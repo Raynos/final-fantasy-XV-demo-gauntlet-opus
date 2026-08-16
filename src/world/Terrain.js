@@ -150,6 +150,50 @@ export class Terrain {
   roadDistance(x, z) { return this.road ? this.road.distance(x, z) : 1e5; }
 
   /**
+   * X of the road centreline at a given Z.
+   *
+   * Vegetation/Props (`veg/Ecology.js`) probe for this and fall back to their
+   * own approximate curve when it is missing — which would scatter grass and
+   * roadside props along a line the terrain never carved. Exposing it keeps
+   * every system agreeing on where the road actually is.
+   * @param {number} z
+   * @returns {number}
+   */
+  roadCenterX(z) {
+    const road = this.road;
+    if (!road || !road.points || road.points.length < 2) return 0;
+    const pts = road.points;
+
+    // The highway runs broadly north-south, so bracket by Z and lerp. Scan
+    // from a cached index since callers sweep Z coherently while scattering.
+    let i = this._roadIdx || 0;
+    if (i >= pts.length - 1 || !this._bracketsZ(pts, i, z)) {
+      i = this._findRoadSegment(pts, z);
+      this._roadIdx = i;
+    }
+    const a = pts[i], b = pts[i + 1];
+    const dz = b.z - a.z;
+    const t = Math.abs(dz) < 1e-6 ? 0 : (z - a.z) / dz;
+    return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
+  }
+
+  _bracketsZ(pts, i, z) {
+    const a = pts[i].z, b = pts[i + 1].z;
+    return z >= Math.min(a, b) && z <= Math.max(a, b);
+  }
+
+  /** Nearest segment in Z; falls back to the closest endpoint off the ends. */
+  _findRoadSegment(pts, z) {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (this._bracketsZ(pts, i, z)) return i;
+      const d = Math.min(Math.abs(pts[i].z - z), Math.abs(pts[i + 1].z - z));
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  /**
    * Rough surface classification, mirroring the splat weights the shader uses.
    * Vegetation should look at `weights.grass` and `sediment`.
    * @returns {{id:number, name:string, weights:object, slope:number, height:number,
