@@ -100,6 +100,13 @@ export class GradePass extends FilterPass {
           float gl2 = luma(disp);
           disp += g * uGrain * (0.35 + 0.85 * (1.0 - smoothstep(0.0, 0.75, gl2)));
 
+          // Temporal dither with a hard floor of ~1.5 LSB. The deep blue
+          // gradients of a night sky are exactly the case where 8 bits runs
+          // out, and grain alone is scaled per preset so it cannot be relied
+          // on to cover it. Decorrelated from the grain hash on purpose.
+          float d8 = hash12(gl_FragCoord.yx * 1.7 + fract(uTime * 0.37) * 311.3) - 0.5;
+          disp += d8 * (1.5 / 255.0);
+
           gl_FragColor = vec4(max(disp, vec3(0.0)), 1.0);
         }
       `,

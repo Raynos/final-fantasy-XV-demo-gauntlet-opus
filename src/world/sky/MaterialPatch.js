@@ -161,11 +161,42 @@ export class MaterialPatch {
         // haze between the eye and a surface is lit like the sky just above the
         // horizon, never like the (occluded) ground below it
         vec3 apDir = normalize(vec3(atmDir.x, max(atmDir.y, 0.004), atmDir.z));
-        vec3 inCol = atmSkyRadiance(uSkyLut, r, apDir, uSunDir) * uSunIntensity;
+
+        // --- Rayleigh / Mie split ------------------------------------------
+        // Sampling the LUT along the view ray alone makes *every* azimuth warm
+        // at low sun, because the horizon band is reddened all the way round.
+        // The air is not one colour: the molecular (Rayleigh) term is blue and
+        // near-isotropic, the aerosol (Mie) term is warm and lives in a tight
+        // forward lobe about the sun. Weighting them separately is what puts
+        // cool haze on the anti-solar side of a golden hour frame and keeps the
+        // warm inscatter where the sun actually is.
+        vec3 highDir = normalize(vec3(apDir.x, apDir.y + 0.55, apDir.z));
+        vec3 zenith  = atmSkyRadiance(uSkyLut, r, vec3(0.0, 1.0, 0.0), uSunDir) * uSunIntensity;
+        vec3 rayCol  = atmSkyRadiance(uSkyLut, r, highDir, uSunDir) * uSunIntensity;
+        rayCol = mix(rayCol, zenith, 0.40);
+        vec3 mieCol  = atmSkyRadiance(uSkyLut, r, apDir, uSunDir) * uSunIntensity;
+        // The near-sun entry of the sky LUT carries the whole solar aureole,
+        // integrated over the entire atmosphere. A few kilometres of surface
+        // haze is nowhere near that bright, and letting it through blows the
+        // sun-side third of a sunset frame to flat white. Cap the magnitude
+        // against the molecular term and keep only the hue.
+        float apRef = dot(rayCol, vec3(0.3333)) + 1e-5;
+        float apLum = dot(mieCol, vec3(0.3333)) + 1e-5;
+        mieCol *= min(1.0, (apRef * 2.2) / apLum);
+        // ~57 deg to ~10 deg from the sun vector
+        float apCos = dot(atmDir, uSunDir);
+        float mieW  = smoothstep(0.55, 0.985, apCos);
+        vec3 inCol  = mix(rayCol, mieCol, mix(0.10, 0.42, mieW));
+
         if (uOvercast > 0.01) {
           vec3 upSky = atmSkyRadiance(uSkyLut, r, vec3(0.0, 1.0, 0.0), uSunDir) * uSunIntensity;
           vec3 flat3 = vec3(dot(upSky, vec3(0.3333)));
-          inCol = mix(inCol, mix(upSky, flat3, 0.8) * 1.35, uOvercast);
+          // a storm deck is darkest at the horizon, not brightest: the light
+          // gets there through kilometres more cloud than it does overhead
+          vec3 deck = mix(upSky, mix(upSky, flat3, 0.50), 0.65) * 1.10;
+          float slot = exp(-max(atmDir.y, 0.0) * 7.0);
+          deck *= mix(0.58, 1.0, smoothstep(-0.03, 0.45, atmDir.y)) + 0.70 * slot;
+          inCol = mix(inCol, deck, uOvercast);
         }
         inCol *= uSkyDim * uAerialTint;
         // Airglow. The sky dome already sits on this floor at night; without

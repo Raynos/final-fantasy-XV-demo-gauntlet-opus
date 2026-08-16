@@ -29,15 +29,19 @@ export const GRADES = {
   // Flat, neutral daylight. Slightly cool shadows, sun-bleached highlights.
   day: {
     balance: [0.04, 0.0],
-    contrast: 1.06, saturation: 1.02,
-    lift: [0.0, 0.0, 0.004], gain: [1.0, 1.0, 1.0],
-    vignette: 0.30, chroma: 0.7, grain: 0.020, key: 0.235,
+    // Daylight was printing into about half a console frame — nothing near
+    // white, nothing near black — which reads as noon through a scrim. The
+    // range comes back from a steeper log contrast, a much shorter toe and a
+    // higher shoulder, not from saturation.
+    contrast: 1.13, saturation: 1.02,
+    lift: [0.0, 0.0, 0.003], gain: [1.0, 1.0, 1.0],
+    vignette: 0.30, chroma: 0.7, grain: 0.020, key: 0.225,
     look: {
-      toe: 0.035, shoulder: 0.90, pivot: 0.42, contrast: 1.10,
-      shadowTint: [0.94, 0.99, 1.10], midTint: [1.0, 1.0, 0.99], highTint: [1.03, 1.0, 0.955],
-      sat: 0.98, satShadow: 0.86, satHigh: 0.90,
+      toe: 0.012, shoulder: 0.96, pivot: 0.40, contrast: 1.21,
+      shadowTint: [0.88, 0.97, 1.17], midTint: [1.0, 1.0, 0.985], highTint: [1.04, 1.0, 0.94],
+      sat: 0.99, satShadow: 1.0, satHigh: 0.88,
       mixer: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-      fade: 0.010, fadeTint: [0.05, 0.07, 0.11],
+      fade: 0.006, fadeTint: [0.04, 0.06, 0.11],
     },
   },
 
@@ -49,46 +53,58 @@ export const GRADES = {
   // warm, push the shadows further toward teal, and let the separation do the
   // work instead of the white balance.
   golden: {
-    balance: [0.13, 0.03],
-    contrast: 1.10, saturation: 1.08,
-    lift: [0.0, 0.003, 0.018], gain: [1.03, 1.0, 0.975],
-    vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.225,
+    // A warm white balance *on top of* warm light is a double warm: the frame
+    // has nothing cool left to oppose the key with. The balance is therefore
+    // barely warm at all; the heat comes from the sun itself and the grade's
+    // only job is to protect the shadow chroma. Note satShadow > 1: the teal
+    // in the shadows is the load-bearing colour and must not be washed out.
+    balance: [0.04, 0.0],
+    contrast: 1.14, saturation: 1.0,
+    lift: [0.0, 0.004, 0.022], gain: [1.0, 1.0, 1.005],
+    vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.215,
     look: {
-      toe: 0.045, shoulder: 0.88, pivot: 0.40, contrast: 1.13,
-      shadowTint: [0.78, 0.94, 1.30], midTint: [1.02, 1.0, 0.975], highTint: [1.10, 1.02, 0.90],
-      sat: 1.04, satShadow: 0.92, satHigh: 0.84,
-      mixer: [1.0, 0.02, -0.01, 0.0, 1.0, 0.0, -0.01, 0.01, 1.0],
-      fade: 0.016, fadeTint: [0.07, 0.08, 0.11],
+      toe: 0.030, shoulder: 0.78, pivot: 0.39, contrast: 1.19,
+      shadowTint: [0.66, 0.89, 1.42], midTint: [1.01, 1.0, 0.99], highTint: [1.10, 1.01, 0.87],
+      sat: 1.02, satShadow: 1.08, satHigh: 0.82,
+      mixer: [1.0, 0.01, -0.01, 0.0, 1.0, 0.0, -0.02, 0.01, 1.0],
+      fade: 0.012, fadeTint: [0.05, 0.08, 0.15],
     },
   },
 
   // Deep blue night. Low key, strong desaturation, milky moon highlights.
   night: {
-    balance: [-0.22, -0.05],
-    contrast: 1.02, saturation: 0.90,
-    lift: [0.0, 0.003, 0.012], gain: [0.94, 0.98, 1.08],
-    vignette: 0.46, chroma: 1.3, grain: 0.042, key: 0.135,
+    // Dark but *readable*. The toe is the black floor: it lands the deepest
+    // shadow on a navy around #0a0e18 instead of on zero, so silhouettes stay
+    // separable and 8-bit banding has somewhere to dither into. satShadow is
+    // high on purpose — a night with grey shadows is a broken night.
+    balance: [-0.20, -0.04],
+    contrast: 1.06, saturation: 0.94,
+    lift: [0.0, 0.004, 0.016], gain: [0.93, 0.98, 1.10],
+    vignette: 0.44, chroma: 1.3, grain: 0.024, key: 0.115,
     look: {
-      toe: 0.020, shoulder: 0.94, pivot: 0.34, contrast: 1.04,
-      shadowTint: [0.74, 0.87, 1.24], midTint: [0.88, 0.95, 1.14], highTint: [0.98, 1.0, 1.06],
-      sat: 0.82, satShadow: 0.55, satHigh: 0.78,
+      toe: 0.055, shoulder: 0.95, pivot: 0.33, contrast: 1.10,
+      shadowTint: [0.62, 0.84, 1.46], midTint: [0.84, 0.94, 1.20], highTint: [0.97, 1.0, 1.08],
+      sat: 0.90, satShadow: 0.86, satHigh: 0.76,
       mixer: [1.0, 0.0, 0.03, 0.0, 1.0, 0.02, 0.02, 0.0, 1.0],
-      fade: 0.024, fadeTint: [0.04, 0.06, 0.13],
+      fade: 0.018, fadeTint: [0.03, 0.05, 0.14],
     },
   },
 
   // Overcast / storm. Cold, flat, heavy, slightly green-grey.
   storm: {
-    balance: [-0.10, 0.04],
-    contrast: 0.98, saturation: 0.88,
-    lift: [0.004, 0.006, 0.010], gain: [0.97, 1.0, 1.03],
-    vignette: 0.42, chroma: 0.9, grain: 0.030, key: 0.195,
+    // Not flat. A storm is the *highest* contrast weather there is: a black
+    // deck over a bright break on the horizon. The old preset had contrast
+    // below 1 and printed a stop up, which is the recipe for an empty field.
+    balance: [-0.05, 0.05],
+    contrast: 1.12, saturation: 0.82,
+    lift: [0.003, 0.005, 0.011], gain: [0.95, 0.99, 1.05],
+    vignette: 0.42, chroma: 0.9, grain: 0.032, key: 0.200,
     look: {
-      toe: 0.030, shoulder: 0.92, pivot: 0.40, contrast: 1.02,
-      shadowTint: [0.88, 0.96, 1.10], midTint: [0.95, 0.99, 1.02], highTint: [0.99, 1.01, 1.02],
-      sat: 0.86, satShadow: 0.68, satHigh: 0.82,
+      toe: 0.018, shoulder: 0.94, pivot: 0.38, contrast: 1.16,
+      shadowTint: [0.86, 0.97, 1.12], midTint: [0.95, 0.99, 1.02], highTint: [1.0, 1.01, 1.01],
+      sat: 0.86, satShadow: 0.80, satHigh: 0.80,
       mixer: [1.0, 0.0, 0.01, 0.01, 1.0, 0.01, 0.0, 0.0, 1.0],
-      fade: 0.022, fadeTint: [0.07, 0.09, 0.10],
+      fade: 0.014, fadeTint: [0.05, 0.07, 0.10],
     },
   },
 };
