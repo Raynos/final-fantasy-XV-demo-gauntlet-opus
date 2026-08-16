@@ -1,0 +1,109 @@
+import { el, clamp, commas, easeOut } from './UIKit.js';
+import { icon, portrait } from './Icons.js';
+import { Bar } from './Bar.js';
+import { readParty } from './GameData.js';
+
+const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
+
+/**
+ * Bottom-left party status stack: three companions above, Noctis at the bottom
+ * with a larger plate, an MP gauge and a level readout.
+ */
+export class PartyPanel {
+  /** @param {HTMLElement} parent */
+  constructor(parent) {
+    this.root = el('div.hud-corner.bl');
+    this.list = el('div.party');
+    this.root.appendChild(this.list);
+    parent.appendChild(this.root);
+    this.rows = [];
+    this.built = false;
+  }
+
+  _build(party) {
+    // companions first (stacked above), lead last so it sits at the bottom
+    const order = [1, 2, 3, 0];
+    for (const idx of order) {
+      const p = party[idx];
+      const lead = idx === 0;
+      const pfPlate = el('div.pf-plate', {}, [portrait(p.hue, lead ? 0.62 : 0.4)]);
+      const nm = el('span.nm', { text: p.name });
+      const lv = el('span.lv', {}, [el('span', { text: 'LV ' }), el('b', { text: String(p.level) })]);
+      const sts = el('div.sts');
+      const head = el('div.party-head', {}, lead ? [nm, lv, sts] : [nm, sts]);
+
+      const hpBar = new Bar({ cls: 'cut' });
+      const hpVal = el('div.val');
+      const hpLine = el('div.hp-line', {}, [hpBar.node, hpVal]);
+
+      const body = el('div.party-body', {}, [head, hpLine]);
+      let mpBar = null; let mpVal = null;
+      if (lead) {
+        mpBar = new Bar({ cls: 'slim', chase: false }).tint('mp');
+        mpVal = el('div.val');
+        body.appendChild(el('div.mp-line', {}, [el('span.tag', { text: 'MP' }), mpBar.node, mpVal]));
+      }
+
+      const row = el(`div.party-row${lead ? '.lead' : ''}`, {}, [pfPlate, body]);
+      this.list.appendChild(row);
+      this.rows.push({ idx, lead, row, hpBar, hpVal, mpBar, mpVal, sts, stsKey: '', flash: 0, lastHp: p.hp });
+    }
+    this.built = true;
+  }
+
+  /**
+   * @param {number} dt seconds
+   * @param {object} game
+   * @param {number} appear 0..1 master reveal
+   */
+  update(dt, game, appear) {
+    const party = readParty(game);
+    if (!this.built) this._build(party);
+
+    for (let i = 0; i < this.rows.length; i++) {
+      const r = this.rows[i];
+      const p = party[r.idx] || {};
+      const maxHp = p.maxHp || 1;
+      const hp = clamp(p.hp ?? maxHp, 0, maxHp);
+
+      // staggered reveal — rows slide in from the left, lead first
+      const stagger = clamp((appear - 0.06 * (this.rows.length - 1 - i)) / 0.72, 0, 1);
+      const e = easeOut(stagger);
+      r.row.style.opacity = e.toFixed(3);
+      r.row.style.transform = `translateX(${((1 - e) * -26).toFixed(2)}px)`;
+
+      r.hpBar.set(hp / maxHp, dt);
+      const txt = commas(hp);
+      if (r._hpTxt !== txt) {
+        r.hpVal.textContent = '';
+        r.hpVal.appendChild(document.createTextNode(txt));
+        r.hpVal.appendChild(el('span.max', { text: ` / ${commas(maxHp)}` }));
+        r._hpTxt = txt;
+      }
+      // critical HP: the number and bar breathe
+      const crit = hp / maxHp < 0.25;
+      if (crit) {
+        const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(game.time.now * 6.2));
+        r.hpVal.style.color = `rgba(255,${Math.round(140 + 70 * pulse)},${Math.round(120 + 60 * pulse)},1)`;
+      } else if (r._crit) r.hpVal.style.color = '';
+      r._crit = crit;
+
+      if (r.mpBar) {
+        const maxMp = p.maxMp || 1;
+        const mp = clamp(p.mp ?? maxMp, 0, maxMp);
+        r.mpBar.set(mp / maxMp, dt);
+        const mtxt = `${Math.round(mp)} / ${Math.round(maxMp)}`;
+        if (r._mpTxt !== mtxt) { r.mpVal.textContent = mtxt; r._mpTxt = mtxt; }
+      }
+
+      const key = (p.status || []).join(',');
+      if (key !== r.stsKey) {
+        r.sts.textContent = '';
+        for (const s of p.status || []) {
+          r.sts.appendChild(icon(s, { size: 13, stroke: 1.35, cls: BAD_STATUS.has(s) ? 'bad' : '' }));
+        }
+        r.stsKey = key;
+      }
+    }
+  }
+}
