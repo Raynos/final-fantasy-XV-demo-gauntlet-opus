@@ -216,9 +216,15 @@ vec3 atmIntegrate(vec3 ro, vec3 rd, vec3 sunDir, sampler2D tLut, int steps,
     // cheap multiple scattering: isotropic (1/4pi), scaled by the boost
     vec3 iso = (scatterR + scatterM) * (msBoost * 0.0796) * (0.35 + 0.65 * max(muSun, 0.0));
 
-    // multiple scattering keeps far more blue than the direct path: real MS
-    // light has been redirected many times, so use a softened transmittance
-    vec3 msT = pow(max(sunT, vec3(1e-4)), vec3(0.62));
+    // Multiple scattering keeps far more blue than the direct path. The light
+    // that ends up here after several bounces mostly entered the atmosphere
+    // high up, where the slant path is short and the red-shift has not
+    // happened yet — so sample the transmittance at altitude and off the
+    // grazing angle. Using the ground-level, near-horizon transmittance (what
+    // this used to do) tints the *entire* twilight dome, anti-solar side
+    // included, the same brown as the sun itself.
+    vec3 msSunT = atmTransmittance(tLut, ATM_PLANET_R + 18000.0, max(muSun, 0.16));
+    vec3 msT = pow(max(msSunT, vec3(1e-4)), vec3(0.55));
     vec3 inScatter = (phased * sunT + iso * msT) * ground;
 
     // energy conserving integration of the segment (Hillaire)

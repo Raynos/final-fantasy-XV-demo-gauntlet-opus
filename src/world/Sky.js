@@ -16,38 +16,64 @@ const smoothstep = (a, b, x) => {
 const SUNRISE = 6.0;
 const SUNSET = 19.0;
 const SUN_MAX_ELEV = 62;
-const MOONRISE = 12.4;
-const MOONSET = 23.9;
-const MOON_MAX_ELEV = 40;
+// The moon has to be genuinely *up* at the hour the night shots are taken. A
+// moon at 7 degrees is a grazing key: the ground plane gets almost nothing
+// while anything facing it blows out, which reads as a broken exposure rather
+// than as moonlight.
+const MOONRISE = 14.6;
+const MOONSET = 26.6;
+const MOON_MAX_ELEV = 46;
 const MOON_AZ_OFFSET = 70;
 
 /** Weather presets. Values are lerped toward, so transitions are continuous. */
+/**
+ * Fog is calibrated in *extinction at range*, not in taste units. With
+ * `fogHeight` as the scale height and a camera a few tens of metres up, the
+ * horizontal integral is very close to `distance * exp(-camY/H)`, so
+ *   od(d) ~= (fogDensity * 0.86 + haze) * d
+ * `clear` is tuned to ~15% extinction at 1 km and ~55% at 5 km, which is what
+ * a dry, high-visibility badland actually looks like. The old numbers were
+ * roughly 4x that: they saturated by ~2 km, which is why every distance band
+ * collapsed onto the same inscatter colour and golden hour went monochrome.
+ */
 const WEATHER = {
   clear: {
     coverage: 0.34, density: 0.019, type: 0.86, detail: 0.42, anvil: 0.25,
-    bottom: 1500, top: 4200, cirrus: 0.40, cloudShadow: 0.78,
-    fogDensity: 0.0007, fogHeight: 130, haze: 0.00017, sunMul: 1.0,
-    exposureMul: 1.0, godRays: 1.0, ambient: 1.0,
+    bottom: 1500, top: 4200, cirrus: 0.26, cloudShadow: 0.78,
+    fogDensity: 0.00013, fogHeight: 200, haze: 0.00004, sunMul: 1.0,
+    exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
+    overcast: 0.0, skyDim: 1.0, shadowScale: 30,
   },
   overcast: {
     coverage: 0.92, density: 0.026, type: 0.30, detail: 0.34, anvil: 0.1,
     bottom: 1100, top: 3200, cirrus: 0.12, cloudShadow: 0.35,
-    fogDensity: 0.0026, fogHeight: 190, haze: 0.00085, sunMul: 0.30,
-    exposureMul: 1.12, godRays: 0.25, ambient: 1.0,
+    fogDensity: 0.00055, fogHeight: 260, haze: 0.00020, sunMul: 0.30,
+    exposureMul: 1.02, godRays: 0.25, ambient: 1.2, wind: 12.0,
+    overcast: 0.85, skyDim: 0.55, shadowScale: 55,
   },
   storm: {
-    coverage: 1.0, density: 0.038, type: 0.42, detail: 0.30, anvil: 0.55,
-    bottom: 800, top: 5200, cirrus: 0.05, cloudShadow: 0.20,
-    fogDensity: 0.0042, fogHeight: 240, haze: 0.0013, sunMul: 0.16,
-    // heavy weather is printed up a stop: a storm should read as oppressive,
-    // not as night
-    exposureMul: 1.25, godRays: 0.15, ambient: 1.0,
+    // Coverage deliberately short of 1: a solid lid is a grey field. Leaving
+    // breaks in it, and making what remains much thicker, is what gives a
+    // storm its structure and its one bright hole on the horizon.
+    coverage: 0.78, density: 0.034, type: 0.44, detail: 0.58, anvil: 0.45,
+    bottom: 700, top: 5200, cirrus: 0.0, cloudShadow: 0.88, shadowScale: 130.0,
+    fogDensity: 0.00090, fogHeight: 320, haze: 0.00030, sunMul: 0.12,
+    // A storm is *dark*. Printing it up a stop is what turned it into an empty
+    // grey field; the drama comes from value range, not from lifting the floor.
+    exposureMul: 1.22, godRays: 0.40, ambient: 1.85, wind: 30.0,
+    // `overcast`/`skyDim` are authored, not derived from coverage: a storm
+    // needs its cloud field to have *gaps* (so the deck has silhouette and
+    // there is somewhere for a break of light) while the light on the ground
+    // stays as heavy as a solid lid. Deriving one from the other forced those
+    // two to move together and produced an even grey field.
+    overcast: 0.80, skyDim: 0.46,
   },
   fog: {
     coverage: 0.55, density: 0.016, type: 0.5, detail: 0.4, anvil: 0.2,
     bottom: 1300, top: 3600, cirrus: 0.25, cloudShadow: 0.30,
-    fogDensity: 0.020, fogHeight: 55, haze: 0.0022, sunMul: 0.55,
-    exposureMul: 1.12, godRays: 0.8, ambient: 1.2,
+    fogDensity: 0.0060, fogHeight: 70, haze: 0.00075, sunMul: 0.55,
+    exposureMul: 1.06, godRays: 0.8, ambient: 1.2, wind: 9.0,
+    overcast: 0.35, skyDim: 0.78, shadowScale: 30,
   },
 };
 
@@ -358,15 +384,19 @@ export class Sky {
     u.uNight.value = night;
 
     // --- moon --------------------------------------------------------------
+    // A grazing moon is a weak key: sin(7 deg) throws away most of the
+    // irradiance before it ever reaches the ground. Two stops of headroom on
+    // the moon is what makes the ground plane readable while the *ratio* to
+    // the fill stays moonlit rather than floodlit.
     const moonUp = smoothstep(-0.06, 0.10, this.moonDir.y);
-    const moonPower = 2.0 * moonUp * night * u.uMoonPhase.value;
-    u.uMoonBright.value = 2.2 * moonUp;
-    u.uMoonLight.value = 0.20 * moonUp * night;
+    const moonPower = 1.9 * moonUp * night * u.uMoonPhase.value;
+    u.uMoonBright.value = 3.4 * moonUp;
+    u.uMoonLight.value = 0.30 * moonUp * night;
 
     this.sun.color.copy(sunColor);
     this.sun.intensity = sunPower;
     this.sun.position.copy(this.sunDir).multiplyScalar(500);
-    this.moon.color.setRGB(0.72, 0.82, 1.0);
+    this.moon.color.setRGB(0.56, 0.71, 1.0);
     this.moon.intensity = moonPower;
     this.moon.position.copy(this.moonDir).multiplyScalar(500);
 
@@ -384,22 +414,55 @@ export class Sky {
     u.uSunTint.value.set(1, 1, 1);
     u.uSunIntensity.value = 8.5;
     // heavy cloud puts the whole lower atmosphere in shade
-    const overcast = smoothstep(0.55, 1.0, p.coverage) * smoothstep(0.014, 0.030, p.density);
-    u.uSkyDim.value = 1.0 - 0.72 * overcast;
+    const overcast = p.overcast != null ? p.overcast : 0.0;
+    u.uSkyDim.value = p.skyDim != null ? p.skyDim : 1.0;
     u.uOvercast.value = overcast;
+    // A storm deck is lit almost entirely from above and is very deep, so its
+    // underside — the part the camera sees — is far darker than a fair-weather
+    // cumulus base. Pulling the march's ambient down under heavy cover is what
+    // turns the deck from pale mush into a lid.
+    if (this.clouds) {
+      this.clouds.marchUniforms.uAmbientBoost.value = lerp(1.15, 0.30, overcast);
+      this.clouds.marchUniforms.uCloudSunGain.value = lerp(0.42, 0.24, overcast);
+    }
 
     // --- ambient / IBL -----------------------------------------------------
+    // Golden hour: the *only* thing that stops the frame collapsing to one hue
+    // is that the fill opposes the key. The image-based probe cannot supply it
+    // — it integrates the sunset band and comes out amber — so the hemisphere
+    // fill is deliberately driven the other way, coolest and strongest exactly
+    // when the sun is lowest. Warm key vs blue fill is the whole look.
+    const golden = smoothstep(24, 3, elevDeg) * smoothstep(-7, 1.5, elevDeg);
     const skyTint = new THREE.Color().setRGB(
-      lerp(0.10, 0.62, day), lerp(0.14, 0.75, day), lerp(0.30, 1.0, day)
+      lerp(0.10, 0.62, day), lerp(0.14, 0.75, day), lerp(0.34, 1.0, day)
     );
+    // push the fill toward a saturated sky blue through the golden band
+    skyTint.lerp(new THREE.Color(0.26, 0.45, 0.92), 0.72 * golden);
     this.ambient.color.copy(skyTint);
-    this.ambient.groundColor.setRGB(0.16 * day + 0.02, 0.14 * day + 0.02, 0.11 * day + 0.03);
+    // ground bounce stays warm ochre: it is the *only* warm fill and it comes
+    // from below, which is what a real sunlit landscape does to a standing figure
+    this.ambient.groundColor.setRGB(
+      0.16 * day + 0.03 + 0.12 * golden,
+      0.14 * day + 0.025 + 0.07 * golden,
+      0.11 * day + 0.035 + 0.02 * golden
+    );
     // Night needs real sky fill, not just a key. With too little of it the moon
     // becomes a binary light: faces turned to it read as snow and everything
     // else falls to black, which looks like a broken exposure rather than
     // night. Lifting the fill compresses that ratio back to something the eye
     // reads as moonlight.
-    this.ambient.intensity = lerp(0.115, 0.16, day) * p.ambient;
+    // `fillBase` is the physically motivated fill and is what the light meter
+    // sees; the golden-hour boost on top of it is an *artistic* fill and is
+    // deliberately excluded from the meter, otherwise adding blue shadow light
+    // would immediately stop the frame down again and cancel itself out.
+    const fillBase = lerp(0.155, 0.16, day) * p.ambient;
+    this.ambient.intensity = fillBase + 0.54 * golden * p.ambient;
+
+    // The probe is baked from the sky dome, so at low sun it is a bucket of
+    // amber. Dialling it back through the golden band hands that job to the
+    // (cool) hemisphere fill instead and keeps shadow chroma alive.
+    this._envIntensity = lerp(1.0, 0.30, golden) * lerp(1.0, 0.85, night);
+    if (this.game && this.game.scene) this.game.scene.environmentIntensity = this._envIntensity;
 
     // --- exposure ----------------------------------------------------------
     // Sky owns the *scene* exposure and nothing else. It is derived from the
@@ -419,18 +482,25 @@ export class Sky {
       moonPower * Math.max(this.moonDir.y, 0));
     // uSkyDim is how much of the sky dome survives the cloud deck, so it is
     // also how much of the sky's fill reaches the ground
-    const skyE = 6.0 * this.ambient.intensity * u.uSkyDim.value;
+    const skyE = 6.0 * fillBase * u.uSkyDim.value;
     const sceneE = Math.max(keyE + skyE, 0.02);
-    this.exposure = (1.42 / Math.pow(sceneE, 0.22)) * p.exposureMul;
+    // Golden hour is *printed* up. The eye is adapted to the low sun, not to
+    // the average of the frame, and a foreground with no shadow detail at all
+    // is a failure rather than a mood; this is the one place the model is
+    // overridden on purpose.
+    // Golden hour is printed up, and so is night — a night that meters
+    // honestly is a black rectangle, and FFXV nights are dark but read.
+    const evTrim = (1.0 + 0.28 * golden) * (1.0 + 0.24 * night);
+    this.exposure = (1.42 / Math.pow(sceneE, 0.22)) * p.exposureMul * evTrim;
     // FFXV nights are dark. A hard ceiling guarantees eye adaptation can never
     // lift the frame out of the blue no matter how black the scene gets.
-    this.exposureCeiling = lerp(12.0, 2.8, night);
+    this.exposureCeiling = lerp(12.0, 3.4, night);
     this._publishExposure();
 
     // --- god rays ----------------------------------------------------------
     // strongest when the sun rakes across the frame
     const lowSun = smoothstep(28, 4, elevDeg) * smoothstep(-1.5, 2.0, elevDeg);
-    this._godRayBase = (0.45 + 1.5 * lowSun) * p.godRays * day;
+    this._godRayBase = (0.32 + 0.85 * lowSun) * p.godRays * day;
     this.godRays.compositeMaterial.uniforms.uTint.value.setRGB(
       1.0, lerp(0.72, 0.88, day), lerp(0.42, 0.72, day)
     );
@@ -446,9 +516,9 @@ export class Sky {
     // The night floor is deep navy, not black: real night air glows, and the
     // aerial-perspective term reads the same value, so sky and distant ridges
     // sit on one floor instead of separating into cut-out silhouettes.
-    u.uNightTint.value.set(0.0034, 0.0056, 0.0132);
-    u.uStarBright.value = 1.0;
-    u.uMilkyWay.value = 0.9;
+    u.uNightTint.value.set(0.0082, 0.0128, 0.0290);
+    u.uStarBright.value = 1.7;
+    u.uMilkyWay.value = 1.35;
 
     if (force || Math.abs(this.hours - this._envHours) > 0.08) this._updateEnv();
   }
@@ -462,11 +532,38 @@ export class Sky {
     const post = this.game && this.game.post;
     if (!post || !post.exposure || !post.exposure.setSceneExposure) return;
     post.exposure.setSceneExposure(this.exposure, {
-      lo: 0.62, hi: 1.65, ceiling: this.exposureCeiling,
+      lo: 0.70, hi: 1.90, ceiling: this.exposureCeiling,
     });
     // Sky is the exposure owner; three's own multiplier stays neutral so a
     // second stop can never sneak in behind PostFX's back.
     this.game.renderer.toneMappingExposure = 1.0;
+  }
+
+  /**
+   * Choose the colour grade. PostFX's own auto-grade asks a `Weather` system
+   * for the current conditions, and that system is free to be a stub — when it
+   * is, heavy weather silently prints with the clear-sky grade, which is how a
+   * storm ended up graded as a bright afternoon. Sky is the one thing that
+   * always knows both the clock and the sky state, so it takes the decision
+   * and switches PostFX's own selector off.
+   */
+  _publishGrade() {
+    const post = this.game.post;
+    if (!post.setGradeBlend) return;
+    post.autoGrade = false;
+    const h = this.hours;
+    let a, b, t;
+    if (h < 4.6) { a = b = 'night'; t = 0; }
+    else if (h < 6.6) { a = 'night'; b = 'golden'; t = smoothstep(0, 1, (h - 4.6) / 2.0); }
+    else if (h < 8.6) { a = 'golden'; b = 'day'; t = smoothstep(0, 1, (h - 6.6) / 2.0); }
+    else if (h < 15.5) { a = b = 'day'; t = 0; }
+    else if (h < 18.6) { a = 'day'; b = 'golden'; t = smoothstep(0, 1, (h - 15.5) / 3.1); }
+    else if (h < 20.4) { a = 'golden'; b = 'night'; t = smoothstep(0, 1, (h - 18.6) / 1.8); }
+    else { a = b = 'night'; t = 0; }
+
+    const heavy = { storm: 0.92, overcast: 0.75, fog: 0.45 }[this.weather];
+    if (heavy) post.setGradeBlend(t > 0.5 ? b : a, 'storm', heavy);
+    else post.setGradeBlend(a, b, t);
   }
 
   _updateEnv() {
@@ -476,7 +573,7 @@ export class Sky {
     // analytic clouds for the probe: cheap and it is blurred to irradiance anyway
     this.envRT = this.pmrem.fromScene(this.envScene, 0.0, 1, 20000);
     this.game.scene.environment = this.envRT.texture;
-    this.game.scene.environmentIntensity = 1.0;
+    this.game.scene.environmentIntensity = this._envIntensity != null ? this._envIntensity : 1.0;
     if (prev) prev.dispose();
   }
 
@@ -498,7 +595,7 @@ export class Sky {
     }
     this._pushWeatherUniforms();
 
-    const wind = 7.5;
+    const wind = this.params.wind || 7.5;
     this._windOffset.x += wind * dt;
     this._windOffset.y += wind * 0.42 * dt;
     this.u.uCloudWind.value.set(this._windOffset.x, this._windOffset.y);
@@ -518,6 +615,11 @@ export class Sky {
     u.uCloudTop.value = p.top;
     u.uCirrus.value = p.cirrus;
     u.uCloudShadowStrength.value = p.cloudShadow;
+    // A storm's drama on the ground is the *patchiness* of the light.
+    // Magnifying the shadow field puts several cloud-sized patches inside
+    // the few hundred metres a low camera can actually see.
+    u.uShadowFieldScale.value = p.shadowScale;
+    this._shadowDirty = true;
     u.uFogDensity.value = p.fogDensity;
     u.uFogHeight.value = p.fogHeight;
     u.uHazeBase.value = p.haze;
@@ -527,6 +629,7 @@ export class Sky {
     const game = this.game;
     if (!game || !game.post) return;
     this._publishExposure();
+    this._publishGrade();
     if (!this._raysInserted) {
       this._raysInserted = true;
       const idx = game.post.composer.passes.indexOf(game.post.bloom);

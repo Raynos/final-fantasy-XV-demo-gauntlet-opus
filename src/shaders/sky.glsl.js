@@ -221,7 +221,20 @@ void main() {
   if (uOvercast > 0.01) {
     vec3 upSky = atmSkyRadiance(uSkyLut, r, vec3(0.0, 1.0, 0.0), uSunDir) * uSunIntensity;
     vec3 flat3 = vec3(dot(upSky, vec3(0.3333)));
-    sky = mix(sky, mix(upSky, flat3, 0.8) * 1.35, uOvercast);
+    // Keep some of the sky's own chroma — a fully desaturated deck is the
+    // "empty grey field" read. And ramp it *down* toward the horizon: under a
+    // storm the base of the cloud is the darkest thing in the frame, which is
+    // what gives the deck its weight and the horizon its menace.
+    // What this term draws is the *gap* between the clouds, not the clouds:
+    // the volumetric march composites the deck itself on top. Darkening this
+    // to cloud-base grey (what it used to do) left the cumulus with nothing to
+    // silhouette against, which is why heavy weather rendered as one flat
+    // field. Keep it bright and slightly flattened, and put a hot slot of
+    // clear air along the horizon for everything else to read against.
+    vec3 deck = mix(upSky, mix(upSky, flat3, 0.50), 0.65) * 1.20;
+    float slot = exp(-max(dir.y, 0.0) * 7.0);
+    deck *= mix(0.72, 1.0, smoothstep(-0.03, 0.45, dir.y)) + 0.85 * slot;
+    sky = mix(sky, deck, uOvercast);
   }
   sky *= uSkyDim;
 

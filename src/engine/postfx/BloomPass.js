@@ -21,11 +21,24 @@ export class BloomPass extends Pass {
     this.needsSwap = true;
     this.enabled = true;
 
-    this.strength = 0.42;
+    this.strength = 0.34;
     this.radius = 0.85;
-    this.threshold = 0.85;
-    this.knee = 0.55;
-    this.floor = 0.012;          // thresholdless component -> filmic veil
+    /**
+     * Threshold in *display* units (post-exposure), not raw scene-linear.
+     * The bloom runs on the un-exposed HDR buffer, so a fixed scene-linear
+     * threshold means a different thing at every time of day — at dusk the
+     * whole sunset band sat above it and the widest mip painted a uniform
+     * amber veil across the frame. Dividing by the published scene exposure
+     * makes "bloom what looks blown out" true at noon and at midnight alike.
+     */
+    this.threshold = 1.45;
+    this.knee = 0.42;
+    // Thresholdless veil. This is applied to *every* texel, so at 0.012 the
+    // deepest mip was ~1% of the entire frame smeared over the entire frame —
+    // a flat wash tinted by whatever was brightest. Keep it homeopathic.
+    this.floor = 0.0018;
+    /** Per-octave falloff on the upsample. <1 keeps the glow local. */
+    this.mipFalloff = 0.72;
     this.anamorphic = 0.26;
     this.anamorphicTint = new THREE.Color(0.35, 0.55, 1.0);
     this.dirtAmount = 0.22;
@@ -101,10 +114,13 @@ export class BloomPass extends Pass {
     });
 
     this.upMat = fsMaterial({
-      uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2() }, uRadius: { value: 1 } },
+      uniforms: {
+        tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2() },
+        uRadius: { value: 1 }, uWeight: { value: 1 },
+      },
       fragmentShader: /* glsl */`
         precision highp float;
-        uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uRadius;
+        uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uRadius, uWeight;
         varying vec2 vUv;
         void main() {
           vec2 t = uTexel * uRadius;
@@ -117,7 +133,7 @@ export class BloomPass extends Pass {
           col += texture2D(tDiffuse, vUv + vec2( t.x, -t.y)).rgb;
           col += texture2D(tDiffuse, vUv + vec2(-t.x,  t.y)).rgb;
           col += texture2D(tDiffuse, vUv + vec2( t.x,  t.y)).rgb;
-          gl_FragColor = vec4(col / 16.0, 1.0);
+          gl_FragColor = vec4(col * (uWeight / 16.0), 1.0);
         }
       `,
       blending: THREE.AdditiveBlending,
@@ -291,9 +307,13 @@ export class BloomPass extends Pass {
 
   render(renderer, writeBuffer, readBuffer) {
     const u = this.prefilterMat.uniforms;
-    const k = Math.max(this.knee, 1e-4);
+    // the threshold is authored post-exposure; convert it into the scene-linear
+    // units this buffer is actually in (see the field comment)
+    const ev = this.fx.exposure ? Math.max(this.fx.exposure.base, 0.05) : 1.0;
+    const thr = this.threshold / ev;
+    const k = Math.max(this.knee / ev, 1e-4);
     u.tDiffuse.value = readBuffer.texture;
-    u.uThreshold.value.set(this.threshold, this.threshold - k, 2 * k, 0.25 / k);
+    u.uThreshold.value.set(thr, thr - k, 2 * k, 0.25 / k);
     u.uFloor.value = this.floor;
     blit(renderer, this.prefilterMat, this.mips[0]);
 
@@ -309,6 +329,7 @@ export class BloomPass extends Pass {
       this.upMat.uniforms.tDiffuse.value = src.texture;
       this.upMat.uniforms.uTexel.value.set(1 / src.width, 1 / src.height);
       this.upMat.uniforms.uRadius.value = this.radius;
+      this.upMat.uniforms.uWeight.value = this.mipFalloff;
       blit(renderer, this.upMat, this.mips[i - 1]);
     }
 
