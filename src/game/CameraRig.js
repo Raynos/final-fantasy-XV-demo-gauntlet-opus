@@ -222,6 +222,13 @@ export class CameraRig {
           p.z + (f.lookOffset?.[2] ?? 0),
         ];
       }
+      // Keep a framed shot clear of the ground even where the terrain rises
+      // between the anchor and the subject.
+      const terrain = game.get('Terrain');
+      if (terrain && terrain.heightAt) {
+        const floor = terrain.heightAt(s.pos[0], s.pos[2]) + 1.35;
+        if (s.pos[1] < floor) s.pos[1] = floor;
+      }
       this.cam.position.fromArray(s.pos);
       this._lookAt.fromArray(s.target);
       this.cam.lookAt(this._lookAt);

@@ -139,9 +139,14 @@ export function readParty(game) {
   const out = PARTY.map((p) => ({ ...p }));
   const live = game?.get?.('Party')?.members;
   if (Array.isArray(live) && live.length) {
-    live.slice(0, 4).forEach((m, i) => {
+    // `Party.members` holds only the three companions — Noctis is the Player.
+    // Match by identity, never by index, or the companions shift into the lead
+    // slot and the roster ends up with a duplicate and the wrong leader.
+    for (const m of live) {
+      const key = String(m?.key || m?.id || m?.name || '').toLowerCase();
+      const dst = out.find((p) => p.id === key || p.name.toLowerCase() === key);
+      if (!dst || dst.id === 'noctis') continue;
       const s = m?.stats || m || {};
-      const dst = out[i];
       if (m?.name) dst.name = m.name;
       if (typeof s.hp === 'number') dst.hp = s.hp;
       if (typeof s.maxHp === 'number') dst.maxHp = s.maxHp;
@@ -149,7 +154,7 @@ export function readParty(game) {
       if (typeof s.maxMp === 'number') dst.maxMp = s.maxMp;
       if (typeof s.level === 'number') dst.level = s.level;
       if (Array.isArray(m?.status)) dst.status = m.status;
-    });
+    }
   }
   const ps = game?.get?.('Player')?.stats;
   if (ps) {
