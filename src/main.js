@@ -18,7 +18,10 @@ window.GAME = game;
 game.init().then(() => {
   boot.classList.add('done');
   setTimeout(() => boot.remove(), 900);
-  game.start();
+  // Under the capture harness the page must not free-run: any wall-clock frame
+  // between "ready" and the harness taking over would advance TAA history, the
+  // exposure integrator and enemy AI by a nondeterministic amount.
+  if (!new URLSearchParams(location.search).has('shoot')) game.start();
 }).catch((err) => {
   label.textContent = 'ERROR';
   console.error(err);

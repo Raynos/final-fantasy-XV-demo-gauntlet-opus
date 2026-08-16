@@ -158,6 +158,19 @@ export class Game {
     for (let i = 0; i < frames; i++) this.frame(dt);
   }
 
+  /**
+   * Zero the clock so a capture depends only on the number of fixed steps
+   * taken, not on how long boot happened to take. Without this, anything
+   * phased off `time.now` — film grain, wind, water, VFX — differs run to run.
+   */
+  resetClock() {
+    const t = this.time;
+    t.now = 0; t.raw = 0; t.dt = 0; t.rawDt = 0; t.frame = 0; t.scale = 1;
+    t._last = performance.now() / 1000;
+    for (const s of this.systems) if (s.resetClock) s.resetClock();
+    if (this.post && this.post.resetHistory) this.post.resetHistory();
+  }
+
   /** Advance one frame. Exposed so the screenshot harness can step deterministically. */
   frame(fixedDt) {
     const t = this.time;

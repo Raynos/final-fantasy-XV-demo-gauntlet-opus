@@ -110,6 +110,7 @@ async function main() {
     // stop the rAF loop; we step manually for determinism
     await page.evaluate(() => {
       window.GAME.stop();
+      window.GAME.resetClock();
       document.getElementById('boot')?.remove();
     });
 

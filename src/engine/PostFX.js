@@ -248,6 +248,10 @@ export class PostFX {
   resetHistory() {
     this.taa.reset();
     this.exposure.reset();
+    // The jitter index selects the Halton sample, so leaving it running makes
+    // an otherwise identical capture land on a different subpixel offset.
+    this.frame = 0;
+    this.prevViewProj.identity();
   }
 
   /**
