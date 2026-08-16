@@ -44,9 +44,9 @@ export const SHOTS = {
     pos: [92, 36, 96], target: [-104, 14, -138], fov: 46,
   },
   storm: {
-    doc: 'Storm front over the basin from the western ridge',
+    doc: 'Storm front rolling over the basin — framed to show the cloud deck',
     time: 15.0, weather: 'storm',
-    pos: [-380, 74, 200], target: [120, 20, -160], fov: 46,
+    pos: [-380, 74, 200], target: [120, 62, -160], fov: 48,
   },
 
   // --- the world is inhabited -------------------------------------------
