@@ -213,6 +213,36 @@ export class PostFX {
   attach(game) { this.game = game; }
 
   /**
+   * Own the `scene.overrideMaterial` contract for the whole engine.
+   *
+   * Any pass that swaps in a single override material to rebuild a G-buffer
+   * (three's GTAOPass does this whenever it renders its own depth+normals)
+   * loses every material's alpha test, so an alpha-cut foliage card stamps a
+   * solid rectangle into the AO buffer. three r185 lets an individual material
+   * opt out with `allowOverride = false`: it then draws with its own shader,
+   * keeping `alphaTest` / `alphaMap` and writing a correct silhouette.
+   *
+   * That is strictly better than the alternative each system used to reach for
+   * — hiding the mesh for the duration of the pass — because the foliage still
+   * contributes real occlusion instead of vanishing. Doing it here, once, also
+   * means a new vegetation or VFX system gets it for free.
+   *
+   * @param {THREE.Scene} scene
+   */
+  guardOverrides(scene) {
+    scene.traverse((o) => {
+      const m = o.material;
+      if (!m) return;
+      const list = Array.isArray(m) ? m : [m];
+      for (const mat of list) {
+        if (mat.userData.__overrideGuarded) continue;
+        mat.userData.__overrideGuarded = true;
+        if (mat.alphaTest > 0 || mat.alphaMap) mat.allowOverride = false;
+      }
+    });
+  }
+
+  /**
    * Quality tier. `low` drops the expensive gathers, `ultra` widens them.
    * @param {'low'|'medium'|'high'|'ultra'} tier
    */
@@ -380,6 +410,10 @@ export class PostFX {
   update(time) {
     this.dt = Math.min(time.dt || 1 / 60, 0.1);
     this.grade.uniforms.uTime.value = time.now;
+
+    // cheap: only untagged materials do any work, and streamed-in content is
+    // picked up within a few frames
+    if ((this.frame & 15) === 0) this.guardOverrides(this.scene);
 
     if (this.autoGrade && this.game) {
       const sky = this.game.get('Sky');

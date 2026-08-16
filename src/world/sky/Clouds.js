@@ -30,6 +30,8 @@ uniform float uCamAlt;
 uniform float uMaxDist;
 uniform float uCloudHaze;
 uniform float uAmbientBoost;
+uniform float uCloudSunGain;
+uniform vec2  uPhaseClamp;
 uniform float uSkyDim;
 uniform float uFrame;
 varying vec2 vUv;
@@ -60,10 +62,20 @@ void main() {
   vec3 skyHz = atmSkyRadiance(uSkyLut, rCam, normalize(vec3(rd.x, 0.02, rd.z)), uSunDir) * uSunIntensity;
   skyUp *= uSkyDim; skyHz *= uSkyDim;
 
+  // Phase, expressed as a gain over isotropic (1/4pi) rather than as a raw
+  // per-steradian value. Un-normalised, a dual-lobe HG swings ~350:1 between
+  // looking at the sun and looking away from it, which is why the same cloud
+  // deck was a blazing silver lining at dusk and near-black at midday. Real
+  // cumulus is a near-conservative scatterer: hundreds of scattering events
+  // flatten that ratio out, so clamp the gain and let uCloudSunGain carry the
+  // energy the 3-octave approximation cannot reach on its own.
+  const float ISO_INV = 12.566370614;                  // 4*PI
   float cosT = dot(rd, uSunDir);
-  float phase = mix(atmHG(cosT, 0.80), atmHG(cosT, -0.30), 0.26);
+  float phase = clamp(mix(atmHG(cosT, 0.80), atmHG(cosT, -0.30), 0.26) * ISO_INV,
+                      uPhaseClamp.x, uPhaseClamp.y);
   float cosTM = dot(rd, uMoonDir);
-  float phaseM = mix(atmHG(cosTM, 0.78), atmHG(cosTM, -0.30), 0.26);
+  float phaseM = clamp(mix(atmHG(cosTM, 0.78), atmHG(cosTM, -0.30), 0.26) * ISO_INV,
+                       uPhaseClamp.x, uPhaseClamp.y);
 
   int steps = int(mix(96.0, 44.0, smoothstep(0.03, 0.40, rd.y)));
   float stepLen = (t1 - t0) / float(steps);
@@ -90,9 +102,11 @@ void main() {
       float a = 1.0, b = 1.0, c = 1.0;
       float energy = 0.0;
       for (int o = 0; o < 3; o++) {
-        energy += a * exp(-tau * b) * mix(0.0796, phase, c);
+        // later octaves have been scattered more, so they relax to isotropic
+        energy += a * exp(-tau * b) * mix(1.0, phase, c);
         a *= 0.52; b *= 0.55; c *= 0.62;
       }
+      energy *= uCloudSunGain;
       // powder: darkened cloud edges facing the light
       float powder = 1.0 - exp(-d * 42.0);
       vec3 sunL = sunRad * energy * mix(1.0, powder * 2.0, 0.42);
@@ -100,7 +114,7 @@ void main() {
       vec3 moonL = vec3(0.0);
       if (uMoonLight > 0.0001 && tr > 0.12) {
         float tauM = cloudLightOpticalDepth(q, uMoonDir, 1.0);
-        moonL = moonRad * exp(-tauM * 0.8) * (0.0796 + phaseM * 0.5);
+        moonL = moonRad * exp(-tauM * 0.8) * uCloudSunGain * (0.5 + phaseM * 0.5);
       }
 
       vec3 amb = mix(skyHz * 0.55, skyUp, hf) * uAmbientBoost * (0.30 + 0.70 * hf);
@@ -203,7 +217,12 @@ export class Clouds {
       uCamPos: { value: new THREE.Vector3() },
       uMaxDist: { value: 46000 },
       uCloudHaze: { value: 0.0000085 },
-      uAmbientBoost: { value: 1.0 },
+      uAmbientBoost: { value: 1.15 },
+      // energy the 3-octave multiple-scattering sum has to make up for; tuned
+      // so a thick, fully lit midday cumulus reads a little brighter than
+      // sunlit ground, which is what puts the eye on the sky
+      uCloudSunGain: { value: 0.42 },
+      uPhaseClamp: { value: new THREE.Vector2(0.85, 8.0) },
       uFrame: { value: 0 },
     });
     this.marchUniforms = marchUniforms;

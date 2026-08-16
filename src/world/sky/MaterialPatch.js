@@ -99,6 +99,8 @@ export class MaterialPatch {
       uniform float uSpecIBL;
       uniform float uSkyDim;
       uniform float uOvercast;
+      uniform float uNight;
+      uniform vec3  uNightTint;
       ${ATMO_COMMON}
 
       float atmCloudShadow(vec3 wp) {
@@ -166,6 +168,12 @@ export class MaterialPatch {
           inCol = mix(inCol, mix(upSky, flat3, 0.8) * 1.35, uOvercast);
         }
         inCol *= uSkyDim * uAerialTint;
+        // Airglow. The sky dome already sits on this floor at night; without
+        // the same floor here the air between the eye and a distant ridge is
+        // perfectly black, so moonlit faces read as snow cut out of nothing.
+        // Aerial perspective has to reach the same colour the sky does or the
+        // horizon stops joining up.
+        inCol += uNightTint * uNight * 1.6;
         float k = (1.0 - T) * uAerialStrength;
         gl_FragColor.rgb = mix(gl_FragColor.rgb, inCol, clamp(k, 0.0, 1.0));
       }

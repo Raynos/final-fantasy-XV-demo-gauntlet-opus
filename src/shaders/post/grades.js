@@ -42,17 +42,23 @@ export const GRADES = {
   },
 
   // The FFXV signature. Warm raking light, teal shadows, creamy highlights.
+  // The FFXV signature is warm raking light against *cool* shadows. The grade
+  // must not warm the whole frame — the atmosphere is already pouring amber
+  // inscatter into every distant surface at golden hour, so a heavy warm
+  // balance on top of that collapses the image to one hue. Keep the highlights
+  // warm, push the shadows further toward teal, and let the separation do the
+  // work instead of the white balance.
   golden: {
-    balance: [0.24, 0.04],
-    contrast: 1.09, saturation: 1.07,
-    lift: [0.0, 0.002, 0.012], gain: [1.05, 1.0, 0.945],
+    balance: [0.13, 0.03],
+    contrast: 1.10, saturation: 1.08,
+    lift: [0.0, 0.003, 0.018], gain: [1.03, 1.0, 0.975],
     vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.225,
     look: {
       toe: 0.045, shoulder: 0.88, pivot: 0.40, contrast: 1.13,
-      shadowTint: [0.84, 0.96, 1.20], midTint: [1.05, 1.0, 0.945], highTint: [1.14, 1.03, 0.86],
-      sat: 1.02, satShadow: 0.80, satHigh: 0.84,
+      shadowTint: [0.78, 0.94, 1.30], midTint: [1.02, 1.0, 0.975], highTint: [1.10, 1.02, 0.90],
+      sat: 1.04, satShadow: 0.92, satHigh: 0.84,
       mixer: [1.0, 0.02, -0.01, 0.0, 1.0, 0.0, -0.01, 0.01, 1.0],
-      fade: 0.016, fadeTint: [0.09, 0.07, 0.06],
+      fade: 0.016, fadeTint: [0.07, 0.08, 0.11],
     },
   },
 

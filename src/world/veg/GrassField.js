@@ -17,10 +17,16 @@ import { grassClumpTex } from './VegTextures.js';
  * what keeps the whole field at three draw calls with no per-frame CPU cost.
  */
 
+// The outer ring used to reach 300 m. An alpha-cut card that small samples the
+// coarsest mips, where its silhouette no longer exists, so the whole quad
+// passes or fails as one block and the field turns into a rash of dark
+// rectangles. Ending the ring where the cards are still several pixels across
+// and handing the rest to the terrain's own grass tint reads far better than
+// stamping geometry the alpha test cannot resolve.
 const LODS = [
   { name: 'blade', tile: 16, far: 46, spacing: 0.155, max: 210000 },
   { name: 'clump', tile: 32, near: 40, far: 132, spacing: 0.8, max: 78000 },
-  { name: 'far', tile: 64, near: 124, far: 300, spacing: 2.6, max: 44000 },
+  { name: 'far', tile: 64, near: 122, far: 196, spacing: 2.2, max: 44000 },
 ];
 
 const _m = new THREE.Matrix4();
@@ -130,14 +136,17 @@ export class GrassField {
       mat: {},
       veg: { bend: 0.34, flutter: 0.34, gustFreq: 0.052, trample: 0.85, flexPow: 1.9, twoSidedNormals: true, aoBoost: 0.42 },
     });
-    const clumpTexA = grassClumpTex(0, 46);
-    const clumpTexB = grassClumpTex(1, 30);
+    // the alpha reference the mip chain preserves must be the alpha test the
+    // material will actually run, or the far LODs come out denser than the
+    // near ones and the field grows a hard edge at the LOD ring
+    const clumpTexA = grassClumpTex(0, 46, 0.42);
+    const clumpTexB = grassClumpTex(1, 30, 0.42);
     const m1 = grassMat({
       mat: { map: clumpTexA, alphaTest: 0.42, transparent: false },
       veg: { bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.5, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.3 },
     });
     const m2 = grassMat({
-      mat: { map: clumpTexB, alphaTest: 0.3, transparent: false },
+      mat: { map: clumpTexB, alphaTest: 0.42, transparent: false },
       veg: { bend: 0.24, flutter: 0.1, gustFreq: 0.045, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.2 },
     });
 
@@ -229,8 +238,10 @@ export class GrassField {
           h = (0.3 + 0.55 * d) * (0.62 + jitter * 1.0);
           w = h * (1.15 + rng.next() * 0.8);
         } else {
-          h = (0.5 + 0.75 * d) * (0.7 + jitter * 0.75);
-          w = h * (1.2 + rng.next() * 0.9);
+          // bigger cards on the outer ring: a few large clumps resolve, a
+          // scatter of tiny ones only aliases
+          h = (0.62 + 0.9 * d) * (0.8 + jitter * 0.8);
+          w = h * (1.25 + rng.next() * 0.9);
         }
         const yaw = rng.next() * Math.PI * 2;
         const tilt = isBlade ? rng.gauss(0, 0.19) : rng.gauss(0, 0.07);

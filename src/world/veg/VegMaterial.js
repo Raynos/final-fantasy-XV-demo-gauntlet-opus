@@ -20,31 +20,36 @@ export const VegUniforms = {
 /**
  * Meshes whose silhouette exists only in the alpha channel.
  *
- * Any pass that swaps in a `scene.overrideMaterial` (the GTAO g-buffer pass
- * does exactly this) loses the alpha test and renders these cards as solid
- * quads — a distant tree impostor then stamps a black rectangle into the
- * ambient-occlusion buffer. We hide them for the duration of such passes:
- * screen-space AO on a two-triangle billboard was never meaningful anyway.
+ * Any pass that swaps in a `scene.overrideMaterial` (three's GTAO g-buffer
+ * path does exactly this) loses the alpha test and would render these cards as
+ * solid quads. **PostFX owns that problem now** — see `PostFX.guardOverrides`,
+ * which flags every alpha-cut material `allowOverride = false` so it keeps its
+ * own shader through such a pass. Registering here just marks the card
+ * immediately instead of waiting for PostFX's next scan, and keeps the
+ * inventory available for debugging.
  */
 const alphaCards = new Set();
 
-/** Mark a mesh as alpha-silhouetted so override-material passes skip it. */
-export function registerAlphaCard(mesh) { alphaCards.add(mesh); return mesh; }
+/** Mark a mesh as alpha-silhouetted. @returns {THREE.Mesh} the mesh */
+export function registerAlphaCard(mesh) {
+  alphaCards.add(mesh);
+  const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  for (const m of list) if (m) m.allowOverride = false;
+  return mesh;
+}
+
+/** Every mesh registered with {@link registerAlphaCard}. */
+export function alphaCardMeshes() { return alphaCards; }
 
 /**
- * Install the override-material guard on a scene. Safe to call once per run;
- * chains onto any handler another system already registered.
+ * Retained for callers written before PostFX took ownership of the
+ * override-material contract. It no longer touches `visible`: hiding foliage
+ * for the AO pass punched holes in the occlusion instead of fixing it.
  * @param {THREE.Scene} scene
  */
 export function installAlphaCardGuard(scene) {
-  if (scene.userData._vegAlphaGuard) return;
   scene.userData._vegAlphaGuard = true;
-  const prev = scene.onBeforeRender;
-  scene.onBeforeRender = function onBeforeRender(...args) {
-    const hidden = this.overrideMaterial !== null && this.overrideMaterial !== undefined;
-    for (const m of alphaCards) m.visible = !hidden;
-    if (prev) prev.apply(this, args);
-  };
+  for (const mesh of alphaCards) registerAlphaCard(mesh);
 }
 
 const COMMON = /* glsl */`
@@ -167,11 +172,20 @@ export function patchVeg(mat, {
             {
               vec3 V = geometryViewDir;
               vec3 L = normalize(directionalLights[0].direction);
-              // light travelling through the leaf toward the eye
+              // Light travelling through the leaf toward the eye. Two things
+              // keep this honest: it is radiance, so it carries the same 1/PI
+              // the lambert lobe does, and it is gated by how much light the
+              // leaf actually intercepts. Without the gate a canopy transmits
+              // the full key colour regardless of geometry, which is invisible
+              // under a high sun but turns every tree into a lantern on a
+              // moonlit night, when the key rakes in at a few degrees and the
+              // direct term has all but vanished.
               float back = clamp(dot(V, -L), 0.0, 1.0);
-              float trans = pow(back, 3.2) * ${translucency.toFixed(3)};
+              float gate = 0.06 + 0.94 * abs(dot(geometryNormal, L));
+              float trans = pow(back, 3.2) * gate * ${translucency.toFixed(3)};
               trans += pow(clamp(dot(-geometryNormal, L), 0.0, 1.0), 1.5) * ${(translucency * 0.22).toFixed(3)};
-              reflectedLight.indirectDiffuse += directionalLights[0].color * trans * diffuseColor.rgb * (0.45 + 0.55 * vFlexOut);
+              reflectedLight.indirectDiffuse += directionalLights[0].color *
+                (trans * RECIPROCAL_PI * 2.6) * diffuseColor.rgb * (0.45 + 0.55 * vFlexOut);
             }
           #endif
           ${aoBoost > 0 ? `reflectedLight.indirectDiffuse *= mix(${(1 - aoBoost).toFixed(3)}, 1.0, vFlexOut);` : ''}

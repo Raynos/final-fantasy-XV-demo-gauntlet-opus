@@ -24,8 +24,20 @@ function memo(key, make) {
  * floods to fully opaque and renders as a solid rectangle. We box-filter with
  * alpha-weighted colour and then rescale alpha at every level so the fraction
  * of texels passing the alpha test stays constant.
+ *
+ * The rescale is only meaningful while a level still has enough texels to
+ * *represent* the coverage. At 4x4 coverage is quantised to 1/16 and at 1x1 it
+ * is either 0 or 1, so the search can never hit the target and instead rails
+ * the alpha scale to its upper bound — which floods the coarse levels to fully
+ * opaque and is precisely how a distant alpha card, or any card seen edge-on
+ * (huge UV derivative on one axis), stamps a solid rectangle. Below
+ * MIN_COVERAGE_SIZE we therefore freeze the last trustworthy scale and let the
+ * natural box-filtered alpha take over, so far cards thin out instead of
+ * filling in.
  */
-function buildAlphaMips(data, size, alphaRef = 0.42) {
+const MIN_COVERAGE_SIZE = 16;
+
+function buildAlphaMips(data, size, alphaRef = 0.42, tinyFade = 1.0) {
   const coverageOf = (buf, scale) => {
     let n = 0;
     for (let i = 3; i < buf.length; i += 4) if ((buf[i] / 255) * scale >= alphaRef) n++;
@@ -34,6 +46,7 @@ function buildAlphaMips(data, size, alphaRef = 0.42) {
   const target = coverageOf(data, 1);
   const mips = [{ data, width: size, height: size }];
   let src = data, w = size, h = size;
+  let scale = 1;
 
   while (w > 1 || h > 1) {
     const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1);
@@ -58,12 +71,25 @@ function buildAlphaMips(data, size, alphaRef = 0.42) {
       }
     }
     // binary-search an alpha scale that restores the original coverage
-    let lo = 0.25, hi = 8;
-    for (let it = 0; it < 12; it++) {
-      const mid = (lo + hi) * 0.5;
-      if (coverageOf(dst, mid) < target) lo = mid; else hi = mid;
+    if (nw >= MIN_COVERAGE_SIZE && nh >= MIN_COVERAGE_SIZE) {
+      let lo = 0.25, hi = 4;
+      for (let it = 0; it < 12; it++) {
+        const mid = (lo + hi) * 0.5;
+        if (coverageOf(dst, mid) < target) lo = mid; else hi = mid;
+      }
+      // never more than a stop of correction: past that the level has stopped
+      // resolving the silhouette and is only being made opaque
+      scale = Math.min(2.0, Math.max(0.5, (lo + hi) * 0.5));
+    } else {
+      // Cards that have shrunk past a few pixels — or that are seen edge-on,
+      // where one UV axis blows past the anisotropy limit — sample only these
+      // levels, and their alpha is nearly uniform there. Whatever the test
+      // does then, it does to the *whole quad*. Fading them below the
+      // threshold makes such a card dissolve, which the ground texture covers
+      // for; leaving them at it makes it stamp a rectangle, which nothing does.
+      scale *= tinyFade;
     }
-    const s = (lo + hi) * 0.5;
+    const s = scale;
     if (Math.abs(s - 1) > 0.01) {
       for (let i = 3; i < dst.length; i += 4) dst[i] = Math.min(255, Math.round(dst[i] * s));
     }
@@ -74,8 +100,8 @@ function buildAlphaMips(data, size, alphaRef = 0.42) {
 }
 
 /** Apply the hand-built mip chain to an RGBA DataTexture. */
-function withAlphaMips(tex, data, size, alphaRef) {
-  tex.mipmaps = buildAlphaMips(data, size, alphaRef);
+function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
+  tex.mipmaps = buildAlphaMips(data, size, alphaRef, tinyFade);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -90,8 +116,17 @@ function withAlphaMips(tex, data, size, alphaRef) {
  * renderer path, which silently turns every alpha-tested card into an opaque
  * rectangle. Reading the pixels back with getImageData (already
  * un-premultiplied) and uploading them as data sidesteps that entirely.
+ *
+ * @param {number} size square texture size
+ * @param {(ctx:CanvasRenderingContext2D, size:number) => void} draw
+ * @param {{alphaRef?:number, tinyFade?:number}} [opts]
+ *   `alphaRef` is the alpha test the mip chain preserves coverage for — set it
+ *   to the material's own `alphaTest`. `tinyFade` (<1) dissolves the sub-8px
+ *   mips instead of holding their coverage; use it for cards that are dense
+ *   enough to hide the loss, and never for a lone silhouette like a tree
+ *   impostor that has to survive to the horizon.
  */
-export function alphaTex(size, draw) {
+export function alphaTex(size, draw, opts = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -110,7 +145,7 @@ export function alphaTex(size, draw) {
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.anisotropy = 8;
   tex.flipY = false;
-  return withAlphaMips(tex, data, size, 0.4);
+  return withAlphaMips(tex, data, size, opts.alphaRef ?? 0.4, opts.tinyFade ?? 1.0);
 }
 
 /** One tapered, curved blade stroke. */
@@ -137,9 +172,16 @@ function blade(ctx, x0, y0, len, wid, lean, colA, colB) {
   ctx.fill();
 }
 
-/** Dense clump of grass blades on a transparent card. */
-export function grassClumpTex(variant = 0, count = 46) {
-  return memo(`clump${variant}${count}`, () => alphaTex(256, (ctx, s) => {
+/**
+ * Dense clump of grass blades on a transparent card.
+ *
+ * @param {number} variant
+ * @param {number} count blades per card
+ * @param {number} [alphaRef] the material's alphaTest, so the mip chain
+ *   preserves the coverage that will actually be tested
+ */
+export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4) {
+  return memo(`clump${variant}${count}${alphaRef}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(4242 + variant * 977);
     for (let i = 0; i < count; i++) {
       const x = s * 0.5 + rng.gauss(0, s * 0.19);
@@ -154,7 +196,9 @@ export function grassClumpTex(variant = 0, count = 46) {
         `rgba(${dark * 0.88 | 0},${dark | 0},${dark * 0.78 | 0},1)`,
         `rgba(${lite * 0.95 | 0},${lite | 0},${lite * 0.84 | 0},1)`);
     }
-  }));
+    // a grass field is thousands of overlapping cards, so a card that has
+    // shrunk below a few pixels can dissolve without leaving a hole
+  }, { alphaRef, tinyFade: 0.82 }));
 }
 
 /** Leafy canopy card — a mass of small leaves, used on tree branch tips. */

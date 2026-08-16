@@ -24,28 +24,30 @@ const MOON_AZ_OFFSET = 70;
 /** Weather presets. Values are lerped toward, so transitions are continuous. */
 const WEATHER = {
   clear: {
-    coverage: 0.44, density: 0.016, type: 0.86, detail: 0.42, anvil: 0.25,
+    coverage: 0.34, density: 0.019, type: 0.86, detail: 0.42, anvil: 0.25,
     bottom: 1500, top: 4200, cirrus: 0.40, cloudShadow: 0.78,
-    fogDensity: 0.0009, fogHeight: 130, haze: 0.00030, sunMul: 1.0,
+    fogDensity: 0.0007, fogHeight: 130, haze: 0.00017, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0,
   },
   overcast: {
     coverage: 0.92, density: 0.026, type: 0.30, detail: 0.34, anvil: 0.1,
     bottom: 1100, top: 3200, cirrus: 0.12, cloudShadow: 0.35,
     fogDensity: 0.0026, fogHeight: 190, haze: 0.00085, sunMul: 0.30,
-    exposureMul: 1.0, godRays: 0.25, ambient: 1.0,
+    exposureMul: 1.12, godRays: 0.25, ambient: 1.0,
   },
   storm: {
     coverage: 1.0, density: 0.038, type: 0.42, detail: 0.30, anvil: 0.55,
     bottom: 800, top: 5200, cirrus: 0.05, cloudShadow: 0.20,
     fogDensity: 0.0042, fogHeight: 240, haze: 0.0013, sunMul: 0.16,
-    exposureMul: 0.95, godRays: 0.15, ambient: 1.0,
+    // heavy weather is printed up a stop: a storm should read as oppressive,
+    // not as night
+    exposureMul: 1.25, godRays: 0.15, ambient: 1.0,
   },
   fog: {
     coverage: 0.55, density: 0.016, type: 0.5, detail: 0.4, anvil: 0.2,
     bottom: 1300, top: 3600, cirrus: 0.25, cloudShadow: 0.30,
     fogDensity: 0.020, fogHeight: 55, haze: 0.0022, sunMul: 0.55,
-    exposureMul: 1.1, godRays: 0.8, ambient: 1.2,
+    exposureMul: 1.12, godRays: 0.8, ambient: 1.2,
   },
 };
 
@@ -70,6 +72,8 @@ export class Sky {
     this.moonDir = new THREE.Vector3(0, -1, 0);
     this._windOffset = new THREE.Vector2();
     this._lastPreFrame = -1;
+    this.exposure = 1.0;
+    this.exposureCeiling = 12.0;
     this._envHours = -999;
     this._scanCountdown = 0;
   }
@@ -355,7 +359,7 @@ export class Sky {
 
     // --- moon --------------------------------------------------------------
     const moonUp = smoothstep(-0.06, 0.10, this.moonDir.y);
-    const moonPower = 2.4 * moonUp * night * u.uMoonPhase.value;
+    const moonPower = 2.0 * moonUp * night * u.uMoonPhase.value;
     u.uMoonBright.value = 2.2 * moonUp;
     u.uMoonLight.value = 0.20 * moonUp * night;
 
@@ -390,14 +394,38 @@ export class Sky {
     );
     this.ambient.color.copy(skyTint);
     this.ambient.groundColor.setRGB(0.16 * day + 0.02, 0.14 * day + 0.02, 0.11 * day + 0.03);
-    this.ambient.intensity = lerp(0.07, 0.16, day) * p.ambient;
+    // Night needs real sky fill, not just a key. With too little of it the moon
+    // becomes a binary light: faces turned to it read as snow and everything
+    // else falls to black, which looks like a broken exposure rather than
+    // night. Lifting the fill compresses that ratio back to something the eye
+    // reads as moonlight.
+    this.ambient.intensity = lerp(0.115, 0.16, day) * p.ambient;
 
     // --- exposure ----------------------------------------------------------
-    let exposure = lerp(2.7, 1.55, twilight);
-    exposure = lerp(exposure, 0.85, day);
-    exposure *= p.exposureMul;
-    if (this.game) this.game.renderer.toneMappingExposure = exposure;
-    this.exposure = exposure;
+    // Sky owns the *scene* exposure and nothing else. It is derived from the
+    // irradiance actually landing on a horizontal surface — key light (sun or
+    // moon) plus the sky dome's own fill — rather than hand-authored per hour,
+    // so weather that kills the sun automatically opens the stop.
+    //
+    // The fractional power is the print, not the meter: a photograph is graded
+    // *relative* to the scene, so a 30x drop in irradiance from noon to night
+    // only opens ~1.3 stops instead of 5. That, plus the ceiling below, is what
+    // keeps night genuinely dark and blue.
+    //
+    // PostFX's auto-exposure is handed this as its centre and may only roam
+    // inside a narrow band around it — see Exposure.setSceneExposure. Writing
+    // renderer.toneMappingExposure here as well would multiply twice.
+    const keyE = Math.max(sunPower * Math.max(this.sunDir.y, 0),
+      moonPower * Math.max(this.moonDir.y, 0));
+    // uSkyDim is how much of the sky dome survives the cloud deck, so it is
+    // also how much of the sky's fill reaches the ground
+    const skyE = 6.0 * this.ambient.intensity * u.uSkyDim.value;
+    const sceneE = Math.max(keyE + skyE, 0.02);
+    this.exposure = (1.42 / Math.pow(sceneE, 0.22)) * p.exposureMul;
+    // FFXV nights are dark. A hard ceiling guarantees eye adaptation can never
+    // lift the frame out of the blue no matter how black the scene gets.
+    this.exposureCeiling = lerp(12.0, 2.8, night);
+    this._publishExposure();
 
     // --- god rays ----------------------------------------------------------
     // strongest when the sun rakes across the frame
@@ -415,11 +443,30 @@ export class Sky {
     u.uStarRot.value.setFromMatrix4(rot);
 
     // --- night sky floor ----------------------------------------------------
-    u.uNightTint.value.set(0.0016, 0.0028, 0.0072);
+    // The night floor is deep navy, not black: real night air glows, and the
+    // aerial-perspective term reads the same value, so sky and distant ridges
+    // sit on one floor instead of separating into cut-out silhouettes.
+    u.uNightTint.value.set(0.0034, 0.0056, 0.0132);
     u.uStarBright.value = 1.0;
     u.uMilkyWay.value = 0.9;
 
     if (force || Math.abs(this.hours - this._envHours) > 0.08) this._updateEnv();
+  }
+
+  /**
+   * Hand the scene exposure to PostFX. PostFX is built after every system's
+   * init(), so this has to be re-issued once it exists — cheap enough to do
+   * every frame from lateUpdate.
+   */
+  _publishExposure() {
+    const post = this.game && this.game.post;
+    if (!post || !post.exposure || !post.exposure.setSceneExposure) return;
+    post.exposure.setSceneExposure(this.exposure, {
+      lo: 0.62, hi: 1.65, ceiling: this.exposureCeiling,
+    });
+    // Sky is the exposure owner; three's own multiplier stays neutral so a
+    // second stop can never sneak in behind PostFX's back.
+    this.game.renderer.toneMappingExposure = 1.0;
   }
 
   _updateEnv() {
@@ -479,6 +526,7 @@ export class Sky {
   lateUpdate() {
     const game = this.game;
     if (!game || !game.post) return;
+    this._publishExposure();
     if (!this._raysInserted) {
       this._raysInserted = true;
       const idx = game.post.composer.passes.indexOf(game.post.bloom);

@@ -6,6 +6,16 @@ import { CHUNK_COLOR } from '../../shaders/post/common.js';
  * GPU eye adaptation. The scene buffer is reduced to a single texel of average
  * log-luminance, then a 1x1 ping-pong target integrates it over time. Nothing
  * is ever read back to the CPU, so there is no pipeline stall.
+ *
+ * **Ownership.** The value this integrates *is* the final scene-exposure
+ * multiplier: metering runs on the un-exposed HDR buffer, so `key / avgLuma`
+ * is already an absolute exposure, not a correction on top of one. Nothing
+ * else may multiply a second exposure onto the frame. Instead the Sky
+ * publishes the physically motivated *scene* exposure through
+ * {@link setSceneExposure} and eye adaptation is only allowed to roam inside a
+ * band around it (`lo`..`hi`), under a hard `ceiling`. That is what keeps a
+ * night dark: a dark frame drives `key / avgLuma` toward the rail, and without
+ * the band the integrator would happily expose midnight as noon.
  */
 export class Exposure {
   constructor(w, h) {
@@ -13,8 +23,12 @@ export class Exposure {
     this.key = 0.19;            // target middle-grey luminance
     this.speedUp = 3.2;         // adaptation to brighter scenes (per second)
     this.speedDown = 1.6;
-    this.min = 0.12;
+    this.min = 0.12;            // absolute rails, a backstop for the band
     this.max = 8.0;
+    this.base = 1.0;            // scene exposure published by Sky
+    this.rangeLo = 0.62;        // adaptation band, as a ratio of `base`
+    this.rangeHi = 1.65;
+    this.ceiling = Infinity;    // hard cap on the final multiplier
     this.compensation = 1.0;    // manual EV trim, multiplied on top
     this._reset = true;
 
@@ -92,6 +106,28 @@ export class Exposure {
   /** Texture holding the current adapted exposure multiplier in .r */
   get texture() { return this.adapt[this.pingpong].texture; }
 
+  /**
+   * Publish the scene exposure. This is the *only* supported way to drive
+   * exposure from lighting: eye adaptation then adapts within `lo`..`hi` of it
+   * instead of fighting it.
+   *
+   * @param {number} base scene exposure multiplier (>0)
+   * @param {{lo?:number, hi?:number, ceiling?:number}} [band]
+   */
+  setSceneExposure(base, band = {}) {
+    this.base = Math.max(1e-4, base);
+    if (band.lo != null) this.rangeLo = band.lo;
+    if (band.hi != null) this.rangeHi = band.hi;
+    this.ceiling = band.ceiling != null ? band.ceiling : Infinity;
+  }
+
+  /** The clamped [min, max] the integrator is allowed to settle inside. */
+  get bounds() {
+    const hi = Math.min(this.max, this.ceiling, this.base * this.rangeHi);
+    const lo = Math.min(hi, Math.max(this.min, this.base * this.rangeLo));
+    return [lo, hi];
+  }
+
   setSize(w, h) {
     if (this.chain) for (const rt of this.chain) rt.dispose();
     this.chain = [];
@@ -135,7 +171,8 @@ export class Exposure {
     u.uDt.value = Math.min(dt, 0.1);
     u.uKey.value = this.key;
     u.uSpeed.value.set(this.speedUp, this.speedDown);
-    u.uRange.value.set(this.min, this.max);
+    const [lo, hi] = this.bounds;
+    u.uRange.value.set(lo, hi);
     u.uReset.value = this._reset ? 1 : 0;
     blit(renderer, this.adaptMat, this.adapt[dst]);
     this.pingpong = dst;
