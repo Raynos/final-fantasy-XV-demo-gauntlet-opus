@@ -69,7 +69,9 @@ export class Game {
       ['Combat', () => new CombatSystem()],
       ['Camera', () => new CameraRig()],
       ['Audio', () => new AudioSystem()],
-      ['Rpg', () => new RpgSystem()],   // before HUD — the HUD reads it during init
+      // Before HUD — the HUD reads it during init. Start mid-game so the
+      // capture shots show a party with real progression, not a level 1 save.
+      ['Rpg', () => new RpgSystem({ startLevel: 27 })],
       ['HUD', () => new HUD()],
       ['Menus', () => new Menus()],
       ['Director', () => new Director()],

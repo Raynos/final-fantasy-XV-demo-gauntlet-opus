@@ -164,11 +164,12 @@ export class Stats {
     this.buff = emptyMods();
     /** Modifiers contributed by unlocked Ascension nodes. */
     this.ascension = emptyMods();
+    /** Max-HP temporarily lost to damage-over-time (FFXV's grey bar).
+     *  Must be set before `maxHp` is first read — it is a term in that getter. */
+    this.hpDrain = 0;
     this.hp = this.maxHp;
     this.mp = this.maxMp;
     this.ko = false;
-    /** Max-HP that has been temporarily lost to damage-over-time (FFXV's grey bar). */
-    this.hpDrain = 0;
   }
 
   /** Base (pre-gear) value of a core stat at the current level. */
