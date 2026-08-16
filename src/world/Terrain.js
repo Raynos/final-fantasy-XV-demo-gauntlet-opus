@@ -1,48 +1,222 @@
 import * as THREE from 'three';
+import {
+  Field, LANDMARKS, gnoise2, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
+} from './terrain/Field.js';
+import { Clipmap } from './terrain/Clipmap.js';
+import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
+import {
+  createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
+} from './terrain/TerrainMaterial.js';
 
 /**
- * Placeholder terrain: a single displaced plane with a height query API.
- * Contract used by every other system — keep these signatures when replacing:
- *   heightAt(x, z) -> number
- *   normalAt(x, z) -> THREE.Vector3
+ * Leide badlands: a 3 km eroded basin ringed by ridged mountain ranges, drawn
+ * with a camera-centred geometry clipmap and a six-layer height-blended,
+ * triplanar splat shader.
+ *
+ * Cross-system contract:
+ *   heightAt(x, z)      -> number      exact surface height, bilinear cached
+ *   normalAt(x, z, out) -> Vector3     surface normal
+ *   sampleMaterial(x,z) -> {...}       dominant material + weights
+ *   roadDistance(x, z)  -> number      metres to the dirt road centreline
+ *   road                               spline: points / pointAt(s) / width
+ *   landmarks                          named hero features for shot framing
  */
 export class Terrain {
-  constructor() { this.size = 1400; }
+  constructor() {
+    /** Full span of the detailed heightfield, metres. */
+    this.size = HALF * 2;
+    /** Hero landmark anchors, world space. */
+    this.landmarks = LANDMARKS;
+    this.layerNames = LAYER_NAMES;
+    this._v = new THREE.Vector3();
+    this._ctrl = {};
+  }
 
   async init(game) {
     this.game = game;
-    const seg = 256;
-    const geo = new THREE.PlaneGeometry(this.size, this.size, seg, seg);
-    geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      pos.setY(i, this.heightAt(pos.getX(i), pos.getZ(i)));
-    }
-    geo.computeVertexNormals();
 
-    const mat = new THREE.MeshStandardMaterial({ color: 0x6b7355, roughness: 0.95, metalness: 0 });
-    this.mesh = new THREE.Mesh(geo, mat);
-    this.mesh.receiveShadow = true;
-    this.mesh.castShadow = false;
-    game.scene.add(this.mesh);
+    this.field = new Field(game.seed || 1337);
+    this.field.build();
+    this.road = this.field.roadSpline;
+
+    const quality = game.rnd ? game.rnd.quality : 'high';
+    const layerSize = quality === 'low' ? 256 : 512;
+    const layers = buildLayerTextures(layerSize);
+    this.textures = { ...layers, ...this._uploadFieldTextures() };
+
+    this.res = {
+      uniforms: makeTerrainUniforms(this.textures, {
+        HALF, CELL, N, BLEND_OUT, FAR_HALF, FAR_CELL, FAR_N,
+      }),
+      finestCell: 1.5,
+    };
+
+    this.clipmap = new Clipmap({
+      levels: 7,
+      n: 48,
+      cell0: 1.5,
+      castShadow: true,
+      makeMaterial: (cell, level) => ({
+        surface: createTerrainMaterial(this.res, cell, level),
+        depth: level <= 1 ? createTerrainDepthMaterial(this.res, cell) : null,
+      }),
+    });
+    game.scene.add(this.clipmap.group);
+    this.clipmap.update(game.camera.position.x, game.camera.position.z);
+
+    this.stats = {
+      triangles: this.clipmap.triangles,
+      drawCalls: this.clipmap.group.children.length,
+      buildMs: this.field.stats.buildMs,
+    };
+    if (game.debug) console.log('[Terrain]', JSON.stringify(this.stats));
   }
 
-  heightAt(x, z) {
-    const s = 0.0035;
-    let h = 0, amp = 14, f = s;
-    for (let o = 0; o < 4; o++) {
-      h += amp * Math.sin(x * f + o * 1.7) * Math.cos(z * f * 1.13 + o * 2.3);
-      amp *= 0.5; f *= 2.03;
-    }
-    return h;
+  /** Upload the CPU grids as the textures the vertex/fragment shaders sample. */
+  _uploadFieldTextures() {
+    const f = this.field;
+
+    const height = new THREE.DataTexture(f.h, N, N, THREE.RedFormat, THREE.FloatType);
+    height.magFilter = height.minFilter = THREE.NearestFilter;
+    height.wrapS = height.wrapT = THREE.ClampToEdgeWrapping;
+    height.generateMipmaps = false;
+    height.needsUpdate = true;
+
+    const farHeight = new THREE.DataTexture(f.far, FAR_N, FAR_N, THREE.RedFormat, THREE.FloatType);
+    farHeight.magFilter = farHeight.minFilter = THREE.NearestFilter;
+    farHeight.wrapS = farHeight.wrapT = THREE.ClampToEdgeWrapping;
+    farHeight.generateMipmaps = false;
+    farHeight.needsUpdate = true;
+
+    const normal = new THREE.DataTexture(f.nrm, N, N, THREE.RGFormat, THREE.HalfFloatType);
+    normal.magFilter = normal.minFilter = THREE.LinearFilter;
+    normal.wrapS = normal.wrapT = THREE.ClampToEdgeWrapping;
+    normal.generateMipmaps = false;
+    normal.needsUpdate = true;
+
+    const farNormal = new THREE.DataTexture(f.farNrm, FAR_N, FAR_N, THREE.RGFormat, THREE.HalfFloatType);
+    farNormal.magFilter = farNormal.minFilter = THREE.LinearFilter;
+    farNormal.wrapS = farNormal.wrapT = THREE.ClampToEdgeWrapping;
+    farNormal.generateMipmaps = false;
+    farNormal.needsUpdate = true;
+
+    const ctrl = new THREE.DataTexture(f.ctrl, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+    ctrl.magFilter = ctrl.minFilter = THREE.LinearFilter;
+    ctrl.wrapS = ctrl.wrapT = THREE.ClampToEdgeWrapping;
+    ctrl.colorSpace = THREE.NoColorSpace;
+    ctrl.generateMipmaps = false;
+    ctrl.needsUpdate = true;
+
+    const farCtrl = new THREE.DataTexture(f.farCtrl, FAR_N, FAR_N, THREE.RGBAFormat, THREE.UnsignedByteType);
+    farCtrl.magFilter = farCtrl.minFilter = THREE.LinearFilter;
+    farCtrl.wrapS = farCtrl.wrapT = THREE.ClampToEdgeWrapping;
+    farCtrl.colorSpace = THREE.NoColorSpace;
+    farCtrl.generateMipmaps = false;
+    farCtrl.needsUpdate = true;
+
+    return { height, farHeight, normal, farNormal, ctrl, farCtrl };
   }
 
+  // ------------------------------------------------------------------- query
+
+  /**
+   * Surface height at a world position — exactly what the GPU renders.
+   * @returns {number}
+   */
+  heightAt(x, z) { return this.field.heightAt(x, z); }
+
+  /**
+   * Surface normal at a world position.
+   * @returns {THREE.Vector3}
+   */
   normalAt(x, z, out = new THREE.Vector3()) {
-    const e = 0.5;
-    const hL = this.heightAt(x - e, z), hR = this.heightAt(x + e, z);
-    const hD = this.heightAt(x, z - e), hU = this.heightAt(x, z + e);
+    const e = CELL;
+    const f = this.field;
+    const hL = f.heightAt(x - e, z), hR = f.heightAt(x + e, z);
+    const hD = f.heightAt(x, z - e), hU = f.heightAt(x, z + e);
     return out.set(hL - hR, 2 * e, hD - hU).normalize();
   }
 
+  /** Steepness in 0..1 (0 = flat, 1 = vertical). */
+  slopeAt(x, z) {
+    const n = this.normalAt(x, z, this._v);
+    return 1 - n.y;
+  }
+
+  /**
+   * Distance in metres from the road centreline. Cheap enough for scattering.
+   * @returns {number}
+   */
+  roadDistance(x, z) { return this.road ? this.road.distance(x, z) : 1e5; }
+
+  /**
+   * Rough surface classification, mirroring the splat weights the shader uses.
+   * Vegetation should look at `weights.grass` and `sediment`.
+   * @returns {{id:number, name:string, weights:object, slope:number, height:number,
+   *            flow:number, sediment:number, rocky:number, road:number, roadDist:number}}
+   */
+  sampleMaterial(x, z) {
+    const f = this.field;
+    const c = f.ctrlAt(x, z, this._ctrl);
+    const h = f.heightAt(x, z);
+    const slope = this.slopeAt(x, z);
+    // identical fields to the ones the splat shader evaluates
+    const m1 = gnoise2(x * 0.0017, z * 0.0017);
+    const m2 = gnoise2(x * 0.0072 + 21, z * 0.0072 + 21);
+    const p1 = gnoise2(x * 0.0125 + 3.3, z * 0.0125 + 3.3);
+    const p2 = gnoise2(x * 0.043 - 9.1, z * 0.043 - 9.1);
+    const patchN = 0.62 * p1 + 0.38 * p2;
+    const dryness = Math.max(0, Math.min(1, 0.5 + 0.45 * m1 + 0.55 * patchN));
+    const flatAmt = 1 - ss(0.06, 0.28, slope);
+    const lowAlt = 1 - ss(48, 120, h);
+
+    // ctrl.r doubles as the road lateral offset where the mask is set
+    const flow = c.road > 0.02 ? 0 : c.flow;
+    const w = {
+      sand: flatAmt * lowAlt * (0.14 + 1.05 * c.sediment + 1.70 * ss(0.60, 0.95, dryness)),
+      dirt: 0.72 + 0.55 * (0.5 + 0.5 * p2) - 1.35 * ss(0.10, 0.44, slope),
+      gravel: ss(0.14, 0.42, slope) * (0.5 + 0.8 * (0.5 + 0.5 * m2))
+        + 1.20 * flow + 0.40 * c.rocky + 0.62 * ss(0.34, 0.04, dryness) * flatAmt,
+      rock: ss(0.20, 0.48, slope) * 1.80 + 1.10 * c.rocky + 0.65 * ss(80, 175, h),
+      grass: flatAmt * lowAlt * 1.30
+        * ss(0.12, 0.66, 0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * c.sediment),
+      road: c.road * 5.5 * (1 - ss(0.30, 0.55, slope)),
+    };
+    let sum = 0;
+    for (const k in w) { w[k] = Math.pow(Math.max(w[k], 0), 1.7); sum += w[k]; }
+    sum = Math.max(sum, 1e-4);
+    let best = 'dirt', bestV = -1;
+    for (const k in w) { w[k] /= sum; if (w[k] > bestV) { bestV = w[k]; best = k; } }
+
+    return {
+      id: LAYER_NAMES.indexOf(best),
+      name: best,
+      weights: w,
+      slope,
+      height: h,
+      flow,
+      sediment: c.sediment,
+      rocky: c.rocky,
+      road: c.road,
+      roadDist: this.roadDistance(x, z),
+    };
+  }
+
+  // ------------------------------------------------------------------ update
+
+  lateUpdate(dt, game) {
+    const p = game.camera.position;
+    this.clipmap.update(p.x, p.z);
+    if (!this._gbufferPatched && game.post && game.post.gtao) {
+      patchGBufferMaterial(game.post.gtao.normalMaterial, this.res);
+      this._gbufferPatched = true;
+    }
+  }
+
   update() {}
+}
+
+function ss(a, b, x) {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
 }
