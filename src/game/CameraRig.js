@@ -1,38 +1,217 @@
 import * as THREE from 'three';
+import { Noise } from '../util/Noise.js';
+
+const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Third-person spring-arm camera with collision, framing offsets and a
- * cinematic-shot override used by the screenshot harness.
+ * Third-person game camera.
  *
- * Harness contract:
- *   rig.setShot({ pos:[x,y,z], target:[x,y,z], fov })  -> freeze camera
+ * A spring arm with real collision (a swept probe against the terrain and any
+ * prop colliders, with a fast push-in and a slow recover), separate position
+ * and rotation damping, velocity look-ahead, speed-reactive FOV, a handheld
+ * noise layer, combat framing that keeps the player and the lock-on target in
+ * the same frame, and a trauma-driven shake model.
+ *
+ * Harness contract (unchanged):
+ *   rig.setShot({ pos:[x,y,z], target:[x,y,z], fov })   -> freeze camera
  *   rig.clearShot()
+ *   rig.followShot = shot                                -> track the player
  */
 export class CameraRig {
   async init(game) {
     this.game = game;
     this.cam = game.camera;
+
+    // orbit state
     this.yaw = Math.PI * 0.15;
     this.pitch = 0.22;
+    this.yawTarget = this.yaw;
+    this.pitchTarget = this.pitch;
+    this.sensitivity = 0.0026;
+    this.pitchMin = -0.62;
+    this.pitchMax = 1.15;
+
+    // arm
     this.distance = 5.6;
+    this.restDistance = 5.6;
     this.targetDistance = 5.6;
-    this.height = 1.55;
+    this.minDistance = 1.1;
+    this.maxDistance = 12;
+    this.probeRadius = 0.32;
+    this.height = 1.62;
     this.shoulder = 0.55;
+
+    // damping (separate rates: position lags, aim is crisp)
+    this.posDamp = 11.0;
+    this.posDampY = 7.0;
+    this.rotDamp = 16.0;
+    this.lookDamp = 13.0;
+
+    // framing
+    this.lookAhead = 0.34;        // metres per m/s of player velocity
+    this.lookAheadMax = 2.2;
+    this.lockOn = null;
+    this.combatFraming = 0.6;
+
+    // lens
+    this.baseFov = 50;
+    this.fov = 50;
+    this.fovSpeedGain = 1.15;     // degrees per m/s over the walk speed
+    this.fovMax = 14;             // max extra degrees
+    this.sprintFov = 4.0;
+
+    // handheld + shake
+    this.handheld = 1.0;
+    this.trauma = 0;
+    this.traumaDecay = 1.35;
+    this.traumaMax = 1.0;
+    this.shakeFreq = 13.0;
+    this.shakePos = 0.26;
+    this.shakeRot = 0.055;
+    this._traumaDir = new THREE.Vector3(0, 0, 0);
+    this._noise = new Noise(20166);
+    this._t = 0;
+
     this.shot = null;
+    this.followShot = null;
+
     this._focus = new THREE.Vector3();
+    this._focusSmooth = new THREE.Vector3();
     this._desired = new THREE.Vector3();
     this._smooth = new THREE.Vector3();
+    this._dir = new THREE.Vector3();
+    this._tmp = new THREE.Vector3();
+    this._tmp2 = new THREE.Vector3();
+    this._lookAt = new THREE.Vector3();
     this._first = true;
-    this.sensitivity = 0.0026;
+
+    this._ray = new THREE.Raycaster();
+    this._ray.far = 20;
+    this._colliders = null;
+    this._collideAge = -1;
   }
 
-  setShot(shot) { this.shot = shot; }
-  clearShot() { this.shot = null; }
+  // ------------------------------------------------------------------ API
+
+  /** Freeze the camera on a cinematic shot. */
+  setShot(shot) {
+    this.shot = shot;
+    this._cut();
+  }
+
+  /** Return to gameplay control. */
+  clearShot() {
+    this.shot = null;
+    this.followShot = null;
+    this._first = true;
+    this._cut();
+  }
+
+  /**
+   * Add screen shake. Trauma decays quadratically so small hits read as a
+   * tick and big ones as a real impact.
+   * @param {number} amount 0..1
+   * @param {THREE.Vector3} [dir] world direction to bias the kick along
+   */
+  addTrauma(amount, dir) {
+    this.trauma = Math.min(this.traumaMax, this.trauma + amount);
+    if (dir) this._traumaDir.copy(dir).normalize();
+    else this._traumaDir.set(0, 0, 0);
+  }
+
+  /** Lock-on framing target (an Object3D or null). */
+  setLockOn(target) { this.lockOn = target || null; }
+
+  /** Nudge the orbit directly (used by cutscenes / auto-follow). */
+  setOrbit(yaw, pitch) {
+    this.yawTarget = yaw;
+    this.pitchTarget = THREE.MathUtils.clamp(pitch, this.pitchMin, this.pitchMax);
+  }
+
+  // ------------------------------------------------------------- internals
+
+  _cut() {
+    const post = this.game && this.game.post;
+    if (post) { post.resetHistory(); if (post.snapFocus) post.snapFocus(); }
+  }
+
+  /** Meshes the camera arm should not pass through. */
+  _collisionMeshes(game) {
+    if (this._collideAge === game.time.frame >> 5) return this._colliders;
+    this._collideAge = game.time.frame >> 5;
+    // opt-in only: raycasting a whole prop group (instanced foliage, etc.)
+    // every frame would cost more than the camera is worth
+    const props = game.get('Props');
+    const list = props && (props.cameraColliders || props.colliders || props.collisionMeshes);
+    this._colliders = Array.isArray(list) && list.length && list.length < 256 ? list : null;
+    return this._colliders;
+  }
+
+  /**
+   * Sweep the arm from the focus point outward and return the first distance
+   * at which the camera would clip something.
+   */
+  _armDistance(game, focus, dir, wanted) {
+    let d = wanted;
+    const terrain = game.get('Terrain');
+    if (terrain && terrain.heightAt) {
+      const steps = 8;
+      for (let i = 1; i <= steps; i++) {
+        const t = (i / steps) * wanted;
+        const x = focus.x + dir.x * t;
+        const y = focus.y + dir.y * t;
+        const z = focus.z + dir.z * t;
+        const h = terrain.heightAt(x, z) + this.probeRadius + 0.42;
+        if (y < h) {
+          // pull in until the arm clears the ground, but never below the min
+          const slope = dir.y;
+          const need = slope < -1e-3 ? (h - focus.y) / slope : t;
+          d = Math.min(d, Math.max(this.minDistance, Math.min(t, need)));
+          break;
+        }
+      }
+    }
+
+    const meshes = this._collisionMeshes(game);
+    if (meshes && meshes.length) {
+      this._ray.set(focus, dir);
+      this._ray.far = d;
+      const hits = this._ray.intersectObjects(meshes, true);
+      if (hits.length) d = Math.max(this.minDistance, hits[0].distance - this.probeRadius * 1.6);
+    }
+    return d;
+  }
+
+  _shakeOffset(dt, out, rot) {
+    const tr = this.trauma;
+    if (tr <= 0.0001) { out.set(0, 0, 0); rot.set(0, 0, 0); return; }
+    const s = tr * tr;                       // quadratic falloff reads better
+    const t = this._t * this.shakeFreq;
+    const n = (o) => this._noise.simplex2(t, o);
+    out.set(n(0.0), n(11.3), n(23.7)).multiplyScalar(s * this.shakePos);
+    if (this._traumaDir.lengthSq() > 0.01) {
+      out.addScaledVector(this._traumaDir, s * this.shakePos * 0.9 * n(31.1));
+    }
+    rot.set(n(41.2) * this.shakeRot * s, n(53.9) * this.shakeRot * s, n(67.5) * this.shakeRot * 1.6 * s);
+  }
+
+  _drivePost(game, focusPoint) {
+    const post = game.post;
+    if (!post) return;
+    if (!post.game && post.attach) post.attach(game);
+    if (post.setFocusDistance) {
+      post.setFocusDistance(this.cam.position.distanceTo(focusPoint));
+    }
+  }
+
+  // ------------------------------------------------------------- main tick
 
   lateUpdate(dt, game) {
+    this._t += dt;
+    if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
+
     if (this.shot) {
       const s = this.shot;
-      // follow-shots track the player so the framing stays correct after settling
       if (this.followShot) {
         const p = game.get('Player').position;
         const f = this.followShot;
@@ -44,9 +223,21 @@ export class CameraRig {
         ];
       }
       this.cam.position.fromArray(s.pos);
-      this.cam.lookAt(new THREE.Vector3().fromArray(s.target));
+      this._lookAt.fromArray(s.target);
+      this.cam.lookAt(this._lookAt);
       if (s.fov && s.fov !== this.cam.fov) { this.cam.fov = s.fov; this.cam.updateProjectionMatrix(); }
       if (s.roll) this.cam.rotateZ(s.roll);
+
+      // shake still applies to cinematics (trauma is zero in captures)
+      this._shakeOffset(dt, this._tmp, this._tmp2);
+      if (this._tmp.lengthSq() > 0) {
+        this.cam.position.add(this._tmp);
+        this.cam.rotateX(this._tmp2.x);
+        this.cam.rotateY(this._tmp2.y);
+        this.cam.rotateZ(this._tmp2.z);
+      }
+      this.cam.updateMatrixWorld();
+      this._drivePost(game, this._lookAt);
       return;
     }
 
@@ -54,34 +245,117 @@ export class CameraRig {
     const player = game.get('Player');
     if (!player) return;
 
-    this.yaw -= input.look.x * this.sensitivity;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + input.look.y * this.sensitivity, -0.55, 1.15);
-    this.targetDistance = THREE.MathUtils.clamp(this.targetDistance + input.mouse.wheel * 0.5, 2.2, 12);
-    this.distance = THREE.MathUtils.damp(this.distance, this.targetDistance, 6, dt);
+    // ---- orbit ---------------------------------------------------------
+    this.yawTarget -= input.look.x * this.sensitivity;
+    this.pitchTarget = THREE.MathUtils.clamp(
+      this.pitchTarget + input.look.y * this.sensitivity, this.pitchMin, this.pitchMax);
+    this.targetDistance = THREE.MathUtils.clamp(
+      this.targetDistance + input.mouse.wheel * 0.5, 2.2, this.maxDistance);
+    this.restDistance = this.targetDistance;
 
+    // ---- combat framing: bias the orbit so the lock-on target is in frame
+    const lock = this.lockOn;
+    if (lock) {
+      const lp = lock.isVector3 ? lock : this._tmp.setFromMatrixPosition(lock.matrixWorld);
+      const toTarget = this._tmp2.copy(lp).sub(player.position);
+      const flat = Math.hypot(toTarget.x, toTarget.z);
+      const wantYaw = Math.atan2(-toTarget.x, -toTarget.z);
+      const wantPitch = THREE.MathUtils.clamp(0.16 + toTarget.y * 0.03, -0.2, 0.7);
+      this.yawTarget = angleLerp(this.yawTarget, wantYaw, this.combatFraming * Math.min(1, dt * 4));
+      this.pitchTarget = THREE.MathUtils.lerp(
+        this.pitchTarget, wantPitch, this.combatFraming * Math.min(1, dt * 3));
+      // back off so both silhouettes fit
+      this.restDistance = THREE.MathUtils.clamp(
+        this.targetDistance + flat * 0.22, this.targetDistance, this.maxDistance);
+    }
+
+    this.yaw = angleLerp(this.yaw, this.yawTarget, 1 - Math.exp(-this.rotDamp * dt));
+    this.pitch = THREE.MathUtils.damp(this.pitch, this.pitchTarget, this.rotDamp, dt);
+
+    // ---- focus point: shoulder offset + velocity look-ahead ------------
+    const vel = player.velocity || this._tmp2.set(0, 0, 0);
+    const speed = Math.hypot(vel.x, vel.z);
     this._focus.copy(player.position);
     this._focus.y += this.height;
-
-    const cp = Math.cos(this.pitch);
-    const dir = new THREE.Vector3(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
-    this._desired.copy(this._focus).addScaledVector(dir, this.distance);
-
-    // keep the camera above the ground
-    const terrain = game.get('Terrain');
-    if (terrain) {
-      const h = terrain.heightAt(this._desired.x, this._desired.z) + 0.9;
-      if (this._desired.y < h) this._desired.y = h;
+    if (speed > 0.05) {
+      const la = Math.min(this.lookAheadMax, speed * this.lookAhead);
+      this._focus.x += (vel.x / speed) * la;
+      this._focus.z += (vel.z / speed) * la;
     }
+    // shoulder offset, in camera space
+    const cp = Math.cos(this.pitch);
+    this._dir.set(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp).normalize();
+    const right = this._tmp.copy(this._dir).cross(UP).normalize();
+    this._focus.addScaledVector(right, -this.shoulder);
+
+    if (this._first) this._focusSmooth.copy(this._focus);
+    else {
+      this._focusSmooth.x = THREE.MathUtils.damp(this._focusSmooth.x, this._focus.x, this.lookDamp, dt);
+      this._focusSmooth.y = THREE.MathUtils.damp(this._focusSmooth.y, this._focus.y, this.lookDamp * 0.6, dt);
+      this._focusSmooth.z = THREE.MathUtils.damp(this._focusSmooth.z, this._focus.z, this.lookDamp, dt);
+    }
+
+    // ---- arm + collision ----------------------------------------------
+    const wanted = this.restDistance;
+    const clear = this._armDistance(game, this._focusSmooth, this._dir, wanted);
+    if (clear < this.distance) this.distance = clear;                       // push in now
+    else this.distance = THREE.MathUtils.damp(this.distance, clear, 3.2, dt); // recover slowly
+
+    this._desired.copy(this._focusSmooth).addScaledVector(this._dir, this.distance);
 
     if (this._first) { this._smooth.copy(this._desired); this._first = false; }
     else {
-      const k = 12;
-      this._smooth.x = THREE.MathUtils.damp(this._smooth.x, this._desired.x, k, dt);
-      this._smooth.y = THREE.MathUtils.damp(this._smooth.y, this._desired.y, k * 0.7, dt);
-      this._smooth.z = THREE.MathUtils.damp(this._smooth.z, this._desired.z, k, dt);
+      this._smooth.x = THREE.MathUtils.damp(this._smooth.x, this._desired.x, this.posDamp, dt);
+      this._smooth.y = THREE.MathUtils.damp(this._smooth.y, this._desired.y, this.posDampY, dt);
+      this._smooth.z = THREE.MathUtils.damp(this._smooth.z, this._desired.z, this.posDamp, dt);
     }
 
-    this.cam.position.copy(this._smooth);
-    this.cam.lookAt(this._focus);
+    // ---- handheld -------------------------------------------------------
+    const hh = this.handheld;
+    if (hh > 0) {
+      const t = this._t;
+      const n = (o, f) => this._noise.simplex2(t * f, o);
+      this._smooth.x += n(3.1, 0.42) * 0.020 * hh;
+      this._smooth.y += n(9.7, 0.31) * 0.026 * hh;
+      this._smooth.z += n(15.3, 0.37) * 0.020 * hh;
+    }
+
+    // ---- FOV -------------------------------------------------------------
+    const sprint = speed > 5.2 ? 1 : 0;
+    const extra = Math.min(this.fovMax, Math.max(0, speed - 3.2) * this.fovSpeedGain + sprint * this.sprintFov);
+    this.fov = THREE.MathUtils.damp(this.fov, this.baseFov + extra, 4.0, dt);
+
+    // ---- commit ----------------------------------------------------------
+    this._shakeOffset(dt, this._tmp, this._tmp2);
+    this.cam.position.copy(this._smooth).add(this._tmp);
+
+    this._lookAt.copy(this._focusSmooth);
+    if (lock) {
+      const lp = lock.isVector3
+        ? lock
+        : new THREE.Vector3().setFromMatrixPosition(lock.matrixWorld);
+      this._lookAt.lerp(lp, 0.32 * this.combatFraming);
+    }
+    this.cam.lookAt(this._lookAt);
+    if (this._tmp2.lengthSq() > 0) {
+      this.cam.rotateX(this._tmp2.x);
+      this.cam.rotateY(this._tmp2.y);
+      this.cam.rotateZ(this._tmp2.z);
+    }
+
+    if (Math.abs(this.cam.fov - this.fov) > 1e-3) {
+      this.cam.fov = this.fov;
+      this.cam.updateProjectionMatrix();
+    }
+    this.cam.updateMatrixWorld();
+    this._drivePost(game, this._focusSmooth);
   }
+}
+
+/** Shortest-arc lerp between two angles. */
+function angleLerp(a, b, t) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
 }

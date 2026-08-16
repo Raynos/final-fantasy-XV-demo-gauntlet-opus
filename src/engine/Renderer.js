@@ -26,10 +26,14 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality === 'ultra' ? 2 : 1.5));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // The scene is only ever rendered into HDR float targets, so three never
+    // applies its own tone map — PostFX owns the whole display transform.
+    // `toneMappingExposure` is still honoured: PostFX folds it into the
+    // auto-exposure multiplier so existing code that pokes it keeps working.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoft is deprecated in r185
     this.renderer.shadowMap.autoUpdate = true;
     this.renderer.info.autoReset = false;
     container.appendChild(this.renderer.domElement);
@@ -48,6 +52,19 @@ export class Renderer {
   get domElement() { return this.renderer.domElement; }
   get width() { return this.container.clientWidth; }
   get height() { return this.container.clientHeight; }
+
+  /**
+   * Change the quality tier at runtime. PostFX has a matching `setQuality`
+   * for the post chain; call both.
+   * @param {'low'|'medium'|'high'|'ultra'} tier
+   */
+  setQuality(tier) {
+    this.quality = tier;
+    const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+    this.renderer.shadowMap.enabled = tier !== 'low';
+    this.resize();
+  }
 
   resize() {
     const w = this.container.clientWidth, h = this.container.clientHeight;
