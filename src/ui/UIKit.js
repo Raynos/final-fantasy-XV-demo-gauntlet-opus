@@ -1,0 +1,136 @@
+/**
+ * Tiny DOM/SVG construction and animation helpers shared by every UI module.
+ *
+ * Design rule for this whole directory: **no CSS transitions or keyframe
+ * animations**. Every animated property is written per-frame from
+ * `game.time.now`, so a screenshot taken after N fixed sim steps is always
+ * byte-identical. CSS is used for static appearance only.
+ */
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * Create an HTML element.
+ * @param {string} tag e.g. `div.party-row.is-lead`
+ * @param {object} [attrs] attributes; `text` sets textContent, `style` a cssText string
+ * @param {Array<Node|string>} [kids]
+ * @returns {HTMLElement}
+ */
+export function el(tag, attrs = {}, kids = []) {
+  const [name, ...classes] = tag.split('.');
+  const node = document.createElement(name || 'div');
+  if (classes.length) node.className = classes.join(' ');
+  applyAttrs(node, attrs);
+  append(node, kids);
+  return node;
+}
+
+/**
+ * Create an SVG element in the SVG namespace.
+ * @param {string} tag e.g. `path.glyph`
+ * @param {object} [attrs]
+ * @param {Array<Node|string>} [kids]
+ * @returns {SVGElement}
+ */
+export function svg(tag, attrs = {}, kids = []) {
+  const [name, ...classes] = tag.split('.');
+  const node = document.createElementNS(SVG_NS, name);
+  if (classes.length) node.setAttribute('class', classes.join(' '));
+  applyAttrs(node, attrs, true);
+  append(node, kids);
+  return node;
+}
+
+function applyAttrs(node, attrs, isSvg) {
+  for (const k of Object.keys(attrs)) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === 'text') node.textContent = v;
+    else if (k === 'html') node.innerHTML = v;
+    else if (k === 'style' && !isSvg) node.style.cssText = v;
+    else if (k === 'class') node.setAttribute('class', [node.getAttribute('class'), v].filter(Boolean).join(' '));
+    else node.setAttribute(k, v);
+  }
+}
+
+function append(node, kids) {
+  const list = Array.isArray(kids) ? kids : [kids];
+  for (const k of list) {
+    if (k == null || k === false) continue;
+    node.appendChild(typeof k === 'string' ? document.createTextNode(k) : k);
+  }
+}
+
+/** Remove every child of `node`. */
+export function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+/** Toggle a class without touching the rest of the class list. */
+export function cls(node, name, on) { node.classList.toggle(name, !!on); }
+
+export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+export const lerp = (a, b, t) => a + (b - a) * t;
+/** Frame-rate independent exponential approach. */
+export const damp = (a, b, lambda, dt) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+export const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+export const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+export const easeOutQuint = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
+export const easeIn = (t) => Math.pow(clamp(t, 0, 1), 3);
+/** Overshoot ease used for pop-in of damage numbers and callouts. */
+export function easeBack(t) {
+  const c = 1.70158 + 1;
+  const x = clamp(t, 0, 1) - 1;
+  return 1 + c * x * x * x + 1.70158 * x * x;
+}
+
+/** Deterministic 32-bit hash-based RNG (mulberry32). */
+export function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 1234567 -> "1,234,567" */
+export function commas(n) {
+  const v = Math.max(0, Math.round(n));
+  return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/** Fractional hours -> "17:42" */
+export function clock(hours) {
+  const h = ((hours % 24) + 24) % 24;
+  const hh = Math.floor(h);
+  const mm = Math.floor((h - hh) * 60);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+/**
+ * Split a string into per-character spans so it can be revealed letter by
+ * letter (used by the area title card and menu headings).
+ * @returns {{node: HTMLElement, chars: HTMLElement[]}}
+ */
+export function letters(text, tag = 'span.ltr') {
+  const node = el('span.letters');
+  const chars = [];
+  for (const ch of text) {
+    const s = el(tag, { text: ch === ' ' ? ' ' : ch });
+    node.appendChild(s);
+    chars.push(s);
+  }
+  return { node, chars };
+}
+
+/**
+ * A one-shot normalised timeline. `t` runs 0..1 over `dur` seconds and then
+ * stays at 1; `alive` stays true until `dur + hold` has elapsed.
+ */
+export class Clip {
+  constructor(dur, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
+  step(dt) { this.age += dt; return this; }
+  get t() { return clamp(this.age / this.dur, 0, 1); }
+  get alive() { return this.age < this.dur + this.hold; }
+}
