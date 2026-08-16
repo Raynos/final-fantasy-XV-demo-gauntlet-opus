@@ -19,6 +19,7 @@ import { HUD } from '../ui/HUD.js';
 import { Menus } from '../ui/Menus.js';
 import { AudioSystem } from '../audio/AudioSystem.js';
 import { Director } from './Director.js';
+import { RpgSystem } from './rpg/RpgSystem.js';
 import { SHOTS } from './Shots.js';
 
 /**
@@ -68,6 +69,7 @@ export class Game {
       ['Combat', () => new CombatSystem()],
       ['Camera', () => new CameraRig()],
       ['Audio', () => new AudioSystem()],
+      ['Rpg', () => new RpgSystem()],   // before HUD — the HUD reads it during init
       ['HUD', () => new HUD()],
       ['Menus', () => new Menus()],
       ['Director', () => new Director()],
