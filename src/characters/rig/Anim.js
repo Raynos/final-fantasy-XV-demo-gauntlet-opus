@@ -177,6 +177,10 @@ export class Animator {
     this.tail = { x: new Spring(130, 13), z: new Spring(130, 13) };
     this.blinkTimer = 1 + (character.seedRnd ? character.seedRnd.next() * 3 : 1.5);
     this.blink = 0;
+    // which leg carries the weight at rest; deterministic, per character
+    this.stanceBias = (character.look && character.look.stance) ??
+      (character.seedRnd ? character.seedRnd.next() * 1.4 - 0.7 : 0.4);
+    this.hipShift = 0;
     this.action = null;
     this.lookTarget = null;
     this.lookW = 0;
@@ -236,6 +240,7 @@ export class Animator {
     if (moveW < 0.02) this.phase = (this.phase + dt * 0.12) % 1;
 
     this.pose.clear();
+    this.hipShift = 0;
     this.evalGait(this.phase, g, moveW, st);
     this.evalIdle(this.t, 1 - moveW * 0.75);
     this.evalAdditive(dt, st, moveW);
@@ -303,10 +308,19 @@ export class Animator {
     const br = Math.sin(t * 1.35) * 0.5 + Math.sin(t * 0.61 + 1.2) * 0.5;
     const shift = Math.sin(t * 0.42);
     const shift2 = Math.sin(t * 0.27 + 0.8);
-    this.add('hips', 0.015, shift * 0.045, shift * 0.030, w);
-    this.add('spine01', -0.012 + br * 0.010, -shift * 0.02, -shift * 0.012, w);
-    this.add('spine02', -0.010 + br * 0.014, -shift * 0.02, 0, w);
-    this.add('spine03', 0.014 + br * 0.016, -shift2 * 0.03, 0, w);
+    // Contrapposto. A standing person never splits their weight: one leg locks
+    // and carries, that hip rides up and outward, the spine counter-curves and
+    // the opposite shoulder drops. Without it four people stand like four shop
+    // dummies no matter how good the gait is.
+    const load = this.stanceBias + 0.55 * shift;      // >0 weight on the left leg
+    const lock = clamp01(Math.abs(load));
+    this.hipShift = load * 0.030 * this.rig.dims.s * w;
+    this.add('hips', 0.015, shift * 0.045, shift * 0.030 - load * 0.085, w);
+    this.add('spine01', -0.012 + br * 0.010, -shift * 0.02, -shift * 0.012 + load * 0.048, w);
+    this.add('spine02', -0.010 + br * 0.014, -shift * 0.02, load * 0.030, w);
+    this.add('spine03', 0.014 + br * 0.016, -shift2 * 0.03, load * 0.022, w);
+    this.add('clavicleL', 0, 0, load * 0.05, w);
+    this.add('clavicleR', 0, 0, load * 0.05, w);
     this.add('neck', -0.02 - br * 0.012, shift2 * 0.05, 0, w);
     this.add('head', 0.01 + Math.sin(t * 0.9) * 0.012, Math.sin(t * 0.33) * 0.06, Math.sin(t * 0.5) * 0.012, w);
     this.add('clavicleL', -br * 0.02, 0, -0.03, w);
@@ -323,10 +337,14 @@ export class Animator {
     // standing like identical mannequins
     const bias = this.char.look && this.char.look.idle;
     if (bias) for (const n in bias) this.add(n, bias[n][0], bias[n][1], bias[n][2], w);
-    this.add('thighL', 0.02, 0, 0.02 + shift * 0.02, w);
-    this.add('thighR', -0.02, 0, -0.02 + shift * 0.02, w);
-    this.add('shinL', 0.05 + Math.max(0, shift) * 0.06, 0, 0, w);
-    this.add('shinR', 0.05 + Math.max(0, -shift) * 0.06, 0, 0, w);
+    // the loaded leg straightens, the free leg bends and drifts out
+    const freeL = clamp01(-load), freeR = clamp01(load);
+    this.add('thighL', 0.02 + freeL * 0.10, 0, 0.02 + shift * 0.02 + freeL * 0.05, w);
+    this.add('thighR', -0.02 + freeR * 0.10, 0, -0.02 + shift * 0.02 - freeR * 0.05, w);
+    this.add('shinL', 0.04 + freeL * 0.22 - lock * 0.02, 0, 0, w);
+    this.add('shinR', 0.04 + freeR * 0.22 - lock * 0.02, 0, 0, w);
+    this.add('footL', -freeL * 0.10, 0, 0, w);
+    this.add('footR', -freeR * 0.10, 0, 0, w);
     this.bobY = (this.bobY || 0) - 0.004 * w * (0.5 + 0.5 * br);
   }
 
@@ -360,8 +378,13 @@ export class Animator {
     this.eyePitch = this.look.pitch * 0.35 * lw;
 
     // ---- blink
+    // deterministic blink spacing — two runs of the capture harness must match
     this.blinkTimer -= dt;
-    if (this.blinkTimer <= 0) { this.blinkTimer = 2.4 + Math.random() * 3.6; this.blink = 1; }
+    if (this.blinkTimer <= 0) {
+      this.blinkSeq = (this.blinkSeq || 0) + 1;
+      this.blinkTimer = 2.4 + (Math.sin(this.blinkSeq * 12.9898 + this.stanceBias * 7.3) * 0.5 + 0.5) * 3.6;
+      this.blink = 1;
+    }
     if (this.blink > 0) this.blink = Math.max(0, this.blink - dt / 0.075);
     const lid = (1 - Math.abs(this.blink * 2 - 1)) * (this.blink > 0 ? 1 : 0);
     this.lidClose = lid;
@@ -421,15 +444,19 @@ export class Animator {
     // pelvis height: gait bob + IK dip
     const hips = bones.hips;
     hips.position.y = P.hips.y + (this.bobY || 0) * this.rig.dims.s + this.pelvisIK;
+    hips.position.x = P.hips.x + (this.hipShift || 0);
 
     // eyelids
     const lid = this.lidClose || 0;
     bones.lidL.quaternion.setFromEuler(_e.set(lid * 1.15, 0, 0, 'YXZ'));
     bones.lidR.quaternion.setFromEuler(_e.set(lid * 1.15, 0, 0, 'YXZ'));
 
-    // eye gaze
+    // Eye gaze. The small constant downward bias is not a mistake: the lid
+    // aperture opens slightly below the globe's equator (as a real one does),
+    // so a mathematically level gaze parks the iris high and the character
+    // reads as permanently startled.
     if (this.char.eyes) {
-      this.char.eyes.rotation.set(this.eyePitch || 0, this.eyeYaw || 0, 0);
+      this.char.eyes.rotation.set((this.eyePitch || 0) + 0.11, this.eyeYaw || 0, 0);
     }
   }
 

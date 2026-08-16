@@ -1,23 +1,34 @@
 import * as THREE from 'three';
-import { makeTexture, normalFromHeight, canvasTexture, srgb } from '../../util/TextureGen.js';
+import { makeTexture, normalFromHeight, srgb } from '../../util/TextureGen.js';
 import { Noise } from '../../util/Noise.js';
 
 /**
  * Character materials.
  *
- * Two ideas keep the draw-call count low without flattening the look:
+ * Three ideas keep the draw-call count low without flattening the look:
  *
- * 1. every character vertex carries `color` and `aMat` (roughness, metalness),
- *    so one shared material can render leather, denim, wool and rubber;
- * 2. skin and hair get a small shader patch — a wrap-lit fresnel term standing
- *    in for subsurface scattering, which is what stops procedural skin reading
- *    as painted plastic.
+ * 1. every character vertex carries `color` and `aMat` (roughness, metalness,
+ *    translucent thickness), so one shared material renders leather, denim,
+ *    wool and rubber;
+ * 2. skin gets a real two-term subsurface model — a *terminator* bleed that
+ *    pushes blood-red into the band where N·L crosses zero, plus back-scatter
+ *    through thin parts (ears, nose wings, fingers). Rim-only fresnel "SSS",
+ *    which is what this used to do, reads as wax, not flesh;
+ * 3. hair gets a Kajiya-Kay anisotropic pair of highlight bands aligned to the
+ *    per-vertex strand tangent, which is the single cue that separates hair
+ *    from a moulded plastic helmet.
+ *
+ * Everything is injected right after `<opaque_fragment>`, i.e. while the frame
+ * is still linear HDR and *before* MaterialPatch's aerial perspective mixes the
+ * surface toward the sky — so distance correctly washes these terms out too.
  */
 
 /** View-space sun direction shared by every patched character material. */
 export const SUN = {
   dir: { value: new THREE.Vector3(0, 1, 0) },
   color: { value: new THREE.Color(1, 0.95, 0.88) },
+  /** View-space "key fill" — where the sky's brightest lobe sits. */
+  sky: { value: new THREE.Vector3(0, 1, 0) },
 };
 
 const _v = new THREE.Vector3();
@@ -30,55 +41,208 @@ export function updateSun(sunLight, camera) {
   _v.normalize().transformDirection(camera.matrixWorldInverse);
   SUN.dir.value.copy(_v);
   SUN.color.value.copy(sunLight.color).multiplyScalar(Math.min(1.4, sunLight.intensity * 0.35));
+  // the sky's dominant lobe is straight up; used for eye catchlights so a face
+  // in shadow still has living eyes
+  _v.set(0, 1, 0).transformDirection(camera.matrixWorldInverse);
+  SUN.sky.value.copy(_v);
 }
 
+/** GLSL prologue shared by every patched character shader. */
+const HEAD = /* glsl */`
+varying vec3 vMat;
+varying vec3 vTanV;
+varying vec3 vObjN;
+uniform vec3 uSunDirView, uSunColor, uSkyDirView, uSssColor;
+uniform float uSssAmt, uTrans;
+`;
+
 /**
- * Wire per-vertex roughness/metalness and an optional fake-SSS rim into a
- * standard/physical material.
+ * Wire per-vertex roughness / metalness / thickness and an optional shading
+ * extension (subsurface, hair anisotropy, cornea glint) into a standard or
+ * physical material.
+ *
+ * @param {THREE.Material} mat
+ * @param {Object} o
+ * @param {number} [o.sss] subsurface strength, 0 disables the whole term
+ * @param {number} [o.sssColor] the colour light picks up travelling through flesh
+ * @param {number} [o.translucency] how much back-lit light comes through
+ * @param {Object} [o.hair] `{spec, shift, exp, tint}` Kajiya-Kay parameters
+ * @param {Object} [o.cornea] `{gloss, size}` explicit specular for eyeballs
  */
-function patch(mat, { sss = 0, sssColor = 0xff5b3a, translucency = 0.5 } = {}) {
+function patch(mat, o = {}) {
+  const { sss = 0, sssColor = 0xff5b3a, translucency = 0.5, hair = null, cornea = null } = o;
   mat.defines = mat.defines || {};
   mat.userData.sss = sss;
   const sssCol = { value: new THREE.Color().setHex(sssColor, THREE.SRGBColorSpace) };
   const sssAmt = { value: sss };
   const trans = { value: translucency };
+  const kind = hair ? 'hair' : cornea ? `eye${cornea.iris}` : sss > 0 ? 'sss' : 'plain';
+
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uSunDirView = SUN.dir;
     sh.uniforms.uSunColor = SUN.color;
+    sh.uniforms.uSkyDirView = SUN.sky;
     sh.uniforms.uSssColor = sssCol;
     sh.uniforms.uSssAmt = sssAmt;
     sh.uniforms.uTrans = trans;
 
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 aMat;\nvarying vec2 vMat;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvMat = aMat;');
+      .replace('#include <common>',
+        '#include <common>\nattribute vec3 aMat;\nattribute vec3 aTan;\nvarying vec3 vMat;\nvarying vec3 vTanV;\nvarying vec3 vObjN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvMat = aMat;')
+      // object-space normal, before skinning: on the eyeball this is exactly the
+      // direction from the globe centre, which is the only stable way to place an
+      // iris. UV varyings are hostage to which map slots a material happens to
+      // have; a normal is always there.
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n\tvObjN = normalize( objectNormal );')
+      // skin the strand tangent with the same matrix the normal uses, then take
+      // it to view space — this has to happen after <skinnormal_vertex> so
+      // `skinMatrix` is in scope
+      .replace('#include <skinnormal_vertex>', /* glsl */`#include <skinnormal_vertex>
+      vec3 tanRaw = dot( aTan, aTan ) > 1e-6 ? aTan : vec3( 0.0, 1.0, 0.0 );
+      #ifdef USE_SKINNING
+        tanRaw = ( skinMatrix * vec4( tanRaw, 0.0 ) ).xyz;
+      #endif
+      vTanV = normalize( normalMatrix * tanRaw );`);
 
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>
-varying vec2 vMat;
-uniform vec3 uSunDirView, uSunColor, uSssColor;
-uniform float uSssAmt, uTrans;`)
+      .replace('#include <common>', `#include <common>\n${HEAD}`)
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n\troughnessFactor = clamp( vMat.x, 0.035, 1.0 );')
       .replace('#include <metalnessmap_fragment>',
         '#include <metalnessmap_fragment>\n\tmetalnessFactor = clamp( vMat.y, 0.0, 1.0 );');
 
+    const blocks = [];
+
     if (sss > 0) {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `
+      blocks.push(/* glsl */`
 {
   vec3 sN = normalize( vNormal );
   vec3 sV = normalize( vViewPosition );
-  float fres = pow( 1.0 - clamp( dot( sN, sV ), 0.0, 1.0 ), 4.5 );
-  float wrap = clamp( dot( sN, uSunDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  float back = pow( clamp( dot( sV, -uSunDirView ), 0.0, 1.0 ), 2.5 );
-  vec3 sss = uSssColor * uSunColor * uSssAmt *
-             ( fres * ( 0.15 + 0.85 * wrap * wrap ) + back * uTrans * fres );
+  vec3 sL = uSunDirView;
+  float ndl = dot( sN, sL );
+  float ndv = clamp( dot( sN, sV ), 0.0, 1.0 );
+  float thick = clamp( vMat.z, 0.0, 1.0 );
+  float fres = pow( 1.0 - ndv, 4.0 );
+  // 1. terminator bleed — a narrow red band centred exactly where the surface
+  //    turns away from the sun, falling off fast into full shadow
+  float term = exp( -ndl * ndl * 11.0 ) * smoothstep( -0.60, 0.05, ndl );
+  // 2. back-scatter — light entering the far side of a thin part and leaving
+  //    toward the eye; ears and nose wings glow, a chest does not
+  float back = pow( clamp( dot( sV, -sL ), 0.0, 1.0 ), 3.0 ) * ( 0.12 + 1.15 * thick );
+  // 3. a whisper of forward wrap so lit skin never reads as flat paint
+  float wrapT = clamp( ndl * 0.5 + 0.5, 0.0, 1.0 );
+  vec3 sss = uSssColor * uSunColor * uSssAmt * (
+      term * 1.35
+    + back * uTrans
+    + fres * 0.30 * ( 0.25 + 0.75 * thick ) * wrapT
+  );
   gl_FragColor.rgb += sss * diffuseColor.rgb;
-}
-#include <dithering_fragment>`);
+}`);
+    }
+
+    if (hair) {
+      const { spec = 0.5, shift = 0.06, exp1 = 110.0, exp2 = 18.0, tint = 0.75 } = hair;
+      blocks.push(/* glsl */`
+{
+  vec3 hN = normalize( vNormal );
+  vec3 hV = normalize( vViewPosition );
+  vec3 hL = uSunDirView;
+  vec3 hT = normalize( vTanV );
+  vec3 hH = normalize( hL + hV );
+  // per-strand jitter so the band breaks into filaments instead of a chrome bar
+  float jit = fract( sin( dot( vMapUv, vec2( 91.7, 47.3 ) ) ) * 4371.1 ) - 0.5;
+  vec3 t1 = normalize( hT + hN * ( ${(-shift).toFixed(3)} + jit * 0.05 ) );
+  vec3 t2 = normalize( hT + hN * ( ${(shift * 1.9).toFixed(3)} + jit * 0.07 ) );
+  float d1 = dot( t1, hH ), d2 = dot( t2, hH );
+  float s1 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d1 * d1 ) ) ), ${exp1.toFixed(1)} );
+  float s2 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d2 * d2 ) ) ), ${exp2.toFixed(1)} );
+  float vis = clamp( dot( hN, hL ) * 0.7 + 0.3, 0.0, 1.0 );
+  // break the band along the strand so it reads as filaments catching light
+  // rather than a chrome stripe painted down a tube
+  float mask = 0.28 + 0.72 * abs( sin( vMapUv.x * 34.0 + jit * 7.0 ) );
+  vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
+  vec3 kk = uSunColor * vis * mask * ( s1 * 0.55 + s2 * 0.40 * sheenC ) * ${spec.toFixed(3)};
+  // backlit hair glows at the silhouette — the cue that reads as fine strands
+  float rim = pow( 1.0 - clamp( dot( hN, hV ), 0.0, 1.0 ), 2.6 )
+            * pow( clamp( dot( hV, -hL ), 0.0, 1.0 ), 1.6 );
+  kk += uSunColor * rim * 0.30 * ( vColor.rgb * 2.4 + 0.05 );
+  gl_FragColor.rgb += kk;
+}`);
+    }
+
+    if (cornea) {
+      const { gloss = 1.0, iris = '#3f6f9c' } = cornea;
+      const c = new THREE.Color().setHex(
+        typeof iris === 'number' ? iris : 0x3f6f9c, THREE.SRGBColorSpace
+      );
+      // The iris is generated in the shader from the eyeball's azimuthal UV
+      // rather than sampled from a map. A polar-mapped eye texture is a trap:
+      // the UV derivative is unbounded at the pole, which is precisely where
+      // the iris lives, so the hardware picks a coarse mip and the eye renders
+      // as a blank white bead. Procedural also stays crisp at any distance.
+      blocks.push(/* glsl */`
+{
+  vec3 oN = normalize( vObjN );
+  float ePhi = acos( clamp( oN.z, -1.0, 1.0 ) );      // angle from the gaze axis
+  float eT = ePhi / 0.560;                            // 0..1 across the iris
+  float eL = max( 1e-5, length( oN.xy ) );
+  float eUp = oN.y / eL;                              // +1 straight up
+  float eAng = atan( oN.y, oN.x );
+  float lidShade = 1.0 - 0.40 * pow( clamp( eUp, 0.0, 1.0 ), 2.0 );
+  vec3 eyeC;
+  if ( eT < 0.34 ) {
+    // never pure black: a real pupil scatters a little, and true black
+    // crushes to a hole under bloom
+    eyeC = vec3( 0.014 + 0.022 * pow( eT / 0.34, 3.0 ) );
+  } else if ( eT < 1.0 ) {
+    float q = ( eT - 0.34 ) / 0.66;
+    float fib = 0.70 + 0.38 * abs( sin( eAng * 38.0 + sin( eAng * 7.0 ) * 2.2 ) );
+    float radial = 0.18 + 0.82 * pow( q, 1.45 );
+    float ruff = 1.0 + 0.28 * exp( -pow( ( q - 0.30 ) / 0.10, 2.0 ) );
+    // light entering the cornea lights the iris wall opposite the sky
+    float cres = 1.0 + 0.65 * clamp( -eUp, 0.0, 1.0 ) * pow( q, 0.7 );
+    float k = radial * fib * ruff * cres;
+    k *= 0.88 + 0.22 * sin( eAng * 21.0 + q * 9.0 );
+    k *= mix( 1.0, 0.05, smoothstep( 0.80, 0.97, q ) );   // limbal ring
+    eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.2, k ) * lidShade;
+    eyeC = mix( eyeC, vec3( 0.42, 0.41, 0.41 ) * lidShade, smoothstep( 0.975, 1.0, q ) );
+  } else {
+    float sh = ( 0.34 + 0.16 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * lidShade;
+    float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 2.0, 0.0, 1.0 );
+    eyeC = sh * vec3( 0.99, 0.925 - corner * 0.10, 0.895 - corner * 0.16 );
+  }
+  // re-light: the ball was shaded with a flat white albedo, so scale the
+  // result by the iris/sclera value we just computed
+  gl_FragColor.rgb *= eyeC;
+
+  vec3 eN = normalize( vNormal );
+  vec3 eV = normalize( vViewPosition );
+  // a tight sun glint plus a broad sky catchlight: an eye without a specular
+  // dot reads as a painted bead no matter how good the iris is
+  vec3 h1 = normalize( uSunDirView + eV );
+  vec3 h2 = normalize( uSkyDirView * 0.85 + eV );
+  float g1 = pow( clamp( dot( eN, h1 ), 0.0, 1.0 ), 1400.0 );
+  float g2 = pow( clamp( dot( eN, h2 ), 0.0, 1.0 ), 260.0 );
+  float wet = pow( 1.0 - clamp( dot( eN, eV ), 0.0, 1.0 ), 3.0 );
+  // Ambient lift. An eye sits at the bottom of a socket under a brow and,
+  // for Noctis, under a fringe that casts a real shadow — so physically it
+  // is dark, and a dark eye is an eye the viewer cannot find. Every shipped
+  // game cheats this: the globe gets a sky term shadowing does not touch.
+  float skyE = clamp( dot( eN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
+  gl_FragColor.rgb += eyeC * uSunColor * 0.55 * pow( skyE, 1.4 );
+  gl_FragColor.rgb += ( g1 * 5.0 + g2 * 1.6 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)};
+}`);
+    }
+
+    if (blocks.length) {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <opaque_fragment>',
+        `#include <opaque_fragment>\n${blocks.join('\n')}`
+      );
     }
   };
-  mat.customProgramCacheKey = () => `char-${sss > 0 ? 'sss' : 'plain'}`;
+  mat.customProgramCacheKey = () => `char2-${kind}`;
   return mat;
 }
 
@@ -105,10 +269,16 @@ function cache() {
   ), 1.1);
   weave.repeat.set(9, 14);
 
-  const hairStripe = makeTexture(64, (u, v, c) => {
-    const s = 0.74 + 0.26 * Math.abs(Math.sin(u * Math.PI * 7.0 + n.simplex2(u * 9, 0) * 3));
-    const t = 0.88 + 0.12 * n.simplex2(u * 30, v * 6);
-    c[0] = c[1] = c[2] = s * t;
+  // strand value break-up along the hair ribbon: dark gaps between filaments
+  const hairStripe = makeTexture(128, (u, v, c) => {
+    // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
+    // crest), v along its length
+    const across = Math.abs(u - 0.5) * 2;
+    const fil = 0.62 + 0.38 * Math.abs(Math.sin(u * Math.PI * 11.0 + n.simplex2(u * 14, v * 2) * 3.4));
+    const along = 0.86 + 0.14 * n.simplex2(u * 8, v * 26);
+    // edges of a clump are always darker than its crest
+    const edge = 0.70 + 0.30 * (1.0 - across * across);
+    c[0] = c[1] = c[2] = fil * along * edge;
   }, { colorSpace: THREE.SRGBColorSpace });
 
   _cache = { pore, poreFine, weave, hairStripe };
@@ -121,34 +291,36 @@ export function skinMaterial() {
   return patch(new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
-    roughness: 0.62,
+    roughness: 0.52,
     metalness: 0,
     normalMap: c.pore,
-    normalScale: new THREE.Vector2(0.36, 0.36),
-    sheen: 0.12,
-    sheenColor: srgb(0xffd8c0),
-    sheenRoughness: 0.9,
-    clearcoat: 0.05,
-    clearcoatRoughness: 0.62,
-  }), { sss: 0.085, sssColor: 0xff6a48, translucency: 0.35 });
+    normalScale: new THREE.Vector2(0.42, 0.42),
+    // a whisper of oily sheen. Clearcoat here is what made skin read as a
+    // vacuum-formed plastic shell, so there is none.
+    sheen: 0.22,
+    sheenColor: srgb(0xffc9a8),
+    sheenRoughness: 0.72,
+    specularIntensity: 0.42,
+    specularColor: srgb(0xfff0e4),
+  }), { sss: 0.17, sssColor: 0xd8321a, translucency: 0.9 });
 }
 
 /** Per-character face material — carries the painted face map. */
-export function faceMaterial(map, sss = 0.09) {
+export function faceMaterial(map, sss = 0.19) {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     map,
     vertexColors: true,
-    roughness: 0.56,
+    roughness: 0.46,
     metalness: 0,
     normalMap: c.poreFine,
-    normalScale: new THREE.Vector2(0.30, 0.30),
-    sheen: 0.14,
-    sheenColor: srgb(0xffd0b4),
-    sheenRoughness: 0.85,
-    clearcoat: 0.06,
-    clearcoatRoughness: 0.5,
-  }), { sss, sssColor: 0xff4a26, translucency: 0.6 });
+    normalScale: new THREE.Vector2(0.34, 0.34),
+    sheen: 0.28,
+    sheenColor: srgb(0xffc0a0),
+    sheenRoughness: 0.62,
+    specularIntensity: 0.50,
+    specularColor: srgb(0xfff2e8),
+  }), { sss, sssColor: 0xe02c12, translucency: 1.0 });
 }
 
 /** Shared garment material — colour and finish come from vertex attributes. */
@@ -160,45 +332,50 @@ export function garmentMaterial() {
     roughness: 0.8,
     metalness: 0,
     normalMap: c.weave,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-    sheen: 0.35,
-    sheenColor: srgb(0x9aa4b4),
-    sheenRoughness: 0.7,
+    normalScale: new THREE.Vector2(0.62, 0.62),
+    sheen: 0.45,
+    sheenColor: srgb(0xa8b0be),
+    sheenRoughness: 0.62,
+    specularIntensity: 0.55,
   }), { sss: 0 });
 }
 
-/** Shared hair material — anisotropic highlight along the strand direction. */
+/** Shared hair material — Kajiya-Kay bands along the per-vertex strand tangent. */
 export function hairMaterial() {
   const c = cache();
   const m = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
-    roughness: 0.54,
+    roughness: 0.46,
     metalness: 0.0,
     map: c.hairStripe,
-    anisotropy: 0.6,
-    anisotropyRotation: Math.PI * 0.5,
-    specularIntensity: 0.4,
-    clearcoat: 0.06,
-    clearcoatRoughness: 0.40,
-    sheen: 0.3,
-    sheenColor: srgb(0x6b5a4a),
-    sheenRoughness: 0.5,
+    specularIntensity: 0.25,
+    sheen: 0.16,
+    sheenColor: srgb(0x8ea0b8),
+    sheenRoughness: 0.45,
     side: THREE.DoubleSide,
   });
-  return patch(m, { sss: 0.14, sssColor: 0x8a6a4a, translucency: 0.45 });
+  return patch(m, {
+    sss: 0,
+    hair: { spec: 0.20, shift: 0.055, exp1: 200.0, exp2: 26.0, tint: 0.85 },
+  });
 }
 
-/** Eyeball material: painted iris + sclera, glossy. */
-export function eyeMaterial(map) {
+/** Eyeball material: painted iris + sclera, with an explicit cornea glint. */
+export function eyeMaterial(iris) {
   return patch(new THREE.MeshPhysicalMaterial({
-    map,
+    defines: { USE_UV: '' },
     vertexColors: true,
-    roughness: 0.22,
+    roughness: 0.30,
     metalness: 0,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.07,
-  }), { sss: 0 });
+    // A cornea really is a mirror, but a mirror sphere under an image-based sky
+    // reflects the whole dome and renders as a blank white bead — which is
+    // exactly what an iris must never be. Keep the coat weak and dull and let
+    // the explicit glints in the shader carry the wetness instead.
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.12,
+    envMapIntensity: 0.20,
+  }), { sss: 0, cornea: { gloss: 1.0, iris } });
 }
 
 /** Thin glass for spectacle lenses. */
@@ -208,12 +385,38 @@ export function lensMaterial() {
     roughness: 0.05,
     metalness: 0,
     transparent: true,
-    opacity: 0.17,
+    opacity: 0.13,
     transmission: 0,
     clearcoat: 1,
     clearcoatRoughness: 0.02,
     side: THREE.DoubleSide,
     depthWrite: false,
+  });
+}
+
+/**
+ * Soft contact shadow blob laid on the ground under a character. CSM shadows
+ * alone lose the contact point in tall grass and the character reads as
+ * hovering; this pins them down for the cost of one alpha-blended quad.
+ */
+export function contactShadowMaterial() {
+  // MultiplyBlending ignores alpha, so the falloff has to live in the RGB:
+  // white at the rim leaves the ground untouched, dark at the centre bites.
+  const tex = makeTexture(64, (u, v, c) => {
+    const d = Math.hypot(u - 0.5, v - 0.5) * 2;
+    const k = Math.pow(Math.max(0, 1 - d), 1.8) * 0.66;
+    c[0] = 1 - k;
+    c[1] = 1 - k * 0.96;
+    c[2] = 1 - k * 0.88;          // shadows go blue, never neutral grey
+  }, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: true });
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    blending: THREE.MultiplyBlending,
+    premultipliedAlpha: true,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
   });
 }
 

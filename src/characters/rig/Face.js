@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { MeshBuilder, applyBrushes, expandMirrors, blob, clamp01, smooth, lerp } from './Geo.js';
-import { makeTexture, canvasTexture } from '../../util/TextureGen.js';
+import { MeshBuilder, applyBrushes, expandMirrors, blob, ribbon, clamp01, smooth, lerp } from './Geo.js';
+import { canvasTexture } from '../../util/TextureGen.js';
 import { Rng } from '../../util/Rng.js';
 import { Noise } from '../../util/Noise.js';
 
@@ -16,6 +16,13 @@ import { Noise } from '../../util/Noise.js';
  * All authoring happens in canonical head space (origin = skull centre,
  * +Z forward) and is placed onto the skeleton at the end.
  */
+
+/**
+ * Upper / lower lid opening fractions. Below about 0.7 the aperture is
+ * narrower than the iris and the eye reads as a dark bead with no sclera —
+ * which is the difference between a person and a doll at any distance.
+ */
+export const LID_OPEN = [0.84, 0.19];
 
 /** Canonical head half-extents before sculpting. */
 const HR = [0.0785, 0.1130, 0.0960];
@@ -58,21 +65,24 @@ function brushes(look) {
   add({ p: [0.064, 0.014, 0.050], r: [0.038, 0.038, 0.048], amt: -0.005, dir: 'normal', mirror: true });
 
   // brow ridge + glabella
-  add({ p: [0.030, 0.006, 0.080], r: [0.048, 0.024, 0.052], amt: 0.0115 + 0.005 * brow, dir: [0, 0, 1], mirror: true });
-  add({ p: [0, 0.001, 0.082], r: [0.022, 0.020, 0.040], amt: 0.0045 + 0.002 * brow, dir: [0, 0, 1] });
-  add({ p: [0.047, 0.002, 0.068], r: [0.028, 0.024, 0.042], amt: 0.0045, dir: 'normal', mirror: true });
+  add({ p: [0.030, 0.0155, 0.079], r: [0.048, 0.017, 0.052], amt: 0.0125 + 0.006 * brow, dir: [0, 0, 1], mirror: true });
+  add({ p: [0, 0.009, 0.082], r: [0.022, 0.016, 0.040], amt: 0.0045 + 0.002 * brow, dir: [0, 0, 1] });
+  add({ p: [0.049, 0.010, 0.067], r: [0.028, 0.020, 0.042], amt: 0.0045, dir: 'normal', mirror: true });
   // shadowed hollow directly under the brow
-  add({ p: [0.031, -0.005, 0.078], r: [0.034, 0.011, 0.038], amt: -0.005, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0075, dir: [0, 0, 1], mirror: true });
 
   // eye sockets
-  add({ p: [0.0335, -0.006, 0.076], r: [0.038, 0.027, 0.048], amt: -0.0215, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0070, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0335, -0.021, 0.074], r: [0.028, 0.013, 0.032], amt: 0.0040, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0460, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0150, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0090, dir: [0, 0, 1], mirror: true });
+  // lower orbital rim: this is what stops a crescent of sclera showing under
+  // the iris and giving every character a permanently startled stare
+  add({ p: [0.0335, -0.0180, 0.0745], r: [0.030, 0.0090, 0.034], amt: 0.0195, dir: [0, 0, 1], mirror: true });
   add({ p: [0.058, -0.004, 0.056], r: [0.020, 0.024, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
 
   // cheeks
-  add({ p: [0.057, -0.018, 0.058], r: [0.042, 0.030, 0.054], amt: 0.0090 + 0.006 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.051, -0.048, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0075 + 0.005 * cheek, dir: 'normal', mirror: true });
+  add({ p: [0.059, -0.014, 0.056], r: [0.038, 0.024, 0.050], amt: 0.0115 + 0.007 * cheek, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.050, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0120 + 0.006 * cheek, dir: 'normal', mirror: true });
   add({ p: [0.038, -0.062, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
 
   // nose
@@ -92,11 +102,11 @@ function brushes(look) {
 
   // chin + jaw
   add({ p: [0, -0.0935, 0.079], r: [0.022, 0.008, 0.024], amt: -0.0050, dir: [0, 0, 1] });
-  add({ p: [0, -0.1015, 0.076], r: [0.030, 0.024, 0.040], amt: 0.0155 + 0.006 * jaw, dir: [0, 0.15, 1] });
+  add({ p: [0, -0.1045, 0.074], r: [0.028, 0.024, 0.040], amt: 0.0185 + 0.008 * jaw, dir: [0, 0.10, 1] });
   // mandible: a ramus block plus an undercut that carves the jawline edge
-  add({ p: [0.063, -0.052, 0.000], r: [0.030, 0.036, 0.056], amt: 0.006 + 0.010 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.064, -0.056, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.054, -0.078, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.050, -0.100, 0.030], r: [0.046, 0.030, 0.062], amt: -0.013 + 0.004 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.098, 0.030], r: [0.048, 0.032, 0.062], amt: -0.019 + 0.005 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.042, -0.036, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
 
   // neck tie-in — tuck the underside so the jawline reads as an edge
@@ -113,7 +123,7 @@ function brushes(look) {
 function profileW(yn) {
   if (yn >= 0) return Math.sqrt(Math.max(0, 1 - yn * yn));
   const a = Math.min(1, Math.abs(yn) / 1.055);
-  return Math.pow(Math.max(0, 1 - Math.pow(a, 3.4)), 0.36);
+  return Math.pow(Math.max(0, 1 - Math.pow(a, 2.6)), 0.46);
 }
 
 /** Un-sculpted skull surface point for a spherical coordinate. */
@@ -188,7 +198,7 @@ export function buildHead(rig, look) {
   B.color(0xffffff).mat(0.5, 0).skin([[I.head, 1]]);
 
   const brs = brushes(look);
-  const segU = 60, segV = 44;
+  const segU = 76, segV = 56;
   const hw = look.headWidth ?? 1;
   const rr = [HR[0] * hw, HR[1], HR[2]];
 
@@ -205,6 +215,22 @@ export function buildHead(rig, look) {
     grid.push(row);
   }
 
+  // How thin the flesh is at a given canonical-space point — drives the
+  // back-scatter term, so ear rims and nose wings glow red against the sun and
+  // a forehead does not.
+  const thicknessAt = (p) => {
+    const ear = Math.exp(-(Math.pow((Math.abs(p.x) - FACE.ear[0] * hw) / 0.026, 2)
+      + Math.pow((p.y - FACE.ear[1]) / 0.034, 2)
+      + Math.pow((p.z - FACE.ear[2]) / 0.030, 2)));
+    const nose = Math.exp(-(Math.pow(p.x / 0.020, 2)
+      + Math.pow((p.y + 0.050) / 0.020, 2)
+      + Math.pow((p.z - 0.094) / 0.020, 2)));
+    const lip = Math.exp(-(Math.pow(p.x / 0.030, 2)
+      + Math.pow((p.y + 0.079) / 0.013, 2)
+      + Math.pow((p.z - 0.085) / 0.018, 2)));
+    return clamp01(ear * 1.0 + nose * 0.85 + lip * 0.7);
+  };
+
   const idx = [];
   for (let v = 0; v <= segV; v++) {
     const row = [];
@@ -212,10 +238,14 @@ export function buildHead(rig, look) {
       const p = grid[v][u];
       const [tu, tv] = uvOf(p.x, p.y, p.z);
       const w = put(p);
+      // lips are wetter than cheeks; the whole face is glossier than the crown
+      const th = thicknessAt(p);
+      B.mat(0.50 - 0.16 * th, 0, th);
       row.push(B.v(w.x, w.y, w.z, u === segU ? 1 : tu, tv));
     }
     idx.push(row);
   }
+  B.mat(0.5, 0, 0);
   for (let v = 0; v < segV; v++) {
     for (let u = 0; u < segU; u++) {
       B.quad(idx[v][u], idx[v][u + 1], idx[v + 1][u + 1], idx[v + 1][u]);
@@ -235,6 +265,7 @@ export function buildHead(rig, look) {
     const e = FACE.ear;
     const c = put([e[0] * sg * hw * 0.97, e[1], e[2]]);
     B.group(2);
+    B.mat(0.46, 0, 1);           // an ear is two sheets of skin and a wafer of cartilage
     blob(B, {
       center: [c.x, c.y, c.z], scale: [0.0075 * scale, 0.0245 * scale, 0.0155 * scale],
       rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9,
@@ -246,15 +277,19 @@ export function buildHead(rig, look) {
       rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7,
     });
     B.color(0xffffff);
+    B.mat(0.5, 0, 0);
     B.group(0);
   }
 
-  // ---- eyelids -----------------------------------------------------------
+  // ---- eyelids + lashes --------------------------------------------------
   for (const side of ['L', 'R']) {
     const sg = side === 'L' ? 1 : -1;
     const ec = [FACE.eye[0] * sg * hw, FACE.eye[1], FACE.eye[2]];
     buildLid(B, { put, scale, ec, sg, upper: true, bone: I[`lid${side}`], head: I.head, look });
     buildLid(B, { put, scale, ec, sg, upper: false, bone: I[`lid${side}`], head: I.head, look });
+    B.skin([[I[`lid${side}`], 0.85], [I.head, 0.15]]);
+    buildLashes(B, { put, scale, ec, sg, look });
+    B.skin([[I.head, 1]]);
   }
 
   const geometry = B.build();
@@ -270,7 +305,7 @@ export function buildHead(rig, look) {
 function buildLid(B, o) {
   const { put, scale, ec, sg, upper, bone, head, look } = o;
   const R = FACE.eyeR;
-  const openU = (look.eyeOpen ?? 1) * (upper ? 0.58 : 0.48);
+  const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
   const cols = 14, rows = 4;
   const arc = upper ? [-1.06, 1.10] : [-1.00, 1.04];
 
@@ -282,7 +317,7 @@ function buildLid(B, o) {
     return [ec[0] + x, ec[1] + y * 1.02, ec[2] + z * 0.92];
   };
 
-  const dark = new THREE.Color().setHex(upper ? 0x3a2a26 : 0x5a4038, THREE.SRGBColorSpace);
+  const dark = new THREE.Color().setHex(upper ? 0x140f10 : 0x3a2620, THREE.SRGBColorSpace);
   const skinC = new THREE.Color(1, 1, 1);
   const gridIdx = [];
   for (let r = 0; r <= rows; r++) {
@@ -299,9 +334,10 @@ function buildLid(B, o) {
       const rad = R * lerp(1.055, 1.16, t * t);
       const p = pt(a, e, rad);
       const w = put(p);
-      // lid margin is dark (lash line), blending to skin toward the socket
-      B.color(skinC.clone().lerp(dark, Math.pow(1 - t, 3.0) * (upper ? 0.92 : 0.6)));
-      B.mat(0.42 + 0.2 * t, 0);
+      // lid margin is dark (lash line), blending to skin toward the socket;
+      // the margin itself is wet, the lid skin above it is not
+      B.color(skinC.clone().lerp(dark, Math.pow(1 - t, 2.2) * (upper ? 1.0 : 0.72)));
+      B.mat(0.24 + 0.30 * t, 0, 0.55 * (1 - t));
       B.skin(r === rows ? [[head, 1]] : [[bone, 1 - t * 0.5], [head, t * 0.5]]);
       row.push(B.v(w.x, w.y, w.z, 0.5 + (f - 0.5) * 0.04, 0.5));
     }
@@ -329,23 +365,34 @@ export function buildEyes(rig, look) {
   const B = new MeshBuilder('eyes');
   B.color(0xffffff).mat(0.1, 0);
 
+  // where the iris ends and the sclera begins, in polar angle from the front
+  const IRIS = 0.58;
+
   for (const sg of [1, -1]) {
     const cx = FACE.eye[0] * sg * hw * scale;
-    const segU = 20, segV = 14;
+    const segU = 28, segV = 22;
     const rows = [];
     for (let v = 0; v <= segV; v++) {
-      const phi = (v / segV) * Math.PI;
+      // pack rings toward the front pole: the cornea and limbus carry every
+      // silhouette cue an eye has, the back of the ball carries none
+      const phi = Math.pow(v / segV, 1.35) * Math.PI;
       const row = [];
       for (let u = 0; u <= segU; u++) {
         const th = (u / segU) * Math.PI * 2;
-        // cornea bulge over the iris
-        const irisT = clamp01(1 - phi / 0.62);
-        const r = R * (1 + 0.05 * smooth(irisT));
+        // Real eye profile: a clear cornea domed ~1.1x over the iris, breaking
+        // at a hard limbus into the sclera. That break is what catches a bright
+        // rim and stops the eyeball reading as a painted marble.
+        const q = clamp01(1 - phi / IRIS);
+        const dome = 0.115 * Math.pow(q, 0.55);
+        const limbus = -0.028 * Math.exp(-Math.pow((phi - IRIS) / 0.10, 2));
+        const r = R * (1 + dome + limbus);
         const p = new THREE.Vector3(
           Math.sin(phi) * Math.cos(th) * r + cx,
           Math.sin(phi) * Math.sin(th) * r,
           Math.cos(phi) * r
         );
+        // the cornea is wet glass, the sclera is damp tissue
+        B.mat(phi < IRIS ? 0.12 : 0.30, 0);
         row.push(B.v(p.x, p.y, p.z, u / segU, phi / Math.PI));
       }
       rows.push(row);
@@ -354,47 +401,81 @@ export function buildEyes(rig, look) {
       for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v][u + 1], rows[v + 1][u + 1], rows[v + 1][u]);
     }
   }
-  return { geometry: B.build(), map: paintEye(look) };
-}
-
-/** Polar eye texture: pupil, iris fibres, limbal ring, sclera with veins. */
-function paintEye(look) {
-  const iris = new THREE.Color().setHex(look.iris ?? 0x3f6f9c, THREE.SRGBColorSpace);
-  const n = new Noise(99);
-  return makeTexture(256, (u, v, c) => {
-    const r = v * Math.PI;                    // polar angle 0 at the front
-    const t = r / 0.68;                        // 0..1 across the iris
-    const lidShade = 1 - 0.34 * clamp01(Math.sin(u * Math.PI * 2));
-    if (t < 1.06) {
-      const pupil = 0.36;
-      if (t < pupil) { c[0] = c[1] = c[2] = 0.006; return; }
-      const q = (t - pupil) / (1 - pupil);
-      const fib = 0.60 + 0.55 * Math.abs(Math.sin(u * Math.PI * 2 * 34 + n.simplex2(u * 40, 0) * 4));
-      const radial = 0.42 + 0.85 * Math.pow(q, 1.3);
-      let k = fib * radial * 0.95 * lidShade;
-      k *= 0.85 + 0.35 * n.simplex2(u * 22, q * 6);
-      if (q > 0.84) k *= 0.22;                 // limbal ring
-      c[0] = iris.r * k; c[1] = iris.g * k; c[2] = iris.b * k;
-      if (q > 0.98) { const m = (q - 0.98) / 0.02; c[0] = lerp(c[0], 0.5, m); c[1] = lerp(c[1], 0.49, m); c[2] = lerp(c[2], 0.48, m); }
-      return;
-    }
-    // sclera: never paper-white, and shadowed under the upper lid so the eye
-    // sits in a socket instead of glowing out of it
-    const shade = (0.44 + 0.30 * Math.min(1, (t - 1.0) * 1.1)) * lidShade;
-    const vein = Math.max(0, n.simplex2(u * 26, v * 9)) * Math.max(0, 1 - Math.abs(t - 1.35));
-    c[0] = shade * (0.99 + vein * 0.01);
-    c[1] = shade * (0.93 - vein * 0.16);
-    c[2] = shade * (0.90 - vein * 0.18);
-  }, { generateMipmaps: true });
+  return { geometry: B.build() };
 }
 
 /**
- * The painted face map: base tone, lip colour, lash and brow shadow, beard
- * shadow, freckles, scars. Placed through the same UV projection the mesh uses,
- * so features land where the sculpt put them.
+ * Upper eyelashes as geometry: a fan of fine tapered ribbons rising from the
+ * lid margin and flicking out at the outer canthus. A painted lash line alone
+ * disappears the moment the head turns; these hold the eye's dark accent from
+ * every angle and are the cheapest "this is a person" cue on the whole model.
+ */
+function buildLashes(B, o) {
+  const { put, scale, ec, sg, look } = o;
+  const R = FACE.eyeR;
+  const openU = (look.eyeOpen ?? 1) * LID_OPEN[0];
+  const n = 13;
+  const col = new THREE.Color().setHex(look.lashColor ?? 0x0d0a0c, THREE.SRGBColorSpace);
+  const arc = [-1.02, 1.06];
+
+  const pt = (a, e, rad) => new THREE.Vector3(
+    ec[0] + Math.sin(a * sg) * Math.cos(e) * rad,
+    ec[1] + Math.sin(e) * rad * 1.02,
+    ec[2] + Math.cos(a) * Math.cos(e) * rad * 0.92
+  );
+
+  B.group(6).color(col).mat(0.42, 0, 0);
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1);
+    const a = lerp(arc[0], arc[1], f);
+    const shape = Math.sin(Math.PI * clamp01((f - 0.02) / 0.96));
+    const margin = 0.16 + 0.62 * openU * Math.pow(shape, 0.75);
+    const root = pt(a, margin, R * 1.045);
+    // lashes sweep up, forward and outward, longest at the outer third
+    const grow = 0.55 + 0.75 * Math.pow(clamp01((f - 0.15) / 0.85), 0.8);
+    const L = R * 0.58 * grow;
+    const d = new THREE.Vector3(
+      Math.sin(a * sg) * 0.42 + sg * 0.30 * f,
+      0.72 + 0.20 * f,
+      Math.cos(a) * 0.70
+    ).normalize();
+    const mid = root.clone().addScaledVector(d, L * 0.5);
+    // curl: the tip bends further up and away from the eye
+    const tipD = d.clone().add(new THREE.Vector3(sg * 0.16, 0.34, 0.10)).normalize();
+    const tip = mid.clone().addScaledVector(tipD, L * 0.55);
+    const w = R * (0.034 + 0.014 * shape);
+    ribbon(B, {
+      points: [root, mid, tip].map((q) => put(q).toArray()),
+      steps: 3,
+      width: w * scale,
+      thick: w * scale * 0.30,
+      up: [0, 0, 1],
+      taper: (t) => Math.pow(1 - t, 0.55),
+    });
+  }
+  B.group(0).color(0xffffff).mat(0.5, 0, 0);
+}
+
+/**
+ * The painted face map.
+ *
+ * Everything here is authored in **canonical head metres** and converted to
+ * texels at the last moment. That matters more than it sounds: the head UV is a
+ * cylindrical projection, so a millimetre of face is 1917 texels/m across and
+ * 4302 texels/m down — better than 2:1 anisotropy. Authoring radii directly in
+ * texture fractions (which is what this used to do) silently squashes every
+ * feature, which is why the mouth read as three stacked ellipses and the eye
+ * sockets as wide grey bars.
+ *
+ * The map carries what lighting cannot resolve at gameplay distance: the value
+ * structure of a face. Sockets, nostrils, the vermilion border, the shadow the
+ * fringe throws on the forehead.
  */
 function paintFace(look, uv) {
   const S = 1024;
+  // texels per metre, measured at the front of the face where the features are
+  const PX = S / (0.085 * Math.PI * 2);
+  const PY = S / (FACE.yMax - FACE.yMin);
   const skin = new THREE.Color().setHex(look.skin.getHex(THREE.SRGBColorSpace), THREE.SRGBColorSpace);
   const hexOf = (c) => `#${c.getHexString(THREE.SRGBColorSpace)}`;
   const rng = new Rng(look.seed || 7);
@@ -404,147 +485,299 @@ function paintFace(look, uv) {
     const [u, v] = uv(p[0], p[1], p[2]);
     return [u * S, (1 - v) * S];
   };
+  // canonical point -> texel, for points authored on the face plane
+  const fx = (x, y) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
   return canvasTexture(S, (ctx) => {
     ctx.fillStyle = hexOf(skin);
     ctx.fillRect(0, 0, S, S);
 
-    // large-scale tonal variation
+    // large-scale tonal variation + fine mottling
     const img = ctx.getImageData(0, 0, S, S);
     const d = img.data;
     for (let y = 0; y < S; y++) {
       for (let x = 0; x < S; x++) {
         const i = (y * S + x) * 4;
-        const f = 1 + 0.045 * n.fbm2(x * 0.012, y * 0.012, 4) + 0.02 * n.simplex2(x * 0.14, y * 0.14);
+        const f = 1 + 0.055 * n.fbm2(x * 0.012, y * 0.012, 4) + 0.024 * n.simplex2(x * 0.14, y * 0.14);
         d[i] = Math.min(255, d[i] * f);
-        d[i + 1] = Math.min(255, d[i + 1] * (f * 0.995));
-        d[i + 2] = Math.min(255, d[i + 2] * (f * 0.99));
+        d[i + 1] = Math.min(255, d[i + 1] * (f * 0.99));
+        d[i + 2] = Math.min(255, d[i + 2] * (f * 0.975));
       }
     }
     ctx.putImageData(img, 0, 0);
 
-    const soft = (p, rx, ry, color, alpha, rot = 0, mode = 'source-over') => {
+    /** Soft radial blob. `rx`/`ry` are half-widths in canonical metres. */
+    const soft = (p, rx, ry, color, alpha = 1, mode = 'source-over') => {
       const [cx, cy] = px(p);
+      const a = rx * PX, b = ry * PY;
+      const r = Math.max(a, b);
       ctx.save();
       ctx.globalCompositeOperation = mode;
-      ctx.translate(cx, cy); ctx.rotate(rot);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(rx, ry) * S);
+      ctx.translate(cx, cy);
+      ctx.scale(a / r, b / r);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
       g.addColorStop(0, color);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.globalAlpha = alpha;
-      ctx.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry));
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(0, 0, Math.max(rx, ry) * S, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       ctx.globalAlpha = 1;
     };
 
-    // warmth on cheeks, nose, ears, lips region
-    const blush = look.blush || 'rgba(198,86,70,0.30)';
-    soft([0.052, -0.026, 0.056], 0.055, 0.045, blush, 0.7);
-    soft([-0.052, -0.026, 0.056], 0.055, 0.045, blush, 0.7);
-    soft([0, -0.045, 0.099], 0.030, 0.030, blush, 0.55);
-    soft([0, -0.092, 0.077], 0.030, 0.026, blush, 0.35);
-    // occlusion in the sockets, under the brow, beside the nose and under the
-    // lip — multiplied in, so it darkens instead of washing the tone out
-    const ao = (p, rx, ry, a) => soft(p, rx, ry, `rgba(120,86,78,${a})`, 1, 0, 'multiply');
-    ao([0.034, -0.006, 0.072], 0.040, 0.026, 0.95);
-    ao([-0.034, -0.006, 0.072], 0.040, 0.026, 0.95);
-    ao([0.030, 0.008, 0.079], 0.038, 0.011, 0.75);
-    ao([-0.030, 0.008, 0.079], 0.038, 0.011, 0.75);
-    ao([0, -0.057, 0.091], 0.026, 0.012, 0.85);
-    ao([0.019, -0.052, 0.084], 0.012, 0.012, 0.85);
-    ao([-0.019, -0.052, 0.084], 0.012, 0.012, 0.85);
-    ao([0, -0.090, 0.080], 0.028, 0.009, 0.6);
-    ao([0.032, -0.074, 0.070], 0.020, 0.026, 0.5);
-    ao([-0.032, -0.074, 0.070], 0.020, 0.026, 0.5);
-    ao([0.064, 0.030, 0.046], 0.048, 0.048, 0.45);
-    ao([-0.064, 0.030, 0.046], 0.048, 0.048, 0.45);
-    ao([0, -0.106, 0.036], 0.070, 0.028, 0.55);
+    /** Filled closed path through face-plane (x,y) points, cubic-smoothed. */
+    const shape = (pts, style, { mode = 'source-over', alpha = 1, blur = 0 } = {}) => {
+      const q = pts.map(([x, y]) => fx(x, y));
+      ctx.save();
+      ctx.globalCompositeOperation = mode;
+      ctx.globalAlpha = alpha;
+      if (blur) ctx.filter = `blur(${blur}px)`;
+      ctx.fillStyle = style;
+      ctx.beginPath();
+      ctx.moveTo(q[0][0], q[0][1]);
+      for (let i = 0; i < q.length; i++) {
+        const p0 = q[i], p1 = q[(i + 1) % q.length], p2 = q[(i + 2) % q.length];
+        ctx.quadraticCurveTo(p1[0], p1[1], (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    };
 
-    // beard / stubble shadow
+    /** Stroked open curve through face-plane points. `w` in metres. */
+    const stroke = (pts, style, w, { mode = 'source-over', alpha = 1, blur = 0, cap = 'round' } = {}) => {
+      const q = pts.map(([x, y]) => fx(x, y));
+      ctx.save();
+      ctx.globalCompositeOperation = mode;
+      ctx.globalAlpha = alpha;
+      if (blur) ctx.filter = `blur(${blur}px)`;
+      ctx.strokeStyle = style;
+      ctx.lineWidth = w * PY;
+      ctx.lineCap = cap;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(q[0][0], q[0][1]);
+      for (let i = 1; i < q.length - 1; i++) {
+        ctx.quadraticCurveTo(q[i][0], q[i][1], (q[i][0] + q[i + 1][0]) / 2, (q[i][1] + q[i + 1][1]) / 2);
+      }
+      ctx.lineTo(q[q.length - 1][0], q[q.length - 1][1]);
+      ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    };
+
+    // ---- tonal zones ------------------------------------------------------
+    // A portrait painter's three bands: ochre forehead, red mid-face, blue-grey
+    // jaw. Without them procedural skin is one flat plastic beige.
+    soft([0, 0.058, 0.078], 0.055, 0.030, 'rgba(206,158,88,0.22)', 0.9);
+    soft([0, -0.030, 0.092], 0.048, 0.028, 'rgba(196,80,58,0.26)', 1.0);
+    soft([0, -0.100, 0.066], 0.046, 0.024, 'rgba(92,104,132,0.24)', 0.9);
+
+    // warmth on cheeks, nose, ears
+    const blush = look.blush || 'rgba(198,86,70,0.30)';
+    soft([0.050, -0.024, 0.058], 0.030, 0.020, blush, 0.9);
+    soft([-0.050, -0.024, 0.058], 0.030, 0.020, blush, 0.9);
+    soft([0, -0.044, 0.099], 0.016, 0.012, blush, 0.85);
+    // ears and nostril wings are two sheets of skin over nothing: always redder
+    soft([0.070, -0.026, -0.004], 0.022, 0.026, 'rgba(206,88,66,0.50)', 1.0);
+    soft([-0.070, -0.026, -0.004], 0.022, 0.026, 'rgba(206,88,66,0.50)', 1.0);
+
+    // ---- occlusion --------------------------------------------------------
+    const ao = (p, rx, ry, a, col = '104,68,62') => soft(p, rx, ry, `rgba(${col},${a})`, 1, 'multiply');
+    // the orbit: a real socket is 40mm wide and 28mm tall, and it is the
+    // strongest value on a face. Eyes read as eyes because they sit in a hole.
+    ao([0.0335, -0.004, 0.070], 0.021, 0.015, 0.42, '112,76,72');
+    ao([-0.0335, -0.004, 0.070], 0.021, 0.015, 0.42, '112,76,72');
+    // the crease directly under the brow ridge, darker and tighter
+    ao([0.0335, 0.004, 0.076], 0.017, 0.006, 0.52, '92,60,58');
+    ao([-0.0335, 0.004, 0.076], 0.017, 0.006, 0.52, '92,60,58');
+    // tear trough
+    ao([0.0330, -0.0165, 0.073], 0.014, 0.005, 0.44, '124,80,72');
+    ao([-0.0330, -0.0165, 0.073], 0.014, 0.005, 0.44, '124,80,72');
+    // temples, jaw undercut, under the chin
+    ao([0.062, 0.026, 0.048], 0.024, 0.026, 0.34);
+    ao([-0.062, 0.026, 0.048], 0.024, 0.026, 0.34);
+    ao([0.048, -0.070, 0.056], 0.018, 0.018, 0.30);
+    ao([-0.048, -0.070, 0.056], 0.018, 0.018, 0.30);
+    ao([0, -0.108, 0.030], 0.040, 0.014, 0.55);
+
+    // ---- nose -------------------------------------------------------------
+    // bridge highlight, side planes in shadow, a lit tip
+    soft([0, -0.014, 0.093], 0.005, 0.020, 'rgba(255,232,212,0.30)', 1);
+    soft([0, -0.040, 0.098], 0.006, 0.008, 'rgba(255,236,218,0.34)', 1);
+    ao([0.0115, -0.020, 0.086], 0.005, 0.020, 0.42, '126,84,76');
+    ao([-0.0115, -0.020, 0.086], 0.005, 0.020, 0.42, '126,84,76');
+    // the shadow the tip casts on the philtrum
+    ao([0, -0.0575, 0.089], 0.011, 0.005, 0.72, '110,70,64');
+    // nostril wings: a crease curling around each ala
+    stroke([[0.0215, -0.0455], [0.0215, -0.0530], [0.0140, -0.0575]],
+      'rgba(112,66,58,0.62)', 0.0022, { blur: 2 });
+    stroke([[-0.0215, -0.0455], [-0.0215, -0.0530], [-0.0140, -0.0575]],
+      'rgba(112,66,58,0.62)', 0.0022, { blur: 2 });
+    // the openings themselves: comma-shaped, dark, tilted inward
+    for (const sg of [1, -1]) {
+      shape([
+        [sg * 0.0055, -0.0560], [sg * 0.0110, -0.0548], [sg * 0.0135, -0.0568],
+        [sg * 0.0100, -0.0588], [sg * 0.0058, -0.0582],
+      ], 'rgba(48,26,26,0.80)', { blur: 1.5 });
+    }
+    // columella
+    ao([0, -0.0565, 0.093], 0.0028, 0.0035, 0.5, '120,78,70');
+
+    // ---- nasolabial fold + cheek plane ------------------------------------
+    stroke([[0.0225, -0.0500], [0.0300, -0.0665], [0.0300, -0.0790]],
+      'rgba(126,80,72,0.34)', 0.0055, { blur: 6 });
+    stroke([[-0.0225, -0.0500], [-0.0300, -0.0665], [-0.0300, -0.0790]],
+      'rgba(126,80,72,0.34)', 0.0055, { blur: 6 });
+
+    // ---- mouth ------------------------------------------------------------
+    // Two filled vermilion shapes with a real cupid's bow, not stacked blobs.
+    // The upper lip faces down and away from the sky, so it is always the
+    // darker of the two — that value break is most of what reads as a mouth.
+    const lipHex = look.lip || 'rgba(158,84,80,0.55)';
+    const cL = -0.0285, cR = 0.0285;          // corners
+    const yC = -0.0788;                        // mouth line
+    shape([
+      [cL, yC + 0.0004],
+      [-0.0170, -0.0724], [-0.0060, -0.0710], [0, -0.0730],
+      [0.0060, -0.0710], [0.0170, -0.0724],
+      [cR, yC + 0.0004],
+      [0.0140, -0.0778], [0, -0.0786], [-0.0140, -0.0778],
+    ], lipHex, { alpha: 1 });
+    shape([
+      [cL, yC + 0.0006],
+      [-0.0150, -0.0800], [0, -0.0806], [0.0150, -0.0800],
+      [cR, yC + 0.0006],
+      [0.0165, -0.0868], [0, -0.0894], [-0.0165, -0.0868],
+    ], lipHex, { alpha: 1 });
+    // upper lip in its own shadow
+    shape([
+      [cL, yC], [-0.0170, -0.0722], [0, -0.0728], [0.0170, -0.0722], [cR, yC],
+      [0.0140, -0.0776], [0, -0.0784], [-0.0140, -0.0776],
+    ], 'rgba(58,26,30,0.42)', { mode: 'multiply', blur: 2 });
+    // vermilion border: a fine light line where lip meets skin
+    stroke([[cL, yC - 0.0022], [-0.0160, -0.0716], [0, -0.0734], [0.0160, -0.0716], [cR, yC - 0.0022]],
+      'rgba(255,226,208,0.24)', 0.0016, { blur: 2 });
+    // the mouth line itself
+    stroke([[cL, yC], [-0.0130, -0.0796], [0, -0.0784], [0.0130, -0.0796], [cR, yC]],
+      'rgba(64,28,30,0.85)', 0.0026, { blur: 0.6 });
+    // wet highlight on the lower lip
+    soft([0, -0.0852, 0.084], 0.008, 0.0022, 'rgba(255,224,208,0.34)', 1);
+    // corner shadows and the mentolabial crease
+    ao([cR, yC - 0.0004, 0.076], 0.004, 0.003, 0.62, '92,52,50');
+    ao([cL, yC - 0.0004, 0.076], 0.004, 0.003, 0.62, '92,52,50');
+    ao([0, -0.0930, 0.080], 0.014, 0.0035, 0.44, '124,82,74');
+    soft([0, -0.1010, 0.079], 0.010, 0.006, 'rgba(255,230,214,0.16)', 1);
+
+    // ---- brows ------------------------------------------------------------
+    // A filled tapered shape, not a fat grey stroke: the brow is the darkest
+    // horizontal in the upper face and it has to hold an edge.
+    const browCol = look.browShadow || 'rgba(52,38,34,0.62)';
+    for (const sg of [1, -1]) {
+      shape([
+        [sg * 0.0095, 0.0128], [sg * 0.0260, 0.0176], [sg * 0.0430, 0.0140],
+        [sg * 0.0560, 0.0060], [sg * 0.0500, 0.0056],
+        [sg * 0.0400, 0.0102], [sg * 0.0250, 0.0128], [sg * 0.0105, 0.0086],
+      ], browCol, { blur: 3 });
+    }
+
+    // ---- eyes -------------------------------------------------------------
+    for (const sg of [1, -1]) {
+      const ep = (x, y) => px([sg * x, y, 0.079 - Math.abs(x - 0.033) * 0.35]);
+      ctx.save();
+      ctx.lineCap = 'round';
+      // a soft dark bed so the hard line reads as sitting in a socket
+      ctx.strokeStyle = 'rgba(52,30,34,0.50)';
+      ctx.lineWidth = 0.0060 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0140, -0.0050));
+      ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
+      ctx.stroke();
+      // the lash line
+      ctx.strokeStyle = look.lash || 'rgba(14,10,12,0.97)';
+      ctx.lineWidth = 0.0026 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0140, -0.0050));
+      ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
+      ctx.stroke();
+      // outer flick
+      ctx.lineWidth = 0.0015 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0470, -0.0012));
+      ctx.lineTo(...ep(0.0590, -0.0014));
+      ctx.stroke();
+      // the lid crease — the fold that gives an eye its shape
+      ctx.strokeStyle = 'rgba(96,60,58,0.40)';
+      ctx.lineWidth = 0.0026 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0155, 0.0032));
+      ctx.quadraticCurveTo(...ep(0.0340, 0.0098), ...ep(0.0520, 0.0024));
+      ctx.stroke();
+      // lower lash and the wet line under it
+      ctx.strokeStyle = 'rgba(62,36,36,0.55)';
+      ctx.lineWidth = 0.0012 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0165, -0.0098));
+      ctx.quadraticCurveTo(...ep(0.0340, -0.0158), ...ep(0.0500, -0.0072));
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,230,216,0.20)';
+      ctx.lineWidth = 0.0010 * PY;
+      ctx.beginPath();
+      ctx.moveTo(...ep(0.0180, -0.0112));
+      ctx.quadraticCurveTo(...ep(0.0340, -0.0170), ...ep(0.0490, -0.0086));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ---- beard shadow -----------------------------------------------------
     if (look.stubble) {
       ctx.save();
       const [jx, jy] = px([0, -0.086, 0.077]);
-      ctx.globalAlpha = look.stubble;
+      // a soft field first — sparse individual dots read as dirt, not stubble
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = look.stubble * 0.85;
+      const g = ctx.createRadialGradient(jx, jy, 0, jx, jy, 0.036 * PY);
+      g.addColorStop(0, look.stubbleColor || '#4b3a30');
+      g.addColorStop(0.45, look.stubbleColor || '#4b3a30');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.save();
+      ctx.translate(jx, jy); ctx.scale(1.6, 1); ctx.translate(-jx, -jy);
+      ctx.beginPath(); ctx.arc(jx, jy, 0.036 * PY, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      // then the grain on top
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(0.55, look.stubble * 1.1);
       ctx.fillStyle = look.stubbleColor || '#4b3a30';
-      for (let i = 0; i < 5200; i++) {
+      for (let i = 0; i < 24000; i++) {
         const a = rng.range(0, Math.PI * 2), r = Math.sqrt(rng.next());
-        const x = jx + Math.cos(a) * r * 0.155 * S;
-        const y = jy + Math.sin(a) * r * 0.085 * S - 0.02 * S;
-        const fall = 1 - r;
-        if (rng.next() > fall * 0.9) continue;
-        ctx.fillRect(x, y, 1.7, 1.7);
+        const x = jx + Math.cos(a) * r * 0.058 * PY * 1.6;
+        const y = jy + Math.sin(a) * r * 0.036 * PY - 0.008 * PY;
+        if (rng.next() > (1 - r) * 0.9) continue;
+        ctx.fillRect(x, y, 1.0, 1.0);
       }
       ctx.restore();
       ctx.globalAlpha = 1;
     }
 
-    // freckles
+    // ---- freckles ---------------------------------------------------------
     if (look.freckles) {
       ctx.save();
-      const [fx, fy] = px([0, -0.032, 0.092]);
+      const [fx0, fy0] = px([0, -0.030, 0.092]);
       ctx.fillStyle = look.freckleColor || 'rgba(150,88,58,0.55)';
-      for (let i = 0; i < 260; i++) {
-        const x = fx + rng.gauss(0, 0.055) * S;
-        const y = fy + rng.gauss(0, 0.020) * S;
-        const r = rng.range(1.1, 2.6);
-        ctx.globalAlpha = rng.range(0.25, 0.75);
+      for (let i = 0; i < 320; i++) {
+        const x = fx0 + rng.gauss(0, 0.028) * PY * 1.6;
+        const y = fy0 + rng.gauss(0, 0.011) * PY;
+        const r = rng.range(0.9, 2.2);
+        ctx.globalAlpha = rng.range(0.22, 0.7);
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
       ctx.globalAlpha = 1;
     }
 
-    // lips
-    const lipCol = look.lip || 'rgba(158,84,80,0.55)';
-    soft([0, -0.0738, 0.085], 0.028, 0.0080, lipCol, 1);
-    soft([0, -0.0846, 0.084], 0.025, 0.0080, lipCol, 1);
-    soft([0, -0.0738, 0.085], 0.020, 0.0050, lipCol, 0.8);
-    soft([0, -0.0846, 0.084], 0.018, 0.0050, lipCol, 0.8);
-    // mouth line: cupid's bow into the corners
-    ctx.save();
-    const mp = (x, y) => px([x, y, 0.085 - Math.abs(x) * 0.16]);
-    const a1 = mp(-0.0275, -0.0786);
-    const a3 = mp(0.0275, -0.0786);
-    ctx.strokeStyle = 'rgba(78,36,36,0.85)';
-    ctx.lineWidth = 4.5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(a1[0], a1[1]);
-    ctx.bezierCurveTo(...mp(-0.012, -0.0806), ...mp(-0.006, -0.0784), ...mp(0, -0.0790));
-    ctx.bezierCurveTo(...mp(0.006, -0.0784), ...mp(0.012, -0.0806), a3[0], a3[1]);
-    ctx.stroke();
-    ctx.restore();
-
-    // lash lines — the single strongest cue that an eye is an eye
-    for (const sg of [1, -1]) {
-      const ep = (x, y) => px([sg * x, y, 0.079 - Math.abs(x - 0.033) * 0.35]);
-      ctx.save();
-      ctx.strokeStyle = look.lash || 'rgba(28,20,22,0.92)';
-      ctx.lineWidth = 5.0;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.015, -0.0055));
-      ctx.quadraticCurveTo(...ep(0.033, 0.0035), ...ep(0.051, -0.0035));
-      ctx.stroke();
-      // outer flick
-      ctx.lineWidth = 3.0;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.047, -0.0015));
-      ctx.lineTo(...ep(0.056, -0.0020));
-      ctx.stroke();
-      // faint lower lash
-      ctx.strokeStyle = 'rgba(70,46,44,0.45)';
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.017, -0.0095));
-      ctx.quadraticCurveTo(...ep(0.034, -0.0155), ...ep(0.050, -0.0070));
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // scar
+    // ---- scar -------------------------------------------------------------
     if (look.scar) {
       ctx.save();
       const s1 = px(look.scar.from), s2 = px(look.scar.to);
@@ -558,19 +791,20 @@ function paintFace(look, uv) {
       ctx.restore();
     }
 
-    // eyebrow shadow so the geometry brows sit on something
-    for (const sg of [1, -1]) {
-      const b0 = px([sg * 0.012, 0.0140, 0.085]);
-      const b1 = px([sg * 0.034, 0.0170, 0.077]);
-      const b2 = px([sg * 0.053, 0.0085, 0.059]);
+    // ---- fringe shadow ----------------------------------------------------
+    // hair throws a real shadow across the forehead; without it the hairstyle
+    // sits on the skull like a wig on a stand
+    if (look.hair) {
+      const fs = look.fringeShadow ?? 0.55;
       ctx.save();
-      ctx.strokeStyle = look.browShadow || 'rgba(70,50,44,0.42)';
-      ctx.lineWidth = 16;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(b0[0], b0[1]);
-      ctx.quadraticCurveTo(b1[0], b1[1] - 4, b2[0], b2[1]);
-      ctx.stroke();
+      ctx.globalCompositeOperation = 'multiply';
+      const [, hy] = px([0, 0.048, 0.082]);
+      const g = ctx.createLinearGradient(0, hy - 0.030 * PY, 0, hy + 0.040 * PY);
+      g.addColorStop(0, `rgba(58,40,44,${fs})`);
+      g.addColorStop(0.5, `rgba(96,70,68,${fs * 0.5})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, hy - 0.030 * PY, S, 0.070 * PY);
       ctx.restore();
     }
   }, { repeat: 1 });

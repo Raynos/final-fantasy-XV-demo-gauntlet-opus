@@ -36,34 +36,51 @@ export function buildHair(rig, look) {
   const rootC = base.clone().multiplyScalar(0.72);
 
   // hairline elevation in canonical y for a given azimuth
+  // A hairline is not a circle. It rides high across the forehead, plunges at
+  // the temples, and drops lowest at the nape — and if the temples do not drop
+  // the character has two bald patches beside the eyes from every angle.
   const hairline = (th) => {
     const c = Math.cos(th);
-    let y = -0.010 + 0.060 * c + (H.hairline || 0);
+    let y = -0.012 + 0.049 * c + (H.hairline || 0);
+    y -= (H.temple ?? 0.030) * Math.pow(Math.abs(Math.sin(th)), 1.2);
     y += (H.peak || 0) * 0.012 * Math.max(0, Math.cos(th * 2));
     return y;
   };
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
 
   // ---- scalp shell -------------------------------------------------------
-  const cols = 44, rows = 9;
+  const cols = 52, rows = 11;
   const shell = [];
   B.color(base).mat(H.rough ?? 0.36, 0).skin([[I.head, 1]]);
+  const shellPoint = (th, t) => {
+    const pm = phiOf(th);
+    const phi = pm * Math.min(1, t * 1.02);
+    const { p, n } = sample(th, phi);
+    const vol = (H.volume ?? 1) * (H.shell ?? 0.011);
+    // thicker at the crown, thinning to a lip at the hairline
+    let off = vol * (0.22 + 0.9 * smooth(1 - t));
+    if (t >= 0.999) off = 0.0012;
+    if (H.shellShape) off *= H.shellShape(th, 1 - t);
+    return { p: p.clone().addScaledVector(n, off), n };
+  };
   for (let r = 0; r <= rows; r++) {
     const row = [];
+    const t = r / rows;
     for (let c = 0; c <= cols; c++) {
       const th = (c / cols) * Math.PI * 2;
-      const pm = phiOf(th);
-      const t = r / rows;
-      const phi = pm * Math.min(1, t * 1.02);
-      const { p, n } = sample(th, phi);
-      const vol = (H.volume ?? 1) * (H.shell ?? 0.011);
-      // thicker at the crown, thinning to a lip at the hairline
-      let off = vol * (0.22 + 0.9 * smooth(1 - t));
-      if (r === rows) off = 0.0012;
-      if (H.shellShape) off *= H.shellShape(th, 1 - t);
-      const w = put(p.clone().addScaledVector(n, off));
-      B.color(r > rows - 2 ? rootC : base);
-      row.push(B.v(w.x, w.y, w.z, c / cols, t));
+      const { p } = shellPoint(th, t);
+      // strand flow runs crown -> hairline; the highlight band is perpendicular
+      const q = shellPoint(th, Math.min(1, t + 0.02)).p;
+      const d = q.clone().sub(p);
+      if (d.lengthSq() < 1e-10) d.set(0, -1, 0);
+      B.tang(d.x, d.y, d.z);
+      const w = put(p);
+      // a parting is a value break, not a shape: the crown is lighter than the
+      // nape and the roots at the hairline are darkest of all
+      // the shell is a value floor under the strands, never a surface in its own
+      // right: keep it dark enough that any gap reads as depth, not as a helmet
+      B.color(rootC.clone().multiplyScalar(0.62).lerp(rootC, smooth(1 - t * 1.15)));
+      row.push(B.v(w.x, w.y, w.z, (c / cols) * 6, t * 1.5));
     }
     shell.push(row);
   }
@@ -122,6 +139,40 @@ export function buildHair(rig, look) {
         // clump profile: hold width through the body of the strand and only
         // taper near the tip, so hair reads as locks rather than quills
         taper: (t) => Math.pow(clamp01(1 - Math.pow(t, 1.5 + spike)), 0.62),
+      });
+    }
+  }
+
+  // ---- hairline wisps ----------------------------------------------------
+  // The scalp shell meets the forehead along a hard geometric edge. Real hair
+  // never does: a few dozen fine, short, low-contrast strands crossing that
+  // line are what dissolve the "wig on a stand" seam.
+  {
+    const nw = H.wisps ?? 44;
+    B.skin([[I.head, 1]]).mat((H.rough ?? 0.36) + 0.10, 0);
+    for (let i = 0; i < nw; i++) {
+      const th = rng.range(-2.5, 2.5);
+      const pm = phiOf(th);
+      const { p, n: nrm } = sample(th, pm * (0.94 + rng.next() * 0.10));
+      const root = p.clone().addScaledVector(nrm, (H.shell ?? 0.011) * 0.4);
+      const len = (0.016 + rng.next() * 0.020) * (H.wispLen ?? 1);
+      const d = new THREE.Vector3(
+        nrm.x * 0.5 + rng.gauss(0, 0.35),
+        -0.80 + rng.gauss(0, 0.28),
+        nrm.z * 0.55 + rng.gauss(0, 0.22)
+      ).normalize();
+      const mid = root.clone().addScaledVector(nrm.clone().lerp(d, 0.45).normalize(), len * 0.5);
+      const tipP = mid.clone().addScaledVector(d, len * 0.6);
+      B.color(rootC);
+      ribbon(B, {
+        points: [root, mid, tipP].map((q) => put(q).toArray()),
+        steps: 3,
+        width: 0.0026 * scale * (0.7 + rng.next() * 0.8),
+        thick: 0.0009 * scale,
+        up: nrm.toArray(),
+        color: rootC.clone().multiplyScalar(0.9 + 0.3 * rng.next()),
+        tipColor: base,
+        taper: (t) => Math.pow(1 - t, 0.5),
       });
     }
   }

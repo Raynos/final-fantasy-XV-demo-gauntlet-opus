@@ -46,11 +46,14 @@ export function armNodes(rig, side) {
   const at = (a, b, t) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
   const R = (v) => v * s;
   return [
-    // the sweep starts just inside the joint: run it further up and a bare
-    // cylinder of shoulder pokes above the trapezius like an epaulette
-    { p: at(sh, el, -0.05), rx: R(0.048 + 0.018 * m), w: [[I[`clavicle${side}`], 0.55], [I.spine03, 0.45]] },
-    { p: at(sh, el, 0.06), rx: R(0.056 + 0.026 * m), w: [[I[`upperArm${side}`], 0.6], [I[`clavicle${side}`], 0.28], [I.spine03, 0.12]] },
-    { p: at(sh, el, 0.26), rx: R(0.052 + 0.028 * m), w: [[I[`upperArm${side}`], 1]] },
+    // The sweep starts *inside* the ribcage and swells into the deltoid before
+    // tapering to the elbow. Starting at the joint left a gap that had to be
+    // plugged with a sphere, and a sphere intersecting a tube is exactly what
+    // reads as a ball-jointed doll rather than a shoulder.
+    { p: at(sh, el, -0.30), rx: R(0.030 + 0.008 * m), w: [[I[`clavicle${side}`], 0.25], [I.spine03, 0.75]] },
+    { p: at(sh, el, -0.10), rx: R(0.046 + 0.016 * m), w: [[I[`clavicle${side}`], 0.55], [I.spine03, 0.45]] },
+    { p: at(sh, el, 0.06), rx: R(0.053 + 0.024 * m), w: [[I[`upperArm${side}`], 0.6], [I[`clavicle${side}`], 0.28], [I.spine03, 0.12]] },
+    { p: at(sh, el, 0.26), rx: R(0.050 + 0.026 * m), w: [[I[`upperArm${side}`], 1]] },
     { p: at(sh, el, 0.62), rx: R(0.046 + 0.026 * m), w: [[I[`upperArm${side}`], 1]] },
     { p: at(sh, el, 0.94), rx: R(0.040 + 0.012 * m), w: [[I[`upperArm${side}`], 0.6], [I[`lowerArm${side}`], 0.4]] },
     { p: at(el, wr, 0.14), rx: R(0.043 + 0.020 * m), w: [[I[`upperArm${side}`], 0.12], [I[`lowerArm${side}`], 0.88]] },
@@ -90,8 +93,8 @@ export function legNodes(rig, side) {
 export function torsoShape(m) {
   return (th, t) => {
     let k = 1;
-    k += (0.055 + 0.115 * m) * abump(th, 0.34, 0.55) * bump(t, 0.80, 0.15);
-    k += (0.055 + 0.115 * m) * abump(th, -0.34, 0.55) * bump(t, 0.80, 0.15);
+    k += (0.045 + 0.062 * m) * abump(th, 0.40, 0.62) * bump(t, 0.79, 0.18);
+    k += (0.045 + 0.062 * m) * abump(th, -0.40, 0.62) * bump(t, 0.79, 0.18);
     k -= (0.010 + 0.030 * m) * (abump(th, 0.34, 0.5) + abump(th, -0.34, 0.5)) * bump(t, 0.695, 0.05);
     k -= 0.035 * abump(th, 0, 0.22) * bump(t, 0.78, 0.2);
     k += (0.02 + 0.09 * m) * (abump(th, Math.PI * 0.5, 0.75) + abump(th, -Math.PI * 0.5, 0.75)) * bump(t, 0.66, 0.24);
@@ -110,7 +113,7 @@ export function torsoShape(m) {
 /** Deltoid / biceps / triceps / forearm shaping. */
 export function armShape(m, sg) {
   return (th, t) => 1
-    + (0.10 + 0.22 * m) * abump(th, sg * Math.PI * 0.5, 1.5) * bump(t, 0.10, 0.16)
+    + (0.055 + 0.115 * m) * abump(th, sg * Math.PI * 0.5, 1.6) * bump(t, 0.10, 0.17)
     + (0.05 + 0.16 * m) * abump(th, 0, 1.2) * bump(t, 0.30, 0.16)
     + (0.04 + 0.12 * m) * abump(th, Math.PI, 1.2) * bump(t, 0.34, 0.18)
     + (0.05 + 0.10 * m) * bump(t, 0.62, 0.10)
