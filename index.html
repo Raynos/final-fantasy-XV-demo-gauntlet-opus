@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<title>FINAL FANTASY XV — Eos</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
+  body { font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; }
+  #ui { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #boot {
+    position:fixed; inset:0; z-index:100; background:#05060a; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; color:#cfd6e4;
+    letter-spacing:.35em; font-size:12px; text-transform:uppercase; transition:opacity .8s;
+  }
+  #boot .bar { margin-top:18px; width:280px; height:1px; background:#1d2230; position:relative; }
+  #boot .bar i { position:absolute; inset:0 100% 0 0; background:linear-gradient(90deg,#5b7fb8,#dfe8ff); transition:right .25s; }
+  #boot.done { opacity:0; pointer-events:none; }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="ui"></div>
+  <div id="boot"><span id="boot-label">Loading</span><div class="bar"><i id="boot-bar"></i></div></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

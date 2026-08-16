@@ -1,0 +1,23 @@
+{
+  "name": "final-fantasy-xv-demo-gauntlet-opus",
+  "version": "1.0.0",
+  "description": "I want you to build an action role playing game at the level of the most recent Final Fantasy XV for PS4. It should be utterly perfect, visually beautiful, with every single thing done at AAA quality—from textures to physics to anything you could think of.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "shoot": "node tools/shoot.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "vite": "^8.2.1"
+  }
+}
