@@ -76,42 +76,54 @@ export class Terrain {
   _uploadFieldTextures() {
     const f = this.field;
 
+    // Linear filtering costs nothing here — the terrain shader reads these
+    // through texelFetch and does its own bilinear — but it lets the weather
+    // volume sample the ground height smoothly with a single fetch.
     const height = new THREE.DataTexture(f.h, N, N, THREE.RedFormat, THREE.FloatType);
-    height.magFilter = height.minFilter = THREE.NearestFilter;
+    height.magFilter = height.minFilter = THREE.LinearFilter;
     height.wrapS = height.wrapT = THREE.ClampToEdgeWrapping;
     height.generateMipmaps = false;
     height.needsUpdate = true;
 
     const farHeight = new THREE.DataTexture(f.far, FAR_N, FAR_N, THREE.RedFormat, THREE.FloatType);
-    farHeight.magFilter = farHeight.minFilter = THREE.NearestFilter;
+    farHeight.magFilter = farHeight.minFilter = THREE.LinearFilter;
     farHeight.wrapS = farHeight.wrapT = THREE.ClampToEdgeWrapping;
     farHeight.generateMipmaps = false;
     farHeight.needsUpdate = true;
 
+    // Mipmaps on the normal fields. Without them a distant range minifies a
+    // 12 m normal grid into a single pixel and the ridge lines crawl with
+    // high-frequency zigzag aliasing — the "shimmering wallpaper" horizon.
     const normal = new THREE.DataTexture(f.nrm, N, N, THREE.RGFormat, THREE.HalfFloatType);
-    normal.magFilter = normal.minFilter = THREE.LinearFilter;
+    normal.magFilter = THREE.LinearFilter;
+    normal.minFilter = THREE.LinearMipmapLinearFilter;
     normal.wrapS = normal.wrapT = THREE.ClampToEdgeWrapping;
-    normal.generateMipmaps = false;
+    normal.generateMipmaps = true;
+    normal.anisotropy = 8;
     normal.needsUpdate = true;
 
     const farNormal = new THREE.DataTexture(f.farNrm, FAR_N, FAR_N, THREE.RGFormat, THREE.HalfFloatType);
-    farNormal.magFilter = farNormal.minFilter = THREE.LinearFilter;
+    farNormal.magFilter = THREE.LinearFilter;
+    farNormal.minFilter = THREE.LinearMipmapLinearFilter;
     farNormal.wrapS = farNormal.wrapT = THREE.ClampToEdgeWrapping;
-    farNormal.generateMipmaps = false;
+    farNormal.generateMipmaps = true;
+    farNormal.anisotropy = 8;
     farNormal.needsUpdate = true;
 
     const ctrl = new THREE.DataTexture(f.ctrl, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
-    ctrl.magFilter = ctrl.minFilter = THREE.LinearFilter;
+    ctrl.magFilter = THREE.LinearFilter;
+    ctrl.minFilter = THREE.LinearMipmapLinearFilter;
     ctrl.wrapS = ctrl.wrapT = THREE.ClampToEdgeWrapping;
     ctrl.colorSpace = THREE.NoColorSpace;
-    ctrl.generateMipmaps = false;
+    ctrl.generateMipmaps = true;
     ctrl.needsUpdate = true;
 
     const farCtrl = new THREE.DataTexture(f.farCtrl, FAR_N, FAR_N, THREE.RGBAFormat, THREE.UnsignedByteType);
-    farCtrl.magFilter = farCtrl.minFilter = THREE.LinearFilter;
+    farCtrl.magFilter = THREE.LinearFilter;
+    farCtrl.minFilter = THREE.LinearMipmapLinearFilter;
     farCtrl.wrapS = farCtrl.wrapT = THREE.ClampToEdgeWrapping;
     farCtrl.colorSpace = THREE.NoColorSpace;
-    farCtrl.generateMipmaps = false;
+    farCtrl.generateMipmaps = true;
     farCtrl.needsUpdate = true;
 
     return { height, farHeight, normal, farNormal, ctrl, farCtrl };
@@ -135,6 +147,17 @@ export class Terrain {
     const hL = f.heightAt(x - e, z), hR = f.heightAt(x + e, z);
     const hD = f.heightAt(x, z - e), hU = f.heightAt(x, z + e);
     return out.set(hL - hR, 2 * e, hD - hU).normalize();
+  }
+
+  /**
+   * How wet the ground is, 0..1. Damp ground darkens and smooths; above about
+   * 0.15 standing water starts to gather in the erosion flow channels, the
+   * sediment pans and the wheel ruts. Driven by `Weather`.
+   * @param {number} w 0..1
+   */
+  setWetness(w) {
+    if (!this.res) return;
+    this.res.uniforms.uWet.value.x = Math.max(0, Math.min(1, w));
   }
 
   /** Steepness in 0..1 (0 = flat, 1 = vertical). */

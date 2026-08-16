@@ -97,11 +97,28 @@ export class Field {
       * (0.5 + 0.5 * n.fbm2(x * 0.00019 + 31, z * 0.00019 - 17, 3) + 0.001) * dir * massif;
     const plain = 9 + 30 * n.fbm2(x * 0.00052 + 3.3, z * 0.00052 + 8.1, 4);
 
-    let h = plain + Math.pow(Math.max(0, rg - 0.10), 1.45) * 780 * Math.max(0, mask);
+    // Per-massif character. Without this every range on the horizon rhymes:
+    // the same ridge exponent everywhere makes one silhouette, repeated. Low
+    // `ch` regions become broad, flat-topped mesa walls; high `ch` regions
+    // become the spiky fangs.
+    const ch = clamp01(0.5 + 0.62 * n2.fbm2(x * 0.00021 + 55.7, z * 0.00021 - 22.3, 2));
+    const sharp = 1.12 + 0.78 * ch;
+    const amp = 980 - 300 * ch;
+
+    let h = plain + Math.pow(Math.max(0, rg - 0.10), sharp) * amp * Math.max(0, mask);
     // shoulders: broad fbm bulk under the ridges so they read as massifs
     h += smoothstep(1.2, 2.6, r) * 130 * Math.max(0, n.fbm2(wx * 0.8 + 2.4, wz * 0.8 - 6.1, 4)) * dir;
     // a second, hazier range further out to layer the horizon
     h += smoothstep(2.3, 4.0, r) * 330 * Math.pow(n.ridged2(wx * 0.52 + 5.5, wz * 0.52 - 2.2, 4, 2.0, 0.46), 1.4);
+
+    // Mesa capping: shear the tops off the broad massifs against a bench
+    // altitude that itself drifts, so the skyline gets tables and saddles
+    // instead of an unbroken row of triangles.
+    const capAmt = smoothstep(0.58, 0.14, ch);
+    if (capAmt > 0.001) {
+      const capH = 190 + 300 * (0.5 + 0.5 * n.fbm2(x * 0.00026 - 13.1, z * 0.00026 + 6.7, 2));
+      if (h > capH) h -= (h - capH) * capAmt * 0.78;
+    }
     return h;
   }
 
@@ -792,6 +809,8 @@ function smoothstep(a, b, x) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
+
+function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 /**
  * The exact JS twin of `tf_snoise` in TerrainMaterial.js (Ashima simplex).

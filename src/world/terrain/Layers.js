@@ -225,7 +225,7 @@ const RECIPES = [
  * Synthesise every layer into two DataArrayTextures plus a shared close-range
  * detail map.
  * @param {number} size texel resolution per layer
- * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detail: THREE.DataTexture}}
+ * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture}}
  */
 export function buildLayerTextures(size = 512) {
   const px = size * size;
@@ -274,7 +274,7 @@ export function buildLayerTextures(size = 512) {
   albedoArray.minFilter = THREE.LinearMipmapLinearFilter;
   albedoArray.magFilter = THREE.LinearFilter;
   albedoArray.generateMipmaps = true;
-  albedoArray.anisotropy = 8;
+  albedoArray.anisotropy = 16;
   albedoArray.needsUpdate = true;
 
   const surfArray = new THREE.DataArrayTexture(surf, size, size, LAYER_COUNT);
@@ -284,15 +284,127 @@ export function buildLayerTextures(size = 512) {
   surfArray.minFilter = THREE.LinearMipmapLinearFilter;
   surfArray.magFilter = THREE.LinearFilter;
   surfArray.generateMipmaps = true;
-  surfArray.anisotropy = 8;
+  surfArray.anisotropy = 16;
   surfArray.needsUpdate = true;
 
-  return { albedoArray, surfArray, detail: buildDetail(Math.min(512, size)) };
+  return {
+    albedoArray,
+    surfArray,
+    detailArray: buildDetailArray(Math.min(512, size)),
+  };
+}
+
+/**
+ * The two close-range detail maps, packed as one 2-layer array.
+ *
+ *   layer 0 — pebble / grit scale, tiled sub-metre (parallax + micro normal)
+ *   layer 1 — near-field surface at 2-4 m (gravel, cracking, scour)
+ *
+ * They share a sampler on purpose: the terrain fragment shader already sits on
+ * the 16-texture-unit limit once the atmosphere patch and the shadow cascades
+ * are injected into it, and a seventh standalone sampler tips it over.
+ */
+function buildDetailArray(size) {
+  const px = size * size;
+  const data = new Uint8Array(px * 4 * 2);
+  data.set(buildDetail(size), 0);
+  data.set(buildNearDetail(size), px * 4);
+
+  const tex = new THREE.DataArrayTexture(data, size, size, 2);
+  tex.format = THREE.RGBAFormat;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 16;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Near-field surface map, tiled at 2–4 m rather than the layer textures' 3–12 m.
+ *
+ * This is the band the layer splat cannot reach: at two metres from the camera
+ * a 9 m dirt tile is magnified into a flat wash, which is exactly the "smooth
+ * brown mound" tell. It carries four things the eye reads as *ground* —
+ * scattered pebbles and gravel, polygonal shrinkage cracking, shallow scour
+ * channels and a fine grit floor — packed as rgb = tangent normal, a = a
+ * signed-ish detail height used to modulate albedo.
+ */
+function buildNearDetail(size) {
+  const px = size * size;
+  const h = new Float32Array(px);
+  const alb = new Float32Array(px);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size, v = y / size;
+
+      // domain warp: nothing here is allowed to look lattice-aligned
+      const wx = (fbm(u, v, 5, 5, 311, 3) - 0.5) * 0.09;
+      const wy = (fbm(u, v, 5, 5, 313, 3) - 0.5) * 0.09;
+
+      // 1 — polygonal shrinkage cracking, two generations
+      const c1 = worley(u + wx, v + wy, 5, 5, 317);
+      const crack1 = 1 - sstep(0.0, 0.045, c1.f2 - c1.f1);
+      const c2 = worley(u + wx * 1.7, v + wy * 1.7, 11, 11, 331);
+      const crack2 = (1 - sstep(0.0, 0.055, c2.f2 - c2.f1)) * (0.35 + 0.65 * c1.id);
+      const crack = clamp01(crack1 * 0.75 + crack2 * 0.45);
+
+      // 2 — pebble / gravel scatter at two sizes, clustered into drifts
+      const drift = fbm(u, v, 4, 4, 337, 3);
+      const bigP = worley(u, v, 9, 9, 341);
+      const big = clamp01(1 - bigP.f1 * 2.7) * sstep(0.52, 0.88, bigP.id) * sstep(0.38, 0.72, drift);
+      const smP = worley(u + wx * 0.5, v, 21, 21, 347);
+      const small = clamp01(1 - smP.f1 * 3.0) * sstep(0.44, 0.86, smP.id);
+      const peb = clamp01(big * 1.0 + small * 0.55);
+
+      // 3 — shallow scour channels: where water last ran across the pan
+      const scour = sstep(0.30, 0.02, Math.abs(fbm(u, v, 3, 7, 353, 4) - 0.5)) * 0.5;
+
+      // 4 — grit floor
+      const grit = fbm(u, v, 42, 42, 359, 3);
+
+      const height = clamp01(
+        0.42 + peb * 0.55 - crack * 0.46 - scour * 0.26 + (grit - 0.5) * 0.24
+      );
+      h[y * size + x] = height;
+
+      // albedo modulation: pebbles read pale and slightly cool, cracks read
+      // dark and warm, and the grit adds high-frequency salt so the surface
+      // never resolves into one flat colour under the sun
+      alb[y * size + x] = clamp01(
+        0.50 + peb * 0.42 - crack * 0.40 - scour * 0.16 + (grit - 0.5) * 0.34
+      );
+    }
+  }
+
+  const data = new Uint8Array(px * 4);
+  const at = (x, y) => h[((y + size) % size) * size + ((x + size) % size)];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) -
+        (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+      const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) -
+        (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+      const nx = -dx * 3.1, ny = -dy * 3.1, nz = 1;
+      const inv = 1 / Math.hypot(nx, ny, nz);
+      data[i * 4] = clampByte((nx * inv * 0.5 + 0.5) * 255);
+      data[i * 4 + 1] = clampByte((ny * inv * 0.5 + 0.5) * 255);
+      data[i * 4 + 2] = clampByte((nz * inv * 0.5 + 0.5) * 255);
+      data[i * 4 + 3] = clampByte(alb[i] * 255);
+    }
+  }
+
+  return data;
 }
 
 /**
  * Close-range detail map: pebbles, hairline cracks and dirt tufts.
  * rgb = tangent normal, a = height (drives the parallax offset).
+ * @returns {Uint8Array} RGBA texels, ready to pack into the detail array.
  */
 function buildDetail(size) {
   const px = size * size;
@@ -327,15 +439,7 @@ function buildDetail(size) {
       data[i * 4 + 3] = clampByte(h[i] * 255);
     }
   }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
+  return data;
 }
 
 function clampByte(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }

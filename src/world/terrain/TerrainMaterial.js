@@ -63,6 +63,13 @@ float tf_height(vec2 p) {
 vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
 `;
 
+/**
+ * The heightfield sampler, exported so other systems that need to know where
+ * the ground is on the GPU (rain splashes, the weather volume) read exactly the
+ * same surface the terrain displaces to instead of an approximation.
+ */
+export const TERRAIN_FIELD_GLSL = FIELD_GLSL;
+
 const VERT_PARS = /* glsl */`
 ${FIELD_GLSL}
 uniform sampler2D uNormalTex;
@@ -104,7 +111,9 @@ uniform sampler2D uNormalTex;
 uniform sampler2D uFarNormalTex;
 uniform sampler2D uCtrlTex;
 uniform sampler2D uFarCtrlTex;
-uniform sampler2D uDetailTex;
+uniform highp sampler2DArray uDetailArr;   // 0 = sub-metre grit, 1 = 2-4 m surface
+uniform float uNearScale;
+uniform vec4 uWet;      // wetness, puddleGain, -, -
 uniform highp sampler2DArray uAlbedoArr;
 uniform highp sampler2DArray uSurfArr;
 uniform vec4 uField;
@@ -122,10 +131,42 @@ vec3 tfAlbedo; float tfRough; vec3 tfNormalW; float tfAO;
 
 vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
 
+/**
+ * Surface normal, low-pass filtered with distance.
+ *
+ * A range 3 km out projects a 12 m normal grid onto a couple of pixels. Point
+ * sampling that is what makes far ridges break into a crawling zigzag hatch —
+ * the horizon "wallpaper" artefact. Widening the kernel with distance both
+ * kills the aliasing and is physically right: at that range you are seeing the
+ * massif, not its boulders.
+ */
 vec3 tf_surfNormal(vec2 p) {
-  vec2 nn = (max(abs(p.x), abs(p.y)) >= uField.w)
-    ? texture2D(uFarNormalTex, tf_uv(p, uFarP)).rg
-    : texture2D(uNormalTex, tf_uv(p, uField)).rg;
+  bool far = max(abs(p.x), abs(p.y)) >= uField.w;
+  vec4 P = far ? uFarP : uField;
+  vec2 uv = tf_uv(p, P);
+  vec2 texel = vec2(1.0 / P.z);
+  float k = clamp(vTDist / 900.0, 0.0, 3.2);
+  vec2 nn;
+  if (k < 0.06) {
+    nn = far ? texture2D(uFarNormalTex, uv).rg : texture2D(uNormalTex, uv).rg;
+  } else {
+    vec2 o = texel * (0.75 + k * 1.9);
+    vec2 a, b, c, d, e;
+    if (far) {
+      a = texture2D(uFarNormalTex, uv).rg;
+      b = texture2D(uFarNormalTex, uv + vec2(o.x, 0.0)).rg;
+      c = texture2D(uFarNormalTex, uv - vec2(o.x, 0.0)).rg;
+      d = texture2D(uFarNormalTex, uv + vec2(0.0, o.y)).rg;
+      e = texture2D(uFarNormalTex, uv - vec2(0.0, o.y)).rg;
+    } else {
+      a = texture2D(uNormalTex, uv).rg;
+      b = texture2D(uNormalTex, uv + vec2(o.x, 0.0)).rg;
+      c = texture2D(uNormalTex, uv - vec2(o.x, 0.0)).rg;
+      d = texture2D(uNormalTex, uv + vec2(0.0, o.y)).rg;
+      e = texture2D(uNormalTex, uv - vec2(0.0, o.y)).rg;
+    }
+    nn = (a * 0.36 + (b + c + d + e) * 0.16);
+  }
   return normalize(vec3(nn.x, sqrt(max(0.02, 1.0 - dot(nn, nn))), nn.y));
 }
 vec4 tf_ctrl(vec2 p) {
@@ -200,7 +241,7 @@ void tf_shade() {
     vec2 poff = vec2(0.0);
     if (nearAmt > 0.001) {
       vec3 V = normalize(cameraPosition - P);
-      float dh = texture2D(uDetailTex, P.xz * uDetailScale).a - 0.55;
+      float dh = texture(uDetailArr, vec3(P.xz * uDetailScale, 0.0)).a - 0.55;
       poff = -V.xz / max(0.45, V.y) * dh * 0.035 * nearAmt;
       poff = clamp(poff, vec2(-0.045), vec2(0.045));
     }
@@ -235,32 +276,79 @@ void tf_shade() {
     // ---- rock is triplanar so cliffs never smear, and carries the strata ---
     vec3 bw = pow(abs(N), vec3(5.0));
     bw /= max(bw.x + bw.y + bw.z, 1e-4);
-    float rs = uLayerScale[3];
+
+    // Per-massif identity. Three overlapping ~0.9-1.6 km fields stand in for
+    // "which range am I on": smooth, so no seam ever cuts across a mountain,
+    // but decorrelated enough that no two massifs share a bed thickness, a dip
+    // direction or a texture scale. This is what stops the horizon reading as
+    // one strip of wallpaper repeated behind every peak.
+    float mr1 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00115 + 41.0);
+    float mr2 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00088 - 17.0);
+    float mr3 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00061 + 73.0);
+    // faster fields for the tiling itself: two neighbouring buttes must not
+    // share a bed thickness, or a wide shot still reads as one printed sheet
+    float mrA = 0.5 + 0.5 * tf_snoise(P.xz * 0.0027 + 91.0);
+    float mrB = 0.5 + 0.5 * tf_snoise(P.xz * 0.0034 - 55.0);
+
+    // The rock tile is scaled *separately* in the horizontal and the bedding
+    // axis: the horizontal scale controls grain, the vertical one controls bed
+    // thickness. Both drift massif to massif, and bed thickness also grows with
+    // altitude the way a real stack coarsens toward its base.
+    float rsH = uLayerScale[3] * (0.66 + 0.85 * mrA);
+    float rsV = uLayerScale[3] * (0.42 + 1.25 * mrB)
+              * (0.82 + 0.62 * smoothstep(20.0, 320.0, P.y));
     // undulate the bedding plane so the texture's own strata are not a perfect
     // world-aligned stack across every cliff in the region
-    float yw = P.y + 2.6 * tf_snoise(P.xz * 0.0072) + 0.9 * tf_snoise(P.xz * 0.028);
-    vec2 rzy = vec2(P.z + jit.y * 0.35, yw) * rs;
-    vec2 rxz = (P.xz + jit) * rs;
-    vec2 rxy = vec2(P.x + jit.x * 0.35, yw) * rs;
+    float yw = P.y + 6.5 * tf_snoise(P.xz * 0.0031 + 3.0)
+             + 2.6 * tf_snoise(P.xz * 0.0072) + 0.9 * tf_snoise(P.xz * 0.028);
+    vec2 rzy = vec2((P.z + jit.y * 0.35) * rsH, yw * rsV);
+    vec2 rxz = (P.xz + jit) * rsH;
+    vec2 rxy = vec2((P.x + jit.x * 0.35) * rsH, yw * rsV);
     vec4 ax = texture(uAlbedoArr, vec3(rzy, 3.0));
     vec4 ay = texture(uAlbedoArr, vec3(rxz, 3.0));
     vec4 az = texture(uAlbedoArr, vec3(rxy, 3.0));
+    // Second, incommensurate sample of the bedded planes, cross-faded by the
+    // same low-frequency field the other layers use. Layer 3 was the one layer
+    // still drawn at a single scale, which is precisely why every cliff in a
+    // wide shot repeated on the same 12 m vertical period.
+    ax = mix(ax, texture(uAlbedoArr, vec3(rzy * 0.415 + 7.13, 3.0)), macroMix);
+    az = mix(az, texture(uAlbedoArr, vec3(rxy * 0.415 + 7.13, 3.0)), macroMix);
     vec4 sx = texture(uSurfArr, vec3(rzy, 3.0));
     vec4 sy = texture(uSurfArr, vec3(rxz, 3.0));
     vec4 sz = texture(uSurfArr, vec3(rxy, 3.0));
     alb[3] = ax * bw.x + ay * bw.y + az * bw.z;
     srf[3] = sx * bw.x + sy * bw.y + sz * bw.z;
 
+    // Vertical erosion runnels. Every badland face is raked by rain channels
+    // that cut straight down across the bedding; without them the horizontal
+    // strata have nothing to interrupt them and the whole range reads as a
+    // printed stripe. These run with the *slope*, not with world Y, so they
+    // fan out over ridges instead of marching in lockstep.
+    float rn1 = tf_snoise(vec2((P.x * 0.83 - P.z * 0.56) * 0.052, P.y * 0.0045 + 2.0));
+    float rn2 = tf_snoise(vec2((P.x * 0.41 + P.z * 0.91) * 0.155, P.y * 0.011 - 5.0));
+    float rn3 = tf_snoise(vec2((P.x * 0.67 - P.z * 0.74) * 0.017, P.y * 0.0018 + 8.0));
+    float runnel = smoothstep(0.16, 0.82, 0.5 + 0.34 * rn1 + 0.22 * rn2 + 0.30 * rn3);
+
     // Procedural sedimentary banding — the Leide signature. Bed thickness and
     // colour are randomised per bed index so the stack never reads as a
     // regular stripe pattern, and the contrast falls off with distance so the
     // bands cannot alias into moire on far ranges.
+    // The bedding coordinate is *not* world Y. It is a warped, per-massif
+    // tilted surface: beds dip, thicken and bend with the rock form, which is
+    // what a real sedimentary stack does and what a straight world-Y band never
+    // will. Three things break the stripe: a massif-specific dip vector, a
+    // frequency that changes range to range, and a warp that carries a Y term
+    // so the bands are not a stack of perfectly level planes.
+    vec2 dip = vec2(mr2 - 0.5, mr3 - 0.5) * 0.92;
+    float freq = 0.014 + 0.048 * mr1;
     float warp = 3.4 * tf_snoise(P.xz * 0.0041) + 1.2 * tf_snoise(P.xz * 0.018)
-               + 0.5 * tf_snoise(P.xz * 0.075);
-    float sy1 = P.y * 0.034 + warp * 0.14;
+               + 0.5 * tf_snoise(P.xz * 0.075)
+               + 2.6 * tf_snoise(vec2(P.y * 0.019 + 5.0, (P.x - P.z) * 0.0033))
+               + 1.1 * tf_snoise(vec2(P.y * 0.062 - 3.0, (P.x + P.z) * 0.0125));
+    float sy1 = (P.y + dot(P.xz, dip)) * freq + warp * 0.14 + mr3 * 7.0;
     float bedIdx = floor(sy1);
-    float bedR = fract(sin(bedIdx * 12.9898) * 43758.5453);
-    float bedR2 = fract(sin(bedIdx * 7.137 + 1.7) * 21254.13);
+    float bedR = fract(sin(bedIdx * 12.9898 + mr1 * 31.7) * 43758.5453);
+    float bedR2 = fract(sin(bedIdx * 7.137 + 1.7 + mr2 * 17.3) * 21254.13);
     float band = fract(sy1);
     float thick = 0.24 + 0.58 * bedR;
     float bedA = smoothstep(0.02, 0.06 + 0.16 * bedR, band)
@@ -268,16 +356,30 @@ void tf_shade() {
     // erosion gullies chew the beds apart — without this they read as wallpaper
     bedA *= 0.30 + 0.70 * smoothstep(0.22, 0.78,
       0.5 + 0.34 * tf_snoise(P.xz * 0.085) + 0.22 * tf_snoise(P.xz * 0.31));
-    float lam = 0.5 + 0.5 * sin((P.y * (0.44 + 0.3 * bedR2) + warp * 1.1) * 6.2831);
-    float bedTint = clamp(bedA * 0.68 + lam * 0.32, 0.0, 1.0);
+    // and whole stretches of a range are simply massive, unbedded rock
+    bedA *= mix(0.22, 1.0, smoothstep(0.30, 0.72,
+      0.5 + 0.5 * tf_snoise(P.xz * 0.0021 - 27.0) * 1.3));
+    // fine laminations inside a bed: per-massif frequency and cut by the same
+    // runnels, so they can never comb the whole range at one pitch
+    float lam = 0.5 + 0.5 * sin(((P.y + dot(P.xz, dip)) * (0.16 + 0.52 * mrB + 0.22 * bedR2)
+      + warp * 1.6) * 6.2831);
+    lam *= 0.35 + 0.65 * runnel;
+    float bedTint = clamp(bedA * 0.76 + lam * 0.24, 0.0, 1.0);
     vec3 strataWarm = vec3(1.15, 0.97, 0.80);
     vec3 strataCool = vec3(0.86, 0.89, 0.95);
     vec3 strataPale = vec3(1.07, 1.04, 0.96);
     vec3 bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
-    float bandFade = 1.0 - smoothstep(220.0, 780.0, vTDist);
-    float cliffAmt = smoothstep(0.30, 0.62, slope) * bandFade;
+    // each range carries its own iron / ash balance
+    bedCol *= mix(vec3(0.94, 0.97, 1.06), vec3(1.10, 0.98, 0.86), mr3);
+    float bandFade = 1.0 - smoothstep(160.0, 620.0, vTDist);
+    // contrast also falls with how strongly this massif is bedded at all
+    float cliffAmt = smoothstep(0.30, 0.62, slope) * bandFade * (0.45 + 0.75 * mr1);
     alb[3].rgb *= mix(vec3(1.0), bedCol, cliffAmt);
-    alb[3].rgb *= mix(1.0, 0.87 + 0.24 * bedA, cliffAmt);
+    alb[3].rgb *= mix(1.0, 0.92 + 0.15 * bedA, cliffAmt);
+    // the runnels darken independently of the bedding, at every distance, so
+    // even a range past the band fade still has vertical structure
+    float runnelAmt = smoothstep(0.22, 0.55, slope) * (1.0 - smoothstep(1400.0, 3200.0, vTDist));
+    alb[3].rgb *= mix(1.0, 0.74 + 0.36 * runnel, runnelAmt);
     alb[3].a = mix(alb[3].a, alb[3].a * (0.7 + 0.45 * bedA), cliffAmt);
 
     // ---- height blend ------------------------------------------------------
@@ -302,11 +404,11 @@ void tf_shade() {
     }
 
     // detail normals: pebble scale at the camera, a coarser octave further out
-    float dAmtA = (1.0 - smoothstep(9.0, 60.0, vTDist)) * uMicro;
+    float dAmtA = (1.0 - smoothstep(14.0, 90.0, vTDist)) * uMicro;
     float dAmtB = (1.0 - smoothstep(90.0, 420.0, vTDist)) * uMicro;
-    vec3 dnA = texture2D(uDetailTex, wj * uDetailScale).xyz * 2.0 - 1.0;
-    vec3 dnC = texture2D(uDetailTex, wj * uDetailScale * 0.37 + 0.71).xyz * 2.0 - 1.0;
-    vec3 dnB = texture2D(uDetailTex, wj * uDetailScale * 0.085 + 0.37).xyz * 2.0 - 1.0;
+    vec3 dnA = texture(uDetailArr, vec3(wj * uDetailScale, 0.0)).xyz * 2.0 - 1.0;
+    vec3 dnC = texture(uDetailArr, vec3(wj * uDetailScale * 0.37 + 0.71, 0.0)).xyz * 2.0 - 1.0;
+    vec3 dnB = texture(uDetailArr, vec3(wj * uDetailScale * 0.085 + 0.37, 0.0)).xyz * 2.0 - 1.0;
     tnXY += dnA.xy * 0.55 * dAmtA + dnC.xy * 0.34 * dAmtB + dnB.xy * 0.22 * dAmtB;
     // hard clamp: an over-tilted tangent normal turns ground into torn foil
     tnXY = clamp(tnXY, vec2(-0.95), vec2(0.95));
@@ -314,14 +416,59 @@ void tf_shade() {
     // Close-range albedo detail. The layer tiles are 3-12 m, so a metre from
     // the camera they are magnified into mush; this puts pebble-and-crack
     // scale contrast back into the colour, not just the normal.
-    float grit = texture2D(uDetailTex, wj * uDetailScale * 2.9).a;
-    float pebA = texture2D(uDetailTex, wj * uDetailScale).a;
+    float grit = texture(uDetailArr, vec3(wj * uDetailScale * 2.9, 0.0)).a;
+    float pebA = texture(uDetailArr, vec3(wj * uDetailScale, 0.0)).a;
     float micro = mix(1.0, 0.78 + 0.46 * pebA, dAmtA * 0.8)
                 * mix(1.0, 0.86 + 0.28 * grit, (1.0 - smoothstep(2.0, 16.0, vTDist)) * 0.85);
+
+    // ---- near-field surface: gravel, cracking and scour at 2-4 m ----------
+    // Triplanar, because the near ground is exactly where the camera looks
+    // along the surface: a planar XZ projection smears to nothing at a grazing
+    // angle, which is why detail used to "die past ~15 m".
+    vec3 nearN = vec3(0.0, 0.0, 1.0);
+    float nearAlb = 0.5;
+    float nfAmt = (1.0 - smoothstep(38.0, 105.0, vTDist)) * uMicro;
+    if (nfAmt > 0.003) {
+      vec3 nbw = pow(abs(N), vec3(3.0));
+      nbw /= max(nbw.x + nbw.y + nbw.z, 1e-4);
+      float ns = uNearScale;
+      vec2 nzy = vec2(P.z + jit.y * 0.5, P.y) * ns;
+      vec2 nxz = (P.xz + jit * 0.5) * ns;
+      vec2 nxy = vec2(P.x + jit.x * 0.5, P.y) * ns;
+      vec4 q0 = texture(uDetailArr, vec3(nzy, 1.0));
+      vec4 q1 = texture(uDetailArr, vec3(nxz, 1.0));
+      vec4 q2 = texture(uDetailArr, vec3(nxy, 1.0));
+      // second, finer octave rotated off the first so the 2-4 m lattice never
+      // resolves into a grid at a metre from the lens
+      vec4 r0 = texture(uDetailArr, vec3(tf_rot(nzy, 1.13) * 2.63 + 0.41, 1.0));
+      vec4 r1 = texture(uDetailArr, vec3(tf_rot(nxz, 1.13) * 2.63 + 0.41, 1.0));
+      vec4 r2 = texture(uDetailArr, vec3(tf_rot(nxy, 1.13) * 2.63 + 0.41, 1.0));
+      float fine = (1.0 - smoothstep(3.0, 15.0, vTDist));
+      vec4 nq = mix(q0 * nbw.x + q1 * nbw.y + q2 * nbw.z,
+                    r0 * nbw.x + r1 * nbw.y + r2 * nbw.z, 0.42 * fine);
+      // whiteout triplanar normal for the near map
+      vec3 m0 = nq.rgb * 2.0 - 1.0;
+      nearN = normalize(vec3(m0.xy * 1.35, max(m0.z, 0.22)));
+      nearAlb = nq.a;
+    }
+
+    // Gravel gets stronger on slopes: loose material collects where the ground
+    // starts to tip, so the near ground stops being one uniform mud.
+    float scree = smoothstep(0.08, 0.34, slope) * nfAmt;
+    // push the contrast of the near map: the raw field is centred and gentle,
+    // and gentle is exactly what reads as a smooth brown mound
+    float na = clamp((nearAlb - 0.5) * 1.75 + 0.5, 0.0, 1.0);
+    float nearCol = mix(1.0, 0.55 + 0.95 * na, nfAmt * 0.80);
+    micro *= nearCol;
+    // pebbles read a touch cooler and the cracks a touch warmer than the bed
+    vec3 nearTint = mix(vec3(1.09, 0.95, 0.85), vec3(0.94, 0.99, 1.07), na);
+    micro *= 1.0 + 0.10 * scree;
 
     // build the world normal from the terrain frame + blended tangent normal
     vec3 T = normalize(vec3(1.0, 0.0, 0.0) - N * N.x);
     vec3 B = cross(N, T);
+    tnXY += nearN.xy * (0.88 + 0.55 * scree) * nfAmt;
+    tnXY = clamp(tnXY, vec2(-0.95), vec2(0.95));
     vec3 tn = normalize(vec3(tnXY, 1.0));
     vec3 planarN = normalize(T * tn.x + B * tn.y + N * tn.z);
 
@@ -335,9 +482,11 @@ void tf_shade() {
 
     vec3 dN = normalize(mix(planarN, rockN, clamp(w2[3] * 1.15, 0.0, 1.0)));
 
-    col = mix(farCol, dcol * micro, detailAmt);
+    col = mix(farCol, dcol * micro * mix(vec3(1.0), nearTint, nfAmt * 0.5), detailAmt);
     rgh = mix(farRough, drough, detailAmt);
-    ao = mix(1.0, dao, detailAmt);
+    // cracks and scour hold shade; pebble crowns are polished by the wind
+    rgh = mix(rgh, rgh * (1.14 - 0.40 * na), nfAmt * 0.60);
+    ao = mix(1.0, dao * (0.76 + 0.36 * na), detailAmt);
     Nw = normalize(mix(N, dN, detailAmt));
   }
 
@@ -373,8 +522,39 @@ void tf_shade() {
   // sun-bleached naturalism, not candy: pull a little saturation back out
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 0.86);
 
+  // ---- wet response --------------------------------------------------------
+  // A water film fills the surface micro-relief, so roughness collapses, and it
+  // traps light that would otherwise have scattered back out of the top layer,
+  // so albedo darkens. Standing water then collects exactly where the erosion
+  // sim already says water goes — the flow channels, the sediment pans, the
+  // wheel ruts — rather than in an arbitrary noise field.
+  float wet = uWet.x;
+  if (wet > 0.002) {
+    float flatW = 1.0 - smoothstep(0.05, 0.22, slope);
+    float pn1 = 0.5 + 0.5 * tf_snoise(P.xz * 0.19 + 4.0);
+    float pn2 = 0.5 + 0.5 * tf_snoise(P.xz * 0.052 - 12.0);
+    float basin = clamp(flow * 2.1 + sedi * 0.55 + pn2 * 0.42 - 0.28, 0.0, 1.0);
+    if (onRoad > 0.5) {
+      float rutW = exp(-pow((abs(roadLat) - 1.85) / 0.70, 2.0)) * road;
+      basin = max(basin, rutW * 0.92);
+    }
+    float puddle = flatW * smoothstep(0.40, 0.84, basin * (0.55 + 0.65 * pn1))
+                 * smoothstep(0.12, 0.62, wet);
+
+    float damp = wet * mix(0.60, 1.0, flatW);
+    col *= mix(1.0, 0.50, damp);
+    // and a soaked surface loses the dry-dust warm cast
+    col = mix(col, col * vec3(0.88, 0.94, 1.04), damp);
+    rgh = mix(rgh, rgh * 0.40, damp);
+    // standing water on top of the damp ground
+    col = mix(col, col * 0.28 + vec3(0.010, 0.013, 0.018), puddle);
+    rgh = mix(rgh, 0.055, puddle);
+    Nw = normalize(mix(Nw, vec3(0.0, 1.0, 0.0), puddle * 0.88));
+    ao = mix(ao, mix(ao, 1.0, 0.6), puddle);
+  }
+
   tfAlbedo = col;
-  tfRough = clamp(rgh, 0.35, 1.0);
+  tfRough = clamp(rgh, mix(0.35, 0.045, wet), 1.0);
   tfNormalW = Nw;
   tfAO = clamp(ao, 0.0, 1.0);
 }
@@ -413,6 +593,9 @@ export function createTerrainMaterial(res, cell, level) {
     metalness: 0.0,
     dithering: true,
   });
+  // Weather drives the terrain's wet response through uWet, not by scaling the
+  // material's authored colour/roughness the way it does for props.
+  mat.userData.terrainSurface = true;
   mat.polygonOffset = true;
   mat.polygonOffsetFactor = 1.0 + level * 0.5;
   mat.polygonOffsetUnits = 2.0 + level * 6.0;
@@ -493,7 +676,7 @@ export function makeTerrainUniforms(tex, field) {
     uFarNormalTex: { value: tex.farNormal },
     uCtrlTex: { value: tex.ctrl },
     uFarCtrlTex: { value: tex.farCtrl },
-    uDetailTex: { value: tex.detail },
+    uDetailArr: { value: tex.detailArray },
     uAlbedoArr: { value: tex.albedoArray },
     uSurfArr: { value: tex.surfArray },
     uField: { value: new THREE.Vector4(field.HALF, field.CELL, field.N, field.BLEND_OUT) },
@@ -503,6 +686,10 @@ export function makeTerrainUniforms(tex, field) {
     uLayerScale: { value: LAYER_SCALE.slice() },
     uLayerRot: { value: [0.0, 0.72, 1.63, 0.31, 2.41, 0.0] },
     uDetailScale: { value: 1.55 },
+    // 0.34 tiles/m ~= a 2.9 m repeat: the band between the layer tiles (3-12 m)
+    // and the pebble detail map (0.65 m)
+    uNearScale: { value: 0.34 },
     uMicro: { value: 1.0 },
+    uWet: { value: new THREE.Vector4(0, 1, 0, 0) },
   };
 }
