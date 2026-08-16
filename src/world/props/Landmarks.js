@@ -4,7 +4,7 @@ import { Noise } from '../../util/Noise.js';
 import { PartBuilder } from './PartBuilder.js';
 import {
   rockMaterial, woodMaterial, rustMaterial, canvasClothMaterial,
-  runeTexture, signTexture,
+  runeTexture, signTexture, glowMaterial, flameTexture,
 } from './PropMaterials.js';
 
 /**
@@ -66,8 +66,8 @@ export class Landmarks {
   build() {
     const eco = this.eco;
     this.mats = {
-      rock: rockMaterial(0x8d7663, 0.93),
-      pale: rockMaterial(0x9c8d78, 0.9),
+      rock: rockMaterial(0x8d7663, 0.93, false),
+      pale: rockMaterial(0x9c8d78, 0.9, false),
       wood: woodMaterial(0x7d674c),
       dark: woodMaterial(0x4a3d30),
       rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
@@ -81,6 +81,12 @@ export class Landmarks {
       rune: new THREE.MeshBasicMaterial({
         map: runeTexture(), transparent: true, blending: THREE.AdditiveBlending,
         depthWrite: false, opacity: 0.85, side: THREE.DoubleSide,
+      }),
+      glyph: glowMaterial(0x86cfff, 1.6, 0x243038),
+      lantern: glowMaterial(0xffbe72, 2.0, 0x271a0c),
+      flame: new THREE.MeshBasicMaterial({
+        map: flameTexture(), transparent: true, blending: THREE.AdditiveBlending,
+        depthWrite: false, side: THREE.DoubleSide, opacity: 0.95, toneMapped: true,
       }),
       signA: new THREE.MeshStandardMaterial({ map: signTexture(0), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
       signB: new THREE.MeshStandardMaterial({ map: signTexture(1), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
@@ -115,61 +121,171 @@ export class Landmarks {
     let base = Infinity;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      base = Math.min(base, eco.height(cx + Math.cos(a) * 4.6, cz + Math.sin(a) * 4.6));
+      base = Math.min(base, eco.height(cx + Math.cos(a) * 6.4, cz + Math.sin(a) * 6.4));
     }
     base = Math.min(base, eco.height(cx, cz));
-    const top = base + 0.62;
+    // A haven is a rock, not a paving slab: it stands proud of the scrub so it
+    // reads as a place at a hundred metres and in silhouette at dusk.
+    const top = base + 1.75;
 
-    // the haven slab itself
-    const slab = block(5511, 10.4, 1.5, 8.6, 0.1);
-    B.add(M.pale, slab, mat4([cx, base - 0.12, cz], [0, 0.22, 0]));
+    // the haven rock: a stepped, canted plinth
+    B.add(M.pale, block(5511, 13.6, 2.0, 11.4, 0.09), mat4([cx, base + 0.2, cz], [0, 0.22, 0]));
+    B.add(M.pale, block(5512, 12.4, 1.6, 10.2, 0.07), mat4([cx + 0.2, base + 1.25, cz - 0.15], [0, 0.30, 0]));
     // skirt of broken rock so it isn't a table floating on grass
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 20; i++) {
       const a = rng.next() * Math.PI * 2;
-      const d = 4.2 + rng.range(0, 1.7);
+      const d = 5.6 + rng.range(0, 2.4);
       const px = cx + Math.cos(a) * d, pz = cz + Math.sin(a) * d;
-      const s = rng.range(0.4, 1.5);
+      const s = rng.range(0.5, 1.9);
       B.add(M.rock, block(600 + i, s * 1.6, s, s * 1.4, 0.3),
-        mat4([px, eco.height(px, pz) - s * 0.28, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
+        mat4([px, eco.height(px, pz) - s * 0.24, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
+    }
+    // a couple of steps up onto the rock
+    for (let i = 0; i < 3; i++) {
+      B.add(M.pale, block(5520 + i, 2.6 - i * 0.2, 0.4, 1.5, 0.12),
+        mat4([cx + 5.4 + i * 0.9, base + 1.35 - i * 0.5, cz + 3.4], [0, 0.22, 0]));
     }
 
-    // runes etched into the slab surface — kept out of the merged/shadow pass
-    const rune = new THREE.PlaneGeometry(8.2, 8.2);
+    // Runes: the flat sigil on the deck plus glyph bands cut into the rock
+    // face, which is what actually reads from a distance at dusk.
+    const rune = new THREE.PlaneGeometry(10.6, 9.4);
     rune.rotateX(-Math.PI / 2);
     const runeMesh = new THREE.Mesh(rune, M.rune);
-    runeMesh.position.set(cx, top + 0.02, cz);
-    runeMesh.rotation.y = 0.22;
+    runeMesh.position.set(cx + 0.2, top + 0.03, cz - 0.15);
+    runeMesh.rotation.y = 0.30;
     runeMesh.castShadow = false;
     runeMesh.receiveShadow = false;
     runeMesh.renderOrder = 3;
     this.root.add(runeMesh);
     this.runeMesh = runeMesh;
 
-    // firepit
-    const fx = cx + 1.5, fz = cz - 0.9;
-    for (let i = 0; i < 11; i++) {
-      const a = (i / 11) * Math.PI * 2 + rng.gauss(0, 0.1);
-      const r = 0.72 + rng.gauss(0, 0.05);
-      B.add(M.rock, block(300 + i, 0.34, 0.3, 0.28, 0.35),
-        mat4([fx + Math.cos(a) * r, top + 0.11, fz + Math.sin(a) * r],
+    for (let i = 0; i < 30; i++) {
+      const a = (i / 30) * Math.PI * 2;
+      const rx = 6.4, rz = 5.4;
+      const px = cx + Math.cos(a + 0.3) * rx, pz = cz + Math.sin(a + 0.3) * rz;
+      B.add(M.glyph, new THREE.BoxGeometry(0.12, 0.5 + (i % 3) * 0.34, 0.12),
+        mat4([px, base + 1.0 + (i % 2) * 0.35, pz], [0, a, 0]));
+    }
+    // dashed sill line: broken into glyph groups so it reads as carving rather
+    // than as a strip light glued to the rock
+    for (let i = 0; i < 9; i++) {
+      const t = (i / 8 - 0.5) * 12.2;
+      const w = i % 3 === 0 ? 1.1 : 0.55;
+      for (const sz of [-5.3, 5.0]) {
+        B.add(M.glyph, new THREE.BoxGeometry(w, 0.09, 0.09),
+          mat4([cx + 0.2 + Math.cos(0.30) * t, base + 2.02, cz + sz - Math.sin(0.30) * t], [0, 0.30, 0]));
+      }
+    }
+
+    // ------------------------------------------------------------ firepit
+    const fx = cx + 2.2, fz = cz - 1.4;
+    for (let i = 0; i < 13; i++) {
+      const a = (i / 13) * Math.PI * 2 + rng.gauss(0, 0.1);
+      const r = 0.95 + rng.gauss(0, 0.06);
+      B.add(M.rock, block(300 + i, 0.44, 0.4, 0.36, 0.35),
+        mat4([fx + Math.cos(a) * r, top + 0.14, fz + Math.sin(a) * r],
           [rng.gauss(0, 0.2), rng.next() * 3, rng.gauss(0, 0.2)]));
     }
-    const log = new THREE.CylinderGeometry(0.075, 0.09, 1.0, 7);
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      B.add(M.dark, log, mat4([fx + Math.cos(a) * 0.16, top + 0.28, fz + Math.sin(a) * 0.16],
+    const log = new THREE.CylinderGeometry(0.1, 0.13, 1.35, 7);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      B.add(M.dark, log, mat4([fx + Math.cos(a) * 0.2, top + 0.38, fz + Math.sin(a) * 0.2],
         [Math.cos(a) * 0.95, 0, Math.sin(a) * 0.95]));
     }
-    B.add(M.ember, new THREE.SphereGeometry(0.3, 12, 8),
-      mat4([fx, top + 0.12, fz], [0, 0, 0], [1, 0.45, 1]));
-    const fire = new THREE.PointLight(0xff7a26, 9, 16, 2);
-    fire.position.set(fx, top + 0.55, fz);
+    B.add(M.ember, new THREE.SphereGeometry(0.42, 12, 8),
+      mat4([fx, top + 0.14, fz], [0, 0, 0], [1, 0.45, 1]));
+
+    // flame: three crossed cards, scaled and swayed per frame
+    const flames = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const q = new THREE.PlaneGeometry(1.25, 1.9);
+      q.translate(0, 0.95, 0);
+      const m = new THREE.Mesh(q, M.flame);
+      m.rotation.y = (i / 3) * Math.PI;
+      m.renderOrder = 5;
+      flames.add(m);
+    }
+    flames.position.set(fx, top + 0.16, fz);
+    this.root.add(flames);
+    this.flames = flames;
+
+    // an awning over the fire on two poles, so the camp has a roofline in
+    // silhouette and the firelight has something to bounce off
+    for (const [px, pz] of [[fx - 2.6, fz - 2.2], [fx + 2.4, fz - 2.4], [fx - 2.6, fz + 2.0], [fx + 2.4, fz + 1.8]]) {
+      B.add(M.steel, new THREE.CylinderGeometry(0.04, 0.05, 2.6, 6), mat4([px, top + 1.3, pz]));
+    }
+    B.add(M.cloth, new THREE.PlaneGeometry(5.2, 4.4),
+      mat4([fx - 0.1, top + 2.62, fz - 0.2], [0, 0, 0])
+        .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2 + 0.12)));
+
+    // a spit and a hanging pot over the coals — Ignis is cooking
+    for (const s of [-1, 1]) {
+      B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.035, 1.9, 5),
+        mat4([fx + s * 0.95, top + 0.85, fz], [0, 0, s * 0.22]));
+    }
+    B.add(M.steel, new THREE.CylinderGeometry(0.025, 0.025, 2.1, 5),
+      mat4([fx, top + 1.72, fz], [0, 0, Math.PI / 2]));
+    B.add(M.steel, new THREE.CylinderGeometry(0.34, 0.28, 0.42, 12), mat4([fx, top + 1.2, fz]));
+    B.add(M.steel, new THREE.TorusGeometry(0.3, 0.02, 4, 12), mat4([fx, top + 1.44, fz], [Math.PI / 2, 0, 0]));
+
+    const fire = new THREE.PointLight(0xff7a26, 9, 46, 2);
+    fire.position.set(fx, top + 0.9, fz);
     fire.castShadow = false;
     this.root.add(fire);
-    this.lights.push({ light: fire, kind: 'fire', base: 9 });
+    this.lights.push({ light: fire, kind: 'fire', base: 130 });
+    // a wide, soft bounce so the whole rock reads as lit, not just the ring
+    const glow = new THREE.PointLight(0xff9a4a, 0, 22, 1.4);
+    glow.position.set(cx, top + 2.6, cz);
+    glow.castShadow = false;
+    this.root.add(glow);
+    this.lights.push({ light: glow, kind: 'fire', base: 34 });
+
+    // ---------------------------------------------------- Ignis's kitchen
+    const kx = cx - 0.6, kz = cz - 3.6;
+    B.add(M.steel, new THREE.BoxGeometry(2.0, 0.07, 0.9), mat4([kx, top + 0.78, kz], [0, 0.18, 0]));
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        B.add(M.steel, new THREE.CylinderGeometry(0.022, 0.022, 0.78, 5),
+          mat4([kx + sx * 0.85, top + 0.39, kz + sz * 0.34], [sx * 0.1, 0, sz * 0.08]));
+      }
+    }
+    B.add(M.dark, new THREE.BoxGeometry(0.6, 0.22, 0.42), mat4([kx - 0.5, top + 0.92, kz], [0, 0.18, 0]));
+    B.add(M.steel, new THREE.CylinderGeometry(0.16, 0.14, 0.2, 10), mat4([kx - 0.5, top + 1.12, kz]));
+    B.add(M.wood, new THREE.BoxGeometry(0.5, 0.04, 0.34), mat4([kx + 0.5, top + 0.84, kz], [0, 0.4, 0]));
+    B.add(M.steel, new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8), mat4([kx + 0.9, top + 0.9, kz - 0.2], [0.2, 0, 0.5]));
+    B.add(M.wood, new THREE.BoxGeometry(0.72, 0.52, 0.6), mat4([kx - 1.5, top + 0.26, kz - 0.3], [0, -0.2, 0]));
+    B.add(M.wood, new THREE.BoxGeometry(0.64, 0.46, 0.54), mat4([kx - 1.4, top + 0.74, kz - 0.25], [0, 0.35, 0]));
+
+    // ------------------------------------------------------------ lanterns
+    const lanternAt = (lx, lz, poleH) => {
+      if (poleH > 0) {
+        B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.04, poleH, 6), mat4([lx, top + poleH / 2, lz]));
+        B.add(M.steel, new THREE.BoxGeometry(0.34, 0.03, 0.03), mat4([lx + 0.15, top + poleH, lz]));
+      }
+      const y = top + (poleH > 0 ? poleH - 0.28 : 0.2);
+      const gx = poleH > 0 ? lx + 0.3 : lx;
+      B.add(M.steel, new THREE.CylinderGeometry(0.11, 0.13, 0.08, 8), mat4([gx, y + 0.2, lz]));
+      B.add(M.lantern, new THREE.CylinderGeometry(0.1, 0.12, 0.26, 8), mat4([gx, y + 0.04, lz]));
+      B.add(M.steel, new THREE.CylinderGeometry(0.12, 0.09, 0.07, 8), mat4([gx, y - 0.13, lz]));
+      const l = new THREE.PointLight(0xffca7a, 0, 16, 2);
+      l.position.set(gx, y + 0.04, lz);
+      this.root.add(l);
+      this.lights.push({ light: l, kind: 'lantern', base: 14 });
+    };
+    lanternAt(cx + 5.0, cz + 2.4, 2.4);
+    lanternAt(cx - 4.4, cz - 3.0, 2.4);
+    lanternAt(cx + 1.0, cz + 3.2, 0);
+
+    // packs and bedrolls
+    for (let i = 0; i < 4; i++) {
+      const a = 1.3 + i * 0.7;
+      B.add(M.cloth, new THREE.CapsuleGeometry(0.24, 0.5, 4, 8),
+        mat4([cx - 3.6 + Math.cos(a) * 1.2, top + 0.26, cz + 2.6 + Math.sin(a) * 0.9],
+          [Math.PI / 2, a, 0]));
+    }
 
     // tent: A-frame with a fly sheet and guy lines
-    const tx = cx - 2.4, tz = cz + 1.1;
+    const tx = cx - 3.6, tz = cz + 1.1;
     const panel = new THREE.PlaneGeometry(3.4, 2.05);
     B.add(M.cloth, panel, mat4([tx, top + 0.72, tz + 0.72], [0.0, 0, 0], [1, 1, 1])
       .multiply(new THREE.Matrix4().makeRotationX(-0.62)));
@@ -369,7 +485,10 @@ export class Landmarks {
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [-0.9, 1.75, 0]);
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [0.9, 1.75, 0]);
     put(M.steel, new THREE.BoxGeometry(2.5, 1.7, 0.06), [0, 2.7, 0]);
+    // faced both ways: a highway sign is read by traffic in both directions,
+    // and the camera does not always stand on the side we guessed
     put(kind, new THREE.PlaneGeometry(2.4, 1.6), [0, 2.7, 0.045]);
+    put(kind, new THREE.PlaneGeometry(2.4, 1.6), [0, 2.7, -0.045], [0, Math.PI, 0]);
   }
 
   // -------------------------------------------------------------- telegraph
@@ -459,12 +578,36 @@ export class Landmarks {
     }
   }
 
-  update(dt, time) {
-    // firelight flicker
+  /**
+   * @param {number} dt
+   * @param {number} time seconds
+   * @param {number} [night] 0 in daylight, 1 after dark
+   */
+  update(dt, time, night = 0) {
+    const flicker = 0.78 + 0.34 * Math.sin(time * 11.3) * Math.sin(time * 4.1)
+      + 0.1 * Math.sin(time * 23.7);
     for (const l of this.lights) {
-      if (l.kind !== 'fire') continue;
-      const f = 0.78 + 0.34 * Math.sin(time * 11.3) * Math.sin(time * 4.1) + 0.1 * Math.sin(time * 23.7);
-      l.light.intensity = l.base * f;
+      if (l.kind === 'fire') {
+        // the fire is always lit, but it only *matters* once the sun is gone
+        l.light.intensity = l.base * flicker * (0.25 + 0.75 * night);
+      } else if (l.kind === 'lantern') {
+        l.light.intensity = l.base * night * (0.94 + 0.06 * Math.sin(time * 3.1 + l.light.position.x));
+      }
+    }
+    if (this.mats) {
+      this.mats.ember.emissiveIntensity = (2.0 + 2.6 * night) * flicker;
+      this.mats.glyph.emissiveIntensity = 0.35 + 1.15 * night
+        + 0.12 * Math.sin(time * 0.9);
+      this.mats.lantern.emissiveIntensity = 0.3 + 4.5 * night;
+      this.mats.rune.opacity = 0.35 + 0.75 * night;
+    }
+    if (this.flames) {
+      const s = 0.86 + 0.2 * Math.sin(time * 7.3) + 0.08 * Math.sin(time * 17.1);
+      this.flames.scale.set(s * 0.95, s, s * 0.95);
+      this.flames.rotation.y = Math.sin(time * 1.7) * 0.16;
+      for (const m of this.flames.children) {
+        m.material.opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 9.1));
+      }
     }
   }
 }

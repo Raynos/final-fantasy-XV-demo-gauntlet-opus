@@ -4,6 +4,10 @@ import { Rocks } from './props/Rocks.js';
 import { Landmarks } from './props/Landmarks.js';
 import { Debris } from './props/Debris.js';
 import { buildRegalia } from './props/Regalia.js';
+import { Megastructures } from './props/Megastructures.js';
+import { RoadFurniture } from './props/RoadFurniture.js';
+import { Outposts } from './props/Outposts.js';
+import { Wildlife } from './props/Wildlife.js';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -25,6 +29,18 @@ export class Props {
 
     this.landmarks = new Landmarks(this.ecology, game.scene);
     this.landmarks.build();
+
+    this.mega = new Megastructures(this.ecology, game.scene);
+    this.mega.build();
+
+    this.outposts = new Outposts(this.ecology, game.scene);
+    this.outposts.build();
+
+    this.roadKit = new RoadFurniture(this.ecology, game.scene);
+    this.roadKit.build();
+
+    this.wildlife = new Wildlife(this.ecology, game.scene, { quality });
+    this.wildlife.build();
 
     this.debris = new Debris(this.ecology, game.scene, { quality });
     this.debris.build();
@@ -96,19 +112,23 @@ export class Props {
     this.regalia = outer;
   }
 
+  /** 0 in full daylight, 1 once the sun is well below the horizon. */
+  _night(game) {
+    const sky = game.get('Sky');
+    if (!sky || !sky.sun || !sky.sun.position) return 0;
+    const p = sky.sun.position;
+    const elev = p.y / (p.length() || 1);
+    return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
+  }
+
   update(dt, game) {
     const t = game.time.now;
-    if (this.landmarks) this.landmarks.update(dt, t);
+    const night = this._night(game);
+    if (this.landmarks) this.landmarks.update(dt, t, night);
+    if (this.mega) this.mega.update(dt, t, night);
 
     // headlights come up as the sun goes down
     if (this.regaliaLights) {
-      const sky = game.get('Sky');
-      let night = 0;
-      if (sky && sky.sun && sky.sun.position) {
-        const p = sky.sun.position;
-        const elev = p.y / (p.length() || 1);
-        night = THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
-      }
       for (const l of this.regaliaLights) l.intensity = 0.4 + night * 9.5;
       if (this.regaliaLamp) this.regaliaLamp.emissiveIntensity = 0.3 + night * 3.2;
       if (this.regaliaTail) this.regaliaTail.emissiveIntensity = 0.25 + night * 1.3;
@@ -117,5 +137,8 @@ export class Props {
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     this.rocks.update(this._camPos);
     this.debris.update(this._camPos);
+    if (this.outposts) this.outposts.update(dt, t, night, this._camPos);
+    if (this.roadKit) this.roadKit.update(this._camPos);
+    if (this.wildlife) this.wildlife.update(dt, t, night, this._camPos);
   }
 }

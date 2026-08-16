@@ -127,6 +127,38 @@ export class Ecology {
     return out.set(x, this.height(x, zz), zz);
   }
 
+  /**
+   * Walk the highway centreline at a fixed spacing in *arc length*, which is
+   * the only sane way to place kerbside furniture: the route runs nearly
+   * east-west near the spawn, so stepping in Z alone would drop one post every
+   * six metres in one place and one every sixty in another.
+   *
+   * @param {{step?:number, radius?:number, from?:number, to?:number}} opts
+   * @returns {Array<{x:number,z:number,y:number,roadY:number,tx:number,tz:number,s:number}>}
+   */
+  roadSamples({ step = 8, radius = 950, from = -1e9, to = 1e9 } = {}) {
+    const out = [];
+    const road = this.terrain && this.terrain.road;
+    if (road && road.points && road.points.length > 1) {
+      let nextS = -1e9;
+      for (const p of road.points) {
+        if (p.s < nextS || p.s < from || p.s > to) continue;
+        nextS = p.s + step;
+        if (Math.hypot(p.x, p.z) > radius) continue;
+        out.push({ x: p.x, z: p.z, y: this.height(p.x, p.z), roadY: p.y, tx: p.tx, tz: p.tz, s: p.s });
+      }
+      return out;
+    }
+    // fallback: march the approximate curve in Z and accept the uneven spacing
+    for (let z = -radius; z <= radius; z += step) {
+      const x = this.roadCenterX(z);
+      if (Math.hypot(x, z) > radius) continue;
+      const t = this.roadTangent(z, new THREE.Vector2());
+      out.push({ x, z, y: this.height(x, z), roadY: this.height(x, z), tx: t.x, tz: t.y, s: out.length * step });
+    }
+    return out;
+  }
+
   // -------------------------------------------------------------- landmarks
 
   _layoutSites() {
@@ -162,10 +194,56 @@ export class Ecology {
     put('regalia', rp.x, rp.z, 5, { yaw: Math.atan2(this.roadTangent(rz).x, this.roadTangent(rz).y) });
 
     // Road signs.
-    for (const [sz, side] of [[46, 1], [-132, -1]]) {
+    for (const [sz, side] of [[46, 1], [-132, -1], [18, -1], [128, 1]]) {
       const p = this.roadPoint(sz, side, 6.2, new THREE.Vector3());
       put('sign', p.x, p.z, 3.4, { roadZ: sz, side });
     }
+
+    // ---- inhabited world: outposts, wrecks, ruins and grazing ground ----
+
+    const roadYaw = (z) => {
+      const t = this.roadTangent(z, new THREE.Vector2());
+      return Math.atan2(t.x, t.y);
+    };
+    const beside = (type, z, side, off, r, extra = {}) => {
+      const p = this.roadPoint(z, side, off, new THREE.Vector3());
+      put(type, p.x, p.z, r, { roadZ: z, side, yaw: roadYaw(z), ...extra });
+    };
+
+    // A Coernix-style fuel stop with a lit canopy, the one piece of commerce
+    // on this stretch of Route 1.
+    beside('reststop', 25, 1, 34, 26);
+    // Imperial roadblock straddling the carriageway.
+    beside('blockade', 72, 0, 0, 24);
+    // Bus shelter and a gravel lay-by.
+    beside('layby', -60, -1, 15, 13);
+    // Two more dead vehicles on the shoulder.
+    beside('wreck', 40, -1, 8.5, 6, { kind: 0 });
+    beside('wreck', -104, 1, 9.5, 6, { kind: 1 });
+
+    // A crashed magitek dropship, ploughed into the basin floor.
+    put('crashsite', -60, -230, 30, { yaw: 0.9 });
+    // Comms mast and containers at the foot of Blackrock Mesa — the scale cue
+    // that lets the eye read the mesa as a kilometre of rock.
+    const mo = this._findFlat(-150, -350, 26, 10);
+    put('outpost', mo.x, mo.z, 24);
+    // Water tower on the East Buttes bench.
+    const wt = this._findFlat(268, -258, 20, 10);
+    put('watertower', wt.x, wt.z, 14);
+    // Solheim column ruins under the Spire Ridge.
+    put('ruins', -500, 330, 34);
+    // Windmill pumps and stock pens: one by the abandoned outpost, one out on
+    // the flats north of the spawn where the road shots need a midground.
+    put('windpump', -252, 78, 16);
+    put('windpump', 30, -91, 14);
+
+    // Grazing ground: the herd wanders inside `range` of these anchors. The
+    // site radius stays tiny on purpose — animals graze the grass, they do not
+    // clear it.
+    put('graze', -80, -245, 2, { count: 12, seed: 41, range: 40 });
+    put('graze', -330, 168, 2, { count: 7, seed: 42, range: 38 });
+    put('graze', 120, 60, 2, { count: 9, seed: 43, range: 34 });
+    put('graze', -30, -70, 2, { count: 8, seed: 44, range: 26 });
 
     return s;
   }
