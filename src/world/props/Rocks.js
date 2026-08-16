@@ -78,8 +78,12 @@ export class Rocks {
         const slope = eco.slope01(x, z);
         const p = eco.patch(x + 610, z - 340, 0.011, 3);
         const rd = THREE.MathUtils.smoothstep(eco.roadDist(x, z), 4.5, 9);
+        // Scree gathers on slopes, but nothing rests on a cliff face — past
+        // about 40 degrees a boulder would hang off the wall instead of
+        // sitting on it, so fall away to zero well before vertical.
+        const rests = 1 - THREE.MathUtils.smoothstep(slope, 0.42, 0.62);
         return THREE.MathUtils.clamp(
-          (0.5 + 0.5 * THREE.MathUtils.smoothstep(slope, 0.06, 0.45)) *
+          (0.5 + 0.5 * THREE.MathUtils.smoothstep(slope, 0.06, 0.45)) * rests *
           (0.32 + 0.68 * THREE.MathUtils.smoothstep(p, 0.26, 0.74)) *
           rd * (1 - eco.siteBlock(x, z) * 0.85), 0, 1);
       },
@@ -152,8 +156,13 @@ export class Rocks {
   _item(kind, x, z, rng, w) {
     const t = Math.pow(rng.next(), 1.7);
     const size = kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7);
+    const nrm = this.eco.normal(x, z);
     return {
       x, z, y: this.eco.height(x, z),
+      // Sink along the surface normal, not straight down: on a slope a purely
+      // vertical offset leaves the rock hanging off the face. Ecology.normal
+      // hands back a shared vector, so copy the components out.
+      nx: nrm.x, ny: nrm.y, nz: nrm.z,
       s: size,
       sx: 1 + rng.gauss(0, 0.14), sz: 1 + rng.gauss(0, 0.14),
       yaw: rng.next() * Math.PI * 2,
@@ -176,7 +185,8 @@ export class Rocks {
         if (w >= g.max) break;
         _e.set(it.pitch, it.yaw, it.roll);
         _q.setFromEuler(_e);
-        _p.set(it.x, it.y - it.s * it.bury, it.z);
+        const sink = it.s * it.bury;
+        _p.set(it.x - it.nx * sink, it.y - it.ny * sink, it.z - it.nz * sink);
         _s.set(it.s * it.sx, it.s, it.s * it.sz);
         _m.compose(_p, _q, _s);
         _m.toArray(g.mesh.instanceMatrix.array, w * 16);

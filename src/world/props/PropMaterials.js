@@ -32,7 +32,7 @@ export function rockMaterial(tint = 0x8a7461, rough = 0.94, instanceTint = true)
       const big = n.fbm2(u * 4, v * 4, 3) * 0.5 + 0.5;
       return crack * 0.42 + grain * 0.25 + big * 0.33;
     };
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(512, (u, v, c) => {
       const k = 0.5 + h(u, v) * 0.85;
       const iron = Math.max(0, n.fbm2(u * 3 + 17, v * 3 - 5, 3)) * 0.5;
@@ -60,7 +60,7 @@ export function woodMaterial(tint = 0x7a6449) {
       const grain = Math.sin(v * 130 + n.fbm2(u * 3, v * 9, 3) * 9) * 0.5 + 0.5;
       return grain * 0.55 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.45;
     };
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const k = 0.62 + h(u, v) * 0.62;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
@@ -80,7 +80,7 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
     const n = new Noise(9090);
     const h = (u, v) => (n.fbm2(u * 16, v * 16, 4) * 0.5 + 0.5) * 0.6
       + (n.worley2(u * 9, v * 9).f1) * 0.4;
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
       const k = 0.55 + h(u, v) * 0.7;
@@ -115,7 +115,7 @@ export function canvasClothMaterial(tint = 0x2f3a44) {
     const n = new Noise(1212);
     const h = (u, v) => (Math.sin(u * 420) * 0.5 + 0.5) * 0.35 + (Math.sin(v * 420) * 0.5 + 0.5) * 0.35
       + (n.fbm2(u * 8, v * 8, 3) * 0.5 + 0.5) * 0.3;
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const k = 0.72 + h(u, v) * 0.5;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
@@ -215,7 +215,7 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
       const stain = n.fbm2(u * 5, v * 5, 3) * 0.5 + 0.5;
       return grain * 0.34 + stain * 0.5 - pit * 0.3;
     };
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const k = 0.66 + h(u, v) * 0.7;
       // rust weep and grime running down from the top
@@ -238,7 +238,7 @@ export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
   return memo(`paint${tint}${rough}${metal}`, () => {
     const n = new Noise(8123);
     const h = (u, v) => n.fbm2(u * 30, v * 30, 3) * 0.5 + 0.5;
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const chip = THREE.MathUtils.smoothstep(n.fbm2(u * 11 + 5, v * 11 - 3, 4) * 0.5 + 0.5, 0.62, 0.86);
       const k = 0.82 + h(u, v) * 0.24;
@@ -263,7 +263,7 @@ export function magitekMaterial(tint = 0x2b2f36) {
       const panel = Math.min(1, Math.abs(Math.sin(u * 34)) * 0.5 + Math.abs(Math.sin(v * 21)) * 0.5);
       return panel * 0.55 + (n.fbm2(u * 20, v * 20, 3) * 0.5 + 0.5) * 0.45;
     };
-    const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(256, (u, v, c) => {
       const k = 0.7 + h(u, v) * 0.5;
       const grime = n.fbm2(u * 6, v * 6, 3) * 0.5 + 0.5;
