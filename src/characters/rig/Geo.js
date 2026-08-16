@@ -7,7 +7,8 @@ import * as THREE from 'three';
  * accumulating triangles into a `MeshBuilder`, which emits a BufferGeometry
  * carrying the attribute set every character mesh shares:
  *
- *   position, normal, uv, color, aMat(roughness,metalness), skinIndex, skinWeight
+ *   position, normal, uv, color, aMat(roughness,metalness,thickness),
+ *   aTan(strand/flow direction), skinIndex, skinWeight
  *
  * Because the attribute layout is uniform, parts can be merged aggressively:
  * a whole outfit collapses into one draw call while still varying colour and
@@ -64,13 +65,15 @@ export class MeshBuilder {
     this.uv = [];
     this.col = [];
     this.mp = [];
+    this.tn = [];
     this.si = [];
     this.sw = [];
     this.grp = [];
     this.idx = [];
     this._g = 0;
     this._c = [1, 1, 1];
-    this._m = [0.7, 0];
+    this._m = [0.7, 0, 0];
+    this._t = [0, 1, 0];
     this._s = [0, 0, 0, 0, 1, 0, 0, 0];
   }
 
@@ -86,8 +89,26 @@ export class MeshBuilder {
 
   tint(mul) { this._c = [this._c[0] * mul, this._c[1] * mul, this._c[2] * mul]; return this; }
 
-  /** Per-vertex roughness / metalness. */
-  mat(rough, metal = 0) { this._m = [rough, metal]; return this; }
+  /**
+   * Per-vertex roughness / metalness / translucent thickness.
+   * `thick` is 0 for opaque bulk and 1 for a paper-thin part light shines
+   * through (ear rims, nostril wings, fingers, the web of the hand).
+   */
+  mat(rough, metal = 0, thick = this._m[2]) { this._m = [rough, metal, thick]; return this; }
+
+  /** Translucent thickness alone, leaving roughness/metalness as they are. */
+  thick(t) { this._m = [this._m[0], this._m[1], t]; return this; }
+
+  /**
+   * Flow direction for anisotropic shading — the strand tangent on hair, the
+   * weave direction on cloth. Object space; the shader skins and view-transforms
+   * it. Defaults to +Y, which is what an unset surface gets.
+   */
+  tang(x, y, z) {
+    const l = Math.hypot(x, y, z) || 1;
+    this._t = [x / l, y / l, z / l];
+    return this;
+  }
 
   /** Skin binding: array of [boneIndex, weight]; normalised, max 4. */
   skin(pairs) {
@@ -106,7 +127,8 @@ export class MeshBuilder {
     this.pos.push(x, y, z);
     this.uv.push(u, w);
     this.col.push(this._c[0], this._c[1], this._c[2]);
-    this.mp.push(this._m[0], this._m[1]);
+    this.mp.push(this._m[0], this._m[1], this._m[2]);
+    this.tn.push(this._t[0], this._t[1], this._t[2]);
     this.si.push(this._s[0], this._s[1], this._s[2], this._s[3]);
     this.sw.push(this._s[4], this._s[5], this._s[6], this._s[7]);
     this.grp.push(this._g);
@@ -139,7 +161,8 @@ export class MeshBuilder {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    geo.setAttribute('aMat', new THREE.Float32BufferAttribute(this.mp, 2));
+    geo.setAttribute('aMat', new THREE.Float32BufferAttribute(this.mp, 3));
+    geo.setAttribute('aTan', new THREE.Float32BufferAttribute(this.tn, 3));
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
     geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
     geo.setIndex(this.idx);
@@ -203,7 +226,7 @@ export function mergeParts(geos) {
   const out = new THREE.BufferGeometry();
   const specs = [
     ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
-    ['color', 3, Float32Array], ['aMat', 2, Float32Array],
+    ['color', 3, Float32Array], ['aMat', 3, Float32Array], ['aTan', 3, Float32Array],
     ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],
   ];
   for (const [name, size, Type] of specs) {
@@ -585,11 +608,13 @@ export function ribbon(B, o) {
     if (baseColor && tipColor) {
       B.color(new THREE.Color().copy(baseColor).lerp(tipColor, t * t));
     }
+    // the strand tangent drives the anisotropic highlight band in the shader
+    B.tang(tan.x, tan.y, tan.z);
     rows.push([
       B.vv(_t.copy(p).addScaledVector(_r, -w), 0, t),
       B.vv(_t.copy(p).addScaledVector(_f, h), 0.5, t),
       B.vv(_t.copy(p).addScaledVector(_r, w), 1, t),
-      B.vv(_t.copy(p).addScaledVector(_f, -h * 0.55), 0.75, t),
+      B.vv(_t.copy(p).addScaledVector(_f, -h * 0.55), 0.5, t),
     ]);
   }
   for (let i = 0; i < steps; i++) {

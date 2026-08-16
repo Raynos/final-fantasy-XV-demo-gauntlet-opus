@@ -5,7 +5,7 @@ import { buildHead, buildEyes } from './Face.js';
 import { buildHair } from './Hair.js';
 import { buildOutfit } from './Outfit.js';
 import { Animator } from './Anim.js';
-import { skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, lensMaterial } from './Materials.js';
+import { skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, lensMaterial, contactShadowMaterial } from './Materials.js';
 import { Rng } from '../../util/Rng.js';
 
 /**
@@ -29,6 +29,8 @@ function shared() {
       skin: skinMaterial(),
       garment: garmentMaterial(),
       hair: hairMaterial(),
+      shadow: contactShadowMaterial(),
+      shadowGeo: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
     };
     SHARED.skin.side = THREE.FrontSide;
     SHARED.garment.side = THREE.DoubleSide;
@@ -70,7 +72,7 @@ export class Character {
     this.faceMat = faceMaterial(head.map);
     this.faceMat.side = THREE.DoubleSide;
     this.faceMat.shadowSide = THREE.BackSide;
-    this.eyeMat = eyeMaterial(eyes.map);
+    this.eyeMat = eyeMaterial(look.iris ?? 0x3f6f9c);
 
     this.body = this._skinned(bodyGeo, S.skin, 'body');
     this.head = this._skinned(head.geometry, this.faceMat, 'head');
@@ -113,6 +115,19 @@ export class Character {
       hip: socket('hip', 'hips', [-0.14 * s, 0.02 * s, -0.02 * s], [0, 0, -0.2]),
       head: socket('headTop', 'head', [0, 0.16 * s, 0], null),
     };
+
+    // Contact shadow. The cascaded sun shadow alone loses the point where a
+    // boot meets the ground once there is grass in between, and a character
+    // whose contact you cannot find reads as hovering — the single cheapest
+    // tell that a model was pasted into a scene rather than standing in it.
+    const blob = new THREE.Mesh(S.shadowGeo, S.shadow);
+    blob.scale.setScalar(0.98 * s);
+    blob.position.set(0, 0.035 * s, -0.01 * s);
+    blob.renderOrder = -2;
+    blob.frustumCulled = false;
+    blob.matrixAutoUpdate = true;
+    this.root.add(blob);
+    this.groundShadow = blob;
 
     this.anim = new Animator(this);
     this.height = rig.dims.height;

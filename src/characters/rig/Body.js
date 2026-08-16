@@ -82,12 +82,13 @@ export function buildBody(rig, look) {
       uvScale: [1, 1.6],
     });
 
-    // deltoid cap so the shoulder keeps volume when the arm lifts
+    // a small deltoid cap, sunk inside the sweep so it only fills the joint
+    // when the arm lifts and never breaks the silhouette at rest
     B.skin([[I[`upperArm${side}`], 0.75], [I[`clavicle${side}`], 0.25]]);
     blob(B, {
-      center: [sh.x - sg * R(0.004), sh.y - R(0.004), sh.z],
-      scale: [R(0.046 + 0.020 * m), R(0.046 + 0.018 * m), R(0.047 + 0.018 * m)],
-      segU: 14, segV: 9,
+      center: [sh.x - sg * R(0.014), sh.y - R(0.014), sh.z],
+      scale: [R(0.030 + 0.012 * m), R(0.034 + 0.012 * m), R(0.033 + 0.011 * m)],
+      segU: 12, segV: 8,
     });
 
     buildHand(B, rig, side, look);
@@ -145,7 +146,10 @@ function buildHand(B, rig, side, look) {
     shape: (th) => 1 + 0.12 * abump(th, Math.PI, 1.0),
   });
 
-  // four fingers, progressively shorter and more curled
+  // four fingers, progressively shorter and more curled. Bare fingers are the
+  // one part of a body light shines clean through, so they carry full
+  // translucent thickness; a glove blocks that entirely.
+  if (!gl) B.mat(0.54, 0, 0.85);
   const fl = [0.046, 0.051, 0.047, 0.039];
   const fr = [0.0100, 0.0107, 0.0100, 0.0086];
   for (let i = 0; i < 4; i++) {
@@ -181,4 +185,5 @@ function buildHand(B, rig, side, look) {
   });
   B.skin([[I[`thumb${side}`], 1]]);
   blob(B, { center: t2.toArray(), scale: [R(0.0102), R(0.0102), R(0.0102)], segU: 8, segV: 5 });
+  B.mat(0.57, 0, 0);
 }

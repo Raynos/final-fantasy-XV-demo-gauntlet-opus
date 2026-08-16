@@ -5,7 +5,7 @@ import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape }
 const _c = new THREE.Color();
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
-function under(fn, u0, u1, damp = 0.7) {
+function under(fn, u0, u1, damp = 0.88) {
   return (th, t) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
 }
 
@@ -60,7 +60,7 @@ piece('shirt', (B, ctx, o) => {
   const u0 = o.u0 ?? 0.28, u1 = o.u1 ?? 0.96;
   const nodes = drape(ctx.torso, u0, u1, 10, o.pad ?? 0.010, o.padZ);
   const cut = o.neckCut ?? 0.55;
-  const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.85);
+  const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.92);
   const base = _c.clone().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const printC = new THREE.Color().setHex(o.printColor ?? 0xcccccc, THREE.SRGBColorSpace);
   sweepTube(B, {
@@ -84,7 +84,7 @@ piece('jacket', (B, ctx, o) => {
   const base = o.pad ?? 0.026;
   const padFn = (t) => base * (1 - 0.62 * smooth((t - 0.70) / 0.30));
   const nodes = drape(ctx.torso, u0, u1, 12, padFn, padFn);
-  const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.7);
+  const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.90);
   sweepShell(B, {
     nodes, steps: o.steps ?? 22, seg: o.seg ?? 26,
     theta0: gap, theta1: Math.PI * 2 - gap,
@@ -96,14 +96,16 @@ piece('jacket', (B, ctx, o) => {
       const edge = Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap)));
       k += 0.085 * Math.exp(-edge * 5) * bump(t, 0.62, 0.34);
       k += (o.flare ?? 0.10) * smooth((0.24 - t) / 0.24);              // hem flare
-      k += (o.wrinkle ?? 0.010) * Math.sin(th * 7 + t * 16);
+      // a few real folds: cloth that never creases reads as vacuum-formed plastic
+      k += (o.wrinkle ?? 0.014) * Math.sin(th * 7 + t * 16)
+         + (o.wrinkle ?? 0.014) * 0.6 * Math.sin(th * 3.2 - t * 9.0) * smooth((0.55 - t) / 0.55);
       k -= 0.05 * abump(th, Math.PI, 0.5) * bump(t, 0.9, 0.2);          // yoke tuck
       return k;
     },
     // the top edge follows the trapezius down toward the acromion — a flat
     // horizontal ring here is what produces boxy pauldron corners
     offset: (th, t, out) => {
-      const drop = (o.shoulderDrop ?? 0.085) * ctx.s;
+      const drop = (o.shoulderDrop ?? 0.032) * ctx.s;
       out.y = -drop * smooth((t - 0.62) / 0.38) * Math.pow(Math.abs(Math.sin(th)), 1.6);
     },
     uvScale: [1.6, 2.6],
@@ -173,17 +175,17 @@ piece('skirt', (B, ctx, o) => {
 /** Sleeve over the arm; `u1` sets short / three-quarter / full length. */
 piece('sleeve', (B, ctx, o) => {
   for (const side of (o.sides || ['L', 'R'])) {
-    // start below the shoulder joint and sink the first rings *inside* the
-    // deltoid: an open sleeve tube that begins above the joint reads as a
-    // flat-topped pauldron from every angle
-    const u0 = o.u0 ?? 0.17, u1 = o.u1 ?? 0.82;
+    // Start *at* the shoulder joint. The arm sweep now begins well inside the
+    // ribcage, so u=0 is about 9 cm above the acromion — a sleeve cut there
+    // erupts through the trapezius as a pointed wing.
+    const u0 = o.u0 ?? 0.11, u1 = o.u1 ?? 0.82;
     const base = o.pad ?? 0.014;
     const nodes = drape(ctx.arm(side), u0, u1, 8,
-      (t) => base * (0.55 + 0.45 * smooth(t * 3.0)) + 0.004 * (1 - smooth(t * 2.0)));
-    const body = under(armShape(ctx.rig.profile.muscle, side === 'L' ? 1 : -1), u0, u1, 0.8);
+      (t) => base * (0.30 + 0.70 * smooth(t * 3.0)) - 0.006 * (1 - smooth(t * 2.2)));
+    const body = under(armShape(ctx.rig.profile.muscle, side === 'L' ? 1 : -1), u0, u1, 0.94);
     sweepTube(B, {
       nodes, steps: o.steps ?? 14, seg: o.seg ?? 16,
-      capStart: true, capHeight: o.capHeight ?? 0.95,
+      capStart: true, capHeight: o.capHeight ?? 0.55,
       shape: (th, t) => body(th, t)
         + (o.wrinkle ?? 0.02) * Math.sin(th * 6 + t * 18) * smooth(t)
         + (o.cuff ?? 0.0) * bump(t, 0.97, 0.12)
@@ -205,7 +207,7 @@ piece('pants', (B, ctx, o) => {
     const u0 = o.u0 ?? 0.02, u1 = o.u1 ?? 0.93;
     const nodes = drape(ctx.leg(side), u0, u1, 10,
       (t) => lerp(o.padHip ?? 0.014, o.padAnkle ?? 0.012, t));
-    const body = under(legShape(ctx.rig.profile.muscle), u0, u1, 0.8);
+    const body = under(legShape(ctx.rig.profile.muscle), u0, u1, 0.94);
     sweepTube(B, {
       nodes, steps: o.steps ?? 16, seg: o.seg ?? 18,
       shape: (th, t) => body(th, t)
@@ -379,7 +381,7 @@ piece('glasses', (B, ctx, o) => {
   const put = (x, y, z) => [org.x + x * s, org.y + y * s, org.z + z * s];
   B.skin([[I.head, 1]]);
   B.color(o.color ?? 0x23262c).mat(0.26, 0.55);
-  const w = 0.0325, h = 0.0165;
+  const w = 0.0345, h = 0.0145;
   const eyeY = -0.006, eyeZ = 0.0805;   // matches FACE.eye
   for (const sg of [1, -1]) {
     const cx = sg * 0.0335;
@@ -388,9 +390,9 @@ piece('glasses', (B, ctx, o) => {
     const N = 18;
     for (let i = 0; i <= N; i++) {
       const a = (i / N) * Math.PI * 2;
-      const px = cx + Math.cos(a) * w * (1 - 0.25 * Math.pow(Math.abs(Math.sin(a)), 3));
-      const py = eyeY + Math.sin(a) * h;
-      pts.push({ p: put(px, py, eyeZ - Math.abs(px - cx) * 0.30), rx: 0.0042 * s, rz: 0.0050 * s, w: [[I.head, 1]] });
+      const px = cx + Math.cos(a) * w * (1 - 0.10 * Math.pow(Math.abs(Math.sin(a)), 4));
+      const py = eyeY + Math.sin(a) * h * (1 - 0.12 * Math.pow(Math.abs(Math.cos(a)), 4));
+      pts.push({ p: put(px, py, eyeZ - Math.abs(px - cx) * 0.30), rx: 0.0018 * s, rz: 0.0026 * s, w: [[I.head, 1]] });
     }
     sweepTube(B, { nodes: pts, steps: 26, seg: 6, ref: [0, 0, 1], uvScale: [1, 1] });
     // temple arm back to the ear
