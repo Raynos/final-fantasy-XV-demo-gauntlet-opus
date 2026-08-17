@@ -1,8 +1,64 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp, smooth, clamp01 } from './Geo.js';
 import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape } from './Anatomy.js';
+import { Noise } from '../../util/Noise.js';
 
 const _c = new THREE.Color();
+const _cloth = new Noise(9137);
+
+/** Gaussian ridge centred on `c`, half-width `w`. */
+const ridge = (x, c, w) => Math.exp(-((x - c) / w) * ((x - c) / w));
+
+/** Same, on an angle, wrapping at 2π. */
+function aridge(th, c, w) {
+  let d = Math.abs(th - c) % (Math.PI * 2);
+  if (d > Math.PI) d = Math.PI * 2 - d;
+  return Math.exp(-(d / w) * (d / w));
+}
+
+/**
+ * Panel break-up for a garment sweep.
+ *
+ * Near-black cloth carries almost no colour information, so everything that
+ * says "jacket" rather than "shell" has to arrive as *value*: stitched seams a
+ * shade darker than the panel they join, a hem and a shoulder worn a shade
+ * lighter, and a low-frequency mottle so the field between them is never flat.
+ * Roughness tells the same story — thread and creased cloth are matte, a worn
+ * edge and a stretched shoulder are not — and on this palette the roughness
+ * break is the more legible half of the pair.
+ *
+ * @param {Object} o garment piece description
+ * @returns {{color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[]}}
+ */
+function clothShade(o) {
+  const base = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
+  const rough = o.rough ?? 0.78;
+  const metal = o.metal ?? 0;
+  const seams = o.seams ?? [Math.PI, Math.PI * 0.54, Math.PI * 1.46];
+  const yoke = o.yoke ?? 0.76;
+  const wear = o.wear ?? 1;
+  const out = new THREE.Color();
+  const seamK = (th, t) => {
+    let s = 0;
+    for (const c of seams) s = Math.max(s, aridge(th, c, o.seamW ?? 0.055));
+    s = Math.max(s, ridge(t, yoke, 0.020) * 0.9);
+    return s;
+  };
+  const wearK = (th, t) => wear * (
+    0.85 * ridge(t, o.hemAt ?? 0.030, 0.042)
+    + 0.45 * ridge(t, 0.885, 0.055) * Math.pow(Math.abs(Math.sin(th)), 2.0)
+  );
+  const mottle = (th, t) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
+  return {
+    /** Seam mask, 0..1 — also drives the raised topstitch ridge in `shape`. */
+    seam: seamK,
+    wear: wearK,
+    color: (th, t) => out.copy(base).multiplyScalar(
+      (1 - 0.40 * seamK(th, t)) * (1 + 0.62 * wearK(th, t)) * (1 + mottle(th, t))
+    ),
+    mat: (th, t) => [clamp01(rough + 0.15 * seamK(th, t) - 0.18 * wearK(th, t)), metal, 0],
+  };
+}
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
 function under(fn, u0, u1, damp = 0.88) {
@@ -63,16 +119,33 @@ piece('shirt', (B, ctx, o) => {
   const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.92);
   const base = _c.clone().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const printC = new THREE.Color().setHex(o.printColor ?? 0xcccccc, THREE.SRGBColorSpace);
+  const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.52, Math.PI * 1.48], yoke: o.yoke ?? 0.86 });
+  const tee = new THREE.Color();
   sweepTube(B, {
-    nodes, steps: o.steps ?? 18, seg: o.seg ?? 26,
+    nodes, steps: o.steps ?? 20, seg: o.seg ?? 32,
     shape: (th, t) => body(th, t)
       + (o.chest ?? 0.0) * abump(th, 0, 1.2) * bump(t, 0.7, 0.3)
       - 0.35 * cut * abump(th, 0, 0.75) * smooth((t - 0.86) / 0.15)     // neckline scoop
       - 0.30 * cut * abump(th, Math.PI, 0.9) * smooth((t - 0.9) / 0.12)
-      + (o.wrinkle ?? 0.012) * Math.sin(th * 9 + t * 22) * bump(t, 0.35, 0.4),
-    colorAt: o.print ? (th, t) => _c.copy(base).lerp(printC, o.print(th, t)) : undefined,
+      + (o.wrinkle ?? 0.020) * Math.sin(th * 9 + t * 22) * bump(t, 0.35, 0.4)
+      + (o.wrinkle ?? 0.020) * 0.7 * Math.sin(th * 4.5 - t * 12.0) * bump(t, 0.55, 0.45)
+      // side and shoulder seams as raised topstitch, plus the ribbed neckband
+      // and the doubled hem — the two edges of a tee that ever catch light
+      + (o.seamRib ?? 0.011) * shade.seam(th, t)
+      + (o.neckRib ?? 0.013) * ridge(t, 0.965, 0.030)
+      + (o.hemRib ?? 0.011) * ridge(t, 0.030, 0.026),
+    colorAt: o.print
+      ? (th, t) => tee.copy(shade.color(th, t))
+        .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026))
+        .lerp(printC, o.print(th, t))
+      : (th, t) => tee.copy(shade.color(th, t))
+        .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026)),
+    matAt: o.print
+      ? (th, t) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * o.print(th, t)), m[1], 0]; }
+      : shade.mat,
     uvScale: [1.4, 2.4],
   });
+  B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
   if (o.hemBand) hemBand(B, ctx, nodes[0], o);
 });
 
@@ -85,8 +158,23 @@ piece('jacket', (B, ctx, o) => {
   const padFn = (t) => base * (1 - 0.62 * smooth((t - 0.70) / 0.30));
   const nodes = drape(ctx.torso, u0, u1, 12, padFn, padFn);
   const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.90);
+  const shade = clothShade(o);
+  const jc = new THREE.Color();
+  /** How proud of the panel a point sits: placket band plus hem band. */
+  const proud = (th, t) => {
+    const pl = Math.min(
+      Math.abs(th - (gap + 0.20)),
+      Math.abs(th - (Math.PI * 2 - gap - 0.20))
+    );
+    return Math.max(
+      Math.exp(-(pl / 0.11) * (pl / 0.11)) * smooth(t / 0.18),
+      ridge(t, 0.045, 0.030)
+    );
+  };
   sweepShell(B, {
-    nodes, steps: o.steps ?? 22, seg: o.seg ?? 26,
+    // a fold sampled four times across its own period is a facet, not a fold:
+    // the ring count is what lets the creases below cast their own shadow
+    nodes, steps: o.steps ?? 26, seg: o.seg ?? 38,
     theta0: gap, theta1: Math.PI * 2 - gap,
     thickness: o.thickness ?? 0.013,
     shape: (th, t) => {
@@ -102,9 +190,29 @@ piece('jacket', (B, ctx, o) => {
       // hem break: cloth folds over on itself where it stops being supported
       k += (o.hemBreak ?? 0.030) * Math.pow(Math.max(0, 1 - t / 0.14), 1.6)
          * (0.6 + 0.4 * Math.sin(th * 5.0 + 1.1));
-      // a few real folds: cloth that never creases reads as vacuum-formed plastic
-      k += (o.wrinkle ?? 0.014) * Math.sin(th * 7 + t * 16)
-         + (o.wrinkle ?? 0.014) * 0.6 * Math.sin(th * 3.2 - t * 9.0) * smooth((0.55 - t) / 0.55);
+      // Real folds. Cloth that never creases reads as vacuum-formed plastic,
+      // and on a near-black garment the shadow inside a crease is most of the
+      // material information the viewer ever gets — so these run roughly twice
+      // as deep as before, with a second, finer set crossing them.
+      const wr = o.wrinkle ?? 0.030;
+      k += wr * Math.sin(th * 7 + t * 16)
+         + wr * 0.70 * Math.sin(th * 3.2 - t * 9.0) * smooth((0.55 - t) / 0.55)
+         + wr * 0.55 * Math.sin(th * 13.0 + t * 4.0) * smooth((0.70 - t) / 0.55)
+         // drag folds pulling from the armpit toward the opposite hip
+         + wr * 0.90 * Math.sin(th * 2.0 + t * 7.5) * bump(t, 0.48, 0.34);
+      // Topstitching. A raised 2 mm rib along every seam is the single detail
+      // that turns a black shell into a tailored garment: it is geometry, so it
+      // catches a real specular edge from any light direction, and it survives
+      // minification in a way a painted line never does.
+      k += (o.seamRib ?? 0.014) * shade.seam(th, t);
+      // a doubled-over hem band around the bottom edge
+      k += (o.hemRib ?? 0.016) * ridge(t, 0.045, 0.030);
+      // zip guard: a raised placket running just inboard of each front edge
+      const pl = Math.min(
+        Math.abs(th - (gap + 0.20)),
+        Math.abs(th - (Math.PI * 2 - gap - 0.20))
+      );
+      k += (o.placket ?? 0.016) * Math.exp(-(pl / 0.11) * (pl / 0.11)) * smooth(t / 0.18);
       k -= 0.05 * abump(th, Math.PI, 0.5) * bump(t, 0.9, 0.2);          // yoke tuck
       return k;
     },
@@ -115,7 +223,12 @@ piece('jacket', (B, ctx, o) => {
       out.y = -drop * smooth((t - 0.62) / 0.38) * Math.pow(Math.abs(Math.sin(th)), 1.6);
     },
     uvScale: [1.6, 2.6],
+    // the placket and the hem are proud of the panel, so they take the light:
+    // a shade lighter and a good deal smoother than the cloth behind them
+    colorAt: (th, t) => jc.copy(shade.color(th, t)).multiplyScalar(1 + 0.45 * proud(th, t)),
+    matAt: (th, t) => { const m = shade.mat(th, t); return [clamp01(m[0] - 0.26 * proud(th, t)), m[1], 0]; },
   });
+  B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
   if (o.collar !== false) collar(B, ctx, o);
 });
 
@@ -134,13 +247,23 @@ function collar(B, ctx, o) {
     { p: [0, y0 + h * s * 0.5, -0.016 * s], rx: r0 * 0.90, rz: r0 * 0.90, w: [[I.spine03, 0.6], [I.neck, 0.4]] },
     { p: [0, y0 + h * s * 1.1, -0.018 * s], rx: r0 * (o.collarFlare ?? 1.0), rz: r0 * (o.collarFlare ?? 1.0), w: [[I.spine03, 0.28], [I.neck, 0.72]] },
   ];
+  // A collar is the one garment edge that sits right beside the face, so it is
+  // the piece that most repays being told apart from the body of the jacket:
+  // its outer face is worn smoother, and its top edge catches the sky.
+  const cCol = new THREE.Color().setHex(o.collarColor ?? o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
+  const cRough = (o.collarRough ?? (o.rough ?? 0.6) - 0.14);
+  const out = new THREE.Color();
   sweepShell(B, {
-    nodes, steps: 6, seg: 20,
+    nodes, steps: 7, seg: 24,
     theta0: gap, theta1: Math.PI * 2 - gap,
     thickness: o.thickness ?? 0.012,
-    shape: (th, t) => 1 + 0.16 * t * Math.exp(-Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap))) * 3),
+    shape: (th, t) => 1 + 0.16 * t * Math.exp(-Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap))) * 3)
+      + 0.020 * Math.sin(th * 6.0 + 1.4) * t,
+    colorAt: (th, t) => out.copy(cCol).multiplyScalar(1 + 0.55 * Math.pow(t, 2.2) + 0.05 * Math.sin(th * 5.0)),
+    matAt: (th, t) => [clamp01(cRough - 0.22 * Math.pow(t, 2.2)), o.metal ?? 0, 0],
     uvScale: [1, 0.5],
   });
+  B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
 }
 
 /** Skirt / coat tails hanging from the waist, driven by the coat spring bones. */
@@ -194,15 +317,22 @@ piece('sleeve', (B, ctx, o) => {
       // reaches full thickness only once it is clear of the deltoid
       (t) => base * (0.15 + 0.85 * smooth(t * 2.4)) - 0.013 * (1 - smooth(t * 2.6)));
     const body = under(armShape(ctx.rig.profile.muscle, side === 'L' ? 1 : -1), u0, u1, 0.94);
+    const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.5, Math.PI * 1.5], yoke: 0.22, hemAt: 0.94 });
     sweepTube(B, {
-      nodes, steps: o.steps ?? 16, seg: o.seg ?? 16,
+      nodes, steps: o.steps ?? 18, seg: o.seg ?? 22,
       shape: (th, t) => body(th, t)
-        + (o.wrinkle ?? 0.02) * Math.sin(th * 6 + t * 18) * smooth(t)
+        + (o.wrinkle ?? 0.024) * Math.sin(th * 6 + t * 18) * smooth(t)
+        // elbow crush: a sleeve is at its most creased where the arm bends
+        + (o.wrinkle ?? 0.024) * 1.1 * Math.sin(t * 34.0 + th * 1.5) * bump(t, 0.52, 0.22)
         + (o.cuff ?? 0.0) * bump(t, 0.96, 0.10)
         - (o.taper ?? 0.05) * smooth((t - 0.86) / 0.14)     // wrist taper, no butt-seam
-        + (o.shoulderPad ?? 0.0) * bump(t, 0.16, 0.14),
+        + (o.shoulderPad ?? 0.0) * bump(t, 0.16, 0.14)
+        + (o.seamRib ?? 0.012) * shade.seam(th, t),
+      colorAt: shade.color,
+      matAt: shade.mat,
       uvScale: [1, 2],
     });
+    B.color(o.color ?? 0x1a1a1e).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
     if (o.cuffBand) {
       const c = drape(ctx.arm(side), (o.u1 ?? 0.88) - 0.045, (o.u1 ?? 0.88) + 0.005, 3, (o.pad ?? 0.014) + 0.005);
       B.color(o.cuffColor ?? o.color ?? 0x1a1a1e);
@@ -219,15 +349,23 @@ piece('pants', (B, ctx, o) => {
     const nodes = drape(ctx.leg(side), u0, u1, 10,
       (t) => lerp(o.padHip ?? 0.014, o.padAnkle ?? 0.012, t));
     const body = under(legShape(ctx.rig.profile.muscle), u0, u1, 0.94);
+    const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.5, Math.PI * 1.5], yoke: 0.06, hemAt: 0.10 });
     sweepTube(B, {
-      nodes, steps: o.steps ?? 16, seg: o.seg ?? 18,
+      nodes, steps: o.steps ?? 18, seg: o.seg ?? 22,
       shape: (th, t) => body(th, t)
-        + (o.wrinkle ?? 0.018) * Math.sin(th * 5 + t * 20) * smooth(t * 1.6)
+        + (o.wrinkle ?? 0.020) * Math.sin(th * 5 + t * 20) * smooth(t * 1.6)
+        // the stack of creases behind the knee and above the ankle
+        + (o.wrinkle ?? 0.020) * 1.2 * Math.sin(t * 46.0) * bump(t, 0.56, 0.16)
+        + (o.wrinkle ?? 0.020) * 0.9 * Math.sin(t * 38.0 + 1.0) * bump(t, 0.86, 0.12)
         + (o.knee ?? 0.03) * bump(t, 0.5, 0.12)
         + (o.cargo ?? 0) * (abump(th, Math.PI * 0.5, 0.8) + abump(th, -Math.PI * 0.5, 0.8)) * bump(t, 0.34, 0.10)
-        + (o.boot ?? 0) * bump(t, 0.92, 0.14),
+        + (o.boot ?? 0) * bump(t, 0.92, 0.14)
+        + (o.seamRib ?? 0.010) * shade.seam(th, t),
+      colorAt: shade.color,
+      matAt: shade.mat,
       uvScale: [1.2, 2.4],
     });
+    B.color(o.color ?? 0x22242a).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
   }
   if (o.waist !== false) {
     // reaches down over the hip crest: the leg tubes only begin at the greater

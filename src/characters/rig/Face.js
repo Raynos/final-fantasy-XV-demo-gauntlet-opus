@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { MeshBuilder, applyBrushes, expandMirrors, blob, ribbon, clamp01, smooth, lerp } from './Geo.js';
-import { canvasTexture } from '../../util/TextureGen.js';
 import { Rng } from '../../util/Rng.js';
 import { Noise } from '../../util/Noise.js';
 
@@ -22,7 +21,7 @@ import { Noise } from '../../util/Noise.js';
  * narrower than the iris and the eye reads as a dark bead with no sclera —
  * which is the difference between a person and a doll at any distance.
  */
-export const LID_OPEN = [0.70, 0.17];
+export const LID_OPEN = [0.76, 0.22];
 
 /** Canonical head half-extents before sculpting. */
 const HR = [0.0785, 0.1130, 0.0960];
@@ -479,6 +478,95 @@ function buildLashes(B, o) {
 }
 
 /**
+ * Contrast-preserving mip chain.
+ *
+ * This is the whole reason faces used to dissolve into a beige smear at
+ * gameplay range. A face is 20–60 px tall at 4–8 m, which lands on mip 4–5;
+ * a plain box filter averages the lash line, the socket and the brow into the
+ * surrounding skin and the head arrives at the screen with no features left.
+ *
+ * Each level instead takes the *most deviant* of its four contributors and
+ * mixes it back over the average, so a two-texel-wide black lash line survives
+ * as a dark texel instead of a 12% grey tint. Mean luminance is restored per
+ * level, so the face does not drift dark with distance — only more contrasty.
+ */
+function contrastMips(canvas) {
+  const mips = [canvas];
+  let src = canvas;
+  let level = 0;
+  while (src.width > 1 && src.height > 1) {
+    level++;
+    const sw = src.width, sh = src.height;
+    const w = sw >> 1, h = sh >> 1;
+    const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+    const dst = document.createElement('canvas');
+    dst.width = w; dst.height = h;
+    const dctx = dst.getContext('2d', { willReadFrequently: true });
+    const out = dctx.createImageData(w, h);
+    const od = out.data;
+    // deviation is pushed harder the further down the chain we go: at mip 5 a
+    // feature owns a single texel and nothing but the extreme is left of it
+    const k = Math.min(0.66, 0.15 * level);
+    let sumIn = 0, sumOut = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const a0 = ((y * 2) * sw + x * 2) * 4;
+        const a1 = a0 + 4;
+        const a2 = a0 + sw * 4;
+        const a3 = a2 + 4;
+        const ar = (sd[a0] + sd[a1] + sd[a2] + sd[a3]) * 0.25;
+        const ag = (sd[a0 + 1] + sd[a1 + 1] + sd[a2 + 1] + sd[a3 + 1]) * 0.25;
+        const ab = (sd[a0 + 2] + sd[a1 + 2] + sd[a2 + 2] + sd[a3 + 2]) * 0.25;
+        const al = ar * 0.30 + ag * 0.59 + ab * 0.11;
+        let br = ar, bg = ag, bb = ab, bd = -1;
+        for (let s = 0; s < 4; s++) {
+          const i = s === 0 ? a0 : s === 1 ? a1 : s === 2 ? a2 : a3;
+          const l = sd[i] * 0.30 + sd[i + 1] * 0.59 + sd[i + 2] * 0.11;
+          const d = Math.abs(l - al);
+          if (d > bd) { bd = d; br = sd[i]; bg = sd[i + 1]; bb = sd[i + 2]; }
+        }
+        const o = (y * w + x) * 4;
+        od[o] = ar + (br - ar) * k;
+        od[o + 1] = ag + (bg - ag) * k;
+        od[o + 2] = ab + (bb - ab) * k;
+        od[o + 3] = 255;
+        sumIn += al;
+        sumOut += od[o] * 0.30 + od[o + 1] * 0.59 + od[o + 2] * 0.11;
+      }
+    }
+    const g = sumOut > 1e-4 ? sumIn / sumOut : 1;
+    if (Math.abs(g - 1) > 0.002) {
+      for (let i = 0; i < od.length; i += 4) {
+        od[i] = Math.min(255, od[i] * g);
+        od[i + 1] = Math.min(255, od[i + 1] * g);
+        od[i + 2] = Math.min(255, od[i + 2] * g);
+      }
+    }
+    dctx.putImageData(out, 0, 0);
+    mips.push(dst);
+    src = dst;
+  }
+  return mips;
+}
+
+/** Canvas texture whose mip chain keeps facial value structure (see above). */
+function faceTexture(size, draw) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  draw(cv.getContext('2d', { willReadFrequently: true }), size);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 16;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.mipmaps = contrastMips(cv);
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * The painted face map.
  *
  * Everything here is authored in **canonical head metres** and converted to
@@ -510,7 +598,7 @@ function paintFace(look, uv) {
   // canonical point -> texel, for points authored on the face plane
   const fx = (x, y) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
-  return canvasTexture(S, (ctx) => {
+  return faceTexture(S, (ctx) => {
     ctx.fillStyle = hexOf(skin.clone().multiplyScalar(0.88));
     ctx.fillRect(0, 0, S, S);
 
@@ -537,8 +625,12 @@ function paintFace(look, uv) {
       ctx.globalCompositeOperation = mode;
       ctx.translate(cx, cy);
       ctx.scale(a / r, b / r);
+      // A linear alpha ramp reads as a cone — a visible disc edge, and a face
+      // covered in them looks bruised. A smoothstep-ish ramp dissolves.
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
       g.addColorStop(0, color);
+      g.addColorStop(0.35, color.replace(/([\d.]+)\)$/, (m, a) => `${(Number(a) * 0.82).toFixed(3)})`));
+      g.addColorStop(0.70, color.replace(/([\d.]+)\)$/, (m, a) => `${(Number(a) * 0.34).toFixed(3)})`));
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.globalAlpha = alpha;
       ctx.fillStyle = g;
@@ -591,54 +683,84 @@ function paintFace(look, uv) {
 
     // ---- tonal zones ------------------------------------------------------
     // A portrait painter's three bands: ochre forehead, red mid-face, blue-grey
-    // jaw. Without them procedural skin is one flat plastic beige.
-    soft([0, 0.058, 0.078], 0.058, 0.032, 'rgba(198,146,74,0.32)', 0.95);
-    soft([0, -0.030, 0.092], 0.050, 0.030, 'rgba(190,72,52,0.34)', 1.0);
-    soft([0, -0.100, 0.066], 0.048, 0.026, 'rgba(78,90,122,0.34)', 0.95);
+    // jaw. Without them procedural skin is one flat plastic beige. These are
+    // deliberately strong — they are the only face structure wide enough to
+    // survive to mip 5, which is where a head sits at 6 m.
+    soft([0, 0.058, 0.078], 0.070, 0.040, 'rgba(226,180,126,0.34)', 1.0);
+    soft([0, -0.026, 0.092], 0.058, 0.036, 'rgba(190,108,88,0.20)', 1.0);
+    soft([0, -0.100, 0.066], 0.056, 0.032, 'rgba(96,106,136,0.34)', 1.0);
+
+    // The lit mask: a face is a bright central T over darker perimeter planes.
+    // At 30 px this reads as "a head turned toward the light" long before any
+    // individual feature resolves.
+    soft([0, 0.030, 0.090], 0.026, 0.052, 'rgba(255,236,206,0.22)', 1);
+    soft([0, -0.104, 0.072], 0.016, 0.012, 'rgba(255,232,204,0.20)', 1);
 
     // warmth on cheeks, nose, ears
     const blush = look.blush || 'rgba(198,86,70,0.30)';
-    soft([0.050, -0.024, 0.058], 0.030, 0.020, blush, 0.9);
-    soft([-0.050, -0.024, 0.058], 0.030, 0.020, blush, 0.9);
-    soft([0, -0.044, 0.099], 0.016, 0.012, blush, 0.85);
+    soft([0.050, -0.024, 0.058], 0.036, 0.026, blush, 0.68);
+    soft([-0.050, -0.024, 0.058], 0.036, 0.026, blush, 0.68);
+    soft([0, -0.044, 0.099], 0.018, 0.014, blush, 0.80);
     // ears and nostril wings are two sheets of skin over nothing: always redder
-    soft([0.070, -0.026, -0.004], 0.022, 0.026, 'rgba(206,88,66,0.50)', 1.0);
-    soft([-0.070, -0.026, -0.004], 0.022, 0.026, 'rgba(206,88,66,0.50)', 1.0);
+    soft([0.070, -0.026, -0.004], 0.024, 0.028, 'rgba(200,104,84,0.40)', 1.0);
+    soft([-0.070, -0.026, -0.004], 0.024, 0.028, 'rgba(200,104,84,0.40)', 1.0);
 
     // ---- occlusion --------------------------------------------------------
     const ao = (p, rx, ry, a, col = '104,68,62') => soft(p, rx, ry, `rgba(${col},${a})`, 1, 'multiply');
     // the orbit: a real socket is 40mm wide and 28mm tall, and it is the
     // strongest value on a face. Eyes read as eyes because they sit in a hole.
-    ao([0.0335, -0.004, 0.070], 0.0175, 0.0115, 0.44, '116,80,76');
-    ao([-0.0335, -0.004, 0.070], 0.0175, 0.0115, 0.44, '116,80,76');
+    // The socket is also the one feature that has to hold at 20 px, so it is
+    // painted wider and roughly twice as deep as anatomy alone would ask for.
+    ao([0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.62, '96,64,62');
+    ao([-0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.62, '96,64,62');
     // the crease directly under the brow ridge, darker and tighter
-    ao([0.0335, 0.0035, 0.076], 0.0145, 0.0050, 0.58, '88,56,56');
-    ao([-0.0335, 0.0035, 0.076], 0.0145, 0.0050, 0.58, '88,56,56');
+    ao([0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.46, '82,54,54');
+    ao([-0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.46, '82,54,54');
+    // The eye mass itself. The eyeball is 21 mm across, i.e. 2–4 px at
+    // gameplay range: far too small to survive on its own. A painted dark
+    // almond under the aperture keeps a definite dark accent exactly where the
+    // eye is, so the geometry adds sclera and iris on top of a hole rather
+    // than floating on flat cheek.
+    for (const sg of [1, -1]) {
+      shape([
+        [sg * 0.0195, -0.0040], [sg * 0.0290, 0.0030], [sg * 0.0420, 0.0014],
+        [sg * 0.0505, -0.0055], [sg * 0.0420, -0.0112], [sg * 0.0290, -0.0122],
+      ], 'rgba(44,26,30,0.72)', { blur: 3 });
+    }
     // tear trough
-    ao([0.0330, -0.0135, 0.073], 0.0120, 0.0042, 0.44, '124,80,72');
-    ao([-0.0330, -0.0135, 0.073], 0.0120, 0.0042, 0.44, '124,80,72');
+    ao([0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.34, '128,92,86');
+    ao([-0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.34, '128,92,86');
     // temples, jaw undercut, under the chin
-    ao([0.062, 0.026, 0.048], 0.026, 0.028, 0.46);
-    ao([-0.062, 0.026, 0.048], 0.026, 0.028, 0.46);
+    ao([0.062, 0.026, 0.048], 0.038, 0.044, 0.34);
+    ao([-0.062, 0.026, 0.048], 0.038, 0.044, 0.34);
+    // the outer face planes turn away from the light: darkening them is what
+    // gives a minified head a rounded, lit mass instead of a flat oval
+    ao([0.070, -0.030, 0.020], 0.042, 0.066, 0.30, '104,76,72');
+    ao([-0.070, -0.030, 0.020], 0.042, 0.066, 0.30, '104,76,72');
     // the hollow under the cheekbone — the single strongest age/sex cue on a
     // face after the jaw, and the thing whose absence read as "child"
-    ao([0.0475, -0.0400, 0.0575], 0.0230, 0.0175, 0.42, '116,74,68');
-    ao([-0.0475, -0.0400, 0.0575], 0.0230, 0.0175, 0.42, '116,74,68');
-    ao([0.048, -0.074, 0.054], 0.020, 0.020, 0.44);
-    ao([-0.048, -0.074, 0.054], 0.020, 0.020, 0.44);
-    ao([0, -0.108, 0.030], 0.042, 0.016, 0.62);
+    ao([0.0475, -0.0400, 0.0575], 0.0300, 0.0230, 0.34, '120,84,78');
+    ao([-0.0475, -0.0400, 0.0575], 0.0300, 0.0230, 0.34, '120,84,78');
+    ao([0.048, -0.074, 0.054], 0.028, 0.028, 0.32);
+    ao([-0.048, -0.074, 0.054], 0.028, 0.028, 0.32);
+    // the jaw shadow, run right along the mandible: the single value that keeps
+    // a head from merging into the neck and shoulders at distance
+    ao([0, -0.113, 0.024], 0.058, 0.022, 0.44, '112,86,82');
+    ao([0.040, -0.110, 0.038], 0.034, 0.016, 0.30, '116,90,86');
+    ao([-0.040, -0.110, 0.038], 0.034, 0.016, 0.30, '116,90,86');
     // brow-ridge cast shadow: the brow is a shelf and it shades the lid
-    ao([0.032, 0.0085, 0.0780], 0.0210, 0.0058, 0.40, '96,64,60');
-    ao([-0.032, 0.0085, 0.0780], 0.0210, 0.0058, 0.40, '96,64,60');
+    ao([0.032, 0.0090, 0.0780], 0.0230, 0.0060, 0.38, '92,62,60');
+    ao([-0.032, 0.0090, 0.0780], 0.0230, 0.0060, 0.38, '92,62,60');
 
     // ---- nose -------------------------------------------------------------
     // bridge highlight, side planes in shadow, a lit tip
-    soft([0, -0.014, 0.093], 0.005, 0.020, 'rgba(255,232,212,0.30)', 1);
-    soft([0, -0.040, 0.098], 0.006, 0.008, 'rgba(255,236,218,0.34)', 1);
-    ao([0.0115, -0.020, 0.086], 0.005, 0.020, 0.42, '126,84,76');
-    ao([-0.0115, -0.020, 0.086], 0.005, 0.020, 0.42, '126,84,76');
-    // the shadow the tip casts on the philtrum
-    ao([0, -0.0575, 0.089], 0.011, 0.005, 0.72, '110,70,64');
+    soft([0, -0.014, 0.093], 0.0060, 0.024, 'rgba(255,238,218,0.30)', 1);
+    soft([0, -0.040, 0.098], 0.0070, 0.010, 'rgba(255,242,224,0.34)', 1);
+    ao([0.0125, -0.020, 0.086], 0.0060, 0.022, 0.56, '112,72,68');
+    ao([-0.0125, -0.020, 0.086], 0.0060, 0.022, 0.56, '112,72,68');
+    // the shadow the tip casts on the philtrum — the darkest small value in the
+    // mid-face, and what stops the nose flattening into the upper lip
+    ao([0, -0.0570, 0.089], 0.013, 0.0058, 0.70, '104,68,62');
     // nostril wings: a crease curling around each ala
     stroke([[0.0215, -0.0455], [0.0215, -0.0530], [0.0140, -0.0575]],
       'rgba(112,66,58,0.62)', 0.0022, { blur: 2 });
@@ -656,9 +778,9 @@ function paintFace(look, uv) {
 
     // ---- nasolabial fold + cheek plane ------------------------------------
     stroke([[0.0225, -0.0500], [0.0300, -0.0665], [0.0300, -0.0790]],
-      'rgba(126,80,72,0.34)', 0.0055, { blur: 6 });
+      'rgba(140,98,88,0.22)', 0.0055, { blur: 7 });
     stroke([[-0.0225, -0.0500], [-0.0300, -0.0665], [-0.0300, -0.0790]],
-      'rgba(126,80,72,0.34)', 0.0055, { blur: 6 });
+      'rgba(140,98,88,0.22)', 0.0055, { blur: 7 });
 
     // ---- mouth ------------------------------------------------------------
     // Two filled vermilion shapes with a real cupid's bow, not stacked blobs.
@@ -692,23 +814,31 @@ function paintFace(look, uv) {
     stroke([[cL, yC], [-0.0130, -0.0796], [0, -0.0784], [0.0130, -0.0796], [cR, yC]],
       'rgba(46,18,22,0.95)', 0.0040, { blur: 0.6 });
     // wet highlight on the lower lip
-    soft([0, -0.0852, 0.084], 0.008, 0.0022, 'rgba(255,224,208,0.34)', 1);
+    soft([0, -0.0852, 0.084], 0.009, 0.0026, 'rgba(255,228,212,0.46)', 1);
     // corner shadows and the mentolabial crease
-    ao([cR, yC - 0.0004, 0.076], 0.004, 0.003, 0.62, '92,52,50');
-    ao([cL, yC - 0.0004, 0.076], 0.004, 0.003, 0.62, '92,52,50');
-    ao([0, -0.0930, 0.080], 0.014, 0.0035, 0.44, '124,82,74');
-    soft([0, -0.1010, 0.079], 0.010, 0.006, 'rgba(255,230,214,0.16)', 1);
+    ao([cR, yC - 0.0004, 0.076], 0.0050, 0.0038, 0.80, '78,44,44');
+    ao([cL, yC - 0.0004, 0.076], 0.0050, 0.0038, 0.80, '78,44,44');
+    ao([0, -0.0930, 0.080], 0.016, 0.0042, 0.60, '112,72,68');
+    soft([0, -0.1010, 0.079], 0.011, 0.007, 'rgba(255,232,216,0.26)', 1);
 
     // ---- brows ------------------------------------------------------------
     // A filled tapered shape, not a fat grey stroke: the brow is the darkest
     // horizontal in the upper face and it has to hold an edge.
+    // Twice the mass it had: a brow that is one texel wide at mip 4 is a brow
+    // that is gone, and the brow is the strongest horizontal in the upper face.
     const browCol = look.browShadow || 'rgba(52,38,34,0.62)';
     for (const sg of [1, -1]) {
       shape([
-        [sg * 0.0095, 0.0128], [sg * 0.0260, 0.0176], [sg * 0.0430, 0.0140],
-        [sg * 0.0560, 0.0060], [sg * 0.0500, 0.0056],
-        [sg * 0.0400, 0.0102], [sg * 0.0250, 0.0128], [sg * 0.0105, 0.0086],
+        [sg * 0.0090, 0.0175], [sg * 0.0260, 0.0231], [sg * 0.0440, 0.0193],
+        [sg * 0.0580, 0.0093], [sg * 0.0490, 0.0075],
+        [sg * 0.0390, 0.0121], [sg * 0.0245, 0.0145], [sg * 0.0100, 0.0099],
       ], browCol, { blur: 3 });
+      // a denser core so the brow keeps a hard dark centre once minified
+      shape([
+        [sg * 0.0140, 0.0163], [sg * 0.0280, 0.0205], [sg * 0.0430, 0.0173],
+        [sg * 0.0510, 0.0107], [sg * 0.0420, 0.0127],
+        [sg * 0.0270, 0.0153], [sg * 0.0150, 0.0123],
+      ], browCol, { blur: 1.5, alpha: 0.85 });
     }
 
     // ---- eyes -------------------------------------------------------------
@@ -727,15 +857,16 @@ function paintFace(look, uv) {
       ctx.save();
       ctx.lineCap = 'round';
       // a soft dark bed so the hard line reads as sitting in a socket
-      ctx.strokeStyle = 'rgba(52,30,34,0.50)';
-      ctx.lineWidth = 0.0060 * PY;
+      ctx.strokeStyle = 'rgba(44,24,28,0.62)';
+      ctx.lineWidth = 0.0078 * PY;
       ctx.beginPath();
       ctx.moveTo(...ep(0.0140, -0.0050));
       ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
       ctx.stroke();
-      // the lash line
+      // The lash line, at 1.6x its anatomical width. This and the brow are the
+      // two strokes that decide whether a 30 px head has a face on it.
       ctx.strokeStyle = look.lash || 'rgba(14,10,12,0.97)';
-      ctx.lineWidth = 0.0026 * PY;
+      ctx.lineWidth = 0.0042 * PY;
       ctx.beginPath();
       ctx.moveTo(...ep(0.0140, -0.0050));
       ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
@@ -754,8 +885,8 @@ function paintFace(look, uv) {
       ctx.quadraticCurveTo(...ep(0.0340, 0.0098), ...ep(0.0520, 0.0024));
       ctx.stroke();
       // lower lash and the wet line under it
-      ctx.strokeStyle = 'rgba(62,36,36,0.55)';
-      ctx.lineWidth = 0.0012 * PY;
+      ctx.strokeStyle = 'rgba(58,32,34,0.70)';
+      ctx.lineWidth = 0.0020 * PY;
       ctx.beginPath();
       ctx.moveTo(...ep(0.0165, -0.0098));
       ctx.quadraticCurveTo(...ep(0.0340, -0.0158), ...ep(0.0500, -0.0072));
@@ -846,5 +977,5 @@ function paintFace(look, uv) {
       ctx.fillRect(0, hy - 0.030 * PY, S, 0.070 * PY);
       ctx.restore();
     }
-  }, { repeat: 1 });
+  });
 }

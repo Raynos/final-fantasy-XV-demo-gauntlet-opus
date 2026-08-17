@@ -304,6 +304,10 @@ export function sweepTube(B, o) {
     for (let j = 0; j < cols; j++) {
       const th = t0 + (t1 - t0) * (j / seg);
       if (o.colorAt) B.color(o.colorAt(th, u));
+      // per-vertex finish: a seam, a worn hem and a lit shoulder are all the
+      // same cloth at different roughness, and on a near-black palette that
+      // difference is the only thing separating the panels
+      if (o.matAt) { const q = o.matAt(th, u); B.mat(q[0], q[1] ?? 0, q[2] ?? 0); }
       let m = shape ? shape(th, u) : 1;
       let x = Math.sin(th) * rx * m;
       let z = Math.cos(th) * rz * m;
