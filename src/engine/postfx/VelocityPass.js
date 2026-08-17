@@ -126,6 +126,8 @@ export class VelocityPass extends Pass {
       const moved = o.isSkinnedMesh || !matrixNearlyEqual(e.prev, o.matrixWorld);
       if (moved) movers.push(e);
     });
+    /** How much of the frame is actually in motion — motion blur reads this. */
+    this.moverCount = movers.length;
 
     const prevAutoClear = renderer.autoClear;
     const prevClear = renderer.getClearColor(new THREE.Color());

@@ -155,18 +155,37 @@ export class Sky {
     scene.add(this.dome);
 
     // --- key light (sun by day, moon by night) via cascaded shadow maps ----
+    //
+    // Three cascades used to re-render the entire world — clipmap, ~400 props,
+    // instanced vegetation, the whole cast — into three 2048² maps, every
+    // frame, plus a second time for the water reflection. That was the single
+    // biggest cost in the frame. Three things fix it without a visible change:
+    // the outer cascades drop to half resolution (they cover ten times the
+    // ground, and are faded and softened anyway), they refresh on a stride
+    // rather than every frame, and the maps are no longer rebuilt for
+    // secondary render passes.
+    const tier = (game.rnd && game.rnd.quality) || 'high';
+    const res = tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048;
+    this.cascadeRes = [res, res / 2, res / 2];
+    // frames between refreshes: near cascade every frame, mid every other,
+    // far every fourth. At sprint speed the far cascade drifts 0.7 m across
+    // four frames inside a 200 m box — invisible.
+    this.cascadeStride = tier === 'low' ? [1, 4, 8] : [1, 2, 4];
+
     this.csm = new CSM({
       camera: game.camera,
       parent: scene,
       cascades: 3,
-      maxFar: 260,
+      // 260 m put the far cascade's texels on ground that aerial perspective
+      // has already washed out; 190 m keeps every shadow the eye can resolve.
+      maxFar: 190,
       mode: 'practical',
-      shadowMapSize: 2048,
+      shadowMapSize: res,
       shadowBias: -0.00018,
       lightIntensity: 3.0,
       lightNear: 1,
       lightFar: 1400,
-      lightMargin: 220,
+      lightMargin: 150,
       lightDirection: new THREE.Vector3(-1, -1, -1).normalize(),
     });
     this.csm.fade = true;
@@ -174,7 +193,15 @@ export class Sky {
     this.csm.lights.forEach((l, i) => {
       l.shadow.normalBias = normalBias[i];
       l.shadow.bias = -0.00018;
+      l.shadow.mapSize.setScalar(this.cascadeRes[i]);
+      // We drive the refresh ourselves. This also stops three from re-rendering
+      // every cascade for the water reflection and the VFX depth prepass,
+      // which it does on every top-level render() call.
+      l.shadow.autoUpdate = false;
+      l.shadow.needsUpdate = true;
     });
+    this._lightPos = this.csm.lights.map(() => new THREE.Vector3());
+    this._lightTgt = this.csm.lights.map(() => new THREE.Vector3());
     this._camFov = 0;
     this._camAspect = 0;
 
@@ -438,7 +465,14 @@ export class Sky {
     const keyDir = useMoon ? this.moonDir : this.sunDir;
     const keyColor = useMoon ? this.moon.color : sunColor;
     const keyPower = Math.max(sunPower, moonPower);
+    const prevDir = this._keyDir || (this._keyDir = new THREE.Vector3());
     this.csm.lightDirection.copy(keyDir).multiplyScalar(-1).normalize();
+    // A cascade only gets to keep a stale depth map while the light that made
+    // it has not moved. The sun crossing the sky invalidates all of them.
+    if (prevDir.dot(this.csm.lightDirection) < 0.99995) {
+      for (const l of this.csm.lights) l.shadow.needsUpdate = true;
+    }
+    prevDir.copy(this.csm.lightDirection);
     for (const l of this.csm.lights) {
       l.color.copy(keyColor);
       l.intensity = keyPower;
@@ -705,6 +739,50 @@ export class Sky {
     gr.raysMaterial.uniforms.uThreshold.value = 1.1 * (this.exposure > 1.4 ? 0.5 : 1.0);
   }
 
+  /**
+   * Re-fit and re-render the cascades on their stride.
+   *
+   * `CSM.update()` refits every cascade at once, so a cascade we mean to leave
+   * alone has its light snapped to a new texel — which would desynchronise the
+   * stale depth map from the shadow matrix the shader samples it with. The
+   * cheapest correct answer is to let CSM do its pass and then put the skipped
+   * cascades' lights back exactly where they were.
+   *
+   * @param {number} frame
+   */
+  _updateCascades(frame) {
+    const lights = this.csm.lights;
+    const stride = this.cascadeStride;
+
+    // A hard cut teleports the cascades' coverage; nothing stale survives it.
+    const cam = this.game.camera;
+    const prev = this._camAnchor || (this._camAnchor = new THREE.Vector3().copy(cam.position));
+    const cut = prev.distanceToSquared(cam.position) > 100 || frame < 2;
+    prev.copy(cam.position);
+
+    const due = [];
+    for (let i = 0; i < lights.length; i++) {
+      // `needsUpdate` set elsewhere — the sun moved, the lens changed — means
+      // this cascade has to refit now whatever its stride says.
+      due[i] = cut || lights[i].shadow.needsUpdate || (frame % stride[i]) === 0;
+      this._lightPos[i].copy(lights[i].position);
+      this._lightTgt[i].copy(lights[i].target.position);
+    }
+
+    this.csm.update();
+
+    for (let i = 0; i < lights.length; i++) {
+      const l = lights[i];
+      l.shadow.needsUpdate = due[i];
+      if (!due[i]) {
+        l.position.copy(this._lightPos[i]);
+        l.target.position.copy(this._lightTgt[i]);
+      }
+      l.updateMatrixWorld(true);
+      l.target.updateMatrixWorld(true);
+    }
+  }
+
   /** Runs immediately before the scene render, with the final camera. */
   _preRender(renderer, camera) {
     // The dome rides with whatever camera is drawing it — including the water
@@ -738,12 +816,9 @@ export class Sky {
       this._camFov = camera.fov;
       this._camAspect = camera.aspect;
       this.csm.updateFrustums();
+      for (const l of this.csm.lights) l.shadow.needsUpdate = true;
     }
-    this.csm.update();
-    for (const l of this.csm.lights) {
-      l.updateMatrixWorld(true);
-      l.target.updateMatrixWorld(true);
-    }
+    this._updateCascades(frame);
 
     // clouds
     this.clouds.setSize(size.x, size.y);
@@ -754,9 +829,10 @@ export class Sky {
       this.clouds.renderShadow();
     }
 
-    if (this._scanCountdown-- <= 0) {
-      this._scanCountdown = 12;
-      this.patch.scan(this.game.scene);
-    }
+    // Every frame, not every twelfth. A material that appears between scans is
+    // drawn bare first and patched afterwards, so its (expensive) program is
+    // compiled twice — two synchronous stalls instead of none. The scan itself
+    // is a scene traverse with an early-out per material: tens of microseconds.
+    this.patch.scan(this.game.scene);
   }
 }

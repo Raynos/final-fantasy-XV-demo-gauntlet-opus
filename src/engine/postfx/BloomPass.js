@@ -46,7 +46,17 @@ export class BloomPass extends Pass {
     this.haloAmount = 0.07;
     this.flareThreshold = 0.45;   // ghosts come from real hot spots only
     this.sunAmount = 0.75;
-    this.levels = 6;
+    /**
+     * Mips in the pyramid, and where it starts.
+     *
+     * Six mips from half resolution and five from quarter reach exactly the
+     * same widest octave (1/64 of the frame), so the glow is the same size —
+     * but the quarter-res chain touches a quarter of the pixels and runs two
+     * fewer fullscreen passes. Bloom is a wide, smooth field; there is no
+     * detail at half resolution that survives the first downsample anyway.
+     */
+    this.levels = 5;
+    this.baseDivisor = 4;
 
     this.dirt = lensDirtTexture(256, 90210);
 
@@ -292,7 +302,8 @@ export class BloomPass extends Pass {
     if (this.mips) for (const rt of this.mips) rt.dispose();
     if (this.streak) for (const rt of this.streak) rt.dispose();
     this.mips = [];
-    let mw = Math.max(1, Math.floor(w / 2)), mh = Math.max(1, Math.floor(h / 2));
+    const div = this.baseDivisor || 2;
+    let mw = Math.max(1, Math.floor(w / div)), mh = Math.max(1, Math.floor(h / div));
     for (let i = 0; i < this.levels; i++) {
       this.mips.push(makeRT(mw, mh));
       mw = Math.max(1, Math.floor(mw / 2));
@@ -335,7 +346,9 @@ export class BloomPass extends Pass {
 
     // anamorphic streak: two widening horizontal passes off a mid mip
     const s0 = this.streak[0], s1 = this.streak[1];
-    this.streakMat.uniforms.tDiffuse.value = this.mips[2].texture;
+    // keep the streak and ghost sources at the same *screen* octaves they
+    // used to sit at, now that the pyramid starts one level lower
+    this.streakMat.uniforms.tDiffuse.value = this.mips[Math.min(1, this.mips.length - 1)].texture;
     this.streakMat.uniforms.uTexel.value.set(1 / s0.width, 1 / s0.height);
     this.streakMat.uniforms.uStep.value = 2.0;
     blit(renderer, this.streakMat, s0);
@@ -349,7 +362,7 @@ export class BloomPass extends Pass {
     const cu = this.compositeMat.uniforms;
     cu.tDiffuse.value = readBuffer.texture;
     cu.tBloom.value = this.mips[0].texture;
-    cu.tGhostSrc.value = this.mips[Math.min(4, this.mips.length - 1)].texture;
+    cu.tGhostSrc.value = this.mips[Math.min(3, this.mips.length - 1)].texture;
     cu.tStreak.value = s0.texture;
     cu.tDirt.value = this.dirt;
     cu.tDepth.value = this.fx.rtScene.depthTexture;

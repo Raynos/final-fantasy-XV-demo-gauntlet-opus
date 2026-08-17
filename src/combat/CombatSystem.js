@@ -45,6 +45,7 @@ export class CombatSystem {
 
     this.weaponCache = new Map();
     this.weapon = null;
+    this._prebuildWeapons(game);
     this.setWeapon('sword', { materialise: false });
 
     this.armiger = new Armiger({ count: 6 });
@@ -107,14 +108,52 @@ export class CombatSystem {
 
   /* -------------------------------------------------------- weapons */
 
+  /**
+   * Build every weapon class up front and leave all of them parented to the
+   * hand, dematerialised.
+   *
+   * Building one lazily on first swap looked harmless — the geometry is a
+   * couple of thousand triangles and takes 0.2 ms to generate — but the mesh
+   * then reaches its first render with an uncompiled program, and the driver
+   * compiles it synchronously in the middle of the frame. Worse, the material
+   * is only picked up by the sky's atmosphere patch on its next scan, so it
+   * compiles *twice*: once bare, once patched. Two half-second stalls the
+   * instant the player pressed a number key.
+   *
+   * Constructing them here means they are in the scene graph before Game's
+   * boot-time `renderer.compile()`, and patching them here means the program
+   * that compile warms is the final, atmosphere-patched one. All five then
+   * share a single program (the material's `customProgramCacheKey` is
+   * constant), so a swap costs one visibility flip.
+   *
+   * @param {object} game
+   */
+  _prebuildWeapons(game) {
+    const patch = game.get('Sky') && game.get('Sky').patch;
+    for (const kind of Object.keys(WEAPONS)) {
+      const w = new Weapon(kind);
+      w.setReveal(0);
+      this.hand.add(w.root);
+      if (patch) patch.patch(w.material);
+      this.weaponCache.set(kind, w);
+    }
+  }
+
   /** @param {'sword'|'greatsword'|'polearm'|'daggers'|'firearm'} kind */
   setWeapon(kind, { materialise = true } = {}) {
     if (this.weapon && this.weapon.kind === kind) return this.weapon;
-    if (this.weapon) this.hand.remove(this.weapon.root);
     let w = this.weaponCache.get(kind);
-    if (!w) { w = new Weapon(kind); this.weaponCache.set(kind, w); }
+    if (!w) {
+      // A kind outside WEAPONS (Armiger fillers, modded gear): still cached,
+      // but it pays a one-frame compile the first time it is drawn.
+      w = new Weapon(kind);
+      this.hand.add(w.root);
+      const patch = this.game.get('Sky') && this.game.get('Sky').patch;
+      if (patch) patch.patch(w.material);
+      this.weaponCache.set(kind, w);
+    }
+    if (this.weapon) this.weapon.setReveal(0);
     this.weapon = w;
-    this.hand.add(w.root);
     if (materialise) this.materialise();
     else w.setReveal(1);
     this.comboIndex = -1;
@@ -128,6 +167,8 @@ export class CombatSystem {
     w.setReveal(0);
     if (!this.vfx) { w.setReveal(1); return; }
     this.vfx.track(t0, 0.34, (n) => {
+      // A second swap during the draw must not resurrect the blade we put away
+      if (this.weapon !== w) return;
       w.setReveal(n < 0 ? 0 : n > 1 ? 1 : n);
     });
     this.hand.updateWorldMatrix(true, false);

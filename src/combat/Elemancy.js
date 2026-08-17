@@ -25,12 +25,37 @@ export class Elemancy {
   }
 
   /**
+   * Where a spell lands when the caller did not say: a few metres in front of
+   * the player, on the ground. `cast('fire')` is a legitimate call — a hotkey,
+   * a script, an AI that only knows the element — and it used to throw.
+   * @returns {THREE.Vector3}
+   */
+  defaultTarget() {
+    const out = new THREE.Vector3();
+    const player = this.game && this.game.get && this.game.get('Player');
+    const cam = this.game && this.game.camera;
+    if (player && player.position) out.copy(player.position);
+    else if (cam) out.setFromMatrixPosition(cam.matrixWorld);
+    const fwd = new THREE.Vector3(0, 0, -1);
+    if (cam) { cam.getWorldDirection(fwd); fwd.y = 0; }
+    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+    out.addScaledVector(fwd.normalize(), 6);
+    const terrain = this.game && this.game.get && this.game.get('Terrain');
+    if (terrain && terrain.heightAt) out.y = terrain.heightAt(out.x, out.z);
+    return out;
+  }
+
+  /**
    * Cast a spell at a point.
    * @param {'fire'|'ice'|'lightning'} element
-   * @param {object} o {pos, t0, power, terrain, from}
+   * @param {object} [o] {pos, t0, power, terrain, from}
    * @returns {{element:string, pos:THREE.Vector3, radius:number, damage:number, reaction:string|null}}
    */
-  cast(element, { pos, t0 = this.vfx.clock, power = 1, terrain = null, from = null }) {
+  cast(element, o = {}) {
+    const {
+      t0 = this.vfx.clock, power = 1, terrain = null, from = null,
+    } = o;
+    const pos = o.pos || this.defaultTarget();
     const def = ELEMENTS[element] || ELEMENTS.fire;
     const radius = def.radius * power;
     const reaction = this._reactionAt(pos, element);
