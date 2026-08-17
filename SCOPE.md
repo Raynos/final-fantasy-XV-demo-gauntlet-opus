@@ -463,6 +463,8 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 
 ## 14. TypeScript port (planned — blocked on the current agent wave)
 
+Full detail in **[`docs/typescript-port-plan.md`](docs/typescript-port-plan.md)**.
+
 Match the sibling attempts `../final-fantasy-XV-demo-opus` (172 `.ts`) and
 `../final-fantasy-XV-demo-ogl-opus` (100 `.ts`), which are 100% TypeScript with
 zero `.js` in `src/`.
