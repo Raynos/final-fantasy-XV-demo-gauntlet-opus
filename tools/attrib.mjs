@@ -6,6 +6,7 @@
  *   node tools/attrib.mjs vista_dusk
  */
 import { chromium } from 'playwright';
+import { CHROMIUM_ARGS } from './chromium.mjs';
 import net from 'node:net';
 
 const PORT = Number(process.env.PORT || 5299);
@@ -20,10 +21,7 @@ const portOpen = (p) => new Promise((res) => {
 });
 if (!(await portOpen(PORT))) { console.error(`no server on ${PORT}`); process.exit(1); }
 
-const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-    '--disable-gpu-vsync', '--disable-frame-rate-limit', '--hide-scrollbars'],
-});
+const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
 await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });

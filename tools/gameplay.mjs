@@ -18,6 +18,7 @@
  * Exits non-zero if the p99 is over budget or any segment medians below target.
  */
 import { chromium } from 'playwright';
+import { CHROMIUM_ARGS } from './chromium.mjs';
 import { spawn } from 'node:child_process';
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -67,12 +68,7 @@ async function main() {
   const o = parseArgs(process.argv.slice(2));
   const server = await ensureServer();
 
-  const browser = await chromium.launch({
-    args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-      '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-dev-shm-usage',
-      '--force-color-profile=srgb', '--hide-scrollbars', '--mute-audio',
-      '--disable-frame-rate-limit', '--disable-gpu-vsync'],
-  });
+  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

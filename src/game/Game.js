@@ -23,6 +23,7 @@ import { RpgSystem } from './rpg/RpgSystem.js';
 import { InteractionSystem } from './interaction/Interactables.js';
 import { Hammerhead } from '../world/town/Hammerhead.js';
 import { Npcs } from '../characters/npc/Npcs.js';
+import { Dungeons } from '../world/dungeons/Dungeons.js';
 import { SHOTS } from './Shots.js';
 
 /**
@@ -118,6 +119,9 @@ export class Game {
       ['Town', () => new Hammerhead()],
       ['Npcs', () => new Npcs()],
       ['Director', () => new Director()],
+      // Last: entering a dungeon overrides exposure, grade and the whole
+      // atmosphere, so it must get the final word each frame.
+      ['Dungeons', () => new Dungeons()],
     ];
 
     for (let i = 0; i < order.length; i++) {

@@ -9,6 +9,7 @@
  * Uses the already-installed chromium (no extra image deps).
  */
 import { chromium } from 'playwright';
+import { CHROMIUM_ARGS } from './chromium.mjs';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 

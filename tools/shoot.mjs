@@ -15,6 +15,7 @@
  * blank canvas for success.
  */
 import { chromium } from 'playwright';
+import { CHROMIUM_ARGS } from './chromium.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -92,19 +93,7 @@ async function main() {
   const server = await ensureServer(opts.prod);
   const shots = opts.shots.length ? opts.shots : await listShots();
 
-  const browser = await chromium.launch({
-    args: [
-      '--use-gl=angle',
-      '--use-angle=default',
-      '--enable-unsafe-swiftshader',
-      '--ignore-gpu-blocklist',
-      '--enable-gpu-rasterization',
-      '--disable-dev-shm-usage',
-      '--force-color-profile=srgb',
-      '--hide-scrollbars',
-      '--mute-audio',
-    ],
-  });
+  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({
     viewport: { width: opts.w, height: opts.h },
     deviceScaleFactor: 1,
