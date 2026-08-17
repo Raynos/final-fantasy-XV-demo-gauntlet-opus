@@ -5,6 +5,7 @@ import { MainScreen } from './screens/MainScreen.js';
 import { InventoryScreen } from './screens/InventoryScreen.js';
 import { AscensionScreen } from './screens/AscensionScreen.js';
 import { MapScreen } from './screens/MapScreen.js';
+import { WorldMapScreen } from './screens/WorldMapScreen.js';
 import { GearScreen } from './screens/GearScreen.js';
 import { PhotoScreen } from './screens/PhotoScreen.js';
 
@@ -59,6 +60,7 @@ export class Menus {
       inventory: new InventoryScreen(this),
       ascension: new AscensionScreen(this),
       map: new MapScreen(this),
+      world: new WorldMapScreen(this),
       gear: new GearScreen(this),
       photo: new PhotoScreen(this),
     };

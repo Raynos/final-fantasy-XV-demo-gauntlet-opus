@@ -138,8 +138,13 @@ export class Minimap {
       if (found.length) this._flash = { at: game.time.now, poi: found[found.length - 1] };
     }
 
+    // The minimap is part of the field HUD, so it follows the HUD rather than
+    // holding its own opinion — otherwise it draws over cinematic and vista
+    // shots, which switch the HUD off but never knew to switch this off too.
     const menus = game.get('Menus');
-    const target = this.visible && !(menus && menus.open) ? 1 : 0;
+    const hud = game.get('HUD');
+    const hudOn = hud ? hud.visible !== false : true;
+    const target = this.visible && hudOn && !(menus && menus.open) ? 1 : 0;
     this._a = damp(this._a, target, 9, dt);
     this.root.style.opacity = easeOut(this._a).toFixed(3);
     if (this._a < 0.004) { this.root.style.display = 'none'; return; }

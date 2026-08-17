@@ -11,13 +11,12 @@
  *   - a man-made prop (obelisk, haven, the Regalia, telegraph poles) sits in the
  *     midground to give the landscape scale and to make the world look inhabited.
  *
- * World anchors these were composed against:
- *   blackrockMesa (-215,-395) h108   northMesa (-640,-900) h168
- *   eastButtes    ( 305,-300) h60    westScarp (-350, 300) h86
- *   spireRidge    (-545, 350) h72    canyon    (  60, 430)
- *   haven (-22,-46)  regalia (47,14)  obelisks (-104,-138) (168,-206) (-238,96)
- *   shack (-296,110) truck (455,-81)
- * The highway runs NE->SW: x=738 at z=-200, x=132 at z=0, x=-651 at z=200.
+ * World anchors these were composed against (8192 m world, north = -Z):
+ *   blackrockMesa (-430,-560) h163   northMesa (-980,-1240) h410
+ *   eastButtes    ( 560,-420) h102   westScarp (-640, 430) h137
+ *   longwythePeak ( 900,-1180) h445  discCauthess (-1020,-2160) h253
+ *   hammerhead (60,18) h8   regalia (-19,14)   haven (-62,-46)
+ * The highway runs x=3520 @ z=512, x=60 @ z=18, x=-2960 @ z=-700.
  *
  * Add shots here — tools/shoot.mjs discovers them automatically.
  */
@@ -26,34 +25,34 @@ export const SHOTS = {
   vista_dawn: {
     doc: 'Dawn over the basin from the western ridge, sun rising behind the buttes',
     time: 6.4, weather: 'clear',
-    pos: [-380, 70, 180], target: [168, 26, -206], fov: 44,
+    pos: [-660, 92, 400], target: [560, 90, -420], fov: 44,
   },
   vista_noon: {
     doc: 'Harsh midday over the badlands, Blackrock Mesa off to the left',
     time: 12.5, weather: 'clear',
-    pos: [420, 46, -140], target: [-215, 48, -395], fov: 46,
+    pos: [180, 40, -300], target: [-430, 120, -560], fov: 46,
   },
   vista_dusk: {
     doc: 'Golden hour looking west into the sun across the West Scarp',
     time: 18.7, weather: 'clear',
-    pos: [300, 34, -20], target: [-350, 52, 300], fov: 42,
+    pos: [430, 40, -60], target: [-640, 140, 430], fov: 42,
   },
   vista_night: {
     doc: 'Night over the haven, campfire as the one warm accent under the moon',
     time: 23.2, weather: 'clear',
-    pos: [92, 36, 96], target: [-104, 14, -138], fov: 46,
+    pos: [70, 22, 60], target: [-104, 12, -138], fov: 46,
   },
   storm: {
     doc: 'Storm front rolling over the basin — framed to show the cloud deck',
     time: 15.0, weather: 'storm',
-    pos: [-380, 74, 200], target: [120, 62, -160], fov: 48,
+    pos: [-700, 120, 340], target: [320, 80, -320], fov: 48,
   },
 
   // --- the world is inhabited -------------------------------------------
   regalia_road: {
     doc: 'The Regalia parked on the highway, telegraph poles receding',
     time: 17.4, weather: 'clear',
-    pos: [66, 11, 42], target: [40, 7, 2], fov: 40,
+    pos: [16, 11.5, 48], target: [-19, 8.4, 14], fov: 40,
   },
   regalia_drive: {
     doc: 'Chase camera behind the Regalia at speed',
@@ -74,12 +73,12 @@ export const SHOTS = {
   haven_dusk: {
     doc: 'The haven and its campfire at blue hour, mesa behind',
     time: 20.1, weather: 'clear',
-    pos: [16, 13, -8], target: [-30, 6, -58], fov: 44,
+    pos: [8, 13, 18], target: [-62, 8, -46], fov: 44,
   },
   mesa_landmark: {
     doc: 'Blackrock Mesa close enough to read its strata, obelisk for scale',
     time: 16.0, weather: 'clear',
-    pos: [40, 30, -110], target: [-215, 60, -395], fov: 38,
+    pos: [-40, 42, -300], target: [-430, 130, -560], fov: 40,
   },
 
 
