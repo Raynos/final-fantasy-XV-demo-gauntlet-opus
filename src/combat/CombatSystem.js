@@ -176,6 +176,7 @@ export class CombatSystem {
     this.vfx.crystalBurst({ pos: p, count: 16, speed: 3.2, t0, life: 0.5, size: 0.16, gravity: -3 });
     this.vfx.moteBurst({ pos: p, count: 22, speed: 2.2, color: 0x5fc0ff, life: 0.7, t0, size: 0.18, intensity: 4 });
     this.vfx.flash({ pos: p, color: 0x59b8ff, intensity: 18, distance: 6, life: 0.3, t0 });
+    this.emit('materialise', { position: p });
   }
 
   /* ------------------------------------------------------ targeting */
@@ -234,6 +235,7 @@ export class CombatSystem {
     this.state = 'dodge';
     this.stateTime = 0;
     this._endSwing();
+    this.emit('dodge', {});
     const p = this.player;
     if (p) {
       const in2 = this.game.input.move;
@@ -665,6 +667,7 @@ export class CombatSystem {
     const target = this.lockTarget || this.autoTarget(30);
     this.hand.updateWorldMatrix(true, true);
     const muzzle = this.weapon.tip();
+    this.emit('shot', { position: muzzle });
     const to = target ? target.centre() : muzzle.clone().addScaledVector(
       this._tmp.set(Math.sin(this.player.heading), 0, Math.cos(this.player.heading)), 26
     );

@@ -77,7 +77,7 @@ export class Lightning {
       f = Math.max(f, envelope(age, s.bias) * (0.45 + 0.75 * (1 - s.dist / 2700)));
       if (!s.fired) {
         s.fired = true;
-        this._thunder.push({ at: now + s.dist / 340, vol: 1 - s.dist / 3400 });
+        this._thunder.push({ at: now + s.dist / 340, vol: 1 - s.dist / 3400, dist: s.dist });
       }
     }
     this.flash = f;
@@ -89,7 +89,9 @@ export class Lightning {
       for (let i = this._thunder.length - 1; i >= 0; i--) {
         if (now >= this._thunder[i].at) {
           const vol = Math.max(0.15, this._thunder[i].vol);
-          if (audio && audio.play) audio.play('hit', null, { volume: vol * 1.4 });
+          if (audio && audio.play) {
+            audio.play('thunder', null, { volume: vol * 1.4, distance: this._thunder[i].dist });
+          }
           this._thunder.splice(i, 1);
         }
       }
