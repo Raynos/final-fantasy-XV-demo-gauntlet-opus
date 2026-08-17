@@ -155,7 +155,7 @@ export class Character {
       const g = new THREE.SphereGeometry(0.0275 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.34);
       g.scale(1, 0.5, 0.28);
       g.rotateX(Math.PI * 0.5);
-      g.translate(org.x + sg * 0.0335 * s, org.y - 0.006 * s, org.z + 0.0775 * s);
+      g.translate(org.x + sg * 0.0335 * s, org.y - 0.006 * s, org.z + 0.0772 * s);
       geos.push(g);
     }
     const merged = new THREE.BufferGeometry();

@@ -51,7 +51,7 @@ export function buildHair(rig, look) {
   // ---- scalp shell -------------------------------------------------------
   const cols = 52, rows = 11;
   const shell = [];
-  B.color(base).mat(H.rough ?? 0.36, 0).skin([[I.head, 1]]);
+  B.color(base).mat((H.rough ?? 0.36) + 0.22, 0, 0).skin([[I.head, 1]]);
   const shellPoint = (th, t) => {
     const pm = phiOf(th);
     const phi = pm * Math.min(1, t * 1.02);
@@ -96,7 +96,10 @@ export function buildHair(rig, look) {
       const th = lerp(tuft.th[0], tuft.th[1], f) + rng.gauss(0, tuft.thJit ?? 0.05);
       const pf = (tuft.phi ? lerp(tuft.phi[0], tuft.phi[1], rng.next()) : 0.55);
       const pm = phiOf(th);
-      const phi = pm * pf;
+      // `absPhi` reads phi as a real polar angle instead of a fraction of the
+      // hairline, which is the only way to root strands below the equator —
+      // i.e. beards, sideburns and jaw-line stubble.
+      const phi = tuft.absPhi ? pf : pm * pf;
       const { p, n: nrm } = sample(th, phi);
       const root = p.clone().addScaledVector(nrm, (H.shell ?? 0.011) * (H.volume ?? 1) * 0.8 + (tuft.lift ?? 0));
 
@@ -122,20 +125,23 @@ export function buildHair(rig, look) {
         pts.push(cur.clone());
       }
 
+      const tBase = tuft.color != null ? new THREE.Color().setHex(tuft.color, THREE.SRGBColorSpace) : base;
+      const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
+      const tRoot = tBase.clone().multiplyScalar(0.74);
       const spike = tuft.spike ?? 0.9;
       const wid = (tuft.width || 0.014) * (1 + rng.gauss(0, 0.18));
       const bone = tuft.spring ? I.tail : I.head;
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
-      B.mat(H.rough ?? 0.36, 0);
+      B.mat(tuft.rough ?? H.rough ?? 0.36, 0, 1);
       ribbon(B, {
         points: pts.map((q) => put(q).toArray()),
         steps: tuft.steps || 6,
         width: wid * scale,
         thick: wid * scale * (tuft.thick ?? 0.5),
         up: nrm.toArray(),
-        color: rootC.clone().lerp(base, 0.5 + 0.5 * rng.next()),
-        tipColor: tip.clone().multiplyScalar(0.92 + 0.22 * rng.next()),
+        color: tRoot.clone().lerp(tBase, 0.5 + 0.5 * rng.next()),
+        tipColor: tTip.clone().multiplyScalar(0.92 + 0.22 * rng.next()),
         // clump profile: hold width through the body of the strand and only
         // taper near the tip, so hair reads as locks rather than quills
         taper: (t) => Math.pow(clamp01(1 - Math.pow(t, 1.5 + spike)), 0.62),
@@ -149,7 +155,7 @@ export function buildHair(rig, look) {
   // line are what dissolve the "wig on a stand" seam.
   {
     const nw = H.wisps ?? 44;
-    B.skin([[I.head, 1]]).mat((H.rough ?? 0.36) + 0.10, 0);
+    B.skin([[I.head, 1]]).mat((H.rough ?? 0.36) + 0.10, 0, 1);
     for (let i = 0; i < nw; i++) {
       const th = rng.range(-2.5, 2.5);
       const pm = phiOf(th);

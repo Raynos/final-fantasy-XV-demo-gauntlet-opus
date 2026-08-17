@@ -31,9 +31,11 @@ export function torsoNodes(rig) {
     { p: [0, y(1.245), 0.010 * s], rx: chestW * 0.92, rz: chestD * 0.95, w: [[I.spine02, 0.72], [I.spine03, 0.28]] },
     { p: [0, y(1.335), 0.004 * s], rx: chestW, rz: chestD, w: [[I.spine02, 0.18], [I.spine03, 0.82]] },
     { p: [0, y(1.415), -0.006 * s], rx: chestW * 0.90, rz: chestD * 0.88, w: [[I.spine03, 1]] },
-    // neck base: the trapezius must fall away to roughly neck width here, or
-    // every garment cut across the top gains a wide horizontal shelf
-    { p: [0, y(1.482), -0.014 * s], rx: chestW * 0.44, rz: chestD * 0.56, w: [[I.spine03, 0.8], [I.neck, 0.2]] },
+    // Neck base. The ring itself stays close to neck width — a wide ring here is
+    // a horizontal shelf — but `torsoShape` ramps it back out along ±X only, so
+    // the trapezius rises from C7 to the acromion as a slope rather than the
+    // 90° step that made every neck read twice its real length.
+    { p: [0, y(1.478), -0.014 * s], rx: chestW * 0.48, rz: chestD * 0.54, w: [[I.spine03, 0.8], [I.neck, 0.2]] },
   ];
 }
 
@@ -45,21 +47,25 @@ export function armNodes(rig, side) {
   const sh = P[`upperArm${side}`], el = P[`lowerArm${side}`], wr = P[`hand${side}`];
   const at = (a, b, t) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
   const R = (v) => v * s;
+  // The proximal end runs *inboard along the clavicle*, not backwards along the
+  // arm axis. In an A-pose that axis is nearly vertical, so extrapolating it
+  // negatively put the first two nodes 9 cm ABOVE the shoulder line and outboard
+  // of the acromion: a spike rising off each corner of the yoke, and any sleeve
+  // draped on it capped into a pointed wing. The deltoid now begins *below* the
+  // acromion and rounds downward, which is what a shoulder actually does.
+  const acx = sh.x, shY = sh.y;
   return [
-    // The sweep starts *inside* the ribcage and swells into the deltoid before
-    // tapering to the elbow. Starting at the joint left a gap that had to be
-    // plugged with a sphere, and a sphere intersecting a tube is exactly what
-    // reads as a ball-jointed doll rather than a shoulder.
-    { p: at(sh, el, -0.30), rx: R(0.030 + 0.008 * m), w: [[I[`clavicle${side}`], 0.25], [I.spine03, 0.75]] },
-    { p: at(sh, el, -0.10), rx: R(0.046 + 0.016 * m), w: [[I[`clavicle${side}`], 0.55], [I.spine03, 0.45]] },
-    { p: at(sh, el, 0.06), rx: R(0.053 + 0.024 * m), w: [[I[`upperArm${side}`], 0.6], [I[`clavicle${side}`], 0.28], [I.spine03, 0.12]] },
-    { p: at(sh, el, 0.26), rx: R(0.050 + 0.026 * m), w: [[I[`upperArm${side}`], 1]] },
-    { p: at(sh, el, 0.62), rx: R(0.046 + 0.026 * m), w: [[I[`upperArm${side}`], 1]] },
-    { p: at(sh, el, 0.94), rx: R(0.040 + 0.012 * m), w: [[I[`upperArm${side}`], 0.6], [I[`lowerArm${side}`], 0.4]] },
-    { p: at(el, wr, 0.14), rx: R(0.043 + 0.020 * m), w: [[I[`upperArm${side}`], 0.12], [I[`lowerArm${side}`], 0.88]] },
-    { p: at(el, wr, 0.42), rx: R(0.041 + 0.018 * m), w: [[I[`lowerArm${side}`], 0.72], [I[`twist${side}`], 0.28]] },
-    { p: at(el, wr, 0.74), rx: R(0.033 + 0.008 * m), w: [[I[`lowerArm${side}`], 0.3], [I[`twist${side}`], 0.7]] },
-    { p: at(el, wr, 0.99), rx: R(0.027 + 0.004 * m), w: [[I[`twist${side}`], 0.45], [I[`hand${side}`], 0.55]] },
+    { p: [acx * 0.20, shY + 0.026 * s, 0.012 * s], rx: R(0.050 + 0.014 * m), rz: R(0.062 + 0.014 * m), w: [[I.spine03, 0.94], [I[`clavicle${side}`], 0.06]] },
+    { p: [acx * 0.58, shY + 0.022 * s, 0.008 * s], rx: R(0.048 + 0.016 * m), rz: R(0.058 + 0.014 * m), w: [[I.spine03, 0.56], [I[`clavicle${side}`], 0.44]] },
+    // acromion: the cap of the shoulder, a rounded capsule, not a shelf corner
+    { p: [acx * 0.93, shY + 0.004 * s, 0.004 * s], rx: R(0.047 + 0.020 * m), rz: R(0.052 + 0.017 * m), w: [[I[`upperArm${side}`], 0.46], [I[`clavicle${side}`], 0.42], [I.spine03, 0.12]] },
+    { p: at(sh, el, 0.17), rx: R(0.049 + 0.026 * m), w: [[I[`upperArm${side}`], 0.92], [I[`clavicle${side}`], 0.08]] },
+    { p: at(sh, el, 0.46), rx: R(0.047 + 0.027 * m), w: [[I[`upperArm${side}`], 1]] },
+    { p: at(sh, el, 0.78), rx: R(0.043 + 0.020 * m), w: [[I[`upperArm${side}`], 1]] },
+    { p: at(sh, el, 0.99), rx: R(0.039 + 0.011 * m), w: [[I[`upperArm${side}`], 0.55], [I[`lowerArm${side}`], 0.45]] },
+    { p: at(el, wr, 0.30), rx: R(0.042 + 0.019 * m), w: [[I[`lowerArm${side}`], 0.82], [I[`twist${side}`], 0.18]] },
+    { p: at(el, wr, 0.68), rx: R(0.034 + 0.009 * m), w: [[I[`lowerArm${side}`], 0.32], [I[`twist${side}`], 0.68]] },
+    { p: at(el, wr, 0.99), rx: R(0.026 + 0.004 * m), w: [[I[`twist${side}`], 0.45], [I[`hand${side}`], 0.55]] },
   ];
 }
 
@@ -106,18 +112,29 @@ export function torsoShape(m) {
     k -= 0.02 * abump(th, 0, 0.5) * bump(t, 0.55, 0.10);
     k += (0.05 + 0.04 * m) * abump(th, Math.PI, 1.0) * bump(t, 0.10, 0.16);
     k -= 0.03 * (abump(th, Math.PI * 0.5, 0.9) + abump(th, -Math.PI * 0.5, 0.9)) * bump(t, 0.38, 0.16);
+    // Trapezius. Purely lateral (±X), ramping in over the top eighth of the
+    // sweep, so the neck ring stays slim while the yoke slopes out to the
+    // acromion. Without it the neck is a bare cylinder meeting a flat plate at
+    // 90°, and that step is most of why the neck reads twice its real length.
+    const trap = (abump(th, Math.PI * 0.5, 0.78) + abump(th, -Math.PI * 0.5, 0.78));
+    k += (0.40 + 0.34 * m) * trap * smoothIn(0.80, 1.0, t);
+    // and it carries a little of the same mass round the back of the neck
+    k += (0.16 + 0.14 * m) * abump(th, Math.PI, 0.8) * smoothIn(0.84, 1.0, t);
     return k;
   };
 }
 
 /** Deltoid / biceps / triceps / forearm shaping. */
 export function armShape(m, sg) {
+  // t indices follow armNodes(): 0..0.22 clavicle, 0.22 acromion, 0.67 elbow,
+  // 1.0 wrist.
   return (th, t) => 1
-    + (0.055 + 0.115 * m) * abump(th, sg * Math.PI * 0.5, 1.6) * bump(t, 0.10, 0.17)
-    + (0.05 + 0.16 * m) * abump(th, 0, 1.2) * bump(t, 0.30, 0.16)
-    + (0.04 + 0.12 * m) * abump(th, Math.PI, 1.2) * bump(t, 0.34, 0.18)
-    + (0.05 + 0.10 * m) * bump(t, 0.62, 0.10)
-    - 0.05 * bump(t, 0.46, 0.06);
+    + (0.045 + 0.10 * m) * abump(th, sg * Math.PI * 0.5, 1.5) * bump(t, 0.30, 0.15)
+    + (0.05 + 0.16 * m) * abump(th, 0, 1.2) * bump(t, 0.44, 0.15)
+    + (0.04 + 0.12 * m) * abump(th, Math.PI, 1.2) * bump(t, 0.47, 0.17)
+    + (0.05 + 0.10 * m) * bump(t, 0.76, 0.09)
+    - 0.05 * bump(t, 0.66, 0.05)
+    - (0.05 + 0.05 * m) * bump(t, 0.98, 0.06);      // wrist taper
 }
 
 /** Glute tie-in, quad sweep, calf. */

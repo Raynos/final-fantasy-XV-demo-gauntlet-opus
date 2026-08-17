@@ -135,7 +135,9 @@ function patch(mat, o = {}) {
   vec3 sss = uSssColor * uSunColor * uSssAmt * (
       term * 1.35
     + back * uTrans
-    + fres * 0.30 * ( 0.25 + 0.75 * thick ) * wrapT
+    // a broad fresnel lift over the whole face is waxy fill light, not
+    // subsurface: keep it for thin parts (ears, nose wings) and little else
+    + fres * 0.16 * ( 0.10 + 0.90 * thick ) * wrapT
   );
   gl_FragColor.rgb += sss * diffuseColor.rgb;
 }`);
@@ -162,11 +164,14 @@ function patch(mat, o = {}) {
   // rather than a chrome stripe painted down a tube
   float mask = 0.28 + 0.72 * abs( sin( vMapUv.x * 34.0 + jit * 7.0 ) );
   vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
-  vec3 kk = uSunColor * vis * mask * ( s1 * 0.55 + s2 * 0.40 * sheenC ) * ${spec.toFixed(3)};
+  // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
+  // matte value floor or its broad highlight reads as a moulded plastic dome
+  float strand = 0.16 + 0.84 * clamp( vMat.z, 0.0, 1.0 );
+  vec3 kk = uSunColor * vis * mask * strand * ( s1 * 0.55 + s2 * 0.40 * sheenC ) * ${spec.toFixed(3)};
   // backlit hair glows at the silhouette — the cue that reads as fine strands
   float rim = pow( 1.0 - clamp( dot( hN, hV ), 0.0, 1.0 ), 2.6 )
             * pow( clamp( dot( hV, -hL ), 0.0, 1.0 ), 1.6 );
-  kk += uSunColor * rim * 0.30 * ( vColor.rgb * 2.4 + 0.05 );
+  kk += uSunColor * rim * 0.30 * strand * ( vColor.rgb * 2.4 + 0.05 );
   gl_FragColor.rgb += kk;
 }`);
     }
@@ -185,7 +190,7 @@ function patch(mat, o = {}) {
 {
   vec3 oN = normalize( vObjN );
   float ePhi = acos( clamp( oN.z, -1.0, 1.0 ) );      // angle from the gaze axis
-  float eT = ePhi / 0.560;                            // 0..1 across the iris
+  float eT = ePhi / 0.395;                            // 0..1 across the iris
   float eL = max( 1e-5, length( oN.xy ) );
   float eUp = oN.y / eL;                              // +1 straight up
   float eAng = atan( oN.y, oN.x );
@@ -208,9 +213,9 @@ function patch(mat, o = {}) {
     eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.2, k ) * lidShade;
     eyeC = mix( eyeC, vec3( 0.42, 0.41, 0.41 ) * lidShade, smoothstep( 0.975, 1.0, q ) );
   } else {
-    float sh = ( 0.34 + 0.16 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * lidShade;
+    float sh = ( 0.27 + 0.17 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * lidShade;
     float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 2.0, 0.0, 1.0 );
-    eyeC = sh * vec3( 0.99, 0.925 - corner * 0.10, 0.895 - corner * 0.16 );
+    eyeC = sh * vec3( 0.99, 0.930 - corner * 0.10, 0.900 - corner * 0.16 );
   }
   // re-light: the ball was shaded with a flat white albedo, so scale the
   // result by the iris/sclera value we just computed
@@ -223,15 +228,15 @@ function patch(mat, o = {}) {
   vec3 h1 = normalize( uSunDirView + eV );
   vec3 h2 = normalize( uSkyDirView * 0.85 + eV );
   float g1 = pow( clamp( dot( eN, h1 ), 0.0, 1.0 ), 1400.0 );
-  float g2 = pow( clamp( dot( eN, h2 ), 0.0, 1.0 ), 260.0 );
+  float g2 = pow( clamp( dot( eN, h2 ), 0.0, 1.0 ), 190.0 );
   float wet = pow( 1.0 - clamp( dot( eN, eV ), 0.0, 1.0 ), 3.0 );
   // Ambient lift. An eye sits at the bottom of a socket under a brow and,
   // for Noctis, under a fringe that casts a real shadow — so physically it
   // is dark, and a dark eye is an eye the viewer cannot find. Every shipped
   // game cheats this: the globe gets a sky term shadowing does not touch.
   float skyE = clamp( dot( eN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  gl_FragColor.rgb += eyeC * uSunColor * 0.55 * pow( skyE, 1.4 );
-  gl_FragColor.rgb += ( g1 * 5.0 + g2 * 1.6 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)};
+  gl_FragColor.rgb += eyeC * uSunColor * 0.72 * pow( skyE, 1.2 );
+  gl_FragColor.rgb += ( g1 * 4.0 + g2 * 1.5 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)};
 }`);
     }
 
@@ -315,10 +320,10 @@ export function faceMaterial(map, sss = 0.19) {
     metalness: 0,
     normalMap: c.poreFine,
     normalScale: new THREE.Vector2(0.34, 0.34),
-    sheen: 0.28,
+    sheen: 0.17,
     sheenColor: srgb(0xffc0a0),
     sheenRoughness: 0.62,
-    specularIntensity: 0.50,
+    specularIntensity: 0.35,
     specularColor: srgb(0xfff2e8),
   }), { sss, sssColor: 0xe02c12, translucency: 1.0 });
 }
@@ -333,10 +338,14 @@ export function garmentMaterial() {
     metalness: 0,
     normalMap: c.weave,
     normalScale: new THREE.Vector2(0.62, 0.62),
-    sheen: 0.45,
-    sheenColor: srgb(0xa8b0be),
-    sheenRoughness: 0.62,
-    specularIntensity: 0.55,
+    // A strong blue-grey sheen over near-black cloth is exactly what turned the
+    // whole cast into "generic slate NPCs": the sky's dominant lobe is blue, so
+    // any broad sheen term lifts black to navy. Keep it weak and warm and let
+    // per-vertex roughness carry the material difference instead.
+    sheen: 0.16,
+    sheenColor: srgb(0x8c8478),
+    sheenRoughness: 0.58,
+    specularIntensity: 0.34,
   }), { sss: 0 });
 }
 
@@ -349,9 +358,9 @@ export function hairMaterial() {
     roughness: 0.46,
     metalness: 0.0,
     map: c.hairStripe,
-    specularIntensity: 0.25,
-    sheen: 0.16,
-    sheenColor: srgb(0x8ea0b8),
+    specularIntensity: 0.22,
+    sheen: 0.10,
+    sheenColor: srgb(0x6b5c52),
     sheenRoughness: 0.45,
     side: THREE.DoubleSide,
   });

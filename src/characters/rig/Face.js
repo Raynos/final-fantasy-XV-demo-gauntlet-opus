@@ -22,7 +22,7 @@ import { Noise } from '../../util/Noise.js';
  * narrower than the iris and the eye reads as a dark bead with no sclera —
  * which is the difference between a person and a doll at any distance.
  */
-export const LID_OPEN = [0.84, 0.19];
+export const LID_OPEN = [0.70, 0.17];
 
 /** Canonical head half-extents before sculpting. */
 const HR = [0.0785, 0.1130, 0.0960];
@@ -34,8 +34,8 @@ const HR = [0.0785, 0.1130, 0.0960];
  * what makes a procedural head read as a doll.
  */
 export const FACE = {
-  eye: [0.0335, -0.006, 0.0670],
-  eyeR: 0.0122,
+  eye: [0.0335, -0.006, 0.0646],
+  eyeR: 0.0107,
   brow: [0.031, 0.005, 0.081],
   noseTip: [0, -0.046, 0.104],
   mouth: [0, -0.079, 0.084],
@@ -72,12 +72,16 @@ function brushes(look) {
   add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0075, dir: [0, 0, 1], mirror: true });
 
   // eye sockets
-  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0460, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0150, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0090, dir: [0, 0, 1], mirror: true });
+  // A socket is a shallow dish, not a crater. At -46 mm the skin fell 4 cm
+  // behind the eyeball and the globe stood proud of the face like a marble
+  // glued on; the lids could not reach it and the whole lower hemisphere was
+  // visible. The globe now sits *inside* the head and only the aperture shows.
+  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0285, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0115, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0060, dir: [0, 0, 1], mirror: true });
   // lower orbital rim: this is what stops a crescent of sclera showing under
   // the iris and giving every character a permanently startled stare
-  add({ p: [0.0335, -0.0180, 0.0745], r: [0.030, 0.0090, 0.034], amt: 0.0195, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.0175, 0.0735], r: [0.030, 0.0090, 0.034], amt: 0.0112, dir: [0, 0, 1], mirror: true });
   add({ p: [0.058, -0.004, 0.056], r: [0.020, 0.024, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
 
   // cheeks
@@ -89,24 +93,37 @@ function brushes(look) {
   add({ p: [0, -0.014, 0.089], r: [0.0175, 0.032, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
   add({ p: [0, -0.042, 0.095], r: [0.0165, 0.019, 0.028], amt: 0.0205 + 0.005 * nose, dir: [0, 0.14, 1] });
   add({ p: [0, -0.049, 0.098], r: [0.0115, 0.010, 0.020], amt: 0.0070, dir: [0, -0.2, 1] });
-  add({ p: [0.017, -0.050, 0.083], r: [0.0145, 0.014, 0.024], amt: 0.0085, dir: 'normal', mirror: true });
+  // alar wings: a real ball of cartilage each side of the tip, and the crease
+  // that curls around it. Without these the nose is a triangular smear.
+  add({ p: [0.0155, -0.0495, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0115, dir: 'normal', mirror: true });
+  add({ p: [0.0225, -0.0505, 0.0790], r: [0.0055, 0.0090, 0.0140], amt: -0.0055, dir: 'normal', mirror: true });
   add({ p: [0, -0.058, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0095, dir: [0, 0, 1] });
-  add({ p: [0.011, -0.056, 0.089], r: [0.006, 0.007, 0.015], amt: -0.0045, dir: [0, 0, 1], mirror: true });
+  // nostril openings, cut upward into the underside of the nose
+  add({ p: [0.0092, -0.0562, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0090, dir: [0, 0.55, 1], mirror: true });
 
-  // mouth
-  add({ p: [0, -0.065, 0.086], r: [0.010, 0.011, 0.020], amt: -0.0045, dir: [0, 0, 1] });
-  add({ p: [0, -0.0735, 0.085], r: [0.028, 0.0090, 0.026], amt: 0.0075, dir: [0, 0, 1] });
-  add({ p: [0, -0.0790, 0.085], r: [0.030, 0.0035, 0.026], amt: -0.0075, dir: [0, 0, 1] });
-  add({ p: [0, -0.0850, 0.084], r: [0.024, 0.0090, 0.026], amt: 0.0065, dir: [0, 0, 1] });
-  add({ p: [0.026, -0.0790, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0055, dir: 'normal', mirror: true });
+  // mouth — the lips are volumes, not a painted line. Upper lip rolls forward
+  // under a real philtrum; the lower lip carries a fuller, rounder mass with a
+  // shadowed mentolabial crease beneath it.
+  add({ p: [0, -0.0630, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0060, dir: [0, 0, 1] });    // philtrum groove
+  add({ p: [0.0090, -0.0640, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0042, dir: [0, 0, 1], mirror: true }); // philtrum columns
+  add({ p: [0, -0.0735, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0115, dir: [0, 0.18, 1] });   // upper vermilion
+  add({ p: [0, -0.0700, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0038, dir: [0, 0, 1] });      // cupid's bow
+  add({ p: [0, -0.0788, 0.0850], r: [0.030, 0.0032, 0.026], amt: -0.0092, dir: [0, 0, 1] });     // mouth line
+  add({ p: [0, -0.0855, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0105, dir: [0, -0.10, 1] });  // lower vermilion
+  add({ p: [0.026, -0.0790, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0070, dir: 'normal', mirror: true });
 
   // chin + jaw
-  add({ p: [0, -0.0935, 0.079], r: [0.022, 0.008, 0.024], amt: -0.0050, dir: [0, 0, 1] });
-  add({ p: [0, -0.1045, 0.074], r: [0.028, 0.024, 0.040], amt: 0.0185 + 0.008 * jaw, dir: [0, 0.10, 1] });
+  add({ p: [0, -0.0945, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
+  add({ p: [0, -0.1075, 0.0735], r: [0.028, 0.026, 0.040], amt: 0.0215 + 0.009 * jaw, dir: [0, 0.06, 1] });
   // mandible: a ramus block plus an undercut that carves the jawline edge
   add({ p: [0.064, -0.056, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
+  // gonial angle — the corner where the ramus turns forward into the body of
+  // the mandible. Without it the lower face is a rounded egg and the character
+  // reads as a child no matter what the rest of the sculpt does.
+  add({ p: [0.0605, -0.0800, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.010 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0575, -0.0915, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.054, -0.078, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.050, -0.098, 0.030], r: [0.048, 0.032, 0.062], amt: -0.019 + 0.005 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.101, 0.030], r: [0.046, 0.030, 0.062], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.042, -0.036, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
 
   // neck tie-in — tuck the underside so the jawline reads as an edge
@@ -267,13 +284,13 @@ export function buildHead(rig, look) {
     B.group(2);
     B.mat(0.46, 0, 1);           // an ear is two sheets of skin and a wafer of cartilage
     blob(B, {
-      center: [c.x, c.y, c.z], scale: [0.0075 * scale, 0.0245 * scale, 0.0155 * scale],
+      center: [c.x, c.y, c.z], scale: [0.0092 * scale, 0.0305 * scale, 0.0192 * scale],
       rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9,
     });
     const c2 = put([e[0] * sg * hw * 0.92, e[1] - 0.004, e[2] + 0.003]);
     B.color(0xbfbfbf);
     blob(B, {
-      center: [c2.x, c2.y, c2.z], scale: [0.0042 * scale, 0.0145 * scale, 0.0085 * scale],
+      center: [c2.x, c2.y, c2.z], scale: [0.0050 * scale, 0.0182 * scale, 0.0105 * scale],
       rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7,
     });
     B.color(0xffffff);
@@ -307,7 +324,7 @@ function buildLid(B, o) {
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
   const cols = 14, rows = 4;
-  const arc = upper ? [-1.06, 1.10] : [-1.00, 1.04];
+  const arc = upper ? [-1.15, 1.19] : [-1.09, 1.13];
 
   const pt = (a, e, rad) => {
     // a: around the vertical axis of the eye, e: elevation from the equator
@@ -326,12 +343,17 @@ function buildLid(B, o) {
     for (let c = 0; c <= cols; c++) {
       const f = c / cols;
       const a = lerp(arc[0], arc[1], f);
-      // margin elevation: high in the middle, dipping at the corners
+      // margin elevation: high in the middle, dipping at the corners.
+      // The two lids need *different* rest offsets: a shared +0.16 base pushed
+      // the whole aperture above the gaze axis, so the iris sat behind the lower
+      // lid and only a crescent of it was ever visible.
       const shape = Math.sin(Math.PI * clamp01((f - 0.02) / 0.96));
-      const margin = (upper ? 1 : -1) * (0.16 + 0.62 * openU * Math.pow(shape, 0.75));
-      const outer = (upper ? 1 : -1) * (1.30 + 0.35 * shape);
+      const mBase = upper ? 0.020 : 0.300;
+      const mSpan = upper ? 0.500 : 0.720;
+      const margin = (upper ? 1 : -1) * (mBase + mSpan * openU * Math.pow(shape, 0.75));
+      const outer = (upper ? 1 : -1) * (1.12 + 0.30 * shape);
       const e = lerp(margin, outer, smooth(t));
-      const rad = R * lerp(1.055, 1.16, t * t);
+      const rad = R * lerp(1.045, 1.34, t * t);
       const p = pt(a, e, rad);
       const w = put(p);
       // lid margin is dark (lash line), blending to skin toward the socket;
@@ -366,7 +388,7 @@ export function buildEyes(rig, look) {
   B.color(0xffffff).mat(0.1, 0);
 
   // where the iris ends and the sclera begins, in polar angle from the front
-  const IRIS = 0.58;
+  const IRIS = 0.405;
 
   for (const sg of [1, -1]) {
     const cx = FACE.eye[0] * sg * hw * scale;
@@ -414,9 +436,9 @@ function buildLashes(B, o) {
   const { put, scale, ec, sg, look } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * LID_OPEN[0];
-  const n = 13;
+  const n = 11;
   const col = new THREE.Color().setHex(look.lashColor ?? 0x0d0a0c, THREE.SRGBColorSpace);
-  const arc = [-1.02, 1.06];
+  const arc = [-1.11, 1.15];
 
   const pt = (a, e, rad) => new THREE.Vector3(
     ec[0] + Math.sin(a * sg) * Math.cos(e) * rad,
@@ -429,11 +451,11 @@ function buildLashes(B, o) {
     const f = i / (n - 1);
     const a = lerp(arc[0], arc[1], f);
     const shape = Math.sin(Math.PI * clamp01((f - 0.02) / 0.96));
-    const margin = 0.16 + 0.62 * openU * Math.pow(shape, 0.75);
+    const margin = 0.020 + 0.500 * openU * Math.pow(shape, 0.75);
     const root = pt(a, margin, R * 1.045);
     // lashes sweep up, forward and outward, longest at the outer third
     const grow = 0.55 + 0.75 * Math.pow(clamp01((f - 0.15) / 0.85), 0.8);
-    const L = R * 0.58 * grow;
+    const L = R * 0.36 * grow;
     const d = new THREE.Vector3(
       Math.sin(a * sg) * 0.42 + sg * 0.30 * f,
       0.72 + 0.20 * f,
@@ -443,7 +465,7 @@ function buildLashes(B, o) {
     // curl: the tip bends further up and away from the eye
     const tipD = d.clone().add(new THREE.Vector3(sg * 0.16, 0.34, 0.10)).normalize();
     const tip = mid.clone().addScaledVector(tipD, L * 0.55);
-    const w = R * (0.034 + 0.014 * shape);
+    const w = R * (0.019 + 0.009 * shape);
     ribbon(B, {
       points: [root, mid, tip].map((q) => put(q).toArray()),
       steps: 3,
@@ -489,7 +511,7 @@ function paintFace(look, uv) {
   const fx = (x, y) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
   return canvasTexture(S, (ctx) => {
-    ctx.fillStyle = hexOf(skin);
+    ctx.fillStyle = hexOf(skin.clone().multiplyScalar(0.88));
     ctx.fillRect(0, 0, S, S);
 
     // large-scale tonal variation + fine mottling
@@ -570,9 +592,9 @@ function paintFace(look, uv) {
     // ---- tonal zones ------------------------------------------------------
     // A portrait painter's three bands: ochre forehead, red mid-face, blue-grey
     // jaw. Without them procedural skin is one flat plastic beige.
-    soft([0, 0.058, 0.078], 0.055, 0.030, 'rgba(206,158,88,0.22)', 0.9);
-    soft([0, -0.030, 0.092], 0.048, 0.028, 'rgba(196,80,58,0.26)', 1.0);
-    soft([0, -0.100, 0.066], 0.046, 0.024, 'rgba(92,104,132,0.24)', 0.9);
+    soft([0, 0.058, 0.078], 0.058, 0.032, 'rgba(198,146,74,0.32)', 0.95);
+    soft([0, -0.030, 0.092], 0.050, 0.030, 'rgba(190,72,52,0.34)', 1.0);
+    soft([0, -0.100, 0.066], 0.048, 0.026, 'rgba(78,90,122,0.34)', 0.95);
 
     // warmth on cheeks, nose, ears
     const blush = look.blush || 'rgba(198,86,70,0.30)';
@@ -587,20 +609,27 @@ function paintFace(look, uv) {
     const ao = (p, rx, ry, a, col = '104,68,62') => soft(p, rx, ry, `rgba(${col},${a})`, 1, 'multiply');
     // the orbit: a real socket is 40mm wide and 28mm tall, and it is the
     // strongest value on a face. Eyes read as eyes because they sit in a hole.
-    ao([0.0335, -0.004, 0.070], 0.021, 0.015, 0.42, '112,76,72');
-    ao([-0.0335, -0.004, 0.070], 0.021, 0.015, 0.42, '112,76,72');
+    ao([0.0335, -0.004, 0.070], 0.0175, 0.0115, 0.44, '116,80,76');
+    ao([-0.0335, -0.004, 0.070], 0.0175, 0.0115, 0.44, '116,80,76');
     // the crease directly under the brow ridge, darker and tighter
-    ao([0.0335, 0.004, 0.076], 0.017, 0.006, 0.52, '92,60,58');
-    ao([-0.0335, 0.004, 0.076], 0.017, 0.006, 0.52, '92,60,58');
+    ao([0.0335, 0.0035, 0.076], 0.0145, 0.0050, 0.58, '88,56,56');
+    ao([-0.0335, 0.0035, 0.076], 0.0145, 0.0050, 0.58, '88,56,56');
     // tear trough
-    ao([0.0330, -0.0165, 0.073], 0.014, 0.005, 0.44, '124,80,72');
-    ao([-0.0330, -0.0165, 0.073], 0.014, 0.005, 0.44, '124,80,72');
+    ao([0.0330, -0.0135, 0.073], 0.0120, 0.0042, 0.44, '124,80,72');
+    ao([-0.0330, -0.0135, 0.073], 0.0120, 0.0042, 0.44, '124,80,72');
     // temples, jaw undercut, under the chin
-    ao([0.062, 0.026, 0.048], 0.024, 0.026, 0.34);
-    ao([-0.062, 0.026, 0.048], 0.024, 0.026, 0.34);
-    ao([0.048, -0.070, 0.056], 0.018, 0.018, 0.30);
-    ao([-0.048, -0.070, 0.056], 0.018, 0.018, 0.30);
-    ao([0, -0.108, 0.030], 0.040, 0.014, 0.55);
+    ao([0.062, 0.026, 0.048], 0.026, 0.028, 0.46);
+    ao([-0.062, 0.026, 0.048], 0.026, 0.028, 0.46);
+    // the hollow under the cheekbone — the single strongest age/sex cue on a
+    // face after the jaw, and the thing whose absence read as "child"
+    ao([0.0475, -0.0400, 0.0575], 0.0230, 0.0175, 0.42, '116,74,68');
+    ao([-0.0475, -0.0400, 0.0575], 0.0230, 0.0175, 0.42, '116,74,68');
+    ao([0.048, -0.074, 0.054], 0.020, 0.020, 0.44);
+    ao([-0.048, -0.074, 0.054], 0.020, 0.020, 0.44);
+    ao([0, -0.108, 0.030], 0.042, 0.016, 0.62);
+    // brow-ridge cast shadow: the brow is a shelf and it shades the lid
+    ao([0.032, 0.0085, 0.0780], 0.0210, 0.0058, 0.40, '96,64,60');
+    ao([-0.032, 0.0085, 0.0780], 0.0210, 0.0058, 0.40, '96,64,60');
 
     // ---- nose -------------------------------------------------------------
     // bridge highlight, side planes in shadow, a lit tip
@@ -655,13 +684,13 @@ function paintFace(look, uv) {
     shape([
       [cL, yC], [-0.0170, -0.0722], [0, -0.0728], [0.0170, -0.0722], [cR, yC],
       [0.0140, -0.0776], [0, -0.0784], [-0.0140, -0.0776],
-    ], 'rgba(58,26,30,0.42)', { mode: 'multiply', blur: 2 });
+    ], 'rgba(58,26,30,0.58)', { mode: 'multiply', blur: 2 });
     // vermilion border: a fine light line where lip meets skin
     stroke([[cL, yC - 0.0022], [-0.0160, -0.0716], [0, -0.0734], [0.0160, -0.0716], [cR, yC - 0.0022]],
       'rgba(255,226,208,0.24)', 0.0016, { blur: 2 });
     // the mouth line itself
     stroke([[cL, yC], [-0.0130, -0.0796], [0, -0.0784], [0.0130, -0.0796], [cR, yC]],
-      'rgba(64,28,30,0.85)', 0.0026, { blur: 0.6 });
+      'rgba(46,18,22,0.95)', 0.0040, { blur: 0.6 });
     // wet highlight on the lower lip
     soft([0, -0.0852, 0.084], 0.008, 0.0022, 'rgba(255,224,208,0.34)', 1);
     // corner shadows and the mentolabial crease
@@ -684,7 +713,17 @@ function paintFace(look, uv) {
 
     // ---- eyes -------------------------------------------------------------
     for (const sg of [1, -1]) {
-      const ep = (x, y) => px([sg * x, y, 0.079 - Math.abs(x - 0.033) * 0.35]);
+      // The painted lash line, crease and waterline are authored around the lid
+      // geometry; when the palpebral fissure narrowed to adult proportions these
+      // strokes kept their old span and read as smeared eyeliner reaching the
+      // temple. Remap them onto the actual aperture instead of restating every
+      // coordinate.
+      const EX = 0.60, EY = 0.70, C = 0.0335;
+      const ep = (x0, y0) => {
+        const x = C + (x0 - C) * EX;
+        const y = -0.006 + (y0 + 0.006) * EY;
+        return px([sg * x, y, 0.079 - Math.abs(x - 0.033) * 0.35]);
+      };
       ctx.save();
       ctx.lineCap = 'round';
       // a soft dark bed so the hard line reads as sitting in a socket

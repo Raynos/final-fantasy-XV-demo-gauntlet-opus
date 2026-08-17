@@ -64,7 +64,7 @@ export function buildSkeleton(profile = {}) {
   const hs = p.headScale;
   const headOrigin = [0, Y(1.578) + 0.0900 * s * hs, 0.004 * s * hs];
   const eyeY = headOrigin[1] - 0.006 * s * hs;
-  const eyeZ = headOrigin[2] + 0.0670 * s * hs;
+  const eyeZ = headOrigin[2] + 0.0646 * s * hs;
 
   const defs = [
     ['hips', null, [0, Y(0.985), -0.005 * s]],
