@@ -297,7 +297,12 @@ export class PostFX {
   setQuality(tier) {
     this.quality = tier;
     const low = tier === 'low', med = tier === 'medium', ultra = tier === 'ultra';
-    if (this.lights) this.lights.setBudget(LIGHT_BUDGET[tier] || LIGHT_BUDGET.high);
+    // The light budget is deliberately *not* re-set here. Changing it changes
+    // three's program cache key for every lit material, so a mid-session tier
+    // switch would recompile the whole scene — several seconds of freeze to
+    // save a few point lights. It is fixed by the tier the game booted at.
+    const sky = this.game && this.game.get && this.game.get('Sky');
+    if (sky && sky.setShadowQuality) sky.setShadowQuality(tier);
     this.gtao.enabled = !low;
     this.contact.enabled = !low;
     this.ssr.enabled = this.ssr.enabled && !low;

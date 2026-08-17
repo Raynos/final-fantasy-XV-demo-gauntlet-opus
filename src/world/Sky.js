@@ -25,6 +25,11 @@ const MOONSET = 26.6;
 const MOON_MAX_ELEV = 46;
 const MOON_AZ_OFFSET = 70;
 
+/** Near-cascade shadow map edge per quality tier; the outer two are half this. */
+const SHADOW_RES = { low: 1024, medium: 1536, high: 2048, ultra: 2048 };
+/** Frames between refreshes for each cascade, near to far. */
+const SHADOW_STRIDE = { low: [2, 6, 12], medium: [1, 3, 6], high: [1, 2, 4], ultra: [1, 2, 4] };
+
 /** Weather presets. Values are lerped toward, so transitions are continuous. */
 /**
  * Fog is calibrated in *extinction at range*, not in taste units. With
@@ -165,12 +170,12 @@ export class Sky {
     // rather than every frame, and the maps are no longer rebuilt for
     // secondary render passes.
     const tier = (game.rnd && game.rnd.quality) || 'high';
-    const res = tier === 'low' ? 1024 : tier === 'medium' ? 1536 : 2048;
+    const res = SHADOW_RES[tier] || SHADOW_RES.high;
     this.cascadeRes = [res, res / 2, res / 2];
     // frames between refreshes: near cascade every frame, mid every other,
     // far every fourth. At sprint speed the far cascade drifts 0.7 m across
     // four frames inside a 200 m box — invisible.
-    this.cascadeStride = tier === 'low' ? [1, 4, 8] : [1, 2, 4];
+    this.cascadeStride = (SHADOW_STRIDE[tier] || SHADOW_STRIDE.high).slice();
 
     this.csm = new CSM({
       camera: game.camera,
@@ -737,6 +742,30 @@ export class Sky {
     const inFrame = smoothstep(1.25, 0.45, off) * smoothstep(0.05, 0.45, facing);
     gr.compositeMaterial.uniforms.uIntensity.value = (this._godRayBase || 0) * inFrame * 0.55;
     gr.raysMaterial.uniforms.uThreshold.value = 1.1 * (this.exposure > 1.4 ? 0.5 : 1.0);
+  }
+
+  /**
+   * Scale the cascades with the quality tier. Called by PostFX.setQuality.
+   *
+   * Resolution and refresh rate are the two knobs that actually cost anything;
+   * cascade *count* is deliberately not one of them, because changing it
+   * rewrites the CSM defines and recompiles every lit material in the scene.
+   *
+   * @param {'low'|'medium'|'high'|'ultra'} tier
+   */
+  setShadowQuality(tier) {
+    if (!this.csm) return;
+    const res = SHADOW_RES[tier] || SHADOW_RES.high;
+    this.cascadeRes = [res, res / 2, res / 2];
+    const stride = SHADOW_STRIDE[tier] || SHADOW_STRIDE.high;
+    for (let i = 0; i < this.cascadeStride.length; i++) this.cascadeStride[i] = stride[i];
+    this.csm.lights.forEach((l, i) => {
+      if (l.shadow.mapSize.x === this.cascadeRes[i]) return;
+      l.shadow.mapSize.setScalar(this.cascadeRes[i]);
+      // the existing depth target is the old size; drop it so three rebuilds it
+      if (l.shadow.map) { l.shadow.map.dispose(); l.shadow.map = null; }
+      l.shadow.needsUpdate = true;
+    });
   }
 
   /**
