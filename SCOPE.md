@@ -7,7 +7,14 @@ Companion docs: `PROGRESS.md` (status by area, scoreboard, bug log) ·
 `PLAN.md` (design audit and sequencing) · `WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
 
-**Counts at last update (2026-08-17 ~04:00):** 214 atoms · 84 shipped · 61 in progress · 69 not started.
+**Counts at last update (2026-08-17 ~04:00):** 330 atoms · **127 shipped** · **92 in progress** · **111 not started**.
+
+Recount with:
+```sh
+grep -c '^- \[x\]' SCOPE.md   # shipped
+grep -c '^- \[~\]' SCOPE.md   # in progress
+grep -c '^- \[ \]' SCOPE.md   # not started
+```
 
 ---
 
