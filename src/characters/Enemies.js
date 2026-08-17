@@ -98,7 +98,13 @@ export class Enemies {
     const terrain = this.game.get('Terrain');
     const p = o.pos ? (o.pos.isVector3 ? o.pos : this._tmp.fromArray(o.pos)) : this._tmp.set(0, 0, 0);
     e.root.position.copy(p);
-    if (terrain) e.root.position.y = terrain.heightAt(p.x, p.z);
+    // Spawn on the highest support, not the raw heightfield: an enemy placed on
+    // Hammerhead's graded pad or a dungeon floor would otherwise stand inside
+    // it while the party walks on top.
+    const col = this.game.get('Collision');
+    const g = col && col.ready ? col.groundAt(p.x, p.z, p.y + 3, 1.2, 6) : null;
+    if (g) e.root.position.y = g.y;
+    else if (terrain) e.root.position.y = terrain.heightAt(p.x, p.z);
     e.root.rotation.y = e.heading;
     e.home.copy(e.root.position);
     if (o.home) e.home.copy(o.home);
