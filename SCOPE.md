@@ -205,7 +205,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Weapon-class weakness bonuses
 - [x] Stagger multipliers, back and warp bonuses, crits
 - [x] Night daemon scaling
-- [~] Damage numbers driven by the real formula (not literals)
+- [x] Damage numbers driven by the real formula (not literals)
 
 ### 6.3 Encounters
 - [~] Roaming groups with territories and patrols
@@ -280,9 +280,9 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Cooking: 30 recipes with timed buffs, Ignis's cooking level
 - [x] DayCycle: 8 phases, daemon pressure, havens, camping
 - [x] SaveGame with versioning and migration
-- [~] **Wired to the UI and combat** (was entirely dead code)
-- [~] Ascension screen rendering the real 106-node graph
-- [~] Inventory/gear screens reading real tables
+- [x] **Wired to the UI and combat** (was entirely dead code)
+- [x] Ascension screen rendering the real 106-node graph
+- [x] Inventory/gear screens reading real tables
 - [ ] Quest coordinates matching real world geometry
 - [ ] Shops trading against the real gil economy
 - [ ] Hunter rank progression

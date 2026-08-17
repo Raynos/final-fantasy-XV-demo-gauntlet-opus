@@ -115,7 +115,7 @@ The HUD displayed hardcoded literals over a fully-implemented simulation.
 | Quests: 30 (7 chapters, 12 hunts, 11 side) | ✅ | coordinates are fictional, match no geometry |
 | Party: 13 techniques, 30 recipes, bonds | ✅ | |
 | DayCycle, havens, camping, saves | ✅ | |
-| **Wiring RPG → UI → combat** | 🟡 | agent running — top priority |
+| **Wiring RPG → UI → combat** | ✅ | `CombatBridge` + `HudBridge`; ascension/inventory/gear/map all live |
 | Camp / cook / rest loop | 🔵 | ~90% coded, needs the interaction verb |
 
 ## 6. Gameplay & content — 🟡 just started
