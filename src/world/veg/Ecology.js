@@ -241,7 +241,7 @@ export class Ecology {
 
     // A Coernix-style fuel stop with a lit canopy, the one piece of commerce
     // on this stretch of Route 1.
-    beside('reststop', 25, 1, 34, 26);
+    beside('reststop', 44, 1, 34, 26);
     // Imperial roadblock straddling the carriageway.
     beside('blockade', 72, 0, 0, 24);
     // Bus shelter and a gravel lay-by.

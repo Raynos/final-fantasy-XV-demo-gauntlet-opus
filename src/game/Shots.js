@@ -66,6 +66,44 @@ export const SHOTS = {
     pos: [40, 30, -110], target: [-215, 60, -395], fov: 38,
   },
 
+
+  // --- Hammerhead -------------------------------------------------------
+  town_approach: {
+    doc: 'Coming off the highway toward the Hammerhead pylon',
+    time: 17.2, weather: 'clear',
+    pos: [-34.7, 16, 14.6], target: [-12.8, 13.5, 53.1], fov: 44,
+  },
+  town_forecourt: {
+    doc: 'Standing on the forecourt between the pumps and the garage',
+    time: 16.0, weather: 'clear',
+    pos: [-20.6, 12.1, 34.3], target: [-7.1, 11.9, 61.1], fov: 52,
+  },
+  town_wide: {
+    doc: 'The whole truck stop read against the badlands',
+    time: 18.2, weather: 'clear',
+    pos: [23.5, 23.5, 5.1], target: [-14.6, 14.5, 59.6], fov: 40,
+  },
+  town_garage: {
+    doc: "Cid's garage, roller bay open with a car on the lift",
+    time: 15.4, weather: 'clear',
+    pos: [-6.5, 11.5, 43.7], target: [-1.3, 10.9, 52.4], fov: 42,
+  },
+  town_board: {
+    doc: 'The hunt board with Dave beside it',
+    time: 16.8, weather: 'clear',
+    pos: [-19.5, 11.4, 53.2], target: [-18.7, 11.5, 58.9], fov: 42,
+  },
+  town_caravan: {
+    doc: 'The caravan and its awning',
+    time: 16.2, weather: 'clear',
+    pos: [1.1, 11.9, 36.1], target: [11, 11.2, 39.7], fov: 44,
+  },
+  town_night: {
+    doc: 'Hammerhead after dark under the floodlights',
+    time: 21.6, weather: 'clear',
+    pos: [-34.7, 16, 14.6], target: [-12.8, 13.5, 53.1], fov: 44,
+  },
+
   // --- character --------------------------------------------------------
   hero_closeup: {
     doc: 'Over-shoulder close-up of Noctis, shallow depth of field',
@@ -124,6 +162,16 @@ export const SHOTS = {
   menu_map: {
     doc: 'The chart of Lucis with live quest waypoints and havens',
     time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'map',
+    offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
+  },,
+  menu_shop: {
+    doc: 'A shop counter trading against the real gil economy',
+    time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'shop',
+    offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
+  },
+  menu_hunts: {
+    doc: 'The hunt board — 12 hunts, star ranks, hunter-rank ladder',
+    time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'hunts',
     offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
   },
 };

@@ -104,7 +104,7 @@ export const EXP_TABLE = (() => {
  */
 export const LODGINGS = {
   haven:            { id: 'haven',            name: 'Haven',                          gil: 0,     bonus: 1.0,  cooking: true,  desc: 'A rune-marked campsite. Safe from daemons; Ignis can cook.' },
-  caravan:          { id: 'caravan',          name: 'Trailer',                        gil: 100,   bonus: 1.2,  cooking: false, desc: 'A cramped outpost trailer. Cheap and cheerful.' },
+  caravan:          { id: 'caravan',          name: 'Trailer',                        gil: 30,   bonus: 1.2,  cooking: false, desc: 'A cramped outpost trailer. Cheap and cheerful.' },
   motel:            { id: 'motel',            name: 'Motel',                          gil: 300,   bonus: 1.5,  cooking: false, desc: 'Roadside beds with actual mattresses.' },
   leville_std:      { id: 'leville_std',      name: 'The Leville — Standard',         gil: 1000,  bonus: 1.5,  cooking: false, desc: 'Lestallum\'s grand old hotel.' },
   leville_deluxe:   { id: 'leville_deluxe',   name: 'The Leville — Deluxe',           gil: 3000,  bonus: 2.0,  cooking: false, desc: 'A suite with a view of the Meteor.' },
