@@ -51,6 +51,7 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 | Cost attribution | ✅ | `tools/attrib.mjs` — A/B/A per-subsystem |
 | Production build verified | ✅ | `--prod` flag; fixed a minifier-only crash |
 | Capture determinism | ✅ | visually stable (mean Δ 0.39/255); not bit-exact |
+| Cloud raymarch upsample blockiness | 🔵 | visible at upper-left in `mesa_landmark` |
 | Automated visual regression diffing | ⬜ | would catch silent quality regressions between merges |
 
 ## 2. Rendering & world — ✅ strongest area
@@ -63,7 +64,7 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 | Day/night + moon + starfield + milky way | ✅ | |
 | Cascaded shadow maps (3) | ✅ | **but the dominant frame cost** |
 | Terrain: 2048² field, hydraulic erosion, 7-level clipmap, 6-layer splat | ✅ | |
-| Terrain strata frequency + silhouette variety | 🟡 | agent running — ranges read "big but near" |
+| Terrain strata frequency + silhouette variety | ✅ | 16-71 m beds → 3.5-14 m; benched mesas, fins, talus aprons |
 | Vegetation: instanced grass, wind, LOD, trample | ✅ | rescaled to Leide-correct ankle height |
 | Water: planar reflection | ✅ | wasteful — re-renders scene every frame |
 | Weather: rain, wet surfaces, wind, lightning, valley fog | ✅ | |
