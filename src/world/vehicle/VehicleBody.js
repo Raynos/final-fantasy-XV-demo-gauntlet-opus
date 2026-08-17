@@ -38,14 +38,27 @@ function engineCurve(v, maxForce, vMax) {
 }
 
 export class VehicleBody {
+  /** Highest support under a wheel: town slabs and pads before raw terrain. */
+  _groundAt(t, x, z, fromY) {
+    if (this.collision && this.collision.ready) {
+      const g = this.collision.groundAt(x, z, fromY, 1.2, 4);
+      if (g) return g.y;
+    }
+    return t ? t.heightAt(x, z) : 0;
+  }
+
   /**
    * @param {object} opts
    * @param {object} opts.terrain  Terrain system (heightAt)
    * @param {import('./RoadPath.js').RoadPath} opts.road
+   * @param {object} [opts.collision] static world collision, so the car rests
+   *   on graded pads and town slabs instead of sinking to the raw heightfield
+   *   underneath them while the party stands on top
    */
-  constructor({ terrain, road }) {
+  constructor({ terrain, road, collision = null }) {
     this.terrain = terrain;
     this.road = road;
+    this.collision = collision;
     /** Half-extent of the drivable world, metres. 0 disables the clamp. */
     this.bound = terrain && terrain.size ? terrain.size * 0.5 - 60 : 0;
 
@@ -176,7 +189,7 @@ export class VehicleBody {
     // clipmap resolution can hand back a single-cell spire; without a filter
     // against something stable, one such sample under one wheel throws the
     // whole chassis metres into the air for a frame.
-    const c = t ? t.heightAt(this.pos.x, this.pos.z) : 0;
+    const c = this._groundAt(t, this.pos.x, this.pos.z, this.pos.y);
     const lo = c - 2.2, hiClamp = c + 2.2;
     let sum = 0, hi = -1e9;
     for (let i = 0; i < 4; i++) {
@@ -185,7 +198,7 @@ export class VehicleBody {
       const lr = -w.side * this.halfTrack;
       const x = this.pos.x + fx * lf + rx * lr;
       const z = this.pos.z + fz * lf + rz * lr;
-      let y = t ? t.heightAt(x, z) : 0;
+      let y = this._groundAt(t, x, z, this.pos.y);
       if (y < lo) y = lo; else if (y > hiClamp) y = hiClamp;
       this._gy[i] = y;
       w.contactY = y;

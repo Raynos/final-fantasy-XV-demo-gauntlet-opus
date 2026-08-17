@@ -83,7 +83,7 @@ export class RegaliaSystem {
     if (!terrain || !terrain.road) { this.enabled = false; return; }
 
     this.path = new RoadPath(terrain.road);
-    this.body = new VehicleBody({ terrain, road: this.path });
+    this.body = new VehicleBody({ terrain, road: this.path, collision: game.get('Collision') });
     this.autoDrive = new AutoDrive(this.path);
     this.driveCam = new DriveCamera(game.camera);
     this.driveCam._terrain = terrain;
