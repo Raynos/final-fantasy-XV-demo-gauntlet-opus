@@ -5,8 +5,8 @@ import * as THREE from 'three';
  * Nubis-style channel packing:
  *
  *   base   64^3 RGBA  R = perlin-worley (cloud shape), GBA = worley at 3 octaves
- *   detail 32^3 RGB   worley at 3 octaves (erodes the cloud edges)
- *   weather 512^2 RGB R = coverage, G = cloud type, B = large scale variation
+ *   detail 48^3 RGB   worley at 3 octaves (erodes the cloud edges)
+ *   weather 256^2 RGB R = coverage, G = cloud type, B = large scale variation
  *
  * All noises wrap exactly, so the cloud field can tile across the world
  * without a visible seam. Generation is deterministic for a given seed.
@@ -114,18 +114,46 @@ const remap = (v, a, b, c, d) => c + ((v - a) / (b - a)) * (d - c);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
+ * Stretch a channel onto [0,1] between two percentiles.
+ *
+ * An fbm is a weighted sum of independent samples, so it is near-Gaussian and
+ * only ever occupies a thin band around 0.5 — the raw perlin-worley here spans
+ * 0.34..0.92 with three quarters of it inside 0.57..0.79. A coverage threshold
+ * applied to a field that flat goes from "empty sky" to "solid lid" over a few
+ * hundredths, which is exactly why every heavy weather preset saturated into a
+ * featureless deck. Stretching the histogram is what gives coverage a usable
+ * range and gives the cloud field its silhouette back.
+ *
+ * @param {Float32Array} v values, modified in place
+ * @param {number} lo low percentile (0..1)
+ * @param {number} hi high percentile (0..1)
+ */
+function stretch(v, lo, hi) {
+  const s = Float32Array.from(v).sort();
+  const a = s[Math.floor(lo * (s.length - 1))];
+  const b = s[Math.floor(hi * (s.length - 1))];
+  const k = 1 / Math.max(1e-5, b - a);
+  for (let i = 0; i < v.length; i++) v[i] = clamp01((v[i] - a) * k);
+  return v;
+}
+
+/**
  * Build the cloud noise set.
  * @param {{baseSize?:number, detailSize?:number, weatherSize?:number, seed?:number}} opts
  * @returns {{base:THREE.Data3DTexture, detail:THREE.Data3DTexture, weather:THREE.DataTexture}}
  */
-export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize = 256, seed = 1337 } = {}) {
+export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize = 256, seed = 1337 } = {}) {
   // ---- base volume -------------------------------------------------------
   const g4 = makePointGrid(4, seed + 1);
   const g8 = makePointGrid(8, seed + 2);
   const g16 = makePointGrid(16, seed + 3);
   const g24 = makePointGrid(24, seed + 4);
 
-  const baseData = new Uint8Array(baseSize * baseSize * baseSize * 4);
+  const nBase = baseSize * baseSize * baseSize;
+  const chR = new Float32Array(nBase);
+  const ch8 = new Float32Array(nBase);
+  const ch16 = new Float32Array(nBase);
+  const ch24 = new Float32Array(nBase);
   let i = 0;
   for (let z = 0; z < baseSize; z++) {
     const fz = z / baseSize;
@@ -141,13 +169,24 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize
         const wf = w4 * 0.625 + w8 * 0.25 + w16 * 0.125;
         // perlin-worley: dilate the perlin fbm by the worley fbm
         const p = valueFbm3(fx * 4, fy * 4, fz * 4, 4, 4, seed + 11);
-        const pw = clamp01(remap(p, wf - 1, 1, 0, 1));
-        baseData[i++] = (clamp01(pw) * 255) | 0;
-        baseData[i++] = (clamp01(w8) * 255) | 0;
-        baseData[i++] = (clamp01(w16) * 255) | 0;
-        baseData[i++] = (clamp01(w24) * 255) | 0;
+        chR[i] = clamp01(remap(p, wf - 1, 1, 0, 1));
+        ch8[i] = w8; ch16[i] = w16; ch24[i] = w24;
+        i++;
       }
     }
+  }
+  // widen the histograms so coverage has somewhere to threshold
+  stretch(chR, 0.015, 0.985);
+  stretch(ch8, 0.02, 0.98);
+  stretch(ch16, 0.02, 0.98);
+  stretch(ch24, 0.02, 0.98);
+
+  const baseData = new Uint8Array(nBase * 4);
+  for (let k = 0; k < nBase; k++) {
+    baseData[k * 4] = (chR[k] * 255) | 0;
+    baseData[k * 4 + 1] = (ch8[k] * 255) | 0;
+    baseData[k * 4 + 2] = (ch16[k] * 255) | 0;
+    baseData[k * 4 + 3] = (ch24[k] * 255) | 0;
   }
   const base = new THREE.Data3DTexture(baseData, baseSize, baseSize, baseSize);
   base.format = THREE.RGBAFormat;
@@ -160,7 +199,7 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize
   // ---- detail volume -----------------------------------------------------
   const d8 = makePointGrid(8, seed + 21);
   const d16 = makePointGrid(16, seed + 22);
-  const d32 = makePointGrid(32, seed + 23);
+  const d32 = makePointGrid(24, seed + 23);
   const detailData = new Uint8Array(detailSize * detailSize * detailSize * 4);
   i = 0;
   for (let z = 0; z < detailSize; z++) {
@@ -171,7 +210,7 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize
         const fx = x / detailSize;
         detailData[i++] = (clamp01(worley3(d8, 8, fx * 8, fy * 8, fz * 8)) * 255) | 0;
         detailData[i++] = (clamp01(worley3(d16, 16, fx * 16, fy * 16, fz * 16)) * 255) | 0;
-        detailData[i++] = (clamp01(worley3(d32, 32, fx * 32, fy * 32, fz * 32)) * 255) | 0;
+        detailData[i++] = (clamp01(worley3(d32, 24, fx * 24, fy * 24, fz * 24)) * 255) | 0;
         detailData[i++] = 255;
       }
     }
@@ -185,7 +224,11 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize
   detail.needsUpdate = true;
 
   // ---- weather map -------------------------------------------------------
-  const wData = new Uint8Array(weatherSize * weatherSize * 4);
+  const nW = weatherSize * weatherSize;
+  const wCov = new Float32Array(nW);
+  const wType = new Float32Array(nW);
+  const wVar = new Float32Array(nW);
+  const wData = new Uint8Array(nW * 4);
   i = 0;
   for (let y = 0; y < weatherSize; y++) {
     const fy = y / weatherSize;
@@ -197,14 +240,20 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 32, weatherSize
       const cov = valueFbm2(fx * 4 + wx * 0.9, fy * 4 + wy * 0.9, 4, 5, seed + 33);
       // ridged streaks give the banks a wind-blown direction
       const streak = 1 - Math.abs(valueFbm2(fx * 6 + wy, fy * 2.0, 6, 3, seed + 34) * 2 - 1);
-      const coverage = clamp01(remap(cov, 0.28, 0.85, 0, 1) * (0.75 + 0.35 * streak));
-      const type = clamp01(valueFbm2(fx * 2, fy * 2, 2, 3, seed + 35) * 1.6 - 0.25);
-      const varia = valueFbm2(fx * 8, fy * 8, 8, 3, seed + 36);
-      wData[i++] = (coverage * 255) | 0;
-      wData[i++] = (type * 255) | 0;
-      wData[i++] = (varia * 255) | 0;
-      wData[i++] = 255;
+      wCov[i] = cov * (0.72 + 0.42 * streak);
+      wType[i] = valueFbm2(fx * 2, fy * 2, 2, 3, seed + 35);
+      wVar[i] = valueFbm2(fx * 8, fy * 8, 8, 3, seed + 36);
+      i++;
     }
+  }
+  stretch(wCov, 0.01, 0.99);
+  stretch(wType, 0.03, 0.97);
+  stretch(wVar, 0.03, 0.97);
+  for (let k = 0; k < nW; k++) {
+    wData[k * 4] = (wCov[k] * 255) | 0;
+    wData[k * 4 + 1] = (wType[k] * 255) | 0;
+    wData[k * 4 + 2] = (wVar[k] * 255) | 0;
+    wData[k * 4 + 3] = 255;
   }
   const weather = new THREE.DataTexture(wData, weatherSize, weatherSize, THREE.RGBAFormat);
   weather.wrapS = weather.wrapT = THREE.RepeatWrapping;
