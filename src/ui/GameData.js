@@ -1,19 +1,74 @@
 /**
- * Fallback game data for the UI.
+ * The UI's single read-side adapter over the RPG model.
  *
- * Every other system in the project is being written in parallel, so the UI
- * never assumes they exist. `readParty()` and friends prefer live data from
- * `Party` / `Player` / `Combat` and silently fall back to these tables, which
- * keeps the HUD renderable (and screenshot-able) at all times.
+ * `src/game/rpg/**` owns every number the game actually simulates — levels,
+ * HP/MP, gil, AP, the 137-item bag, the 106-node grid, the 30-quest log and the
+ * clock. This module is the *only* place `src/ui` is allowed to reach into it,
+ * so every screen and widget reads one shape and none of them care whether the
+ * system is present.
+ *
+ * Every reader takes `game` and degrades gracefully: if `game.get('Rpg')` is
+ * missing (the screenshot harness may boot a partial world, and other agents
+ * run this file with their systems half-built) the fallback tables below keep
+ * the HUD renderable and screenshot-able. The *live* path is always preferred.
  */
 
+import { NODES, EDGES, CONSTELLATION_INFO } from '../game/rpg/Ascension.js';
+
+/* ------------------------------------------------------------------------ */
+/* Presentation metadata — colour and role, which the model has no opinion on */
+/* ------------------------------------------------------------------------ */
+
+/** Portrait hue + HUD role per roster id. Purely cosmetic. */
+export const MEMBER_UI = {
+  noctis:  { hue: 218, role: 'lead',      short: 'Noctis' },
+  gladio:  { hue: 24,  role: 'guard',     short: 'Gladiolus' },
+  ignis:   { hue: 268, role: 'tactician', short: 'Ignis' },
+  prompto: { hue: 44,  role: 'marksman',  short: 'Prompto' },
+};
+
+/** RPG weapon class -> the icon key `Icons.js` draws. */
+export const CLASS_ICON = {
+  sword: 'sword', greatsword: 'greatsword', polearm: 'lance', dagger: 'daggers',
+  firearm: 'firearm', shield: 'shield', machinery: 'machinery',
+};
+
+/** RPG weapon class -> the label FFXV prints under the weapon name. */
+export const CLASS_LABEL = {
+  sword: 'Sword', greatsword: 'Greatsword', polearm: 'Polearm', dagger: 'Daggers',
+  firearm: 'Firearm', shield: 'Shield', machinery: 'Machinery',
+};
+
+/** Item category -> icon key, so 137 items need no per-item art. */
+const CATEGORY_ICON = {
+  curative: 'potion', catalyst: 'lightning', treasure: 'ap', ingredient: 'regen',
+  key: 'items', weapon: 'sword', accessory: 'ap', spell: 'fire',
+};
+
+/** Item category -> the tag line printed above the item name. */
+const CATEGORY_TAG = {
+  curative: 'Consumable', catalyst: 'Catalyst', treasure: 'Treasure',
+  ingredient: 'Ingredient', key: 'Key Item', weapon: 'Weapon', accessory: 'Accessory',
+  spell: 'Magic',
+};
+
+/** Inventory screen tabs and the model categories each one gathers. */
+export const ITEM_TABS = [
+  { name: 'Consumables', cats: ['curative'] },
+  { name: 'Materials', cats: ['catalyst', 'treasure'] },
+  { name: 'Provisions', cats: ['ingredient'] },
+  { name: 'Equipment', cats: ['weapon', 'accessory'] },
+  { name: 'Key Items', cats: ['key'] },
+];
+
+/* ------------------------------------------------------------------------ */
+/* Fallbacks — used only when no RpgSystem is registered                     */
+/* ------------------------------------------------------------------------ */
+
 export const PARTY = [
-  {
-    id: 'noctis', name: 'Noctis', role: 'lead', level: 27, hue: 218,
-    hp: 3040, maxHp: 3200, mp: 74, maxMp: 100,
-    status: ['haste'],
-  },
-  { id: 'gladiolus', name: 'Gladiolus', role: 'guard', level: 28, hue: 24, hp: 4180, maxHp: 4600, status: ['shieldUp'] },
+  { id: 'noctis', name: 'Noctis', role: 'lead', level: 27, hue: 218,
+    hp: 3040, maxHp: 3200, mp: 74, maxMp: 100, status: ['haste'] },
+  { id: 'gladio', name: 'Gladiolus', role: 'guard', level: 28, hue: 24, hp: 4180, maxHp: 4600, status: ['shieldUp'] },
   { id: 'ignis', name: 'Ignis', role: 'tactician', level: 27, hue: 268, hp: 2560, maxHp: 2900, status: [] },
   { id: 'prompto', name: 'Prompto', role: 'marksman', level: 26, hue: 44, hp: 1980, maxHp: 2650, status: ['swordUp', 'poison'] },
 ];
@@ -38,29 +93,29 @@ export const ENEMY_TEMPLATES = [
 ];
 
 export const ITEMS = [
-  { name: 'Potion', qty: 32, icon: 'potion', tag: 'Consumable', effect: 'Restore 1,000 HP', target: 'One ally', field: true,
+  { id: 'potion', name: 'Potion', qty: 32, icon: 'potion', tag: 'Consumable', effect: 'Restore 1,000 HP', target: 'One ally', field: true,
     desc: 'Restores 1,000 HP to one ally. Standard field issue from the Crown City infirmary — Ignis buys them by the crate.' },
-  { name: 'Hi-Potion', qty: 14, icon: 'potion', tag: 'Consumable', effect: 'Restore 3,000 HP', target: 'One ally', field: true,
+  { id: 'hi_potion', name: 'Hi-Potion', qty: 14, icon: 'potion', tag: 'Consumable', effect: 'Restore 3,000 HP', target: 'One ally', field: true,
     desc: 'A denser draught of the same. Worth holding back until someone is genuinely in trouble.' },
-  { name: 'Mega-Potion', qty: 6, icon: 'potion', tag: 'Consumable', effect: 'Restore 5,000 HP', target: 'All allies', field: true,
+  { id: 'mega_potion', name: 'Mega-Potion', qty: 6, icon: 'potion', tag: 'Consumable', effect: 'Restore 5,000 HP', target: 'All allies', field: true,
     desc: 'Vapourises on contact with air, restoring the whole retinue at once.' },
-  { name: 'Elixir', qty: 5, icon: 'potion', tag: 'Consumable', effect: 'Full HP / MP', target: 'One ally', field: true,
+  { id: 'elixir', name: 'Elixir', qty: 5, icon: 'potion', tag: 'Consumable', effect: 'Full HP / MP', target: 'One ally', field: true,
     desc: 'Fully restores HP and MP to one ally and clears every ailment. Rare enough to be worth the pocket space.' },
-  { name: 'Phoenix Down', qty: 3, icon: 'regen', tag: 'Consumable', effect: 'Revive · 50% HP', target: 'One ally', field: false,
+  { id: 'phoenix_down', name: 'Phoenix Down', qty: 3, icon: 'regen', tag: 'Consumable', effect: 'Revive · 50% HP', target: 'One ally', field: false,
     desc: 'A single feather that pulls a downed ally back to their feet with half their health restored.' },
-  { name: 'Antidote', qty: 9, icon: 'poison', tag: 'Remedy', effect: 'Cure poison', target: 'One ally', field: true,
+  { id: 'antidote', name: 'Antidote', qty: 9, icon: 'poison', tag: 'Remedy', effect: 'Cure poison', target: 'One ally', field: true,
     desc: 'Neutralises venom from sabertusk and voretooth bites alike.' },
-  { name: 'Gold Needle', qty: 4, icon: 'shieldUp', tag: 'Remedy', effect: 'Cure stone', target: 'One ally', field: true,
+  { id: 'gold_needle', name: 'Gold Needle', qty: 4, icon: 'shieldUp', tag: 'Remedy', effect: 'Cure stone', target: 'One ally', field: true,
     desc: 'Breaks petrifaction. Unpleasant for everyone involved, including the person holding the needle.' },
-  { name: 'Smelling Salts', qty: 6, icon: 'haste', tag: 'Remedy', effect: 'Cure confusion', target: 'One ally', field: true,
+  { id: 'smelling_salts', name: 'Smelling Salts', qty: 6, icon: 'haste', tag: 'Remedy', effect: 'Cure confusion', target: 'One ally', field: true,
     desc: 'Sharp enough to clear a daemon\'s influence out of a clouded head.' },
-  { name: 'Hunter\'s Medal', qty: 7, icon: 'ap', tag: 'Treasure', effect: 'Sells for 300 gil', target: '—', field: false,
+  { id: 'hunters_medal', name: 'Hunter\'s Medal', qty: 7, icon: 'ap', tag: 'Treasure', effect: 'Sells for 300 gil', target: '—', field: false,
     desc: 'Proof of a hunt completed. Traded at outposts for gil, or kept as a quiet boast.' },
-  { name: 'Rare Metal', qty: 1, icon: 'machinery', tag: 'Key Item', effect: 'Quest item', target: '—', field: false,
+  { id: 'rare_metal', name: 'Rare Metal', qty: 1, icon: 'machinery', tag: 'Key Item', effect: 'Quest item', target: '—', field: false,
     desc: 'A dense ingot Cid asked for. He was not specific about what he intends to do with it.' },
-  { name: 'Fire Flask', qty: 2, icon: 'fire', tag: 'Magic', effect: 'Fire · 180 potency', target: 'Area', field: false,
+  { id: 'fire_flask', name: 'Fire Flask', qty: 2, icon: 'fire', tag: 'Magic', effect: 'Fire · 180 potency', target: 'Area', field: false,
     desc: 'A flask of unstable elemancy. Deals fire damage in a wide radius — mind the grass.' },
-  { name: 'Sky Gemstone', qty: 1, icon: 'lightning', tag: 'Catalyst', effect: 'Spellcraft catalyst', target: '—', field: false,
+  { id: 'sky_gemstone', name: 'Sky Gemstone', qty: 1, icon: 'lightning', tag: 'Catalyst', effect: 'Spellcraft catalyst', target: '—', field: false,
     desc: 'A shard humming with stored lightning. Folded into a spell it raises the potency considerably.' },
 ];
 
@@ -73,7 +128,7 @@ export const GEAR = {
     { slot: 'Accessory', name: 'Ribbon', stat: 'Resist all ailments' },
     { slot: 'Accessory', name: 'Moogle Charm', stat: 'AP gain +50%' },
   ],
-  gladiolus: [
+  gladio: [
     { slot: 'Weapon', name: 'Ziedrich', stat: 'ATK +231' },
     { slot: 'Weapon', name: 'Bronze Shield', stat: 'DEF +64' },
     { slot: 'Accessory', name: 'Power Wristbands', stat: 'STR +80' },
@@ -96,10 +151,10 @@ export const GEAR = {
 // map-space coordinates are normalised to the 1600x900 chart and kept inside
 // the generated coastline in MapScreen
 export const REGIONS = [
-  { name: 'Leide', sub: 'Longwythe Region', x: 0.288, y: 0.645 },
-  { name: 'Duscae', sub: 'Alstor Slough', x: 0.495, y: 0.40 },
-  { name: 'Cleigne', sub: 'Vesperpool', x: 0.655, y: 0.29 },
-  { name: 'Lucis Coast', sub: 'Galdin Quay', x: 0.375, y: 0.735 },
+  { name: 'Leide', sub: 'Longwythe Region', x: 0.300, y: 0.625 },
+  { name: 'Duscae', sub: 'Alstor Slough', x: 0.545, y: 0.265 },
+  { name: 'Cleigne', sub: 'Vesperpool', x: 0.735, y: 0.375 },
+  { name: 'Lucis Coast', sub: 'Galdin Quay', x: 0.395, y: 0.800 },
 ];
 
 export const MAP_PINS = [
@@ -129,50 +184,340 @@ export const QUEST = {
   dist: 1240,
 };
 
+/* ------------------------------------------------------------------------ */
+/* Live reads                                                                */
+/* ------------------------------------------------------------------------ */
+
+/** The RpgSystem, or null when the world was booted without it. */
+export function rpg(game) {
+  const r = game?.get?.('Rpg');
+  return r && r.party ? r : null;
+}
+
 /**
- * Merge live party data (if the Party system exposes any) over the fallback
- * table. Never throws, whatever shape the other systems ended up with.
+ * `rpg.hudState()` for this frame, memoised.
+ *
+ * `hudState()` rebuilds four party records, the buff list and the waypoint list
+ * every call, and half a dozen widgets want it in the same frame. The cache is
+ * keyed on the frame counter and cleared by `Game.resetClock()`.
+ * @param {object} game
+ * @returns {object|null}
+ */
+export function hudState(game) {
+  const r = rpg(game);
+  if (!r) return null;
+  const frame = game.time ? game.time.frame : -1;
+  const c = game._hudCache;
+  if (c && c.frame === frame) return c.state;
+  const state = r.hudState();
+  game._hudCache = { frame, state };
+  return state;
+}
+
+/**
+ * The four-member roster the HUD, the pause menu and the gear screen all draw.
+ * Live values come from `hudState().party`; hue/role are cosmetic overlays.
  * @param {object} game
  * @returns {Array<object>}
  */
 export function readParty(game) {
-  const out = PARTY.map((p) => ({ ...p }));
-  const live = game?.get?.('Party')?.members;
-  if (Array.isArray(live) && live.length) {
-    // `Party.members` holds only the three companions — Noctis is the Player.
-    // Match by identity, never by index, or the companions shift into the lead
-    // slot and the roster ends up with a duplicate and the wrong leader.
-    for (const m of live) {
-      const key = String(m?.key || m?.id || m?.name || '').toLowerCase();
-      const dst = out.find((p) => p.id === key || p.name.toLowerCase() === key);
-      if (!dst || dst.id === 'noctis') continue;
-      const s = m?.stats || m || {};
-      if (m?.name) dst.name = m.name;
-      if (typeof s.hp === 'number') dst.hp = s.hp;
-      if (typeof s.maxHp === 'number') dst.maxHp = s.maxHp;
-      if (typeof s.mp === 'number') dst.mp = s.mp;
-      if (typeof s.maxMp === 'number') dst.maxMp = s.maxMp;
-      if (typeof s.level === 'number') dst.level = s.level;
-      if (Array.isArray(m?.status)) dst.status = m.status;
-    }
+  const hs = hudState(game);
+  if (!hs || !hs.party || !hs.party.length) return PARTY.map((p) => ({ ...p }));
+  return hs.party.map((m, i) => {
+    const ui = MEMBER_UI[m.id] || MEMBER_UI.noctis;
+    return {
+      id: m.id,
+      name: ui.short,
+      fullName: m.name,
+      role: ui.role,
+      hue: ui.hue,
+      level: m.level,
+      hp: m.hp, maxHp: m.maxHp,
+      mp: m.mp, maxMp: m.maxMp,
+      ko: m.ko,
+      bond: m.bond,
+      status: statusIcons(hs, m, i),
+    };
+  });
+}
+
+/**
+ * Status icons for one member. Real state only: a KO badge, a critical-HP
+ * warning, and one icon per active meal/spell buff mapped onto the icon set.
+ */
+function statusIcons(hs, m) {
+  const out = [];
+  if (m.ko) out.push('poison');
+  for (const b of hs.buffs || []) {
+    const e = (b.effects || []).join(' ');
+    if (/Strength/.test(e)) out.push('swordUp');
+    else if (/Vitality|Max HP/.test(e)) out.push('shieldUp');
+    else if (/Magic|Spirit/.test(e)) out.push('haste');
+    else out.push('regen');
   }
-  const ps = game?.get?.('Player')?.stats;
-  if (ps) {
-    const lead = out[0];
-    if (typeof ps.hp === 'number') lead.hp = ps.hp;
-    if (typeof ps.maxHp === 'number') lead.maxHp = ps.maxHp;
-    if (typeof ps.mp === 'number') lead.mp = ps.mp;
-    if (typeof ps.maxMp === 'number') lead.maxMp = ps.maxMp;
-    if (typeof ps.level === 'number') lead.level = ps.level;
+  if (!m.ko && m.maxHp && m.hp / m.maxHp < 0.25) out.push('poison');
+  return [...new Set(out)].slice(0, 3);
+}
+
+/**
+ * Noctis' phantom arsenal, laid out on the weapon wheel's diamond.
+ * Reads the four real equipment slots from `Inventory`.
+ * @param {object} game
+ */
+export function readWeapons(game) {
+  const r = rpg(game);
+  const slots = ['up', 'right', 'down', 'left'];
+  if (!r) return WEAPONS.map((w) => ({ ...w }));
+  const rack = r.inventory.equipped('noctis').weapon;
+  return slots.map((slot, i) => {
+    const def = rack[i];
+    if (!def) return { slot, key: 'sword', name: 'Empty', kind: 'No armament', atk: 0, element: null, id: null };
+    const el = (def.tags || []).find((t) => t.startsWith('element:'));
+    return {
+      slot, id: def.id,
+      key: CLASS_ICON[def.class] || 'sword',
+      name: def.name,
+      kind: CLASS_LABEL[def.class] || 'Arm',
+      atk: def.attack || 0,
+      element: el ? el.slice(8) : null,
+    };
+  });
+}
+
+/**
+ * The bag, in the shape the item screen draws.
+ * @param {object} game
+ * @param {number} [tab] index into `ITEM_TABS`; omit for everything
+ * @returns {Array<object>}
+ */
+export function readItems(game, tab = -1) {
+  const r = rpg(game);
+  if (!r) {
+    if (tab < 0) return ITEMS.map((i) => ({ ...i }));
+    const want = ITEM_TABS[tab]?.name;
+    const map = { Consumables: ['Consumable', 'Remedy'], Materials: ['Treasure', 'Catalyst'], Provisions: [], Equipment: [], 'Key Items': ['Key Item', 'Magic'] };
+    const tags = map[want] || [];
+    const out = ITEMS.filter((i) => tags.includes(i.tag)).map((i) => ({ ...i }));
+    return out.length ? out : ITEMS.map((i) => ({ ...i }));
+  }
+  const cats = tab < 0 ? null : (ITEM_TABS[tab]?.cats || null);
+  return r.inventory.list()
+    .filter((e) => !cats || cats.includes(e.def.category))
+    .map((e) => itemView(e.def, e.count, r));
+}
+
+/** One item stack, hydrated for the detail column. */
+function itemView(def, count, r) {
+  const use = def.use || null;
+  let effect = '—';
+  if (use) {
+    if (use.type === 'heal') effect = `Restore ${use.amount.toLocaleString()} HP`;
+    else if (use.type === 'mp') effect = `Restore ${use.amount} MP`;
+    else if (use.type === 'full') effect = 'Full HP / MP';
+    else if (use.type === 'revive') effect = `Revive · ${Math.round((use.percent || 0.5) * 100)}% HP`;
+    else if (use.type === 'cure') effect = `Cure ${use.status.join(', ').replace('*', 'all ailments')}`;
+  } else if (def.category === 'weapon') effect = `ATK +${def.attack}`;
+  else if (def.category === 'accessory') effect = modLine(def.mods) || 'Passive';
+  else if (def.catalyst) effect = `${def.catalyst.effect} · potency ${def.catalyst.potency}`;
+  else if (def.sell > 0) effect = `Sells for ${r.inventory.sellPrice(def.id).toLocaleString()} gil`;
+
+  return {
+    id: def.id,
+    name: def.name,
+    qty: count,
+    icon: itemIcon(def),
+    tag: CATEGORY_TAG[def.category] || 'Item',
+    effect,
+    target: use ? (use.target === 'party' ? 'All allies' : use.target === 'downed' ? 'Downed ally' : 'One ally') : '—',
+    field: !!use,
+    desc: def.desc || '',
+  };
+}
+
+/** Pick the icon that says the most about what an item actually does. */
+function itemIcon(def) {
+  const u = def.use;
+  if (u) {
+    if (u.type === 'revive') return 'regen';
+    if (u.type === 'mp') return 'lightning';
+    if (u.type === 'full') return 'haste';
+    if (u.type === 'cure') return u.status?.includes('poison') ? 'poison' : 'shieldUp';
+    return 'potion';
+  }
+  if (def.category === 'weapon') return CLASS_ICON[def.class] || 'sword';
+  if (def.catalyst) {
+    const t = def.catalyst.tags || [];
+    if (t.includes('lightning')) return 'lightning';
+    if (t.includes('heal')) return 'regen';
+    if (t.includes('poison')) return 'poison';
+    return 'ap';
+  }
+  return CATEGORY_ICON[def.category] || 'items';
+}
+
+/** "STR +40  ·  HP +300" from a modifier bucket. */
+function modLine(mods) {
+  if (!mods) return '';
+  const K = { hp: 'HP', mp: 'MP', strength: 'STR', vitality: 'VIT', magic: 'MAG', spirit: 'SPR', attack: 'ATK', defense: 'DEF', magicAttack: 'M.ATK', magicDefense: 'M.DEF' };
+  const bits = [];
+  for (const k of Object.keys(K)) if (mods[k]) bits.push(`${K[k]} ${mods[k] > 0 ? '+' : ''}${mods[k]}`);
+  if (mods.critRate) bits.push(`Crit +${Math.round(mods.critRate * 100)}%`);
+  for (const e of Object.keys(mods.resist || {})) if (mods.resist[e]) bits.push(`${e} res +${mods.resist[e]}%`);
+  return bits.slice(0, 3).join('  ·  ');
+}
+
+/**
+ * One member's equipment slots, in the order the gear card lays them out.
+ * @param {object} game
+ * @param {string} id roster id
+ */
+export function readGear(game, id) {
+  const r = rpg(game);
+  if (!r) return (GEAR[id] || GEAR.noctis).map((g) => ({ ...g }));
+  const eq = r.inventory.equipped(id);
+  const out = [];
+  eq.weapon.forEach((def) => out.push(slotView('Weapon', def)));
+  eq.accessory.forEach((def) => out.push(slotView('Accessory', def)));
+  return out;
+}
+
+function slotView(slot, def) {
+  if (!def) return { slot, name: '— Empty —', stat: '', empty: true, id: null };
+  return {
+    slot, id: def.id, name: def.name,
+    stat: slot === 'Weapon' ? `ATK +${def.attack}${modLine(def.mods) ? `  ·  ${modLine(def.mods)}` : ''}` : (modLine(def.mods) || def.special || ''),
+  };
+}
+
+/**
+ * The tracked quest, its current objective and the real distance to its
+ * waypoint. Everything the compass strip and the pause menu print.
+ * @param {object} game
+ * @returns {{title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null}}
+ */
+export function readQuest(game) {
+  const hs = hudState(game);
+  const t = hs && hs.tracked;
+  if (!t) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };
+  const obj = (t.objectives || []).find((o) => !o.done) || t.objectives?.[t.objectives.length - 1];
+  const wp = (hs.waypoints || []).find((w) => w.questId === t.id) || null;
+  const p = game?.get?.('Player')?.position;
+  let dist = 0;
+  if (wp && p) dist = Math.round(Math.hypot(p.x - wp.pos[0], p.z - wp.pos[2]));
+  return {
+    id: t.id,
+    title: t.name,
+    step: obj ? obj.label : t.summary,
+    dist,
+    progress: obj ? obj.progress : 0,
+    count: obj ? obj.count : 0,
+    region: t.region || 'leide',
+    type: t.type,
+    waypoint: wp ? wp.pos : null,
+    live: true,
+  };
+}
+
+/**
+ * Every marker the world map and the compass strip should show: active quest
+ * waypoints plus discovered havens.
+ * @param {object} game
+ * @returns {Array<{kind:string, name:string, x:number, z:number}>}
+ */
+export function readMarkers(game) {
+  const r = rpg(game);
+  const hs = hudState(game);
+  if (!r || !hs) return null;
+  const out = [];
+  for (const w of hs.waypoints || []) {
+    out.push({ kind: w.type === 'hunt' ? 'hunt' : 'quest', name: w.name, x: w.pos[0], z: w.pos[2], tracked: w.tracked });
+  }
+  for (const h of r.day.havens()) {
+    if (!h.discovered) continue;
+    out.push({ kind: 'haven', name: h.name, x: h.pos[0], z: h.pos[2] });
+  }
+  for (const d of r.tables.deposits || []) {
+    out.push({ kind: 'deposit', name: d.name || d.id, x: d.pos[0], z: d.pos[2] });
   }
   return out;
 }
 
-/** Weapon loadout, preferring `Combat.loadout` / `Player.weapons` if present. */
-export function readWeapons(game) {
-  const live = game?.get?.('Combat')?.loadout || game?.get?.('Player')?.weapons;
-  if (Array.isArray(live) && live.length) {
-    return WEAPONS.map((w, i) => ({ ...w, ...(live[i] || {}) }));
+/**
+ * Party techniques for the combat HUD's tech rack — one signature technique
+ * per companion, with real bar costs and the real charge state.
+ * @param {object} game
+ */
+export function readTechniques(game) {
+  const r = rpg(game);
+  if (!r) return TECHNIQUES.map((t) => ({ ...t }));
+  const charge = r.party.techCharge;
+  const out = [];
+  for (const id of ['gladio', 'ignis', 'prompto']) {
+    const t = r.party.signatureTechnique(id);
+    if (!t) continue;
+    out.push({
+      name: t.name,
+      owner: MEMBER_UI[id].short,
+      cost: t.bars,
+      icon: CLASS_ICON[r.party.members[id].weapon] || 'sword',
+      ready: t.bars > 0 ? Math.min(1, charge / t.bars) : 1,
+    });
   }
-  return WEAPONS.map((w) => ({ ...w }));
+  return out.length ? out : TECHNIQUES.map((t) => ({ ...t }));
+}
+
+/**
+ * The Ascension grid: the authored 106-node graph plus whatever live state
+ * there is to overlay on it.
+ *
+ * The layout tables are pure data, so the star map draws correctly even without
+ * a running `RpgSystem`; only the AP wallet and the unlocked set need one.
+ * @param {object} game
+ */
+export function readAscension(game) {
+  const r = rpg(game);
+  const asc = r ? r.ascension : null;
+  return {
+    nodes: r ? r.tables.nodes : NODES,
+    edges: r ? r.tables.edges : EDGES,
+    constellations: r ? r.tables.constellations : CONSTELLATION_INFO,
+    ap: asc ? asc.ap : 0,
+    total: asc ? asc.totalApRequired : Object.values(NODES).reduce((a, n) => a + n.ap, 0),
+    unlockedCount: asc ? asc.unlocked.size : 0,
+    isUnlocked: (id) => !!asc && asc.isUnlocked(id),
+    canUnlock: (id) => (asc ? asc.canUnlock(id) : { ok: false, reason: 'locked', missing: [], ap: 0 }),
+    unlock: (id) => (r ? r.unlockNode(id) : false),
+  };
+}
+
+/**
+ * The Armiger gauge, 0..1, earned from damage dealt. Null with no RPG system.
+ * @param {object} game
+ */
+export function readArmiger(game) {
+  const r = rpg(game);
+  return r && r.combatBridge ? r.combatBridge.armiger : null;
+}
+
+/**
+ * Resolve a hit on a scene-graph enemy through the real damage formula.
+ * Returns null when there is no RPG system to ask.
+ * @param {object} game
+ * @param {object} enemy
+ * @param {object} [opts] see `CombatBridge.roll`
+ */
+export function rollDamage(game, enemy, opts) {
+  const r = rpg(game);
+  if (!r || !r.combatBridge || !enemy) return null;
+  return r.combatBridge.roll(enemy, opts);
+}
+
+/**
+ * World XZ -> the MapScreen's 1600x900 chart. North is -Z and up-screen; the
+ * transform is anisotropic to match the chart's elliptical landmass.
+ * @param {number} x world x
+ * @param {number} z world z
+ */
+export function worldToChart(x, z) {
+  return { x: 760 + (x / 430) * 396, y: 440 + (z / 430) * 248 };
 }

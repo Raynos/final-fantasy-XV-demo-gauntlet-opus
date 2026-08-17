@@ -1,8 +1,11 @@
 import { el, svg, clamp, rng, easeOut, easeOutQuint } from '../UIKit.js';
-import { REGIONS, MAP_PINS } from '../GameData.js';
+import { REGIONS, MAP_PINS, readMarkers, worldToChart } from '../GameData.js';
 
 const W = 1600, H = 900;
-const PIN_COL = { quest: '#e8cf98', hunt: '#e0644a', haven: '#b6d6f8', dungeon: '#a68fd0' };
+const PIN_COL = { quest: '#e8cf98', hunt: '#e0644a', haven: '#b6d6f8', deposit: '#a68fd0' };
+const PIN_LABEL = { quest: 'Quest', hunt: 'Hunt', haven: 'Haven', deposit: 'Elemental Deposit' };
+/** Marker slots reserved on the chart; the rest of the list is dropped. */
+const MAX_PINS = 14;
 
 /** Closed blobby coastline from a seeded radial noise walk. */
 function blob(cx, cy, rx, ry, seed, wob = 0.22, pts = 30) {
@@ -98,34 +101,37 @@ export class MapScreen {
       const g = svg('g');
       g.appendChild(svg('text', {
         x: (r2.x * W).toFixed(0), y: (r2.y * H).toFixed(0), 'text-anchor': 'middle',
-        fill: 'rgba(232,244,255,.80)', 'font-size': 19, 'font-weight': 200,
+        fill: 'rgba(232,244,255,.52)', 'font-size': 19, 'font-weight': 200,
         'letter-spacing': 8.5, 'font-family': 'inherit',
       }, [r2.name.toUpperCase()]));
       g.appendChild(svg('text', {
         x: (r2.x * W).toFixed(0), y: (r2.y * H + 20).toFixed(0), 'text-anchor': 'middle',
-        fill: 'rgba(190,214,246,.42)', 'font-size': 9, 'letter-spacing': 4.2, 'font-family': 'inherit',
+        fill: 'rgba(190,214,246,.30)', 'font-size': 9, 'letter-spacing': 4.2, 'font-family': 'inherit',
       }, [r2.sub.toUpperCase()]));
       this.regionG.appendChild(g);
       return g;
     });
     this.svg.appendChild(this.regionG);
 
-    // pins
+    // Pins — a fixed pool, reassigned each frame from the live marker list so
+    // waypoints can appear and vanish without touching the DOM.
     this.pinG = svg('g');
-    this.pinEls = MAP_PINS.map((p) => {
-      const x = p.x * W, y = p.y * H;
-      const col = PIN_COL[p.kind] || '#b6d6f8';
-      const g = svg('g', { transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` });
-      g.appendChild(svg('circle', { r: 15, fill: 'none', stroke: col, 'stroke-width': 1, opacity: 0.30 }));
-      g.appendChild(svg('path', { d: 'M0 -7 5.4 0 0 7 -5.4 0Z', fill: col, opacity: 0.95 }));
-      g.appendChild(svg('text', {
+    this.pinEls = [];
+    for (let i = 0; i < MAX_PINS; i++) {
+      const g = svg('g', { opacity: 0 });
+      const ring = svg('circle', { r: 15, fill: 'none', stroke: '#b6d6f8', 'stroke-width': 1, opacity: 0.30 });
+      const head = svg('path', { d: 'M0 -7 5.4 0 0 7 -5.4 0Z', fill: '#b6d6f8', opacity: 0.95 });
+      const label = svg('text', {
         x: 22, y: 4, fill: 'rgba(224,238,255,.78)', 'font-size': 10,
         'letter-spacing': 2.2, 'font-family': 'inherit',
-      }, [p.name.toUpperCase()]));
+        stroke: 'rgba(5,9,16,.85)', 'stroke-width': 2.6, 'paint-order': 'stroke fill',
+      }, ['']);
+      g.appendChild(ring); g.appendChild(head); g.appendChild(label);
       this.pinG.appendChild(g);
-      return { g, p, ring: g.firstChild };
-    });
+      this.pinEls.push({ g, ring, head, label, key: '' });
+    }
     this.svg.appendChild(this.pinG);
+    this.pins = [];
 
     // player marker
     this.player = svg('g', { transform: 'translate(596 508) rotate(38)' });
@@ -146,12 +152,35 @@ export class MapScreen {
 
     this.legend = el('div.map-legend', {}, Object.keys(PIN_COL).map((k) => el('div.lg', {}, [
       el('div.sw', { style: `width:9px;height:9px;transform:rotate(45deg);background:${PIN_COL[k]}` }),
-      k === 'haven' ? 'Haven / Outpost' : k === 'dungeon' ? 'Dungeon' : k === 'hunt' ? 'Hunt' : 'Quest',
+      PIN_LABEL[k],
     ])));
     root.appendChild(this.legend);
   }
 
-  nav(dx, dy) { if (dx || dy) this.i = (this.i + (dy || dx) + MAP_PINS.length) % MAP_PINS.length; }
+  nav(dx, dy) {
+    const n = this.pins.length || 1;
+    if (dx || dy) this.i = (this.i + (dy || dx) + n) % n;
+  }
+
+  /**
+   * The markers to draw: live quest waypoints, discovered havens and elemental
+   * deposits, projected from real world XZ. Falls back to the chart literals
+   * only when no RPG system is registered.
+   * @param {object} game
+   */
+  _markers(game) {
+    const live = readMarkers(game);
+    if (live && live.length) {
+      const rank = { quest: 0, hunt: 1, haven: 2, deposit: 3 };
+      const sorted = live.slice().sort((a, b) =>
+        (b.tracked ? 1 : 0) - (a.tracked ? 1 : 0) || (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9));
+      return sorted.slice(0, MAX_PINS).map((m) => {
+        const c = worldToChart(m.x, m.z);
+        return { kind: m.kind, name: m.name, x: c.x, y: c.y, tracked: !!m.tracked };
+      });
+    }
+    return MAP_PINS.slice(0, MAX_PINS).map((p) => ({ kind: p.kind, name: p.name, x: p.x * W, y: p.y * H }));
+  }
 
   /** @param {number} dt @param {object} game @param {number} a */
   update(dt, game, a) {
@@ -167,16 +196,48 @@ export class MapScreen {
     for (let i = 0; i < this.regionEls.length; i++) {
       this.regionEls[i].setAttribute('opacity', easeOut(clamp((rev - 0.24 - i * 0.06) / 0.5, 0, 1)).toFixed(3));
     }
+    this.pins = this._markers(game);
+    if (this.i >= this.pins.length) this.i = 0;
     for (let i = 0; i < this.pinEls.length; i++) {
       const pe = this.pinEls[i];
-      const s = easeOut(clamp((rev - 0.34 - i * 0.05) / 0.45, 0, 1));
+      const p = this.pins[i];
+      if (!p) { if (pe._vis !== false) { pe.g.setAttribute('opacity', 0); pe._vis = false; } continue; }
+      pe._vis = true;
+      const key = `${p.kind}|${p.name}|${p.x > 800 ? 'l' : 'r'}`;
+      if (pe.key !== key) {
+        const col = PIN_COL[p.kind] || '#b6d6f8';
+        pe.ring.setAttribute('stroke', col);
+        pe.head.setAttribute('fill', col);
+        // Deposits are legible from their colour alone; labelling all ten of
+        // them turns the chart into a wall of text.
+        pe.label.textContent = p.kind === 'deposit' ? '' : p.name.toUpperCase();
+        // label on the side that points away from the middle of the chart
+        const left = p.x > 800;
+        pe.label.setAttribute('x', left ? -22 : 22);
+        pe.label.setAttribute('text-anchor', left ? 'end' : 'start');
+        pe.key = key;
+      }
+      const s = easeOut(clamp((rev - 0.34 - i * 0.035) / 0.45, 0, 1));
       const on = i === this.i;
       const pulse = 0.5 + 0.5 * Math.sin(t * 2.6 + i);
-      pe.g.setAttribute('opacity', (s * (on ? 1 : 0.72)).toFixed(3));
+      pe.g.setAttribute('opacity', (s * (on ? 1 : p.tracked ? 0.9 : 0.66)).toFixed(3));
       pe.g.setAttribute('transform',
-        `translate(${(pe.p.x * W).toFixed(1)} ${(pe.p.y * H).toFixed(1)}) scale(${(s * (on ? 1.22 : 1)).toFixed(3)})`);
+        `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(s * (on ? 1.22 : 1)).toFixed(3)})`);
       pe.ring.setAttribute('r', (on ? 15 + 7 * pulse : 15).toFixed(1));
       pe.ring.setAttribute('opacity', (on ? 0.30 + 0.4 * (1 - pulse) : 0.22).toFixed(3));
+    }
+
+    // the player marker sits at the party's real position, facing the camera
+    const pp = game.get?.('Player')?.position;
+    if (pp) {
+      const c = worldToChart(pp.x, pp.z);
+      const cam = game.camera;
+      let yaw = 0;
+      if (cam) {
+        const m = cam.matrixWorld.elements;
+        yaw = Math.atan2(-m[8], -m[10]) * 180 / Math.PI;
+      }
+      this.player.setAttribute('transform', `translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${(180 - yaw).toFixed(1)})`);
     }
     const pr = 12 + 6 * (0.5 + 0.5 * Math.sin(t * 2.2));
     this.playerRing.setAttribute('r', pr.toFixed(1));

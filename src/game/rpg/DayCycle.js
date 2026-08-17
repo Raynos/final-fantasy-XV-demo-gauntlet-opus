@@ -115,13 +115,21 @@ export class DayCycle {
    */
   update(dt, game = null) {
     // Prefer an authoritative Sky if it has one and we're set to follow.
+    // `Sky` names the property `hours`; `timeOfDay` is accepted too so any
+    // other implementation of the documented contract still drives us.
     const sky = this.syncFromSky && game?.get ? game.get('Sky') : null;
-    if (sky && typeof sky.timeOfDay === 'number') {
+    const skyHour = typeof sky?.timeOfDay === 'number' ? sky.timeOfDay
+      : typeof sky?.hours === 'number' ? sky.hours : null;
+    if (skyHour != null) {
       // Follow the sky by *delta* so midnight wrap still advances the day and
       // absolute-hour buff timers never run backwards.
-      let delta = sky.timeOfDay - this.hour;
+      let delta = skyHour - this.hour;
       if (delta < -12) delta += 24;
       if (delta > 0) this.advance(delta);
+      // A scripted jump backwards (the shot harness, a cutscene) is not a
+      // rewind of the calendar — snap to it so the clock never contradicts the
+      // light the player is standing in.
+      else if (delta < -0.001) this.setHour(skyHour);
     } else if (this.running) {
       this.advance((dt * this.minutesPerSecond) / 60);
     }

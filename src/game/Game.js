@@ -101,8 +101,11 @@ export class Game {
       ['Camera', () => new CameraRig()],
       ['Audio', () => new AudioSystem()],
       // Before HUD — the HUD reads it during init. Start mid-game so the
-      // capture shots show a party with real progression, not a level 1 save.
-      ['Rpg', () => new RpgSystem({ startLevel: 27 })],
+      // capture shots show a party with real progression, not a level 1 save:
+      // a level-27 retinue with a walked Ascension path, a live quest log, a
+      // stocked bag and AP left to spend. Every number the UI draws comes from
+      // here (see src/ui/GameData.js).
+      ['Rpg', () => new RpgSystem({ startLevel: 27, startGil: 42180, startAp: 148 })],
       ['HUD', () => new HUD()],
       ['Menus', () => new Menus()],
       ['Director', () => new Director()],
@@ -159,6 +162,9 @@ export class Game {
 
     const hud = this.get('HUD');
     if (hud && hud.setVisible) hud.setVisible(!!shot.hud);
+    // notifications are transient by nature; without this, an AP award earned
+    // during the previous shot's settle is still on screen during this one
+    if (hud && hud.toasts) hud.toasts.clear();
 
     const menus = this.get('Menus');
     if (menus && menus.setScreen) menus.setScreen(shot.menu || null);
@@ -198,6 +204,9 @@ export class Game {
     const t = this.time;
     t.now = 0; t.raw = 0; t.dt = 0; t.rawDt = 0; t.frame = 0; t.scale = 1;
     t._last = performance.now() / 1000;
+    // the UI memoises rpg.hudState() by frame number; rewinding the frame
+    // counter would otherwise let a stale record survive the reset
+    this._hudCache = null;
     for (const s of this.systems) if (s.resetClock) s.resetClock();
     if (this.post && this.post.resetHistory) this.post.resetHistory();
   }

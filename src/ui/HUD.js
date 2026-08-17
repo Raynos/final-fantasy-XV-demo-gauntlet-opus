@@ -7,6 +7,8 @@ import { CombatHUD } from './CombatHUD.js';
 import { Prompts } from './Prompts.js';
 import { ScreenFX } from './ScreenFX.js';
 import { Subtitles } from './Subtitles.js';
+import { Toasts } from './Toasts.js';
+import { HudBridge } from './HudBridge.js';
 import { SHOTS } from '../game/Shots.js';
 import { BANTER } from './GameData.js';
 
@@ -48,6 +50,7 @@ export class HUD {
     this.combat = new CombatHUD(this.root);
     this.prompts = new Prompts(this.root);
     this.subtitles = new Subtitles(this.root);
+    this.toasts = new Toasts(this.party.root);
     this.fx = new ScreenFX(game.uiRoot);
 
     this.visible = true;
@@ -63,7 +66,14 @@ export class HUD {
 
     window.addEventListener('ffxv-damage', (e) => this.combat.damage(e.detail));
     window.addEventListener('ffxv-callout', (e) => this.combat.callOut(e.detail?.word, e.detail?.sub));
+
+    // Combat and RPG events -> damage numbers, call-outs, toasts, level-ups.
+    this.bridge = new HudBridge(this);
+    this.bridge.attach(game);
   }
+
+  /** Push a line onto the notification column. @param {string} k @param {string} v */
+  toast(k, v, ico, tone) { this.toasts.push(k, v, ico, tone); }
 
   /** UI is authored at 1600x900; scale it crisply for other viewport sizes. */
   _scale() {
@@ -108,6 +118,8 @@ export class HUD {
     this.subtitles.cur = null;
     for (const b of this.subtitles.bubbles) b.node.remove();
     this.subtitles.bubbles.length = 0;
+    this.toasts.clear();
+    if (this.bridge) this.bridge._lastCall = -99;
     this._banterAt = this.game.time.now + 0.30;
     this.fieldA = 0; this.combatA = 0;
   }
@@ -145,6 +157,7 @@ export class HUD {
     this.prompts.update(dt, game, mode, this.fieldA);
     this.combat.update(dt, game, this.combatA);
     this.subtitles.update(dt);
+    this.toasts.update(dt, this.fieldA);
     // the cinematic edge darkening is part of the HUD frame — it must not tint
     // shots that have the HUD switched off (vistas, hero shots, other agents')
     this.fx.setCinematic((0.46 + this.combatA * 0.12) * Math.max(this.fieldA, this.combatA));

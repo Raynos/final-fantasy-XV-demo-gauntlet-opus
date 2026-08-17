@@ -1,7 +1,7 @@
 import { el, clamp, commas, easeOut, easeOutQuint } from '../UIKit.js';
 import { icon, portrait } from '../Icons.js';
 import { Bar } from '../Bar.js';
-import { readParty } from '../GameData.js';
+import { readParty, readQuest, hudState } from '../GameData.js';
 
 const ENTRIES = [
   { key: 'items', label: 'Items', icon: 'items', hint: 'Consumables & treasures', to: 'inventory',
@@ -55,18 +55,19 @@ export class MainScreen {
     this.preview.appendChild(this.pvB);
 
     this.stats = el('div.mpv-stats');
-    this.statNodes = [['Gil', '42,180'], ['Play Time', '27:14'], ['Party Level', '27']].map(([k, v]) => {
+    this.statNodes = [['Gil', '—'], ['Play Time', '—'], ['Party Level', '—'], ['AP', '—']].map(([k, v]) => {
       const vn = el('div.v', { text: v });
       this.stats.appendChild(el('div.mpv-stat', {}, [el('div.k', { text: k }), vn]));
       return vn;
     });
     this.preview.appendChild(this.stats);
 
+    this.trackQ = el('div.q', { text: '—' });
+    this.trackS = el('div.s', { text: '' });
     this.track = el('div.mpv-track', {}, [
       el('div.rule', { style: 'margin-bottom:16px' }),
       el('div.k', { text: 'Tracking' }),
-      el('div.q', { text: 'A Better Engine Blade' }),
-      el('div.s', { text: 'Deliver the Rare Metal to Cid at Hammerhead  ·  1,240 m' }),
+      this.trackQ, this.trackS,
     ]);
     this.preview.appendChild(this.track);
 
@@ -97,6 +98,33 @@ export class MainScreen {
     if (dy) this.i = (this.i + dy + ENTRIES.length) % ENTRIES.length;
   }
 
+  /**
+   * The preview blurb. Three of the eight entries can report real state, so
+   * they do rather than repeating an authored count that would drift.
+   * @param {object} entry
+   * @param {object} game
+   */
+  _body(entry, game) {
+    const r = game?.get?.('Rpg');
+    if (!r) return entry.body;
+    if (entry.key === 'quests') {
+      const q = r.quests;
+      const hunts = q.active.filter((x) => x.type === 'hunt').length;
+      return `${q.active.length} active, ${q.available.length} available, ${q.completed.length} finished — `
+        + `${hunts} of them bount${hunts === 1 ? 'y' : 'ies'}. Chapter ${r.chapter}.`;
+    }
+    if (entry.key === 'ascension') {
+      const a = r.ascension;
+      return `${a.unlocked.size} of ${a.allNodes.length} nodes unlocked across nine constellations, `
+        + `${a.ap} AP unspent. ${entry.body}`;
+    }
+    if (entry.key === 'items') {
+      const list = r.inventory.list();
+      return `${list.length} kinds of thing in the bag and ${commas(r.inventory.gil)} gil. ${entry.body}`;
+    }
+    return entry.body;
+  }
+
   accept() {
     const to = ENTRIES[this.i].to;
     if (to) this.menus.push(to);
@@ -123,7 +151,7 @@ export class MainScreen {
     const cur = ENTRIES[this.i];
     if (this._cur !== cur.key) {
       this.pvT.textContent = cur.label;
-      this.pvB.textContent = cur.body;
+      this.pvB.textContent = this._body(cur, game);
       this.mark.textContent = '';
       this.mark.appendChild(icon(cur.icon, { size: 210, stroke: 0.34 }));
       this._cur = cur.key;
@@ -145,7 +173,22 @@ export class MainScreen {
       const txt = `LV ${p.level}    ${commas(p.hp)} / ${commas(p.maxHp)}`;
       if (c._t !== txt) { c.hp.textContent = txt; c._t = txt; }
     }
-    this.statNodes[2].textContent = String(party[0]?.level ?? 27);
+    // the save summary, straight off the model
+    const hs = hudState(game);
+    if (hs) {
+      const avg = Math.round(party.reduce((s2, p) => s2 + p.level, 0) / Math.max(1, party.length));
+      const secs = Math.max(0, Math.floor(game.get('Rpg').playTime));
+      const play = `${String(Math.floor(secs / 3600)).padStart(2, '0')}:${String(Math.floor(secs / 60) % 60).padStart(2, '0')}`;
+      const vals = [commas(hs.gil), play, String(avg), commas(hs.ap)];
+      for (let i = 0; i < this.statNodes.length; i++) {
+        if (this.statNodes[i]._v !== vals[i]) { this.statNodes[i].textContent = vals[i]; this.statNodes[i]._v = vals[i]; }
+      }
+      // the region subtitle follows the tracked quest's region
+      const q = readQuest(game);
+      const qs = q.live && q.waypoint ? `${q.step}  ·  ${commas(q.dist)} m` : q.step;
+      if (this._q !== q.title) { this.trackQ.textContent = q.title; this._q = q.title; }
+      if (this._qs !== qs) { this.trackS.textContent = qs; this._qs = qs; }
+    }
     this.stats.style.opacity = easeOut(clamp((a - 0.4) / 0.5, 0, 1)).toFixed(3);
     void e;
   }
