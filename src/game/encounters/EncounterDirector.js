@@ -662,6 +662,30 @@ export class EncounterDirector {
       }
     }
     if (this.rpg) this.rpg.inCombat = this.state === 'combat';
+    this._publishMode();
+  }
+
+  /**
+   * Tell the HUD what kind of moment this is.
+   *
+   * `HUD._resolveMode()` reads `Director.scenario || Director.mode ||
+   * Director.state`, and `Director.play()` stamps the literal string `'live'`
+   * into `scenario`. `'live'` is not a mode the HUD knows, so it was never
+   * equal to `'combat'` — which is what gates the entire combat layer. In a
+   * real fight the enemy nameplates, the lock-on reticle, the Armiger gauge
+   * and the technique rack were all sitting at zero opacity behind
+   * `display:none`.
+   *
+   * The live loop is the thing that actually knows whether a fight is on, so
+   * it publishes that under `mode` and clears the placeholder scenario. This
+   * is safe for the capture harness: `Director.setScenario` early-outs only on
+   * an *equal* name, and it is always the one to call `setLive(false)`.
+   */
+  _publishMode() {
+    const d = this.game.get('Director');
+    if (!d) return;
+    if (d.scenario === 'live') d.scenario = null;
+    if (d.scenario == null) d.mode = this.state;
   }
 
   /** Activate what is near, retire what is not. */
