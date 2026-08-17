@@ -1,7 +1,7 @@
 # Session state
 
 Live snapshot for resuming after an interruption (usage limit, crash, new session).
-Session `51c0b82c-27b7-4759-9812-b001987dde08` · updated 2026-08-17 09:35 · `main` @ 117 commits.
+Session `51c0b82c-27b7-4759-9812-b001987dde08` · updated 2026-08-17 09:35 · `main` @ 125 commits. **0 agents running, 0 worktrees, `main` only.**
 
 Working tree is **clean**, **no agents are running**, and everything is merged
 to `main`. If the session dies right now, nothing is lost.
