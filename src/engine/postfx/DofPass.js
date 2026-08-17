@@ -24,14 +24,21 @@ export class DofPass extends Pass {
     this.needsSwap = true;
     this.enabled = true;
 
-    this.fStop = 2.8;
+    // A stills photographer shooting a person at f/2.8 on a 40mm lens throws
+    // the whole background away, and that is exactly what a game frame must
+    // not do: the world *is* the shot. Games that look cinematic (FFXV very
+    // much included) run a deep stop and let the far field go gently soft
+    // rather than to mush, so the mesa behind the hero still reads as strata.
+    // The near field is a different job — a soft grass foreground is a free
+    // depth cue — so the two halves are scaled independently below.
+    this.fStop = 4.6;
     this.sensorHeight = 24.0;      // mm, full frame
     this.focusDistance = 8.0;      // metres
-    this.bokehScale = 1.35;        // artistic multiplier on top of the physics
-    this.maxCoc = 14.0;            // pixels, full-res
+    this.bokehScale = 0.95;        // artistic multiplier on top of the physics
+    this.maxCoc = 10.0;            // pixels, full-res
     this.blades = 0.55;            // 0 = circular, 1 = hard hexagon
-    this.nearScale = 1.0;
-    this.farScale = 1.0;
+    this.nearScale = 1.35;         // foreground: keep it creamy
+    this.farScale = 0.68;          // background: soft, never unreadable
 
     this.prefilter = fsMaterial({
       uniforms: {

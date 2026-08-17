@@ -79,53 +79,133 @@ const GOLD = 0xb08a3c;
 
 /* -------------------------------------------------------------- geometry */
 
+/**
+ * Cross-section of a blade that has actually been ground: a wide primary face
+ * falling to a real cutting bevel at each edge, with a fuller channel milled
+ * down the centre line.
+ *
+ * The old blade used the smooth lens section, and a smooth lens with a
+ * polished-metal shader is a *mirror*: every point on the face returns very
+ * nearly the same slice of sky, so the whole thing renders as one flat lit
+ * rectangle — a slab, exactly what the critic called it. Facets are what make
+ * steel read as steel. Four planes at genuinely different angles return four
+ * different pieces of the environment, the bevel catches a hard specular line
+ * along the edge, and the channel throws a shadow down the middle.
+ *
+ * @param {number} [chan] channel half-width as a fraction of the blade
+ * @returns {Array<[number, number]>} unit cross-section, CCW
+ */
+function ridgedBladeCross(chan = 0.20) {
+  const upper = [
+    [1.00, 0.00],       // cutting edge
+    [0.80, 0.66],       // bevel shoulder
+    [0.40, 0.92],       // primary face
+    [chan + 0.06, 0.94],
+    [chan, 0.52],       // channel wall
+    [0.00, 0.48],       // channel floor
+  ];
+  const c = [];
+  for (const p of upper) c.push(p);
+  for (let i = upper.length - 2; i >= 0; i--) c.push([-upper[i][0], upper[i][1]]);
+  for (let i = 1; i < upper.length; i++) c.push([-upper[i][0], -upper[i][1]]);
+  for (let i = upper.length - 2; i >= 1; i--) c.push([upper[i][0], -upper[i][1]]);
+  return c;
+}
+
+/** Faceted shading: every triangle keeps its own plane normal. */
+function faceted(geo) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  if (g !== geo) geo.dispose();
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Noctis' Engine Blade: slim, angular, blue-lit fuller. */
 export function swordGeometry() {
   const parts = [];
-  const blade = loft(bladeCross(12), [
-    { y: 0.00, sx: 0.052, sz: 0.020 },
-    { y: 0.18, sx: 0.058, sz: 0.021 },
-    { y: 0.72, sx: 0.052, sz: 0.018 },
-    { y: 0.95, sx: 0.040, sz: 0.013 },
-    { y: 1.06, sx: 0.016, sz: 0.006 },
+  const blade = faceted(loft(ridgedBladeCross(), [
+    { y: 0.00, sx: 0.048, sz: 0.0165 },
+    { y: 0.14, sx: 0.055, sz: 0.0178 },
+    { y: 0.46, sx: 0.052, sz: 0.0168 },
+    { y: 0.76, sx: 0.047, sz: 0.0152 },
+    { y: 0.94, sx: 0.038, sz: 0.0126 },
+    { y: 1.04, sx: 0.021, sz: 0.0078 },
+    { y: 1.10, sx: 0.005, sz: 0.0026 },
+  ]));
+  parts.push(tint(blade, 0xa2acb6, 0.07));
+
+  // The light lives *in* the fuller, recessed below the faces, so the glow is
+  // a line you read along the blade rather than a slab that out-shouts a face.
+  const fuller = loft(rectCross(0.5, 8), [
+    { y: 0.10, sx: 0.0088, sz: 0.0098 },
+    { y: 0.50, sx: 0.0082, sz: 0.0094 },
+    { y: 0.90, sx: 0.0060, sz: 0.0086 },
   ]);
-  parts.push(tint(blade, STEEL, 0.05));
-  const fuller = loft(rectCross(0.4, 8), [
-    { y: 0.10, sx: 0.010, sz: 0.023 },
-    { y: 0.88, sx: 0.008, sz: 0.022 },
-  ]);
-  parts.push(glow(tint(fuller, 0x2a4a7a), 0x2f9bff, 1.6));
-  const guard = place(slab(0.22, 0.035, 0.055, 0.012), { pos: [0, -0.015, 0] });
-  parts.push(tint(guard, DARK));
-  const wingL = place(slab(0.05, 0.10, 0.03, 0.008), { pos: [0.10, 0.03, 0], rot: [0, 0, -0.5] });
-  const wingR = place(slab(0.05, 0.10, 0.03, 0.008), { pos: [-0.10, 0.03, 0], rot: [0, 0, 0.5] });
-  parts.push(tint(wingL, GOLD), tint(wingR, GOLD));
-  const grip = loft(circleCross(8), [
-    { y: -0.04, sx: 0.020, sz: 0.014 },
-    { y: -0.20, sx: 0.018, sz: 0.013 },
+  parts.push(glow(tint(fuller, 0x14355e), 0x3d94dd, 0.42));
+
+  // crossguard: a centre block with two swept quillons, all with real depth
+  const boss = place(slab(0.052, 0.058, 0.052, 0.012), { pos: [0, -0.012, 0] });
+  parts.push(tint(boss, DARK));
+  const quillon = (side) => place(faceted(loft(rectCross(0.5, 8), [
+    { y: 0.000, sx: 0.021, sz: 0.024 },
+    { y: 0.055, sx: 0.019, sz: 0.021 },
+    { y: 0.098, sx: 0.012, sz: 0.014 },
+    { y: 0.122, sx: 0.004, sz: 0.005 },
+  ])), { pos: [side * 0.022, -0.014, 0], rot: [0, 0, side * -Math.PI * 0.46] });
+  parts.push(tint(quillon(1), DARK), tint(quillon(-1), DARK));
+
+  // gold wing plates flaring off the guard, canted so they catch a highlight
+  const wing = (side) => place(slab(0.038, 0.088, 0.024, 0.007),
+    { pos: [side * 0.062, 0.028, 0], rot: [0, side * 0.35, side * -0.62] });
+  parts.push(tint(wing(1), GOLD), tint(wing(-1), GOLD));
+
+  // ricasso collar between guard and grip
+  const collar = place(slab(0.030, 0.024, 0.030, 0.008), { pos: [0, -0.048, 0] });
+  parts.push(tint(collar, 0x33373f));
+
+  const grip = loft(circleCross(10), [
+    { y: -0.058, sx: 0.0195, sz: 0.0135 },
+    { y: -0.110, sx: 0.0182, sz: 0.0126 },
+    { y: -0.165, sx: 0.0188, sz: 0.0130 },
+    { y: -0.205, sx: 0.0172, sz: 0.0120 },
   ]);
   parts.push(tint(grip, 0x1a1c22));
-  const pommel = place(slab(0.05, 0.05, 0.035, 0.014), { pos: [0, -0.225, 0] });
+  for (let i = 0; i < 3; i++) {
+    const band = loft(circleCross(10), [
+      { y: -0.082 - i * 0.042, sx: 0.0206, sz: 0.0146 },
+      { y: -0.094 - i * 0.042, sx: 0.0206, sz: 0.0146 },
+    ]);
+    parts.push(tint(band, 0x121418));
+  }
+
+  const pommel = place(slab(0.046, 0.042, 0.034, 0.013), { pos: [0, -0.228, 0] });
   parts.push(tint(pommel, GOLD));
+  const core = place(faceted(loft(circleCross(6), [
+    { y: -0.014, sx: 0.0095, sz: 0.0095 },
+    { y: 0.000, sx: 0.0125, sz: 0.0125 },
+    { y: 0.014, sx: 0.0085, sz: 0.0085 },
+  ])), { pos: [0, -0.228, 0.018], rot: [Math.PI / 2, 0, 0] });
+  parts.push(glow(tint(core, 0x16385f), 0x3d94dd, 0.45));
   return merge(parts);
 }
 
 /** Gladiolus' greatsword: broad, heavy, chipped. */
 export function greatswordGeometry() {
   const parts = [];
-  const blade = loft(bladeCross(12), [
-    { y: 0.00, sx: 0.115, sz: 0.028 },
-    { y: 0.30, sx: 0.135, sz: 0.030 },
-    { y: 1.05, sx: 0.125, sz: 0.026 },
-    { y: 1.48, sx: 0.095, sz: 0.020 },
-    { y: 1.66, sx: 0.020, sz: 0.008 },
-  ]);
-  parts.push(tint(blade, 0x9aa4ae, 0.06));
+  const blade = faceted(loft(ridgedBladeCross(0.16), [
+    { y: 0.00, sx: 0.115, sz: 0.026 },
+    { y: 0.30, sx: 0.135, sz: 0.029 },
+    { y: 1.05, sx: 0.125, sz: 0.025 },
+    { y: 1.48, sx: 0.095, sz: 0.019 },
+    { y: 1.62, sx: 0.048, sz: 0.010 },
+    { y: 1.68, sx: 0.010, sz: 0.004 },
+  ]));
+  parts.push(tint(blade, 0x9aa4ae, 0.07));
   const spineGlow = loft(rectCross(0.5, 6), [
-    { y: 0.12, sx: 0.016, sz: 0.032 },
-    { y: 1.35, sx: 0.012, sz: 0.030 },
+    { y: 0.12, sx: 0.014, sz: 0.016 },
+    { y: 1.35, sx: 0.010, sz: 0.014 },
   ]);
-  parts.push(glow(tint(spineGlow, 0x3a2a1a), 0xff7a2a, 1.0));
+  parts.push(glow(tint(spineGlow, 0x3a2a1a), 0xff7a2a, 0.40));
   const guard = place(slab(0.40, 0.055, 0.09, 0.016), { pos: [0, -0.035, 0] });
   parts.push(tint(guard, 0x2c2019));
   const grip = loft(circleCross(8), [
@@ -160,7 +240,7 @@ export function polearmGeometry() {
   ]), { pos: [-0.05, 1.42, 0], rot: [0, 0, 1.15] });
   parts.push(tint(wingA, 0xc4cdd6), tint(wingB, 0xc4cdd6));
   const collar = place(slab(0.08, 0.06, 0.08, 0.02), { pos: [0, 1.33, 0] });
-  parts.push(glow(tint(collar, 0x24406a), 0x3f9dff, 0.9));
+  parts.push(glow(tint(collar, 0x24406a), 0x3f9dff, 0.35));
   const butt = place(spike(0.026, 0.16, 6), { pos: [0, -1.36, 0], rot: [Math.PI, 0, 0] });
   parts.push(tint(butt, 0x8a9099));
   return merge(parts);
@@ -179,7 +259,7 @@ export function daggerGeometry() {
   const edge = loft(rectCross(0.5, 6), [
     { y: 0.06, sx: 0.006, sz: 0.016 }, { y: 0.46, sx: 0.005, sz: 0.014, dx: 0.034 },
   ]);
-  parts.push(glow(tint(edge, 0x1a4a42), 0x30e0b8, 1.2));
+  parts.push(glow(tint(edge, 0x1a4a42), 0x30e0b8, 0.45));
   const guard = place(slab(0.10, 0.022, 0.04, 0.008), { pos: [0, -0.012, 0] });
   parts.push(tint(guard, 0x22262b));
   const grip = loft(circleCross(6), [{ y: -0.03, sx: 0.016, sz: 0.012 }, { y: -0.17, sx: 0.015, sz: 0.011 }]);
@@ -198,7 +278,7 @@ export function firearmGeometry() {
   const grip = place(slab(0.038, 0.13, 0.05, 0.010), { pos: [0, -0.08, -0.03], rot: [0.28, 0, 0] });
   parts.push(tint(grip, 0x15171b));
   const sight = place(slab(0.02, 0.02, 0.05, 0.004), { pos: [0, 0.08, 0.02] });
-  parts.push(glow(tint(sight, 0x30506a), 0x66d9ff, 0.7));
+  parts.push(glow(tint(sight, 0x30506a), 0x66d9ff, 0.30));
   const mag = place(slab(0.03, 0.08, 0.04, 0.006), { pos: [0, -0.06, 0.0] });
   parts.push(tint(mag, 0x1d2026));
   return merge(parts);
@@ -234,7 +314,7 @@ export function lanceGeometry() {
   parts.push(tint(head, 0xccd5de, 0.04));
   for (let i = 0; i < 3; i++) {
     const ring = place(slab(0.055, 0.03, 0.055, 0.012), { pos: [0, 0.2 + i * 0.3, 0] });
-    parts.push(glow(tint(ring, 0x2b4a72), 0x4aa8ff, 0.8));
+    parts.push(glow(tint(ring, 0x2b4a72), 0x4aa8ff, 0.30));
   }
   return merge(parts);
 }
@@ -258,7 +338,7 @@ export const WEAPON_GEOMETRY = {
  */
 export function makeWeaponMaterial() {
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, vertexColors: true, roughness: 0.32, metalness: 0.92,
+    color: 0xffffff, vertexColors: true, roughness: 0.38, metalness: 0.84,
     emissive: 0x000000,
   });
   const uniforms = { uReveal: { value: 1 }, uEdge: { value: new THREE.Color(0x4fb6ff) } };

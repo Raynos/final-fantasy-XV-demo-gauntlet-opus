@@ -134,7 +134,7 @@ export class GrassField {
 
     const m0 = grassMat({
       mat: {},
-      veg: { bend: 0.34, flutter: 0.34, gustFreq: 0.052, trample: 0.85, flexPow: 1.9, twoSidedNormals: true, aoBoost: 0.42 },
+      veg: { bend: 0.34, flutter: 0.34, gustFreq: 0.052, trample: 1.15, flexPow: 1.9, twoSidedNormals: true, aoBoost: 0.42 },
     });
     // the alpha reference the mip chain preserves must be the alpha test the
     // material will actually run, or the far LODs come out denser than the
@@ -143,7 +143,7 @@ export class GrassField {
     const clumpTexB = grassClumpTex(1, 30, 0.42);
     const m1 = grassMat({
       mat: { map: clumpTexA, alphaTest: 0.42, transparent: false },
-      veg: { bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.5, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.3 },
+      veg: { bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.7, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.3 },
     });
     const m2 = grassMat({
       mat: { map: clumpTexB, alphaTest: 0.42, transparent: false },

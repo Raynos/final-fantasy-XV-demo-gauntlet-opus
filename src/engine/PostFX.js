@@ -10,6 +10,7 @@ import { DofPass } from './postfx/DofPass.js';
 import { MotionBlurPass } from './postfx/MotionBlurPass.js';
 import { BloomPass } from './postfx/BloomPass.js';
 import { SsrPass } from './postfx/SsrPass.js';
+import { ContactShadowPass } from './postfx/ContactShadowPass.js';
 import { GradePass } from './postfx/GradePass.js';
 import { CasPass } from './postfx/CasPass.js';
 import { Exposure } from './postfx/Exposure.js';
@@ -19,7 +20,8 @@ import { GRADES, lutFor } from '../shaders/post/grades.js';
  * Cinematic post-processing pipeline.
  *
  *   scene(HDR + depth, jittered)
- *     -> auto exposure -> GTAO -> SSR -> TAA -> bokeh DOF -> motion blur
+ *     -> auto exposure -> GTAO -> contact shadows -> SSR -> TAA
+ *     -> bokeh DOF -> motion blur
  *     -> bloom / anamorphic / lens dirt / flares / sun glare
  *     -> grade (white balance, contrast, LGG, vignette, ACES, 3D LUT, grain)
  *     -> CAS sharpen + dither -> screen
@@ -27,6 +29,7 @@ import { GRADES, lutFor } from '../shaders/post/grades.js';
  * Public surface used by other systems:
  *   post.bloom            strength / radius / threshold / anamorphic / dirtAmount
  *   post.gtao             three GTAOPass (fed our depth buffer, no extra scene pass)
+ *   post.contact          screen-space contact shadows (intensity / length)
  *   post.dof              fStop / focusDistance / bokehScale / maxCoc
  *   post.motionBlur       shutter / maxRadius
  *   post.taa, post.ssr, post.grade, post.cas, post.exposure
@@ -111,17 +114,26 @@ export class PostFX {
     // reuse our depth buffer: no second scene render, normals from depth
     this.gtao.setGBuffer(this.rtScene.depthTexture);
     this.gtao.output = GTAOPass.OUTPUT.Default;
+    // A 1.1 m gather is a *room* radius: it darkens the underside of a cliff
+    // beautifully and does nothing at all to the eight centimetres where a
+    // boot meets the ground, because at that scale the ground is its own
+    // horizon. Pulling it in to knee height puts the occlusion where a human
+    // figure actually needs it, and the contact-shadow pass below covers the
+    // last few centimetres the AO still cannot see.
     this.gtao.updateGtaoMaterial({
-      radius: 1.1,
-      distanceExponent: 1.6,
-      thickness: 0.8,
-      scale: 1.1,
+      radius: 0.62,
+      distanceExponent: 1.35,
+      thickness: 0.45,
+      scale: 1.25,
       samples: 16,
       distanceFallOff: 1.0,
       screenSpaceRadius: false,
     });
-    this.gtao.blendIntensity = 0.72;
+    this.gtao.blendIntensity = 0.9;
     this.composer.addPass(this.gtao);
+
+    this.contact = new ContactShadowPass(this);
+    this.composer.addPass(this.contact);
 
     this.ssr = new SsrPass(this);
     this.composer.addPass(this.ssr);
@@ -161,6 +173,19 @@ export class PostFX {
     this.focusSpeed = 3.5;        // focus-pull rate (per second, exponential)
     this._focusGoal = 10;
 
+    // A camera rig frames a character from a *root* pivot — hips, or a fixed
+    // height above the feet. Focus there and the eyes sit anywhere from 10 to
+    // 40 cm behind the focal plane, which at a portrait distance is most of
+    // the depth of field: the one thing the audience is looking at is the one
+    // thing that is soft. So when the rig is clearly framing the player, snap
+    // the plane onto the head instead. The window keeps a shot that happens to
+    // point somewhere else entirely (a landscape, a vehicle) from being
+    // hijacked by a character standing off in the field.
+    this.autoFocusHead = true;
+    this.headFocusWindow = 3.2;   // metres of disagreement we will override
+    this._head = null;
+    this._v2 = new THREE.Vector3();
+
     this.jitter = true;
     this.aoScale = 1.0;
     this._halton = haltonSequence(8);
@@ -186,6 +211,7 @@ export class PostFX {
       else if (t === 'notaa') this.setAA('none');
       else if (t === 'smaa') this.setAA('smaa');
       else if (t === 'nogtao') this.gtao.enabled = false;
+      else if (t === 'nocontact') this.contact.enabled = false;
       else if (t === 'nomb') this.motionBlur.enabled = false;
       else if (t === 'nocas') this.cas.sharpness = 0;
       else if (t === 'nograin') this.grade.uniforms.uGrain.value = 0;
@@ -197,6 +223,7 @@ export class PostFX {
       else if (t === 'ssr') this.ssr.enabled = true;
       else if (t === 'plain') {
         this.dof.enabled = false; this.bloom.enabled = false; this.gtao.enabled = false;
+        this.contact.enabled = false;
         this.motionBlur.enabled = false; this.grade.uniforms.uGrain.value = 0;
         this.grade.uniforms.uVignette.value = 0; this.cas.sharpness = 0;
       }
@@ -250,6 +277,7 @@ export class PostFX {
     this.quality = tier;
     const low = tier === 'low', med = tier === 'medium', ultra = tier === 'ultra';
     this.gtao.enabled = !low;
+    this.contact.enabled = !low;
     this.ssr.enabled = this.ssr.enabled && !low;
     this.dof.enabled = !low;
     this.motionBlur.enabled = !low;
@@ -322,7 +350,44 @@ export class PostFX {
   setFocusDistance(d) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
 
   /** Snap the focus instead of pulling to it (camera cuts). */
-  snapFocus() { this.dof.focusDistance = this._focusGoal; }
+  snapFocus() {
+    const h = this._headFocusDistance();
+    if (h > 0 && Math.abs(h - this._focusGoal) < this.headFocusWindow) this._focusGoal = h;
+    this.dof.focusDistance = this._focusGoal;
+  }
+
+  /**
+   * The player's head/eye transform, if the character system has one built.
+   * Deliberately forgiving: characters are rebuilt often and any of these
+   * handles disappearing must cost us the head lock, never a frame.
+   * @returns {THREE.Object3D|null}
+   */
+  _headObject() {
+    if (this._head && this._head.parent) return this._head;
+    this._head = null;
+    const game = this.game;
+    if (!game || !game.get) return null;
+    const player = game.get('Player');
+    const char = player && player.character;
+    if (!char) return null;
+    const rigBones = char.rig && char.rig.byName;
+    this._head = char.eyes
+      || (char.attach && char.attach.head)
+      || (rigBones && (rigBones.head || rigBones.Head || rigBones.neck))
+      || null;
+    return this._head;
+  }
+
+  /** Camera distance to the player's eyes, or -1 when there is no head. */
+  _headFocusDistance() {
+    if (!this.autoFocusHead) return -1;
+    const head = this._headObject();
+    if (!head) return -1;
+    head.updateWorldMatrix(true, false);
+    const p = this._v2.setFromMatrixPosition(head.matrixWorld);
+    if (!isFinite(p.x)) return -1;
+    return this._v.setFromMatrixPosition(this.camera.matrixWorld).distanceTo(p);
+  }
 
   // -------------------------------------------------------------- internals
 
@@ -437,6 +502,10 @@ export class PostFX {
         ? this.focusTarget
         : this._v.setFromMatrixPosition(this.focusTarget.matrixWorld);
       this._focusGoal = this.camera.position.distanceTo(p);
+    }
+    const headDist = this._headFocusDistance();
+    if (headDist > 0 && Math.abs(headDist - this._focusGoal) < this.headFocusWindow) {
+      this._focusGoal = headDist;
     }
     this.dof.focusDistance = THREE.MathUtils.damp(
       this.dof.focusDistance, this._focusGoal, this.focusSpeed, this.dt);

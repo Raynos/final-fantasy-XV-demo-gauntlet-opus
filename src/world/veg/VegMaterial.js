@@ -10,11 +10,20 @@ import * as THREE from 'three';
  * pipeline — vegetation then automatically matches whatever the Sky agent does.
  */
 
+/** Most actors we will part the grass around in one frame. */
+export const VEG_ACTOR_MAX = 10;
+
 export const VegUniforms = {
   uTime: { value: 0 },
   uWindDir: { value: new THREE.Vector2(0.82, 0.57) },
   uWindStrength: { value: 1.0 },
   uPlayer: { value: new THREE.Vector3(0, 0, 0) },
+  // xyz = feet position, w = clearance radius in metres. Count is a float so
+  // the loop bound works identically on every driver.
+  uActors: {
+    value: Array.from({ length: VEG_ACTOR_MAX }, () => new THREE.Vector4(0, -1e5, 0, 0)),
+  },
+  uActorCount: { value: 0 },
 };
 
 /**
@@ -57,6 +66,8 @@ uniform float uTime;
 uniform vec2  uWindDir;
 uniform float uWindStrength;
 uniform vec3  uPlayer;
+uniform vec4  uActors[VEG_ACTOR_MAX];
+uniform float uActorCount;
 attribute float aFlex;
 varying float vFlexOut;
 
@@ -82,14 +93,44 @@ vec3 vegSway(vec3 o, float f, float bend, float flutter, float gustFreq) {
   return vec3(lat.x, drop, lat.y);
 }
 
-// Grass gets shoved aside by whoever walks through it.
-vec3 vegTrample(vec3 o, float f, float radius, float strength) {
-  vec2 d = o.xz - uPlayer.xz;
-  float dist = length(d);
-  float vert = abs(o.y - uPlayer.y);
-  float push = (1.0 - smoothstep(radius * 0.25, radius, dist)) * (1.0 - smoothstep(1.2, 2.6, vert));
-  vec2 dir = dist > 0.0001 ? d / dist : vec2(1.0, 0.0);
-  return vec3(dir.x, -0.55, dir.y) * push * strength * f;
+// Grass parts around whoever is standing in it.
+//
+// The old version pushed blades sideways by a fixed distance, which for a
+// half-metre blade is a lean and for a metre-tall clump is nothing — so legs
+// still came out sliced in half by alpha planes and no silhouette ever read.
+// Scaling the response by the blade's own height instead turns it into a
+// *rotation*: at full strength the blade lies over at roughly the angle real
+// trodden grass does, tip on the ground, pointing away from the foot. Because
+// it is proportional, one tuning works from a seedling to a metre of tussock.
+//
+// h is this vertex's height above its own instance origin. f is the *linear*
+// root-to-tip weight, not the wind's stiffness curve: wind bows a blade, which
+// wants a stiff base, but a boot rotates the whole blade about its root, and
+// with the curved weight the lower two-thirds stayed bolt upright and went on
+// slicing through the shin the response was there to clear.
+vec3 vegClearance(vec3 o, float f, float h, float strength) {
+  vec2 dsum = vec2(0.0);
+  float kmax = 0.0;
+  for (int i = 0; i < VEG_ACTOR_MAX; i++) {
+    if (float(i) >= uActorCount) break;
+    vec4 a = uActors[i];
+    if (a.w <= 0.0) continue;
+    vec2 d = o.xz - a.xz;
+    float dist = length(d);
+    if (dist > a.w) continue;
+    // a character two storeys below on a slope is not standing in this grass
+    float k = (1.0 - smoothstep(a.w * 0.30, a.w, dist))
+            * (1.0 - smoothstep(1.1, 2.4, abs(o.y - a.y)));
+    if (k <= 0.0) continue;
+    dsum += (dist > 1e-4 ? d / dist : vec2(1.0, 0.0)) * k;
+    kmax = max(kmax, k);
+  }
+  if (kmax <= 0.0) return vec3(0.0);
+  vec2 dir = dot(dsum, dsum) > 1e-8 ? normalize(dsum) : vec2(1.0, 0.0);
+  float lay = kmax * kmax;                       // hard core, feathered skirt
+  float lean = (0.40 * kmax + 0.78 * lay) * strength;
+  float drop = (0.18 * kmax + 0.68 * lay) * strength;
+  return vec3(dir.x * lean, -drop, dir.y * lean) * h * f;
 }
 `;
 
@@ -102,7 +143,8 @@ vec3 vegTrample(vec3 o, float f, float radius, float strength) {
  * @param {number} opts.bend      lateral sway metres at full gust
  * @param {number} opts.flutter   high-frequency flutter scale
  * @param {number} opts.gustFreq  spatial frequency of the gust front
- * @param {number} opts.trample   player push-aside strength (0 disables)
+ * @param {number} opts.trample   clearance strength around actors (0 disables);
+ *   1 lays a blade fully flat inside the core radius
  * @param {number} opts.translucency  backlit leaf glow (0 disables)
  * @param {number} opts.flexPow   how sharply stiffness ramps toward the tip
  */
@@ -115,9 +157,12 @@ export function patchVeg(mat, {
     shader.uniforms.uWindDir = VegUniforms.uWindDir;
     shader.uniforms.uWindStrength = VegUniforms.uWindStrength;
     shader.uniforms.uPlayer = VegUniforms.uPlayer;
+    shader.uniforms.uActors = VegUniforms.uActors;
+    shader.uniforms.uActorCount = VegUniforms.uActorCount;
 
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${COMMON}`)
+      .replace('#include <common>',
+        `#include <common>\n#define VEG_ACTOR_MAX ${VEG_ACTOR_MAX}\n${COMMON}`)
       .replace('#include <begin_vertex>', /* glsl */`
         #include <begin_vertex>
         vec3 vegInstOrigin = vec3(0.0);
@@ -128,7 +173,11 @@ export function patchVeg(mat, {
         float vegF = pow(clamp(aFlex, 0.0, 1.0), ${flexPow.toFixed(2)});
         vFlexOut = clamp(aFlex, 0.0, 1.0);
         vec3 vegOff = vegSway(vegOrigin, vegF, ${bend.toFixed(3)}, ${flutter.toFixed(3)}, ${gustFreq.toFixed(4)});
-        ${trample > 0 ? `vegOff += vegTrample(vegOrigin, vegF, 2.1, ${trample.toFixed(3)});` : ''}
+        float vegHeight = max(transformed.y, 0.0);
+        #ifdef USE_INSTANCING
+          vegHeight = max((instanceMatrix * vec4(transformed, 1.0)).y - vegInstOrigin.y, 0.0);
+        #endif
+        ${trample > 0 ? `vegOff += vegClearance(vegOrigin, vFlexOut, vegHeight, ${trample.toFixed(3)});` : ''}
       `)
       .replace('#include <project_vertex>', /* glsl */`
         vec4 mvPosition = vec4(transformed, 1.0);

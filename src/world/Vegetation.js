@@ -3,7 +3,7 @@ import { Ecology } from './veg/Ecology.js';
 import { GrassField } from './veg/GrassField.js';
 import { Bushes } from './veg/Bushes.js';
 import { Trees } from './veg/Trees.js';
-import { VegUniforms, installAlphaCardGuard } from './veg/VegMaterial.js';
+import { VegUniforms, VEG_ACTOR_MAX, installAlphaCardGuard } from './veg/VegMaterial.js';
 
 /**
  * Everything that grows. Owns the shared Ecology sampler (Props borrows it),
@@ -38,12 +38,67 @@ export class Vegetation {
 
     this._camPos = new THREE.Vector3();
     this._gust = 0;
+    this._actors = [];
+    this._pool = [];
+    this.actorRange = 45;        // metres from camera; past that no blade reads
   }
 
   /** Wind strength, 0.4 = still air, 2.5 = storm. Weather can drive this. */
   setWind(strength, dirRadians) {
     VegUniforms.uWindStrength.value = strength;
     if (dirRadians != null) VegUniforms.uWindDir.value.set(Math.cos(dirRadians), Math.sin(dirRadians));
+  }
+
+  /**
+   * Collect everyone standing in the grass this frame.
+   *
+   * Only the player used to part the field, so the other three party members
+   * and every enemy waded through it with alpha planes slicing their shins —
+   * and a silhouette you cannot see the legs of never reads as a person
+   * standing in a place. The list is distance-sorted and capped so a crowded
+   * fight still costs a fixed-size uniform block.
+   *
+   * @param {object} game
+   * @param {THREE.Vector3} centre camera position — who matters is who is on screen
+   */
+  _gatherActors(game, centre) {
+    const out = this._actors;
+    const pool = this._pool;
+    out.length = 0;
+    const add = (obj, radius) => {
+      const p = obj && (obj.position || (obj.root && obj.root.position));
+      if (!p) return;
+      const d2 = (p.x - centre.x) ** 2 + (p.z - centre.z) ** 2;
+      if (d2 > this.actorRange * this.actorRange) return;
+      const slot = pool[out.length] || (pool[out.length] = { x: 0, y: 0, z: 0, r: 0, d2: 0 });
+      slot.x = p.x; slot.y = p.y; slot.z = p.z; slot.r = radius; slot.d2 = d2;
+      out.push(slot);
+    };
+
+    const player = game.get('Player');
+    if (player) add(player, 1.35);
+
+    const party = game.get('Party');
+    if (party && Array.isArray(party.members)) {
+      for (const m of party.members) add(m, 1.25);
+    }
+
+    const enemies = game.get('Enemies');
+    if (enemies && Array.isArray(enemies.list)) {
+      for (const e of enemies.list) {
+        if (e && e.dead) continue;
+        add(e, 0.95 + (e && e.scale ? e.scale : 1) * 0.45);
+      }
+    }
+
+    out.sort((a, b) => a.d2 - b.d2);
+    const n = Math.min(out.length, VEG_ACTOR_MAX);
+    const slots = VegUniforms.uActors.value;
+    for (let i = 0; i < n; i++) {
+      const a = out[i];
+      slots[i].set(a.x, a.y, a.z, a.r);
+    }
+    VegUniforms.uActorCount.value = n;
   }
 
   update(dt, game) {
@@ -61,6 +116,7 @@ export class Vegetation {
     // camera transform is one frame stale here (CameraRig runs later in the
     // system list); the streaming radius has plenty of margin for that.
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
+    this._gatherActors(game, this._camPos);
     this.grass.update(this._camPos);
     this.bushes.update(this._camPos);
     this.trees.update(this._camPos);
