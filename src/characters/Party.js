@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeCharacter } from './Cast.js';
 import { dampAngle, angleDelta } from './Player.js';
+import { CharacterController } from '../world/collision/CharacterController.js';
 import { Rng } from '../util/Rng.js';
 
 /**
@@ -23,6 +24,8 @@ export class Party {
     this.terrain = terrain;
     const player = game.get('Player');
     this.player = player;
+    /** Shared with the player: same soup, same broadphase, same step rules. */
+    this.collision = game.get('Collision') || (player && player.collision) || null;
 
     const specs = [
       { key: 'gladio', slot: [-1.95, -0.95], speedMul: 0.97, lag: 0.16 },
@@ -58,6 +61,16 @@ export class Party {
          * the matching `Stats` block (keyed on `m.key`) onto it every frame.
          */
         stats: { hp: 0, maxHp: 0, mp: 0, maxMp: 0, level: 1, ko: false },
+        /** Own controller: they have their own feet, their own ground, their own walls. */
+        body: this.collision
+          ? new CharacterController(this.collision, {
+            radius: 0.38, height: 1.80, stepUp: 0.45, stepDown: 0.55,
+          })
+          : null,
+        gait: 0,
+        avoidX: 0,
+        avoidZ: 0,
+        avoidAge: 99,
       };
       // spread them out at spawn so the first frame is never a pile
       const p = player ? player.position : new THREE.Vector3();
@@ -121,10 +134,34 @@ export class Party {
       dir.add(push);
       if (dir.lengthSq() > 1e-6) dir.normalize();
 
+      // Steer round anything solid on the way to the slot. Re-probed a few
+      // times a second and held in between — a per-frame probe both costs more
+      // and makes them twitch at the corner of a building.
+      if (m.body && dir.lengthSq() > 1e-6) {
+        m.avoidAge += dt;
+        if (m.avoidAge > 0.2) {
+          m.avoidAge = 0;
+          const [ax, az] = m.body.avoid(m.root.position, dir.x, dir.z, 1.9);
+          m.avoidX = ax; m.avoidZ = az;
+        }
+        if (m.avoidX || m.avoidZ) {
+          dir.x = THREE.MathUtils.damp(dir.x, m.avoidX, 12, dt);
+          dir.z = THREE.MathUtils.damp(dir.z, m.avoidZ, 12, dt);
+          if (dir.lengthSq() > 1e-6) dir.normalize();
+        }
+      }
+
       m.speed = THREE.MathUtils.damp(m.speed, wanted, 5.5, dt);
       m.velocity.copy(dir).multiplyScalar(m.speed);
-      m.root.position.addScaledVector(m.velocity, dt);
-      m.root.position.y = this.terrain.heightAt(m.root.position.x, m.root.position.z);
+      if (m.body) {
+        m.body.move(m.root.position, m.velocity.x, m.velocity.z, dt);
+        m.velocity.multiplyScalar(m.body.progress);
+        m.gait = THREE.MathUtils.damp(m.gait, m.speed * m.body.progress, 10, dt);
+      } else {
+        m.root.position.addScaledVector(m.velocity, dt);
+        m.root.position.y = this.terrain.heightAt(m.root.position.x, m.root.position.z);
+        m.gait = m.speed;
+      }
 
       // face travel direction while moving, otherwise turn toward Noctis
       let want;
@@ -150,7 +187,7 @@ export class Party {
       }
 
       m.character.update(dt, {
-        speed: m.speed,
+        speed: m.gait,
         velocity: m.velocity,
         turnRate,
         terrain: this.terrain,

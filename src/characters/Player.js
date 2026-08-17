@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { makeCharacter } from './Cast.js';
 import { updateSun } from './rig/Materials.js';
+import { CollisionWorld } from '../world/collision/CollisionWorld.js';
+import { CharacterController } from '../world/collision/CharacterController.js';
 
 /**
  * Noctis — the playable character.
@@ -52,6 +54,28 @@ export class Player {
     this._look = new THREE.Vector3();
     this.runSpeed = 7.4;
     this.walkSpeed = 3.6;
+
+    /**
+     * The world's static collision. Owned here rather than by `Game` because
+     * the systems list is shared and this workstream may not edit it; it is
+     * registered so `game.get('Collision')` finds it, and it harvests itself
+     * incrementally off the first frames (the town, the props and the dungeon
+     * entrances are all built *after* this system's `init`).
+     */
+    let world = game.get('Collision');
+    if (!world) {
+      world = new CollisionWorld();
+      // init *before* registering: `BootProfile` wraps `Game.add` and replaces
+      // the system's `init` with an async profiling shim, so calling it through
+      // the registration would hand back a Promise instead of the world.
+      world.init(game);
+      game.add(world, 'Collision');
+    }
+    this.collision = world;
+    this.body = new CharacterController(this.collision, {
+      radius: 0.36, height: 1.78, stepUp: 0.45, stepDown: 0.55,
+    });
+    this._gait = 0;
   }
 
   get position() { return this.root.position; }
@@ -97,15 +121,28 @@ export class Player {
     }
 
     this.velocity.set(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(this.speed);
-    this.root.position.addScaledVector(this.velocity, dt);
-    this.root.position.y = this.terrain.heightAt(this.root.position.x, this.root.position.z);
+
+    // Collide with the world instead of sliding through it. Inside a dungeon
+    // the exterior soup is meaningless — `Dungeons` redirects `heightAt` to the
+    // room floor and confines the party against its own Layout — so the static
+    // world is switched off and only the ground snap runs.
+    const dungeons = game.get('Dungeons');
+    this.collision.enabled = !(dungeons && dungeons.isInside);
+    this.collision.ensure(4);
+    this.body.move(this.root.position, this.velocity.x, this.velocity.z, dt);
+    this.grounded = this.body.grounded;
+    this.velocity.multiplyScalar(this.body.progress);
 
     const prev = this.root.rotation.y;
     this.root.rotation.y = dampAngle(prev, this.heading, this.speed > 0.2 ? 9 : 5, dt);
     const turnRate = angleDelta(prev, this.root.rotation.y) / Math.max(1e-4, dt);
 
+    // The gait follows the distance actually covered, so walking into a wall
+    // stops the legs rather than moonwalking on the spot.
+    this._gait = THREE.MathUtils.damp(this._gait, this.speed * this.body.progress, 10, dt);
+
     this.character.update(dt, {
-      speed: this.speed,
+      speed: this._gait,
       velocity: this.velocity,
       turnRate,
       terrain: this.terrain,
