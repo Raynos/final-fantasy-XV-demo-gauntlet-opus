@@ -1,24 +1,39 @@
 import * as THREE from 'three';
-import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, organicNormal, organicRoughness } from './EnemyBase.js';
-import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.js';
+import { Rig, creatureMaterial } from './RigBuilder.js';
+import { organicNormal, organicRoughness } from './EnemyBase.js';
+import { QuadrupedEnemy } from './Quadruped.js';
+import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
+import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.js';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const SHAG = 0x8a6c46;
+const SHAG_LIT = 0xa98d61;
+const SHAG_DARK = 0x674e33;
+const HIDE = 0x6f6558;
+const HIDE_DARK = 0x453f38;
+const BELLY = 0x9e9384;
+const TUSK = 0xeadfc0;
+const TUSK_DARK = 0x9d9170;
+const PLATE = 0x585047;
+const HOOF = 0x302a23;
+const NOSE = 0x2b241d;
+const EYE = 0xc4761e;
 
-const SHAG = 0x6a4326;
-const SHAG_DARK = 0x452a17;
-const HIDE = 0x38352f;
-const HIDE_DARK = 0x201e1a;
-const TUSK = 0xcabf9f;
-const HOOF = 0x1c1915;
-const EYE = 0x8c5416;
+const M_SHAG = [1.0, 0];
+const M_HIDE = [0.90, 0];
+const M_PLATE = [0.66, 0.03];    // the face shield is hard keratin, not hide
+const M_TUSK = [0.30, 0.05];
+const M_HOOF = [0.42, 0.10];
+const M_WET = [0.15, 0];
 
 /**
  * Garula — the Duscae grazer that turns into a landslide when provoked.
- * A tusked mammoth-boar the size of a van: one enormous barrel carried on
- * four pillar legs, a wide flat face with a broad snout and two upward-curving
- * tusks, and a mane of long coarse russet shag over the shoulders and down
- * the flanks. Everything it does is slow, committed and very heavy.
+ *
+ * A tusked mammoth-boar the size of a van: one enormous barrel carried on four
+ * pillar legs, a wide flat face plate with two upward-hooking tusks, tiny eyes
+ * set far apart, and a mane of long coarse russet shag over the shoulders and
+ * down the flanks. Everything it does is slow, committed and very heavy — it
+ * never leaves the ground except to rear, and when it does the ground is the
+ * thing that suffers.
  */
 export const GARULA = {
   key: 'garula',
@@ -56,405 +71,466 @@ export const GARULA = {
   make(opts) { return new GarulaEnemy(opts); },
 };
 
-/** One coarse hair lock, built hanging along -Y so `place` can aim it. */
-function lock(len, w) {
-  return tube([
-    P(0, 0, 0), P(0, -len * 0.38, w * 0.4), P(0, -len * 0.74, w * 0.85), P(0, -len, w * 1.15),
-  ], [[w, w * 0.34], [w * 0.92, w * 0.30], [w * 0.55, w * 0.20], [w * 0.10, w * 0.05]],
-  { radialSeg: 5 });
-}
-
-/** One tusk: out of the lip, forward, then hooking up. */
-function tuskGeo(len) {
-  return tube([
-    P(0, 0, 0), P(0, -0.05 * len, 0.30 * len), P(0, 0.06 * len, 0.58 * len),
-    P(0, 0.34 * len, 0.72 * len), P(0, 0.62 * len, 0.66 * len),
-  ], [0.090 * len, 0.076 * len, 0.058 * len, 0.038 * len, 0.012 * len], { radialSeg: 6 });
-}
-
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
-  rig.bone('hips', 'root', [0, 1.55, -0.95]);
-  rig.bone('spine', 'hips', [0, 1.62, -0.35]);
-  rig.bone('chest', 'spine', [0, 1.66, 0.30]);
-  rig.bone('neck', 'chest', [0, 1.60, 0.85]);
-  rig.bone('head', 'neck', [0, 1.48, 1.28]);
-  rig.bone('jaw', 'head', [0, 1.24, 1.44]);
-  rig.bone('tail1', 'hips', [0, 1.52, -1.34]);
-  rig.bone('tail2', 'tail1', [0, 1.38, -1.62]);
+  rig.bone('hips', 'root', [0, 1.94, -1.32]);
+  rig.bone('spine', 'hips', [0, 2.10, -0.54]);
+  rig.bone('chest', 'spine', [0, 2.22, 0.36]);
+  rig.bone('neck', 'chest', [0, 2.10, 1.02]);
+  rig.bone('head', 'neck', [0, 1.88, 1.54]);
+  rig.bone('jaw', 'head', [0, 1.64, 1.66]);
+  rig.bone('tail1', 'hips', [0, 1.86, -1.64]);
+  rig.bone('tail2', 'tail1', [0, 1.60, -1.82]);
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    rig.bone(`fsh${n}`, 'chest', [0.46 * s, 1.45, 0.44]);
-    rig.bone(`fkn${n}`, `fsh${n}`, [0.51 * s, 0.86, 0.38]);
-    rig.bone(`fpw${n}`, `fkn${n}`, [0.54 * s, 0.24, 0.42]);
-    rig.bone(`bhp${n}`, 'hips', [0.50 * s, 1.48, -0.92]);
-    rig.bone(`bkn${n}`, `bhp${n}`, [0.54 * s, 0.86, -1.02]);
-    rig.bone(`bpw${n}`, `bkn${n}`, [0.56 * s, 0.24, -0.86]);
+    rig.bone(`fsh${n}`, 'chest', [0.56 * s, 2.12, 0.40]);
+    rig.bone(`fel${n}`, `fsh${n}`, [0.62 * s, 1.44, 0.48]);
+    rig.bone(`fkn${n}`, `fel${n}`, [0.65 * s, 0.70, 0.32]);
+    rig.bone(`fhf${n}`, `fkn${n}`, [0.66 * s, 0.16, 0.38]);
+    rig.bone(`bhp${n}`, 'hips', [0.54 * s, 1.98, -1.26]);
+    rig.bone(`bkn${n}`, `bhp${n}`, [0.58 * s, 1.28, -1.50]);
+    rig.bone(`bhk${n}`, `bkn${n}`, [0.60 * s, 0.66, -1.16]);
+    rig.bone(`bhf${n}`, `bhk${n}`, [0.61 * s, 0.16, -1.18]);
   }
 
-  /* ---- the barrel: one enormous mass, nothing else competes with it ---- */
-  const torso = tube([
-    P(0, 1.58, -1.32), P(0, 1.64, -0.95), P(0, 1.68, -0.35),
-    P(0, 1.70, 0.25), P(0, 1.66, 0.70), P(0, 1.58, 1.00),
-  ], [0.46, 0.72, 0.82, 0.80, 0.68, 0.50], { radialSeg: 10, flat: 0.94 });
-  rig.attachBlend(tint(torso, HIDE, 0.05), 'spine', 'chest', 1.8);
+  const B = new CBuilder();
+  const P = [];
+  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
 
-  const belly = tube([P(0, 1.16, -0.80), P(0, 1.10, -0.10), P(0, 1.14, 0.55)],
-    [0.56, 0.62, 0.52], { radialSeg: 8, flat: 0.72 });
-  rig.attach(tint(belly, HIDE_DARK, 0.04), 'spine');
+  /* ------------------------------------------------------------ torso -- */
+  // One continuous barrel. Deepest and widest just behind the shoulder, then
+  // a long slow taper to a small rump — a front-heavy animal that looks like
+  // it would take a wall down without noticing.
+  B.group(1);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.84, -1.86], rx: 0.42, rz: 0.50 },
+      { p: [0, 1.94, -1.42], rx: 0.68, rz: 0.74 },   // rump
+      { p: [0, 2.02, -0.82], rx: 0.72, rz: 0.86 },   // loin
+      { p: [0, 2.08, -0.16], rx: 0.80, rz: 0.98 },
+      { p: [0, 2.12, 0.42], rx: 0.86, rz: 1.06 },    // barrel at its deepest
+      { p: [0, 2.14, 0.86], rx: 0.72, rz: 0.88 },
+      { p: [0, 2.10, 1.10], rx: 0.50, rz: 0.62 },
+    ],
+    steps: 28, seg: 20, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
+    shape: (th, u) => {
+      const b = Math.cos(th);                       // +1 spine, -1 belly
+      const side = Math.abs(Math.sin(th));
+      let m = 1;
+      // the shoulder mane rides as a raised, clumped mass over the withers
+      const mane = Math.max(0, b) * Math.exp(-Math.pow((u - 0.74) / 0.22, 2));
+      m += mane * (0.26 + Math.sin(th * 7 + u * 16) * 0.06 + Math.sin(th * 15) * 0.03);
+      // flattish spine, heavy sagging gut
+      m += b > 0 ? -0.06 * b * b * (1 - smooth((u - 0.6) / 0.2)) : 0.11 * b * b;
+      // shoulder and haunch bosses
+      m += side * 0.09 * Math.exp(-Math.pow((u - 0.80) / 0.13, 2));
+      m += side * 0.09 * Math.exp(-Math.pow((u - 0.20) / 0.16, 2));
+      // shag hanging off the flank in coarse vertical clumps
+      m += Math.max(0, -b + 0.5) * side * 0.045
+        * Math.max(0, Math.sin(th * 13 + u * 5)) * smooth((u - 0.3) / 0.4);
+      return m;
+    },
+    colorAt: (th, u) => {
+      const b = Math.cos(th);
+      const shaggy = clamp01((b + 0.15) / 0.9) * smooth((u - 0.30) / 0.40);
+      if (b < -0.55) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.45) * 0.85);
+      const base = mix(HIDE, HIDE_DARK, 0.35 + 0.2 * Math.sin(u * 19 + th * 4));
+      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 13 + u * 5) * 0.5 + 0.5)), shaggy);
+    },
+    matAt: (th, u) => (Math.cos(th) > -0.1 && u > 0.30 ? M_SHAG : M_HIDE),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['hips', 'spine', 'chest']] });
+  reset(B);
 
-  // withers hump — the shoulder mass the mane sits on
-  const hump = place(blob(0.52, 0.44, 0.58, 10, 7), { pos: [0, 2.02, 0.28] });
-  rig.attach(tint(hump, HIDE, 0.05), 'chest');
-  const rump = place(blob(0.56, 0.52, 0.54, 10, 7), { pos: [0, 1.70, -1.06] });
-  rig.attach(tint(rump, HIDE, 0.05), 'hips');
-
-  /* ---- neck & the wide flat face ---- */
-  const neck = tube([P(0, 1.70, 0.72), P(0, 1.64, 0.98), P(0, 1.56, 1.16)],
-    [0.52, 0.48, 0.42], { radialSeg: 9, flat: 0.92 });
-  rig.attachBlend(tint(neck, HIDE, 0.05), 'chest', 'head', 1.2);
-
-  const skull = place(blob(0.36, 0.31, 0.34, 10, 7), { pos: [0, 1.50, 1.32] });
-  rig.attach(tint(skull, HIDE, 0.04), 'head');
-  // the face is a flat plate, not a muzzle — that is the Garula read
-  const face = place(slab(0.66, 0.52, 0.16, 0.06), { pos: [0, 1.46, 1.52], rot: [0.14, 0, 0] });
-  rig.attach(tint(face, HIDE, 0.04), 'head');
-  const brow = place(slab(0.62, 0.11, 0.26, 0.03), { pos: [0, 1.66, 1.44], rot: [0.28, 0, 0] });
-  rig.attach(tint(brow, HIDE_DARK), 'head');
-
-  const snout = tube([P(0, 1.42, 1.56), P(0, 1.35, 1.80), P(0, 1.31, 1.98)],
-    [[0.30, 0.22], [0.28, 0.20], [0.25, 0.17]], { radialSeg: 8 });
-  rig.attach(tint(snout, HIDE_DARK, 0.04), 'head');
-  const nose = place(blob(0.23, 0.14, 0.07, 8, 5), { pos: [0, 1.32, 2.03] });
-  rig.attach(tint(nose, 0x141210), 'head');
-
-  const jaw = tube([P(0, 1.24, 1.50), P(0, 1.21, 1.72), P(0, 1.21, 1.90)],
-    [[0.25, 0.15], [0.22, 0.12], [0.18, 0.09]], { radialSeg: 7 });
-  rig.attach(tint(jaw, HIDE_DARK, 0.04), 'jaw');
-
-  // tusks — the only bright thing on the animal
-  for (const s of [-1, 1]) {
-    const t = place(tuskGeo(1.0), { pos: [0.27 * s, 1.26, 1.84], rot: [0, 0.24 * s, 0.10 * s] });
-    rig.attach(tint(t, TUSK, 0.03), 'head');
-    const t2 = place(tuskGeo(0.42), { pos: [0.19 * s, 1.22, 1.80], rot: [0, 0.34 * s, 0.16 * s] });
-    rig.attach(tint(t2, TUSK, 0.03), 'jaw');
+  /* ---------------------------------------------------- mane over withers */
+  // Coarse locks hanging *down* off the shoulder, not arcing off it. Aiming
+  // them backward and up read as a pair of scythes growing out of the withers
+  // — hair falls, so they start on the flank at the top of the shoulder and
+  // drop, splaying slightly outward as they go.
+  B.group(2);
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * Math.PI * 2;
+    const side = Math.sin(a) >= 0 ? 1 : -1;
+    const zc = 0.42 + Math.cos(a) * 0.62;
+    const x = side * (0.72 + (i % 3) * 0.05) * (0.55 + 0.45 * Math.abs(Math.sin(a)));
+    const y = 2.56 - Math.abs(Math.cos(a)) * 0.26;
+    horn(B, {
+      from: [x, y, zc], dir: [side * 0.42, -0.88, -0.22], len: 0.40 + (i % 4) * 0.11,
+      curve: [side * 0.10, -0.10, -0.06], r0: 0.070, r1: 0.006, flat: 0.26, seg: 5, steps: 4,
+      colorAt: (th, u) => mix(mix2(SHAG_LIT, SHAG, (i % 5) / 5), SHAG_DARK, u * 0.45),
+      matAt: () => M_SHAG,
+    });
   }
+  emit(['bone', 'chest']);
 
-  // small ears, mostly lost in the mane
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.15, 0.09, 0.12, 6, 5), { pos: [0.35 * s, 1.63, 1.20], rot: [0, 0, 0.5 * s] });
-    rig.attach(tint(e, HIDE_DARK, 0.04), 'head');
-  }
-  // eyes set far back on the flat face
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.055, 0.045, 0.035, 6, 5), { pos: [0.30 * s, 1.57, 1.53] });
-    rig.attach(glow(tint(e, 0x150c04), EYE, 1.5), 'head');
-  }
+  /* ------------------------------------------------------------- neck -- */
+  B.group(3);
+  sweep(B, {
+    nodes: [
+      { p: [0, 2.16, 0.84], rx: 0.58, rz: 0.60 },
+      { p: [0, 2.10, 1.16], rx: 0.46, rz: 0.48 },
+      { p: [0, 1.98, 1.44], rx: 0.36, rz: 0.38 },
+    ],
+    steps: 12, seg: 16, ref: [0, 1, 0], capStart: false, capEnd: false,
+    shape: (th, u) => {
+      const b = Math.cos(th);
+      // heavy crest of mane on top, loose dewlap swinging underneath
+      return 1 + Math.max(0, b) * 0.22 * (1 - u * 0.4)
+        + Math.max(0, -b) * 0.26 * smooth((u - 0.15) / 0.5)
+        + Math.sin(th * 9) * 0.06 * Math.max(0, b);
+    },
+    colorAt: (th, u) => (Math.cos(th) > -0.1
+      ? mix(SHAG_DARK, SHAG_LIT, 0.30 + 0.45 * (Math.sin(th * 9) * 0.5 + 0.5))
+      : mix(HIDE, BELLY, smooth((u - 0.2) / 0.6) * 0.6)),
+    matAt: (th) => (Math.cos(th) > -0.1 ? M_SHAG : M_HIDE),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['chest', 'neck', 'head']] });
+  reset(B);
 
-  /* ---- pillar legs ---- */
-  for (const s of [-1, 1]) {
-    const n = s < 0 ? 'L' : 'R';
-    const fu = tube([P(0.45 * s, 1.50, 0.46), P(0.49 * s, 1.16, 0.42), P(0.51 * s, 0.88, 0.38)],
-      [0.31, 0.28, 0.24], { radialSeg: 8 });
-    rig.attachBlend(tint(fu, HIDE, 0.04), `fsh${n}`, `fkn${n}`, 0.9);
-    const fl = tube([P(0.51 * s, 0.86, 0.38), P(0.53 * s, 0.55, 0.40), P(0.54 * s, 0.28, 0.42)],
-      [0.22, 0.20, 0.19], { radialSeg: 8 });
-    rig.attachBlend(tint(fl, HIDE_DARK, 0.04), `fkn${n}`, `fpw${n}`, 0.9);
-    const ff = place(blob(0.25, 0.13, 0.26, 8, 5), { pos: [0.54 * s, 0.13, 0.46] });
-    rig.attach(tint(ff, HIDE_DARK, 0.04), `fpw${n}`);
-    for (let c = -1; c <= 1; c++) {
-      const h = place(blob(0.075, 0.055, 0.075, 6, 4), { pos: [(0.54 + c * 0.13) * s, 0.06, 0.64] });
-      rig.attach(tint(h, HOOF), `fpw${n}`);
+  /* ------------------------------------------------------------- head -- */
+  B.group(4);
+  // The face is Garula's signature: a broad flat shield of hard keratin, edged
+  // by a raised rim, with the eyes pushed right out to the corners and the
+  // snout hanging below it. Sculpted as one mass, then the rim added on top.
+  sculptBlob(B, {
+    center: [0, 1.86, 1.62], scale: [0.40, 0.34, 0.44], segU: 26, segV: 18,
+    brushes: [
+      { p: [0, 2.10, 1.44], r: [0.46, 0.22, 0.30], amt: 0.075, dir: [0, 1, -0.15] },       // crown boss
+      { p: [0, 1.90, 2.02], r: [0.44, 0.36, 0.28], amt: -0.095, dir: [0, 0, 1] },          // flatten the face
+      { p: [0, 1.94, 1.96], r: [0.30, 0.23, 0.14], amt: 0.040, dir: [0, 0, 1] },           // plate proud of the skull
+      { p: [0.31, 1.94, 1.80], r: [0.14, 0.13, 0.16], amt: -0.045, dir: 'normal', mirror: true }, // eye pit
+      { p: [0.36, 1.82, 1.66], r: [0.16, 0.20, 0.22], amt: 0.050, dir: [1, -0.2, 0], mirror: true }, // cheek slab
+      { p: [0, 1.62, 2.00], r: [0.30, 0.26, 0.28], amt: 0.070, dir: [0, -0.5, 1] },        // snout
+      { p: [0, 1.54, 2.10], r: [0.22, 0.16, 0.16], amt: 0.040, dir: [0, -0.6, 1] },        // nose pad
+      { p: [0, 2.02, 1.72], r: [0.16, 0.14, 0.24], amt: 0.026, dir: [0, 1, 0] },           // nasal ridge
+    ],
+    colorAt: (u, v, p) => {
+      const nose = clamp01((p.z - 2.06) / 0.12);
+      const face = clamp01((p.z - 1.90) / 0.16) * clamp01((p.y - 1.70) / 0.14);
+      const top = clamp01((p.y - 2.02) / 0.14);
+      return mix(mix2(HIDE, PLATE, face * 0.85), NOSE, nose * 0.9)
+        .lerp(hex(SHAG_DARK), top * 0.55);
+    },
+    matAt: (u, v, p) => {
+      if (p.z > 2.08) return M_WET;
+      const face = clamp01((p.z - 1.92) / 0.14) * clamp01((p.y - 1.70) / 0.14);
+      return face > 0.5 ? M_PLATE : M_HIDE;
+    },
+  });
+  // Raised rim running round the edge of the face shield. Swept along the rim
+  // *path* rather than across it, so it is a bead of keratin standing proud of
+  // the plate — the hard edge that gives the flat face something to catch the
+  // key light on. It stops short at the bottom, where the jaw covers the gap.
+  {
+    const rimNodes = [];
+    for (let i = 0; i <= 14; i++) {
+      const a = -1.9 + (i / 14) * (Math.PI * 2 - 1.0);   // gap at the chin
+      rimNodes.push({
+        p: [Math.sin(a) * 0.255, 1.91 + Math.cos(a) * 0.195, 1.945 - Math.abs(Math.cos(a)) * 0.030],
+        rx: 0.032 - Math.abs(Math.cos(a)) * 0.007,
+      });
     }
-
-    const bu = tube([P(0.49 * s, 1.52, -0.90), P(0.52 * s, 1.18, -0.98), P(0.54 * s, 0.88, -1.02)],
-      [0.33, 0.29, 0.24], { radialSeg: 8 });
-    rig.attachBlend(tint(bu, HIDE, 0.04), `bhp${n}`, `bkn${n}`, 0.9);
-    const bl = tube([P(0.54 * s, 0.86, -1.02), P(0.55 * s, 0.55, -0.94), P(0.56 * s, 0.28, -0.86)],
-      [0.22, 0.20, 0.19], { radialSeg: 8 });
-    rig.attachBlend(tint(bl, HIDE_DARK, 0.04), `bkn${n}`, `bpw${n}`, 0.9);
-    const bf = place(blob(0.25, 0.13, 0.26, 8, 5), { pos: [0.56 * s, 0.13, -0.82] });
-    rig.attach(tint(bf, HIDE_DARK, 0.04), `bpw${n}`);
-    for (let c = -1; c <= 1; c++) {
-      const h = place(blob(0.072, 0.052, 0.072, 6, 4), { pos: [(0.56 + c * 0.125) * s, 0.06, -0.65] });
-      rig.attach(tint(h, HOOF), `bpw${n}`);
-    }
+    sweep(B, {
+      nodes: rimNodes, steps: 26, seg: 7, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.4,
+      colorAt: () => col(PLATE), matAt: () => M_PLATE,
+    });
   }
-
-  /* ---- short tail ---- */
-  const tl = tube([P(0, 1.56, -1.30), P(0, 1.44, -1.56)], [0.13, 0.09], { radialSeg: 6 });
-  rig.attachBlend(tint(tl, HIDE, 0.04), 'tail1', 'tail2', 1.0);
-  for (let i = 0; i < 3; i++) {
-    const tf = place(lock(0.26, 0.045), { pos: [(i - 1) * 0.05, 1.40, -1.62], rot: [-0.5, 0, 0] });
-    rig.attach(tint(tf, SHAG_DARK, 0.05), 'tail2');
+  for (const s of [-1, 1]) {
+    B.glow(EYE, 1.6);
+    sculptBlob(B, {
+      center: [0.315 * s, 1.945, 1.845], scale: [0.055, 0.048, 0.042], segU: 10, segV: 7,
+      colorAt: () => col(0x160b02), matAt: () => M_WET,
+    });
+    B.glow(null);
+    // small mobile ear, half lost in the mane
+    sweep(B, {
+      nodes: [
+        { p: [0.33 * s, 2.04, 1.44], rx: 0.075, rz: 0.034 },
+        { p: [0.42 * s, 2.06, 1.36], rx: 0.052, rz: 0.024 },
+        { p: [0.48 * s, 2.03, 1.28], rx: 0.018, rz: 0.009 },
+      ],
+      steps: 6, seg: 7, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.5,
+      colorAt: (th, u) => mix(SHAG_DARK, HIDE, u * 0.4), matAt: () => M_HIDE,
+    });
+    // brow tuft over the eye
+    horn(B, {
+      from: [0.30 * s, 2.03, 1.82], dir: [0.28 * s, 0.72, 0.62], len: 0.22,
+      curve: [0, -0.06, -0.04], r0: 0.050, r1: 0.005, flat: 0.30, seg: 5, steps: 3,
+      colorAt: () => col(SHAG_DARK), matAt: () => M_SHAG,
+    });
   }
+  emit(['bone', 'head']);
 
-  /* ---- the mane: crest over the withers, curtains down both flanks ---- */
+  /* -------------------------------------------------------------- jaw -- */
+  B.group(5);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.64, 1.62], rx: 0.28, rz: 0.24 },
+      { p: [0, 1.60, 1.90], rx: 0.24, rz: 0.21 },
+      { p: [0, 1.60, 2.10], rx: 0.17, rz: 0.15 },
+    ],
+    steps: 8, seg: 12, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.5,
+    shape: (th) => 1 + Math.max(0, -Math.cos(th)) * 0.34,
+    colorAt: (th) => (Math.cos(th) < -0.2 ? col(BELLY) : col(HIDE_DARK)),
+    matAt: () => M_HIDE,
+  });
+  // The tusks. Out of the lower lip, forward, then hooking hard up — the one
+  // element of this animal that reads instantly at thirty metres.
+  for (const s of [-1, 1]) {
+    horn(B, {
+      from: [0.30 * s, 1.58, 1.88], dir: [0.52 * s, 0.02, 0.85], len: 1.15,
+      curve: [0.10 * s, 1.05, -0.30], r0: 0.115, r1: 0.012, taper: 0.70,
+      seg: 8, steps: 9, flat: 0.90,
+      colorAt: (th, u) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
+      matAt: () => M_TUSK,
+    });
+    // second, smaller tusk inboard of it
+    horn(B, {
+      from: [0.16 * s, 1.55, 1.94], dir: [0.26 * s, 0.14, 0.95], len: 0.50,
+      curve: [0.06 * s, 0.34, -0.16], r0: 0.055, r1: 0.006, seg: 6, steps: 5,
+      colorAt: () => col(TUSK), matAt: () => M_TUSK,
+    });
+  }
+  // chin beard
   for (let i = 0; i < 7; i++) {
-    const t = i / 6;
-    const z = 0.86 - t * 1.05;
-    const y = 2.14 + Math.sin(t * Math.PI) * 0.10;
-    const len = 0.52 + Math.sin(t * Math.PI) * 0.34;
-    const c = place(lock(len, 0.085), { pos: [0, y, z], rot: [-2.15 - t * 0.20, 0, 0] });
-    rig.attach(tint(c, t < 0.35 ? SHAG : SHAG_DARK, 0.07), t < 0.5 ? 'chest' : 'spine');
+    horn(B, {
+      from: [(i - 3) * 0.06, 1.50, 1.74 + (i % 2) * 0.07], dir: [0, -1, -0.22],
+      len: 0.26 + (i % 3) * 0.07, r0: 0.045, r1: 0.005, flat: 0.36, seg: 5, steps: 3,
+      colorAt: () => mix(SHAG_DARK, HIDE_DARK, (i % 3) / 3), matAt: () => M_SHAG,
+    });
   }
-  for (let i = 0; i < 5; i++) {
-    const t = i / 4;
-    const z = 0.72 - t * 1.35;
-    for (const s of [-1, 1]) {
-      for (let r = 0; r < 2; r++) {
-        const a = 0.62 + r * 0.62;
-        const x = Math.sin(a) * (0.78 - t * 0.05) * s;
-        const y = 1.70 + Math.cos(a) * 0.82;
-        const len = (0.62 + Math.sin((1 - t) * Math.PI * 0.6) * 0.34) * (1 - r * 0.22);
-        const g = place(lock(len, 0.085), { pos: [x, y, z], rot: [-0.18, 0, (0.55 + r * 0.35) * s] });
-        rig.attach(tint(g, r === 0 ? SHAG : SHAG_DARK, 0.07),
-          z > 0.35 ? 'chest' : z > -0.5 ? 'spine' : 'hips');
-      }
-    }
+  emit(['bone', 'jaw']);
+
+  /* ------------------------------------------------------------- legs -- */
+  for (const s of [-1, 1]) {
+    const n = s < 0 ? 'L' : 'R';
+    B.group(6);
+    // front pillar: enormous at the shoulder, feathered with shag to the knee,
+    // then a bare grey cannon bone
+    sweep(B, {
+      nodes: [
+        { p: [0.54 * s, 2.24, 0.40], rx: 0.34, rz: 0.40 },
+        { p: [0.59 * s, 1.78, 0.44], rx: 0.32, rz: 0.38 },   // shoulder muscle
+        { p: [0.62 * s, 1.42, 0.48], rx: 0.235, rz: 0.27 },  // elbow
+        { p: [0.64 * s, 1.06, 0.38], rx: 0.180, rz: 0.205 },
+        { p: [0.65 * s, 0.70, 0.32], rx: 0.150, rz: 0.165 }, // carpus
+        { p: [0.66 * s, 0.36, 0.36], rx: 0.125, rz: 0.138 }, // cannon
+        { p: [0.66 * s, 0.19, 0.38], rx: 0.132, rz: 0.145 },
+      ],
+      steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.24 * Math.exp(-Math.pow((u - 0.16) / 0.20, 2))
+          + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.48) / 0.12, 2))
+          // shaggy feathering down the outside of the upper leg
+          + Math.max(0, Math.sin(th) * s) * 0.06
+            * Math.max(0, Math.sin(th * 11)) * (1 - smooth((u - 0.35) / 0.25));
+      },
+      colorAt: (th, u) => {
+        const feather = (1 - smooth((u - 0.30) / 0.28));
+        return mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9)
+          .lerp(hex(SHAG_DARK), feather * 0.7);
+      },
+      matAt: (th, u) => (u < 0.35 ? M_SHAG : M_HIDE),
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fel${n}`, `fkn${n}`, `fhf${n}`]] });
+    reset(B);
+
+    B.group(7);
+    hoof(B, 0.66 * s, 0.16, 0.40);
+    emit(['bone', `fhf${n}`]);
+
+    B.group(6);
+    sweep(B, {
+      nodes: [
+        { p: [0.52 * s, 2.06, -1.24], rx: 0.36, rz: 0.42 },
+        { p: [0.56 * s, 1.62, -1.36], rx: 0.34, rz: 0.40 },  // thigh
+        { p: [0.58 * s, 1.26, -1.50], rx: 0.235, rz: 0.265 }, // stifle
+        { p: [0.59 * s, 0.96, -1.36], rx: 0.180, rz: 0.200 },
+        { p: [0.60 * s, 0.66, -1.16], rx: 0.145, rz: 0.158 }, // hock
+        { p: [0.61 * s, 0.36, -1.16], rx: 0.120, rz: 0.132 },
+        { p: [0.61 * s, 0.19, -1.18], rx: 0.128, rz: 0.140 },
+      ],
+      steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.30 * Math.exp(-Math.pow((u - 0.14) / 0.22, 2))
+          + Math.max(0, Math.sin(th) * s) * 0.05
+            * Math.max(0, Math.sin(th * 11)) * (1 - smooth((u - 0.30) / 0.25));
+      },
+      colorAt: (th, u) => {
+        const feather = (1 - smooth((u - 0.26) / 0.26));
+        return mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9)
+          .lerp(hex(SHAG_DARK), feather * 0.65);
+      },
+      matAt: (th, u) => (u < 0.32 ? M_SHAG : M_HIDE),
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bkn${n}`, `bhk${n}`, `bhf${n}`]] });
+    reset(B);
+
+    B.group(7);
+    hoof(B, 0.61 * s, 0.16, -1.16);
+    emit(['bone', `bhf${n}`]);
   }
-  // a fringe of shag hanging off the brow
-  for (let i = -1; i <= 1; i++) {
-    const f = place(lock(0.30, 0.07), { pos: [i * 0.20, 1.72, 1.34], rot: [-0.9, 0, 0] });
-    rig.attach(tint(f, SHAG, 0.07), 'head');
-  }
-  // little bristle ridge along the snout
-  for (let i = 0; i < 3; i++) {
-    const b = place(spike(0.028, 0.10, 4), { pos: [0, 1.50 - i * 0.02, 1.66 + i * 0.11], rot: [-0.5, 0, 0] });
-    rig.attach(tint(b, SHAG_DARK), 'head');
+
+  /* ------------------------------------------------------------- tail -- */
+  B.group(8);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.90, -1.62], rx: 0.13 },
+      { p: [0, 1.70, -1.80], rx: 0.095 },
+      { p: [0, 1.46, -1.90], rx: 0.070 },
+      { p: [0, 1.30, -1.94], rx: 0.034 },
+    ],
+    steps: 12, seg: 8, ref: [0, 1, 0], capStart: false, capEnd: 0.5,
+    shape: (th, u) => 1 + smooth((u - 0.55) / 0.25) * (1 - smooth((u - 0.92) / 0.08)) * 1.6
+      + Math.sin(th * 8) * 0.14 * smooth((u - 0.55) / 0.3),
+    colorAt: (th, u) => mix(HIDE_DARK, SHAG_DARK, clamp01((u - 0.45) / 0.4)),
+    matAt: () => M_SHAG,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2']] });
+  reset(B);
+
+  for (const p of P) {
+    if (p.bind[0] === 'chain') rig.attachChain(p.geo, p.bind[1], 0.95);
+    else rig.attach(p.geo, p.bind[1]);
   }
 
   const mat = creatureMaterial({
-    roughness: 0.90, metalness: 0.0,
-    normalMap: organicNormal(), normalScale: 0.65, roughnessMap: organicRoughness(),
+    roughness: 0.93, metalness: 0.0,
+    normalMap: organicNormal(), normalScale: 0.9, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4 });
+  return rig.build(mat, { radius: 3.8 });
 }
 
-class GarulaEnemy extends Enemy {
+/** A heavy three-toed foot: two front toes, a broad pad, a rear dewclaw. */
+function hoof(B, x, y, z) {
+  const s = Math.sign(x) || 1;
+  for (const i of [-1, 1]) {
+    sweep(B, {
+      nodes: [
+        { p: [x + i * 0.068 * s, y + 0.06, z - 0.03], rx: 0.072, rz: 0.086 },
+        { p: [x + i * 0.072 * s, y - 0.05, z + 0.04], rx: 0.066, rz: 0.098 },
+        { p: [x + i * 0.072 * s, y - 0.135, z + 0.11], rx: 0.045, rz: 0.062 },
+      ],
+      steps: 6, seg: 9, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.4,
+      colorAt: (th, u) => mix(HOOF, 0x4e463c, u * 0.45), matAt: () => M_HOOF,
+    });
+  }
+  horn(B, {
+    from: [x, y - 0.02, z - 0.16], dir: [0, -0.5, -0.87], len: 0.095,
+    r0: 0.036, r1: 0.010, seg: 5, steps: 3, colorAt: () => col(HOOF), matAt: () => M_HOOF,
+  });
+}
+
+function reset(B) {
+  B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
+  B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
+  B.glow(null);
+}
+
+const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _c3 = new THREE.Color();
+/** Blend two sRGB hexes into the shared working colour. */
+function mix(a, b, t) {
+  _c1.setHex(a, THREE.SRGBColorSpace);
+  _c2.setHex(b, THREE.SRGBColorSpace);
+  return _c1.lerp(_c2, clamp01(t));
+}
+/** Same blend, but returns a hex so it can be fed back into `mix`/`hex`. */
+function mix2(a, b, t) {
+  _c3.setHex(a, THREE.SRGBColorSpace);
+  _c2.setHex(b, THREE.SRGBColorSpace);
+  return _c3.lerp(_c2, clamp01(t)).getHex();
+}
+/** A second scratch colour, so a `.lerp` target does not clobber `mix`. */
+function hex(h) { return _c2.setHex(h, THREE.SRGBColorSpace); }
+function col(h) { return _c1.setHex(h, THREE.SRGBColorSpace); }
+
+class GarulaEnemy extends QuadrupedEnemy {
   constructor(opts) { super(GARULA, opts); }
 
-  pose(state, t) {
-    const rig = this.rig;
-    if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+  telegraphScale() {
+    // the barrel charge coils low and long; the quake rears instead
+    if (this.attackId === 'barrel') return 1.30;
+    if (this.attackId === 'quake') return -0.95;
+    return 0.90;
+  }
 
-    // Four-beat lateral walk: near hind, near fore, off hind, off fore.
-    // A Garula never trots — it plods, and each footfall lands like a sack.
-    const OFF = { fL: Math.PI * 0.5, fR: Math.PI * 1.5, bL: 0, bR: Math.PI };
-    const walk = (ph, amp, kneeAmp, lift) => {
-      for (const s of [-1, 1]) {
-        const n = s < 0 ? 'L' : 'R';
-        const fo = OFF[`f${n}`], bo = OFF[`b${n}`];
-        const fa = Math.sin(ph + fo), fb = Math.max(0, Math.sin(ph + fo + 1.4));
-        const ba = Math.sin(ph + bo), bb = Math.max(0, Math.sin(ph + bo + 1.4));
-        S(`fsh${n}`, fa * amp, 0, 0);
-        S(`fkn${n}`, -0.10 - fb * kneeAmp, 0, 0);
-        S(`fpw${n}`, 0.10 + fa * lift, 0, 0);
-        S(`bhp${n}`, -ba * amp, 0, 0);
-        S(`bkn${n}`, 0.18 + bb * kneeAmp, 0, 0);
-        S(`bpw${n}`, -0.12 - ba * lift, 0, 0);
-      }
-    };
-    const rest = () => {
-      for (const s of [-1, 1]) {
-        const n = s < 0 ? 'L' : 'R';
-        S(`fsh${n}`, 0, 0, 0); S(`fkn${n}`, -0.08, 0, 0); S(`fpw${n}`, 0.06, 0, 0);
-        S(`bhp${n}`, -0.06, 0, 0); S(`bkn${n}`, 0.16, 0, 0); S(`bpw${n}`, -0.10, 0, 0);
-      }
-    };
+  leapScale() { return this.attackId === 'quake' ? 1.0 : 0.18; }
 
-    switch (state) {
-      case 'run':
-      case 'approach': {
-        const ph = t * 5.4;
-        walk(ph, 0.44, 0.55, 0.22);
-        S('spine', Math.sin(ph * 2) * 0.035, Math.sin(ph) * 0.05, 0);
-        S('chest', -0.03 + Math.sin(ph * 2 + 1.1) * 0.03, 0, Math.sin(ph) * 0.05);
-        S('neck', 0.06 + Math.sin(ph * 2) * 0.05, 0, 0);
-        S('head', -0.05 - Math.sin(ph * 2 + 0.6) * 0.07, Math.sin(ph) * 0.06, 0);
-        S('tail1', -0.12, Math.sin(ph * 0.8) * 0.22, 0);
-        S('tail2', -0.08, Math.sin(ph * 0.8 + 0.8) * 0.28, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph * 2)) * 0.045;
-        this.visual.rotation.z = Math.sin(ph) * 0.035;
-        break;
+  /**
+   * `quake` is the only move that goes up, so it gets its own wind-up: the
+   * forelegs leave the ground, the head goes back and the whole mass hangs
+   * there for a beat before it comes down. The negative `telegraphScale`
+   * already inverts the body drop; this adds the rear itself.
+   */
+  poseTelegraph(S, t) {
+    super.poseTelegraph(S, t);
+    if (this.attackId !== 'quake') {
+      if (this.attackId === 'barrel') {
+        // scuffing the dirt with the near forefoot, building to the charge
+        const k = attackEnvelope('telegraph', this.stateTime, this._timingAll()).tension;
+        const paw = Math.sin(this.stateTime * 7.5) * k;
+        this.anim.solveLeg('fR', 0.36 * Math.max(0, paw), 0.26 * Math.max(0, paw), S,
+          { kneeSign: 1, footPitch: -0.28 });
+        // head swings low and level, tusks forward
+        S('head', -0.42 * k, 0, 0);
       }
-      case 'telegraph': {
-        const k = Math.min(1, this.stateTime / 0.5);
-        const id = this.attackId;
-        if (id === 'barrel') {
-          // head down, shoulders loaded, one foreleg scraping the dirt
-          rest();
-          S('spine', 0.10 * k, 0, 0);
-          S('chest', 0.16 * k, 0, 0);
-          S('neck', 0.34 * k, 0, 0);
-          S('head', -0.30 * k, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`bhp${n}`, -0.42 * k, 0, 0); S(`bkn${n}`, 0.70 * k, 0, 0);
-          }
-          const paw = Math.max(0, Math.sin(this.stateTime * 7)) * k;
-          S('fshR', -0.55 * paw, 0, 0); S('fknR', -0.55 * paw, 0, 0);
-          this.visual.position.y = -0.10 * k;
-        } else if (id === 'quake') {
-          // rises onto the hind legs, forelegs cocked high overhead
-          const r = Math.min(1, this.stateTime / 0.7);
-          rest();
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, -1.55 * r, 0.10 * s * r, 0);
-            S(`fkn${n}`, -1.20 * r, 0, 0);
-            S(`fpw${n}`, -0.45 * r, 0, 0);
-            S(`bhp${n}`, 0.42 * r, 0, 0); S(`bkn${n}`, -0.30 * r, 0, 0);
-          }
-          S('spine', -0.42 * r, 0, 0);
-          S('chest', -0.30 * r, 0, 0);
-          S('neck', -0.28 * r, 0, 0);
-          S('head', 0.42 * r, 0, 0);
-          S('jaw', 0.35 * r, 0, 0);
-          this.visual.rotation.x = -0.58 * r;
-          this.visual.position.y = 0.34 * r;
-        } else {
-          // tusk: head cocked low and to one side, weight rocked back
-          rest();
-          S('spine', 0.08 * k, -0.10 * k, 0);
-          S('chest', 0.12 * k, -0.14 * k, 0);
-          S('neck', 0.40 * k, -0.22 * k, 0);
-          S('head', -0.46 * k, -0.28 * k, -0.30 * k);
-          S('jaw', 0.20 * k, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, 0.20 * k, 0, 0); S(`fkn${n}`, -0.30 * k, 0, 0);
-            S(`bhp${n}`, -0.38 * k, 0, 0); S(`bkn${n}`, 0.60 * k, 0, 0);
-          }
-          this.visual.position.y = -0.13 * k;
-        }
-        break;
-      }
-      case 'attack': {
-        const id = this.attackId;
-        if (id === 'barrel') {
-          // flat out and low, legs churning under the barrel
-          const ph = t * 13;
-          const k = Math.min(1, this.stateTime / 0.18);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            const o = s < 0 ? 0 : Math.PI;
-            S(`fsh${n}`, Math.sin(ph + o) * 1.0, 0, 0);
-            S(`fkn${n}`, -0.55 - Math.max(0, Math.sin(ph + o + 1.5)) * 0.9, 0, 0);
-            S(`bhp${n}`, -Math.sin(ph + o) * 0.95, 0, 0);
-            S(`bkn${n}`, 0.55 + Math.max(0, Math.sin(ph + o + 1.5)) * 0.9, 0, 0);
-          }
-          S('spine', -0.10 * k, 0, 0);
-          S('chest', 0.20 * k, 0, 0);
-          S('neck', 0.42 * k, 0, 0);
-          S('head', -0.40 * k, 0, 0);
-          this.visual.position.y = -0.16 * k + Math.abs(Math.sin(ph)) * 0.05;
-          this.visual.rotation.z = Math.sin(ph) * 0.10;
-        } else if (id === 'quake') {
-          // both forelegs come down; the whole animal lands on them
-          const k = Math.min(1, this.stateTime / 0.30);
-          const e = 1 - Math.pow(1 - k, 4);
-          const shock = Math.exp(-Math.max(0, this.stateTime - 0.30) * 9)
-            * Math.sin(this.stateTime * 52) * 0.05;
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, -1.55 + 1.85 * e, 0, 0);
-            S(`fkn${n}`, -1.20 + 1.30 * e, 0, 0);
-            S(`fpw${n}`, -0.45 + 0.55 * e, 0, 0);
-            S(`bhp${n}`, 0.42 - 0.52 * e, 0, 0); S(`bkn${n}`, -0.30 + 0.52 * e, 0, 0);
-          }
-          S('spine', -0.42 + 0.60 * e + shock, 0, 0);
-          S('chest', -0.30 + 0.46 * e, 0, 0);
-          S('neck', -0.28 + 0.50 * e, 0, 0);
-          S('head', 0.42 - 0.80 * e, 0, 0);
-          S('jaw', 0.55 * (1 - e) + 0.15, 0, 0);
-          this.visual.rotation.x = -0.58 * (1 - e) + shock;
-          this.visual.position.y = 0.34 * (1 - e) - 0.06 * e;
-        } else {
-          // tusk: the head whips up and across, and the shoulders follow
-          const k = Math.min(1, this.stateTime / 0.26);
-          const e = 1 - Math.pow(1 - k, 3);
-          S('spine', 0.08 - 0.20 * e, -0.10 + 0.24 * e, 0);
-          S('chest', 0.12 - 0.28 * e, -0.14 + 0.34 * e, 0);
-          S('neck', 0.40 - 0.86 * e, -0.22 + 0.50 * e, 0);
-          S('head', -0.46 + 1.00 * e, -0.28 + 0.62 * e, -0.30 + 0.66 * e);
-          S('jaw', 0.20 + 0.45 * e, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, 0.20 - 0.55 * e, 0, 0); S(`fkn${n}`, -0.30 + 0.20 * e, 0, 0);
-            S(`bhp${n}`, -0.38 + 0.28 * e, 0, 0); S(`bkn${n}`, 0.60 - 0.42 * e, 0, 0);
-          }
-          this.visual.position.y = -0.13 + 0.20 * e;
-        }
-        break;
-      }
-      case 'flinch': {
-        // barely notices — a shrug of that much muscle is a small thing
-        const k = Math.exp(-this.stateTime * 8) * (1 - Math.min(1, this.stateTime / 0.35));
-        const sh = Math.sin(this.stateTime * 34) * k;
-        rest();
-        S('spine', 0.10 * k, sh * 0.16, 0);
-        S('chest', 0.08 * k, sh * 0.12, 0);
-        S('neck', 0.20 * k, sh * 0.22, 0);
-        S('head', -0.26 * k, sh * 0.26, 0.14 * k);
-        S('jaw', 0.30 * k, 0, 0);
-        this.visual.position.y = -0.05 * k;
-        break;
-      }
-      case 'stagger': {
-        // legs splay, the barrel sags between them, head hangs in the dirt
-        const k = Math.min(1, this.stateTime / 0.3) * Math.max(0, 1 - this.stateTime / 2.6);
-        const sway = Math.sin(this.stateTime * 3.2) * 0.16 * k;
-        S('spine', 0.24 * k, sway, 0.12 * k);
-        S('chest', 0.18 * k, sway * 0.7, 0);
-        S('neck', 0.62 * k, sway * 1.2, 0);
-        S('head', -0.55 * k, sway * 1.4, 0.20 * k);
-        S('jaw', 0.60 * k, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.42 * k, 0, 0.36 * s * k); S(`fkn${n}`, -0.72 * k, 0, 0);
-          S(`bhp${n}`, -0.50 * k, 0, 0.32 * s * k); S(`bkn${n}`, 0.90 * k, 0, 0);
-        }
-        this.visual.position.y = -0.34 * k;
-        break;
-      }
-      case 'death': {
-        // the legs fold and the whole mass goes over sideways
-        const k = Math.min(1, this.stateTime / 0.85);
-        const e = 1 - Math.pow(1 - k, 3);
-        this.visual.rotation.z = e * 1.42;
-        this.visual.rotation.x = 0;
-        this.visual.position.y = -0.62 * e;
-        S('spine', 0.22 * e, 0, 0);
-        S('chest', 0.14 * e, 0, 0);
-        S('neck', 0.55 * e, 0.24 * e, 0);
-        S('head', -0.48 * e, 0, 0);
-        S('jaw', 0.42 * e, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.66 * e, 0, 0); S(`fkn${n}`, -1.05 * e, 0, 0);
-          S(`bhp${n}`, -0.72 * e, 0, 0); S(`bkn${n}`, 1.15 * e, 0, 0);
-        }
-        break;
-      }
-      default: {
-        // grazing idle: slow deep breathing, head dipping toward the ground
-        const b = Math.sin(t * 1.1) * 0.035;
-        rest();
-        S('spine', b, 0, 0);
-        S('chest', b * 0.6, 0, 0);
-        S('neck', 0.18 + b + Math.sin(t * 0.34) * 0.10, Math.sin(t * 0.27) * 0.14, 0);
-        S('head', -0.16 - b, Math.sin(t * 0.31) * 0.16, 0);
-        S('jaw', 0.10 + Math.max(0, Math.sin(t * 2.3)) * 0.14, 0, 0);
-        S('tail1', -0.06, Math.sin(t * 0.9) * 0.26, 0);
-        S('tail2', -0.04, Math.sin(t * 0.9 + 0.7) * 0.32, 0);
-        this.visual.position.y = 0;
-        this.visual.rotation.x = 0;
-        this.visual.rotation.z = 0;
-        break;
-      }
+      return;
     }
+    const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
+    const k = env.tension;
+    const rear = smooth(k);
+    this.stance(S, {
+      front: { reach: -0.42 * rear, lift: 1.45 * rear },
+      back: { reach: 0.16 * rear, lift: 0 },
+    });
+    this.spine(S, -0.34 * rear + env.shake, 0, 0);
+    S('head', 0.40 * rear, 0, 0);
+    S('jaw', 0.55 * k);
+    this.tail(t, 0.30 * k, 0.14, 3);
+    this.visual.rotation.x -= 0.46 * rear;
+    this.visual.position.y += 0.14 * rear;
+  }
+
+  poseAttack(S, t) {
+    if (this.attackId !== 'quake') { super.poseAttack(S, t); return; }
+    // and down: both forefeet together, the body driving through the ground
+    const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack',
+      this.stateTime, this._timingAll());
+    const k = env.k;
+    const up = clamp01(-k);
+    const down = clamp01(k);
+    this.stance(S, {
+      drop: 0.24 * down * (1 - env.f * 0.4),
+      front: { reach: -0.38 * up + 0.30 * down, lift: 1.45 * up },
+      back: { reach: 0.16 * up - 0.10 * down },
+    });
+    this.spine(S, -0.34 * up + 0.30 * down, 0, 0);
+    S('head', 0.40 * up - 0.34 * down, 0, 0);
+    S('jaw', 0.75 * down);
+    this.tail(t, -0.45 * down, 0.2, 4);
+    this.visual.rotation.x += -0.46 * up + 0.14 * down;
+    this.visual.position.y += 0.14 * up;
   }
 }
+
+GarulaEnemy.ANIM = {
+  legs: {
+    fL: ['fshL', 'felL', 'fknL', 'fhfL'], fR: ['fshR', 'felR', 'fknR', 'fhfR'],
+    bL: ['bhpL', 'bknL', 'bhkL', 'bhfL'], bR: ['bhpR', 'bknR', 'bhkR', 'bhfR'],
+  },
+  trunk: ['hips', 'spine', 'chest', 'neck', 'head'],
+  tails: ['tail1', 'tail2'],
+  jawBone: 'jaw',
+  heavy: true,
+  strideLen: 2.9, stride: 0.58, lift: 0.24, splay: 0.02, bodyScale: 2.0,
+  crouch: 0.26, crouchFront: 0.12, crouchBack: -0.20, crouchPitch: 0.13, headDown: 0.36,
+  lunge: 0.36, lungeLift: 0.30, lungeLiftBack: 0, hop: 0.05,
+  strikePitch: 0.15, headThrust: 0.46, jaw: 0.30, jawBite: 0.55,
+  runNeck: 0.09, runHead: 0.15, flex: 0.35,
+  bodyY: 2.14, bodyR: 0.94, deathRoll: 0.92, deathSlow: 2.0,
+  tailRun: -0.20, tailIdle: 0.08,
+  footPitchF: -0.05, footPitchB: 0.05,
+};

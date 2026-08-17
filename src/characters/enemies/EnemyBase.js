@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { normalFromHeight, makeDataMap } from '../../util/TextureGen.js';
 import { Noise } from '../../util/Noise.js';
+import { CreatureAnim } from '../rig/CreatureAnim.js';
 
 /**
  * Shared enemy behaviour.
@@ -123,7 +124,21 @@ export class Enemy {
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
     this.root.add(group);
+    /**
+     * Shared animation state — gait phase, solved leg chains, impact springs.
+     * `setupAnim()` is where a species declares its legs and spine; species
+     * that do not override it simply get the additive impact layer.
+     */
+    this.anim = new CreatureAnim(this);
+    this.setupAnim(this.anim);
     return group;
+  }
+
+  /** Species hook: register leg chains and the trunk for the impact layer. */
+  setupAnim(anim) {
+    const has = (n) => this.rig.byName.has(n);
+    const trunk = ['hips', 'pelvis', 'spine', 'spineA', 'spineB', 'chest', 'core', 'pod', 'neck', 'head'];
+    anim.setTrunk(trunk.filter(has));
   }
 
   /** Reset a pooled instance back to a spawnable state. */
@@ -147,6 +162,15 @@ export class Enemy {
     this.phaseIndex = 0;
     this.setState('idle');
     this.stateTime = 0;
+    this.hitPower = 0;
+    if (this._kb) this._kb.set(0, 0, 0);
+    if (this.anim) {
+      for (const s of [this.anim.hitPitch, this.anim.hitRoll, this.anim.hitYaw, this.anim.pushZ, this.anim.pushX]) s.reset();
+      this.anim.hitAmount = 0;
+      this.anim.shake = 0;
+      this.anim.airborne = false;
+      this.anim.bodyY = this.anim.bodyRoll = this.anim.bodyPitch = 0;
+    }
     if (this.visual) {
       this.visual.rotation.set(0, 0, 0);
       this.visual.position.set(0, 0, 0);
@@ -223,6 +247,24 @@ export class Enemy {
     }
     this.flinchDir = dir ? dir.clone().normalize() : new THREE.Vector3(0, 0, 1);
 
+    /* ---- physical reaction ------------------------------------------- */
+    // Severity is a blend of how big the hit was relative to this creature's
+    // own health pool and how much poise it broke — a chip of a Titan must not
+    // rock it the way the same number rocks a sabertusk.
+    const frac = dmg / Math.max(1, this.maxHp);
+    let power = Math.min(1.6, frac * 9 + (o.poise ?? 10) / 55);
+    if (staggered) power = Math.max(power, 1.15);
+    if (this.superArmour) power *= 0.35;
+    this.hitPower = power;
+    if (this.anim) this.anim.impact(this.flinchDir, power, this.heading);
+    // knockback: a slide the creature has to arrest, not a teleport
+    const kb = Math.min(this.knockbackCap ?? 3.6, power * (staggered ? 3.2 : 1.5)) / (1 + this.radius * 0.9);
+    if (kb > 0.05) {
+      this._kb = this._kb || new THREE.Vector3();
+      this._kb.copy(this.flinchDir).setY(0).normalize().multiplyScalar(kb);
+    }
+    this.lastHitAt = this.phase;
+
     // being hit is the loudest possible cue
     if (!this.target && o.source) this.target = o.source;
     this.awareness = 1;
@@ -243,6 +285,15 @@ export class Enemy {
     this.invulnerable = true;
     this.corpseTime = 0;
     this.attack = null;
+    /**
+     * Which way the corpse goes down. A death that always folds the same way
+     * looks scripted; taking the side from the killing blow means the same
+     * animation reads differently every time.
+     */
+    const d = this.flinchDir || new THREE.Vector3(0, 0, 1);
+    const cs = Math.cos(-this.heading), sn = Math.sin(-this.heading);
+    this.deathSide = (d.x * cs - d.z * sn) >= 0 ? 1 : -1;
+    this.deathPush = d.x * sn + d.z * cs;   // +1 hit from the front, -1 from behind
     this.setState('death');
     if (this.pack) this.pack.onDeath(this);
   }
@@ -366,12 +417,21 @@ export class Enemy {
   update(dt, ctx) {
     this.stateTime += dt;
     this.phase += dt;
+    /** Frame delta, so `pose()` can advance stride phase and springs. */
+    this._dt = dt;
     if (this.frozenPose) return;
     if (this._atkCooldown > 0) this._atkCooldown -= dt;
+    this.moveSpeed = 0;
 
     if (this.dead) {
       this.corpseTime += dt;
+      if (ctx && ctx.terrain) {
+        this.root.position.y = ctx.terrain.heightAt(this.root.position.x, this.root.position.z);
+      }
+      this._slide(dt, ctx);
+      this._resetVisual();
       this.pose('death', this.phase, ctx);
+      this._postPose(dt);
       return;
     }
 
@@ -413,13 +473,67 @@ export class Enemy {
       default: this.setState('idle'); break;
     }
 
+    this._slide(dt, ctx);
+
     // terrain follow
     if (ctx && ctx.terrain) {
       const gy = ctx.terrain.heightAt(this.root.position.x, this.root.position.z);
       this.root.position.y = this.airborne ? Math.max(gy, this.root.position.y) : gy;
     }
     this.root.rotation.y = this.heading;
+    this._resetVisual();
     this.pose(POSE_MAP[this.state] || 'idle', this.phase, ctx);
+    this._postPose(dt);
+  }
+
+  /**
+   * Species rebuilt against `CreatureAnim` author the whole body transform
+   * every frame, so it starts from zero; the older species still carry state
+   * across frames in `visual` and must not be reset under them.
+   */
+  _resetVisual() {
+    if (!this.autoResetVisual || !this.visual) return;
+    this.visual.position.set(0, 0, 0);
+    this.visual.rotation.set(0, 0, 0);
+    if (this.anim) { this.anim.bodyY = 0; this.anim.bodyRoll = 0; this.anim.bodyPitch = 0; }
+  }
+
+  /**
+   * Knockback decay. Being hit shoves a creature and it has to dig in and stop
+   * — that friction is a large part of why a hit reads as having landed.
+   */
+  _slide(dt, ctx) {
+    const kb = this._kb;
+    if (!kb || kb.lengthSq() < 1e-5) return;
+    this.root.position.x += kb.x * dt;
+    this.root.position.z += kb.z * dt;
+    kb.multiplyScalar(Math.max(0, 1 - dt * (this.dead ? 5.5 : 9)));
+    if (kb.lengthSq() < 1e-5) kb.set(0, 0, 0);
+  }
+
+  /**
+   * Additive layer applied after the species pose: impact springs whipping
+   * through the spine, the gait's vertical bounce, and the residual shove.
+   */
+  _postPose(dt) {
+    const a = this.anim;
+    if (!a || !this.rig) return;
+    a.commit(dt, (name, x, y, z) => {
+      const b = this.rig.byName.get(name);
+      if (!b) return;
+      _addEuler.set(x, y, z, 'XYZ');
+      _addQ.setFromEuler(_addEuler);
+      b.quaternion.multiply(_addQ);
+    });
+    const v = this.visual;
+    if (!v) return;
+    if (a.bodyY) v.position.y += a.bodyY;
+    if (a.bodyRoll || a.bodyPitch) {
+      v.rotation.z += a.bodyRoll;
+      v.rotation.x += a.bodyPitch;
+    }
+    const p = a.pushLocal;
+    if (p && (p.x || p.z)) { v.position.x += p.x; v.position.z += p.z; }
   }
 
   /** Notice things, lose interest in things. */
@@ -652,6 +766,9 @@ export class Enemy {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);
+    // the gait reads its stride from ground speed, so record what we actually
+    // travelled rather than what the AI intended
+    this.moveSpeed = sp;
     if (skipSeparation || !ctx || !ctx.others) return;
     const others = ctx.others;
     for (let i = 0; i < others.length; i++) {
@@ -686,6 +803,8 @@ export class Enemy {
 
 const EMPTY = [];
 const DEFAULT_TIMING = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
+const _addEuler = new THREE.Euler();
+const _addQ = new THREE.Quaternion();
 
 /**
  * Map the richer AI vocabulary onto the pose vocabulary the original four

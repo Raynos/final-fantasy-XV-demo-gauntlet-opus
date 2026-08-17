@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../util/Rng.js';
 import { BESTIARY, TYPES, speciesKeys } from './enemies/Bestiary.js';
+import { CombatAnim } from './rig/CombatAnim.js';
 
 /**
  * Bestiary + spawner + AI tick.
@@ -256,6 +257,23 @@ export class Enemies {
       e.update(dt, ctx);
       if (e.dead && e.corpseTime > this.corpseLinger && !e.keepCorpse) this.despawn(e);
     }
+  }
+
+  /**
+   * Drive the player's combat body (`rig/CombatAnim.js`).
+   *
+   * It has to run in the **lateUpdate** pass: `CombatSystem` updates after
+   * `Player`, so a layer driven from the update pass would read last frame's
+   * swing angle and the arm would trail the blade. This system is hosted here
+   * only because it is the character-animation system that already ticks late;
+   * it belongs on `CombatSystem` or `Player` once those owners can take a
+   * one-line call, and nothing else in here depends on it.
+   */
+  lateUpdate(dt, game) {
+    if (!this.combatAnim && game.get('Combat') && game.get('Player')) {
+      this.combatAnim = new CombatAnim(game);
+    }
+    if (this.combatAnim) this.combatAnim.lateUpdate(dt);
   }
 }
 

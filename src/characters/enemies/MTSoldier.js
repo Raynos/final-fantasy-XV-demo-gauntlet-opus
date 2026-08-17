@@ -1,21 +1,36 @@
 import * as THREE from 'three';
-import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, metalNormal, metalRoughness } from './EnemyBase.js';
-import { tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross } from '../../combat/GeoKit.js';
+import { Rig, creatureMaterial } from './RigBuilder.js';
+import { metalNormal, metalRoughness } from './EnemyBase.js';
+import { BipedEnemy } from './Biped.js';
+import { CBuilder, sweep, plate, horn, sculptBlob } from '../rig/Sculpt.js';
+import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
-
-const PLATE = 0x33383f;
-const PLATE_DARK = 0x191c21;
-const JOINT = 0x14161a;
-const TRIM = 0x555b63;
+/* Niflheim issue: a dark blue-grey enamel over gunmetal, with the daemon
+ * furnace showing through every seam as a hard orange-red. */
+const SHELL = 0x2f353d;
+const SHELL_LIT = 0x424b55;
+const SHELL_DARK = 0x181c21;
+const RUBBER = 0x101215;
+const PISTON = 0x8d9199;
+const BRASS = 0x6d5c3c;
 const MAGITEK = 0xff2f12;
+const EMBER = 0x3a0d05;
+
+const M_ENAMEL = [0.34, 0.22];   // painted plate: tight highlight, low metal
+const M_GUN = [0.46, 0.85];      // bare gunmetal
+const M_RUBBER = [0.82, 0.05];   // seals and boot soles
+const M_PISTON = [0.20, 0.95];   // chromed rod
+const M_SCUFF = [0.62, 0.55];    // worn edges where paint has gone
 
 /**
- * Imperial Magitek Trooper (MT) — mass-produced Niflheim infantry.
- * Hard angular armour over exposed black piston joints, a faceless helm with
- * a single burning visor slit, and magitek vents that glow through the plate.
- * Drops out of a dropship, snaps to attention, then advances firing.
+ * Imperial MT — a magitek trooper.
+ *
+ * Not a person in armour: a daemon-fuelled automaton grown into a shell. The
+ * read is a gaunt, forward-hunched armature — narrow waist, long thin piston
+ * limbs, a heavy back-mounted reactor that drags the shoulders forward, and a
+ * beaked helm with a single hot slit where a face should be. Every armour
+ * plate is a shaped shell over a visible mechanical core, so light finds a
+ * cavity edge everywhere instead of sliding off a box.
  */
 export const MT_SOLDIER = {
   key: 'mt',
@@ -23,18 +38,15 @@ export const MT_SOLDIER = {
   faction: 'imperial',
   expClass: 'normal',
   stats: {
-    name: 'Magitek Trooper', hp: 640, poise: 34, speed: 3.2, attackRange: 9.5,
+    name: 'Imperial MT', hp: 640, poise: 34, speed: 3.2, attackRange: 9.5,
     aggroRange: 34, radius: 0.42, height: 1.95, damage: 74, level: 16,
   },
   weakness: 'lightning',
   resist: 'fire',
-  resistPct: { lightning: 170, fire: 60, ice: 100, dark: 100, light: 100 },
-  weakTo: ['polearm'],
-  senses: { sight: 34, fov: 1.3, hearing: 12 },
+  senses: { sight: 34, fov: 1.3, hearing: 14 },
   drops: [
-    { id: 'chrome_bit', chance: 0.4, count: 1 },
-    { id: 'magitek_booster', chance: 0.15, count: 1 },
-    { id: 'debased_coin', chance: 0.3, count: 3 },
+    { id: 'magitek_core', chance: 0.30, count: 1 },
+    { id: 'rusted_bit', chance: 0.55, count: 1 },
   ],
   timing: { telegraph: 0.5, strike: 0.1, attack: 0.42, recover: 0.75 },
   attacks: [
@@ -44,275 +56,494 @@ export const MT_SOLDIER = {
       telegraph: 0.4, strike: 0.14, attack: 0.42, recover: 0.7, cooldown: 1.2 },
   ],
   buildPrototype,
-  make(opts) { return new MTEnemy(opts); },
+  make(opts) { return new MTSoldierEnemy(opts); },
 };
 
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
-  rig.bone('pelvis', 'root', [0, 0.92, 0]);
-  rig.bone('spine', 'pelvis', [0, 1.16, 0]);
-  rig.bone('chest', 'spine', [0, 1.40, 0]);
-  rig.bone('neck', 'chest', [0, 1.62, 0]);
-  rig.bone('head', 'neck', [0, 1.74, 0.01]);
+  rig.bone('pelvis', 'root', [0, 0.94, -0.02]);
+  rig.bone('spine', 'pelvis', [0, 1.15, -0.03]);
+  rig.bone('chest', 'spine', [0, 1.40, -0.02]);
+  rig.bone('neck', 'chest', [0, 1.60, 0.0]);
+  rig.bone('head', 'neck', [0, 1.71, 0.01]);
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    rig.bone(`sh${n}`, 'chest', [0.235 * s, 1.53, 0]);
-    rig.bone(`el${n}`, `sh${n}`, [0.30 * s, 1.19, 0.02]);
-    rig.bone(`hd${n}`, `el${n}`, [0.30 * s, 0.90, 0.10]);
-    rig.bone(`hp${n}`, 'pelvis', [0.135 * s, 0.90, 0]);
-    rig.bone(`kn${n}`, `hp${n}`, [0.145 * s, 0.50, 0.03]);
-    rig.bone(`ft${n}`, `kn${n}`, [0.145 * s, 0.08, -0.01]);
+    rig.bone(`sh${n}`, 'chest', [0.225 * s, 1.535, -0.01]);
+    rig.bone(`el${n}`, `sh${n}`, [0.285 * s, 1.20, 0.015]);
+    rig.bone(`hd${n}`, `el${n}`, [0.295 * s, 0.90, 0.085]);
+    rig.bone(`hp${n}`, 'pelvis', [0.125 * s, 0.90, -0.01]);
+    rig.bone(`kn${n}`, `hp${n}`, [0.135 * s, 0.505, 0.035]);
+    rig.bone(`ft${n}`, `kn${n}`, [0.138 * s, 0.095, -0.02]);
   }
 
-  /* --- torso: layered angular plate over a dark chassis --- */
-  const core = loft(rectCross(0.3, 14), [
-    { y: 0.86, sx: 0.145, sz: 0.105 },
-    { y: 1.10, sx: 0.150, sz: 0.110 },
-    { y: 1.36, sx: 0.185, sz: 0.125 },
-    { y: 1.56, sx: 0.170, sz: 0.115 },
-  ]);
-  rig.attachBlend(tint(core, PLATE_DARK, 0.03), 'pelvis', 'chest', 1.4);
+  const B = new CBuilder();
+  const P = [];
+  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
 
-  const breast = place(slab(0.40, 0.30, 0.24, 0.035), { pos: [0, 1.40, 0.01] });
-  rig.attach(tint(breast, PLATE, 0.03), 'chest');
-  const gorget = place(slab(0.26, 0.09, 0.20, 0.025), { pos: [0, 1.58, 0.0] });
-  rig.attach(tint(gorget, PLATE_DARK), 'chest');
-  const abdo = place(slab(0.30, 0.20, 0.20, 0.03), { pos: [0, 1.16, 0.0] });
-  rig.attach(tint(abdo, PLATE, 0.03), 'spine');
-  const belt = place(slab(0.34, 0.10, 0.24, 0.02), { pos: [0, 0.96, 0] });
-  rig.attach(tint(belt, PLATE_DARK), 'pelvis');
-  const skirtF = place(slab(0.26, 0.20, 0.05, 0.015), { pos: [0, 0.84, 0.12], rot: [0.16, 0, 0] });
-  rig.attach(tint(skirtF, PLATE), 'pelvis');
-  const skirtB = place(slab(0.26, 0.20, 0.05, 0.015), { pos: [0, 0.84, -0.12], rot: [-0.16, 0, 0] });
-  rig.attach(tint(skirtB, PLATE), 'pelvis');
-
-  // magitek core: the red furnace behind the chest plate
-  const coreGlow = place(slab(0.11, 0.11, 0.06, 0.02), { pos: [0, 1.42, 0.135] });
-  rig.attach(glow(tint(coreGlow, 0x3a0d05), MAGITEK, 3.0), 'chest');
+  /* ------------------------------------------------------------ torso -- */
+  B.group(1);
+  // The core: a narrow, tapered ribcage shell. The section is a rounded
+  // rectangle at the sternum and an ellipse at the waist, so the chest reads
+  // as armour plate and the waist as a flexible joint.
+  sweep(B, {
+    nodes: [
+      { p: [0, 0.90, -0.02], rx: 0.145, rz: 0.115 },
+      { p: [0, 1.06, -0.035], rx: 0.118, rz: 0.098 },   // waist pinch
+      { p: [0, 1.24, -0.03], rx: 0.165, rz: 0.128 },
+      { p: [0, 1.42, -0.015], rx: 0.205, rz: 0.150 },   // chest
+      { p: [0, 1.54, 0.0], rx: 0.185, rz: 0.132 },
+      { p: [0, 1.60, 0.0], rx: 0.115, rz: 0.098 },
+    ],
+    steps: 22, seg: 16, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.35,
+    shape: (th, u) => {
+      const front = Math.cos(th);                 // +1 chest, -1 back
+      let m = 1;
+      // squared-off chest plate with a soft chamfer, rounded back
+      m += Math.max(0, front) * 0.10 * smooth((u - 0.42) / 0.25);
+      // sternum keel
+      m += Math.exp(-Math.pow((th - 0) / 0.42, 2)) * 0.055 * smooth((u - 0.40) / 0.3);
+      // a horizontal seam between the abdominal segments
+      m -= Math.exp(-Math.pow((u - 0.30) / 0.035, 2)) * 0.035;
+      m -= Math.exp(-Math.pow((u - 0.52) / 0.030, 2)) * 0.028;
+      return m;
+    },
+    colorAt: (th, u) => {
+      const front = Math.cos(th);
+      if (u < 0.34 && Math.abs(front) < 0.55) return col(RUBBER);       // waist bellows
+      return col(front > 0.2 ? SHELL_LIT : SHELL, front > 0.2 ? 1 : 0.92);
+    },
+    matAt: (th, u) => (u < 0.34 && Math.abs(Math.cos(th)) < 0.55 ? M_RUBBER : M_ENAMEL),
+  });
+  // the furnace: an exposed core burning through the chest cavity
+  B.glow(MAGITEK, 2.6);
+  sculptBlob(B, {
+    center: [0, 1.30, 0.115], scale: [0.055, 0.075, 0.035], segU: 12, segV: 8,
+    colorAt: () => col(EMBER), matAt: () => [0.5, 0.1],
+  });
+  B.glow(null);
+  // abdominal vent louvres
   for (let i = 0; i < 3; i++) {
-    const vent = place(slab(0.20, 0.016, 0.03, 0.004), { pos: [0, 1.24 + i * 0.045, 0.115] });
-    rig.attach(glow(tint(vent, 0x2a0a04), MAGITEK, 1.6), 'spine');
+    B.glow(MAGITEK, 1.5 - i * 0.25);
+    plate(B, {
+      size: [0.11, 0.014, 0.03], center: [0, 1.14 + i * 0.045, 0.115], power: 4,
+      segU: 8, segV: 5, colorAt: () => col(EMBER), matAt: () => [0.55, 0.1],
+    });
+    B.glow(null);
   }
-  // back power unit
-  const pack = place(slab(0.28, 0.30, 0.14, 0.03), { pos: [0, 1.38, -0.16] });
-  rig.attach(tint(pack, PLATE_DARK, 0.03), 'chest');
+  emit(['chain', ['pelvis', 'spine', 'chest']]);
+
+  /* --------------------------------------------------------- backpack -- */
+  B.group(2);
+  plate(B, {
+    size: [0.30, 0.34, 0.17], center: [0, 1.40, -0.175], power: 6, segU: 16, segV: 12,
+    colorAt: (u, v, p) => col(p.y > 1.5 ? SHELL_LIT : SHELL_DARK),
+    matAt: () => M_ENAMEL,
+  });
+  // reactor stacks: two vertical cylinders venting hot
   for (const s of [-1, 1]) {
-    const t = place(loft(circleCross(8), [{ y: 0, sx: 0.035 }, { y: 0.30, sx: 0.028 }]),
-      { pos: [0.085 * s, 1.44, -0.23], rot: [0.2, 0, 0] });
-    rig.attach(tint(t, TRIM), 'chest');
-    const cap = place(blob(0.032, 0.02, 0.032, 7, 5), { pos: [0.085 * s, 1.74, -0.29] });
-    rig.attach(glow(tint(cap, 0x3a0d05), MAGITEK, 2.0), 'chest');
+    sweep(B, {
+      nodes: [
+        { p: [0.10 * s, 1.28, -0.235], rx: 0.045 },
+        { p: [0.10 * s, 1.52, -0.235], rx: 0.042 },
+        { p: [0.10 * s, 1.62, -0.225], rx: 0.030 },
+      ],
+      steps: 8, seg: 10, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.2,
+      colorAt: (th, u) => col(u > 0.82 ? BRASS : SHELL_DARK),
+      matAt: (th, u) => (u > 0.82 ? M_SCUFF : M_GUN),
+    });
+    B.glow(MAGITEK, 2.2);
+    sculptBlob(B, {
+      center: [0.10 * s, 1.645, -0.222], scale: [0.026, 0.012, 0.026], segU: 9, segV: 5,
+      colorAt: () => col(EMBER), matAt: () => [0.4, 0.1],
+    });
+    B.glow(null);
   }
+  emit(['bone', 'chest']);
 
-  /* --- head: faceless helm, single visor slit --- */
-  const neck = place(loft(circleCross(8), [{ y: 1.58, sx: 0.055 }, { y: 1.68, sx: 0.055 }]), {});
-  rig.attachBlend(tint(neck, JOINT), 'chest', 'head', 1.0);
-  const helm = place(slab(0.20, 0.22, 0.23, 0.045), { pos: [0, 1.78, 0.0] });
-  rig.attach(tint(helm, PLATE, 0.03), 'head');
-  const crest = place(slab(0.045, 0.18, 0.22, 0.02), { pos: [0, 1.90, -0.01] });
-  rig.attach(tint(crest, PLATE_DARK), 'head');
-  const chin = place(slab(0.15, 0.09, 0.10, 0.02), { pos: [0, 1.685, 0.07] });
-  rig.attach(tint(chin, PLATE_DARK), 'head');
-  const visor = place(slab(0.165, 0.032, 0.03, 0.008), { pos: [0, 1.795, 0.122] });
-  rig.attach(glow(tint(visor, 0x3d0e05), MAGITEK, 4.5), 'head');
-  const visorRim = place(slab(0.19, 0.075, 0.035, 0.012), { pos: [0, 1.795, 0.108] });
-  rig.attach(tint(visorRim, JOINT), 'head');
+  /* -------------------------------------------------------------- hip -- */
+  B.group(3);
+  plate(B, {
+    size: [0.28, 0.13, 0.20], center: [0, 0.925, -0.01], power: 5, segU: 14, segV: 9,
+    colorAt: () => col(SHELL_DARK), matAt: () => M_ENAMEL,
+  });
+  // tassets — angular skirt plates that widen the hip and break the leg line
+  for (const s of [-1, 1]) {
+    for (const [zc, w, rot] of [[0.115, 0.13, 0.22], [-0.13, 0.14, -0.20]]) {
+      plate(B, {
+        size: [w, 0.20, 0.042], center: [0.115 * s, 0.845, zc], power: 7,
+        rot: [rot, 0, -0.22 * s], segU: 8, segV: 7,
+        colorAt: (u, v, p) => col(SHELL, p.y > 0.85 ? 1 : 0.8), matAt: () => M_ENAMEL,
+      });
+    }
+  }
+  emit(['bone', 'pelvis']);
 
-  /* --- arms --- */
+  /* ------------------------------------------------------------- head -- */
+  B.group(4);
+  // A beaked helm: a smooth dome pulled forward into a muzzle, a hard brow
+  // shelf, and a slit that is the only feature. Nothing about it is a face.
+  sculptBlob(B, {
+    center: [0, 1.755, 0.005], scale: [0.088, 0.105, 0.098], segU: 22, segV: 16,
+    brushes: [
+      { p: [0, 1.80, -0.05], r: [0.11, 0.09, 0.09], amt: 0.020, dir: [0, 0.4, -1] },   // occiput
+      { p: [0, 1.79, 0.075], r: [0.11, 0.045, 0.07], amt: 0.026, dir: [0, 0.35, 1] },  // brow shelf
+      { p: [0, 1.715, 0.10], r: [0.075, 0.075, 0.09], amt: 0.030, dir: [0, -0.25, 1] }, // beak
+      { p: [0, 1.745, 0.078], r: [0.10, 0.020, 0.05], amt: -0.028, dir: 'normal' },     // slit recess
+      { p: [0.072, 1.755, 0.02], r: [0.05, 0.09, 0.09], amt: -0.014, dir: 'normal', mirror: true },
+      { p: [0, 1.665, 0.0], r: [0.09, 0.05, 0.10], amt: -0.020, dir: [0, 1, 0] },       // jaw undercut
+    ],
+    colorAt: (u, v, p) => col(p.y > 1.79 ? SHELL_LIT : SHELL, 1),
+    matAt: () => M_ENAMEL,
+  });
+  // the visor slit
+  B.glow(MAGITEK, 4.6);
+  plate(B, {
+    size: [0.135, 0.020, 0.030], center: [0, 1.7465, 0.093], power: 4, segU: 12, segV: 6,
+    colorAt: () => col(EMBER), matAt: () => [0.35, 0.1],
+  });
+  B.glow(null);
+  // crest fin and the two intake horns that give the helm its silhouette
+  plate(B, {
+    size: [0.022, 0.075, 0.19], center: [0, 1.845, -0.005], power: 8, segU: 6, segV: 8,
+    colorAt: () => col(SHELL_DARK), matAt: () => M_SCUFF,
+  });
+  for (const s of [-1, 1]) {
+    horn(B, {
+      from: [0.075 * s, 1.775, -0.045], dir: [0.32 * s, 0.55, -0.77], len: 0.115,
+      r0: 0.024, r1: 0.006, seg: 6, steps: 4, colorAt: () => col(SHELL_DARK), matAt: () => M_SCUFF,
+    });
+  }
+  // throat bellows, so the head does not float on nothing
+  sweep(B, {
+    nodes: [{ p: [0, 1.60, -0.005], rx: 0.052 }, { p: [0, 1.665, 0.0], rx: 0.047 }],
+    steps: 4, seg: 10, ref: [0, 1, 0], capStart: false, capEnd: false,
+    shape: (th, u) => 1 + Math.sin(u * 12) * 0.10,
+    colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
+  });
+  emit(['bone', 'head']);
+
+  /* ------------------------------------------------------------- arms -- */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const pauldron = place(slab(0.19, 0.17, 0.21, 0.035), { pos: [0.255 * s, 1.545, 0], rot: [0, 0, -0.24 * s] });
-    rig.attach(tint(pauldron, PLATE, 0.03), `sh${n}`);
-    const paulTrim = place(slab(0.055, 0.14, 0.20, 0.012), { pos: [0.335 * s, 1.53, 0], rot: [0, 0, -0.24 * s] });
-    rig.attach(tint(paulTrim, TRIM), `sh${n}`);
+    B.group(5);
+    // pauldron: a wide clamshell that reads from any angle
+    plate(B, {
+      size: [0.155, 0.135, 0.20], center: [0.235 * s, 1.555, -0.005], power: 4,
+      rot: [0, 0, -0.30 * s], segU: 12, segV: 9,
+      colorAt: (u, v, p) => col(p.y > 1.57 ? SHELL_LIT : SHELL_DARK), matAt: () => M_ENAMEL,
+    });
+    emit(['bone', 'chest']);
 
-    const upArm = tube([P(0.235 * s, 1.50, 0), P(0.27 * s, 1.34, 0.01), P(0.30 * s, 1.20, 0.02)],
-      [0.062, 0.056, 0.05], { radialSeg: 8 });
-    rig.attachBlend(tint(upArm, JOINT), `sh${n}`, `el${n}`, 1.0);
-    const upPlate = place(slab(0.13, 0.20, 0.13, 0.022), { pos: [0.265 * s, 1.35, 0.005] });
-    rig.attach(tint(upPlate, PLATE, 0.03), `sh${n}`);
+    B.group(6);
+    // upper arm: an exposed piston with a plate strapped over the outside
+    sweep(B, {
+      nodes: [
+        { p: [0.228 * s, 1.52, -0.01], rx: 0.062, rz: 0.058 },
+        { p: [0.262 * s, 1.34, 0.0], rx: 0.040, rz: 0.038 },
+        { p: [0.285 * s, 1.21, 0.012], rx: 0.048, rz: 0.046 },
+      ],
+      steps: 10, seg: 10, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.4,
+      colorAt: (th, u) => col(u > 0.2 && u < 0.75 ? PISTON : SHELL_DARK),
+      matAt: (th, u) => (u > 0.2 && u < 0.75 ? M_PISTON : M_GUN),
+    });
+    plate(B, {
+      size: [0.055, 0.20, 0.115], center: [0.272 * s, 1.375, -0.005], power: 6,
+      rot: [0.08, 0, -0.10 * s], segU: 7, segV: 8,
+      colorAt: () => col(SHELL), matAt: () => M_ENAMEL,
+    });
+    emit(['chain', [`sh${n}`, `el${n}`, `hd${n}`]]);
 
-    const elbow = place(blob(0.055, 0.055, 0.055, 8, 6), { pos: [0.30 * s, 1.19, 0.02] });
-    rig.attach(tint(elbow, JOINT), `el${n}`);
-    const loArm = tube([P(0.30 * s, 1.18, 0.02), P(0.30 * s, 1.04, 0.06), P(0.30 * s, 0.92, 0.10)],
-      [0.05, 0.046, 0.042], { radialSeg: 8 });
-    rig.attachBlend(tint(loArm, JOINT), `el${n}`, `hd${n}`, 1.0);
-    const bracer = place(slab(0.115, 0.18, 0.115, 0.02), { pos: [0.30 * s, 1.06, 0.06] });
-    rig.attach(tint(bracer, PLATE, 0.03), `el${n}`);
-    const hand = place(slab(0.075, 0.10, 0.06, 0.018), { pos: [0.30 * s, 0.875, 0.115] });
-    rig.attach(tint(hand, PLATE_DARK), `hd${n}`);
+    B.group(7);
+    // forearm: tapered vambrace over a thin core, ending in a clamp hand
+    sweep(B, {
+      nodes: [
+        { p: [0.288 * s, 1.19, 0.02], rx: 0.052, rz: 0.050 },
+        { p: [0.293 * s, 1.04, 0.055], rx: 0.042, rz: 0.040 },
+        { p: [0.295 * s, 0.925, 0.078], rx: 0.034, rz: 0.032 },
+      ],
+      steps: 9, seg: 9, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.3,
+      shape: (th) => 1 + Math.max(0, -Math.cos(th)) * 0.22,
+      colorAt: (th, u) => col(u < 0.6 ? SHELL : SHELL_DARK), matAt: () => M_ENAMEL,
+    });
+    B.glow(MAGITEK, 1.4);
+    plate(B, {
+      size: [0.012, 0.075, 0.020], center: [(0.295 + 0.040) * s, 1.10, 0.045], power: 5, segU: 6, segV: 5,
+      colorAt: () => col(EMBER), matAt: () => [0.5, 0.1],
+    });
+    B.glow(null);
+    emit(['chain', [`el${n}`, `hd${n}`]]);
+
+    B.group(8);
+    // hand: three blunt digits and an opposed thumb
+    plate(B, {
+      size: [0.058, 0.085, 0.062], center: [0.295 * s, 0.878, 0.085], power: 5, segU: 8, segV: 7,
+      colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+    });
+    for (let i = -1; i <= 1; i++) {
+      plate(B, {
+        size: [0.017, 0.062, 0.024], center: [(0.295 + i * 0.019) * s, 0.822, 0.098],
+        power: 6, rot: [0.30, 0, 0], segU: 5, segV: 5,
+        colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
+      });
+    }
+    plate(B, {
+      size: [0.020, 0.052, 0.022], center: [(0.295 - 0.030 * s) * s, 0.845, 0.055],
+      power: 6, rot: [0.1, 0, 0.5 * s], segU: 5, segV: 5,
+      colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
+    });
+    emit(['bone', `hd${n}`]);
   }
 
-  /* --- legs --- */
+  /* ---------------------------------------------------- magitek rifle -- */
+  B.group(9);
+  const gz = 0.085, gy = 0.878, gx = 0.295;
+  // receiver
+  plate(B, {
+    size: [0.052, 0.088, 0.34], center: [gx, gy + 0.03, gz + 0.10], power: 6, segU: 10, segV: 8,
+    colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+  });
+  // barrel shroud with cooling ribs
+  sweep(B, {
+    nodes: [
+      { p: [gx, gy + 0.045, gz + 0.24], rx: 0.028 },
+      { p: [gx, gy + 0.048, gz + 0.46], rx: 0.024 },
+      { p: [gx, gy + 0.050, gz + 0.60], rx: 0.019 },
+    ],
+    steps: 14, seg: 9, ref: [0, 1, 0], capStart: false, capEnd: 0.3,
+    shape: (th, u) => 1 + Math.max(0, Math.sin(u * 42)) * 0.20,
+    colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+  });
+  // magitek rail: the glowing charge line down the top of the weapon
+  B.glow(MAGITEK, 2.2);
+  plate(B, {
+    size: [0.014, 0.012, 0.30], center: [gx, gy + 0.078, gz + 0.18], power: 5, segU: 6, segV: 5,
+    colorAt: () => col(EMBER), matAt: () => [0.45, 0.1],
+  });
+  B.glow(null);
+  // underslung bayonet — the reason it can be dangerous up close
+  horn(B, {
+    from: [gx, gy + 0.015, gz + 0.50], dir: [0, 0.06, 1], len: 0.30,
+    r0: 0.020, r1: 0.002, flat: 0.30, seg: 6, steps: 5,
+    colorAt: () => col(PISTON), matAt: () => [0.22, 0.9],
+  });
+  // stock / grip
+  plate(B, {
+    size: [0.040, 0.115, 0.075], center: [gx, gy - 0.045, gz + 0.01], power: 6,
+    rot: [-0.35, 0, 0], segU: 7, segV: 6, colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
+  });
+  emit(['bone', 'hdR']);
+
+  /* ------------------------------------------------------------- legs -- */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const thigh = tube([P(0.135 * s, 0.90, 0), P(0.14 * s, 0.70, 0.02), P(0.145 * s, 0.52, 0.03)],
-      [0.075, 0.068, 0.058], { radialSeg: 8 });
-    rig.attachBlend(tint(thigh, JOINT), `hp${n}`, `kn${n}`, 1.0);
-    const thighP = place(slab(0.155, 0.30, 0.16, 0.028), { pos: [0.14 * s, 0.71, 0.015] });
-    rig.attach(tint(thighP, PLATE, 0.03), `hp${n}`);
-    const knee = place(slab(0.13, 0.11, 0.13, 0.03), { pos: [0.145 * s, 0.50, 0.045] });
-    rig.attach(tint(knee, TRIM), `kn${n}`);
-    const shin = tube([P(0.145 * s, 0.49, 0.03), P(0.145 * s, 0.30, 0.015), P(0.145 * s, 0.12, 0.0)],
-      [0.052, 0.046, 0.042], { radialSeg: 8 });
-    rig.attachBlend(tint(shin, JOINT), `kn${n}`, `ft${n}`, 1.0);
-    const shinP = place(slab(0.135, 0.30, 0.145, 0.025), { pos: [0.145 * s, 0.31, 0.02] });
-    rig.attach(tint(shinP, PLATE, 0.03), `kn${n}`);
-    const foot = place(slab(0.145, 0.09, 0.30, 0.025), { pos: [0.145 * s, 0.055, 0.06] });
-    rig.attach(tint(foot, PLATE_DARK), `ft${n}`);
-    const toe = place(slab(0.13, 0.055, 0.08, 0.015), { pos: [0.145 * s, 0.045, 0.20] });
-    rig.attach(tint(toe, TRIM), `ft${n}`);
+    B.group(10);
+    // thigh: armoured on the outside, piston on the inside
+    sweep(B, {
+      nodes: [
+        { p: [0.128 * s, 0.905, -0.005], rx: 0.082, rz: 0.088 },
+        { p: [0.132 * s, 0.72, 0.012], rx: 0.062, rz: 0.070 },
+        { p: [0.135 * s, 0.545, 0.030], rx: 0.055, rz: 0.058 },
+      ],
+      steps: 11, seg: 11, ref: [0, 1, 0], capStart: 0.4, capEnd: false,
+      shape: (th, u) => 1 + Math.max(0, Math.sin(th) * s) * 0.20 * (1 - u * 0.5),
+      colorAt: (th, u) => col(Math.sin(th) * s > 0.25 ? SHELL : SHELL_DARK),
+      matAt: (th) => (Math.sin(th) * s > 0.25 ? M_ENAMEL : M_GUN),
+    });
+    // knee cop
+    plate(B, {
+      size: [0.10, 0.095, 0.095], center: [0.136 * s, 0.505, 0.055], power: 5, segU: 9, segV: 7,
+      colorAt: () => col(SHELL_LIT), matAt: () => M_SCUFF,
+    });
+    // shin: a narrow greave over a bare rod, the machine's thinnest point
+    sweep(B, {
+      nodes: [
+        { p: [0.136 * s, 0.48, 0.030], rx: 0.050, rz: 0.052 },
+        { p: [0.137 * s, 0.30, 0.005], rx: 0.036, rz: 0.040 },
+        { p: [0.138 * s, 0.135, -0.012], rx: 0.042, rz: 0.045 },
+      ],
+      steps: 10, seg: 10, ref: [0, 1, 0], capStart: false, capEnd: 0.3,
+      shape: (th, u) => 1 + Math.max(0, Math.cos(th)) * 0.28 * (1 - Math.abs(u - 0.35) * 1.4),
+      colorAt: (th, u) => col(u > 0.25 && u < 0.7 && Math.cos(th) < 0 ? PISTON : SHELL),
+      matAt: (th, u) => (u > 0.25 && u < 0.7 && Math.cos(th) < 0 ? M_PISTON : M_ENAMEL),
+    });
+    emit(['chain', [`hp${n}`, `kn${n}`, `ft${n}`]]);
+
+    B.group(11);
+    // foot: a splayed three-point pad, not a shoe
+    plate(B, {
+      size: [0.105, 0.075, 0.24], center: [0.138 * s, 0.055, 0.045], power: 5, segU: 10, segV: 7,
+      colorAt: (u, v, p) => col(p.y < 0.04 ? RUBBER : SHELL_DARK),
+      matAt: (u, v, p) => (p.y < 0.04 ? M_RUBBER : M_ENAMEL),
+    });
+    horn(B, {
+      from: [0.138 * s, 0.05, -0.075], dir: [0, -0.1, -1], len: 0.075,
+      r0: 0.030, r1: 0.008, seg: 5, steps: 3, colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+    });
+    for (let i = -1; i <= 1; i++) {
+      horn(B, {
+        from: [(0.138 + i * 0.030) * s, 0.030, 0.145], dir: [i * 0.25, -0.12, 1], len: 0.055,
+        r0: 0.017, r1: 0.004, seg: 5, steps: 3, colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
+      });
+    }
+    emit(['bone', `ft${n}`]);
   }
 
-  /* --- magitek rifle, welded to the right hand --- */
-  const gunParts = [];
-  gunParts.push(tint(place(slab(0.055, 0.09, 0.46, 0.012), { pos: [0.30, 0.90, 0.30] }), PLATE_DARK));
-  gunParts.push(tint(place(loft(circleCross(8), [{ y: 0, sx: 0.020 }, { y: 0.30, sx: 0.017 }]),
-    { pos: [0.30, 0.905, 0.48], rot: [Math.PI / 2, 0, 0] }), TRIM));
-  gunParts.push(tint(place(slab(0.035, 0.13, 0.06, 0.01), { pos: [0.30, 0.82, 0.20], rot: [0.3, 0, 0] }), JOINT));
-  gunParts.push(tint(place(slab(0.045, 0.10, 0.09, 0.012), { pos: [0.30, 0.965, 0.16] }), PLATE));
-  gunParts.push(glow(tint(place(slab(0.02, 0.03, 0.14, 0.005), { pos: [0.328, 0.945, 0.30] }), 0x3a0d05), MAGITEK, 2.2));
-  gunParts.push(glow(tint(place(slab(0.02, 0.03, 0.14, 0.005), { pos: [0.272, 0.945, 0.30] }), 0x3a0d05), MAGITEK, 2.2));
-  for (const g of gunParts) rig.attach(g, 'hdR');
+  for (const p of P) {
+    if (p.bind[0] === 'chain') rig.attachChain(p.geo, p.bind[1], 0.9);
+    else rig.attach(p.geo, p.bind[1]);
+  }
 
   const mat = creatureMaterial({
-    roughness: 0.48, metalness: 0.42,
-    normalMap: metalNormal(), normalScale: 0.22, roughnessMap: metalRoughness(),
+    roughness: 0.42, metalness: 0.40,
+    normalMap: metalNormal(), normalScale: 0.35, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 2.2 });
 }
 
-class MTEnemy extends Enemy {
+function reset(B) {
+  B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
+  B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
+  B.glow(null);
+}
+
+const _c = new THREE.Color();
+function col(hex, k = 1) {
+  _c.setHex(hex, THREE.SRGBColorSpace);
+  if (k !== 1) _c.multiplyScalar(k);
+  return _c;
+}
+
+class MTSoldierEnemy extends BipedEnemy {
   constructor(opts) { super(MT_SOLDIER, opts); }
 
-  /** World-space muzzle position — the combat system spawns tracers here. */
-  muzzle(out = new THREE.Vector3()) {
+  /** Muzzle in world space — the beam origin for `volley`. */
+  muzzle(out) {
     const b = this.rig && this.rig.byName.get('hdR');
-    if (!b) return this.centre(out);
-    b.updateWorldMatrix(true, false);
-    return out.set(0.0, 0.02, 0.62).applyMatrix4(b.matrixWorld);
+    if (!b) return out.copy(this.centre());
+    return out.set(0, 0.10, 0.69).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
-    const rig = this.rig;
-    if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
-    // rifle carried at low ready by default
-    const ready = (k = 1) => {
-      S('shR', -1.15 * k, -0.30 * k, -0.30 * k);
-      S('elR', -1.20 * k, 0, 0);
-      S('hdR', 0.10 * k, 0.20 * k, 0);
-      S('shL', -1.05 * k, 0.55 * k, 0.55 * k);
-      S('elL', -1.55 * k, 0, 0);
-      S('hdL', 0, -0.5 * k, 0);
-    };
+  /**
+   * The MT marches. It does not walk — the legs come up too high, the torso
+   * never counter-rotates, and the whole thing lands flat-footed. That
+   * stiffness is the point: it is the one enemy in the game that is obviously
+   * not alive, and the gait has to say so before the model does.
+   */
+  poseArms(S, t, swing, norm) {
+    // Port arms. The weapon hangs off the right hand pointing along the hand's
+    // local +Z, so the muzzle angle is just the *sum* of the shoulder and
+    // elbow pitches — bending the elbow the same way as the shoulder points
+    // the gun at the sky, which is the one thing a soldier never does.
+    const sway = swing * 0.22;
+    this.arm(S, 'R', [-1.02 + sway, -0.26, -0.30], [0.40, 0, 0], [0, 0, 0]);
+    this.arm(S, 'L', [-1.14 - sway, 0.56, 0.30], [0.30, 0, 0], [0, 0, 0]);
+  }
 
-    switch (state) {
-      case 'approach':
-      case 'run': {
-        const ph = t * 7.2;
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          const o = s < 0 ? 0 : Math.PI;
-          S(`hp${n}`, Math.sin(ph + o) * 0.55, 0, 0);
-          S(`kn${n}`, 0.15 + Math.max(0, Math.sin(ph + o + 1.5)) * 0.85, 0, 0);
-          S(`ft${n}`, -0.15 - Math.sin(ph + o) * 0.2, 0, 0);
-        }
-        ready(1);
-        S('spine', 0.06, Math.sin(ph) * 0.05, 0);
-        S('chest', 0.04, -Math.sin(ph) * 0.08, 0);
-        S('head', 0, Math.sin(ph * 0.5) * 0.1, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph)) * 0.035;
-        break;
-      }
-      case 'telegraph': {
-        // shoulder the rifle and sight down it
-        const k = Math.min(1, this.stateTime / 0.30);
-        S('shR', -1.5 - 0.05 * k, -0.55 * k, -0.55 * k);
-        S('elR', -1.35, 0, 0);
-        S('hdR', 0.25 * k, 0.35 * k, 0);
-        S('shL', -1.35, 0.75 * k, 0.75 * k);
-        S('elL', -1.7, 0, 0);
-        S('chest', -0.04, -0.16 * k, 0);
-        S('head', 0.05 * k, -0.10 * k, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, (s < 0 ? -0.18 : 0.10) * k, 0, 0);
-          S(`kn${n}`, 0.28 * k, 0, 0);
-          S(`ft${n}`, -0.12 * k, 0, 0);
-        }
-        break;
-      }
-      case 'attack': {
-        // recoil kick on each shot
-        const kick = Math.exp(-((this.stateTime % 0.14) * 26)) * 0.28;
-        S('shR', -1.55 - kick, -0.55, -0.55);
-        S('elR', -1.35 + kick * 1.4, 0, 0);
-        S('hdR', 0.25, 0.35, 0);
-        S('shL', -1.35 - kick * 0.5, 0.75, 0.75);
-        S('elL', -1.7 + kick, 0, 0);
-        S('chest', -0.04 + kick * 0.4, -0.16, 0);
-        S('head', 0.05, -0.10, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, (s < 0 ? -0.18 : 0.10), 0, 0);
-          S(`kn${n}`, 0.28, 0, 0);
-        }
-        break;
-      }
-      case 'flinch': {
-        const k = Math.exp(-this.stateTime * 8) * (1 - Math.min(1, this.stateTime / 0.35));
-        ready(1);
-        S('spine', 0.30 * k, Math.sin(this.stateTime * 40) * 0.25 * k, 0);
-        S('chest', 0.20 * k, 0, 0.15 * k);
-        S('head', -0.35 * k, 0.25 * k, 0);
-        S('shR', -1.15 + 0.7 * k, -0.30, -0.30);
-        break;
-      }
-      case 'stagger': {
-        const k = Math.min(1, this.stateTime / 0.18) * Math.max(0, 1 - this.stateTime / 2.2);
-        S('spine', 0.45 * k, 0.25 * k, 0);
-        S('chest', 0.30 * k, 0, 0.25 * k);
-        S('head', -0.5 * k, 0.3 * k, 0);
-        S('shR', -0.5 * k, -0.2, 0.8 * k);
-        S('elR', -0.6, 0, 0);
-        S('shL', -0.4 * k, 0.2, -0.8 * k);
-        S('elL', -0.6, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, -0.55 * k, 0, 0); S(`kn${n}`, 1.0 * k, 0, 0); S(`ft${n}`, -0.4 * k, 0, 0);
-        }
-        this.visual.position.y = -0.20 * k;
-        break;
-      }
-      case 'death': {
-        const k = Math.min(1, this.stateTime / 0.6);
-        const e = 1 - Math.pow(1 - k, 3);
-        this.visual.rotation.x = e * 1.4;
-        this.visual.position.y = -0.45 * e;
-        S('spine', -0.2 * e, 0, 0);
-        S('head', 0.4 * e, 0, 0);
-        S('shR', 0.9 * e, 0, 0.7 * e); S('shL', 0.9 * e, 0, -0.7 * e);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, -0.7 * e, 0, 0); S(`kn${n}`, 1.2 * e, 0, 0);
-        }
-        break;
-      }
-      default: {
-        const b = Math.sin(t * 1.3) * 0.02;
-        ready(1);
-        S('spine', b, 0, 0);
-        S('chest', b * 0.5, 0, 0);
-        S('head', 0, Math.sin(t * 0.42) * 0.22, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, 0.02, 0, 0); S(`kn${n}`, 0.06, 0, 0); S(`ft${n}`, -0.05, 0, 0);
-        }
-        this.visual.position.y = 0;
-        break;
-      }
+  /**
+   * Rifle up to the visor. Shoulder and elbow pitches cancel so the barrel
+   * comes out level however far into the pose we are; `kick` rocks it back.
+   */
+  aim(S, k, kick = 0) {
+    const sh = -1.22 * k - 1.02 * (1 - k);
+    const el = 1.18 * k + 0.40 * (1 - k);
+    this.arm(S, 'R', [sh + kick * 0.14, -0.20 * k - 0.26 * (1 - k), -0.12 * k - 0.30 * (1 - k)],
+      [el - kick * 0.20, 0, 0], [0, 0.08 * k, 0]);
+    this.arm(S, 'L', [-1.16 * k - 1.14 * (1 - k) + kick * 0.10, 0.62, 0.32],
+      [1.02 * k + 0.30 * (1 - k) - kick * 0.16, 0, 0], [0, 0, 0]);
+  }
+
+  poseWindUp(S, t, k, env) {
+    const bayonet = this.attackId === 'bayonet';
+    if (bayonet) {
+      // shoulder the weapon back and drop into a lunge stance
+      this.stance(S, { drop: 0.075 * k, L: { reach: -0.16 * k }, R: { reach: 0.14 * k } });
+      this.spine(S, -0.12 * k + env.shake, -0.42 * k, 0);
+      this.arm(S, 'R', [-1.02 - 0.30 * k, -0.26 - 0.80 * k, -0.30], [0.40 + 0.55 * k, 0, 0], [0, 0, 0]);
+      this.arm(S, 'L', [-1.14 - 0.20 * k, 0.56 + 0.28 * k, 0.30], [0.30 + 0.50 * k, 0, 0], [0, 0, 0]);
+      return;
     }
+    // volley: plant, square the shoulders, bring the rifle up to the visor.
+    // The gun rising to eye line *is* the telegraph — it is the same read at
+    // 30 m as at 3 m, which is what a ranged tell has to be.
+    this.stance(S, { drop: 0.045 * k, L: { reach: -0.08 * k, splay: 0.10 * k }, R: { reach: 0.05 * k } });
+    this.spine(S, -0.06 * k + env.shake * 0.5, -0.22 * k, 0);
+    S('head', -0.10 * k, 0.14 * k, 0);
+    this.aim(S, k);
+  }
+
+  poseSwing(S, t, k, env) {
+    const bayonet = this.attackId === 'bayonet';
+    const kp = clamp01(k);
+    if (bayonet) {
+      // a straight-line thrust: the whole machine steps into it
+      this.stance(S, { drop: 0.04 * kp, L: { reach: 0.30 * k }, R: { reach: -0.22 * k } });
+      this.spine(S, 0.16 * k, 0.34 * k, 0);
+      // the bayonet goes out level and stays level all the way through
+      this.arm(S, 'R', [-1.02 - 0.34 * k, -0.26 + 0.44 * k, -0.30 + 0.14 * k], [0.40 + 0.42 * k, 0, 0], [0, 0, 0]);
+      this.arm(S, 'L', [-1.14 - 0.22 * k, 0.56 - 0.30 * k, 0.30], [0.30 + 0.34 * k, 0, 0], [0, 0, 0]);
+      this.visual.position.z += 0.10 * kp;
+      return;
+    }
+    // volley: three-round recoil. Each shot kicks the shoulder and the torso
+    // absorbs it — the body is what sells a gun going off, not the muzzle.
+    const T = this._timing('attack');
+    const shots = 3;
+    let kick = 0;
+    for (let i = 0; i < shots; i++) {
+      const at = (i + 0.15) * (T / shots) * 0.85;
+      const dt = this.stateTime - at;
+      if (dt > 0) kick += Math.exp(-dt * 16) * Math.sin(Math.min(1, dt * 26) * Math.PI) * 1.0;
+    }
+    kick = Math.min(1.5, kick) * (this.state === 'recover' ? Math.max(0, 1 - this.stateTime * 2.2) : 1);
+    this.stance(S, { drop: 0.045, L: { reach: -0.08, splay: 0.10 }, R: { reach: 0.05 } });
+    this.spine(S, -0.06 - kick * 0.06, -0.22 + kick * 0.05, 0);
+    S('head', -0.10, 0.14, 0);
+    this.aim(S, 1, kick);
+    this.visual.position.z -= kick * 0.022;
+    this.recoil = kick;
+  }
+
+  /**
+   * Magitek does not bleed out — it fails. The frame locks up mid-step, the
+   * limbs go slack in a different order from a living body, and the whole
+   * thing goes over rigid, like dropped furniture.
+   */
+  poseDeath(S, t) {
+    const A = this.A;
+    const T = this.stateTime;
+    const seize = Math.exp(-T * 9) * Math.sin(T * 60) * 0.10;      // the last spasm
+    const slack = smooth(clamp01((T - 0.10) / 0.22));
+    const topple = smooth(clamp01((T - 0.22) / 0.50));
+    const fwd = (this.deathPush ?? 1) >= 0 ? -1 : 1;
+    const side = this.deathSide || 1;
+    const sink = A.hipY - A.bodyR;
+    this.stance(S, {
+      L: { reach: 0.12 * slack - 0.14 * topple, lift: sink * slack * 0.9, splay: 0.24 * topple },
+      R: { reach: -0.14 * slack + 0.10 * topple, lift: sink * slack * 0.9, splay: 0.20 * topple },
+    });
+    this.spine(S, (0.28 * slack + seize) * -fwd, 0.18 * topple * side, 0.14 * topple * side);
+    S('head', 0.55 * slack * -fwd, 0.3 * topple * side, 0);
+    this.arm(S, 'L', [1.35 * slack * -fwd, 0.45 * topple, 0.75 * topple], [-0.55 * slack, 0, 0], null);
+    this.arm(S, 'R', [1.35 * slack * -fwd, -0.45 * topple, -0.75 * topple], [-0.55 * slack, 0, 0], null);
+    const th = topple * 1.48 * fwd;
+    const centre = A.hipY - sink * slack;
+    this.visual.rotation.x += th;
+    this.visual.rotation.z += topple * 0.22 * side;
+    this.visual.position.y += centre - A.hipY * Math.cos(th);
+    this.visual.position.z -= A.hipY * Math.sin(th) * 0.65;
   }
 }
+
+MTSoldierEnemy.ANIM = {
+  legs: { L: ['hpL', 'knL', 'ftL'], R: ['hpR', 'knR', 'ftR'] },
+  arms: { L: ['shL', 'elL', 'hdL'], R: ['shR', 'elR', 'hdR'] },
+  trunk: ['pelvis', 'spine', 'chest', 'neck', 'head'],
+  strideLen: 1.35, stride: 0.30, lift: 0.16, duty: 0.60,
+  hipY: 0.94, bodyR: 0.30, hipSway: 0.030, bob: 0.030, lean: 0.10,
+  armSwing: 0.42, torsoTwist: 0.06, elbow: 0.5, armOut: 0.12,
+  marchStiff: 1, crouch: 0.06, step: 0.14, windTwist: 0.35,
+  footPitch: 0.02, idleLean: 0.05, breath: 0.9,
+};
+
+export { MTSoldierEnemy };
