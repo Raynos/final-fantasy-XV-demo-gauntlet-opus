@@ -1,36 +1,52 @@
 import { el, clamp, easeOut, easeOutQuint, damp } from '../UIKit.js';
-import { worldMap, WORLD, POI_TYPES } from '../../world/map/WorldMap.js';
-import { drawWorldRaster, drawRoads, POI_GLYPH, drawGlyph } from '../../world/map/MapRaster.js';
+import { worldMap, WORLD, POI_TYPES, REGIONS } from '../../world/map/WorldMap.js';
+import { getChart } from '../../world/map/Chart.js';
+import {
+  drawRoads, drawJunctions, drawZoneBorders, spacedText, spacedWidth, LabelPlacer, routeClass,
+} from '../../world/map/MapDraw.js';
+import { drawGlyph, glyphSvg, POI_GLYPH } from '../../world/map/MapGlyphs.js';
+import { fog } from '../../world/map/FogOfWar.js';
 
 /**
- * The full-screen chart of Lucis.
+ * THE CHART OF LUCIS — the full-screen atlas.
  *
- * Pan, zoom, filter by type, fog of war over everything nobody has walked,
- * quest markers, fast travel where the map allows it, and — the FFXV habit —
- * a distance and an estimated travel time to whatever the cursor is on, by
- * road for the car and in a straight line on foot.
+ * The relief is the real heightfield, baked once by `world/map/Chart.js`; the
+ * roads are the real road graph; the nineteen regions are the real zone
+ * fields, bordered where their influence changes hands. Everything else is
+ * atlas convention: type that fades in by zoom the way sheet labels do, a
+ * measured line from the player to whatever is selected, distance and drive
+ * time to it, and unsurveyed country under a parchment haze.
  *
- * Registration (`src/ui/Menus.js`):
- *   import { WorldMapScreen } from './screens/WorldMapScreen.js';
- *   ...
- *   this.screens = { ..., world: new WorldMapScreen(this) };
- * and, to open it, `menus.setScreen('world')`.
+ * Controls
+ *   ↑↓        step the filter rail          ←→   step the selection
+ *   Enter     fast travel, where allowed    wheel / +- zoom about the cursor
+ *   drag      pan                           click  select
  *
  * No CSS transitions or keyframes: every animated value is written per frame
- * from `game.time.now`, so a capture after N fixed steps is reproducible.
+ * from `dt` and `game.time.now`, so a capture after N fixed steps is
+ * reproducible.
  */
 
 const FILTERS = [
-  { id: 'all', label: 'All', types: null },
-  { id: 'settle', label: 'Settlements', types: ['town', 'outpost', 'reststop', 'chocobo'] },
-  { id: 'haven', label: 'Havens', types: ['haven', 'parking'] },
-  { id: 'dungeon', label: 'Dungeons', types: ['dungeon', 'menace', 'tomb'] },
-  { id: 'hostile', label: 'Imperial', types: ['imperial'] },
-  { id: 'leisure', label: 'Fishing', types: ['fishing'] },
-  { id: 'sights', label: 'Landmarks', types: ['landmark'] },
+  { id: 'all', label: 'All Points', types: null, glyph: 'quest' },
+  { id: 'settle', label: 'Settlements', types: ['town', 'outpost', 'reststop'], glyph: 'town' },
+  { id: 'haven', label: 'Havens', types: ['haven'], glyph: 'haven' },
+  { id: 'parking', label: 'Parking', types: ['parking'], glyph: 'parking' },
+  { id: 'dungeon', label: 'Dungeons', types: ['dungeon', 'menace'], glyph: 'dungeon' },
+  { id: 'tomb', label: 'Royal Tombs', types: ['tomb'], glyph: 'tomb' },
+  { id: 'imperial', label: 'Imperial', types: ['imperial'], glyph: 'imperial' },
+  { id: 'chocobo', label: 'Chocobo', types: ['chocobo'], glyph: 'chocobo' },
+  { id: 'fishing', label: 'Fishing', types: ['fishing'], glyph: 'fishing' },
+  { id: 'landmark', label: 'Landmarks', types: ['landmark'], glyph: 'landmark' },
 ];
 
-const ZOOMS = [0.055, 0.085, 0.13, 0.20, 0.32];
+/** Css px per world metre. The first step fits the whole continent. */
+const ZOOMS = [0.118, 0.175, 0.26, 0.38, 0.55];
+
+/** Chart geometry inside the 1600×900 menu space. */
+const BOX = { x: 40, y: 132, w: 1520, h: 676 };
+
+const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
 export class WorldMapScreen {
   /** @param {import('../Menus.js').Menus} menus */
@@ -40,17 +56,25 @@ export class WorldMapScreen {
     this.sub = 'Lucis  ·  Leide · Duscae · Cleigne';
     this.filter = 0;
     this.zoomI = 2;
+    this.zoom = ZOOMS[2];
     this.cam = { x: 0, z: 0 };
     this.camT = { x: 0, z: 0 };
     this.sel = 0;
+    this.hover = null;
     this._a = 0;
+    this._drag = null;
+    this._screenPos = new Map();
   }
 
   /** @param {HTMLElement} root @param {object} game */
   build(root, game) {
     this.game = game;
     this.map = worldMap;
-    root.appendChild(styleTag());
+    // the styles key off `.wm`, not the screen slot, so the same screen can be
+    // registered under more than one name without losing its chrome
+    root.classList.add('wm');
+    const st = styleTag();
+    if (st) root.appendChild(st);
 
     this.wrap = el('div.wm-wrap');
     this.canvas = document.createElement('canvas');
@@ -59,33 +83,52 @@ export class WorldMapScreen {
     root.appendChild(this.wrap);
     this.ctx = this.canvas.getContext('2d');
 
-    // filter rail
+    // ---- filter rail -----------------------------------------------------
     this.filterEls = FILTERS.map((f, i) => {
+      const count = el('div.wm-fcount', { text: '' });
       const n = el('div.wm-filter', {}, [
-        el('div.wm-fdot'), el('div.wm-flabel', { text: f.label.toUpperCase() }),
+        el('div.wm-fmark', {}, [glyphSvg(f.glyph, { size: 15 })]),
+        el('div.wm-flabel', { text: f.label.toUpperCase() }),
+        count,
       ]);
+      n.addEventListener('pointerdown', () => this._setFilter(i));
       if (i === 0) n.classList.add('on');
+      n._count = count;
       return n;
     });
-    this.rail = el('div.wm-rail', {}, this.filterEls);
+    this.rail = el('div.wm-rail.plate', {}, [
+      el('div.wm-rail-h', { text: 'Filter' }),
+      el('div.rule'),
+      ...this.filterEls,
+    ]);
     root.appendChild(this.rail);
 
-    // read-out card for the selected point
+    // ---- detail card -----------------------------------------------------
+    this.cardGlyph = el('div.wm-cglyph');
     this.cardName = el('div.wm-name', { text: '' });
     this.cardType = el('div.wm-type', { text: '' });
     this.cardDoes = el('div.wm-does', { text: '' });
     this.cardRows = el('div.wm-rows');
-    this.card = el('div.wm-card', {}, [
-      this.cardName, this.cardType, el('div.wm-rule'), this.cardDoes, this.cardRows,
+    this.cardFt = el('div.wm-ft', { text: '' });
+    this.card = el('div.wm-card.plate', {}, [
+      el('div.wm-chead', {}, [this.cardGlyph, el('div', {}, [this.cardName, this.cardType])]),
+      el('div.rule'), this.cardDoes, this.cardRows, this.cardFt,
     ]);
     root.appendChild(this.card);
 
-    // scale bar + legend
-    this.scaleBar = el('div.wm-scalebar', {}, [
-      el('div.wm-scaleline'), this.scaleTxt = el('div.wm-scaletxt', { text: '1 KM' }),
-    ]);
+    // ---- scale bar and survey read-out -----------------------------------
+    this.scaleLine = el('div.wm-scaleline');
+    this.scaleTxt = el('div.wm-scaletxt', { text: '' });
+    this.scaleBar = el('div.wm-scalebar', {}, [this.scaleTxt, this.scaleLine]);
     root.appendChild(this.scaleBar);
 
+    this.surveyV = el('div.wm-surveyv', { text: '' });
+    this.survey = el('div.wm-survey', {}, [
+      el('div.wm-surveyk', { text: 'Surveyed' }), this.surveyV,
+    ]);
+    root.appendChild(this.survey);
+
+    this._bindPointer();
     this._onResize = () => this._resize();
     window.addEventListener('resize', this._onResize);
     this._resize();
@@ -93,51 +136,73 @@ export class WorldMapScreen {
 
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = Math.round(1600 * 0.76), h = Math.round(900 * 0.80);
-    this.w = w; this.h = h; this.dpr = dpr;
-    this.canvas.width = w * dpr;
-    this.canvas.height = h * dpr;
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
+    this.w = BOX.w; this.h = BOX.h; this.dpr = dpr;
+    this.canvas.width = Math.round(BOX.w * dpr);
+    this.canvas.height = Math.round(BOX.h * dpr);
+    this.canvas.style.width = `${BOX.w}px`;
+    this.canvas.style.height = `${BOX.h}px`;
   }
+
+  // ------------------------------------------------------------- lifecycle
 
   /** Called by Menus when the screen becomes visible. */
   enter(game) {
     this.game = game;
     const t = game.get('Terrain');
-    if (!this.world) this.world = drawWorldRaster(t, { pixelsPerMetre: 1 / 6 });
-    this.minimap = game.get('Minimap');
+    if (!this.chart) this.chart = getChart(t);
     const p = game.get('Player');
     if (p) { this.cam.x = this.camT.x = p.position.x; this.cam.z = this.camT.z = p.position.z; }
+    this.zoom = ZOOMS[this.zoomI];
     this._rebuildList();
-    // start on the nearest discovered point so the card is never empty
     const near = this.map.nearestPOI(this.cam.x, this.cam.z, { discoveredOnly: true });
     if (near) {
       const i = this.list.indexOf(near.poi);
       if (i >= 0) this.sel = i;
     }
+    const sp = this.list[this.sel];
+    if (sp) { this.camT.x = sp.x; this.camT.z = sp.z; }
+    this._keys = (e) => this._onKey(e);
+    window.addEventListener('keydown', this._keys);
+  }
+
+  exit() {
+    if (this._keys) window.removeEventListener('keydown', this._keys);
+    this._keys = null;
+    this.hover = null;
+    this._drag = null;
   }
 
   _rebuildList() {
     const f = FILTERS[this.filter];
-    this.list = this.map.pois.filter((p) => this.map.discovered.has(p.id)
-      && (!f.types || f.types.includes(p.type)));
-    if (!this.list.length) this.list = this.map.pois.filter((p) => this.map.discovered.has(p.id));
+    const seen = (p) => this.map.discovered.has(p.id) || fog.at(p.x, p.z) > 0.5;
+    this.list = this.map.pois.filter((p) => seen(p) && (!f.types || f.types.includes(p.type)));
+    if (!this.list.length) this.list = this.map.pois.filter(seen);
     this.sel = clamp(this.sel, 0, Math.max(0, this.list.length - 1));
+    for (let i = 0; i < FILTERS.length; i++) {
+      const ff = FILTERS[i];
+      const n = this.map.pois.filter((p) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
+      this.filterEls[i]._count.textContent = String(n);
+    }
   }
 
+  _setFilter(i) {
+    this.filter = (i + FILTERS.length) % FILTERS.length;
+    for (let k = 0; k < this.filterEls.length; k++) {
+      this.filterEls[k].classList.toggle('on', k === this.filter);
+    }
+    this._rebuildList();
+    const p = this.list[this.sel];
+    if (p) { this.camT.x = p.x; this.camT.z = p.z; }
+  }
+
+  // ----------------------------------------------------------------- input
+
   /**
-   * D-pad: left/right steps the selection along the list, up/down changes the
-   * filter. Holding a direction pans because `Menus` repeats the edge.
+   * D-pad: up/down steps the filter rail, left/right steps the selection and
+   * pans the chart to it.
    */
   nav(dx, dy) {
-    if (dy) {
-      this.filter = (this.filter + (dy > 0 ? 1 : -1) + FILTERS.length) % FILTERS.length;
-      for (let i = 0; i < this.filterEls.length; i++) {
-        this.filterEls[i].classList.toggle('on', i === this.filter);
-      }
-      this._rebuildList();
-    }
+    if (dy) this._setFilter(this.filter + (dy > 0 ? 1 : -1));
     if (dx && this.list.length) {
       this.sel = (this.sel + (dx > 0 ? 1 : -1) + this.list.length) % this.list.length;
     }
@@ -148,7 +213,7 @@ export class WorldMapScreen {
   /** Fast travel to the selected point, if it allows it. */
   accept() {
     const p = this.list[this.sel];
-    if (!p || !p.travel) return;
+    if (!p || !p.travel || !this.map.discovered.has(p.id)) return;
     const game = this.game;
     const player = game?.get('Player');
     const terrain = game?.get('Terrain');
@@ -160,8 +225,93 @@ export class WorldMapScreen {
     this.menus.setScreen(null);
   }
 
-  /** Zoom out one step, then in again (bound by whoever wires the key). */
-  zoom(dir) { this.zoomI = clamp(this.zoomI + dir, 0, ZOOMS.length - 1); }
+  /**
+   * Step the scale. Passing a world position keeps that point pinned under the
+   * cursor while the chart grows or shrinks around it.
+   * @param {number} dir -1 out, +1 in
+   */
+  zoomBy(dir, ax, az) {
+    const i = clamp(this.zoomI + dir, 0, ZOOMS.length - 1);
+    if (i === this.zoomI) return;
+    const k = this.zoom / ZOOMS[i];
+    this.zoomI = i;
+    if (ax != null) {
+      this.camT.x = clamp(ax - (ax - this.camT.x) * k, -WORLD.half, WORLD.half);
+      this.camT.z = clamp(az - (az - this.camT.z) * k, -WORLD.half, WORLD.half);
+    }
+  }
+
+  _onKey(e) {
+    if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'KeyE') this.zoomBy(1);
+    else if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'KeyQ') this.zoomBy(-1);
+    else return;
+    e.preventDefault();
+  }
+
+  _bindPointer() {
+    const cv = this.canvas;
+    const world = (ev) => {
+      const r = cv.getBoundingClientRect();
+      const px = (ev.clientX - r.left) / r.width * this.w;
+      const py = (ev.clientY - r.top) / r.height * this.h;
+      return {
+        x: this.cam.x + (px - this.w / 2) / this.zoom,
+        z: this.cam.z + (py - this.h / 2) / this.zoom,
+        px, py,
+      };
+    };
+    cv.addEventListener('pointerdown', (ev) => {
+      const w = world(ev);
+      this._drag = { x: w.x, z: w.z, cx: this.camT.x, cz: this.camT.z, moved: 0 };
+      cv.setPointerCapture?.(ev.pointerId);
+    });
+    cv.addEventListener('pointermove', (ev) => {
+      const w = world(ev);
+      this._cursor = w;
+      if (this._drag) {
+        const dx = w.x - this._drag.x, dz = w.z - this._drag.z;
+        this._drag.moved += Math.abs(dx) + Math.abs(dz);
+        this.camT.x = clamp(this._drag.cx - dx, -WORLD.half, WORLD.half);
+        this.camT.z = clamp(this._drag.cz - dz, -WORLD.half, WORLD.half);
+        this.cam.x = this.camT.x; this.cam.z = this.camT.z;
+        this._drag.x = this.cam.x + (w.px - this.w / 2) / this.zoom;
+        this._drag.z = this.cam.z + (w.py - this.h / 2) / this.zoom;
+      } else {
+        this.hover = this._pick(w.px, w.py);
+      }
+    });
+    cv.addEventListener('pointerup', (ev) => {
+      const w = world(ev);
+      if (this._drag && this._drag.moved < 12) {
+        const hit = this._pick(w.px, w.py);
+        if (hit) {
+          const i = this.list.indexOf(hit);
+          if (i >= 0) { this.sel = i; this.camT.x = hit.x; this.camT.z = hit.z; }
+        }
+      }
+      this._drag = null;
+      cv.releasePointerCapture?.(ev.pointerId);
+    });
+    cv.addEventListener('pointerleave', () => { this.hover = null; this._drag = null; });
+    cv.addEventListener('wheel', (ev) => {
+      const w = world(ev);
+      this.zoomBy(ev.deltaY < 0 ? 1 : -1, w.x, w.z);
+      ev.preventDefault();
+    }, { passive: false });
+  }
+
+  /** Nearest drawn point within 16 css px of a chart position. */
+  _pick(px, py) {
+    let best = null, bd = 16 * 16;
+    for (const [p, s] of this._screenPos) {
+      const dx = s[0] - px, dy = s[1] - py;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  // ------------------------------------------------------------------ frame
 
   /** @param {number} dt @param {object} game @param {number} a */
   update(dt, game, a) {
@@ -169,13 +319,16 @@ export class WorldMapScreen {
     const t = game.time.now;
     const rev = easeOutQuint(clamp((a - 0.05) / 0.85, 0, 1));
     this.wrap.style.opacity = rev.toFixed(3);
-    this.rail.style.opacity = easeOut(clamp((rev - 0.2) / 0.6, 0, 1)).toFixed(3);
-    this.card.style.opacity = easeOut(clamp((rev - 0.34) / 0.55, 0, 1)).toFixed(3);
+    this.rail.style.opacity = easeOut(clamp((rev - 0.18) / 0.6, 0, 1)).toFixed(3);
+    this.rail.style.transform = `translateX(${(-(1 - rev) * 18).toFixed(2)}px)`;
+    this.card.style.opacity = easeOut(clamp((rev - 0.3) / 0.55, 0, 1)).toFixed(3);
+    this.card.style.transform = `translateX(${((1 - rev) * 20).toFixed(2)}px)`;
     this.scaleBar.style.opacity = easeOut(clamp((rev - 0.4) / 0.5, 0, 1)).toFixed(3);
-    this.card.style.transform = `translateX(${((1 - rev) * 22).toFixed(2)}px)`;
+    this.survey.style.opacity = easeOut(clamp((rev - 0.44) / 0.5, 0, 1)).toFixed(3);
 
-    this.cam.x = damp(this.cam.x, this.camT.x, 7, dt);
-    this.cam.z = damp(this.cam.z, this.camT.z, 7, dt);
+    this.cam.x = damp(this.cam.x, this.camT.x, 8, dt);
+    this.cam.z = damp(this.cam.z, this.camT.z, 8, dt);
+    this.zoom = damp(this.zoom, ZOOMS[this.zoomI], 9, dt);
 
     this._draw(game, t, rev);
     this._card(game);
@@ -184,37 +337,56 @@ export class WorldMapScreen {
   _card(game) {
     const p = this.list?.[this.sel];
     if (!p) { this.cardName.textContent = ''; return; }
+    const known = this.map.discovered.has(p.id);
     const player = game.get('Player');
     const px = player?.position?.x ?? 0, pz = player?.position?.z ?? 0;
-    const drive = this.map.travel(px, pz, p.x, p.z, 'drive');
-    const walk = this.map.travel(px, pz, p.x, p.z, 'walk');
     const zone = this.map.zoneById.get(p.zone);
     const region = zone ? this.map.regionById.get(zone.region) : null;
+    const def = POI_TYPES[p.type];
 
-    this.cardName.textContent = p.name.toUpperCase();
-    this.cardType.textContent = `${POI_TYPES[p.type].label}  ·  ${zone ? zone.name : ''}`
-      + `${region ? `, ${region.name}` : ''}`;
-    this.cardDoes.textContent = p.does || '';
+    if (this._cardKey !== `${p.id}|${known}`) {
+      this._cardKey = `${p.id}|${known}`;
+      while (this.cardGlyph.firstChild) this.cardGlyph.removeChild(this.cardGlyph.firstChild);
+      this.cardGlyph.appendChild(glyphSvg(known ? POI_GLYPH[p.type] : 'unknown', { size: 26 }));
+      this.cardGlyph.style.color = known ? def.colour : 'rgba(198,214,240,.42)';
+      this.cardName.textContent = (known ? p.name : 'Unsurveyed Site').toUpperCase();
+      this.cardType.textContent = `${known ? def.label : 'Unknown'}  ·  ${zone ? zone.name : 'The Frontier'}`
+        + `${region ? `, ${region.name}` : ''}`;
+      this.cardDoes.textContent = known ? (p.does || '')
+        : 'Charted from a distance. Walk within sight of it to learn what it is.';
+    }
 
+    const drive = this.map.travel(px, pz, p.x, p.z, 'drive');
+    const walk = this.map.travel(px, pz, p.x, p.z, 'walk');
+    const choco = this.map.travel(px, pz, p.x, p.z, 'chocobo');
     const rows = [
-      ['Distance', `${(Math.hypot(p.x - px, p.z - pz) / 1000).toFixed(2)} km`],
-      ['By road', `${(drive.dist / 1000).toFixed(2)} km  ·  ${fmtTime(drive.seconds)}`],
+      ['Direct', `${(Math.hypot(p.x - px, p.z - pz) / 1000).toFixed(2)} km`],
+      ['By road', `${(drive.dist / 1000).toFixed(2)} km · ${fmtTime(drive.seconds)}`],
+      ['By chocobo', fmtTime(choco.seconds)],
       ['On foot', fmtTime(walk.seconds)],
       ['Level', p.lv ? `${p.lv}` : '—'],
-      ['Fast travel', p.travel ? 'Available' : 'Not available'],
     ];
-    while (this.cardRows.firstChild) this.cardRows.removeChild(this.cardRows.firstChild);
-    for (const [k, v] of rows) {
-      this.cardRows.appendChild(el('div.wm-row', {}, [
-        el('div.wm-k', { text: k.toUpperCase() }), el('div.wm-v', { text: v }),
-      ]));
+    if (!this._rowEls || this._rowEls.length !== rows.length) {
+      while (this.cardRows.firstChild) this.cardRows.removeChild(this.cardRows.firstChild);
+      this._rowEls = rows.map(() => {
+        const k = el('div.wm-k'), v = el('div.wm-v');
+        this.cardRows.appendChild(el('div.wm-row', {}, [k, v]));
+        return [k, v];
+      });
     }
+    for (let i = 0; i < rows.length; i++) {
+      this._rowEls[i][0].textContent = rows[i][0].toUpperCase();
+      this._rowEls[i][1].textContent = rows[i][1];
+    }
+    this.cardFt.textContent = !known ? 'UNDISCOVERED'
+      : p.travel ? 'FAST TRAVEL AVAILABLE  ·  ENTER' : 'NO FAST TRAVEL';
+    this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
   }
 
   _draw(game, t, rev) {
     const c = this.ctx, dpr = this.dpr;
     const W = this.w * dpr, H = this.h * dpr;
-    const ppm = ZOOMS[this.zoomI] * dpr;
+    const ppm = this.zoom * dpr;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, W, H);
 
@@ -222,237 +394,503 @@ export class WorldMapScreen {
     c.beginPath();
     c.rect(0, 0, W, H);
     c.clip();
-    c.fillStyle = 'rgba(5,9,16,0.92)';
+
+    // the sheet the chart is printed on
+    const bg = c.createLinearGradient(0, 0, W * 0.4, H);
+    bg.addColorStop(0, 'rgba(9,15,24,0.94)');
+    bg.addColorStop(1, 'rgba(5,9,16,0.96)');
+    c.fillStyle = bg;
     c.fillRect(0, 0, W, H);
 
     const sx = (wx) => W / 2 + (wx - this.cam.x) * ppm;
     const sy = (wz) => H / 2 + (wz - this.cam.z) * ppm;
+    const bounds = {
+      x0: this.cam.x - W / 2 / ppm - 200, x1: this.cam.x + W / 2 / ppm + 200,
+      z0: this.cam.z - H / 2 / ppm - 200, z1: this.cam.z + H / 2 / ppm + 200,
+    };
 
-    // graticule, 500 m
-    c.strokeStyle = 'rgba(160,196,240,0.055)';
+    // ---- graticule, 500 m ------------------------------------------------
+    c.strokeStyle = 'rgba(150,190,240,0.05)';
     c.lineWidth = 1;
     c.beginPath();
-    for (let g = -WORLD.half; g <= WORLD.half; g += 500) {
-      c.moveTo(sx(g), 0); c.lineTo(sx(g), H);
-      c.moveTo(0, sy(g)); c.lineTo(W, sy(g));
+    const gstep = ppm > 0.5 * dpr ? 500 : 1000;
+    for (let g = -WORLD.half; g <= WORLD.half; g += gstep) {
+      const x = sx(g), y = sy(g);
+      if (x > -1 && x < W + 1) { c.moveTo(x, 0); c.lineTo(x, H); }
+      if (y > -1 && y < H + 1) { c.moveTo(0, y); c.lineTo(W, y); }
     }
     c.stroke();
 
-    // the chart
+    // ---- the relief chart ------------------------------------------------
+    if (this.chart) {
+      const k = ppm / this.chart.ppm;
+      c.save();
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      c.translate(W / 2, H / 2);
+      c.scale(k, k);
+      c.translate(-this.chart.toPx(this.cam.x), -this.chart.toPz(this.cam.z));
+      c.globalAlpha = rev;
+      c.filter = 'saturate(1.06)';
+      c.drawImage(this.chart.canvas, 0, 0);
+      c.filter = 'none';
+      c.restore();
+      c.globalAlpha = 1;
+    }
+
+    // ---- region borders and the road network -----------------------------
+    const zoneFade = clamp((ppm / dpr - 0.17) / 0.12, 0, 1);
+    drawZoneBorders(c, sx, sy, { alpha: 0.55 * rev, scale: dpr });
+    drawRoads(c, sx, sy, {
+      scale: dpr * (0.55 + this.zoom * 3.4),
+      alpha: 0.95 * rev,
+      lod: this.zoom > 0.4 ? 0 : 1,
+      bounds,
+    });
+    drawJunctions(c, sx, sy, dpr * (0.5 + this.zoom * 1.6), 0.5 * rev);
+
+    // ---- unsurveyed country ----------------------------------------------
+    const sheet = fog.sheet();
     c.save();
+    const fk = ppm / sheet.ppm;
+    c.imageSmoothingEnabled = true;
     c.translate(W / 2, H / 2);
-    c.scale(ppm / this.world.ppm, ppm / this.world.ppm);
-    c.translate(-this.world.toPx(this.cam.x), -this.world.toPz(this.cam.z));
-    c.globalAlpha = 0.96 * rev;
-    c.drawImage(this.world.canvas, 0, 0);
+    c.scale(fk, fk);
+    c.translate(-sheet.toPx(this.cam.x), -sheet.toPz(this.cam.z));
+    c.globalAlpha = 0.86 * rev;
+    c.drawImage(sheet.canvas, 0, 0);
+    c.restore();
     c.globalAlpha = 1;
-    c.restore();
 
-    drawRoads(c, sx, sy, { scale: dpr * (0.7 + ppm * 2.4), alpha: 0.92 });
-
-    this._drawFog(c, W, H, ppm, sx, sy);
-
-    // zone names
-    c.textAlign = 'center';
+    // ---- type ------------------------------------------------------------
+    // The chrome is reserved in the placer rather than tested for later, so a
+    // label never ends up half under the filter rail or the detail card.
+    const place = new LabelPlacer(3 * dpr);
+    place.reserve(0, 0, 248 * dpr, 404 * dpr);                    // filter rail
+    place.reserve((this.w - 356) * dpr, 0, W, 372 * dpr);         // detail card
+    place.reserve(0, (this.h - 74) * dpr, 250 * dpr, H);          // scale bar
+    place.reserve((this.w - 300) * dpr, (this.h - 78) * dpr, W, H); // survey
+    place.reserve((this.w - 96) * dpr, 0, W, 96 * dpr);           // compass
+    const pp = game.get('Player')?.position;
+    if (pp) place.reserve(sx(pp.x) - 12 * dpr, sy(pp.z) - 12 * dpr, sx(pp.x) + 12 * dpr, sy(pp.z) + 12 * dpr);
     c.textBaseline = 'middle';
-    for (const z of this.map.zones) {
-      if (ppm > 0.30 * dpr || !this._zoneSeen(z)) continue;
-      const x = sx(z.cx), y = sy(z.cz);
-      if (x < -100 || x > W + 100 || y < -60 || y > H + 60) continue;
-      c.font = `200 ${Math.round(11 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
-      c.fillStyle = 'rgba(232,244,255,0.42)';
-      c.save();
-      c.translate(x, y);
-      spaced(c, z.name.toUpperCase(), 5.2 * dpr);
-      c.restore();
-    }
+    this._regionLabels(c, sx, sy, ppm, dpr, rev, place);
+    this._zoneLabels(c, sx, sy, ppm, dpr, rev, place, zoneFade);
+    this._routeLabels(c, sx, sy, ppm, dpr, rev, place);
 
-    // the road network is already in the raster; draw POIs on top
-    const f = FILTERS[this.filter];
-    for (const p of this.map.pois) {
-      if (!this.map.discovered.has(p.id)) continue;
-      const dim = f.types && !f.types.includes(p.type);
-      const x = sx(p.x), y = sy(p.z);
-      if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
-      const def = POI_TYPES[p.type];
-      const on = this.list?.[this.sel] === p;
-      drawGlyph(c, POI_GLYPH[p.type] || 'dot', x, y, (on ? 8.2 : 6.0) * dpr, def.colour,
-        dim ? 0.20 : on ? 1 : 0.78);
-      const named = ['town', 'outpost', 'reststop', 'chocobo'].includes(p.type);
-      if (!dim && (on || named || (ppm > 0.24 * dpr && p.type === 'landmark'))) {
-        c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
-        c.fillStyle = on ? 'rgba(240,248,255,0.95)' : 'rgba(216,232,252,0.62)';
-        c.textAlign = 'left';
-        c.shadowColor = 'rgba(4,8,14,0.95)';
-        c.shadowBlur = 5 * dpr;
-        c.fillText(p.name.toUpperCase(), x + 12 * dpr, y + 1);
-        c.shadowBlur = 0;
-      }
-      if (on) {
-        const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
-        c.strokeStyle = `rgba(226,242,255,${(0.30 + 0.42 * (1 - pulse)).toFixed(3)})`;
-        c.lineWidth = 1.1 * dpr;
-        c.beginPath();
-        c.arc(x, y, (13 + 8 * pulse) * dpr, 0, Math.PI * 2);
-        c.stroke();
-      }
-    }
+    // ---- points of interest ----------------------------------------------
+    this._pois(c, sx, sy, ppm, dpr, rev, t, place, W, H);
 
-    // the player
-    const player = game.get('Player');
-    if (player?.position) {
-      const x = sx(player.position.x), y = sy(player.position.z);
-      c.save();
-      c.translate(x, y);
-      c.rotate(player.heading || 0);
-      c.fillStyle = '#f2f8ff';
-      c.strokeStyle = 'rgba(6,10,18,0.9)';
-      c.lineWidth = 1.3 * dpr;
-      c.beginPath();
-      c.moveTo(0, -9 * dpr); c.lineTo(6 * dpr, 7 * dpr);
-      c.lineTo(0, 3 * dpr); c.lineTo(-6 * dpr, 7 * dpr);
-      c.closePath();
-      c.fill(); c.stroke();
-      c.restore();
-      const pr = (13 + 7 * (0.5 + 0.5 * Math.sin(t * 2.2))) * dpr;
-      c.strokeStyle = `rgba(226,242,255,${(0.75 - (pr / dpr - 13) / 14).toFixed(3)})`;
-      c.lineWidth = 1.1 * dpr;
-      c.beginPath();
-      c.arc(x, y, pr, 0, Math.PI * 2);
-      c.stroke();
-    }
+    // ---- the player and the measured line --------------------------------
+    this._player(c, sx, sy, ppm, dpr, t);
+
     c.restore();
 
-    // frame hairline with the house corner cut
-    c.strokeStyle = 'rgba(206,224,250,0.22)';
+    // ---- frame and vignette ---------------------------------------------
+    const vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34, W / 2, H / 2, Math.max(W, H) * 0.72);
+    vg.addColorStop(0, 'rgba(3,6,12,0)');
+    vg.addColorStop(1, 'rgba(3,6,12,0.46)');
+    c.fillStyle = vg;
+    c.fillRect(0, 0, W, H);
+
+    c.strokeStyle = 'rgba(206,224,250,0.20)';
     c.lineWidth = 1;
-    const cut = 14 * dpr;
+    const cut = 16 * dpr;
     c.beginPath();
     c.moveTo(cut, 0.5); c.lineTo(W - 0.5, 0.5); c.lineTo(W - 0.5, H - cut);
     c.lineTo(W - cut, H - 0.5); c.lineTo(0.5, H - 0.5); c.lineTo(0.5, cut);
     c.closePath();
     c.stroke();
+    this._compass(c, W, H, dpr, rev);
 
-    const km = 1000 * ZOOMS[this.zoomI];
-    this.scaleTxt.textContent = km > 90 ? '1 KM' : '5 KM';
-    this.scaleBar.firstChild.style.width = `${(km > 90 ? km : km * 5).toFixed(0)}px`;
+    // ---- read-outs -------------------------------------------------------
+    const span = this.w / this.zoom;                      // metres across
+    const bar = span > 6000 ? 2000 : span > 2600 ? 1000 : 500;
+    this.scaleLine.style.width = `${(bar * this.zoom).toFixed(1)}px`;
+    this.scaleTxt.textContent = bar >= 1000 ? `${bar / 1000} KM` : `${bar} M`;
+    let seen = 0;
+    for (let i = 0; i < fog.mask.length; i++) if (fog.mask[i]) seen++;
+    this.surveyV.textContent = `${((seen / fog.mask.length) * 100).toFixed(1)} %`;
   }
 
-  _zoneSeen(z) {
-    if (!this.minimap) return true;
-    return this.minimap.fogAt(z.cx, z.cz) > 0.5;
+  _regionLabels(c, sx, sy, ppm, dpr, rev, place) {
+    const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
+    if (a <= 0.01) return;
+    for (const r of REGIONS) {
+      const zs = this.map.zones.filter((z) => z.region === r.id);
+      if (!zs.length) continue;
+      let cx = 0, cz = 0;
+      for (const z of zs) { cx += z.cx; cz += z.cz; }
+      cx /= zs.length; cz /= zs.length;
+      const x = sx(cx), y = sy(cz);
+      // the rail and the card own the outer thirds of the sheet
+      if (x < 300 * dpr || x > (this.w - 340) * dpr || y < 40 * dpr || y > (this.h - 40) * dpr) continue;
+      c.font = `100 ${Math.round(32 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      const w = spacedWidth(c, r.name.toUpperCase(), 16 * dpr);
+      place.reserve(x - w / 2, y - 22 * dpr, x + w / 2, y + 26 * dpr);
+      c.fillStyle = `rgba(240,248,255,${(0.46 * a).toFixed(3)})`;
+      c.shadowColor = 'rgba(3,7,14,0.9)';
+      c.shadowBlur = 12 * dpr;
+      spacedText(c, r.name.toUpperCase(), x, y, 16 * dpr);
+      c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      c.fillStyle = `rgba(206,224,248,${(0.34 * a).toFixed(3)})`;
+      spacedText(c, r.sub.toUpperCase(), x, y + 24 * dpr, 6 * dpr);
+      c.shadowBlur = 0;
+    }
   }
 
-  _drawFog(c, W, H, ppm, sx, sy) {
-    const mm = this.minimap;
-    if (!mm || !mm.fog) return;
-    const cell = mm.fogCell;
-    c.fillStyle = 'rgba(5,9,16,0.86)';
-    for (let j = 0; j < mm.fogN; j++) {
-      const wz = -WORLD.half + j * cell;
-      const y = sy(wz);
-      if (y < -cell * ppm || y > H + cell * ppm) continue;
-      let run = -1;
-      for (let i = 0; i <= mm.fogN; i++) {
-        const unseen = i < mm.fogN && !mm.fog[j * mm.fogN + i];
-        if (unseen && run < 0) run = i;
-        if (!unseen && run >= 0) {
-          const x0 = sx(-WORLD.half + run * cell), x1 = sx(-WORLD.half + i * cell);
-          c.fillRect(x0, y, x1 - x0 + 1, cell * ppm + 1);
-          run = -1;
-        }
+  _zoneLabels(c, sx, sy, ppm, dpr, rev, place, fade) {
+    const a = fade * rev;
+    if (a <= 0.01) return;
+    // biggest zones first, so a small zone yields its label to a large one
+    const zs = this.map.zones.slice().sort((p, q) => q.rx * q.rz - p.rx * p.rz);
+    for (const z of zs) {
+      if (fog.at(z.cx, z.cz) < 0.4) continue;
+      const x = sx(z.cx), y = sy(z.cz);
+      // a label the sheet edge would slice in half is worse than no label
+      const W = this.w * dpr, H = this.h * dpr;
+      if (x < 96 * dpr || x > W - 96 * dpr || y < 26 * dpr || y > H - 26 * dpr) continue;
+      c.font = `200 ${Math.round(12.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      const label = z.name.toUpperCase();
+      const w = spacedWidth(c, label, 6.4 * dpr);
+      if (!place.place(x - w / 2, y - 9 * dpr, x + w / 2, y + 9 * dpr)) continue;
+      c.shadowColor = 'rgba(3,7,14,0.92)';
+      c.shadowBlur = 7 * dpr;
+      c.fillStyle = `rgba(226,238,254,${(0.52 * a).toFixed(3)})`;
+      spacedText(c, label, x, y, 6.4 * dpr);
+      c.shadowBlur = 0;
+      // a hairline under the label, the way a sheet underlines a district
+      c.strokeStyle = `rgba(206,226,252,${(0.16 * a).toFixed(3)})`;
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(x - w / 2, y + 10 * dpr);
+      c.lineTo(x + w / 2, y + 10 * dpr);
+      c.stroke();
+    }
+  }
+
+  _routeLabels(c, sx, sy, ppm, dpr, rev, place) {
+    const a = clamp((ppm / dpr - 0.3) / 0.14, 0, 1) * rev;
+    if (a <= 0.01) return;
+    c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+    for (const r of this.map.roadGraph.routes) {
+      const rc = routeClass(r);
+      if (rc === 'trail' || rc === 'track') continue;
+      const pts = r.pts;
+      for (let k = 1; k < 6; k++) {
+        const p = pts[Math.floor((pts.length - 1) * (k / 6))];
+        if (!p) continue;
+        const x = sx(p.x), y = sy(p.z);
+        if (x < 40 || x > this.w * dpr - 40 || y < 20 || y > this.h * dpr - 20) continue;
+        if (fog.at(p.x, p.z) < 0.5) continue;
+        const label = r.name.split('—')[0].trim().toUpperCase();
+        const w = spacedWidth(c, label, 3.4 * dpr);
+        const ang = Math.atan2(p.tz || 0, p.tx || 1);
+        const nx = -Math.sin(ang), ny = Math.cos(ang);
+        const lx = x + nx * 9 * dpr, ly = y + ny * 9 * dpr;
+        if (!place.place(lx - w / 2, ly - 7 * dpr, lx + w / 2, ly + 7 * dpr)) continue;
+        c.save();
+        c.translate(lx, ly);
+        c.rotate(Math.abs(ang) > Math.PI / 2 ? ang + Math.PI : ang);
+        c.fillStyle = `rgba(214,232,254,${(0.46 * a).toFixed(3)})`;
+        c.shadowColor = 'rgba(3,7,14,0.95)';
+        c.shadowBlur = 5 * dpr;
+        spacedText(c, label, 0, 0, 3.4 * dpr);
+        c.shadowBlur = 0;
+        c.restore();
+        break;
       }
     }
   }
 
-  exit() { }
+  _pois(c, sx, sy, ppm, dpr, rev, t, place, W, H) {
+    const f = FILTERS[this.filter];
+    const selected = this.list?.[this.sel];
+    this._screenPos.clear();
+    // draw order: dimmed first, then normal, then the selection on top
+    const rows = [];
+    for (const p of this.map.pois) {
+      const known = this.map.discovered.has(p.id);
+      if (!known && fog.at(p.x, p.z) < 0.5) continue;
+      const x = sx(p.x), y = sy(p.z);
+      if (x < -60 || x > W + 60 || y < -60 || y > H + 60) continue;
+      this._screenPos.set(p, [x / dpr, y / dpr]);
+      const off = f.types && !f.types.includes(p.type);
+      rows.push({ p, x, y, known, off, sel: p === selected, hover: p === this.hover });
+    }
+    rows.sort((a, b) => (a.off ? 0 : 1) - (b.off ? 0 : 1) || (a.sel ? 1 : 0) - (b.sel ? 1 : 0));
+
+    for (const r of rows) {
+      const def = POI_TYPES[r.p.type];
+      const big = r.sel || r.hover;
+      const zk = clamp(0.78 + this.zoom * 0.9, 0.78, 1.12);
+      const rad = (!r.known ? 4.6 : r.sel ? 10 : r.hover ? 9 : SETTLED.includes(r.p.type) ? 8.4 : 7.4)
+        * zk * dpr;
+      r.rad = rad;
+      const alpha = (r.off ? 0.14 : r.known ? (big ? 1 : 0.9) : 0.3) * rev;
+      const colour = r.known ? def.colour : 'rgba(206,222,246,0.9)';
+      drawGlyph(c, r.known ? (POI_GLYPH[r.p.type] || 'dot') : 'unknown', r.x, r.y, rad, colour,
+        { alpha, weight: 1.3 * dpr });
+      place.reserve(r.x - rad, r.y - rad, r.x + rad, r.y + rad);
+    }
+
+    // labels in a second pass so a glyph never sits on top of a name
+    c.textBaseline = 'middle';
+    for (const r of rows) {
+      if (r.off) continue;
+      const named = SETTLED.includes(r.p.type);
+      const show = r.sel || r.hover || (r.known && (named || ppm / dpr > 0.33));
+      if (!show) continue;
+      const label = (r.known ? r.p.name : 'Unsurveyed site').toUpperCase();
+      const size = named ? 10.5 : 9.5;
+      c.font = `${r.sel ? 400 : 300} ${Math.round(size * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      const sp = 2.2 * dpr;
+      const w = spacedWidth(c, label, sp);
+      // clear of the glyph's own reserved box, or the placer rejects every slot
+      const gap = (r.rad || 8 * dpr) + 7 * dpr;
+      const slots = [
+        [r.x + gap, r.y], [r.x - gap - w, r.y],
+        [r.x - w / 2, r.y - gap - 4 * dpr], [r.x - w / 2, r.y + gap + 4 * dpr],
+      ];
+      let put = null;
+      for (const s of slots) {
+        if (place.place(s[0], s[1] - 6.5 * dpr, s[0] + w, s[1] + 6.5 * dpr)) { put = s; break; }
+      }
+      // the selected point always carries its name, collision or not
+      if (!put && r.sel) { put = slots[0]; place.reserve(put[0], put[1] - 6.5 * dpr, put[0] + w, put[1] + 6.5 * dpr); }
+      if (!put) continue;
+      const a = (r.sel ? 0.98 : r.hover ? 0.92 : named ? 0.80 : r.known ? 0.60 : 0.4) * rev;
+      c.fillStyle = `rgba(240,248,255,${a.toFixed(3)})`;
+      c.shadowColor = 'rgba(3,7,14,0.95)';
+      c.shadowBlur = 6 * dpr;
+      spacedText(c, label, put[0], put[1], sp, 'left');
+      c.shadowBlur = 0;
+    }
+
+    // selection reticle
+    if (selected) {
+      const x = sx(selected.x), y = sy(selected.z);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+      c.strokeStyle = `rgba(226,242,255,${(0.22 + 0.38 * (1 - pulse)).toFixed(3)})`;
+      c.lineWidth = 1.1 * dpr;
+      c.beginPath();
+      c.arc(x, y, (15 + 9 * pulse) * dpr, 0, Math.PI * 2);
+      c.stroke();
+      // corner brackets, the house selection mark
+      const s = 15 * dpr, g = 5.5 * dpr;
+      c.strokeStyle = 'rgba(226,242,255,0.85)';
+      c.lineWidth = 1.2 * dpr;
+      c.beginPath();
+      for (const [ox, oy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        c.moveTo(x + ox * s, y + oy * s - oy * g);
+        c.lineTo(x + ox * s, y + oy * s);
+        c.lineTo(x + ox * s - ox * g, y + oy * s);
+      }
+      c.stroke();
+    }
+  }
+
+  _player(c, sx, sy, ppm, dpr, t) {
+    const player = this.game?.get('Player');
+    if (!player?.position) return;
+    const px = sx(player.position.x), py = sy(player.position.z);
+    const sel = this.list?.[this.sel];
+
+    // the measured line: FFXV always tells you how far it is
+    const far = sel && Math.hypot(sel.x - player.position.x, sel.z - player.position.z) > 200;
+    if (far) {
+      const tx = sx(sel.x), ty = sy(sel.z);
+      c.save();
+      c.setLineDash([4 * dpr, 5 * dpr]);
+      c.lineDashOffset = -(t * 22 * dpr) % (9 * dpr);
+      c.strokeStyle = 'rgba(206,228,252,0.34)';
+      c.lineWidth = 1.1 * dpr;
+      c.beginPath();
+      c.moveTo(px, py);
+      c.lineTo(tx, ty);
+      c.stroke();
+      c.setLineDash([]);
+      const km = Math.hypot(sel.x - player.position.x, sel.z - player.position.z) / 1000;
+      const mx = (px + tx) / 2, my = (py + ty) / 2;
+      c.font = `300 ${Math.round(9 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      c.textAlign = 'center';
+      c.fillStyle = 'rgba(226,240,255,0.72)';
+      c.shadowColor = 'rgba(3,7,14,0.95)';
+      c.shadowBlur = 6 * dpr;
+      c.fillText(`${km.toFixed(2)} KM`, mx, my - 7 * dpr);
+      c.shadowBlur = 0;
+      c.textAlign = 'left';
+      c.restore();
+    }
+
+    c.save();
+    c.translate(px, py);
+    // view cone
+    const head = player.heading || 0;
+    c.save();
+    c.rotate(head);
+    const cone = c.createRadialGradient(0, 0, 0, 0, 0, 34 * dpr);
+    cone.addColorStop(0, 'rgba(190,222,255,0.28)');
+    cone.addColorStop(1, 'rgba(190,222,255,0)');
+    c.fillStyle = cone;
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.arc(0, 0, 34 * dpr, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#f4f9ff';
+    c.strokeStyle = 'rgba(6,10,18,0.92)';
+    c.lineWidth = 1.4 * dpr;
+    c.beginPath();
+    c.moveTo(0, -9.5 * dpr); c.lineTo(6.4 * dpr, 7.4 * dpr);
+    c.lineTo(0, 3.2 * dpr); c.lineTo(-6.4 * dpr, 7.4 * dpr);
+    c.closePath();
+    c.fill(); c.stroke();
+    c.restore();
+    const pr = (13 + 8 * (0.5 + 0.5 * Math.sin(t * 2.2))) * dpr;
+    c.strokeStyle = `rgba(226,242,255,${(0.7 - (pr / dpr - 13) / 16).toFixed(3)})`;
+    c.lineWidth = 1.1 * dpr;
+    c.beginPath();
+    c.arc(0, 0, pr, 0, Math.PI * 2);
+    c.stroke();
+    c.restore();
+  }
+
+  _compass(c, W, H, dpr, rev) {
+    const R = 30 * dpr;
+    const x = W - R - 30 * dpr, y = R + 30 * dpr;
+    c.save();
+    c.globalAlpha = rev;
+    c.translate(x, y);
+    c.strokeStyle = 'rgba(206,226,252,0.30)';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(0, 0, R, 0, Math.PI * 2);
+    c.stroke();
+    for (let d = 0; d < 360; d += 15) {
+      const a = (d * Math.PI) / 180 - Math.PI / 2;
+      const major = d % 45 === 0;
+      c.strokeStyle = major ? 'rgba(214,234,255,0.5)' : 'rgba(206,224,250,0.22)';
+      c.beginPath();
+      c.moveTo(Math.cos(a) * (R - (major ? 8 : 5) * dpr), Math.sin(a) * (R - (major ? 8 : 5) * dpr));
+      c.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+      c.stroke();
+    }
+    // the needle
+    c.fillStyle = 'rgba(240,248,255,0.92)';
+    c.beginPath();
+    c.moveTo(0, -R + 9 * dpr); c.lineTo(5 * dpr, 2 * dpr); c.lineTo(0, -2 * dpr); c.lineTo(-5 * dpr, 2 * dpr);
+    c.closePath();
+    c.fill();
+    c.fillStyle = 'rgba(150,186,232,0.5)';
+    c.beginPath();
+    c.moveTo(0, R - 9 * dpr); c.lineTo(5 * dpr, -2 * dpr); c.lineTo(0, 2 * dpr); c.lineTo(-5 * dpr, -2 * dpr);
+    c.closePath();
+    c.fill();
+    c.font = `300 ${Math.round(9 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+    c.textAlign = 'center';
+    c.fillStyle = 'rgba(238,246,255,0.85)';
+    c.fillText('N', 0, -R - 9 * dpr);
+    c.textAlign = 'left';
+    c.restore();
+  }
 }
 
 function fmtTime(sec) {
   if (!isFinite(sec)) return '—';
   const m = Math.floor(sec / 60), s = Math.round(sec % 60);
-  if (m >= 60) return `${Math.floor(m / 60)} h ${m % 60} min`;
+  if (m >= 60) return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
   return m ? `${m} min ${String(s).padStart(2, '0')} s` : `${s} s`;
 }
 
-/** Draw letter-spaced text centred on the origin — canvas has no tracking. */
-function spaced(c, text, spacing) {
-  let total = 0;
-  for (const ch of text) total += c.measureText(ch).width + spacing;
-  total -= spacing;
-  let x = -total / 2;
-  c.textAlign = 'left';
-  for (const ch of text) {
-    c.fillText(ch, x, 0);
-    x += c.measureText(ch).width + spacing;
-  }
-  c.textAlign = 'center';
-}
+let _styled = false;
 
 function styleTag() {
+  if (_styled) return null;
+  _styled = true;
   const s = document.createElement('style');
   s.textContent = `
-.s-world .wm-wrap {
-  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+.wm .wm-wrap {
+  position: absolute; left: ${BOX.x}px; top: ${BOX.y}px;
+  width: ${BOX.w}px; height: ${BOX.h}px; pointer-events: auto;
 }
-.s-world .wm-canvas { display: block; }
-.s-world .wm-rail {
-  position: absolute; left: 64px; top: 176px;
-  display: flex; flex-direction: column; gap: 13px;
+.wm .wm-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+.wm .wm-rail {
+  position: absolute; left: 64px; top: 168px; width: 214px; padding: 14px 4px 12px 16px;
+  pointer-events: auto;
 }
-.s-world .wm-filter { display: flex; align-items: center; gap: 11px; }
-.s-world .wm-fdot {
-  width: 7px; height: 7px; flex: none; transform: rotate(45deg);
-  background: transparent; box-shadow: inset 0 0 0 1px rgba(206,224,250,.42);
+.wm .wm-rail-h {
+  font-size: 8px; letter-spacing: .38em; text-transform: uppercase;
+  color: var(--ink-4); margin-bottom: 10px; text-shadow: var(--sh-text);
 }
-.s-world .wm-filter.on .wm-fdot { background: var(--ice, #b6d6f8); box-shadow: 0 0 8px rgba(150,200,250,.6); }
-.s-world .wm-flabel {
-  font-size: 8.5px; letter-spacing: .30em; color: var(--ink-4, rgba(198,214,240,.34));
-  text-shadow: 0 1px 2px rgba(0,0,0,.72);
+.wm .wm-rail .rule { margin-bottom: 8px; }
+.wm .wm-filter {
+  display: flex; align-items: center; gap: 11px; padding: 5px 12px 5px 2px; position: relative;
 }
-.s-world .wm-filter.on .wm-flabel { color: var(--ink, #eef4fd); }
-.s-world .wm-card {
-  position: absolute; right: 58px; top: 168px; width: 320px;
-  padding: 18px 20px 16px;
-  background: linear-gradient(104deg, rgba(9,14,24,.62) 0%, rgba(9,14,24,.34) 62%, rgba(9,14,24,.20) 100%);
-  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px));
-  box-shadow: 0 10px 34px rgba(0,0,0,.42);
+.wm .wm-fmark { color: var(--ink-4); display: flex; width: 16px; }
+.wm .wm-filter.on .wm-fmark { color: var(--ice); filter: drop-shadow(0 0 6px rgba(150,200,250,.55)); }
+.wm .wm-flabel {
+  flex: 1; font-size: 8.5px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--ink-4); text-shadow: var(--sh-text);
 }
-.s-world .wm-name {
-  font-size: 15px; font-weight: 200; letter-spacing: .20em; color: var(--ink, #eef4fd);
-  text-shadow: 0 2px 6px rgba(0,0,0,.78);
+.wm .wm-filter.on .wm-flabel { color: var(--ink); }
+.wm .wm-fcount {
+  font-size: 8.5px; letter-spacing: .12em; color: var(--ink-4); text-shadow: var(--sh-text);
 }
-.s-world .wm-type {
-  margin-top: 5px; font-size: 8.5px; letter-spacing: .24em; text-transform: uppercase;
-  color: var(--ink-3, rgba(210,224,246,.56)); text-shadow: 0 1px 2px rgba(0,0,0,.72);
+.wm .wm-filter.on .wm-fcount { color: var(--ice); }
+
+.wm .wm-card {
+  position: absolute; right: 62px; top: 168px; width: 336px; padding: 18px 20px 15px;
 }
-.s-world .wm-rule {
-  height: 1px; margin: 13px 0 12px;
-  background: linear-gradient(90deg, transparent, rgba(206,224,250,.26) 6%, rgba(206,224,250,.26) 78%, transparent);
+.wm .wm-chead { display: flex; align-items: flex-start; gap: 13px; }
+.wm .wm-cglyph { flex: none; margin-top: 1px; color: var(--ice); }
+.wm .wm-name {
+  font-size: 15.5px; font-weight: 200; letter-spacing: .19em; color: var(--ink);
+  text-shadow: var(--sh-text-lg); line-height: 1.25;
 }
-.s-world .wm-does {
+.wm .wm-type {
+  margin-top: 6px; font-size: 8.5px; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--ink-3); text-shadow: var(--sh-text);
+}
+.wm .wm-card .rule { margin: 13px 0 12px; }
+.wm .wm-does {
   font-size: 11.5px; font-weight: 300; letter-spacing: .035em; line-height: 1.62;
-  color: var(--ink-2, rgba(228,238,252,.72)); text-shadow: 0 1px 2px rgba(0,0,0,.72);
-  min-height: 56px;
+  color: var(--ink-2); text-shadow: var(--sh-text); min-height: 58px;
 }
-.s-world .wm-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
-.s-world .wm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
-.s-world .wm-k {
-  font-size: 8px; letter-spacing: .28em; color: var(--ink-4, rgba(198,214,240,.34));
-  text-shadow: 0 1px 2px rgba(0,0,0,.72);
+.wm .wm-rows { margin-top: 13px; display: flex; flex-direction: column; gap: 7px; }
+.wm .wm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.wm .wm-k {
+  font-size: 8px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--ink-4); text-shadow: var(--sh-text);
 }
-.s-world .wm-v {
-  font-size: 11px; font-weight: 300; letter-spacing: .04em; color: var(--ink, #eef4fd);
-  text-shadow: 0 1px 2px rgba(0,0,0,.72); font-variant-numeric: tabular-nums;
+.wm .wm-v {
+  font-size: 11px; font-weight: 300; letter-spacing: .04em; color: var(--ink);
+  text-shadow: var(--sh-text); font-variant-numeric: tabular-nums;
 }
-.s-world .wm-scalebar { position: absolute; left: 64px; bottom: 118px; }
-.s-world .wm-scaleline {
-  height: 1px; width: 130px; background: rgba(216,234,255,.6);
-  box-shadow: 0 -4px 0 -3px rgba(216,234,255,.6), 0 4px 0 -3px rgba(216,234,255,.6);
+.wm .wm-ft {
+  margin-top: 15px; font-size: 8px; letter-spacing: .3em; color: var(--ink-4);
+  text-shadow: var(--sh-text);
 }
-.s-world .wm-scaletxt {
-  margin-top: 6px; font-size: 8px; letter-spacing: .3em;
-  color: var(--ink-4, rgba(198,214,240,.34)); text-shadow: 0 1px 2px rgba(0,0,0,.72);
+.wm .wm-ft.on { color: var(--gold); }
+
+.wm .wm-scalebar { position: absolute; left: 66px; bottom: 118px; }
+.wm .wm-scaleline {
+  height: 1px; width: 130px; background: rgba(216,234,255,.55);
+  box-shadow: 0 -4px 0 -3px rgba(216,234,255,.55), 0 4px 0 -3px rgba(216,234,255,.55);
+}
+.wm .wm-scaletxt {
+  margin-bottom: 7px; font-size: 8px; letter-spacing: .3em;
+  color: var(--ink-4); text-shadow: var(--sh-text);
+}
+.wm .wm-survey { position: absolute; right: 64px; bottom: 118px; text-align: right; }
+.wm .wm-surveyk {
+  font-size: 8px; letter-spacing: .3em; text-transform: uppercase;
+  color: var(--ink-4); text-shadow: var(--sh-text);
+}
+.wm .wm-surveyv {
+  margin-top: 6px; font-size: 17px; font-weight: 200; letter-spacing: .1em;
+  color: var(--ink); text-shadow: var(--sh-text); font-variant-numeric: tabular-nums;
 }
 `;
   return s;
