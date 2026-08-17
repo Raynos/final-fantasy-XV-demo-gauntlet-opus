@@ -1,0 +1,84 @@
+/* =====================================================================
+   FINAL FANTASY XV — Eos : title screen
+   Per-frame animation only. Nothing here transitions on its own.
+   ===================================================================== */
+
+/* Hairline type over a sunlit landscape needs a real plate under it, but the
+   plate must never read as a box. Three stacked gradients: a top wash for the
+   logo, a heavier bottom wash for the menu, and a soft centre column that darks
+   the middle of frame without touching the corners. */
+#title .ti-scrim {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 46% 78% at 50% 46%, rgba(3,6,12,.58), rgba(3,6,12,.22) 52%, rgba(3,6,12,0) 84%),
+    linear-gradient(180deg, rgba(3,6,12,.82) 0%, rgba(3,6,12,.42) 22%, rgba(3,6,12,.06) 46%),
+    linear-gradient(0deg, rgba(3,6,12,.90) 0%, rgba(3,6,12,.58) 20%, rgba(3,6,12,.10) 52%);
+}
+#title .ti-grain {
+  position: absolute; inset: 0; opacity: .35; mix-blend-mode: overlay;
+  background-image: linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px);
+  background-size: 100% 3px;
+}
+#title .ti-fade { position: absolute; inset: 0; background: #000; opacity: 0; }
+
+/* ---------- logo lockup ------------------------------------------------ */
+#title .ti-mark { position: absolute; left: 50%; top: 31%; transform: translate(-50%, -50%); text-align: center; }
+#title .ti-crest { display: block; margin: 0 auto 28px; color: rgba(236,244,255,.98); filter: drop-shadow(0 2px 6px rgba(0,0,0,.9)) drop-shadow(0 0 24px rgba(0,0,0,.8)); }
+#title .ti-ff {
+  font-size: 17px; font-weight: 200; letter-spacing: 0.86em; text-transform: uppercase;
+  color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 2px 12px rgba(0,0,0,.9), 0 0 40px rgba(0,0,0,.7);
+  padding-left: .86em;
+}
+#title .ti-xv {
+  margin-top: 18px; font-size: 112px; font-weight: 100; letter-spacing: 0.20em;
+  color: #fff; line-height: 0.94; padding-left: .20em;
+  text-shadow: 0 2px 5px rgba(0,0,0,.92), 0 6px 40px rgba(0,0,0,.85), 0 0 80px rgba(150,196,248,.28);
+}
+#title .ti-xv .ch { display: inline-block; }
+#title .ti-rule { height: 1px; width: 0; margin: 26px auto 0; background: linear-gradient(90deg, transparent, var(--hair-hot) 22%, var(--hair-hot) 78%, transparent); }
+#title .ti-tag {
+  margin-top: 22px; font-size: 10px; font-weight: 300; letter-spacing: 0.46em;
+  text-transform: uppercase; color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 26px rgba(0,0,0,.85); padding-left: .46em;
+}
+
+/* ---------- menu -------------------------------------------------------- */
+#title .ti-menu { position: absolute; left: 50%; top: 63%; transform: translateX(-50%); width: 360px; }
+#title .ti-row { position: relative; padding: 14px 18px 14px 22px; text-align: center; }
+#title .ti-row .tr-t {
+  font-size: 13.5px; font-weight: 300; letter-spacing: 0.40em; text-transform: uppercase;
+  color: rgba(228,238,252,.86); padding-left: .40em;
+  text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 20px rgba(0,0,0,.85);
+}
+#title .ti-row .tr-d {
+  font-size: 8.5px; letter-spacing: 0.26em; text-transform: uppercase;
+  color: rgba(206,222,246,.52); margin-top: 6px; padding-left: .26em;
+  text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 16px rgba(0,0,0,.8);
+}
+/* A soft pool of light, not a plate: the highlight has to have no edge on any
+   side or the menu reads as a web form sitting on top of the landscape. */
+#title .ti-row .tr-bg {
+  position: absolute; left: -14%; right: -14%; top: -18%; bottom: -18%; opacity: 0;
+  background: radial-gradient(ellipse 46% 52% at 50% 50%, rgba(146,192,242,.30), rgba(146,192,242,.10) 54%, rgba(146,192,242,0) 82%);
+}
+#title .ti-row .tr-m {
+  position: absolute; top: 50%; width: 6px; height: 6px; margin-top: -3px;
+  transform: rotate(45deg); background: var(--accent-hot); opacity: 0;
+  box-shadow: 0 0 10px rgba(180,220,255,.9);
+}
+#title .ti-row .tr-m.l { left: -6px; }
+#title .ti-row .tr-m.r { right: -6px; }
+#title .ti-row.on .tr-t { color: #fff; }
+#title .ti-row.off .tr-t { color: rgba(198,214,240,.22); }
+
+/* ---------- footer ------------------------------------------------------ */
+#title .ti-foot {
+  position: absolute; left: 0; right: 0; bottom: 40px;
+  display: flex; align-items: center; justify-content: center; gap: 34px;
+}
+#title .ti-foot .fk {
+  font-size: 9px; letter-spacing: .24em; text-transform: uppercase;
+  color: rgba(210,224,246,.7); text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 16px rgba(0,0,0,.8);
+}
+#title .ti-foot .fk b { font-weight: 400; color: var(--ice); margin-right: 8px; }
+#title .ti-ver { position: absolute; right: 40px; bottom: 22px; font-size: 8px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-4); }
