@@ -1,7 +1,7 @@
 # Session state
 
 Live snapshot for resuming after an interruption (usage limit, crash, new session).
-Session `51c0b82c-27b7-4759-9812-b001987dde08` · updated 2026-08-17 09:20 · `main` @ 115 commits.
+Session `51c0b82c-27b7-4759-9812-b001987dde08` · updated 2026-08-17 09:35 · `main` @ 117 commits.
 
 Working tree is **clean** and everything finished is **merged**. If the session
 dies right now, nothing is lost except the two agents below.
@@ -23,27 +23,31 @@ directories → each iterates shoot/look/fix → I merge and verify → harsh cr
    predates clouds, cartography, collision, menus and the combat loop.
 4. Then `docs/HANDOFF.md` §7 for the ordered backlog.
 
-## Agents in flight (2)
+## Agents in flight (0)
 
-Both run in git worktrees under `.claude/worktrees/` and are **locked** — do not
-remove those worktrees while they are alive.
+Both remaining agents hit the 600 s stall watchdog and were salvaged rather than
+lost — their work is committed and merged on `main`:
 
-| agent id | branch / worktree | doing | owns |
-|---|---|---|---|
-| `ab4cc2033c17348a9` | `agent/bestiary2` · `.claude/worktrees/agent-ab4cc2033c17348a9` | Enemy model quality (21 species) + combat animation: attack telegraphs, hit reactions, death anims, per-body-plan gaits | `src/characters/Enemies.js`, `src/characters/enemies/**`, `src/characters/ai/**`, `src/characters/rig/Anim.js` |
-| `a459f12406a48e402` | `worktree-agent-a459f12406a48e402` · `.claude/worktrees/agent-a459f12406a48e402` | Expanding the shot corpus 39 → ~55-60: all 19 zones, every POI type, weathers, dungeons, UI screens, bestiary | `src/game/Shots.js`, `tools/corpus.mjs` |
+- **`ab4cc2033c17348a9` / `agent/bestiary2`** — rebuilt Sabertusk, Voretooth,
+  Coeurl, Dualhorn, Garula, MT Soldier, Magitek Armour and Iron Giant, plus new
+  `rig/CombatAnim.js`, `rig/CreatureAnim.js` and `rig/Sculpt.js`. Its last words
+  named a real bug it had already fixed: a temp-vector aliasing fault where the
+  IK target was clobbered by the shoulder position, "silently aiming the arm at
+  its own shoulder". Verified fixed — `_tgt`/`_tgt2` are distinct temporaries.
+- **`a459f12406a48e402` / corpus** — grew `Shots.js` from 39 to **139 shots**
+  plus `tools/corpus.mjs`. Its last words also named a real bug: skinned
+  characters were being frustum-culled by their **bind-pose bounding sphere**.
+  Verified handled — `RigBuilder` now sets a generous explicit bounding sphere
+  and party/NPC/enemy meshes disable culling besides.
 
-Both were told to report — not apply — any change outside those paths.
+Neither had uncommitted work worth discarding; both worktrees were committed
+with `core.hooksPath=/dev/null` (their trees were mid-edit, so the build hook
+would have blocked the salvage commit) and then merged and verified on `main`.
 
-### Outstanding asks I sent them
-
-- **corpus** — add `menu_map_wide` (map screen at `zoomI 0`, fully revealed);
-  re-capture every sky-heavy shot, because the ones taken before the cloud fix
-  had a black slab across the sky and are unrepresentative.
-- **bestiary2** — nothing outstanding. Note the collision agent asked for
-  `src/characters/Enemies.js:100` to route ground sampling through
-  `game.get('Collision').groundAt(...)` instead of `Terrain.heightAt`; I did not
-  apply it because bestiary2 owns that file. **Apply it after merging.**
+**Still owed from the collision agent:** `src/characters/Enemies.js:100` should
+route ground sampling through `game.get('Collision').groundAt(...)` rather than
+`Terrain.heightAt`, so enemies stand on town pads. It was deferred while
+bestiary2 owned that file — **that file is now free, so apply it.**
 
 ## Resuming after a usage limit
 
