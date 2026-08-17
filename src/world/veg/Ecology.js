@@ -22,9 +22,12 @@ const _v = new THREE.Vector3();
 const C_SOIL_DRY = srgb(0x9a7448);
 const C_SOIL_RED = srgb(0x7e4b30);
 const C_SOIL_WET = srgb(0x4c4a30);
-const C_GRASS_DRY = srgb(0xa8914f);
-const C_GRASS_MID = srgb(0x7d8a45);
-const C_GRASS_LUSH = srgb(0x4d6b2c);
+// Leide is straw and olive, not lawn. The "dry" end is a sun-bleached wheat
+// that has been dead since spring; the lush end only ever shows up in the
+// drainage lines, so it is allowed to be a real green.
+const C_GRASS_DRY = srgb(0xa89358);
+const C_GRASS_MID = srgb(0x8a8450);
+const C_GRASS_LUSH = srgb(0x596b31);
 
 const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
@@ -95,6 +98,32 @@ export class Ecology {
   /** Local patchiness — the thing that stops scatter looking uniform. */
   patch(x, z, scale = 0.02, oct = 3) {
     return this.nPatch.fbm2(x * scale, z * scale, oct) * 0.5 + 0.5;
+  }
+
+  /**
+   * How strongly this point sits in a drainage line, 0..1.
+   *
+   * Discrete laplacian of the heightfield: where the ground is concave the
+   * water that falls on the surrounding slopes runs through here, so this is
+   * where the only genuinely green grass in Leide grows. It is what turns a
+   * flat noise-driven meadow into a landscape with gulleys you can read.
+   */
+  drainage(x, z) {
+    const t = this.terrain, e = 4.0;
+    const h = t.heightAt(x, z);
+    const avg = (t.heightAt(x - e, z) + t.heightAt(x + e, z)
+      + t.heightAt(x, z - e) + t.heightAt(x, z + e)) * 0.25;
+    return THREE.MathUtils.clamp((avg - h) / 1.15, 0, 1);
+  }
+
+  /**
+   * Moisture plus the drainage bonus — the field grass actually responds to.
+   * Kept separate from {@link moisture} so the climate-scale sampler stays
+   * cheap for the callers (tree/scrub scatter) that evaluate it 100k times.
+   */
+  wetness(x, z) {
+    const m = this.moisture(x, z);
+    return THREE.MathUtils.clamp(m + this.drainage(x, z) * 0.34, 0, 1);
   }
 
   // ------------------------------------------------------------------- road
@@ -280,14 +309,15 @@ export class Ecology {
   grassDensity(x, z) {
     const slope = this.slope01(x, z);
     if (slope > 0.66) return 0;
-    const m = this.moisture(x, z);
-    // a thin carpet everywhere, thickening fast with moisture
-    let d = 0.34 + 0.66 * THREE.MathUtils.smoothstep(m, 0.16, 0.62);
+    const m = this.wetness(x, z);
+    // Leide is scrubland: the baseline is scattered tufts over open dirt, and
+    // only the wet ground closes into anything like a sward.
+    let d = 0.26 + 0.74 * THREE.MathUtils.smoothstep(m, 0.2, 0.7);
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.3, 0.66);
     // clumping: large soft patches plus fine breakup
     const p = this.patch(x, z, 0.013, 3);
     const fine = this.patch(x + 900, z - 500, 0.075, 2);
-    d *= 0.42 + 0.58 * THREE.MathUtils.smoothstep(p * 0.72 + fine * 0.28, 0.24, 0.7);
+    d *= 0.32 + 0.68 * THREE.MathUtils.smoothstep(p * 0.72 + fine * 0.28, 0.26, 0.72);
     // road corridor
     const rd = this.roadDist(x, z);
     d *= THREE.MathUtils.smoothstep(rd, 2.4, 10.5);
@@ -354,12 +384,18 @@ export class Ecology {
     return out.copy(_tmpA).lerp(_tmpB, THREE.MathUtils.smoothstep(slope, 0.35, 0.7));
   }
 
-  /** Base grass colour for this spot, before per-blade variation. */
+  /**
+   * Base grass colour for this spot, before per-clump variation.
+   *
+   * The thresholds are deliberately late: most of Leide has to land on the
+   * straw end of the ramp, and green is reserved for the drainage lines that
+   * {@link wetness} picks out.
+   */
   grassColor(x, z, out = new THREE.Color()) {
-    const m = this.moisture(x, z);
+    const m = this.wetness(x, z);
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
-    out.copy(C_GRASS_DRY).lerp(C_GRASS_MID, THREE.MathUtils.smoothstep(m, 0.2, 0.58));
-    out.lerp(C_GRASS_LUSH, THREE.MathUtils.smoothstep(m, 0.55, 0.92));
+    out.copy(C_GRASS_DRY).lerp(C_GRASS_MID, THREE.MathUtils.smoothstep(m, 0.34, 0.7));
+    out.lerp(C_GRASS_LUSH, THREE.MathUtils.smoothstep(m, 0.7, 0.97));
     const k = 0.86 + v * 0.3;
     out.setRGB(out.r * k, out.g * (k * 0.98 + 0.02), out.b * k);
     return out;

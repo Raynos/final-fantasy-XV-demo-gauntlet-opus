@@ -7,9 +7,9 @@ import { grassClumpTex } from './VegTextures.js';
 /**
  * Camera-following instanced grass with three LOD rings:
  *
- *   0  real tapered blade geometry, 0-58 m
- *   1  crossed alpha-cut clump cards, 52-150 m
- *   2  big sparse clump cards, 140-320 m
+ *   0  real tapered blade geometry, grown in tufts, 0-30 m
+ *   1  crossed alpha-cut tuft cards, 25-95 m
+ *   2  big sparse clump cards, 88-190 m
  *
  * Placement is *position-hashed*, never sequence-dependent, so a tile
  * regenerates byte-identically no matter which order tiles stream in. Tiles are
@@ -17,6 +17,14 @@ import { grassClumpTex } from './VegTextures.js';
  * what keeps the whole field at three draw calls with no per-frame CPU cost.
  */
 
+// Ring sizing, two rules:
+//
+// The blade ring is short because Leide grass is ankle-to-calf high. Past
+// thirty metres a whole tuft is a couple of pixels, and one textured card per
+// tuft is then both cheaper and *more* accurate than a hundred sub-pixel
+// triangles. `spacing` on that ring is therefore the tuft grid, not the blade
+// grid: every accepted cell spawns a whole clump.
+//
 // The outer ring used to reach 300 m. An alpha-cut card that small samples the
 // coarsest mips, where its silhouette no longer exists, so the whole quad
 // passes or fails as one block and the field turns into a rash of dark
@@ -24,10 +32,13 @@ import { grassClumpTex } from './VegTextures.js';
 // and handing the rest to the terrain's own grass tint reads far better than
 // stamping geometry the alpha test cannot resolve.
 const LODS = [
-  { name: 'blade', tile: 16, far: 46, spacing: 0.155, max: 210000 },
-  { name: 'clump', tile: 32, near: 40, far: 132, spacing: 0.8, max: 78000 },
-  { name: 'far', tile: 64, near: 122, far: 196, spacing: 2.2, max: 44000 },
+  { name: 'blade', tile: 12, far: 30, spacing: 0.36, max: 240000 },
+  { name: 'clump', tile: 24, near: 25, far: 95, spacing: 0.46, max: 105000 },
+  { name: 'far', tile: 48, near: 88, far: 190, spacing: 1.7, max: 44000 },
 ];
+
+/** Blades in the fattest tuft. Sizes the tile scratch buffer. */
+const MAX_PER_CLUMP = 22;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -37,31 +48,62 @@ const _scl = new THREE.Vector3();
 const _cGrass = new THREE.Color();
 const _cGround = new THREE.Color();
 
-/** Tapered, slightly curved blade. Vertex colour carries the root->tip ramp. */
+/**
+ * One blade, built in *units of its own height* so the instance scale can stay
+ * (near) uniform.
+ *
+ * That constraint is not cosmetic. three has no per-instance normal matrix; it
+ * divides the object normal by the squared length of each instance-matrix
+ * column, so a blade scaled (1, 0.25, 1) has its Y normal multiplied by four
+ * relative to X and Z and every blade in the field ends up with a normal
+ * pointing dead up — which is exactly the flat-green-cardboard read. Modelling
+ * the blade at unit height and scaling it uniformly keeps the authored normals
+ * intact, and it also makes the silhouette self-similar: a short blade is a
+ * small blade, not a squashed one.
+ *
+ * The authored normals fan hard to left and right (`FAN`). Interpolated across
+ * a two-column ribbon that is a round cross-section: the shading sweeps from
+ * one edge, through a bright centre line where the normal points straight out
+ * of the fold, to the other edge. That centre line is the midrib highlight.
+ *
+ * The tip is a single vertex, so the blade tapers to a real point and we spend
+ * one triangle there instead of a degenerate quad.
+ */
 function bladeGeometry(segs = 4) {
-  const rows = segs + 1;
   const pos = [], nor = [], uv = [], col = [], flex = [], idx = [];
-  const halfW = 0.0135, curve = 0.28;
-  for (let i = 0; i < rows; i++) {
+  const HALF_W = 0.043;   // half width at the root, as a fraction of height
+  const CURVE = 0.34;     // tip offset along +Z, as a fraction of height
+  const FAN = 0.95;       // lateral normal spread -> rounded cross-section
+  const shadeAt = (t) => 0.40 + Math.pow(t, 0.75) * 0.62;
+  for (let i = 0; i < segs; i++) {
     const t = i / segs;
-    const w = halfW * (1 - Math.pow(t, 1.45));
-    const y = t;
-    const z = curve * t * t;
-    // normals lean toward "up" so blades read as soft foliage, not metal shards
-    const nz = 0.58, ny = 0.81;
+    const w = HALF_W * Math.pow(1 - t, 0.6);
+    const z = CURVE * t * t;
     for (let s = -1; s <= 1; s += 2) {
-      pos.push(s * w, y, z);
-      nor.push(s * 0.14, ny, nz);
+      pos.push(s * w, t, z);
+      // the blade leans further off vertical as it droops, so the face normal
+      // tips forward with it
+      nor.push(s * FAN, 0.9, 0.42 + t * 0.72);
       uv.push(s * 0.5 + 0.5, t);
-      const shade = 0.34 + Math.pow(t, 0.8) * 0.82;
-      col.push(shade * 0.97, shade, shade * 0.86);
+      const shade = shadeAt(t);
+      col.push(shade * 0.99, shade, shade * 0.83);
       flex.push(t);
     }
   }
-  for (let i = 0; i < segs; i++) {
+  pos.push(0, 1, CURVE);
+  nor.push(0, 0.9, 1.14);
+  uv.push(0.5, 1);
+  const st = shadeAt(1);
+  col.push(st * 0.99, st, st * 0.83);
+  flex.push(1);
+
+  for (let i = 0; i < segs - 1; i++) {
     const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
     idx.push(a, c, b, b, c, d);
   }
+  const last = (segs - 1) * 2;
+  idx.push(last, segs * 2, last + 1);
+
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
@@ -89,7 +131,7 @@ function crossCardGeometry(planes = 3, width = 1.0) {
       pos.push(x, y, z);
       nor.push(nx * 0.35, 0.9, nz * 0.35);
       uv.push(u, vv);
-      const shade = 0.6 + vv * 0.55;
+      const shade = 0.5 + vv * 0.48;
       col.push(shade, shade, shade);
     }
     idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
@@ -118,7 +160,7 @@ export class GrassField {
     this.tiles = new Map();
     this.meshes = [];
     this._last = new THREE.Vector3(1e9, 0, 1e9);
-    this._budget = 6;          // new tiles generated per update
+    this._budget = 10;         // new tiles generated per update
     this._pending = true;
   }
 
@@ -132,9 +174,15 @@ export class GrassField {
       side: THREE.DoubleSide, ...opts.mat,
     }), opts.veg);
 
+    // roughness low enough that the rounded cross-section actually catches a
+    // specular streak down the midrib; translucency so backlit blades glow
+    // at dawn/dusk instead of going to silhouette.
     const m0 = grassMat({
-      mat: {},
-      veg: { bend: 0.34, flutter: 0.34, gustFreq: 0.052, trample: 1.15, flexPow: 1.9, twoSidedNormals: true, aoBoost: 0.42 },
+      mat: { roughness: 0.62 },
+      veg: {
+        bend: 0.34, flutter: 0.34, gustFreq: 0.052, trample: 1.15, flexPow: 1.9,
+        twoSidedNormals: true, aoBoost: 0.42, translucency: 1.05,
+      },
     });
     // the alpha reference the mip chain preserves must be the alpha test the
     // material will actually run, or the far LODs come out denser than the
@@ -182,18 +230,20 @@ export class GrassField {
 
     // coarse fields, bilerped per instance — density noise is far too costly
     // to evaluate hundreds of thousands of times.
-    const CG = 6;                      // density / colour grid
+    const CG = 6;                      // density / colour / wetness grid
     const HG = li === 0 ? 24 : 12;     // height grid
     const dg = new Float32Array((CG + 1) * (CG + 1));
+    const wg = new Float32Array((CG + 1) * (CG + 1));
     const cg = new Float32Array((CG + 1) * (CG + 1) * 3);
     for (let j = 0; j <= CG; j++) {
       for (let i = 0; i <= CG; i++) {
         const x = x0 + (i / CG) * T, z = z0 + (j / CG) * T;
         const k = j * (CG + 1) + i;
         dg[k] = eco.grassDensity(x, z);
+        wg[k] = eco.wetness(x, z);
         eco.grassColor(x, z, _cGrass);
         eco.groundColor(x, z, _cGround);
-        _cGrass.lerp(_cGround, 0.34);
+        _cGrass.lerp(_cGround, 0.32);
         cg[k * 3] = _cGrass.r; cg[k * 3 + 1] = _cGrass.g; cg[k * 3 + 2] = _cGrass.b;
       }
     }
@@ -215,51 +265,106 @@ export class GrassField {
     };
 
     const n = Math.max(1, Math.round(T / lod.spacing));
-    const cap = n * n;
+    const isBlade = li === 0;
+    const cap = n * n * (isBlade ? MAX_PER_CLUMP : 1);
     const mArr = new Float32Array(cap * 16);
     const cArr = new Float32Array(cap * 3);
     let count = 0;
 
-    const isBlade = li === 0;
+    // Per-clump colour: a tuft is one plant, so it is one colour. Spreading
+    // the dry/green spread across individual blades instead just averages back
+    // out to a uniform field at any distance.
+    const tint = (u, v, wet, dry, k) => {
+      const r = bil(cg, CG, u, v, 3, 0), g = bil(cg, CG, u, v, 3, 1), b = bil(cg, CG, u, v, 3, 2);
+      // dry tufts bleach toward straw: red up, blue down, value up
+      const lift = k * (1 + dry * 0.10);
+      cArr[count * 3] = r * lift * (1 + dry * 0.44);
+      cArr[count * 3 + 1] = g * lift * (1 + dry * 0.13);
+      cArr[count * 3 + 2] = b * lift * (1 - dry * 0.40) * (0.9 + wet * 0.28);
+    };
+
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const u = (i + rng.next()) / n, v = (j + rng.next()) / n;
         const d = bil(dg, CG, u, v);
-        if (d < 0.02 || rng.next() > d) continue;
+        const roll = rng.next();
+        const clumpRnd = rng.next();
+        const colRnd = rng.next();
+        const deadRnd = rng.next();
+        if (d < 0.02 || roll > d * 1.3) continue;
         const x = x0 + u * T, z = z0 + v * T;
         const y = bil(hg, HG, u, v);
+        const wet = bil(wg, CG, u, v);
+        // Green only where the water collects; everything else goes to straw.
+        // A fifth of the tufts are last season's, dead and bleached whatever
+        // the ground is doing — that speckle of pale tussocks among the olive
+        // is the single most recognisable thing about the Leide flats.
+        const dead = deadRnd < 0.2 - wet * 0.12;
+        const dry = dead ? 1
+          : Math.pow(colRnd, 0.42) * THREE.MathUtils.clamp(1.5 - wet * 1.45, 0, 1);
+
+        if (isBlade) {
+          // one tuft: a ring of blades leaning out of a shared root, tallest
+          // in the middle. Radius and population both vary, so the field is
+          // tufts-and-dirt rather than an even scatter.
+          // heavy-tailed tuft size: mostly small sprigs, the odd fat tussock
+          const vig = 0.55 + Math.pow(clumpRnd, 1.7) * 1.35;
+          const rad = (0.05 + clumpRnd * 0.13 + rng.next() * 0.07) * vig;
+          // whole-tuft lean: a real tussock is combed over by the prevailing
+          // wind, so it is never the radially symmetric pom-pom that a pure
+          // outward splay produces
+          const tuftA = rng.next() * Math.PI * 2;
+          const tuftL = rng.next() * 0.30;
+          const nb = Math.min(MAX_PER_CLUMP,
+            Math.max(3, Math.round((4 + d * 14) * (0.55 + rng.next() * 0.95))));
+          const hBase = (0.10 + 0.10 * d + 0.13 * wet * wet) * (0.68 + vig * 0.38);
+          const k = (dead ? 0.92 : 0.62) + colRnd * 0.62;
+          for (let bI = 0; bI < nb; bI++) {
+            if (count >= cap) break;
+            const a = rng.next() * Math.PI * 2;
+            const rr = Math.sqrt(rng.next()) * rad;
+            // blades at the edge of a tuft are shorter and lean out further
+            const edge = rr / Math.max(rad, 1e-4);
+            // long tail on the height so a few stems overtop the tuft
+            const h = hBase * (0.45 + Math.pow(rng.next(), 0.7) * 1.15) * (1 - edge * 0.28);
+            const lean = (0.10 + edge * 0.42) * (0.6 + rng.next() * 0.9);
+            const yaw = a + rng.gauss(0, 0.5);
+            // droop grows faster than height: a half-metre stem lies over
+            // under its own weight, an ankle-high one stands up
+            const zj = (0.55 + h * 2.4) * (0.7 + rng.next() * 0.7);
+            _e.set(Math.sin(a) * lean + Math.sin(tuftA) * tuftL,
+              yaw, -Math.cos(a) * lean - Math.cos(tuftA) * tuftL);
+            _q.setFromEuler(_e);
+            _pos.set(x + Math.cos(a) * rr, y - 0.015, z + Math.sin(a) * rr);
+            _scl.set(h * (0.82 + rng.next() * 0.4), h, h * zj);
+            _m.compose(_pos, _q, _scl);
+            _m.toArray(mArr, count * 16);
+            tint(u, v, wet, dry, k * (0.9 + rng.next() * 0.2));
+            count++;
+          }
+          continue;
+        }
 
         const jitter = rng.next();
         let h, w;
-        if (isBlade) {
-          h = (0.15 + 0.30 * d) * (0.55 + jitter * 1.05);
-          w = 0.85 + rng.next() * 1.0;
-        } else if (li === 1) {
-          h = (0.3 + 0.55 * d) * (0.62 + jitter * 1.0);
-          w = h * (1.15 + rng.next() * 0.8);
+        if (li === 1) {
+          // one card == one tuft, matched to the blade ring it takes over from
+          h = (0.16 + 0.22 * d + 0.2 * wet * wet) * (0.75 + jitter * 0.85);
+          w = h * (1.5 + rng.next() * 1.1);
         } else {
           // bigger cards on the outer ring: a few large clumps resolve, a
           // scatter of tiny ones only aliases
-          h = (0.62 + 0.9 * d) * (0.8 + jitter * 0.8);
-          w = h * (1.25 + rng.next() * 0.9);
+          h = (0.3 + 0.4 * d) * (0.8 + jitter * 0.8);
+          w = h * (1.8 + rng.next() * 1.2);
         }
         const yaw = rng.next() * Math.PI * 2;
-        const tilt = isBlade ? rng.gauss(0, 0.19) : rng.gauss(0, 0.07);
-        _e.set(tilt, yaw, rng.gauss(0, isBlade ? 0.19 : 0.06));
+        _e.set(rng.gauss(0, 0.07), yaw, rng.gauss(0, 0.06));
         _q.setFromEuler(_e);
         _pos.set(x, y - 0.03, z);
         _scl.set(w, h, w);
         _m.compose(_pos, _q, _scl);
         _m.toArray(mArr, count * 16);
-
-        // per-blade value + hue spread; a minority go straw-dry so the field
-        // never reads as one flat colour
-        const k = 0.66 + jitter * 0.72;
-        const dry = Math.pow(rng.next(), 2.2);
-        const hue = rng.next() * 0.2 - 0.09 + dry * 0.5;
-        cArr[count * 3] = bil(cg, CG, u, v, 3, 0) * k * (1 + hue * 1.1);
-        cArr[count * 3 + 1] = bil(cg, CG, u, v, 3, 1) * k * (1 + dry * 0.22);
-        cArr[count * 3 + 2] = bil(cg, CG, u, v, 3, 2) * k * (1 - hue * 0.7);
+        tint(u, v, wet, dry, (dead ? 0.85 : 0.58) + jitter * 0.46);
         count++;
       }
     }
@@ -286,8 +391,8 @@ export class GrassField {
   /** @param {THREE.Vector3} camPos */
   update(camPos) {
     const moved = this._last.distanceToSquared(camPos);
-    if (moved < 36 && !this._pending) return;
-    this._budget = 6;
+    if (moved < 25 && !this._pending) return;
+    this._budget = 10;
     this._last.copy(camPos);
     let pending = false;
 

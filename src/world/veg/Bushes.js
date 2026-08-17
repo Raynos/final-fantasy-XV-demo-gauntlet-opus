@@ -20,7 +20,7 @@ const BUSH = {
       trunkFrac: 0.34, leafDepth: 2, leafCount: 7, leafSize: 0.3,
       leafKind: 'dry', bark: 0x8b7d63, barkRough: 0.95,
     },
-    tint: [0.95, 0.92, 0.7], scale: [0.6, 2.6],
+    tint: [1.0, 0.94, 0.66], scale: [0.55, 1.75],
     density: (eco, x, z) => eco.scrubDensity(x, z),
   },
   thorn: {
@@ -31,7 +31,7 @@ const BUSH = {
       trunkFrac: 0.3, leafDepth: 99, leafCount: 0,
       bark: 0x6f5c46, barkRough: 0.95,
     },
-    tint: [1.0, 0.95, 0.82], scale: [0.55, 2.3],
+    tint: [1.0, 0.95, 0.82], scale: [0.5, 1.6],
     density: (eco, x, z) => eco.scrubDensity(x, z) * 0.75,
   },
   shrub: {
@@ -42,10 +42,10 @@ const BUSH = {
       trunkFrac: 0.34, leafDepth: 2, leafCount: 9, leafSize: 0.42,
       leafKind: 'broad', bark: 0x6a5a44, barkRough: 0.92,
     },
-    tint: [0.85, 1.0, 0.78], scale: [0.6, 2.4],
+    tint: [0.78, 0.88, 0.54], scale: [0.55, 1.6],
     density: (eco, x, z) => {
-      const m = eco.moisture(x, z);
-      return eco.grassDensity(x, z) * THREE.MathUtils.smoothstep(m, 0.4, 0.8);
+      const m = eco.wetness(x, z);
+      return eco.grassDensity(x, z) * THREE.MathUtils.smoothstep(m, 0.52, 0.88);
     },
   },
 };
@@ -64,8 +64,8 @@ function fernGeometry(seed) {
   for (let i = 0; i < fronds; i++) {
     const a = (i / fronds) * Math.PI * 2 + rng.gauss(0, 0.25);
     const lean = rng.range(0.35, 0.75);
-    const len = rng.range(0.62, 1.0);
-    const wid = len * 0.62;
+    const len = rng.range(0.40, 0.68);
+    const wid = len * 0.44;
     const dx = Math.cos(a), dz = Math.sin(a);
     // frond plane: "up" tilted outward, "side" perpendicular
     const uy = 1 - lean, ux = dx * lean, uz = dz * lean;
@@ -159,9 +159,10 @@ export class Bushes {
       const items = placements.map((pt) => ({
         x: pt.x, y: pt.y, z: pt.z,
         vi: Math.floor(rng.next() * spec.variants),
-        // heavy-tailed size distribution: mostly small scrub with the odd
-        // waist-high bush that breaks up the speckle
-        s: (0.5 + pt.w * 0.7) * (spec.scale[0] + Math.pow(rng.next(), 2.1) * (spec.scale[1] - spec.scale[0])) * 0.8,
+        // heavy-tailed size distribution: mostly knee-high scrub with the odd
+        // waist-high bush that breaks up the speckle. The tail used to run to
+        // two and a half metres, which put sagebrush over Gladiolus's head.
+        s: (0.5 + pt.w * 0.7) * (spec.scale[0] + Math.pow(rng.next(), 2.1) * (spec.scale[1] - spec.scale[0])) * 0.78,
         yaw: rng.next() * Math.PI * 2,
         tilt: rng.gauss(0, 0.09),
         tint: 0.82 + rng.next() * 0.4,
@@ -171,18 +172,18 @@ export class Bushes {
 
     // Ferns: damp hollows only, one instanced mesh.
     const fernMat = patchVeg(new THREE.MeshStandardMaterial({
-      map: fernTex(), color: 0xdfeed2, vertexColors: true,
+      map: fernTex(), color: 0xb9c69a, vertexColors: true,
       alphaTest: 0.38, transparent: false, side: THREE.DoubleSide,
       roughness: 0.7, metalness: 0,
     }), { bend: 0.4, flutter: 0.6, gustFreq: 0.05, flexPow: 1.6, translucency: 1.7, twoSidedNormals: true });
     const fernPts = this.eco.scatterClustered(0x3f2a, {
       radius: 150, cellSize: 30, perCell: 12, spread: 8,
       density: (x, z) => {
-        const m = this.eco.moisture(x, z);
+        const m = this.eco.wetness(x, z);
         const low = 1 - THREE.MathUtils.smoothstep(this.eco.height(x, z), 0, 12);
-        return this.eco.grassDensity(x, z) * THREE.MathUtils.smoothstep(m, 0.55, 0.9) * low;
+        return this.eco.grassDensity(x, z) * THREE.MathUtils.smoothstep(m, 0.7, 0.96) * low;
       },
-      maxCount: Math.round(1400 * this.quality),
+      maxCount: Math.round(900 * this.quality),
     });
     const fernMax = fernPts.length + 32;
     const fern = new THREE.InstancedMesh(fernGeometry(88), fernMat, fernMax);
@@ -197,7 +198,7 @@ export class Bushes {
       variants: [{ wood: fern, leaves: null, max: fernMax }],
       items: fernPts.map((pt) => ({
         x: pt.x, y: pt.y, z: pt.z, vi: 0,
-        s: (0.6 + pt.w * 0.7) * rng.range(0.7, 1.5),
+        s: (0.45 + pt.w * 0.5) * rng.range(0.6, 1.05),
         yaw: rng.next() * Math.PI * 2, tilt: rng.gauss(0, 0.07),
         tint: 0.8 + rng.next() * 0.4,
       })),
