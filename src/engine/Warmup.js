@@ -119,6 +119,9 @@ export class Warmup {
   _warmShadows(rt) {
     const hidden = [];
     this.scene.traverse((o) => {
+      // Lights are deliberately left alone: their visibility is the light
+      // budget's business, and showing them all would push the count past it.
+      if (o.isLight) return;
       if (o.visible === false) { hidden.push(o); o.visible = true; }
     });
     try {
