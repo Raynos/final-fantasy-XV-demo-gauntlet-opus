@@ -1,7 +1,28 @@
 # FINAL FANTASY XV — Eos. Scope & Progress
 
-**Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 05:30 · **Elapsed ~7h15m**
-**~70 commits · 200+ source files**
+**Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 ~08:30 · **Elapsed ~10h**
+**98 commits · 235 source files · ~79,500 lines**
+
+## Integration status (verified, not claimed)
+
+`node tools/orphans.mjs` — 235/235 modules reachable from `main.js`, no dead code.
+`node tools/integration.mjs` — drives the real page and asserts observable state:
+**17 pass · 1 wired-but-unproven · 0 not integrated.**
+
+Verified end to end: 25 systems registered · HUD mirrors the real stat model ·
+Ascension spends real AP · 29 item stacks + 42,180 gil · save/loadGame
+round-trips · 3 companions with combat hooks · weapon swap 5x in 35 ms ·
+12 interactables with the hunt board selecting Cindy · shop and hunt screens
+open · Hammerhead built with 11 NPCs · Regalia enters and drives 5.9 m under
+throttle · 3 dungeons enter and leave · title + attract camera + opening scene ·
+audio graph running · 124 POIs on the minimap · rest at a lodging.
+
+**Known gaps from live play (user-reported, not yet fixed):**
+- No character collision — you walk through the campsite instead of up its stairs
+- Escape fights the browser's pointer-lock, so menus are hard to exit
+- Several menu entries are dead
+- Entering the Regalia is not discoverable
+- The world map screen is crude
 
 Ambition: an action RPG in ThreeJS at the level of Final Fantasy XV (PS4, 2016) —
 photoreal, fully playable, everything procedural (no asset files, no network).

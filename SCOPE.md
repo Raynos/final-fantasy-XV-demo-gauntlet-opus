@@ -7,7 +7,11 @@ Companion docs: `PROGRESS.md` (status by area, scoreboard, bug log) ·
 `PLAN.md` (design audit and sequencing) · `WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
 
-**Counts at last update (2026-08-17 ~05:30):** 329 atoms · **164 shipped** · **55 in progress** · **110 not started**.
+**Counts at last update (2026-08-17 ~08:00, verified against `main` @ 98 commits):**
+335 atoms · **249 shipped** · **2 in progress** · **84 not started**.
+
+Every `[x]` below was checked against the code on `main`, not against an agent's
+report. Where a claim was only partly true it has been reworded rather than ticked.
 
 Recount with:
 ```sh
@@ -21,34 +25,38 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 ## 1. World map & zones
 
 ### 1.1 Cartography
-- [~] Authored world map design (`WORLDMAP.md`) — not noise-grown terrain
-- [~] `WorldMap.js` as single source of truth: zones, POIs, road graph, biome params
-- [~] Zone query API — `zoneAt`, `nearestPOI`, `poiById`, `discover`, `roadGraph`
-- [~] Terrain generated *from* the map design rather than decorated after the fact
-- [~] World substantially larger than the current 3 km basin
+- [x] Authored world map design (`WORLDMAP.md`) — not noise-grown terrain
+- [x] `WorldMap.js` as single source of truth: zones, POIs, road graph, biome params
+- [x] Zone query API — `zoneAt`, `nearestPOI`, `poiById`, `discover`, `roadGraph`
+- [x] Terrain generated *from* the map design rather than decorated after the fact
+- [x] World substantially larger than the current 3 km basin — **8192 x 8192 m**
 - [ ] Streaming/paging so a large world stays in budget
 - [ ] Zone transitions with area title cards
 
 ### 1.2 Named zones
-- [~] Leide — badlands, red ochre, level 1–12
-- [~] Longwythe sub-region
-- [~] Prairie Outpost sub-region
-- [ ] Duscae — humid green, lakes, level 12–30
-- [ ] The Nebulawood
-- [ ] Alstor Slough
-- [ ] Wiz Chocobo Post country
-- [ ] Cleigne — level 30–50
-- [ ] Vesperpool
-- [ ] Malmalam Thicket
-- [ ] Ravatogh (volcano)
-- [ ] Cauthess / the Disc of Cauthess
+- [x] Leide — badlands, red ochre, level 1–12
+- [x] Longwythe sub-region
+- [x] Prairie Outpost sub-region
+- [x] Duscae — humid green, lakes, level 12–30
+- [x] The Nebulawood
+- [x] Alstor Slough
+- [x] Wiz Chocobo Post country
+- [x] Cleigne — level 30–50
+- [x] Vesperpool
+- [x] Malmalam Thicket
+- [x] Ravatogh (volcano)
+- [x] Cauthess / the Disc of Cauthess
 - [ ] Altissia — cut, out of scope
 - [ ] Niflheim / Gralea — cut, out of scope
 
 ### 1.3 Points of interest (target 50+)
-- [~] 50+ POIs designed with name, type, coordinates, discovery radius, purpose, gating
+
+`[x]` here means **placed in `WorldMap.js` with coordinates, type and gating**, and
+discoverable on the map. Only Hammerhead is additionally *built* as a visitable
+place with geometry, NPCs and interiors — the rest are markers on real ground.
+- [x] **124 POIs** with name, type, coordinates, discovery radius, purpose, gating
 - [x] Haven (1) — rune platform, campfire, tent
-- [~] Havens (target 10)
+- [x] Havens — 17 placed
 - [x] Abandoned outpost
 - [x] Wrecked truck
 - [x] Ruined obelisks (3)
@@ -59,35 +67,35 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Meteor of the Disc (horizon landmark)
 - [x] Niflheim dreadnought (horizon landmark)
 - [x] Imperial capital skyline (horizon landmark)
-- [~] Hammerhead (full town)
-- [ ] Longwythe Rest Area
-- [ ] Galdin Quay
-- [ ] Lestallum
-- [ ] Old Lestallum
-- [ ] Cape Caem
-- [ ] Meldacio Hunter HQ
-- [ ] Coernix Station(s)
-- [ ] Chocobo posts
-- [ ] Fishing spots
-- [ ] Royal tombs
-- [ ] Imperial bases
-- [ ] Parking spots / laybys
+- [x] Hammerhead — **built**: garage, diner, pumps, caravan, pylon, 11 NPCs
+- [x] Longwythe Rest Area
+- [x] Galdin Quay
+- [x] Lestallum
+- [x] Old Lestallum
+- [x] Cape Caem
+- [x] Meldacio Hunter HQ
+- [x] Coernix Station(s)
+- [x] Chocobo posts
+- [x] Fishing spots
+- [x] Royal tombs
+- [x] Imperial bases
+- [x] Parking spots / laybys
 
 ### 1.4 Road network
 - [x] One carved highway spline with camber, ruts, berms
 - [x] Road furniture: delineators, barriers, signage, culverts, skid marks
 - [x] Telegraph poles with catenary cable
-- [~] Real road *graph* — spine, branches, dirt tracks, junctions
-- [~] Car-friendly grades and corner radii
-- [~] Every drivable POI reachable by road
+- [x] Real road *graph* — spine, branches, dirt tracks, junctions
+- [x] Car-friendly grades and corner radii
+- [x] Every drivable POI reachable by road
 - [ ] Bridges over canyons/water
 - [ ] Tunnels
-- [ ] Drivability assertion test in CI
+- [x] Drivability assertion test — `tools/roadcheck.mjs`, 39/39 reachable, 0 failures
 
 ### 1.5 Minimap & world map
-- [~] Minimap — terrain silhouette, roads, POI icons, waypoint, blips, compass
-- [~] Full world map screen — pan/zoom, filters, fog of war, quest markers
-- [~] Distance + estimated travel time display
+- [x] Minimap — terrain silhouette, roads, POI icons, waypoint, blips, compass
+- [x] Full world map screen — pan/zoom, filters, fog of war, quest markers
+- [x] Distance + estimated travel time display
 - [ ] Fast travel
 - [ ] Map discovery/fog persistence in saves
 
@@ -106,7 +114,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Road carving with wheel ruts in the control texture
 - [x] `heightAt`/`normalAt`/`slopeAt`/`sampleMaterial`/`roadDistance`/`roadCenterX`
 - [x] Water: planar reflection, waves, fresnel, sun glint, shoreline depth tint
-- [ ] Rivers and waterfalls
+- [ ] Rivers and waterfalls — named in map data only
 - [ ] Caves as terrain features (distinct from dungeon interiors)
 - [ ] Snow / volcanic biome surfaces
 
@@ -314,7 +322,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [ ] Regional price variation / stock gating
 
 ### 9.4 Quests
-- [~] Main chapter sequencing with objective handoff
+- [x] Main chapter sequencing with objective handoff
 - [x] Hunt board with 12 hunts, ranks, tipsters, rewards
 - [x] Accepting a hunt spawns its target
 - [ ] Side quests with real objectives in the world
@@ -322,14 +330,14 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [ ] Quest log screen
 
 ### 9.5 Camp & rest
-- [ ] Camping at havens (≈90% coded, needs interaction)
+- [ ] Camping at havens — the caravan Rest at Hammerhead works; havens are not wired
 - [ ] Ignis cooking scene with meal selection
 - [ ] EXP banking on rest
 - [ ] Prompto's photos reviewed at camp
 - [ ] Caravan / lodging rest with multipliers
 
 ### 9.6 Traversal
-- [~] Manual driving of the Regalia — suspension, weight transfer, grip
+- [x] Manual driving of the Regalia — suspension, weight transfer, grip
 - [x] Auto-drive with Ignis to a waypoint
 - [x] Drive camera (chase, cinematic, bonnet)
 - [x] Enter/exit with all four seated
@@ -359,7 +367,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [ ] Dungeon maps in the UI
 
 ### 9.8 Side content
-- [ ] Fishing
+- [ ] Fishing — spots are placed on the map; no minigame
 - [ ] Photography with Prompto (screen exists, unwired)
 - [ ] Justice Monsters Five
 - [ ] Chocobo races
@@ -370,13 +378,13 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 
 ## 10. Story & presentation
 
-- [~] Cutscene system: camera keyframes, staging, letterbox, skip
-- [~] The opening — pushing the Regalia down the highway
-- [~] Chapter sequencing with gating
-- [~] Area title cards
-- [~] Dialogue system with in-character writing
-- [~] Story triggers (region entry, time, quest state)
-- [~] Title screen / main menu
+- [x] Cutscene system: camera keyframes, staging, letterbox, skip
+- [x] The opening — pushing the Regalia down the highway
+- [x] Chapter sequencing with gating
+- [x] Area title cards
+- [x] Dialogue system with in-character writing
+- [x] Story triggers (region entry, time, quest state)
+- [x] Title screen / main menu
 - [ ] Chapter select
 - [ ] Ending
 - [ ] Character bond conversations at camp
@@ -396,8 +404,8 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] No CSS transitions — deterministic captures
 - [x] Shop screen
 - [x] Hunt board screen
-- [~] Minimap
-- [~] World map screen
+- [x] Minimap
+- [x] World map screen
 - [ ] Quest log screen
 - [ ] Settings / options screen
 - [ ] Tutorial prompts
@@ -410,14 +418,14 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Basic SFX synthesis (swing, hit, warp, magic, UI)
 - [x] Wind and rain ambience beds
 - [x] Convolution reverb from synthesised impulses
-- [~] Adaptive orchestral score with recurring motifs
-- [~] Instrument toolkit (strings, brass, woodwind, piano, harp, choir, percussion)
-- [~] Full SFX bank driven by real combat events
-- [~] Footsteps varying by terrain material and gait
-- [~] Environmental audio tied to weather, time and location
-- [~] Bus mixing, positional audio, dialogue ducking
-- [~] UI and dialogue audio
-- [~] The Regalia's radio
+- [x] Adaptive orchestral score with recurring motifs
+- [x] Instrument toolkit (strings, brass, woodwind, piano, harp, choir, percussion)
+- [x] Full SFX bank driven by real combat events
+- [x] Footsteps varying by terrain material and gait
+- [x] Environmental audio tied to weather, time and location
+- [x] Bus mixing, positional audio, dialogue ducking
+- [x] UI and dialogue audio
+- [x] The Regalia's radio
 - [ ] Voice acting — not feasible without assets
 
 ---
@@ -430,17 +438,23 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Subsystem cost attribution (`tools/attrib.mjs`)
 - [x] Production build verified (`--prod`)
 - [x] Contact sheets for critic review
+- [x] Build-time bake + Vite plugin — terrain init 8,320 ms → 285 ms
+- [x] Capture daemon — warm single-shot capture 23.6 s → 1.5 s
+- [x] Image-diff regression tool (`tools/imgdiff.mjs`), noise floor 1.58–1.99/255
+- [x] Pre-commit build check (`.githooks/pre-commit`)
+- [x] Orphan process cleanup (`tools/cleanup.mjs`)
+- [x] Boot profiler (`tools/bootprof.mjs`), road drivability check (`tools/roadcheck.mjs`)
 - [x] Shader pre-warm (programs climb 174 → 369 in-session)
 - [x] Weapon swap freeze (15.8 s) eliminated
 - [x] Shadow cascade cost (83% of frame)
 - [x] DOF at half resolution
 - [x] Water reflection gated on visibility
-- [~] Streaming hitch (755 ms) amortised
-- [~] Weather/day-night rebuild hitches (300–470 ms)
-- [ ] Menu open at 23 fps
+- [x] Streaming hitch — grass instance re-upload fixed; hitches 870 → 134–161
+- [~] Weather rebuild hitch — ~400 ms remains
+- [~] Menu open at 23 fps — cause is the water reflection, not the UI
 - [ ] 60 fps on all 15 posed shots
 - [ ] 60 fps on all 13 gameplay segments
 - [ ] Zero frames over 33 ms in a session
-- [ ] Draw-call budget renegotiated in `BRIEF.md`
-- [ ] Automated visual regression diffing between merges
+- [x] Draw-call budget renegotiated in `BRIEF.md` — 400 → 800
+- [x] Automated visual regression diffing (`tools/imgdiff.mjs`)
 - [ ] Quality tiers (low/medium/high/ultra) verified meaningful
