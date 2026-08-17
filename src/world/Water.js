@@ -14,7 +14,11 @@ export class Water {
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
-    this.reflectionRes = 512;
+    this.reflectionRes = 256;
+    this._frustum = new THREE.Frustum();
+    this._vp = new THREE.Matrix4();
+    this._box = new THREE.Box3();
+    this._reflecting = false;
   }
 
   async init(game) {
@@ -118,7 +122,13 @@ export class Water {
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     game.scene.add(mesh);
-    this.bodies.push({ mesh, mat, ...b });
+    // World bounds with headroom above the plane: a lake below the horizon is
+    // still visible through its own reflection, so test a slab, not a plane.
+    const bounds = new THREE.Box3(
+      new THREE.Vector3(b.cx - b.w * 0.5, this.level - 2, b.cz - b.d * 0.5),
+      new THREE.Vector3(b.cx + b.w * 0.5, this.level + 40, b.cz + b.d * 0.5)
+    );
+    this.bodies.push({ mesh, mat, bounds, ...b });
   }
 
   _makeMaterial() {
@@ -224,11 +234,33 @@ export class Water {
     }
   }
 
+  /**
+   * Is any water body inside the camera frustum?
+   *
+   * This mattered more than anything else in the system: the reflection is a
+   * second full render of the world — its own draw list, its own shadow pass —
+   * and it was running every frame of every shot, including the twelve of the
+   * fifteen capture shots that contain no water at all.
+   *
+   * @param {THREE.Camera} cam
+   * @returns {boolean}
+   */
+  _visible(cam) {
+    this._vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this._frustum.setFromProjectionMatrix(this._vp);
+    for (const b of this.bodies) {
+      if (b.mesh.visible && this._frustum.intersectsBox(b.bounds)) return true;
+    }
+    return false;
+  }
+
   /** Render the mirrored view. Called from lateUpdate so transforms are final. */
   lateUpdate(dt, game) {
     if (!this.enabled) return;
     const cam = game.camera;
     if (cam.position.y < this.level) return;   // underwater: skip
+    cam.updateMatrixWorld();
+    if (!this._visible(cam)) return;
 
     const rc = this.reflectCam;
     rc.copy(cam);
@@ -237,9 +269,10 @@ export class Water {
     rc.layers.enable(3);
 
     // mirror the orientation about the water plane
-    const q = new THREE.Quaternion();
+    const q = this._q || (this._q = new THREE.Quaternion());
+    const e = this._e || (this._e = new THREE.Euler());
     cam.getWorldQuaternion(q);
-    const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+    e.setFromQuaternion(q, 'YXZ');
     e.x = -e.x; e.z = -e.z;
     rc.quaternion.setFromEuler(e);
     rc.updateMatrixWorld(true);
@@ -250,11 +283,22 @@ export class Water {
     const visible = this.bodies.map((b) => b.mesh.visible);
     this.bodies.forEach((b) => { b.mesh.visible = false; });
 
+    // The cascades were being re-rendered for this pass — three re-runs the
+    // whole shadow map on every top-level `render()` — so a mirrored view at a
+    // quarter of the screen area was paying full price for three 2048² depth
+    // passes. Nothing in a wave-distorted reflection resolves a shadow edge, so
+    // it reuses the maps the beauty pass already has.
+    const prevShadow = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    this._reflecting = true;
+
     renderer.setRenderTarget(this.reflectTarget);
     renderer.clear();
     renderer.render(game.scene, rc);
     renderer.setRenderTarget(prevTarget);
 
+    this._reflecting = false;
+    renderer.shadowMap.autoUpdate = prevShadow;
     this.bodies.forEach((b, i) => { b.mesh.visible = visible[i]; });
   }
 

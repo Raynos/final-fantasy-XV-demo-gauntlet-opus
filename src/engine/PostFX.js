@@ -14,7 +14,17 @@ import { ContactShadowPass } from './postfx/ContactShadowPass.js';
 import { GradePass } from './postfx/GradePass.js';
 import { CasPass } from './postfx/CasPass.js';
 import { Exposure } from './postfx/Exposure.js';
+import { LightBudget } from './LightBudget.js';
+import { Warmup } from './Warmup.js';
 import { GRADES, lutFor } from '../shaders/post/grades.js';
+
+/** Visible point/spot lights held resident per quality tier. See LightBudget. */
+const LIGHT_BUDGET = {
+  low: { point: 6, spot: 2 },
+  medium: { point: 8, spot: 2 },
+  high: { point: 10, spot: 2 },
+  ultra: { point: 12, spot: 2 },
+};
 
 /**
  * Cinematic post-processing pipeline.
@@ -103,6 +113,17 @@ export class PostFX {
     this.composer.setPixelRatio(1);
 
     this.exposure = new Exposure(size.x, size.y);
+
+    // Must exist before Game's boot-time `renderer.compile()` so the programs
+    // it warms are the ones the budgeted light count will actually ask for.
+    this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality] || LIGHT_BUDGET.high);
+    const prevBefore = scene.onBeforeRender;
+    scene.onBeforeRender = (r, sc, cam, rt) => {
+      // Every render — beauty pass, water reflection, VFX depth prepass — goes
+      // through the program cache, so every one of them has to see the budget.
+      this.lights.balance(cam);
+      if (prevBefore) prevBefore.call(scene, r, sc, cam, rt);
+    };
 
     this.scenePass = new ScenePass(this);
     this.composer.addPass(this.scenePass);
@@ -276,15 +297,27 @@ export class PostFX {
   setQuality(tier) {
     this.quality = tier;
     const low = tier === 'low', med = tier === 'medium', ultra = tier === 'ultra';
+    // The light budget is deliberately *not* re-set here. Changing it changes
+    // three's program cache key for every lit material, so a mid-session tier
+    // switch would recompile the whole scene — several seconds of freeze to
+    // save a few point lights. It is fixed by the tier the game booted at.
+    const sky = this.game && this.game.get && this.game.get('Sky');
+    if (sky && sky.setShadowQuality) sky.setShadowQuality(tier);
     this.gtao.enabled = !low;
     this.contact.enabled = !low;
     this.ssr.enabled = this.ssr.enabled && !low;
     this.dof.enabled = !low;
     this.motionBlur.enabled = !low;
     this.velocity.enabled = !low;
-    this.bloom.levels = low ? 4 : 6;
-    this.gtao.updateGtaoMaterial({ samples: low ? 6 : med ? 8 : ultra ? 16 : 11 });
-    this.gtao.updatePdMaterial({ samples: low ? 4 : ultra ? 12 : 8, rings: 2, radiusExponent: 2 });
+    this.bloom.levels = low ? 3 : 5;
+    // 16 AO samples and a 12-tap denoise were the most expensive thing in the
+    // post chain by some margin, and the pair below is visually the same
+    // picture: the gather radius is small enough that the extra samples were
+    // re-reading the same few pixels, and the poisson denoise was already
+    // spatially wider than the noise it was removing.
+    this.gtao.updateGtaoMaterial({ samples: low ? 6 : med ? 8 : ultra ? 11 : 9 });
+    this.gtao.updatePdMaterial({ samples: low ? 4 : ultra ? 8 : 6, rings: 2, radiusExponent: 2 });
+    this.dof.setTaps(low ? 12 : med ? 16 : ultra ? 24 : 20);
     // half-res AO upsamples badly across the sky/terrain depth edge, so the
     // saving comes from the sample counts instead
     this.aoScale = low ? 0.5 : 1.0;
@@ -513,9 +546,35 @@ export class PostFX {
     this._updateSun();
   }
 
+  /**
+   * Compile every shader the session can reach, once, on the loading screen.
+   *
+   * Game calls `renderer.compile()` and then this method's first render as the
+   * last thing before it reports ready, which is exactly the moment to do it:
+   * every system has built its content, and nothing is on screen yet.
+   *
+   * @returns {object|null} warm-up report, or null if it could not run
+   */
+  precompile() {
+    const game = this.game || (typeof window !== 'undefined' ? window.GAME : null);
+    if (!game || !game.get || this._warmed) return null;
+    this._warmed = true;
+    try {
+      const warm = new Warmup(game);
+      const report = warm.run();
+      this.warmupReport = report;
+      if (game.debug) console.info('[warmup]', report);
+      return report;
+    } catch (e) {
+      console.warn('[warmup] skipped:', e);
+      return null;
+    }
+  }
+
   render() {
     const cam = this.camera;
     const renderer = this.rnd.renderer;
+    if (!this._warmed) this.precompile();
     this.frame++;
 
     cam.updateMatrixWorld();
@@ -546,6 +605,12 @@ export class PostFX {
     this.taa.material.uniforms.uJitter.value.copy(this.jitterUv);
     this.motionBlur.material.uniforms.uJitter.value.copy(this.jitterUv);
 
+    this.motionBlur.setMoving(
+      this.frame <= 2
+      || (this.velocity.moverCount || 0) > 0
+      || !matricesClose(this.viewProj, this.prevViewProj)
+    );
+
     this.composer.render(this.dt);
 
     cam.clearViewOffset();
@@ -574,6 +639,13 @@ function todGrade(hours) {
   if (h < 18.6) return ['day', 'golden', smooth((h - 15.5) / 3.1)];
   if (h < 20.4) return ['golden', 'night', smooth((h - 18.6) / 1.8)];
   return ['night', 'night', 0];
+}
+
+/** Are two view-projection matrices the same to within a sub-pixel shift? */
+function matricesClose(a, b) {
+  const ae = a.elements, be = b.elements;
+  for (let i = 0; i < 16; i++) if (Math.abs(ae[i] - be[i]) > 1e-7) return false;
+  return true;
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }

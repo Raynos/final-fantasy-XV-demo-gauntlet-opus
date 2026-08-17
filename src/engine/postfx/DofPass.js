@@ -191,6 +191,21 @@ export class DofPass extends Pass {
     this.setSize(w, h);
   }
 
+  /**
+   * Taps around the aperture. The kernel is a spiral over a rounded hexagon at
+   * half resolution, so the shape survives a lower count — what falls off is
+   * how smoothly a very bright highlight fills its bokeh disc. 24 holds the
+   * hexagon cleanly; below about 16 a specular pinpoint starts to read as a
+   * ring of dots rather than a blade-edged circle.
+   * @param {number} n
+   */
+  setTaps(n) {
+    const taps = Math.max(8, Math.round(n));
+    if (this.gather.defines.TAPS === taps) return;
+    this.gather.defines.TAPS = taps;
+    this.gather.needsUpdate = true;
+  }
+
   setSize(w, h) {
     this.width = w; this.height = h;
     const hw = Math.max(1, Math.floor(w / 2)), hh = Math.max(1, Math.floor(h / 2));

@@ -14,7 +14,8 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
 export class MotionBlurPass extends FilterPass {
   constructor(fx) {
     super(fx);
-    this.enabled = true;
+    this._wanted = true;
+    this._enabled = true;
     this.shutter = 0.55;       // fraction of the frame the shutter is open
     this.maxRadius = 28.0;     // pixels
     this.samples = 13;
@@ -93,6 +94,28 @@ export class MotionBlurPass extends FilterPass {
       `,
     });
   }
+
+  /**
+   * `enabled` stays the public switch — quality tiers and the `?post=nomb`
+   * debug flag both write it. The pass keeps that intent separately from the
+   * per-frame decision below, so turning it off by hand stays off.
+   */
+  get enabled() { return this._enabled; }
+
+  set enabled(v) { this._wanted = v; this._enabled = v; }
+
+  /**
+   * Skip the pass on a frame with no motion at all.
+   *
+   * On a still frame the shader reads a zero velocity buffer and writes the
+   * image straight back — but a fullscreen pass costs a millisecond or two of
+   * fixed cost on this GPU whatever the shader does, and the composer only
+   * skips a pass whose `enabled` is false. A locked-off camera, a paused
+   * frame, and every screenshot the harness takes get that time back.
+   *
+   * @param {boolean} moving
+   */
+  setMoving(moving) { this._enabled = this._wanted && moving; }
 
   setSize(w, h) {
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);

@@ -46,11 +46,28 @@ export const quad = new FullScreenQuad(null);
 /**
  * Render `material` over `target` (null = screen). Never clears depth so a
  * shared depth attachment survives the whole frame.
+ *
+ * The colour buffer *is* cleared first, unless the material blends. That looks
+ * redundant — a fullscreen triangle overwrites every pixel anyway — but it is
+ * worth around a millisecond per pass on a tile-based GPU. Without the clear
+ * the driver has to assume the pass reads what was already in the attachment,
+ * so it faults the whole render target back into tile memory before drawing;
+ * with it, the load is skipped. At two dozen fullscreen passes a frame that is
+ * most of the post chain's fixed overhead.
+ *
+ * @param {THREE.WebGLRenderer} renderer
+ * @param {THREE.Material} material
+ * @param {THREE.WebGLRenderTarget|null} target
+ * @param {{clear?:boolean}} [opts] force the clear on or off
  */
-export function blit(renderer, material, target) {
+export function blit(renderer, material, target, opts) {
+  const clear = opts && opts.clear !== undefined
+    ? opts.clear
+    : material.blending === THREE.NoBlending;
   const prevAutoClear = renderer.autoClear;
   renderer.autoClear = false;
   renderer.setRenderTarget(target || null);
+  if (clear) renderer.clear(true, false, false);
   quad.material = material;
   quad.render(renderer);
   renderer.autoClear = prevAutoClear;
