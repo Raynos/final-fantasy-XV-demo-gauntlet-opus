@@ -48,6 +48,10 @@ export class CompassBar {
 
     this.qName = el('div.qt', { text: QUEST.title });
     this.qDist = el('div.qd', { text: `${QUEST.dist} m` });
+    // A caption over the tracked quest. Without it the two lines below read as
+    // decoration; with it they read as "this is the thing to go and do", which
+    // is the one question a player of an unfamiliar build actually has.
+    this.box.appendChild(el('div.q-cap', { text: 'Objective' }));
     this.box.appendChild(el('div.quest-line', {}, [
       icon('compassPin', { size: 13, stroke: 1.3 }), this.qName, this.qDist,
     ]));

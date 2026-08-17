@@ -536,29 +536,51 @@ export class CombatSystem {
 
   _readInput(input, dt) {
     const m = input.mouse;
-    if (m.left) this.attack();
-    if (input.keyDown('Space')) this.dodge();
-    if (m.right && !this.stasis) {
+    // Gamepad face buttons mirror the keyboard verbs one for one, so the
+    // controls card can print both columns without either being a promise the
+    // game does not keep. `gpDown` is a real rising edge tracked by Input.
+    const pad = input.gpDown ? input : null;
+    const gpHeld = (i) => !!(pad && input.gpButton(i));
+    const gpEdge = (i) => !!(pad && input.gpDown(i));
+
+    // Circle taps to dodge and holds to phase, exactly as FFXV does it. A/Cross
+    // stays free for the interact verb, which owns it everywhere else.
+    if (m.left || gpHeld(2)) this.attack();
+    if (input.keyDown('Space') || gpEdge(1)) this.dodge();
+    if (gpEdge(3)) { if (this.counterWindow > 0) this.counter(); else this.warpStrike(); }
+    if (gpEdge(4)) this.armigerBurst();
+    if (gpEdge(5)) this.lockOn(this.lockTarget ? null : this.autoTarget());
+    if (gpEdge(12)) this.setWeapon('sword');
+    if (gpEdge(15)) this.setWeapon('greatsword');
+    if (gpEdge(13)) this.setWeapon('polearm');
+    if (gpEdge(14)) this.setWeapon('daggers');
+    if ((m.right || gpHeld(1)) && !this.stasis) {
       if (this.state !== 'phase' && this.state !== 'warp') { this.state = 'phase'; this.stateTime = 0; }
     } else if (this.state === 'phase') { this.state = 'idle'; }
     if (input.keyDown('KeyQ')) {
       if (this.counterWindow > 0) this.counter();
       else this.warpStrike();
     }
-    if (input.keyDown('KeyE')) {
+    // R, not E: E is the world's interact verb and nothing else, or standing
+    // near a shop counter mid-fight point-warps you instead of opening it.
+    if (input.keyDown('KeyR')) {
       const t = this.autoTarget(40);
       if (t) this.warpTo(t.root.position.clone().add(new THREE.Vector3(0, 0, 3)));
     }
-    if (input.keyDown('Tab')) this.lockOn(this.lockTarget ? null : this.autoTarget());
-    if (input.keyDown('KeyR')) this.armigerBurst();
+    // Y, not Tab: Tab is the pause menu, globally.
+    if (input.keyDown('KeyY')) this.lockOn(this.lockTarget ? null : this.autoTarget());
+    if (input.keyDown('KeyX')) this.armigerBurst();
     if (input.keyDown('Digit1')) this.setWeapon('sword');
     if (input.keyDown('Digit2')) this.setWeapon('greatsword');
     if (input.keyDown('Digit3')) this.setWeapon('polearm');
     if (input.keyDown('Digit4')) this.setWeapon('daggers');
     if (input.keyDown('Digit5')) this.setWeapon('firearm');
-    if (input.keyDown('KeyZ')) this.cast('fire');
-    if (input.keyDown('KeyX')) this.cast('ice');
-    if (input.keyDown('KeyC')) this.cast('lightning');
+    // Magic sits on 6/7/8, next to the armaments on 1-5, so the whole "what am
+    // I attacking with" row is one contiguous strip. It also frees C for photo
+    // mode, which used to fire a Thundara every time you took a picture.
+    if (input.keyDown('Digit6')) this.cast('fire');
+    if (input.keyDown('Digit7')) this.cast('ice');
+    if (input.keyDown('Digit8')) this.cast('lightning');
   }
 
   /* -------------------------------------------------------- swings */

@@ -357,13 +357,19 @@ export class PartyAI {
     }
   }
 
-  /** Keyboard: G/H/J fire a technique for each companion. */
+  /**
+   * Keyboard: G/J/K fire a technique for each companion.
+   *
+   * Ignis moved off H when H became the global controls card — a key that
+   * opened a help overlay *and* spent a tech bar was the worst kind of clash,
+   * because the overlay hid the thing it had just cost you.
+   */
   _input(game) {
     const input = game.input;
     if (!input || input.enabled === false || !input.keyDown) return;
     if (input.keyDown('KeyG')) this.useTechnique('gladio');
-    if (input.keyDown('KeyH')) this.useTechnique('ignis');
-    if (input.keyDown('KeyJ')) this.useTechnique('prompto');
+    if (input.keyDown('KeyJ')) this.useTechnique('ignis');
+    if (input.keyDown('KeyK')) this.useTechnique('prompto');
   }
 
   /** Spend a full bar on its own so the fight has technique beats in it. */

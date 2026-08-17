@@ -640,3 +640,157 @@
 /* menu footer prompt row */
 .menu-foot .prompt { display: flex; align-items: center; gap: 8px; }
 .menu-foot .prompt .lb { font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
+
+/* ===================================================================== */
+/* Controls & menu UX pass                                               */
+/* Dead rows, the new screens, the equip picker, the first-run hints.     */
+/* Same rules as everything above: no transitions, no keyframes.          */
+/* ===================================================================== */
+
+/* ---- a menu row that genuinely cannot be opened ---------------------- */
+.mrow .mr-x {
+  display: none; margin-left: auto; font-size: 7.5px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--ink-4); align-self: center;
+}
+.mrow.disabled .mr-x { display: block; }
+.mrow.disabled .mr-t { color: var(--ink-4); text-decoration: line-through; text-decoration-thickness: 1px; }
+.mrow.disabled .mr-d, .mrow.disabled .ico { color: rgba(198,214,240,.20); }
+.mrow.disabled.on .mr-t { color: var(--ink-4); letter-spacing: 0.28em; }
+.mrow.disabled.on .ico { color: rgba(198,214,240,.20); }
+
+/* ---- shared list used by quests / archives / armiger ----------------- */
+.qlist { display: flex; flex-direction: column; }
+.qrow { position: relative; display: flex; align-items: center; gap: 13px; padding: 9px 14px 9px 8px; }
+.qrow .ico { color: var(--ink-3); flex: none; }
+.qrow .qn { flex: 1; font-size: 12px; font-weight: 300; letter-spacing: .11em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.qrow .qp { font-size: 11px; font-weight: 300; letter-spacing: .06em; color: var(--ink-3); min-width: 62px; text-align: right; }
+.qrow .qflag {
+  font-size: 7.5px; letter-spacing: .28em; text-transform: uppercase; color: var(--gold);
+  padding: 2px 7px; box-shadow: inset 0 0 0 1px rgba(232,207,152,.4);
+}
+.qrow .mr-bg { position: absolute; left: -14px; right: -6px; top: 0; bottom: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(134,184,239,.22), transparent 72%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.qrow.on .qn, .qrow.on .qp { color: #fff; }
+.qrow.on .ico { color: var(--accent-hot); }
+.qrow.locked .qn, .qrow.locked .qp { color: var(--ink-4); }
+.qrow.locked .ico { color: rgba(198,214,240,.18); }
+.qrow.tracked .qn { color: var(--ice); }
+
+.q-objs { margin-top: 24px; max-width: 440px; }
+.q-objs > .k { font-size: 8px; letter-spacing: .32em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 10px; }
+.q-objs .hc-ob { display: flex; align-items: center; gap: 10px; padding: 4px 0;
+  font-size: 11px; font-weight: 300; letter-spacing: .08em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.q-objs .hc-ob .d { width: 5px; height: 5px; transform: rotate(45deg); background: var(--ink-4); flex: none; }
+.q-objs .hc-ob.done .d { background: var(--ice); box-shadow: 0 0 8px rgba(150,200,255,.8); }
+.q-objs .hc-ob.done { color: var(--ink-4); }
+
+.q-act { margin-top: 26px; display: flex; align-items: center; gap: 10px; }
+.q-act .lb { font-size: 10px; letter-spacing: .26em; text-transform: uppercase; text-shadow: var(--sh-text); }
+.q-act .lb.go { color: #fff; }
+.q-act .lb.no { color: var(--ink-4); }
+
+.q-tally { position: absolute; right: 68px; top: 54px; text-align: right; }
+.q-tally .k { font-size: 8.5px; letter-spacing: .38em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
+.q-tally .v { font-size: 32px; font-weight: 100; letter-spacing: .06em; color: #fff; line-height: 1; margin-top: 7px; text-shadow: var(--sh-text-lg); }
+.q-tally .d { font-size: 9.5px; letter-spacing: .2em; color: var(--ice); margin-top: 9px; }
+
+/* ---- archives -------------------------------------------------------- */
+.arc-weak { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 18px; max-width: 400px; }
+.arc-weak .aw { display: flex; align-items: center; gap: 6px;
+  font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); text-shadow: var(--sh-text); }
+.arc-weak .aw .ico { color: var(--gold); }
+.arc-weak .aw.res { color: var(--ink-4); }
+.arc-weak .aw.res .ico { color: var(--ink-4); }
+.arc-drops { margin-top: 22px; max-width: 400px; }
+.arc-drops .k { font-size: 8px; letter-spacing: .32em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 9px; }
+.arc-drops .ad { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 0;
+  font-size: 10.5px; font-weight: 300; letter-spacing: .08em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.arc-drops .ad .p { color: var(--ice); font-size: 9.5px; letter-spacing: .06em; }
+
+/* ---- system ---------------------------------------------------------- */
+.syslist { display: flex; flex-direction: column; }
+.syrow { position: relative; display: grid; grid-template-columns: 16px 1fr auto; grid-column-gap: 14px;
+  align-items: center; padding: 11px 14px 11px 8px; }
+.syrow .ico { color: var(--ink-3); }
+.syrow .sy-n { font-size: 12px; font-weight: 300; letter-spacing: .14em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.syrow .sy-v { font-size: 12px; font-weight: 300; letter-spacing: .1em; color: var(--ink); text-align: right; min-width: 92px; }
+.syrow .gauge { grid-column: 2 / 4; margin-top: 8px; }
+.syrow .mr-bg { position: absolute; left: -14px; right: -6px; top: 0; bottom: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(134,184,239,.22), transparent 72%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.syrow.on .sy-n, .syrow.on .sy-v { color: #fff; }
+.syrow.on .ico { color: var(--accent-hot); }
+.syrow.disabled .sy-n, .syrow.disabled .sy-v { color: var(--ink-4); }
+.syrow.disabled .ico { color: rgba(198,214,240,.18); }
+
+/* ---- controls card --------------------------------------------------- */
+.ctrl-grid { position: absolute; left: 68px; right: 68px; top: 162px; bottom: 132px;
+  display: flex; gap: 18px; align-items: flex-start; }
+.ctrl-col { flex: 1; padding: 16px 18px 16px; display: flex; flex-direction: column; overflow: hidden; }
+.crow .cr-k .cr-dash { font-size: 11px; color: var(--ink-4); line-height: 1; }
+.ctrl-col .cc-h { display: flex; align-items: center; gap: 10px; }
+.ctrl-col .cc-h .ico { color: var(--ice); flex: none; }
+.ctrl-col .cc-t { font-size: 10.5px; letter-spacing: .32em; text-transform: uppercase; color: #fff; text-shadow: var(--sh-text); }
+.crow { position: relative; display: flex; align-items: center; gap: 11px; padding: 4px 8px 4px 4px; }
+.crow .mr-bg { position: absolute; left: -8px; right: -4px; top: 0; bottom: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(134,184,239,.22), transparent 74%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.crow .cr-k { display: flex; align-items: center; gap: 3px; min-width: 82px; flex: none; }
+.crow .cr-k .btn-glyph { color: var(--ice); }
+.crow .cr-b { flex: 1; min-width: 0; }
+.crow .cr-t { font-size: 10.5px; font-weight: 300; letter-spacing: .1em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.crow .cr-n { font-size: 8px; letter-spacing: .12em; color: var(--ink-4); margin-top: 2px; }
+.crow .cr-p { font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-4);
+  text-align: right; min-width: 74px; flex: none; }
+.crow.on .cr-t { color: #fff; }
+.crow.on .cr-p { color: var(--ice); }
+.ctrl-note { position: absolute; left: 68px; right: 68px; bottom: 86px; max-width: 980px;
+  font-size: 9.5px; font-weight: 300; line-height: 1.7; letter-spacing: .1em; color: var(--ink-3); text-shadow: var(--sh-text); }
+
+/* ---- armiger --------------------------------------------------------- */
+.arm-gauge { position: absolute; right: 68px; top: 54px; width: 250px; text-align: right; }
+.arm-gauge .k { font-size: 8.5px; letter-spacing: .38em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
+.arm-gauge .v { font-size: 34px; font-weight: 100; letter-spacing: .04em; color: #fff; line-height: 1; margin: 7px 0 11px; text-shadow: var(--sh-text-lg); }
+.arm-gauge .d { font-size: 8.5px; letter-spacing: .2em; color: var(--ink-4); margin-top: 10px; }
+
+/* ---- gear: the equip picker ------------------------------------------ */
+.equip-pick { position: absolute; left: 50%; top: 168px; width: 470px; margin-left: -235px; padding: 18px 20px 16px; }
+.equip-pick .ep-h { font-size: 9px; letter-spacing: .32em; text-transform: uppercase; color: var(--ice); text-shadow: var(--sh-text); }
+.equip-pick .ep-list { max-height: 470px; overflow: hidden; }
+.eprow { position: relative; display: flex; align-items: baseline; gap: 12px; padding: 7px 10px 7px 6px; }
+.eprow .mr-bg { position: absolute; left: -10px; right: -4px; top: 0; bottom: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(134,184,239,.24), transparent 74%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.eprow .ep-n { flex: 1; font-size: 11.5px; font-weight: 300; letter-spacing: .1em; color: var(--ink-2); text-shadow: var(--sh-text); }
+.eprow .ep-s { font-size: 8.5px; letter-spacing: .12em; color: var(--ice); opacity: .8; }
+.eprow .ep-q { font-size: 9.5px; color: var(--ink-4); min-width: 30px; text-align: right; }
+.eprow.on .ep-n { color: #fff; }
+.gear-msg { position: absolute; left: 68px; bottom: 84px; font-size: 10px; letter-spacing: .22em;
+  text-transform: uppercase; text-shadow: var(--sh-text); color: var(--ice); }
+.gear-msg.bad { color: var(--danger); }
+
+/* ---- the tracked objective, made unmistakable ------------------------ */
+.q-cap { font-size: 8px; letter-spacing: .38em; text-transform: uppercase; color: var(--gold);
+  text-align: right; margin-top: 11px; text-shadow: var(--sh-text); opacity: .9; }
+.quest-line { margin-top: 6px; }
+.quest-line .qt { font-size: 11.5px; color: var(--ink); letter-spacing: .14em; }
+.quest-step { color: var(--ink); opacity: .88; font-size: 9.5px; }
+
+/* ---- first-run hints ------------------------------------------------- */
+#hints { position: absolute; inset: 0; pointer-events: none; z-index: 4;
+  font-family: var(--ui-font); color: var(--ink); -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums; user-select: none; }
+#hints * { box-sizing: border-box; }
+/* top-centre: the only quiet corner of the field HUD — the party stack owns the
+   bottom left, the compass the top right, and the prompt strip the bottom edge */
+/* centred by the per-frame transform, not by a margin — Hints writes
+   translateX(-50%) every frame, and a margin on top of that double-shifts it */
+.hint { position: absolute; left: 50%; top: 112px; width: 500px;
+  display: flex; gap: 15px; padding: 15px 20px 15px 17px; }
+.hint .hn-i { color: var(--ice); flex: none; padding-top: 2px; }
+.hint .hn-b { flex: 1; min-width: 0; }
+.hint .hn-t { font-size: 9px; letter-spacing: .36em; text-transform: uppercase; color: var(--ice); text-shadow: var(--sh-text); }
+.hint .hn-x { font-size: 11.5px; font-weight: 300; line-height: 1.62; letter-spacing: .04em;
+  color: var(--ink); margin-top: 8px; text-shadow: var(--sh-text); }
+.hint .hn-k { display: flex; align-items: center; gap: 8px; margin-top: 11px; color: var(--ice); }

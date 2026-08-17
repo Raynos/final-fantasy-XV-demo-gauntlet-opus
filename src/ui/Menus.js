@@ -8,24 +8,65 @@ import { MapScreen } from './screens/MapScreen.js';
 import { WorldMapScreen } from './screens/WorldMapScreen.js';
 import { GearScreen } from './screens/GearScreen.js';
 import { PhotoScreen } from './screens/PhotoScreen.js';
+import { QuestScreen } from './screens/QuestScreen.js';
+import { ArchiveScreen } from './screens/ArchiveScreen.js';
+import { SystemScreen } from './screens/SystemScreen.js';
+import { ControlsScreen } from './screens/ControlsScreen.js';
+import { ArmigerScreen } from './screens/ArmigerScreen.js';
 
+/**
+ * Footer prompt sets.
+ *
+ * Escape is deliberately *not* the headline back key anywhere. Browsers
+ * reserve it to release pointer lock and swallow the keydown, so a footer that
+ * promises "Esc — Back" is promising something the browser will eat. Tab and
+ * Backspace are advertised instead, because those always arrive.
+ */
 const FOOT = {
-  default: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['Esc', 'Back']],
-  main: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['Tab', 'Close']],
-  ascension: [['↑↓←→', 'Navigate'], ['Enter', 'Unlock'], ['Esc', 'Back']],
-  photo: [['↑↓', 'Filter'], ['←→', 'Aperture'], ['Space', 'Shoot'], ['Esc', 'Exit']],
+  default: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['Bksp', 'Back'], ['Tab', 'Close']],
+  main: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['H', 'Controls'], ['Tab', 'Close']],
+  ascension: [['↑↓←→', 'Navigate'], ['Enter', 'Unlock'], ['Bksp', 'Back'], ['Tab', 'Close']],
+  photo: [['↑↓', 'Filter'], ['←→', 'Aperture'], ['Space', 'Shoot'], ['Bksp', 'Exit']],
+  inventory: [['↑↓', 'Select'], ['←→', 'Category'], ['Enter', 'Use'], ['Bksp', 'Back']],
+  gear: [['←→', 'Member'], ['↑↓', 'Slot'], ['Enter', 'Equip'], ['Bksp', 'Back']],
+  quests: [['↑↓', 'Select'], ['←→', 'Tab'], ['Enter', 'Track'], ['Bksp', 'Back']],
+  archives: [['↑↓', 'Select'], ['←→', 'Section'], ['Bksp', 'Back'], ['Tab', 'Close']],
+  system: [['↑↓', 'Select'], ['←→', 'Adjust'], ['Enter', 'Confirm'], ['Bksp', 'Back']],
+  controls: [['←→', 'Column'], ['↑↓', 'Row'], ['H', 'Close'], ['Tab', 'Close']],
+  armiger: [['↑↓', 'Select'], ['Enter', 'Unlock'], ['Bksp', 'Back'], ['Tab', 'Close']],
+  shop: [['↑↓', 'Select'], ['←→', 'Shelf'], ['Enter', 'Deal'], ['Bksp', 'Leave']],
+  hunts: [['↑↓', 'Select'], ['←→', 'Ledger'], ['Enter', 'Accept'], ['Bksp', 'Leave']],
+  world: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['M', 'Close'], ['Tab', 'Close']],
+  map: [['↑↓', 'Marker'], ['Bksp', 'Back'], ['Tab', 'Close']],
 };
 
 /**
  * Full-screen menu stack.
  *
- * `setScreen(name|null)` is the whole public surface — `main`, `inventory`,
- * `ascension`, `map`, `gear`, `photo`. Screens cross-fade through a shared
- * chrome (blurred game frame, heading, footer prompts) and are driven per
- * frame from `game.time`, never CSS transitions, so captures are deterministic.
+ * `setScreen(name|null)` is the whole public surface. Screens cross-fade through
+ * a shared chrome (blurred game frame, heading, footer prompts) and are driven
+ * per frame from `game.time`, never CSS transitions, so captures stay
+ * deterministic.
  *
- * Keyboard: Tab toggles the main menu, arrows/WASD navigate, Enter confirms,
- * Escape goes back. Gamepad: d-pad + A/B, Start toggles.
+ * ### Getting out again
+ *
+ * The single worst thing about the old build was that Escape — the key every
+ * player reaches for — is claimed by the browser to release pointer lock, so it
+ * never reached the menu. Three things fix that here:
+ *
+ *  1. **Tab, Backspace and gamepad B/Circle all work as back/close on every
+ *     screen**, and the footer says so. Escape still works when it survives.
+ *  2. **Pointer lock is only held during gameplay.** Whenever a menu, shop,
+ *     conversation or cutscene is up, `Input.setPointerLockAllowed(false)`
+ *     releases the mouse; closing everything hands it back, re-acquired on the
+ *     next click on the canvas (the user gesture browsers demand).
+ *  3. **An unexpected lock exit opens the pause menu** instead of dumping the
+ *     player into a live world with a dead mouse — so pressing Escape out of
+ *     pointer lock does, in practice, open the menu after all.
+ *
+ * ### Global bindings this owns
+ * `Tab` menu · `H` controls card · `M` world map · `C` photo mode. All three of
+ * the latter toggle: press again (or Tab / Backspace / B) to close.
  */
 export class Menus {
   /** @param {object} game */
@@ -59,9 +100,14 @@ export class Menus {
       main: new MainScreen(this),
       inventory: new InventoryScreen(this),
       ascension: new AscensionScreen(this),
+      armiger: new ArmigerScreen(this),
       map: new MapScreen(this),
       world: new WorldMapScreen(this),
       gear: new GearScreen(this),
+      quests: new QuestScreen(this),
+      archives: new ArchiveScreen(this),
+      system: new SystemScreen(this),
+      controls: new ControlsScreen(this),
       photo: new PhotoScreen(this),
     };
     for (const k of Object.keys(this.screens)) {
@@ -78,6 +124,8 @@ export class Menus {
     this.a = 0;              // 0..1 open amount
     this.stack = [];
     this.open = false;
+    this._lockHeld = null;   // what we last told Input about pointer lock
+    this._inputWas = false;  // did we take `input.enabled` away?
     this._scale();
     this._onResize = () => this._scale();
     window.addEventListener('resize', this._onResize);
@@ -114,11 +162,18 @@ export class Menus {
     else { this._activate(name); }
   }
 
-  /** Push a screen, remembering where to return to on Escape. */
+  /** Push a screen, remembering where to return to on back. */
   push(name) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
 
-  /** Pop back to the previous screen, or close. */
-  back() { this.setScreen(this.stack.length ? this.stack.pop() : null); }
+  /**
+   * Go back one level: first to whatever modal the current screen is holding
+   * (an equip picker, say), then up the stack, then out of the menu entirely.
+   */
+  back() {
+    const s = this.screens[this.name];
+    if (s && s.back && s.back()) return;
+    this.setScreen(this.stack.length ? this.stack.pop() : null);
+  }
 
   /** Take the currently displayed screen off-screen. */
   _hideShown() {
@@ -144,9 +199,50 @@ export class Menus {
     this.foot.style.display = s.chrome === false ? 'none' : '';
   }
 
+  /**
+   * True while anything other than plain gameplay owns the screen: a menu, a
+   * conversation, a shop, the title card or a playing cutscene. This is what
+   * decides whether the pointer may be locked.
+   * @param {object} game
+   */
+  _uiBusy(game) {
+    if (this.name) return true;
+    const ix = game.get?.('Interaction');
+    if (ix && ix.talking) return true;
+    const story = game.get?.('Story');
+    if (story && (story.title?.shown || story.cine?.playing)) return true;
+    return false;
+  }
+
+  /**
+   * Keep the browser's pointer lock in step with what is on screen, and turn an
+   * unexpected exit into an opened pause menu.
+   * @param {object} game
+   */
+  _pointerLock(game) {
+    const inp = game.input;
+    if (!inp || !inp.setPointerLockAllowed) return;
+    const busy = this._uiBusy(game);
+    if (this._lockHeld !== !busy) {
+      this._lockHeld = !busy;
+      inp.setPointerLockAllowed(!busy);
+    }
+    // Escape (or any other route out of the lock) while gameplay wanted it:
+    // treat it as the pause request the player almost certainly meant.
+    if (inp.consumeLockLost && inp.consumeLockLost() && !busy && !game.currentShot) {
+      this.stack.length = 0;
+      this.setScreen('main');
+    }
+    // While a screen is up, gameplay must not read the stick — otherwise the
+    // party walks off while you are reading the quest log.
+    if (this.name && inp.enabled !== false) { inp.enabled = false; this._inputWas = true; }
+    else if (!this.name && this._inputWas) { inp.enabled = true; this._inputWas = false; }
+  }
+
   /** @param {number} dt @param {object} game */
   update(dt, game) {
     this._input(game);
+    this._pointerLock(game);
 
     // a queued screen swap drives the current one out first, then back in
     const target = this.name && !this.pending ? 1 : 0;
@@ -182,29 +278,58 @@ export class Menus {
     if (s) s.update(dt, game, this.a);
   }
 
+  /**
+   * Open a screen straight from a global hotkey: no stack, and pressing the
+   * same key again closes it.
+   * @param {string} name
+   */
+  toggleScreen(name) {
+    // Already here: go back the way we came, so H out of the controls card
+    // returns you to the shop you were reading it from rather than the field.
+    if (this.name === name) { this.back(); return; }
+    if (this.name) { this.push(name); return; }
+    this.stack.length = 0;
+    this.setScreen(name);
+  }
+
   _input(game) {
     const inp = game.input;
     if (!inp) return;
     const down = (c) => inp.keyDown?.(c);
     const gp = (i) => inp.gamepad?.buttons?.[i]?.pressed;
     const edge = (k, v) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
+    // read every pad edge every frame, or a button held across a frame where it
+    // was not consulted reads as a fresh press the next time it is
+    const b = {
+      a: edge('a', gp(0)), back: edge('b', gp(1)), start: edge('start', gp(9)),
+      up: edge('dU', gp(12)), down: edge('dD', gp(13)),
+      left: edge('dL', gp(14)), right: edge('dR', gp(15)),
+    };
 
-    if (down('Tab') || edge('start', gp(9))) {
+    // ---- global toggles: work from gameplay *and* from any other screen ----
+    // Keyboard only, on purpose: every spare pad face button is a combat verb,
+    // and a controller player reaches these in one more press through Start.
+    if (down('KeyH')) { this.toggleScreen('controls'); return; }
+    if (down('KeyM')) { this.toggleScreen('world'); return; }
+    if (down('KeyC') && (!this.name || this.name === 'photo')) { this.toggleScreen('photo'); return; }
+
+    if (down('Tab') || b.start) {
       if (this.name) this.setScreen(null); else { this.stack.length = 0; this.setScreen('main'); }
       return;
     }
-    if (down('KeyC') && !this.name) { this.stack.length = 0; this.setScreen('photo'); return; }
     if (!this.name) return;
 
-    if (down('Escape') || edge('b', gp(1))) { this.back(); return; }
+    // Escape is included but never load-bearing: the browser eats it while the
+    // pointer is locked, which is why Backspace and B exist here.
+    if (down('Escape') || down('Backspace') || b.back) { this.back(); return; }
 
     let dx = 0, dy = 0;
-    if (down('ArrowUp') || down('KeyW') || edge('dU', gp(12))) dy -= 1;
-    if (down('ArrowDown') || down('KeyS') || edge('dD', gp(13))) dy += 1;
-    if (down('ArrowLeft') || down('KeyA') || edge('dL', gp(14))) dx -= 1;
-    if (down('ArrowRight') || down('KeyD') || edge('dR', gp(15))) dx += 1;
+    if (down('ArrowUp') || down('KeyW') || b.up) dy -= 1;
+    if (down('ArrowDown') || down('KeyS') || b.down) dy += 1;
+    if (down('ArrowLeft') || down('KeyA') || b.left) dx -= 1;
+    if (down('ArrowRight') || down('KeyD') || b.right) dx += 1;
     const s = this.screens[this.name];
     if ((dx || dy) && s?.nav) s.nav(dx, dy);
-    if ((down('Enter') || down('Space') || edge('a', gp(0))) && s?.accept) s.accept();
+    if ((down('Enter') || down('Space') || b.a) && s?.accept) s.accept();
   }
 }

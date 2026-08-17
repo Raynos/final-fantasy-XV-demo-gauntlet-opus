@@ -430,7 +430,12 @@ export function readMarkers(game) {
   if (!r || !hs) return null;
   const out = [];
   for (const w of hs.waypoints || []) {
-    out.push({ kind: w.type === 'hunt' ? 'hunt' : 'quest', name: w.name, x: w.pos[0], z: w.pos[2], tracked: w.tracked });
+    // `questId` rides along so a map pin can be *selected* and made the tracked
+    // objective, rather than being a decoration you can move a cursor over.
+    out.push({
+      kind: w.type === 'hunt' ? 'hunt' : 'quest', name: w.name,
+      x: w.pos[0], z: w.pos[2], tracked: w.tracked, questId: w.questId,
+    });
   }
   for (const h of r.day.havens()) {
     if (!h.discovered) continue;

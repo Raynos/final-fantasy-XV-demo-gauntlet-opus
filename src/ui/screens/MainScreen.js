@@ -3,23 +3,34 @@ import { icon, portrait } from '../Icons.js';
 import { Bar } from '../Bar.js';
 import { readParty, readQuest, hudState } from '../GameData.js';
 
+/**
+ * Every row of the pause menu, and the screen it opens.
+ *
+ * `to` is not optional any more. A row that led nowhere used to look exactly
+ * like a row that worked — same weight, same hover, same nothing when you
+ * pressed Enter — which is how half this menu came to read as dead. Every row
+ * now resolves to a real screen; anything that ever cannot (a screen a build
+ * did not register) is drawn disabled with the reason printed, never live.
+ */
 const ENTRIES = [
   { key: 'items', label: 'Items', icon: 'items', hint: 'Consumables & treasures', to: 'inventory',
     body: 'Potions, elixirs and the odd hunt trophy. Ignis keeps the inventory in order — mostly.' },
   { key: 'ascension', label: 'Ascension', icon: 'ascension', hint: 'Spend AP on the grid', to: 'ascension',
     body: 'Channel the accumulated Ability Points of the retinue into the Astral constellations. Unlocked nodes are permanent.' },
-  { key: 'armiger', label: 'Armiger', icon: 'armiger', hint: 'The royal arms', to: null,
+  { key: 'armiger', label: 'Armiger', icon: 'armiger', hint: 'The royal arms', to: 'armiger',
     body: 'Thirteen weapons of the Lucian kings orbit the heir. Fill the gauge in battle to call them all at once.' },
   { key: 'gear', label: 'Gear', icon: 'gear', hint: 'Weapons & accessories', to: 'gear',
     body: 'Equip up to four armaments and two accessories per member. Loadouts change what each ally does in the field.' },
   { key: 'map', label: 'Map', icon: 'map', hint: 'Survey Lucis', to: 'map',
     body: 'The road network of Leide, Duscae and Cleigne, with every haven, outpost and hunt the party has heard about.' },
-  { key: 'quests', label: 'Quests', icon: 'quests', hint: 'Track objectives', to: null,
-    body: 'One main quest, eleven side quests, four hunts outstanding. Cid is still waiting on that rare metal.' },
-  { key: 'archives', label: 'Archives', icon: 'archives', hint: 'Datalog & bestiary', to: null,
+  { key: 'quests', label: 'Quests', icon: 'quests', hint: 'Track objectives', to: 'quests',
+    body: 'Every contract in hand, every lead not yet followed, and every objective still outstanding.' },
+  { key: 'archives', label: 'Archives', icon: 'archives', hint: 'Datalog & bestiary', to: 'archives',
     body: 'Everything the retinue has learned about Eos: her people, her daemons, and the Crystal at the centre of it.' },
-  { key: 'system', label: 'System', icon: 'system', hint: 'Save, load, settings', to: null,
-    body: 'Save the journey, adjust the camera, or turn the difficulty down and admit nothing to Gladio.' },
+  { key: 'help', label: 'Controls', icon: 'camera', hint: 'Every binding, on foot and at the wheel', to: 'controls',
+    body: 'The whole control sheet — movement, camera, attack, dodge, warp, weapon swap, photo mode, and how to drive the Regalia.' },
+  { key: 'system', label: 'System', icon: 'system', hint: 'Save, settings, title', to: 'system',
+    body: 'Volume, graphics tier, camera inversion and look sensitivity — plus a save slot and the road back to the title screen.' },
 ];
 
 /** The FFXV-style pause menu: a vertical list over a blurred game frame. */
@@ -40,6 +51,7 @@ export class MainScreen {
         el('div.mr-bg'), el('div.mr-bar'),
         icon(e2.icon, { size: 18, stroke: 1.15 }),
         el('div', {}, [el('div.mr-t', { text: e2.label }), el('div.mr-d', { text: e2.hint })]),
+        el('div.mr-x', { text: 'Unavailable' }),
       ]);
       this.list.appendChild(row);
       return { row, e: e2, bg: row.firstChild, bar: row.childNodes[1] };
@@ -125,9 +137,12 @@ export class MainScreen {
     return entry.body;
   }
 
+  /** True when the menu stack actually carries the screen this row points at. */
+  _live(e2) { return !!(e2.to && this.menus.screens && this.menus.screens[e2.to]); }
+
   accept() {
-    const to = ENTRIES[this.i].to;
-    if (to) this.menus.push(to);
+    const e2 = ENTRIES[this.i];
+    if (this._live(e2)) this.menus.push(e2.to);
   }
 
   /** @param {number} dt @param {object} game @param {number} a 0..1 */
@@ -143,15 +158,22 @@ export class MainScreen {
       r.row.style.transform = `translateX(${((1 - t) * -34).toFixed(2)}px)`;
       const on = i === this.i;
       if (r._on !== on) { r.row.classList.toggle('on', on); r._on = on; }
+      // A row whose screen is missing is drawn dead rather than merely inert:
+      // dimmed and marked, with the reason printed in the preview. Nothing in
+      // this list is allowed to look pressable and then do nothing.
+      const live = this._live(r.e);
+      if (r._live !== live) { r.row.classList.toggle('disabled', !live); r._live = live; }
       const glow = on ? 0.5 + 0.5 * Math.sin(game.time.now * 2.6) : 0;
-      r.bg.style.opacity = on ? (0.62 + 0.22 * glow).toFixed(3) : '0';
-      r.bar.style.opacity = on ? '1' : '0';
+      r.bg.style.opacity = on && live ? (0.62 + 0.22 * glow).toFixed(3) : '0';
+      r.bar.style.opacity = on && live ? '1' : '0';
     }
 
     const cur = ENTRIES[this.i];
     if (this._cur !== cur.key) {
       this.pvT.textContent = cur.label;
-      this.pvB.textContent = this._body(cur, game);
+      this.pvB.textContent = this._live(cur)
+        ? this._body(cur, game)
+        : `${cur.body}  ·  Unavailable in this build: no “${cur.to}” screen is registered.`;
       this.mark.textContent = '';
       this.mark.appendChild(icon(cur.icon, { size: 210, stroke: 0.34 }));
       this._cur = cur.key;
