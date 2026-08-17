@@ -36,44 +36,68 @@ const MOON_AZ_OFFSET = 70;
  * roughly 4x that: they saturated by ~2 km, which is why every distance band
  * collapsed onto the same inscatter colour and golden hour went monochrome.
  */
+/**
+ * `covLo`/`covHi` are the window the weather map's coverage channel is
+ * stretched over before it multiplies `coverage`. The raw map only spans about
+ * 0.15..0.60, so a narrow high window gives sparse, well separated banks while
+ * a wide low one gives a continuous deck. It is the single most important
+ * control on whether heavy weather has *holes* in it: the old fixed bias could
+ * not reach zero, so above ~0.6 coverage the sky became one opaque lid.
+ *
+ * `tower` is how hard coverage drives cloud *type*, i.e. how much the tall
+ * cumulus profile is reserved for the strong parts of the field. It is what
+ * makes a storm read as towers standing out of a low ragged base.
+ */
 const WEATHER = {
   clear: {
-    coverage: 0.34, density: 0.019, type: 0.86, detail: 0.42, anvil: 0.25,
-    bottom: 1500, top: 4200, cirrus: 0.26, cloudShadow: 0.78,
+    coverage: 0.80, density: 0.021, type: 0.90, detail: 0.30, anvil: 0.30,
+    covLo: 0.44, covHi: 0.82, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
+    virga: 0.0, silver: 0.06, baseShade: 0.55,
+    bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
     fogDensity: 0.00013, fogHeight: 200, haze: 0.00004, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
-    overcast: 0.0, skyDim: 1.0, shadowScale: 30,
+    overcast: 0.0, skyDim: 1.0, shadowScale: 3.5,
   },
   overcast: {
-    coverage: 0.92, density: 0.026, type: 0.30, detail: 0.34, anvil: 0.1,
-    bottom: 1100, top: 3200, cirrus: 0.12, cloudShadow: 0.35,
+    // A stratiform lid, but stretched over a *wide* window so the deck keeps
+    // internal variation — thin luminous patches and heavier ribs — instead of
+    // being one grey dome.
+    coverage: 1.0, density: 0.020, type: 0.26, detail: 0.46, anvil: 0.1,
+    covLo: 0.10, covHi: 0.66, tower: 0.35, baseLift: 0.55, baseSag: 0.18, cloudHaze: 0.0000120,
+    virga: 0.0, silver: 0.07, baseShade: 0.80,
+    bottom: 1100, top: 3200, cirrus: 0.10, cloudShadow: 0.35,
     fogDensity: 0.00055, fogHeight: 260, haze: 0.00020, sunMul: 0.30,
     exposureMul: 1.02, godRays: 0.25, ambient: 1.2, wind: 12.0,
-    overcast: 0.85, skyDim: 0.55, shadowScale: 55,
+    overcast: 0.80, skyDim: 0.60, shadowScale: 5.0,
   },
   storm: {
-    // Coverage deliberately short of 1: a solid lid is a grey field. Leaving
-    // breaks in it, and making what remains much thicker, is what gives a
-    // storm its structure and its one bright hole on the horizon.
-    coverage: 0.78, density: 0.034, type: 0.44, detail: 0.58, anvil: 0.45,
-    bottom: 700, top: 5200, cirrus: 0.0, cloudShadow: 0.88, shadowScale: 130.0,
-    fogDensity: 0.00090, fogHeight: 320, haze: 0.00030, sunMul: 0.12,
+    // Coverage deliberately short of a lid: the drama is in the gaps. `covLo`
+    // stays above zero so the weakest columns are genuinely empty and there is
+    // somewhere near the horizon for a break of light to come through, while
+    // `tower` reserves the tall cumulonimbus profile for the strong cells.
+    coverage: 1.0, density: 0.030, type: 0.52, detail: 0.62, anvil: 0.70,
+    covLo: 0.14, covHi: 0.62, tower: 0.75, baseLift: 0.34, baseSag: 0.20, cloudHaze: 0.0000105,
+    virga: 0.55, silver: 0.16, baseShade: 0.95,
+    bottom: 900, top: 6800, cirrus: 0.0, cloudShadow: 0.88, shadowScale: 7.0,
+    fogDensity: 0.00072, fogHeight: 320, haze: 0.00022, sunMul: 0.12,
     // A storm is *dark*. Printing it up a stop is what turned it into an empty
     // grey field; the drama comes from value range, not from lifting the floor.
-    exposureMul: 1.22, godRays: 0.40, ambient: 1.85, wind: 30.0,
+    exposureMul: 0.94, godRays: 0.40, ambient: 1.30, wind: 30.0,
     // `overcast`/`skyDim` are authored, not derived from coverage: a storm
     // needs its cloud field to have *gaps* (so the deck has silhouette and
     // there is somewhere for a break of light) while the light on the ground
     // stays as heavy as a solid lid. Deriving one from the other forced those
     // two to move together and produced an even grey field.
-    overcast: 0.80, skyDim: 0.46,
+    overcast: 0.86, skyDim: 0.42,
   },
   fog: {
-    coverage: 0.55, density: 0.016, type: 0.5, detail: 0.4, anvil: 0.2,
-    bottom: 1300, top: 3600, cirrus: 0.25, cloudShadow: 0.30,
+    coverage: 0.85, density: 0.016, type: 0.45, detail: 0.42, anvil: 0.2,
+    covLo: 0.28, covHi: 0.68, tower: 0.45, baseLift: 0.18, baseSag: 0.12, cloudHaze: 0.0000180,
+    virga: 0.0, silver: 0.09, baseShade: 0.60,
+    bottom: 1300, top: 3600, cirrus: 0.22, cloudShadow: 0.30,
     fogDensity: 0.0060, fogHeight: 70, haze: 0.00075, sunMul: 0.55,
     exposureMul: 1.06, godRays: 0.8, ambient: 1.2, wind: 9.0,
-    overcast: 0.35, skyDim: 0.78, shadowScale: 30,
+    overcast: 0.35, skyDim: 0.78, shadowScale: 3.5,
   },
 };
 
@@ -236,7 +260,16 @@ export class Sky {
       uWeatherTile: { value: 27000 },
       uCloudWind: { value: new THREE.Vector2() },
       uAnvil: { value: 0.25 },
-      uEnvCloudGain: { value: 0.16 },
+      uEnvCloudGain: { value: 0.075 },
+      // window the weather map's coverage channel is stretched over — this is
+      // what decides whether a heavy deck still has holes in it
+      uCloudHaze: { value: 0.0000085 },
+      uCovRange: { value: new THREE.Vector2(0.30, 0.62) },
+      uTowerAmt: { value: 0.5 },
+      uBaseLift: { value: 0 },
+      uBaseSag: { value: 0.10 },
+      uVirga: { value: 0 },
+      uVirgaFloor: { value: 260 },
 
       uShadowTile: { value: 2700 },
       uShadowFieldScale: { value: 30.0 },
@@ -422,7 +455,7 @@ export class Sky {
     // cumulus base. Pulling the march's ambient down under heavy cover is what
     // turns the deck from pale mush into a lid.
     if (this.clouds) {
-      this.clouds.marchUniforms.uAmbientBoost.value = lerp(1.15, 0.30, overcast);
+      this.clouds.marchUniforms.uAmbientBoost.value = lerp(1.15, 0.20, overcast);
       this.clouds.marchUniforms.uCloudSunGain.value = lerp(0.42, 0.24, overcast);
     }
 
@@ -615,6 +648,19 @@ export class Sky {
     u.uCloudTop.value = p.top;
     u.uCirrus.value = p.cirrus;
     u.uCloudShadowStrength.value = p.cloudShadow;
+    u.uCovRange.value.set(p.covLo, p.covHi);
+    u.uTowerAmt.value = p.tower;
+    u.uBaseLift.value = p.baseLift;
+    u.uBaseSag.value = p.baseSag;
+    u.uCloudHaze.value = p.cloudHaze;
+    u.uVirga.value = p.virga;
+    // shafts stop well above the ground: below that the weather volume's own
+    // squall curtains take over, and they are depth-aware
+    u.uVirgaFloor.value = Math.min(p.bottom - 100, 320);
+    if (this.clouds) {
+      this.clouds.marchUniforms.uSilver.value = p.silver;
+      this.clouds.marchUniforms.uBaseShade.value = p.baseShade;
+    }
     // A storm's drama on the ground is the *patchiness* of the light.
     // Magnifying the shadow field puts several cloud-sized patches inside
     // the few hundred metres a low camera can actually see.
@@ -661,6 +707,23 @@ export class Sky {
 
   /** Runs immediately before the scene render, with the final camera. */
   _preRender(renderer, camera) {
+    // The dome rides with whatever camera is drawing it — including the water
+    // reflection pass — so this part is unconditional.
+    camera.updateMatrixWorld();
+    this.dome.position.setFromMatrixPosition(camera.matrixWorld);
+    this.dome.updateMatrix();
+    this.dome.matrixWorld.copy(this.dome.matrix);
+
+    // Everything below is *view dependent state for the main render*. Water
+    // renders the whole scene a second time through a mirrored camera, and it
+    // does so before the main pass — so without this guard the cloud raymarch
+    // was being run for the reflection: the buffer the sky dome then sampled
+    // had been marched along rays pointing *down* through the water plane, and
+    // hardly any of them ever entered the cloud layer. That is why heavy
+    // weather rendered as an empty gradient with a thin sliver of cloud along
+    // the top edge of frame — the only rays whose mirror still pointed at the
+    // sky.
+    if (camera !== this.game.camera) return;
     const frame = this.game.time.frame;
     if (frame === this._lastPreFrame) return;      // GTAO re-renders the scene
     this._lastPreFrame = frame;
@@ -669,12 +732,6 @@ export class Sky {
     this.u.uResolution.value.copy(size);
     this.u.uPixelAngle.value = (camera.fov * DEG) / Math.max(1, size.y);
     this.u.uCamAlt.value = Math.max(2, camera.position.y);
-
-    // dome rides with the camera so the fragment world position is exactly on
-    // the view ray (no tessellation error, no seam)
-    this.dome.position.setFromMatrixPosition(camera.matrixWorld);
-    this.dome.updateMatrix();
-    this.dome.matrixWorld.copy(this.dome.matrix);
 
     // cascades
     if (camera.fov !== this._camFov || camera.aspect !== this._camAspect) {

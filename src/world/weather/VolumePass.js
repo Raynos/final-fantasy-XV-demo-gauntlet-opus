@@ -84,9 +84,16 @@ void main() {
   vec3 ray = wpos - uCamPos;
   float sceneDist = length(ray);
   vec3 dir = sceneDist > 1e-4 ? ray / sceneDist : vec3(0.0, 0.0, -1.0);
-  // a sky ray gets a longer leash so the storm base has room to build
-  float reach = d >= 0.9999 ? uFogP.w * 1.25 : uFogP.w;
-  if (d >= 0.9999) sceneDist = reach;
+  // A sky ray needs enough leash for the storm base to build, but not so much
+  // that the weather layers integrate into an opaque grey lid over the whole
+  // sky — the cloud raymarch owns everything above the scud, and washing it out
+  // here is what turned a storm into a flat gradient. The leash shortens as the
+  // ray climbs, because a steep ray leaves the low weather almost immediately.
+  float climb = clamp(dir.y, 0.0, 1.0);
+  float sky = d >= 0.9999 ? 1.0 : 0.0;
+  float skyVeil = sky * smoothstep(0.005, 0.09, climb);
+  float reach = sky > 0.5 ? uFogP.w * mix(1.25, 0.42, smoothstep(0.02, 0.35, climb)) : uFogP.w;
+  if (sky > 0.5) sceneDist = reach;
   float maxD = min(sceneDist, reach);
 
   float wxAmt = uFogP.x + uDustP.x + uRainP.x + uRainP.y + uScudP.x;
@@ -134,16 +141,33 @@ void main() {
 
       // --- rain: flat haze plus travelling squall curtains -------------------
       float squall = fbm3(vec3(p.xz * uRainP.z + windOff * 0.05, uTime * 0.05));
-      float rain = uRainP.x + uRainP.y * smoothstep(0.40, 0.66, squall);
-      rain *= exp(-above * 0.0016);
+      float rain = uRainP.x + uRainP.y * smoothstep(0.46, 0.70, squall);
+      // Rain lives in the lowest kilometre. The old 625 m scale height left a
+      // near-horizontal sky ray integrating kilometres of curtain and painted
+      // the whole sky pale — which is what buried the storm's cloud deck.
+      rain *= exp(-above * 0.0034);
 
       // --- scud: ragged low cloud torn off the storm base -------------------
       // Dark, fast, and *below* the cloud deck, so it fills the empty band of
       // sky between the ranges and the overcast instead of leaving a flat wash.
+      // The gate is deliberately narrow: with a wide one the layer is
+      // continuous along any near-horizontal ray and stops being torn cloud —
+      // it becomes an even grey veil over the whole sky, which is exactly what
+      // was flattening the storm frame.
       float scudBand = smoothstep(uScudP.y - uScudP.z, uScudP.y - uScudP.z * 0.35, p.y)
                      * (1.0 - smoothstep(uScudP.y + uScudP.z * 0.4, uScudP.y + uScudP.z * 1.5, p.y));
       float scudN = fbm3(vec3(p.xz * uScudP.w + windOff * 0.22, p.y * 0.0018 + uTime * 0.03));
-      float scud = uScudP.x * scudBand * smoothstep(0.40, 0.63, scudN);
+      float scud = uScudP.x * scudBand * smoothstep(0.52, 0.70, scudN);
+
+      // A ray that reaches the sky must not be *painted over* by the weather.
+      // At storm strength the squall and scud layers integrate to an optical
+      // depth of ~5 along any near-horizontal sky ray, which means every sky
+      // pixel ends up as one flat in-scattered grey and the cloud deck behind
+      // it is thrown away entirely — the single biggest reason a storm rendered
+      // as a featureless gradient. Curtains belong over the land, where the
+      // depth cue is worth having; over the sky they stay a thin veil.
+      rain *= mix(1.0, 0.16, skyVeil);
+      scud *= mix(1.0, 0.60, skyVeil);
 
       float dens = fog + dust + rain + scud;
       if (dens > 1e-5) {
@@ -174,8 +198,15 @@ void main() {
     float aspect = uRes.x / max(uRes.y, 1.0);
     vec2 q = vec2(vUv.x * aspect, vUv.y);
 
-    // static droplet field: cells with one lens each, refracting the frame
-    vec2 g = q * 26.0;
+    // Static droplet field: cells with one lens each, refracting the frame.
+    //
+    // The refraction offset is the whole trick and it has to be *small*. At
+    // 0.055 of the frame a drop no longer showed a squashed image of what is
+    // behind it, it showed a piece of somewhere else entirely — which over a
+    // ridge line meant every drop within about 5% of the horizon sampled dark
+    // terrain and painted a row of black dots across the sky. Real glass beads
+    // displace a fraction of a degree; keep the offset near a drop's own size.
+    vec2 g = q * 38.0;
     vec2 gi = floor(g), gf = fract(g) - 0.5;
     vec3 acc = vec3(0.0);
     float cover = 0.0;
@@ -185,20 +216,27 @@ void main() {
         vec2 id = gi + o;
         vec2 rnd = hash22(id);
         // most cells are dry glass; a beaded lens is not a honeycomb
-        if (hash12(id + 5.0) > 0.34) continue;
-        float r = 0.07 + 0.20 * rnd.x;
+        float pick = hash12(id + 5.0);
+        if (pick > 0.30) continue;
+        // wide size spread: a few fat beads among many pinpricks reads as
+        // water on glass, one uniform size reads as a texture
+        float r = 0.045 + 0.26 * pick * pick * 11.0 * rnd.x;
+        r = clamp(r, 0.04, 0.34);
         // drops crawl down the glass, slower ones lingering
-        float fall = fract(rnd.y + uTime * (0.018 + 0.05 * rnd.x));
+        float fall = fract(rnd.y + uTime * (0.018 + 0.05 * rnd.x) * smoothstep(0.06, 0.20, r));
         vec2 cpos = o + vec2(rnd.x - 0.5, (1.0 - fall) - 0.5) * 0.9;
         vec2 dv = gf - cpos;
         float dd = length(dv);
-        float m = smoothstep(r, r * 0.55, dd);
+        float m = smoothstep(r, r * 0.62, dd);
         if (m > 0.0) {
-          vec2 refr = dv / max(r, 1e-3) * 0.055;
-          vec3 s = texture2D(tDiffuse, clamp(vUv - refr, vec2(0.001), vec2(0.999))).rgb;
+          // a bead is a tiny fisheye: it inverts and magnifies what is right
+          // behind it, so the displacement scales with the drop, not the frame
+          vec2 refr = dv * (r * 0.030 / max(r, 1e-3)) * (1.0 + 2.2 * dd / max(r, 1e-3));
+          refr.x /= aspect;
+          vec3 s = texture2D(tDiffuse, clamp(vUv - refr, vec2(0.002), vec2(0.998))).rgb;
           // rim brightening — the meniscus catches the sky
-          float rim = smoothstep(r * 0.55, r, dd) * m;
-          acc += (s * 1.06 + rim * 0.10) * m;
+          float rim = smoothstep(r * 0.62, r, dd) * m;
+          acc += (s * 1.10 + rim * 0.05) * m;
           cover += m;
         }
       }

@@ -171,15 +171,23 @@ vec4 skyCirrus(vec3 ro, vec3 rd, vec3 sunDir, vec3 sunRad, vec3 skyCol) {
 
   vec2 warp = vec2(nFbm2(p * 1.7 + 3.1, 3), nFbm2(p * 1.7 + 8.4, 3)) - 0.5;
   float n = nFbm2(p * 2.6 + warp * 1.4, 5);
-  float streak = nFbm2(vec2(p.x * 0.5, p.y * 5.5) + warp * 0.6, 4);
-  float a = smoothstep(0.48, 0.86, n * 0.55 + streak * 0.62);
-  a *= uCirrus * smoothstep(0.012, 0.16, rd.y);
+  // Ridged, strongly anisotropic streaks: cirrus is ice blown into fibres by
+  // the jet, so the field has to be filaments, not a blanket. A wide, soft
+  // threshold on an isotropic fbm is what made this a flat haze — and once it
+  // also *darkened* what was behind it, the dawn sky went muddy grey-tan.
+  float fib = nFbm2(vec2(p.x * 0.35, p.y * 7.0) + warp * 0.5, 4);
+  float fine = nFbm2(vec2(p.x * 1.1, p.y * 19.0) + warp * 0.3, 3);
+  float ridge = 1.0 - abs(fib * 2.0 - 1.0);
+  float a = smoothstep(0.56, 0.90, n * 0.42 + ridge * 0.52 + fine * 0.16);
+  a *= uCirrus * smoothstep(0.012, 0.18, rd.y);
   if (a <= 0.001) return vec4(0.0, 0.0, 0.0, 1.0);
 
   float c = dot(rd, sunDir);
-  float fwd = atmHG(c, 0.72) * 3.4 + 0.35;
-  vec3 col = sunRad * fwd * 0.10 + skyCol * 0.55;
-  return vec4(col * a, 1.0 - a * 0.86);
+  // Ice crystals forward scatter hard and are almost lossless, so cirrus is
+  // *brighter* than the sky behind it at every hour and blocks very little.
+  float fwd = min(atmHG(c, 0.78) * 4.4, 3.6) + 0.30;
+  vec3 col = sunRad * fwd * 0.085 + skyCol * 0.92;
+  return vec4(col * a, 1.0 - a * 0.50);
 }
 `;
 
@@ -231,9 +239,15 @@ void main() {
     // silhouette against, which is why heavy weather rendered as one flat
     // field. Keep it bright and slightly flattened, and put a hot slot of
     // clear air along the horizon for everything else to read against.
-    vec3 deck = mix(upSky, mix(upSky, flat3, 0.50), 0.65) * 1.20;
-    float slot = exp(-max(dir.y, 0.0) * 7.0);
-    deck *= mix(0.72, 1.0, smoothstep(-0.03, 0.45, dir.y)) + 0.85 * slot;
+    // Under a deck the *gaps* are dark: they show the shaded flank of the next
+    // cloud, not open sky. Lifting this to brighter-than-zenith (what it used
+    // to do) put a pale grey floor under the whole frame that no amount of
+    // cloud contrast could climb out of. What stays bright is a narrow slot
+    // right on the horizon — the break of clear air under the front, which is
+    // the one value the storm reads against.
+    vec3 deck = mix(upSky, mix(upSky, flat3, 0.50), 0.65) * 0.52;
+    float slot = exp(-max(dir.y, 0.0) * 13.0);
+    deck *= mix(0.60, 1.0, smoothstep(-0.03, 0.55, dir.y)) + 1.55 * slot;
     sky = mix(sky, deck, uOvercast);
   }
   sky *= uSkyDim;
@@ -287,7 +301,7 @@ void main() {
     // 5 tap cross on the half res buffer: removes the raymarch step dither
     // without visibly softening the cloud silhouettes
     vec2 tuv = gl_FragCoord.xy / uResolution;
-    vec2 texel = 1.0 / max(uResolution * 0.45, vec2(1.0));
+    vec2 texel = 1.4 / max(uResolution * 0.45, vec2(1.0));
     cl  = texture2D(uCloudTex, tuv) * 0.2270;
     cl += (texture2D(uCloudTex, tuv + vec2(texel.x, 0.0)) +
            texture2D(uCloudTex, tuv - vec2(texel.x, 0.0)) +
