@@ -20,6 +20,7 @@ import { Menus } from '../ui/Menus.js';
 import { AudioSystem } from '../audio/AudioSystem.js';
 import { Director } from './Director.js';
 import { RpgSystem } from './rpg/RpgSystem.js';
+import { RegaliaSystem } from '../world/vehicle/RegaliaSystem.js';
 import { InteractionSystem } from './interaction/Interactables.js';
 import { Hammerhead } from '../world/town/Hammerhead.js';
 import { Npcs } from '../characters/npc/Npcs.js';
@@ -103,6 +104,8 @@ export class Game {
       ['Enemies', () => new Enemies()],
       ['Combat', () => new CombatSystem()],
       ['Camera', () => new CameraRig()],
+      // After Camera: the drive camera writes the lens in lateUpdate.
+      ['Regalia', () => new RegaliaSystem()],
       ['Audio', () => new AudioSystem()],
       // Before HUD — the HUD reads it during init. Start mid-game so the
       // capture shots show a party with real progression, not a level 1 save:

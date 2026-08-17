@@ -55,6 +55,22 @@ export const SHOTS = {
     time: 17.4, weather: 'clear',
     pos: [66, 11, 42], target: [40, 7, 2], fov: 40,
   },
+  regalia_drive: {
+    doc: 'Chase camera behind the Regalia at speed',
+    time: 16.8, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
+  },
+  regalia_cruise: {
+    doc: 'Low cinematic three-quarter on the highway',
+    time: 18.4, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 42,
+  },
+  regalia_night: {
+    doc: 'Night drive, headlights carving the badlands',
+    time: 22.6, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
+  },
+  regalia_cockpit: {
+    doc: 'Over the bonnet at dusk',
+    time: 17.9, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 62,
+  },
   haven_dusk: {
     doc: 'The haven and its campfire at blue hour, mesa behind',
     time: 20.1, weather: 'clear',
