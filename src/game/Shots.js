@@ -84,40 +84,45 @@ export const SHOTS = {
 
 
   // --- Hammerhead -------------------------------------------------------
+  // Framed against the live anchors, not the town agent's worktree numbers —
+  // merging the terrain reshape moved the graded pad ~84 m west of where it
+  // measured them. Pad y=13.5; origin (-92.8, 77.1). pylon (-124,56)
+  // pump (-101,56) huntBoard (-103,77) diner (-110,82) garageBay (-86,70)
+  // caravan (-73,54) regaliaBay (-91,63)
   town_approach: {
     doc: 'Coming off the highway toward the Hammerhead pylon',
     time: 17.2, weather: 'clear',
-    pos: [-34.7, 16, 14.6], target: [-12.8, 13.5, 53.1], fov: 44,
+    pos: [-146, 22, 22], target: [-104, 16, 64], fov: 46,
   },
   town_forecourt: {
     doc: 'Standing on the forecourt between the pumps and the garage',
     time: 16.0, weather: 'clear',
-    pos: [-20.6, 12.1, 34.3], target: [-7.1, 11.9, 61.1], fov: 52,
+    pos: [-114, 16.5, 49], target: [-90, 15, 73], fov: 52,
   },
   town_wide: {
     doc: 'The whole truck stop read against the badlands',
     time: 18.2, weather: 'clear',
-    pos: [23.5, 23.5, 5.1], target: [-14.6, 14.5, 59.6], fov: 40,
+    pos: [-34, 36, 26], target: [-100, 17, 68], fov: 40,
   },
   town_garage: {
     doc: "Cid's garage, roller bay open with a car on the lift",
     time: 15.4, weather: 'clear',
-    pos: [-6.5, 11.5, 43.7], target: [-1.3, 10.9, 52.4], fov: 42,
+    pos: [-97, 16, 61], target: [-84, 14.6, 72], fov: 44,
   },
   town_board: {
     doc: 'The hunt board with Dave beside it',
     time: 16.8, weather: 'clear',
-    pos: [-19.5, 11.4, 53.2], target: [-18.7, 11.5, 58.9], fov: 42,
+    pos: [-98.5, 15.4, 69], target: [-103.4, 14.4, 77], fov: 40,
   },
   town_caravan: {
     doc: 'The caravan and its awning',
     time: 16.2, weather: 'clear',
-    pos: [1.1, 11.9, 36.1], target: [11, 11.2, 39.7], fov: 44,
+    pos: [-85, 16, 46], target: [-72.5, 14.4, 54.5], fov: 44,
   },
   town_night: {
     doc: 'Hammerhead after dark under the floodlights',
     time: 21.6, weather: 'clear',
-    pos: [-34.7, 16, 14.6], target: [-12.8, 13.5, 53.1], fov: 44,
+    pos: [-121, 19, 40], target: [-97, 15.5, 70], fov: 48,
   },
 
   // --- character --------------------------------------------------------
