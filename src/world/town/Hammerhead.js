@@ -903,23 +903,25 @@ export class Hammerhead {
       handler: () => this._refuel(game),
     }));
 
-    // The Regalia's bay. If a vehicle system is present it owns the verb; until
-    // then the prompt still exists and says why nothing happens.
+    // The Regalia. The prompt used to be pinned to the parking bay and gated on
+    // the car being within 8 m of it — but the Regalia parks itself at the
+    // roadside site the world already expected one at, hundreds of metres from
+    // here, so the gate was never open and the "Drive" prompt never appeared.
+    // That is the whole of "how do you get in the car lol".
+    //
+    // The anchor is now the car's own root, which the vehicle sim writes every
+    // frame, so the prompt follows the Regalia wherever it is parked.
     this.anchors.regaliaBay = this.local(4.9, 0, -13.4);
+    const car = game.get('Regalia') || game.get('Vehicle');
+    const carPos = car?.root?.position || car?.position || this.anchors.regaliaBay;
     this._handles.push(ix.register({
-      id: 'hh_regalia_bay', pos: this.anchors.regaliaBay, radius: 3.4, priority: 0,
-      verb: 'Drive', label: 'Regalia', hint: 'Parking bay',
+      id: 'hh_regalia_bay', pos: carPos, radius: 3.8, priority: 1,
+      verb: 'Drive', label: 'Regalia', hint: 'F to drive  ·  I lets Ignis take the wheel',
       yOffset: 1.3,
-      enabled: () => {
-        const car = game.get('Regalia') || game.get('Vehicle');
-        if (!car) return false;
-        const p = car.position || car.root?.position;
-        return !!p && p.distanceTo(this.anchors.regaliaBay) < 8;
-      },
-      handler: () => {
-        const car = game.get('Regalia') || game.get('Vehicle');
-        if (car && car.enter) car.enter(game);
-      },
+      enabled: () => !!(car && car.enabled !== false && !car.isDriving),
+      // `enter()` takes an autoDrive flag, not a game: passing `game` here made
+      // every walk-up handover the wheel to Ignis.
+      handler: () => { if (car && car.enter) car.enter(false); },
     }));
 
     this._handles.push(ix.register({

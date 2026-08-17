@@ -1,15 +1,32 @@
 import { el, clamp, easeOut } from './UIKit.js';
 import { button } from './Icons.js';
 
+/**
+ * Contextual button prompts, one set per situation.
+ *
+ * These are the game's only permanently-visible controls documentation, so
+ * every entry has to be a binding that genuinely exists — the old set promised
+ * "Q — Camp", which was bound to nothing at all, and omitted driving entirely,
+ * which is how a fully drivable Regalia went unnoticed.
+ */
 const SETS = {
   field: [
-    ['E', 'Interact'], ['Tab', 'Menu'], ['C', 'Photo'], ['Q', 'Camp'],
+    ['E', 'Interact'], ['Tab', 'Menu'], ['M', 'Map'], ['C', 'Photo'], ['H', 'Controls'],
   ],
   combat: [
-    ['LMB', 'Attack'], ['RMB', 'Warp-Strike'], ['Q', 'Techniques'], ['E', 'Item'],
+    ['LMB', 'Attack'], ['Space', 'Dodge'], ['Q', 'Warp-Strike'], ['Y', 'Lock-On'], ['H', 'Controls'],
   ],
   warp: [
-    ['RMB', 'Warp'], ['Space', 'Point-Warp'],
+    ['Q', 'Warp-Strike'], ['R', 'Point-Warp'], ['X', 'Armiger'], ['H', 'Controls'],
+  ],
+  /** Standing beside the parked Regalia. */
+  car: [
+    ['F', 'Drive'], ['E', 'Interact'], ['Tab', 'Menu'], ['H', 'Controls'],
+  ],
+  /** Behind the wheel. */
+  driving: [
+    ['W', 'Accelerate'], ['S', 'Brake'], ['Space', 'Handbrake'], ['I', 'Ignis Drives'],
+    ['V', 'Camera'], ['F', 'Get Out'],
   ],
 };
 
@@ -31,11 +48,26 @@ export class Prompts {
     this.row.textContent = '';
     for (const [key, label] of SETS[mode] || SETS.field) {
       this.row.appendChild(el('div.prompt.key', {}, [
-        button(key, { size: key.length > 1 ? 22 : 19 }),
+        button(key, { size: key.length > 2 ? 23 : key.length > 1 ? 22 : 19 }),
         el('div.lb', { text: label }),
       ]));
     }
     this.mode = mode;
+  }
+
+  /**
+   * The car outranks the Director's scenario: if you are in the Regalia, or
+   * standing next to it, that is unambiguously what the prompt strip is for.
+   * @param {object} game
+   * @param {string} mode the Director's scenario
+   */
+  _resolve(game, mode) {
+    const car = game.get?.('Regalia');
+    if (car && car.enabled) {
+      if (car.isDriving) return 'driving';
+      if (mode !== 'combat' && car.distanceToPlayer && car.distanceToPlayer() < 7.5) return 'car';
+    }
+    return SETS[mode] ? mode : 'field';
   }
 
   /**
@@ -45,7 +77,8 @@ export class Prompts {
    * @param {number} appear 0..1
    */
   update(dt, game, mode, appear) {
-    if (mode !== this.mode) this._render(mode);
+    const set = this._resolve(game, mode);
+    if (set !== this.mode) this._render(set);
     const e = easeOut(clamp((appear - 0.18) / 0.62, 0, 1));
     this.root.style.opacity = e.toFixed(3);
     this.root.style.transform = `translateX(-50%) translateY(${((1 - e) * 14).toFixed(2)}px)`;

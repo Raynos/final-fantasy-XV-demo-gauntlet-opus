@@ -1,6 +1,7 @@
 import { el, clamp, commas, easeOut, easeOutQuint } from '../UIKit.js';
 import { icon } from '../Icons.js';
-import { ITEM_TABS, readItems, hudState } from '../GameData.js';
+import { ensureInteractCss } from '../../game/interaction/interact.css.js';
+import { ITEM_TABS, readItems, hudState, rpg } from '../GameData.js';
 
 /** Rows the column can hold before the list would need to scroll. */
 const MAX_ROWS = 22;
@@ -15,12 +16,15 @@ const MAX_ROWS = 22;
 export class InventoryScreen {
   /** @param {import('../Menus.js').Menus} menus */
   constructor(menus) {
+    ensureInteractCss();
     this.menus = menus;
     this.title = 'Items';
     this.sub = 'Carried by the retinue';
     this.i = 0;
     this.tab = 0;
     this.items = [];
+    this._msg = null;
+    this._msgAge = 9;
   }
 
   /** @param {HTMLElement} root */
@@ -60,6 +64,10 @@ export class InventoryScreen {
     });
     this.detail.appendChild(el('div.rule', { style: 'margin-top:30px;max-width:400px' }));
     this.detail.appendChild(this.dSpecs);
+    this.act = el('div.q-act', {}, [this.actLb = el('div.lb')]);
+    this.detail.appendChild(this.act);
+    this.msg = el('div.shop-msg');
+    this.detail.appendChild(this.msg);
     r.appendChild(this.detail);
 
     this.cols.appendChild(l);
@@ -106,9 +114,53 @@ export class InventoryScreen {
     if (dx) { this.tab = (this.tab + dx + ITEM_TABS.length) % ITEM_TABS.length; this.i = 0; this._key = null; }
   }
 
-  accept() { /* using an item is the combat system's business */ }
+  /**
+   * Use the selected item on the party.
+   *
+   * The bag is real and so is the effect: this runs `Inventory.use`, which
+   * spends the stack and applies the heal / revive / MP restore to actual
+   * `Stats` blocks. Targeting follows the item definition — a party item hits
+   * everyone, a revive picks a downed member, everything else picks whoever is
+   * furthest from full — because asking a player to build a target cursor for
+   * a potion is how a menu stops being used.
+   */
+  accept() {
+    const r = rpg(this.game);
+    const it = this.items[this.i];
+    if (!r || !it) return;
+    const def = r.tables?.items?.[it.id];
+    if (!def || !def.use) { this._say(`${it.name} is not something you can use.`, false); return; }
 
-  enter(game) { if (game) this.game = game; this._key = null; }
+    const roster = r.party.roster;
+    const alive = roster.filter((s) => !s.ko);
+    let targets;
+    if (def.use.target === 'party') targets = roster;
+    else if (def.use.type === 'revive') targets = roster.filter((s) => s.ko).slice(0, 1);
+    else {
+      const pool = alive.length ? alive : roster;
+      targets = [pool.slice().sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]];
+    }
+
+    const res = r.inventory.use(it.id, targets.filter(Boolean), { curativePower: r.ascension.value('curativePower') || 0 });
+    if (res.ok) {
+      const healed = res.results.reduce((s, x) => s + (x.healed || 0), 0);
+      const revived = res.results.some((x) => x.revived);
+      this._say(revived ? `${it.name} — back on their feet.`
+        : healed ? `${it.name} — ${commas(healed)} HP restored.`
+          : `${it.name} used.`, true);
+      this._key = null;
+    } else {
+      this._say(({
+        'not-usable': 'Nothing to use it on.',
+        'none-left': 'None left.',
+        'no-target': 'Nobody needs it.',
+      })[res.reason] || 'Nothing doing.', false);
+    }
+  }
+
+  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+
+  enter(game) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 
   /** @param {number} dt @param {object} game @param {number} a */
   update(dt, game, a) {
@@ -151,11 +203,23 @@ export class InventoryScreen {
       this.specVals[3].textContent = `×${it.qty}`;
       this._cur = it.id;
       this._age = 0;
+      // Say what Enter will do on this row, every row, so nothing in the list
+      // is a mystery box.
+      const usable = it.field;
+      this.actLb.textContent = usable ? 'Enter — use it' : 'Cannot be used here';
+      this.actLb.className = usable ? 'lb go' : 'lb no';
     }
     this._age = (this._age || 0) + dt;
     const d = easeOut(clamp(this._age / 0.24, 0, 1)) * easeOut(clamp((a - 0.24) / 0.55, 0, 1));
     this.detail.style.opacity = (it ? d : 0).toFixed(3);
     this.detail.style.transform = `translateX(${((1 - d) * 16).toFixed(2)}px)`;
     this.dRule.style.height = `${(easeOutQuint(clamp((a - 0.2) / 0.7, 0, 1)) * 100).toFixed(0)}%`;
+
+    this._msgAge += dt;
+    this.msg.style.opacity = this._msg ? easeOut(clamp((2.6 - this._msgAge) / 0.7, 0, 1)).toFixed(3) : '0';
+    if (this._msg) {
+      this.msg.textContent = this._msg.text;
+      this.msg.className = `shop-msg ${this._msg.ok ? 'ok' : 'bad'}`;
+    }
   }
 }

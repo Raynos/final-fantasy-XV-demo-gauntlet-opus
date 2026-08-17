@@ -37,14 +37,22 @@ import { Radio } from '../../audio/Radio.js';
  *   regalia.body  the VehicleBody, for the HUD speedo
  */
 
+/**
+ * The driving keymap.
+ *
+ * Every key here except `enter` only does anything while you are actually in
+ * the car, but they are still chosen not to collide with anything on foot:
+ * `I` for "let Ignis drive" (it was G, which is Gladiolus' technique) and `L`
+ * for lights (it was H, which is now the global controls card).
+ */
 const KEY = {
   enter: 'KeyF',
   camera: 'KeyV',
-  auto: 'KeyG',
+  auto: 'KeyI',
   typeD: 'KeyT',
   radio: 'KeyB',
   radioPower: 'KeyN',
-  lights: 'KeyH',
+  lights: 'KeyL',
   handbrake: 'Space',
 };
 
@@ -450,7 +458,10 @@ export class RegaliaSystem {
   /** Doors, camera modes, radio, off-road, auto-drive. */
   _input(dt, game) {
     const inp = game.input;
-    if (!inp || game.currentShot) return;
+    // `enabled === false` means a menu, a shop or a conversation owns the
+    // keyboard — without this, Backspace-ing out of the shop screen while
+    // parked beside the car would also fire F and put you in it.
+    if (!inp || inp.enabled === false || game.currentShot) return;
 
     // "Drive" — offered whenever Noctis is beside the car. There is no event
     // channel into the prompt strip, so the state is published on `this.prompt`

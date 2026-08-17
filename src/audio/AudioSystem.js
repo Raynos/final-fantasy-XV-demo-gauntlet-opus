@@ -225,7 +225,9 @@ export class AudioSystem {
     /* ---- global volume ------------------------------------------------ */
     window.addEventListener('keydown', (e) => {
       if (!this.enabled || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.code === 'KeyM') { this.setMuted(); this.sfx.play('ui:cancel', null, {}); }
+      // Backquote, not M: M is the world map. Volume also has real sliders on
+      // the System screen now, so this is only the quick mute.
+      if (e.code === 'Backquote') { this.setMuted(); this.sfx.play('ui:cancel', null, {}); }
       else if (e.code === 'BracketLeft') this._nudgeVolume(-0.1);
       else if (e.code === 'BracketRight') this._nudgeVolume(0.1);
     });

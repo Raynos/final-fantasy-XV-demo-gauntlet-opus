@@ -8,6 +8,7 @@ import { Prompts } from './Prompts.js';
 import { ScreenFX } from './ScreenFX.js';
 import { Subtitles } from './Subtitles.js';
 import { Toasts } from './Toasts.js';
+import { Hints } from './Hints.js';
 import { HudBridge } from './HudBridge.js';
 import { SHOTS } from '../game/Shots.js';
 import { BANTER } from './GameData.js';
@@ -52,6 +53,10 @@ export class HUD {
     this.subtitles = new Subtitles(this.root);
     this.toasts = new Toasts(this.party.root);
     this.fx = new ScreenFX(game.uiRoot);
+    // Hints sit in their own layer above the menus, so the "how do I get out
+    // of here" hint is readable over a full-screen screen. They never appear
+    // during a capture.
+    this.hints = new Hints(game.uiRoot);
 
     this.visible = true;
     this.menuOpen = false;
@@ -80,6 +85,7 @@ export class HUD {
     const s = clamp(Math.min(window.innerWidth / 1600, window.innerHeight / 900), 0.72, 1.5);
     this.root.style.zoom = s.toFixed(4);
     this.fx.root.style.zoom = s.toFixed(4);
+    if (this.hints) this.hints.root.style.zoom = s.toFixed(4);
     this.uiScale = s;
   }
 
@@ -119,6 +125,7 @@ export class HUD {
     for (const b of this.subtitles.bubbles) b.node.remove();
     this.subtitles.bubbles.length = 0;
     this.toasts.clear();
+    this.hints.reset();
     if (this.bridge) this.bridge._lastCall = -99;
     this._banterAt = this.game.time.now + 0.30;
     this.fieldA = 0; this.combatA = 0;
@@ -137,6 +144,11 @@ export class HUD {
 
   /** @param {number} dt @param {object} game */
   lateUpdate(dt, game) {
+    // First-run hints run outside the HUD's own visibility, because the one
+    // about closing a menu has to show while the HUD itself is faded out.
+    this.hints.muted = !!game.currentShot;
+    this.hints.update(dt, game);
+
     const mode = this._resolveMode();
     this.mode = mode;
     const fighting = mode === 'combat';

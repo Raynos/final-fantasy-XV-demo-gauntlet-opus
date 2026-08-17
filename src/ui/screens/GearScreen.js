@@ -1,9 +1,18 @@
-import { el, clamp, commas, easeOut } from '../UIKit.js';
+import { el, clear, clamp, commas, easeOut } from '../UIKit.js';
 import { icon, portrait } from '../Icons.js';
+import { ensureInteractCss } from '../../game/interaction/interact.css.js';
 import { Bar } from '../Bar.js';
 import { readGear, readParty, rpg } from '../GameData.js';
 
 const SLOT_ICON = { Weapon: 'sword', Accessory: 'ap' };
+
+/** Which weapon classes each member is allowed to carry. Mirrors Inventory. */
+const CLASS_OK = {
+  noctis: ['sword', 'greatsword', 'polearm', 'dagger', 'firearm', 'shield'],
+  gladio: ['greatsword', 'shield'],
+  ignis: ['dagger', 'polearm'],
+  prompto: ['firearm', 'machinery'],
+};
 
 /**
  * Gear: one card per party member with their real equipment slots.
@@ -16,11 +25,16 @@ const SLOT_ICON = { Weapon: 'sword', Accessory: 'ap' };
 export class GearScreen {
   /** @param {import('../Menus.js').Menus} menus */
   constructor(menus) {
+    ensureInteractCss();
     this.menus = menus;
     this.title = 'Gear';
     this.sub = 'Four armaments, two accessories, one very tired advisor';
     this.i = 0;
     this.j = 0;
+    /** The equip picker, or null when the grid has focus. */
+    this.picker = null;
+    this._msg = null;
+    this._msgAge = 9;
   }
 
   /** @param {HTMLElement} root */
@@ -29,6 +43,21 @@ export class GearScreen {
     this.grid = el('div.gear-grid');
     root.appendChild(this.grid);
     this.cards = [];
+
+    // The equip picker. It lives here rather than in a second screen because
+    // choosing a sword is a modal step inside Gear, not a place you navigate
+    // to — and Backspace/B out of it returns to the slot you were on.
+    this.pick = el('div.equip-pick.plate');
+    this.pickH = el('div.ep-h');
+    this.pickList = el('div.ep-list');
+    this.pick.appendChild(this.pickH);
+    this.pick.appendChild(el('div.rule', { style: 'margin:10px 0 4px' }));
+    this.pick.appendChild(this.pickList);
+    this.pick.style.display = 'none';
+    root.appendChild(this.pick);
+
+    this.msg = el('div.gear-msg');
+    root.appendChild(this.msg);
   }
 
   _build(game, party) {
@@ -77,12 +106,117 @@ export class GearScreen {
   }
 
   nav(dx, dy) {
+    if (this.picker) {
+      const n = this.picker.rows.length || 1;
+      if (dy) this.picker.i = (this.picker.i + dy + n) % n;
+      return;
+    }
     if (dx) this.i = clamp(this.i + dx, 0, Math.max(0, this.cards.length - 1));
     const n = this.cards[this.i]?.slots.length || 1;
     if (dy) this.j = (this.j + dy + n) % n;
   }
 
-  enter(game) { if (game) this.game = game; this._key = null; }
+  /**
+   * Open the picker for the highlighted slot, or equip the highlighted item.
+   *
+   * Everything goes through `Inventory.equip`, so a swap really does move the
+   * old armament back into the bag, really does re-derive every stat block,
+   * and really does change what the party fights with.
+   */
+  accept() {
+    if (this.picker) { this._equipChosen(); return; }
+    const r = rpg(this.game);
+    const card = this.cards[this.i];
+    if (!r || !card) return;
+    const layout = readGear(this.game, card.p.id);
+    const slot = layout[this.j];
+    if (!slot) return;
+    const kind = slot.slot === 'Weapon' ? 'weapon' : 'accessory';
+    const index = layout.slice(0, this.j).filter((s) => s.slot === slot.slot).length;
+    const options = this._candidates(r, card.p.id, kind, slot);
+    this.picker = { charId: card.p.id, kind, index, rows: options, i: 0, slotName: slot.slot };
+    this._renderPicker();
+  }
+
+  /** Back out of the picker. Menus calls this before it pops the screen. */
+  back() {
+    if (!this.picker) return false;
+    this.picker = null;
+    this.pick.style.display = 'none';
+    return true;
+  }
+
+  /** Everything in the bag this member is allowed to put in this slot. */
+  _candidates(r, charId, kind, slot) {
+    const rows = [];
+    if (!slot.empty) rows.push({ id: null, name: '— Remove —', stat: 'Back into the bag', count: 0 });
+    const allowed = CLASS_OK[charId] || CLASS_OK.noctis;
+    for (const e of r.inventory.list(kind)) {
+      const def = e.def;
+      if (kind === 'weapon') {
+        if (!allowed.includes(def.class)) continue;
+        if (def.wielders && !def.wielders.includes(charId)) continue;
+      }
+      rows.push({
+        id: def.id,
+        name: def.name,
+        stat: kind === 'weapon' ? `ATK +${def.attack}` : (def.special || 'Passive'),
+        count: e.count,
+      });
+    }
+    if (rows.length === 0) rows.push({ id: null, name: '— Nothing to fit here —', stat: '', count: 0, dead: true });
+    return rows;
+  }
+
+  _renderPicker() {
+    const p = this.picker;
+    this.pick.style.display = '';
+    this.pickH.textContent = `${p.charId.toUpperCase()}  ·  ${p.slotName} slot ${p.index + 1}`;
+    clear(this.pickList);
+    p.nodes = p.rows.map((row) => {
+      const bg = el('div.mr-bg');
+      const node = el('div.eprow', {}, [
+        bg,
+        el('div.ep-n', { text: row.name }),
+        el('div.ep-s', { text: row.stat }),
+        el('div.ep-q', { text: row.count ? `×${row.count}` : '' }),
+      ]);
+      this.pickList.appendChild(node);
+      return { node, bg, row };
+    });
+  }
+
+  _equipChosen() {
+    const p = this.picker;
+    const row = p.rows[p.i];
+    const r = rpg(this.game);
+    if (!r || !row) return;
+    if (row.dead) { this.back(); return; }
+    const res = r.inventory.equip(p.charId, p.kind, p.index, row.id);
+    if (res.ok) {
+      this._say(row.id ? `Equipped ${row.name}.` : 'Slot cleared.', true);
+      if (r.refreshGear) r.refreshGear();
+    } else {
+      this._say(({
+        'class-not-allowed': 'They cannot wield that.',
+        'not-your-weapon': 'That blade answers to someone else.',
+        'already-equipped': 'Already worn in another slot.',
+        'not-owned': 'None left in the bag.',
+      })[res.reason] || `Cannot equip that. (${res.reason})`, false);
+    }
+    this.back();
+  }
+
+  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+
+  enter(game) {
+    if (game) this.game = game;
+    this._key = null;
+    this.picker = null;
+    this.pick.style.display = 'none';
+    this._msg = null;
+    this._msgAge = 9;
+  }
 
   /** @param {number} dt @param {object} game @param {number} a */
   update(dt, game, a) {
@@ -122,7 +256,7 @@ export class GearScreen {
       }
 
       for (let j = 0; j < c.slots.length; j++) {
-        const on = i === this.i && j === this.j;
+        const on = i === this.i && j === this.j && !this.picker;
         if (c.slots[j]._on !== on) {
           c.slots[j].n.classList.toggle('on', on);
           c.slots[j]._on = on;
@@ -132,6 +266,25 @@ export class GearScreen {
           c.slots[j].n.style.setProperty('--sel', (0.5 + 0.35 * pulse).toFixed(3));
         }
       }
+    }
+
+    // the equip picker
+    if (this.picker) {
+      const pk = this.picker;
+      for (let i = 0; i < pk.nodes.length; i++) {
+        const n = pk.nodes[i];
+        const on = i === pk.i;
+        if (n._on !== on) { n.node.classList.toggle('on', on); n._on = on; }
+        n.bg.style.opacity = on ? (0.6 + 0.2 * (0.5 + 0.5 * Math.sin(game.time.now * 2.6))).toFixed(3) : '0';
+      }
+      this.pick.style.opacity = easeOut(clamp(a * 1.4, 0, 1)).toFixed(3);
+    }
+
+    this._msgAge = (this._msgAge || 0) + dt;
+    this.msg.style.opacity = this._msg ? easeOut(clamp((2.6 - this._msgAge) / 0.7, 0, 1)).toFixed(3) : '0';
+    if (this._msg) {
+      this.msg.textContent = this._msg.text;
+      this.msg.className = `gear-msg ${this._msg.ok ? 'ok' : 'bad'}`;
     }
   }
 }
