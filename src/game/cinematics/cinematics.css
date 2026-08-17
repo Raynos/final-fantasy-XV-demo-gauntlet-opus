@@ -1,0 +1,102 @@
+/* =====================================================================
+   FINAL FANTASY XV — Eos : cinematic layer
+   Letterbox, fades, cutscene dialogue, chapter cards, title screen.
+   Same rule as the rest of the UI: NO transitions, NO keyframes. Every
+   animated value is written per frame from game.time.
+   ===================================================================== */
+
+#cine, #title {
+  position: absolute; inset: 0;
+  font-family: var(--ui-font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
+}
+#cine { z-index: 4; }
+#title { z-index: 6; }
+#cine *, #title * { box-sizing: border-box; }
+
+/* ---------- letterbox -------------------------------------------------- */
+.cine-bar { position: absolute; left: 0; right: 0; height: 0; background: #000; }
+.cine-bar.top { top: 0; }
+.cine-bar.bot { bottom: 0; }
+/* a hairline of light on the inner edge — the bars read as a matte, not a crop */
+.cine-bar.top::after, .cine-bar.bot::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 34px;
+  pointer-events: none;
+}
+.cine-bar.top::after { bottom: -34px; background: linear-gradient(180deg, rgba(0,0,0,.42), rgba(0,0,0,0)); }
+.cine-bar.bot::after { top: -34px; background: linear-gradient(0deg, rgba(0,0,0,.42), rgba(0,0,0,0)); }
+
+.cine-fade { position: absolute; inset: 0; background: #000; opacity: 0; }
+.cine-fade.white { background: #eef4fd; }
+
+/* ---------- cutscene dialogue ------------------------------------------ */
+.cine-line {
+  position: absolute; left: 50%; bottom: 15.5%; width: 62%; max-width: 940px;
+  transform: translateX(-50%); text-align: center; opacity: 0;
+}
+.cine-line::before {
+  content: ''; position: absolute; left: -30%; right: -30%; top: -84px; bottom: -96px;
+  background: radial-gradient(ellipse 54% 100% at 50% 50%, rgba(3,6,12,.46), rgba(3,6,12,.14) 46%, rgba(3,6,12,0) 84%);
+  z-index: -1;
+}
+.cine-line .cl-sp {
+  font-size: 10px; letter-spacing: 0.42em; text-transform: uppercase;
+  color: var(--ice); text-shadow: var(--sh-text); margin-bottom: 9px; padding-left: .42em;
+}
+.cine-line .cl-r { height: 1px; width: 0; margin: 0 auto 12px; background: linear-gradient(90deg, transparent, var(--hair-hot), transparent); }
+.cine-line .cl-t {
+  font-size: 19px; font-weight: 200; letter-spacing: 0.05em; line-height: 1.52;
+  color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.92), 0 0 28px rgba(0,0,0,.72);
+}
+.cine-line .cl-t .ch { display: inline-block; white-space: pre; }
+/* an unattributed line — narration, a radio, a voice from off — sits in italic */
+.cine-line.aside .cl-t { font-style: italic; color: rgba(238,244,253,.88); font-size: 17px; }
+
+/* ---------- skip prompt ------------------------------------------------ */
+.cine-skip {
+  position: absolute; right: 44px; bottom: 0; display: flex; align-items: center; gap: 11px;
+  opacity: 0;
+}
+.cine-skip .sk-k {
+  font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink);
+  padding: 4px 9px; text-shadow: var(--sh-text);
+  box-shadow: inset 0 0 0 1px rgba(206,224,250,.34);
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+  background: rgba(6,10,18,.42);
+}
+.cine-skip .sk-l { font-size: 9px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-3); text-shadow: var(--sh-text); }
+.cine-skip .sk-bar { position: absolute; left: 0; right: 0; bottom: -6px; height: 1px; background: var(--accent-hot); width: 0; opacity: .8; }
+
+/* ---------- chapter card ----------------------------------------------- */
+.chapcard { position: absolute; left: 0; right: 0; top: 40%; text-align: center; opacity: 0; }
+/* Hairline type has to survive a blown-out dusk road behind it. A wide, very
+   soft radial plate does that without ever reading as a UI panel. */
+.chapcard::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 1180px; height: 460px;
+  transform: translate(-50%, -50%); pointer-events: none; z-index: -1;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(3,6,12,.62), rgba(3,6,12,.26) 46%, rgba(3,6,12,0) 78%);
+}
+.chapcard .cc-k {
+  font-size: 10px; letter-spacing: 0.62em; text-transform: uppercase;
+  color: var(--ice); text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 26px rgba(0,0,0,.85); padding-left: .62em;
+}
+.chapcard .cc-r { height: 1px; width: 0; margin: 22px auto; background: linear-gradient(90deg, transparent, var(--hair-hot) 20%, var(--hair-hot) 80%, transparent); }
+.chapcard .cc-n {
+  font-size: 42px; font-weight: 100; letter-spacing: 0.40em; text-transform: uppercase;
+  color: #fff; line-height: 1; padding-left: .40em;
+  text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 3px 16px rgba(0,0,0,.85), 0 0 52px rgba(0,0,0,.7);
+}
+.chapcard .cc-n .ch { display: inline-block; white-space: pre; }
+.chapcard .cc-s { margin-top: 22px; font-size: 9.5px; letter-spacing: 0.40em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text-lg); }
+
+/* ---------- objective handoff ------------------------------------------ */
+.objcard { position: absolute; left: 10.5%; top: 63%; opacity: 0; }
+.objcard .ob-k { font-size: 8.5px; letter-spacing: .46em; text-transform: uppercase; color: var(--gold); text-shadow: var(--sh-text-lg); }
+.objcard .ob-r { height: 1px; width: 0; margin: 12px 0 13px; background: linear-gradient(90deg, var(--hair-hot), transparent); }
+.objcard .ob-t { font-size: 15px; font-weight: 300; letter-spacing: .18em; color: #fff; text-shadow: var(--sh-text-lg); }
+.objcard .ob-s { margin-top: 9px; font-size: 10px; letter-spacing: .12em; color: var(--ink-2); text-shadow: var(--sh-text-lg); }
