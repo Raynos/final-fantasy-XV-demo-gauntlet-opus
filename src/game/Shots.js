@@ -178,7 +178,7 @@ export const SHOTS = {
   menu_title: {
     doc: 'Title screen over the attract camera',
     time: 18.55, weather: 'clear', story: 'title',
-    pos: [330, 38, -58], target: [-336, 52, 272], fov: 42,
+    pos: [430, 40, -60], target: [-640, 140, 430], fov: 42,
   },
   cine_opening: {
     doc: 'Chapter I: the four pushing the Regalia at dusk',

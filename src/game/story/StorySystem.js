@@ -164,7 +164,12 @@ export class StorySystem {
     if (spec === 'title' || spec.title) {
       if (this.cine && this.cine.playing) this.cine.stop();
       this.title.show();
-      this.title.t = spec.at ?? 6;
+      // `spec` may be the bare string 'title'. Reading `.at` off a string finds
+      // String.prototype.at — a function, not undefined — so `??` never fires
+      // and `t` becomes a function. `t += dt` then string-concatenates and the
+      // attract camera resolves to NaN, which renders a black screen.
+      const at = typeof spec === 'object' ? spec.at : undefined;
+      this.title.t = typeof at === 'number' ? at : 6;
       return;
     }
     this.title.hide();

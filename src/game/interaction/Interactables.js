@@ -151,7 +151,11 @@ export class InteractionSystem {
     if (hud && hud.setMenuOpen && this.dialogue.active) hud.setMenuOpen(true);
 
     // Nothing to point at while a full-screen menu or a conversation is up.
-    const suppressed = menuOpen || this.dialogue.active || this.blocked || !player;
+    // The title screen and a playing cutscene are not gameplay: neither routes
+    // input here, so a "Talk" prompt over either is pure noise.
+    const story = game.get('Story');
+    const cinematic = !!(story && (story.title?.shown || story.cine?.playing));
+    const suppressed = menuOpen || cinematic || this.dialogue.active || this.blocked || !player;
     const best = suppressed ? null : this._pick(player);
 
     if (best !== this.current) {

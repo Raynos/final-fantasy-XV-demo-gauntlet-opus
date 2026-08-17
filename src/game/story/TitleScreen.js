@@ -258,16 +258,17 @@ export class TitleScreen {
     const n = this._noise;
 
     // From above the eastern flats, drifting west across the basin toward the
-    // West Scarp, which the world builder put at (-350, 300) at height 86.
+    // West Scarp. Recomposed for the 8192 m world: the scarp moved to
+    // (-640, 430) h137 and the old framing pointed at empty sky.
     this._camPos.set(
-      lerp(330, 244, k),
-      lerp(38, 31, k) + n.simplex2(this.t * 0.06, 3.7) * 0.7,
-      lerp(-58, 46, k),
+      lerp(430, 330, k),
+      lerp(40, 34, k) + n.simplex2(this.t * 0.06, 3.7) * 0.7,
+      lerp(-60, 60, k),
     );
     this._camTgt.set(
-      lerp(-336, -366, k) + n.simplex2(this.t * 0.05, 21.3) * 1.6,
-      lerp(52, 46, k),
-      lerp(272, 322, k) + n.simplex2(this.t * 0.04, 47.1) * 1.6,
+      lerp(-640, -690, k) + n.simplex2(this.t * 0.05, 21.3) * 1.6,
+      lerp(140, 128, k),
+      lerp(430, 490, k) + n.simplex2(this.t * 0.04, 47.1) * 1.6,
     );
     const terrain = game.get('Terrain');
     if (terrain && terrain.heightAt) {
