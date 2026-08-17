@@ -19,92 +19,231 @@ const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
-/** A gliding raptor: two swept wings, a body and a fanned tail. */
-function birdGeometry() {
-  const parts = [];
-  const body = new THREE.ConeGeometry(0.16, 1.0, 6);
-  body.rotateZ(Math.PI / 2);
-  parts.push(body);
-  for (const s of [-1, 1]) {
-    const wing = new THREE.BufferGeometry();
-    // root, mid, tip — swept back and dihedral-up
-    const p = [
-      0.18, 0.0, s * 0.05, -0.14, 0.0, s * 0.05,
-      0.10, 0.09, s * 0.95, -0.30, 0.07, s * 0.95,
-      -0.06, 0.16, s * 1.75, -0.34, 0.15, s * 1.70,
-    ];
-    const idx = s > 0
-      ? [0, 2, 1, 1, 2, 3, 2, 4, 3, 3, 4, 5]
-      : [0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4];
-    wing.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
-    wing.setIndex(idx);
-    wing.computeVertexNormals();
-    parts.push(wing);
+/**
+ * Merge a list of primitives into one buffer, stripping everything but
+ * position and normal and tagging each part with a flat vertex colour so the
+ * animal can be shaded (pale back, dark belly, bone-coloured horns) from a
+ * single unlit-looking material.
+ *
+ * @param {Array<{geo:THREE.BufferGeometry, c:number[]}>} parts
+ */
+function mergeTinted(parts) {
+  const geos = [];
+  for (const { geo, c } of parts) {
+    for (const k of Object.keys(geo.attributes)) {
+      if (!['position', 'normal'].includes(k)) geo.deleteAttribute(k);
+    }
+    const n = geo.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2]; }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geos.push(geo);
   }
-  const tail = new THREE.BufferGeometry();
-  tail.setAttribute('position', new THREE.Float32BufferAttribute(
-    [-0.4, 0, 0, -0.95, 0.02, 0.26, -0.95, 0.02, -0.26], 3));
-  tail.setIndex([0, 1, 2]);
-  tail.computeVertexNormals();
-  parts.push(tail);
-  for (const g of parts) {
-    for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
-  }
-  const g = mergeGeometries(parts, false);
+  const g = mergeGeometries(geos, false);
   g.computeBoundingSphere();
   return g;
 }
 
 /**
- * Garula: the shaggy, horned grazer of the Leide plains. Low poly on purpose —
- * it is never nearer than a hundred metres, and what has to read is the
- * silhouette: heavy shoulders, low head, four stumpy legs.
+ * A gliding raptor.
+ *
+ * Everything that makes a bird read at range is planform, so the wing is a
+ * proper crescent — swept leading edge, concave trailing edge, and three
+ * splayed primary "fingers" at the tip — rather than the two-triangle sliver
+ * it used to be. Body, head and a fanned tail complete the silhouette.
+ */
+function birdGeometry() {
+  const parts = [];
+  const dark = [0.34, 0.31, 0.28], light = [0.62, 0.56, 0.48];
+
+  const body = new THREE.SphereGeometry(0.19, 8, 6);
+  body.scale(3.0, 0.9, 1.0);
+  parts.push({ geo: body, c: dark });
+  const head = new THREE.SphereGeometry(0.13, 7, 5);
+  head.scale(1.5, 1.0, 1.0);
+  head.translate(0.62, 0.03, 0);
+  parts.push({ geo: head, c: light });
+  const beak = new THREE.ConeGeometry(0.045, 0.18, 5);
+  beak.rotateZ(-Math.PI / 2);
+  beak.translate(0.80, 0.0, 0);
+  parts.push({ geo: beak, c: light });
+
+  // wing planform: leading edge sweeps back, trailing edge is concave, and
+  // the tip splits into finger feathers
+  const le = [[0.30, 0.0], [0.26, 0.62], [0.10, 1.28], [-0.10, 1.86]];
+  const te = [[-0.30, 0.0], [-0.44, 0.60], [-0.44, 1.24], [-0.30, 1.80]];
+  for (const s of [-1, 1]) {
+    const p = [], idx = [];
+    for (let i = 0; i < le.length; i++) {
+      p.push(le[i][0], 0.02 + le[i][1] * 0.09, s * le[i][1]);
+      p.push(te[i][0], 0.0 + te[i][1] * 0.085, s * te[i][1]);
+    }
+    for (let i = 0; i < le.length - 1; i++) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      if (s > 0) idx.push(a, c, b, b, c, d);
+      else idx.push(a, b, c, b, d, c);
+    }
+    const wing = new THREE.BufferGeometry();
+    wing.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+    wing.setIndex(idx);
+    wing.computeVertexNormals();
+    parts.push({ geo: wing, c: dark });
+
+    // three primaries fanning off the tip
+    for (let f = 0; f < 3; f++) {
+      const a0 = -0.12 - f * 0.11, a1 = a0 - 0.16;
+      const fp = [
+        -0.10, 0.166, s * 1.86,
+        a0, 0.20, s * 2.30,
+        a1, 0.20, s * 2.26,
+      ];
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+      fg.setIndex(s > 0 ? [0, 1, 2] : [0, 2, 1]);
+      fg.computeVertexNormals();
+      parts.push({ geo: fg, c: dark });
+    }
+  }
+  // fanned tail
+  const tail = new THREE.BufferGeometry();
+  tail.setAttribute('position', new THREE.Float32BufferAttribute(
+    [-0.45, 0, 0, -1.05, 0.02, 0.30, -0.92, 0.02, 0, -1.05, 0.02, -0.30], 3));
+  tail.setIndex([0, 1, 2, 0, 2, 3]);
+  tail.computeVertexNormals();
+  parts.push({ geo: tail, c: dark });
+
+  return mergeTinted(parts);
+}
+
+/**
+ * Garula: the shaggy, horned grazer of the Leide plains.
+ *
+ * At a hundred metres only three things carry: the mass over the shoulders,
+ * the head hung low and forward of it, and daylight between four load-bearing
+ * legs. So the body is a barrel with a sloping croup rather than an ellipsoid,
+ * the legs are jointed (femur angled back, cannon bone dropping vertically,
+ * splayed hoof) with a real gap under the belly, and the horns are a heavy
+ * forward-curving pair on a broad skull. Roughly 3.6 m nose to tail and 2.3 m
+ * at the hump — twice the height of a 1.8 m character.
  */
 function garulaGeometry() {
   const parts = [];
-  const body = new THREE.SphereGeometry(1.0, 10, 8);
-  body.scale(1.75, 0.95, 1.0);
-  body.translate(0, 1.35, 0);
-  parts.push(body);
-  const hump = new THREE.SphereGeometry(0.72, 8, 6);
-  hump.scale(1.1, 0.8, 0.95);
-  hump.translate(0.75, 1.95, 0);
-  parts.push(hump);
-  const neck = new THREE.CylinderGeometry(0.42, 0.55, 1.0, 7);
-  neck.rotateZ(-0.95);
-  neck.translate(1.85, 1.25, 0);
-  parts.push(neck);
-  const head = new THREE.SphereGeometry(0.46, 8, 6);
-  head.scale(1.5, 0.85, 0.8);
-  head.translate(2.55, 0.95, 0);
-  parts.push(head);
+  const coat = [0.52, 0.44, 0.34];
+  const belly = [0.30, 0.25, 0.20];
+  const mane = [0.38, 0.30, 0.23];
+  const bone = [0.78, 0.74, 0.64];
+  const hoofC = [0.20, 0.18, 0.16];
+
+  // --- barrel body: ribcage forward, narrower croup behind ---------------
+  const chest = new THREE.SphereGeometry(1.0, 11, 8);
+  chest.scale(1.05, 0.98, 0.9);
+  chest.translate(0.45, 1.42, 0);
+  parts.push({ geo: chest, c: coat });
+  const rump = new THREE.SphereGeometry(1.0, 10, 7);
+  rump.scale(0.95, 0.8, 0.76);
+  rump.translate(-0.95, 1.30, 0);
+  parts.push({ geo: rump, c: coat });
+  const flank = new THREE.CylinderGeometry(0.86, 0.78, 1.6, 10);
+  flank.rotateZ(Math.PI / 2);
+  flank.scale(1, 1, 0.92);
+  flank.translate(-0.25, 1.36, 0);
+  parts.push({ geo: flank, c: coat });
+  const under = new THREE.SphereGeometry(0.78, 9, 6);
+  under.scale(1.5, 0.5, 0.85);
+  under.translate(-0.1, 1.02, 0);
+  parts.push({ geo: under, c: belly });
+
+  // --- withers hump: the highest point of the animal ---------------------
+  const hump = new THREE.SphereGeometry(0.78, 9, 7);
+  hump.scale(1.15, 0.92, 0.8);
+  hump.translate(0.55, 2.02, 0);
+  parts.push({ geo: hump, c: mane });
+  // shaggy mane spilling off the hump and down the neck
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6;
+    const tuft = new THREE.ConeGeometry(0.22 - t * 0.06, 0.62, 5);
+    tuft.rotateZ(0.9 + t * 0.5);
+    tuft.translate(0.9 + t * 0.75, 2.28 - t * 0.5, (i % 2 ? 0.16 : -0.16) * (1 - t));
+    parts.push({ geo: tuft, c: mane });
+  }
+
+  // --- neck and skull: slung low and forward -----------------------------
+  const neck = new THREE.CylinderGeometry(0.40, 0.62, 1.25, 8);
+  neck.rotateZ(-1.02);
+  neck.translate(1.62, 1.52, 0);
+  parts.push({ geo: neck, c: mane });
+  const skull = new THREE.SphereGeometry(0.44, 9, 7);
+  skull.scale(1.6, 0.86, 0.92);
+  skull.translate(2.42, 1.02, 0);
+  parts.push({ geo: skull, c: coat });
+  const muzzle = new THREE.CylinderGeometry(0.22, 0.29, 0.5, 7);
+  muzzle.rotateZ(-1.35);
+  muzzle.translate(2.98, 0.90, 0);
+  parts.push({ geo: muzzle, c: belly });
+  // brow ridge the horns spring from
+  const brow = new THREE.BoxGeometry(0.3, 0.2, 0.86);
+  brow.translate(2.34, 1.28, 0);
+  parts.push({ geo: brow, c: bone });
   for (const s of [-1, 1]) {
-    const horn = new THREE.ConeGeometry(0.09, 0.72, 5);
-    horn.rotateZ(0.5);
-    horn.rotateX(s * 0.55);
-    horn.translate(2.45, 1.35, s * 0.3);
-    parts.push(horn);
-  }
-  for (const ax of [1.15, -1.05]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.CylinderGeometry(0.19, 0.15, 1.0, 6);
-      leg.translate(ax, 0.5, sz * 0.62);
-      parts.push(leg);
-      const hoof = new THREE.CylinderGeometry(0.2, 0.22, 0.16, 6);
-      hoof.translate(ax, 0.08, sz * 0.62);
-      parts.push(hoof);
+    // heavy forward-curving horn built from three tapering segments
+    let px = 2.34, py = 1.36, pz = s * 0.4;
+    const seg = [[0.30, 0.15, 0.55, 0.36], [0.34, 0.30, 0.28, 0.5], [0.34, 0.34, 0.10, 0.26]];
+    let r = 0.15;
+    for (const [dx, dy, dz, rr] of seg) {
+      const h = Math.hypot(dx, dy, dz);
+      const c = new THREE.CylinderGeometry(rr * 0.75, r, h, 6);
+      // orient +Y along the segment
+      const q = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, dy, s * dz).normalize());
+      c.applyQuaternion(q);
+      c.translate(px + dx / 2, py + dy / 2, pz + s * dz / 2);
+      parts.push({ geo: c, c: bone });
+      px += dx; py += dy; pz += s * dz; r = rr * 0.75;
     }
+    const tip = new THREE.ConeGeometry(r, 0.3, 6);
+    tip.rotateZ(-0.6);
+    tip.translate(px + 0.08, py + 0.1, pz);
+    parts.push({ geo: tip, c: bone });
+    // ear
+    const ear = new THREE.ConeGeometry(0.1, 0.3, 5);
+    ear.rotateX(s * 1.2);
+    ear.translate(2.16, 1.2, s * 0.42);
+    parts.push({ geo: ear, c: coat });
   }
-  const tail = new THREE.CylinderGeometry(0.07, 0.03, 0.8, 5);
-  tail.rotateZ(0.5);
-  tail.translate(-1.9, 1.15, 0);
-  parts.push(tail);
-  for (const g of parts) {
-    for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+
+  // --- jointed legs -------------------------------------------------------
+  // front pair sits under the chest, rear pair under the croup, and each is
+  // femur -> cannon -> hoof so there is a visible knee and real ground gap
+  const leg = (ax, az, femurLean, upperR, lowerR, top) => {
+    const knee = 0.72;
+    const dx = femurLean * (top - knee);
+    const fem = new THREE.CylinderGeometry(lowerR * 1.05, upperR, top - knee, 6);
+    fem.rotateZ(Math.atan2(-dx, top - knee));
+    fem.translate(ax + dx * 0.5, (top + knee) * 0.5, az);
+    parts.push({ geo: fem, c: coat });
+    const cannon = new THREE.CylinderGeometry(lowerR * 0.8, lowerR * 1.02, knee - 0.13, 6);
+    cannon.translate(ax + dx, (knee + 0.13) * 0.5, az);
+    parts.push({ geo: cannon, c: belly });
+    const hoof = new THREE.CylinderGeometry(lowerR * 1.25, lowerR * 1.5, 0.17, 6);
+    hoof.translate(ax + dx, 0.085, az);
+    parts.push({ geo: hoof, c: hoofC });
+  };
+  for (const sz of [-1, 1]) {
+    leg(1.02, sz * 0.62, 0.16, 0.30, 0.16, 1.36);   // foreleg, shoulder high
+    leg(-1.12, sz * 0.6, -0.2, 0.34, 0.17, 1.24);   // hind leg, hock kicked back
   }
-  const g = mergeGeometries(parts, false);
-  g.computeBoundingSphere();
-  return g;
+
+  // --- tail ---------------------------------------------------------------
+  const tail = new THREE.CylinderGeometry(0.08, 0.035, 0.95, 5);
+  tail.rotateZ(0.42);
+  tail.translate(-1.92, 1.12, 0);
+  parts.push({ geo: tail, c: coat });
+  const tuft = new THREE.SphereGeometry(0.15, 6, 5);
+  tuft.scale(0.8, 1.4, 0.8);
+  tuft.translate(-2.12, 0.68, 0);
+  parts.push({ geo: tuft, c: mane });
+
+  return mergeTinted(parts);
 }
 
 export class Wildlife {
@@ -135,7 +274,8 @@ export class Wildlife {
   _birds() {
     const rng = new Rng(1234);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x2b2723, roughness: 0.86, metalness: 0, side: THREE.DoubleSide,
+      color: 0x6d6459, roughness: 0.86, metalness: 0, side: THREE.DoubleSide,
+      vertexColors: true,
     });
     mat.name = 'bird';
     const anchors = [
@@ -156,7 +296,7 @@ export class Wildlife {
           phase: rng.next() * Math.PI * 2,
           rate: (rng.next() < 0.5 ? -1 : 1) * rng.range(0.055, 0.12),
           climb: rng.range(3, 11), climbRate: rng.range(0.13, 0.3),
-          scale: rng.range(0.8, 1.45),
+          scale: rng.range(1.15, 2.1),
         });
       }
     }
@@ -174,7 +314,7 @@ export class Wildlife {
   /** Garula grazing the sites Ecology marked, drifting slowly downwind. */
   _herds() {
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x6b5b48, roughness: 0.92, metalness: 0, vertexColors: false,
+      color: 0x8c7c67, roughness: 0.92, metalness: 0, vertexColors: true,
     });
     mat.name = 'garula';
     const items = [];
