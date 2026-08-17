@@ -141,7 +141,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Blowing dust, squall curtains, scud
 - [x] Wind vector with gusts driving vegetation
 - [ ] Night/dusk key light fix — `haven_dusk` is under-exposed mud
-- [ ] Cloud raymarch upsample blockiness
+- [x] Cloud raymarch upsample blockiness — sub-texel Halton jitter, TAA resolves it
 - [ ] Rainbows, auroras, meteor showers
 
 ---
@@ -451,7 +451,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Water reflection gated on visibility
 - [x] Streaming hitch — grass instance re-upload fixed; hitches 870 → 134–161
 - [~] Weather rebuild hitch — ~400 ms remains
-- [~] Menu open at 23 fps — cause is the water reflection, not the UI
+- [x] Menu open — 33 ms → 16 ms once the reflection stopped rendering the whole scene
 - [ ] 60 fps on all 15 posed shots
 - [ ] 60 fps on all 13 gameplay segments
 - [ ] Zero frames over 33 ms in a session
