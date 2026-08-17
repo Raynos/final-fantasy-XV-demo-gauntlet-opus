@@ -10,15 +10,35 @@
  *   node tools/corpus.mjs --list                # print the category index
  *   node tools/corpus.mjs --out shots/corpus --cols 4 --w 3200
  *
+ * Two authoring aids, because a shot is only worth taking if its subject is
+ * actually in frame and both of these were hand-arithmetic before:
+ *
+ *   node tools/corpus.mjs --frame '[{"cam":[x,y,z],"sub":[x,y,z],"fov":42,"u":0.3,"v":0.1}]'
+ *     `target` is the point the frame centres on, so a landmark only lands on
+ *     a third if you aim *beside* it. Give a camera, the subject and where it
+ *     should sit on screen (u right, v up, both -1..1) and this prints the
+ *     `pos`/`target`/`fov` triple to paste into Shots.js.
+ *
+ *   node tools/corpus.mjs --scout '[{"name":"x","sx":900,"sz":-1180,"dist":[600,1400]}]'
+ *     Builds the real heightfield (`src/world/terrain/Field.js`, ~8 s) and
+ *     sweeps a ring of camera positions around a subject, scoring each on
+ *     elevation above it, an unobstructed sight line, and how much relief lies
+ *     beyond it. Prints the best stand. Use it before inventing coordinates:
+ *     several shots in this corpus' history framed empty ground because they
+ *     were authored against a world that had since moved.
+ *
  * Categories come from the `// --- name ---` comment headers in Shots.js, so
  * adding a shot under a header files it automatically.
  *
- * Why this exists rather than a plain `tools/shoot.mjs` run: the capture
- * daemon answers one HTTP request per run, and undici gives up on response
- * *headers* after 300 s. A 128-shot corpus takes longer than that, so a single
- * call fails even though every frame rendered. This chunks the run (default 20
- * shots) and keeps the daemon warm between chunks, which also means a failure
- * costs one chunk instead of the whole corpus.
+ * Why this exists rather than a plain `tools/shoot.mjs` run:
+ *   - the capture daemon answers one HTTP request per run and undici gives up
+ *     on response *headers* after 300 s, so a ~140-shot corpus fails at the
+ *     client even though every frame rendered; this talks to the daemon over
+ *     raw `node:http`, which has no header deadline,
+ *   - the run is **cold by default**. A page that has already served another
+ *     invocation comes back with degraded sky state — the same shot renders a
+ *     lit cloud deck on a fresh page and a black zenith on a reused one — and a
+ *     corpus is meaningless if half of it was shot under different conditions.
  */
 import http from 'node:http';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
@@ -31,11 +51,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 function parseArgs(argv) {
   const o = {
     out: 'shots/corpus', cols: 4, w: 3200, chunk: 0, sheetOnly: false, list: false,
-    only: null, settle: 60, warm: false,
+    only: null, settle: 60, warm: false, frame: null, scout: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--sheet') o.sheetOnly = true;
+    else if (a === '--frame') o.frame = JSON.parse(argv[++i]);
+    else if (a === '--scout') o.scout = JSON.parse(argv[++i]);
     else if (a === '--warm') o.warm = true;
     else if (a === '--list') o.list = true;
     else if (a === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
@@ -145,8 +167,76 @@ async function sheet(dir, names, docs, { cols, w, title, out }) {
   return cells.length;
 }
 
+/**
+ * Solve the `target` that puts `sub` at screen position (u, v) for a camera at
+ * `cam` with vertical fov `fov`. u is right, v is up, both in -1..1.
+ */
+function frame(jobs, aspect = 1600 / 900) {
+  for (const j of jobs) {
+    const [cx, cy, cz] = j.cam;
+    const [sx, sy, sz] = j.sub;
+    const fov = j.fov ?? 42, u = j.u ?? 0, v = j.v ?? 0;
+    const d = [sx - cx, sy - cy, sz - cz];
+    const len = Math.hypot(...d);
+    const f = d.map((n) => n / len);
+    const rl = Math.hypot(f[2], f[0]);
+    const r = [f[2] / rl, 0, -f[0] / rl];
+    const up = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    const tanV = Math.tan((fov / 2) * Math.PI / 180);
+    const du = -u * tanV * aspect * len, dv = -v * tanV * len;
+    const t = [sx + r[0] * du + up[0] * dv, sy + up[1] * dv, sz + r[2] * du + up[2] * dv];
+    console.log(`${(j.name || '').padEnd(20)} pos: [${j.cam.map((n) => +n.toFixed(1)).join(', ')}], `
+      + `target: [${t.map((n) => +n.toFixed(0)).join(', ')}], fov: ${fov},   // ${len.toFixed(0)} m out`);
+  }
+}
+
+/**
+ * Sweep a ring of camera stands around a subject and print the best one.
+ * Score = sight-line clearance + how far the camera stands above the subject
+ * + how much relief sits behind it, which is what makes a vista read.
+ */
+async function scout(jobs) {
+  const { Field } = await import('../src/world/terrain/Field.js');
+  const t0 = Date.now();
+  const field = new Field(1337);
+  field.build();
+  console.error(`[scout] field built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  const h = (x, z) => field.heightAt(x, z);
+  for (const j of jobs) {
+    const sy = h(j.sx, j.sz);
+    const eye = j.eye ?? 2.4;
+    const [b0, b1] = j.bear ?? [0, 356];
+    const [d0, d1] = j.dist ?? [500, 900];
+    let best = null;
+    for (let b = b0; b <= b1; b += 4) {
+      const a = (b * Math.PI) / 180;
+      for (let d = d0; d <= d1; d += 40) {
+        const cx = j.sx + Math.sin(a) * d, cz = j.sz + Math.cos(a) * d;
+        if (Math.abs(cx) > 4000 || Math.abs(cz) > 4000) continue;
+        const cy = h(cx, cz) + eye;
+        let clear = 1e9;
+        for (let t = 0.06; t < 0.98; t += 0.03) {
+          const px = cx + (j.sx - cx) * t, pz = cz + (j.sz - cz) * t;
+          clear = Math.min(clear, cy + (sy - cy) * t - h(px, pz));
+        }
+        let back = 0;
+        for (let e = 200; e <= 1400; e += 100) {
+          back = Math.max(back, h(j.sx - Math.sin(a) * e, j.sz - Math.cos(a) * e) - sy);
+        }
+        const score = Math.min(clear, 40) * 2 + Math.min(cy - sy, 160) * 1.4 + Math.min(back, 300) * 0.5;
+        if (!best || score > best.score) best = { score, cx, cy, cz, d, clear, back, rise: cy - sy };
+      }
+    }
+    console.log(`${(j.name || '').padEnd(20)} pos: [${best.cx.toFixed(0)}, ${best.cy.toFixed(1)}, ${best.cz.toFixed(0)}]`
+      + `  sub: [${j.sx}, ${sy.toFixed(1)}, ${j.sz}]  ${best.d} m out, `
+      + `${best.rise.toFixed(0)} m above, clearance ${best.clear.toFixed(1)} m, backdrop ${best.back.toFixed(0)} m`);
+  }
+}
+
 async function main() {
   const o = parseArgs(process.argv.slice(2));
+  if (o.frame) return frame(o.frame);
+  if (o.scout) return scout(o.scout);
   const { order, groups, docs } = await index();
   const cats = o.only ? order.filter((c) => o.only.includes(c)) : order;
 
