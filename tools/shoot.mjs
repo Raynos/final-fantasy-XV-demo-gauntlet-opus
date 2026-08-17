@@ -28,10 +28,14 @@ const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 function parseArgs(argv) {
-  const opts = { w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false, timeout: 120000 };
+  const opts = {
+    w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false,
+    timeout: 120000, nobake: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--w') opts.w = Number(argv[++i]);
+    if (a === '--nobake') opts.nobake = true;
+    else if (a === '--w') opts.w = Number(argv[++i]);
     else if (a === '--h') opts.h = Number(argv[++i]);
     else if (a === '--settle') opts.settle = Number(argv[++i]);
     else if (a === '--out') opts.out = argv[++i];
@@ -109,7 +113,8 @@ async function main() {
 
   const results = [];
   try {
-    await page.goto(`${URL_BASE}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: opts.timeout });
+    const query = `?q=ultra&shoot=1${opts.nobake ? '&nobake=1' : ''}`;
+    await page.goto(`${URL_BASE}/${query}`, { waitUntil: 'domcontentloaded', timeout: opts.timeout });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: opts.timeout });
 
     // stop the rAF loop; we step manually for determinism

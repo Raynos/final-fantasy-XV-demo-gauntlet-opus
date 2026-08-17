@@ -78,6 +78,42 @@ export class Field {
     this.stats.buildMs = Math.round(performance.now() - t0);
   }
 
+  /**
+   * Rebuild the cheap derived grids from `h` / `far` alone.
+   *
+   * Used by the baked-field path: normals are a two-tap finite difference over
+   * a grid we already have, ~50 ms for both resolutions, so they are recomputed
+   * rather than stored — baking them would cost 16 MB of payload to save a
+   * twentieth of a second.
+   */
+  deriveNormals() {
+    const toHalf = THREE.DataUtils.toHalfFloat;
+    const h = this.h;
+    this.nrm = new Uint16Array(N * N * 2);
+    for (let j = 0; j < N; j++) {
+      const jc = j * N, jm = (j > 0 ? j - 1 : 0) * N, jp = (j < N - 1 ? j + 1 : N - 1) * N;
+      for (let i = 0; i < N; i++) {
+        const im = i > 0 ? i - 1 : 0, ip = i < N - 1 ? i + 1 : N - 1;
+        let nx = (h[jc + im] - h[jc + ip]) / (2 * CELL);
+        let nz = (h[jm + i] - h[jp + i]) / (2 * CELL);
+        const inv = 1 / Math.sqrt(nx * nx + nz * nz + 1);
+        this.nrm[(jc + i) * 2] = toHalf(nx * inv);
+        this.nrm[(jc + i) * 2 + 1] = toHalf(nz * inv);
+      }
+    }
+    this.farNrm = new Uint16Array(FAR_N * FAR_N * 2);
+    for (let j = 0; j < FAR_N; j++) {
+      for (let i = 0; i < FAR_N; i++) {
+        const idx = j * FAR_N + i;
+        let nx = (this._farAt(i - 1, j) - this._farAt(i + 1, j)) / (2 * FAR_CELL);
+        let nz = (this._farAt(i, j - 1) - this._farAt(i, j + 1)) / (2 * FAR_CELL);
+        const inv = 1 / Math.sqrt(nx * nx + nz * nz + 1);
+        this.farNrm[idx * 2] = toHalf(nx * inv);
+        this.farNrm[idx * 2 + 1] = toHalf(nz * inv);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- far field
 
   /** Distant ranges: ridged multifractal that only switches on past ~1.2 km. */

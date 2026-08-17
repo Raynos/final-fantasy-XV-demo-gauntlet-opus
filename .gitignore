@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Cached output of our own generators (tools/bake.mjs). Not an authored asset:
+# deleted, the game regenerates it at runtime; stale, the build step re-bakes.
+public/baked/
 shots/
 .DS_Store
 .claude/worktrees/
