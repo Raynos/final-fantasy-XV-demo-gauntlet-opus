@@ -18,12 +18,28 @@ const EYE = 0xff3018;
  */
 export const GOBLIN = {
   key: 'goblin',
+  questId: 'goblin',
+  faction: 'daemon',
+  expClass: 'daemon',
   stats: {
     name: 'Goblin', hp: 420, poise: 24, speed: 4.2, attackRange: 1.7,
     aggroRange: 22, radius: 0.42, height: 1.30, damage: 62, level: 11,
   },
   weakness: 'light',
+  resistPct: { light: 185, dark: 0, fire: 110, ice: 100, lightning: 100 },
+  weakTo: ['dagger'],
+  senses: { sight: 22, fov: 2.2, hearing: 16, nocturnal: true },
+  drops: [
+    { id: 'rotten_splinterbone', chance: 0.30, count: 1 },
+    { id: 'debased_coin', chance: 0.35, count: 2 },
+  ],
   timing: { telegraph: 0.36, strike: 0.14, attack: 0.38, recover: 0.55 },
+  attacks: [
+    { id: 'claw', range: 1.9, weight: 3, mult: 1.0, poise: 8, hitRadius: 1.5,
+      telegraph: 0.32, strike: 0.13, attack: 0.36, recover: 0.5, cooldown: 0.9 },
+    { id: 'leap', range: 7, minRange: 3, weight: 1, mult: 1.4, poise: 16, hitRadius: 1.7,
+      telegraph: 0.5, strike: 0.16, attack: 0.5, recover: 0.8, cooldown: 4, lunge: 10 },
+  ],
   buildPrototype,
   make(opts) { return new GoblinEnemy(opts); },
 };

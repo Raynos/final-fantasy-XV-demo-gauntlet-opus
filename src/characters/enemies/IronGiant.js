@@ -21,12 +21,31 @@ const BLADE = 0x5a6068;
  */
 export const IRON_GIANT = {
   key: 'irongiant',
+  questId: 'iron_giant',
+  faction: 'daemon',
+  expClass: 'elite',
+  superArmour: true,
+  staggerDuration: 3.2,
   stats: {
     name: 'Iron Giant', hp: 14800, poise: 260, speed: 2.1, attackRange: 5.2,
     aggroRange: 40, radius: 1.5, height: 5.4, damage: 460, level: 46,
   },
   weakness: 'lightning',
+  resistPct: { light: 175, dark: 0, lightning: 165, fire: 90, ice: 100 },
+  weakTo: ['greatsword'],
+  resistsWeapon: ['firearm'],
+  senses: { sight: 40, fov: 1.8, hearing: 26, nocturnal: true },
+  drops: [
+    { id: 'rotten_splinterbone', chance: 0.7, count: 2 },
+    { id: 'mythril_shaft', chance: 0.2, count: 1 },
+  ],
   timing: { telegraph: 1.15, strike: 0.28, attack: 0.9, recover: 1.5 },
+  attacks: [
+    { id: 'cleave', range: 5.6, weight: 3, mult: 1.0, poise: 40, hitRadius: 4.0, arc: 1.1,
+      telegraph: 1.15, strike: 0.28, attack: 0.9, recover: 1.5, cooldown: 2.2 },
+    { id: 'sweep', range: 6.4, weight: 2, mult: 1.2, poise: 55, hitRadius: 5.2, arc: 2.0, aoe: true,
+      telegraph: 1.35, strike: 0.32, attack: 1.0, recover: 1.8, cooldown: 5, unblockable: true },
+  ],
   buildPrototype,
   make(opts) { return new IronGiantEnemy(opts); },
 };

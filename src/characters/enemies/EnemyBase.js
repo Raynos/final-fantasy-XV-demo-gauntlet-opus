@@ -4,11 +4,24 @@ import { normalFromHeight, makeDataMap } from '../../util/TextureGen.js';
 import { Noise } from '../../util/Noise.js';
 
 /**
- * Shared enemy behaviour: aggro, approach, telegraph, attack, flinch, death,
- * plus the hit/poise model the combat system drives.
+ * Shared enemy behaviour.
+ *
+ * An enemy runs a small perception → decision → action loop:
+ *
+ *   sleep ─(wake hour)─▶ patrol ─(see/hear)─▶ alert ─(confirm)─▶ combat
+ *     ▲                    ▲                                      │
+ *     └──────── return ◀───┴──────────────(lost target, leashed)◀─┘
+ *
+ * In combat the pack (see `game/encounters/Pack.js`) hands out roles so a
+ * group flanks and takes turns instead of queueing: only a couple of members
+ * hold the `engage` token at once, everyone else circles to a ring slot.
  *
  * Subclasses supply `buildPrototype()` (geometry + rig, built once per type
- * and instanced via skeleton cloning) and `pose(state, phase, ctx)`.
+ * and instanced via skeleton cloning) and `pose(state, phase, ctx)`. `pose` is
+ * always called with the *legacy* state vocabulary
+ * (`idle|approach|run|telegraph|attack|flinch|stagger|death`) so the four
+ * original species keep working; richer species can read `this.state` and
+ * `this.attackId` directly for extra variants.
  */
 export class Enemy {
   constructor(type, opts = {}) {
@@ -19,6 +32,7 @@ export class Enemy {
     this.heading = opts.heading ?? 0;
 
     const s = type.stats;
+    this.baseMaxHp = s.hp;
     this.maxHp = opts.maxHp ?? s.hp;
     this.hp = this.maxHp;
     this.maxPoise = s.poise;
@@ -31,7 +45,14 @@ export class Enemy {
     this.damage = s.damage;
     this.scale = opts.scale ?? 1;
     this.level = opts.level ?? s.level ?? 12;
-    this.name = s.name;
+    this.name = opts.name || s.name;
+
+    /** 'beast' | 'daemon' | 'imperial' — drives spawn windows and light weakness. */
+    this.faction = type.faction || 'beast';
+    /** EXP bucket read by `Stats.expForKill`. */
+    this.expClass = opts.expClass || type.expClass || 'normal';
+    /** Stable id the quest log matches kill objectives against. */
+    this.speciesId = type.questId || type.key;
 
     this.state = 'idle';
     this.stateTime = 0;
@@ -39,13 +60,51 @@ export class Enemy {
     this.target = null;
     this.dead = false;
     this.staggered = false;
+    this.staggerTime = 0;
     this.flinchTime = 0;
     this.attackCooldown = opts.cooldown ?? 1.2;
     this.locked = false;         // player has lock-on
     this.frozenPose = null;      // scenario override
+    this.corpseTime = 0;
+
+    /* ---- perception / territory ------------------------------------- */
+    const sense = type.senses || {};
+    this.sight = sense.sight ?? s.aggroRange;
+    this.fov = sense.fov ?? 1.9;               // half-angle, radians
+    this.hearing = sense.hearing ?? 12;
+    this.nocturnal = !!(sense.nocturnal ?? (type.faction === 'daemon'));
+    /** Rises while the enemy is noticing something, falls when it is not. */
+    this.awareness = 0;
+    this.home = new THREE.Vector3();
+    this.leash = opts.leash ?? 44;
+    this.patrol = null;          // {points:[Vector3], index, wait, waitTimer}
+    this.packRole = 'engage';
+    this.slotAngle = 0;
+    this.pack = null;
+    this._senseTimer = (this.id % 7) * 0.037;
+    this._roleTimer = 0;
+    this._lostTimer = 0;
+    this._strafeDir = (this.id % 2) ? 1 : -1;
+    this._wanderTimer = 0;
+    this._wanderAngle = 0;
+
+    /* ---- attacks ----------------------------------------------------- */
+    this.attacks = type.attacks || null;
+    this.attack = null;          // the attack currently being performed
+    this.attackId = null;
+    this._swung = false;
+    this._atkCooldown = 0;
+
+    this.boss = !!type.boss;
+    this.phaseIndex = 0;         // boss phase, driven by BossFight
+    this.invulnerable = false;
+    this.superArmour = !!type.superArmour;
   }
 
   get position() { return this.root.position; }
+
+  /** Fraction of max HP remaining, 0..1. */
+  get hpFraction() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
 
   /** Instantiate the shared prototype for this enemy. */
   attachVisual(proto) {
@@ -61,8 +120,40 @@ export class Enemy {
     this.mesh = mesh;
     this.visual = group;
     group.scale.setScalar(this.scale);
+    group.position.set(0, 0, 0);
+    group.rotation.set(0, 0, 0);
     this.root.add(group);
     return group;
+  }
+
+  /** Reset a pooled instance back to a spawnable state. */
+  reset(opts = {}) {
+    this.maxHp = opts.maxHp ?? this.baseMaxHp;
+    this.hp = this.maxHp;
+    this.poise = this.maxPoise;
+    this.level = opts.level ?? this.type.stats.level ?? 12;
+    this.damage = opts.damage ?? this.type.stats.damage;
+    this.dead = false;
+    this.staggered = false;
+    this.corpseTime = 0;
+    this.awareness = 0;
+    this.target = null;
+    this.pack = null;
+    this.patrol = null;
+    this.attack = null;
+    this.attackId = null;
+    this.invulnerable = false;
+    this.frozenPose = null;
+    this.phaseIndex = 0;
+    this.setState('idle');
+    this.stateTime = 0;
+    if (this.visual) {
+      this.visual.rotation.set(0, 0, 0);
+      this.visual.position.set(0, 0, 0);
+      this.visual.visible = true;
+      this.visual.scale.setScalar(this.scale);
+    }
+    return this;
   }
 
   /** Centre of mass in world space — the point VFX and lock-on aim at. */
@@ -71,43 +162,89 @@ export class Enemy {
   }
 
   /**
+   * Percent-of-damage-taken for an element. 100 = neutral, >100 weak,
+   * <100 resistant, 0 immune. Feeds `Stats.computeDamage` unchanged.
+   * @param {string} element
+   */
+  resistance(element) {
+    const t = this.type;
+    if (t.resistPct && t.resistPct[element] != null) return t.resistPct[element];
+    if (t.weakness === element) return 160;
+    if (t.resist === element) return 50;
+    if (element === 'light' && this.faction === 'daemon') return 175;
+    return 100;
+  }
+
+  /** Weapon classes this creature is soft against (`computeDamage`). */
+  get weakTo() { return this.type.weakTo || EMPTY; }
+  /** Weapon classes that bounce off it. */
+  get resistsWeapon() { return this.type.resistsWeapon || EMPTY; }
+  /** Stagger multiplier the damage formula uses. */
+  get staggerMult() { return this.staggered ? 2.0 : (this.state === 'telegraph' ? 1.25 : 1); }
+  /** Physical mitigation, so `computeDamage` has something to bite on. */
+  get defense() { return Math.round(8 + this.level * 3.1 + (this.type.defense || 0)); }
+  get magicDefense() { return Math.round(6 + this.level * 2.6 + (this.type.magicDefense || 0)); }
+
+  /**
    * Apply damage. Returns a result the combat system turns into events.
    * @param {number} amount
    * @param {THREE.Vector3} dir world-space direction of the blow
-   * @param {object} o {poise, blindside, element}
+   * @param {object} o {poise, blindside, element, weaponClass, noFlinch}
    */
   hit(amount, dir, o = {}) {
-    if (this.dead) return null;
+    if (this.dead || this.invulnerable) return null;
     let dmg = amount;
-    if (o.blindside) dmg *= 1.5;
-    const weak = this.type.weakness;
-    if (weak && o.element === weak) dmg *= 1.6;
-    const resist = this.type.resist;
-    if (resist && o.element === resist) dmg *= 0.5;
-    dmg = Math.round(dmg);
+    if (o.blindside) dmg *= 1.35;
+
+    const el = o.element || 'physical';
+    if (el !== 'physical') dmg *= this.resistance(el) / 100;
+    if (o.weaponClass) {
+      if (this.weakTo.includes(o.weaponClass)) dmg *= 1.4;
+      else if (this.resistsWeapon.includes(o.weaponClass)) dmg *= 0.6;
+    }
+    if (this.staggered) dmg *= 1.7;
+    dmg = Math.max(1, Math.round(dmg));
     this.hp -= dmg;
 
-    this.poise -= (o.poise ?? 10);
     let staggered = false;
-    if (this.poise <= 0) {
-      this.poise = this.maxPoise;
-      staggered = true;
-      this.setState('stagger');
-    } else if (this.state !== 'stagger') {
-      this.setState('flinch');
+    if (!this.superArmour || this.hp <= this.maxHp * 0.35) {
+      this.poise -= (o.poise ?? 10);
+      if (this.poise <= 0) {
+        this.poise = this.maxPoise;
+        staggered = true;
+        this.staggered = true;
+        this.staggerTime = this.type.staggerDuration || 2.4;
+        this._endAttack();
+        this.setState('stagger');
+      } else if (this.state !== 'stagger' && !o.noFlinch && !this.superArmour
+        && this.state !== 'attack' && this.state !== 'telegraph') {
+        this.setState('flinch');
+      }
     }
     this.flinchDir = dir ? dir.clone().normalize() : new THREE.Vector3(0, 0, 1);
 
-    if (this.hp <= 0) { this.hp = 0; this.die(); }
+    // being hit is the loudest possible cue
+    if (!this.target && o.source) this.target = o.source;
+    this.awareness = 1;
+    if (this.state === 'idle' || this.state === 'patrol' || this.state === 'sleep' || this.state === 'alert') {
+      this.setState('chase');
+    }
+
+    if (this.hp <= 0) { this.hp = 0; this.die(o.killer || null); }
     return {
       enemy: this, damage: dmg, staggered, killed: this.dead,
       crit: !!o.blindside, element: o.element || null,
     };
   }
 
-  die() {
+  die(killer = null) {
     this.dead = true;
+    this.killer = killer;
+    this.invulnerable = true;
+    this.corpseTime = 0;
+    this.attack = null;
     this.setState('death');
+    if (this.pack) this.pack.onDeath(this);
   }
 
   setState(s) {
@@ -116,60 +253,389 @@ export class Enemy {
     this.stateTime = 0;
   }
 
+  /* ------------------------------------------------------------ senses */
+
   /**
-   * Simple but readable combat AI: notice, close the distance, telegraph,
-   * commit, recover. Telegraphs are deliberately long so hits are dodgeable.
+   * Can this enemy perceive `t` right now? Sight is a cone, narrowed at
+   * night for daylight animals and widened for daemons; hearing is a plain
+   * radius scaled by how fast the target is moving.
+   * @param {object} t something with `.position` and optional `.speed`
+   * @param {object} ctx
+   */
+  perceives(t, ctx) {
+    const p = t.position || t.root?.position;
+    if (!p) return 0;
+    const dx = p.x - this.root.position.x, dz = p.z - this.root.position.z;
+    const d2 = dx * dx + dz * dz;
+    const night = ctx && ctx.night ? ctx.night : 0;
+    const sightRange = this.sight * (this.nocturnal ? 1 + night * 0.45 : 1 - night * 0.3);
+    if (d2 < sightRange * sightRange) {
+      const d = Math.sqrt(d2) || 1e-4;
+      const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+      const dot = (dx / d) * fx + (dz / d) * fz;
+      // very close range is felt, not seen
+      if (d < this.radius * 3 + 2.5 || dot > Math.cos(this.fov)) {
+        return THREE.MathUtils.clamp(1.6 - d / sightRange, 0.25, 1);
+      }
+    }
+    const noise = t.speed != null ? THREE.MathUtils.clamp(t.speed / 5, 0.25, 1.4) : 0.8;
+    const hear = this.hearing * noise;
+    if (d2 < hear * hear) return 0.45;
+    return 0;
+  }
+
+  /* ------------------------------------------------------------ combat */
+
+  /** Pick the next attack whose range covers `dist`, weighted. */
+  _chooseAttack(dist, rng) {
+    const list = this.attacks;
+    if (!list || !list.length) return null;
+    let total = 0;
+    for (const a of list) {
+      if (a.phase != null && a.phase > this.phaseIndex) continue;
+      if (dist > (a.range || this.attackRange) * this.scale) continue;
+      if (a.minRange && dist < a.minRange * this.scale) continue;
+      total += a.weight || 1;
+    }
+    if (total <= 0) return null;
+    let r = (rng ? rng() : Math.random()) * total;
+    for (const a of list) {
+      if (a.phase != null && a.phase > this.phaseIndex) continue;
+      if (dist > (a.range || this.attackRange) * this.scale) continue;
+      if (a.minRange && dist < a.minRange * this.scale) continue;
+      r -= (a.weight || 1);
+      if (r <= 0) return a;
+    }
+    return null;
+  }
+
+  /** Longest range any currently usable attack reaches. */
+  get reach() {
+    if (!this.attacks) return this.attackRange * this.scale;
+    let m = 0;
+    for (const a of this.attacks) {
+      if (a.phase != null && a.phase > this.phaseIndex) continue;
+      m = Math.max(m, (a.range || this.attackRange));
+    }
+    return (m || this.attackRange) * this.scale;
+  }
+
+  /**
+   * The distance this creature actually wants to fight at — the range of its
+   * *shortest* attack, not its longest. Without this a melee enemy parks at
+   * the edge of its leap range and swings at nothing.
+   */
+  get fightRange() {
+    if (!this.attacks || !this.attacks.length) return this.attackRange * this.scale;
+    let m = Infinity;
+    for (const a of this.attacks) {
+      if (a.phase != null && a.phase > this.phaseIndex) continue;
+      if (a.lunge) continue;                     // a leap is an opener, not a station
+      m = Math.min(m, a.range || this.attackRange);
+    }
+    if (!Number.isFinite(m)) m = this.reach / this.scale;
+    return m * this.scale;
+  }
+
+  _beginAttack(a) {
+    this.attack = a;
+    this.attackId = a ? a.id : null;
+    this._swung = false;
+    this.setState('telegraph');
+  }
+
+  _endAttack() {
+    this.attack = null;
+    this.attackId = null;
+    this._swung = false;
+  }
+
+  /** Timing for the current attack, falling back to the legacy table. */
+  _timing(field) {
+    const t = this.type.timing || DEFAULT_TIMING;
+    if (this.attack && this.attack[field] != null) return this.attack[field];
+    return t[field] != null ? t[field] : DEFAULT_TIMING[field];
+  }
+
+  /* -------------------------------------------------------------- tick */
+
+  /**
+   * @param {number} dt
+   * @param {object} ctx {terrain, player, allies, others, night, onStrike, rng}
    */
   update(dt, ctx) {
     this.stateTime += dt;
     this.phase += dt;
     if (this.frozenPose) return;
+    if (this._atkCooldown > 0) this._atkCooldown -= dt;
+
+    if (this.dead) {
+      this.corpseTime += dt;
+      this.pose('death', this.phase, ctx);
+      return;
+    }
+
+    if (this.staggered) {
+      this.staggerTime -= dt;
+      if (this.staggerTime <= 0) { this.staggered = false; this.setState('chase'); }
+    }
+
+    this._sense(dt, ctx);
 
     const target = this.target;
-    const dist = target ? this.root.position.distanceTo(target.position) : Infinity;
+    const tp = target ? (target.position || target.root?.position) : null;
+    const dist = tp ? Math.hypot(tp.x - this.root.position.x, tp.z - this.root.position.z) : Infinity;
 
     switch (this.state) {
-      case 'idle':
-        if (target && dist < this.aggroRange) this.setState('approach');
-        break;
-      case 'approach': {
-        if (!target) { this.setState('idle'); break; }
-        this._face(target.position, dt, 5);
-        if (dist > this.attackRange * 0.9) this._advance(dt, target, ctx);
-        else if (this.stateTime > this.attackCooldown * 0.35) this.setState('telegraph');
-        break;
-      }
-      case 'telegraph':
-        this._face(target ? target.position : null, dt, 2.4);
-        if (this.stateTime > this.type.timing.telegraph) this.setState('attack');
-        break;
-      case 'attack':
-        if (!this._swung && this.stateTime > this.type.timing.strike) {
-          this._swung = true;
-          if (ctx && ctx.onEnemyStrike) ctx.onEnemyStrike(this);
-        }
-        if (this.stateTime > this.type.timing.attack) { this._swung = false; this.setState('recover'); }
-        break;
+      case 'sleep': break;
+      case 'idle': this._tickIdle(dt, ctx); break;
+      case 'patrol': this._tickPatrol(dt, ctx); break;
+      case 'alert': this._tickAlert(dt, ctx, tp); break;
+      case 'return': this._tickReturn(dt, ctx); break;
+      case 'chase':
+      case 'approach': this._tickChase(dt, ctx, target, tp, dist); break;
+      case 'strafe': this._tickStrafe(dt, ctx, target, tp, dist); break;
+      case 'telegraph': this._tickTelegraph(dt, ctx, tp, dist); break;
+      case 'attack': this._tickAttack(dt, ctx, target, tp, dist); break;
       case 'recover':
-        if (this.stateTime > this.type.timing.recover) this.setState(target ? 'approach' : 'idle');
+        this._face(tp, dt, 2.0);
+        if (this.stateTime > this._timing('recover')) {
+          this._endAttack();
+          this.setState(target ? 'strafe' : 'return');
+        }
         break;
       case 'flinch':
-        if (this.stateTime > 0.35) this.setState('approach');
+        if (this.stateTime > 0.35) this.setState(target ? 'chase' : 'idle');
         break;
       case 'stagger':
-        if (this.stateTime > 2.2) this.setState('approach');
+        if (!this.staggered) this.setState(target ? 'chase' : 'idle');
         break;
-      case 'death':
-        break;
-      default: break;
+      default: this.setState('idle'); break;
     }
 
     // terrain follow
     if (ctx && ctx.terrain) {
-      this.root.position.y = ctx.terrain.heightAt(this.root.position.x, this.root.position.z);
+      const gy = ctx.terrain.heightAt(this.root.position.x, this.root.position.z);
+      this.root.position.y = this.airborne ? Math.max(gy, this.root.position.y) : gy;
     }
     this.root.rotation.y = this.heading;
-    this.pose(this.state, this.phase, ctx);
+    this.pose(POSE_MAP[this.state] || 'idle', this.phase, ctx);
+  }
+
+  /** Notice things, lose interest in things. */
+  _sense(dt, ctx) {
+    this._senseTimer -= dt;
+    if (this._senseTimer > 0) return;
+    this._senseTimer = 0.22;
+    const step = 0.22;
+
+    if (this.state === 'sleep') {
+      // daemons sleep by day, beasts by night — until something walks into them
+      const wake = this.nocturnal ? (ctx.night > 0.05) : (ctx.night < 0.4);
+      if (wake) this.setState('patrol');
+      else if (ctx.player && this.root.position.distanceTo(ctx.player.position) < 6) this.setState('alert');
+      return;
+    }
+
+    let best = null, bestScore = 0;
+    const cands = ctx.threats || (ctx.player ? [ctx.player] : EMPTY);
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      if (!c || c.downed || c.ko) continue;
+      // Noctis is the fight. Companions only pull aggro when they are much
+      // closer, or when Gladio has deliberately taken it with Coverage.
+      const score = this.perceives(c, ctx) * (c.threatWeight != null ? c.threatWeight : 1);
+      if (score > bestScore) { bestScore = score; best = c; }
+    }
+
+    if (bestScore > 0) {
+      this.awareness = Math.min(1, this.awareness + bestScore * step * 3.2);
+      this.target = best;
+      this._lostTimer = 0;
+      if (this.awareness >= 0.55 && (this.state === 'idle' || this.state === 'patrol' || this.state === 'alert')) {
+        this.setState('chase');
+        if (this.pack) this.pack.alert(this, best);
+      } else if (this.awareness > 0.12 && (this.state === 'idle' || this.state === 'patrol')) {
+        this.setState('alert');
+      }
+    } else {
+      this.awareness = Math.max(0, this.awareness - step * 0.45);
+      if (this.inCombat) {
+        this._lostTimer += step;
+        if (this._lostTimer > 8) this._giveUp();
+      } else if (this.state === 'alert' && this.awareness <= 0.02) {
+        this.setState('patrol');
+      }
+    }
+
+    // leashing: never chase forever
+    if (this.inCombat && this.home.lengthSq() > 0) {
+      const dh = Math.hypot(this.root.position.x - this.home.x, this.root.position.z - this.home.z);
+      if (dh > this.leash) this._giveUp();
+    }
+  }
+
+  /** True while this enemy is actively pursuing or attacking something. */
+  get inCombat() {
+    const s = this.state;
+    return s === 'chase' || s === 'approach' || s === 'strafe'
+      || s === 'telegraph' || s === 'attack' || s === 'recover';
+  }
+
+  /**
+   * True while this enemy counts as part of a live fight. Wider than
+   * `inCombat`: an enemy reeling from a hit has not stopped fighting, it is
+   * just not in a position to act — the encounter must not declare victory
+   * over something that is mid-stagger.
+   */
+  get fighting() {
+    return this.inCombat || this.state === 'flinch' || this.state === 'stagger';
+  }
+
+  _giveUp() {
+    this.target = null;
+    this.awareness = 0;
+    this._lostTimer = 0;
+    this._endAttack();
+    this.setState('return');
+  }
+
+  _tickIdle(dt, ctx) {
+    if (this.patrol) { this.setState('patrol'); return; }
+    this._wanderTimer -= dt;
+    if (this._wanderTimer <= 0) {
+      this._wanderTimer = 3 + (this.id % 5);
+      this._wanderAngle = this.heading + ((this.id * 37 % 100) / 100 - 0.5) * 2.2;
+    }
+    this.heading += (this._wanderAngle - this.heading) * Math.min(1, dt * 0.8);
+  }
+
+  _tickPatrol(dt, ctx) {
+    const p = this.patrol;
+    if (!p || !p.points.length) { this.setState('idle'); return; }
+    const wp = p.points[p.index % p.points.length];
+    const dx = wp.x - this.root.position.x, dz = wp.z - this.root.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 2.2) {
+      p.waitTimer -= dt;
+      if (p.waitTimer <= 0) { p.index++; p.waitTimer = p.wait; }
+      this._tickIdle(dt, ctx);
+      return;
+    }
+    this._face(wp, dt, 2.4);
+    this._move(dt, dx / d, dz / d, this.speed * 0.32, ctx);
+  }
+
+  _tickAlert(dt, ctx, tp) {
+    // stand up, look toward whatever it was
+    if (tp) this._face(tp, dt, 3.0);
+    if (this.stateTime > 4.5 && this.awareness < 0.2) this.setState('patrol');
+  }
+
+  _tickReturn(dt, ctx) {
+    if (this.home.lengthSq() === 0) { this.setState('idle'); return; }
+    const dx = this.home.x - this.root.position.x, dz = this.home.z - this.root.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 2.5) { this.setState(this.patrol ? 'patrol' : 'idle'); return; }
+    this._face(this.home, dt, 3.0);
+    this._move(dt, dx / d, dz / d, this.speed * 0.55, ctx);
+  }
+
+  _tickChase(dt, ctx, target, tp, dist) {
+    if (!target || !tp) { this.setState('return'); return; }
+    this._role(dt);
+    this._face(tp, dt, 5);
+
+    const want = this.fightRange * 0.85;
+    if (this.packRole === 'engage' && this._atkCooldown <= 0 && dist <= this.reach) {
+      const a = this._chooseAttack(dist, ctx.rng);
+      if (a) { this._beginAttack(a); return; }
+    }
+    if (this.packRole !== 'engage' && dist < want * 1.4) { this.setState('strafe'); return; }
+
+    // Everyone closes along their own bearing, not down the same line: the
+    // attackers come in on their slot, the flankers hold the ring on theirs.
+    // That is the whole difference between a pack and a queue.
+    const r = this.packRole === 'engage'
+      ? want * 0.7
+      : want * 1.6 + this.radius * this.scale;
+    const gx = tp.x + Math.sin(this.slotAngle) * r;
+    const gz = tp.z + Math.cos(this.slotAngle) * r;
+    const dx = gx - this.root.position.x, dz = gz - this.root.position.z;
+    const d = Math.hypot(dx, dz) || 1;
+    if (d < 0.6) { this.setState('strafe'); return; }
+    this._move(dt, dx / d, dz / d, this.speed, ctx);
+  }
+
+  /** Circle the target waiting for a turn. This is what stops the conga line. */
+  _tickStrafe(dt, ctx, target, tp, dist) {
+    if (!target || !tp) { this.setState('return'); return; }
+    this._role(dt);
+    this._face(tp, dt, 4.5);
+    const want = this.fightRange * 0.85;
+    if (this.packRole === 'engage' && this._atkCooldown <= 0) {
+      if (dist <= this.reach) {
+        const a = this._chooseAttack(dist, ctx.rng);
+        if (a) { this._beginAttack(a); return; }
+      }
+      this.setState('chase');
+      return;
+    }
+    if (dist > want * 2.6 + 4) { this.setState('chase'); return; }
+
+    // Hold the assigned bearing on the ring, and let the whole ring rotate
+    // slowly, so the pressure on the player keeps coming from a new angle.
+    this.slotAngle += this._strafeDir * dt * 0.45;
+    const ring = want * 1.5 + this.radius * this.scale;
+    const gx = tp.x + Math.sin(this.slotAngle) * ring;
+    const gz = tp.z + Math.cos(this.slotAngle) * ring;
+    const dx = gx - this.root.position.x, dz = gz - this.root.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 0.35) this._move(dt, dx / d, dz / d, this.speed * 0.62, ctx);
+    if (this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
+  }
+
+  _tickTelegraph(dt, ctx, tp, dist) {
+    const a = this.attack;
+    this._face(tp, dt, a && a.tracking != null ? a.tracking : 2.4);
+    if (a && a.approachDuring && tp) {
+      const dx = tp.x - this.root.position.x, dz = tp.z - this.root.position.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > this.reach * 0.6) this._move(dt, dx / d, dz / d, this.speed * 0.4, ctx);
+    }
+    if (this.stateTime > this._timing('telegraph')) this.setState('attack');
+  }
+
+  _tickAttack(dt, ctx, target, tp, dist) {
+    const a = this.attack;
+    // a lunge carries all the way through the active window, decaying, so a
+    // leap actually arrives instead of stopping short of its own target
+    if (a && a.lunge) {
+      const T = this._timing('attack');
+      const k = Math.max(0, 1 - this.stateTime / Math.max(0.05, T));
+      if (k > 0) {
+        const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+        this._move(dt, fx, fz, a.lunge * k, ctx, true);
+      }
+    }
+    if (!this._swung && this.stateTime > this._timing('strike')) {
+      this._swung = true;
+      if (ctx && ctx.onStrike) ctx.onStrike(this, a);
+      else if (ctx && ctx.onEnemyStrike) ctx.onEnemyStrike(this);
+    }
+    if (this.stateTime > this._timing('attack')) {
+      this._atkCooldown = (a && a.cooldown != null ? a.cooldown : this.attackCooldown);
+      this.setState('recover');
+    }
+  }
+
+  /** Ask the pack whether we hold the engage token. */
+  _role(dt) {
+    this._roleTimer -= dt;
+    if (this._roleTimer > 0) return;
+    this._roleTimer = 0.55;
+    if (this.pack) this.pack.assign(this);
+    else this.packRole = 'engage';
   }
 
   _face(p, dt, k = 6) {
@@ -181,27 +647,24 @@ export class Enemy {
     this.heading += d * Math.min(1, k * dt);
   }
 
-  _advance(dt, target, ctx) {
-    const sp = this.speed * (this.state === 'approach' ? 1 : 0.4);
-    const dx = target.position.x - this.root.position.x;
-    const dz = target.position.z - this.root.position.z;
-    const l = Math.hypot(dx, dz) || 1;
-    this.root.position.x += (dx / l) * sp * dt;
-    this.root.position.z += (dz / l) * sp * dt;
-    this.velocity.set((dx / l) * sp, 0, (dz / l) * sp);
-    // separation from other enemies so a pack doesn't stack up
-    if (ctx && ctx.others) {
-      for (const o of ctx.others) {
-        if (o === this || o.dead) continue;
-        const ox = this.root.position.x - o.root.position.x;
-        const oz = this.root.position.z - o.root.position.z;
-        const d2 = ox * ox + oz * oz;
-        const minD = (this.radius + o.radius) * 1.05;
-        if (d2 < minD * minD && d2 > 1e-4) {
-          const d = Math.sqrt(d2), push = (minD - d) * 2.4 * dt;
-          this.root.position.x += (ox / d) * push;
-          this.root.position.z += (oz / d) * push;
-        }
+  /** Move along a unit direction with pack separation. */
+  _move(dt, nx, nz, sp, ctx, skipSeparation = false) {
+    this.root.position.x += nx * sp * dt;
+    this.root.position.z += nz * sp * dt;
+    this.velocity.set(nx * sp, 0, nz * sp);
+    if (skipSeparation || !ctx || !ctx.others) return;
+    const others = ctx.others;
+    for (let i = 0; i < others.length; i++) {
+      const o = others[i];
+      if (o === this || o.dead) continue;
+      const ox = this.root.position.x - o.root.position.x;
+      const oz = this.root.position.z - o.root.position.z;
+      const d2 = ox * ox + oz * oz;
+      const minD = (this.radius * this.scale + o.radius * o.scale) * 1.05;
+      if (d2 < minD * minD && d2 > 1e-4) {
+        const d = Math.sqrt(d2), push = (minD - d) * 2.4 * dt;
+        this.root.position.x += (ox / d) * push;
+        this.root.position.z += (oz / d) * push;
       }
     }
   }
@@ -220,6 +683,20 @@ export class Enemy {
 
   unfreeze() { this.frozenPose = null; }
 }
+
+const EMPTY = [];
+const DEFAULT_TIMING = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
+
+/**
+ * Map the richer AI vocabulary onto the pose vocabulary the original four
+ * species were written against, so no existing `pose()` has to change.
+ */
+const POSE_MAP = {
+  sleep: 'idle', idle: 'idle', patrol: 'approach', alert: 'idle',
+  return: 'approach', chase: 'approach', approach: 'approach', strafe: 'approach',
+  telegraph: 'telegraph', attack: 'attack', recover: 'attack',
+  flinch: 'flinch', stagger: 'stagger', death: 'death',
+};
 
 /* ------------------------------------------------------------ textures */
 
