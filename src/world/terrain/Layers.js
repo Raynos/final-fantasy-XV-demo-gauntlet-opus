@@ -167,7 +167,12 @@ const RECIPES = [
     const fracture = sstep(0.0, 0.055, frac.f2 - frac.f1);
     const grit = fbm(u, v, 40, 40, 47, 4);
     const chip = fbm(u, v, 12, 6, 53, 3);
-    const height = clamp01(bedStep * 0.20 + fracture * 0.26 + grit * 0.24 + chip * 0.34);
+    // The bedding relief in the *tile* is kept very low. It repeats on a fixed
+    // 3-15 m period wherever the layer is drawn, so any strength here shows up
+    // as identical corduroy on every rock face in the frame. The strong, varied
+    // banding comes from the shader's analytic beds instead; this tile only
+    // supplies grain, jointing and chip.
+    const height = clamp01(bedStep * 0.075 + fracture * 0.28 + grit * 0.27 + chip * 0.38);
     const hueSel = clamp01(0.5 + 0.5 * b2);
     const blotch = fbm(u, v, 5, 3, 59, 3);
     const stain = fbm(u, v, 3, 9, 67, 4);
@@ -177,7 +182,7 @@ const RECIPES = [
     const dark = mix(0.70, 1.0, fracture);
     return {
       height, color: [r * dark, g * dark, b * dark],
-      rough: mix(0.88, 0.64, bedStep), ao: mix(0.52, 1.0, fracture) * mix(0.80, 1.0, bedStep),
+      rough: mix(0.86, 0.74, bedStep), ao: mix(0.52, 1.0, fracture) * mix(0.90, 1.0, bedStep),
     };
   },
   // 4 — bleached dry grass / scrub mat with bare dirt showing through

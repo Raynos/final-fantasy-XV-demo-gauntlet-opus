@@ -249,6 +249,11 @@ export class Terrain {
         * ss(0.12, 0.66, 0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * c.sediment),
       road: c.road * 5.5 * (1 - ss(0.30, 0.55, slope)),
     };
+    // talus / scree band under the cliffs — mirrors the shader exactly
+    const scree = ss(0.15, 0.31, slope) * (1 - ss(0.33, 0.52, slope)) * ss(0.30, 0.70, c.rocky)
+      * (0.55 + 0.45 * (0.5 + 0.5 * gnoise2(x * 0.021 - 3, z * 0.021 - 3)));
+    w.gravel += 0.55 * scree;
+    w.rock -= 0.22 * scree;
     let sum = 0;
     for (const k in w) { w[k] = Math.pow(Math.max(w[k], 0), 1.7); sum += w[k]; }
     sum = Math.max(sum, 1e-4);

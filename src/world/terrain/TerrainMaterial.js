@@ -213,6 +213,14 @@ void tf_shade() {
        + 0.62 * smoothstep(0.34, 0.04, dryness) * flatAmt;
   w[3] = smoothstep(0.20, 0.48, slope) * 1.80 + 1.10 * rocky
        + 0.65 * smoothstep(80.0, 175.0, alt);
+  // Talus / scree: the mid-slope band directly under a cliff face, where the
+  // material that spalled off it collects. Badlands read as badlands largely
+  // because every wall stands on a skirt of its own debris.
+  float scree = smoothstep(0.15, 0.31, slope) * (1.0 - smoothstep(0.33, 0.52, slope))
+              * smoothstep(0.30, 0.70, rocky)
+              * (0.55 + 0.45 * (0.5 + 0.5 * tf_snoise(vTW.xz * 0.021 - 3.0)));
+  w[2] += 0.55 * scree;
+  w[3] -= 0.22 * scree;
   w[4] = flatAmt * lowAlt * 1.30
        * smoothstep(0.12, 0.66, 0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * sedi);
   // a road can never read as a pale scar up a cliff face, whatever the mask says
@@ -224,10 +232,185 @@ void tf_shade() {
   wsum = max(wsum, 1e-4);
   for (int i = 0; i < 6; i++) w[i] /= wsum;
 
+  // ---- per-massif identity and sedimentary strata -------------------------
+  // Deliberately evaluated *before* the detail branch: the far LOD path used
+  // to get none of this, which is exactly why every range past 1.1 km was a
+  // smooth untextured cone. Strata and runnels are the cues that tell the eye
+  // how far away a mountain is, so they have to survive to the horizon.
+
+  // Three overlapping ~0.9-1.6 km fields stand in for "which range am I on":
+  // smooth, so no seam ever cuts across a mountain, but decorrelated enough
+  // that no two massifs share a bed thickness, a dip direction or a texture
+  // scale.
+  float mr1 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00115 + 41.0);
+  float mr2 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00088 - 17.0);
+  float mr3 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00061 + 73.0);
+  // faster fields for the tiling itself: two neighbouring buttes must not
+  // share a bed thickness, or a wide shot still reads as one printed sheet
+  float mrA = 0.5 + 0.5 * tf_snoise(P.xz * 0.0027 + 91.0);
+  float mrB = 0.5 + 0.5 * tf_snoise(P.xz * 0.0034 - 55.0);
+
+  // Structural slope, read from the *unfiltered* normal grid. tf_surfNormal
+  // deliberately low-passes with distance so far ridges cannot alias into a
+  // crawling hatch — but that also flattens every distant face toward zero
+  // slope, which silently switched the strata and the runnels off on exactly
+  // the ranges that need them most to read as far away rather than merely big.
+  // It is measured as sin(tilt), not as 1 - N.y: the latter is 0.13 at 30 deg
+  // and 0.29 at 45, so a threshold that admitted a real badland face also
+  // admitted the pans, and a threshold that excluded the pans excluded every
+  // face. sin(tilt) is 0.50 and 0.71 for the same angles — a usable range.
+  vec2 rawN = (max(abs(P.x), abs(P.z)) >= uField.w)
+    ? textureLod(uFarNormalTex, tf_uv(P.xz, uFarP), 0.0).rg
+    : textureLod(uNormalTex, tf_uv(P.xz, uField), 0.0).rg;
+  // Past ~1.5 km it hands back to the filtered normal: a 12 m grid sampled
+  // point-wise at that range is itself an aliasing source, and the horizon
+  // hatch it produces is worse than the detail it buys.
+  float structSlope = mix(
+    clamp(max(length(rawN), length(N.xz)), 0.0, 1.0),
+    clamp(length(N.xz), 0.0, 1.0),
+    smoothstep(900.0, 2200.0, vTDist));
+
+  // Vertical erosion runnels. Every badland face is raked by rain channels
+  // that cut straight down across the bedding; without them the horizontal
+  // strata have nothing to interrupt them and the whole range reads as a
+  // printed stripe. These run with the *slope*, not with world Y, so they fan
+  // out over ridges instead of marching in lockstep.
+  float rn1 = tf_snoise(vec2((P.x * 0.83 - P.z * 0.56) * 0.052, P.y * 0.0045 + 2.0));
+  float rn2 = tf_snoise(vec2((P.x * 0.41 + P.z * 0.91) * 0.155, P.y * 0.011 - 5.0));
+  float rn3 = tf_snoise(vec2((P.x * 0.67 - P.z * 0.74) * 0.017, P.y * 0.0018 + 8.0));
+  float runnel = smoothstep(0.16, 0.82, 0.5 + 0.34 * rn1 + 0.22 * rn2 + 0.30 * rn3);
+
+  // Procedural sedimentary banding — the Leide signature. Bed thickness and
+  // colour are randomised per bed index so the stack never reads as a regular
+  // stripe pattern.
+  // The bedding coordinate is *not* world Y. It is a warped, per-massif tilted
+  // surface bent by the local rock form: beds dip, thicken and bend with the
+  // landform, which is what a real sedimentary stack does and what a straight
+  // world-Y band never will.
+  vec2 dip = vec2(mr2 - 0.5, mr3 - 0.5) * 0.92;
+  // Bed thickness. A real Leide butte bands at metres, not tens of metres:
+  // 0.070..0.285 cycles/m is a 3.5-14 m repeat, and with the per-bed thickness
+  // jitter below, the visible beds land at roughly 1-9 m. That is 4-5x tighter
+  // than the 16-70 m stack this used to draw, and fine banding is one of the
+  // strongest distance cues there is — it is what separates a range that reads
+  // as *far* from one that merely reads as *big*.
+  // Beds also coarsen downward, the way a real stack does toward its base.
+  // The pitch has to change *within* a range as well as between ranges — a
+  // single massif drawn at one pitch is still wallpaper, just finer wallpaper.
+  float freq = (0.058 + 0.170 * mr1 + 0.085 * mrA)
+             * mix(0.74, 1.28, smoothstep(20.0, 300.0, P.y));
+  float warp = 3.4 * tf_snoise(P.xz * 0.0041) + 1.2 * tf_snoise(P.xz * 0.018)
+             + 0.5 * tf_snoise(P.xz * 0.075)
+             + 2.6 * tf_snoise(vec2(P.y * 0.019 + 5.0, (P.x - P.z) * 0.0033))
+             + 1.1 * tf_snoise(vec2(P.y * 0.062 - 3.0, (P.x + P.z) * 0.0125));
+  // beds wrap round a nose and splay in a re-entrant instead of ruling
+  // straight across the landscape like paint
+  // Form-following, expressed in *metres of bedding offset* rather than as a
+  // dot with the absolute world position. Scaling it by |P| meant the offset
+  // ran to tens of bed thicknesses and swung by several whole cycles across a
+  // single flute, so the beds averaged out to nothing on every massif more
+  // than a few hundred metres from the origin — the reason mid-range faces
+  // came out as smooth dunes. Bounded, it does what it should: bends the beds
+  // round a nose and splays them in a re-entrant.
+  float form = 3.6 * (1.0 - N.y) + 2.0 * N.x - 1.4 * N.z;
+  float sy1 = (P.y + dot(P.xz, dip) + form * (0.6 + 0.8 * mr2)) * freq
+            + warp * 0.20 + mr3 * 7.0;
+  // Analytic band filtering. Once a bed projects to less than a pixel the
+  // contrast is rolled off instead of aliasing, which is what lets the beds
+  // survive out to kilometres and simply *dissolve* into haze at the limit.
+  float sw = fwidth(sy1);
+  float aaFade = 1.0 - smoothstep(0.17, 0.68, sw);
+  float edge = max(sw * 1.1, 0.02);
+  float bedIdx = floor(sy1);
+  float bedR = fract(sin(bedIdx * 12.9898 + mr1 * 31.7) * 43758.5453);
+  float bedR2 = fract(sin(bedIdx * 7.137 + 1.7 + mr2 * 17.3) * 21254.13);
+  float band = fract(sy1);
+  // Bed profile. This must swing the full 0..1 or the beds have no contrast to
+  // give: everything that says *how strongly* this rock is bedded belongs in
+  // bedStr below, multiplied into the effect, never into the profile. (It
+  // used to be folded in here, and the product of three modulators pinned the
+  // profile near zero — which is why entire massifs came out unbanded.)
+  float thick = 0.18 + 0.38 * bedR;
+  float fall = clamp(edge * 2.0, 0.14, 0.32);
+  float bedA = smoothstep(0.0, min(edge + 0.14 * bedR, 0.26), band)
+             * (1.0 - smoothstep(thick, thick + fall, band));
+  // erosion gullies chew the beds apart — without this they read as wallpaper
+  float bedStr = 0.30 + 0.70 * smoothstep(0.22, 0.78,
+    0.5 + 0.34 * tf_snoise(P.xz * 0.085) + 0.22 * tf_snoise(P.xz * 0.31));
+  // and whole stretches of a range are simply massive, unbedded rock
+  bedStr *= mix(0.28, 1.0, smoothstep(0.30, 0.72,
+    0.5 + 0.5 * tf_snoise(P.xz * 0.0021 - 27.0) * 1.3));
+  // Stratigraphic hierarchy: the fine beds come in packages ~6x thicker,
+  // bounded by resistant units. A cliff with one single pitch of banding reads
+  // as corduroy; a cliff with two nested scales reads as rock.
+  float pkg = 0.5 + 0.5 * sin((sy1 * 0.165 + mr2 * 4.0 + warp * 0.05) * 6.2831);
+  bedStr = clamp(bedStr * (0.50 + 0.70 * pkg), 0.0, 1.0);
+  // fine laminations inside a bed: per-massif frequency and cut by the same
+  // runnels, so they can never comb the whole range at one pitch
+  float lamPh = (P.y + dot(P.xz, dip)) * (0.42 + 1.15 * mrB + 0.48 * bedR2) + warp * 1.6;
+  float lam = 0.5 + 0.5 * sin(lamPh * 6.2831);
+  // the laminations are finer than the beds, so they need their own filter
+  lam = mix(0.5, lam, 1.0 - smoothstep(0.10, 0.42, fwidth(lamPh)));
+  lam *= 0.35 + 0.65 * runnel;
+  float bedTint = clamp(bedA * 0.76 + lam * 0.24, 0.0, 1.0);
+  // Leide is red-ochre badlands: the bands run rust -> ash -> bleached, never
+  // through neutral grey, or the whole massif desaturates into concrete.
+  vec3 strataWarm = vec3(1.13, 0.96, 0.80);
+  vec3 strataCool = vec3(0.93, 0.93, 0.95);
+  vec3 strataPale = vec3(1.07, 1.02, 0.94);
+  vec3 bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
+  // each range carries its own iron / ash balance
+  bedCol *= mix(vec3(0.94, 0.97, 1.06), vec3(1.10, 0.98, 0.86), mr3);
+  // With the beds analytically filtered they no longer have to be faded out at
+  // 600 m to avoid moire: they run to the horizon and dissolve when a bed drops
+  // below a pixel. That dissolve *is* the distance cue.
+  float bandFade = aaFade * (1.0 - smoothstep(2400.0, 5000.0, vTDist));
+  // contrast also falls with how strongly this massif is bedded at all
+  // 0.34..0.78 in sin(tilt) is 20..51 degrees: beds show wherever the ground is
+  // steep enough to shed its cover, which on a badland massif is most of it.
+  // Contrast is pushed *up* with distance to pay back what the aerial
+  // perspective takes away. A 10% albedo swing at 20 m survives to the eye; the
+  // same swing at 900 m, behind that much scattering, does not — and a range
+  // whose bedding has been washed flat is exactly the one that reads as a big
+  // near lump rather than a distant mountain.
+  float cliffAmt = clamp(smoothstep(0.34, 0.78, structSlope) * bandFade
+    * (0.45 + 0.80 * mr1) * bedStr
+    * (1.0 + 1.10 * smoothstep(250.0, 1200.0, vTDist)), 0.0, 1.0);
+
+  // Large-scale value and hue drift across each landform. Three octaves from
+  // ~1.4 km down to ~110 m: no two rock faces in a wide shot resolve to the
+  // same material, which is the other half of killing the "one printed sheet
+  // behind every peak" read.
+  float vv1 = tf_snoise(P.xz * 0.00071 + 5.0);
+  float vv2 = tf_snoise(P.xz * 0.0026 - 61.0);
+  float vv3 = tf_snoise(P.xz * 0.0092 + 23.0);
+  float faceV = clamp(0.5 + 0.44 * vv1 + 0.33 * vv2 + 0.23 * vv3, 0.0, 1.0);
+  // the runnels darken independently of the bedding, at every distance, so even
+  // a range past the band fade still has vertical structure
+  float runnelAmt = smoothstep(0.30, 0.72, structSlope) * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
+
+  vec3 rockTint = mix(vec3(1.0), bedCol, cliffAmt)
+    * mix(1.0, 0.83 + 0.31 * bedA, cliffAmt)
+    * (0.84 + 0.34 * faceV)
+    // face-to-face hue drift stays on the ochre/ash axis, warm-biased
+    * mix(vec3(0.95, 0.96, 1.02), vec3(1.18, 1.00, 0.80), clamp(0.5 + 0.75 * vv2, 0.0, 1.0))
+    * mix(1.0, 0.74 + 0.36 * runnel, runnelAmt)
+    * vec3(1.05, 1.00, 0.93);
+
   // ---- cheap far shading -------------------------------------------------
   vec3 farCol = vec3(0.0);
   float farRough = 0.0;
   for (int i = 0; i < 6; i++) { farCol += uLayerAvg[i] * w[i]; farRough += uLayerRough[i] * w[i]; }
+  // On a steep face the dirt and gravel are a veneer a few centimetres thick
+  // and the beds show straight through them. Without this the strata switch
+  // off wherever the splat happens to favour a soft layer, which on a 30 deg
+  // badland flank is most of the time — and the massif goes back to being a
+  // smooth dune.
+  float bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope), 0.0, 1.0);
+  // the far LOD is a flat average of the layers; without the rock tint every
+  // distant massif is the same untextured lump of one colour
+  farCol *= mix(vec3(1.0), rockTint,
+    clamp(w[3] * 1.25 + w[2] * 0.35 + bedThrough, 0.0, 1.0));
 
   float detailAmt = 1.0 - smoothstep(420.0, 1100.0, vTDist);
   vec3 col = farCol;
@@ -277,26 +460,16 @@ void tf_shade() {
     vec3 bw = pow(abs(N), vec3(5.0));
     bw /= max(bw.x + bw.y + bw.z, 1e-4);
 
-    // Per-massif identity. Three overlapping ~0.9-1.6 km fields stand in for
-    // "which range am I on": smooth, so no seam ever cuts across a mountain,
-    // but decorrelated enough that no two massifs share a bed thickness, a dip
-    // direction or a texture scale. This is what stops the horizon reading as
-    // one strip of wallpaper repeated behind every peak.
-    float mr1 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00115 + 41.0);
-    float mr2 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00088 - 17.0);
-    float mr3 = 0.5 + 0.5 * tf_snoise(P.xz * 0.00061 + 73.0);
-    // faster fields for the tiling itself: two neighbouring buttes must not
-    // share a bed thickness, or a wide shot still reads as one printed sheet
-    float mrA = 0.5 + 0.5 * tf_snoise(P.xz * 0.0027 + 91.0);
-    float mrB = 0.5 + 0.5 * tf_snoise(P.xz * 0.0034 - 55.0);
-
     // The rock tile is scaled *separately* in the horizontal and the bedding
     // axis: the horizontal scale controls grain, the vertical one controls bed
-    // thickness. Both drift massif to massif, and bed thickness also grows with
-    // altitude the way a real stack coarsens toward its base.
-    float rsH = uLayerScale[3] * (0.66 + 0.85 * mrA);
-    float rsV = uLayerScale[3] * (0.42 + 1.25 * mrB)
-              * (0.82 + 0.62 * smoothstep(20.0, 320.0, P.y));
+    // thickness. Both drift massif to massif, bed thickness also grows with
+    // altitude the way a real stack coarsens toward its base, and the whole
+    // tile is coarsened with distance so a face 800 m out is not drawn at the
+    // same grain as one at 20 m.
+    float distGrain = mix(1.0, 0.46, smoothstep(90.0, 700.0, vTDist));
+    float rsH = uLayerScale[3] * (0.55 + 1.15 * mrA) * distGrain;
+    float rsV = uLayerScale[3] * (0.38 + 1.45 * mrB)
+              * (0.82 + 0.62 * smoothstep(20.0, 320.0, P.y)) * distGrain;
     // undulate the bedding plane so the texture's own strata are not a perfect
     // world-aligned stack across every cliff in the region
     float yw = P.y + 6.5 * tf_snoise(P.xz * 0.0031 + 3.0)
@@ -319,68 +492,16 @@ void tf_shade() {
     alb[3] = ax * bw.x + ay * bw.y + az * bw.z;
     srf[3] = sx * bw.x + sy * bw.y + sz * bw.z;
 
-    // Vertical erosion runnels. Every badland face is raked by rain channels
-    // that cut straight down across the bedding; without them the horizontal
-    // strata have nothing to interrupt them and the whole range reads as a
-    // printed stripe. These run with the *slope*, not with world Y, so they
-    // fan out over ridges instead of marching in lockstep.
-    float rn1 = tf_snoise(vec2((P.x * 0.83 - P.z * 0.56) * 0.052, P.y * 0.0045 + 2.0));
-    float rn2 = tf_snoise(vec2((P.x * 0.41 + P.z * 0.91) * 0.155, P.y * 0.011 - 5.0));
-    float rn3 = tf_snoise(vec2((P.x * 0.67 - P.z * 0.74) * 0.017, P.y * 0.0018 + 8.0));
-    float runnel = smoothstep(0.16, 0.82, 0.5 + 0.34 * rn1 + 0.22 * rn2 + 0.30 * rn3);
-
-    // Procedural sedimentary banding — the Leide signature. Bed thickness and
-    // colour are randomised per bed index so the stack never reads as a
-    // regular stripe pattern, and the contrast falls off with distance so the
-    // bands cannot alias into moire on far ranges.
-    // The bedding coordinate is *not* world Y. It is a warped, per-massif
-    // tilted surface: beds dip, thicken and bend with the rock form, which is
-    // what a real sedimentary stack does and what a straight world-Y band never
-    // will. Three things break the stripe: a massif-specific dip vector, a
-    // frequency that changes range to range, and a warp that carries a Y term
-    // so the bands are not a stack of perfectly level planes.
-    vec2 dip = vec2(mr2 - 0.5, mr3 - 0.5) * 0.92;
-    float freq = 0.014 + 0.048 * mr1;
-    float warp = 3.4 * tf_snoise(P.xz * 0.0041) + 1.2 * tf_snoise(P.xz * 0.018)
-               + 0.5 * tf_snoise(P.xz * 0.075)
-               + 2.6 * tf_snoise(vec2(P.y * 0.019 + 5.0, (P.x - P.z) * 0.0033))
-               + 1.1 * tf_snoise(vec2(P.y * 0.062 - 3.0, (P.x + P.z) * 0.0125));
-    float sy1 = (P.y + dot(P.xz, dip)) * freq + warp * 0.14 + mr3 * 7.0;
-    float bedIdx = floor(sy1);
-    float bedR = fract(sin(bedIdx * 12.9898 + mr1 * 31.7) * 43758.5453);
-    float bedR2 = fract(sin(bedIdx * 7.137 + 1.7 + mr2 * 17.3) * 21254.13);
-    float band = fract(sy1);
-    float thick = 0.24 + 0.58 * bedR;
-    float bedA = smoothstep(0.02, 0.06 + 0.16 * bedR, band)
-               * (1.0 - smoothstep(thick, thick + 0.34, band));
-    // erosion gullies chew the beds apart — without this they read as wallpaper
-    bedA *= 0.30 + 0.70 * smoothstep(0.22, 0.78,
-      0.5 + 0.34 * tf_snoise(P.xz * 0.085) + 0.22 * tf_snoise(P.xz * 0.31));
-    // and whole stretches of a range are simply massive, unbedded rock
-    bedA *= mix(0.22, 1.0, smoothstep(0.30, 0.72,
-      0.5 + 0.5 * tf_snoise(P.xz * 0.0021 - 27.0) * 1.3));
-    // fine laminations inside a bed: per-massif frequency and cut by the same
-    // runnels, so they can never comb the whole range at one pitch
-    float lam = 0.5 + 0.5 * sin(((P.y + dot(P.xz, dip)) * (0.16 + 0.52 * mrB + 0.22 * bedR2)
-      + warp * 1.6) * 6.2831);
-    lam *= 0.35 + 0.65 * runnel;
-    float bedTint = clamp(bedA * 0.76 + lam * 0.24, 0.0, 1.0);
-    vec3 strataWarm = vec3(1.15, 0.97, 0.80);
-    vec3 strataCool = vec3(0.86, 0.89, 0.95);
-    vec3 strataPale = vec3(1.07, 1.04, 0.96);
-    vec3 bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
-    // each range carries its own iron / ash balance
-    bedCol *= mix(vec3(0.94, 0.97, 1.06), vec3(1.10, 0.98, 0.86), mr3);
-    float bandFade = 1.0 - smoothstep(160.0, 620.0, vTDist);
-    // contrast also falls with how strongly this massif is bedded at all
-    float cliffAmt = smoothstep(0.30, 0.62, slope) * bandFade * (0.45 + 0.75 * mr1);
-    alb[3].rgb *= mix(vec3(1.0), bedCol, cliffAmt);
-    alb[3].rgb *= mix(1.0, 0.92 + 0.15 * bedA, cliffAmt);
-    // the runnels darken independently of the bedding, at every distance, so
-    // even a range past the band fade still has vertical structure
-    float runnelAmt = smoothstep(0.22, 0.55, slope) * (1.0 - smoothstep(1400.0, 3200.0, vTDist));
-    alb[3].rgb *= mix(1.0, 0.74 + 0.36 * runnel, runnelAmt);
+    // the strata, runnels and per-massif colour were all resolved above so
+    // that the far LOD gets them too; here they simply modulate the sampled
+    // rock tile, and the bed alpha pushes bedded rock up in the height blend
+    alb[3].rgb *= rockTint;
     alb[3].a = mix(alb[3].a, alb[3].a * (0.7 + 0.45 * bedA), cliffAmt);
+    // the same veneer argument as the far path: dirt and gravel on a steep
+    // face take the colour of the bed they are sitting on
+    vec3 through = mix(vec3(1.0), rockTint, bedThrough);
+    alb[1].rgb *= through;
+    alb[2].rgb *= through;
 
     // ---- height blend ------------------------------------------------------
     float b[6];

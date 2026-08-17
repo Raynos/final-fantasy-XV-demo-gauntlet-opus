@@ -82,11 +82,27 @@ export class Field {
 
   /** Distant ranges: ridged multifractal that only switches on past ~1.2 km. */
   farHeight(x, z) {
-    const n = this.n, n2 = this.n2;
+    const n = this.n, n2 = this.n2, n3 = this.n3;
     const wx = x * 0.00042, wz = z * 0.00042;
     const q1 = n2.fbm2(wx * 0.62 + 11.3, wz * 0.62 - 4.1, 3);
     const q2 = n2.fbm2(wx * 0.62 - 7.7, wz * 0.62 + 9.4, 3);
-    const rg = n.ridged2(wx + 0.85 * q1, wz + 0.85 * q2, 5, 2.03, 0.44);
+
+    // Per-massif structural grain. Every range gets its own axis and its own
+    // aspect ratio, and the ridge domain is stretched along that axis before it
+    // is evaluated. This is the single biggest reason a horizon stops reading
+    // as N copies of one cone: some massifs come out as long hogback walls,
+    // some as compact stacks, and only a few as isolated fangs.
+    const th = 3.14159 * n3.fbm2(x * 0.00019 + 71.3, z * 0.00019 - 12.7, 2);
+    const ca = Math.cos(th), sa = Math.sin(th);
+    const elong = clamp01(0.5 + 0.72 * n3.fbm2(x * 0.00026 - 44.1, z * 0.00026 + 18.9, 2));
+    const uu = (wx * ca + wz * sa) / (0.50 + 1.20 * elong) + 0.85 * q1;
+    const vv = (-wx * sa + wz * ca) * (0.62 + 1.05 * elong) + 0.85 * q2;
+    let rg = n.ridged2(uu, vv, 5, 2.03, 0.44);
+
+    // Saddles and notches. A real crest line is a chain of summits separated by
+    // cols; without this the ridge is one extruded triangle from end to end.
+    rg *= 1 - 0.44 * smoothstep(0.28, 0.86,
+      0.5 + 0.62 * n3.fbm2(uu * 4.7 + 3.3, vv * 4.7 - 7.1, 3));
 
     const r = Math.hypot(x, z) / 1000;
     // the northern (-Z) wall is the tallest: it backs the hero and vista shots
@@ -113,12 +129,28 @@ export class Field {
 
     // Mesa capping: shear the tops off the broad massifs against a bench
     // altitude that itself drifts, so the skyline gets tables and saddles
-    // instead of an unbroken row of triangles.
+    // instead of an unbroken row of triangles. The shear is near-total now —
+    // a half-sheared cone is still a cone.
     const capAmt = smoothstep(0.58, 0.14, ch);
     if (capAmt > 0.001) {
-      const capH = 190 + 300 * (0.5 + 0.5 * n.fbm2(x * 0.00026 - 13.1, z * 0.00026 + 6.7, 2));
-      if (h > capH) h -= (h - capH) * capAmt * 0.78;
+      const capH = 175 + 320 * (0.5 + 0.5 * n.fbm2(x * 0.00026 - 13.1, z * 0.00026 + 6.7, 2));
+      if (h > capH) h -= (h - capH) * capAmt * 0.96;
     }
+
+    // Stepped plateaus. The broad, low-`ch` massifs get benched shoulders at
+    // 45-100 m: a readable geological staircase rather than a smooth flank.
+    const stepAmt = smoothstep(0.24, 0.72, 1 - ch) * smoothstep(70, 165, h);
+    if (stepAmt > 0.002) {
+      const stepH = 44 + 56 * (0.5 + 0.5 * n2.fbm2(x * 0.00031 + 27.7, z * 0.00031 - 5.5, 2));
+      const t = h / stepH, fl = Math.floor(t), fr = t - fl;
+      h += ((fl + smoothstep(0.50, 0.94, fr)) * stepH - h) * 0.60 * stepAmt;
+    }
+
+    // Talus aprons. The bottom ~150 m of every face lays back into a concave
+    // scree skirt instead of meeting the plain at a hard cone angle — the
+    // silhouette softener that makes a range read as eroded rock, not a tent.
+    const above = h - plain;
+    if (above > 0) h = plain + above * (0.60 + 0.40 * Math.min(1, above / 150));
     return h;
   }
 
@@ -170,11 +202,40 @@ export class Field {
     const bench = n.ridged2(wx * 0.0042 + 3.7, wz * 0.0042 - 9.1, 4, 2.05, 0.55);
     h += Math.pow(Math.max(0, bench - 0.30) / 0.70, 1.6) * 34;
 
-    // ridged badland belt: kept clear of the spawn basin so the player has room
+    // Ridged badland belt: kept clear of the spawn basin so the player has
+    // room. Everything below exists to stop this belt being a picket fence of
+    // identical triangles — a per-massif axis and aspect, crest notches, a
+    // style field that decides table vs fang, and a laid-back scree foot.
     const r = Math.hypot(x, z);
     const belt = smoothstep(165, 820, r);
-    const rg = n.ridged2(wx * 0.00135 + 21.5, wz * 0.00135 + 4.2, 5, 2.11, 0.5);
-    h += Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.85) * 215 * belt;
+    const th = 3.14159 * n2.fbm2(x * 0.00044 + 12.9, z * 0.00044 - 31.5, 2);
+    const ca = Math.cos(th), sa = Math.sin(th);
+    const elong = clamp01(0.5 + 0.75 * n2.fbm2(x * 0.00061 - 7.7, z * 0.00061 + 22.1, 2));
+    const bu = (wx * ca + wz * sa) * 0.00135 / (0.55 + 1.05 * elong) + 21.5;
+    const bv = (-wx * sa + wz * ca) * 0.00135 * (0.62 + 1.00 * elong) + 4.2;
+    let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
+    rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
+      0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
+
+    // style: 0 = broad table / cuesta, 1 = fang
+    const style = clamp01(0.5 + 0.78 * n2.fbm2(x * 0.00052 + 61.3, z * 0.00052 - 37.1, 2));
+    let beltH = Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.30 + 1.05 * style)
+      * (268 - 70 * style) * belt;
+    const capA = smoothstep(0.58, 0.10, style);
+    if (capA > 0.002 && beltH > 20) {
+      const capH = 44 + 118 * (0.5 + 0.5 * n2.fbm2(x * 0.0007 - 5.5, z * 0.0007 + 9.1, 2));
+      if (beltH > capH) beltH -= (beltH - capH) * capA * 0.94;
+    }
+    // concave foot: scree apron rather than a hard cone base
+    if (beltH > 0) beltH *= 0.58 + 0.42 * Math.min(1, beltH / 55);
+    // Hero clearing. Blackrock Mesa and the East Buttes are framed by named
+    // shots, and a generic 180 m belt ridge standing behind a 108 m table
+    // turns the hero landform into a bump on someone else's mountain. Pulling
+    // the belt down around them is what lets each landmark read as its own
+    // landform — which is the whole point of having landmarks.
+    beltH *= 1 - 0.74 * (1 - smoothstep(150, 470, Math.hypot(x + 215, z + 395)));
+    beltH *= 1 - 0.58 * (1 - smoothstep(120, 380, Math.hypot(x - 305, z + 300)));
+    h += beltH;
 
     // a shallow bowl centred on the spawn so the camera looks *across* the land
     h -= 7 * Math.exp(-(r * r) / (2 * 320 * 320));
@@ -293,32 +354,69 @@ export class Field {
 
   // -------------------------------------------------------------- landmarks
 
+  /**
+   * The hero landforms. Deliberately one of each *kind* rather than one shape
+   * repeated: a benched table, a tall stepped plateau, a cluster of steep-sided
+   * buttes, a cuesta escarpment with a long dip slope, hogback fins and spires.
+   */
   _applyLandmarks() {
     const L = LANDMARKS;
-    // hero mesa: sits on the vista_dawn and hero_full sight lines at ~450 m
-    this._mesa(L.blackrockMesa.x, L.blackrockMesa.z, L.blackrockMesa.r, L.blackrockMesa.h, 0.30);
-    this._mesa(-118, -560, 54, 58, 0.45);            // outlier stack in front of it
-    this._mesa(L.northMesa.x, L.northMesa.z, L.northMesa.r, L.northMesa.h, 0.28);
-    this._mesa(-1080, -520, 150, 122, 0.34);
-    this._mesa(-760, -180, 96, 62, 0.42);
+    // Blackrock Mesa — the hero table. Two benches, a wide flat cap, a hard
+    // rim, and its scarp turned toward the basin cameras.
+    this._mesa(L.blackrockMesa.x, L.blackrockMesa.z, L.blackrockMesa.r, L.blackrockMesa.h,
+      0.30, { benches: 2, cliff: 0.11, apron: 1.05, tilt: 0.055, dipDir: -1.15 });
+    // outlier stack in front of it: a sheer-sided remnant, no benches
+    this._mesa(-118, -560, 54, 58, 0.45, { benches: 0, cliff: 0.09, apron: 0.7 });
+    // North Mesa — a tall stepped plateau, three benches
+    this._mesa(L.northMesa.x, L.northMesa.z, L.northMesa.r, L.northMesa.h,
+      0.28, { benches: 3, cliff: 0.10, apron: 1.15, tilt: 0.030, dipDir: 1.9 });
+    this._mesa(-1080, -520, 150, 122, 0.34, { benches: 2, cliff: 0.13, apron: 0.95 });
+    this._mesa(-760, -180, 96, 62, 0.42, { benches: 1, cliff: 0.16, apron: 1.20, tilt: 0.09 });
 
-    // butte cluster to the north-east — the vista_noon sight line
-    this._mesa(305, -300, 60, 58, 0.48);
-    this._mesa(392, -212, 34, 41, 0.55);
-    this._mesa(232, -392, 42, 47, 0.52);
-    this._mesa(560, -470, 80, 76, 0.44);
-    this._mesa(880, -700, 130, 104, 0.38);
+    // Butte cluster to the north-east — the vista_noon sight line. Steep
+    // sided, small caps, deep talus: classic Monument-Valley remnants.
+    this._mesa(305, -300, 60, 58, 0.48, { benches: 0, cliff: 0.085, apron: 0.85 });
+    this._mesa(392, -212, 34, 41, 0.55, { benches: 0, cliff: 0.075, apron: 0.9 });
+    this._mesa(232, -392, 42, 47, 0.52, { benches: 1, cliff: 0.10, apron: 0.8 });
+    this._mesa(560, -470, 80, 76, 0.44, { benches: 2, cliff: 0.12, apron: 1.0 });
+    this._mesa(880, -700, 130, 104, 0.38, { benches: 3, cliff: 0.11, apron: 1.1 });
 
-    // western escarpment — the vista_dusk sight line
-    this._mesa(L.westScarp.x, L.westScarp.z, L.westScarp.r, L.westScarp.h, 0.32);
-    this._mesa(-520, 210, 70, 55, 0.46);
-    this._mesa(-900, 480, 160, 118, 0.34);
+    // Western escarpment — the vista_dusk sight line. A cuesta: the mesa is
+    // the high end, the fin carries the scarp line away from it.
+    // Pulled a little south-west of the landmark anchor and kept compact: the
+    // vista_dawn camera stands 170 m north of it at eye height 70 m, and a
+    // 118 m table centred on the anchor would swallow the lens. The anchor
+    // still sits well inside the cap, so the shot framing is unchanged.
+    this._mesa(-368, 352, 96, L.westScarp.h,
+      0.32, { benches: 1, cliff: 0.10, apron: 0.75, tilt: 0.11, dipDir: 1.50 });
+    this._fin(-286, 392, -600, 610, 46, 62, { dip: 3.6 });
+    this._mesa(-520, 210, 70, 55, 0.46, { benches: 1, cliff: 0.14, apron: 0.9 });
+    this._mesa(-900, 480, 160, 118, 0.34, { benches: 2, cliff: 0.12, apron: 1.05 });
 
-    // spire ridges — fangs that catch a low sun
+    // Hogback fins — thin blades on edge, the counterpoint to the tables.
+    this._fin(120, -700, 470, -545, 34, 74, { dip: 2.6, flip: true });
+    this._fin(-800, -740, -430, -1010, 52, 96, { dip: 3.0 });
+    this._fin(690, 120, 980, 430, 40, 68, { dip: 2.4 });
+    this._fin(-160, 690, 260, 830, 30, 44, { dip: 3.4, flip: true });
+
+    // Northern backdrop — the party_walk and hero sight lines. A table, a
+    // stepped remnant and a blade, so the wall behind the party is three
+    // different landforms rather than a row of the same peak.
+    this._mesa(-30, -640, 104, 82, 0.36, { benches: 2, cliff: 0.10, apron: 1.0, dipDir: 1.6 });
+    this._mesa(180, -760, 62, 68, 0.50, { benches: 0, cliff: 0.08, apron: 0.8 });
+    this._fin(-330, -700, -80, -900, 44, 78, { dip: 2.8 });
+
+    // Tables set among the spire country to the south-west, so the vista_dusk
+    // skyline is not a picket fence of the same fang seven times over.
+    this._mesa(-620, 120, 88, 74, 0.40, { benches: 2, cliff: 0.10, apron: 0.70 });
+    this._fin(-760, 620, -430, 820, 38, 58, { dip: 3.0, flip: true });
+
+    // spire ridges — fangs that catch a low sun. Deliberately the *minority*
+    // landform: a badland range that is all fangs is one shape repeated.
     const rng = new Rng(9931);
     this._spireRidge(L.spireRidge.x, L.spireRidge.z, 320, 170, 9, rng);
     this._spireRidge(430, 330, 260, -120, 6, rng);
-    this._spireRidge(-40, -880, 380, 90, 7, rng);
+    this._spireRidge(-40, -880, 380, 90, 4, rng);
 
     this._canyon();
   }
@@ -383,35 +481,163 @@ export class Field {
     }
   }
 
-  /** Flat-topped mesa with a steep noise-warped wall and a talus skirt. */
-  _mesa(cx, cz, radius, height, wallFrac) {
-    const h = this.h, n = this.n2;
-    const R = radius * 2.6;
+  /**
+   * Flat-topped mesa / butte.
+   *
+   * This *imposes* a landform rather than adding a bump: the cap is genuinely
+   * level (with a slight structural dip), the wall drops as a near-vertical
+   * cliff off a hard rim, optional benches step down from it, and a concave
+   * scree apron lays the foot back into the surrounding ground. One side is
+   * always the steep scarp and the opposite side the long dip slope, so the
+   * profile is asymmetric the way a real butte is.
+   *
+   * @param {number} wallFrac 0..1 — how much of the radius the cliff occupies
+   * @param {{benches?:number, tilt?:number, dipDir?:number, apron?:number,
+   *          cliff?:number}} [opt]
+   */
+  _mesa(cx, cz, radius, height, wallFrac, opt = {}) {
+    const h = this.h, n = this.n2, n3 = this.n3;
+    const benches = opt.benches === undefined ? 1 : opt.benches;
+    const tiltAmt = opt.tilt === undefined ? 0.045 : opt.tilt;
+    const dipDir = opt.dipDir === undefined ? Math.atan2(cz, cx) + 2.1 : opt.dipDir;
+    const apronF = opt.apron === undefined ? 0.90 : opt.apron;
+    const cliffFrac = opt.cliff === undefined
+      ? Math.max(0.07, Math.min(0.26, wallFrac * 0.42)) : opt.cliff;
+    const cliffShare = 0.30 + 0.34 * (1 - Math.min(1, benches * 0.3));
+
+    const base = this.rawHeightAt(cx, cz);
+    const capY = base + height;
+    const rimH = height * 0.022 + 1.2;
+    const R = radius * (1.45 + cliffFrac + 0.20 * benches + apronF);
     const box = this._box(cx, cz, R);
-    const wall = radius * wallFrac;
+    const cdx = Math.cos(dipDir), cdz = Math.sin(dipDir);
+
     for (let j = box.j0; j <= box.j1; j++) {
       const z = -HALF + j * CELL;
       for (let i = box.i0; i <= box.i1; i++) {
         const x = -HALF + i * CELL;
         const dx = x - cx, dz = z - cz;
-        let d = Math.hypot(dx, dz);
+        const d = Math.hypot(dx, dz);
         if (d > R) continue;
         const ang = Math.atan2(dz, dx);
-        // warp the rim so the plan view is not a circle
-        const warp = 1 + 0.26 * n.fbm2(Math.cos(ang) * 1.7 + cx * 0.01, Math.sin(ang) * 1.7 + cz * 0.01, 3)
-          + 0.14 * n.fbm2(x * 0.006 + 3, z * 0.006 - 1, 3);
-        const rr = radius * warp;
-        const t = Math.max(0, Math.min(1, 1 - (d - rr + wall) / wall));
-        let v = height * Math.pow(t, 0.42);
-        // terraced strata on the wall
-        if (t > 0.02 && t < 0.995) {
-          const bands = 5.5 + 3 * n.simplex2(cx * 0.01, cz * 0.01);
-          v += height * 0.045 * Math.sin(t * bands * Math.PI * 2) * (1 - t);
+        // plan form: lobed and re-entrant, never a circle
+        // Clamped: the cap edge has to stay inside a predictable footprint, or
+        // a landform placed near a fixed shot camera can grow through the lens.
+        const warp = Math.max(0.72, Math.min(1.18, 1
+          + 0.26 * n.fbm2(Math.cos(ang) * 1.7 + cx * 0.01, Math.sin(ang) * 1.7 + cz * 0.01, 3)
+          + 0.12 * n.fbm2(Math.cos(ang) * 4.3 + cz * 0.02, Math.sin(ang) * 4.3 - cx * 0.02, 2)
+          + 0.09 * n.fbm2(x * 0.006 + 3, z * 0.006 - 1, 3)));
+        // the cap is the inner 80% — the cliff, benches and apron fill the rest
+        // of the nominal radius, so `radius` still means the whole landform
+        const rr = radius * warp * 0.80;
+        const s = d - rr;                              // metres outside the rim
+        // asym = 1 on the dip side, 0 on the scarp side
+        const asym = d < 1 ? 0.5 : 0.5 + 0.5 * (dx * cdx + dz * cdz) / d;
+        const capTop = capY - tiltAmt * (dx * cdx + dz * cdz)
+          + 1.5 * n3.fbm2(x * 0.011 + 5, z * 0.011 - 2, 3);
+
+        let y;
+        if (s <= 0) {
+          // the rim: a hard raised lip that catches the light along the edge
+          y = capTop + rimH * Math.max(0, 1 - Math.abs(s + 0.035 * radius) / (0.075 * radius));
+        } else {
+          // radial gullies chew the wall back at irregular intervals
+          const gully = 0.5 + 0.5 * n3.fbm2(Math.cos(ang) * 7.1 + cx * 0.03,
+            Math.sin(ang) * 7.1 + cz * 0.03, 3);
+          const cliffW = radius * cliffFrac * (0.40 + 1.40 * asym) * (0.7 + 0.6 * gully);
+          const apronW = radius * apronF * (0.50 + 1.30 * asym);
+          let t = s, drop = height;
+          y = capTop;
+
+          const cd = height * cliffShare * (0.85 + 0.30 * gully);
+          if (t < cliffW) {
+            // pow < 1 keeps the top of the face vertical under the rim
+            y -= cd * Math.pow(t / cliffW, 0.45);
+            t = -1;
+          } else { y -= cd; t -= cliffW; drop -= cd; }
+
+          for (let b = 0; b < benches && t >= 0; b++) {
+            const lw = radius * 0.105 * (0.55 + 0.95 * asym) * (0.65 + 0.7 * gully);
+            if (t < lw) { y -= drop * 0.03 * (t / lw); t = -1; break; }
+            t -= lw;
+            const rd = Math.min(drop * 0.6, height * 0.135);
+            const rw = radius * 0.055 * (0.7 + 0.6 * gully);
+            if (t < rw) { y -= rd * Math.pow(t / rw, 0.55); t = -1; break; }
+            y -= rd; t -= rw; drop -= rd;
+          }
+
+          if (t >= 0) {
+            // Talus apron — concave, at roughly the angle of repose. It has to
+            // land on the *local* ground, not on the elevation under the mesa's
+            // centre, or the skirt floods every hollow inside its radius.
+            if (t > apronW) continue;
+            const u = t / Math.max(1, apronW);
+            const foot = Math.min(y - drop, h[j * N + i]);
+            y -= (y - foot) * (1 - Math.pow(1 - u, 2.0));
+            // scree flutes so the apron is not a smooth cone of its own
+            y += drop * 0.14 * Math.sin(ang * (9 + 6 * gully)) * u * (1 - u);
+          }
         }
-        // talus skirt of eroded debris
-        const skirt = Math.max(0, 1 - (d - rr) / (radius * 1.35));
-        v += height * 0.20 * Math.pow(Math.max(0, Math.min(1, skirt)), 2.1) * (d > rr ? 1 : 0);
-        h[j * N + i] += v;
+
+        const idx = j * N + i;
+        const k = s <= 0 ? 0.94
+          : 0.94 * (1 - smoothstep(0, radius * cliffFrac * 1.6, s));
+        const cut = h[idx] + (y - h[idx]) * k;
+        h[idx] = y > cut ? y : cut;
+      }
+    }
+  }
+
+  /**
+   * Hogback / fin: a long narrow ridge with a steep scarp on one flank and a
+   * long dip slope on the other, notched along its crest and tapered at both
+   * ends. These are the landform the badlands were missing entirely — every
+   * elevated thing in the field used to be radially symmetric.
+   */
+  _fin(x0, z0, x1, z1, halfW, height, opt = {}) {
+    const h = this.h, n = this.n2, n3 = this.n3;
+    const flip = opt.flip ? -1 : 1;
+    const dipRun = opt.dip === undefined ? 3.2 : opt.dip;   // dip slope, x halfW
+    const ex = x1 - x0, ez = z1 - z0;
+    const len = Math.hypot(ex, ez) || 1;
+    const ux = ex / len, uz = ez / len;
+    const R = halfW * (dipRun + 1.4);
+    const box = this._box((x0 + x1) / 2, (z0 + z1) / 2, R + len * 0.5 + 20);
+
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const px = x - x0, pz = z - z0;
+        let t = (px * ux + pz * uz) / len;
+        const q = (px * -uz + pz * ux) * flip;          // signed lateral offset
+        const tc = t < 0 ? 0 : t > 1 ? 1 : t;
+        const over = Math.hypot(px - ux * len * tc, pz - uz * len * tc);
+        if (Math.abs(q) > R && over > R) continue;
+
+        // crest: tapered ends, notched into a chain of summits
+        const taper = Math.pow(Math.max(0, Math.sin(Math.PI * tc)), 0.42);
+        const notch = 0.52 + 0.48 * (0.5 + 0.5 * n.fbm2(t * 3.3 + x0 * 0.01, z0 * 0.01, 3));
+        const spikes = 0.72 + 0.44 * Math.max(0, n3.fbm2(t * 7.7 + z0 * 0.02, x0 * 0.02, 2));
+        const crest = height * taper * notch * spikes;
+        if (crest < 0.6) continue;
+
+        // lateral profile: short steep scarp one side, long dip slope the other
+        const wob = 1 + 0.30 * n3.fbm2(t * 5.1 + 3.7, q * 0.012, 3);
+        let v;
+        if (q < 0) {
+          const u = Math.min(1, -q / (halfW * 0.85 * wob));
+          v = crest * (1 - Math.pow(u, 0.62));            // scarp: steep, concave
+        } else {
+          const u = Math.min(1, q / (halfW * dipRun * wob));
+          v = crest * Math.pow(1 - u, 1.55);              // dip slope: long ramp
+        }
+        // talus at the scarp foot
+        if (q < 0) {
+          const sk = Math.max(0, 1 - (-q - halfW * 0.85 * wob) / (halfW * 1.5));
+          if (sk > 0 && sk < 1) v = Math.max(v, crest * 0.22 * sk * sk);
+        }
+        if (v > 0) h[j * N + i] += v;
       }
     }
   }
@@ -621,15 +847,24 @@ export class Field {
     }
   }
 
-  /** Thermal / talus relaxation: scree cones under cliffs, no impossible spikes. */
+  /**
+   * Thermal / talus relaxation: scree cones under cliffs, no impossible spikes.
+   *
+   * The repose angle is *not* uniform. A single global 42 deg limit was what
+   * flattened every mesa wall into a cone — competent rock stands far steeper
+   * than the loose material that falls off it. Above the pans the limit opens
+   * out to ~70 deg so cliff faces survive, while the low ground keeps the
+   * gentle limit and therefore keeps collecting the debris as an apron.
+   */
   _talus() {
     const h = this.h;
-    const maxDelta = 1.35;      // metres of drop tolerated per 1.5 m cell
-    for (let pass = 0; pass < 4; pass++) {
+    for (let pass = 0; pass < 5; pass++) {
       for (let j = 1; j < N - 1; j++) {
         for (let i = 1; i < N - 1; i++) {
           const idx = j * N + i;
           const c = h[idx];
+          // 1.35 m/cell = 42 deg on the flats, 4.1 m/cell = 70 deg on the walls
+          const maxDelta = 1.35 + 2.75 * smoothstep(16, 58, c);
           let move = 0;
           for (let k = 0; k < 4; k++) {
             const t = k === 0 ? idx - 1 : k === 1 ? idx + 1 : k === 2 ? idx - N : idx + N;
