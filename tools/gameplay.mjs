@@ -29,10 +29,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv) {
-  const o = { w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33, out: null };
+  const o = { w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33, out: null, nobake: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--w') o.w = Number(argv[++i]);
+    if (a === '--nobake') o.nobake = true;
+    else if (a === '--w') o.w = Number(argv[++i]);
     else if (a === '--h') o.h = Number(argv[++i]);
     else if (a === '--q') o.q = argv[++i];
     else if (a === '--scale') o.scale = Number(argv[++i]);
@@ -76,7 +77,7 @@ async function main() {
 
   let out;
   try {
-    await page.goto(`http://127.0.0.1:${PORT}/?q=${o.q}&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
+    await page.goto(`http://127.0.0.1:${PORT}/?q=${o.q}&shoot=1${o.nobake ? '&nobake=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
     await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 

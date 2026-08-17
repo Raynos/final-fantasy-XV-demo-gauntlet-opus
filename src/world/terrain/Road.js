@@ -143,6 +143,44 @@ export class RoadNetwork {
   /** Metres to the nearest road centreline. */
   distance(x, z) { return this.graph.distance(x, z, 320); }
 
+  // -------------------------------------------------------- bake / restore
+
+  /**
+   * The fitted centreline elevations — the only part of `carve()` that cannot
+   * be recomputed from a baked heightfield, because grade solving reads the
+   * ground *before* the road flattened it.
+   * @returns {Float32Array}
+   */
+  captureElevations() {
+    let n = 0;
+    for (const e of this.graph.edges) n += e.pts.length;
+    const out = new Float32Array(n);
+    let k = 0;
+    for (const e of this.graph.edges) for (const p of e.pts) out[k++] = p.y;
+    return out;
+  }
+
+  /**
+   * Put a `captureElevations()` snapshot back and rebuild everything `carve()`
+   * derives from it, without touching the heightfield (which is already baked).
+   * @param {Float32Array} ys
+   */
+  restoreElevations(ys) {
+    const g = this.graph;
+    let k = 0;
+    for (const e of g.edges) for (const p of e.pts) p.y = ys[k++];
+    for (const r of g.routes) {
+      let i = 0;
+      for (const ei of r.edges) {
+        const e = g.edges[ei];
+        for (let n = (i ? 1 : 0); n < e.pts.length; n++, i++) {
+          if (r.pts[i]) r.pts[i].y = e.pts[n].y;
+        }
+      }
+    }
+    this.spine = this._makeSpine();
+  }
+
   // ------------------------------------------------------------------ carve
 
   /**

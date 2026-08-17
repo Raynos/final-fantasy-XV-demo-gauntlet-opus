@@ -3,6 +3,8 @@ import {
   Field, LANDMARKS, gnoise2, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
 } from './terrain/Field.js';
 import { Clipmap } from './terrain/Clipmap.js';
+import { loadBaked } from './terrain/FieldBake.js';
+import { bootPhase } from '../engine/BootProfile.js';
 import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
 import {
   createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
@@ -43,13 +45,19 @@ export class Terrain {
     this.game = game;
 
     this.field = new Field(game.seed || 1337);
-    this.field.build();
+    // A baked heightfield is just the cached output of `Field.build()` — same
+    // generator, same seed, run in the build step instead of on every page
+    // load. Missing or stale artifacts fall through to generating in place.
+    const baked = await bootPhase('Terrain.bake', () => loadBaked());
+    if (baked) bootPhase('Terrain.apply', () => baked.applyTo(this.field));
+    else bootPhase('Terrain.field', () => this.field.build());
     this.road = this.field.roadSpline;
 
     const quality = game.rnd ? game.rnd.quality : 'high';
     const layerSize = quality === 'low' ? 256 : 512;
-    const layers = buildLayerTextures(layerSize);
-    this.textures = { ...layers, ...this._uploadFieldTextures() };
+    const layers = bootPhase('Terrain.layers',
+      () => buildLayerTextures(layerSize, baked && baked.layers()));
+    this.textures = { ...layers, ...bootPhase('Terrain.upload', () => this._uploadFieldTextures()) };
 
     this.res = {
       uniforms: makeTerrainUniforms(this.textures, {
@@ -58,7 +66,7 @@ export class Terrain {
       finestCell: 1.5,
     };
 
-    this.clipmap = new Clipmap({
+    this.clipmap = bootPhase('Terrain.clipmap', () => new Clipmap({
       levels: 7,
       n: 48,
       cell0: 1.5,
@@ -67,7 +75,7 @@ export class Terrain {
         surface: createTerrainMaterial(this.res, cell, level),
         depth: level <= 1 ? createTerrainDepthMaterial(this.res, cell) : null,
       }),
-    });
+    }));
     game.scene.add(this.clipmap.group);
     this.clipmap.update(game.camera.position.x, game.camera.position.z);
 

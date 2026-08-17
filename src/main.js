@@ -1,4 +1,5 @@
 import { Game } from './game/Game.js';
+import { installBootProfile } from './engine/BootProfile.js';
 
 const boot = document.getElementById('boot');
 const bar = document.getElementById('boot-bar');
@@ -14,6 +15,7 @@ const game = new Game({
 });
 
 window.GAME = game;
+installBootProfile(game);
 
 game.init().then(() => {
   boot.classList.add('done');
