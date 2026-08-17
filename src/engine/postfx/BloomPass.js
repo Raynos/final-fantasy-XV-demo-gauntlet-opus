@@ -156,12 +156,18 @@ export class BloomPass extends Pass {
         uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uStep;
         varying vec2 vUv;
         void main() {
-          // 9-tap horizontal gaussian, exponentially widening per iteration
-          float w[5];
-          w[0] = 0.2270270270; w[1] = 0.1945945946; w[2] = 0.1216216216;
-          w[3] = 0.0540540541; w[4] = 0.0162162162;
+          // 17-tap horizontal gaussian, widening per iteration.
+          //
+          // Two passes at strides 4 and 14 replace three at 2, 9 and 30: the
+          // wider kernel means the second pass's sample spacing still sits
+          // inside the first pass's support, so the smear stays continuous
+          // rather than breaking into a row of copies of the highlight, and it
+          // reaches the same ~110 texel span for one fewer render target.
+          float w[9];
+          w[0] = 0.1410; w[1] = 0.1330; w[2] = 0.1122; w[3] = 0.0847;
+          w[4] = 0.0572; w[5] = 0.0346; w[6] = 0.0187; w[7] = 0.0090; w[8] = 0.0039;
           vec3 col = texture2D(tDiffuse, vUv).rgb * w[0];
-          for (int i = 1; i < 5; i++) {
+          for (int i = 1; i < 9; i++) {
             float o = float(i) * uStep * uTexel.x;
             col += texture2D(tDiffuse, vUv + vec2(o, 0.0)).rgb * w[i];
             col += texture2D(tDiffuse, vUv - vec2(o, 0.0)).rgb * w[i];
@@ -350,13 +356,10 @@ export class BloomPass extends Pass {
     // used to sit at, now that the pyramid starts one level lower
     this.streakMat.uniforms.tDiffuse.value = this.mips[Math.min(1, this.mips.length - 1)].texture;
     this.streakMat.uniforms.uTexel.value.set(1 / s0.width, 1 / s0.height);
-    this.streakMat.uniforms.uStep.value = 2.0;
-    blit(renderer, this.streakMat, s0);
-    this.streakMat.uniforms.tDiffuse.value = s0.texture;
-    this.streakMat.uniforms.uStep.value = 9.0;
+    this.streakMat.uniforms.uStep.value = 4.0;
     blit(renderer, this.streakMat, s1);
     this.streakMat.uniforms.tDiffuse.value = s1.texture;
-    this.streakMat.uniforms.uStep.value = 30.0;
+    this.streakMat.uniforms.uStep.value = 14.0;
     blit(renderer, this.streakMat, s0);
 
     const cu = this.compositeMat.uniforms;

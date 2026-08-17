@@ -93,10 +93,10 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Drivability assertion test — `tools/roadcheck.mjs`, 39/39 reachable, 0 failures
 
 ### 1.5 Minimap & world map
-- [x] Minimap — terrain silhouette, roads, POI icons, waypoint, blips, compass
-- [x] Full world map screen — pan/zoom, filters, fog of war, quest markers
+- [x] Minimap — baked relief chart shared with the atlas, roads, glyphs, compass; 0.5-0.7 ms/frame
+- [x] World map screen — hillshaded relief, road hierarchy, zone borders, 10 filters, POI card
 - [x] Distance + estimated travel time display
-- [ ] Fast travel
+- [~] Fast travel — offered on the map card; destination jump not wired
 - [ ] Map discovery/fog persistence in saves
 
 ---
@@ -141,7 +141,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Blowing dust, squall curtains, scud
 - [x] Wind vector with gusts driving vegetation
 - [ ] Night/dusk key light fix — `haven_dusk` is under-exposed mud
-- [ ] Cloud raymarch upsample blockiness
+- [x] Cloud raymarch upsample blockiness — sub-texel Halton jitter, TAA resolves it
 - [ ] Rainbows, auroras, meteor showers
 
 ---
@@ -350,7 +350,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [ ] Chocobo riding
 - [ ] Chocobo rental and posts
 - [ ] Chocobo racing
-- [ ] Fast travel
+- [~] Fast travel — offered on the map card; destination jump not wired
 
 ### 9.7 Dungeons
 - [x] Dungeon system: room graph, critical path, side branches, boss chamber
@@ -451,10 +451,57 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Water reflection gated on visibility
 - [x] Streaming hitch — grass instance re-upload fixed; hitches 870 → 134–161
 - [~] Weather rebuild hitch — ~400 ms remains
-- [~] Menu open at 23 fps — cause is the water reflection, not the UI
+- [x] Menu open — 33 ms → 16 ms once the reflection stopped rendering the whole scene
 - [ ] 60 fps on all 15 posed shots
 - [ ] 60 fps on all 13 gameplay segments
 - [ ] Zero frames over 33 ms in a session
 - [x] Draw-call budget renegotiated in `BRIEF.md` — 400 → 800
 - [x] Automated visual regression diffing (`tools/imgdiff.mjs`)
 - [ ] Quality tiers (low/medium/high/ultra) verified meaningful
+
+---
+
+## 14. TypeScript port (planned — blocked on the current agent wave)
+
+Full detail in **[`docs/typescript-port-plan.md`](docs/typescript-port-plan.md)**.
+
+Match the sibling attempts `../final-fantasy-XV-demo-opus` (172 `.ts`) and
+`../final-fantasy-XV-demo-ogl-opus` (100 `.ts`), which are 100% TypeScript with
+zero `.js` in `src/`.
+
+**Target config**, copied from the siblings so the three projects agree:
+
+- `tsconfig.json` — ES2022 · `module: ESNext` · `moduleResolution: bundler` ·
+  `strict: true` · `noImplicitOverride` · `noUnusedLocals` · `isolatedModules` ·
+  `verbatimModuleSyntax` · `allowImportingTsExtensions` · `noEmit` (Vite
+  transpiles) · `types: ["vite/client"]` · `include: ["src/**/*.ts"]`
+- `tsconfig.tools.json` — separate, `module/moduleResolution: nodenext`,
+  `types: ["node"]`, **`erasableSyntaxOnly: true`**. Our tools run under Node's
+  strip-only type stripping, which never type-checks and rejects some legal
+  TypeScript (parameter properties, enums, namespaces) — that flag is what keeps
+  them runnable, and `tsc` is the only thing that checks them at all.
+- devDeps: `typescript`, `@types/node`, `@types/three`
+- scripts: `typecheck` and `typecheck:tools`, both `tsc --noEmit`
+
+**Sequencing — do not start while agents are live.** 235 modules and ~79,500
+lines are under concurrent edit by six agents; porting under that would conflict
+with everything. Order:
+
+- [ ] Land every in-flight agent branch and merge to `main`
+- [ ] Add tsconfigs, devDeps and the two `typecheck` scripts (no renames yet)
+- [ ] Port `src/util/**` first — leaf modules, no internal imports, they define
+      the shared types (`Noise`, `Rng`, `TextureGen`)
+- [ ] Port `src/engine/**` and define the core interfaces: the `System` contract
+      (`init`/`update`/`lateUpdate`), `Game`'s registry, and a typed `SHOTS` shape
+- [ ] Port `src/game/rpg/**` — pure logic, no three.js, highest type value
+- [ ] Port `src/world/**`, `src/characters/**`, `src/combat/**`, `src/ui/**`
+- [ ] Port `tools/**` to `.mts` under `erasableSyntaxOnly`
+- [ ] `typecheck` and `typecheck:tools` clean, `vite build` passes, and the
+      integration audit still reports 0 failures
+- [ ] Add both typechecks to the pre-commit hook alongside the build
+
+**Why it is worth doing here specifically.** Two of the worst bugs this project
+hit were type errors a compiler catches for free: `Game.get()` keyed on
+`constructor.name` (mangled in production, returned `undefined` everywhere), and
+`spec.at ?? 6` resolving to `String.prototype.at` — a function where a number was
+expected — which NaN'd the entire title-screen camera.

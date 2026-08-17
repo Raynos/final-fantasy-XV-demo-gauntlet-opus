@@ -10,15 +10,25 @@ import { makeTexture, normalFromHeight } from '../util/TextureGen.js';
  * Water bodies are discovered from the terrain: any basin below `level` that is
  * large enough gets a surface.
  */
+/**
+ * Layer the mirrored pass draws. Nothing is on it until `Water` opts the sky
+ * dome and the terrain clipmap in, so the reflection is *only* those two.
+ */
+const REFLECT_LAYER = 3;
+
 export class Water {
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
-    this.reflectionRes = 256;
+    this.reflectionRes = 192;
+    /** Frames between reflection refreshes. */
+    this.stride = 2;
     this._frustum = new THREE.Frustum();
     this._vp = new THREE.Matrix4();
     this._box = new THREE.Box3();
     this._reflecting = false;
+    this._reflectRoots = null;
+    this._sinceReflect = 1e9;
   }
 
   async init(game) {
@@ -35,6 +45,7 @@ export class Water {
     for (const b of bodies) this._makeSurface(game, b);
 
     this.enabled = this.bodies.length > 0;
+    if (this.enabled) this._collectReflectRoots(game);
   }
 
   // ---------------------------------------------------------------- textures
@@ -64,10 +75,30 @@ export class Water {
       depthBuffer: true,
     });
     this.reflectCam = new THREE.PerspectiveCamera();
-    // Layer 3 = "reflected by water". Sky and terrain opt in.
-    this.reflectCam.layers.set(0);
-    this.reflectCam.layers.enable(3);
+    // Layer 3 = "reflected by water", and *only* layer 3: the camera used to
+    // enable layer 0 as well, which is the default layer of every object in
+    // the scene, so the "sky + terrain only" reflection was in fact a second
+    // full render of the world — 500 draw calls and six million triangles to
+    // fill a 384x192 buffer that a wave normal then smears beyond recognition.
+    this.reflectCam.layers.set(REFLECT_LAYER);
     this._reflMatrix = new THREE.Matrix4();
+  }
+
+  /**
+   * Opt the sky dome and the terrain clipmap into the reflection layer.
+   *
+   * Done from here rather than from those systems because the contract is
+   * Water's: it is the only thing that reads layer 3, and what belongs in a
+   * mirrored view is a decision about the reflection, not about the sky.
+   */
+  _collectReflectRoots(game) {
+    const roots = [];
+    const sky = game.get('Sky');
+    if (sky && sky.dome) roots.push(sky.dome);
+    const terrain = game.get('Terrain');
+    if (terrain && terrain.clipmap && terrain.clipmap.group) roots.push(terrain.clipmap.group);
+    for (const r of roots) r.traverse((o) => o.layers.enable(REFLECT_LAYER));
+    this._reflectRoots = roots;
   }
 
   // ------------------------------------------------------------------ basins
@@ -254,19 +285,43 @@ export class Water {
     return false;
   }
 
+  /**
+   * Does the reflection need re-rendering this frame?
+   *
+   * Four cheap rejections, in increasing order of cost. The first three are the
+   * common case: most of the map, and most of the capture shots, contain no
+   * water at all, and a menu or a cutscene is looking at a frozen or occluded
+   * world where last frame's mirror is still exactly right.
+   */
+  _shouldReflect(dt, game) {
+    if (!this.enabled) return false;
+    const cam = game.camera;
+    if (cam.position.y < this.level) return false;      // underwater
+    if (game.state === 'menu' || game.state === 'cutscene') return false;
+    const menus = game.get('Menus');
+    // A menu is a scrim over a still world: nothing behind it moves enough for
+    // a wave-distorted mirror to disagree with the one already in the buffer.
+    if (menus && menus.name && menus.name !== 'photo') return false;
+    cam.updateMatrixWorld();
+    if (!this._visible(cam)) return false;
+    // Refresh on a stride once it has been drawn at least once. The surface is
+    // 1-2% of the frame, moving, and read through a distorting normal; a
+    // half-rate mirror is not resolvable, and this is a whole extra scene pass.
+    this._sinceReflect += 1;
+    if (this._sinceReflect < this.stride) return false;
+    this._sinceReflect = 0;
+    return true;
+  }
+
   /** Render the mirrored view. Called from lateUpdate so transforms are final. */
   lateUpdate(dt, game) {
-    if (!this.enabled) return;
+    if (!this._shouldReflect(dt, game)) return;
     const cam = game.camera;
-    if (cam.position.y < this.level) return;   // underwater: skip
-    cam.updateMatrixWorld();
-    if (!this._visible(cam)) return;
 
     const rc = this.reflectCam;
     rc.copy(cam);
     rc.position.y = 2 * this.level - cam.position.y;
-    rc.layers.set(0);
-    rc.layers.enable(3);
+    rc.layers.set(REFLECT_LAYER);
 
     // mirror the orientation about the water plane
     const q = this._q || (this._q = new THREE.Quaternion());
@@ -280,8 +335,7 @@ export class Water {
 
     const renderer = game.renderer;
     const prevTarget = renderer.getRenderTarget();
-    const visible = this.bodies.map((b) => b.mesh.visible);
-    this.bodies.forEach((b) => { b.mesh.visible = false; });
+    // No need to hide the surfaces: they are not on the reflection layer.
 
     // The cascades were being re-rendered for this pass — three re-runs the
     // whole shadow map on every top-level `render()` — so a mirrored view at a
@@ -299,7 +353,6 @@ export class Water {
 
     this._reflecting = false;
     renderer.shadowMap.autoUpdate = prevShadow;
-    this.bodies.forEach((b, i) => { b.mesh.visible = visible[i]; });
   }
 
   /** Height of the water surface, or null if this point isn't over water. */

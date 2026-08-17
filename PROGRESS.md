@@ -17,6 +17,10 @@ open · Hammerhead built with 11 NPCs · Regalia enters and drives 5.9 m under
 throttle · 3 dungeons enter and leave · title + attract camera + opening scene ·
 audio graph running · 124 POIs on the minimap · rest at a lodging.
 
+**Queued after the current wave:** a full TypeScript port to match the sibling
+attempts — see **`docs/typescript-port-plan.md`**. Blocked until every agent branch is merged —
+porting 235 modules while six agents edit them would conflict with everything.
+
 **Known gaps from live play (user-reported, not yet fixed):**
 - No character collision — you walk through the campsite instead of up its stairs
 - Escape fights the browser's pointer-lock, so menus are hard to exit
@@ -51,7 +55,7 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 
 | metric | baseline | target |
 |---|---|---|
-| Posed shots (`tools/perf.mjs`) | mean 29.1 → **44.1 fps** | ≥60 fps every shot |
+| Posed shots (`tools/perf.mjs`) | mean → **~87 fps**, worst **~47** | ≥60 fps every shot |
 | Gameplay (`tools/gameplay.mjs`) | worst segment 15.7 → **27.2 fps** | ≥60 fps every segment |
 | Hitches > 33 ms in a session | 870 → **183** | 0 |
 | Worst single frame | 15,820 ms → **22 ms** ✅ | < 20 ms |
@@ -72,7 +76,7 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 | Cost attribution | ✅ | `tools/attrib.mjs` — A/B/A per-subsystem |
 | Production build verified | ✅ | `--prod` flag; fixed a minifier-only crash |
 | Capture determinism | ✅ | visually stable (mean Δ 0.39/255); not bit-exact |
-| Cloud raymarch upsample blockiness | 🔵 | visible at upper-left in `mesa_landmark` |
+| Cloud raymarch upsample blockiness | ✅ | Halton-jittered half-res march, TAA supersamples it |
 | Automated visual regression diffing | ⬜ | would catch silent quality regressions between merges |
 
 ## 2. Rendering & world — ✅ strongest area
