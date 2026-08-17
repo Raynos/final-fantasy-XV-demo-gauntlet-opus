@@ -44,6 +44,37 @@ uniform sampler2D uHeightTex;
 uniform sampler2D uFarHeightTex;
 uniform vec4 uField;    // half, cell, N, blendOut
 uniform vec4 uFarP;     // half, cell, N, -
+
+// --- micro-relief -----------------------------------------------------------
+// The macro grid is 4 m; this puts the 6-25 m surface band back analytically.
+// It is the exact twin of microDetail() in Field.js -- a character standing on
+// this ground is placed by the JS version, so the two must not drift.
+vec3 tf_mperm(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+float tf_msnoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = tf_mperm(tf_mperm(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+  m = m * m; m = m * m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+  vec3 g;
+  g.x = a0.x * x0.x + h.x * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+float tf_micro(vec2 p) {
+  return (0.62 * tf_msnoise(p * 0.0930)
+        + 0.30 * tf_msnoise(p * 0.2650 + vec2(5.0, -3.0))) * 0.95;
+}
 float tf_grid(sampler2D tex, vec2 p, vec4 P) {
   vec2 f = (p + P.x) / P.y;
   vec2 i0 = floor(f);
@@ -57,8 +88,10 @@ float tf_grid(sampler2D tex, vec2 p, vec4 P) {
   return mix(mix(a, b, t.x), mix(d, e, t.x), t.y);
 }
 float tf_height(vec2 p) {
-  if (max(abs(p.x), abs(p.y)) >= uField.w) return tf_grid(uFarHeightTex, p, uFarP);
-  return tf_grid(uHeightTex, p, uField);
+  // Roads pre-compensate for the micro term when they are carved, so a highway
+  // stays a highway even though the relief is added everywhere.
+  if (max(abs(p.x), abs(p.y)) >= uField.w) return tf_grid(uFarHeightTex, p, uFarP) + tf_micro(p);
+  return tf_grid(uHeightTex, p, uField) + tf_micro(p);
 }
 vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
 `;
