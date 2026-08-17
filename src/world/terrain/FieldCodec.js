@@ -26,7 +26,7 @@
 
 export const MAGIC = 'EOSFLD01';
 /** Bump when the encoding or the generator's output contract changes. */
-export const BAKE_VERSION = 2;
+export const BAKE_VERSION = 3;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

@@ -39,6 +39,7 @@ const SOURCES = [
   'src/world/terrain/Road.js',
   'src/world/terrain/FieldCodec.js',
   'src/world/terrain/FieldBake.js',
+  'src/world/terrain/Layers.js',
   'src/world/map/WorldMap.js',
   'src/world/map/RoadGraph.js',
   'src/util/Noise.js',
@@ -76,14 +77,18 @@ export async function bake(opts = {}) {
 
   const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.js')).href);
   const { encodeField } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.js')).href);
+  const { buildLayerData } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Layers.js')).href);
 
   log('building terrain field (2048^2 heightfield + 420k-droplet erosion)...');
   const field = new Field(1337);
   field.build();
   log(`field built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
+  log('synthesising the six PBR layer textures...');
+  const layers = buildLayerData(512);
+
   const hash = await sourceHash();
-  const raw = encodeField(field, { seed: 1337, hash });
+  const raw = encodeField(field, { seed: 1337, hash }, layers);
   const gz = gzipSync(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), { level: 9 });
 
   await mkdir(BAKE_DIR, { recursive: true });

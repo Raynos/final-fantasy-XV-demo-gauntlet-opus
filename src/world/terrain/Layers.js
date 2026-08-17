@@ -227,12 +227,14 @@ const RECIPES = [
 // -------------------------------------------------------------------- build
 
 /**
- * Synthesise every layer into two DataArrayTextures plus a shared close-range
- * detail map.
+ * Synthesise every layer's texels. Split out from the texture construction so
+ * the build step can bake the bytes once (`tools/bake.mjs`) instead of every
+ * page load spending a second evaluating 1.6 M per-texel recipes.
+ *
  * @param {number} size texel resolution per layer
- * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture}}
+ * @returns {{size:number, detailSize:number, albedo:Uint8Array, surf:Uint8Array, detail:Uint8Array}}
  */
-export function buildLayerTextures(size = 512) {
+export function buildLayerData(size = 512) {
   const px = size * size;
   const albedo = new Uint8Array(px * 4 * LAYER_COUNT);
   const surf = new Uint8Array(px * 4 * LAYER_COUNT);
@@ -272,6 +274,20 @@ export function buildLayerTextures(size = 512) {
     }
   }
 
+  const detailSize = Math.min(512, size);
+  return { size, detailSize, albedo, surf, detail: buildDetailData(detailSize) };
+}
+
+/**
+ * Wrap layer texels in the array textures the terrain shader samples.
+ * @param {number} size texel resolution per layer
+ * @param {object} [data] pre-baked texels from `buildLayerData`; synthesised when absent
+ * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture}}
+ */
+export function buildLayerTextures(size = 512, data = null) {
+  const d = data && data.size === size ? data : buildLayerData(size);
+  const { albedo, surf, detail, detailSize } = d;
+
   const albedoArray = new THREE.DataArrayTexture(albedo, size, size, LAYER_COUNT);
   albedoArray.format = THREE.RGBAFormat;
   albedoArray.colorSpace = THREE.SRGBColorSpace;
@@ -292,11 +308,7 @@ export function buildLayerTextures(size = 512) {
   surfArray.anisotropy = 16;
   surfArray.needsUpdate = true;
 
-  return {
-    albedoArray,
-    surfArray,
-    detailArray: buildDetailArray(Math.min(512, size)),
-  };
+  return { albedoArray, surfArray, detailArray: buildDetailArray(detailSize, detail) };
 }
 
 /**
@@ -309,12 +321,16 @@ export function buildLayerTextures(size = 512) {
  * the 16-texture-unit limit once the atmosphere patch and the shadow cascades
  * are injected into it, and a seventh standalone sampler tips it over.
  */
-function buildDetailArray(size) {
+/** @returns {Uint8Array} the two detail layers packed back to back */
+function buildDetailData(size) {
   const px = size * size;
   const data = new Uint8Array(px * 4 * 2);
   data.set(buildDetail(size), 0);
   data.set(buildNearDetail(size), px * 4);
+  return data;
+}
 
+function buildDetailArray(size, data = buildDetailData(size)) {
   const tex = new THREE.DataArrayTexture(data, size, size, 2);
   tex.format = THREE.RGBAFormat;
   tex.colorSpace = THREE.NoColorSpace;

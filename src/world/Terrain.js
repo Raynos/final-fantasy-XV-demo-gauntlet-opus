@@ -3,7 +3,7 @@ import {
   Field, LANDMARKS, gnoise2, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
 } from './terrain/Field.js';
 import { Clipmap } from './terrain/Clipmap.js';
-import { loadBakedField } from './terrain/FieldBake.js';
+import { loadBaked } from './terrain/FieldBake.js';
 import { bootPhase } from '../engine/BootProfile.js';
 import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
 import {
@@ -48,13 +48,15 @@ export class Terrain {
     // A baked heightfield is just the cached output of `Field.build()` — same
     // generator, same seed, run in the build step instead of on every page
     // load. Missing or stale artifacts fall through to generating in place.
-    const baked = await bootPhase('Terrain.bake', () => loadBakedField(this.field));
-    if (!baked) bootPhase('Terrain.field', () => this.field.build());
+    const baked = await bootPhase('Terrain.bake', () => loadBaked());
+    if (baked) bootPhase('Terrain.apply', () => baked.applyTo(this.field));
+    else bootPhase('Terrain.field', () => this.field.build());
     this.road = this.field.roadSpline;
 
     const quality = game.rnd ? game.rnd.quality : 'high';
     const layerSize = quality === 'low' ? 256 : 512;
-    const layers = bootPhase('Terrain.layers', () => buildLayerTextures(layerSize));
+    const layers = bootPhase('Terrain.layers',
+      () => buildLayerTextures(layerSize, baked && baked.layers()));
     this.textures = { ...layers, ...bootPhase('Terrain.upload', () => this._uploadFieldTextures()) };
 
     this.res = {

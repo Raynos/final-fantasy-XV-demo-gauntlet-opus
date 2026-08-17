@@ -40,8 +40,11 @@ async function ensureServer() {
 
 async function main() {
   const argv = process.argv.slice(2);
-  let n = 2;
-  for (let i = 0; i < argv.length; i++) if (argv[i] === '--n') n = Number(argv[++i]);
+  let n = 2, nobake = false;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--n') n = Number(argv[++i]);
+    else if (argv[i] === '--nobake') nobake = true;
+  }
 
   const server = await ensureServer();
   const browser = await chromium.launch({
@@ -56,7 +59,8 @@ async function main() {
   try {
     for (let run = 0; run < n; run++) {
       const t0 = Date.now();
-      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 300000 });
+      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}`,
+        { waitUntil: 'domcontentloaded', timeout: 300000 });
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
       const wall = Date.now() - t0;
       const prof = await page.evaluate(() => window.BOOT_PROFILE);
