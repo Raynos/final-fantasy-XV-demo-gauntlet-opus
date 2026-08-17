@@ -7,6 +7,9 @@ code. This document is what I wish I had been handed.
 **State at handoff:** 114 commits · 249 source files · ~86,300 lines · 39 shots ·
 25 registered systems · SCOPE 251 shipped / 3 in progress / 90 not started.
 
+For the narrative version of how this got built — including what went wrong
+and why several things are the way they are — see `journal/2026-08-17-51c0b82c.md`.
+
 Read next, in this order: `BRIEF.md` (the contract every agent works against),
 `SCOPE.md` (atomic checklist), `PROGRESS.md` (status + bug log), `PLAN.md`
 (design audit), `WORLDMAP.md` (cartography), `docs/typescript-port-plan.md`.
