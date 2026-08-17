@@ -20,6 +20,9 @@ import { Menus } from '../ui/Menus.js';
 import { AudioSystem } from '../audio/AudioSystem.js';
 import { Director } from './Director.js';
 import { RpgSystem } from './rpg/RpgSystem.js';
+import { InteractionSystem } from './interaction/Interactables.js';
+import { Hammerhead } from '../world/town/Hammerhead.js';
+import { Npcs } from '../characters/npc/Npcs.js';
 import { SHOTS } from './Shots.js';
 
 /**
@@ -105,6 +108,12 @@ export class Game {
       ['Rpg', () => new RpgSystem({ startLevel: 27 })],
       ['HUD', () => new HUD()],
       ['Menus', () => new Menus()],
+      // WS-3: the interaction verb, then Hammerhead, then the people in it.
+      // Order matters — Town registers its interactables and its two screens,
+      // and Npcs places itself against the anchors Town publishes.
+      ['Interaction', () => new InteractionSystem()],
+      ['Town', () => new Hammerhead()],
+      ['Npcs', () => new Npcs()],
       ['Director', () => new Director()],
     ];
 
