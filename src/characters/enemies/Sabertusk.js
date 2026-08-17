@@ -1,21 +1,38 @@
 import * as THREE from 'three';
-import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, organicNormal, organicRoughness } from './EnemyBase.js';
-import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.js';
+import { Rig, creatureMaterial } from './RigBuilder.js';
+import { organicNormal, organicRoughness } from './EnemyBase.js';
+import { QuadrupedEnemy } from './Quadruped.js';
+import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
+import { clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
-
-const FUR = 0x4b4034;
-const FUR_DARK = 0x2b2620;
-const BELLY = 0x8b7f6c;
-const TUSK = 0xd9d2bd;
-const CLAW = 0x1b1815;
+const FUR = 0x8d7c62;
+const FUR_DARK = 0x4b4031;
+const FUR_MID = 0x6d5e49;
+const BELLY = 0xcbb89b;
+const TUSK = 0xe6ddc4;
+const CLAW = 0x2a251f;
+const NOSE = 0x120f0d;
 const EYE = 0xffa416;
 
+/* Material response is the difference between "brown creature" and an animal:
+ * dry matted fur eats light, the wet nose and eye are near-mirrors, keratin
+ * sits between the two. One draw call, four surfaces. */
+const M_FUR = [0.97, 0];
+const M_FUR_WORN = [0.86, 0];
+const M_BELLY = [0.93, 0];
+const M_TUSK = [0.38, 0.04];
+const M_CLAW = [0.31, 0.05];
+const M_WET = [0.14, 0.0];
+
 /**
- * Sabertusk — the Leide pack predator. Low, fast quadruped with a heavy
- * shoulder mass, a spined dorsal ridge and a pair of outsized lower tusks.
- * Hunts in threes: one commits, the others circle.
+ * Sabertusk — the Leide pack predator. A low, fast, deep-chested canid with a
+ * heavy forequarter, a bristled dorsal ridge and a pair of outsized lower
+ * tusks. Hunts in threes: one commits, the others circle.
+ *
+ * Built as continuous swept masses rather than stacked primitives — the
+ * ribcage, shoulder and haunch are one torso sweep whose cross-section is
+ * shaped per angle, and each leg is a single sweep bound smoothly across four
+ * bones, so it bends at shoulder, elbow, wrist and toe at once.
  */
 export const SABERTUSK = {
   key: 'sabertusk',
@@ -45,282 +62,372 @@ export const SABERTUSK = {
   make(opts) { return new SabertuskEnemy(opts); },
 };
 
+/* Shoulder height 0.86; nose at z ≈ 1.28; rump at z ≈ -0.78. */
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
-  rig.bone('hips', 'root', [0, 0.72, -0.42]);
-  rig.bone('spine', 'hips', [0, 0.78, -0.05]);
+  rig.bone('hips', 'root', [0, 0.74, -0.44]);
+  rig.bone('spine', 'hips', [0, 0.78, -0.06]);
   rig.bone('chest', 'spine', [0, 0.80, 0.34]);
-  rig.bone('neck', 'chest', [0, 0.83, 0.60]);
-  rig.bone('head', 'neck', [0, 0.80, 0.86]);
-  rig.bone('jaw', 'head', [0, 0.70, 0.92]);
-  rig.bone('tail1', 'hips', [0, 0.70, -0.64]);
+  rig.bone('neck', 'chest', [0, 0.84, 0.60]);
+  rig.bone('head', 'neck', [0, 0.83, 0.86]);
+  rig.bone('jaw', 'head', [0, 0.74, 0.90]);
+  rig.bone('tail1', 'hips', [0, 0.72, -0.66]);
   rig.bone('tail2', 'tail1', [0, 0.64, -0.94]);
-  rig.bone('tail3', 'tail2', [0, 0.54, -1.20]);
+  rig.bone('tail3', 'tail2', [0, 0.52, -1.20]);
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    rig.bone(`fsh${n}`, 'chest', [0.21 * s, 0.68, 0.32]);
-    rig.bone(`fkn${n}`, `fsh${n}`, [0.24 * s, 0.36, 0.26]);
-    rig.bone(`fpw${n}`, `fkn${n}`, [0.25 * s, 0.06, 0.36]);
-    rig.bone(`bhp${n}`, 'hips', [0.23 * s, 0.70, -0.44]);
-    rig.bone(`bkn${n}`, `bhp${n}`, [0.26 * s, 0.38, -0.58]);
-    rig.bone(`bpw${n}`, `bkn${n}`, [0.26 * s, 0.06, -0.44]);
+    // digitigrade: scapula → elbow → carpus → toes
+    rig.bone(`fsh${n}`, 'chest', [0.19 * s, 0.74, 0.30]);
+    rig.bone(`fel${n}`, `fsh${n}`, [0.22 * s, 0.46, 0.24]);
+    rig.bone(`fwr${n}`, `fel${n}`, [0.235 * s, 0.19, 0.32]);
+    rig.bone(`fpw${n}`, `fwr${n}`, [0.235 * s, 0.05, 0.36]);
+    rig.bone(`bhp${n}`, 'hips', [0.20 * s, 0.75, -0.44]);
+    rig.bone(`bkn${n}`, `bhp${n}`, [0.235 * s, 0.48, -0.62]);
+    rig.bone(`bhk${n}`, `bkn${n}`, [0.245 * s, 0.20, -0.42]);
+    rig.bone(`bpw${n}`, `bhk${n}`, [0.245 * s, 0.05, -0.38]);
   }
 
-  /* ---- torso ---- */
-  const torso = tube([
-    P(0, 0.70, -0.74), P(0, 0.75, -0.50), P(0, 0.79, -0.15),
-    P(0, 0.80, 0.20), P(0, 0.82, 0.46), P(0, 0.82, 0.58),
-  ], [0.15, 0.235, 0.245, 0.29, 0.245, 0.17], { radialSeg: 12, flat: 0.82 });
-  rig.attach(tint(torso, FUR, 0.05), 'spine');
+  const B = new CBuilder();
+  const P = [];
 
-  const belly = tube([
-    P(0, 0.60, -0.42), P(0, 0.60, 0.0), P(0, 0.62, 0.36),
-  ], [0.14, 0.17, 0.15], { radialSeg: 8, flat: 0.6 });
-  rig.attach(tint(belly, BELLY, 0.04), 'spine');
+  /* ---------------------------------------------------------- torso ---- */
+  // theta 0 = +Z side of the ring; because the sweep runs along +Z the ring
+  // frame puts theta = π/2 on the animal's left and 0 on its back.
+  B.group(1);
+  const backline = (th) => Math.cos(th);           // +1 on the spine, -1 on the belly
+  sweep(B, {
+    nodes: [
+      { p: [0, 0.70, -0.80], rx: 0.145, rz: 0.155 },
+      { p: [0, 0.755, -0.60], rx: 0.225, rz: 0.235 },   // haunch
+      { p: [0, 0.775, -0.28], rx: 0.205, rz: 0.245 },   // loin, narrow and tucked
+      { p: [0, 0.785, 0.02], rx: 0.215, rz: 0.265 },
+      { p: [0, 0.795, 0.30], rx: 0.235, rz: 0.30 },     // ribcage, deep not wide
+      { p: [0, 0.80, 0.50], rx: 0.215, rz: 0.265 },
+      { p: [0, 0.815, 0.62], rx: 0.16, rz: 0.185 },
+    ],
+    steps: 26, seg: 18, ref: [0, 1, 0],
+    capStart: 0.7, capEnd: 0.2,
+    shape: (th, u) => {
+      const b = backline(th);
+      let m = 1;
+      // flat withers and a keeled sternum: the vertical section is an egg, not
+      // a circle, which is what makes a running predator read as deep-chested
+      m += b > 0 ? -0.06 * b * b : 0.10 * b * b * smooth(1 - Math.abs(u - 0.55) * 2.2);
+      // tucked flank behind the ribs
+      m -= smooth((u - 0.15) / 0.3) * (1 - smooth((u - 0.42) / 0.25)) * 0.10 * clamp01(-b);
+      // shoulder blade and haunch mass push out sideways
+      const side = Math.abs(Math.sin(th));
+      m += side * 0.11 * Math.exp(-Math.pow((u - 0.80) / 0.14, 2));
+      m += side * 0.10 * Math.exp(-Math.pow((u - 0.14) / 0.16, 2));
+      // rib banding — shallow, only on the lower flank where light rakes it
+      m += Math.sin(u * 62) * 0.010 * side * clamp01(-b + 0.4) * smooth((u - 0.5) / 0.2);
+      return m;
+    },
+    colorAt: (th, u) => {
+      const b = backline(th);
+      if (b < -0.35) return blend(BELLY, FUR_MID, clamp01((b + 1) / 0.65) * 0.75);
+      if (b > 0.55) return blend(FUR, FUR_DARK, clamp01((b - 0.55) / 0.45) * 0.8);
+      return blend(FUR, FUR_MID, 0.35 + 0.3 * Math.sin(u * 17 + th * 3));
+    },
+    matAt: (th) => (backline(th) < -0.5 ? M_BELLY : M_FUR),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['hips', 'spine', 'chest']] });
+  resetB(B);
 
-  // shoulder mass — the silhouette read that says "predator"
+  /* ------------------------------------------------------ neck + ruff -- */
+  B.group(2);
+  sweep(B, {
+    nodes: [
+      { p: [0, 0.81, 0.50], rx: 0.185, rz: 0.20 },
+      { p: [0, 0.845, 0.64], rx: 0.165, rz: 0.185 },
+      { p: [0, 0.845, 0.80], rx: 0.135, rz: 0.155 },
+    ],
+    steps: 12, seg: 14, ref: [0, 1, 0], capStart: false, capEnd: false,
+    shape: (th, u) => {
+      // the ruff: a collar of longer guard hair that widens the silhouette
+      const ruff = Math.exp(-Math.pow((u - 0.18) / 0.30, 2)) * 0.30;
+      const clump = 1 + Math.sin(th * 9) * 0.14 * ruff * 3;
+      return (1 + ruff) * clump;
+    },
+    colorAt: (th, u) => blend(FUR_DARK, FUR, 0.25 + 0.35 * (Math.sin(th * 9 + u * 4) * 0.5 + 0.5)),
+    matAt: () => M_FUR,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['chest', 'neck', 'head']] });
+  resetB(B);
+
+  /* ------------------------------------------------------------ head --- */
+  B.group(3);
+  // a wolf skull: braincase, a hard brow shelf over deep-set eyes, prominent
+  // zygomatic arches, then a long tapering muzzle
+  sculptBlob(B, {
+    center: [0, 0.835, 0.955], scale: [0.115, 0.115, 0.20], segU: 26, segV: 18,
+    brushes: [
+      { p: [0, 0.90, 0.88], r: [0.14, 0.10, 0.13], amt: 0.022, dir: [0, 1, 0] },      // occiput
+      { p: [0, 0.885, 0.985], r: [0.13, 0.055, 0.09], amt: 0.030, dir: [0, 1, 0.25] }, // brow shelf
+      { p: [0.075, 0.855, 1.035], r: [0.055, 0.05, 0.06], amt: -0.026, dir: 'normal', mirror: true }, // eye socket
+      { p: [0.105, 0.825, 0.975], r: [0.055, 0.07, 0.08], amt: 0.022, dir: [1, -0.1, 0], mirror: true }, // zygomatic
+      { p: [0.085, 0.775, 0.955], r: [0.07, 0.075, 0.10], amt: 0.026, dir: [1, -0.4, 0], mirror: true }, // masseter
+      { p: [0, 0.815, 1.14], r: [0.11, 0.11, 0.16], amt: -0.052, dir: 'normal' },       // muzzle taper
+      { p: [0, 0.795, 1.16], r: [0.09, 0.06, 0.14], amt: 0.020, dir: [0, -1, 0.3] },    // muzzle bridge down
+      { p: [0, 0.86, 1.06], r: [0.045, 0.05, 0.11], amt: 0.012, dir: [0, 1, 0] },       // nasal bone
+      { p: [0.05, 0.79, 1.10], r: [0.05, 0.05, 0.10], amt: 0.014, dir: [1, 0, 0], mirror: true }, // flews
+    ],
+    colorAt: (u, v, p) => {
+      const snout = clamp01((p.z - 1.02) / 0.16);
+      const under = clamp01((0.815 - p.y) / 0.07);
+      return blend(blend(FUR, FUR_DARK, snout * 0.75), BELLY, under * 0.45);
+    },
+    matAt: (u, v, p) => (p.z > 1.19 ? M_WET : M_FUR),
+  });
+  // nose leather
+  sculptBlob(B, {
+    center: [0, 0.795, 1.225], scale: [0.052, 0.040, 0.036], segU: 12, segV: 8,
+    brushes: [
+      { p: [0, 0.775, 1.245], r: [0.06, 0.03, 0.04], amt: -0.010, dir: [0, 1, 0] },
+      { p: [0.028, 0.80, 1.245], r: [0.02, 0.025, 0.03], amt: -0.011, dir: 'normal', mirror: true },
+    ],
+    colorAt: () => NOSE, matAt: () => M_WET,
+  });
   for (const s of [-1, 1]) {
-    const m = place(blob(0.15, 0.15, 0.21, 10, 8), { pos: [0.20 * s, 0.80, 0.28] });
-    rig.attach(tint(m, FUR, 0.06), 'chest');
+    // eye: a dark globe with a hot iris that catches the bloom
+    B.glow(EYE, 2.6);
+    sculptBlob(B, {
+      center: [0.079 * s, 0.851, 1.028], scale: [0.026, 0.023, 0.020], segU: 10, segV: 7,
+      colorAt: () => 0x140d02, matAt: () => M_WET,
+    });
+    B.glow(null);
+    // ear: a swept cone with a folded rim
+    sweep(B, {
+      nodes: [
+        { p: [0.088 * s, 0.895, 0.855], rx: 0.055, rz: 0.030 },
+        { p: [0.108 * s, 0.955, 0.835], rx: 0.045, rz: 0.024 },
+        { p: [0.125 * s, 1.005, 0.815], rx: 0.020, rz: 0.012 },
+      ],
+      steps: 7, seg: 9, ref: [0, 0, 1], capStart: 0.4, capEnd: 0.5,
+      colorAt: (th, u) => blend(FUR_DARK, 0x1a1512, u * 0.6),
+      matAt: () => M_FUR,
+    });
+    // upper canine
+    horn(B, {
+      from: [0.052 * s, 0.792, 1.145], dir: [0.05 * s, -1, 0.05], len: 0.085,
+      r0: 0.017, r1: 0.002, seg: 6, steps: 5, colorAt: () => TUSK, matAt: () => M_TUSK,
+    });
   }
 
-  /* ---- dorsal ridge of quills ---- */
-  for (let i = 0; i < 11; i++) {
-    const t = i / 10;
-    const z = -0.62 + t * 1.18;
-    const h = 0.10 + Math.sin(t * Math.PI) * 0.20;
-    const y = 0.94 + Math.sin(t * Math.PI) * 0.04;
-    const q = place(spike(0.030, h, 5), { pos: [0, y, z], rot: [-0.55 - t * 0.25, 0, 0] });
-    rig.attach(tint(q, FUR_DARK), t < 0.35 ? 'hips' : t < 0.75 ? 'spine' : 'chest');
-  }
-
-  /* ---- neck & head ---- */
-  const neck = tube([P(0, 0.82, 0.50), P(0, 0.83, 0.66), P(0, 0.81, 0.80)],
-    [0.19, 0.175, 0.155], { radialSeg: 10, flat: 0.95 });
-  rig.attachBlend(tint(neck, FUR, 0.05), 'chest', 'head', 1.0);
-
-  const mane = tube([P(0, 0.86, 0.46), P(0, 0.88, 0.62)], [0.26, 0.21], { radialSeg: 10, flat: 0.8 });
-  rig.attach(tint(mane, FUR_DARK, 0.08), 'chest');
-
-  const skull = place(blob(0.135, 0.125, 0.165, 10, 8), { pos: [0, 0.81, 0.88] });
-  rig.attach(tint(skull, FUR, 0.04), 'head');
-  const snout = tube([P(0, 0.79, 0.95), P(0, 0.76, 1.10), P(0, 0.75, 1.20)],
-    [0.10, 0.085, 0.065], { radialSeg: 8, flat: 0.85 });
-  rig.attach(tint(snout, FUR_DARK, 0.05), 'head');
-  const nose = place(blob(0.045, 0.035, 0.035, 6, 5), { pos: [0, 0.755, 1.235] });
-  rig.attach(tint(nose, 0x14110f), 'head');
-
-  // lower jaw
-  const jaw = tube([P(0, 0.71, 0.94), P(0, 0.70, 1.12)], [0.075, 0.055], { radialSeg: 7, flat: 0.8 });
-  rig.attach(tint(jaw, FUR_DARK), 'jaw');
-
-  // the tusks: long, curved, unmissable
+  /* the tusks — the read at 30 m. Long, curved, and lit brighter than
+   * anything else on the animal so they carry the silhouette. */
   for (const s of [-1, 1]) {
-    const t1 = place(spike(0.036, 0.34, 6), { pos: [0.075 * s, 0.745, 1.10], rot: [2.55, 0, 0.16 * s] });
-    rig.attach(tint(t1, TUSK), 'head');
-    const t2 = place(spike(0.020, 0.15, 5), { pos: [0.055 * s, 0.735, 0.99], rot: [2.75, 0, 0.10 * s] });
-    rig.attach(tint(t2, TUSK), 'head');
+    horn(B, {
+      from: [0.072 * s, 0.755, 1.075], dir: [0.10 * s, 0.62, 0.78], len: 0.30,
+      curve: [0.05 * s, 0.10, -0.16], r0: 0.036, r1: 0.004, taper: 0.75,
+      seg: 8, steps: 8, flat: 0.82, colorAt: () => TUSK, matAt: () => M_TUSK,
+    });
+    horn(B, {
+      from: [0.056 * s, 0.752, 0.985], dir: [0.08 * s, 0.9, 0.42], len: 0.13,
+      curve: [0.01 * s, 0.02, -0.05], r0: 0.019, r1: 0.003,
+      seg: 6, steps: 5, colorAt: () => TUSK, matAt: () => M_TUSK,
+    });
   }
-  // upper fangs
+  P.push({ geo: B.build(), bind: ['bone', 'head'] });
+  resetB(B);
+
+  /* ------------------------------------------------------------- jaw --- */
+  B.group(4);
+  sweep(B, {
+    nodes: [
+      { p: [0, 0.745, 0.895], rx: 0.085, rz: 0.070 },
+      { p: [0, 0.735, 1.02], rx: 0.062, rz: 0.055 },
+      { p: [0, 0.735, 1.16], rx: 0.038, rz: 0.036 },
+    ],
+    steps: 9, seg: 11, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.6,
+    shape: (th) => 1 + Math.max(0, Math.cos(th)) * 0.18,   // fleshy chin
+    colorAt: (th) => (Math.cos(th) < -0.2 ? BELLY : FUR_DARK),
+    matAt: () => M_FUR,
+  });
   for (const s of [-1, 1]) {
-    const f = place(spike(0.018, 0.10, 5), { pos: [0.055 * s, 0.735, 1.16], rot: [Math.PI - 0.15, 0, 0] });
-    rig.attach(tint(f, TUSK), 'head');
+    for (let i = 0; i < 3; i++) {
+      horn(B, {
+        from: [(0.030 + i * 0.008) * s, 0.755, 1.02 + i * 0.045], dir: [0, 1, 0.05],
+        len: 0.030 - i * 0.005, r0: 0.009, r1: 0.001, seg: 5, steps: 3,
+        colorAt: () => TUSK, matAt: () => M_TUSK,
+      });
+    }
+  }
+  P.push({ geo: B.build(), bind: ['bone', 'jaw'] });
+  resetB(B);
+
+  /* --------------------------------------------------------- dorsal ---- */
+  // The bristle ridge. Emitted as flattened blades rather than cones so the
+  // ridge reads as hair standing up, and split across three bones so it moves
+  // with the spine when the animal hunches.
+  for (const [bone, z0, z1, n] of [['hips', -0.72, -0.30, 4], ['spine', -0.26, 0.16, 5], ['chest', 0.20, 0.56, 4]]) {
+    B.group(5);
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const z = lerp(z0, z1, t);
+      const g = clamp01((z + 0.75) / 1.35);
+      const h = 0.075 + Math.sin(g * Math.PI) * 0.135;
+      horn(B, {
+        from: [0, 0.90 + Math.sin(g * Math.PI) * 0.055, z], dir: [0, 0.82, -0.57],
+        len: h, curve: [0, -0.02, -0.03], r0: 0.026, r1: 0.002, flat: 0.34,
+        seg: 5, steps: 4, colorAt: () => FUR_DARK, matAt: () => M_FUR_WORN,
+      });
+    }
+    P.push({ geo: B.build(), bind: ['bone', bone] });
+    resetB(B);
   }
 
-  // ears
-  for (const s of [-1, 1]) {
-    const e = place(spike(0.055, 0.15, 5), { pos: [0.095 * s, 0.90, 0.80], rot: [-0.5, 0, 0.55 * s] });
-    rig.attach(tint(e, FUR_DARK), 'head');
-  }
-  // eyes — small, hot, catch the bloom
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.030, 0.026, 0.020, 7, 5), { pos: [0.088 * s, 0.845, 1.005] });
-    rig.attach(glow(tint(e, 0x120c02), EYE, 2.4), 'head');
-  }
-
-  /* ---- legs ---- */
+  /* ------------------------------------------------------------ legs --- */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const fu = tube([P(0.21 * s, 0.72, 0.32), P(0.23 * s, 0.52, 0.29), P(0.24 * s, 0.37, 0.26)],
-      [0.115, 0.095, 0.072], { radialSeg: 7 });
-    rig.attachBlend(tint(fu, FUR, 0.04), `fsh${n}`, `fkn${n}`, 0.9);
-    const fl = tube([P(0.24 * s, 0.37, 0.26), P(0.245 * s, 0.20, 0.31), P(0.25 * s, 0.08, 0.35)],
-      [0.068, 0.050, 0.045], { radialSeg: 7 });
-    rig.attachBlend(tint(fl, FUR_DARK, 0.04), `fkn${n}`, `fpw${n}`, 0.9);
-    const fp = place(blob(0.062, 0.045, 0.085, 7, 5), { pos: [0.25 * s, 0.055, 0.40] });
-    rig.attach(tint(fp, FUR_DARK), `fpw${n}`);
-    for (let c = -1; c <= 1; c++) {
-      const cl = place(spike(0.014, 0.055, 4), { pos: [(0.25 + c * 0.035) * s, 0.03, 0.465], rot: [1.25, 0, 0] });
-      rig.attach(tint(cl, CLAW), `fpw${n}`);
-    }
+    // front: one sweep, scapula through toes, bound across all four bones
+    B.group(6);
+    sweep(B, {
+      nodes: [
+        { p: [0.185 * s, 0.86, 0.28], rx: 0.105, rz: 0.125 },   // scapula
+        { p: [0.205 * s, 0.66, 0.28], rx: 0.100, rz: 0.115 },   // triceps
+        { p: [0.220 * s, 0.46, 0.24], rx: 0.072, rz: 0.082 },   // elbow
+        { p: [0.232 * s, 0.30, 0.28], rx: 0.048, rz: 0.055 },   // forearm
+        { p: [0.235 * s, 0.19, 0.32], rx: 0.040, rz: 0.044 },   // carpus
+        { p: [0.235 * s, 0.09, 0.345], rx: 0.036, rz: 0.042 },  // metacarpus
+      ],
+      steps: 20, seg: 11, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        // the front of the limb is taut over bone, the back carries muscle
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.20 * Math.exp(-Math.pow((u - 0.22) / 0.20, 2))
+          + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.62) / 0.14, 2));
+      },
+      colorAt: (th, u) => blend(FUR, FUR_DARK, clamp01((u - 0.45) / 0.5) * 0.85),
+      matAt: () => M_FUR,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fel${n}`, `fwr${n}`, `fpw${n}`]] });
+    resetB(B);
 
-    const bu = tube([P(0.23 * s, 0.74, -0.42), P(0.25 * s, 0.55, -0.52), P(0.26 * s, 0.39, -0.57)],
-      [0.135, 0.115, 0.078], { radialSeg: 7 });
-    rig.attachBlend(tint(bu, FUR, 0.04), `bhp${n}`, `bkn${n}`, 0.9);
-    const bl = tube([P(0.26 * s, 0.39, -0.57), P(0.26 * s, 0.22, -0.50), P(0.26 * s, 0.08, -0.45)],
-      [0.072, 0.052, 0.045], { radialSeg: 7 });
-    rig.attachBlend(tint(bl, FUR_DARK, 0.04), `bkn${n}`, `bpw${n}`, 0.9);
-    const bp = place(blob(0.060, 0.045, 0.082, 7, 5), { pos: [0.26 * s, 0.055, -0.40] });
-    rig.attach(tint(bp, FUR_DARK), `bpw${n}`);
-    for (let c = -1; c <= 1; c++) {
-      const cl = place(spike(0.013, 0.05, 4), { pos: [(0.26 + c * 0.033) * s, 0.03, -0.335], rot: [1.25, 0, 0] });
-      rig.attach(tint(cl, CLAW), `bpw${n}`);
-    }
+    B.group(7);
+    paw(B, 0.235 * s, 0.05, 0.375, 1);
+    P.push({ geo: B.build(), bind: ['bone', `fpw${n}`] });
+    resetB(B);
+
+    // back: the powerful one. Thigh, gaskin, then a long thin hock.
+    B.group(6);
+    sweep(B, {
+      nodes: [
+        { p: [0.195 * s, 0.86, -0.42], rx: 0.130, rz: 0.150 },  // rump
+        { p: [0.215 * s, 0.66, -0.50], rx: 0.125, rz: 0.145 },  // thigh
+        { p: [0.235 * s, 0.48, -0.60], rx: 0.078, rz: 0.090 },  // stifle
+        { p: [0.242 * s, 0.32, -0.52], rx: 0.052, rz: 0.058 },  // gaskin
+        { p: [0.245 * s, 0.20, -0.42], rx: 0.038, rz: 0.042 },  // hock
+        { p: [0.245 * s, 0.09, -0.385], rx: 0.033, rz: 0.038 }, // metatarsus
+      ],
+      steps: 20, seg: 11, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.26 * Math.exp(-Math.pow((u - 0.18) / 0.22, 2))
+          + Math.max(0, -back) * 0.10 * Math.exp(-Math.pow((u - 0.52) / 0.16, 2));
+      },
+      colorAt: (th, u) => blend(FUR, FUR_DARK, clamp01((u - 0.45) / 0.5) * 0.85),
+      matAt: () => M_FUR,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bkn${n}`, `bhk${n}`, `bpw${n}`]] });
+    resetB(B);
+
+    B.group(7);
+    paw(B, 0.245 * s, 0.05, -0.355, -1);
+    P.push({ geo: B.build(), bind: ['bone', `bpw${n}`] });
+    resetB(B);
   }
 
-  /* ---- tail ---- */
-  const t1 = tube([P(0, 0.72, -0.62), P(0, 0.68, -0.80)], [0.075, 0.058], { radialSeg: 6 });
-  rig.attachBlend(tint(t1, FUR, 0.04), 'tail1', 'tail2', 1.0);
-  const t2 = tube([P(0, 0.66, -0.88), P(0, 0.58, -1.14)], [0.052, 0.038], { radialSeg: 6 });
-  rig.attachBlend(tint(t2, FUR, 0.04), 'tail2', 'tail3', 1.0);
-  const tuft = place(blob(0.055, 0.055, 0.10, 7, 5), { pos: [0, 0.53, -1.26] });
-  rig.attach(tint(tuft, FUR_DARK), 'tail3');
+  /* ------------------------------------------------------------ tail --- */
+  B.group(8);
+  sweep(B, {
+    nodes: [
+      { p: [0, 0.74, -0.60], rx: 0.075, rz: 0.075 },
+      { p: [0, 0.70, -0.80], rx: 0.062, rz: 0.062 },
+      { p: [0, 0.62, -1.00], rx: 0.052, rz: 0.052 },
+      { p: [0, 0.52, -1.20], rx: 0.048, rz: 0.048 },
+      { p: [0, 0.44, -1.34], rx: 0.026, rz: 0.026 },
+    ],
+    steps: 16, seg: 9, ref: [0, 1, 0], capStart: false, capEnd: 0.6,
+    shape: (th, u) => 1 + Math.sin(th * 7) * 0.10 * smooth((u - 0.25) / 0.4)
+      + smooth((u - 0.45) / 0.35) * (1 - smooth((u - 0.85) / 0.15)) * 0.55,
+    colorAt: (th, u) => blend(FUR, FUR_DARK, clamp01((u - 0.3) / 0.5)),
+    matAt: () => M_FUR,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2', 'tail3']] });
+  resetB(B);
+
+  for (const p of P) {
+    if (p.bind[0] === 'chain') rig.attachChain(p.geo, p.bind[1], 0.95);
+    else rig.attach(p.geo, p.bind[1]);
+  }
 
   const mat = creatureMaterial({
-    roughness: 0.86, metalness: 0.0,
-    normalMap: organicNormal(), normalScale: 0.6, roughnessMap: organicRoughness(),
+    roughness: 0.95, metalness: 0.0,
+    normalMap: organicNormal(), normalScale: 0.85, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 2.0 });
 }
 
-class SabertuskEnemy extends Enemy {
-  constructor(opts) { super(SABERTUSK, opts); }
-
-  pose(state, t) {
-    const rig = this.rig;
-    if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
-    const gait = (phase, amp, kneeAmp, front) => {
-      for (const s of [-1, 1]) {
-        const n = s < 0 ? 'L' : 'R';
-        const off = (s < 0 ? 0 : Math.PI) + (front ? 0 : Math.PI * 0.55);
-        const a = Math.sin(phase + off);
-        const b = Math.sin(phase + off + 1.7);
-        if (front) {
-          S(`fsh${n}`, a * amp, 0, 0);
-          S(`fkn${n}`, -0.35 + Math.max(0, b) * kneeAmp, 0, 0);
-          S(`fpw${n}`, 0.25 - a * 0.3, 0, 0);
-        } else {
-          S(`bhp${n}`, -a * amp, 0, 0);
-          S(`bkn${n}`, 0.5 - Math.max(0, b) * kneeAmp, 0, 0);
-          S(`bpw${n}`, -0.3 + a * 0.3, 0, 0);
-        }
-      }
-    };
-
-    switch (state) {
-      case 'run':
-      case 'approach': {
-        const ph = t * 11.5;
-        gait(ph, 0.85, 0.9, true);
-        gait(ph, 0.75, 0.85, false);
-        S('spine', Math.sin(ph * 2) * 0.06, 0, 0);
-        S('chest', -0.06 + Math.sin(ph * 2 + 1) * 0.05, 0, 0);
-        S('neck', -0.10, 0, 0);
-        S('head', 0.10 + Math.sin(ph) * 0.05, Math.sin(ph * 0.5) * 0.06, 0);
-        S('tail1', -0.35, Math.sin(ph * 0.9) * 0.3, 0);
-        S('tail2', -0.25, Math.sin(ph * 0.9 + 0.7) * 0.35, 0);
-        S('tail3', -0.15, Math.sin(ph * 0.9 + 1.4) * 0.4, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph)) * 0.07;
-        break;
-      }
-      case 'telegraph': {
-        // hunker down, hackles up, weight back — the tell before the pounce
-        const k = Math.min(1, this.stateTime / 0.3);
-        const tremble = Math.sin(t * 40) * 0.02 * k;
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.35 * k, 0, 0); S(`fkn${n}`, -0.85 * k, 0, 0); S(`fpw${n}`, 0.5 * k, 0, 0);
-          S(`bhp${n}`, -0.75 * k, 0, 0); S(`bkn${n}`, 1.15 * k, 0, 0); S(`bpw${n}`, -0.55 * k, 0, 0);
-        }
-        S('spine', 0.12 * k + tremble, 0, 0);
-        S('chest', 0.10 * k, 0, 0);
-        S('neck', 0.28 * k, 0, 0);
-        S('head', -0.22 * k, 0, 0);
-        S('jaw', 0.25 * k, 0, 0);
-        S('tail1', 0.55 * k, 0, 0); S('tail2', 0.4 * k, 0, 0); S('tail3', 0.3 * k, 0, 0);
-        this.visual.position.y = -0.16 * k;
-        break;
-      }
-      case 'attack':
-      case 'pounce': {
-        // airborne lunge: front legs reaching, jaws wide, spine extended
-        const k = state === 'pounce' ? 1 : Math.min(1, this.stateTime / 0.14);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, -1.15 * k, 0.10 * s, 0); S(`fkn${n}`, -0.30 * k, 0, 0); S(`fpw${n}`, -0.45 * k, 0, 0);
-          S(`bhp${n}`, 0.95 * k, 0, 0); S(`bkn${n}`, -0.85 * k, 0, 0); S(`bpw${n}`, 0.5 * k, 0, 0);
-        }
-        S('spine', -0.22 * k, 0, 0);
-        S('chest', -0.16 * k, 0, 0);
-        S('neck', -0.30 * k, 0, 0);
-        S('head', 0.34 * k, 0, 0);
-        S('jaw', 0.85 * k, 0, 0);
-        S('tail1', -0.6 * k, 0, 0); S('tail2', -0.35 * k, 0, 0); S('tail3', -0.2 * k, 0, 0);
-        break;
-      }
-      case 'flinch': {
-        const k = Math.exp(-this.stateTime * 7) * (1 - Math.min(1, this.stateTime / 0.35));
-        const sh = Math.sin(this.stateTime * 46) * k;
-        S('spine', 0.25 * k, sh * 0.4, 0);
-        S('chest', 0.18 * k, sh * 0.3, 0);
-        S('neck', 0.4 * k, sh * 0.5, 0);
-        S('head', -0.5 * k, sh * 0.6, 0.3 * k);
-        S('jaw', 0.5 * k, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.3 * k, 0, 0); S(`fkn${n}`, -0.5 * k, 0, 0);
-          S(`bhp${n}`, -0.35 * k, 0, 0); S(`bkn${n}`, 0.6 * k, 0, 0);
-        }
-        break;
-      }
-      case 'stagger': {
-        const k = Math.min(1, this.stateTime / 0.2) * Math.max(0, 1 - this.stateTime / 2.2);
-        S('spine', 0.32 * k, 0.28 * k, 0.2 * k);
-        S('neck', 0.55 * k, 0.35 * k, 0);
-        S('head', -0.6 * k, 0.3 * k, 0.4 * k);
-        S('jaw', 0.6 * k, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.55 * k, 0, 0); S(`fkn${n}`, -1.0 * k, 0, 0);
-          S(`bhp${n}`, -0.7 * k, 0, 0); S(`bkn${n}`, 1.1 * k, 0, 0);
-        }
-        this.visual.position.y = -0.22 * k;
-        break;
-      }
-      case 'death': {
-        const k = Math.min(1, this.stateTime / 0.55);
-        const e = 1 - Math.pow(1 - k, 3);
-        this.visual.rotation.z = e * 1.45;
-        this.visual.position.y = -0.42 * e;
-        S('spine', 0.3 * e, 0, 0);
-        S('neck', 0.5 * e, 0.3 * e, 0);
-        S('head', -0.4 * e, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.6 * e, 0, 0); S(`fkn${n}`, -1.2 * e, 0, 0);
-          S(`bhp${n}`, -0.8 * e, 0, 0); S(`bkn${n}`, 1.3 * e, 0, 0);
-        }
-        break;
-      }
-      default: {
-        const b = Math.sin(t * 1.6) * 0.03;
-        S('spine', b, 0, 0);
-        S('chest', b * 0.6, 0, 0);
-        S('neck', -0.05 + b, Math.sin(t * 0.5) * 0.12, 0);
-        S('head', 0.05, Math.sin(t * 0.37) * 0.18, 0);
-        S('tail1', -0.15, Math.sin(t * 1.1) * 0.25, 0);
-        S('tail2', -0.1, Math.sin(t * 1.1 + 0.6) * 0.3, 0);
-        S('tail3', -0.05, Math.sin(t * 1.1 + 1.2) * 0.35, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0, 0, 0); S(`fkn${n}`, -0.12, 0, 0); S(`fpw${n}`, 0.08, 0, 0);
-          S(`bhp${n}`, -0.15, 0, 0); S(`bkn${n}`, 0.3, 0, 0); S(`bpw${n}`, -0.15, 0, 0);
-        }
-        this.visual.position.y = 0;
-        break;
-      }
-    }
+/** Toe pad group: three digits and their claws. */
+function paw(B, x, y, z, dir) {
+  const sgn = Math.sign(x) || 1;
+  for (let i = -1; i <= 1; i++) {
+    const ox = x + i * 0.033 * sgn;
+    const oz = z + (1 - Math.abs(i) * 0.35) * 0.022 * dir;
+    sweep(B, {
+      nodes: [
+        { p: [ox, y + 0.035, oz - dir * 0.03], rx: 0.026, rz: 0.030 },
+        { p: [ox, y + 0.012, oz + dir * 0.024], rx: 0.024, rz: 0.030 },
+        { p: [ox, y + 0.004, oz + dir * 0.055], rx: 0.017, rz: 0.020 },
+      ],
+      steps: 5, seg: 8, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.5,
+      colorAt: () => 0x1e1a16, matAt: () => [0.88, 0],
+    });
+    horn(B, {
+      from: [ox, y + 0.006, oz + dir * 0.062], dir: [0, -0.12, dir], len: 0.042,
+      curve: [0, -0.016, 0], r0: 0.010, r1: 0.001, seg: 5, steps: 4,
+      colorAt: () => CLAW, matAt: () => M_CLAW,
+    });
   }
 }
+
+function resetB(B) {
+  B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
+  B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
+  B.glow(null);
+}
+
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+/** sRGB hex blend, returned as a working-space Color. */
+function blend(a, b, t) {
+  _c1.setHex(a, THREE.SRGBColorSpace);
+  _c2.setHex(b, THREE.SRGBColorSpace);
+  return _c1.lerp(_c2, clamp01(t));
+}
+
+class SabertuskEnemy extends QuadrupedEnemy {
+  constructor(opts) { super(SABERTUSK, opts); }
+
+  /** A pounce coils harder and leaves the ground; a bite barely does either. */
+  telegraphScale() { return this.attackId === 'pounce' ? 1.15 : 0.8; }
+  leapScale() { return this.attackId === 'pounce' ? 1.0 : 0.4; }
+}
+
+SabertuskEnemy.ANIM = {
+  legs: {
+    fL: ['fshL', 'felL', 'fwrL', 'fpwL'], fR: ['fshR', 'felR', 'fwrR', 'fpwR'],
+    bL: ['bhpL', 'bknL', 'bhkL', 'bpwL'], bR: ['bhpR', 'bknR', 'bhkR', 'bpwR'],
+  },
+  trunk: ['hips', 'spine', 'chest', 'neck', 'head'],
+  tails: ['tail1', 'tail2', 'tail3'],
+  jawBone: 'jaw',
+  strideLen: 1.05, stride: 0.24, lift: 0.13, splay: 0.02,
+  crouch: 0.13, crouchFront: 0.05, crouchBack: -0.11, crouchPitch: 0.16, headDown: 0.30,
+  lunge: 0.26, lungeLift: 0.34, lungeLiftBack: 0.10, hop: 0.20,
+  strikePitch: 0.20, headThrust: 0.30, jaw: 0.30, jawBite: 0.95,
+  runNeck: 0.14, runHead: 0.12, flex: 1.0,
+  bodyY: 0.79, bodyR: 0.27, deathRoll: 1.32,
+  tailRun: -0.35, tailIdle: -0.12,
+};

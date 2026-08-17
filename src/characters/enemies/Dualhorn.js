@@ -1,30 +1,39 @@
 import * as THREE from 'three';
-import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, organicNormal, organicRoughness } from './EnemyBase.js';
-import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.js';
+import { Rig, creatureMaterial } from './RigBuilder.js';
+import { organicNormal, organicRoughness } from './EnemyBase.js';
+import { QuadrupedEnemy } from './Quadruped.js';
+import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
+import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
-
-const HIDE = 0x6b5a44;
-const HIDE_DARK = 0x463a2c;
-const SHAG = 0x574733;
-const BELLY = 0x9c8f76;
-const HORN = 0xe4dcc4;
-const HORN_DARK = 0xb8ad91;
-const HOOF = 0x14120f;
+const HIDE = 0x6e5b41;
+const HIDE_DARK = 0x3c3123;
+const SHAG = 0x9d8459;
+const SHAG_DARK = 0x5d4a2c;
+const BELLY = 0x9a8767;
+const HORN = 0xf0e7c9;
+const HORN_DARK = 0x9d8f6d;
+const HOOF = 0x2b2620;
+const NOSE = 0x25201b;
 const EYE = 0xc46a1e;
 
+const M_HIDE = [0.93, 0];
+const M_SHAG = [1.0, 0];
+const M_HORN = [0.34, 0.05];
+const M_HOOF = [0.42, 0.10];
+const M_WET = [0.16, 0];
+
 /**
- * Dualhorn — the Leide plains bull-boar. Two and a third metres at the
- * shoulder of shaggy dust-brown muscle: an enormous humped forequarter
- * tapering back to small hindquarters, short pillar legs, a stubby tail, and
- * a low armoured skull carrying a pair of forward-swept ivory horns as long
- * as a man's arm. Placid until it isn't; then it puts its head down and runs
- * straight through whatever is in the way.
+ * Dualhorn — the Leide bull.
+ *
+ * Two tonnes of forequarter: a shaggy withers hump that carries the head, a
+ * ribcage far deeper than it is wide, short pillar legs on cloven hooves, and
+ * a pair of forward-raked horns sweeping out of a heavy brow boss. Everything
+ * about the silhouette says the danger comes from the front and arrives at
+ * speed. It charges, it gores, and it stamps — and each of those three has a
+ * wind-up shaped differently enough to tell apart from behind a rock.
  */
 export const DUALHORN = {
   key: 'dualhorn',
-  questId: 'dualhorn',
   faction: 'beast',
   expClass: 'normal',
   stats: {
@@ -33,31 +42,21 @@ export const DUALHORN = {
   },
   weakness: 'fire',
   resist: 'ice',
-  resistPct: { fire: 160, ice: 70, lightning: 100, dark: 100, light: 100 },
   weakTo: ['greatsword'],
-  senses: { sight: 30, fov: 1.5, hearing: 18, nocturnal: false },
+  senses: { sight: 30, fov: 1.7, hearing: 22 },
   drops: [
-    { id: 'dualhorn_steak', chance: 0.5, count: 1 },
-    { id: 'beast_bone', chance: 0.25, count: 1 },
+    { id: 'dualhorn_horn', chance: 0.5, count: 1 },
+    { id: 'beast_hide', chance: 0.4, count: 1 },
   ],
   timing: { telegraph: 0.7, strike: 0.26, attack: 0.8, recover: 1.0 },
   attacks: [
-    // short horn toss — a flick of that armoured skull, close in
-    {
-      id: 'gore', range: 3.6, weight: 3, mult: 1.0, poise: 26, hitRadius: 2.6, arc: 1.3,
-      telegraph: 0.55, strike: 0.22, attack: 0.7, recover: 0.9, cooldown: 1.4,
-    },
-    // the signature: a long committed run-down that barely tracks
-    {
-      id: 'charge', range: 16, minRange: 6, weight: 2, mult: 1.6, poise: 55, hitRadius: 2.2,
+    { id: 'gore', range: 3.6, weight: 3, mult: 1.0, poise: 26, hitRadius: 2.6, arc: 1.3,
+      telegraph: 0.55, strike: 0.22, attack: 0.7, recover: 0.9, cooldown: 1.4 },
+    { id: 'charge', range: 16, minRange: 6, weight: 2, mult: 1.6, poise: 55, hitRadius: 2.2,
       telegraph: 0.95, strike: 0.30, attack: 1.1, recover: 1.4, cooldown: 4.0,
-      lunge: 16, tracking: 0.4, unblockable: true,
-    },
-    // both front hooves come down together — everything nearby eats it
-    {
-      id: 'stomp', range: 3.2, weight: 2, mult: 1.3, poise: 40, hitRadius: 3.2, arc: Math.PI,
-      telegraph: 0.85, strike: 0.30, attack: 0.9, recover: 1.2, cooldown: 3.2, aoe: true,
-    },
+      lunge: 16, tracking: 0.4, unblockable: true },
+    { id: 'stomp', range: 3.2, weight: 2, mult: 1.3, poise: 40, hitRadius: 3.2, arc: Math.PI,
+      telegraph: 0.85, strike: 0.30, attack: 0.9, recover: 1.2, cooldown: 3.2, aoe: true },
   ],
   buildPrototype,
   make(opts) { return new DualhornEnemy(opts); },
@@ -66,397 +65,402 @@ export const DUALHORN = {
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
-  rig.bone('hips', 'root', [0, 1.55, -1.25]);
-  rig.bone('spine', 'hips', [0, 1.72, -0.50]);
-  rig.bone('chest', 'spine', [0, 1.86, 0.30]);
-  rig.bone('neck', 'chest', [0, 1.78, 0.92]);
-  rig.bone('head', 'neck', [0, 1.48, 1.36]);
-  rig.bone('jaw', 'head', [0, 1.30, 1.48]);
-  rig.bone('tail1', 'hips', [0, 1.50, -1.55]);
-  rig.bone('tail2', 'tail1', [0, 1.34, -1.76]);
+  rig.bone('hips', 'root', [0, 1.72, -1.12]);
+  rig.bone('spine', 'hips', [0, 1.90, -0.48]);
+  rig.bone('chest', 'spine', [0, 2.02, 0.30]);
+  rig.bone('neck', 'chest', [0, 1.92, 0.90]);
+  rig.bone('head', 'neck', [0, 1.74, 1.38]);
+  rig.bone('jaw', 'head', [0, 1.56, 1.50]);
+  rig.bone('tail1', 'hips', [0, 1.62, -1.42]);
+  rig.bone('tail2', 'tail1', [0, 1.32, -1.62]);
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    rig.bone(`fsh${n}`, 'chest', [0.46 * s, 1.42, 0.36]);
-    rig.bone(`fkn${n}`, `fsh${n}`, [0.50 * s, 0.78, 0.42]);
-    rig.bone(`fhf${n}`, `fkn${n}`, [0.52 * s, 0.16, 0.36]);
-    rig.bone(`bhp${n}`, 'hips', [0.42 * s, 1.44, -1.20]);
-    rig.bone(`bkn${n}`, `bhp${n}`, [0.46 * s, 0.76, -1.34]);
-    rig.bone(`bhf${n}`, `bkn${n}`, [0.48 * s, 0.16, -1.16]);
+    rig.bone(`fsh${n}`, 'chest', [0.44 * s, 1.92, 0.34]);
+    rig.bone(`fel${n}`, `fsh${n}`, [0.49 * s, 1.30, 0.42]);
+    rig.bone(`fkn${n}`, `fel${n}`, [0.52 * s, 0.62, 0.28]);
+    rig.bone(`fhf${n}`, `fkn${n}`, [0.53 * s, 0.13, 0.34]);
+    rig.bone(`bhp${n}`, 'hips', [0.42 * s, 1.76, -1.08]);
+    rig.bone(`bkn${n}`, `bhp${n}`, [0.46 * s, 1.14, -1.30]);
+    rig.bone(`bhk${n}`, `bkn${n}`, [0.48 * s, 0.58, -1.02]);
+    rig.bone(`bhf${n}`, `bhk${n}`, [0.49 * s, 0.13, -1.04]);
   }
 
-  /* ---- torso: small behind, colossal in front ---- */
-  const torso = tube([
-    P(0, 1.48, -1.62), P(0, 1.55, -1.20), P(0, 1.66, -0.55),
-    P(0, 1.80, 0.10), P(0, 1.84, 0.58), P(0, 1.76, 0.94),
-  ], [0.40, 0.56, 0.68, 0.84, 0.78, 0.56], { radialSeg: 10, flat: 0.92 });
-  rig.attachBlend(tint(torso, HIDE, 0.06), 'hips', 'chest', 1.6);
+  const B = new CBuilder();
+  const P = [];
+  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
 
-  // the hump — the mass that makes the profile unmistakable at 20 m
-  const hump = place(blob(0.60, 0.42, 0.72, 12, 9), { pos: [0, 1.94, 0.16] });
-  rig.attach(tint(hump, SHAG, 0.07), 'chest');
-  const humpFront = place(blob(0.50, 0.30, 0.34, 10, 7), { pos: [0, 1.90, 0.62] });
-  rig.attach(tint(humpFront, SHAG, 0.06), 'chest');
+  /* ------------------------------------------------------------ torso -- */
+  B.group(1);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.62, -1.58], rx: 0.34, rz: 0.42 },
+      { p: [0, 1.72, -1.20], rx: 0.56, rz: 0.60 },   // rump
+      { p: [0, 1.78, -0.66], rx: 0.50, rz: 0.62 },   // loin
+      { p: [0, 1.84, -0.10], rx: 0.53, rz: 0.70 },
+      { p: [0, 1.90, 0.36], rx: 0.60, rz: 0.80 },    // barrel, deep not wide
+      { p: [0, 1.92, 0.72], rx: 0.50, rz: 0.66 },
+      { p: [0, 1.90, 0.92], rx: 0.36, rz: 0.46 },
+    ],
+    steps: 28, seg: 20, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
+    shape: (th, u) => {
+      const b = Math.cos(th);                       // +1 spine, -1 belly
+      const side = Math.abs(Math.sin(th));
+      let m = 1;
+      // the withers hump: the animal's whole read from the side
+      const hump = Math.max(0, b) * Math.exp(-Math.pow((u - 0.72) / 0.17, 2));
+      // clumped guard hair, not a smooth dome: the ridges catch the rim light
+      m += hump * (0.27 + Math.sin(th * 8 + u * 20) * 0.060 + Math.sin(th * 17) * 0.030);
+      // flat top over the loin, heavy hanging belly
+      m += b > 0 ? -0.07 * b * b * (1 - smooth((u - 0.55) / 0.2)) : 0.09 * b * b;
+      // shoulder and haunch masses
+      m += side * 0.10 * Math.exp(-Math.pow((u - 0.80) / 0.13, 2));
+      m += side * 0.11 * Math.exp(-Math.pow((u - 0.18) / 0.15, 2));
+      // ribs
+      m += Math.sin(u * 78) * 0.012 * side * clamp01(-b + 0.35) * smooth((u - 0.5) / 0.2);
+      return m;
+    },
+    colorAt: (th, u) => {
+      const b = Math.cos(th);
+      const shaggy = clamp01((b - 0.1) / 0.9) * smooth((u - 0.45) / 0.35);
+      if (b < -0.4) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.6) * 0.8);
+      return mix(mix(HIDE, HIDE_DARK, 0.3 + 0.25 * Math.sin(u * 21 + th * 4)), SHAG, shaggy);
+    },
+    matAt: (th, u) => (Math.cos(th) > 0.25 && u > 0.55 ? M_SHAG : M_HIDE),
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['hips', 'spine', 'chest']] });
+  reset(B);
 
-  // dirty pale underbelly
-  const belly = tube([
-    P(0, 1.22, -1.05), P(0, 1.14, -0.30), P(0, 1.16, 0.35), P(0, 1.28, 0.78),
-  ], [0.34, 0.46, 0.52, 0.40], { radialSeg: 8, flat: 0.75 });
-  rig.attachBlend(tint(belly, BELLY, 0.05), 'hips', 'chest', 1.6);
+  /* ---------------------------------------------------- shag on the hump */
+  // Long guard hair as flattened blades. Enough to break the hump silhouette
+  // without paying for a fur shell.
+  B.group(2);
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const r = 0.34 + (i % 3) * 0.07;
+    const x = Math.sin(a) * r * 0.85;
+    const z = 0.30 + Math.cos(a) * r * 0.55;
+    const y = 2.18 - Math.abs(Math.sin(a)) * 0.22;
+    horn(B, {
+      from: [x, y, z], dir: [x * 0.4, 0.55, -0.75], len: 0.26 + (i % 4) * 0.06,
+      curve: [0, -0.16, -0.18], r0: 0.070, r1: 0.005, flat: 0.26, seg: 5, steps: 4,
+      colorAt: () => mix(SHAG, SHAG_DARK, (i % 5) / 5), matAt: () => M_SHAG,
+    });
+  }
+  emit(['bone', 'chest']);
 
-  // haunches — small, but still slabs of muscle
+  /* ------------------------------------------------------------- neck -- */
+  B.group(3);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.96, 0.72], rx: 0.42, rz: 0.44 },
+      { p: [0, 1.92, 1.02], rx: 0.34, rz: 0.36 },
+      { p: [0, 1.82, 1.28], rx: 0.27, rz: 0.30 },
+    ],
+    steps: 12, seg: 16, ref: [0, 1, 0], capStart: false, capEnd: false,
+    shape: (th, u) => {
+      const b = Math.cos(th);
+      // crest along the top of the neck, dewlap hanging beneath
+      return 1 + Math.max(0, b) * 0.16 * (1 - u * 0.5)
+        + Math.max(0, -b) * 0.22 * smooth((u - 0.2) / 0.5)
+        + Math.sin(th * 11) * 0.05 * Math.max(0, b);
+    },
+    colorAt: (th, u) => mix(SHAG_DARK, HIDE, 0.3 + 0.4 * (Math.sin(th * 11) * 0.5 + 0.5)),
+    matAt: () => M_SHAG,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['chest', 'neck', 'head']] });
+  reset(B);
+
+  /* ------------------------------------------------------------- head -- */
+  B.group(4);
+  // Bovine skull: a heavy brow boss between the horns, wide zygomatics, a
+  // broad squared-off muzzle, and eyes set well out to the sides.
+  sculptBlob(B, {
+    center: [0, 1.72, 1.46], scale: [0.24, 0.24, 0.36], segU: 26, segV: 18,
+    brushes: [
+      { p: [0, 1.92, 1.32], r: [0.34, 0.16, 0.24], amt: 0.075, dir: [0, 1, -0.2] },     // horn boss
+      { p: [0, 1.82, 1.54], r: [0.26, 0.12, 0.18], amt: 0.045, dir: [0, 1, 0.3] },      // brow
+      { p: [0.20, 1.74, 1.44], r: [0.11, 0.10, 0.12], amt: -0.035, dir: 'normal', mirror: true }, // eye pit
+      { p: [0.24, 1.67, 1.38], r: [0.12, 0.16, 0.18], amt: 0.045, dir: [1, -0.2, 0], mirror: true }, // cheek
+      { p: [0, 1.64, 1.74], r: [0.22, 0.22, 0.26], amt: -0.075, dir: 'normal' },        // muzzle taper
+      { p: [0, 1.60, 1.82], r: [0.20, 0.14, 0.16], amt: 0.048, dir: [0, -0.4, 1] },     // squared nose pad
+      { p: [0, 1.78, 1.64], r: [0.10, 0.10, 0.20], amt: 0.020, dir: [0, 1, 0] },        // nasal bone
+    ],
+    colorAt: (u, v, p) => {
+      const nose = clamp01((p.z - 1.80) / 0.10);
+      const under = clamp01((1.66 - p.y) / 0.12);
+      return mix(mix(HIDE, HIDE_DARK, clamp01((p.z - 1.5) / 0.3) * 0.6), NOSE, nose * 0.9)
+        .lerp(new THREE.Color().setHex(BELLY, THREE.SRGBColorSpace), under * 0.3);
+    },
+    matAt: (u, v, p) => (p.z > 1.82 ? M_WET : M_HIDE),
+  });
   for (const s of [-1, 1]) {
-    const h = place(blob(0.34, 0.38, 0.42, 9, 7), { pos: [0.34 * s, 1.48, -1.16] });
-    rig.attach(tint(h, HIDE, 0.05), 'hips');
-    const sh = place(blob(0.30, 0.36, 0.34, 9, 7), { pos: [0.42 * s, 1.52, 0.30] });
-    rig.attach(tint(sh, HIDE, 0.05), 'chest');
+    B.glow(EYE, 2.4);
+    sculptBlob(B, {
+      center: [0.205 * s, 1.745, 1.475], scale: [0.056, 0.048, 0.044], segU: 10, segV: 7,
+      colorAt: () => col(0x140a02), matAt: () => M_WET,
+    });
+    B.glow(null);
+    // ear tucked behind the horn boss
+    sweep(B, {
+      nodes: [
+        { p: [0.24 * s, 1.86, 1.26], rx: 0.07, rz: 0.035 },
+        { p: [0.34 * s, 1.88, 1.16], rx: 0.055, rz: 0.026 },
+        { p: [0.42 * s, 1.86, 1.05], rx: 0.020, rz: 0.010 },
+      ],
+      steps: 7, seg: 8, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.5,
+      colorAt: () => col(HIDE_DARK), matAt: () => M_HIDE,
+    });
+    // the horns: out, forward, then up. Growth rings near the base.
+    horn(B, {
+      from: [0.20 * s, 1.96, 1.34], dir: [0.66 * s, 0.26, 0.70], len: 0.86,
+      curve: [-0.22 * s, 0.54, 0.10], r0: 0.115, r1: 0.012, taper: 0.72,
+      seg: 9, steps: 9, flat: 0.88,
+      colorAt: (th, u) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
+      matAt: () => M_HORN,
+    });
+    // ridged sheath at the horn base
+    sweep(B, {
+      nodes: [
+        { p: [0.21 * s, 1.965, 1.36], rx: 0.125 },
+        { p: [0.29 * s, 2.005, 1.44], rx: 0.106 },
+      ],
+      steps: 6, seg: 9, ref: [0, 1, 0], capStart: false, capEnd: false,
+      shape: (th, u) => 1 + Math.max(0, Math.sin(u * 26)) * 0.10,
+      colorAt: () => col(HORN_DARK), matAt: () => M_HORN,
+    });
+    // lower tusk
+    horn(B, {
+      from: [0.13 * s, 1.62, 1.74], dir: [0.14 * s, 0.86, 0.49], len: 0.22,
+      curve: [0, 0.04, -0.08], r0: 0.036, r1: 0.004, seg: 6, steps: 5,
+      colorAt: () => col(HORN), matAt: () => M_HORN,
+    });
   }
+  emit(['bone', 'head']);
 
-  /* ---- shaggy coat: clumps of matted hair hanging off the forequarter ---- */
-  for (let i = 0; i < 9; i++) {
-    const t = i / 8;
-    const z = 0.70 - t * 1.30;
-    const y = 1.98 - t * 0.16;
-    const bone = t < 0.35 ? 'chest' : t < 0.8 ? 'spine' : 'hips';
-    const clump = place(spike(0.14 - t * 0.05, 0.34 - t * 0.12, 5),
-      { pos: [0, y, z], rot: [Math.PI * 0.5 + 0.35, 0, 0] });
-    rig.attach(tint(clump, SHAG, 0.09), bone);
-    for (const s of [-1, 1]) {
-      const side = place(spike(0.11 - t * 0.04, 0.30 - t * 0.10, 5),
-        { pos: [(0.42 - t * 0.10) * s, y - 0.24, z], rot: [0.25, 0, Math.PI * 0.5 * s + 0.4 * s] });
-      rig.attach(tint(side, SHAG, 0.09), bone);
-    }
+  /* -------------------------------------------------------------- jaw -- */
+  B.group(5);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.56, 1.46], rx: 0.19, rz: 0.16 },
+      { p: [0, 1.54, 1.68], rx: 0.16, rz: 0.14 },
+      { p: [0, 1.56, 1.84], rx: 0.12, rz: 0.11 },
+    ],
+    steps: 8, seg: 12, ref: [0, 1, 0], capStart: 0.5, capEnd: 0.5,
+    shape: (th) => 1 + Math.max(0, -Math.cos(th)) * 0.30,
+    colorAt: (th) => (Math.cos(th) < -0.2 ? col(BELLY) : col(HIDE_DARK)),
+    matAt: () => M_HIDE,
+  });
+  // beard
+  for (let i = 0; i < 6; i++) {
+    horn(B, {
+      from: [(i - 2.5) * 0.05, 1.48, 1.54 + (i % 2) * 0.06], dir: [0, -1, -0.25],
+      len: 0.20 + (i % 3) * 0.05, r0: 0.035, r1: 0.004, flat: 0.4, seg: 5, steps: 3,
+      colorAt: () => col(SHAG_DARK), matAt: () => M_SHAG,
+    });
   }
-  // beard hanging under the throat
-  for (let i = 0; i < 3; i++) {
-    const b = place(spike(0.10, 0.30 - i * 0.05, 5),
-      { pos: [0, 1.42 - i * 0.03, 0.82 + i * 0.14], rot: [Math.PI - 0.25, 0, 0] });
-    rig.attach(tint(b, SHAG, 0.08), 'neck');
-  }
+  emit(['bone', 'jaw']);
 
-  /* ---- neck & armoured skull ---- */
-  const neck = tube([P(0, 1.80, 0.84), P(0, 1.72, 1.06), P(0, 1.58, 1.26)],
-    [0.44, 0.40, 0.34], { radialSeg: 9, flat: 0.95 });
-  rig.attachBlend(tint(neck, HIDE, 0.05), 'chest', 'head', 1.2);
-
-  const skull = place(blob(0.32, 0.24, 0.36, 10, 8), { pos: [0, 1.46, 1.44] });
-  rig.attach(tint(skull, HIDE, 0.04), 'head');
-  // the bony boss the horns grow out of — a slab of armour across the brow
-  const boss = place(slab(0.62, 0.16, 0.34, 0.05), { pos: [0, 1.60, 1.46], rot: [0.22, 0, 0] });
-  rig.attach(tint(boss, HORN_DARK, 0.04), 'head');
-  const brow = place(slab(0.54, 0.09, 0.20, 0.03), { pos: [0, 1.52, 1.62], rot: [0.35, 0, 0] });
-  rig.attach(tint(brow, HIDE_DARK), 'head');
-
-  const muzzle = tube([P(0, 1.42, 1.58), P(0, 1.36, 1.82), P(0, 1.34, 1.98)],
-    [0.26, 0.22, 0.19], { radialSeg: 8, flat: 0.9 });
-  rig.attach(tint(muzzle, HIDE_DARK, 0.05), 'head');
-  const nose = place(blob(0.17, 0.12, 0.09, 8, 6), { pos: [0, 1.34, 2.03] });
-  rig.attach(tint(nose, 0x241d17), 'head');
-  const jaw = tube([P(0, 1.24, 1.56), P(0, 1.22, 1.86)], [0.19, 0.15], { radialSeg: 7, flat: 0.9 });
-  rig.attach(tint(jaw, HIDE_DARK, 0.04), 'jaw');
-  // stubby tusks poking out of the lower jaw
-  for (const s of [-1, 1]) {
-    const t = place(spike(0.035, 0.16, 5), { pos: [0.12 * s, 1.28, 1.80], rot: [-0.35, 0, 0.18 * s] });
-    rig.attach(tint(t, HORN), 'jaw');
-  }
-
-  /* ---- the horns: forward-swept, longer than they have any right to be ---- */
-  for (const s of [-1, 1]) {
-    const h = tube([
-      P(0.26 * s, 1.60, 1.36), P(0.48 * s, 1.66, 1.42), P(0.66 * s, 1.60, 1.66),
-      P(0.72 * s, 1.48, 1.98), P(0.66 * s, 1.42, 2.24), P(0.56 * s, 1.44, 2.42),
-    ], [0.135, 0.115, 0.092, 0.068, 0.042, 0.014], { radialSeg: 8 });
-    rig.attach(tint(h, HORN, 0.04), 'head');
-    // growth rings near the base, so the horn does not read as a plain cone
-    for (let i = 0; i < 3; i++) {
-      const r = place(blob(0.13 - i * 0.012, 0.032, 0.13 - i * 0.012, 8, 5),
-        { pos: [(0.34 + i * 0.13) * s, 1.645 - i * 0.02, 1.40 + i * 0.10], rot: [0, 0, 1.45 * s] });
-      rig.attach(tint(r, HORN_DARK), 'head');
-    }
-  }
-
-  // ears, tucked behind the horn bosses
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.06, 0.10, 0.15, 7, 5), { pos: [0.30 * s, 1.52, 1.26], rot: [0.2, 0, 0.7 * s] });
-    rig.attach(tint(e, HIDE_DARK, 0.05), 'head');
-  }
-  // small, sunken, unimpressed eyes
-  for (const s of [-1, 1]) {
-    const e = place(blob(0.045, 0.038, 0.030, 7, 5), { pos: [0.235 * s, 1.50, 1.62] });
-    rig.attach(glow(tint(e, 0x150c02), EYE, 1.3), 'head');
-  }
-
-  /* ---- legs: short, thick, pillar-like, ending in split black hooves ---- */
+  /* ------------------------------------------------------------- legs -- */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const fu = tube([P(0.46 * s, 1.44, 0.34), P(0.49 * s, 1.10, 0.38), P(0.50 * s, 0.80, 0.42)],
-      [0.26, 0.22, 0.185], { radialSeg: 8 });
-    rig.attachBlend(tint(fu, HIDE, 0.04), `fsh${n}`, `fkn${n}`, 0.9);
-    const fl = tube([P(0.50 * s, 0.80, 0.42), P(0.51 * s, 0.48, 0.39), P(0.52 * s, 0.20, 0.36)],
-      [0.175, 0.145, 0.130], { radialSeg: 8 });
-    rig.attachBlend(tint(fl, HIDE_DARK, 0.04), `fkn${n}`, `fhf${n}`, 0.9);
-    const fh = place(blob(0.16, 0.12, 0.20, 8, 6), { pos: [0.52 * s, 0.10, 0.40] });
-    rig.attach(tint(fh, HOOF), `fhf${n}`);
-    const fc = place(slab(0.05, 0.16, 0.30, 0.02), { pos: [0.52 * s, 0.08, 0.42] });
-    rig.attach(tint(fc, 0x0a0908), `fhf${n}`);
+    B.group(6);
+    sweep(B, {
+      nodes: [
+        { p: [0.42 * s, 2.02, 0.34], rx: 0.26, rz: 0.30 },
+        { p: [0.46 * s, 1.62, 0.38], rx: 0.24, rz: 0.28 },   // shoulder muscle
+        { p: [0.49 * s, 1.28, 0.42], rx: 0.175, rz: 0.20 },  // elbow
+        { p: [0.51 * s, 0.94, 0.34], rx: 0.135, rz: 0.155 },
+        { p: [0.52 * s, 0.62, 0.28], rx: 0.115, rz: 0.125 }, // knee (carpus)
+        { p: [0.53 * s, 0.30, 0.32], rx: 0.095, rz: 0.105 }, // cannon
+        { p: [0.53 * s, 0.16, 0.34], rx: 0.100, rz: 0.110 },
+      ],
+      steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.22 * Math.exp(-Math.pow((u - 0.16) / 0.20, 2))
+          + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.50) / 0.12, 2));
+      },
+      colorAt: (th, u) => mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9),
+      matAt: () => M_HIDE,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fel${n}`, `fkn${n}`, `fhf${n}`]] });
+    reset(B);
 
-    const bu = tube([P(0.42 * s, 1.44, -1.20), P(0.45 * s, 1.10, -1.28), P(0.46 * s, 0.78, -1.34)],
-      [0.24, 0.20, 0.165], { radialSeg: 8 });
-    rig.attachBlend(tint(bu, HIDE, 0.04), `bhp${n}`, `bkn${n}`, 0.9);
-    const bl = tube([P(0.46 * s, 0.78, -1.34), P(0.47 * s, 0.46, -1.26), P(0.48 * s, 0.20, -1.18)],
-      [0.155, 0.130, 0.118], { radialSeg: 8 });
-    rig.attachBlend(tint(bl, HIDE_DARK, 0.04), `bkn${n}`, `bhf${n}`, 0.9);
-    const bh = place(blob(0.145, 0.11, 0.185, 8, 6), { pos: [0.48 * s, 0.10, -1.14] });
-    rig.attach(tint(bh, HOOF), `bhf${n}`);
-    const bc = place(slab(0.05, 0.15, 0.28, 0.02), { pos: [0.48 * s, 0.08, -1.12] });
-    rig.attach(tint(bc, 0x0a0908), `bhf${n}`);
+    B.group(7);
+    hoof(B, 0.53 * s, 0.13, 0.36);
+    emit(['bone', `fhf${n}`]);
+
+    B.group(6);
+    sweep(B, {
+      nodes: [
+        { p: [0.40 * s, 1.86, -1.06], rx: 0.28, rz: 0.34 },
+        { p: [0.44 * s, 1.46, -1.18], rx: 0.27, rz: 0.32 },  // thigh
+        { p: [0.46 * s, 1.12, -1.30], rx: 0.185, rz: 0.21 }, // stifle
+        { p: [0.47 * s, 0.84, -1.18], rx: 0.140, rz: 0.155 },
+        { p: [0.48 * s, 0.58, -1.02], rx: 0.110, rz: 0.120 }, // hock
+        { p: [0.49 * s, 0.30, -1.02], rx: 0.092, rz: 0.100 },
+        { p: [0.49 * s, 0.16, -1.04], rx: 0.098, rz: 0.106 },
+      ],
+      steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
+      shape: (th, u) => {
+        const back = -Math.cos(th);
+        return 1 + Math.max(0, back) * 0.28 * Math.exp(-Math.pow((u - 0.14) / 0.22, 2));
+      },
+      colorAt: (th, u) => mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9),
+      matAt: () => M_HIDE,
+    });
+    P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bkn${n}`, `bhk${n}`, `bhf${n}`]] });
+    reset(B);
+
+    B.group(7);
+    hoof(B, 0.49 * s, 0.13, -1.02);
+    emit(['bone', `bhf${n}`]);
   }
 
-  /* ---- stubby tail ---- */
-  const t1 = tube([P(0, 1.50, -1.52), P(0, 1.38, -1.72)], [0.11, 0.08], { radialSeg: 6 });
-  rig.attachBlend(tint(t1, HIDE, 0.04), 'tail1', 'tail2', 1.0);
-  const tuft = place(blob(0.10, 0.10, 0.13, 7, 5), { pos: [0, 1.28, -1.84] });
-  rig.attach(tint(tuft, SHAG, 0.08), 'tail2');
+  /* ------------------------------------------------------------- tail -- */
+  B.group(8);
+  sweep(B, {
+    nodes: [
+      { p: [0, 1.66, -1.40], rx: 0.10 },
+      { p: [0, 1.44, -1.56], rx: 0.075 },
+      { p: [0, 1.16, -1.66], rx: 0.055 },
+      { p: [0, 0.98, -1.70], rx: 0.028 },
+    ],
+    steps: 12, seg: 8, ref: [0, 1, 0], capStart: false, capEnd: 0.5,
+    shape: (th, u) => 1 + smooth((u - 0.6) / 0.25) * (1 - smooth((u - 0.92) / 0.08)) * 1.5
+      + Math.sin(th * 8) * 0.12 * smooth((u - 0.6) / 0.3),
+    colorAt: (th, u) => mix(HIDE_DARK, SHAG_DARK, clamp01((u - 0.5) / 0.4)),
+    matAt: () => M_SHAG,
+  });
+  P.push({ geo: B.build(), bind: ['chain', ['tail1', 'tail2']] });
+  reset(B);
+
+  for (const p of P) {
+    if (p.bind[0] === 'chain') rig.attachChain(p.geo, p.bind[1], 0.95);
+    else rig.attach(p.geo, p.bind[1]);
+  }
 
   const mat = creatureMaterial({
-    roughness: 0.90, metalness: 0.0,
-    normalMap: organicNormal(), normalScale: 0.7, roughnessMap: organicRoughness(),
+    roughness: 0.93, metalness: 0.0,
+    normalMap: organicNormal(), normalScale: 0.85, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 3.4 });
 }
 
-class DualhornEnemy extends Enemy {
+/** A cloven hoof: two keratin toes with a dewclaw behind. */
+function hoof(B, x, y, z) {
+  const s = Math.sign(x) || 1;
+  for (const i of [-1, 1]) {
+    sweep(B, {
+      nodes: [
+        { p: [x + i * 0.055 * s, y + 0.05, z - 0.02], rx: 0.058, rz: 0.070 },
+        { p: [x + i * 0.058 * s, y - 0.05, z + 0.03], rx: 0.052, rz: 0.078 },
+        { p: [x + i * 0.058 * s, y - 0.115, z + 0.09], rx: 0.036, rz: 0.050 },
+      ],
+      steps: 6, seg: 9, ref: [0, 1, 0], capStart: 0.4, capEnd: 0.4,
+      colorAt: (th, u) => mix(HOOF, 0x4a4238, u * 0.4), matAt: () => M_HOOF,
+    });
+  }
+  horn(B, {
+    from: [x, y - 0.02, z - 0.13], dir: [0, -0.55, -0.84], len: 0.075,
+    r0: 0.028, r1: 0.008, seg: 5, steps: 3, colorAt: () => col(HOOF), matAt: () => M_HOOF,
+  });
+}
+
+function reset(B) {
+  B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
+  B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
+  B.glow(null);
+}
+
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+function mix(a, b, t) {
+  _c1.setHex(a, THREE.SRGBColorSpace);
+  _c2.setHex(b, THREE.SRGBColorSpace);
+  return _c1.lerp(_c2, clamp01(t));
+}
+function col(hex) { return _c1.setHex(hex, THREE.SRGBColorSpace); }
+
+class DualhornEnemy extends QuadrupedEnemy {
   constructor(opts) { super(DUALHORN, opts); }
 
-  pose(state, t) {
-    const rig = this.rig;
-    if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
-    // heavy four-beat walk: front pair leads, back pair follows half a beat
-    const gait = (phase, amp, kneeAmp, front) => {
-      for (const s of [-1, 1]) {
-        const n = s < 0 ? 'L' : 'R';
-        const off = (s < 0 ? 0 : Math.PI) + (front ? 0 : Math.PI * 0.5);
-        const a = Math.sin(phase + off);
-        const b = Math.sin(phase + off + 1.6);
-        if (front) {
-          S(`fsh${n}`, a * amp, 0, 0);
-          S(`fkn${n}`, -0.18 + Math.max(0, b) * kneeAmp, 0, 0);
-          S(`fhf${n}`, 0.16 - a * 0.22, 0, 0);
-        } else {
-          S(`bhp${n}`, -a * amp, 0, 0);
-          S(`bkn${n}`, 0.32 - Math.max(0, b) * kneeAmp, 0, 0);
-          S(`bhf${n}`, -0.20 + a * 0.24, 0, 0);
-        }
-      }
-    };
+  telegraphScale() {
+    // a charge paws the ground and coils low; a stomp rears instead
+    if (this.attackId === 'charge') return 1.25;
+    if (this.attackId === 'stomp') return -0.85;
+    return 0.9;
+  }
 
-    switch (state) {
-      case 'run':
-      case 'approach': {
-        const ph = t * 6.4;
-        gait(ph, 0.52, 0.62, true);
-        gait(ph, 0.46, 0.58, false);
-        S('spine', Math.sin(ph * 2) * 0.04, Math.sin(ph) * 0.05, 0);
-        S('chest', -0.05 + Math.sin(ph * 2 + 1) * 0.035, 0, 0);
-        S('neck', 0.06 + Math.sin(ph) * 0.05, 0, 0);
-        S('head', -0.04 + Math.sin(ph * 2) * 0.07, Math.sin(ph * 0.5) * 0.05, 0);
-        S('tail1', 0.15, Math.sin(ph * 0.8) * 0.3, 0);
-        S('tail2', 0.1, Math.sin(ph * 0.8 + 0.6) * 0.35, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph)) * 0.06;
-        this.visual.rotation.z = Math.sin(ph) * 0.035;
-        break;
+  leapScale() { return this.attackId === 'stomp' ? 1.0 : 0.25; }
+
+  /**
+   * The stomp rears — the only move in this animal's set that goes *up*, so
+   * it gets its own wind-up rather than a scaled crouch. Negative
+   * `telegraphScale` already inverts the body drop; this adds the forelegs
+   * leaving the ground and the head going back, which is the readable part.
+   */
+  poseTelegraph(S, t) {
+    super.poseTelegraph(S, t);
+    if (this.attackId !== 'stomp') {
+      if (this.attackId === 'charge') {
+        // pawing: the near foreleg rakes the dirt while the body stays coiled
+        const k = attackEnvelope('telegraph', this.stateTime, this._timingAll()).tension;
+        const paw = Math.sin(this.stateTime * 9) * k;
+        this.anim.solveLeg('fR', 0.30 * Math.max(0, paw), 0.22 * Math.max(0, paw), S,
+          { kneeSign: 1, footPitch: -0.3 });
       }
-      case 'telegraph': {
-        const k = Math.min(1, this.stateTime / 0.3);
-        if (this.attackId === 'charge') {
-          // THE tell: skull dropped to knee height, weight rocked back onto the
-          // hindquarters, front hooves scraping the dirt, whole mass shivering.
-          const scrape = Math.sin(t * 16);
-          const shiver = Math.sin(t * 34) * 0.02 * k;
-          S('spine', -0.10 * k + shiver, 0, 0);
-          S('chest', -0.16 * k, 0, 0);
-          S('neck', 0.62 * k, 0, 0);
-          S('head', 0.34 * k + shiver * 2, 0, 0);
-          S('jaw', 0.14 * k, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            const lead = s < 0 ? 1 : -1;
-            S(`fsh${n}`, (0.30 + scrape * 0.34 * lead) * k, 0, 0);
-            S(`fkn${n}`, (-0.55 - Math.max(0, scrape * lead) * 0.5) * k, 0, 0);
-            S(`fhf${n}`, (0.45 + scrape * 0.3 * lead) * k, 0, 0);
-            S(`bhp${n}`, -0.42 * k, 0, 0);
-            S(`bkn${n}`, 0.66 * k, 0, 0);
-            S(`bhf${n}`, -0.30 * k, 0, 0);
-          }
-          S('tail1', 0.5 * k, 0, 0); S('tail2', 0.4 * k, 0, 0);
-          this.visual.position.y = -0.14 * k;
-          this.visual.rotation.z = 0;
-        } else if (this.attackId === 'stomp') {
-          // rears: front legs come off the ground, chest climbing
-          const e = k * k * (3 - 2 * k);
-          S('spine', 0.34 * e, 0, 0);
-          S('chest', 0.26 * e, 0, 0);
-          S('neck', -0.30 * e, 0, 0);
-          S('head', -0.24 * e, 0, 0);
-          S('jaw', 0.35 * e, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, -1.25 * e, 0, 0.12 * s * e);
-            S(`fkn${n}`, -1.05 * e, 0, 0);
-            S(`fhf${n}`, 0.5 * e, 0, 0);
-            S(`bhp${n}`, 0.28 * e, 0, 0);
-            S(`bkn${n}`, -0.35 * e, 0, 0);
-            S(`bhf${n}`, 0.25 * e, 0, 0);
-          }
-          this.visual.position.y = 0.30 * e;
-          this.visual.rotation.z = 0;
-        } else {
-          // gore: head cocked and loaded to one side, shoulder braced
-          const e = k * k * (3 - 2 * k);
-          S('spine', 0.05 * e, -0.14 * e, 0);
-          S('chest', 0.04 * e, -0.18 * e, 0);
-          S('neck', -0.22 * e, -0.30 * e, 0);
-          S('head', -0.20 * e, -0.34 * e, -0.28 * e);
-          S('jaw', 0.20 * e, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, 0.20 * e, 0, 0); S(`fkn${n}`, -0.35 * e, 0, 0);
-            S(`bhp${n}`, -0.22 * e, 0, 0); S(`bkn${n}`, 0.34 * e, 0, 0);
-          }
-          this.visual.position.y = -0.06 * e;
-          this.visual.rotation.z = 0;
-        }
-        break;
-      }
-      case 'attack': {
-        if (this.attackId === 'charge') {
-          // flat-out: horns levelled, legs hammering, body slung forward
-          const k = Math.min(1, this.stateTime / 0.12);
-          const ph = t * 13.0;
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            const off = s < 0 ? 0 : Math.PI;
-            S(`fsh${n}`, Math.sin(ph + off) * 0.95 * k, 0, 0);
-            S(`fkn${n}`, -0.5 - Math.max(0, Math.sin(ph + off + 1.5)) * 0.9 * k, 0, 0);
-            S(`fhf${n}`, 0.3, 0, 0);
-            S(`bhp${n}`, -Math.sin(ph + off + 1.1) * 0.9 * k, 0, 0);
-            S(`bkn${n}`, 0.5 + Math.max(0, Math.sin(ph + off + 2.6)) * 0.8 * k, 0, 0);
-            S(`bhf${n}`, -0.25, 0, 0);
-          }
-          S('spine', -0.14 * k + Math.sin(ph * 2) * 0.04, 0, 0);
-          S('chest', -0.20 * k, 0, 0);
-          S('neck', 0.30 * k, 0, 0);
-          S('head', 0.12 * k, 0, 0);
-          S('jaw', 0.30 * k, 0, 0);
-          S('tail1', -0.4 * k, 0, 0); S('tail2', -0.3 * k, 0, 0);
-          this.visual.position.y = Math.abs(Math.sin(ph)) * 0.09;
-        } else if (this.attackId === 'stomp') {
-          // both front hooves slam down together
-          const k = Math.min(1, this.stateTime / 0.16);
-          const e = 1 - Math.pow(1 - k, 4);
-          S('spine', 0.34 - 0.52 * e, 0, 0);
-          S('chest', 0.26 - 0.44 * e, 0, 0);
-          S('neck', -0.30 + 0.55 * e, 0, 0);
-          S('head', -0.24 + 0.42 * e, 0, 0);
-          S('jaw', 0.35 * (1 - e * 0.5), 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, -1.25 + 1.75 * e, 0, 0.12 * s * (1 - e));
-            S(`fkn${n}`, -1.05 + 0.95 * e, 0, 0);
-            S(`fhf${n}`, 0.5 - 0.6 * e, 0, 0);
-            S(`bhp${n}`, 0.28 - 0.45 * e, 0, 0);
-            S(`bkn${n}`, -0.35 + 0.65 * e, 0, 0);
-          }
-          this.visual.position.y = 0.30 - 0.44 * e;
-        } else {
-          // gore: the skull whips across and up, horns leading
-          const k = Math.min(1, this.stateTime / 0.14);
-          const e = 1 - Math.pow(1 - k, 3);
-          S('spine', 0.05 + 0.10 * e, -0.14 + 0.30 * e, 0);
-          S('chest', 0.04 + 0.06 * e, -0.18 + 0.40 * e, 0);
-          S('neck', -0.22 + 0.16 * e, -0.30 + 0.66 * e, 0);
-          S('head', -0.20 - 0.30 * e, -0.34 + 0.72 * e, -0.28 + 0.56 * e);
-          S('jaw', 0.20 + 0.35 * e, 0, 0);
-          for (const s of [-1, 1]) {
-            const n = s < 0 ? 'L' : 'R';
-            S(`fsh${n}`, 0.20 - 0.34 * e, 0, 0); S(`fkn${n}`, -0.35 + 0.2 * e, 0, 0);
-            S(`bhp${n}`, -0.22 + 0.12 * e, 0, 0); S(`bkn${n}`, 0.34 - 0.16 * e, 0, 0);
-          }
-          this.visual.position.y = -0.06 + 0.10 * e;
-        }
-        this.visual.rotation.z = 0;
-        break;
-      }
-      case 'flinch': {
-        const k = Math.exp(-this.stateTime * 6) * (1 - Math.min(1, this.stateTime / 0.35));
-        const sh = Math.sin(this.stateTime * 38) * k;
-        S('spine', 0.14 * k, sh * 0.22, 0);
-        S('chest', 0.10 * k, sh * 0.18, 0);
-        S('neck', 0.26 * k, sh * 0.3, 0);
-        S('head', -0.30 * k, sh * 0.35, 0.22 * k);
-        S('jaw', 0.35 * k, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.22 * k, 0, 0); S(`fkn${n}`, -0.32 * k, 0, 0);
-          S(`bhp${n}`, -0.26 * k, 0, 0); S(`bkn${n}`, 0.38 * k, 0, 0);
-        }
-        this.visual.position.y = -0.05 * k;
-        break;
-      }
-      case 'stagger': {
-        // knees buckle, the head hangs, the whole front end drops
-        const k = Math.min(1, this.stateTime / 0.25) * Math.max(0, 1 - this.stateTime / 2.4);
-        S('spine', 0.20 * k, 0.20 * k, 0.12 * k);
-        S('chest', 0.16 * k, 0.14 * k, 0);
-        S('neck', 0.70 * k, 0.24 * k, 0);
-        S('head', 0.30 * k, 0.20 * k, 0.30 * k);
-        S('jaw', 0.55 * k, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.55 * k, 0, 0); S(`fkn${n}`, -1.05 * k, 0, 0); S(`fhf${n}`, 0.6 * k, 0, 0);
-          S(`bhp${n}`, -0.45 * k, 0, 0); S(`bkn${n}`, 0.8 * k, 0, 0);
-        }
-        S('tail1', 0.4 * k, 0, 0);
-        this.visual.position.y = -0.42 * k;
-        this.visual.rotation.z = 0.10 * k;
-        break;
-      }
-      case 'death': {
-        const k = Math.min(1, this.stateTime / 0.8);
-        const e = 1 - Math.pow(1 - k, 3);
-        this.visual.rotation.z = e * 1.35;
-        this.visual.position.y = -0.62 * e;
-        S('spine', 0.18 * e, 0, 0);
-        S('neck', 0.55 * e, 0.22 * e, 0);
-        S('head', 0.20 * e, 0, 0);
-        S('jaw', 0.45 * e, 0, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0.55 * e, 0, 0); S(`fkn${n}`, -1.2 * e, 0, 0);
-          S(`bhp${n}`, -0.6 * e, 0, 0); S(`bkn${n}`, 1.0 * e, 0, 0);
-        }
-        S('tail1', 0.5 * e, 0, 0); S('tail2', 0.35 * e, 0, 0);
-        break;
-      }
-      default: {
-        // idle: slow bellows breathing, the head swinging low as it grazes
-        const b = Math.sin(t * 1.1) * 0.035;
-        S('spine', b, 0, 0);
-        S('chest', b * 0.6, 0, 0);
-        S('neck', 0.18 + b * 1.4, Math.sin(t * 0.31) * 0.16, 0);
-        S('head', 0.10 - b, Math.sin(t * 0.23) * 0.20, 0);
-        S('jaw', 0.10 + Math.max(0, Math.sin(t * 2.3)) * 0.14, 0, 0);
-        S('tail1', 0.1, Math.sin(t * 0.9) * 0.28, 0);
-        S('tail2', 0.05, Math.sin(t * 0.9 + 0.7) * 0.32, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`fsh${n}`, 0, 0, 0); S(`fkn${n}`, -0.08, 0, 0); S(`fhf${n}`, 0.06, 0, 0);
-          S(`bhp${n}`, -0.10, 0, 0); S(`bkn${n}`, 0.18, 0, 0); S(`bhf${n}`, -0.10, 0, 0);
-        }
-        this.visual.position.y = 0;
-        this.visual.rotation.z = 0;
-        break;
-      }
+      return;
     }
+    const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
+    const k = env.tension;
+    const rear = smooth(k) * 1.0;
+    this.stance(S, {
+      front: { reach: -0.35 * rear, lift: 1.15 * rear },
+      back: { reach: 0.12 * rear, lift: 0 },
+    });
+    this.spine(S, -0.30 * rear + env.shake, 0, 0);
+    S('head', 0.34 * rear, 0, 0);
+    S('jaw', 0.5 * k);
+    this.visual.rotation.x -= 0.42 * rear;
+    this.visual.position.y += 0.10 * rear;
+  }
+
+  poseAttack(S, t) {
+    if (this.attackId !== 'stomp') { super.poseAttack(S, t); return; }
+    // the drop: both forefeet come down together and the ground takes it
+    const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
+    const k = env.k;
+    const up = clamp01(-k);
+    const down = clamp01(k);
+    this.stance(S, {
+      drop: 0.18 * down * (1 - env.f * 0.4),
+      front: { reach: -0.30 * up + 0.25 * down, lift: 1.15 * up },
+      back: { reach: 0.12 * up - 0.08 * down },
+    });
+    this.spine(S, -0.30 * up + 0.26 * down, 0, 0);
+    S('head', 0.34 * up - 0.30 * down, 0, 0);
+    S('jaw', 0.7 * down);
+    this.tail(t, -0.4 * down, 0.2, 5);
+    this.visual.rotation.x += -0.42 * up + 0.12 * down;
+    this.visual.position.y += 0.10 * up;
   }
 }
+
+DualhornEnemy.ANIM = {
+  legs: {
+    fL: ['fshL', 'felL', 'fknL', 'fhfL'], fR: ['fshR', 'felR', 'fknR', 'fhfR'],
+    bL: ['bhpL', 'bknL', 'bhkL', 'bhfL'], bR: ['bhpR', 'bknR', 'bhkR', 'bhfR'],
+  },
+  trunk: ['hips', 'spine', 'chest', 'neck', 'head'],
+  tails: ['tail1', 'tail2'],
+  jawBone: 'jaw',
+  heavy: true,
+  strideLen: 2.3, stride: 0.52, lift: 0.24, splay: 0.02, bodyScale: 1.7,
+  crouch: 0.22, crouchFront: 0.10, crouchBack: -0.18, crouchPitch: 0.14, headDown: 0.34,
+  lunge: 0.34, lungeLift: 0.30, lungeLiftBack: 0, hop: 0.06,
+  strikePitch: 0.16, headThrust: 0.42, jaw: 0.28, jawBite: 0.6,
+  runNeck: 0.10, runHead: 0.16, flex: 0.5,
+  bodyY: 1.88, bodyR: 0.74, deathRoll: 1.05, deathSlow: 1.6,
+  tailRun: -0.25, tailIdle: 0.05,
+  footPitchF: -0.05, footPitchB: 0.05,
+};

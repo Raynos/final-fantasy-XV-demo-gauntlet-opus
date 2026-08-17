@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, poseBoneMix, creatureMaterial } from './RigBuilder.js';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.js';
+import { legPhase } from '../rig/CreatureAnim.js';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.js';
@@ -329,6 +330,13 @@ function buildPrototype() {
 class MagitekArmourEnemy extends Enemy {
   constructor(opts) { super(MAGITEK_ARMOUR, opts); }
 
+  /** Reverse-jointed legs, solved with IK so six tonnes plants its feet. */
+  setupAnim(anim) {
+    super.setupAnim(anim);
+    anim.leg('fL', ['hpL', 'knL', 'anL', 'ftL']);
+    anim.leg('fR', ['hpR', 'knR', 'anR', 'ftR']);
+  }
+
   /** World-space cannon muzzle — where the raking burst comes from. */
   muzzle(out = new THREE.Vector3()) {
     const b = this.rig && this.rig.byName.get('wpR');
@@ -351,6 +359,7 @@ class MagitekArmourEnemy extends Enemy {
     const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
     const M = (n, x, y, z, k) => poseBoneMix(rig, n, x, y, z, k);
     this.visual.rotation.z = 0;
+    this.visual.position.x = 0;
 
     // the machine at rest: legs loaded, arms hanging level
     const stand = (k = 1) => {
@@ -373,26 +382,39 @@ class MagitekArmourEnemy extends Enemy {
     switch (state) {
       case 'approach':
       case 'walk': {
-        // a slow, enormous two-beat stride; the pod rocks a beat behind the legs
-        const ph = t * 2.6;
+        // A slow, enormous two-beat stride, phased off ground speed rather
+        // than the clock so the feet stay planted instead of paddling, and
+        // with a duty factor over one half so at least one foot always is.
+        const a = this.anim;
+        const sp = this.moveSpeed || 0;
+        const norm = Math.min(1, sp / this.speed);
+        a.stride(this._dt || 0, sp, 3.9);
+        const gait = { duty: 0.72 };
+        const pL = legPhase(a.gaitPhase, gait);
+        const pR = legPhase(a.gaitPhase - 0.5, gait);
+        const stride = 1.05 * (0.5 + 0.5 * norm);
+        const lift = 0.60 * (0.35 + 0.65 * norm);
+        for (const [id, p] of [['fL', pL], ['fR', pR]]) {
+          a.solveLeg(id, p.reach * stride, p.lift * lift, S, {
+            kneeSign: 1, footPitch: 0.10 - p.lift * 0.45,
+          });
+        }
+        const support = pL.load + pR.load;
+        const sway = (pL.load - pR.load);
+        // the chassis rides over the loaded leg and the pod rocks a beat behind
+        this.visual.position.x = sway * 0.24;
+        this.visual.position.y = (support / 1.4 - 1) * 0.16;
+        S('core', (1 - support) * 0.05, sway * 0.06, sway * 0.09);
+        S('pod', 0.04 + (1 - support) * 0.05, -sway * 0.10, sway * 0.05);
+        S('visor', 0, Math.sin(a.gaitPhase * Math.PI) * 0.05, 0);
         for (const s of [-1, 1]) {
           const n = s < 0 ? 'L' : 'R';
-          const o = s < 0 ? 0 : Math.PI;
-          const a = Math.sin(ph + o);
-          const lift = Math.max(0, Math.sin(ph + o + 1.4));
-          S(`hp${n}`, 0.10 + a * 0.44, 0, 0);
-          S(`kn${n}`, -0.16 - lift * 0.70, 0, 0);
-          S(`an${n}`, 0.14 + lift * 0.62 - a * 0.16, 0, 0);
-          S(`ft${n}`, -0.06 - a * 0.26, 0, 0);
-          S(`to${n}`, lift * 0.24, 0, 0);
-          S(`sh${n}`, -a * 0.10, 0, 0);
-          S(`am${n}`, a * 0.06, 0, 0);
+          const q = s < 0 ? sway : -sway;
+          S(`to${n}`, (s < 0 ? pL : pR).lift * 0.24, 0, 0);
+          S(`sh${n}`, -q * 0.09, 0, 0);
+          S(`am${n}`, q * 0.05, 0, 0);
           S(`wp${n}`, 0, 0, 0);
         }
-        S('core', Math.sin(ph * 2) * 0.03, Math.sin(ph) * 0.06, Math.sin(ph) * 0.05);
-        S('pod', 0.04 + Math.sin(ph * 2 + 0.8) * 0.03, -Math.sin(ph) * 0.09, 0);
-        S('visor', 0, Math.sin(ph * 0.5) * 0.06, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph)) * 0.16 - 0.08;
         break;
       }
       case 'telegraph': {

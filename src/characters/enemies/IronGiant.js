@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, metalNormal, metalRoughness } from './EnemyBase.js';
+import { metalNormal, metalRoughness } from './EnemyBase.js';
+import { BipedEnemy } from './Biped.js';
+import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/CreatureAnim.js';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.js';
@@ -199,141 +201,170 @@ function buildPrototype() {
   return rig.build(mat, { radius: 6.5 });
 }
 
-class IronGiantEnemy extends Enemy {
+/**
+ * A daemon in a suit of dead iron. Nothing about the way it moves should read
+ * as a person in armour: the limbs arrive slightly out of sequence, the head
+ * lags the torso, and the whole frame carries an idle tremor that never quite
+ * resolves. The cleave is telegraphed for well over a second — that is the
+ * fight, and the animation has to hand the player the window honestly.
+ */
+class IronGiantEnemy extends BipedEnemy {
   constructor(opts) { super(IRON_GIANT, opts); }
 
-  /** World-space sword tip, for the overhead-cleave hit sweep and trail. */
+  /** World-space sword tip — used by the arc VFX and the sweep hitbox. */
   swordTip(out = new THREE.Vector3()) {
     const b = this.rig && this.rig.byName.get('hdR');
-    if (!b) return this.centre(out);
-    b.updateWorldMatrix(true, false);
-    return out.set(0.0, 4.30, 0.0).applyMatrix4(b.matrixWorld);
+    if (!b) return out.copy(this.centre());
+    return out.set(0, 4.30, 0).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
-    const rig = this.rig;
-    if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
-    const carry = (k = 1) => {
-      // sword resting point-down at the side
-      S('shR', 0.35 * k, 0, -0.30 * k);
-      S('elR', -0.55 * k, 0, 0);
-      S('hdR', -0.35 * k, 0, 0);
-      S('shL', 0.15 * k, 0, -0.22 * k);
-      S('elL', -0.45 * k, 0, 0);
-    };
+  /** Sword carried point-down at the side. */
+  carry(S, k = 1) {
+    S('shR', 0.35 * k, 0, -0.30 * k);
+    S('elR', -0.55 * k, 0, 0);
+    S('hdR', -0.35 * k, 0, 0);
+    S('shL', 0.15 * k, 0, -0.22 * k);
+    S('elL', -0.45 * k, 0, 0);
+  }
 
-    switch (state) {
-      case 'approach':
-      case 'walk': {
-        const ph = t * 3.0;
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          const o = s < 0 ? 0 : Math.PI;
-          S(`hp${n}`, Math.sin(ph + o) * 0.48, 0, 0);
-          S(`kn${n}`, 0.12 + Math.max(0, Math.sin(ph + o + 1.4)) * 0.75, 0, 0);
-          S(`ft${n}`, -0.1 - Math.sin(ph + o) * 0.22, 0, 0);
-        }
-        carry(1);
-        S('shL', 0.15 - Math.sin(ph) * 0.35, 0, -0.22);
-        S('spine', 0.05, Math.sin(ph) * 0.07, 0);
-        S('chest', 0.03, -Math.sin(ph) * 0.10, 0);
-        S('head', 0.05, Math.sin(ph * 0.5) * 0.08, 0);
-        this.visual.position.y = Math.abs(Math.sin(ph)) * 0.09;
-        break;
-      }
-      case 'telegraph': {
-        // rear back, sword hauled overhead — a full second of warning
-        const k = Math.min(1, this.stateTime / 0.9);
-        const e = k * k * (3 - 2 * k);
-        S('shR', 0.35 - 3.40 * e, -0.35 * e, -0.30 + 0.55 * e);
-        S('elR', -0.55 - 0.75 * e, 0, 0);
-        S('hdR', -0.35 + 0.25 * e, 0, 0);
-        S('shL', 0.15 - 1.20 * e, 0.4 * e, -0.22);
-        S('elL', -0.45 - 0.8 * e, 0, 0);
-        S('spine', -0.22 * e, -0.28 * e, 0);
-        S('chest', -0.18 * e, -0.20 * e, 0);
-        S('head', 0.12 * e, 0.20 * e, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, (s < 0 ? 0.35 : -0.22) * e, 0, 0);
-          S(`kn${n}`, 0.42 * e, 0, 0);
-          S(`ft${n}`, -0.2 * e, 0, 0);
-        }
-        break;
-      }
-      case 'attack': {
-        // the cleave
-        const k = Math.min(1, this.stateTime / 0.30);
-        const e = 1 - Math.pow(1 - k, 3.2);
-        S('shR', -3.05 + 3.85 * e, -0.35 + 0.35 * e, 0.25 - 0.15 * e);
-        S('elR', -1.30 + 0.85 * e, 0, 0);
-        S('hdR', -0.10 - 0.30 * e, 0, 0);
-        S('shL', -1.05 + 0.9 * e, 0.4, -0.22);
-        S('elL', -1.25 + 0.6 * e, 0, 0);
-        S('spine', -0.22 + 0.62 * e, -0.28 + 0.36 * e, 0);
-        S('chest', -0.18 + 0.48 * e, -0.20 + 0.26 * e, 0);
-        S('head', 0.12 - 0.30 * e, 0.20 - 0.22 * e, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, (s < 0 ? 0.35 : -0.22) * (1 - e) - 0.30 * e, 0, 0);
-          S(`kn${n}`, 0.42 + 0.35 * e, 0, 0);
-          S(`ft${n}`, -0.2 - 0.15 * e, 0, 0);
-        }
-        this.visual.position.y = -0.35 * e;
-        break;
-      }
-      case 'flinch': {
-        const k = Math.exp(-this.stateTime * 9) * (1 - Math.min(1, this.stateTime / 0.3));
-        carry(1);
-        S('spine', 0.16 * k, 0.12 * k, 0);
-        S('chest', 0.12 * k, 0, 0.08 * k);
-        S('head', -0.2 * k, 0.15 * k, 0);
-        break;
-      }
-      case 'stagger': {
-        const k = Math.min(1, this.stateTime / 0.3) * Math.max(0, 1 - this.stateTime / 2.4);
-        S('spine', 0.42 * k, 0.2 * k, 0);
-        S('chest', 0.30 * k, 0, 0.2 * k);
-        S('head', -0.45 * k, 0.25 * k, 0);
-        S('shR', 0.35 + 0.6 * k, 0, -0.30 + 0.7 * k);
-        S('elR', -0.55 - 0.4 * k, 0, 0);
-        S('shL', 0.15 + 0.5 * k, 0, -0.22 - 0.7 * k);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, -0.5 * k, 0, 0); S(`kn${n}`, 1.0 * k, 0, 0); S(`ft${n}`, -0.45 * k, 0, 0);
-        }
-        this.visual.position.y = -0.55 * k;
-        break;
-      }
-      case 'death': {
-        const k = Math.min(1, this.stateTime / 1.4);
-        const e = 1 - Math.pow(1 - k, 2.4);
-        this.visual.rotation.x = e * 1.35;
-        this.visual.position.y = -1.5 * e;
-        S('spine', -0.25 * e, 0, 0);
-        S('head', 0.5 * e, 0, 0);
-        S('shR', 1.0 * e, 0, 0.8 * e);
-        S('shL', 1.0 * e, 0, -0.8 * e);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, -0.9 * e, 0, 0); S(`kn${n}`, 1.4 * e, 0, 0);
-        }
-        break;
-      }
-      default: {
-        const b = Math.sin(t * 0.9) * 0.03;
-        carry(1);
-        S('spine', 0.04 + b, 0, 0);
-        S('chest', 0.02 + b * 0.5, 0, 0);
-        S('head', 0.06, Math.sin(t * 0.33) * 0.16, 0);
-        for (const s of [-1, 1]) {
-          const n = s < 0 ? 'L' : 'R';
-          S(`hp${n}`, 0.04, 0, 0); S(`kn${n}`, 0.10, 0, 0); S(`ft${n}`, -0.08, 0, 0);
-        }
-        this.visual.position.y = 0;
-        break;
-      }
-    }
+  /**
+   * The wrongness layer. A slow, irregular tremor with no period a viewer can
+   * lock onto, plus a permanent asymmetry — one shoulder always lower than the
+   * other. Cheap, and it does more for "this is a daemon" than any amount of
+   * extra geometry.
+   */
+  miasma(S, t) {
+    const j = Math.sin(t * 1.7) * Math.sin(t * 0.43 + 1.1) * Math.sin(t * 0.19);
+    this.add(S, 'chest', j * 0.020, j * 0.030, -0.035 + j * 0.014);
+    this.add(S, 'neck', -j * 0.030, j * 0.055, 0.02);
+    this.add(S, 'head', j * 0.050, -j * 0.085, -0.03);
+  }
+
+  add(S, name, x, y, z) {
+    const b = this.rig.byName.get(name);
+    if (!b) return;
+    _e.set(x, y, z, 'XYZ');
+    _q.setFromEuler(_e);
+    b.quaternion.multiply(_q);
+  }
+
+  poseLocomotion(S, t) {
+    super.poseLocomotion(S, t);
+    // the sword hand does not swing; it hauls
+    const sw = Math.sin(this.anim.gaitPhase * Math.PI * 2);
+    this.carry(S, 1);
+    S('shL', 0.15 - sw * 0.30, 0, -0.22);
+    S('shR', 0.35 + sw * 0.10, 0, -0.30);
+    this.miasma(S, t);
+  }
+
+  poseArms() { /* the carry pose owns the arms */ }
+
+  poseWindUp(S, t, k, env) {
+    // Rear back and haul the blade overhead. Two-thirds of the wind-up is
+    // spent getting there; the last third is a held, trembling threat.
+    const e = smooth(k);
+    S('shR', 0.35 - 3.40 * e, -0.35 * e, -0.30 + 0.55 * e);
+    S('elR', -0.55 - 0.75 * e, 0, 0);
+    S('hdR', -0.35 + 0.25 * e, 0, 0);
+    S('shL', 0.15 - 1.20 * e, 0.4 * e, -0.22);
+    S('elL', -0.45 - 0.8 * e, 0, 0);
+    S('pelvis', 0.06 * e, -0.14 * e, 0);
+    S('spine', -0.22 * e + env.shake, -0.28 * e, 0);
+    S('chest', -0.18 * e + env.shake, -0.20 * e, 0);
+    S('neck', 0.06 * e, 0.12 * e, 0);
+    S('head', 0.12 * e, 0.20 * e, 0);
+    this.stance(S, {
+      drop: 0.28 * e,
+      L: { reach: 0.34 * e },
+      R: { reach: -0.24 * e },
+    });
+  }
+
+  poseSwing(S, t, k, env) {
+    // one continuous arc from the held wind-up through the ground
+    const e = clamp01((k + 1) * 0.5);
+    const f = env.phase === 'follow' ? env.f : 0;
+    S('shR', -3.05 + 3.85 * e, -0.35 + 0.35 * e, 0.25 - 0.15 * e);
+    S('elR', -1.30 + 0.85 * e, 0, 0);
+    S('hdR', -0.10 - 0.30 * e, 0, 0);
+    S('shL', -1.05 + 0.9 * e, 0.4, -0.22);
+    S('elL', -1.25 + 0.6 * e, 0, 0);
+    S('pelvis', 0.06 - 0.20 * e, -0.14 + 0.20 * e, 0);
+    S('spine', -0.22 + 0.62 * e, -0.28 + 0.36 * e, 0);
+    S('chest', -0.18 + 0.48 * e, -0.20 + 0.26 * e, 0);
+    S('neck', 0.06 - 0.14 * e, 0.12 - 0.10 * e, 0);
+    S('head', 0.12 - 0.30 * e, 0.20 - 0.22 * e, 0);
+    // the whole mass drops onto the blow and springs back off the recoil
+    this.stance(S, {
+      drop: 0.28 + 0.34 * e - 0.16 * Math.sin(f * Math.PI),
+      L: { reach: 0.34 - 0.56 * e },
+      R: { reach: -0.24 + 0.46 * e },
+    });
+  }
+
+  poseDeath(S, t) {
+    // Iron does not crumple; it falls in one piece and the daemon leaves it.
+    const A = this.A;
+    const T = this.stateTime;
+    const buckle = smooth(clamp01(T / 0.32));
+    const topple = decelerate(clamp01((T - 0.26) / 0.85), 1.9);
+    const fwd = (this.deathPush ?? 1) >= 0 ? -1 : 1;
+    const side = this.deathSide || 1;
+    const sink = A.hipY - A.bodyR;
+    this.stance(S, {
+      L: { reach: 0.22 * buckle - 0.20 * topple, lift: sink * buckle, splay: 0.20 * topple },
+      R: { reach: -0.26 * buckle + 0.16 * topple, lift: sink * buckle, splay: 0.16 * topple },
+    });
+    S('pelvis', 0.20 * buckle * -fwd, 0, 0);
+    S('spine', 0.26 * buckle * -fwd, 0.10 * topple * side, 0);
+    S('chest', 0.18 * buckle * -fwd, 0.14 * topple * side, 0.10 * topple * side);
+    S('head', 0.55 * buckle * -fwd, 0.20 * topple * side, 0);
+    S('shR', 0.35 + 1.10 * topple, 0, -0.30 + 0.70 * topple);
+    S('elR', -0.55 - 0.35 * topple, 0, 0);
+    S('shL', 0.15 + 1.05 * topple, 0, -0.22 - 0.70 * topple);
+    S('elL', -0.45 - 0.30 * topple, 0, 0);
+    const th = topple * 1.42 * fwd;
+    const centre = A.hipY - sink * buckle;
+    this.visual.rotation.x += th;
+    this.visual.rotation.z += topple * 0.14 * side;
+    this.visual.position.y += centre - A.hipY * Math.cos(th);
+    this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
+  }
+
+  poseIdle(S, t) {
+    super.poseIdle(S, t);
+    this.carry(S, 1);
+    this.miasma(S, t);
+  }
+
+  poseFlinch(S, t) {
+    super.poseFlinch(S, t);
+    this.carry(S, 1);
+  }
+
+  poseStagger(S, t) {
+    super.poseStagger(S, t);
+    const total = this.type.staggerDuration || 3.2;
+    const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));
+    // the sword arm hangs dead while it reels — the opening the fight is about
+    S('shR', 0.35 + 0.70 * k, 0, -0.30 + 0.80 * k);
+    S('elR', -0.55 - 0.45 * k, 0, 0);
+    S('shL', 0.15 + 0.55 * k, 0, -0.22 - 0.75 * k);
+    S('elL', -0.45 - 0.30 * k, 0, 0);
   }
 }
+
+IronGiantEnemy.ANIM = {
+  legs: { L: ['hpL', 'knL', 'ftL'], R: ['hpR', 'knR', 'ftR'] },
+  arms: { L: ['shL', 'elL', 'hdL'], R: ['shR', 'elR', 'hdR'] },
+  trunk: ['pelvis', 'spine', 'chest', 'neck', 'head'],
+  strideLen: 3.4, stride: 0.80, lift: 0.34, duty: 0.70,
+  hipY: 2.55, bodyR: 0.95, hipSway: 0.075, bob: 0.070, lean: 0.06,
+  armSwing: 0, torsoTwist: 0.05, marchStiff: 1,
+  crouch: 0.28, step: 0.30, windTwist: 0.28,
+  footPitch: 0.0, breath: 0.55, deathPitch: 1.42,
+};
+
+const _e = new THREE.Euler();
+const _q = new THREE.Quaternion();

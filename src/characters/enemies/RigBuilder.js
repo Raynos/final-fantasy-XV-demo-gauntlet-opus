@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { merge, enableVertexEmissive } from '../../combat/GeoKit.js';
+import { mergeCreature } from '../rig/Sculpt.js';
 
 /**
  * Rigid-bind skinning helper.
@@ -93,12 +93,61 @@ export class Rig {
   }
 
   /**
+   * Bind a geometry smoothly along a whole chain of bones.
+   *
+   * `attachBlend` only creases one joint; a real limb is shoulder → elbow →
+   * wrist → paw, and binding each segment to a single bone is exactly what
+   * makes a leg read as a stack of cylinders. Here every vertex is projected
+   * onto the polyline through the chain's bind positions and blended between
+   * the two bones it falls between, so one continuous swept limb bends at
+   * every joint at once.
+   * @param {THREE.BufferGeometry} geo
+   * @param {string[]} names bone chain, root first
+   * @param {number} soft 0..1 blend width around each joint
+   */
+  attachChain(geo, names, soft = 1.0) {
+    const idxs = names.map((n) => this.bones.indexOf(this.byName.get(n)));
+    const pts = names.map((n) => this._world.get(n));
+    if (idxs.some((i) => i < 0)) throw new Error(`unknown bone in chain ${names.join(',')}`);
+    const pos = geo.attributes.position;
+    const n = pos.count;
+    const idx = new Uint16Array(n * 4);
+    const w = new Float32Array(n * 4);
+    const v = new THREE.Vector3(), seg = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(pos, i);
+      // parametric position along the chain: segment index + fraction
+      let best = 0, bestD = Infinity;
+      for (let s = 0; s < pts.length - 1; s++) {
+        seg.subVectors(pts[s + 1], pts[s]);
+        const len2 = Math.max(1e-8, seg.lengthSq());
+        let t = (v.x - pts[s].x) * seg.x + (v.y - pts[s].y) * seg.y + (v.z - pts[s].z) * seg.z;
+        t = THREE.MathUtils.clamp(t / len2, 0, 1);
+        const dx = v.x - (pts[s].x + seg.x * t);
+        const dy = v.y - (pts[s].y + seg.y * t);
+        const dz = v.z - (pts[s].z + seg.z * t);
+        const d = dx * dx + dy * dy + dz * dz;
+        if (d < bestD) { bestD = d; best = s + t; }
+      }
+      const s0 = Math.min(names.length - 2, Math.floor(best));
+      const f = THREE.MathUtils.clamp((best - s0 - (0.5 - soft * 0.5)) / Math.max(1e-3, soft), 0, 1);
+      const k = f * f * (3 - 2 * f);
+      idx[i * 4] = idxs[s0]; idx[i * 4 + 1] = idxs[s0 + 1];
+      w[i * 4] = 1 - k; w[i * 4 + 1] = k;
+    }
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w, 4));
+    this.parts.push(geo);
+    return geo;
+  }
+
+  /**
    * Merge everything and produce the SkinnedMesh.
    * @param {THREE.Material} material
    * @returns {{group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>}}
    */
   build(material, { castShadow = true, radius = 4 } = {}) {
-    const geo = merge(this.parts);
+    const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
     const group = new THREE.Group();
     const rootBone = this.bones[0];
     group.add(rootBone);
@@ -146,17 +195,53 @@ export function poseBoneMix(rig, name, x, y, z, k, order = 'XYZ') {
 
 /**
  * Shared creature material: vertex-colour albedo, per-vertex emissive for
- * glowing details, and a procedural detail normal so silhouettes are not the
- * only thing carrying the read.
+ * glowing details, **per-vertex roughness and metalness**, and a procedural
+ * detail normal so silhouettes are not the only thing carrying the read.
+ *
+ * The per-vertex material channel is the important one. A creature is one
+ * draw call, so without it every surface on the body answers the light
+ * identically — wet nose, dry hide, keratin horn and painted steel all at the
+ * same gloss, which is the single loudest tell that something was assembled
+ * from primitives. `roughness`/`metalness` here are only the *defaults* filled
+ * in for parts that did not author an `aMat` attribute themselves.
  */
 export function creatureMaterial({
   roughness = 0.72, metalness = 0.05, normalMap = null, normalScale = 0.7,
   roughnessMap = null, envMapIntensity = 1.0,
 } = {}) {
   const m = new THREE.MeshStandardMaterial({
-    color: 0xffffff, vertexColors: true, roughness, metalness,
+    color: 0xffffff, vertexColors: true, roughness: 1, metalness: 1,
     normalMap, roughnessMap, envMapIntensity,
   });
   if (normalMap) m.normalScale = new THREE.Vector2(normalScale, normalScale);
-  return enableVertexEmissive(m);
+  m.userData.defMat = [roughness, metalness];
+  return enableVertexMaterial(m);
+}
+
+/**
+ * Patch a MeshStandardMaterial to read `aEmissive` (vec3) and `aMat`
+ * (vec2 roughness/metalness) vertex attributes. The base material carries
+ * roughness = metalness = 1 so the attribute multiplies cleanly through any
+ * roughness map that is also bound.
+ * @param {THREE.Material} material
+ */
+export function enableVertexMaterial(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>',
+        '#include <common>\nattribute vec3 aEmissive;\nattribute vec2 aMat;\nvarying vec3 vEmissive;\nvarying vec2 vMatP;')
+      .replace('#include <begin_vertex>',
+        '#include <begin_vertex>\nvEmissive = aEmissive;\nvMatP = aMat;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>',
+        '#include <common>\nvarying vec3 vEmissive;\nvarying vec2 vMatP;')
+      .replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\nroughnessFactor = clamp( roughnessFactor * vMatP.x, 0.035, 1.0 );')
+      .replace('#include <metalnessmap_fragment>',
+        '#include <metalnessmap_fragment>\nmetalnessFactor = clamp( metalnessFactor * vMatP.y, 0.0, 1.0 );')
+      .replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmissive;');
+  };
+  material.customProgramCacheKey = () => 'creatureVertexMat';
+  return material;
 }
