@@ -149,6 +149,27 @@ export const SHOTS = {
     offset: [3.2, 2.5, 4.4], lookOffset: [0, 1.45, 0], fov: 50,
   },
 
+  boss_field: {
+    doc: 'Bloodhorn mid-charge',
+    time: 16.2, weather: 'clear', scenario: 'boss_field', follow: 'player',
+    offset: [-7.2, 3.6, 9.0], lookOffset: [0, 1.8, -6], fov: 46,
+  },
+  boss_imperial: {
+    doc: 'MA-X Cuirass venting',
+    time: 17.4, weather: 'clear', scenario: 'boss_imperial', follow: 'player',
+    offset: [-8.4, 4.4, 10.5], lookOffset: [0, 3, -9], fov: 48,
+  },
+  boss_astral: {
+    doc: 'Titan winding up the slam',
+    time: 15.0, weather: 'clear', scenario: 'boss_astral', follow: 'player',
+    offset: [10, 5.5, 20], lookOffset: [2, 16, -34], fov: 52,
+  },
+  daemon_night: {
+    doc: 'A daemon pack after dark',
+    time: 23.0, weather: 'clear', scenario: 'daemons', follow: 'player',
+    offset: [4.5, 3.2, 8.5], lookOffset: [0, 1.5, -6], fov: 48,
+  },
+
   // --- UI ---------------------------------------------------------------
   hud_field: {
     doc: 'Gameplay framing with the full field HUD visible',

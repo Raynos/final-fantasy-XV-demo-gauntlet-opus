@@ -208,17 +208,17 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Damage numbers driven by the real formula (not literals)
 
 ### 6.3 Encounters
-- [~] Roaming groups with territories and patrols
-- [~] Sight cones, hearing, aggro/de-aggro
-- [~] Group coordination (flanking, not queueing)
-- [~] Combat start/end state for HUD and music
-- [~] Victory: EXP, AP, gil, item drops
-- [~] Party companions actually attacking
-- [~] Techniques: Tempest, Royal Guard, Enhancement, Regroup, Overwhelm, Starshell, Piercer, Trigger-Happy
-- [~] Tech bar charging
-- [~] Player downed state with bleed-out and ally revive
-- [~] Game over and retry
-- [ ] Ambushes and enemy reinforcements
+- [x] Roaming groups with territories and patrols
+- [x] Sight cones, hearing, aggro/de-aggro
+- [x] Group coordination (flanking, not queueing)
+- [x] Combat start/end state for HUD and music
+- [x] Victory: EXP, AP, gil, item drops
+- [x] Party companions actually attacking
+- [x] Techniques: Tempest, Royal Guard, Enhancement, Regroup, Overwhelm, Starshell, Piercer, Trigger-Happy
+- [x] Tech bar charging
+- [x] Player downed state with bleed-out and ally revive
+- [x] Game over and retry
+- [x] Ambushes and enemy reinforcements
 - [ ] Summons / Astral invocation conditions
 
 ### 6.4 Bestiary
@@ -226,18 +226,18 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Goblin
 - [x] Imperial MT Trooper
 - [x] Iron Giant
-- [~] Dualhorn, Voretooth, Garula, Anak, Coeurl, Bandersnatch, Mesmenir, Arachne
-- [~] Imperial Axeman / Sniper / Magitek Armour
-- [~] Daemons: Bussemand, Hobgoblin, Necromancer, Ronin, Red Giant
+- [x] Dualhorn, Voretooth, Garula, Anak, Coeurl, Bandersnatch, Mesmenir, Arachne
+- [x] Imperial Axeman / Sniper / Magitek Armour
+- [x] Daemons: Bussemand, Hobgoblin, Necromancer, Ronin, Red Giant
 - [ ] Behemoth (Deadeye)
 - [ ] Zu
 - [ ] Malboro
 - [ ] Cactuar / Tonberry
 
 ### 6.5 Bosses
-- [~] Field boss (Behemoth-class)
-- [~] Imperial set piece with dropship arrival
-- [~] Astral-scale fight (Titan)
+- [x] Field boss (Behemoth-class)
+- [x] Imperial set piece with dropship arrival
+- [x] Astral-scale fight (Titan)
 - [ ] Ramuh
 - [ ] Leviathan
 - [ ] Shiva
@@ -316,7 +316,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 ### 9.4 Quests
 - [~] Main chapter sequencing with objective handoff
 - [x] Hunt board with 12 hunts, ranks, tipsters, rewards
-- [~] Accepting a hunt spawns its target
+- [x] Accepting a hunt spawns its target
 - [ ] Side quests with real objectives in the world
 - [ ] Fetch / escort / photo objective types wired
 - [ ] Quest log screen

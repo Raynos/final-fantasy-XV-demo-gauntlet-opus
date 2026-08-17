@@ -342,6 +342,14 @@ export class CombatSystem {
     const dir = this._tmp.subVectors(enemy.centre(), at);
     if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
     dir.normalize();
+    // Enemies score weapon-class weakness off `weaponClass`. Stamp it here,
+    // at the one choke point every physical hit passes through, rather than at
+    // each call site — three sites drift, one cannot. Spells identify by
+    // element instead and must not claim a class.
+    if (opts.weaponClass === undefined && !opts.element && this.weapon) {
+      const kind = this.weapon.kind;
+      opts.weaponClass = kind === 'daggers' ? 'dagger' : kind;
+    }
     const res = enemy.hit(amount, dir, opts);
     if (!res) return null;
     this.emit('damage', {
