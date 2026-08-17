@@ -34,7 +34,10 @@ export function rockMaterial(tint = 0x8a7461, rough = 0.94, instanceTint = true)
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
     const map = makeTexture(512, (u, v, c) => {
-      const k = 0.5 + h(u, v) * 0.85;
+      // Keep the contrast but pull the mean down: sunlit stone at 0.5+ albedo
+      // burns out to white paper under the tone map, which is what made the
+      // scree runs read as popcorn instead of rock.
+      const k = 0.42 + h(u, v) * 0.72;
       const iron = Math.max(0, n.fbm2(u * 3 + 17, v * 3 - 5, 3)) * 0.5;
       c[0] = base.r * k * (1 + iron * 0.5);
       c[1] = base.g * k * (1 + iron * 0.12);

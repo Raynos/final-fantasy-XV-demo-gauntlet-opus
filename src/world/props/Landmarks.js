@@ -121,34 +121,38 @@ export class Landmarks {
     let base = Infinity;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      base = Math.min(base, eco.height(cx + Math.cos(a) * 6.4, cz + Math.sin(a) * 6.4));
+      base = Math.min(base, eco.height(cx + Math.cos(a) * 9.2, cz + Math.sin(a) * 9.2));
     }
     base = Math.min(base, eco.height(cx, cz));
     // A haven is a rock, not a paving slab: it stands proud of the scrub so it
     // reads as a place at a hundred metres and in silhouette at dusk.
-    const top = base + 1.75;
+    //
+    // Scale is against a 1.8 m character. Four of them plus a tent, an awning,
+    // a kitchen and a fire need something like a twenty-metre shelf; at the
+    // old 13 m it read as a tabletop diorama with toys on it.
+    const top = base + 2.35;
 
     // the haven rock: a stepped, canted plinth
-    B.add(M.pale, block(5511, 13.6, 2.0, 11.4, 0.09), mat4([cx, base + 0.2, cz], [0, 0.22, 0]));
-    B.add(M.pale, block(5512, 12.4, 1.6, 10.2, 0.07), mat4([cx + 0.2, base + 1.25, cz - 0.15], [0, 0.30, 0]));
+    B.add(M.pale, block(5511, 19.6, 2.6, 16.6, 0.09), mat4([cx, base + 0.25, cz], [0, 0.22, 0]));
+    B.add(M.pale, block(5512, 17.8, 2.1, 14.8, 0.07), mat4([cx + 0.3, base + 1.65, cz - 0.2], [0, 0.30, 0]));
     // skirt of broken rock so it isn't a table floating on grass
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 26; i++) {
       const a = rng.next() * Math.PI * 2;
-      const d = 5.6 + rng.range(0, 2.4);
+      const d = 8.2 + rng.range(0, 3.4);
       const px = cx + Math.cos(a) * d, pz = cz + Math.sin(a) * d;
-      const s = rng.range(0.5, 1.9);
+      const s = rng.range(0.7, 2.6);
       B.add(M.rock, block(600 + i, s * 1.6, s, s * 1.4, 0.3),
         mat4([px, eco.height(px, pz) - s * 0.24, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
     }
-    // a couple of steps up onto the rock
-    for (let i = 0; i < 3; i++) {
-      B.add(M.pale, block(5520 + i, 2.6 - i * 0.2, 0.4, 1.5, 0.12),
-        mat4([cx + 5.4 + i * 0.9, base + 1.35 - i * 0.5, cz + 3.4], [0, 0.22, 0]));
+    // a flight of steps up onto the rock
+    for (let i = 0; i < 4; i++) {
+      B.add(M.pale, block(5520 + i, 3.2 - i * 0.22, 0.5, 2.0, 0.12),
+        mat4([cx + 7.9 + i * 1.15, base + 1.8 - i * 0.52, cz + 4.8], [0, 0.22, 0]));
     }
 
     // Runes: the flat sigil on the deck plus glyph bands cut into the rock
     // face, which is what actually reads from a distance at dusk.
-    const rune = new THREE.PlaneGeometry(10.6, 9.4);
+    const rune = new THREE.PlaneGeometry(15.2, 13.4);
     rune.rotateX(-Math.PI / 2);
     const runeMesh = new THREE.Mesh(rune, M.rune);
     runeMesh.position.set(cx + 0.2, top + 0.03, cz - 0.15);
@@ -159,74 +163,102 @@ export class Landmarks {
     this.root.add(runeMesh);
     this.runeMesh = runeMesh;
 
-    for (let i = 0; i < 30; i++) {
-      const a = (i / 30) * Math.PI * 2;
-      const rx = 6.4, rz = 5.4;
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const rx = 9.3, rz = 7.9;
       const px = cx + Math.cos(a + 0.3) * rx, pz = cz + Math.sin(a + 0.3) * rz;
-      B.add(M.glyph, new THREE.BoxGeometry(0.12, 0.5 + (i % 3) * 0.34, 0.12),
-        mat4([px, base + 1.0 + (i % 2) * 0.35, pz], [0, a, 0]));
+      B.add(M.glyph, new THREE.BoxGeometry(0.14, 0.62 + (i % 3) * 0.4, 0.14),
+        mat4([px, base + 1.25 + (i % 2) * 0.42, pz], [0, a, 0]));
     }
     // dashed sill line: broken into glyph groups so it reads as carving rather
     // than as a strip light glued to the rock
-    for (let i = 0; i < 9; i++) {
-      const t = (i / 8 - 0.5) * 12.2;
-      const w = i % 3 === 0 ? 1.1 : 0.55;
-      for (const sz of [-5.3, 5.0]) {
-        B.add(M.glyph, new THREE.BoxGeometry(w, 0.09, 0.09),
-          mat4([cx + 0.2 + Math.cos(0.30) * t, base + 2.02, cz + sz - Math.sin(0.30) * t], [0, 0.30, 0]));
+    for (let i = 0; i < 11; i++) {
+      const t = (i / 10 - 0.5) * 17.4;
+      const w = i % 3 === 0 ? 1.4 : 0.7;
+      for (const sz of [-7.6, 7.2]) {
+        B.add(M.glyph, new THREE.BoxGeometry(w, 0.1, 0.1),
+          mat4([cx + 0.3 + Math.cos(0.30) * t, base + 2.66, cz + sz - Math.sin(0.30) * t], [0, 0.30, 0]));
       }
     }
 
     // ------------------------------------------------------------ firepit
-    const fx = cx + 2.2, fz = cz - 1.4;
-    for (let i = 0; i < 13; i++) {
-      const a = (i / 13) * Math.PI * 2 + rng.gauss(0, 0.1);
-      const r = 0.95 + rng.gauss(0, 0.06);
-      B.add(M.rock, block(300 + i, 0.44, 0.4, 0.36, 0.35),
-        mat4([fx + Math.cos(a) * r, top + 0.14, fz + Math.sin(a) * r],
+    const fx = cx + 3.0, fz = cz - 1.9;
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2 + rng.gauss(0, 0.1);
+      const r = 1.25 + rng.gauss(0, 0.07);
+      B.add(M.rock, block(300 + i, 0.56, 0.5, 0.46, 0.35),
+        mat4([fx + Math.cos(a) * r, top + 0.16, fz + Math.sin(a) * r],
           [rng.gauss(0, 0.2), rng.next() * 3, rng.gauss(0, 0.2)]));
     }
-    const log = new THREE.CylinderGeometry(0.1, 0.13, 1.35, 7);
+    const log = new THREE.CylinderGeometry(0.13, 0.17, 1.8, 7);
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      B.add(M.dark, log, mat4([fx + Math.cos(a) * 0.2, top + 0.38, fz + Math.sin(a) * 0.2],
+      B.add(M.dark, log, mat4([fx + Math.cos(a) * 0.26, top + 0.5, fz + Math.sin(a) * 0.26],
         [Math.cos(a) * 0.95, 0, Math.sin(a) * 0.95]));
     }
-    B.add(M.ember, new THREE.SphereGeometry(0.42, 12, 8),
-      mat4([fx, top + 0.14, fz], [0, 0, 0], [1, 0.45, 1]));
+    B.add(M.ember, new THREE.SphereGeometry(0.56, 12, 8),
+      mat4([fx, top + 0.16, fz], [0, 0, 0], [1, 0.45, 1]));
 
     // flame: three crossed cards, scaled and swayed per frame
     const flames = new THREE.Group();
     for (let i = 0; i < 3; i++) {
-      const q = new THREE.PlaneGeometry(1.25, 1.9);
-      q.translate(0, 0.95, 0);
+      const q = new THREE.PlaneGeometry(1.65, 2.5);
+      q.translate(0, 1.25, 0);
       const m = new THREE.Mesh(q, M.flame);
       m.rotation.y = (i / 3) * Math.PI;
       m.renderOrder = 5;
       flames.add(m);
     }
-    flames.position.set(fx, top + 0.16, fz);
+    flames.position.set(fx, top + 0.18, fz);
     this.root.add(flames);
     this.flames = flames;
 
     // an awning over the fire on two poles, so the camp has a roofline in
     // silhouette and the firelight has something to bounce off
-    for (const [px, pz] of [[fx - 2.6, fz - 2.2], [fx + 2.4, fz - 2.4], [fx - 2.6, fz + 2.0], [fx + 2.4, fz + 1.8]]) {
-      B.add(M.steel, new THREE.CylinderGeometry(0.04, 0.05, 2.6, 6), mat4([px, top + 1.3, pz]));
+    // A person has to be able to stand under this: 3.5 m poles, 8 m of cloth.
+    for (const [px, pz] of [[fx - 3.8, fz - 3.2], [fx + 3.5, fz - 3.4], [fx - 3.8, fz + 2.9], [fx + 3.5, fz + 2.7]]) {
+      B.add(M.steel, new THREE.CylinderGeometry(0.055, 0.07, 3.5, 6), mat4([px, top + 1.75, pz]));
+      // guy line out to a peg on the deck
+      const dx = Math.sign(px - fx), dz = Math.sign(pz - fz);
+      B.add(M.wire, new THREE.CylinderGeometry(0.012, 0.012, 2.4, 4),
+        mat4([px + dx * 0.7, top + 1.9, pz + dz * 0.6], [dz * 0.5, 0, -dx * 0.62]));
     }
-    B.add(M.cloth, new THREE.PlaneGeometry(5.2, 4.4),
-      mat4([fx - 0.1, top + 2.62, fz - 0.2], [0, 0, 0])
-        .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2 + 0.12)));
+    // Canopy as a shallow hip, not a flat sheet: four panels falling away from
+    // a ridge, so it catches the firelight differently on each face and reads
+    // as fabric under tension rather than a floating blue rectangle.
+    {
+      const AW = 4.0, AD = 3.3, RISE = 0.55, EAVE = 3.45;
+      const cxx = fx - 0.15, czz = fz - 0.3, cy = top + EAVE;
+      const corner = [[-AW, -AD], [AW, -AD], [AW, AD], [-AW, AD]];
+      const pos = [], uv = [], idx = [];
+      pos.push(cxx, cy + RISE, czz); uv.push(0.5, 0.5);
+      for (const [dx, dz] of corner) {
+        pos.push(cxx + dx, cy - 0.12, czz + dz);
+        uv.push(dx > 0 ? 1 : 0, dz > 0 ? 1 : 0);
+      }
+      for (let i = 0; i < 4; i++) idx.push(0, 1 + i, 1 + ((i + 1) % 4));
+      const cn = new THREE.BufferGeometry();
+      cn.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      cn.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      cn.setIndex(idx);
+      cn.computeVertexNormals();
+      B.add(M.cloth, cn);
+      // valance hanging off the two long eaves
+      for (const sz of [-1, 1]) {
+        B.add(M.cloth, new THREE.PlaneGeometry(AW * 2, 0.34),
+          mat4([cxx, cy - 0.28, czz + sz * AD], [0, sz > 0 ? 0 : Math.PI, 0]));
+      }
+    }
 
     // a spit and a hanging pot over the coals — Ignis is cooking
     for (const s of [-1, 1]) {
-      B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.035, 1.9, 5),
-        mat4([fx + s * 0.95, top + 0.85, fz], [0, 0, s * 0.22]));
+      B.add(M.steel, new THREE.CylinderGeometry(0.035, 0.04, 2.5, 5),
+        mat4([fx + s * 1.25, top + 1.1, fz], [0, 0, s * 0.22]));
     }
-    B.add(M.steel, new THREE.CylinderGeometry(0.025, 0.025, 2.1, 5),
-      mat4([fx, top + 1.72, fz], [0, 0, Math.PI / 2]));
-    B.add(M.steel, new THREE.CylinderGeometry(0.34, 0.28, 0.42, 12), mat4([fx, top + 1.2, fz]));
-    B.add(M.steel, new THREE.TorusGeometry(0.3, 0.02, 4, 12), mat4([fx, top + 1.44, fz], [Math.PI / 2, 0, 0]));
+    B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.03, 2.7, 5),
+      mat4([fx, top + 2.25, fz], [0, 0, Math.PI / 2]));
+    B.add(M.steel, new THREE.CylinderGeometry(0.42, 0.34, 0.52, 12), mat4([fx, top + 1.55, fz]));
+    B.add(M.steel, new THREE.TorusGeometry(0.37, 0.024, 4, 12), mat4([fx, top + 1.85, fz], [Math.PI / 2, 0, 0]));
 
     const fire = new THREE.PointLight(0xff7a26, 9, 46, 2);
     fire.position.set(fx, top + 0.9, fz);
@@ -241,7 +273,7 @@ export class Landmarks {
     this.lights.push({ light: glow, kind: 'fire', base: 34 });
 
     // ---------------------------------------------------- Ignis's kitchen
-    const kx = cx - 0.6, kz = cz - 3.6;
+    const kx = cx - 1.2, kz = cz - 5.4;
     B.add(M.steel, new THREE.BoxGeometry(2.0, 0.07, 0.9), mat4([kx, top + 0.78, kz], [0, 0.18, 0]));
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
@@ -272,47 +304,63 @@ export class Landmarks {
       this.root.add(l);
       this.lights.push({ light: l, kind: 'lantern', base: 14 });
     };
-    lanternAt(cx + 5.0, cz + 2.4, 2.4);
-    lanternAt(cx - 4.4, cz - 3.0, 2.4);
-    lanternAt(cx + 1.0, cz + 3.2, 0);
+    lanternAt(cx + 7.4, cz + 3.6, 3.1);
+    lanternAt(cx - 6.6, cz - 4.4, 3.1);
+    lanternAt(cx + 1.4, cz + 5.0, 0);
 
     // packs and bedrolls
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       const a = 1.3 + i * 0.7;
-      B.add(M.cloth, new THREE.CapsuleGeometry(0.24, 0.5, 4, 8),
-        mat4([cx - 3.6 + Math.cos(a) * 1.2, top + 0.26, cz + 2.6 + Math.sin(a) * 0.9],
+      B.add(M.cloth, new THREE.CapsuleGeometry(0.26, 0.56, 4, 8),
+        mat4([cx - 1.2 + Math.cos(a) * 1.6, top + 0.28, cz + 4.4 + Math.sin(a) * 1.2],
           [Math.PI / 2, a, 0]));
     }
 
-    // tent: A-frame with a fly sheet and guy lines
-    const tx = cx - 3.6, tz = cz + 1.1;
-    const panel = new THREE.PlaneGeometry(3.4, 2.05);
-    B.add(M.cloth, panel, mat4([tx, top + 0.72, tz + 0.72], [0.0, 0, 0], [1, 1, 1])
-      .multiply(new THREE.Matrix4().makeRotationX(-0.62)));
-    B.add(M.cloth, panel, mat4([tx, top + 0.72, tz - 0.72], [0, 0, 0], [1, 1, 1])
-      .multiply(new THREE.Matrix4().makeRotationX(0.62)));
+    // Tent: a four-man expedition A-frame, 5.4 m long and 2.35 m to the ridge,
+    // so a 1.8 m character can stand up inside the door.
+    const tx = cx - 4.8, tz = cz + 1.6;
+    const TL = 5.4, TH = 2.35, TW = 1.32;
+    const panel = new THREE.PlaneGeometry(TL, Math.hypot(TH, TW) + 0.1);
+    const slope = Math.atan2(TW, TH);
+    B.add(M.cloth, panel, mat4([tx, top + TH * 0.5, tz + TW * 0.5], [0, 0, 0])
+      .multiply(new THREE.Matrix4().makeRotationX(-(Math.PI / 2 - slope))));
+    B.add(M.cloth, panel, mat4([tx, top + TH * 0.5, tz - TW * 0.5], [0, 0, 0])
+      .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2 - slope)));
     const gable = new THREE.BufferGeometry();
     gable.setAttribute('position', new THREE.Float32BufferAttribute(
-      [-0.95, 0, 0, 0.95, 0, 0, 0, 1.42, 0], 3));
+      [-TW, 0, 0, TW, 0, 0, 0, TH, 0], 3));
     gable.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
     gable.computeVertexNormals();
-    B.add(M.cloth, gable, mat4([tx + 1.7, top, tz], [0, Math.PI / 2, 0]));
-    B.add(M.cloth, gable, mat4([tx - 1.7, top, tz], [0, Math.PI / 2, 0]));
-    const pole = new THREE.CylinderGeometry(0.028, 0.028, 1.5, 6);
-    B.add(M.steel, pole, mat4([tx + 1.7, top + 0.75, tz]));
-    B.add(M.steel, pole, mat4([tx - 1.7, top + 0.75, tz]));
-    const guy = new THREE.CylinderGeometry(0.008, 0.008, 1.5, 4);
+    B.add(M.cloth, gable, mat4([tx + TL / 2, top, tz], [0, Math.PI / 2, 0]));
+    B.add(M.cloth, gable, mat4([tx - TL / 2, top, tz], [0, Math.PI / 2, 0]));
+    // ridge pole plus the two uprights holding it
+    B.add(M.steel, new THREE.CylinderGeometry(0.035, 0.035, TL + 0.5, 6),
+      mat4([tx, top + TH, tz], [0, 0, Math.PI / 2]));
+    const pole = new THREE.CylinderGeometry(0.04, 0.04, TH, 6);
+    B.add(M.steel, pole, mat4([tx + TL / 2, top + TH / 2, tz]));
+    B.add(M.steel, pole, mat4([tx - TL / 2, top + TH / 2, tz]));
+    const guy = new THREE.CylinderGeometry(0.01, 0.01, 2.4, 4);
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        B.add(M.wire, guy, mat4([tx + sx * 2.25, top + 0.42, tz + sz * 0.55],
+        B.add(M.wire, guy, mat4([tx + sx * (TL / 2 + 0.85), top + 0.65, tz + sz * 0.85],
           [sz * 0.55, 0, -sx * 0.72]));
       }
     }
+    // Door flap rolled back at one gable, a ground sheet under it and a sill
+    // pole along each eave — without these the tent is a blank white wedge.
+    B.add(M.dark, gable, mat4([tx - TL / 2 + 0.02, top, tz], [0, Math.PI / 2, 0], [0.72, 0.86, 1]));
+    B.add(M.cloth, new THREE.CylinderGeometry(0.14, 0.11, 1.5, 6),
+      mat4([tx - TL / 2 + 0.06, top + 1.5, tz + 0.5], [0, 0, 0.3]));
+    B.add(M.dark, new THREE.BoxGeometry(TL + 0.2, 0.06, TW * 2 + 0.3), mat4([tx, top + 0.05, tz]));
+    for (const sz of [-1, 1]) {
+      B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.03, TL + 0.2, 5),
+        mat4([tx, top + 0.09, tz + sz * TW], [0, 0, Math.PI / 2]));
+    }
 
     // two camp chairs + a cooler, angled at the fire
-    for (let i = 0; i < 2; i++) {
-      const a = -0.9 + i * 1.5;
-      const px = fx + Math.cos(a) * 2.0, pz = fz + Math.sin(a) * 2.0;
+    for (let i = 0; i < 3; i++) {
+      const a = -1.1 + i * 1.15;
+      const px = fx + Math.cos(a) * 2.7, pz = fz + Math.sin(a) * 2.7;
       const yaw = Math.atan2(fx - px, fz - pz);
       B.add(M.cloth, new THREE.BoxGeometry(0.6, 0.06, 0.58), mat4([px, top + 0.44, pz], [0, yaw, 0]));
       B.add(M.cloth, new THREE.BoxGeometry(0.6, 0.6, 0.06), mat4([px, top + 0.72, pz], [0.28, yaw, 0])
@@ -324,8 +372,8 @@ export class Landmarks {
         }
       }
     }
-    B.add(M.steel, new THREE.BoxGeometry(0.78, 0.46, 0.5), mat4([cx - 0.4, top + 0.23, cz - 2.3], [0, 0.4, 0]));
-    B.add(M.wood, new THREE.BoxGeometry(0.62, 0.5, 0.62), mat4([cx + 2.9, top + 0.25, cz + 1.9], [0, -0.3, 0]));
+    B.add(M.steel, new THREE.BoxGeometry(0.86, 0.5, 0.56), mat4([cx - 0.8, top + 0.25, cz - 3.4], [0, 0.4, 0]));
+    B.add(M.wood, new THREE.BoxGeometry(0.68, 0.55, 0.68), mat4([cx + 4.4, top + 0.28, cz + 2.8], [0, -0.3, 0]));
     this.havenTop = top;
   }
 
@@ -496,44 +544,67 @@ export class Landmarks {
   _telegraph(B) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(4004);
-    const step = 36;
+    const step = 34;
     const from = -430, to = 430;
     const tops = [];
     for (let z = from; z <= to; z += step) {
-      const p = eco.roadPoint(z, 1, 9.5, new THREE.Vector3());
+      // Stand them further off the shoulder than before: at 9.5 m the run sat
+      // right behind the roadside tree in the highway framing and the whole
+      // line read as wire with nothing holding it up.
+      const p = eco.roadPoint(z, 1, 13.5, new THREE.Vector3());
       const lean = rng.gauss(0, 0.035);
-      const h = 7.2 + rng.range(0, 1.1);
+      // Taller and heavier than before: these are the only vertical elements
+      // between the road and the mesa, and at 7 m in a dark silhouette against
+      // dark rock they simply vanished. At 9 m they carry the perspective.
+      const h = 9.0 + rng.range(0, 1.3);
       const yaw = rng.gauss(0, 0.25);
       const world = mat4([p.x, p.y - 0.4, p.z], [lean, yaw, rng.gauss(0, 0.03)]);
-      B.add(M.dark, new THREE.CylinderGeometry(0.11, 0.17, h, 8),
+      B.add(M.wood, new THREE.CylinderGeometry(0.15, 0.23, h, 8),
         world.clone().multiply(mat4([0, h / 2, 0])));
-      B.add(M.dark, new THREE.BoxGeometry(2.1, 0.12, 0.14),
+      B.add(M.wood, new THREE.BoxGeometry(2.5, 0.16, 0.18),
         world.clone().multiply(mat4([0, h - 0.5, 0])));
-      B.add(M.dark, new THREE.BoxGeometry(1.5, 0.11, 0.12),
-        world.clone().multiply(mat4([0, h - 1.25, 0])));
+      B.add(M.wood, new THREE.BoxGeometry(1.8, 0.15, 0.16),
+        world.clone().multiply(mat4([0, h - 1.5, 0])));
+      // knee braces under the top crossarm — the detail that says "pole"
+      for (const s of [-1, 1]) {
+        B.add(M.wood, new THREE.BoxGeometry(0.09, 1.1, 0.09),
+          world.clone().multiply(mat4([s * 0.5, h - 1.05, 0], [0, 0, s * 0.72])));
+      }
       const anchors = [];
-      for (const [dx, dy] of [[-0.95, h - 0.38], [0, h - 0.38], [0.95, h - 0.38], [-0.68, h - 1.13], [0.68, h - 1.13]]) {
-        B.add(M.ceramic, new THREE.CylinderGeometry(0.055, 0.07, 0.16, 8),
-          world.clone().multiply(mat4([dx, dy + 0.08, 0])));
-        const a = new THREE.Vector3(dx, dy + 0.16, 0).applyMatrix4(world);
+      for (const [dx, dy] of [[-1.12, h - 0.38], [0, h - 0.38], [1.12, h - 0.38], [-0.78, h - 1.38], [0.78, h - 1.38]]) {
+        B.add(M.ceramic, new THREE.CylinderGeometry(0.06, 0.075, 0.18, 8),
+          world.clone().multiply(mat4([dx, dy + 0.09, 0])));
+        const a = new THREE.Vector3(dx, dy + 0.18, 0).applyMatrix4(world);
         anchors.push(a);
       }
       tops.push(anchors);
     }
-    // sagging catenary wire between consecutive poles
+    // Sagging catenary wire between consecutive poles.
+    //
+    // A true hyperbolic cosine, not a sine arc, and with real depth: a 38 m
+    // span of old copper hangs the better part of three metres. The previous
+    // 1.35 m over a sine looked dead straight the moment the camera lined up
+    // anywhere near along the run, which is exactly how the road shots frame it.
     const wireGeo = [];
+    const SAG = 3.1;
+    // cosh-based drop, normalised to 1 at the midspan
+    const A = 2.6;
+    const cosh = (t) => (Math.exp(t) + Math.exp(-t)) * 0.5;
+    const drop = (t) => (cosh(A * (t - 0.5) * 2) - cosh(A)) / (1 - cosh(A));
     for (let i = 0; i < tops.length - 1; i++) {
       const a = tops[i], b = tops[i + 1];
       const near = Math.min(Math.hypot(a[0].x, a[0].z), Math.hypot(b[0].x, b[0].z));
-      const segs = near < 220 ? 9 : 4;
-      const r = near < 220 ? 0.022 : 0.035;
+      const segs = near < 260 ? 12 : 5;
+      const r = near < 260 ? 0.026 : 0.04;
       for (let w = 0; w < a.length; w++) {
         const pts = [];
+        // lower wires hang slacker than the top pair, so the bundle separates
+        const sag = SAG * (w < 3 ? 1 : 1.22);
         for (let s = 0; s <= segs; s++) {
           const t = s / segs;
           const x = a[w].x + (b[w].x - a[w].x) * t;
           const z = a[w].z + (b[w].z - a[w].z) * t;
-          const y = a[w].y + (b[w].y - a[w].y) * t - Math.sin(t * Math.PI) * 1.35;
+          const y = a[w].y + (b[w].y - a[w].y) * t - drop(t) * sag;
           pts.push(new THREE.Vector3(x, y, z));
         }
         wireGeo.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs, r, 3, false));
