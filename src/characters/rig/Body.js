@@ -53,19 +53,20 @@ export function buildBody(rig, look) {
   // ---- neck --------------------------------------------------------------
   // a 9cm neck makes every head look detached; real male necks are 12-13cm
   // across, and the sternocleidomastoid keeps it from reading as a pipe
-  const neckR = (0.0555 + 0.016 * m) * s * rig.profile.neck;
+  const neckR = (0.0505 + 0.0125 * m) * s * rig.profile.neck;
   sweepTube(B, {
     nodes: [
-      { p: [0, y(1.410), -0.010 * s], rx: neckR * 1.44, rz: neckR * 1.40, w: [[I.spine03, 0.9], [I.neck, 0.1]] },
-      { p: [0, y(1.462), -0.014 * s], rx: neckR * 1.10, rz: neckR * 1.10, w: [[I.spine03, 0.35], [I.neck, 0.65]] },
-      { p: [0, y(1.500), -0.008 * s], rx: neckR * 0.98, rz: neckR * 1.02, w: [[I.neck, 0.72], [I.head, 0.28]] },
-      { p: [0, y(1.540), -0.002 * s], rx: neckR * 0.90, rz: neckR * 0.96, w: [[I.neck, 0.2], [I.head, 0.8]] },
-      { p: [0, y(1.566), 0.002 * s], rx: neckR * 0.66, rz: neckR * 0.72, w: [[I.head, 1]] },
+      { p: [0, y(1.406), -0.010 * s], rx: neckR * 1.62, rz: neckR * 1.52, w: [[I.spine03, 0.9], [I.neck, 0.1]] },
+      { p: [0, y(1.458), -0.014 * s], rx: neckR * 1.14, rz: neckR * 1.14, w: [[I.spine03, 0.35], [I.neck, 0.65]] },
+      { p: [0, y(1.500), -0.008 * s], rx: neckR * 0.99, rz: neckR * 1.04, w: [[I.neck, 0.72], [I.head, 0.28]] },
+      { p: [0, y(1.542), -0.002 * s], rx: neckR * 0.92, rz: neckR * 0.98, w: [[I.neck, 0.2], [I.head, 0.8]] },
+      { p: [0, y(1.568), 0.002 * s], rx: neckR * 0.68, rz: neckR * 0.74, w: [[I.head, 1]] },
     ],
     steps: 8, seg: 18,
     shape: (th, t) => 1
-      + 0.16 * abump(th, Math.PI, 1.1) * t                 // trapezius / nape
-      + 0.09 * (abump(th, 1.15, 0.5) + abump(th, -1.15, 0.5)) * (1 - t * 0.7) // sternocleidomastoid
+      + 0.20 * abump(th, Math.PI, 1.1) * (1 - t) * 1.2     // nape into the trapezius
+      + 0.10 * (abump(th, 1.15, 0.5) + abump(th, -1.15, 0.5)) * (1 - t * 0.7) // sternocleidomastoid
+      + 0.34 * (abump(th, Math.PI * 0.5, 0.7) + abump(th, -Math.PI * 0.5, 0.7)) * Math.pow(1 - t, 2.2)
       - 0.06 * abump(th, 0, 0.5) * bump(t, 0.75, 0.3),
     uvScale: [1, 0.6],
   });
@@ -82,13 +83,14 @@ export function buildBody(rig, look) {
       uvScale: [1, 1.6],
     });
 
-    // a small deltoid cap, sunk inside the sweep so it only fills the joint
-    // when the arm lifts and never breaks the silhouette at rest
-    B.skin([[I[`upperArm${side}`], 0.75], [I[`clavicle${side}`], 0.25]]);
+    // A small joint filler, buried well inside the sweep. It exists only to
+    // keep the armpit closed when the arm lifts; anything proud of the surface
+    // here immediately reads as a ball-jointed doll.
+    B.skin([[I[`upperArm${side}`], 0.7], [I[`clavicle${side}`], 0.3]]);
     blob(B, {
-      center: [sh.x - sg * R(0.014), sh.y - R(0.014), sh.z],
-      scale: [R(0.030 + 0.012 * m), R(0.034 + 0.012 * m), R(0.033 + 0.011 * m)],
-      segU: 12, segV: 8,
+      center: [sh.x - sg * R(0.020), sh.y - R(0.026), sh.z],
+      scale: [R(0.026 + 0.010 * m), R(0.030 + 0.010 * m), R(0.029 + 0.009 * m)],
+      segU: 10, segV: 6,
     });
 
     buildHand(B, rig, side, look);

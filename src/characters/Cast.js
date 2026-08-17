@@ -45,13 +45,17 @@ function skullPrint(th, t) {
   const x = d / 0.30, y = (t - cy) / 0.115;
   const r = Math.hypot(x, y * 0.9);
   if (r > 1.25) return 0;
-  let v = 1 - smoothIn(0.75, 1.05, r);              // cranium
-  v *= 1 - 0.55 * smoothIn(0.55, 1.0, Math.abs(y + 0.75) + Math.max(0, Math.abs(x) - 0.55));
-  // eye sockets and nasal void
-  const e1 = Math.hypot((Math.abs(x) - 0.38) / 0.24, (y - 0.08) / 0.24);
-  const e2 = Math.hypot(x / 0.13, (y + 0.42) / 0.22);
-  v *= smoothIn(0.55, 1.0, e1);
-  v *= smoothIn(0.5, 1.0, e2);
+  // Hard edges. A decal whose falloff spans a third of its own radius is not a
+  // logo, it is a stain — and that is exactly how the chest print read.
+  let v = 1 - smoothIn(0.94, 1.02, r);              // cranium
+  v *= 1 - 0.88 * smoothIn(0.86, 1.0, Math.abs(y + 0.78) + Math.max(0, Math.abs(x) - 0.52));
+  // eye sockets, nasal void and a jaw line, all cut sharply out of the skull
+  const e1 = Math.hypot((Math.abs(x) - 0.40) / 0.235, (y - 0.10) / 0.225);
+  const e2 = Math.hypot(x / 0.115, (y + 0.40) / 0.20);
+  const e3 = Math.hypot(x / 0.62, (y + 0.66) / 0.075);
+  v *= smoothIn(0.88, 1.0, e1);
+  v *= smoothIn(0.86, 1.0, e2);
+  v *= 1 - 0.9 * (1 - smoothIn(0.85, 1.0, e3));
   return clamp01(v);
 }
 
@@ -62,7 +66,7 @@ export const CAST = {
     // 1.775 m at 7.6 heads. FFXV's cast is stylised-realistic, not anime: an
     // 1.05 head scale put them at 7.1 heads, which is precisely the ratio that
     // reads as a doll no matter how good the shading is.
-    profile: { height: 1.775, shoulder: 1.035, muscle: 0.34, hip: 0.95, neck: 0.96, headScale: 0.975 },
+    profile: { height: 1.775, shoulder: 0.90, muscle: 0.36, hip: 0.95, neck: 1.02, headScale: 1.045 },
     look: {
       seed: 11,
       idle: {
@@ -72,7 +76,7 @@ export const CAST = {
         lowerArmL: [-0.16, 0, 0], lowerArmR: [-0.10, 0, 0],
         thighR: [-0.04, 0, 0], shinR: [0.07, 0, 0], footR: [-0.04, 0, 0],
       },
-      skin: srgb(0xc98f6c),
+      skin: srgb(0xbe8560),
       iris: 0x2b5f96,
       headWidth: 0.97,
       jaw: -0.25, cheek: 0.35, nose: -0.1, brow: 0.15,
@@ -89,33 +93,38 @@ export const CAST = {
       // helmet; the silhouette only comes alive once individual clumps are
       // narrow enough to leave gaps between them.
       hair: {
-        color: 0x1b1c26, tipColor: 0x333b4a, rough: 0.34, shell: 0.019, volume: 1.22,
-        hairline: 0.002, peak: 0.35, wisps: 52, wispLen: 1.15,
+        color: 0x0d0d12, tipColor: 0x22232c, rough: 0.36, shell: 0.0125, volume: 0.92,
+        hairline: 0.002, peak: 0.35, wisps: 46, wispLen: 0.85,
         tufts: [
-          { n: 160, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.18, -0.98], out: 0.82, bend: 0.55, len: 0.030, width: 0.0016, thick: 0.36, spike: 1.0, dirJit: 0.22, lenVar: 0.30 },
-          // long asymmetric fringe sweeping across and over the right eye
-          { n: 70, th: [-1.14, 0.62], phi: [0.80, 1.0], dir: [-0.34, -0.86, 0.38], out: 0.26, bend: 0.98, len: 0.045, width: 0.0028, thick: 0.34, spike: 0.8, sag: 0.10, dirJit: 0.10, lenVar: 0.24, steps: 6 },
-          { n: 42, th: [-0.90, -0.02], phi: [0.84, 1.0], dir: [-0.50, -0.84, 0.26], out: 0.20, bend: 1.0, len: 0.058, width: 0.0030, thick: 0.34, spike: 0.75, sag: 0.14, dirJit: 0.09, lenVar: 0.26, steps: 6 },
-          { n: 44, th: [0.18, 1.04], phi: [0.82, 1.0], dir: [0.28, -0.78, 0.54], out: 0.34, bend: 0.92, len: 0.051, width: 0.0027, thick: 0.34, spike: 0.85, sag: 0.09, dirJit: 0.11, lenVar: 0.24 },
-          // crown spikes
-          { n: 122, th: [-2.75, 2.75], phi: [0.18, 0.74], dir: [0, 0.10, -0.99], out: 0.62, bend: 0.72, len: 0.047, width: 0.0022, thick: 0.36, spike: 0.95, dirJit: 0.15, lenVar: 0.26 },
+          // Layered clumps that lie *along* the skull. Pushing strands out along
+          // the surface normal (`out` near 1) is what turned this into a sea
+          // urchin; a hairstyle is locks following a flow, not quills.
+          { n: 200, th: [-3.14, 3.14], phi: [0.0, 0.54], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.033, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.16, lenVar: 0.34 },
+          // long asymmetric fringe sweeping across the brow — clearing the lids
+          { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.52, 0.72], out: 0.71, bend: 1.0, len: 0.038, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18, steps: 6 },
+          { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.60, -0.50, 0.63], out: 0.68, bend: 1.0, len: 0.046, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.05, dirJit: 0.06, lenVar: 0.20, steps: 6 },
+          { n: 48, th: [0.20, 1.04], phi: [0.88, 1.0], dir: [0.38, -0.46, 0.80], out: 0.72, bend: 0.98, len: 0.040, width: 0.0030, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18 },
+          // crown layers, swept back
+          { n: 140, th: [-2.75, 2.75], phi: [0.20, 0.78], dir: [0, -0.10, -0.99], out: 0.60, bend: 0.94, len: 0.046, width: 0.0024, thick: 0.36, spike: 0.72, dirJit: 0.14, lenVar: 0.32 },
+          // crown spikes: the one thing that makes Noctis readable in silhouette
+          { n: 64, th: [-2.5, 2.5], phi: [0.10, 0.62], dir: [0.02, 0.34, -0.94], out: 0.34, bend: 0.60, len: 0.054, width: 0.0020, thick: 0.42, spike: 1.15, dirJit: 0.24, lenVar: 0.30, steps: 5 },
           // back layers, dynamic
-          { n: 96, th: [1.95, 4.35], phi: [0.52, 1.0], dir: [0, -0.42, -0.90], out: 0.50, bend: 0.85, len: 0.066, width: 0.0025, thick: 0.36, spike: 0.9, dirJit: 0.12, lenVar: 0.26, spring: 0.35 },
-          // side tufts over the ears
-          { n: 35, th: [1.20, 2.14], phi: [0.84, 1.0], dir: [0.44, -0.80, -0.40], out: 0.34, bend: 0.9, len: 0.055, width: 0.0021, thick: 0.34, spike: 0.85, dirJit: 0.11, lenVar: 0.24 },
-          { n: 35, th: [-2.14, -1.20], phi: [0.84, 1.0], dir: [-0.44, -0.80, -0.40], out: 0.34, bend: 0.9, len: 0.055, width: 0.0021, thick: 0.34, spike: 0.85, dirJit: 0.11, lenVar: 0.24 },
-          // a handful of long flyaways that break the outline entirely
-          { n: 20, th: [-2.6, 2.6], phi: [0.30, 0.95], dir: [0.05, 0.22, -0.97], out: 0.55, bend: 0.7, len: 0.086, width: 0.0012, thick: 0.4, spike: 1.3, dirJit: 0.30, lenVar: 0.35 },
+          { n: 108, th: [1.95, 4.35], phi: [0.56, 1.0], dir: [0, -0.60, -0.80], out: 0.76, bend: 0.94, len: 0.058, width: 0.0028, thick: 0.36, spike: 0.62, dirJit: 0.08, lenVar: 0.20, spring: 0.35 },
+          // side tufts over the ears — kept short so the ear reads
+          { n: 34, th: [1.24, 2.10], phi: [0.90, 1.0], dir: [0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
+          { n: 34, th: [-2.10, -1.24], phi: [0.90, 1.0], dir: [-0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
+          // a handful of flyaways to break the outline — no longer 9 cm quills
+          { n: 18, th: [-2.6, 2.6], phi: [0.36, 0.95], dir: [0.05, 0.24, -0.97], out: 0.87, bend: 0.86, len: 0.042, width: 0.0013, thick: 0.4, spike: 1.05, dirJit: 0.22, lenVar: 0.30 },
         ],
       },
       outfit: [
-        { type: 'shirt', color: 0x3c3f49, rough: 0.82, u0: 0.30, u1: 0.95, pad: 0.010, neckCut: 0.34, steps: 26, seg: 44, print: skullPrint, printColor: 0xb9bcc4 },
-        { type: 'pants', color: 0x181920, rough: 0.72, padHip: 0.016, padAnkle: 0.010, u1: 0.95, knee: 0.03, wrinkle: 0.016 },
-        { type: 'jacket', color: 0x131419, rough: 0.66, u0: 0.44, u1: 0.965, pad: 0.024, gap: 0.58, flare: 0.05, thickness: 0.011, collarH: 0.075, collarR: 0.066, collarFlare: 1.20 },
-        { type: 'skirt', color: 0x131419, rough: 0.66, top: 1.04, bottom: 0.775, rTop: 0.166, rBot: 0.176, gap: 0.60, backLong: 0.16, spring: 0.9, wave: 0.04, depth: 0.86 },
-        { type: 'sleeve', color: 0x14151b, rough: 0.66, u0: 0.11, u1: 0.86, pad: 0.015, cuff: 0.05, cuffBand: true, cuffColor: 0x0e0f13 },
-        { type: 'belt', color: 0x14151a, rough: 0.5, metal: 0.1, u: 0.365, pad: 0.020, buckleBox: true, buckleColor: 0x9aa0a8 },
-        { type: 'boots', color: 0x14151b, rough: 0.55, shaft: 0.74, strap: true, height: 0.038 },
+        { type: 'shirt', color: 0x1f2027, rough: 0.86, u0: 0.30, u1: 0.95, pad: 0.010, neckCut: 0.34, steps: 42, seg: 76, print: skullPrint, printColor: 0xb9bcc4 },
+        { type: 'pants', color: 0x15161b, rough: 0.74, padHip: 0.016, padAnkle: 0.010, u1: 0.95, knee: 0.03, wrinkle: 0.016 },
+        { type: 'jacket', color: 0x101116, rough: 0.56, u0: 0.36, u1: 0.965, pad: 0.019, gap: 0.58, flare: 0.05, waist: 0.070, thickness: 0.011, collarH: 0.098, collarR: 0.062, collarFlare: 1.16 },
+        { type: 'skirt', color: 0x101116, rough: 0.56, top: 1.04, bottom: 0.775, rTop: 0.166, rBot: 0.176, gap: 0.60, backLong: 0.16, spring: 0.9, wave: 0.04, depth: 0.86 },
+        { type: 'sleeve', color: 0x101116, rough: 0.56, u0: 0.03, u1: 0.89, pad: 0.015, cuff: 0.05, cuffBand: true, cuffColor: 0x0e0f13 },
+        { type: 'belt', color: 0x121318, rough: 0.40, metal: 0.1, u: 0.365, pad: 0.020, buckleBox: true, buckleColor: 0x9aa0a8 },
+        { type: 'boots', color: 0x121317, rough: 0.42, shaft: 0.74, strap: true, height: 0.038 },
       ],
     },
   },
@@ -123,7 +132,7 @@ export const CAST = {
   // ----------------------------------------------------------- Gladiolus --
   gladio: {
     name: 'Gladiolus',
-    profile: { height: 1.975, shoulder: 1.24, muscle: 0.95, hip: 1.02, neck: 1.14, armScale: 1.02, headScale: 0.925 },
+    profile: { height: 2.00, shoulder: 0.95, muscle: 0.95, hip: 1.02, neck: 1.06, armScale: 1.02, headScale: 0.99 },
     look: {
       seed: 23,
       idle: {
@@ -136,8 +145,8 @@ export const CAST = {
       },
       skin: srgb(0xaa7245),
       iris: 0x7a5326,
-      headWidth: 1.06,
-      jaw: 1.35, cheek: -0.35, nose: 0.55, brow: 1.05,
+      headWidth: 1.04,
+      jaw: 1.35, cheek: -0.20, nose: 0.55, brow: 1.05,
       eyeOpen: 0.90,
       blush: 'rgba(170,80,58,0.26)',
       lip: 'rgba(140,80,68,0.48)',
@@ -149,33 +158,40 @@ export const CAST = {
       brows: { color: 0x27201a, len: 0.016, width: 0.0072, lift: -0.001 },
       tattoo: eagleInk,
       hair: {
-        color: 0x241a13, tipColor: 0x4a361f, rough: 0.40, shell: 0.015, volume: 1.05,
-        hairline: 0.008, peak: 0.35, wisps: 46, wispLen: 1.0,
+        color: 0x1a120c, tipColor: 0x3a2a18, rough: 0.42, shell: 0.0125, volume: 0.92,
+        hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9,
         tufts: [
-          { n: 150, th: [-3.14, 3.14], phi: [0.0, 0.48], dir: [0, 0.10, -0.99], out: 0.76, bend: 0.6, len: 0.036, width: 0.0016, thick: 0.36, spike: 1.0, dirJit: 0.18, lenVar: 0.28 },
-          { n: 46, th: [-1.1, 1.1], phi: [0.80, 1.0], dir: [0, 0.12, -0.99], out: 0.25, bend: 0.95, len: 0.10, thick: 0.34, width: 0.0020, spike: 0.9, dirJit: 0.09, lenVar: 0.22 },
-          { n: 55, th: [1.0, 2.4], phi: [0.55, 1.0], dir: [0.25, -0.05, -0.96], out: 0.30, bend: 0.9, len: 0.11, thick: 0.34, width: 0.0022, spike: 0.85, dirJit: 0.10, lenVar: 0.22 },
-          { n: 55, th: [-2.4, -1.0], phi: [0.55, 1.0], dir: [-0.25, -0.05, -0.96], out: 0.30, bend: 0.9, len: 0.11, thick: 0.34, width: 0.0022, spike: 0.85, dirJit: 0.10, lenVar: 0.22 },
-          // gathered tail
-          { n: 64, th: [2.55, 3.75], phi: [0.55, 1.0], dir: [0, -0.55, -0.84], out: 0.20, bend: 1.0, len: 0.145, thick: 0.34, width: 0.0024, spike: 0.75, sag: 0.20, dirJit: 0.07, lenVar: 0.20, spring: 0.75, steps: 7 },
-          { n: 29, th: [2.9, 3.4], phi: [0.85, 1.0], dir: [0, -0.85, -0.52], out: 0.15, bend: 1.0, len: 0.18, thick: 0.34, width: 0.0027, spike: 0.7, sag: 0.28, dirJit: 0.06, lenVar: 0.20, spring: 0.9, steps: 7 },
-          // loose strands at the temples
-          { n: 14, th: [1.12, 1.58], phi: [0.9, 1.0], dir: [0.55, -0.72, -0.42], out: 0.25, bend: 0.95, len: 0.075, width: 0.0018, spike: 1.0, dirJit: 0.13, lenVar: 0.3 },
-          { n: 14, th: [-1.58, -1.12], phi: [0.9, 1.0], dir: [-0.55, -0.72, -0.42], out: 0.25, bend: 0.95, len: 0.075, width: 0.0018, spike: 1.0, dirJit: 0.13, lenVar: 0.3 },
-          { n: 17, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.14, -0.99], out: 0.5, bend: 0.75, len: 0.115, width: 0.0012, thick: 0.4, spike: 1.25, dirJit: 0.26, lenVar: 0.34 },
+          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.52], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.036, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.16, lenVar: 0.32 },
+          { n: 52, th: [-1.1, 1.1], phi: [0.84, 1.0], dir: [0, -0.30, -0.95], out: 0.71, bend: 1.0, len: 0.080, thick: 0.34, width: 0.0022, spike: 0.6, dirJit: 0.07, lenVar: 0.18 },
+          { n: 70, th: [1.0, 2.4], phi: [0.55, 1.0], dir: [0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
+          { n: 70, th: [-2.4, -1.0], phi: [0.55, 1.0], dir: [-0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
+          // the mane: long layers falling past the shoulder blades
+          { n: 120, th: [2.25, 4.05], phi: [0.50, 1.0], dir: [0, -0.86, -0.51], out: 0.66, bend: 1.0, len: 0.205, thick: 0.34, width: 0.0028, spike: 0.55, sag: 0.16, dirJit: 0.06, lenVar: 0.20, spring: 0.72, steps: 9 },
+          { n: 62, th: [2.70, 3.60], phi: [0.80, 1.0], dir: [0, -0.94, -0.34], out: 0.63, bend: 1.0, len: 0.250, thick: 0.34, width: 0.0031, spike: 0.5, sag: 0.20, dirJit: 0.05, lenVar: 0.18, spring: 0.88, steps: 9 },
+          { n: 20, th: [1.12, 1.62], phi: [0.92, 1.0], dir: [0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
+          { n: 20, th: [-1.62, -1.12], phi: [0.92, 1.0], dir: [-0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
+          { n: 30, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.10, -0.99], out: 0.60, bend: 0.86, len: 0.066, width: 0.0013, thick: 0.4, spike: 1.0, dirJit: 0.24, lenVar: 0.30 },
+          // ---- full beard: rooted below the equator, so `absPhi` ------------
+          { n: 150, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0155, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.22, lenVar: 0.34, color: 0x1c140d, tipColor: 0x3c2c1a },
+          { n: 90, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0195, width: 0.0012, thick: 0.45, spike: 0.8, dirJit: 0.20, lenVar: 0.32, color: 0x1c140d, tipColor: 0x3c2c1a },
+          // moustache
+          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0125, width: 0.0011, thick: 0.45, spike: 0.9, dirJit: 0.20, lenVar: 0.30, color: 0x1c140d, tipColor: 0x3c2c1a },
+          // sideburns tying the beard into the hairline
+          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x1c140d, tipColor: 0x3c2c1a },
+          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x1c140d, tipColor: 0x3c2c1a },
         ],
       },
       outfit: [
-        { type: 'pants', color: 0x3a3730, rough: 0.85, padHip: 0.020, padAnkle: 0.016, u1: 0.94, cargo: 0.06, wrinkle: 0.022, knee: 0.035 },
+        { type: 'pants', color: 0x232219, rough: 0.88, padHip: 0.020, padAnkle: 0.016, u1: 0.94, cargo: 0.06, wrinkle: 0.022, knee: 0.035 },
         // a real jacket: heavy hems, a fold-down collar standing off the neck,
         // and enough thickness at the open edge to read as leather rather than
         // as two straps drawn on a bare chest
-        { type: 'jacket', color: 0x17181c, rough: 0.46, u0: 0.34, u1: 0.955, pad: 0.038, gap: 0.42, flare: 0.07, thickness: 0.020, collarH: 0.058, collarR: 0.086, collarFlare: 1.30, collarGap: 0.40, shoulderDrop: 0.02 },
-        { type: 'sleeve', color: 0x17181c, rough: 0.46, u0: 0.11, u1: 0.33, pad: 0.021, cuff: 0.05, cuffBand: true, cuffColor: 0x101115 },
-        { type: 'belt', color: 0x241d16, rough: 0.55, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
-        { type: 'pouch', color: 0x241d16, rough: 0.6, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
-        { type: 'boots', color: 0x211c17, rough: 0.62, shaft: 0.70, strap: true, width: 0.052, height: 0.040 },
-        { type: 'band', color: 0x2b2119, rough: 0.6, sides: ['L'], u: 0.90, pad: 0.012, ridge: 0.05 },
+        { type: 'jacket', color: 0x131318, rough: 0.40, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006 },
+        { type: 'sleeve', color: 0x131318, rough: 0.40, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x101115 },
+        { type: 'belt', color: 0x1c1710, rough: 0.45, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
+        { type: 'pouch', color: 0x1c1710, rough: 0.5, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
+        { type: 'boots', color: 0x191510, rough: 0.5, shaft: 0.70, strap: true, width: 0.052, height: 0.040 },
+        { type: 'band', color: 0x201911, rough: 0.5, sides: ['L'], u: 0.90, pad: 0.012, ridge: 0.05 },
       ],
     },
   },
@@ -183,7 +199,7 @@ export const CAST = {
   // --------------------------------------------------------------- Ignis --
   ignis: {
     name: 'Ignis',
-    profile: { height: 1.865, shoulder: 1.06, muscle: 0.45, hip: 0.92, neck: 1.02, legScale: 1.03, headScale: 0.955 },
+    profile: { height: 1.865, shoulder: 0.94, muscle: 0.45, hip: 0.92, neck: 0.98, legScale: 1.03, headScale: 1.025 },
     look: {
       seed: 37,
       idle: {
@@ -193,7 +209,7 @@ export const CAST = {
         lowerArmL: [-0.42, 0.20, 0.05], lowerArmR: [-0.42, -0.20, -0.05],
         handL: [0.1, 0, 0.15], handR: [0.1, 0, -0.15],
       },
-      skin: srgb(0xc08a62),
+      skin: srgb(0xb6825c),
       iris: 0x4d7d58,
       headWidth: 0.96,
       jaw: 0.25, cheek: 0.5, nose: 0.2, brow: 0.35,
@@ -208,27 +224,28 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x1b1b21), rough: 0.62 },
       hair: {
-        color: 0x8a6837, tipColor: 0xa6813f, rough: 0.32, shell: 0.014, volume: 1.05,
-        hairline: 0.004, peak: 0.25, wisps: 40, wispLen: 0.85,
+        color: 0x7d6742, tipColor: 0xab9060, rough: 0.34, shell: 0.011, volume: 0.85,
+        hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75,
         tufts: [
-          { n: 150, th: [-3.14, 3.14], phi: [0.0, 0.48], dir: [0, 0.28, -0.96], out: 0.68, bend: 0.7, len: 0.032, width: 0.0015, thick: 0.36, spike: 1.0, dirJit: 0.14, lenVar: 0.26 },
-          // swept straight back, tight to the skull
-          { n: 78, th: [-1.32, 1.32], phi: [0.76, 1.0], dir: [0, 0.34, -0.94], out: 0.16, bend: 1.0, len: 0.058, width: 0.0018, thick: 0.34, spike: 0.7, dirJit: 0.06, lenVar: 0.20 },
-          { n: 32, th: [-0.44, 0.44], phi: [0.93, 1.0], dir: [0.05, 0.66, -0.75], out: 0.28, bend: 0.85, len: 0.052, width: 0.0018, thick: 0.34, spike: 0.95, dirJit: 0.11, lenVar: 0.24 },
-          { n: 64, th: [1.1, 2.6], phi: [0.45, 1.0], dir: [0.22, 0.08, -0.97], out: 0.20, bend: 0.95, len: 0.056, width: 0.0018, thick: 0.34, spike: 0.8, dirJit: 0.06, lenVar: 0.20 },
-          { n: 64, th: [-2.6, -1.1], phi: [0.45, 1.0], dir: [-0.22, 0.08, -0.97], out: 0.20, bend: 0.95, len: 0.056, width: 0.0018, thick: 0.34, spike: 0.8, dirJit: 0.06, lenVar: 0.20 },
-          { n: 49, th: [2.5, 3.8], phi: [0.62, 1.0], dir: [0, -0.40, -0.92], out: 0.28, bend: 0.95, len: 0.050, width: 0.0019, thick: 0.34, spike: 0.85, dirJit: 0.08, lenVar: 0.20, spring: 0.25 },
-          { n: 14, th: [-2.4, 2.4], phi: [0.40, 0.95], dir: [0.02, 0.42, -0.91], out: 0.4, bend: 0.85, len: 0.070, width: 0.0011, thick: 0.4, spike: 1.3, dirJit: 0.22, lenVar: 0.32 },
+          { n: 170, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.030, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.13, lenVar: 0.28 },
+          // slicked-up quiff: front hair lifts off the brow, then sweeps back
+          { n: 74, th: [-0.86, 0.86], phi: [0.88, 1.0], dir: [0, 0.86, -0.51], out: 0.84, bend: 0.90, len: 0.058, width: 0.0020, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20, steps: 6 },
+          { n: 52, th: [-0.60, 0.60], phi: [0.66, 0.90], dir: [0.02, 0.62, -0.78], out: 0.87, bend: 0.88, len: 0.050, width: 0.0019, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20 },
+          // sides swept tight and flat — the contrast with the quiff is the read
+          { n: 76, th: [1.05, 2.65], phi: [0.42, 1.0], dir: [0.12, -0.10, -0.98], out: 0.66, bend: 0.98, len: 0.044, width: 0.0017, thick: 0.34, spike: 0.6, dirJit: 0.05, lenVar: 0.16 },
+          { n: 76, th: [-2.65, -1.05], phi: [0.42, 1.0], dir: [-0.12, -0.10, -0.98], out: 0.66, bend: 0.98, len: 0.044, width: 0.0017, thick: 0.34, spike: 0.6, dirJit: 0.05, lenVar: 0.16 },
+          { n: 58, th: [2.5, 3.8], phi: [0.62, 1.0], dir: [0, -0.52, -0.86], out: 0.74, bend: 0.96, len: 0.044, width: 0.0018, thick: 0.34, spike: 0.7, dirJit: 0.07, lenVar: 0.18, spring: 0.22 },
+          { n: 24, th: [-2.0, 2.0], phi: [0.42, 0.95], dir: [0.02, 0.52, -0.85], out: 0.62, bend: 0.88, len: 0.046, width: 0.0011, thick: 0.4, spike: 1.1, dirJit: 0.18, lenVar: 0.28 },
         ],
       },
       outfit: [
-        { type: 'shirt', color: 0x22222a, rough: 0.7, u0: 0.32, u1: 0.99, pad: 0.010, neckCut: 0.22 },
-        { type: 'pants', color: 0x22212a, rough: 0.72, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.014 },
-        { type: 'jacket', color: 0x4a4456, rough: 0.62, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarGap: 0.16 },
-        { type: 'skirt', color: 0x453f50, rough: 0.62, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
-        { type: 'sleeve', color: 0x4a4456, rough: 0.62, u0: 0.11, u1: 0.90, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x272430 },
-        { type: 'belt', color: 0x1c1a22, rough: 0.5, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
-        { type: 'boots', color: 0x1a1920, rough: 0.5, shaft: 0.78, height: 0.036 },
+        { type: 'shirt', color: 0x14141a, rough: 0.72, u0: 0.32, u1: 0.99, pad: 0.010, neckCut: 0.22 },
+        { type: 'pants', color: 0x16151c, rough: 0.74, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.014 },
+        { type: 'jacket', color: 0x1c1a24, rough: 0.64, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarGap: 0.16 },
+        { type: 'skirt', color: 0x1c1a24, rough: 0.64, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
+        { type: 'sleeve', color: 0x1c1a24, rough: 0.64, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x4a3d68 },
+        { type: 'belt', color: 0x3a2f52, rough: 0.5, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
+        { type: 'boots', color: 0x141319, rough: 0.4, shaft: 0.78, height: 0.036 },
         // Ignis without visible frames is just a man with a shiny patch on his
         // face; the rim geometry is the whole silhouette read
         { type: 'glasses', color: 0x1a1c22, rough: 0.22, metal: 0.65 },
@@ -239,7 +256,7 @@ export const CAST = {
   // ------------------------------------------------------------- Prompto --
   prompto: {
     name: 'Prompto',
-    profile: { height: 1.745, shoulder: 1.015, muscle: 0.40, hip: 0.90, neck: 0.98, headScale: 0.975 },
+    profile: { height: 1.745, shoulder: 0.89, muscle: 0.42, hip: 0.90, neck: 1.02, headScale: 1.05 },
     look: {
       seed: 53,
       idle: {
@@ -249,7 +266,7 @@ export const CAST = {
         upperArmL: [0.02, 0, 0.05], lowerArmL: [-0.18, 0, 0],
         thighL: [0.05, 0, 0.05], shinL: [0.12, 0, 0], thighR: [-0.02, 0, -0.02],
       },
-      skin: srgb(0xd6a479),
+      skin: srgb(0xcb9a70),
       iris: 0x4d8ec0,
       headWidth: 0.98,
       jaw: -0.35, cheek: 0.25, nose: -0.25, brow: -0.15,
@@ -262,30 +279,30 @@ export const CAST = {
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
       brows: { color: 0xa07a40, len: 0.012, width: 0.0052 },
       hair: {
-        color: 0xa8823c, tipColor: 0xcfa95e, rough: 0.30, shell: 0.018, volume: 1.28,
-        hairline: 0.006, peak: 0.2, wisps: 48, wispLen: 1.1,
+        color: 0xc9a24c, tipColor: 0xecd287, rough: 0.30, shell: 0.011, volume: 0.86,
+        hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8,
         tufts: [
-          { n: 155, th: [-3.14, 3.14], phi: [0.0, 0.48], dir: [0, 0.72, -0.69], out: 0.76, bend: 0.6, len: 0.036, width: 0.0015, thick: 0.36, spike: 1.15, dirJit: 0.24, lenVar: 0.30 },
-          // upswept front spikes
-          { n: 58, th: [-1.0, 1.0], phi: [0.82, 1.0], dir: [0, 0.86, 0.46], out: 0.30, bend: 0.85, len: 0.083, thick: 0.34, width: 0.0018, spike: 1.35, dirJit: 0.22, lenVar: 0.26, steps: 6 },
-          { n: 46, th: [-0.7, 0.7], phi: [0.55, 0.82], dir: [0.05, 0.96, 0.20], out: 0.35, bend: 0.8, len: 0.071, width: 0.0019, thick: 0.34, spike: 1.1, dirJit: 0.22, lenVar: 0.26 },
-          { n: 81, th: [-2.6, 2.6], phi: [0.25, 0.60], dir: [0, 0.80, -0.55], out: 0.45, bend: 0.75, len: 0.057, width: 0.0019, thick: 0.34, spike: 1.05, dirJit: 0.24, lenVar: 0.26 },
-          { n: 58, th: [2.2, 4.1], phi: [0.70, 1.0], dir: [0, 0.10, -0.98], out: 0.40, bend: 0.85, len: 0.071, thick: 0.34, width: 0.0018, spike: 1.25, dirJit: 0.20, lenVar: 0.26, spring: 0.3 },
-          { n: 14, th: [1.22, 1.88], phi: [0.9, 1.0], dir: [0.62, -0.35, -0.65], out: 0.30, bend: 0.9, len: 0.055, width: 0.0020, spike: 1.2, dirJit: 0.15, lenVar: 0.3 },
-          { n: 14, th: [-1.88, -1.22], phi: [0.9, 1.0], dir: [-0.62, -0.35, -0.65], out: 0.30, bend: 0.9, len: 0.055, width: 0.0020, spike: 1.2, dirJit: 0.15, lenVar: 0.3 },
-          { n: 23, th: [-2.4, 2.4], phi: [0.30, 0.95], dir: [0.02, 0.90, -0.42], out: 0.5, bend: 0.75, len: 0.098, width: 0.0011, thick: 0.4, spike: 1.5, dirJit: 0.32, lenVar: 0.36 },
+          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.029, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.18, lenVar: 0.30 },
+          // short up-swept front spikes — the whole read, but half the height
+          { n: 66, th: [-1.0, 1.0], phi: [0.86, 1.0], dir: [0, 0.88, 0.42], out: 0.79, bend: 0.88, len: 0.046, thick: 0.34, width: 0.0019, spike: 1.05, dirJit: 0.17, lenVar: 0.22, steps: 6 },
+          { n: 52, th: [-0.7, 0.7], phi: [0.58, 0.86], dir: [0.05, 0.94, 0.24], out: 0.84, bend: 0.84, len: 0.042, width: 0.0020, thick: 0.34, spike: 1.0, dirJit: 0.17, lenVar: 0.22 },
+          { n: 92, th: [-2.6, 2.6], phi: [0.26, 0.62], dir: [0, 0.60, -0.78], out: 0.90, bend: 0.82, len: 0.038, width: 0.0020, thick: 0.34, spike: 0.9, dirJit: 0.17, lenVar: 0.22 },
+          { n: 66, th: [2.2, 4.1], phi: [0.70, 1.0], dir: [0, -0.12, -0.98], out: 0.82, bend: 0.90, len: 0.046, thick: 0.34, width: 0.0019, spike: 0.9, dirJit: 0.14, lenVar: 0.22, spring: 0.3 },
+          { n: 16, th: [1.22, 1.88], phi: [0.92, 1.0], dir: [0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },
+          { n: 16, th: [-1.88, -1.22], phi: [0.92, 1.0], dir: [-0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },
+          { n: 30, th: [-2.4, 2.4], phi: [0.32, 0.95], dir: [0.02, 0.84, -0.52], out: 0.62, bend: 0.82, len: 0.054, width: 0.0012, thick: 0.4, spike: 1.2, dirJit: 0.24, lenVar: 0.30 },
         ],
       },
       outfit: [
-        { type: 'shirt', color: 0xd6d2c8, rough: 0.85, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016 },
-        { type: 'pants', color: 0x1c1d24, rough: 0.75, padHip: 0.016, padAnkle: 0.011, u1: 0.95, wrinkle: 0.018, knee: 0.03 },
-        { type: 'jacket', color: 0x16171c, rough: 0.62, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16 },
-        { type: 'sleeve', color: 0x16171c, rough: 0.62, u0: 0.11, u1: 0.30, pad: 0.017, cuff: 0.04, cuffBand: true, cuffColor: 0x101115 },
-        { type: 'belt', color: 0x22232a, rough: 0.55, u: 0.36, pad: 0.020, buckleBox: true, buckleColor: 0xa8adb4 },
-        { type: 'band', color: 0x2b2d34, rough: 0.7, sides: ['L', 'R'], u: 0.90, pad: 0.010, ridge: 0.04 },
-        { type: 'strap', color: 0x2a2b32, rough: 0.7, side: 'L', width: 0.018 },
-        { type: 'camera', color: 0x1d1e24, rough: 0.42, metal: 0.2, at: [-0.085, 1.03, 0.125] },
-        { type: 'boots', color: 0x24252c, rough: 0.7, shaft: 0.80, height: 0.034 },
+        { type: 'shirt', color: 0xc3bfb2, rough: 0.90, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016 },
+        { type: 'pants', color: 0x17181d, rough: 0.80, padHip: 0.016, padAnkle: 0.011, u1: 0.95, wrinkle: 0.018, knee: 0.03 },
+        { type: 'jacket', color: 0x131419, rough: 0.72, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16 },
+        { type: 'sleeve', color: 0x131419, rough: 0.72, u0: 0.03, u1: 0.38, pad: 0.017, cuff: 0.04, cuffBand: true, cuffColor: 0x101115 },
+        { type: 'belt', color: 0x1a1b20, rough: 0.5, u: 0.36, pad: 0.020, buckleBox: true, buckleColor: 0xa8adb4 },
+        { type: 'band', color: 0x1e1f25, rough: 0.7, sides: ['L', 'R'], u: 0.90, pad: 0.010, ridge: 0.04 },
+        { type: 'strap', color: 0x6a5a3c, rough: 0.88, side: 'L', width: 0.013, to: [-0.048, 1.150, 0.118] },
+        { type: 'camera', color: 0x24252b, rough: 0.38, metal: 0.25, at: [-0.048, 1.135, 0.128] },
+        { type: 'boots', color: 0x17181d, rough: 0.6, shaft: 0.80, height: 0.034 },
       ],
     },
   },

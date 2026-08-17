@@ -95,7 +95,13 @@ piece('jacket', (B, ctx, o) => {
       // reach the yoke and the shoulder grows a pointed epaulette
       const edge = Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap)));
       k += 0.085 * Math.exp(-edge * 5) * bump(t, 0.62, 0.34);
-      k += (o.flare ?? 0.10) * smooth((0.24 - t) / 0.24);              // hem flare
+      k += (o.flare ?? 0.10) * smooth((0.18 - t) / 0.18);              // hem flare
+      // a real waist. A jacket with no nip between ribcage and hip is a barrel,
+      // and a barrel is the single loudest "this is a game model" tell there is.
+      k -= (o.waist ?? 0.055) * bump(t, 0.30, 0.26);
+      // hem break: cloth folds over on itself where it stops being supported
+      k += (o.hemBreak ?? 0.030) * Math.pow(Math.max(0, 1 - t / 0.14), 1.6)
+         * (0.6 + 0.4 * Math.sin(th * 5.0 + 1.1));
       // a few real folds: cloth that never creases reads as vacuum-formed plastic
       k += (o.wrinkle ?? 0.014) * Math.sin(th * 7 + t * 16)
          + (o.wrinkle ?? 0.014) * 0.6 * Math.sin(th * 3.2 - t * 9.0) * smooth((0.55 - t) / 0.55);
@@ -105,7 +111,7 @@ piece('jacket', (B, ctx, o) => {
     // the top edge follows the trapezius down toward the acromion — a flat
     // horizontal ring here is what produces boxy pauldron corners
     offset: (th, t, out) => {
-      const drop = (o.shoulderDrop ?? 0.032) * ctx.s;
+      const drop = (o.shoulderDrop ?? 0.008) * ctx.s;
       out.y = -drop * smooth((t - 0.62) / 0.38) * Math.pow(Math.abs(Math.sin(th)), 1.6);
     },
     uvScale: [1.6, 2.6],
@@ -122,10 +128,11 @@ function collar(B, ctx, o) {
   const gap = o.collarGap ?? (o.gap ?? 0.42) * 0.8;
   const r0 = (o.collarR ?? 0.085) * s;
   const I = rig.index;
+  const y0 = y(o.collarY ?? 1.418);
   const nodes = [
-    { p: [0, y(1.40), -0.012 * s], rx: r0 * 1.02, rz: r0 * 0.98, w: [[I.spine03, 0.95], [I.neck, 0.05]] },
-    { p: [0, y(1.40) + h * s * 0.5, -0.016 * s], rx: r0 * 0.92, rz: r0 * 0.92, w: [[I.spine03, 0.7], [I.neck, 0.3]] },
-    { p: [0, y(1.40) + h * s * 1.1, -0.018 * s], rx: r0 * (o.collarFlare ?? 1.0), rz: r0 * (o.collarFlare ?? 1.0), w: [[I.spine03, 0.35], [I.neck, 0.65]] },
+    { p: [0, y0, -0.012 * s], rx: r0 * 1.02, rz: r0 * 0.98, w: [[I.spine03, 0.95], [I.neck, 0.05]] },
+    { p: [0, y0 + h * s * 0.5, -0.016 * s], rx: r0 * 0.90, rz: r0 * 0.90, w: [[I.spine03, 0.6], [I.neck, 0.4]] },
+    { p: [0, y0 + h * s * 1.1, -0.018 * s], rx: r0 * (o.collarFlare ?? 1.0), rz: r0 * (o.collarFlare ?? 1.0), w: [[I.spine03, 0.28], [I.neck, 0.72]] },
   ];
   sweepShell(B, {
     nodes, steps: 6, seg: 20,
@@ -175,25 +182,29 @@ piece('skirt', (B, ctx, o) => {
 /** Sleeve over the arm; `u1` sets short / three-quarter / full length. */
 piece('sleeve', (B, ctx, o) => {
   for (const side of (o.sides || ['L', 'R'])) {
-    // Start *at* the shoulder joint. The arm sweep now begins well inside the
-    // ribcage, so u=0 is about 9 cm above the acromion — a sleeve cut there
-    // erupts through the trapezius as a pointed wing.
-    const u0 = o.u0 ?? 0.11, u1 = o.u1 ?? 0.82;
+    // The sleeve now starts at the *clavicle root*, i.e. buried inside the
+    // torso shell, and simply emerges from under the jacket yoke. Cutting it at
+    // the acromion and doming the cut (which is what this used to do) is what
+    // produced the pointed wing at each shoulder corner, plus a triangle of
+    // bare skin between sleeve and yoke.
+    const u0 = o.u0 ?? 0.03, u1 = o.u1 ?? 0.88;
     const base = o.pad ?? 0.014;
-    const nodes = drape(ctx.arm(side), u0, u1, 8,
-      (t) => base * (0.30 + 0.70 * smooth(t * 3.0)) - 0.006 * (1 - smooth(t * 2.2)));
+    const nodes = drape(ctx.arm(side), u0, u1, 9,
+      // negative padding at the root sinks the seam inside the body; the sleeve
+      // reaches full thickness only once it is clear of the deltoid
+      (t) => base * (0.15 + 0.85 * smooth(t * 2.4)) - 0.013 * (1 - smooth(t * 2.6)));
     const body = under(armShape(ctx.rig.profile.muscle, side === 'L' ? 1 : -1), u0, u1, 0.94);
     sweepTube(B, {
-      nodes, steps: o.steps ?? 14, seg: o.seg ?? 16,
-      capStart: true, capHeight: o.capHeight ?? 0.55,
+      nodes, steps: o.steps ?? 16, seg: o.seg ?? 16,
       shape: (th, t) => body(th, t)
         + (o.wrinkle ?? 0.02) * Math.sin(th * 6 + t * 18) * smooth(t)
-        + (o.cuff ?? 0.0) * bump(t, 0.97, 0.12)
-        + (o.shoulderPad ?? 0.0) * bump(t, 0.10, 0.16),
+        + (o.cuff ?? 0.0) * bump(t, 0.96, 0.10)
+        - (o.taper ?? 0.05) * smooth((t - 0.86) / 0.14)     // wrist taper, no butt-seam
+        + (o.shoulderPad ?? 0.0) * bump(t, 0.16, 0.14),
       uvScale: [1, 2],
     });
     if (o.cuffBand) {
-      const c = drape(ctx.arm(side), (o.u1 ?? 0.82) - 0.05, (o.u1 ?? 0.82) + 0.01, 3, (o.pad ?? 0.014) + 0.006);
+      const c = drape(ctx.arm(side), (o.u1 ?? 0.88) - 0.045, (o.u1 ?? 0.88) + 0.005, 3, (o.pad ?? 0.014) + 0.005);
       B.color(o.cuffColor ?? o.color ?? 0x1a1a1e);
       sweepTube(B, { nodes: c, steps: 3, seg: 14, uvScale: [1, 0.4] });
       B.color(o.color ?? 0x1a1a1e);
@@ -219,9 +230,11 @@ piece('pants', (B, ctx, o) => {
     });
   }
   if (o.waist !== false) {
-    const w = drape(ctx.torso, 0.30, 0.40, 3, (o.padHip ?? 0.014) + 0.006);
+    // reaches down over the hip crest: the leg tubes only begin at the greater
+    // trochanter, so a short waistband leaves a ring of bare skin at the pelvis
+    const w = drape(ctx.torso, 0.16, 0.42, 5, (o.padHip ?? 0.014) + 0.004);
     B.color(o.waistColor ?? o.color ?? 0x22242a);
-    sweepTube(B, { nodes: w, steps: 3, seg: 20, uvScale: [1, 0.3] });
+    sweepTube(B, { nodes: w, steps: 6, seg: 20, uvScale: [1, 0.5] });
   }
 });
 
@@ -307,11 +320,12 @@ piece('strap', (B, ctx, o) => {
   const s = ctx.s;
   const sg = o.side === 'R' ? -1 : 1;
   const w = (o.width ?? 0.020) * s;
+  const end = o.to ? o.to.map((v) => v * s) : [-sg * 0.070 * s, rig.dims.shoulderY - 0.30 * s, 0.090 * s];
   const pts = [
-    { p: [sg * 0.055 * s, rig.dims.shoulderY + 0.028 * s, -0.045 * s], w: [[I.spine03, 1]] },
-    { p: [sg * 0.085 * s, rig.dims.shoulderY + 0.020 * s, 0.030 * s], w: [[I.spine03, 1]] },
-    { p: [sg * 0.030 * s, rig.dims.shoulderY - 0.16 * s, 0.115 * s], w: [[I.spine02, 0.7], [I.spine03, 0.3]] },
-    { p: [-sg * 0.070 * s, rig.dims.shoulderY - 0.30 * s, 0.090 * s], w: [[I.spine01, 0.6], [I.spine02, 0.4]] },
+    { p: [sg * 0.058 * s, rig.dims.shoulderY + 0.020 * s, -0.052 * s], w: [[I.spine03, 1]] },
+    { p: [sg * 0.082 * s, rig.dims.shoulderY + 0.012 * s, 0.028 * s], w: [[I.spine03, 1]] },
+    { p: [sg * 0.036 * s, rig.dims.shoulderY - 0.15 * s, 0.108 * s], w: [[I.spine02, 0.7], [I.spine03, 0.3]] },
+    { p: end, w: [[I.spine01, 0.6], [I.spine02, 0.4]] },
   ];
   sweepTube(B, {
     nodes: pts.map((q) => ({ p: q.p, rx: w, rz: 0.005 * s, w: q.w })),
@@ -382,7 +396,7 @@ piece('glasses', (B, ctx, o) => {
   B.skin([[I.head, 1]]);
   B.color(o.color ?? 0x23262c).mat(0.26, 0.55);
   const w = 0.0345, h = 0.0145;
-  const eyeY = -0.006, eyeZ = 0.0805;   // matches FACE.eye
+  const eyeY = -0.006, eyeZ = 0.0796;   // just proud of the brow / FACE.eye
   for (const sg of [1, -1]) {
     const cx = sg * 0.0335;
     // rim: a thin rounded rectangle traced as a tube
