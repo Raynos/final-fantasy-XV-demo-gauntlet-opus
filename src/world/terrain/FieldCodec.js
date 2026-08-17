@@ -12,11 +12,11 @@
  * height grid in ~50 ms, so baking them would trade 16 MB of payload for nothing.
  * What is stored:
  *
- *   h        2048^2 float heights   -> 16-bit quantised, row-delta   ~5.5 MB gz
- *   far      1024^2 float heights   -> same                          ~1.7 MB gz
+ *   h        2048^2 float heights   -> lossless float byte planes    ~12 MB gz
+ *   far      1024^2 float heights   -> same                           ~3 MB gz
  *   ctrl     2048^2 RGBA8 splat     -> de-interleaved planes         ~7.6 MB gz
  *   farCtrl  1024^2 RGBA8 splat     -> same                          ~1.3 MB gz
- *   road     centreline elevations  -> raw floats                     ~5 kB
+ *   road     solved centreline elevations -> raw floats                ~5 kB
  *
  * The whole container is gzipped; the browser inflates it with the platform
  * `DecompressionStream`, so there is no decoder dependency.
@@ -26,10 +26,45 @@
 
 export const MAGIC = 'EOSFLD01';
 /** Bump when the encoding or the generator's output contract changes. */
-export const BAKE_VERSION = 1;
+export const BAKE_VERSION = 2;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+
+/**
+ * Lossless float32 grid: split into four byte planes.
+ *
+ * The heights must round-trip *exactly*. Quantising to 16 bits costs 5 mm,
+ * which is invisible on the ground but is enough to perturb the characters'
+ * foot IK; a procedural gait then diverges over a settle and the same shot
+ * renders a visibly different pose. So the artifact is bit-exact and the bake
+ * cannot change a single pixel by construction.
+ *
+ * De-interleaving is what makes that affordable: the exponent byte of adjacent
+ * samples on a smooth field is nearly constant, so plane 3 compresses ~40:1 and
+ * the whole grid still lands at about a quarter of its raw size.
+ */
+export function encodeF32Planes(src) {
+  const n = src.length;
+  const u8 = new Uint8Array(src.buffer, src.byteOffset, n * 4);
+  const out = new Uint8Array(n * 4);
+  for (let c = 0; c < 4; c++) {
+    const base = c * n;
+    for (let i = 0; i < n; i++) out[base + i] = u8[i * 4 + c];
+  }
+  return out;
+}
+
+/** @returns {Float32Array} */
+export function decodeF32Planes(bytes, n) {
+  const out = new Float32Array(n);
+  const u8 = new Uint8Array(out.buffer);
+  for (let c = 0; c < 4; c++) {
+    const base = c * n;
+    for (let i = 0; i < n; i++) u8[i * 4 + c] = bytes[base + i];
+  }
+  return out;
+}
 
 /** Quantise a float grid to 16 bits and delta-code along rows. */
 export function encodeQ16D(src, w, h) {

@@ -1,6 +1,8 @@
 import { N, FAR_N } from './Field.js';
-import { Road } from './Road.js';
-import { decodeQ16D, decodePlanes8, packContainer, unpackContainer, encodeQ16D, encodePlanes8 } from './FieldCodec.js';
+import { RoadNetwork } from './Road.js';
+import {
+  decodeF32Planes, decodePlanes8, encodeF32Planes, encodePlanes8, packContainer, unpackContainer,
+} from './FieldCodec.js';
 
 /**
  * Load / store side of the baked heightfield.
@@ -21,12 +23,10 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
  * @returns {Uint8Array} the uncompressed container
  */
 export function encodeField(field, meta = {}) {
-  const h = encodeQ16D(field.h, N, N);
-  const far = encodeQ16D(field.far, FAR_N, FAR_N);
-  const roadY = new Float32Array(field.roadSpline.points.map((p) => p.y));
+  const roadY = field.network.captureElevations();
   return packContainer({ ...meta, N, FAR_N }, [
-    { name: 'h', kind: 'q16d', w: N, h: N, min: h.min, scale: h.scale, bytes: h.bytes },
-    { name: 'far', kind: 'q16d', w: FAR_N, h: FAR_N, min: far.min, scale: far.scale, bytes: far.bytes },
+    { name: 'h', kind: 'f32planes', n: N * N, bytes: encodeF32Planes(field.h) },
+    { name: 'far', kind: 'f32planes', n: FAR_N * FAR_N, bytes: encodeF32Planes(field.far) },
     { name: 'ctrl', kind: 'planes8', w: N, h: N, ch: 4, bytes: encodePlanes8(field.ctrl, N, N, 4) },
     { name: 'farCtrl', kind: 'planes8', w: FAR_N, h: FAR_N, ch: 4, bytes: encodePlanes8(field.farCtrl, FAR_N, FAR_N, 4) },
     { name: 'roadY', kind: 'f32', bytes: new Uint8Array(roadY.buffer) },
@@ -45,23 +45,21 @@ export function applyBakedField(field, buf) {
   const roadY = c.section('roadY');
   if (!h || !far || !ctrl || !farCtrl || !roadY) throw new Error('bake missing a section');
 
-  field.h = decodeQ16D(h.bytes, h.w, h.h, h.min, h.scale);
-  field.far = decodeQ16D(far.bytes, far.w, far.h, far.min, far.scale);
+  field.h = decodeF32Planes(h.bytes, h.n);
+  field.far = decodeF32Planes(far.bytes, far.n);
   field.ctrl = decodePlanes8(ctrl.bytes, ctrl.w, ctrl.h, ctrl.ch);
   field.farCtrl = decodePlanes8(farCtrl.bytes, farCtrl.w, farCtrl.h, farCtrl.ch);
   field.deriveNormals();
 
-  // The spline geometry is a few hundred microseconds of Catmull-Rom; only the
-  // fitted centreline elevation depends on the pre-carve terrain, so that is
-  // the one part worth storing.
-  const road = new Road();
-  road._sampleSpline();
-  const ys = new Float32Array(roadY.bytes.slice().buffer);
-  for (let i = 0; i < road.points.length && i < ys.length; i++) road.points[i].y = ys[i];
-  road._buildAccel();
-  field.roadSpline = road;
-  field.road = road;
-  field.stats = { ...(field.stats || {}), baked: true };
+  // The road graph rebuilds itself from `WorldMap` for free; only the solved
+  // centreline elevations depend on the pre-carve terrain, so they are the one
+  // part of `carve()` worth storing.
+  const net = new RoadNetwork(field.map.roadGraph);
+  net.restoreElevations(new Float32Array(roadY.bytes.slice().buffer));
+  field.network = net;
+  field.roadSpline = net.spine;
+  field.road = net.spine;
+  field.stats = { ...(field.stats || {}), baked: true, buildMs: 0 };
 }
 
 /**

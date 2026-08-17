@@ -39,6 +39,8 @@ const SOURCES = [
   'src/world/terrain/Road.js',
   'src/world/terrain/FieldCodec.js',
   'src/world/terrain/FieldBake.js',
+  'src/world/map/WorldMap.js',
+  'src/world/map/RoadGraph.js',
   'src/util/Noise.js',
   'src/util/Rng.js',
 ];

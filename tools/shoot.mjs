@@ -8,14 +8,22 @@
  *   node tools/shoot.mjs --w 1920 --h 1080     # resolution (default 1600x900)
  *   node tools/shoot.mjs --settle 90           # sim frames before capture
  *   node tools/shoot.mjs --prod                # build + serve the real bundle
+ *   node tools/shoot.mjs --cold                # force a fresh boot, no page reuse
+ *   node tools/shoot.mjs --no-daemon           # own the browser in-process (old path)
  *
- * Boots vite itself (or reuses one already on the port), waits for the
- * `game-ready` event, drives the game deterministically with fixed timesteps,
+ * By default this hands the work to `tools/daemon.mjs`, which keeps one vite
+ * server, one Chromium and one booted page alive between invocations — so the
+ * second run of the day costs its frames and nothing else. The daemon is
+ * autostarted and shuts itself down when idle. `--cold` forces a fresh page
+ * when a capture has to be provably independent of everything before it.
+ *
+ * Either way it waits for `GAME.ready`, drives the game with fixed timesteps,
  * and writes PNGs. Exits non-zero on any page error so agents can't mistake a
  * blank canvas for success.
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mjs';
+import { call, ensureDaemon } from './daemon.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -30,11 +38,13 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
 function parseArgs(argv) {
   const opts = {
     w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false,
-    timeout: 120000, nobake: false,
+    timeout: 120000, nobake: false, daemon: true, cold: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--nobake') opts.nobake = true;
+    else if (a === '--no-daemon') opts.daemon = false;
+    else if (a === '--cold') opts.cold = true;
     else if (a === '--w') opts.w = Number(argv[++i]);
     else if (a === '--h') opts.h = Number(argv[++i]);
     else if (a === '--settle') opts.settle = Number(argv[++i]);
@@ -89,13 +99,46 @@ async function listShots() {
   return [...src.matchAll(/^\s{2}([a-zA-Z0-9_]+):\s*\{/gm)].map((m) => m[1]);
 }
 
+/** Report one shot the way this tool has always reported it. */
+function line(r) {
+  console.log(
+    `✓ ${r.name.padEnd(16)} ${String(r.triangles).padStart(9)} tris  ` +
+    `${String(r.calls).padStart(4)} calls  ${String(r.ms).padStart(5)}ms  -> ${path.relative(ROOT, r.file)}`
+  );
+}
+
+/** Render through the shared daemon, which owns the server, browser and page. */
+async function viaDaemon(opts, shots, outDir) {
+  const started = await ensureDaemon();
+  if (started) console.log('[shoot] started capture daemon');
+  const out = await call('/shots', {
+    shots, out: outDir, settle: opts.settle, w: opts.w, h: opts.h,
+    nobake: opts.nobake, prod: opts.prod, cold: opts.cold,
+  });
+  for (const r of out.results) line(r);
+  console.log(`[shoot] daemon: ${out.boots} boot(s), ${out.reuses} page reuse(s), last boot ${out.bootMs} ms`);
+  return out;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
   await mkdir(outDir, { recursive: true });
+  const shots = opts.shots.length ? opts.shots : await listShots();
+
+  if (opts.daemon) {
+    const out = await viaDaemon(opts, shots, outDir);
+    await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(out, null, 2));
+    if (out.errors.length) {
+      console.error(`\n${out.errors.length} page error(s):`);
+      for (const e of [...new Set(out.errors)].slice(0, 20)) console.error('  ' + e.split('\n')[0]);
+      process.exit(1);
+    }
+    console.log(`\n${out.results.length} shots -> ${path.relative(ROOT, outDir)}`);
+    return;
+  }
 
   const server = await ensureServer(opts.prod);
-  const shots = opts.shots.length ? opts.shots : await listShots();
 
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({
@@ -155,10 +198,7 @@ async function main() {
       await writeFile(file, buf);
       const ms = Date.now() - t0;
       results.push({ name, file, ...meta, ms });
-      console.log(
-        `✓ ${name.padEnd(16)} ${String(meta.triangles).padStart(9)} tris  ` +
-        `${String(meta.calls).padStart(4)} calls  ${String(ms).padStart(5)}ms  -> ${path.relative(ROOT, file)}`
-      );
+      line(results[results.length - 1]);
     }
   } finally {
     if (!opts.keep) await browser.close();
