@@ -2,6 +2,8 @@
 
 Read this fully before writing code. Every agent works against this contract.
 
+> Coordinating rather than implementing? Read **[`docs/HANDOFF.md`](docs/HANDOFF.md)** first.
+
 ## The bar
 
 We are building a **AAA-quality action RPG in ThreeJS** that stands up to a blind

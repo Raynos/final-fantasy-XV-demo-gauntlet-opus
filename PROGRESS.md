@@ -1,5 +1,7 @@
 # FINAL FANTASY XV — Eos. Scope & Progress
 
+> **Taking over? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
+
 **Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 ~08:30 · **Elapsed ~10h**
 **98 commits · 235 source files · ~79,500 lines**
 

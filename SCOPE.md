@@ -3,6 +3,8 @@
 Every discrete thing the game should contain, one line each, checkable.
 `[x]` shipped and verified · `[~]` in progress right now · `[ ]` not started.
 
+Taking over? Start with **[`docs/HANDOFF.md`](docs/HANDOFF.md)**.
+
 Companion docs: `PROGRESS.md` (status by area, scoreboard, bug log) ·
 `PLAN.md` (design audit and sequencing) · `WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
