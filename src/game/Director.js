@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { Rng } from '../util/Rng.js';
+import { EncounterDirector } from './encounters/EncounterDirector.js';
+import { Downed } from './encounters/Downed.js';
+import { HuntRuntime } from './encounters/HuntRuntime.js';
+import { PartyAI } from '../characters/ai/PartyAI.js';
 
 /**
- * Encounter director.
+ * Scenario director, and the host for the live gameplay systems.
  *
  * Owns `setScenario('field'|'combat'|'warp')` — the reproducible world states
  * the screenshot harness captures. A scenario spawns enemies at seeded
@@ -30,6 +34,66 @@ export class Director {
     this._frozenPlayer = null;
     this._ambient = 0;
     this._tmp = new THREE.Vector3();
+
+    /* ---- the live game ------------------------------------------------
+     * Director is the last system in the boot order, so this is where the
+     * gameplay systems get built and registered. `game.add` puts them in the
+     * tick list *after* Director, which is exactly where they want to be:
+     * after Player, Party and Combat have moved everything for this frame.
+     */
+    this.encounters = game.add(new EncounterDirector(), 'Encounters');
+    await this.encounters.init(game);
+
+    this.partyAI = game.add(new PartyAI(), 'PartyAI');
+    await this.partyAI.init(game);
+
+    this.downed = game.add(new Downed(), 'Downed');
+    await this.downed.init(game);
+
+    this.hunts = new HuntRuntime(this.encounters).init();
+    this.encounters.huntRuntime = this.hunts;
+
+    // The capture harness boots straight into a posed shot and must not have
+    // a wandering pack walk into frame; a real session starts playing.
+    const posed = typeof location !== 'undefined'
+      && new URLSearchParams(location.search).has('shoot');
+    if (posed) this.setLive(false);
+    else this.play();
+  }
+
+  /**
+   * Turn the live encounter loop on or off. The screenshot scenarios author
+   * the world by hand and must not have a wandering sabertusk walk into frame.
+   * @param {boolean} on
+   */
+  setLive(on) {
+    this.live = on;
+    if (this.encounters) {
+      this.encounters.enabled = on;
+      if (!on) {
+        if (this.encounters.boss) this.encounters.endBoss(false);
+        this.encounters.active.clear();
+        this.encounters.packs.length = 0;
+        this.encounters.state = 'field';
+      }
+    }
+    if (this.partyAI) {
+      this.partyAI.enabled = on;
+      if (!on && this.partyAI.party) {
+        for (const m of this.partyAI.party.members) {
+          if (m.baseSlot) m.slot.copy(m.baseSlot);
+          if (m.baseSpeedMul) m.speedMul = m.baseSpeedMul;
+          m.aiState = 'follow';
+          m.aiTarget = null;
+          m.reviveTarget = null;
+        }
+      }
+    }
+    if (this.downed && !on) {
+      this.downed.state = 'ok';
+      if (this.player) this.player.downed = false;
+      if (this.game.input) this.game.input.enabled = true;
+    }
   }
 
   /* --------------------------------------------------------- helpers */
@@ -99,6 +163,8 @@ export class Director {
   setScenario(name) {
     if (name === this.scenario) return;
     this.scenario = name;
+    // a posed scenario owns the whole field; the live loop stands down
+    this.setLive(false);
 
     const { vfx, enemies, combat, player } = this;
     if (vfx) vfx.reset();
@@ -122,12 +188,144 @@ export class Director {
 
     if (name === 'combat') this._combatScenario();
     else if (name === 'warp') this._warpScenario();
+    else if (name === 'boss_field') this._bossScenario('bloodhorn');
+    else if (name === 'boss_imperial') this._bossScenario('magitek_armour');
+    else if (name === 'boss_astral') this._bossScenario('titan');
+    else if (name === 'daemons') this._daemonScenario();
     else this._fieldScenario();
+  }
+
+  /**
+   * A posed boss encounter for the harness: the mark mid-telegraph, its adds
+   * fanned out around it, the party braced, and the VFX clock pinned.
+   * @param {'bloodhorn'|'magitek_armour'|'titan'} key
+   */
+  _bossScenario(key) {
+    const { vfx, enemies, combat, player } = this;
+    const T = this.pinTime;
+    this.game.state = 'combat';
+    if (!vfx || !enemies) return;
+    vfx.pin(T);
+    if (combat) combat.scenarioLock = true;
+
+    const A = this.home.clone();
+    if (player) {
+      player.heading = Math.PI;
+      player.root.rotation.y = Math.PI;
+      this._frozenPlayer = { pos: A.clone(), heading: Math.PI };
+    }
+
+    const far = key === 'titan' ? -54 : key === 'magitek_armour' ? -17 : -13;
+    const boss = enemies.spawn(key, { pos: this.at(key === 'titan' ? 4 : -1.5, far), expClass: 'boss' });
+    this.face(boss, A);
+    boss.stateTime = 0.7;
+    boss.phaseIndex = key === 'titan' ? 1 : 2;
+    boss.attackId = key === 'titan' ? 'slam_r' : key === 'magitek_armour' ? 'overload' : 'charge';
+    boss.attack = (boss.attacks || []).find((a) => a.id === boss.attackId) || null;
+    boss.freeze('telegraph', key === 'titan' ? 6.2 : 4.4);
+
+    if (key === 'magitek_armour') {
+      const spots = [[-7.5, -12], [6.2, -13], [-11, -19], [10.5, -20]];
+      spots.forEach((s, i) => {
+        const e = enemies.spawn(i === 3 ? 'axeman' : 'mt', { pos: this.at(s[0], s[1]) });
+        this.face(e, A);
+        e.stateTime = 0.3 + i * 0.15;
+        e.freeze(i % 2 ? 'attack' : 'approach', 2.1 + i * 0.9);
+      });
+    } else if (key === 'bloodhorn') {
+      [[-8.5, -9], [7.5, -10]].forEach((s, i) => {
+        const e = enemies.spawn('dualhorn', { pos: this.at(s[0], s[1]) });
+        this.face(e, A);
+        e.stateTime = 0.5;
+        e.freeze(i ? 'approach' : 'telegraph', 1.7 + i * 1.3);
+      });
+    }
+    enemies.frozen = true;
+
+    if (combat) {
+      combat.setWeapon('greatsword', { materialise: false });
+      combat.weapon.setReveal(1);
+      combat.lockOn(boss);
+    }
+
+    const c = boss.centre();
+    if (key === 'titan') {
+      const at = this.at(2, -20);
+      vfx.shockwave({ pos: at, terrain: this.terrain, radius: 15, color: 0xffb060, t0: T - 0.45, intensity: 4.2 });
+      vfx.dustPuff({ pos: at, count: 60, radius: 8, speed: 15, life: 3.4, t0: T - 0.5, size: 2.4, grow: 3.4, up: 1.6, intensity: 0.55 });
+      vfx.flash({ pos: at, color: 0xffa060, intensity: 70, distance: 40, life: 0.6, t0: T - 0.45, priority: 6 });
+    } else {
+      vfx.flare({ pos: c, color: key === 'magitek_armour' ? 0xff5030 : 0xffd090, size: 2.6, life: 0.6, t0: T - 0.2, intensity: 6 });
+      vfx.dustPuff({ pos: this.at(-1.5, far), count: 30, radius: 2.6, speed: 6, life: 2.4, t0: T - 0.8, size: 1.1, grow: 3.2, intensity: 0.5 });
+    }
+    this.seedAmbient(A, 26, T, { motes: 110, dust: 90, color: key === 'titan' ? 0xffb070 : 0xffd9a8 });
+    if (combat) {
+      combat.emit('lockon', { enemy: boss });
+      combat.emit('damage', {
+        enemy: boss, damage: key === 'titan' ? 4871 : 2166, position: c,
+        crit: true, element: null, killed: false, staggered: false,
+      });
+    }
+  }
+
+  /** A night daemon pack, for the "the sun went down" capture. */
+  _daemonScenario() {
+    const { vfx, enemies, combat, player } = this;
+    const T = this.pinTime;
+    this.game.state = 'combat';
+    if (!vfx || !enemies) return;
+    vfx.pin(T);
+    if (combat) combat.scenarioLock = true;
+
+    const A = this.home.clone();
+    if (player) {
+      player.heading = Math.PI;
+      player.root.rotation.y = Math.PI;
+      this._frozenPlayer = { pos: A.clone(), heading: Math.PI };
+    }
+    const cast = [
+      ['goblin', -3.2, -5.0, 'attack', 1.6],
+      ['goblin', 2.6, -6.2, 'approach', 2.4],
+      ['hobgoblin', -6.4, -8.0, 'telegraph', 3.1],
+      ['bussemand', 5.5, -11.0, 'telegraph', 4.2],
+      ['necromancer', -10.5, -14.0, 'attack', 5.0],
+      ['arachne', 9.0, -15.5, 'approach', 2.8],
+    ];
+    for (const [key, dx, dz, state, phase] of cast) {
+      const e = enemies.spawn(key, { pos: this.at(dx, dz) });
+      this.face(e, A);
+      e.stateTime = 0.4;
+      e.freeze(state, phase);
+    }
+    enemies.frozen = true;
+    if (combat) {
+      combat.setWeapon('polearm', { materialise: false });
+      combat.weapon.setReveal(1);
+    }
+    this.seedAmbient(A, 24, T, { motes: 130, dust: 70, color: 0x8a7cff });
   }
 
   _fieldScenario() {
     if (this.vfx) this.vfx.unpin();
     this.game.state = 'field';
+  }
+
+  /**
+   * Hand the world to the live encounter loop: roaming packs, patrols,
+   * day/night spawn windows, party combat AI, death and revive.
+   *
+   * This is what `main.js` (or a test harness) calls to actually play.
+   */
+  play() {
+    this.scenario = 'live';
+    if (this.vfx) this.vfx.unpin();
+    if (this.enemies) { this.enemies.clear(); this.enemies.frozen = false; }
+    if (this.combat) this.combat.scenarioLock = false;
+    this._frozenPlayer = null;
+    this._swing = null;
+    this.game.state = 'field';
+    this.setLive(true);
+    return this.encounters;
   }
 
   /* ------------------------------------------------------------ combat */
