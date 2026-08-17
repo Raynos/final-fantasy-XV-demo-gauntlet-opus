@@ -55,9 +55,15 @@ const SHADOW_STRIDE = { low: [2, 6, 12], medium: [1, 3, 6], high: [1, 2, 4], ult
  */
 const WEATHER = {
   clear: {
-    coverage: 0.80, density: 0.021, type: 0.90, detail: 0.30, anvil: 0.30,
+    // "Clear" has to mean *blue with cumulus in it*. At 0.80 the field closed
+    // over into a continuous deck and the sky at midday was a lid — the thing a
+    // clear-weather preset must never produce. 0.52 leaves the strong columns
+    // building full cumulus while the weak ones are empty, which is what puts
+    // blue holes between the banks; the extra erosion and silver lining are
+    // what stop the banks that remain from reading as cotton wool.
+    coverage: 0.52, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
     covLo: 0.44, covHi: 0.82, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
-    virga: 0.0, silver: 0.06, baseShade: 0.55,
+    virga: 0.0, silver: 0.14, baseShade: 0.78,
     bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
     fogDensity: 0.00013, fogHeight: 200, haze: 0.00004, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,

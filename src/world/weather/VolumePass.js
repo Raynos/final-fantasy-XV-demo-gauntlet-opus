@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FilterPass, fsMaterial } from '../../engine/postfx/Fx.js';
+import { FilterPass, fsMaterial, makeRT, blit } from '../../engine/postfx/Fx.js';
 import { CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.js';
 
 /**
@@ -18,7 +18,12 @@ import { CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.js';
  * terrain shader displaces from), so nothing ever floats above a ridge line.
  */
 
-const VOLUME_FRAG = /* glsl */`
+/**
+ * Uniform block and helpers shared by the march and the composite. They are
+ * literally the same JS uniform objects, so `Weather` keeps writing to
+ * `volume.material.uniforms` and both programs see it.
+ */
+const VOLUME_COMMON = /* glsl */`
 precision highp float;
 uniform sampler2D tDiffuse;
 uniform sampler2D tDepth;
@@ -46,7 +51,23 @@ varying vec2 vUv;
 
 ${CHUNK_DEPTH}
 ${CHUNK_HASH}
+`;
 
+/**
+ * The march. Runs at `MARCH_SCALE` of the frame and writes only what the
+ * volume itself contributes — in-scattered radiance in rgb, transmittance in a
+ * — so the composite can apply it to a full-resolution image.
+ *
+ * This is a 36-step ray march with two fbm3 evaluations and a heightfield fetch
+ * per step, and at full resolution it was **20 ms of a 36 ms frame** on every
+ * shot with weather in it: the storm, the dawn valley fog and the overcast
+ * cinematic were all more than half volume. Fog is a low-frequency field —
+ * nothing it produces has an edge that a quarter of the pixels cannot carry —
+ * and the one place resolution genuinely matters is the terrain silhouette,
+ * which the composite's depth-aware upsample handles explicitly.
+ */
+const MARCH_FRAG = /* glsl */`
+${VOLUME_COMMON}
 vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
 float tf_height(vec2 p) {
   return (max(abs(p.x), abs(p.y)) >= uField.w)
@@ -77,7 +98,6 @@ float fbm3(vec3 p) {
 }
 
 void main() {
-  vec3 src = texture2D(tDiffuse, vUv).rgb;
   float d = texture2D(tDepth, vUv).x;
 
   vec3 wpos = worldFromDepth(vUv, d, uInvViewProj);
@@ -97,7 +117,7 @@ void main() {
   float maxD = min(sceneDist, reach);
 
   float wxAmt = uFogP.x + uDustP.x + uRainP.x + uRainP.y + uScudP.x;
-  vec3 col = src;
+  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
 
   if (wxAmt > 0.0005 && maxD > 0.6) {
     const int STEPS = 36;
@@ -187,8 +207,52 @@ void main() {
     // the volume, so the curtains and the fog blaze and the clear air does not.
     scat *= 1.0 + uLens.z * 0.42;
     scat += uFlashColor * uLens.z * 0.030 * (1.0 - T);
-    col = src * T + scat;
+    gl_FragColor = vec4(scat, T);
   }
+}
+`;
+
+/**
+ * Full-resolution composite: apply the marched volume to the frame, then the
+ * lens effects, which read `tDiffuse` and therefore have to stay full res.
+ */
+const COMPOSITE_FRAG = /* glsl */`
+${VOLUME_COMMON}
+uniform sampler2D tVolume;
+uniform vec2 uVolRes;
+
+void main() {
+  vec3 src = texture2D(tDiffuse, vUv).rgb;
+
+  // Depth-aware upsample of the half-res march.
+  //
+  // Bilinear alone is fine across open air and wrong along the one edge that
+  // matters: a ridge against the sky, where two neighbouring march texels
+  // integrated 200 m and 4 km of fog. Weighting each tap by how well the depth
+  // it marched against agrees with this pixel's own turns that bleed back into
+  // a clean silhouette. The tap depths are refetched rather than stored,
+  // because sampling tDepth at the half-res texel centre reproduces exactly
+  // what the march saw there.
+  vec2 st = vUv * uVolRes - 0.5;
+  vec2 i0 = floor(st);
+  vec2 f = st - i0;
+  float dz = viewDepth(texture2D(tDepth, vUv).x, uNear, uFar);
+  vec4 vol = vec4(0.0);
+  float wsum = 0.0;
+  for (int j = 0; j < 2; j++) {
+    for (int i = 0; i < 2; i++) {
+      vec2 o = vec2(float(i), float(j));
+      vec2 huv = (i0 + o + 0.5) / uVolRes;
+      float bw = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+      float hz = viewDepth(texture2D(tDepth, huv).x, uNear, uFar);
+      float w = bw / (1.0 + abs(hz - dz) * 0.35) + 1e-4;
+      vol += texture2D(tVolume, huv) * w;
+      wsum += w;
+    }
+  }
+  vol /= max(wsum, 1e-5);
+
+  vec3 col = src * clamp(vol.a, 0.0, 1.0) + max(vol.rgb, vec3(0.0));
 
   // a whisper of the flash on everything else, so the frame lifts as one
   if (uLens.z > 0.0005) col += uFlashColor * uLens.z * 0.004;
@@ -270,6 +334,9 @@ void main() {
 }
 `;
 
+/** Fraction of the frame the volumetric march runs at. */
+const MARCH_SCALE = 0.4;
+
 export class VolumePass extends FilterPass {
   /** @param {import('../../engine/PostFX.js').PostFX} fx */
   constructor(fx) {
@@ -300,9 +367,27 @@ export class VolumePass extends FilterPass {
         uFlashColor: { value: new THREE.Vector3(0.7, 0.8, 1.0) },
         uRes: { value: new THREE.Vector2(1600, 900) },
       },
-      fragmentShader: VOLUME_FRAG,
+      fragmentShader: MARCH_FRAG,
     });
+    // The composite shares the march's uniform objects, so `Weather` keeps
+    // writing to `volume.material.uniforms` and both programs stay in step.
+    const shared = this.material.uniforms;
+    this.composite = fsMaterial({
+      uniforms: Object.assign({}, shared, {
+        tVolume: { value: null },
+        uVolRes: { value: new THREE.Vector2(2, 2) },
+      }),
+      fragmentShader: COMPOSITE_FRAG,
+    });
+    this.rtVol = makeRT(2, 2);
     this.enabled = true;
+  }
+
+  setSize(w, h) {
+    const mw = Math.max(1, Math.round(w * MARCH_SCALE));
+    const mh = Math.max(1, Math.round(h * MARCH_SCALE));
+    this.rtVol.setSize(mw, mh);
+    this.composite.uniforms.uVolRes.value.set(mw, mh);
   }
 
   beforeRender() {
@@ -314,6 +399,23 @@ export class VolumePass extends FilterPass {
     u.uNear.value = fx.camera.near;
     u.uFar.value = fx.camera.far;
     u.uRes.value.set(fx.width, fx.height);
+    if (this.rtVol.width !== Math.max(1, Math.round(fx.width * MARCH_SCALE))) {
+      this.setSize(fx.width, fx.height);
+    }
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    this.beforeRender();
+    this.material.uniforms.tDiffuse.value = readBuffer.texture;
+    blit(renderer, this.material, this.rtVol);
+    this.composite.uniforms.tVolume.value = this.rtVol.texture;
+    blit(renderer, this.composite, this.renderToScreen ? null : writeBuffer);
+  }
+
+  dispose() {
+    this.material.dispose();
+    this.composite.dispose();
+    this.rtVol.dispose();
   }
 
   /** Nothing to do when every channel is off — skip the march entirely. */

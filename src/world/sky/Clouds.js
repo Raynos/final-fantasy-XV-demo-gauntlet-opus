@@ -9,6 +9,23 @@ varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 
+/**
+ * Fraction of the frame the raymarch runs at.
+ */
+const MARCH_SCALE = 0.45;
+
+/**
+ * Halton(2,3), eight samples — the same low-discrepancy set the TAA camera
+ * jitter uses, so the march's sub-texel offsets and the resolve's sub-pixel
+ * offsets cover their respective cells evenly over the same eight frames.
+ */
+const HALTON = (() => {
+  const radical = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+  const out = [];
+  for (let i = 1; i <= 8; i++) out.push([radical(i, 2), radical(i, 3)]);
+  return out;
+})();
+
 /** Screen-space raymarch of the cumulus layer at half resolution. */
 const CLOUD_FRAG = /* glsl */`
 precision highp float;
@@ -34,13 +51,25 @@ uniform float uCloudSunGain;
 uniform vec2  uPhaseClamp;
 uniform float uSkyDim;
 uniform float uFrame;
+uniform vec2  uJitter;
 uniform float uSilver;
 uniform float uBaseShade;
 uniform float uCloudMaxRad;
+uniform float uCloudMS;
 varying vec2 vUv;
 
 void main() {
-  vec2 ndc = vUv * 2.0 - 1.0;
+  // Sub-texel jitter, rotating on an 8-frame Halton sequence.
+  //
+  // The march runs at 45% of the frame and, without this, every frame shot the
+  // ray through the exact centre of the same low-res texel. The buffer was
+  // therefore bit-stable, so the TAA that resolves everything else in the
+  // frame had nothing to average: the deck kept the texel grid of the buffer
+  // it was marched into, and a 2x2 pixel staircase along every cloud edge is
+  // what "blocky sky" actually was. Moving the ray inside its texel each frame
+  // turns the accumulation history into an 8x supersample of the cloud layer
+  // for no extra marching at all.
+  vec2 ndc = (vUv + uJitter) * 2.0 - 1.0;
   vec4 pw = uInvViewProj * vec4(ndc, 1.0, 1.0);
   vec3 rd = normalize(pw.xyz / pw.w - uCamPos);
 
@@ -106,12 +135,12 @@ void main() {
   float tr = 1.0;
   float meanT = 0.0, wsum = 0.0;
   int miss = MISS_MAX;
-  float fine = clamp(t0 * 0.020, 40.0, 260.0);
+  float fine = clamp(t0 * 0.012, 30.0, 300.0);
   t += fine * jitter;
 
   for (int i = 0; i < 160; i++) {
     if (tr < 0.008 || t > t1) break;
-    fine = clamp(t * 0.020, 40.0, 260.0);
+    fine = clamp(t * 0.012, 30.0, 300.0);
     float coarse = fine * 3.0;
     vec3 sp = uCamPos + rd * t;
     float alt = length(P + rd * t) - ATM_PLANET_R;
@@ -119,6 +148,7 @@ void main() {
 
     // --- empty space skipping -------------------------------------------
     if (miss >= MISS_MAX) {
+      gCloudLod = clamp(log2(1.0 + t * 0.00001), 0.0, 2.0);
       if (cloudDensity(q, 0.0) + cloudVirga(q) <= 0.0) { t += coarse; continue; }
       t = max(t0, t - coarse);            // back up and re-enter at full rate
       miss = 0;
@@ -131,6 +161,13 @@ void main() {
     // banks into a blocky popcorn field. Fading it out lets far cloud resolve
     // as smooth mass — and below the cut the erosion fetch is skipped entirely.
     float detFade = clamp(1.45 - t * 0.000048, 0.0, 1.0);
+    // Explicit weather-map LOD, in place of the undefined implicit derivative.
+    // A weather texel is 105 m and a march pixel subtends about 0.002 rad, so
+    // the two are the same size only at ~50 km; the ramp is set so the map is
+    // read at full detail across everything the camera can actually resolve and
+    // only softens beyond the far horizon, where the step length rather than
+    // the pixel is what needs band limiting.
+    gCloudLod = clamp(log2(1.0 + t * 0.00001), 0.0, 2.0);
     float d = cloudDensity(q, detFade);
     float vd = cloudVirga(q);
 
@@ -148,6 +185,20 @@ void main() {
         energy += a * exp(-tau * b) * mix(1.0, phase, c);
         a *= 0.52; b *= 0.55; c *= 0.62;
       }
+      // Diffusion floor: the term the octave sum cannot reach.
+      //
+      // Every octave above is an exponential in tau, so the whole sum is
+      // effectively zero once the light march reports the twelve or more
+      // optical depths a real deck has — 0.3% of the incident sun at tau = 12.
+      // But a thick cloud is a *diffuser*, not a blocker: two-stream similarity
+      // gives a diffuse transmittance of 1/(1 + 0.75*tau*(1-g)), which for the
+      // g = 0.85 of water droplets is 0.4 at tau = 12, a hundred times what the
+      // sum returns. That gap is why the underside of any optically thick cloud
+      // rendered black — a midday overcast base is *pale grey*, and it is pale
+      // grey precisely because of the light that reaches it after dozens of
+      // scattering events. Isotropic on purpose: light that has scattered that
+      // many times has forgotten which way the sun is.
+      energy += uCloudMS / (1.0 + tau * 0.34);
       energy *= uCloudSunGain;
       // powder: darkened cloud edges facing the light
       float powder = 1.0 - exp(-d * 42.0);
@@ -272,6 +323,7 @@ export class Clouds {
     this.renderer = renderer;
     this.shared = shared;
 
+
     const tex = buildCloudTextures({ baseSize: 64, detailSize: 48, weatherSize: 256, seed: 1337 });
     shared.uCloudBase.value = tex.base;
     shared.uCloudDetail.value = tex.detail;
@@ -285,7 +337,13 @@ export class Clouds {
       colorSpace: THREE.LinearSRGBColorSpace,
     });
 
-    this.shadowRT = new THREE.WebGLRenderTarget(1024, 1024, {
+    // 512, not 1024. The bake is four laterally offset columns of twelve
+    // `cloudDensity` samples per texel — 48 volume evaluations — so it is by
+    // some way the most expensive thing in the sky, and it lands on one frame
+    // in four as a spike rather than as a cost. What it produces is a
+    // kilometre-scale soft shadow field with no edge finer than a cloud, and a
+    // quarter of the texels carry that exactly as well for a quarter of the price.
+    this.shadowRT = new THREE.WebGLRenderTarget(512, 512, {
       type: THREE.UnsignedByteType, format: THREE.RGBAFormat,
       // no mipmaps: the ground is seen at grazing angles, and mip selection
       // there collapses to the coarsest level and flattens the shadows away
@@ -312,7 +370,10 @@ export class Clouds {
       uBaseShade: { value: 0.65 },
       // soft ceiling on sunlit cloud radiance, in scene-linear units
       uCloudMaxRad: { value: 3.2 },
+      // amplitude of the high-order (diffuse) scattering floor
+      uCloudMS: { value: 0.62 },
       uFrame: { value: 0 },
+      uJitter: { value: new THREE.Vector2() },
     });
     this.marchUniforms = marchUniforms;
     this._marchQuad = new FullScreenQuad(new THREE.ShaderMaterial({
@@ -332,8 +393,8 @@ export class Clouds {
   get shadowTexture() { return this.shadowRT.texture; }
 
   setSize(w, h) {
-    const sw = Math.max(2, Math.floor(w * 0.45));
-    const sh = Math.max(2, Math.floor(h * 0.45));
+    const sw = Math.max(2, Math.floor(w * MARCH_SCALE));
+    const sh = Math.max(2, Math.floor(h * MARCH_SCALE));
     if (sw !== this.rt.width || sh !== this.rt.height) this.rt.setSize(sw, sh);
   }
 
@@ -343,6 +404,8 @@ export class Clouds {
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
     u.uInvViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();
     u.uFrame.value = frame % 64;
+    const h = HALTON[frame % HALTON.length];
+    u.uJitter.value.set((h[0] - 0.5) / this.rt.width, (h[1] - 0.5) / this.rt.height);
     const r = this.renderer;
     const prev = r.getRenderTarget();
     r.setRenderTarget(this.rt);

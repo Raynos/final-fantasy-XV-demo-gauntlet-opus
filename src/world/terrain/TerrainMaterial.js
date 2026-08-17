@@ -303,6 +303,17 @@ void tf_shade() {
     clamp(length(N.xz), 0.0, 1.0),
     smoothstep(900.0, 2200.0, vTDist));
 
+  // Everything below — the runnels, the bedding stack, the laminations — is
+  // multiplied by smoothstep(0.34, 0.78, structSlope) (cliffAmt),
+  // smoothstep(0.34, 0.80, structSlope) (bedThrough) or
+  // smoothstep(0.30, 0.72, structSlope) (runnelAmt). Below a sin(tilt) of 0.30,
+  // which is a 17 degree slope — the pans, the gravel flats, the road, the
+  // whole floor of the basin — all three are identically zero, and the twelve
+  // noise octaves that feed them were being evaluated and multiplied by nothing.
+  // On a badland face the branch is taken and the result is bit-identical.
+  float runnel = 1.0, bedA = 0.0, cliffAmt = 0.0, bedThrough = 0.0, runnelAmt = 0.0;
+  vec3 bedCol = vec3(1.0);
+  if (structSlope > 0.295) {
   // Vertical erosion runnels. Every badland face is raked by rain channels
   // that cut straight down across the bedding; without them the horizontal
   // strata have nothing to interrupt them and the whole range reads as a
@@ -311,7 +322,7 @@ void tf_shade() {
   float rn1 = tf_snoise(vec2((P.x * 0.83 - P.z * 0.56) * 0.052, P.y * 0.0045 + 2.0));
   float rn2 = tf_snoise(vec2((P.x * 0.41 + P.z * 0.91) * 0.155, P.y * 0.011 - 5.0));
   float rn3 = tf_snoise(vec2((P.x * 0.67 - P.z * 0.74) * 0.017, P.y * 0.0018 + 8.0));
-  float runnel = smoothstep(0.16, 0.82, 0.5 + 0.34 * rn1 + 0.22 * rn2 + 0.30 * rn3);
+  runnel = smoothstep(0.16, 0.82, 0.5 + 0.34 * rn1 + 0.22 * rn2 + 0.30 * rn3);
 
   // Procedural sedimentary banding — the Leide signature. Bed thickness and
   // colour are randomised per bed index so the stack never reads as a regular
@@ -365,7 +376,7 @@ void tf_shade() {
   // profile near zero — which is why entire massifs came out unbanded.)
   float thick = 0.18 + 0.38 * bedR;
   float fall = clamp(edge * 2.0, 0.14, 0.32);
-  float bedA = smoothstep(0.0, min(edge + 0.14 * bedR, 0.26), band)
+  bedA = smoothstep(0.0, min(edge + 0.14 * bedR, 0.26), band)
              * (1.0 - smoothstep(thick, thick + fall, band));
   // erosion gullies chew the beds apart — without this they read as wallpaper
   float bedStr = 0.30 + 0.70 * smoothstep(0.22, 0.78,
@@ -391,7 +402,7 @@ void tf_shade() {
   vec3 strataWarm = vec3(1.13, 0.96, 0.80);
   vec3 strataCool = vec3(0.93, 0.93, 0.95);
   vec3 strataPale = vec3(1.07, 1.02, 0.94);
-  vec3 bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
+  bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
   // each range carries its own iron / ash balance
   bedCol *= mix(vec3(0.94, 0.97, 1.06), vec3(1.10, 0.98, 0.86), mr3);
   // With the beds analytically filtered they no longer have to be faded out at
@@ -406,9 +417,15 @@ void tf_shade() {
   // same swing at 900 m, behind that much scattering, does not — and a range
   // whose bedding has been washed flat is exactly the one that reads as a big
   // near lump rather than a distant mountain.
-  float cliffAmt = clamp(smoothstep(0.34, 0.78, structSlope) * bandFade
+  cliffAmt = clamp(smoothstep(0.34, 0.78, structSlope) * bandFade
     * (0.45 + 0.80 * mr1) * bedStr
     * (1.0 + 1.10 * smoothstep(250.0, 1200.0, vTDist)), 0.0, 1.0);
+
+  bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope), 0.0, 1.0);
+  // the runnels darken independently of the bedding, at every distance, so even
+  // a range past the band fade still has vertical structure
+  runnelAmt = smoothstep(0.30, 0.72, structSlope) * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
+  }
 
   // Large-scale value and hue drift across each landform. Three octaves from
   // ~1.4 km down to ~110 m: no two rock faces in a wide shot resolve to the
@@ -418,9 +435,6 @@ void tf_shade() {
   float vv2 = tf_snoise(P.xz * 0.0026 - 61.0);
   float vv3 = tf_snoise(P.xz * 0.0092 + 23.0);
   float faceV = clamp(0.5 + 0.44 * vv1 + 0.33 * vv2 + 0.23 * vv3, 0.0, 1.0);
-  // the runnels darken independently of the bedding, at every distance, so even
-  // a range past the band fade still has vertical structure
-  float runnelAmt = smoothstep(0.30, 0.72, structSlope) * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
 
   vec3 rockTint = mix(vec3(1.0), bedCol, cliffAmt)
     * mix(1.0, 0.83 + 0.31 * bedA, cliffAmt)
@@ -439,7 +453,6 @@ void tf_shade() {
   // off wherever the splat happens to favour a soft layer, which on a 30 deg
   // badland flank is most of the time — and the massif goes back to being a
   // smooth dune.
-  float bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope), 0.0, 1.0);
   // the far LOD is a flat average of the layers; without the rock tint every
   // distant massif is the same untextured lump of one colour
   farCol *= mix(vec3(1.0), rockTint,
@@ -478,9 +491,21 @@ void tf_shade() {
              + vec2(tf_snoise(P.xz * 0.052 - 11.0), tf_snoise(P.xz * 0.052 + 17.0)) * 0.42;
     vec2 wj = wp + jit;
 
+    // Sample only the layers the splat actually asked for.
+    //
+    // The six weights come out of a pow(1.7) sharpen and are extremely peaked:
+    // a gravel flat is essentially one layer, a cliff face two. The height
+    // blend below then throws away everything more than 0.30 under the leader,
+    // so a layer sitting at a few percent of the dominant weight cannot reach
+    // the final colour at all — and it was costing four array fetches to prove
+    // it. Skipping those is where most of the splat's bandwidth was going.
+    float maxW = 0.0;
+    for (int i = 0; i < 6; i++) maxW = max(maxW, w[i]);
+    float wCut = maxW * 0.06;
     vec4 alb[6];
     vec4 srf[6];
     for (int i = 0; i < 6; i++) {
+      if (w[i] < wCut) { alb[i] = vec4(0.0); srf[i] = vec4(0.5, 0.5, uLayerRough[i], 1.0); continue; }
       vec2 uvA = tf_rot(wj, uLayerRot[i]) * uLayerScale[i];
       vec2 uvB = tf_rot(wj, uLayerRot[i] + 1.87) * (uLayerScale[i] * 0.34) + 11.3;
       alb[i] = mix(texture(uAlbedoArr, vec3(uvA, float(i))),
@@ -490,8 +515,14 @@ void tf_shade() {
     }
 
     // ---- rock is triplanar so cliffs never smear, and carries the strata ---
+    // Eight more fetches, and on the basin floor the rock layer loses the
+    // height blend outright — so it is only worth projecting where it is in
+    // contention.
     vec3 bw = pow(abs(N), vec3(5.0));
     bw /= max(bw.x + bw.y + bw.z, 1e-4);
+    const vec4 SURF_FLAT = vec4(0.5, 0.5, 0.5, 1.0);
+    vec4 sx = SURF_FLAT, sy = SURF_FLAT, sz = SURF_FLAT;
+    if (w[3] >= wCut) {
 
     // The rock tile is scaled *separately* in the horizontal and the bedding
     // axis: the horizontal scale controls grain, the vertical one controls bed
@@ -510,18 +541,30 @@ void tf_shade() {
     vec2 rzy = vec2((P.z + jit.y * 0.35) * rsH, yw * rsV);
     vec2 rxz = (P.xz + jit) * rsH;
     vec2 rxy = vec2((P.x + jit.x * 0.35) * rsH, yw * rsV);
-    vec4 ax = texture(uAlbedoArr, vec3(rzy, 3.0));
-    vec4 ay = texture(uAlbedoArr, vec3(rxz, 3.0));
-    vec4 az = texture(uAlbedoArr, vec3(rxy, 3.0));
+    // A pow(5) blend weight is savagely peaked: on the basin floor bw is
+    // (0.00, 1.00, 0.00) and on a cliff face one lateral axis owns it just as
+    // completely. Sampling all three planes unconditionally spent eight array
+    // fetches per pixel to add two contributions of well under one percent.
+    // The neutral fill is what a zero-weighted plane contributes anyway.
+    vec4 ax = SURF_FLAT, ay = SURF_FLAT, az = SURF_FLAT;
     // Second, incommensurate sample of the bedded planes, cross-faded by the
     // same low-frequency field the other layers use. Layer 3 was the one layer
     // still drawn at a single scale, which is precisely why every cliff in a
     // wide shot repeated on the same 12 m vertical period.
-    ax = mix(ax, texture(uAlbedoArr, vec3(rzy * 0.415 + 7.13, 3.0)), macroMix);
-    az = mix(az, texture(uAlbedoArr, vec3(rxy * 0.415 + 7.13, 3.0)), macroMix);
-    vec4 sx = texture(uSurfArr, vec3(rzy, 3.0));
-    vec4 sy = texture(uSurfArr, vec3(rxz, 3.0));
-    vec4 sz = texture(uSurfArr, vec3(rxy, 3.0));
+    if (bw.x > 0.012) {
+      ax = mix(texture(uAlbedoArr, vec3(rzy, 3.0)),
+               texture(uAlbedoArr, vec3(rzy * 0.415 + 7.13, 3.0)), macroMix);
+      sx = texture(uSurfArr, vec3(rzy, 3.0));
+    }
+    if (bw.y > 0.012) {
+      ay = texture(uAlbedoArr, vec3(rxz, 3.0));
+      sy = texture(uSurfArr, vec3(rxz, 3.0));
+    }
+    if (bw.z > 0.012) {
+      az = mix(texture(uAlbedoArr, vec3(rxy, 3.0)),
+               texture(uAlbedoArr, vec3(rxy * 0.415 + 7.13, 3.0)), macroMix);
+      sz = texture(uSurfArr, vec3(rxy, 3.0));
+    }
     alb[3] = ax * bw.x + ay * bw.y + az * bw.z;
     srf[3] = sx * bw.x + sy * bw.y + sz * bw.z;
 
@@ -530,6 +573,7 @@ void tf_shade() {
     // rock tile, and the bed alpha pushes bedded rock up in the height blend
     alb[3].rgb *= rockTint;
     alb[3].a = mix(alb[3].a, alb[3].a * (0.7 + 0.45 * bedA), cliffAmt);
+    }
     // the same veneer argument as the far path: dirt and gravel on a steep
     // face take the colour of the bed they are sitting on
     vec3 through = mix(vec3(1.0), rockTint, bedThrough);
@@ -557,23 +601,31 @@ void tf_shade() {
       if (i != 3) tnXY += tf_rot((srf[i].rg * 2.0 - 1.0), -uLayerRot[i]) * w2[i];
     }
 
-    // detail normals: pebble scale at the camera, a coarser octave further out
+    // detail normals: pebble scale at the camera, a coarser octave further out.
+    // The pebble octave carries both the normal (xyz) and the albedo detail (a),
+    // and was being fetched twice from the same coordinate for the two of them.
     float dAmtA = (1.0 - smoothstep(14.0, 90.0, vTDist)) * uMicro;
     float dAmtB = (1.0 - smoothstep(90.0, 420.0, vTDist)) * uMicro;
-    vec3 dnA = texture(uDetailArr, vec3(wj * uDetailScale, 0.0)).xyz * 2.0 - 1.0;
-    vec3 dnC = texture(uDetailArr, vec3(wj * uDetailScale * 0.37 + 0.71, 0.0)).xyz * 2.0 - 1.0;
-    vec3 dnB = texture(uDetailArr, vec3(wj * uDetailScale * 0.085 + 0.37, 0.0)).xyz * 2.0 - 1.0;
-    tnXY += dnA.xy * 0.55 * dAmtA + dnC.xy * 0.34 * dAmtB + dnB.xy * 0.22 * dAmtB;
+    vec4 dPeb = vec4(0.5, 0.5, 1.0, 0.5);
+    if (dAmtA > 0.003) dPeb = texture(uDetailArr, vec3(wj * uDetailScale, 0.0));
+    if (dAmtB > 0.003) {
+      vec3 dnC = texture(uDetailArr, vec3(wj * uDetailScale * 0.37 + 0.71, 0.0)).xyz * 2.0 - 1.0;
+      vec3 dnB = texture(uDetailArr, vec3(wj * uDetailScale * 0.085 + 0.37, 0.0)).xyz * 2.0 - 1.0;
+      tnXY += dnC.xy * 0.34 * dAmtB + dnB.xy * 0.22 * dAmtB;
+    }
+    tnXY += (dPeb.xy * 2.0 - 1.0) * 0.55 * dAmtA;
     // hard clamp: an over-tilted tangent normal turns ground into torn foil
     tnXY = clamp(tnXY, vec2(-0.95), vec2(0.95));
 
     // Close-range albedo detail. The layer tiles are 3-12 m, so a metre from
     // the camera they are magnified into mush; this puts pebble-and-crack
-    // scale contrast back into the colour, not just the normal.
-    float grit = texture(uDetailArr, vec3(wj * uDetailScale * 2.9, 0.0)).a;
-    float pebA = texture(uDetailArr, vec3(wj * uDetailScale, 0.0)).a;
-    float micro = mix(1.0, 0.78 + 0.46 * pebA, dAmtA * 0.8)
-                * mix(1.0, 0.86 + 0.28 * grit, (1.0 - smoothstep(2.0, 16.0, vTDist)) * 0.85);
+    // scale contrast back into the colour, not just the normal. The finest
+    // octave of it is gone by 16 m, so past that it is not fetched at all.
+    float gritAmt = (1.0 - smoothstep(2.0, 16.0, vTDist)) * 0.85;
+    float grit = 0.5;
+    if (gritAmt > 0.003) grit = texture(uDetailArr, vec3(wj * uDetailScale * 2.9, 0.0)).a;
+    float micro = mix(1.0, 0.78 + 0.46 * dPeb.a, dAmtA * 0.8)
+                * mix(1.0, 0.86 + 0.28 * grit, gritAmt);
 
     // ---- near-field surface: gravel, cracking and scour at 2-4 m ----------
     // Triplanar, because the near ground is exactly where the camera looks
