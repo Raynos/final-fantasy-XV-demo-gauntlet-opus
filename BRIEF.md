@@ -44,9 +44,13 @@ shipped-console-game* quality.
    no `.glb`/`.png`/`.hdr` loads. If you need a texture, generate it.
 2. **Determinism.** Use `Rng`/`Noise` from `src/util/` with fixed seeds. Two runs
    of `tools/shoot.mjs` must produce identical images.
-3. **Performance budget.** ≥45 fps at 1600×900 on an Apple M-series GPU with the
-   full post chain on. Instance everything repeated. Keep draw calls under ~400.
-   Test it: `manifest.json` from the harness records tris/calls per shot.
+3. **Performance budget.** ≥60 fps at 1600×900 on an Apple M-series GPU with the
+   full post chain on, measured by `tools/perf.mjs` (posed) **and**
+   `tools/gameplay.mjs` (real input, streaming, combat, menus). No frame in a
+   gameplay session may exceed 33 ms. Instance everything repeated. Draw-call
+   budget is **800** — the original 400 predated the town, dungeons, 124 POIs
+   and three shadow cascades, and was unreachable. Measured range today is
+   351-506.
 4. **Do not edit `src/game/Game.js` or `src/game/Shots.js`** unless you are the
    agent who owns them — they are shared. Create new files inside *your own*
    directory and wire them from your system's `init()`.
