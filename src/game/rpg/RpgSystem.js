@@ -18,7 +18,9 @@
  *   game-loaded.
  */
 
+import { Rng } from '../../util/Rng.js';
 import { Emitter } from './Emitter.js';
+import { CombatBridge } from './CombatBridge.js';
 import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor, MAX_LEVEL, EXP_TABLE } from './Stats.js';
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.js';
 import { Inventory, ITEMS, SHOPS } from './Inventory.js';
@@ -44,6 +46,29 @@ const STARTING_EQUIPMENT = {
   gladio:  { weapon: ['hardedge', 'buckler'], accessory: [null, null, null] },
   ignis:   { weapon: ['plunderers', null], accessory: [null, null, null] },
   prompto: { weapon: ['handgun', 'auto_crossbow'], accessory: [null, null, null] },
+};
+
+/**
+ * The Ascension nodes a mid-game save is assumed to have already bought, in
+ * purchase order. `startLevel > 1` walks this list so a capture shows a grid
+ * that has genuinely been played rather than an empty star map.
+ */
+const STARTER_PATH = [
+  'arm_awaken', 'arm_charge1', 'cbt_airstep', 'cbt_warpdmg1', 'cbt_warpfactor',
+  'cbt_parry', 'cbt_riposte', 'cbt_dodge', 'cbt_deathblow',
+  'st_hp1', 'st_hp2', 'st_mp1', 'st_str1', 'st_vit1', 'st_mag1',
+  'rec_first', 'rec_quick', 'rec_second',
+  'tec_bar1', 'tec_dmg1', 'tec_libra', 'tec_gladio', 'tec_ignis', 'tec_prompto',
+  'tw_link1', 'tw_linkrate', 'tw_rescue',
+  'mag_power1', 'mag_draw1',
+  'exp_camp1', 'exp_car1', 'wait_libra',
+];
+
+/** Quests a mid-game save has already been through, and what it is carrying. */
+const STARTER_QUESTS = {
+  complete: ['main_ch1_departure', 'hunt_killer_wasps'],
+  accept: ['main_ch1_pauper', 'side_engine_blade', 'hunt_sabertusks', 'hunt_dualhorn'],
+  track: 'side_engine_blade',
 };
 
 export class RpgSystem {
@@ -75,6 +100,12 @@ export class RpgSystem {
     this.autosaveInterval = opts.autosaveInterval ?? 180;
     this._autosaveTimer = 0;
     this._newGameLevel = opts.startLevel ?? 1;
+    this._newGameGil = opts.startGil ?? 0;
+    this._newGameAp = opts.startAp ?? 0;
+    /** Seeded so drops, and therefore every capture, are reproducible. */
+    this.rng = new Rng(opts.seed ?? 0x9e3779b1);
+    /** Subscribes to CombatSystem and routes hits through the damage formula. */
+    this.combatBridge = new CombatBridge(this);
   }
 
   /* -- Lifecycle --------------------------------------------------------- */
@@ -94,6 +125,7 @@ export class RpgSystem {
     else this.newGame();
 
     this.refreshDerived();
+    this.combatBridge.attach(game);
     this.emitter.emit('rpg-ready', { rpg: this });
     return this;
   }
@@ -112,7 +144,66 @@ export class RpgSystem {
     this.quests.refresh();
     this.quests.accept('main_ch1_departure');
     this.day.setHour(9);
+    if (this._newGameLevel > 1) this._seedMidGame();
+    // Levelling raises max HP/MP but not the current pools, so a party dealt out
+    // above level 1 would otherwise start on its level-1 MP.
+    this.refreshDerived();
+    this.party.restoreAll();
     return this;
+  }
+
+  /**
+   * Fast-forward a fresh save to something that looks like it has been played:
+   * a walked Ascension path, a chapter behind it, a live quest log and a wallet.
+   * Only runs when `startLevel > 1`.
+   */
+  _seedMidGame() {
+    for (const id of STARTER_QUESTS.complete) {
+      this.quests.accept(id);
+      this.quests.complete(id);
+    }
+    for (const id of STARTER_QUESTS.accept) this.quests.accept(id);
+    if (this.quests.states[STARTER_QUESTS.track]?.status === 'active') this.quests.track(STARTER_QUESTS.track);
+
+    // Buy the starter path outright, then leave the wallet at the requested AP.
+    for (const id of STARTER_PATH) {
+      const n = this.ascension.node(id);
+      if (!n || this.ascension.isUnlocked(id)) continue;
+      if (this.ascension.ap < n.ap) this.ascension.grantRaw(n.ap - this.ascension.ap, 'seed');
+      this.ascension.unlock(id);
+    }
+    if (this._newGameAp > 0) this.ascension.ap = this._newGameAp;
+    if (this._newGameGil > 0) this.inventory.addGil(this._newGameGil - this.inventory.gil, 'seed');
+
+    // A party this far in has picked things up along the road.
+    const kit = [
+      ['hi_potion', 12], ['mega_potion', 4], ['elixir', 3], ['phoenix_down', 2],
+      ['remedy', 4], ['ether', 5], ['sabertusk_fang', 6], ['rusted_bit', 2],
+      ['debased_silver', 5], ['sky_gemstone', 1], ['venom_fang', 4],
+      ['lucian_tomato', 5], ['anak_meat', 3], ['leiden_potato', 4], ['wild_onion', 3],
+      ['zwill_crossblades', 1], ['hardedge', 1], ['silver_bangle', 1], ['circlet', 1],
+    ];
+    for (const [id, n] of kit) this.inventory.add(id, n, 'seed');
+    // Allies have been landing hits all afternoon: the tech bar sits part-full.
+    this.party.techCharge = 2.35;
+    // Ignis has cooked at every haven since Hammerhead. Without this his
+    // cooking level sits at 1 and three of the four recipes he *starts* the
+    // game knowing are rank 2, so he cannot cook them.
+    this.party.mealsCooked = 9;
+    this.party.cookingLevel = 5;
+    for (const r of ['grilled_wild_trout', 'lestallum_skewers', 'birdbeast_omelette',
+      'mother_child_rice', 'croque_madame', 'multi_meat_sandwich', 'lasagna_al_forno']) {
+      this.party.learnRecipe(r);
+    }
+    this.inventory.equip('noctis', 'weapon', 3, 'zwill_crossblades');
+    this.inventory.equip('noctis', 'accessory', 1, 'silver_bangle');
+    this.inventory.equip('ignis', 'accessory', 0, 'circlet');
+
+    // Ignis cooked this morning: the party is carrying a real meal buff.
+    this.party.cook('lucian_tomato_stew', this.inventory, this.day.absoluteHour);
+
+    // A save this far in has hours on it; the menu prints this as play time.
+    this.playTime = 27 * 3600 + 14 * 60;
   }
 
   /** Subscribe our own cross-system reactions. */
@@ -172,6 +263,7 @@ export class RpgSystem {
    */
   update(dt, game) {
     this.playTime += dt;
+    this.combatBridge.update(dt, game);
     this.day.update(dt, game);
     this.ascension.update(dt);
     this.party.chargeTech(dt, this.inCombat);
@@ -182,13 +274,36 @@ export class RpgSystem {
     if (player?.position) this.quests.checkProximity(player.position);
 
     // Mirror Noctis' vitals onto the Player handle the HUD already reads.
+    // CombatSystem writes damage straight onto this object; anything it took
+    // off is folded back into the model here so `Stats` stays authoritative.
     if (player?.stats) {
       const n = this.noctis;
+      const lost = Math.max(0, Math.round(n.hp) - player.stats.hp);
+      if (lost > 0 && player.stats.maxHp === n.maxHp) n.applyDamage(lost);
+      const spent = Math.max(0, Math.round(n.mp) - player.stats.mp);
+      if (spent > 0 && player.stats.maxMp === n.maxMp) n.mp = Math.max(0, n.mp - spent);
       player.stats.hp = Math.round(n.hp);
       player.stats.maxHp = n.maxHp;
       player.stats.mp = Math.round(n.mp);
       player.stats.maxMp = n.maxMp;
       player.stats.level = n.level;
+    }
+
+    // Mirror the three companions onto the scene-graph Party the same way, so
+    // `Party.members[i].stats` is the model rather than a literal.
+    const party = game?.get?.('Party');
+    if (party?.members) {
+      for (const m of party.members) {
+        const s = this.party.stats[m.key];
+        if (!s) continue;
+        m.stats = m.stats || {};
+        m.stats.hp = Math.round(s.hp);
+        m.stats.maxHp = s.maxHp;
+        m.stats.mp = Math.round(s.mp);
+        m.stats.maxMp = s.maxMp;
+        m.stats.level = s.level;
+        m.stats.ko = s.ko;
+      }
     }
 
     if (this.autosaveInterval > 0) {
@@ -279,7 +394,7 @@ export class RpgSystem {
     const drops = [];
     const rate = 1 + this.ascension.value('dropRate');
     for (const d of enemy.drops || []) {
-      if (Math.random() < Math.min(1, (d.chance ?? 0.3) * rate)) {
+      if (this.rng.next() < Math.min(1, (d.chance ?? 0.3) * rate)) {
         this.inventory.add(d.id, d.count || 1, 'drop');
         drops.push(d.id);
       }
@@ -356,6 +471,16 @@ export class RpgSystem {
       wakeHour: opts.wakeHour,
     });
     if (!rested.ok) return rested;
+
+    // FFXV's rule: the meal you cook at camp is in effect when you *wake*.
+    // Without this the buff's in-game hours are burned by the night's sleep and
+    // cooking before bed does nothing at all.
+    if (meal && !this.party.activeBuffs.includes(meal)) {
+      meal = this.party.addBuff({
+        kind: 'meal', id: meal.id, name: meal.name, mods: meal.mods,
+        tags: meal.tags, effects: meal.effects, hours: meal.hours,
+      }, this.day.absoluteHour);
+    }
 
     if (lodging === 'haven') this.ascension.awardAp('camp');
     this.quests.notify('rest', { target: 'any' });

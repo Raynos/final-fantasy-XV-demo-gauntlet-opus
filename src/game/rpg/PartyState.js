@@ -268,6 +268,26 @@ export class PartyState {
   /** Whole segments currently filled. */
   get techBars() { return Math.floor(this.techCharge); }
 
+  /**
+   * The technique the HUD shows as this member's signature move: the best one
+   * they have actually learned, in authored preference order.
+   * @param {string} id
+   */
+  signatureTechnique(id) {
+    const prefs = {
+      gladio: ['dawnhammer', 'impulse', 'tempest', 'coverage'],
+      ignis: ['regroup', 'overwhelm', 'enhancement', 'analyse'],
+      prompto: ['starshell', 'gravisphere', 'recoil', 'piercer'],
+      noctis: ['armiger'],
+    }[id] || [];
+    const known = this.techniquesFor(id);
+    for (const p of prefs) {
+      const t = known.find((k) => k.id === p);
+      if (t) return t;
+    }
+    return known[0] || null;
+  }
+
   /** Techniques a member currently has, hydrated. */
   techniquesFor(id) {
     const known = this.members[id]?.techniques || [];

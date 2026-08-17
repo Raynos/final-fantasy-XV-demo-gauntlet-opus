@@ -26,7 +26,13 @@ export class Player {
     this.heading = 0;
     this.speed = 0;
     this.grounded = true;
-    this.stats = { hp: 3200, maxHp: 3200, mp: 100, maxMp: 100, level: 27 };
+    /**
+     * Noctis' vitals. **Owned by `RpgSystem`** — it mirrors the real `Stats`
+     * block onto this object every frame and folds anything combat subtracts
+     * back into the model. These are placeholders for the single frame before
+     * the RPG system's first tick, and for worlds booted without it.
+     */
+    this.stats = { hp: 0, maxHp: 0, mp: 0, maxMp: 0, level: 1 };
 
     this.character = makeCharacter('noctis');
     this.root.add(this.character.root);

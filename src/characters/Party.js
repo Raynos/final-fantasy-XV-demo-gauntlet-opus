@@ -53,6 +53,11 @@ export class Party {
         glancing: 0,
         _target: new THREE.Vector3(),
         _steer: new THREE.Vector3(),
+        /**
+         * Vitals for this companion. **Owned by `RpgSystem`**, which mirrors
+         * the matching `Stats` block (keyed on `m.key`) onto it every frame.
+         */
+        stats: { hp: 0, maxHp: 0, mp: 0, maxMp: 0, level: 1, ko: false },
       };
       // spread them out at spawn so the first frame is never a pile
       const p = player ? player.position : new THREE.Vector3();
@@ -61,8 +66,10 @@ export class Party {
       m.root.rotation.y = m.heading;
       this.members.push(m);
     }
-    this.stats = this.members.map(() => ({ hp: 2800, maxHp: 2800 }));
   }
+
+  /** The three companions' vitals, in formation order. Mirrored by `RpgSystem`. */
+  get stats() { return this.members.map((m) => m.stats); }
 
   /** @returns {Object|undefined} member by character name */
   get(name) { return this.members.find((m) => m.name === name || m.key === name); }
