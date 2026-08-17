@@ -7,6 +7,7 @@
  *   node tools/shoot.mjs --out shots/round3    # output directory
  *   node tools/shoot.mjs --w 1920 --h 1080     # resolution (default 1600x900)
  *   node tools/shoot.mjs --settle 90           # sim frames before capture
+ *   node tools/shoot.mjs --prod                # build + serve the real bundle
  *
  * Boots vite itself (or reuses one already on the port), waits for the
  * `game-ready` event, drives the game deterministically with fixed timesteps,
@@ -26,7 +27,7 @@ const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 function parseArgs(argv) {
-  const opts = { w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, timeout: 120000 };
+  const opts = { w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false, timeout: 120000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--w') opts.w = Number(argv[++i]);
@@ -34,6 +35,7 @@ function parseArgs(argv) {
     else if (a === '--settle') opts.settle = Number(argv[++i]);
     else if (a === '--out') opts.out = argv[++i];
     else if (a === '--keep') opts.keep = true;
+    else if (a === '--prod') opts.prod = true;
     else if (a.startsWith('--')) throw new Error(`unknown flag ${a}`);
     else opts.shots.push(a);
   }
@@ -47,9 +49,23 @@ const portOpen = (port) => new Promise((res) => {
   setTimeout(() => { s.destroy(); res(false); }, 800);
 });
 
-async function ensureServer() {
+/**
+ * Start the dev server, or with `--prod` build and serve the real bundle.
+ * Production is worth testing separately: the minifier mangles class names,
+ * so anything keyed off `constructor.name` works in dev and breaks in a build.
+ */
+async function ensureServer(prod) {
   if (await portOpen(PORT)) return null;
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+  if (prod) {
+    await new Promise((res, rej) => {
+      const b = spawn('npx', ['vite', 'build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+      b.on('exit', (c) => (c === 0 ? res() : rej(new Error(`vite build failed (${c})`))));
+    });
+  }
+  const args = prod
+    ? ['vite', 'preview', '--port', String(PORT), '--strictPort']
+    : ['vite', '--port', String(PORT), '--strictPort'];
+  const proc = spawn('npx', args, {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: false,
   });
   proc.stderr.on('data', (d) => process.stderr.write(`[vite] ${d}`));
@@ -73,7 +89,7 @@ async function main() {
   const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
   await mkdir(outDir, { recursive: true });
 
-  const server = await ensureServer();
+  const server = await ensureServer(opts.prod);
   const shots = opts.shots.length ? opts.shots : await listShots();
 
   const browser = await chromium.launch({

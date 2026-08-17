@@ -23,6 +23,18 @@ import { RpgSystem } from './rpg/RpgSystem.js';
 import { SHOTS } from './Shots.js';
 
 /**
+ * Extra keys each system answers to. Callers grew up using both the short
+ * label and the class name, and neither may be derived from `constructor.name`
+ * because a production build mangles it.
+ */
+const SYSTEM_ALIASES = {
+  Combat: ['CombatSystem'],
+  Camera: ['CameraRig'],
+  Audio: ['AudioSystem'],
+  Rpg: ['RpgSystem'],
+};
+
+/**
  * Root orchestrator. Systems are initialised in dependency order and then
  * ticked every frame: update() for simulation, lateUpdate() for anything that
  * must observe the final transforms (camera, HUD, culling).
@@ -34,13 +46,32 @@ export class Game {
     this.onProgress = onProgress || (() => {});
     this.time = new Time();
     this.systems = [];
+    this._registry = new Map();
     this.paused = false;
     this.state = 'boot';           // boot | field | combat | menu | cutscene
     this.debug = new URLSearchParams(location.search).has('debug');
   }
 
-  add(system) { this.systems.push(system); return system; }
-  get(name) { return this.systems.find((s) => s.constructor.name === name); }
+  /**
+   * Register a system under an explicit key plus any aliases.
+   *
+   * Lookup must never depend on `constructor.name` — a production build
+   * mangles class names, so every `game.get('Terrain')` would return
+   * undefined in `vite build` output while working fine in dev.
+   *
+   * @param {object} system
+   * @param {string} [name] registry key; defaults to the (dev-only) class name
+   */
+  add(system, name) {
+    this.systems.push(system);
+    const key = name || system.constructor.name;
+    this._registry.set(key, system);
+    for (const alias of SYSTEM_ALIASES[key] || []) this._registry.set(alias, system);
+    return system;
+  }
+
+  /** @param {string} name registry key or alias @returns {object|undefined} */
+  get(name) { return this._registry.get(name); }
 
   async init() {
     const p = this.onProgress;
@@ -80,7 +111,7 @@ export class Game {
     for (let i = 0; i < order.length; i++) {
       const [name, make] = order[i];
       p(0.05 + 0.8 * (i / order.length), name);
-      const sys = this.add(make());
+      const sys = this.add(make(), name);
       // eslint-disable-next-line no-await-in-loop
       if (sys.init) await sys.init(this);
     }
