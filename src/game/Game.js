@@ -25,6 +25,8 @@ import { InteractionSystem } from './interaction/Interactables.js';
 import { Hammerhead } from '../world/town/Hammerhead.js';
 import { Npcs } from '../characters/npc/Npcs.js';
 import { Minimap } from '../ui/Minimap.js';
+import { Cinematics } from './cinematics/Cinematics.js';
+import { StorySystem } from './story/StorySystem.js';
 import { Dungeons } from '../world/dungeons/Dungeons.js';
 import { SHOTS } from './Shots.js';
 
@@ -38,6 +40,7 @@ const SYSTEM_ALIASES = {
   Camera: ['CameraRig'],
   Audio: ['AudioSystem'],
   Rpg: ['RpgSystem'],
+  Story: ['StorySystem'],
 };
 
 /**
@@ -120,6 +123,10 @@ export class Game {
       // WS-3: the interaction verb, then Hammerhead, then the people in it.
       // Order matters — Town registers its interactables and its two screens,
       // and Npcs places itself against the anchors Town publishes.
+      // After Camera so cinematics win the lens; before Director so its VFX
+      // depth prepass sees the final camera.
+      ['Cinematics', () => new Cinematics()],
+      ['Story', () => new StorySystem()],
       ['Interaction', () => new InteractionSystem()],
       ['Town', () => new Hammerhead()],
       ['Npcs', () => new Npcs()],
@@ -186,6 +193,9 @@ export class Game {
 
     const menus = this.get('Menus');
     if (menus && menus.setScreen) menus.setScreen(shot.menu || null);
+
+    const story = this.get('Story');
+    if (story && story.applyShot) story.applyShot(shot.story || null);
 
     const rig = this.get('CameraRig');
     if (shot.follow) {

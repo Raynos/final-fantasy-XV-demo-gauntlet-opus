@@ -174,6 +174,23 @@ export const SHOTS = {
     offset: [4.5, 3.2, 8.5], lookOffset: [0, 1.5, -6], fov: 48,
   },
 
+  // --- story ------------------------------------------------------------
+  menu_title: {
+    doc: 'Title screen over the attract camera',
+    time: 18.55, weather: 'clear', story: 'title',
+    pos: [330, 38, -58], target: [-336, 52, 272], fov: 42,
+  },
+  cine_opening: {
+    doc: 'Chapter I: the four pushing the Regalia at dusk',
+    time: 18.25, weather: 'clear', story: { scene: 'ch1_opening_push', at: 25 },
+    pos: [0, 0, 0], target: [0, 0, 0], fov: 36,
+  },
+  cine_fall: {
+    doc: 'Chapter III: the morning Insomnia falls',
+    time: 6.4, weather: 'overcast', story: { scene: 'ch3_the_fall', at: 22 },
+    pos: [0, 0, 0], target: [0, 0, 0], fov: 26,
+  },
+
   // --- UI ---------------------------------------------------------------
   hud_field: {
     doc: 'Gameplay framing with the full field HUD visible',
