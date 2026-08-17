@@ -93,10 +93,10 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Drivability assertion test — `tools/roadcheck.mjs`, 39/39 reachable, 0 failures
 
 ### 1.5 Minimap & world map
-- [x] Minimap — terrain silhouette, roads, POI icons, waypoint, blips, compass
-- [x] Full world map screen — pan/zoom, filters, fog of war, quest markers
+- [x] Minimap — baked relief chart shared with the atlas, roads, glyphs, compass; 0.5-0.7 ms/frame
+- [x] World map screen — hillshaded relief, road hierarchy, zone borders, 10 filters, POI card
 - [x] Distance + estimated travel time display
-- [ ] Fast travel
+- [~] Fast travel — offered on the map card; destination jump not wired
 - [ ] Map discovery/fog persistence in saves
 
 ---
@@ -350,7 +350,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [ ] Chocobo riding
 - [ ] Chocobo rental and posts
 - [ ] Chocobo racing
-- [ ] Fast travel
+- [~] Fast travel — offered on the map card; destination jump not wired
 
 ### 9.7 Dungeons
 - [x] Dungeon system: room graph, critical path, side branches, boss chamber
