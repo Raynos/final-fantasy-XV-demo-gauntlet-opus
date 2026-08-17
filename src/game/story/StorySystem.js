@@ -148,6 +148,34 @@ export class StorySystem {
     return p;
   }
 
+  /**
+   * Capture-harness entry point, so `Shots.js` can name a story state the same
+   * way it names a weather or a scenario.
+   *
+   * ```js
+   * story: 'title'                                  // the title screen
+   * story: { scene: 'ch1_opening_push', at: 25 }    // a cutscene, parked at 25 s
+   * ```
+   *
+   * @param {string|object} spec
+   */
+  applyShot(spec) {
+    if (!spec) { this.title.hide(); if (this.cine) this.cine.stop(); return; }
+    if (spec === 'title' || spec.title) {
+      if (this.cine && this.cine.playing) this.cine.stop();
+      this.title.show();
+      this.title.t = spec.at ?? 6;
+      return;
+    }
+    this.title.hide();
+    if (!spec.scene || !this.cine) return;
+    if (this.cine.playing) this.cine.stop();
+    const def = SCENES[spec.scene];
+    if (!def) { console.warn(`[Story] unknown scene: ${spec.scene}`); return; }
+    this.cine.play(def, { skippable: false });
+    if (spec.at) this.cine.seek(spec.at);
+  }
+
   /** The chapter card + area card pair that opens a chapter's play. */
   _announceChapter(ch, delay = 0) {
     const run = () => {
