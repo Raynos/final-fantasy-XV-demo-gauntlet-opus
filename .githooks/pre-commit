@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Refuse a commit that does not build.
+#
+# A syntax error in a module the dev server happens not to have re-parsed yet
+# still boots fine in `vite dev`, then fails in `vite build` and hangs the
+# capture harness on `waitForFunction`. Catching it here costs a few seconds and
+# saves a confusing timeout.
+#
+# Skip with:  git commit --no-verify
+# Install with: git config core.hooksPath .githooks
+
+if [ -n "$SKIP_BUILD_CHECK" ]; then
+  echo "pre-commit: build check skipped (SKIP_BUILD_CHECK set)"
+  exit 0
+fi
+
+# Only worth running when source actually changed.
+if ! git diff --cached --name-only | grep -qE '^(src/|tools/|index\.html|vite\.config\.js|package\.json)'; then
+  exit 0
+fi
+
+echo "pre-commit: building..."
+if ! out=$(npx vite build 2>&1); then
+  echo "$out" | tail -25
+  echo
+  echo "pre-commit: BUILD FAILED — commit aborted."
+  echo "            fix the error, or re-run with --no-verify if you know better."
+  exit 1
+fi
+echo "pre-commit: build ok"
+exit 0

@@ -163,7 +163,7 @@ export const SHOTS = {
     doc: 'The chart of Lucis with live quest waypoints and havens',
     time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'map',
     offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
-  },,
+  },
   menu_shop: {
     doc: 'A shop counter trading against the real gil economy',
     time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'shop',
