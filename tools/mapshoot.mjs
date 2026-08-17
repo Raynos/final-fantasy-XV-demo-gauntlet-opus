@@ -116,7 +116,7 @@ async function main() {
             ws.screen.enter(g);
             if (sh.wmFilter) for (let i = 0; i < sh.wmFilter; i++) ws.screen.nav(0, 1);
             if (sh.wmZoom != null) ws.screen.zoomI = sh.wmZoom;
-            if (sh.revealAll && mm) mm.fog.fill(255);
+            if (sh.revealAll && mm) mm.fog.revealAll();
             if (sh.discoverAll) for (const p of g.get('Terrain').map.pois) g.get('Terrain').map.discover(p.id);
             if (sh.wmSel != null) { ws.screen._rebuildList(); ws.screen.sel = sh.wmSel;
               const t = ws.screen.list[sh.wmSel]; if (t) { ws.screen.camT.x = t.x; ws.screen.camT.z = t.z;
