@@ -61,8 +61,28 @@ float cHeightGradient(float hf, float type) {
  * towers only grow where the field is strongest and the rest of the deck stays
  * a low ragged base — the shape a storm actually has.
  */
+/**
+ * Mip level the weather map is read at.
+ *
+ * It has to be *explicit*. The weather map is the one mipmapped texture in the
+ * cloud model, and every read of it happens inside a ray march whose control
+ * flow diverges wildly between neighbouring pixels — empty space skipping,
+ * rewinds, early breaks — so the two pixels of a quad are almost never at the
+ * same distance along the ray when they sample it. The implicit derivative is then the difference
+ * between two sample points kilometres apart, the hardware picks a mip several
+ * levels too coarse, and over whole regions of sky it picks the *coarsest*:
+ * one uniform coverage value with no holes in it. That is what painted a
+ * featureless, fully overcast slab across the upper sky at midday with the
+ * weather set to clear, gave it a hard constant-elevation edge where the
+ * divergence pattern changed, and — being unbroken — drove the light march's
+ * optical depth to saturation so the slab rendered near black.
+ *
+ * Set from the march to band-limit distant cloud on purpose; 0 everywhere else.
+ */
+float gCloudLod = 0.0;
+
 void cloudWeather(vec2 xz, out float wc, out float type, out float sag) {
-  vec3 w = texture2D(uCloudWeather, (xz + uCloudWind) / uWeatherTile).rgb;
+  vec3 w = textureLod(uCloudWeather, (xz + uCloudWind) / uWeatherTile, gCloudLod).rgb;
   wc = clamp(smoothstep(uCovRange.x, uCovRange.y, w.r) * (0.66 + 0.68 * w.b), 0.0, 1.0);
   float t = uCloudType + (w.g - 0.5) * 0.55;
   type = clamp(t * mix(1.0 - uTowerAmt, 1.0 + uTowerAmt * 0.45, wc), 0.0, 1.0);
