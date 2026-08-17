@@ -15,9 +15,9 @@ const VARIANTS = 3;
 /** Per-species canopy tint so a grove never reads as one flat colour. */
 const SPECIES_TINT = {
   dead: [1.0, 1.0, 1.0],
-  savanna: [1.00, 0.95, 0.70],     // dry olive
-  conifer: [0.74, 0.90, 0.80],     // cool blue-green
-  broadleaf: [0.84, 0.94, 0.74],
+  savanna: [1.00, 0.92, 0.58],     // dry olive
+  conifer: [0.70, 0.83, 0.70],     // cool blue-green
+  broadleaf: [0.80, 0.88, 0.60],   // dusty, never lawn-green
 };
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

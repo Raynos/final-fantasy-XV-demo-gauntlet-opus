@@ -25,7 +25,7 @@ export const TREE_SPECIES = {
     height: 8.4, trunkR: 0.42, depth: 4, kids: [2, 3], spread: [0.5, 1.0],
     lenFall: 0.78, radFall: 0.64, curl: 0.34, droop: 0.0, upBias: 0.34,
     trunkFrac: 0.46, flatten: 0.6,
-    leafDepth: 3, leafCount: 12, leafSize: 1.05, leafKind: 'broad',
+    leafDepth: 3, leafCount: 17, leafSize: 1.12, leafKind: 'broad',
     bark: 0x94795a, barkRough: 0.9,
   },
   // Tall conifer for the wet green region.
@@ -33,7 +33,7 @@ export const TREE_SPECIES = {
     height: 14.0, trunkR: 0.46, depth: 3, kids: [2, 3], spread: [0.55, 0.9],
     lenFall: 0.3, radFall: 0.4, curl: 0.1, droop: 0.1, upBias: 0.1,
     trunkFrac: 0.93, whorl: true,
-    leafDepth: 1, leafCount: 9, leafSize: 0.82, leafKind: 'conifer',
+    leafDepth: 1, leafCount: 11, leafSize: 0.90, leafKind: 'conifer',
     bark: 0x6d5a47, barkRough: 0.95,
   },
   // Dense round broadleaf.
@@ -41,7 +41,7 @@ export const TREE_SPECIES = {
     height: 9.4, trunkR: 0.40, depth: 4, kids: [2, 3], spread: [0.45, 0.95],
     lenFall: 0.76, radFall: 0.66, curl: 0.46, droop: 0.05, upBias: 0.38,
     trunkFrac: 0.42,
-    leafDepth: 3, leafCount: 13, leafSize: 0.92, leafKind: 'broad',
+    leafDepth: 3, leafCount: 17, leafSize: 1.02, leafKind: 'broad',
     bark: 0x87715a, barkRough: 0.9,
   },
 };
@@ -197,9 +197,9 @@ export function buildTree(name, seed, over = {}) {
         const si = Math.floor(fi);
         const a = pts[si], b = pts[si + 1] || pts[si];
         const k = fi - si;
-        const lx = a.x + (b.x - a.x) * k + rng.gauss(0, len * 0.3);
-        const ly = a.y + (b.y - a.y) * k + rng.gauss(0, len * 0.22);
-        const lz = a.z + (b.z - a.z) * k + rng.gauss(0, len * 0.3);
+        const lx = a.x + (b.x - a.x) * k + rng.gauss(0, len * 0.42);
+        const ly = a.y + (b.y - a.y) * k + rng.gauss(0, len * 0.3);
+        const lz = a.z + (b.z - a.z) * k + rng.gauss(0, len * 0.42);
         addLeafCard(lx, ly, lz, dirs[si], S.leafSize * (0.7 + rng.next() * 0.7), flexEnd);
       }
     }
