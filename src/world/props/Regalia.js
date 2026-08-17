@@ -178,10 +178,15 @@ function contactShadowTexture() {
 /**
  * @param {object} opts
  * @param {THREE.Texture|null} [opts.envMap]
+ * @param {boolean} [opts.drivable] emit the four wheels as their own nodes so
+ *   they can steer and spin, and skip the baked-in contact shadow (a moving
+ *   car cannot carry a painted shadow around with it)
  * @returns {{group:THREE.Group, lights:THREE.Object3D[],
- *            lamp:THREE.Material, tail:THREE.Material}}
+ *            lamp:THREE.Material, tail:THREE.Material,
+ *            wheels?:Array<{steer:THREE.Group, spin:THREE.Group, front:boolean, side:number}>,
+ *            shadow?:THREE.Mesh, scale:number, wheelY:number}}
  */
-export function buildRegalia({ envMap = null } = {}) {
+export function buildRegalia({ envMap = null, drivable = false } = {}) {
   const group = new THREE.Group();
   group.name = 'regalia';
   const car = new THREE.Group();
@@ -233,24 +238,56 @@ export function buildRegalia({ envMap = null } = {}) {
 
   // --- hull + greenhouse ------------------------------------------------
   B.add(paint, loft(hull, { caps: true }));
-  B.add(glass, loft(gh, { caps: false }));
 
-  // roof shell over the greenhouse (columns around the top of the ring)
-  B.add(paint, loftBand(gh, N * 0.5 - 7, N * 0.5 + 7, 0.012));
-  // solid rear quarter panel; the rest of the greenhouse stays glass
-  B.add(paint, loftBand(gh.slice(0, 3), 2, N - 2, 0.013));
-  // chrome window surround, one column wide, following the beltline
-  B.add(chrome, loftBand(gh, -1, 0, 0.015));
-  // black rubber weatherstrip just under the chrome, so the glass has a seat
-  B.add(seam, loftBand(gh, 0, 1, 0.006));
-  // A-pillars and the header rail over the windscreen: without them the cabin
-  // reads as an open bathtub with furniture in it rather than a closed coupe
-  B.add(paint, loftBand(gh.slice(gh.length - 3), 2, N - 2, 0.013));
-  B.add(chrome, loftBand(gh.slice(gh.length - 4, gh.length - 2), 5, N - 5, 0.016));
-  B.add(chrome, loftBand(gh.slice(1, 3), 5, N - 5, 0.016));
-  // B-pillar between the door glass and the rear quarter light
-  const bp = Math.round(gh.length * 0.44);
-  B.add(paint, loftBand(gh.slice(bp, bp + 2), 3, N - 3, 0.013));
+  if (drivable) {
+    // Top down. The Regalia of the road trip is an open car: FFXV's whole
+    // visual identity out on the highway is four silhouettes above the
+    // beltline with the wind in their hair. A closed roof also means the
+    // heads of four seated passengers intersect it, which is exactly as bad
+    // as it sounds.
+    //
+    // What is left is what a real convertible has with the hood stowed: a
+    // raked windscreen in a chrome frame, a chrome beltline round the cockpit
+    // opening, a solid rear quarter, and a tonneau deck behind the back seat
+    // where the hood folds away.
+    const screen = gh.slice(gh.length - 6);
+    B.add(glass, loftBand(screen, N * 0.5 - 7, N * 0.5 + 7, 0.0));
+    B.add(chrome, loftBand(screen.slice(0, 2), N * 0.5 - 8, N * 0.5 + 8, 0.016));
+    B.add(chrome, loftBand(screen.slice(screen.length - 2), N * 0.5 - 8, N * 0.5 + 8, 0.014));
+    // the two A-pillars: one column each side of the screen aperture
+    for (const j of [N * 0.5 - 8, N * 0.5 + 7]) {
+      B.add(chrome, loftBand(screen, j, j + 1, 0.020));
+    }
+    // rear quarter and the folded-hood tonneau
+    B.add(paint, loftBand(gh.slice(0, 3), 2, N - 2, 0.013));
+    // keep the deck strictly behind the rear seat, or it arches over the back
+    // of the cabin and decapitates the passengers
+    B.add(paint, loftBand(gh.slice(0, 3), N * 0.5 - 7, N * 0.5 + 7, 0.010));
+    B.add(chrome, loftBand(gh, -1, 0, 0.015));
+    B.add(seam, loftBand(gh, 0, 1, 0.006));
+    // an inner skin down the cockpit opening, so the eye never sees through
+    // the body into the wheel wells
+    B.add(trim, loftBand(gh.slice(3, gh.length - 5), 1, 3, -0.020));
+    B.add(trim, loftBand(gh.slice(3, gh.length - 5), N - 3, N - 1, -0.020));
+  } else {
+    B.add(glass, loft(gh, { caps: false }));
+    // roof shell over the greenhouse (columns around the top of the ring)
+    B.add(paint, loftBand(gh, N * 0.5 - 7, N * 0.5 + 7, 0.012));
+    // solid rear quarter panel; the rest of the greenhouse stays glass
+    B.add(paint, loftBand(gh.slice(0, 3), 2, N - 2, 0.013));
+    // chrome window surround, one column wide, following the beltline
+    B.add(chrome, loftBand(gh, -1, 0, 0.015));
+    // black rubber weatherstrip just under the chrome, so the glass has a seat
+    B.add(seam, loftBand(gh, 0, 1, 0.006));
+    // A-pillars and the header rail over the windscreen: without them the cabin
+    // reads as an open bathtub with furniture in it rather than a closed coupe
+    B.add(paint, loftBand(gh.slice(gh.length - 3), 2, N - 2, 0.013));
+    B.add(chrome, loftBand(gh.slice(gh.length - 4, gh.length - 2), 5, N - 5, 0.016));
+    B.add(chrome, loftBand(gh.slice(1, 3), 5, N - 5, 0.016));
+    // B-pillar between the door glass and the rear quarter light
+    const bp = Math.round(gh.length * 0.44);
+    B.add(paint, loftBand(gh.slice(bp, bp + 2), 3, N - 3, 0.013));
+  }
 
   // Chrome spear and rocker sill, taken as bands off the hull loft itself.
   // A straight box along a body that tapers 15 cm from mid-door to tail ends
@@ -300,6 +337,7 @@ export function buildRegalia({ envMap = null } = {}) {
     const back = new THREE.CircleGeometry(0.53, 18, 0, Math.PI);
     B.place(trim, back, [ax, WY, z - 0.185 * side], [0, side > 0 ? 0 : Math.PI, 0]);
 
+    if (drivable) continue;      // wheels are emitted separately below
     B.place(rubber, tyreGeo, [ax, WY, z]);
     B.place(trim, new THREE.CylinderGeometry(0.255, 0.255, 0.13, 22), [ax, WY, z + 0.03 * side], [Math.PI / 2, 0, 0]);
     B.place(chrome, rimGeo, [ax, WY, z + 0.05 * side]);
@@ -310,48 +348,98 @@ export function buildRegalia({ envMap = null } = {}) {
     B.place(chrome, hubGeo, [ax, WY, z + 0.10 * side], [0, 0, 0], [0.7, 0.7, 0.45]);
   }
 
+  // --- steering / rolling wheels ------------------------------------------
+  // One template built once, then shared four ways: a steer pivot for the yaw
+  // of the knuckle, and a spin node inside it for the road speed. Two meshes
+  // per corner (dark rubber, bright face), so all four cost eight draw calls.
+  let wheels = null;
+  if (drivable) {
+    // one template per side, so the dish of the rim faces outward on both
+    // without mirroring a group (which would invert the winding and the
+    // direction the wheel appears to turn)
+    const templates = {};
+    for (const s of [1, -1]) {
+      const WB = new PartBuilder();
+      WB.add(rubber, tyreGeo.clone());
+      WB.place(rubber, new THREE.CylinderGeometry(0.255, 0.255, 0.13, 22), [0, 0, 0.03 * s], [Math.PI / 2, 0, 0]);
+      WB.place(chrome, rimGeo.clone(), [0, 0, 0.05 * s]);
+      for (let i = 0; i < 14; i++) {
+        WB.place(chrome, spokeGeo, [0, 0, 0.085 * s], [0, 0, (i / 14) * Math.PI * 2]);
+      }
+      WB.place(chrome, hubGeo, [0, 0, 0.10 * s], [0, 0, 0], [0.7, 0.7, 0.45]);
+      const g = new THREE.Group();
+      WB.build(g, { cast: true, receive: false, name: 'regalia_wheel' });
+      templates[s] = g;
+    }
+
+    wheels = [];
+    for (const [ax, side] of axles) {
+      const steer = new THREE.Group();
+      steer.position.set(ax, WY, 0.79 * side);
+      const spin = new THREE.Group();
+      for (const m of templates[side].children) {
+        // share the geometry and the material; only the node is new
+        const inst = new THREE.Mesh(m.geometry, m.material);
+        inst.castShadow = true;
+        inst.name = m.name;
+        spin.add(inst);
+      }
+      steer.add(spin);
+      car.add(steer);
+      wheels.push({ steer, spin, front: ax > 0, side, restY: WY });
+    }
+  }
+
   // --- cabin interior -----------------------------------------------------
   // Visible through the glass, so it needs mass and silhouette, not detail.
   // Everything here lives inside the greenhouse span (x -1.82 .. +0.64) — put
   // the dashboard forward of the windscreen and the car reads as a roadster
   // with furniture sitting on the bonnet.
-  // floor pan and rear bulkhead
-  B.place(trim, new THREE.BoxGeometry(2.5, 0.05, 1.55), [-0.6, 0.58, 0]);
+  // Floor pan and rear bulkhead. The pan sits low and the seats sit high:
+  // an H-point only 17 cm above the carpet gives a seated figure nowhere to
+  // put its thighs, and four passengers end up kneeling in their own footwells.
+  B.place(trim, new THREE.BoxGeometry(2.5, 0.05, 1.55), [-0.6, 0.50, 0]);
   B.place(trim, new THREE.BoxGeometry(0.1, 0.5, 1.55), [-1.9, 0.82, 0]);
   // dashboard: a wrapped shelf with a cowl over the binnacle
-  B.place(trim, new THREE.BoxGeometry(0.4, 0.30, 1.58), [0.28, 0.88, 0], [0, 0, 0.16]);
-  B.place(hide, new THREE.BoxGeometry(0.44, 0.06, 1.56), [0.26, 1.03, 0], [0, 0, 0.13]);
-  B.place(trim, new THREE.BoxGeometry(0.26, 0.13, 0.48), [0.12, 1.01, 0.34], [0, 0, 0.28]);
+  B.place(trim, new THREE.BoxGeometry(0.4, 0.34, 1.58), [0.28, 0.96, 0], [0, 0, 0.16]);
+  B.place(hide, new THREE.BoxGeometry(0.44, 0.06, 1.56), [0.26, 1.14, 0], [0, 0, 0.13]);
+  B.place(trim, new THREE.BoxGeometry(0.26, 0.13, 0.48), [0.12, 1.13, 0.44], [0, 0, 0.28]);
   // centre console between the front seats
-  B.place(hide, new THREE.BoxGeometry(1.2, 0.24, 0.28), [-0.45, 0.72, 0]);
-  B.place(chrome, new THREE.CylinderGeometry(0.02, 0.02, 0.2, 6), [-0.14, 0.9, 0]);
-  B.place(chrome, new THREE.SphereGeometry(0.036, 8, 6), [-0.14, 1.0, 0]);
-  // steering wheel on a raked column
-  B.place(trim, new THREE.CylinderGeometry(0.035, 0.045, 0.42, 8), [0.20, 0.93, 0.34], [0, 0, Math.PI / 2 - 0.42]);
+  B.place(hide, new THREE.BoxGeometry(1.2, 0.26, 0.28), [-0.45, 0.80, 0]);
+  B.place(chrome, new THREE.CylinderGeometry(0.02, 0.02, 0.2, 6), [-0.14, 0.99, 0]);
+  B.place(chrome, new THREE.SphereGeometry(0.036, 8, 6), [-0.14, 1.09, 0]);
+  // Steering wheel on a raked column, sat over the driver's seat. The rim has
+  // to land a hand's reach in front of the H-point and about 25 cm above it,
+  // or the driver's arms have nothing plausible to do.
+  B.place(trim, new THREE.CylinderGeometry(0.035, 0.045, 0.42, 8), [0.20, 1.07, 0.44], [0, 0, Math.PI / 2 - 0.42]);
   const wheelGeo = new THREE.TorusGeometry(0.17, 0.022, 8, 22);
-  B.place(trim, wheelGeo, [-0.02, 1.02, 0.34], [0, Math.PI / 2 - 0.42, 0]);
-  B.place(chrome, new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10), [-0.02, 1.02, 0.34], [0, 0, Math.PI / 2 - 0.42]);
+  B.place(trim, wheelGeo, [-0.02, 1.17, 0.44], [0, Math.PI / 2 - 0.42, 0]);
+  B.place(chrome, new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10), [-0.02, 1.17, 0.44], [0, 0, Math.PI / 2 - 0.42]);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
-    B.place(chrome, new THREE.BoxGeometry(0.013, 0.17, 0.03), [-0.02, 1.02, 0.34],
+    B.place(chrome, new THREE.BoxGeometry(0.013, 0.17, 0.03), [-0.02, 1.17, 0.44],
       [0, Math.PI / 2 - 0.42, a]);
   }
   // seats: squab, back, headrest — two front buckets and a rear bench
+  // Squab centre. The H-point has to end up roughly 45 cm above the carpet —
+  // that is one thigh — or a seated figure cannot get its knees under the
+  // dashboard and its shoulders end up below the door line.
+  const SEAT_Y = 0.86;                 // top face at 0.925
   const seat = (sx, sz, backH) => {
-    B.place(hide, new THREE.BoxGeometry(0.56, 0.13, 0.52), [sx, 0.69, sz]);
-    B.place(hide, new THREE.BoxGeometry(0.16, backH, 0.5), [sx - 0.28, 0.69 + backH * 0.46, sz], [0, 0, 0.2]);
-    B.place(hide, new THREE.BoxGeometry(0.14, 0.2, 0.36), [sx - 0.42, 0.73 + backH, sz], [0, 0, 0.18]);
+    B.place(hide, new THREE.BoxGeometry(0.56, 0.13, 0.52), [sx, SEAT_Y, sz]);
+    B.place(hide, new THREE.BoxGeometry(0.16, backH, 0.5), [sx - 0.28, SEAT_Y + backH * 0.46, sz], [0, 0, 0.2]);
+    B.place(hide, new THREE.BoxGeometry(0.14, 0.2, 0.36), [sx - 0.42, SEAT_Y + 0.04 + backH, sz], [0, 0, 0.18]);
     // bolsters, so the seat is not a shoebox in silhouette
     for (const s of [-1, 1]) {
-      B.place(hide, new THREE.BoxGeometry(0.5, 0.09, 0.08), [sx + 0.02, 0.745, sz + 0.23 * s]);
+      B.place(hide, new THREE.BoxGeometry(0.5, 0.09, 0.08), [sx + 0.02, SEAT_Y + 0.055, sz + 0.23 * s]);
     }
   };
-  seat(-0.4, 0.42, 0.5);
-  seat(-0.4, -0.42, 0.5);
-  B.place(hide, new THREE.BoxGeometry(0.5, 0.13, 1.42), [-1.24, 0.69, 0]);
-  B.place(hide, new THREE.BoxGeometry(0.16, 0.5, 1.42), [-1.5, 0.93, 0], [0, 0, 0.16]);
+  seat(-0.4, 0.44, 0.46);
+  seat(-0.4, -0.44, 0.46);
+  B.place(hide, new THREE.BoxGeometry(0.5, 0.13, 1.42), [-1.24, SEAT_Y, 0]);
+  B.place(hide, new THREE.BoxGeometry(0.16, 0.46, 1.42), [-1.5, SEAT_Y + 0.22, 0], [0, 0, 0.16]);
   for (const s of [-1, 1]) {
-    B.place(hide, new THREE.BoxGeometry(0.14, 0.17, 0.34), [-1.46, 1.18, 0.4 * s], [0, 0, 0.14]);
+    B.place(hide, new THREE.BoxGeometry(0.14, 0.17, 0.34), [-1.46, SEAT_Y + 0.47, 0.42 * s], [0, 0, 0.14]);
   }
   // rear parcel shelf under the backlight
   B.place(hide, new THREE.BoxGeometry(0.5, 0.04, 1.45), [-1.76, 0.99, 0], [0, 0, -0.06]);
@@ -403,9 +491,15 @@ export function buildRegalia({ envMap = null } = {}) {
       lens.rotateZ(-Math.PI / 2);
       B.place(lamp, lens, [2.585, 0.80, dz * s], [0, 0, 0], [0.5, 1, 1]);
     }
-    const sl = new THREE.SpotLight(0xfff0d2, 6.5, 34, 0.44, 0.55, 1.4);
+    // A parked car only needs its lamps to glow. A car being driven at night
+    // needs its headlights to be the only reason the road exists — which under
+    // physically-based falloff means candela in the hundreds, not single
+    // digits, and a throw long enough to matter at 100 km/h.
+    const sl = drivable
+      ? new THREE.SpotLight(0xfff2d8, 900, 105, 0.40, 0.44, 1.0)
+      : new THREE.SpotLight(0xfff0d2, 6.5, 34, 0.44, 0.55, 1.4);
     sl.position.set(2.6 * SCALE, 0.80 * SCALE, 0.62 * SCALE * s);
-    sl.target.position.set(11, -0.2, 1.8 * s);
+    sl.target.position.set(drivable ? 40 : 11, drivable ? -1.6 : -0.2, (drivable ? 4.4 : 1.8) * s);
     sl.castShadow = false;
     group.add(sl); group.add(sl.target);
     lights.push(sl);
@@ -448,6 +542,8 @@ export function buildRegalia({ envMap = null } = {}) {
   B.build(car, { cast: true, receive: true, name: 'regalia' });
 
   // --- contact shadow -----------------------------------------------------
+  // A parked car gets a painted pool under it. A moving one gets the same
+  // plane, but the caller re-lays it on the ground every frame.
   const sh = new THREE.Mesh(
     new THREE.PlaneGeometry(7.6, 3.5),
     new THREE.MeshBasicMaterial({
@@ -462,5 +558,5 @@ export function buildRegalia({ envMap = null } = {}) {
   sh.name = 'regalia_contact';
   group.add(sh);
 
-  return { group, lights, lamp, tail };
+  return { group, car, lights, lamp, tail, wheels, shadow: sh, scale: SCALE, wheelY: WY * SCALE };
 }
