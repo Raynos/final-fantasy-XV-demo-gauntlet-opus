@@ -252,7 +252,18 @@ export class CombatHUD {
   _enemies(game) {
     const live = game.get?.('Enemies')?.list;
     if (Array.isArray(live) && live.length) {
-      return live.slice(0, 5).map((e2, i) => {
+      // Nearest five, not the first five in spawn order: the plates should
+      // describe what is in front of the player, not what spawned earliest.
+      const cam = game.camera;
+      const near = live.filter((e2) => !e2.dead).slice();
+      if (cam) {
+        near.sort((a, b) => {
+          const pa = a.position || a.root?.position, pb = b.position || b.root?.position;
+          if (!pa || !pb) return 0;
+          return cam.position.distanceToSquared(pa) - cam.position.distanceToSquared(pb);
+        });
+      }
+      return near.slice(0, 5).map((e2, i) => {
         const pos = e2.position || e2.root?.position || { x: 0, y: 0, z: 0 };
         const tpl = ENEMY_TEMPLATES[i % ENEMY_TEMPLATES.length];
         return {
@@ -389,7 +400,10 @@ export class CombatHUD {
       const d = cam ? cam.position.distanceTo(e2.pos) : 10;
       const scale = clamp(1.18 - d * 0.022, 0.68, 1.06);
       const fade = clamp(1.35 - d * 0.026, 0.32, 1) * easeOut(clamp((appear - 0.2) / 0.6, 0, 1));
-      const focus = this.lockOn === e2;
+      // Plates wrap the enemy, so compare identity against the wrapped ref —
+      // `this.lockOn` is the raw enemy and never equals its wrapper.
+      const focus = !!(this.lockOn && (this.lockOn === e2 || this.lockOn === e2.ref
+        || this.lockOn.ref === e2.ref));
       if (pl._focus !== focus) { pl.node.classList.toggle('focus', focus); pl._focus = focus; }
       const cx = clamp(sp.x, 92, w - 92);
       pl.node.style.transform = `translate(${cx.toFixed(1)}px, ${sp.y.toFixed(1)}px) scale(${scale.toFixed(3)})`;
@@ -399,8 +413,10 @@ export class CombatHUD {
 
   _updateReticle(dt, game, cam, w, h, enemies, appear) {
     let target = this.lockOn;
-    const live = game.get?.('Combat')?.lockOn;
-    if (live) target = live;
+    // `Combat.lockOn` is the *setter method*; the current target is
+    // `lockTarget`. Reading the method here made the reticle follow a function.
+    const live = game.get?.('Combat')?.lockTarget;
+    if (live) target = this._enemies(game).find((e) => e.ref === live) || target;
     if (!target && enemies.length) target = enemies[0];
     if (target !== this._lastTarget) { this.lockAge = 0; this._lastTarget = target; }
     this.lockAge += dt;

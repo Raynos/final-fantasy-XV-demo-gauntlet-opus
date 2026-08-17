@@ -11,13 +11,18 @@ import {
  * Each class has its own reach, combo timing and swing arc, which the combat
  * system reads directly — the arcs also drive the trail ribbons, so a
  * greatsword really does sweep a wider, slower band than the daggers.
+ *
+ * `motion` is the class' motion value: what one swing is worth to
+ * `Stats.computeDamage`, before the per-step `dmg` multiplier. It is the only
+ * place a weapon's *power* now lives — `damage` survives as the fallback for a
+ * world booted with no RPG model behind it.
  */
 
 /** @typedef {'sword'|'greatsword'|'polearm'|'daggers'|'firearm'} WeaponClass */
 
 export const WEAPONS = {
   sword: {
-    name: 'Engine Blade', reach: 2.05, damage: 118, poise: 22,
+    name: 'Engine Blade', reach: 2.05, damage: 118, poise: 22, motion: 1.05,
     // per-hit: windup, active, recovery (seconds) and the arc the blade sweeps
     combo: [
       { wind: 0.11, active: 0.13, rec: 0.16, arc: [-2.5, 0.9], axis: [0.10, 1, 0.15], tilt: 0.22, dmg: 1.0 },
@@ -29,7 +34,7 @@ export const WEAPONS = {
     hitbox: 0.42,
   },
   greatsword: {
-    name: 'Ultima Blade', reach: 2.6, damage: 226, poise: 60,
+    name: 'Ultima Blade', reach: 2.6, damage: 226, poise: 60, motion: 2.00,
     combo: [
       { wind: 0.26, active: 0.20, rec: 0.34, arc: [-2.9, 1.3], axis: [0.05, 1, 0.1], tilt: 0.3, dmg: 1.0 },
       { wind: 0.30, active: 0.22, rec: 0.40, arc: [2.6, -1.5], axis: [1, 0.1, 0.15], tilt: -0.2, dmg: 1.25 },
@@ -39,7 +44,7 @@ export const WEAPONS = {
     hitbox: 0.72,
   },
   polearm: {
-    name: 'Zwill Crossblade', reach: 3.1, damage: 96, poise: 18,
+    name: 'Zwill Crossblade', reach: 3.1, damage: 96, poise: 18, motion: 0.85,
     combo: [
       { wind: 0.10, active: 0.10, rec: 0.13, arc: [0.2, 0.2], axis: [0, 1, 0], thrust: 1, tilt: 0, dmg: 0.9 },
       { wind: 0.09, active: 0.10, rec: 0.12, arc: [-2.2, 1.4], axis: [0, 1, 0], tilt: 0.05, dmg: 1.0 },
@@ -50,7 +55,7 @@ export const WEAPONS = {
     hitbox: 0.34,
   },
   daggers: {
-    name: 'Auroral Kukris', reach: 1.35, damage: 62, poise: 8,
+    name: 'Auroral Kukris', reach: 1.35, damage: 62, poise: 8, motion: 0.55,
     combo: [
       { wind: 0.06, active: 0.07, rec: 0.07, arc: [-1.9, 0.7], axis: [0.2, 1, 0.1], tilt: 0.3, dmg: 0.85 },
       { wind: 0.05, active: 0.07, rec: 0.07, arc: [1.9, -0.7], axis: [-0.2, 1, -0.1], tilt: -0.3, dmg: 0.85 },
@@ -62,7 +67,7 @@ export const WEAPONS = {
     hitbox: 0.28,
   },
   firearm: {
-    name: 'Quicksilver', reach: 26, damage: 44, poise: 4, ranged: true,
+    name: 'Quicksilver', reach: 26, damage: 44, poise: 4, ranged: true, motion: 0.40,
     combo: [
       { wind: 0.05, active: 0.02, rec: 0.11, arc: [0, 0], axis: [0, 1, 0], shoot: 1, tilt: 0, dmg: 1.0 },
       { wind: 0.04, active: 0.02, rec: 0.11, arc: [0, 0], axis: [0, 1, 0], shoot: 1, tilt: 0, dmg: 1.0 },

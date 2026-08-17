@@ -1,64 +1,31 @@
 /**
  * The wire between `CombatSystem` and the RPG model.
  *
- * `CombatSystem` already emits everything that matters — `damage`, `hit`,
- * `warp`, `parry`, `link`, `stagger`, `death`, `playerHit`, `spell`, `mp` — and
- * before this file existed nothing listened. This bridge subscribes once and:
+ * This file used to *re-resolve* every hit after the fact: `CombatSystem` rolled
+ * a number off a weapon literal, emitted it, and the bridge listened, rolled the
+ * real number through `Stats.computeDamage`, rewrote the event and then nudged
+ * the enemy's HP back to agree. Two damage models, reconciled once a frame.
  *
- *  - re-resolves every hit through `Stats.computeDamage()` with Noctis' real
- *    Strength, his equipped weapon's attack, the level differential, night
- *    scaling, the target's defence and the Ascension multipliers, so the number
- *    the HUD prints is the model's number and not a combat-feel literal;
- *  - reconciles the enemy's HP to that number, so the nameplate agrees with the
- *    damage that floated off it;
- *  - banks EXP, awards AP and rolls drops on a kill;
- *  - awards AP for warp-strikes, parries, staggers and link-strikes;
- *  - routes damage the player takes through `Stats.applyDamage()`;
- *  - pushes `combat.inCombat` into `rpg.inCombat` so the tech bar only charges
- *    in a fight (the flag was computed every frame and thrown away).
+ * That is gone. `CombatSystem.resolve()` now calls `computeDamage` **at source**,
+ * for every swing, warp, counter, link, Armiger arm and spell, so there is one
+ * number and everyone sees the same one.
  *
- * It deliberately lives here rather than in `CombatSystem`, so the encounters
- * agent and this one never edit the same lines.
+ * What is left here is the RPG-side consequences of a fight:
+ *
+ *  - the **Armiger gauge**, filled by damage dealt and by warping;
+ *  - the **tech bar**, charged by damage dealt and damage taken (in FFXV it is
+ *    a fight meter, not a stopwatch — it used to fill purely on elapsed time);
+ *  - **AP** for warp-strikes, parries, staggers and link-strikes;
+ *  - kill payouts *only when nobody else is running the fight* — the live
+ *    `EncounterDirector` owns EXP, gil, drops and quest ticks, and paying twice
+ *    was doubling every reward;
+ *  - the damage-taken flash on the HUD, and the technique call-out banner.
+ *
+ * It also still owns `roll()`, the public one-shot damage resolver the capture
+ * stand-in in `CombatHUD` uses to print genuine numbers over posed enemies.
  */
 
 import { Rng } from '../../util/Rng.js';
-
-/** CombatSystem weapon kinds -> the RPG's `WEAPON_CLASSES` names. */
-const WEAPON_CLASS = {
-  sword: 'sword', greatsword: 'greatsword', polearm: 'polearm',
-  daggers: 'dagger', dagger: 'dagger', firearm: 'firearm', shield: 'shield',
-};
-
-/**
- * Per-species RPG facts the scene-graph enemies do not carry: how much EXP the
- * kill is worth, what it drops, and which weapon classes it hates. Keyed on the
- * species display name so it survives whatever the encounters agent does to the
- * spawn tables.
- */
-const SPECIES = {
-  'Sabertusk': {
-    expClass: 'normal', defenseScale: 1.0,
-    weakTo: ['dagger', 'polearm'],
-    drops: [{ id: 'sabertusk_fang', chance: 0.55 }, { id: 'venom_fang', chance: 0.22 }, { id: 'anak_meat', chance: 0.18 }],
-  },
-  'Goblin': {
-    expClass: 'trash', defenseScale: 0.8, isDaemon: true,
-    weakTo: ['greatsword'],
-    drops: [{ id: 'rotten_splinterbone', chance: 0.4 }, { id: 'debased_coin', chance: 0.3 }],
-  },
-  'Magitek Trooper': {
-    expClass: 'normal', defenseScale: 1.25,
-    weakTo: ['greatsword', 'firearm'],
-    drops: [{ id: 'chrome_bit', chance: 0.5 }, { id: 'magitek_booster', chance: 0.2 }, { id: 'imperial_relay', chance: 0.06 }],
-  },
-  'Iron Giant': {
-    expClass: 'boss', defenseScale: 1.6, isDaemon: true,
-    weakTo: ['greatsword'],
-    drops: [{ id: 'rotten_splinterbone', chance: 1 }, { id: 'mythril_shaft', chance: 0.5 }, { id: 'adamantite', chance: 0.1 }],
-  },
-};
-
-const DEFAULT_SPECIES = { expClass: 'normal', defenseScale: 1, weakTo: [], drops: [] };
 
 export class CombatBridge {
   /** @param {import('./RpgSystem.js').RpgSystem} rpg */
@@ -67,15 +34,15 @@ export class CombatBridge {
     this.combat = null;
     this.game = null;
     this._off = [];
-    /** Seeded per hit so the roll depends only on sim state, never call order. */
+    /** Seeded per hit so a posed capture's roll depends only on sim state. */
     this._rng = new Rng(0xa53f11);
     this._warpUntil = -1;
     /** Last resolved damage roll, for anything that wants to inspect it. */
     this.lastRoll = null;
     /**
      * The Armiger gauge, 0..1. FFXV fills it from damage dealt and warp-strikes
-     * and empties it over the burst; nothing else in the project modelled it,
-     * so the HUD was drawing a clock-driven ramp. Now it is earned.
+     * and empties it over the burst. `CombatSystem.tryArmiger` will not fire
+     * until this reads 1.
      */
     this.armiger = 0;
   }
@@ -98,6 +65,12 @@ export class CombatBridge {
     on('stagger', () => this.rpg.stagger());
     on('link', () => this.rpg.linkStrike(2));
     on('playerHit', (ev) => this._onPlayerHit(ev));
+
+    // Techniques are fired by `PartyAI`, which announces on the window bus.
+    // Give each one a cinematic beat: a banner and a sliver of slow motion.
+    this._onTech = (e) => this._techBeat(e.detail || {});
+    window.addEventListener('encounter:tech', this._onTech);
+    this._off.push(() => window.removeEventListener('encounter:tech', this._onTech));
     return true;
   }
 
@@ -108,30 +81,126 @@ export class CombatBridge {
   update(dt, game) {
     const combat = this.combat || game?.get?.('Combat');
     if (!combat) return;
-    // the tech bar only charges in a fight — this flag was computed every frame
-    // in CombatSystem.update and thrown away
+    // The tech bar only charges in a fight. `EncounterDirector` overwrites this
+    // later in the same frame with its own, stricter, encounter state.
     this.rpg.inCombat = !!combat.inCombat;
-    // an active Armiger burst spends the gauge
+    // An active Armiger burst spends the gauge over its duration.
     if (combat.armigerTimer > 0) this.armiger = Math.max(0, this.armiger - dt / 8);
+
+    // With no live encounter loop running, nothing else claims a corpse. Sweep
+    // for kills that came in through a back door — a scenario, a script, a
+    // debug hit — so a death is never silently worth nothing.
+    const dir = game?.get?.('Encounters');
+    if (dir && dir.enabled && !dir.enemies?.frozen) return;
+    const list = game?.get?.('Enemies')?.list;
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.dead && !e._looted) this._onDeath({ enemy: e });
+    }
   }
 
   /* -- events ------------------------------------------------------------ */
 
   _onWarp(ev) {
     if (ev?.phase !== 'impact') return;
-    // A window rather than a flag: CombatSystem emits `damage` before the warp
-    // impact, the Director's frozen scenarios emit it after.
+    // A window rather than a flag: the Director's frozen scenarios emit the
+    // damage event after the warp impact rather than before it.
     this._warpUntil = (this.game?.time?.now ?? 0) + 0.35;
     this.rpg.warpStrike();
   }
 
   /**
-   * Resolve a hit on a scene-graph enemy through the real damage formula.
+   * A hit landed. The number is already the model's — `CombatSystem` rolled it
+   * through `computeDamage` before it ever left the swing. All that is owed
+   * here is the meters it feeds.
+   */
+  _onDamage(ev) {
+    const dmg = ev?.damage;
+    if (!dmg || dmg <= 0) return;
+    const byPlayer = !ev.source;               // `PartyAI` stamps a member id
+
+    // Armiger charges against a pool scaled off Noctis' own attack, so it takes
+    // roughly a dozen good hits regardless of what he is fighting. Only his own
+    // damage counts — it is his arsenal.
+    if (byPlayer) {
+      const pool = Math.max(1, this.rpg.noctis.attack * 26);
+      const now = this.game?.time?.now ?? 0;
+      const warped = this.combat?.state === 'warp' || now <= this._warpUntil;
+      const charge = (dmg / pool) * (1 + this.rpg.ascension.value('armigerCharge'));
+      this.armiger = Math.min(1, this.armiger + charge + (warped ? 0.06 : 0));
+    }
+    // The tech bar is a fight meter: dealing damage fills it. A dozen or so
+    // clean hits buys one segment.
+    this._chargeTech(dmg / Math.max(1, this.rpg.noctis.attack * 12));
+  }
+
+  /**
+   * Something died.
    *
-   * Noctis' Strength and equipped weapon attack, the level differential, the
-   * target's derived defence, its elemental and weapon-class weaknesses, night
-   * scaling and every Ascension multiplier all land here. Public so the capture
-   * stand-in in `CombatHUD` can print genuine numbers over posed enemies.
+   * `EncounterDirector.onDeath` is the real payout — EXP, gil, rolled drops,
+   * quest kill objectives, hunt top-ups, boss phase-out. It marks the corpse
+   * `_looted`. This only steps in when the live loop is not running at all
+   * (a posed scenario, a bare harness world), so a kill is never paid twice
+   * and never paid zero.
+   */
+  _onDeath(ev) {
+    const e = ev?.enemy;
+    if (!e || e._looted) return;
+    const dir = this.game?.get?.('Encounters');
+    if (dir && dir.enabled && !dir.enemies?.frozen) return;
+    e._looted = true;
+    const now = this.game?.time?.now ?? 0;
+    this.rpg.enemyKilled({
+      id: e.speciesId || String(e.name || 'enemy').toLowerCase().replace(/\s+/g, '_'),
+      name: e.name,
+      level: e.level,
+      expClass: e.expClass,
+      drops: e.type?.drops || [],
+    }, { byWarpStrike: now <= this._warpUntil });
+  }
+
+  /**
+   * Noctis took a hit.
+   *
+   * The HP has *already* come off — either `EncounterDirector.damageThreat`
+   * applied it to the model or `CombatSystem._enemyStrike` did. Applying it
+   * again here (which is what this used to do) meant every enemy blow landed
+   * twice. All that is owed is the screen flash and the tech-bar charge.
+   */
+  _onPlayerHit(ev) {
+    const dmg = Math.max(0, Math.round(ev?.damage || 0));
+    if (!dmg) return;
+    const n = this.rpg.noctis;
+    this._chargeTech(dmg / Math.max(1, n.maxHp * 0.5));
+    const hud = this.game?.get?.('HUD');
+    if (hud?.hit) hud.hit(Math.min(1, dmg / Math.max(1, n.maxHp * 0.22)));
+  }
+
+  /** Add to the shared tech bar, clamped to its segment count. */
+  _chargeTech(bars) {
+    if (!(bars > 0)) return;
+    const p = this.rpg.party;
+    p.techCharge = Math.min(p.maxTechBars, p.techCharge + Math.min(0.5, bars));
+  }
+
+  /** A technique fired: banner it and drop a beat of slow motion under it. */
+  _techBeat(d) {
+    const hud = this.game?.get?.('HUD');
+    if (hud?.callOut) hud.callOut(d.name || 'Technique', `${d.member || ''}`.toUpperCase());
+    if (this.combat) this.combat.slowmo = Math.max(this.combat.slowmo, 0.22);
+  }
+
+  /* -- public resolver --------------------------------------------------- */
+
+  /**
+   * Resolve a hypothetical hit on a scene-graph enemy through the real damage
+   * formula. Public so the capture stand-in in `CombatHUD` can print genuine
+   * numbers over posed enemies without swinging at them.
+   *
+   * The enemy *is* the `computeDamage` target: `EnemyBase` carries `level`,
+   * `defense`, `magicDefense`, `resistance()`, `weakTo` and `resistsWeapon`
+   * already, so there is no per-species table to drift out of date.
    *
    * @param {object} enemy an `Enemy` from `src/characters/enemies/**`
    * @param {object} [o] `{ motion, element, weaponClass, isWarpStrike,
@@ -139,132 +208,26 @@ export class CombatBridge {
    * @returns {object} the `computeDamage` result
    */
   roll(enemy, o = {}) {
-    const spec = SPECIES[enemy.name] || DEFAULT_SPECIES;
     // Seeded from sim state so identical frames give identical numbers, no
     // matter what order the shots were captured in.
     this._rng.s = (Math.imul((enemy.id ?? 0) + 1, 0x9e3779b1)
       ^ Math.imul(Math.round(enemy.hp || 0) + 7, 0x85ebca6b)
       ^ Math.imul(Math.round(o.seed || 0) + 13, 0xc2b2ae35)) >>> 0;
     const res = this.rpg.damage({
-      attacker: 'noctis',
-      target: this._target(enemy, spec),
+      attacker: this.rpg.noctis,
+      target: enemy,
       motion: o.motion ?? 1.05,
       kind: o.element ? 'magical' : 'physical',
       element: o.element || 'physical',
       weaponClass: o.element ? null : (o.weaponClass || 'sword'),
-      staggerMult: o.staggerMult ?? 1,
+      staggerMult: o.staggerMult ?? (enemy.staggerMult ?? 1),
       isBackAttack: !!o.isBackAttack,
       isWarpStrike: !!o.isWarpStrike,
-      targetIsDaemon: !!spec.isDaemon,
+      targetIsDaemon: enemy.faction === 'daemon',
       rng: this._rng,
     });
-    // Armiger charges with damage dealt against a pool scaled off Noctis' own
-    // attack, so it takes roughly a dozen good hits regardless of what he is
-    // fighting. Warping adds a bonus, as it does in FFXV.
-    const pool = Math.max(1, this.rpg.noctis.attack * 26);
-    const charge = (res.damage / pool) * (1 + this.rpg.ascension.value('armigerCharge'));
-    this.armiger = Math.min(1, this.armiger + charge + (o.isWarpStrike ? 0.06 : 0));
-    return res;
-  }
-
-  /**
-   * Re-resolve one live hit and hand the result back to whoever draws numbers.
-   */
-  _onDamage(ev) {
-    const enemy = ev?.enemy;
-    if (!enemy) return;
-    const combat = this.combat;
-    const now = this.game?.time?.now ?? 0;
-    const isWarp = combat?.state === 'warp' || now <= this._warpUntil;
-
-    let motion = 1.05 * (combat?.comboStep?.dmg || 1);
-    if (isWarp) motion = 2.8;
-    else if (ev.element) motion = 2.2;                    // an elemancy burst
-
-    const res = this.roll(enemy, {
-      motion,
-      element: ev.element || null,
-      weaponClass: WEAPON_CLASS[combat?.weapon?.kind] || 'sword',
-      staggerMult: enemy.state === 'stagger' ? 1.9 : ev.staggered ? 1.4 : 1,
-      isBackAttack: this._isBackAttack(enemy),
-      isWarpStrike: isWarp,
-      seed: ev.damage,
-    });
-
-    // Keep the health bar honest about the number we just printed. The kill is
-    // still CombatSystem's to call, so we never push an enemy across zero.
-    if (!ev.killed && !enemy.dead) {
-      enemy.hp = Math.max(1, Math.min(enemy.maxHp, enemy.hp + ev.damage - res.damage));
-    }
-
-    ev.damage = res.damage;
-    ev.crit = res.crit;
-    ev.weakness = res.weakness;
-    ev.elementKind = res.elementKind;
-    ev.rolled = true;
     this.lastRoll = res;
     return res;
-  }
-
-  _onDeath(ev) {
-    const enemy = ev?.enemy;
-    if (!enemy) return;
-    const spec = SPECIES[enemy.name] || DEFAULT_SPECIES;
-    const now = this.game?.time?.now ?? 0;
-    this.rpg.enemyKilled({
-      id: String(enemy.name || 'enemy').toLowerCase().replace(/\s+/g, '_'),
-      name: enemy.name,
-      level: enemy.level,
-      expClass: spec.expClass,
-      drops: spec.drops,
-    }, { byWarpStrike: now <= this._warpUntil });
-  }
-
-  _onPlayerHit(ev) {
-    const dmg = Math.max(0, Math.round(ev?.damage || 0));
-    if (!dmg) return;
-    const n = this.rpg.noctis;
-    // The model is authoritative; RpgSystem.update mirrors the result back onto
-    // `Player.stats` on the same frame.
-    n.applyDamage(dmg);
-    const hud = this.game?.get?.('HUD');
-    if (hud?.hit) hud.hit(Math.min(1, dmg / Math.max(1, n.maxHp * 0.22)));
-  }
-
-  /* -- helpers ----------------------------------------------------------- */
-
-  /**
-   * A `computeDamage` target built from a scene-graph enemy. Defence is derived
-   * from the species' level and health pool — the enemy classes carry no stat
-   * block of their own.
-   */
-  _target(enemy, spec) {
-    const lv = enemy.level || 1;
-    const def = Math.round((18 + lv * 2.4 + (enemy.maxHp || 400) / 240) * (spec.defenseScale || 1));
-    const weakEl = enemy.type?.weakness || null;
-    const resistEl = enemy.type?.resist || null;
-    const resist = { physical: 100, fire: 100, ice: 100, lightning: 100, dark: 100, light: 100 };
-    if (weakEl) resist[weakEl] = 160;
-    if (resistEl) resist[resistEl] = 50;
-    return {
-      level: lv,
-      defense: def,
-      magicDefense: Math.round(def * 0.85),
-      resist,
-      weakTo: spec.weakTo || [],
-      resistsWeapon: spec.resistsWeapon || [],
-    };
-  }
-
-  /** True when Noctis is behind the enemy's facing. */
-  _isBackAttack(enemy) {
-    const p = this.combat?.player?.position;
-    if (!p || !enemy.root) return false;
-    const fx = Math.sin(enemy.heading), fz = Math.cos(enemy.heading);
-    const dx = p.x - enemy.root.position.x, dz = p.z - enemy.root.position.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 1e-4) return false;
-    return (fx * dx + fz * dz) / len < -0.35;
   }
 }
 

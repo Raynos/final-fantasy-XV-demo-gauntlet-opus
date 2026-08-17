@@ -136,6 +136,9 @@ export class HUD {
     const g = this.game;
     const dir = g.get?.('Director');
     const s = dir?.scenario || dir?.mode || dir?.state;
+    // `Director.play()` sets 'live' for a real, unscripted encounter. Without
+    // this the combat HUD only ever appeared in the posed capture scenarios.
+    if (s === 'live') return g.get?.('Combat')?.inCombat ? 'combat' : 'field';
     if (typeof s === 'string') return s;
     if (g.get?.('Combat')?.inCombat) return 'combat';
     const shot = SHOTS[g.currentShot];
