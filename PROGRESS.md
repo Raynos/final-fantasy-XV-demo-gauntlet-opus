@@ -17,6 +17,10 @@ open · Hammerhead built with 11 NPCs · Regalia enters and drives 5.9 m under
 throttle · 3 dungeons enter and leave · title + attract camera + opening scene ·
 audio graph running · 124 POIs on the minimap · rest at a lodging.
 
+**Queued after the current wave:** a full TypeScript port to match the sibling
+attempts (see `SCOPE.md` §14). Blocked until every agent branch is merged —
+porting 235 modules while six agents edit them would conflict with everything.
+
 **Known gaps from live play (user-reported, not yet fixed):**
 - No character collision — you walk through the campsite instead of up its stairs
 - Escape fights the browser's pointer-lock, so menus are hard to exit
