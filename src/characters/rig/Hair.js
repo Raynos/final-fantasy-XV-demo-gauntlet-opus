@@ -33,7 +33,7 @@ export function buildHair(rig, look) {
   const put = (p) => new THREE.Vector3(p.x, p.y, p.z).multiplyScalar(scale).add(origin);
   const base = new THREE.Color().setHex(H.color, THREE.SRGBColorSpace);
   const tip = new THREE.Color().setHex(H.tipColor ?? H.color, THREE.SRGBColorSpace);
-  const rootC = base.clone().multiplyScalar(0.72);
+  const rootC = base.clone().multiplyScalar(0.84);
 
   // hairline elevation in canonical y for a given azimuth
   // A hairline is not a circle. It rides high across the forehead, plunges at
@@ -75,11 +75,14 @@ export function buildHair(rig, look) {
       if (d.lengthSq() < 1e-10) d.set(0, -1, 0);
       B.tang(d.x, d.y, d.z);
       const w = put(p);
-      // a parting is a value break, not a shape: the crown is lighter than the
-      // nape and the roots at the hairline are darkest of all
-      // the shell is a value floor under the strands, never a surface in its own
-      // right: keep it dark enough that any gap reads as depth, not as a helmet
-      B.color(rootC.clone().multiplyScalar(0.62).lerp(rootC, smooth(1 - t * 1.15)));
+      // A parting is a value break, not a shape: the crown is lighter than the
+      // nape and the roots at the hairline are darkest of all. The shell used to
+      // sit at 0.62 of the root colour, which on near-black hair is a void —
+      // and a void is exactly what "one low-poly spiky blob" looks like from
+      // 6 m. It now carries a real crown-to-nape ramp so the mass has a lit
+      // side even before a single strand catches the sun.
+      const crown = smooth(1 - t * 1.15);
+      B.color(rootC.clone().multiplyScalar(0.74 + 0.62 * crown * crown));
       row.push(B.v(w.x, w.y, w.z, (c / cols) * 6, t * 1.5));
     }
     shell.push(row);
@@ -127,7 +130,7 @@ export function buildHair(rig, look) {
 
       const tBase = tuft.color != null ? new THREE.Color().setHex(tuft.color, THREE.SRGBColorSpace) : base;
       const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
-      const tRoot = tBase.clone().multiplyScalar(0.74);
+      const tRoot = tBase.clone().multiplyScalar(0.62);
       const spike = tuft.spike ?? 0.9;
       const wid = (tuft.width || 0.014) * (1 + rng.gauss(0, 0.18));
       const bone = tuft.spring ? I.tail : I.head;
@@ -140,8 +143,12 @@ export function buildHair(rig, look) {
         width: wid * scale,
         thick: wid * scale * (tuft.thick ?? 0.5),
         up: nrm.toArray(),
-        color: tRoot.clone().lerp(tBase, 0.5 + 0.5 * rng.next()),
-        tipColor: tTip.clone().multiplyScalar(0.92 + 0.22 * rng.next()),
+        // A wide per-lock value spread is the difference between "hair" and "a
+        // black shape". Some clumps sit near the root value, some run almost to
+        // the tip value at their base — that is what makes the mass legible
+        // once every individual ribbon is thinner than a pixel.
+        color: tRoot.clone().lerp(tTip, 0.20 + 0.75 * Math.pow(rng.next(), 1.4)),
+        tipColor: tTip.clone().multiplyScalar(0.82 + 0.55 * rng.next()),
         // clump profile: hold width through the body of the strand and only
         // taper near the tip, so hair reads as locks rather than quills
         taper: (t) => Math.pow(clamp01(1 - Math.pow(t, 1.5 + spike)), 0.62),

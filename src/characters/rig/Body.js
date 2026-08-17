@@ -107,6 +107,12 @@ export function buildBody(rig, look) {
   B.occlude(dims.shoulderX * 0.75, armpitY, 0, 0.10 * s, 0.28);
   B.occlude(-dims.shoulderX * 0.75, armpitY, 0, 0.10 * s, 0.28);
   B.occlude(0, y(1.40), -0.04 * s, 0.09 * s, 0.22);
+  // The jaw's cast shadow on the throat. Without it the neck reads at the same
+  // value as the face, the chin loses its edge, and a head at 30 px turns into
+  // one continuous flesh-coloured column — which is what makes distant
+  // characters look like mannequins more than any amount of face detail.
+  B.occlude(0, y(1.545), 0.030 * s, 0.075 * s, 0.44);
+  B.occlude(0, y(1.520), 0.010 * s, 0.070 * s, 0.30);
 
   return B.build();
 }

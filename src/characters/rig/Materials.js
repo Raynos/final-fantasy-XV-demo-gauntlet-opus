@@ -166,12 +166,19 @@ function patch(mat, o = {}) {
   vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
   // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
   // matte value floor or its broad highlight reads as a moulded plastic dome
-  float strand = 0.16 + 0.84 * clamp( vMat.z, 0.0, 1.0 );
+  float strand = 0.30 + 0.70 * clamp( vMat.z, 0.0, 1.0 );
   vec3 kk = uSunColor * vis * mask * strand * ( s1 * 0.55 + s2 * 0.40 * sheenC ) * ${spec.toFixed(3)};
   // backlit hair glows at the silhouette — the cue that reads as fine strands
   float rim = pow( 1.0 - clamp( dot( hN, hV ), 0.0, 1.0 ), 2.6 )
             * pow( clamp( dot( hV, -hL ), 0.0, 1.0 ), 1.6 );
-  kk += uSunColor * rim * 0.30 * strand * ( vColor.rgb * 2.4 + 0.05 );
+  kk += uSunColor * rim * 0.44 * strand * ( vColor.rgb * 3.0 + 0.07 );
+  // Sky sheen. Near-black hair under a directional key has nothing at all in
+  // shadow, which is why the whole cast read as wearing black helmets: the
+  // silhouette went to a single flat value the moment it turned away from the
+  // sun. A broad, weak dome term restores the value range a real head of hair
+  // has on its shadow side without lifting it toward navy.
+  float dome = clamp( dot( hN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
+  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * ( vColor.rgb * 1.8 + 0.05 );
   gl_FragColor.rgb += kk;
 }`);
     }
@@ -210,10 +217,14 @@ function patch(mat, o = {}) {
     float k = radial * fib * ruff * cres;
     k *= 0.88 + 0.22 * sin( eAng * 21.0 + q * 9.0 );
     k *= mix( 1.0, 0.05, smoothstep( 0.80, 0.97, q ) );   // limbal ring
-    eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.2, k ) * lidShade;
+    eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.15, k ) * lidShade;
     eyeC = mix( eyeC, vec3( 0.42, 0.41, 0.41 ) * lidShade, smoothstep( 0.975, 1.0, q ) );
   } else {
-    float sh = ( 0.27 + 0.17 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * lidShade;
+    // Sclera. It used to sit at 0.27 albedo, i.e. the same value as the socket
+    // it lives in, so the only white on the eye was the specular dot and every
+    // character read as squinting. A sclera has to be *light* — that value
+    // break against the iris is the entire "this head is alive" cue at 30 px.
+    float sh = ( 0.52 + 0.22 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * mix( 1.0, lidShade, 0.62 );
     float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 2.0, 0.0, 1.0 );
     eyeC = sh * vec3( 0.99, 0.930 - corner * 0.10, 0.900 - corner * 0.16 );
   }
@@ -366,7 +377,7 @@ export function hairMaterial() {
   });
   return patch(m, {
     sss: 0,
-    hair: { spec: 0.20, shift: 0.055, exp1: 200.0, exp2: 26.0, tint: 0.85 },
+    hair: { spec: 0.55, shift: 0.055, exp1: 150.0, exp2: 20.0, tint: 0.85 },
   });
 }
 
