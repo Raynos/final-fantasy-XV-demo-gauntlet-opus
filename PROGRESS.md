@@ -1,7 +1,7 @@
 # FINAL FANTASY XV — Eos. Scope & Progress
 
-**Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 03:33 · **Elapsed ~5h20m**
-**49 commits · 129 source files · ~37,300 lines**
+**Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 05:30 · **Elapsed ~7h15m**
+**~70 commits · 200+ source files**
 
 Ambition: an action RPG in ThreeJS at the level of Final Fantasy XV (PS4, 2016) —
 photoreal, fully playable, everything procedural (no asset files, no network).
@@ -30,10 +30,10 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 
 | metric | baseline | target |
 |---|---|---|
-| Posed shots (`tools/perf.mjs`) | 8–37 fps, mean 17.5 | ≥60 fps every shot |
-| Gameplay (`tools/gameplay.mjs`) | worst segment 17.7 fps | ≥60 fps every segment |
-| Hitches > 33 ms in a session | **773** | 0 |
-| Worst single frame | **15,820 ms** (weapon swap) | < 20 ms |
+| Posed shots (`tools/perf.mjs`) | mean 29.1 → **44.1 fps** | ≥60 fps every shot |
+| Gameplay (`tools/gameplay.mjs`) | worst segment 15.7 → **27.2 fps** | ≥60 fps every segment |
+| Hitches > 33 ms in a session | 870 → **183** | 0 |
+| Worst single frame | 15,820 ms → **22 ms** ✅ | < 20 ms |
 
 ---
 

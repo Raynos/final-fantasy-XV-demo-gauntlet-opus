@@ -7,7 +7,7 @@ Companion docs: `PROGRESS.md` (status by area, scoreboard, bug log) ·
 `PLAN.md` (design audit and sequencing) · `WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
 
-**Counts at last update (2026-08-17 ~04:00):** 330 atoms · **127 shipped** · **92 in progress** · **111 not started**.
+**Counts at last update (2026-08-17 ~05:30):** 329 atoms · **164 shipped** · **55 in progress** · **110 not started**.
 
 Recount with:
 ```sh
@@ -208,17 +208,17 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Damage numbers driven by the real formula (not literals)
 
 ### 6.3 Encounters
-- [~] Roaming groups with territories and patrols
-- [~] Sight cones, hearing, aggro/de-aggro
-- [~] Group coordination (flanking, not queueing)
-- [~] Combat start/end state for HUD and music
-- [~] Victory: EXP, AP, gil, item drops
-- [~] Party companions actually attacking
-- [~] Techniques: Tempest, Royal Guard, Enhancement, Regroup, Overwhelm, Starshell, Piercer, Trigger-Happy
-- [~] Tech bar charging
-- [~] Player downed state with bleed-out and ally revive
-- [~] Game over and retry
-- [ ] Ambushes and enemy reinforcements
+- [x] Roaming groups with territories and patrols
+- [x] Sight cones, hearing, aggro/de-aggro
+- [x] Group coordination (flanking, not queueing)
+- [x] Combat start/end state for HUD and music
+- [x] Victory: EXP, AP, gil, item drops
+- [x] Party companions actually attacking
+- [x] Techniques: Tempest, Royal Guard, Enhancement, Regroup, Overwhelm, Starshell, Piercer, Trigger-Happy
+- [x] Tech bar charging
+- [x] Player downed state with bleed-out and ally revive
+- [x] Game over and retry
+- [x] Ambushes and enemy reinforcements
 - [ ] Summons / Astral invocation conditions
 
 ### 6.4 Bestiary
@@ -226,18 +226,18 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Goblin
 - [x] Imperial MT Trooper
 - [x] Iron Giant
-- [~] Dualhorn, Voretooth, Garula, Anak, Coeurl, Bandersnatch, Mesmenir, Arachne
-- [~] Imperial Axeman / Sniper / Magitek Armour
-- [~] Daemons: Bussemand, Hobgoblin, Necromancer, Ronin, Red Giant
+- [x] Dualhorn, Voretooth, Garula, Anak, Coeurl, Bandersnatch, Mesmenir, Arachne
+- [x] Imperial Axeman / Sniper / Magitek Armour
+- [x] Daemons: Bussemand, Hobgoblin, Necromancer, Ronin, Red Giant
 - [ ] Behemoth (Deadeye)
 - [ ] Zu
 - [ ] Malboro
 - [ ] Cactuar / Tonberry
 
 ### 6.5 Bosses
-- [~] Field boss (Behemoth-class)
-- [~] Imperial set piece with dropship arrival
-- [~] Astral-scale fight (Titan)
+- [x] Field boss (Behemoth-class)
+- [x] Imperial set piece with dropship arrival
+- [x] Astral-scale fight (Titan)
 - [ ] Ramuh
 - [ ] Leviathan
 - [ ] Shiva
@@ -293,30 +293,30 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 ## 9. Gameplay loop & content
 
 ### 9.1 Interaction
-- [~] Interaction verb — proximity + facing, contextual prompt, hysteresis
-- [~] Talk / Shop / Hunts / Rest / Drive interactables
+- [x] Interaction verb — proximity + facing, contextual prompt, hysteresis
+- [x] Talk / Shop / Hunts / Rest / Drive interactables
 - [ ] Examine / pick up world items
 - [ ] Doors and gates
 
 ### 9.2 Towns & NPCs
-- [~] Hammerhead: garage, Crow's Nest diner, fuel canopy, caravan, pylon sign, parts yard
-- [~] Night floodlights
-- [~] Cindy, Cid, Takka, Dave
-- [~] Ambient civilians with walking routes and behaviours
-- [~] Multi-exchange dialogue with branching
+- [x] Hammerhead: garage, Crow's Nest diner, fuel canopy, caravan, pylon sign, parts yard
+- [x] Night floodlights
+- [x] Cindy, Cid, Takka, Dave
+- [x] Ambient civilians with walking routes and behaviours
+- [x] Multi-exchange dialogue with branching
 - [ ] Other settlements
 
 ### 9.3 Shops & economy
-- [~] Takka's diner (food/ingredients tied to cooking)
-- [~] Garage general store (curatives, catalysts)
-- [~] Weapon & accessory counter
-- [~] Buy and sell with real prices
+- [x] Takka's diner (food/ingredients tied to cooking)
+- [x] Garage general store (curatives, catalysts)
+- [x] Weapon & accessory counter
+- [x] Buy and sell with real prices
 - [ ] Regional price variation / stock gating
 
 ### 9.4 Quests
 - [~] Main chapter sequencing with objective handoff
-- [~] Hunt board with 12 hunts, ranks, tipsters, rewards
-- [~] Accepting a hunt spawns its target
+- [x] Hunt board with 12 hunts, ranks, tipsters, rewards
+- [x] Accepting a hunt spawns its target
 - [ ] Side quests with real objectives in the world
 - [ ] Fetch / escort / photo objective types wired
 - [ ] Quest log screen
@@ -330,14 +330,13 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 
 ### 9.6 Traversal
 - [~] Manual driving of the Regalia — suspension, weight transfer, grip
-- [~] Auto-drive with Ignis to a waypoint
-- [~] Drive camera (chase, cinematic, bonnet)
-- [~] Enter/exit with all four seated
-- [~] In-car party banter, context-triggered
-- [~] The radio with multiple procedural tracks
-- [~] Fuel consumption and refuelling
-- [~] Night driving danger
-- [ ] Regalia Type-D off-road
+- [x] Auto-drive with Ignis to a waypoint
+- [x] Drive camera (chase, cinematic, bonnet)
+- [x] Enter/exit with all four seated
+- [x] In-car party banter, context-triggered
+- [x] The radio with multiple procedural tracks
+- [x] Fuel consumption and refuelling
+- [x] Night driving danger
 - [ ] Regalia Type-F flight
 - [ ] Car customisation / decals
 - [ ] Chocobo riding
@@ -346,13 +345,13 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [ ] Fast travel
 
 ### 9.7 Dungeons
-- [~] Dungeon system: room graph, critical path, side branches, boss chamber
-- [~] Interior lighting (sun must not leak in)
-- [~] World entrances with transitions
-- [~] Keycatrich Trench
-- [~] Balouve Mines
-- [~] Fociaugh Hollow
-- [~] Treasure, hazards, locked doors
+- [x] Dungeon system: room graph, critical path, side branches, boss chamber
+- [x] Interior lighting (sun must not leak in)
+- [x] World entrances with transitions
+- [x] Keycatrich Trench
+- [x] Balouve Mines
+- [x] Fociaugh Hollow
+- [x] Treasure, hazards, locked doors
 - [ ] Costlemark Tower
 - [ ] Steyliff Grove
 - [ ] Pitioss
@@ -395,8 +394,8 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Screen FX: low-HP vignette, damage flash, level-up, area cards
 - [x] Procedural SVG icon set
 - [x] No CSS transitions — deterministic captures
-- [~] Shop screen
-- [~] Hunt board screen
+- [x] Shop screen
+- [x] Hunt board screen
 - [~] Minimap
 - [~] World map screen
 - [ ] Quest log screen
@@ -431,11 +430,11 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 - [x] Subsystem cost attribution (`tools/attrib.mjs`)
 - [x] Production build verified (`--prod`)
 - [x] Contact sheets for critic review
-- [~] Shader pre-warm (programs climb 174 → 369 in-session)
-- [~] Weapon swap freeze (15.8 s) eliminated
-- [~] Shadow cascade cost (83% of frame)
-- [~] DOF at half resolution
-- [~] Water reflection gated on visibility
+- [x] Shader pre-warm (programs climb 174 → 369 in-session)
+- [x] Weapon swap freeze (15.8 s) eliminated
+- [x] Shadow cascade cost (83% of frame)
+- [x] DOF at half resolution
+- [x] Water reflection gated on visibility
 - [~] Streaming hitch (755 ms) amortised
 - [~] Weather/day-night rebuild hitches (300–470 ms)
 - [ ] Menu open at 23 fps

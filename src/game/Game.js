@@ -24,6 +24,7 @@ import { RegaliaSystem } from '../world/vehicle/RegaliaSystem.js';
 import { InteractionSystem } from './interaction/Interactables.js';
 import { Hammerhead } from '../world/town/Hammerhead.js';
 import { Npcs } from '../characters/npc/Npcs.js';
+import { Minimap } from '../ui/Minimap.js';
 import { Dungeons } from '../world/dungeons/Dungeons.js';
 import { SHOTS } from './Shots.js';
 
@@ -114,6 +115,7 @@ export class Game {
       // here (see src/ui/GameData.js).
       ['Rpg', () => new RpgSystem({ startLevel: 27, startGil: 42180, startAp: 148 })],
       ['HUD', () => new HUD()],
+      ['Minimap', () => new Minimap()],
       ['Menus', () => new Menus()],
       // WS-3: the interaction verb, then Hammerhead, then the people in it.
       // Order matters — Town registers its interactables and its two screens,

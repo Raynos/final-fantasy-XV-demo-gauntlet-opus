@@ -19,12 +19,28 @@ const EYE = 0xffa416;
  */
 export const SABERTUSK = {
   key: 'sabertusk',
+  questId: 'sabertusk',
+  faction: 'beast',
+  expClass: 'trash',
   stats: {
     name: 'Sabertusk', hp: 780, poise: 42, speed: 5.6, attackRange: 2.1,
     aggroRange: 26, radius: 0.55, height: 1.05, damage: 88, level: 14,
   },
   weakness: 'fire',
+  resistPct: { fire: 165, ice: 80, lightning: 100, dark: 100, light: 100 },
+  weakTo: ['dagger', 'polearm'],
+  senses: { sight: 26, fov: 1.5, hearing: 18 },
+  drops: [
+    { id: 'sabertusk_fang', chance: 0.45, count: 1 },
+    { id: 'venom_fang', chance: 0.12, count: 1 },
+  ],
   timing: { telegraph: 0.42, strike: 0.16, attack: 0.42, recover: 0.6 },
+  attacks: [
+    { id: 'bite', range: 2.2, weight: 3, mult: 1.0, poise: 12, hitRadius: 1.8,
+      telegraph: 0.34, strike: 0.14, attack: 0.4, recover: 0.55, cooldown: 1.1 },
+    { id: 'pounce', range: 9, minRange: 3.4, weight: 2, mult: 1.5, poise: 22, hitRadius: 2.0,
+      telegraph: 0.52, strike: 0.18, attack: 0.55, recover: 0.9, cooldown: 3.2, lunge: 13, tracking: 1.0 },
+  ],
   buildPrototype,
   make(opts) { return new SabertuskEnemy(opts); },
 };

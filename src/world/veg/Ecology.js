@@ -56,7 +56,7 @@ export class Ecology {
     this.nTint = new Noise(seed ^ 0x77c19);
 
     const tsize = (this.terrain && this.terrain.size) || 1400;
-    this.worldRadius = Math.min(620, tsize * 0.5 - 40);
+    this.worldRadius = Math.min(4200, tsize * 0.5 - 40);
 
     // Does the terrain own a road? If so defer to it.
     this._terrainRoad = !!(this.terrain && typeof this.terrain.roadCenterX === 'function');

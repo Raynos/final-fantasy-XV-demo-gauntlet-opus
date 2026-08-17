@@ -1,0 +1,27 @@
+[
+ { "name": "vista_noon",    "time": 12.5, "weather": "clear",    "pos": [180, 40, -300],    "target": [-430, 120, -560],   "fov": 46 },
+ { "name": "mesa_landmark", "time": 16.0, "weather": "clear",    "pos": [-40, 42, -300],    "target": [-430, 130, -560],   "fov": 40 },
+ { "name": "vista_dawn",    "time": 6.4,  "weather": "clear",    "pos": [-660, 92, 400],    "target": [560, 90, -420],     "fov": 44 },
+ { "name": "vista_dusk",    "time": 18.7, "weather": "clear",    "pos": [430, 40, -60],     "target": [-640, 140, 430],    "fov": 42 },
+ { "name": "vista_night",   "time": 23.2, "weather": "clear",    "pos": [70, 22, 60],       "target": [-104, 12, -138],    "fov": 46 },
+ { "name": "haven_dusk",    "time": 20.1, "weather": "clear",    "pos": [8, 13, 18],        "target": [-62, 8, -46],       "fov": 44 },
+ { "name": "regalia_road",  "time": 17.4, "weather": "clear",    "pos": [16, 11.5, 48],     "target": [-19, 8.4, 14],      "fov": 40 },
+ { "name": "storm",         "time": 15.0, "weather": "storm",    "pos": [-700, 120, 340],   "target": [320, 80, -320],     "fov": 48 },
+ { "name": "longwythe",     "time": 9.5,  "weather": "clear",    "pos": [340, 46, -640],    "target": [900, 300, -1180],   "fov": 42 },
+ { "name": "taelpar",       "time": 15.5, "weather": "clear",    "pos": [-2040, 104, -400], "target": [-2340, 10, -900],   "fov": 46 },
+ { "name": "lestallum",     "time": 17.8, "weather": "clear",    "pos": [-2560, 74, -860],  "target": [-3060, 140, -680],  "fov": 44 },
+ { "name": "alstor",        "time": 8.5,  "weather": "fog",      "pos": [-780, 42, 1240],   "target": [-1320, 2, 820],     "fov": 46 },
+ { "name": "disc",          "time": 16.5, "weather": "clear",    "pos": [-1230, 118, -1330],"target": [-1020, 210, -2160], "fov": 44 },
+ { "name": "galdin",        "time": 18.2, "weather": "clear",    "pos": [2180, 44, 1860],   "target": [2700, 2, 2760],     "fov": 46 },
+ { "name": "vesperpool",    "time": 7.5,  "weather": "overcast", "pos": [-2600, 66, -1980], "target": [-3060, 4, -2400],   "fov": 46 },
+ { "name": "ravatogh",      "time": 17.0, "weather": "clear",    "pos": [-2960, 116, -2760],"target": [-3420, 340, -3160], "fov": 42 },
+
+ { "name": "hud_minimap",   "time": 16.4, "weather": "clear", "pos": [120, 18, 120], "target": [-200, 12, -60], "fov": 50,
+   "minimap": true },
+ { "name": "worldmap_fog",  "time": 16.0, "weather": "clear", "pos": [120, 18, 120], "target": [-200, 12, -60], "fov": 50,
+   "worldmap": true, "wmZoom": 2, "wmSel": 0 },
+ { "name": "worldmap_all",  "time": 16.0, "weather": "clear", "pos": [120, 18, 120], "target": [-200, 12, -60], "fov": 50,
+   "worldmap": true, "revealAll": true, "discoverAll": true, "wmZoom": 1, "wmSel": 0 },
+ { "name": "worldmap_zoom", "time": 16.0, "weather": "clear", "pos": [120, 18, 120], "target": [-200, 12, -60], "fov": 50,
+   "worldmap": true, "revealAll": true, "discoverAll": true, "wmZoom": 3, "wmSel": 2, "wmFilter": 3 }
+]

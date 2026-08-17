@@ -9,11 +9,16 @@ import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
 import {
   createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
 } from './terrain/TerrainMaterial.js';
+import { worldMap } from './map/WorldMap.js';
 
 /**
- * Leide badlands: a 3 km eroded basin ringed by ridged mountain ranges, drawn
+ * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
  * with a camera-centred geometry clipmap and a six-layer height-blended,
  * triplanar splat shader.
+ *
+ * The shape of the world is **not** authored here. `world/map/WorldMap.js` owns
+ * the zones, the points of interest, the required landforms and the road graph;
+ * `terrain/Field.js` realises them. Change the map and the ground follows.
  *
  * Cross-system contract:
  *   heightAt(x, z)      -> number      exact surface height, bilinear cached
@@ -27,8 +32,10 @@ export class Terrain {
   constructor() {
     /** Full span of the detailed heightfield, metres. */
     this.size = HALF * 2;
-    /** Hero landmark anchors, world space. */
+    /** Hero landmark anchors, world space (resolved out of the map). */
     this.landmarks = LANDMARKS;
+    /** The authoritative world definition. */
+    this.map = worldMap;
     this.layerNames = LAYER_NAMES;
     this._v = new THREE.Vector3();
     this._ctrl = {};
@@ -176,7 +183,18 @@ export class Terrain {
    * Distance in metres from the road centreline. Cheap enough for scattering.
    * @returns {number}
    */
-  roadDistance(x, z) { return this.road ? this.road.distance(x, z) : 1e5; }
+  roadDistance(x, z) {
+    return this.field && this.field.network ? this.field.network.distance(x, z) : 1e5;
+  }
+
+  /**
+   * The zone record covering this point, or null on the frontier.
+   * @returns {object|null}
+   */
+  zoneAt(x, z) { return this.map.zoneAt(x, z); }
+
+  /** Blended biome humidity, 0 = Leide badlands, 1 = the Vesperpool. */
+  moistureAt(x, z) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
 
   /**
    * X of the road centreline at a given Z.

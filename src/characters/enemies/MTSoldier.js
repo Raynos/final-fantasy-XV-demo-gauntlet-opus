@@ -19,13 +19,30 @@ const MAGITEK = 0xff2f12;
  */
 export const MT_SOLDIER = {
   key: 'mt',
+  questId: 'magitek_trooper',
+  faction: 'imperial',
+  expClass: 'normal',
   stats: {
     name: 'Magitek Trooper', hp: 640, poise: 34, speed: 3.2, attackRange: 9.5,
     aggroRange: 34, radius: 0.42, height: 1.95, damage: 74, level: 16,
   },
   weakness: 'lightning',
   resist: 'fire',
+  resistPct: { lightning: 170, fire: 60, ice: 100, dark: 100, light: 100 },
+  weakTo: ['polearm'],
+  senses: { sight: 34, fov: 1.3, hearing: 12 },
+  drops: [
+    { id: 'chrome_bit', chance: 0.4, count: 1 },
+    { id: 'magitek_booster', chance: 0.15, count: 1 },
+    { id: 'debased_coin', chance: 0.3, count: 3 },
+  ],
   timing: { telegraph: 0.5, strike: 0.1, attack: 0.42, recover: 0.75 },
+  attacks: [
+    { id: 'volley', range: 16, minRange: 3.5, weight: 4, mult: 0.7, poise: 4, hitRadius: 1.0,
+      ranged: true, telegraph: 0.55, strike: 0.12, attack: 0.5, recover: 0.8, cooldown: 1.6 },
+    { id: 'bayonet', range: 2.6, weight: 2, mult: 1.2, poise: 14, hitRadius: 1.6,
+      telegraph: 0.4, strike: 0.14, attack: 0.42, recover: 0.7, cooldown: 1.2 },
+  ],
   buildPrototype,
   make(opts) { return new MTEnemy(opts); },
 };

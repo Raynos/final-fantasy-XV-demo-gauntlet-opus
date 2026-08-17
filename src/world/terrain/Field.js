@@ -1,41 +1,99 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.js';
 import { Rng } from '../../util/Rng.js';
-import { Road } from './Road.js';
+import { RoadNetwork } from './Road.js';
+import { worldMap, LANDFORMS, WORLD } from '../map/WorldMap.js';
+
+// packed biome vector slots, see WorldMap.BIOME_KEYS
+const B_BASE = 0, B_RELIEF = 1, B_RIDGE = 2, B_RIDGEIN = 3, B_TERRACE = 4, B_STYLE = 9, B_WARP = 6;
 
 /**
- * The CPU heightfield: a composite of ridged multifractal ranges, domain-warped
- * fbm, terraced mesas, hand-placed hero landmarks and a droplet hydraulic
- * erosion pass. Everything the GPU draws is a bilinear sample of these grids,
- * so `heightAt()` matches the rendered surface exactly.
+ * The CPU heightfield — **driven by `world/map/WorldMap.js`, not by taste.**
  *
- *   near grid : 2048^2 over +/-1536 m   (1.5 m cells)
- *   far grid  : 1024^2 over +/-6144 m   (12 m cells) — the horizon ranges
+ * The pipeline is:
+ *   1. a *corridor field*: distance to the nearest road or settlement. Every
+ *      mountain range in the world is masked by it, so the land opens out
+ *      wherever the design says people travel and closes in between,
+ *   2. a macro pass whose amplitude, roughness, terracing and warp come from
+ *      the zone biome parameters blended at that point,
+ *   3. the authored landforms from `WorldMap.LANDFORMS` — mesas, fins, craters,
+ *      lake basins, gorges, terraces, a volcano — stamped where the map says,
+ *   4. hydraulic erosion, thermal talus and scattered outcrops,
+ *   5. settlement pads,
+ *   6. the road network carved from the graph.
+ *
+ * Grid layout (8.2 km of playable world):
+ *   near grid : 2048^2 over +/-4096 m   (4 m cells)
+ *   far grid  : 1024^2 over +/-16384 m  (32 m cells) — the frontier ranges
+ *
+ * The 4 m macro cell is topped up by an analytic micro-relief term evaluated
+ * identically on the CPU (`microDetail`) and in the vertex shader (`tf_micro`),
+ * which is what puts the 6-25 m surface detail back that a 4 m grid cannot
+ * carry. `heightAt()` therefore still matches the rendered surface exactly.
  */
 
 export const N = 2048;
-export const HALF = 1536;
-export const CELL = (HALF * 2) / N;          // 1.5 m
+export const HALF = 4096;
+export const CELL = (HALF * 2) / N;            // 4 m
 export const FAR_N = 1024;
-export const FAR_HALF = 6144;
-export const FAR_CELL = (FAR_HALF * 2) / FAR_N;   // 12 m
+export const FAR_HALF = 16384;
+export const FAR_CELL = (FAR_HALF * 2) / FAR_N;   // 32 m
 /** Beyond this Chebyshev radius the far grid takes over completely. */
-export const BLEND_OUT = 1400;
-const BLEND_IN = 1120;
+export const BLEND_OUT = 4020;
+const BLEND_IN = 3560;
 
-const COARSE = 512;                           // macro pass resolution (6 m)
+const COARSE = 512;                             // macro pass resolution (16 m)
 const COARSE_CELL = (HALF * 2) / COARSE;
+const SEA = WORLD.seaLevel;
 
-/** Hero landmarks — fixed world anchors so shots and props can frame them. */
-export const LANDMARKS = {
-  blackrockMesa: { x: -215, z: -395, r: 132, h: 108, kind: 'mesa' },
-  northMesa: { x: -640, z: -900, r: 215, h: 168, kind: 'mesa' },
-  eastButtes: { x: 305, z: -300, r: 66, h: 60, kind: 'buttes' },
-  westScarp: { x: -350, z: 300, r: 118, h: 86, kind: 'mesa' },
-  spireRidge: { x: -545, z: 350, r: 150, h: 72, kind: 'spires' },
-  canyon: { x: 60, z: 430, r: 760, h: -62, kind: 'canyon' },
-  basin: { x: 0, z: 0, r: 130, h: 0, kind: 'basin' },
-};
+/**
+ * Hero landmark anchors, world space — the same names the shot list and the
+ * prop scatter have always used, now resolved out of the map instead of being
+ * a second, independent set of coordinates.
+ */
+export const LANDMARKS = buildLandmarks();
+
+function buildLandmarks() {
+  const byId = new Map(LANDFORMS.map((l) => [l.id, l]));
+  const L = {};
+  const put = (key, id, kind) => {
+    const f = byId.get(id);
+    if (f) L[key] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
+  };
+  put('blackrockMesa', 'blackrockMesa');
+  put('northMesa', 'northMesa');
+  put('eastButtes', 'eastButtes', 'buttes');
+  put('westScarp', 'westScarp');
+  put('spireRidge', 'spireRidge', 'spires');
+  put('longwythePeak', 'longwythePeak', 'peak');
+  put('discCauthess', 'discCrater', 'crater');
+  put('ravatogh', 'ravatoghCone', 'volcano');
+  put('vesperpool', 'vesperBasin', 'lake');
+  put('alstorSlough', 'alstorBasin', 'lake');
+  put('lestallum', 'lestallumTerrace', 'terrace');
+  put('crownScarp', 'crownScarp');
+  L.canyon = { x: -2318, z: -1180, r: 700, h: -235, kind: 'canyon', id: 'taelparCanyon' };
+  L.basin = { x: 60, z: 40, r: 460, h: 9, kind: 'basin', id: 'hammerheadPan' };
+  for (const id of ['hammerhead', 'galdin_quay', 'lestallum', 'wiz_chocobo', 'meldacio_hq']) {
+    const p = worldMap.poiById(id);
+    if (p) L[id.replace(/_(\w)/g, (m, c) => c.toUpperCase())] = { x: p.x, z: p.z, r: p.r, h: 0, kind: 'settlement', id };
+  }
+  return L;
+}
+
+/**
+ * Analytic micro-relief, 6-25 m wavelength, +/-2 m. Must stay byte-for-byte
+ * equivalent to `tf_micro` in `TerrainMaterial.js`.
+ * @returns {number} metres to add to the grid height
+ */
+export function microDetail(x, z) {
+  // Two octaves, not three. `heightAt()` is called tens of thousands of times a
+  // frame by the grass streamer alone, so this is a hot path: the third octave
+  // that used to modulate the amplitude cost 33% of the whole function and was
+  // worth about a decimetre of variety.
+  return (0.62 * gnoise2(x * 0.0930, z * 0.0930)
+    + 0.30 * gnoise2(x * 0.2650 + 5.0, z * 0.2650 - 3.0)) * 0.95;
+}
 
 export class Field {
   constructor(seed = 1337) {
@@ -43,11 +101,13 @@ export class Field {
     this.n = new Noise(seed);
     this.n2 = new Noise(seed ^ 0x5f3a);
     this.n3 = new Noise(seed ^ 0x9e17);
+    this.map = worldMap;
     this.road = null;
     this.stats = {};
+    this._b = {};
   }
 
-  /** Build every grid. Synchronous; ~3-6 s. */
+  /** Build every grid. Synchronous. */
   build() {
     const t0 = performance.now();
     this.h = new Float32Array(N * N);
@@ -57,25 +117,147 @@ export class Field {
     this.roadMask = new Float32Array(N * N);
     this.roadLat = new Float32Array(N * N);
 
+    this.network = new RoadNetwork(this.map.roadGraph);
+    this._buildCorridor();
+    const t1 = performance.now();
     this._buildFar();
+    const tFar = performance.now();
     this._buildMacro();
-    this._applyLandmarks();
+    const t2 = performance.now();
+    this._farMs = Math.round(tFar - t1);
+    this._applyLandforms();
     this._addDetail();
     this._stitchFar();
+    const t3 = performance.now();
     this._erode();
     this._talus();
     this._outcrops();
     this._stitchFar();
+    const t4 = performance.now();
 
-    this.roadSpline = new Road();
-    // Road.carve() writes into field.h / field.road
-    this.roadSpline.carve({
+    this._settlementPads();
+    this.network.carve({
       N, HALF, CELL, h: this.h, road: this.roadMask, roadLat: this.roadLat,
       rawHeightAt: (x, z) => this.rawHeightAt(x, z),
+      micro: microDetail,
     });
+    /** Legacy single-spline handle: the main highway. */
+    this.roadSpline = this.network.spine;
 
     this._derive();
-    this.stats.buildMs = Math.round(performance.now() - t0);
+    this.stats = {
+      buildMs: Math.round(performance.now() - t0),
+      corridorMs: Math.round(t1 - t0),
+      farMs: this._farMs,
+      macroMs: Math.round(t2 - t1) - this._farMs,
+      landformMs: Math.round(t3 - t2),
+      erodeMs: Math.round(t4 - t3),
+      roadKm: +(this.map.roadGraph.totalLength / 1000).toFixed(2),
+    };
+  }
+
+  // ------------------------------------------------------------- corridor
+
+  /**
+   * Distance in metres from the nearest road centreline or settlement centre,
+   * on the 16 m macro grid. Every mountain belt in the world is faded out
+   * against this, which is what makes the ranges sit *between* the places the
+   * design says people go instead of on top of them.
+   */
+  _buildCorridor() {
+    const c = new Float32Array(COARSE * COARSE).fill(1e6);
+    const g = this.map.roadGraph;
+
+    const stamp = (x, z, extra) => {
+      const R = 520 + extra;
+      const i0 = Math.max(0, Math.floor((x - R + HALF) / COARSE_CELL));
+      const i1 = Math.min(COARSE - 1, Math.ceil((x + R + HALF) / COARSE_CELL));
+      const j0 = Math.max(0, Math.floor((z - R + HALF) / COARSE_CELL));
+      const j1 = Math.min(COARSE - 1, Math.ceil((z + R + HALF) / COARSE_CELL));
+      for (let j = j0; j <= j1; j++) {
+        const pz = -HALF + j * COARSE_CELL;
+        for (let i = i0; i <= i1; i++) {
+          const px = -HALF + i * COARSE_CELL;
+          const d = Math.max(0, Math.hypot(px - x, pz - z) - extra);
+          const idx = j * COARSE + i;
+          if (d < c[idx]) c[idx] = d;
+        }
+      }
+    };
+
+    // Roads: every fourth sample, i.e. one stamp per 24 m. The field is only
+    // ever read through a 150-900 m smoothstep, so finer stamping buys nothing
+    // and costs a second of build time.
+    for (const e of g.edges) for (let i = 0; i < e.pts.length; i += 4) stamp(e.pts[i].x, e.pts[i].z, 0);
+    for (const e of g.edges) stamp(e.pts[e.pts.length - 1].x, e.pts[e.pts.length - 1].z, 0);
+    // settlements and campsites open out a wider clearing
+    for (const p of this.map.pois) {
+      const w = p.type === 'town' ? 170 : p.type === 'outpost' || p.type === 'reststop' ? 110
+        : p.type === 'chocobo' ? 130 : p.type === 'parking' ? 40
+          : p.type === 'haven' ? 40 : p.type === 'imperial' ? 100 : 0;
+      if (w > 0) stamp(p.x, p.z, w);
+    }
+    this.corr = c;
+
+    // A second field: distance from the nearest *authored* landform. The
+    // procedural ridge belt is faded out against it, so a hero mesa is never
+    // buried under a generic range that happened to grow on the same spot.
+    const cl = new Float32Array(COARSE * COARSE).fill(1e6);
+    const stampClear = (x, z, extra) => {
+      const R = 700 + extra;
+      const i0 = Math.max(0, Math.floor((x - R + HALF) / COARSE_CELL));
+      const i1 = Math.min(COARSE - 1, Math.ceil((x + R + HALF) / COARSE_CELL));
+      const j0 = Math.max(0, Math.floor((z - R + HALF) / COARSE_CELL));
+      const j1 = Math.min(COARSE - 1, Math.ceil((z + R + HALF) / COARSE_CELL));
+      for (let j = j0; j <= j1; j++) {
+        const pz = -HALF + j * COARSE_CELL;
+        for (let i = i0; i <= i1; i++) {
+          const px = -HALF + i * COARSE_CELL;
+          const d = Math.max(0, Math.hypot(px - x, pz - z) - extra);
+          const idx = j * COARSE + i;
+          if (d < cl[idx]) cl[idx] = d;
+        }
+      }
+    };
+    for (const f of LANDFORMS) {
+      if (f.kind === 'mesa' || f.kind === 'butte' || f.kind === 'peak'
+        || f.kind === 'volcano' || f.kind === 'crater') {
+        stampClear(f.x, f.z, (f.r || 200) * 0.85);
+      } else if (f.kind === 'terrace') {
+        stampClear(f.x, f.z, Math.max(f.rx, f.rz) * 0.9);
+      } else if (f.kind === 'fin') {
+        const steps = 6;
+        for (let k = 0; k <= steps; k++) {
+          const t = k / steps;
+          stampClear(f.x0 + (f.x1 - f.x0) * t, f.z0 + (f.z1 - f.z0) * t, f.halfW * 1.6);
+        }
+      }
+    }
+    this.clear = cl;
+  }
+
+  /** Bilinear distance to the nearest authored landform, metres. */
+  clearAt(x, z) {
+    const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
+    let i0 = Math.floor(fx), j0 = Math.floor(fz);
+    const tx = fx - i0, tz = fz - j0;
+    if (i0 < 0) i0 = 0; else if (i0 > COARSE - 2) i0 = COARSE - 2;
+    if (j0 < 0) j0 = 0; else if (j0 > COARSE - 2) j0 = COARSE - 2;
+    const c = this.clear, b = j0 * COARSE + i0;
+    const a0 = c[b], a1 = c[b + 1], a2 = c[b + COARSE], a3 = c[b + COARSE + 1];
+    return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
+  }
+
+  /** Bilinear corridor distance, metres. */
+  corridorAt(x, z) {
+    const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
+    let i0 = Math.floor(fx), j0 = Math.floor(fz);
+    const tx = fx - i0, tz = fz - j0;
+    if (i0 < 0) i0 = 0; else if (i0 > COARSE - 2) i0 = COARSE - 2;
+    if (j0 < 0) j0 = 0; else if (j0 > COARSE - 2) j0 = COARSE - 2;
+    const c = this.corr, b = j0 * COARSE + i0;
+    const a0 = c[b], a1 = c[b + 1], a2 = c[b + COARSE], a3 = c[b + COARSE + 1];
+    return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
   }
 
   /**
@@ -116,89 +298,82 @@ export class Field {
 
   // ---------------------------------------------------------------- far field
 
-  /** Distant ranges: ridged multifractal that only switches on past ~1.2 km. */
+  /**
+   * The frontier: ranges beyond the playable field. Pure procedural, but the
+   * silhouette variety machinery (per-massif axis, aspect, crest notches, mesa
+   * capping, benching, talus aprons) is kept — it is what stops a horizon
+   * reading as N copies of one cone.
+   */
   farHeight(x, z) {
     const n = this.n, n2 = this.n2, n3 = this.n3;
-    const wx = x * 0.00042, wz = z * 0.00042;
+    const wx = x * 0.000158, wz = z * 0.000158;
     const q1 = n2.fbm2(wx * 0.62 + 11.3, wz * 0.62 - 4.1, 3);
     const q2 = n2.fbm2(wx * 0.62 - 7.7, wz * 0.62 + 9.4, 3);
 
-    // Per-massif structural grain. Every range gets its own axis and its own
-    // aspect ratio, and the ridge domain is stretched along that axis before it
-    // is evaluated. This is the single biggest reason a horizon stops reading
-    // as N copies of one cone: some massifs come out as long hogback walls,
-    // some as compact stacks, and only a few as isolated fangs.
-    const th = 3.14159 * n3.fbm2(x * 0.00019 + 71.3, z * 0.00019 - 12.7, 2);
+    const th = 3.14159 * n3.fbm2(x * 0.000071 + 71.3, z * 0.000071 - 12.7, 2);
     const ca = Math.cos(th), sa = Math.sin(th);
-    const elong = clamp01(0.5 + 0.72 * n3.fbm2(x * 0.00026 - 44.1, z * 0.00026 + 18.9, 2));
+    const elong = clamp01(0.5 + 0.72 * n3.fbm2(x * 0.0000975 - 44.1, z * 0.0000975 + 18.9, 2));
     const uu = (wx * ca + wz * sa) / (0.50 + 1.20 * elong) + 0.85 * q1;
     const vv = (-wx * sa + wz * ca) * (0.62 + 1.05 * elong) + 0.85 * q2;
     let rg = n.ridged2(uu, vv, 5, 2.03, 0.44);
-
-    // Saddles and notches. A real crest line is a chain of summits separated by
-    // cols; without this the ridge is one extruded triangle from end to end.
     rg *= 1 - 0.44 * smoothstep(0.28, 0.86,
       0.5 + 0.62 * n3.fbm2(uu * 4.7 + 3.3, vv * 4.7 - 7.1, 3));
 
-    const r = Math.hypot(x, z) / 1000;
+    const r = Math.hypot(x, z) / 2670;
     // the northern (-Z) wall is the tallest: it backs the hero and vista shots
     const dir = 0.62 + 0.38 * (-z / Math.max(1, Math.hypot(x, z)));
-    // massif grouping: ranges cluster instead of every peak standing alone
-    const massif = 0.35 + 0.75 * Math.max(0, n2.fbm2(x * 0.00034 - 8.2, z * 0.00034 + 3.5, 3));
+    const massif = 0.35 + 0.75 * Math.max(0, n2.fbm2(x * 0.000128 - 8.2, z * 0.000128 + 3.5, 3));
     const mask = smoothstep(1.05, 2.45, r)
-      * (0.5 + 0.5 * n.fbm2(x * 0.00019 + 31, z * 0.00019 - 17, 3) + 0.001) * dir * massif;
-    const plain = 9 + 30 * n.fbm2(x * 0.00052 + 3.3, z * 0.00052 + 8.1, 4);
+      * (0.5 + 0.5 * n.fbm2(x * 0.000071 + 31, z * 0.000071 - 17, 3) + 0.001) * dir * massif;
+    const plain = 14 + 40 * n.fbm2(x * 0.000195 + 3.3, z * 0.000195 + 8.1, 4);
 
-    // Per-massif character. Without this every range on the horizon rhymes:
-    // the same ridge exponent everywhere makes one silhouette, repeated. Low
-    // `ch` regions become broad, flat-topped mesa walls; high `ch` regions
-    // become the spiky fangs.
-    const ch = clamp01(0.5 + 0.62 * n2.fbm2(x * 0.00021 + 55.7, z * 0.00021 - 22.3, 2));
+    const ch = clamp01(0.5 + 0.62 * n2.fbm2(x * 0.0000788 + 55.7, z * 0.0000788 - 22.3, 2));
     const sharp = 1.12 + 0.78 * ch;
-    const amp = 980 - 300 * ch;
+    const amp = 1180 - 340 * ch;
 
     let h = plain + Math.pow(Math.max(0, rg - 0.10), sharp) * amp * Math.max(0, mask);
-    // shoulders: broad fbm bulk under the ridges so they read as massifs
-    h += smoothstep(1.2, 2.6, r) * 130 * Math.max(0, n.fbm2(wx * 0.8 + 2.4, wz * 0.8 - 6.1, 4)) * dir;
-    // a second, hazier range further out to layer the horizon
-    h += smoothstep(2.3, 4.0, r) * 330 * Math.pow(n.ridged2(wx * 0.52 + 5.5, wz * 0.52 - 2.2, 4, 2.0, 0.46), 1.4);
+    h += smoothstep(1.2, 2.6, r) * 160 * Math.max(0, n.fbm2(wx * 0.8 + 2.4, wz * 0.8 - 6.1, 4)) * dir;
+    h += smoothstep(2.3, 4.0, r) * 380 * Math.pow(n.ridged2(wx * 0.52 + 5.5, wz * 0.52 - 2.2, 4, 2.0, 0.46), 1.4);
 
-    // Mesa capping: shear the tops off the broad massifs against a bench
-    // altitude that itself drifts, so the skyline gets tables and saddles
-    // instead of an unbroken row of triangles. The shear is near-total now —
-    // a half-sheared cone is still a cone.
     const capAmt = smoothstep(0.58, 0.14, ch);
     if (capAmt > 0.001) {
-      const capH = 175 + 320 * (0.5 + 0.5 * n.fbm2(x * 0.00026 - 13.1, z * 0.00026 + 6.7, 2));
+      const capH = 210 + 380 * (0.5 + 0.5 * n.fbm2(x * 0.0000975 - 13.1, z * 0.0000975 + 6.7, 2));
       if (h > capH) h -= (h - capH) * capAmt * 0.96;
     }
-
-    // Stepped plateaus. The broad, low-`ch` massifs get benched shoulders at
-    // 45-100 m: a readable geological staircase rather than a smooth flank.
-    const stepAmt = smoothstep(0.24, 0.72, 1 - ch) * smoothstep(70, 165, h);
+    const stepAmt = smoothstep(0.24, 0.72, 1 - ch) * smoothstep(85, 200, h);
     if (stepAmt > 0.002) {
-      const stepH = 44 + 56 * (0.5 + 0.5 * n2.fbm2(x * 0.00031 + 27.7, z * 0.00031 - 5.5, 2));
+      const stepH = 52 + 66 * (0.5 + 0.5 * n2.fbm2(x * 0.000116 + 27.7, z * 0.000116 - 5.5, 2));
       const t = h / stepH, fl = Math.floor(t), fr = t - fl;
       h += ((fl + smoothstep(0.50, 0.94, fr)) * stepH - h) * 0.60 * stepAmt;
     }
-
-    // Talus aprons. The bottom ~150 m of every face lays back into a concave
-    // scree skirt instead of meeting the plain at a hard cone angle — the
-    // silhouette softener that makes a range read as eroded rock, not a tent.
     const above = h - plain;
-    if (above > 0) h = plain + above * (0.60 + 0.40 * Math.min(1, above / 150));
-    return h;
+    if (above > 0) h = plain + above * (0.60 + 0.40 * Math.min(1, above / 180));
+    // The frontier is never below the water plane. Its plain term is an fbm
+    // that can go negative, and a puddle out at 4 km costs one of the four
+    // water bodies `Water` is willing to build — which is how the Galdin sea
+    // ended up not being drawn.
+    return Math.max(SEA + 14, h);
   }
 
   _buildFar() {
     const f = this.far;
+    // Evaluate on a half-resolution lattice and interpolate up: the field is
+    // low-pass filtered twice below anyway, and the frontier is 4-16 km away.
+    const M = FAR_N >> 1, MC = FAR_CELL * 2;
+    const c = new Float32Array(M * M);
+    for (let j = 0; j < M; j++) {
+      const z = -FAR_HALF + j * MC;
+      for (let i = 0; i < M; i++) c[j * M + i] = this.farHeight(-FAR_HALF + i * MC, z);
+    }
+    const cAt = (i, j) => c[Math.min(M - 1, Math.max(0, j)) * M + Math.min(M - 1, Math.max(0, i))];
     for (let j = 0; j < FAR_N; j++) {
-      const z = -FAR_HALF + j * FAR_CELL;
+      const fj = j * 0.5, j0 = Math.floor(fj), tz = fj - j0;
       for (let i = 0; i < FAR_N; i++) {
-        f[j * FAR_N + i] = this.farHeight(-FAR_HALF + i * FAR_CELL, z);
+        const fi = i * 0.5, i0 = Math.floor(fi), tx = fi - i0;
+        const a = cAt(i0, j0), b = cAt(i0 + 1, j0), d = cAt(i0, j0 + 1), e = cAt(i0 + 1, j0 + 1);
+        f[j * FAR_N + i] = (a + (b - a) * tx) * (1 - tz) + (d + (e - d) * tx) * tz;
       }
     }
-    // smoothing passes so the 12 m grid reads as rock, not as noise
     const tmp = new Float32Array(f.length);
     for (let pass = 0; pass < 2; pass++) {
       for (let j = 0; j < FAR_N; j++) {
@@ -220,73 +395,71 @@ export class Field {
 
   // --------------------------------------------------------------- near field
 
-  /** Macro landscape evaluated on the 6 m grid, then bicubically upsampled. */
+  /**
+   * Macro landscape from the map's blended biome parameters. Evaluated on the
+   * 16 m grid, then bicubically upsampled.
+   */
   macroHeight(x, z) {
     const n = this.n, n2 = this.n2;
+    const b = this.map.biomeVec(x, z);
+    const bRelief = b[B_RELIEF], bRidge = b[B_RIDGE], bTerrace = b[B_TERRACE];
+    this.lastTerrace = bTerrace;
 
     // large domain warp — kills the "obviously procedural" grid feel
-    const q1 = n2.fbm2(x * 0.00085 + 3.1, z * 0.00085 + 7.7, 3);
-    const q2 = n2.fbm2(x * 0.00085 - 5.3, z * 0.00085 + 1.9, 3);
-    const wx = x + 280 * q1, wz = z + 280 * q2;
+    const q1 = n2.fbm2(x * 0.00032 + 3.1, z * 0.00032 + 7.7, 3);
+    const q2 = n2.fbm2(x * 0.00032 - 5.3, z * 0.00032 + 1.9, 3);
+    const wx = x + b[B_WARP] * q1, wz = z + b[B_WARP] * q2;
 
-    // regional undulation + mid-scale rolling ground
-    let h = 12 + 30 * n.fbm2(wx * 0.00058, wz * 0.00058, 4);
-    h += 14 * n.fbm2(wx * 0.0021 + 12.4, wz * 0.0021 - 5.6, 4);
-    h += 7.5 * n2.fbm2(wx * 0.0058 - 2.2, wz * 0.0058 + 6.3, 4);
+    let h = b[B_BASE];
+    h += bRelief * (0.62 * n.fbm2(wx * 0.00022, wz * 0.00022, 4)
+      + 0.30 * n.fbm2(wx * 0.00080 + 12.4, wz * 0.00080 - 5.6, 4)
+      + 0.20 * n2.fbm2(wx * 0.00218 - 2.2, wz * 0.00218 + 6.3, 4));
 
-    // low benched ridges through the basin — mid-ground structure at 60-250 m
-    const bench = n.ridged2(wx * 0.0042 + 3.7, wz * 0.0042 - 9.1, 4, 2.05, 0.55);
-    h += Math.pow(Math.max(0, bench - 0.30) / 0.70, 1.6) * 34;
+    // low benched ridges — mid-ground structure at 150-600 m
+    const bench = n.ridged2(wx * 0.00158 + 3.7, wz * 0.00158 - 9.1, 4, 2.05, 0.55);
+    h += Math.pow(Math.max(0, bench - 0.30) / 0.70, 1.6) * bRelief * 1.15;
 
-    // Ridged badland belt: kept clear of the spawn basin so the player has
-    // room. Everything below exists to stop this belt being a picket fence of
-    // identical triangles — a per-massif axis and aspect, crest notches, a
-    // style field that decides table vs fang, and a laid-back scree foot.
-    const r = Math.hypot(x, z);
-    const belt = smoothstep(165, 820, r);
-    const th = 3.14159 * n2.fbm2(x * 0.00044 + 12.9, z * 0.00044 - 31.5, 2);
-    const ca = Math.cos(th), sa = Math.sin(th);
-    const elong = clamp01(0.5 + 0.75 * n2.fbm2(x * 0.00061 - 7.7, z * 0.00061 + 22.1, 2));
-    const bu = (wx * ca + wz * sa) * 0.00135 / (0.55 + 1.05 * elong) + 21.5;
-    const bv = (-wx * sa + wz * ca) * 0.00135 * (0.62 + 1.00 * elong) + 4.2;
-    let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
-    rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
-      0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
+    // ------- the ridge belt, held off the travel corridors -------
+    const corr = this.corridorAt(x, z);
+    const belt = smoothstep(120, 240 + b[B_RIDGEIN] * 0.55, corr)
+      * (0.16 + 0.84 * smoothstep(30, 340, this.clearAt(x, z)));
+    if (belt > 0.002 && bRidge > 1) {
+      const th = 3.14159 * n2.fbm2(x * 0.000165 + 12.9, z * 0.000165 - 31.5, 2);
+      const ca = Math.cos(th), sa = Math.sin(th);
+      const elong = clamp01(0.5 + 0.75 * n2.fbm2(x * 0.000229 - 7.7, z * 0.000229 + 22.1, 2));
+      const bu = (wx * ca + wz * sa) * 0.000506 / (0.55 + 1.05 * elong) + 21.5;
+      const bv = (-wx * sa + wz * ca) * 0.000506 * (0.62 + 1.00 * elong) + 4.2;
+      let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
+      rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
+        0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
 
-    // style: 0 = broad table / cuesta, 1 = fang
-    const style = clamp01(0.5 + 0.78 * n2.fbm2(x * 0.00052 + 61.3, z * 0.00052 - 37.1, 2));
-    let beltH = Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.30 + 1.05 * style)
-      * (268 - 70 * style) * belt;
-    const capA = smoothstep(0.58, 0.10, style);
-    if (capA > 0.002 && beltH > 20) {
-      const capH = 44 + 118 * (0.5 + 0.5 * n2.fbm2(x * 0.0007 - 5.5, z * 0.0007 + 9.1, 2));
-      if (beltH > capH) beltH -= (beltH - capH) * capA * 0.94;
+      const style = clamp01(b[B_STYLE] + 0.34 * n2.fbm2(x * 0.000195 + 61.3, z * 0.000195 - 37.1, 2));
+      let beltH = Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.30 + 1.05 * style)
+        * bRidge * belt;
+      const capA = smoothstep(0.58, 0.10, style) * bTerrace;
+      if (capA > 0.002 && beltH > 20) {
+        const capH = 46 + 130 * (0.5 + 0.5 * n2.fbm2(x * 0.000262 - 5.5, z * 0.000262 + 9.1, 2));
+        if (beltH > capH) beltH -= (beltH - capH) * capA * 0.94;
+      }
+      // concave foot: scree apron rather than a hard cone base
+      if (beltH > 0) beltH *= 0.58 + 0.42 * Math.min(1, beltH / 60);
+      h += beltH;
     }
-    // concave foot: scree apron rather than a hard cone base
-    if (beltH > 0) beltH *= 0.58 + 0.42 * Math.min(1, beltH / 55);
-    // Hero clearing. Blackrock Mesa and the East Buttes are framed by named
-    // shots, and a generic 180 m belt ridge standing behind a 108 m table
-    // turns the hero landform into a bump on someone else's mountain. Pulling
-    // the belt down around them is what lets each landmark read as its own
-    // landform — which is the whole point of having landmarks.
-    beltH *= 1 - 0.74 * (1 - smoothstep(150, 470, Math.hypot(x + 215, z + 395)));
-    beltH *= 1 - 0.58 * (1 - smoothstep(120, 380, Math.hypot(x - 305, z + 300)));
-    h += beltH;
-
-    // a shallow bowl centred on the spawn so the camera looks *across* the land
-    h -= 7 * Math.exp(-(r * r) / (2 * 320 * 320));
     return h;
   }
 
   _buildMacro() {
     const c = new Float32Array(COARSE * COARSE);
+    const terr = new Float32Array(COARSE * COARSE);
     for (let j = 0; j < COARSE; j++) {
       const z = -HALF + j * COARSE_CELL;
       for (let i = 0; i < COARSE; i++) {
         c[j * COARSE + i] = this.macroHeight(-HALF + i * COARSE_CELL, z);
+        terr[j * COARSE + i] = this.lastTerrace;
       }
     }
     this._coarse = c;
+    this._terr = terr;
 
     const at = (i, j) => {
       const ii = i < 0 ? 0 : i > COARSE - 1 ? COARSE - 1 : i;
@@ -316,36 +489,23 @@ export class Field {
     // terracing + valley flattening at full resolution: crisp mesa risers and
     // genuinely flat basin floors, which is what sells "badlands".
     const n2 = this.n2;
+
     for (let j = 0; j < N; j++) {
       const z = -HALF + j * CELL;
       for (let i = 0; i < N; i++) {
         const idx = j * N + i;
         const x = -HALF + i * CELL;
         let v = h[idx];
+        const tw = terr[Math.min(COARSE - 1, (j >> 2)) * COARSE + Math.min(COARSE - 1, (i >> 2))];
 
-        if (v > 26) {
-          const step = 19 + 9 * n2.simplex2(x * 0.0011 + 4.4, z * 0.0011 - 2.1);
+        if (v > 26 && tw > 0.05) {
+          const step = 22 + 11 * n2.simplex2(x * 0.00041 + 4.4, z * 0.00041 - 2.1);
           const t = v / step, fl = Math.floor(t), fr = t - fl;
           const k = smoothstep(0.46, 0.9, fr);
           const terraced = (fl + k) * step;
-          const amount = 0.28 + 0.45 * (0.5 + 0.5 * n2.fbm2(x * 0.0016 + 9, z * 0.0016 + 3, 3));
-          v += (terraced - v) * amount * smoothstep(26, 52, v);
+          const amount = tw * (0.32 + 0.50 * (0.5 + 0.5 * n2.fbm2(x * 0.0006 + 9, z * 0.0006 + 3, 3)));
+          v += (terraced - v) * amount * smoothstep(26, 56, v);
         }
-        // compress low ground toward a flat pan
-        const floor0 = 9.5 + 5 * n2.fbm2(x * 0.0009 - 12, z * 0.0009 + 6, 3);
-        if (v < floor0) v = floor0 - (floor0 - v) * 0.42;
-
-        // The spawn basin is authored, not emergent: the shot cameras sit at
-        // 18-26 m and must look *across* the land, so pull the inner 400 m
-        // toward a shallow pan while keeping its shape.
-        const r = Math.hypot(x, z);
-        const k = 1 - smoothstep(110, 400, r);
-        if (k > 0.001) {
-          const target = 6.2 + 3.4 * n2.fbm2(x * 0.0038 + 21, z * 0.0038 - 13, 3)
-            + 2.2 * n2.fbm2(x * 0.011 - 4, z * 0.011 + 9, 3);
-          v = v * (1 - k) + (target + (v - target) * 0.15) * k;
-        }
-
         h[idx] = v;
       }
     }
@@ -373,12 +533,13 @@ export class Field {
         const s = grad[idx];
         const rough = 0.45 + 1.25 * s;
         // eroded dry-wash texture: ridged noise reads as gullies, not as bumps
+        // These are *world-space* wavelengths — 140 m washes, 75 m rolls, 19 m
+        // rubble — so they do not scale with the grid. Rescaling them for the
+        // 4 m cell was what turned the badlands into dough.
         const gully = n2.ridged2(x * 0.0072 + 2.2, z * 0.0072 - 4.4, 3, 2.1, 0.55);
-        let d = -3.1 * Math.pow(Math.max(0, gully - 0.34) / 0.66, 1.5) * (0.4 + 0.9 * s);
-        d += 2.6 * n2.fbm2(x * 0.0135, z * 0.0135, 3) * (0.6 + 0.95 * s);
-        d += 1.25 * n3.fbm2(x * 0.052 + 4.1, z * 0.052 - 2.7, 3) * rough;
-        d += 0.42 * n3.simplex2(x * 0.145 + 9.3, z * 0.145 + 1.4) * rough;
-        // rubble / small outcrops where it is already rocky
+        let d = -3.7 * Math.pow(Math.max(0, gully - 0.34) / 0.66, 1.5) * (0.4 + 0.9 * s);
+        d += 2.9 * n2.fbm2(x * 0.0135, z * 0.0135, 3) * (0.6 + 0.95 * s);
+        d += 1.45 * n3.fbm2(x * 0.038 + 4.1, z * 0.038 - 2.7, 3) * rough;
         if (s > 0.34) {
           const w = n3.worley2(x * 0.055, z * 0.055);
           d += Math.max(0, 0.58 - w.f1) * 4.6 * (s - 0.34);
@@ -388,104 +549,209 @@ export class Field {
     }
   }
 
-  // -------------------------------------------------------------- landmarks
+  // -------------------------------------------------------------- landforms
 
-  /**
-   * The hero landforms. Deliberately one of each *kind* rather than one shape
-   * repeated: a benched table, a tall stepped plateau, a cluster of steep-sided
-   * buttes, a cuesta escarpment with a long dip slope, hogback fins and spires.
-   */
-  _applyLandmarks() {
-    const L = LANDMARKS;
-    // Blackrock Mesa — the hero table. Two benches, a wide flat cap, a hard
-    // rim, and its scarp turned toward the basin cameras.
-    this._mesa(L.blackrockMesa.x, L.blackrockMesa.z, L.blackrockMesa.r, L.blackrockMesa.h,
-      0.30, { benches: 2, cliff: 0.11, apron: 1.05, tilt: 0.055, dipDir: -1.15 });
-    // outlier stack in front of it: a sheer-sided remnant, no benches
-    this._mesa(-118, -560, 54, 58, 0.45, { benches: 0, cliff: 0.09, apron: 0.7 });
-    // North Mesa — a tall stepped plateau, three benches
-    this._mesa(L.northMesa.x, L.northMesa.z, L.northMesa.r, L.northMesa.h,
-      0.28, { benches: 3, cliff: 0.10, apron: 1.15, tilt: 0.030, dipDir: 1.9 });
-    this._mesa(-1080, -520, 150, 122, 0.34, { benches: 2, cliff: 0.13, apron: 0.95 });
-    this._mesa(-760, -180, 96, 62, 0.42, { benches: 1, cliff: 0.16, apron: 1.20, tilt: 0.09 });
-
-    // Butte cluster to the north-east — the vista_noon sight line. Steep
-    // sided, small caps, deep talus: classic Monument-Valley remnants.
-    this._mesa(305, -300, 60, 58, 0.48, { benches: 0, cliff: 0.085, apron: 0.85 });
-    this._mesa(392, -212, 34, 41, 0.55, { benches: 0, cliff: 0.075, apron: 0.9 });
-    this._mesa(232, -392, 42, 47, 0.52, { benches: 1, cliff: 0.10, apron: 0.8 });
-    this._mesa(560, -470, 80, 76, 0.44, { benches: 2, cliff: 0.12, apron: 1.0 });
-    this._mesa(880, -700, 130, 104, 0.38, { benches: 3, cliff: 0.11, apron: 1.1 });
-
-    // Western escarpment — the vista_dusk sight line. A cuesta: the mesa is
-    // the high end, the fin carries the scarp line away from it.
-    // Pulled a little south-west of the landmark anchor and kept compact: the
-    // vista_dawn camera stands 170 m north of it at eye height 70 m, and a
-    // 118 m table centred on the anchor would swallow the lens. The anchor
-    // still sits well inside the cap, so the shot framing is unchanged.
-    this._mesa(-368, 352, 96, L.westScarp.h,
-      0.32, { benches: 1, cliff: 0.10, apron: 0.75, tilt: 0.11, dipDir: 1.50 });
-    this._fin(-286, 392, -600, 610, 46, 62, { dip: 3.6 });
-    this._mesa(-520, 210, 70, 55, 0.46, { benches: 1, cliff: 0.14, apron: 0.9 });
-    this._mesa(-900, 480, 160, 118, 0.34, { benches: 2, cliff: 0.12, apron: 1.05 });
-
-    // Hogback fins — thin blades on edge, the counterpoint to the tables.
-    this._fin(120, -700, 470, -545, 34, 74, { dip: 2.6, flip: true });
-    this._fin(-800, -740, -430, -1010, 52, 96, { dip: 3.0 });
-    this._fin(690, 120, 980, 430, 40, 68, { dip: 2.4 });
-    this._fin(-160, 690, 260, 830, 30, 44, { dip: 3.4, flip: true });
-
-    // Northern backdrop — the party_walk and hero sight lines. A table, a
-    // stepped remnant and a blade, so the wall behind the party is three
-    // different landforms rather than a row of the same peak.
-    this._mesa(-30, -640, 104, 82, 0.36, { benches: 2, cliff: 0.10, apron: 1.0, dipDir: 1.6 });
-    this._mesa(180, -760, 62, 68, 0.50, { benches: 0, cliff: 0.08, apron: 0.8 });
-    this._fin(-330, -700, -80, -900, 44, 78, { dip: 2.8 });
-
-    // Tables set among the spire country to the south-west, so the vista_dusk
-    // skyline is not a picket fence of the same fang seven times over.
-    this._mesa(-620, 120, 88, 74, 0.40, { benches: 2, cliff: 0.10, apron: 0.70 });
-    this._fin(-760, 620, -430, 820, 38, 58, { dip: 3.0, flip: true });
-
-    // spire ridges — fangs that catch a low sun. Deliberately the *minority*
-    // landform: a badland range that is all fangs is one shape repeated.
+  /** Stamp every entry in `WorldMap.LANDFORMS`. */
+  _applyLandforms() {
     const rng = new Rng(9931);
-    this._spireRidge(L.spireRidge.x, L.spireRidge.z, 320, 170, 9, rng);
-    this._spireRidge(430, 330, 260, -120, 6, rng);
-    this._spireRidge(-40, -880, 380, 90, 4, rng);
-
-    this._canyon();
+    for (const f of LANDFORMS) {
+      switch (f.kind) {
+        case 'mesa':
+        case 'butte':
+          this._mesa(f.x, f.z, f.r, f.h, f.kind === 'butte' ? 0.48 : 0.30, f);
+          break;
+        case 'fin':
+          this._fin(f.x0, f.z0, f.x1, f.z1, f.halfW, f.h, f);
+          break;
+        case 'spire':
+          this._spireRidge(f.x, f.z, f.spanX, f.spanZ, f.count, rng);
+          break;
+        case 'peak': this._peak(f.x, f.z, f.r, f.h); break;
+        case 'crater': this._crater(f); break;
+        case 'volcano': this._volcano(f); break;
+        case 'basin': this._basin(f); break;
+        case 'terrace': this._terrace(f); break;
+        case 'canyon': this._canyon(f); break;
+        default: break;
+      }
+    }
   }
 
   _spireRidge(cx, cz, spanX, spanZ, count, rng) {
     for (let k = 0; k < count; k++) {
       const t = k / (count - 1) - 0.5;
-      const sx = cx + t * spanX + rng.range(-26, 26);
-      const sz = cz + t * spanZ + rng.range(-30, 30);
-      this._spire(sx, sz, rng.range(10, 24), rng.range(24, 76));
+      const sx = cx + t * spanX + rng.range(-40, 40);
+      const sz = cz + t * spanZ + rng.range(-46, 46);
+      this._spire(sx, sz, rng.range(16, 38), rng.range(34, 108));
     }
     for (let k = 0; k < 4; k++) {
-      const a = rng.range(0, 6.283), d = rng.range(90, 240);
-      this._spire(cx + Math.cos(a) * d, cz + Math.sin(a) * d, rng.range(7, 15), rng.range(12, 32));
+      const a = rng.range(0, 6.283), d = rng.range(140, 360);
+      this._spire(cx + Math.cos(a) * d, cz + Math.sin(a) * d, rng.range(11, 24), rng.range(18, 46));
     }
   }
 
   /**
-   * Rock outcrops scattered across the basin. Added after erosion so they stay
-   * crisp — these are what give the open ground scale and something for the eye
-   * to land on.
+   * A big mountain: conical bulk with ridged flanks and a laid-back foot.
+   * Used for Longwythe Peak — the one landform in Leide with real prominence.
    */
+  _peak(cx, cz, radius, height) {
+    const h = this.h, n = this.n2, n3 = this.n3;
+    const box = this._box(cx, cz, radius);
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const dx = x - cx, dz = z - cz;
+        const ang = Math.atan2(dz, dx);
+        // ridge/gully spokes so the cone reads as a mountain, not a tent
+        const spoke = 0.80 + 0.34 * n.fbm2(Math.cos(ang) * 3.1 + cx * 0.004,
+          Math.sin(ang) * 3.1 + cz * 0.004, 3);
+        const warp = 1 + 0.20 * n3.fbm2(x * 0.0016 + 3, z * 0.0016 - 5, 3);
+        const d = Math.hypot(dx, dz) / warp;
+        if (d > radius) continue;
+        const t = 1 - d / radius;
+        let v = height * Math.pow(t, 2.15) * spoke;
+        // a summit crag and a broad shoulder
+        v += height * 0.16 * Math.pow(Math.max(0, 1 - d / (radius * 0.24)), 1.4);
+        v *= 0.62 + 0.38 * Math.min(1, v / 60);
+        if (v > 0.4) h[j * N + i] += v;
+      }
+    }
+  }
+
+  /**
+   * Impact crater: a raised rim ring, a sunken floor, and a central mass.
+   * The Disc of Cauthess.
+   */
+  _crater(f) {
+    const h = this.h, n = this.n2;
+    const { x: cx, z: cz, r, rim, depth, core } = f;
+    const box = this._box(cx, cz, r * 1.15);
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const dx = x - cx, dz = z - cz;
+        const ang = Math.atan2(dz, dx);
+        const lobe = 1 + 0.13 * n.fbm2(Math.cos(ang) * 2.2, Math.sin(ang) * 2.2, 3);
+        const d = Math.hypot(dx, dz) / lobe;
+        if (d > r * 1.15) continue;
+        const rr = (d - r * 0.80) / (r * 0.17);
+        let v = rim * Math.exp(-rr * rr);
+        // the access road runs out onto a spur of the rim: hold the sunken
+        // crust back from the corridor so the overlook is not in a hole
+        const guard = smoothstep(20, 130, this.corridorAt(x, z));
+        v -= depth * (1 - smoothstep(r * 0.46, r * 0.88, d)) * guard;
+        v += core * Math.pow(Math.max(0, 1 - d / (r * 0.30)), 1.5);
+        // shock-fractured plates on the crust
+        v += 9 * n.fbm2(x * 0.0031 + 71, z * 0.0031 - 12, 3) * (1 - smoothstep(r * 0.5, r * 0.95, d));
+        const idx = j * N + i;
+        h[idx] = Math.max(SEA + 10, h[idx] + v);
+      }
+    }
+  }
+
+  /** Stratovolcano: steep cone, crater bowl, rim lip, ash apron. */
+  _volcano(f) {
+    const h = this.h, n = this.n2;
+    const { x: cx, z: cz, r, h: height } = f;
+    const cr = (f.crater || 0.25) * r;
+    const box = this._box(cx, cz, r);
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const dx = x - cx, dz = z - cz;
+        const ang = Math.atan2(dz, dx);
+        const flute = 0.86 + 0.22 * n.fbm2(Math.cos(ang) * 5.5 + 3, Math.sin(ang) * 5.5 - 7, 3);
+        const d = Math.hypot(dx, dz);
+        if (d > r) continue;
+        const t = 1 - d / r;
+        let v = height * Math.pow(t, 1.55) * flute;
+        if (d < cr) {
+          const u = d / cr;
+          v -= height * 0.20 * (1 - u * u);      // crater bowl
+        }
+        // rim lip
+        v += height * 0.045 * Math.exp(-Math.pow((d - cr) / (cr * 0.22), 2));
+        if (v > 0.4) h[j * N + i] += v;
+      }
+    }
+  }
+
+  /**
+   * A basin: pull the ground toward `h`. Where `h` is below sea level the
+   * result is a lake — and roads are protected, so the highway crosses on a
+   * causeway instead of drowning.
+   */
+  _basin(f) {
+    const h = this.h, n = this.n2;
+    const { x: cx, z: cz, r } = f;
+    const target = f.h;
+    const wet = target < SEA + 6;
+    const box = this._box(cx, cz, r);
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const d = Math.hypot(x - cx, z - cz)
+          * (1 - 0.14 * n.fbm2(x * 0.0012 + 5, z * 0.0012 - 3, 3));
+        if (d > r) continue;
+        let k = 1 - smoothstep(r * 0.42, r, d);
+        if (wet) {
+          // hold the water back from the roads: a raised bank, not a ford
+          k *= smoothstep(24, 105, this.corridorAt(x, z));
+        }
+        if (k < 0.002) continue;
+        const idx = j * N + i;
+        const jitter = (wet ? 2.2 : 5.0) * n.fbm2(x * 0.0026 - 8, z * 0.0026 + 4, 3);
+        h[idx] += ((target + jitter) - h[idx]) * k;
+      }
+    }
+  }
+
+  /**
+   * A structural terrace: a level bench at elevation `h` inside a rotated
+   * ellipse, edged by a cliff. Lestallum stands on one of these.
+   */
+  _terrace(f) {
+    const h = this.h, n = this.n2, n3 = this.n3;
+    const { x: cx, z: cz, rx, rz, rot } = f;
+    const ca = Math.cos(rot || 0), sa = Math.sin(rot || 0);
+    const R = Math.max(rx, rz) * 1.55;
+    const box = this._box(cx, cz, R);
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        const dx = x - cx, dz = z - cz;
+        const u = (dx * ca + dz * sa) / rx;
+        const v = (-dx * sa + dz * ca) / rz;
+        const lobe = 1 + 0.16 * n.fbm2(u * 2.4 + cx * 0.003, v * 2.4 + cz * 0.003, 3);
+        const d = Math.hypot(u, v) / lobe;
+        if (d > 1.5) continue;
+        const idx = j * N + i;
+        const top = f.h + 2.4 * n3.fbm2(x * 0.0025 + 11, z * 0.0025 - 6, 3);
+        if (d <= 0.94) {
+          h[idx] += (top - h[idx]) * 0.95;
+        } else {
+          // the scarp: a steep face falling from the bench to the local ground
+          const t = (d - 0.94) / 0.56;
+          const y = top - (top - h[idx]) * Math.pow(t, 0.55);
+          if (y > h[idx]) h[idx] = h[idx] + (y - h[idx]) * (1 - smoothstep(0, 1, t)) * 0.9;
+        }
+      }
+    }
+  }
+
   _outcrops() {
     const rng = new Rng(4242);
-    for (let k = 0; k < 2400; k++) {
-      const a = rng.range(0, 6.283);
-      const d = Math.pow(rng.next(), 0.55) * 1250;
-      const cx = Math.cos(a) * d, cz = Math.sin(a) * d;
-      if (Math.max(Math.abs(cx), Math.abs(cz)) > 1300) continue;
+    for (let k = 0; k < 9000; k++) {
+      const cx = rng.range(-HALF + 40, HALF - 40);
+      const cz = rng.range(-HALF + 40, HALF - 40);
       const i = Math.round((cx + HALF) / CELL), j = Math.round((cz + HALF) / CELL);
       if (i < 4 || j < 4 || i > N - 5 || j > N - 5) continue;
       const s = this.slope0 ? this.slope0[j * N + i] : 0.2;
-      // more outcrops on already-rocky ground, but keep some out on the pans
       if (rng.next() > 0.24 + s * 1.5) continue;
       const big = rng.next() < 0.12;
       const r = (big ? rng.range(16, 40) : rng.range(3.5, 16)) * (0.75 + s);
@@ -505,10 +771,10 @@ export class Field {
       const z = -HALF + j * CELL;
       for (let i = box.i0; i <= box.i1; i++) {
         const x = -HALF + i * CELL;
-        let dx = x - cx, dz = z - cz;
+        const dx = x - cx, dz = z - cz;
         const rx = dx * ca + dz * sa, rz = (-dx * sa + dz * ca) / ecc;
         const ang = Math.atan2(rz, rx);
-        const warp = 1 + 0.34 * n.fbm2(Math.cos(ang) * 2.4 + cx * 0.05, Math.sin(ang) * 2.4 + cz * 0.05, 3);
+        const warp = 1 + 0.34 * n.fbm2(Math.cos(ang) * 2.4 + cx * 0.02, Math.sin(ang) * 2.4 + cz * 0.02, 3);
         const d = Math.hypot(rx, rz) / warp;
         if (d > R) continue;
         const t = Math.max(0, Math.min(1, 1 - d / radius));
@@ -523,9 +789,7 @@ export class Field {
    * This *imposes* a landform rather than adding a bump: the cap is genuinely
    * level (with a slight structural dip), the wall drops as a near-vertical
    * cliff off a hard rim, optional benches step down from it, and a concave
-   * scree apron lays the foot back into the surrounding ground. One side is
-   * always the steep scarp and the opposite side the long dip slope, so the
-   * profile is asymmetric the way a real butte is.
+   * scree apron lays the foot back into the surrounding ground.
    *
    * @param {number} wallFrac 0..1 — how much of the radius the cliff occupies
    * @param {{benches?:number, tilt?:number, dipDir?:number, apron?:number,
@@ -556,30 +820,22 @@ export class Field {
         const d = Math.hypot(dx, dz);
         if (d > R) continue;
         const ang = Math.atan2(dz, dx);
-        // plan form: lobed and re-entrant, never a circle
-        // Clamped: the cap edge has to stay inside a predictable footprint, or
-        // a landform placed near a fixed shot camera can grow through the lens.
         const warp = Math.max(0.72, Math.min(1.18, 1
-          + 0.26 * n.fbm2(Math.cos(ang) * 1.7 + cx * 0.01, Math.sin(ang) * 1.7 + cz * 0.01, 3)
-          + 0.12 * n.fbm2(Math.cos(ang) * 4.3 + cz * 0.02, Math.sin(ang) * 4.3 - cx * 0.02, 2)
-          + 0.09 * n.fbm2(x * 0.006 + 3, z * 0.006 - 1, 3)));
-        // the cap is the inner 80% — the cliff, benches and apron fill the rest
-        // of the nominal radius, so `radius` still means the whole landform
+          + 0.26 * n.fbm2(Math.cos(ang) * 1.7 + cx * 0.004, Math.sin(ang) * 1.7 + cz * 0.004, 3)
+          + 0.12 * n.fbm2(Math.cos(ang) * 4.3 + cz * 0.008, Math.sin(ang) * 4.3 - cx * 0.008, 2)
+          + 0.09 * n.fbm2(x * 0.0022 + 3, z * 0.0022 - 1, 3)));
         const rr = radius * warp * 0.80;
-        const s = d - rr;                              // metres outside the rim
-        // asym = 1 on the dip side, 0 on the scarp side
+        const s = d - rr;
         const asym = d < 1 ? 0.5 : 0.5 + 0.5 * (dx * cdx + dz * cdz) / d;
         const capTop = capY - tiltAmt * (dx * cdx + dz * cdz)
-          + 1.5 * n3.fbm2(x * 0.011 + 5, z * 0.011 - 2, 3);
+          + 1.8 * n3.fbm2(x * 0.0041 + 5, z * 0.0041 - 2, 3);
 
         let y;
         if (s <= 0) {
-          // the rim: a hard raised lip that catches the light along the edge
           y = capTop + rimH * Math.max(0, 1 - Math.abs(s + 0.035 * radius) / (0.075 * radius));
         } else {
-          // radial gullies chew the wall back at irregular intervals
-          const gully = 0.5 + 0.5 * n3.fbm2(Math.cos(ang) * 7.1 + cx * 0.03,
-            Math.sin(ang) * 7.1 + cz * 0.03, 3);
+          const gully = 0.5 + 0.5 * n3.fbm2(Math.cos(ang) * 7.1 + cx * 0.011,
+            Math.sin(ang) * 7.1 + cz * 0.011, 3);
           const cliffW = radius * cliffFrac * (0.40 + 1.40 * asym) * (0.7 + 0.6 * gully);
           const apronW = radius * apronF * (0.50 + 1.30 * asym);
           let t = s, drop = height;
@@ -587,7 +843,6 @@ export class Field {
 
           const cd = height * cliffShare * (0.85 + 0.30 * gully);
           if (t < cliffW) {
-            // pow < 1 keeps the top of the face vertical under the rim
             y -= cd * Math.pow(t / cliffW, 0.45);
             t = -1;
           } else { y -= cd; t -= cliffW; drop -= cd; }
@@ -603,14 +858,10 @@ export class Field {
           }
 
           if (t >= 0) {
-            // Talus apron — concave, at roughly the angle of repose. It has to
-            // land on the *local* ground, not on the elevation under the mesa's
-            // centre, or the skirt floods every hollow inside its radius.
             if (t > apronW) continue;
             const u = t / Math.max(1, apronW);
             const foot = Math.min(y - drop, h[j * N + i]);
             y -= (y - foot) * (1 - Math.pow(1 - u, 2.0));
-            // scree flutes so the apron is not a smooth cone of its own
             y += drop * 0.14 * Math.sin(ang * (9 + 6 * gully)) * u * (1 - u);
           }
         }
@@ -627,13 +878,12 @@ export class Field {
   /**
    * Hogback / fin: a long narrow ridge with a steep scarp on one flank and a
    * long dip slope on the other, notched along its crest and tapered at both
-   * ends. These are the landform the badlands were missing entirely — every
-   * elevated thing in the field used to be radially symmetric.
+   * ends.
    */
   _fin(x0, z0, x1, z1, halfW, height, opt = {}) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const flip = opt.flip ? -1 : 1;
-    const dipRun = opt.dip === undefined ? 3.2 : opt.dip;   // dip slope, x halfW
+    const dipRun = opt.dip === undefined ? 3.2 : opt.dip;
     const ex = x1 - x0, ez = z1 - z0;
     const len = Math.hypot(ex, ez) || 1;
     const ux = ex / len, uz = ez / len;
@@ -645,30 +895,27 @@ export class Field {
       for (let i = box.i0; i <= box.i1; i++) {
         const x = -HALF + i * CELL;
         const px = x - x0, pz = z - z0;
-        let t = (px * ux + pz * uz) / len;
-        const q = (px * -uz + pz * ux) * flip;          // signed lateral offset
+        const t = (px * ux + pz * uz) / len;
+        const q = (px * -uz + pz * ux) * flip;
         const tc = t < 0 ? 0 : t > 1 ? 1 : t;
         const over = Math.hypot(px - ux * len * tc, pz - uz * len * tc);
         if (Math.abs(q) > R && over > R) continue;
 
-        // crest: tapered ends, notched into a chain of summits
         const taper = Math.pow(Math.max(0, Math.sin(Math.PI * tc)), 0.42);
-        const notch = 0.52 + 0.48 * (0.5 + 0.5 * n.fbm2(t * 3.3 + x0 * 0.01, z0 * 0.01, 3));
-        const spikes = 0.72 + 0.44 * Math.max(0, n3.fbm2(t * 7.7 + z0 * 0.02, x0 * 0.02, 2));
+        const notch = 0.52 + 0.48 * (0.5 + 0.5 * n.fbm2(t * 3.3 + x0 * 0.004, z0 * 0.004, 3));
+        const spikes = 0.72 + 0.44 * Math.max(0, n3.fbm2(t * 7.7 + z0 * 0.008, x0 * 0.008, 2));
         const crest = height * taper * notch * spikes;
         if (crest < 0.6) continue;
 
-        // lateral profile: short steep scarp one side, long dip slope the other
-        const wob = 1 + 0.30 * n3.fbm2(t * 5.1 + 3.7, q * 0.012, 3);
+        const wob = 1 + 0.30 * n3.fbm2(t * 5.1 + 3.7, q * 0.005, 3);
         let v;
         if (q < 0) {
           const u = Math.min(1, -q / (halfW * 0.85 * wob));
-          v = crest * (1 - Math.pow(u, 0.62));            // scarp: steep, concave
+          v = crest * (1 - Math.pow(u, 0.62));
         } else {
           const u = Math.min(1, q / (halfW * dipRun * wob));
-          v = crest * Math.pow(1 - u, 1.55);              // dip slope: long ramp
+          v = crest * Math.pow(1 - u, 1.55);
         }
-        // talus at the scarp foot
         if (q < 0) {
           const sk = Math.max(0, 1 - (-q - halfW * 0.85 * wob) / (halfW * 1.5));
           if (sk > 0 && sk < 1) v = Math.max(v, crest * 0.22 * sk * sk);
@@ -688,7 +935,7 @@ export class Field {
         const x = -HALF + i * CELL;
         const dx = x - cx, dz = z - cz;
         const ang = Math.atan2(dz, dx);
-        const warp = 1 + 0.3 * n.fbm2(Math.cos(ang) * 2.3 + cx * 0.02, Math.sin(ang) * 2.3 + cz * 0.02, 3);
+        const warp = 1 + 0.3 * n.fbm2(Math.cos(ang) * 2.3 + cx * 0.008, Math.sin(ang) * 2.3 + cz * 0.008, 3);
         const d = Math.hypot(dx, dz) / warp;
         if (d > R) continue;
         const t = Math.max(0, 1 - d / radius);
@@ -700,64 +947,84 @@ export class Field {
   }
 
   /**
-   * A branching wash / canyon cut across the southern basin. The cut is applied
-   * from a min-distance field so overlapping spine segments can't stack.
+   * A gorge cut along a polyline, with terraced walls and a flat floor. The
+   * cut is held back from the road corridor, so where the highway meets the
+   * gorge the walls close into a narrow neck the bridge can stand on.
    */
-  _canyon() {
+  _canyon(f) {
     const h = this.h, n = this.n2;
-    const spines = [
-      { pts: [], depth: 62, halfW: 44, from: -900, to: 980, base: 430, amp: 165, ph: 0.6, seed: 7.7 },
-      { pts: [], depth: 34, halfW: 22, from: -220, to: 700, base: 690, amp: 120, ph: 2.4, seed: 3.1 },
-    ];
-    const dist = new Float32Array(N * N).fill(1e9);
-    const R = 150;
-
-    for (const sp of spines) {
-      for (let k = 0; k <= 140; k++) {
-        const t = k / 140;
-        const x = sp.from + t * (sp.to - sp.from);
-        const z = sp.base + sp.amp * Math.sin(t * 3.1 + sp.ph) + 90 * n.fbm2(x * 0.0018, sp.seed, 3);
-        sp.pts.push([x, z]);
+    const halfW = f.halfW, depth = f.depth;
+    const R = halfW * 3.2;
+    const spine = [];
+    const pts = f.pts;
+    for (let s = 0; s < pts.length - 1; s++) {
+      const a = pts[s], b = pts[s + 1];
+      const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const steps = Math.max(2, Math.ceil(segLen / 24));
+      for (let k = 0; k < steps; k++) {
+        const t = k / steps;
+        spine.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
       }
     }
+    spine.push(pts[pts.length - 1]);
 
-    // pass 1 — signed distance stamp
-    for (const sp of spines) {
-      const scale = sp.halfW / spines[0].halfW;
-      for (let s = 0; s < sp.pts.length - 1; s++) {
-        const a = sp.pts[s], b = sp.pts[s + 1];
-        const box = this._box((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, R + Math.hypot(b[0] - a[0], b[1] - a[1]));
-        const ex = b[0] - a[0], ez = b[1] - a[1];
-        const len2 = ex * ex + ez * ez || 1;
-        for (let j = box.j0; j <= box.j1; j++) {
-          const z = -HALF + j * CELL;
-          for (let i = box.i0; i <= box.i1; i++) {
-            const x = -HALF + i * CELL;
-            let t = ((x - a[0]) * ex + (z - a[1]) * ez) / len2;
-            t = t < 0 ? 0 : t > 1 ? 1 : t;
-            const d = Math.hypot(a[0] + ex * t - x, a[1] + ez * t - z) / scale;
-            const idx = j * N + i;
-            if (d < dist[idx]) dist[idx] = d;
-          }
+    // one min-distance field over the polyline's bounding box, so overlapping
+    // segments cannot stack their cuts
+    let bx0 = 1e9, bx1 = -1e9, bz0 = 1e9, bz1 = -1e9;
+    for (const q of spine) {
+      if (q[0] < bx0) bx0 = q[0];
+      if (q[0] > bx1) bx1 = q[0];
+      if (q[1] < bz0) bz0 = q[1];
+      if (q[1] > bz1) bz1 = q[1];
+    }
+    const box = {
+      i0: Math.max(0, Math.floor((bx0 - R + HALF) / CELL)),
+      i1: Math.min(N - 1, Math.ceil((bx1 + R + HALF) / CELL)),
+      j0: Math.max(0, Math.floor((bz0 - R + HALF) / CELL)),
+      j1: Math.min(N - 1, Math.ceil((bz1 + R + HALF) / CELL)),
+    };
+    const bw = box.i1 - box.i0 + 1, bh = box.j1 - box.j0 + 1;
+    const dist = new Float32Array(bw * bh).fill(1e9);
+    for (let s = 0; s < spine.length - 1; s++) {
+      const a = spine[s], b = spine[s + 1];
+      const ex = b[0] - a[0], ez = b[1] - a[1];
+      const len2 = ex * ex + ez * ez || 1;
+      const si0 = Math.max(box.i0, Math.floor((Math.min(a[0], b[0]) - R + HALF) / CELL));
+      const si1 = Math.min(box.i1, Math.ceil((Math.max(a[0], b[0]) + R + HALF) / CELL));
+      const sj0 = Math.max(box.j0, Math.floor((Math.min(a[1], b[1]) - R + HALF) / CELL));
+      const sj1 = Math.min(box.j1, Math.ceil((Math.max(a[1], b[1]) + R + HALF) / CELL));
+      for (let j = sj0; j <= sj1; j++) {
+        const z = -HALF + j * CELL;
+        for (let i = si0; i <= si1; i++) {
+          const x = -HALF + i * CELL;
+          let t = ((x - a[0]) * ex + (z - a[1]) * ez) / len2;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const d = Math.hypot(a[0] + ex * t - x, a[1] + ez * t - z);
+          const k = (j - box.j0) * bw + (i - box.i0);
+          if (d < dist[k]) dist[k] = d;
         }
       }
     }
 
-    // pass 2 — carve once, with terraced walls and a flat gravel floor
-    const depth = spines[0].depth, halfW = spines[0].halfW;
-    for (let j = 0; j < N; j++) {
+    for (let j = box.j0; j <= box.j1; j++) {
       const z = -HALF + j * CELL;
-      for (let i = 0; i < N; i++) {
-        const idx = j * N + i;
-        let d = dist[idx];
-        if (d > R) continue;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const d0 = dist[(j - box.j0) * bw + (i - box.i0)];
+        if (d0 > R) continue;
         const x = -HALF + i * CELL;
-        d += 24 * n.fbm2(x * 0.0042 + 1.7, z * 0.0042 - 3.3, 3) + 7 * n.simplex2(x * 0.017, z * 0.017);
+        const d = d0 + 34 * n.fbm2(x * 0.0013 + 1.7, z * 0.0013 - 3.3, 3)
+          + 10 * n.simplex2(x * 0.0052, z * 0.0052);
         const u = Math.max(0, Math.min(1, d / halfW));
         const wall = u < 1 ? 1 - Math.pow(u, 2.4) : 0;
         const stepped = Math.round(wall * 5) / 5 * 0.5 + wall * 0.5;
-        const rim = 7 * Math.max(0, 1 - Math.abs(d - halfW * 1.3) / 52);
-        h[idx] += -depth * stepped + rim;
+        const rim = 9 * Math.max(0, 1 - Math.abs(d - halfW * 1.3) / 78);
+        // the bridge neck: the gorge shallows where a road crosses it
+        const guard = smoothstep(14, 78, this.corridorAt(x, z));
+        const idx = j * N + i;
+        // A gorge is dry: never cut below the water plane, or `Water` finds a
+        // basin in it and spends one of its four bodies on a flooded canyon
+        // that the sea should have had.
+        h[idx] = Math.max(SEA + 10, h[idx] - depth * stepped * guard + rim);
       }
     }
   }
@@ -769,6 +1036,48 @@ export class Field {
       j0: Math.max(0, Math.floor((cz - R + HALF) / CELL)),
       j1: Math.min(N - 1, Math.ceil((cz + R + HALF) / CELL)),
     };
+  }
+
+  // ----------------------------------------------------------- settlements
+
+  /**
+   * Level pads under everything that is built. A town needs somewhere flat to
+   * stand and the road has to arrive at grade; this runs after erosion and
+   * before the road carve so the two agree.
+   */
+  _settlementPads() {
+    const h = this.h;
+    const PAD = {
+      town: 190, outpost: 120, reststop: 100, chocobo: 130,
+      imperial: 110, parking: 42, haven: 26,
+    };
+    for (const p of this.map.pois) {
+      const rad = PAD[p.type];
+      if (!rad) continue;
+      // median-ish target: average the ground over a ring so a pad on a slope
+      // cuts as much as it fills
+      let sum = 0, cnt = 0;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        sum += this.rawHeightAt(p.x + Math.cos(a) * rad * 0.7, p.z + Math.sin(a) * rad * 0.7);
+        cnt++;
+      }
+      const target = (sum / cnt) * 0.65 + this.rawHeightAt(p.x, p.z) * 0.35;
+      const R = rad * 1.9;
+      const box = this._box(p.x, p.z, R);
+      for (let j = box.j0; j <= box.j1; j++) {
+        const z = -HALF + j * CELL;
+        for (let i = box.i0; i <= box.i1; i++) {
+          const x = -HALF + i * CELL;
+          const d = Math.hypot(x - p.x, z - p.z);
+          if (d > R) continue;
+          const k = 1 - smoothstep(rad * 0.55, R, d);
+          if (k < 0.002) continue;
+          const idx = j * N + i;
+          h[idx] += (target - h[idx]) * k * 0.94;
+        }
+      }
+    }
   }
 
   // --------------------------------------------------------------- stitching
@@ -796,11 +1105,10 @@ export class Field {
   _erode() {
     const h = this.h, flow = this.flow, sed = this.sed;
     const rng = new Rng(778899);
-    const DROPS = 420000, STEPS = 44;
+    const DROPS = 620000, STEPS = 44;
     const inertia = 0.055, capacityF = 5.2, minSlope = 0.012;
     const erodeSpeed = 0.34, depositSpeed = 0.28, evaporate = 0.017, gravity = 5.0;
 
-    // erosion brush (radius 2, weight falls off)
     const br = 2;
     const bo = [], bw = [];
     let bsum = 0;
@@ -858,9 +1166,7 @@ export class Field {
         } else {
           const amount = Math.min((cap - carried) * erodeSpeed, -dh);
           for (let k = 0; k < bo.length; k++) {
-            const t = idx + bo[k];
-            const take = amount * bw[k];
-            h[t] -= take;
+            h[idx + bo[k]] -= amount * bw[k];
           }
           carried += amount;
         }
@@ -871,7 +1177,6 @@ export class Field {
       }
     }
 
-    // knock the single-cell spikes off the eroded field
     const tmp = new Float32Array(h.length);
     tmp.set(h);
     for (let j = 1; j < N - 1; j++) {
@@ -885,12 +1190,8 @@ export class Field {
 
   /**
    * Thermal / talus relaxation: scree cones under cliffs, no impossible spikes.
-   *
-   * The repose angle is *not* uniform. A single global 42 deg limit was what
-   * flattened every mesa wall into a cone — competent rock stands far steeper
-   * than the loose material that falls off it. Above the pans the limit opens
-   * out to ~70 deg so cliff faces survive, while the low ground keeps the
-   * gentle limit and therefore keeps collecting the debris as an apron.
+   * The repose angle is not uniform — competent rock stands far steeper than
+   * the loose material that falls off it, so the limit opens out with altitude.
    */
   _talus() {
     const h = this.h;
@@ -899,8 +1200,8 @@ export class Field {
         for (let i = 1; i < N - 1; i++) {
           const idx = j * N + i;
           const c = h[idx];
-          // 1.35 m/cell = 42 deg on the flats, 4.1 m/cell = 70 deg on the walls
-          const maxDelta = 1.35 + 2.75 * smoothstep(16, 58, c);
+          // 3.6 m/cell = 42 deg on the flats, 11 m/cell = 70 deg on the walls
+          const maxDelta = 3.6 + 7.4 * smoothstep(16, 62, c);
           let move = 0;
           for (let k = 0; k < 4; k++) {
             const t = k === 0 ? idx - 1 : k === 1 ? idx + 1 : k === 2 ? idx - N : idx + N;
@@ -921,12 +1222,11 @@ export class Field {
   /** Normals, slope, curvature and material control channels. */
   _derive() {
     const h = this.h;
-    this.nrm = new Uint16Array(N * N * 2);        // half-float RG
-    this.ctrl = new Uint8Array(N * N * 4);        // flow / sediment / road / rocky
+    this.nrm = new Uint16Array(N * N * 2);
+    this.ctrl = new Uint8Array(N * N * 4);
     const toHalf = THREE.DataUtils.toHalfFloat;
     const n2 = this.n2, n3 = this.n3;
 
-    // normalise flow with a log curve — raw droplet counts are wildly peaked
     let flowMax = 0;
     const flow = this.flow, sed = this.sed;
     for (let k = 0; k < flow.length; k++) if (flow[k] > flowMax) flowMax = flow[k];
@@ -940,7 +1240,6 @@ export class Field {
       return h[jj * N + ii];
     };
 
-    // blur the flow map a little so channels read as valleys, not scratches
     const fb = new Float32Array(flow.length);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
@@ -968,32 +1267,28 @@ export class Field {
         this.nrm[idx * 2 + 1] = toHalf(nz);
 
         const slope = Math.min(1, Math.hypot((hl - hr) / (2 * CELL), (hd - hu) / (2 * CELL)));
-        const curv = (hl + hr + hd + hu) * 0.25 - c;      // + = concave
+        const curv = (hl + hr + hd + hu) * 0.25 - c;
 
         const fl = Math.min(1, Math.log(1 + fb[idx] * 0.35) * flowScale);
         const sd = Math.min(1, Math.pow(sed[idx] / sedMax, 0.32));
 
-        // exposed rock: convex + steep + a stratum-following noise
         let rocky = smoothstep(0.35, 0.95, slope) * 0.85;
-        rocky += Math.max(0, -curv) * 1.4;
-        rocky += 0.28 * Math.max(0, n2.fbm2(x * 0.0032 + 17, z * 0.0032 - 8, 3));
-        rocky += 0.35 * smoothstep(64, 150, c);
+        rocky += Math.max(0, -curv) * 0.5;
+        rocky += 0.28 * Math.max(0, n2.fbm2(x * 0.0012 + 17, z * 0.0012 - 8, 3));
+        rocky += 0.35 * smoothstep(70, 175, c);
         rocky = Math.max(0, Math.min(1, rocky - 0.12 * fl));
 
         const o = idx * 4;
         const rm = this.roadMask[idx];
-        // On the road the flow channel is repurposed to carry the signed lateral
-        // position, which is what lets the shader draw wheel ruts.
         this.ctrl[o] = rm > 0.02
           ? (Math.max(0, Math.min(1, this.roadLat[idx])) * 255) | 0
           : (Math.max(0, Math.min(1, fl)) * 255) | 0;
         this.ctrl[o + 1] = (Math.max(0, Math.min(1, sd * (1 - slope * 0.8))) * 255) | 0;
-        this.ctrl[o + 2] = (Math.max(0, Math.min(1, this.roadMask[idx])) * 255) | 0;
+        this.ctrl[o + 2] = (Math.max(0, Math.min(1, rm)) * 255) | 0;
         this.ctrl[o + 3] = (rocky * 255) | 0;
       }
     }
 
-    // far-field normals + a coarse control map
     this.farNrm = new Uint16Array(FAR_N * FAR_N * 2);
     this.farCtrl = new Uint8Array(FAR_N * FAR_N * 4);
     for (let j = 0; j < FAR_N; j++) {
@@ -1011,8 +1306,8 @@ export class Field {
         this.farNrm[idx * 2 + 1] = toHalf(nz);
         const slope = Math.min(1, Math.hypot((hl - hr) / (2 * FAR_CELL), (hd - hu) / (2 * FAR_CELL)));
         const rocky = Math.max(0, Math.min(1,
-          smoothstep(0.30, 0.85, slope) + 0.4 * smoothstep(90, 260, this.far[idx]) +
-          0.22 * n3.fbm2(x * 0.0009, z * 0.0009, 3)));
+          smoothstep(0.30, 0.85, slope) + 0.4 * smoothstep(110, 300, this.far[idx]) +
+          0.22 * n3.fbm2(x * 0.00034, z * 0.00034, 3)));
         const o = idx * 4;
         this.farCtrl[o] = 0;
         this.farCtrl[o + 1] = ((1 - rocky) * 190) | 0;
@@ -1021,14 +1316,13 @@ export class Field {
       }
     }
 
-    // free the scratch buffers, keep the ones the runtime API needs
     this.flow = null; this.sed = null; this._coarse = null;
     this.roadLat = null; this.roadMask = null; this.slope0 = null;
   }
 
   // -------------------------------------------------------------- public API
 
-  /** Bilinear sample of the near grid (no far-field switch). */
+  /** Bilinear sample of the near grid (no far-field switch, no micro relief). */
   rawHeightAt(x, z) {
     const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
@@ -1051,10 +1345,11 @@ export class Field {
     return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
   }
 
-  /** Exactly what the GPU draws. */
+  /** Exactly what the GPU draws: grid + analytic micro-relief. */
   heightAt(x, z) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
-    return q >= BLEND_OUT ? this.sampleFar(x, z) : this.rawHeightAt(x, z);
+    const base = q >= BLEND_OUT ? this.sampleFar(x, z) : this.rawHeightAt(x, z);
+    return base + microDetail(x, z);
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
@@ -1085,8 +1380,8 @@ function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 /**
  * The exact JS twin of `tf_snoise` in TerrainMaterial.js (Ashima simplex).
- * `Terrain.sampleMaterial()` has to agree with the pixels the shader draws, so
- * the CPU cannot use a differently-seeded noise here.
+ * `Terrain.sampleMaterial()` and `microDetail()` have to agree with the pixels
+ * the shader draws, so the CPU cannot use a differently-seeded noise here.
  * @returns {number} roughly -1..1
  */
 export function gnoise2(xin, yin) {
