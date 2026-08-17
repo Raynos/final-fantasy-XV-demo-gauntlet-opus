@@ -269,9 +269,10 @@ export class Water {
     rc.layers.enable(3);
 
     // mirror the orientation about the water plane
-    const q = new THREE.Quaternion();
+    const q = this._q || (this._q = new THREE.Quaternion());
+    const e = this._e || (this._e = new THREE.Euler());
     cam.getWorldQuaternion(q);
-    const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+    e.setFromQuaternion(q, 'YXZ');
     e.x = -e.x; e.z = -e.z;
     rc.quaternion.setFromEuler(e);
     rc.updateMatrixWorld(true);

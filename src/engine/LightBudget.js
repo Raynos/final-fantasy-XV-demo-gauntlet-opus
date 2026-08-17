@@ -141,10 +141,12 @@ export class LightBudget {
     // distance so a bright flash at the player always beats a distant lamp.
     if (live.length > budget) {
       const p = this._camPos;
+      const lp = this._lp || (this._lp = new THREE.Vector3());
       for (const e of live) {
-        const lp = e.light.position;
-        const d2 = lp.distanceToSquared(p);
-        e.score = (e.light.intensity || 0) / (1 + d2 * 0.02);
+        // world, not local: a lamp parented under an outpost group has a
+        // local position that says nothing about where it is on the map
+        lp.setFromMatrixPosition(e.light.matrixWorld);
+        e.score = (e.light.intensity || 0) / (1 + lp.distanceToSquared(p) * 0.02);
       }
       live.sort((a, b) => b.score - a.score);
       for (let i = budget; i < live.length; i++) {
