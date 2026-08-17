@@ -1,26 +1,64 @@
 import * as THREE from 'three';
+import { AudioGraph, BUSES } from './Graph.js';
+import { Instruments } from './Instruments.js';
+import { Score } from './Score.js';
+import { Sfx } from './Sfx.js';
+import { Ambience } from './Ambience.js';
+import { clamp } from './Dsp.js';
 
 /**
- * Fully procedural audio — no sample files (see BRIEF: no binary assets).
+ * Audio.
  *
- * Three layers:
- *   - an adaptive orchestral score synthesised from a chord progression, with
- *     field / tension / combat / victory states that cross-fade,
- *   - a positional SFX bank built from noise + FM synthesis,
- *   - an ambience bed (wind, insects, rain) tied to weather and time of day.
+ * Everything is synthesised at runtime — there is not a single sample file in
+ * this project (BRIEF: no binary assets), so the orchestra, the sword hits, the
+ * weather and the reverb tails are all built from oscillators, filtered noise
+ * and impulse responses computed at boot.
  *
- * Browsers block audio until a gesture, so everything is created lazily on the
- * first interaction and the whole system is a no-op in the screenshot harness.
+ * Four subsystems hang off this class:
+ *   `Score`      an adaptive orchestral cue that changes chart and orchestration
+ *                by game state and cross-fades at the bar line,
+ *   `Sfx`        the one-shot bank, driven by the combat event stream,
+ *   `Ambience`   weather, time of day, water, wildlife and mains hum,
+ *   `AudioGraph` the mix: five buses, ducking, two convolution reverbs and a
+ *                limiter.
+ *
+ * Browsers refuse to start an AudioContext without a gesture, so the whole
+ * thing is created lazily on the first click or key. Under the screenshot
+ * harness (`?shoot=1`) it stays off entirely — captures are silent and the
+ * scheduler would only cost frame time — unless `?audio=force` is also present,
+ * which is what the offline verification harness uses.
  */
 export class AudioSystem {
   async init(game) {
     this.game = game;
     this.enabled = false;
+    this.ctx = null;
+
+    const params = new URLSearchParams(location.search);
+    const forced = params.get('audio') === 'force';
+    this.headless = params.has('shoot') && !forced;
+    /** Kept for older call sites that read `.state`. */
     this.state = 'field';
-    this.master = null;
-    this.headless = new URLSearchParams(location.search).has('shoot');
+
+    // Per-frame bookkeeping.
+    this._stride = 0;
+    this._enemyState = new Map();
+    this._enemyStride = new Map();
+    this._encounterKills = 0;
+    this._wasInCombat = false;
+    this._probeTimer = 0;
+    this._sweepAt = 0;
+    this._matCache = new Map();
+    this._lastMenu = null;
+    this.cpuMs = 0;
+    this._musicState = 'field';
+    this._camping = false;
+    /** @type {Record<string, number>} user-facing volume per bus, 0..1 */
+    this._userVolume = { music: 1, sfx: 1, amb: 1, ui: 1, voice: 1 };
 
     if (this.headless) return;
+    if (forced) { this._boot(); return; }
+
     const unlock = () => {
       this._boot();
       window.removeEventListener('pointerdown', unlock);
@@ -30,321 +68,654 @@ export class AudioSystem {
     window.addEventListener('keydown', unlock);
   }
 
+  /* -------------------------------------------------------------- boot */
+
   _boot() {
     if (this.ctx) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
-    this.ctx = new Ctx();
-    const ctx = this.ctx;
+    this.ctx = new Ctx({ latencyHint: 'interactive' });
+    if (this.ctx.state === 'suspended') this.ctx.resume();
 
-    this.master = ctx.createGain();
-    this.master.gain.value = 0.5;
+    this.graph = new AudioGraph(this.ctx, { maxVoices: 72 });
+    this.inst = new Instruments(this.graph);
+    this.sfx = new Sfx(this.graph, this.inst);
+    this.amb = new Ambience(this.graph, this.sfx);
+    this.score = new Score(this.graph, this.inst);
 
-    // gentle bus compression so combat hits don't clip the mix
-    this.comp = ctx.createDynamicsCompressor();
-    this.comp.threshold.value = -18;
-    this.comp.knee.value = 22;
-    this.comp.ratio.value = 3.4;
-    this.comp.attack.value = 0.006;
-    this.comp.release.value = 0.22;
+    const sky = this.game && this.game.get('Sky');
+    const hours = sky ? sky.hours : 12;
+    const night = hours >= 19 || hours < 5;
+    this.score.start(night ? 'night' : 'field');
+    this._musicState = night ? 'night' : 'field';
+    this.amb.setTimeOfDay(hours, 0);
+    this.amb.setWind(1.0);
 
-    this.reverb = ctx.createConvolver();
-    this.reverb.buffer = this._impulse(2.6, 2.2);
-    this.reverbSend = ctx.createGain();
-    this.reverbSend.gain.value = 0.24;
+    const weather = this.game && this.game.get('Weather');
+    if (weather) this.setWeather(weather.name);
 
-    this.musicBus = ctx.createGain(); this.musicBus.gain.value = 0.34;
-    this.sfxBus = ctx.createGain(); this.sfxBus.gain.value = 0.7;
-    this.ambBus = ctx.createGain(); this.ambBus.gain.value = 0.4;
+    // A hidden tab should not be paying for an orchestra.
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) this.ctx.suspend().catch(() => {});
+      else this.ctx.resume().catch(() => {});
+    });
 
-    for (const bus of [this.musicBus, this.sfxBus, this.ambBus]) {
-      bus.connect(this.comp);
-      bus.connect(this.reverbSend);
-    }
-    this.reverbSend.connect(this.reverb);
-    this.reverb.connect(this.comp);
-    this.comp.connect(this.master);
-    this.master.connect(ctx.destination);
-
-    this.listener = new THREE.AudioListener();
-    this.game.camera.add(this.listener);
-
-    this._startAmbience();
-    this._startMusic();
+    this._wireEvents();
     this.enabled = true;
   }
 
-  /** Synthesised late-reverb impulse response (exponentially decaying noise). */
-  _impulse(seconds = 2.5, decay = 2.0) {
-    const ctx = this.ctx;
-    const len = Math.floor(ctx.sampleRate * seconds);
-    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) {
-        const t = i / len;
-        // early reflections then a smooth diffuse tail
-        const early = i < ctx.sampleRate * 0.08 ? (Math.random() * 2 - 1) * 0.5 : 0;
-        d[i] = ((Math.random() * 2 - 1) * Math.pow(1 - t, decay)) * 0.7 + early;
-      }
-    }
-    return buf;
-  }
-
-  // ---------------------------------------------------------------- ambience
-
-  _startAmbience() {
-    const ctx = this.ctx;
-    // Wind: filtered pink-ish noise with a slowly modulated band-pass.
-    const noise = ctx.createBufferSource();
-    noise.buffer = this._noiseBuffer(6);
-    noise.loop = true;
-
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 420; bp.Q.value = 0.6;
-
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.06;
-    const lfoGain = ctx.createGain(); lfoGain.gain.value = 240;
-    lfo.connect(lfoGain); lfoGain.connect(bp.frequency);
-
-    this.windGain = ctx.createGain(); this.windGain.gain.value = 0.16;
-    noise.connect(bp); bp.connect(this.windGain); this.windGain.connect(this.ambBus);
-    noise.start(); lfo.start();
-    this.wind = { noise, bp, lfo };
-
-    // Rain bed, kept silent until the weather system asks for it.
-    const rain = ctx.createBufferSource();
-    rain.buffer = this._noiseBuffer(4); rain.loop = true;
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
-    this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
-    rain.connect(hp); hp.connect(this.rainGain); this.rainGain.connect(this.ambBus);
-    rain.start();
-  }
-
-  _noiseBuffer(seconds) {
-    const ctx = this.ctx;
-    const len = ctx.sampleRate * seconds;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < len; i++) {
-      const white = Math.random() * 2 - 1;
-      // one-pole cascade -> pink-ish spectrum, much less harsh than white
-      b0 = 0.99765 * b0 + white * 0.0990460;
-      b1 = 0.96300 * b1 + white * 0.2965164;
-      b2 = 0.57000 * b2 + white * 1.0526913;
-      d[i] = (b0 + b1 + b2 + white * 0.1848) * 0.16;
-    }
-    return buf;
-  }
-
-  // ------------------------------------------------------------------- music
-
-  _startMusic() {
-    // "Somnus"-adjacent: minor key, slow, wide voicings.
-    this.progressions = {
-      field: [[0, 3, 7, 10], [-2, 3, 5, 10], [-4, 0, 3, 7], [-5, 2, 5, 9]],
-      tension: [[0, 3, 6, 10], [0, 3, 6, 10], [-1, 2, 5, 9], [-1, 2, 5, 9]],
-      combat: [[0, 3, 7, 10], [-3, 0, 5, 8], [-5, -1, 2, 7], [-4, 0, 3, 8]],
-      victory: [[0, 4, 7, 11], [2, 5, 9, 12], [4, 7, 11, 14], [0, 4, 7, 12]],
-    };
-    this.root = 55;           // A1
-    this.bar = 0;
-    this._nextNoteTime = this.ctx.currentTime + 0.2;
-    this._scheduler = setInterval(() => this._schedule(), 120);
-  }
-
-  _schedule() {
-    if (!this.ctx) return;
-    const ctx = this.ctx;
-    const tempo = this.state === 'combat' ? 132 : 68;
-    const beat = 60 / tempo;
-    while (this._nextNoteTime < ctx.currentTime + 0.5) {
-      const prog = this.progressions[this.state] || this.progressions.field;
-      const chord = prog[this.bar % prog.length];
-      const t = this._nextNoteTime;
-
-      for (let i = 0; i < chord.length; i++) {
-        const freq = this.root * Math.pow(2, (chord[i] + 24) / 12);
-        this._pad(freq, t + i * 0.02, beat * 4, 0.06 / (1 + i * 0.35));
-      }
-      // bass root
-      this._pad(this.root * Math.pow(2, chord[0] / 12), t, beat * 4, 0.09, 'triangle');
-
-      if (this.state === 'combat') {
-        for (let s = 0; s < 4; s++) this._perc(t + s * beat, s % 2 === 0);
-      }
-      this._nextNoteTime += beat * 4;
-      this.bar++;
-    }
-  }
-
-  /** Soft filtered saw pad with a long swell — the score's main voice. */
-  _pad(freq, t, dur, gain, type = 'sawtooth') {
-    const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    osc.type = type; osc2.type = type;
-    osc.frequency.value = freq;
-    osc2.frequency.value = freq * 1.004;      // detune for width
-    const filt = ctx.createBiquadFilter();
-    filt.type = 'lowpass';
-    filt.frequency.setValueAtTime(300, t);
-    filt.frequency.linearRampToValueAtTime(1600, t + dur * 0.4);
-    filt.Q.value = 0.7;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + dur * 0.28);
-    g.gain.linearRampToValueAtTime(0, t + dur);
-    osc.connect(filt); osc2.connect(filt); filt.connect(g); g.connect(this.musicBus);
-    osc.start(t); osc2.start(t);
-    osc.stop(t + dur + 0.1); osc2.stop(t + dur + 0.1);
-  }
-
-  _perc(t, accent) {
-    const ctx = this.ctx;
-    const src = ctx.createBufferSource();
-    src.buffer = this._noiseBuffer(0.25);
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass'; f.frequency.value = accent ? 180 : 3200; f.Q.value = 1.2;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(accent ? 0.5 : 0.14, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + (accent ? 0.35 : 0.09));
-    src.connect(f); f.connect(g); g.connect(this.musicBus);
-    src.start(t); src.stop(t + 0.4);
-  }
-
-  // --------------------------------------------------------------------- sfx
+  /* ------------------------------------------------------------ events */
 
   /**
-   * One-shot procedural SFX.
-   * @param {'swing'|'hit'|'warp'|'step'|'magic'|'ui'|'parry'} name
-   * @param {THREE.Vector3} [pos] world position for panning
+   * Subscribe to everything the rest of the game already broadcasts. Combat
+   * mirrors every event onto `window` as `combat:<name>`, so no other system
+   * needs a line of code added to make the game audible.
+   */
+  _wireEvents() {
+    const on = (name, fn) => window.addEventListener(`combat:${name}`, (e) => {
+      try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
+    });
+
+    on('combo', (d) => {
+      const kind = d.weapon || 'sword';
+      if (kind === 'firearm') return;                 // the shot is the sound
+      this.sfx.play(`swing:${kind}`, this._playerPos(), { volume: 0.85 });
+      this.sfx.play('cloth', null, { volume: 0.5 });
+      if (d.index > 0) this.sfx.play('combo', null, { index: d.index });
+    });
+
+    on('hit', (d) => {
+      const mat = this._enemyMaterial(d.enemy);
+      this.sfx.play(`impact:${mat}`, d.position, {
+        hrtf: true, scale: d.blindside ? 1.45 : 1.0, crit: !!d.blindside, volume: 0.95,
+      });
+    });
+
+    on('damage', (d) => {
+      if (d.killed) return;                            // the death cue covers it
+      const key = this._speciesOf(d.enemy);
+      if (key && this.sfx.rng() < 0.55) {
+        this.sfx.play(`voc:${key}:hurt`, d.position, { volume: 0.8 });
+      }
+      if (d.crit) this.graph.duck(0.78, 0.06, 0.28);
+    });
+
+    on('death', (d) => {
+      this._encounterKills++;
+      const key = this._speciesOf(d.enemy);
+      const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
+      if (key) this.sfx.play(`voc:${key}:death`, at, { volume: 1.0, hrtf: true });
+      this.sfx.play('impact:ground', at, { scale: 1.2, volume: 0.7 });
+      if (d.enemy) this._enemyState.delete(d.enemy);
+    });
+
+    on('stagger', (d) => {
+      const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
+      this.sfx.play('stagger', at, { volume: 0.9 });
+    });
+
+    on('parry', (d) => {
+      this.sfx.play('parry', d.position, { hrtf: true, volume: 1.0 });
+      this.score.setFilter(1400, 0.08);
+      setTimeout(() => this.score.setFilter(20000, 0.5), 620);
+    });
+
+    on('warp', (d) => {
+      if (d.phase === 'impact') this.sfx.play('warp:impact', d.to, { hrtf: true });
+      else this.sfx.play('warp:start', d.from, { hrtf: true });
+    });
+
+    on('link', (d) => {
+      const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
+      this.sfx.play('link', at, { volume: 0.95 });
+    });
+
+    on('armiger', () => {
+      this.sfx.play('armiger', null, {});
+      this.score.setIntensity(1);
+    });
+
+    on('spell', (d) => {
+      this.sfx.play(`spell:${d.element || 'fire'}`, d.position, { hrtf: true });
+    });
+
+    on('playerHit', (d) => {
+      this.sfx.play('grunt', null, {});
+      this.sfx.play('impact:flesh', d.position, { scale: 1.2, volume: 0.9 });
+      if (d.hp <= 0) this.sfx.play('death', null, {});
+    });
+
+    on('mp', (d) => { if (d.stasis) this.sfx.play('stasis', null, {}); });
+    on('lockon', (d) => { if (d.enemy) this.sfx.play('lockon', null, {}); });
+
+    // Events the combat system does not emit yet. Each is a one-line `emit()`
+    // at the matching call site; until then these listeners simply never fire.
+    on('materialise', (d) => this.sfx.play('materialise', d.position || this._playerPos(), {}));
+    on('shot', (d) => this.sfx.play('gunshot', d.position, { hrtf: true }));
+    on('dodge', () => {
+      this.sfx.play('cloth', null, { volume: 1.1 });
+      this.sfx.play('step:dirt', null, { run: true, volume: 0.7 });
+    });
+    on('armigerHit', (d) => this.sfx.play('armigerHit', d.position, {}));
+
+    /* ---- RPG: level ups, quests, loot -------------------------------- */
+    const rpg = this.game && this.game.get('Rpg');
+    if (rpg && rpg.on) {
+      rpg.on('level-up', () => this.sfx.play('levelup', null, {}));
+      rpg.on('quest-updated', (p) => {
+        if (p && (p.phase === 'complete' || p.phase === 'accepted' || p.phase === 'objective')) {
+          this.sfx.play('quest', null, {});
+        }
+      });
+      rpg.on('item-gained', () => this.sfx.play('item', null, {}));
+      rpg.on('gil-changed', (p) => { if (p && p.delta > 0) this.sfx.play('ui:move', null, {}); });
+      rpg.on('rested', () => { this._camping = false; this.sfx.play('quest', null, {}); });
+      rpg.on('game-saved', () => this.sfx.play('ui:confirm', null, {}));
+    }
+
+    /* ---- dialogue ------------------------------------------------------ */
+    // The HUD's own `ffxv-*` broadcast channel. A line of dialogue ducks the
+    // score hard; ambient party banter only leans on it.
+    window.addEventListener('ffxv-say', (e) => this.say(e.detail?.dur ?? 3.0));
+    window.addEventListener('ffxv-banter', (e) => this.banter(e.detail?.dur ?? 2.5));
+    window.addEventListener('ffxv-callout', () => this.say(1.4, 0.5));
+    window.addEventListener('ffxv-area', () => this.sfx.play('quest', null, {}));
+
+    /* ---- global volume ------------------------------------------------ */
+    window.addEventListener('keydown', (e) => {
+      if (!this.enabled || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.code === 'KeyM') { this.setMuted(); this.sfx.play('ui:cancel', null, {}); }
+      else if (e.code === 'BracketLeft') this._nudgeVolume(-0.1);
+      else if (e.code === 'BracketRight') this._nudgeVolume(0.1);
+    });
+
+    /* ---- UI navigation ------------------------------------------------ */
+    // Menus reads the keyboard directly rather than emitting, so we listen to
+    // the same keys and only speak when a screen is actually open.
+    window.addEventListener('keydown', (e) => {
+      if (!this.enabled) return;
+      const menus = this.game && this.game.get('Menus');
+      const open = !!(menus && menus.name);
+      if (!open) return;
+      if (e.code.startsWith('Arrow') || e.code === 'KeyW' || e.code === 'KeyA'
+        || e.code === 'KeyS' || e.code === 'KeyD' || e.code === 'Tab') {
+        this.sfx.play('ui:move', null, {});
+      } else if (e.code === 'Enter' || e.code === 'Space') {
+        this.sfx.play('ui:confirm', null, {});
+      } else if (e.code === 'Escape' || e.code === 'Backspace') {
+        this.sfx.play('ui:cancel', null, {});
+      }
+    });
+  }
+
+  /* --------------------------------------------------------- public API */
+
+  /**
+   * Play a sound.
+   * @param {string} name see `Sfx` — `swing:greatsword`, `impact:metal`,
+   *   `voc:sabertusk:aggro`, `step:gravel`, `spell:ice`, `ui:confirm`,
+   *   `thunder`, plus the legacy short names `hit` / `swing` / `warp` / `step` /
+   *   `magic` / `ui` / `parry`.
+   * @param {{x:number,y:number,z:number}} [pos] world position, omit for 2D
+   * @param {object} [opts] {volume, hrtf, scale, distance, at}
    */
   play(name, pos, opts = {}) {
-    if (!this.enabled || !this.ctx) return;
-    const ctx = this.ctx;
-    const t = ctx.currentTime;
-    const out = ctx.createGain();
-    out.gain.value = opts.volume ?? 1;
-
-    if (pos) {
-      const pan = ctx.createPanner();
-      pan.panningModel = 'HRTF';
-      pan.distanceModel = 'inverse';
-      pan.refDistance = 4; pan.maxDistance = 90; pan.rolloffFactor = 1.4;
-      pan.positionX.value = pos.x; pan.positionY.value = pos.y; pan.positionZ.value = pos.z;
-      out.connect(pan); pan.connect(this.sfxBus);
-    } else {
-      out.connect(this.sfxBus);
-    }
-
-    switch (name) {
-      case 'swing': this._swoosh(t, out, 0.22, 900, 260); break;
-      case 'parry': this._swoosh(t, out, 0.1, 5200, 1400); this._ping(t, out, 2400, 0.5); break;
-      case 'hit': this._impact(t, out, 0.3, 120); break;
-      case 'warp': this._warp(t, out); break;
-      case 'step': this._impact(t, out, 0.12, 320, 0.35); break;
-      case 'magic': this._magic(t, out); break;
-      case 'ui': this._ping(t, out, 1800, 0.18); break;
-      default: break;
-    }
+    if (!this.enabled || !this.sfx) return false;
+    return this.sfx.play(name, pos, opts);
   }
 
-  _swoosh(t, out, dur, fStart, fEnd) {
-    const ctx = this.ctx;
-    const src = ctx.createBufferSource();
-    src.buffer = this._noiseBuffer(0.5);
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass'; f.Q.value = 3.2;
-    f.frequency.setValueAtTime(fStart, t);
-    f.frequency.exponentialRampToValueAtTime(fEnd, t + dur);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.5, t + dur * 0.2);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f); f.connect(g); g.connect(out);
-    src.start(t); src.stop(t + dur + 0.05);
+  /**
+   * Force the music state. The game normally picks this itself from combat and
+   * the clock; call it for scripted moments.
+   * @param {'field'|'night'|'tension'|'combat'|'boss'|'camp'|'victory'|'silence'} s
+   */
+  setState(s) {
+    this.state = s;
+    if (!this.enabled) return;
+    this._musicState = s;
+    this.score.setState(s);
   }
 
-  _impact(t, out, dur, freq, amp = 0.9) {
-    const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq * 2.2, t);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, t + dur);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(amp, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g); g.connect(out);
-    osc.start(t); osc.stop(t + dur + 0.02);
-    this._swoosh(t, out, dur * 0.6, 2600, 400);
-  }
-
-  _ping(t, out, freq, dur) {
-    const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    osc.type = 'sine'; osc.frequency.value = freq;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.28, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g); g.connect(out);
-    osc.start(t); osc.stop(t + dur + 0.02);
-  }
-
-  _warp(t, out) {
-    const ctx = this.ctx;
-    // rising shimmer + a doppler whoosh + a crystalline tail
-    for (let i = 0; i < 5; i++) {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      const base = 700 + i * 340;
-      osc.frequency.setValueAtTime(base, t);
-      osc.frequency.exponentialRampToValueAtTime(base * 3.2, t + 0.28);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t + i * 0.01);
-      g.gain.exponentialRampToValueAtTime(0.11, t + 0.05 + i * 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-      osc.connect(g); g.connect(out);
-      osc.start(t); osc.stop(t + 0.55);
-    }
-    this._swoosh(t + 0.05, out, 0.35, 300, 4800);
-  }
-
-  _magic(t, out) {
-    const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    const mod = ctx.createOscillator();
-    const modGain = ctx.createGain();
-    osc.type = 'sine'; mod.type = 'sine';
-    osc.frequency.value = 220; mod.frequency.value = 63; modGain.gain.value = 420;
-    mod.connect(modGain); modGain.connect(osc.frequency);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.4, t + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
-    osc.connect(g); g.connect(out);
-    osc.start(t); mod.start(t);
-    osc.stop(t + 1.2); mod.stop(t + 1.2);
-  }
-
-  // ------------------------------------------------------------------ update
-
-  /** @param {'field'|'tension'|'combat'|'victory'} s */
-  setState(s) { this.state = s; }
-
+  /**
+   * Weather changed. `Weather.set()` already calls this; the per-frame values
+   * (wind strength, rain intensity, gusts) are read straight off the Weather
+   * system in `_environment`, so this only needs to move the bed immediately
+   * rather than waiting for the next probe.
+   * @param {'clear'|'overcast'|'storm'|'fog'|'rain'} w
+   */
   setWeather(w) {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
-    const rain = w === 'storm' ? 0.5 : w === 'rain' ? 0.3 : 0;
-    this.rainGain.gain.linearRampToValueAtTime(rain, t + 2.5);
-    this.windGain.gain.linearRampToValueAtTime(w === 'storm' ? 0.34 : 0.16, t + 2.5);
+    if (!this.enabled) return;
+    this.weatherName = w;
+    this.amb.setRain(w === 'storm' ? 1 : w === 'rain' ? 0.55 : 0);
+    this.amb.setWind(w === 'storm' ? 3.0 : w === 'overcast' ? 1.3 : w === 'fog' ? 0.5 : 1.0);
   }
+
+  /**
+   * A character speaks. Ducks the score and ambience for the length of the
+   * line so dialogue and party banter always sit on top.
+   * @param {number} seconds
+   * @param {number} [depth] 0..1, lower ducks harder
+   */
+  say(seconds = 2.5, depth = 0.42) {
+    if (!this.enabled) return;
+    this.graph.duck(depth, Math.max(0.2, seconds), 0.7);
+  }
+
+  /** Lighter duck for in-world banter. */
+  banter(seconds = 2) { this.say(seconds, 0.62); }
+
+  /**
+   * @param {'master'|'music'|'sfx'|'amb'|'ui'|'voice'} bus
+   * @param {number} v 0..1
+   */
+  setVolume(bus, v) {
+    this._userVolume[bus] = clamp(v, 0, 1);
+    if (this.graph) this.graph.setVolume(bus, this._userVolume[bus]);
+  }
+
+  /** Current user setting for a bus, 0..1. */
+  volumeOf(bus) { return this._userVolume[bus] ?? 1; }
+
+  /** @param {boolean} [on] */
+  setMuted(on) { return this.graph ? this.graph.setMuted(on) : false; }
+
+  /** Master volume, 0..1. */
+  get volume() { return this._volume ?? 1; }
+
+  _nudgeVolume(d) {
+    this._volume = clamp((this._volume ?? 1) + d, 0, 1);
+    this.graph.setVolume('master', this._volume);
+    this.sfx.play('ui:move', null, {});
+  }
+
+  /** @returns {string[]} */
+  get buses() { return BUSES.slice(); }
+
+  /**
+   * The live AudioContext, or null before the first gesture unlocks it.
+   * Another system that wants to make its own sound (the Regalia radio, for
+   * instance) should build against this rather than opening a second context —
+   * two contexts means two device streams, two limiters and no shared ducking.
+   */
+  get context() { return this.ctx; }
+
+  /**
+   * A bus to route an external source into, so it inherits the mix: ducking,
+   * the glue compressor, the limiter and the user's volume sliders.
+   * @param {'music'|'sfx'|'amb'|'ui'|'voice'} name
+   * @returns {GainNode|null}
+   */
+  busNode(name = 'music') { return this.graph ? this.graph.bus[name] || null : null; }
+
+  /**
+   * Hand the music over to something else (the car radio) and take it back.
+   * The score keeps its clock, so returning mid-journey resumes in tempo.
+   * @param {boolean} on
+   */
+  suspendScore(on) {
+    if (!this.enabled) return;
+    this._scoreSuspended = !!on;
+    this.score.setState(on ? 'silence' : this._musicState, { fade: on ? 1.2 : 2.0 });
+  }
+
+  /** Acoustic space for the short reverb. */
+  setSpace(name) { if (this.graph) this.graph.setSpace(name); }
+
+  /** Everything the verification harness and the debug overlay want. */
+  stats() {
+    if (!this.enabled) return { enabled: false };
+    return {
+      enabled: true,
+      cpuMs: +this.cpuMs.toFixed(3),
+      graph: this.graph.stats(),
+      score: this.score.stats(),
+      sfx: this.sfx.stats(),
+      ambience: this.amb.stats(),
+      musicState: this._musicState,
+    };
+  }
+
+  /* -------------------------------------------------------------- tick */
 
   update(dt, game) {
     if (!this.enabled) return;
-    const combat = game.get('CombatSystem');
-    const want = combat && combat.inCombat ? 'combat' : 'field';
-    if (want !== this.state) this.setState(want);
+    const t0 = performance.now();
+
+    this._listener(game);
+    this._music(dt, game);
+    this._footsteps(dt, game);
+    this._enemies(dt, game);
+
+    // Backstop for voices whose `onended` never arrived (tab hidden, context
+    // suspended, a frame long enough to starve the event loop). Timed off the
+    // audio clock, not the simulation clock: hitstop and slow-motion scale
+    // `dt`, and a voice's lifetime is in real seconds regardless.
+    const now = this.graph.now;
+    if (now > this._sweepAt) { this._sweepAt = now + 0.5; this.graph.sweep(now); }
+
+    this._probeTimer -= dt;
+    if (this._probeTimer <= 0) {
+      this._probeTimer = 0.4;
+      this._environment(game);
+    }
+    this.amb.update(this._playerPos() || ORIGIN);
+
+    this.cpuMs += ((performance.now() - t0) - this.cpuMs) * 0.05;
+  }
+
+  _playerPos() {
+    const p = this.game && this.game.get('Player');
+    return p && p.position ? p.position : null;
+  }
+
+  _listener(game) {
+    const cam = game.camera;
+    cam.getWorldDirection(FWD);
+    UP.set(0, 1, 0).applyQuaternion(cam.quaternion);
+    POS.setFromMatrixPosition(cam.matrixWorld);
+    this.graph.setListener(POS, FWD, UP);
+  }
+
+  /* ------------------------------------------------------------- music */
+
+  _music(dt, game) {
+    const combat = game.get('Combat');
+    const enemies = game.get('Enemies');
+    const sky = game.get('Sky');
+    const menus = game.get('Menus');
+    const player = game.get('Player');
+
+    // Menus muffle the score rather than replacing it.
+    const menu = menus && menus.name;
+    if (menu !== this._lastMenu) {
+      if (menu && !this._lastMenu) this.sfx.play('ui:open', null, {});
+      else if (!menu && this._lastMenu) this.sfx.play('ui:close', null, {});
+      this._lastMenu = menu;
+      this.score.setFilter(menu ? 900 : 20000, 0.3);
+      // Pull the world down behind a menu without clobbering the user's slider.
+      this.graph.setVolume('sfx', this.volumeOf('sfx') * (menu ? 0.55 : 1), 0.3);
+      this.graph.setVolume('amb', this.volumeOf('amb') * (menu ? 0.5 : 1), 0.3);
+    }
+
+    const inCombat = !!(combat && combat.inCombat);
+    const hours = sky ? sky.hours : 12;
+    const night = hours >= 19 || hours < 5.2;
+
+    // Encounter resolution: the fanfare fires when the last enemy near us dies.
+    if (this._wasInCombat && !inCombat) {
+      if (this._encounterKills > 0) this.score.victory(night ? 'night' : 'field');
+      this._encounterKills = 0;
+    }
+    if (!this._wasInCombat && inCombat) {
+      // A stinger covers the bar we have to wait for before the cue changes.
+      this.sfx.play('impact:metal', null, { volume: 0.5, scale: 1.4 });
+      this.graph.duck(0.7, 0.15, 0.6);
+    }
+    this._wasInCombat = inCombat;
+
+    let want;
+    if (this._camping) want = 'camp';
+    else if (inCombat) want = this._bossPresent(enemies, player) ? 'boss' : 'combat';
+    else if (this._threat(enemies, player) > 0) want = 'tension';
+    else want = night ? 'night' : 'field';
+
+    if (this._scoreSuspended) { this._musicState = want; return; }
+    if (want !== this._musicState && this.score.stateName !== 'victory') {
+      this._musicState = want;
+      this.state = want;
+      this.score.setState(want, { fade: want === 'combat' || want === 'boss' ? 1.4 : 3.2 });
+    }
+
+    // Intensity: how much of the encounter is still standing, and how close.
+    if (inCombat && enemies && player) {
+      let hp = 0, max = 0, near = 0;
+      for (const e of enemies.list) {
+        if (e.dead) continue;
+        const d = e.root.position.distanceTo(player.position);
+        if (d > 40) continue;
+        hp += e.hp; max += e.maxHp;
+        if (d < 12) near++;
+      }
+      const pressure = clamp(near / 3, 0, 1);
+      const remaining = max > 0 ? hp / max : 0;
+      this.score.setIntensity(clamp(0.35 + 0.4 * pressure + 0.35 * (1 - remaining), 0, 1));
+    } else {
+      this.score.setIntensity(0.2);
+    }
+  }
+
+  /** Any enemy big enough to warrant the boss cue. */
+  _bossPresent(enemies, player) {
+    if (!enemies || !player) return false;
+    for (const e of enemies.list) {
+      if (e.dead) continue;
+      const key = this._speciesOf(e);
+      if (key === 'irongiant' && e.root.position.distanceTo(player.position) < 45) return true;
+    }
+    return false;
+  }
+
+  /** Enemies aware of us but not yet engaged — the tension bed. */
+  _threat(enemies, player) {
+    if (!enemies || !player) return 0;
+    let n = 0;
+    for (const e of enemies.list) {
+      if (e.dead) continue;
+      if (e.root.position.distanceTo(player.position) < 70) n++;
+    }
+    return n;
+  }
+
+  /* --------------------------------------------------------- footsteps */
+
+  _footsteps(dt, game) {
+    const p = game.get('Player');
+    if (!p || !p.position) return;
+    const speed = p.speed || 0;
+    if (speed < 0.25) { this._stride = 0.35; return; }
+    const run = speed > 5.0;
+    // Stride length grows with speed, so the cadence stays believable across
+    // the whole locomotion blend rather than turning into a machine gun.
+    const strideLen = run ? 2.45 : 1.55;
+    this._stride += (speed / strideLen) * dt;
+    if (this._stride < 1) return;
+    this._stride -= 1;
+
+    const surface = this._surfaceAt(p.position.x, p.position.z);
+    this.sfx.play(`step:${surface}`, null, {
+      run, volume: clamp(0.45 + speed * 0.07, 0.4, 1.05), minGap: 0.05,
+    });
+    if (this.sfx.rng() < (run ? 0.8 : 0.35)) this.sfx.play('cloth', null, { volume: run ? 0.7 : 0.4 });
+  }
+
+  /** Terrain material, cached on a 3 m grid — `sampleMaterial` is not free. */
+  _surfaceAt(x, z) {
+    const terrain = this.game.get('Terrain');
+    if (!terrain || !terrain.sampleMaterial) return 'dirt';
+    const water = this.game.get('Water');
+    if (water && water.surfaceAt) {
+      const s = water.surfaceAt(x, z);
+      if (s != null && terrain.heightAt(x, z) < s + 0.35) return 'water';
+    }
+    const key = `${Math.round(x / 3)},${Math.round(z / 3)}`;
+    let m = this._matCache.get(key);
+    if (m === undefined) {
+      m = terrain.sampleMaterial(x, z).name;
+      if (this._matCache.size > 512) this._matCache.clear();
+      this._matCache.set(key, m);
+    }
+    return m;
+  }
+
+  /* ----------------------------------------------------------- enemies */
+
+  _enemies(dt, game) {
+    const enemies = game.get('Enemies');
+    const player = game.get('Player');
+    if (!enemies || !player) return;
+    for (const e of enemies.list) {
+      if (e.dead) { this._enemyState.delete(e); continue; }
+      const d = e.root.position.distanceTo(player.position);
+      if (d > 48) continue;
+      const key = this._speciesOf(e);
+      const prev = this._enemyState.get(e);
+      if (prev !== e.state) {
+        this._enemyState.set(e, e.state);
+        if (e.state === 'telegraph' && key) {
+          this.sfx.play(`voc:${key}:aggro`, e.centre(), { volume: 0.85, hrtf: d < 20, minGap: 0.2 });
+        } else if (e.state === 'attack') {
+          this.sfx.play(key === 'mt' ? 'swing:firearm' : key === 'irongiant' ? 'swing:greatsword' : 'swing:sword',
+            e.centre(), { volume: 0.7, minGap: 0.05 });
+        }
+      }
+      // Enemy footfalls: heavy things must be heard moving.
+      if (e.state === 'approach' && d < 26) {
+        let s = this._enemyStride.get(e) || 0;
+        s += (e.speed / (1.6 * e.scale)) * dt;
+        if (s >= 1) {
+          s -= 1;
+          const heavy = key === 'irongiant';
+          this.sfx.play(`step:${heavy ? 'rock' : this._surfaceAt(e.root.position.x, e.root.position.z)}`,
+            e.root.position, { volume: heavy ? 1.3 : 0.5, run: true, minGap: 0.04 });
+        }
+        this._enemyStride.set(e, s);
+      }
+    }
+  }
+
+  /** What a hit on this enemy should sound like. */
+  _enemyMaterial(enemy) {
+    const key = this._speciesOf(enemy);
+    if (key === 'mt') return 'metal';
+    if (key === 'irongiant') return 'armour';
+    return 'flesh';
+  }
+
+  _speciesOf(enemy) {
+    if (!enemy) return null;
+    return (enemy.type && enemy.type.key) || null;
+  }
+
+  /* ------------------------------------------------------- environment */
+
+  /** Weather, clock, nearby water, floodlights and the shape of the space. */
+  _environment(game) {
+    const weather = game.get('Weather');
+    if (weather) {
+      this.amb.setWind(weather.windStrength ?? 1);
+      this.amb.setRain(weather.rainIntensity ?? 0);
+    }
+    const sky = game.get('Sky');
+    const rpg = game.get('Rpg');
+    const depth = rpg && rpg.day && rpg.day.nightDepth != null ? rpg.day.nightDepth : 0;
+    if (sky) this.amb.setTimeOfDay(sky.hours, depth);
+
+    const p = this._playerPos();
+    if (!p) return;
+
+    // Water: nearest lake, clamped to its footprint so the sound comes from the
+    // shore in front of us rather than the centre of the basin.
+    const water = game.get('Water');
+    if (water && water.bodies && water.bodies.length) {
+      let best = null, bestD = Infinity;
+      for (const b of water.bodies) {
+        const x = clamp(p.x, b.cx - b.w * 0.5, b.cx + b.w * 0.5);
+        const z = clamp(p.z, b.cz - b.d * 0.5, b.cz + b.d * 0.5);
+        const dd = Math.hypot(p.x - x, p.z - z);
+        if (dd < bestD) { bestD = dd; best = { x, y: water.level, z }; }
+      }
+      this.amb.setWater(best, bestD);
+    }
+
+    // Floodlights: the nearest practical light at a fuel stop or outpost.
+    const props = game.get('Props');
+    const lights = props && props.outposts && props.outposts.lights;
+    if (lights && lights.length) {
+      let best = null, bestD = Infinity;
+      for (const l of lights) {
+        const lp = l.light.position;
+        const dd = Math.hypot(p.x - lp.x, p.z - lp.z);
+        if (dd < bestD) { bestD = dd; best = lp; }
+      }
+      const on = best && (!sky || sky.hours >= 17.5 || sky.hours < 7);
+      this.amb.setFloodlights(on ? best : null, bestD);
+    }
+
+    // Acoustic space: if the ground rises on every side we are in a cut, and a
+    // cut answers you. This is cheap and it is real.
+    const terrain = game.get('Terrain');
+    if (terrain && terrain.heightAt) {
+      const h0 = terrain.heightAt(p.x, p.z);
+      let walls = 0;
+      for (const [dx, dz] of PROBE) {
+        if (terrain.heightAt(p.x + dx, p.z + dz) - h0 > 7) walls++;
+      }
+      this.graph.setSpace(walls >= 3 ? 'canyon' : 'outdoor');
+    }
+
+    // Camping: standing on a haven at night is the camp cue.
+    const day = rpg && rpg.day;
+    if (day && day.canCamp) {
+      const camp = day.canCamp({ x: p.x, z: p.z });
+      const shouldCamp = !!(camp.ok && day.isNight);
+      if (shouldCamp !== this._camping) this._camping = shouldCamp;
+    }
+  }
+
+  /* ------------------------------------------------------------- reset */
+
+  /** Called by `Game.resetClock()` before a deterministic capture. */
+  resetClock() { /* the audio clock is independent of the sim clock */ }
+
+  /**
+   * Render a scripted session through an OfflineAudioContext.
+   *
+   * This is how the audio gets verified: you cannot screenshot a mix, so the
+   * harness renders one and measures it. The whole stack is built against the
+   * offline context, the script schedules state changes and one-shots at
+   * explicit times, and the score and ambience are asked to fill the entire
+   * session in one pass instead of from a timer.
+   *
+   * @param {object} o
+   * @param {number} o.seconds
+   * @param {number} [o.sampleRate]
+   * @param {(api:object)=>void} o.script
+   * @returns {Promise<{buffer:AudioBuffer, stats:object}>}
+   */
+  static async renderSession(o) {
+    const seconds = o.seconds ?? 30;
+    const sampleRate = o.sampleRate ?? 44100;
+    const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ctx = new Off(2, Math.ceil(seconds * sampleRate), sampleRate);
+
+    const graph = new AudioGraph(ctx, { offline: true, maxVoices: o.maxVoices ?? 72 });
+    const inst = new Instruments(graph);
+    const sfx = new Sfx(graph, inst);
+    const amb = new Ambience(graph, sfx);
+    const score = new Score(graph, inst);
+    score.nextBarTime = 0.05;
+
+    const api = { ctx, graph, inst, sfx, amb, score, seconds };
+    if (o.script) o.script(api);
+
+    // One pass fills the whole timeline; the queue inside Score applies the
+    // scripted state changes as the musical clock reaches them.
+    score._scheduleUntil(seconds);
+    amb.scheduleUntil(seconds, { x: 0, y: 1.6, z: 0 });
+
+    const buffer = await ctx.startRendering();
+    return {
+      buffer,
+      stats: { graph: graph.stats(), score: score.stats(), sfx: sfx.stats(), ambience: amb.stats() },
+    };
   }
 }
+
+const PROBE = [[14, 0], [-14, 0], [0, 14], [0, -14]];
+const ORIGIN = { x: 0, y: 0, z: 0 };
+
+// Scratch vectors — the listener update runs every frame and must not allocate.
+const FWD = new THREE.Vector3(0, 0, -1);
+const UP = new THREE.Vector3(0, 1, 0);
+const POS = new THREE.Vector3();
