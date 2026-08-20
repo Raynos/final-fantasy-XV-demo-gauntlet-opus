@@ -53,6 +53,7 @@ export class Warmup {
       this._step('weapons', () => this._warmWeapons(rt));
       this._step('vfx', () => this._warmVfx(rt));
       this._step('weather', () => this._warmWeather(rt));
+      this._step('post passes', () => this._warmPostPasses());
       this._step('time of day', () => this._warmTimeOfDay(rt));
     } finally {
       this.renderer.setRenderTarget(prevTarget);
@@ -205,6 +206,37 @@ export class Warmup {
       if (wx.snap) wx.snap();
       if (wx.update) wx.update(1 / 60, this.game);
       this.renderer.compile(this.scene, this.camera);
+    }
+  }
+
+  /**
+   * Post passes that boot disabled.
+   *
+   * Everything above compiles through `renderer.render(scene, camera)`, which
+   * never touches the composer — so a pass that is off at boot only builds its
+   * program the first frame something turns it on. That is a real hitch in
+   * play, not a theoretical one: screen-space reflections come on with the wet
+   * ground when a storm clears, and the compile was measured at **240 ms**
+   * inside `SsrPass.render`, which was the whole of the weather-change spike.
+   *
+   * One composer pass with every disabled pass forced on is enough. It draws a
+   * junk frame — the matrices this early are whatever the camera had before
+   * `PostFX.render()` set them — so the temporal history is dropped afterwards.
+   */
+  _warmPostPasses() {
+    const post = this.game.post;
+    if (!post || !post.composer) return;
+    const forced = [];
+    for (const pass of post.composer.passes) {
+      if (pass.enabled === false) { pass.enabled = true; forced.push(pass); }
+    }
+    if (!forced.length) return;
+    try {
+      post.composer.render(1 / 60);
+    } finally {
+      for (const pass of forced) pass.enabled = false;
+      if (post.resetHistory) post.resetHistory();
+      this.renderer.setRenderTarget(null);
     }
   }
 
