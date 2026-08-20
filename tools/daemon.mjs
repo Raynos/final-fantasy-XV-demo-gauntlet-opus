@@ -33,6 +33,8 @@ import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mjs';
+import { createHash } from 'node:crypto';
+import { readdirSync, statSync } from 'node:fs';
 
 /**
  * Fingerprint of everything the page's behaviour depends on.
@@ -54,16 +56,16 @@ function sourceStamp() {
     try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-      const f = join(dir, e.name);
+      const f = path.join(dir, e.name);
       if (e.isDirectory()) walk(f);
       else if (/\.(js|mjs|css|html|json)$/.test(e.name)) {
         try { const st = statSync(f); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* raced */ }
       }
     }
   };
-  walk(join(ROOT, 'src'));
+  walk(path.join(ROOT, 'src'));
   for (const f of ['index.html', 'vite.config.js']) {
-    try { const st = statSync(join(ROOT, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
+    try { const st = statSync(path.join(ROOT, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
   }
   return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
 }
