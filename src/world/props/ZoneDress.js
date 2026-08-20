@@ -107,7 +107,7 @@ export const ZONE_DRESS = {
     rockD: 0.45, rockS: 0.9, tint: [0.88, 0.98, 0.84], bright: 0.9,
     kinds: { worn: 0.5, cobble: 0.3, slab: 0.12, bedded: 0.08 },
     frag: FRAG_ROUND,
-    litter: { log: 0.8, driftwood: 0.7, deadtrunk: 0.55, branch: 0.5, leaves: 0.3, stump: 0.3 },
+    litter: { log: 0.8, driftwood: 0.7, deadtrunk: 1.0, branch: 0.5, leaves: 0.3, stump: 0.3 },
     life: { birds: 1.5, herd: 0.35 },
   }),
   weaverwilds: mk({
@@ -170,7 +170,7 @@ export const ZONE_DRESS = {
     kinds: { worn: 0.44, cobble: 0.34, slab: 0.12, bedded: 0.10 },
     frag: FRAG_ROUND,
     // a drowned forest: standing dead trunks are the whole silhouette
-    litter: { deadtrunk: 1.5, driftwood: 0.9, log: 0.6, branch: 0.4, stump: 0.5 },
+    litter: { deadtrunk: 2.1, driftwood: 0.9, log: 0.6, branch: 0.4, stump: 0.5 },
     life: { birds: 1.5, herd: 0.1 },
   }),
   ravatogh: mk({

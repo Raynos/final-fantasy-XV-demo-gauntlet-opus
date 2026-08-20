@@ -363,7 +363,7 @@ export class Rocks {
     // used to be so early that the ash cone of Ravatogh and the walls of
     // Taelpar Crag — the two most dramatic slopes in the game — came out
     // completely bare, which is the opposite of how a volcano looks.
-    const rests = 1 - THREE.MathUtils.smoothstep(slope, 0.52, 0.76);
+    const rests = 1 - THREE.MathUtils.smoothstep(slope, 0.46, 0.70);
     if (rests <= 0.01) return 0;
     const p = eco.patch(x + 610, z - 340, 0.011, 3);
     const rd = THREE.MathUtils.smoothstep(eco.roadDist(x, z), 4.5, 9);
@@ -430,7 +430,7 @@ export class Rocks {
       // A crag, not a pile of pebbles: the tor is two to three times the size
       // of a loose boulder, which is what makes it legible at half a kilometre
       // and stops the middle distance reading as an empty dust bowl.
-      const grand = rng.range(1.4, 2.9);
+      const grand = rng.range(1.3, 2.15);
       const n = 5 + Math.floor(rng.next() * 7);
       const axis = rng.next() * Math.PI * 2;
       const spanX = 9 * grand, jit = 2.4 * grand;
@@ -442,7 +442,10 @@ export class Rocks {
         const kind = r < 0.42 ? K.granite : r < 0.62 ? K.slab
           : r < 0.82 ? K.bedded : K.spire;
         const it = this._item(kind, px, pz, rng, 1, dress);
-        it.s = Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand);
+        // hard ceiling: past about eleven metres a "boulder" is a landform,
+        // and landforms belong to the heightfield, not to the prop layer
+        const flatness = 1 - THREE.MathUtils.clamp((eco.slope01(px, pz) - 0.14) / 0.4, 0, 1) * 0.6;
+        it.s = Math.min(11, Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand * flatness));
         it.bury = kind.bury * rng.range(0.35, 0.8);
         it.pitch *= 0.35; it.roll *= 0.35;
         it.far = true;
@@ -453,9 +456,13 @@ export class Rocks {
 
   _item(kind, x, z, rng, w, dress) {
     const t = Math.pow(rng.next(), 1.65);
-    const size = (kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7))
-      * (BIG.has(kind.key) ? dress.rockS : 1);
     const nrm = this.eco.normal(x, z);
+    // A five metre block centred on a forty-degree face overhangs it by half
+    // its own width and reads as floating. Steep ground gets talus, not
+    // boulders — which is also what a real scree slope looks like.
+    const steep = THREE.MathUtils.clamp((1 - nrm.y - 0.16) / 0.4, 0, 1);
+    const size = (kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7))
+      * (BIG.has(kind.key) ? dress.rockS : 1) * (1 - steep * 0.62);
     const settle = THREE.MathUtils.clamp(1 - size / 5, 0.18, 1);
     // The instance tint multiplies a deliberately dark base material, so the
     // old 0.7..1.04 range rendered every boulder past a hundred metres as a

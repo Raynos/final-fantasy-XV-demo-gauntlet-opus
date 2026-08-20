@@ -385,7 +385,7 @@ const LITTER = {
   planks: { seed: 77, geo: null, mat: 'wood', per: 0.9, range: 130, scale: [0.7, 1.4], sink: 0.01 },
   rubble: { seed: 81, geo: rubbleGeometry, mat: 'stone', per: 3.0, range: 150, scale: [0.7, 1.7], sink: 0.04 },
   driftwood: { seed: 83, geo: driftwoodGeometry, mat: 'bleach', per: 1.6, range: 165, scale: [0.8, 1.7], sink: 0.03 },
-  deadtrunk: { seed: 85, geo: deadTrunkGeometry, mat: 'bleach', per: 1.6, range: 500, scale: [0.8, 1.5], sink: 0.03, tilt: 0.06 },
+  deadtrunk: { seed: 85, geo: deadTrunkGeometry, mat: 'bleach', per: 2.4, range: 560, scale: [0.8, 1.5], sink: 0.03, tilt: 0.06 },
   cairn: { seed: 87, geo: cairnGeometry, mat: 'stone', per: 0.5, range: 150, scale: [0.9, 1.7], sink: 0.02 },
   barrel: { seed: 89, geo: barrelGeometry, mat: 'rust', per: 0.8, range: 130, scale: [0.85, 1.2], sink: 0.02 },
 };
@@ -485,9 +485,15 @@ export class Debris {
       case 'bones':
         return base * (1 - THREE.MathUtils.smoothstep(
           Math.max(eco.moisture(x, z), zoneMoist(x, z)), 0.3, 0.62));
-      case 'deadtrunk':
-        // ankle-deep: within a few metres of the water plane
-        return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 1.5, 9));
+      case 'deadtrunk': {
+        // Depth of water over the bed, in metres. A trunk stands on the bed,
+        // so it only reads if the bed is within a trunk's height of the
+        // surface: any deeper and the whole thing is submerged, which is how
+        // the first attempt put four hundred invisible trees in the Vesperpool.
+        const d = SEA - h;
+        return base * THREE.MathUtils.smoothstep(d, -2.5, 0.5)
+          * (1 - THREE.MathUtils.smoothstep(d, 4.0, 6.5));
+      }
       case 'driftwood':
         return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 3, 22));
       case 'rubble':

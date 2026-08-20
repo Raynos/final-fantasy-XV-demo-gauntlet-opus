@@ -4,9 +4,8 @@ import { PartBuilder } from './PartBuilder.js';
 import { worldMap, WORLD } from '../map/WorldMap.js';
 import { dressAt } from './ZoneDress.js';
 import {
-  rockMaterial, woodMaterial, rustMaterial, concreteMaterial, paintedMaterial,
-  magitekMaterial, glowMaterial, canvasClothMaterial, signTexture, imperialTexture,
-  runeTexture,
+  woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
+  signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.js';
 
 /**
@@ -59,6 +58,11 @@ function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
   );
 }
 
+/** Flat-coloured PBR material — no map, so it cannot stretch. */
+function plain(hex, rough = 0.85, metal = 0) {
+  return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
+}
+
 /** A slab with a slightly irregular top — reads as cut stone, not a cube. */
 function roughBox(seed, w, h, d, amp = 0.05) {
   const g = new THREE.BoxGeometry(w, h, d, 2, 1, 2);
@@ -93,21 +97,27 @@ export class PoiKits {
 
   build() {
     const M = this.mats = {
-      stone: rockMaterial(0x9a8a74, 0.9, false),
-      dark: rockMaterial(0x5c564e, 0.92, false),
-      concrete: concreteMaterial(0x8d8779, 0.93),
-      ground: rockMaterial(0x6d5b46, 0.96, false),
-      gravel: concreteMaterial(0x6e6355, 0.97),
-      roof: paintedMaterial(0x474c52, 0.74, 0.35),
-      wall: paintedMaterial(0x9a8d78, 0.78, 0.05),
-      wall2: paintedMaterial(0x6f6656, 0.8, 0.05),
+      // Anything bigger than a couple of metres gets a *plain* material.
+      // PropMaterials' concrete and enamel maps are authored for a 1 m part
+      // and every primitive here carries 0..1 box UVs, so on a fourteen metre
+      // wall the paint-chip noise stretches into metre-wide grey blotches —
+      // which is what made the first pass of Lestallum look like granite
+      // chippings. Flat colour at that scale reads far better.
+      stone: plain(0x968a76, 0.93),
+      dark: plain(0x6b6357, 0.94),
+      concrete: plain(0x8d8779, 0.9),
+      ground: plain(0x796450, 0.96),
+      gravel: plain(0x796f5f, 0.95),
+      roof: plain(0x4b5058, 0.72, 0.3),
+      wall: plain(0xa2957e, 0.82),
+      wall2: plain(0x7b7160, 0.84),
       wood: woodMaterial(0x7d674c),
       plank: woodMaterial(0x5d4c39),
       rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
-      steel: paintedMaterial(0x8b9095, 0.5, 0.8),
-      cream: paintedMaterial(0xcfc4a8, 0.6, 0.1),
-      red: paintedMaterial(0x8f2b22, 0.55, 0.3),
-      magitek: magitekMaterial(0x2b2f36),
+      steel: plain(0x8f959b, 0.48, 0.7),
+      cream: plain(0xc8bfa6, 0.7),
+      red: plain(0x8f3a2c, 0.68, 0.1),
+      magitek: plain(0x3a4048, 0.62, 0.45),
       cloth: canvasClothMaterial(0x3d4148),
       glass: new THREE.MeshStandardMaterial({ color: 0x121a20, roughness: 0.14, metalness: 0.4 }),
       lamp: glowMaterial(0xffe6b4, 0.5, 0x141310),
@@ -174,15 +184,32 @@ export class PoiKits {
    * the heightfield from here — the terrain belongs to another system.
    */
   _apron(B, r, depth, seed, mat) {
-    const g = new THREE.CylinderGeometry(r, r * 1.07, depth, 18, 1);
+    const M = this.mats;
     const rng = new Rng(seed);
+    // A tapering, faceted drum rather than a smooth cylinder: on a hillside
+    // this is the most visible thing the kit builds, and a clean extruded
+    // circle reads as a cake stand. Sixteen facets with jittered radii and a
+    // batter on the face read as cut-and-fill.
+    const g = new THREE.CylinderGeometry(r, r * 1.12, depth, 16, 3);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      p.setX(i, p.getX(i) * (1 + rng.gauss(0, 0.035)));
-      p.setZ(i, p.getZ(i) * (1 + rng.gauss(0, 0.035)));
+      const k = 1 + rng.gauss(0, 0.075);
+      p.setX(i, p.getX(i) * k);
+      p.setZ(i, p.getZ(i) * k);
     }
     g.computeVertexNormals();
-    B.add(mat || this.mats.dark, g, mat4([0, -depth * 0.5 + 0.06, 0]));
+    B.add(mat || M.ground, g, mat4([0, -depth * 0.5 + 0.06, 0]));
+    // spoil at the foot of the cut, so the drum does not meet the hill on a line
+    const n = Math.round(10 + r * 0.55);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng.gauss(0, 0.2);
+      const d = r * rng.range(0.98, 1.22);
+      const sc = rng.range(0.5, 1.9) * (0.7 + r * 0.03);
+      B.add(M.dark, new THREE.DodecahedronGeometry(sc, 0),
+        mat4([Math.cos(a) * d, -rng.range(0.2, 1.4) - sc * 0.2, Math.sin(a) * d],
+          [rng.gauss(0, 0.5), rng.next() * 6, rng.gauss(0, 0.5)],
+          [1, rng.range(0.55, 0.9), 1]));
+    }
   }
 
   /** Which way the structure faces: down the nearest road, else seeded. */
@@ -568,10 +595,11 @@ export class PoiKits {
     put(M.magitek, new THREE.CylinderGeometry(11, 11, 0.5, 22), [0, 0.5, 0]);
     put(M.red, new THREE.TorusGeometry(8.4, 0.28, 5, 26).rotateX(Math.PI / 2), [0, 0.78, 0]);
     // hangar
-    put(M.magitek, new THREE.BoxGeometry(20, 8.5, 13), [-14, 4.6, 14]);
-    put(M.magitek, new THREE.CylinderGeometry(6.6, 6.6, 20, 14, 1, false, 0, Math.PI)
-      .rotateZ(Math.PI / 2), [-14, 8.7, 14], [0, Math.PI / 2, 0]);
-    put(M.void, new THREE.BoxGeometry(9, 7, 0.2), [-14, 3.9, 20.6]);
+    put(M.concrete, new THREE.BoxGeometry(18, 7.5, 12), [-14, 4.1, 14]);
+    put(M.roof, new THREE.CylinderGeometry(5.9, 5.9, 18, 14, 1, false, 0, Math.PI)
+      .rotateZ(Math.PI / 2), [-14, 7.7, 14], [0, Math.PI / 2, 0]);
+    put(M.magitek, new THREE.BoxGeometry(18.6, 0.7, 12.6), [-14, 7.9, 14]);
+    put(M.void, new THREE.BoxGeometry(8, 6.4, 0.2), [-14, 3.5, 20.1]);
     // banners and floodlights
     for (let i = 0; i < 5; i++) {
       const a = rng.next() * 6.28;
