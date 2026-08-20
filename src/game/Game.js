@@ -205,8 +205,7 @@ export class Game {
 
     const rig = this.get('CameraRig');
     if (shot.follow) {
-      const player = this.get('Player');
-      const p = player.position;
+      const p = this.followAnchor(shot.follow);
       rig.setShot({
         pos: [p.x + shot.offset[0], p.y + shot.offset[1], p.z + shot.offset[2]],
         target: [
@@ -222,6 +221,25 @@ export class Game {
       rig.setShot({ pos: shot.pos, target: shot.target, fov: shot.fov });
     }
     return shot;
+  }
+
+  /**
+   * World position a follow-shot is framed against.
+   *
+   * `follow: 'player'` is Noctis; `'gladio' | 'ignis' | 'prompto'` frames that
+   * companion directly. Guessing a companion's position as an offset from the
+   * player does not work — they steer to a wandering formation slot, so the
+   * guess drifts and the shot ends up pointing at empty ground.
+   *
+   * @param {string} who
+   * @returns {THREE.Vector3}
+   */
+  followAnchor(who) {
+    const player = this.get('Player');
+    if (!who || who === 'player') return player.position;
+    const party = this.get('Party');
+    const m = party && party.get && party.get(who);
+    return (m && m.root && m.root.position) || player.position;
   }
 
   /** Advance the simulation by `frames` fixed steps without presenting. */

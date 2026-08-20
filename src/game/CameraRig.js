@@ -213,8 +213,8 @@ export class CameraRig {
     if (this.shot) {
       const s = this.shot;
       if (this.followShot) {
-        const p = game.get('Player').position;
         const f = this.followShot;
+        const p = game.followAnchor ? game.followAnchor(f.follow) : game.get('Player').position;
         s.pos = [p.x + f.offset[0], p.y + f.offset[1], p.z + f.offset[2]];
         s.target = [
           p.x + (f.lookOffset?.[0] ?? 0),

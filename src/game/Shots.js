@@ -500,18 +500,18 @@ export const SHOTS = {
   },
   gladio_closeup: {
     doc: 'Gladiolus, the shield: the build, the scar and the greatsword',
-    time: 16.2, weather: 'clear', follow: 'player',
-    offset: [-2.38, 1.85, -3.29], lookOffset: [0.82, 1.10, -1.89], fov: 34,
+    time: 16.2, weather: 'clear', follow: 'gladio',
+    offset: [1.35, 1.72, 2.15], lookOffset: [0, 1.52, 0], fov: 34,
   },
   ignis_closeup: {
     doc: 'Ignis, the strategist: glasses, gloves and the daggers',
-    time: 16.2, weather: 'clear', follow: 'player',
-    offset: [-2.04, 2.00, 3.29], lookOffset: [1.16, 1.25, 1.89], fov: 34,
+    time: 16.2, weather: 'clear', follow: 'ignis',
+    offset: [1.28, 1.70, 2.05], lookOffset: [0, 1.50, 0], fov: 34,
   },
   prompto_closeup: {
     doc: 'Prompto, the gunner: the wristbands, the camera and the grin',
-    time: 16.2, weather: 'clear', follow: 'player',
-    offset: [-0.87, 2.04, 2.41], lookOffset: [2.53, 1.29, 0.91], fov: 34,
+    time: 16.2, weather: 'clear', follow: 'prompto',
+    offset: [1.22, 1.64, 1.95], lookOffset: [0, 1.44, 0], fov: 34,
   },
   party_formation: {
     doc: 'The retinue read head-on: four faces, four builds, four weapons',
