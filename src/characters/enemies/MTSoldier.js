@@ -458,7 +458,7 @@ class MTSoldierEnemy extends BipedEnemy {
     if (bayonet) {
       // shoulder the weapon back and drop into a lunge stance
       this.stance(S, { drop: 0.075 * k, L: { reach: -0.16 * k }, R: { reach: 0.14 * k } });
-      this.spine(S, -0.12 * k + env.shake, -0.42 * k, 0);
+      this.spine(S, -0.29 * k + env.shake, -1.01 * k, 0);
       this.arm(S, 'R', [-1.02 - 0.30 * k, -0.26 - 0.80 * k, -0.30], [0.40 + 0.55 * k, 0, 0], [0, 0, 0]);
       this.arm(S, 'L', [-1.14 - 0.20 * k, 0.56 + 0.28 * k, 0.30], [0.30 + 0.50 * k, 0, 0], [0, 0, 0]);
       return;
@@ -467,7 +467,7 @@ class MTSoldierEnemy extends BipedEnemy {
     // The gun rising to eye line *is* the telegraph — it is the same read at
     // 30 m as at 3 m, which is what a ranged tell has to be.
     this.stance(S, { drop: 0.045 * k, L: { reach: -0.08 * k, splay: 0.10 * k }, R: { reach: 0.05 * k } });
-    this.spine(S, -0.06 * k + env.shake * 0.5, -0.22 * k, 0);
+    this.spine(S, -0.14 * k + env.shake * 0.5, -0.53 * k, 0);
     S('head', -0.10 * k, 0.14 * k, 0);
     this.aim(S, k);
   }
@@ -478,7 +478,7 @@ class MTSoldierEnemy extends BipedEnemy {
     if (bayonet) {
       // a straight-line thrust: the whole machine steps into it
       this.stance(S, { drop: 0.04 * kp, L: { reach: 0.30 * k }, R: { reach: -0.22 * k } });
-      this.spine(S, 0.16 * k, 0.34 * k, 0);
+      this.spine(S, 0.38 * k, 0.82 * k, 0);
       // the bayonet goes out level and stays level all the way through
       this.arm(S, 'R', [-1.02 - 0.34 * k, -0.26 + 0.44 * k, -0.30 + 0.14 * k], [0.40 + 0.42 * k, 0, 0], [0, 0, 0]);
       this.arm(S, 'L', [-1.14 - 0.22 * k, 0.56 - 0.30 * k, 0.30], [0.30 + 0.34 * k, 0, 0], [0, 0, 0]);
@@ -497,7 +497,7 @@ class MTSoldierEnemy extends BipedEnemy {
     }
     kick = Math.min(1.5, kick) * (this.state === 'recover' ? Math.max(0, 1 - this.stateTime * 2.2) : 1);
     this.stance(S, { drop: 0.045, L: { reach: -0.08, splay: 0.10 }, R: { reach: 0.05 } });
-    this.spine(S, -0.06 - kick * 0.06, -0.22 + kick * 0.05, 0);
+    this.spine(S, -0.14 - kick * 0.14, -0.53 + kick * 0.12, 0);
     S('head', -0.10, 0.14, 0);
     this.aim(S, 1, kick);
     this.visual.position.z -= kick * 0.022;
@@ -522,7 +522,7 @@ class MTSoldierEnemy extends BipedEnemy {
       L: { reach: 0.12 * slack - 0.14 * topple, lift: sink * slack * 0.9, splay: 0.24 * topple },
       R: { reach: -0.14 * slack + 0.10 * topple, lift: sink * slack * 0.9, splay: 0.20 * topple },
     });
-    this.spine(S, (0.28 * slack + seize) * -fwd, 0.18 * topple * side, 0.14 * topple * side);
+    this.spine(S, (0.67 * slack + seize) * -fwd, 0.43 * topple * side, 0.34 * topple * side);
     S('head', 0.55 * slack * -fwd, 0.3 * topple * side, 0);
     this.arm(S, 'L', [1.35 * slack * -fwd, 0.45 * topple, 0.75 * topple], [-0.55 * slack, 0, 0], null);
     this.arm(S, 'R', [1.35 * slack * -fwd, -0.45 * topple, -0.75 * topple], [-0.55 * slack, 0, 0], null);

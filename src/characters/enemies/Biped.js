@@ -77,12 +77,39 @@ export class BipedEnemy extends Enemy {
     if (c[2] && hd) S(c[2], hd[0], hd[1], hd[2]);
   }
 
+  /**
+   * Bend the torso. The weights are shares of *one* bend, normalised over the
+   * run from hips to chest — written raw they compound down the parent chain
+   * and a 0.3 rad lean arrives at the shoulders as 1.1 rad.
+   */
   spine(S, pitch, yaw = 0, roll = 0) {
     const t = this.A.trunk, w = this.A.spineW || SPINE_W;
+    let sum = 0;
+    for (let i = 0; i <= t.length - 3; i++) sum += w[Math.min(w.length - 1, i)];
+    const n = sum > 1e-4 ? 1 / sum : 1;
+    let acc = 0, chest = 0, chestF = 0;
     for (let i = 0; i < t.length; i++) {
-      const k = w[Math.min(w.length - 1, i)];
+      const k = w[Math.min(w.length - 1, i)] * n;
       S(t[i], pitch * k, yaw * k, roll * k);
+      if (i <= t.length - 3) { chest = acc + pitch * k; chestF += k; }
+      acc += pitch * k;
     }
+    this._chestPitch = chest;
+    this._chestYaw = yaw * chestF;
+  }
+
+  /**
+   * Point the head in spite of the torso. Without this the skull rides every
+   * lean and twist the body makes, so a soldier bracing to fire ends up
+   * looking at his own boots.
+   */
+  aimHead(S, o = {}) {
+    const t = this.A.trunk;
+    const stab = (this._chestPitch || 0) * (o.stabilise ?? 0.9);
+    const sy = (this._chestYaw || 0) * (o.stabilise ?? 0.9);
+    const pitch = o.pitch || 0, yaw = o.yaw || 0, roll = o.roll || 0;
+    if (t.length >= 2) S(t[t.length - 2], -stab * 0.55 + pitch * 0.4, -sy * 0.55 + yaw * 0.45, roll * 0.4);
+    S(t[t.length - 1], -stab * 0.45 + pitch * 0.6, -sy * 0.45 + yaw * 0.55, roll * 0.6);
   }
 
   _timingAll() {
