@@ -33,24 +33,35 @@ directories → each iterates shoot/look/fix → I merge and verify → harsh cr
    and weather-rebuild hitches. That is the last hard gate.
 4. Then `docs/HANDOFF.md` §7 for the ordered backlog.
 
-## Agents in flight (4)
+## Agents in flight (2)
 
 | agent id | branch | doing |
 |---|---|---|
-| `a67478868fd8a3f23` | `agent/bestiary3` | Resumed bestiary/animation. Predecessor's models *were* merged but never once looked at — first job is to verify them. |
-| `a2b7f245a410ed051` | `agent/perfgate` | Closing the 60 fps `gameplay.mjs` gate — **and now the terrain/heightAt bug below, which outranks it.** |
-| `a909538c4ae855773` | `agent/dressworld` | Dressing the world beyond the 380 m bubble around spawn: camera-relative prop streaming, 19 zone characters, 124 POIs given built form. |
-| *(pending)* | — | Fresh critic pass, once the above land. |
+| `a3aec6b6934d8dd05` | `agent/framing` | Auditing all 139 shots and repairing every broken framing. Several frame empty ground or 75% sky. |
+| `a732ad329c287fb2b` | `agent/wildlife` | Rebuilding the ambient garula herds — "the ugliest thing in every Leide frame" per the bestiary agent. |
 
-## Open bug: the terrain renders above `heightAt`
+Merged this session: `agent/perfgate`, `agent/dressworld`, `agent/bestiary3`.
 
-Found this session and handed to the perfgate agent with a decisive repro.
-`hero_closeup` renders a sword on bare dirt and no characters. Hiding **only**
-`Terrain.clipmap.group` makes all four appear, standing correctly in grass that
-is placed by the same `heightAt`. So the terrain mesh is roughly a metre or two
-above the height the rest of the game is told the ground is, and buries
-everything at close range. Likely the same thing as the never-explained "a
-smooth brown mound eats the bottom third" complaint from critic round 1.
+## Corrected: the terrain does NOT render above `heightAt`
+
+I claimed this earlier and was wrong. A perf agent disproved it by measurement —
+`tools/heightcheck.mjs` renders the terrain vertex shader's own `tf_height()`
+into a float target and reads it back: **0.000 m error vs `Terrain.heightAt()`
+across 64 probes from 1 m to 3 km**, and `tf_micro` matches `microDetail`
+exactly.
+
+**The real cause of my false diagnosis was the capture daemon serving a stale
+page.** It keyed page reuse on query and mode only, so a page booted before an
+edit kept serving the old modules; the two captures I compared were different
+builds. Fixed — pages are now keyed on a source fingerprint (`sourceStamp()` in
+`tools/daemon.mjs`) so any edit forces a reboot.
+
+The genuinely broken thing was shot framing: `ignis_closeup` and
+`prompto_closeup` put every character off-screen because they guessed a
+companion's position as a fixed offset from the player, and companions steer to
+a *wandering* formation slot. Shots can now declare
+`follow: 'gladio' | 'ignis' | 'prompto'` and `Game.followAnchor` resolves the
+real member each frame.
 
 ## Resuming after a usage limit
 
