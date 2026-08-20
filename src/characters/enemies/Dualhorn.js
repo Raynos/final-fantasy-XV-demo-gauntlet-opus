@@ -7,10 +7,10 @@ import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
 const HIDE = 0x6e5b41;
 const HIDE_DARK = 0x3c3123;
-const SHAG = 0x9d8459;
-const SHAG_DARK = 0x5d4a2c;
+const SHAG = 0x7a6540;
+const SHAG_DARK = 0x40331d;
 const BELLY = 0x9a8767;
-const HORN = 0xf0e7c9;
+const HORN = 0xd8cdaa;
 const HORN_DARK = 0x9d8f6d;
 const HOOF = 0x2b2620;
 const NOSE = 0x25201b;
@@ -415,10 +415,10 @@ class DualhornEnemy extends QuadrupedEnemy {
     const k = env.tension;
     const rear = smooth(k) * 1.0;
     this.stance(S, {
-      front: { reach: -0.35 * rear, lift: 1.15 * rear },
+      front: { reach: -0.26 * rear, lift: 0.58 * rear, splay: 0.18 * rear },
       back: { reach: 0.12 * rear, lift: 0 },
     });
-    this.spine(S, -0.30 * rear + env.shake, 0, 0);
+    this.spine(S, -0.50 * rear + env.shake, 0, 0);
     S('head', 0.34 * rear, 0, 0);
     S('jaw', 0.5 * k);
     this.visual.rotation.x -= 0.42 * rear;
@@ -434,10 +434,10 @@ class DualhornEnemy extends QuadrupedEnemy {
     const down = clamp01(k);
     this.stance(S, {
       drop: 0.18 * down * (1 - env.f * 0.4),
-      front: { reach: -0.30 * up + 0.25 * down, lift: 1.15 * up },
+      front: { reach: -0.26 * up + 0.25 * down, lift: 0.58 * up, splay: 0.18 * up },
       back: { reach: 0.12 * up - 0.08 * down },
     });
-    this.spine(S, -0.30 * up + 0.26 * down, 0, 0);
+    this.spine(S, -0.50 * up + 0.30 * down, 0, 0);
     S('head', 0.34 * up - 0.30 * down, 0, 0);
     S('jaw', 0.7 * down);
     this.tail(t, -0.4 * down, 0.2, 5);

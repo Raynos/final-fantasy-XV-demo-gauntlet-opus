@@ -469,9 +469,18 @@ class CoeurlEnemy extends QuadrupedEnemy {
       for (let i = 0; i < 3; i++) {
         const lag = i * 0.5;
         const k = 0.5 + i * 0.28;          // the outer joints move furthest
+        // The whiskers rest pointing up and *back* over the animal, so bringing
+        // them forward down the firing line is a rotation about +X. The sign
+        // used to be negative, which swung them further back and — compounded
+        // over three segments — curled the tips into the ground, aiming the
+        // loudest telegraph in the bestiary at the dirt in front of its feet.
+        // `flare` opens the pair into a V. The whiskers trail backward, so a
+        // positive yaw on the right-hand one swings it *inward* — the pair
+        // crossed over the animal's own head instead of framing the firing
+        // line. Negating it splays them apart, which is the shape that reads.
         S(`wk${i + 1}${n}`,
-          -sweepFwd * 0.62 * k,
-          (flare * 0.42 * k + Math.sin(t * 7 - lag) * wave * (0.4 + i * 0.35)) * s,
+          sweepFwd * 0.62 * k,
+          (-flare * 0.42 * k + Math.sin(t * 7 - lag) * wave * (0.4 + i * 0.35)) * s,
           0);
       }
       // the charge visibly swells the last segment before it fires
@@ -498,7 +507,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
       front: { reach: 0.10 * k, splay: 0.16 * k },
       back: { reach: -0.14 * k, splay: 0.10 * k },
     });
-    this.spine(S, -0.10 * k + env.shake, 0, 0);
+    this.spine(S, -0.24 * k + env.shake, 0, 0);
     S('neck', 0.18 * k, 0, 0);
     S('head', -0.16 * k, 0, 0);
     S('jaw', 0.30 * k);
@@ -520,7 +529,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
         front: { reach: 0.10 - 0.16 * kp, splay: 0.16 },
         back: { reach: -0.14 + 0.10 * kp, splay: 0.10 },
       });
-      this.spine(S, -0.10 + 0.16 * kp, 0, 0);
+      this.spine(S, -0.24 + 0.38 * kp, 0, 0);
       S('neck', 0.18 - 0.10 * kp, 0, 0);
       S('head', -0.16 + 0.24 * kp, 0, 0);
       S('jaw', 0.60 * fire);
@@ -543,7 +552,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
         front: { reach: 0.10 * rear, lift: 0.20 * k1 + 0.20 * k2 },
         back: { reach: -0.06 * rear, splay: 0.06 },
       });
-      this.spine(S, -0.16 * rear, (k1 - k2) * 0.30, (k1 - k2) * 0.16);
+      this.spine(S, -0.38 * rear, (k1 - k2) * 0.72, (k1 - k2) * 0.38);
       S('head', 0.24 * rear, (k1 - k2) * 0.22, 0);
       S('jaw', 0.55 * rear);
       // one paw leads each swipe

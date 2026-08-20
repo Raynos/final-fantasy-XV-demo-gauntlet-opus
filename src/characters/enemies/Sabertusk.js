@@ -5,10 +5,10 @@ import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
 import { clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
-const FUR = 0x8d7c62;
-const FUR_DARK = 0x4b4031;
-const FUR_MID = 0x6d5e49;
-const BELLY = 0xcbb89b;
+const FUR = 0x6b5c46;
+const FUR_DARK = 0x2e271d;
+const FUR_MID = 0x4e4334;
+const BELLY = 0x9a8a72;
 const TUSK = 0xe6ddc4;
 const CLAW = 0x2a251f;
 const NOSE = 0x120f0d;
@@ -128,7 +128,10 @@ function buildPrototype() {
       const b = backline(th);
       if (b < -0.35) return blend(BELLY, FUR_MID, clamp01((b + 1) / 0.65) * 0.75);
       if (b > 0.55) return blend(FUR, FUR_DARK, clamp01((b - 0.55) / 0.45) * 0.8);
-      return blend(FUR, FUR_MID, 0.35 + 0.3 * Math.sin(u * 17 + th * 3));
+      // coarse ticking along the flank: real fur is never one value, and a
+      // flat field is what makes a lit hide read as painted plastic
+      return blend(FUR, FUR_MID,
+        0.42 + 0.34 * Math.sin(u * 17 + th * 3) + 0.16 * Math.sin(u * 41 - th * 7));
     },
     matAt: (th) => (backline(th) < -0.5 ? M_BELLY : M_FUR),
   });

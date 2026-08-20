@@ -204,14 +204,30 @@ export class CreatureAnim {
    * @param {number} reach metres fore(+)/aft(-)
    * @param {number} lift metres above the bind foot height
    * @param {Function} out
-   * @param {Object} [o] {splay, compress, footPitch, kneeSign, twist}
+   * @param {Object} [o] {splay, compress, footPitch, kneeSign, twist,
+   *                      rootPitch, rootDY, rootDZ}
+   *
+   * `rootPitch`/`rootDY`/`rootDZ` describe how the *trunk above this leg* has
+   * moved this frame. Without them the solver places the foot relative to a
+   * shoulder it believes is still in bind pose: pitch the chest 15° and the
+   * whole front assembly swings, carrying a "planted" paw a hand's width
+   * through the floor. Cancelling the parent transform out of the target is
+   * what makes a planted foot actually stay planted.
    */
   solveLeg(id, reach, lift, out, o = {}) {
     const c = this.legs.get(id);
     if (!c) return;
     const kneeSign = o.kneeSign ?? 1;      // +1 knee forward, -1 knee back (hock)
-    const dy = c.footRel.y + lift - (o.compress || 0);
-    const dz = c.footRel.z + reach;
+    let dy = c.footRel.y + lift - (o.compress || 0) - (o.rootDY || 0);
+    let dz = c.footRel.z + reach - (o.rootDZ || 0);
+    const th = o.rootPitch || 0;
+    if (th) {
+      // re-express the world-space target in the root's *rotated* frame
+      const cs = Math.cos(th), sn = Math.sin(th);
+      const y2 = dy * cs + dz * sn;
+      dz = -dy * sn + dz * cs;
+      dy = y2;
+    }
     let d = Math.hypot(dy, dz);
     const maxD = c.reachLen * 0.995;
     const minD = Math.abs(c.L1 - c.L2) + c.reachLen * 0.06;
@@ -230,15 +246,18 @@ export class CreatureAnim {
 
     const rHip = c.seg[0].phi - phiUpper;
     const rKnee = (c.seg[1] ? c.seg[1].phi : 0) - phiLower - rHip;
+    // the pastern is levelled against the *world*, so the trunk's pitch has to
+    // come back out of it too or the paw tips up with the shoulder
+    const fp = (o.footPitch || 0) + th;
     out(c.names[0], rHip, o.twist || 0, o.splay || 0);
     if (c.names[1]) out(c.names[1], rKnee, 0, 0);
     if (c.hasHock && c.names[2]) {
       // a digitigrade hock takes up the remaining bend and levels the pastern
-      const rHock = (c.seg[2].phi) - (o.footPitch || 0) - rHip - rKnee;
+      const rHock = (c.seg[2].phi) - fp - rHip - rKnee;
       out(c.names[2], rHock * (o.hockK ?? 1), 0, 0);
       if (c.names[3]) out(c.names[3], (o.pawPitch || 0), 0, 0);
     } else if (c.names[2]) {
-      out(c.names[2], (c.seg[2] ? c.seg[2].phi : 0) - (o.footPitch || 0) - rHip - rKnee, 0, 0);
+      out(c.names[2], (c.seg[2] ? c.seg[2].phi : 0) - fp - rHip - rKnee, 0, 0);
     }
   }
 
@@ -251,29 +270,42 @@ export class CreatureAnim {
   quadGait(gait, out, o = {}) {
     const strideM = (o.stride || 0.3) * gait.stride;
     const liftM = (o.lift || 0.12) * gait.lift;
+    const phases = [];
     for (let i = 0; i < 4; i++) {
-      const id = LEG_ORDER[i];
-      if (!this.legs.has(id)) continue;
       const ph = legPhase(this.gaitPhase - gait.touch[i], gait);
-      const front = i < 2;
-      const s = front ? (o.frontScale ?? 1) : (o.backScale ?? 1);
+      phases.push(ph);
       this.load[i] = ph.load;
-      this.solveLeg(id, ph.reach * strideM * s, ph.lift * liftM * s, out, {
-        splay: (o.splay || 0) * (id.endsWith('L') ? -1 : 1),
-        kneeSign: front ? (o.kneeF ?? 1) : (o.kneeB ?? -1),
-        footPitch: (o.footPitch || 0) - (ph.stance ? 0 : ph.lift * 0.5),
-        compress: ph.stance ? Math.sin(Math.PI * ph.f) * (o.compress || 0) : 0,
-        hockK: o.hockK,
-        pawPitch: ph.stance ? (o.pawPitch || 0) : (o.pawPitch || 0) - ph.lift * 0.6,
-      });
     }
-    // vertical bounce and lateral rock, derived from how many feet are loaded
+    // Vertical bounce and lateral rock, derived from how many feet are loaded.
+    // Solved *before* the legs, not after: the bob translates the whole body,
+    // so a foot that does not know about it is planted relative to a body that
+    // is about to move out from under it — every stance foot sinks by exactly
+    // the bob depth. Feet through the floor is what that looks like.
     const support = this.load[0] + this.load[1] + this.load[2] + this.load[3];
     this.bodyY = (support / 2.6 - 1) * 0.055 * gait.bob * (o.bodyScale || 1);
     this.bodyRoll = ((this.load[0] + this.load[2]) - (this.load[1] + this.load[3]))
       * 0.035 * gait.sway * (o.bodyScale || 1);
     this.bodyPitch = ((this.load[0] + this.load[1]) - (this.load[2] + this.load[3]))
       * 0.030 * gait.bob * (o.bodyScale || 1);
+    for (let i = 0; i < 4; i++) {
+      const id = LEG_ORDER[i];
+      if (!this.legs.has(id)) continue;
+      const ph = phases[i];
+      const front = i < 2;
+      const s = front ? (o.frontScale ?? 1) : (o.backScale ?? 1);
+      const cp = front ? o.compF : o.compB;
+      // a planted foot holds world height, so it rises in body space by the bob
+      const bob = ph.stance ? -this.bodyY : -this.bodyY * (1 - ph.lift);
+      this.solveLeg(id, ph.reach * strideM * s, ph.lift * liftM * s + bob, out, {
+        splay: (o.splay || 0) * (id.endsWith('L') ? -1 : 1),
+        kneeSign: front ? (o.kneeF ?? 1) : (o.kneeB ?? -1),
+        footPitch: (o.footPitch || 0) - (ph.stance ? 0 : ph.lift * 0.5),
+        compress: ph.stance ? Math.sin(Math.PI * ph.f) * (o.compress || 0) : 0,
+        hockK: o.hockK,
+        pawPitch: ph.stance ? (o.pawPitch || 0) : (o.pawPitch || 0) - ph.lift * 0.6,
+        rootPitch: cp ? cp.pitch : 0, rootDY: cp ? cp.dy : 0, rootDZ: cp ? cp.dz : 0,
+      });
+    }
     return this;
   }
 

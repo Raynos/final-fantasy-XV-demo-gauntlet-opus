@@ -5,9 +5,9 @@ import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
 import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.js';
 
-const SHAG = 0x8a6c46;
-const SHAG_LIT = 0xa98d61;
-const SHAG_DARK = 0x674e33;
+const SHAG = 0x6b5335;
+const SHAG_LIT = 0x87703f;
+const SHAG_DARK = 0x3f2f1e;
 const HIDE = 0x6f6558;
 const HIDE_DARK = 0x453f38;
 const BELLY = 0x9e9384;
@@ -482,15 +482,18 @@ class GarulaEnemy extends QuadrupedEnemy {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     const rear = smooth(k);
+    // The forefeet leave the ground, but only as far as the leg can actually
+    // reach — asking for more than `reachLen` makes the solver clamp, and a
+    // clamped leg folds flat into the chest and vanishes from the silhouette.
+    this.spine(S, -0.55 * rear + env.shake, 0, 0);
     this.stance(S, {
-      front: { reach: -0.42 * rear, lift: 1.45 * rear },
+      front: { reach: -0.30 * rear, lift: 0.62 * rear, splay: 0.20 * rear },
       back: { reach: 0.16 * rear, lift: 0 },
     });
-    this.spine(S, -0.34 * rear + env.shake, 0, 0);
-    S('head', 0.40 * rear, 0, 0);
+    this.aimHead(S, { pitch: -0.34 * rear, stabilise: 0.8 });
     S('jaw', 0.55 * k);
     this.tail(t, 0.30 * k, 0.14, 3);
-    this.visual.rotation.x -= 0.46 * rear;
+    this.visual.rotation.x -= 0.30 * rear;
     this.visual.position.y += 0.14 * rear;
   }
 
@@ -502,16 +505,17 @@ class GarulaEnemy extends QuadrupedEnemy {
     const k = env.k;
     const up = clamp01(-k);
     const down = clamp01(k);
+    this.spine(S, -0.55 * up + 0.34 * down, 0, 0);
     this.stance(S, {
       drop: 0.24 * down * (1 - env.f * 0.4),
-      front: { reach: -0.38 * up + 0.30 * down, lift: 1.45 * up },
+      front: { reach: -0.30 * up + 0.30 * down, lift: 0.62 * up, splay: 0.20 * up },
       back: { reach: 0.16 * up - 0.10 * down },
     });
-    this.spine(S, -0.34 * up + 0.30 * down, 0, 0);
-    S('head', 0.40 * up - 0.34 * down, 0, 0);
+    // it drives the slam with its shoulders; the skull stays out of the dirt
+    this.aimHead(S, { pitch: -0.34 * up + 0.22 * down, stabilise: 0.8 });
     S('jaw', 0.75 * down);
     this.tail(t, -0.45 * down, 0.2, 4);
-    this.visual.rotation.x += -0.46 * up + 0.14 * down;
+    this.visual.rotation.x += -0.30 * up + 0.06 * down;
     this.visual.position.y += 0.14 * up;
   }
 }

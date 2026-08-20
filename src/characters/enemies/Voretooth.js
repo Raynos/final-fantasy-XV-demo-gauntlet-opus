@@ -477,7 +477,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
         front: { reach: 0.04 * k, splay: 0.10 * k },
         back: { reach: -0.05 * k, splay: 0.12 * k },
       });
-      this.spine(S, 0.06 * k + env.shake, -0.55 * k * side, 0.14 * k * side);
+      this.spine(S, 0.14 * k + env.shake, -1.32 * k * side, 0.34 * k * side);
       S('head', -0.10 * k, -0.45 * k * side, 0);
       S('jaw', 0.35 * k);
       this.maw(S, 0.4 * k);
@@ -501,7 +501,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
         front: { reach: 0.02, splay: 0.10 },
         back: { reach: -0.03, splay: 0.12 },
       });
-      this.spine(S, 0.04, 0.62 * k * side, -0.14 * k * side);
+      this.spine(S, 0.10, 1.49 * k * side, -0.34 * k * side);
       S('head', -0.06, 0.50 * k * side, 0);
       S('jaw', 0.25 * (1 - kp));
       this.maw(S, 0.3 * (1 - kp));
