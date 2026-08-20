@@ -8,6 +8,7 @@ import { Megastructures } from './props/Megastructures.js';
 import { RoadFurniture } from './props/RoadFurniture.js';
 import { Outposts } from './props/Outposts.js';
 import { Wildlife } from './props/Wildlife.js';
+import { PoiKits } from './props/PoiKits.js';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -44,6 +45,11 @@ export class Props {
 
     this.debris = new Debris(this.ecology, game.scene, { quality });
     this.debris.build();
+
+    // Built form at every point of interest on the map. Streams itself in
+    // around the camera, so this call only enumerates the sites.
+    this.poiKits = new PoiKits(this.ecology, game.scene, { quality });
+    this.poiKits.build();
 
     this._buildRegalia(game);
     this._camPos = new THREE.Vector3();
@@ -140,5 +146,6 @@ export class Props {
     if (this.outposts) this.outposts.update(dt, t, night, this._camPos);
     if (this.roadKit) this.roadKit.update(this._camPos);
     if (this.wildlife) this.wildlife.update(dt, t, night, this._camPos);
+    if (this.poiKits) this.poiKits.update(dt, t, night, this._camPos, game);
   }
 }
