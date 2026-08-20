@@ -113,7 +113,7 @@ export class TitleScreen {
     const weather = this.game.get('Weather');
     if (weather && weather.set) weather.set('clear');
     const hud = this.game.get('HUD');
-    if (hud) { this._hudWas = hud.visible; hud.setVisible(false); }
+    if (hud && this._hudWas === undefined) { this._hudWas = hud.visible; hud.setVisible(false); }
     const menus = this.game.get('Menus');
     if (menus) menus.setScreen(null);
   }
@@ -122,7 +122,10 @@ export class TitleScreen {
   hide() {
     this.shown = false;
     const hud = this.game.get('HUD');
-    if (hud) hud.setVisible(this._hudWas ?? true);
+    // Only restore if we actually hid it. Restoring unconditionally made a
+    // no-op hide() turn the HUD on for callers that never showed the title.
+    if (hud && this._hudWas !== undefined) hud.setVisible(this._hudWas);
+    this._hudWas = undefined;
     const rig = this.game.get('CameraRig');
     if (rig) rig.clearShot();
   }

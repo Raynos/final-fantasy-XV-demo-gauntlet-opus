@@ -186,7 +186,6 @@ export class Game {
     if (director && director.setScenario) director.setScenario(shot.scenario || 'field');
 
     const hud = this.get('HUD');
-    if (hud && hud.setVisible) hud.setVisible(!!shot.hud);
     // notifications are transient by nature; without this, an AP award earned
     // during the previous shot's settle is still on screen during this one
     if (hud && hud.toasts) hud.toasts.clear();
@@ -196,6 +195,13 @@ export class Game {
 
     const story = this.get('Story');
     if (story && story.applyShot) story.applyShot(shot.story || null);
+
+    // HUD visibility is set *last* and wins. Story's applyShot hides the title
+    // screen, and hiding it restores whatever HUD state the title had saved —
+    // which defaults to visible. Setting the HUD before that call let the story
+    // system silently turn the HUD back on for every shot that never asked for
+    // it, which put the party panel and minimap over all 126 non-HUD shots.
+    if (hud && hud.setVisible) hud.setVisible(!!shot.hud);
 
     const rig = this.get('CameraRig');
     if (shot.follow) {

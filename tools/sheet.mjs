@@ -21,10 +21,10 @@ const width = Number(args[args.indexOf('--w') + 1]) || 2400;
 const files = (await readdir(dir)).filter((f) => f.endsWith('.png') && !f.startsWith('_')).sort();
 if (!files.length) { console.error(`no PNGs in ${dir}`); process.exit(1); }
 
-const cells = await Promise.all(files.map(async (f) => ({
-  name: path.basename(f, '.png'),
-  data: `data:image/png;base64,${(await readFile(path.join(dir, f))).toString('base64')}`,
-})));
+// Reference the PNGs by relative path from an HTML file written into the shot
+// directory, rather than inlining them as data URIs. At 139 shots the base64
+// payload is hundreds of megabytes and simply kills the page.
+const cells = files.map((f) => ({ name: path.basename(f, '.png'), src: f }));
 
 const html = `<!doctype html><meta charset=utf8><style>
   body{margin:0;background:#0a0b0e;font:11px/1.4 ui-monospace,Menlo,monospace;color:#8d97a8}
@@ -33,13 +33,19 @@ const html = `<!doctype html><meta charset=utf8><style>
   img{width:100%;display:block;border:1px solid #1b2029}
   figcaption{padding:4px 2px;letter-spacing:.12em;text-transform:uppercase}
 </style><div class=grid>${
-  cells.map((c) => `<figure><img src="${c.data}"><figcaption>${c.name}</figcaption></figure>`).join('')
+  cells.map((c) => `<figure><img src="${c.src}" loading="eager"><figcaption>${c.name}</figcaption></figure>`).join('')
 }</div>`;
 
-const browser = await chromium.launch();
+const htmlPath = path.join(dir, '_sheet.html');
+await writeFile(htmlPath, html);
+
+const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width, height: 800 } });
-await page.setContent(html);
-await page.waitForLoadState('networkidle');
+await page.goto(`file://${htmlPath}`, { waitUntil: 'load', timeout: 180000 });
+// every <img> decoded before we screenshot, or the sheet has holes in it
+await page.evaluate(() => Promise.all(
+  [...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))
+));
 const out = path.join(dir, '_sheet.png');
 await writeFile(out, await page.locator('.grid').screenshot());
 await browser.close();
