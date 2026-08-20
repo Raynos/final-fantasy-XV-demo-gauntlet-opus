@@ -12,9 +12,11 @@ import { grassClumpTex } from './VegTextures.js';
  *   2  big sparse clump cards, 88-190 m
  *
  * Placement is *position-hashed*, never sequence-dependent, so a tile
- * regenerates byte-identically no matter which order tiles stream in. Tiles are
- * cached as flat matrix/colour arrays; a refill is then just a memcpy, which is
- * what keeps the whole field at three draw calls with no per-frame CPU cost.
+ * regenerates byte-identically no matter which order tiles stream in.
+ *
+ * Each tile is its own instanced mesh, built once and then immutable, so the
+ * ring moving costs nothing but a `visible` flip — see {@link GrassField#_tileFor}
+ * for why one big buffer per ring was the wrong shape.
  */
 
 // Ring sizing, two rules:
@@ -158,13 +160,30 @@ export class GrassField {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
-    this.tiles = new Map();
-    this.meshes = [];
+    /** One entry per LOD ring; each owns a pool of per-tile instanced meshes. */
+    this.rings = [];
+    /** Parent of every ring group, so the whole field can be hidden at once. */
+    this.group = new THREE.Group();
+    this.group.name = 'grass';
+    this.group.matrixAutoUpdate = false;
+    scene.add(this.group);
     this._last = new THREE.Vector3(1e9, 0, 1e9);
-    this._budget = 10;         // new tiles generated per update
     this._pending = true;
-    /** Scratch: the tiles a single ring pack visits, reused every update. */
-    this._list = [];
+    /**
+     * Milliseconds of tile *generation* one update may spend.
+     *
+     * Building a blade tile is ~1.5 ms of matrix composition, and a hop across
+     * the map wants a hundred of them. The old fixed budget of ten tiles per
+     * update put 15-30 ms of CPU into single frames — measured as the whole of
+     * `streaming-traverse`'s 26 ms median. Time is the honest unit: the ring
+     * fills over as many frames as it needs and the frame budget is never
+     * blown. The very first update runs unbounded so the loading screen, not
+     * the first second of play, pays for the initial dressing.
+     */
+    this.budgetMs = 4;
+    this._primed = false;
+    this._deadline = 0;
+    this._stamp = 0;
   }
 
   build() {
@@ -206,36 +225,91 @@ export class GrassField {
 
     for (let i = 0; i < LODS.length; i++) {
       const lod = LODS[i];
-      const max = Math.max(64, Math.floor(lod.max * this.quality));
-      const mesh = new THREE.InstancedMesh(geos[i], mats[i], max);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
-      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-      mesh.count = 0;
-
-      // Double buffer. Re-uploading the blade ring's 240 k instance matrices
-      // into the buffer the GPU is still reading costs 14 ms of pipeline stall
-      // (measured: 5.6 ms/frame without the upload, 20.0 ms with). Writing into
-      // the *other* buffer and swapping means the driver never has to wait for
-      // the in-flight draw to retire.
-      const alt = {
-        matrix: new THREE.InstancedBufferAttribute(new Float32Array(max * 16), 16),
-        color: new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3),
-      };
-      alt.matrix.setUsage(THREE.DynamicDrawUsage);
-      alt.color.setUsage(THREE.DynamicDrawUsage);
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false;
-      mesh.renderOrder = 1;
-      mesh.name = `grass_${lod.name}`;
-      if (i > 0) registerAlphaCard(mesh);
-      this.scene.add(mesh);
-      this.meshes.push({
-        mesh, lod, max, alt,
-        // hash of the packed tile list, and whether the pack was left incomplete
+      const r = Math.ceil(lod.far / lod.tile);
+      const slots = (2 * r + 1) * (2 * r + 1);
+      // The override guard is a *material* contract (`allowOverride = false`),
+      // not a per-mesh one, and the ring now owns hundreds of short-lived
+      // meshes — registering each of them would grow that set forever.
+      if (i > 0) registerAlphaCard({ material: mats[i] });
+      const group = new THREE.Group();
+      group.name = `grass_${lod.name}`;
+      group.matrixAutoUpdate = false;
+      this.group.add(group);
+      this.rings.push({
+        lod, geo: geos[i], mat: mats[i], group,
+        max: Math.max(64, Math.floor(lod.max * this.quality)),
+        /** key -> { mesh, n, stamp }. Also the tile cache: a built tile is a mesh. */
+        pool: new Map(),
+        // enough hysteresis that walking back and forth over a boundary never
+        // rebuilds, but bounded so a drive across Leide cannot grow forever
+        cacheMax: Math.max(48, Math.round(slots * 1.7)),
+        // hash of the visible tile list, and whether it was left incomplete
         packSig: 0, packPending: true,
       });
+    }
+  }
+
+  /**
+   * Get (building at most one) the mesh for one tile of one ring.
+   *
+   * Each tile owns its own instanced mesh, sized exactly to its own instance
+   * count, written once and never touched again. That is the whole point: the
+   * ring used to be one 240 k-instance mesh whose entire 15.4 MB matrix buffer
+   * was re-uploaded whenever the tile *set* changed — and ANGLE's Metal backend
+   * answers a write to a buffer that is in use by committing a full-size shadow
+   * copy, which was measured at 130-290 ms of dead CPU per crossing. Per-tile
+   * buffers are ~350 kB, uploaded once on creation when nothing references
+   * them, and a ring shift uploads nothing at all.
+   *
+   * The second dividend is culling: one ring-sized mesh had to run with
+   * `frustumCulled = false`, so every blade behind the camera was still shaded.
+   * A tile has real bounds.
+   *
+   * @returns {{mesh:THREE.InstancedMesh|null, n:number, stamp:number}|null}
+   *   null when the frame's generation budget is spent.
+   */
+  _tileFor(ring, li, tx, tz) {
+    const key = (tx & 2047) * 4096 + (tz & 2047);
+    const e = ring.pool.get(key);
+    if (e) return e;
+    if (this._primed && performance.now() > this._deadline) return null;
+
+    const t = this._makeTile(li, tx, tz);
+    let mesh = null;
+    if (t.n > 0) {
+      mesh = new THREE.InstancedMesh(ring.geo, ring.mat, 0);
+      mesh.instanceMatrix = new THREE.InstancedBufferAttribute(t.m, 16);
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(t.c, 3);
+      mesh.count = t.n;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.renderOrder = 1;
+      mesh.matrixAutoUpdate = false;
+      mesh.visible = false;
+      // Instances carry world positions, so the mesh sits at the origin and
+      // its bounds are the tile's own footprint. The margin covers blade
+      // height and the wind sway the vertex shader adds on top.
+      const T = LODS[li].tile;
+      mesh.boundingSphere = new THREE.Sphere(
+        new THREE.Vector3((tx + 0.5) * T, (t.y0 + t.y1) * 0.5, (tz + 0.5) * T),
+        Math.hypot(T * 0.71, (t.y1 - t.y0) * 0.5 + 3) + 1
+      );
+      ring.group.add(mesh);
+    }
+    const entry = { mesh, n: t.n, stamp: 0 };
+    ring.pool.set(key, entry);
+    if (ring.pool.size > ring.cacheMax) this._evict(ring);
+    return entry;
+  }
+
+  /** Drop the oldest tiles that are not currently on screen. */
+  _evict(ring) {
+    const target = Math.round(ring.cacheMax * 0.8);
+    for (const [k, e] of ring.pool) {
+      if (ring.pool.size <= target) break;
+      if (e.stamp === this._stamp) continue;      // in this frame's ring
+      if (e.mesh) { ring.group.remove(e.mesh); e.mesh.dispose(); }
+      ring.pool.delete(k);
     }
   }
 
@@ -267,9 +341,13 @@ export class GrassField {
       }
     }
     const hg = new Float32Array((HG + 1) * (HG + 1));
+    let y0 = Infinity, y1 = -Infinity;
     for (let j = 0; j <= HG; j++) {
       for (let i = 0; i <= HG; i++) {
-        hg[j * (HG + 1) + i] = eco.height(x0 + (i / HG) * T, z0 + (j / HG) * T);
+        const h = eco.height(x0 + (i / HG) * T, z0 + (j / HG) * T);
+        hg[j * (HG + 1) + i] = h;
+        if (h < y0) y0 = h;
+        if (h > y1) y1 = h;
       }
     }
     const bil = (arr, g, u, v, stride = 1, c = 0) => {
@@ -388,48 +466,31 @@ export class GrassField {
       }
     }
     // slice (not subarray) so the oversized candidate buffer can be collected
-    return { m: mArr.slice(0, count * 16), c: cArr.slice(0, count * 3), n: count };
-  }
-
-  _tileFor(li, tx, tz) {
-    const key = (li * 4096 + (tx & 2047)) * 4096 + (tz & 2047);
-    let t = this.tiles.get(key);
-    if (t) return t;
-    if (this._budget <= 0) return null;
-    this._budget--;
-    t = this._makeTile(li, tx, tz);
-    this.tiles.set(key, t);
-    if (this.tiles.size > 900) {
-      // cheap FIFO eviction — tiles are pure functions of position
-      const it = this.tiles.keys();
-      for (let i = 0; i < 120; i++) { const k = it.next().value; if (k !== key) this.tiles.delete(k); }
-    }
-    return t;
+    return { m: mArr.slice(0, count * 16), c: cArr.slice(0, count * 3), n: count, y0, y1 };
   }
 
   /** @param {THREE.Vector3} camPos */
   update(camPos) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 25 && !this._pending) return;
-    this._budget = 10;
+    this._deadline = performance.now() + this.budgetMs;
     this._last.copy(camPos);
+    this._stamp++;
     let pending = false;
 
-    for (let li = 0; li < this.meshes.length; li++) {
-      const entry = this.meshes[li];
-      const { mesh, lod, max, alt } = entry;
+    for (let li = 0; li < this.rings.length; li++) {
+      const ring = this.rings[li];
+      const { lod, max } = ring;
       const T = lod.tile;
       const far = lod.far, near = lod.near || 0;
       const r = Math.ceil(far / T);
       const cx = Math.round(camPos.x / T), cz = Math.round(camPos.z / T);
 
-      // Pass one: work out *which* tiles this ring wants and whether that set
-      // is the one already sitting in the buffer. Ring membership is tested
-      // against the continuous camera position, not the centre tile, so it can
-      // change on sub-metre movement — the identity of the pack has to be the
-      // tile list itself, never a quantised camera cell.
-      const list = this._list;
-      let count = 0, w = 0, sig = 2166136261, tilePending = false;
+      // Which tiles this ring wants. Membership is tested against the
+      // continuous camera position, not the centre tile, so it can change on
+      // sub-metre movement — the identity of the ring has to be the tile list
+      // itself, never a quantised camera cell.
+      let w = 0, sig = 2166136261, tilePending = false;
 
       outer:
       for (let dz = -r; dz <= r; dz++) {
@@ -440,53 +501,39 @@ export class GrassField {
           if (dist > far + T * 0.75) continue;
           if (near > 0 && dist < near - T * 0.75) continue;
           if (Math.hypot((tx + 0.5) * T, (tz + 0.5) * T) > this.eco.worldRadius + T) continue;
-          const t = this._tileFor(li, tx, tz);
-          if (!t) { tilePending = true; continue; }
-          if (w + t.n > max) break outer;
-          list[count++] = t;
-          w += t.n;
+          const e = this._tileFor(ring, li, tx, tz);
+          if (!e) { tilePending = true; continue; }
+          if (w + e.n > max) break outer;
+          e.stamp = this._stamp;
+          w += e.n;
           sig = Math.imul(sig ^ (tx & 0xffff), 16777619);
           sig = Math.imul(sig ^ (tz & 0xffff), 16777619);
         }
       }
-      entry.packPending = tilePending;
-      // Identical tile list in the same order == identical bytes. Re-uploading
-      // the blade ring's 240 k matrices costs ~14 ms of pipeline stall, and on
-      // most frames the ring has not changed at all.
-      if (sig === entry.packSig && w === mesh.count) continue;
-
-      const mAttr = alt.matrix, cAttr = alt.color;
-      const mArr = mAttr.array, cArr = cAttr.array;
-      let o = 0;
-      for (let k = 0; k < count; k++) {
-        const t = list[k];
-        mArr.set(t.m, o * 16);
-        cArr.set(t.c, o * 3);
-        o += t.n;
+      ring.packPending = tilePending;
+      // Same tile list == same meshes already shown. Nothing to upload either
+      // way now; this only skips walking the pool.
+      if (sig === ring.packSig && !tilePending) continue;
+      const stamp = this._stamp;
+      for (const e of ring.pool.values()) {
+        if (!e.mesh) continue;
+        const vis = e.stamp === stamp;
+        if (e.mesh.visible !== vis) e.mesh.visible = vis;
       }
-      // Only the written prefix is dirty; the tail is whatever the last pack
-      // left there and is never drawn, so there is no reason to send it.
-      mAttr.clearUpdateRanges();
-      mAttr.addUpdateRange(0, w * 16);
-      cAttr.clearUpdateRanges();
-      cAttr.addUpdateRange(0, w * 3);
-      mAttr.needsUpdate = true;
-      cAttr.needsUpdate = true;
-
-      alt.matrix = mesh.instanceMatrix;
-      alt.color = mesh.instanceColor;
-      mesh.instanceMatrix = mAttr;
-      mesh.instanceColor = cAttr;
-      mesh.count = w;
-      entry.packSig = sig;
+      ring.packSig = sig;
     }
-    for (const e of this.meshes) if (e.packPending) pending = true;
+    for (const e of this.rings) if (e.packPending) pending = true;
     this._pending = pending;
+    // The first update runs unbounded: it happens during load, and a ring that
+    // streams in over the opening second of play is worse than a longer bar.
+    this._primed = true;
   }
 
   get stats() {
-    let inst = 0;
-    for (const m of this.meshes) inst += m.mesh.count;
-    return { instances: inst, draws: this.meshes.length };
+    let inst = 0, draws = 0;
+    for (const ring of this.rings) {
+      for (const e of ring.pool.values()) if (e.mesh && e.mesh.visible) { inst += e.n; draws++; }
+    }
+    return { instances: inst, draws };
   }
 }
