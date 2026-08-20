@@ -1,7 +1,8 @@
 # Session state
 
 Live snapshot for resuming after an interruption (usage limit, crash, new session).
-Session `51c0b82c-27b7-4759-9812-b001987dde08` · updated 2026-08-17 09:35 · `main` @ 125 commits. **0 agents running, 0 worktrees, `main` only.**
+Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-17 · `main` @ 127 commits.
+**4 agents running.**
 
 Working tree is **clean**, **no agents are running**, and everything is merged
 to `main`. If the session dies right now, nothing is lost.
@@ -32,31 +33,24 @@ directories → each iterates shoot/look/fix → I merge and verify → harsh cr
    and weather-rebuild hitches. That is the last hard gate.
 4. Then `docs/HANDOFF.md` §7 for the ordered backlog.
 
-## Agents in flight (0)
+## Agents in flight (4)
 
-Both remaining agents hit the 600 s stall watchdog and were salvaged rather than
-lost — their work is committed and merged on `main`:
+| agent id | branch | doing |
+|---|---|---|
+| `a67478868fd8a3f23` | `agent/bestiary3` | Resumed bestiary/animation. Predecessor's models *were* merged but never once looked at — first job is to verify them. |
+| `a2b7f245a410ed051` | `agent/perfgate` | Closing the 60 fps `gameplay.mjs` gate — **and now the terrain/heightAt bug below, which outranks it.** |
+| `a909538c4ae855773` | `agent/dressworld` | Dressing the world beyond the 380 m bubble around spawn: camera-relative prop streaming, 19 zone characters, 124 POIs given built form. |
+| *(pending)* | — | Fresh critic pass, once the above land. |
 
-- **`ab4cc2033c17348a9` / `agent/bestiary2`** — rebuilt Sabertusk, Voretooth,
-  Coeurl, Dualhorn, Garula, MT Soldier, Magitek Armour and Iron Giant, plus new
-  `rig/CombatAnim.js`, `rig/CreatureAnim.js` and `rig/Sculpt.js`. Its last words
-  named a real bug it had already fixed: a temp-vector aliasing fault where the
-  IK target was clobbered by the shoulder position, "silently aiming the arm at
-  its own shoulder". Verified fixed — `_tgt`/`_tgt2` are distinct temporaries.
-- **`a459f12406a48e402` / corpus** — grew `Shots.js` from 39 to **139 shots**
-  plus `tools/corpus.mjs`. Its last words also named a real bug: skinned
-  characters were being frustum-culled by their **bind-pose bounding sphere**.
-  Verified handled — `RigBuilder` now sets a generous explicit bounding sphere
-  and party/NPC/enemy meshes disable culling besides.
+## Open bug: the terrain renders above `heightAt`
 
-Neither had uncommitted work worth discarding; both worktrees were committed
-with `core.hooksPath=/dev/null` (their trees were mid-edit, so the build hook
-would have blocked the salvage commit) and then merged and verified on `main`.
-
-**Still owed from the collision agent:** `src/characters/Enemies.js:100` should
-route ground sampling through `game.get('Collision').groundAt(...)` rather than
-`Terrain.heightAt`, so enemies stand on town pads. It was deferred while
-bestiary2 owned that file — **that file is now free, so apply it.**
+Found this session and handed to the perfgate agent with a decisive repro.
+`hero_closeup` renders a sword on bare dirt and no characters. Hiding **only**
+`Terrain.clipmap.group` makes all four appear, standing correctly in grass that
+is placed by the same `heightAt`. So the terrain mesh is roughly a metre or two
+above the height the rest of the game is told the ground is, and buries
+everything at close range. Likely the same thing as the never-explained "a
+smooth brown mound eats the bottom third" complaint from critic round 1.
 
 ## Resuming after a usage limit
 
