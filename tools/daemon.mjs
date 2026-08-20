@@ -34,6 +34,40 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mjs';
 
+/**
+ * Fingerprint of everything the page's behaviour depends on.
+ *
+ * The daemon holds a booted page across invocations, which is the whole point —
+ * a warm capture is ~1.5 s against ~12 s cold. But a page booted *before* an
+ * edit keeps the modules it booted with, so reusing it silently serves the old
+ * build. That produced a completely false bug diagnosis once: two captures
+ * taken either side of an edit were compared as if they were the same build,
+ * and the difference was read as a rendering fault in the game.
+ *
+ * Cheap and sufficient: names, sizes and mtimes of every source file. No
+ * hashing of contents, so it costs a stat per file.
+ */
+function sourceStamp() {
+  const parts = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const f = join(dir, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.(js|mjs|css|html|json)$/.test(e.name)) {
+        try { const st = statSync(f); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* raced */ }
+      }
+    }
+  };
+  walk(join(ROOT, 'src'));
+  for (const f of ['index.html', 'vite.config.js']) {
+    try { const st = statSync(join(ROOT, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
+  }
+  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const APP_PORT = Number(process.env.PORT || 5173);
 export const DAEMON_PORT = APP_PORT + 1;
@@ -93,6 +127,7 @@ class Harness {
     this.viewport = null;
     this.mode = null;        // 'dev' | 'prod'
     this.query = null;
+    this.stamp = null;       // source fingerprint the open page booted with
     this.lastUsed = Date.now();
     this.boots = 0;
     this.reuses = 0;
@@ -131,7 +166,11 @@ class Harness {
     this.errors.length = 0;
     await this.ensureServer(prod);
 
-    if (this.page && !cold && this.query === query && this.mode === (prod ? 'prod' : 'dev')) {
+    // A page that booted before a source edit is serving the old build; reusing
+    // it would hand back captures of code that no longer exists.
+    const stamp = sourceStamp();
+    if (this.page && !cold && this.query === query
+        && this.mode === (prod ? 'prod' : 'dev') && this.stamp === stamp) {
       if (this.viewport.w !== w || this.viewport.h !== h) {
         await this.page.setViewportSize({ width: w, height: h });
         this.viewport = { w, h };
@@ -158,6 +197,7 @@ class Harness {
     this.viewport = { w, h };
     this.mode = prod ? 'prod' : 'dev';
     this.query = query;
+    this.stamp = stamp;
     this.boots++;
     this.lastUsed = Date.now();
     await this.reset();
@@ -166,6 +206,9 @@ class Harness {
 
   /** Return the page to the state a fresh load leaves it in for the harness. */
   async reset() {
+    // A concurrent request can close the page between reuse and reset (a source
+    // edit forces a reboot); treat a missing page as "nothing to reset".
+    if (!this.page || this.page.isClosed?.()) return;
     await this.page.evaluate(() => {
       const g = window.GAME;
       g.stop();
