@@ -81,7 +81,7 @@ export const ZONE_DRESS = {
     rockD: 0.6, rockS: 0.85, tint: [1.10, 1.06, 0.98], bright: 1.16,
     kinds: { worn: 0.44, cobble: 0.34, slab: 0.10, bedded: 0.08, granite: 0.04 },
     frag: FRAG_ROUND,
-    litter: { driftwood: 0.9, planks: 0.3, branch: 0.1 },
+    litter: { driftwood: 0.9, planks: 0.3, branch: 0.1, reeds: 0.35 },
     life: { birds: 1.6, herd: 0 },
   }),
   keycatrich: mk({
@@ -107,7 +107,7 @@ export const ZONE_DRESS = {
     rockD: 0.45, rockS: 0.9, tint: [0.88, 0.98, 0.84], bright: 0.9,
     kinds: { worn: 0.5, cobble: 0.3, slab: 0.12, bedded: 0.08 },
     frag: FRAG_ROUND,
-    litter: { log: 0.8, driftwood: 0.7, deadtrunk: 1.0, branch: 0.5, leaves: 0.3, stump: 0.3 },
+    litter: { log: 0.8, driftwood: 0.7, deadtrunk: 1.0, branch: 0.5, leaves: 0.3, stump: 0.3, reeds: 1.3 },
     life: { birds: 1.5, herd: 0.35 },
   }),
   weaverwilds: mk({
@@ -162,7 +162,7 @@ export const ZONE_DRESS = {
     rockD: 0.8, rockS: 1.0, tint: [0.80, 0.94, 0.78], bright: 0.8,
     kinds: { granite: 0.24, worn: 0.3, slab: 0.14, bedded: 0.12, cobble: 0.20 },
     frag: FRAG_ROUND,
-    litter: { log: 1.4, branch: 1.2, stump: 0.9, leaves: 1.2, deadtrunk: 0.3 },
+    litter: { log: 1.4, branch: 1.2, stump: 0.9, leaves: 1.2, deadtrunk: 0.3, reeds: 0.4 },
     life: { birds: 0.6, herd: 0 },
   }),
   vesperpool: mk({
@@ -170,7 +170,7 @@ export const ZONE_DRESS = {
     kinds: { worn: 0.44, cobble: 0.34, slab: 0.12, bedded: 0.10 },
     frag: FRAG_ROUND,
     // a drowned forest: standing dead trunks are the whole silhouette
-    litter: { deadtrunk: 2.1, driftwood: 0.9, log: 0.6, branch: 0.4, stump: 0.5 },
+    litter: { deadtrunk: 2.1, driftwood: 0.9, log: 0.6, branch: 0.4, stump: 0.5, reeds: 1.1 },
     life: { birds: 1.5, herd: 0.1 },
   }),
   ravatogh: mk({
@@ -193,7 +193,7 @@ export const ZONE_DRESS = {
     rockD: 0.7, rockS: 0.9, tint: [0.94, 1.0, 0.9], bright: 1.0,
     kinds: { worn: 0.4, cobble: 0.3, slab: 0.14, bedded: 0.1, granite: 0.06 },
     frag: FRAG_ROUND,
-    litter: { driftwood: 0.8, planks: 0.45, branch: 0.35, log: 0.25, leaves: 0.2 },
+    litter: { driftwood: 0.8, planks: 0.45, branch: 0.35, log: 0.25, leaves: 0.2, reeds: 0.5 },
     life: { birds: 1.7, herd: 0.3 },
   }),
 
@@ -208,7 +208,7 @@ export const ZONE_DRESS = {
 /** Every litter kind any zone can ask for. */
 export const LITTER_KINDS = [
   'branch', 'log', 'stump', 'leaves', 'bones', 'planks',
-  'rubble', 'driftwood', 'deadtrunk', 'cairn', 'barrel',
+  'rubble', 'driftwood', 'deadtrunk', 'cairn', 'barrel', 'reeds',
 ];
 
 // ------------------------------------------------------------------ lookup

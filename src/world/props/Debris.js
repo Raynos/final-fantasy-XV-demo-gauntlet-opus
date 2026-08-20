@@ -351,6 +351,38 @@ function barrelGeometry(seed) {
  * of cylinders silently produced a null driftwood mesh. Force both an index
  * and a uv set on everything.
  */
+/**
+ * A clump of reeds: nine tapered blades fanning out of one root.
+ *
+ * Solid tapered quads rather than alpha cards — at the density a marsh needs,
+ * alpha-tested cards cost a depth-prepass argument nobody wants, and a reed is
+ * a thin solid blade anyway. This is the band that turns Alstor Slough and the
+ * Vesperpool from "a lake" into "a wetland".
+ */
+function reedGeometry(seed) {
+  const rng = new Rng(seed);
+  const parts = [];
+  const n = 8 + Math.floor(rng.next() * 4);
+  for (let i = 0; i < n; i++) {
+    const h = rng.range(0.9, 2.1);
+    const w = rng.range(0.035, 0.07);
+    const blade = new THREE.CylinderGeometry(w * 0.12, w, h, 3, 2);
+    const pos = blade.attributes.position;
+    const lean = rng.range(0.12, 0.5), dir = rng.next() * Math.PI * 2;
+    for (let v = 0; v < pos.count; v++) {
+      const t = (pos.getY(v) + h * 0.5) / h;
+      pos.setX(v, pos.getX(v) + Math.cos(dir) * lean * t * t * h);
+      pos.setZ(v, pos.getZ(v) + Math.sin(dir) * lean * t * t * h);
+    }
+    blade.computeVertexNormals();
+    blade.translate(rng.gauss(0, 0.13), h * 0.5, rng.gauss(0, 0.13));
+    parts.push(blade);
+  }
+  const out = mergeGeometries(parts.map(stripAttrs), false);
+  out.computeBoundingSphere();
+  return out;
+}
+
 function stripAttrs(g) {
   for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
   if (!g.attributes.normal) g.computeVertexNormals();
@@ -388,11 +420,12 @@ const LITTER = {
   deadtrunk: { seed: 85, geo: deadTrunkGeometry, mat: 'bleach', per: 2.4, range: 560, scale: [0.8, 1.5], sink: 0.03, tilt: 0.06 },
   cairn: { seed: 87, geo: cairnGeometry, mat: 'stone', per: 0.5, range: 150, scale: [0.9, 1.7], sink: 0.02 },
   barrel: { seed: 89, geo: barrelGeometry, mat: 'rust', per: 0.8, range: 130, scale: [0.85, 1.2], sink: 0.02 },
+  reeds: { seed: 91, geo: reedGeometry, mat: 'reed', per: 10, range: 145, scale: [0.8, 1.7], sink: 0.06, tilt: 0.05, cast: false },
 };
 
 const CAPS = {
   branch: 620, log: 260, stump: 200, leaves: 900, bones: 90, planks: 150,
-  rubble: 300, driftwood: 180, deadtrunk: 460, cairn: 70, barrel: 110,
+  rubble: 300, driftwood: 180, deadtrunk: 460, cairn: 70, barrel: 110, reeds: 620,
 };
 
 export class Debris {
@@ -412,6 +445,7 @@ export class Debris {
       bleach: woodMaterial(0xa79c86),
       stone: new THREE.MeshStandardMaterial({ color: 0x8e8778, roughness: 0.94, metalness: 0 }),
       rust: rustMaterial(0x8a5a38, 0.5),
+      reed: new THREE.MeshStandardMaterial({ color: 0x5c6a38, roughness: 0.88, metalness: 0 }),
       leaf: patchVeg(new THREE.MeshStandardMaterial({
         map: leafClusterTex('dry'), color: 0xc9a566, vertexColors: true,
         alphaTest: 0.36, transparent: false, side: THREE.DoubleSide,
@@ -493,6 +527,12 @@ export class Debris {
         const d = SEA - h;
         return base * THREE.MathUtils.smoothstep(d, -2.5, 0.5)
           * (1 - THREE.MathUtils.smoothstep(d, 4.0, 6.5));
+      }
+      case 'reeds': {
+        // a band in the shallows and just above the waterline
+        const dw = SEA - h;
+        return base * THREE.MathUtils.smoothstep(dw, -1.6, -0.2)
+          * (1 - THREE.MathUtils.smoothstep(dw, 0.6, 1.6));
       }
       case 'driftwood':
         return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 3, 22));

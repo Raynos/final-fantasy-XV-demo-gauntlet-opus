@@ -865,7 +865,7 @@ export class PoiKits {
     }
     const M = this.mats;
     if (M) {
-      M.lamp.emissiveIntensity = 0.32 + night * 2.4;
+      M.lamp.emissiveIntensity = 0.3 + night * 1.15;
       M.hot.emissiveIntensity = 1.1 + night * 1.9 + Math.sin(t * 5.3) * 0.12;
       M.rune.emissiveIntensity = 0.9 + night * 1.8 + Math.sin(t * 1.4) * 0.1;
       M.arcane.emissiveIntensity = 0.8 + night * 1.6 + Math.sin(t * 0.9 + 1) * 0.15;
