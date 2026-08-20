@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng } from '../../util/Rng.js';
+import { hash3 } from '../veg/Ecology.js';
+import { TileStream } from './TileStream.js';
+import { dressAt } from './ZoneDress.js';
 import { puffTexture } from './PropMaterials.js';
 
 /**
@@ -270,78 +273,118 @@ export class Wildlife {
 
   // ------------------------------------------------------------------ birds
 
-  /** Four kettles of raptors turning on thermals over the hot ground. */
+  /**
+   * Kettles of raptors turning on thermals, streamed across the whole map.
+   *
+   * The old set was five hand-placed circles within four hundred metres of
+   * Hammerhead, so the sky over the other sixty square kilometres of Lucis was
+   * empty. Kettles are now a streamed field weighted by the zone's `life.birds`
+   * — thick over the Galdin coast and Cape Caem, thin over the ash slopes of
+   * Ravatogh, which is what a volcano's sky should look like.
+   */
   _birds() {
-    const rng = new Rng(1234);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x6d6459, roughness: 0.86, metalness: 0, side: THREE.DoubleSide,
       vertexColors: true,
     });
     mat.name = 'bird';
-    const anchors = [
-      { x: -110, z: -250, r: 78, y: 96, n: 13 },
-      { x: 150, z: -60, r: 62, y: 74, n: 9 },
-      { x: -300, z: 130, r: 90, y: 118, n: 11 },
-      { x: -40, z: -420, r: 70, y: 132, n: 8 },
-      // low kettle right over the spawn, so the sky is never empty on the road
-      { x: 0, z: -60, r: 55, y: 34, n: 10 },
-    ];
-    const items = [];
-    for (const a of anchors) {
-      const ground = this.eco.height(a.x, a.z);
-      for (let i = 0; i < a.n; i++) {
-        items.push({
-          cx: a.x, cz: a.z, y: ground + a.y + rng.range(-14, 22),
-          r: a.r * rng.range(0.35, 1.05),
-          phase: rng.next() * Math.PI * 2,
-          rate: (rng.next() < 0.5 ? -1 : 1) * rng.range(0.055, 0.12),
-          climb: rng.range(3, 11), climbRate: rng.range(0.13, 0.3),
-          scale: rng.range(1.15, 2.1),
-        });
-      }
-    }
-    const mesh = new THREE.InstancedMesh(birdGeometry(), mat, items.length);
+    const CAP = Math.round(110 * this.quality);
+    const mesh = new THREE.InstancedMesh(birdGeometry(), mat, CAP);
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     mesh.frustumCulled = false;
+    mesh.count = 0;
     mesh.name = 'wildlife_birds';
     this.root.add(mesh);
-    this.birds = { mesh, items };
+    this.birds = {
+      mesh, cap: CAP,
+      stream: new TileStream({
+        cell: 340, radius: 1150, budget: 4,
+        gen: (cx, cz, out) => this._genKettle(cx, cz, out),
+      }),
+    };
+    this.birds.stream.flush(new THREE.Vector3());
+  }
+
+  _genKettle(cx, cz, out) {
+    const c = 340;
+    const rng = new Rng(hash3(cx, cz, 0x8175));
+    const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
+    const dress = dressAt(x, z);
+    const want = dress.life.birds;
+    if (rng.next() > want * 0.55) return;
+    const ground = this.eco.height(x, z);
+    const n = 5 + Math.floor(rng.next() * 8 * want);
+    const r0 = rng.range(40, 95);
+    const y0 = rng.range(30, 130);
+    for (let i = 0; i < n; i++) {
+      out.push({
+        cx: x, cz: z, y: ground + y0 + rng.range(-14, 22),
+        r: r0 * rng.range(0.35, 1.05),
+        phase: rng.next() * Math.PI * 2,
+        rate: (rng.next() < 0.5 ? -1 : 1) * rng.range(0.055, 0.12),
+        climb: rng.range(3, 11), climbRate: rng.range(0.13, 0.3),
+        scale: rng.range(1.15, 2.1),
+      });
+    }
   }
 
   // ------------------------------------------------------------------ herds
 
-  /** Garula grazing the sites Ecology marked, drifting slowly downwind. */
+  /**
+   * Grazing herds, streamed and zone-weighted.
+   *
+   * Dualhorn on the Vannath prairie, garula on the Malacchi chocobo downs, a
+   * few head on the Leide flats and nothing at all on a volcano. The old
+   * version read four hand-placed anchors from `Ecology.sites`, all of them
+   * inside four hundred metres of the spawn.
+   */
   _herds() {
     const mat = new THREE.MeshStandardMaterial({
       color: 0x8c7c67, roughness: 0.92, metalness: 0, vertexColors: true,
     });
     mat.name = 'garula';
-    const items = [];
-    for (const s of this.eco.sites) {
-      if (s.type !== 'graze') continue;
-      const rng = new Rng(s.seed || 41);
-      const range = s.range || 40;
-      for (let i = 0; i < (s.count || 8); i++) {
-        const a = rng.next() * Math.PI * 2;
-        const d = Math.sqrt(rng.next()) * range;
-        items.push({
-          ax: s.x + Math.cos(a) * d, az: s.z + Math.sin(a) * d,
-          wander: rng.range(4, 13), phase: rng.next() * Math.PI * 2,
-          rate: rng.range(0.016, 0.045),
-          scale: rng.range(0.85, 1.35) * (rng.next() < 0.18 ? 0.6 : 1),
-          bob: rng.range(0.5, 1.6),
-        });
-      }
-    }
-    if (!items.length) return;
-    const mesh = new THREE.InstancedMesh(garulaGeometry(), mat, items.length);
+    const CAP = Math.round(80 * this.quality);
+    const mesh = new THREE.InstancedMesh(garulaGeometry(), mat, CAP);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
+    mesh.count = 0;
     mesh.name = 'wildlife_herd';
     this.root.add(mesh);
-    this.herd = { mesh, items };
+    this.herd = {
+      mesh, cap: CAP, range: 480,
+      stream: new TileStream({
+        cell: 260, radius: 620, budget: 4,
+        gen: (cx, cz, out) => this._genHerd(cx, cz, out),
+      }),
+    };
+    this.herd.stream.flush(new THREE.Vector3());
+  }
+
+  _genHerd(cx, cz, out) {
+    const c = 260, eco = this.eco;
+    const rng = new Rng(hash3(cx, cz, 0x2b91));
+    const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
+    const dress = dressAt(x, z);
+    const want = dress.life.herd;
+    if (want <= 0.01) return;
+    // stock stand on grass, on the flat, away from the carriageway
+    const graze = eco.grassDensity(x, z) * (1 - THREE.MathUtils.smoothstep(eco.slope01(x, z), 0.12, 0.4));
+    if (rng.next() > want * graze * 1.4) return;
+    const range = rng.range(24, 48);
+    const n = 4 + Math.floor(rng.next() * 9 * Math.min(1.4, want));
+    for (let i = 0; i < n; i++) {
+      const a = rng.next() * Math.PI * 2;
+      const d = Math.sqrt(rng.next()) * range;
+      out.push({
+        ax: x + Math.cos(a) * d, az: z + Math.sin(a) * d,
+        wander: rng.range(4, 13), phase: rng.next() * Math.PI * 2,
+        rate: rng.range(0.016, 0.045),
+        scale: rng.range(0.85, 1.35) * (rng.next() < 0.18 ? 0.6 : 1),
+        bob: rng.range(0.5, 1.6),
+      });
+    }
   }
 
   // ---------------------------------------------------------------- insects
@@ -423,8 +466,10 @@ export class Wildlife {
   update(dt, t, night, camPos) {
     if (this.birds) {
       const g = this.birds;
-      for (let i = 0; i < g.items.length; i++) {
-        const b = g.items[i];
+      if (camPos) g.stream.update(camPos);
+      let i = 0;
+      for (const arr of g.stream.live.values()) for (const b of arr) {
+        if (i >= g.cap) break;
         const a = b.phase + t * b.rate;
         const x = b.cx + Math.cos(a) * b.r;
         const z = b.cz + Math.sin(a) * b.r;
@@ -437,15 +482,24 @@ export class Wildlife {
         _s.setScalar(b.scale);
         _m.compose(_p, _q, _s);
         _m.toArray(g.mesh.instanceMatrix.array, i * 16);
+        i++;
       }
+      g.mesh.count = i;
+      g.mesh.visible = i > 0;
       g.mesh.instanceMatrix.needsUpdate = true;
     }
 
     if (this.herd) {
       const g = this.herd;
       const eco = this.eco;
-      for (let i = 0; i < g.items.length; i++) {
-        const h = g.items[i];
+      if (camPos) g.stream.update(camPos);
+      let i = 0;
+      for (const arr of g.stream.live.values()) for (const h of arr) {
+        if (i >= g.cap) break;
+        if (camPos) {
+          const dx = h.ax - camPos.x, dz = h.az - camPos.z;
+          if (dx * dx + dz * dz > g.range * g.range) continue;
+        }
         const a = h.phase + t * h.rate;
         const x = h.ax + Math.cos(a) * h.wander;
         const z = h.az + Math.sin(a * 0.73) * h.wander * 0.7;
@@ -459,7 +513,10 @@ export class Wildlife {
         _s.setScalar(h.scale);
         _m.compose(_p, _q, _s);
         _m.toArray(g.mesh.instanceMatrix.array, i * 16);
+        i++;
       }
+      g.mesh.count = i;
+      g.mesh.visible = i > 0;
       g.mesh.instanceMatrix.needsUpdate = true;
     }
 

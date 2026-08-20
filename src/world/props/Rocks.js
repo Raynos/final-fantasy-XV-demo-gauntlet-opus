@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Noise } from '../../util/Noise.js';
 import { Rng } from '../../util/Rng.js';
+import { hash3 } from '../veg/Ecology.js';
 import { rockMaterial } from './PropMaterials.js';
+import { TileStream } from './TileStream.js';
+import { dressAt, pickWeighted } from './ZoneDress.js';
 
 /**
  * Boulders, slabs and pebbles.
@@ -325,160 +328,278 @@ const KINDS = [
 const K = {};
 for (let i = 0; i < KINDS.length; i++) K[KINDS[i].key] = KINDS[i];
 
+/** Kinds big enough to be worth a distant LOD and a long draw range. */
+const BIG = new Set(['granite', 'bedded', 'worn', 'slab', 'spire']);
+
 export class Rocks {
-  constructor(eco, scene, { quality = 1, range = 380 } = {}) {
+  /**
+   * @param {import('../veg/Ecology.js').Ecology} eco
+   * @param {THREE.Scene} scene
+   * @param {{quality?:number, radius?:number}} opts
+   */
+  constructor(eco, scene, { quality = 1, radius = 560 } = {}) {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
-    this.range = range;
+    this.radius = radius * (quality < 0.7 ? 0.75 : 1);
+    this.cell = 56;
     this.groups = [];
+    this._last = new THREE.Vector3(1e9, 0, 1e9);
   }
 
-  build() {
+  // --------------------------------------------------------------- density
+
+  /**
+   * How much stone this square metre of Lucis wants, 0..1.
+   *
+   * The shape is the same everywhere — scree gathers on slopes, nothing rests
+   * on a cliff face, the carriageway is swept — but the *amount* is the zone's
+   * business: Ravatogh is a scree field, Alstor Slough is mud.
+   */
+  _density(x, z) {
     const eco = this.eco;
-    const mat = rockMaterial(0x6a5849, 0.93);
-    const rng = new Rng(777);
+    const slope = eco.slope01(x, z);
+    // Scree gathers on slopes, but nothing rests on a cliff face. The cut-off
+    // used to be so early that the ash cone of Ravatogh and the walls of
+    // Taelpar Crag — the two most dramatic slopes in the game — came out
+    // completely bare, which is the opposite of how a volcano looks.
+    const rests = 1 - THREE.MathUtils.smoothstep(slope, 0.46, 0.70);
+    if (rests <= 0.01) return 0;
+    const p = eco.patch(x + 610, z - 340, 0.011, 3);
+    const rd = THREE.MathUtils.smoothstep(eco.roadDist(x, z), 4.5, 9);
+    const d = dressAt(x, z);
+    return THREE.MathUtils.clamp(
+      (0.5 + 0.5 * THREE.MathUtils.smoothstep(slope, 0.06, 0.45)) * rests
+      * (0.32 + 0.68 * THREE.MathUtils.smoothstep(p, 0.26, 0.74))
+      * rd * d.rockD * (1 - eco.siteBlock(x, z) * 0.85), 0, 1);
+  }
 
-    // one clustered field, then split by kind so big rocks anchor the clusters
-    const clusters = eco.scatterClustered(0x40c8, {
-      radius: this.range, cellSize: 48, perCell: 9, spread: 13,
-      density: (x, z) => {
-        const slope = eco.slope01(x, z);
-        const p = eco.patch(x + 610, z - 340, 0.011, 3);
-        const rd = THREE.MathUtils.smoothstep(eco.roadDist(x, z), 4.5, 9);
-        // Scree gathers on slopes, but nothing rests on a cliff face — past
-        // about 40 degrees a boulder would hang off the wall instead of
-        // sitting on it, so fall away to zero well before vertical.
-        const rests = 1 - THREE.MathUtils.smoothstep(slope, 0.42, 0.62);
-        return THREE.MathUtils.clamp(
-          (0.5 + 0.5 * THREE.MathUtils.smoothstep(slope, 0.06, 0.45)) * rests *
-          (0.32 + 0.68 * THREE.MathUtils.smoothstep(p, 0.26, 0.74)) *
-          rd * (1 - eco.siteBlock(x, z) * 0.85), 0, 1);
-      },
-      maxCount: 3600,
-    });
+  // ------------------------------------------------------------ generation
 
-    const buckets = new Map();
-    for (const k of KINDS) buckets.set(k.key, []);
-
-    for (const c of clusters) {
-      // one anchor rock and a scatter of talus around it
-      const rBig = rng.next();
-      const anchorKind = rBig < 0.15 ? K.granite : rBig < 0.28 ? K.bedded
-        : rBig < 0.37 ? K.slab : rBig < 0.43 ? K.spire
-          : rBig < 0.58 ? K.worn : K.cobble;
-      buckets.get(anchorKind.key).push(this._item(anchorKind, c.x, c.z, rng, c.w));
-      const debris = 2 + Math.floor(rng.next() * 5);
-      for (let i = 0; i < debris; i++) {
-        const a = rng.next() * Math.PI * 2;
-        const d = Math.abs(rng.gauss(0, 1)) * (2.2 + rBig * 5);
-        const x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
-        if (eco.roadDist(x, z) < 4.6) continue;
-        // spalled fragments cluster right at the foot of a big block
-        const r = rng.next();
-        const kind = r < 0.4 ? K.pebble : r < 0.66 ? K.cobble : K.talus;
-        buckets.get(kind.key).push(this._item(kind, x, z, rng, c.w * 0.7));
+  /**
+   * The boulder field of one 56 m cell: a jittered cluster centre, a handful
+   * of anchor blocks around it, and spalled fragments at the foot of each.
+   * Pure function of (cx, cz) — this is what lets the window move.
+   */
+  _genCell(cx, cz, out) {
+    const c = this.cell, eco = this.eco;
+    const rng = new Rng(hash3(cx, cz, 0x40c8));
+    const seedX = (cx + rng.next()) * c, seedZ = (cz + rng.next()) * c;
+    const bias = this._density(seedX, seedZ);
+    if (bias <= 0.004 && rng.next() > 0.22) return;
+    const dress = dressAt(seedX, seedZ);
+    const n = Math.round(9 * (bias * 0.78 + 0.22) * rng.range(0.4, 1.6));
+    for (let i = 0; i < n; i++) {
+      const a = rng.next() * Math.PI * 2;
+      const r = Math.abs(rng.gauss(0, 1)) * 14;
+      const x = seedX + Math.cos(a) * r, z = seedZ + Math.sin(a) * r;
+      const d = this._density(x, z);
+      if (d <= 0.004 || rng.next() > d) continue;
+      const anchor = K[pickWeighted(dress.kinds, rng.next())] || K.cobble;
+      out.push(this._item(anchor, x, z, rng, d, dress));
+      const frags = 2 + Math.floor(rng.next() * 5);
+      for (let j = 0; j < frags; j++) {
+        const fa = rng.next() * Math.PI * 2;
+        const fd = Math.abs(rng.gauss(0, 1)) * (2.2 + anchor.size[1] * 0.9);
+        const fx = x + Math.cos(fa) * fd, fz = z + Math.sin(fa) * fd;
+        if (eco.roadDist(fx, fz) < 4.6) continue;
+        const kind = K[pickWeighted(dress.frag, rng.next())] || K.pebble;
+        out.push(this._item(kind, fx, fz, rng, d * 0.7, dress));
       }
     }
+  }
 
-    // A dozen proper outcrops: tight knots of large stone that read as bedrock
-    // pushing through the soil rather than boulders dropped on a lawn.
-    const outcrops = eco.scatterClustered(0x0c1f, {
-      radius: this.range, cellSize: 150, perCell: 2, spread: 10,
-      density: (x, z) => {
-        const p = eco.patch(x - 800, z + 950, 0.007, 3);
-        return THREE.MathUtils.smoothstep(p, 0.42, 0.78)
-          * THREE.MathUtils.smoothstep(eco.roadDist(x, z), 9, 26)
-          * (1 - eco.siteBlock(x, z));
-      },
-      maxCount: 26,
-    });
-    for (const o of outcrops) {
-      const n = 4 + Math.floor(rng.next() * 6);
+  /**
+   * Bedrock knots: a line of large blocks pushing through the soil. These
+   * carry a far longer draw range than loose boulders because at four hundred
+   * metres an outcrop is a landform, not a pebble — it is what stops the
+   * middle distance reading as an empty dust bowl.
+   */
+  _genOutcrop(cx, cz, out) {
+    const c = 176, eco = this.eco;
+    const rng = new Rng(hash3(cx, cz, 0x0c1f));
+    for (let m = 0; m < 2; m++) {
+      const ox = (cx + rng.next()) * c, oz = (cz + rng.next()) * c;
+      const p = eco.patch(ox - 800, oz + 950, 0.007, 3);
+      const dress = dressAt(ox, oz);
+      const q = THREE.MathUtils.smoothstep(p, 0.42, 0.78)
+        * THREE.MathUtils.smoothstep(eco.roadDist(ox, oz), 9, 26)
+        * (1 - eco.siteBlock(ox, oz)) * dress.rockD
+        * (1 - THREE.MathUtils.smoothstep(eco.slope01(ox, oz), 0.58, 0.8));
+      if (rng.next() > q * 1.5) continue;
+      // A crag, not a pile of pebbles: the tor is two to three times the size
+      // of a loose boulder, which is what makes it legible at half a kilometre
+      // and stops the middle distance reading as an empty dust bowl.
+      const grand = rng.range(1.3, 2.15);
+      const n = 5 + Math.floor(rng.next() * 7);
       const axis = rng.next() * Math.PI * 2;
+      const spanX = 9 * grand, jit = 2.4 * grand;
       for (let i = 0; i < n; i++) {
         const t = (i / n - 0.5) * 2;
-        const px = o.x + Math.cos(axis) * t * 9 + rng.gauss(0, 2.4);
-        const pz = o.z + Math.sin(axis) * t * 9 + rng.gauss(0, 2.4);
+        const px = ox + Math.cos(axis) * t * spanX + rng.gauss(0, jit);
+        const pz = oz + Math.sin(axis) * t * spanX + rng.gauss(0, jit);
         const r = rng.next();
         const kind = r < 0.42 ? K.granite : r < 0.62 ? K.slab
           : r < 0.82 ? K.bedded : K.spire;
-        const it = this._item(kind, px, pz, rng, 1);
-        it.s = Math.max(it.s, kind.size[1] * rng.range(0.6, 1.05));
+        const it = this._item(kind, px, pz, rng, 1, dress);
+        // hard ceiling: past about eleven metres a "boulder" is a landform,
+        // and landforms belong to the heightfield, not to the prop layer
+        const flatness = 1 - THREE.MathUtils.clamp((eco.slope01(px, pz) - 0.14) / 0.4, 0, 1) * 0.6;
+        it.s = Math.min(11, Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand * flatness));
         it.bury = kind.bury * rng.range(0.35, 0.8);
-        // bedrock is not tipped over: keep strata roughly level
         it.pitch *= 0.35; it.roll *= 0.35;
-        buckets.get(kind.key).push(it);
+        it.far = true;
+        out.push(it);
       }
     }
-
-    for (const k of KINDS) {
-      const items = buckets.get(k.key);
-      if (!items.length) continue;
-      const max = Math.max(8, Math.min(items.length, Math.round(items.length * this.quality)));
-      const mesh = new THREE.InstancedMesh(rockGeometry(k.seed, k.opts), mat, max);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
-      mesh.count = 0; mesh.frustumCulled = false;
-      mesh.name = `rock_${k.key}`;
-      this.scene.add(mesh);
-      this.groups.push({ kind: k, mesh, items, max, range: k.size[1] > 1.2 ? this.range : 90 });
-    }
-    this._last = new THREE.Vector3(1e9, 0, 1e9);
-    this.update(new THREE.Vector3());
   }
 
-  _item(kind, x, z, rng, w) {
+  _item(kind, x, z, rng, w, dress) {
     const t = Math.pow(rng.next(), 1.65);
-    const size = kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7);
     const nrm = this.eco.normal(x, z);
-    // A block that has just split off sits at a jaunty angle; a boulder that
-    // has been there a million years has settled flat. Big stone settles.
+    // A five metre block centred on a forty-degree face overhangs it by half
+    // its own width and reads as floating. Steep ground gets talus, not
+    // boulders — which is also what a real scree slope looks like.
+    const steep = THREE.MathUtils.clamp((1 - nrm.y - 0.16) / 0.4, 0, 1);
+    const size = (kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7))
+      * (BIG.has(kind.key) ? dress.rockS : 1) * (1 - steep * 0.62);
     const settle = THREE.MathUtils.clamp(1 - size / 5, 0.18, 1);
+    // The instance tint multiplies a deliberately dark base material, so the
+    // old 0.7..1.04 range rendered every boulder past a hundred metres as a
+    // black speck on an ochre hillside. Stone reflects far more light than
+    // that; the range is now centred well above 1.
+    const tone = (1.02 + rng.next() * 0.46) * dress.bright;
+    const v = 1 + rng.gauss(0, 0.05);
     return {
-      x, z, y: this.eco.height(x, z),
-      // Sink along the surface normal, not straight down: on a slope a purely
-      // vertical offset leaves the rock hanging off the face. Ecology.normal
-      // hands back a shared vector, so copy the components out.
+      k: kind.key, x, z, y: this.eco.height(x, z),
       nx: nrm.x, ny: nrm.y, nz: nrm.z,
       s: size,
       sx: 1 + rng.gauss(0, 0.16), sy: 1 + rng.gauss(0, 0.13), sz: 1 + rng.gauss(0, 0.16),
       yaw: rng.next() * Math.PI * 2,
       pitch: rng.gauss(0, 0.3) * settle, roll: rng.gauss(0, 0.3) * settle,
       bury: kind.bury * rng.range(0.7, 1.5),
-      tint: 0.7 + rng.next() * 0.34,
-      // Leide is rust-ochre badlands, so bias the spread warm rather than
-      // letting half the field go cold grey.
-      warm: 0.035 + rng.gauss(0, 0.07),
+      cr: tone * dress.tint[0] * v,
+      cg: tone * dress.tint[1] * v,
+      cb: tone * dress.tint[2] * v,
+      far: false,
     };
   }
 
+  // ----------------------------------------------------------------- build
+
+  build() {
+    const mat = rockMaterial(0x6a5849, 0.93);
+    const q = this.quality;
+    // Instance budgets. A boulder at four hundred metres is four pixels, so
+    // the far tier runs a detail-1 blank (80 triangles against 320) and takes
+    // the great majority of the count.
+    const CAP = {
+      granite: [130, 760], bedded: [140, 800], worn: [130, 520],
+      slab: [110, 620], spire: [90, 480],
+      talus: [420, 0], cobble: [520, 0], pebble: [700, 0],
+    };
+    for (const k of KINDS) {
+      const [nearCap, farCap] = CAP[k.key];
+      const g = {
+        kind: k, key: k.key,
+        nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
+        farRange: BIG.has(k.key) ? 430 : 0,
+        outRange: BIG.has(k.key) ? 1150 : 0,
+        near: null, far: null, nearMax: 0, farMax: 0, nw: 0, fw: 0,
+      };
+      g.nearMax = Math.max(8, Math.round(nearCap * q));
+      g.near = this._mesh(rockGeometry(k.seed, k.opts), mat, g.nearMax, `rock_${k.key}`);
+      if (farCap) {
+        g.farMax = Math.max(8, Math.round(farCap * q));
+        g.far = this._mesh(rockGeometry(k.seed, { ...k.opts, detail: 1, chips: 1 }),
+          mat, g.farMax, `rock_${k.key}_far`);
+        g.far.castShadow = false;
+      }
+      this.groups.push(g);
+    }
+    this.byKey = new Map(this.groups.map((g) => [g.key, g]));
+
+    this.stream = new TileStream({
+      cell: this.cell, radius: this.radius,
+      gen: (cx, cz, out) => this._genCell(cx, cz, out),
+      budget: 12,
+    });
+    // Outcrops carry the middle distance, so their window is far wider than
+    // the boulder field's and they draw out to a kilometre. At that range they
+    // are the only thing between the foreground and the skyline.
+    this.outcrops = new TileStream({
+      cell: 176, radius: Math.max(1250, this.radius),
+      gen: (cx, cz, out) => this._genOutcrop(cx, cz, out),
+      budget: 7,
+    });
+    const o = new THREE.Vector3();
+    this.stream.flush(o);
+    this.outcrops.flush(o);
+    this.update(o);
+  }
+
+  _mesh(geo, mat, max, name) {
+    const mesh = new THREE.InstancedMesh(geo, mat, max);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+    mesh.count = 0; mesh.frustumCulled = false;
+    mesh.name = name;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  // ---------------------------------------------------------------- update
+
   update(camPos) {
-    if (this._last.distanceToSquared(camPos) < 100) return;
+    const moved = this._last.distanceToSquared(camPos) >= 121;
+    const a = this.stream.update(camPos);
+    const b = this.outcrops.update(camPos);
+    if (!moved && !a && !b) return;
     this._last.copy(camPos);
-    for (const g of this.groups) {
-      let w = 0;
-      const r2 = g.range * g.range;
-      for (const it of g.items) {
-        const dx = it.x - camPos.x, dz = it.z - camPos.z;
-        if (dx * dx + dz * dz > r2) continue;
-        if (w >= g.max) break;
+
+    for (const g of this.groups) { g.nw = 0; g.fw = 0; }
+    const cx = camPos.x, cz = camPos.z;
+
+    const emit = (arr) => {
+      for (let i = 0; i < arr.length; i++) {
+        const it = arr[i];
+        const g = this.byKey.get(it.k);
+        if (!g) continue;
+        const dx = it.x - cx, dz = it.z - cz;
+        const d2 = dx * dx + dz * dz;
+        let mesh = null, slot = 0;
+        if (d2 < g.nearRange * g.nearRange && g.nw < g.nearMax) {
+          mesh = g.near; slot = g.nw++;
+        } else if (g.far) {
+          const lim = it.far ? g.outRange : g.farRange;
+          if (d2 > lim * lim || g.fw >= g.farMax) continue;
+          mesh = g.far; slot = g.fw++;
+        } else continue;
         _e.set(it.pitch, it.yaw, it.roll);
         _q.setFromEuler(_e);
         const sink = it.s * it.bury;
         _p.set(it.x - it.nx * sink, it.y - it.ny * sink, it.z - it.nz * sink);
         _s.set(it.s * it.sx, it.s * it.sy, it.s * it.sz);
         _m.compose(_p, _q, _s);
-        _m.toArray(g.mesh.instanceMatrix.array, w * 16);
-        const c = g.mesh.instanceColor.array;
-        c[w * 3] = it.tint * (1 + it.warm);
-        c[w * 3 + 1] = it.tint;
-        c[w * 3 + 2] = it.tint * (1 - it.warm);
-        w++;
+        _m.toArray(mesh.instanceMatrix.array, slot * 16);
+        const c = mesh.instanceColor.array;
+        c[slot * 3] = it.cr; c[slot * 3 + 1] = it.cg; c[slot * 3 + 2] = it.cb;
       }
-      g.mesh.count = w;
-      g.mesh.instanceMatrix.needsUpdate = true;
-      g.mesh.instanceColor.needsUpdate = true;
+    };
+    for (const arr of this.stream.live.values()) emit(arr);
+    for (const arr of this.outcrops.live.values()) emit(arr);
+
+    for (const g of this.groups) {
+      g.near.count = g.nw;
+      g.near.visible = g.nw > 0;
+      g.near.instanceMatrix.needsUpdate = true;
+      g.near.instanceColor.needsUpdate = true;
+      if (g.far) {
+        g.far.count = g.fw;
+        g.far.visible = g.fw > 0;
+        g.far.instanceMatrix.needsUpdate = true;
+        g.far.instanceColor.needsUpdate = true;
+      }
     }
   }
 }
