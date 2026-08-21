@@ -21,7 +21,48 @@ import { Noise } from '../../util/Noise.js';
  * narrower than the iris and the eye reads as a dark bead with no sclera —
  * which is the difference between a person and a doll at any distance.
  */
-export const LID_OPEN = [0.76, 0.22];
+export const LID_OPEN = [0.76, 0.62];
+
+/**
+ * Eye geometry constants, shared by the lids, the lashes, the globe and the
+ * cornea shader in `Materials.js`. They are one system: if the lid shell rides
+ * inside the corneal dome the cornea pokes through the closed lid and renders
+ * as a bright white slab above and below the iris, and if the shader's iris
+ * angle disagrees with the geometric limbus the limbal ring lands on flat
+ * sclera. Both of those were happening.
+ */
+export const EYE = {
+  /** Half-angle of the iris measured from the gaze axis. */
+  iris: 0.500,
+  /** How far the cornea domes over the iris, as a fraction of globe radius. */
+  dome: 0.072,
+  /** Radius of the lid shell at its margin, as a fraction of globe radius. */
+  lidR: 1.105,
+  /** Azimuthal span of the palpebral fissure: inner canthus .. outer canthus. */
+  arc: [-1.02, 1.30],
+  /** Extra x-spread at the canthi — a real fissure is wider than the globe. */
+  canthusSpread: 0.30,
+};
+
+/**
+ * Elevation of a lid margin at fissure fraction `f` (0 = inner canthus).
+ *
+ * The two lids must **meet** at both canthi. The lower lid used to carry a
+ * constant 0.30 rad rest offset, so a 17-degree slot of bare sclera ran right
+ * through both corners of every eye — which is the "blank white bead" the far
+ * eye renders as in any three-quarter frame, and most of the startled read
+ * head-on. Now both lids run to a hairline at f=0 and f=1 and the aperture is
+ * a real almond: the upper lid peaks slightly nasal of centre, the lower lid
+ * troughs slightly temporal of it.
+ */
+export function lidMargin(f, upper, openU) {
+  const peak = upper ? 0.44 : 0.60;
+  // a cosine lobe skewed toward `peak`, zero at both canthi
+  const g = f < peak ? f / peak : (1 - f) / (1 - peak);
+  const shape = Math.sin(Math.PI * 0.5 * clamp01(g));
+  const lift = upper ? 0.545 : 0.700;
+  return (upper ? 1 : -1) * (0.012 + lift * openU * Math.pow(shape, 0.72));
+}
 
 /** Canonical head half-extents before sculpting. */
 const HR = [0.0785, 0.1130, 0.0960];
@@ -68,16 +109,25 @@ function brushes(look) {
   add({ p: [0, 0.009, 0.082], r: [0.022, 0.016, 0.040], amt: 0.0045 + 0.002 * brow, dir: [0, 0, 1] });
   add({ p: [0.049, 0.010, 0.067], r: [0.028, 0.020, 0.042], amt: 0.0045, dir: 'normal', mirror: true });
   // shadowed hollow directly under the brow
-  add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0075, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0055, dir: [0, 0, 1], mirror: true });
 
-  // eye sockets
-  // A socket is a shallow dish, not a crater. At -46 mm the skin fell 4 cm
-  // behind the eyeball and the globe stood proud of the face like a marble
-  // glued on; the lids could not reach it and the whole lower hemisphere was
-  // visible. The globe now sits *inside* the head and only the aperture shows.
-  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0285, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0115, dir: [0, 0, 1], mirror: true });
-  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0060, dir: [0, 0, 1], mirror: true });
+  // Eye sockets.
+  //
+  // These three brushes stack, and they used to stack to **-46 mm** at the
+  // aperture centre. The unsculpted skull sits at z = 86 mm there and the lid
+  // margin at z = 75 mm, so the skin only has to fall ~12 mm for the aperture
+  // to open at all — everything past that is a crater that drops the cheek
+  // behind the entire eye assembly, and the lid shell then hangs in front of
+  // the face as a pair of skin-coloured buckets. That, not the iris, is what
+  // made every closeup in the game read as a doll with goggles on.
+  //
+  // 25 mm total: the socket depth *is* the aperture size, because the skull is
+  // a closed shell and the eye only shows where the skull falls behind the lid
+  // margin. Six millimetres of clearance behind the margin is an open, adult
+  // palpebral fissure; two is a squint; forty is goggles.
+  add({ p: [0.0335, -0.008, 0.078], r: [0.036, 0.024, 0.046], amt: -0.0300, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0335, -0.006, 0.072], r: [0.026, 0.018, 0.040], amt: -0.0110, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0150, -0.004, 0.072], r: [0.017, 0.020, 0.030], amt: -0.0055, dir: [0, 0, 1], mirror: true });
   // lower orbital rim: this is what stops a crescent of sclera showing under
   // the iris and giving every character a permanently startled stare
   add({ p: [0.0335, -0.0175, 0.0735], r: [0.030, 0.0090, 0.034], amt: 0.0112, dir: [0, 0, 1], mirror: true });
@@ -301,8 +351,10 @@ export function buildHead(rig, look) {
   for (const side of ['L', 'R']) {
     const sg = side === 'L' ? 1 : -1;
     const ec = [FACE.eye[0] * sg * hw, FACE.eye[1], FACE.eye[2]];
-    buildLid(B, { put, scale, ec, sg, upper: true, bone: I[`lid${side}`], head: I.head, look });
-    buildLid(B, { put, scale, ec, sg, upper: false, bone: I[`lid${side}`], head: I.head, look });
+    const onSkull = skinSnap(look, hw);
+    const lo = { put, scale, ec, sg, bone: I[`lid${side}`], head: I.head, look, onSkull, uv: uvOf };
+    buildLid(B, { ...lo, upper: true });
+    buildLid(B, { ...lo, upper: false });
     B.skin([[I[`lid${side}`], 0.85], [I.head, 0.15]]);
     buildLashes(B, { put, scale, ec, sg, look });
     B.skin([[I.head, 1]]);
@@ -314,24 +366,61 @@ export function buildHead(rig, look) {
 }
 
 /**
+ * Project a canonical point onto the sculpted skull surface along its own
+ * direction from the head centre.
+ *
+ * The eyelid band has to *end on the face*. Ending it on a sphere around the
+ * eyeball instead — which is what it did — leaves a free edge whose position
+ * depends entirely on how deep the socket brushes happen to cut, so any change
+ * to the sculpt opens a lip of skin-coloured shell floating in front of the
+ * cheek. Snapping the outer row to the skull makes the join unconditional.
+ *
+ * @param {Object} look
+ * @param {number} hw head-width multiplier
+ * @returns {(p:number[]) => number[]}
+ */
+function skinSnap(look, hw) {
+  const sample = skullSampler(look);
+  const rr = [HR[0] * hw, HR[1], HR[2]];
+  return (p) => {
+    const theta = Math.atan2(p[0] / rr[0], p[2] / rr[2]);
+    const phi = Math.acos(Math.max(-1, Math.min(1, p[1] / rr[1])));
+    const { p: q, n } = sample(theta, phi);
+    return q.addScaledVector(n, 0.0006).toArray();
+  };
+}
+
+/**
+ * A point on the eye's local sphere.
+ *
+ * `a` is azimuth from the gaze axis, `e` elevation from the equator, `rad` the
+ * radius. `f` is the fissure fraction, used to spread the canthi off the sphere
+ * — a real palpebral fissure is ~30 mm across on a 24 mm globe, so its corners
+ * physically cannot lie on the globe and a pure spherical lid always reads too
+ * round and too small.
+ */
+function eyePoint(ec, sg, a, e, rad, f) {
+  const spread = f === undefined ? 1
+    : 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
+  const x = Math.sin(a * sg) * Math.cos(e) * rad * spread;
+  const y = Math.sin(e) * rad;
+  const z = Math.cos(a) * Math.cos(e) * rad;
+  return [ec[0] + x, ec[1] + y * 1.02, ec[2] + z * 0.92];
+}
+
+/**
  * One eyelid: a band wrapped on a sphere slightly larger than the eyeball,
  * running from the inner canthus to the outer, with the margin dipping at both
  * corners so the opening reads as an almond rather than a circle.
  */
 function buildLid(B, o) {
-  const { put, scale, ec, sg, upper, bone, head, look } = o;
+  const { put, scale, ec, sg, upper, bone, head, look, onSkull, uv } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
-  const cols = 14, rows = 4;
-  const arc = upper ? [-1.15, 1.19] : [-1.09, 1.13];
+  const cols = 20, rows = 5;
+  const arc = EYE.arc;
 
-  const pt = (a, e, rad) => {
-    // a: around the vertical axis of the eye, e: elevation from the equator
-    const x = Math.sin(a * sg) * Math.cos(e) * rad;
-    const y = Math.sin(e) * rad;
-    const z = Math.cos(a) * Math.cos(e) * rad;
-    return [ec[0] + x, ec[1] + y * 1.02, ec[2] + z * 0.92];
-  };
+  const pt = (a, e, rad, f) => eyePoint(ec, sg, a, e, rad, f);
 
   const dark = new THREE.Color().setHex(upper ? 0x140f10 : 0x3a2620, THREE.SRGBColorSpace);
   const skinC = new THREE.Color(1, 1, 1);
@@ -342,25 +431,37 @@ function buildLid(B, o) {
     for (let c = 0; c <= cols; c++) {
       const f = c / cols;
       const a = lerp(arc[0], arc[1], f);
-      // margin elevation: high in the middle, dipping at the corners.
-      // The two lids need *different* rest offsets: a shared +0.16 base pushed
-      // the whole aperture above the gaze axis, so the iris sat behind the lower
-      // lid and only a crescent of it was ever visible.
-      const shape = Math.sin(Math.PI * clamp01((f - 0.02) / 0.96));
-      const mBase = upper ? 0.020 : 0.300;
-      const mSpan = upper ? 0.500 : 0.720;
-      const margin = (upper ? 1 : -1) * (mBase + mSpan * openU * Math.pow(shape, 0.75));
-      const outer = (upper ? 1 : -1) * (1.12 + 0.30 * shape);
+      const shape = Math.abs(lidMargin(f, upper, openU)) / Math.max(1e-4, Math.abs(lidMargin(0.5, upper, 1)));
+      const margin = lidMargin(f, upper, openU);
+      const outer = (upper ? 1 : -1) * (1.02 + 0.42 * shape);
       const e = lerp(margin, outer, smooth(t));
-      const rad = R * lerp(1.045, 1.34, t * t);
-      const p = pt(a, e, rad);
+      // The lid rides *outside* the corneal dome. At 1.045 it rode inside it,
+      // so the cornea burst through the closed part of the lid and rendered as
+      // a bright white slab above and below the iris on every face in the game.
+      const rad = R * lerp(EYE.lidR, 1.36, t * t);
+      // the margin itself is a rolled edge: give it thickness rather than
+      // letting the band end on a zero-width knife
+      let p = pt(a, e, rad, r === 0 ? f : undefined);
+      // the outermost two rows blend onto the sculpted skull, so the lid always
+      // merges into the face instead of ending on a free edge in front of it
+      if (r >= rows - 1 && onSkull) {
+        const q = onSkull(p);
+        const k = r === rows ? 1 : 0.55;
+        p = [lerp(p[0], q[0], k), lerp(p[1], q[1], k), lerp(p[2], q[2], k)];
+      }
       const w = put(p);
       // lid margin is dark (lash line), blending to skin toward the socket;
       // the margin itself is wet, the lid skin above it is not
-      B.color(skinC.clone().lerp(dark, Math.pow(1 - t, 2.2) * (upper ? 1.0 : 0.72)));
+      B.color(skinC.clone().lerp(dark, Math.pow(1 - t, 3.0) * (upper ? 0.50 : 0.24)));
       B.mat(0.24 + 0.30 * t, 0, 0.55 * (1 - t));
       B.skin(r === rows ? [[head, 1]] : [[bone, 1 - t * 0.5], [head, t * 0.5]]);
-      row.push(B.v(w.x, w.y, w.z, 0.5 + (f - 0.5) * 0.04, 0.5));
+      // The lid takes the **real face UV**, not a fixed (0.5, 0.5). Pinned to
+      // one texel it sampled mid-cheek, so both lids rendered as pale plates
+      // laid over the painted socket — the exact thing that made the eye look
+      // like a hole cut in a mask. With the true UV the painted lash line,
+      // crease, waterline and socket occlusion all land on the lid itself.
+      const [tu, tv] = uv(p[0], p[1], p[2]);
+      row.push(B.v(w.x, w.y, w.z, tu, tv));
     }
     gridIdx.push(row);
   }
@@ -370,6 +471,68 @@ function buildLid(B, o) {
       if (upper === (sg > 0)) B.quad(gridIdx[r][c], gridIdx[r][c + 1], gridIdx[r + 1][c + 1], gridIdx[r + 1][c]);
       else B.quad(gridIdx[r][c + 1], gridIdx[r][c], gridIdx[r + 1][c], gridIdx[r + 1][c + 1]);
     }
+  }
+
+  // ---- waterline ---------------------------------------------------------
+  // The wet strip of conjunctiva on the inside of the lower lid margin. It is
+  // two millimetres of bright, near-white, very glossy tissue and it is the
+  // single cue that separates an eye set into a face from a bead glued onto
+  // one — a painted line cannot do it because it dies the moment the head
+  // turns and the lid margin occludes it.
+  if (!upper) {
+    const wl = [];
+    for (let k = 0; k <= 1; k++) {
+      const row = [];
+      for (let c = 0; c <= cols; c++) {
+        const f = c / cols;
+        const a = lerp(arc[0], arc[1], f);
+        const m = lidMargin(f, upper, openU);
+        // step inward (toward the globe) and up over the margin roll
+        const e = m + 0.055 * k * Math.min(1, Math.abs(m) / 0.14);
+        const p = pt(a, e, R * lerp(EYE.lidR, 1.012, k), k === 0 ? f : undefined);
+        const w = put(p);
+        B.color(k === 0 ? 0xe8dcd4 : 0xfffaf4);
+        B.mat(0.06, 0, 0.2);
+        B.skin([[bone, 0.85], [head, 0.15]]);
+        const [tu, tv] = uv(p[0], p[1], p[2]);
+        row.push(B.v(w.x, w.y, w.z, tu, tv));
+      }
+      wl.push(row);
+    }
+    for (let c = 0; c < cols; c++) {
+      if (sg > 0) B.quad(wl[0][c], wl[0][c + 1], wl[1][c + 1], wl[1][c]);
+      else B.quad(wl[0][c + 1], wl[0][c], wl[1][c], wl[1][c + 1]);
+    }
+
+    // ---- caruncle --------------------------------------------------------
+    // The pink fleshy wedge in the inner canthus. Without it the two lids meet
+    // at a geometric point and the inner corner reads as a seam in a mask.
+    const cf = 0.05;
+    const ca = lerp(arc[0], arc[1], cf);
+    const c0 = pt(ca, -0.02, R * (EYE.lidR - 0.02), 0.02);
+    const [cu, cv] = uv(c0[0], c0[1], c0[2]);
+    B.group(4);
+    B.color(0xf0b8a6).mat(0.26, 0, 0.9).skin([[head, 1]]);
+    const cs = [R * 0.16, R * 0.22, R * 0.13];
+    const cr = [];
+    for (let v = 0; v <= 5; v++) {
+      const ph = (v / 5) * Math.PI;
+      const rw = [];
+      for (let u = 0; u <= 7; u++) {
+        const th = (u / 7) * Math.PI * 2;
+        const q = put([
+          c0[0] + Math.sin(ph) * Math.sin(th) * cs[0] * sg,
+          c0[1] + Math.cos(ph) * cs[1],
+          c0[2] + Math.sin(ph) * Math.cos(th) * cs[2],
+        ]);
+        rw.push(B.v(q.x, q.y, q.z, cu, cv));
+      }
+      cr.push(rw);
+    }
+    for (let v = 0; v < 5; v++) {
+      for (let u = 0; u < 7; u++) B.quad(cr[v][u], cr[v][u + 1], cr[v + 1][u + 1], cr[v + 1][u]);
+    }
+    B.color(0xffffff).mat(0.5, 0, 0);
   }
   B.group(0).color(0xffffff);
 }
@@ -386,8 +549,10 @@ export function buildEyes(rig, look) {
   const B = new MeshBuilder('eyes');
   B.color(0xffffff).mat(0.1, 0);
 
-  // where the iris ends and the sclera begins, in polar angle from the front
-  const IRIS = 0.405;
+  // where the iris ends and the sclera begins, in polar angle from the front.
+  // 0.405 rad put an 18 mm iris on a 24 mm globe: too small by a third, which
+  // is most of why the cast read wall-eyed. 0.500 rad is the real 11.7/24 mm.
+  const IRIS = EYE.iris;
 
   for (const sg of [1, -1]) {
     const cx = FACE.eye[0] * sg * hw * scale;
@@ -404,8 +569,10 @@ export function buildEyes(rig, look) {
         // at a hard limbus into the sclera. That break is what catches a bright
         // rim and stops the eyeball reading as a painted marble.
         const q = clamp01(1 - phi / IRIS);
-        const dome = 0.115 * Math.pow(q, 0.55);
-        const limbus = -0.028 * Math.exp(-Math.pow((phi - IRIS) / 0.10, 2));
+        // The dome has to stay inside `EYE.lidR` or the cornea bursts through
+        // the closed lid. At 0.115 it did, on every character, all the time.
+        const dome = EYE.dome * Math.pow(q, 0.55);
+        const limbus = -0.022 * Math.exp(-Math.pow((phi - IRIS) / 0.09, 2));
         const r = R * (1 + dome + limbus);
         const p = new THREE.Vector3(
           Math.sin(phi) * Math.cos(th) * r + cx,
@@ -435,9 +602,9 @@ function buildLashes(B, o) {
   const { put, scale, ec, sg, look } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * LID_OPEN[0];
-  const n = 11;
+  const n = 17;
   const col = new THREE.Color().setHex(look.lashColor ?? 0x0d0a0c, THREE.SRGBColorSpace);
-  const arc = [-1.11, 1.15];
+  const arc = EYE.arc;
 
   const pt = (a, e, rad) => new THREE.Vector3(
     ec[0] + Math.sin(a * sg) * Math.cos(e) * rad,
@@ -449,9 +616,9 @@ function buildLashes(B, o) {
   for (let i = 0; i < n; i++) {
     const f = i / (n - 1);
     const a = lerp(arc[0], arc[1], f);
-    const shape = Math.sin(Math.PI * clamp01((f - 0.02) / 0.96));
-    const margin = 0.020 + 0.500 * openU * Math.pow(shape, 0.75);
-    const root = pt(a, margin, R * 1.045);
+    const margin = lidMargin(f, true, openU);
+    const shape = clamp01(margin / 0.42);
+    const root = pt(a, margin, R * (EYE.lidR - 0.005));
     // lashes sweep up, forward and outward, longest at the outer third
     const grow = 0.55 + 0.75 * Math.pow(clamp01((f - 0.15) / 0.85), 0.8);
     const L = R * 0.36 * grow;
@@ -711,11 +878,15 @@ function paintFace(look, uv) {
     // strongest value on a face. Eyes read as eyes because they sit in a hole.
     // The socket is also the one feature that has to hold at 20 px, so it is
     // painted wider and roughly twice as deep as anatomy alone would ask for.
-    ao([0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.62, '96,64,62');
-    ao([-0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.62, '96,64,62');
+    // Half its old strength: this map is now sampled by the *lid geometry* as
+    // well as the skull, so painting a 0.62 socket on top of a lid that is
+    // already shaded and already carries a lash line stacked two occlusions on
+    // the same pixels and turned every eye into a black slot.
+    ao([0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.34, '96,64,62');
+    ao([-0.0335, -0.003, 0.070], 0.0215, 0.0150, 0.34, '96,64,62');
     // the crease directly under the brow ridge, darker and tighter
-    ao([0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.46, '82,54,54');
-    ao([-0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.46, '82,54,54');
+    ao([0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.30, '82,54,54');
+    ao([-0.0335, 0.0040, 0.076], 0.0165, 0.0052, 0.30, '82,54,54');
     // The eye mass itself. The eyeball is 21 mm across, i.e. 2–4 px at
     // gameplay range: far too small to survive on its own. A painted dark
     // almond under the aperture keeps a definite dark accent exactly where the
@@ -725,7 +896,7 @@ function paintFace(look, uv) {
       shape([
         [sg * 0.0195, -0.0040], [sg * 0.0290, 0.0030], [sg * 0.0420, 0.0014],
         [sg * 0.0505, -0.0055], [sg * 0.0420, -0.0112], [sg * 0.0290, -0.0122],
-      ], 'rgba(44,26,30,0.72)', { blur: 3 });
+      ], 'rgba(52,32,34,0.34)', { blur: 4 });
     }
     // tear trough
     ao([0.0330, -0.0150, 0.073], 0.0135, 0.0046, 0.34, '128,92,86');
@@ -843,60 +1014,77 @@ function paintFace(look, uv) {
 
     // ---- eyes -------------------------------------------------------------
     for (const sg of [1, -1]) {
-      // The painted lash line, crease and waterline are authored around the lid
-      // geometry; when the palpebral fissure narrowed to adult proportions these
-      // strokes kept their old span and read as smeared eyeliner reaching the
-      // temple. Remap them onto the actual aperture instead of restating every
-      // coordinate.
-      const EX = 0.60, EY = 0.70, C = 0.0335;
-      const ep = (x0, y0) => {
-        const x = C + (x0 - C) * EX;
-        const y = -0.006 + (y0 + 0.006) * EY;
-        return px([sg * x, y, 0.079 - Math.abs(x - 0.033) * 0.35]);
+      // The lash line, crease and waterline are *derived from the lid
+      // geometry*, not restated as their own coordinates. Every previous pass
+      // hand-tuned two remap constants against a lid shape that then changed
+      // underneath them, which is how a lash line ended up four millimetres
+      // above the actual margin and read as a second eyebrow.
+      const eR = FACE.eyeR;
+      const eC = [FACE.eye[0], FACE.eye[1]];
+      /**
+       * Canonical (x,y) of a point on the eye sphere at fissure fraction `f`,
+       * elevation `e`, radius `eR * rk`.
+       */
+      const eq = (f, e, rk = EYE.lidR) => {
+        const a = lerp(EYE.arc[0], EYE.arc[1], f);
+        const spread = 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
+        return [
+          eC[0] + Math.sin(a) * Math.cos(e) * eR * rk * spread,
+          eC[1] + Math.sin(e) * eR * rk * 1.02,
+        ];
+      };
+      /** Lid-margin point, pushed `d` radians further from the aperture. */
+      const em = (f, upper, d = 0, rk = EYE.lidR) =>
+        eq(f, lidMargin(f, upper, (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]))
+          + (upper ? d : -d), rk);
+      const ep = (p) => px([sg * p[0], p[1], 0.0795 - Math.abs(p[0] - 0.033) * 0.42]);
+      /** Stroke a curve sampled along the fissure. */
+      const lidCurve = (upper, d, rk, f0 = 0.03, f1 = 0.97) => {
+        ctx.beginPath();
+        for (let i = 0; i <= 12; i++) {
+          const q = ep(em(lerp(f0, f1, i / 12), upper, d, rk));
+          if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]);
+        }
+        ctx.stroke();
       };
       ctx.save();
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       // a soft dark bed so the hard line reads as sitting in a socket
       ctx.strokeStyle = 'rgba(44,24,28,0.62)';
-      ctx.lineWidth = 0.0078 * PY;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.0140, -0.0050));
-      ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
-      ctx.stroke();
+      ctx.lineWidth = 0.0072 * PY;
+      lidCurve(true, 0.02, EYE.lidR);
       // The lash line, at 1.6x its anatomical width. This and the brow are the
       // two strokes that decide whether a 30 px head has a face on it.
       ctx.strokeStyle = look.lash || 'rgba(14,10,12,0.97)';
-      ctx.lineWidth = 0.0042 * PY;
+      ctx.lineWidth = 0.0040 * PY;
+      lidCurve(true, 0.005, EYE.lidR);
+      // outer flick, running past the lateral canthus
+      ctx.lineWidth = 0.0016 * PY;
       ctx.beginPath();
-      ctx.moveTo(...ep(0.0140, -0.0050));
-      ctx.quadraticCurveTo(...ep(0.0335, 0.0042), ...ep(0.0525, -0.0030));
-      ctx.stroke();
-      // outer flick
-      ctx.lineWidth = 0.0015 * PY;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.0470, -0.0012));
-      ctx.lineTo(...ep(0.0590, -0.0014));
+      {
+        const a0 = ep(em(0.90, true, 0.02));
+        const a1 = ep(em(1.0, true, 0.02));
+        ctx.moveTo(a0[0], a0[1]);
+        ctx.lineTo(a1[0] + (a1[0] - a0[0]) * 0.9, a1[1] + (a1[1] - a0[1]) * 0.9);
+      }
       ctx.stroke();
       // the lid crease — the fold that gives an eye its shape
       ctx.strokeStyle = 'rgba(96,60,58,0.40)';
-      ctx.lineWidth = 0.0026 * PY;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.0155, 0.0032));
-      ctx.quadraticCurveTo(...ep(0.0340, 0.0098), ...ep(0.0520, 0.0024));
-      ctx.stroke();
-      // lower lash and the wet line under it
-      ctx.strokeStyle = 'rgba(58,32,34,0.70)';
+      ctx.lineWidth = 0.0028 * PY;
+      lidCurve(true, 0.30, EYE.lidR + 0.16, 0.10, 0.94);
+      // lower lash and the wet waterline just inside it
+      ctx.strokeStyle = 'rgba(58,32,34,0.62)';
       ctx.lineWidth = 0.0020 * PY;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.0165, -0.0098));
-      ctx.quadraticCurveTo(...ep(0.0340, -0.0158), ...ep(0.0500, -0.0072));
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,230,216,0.20)';
-      ctx.lineWidth = 0.0010 * PY;
-      ctx.beginPath();
-      ctx.moveTo(...ep(0.0180, -0.0112));
-      ctx.quadraticCurveTo(...ep(0.0340, -0.0170), ...ep(0.0490, -0.0086));
-      ctx.stroke();
+      lidCurve(false, 0.030, EYE.lidR, 0.06, 0.94);
+      ctx.strokeStyle = 'rgba(255,232,220,0.26)';
+      ctx.lineWidth = 0.0011 * PY;
+      lidCurve(false, 0.055, EYE.lidR + 0.03, 0.08, 0.92);
+      // the tear trough, a soft value a couple of millimetres lower again
+      ctx.strokeStyle = 'rgba(126,84,80,0.26)';
+      ctx.lineWidth = 0.0042 * PY;
+      ctx.filter = 'blur(4px)';
+      lidCurve(false, 0.22, EYE.lidR + 0.10, 0.12, 0.90);
       ctx.restore();
     }
 
