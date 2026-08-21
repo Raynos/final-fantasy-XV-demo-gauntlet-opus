@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Noise } from '../../util/Noise.js';
 import { Rng } from '../../util/Rng.js';
 import { srgb } from '../../util/TextureGen.js';
+import { vegAt, zoneMoist, pickFrom } from './Biomes.js';
+import { WORLD, worldMap } from '../map/WorldMap.js';
 
 /**
  * Shared world-sampling layer used by both Vegetation and Props.
@@ -14,6 +16,12 @@ import { srgb } from '../../util/TextureGen.js';
  * It also owns the road centreline and the deterministic list of landmark
  * sites, so vegetation can carve clearings around structures that Props has
  * not built yet (Props initialises after Vegetation).
+ *
+ * **The climate comes from the cartography, not from noise.** Every "is it wet
+ * here" question is answered by `WorldMap`'s blended `moist` biome parameter
+ * (via `veg/Biomes.js`), with fbm only as local variation on top. It used to be
+ * pure fbm, which is why an 8 km world with nineteen authored zones grew one
+ * biome — dry Leide scrub — from the Vesperpool to Malmalam Thicket.
  */
 
 const _v = new THREE.Vector3();
@@ -22,13 +30,6 @@ const _v = new THREE.Vector3();
 const C_SOIL_DRY = srgb(0x9a7448);
 const C_SOIL_RED = srgb(0x7e4b30);
 const C_SOIL_WET = srgb(0x4c4a30);
-// Leide is straw and olive, not lawn. The "dry" end is a sun-bleached wheat
-// that has been dead since spring; the lush end only ever shows up in the
-// drainage lines, so it is allowed to be a real green.
-const C_GRASS_DRY = srgb(0xa89358);
-const C_GRASS_MID = srgb(0x8a8450);
-const C_GRASS_LUSH = srgb(0x596b31);
-
 const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
 
@@ -62,6 +63,56 @@ export class Ecology {
     this._terrainRoad = !!(this.terrain && typeof this.terrain.roadCenterX === 'function');
 
     this.sites = this._layoutSites();
+    this._clearings = this._layoutClearings();
+  }
+
+  /**
+   * Places the world map says people have cleared.
+   *
+   * `sites` only knows about the handful of landmarks Vegetation authored near
+   * the origin. Once the forest streams across all 8 km it will happily close
+   * over Lestallum, Wiz's paddocks and every turning circle, so the 124 POIs
+   * get a say too. Radii are a *fraction* of the discovery radius, per type: a
+   * town really is cleared for 130 m, a landmark ("Longwythe Peak", r = 520)
+   * is not cleared at all.
+   */
+  _layoutClearings() {
+    const FRAC = {
+      town: 0.62, outpost: 0.5, reststop: 0.5, parking: 0.95, imperial: 0.5,
+      chocobo: 0.62, dungeon: 0.3, haven: 0.9, fishing: 0.45, menace: 0.3,
+    };
+    const cell = 256;
+    const grid = new Map();
+    for (const p of worldMap.pois) {
+      const f = FRAC[p.type];
+      if (!f) continue;
+      const r = p.r * f;
+      const i0 = Math.floor((p.x - r) / cell), i1 = Math.floor((p.x + r) / cell);
+      const j0 = Math.floor((p.z - r) / cell), j1 = Math.floor((p.z + r) / cell);
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const k = i * 65536 + j;
+          let a = grid.get(k);
+          if (!a) { a = []; grid.set(k, a); }
+          a.push({ x: p.x, z: p.z, r });
+        }
+      }
+    }
+    return { cell, grid };
+  }
+
+  /** 1 where a settlement or camp has cleared the ground, 0 in open country. */
+  poiClear(x, z) {
+    const { cell, grid } = this._clearings;
+    const a = grid.get(Math.floor(x / cell) * 65536 + Math.floor(z / cell));
+    if (!a) return 0;
+    let b = 0;
+    for (let i = 0; i < a.length; i++) {
+      const s = a[i];
+      const d = Math.hypot(x - s.x, z - s.z);
+      if (d < s.r) b = Math.max(b, 1 - d / s.r);
+    }
+    return b;
   }
 
   // ---------------------------------------------------------------- terrain
@@ -85,15 +136,34 @@ export class Ecology {
 
   // ---------------------------------------------------------------- climate
 
-  /** 0 = bone dry Leide badlands, 1 = humid Duscae basin. */
+  /**
+   * 0 = bone dry Leide badlands, 1 = humid Duscae basin.
+   *
+   * The cartography is the authority: `zoneMoist` is the blend of every zone's
+   * authored `moist` parameter at this point, and the fbm terms are local
+   * variation *within* a zone, never enough to turn the Nebulawood into
+   * badland. The old version was fbm alone plus an absolute-height penalty,
+   * which made every highland arid and every zone identical.
+   */
   moisture(x, z) {
-    let m = this.nMoist.fbm2(x * 0.0013, z * 0.0013, 4) * 0.5 + 0.5;
-    // valleys collect water; ridges bake dry
+    const zm = zoneMoist(x, z);
+    let m = 0.10 + 0.92 * zm;
+    m += (this.nMoist.fbm2(x * 0.0013, z * 0.0013, 4)) * 0.16;
+    m += this.nMoist.fbm2(x * 0.006 + 40, z * 0.006 - 17, 2) * 0.07;
+    // ground at or below the water plane is saturated whatever the zone says
     const h = this.height(x, z);
-    m += THREE.MathUtils.clamp((6 - h) * 0.018, -0.28, 0.3);
-    m += this.nMoist.fbm2(x * 0.006 + 40, z * 0.006 - 17, 2) * 0.09;
+    m += THREE.MathUtils.clamp((WORLD.seaLevel + 6 - h) * 0.014, 0, 0.22);
     return THREE.MathUtils.clamp(m, 0, 1);
   }
+
+  /** The vegetation recipe for this point. @returns {object} */
+  veg(x, z) { return vegAt(x, z); }
+
+  /**
+   * Metres of water over this point, negative on dry land. Reeds want the
+   * 0..1.2 m band, lily pads want > 0.4 m of standing water.
+   */
+  waterDepth(x, z) { return WORLD.seaLevel - this.height(x, z); }
 
   /** Local patchiness — the thing that stops scatter looking uniform. */
   patch(x, z, scale = 0.02, oct = 3) {
@@ -114,6 +184,24 @@ export class Ecology {
     const avg = (t.heightAt(x - e, z) + t.heightAt(x + e, z)
       + t.heightAt(x, z - e) + t.heightAt(x, z + e)) * 0.25;
     return THREE.MathUtils.clamp((avg - h) / 1.15, 0, 1);
+  }
+
+  /**
+   * How *convex* the ground is at ridge scale, 0..1 — the opposite question to
+   * {@link drainage}, asked with a much wider stencil.
+   *
+   * Exposed crests have thin soil and take the wind, so a real forest thins out
+   * over them and closes again in the hollows. That is worth having for its own
+   * sake — a canopy that stops at the skyline is what makes a wooded basin read
+   * as a basin — and it also keeps the viewpoints clear, because a viewpoint is
+   * by definition a convex piece of ground.
+   */
+  exposure(x, z) {
+    const t = this.terrain, e = 12.0;
+    const h = t.heightAt(x, z);
+    const avg = (t.heightAt(x - e, z) + t.heightAt(x + e, z)
+      + t.heightAt(x, z - e) + t.heightAt(x, z + e)) * 0.25;
+    return THREE.MathUtils.clamp((h - avg) / 2.6, 0, 1);
   }
 
   /**
@@ -309,10 +397,12 @@ export class Ecology {
   grassDensity(x, z) {
     const slope = this.slope01(x, z);
     if (slope > 0.66) return 0;
+    if (this.waterDepth(x, z) > 0.15) return 0;      // nothing grows under a lake
     const m = this.wetness(x, z);
+    const b = vegAt(x, z);
     // Leide is scrubland: the baseline is scattered tufts over open dirt, and
     // only the wet ground closes into anything like a sward.
-    let d = 0.26 + 0.74 * THREE.MathUtils.smoothstep(m, 0.2, 0.7);
+    let d = (0.26 + 0.74 * THREE.MathUtils.smoothstep(m, 0.12, 0.62)) * b.grassD;
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.3, 0.66);
     // clumping: large soft patches plus fine breakup
     const p = this.patch(x, z, 0.013, 3);
@@ -329,8 +419,13 @@ export class Ecology {
   scrubDensity(x, z) {
     const slope = this.slope01(x, z);
     if (slope > 0.78) return 0;
+    if (this.waterDepth(x, z) > 0.15) return 0;
     const m = this.moisture(x, z);
-    let d = 0.35 + 0.65 * (1 - THREE.MathUtils.smoothstep(m, 0.3, 0.8));
+    const b = vegAt(x, z);
+    // Dry country grows thorn on the slopes grass abandons; wet country grows
+    // an undergrowth layer instead, and `scrubD` is what decides which.
+    let d = (0.35 + 0.65 * (1 - THREE.MathUtils.smoothstep(m, 0.22, 0.72))) * b.scrubD;
+    d = Math.min(d, 1.6);
     d *= 0.35 + 0.65 * THREE.MathUtils.smoothstep(slope, 0.05, 0.4);
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.55, 0.78);
     const p = this.patch(x - 300, z + 220, 0.017, 3);
@@ -340,28 +435,56 @@ export class Ecology {
     return THREE.MathUtils.clamp(d, 0, 1);
   }
 
-  /** Trees cluster into groves on low, sheltered, wetter ground. */
+  /**
+   * Trees cluster into groves on low, sheltered, wetter ground — except where
+   * the zone says the canopy closes.
+   *
+   * `canopy` lifts the floor of the grove noise toward 1, which is the whole
+   * difference between a scattered stand and a wood: at canopy 0 the noise
+   * carves islands of trees out of open country (Leide, the Malacchi prairie),
+   * at canopy 1 the cover is continuous and only slope, road and clearings
+   * punch holes in it (the Nebulawood, Malmalam Thicket).
+   */
   treeDensity(x, z) {
     const slope = this.slope01(x, z);
     if (slope > 0.5) return 0;
+    if (this.waterDepth(x, z) > 0.3) return 0;
+    const b = vegAt(x, z);
     const m = this.moisture(x, z);
     const grove = this.nGrove.fbm2(x * 0.0055, z * 0.0055, 3) * 0.5 + 0.5;
-    let d = THREE.MathUtils.smoothstep(grove, 0.46, 0.82);
-    d *= 0.18 + 0.82 * THREE.MathUtils.smoothstep(m, 0.22, 0.72);
+    const c = b.canopy;
+    let d = THREE.MathUtils.smoothstep(grove, 0.46 - c * 0.5, 0.82 - c * 0.46);
+    if (c > 0) {
+      // Even a closed wood has glades, and without them a canopy-1.0 zone is
+      // a solid block you can neither see into nor stand in. A second, much
+      // lower-frequency field opens clearings a couple of hundred metres
+      // across, which is what gives the Nebulawood somewhere to put a haven.
+      const glade = this.nPatch.fbm2(x * 0.0021 + 77, z * 0.0021 - 55, 2) * 0.5 + 0.5;
+      d += (1 - d) * c * 0.88 * THREE.MathUtils.smoothstep(glade, 0.22, 0.6);
+    }
+    d *= 0.18 + 0.82 * THREE.MathUtils.smoothstep(m, 0.16, 0.66);
+    d *= b.treeD;
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.28, 0.5);
+    d *= 1 - this.exposure(x, z) * 0.62;
     d *= THREE.MathUtils.smoothstep(this.roadDist(x, z), 6, 18);
     d *= 1 - this.siteBlock(x, z);
+    d *= 1 - this.poiClear(x, z);
     return THREE.MathUtils.clamp(d, 0, 1);
   }
 
-  /** Which tree species belongs here. */
+  /**
+   * Which tree species belongs here.
+   *
+   * The pick is driven by a low-frequency noise rather than a per-instance
+   * random, so a species holds for a couple of hundred metres and the forest
+   * reads as *stands* — a bank of thicket, then a rise of tall broadleaf —
+   * instead of a uniform salad of every species the zone allows.
+   */
   treeSpecies(x, z) {
-    const m = this.moisture(x, z);
-    const v = this.nGrove.simplex2(x * 0.004 + 11, z * 0.004 - 7);
-    if (m < 0.34) return 'dead';
-    if (m < 0.52) return v > 0.1 ? 'savanna' : 'dead';
-    if (m > 0.74) return v > -0.15 ? 'conifer' : 'broadleaf';
-    return v > 0 ? 'broadleaf' : 'savanna';
+    const b = vegAt(x, z);
+    const r = THREE.MathUtils.clamp(
+      this.nGrove.simplex2(x * 0.0022 + 11, z * 0.0022 - 7) * 0.62 + 0.5, 0, 0.9999);
+    return pickFrom(b.treeTable, r) || 'broadleaf';
   }
 
   // ------------------------------------------------------------------ colour
@@ -392,14 +515,23 @@ export class Ecology {
    * {@link wetness} picks out.
    */
   grassColor(x, z, out = new THREE.Color()) {
-    const m = this.wetness(x, z);
+    const b = vegAt(x, z);
+    const m = this.wetness(x, z) + b.wetBias;
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
-    out.copy(C_GRASS_DRY).lerp(C_GRASS_MID, THREE.MathUtils.smoothstep(m, 0.34, 0.7));
-    out.lerp(C_GRASS_LUSH, THREE.MathUtils.smoothstep(m, 0.7, 0.97));
+    // Leide keeps its authored straw/olive ramp; a forest zone brings its own
+    // pair of ends, so the Nebulawood's dry end is already darker and greener
+    // than Leide's lush end.
+    out.copy(b.dryC).lerp(b.lushC, THREE.MathUtils.smoothstep(m, 0.22, 0.86));
     const k = 0.86 + v * 0.3;
     out.setRGB(out.r * k, out.g * (k * 0.98 + 0.02), out.b * k);
     return out;
   }
+
+  /** Height multiplier for the grass field: ankle tuft .. waist-high reed. */
+  grassScale(x, z) { return vegAt(x, z).grassH; }
+
+  /** Fraction of tufts that are last season's, bleached whatever the ground does. */
+  grassDead(x, z) { return vegAt(x, z).grassDead; }
 
   // ------------------------------------------------------------ distribution
 

@@ -198,7 +198,11 @@ export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4) {
     }
     // a grass field is thousands of overlapping cards, so a card that has
     // shrunk below a few pixels can dissolve without leaving a hole
-  }, { alphaRef, tinyFade: 0.82 }));
+    // A grass field is thousands of overlapping cards, so a card that has been
+    // foreshortened to a sliver — which is what an elevated camera does to a
+    // vertical quad forty metres out — can dissolve without leaving a hole.
+    // Holding its coverage instead is what let it stamp a solid rectangle.
+  }, { alphaRef, tinyFade: 0.62 }));
 }
 
 /** Leafy canopy card — a mass of small leaves, used on tree branch tips. */
@@ -231,10 +235,14 @@ export function leafClusterTex(kind = 'broad') {
         const rx = s * rng.range(0.028, 0.062);
         const ry = rx * rng.range(1.5, 2.5);
         // sun-bleached, slightly desaturated foliage — never candy green
-        const g = kind === 'dry' ? 116 + shade * 54 : 60 + shade * 74;
+        // Sun-bleached and desaturated, never candy green. The old ratios
+        // (0.78, 1, 0.52) are a *chroma* the instance tint cannot undo — it can
+        // only scale each channel, so a saturated texel stays saturated however
+        // dark it is made, and every forest in the world came out lime.
+        const g = kind === 'dry' ? 116 + shade * 54 : 66 + shade * 62;
         const col = kind === 'dry'
-          ? `rgba(${g * 1.1 | 0},${g | 0},${g * 0.6 | 0},1)`
-          : `rgba(${g * 0.78 | 0},${g | 0},${g * 0.52 | 0},1)`;
+          ? `rgba(${g * 1.06 | 0},${g | 0},${g * 0.66 | 0},1)`
+          : `rgba(${g * 0.87 | 0},${g | 0},${g * 0.70 | 0},1)`;
         ctx.fillStyle = col;
         ctx.beginPath();
         ctx.moveTo(0, -ry);
@@ -357,6 +365,164 @@ export function bakeTreeImpostor(renderer, src, size = 256) {
   woodMat.dispose();
   if (leafMat) leafMat.dispose();
   return tex;
+}
+
+/**
+ * Bake a *stand* of trees into one card — the far-distance forest LOD.
+ *
+ * A closed canopy at 8 km scale cannot be individual billboards: the Nebulawood
+ * alone is a square kilometre of continuous cover, which is tens of thousands
+ * of trees. Past a few hundred metres a tree is smaller than the cluster it
+ * belongs to, so the right primitive is the *clump*, not the tree. This bakes
+ * four to six jittered copies of the real geometry into one 45 m card, and the
+ * far ring then draws one of those per ~50 m cell — a kilometre of forest for
+ * a couple of thousand triangles.
+ *
+ * @param {THREE.WebGLRenderer} renderer
+ * @param {{wood:THREE.BufferGeometry, leaves:THREE.BufferGeometry|null,
+ *          woodMap:THREE.Texture, woodColor:number, leafMap:THREE.Texture,
+ *          height:number, radius:number}} src one variant of the species
+ * @param {{count?:number, spread?:number, size?:number, seed?:number}} opts
+ * @returns {{tex:THREE.DataTexture, width:number, height:number}}
+ */
+export function bakeCanopyCard(renderer, src, opts = {}) {
+  const { count = 5, spread = 2.1, size = 384, seed = 991 } = opts;
+  const rng = new Rng(seed);
+  const rt = new THREE.WebGLRenderTarget(size, size, {
+    samples: 4, depthBuffer: true, stencilBuffer: false,
+  });
+  rt.texture.colorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  const woodMat = new THREE.MeshBasicMaterial({ map: src.woodMap, color: src.woodColor });
+  const leafMat = src.leaves ? new THREE.MeshBasicMaterial({
+    map: src.leafMap, color: 0xffffff, vertexColors: true,
+    alphaTest: 0.45, side: THREE.DoubleSide,
+  }) : null;
+
+  const halfW = src.radius * spread * 1.35;
+  let top = 0;
+  for (let i = 0; i < count; i++) {
+    // spread across the card in X, jittered in depth, and staggered in height
+    // so the top edge is a ragged canopy line rather than a hedge
+    const t = count === 1 ? 0.5 : i / (count - 1);
+    const x = (t - 0.5) * halfW * 1.72 + rng.gauss(0, src.radius * 0.28);
+    const z = rng.range(-1, 1) * src.radius * 1.2;
+    const s = rng.range(0.72, 1.18);
+    const add = (geo, mat) => {
+      if (!geo) return;
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, 0, z);
+      m.rotation.y = rng.next() * Math.PI * 2;
+      m.scale.setScalar(s);
+      scene.add(m);
+    };
+    add(src.wood, woodMat);
+    add(src.leaves, leafMat);
+    top = Math.max(top, src.height * s);
+  }
+  top *= 1.03;
+
+  const cam = new THREE.OrthographicCamera(-halfW, halfW, top, 0, -900, 900);
+  cam.position.set(0, 0, 420);
+  cam.lookAt(0, 0, 0);
+
+  const prevTarget = renderer.getRenderTarget();
+  const prevClear = new THREE.Color();
+  renderer.getClearColor(prevClear);
+  const prevAlpha = renderer.getClearAlpha();
+
+  renderer.setRenderTarget(rt);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clear(true, true, false);
+  renderer.render(scene, cam);
+
+  const buf = new Uint8Array(size * size * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, size, size, buf);
+  renderer.setRenderTarget(prevTarget);
+  renderer.setClearColor(prevClear, prevAlpha);
+
+  for (let i = 0; i < buf.length; i += 4) {
+    const a = buf[i + 3];
+    if (a > 0 && a < 255) {
+      const k = 255 / a;
+      buf[i] = Math.min(255, buf[i] * k);
+      buf[i + 1] = Math.min(255, buf[i + 1] * k);
+      buf[i + 2] = Math.min(255, buf[i + 2] * k);
+    }
+  }
+
+  const tex = new THREE.DataTexture(buf, size, size, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = 8;
+  withAlphaMips(tex, buf, size, 0.4);
+
+  rt.dispose();
+  woodMat.dispose();
+  if (leafMat) leafMat.dispose();
+  return { tex, width: halfW * 2, height: top };
+}
+
+/**
+ * Flat, translucent leaf mass seen from *above* — lily pads, forest-floor leaf
+ * drift. Drawn as overlapping ellipses with a notch, so a raft of them reads
+ * as pads rather than a green stain.
+ */
+export function padTex() {
+  return memo('pad', () => alphaTex(128, (ctx, s) => {
+    const rng = new Rng(6301);
+    for (let i = 0; i < 9; i++) {
+      const r = s * rng.range(0.13, 0.24);
+      const x = s * 0.5 + rng.gauss(0, s * 0.19);
+      const y = s * 0.5 + rng.gauss(0, s * 0.19);
+      const a = rng.next() * Math.PI * 2;
+      const g = 74 + rng.range(0, 46);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.fillStyle = `rgba(${g * 0.62 | 0},${g | 0},${g * 0.46 | 0},1)`;
+      ctx.beginPath();
+      // a pad with the classic wedge cut out of it
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r, 0.34, Math.PI * 2 - 0.34);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${g * 0.42 | 0},${g * 0.72 | 0},${g * 0.34 | 0},1)`;
+      ctx.lineWidth = s * 0.006;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, { alphaRef: 0.35, tinyFade: 0.9 }));
+}
+
+/**
+ * A stand of tall marsh reeds: near-vertical, whippy, seed heads on top.
+ * Deliberately narrow so a card reads as a dozen stems, not a bush.
+ */
+export function reedTex() {
+  return memo('reed', () => alphaTex(256, (ctx, s) => {
+    const rng = new Rng(4471);
+    for (let i = 0; i < 34; i++) {
+      const x = s * 0.5 + rng.gauss(0, s * 0.16);
+      const len = s * rng.range(0.62, 0.99);
+      const w = s * rng.range(0.005, 0.011);
+      const lean = rng.gauss(0, 0.34);
+      const dark = 86 + rng.range(0, 26);
+      const lite = 158 + rng.range(0, 54);
+      blade(ctx, x, s * 0.995, len, w, lean,
+        `rgba(${dark * 0.82 | 0},${dark | 0},${dark * 0.6 | 0},1)`,
+        `rgba(${lite * 0.94 | 0},${lite | 0},${lite * 0.66 | 0},1)`);
+      // seed head on the taller stems
+      if (rng.next() < 0.4) {
+        const hx = x + lean * len, hy = s * 0.995 - len;
+        ctx.fillStyle = `rgba(${lite * 0.86 | 0},${lite * 0.74 | 0},${lite * 0.46 | 0},1)`;
+        ctx.beginPath();
+        ctx.ellipse(hx, hy + s * 0.03, s * 0.011, s * 0.045, lean * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, { alphaRef: 0.38, tinyFade: 0.85 }));
 }
 
 /** Bark albedo + normal, shared by every woody thing. */

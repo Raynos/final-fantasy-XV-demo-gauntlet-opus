@@ -147,10 +147,23 @@ vec3 vegClearance(vec3 o, float f, float h, float strength) {
  *   1 lays a blade fully flat inside the core radius
  * @param {number} opts.translucency  backlit leaf glow (0 disables)
  * @param {number} opts.flexPow   how sharply stiffness ramps toward the tip
+ * @param {number} opts.specular  multiplier on both specular lobes, 0..1.
+ *
+ *   `specular` is not a taste knob, it is a bug fix. An alpha card carries a
+ *   deliberately wrong, near-vertical *up* normal so the foliage lights softly.
+ *   Give that normal a dielectric specular lobe and, seen from a camera above
+ *   the ground, its reflection vector lands squarely on the sky — so every card
+ *   mirrors the sky colour at 4 % and a field of them comes out as blue-white
+ *   flakes over brown ground. That is exactly the "blue-white speckle" two
+ *   agents reported in Malmalam and the Nebulawood: proved by re-rendering the
+ *   clump ring with a *black* albedo, which changed the flake count by 0.6 %.
+ *   Real foliage at 30 m has no coherent specular to speak of, so the honest
+ *   value for a card is ~0.
  */
 export function patchVeg(mat, {
   bend = 0.35, flutter = 0.25, gustFreq = 0.055, trample = 0,
   translucency = 0, flexPow = 1.7, aoBoost = 0, twoSidedNormals = false,
+  specular = 1,
 } = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = VegUniforms.uTime;
@@ -160,6 +173,28 @@ export function patchVeg(mat, {
     shader.uniforms.uActors = VegUniforms.uActors;
     shader.uniforms.uActorCount = VegUniforms.uActorCount;
 
+    // The sway is folded back into `transformed` — the pre-instance object
+    // vertex — instead of being post-multiplied onto `mvPosition`.
+    //
+    // This is not a tidy-up. Overriding `<project_vertex>` *consumes the
+    // include marker*, and `world/sky/MaterialPatch.js` gets its turn after us
+    // and finds nothing to replace: the `vAtmWorld` varying its aerial
+    // perspective and cloud shadows both read is then declared and never
+    // written. An unwritten varying reads as zero, so every leaf and every
+    // grass card computed its distance to the eye as the distance from the
+    // *world origin*, and any vegetation more than a kilometre from Hammerhead
+    // came out flooded to 100 % sky inscatter — flat blue-white cards over
+    // brown ground. That is the "blue-white speckle" reported in Malmalam and
+    // the Nebulawood, and the reason it went unreported at Hammerhead is that
+    // there `length(cameraPosition)` really is nearly zero. Leaving the include
+    // alone lets three, CSM and the atmosphere all see the displaced vertex.
+    //
+    // Inverting the instance basis is exact for any translate-rotate-scale
+    // instance matrix, uniform scale or not: column i of an R*S matrix is
+    // s_i * R_i, so dot(v, c_i) / dot(c_i, c_i) is (R_i . v) / s_i, which is
+    // precisely the i-th component of S^-1 * R^T * v. The meshes themselves sit
+    // at the scene root with an identity transform, so world and model space
+    // coincide and no modelMatrix inverse is needed.
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>',
         `#include <common>\n#define VEG_ACTOR_MAX ${VEG_ACTOR_MAX}\n${COMMON}`)
@@ -178,24 +213,16 @@ export function patchVeg(mat, {
           vegHeight = max((instanceMatrix * vec4(transformed, 1.0)).y - vegInstOrigin.y, 0.0);
         #endif
         ${trample > 0 ? `vegOff += vegClearance(vegOrigin, vFlexOut, vegHeight, ${trample.toFixed(3)});` : ''}
-      `)
-      .replace('#include <project_vertex>', /* glsl */`
-        vec4 mvPosition = vec4(transformed, 1.0);
         #ifdef USE_INSTANCING
-          mvPosition = instanceMatrix * mvPosition;
-        #endif
-        mvPosition.xyz += vegOff;
-        mvPosition = modelViewMatrix * mvPosition;
-        gl_Position = projectionMatrix * mvPosition;
-      `)
-      .replace('#include <worldpos_vertex>', /* glsl */`
-        #if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || NUM_SPOT_LIGHT_COORDS > 0
-          vec4 worldPosition = vec4(transformed, 1.0);
-          #ifdef USE_INSTANCING
-            worldPosition = instanceMatrix * worldPosition;
-          #endif
-          worldPosition.xyz += vegOff;
-          worldPosition = modelMatrix * worldPosition;
+          vec3 vegC0 = instanceMatrix[0].xyz;
+          vec3 vegC1 = instanceMatrix[1].xyz;
+          vec3 vegC2 = instanceMatrix[2].xyz;
+          transformed += vec3(
+            dot(vegOff, vegC0) / max(dot(vegC0, vegC0), 1e-8),
+            dot(vegOff, vegC1) / max(dot(vegC1, vegC1), 1e-8),
+            dot(vegOff, vegC2) / max(dot(vegC2, vegC2), 1e-8));
+        #else
+          transformed += vegOff;
         #endif
       `);
 
@@ -212,11 +239,15 @@ export function patchVeg(mat, {
         `);
     }
 
-    if (translucency > 0 || aoBoost > 0) {
+    if (translucency > 0 || aoBoost > 0 || specular < 1) {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vFlexOut;')
         .replace('#include <lights_fragment_end>', /* glsl */`
           #include <lights_fragment_end>
+          ${specular < 1 ? `
+          reflectedLight.directSpecular *= ${specular.toFixed(3)};
+          reflectedLight.indirectSpecular *= ${specular.toFixed(3)};
+          ` : ''}
           #if ( NUM_DIR_LIGHTS > 0 ) && ${translucency > 0 ? 1 : 0}
             {
               vec3 V = geometryViewDir;
@@ -243,7 +274,7 @@ export function patchVeg(mat, {
   };
   // force a distinct program so patched/unpatched variants don't collide
   mat.customProgramCacheKey = () =>
-    `veg${bend}|${flutter}|${trample}|${translucency}|${flexPow}|${aoBoost}|${twoSidedNormals}`;
+    `veg${bend}|${flutter}|${trample}|${translucency}|${flexPow}|${aoBoost}|${twoSidedNormals}|${specular}`;
   return mat;
 }
 
