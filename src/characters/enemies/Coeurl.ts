@@ -452,23 +452,23 @@ const mix = mixc;
 const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
-  anim!: any;
-  attackId!: any;
-  moveSpeed!: any;
-  rig!: any;
-  speed!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override anim!: any;
+  override attackId!: any;
+  override moveSpeed!: any;
+  override rig!: any;
+  override speed!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(COEURL, opts); }
 
-  telegraphScale() {
+  override telegraphScale() {
     if (this.attackId === 'pounce') return 1.25;
     if (this.attackId === 'blaster') return 0.55;
     return 0.7;
   }
 
-  leapScale() { return this.attackId === 'pounce' ? 1.0 : 0.25; }
+  override leapScale() { return this.attackId === 'pounce' ? 1.0 : 0.25; }
 
   /**
    * Drive both whisker chains.
@@ -510,7 +510,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
    * the whiskers swing *forward* into a V pointing down the firing line while
    * the charge builds visibly along them. Nothing else it does looks like this.
    */
-  poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: any) {
     if (this.attackId !== 'blaster') {
       super.poseTelegraph(S, t);
       this.whiskers(S, -0.35, 0.2, 0.05, t);
@@ -533,7 +533,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.tail(t, 0.30 * k, 0.06, 3);
   }
 
-  poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: any) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'blaster') {
@@ -583,28 +583,28 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.whiskers(S, -0.8 * clamp01(-k) - 0.2, 0.35, 0.10, t);
   }
 
-  poseLocomotion(S: any, t: any) {
+  override poseLocomotion(S: any, t: any) {
     super.poseLocomotion(S, t);
     const norm = clamp01((this.moveSpeed || 0) / this.speed);
     this.whiskers(S, -0.25 - norm * 0.45, 0.15, 0.08 + norm * 0.10, t);
   }
 
-  poseIdle(S: any, t: any) {
+  override poseIdle(S: any, t: any) {
     super.poseIdle(S, t);
     this.whiskers(S, 0, 0.10, 0.09, t);
   }
 
-  poseFlinch(S: any, t: any) {
+  override poseFlinch(S: any, t: any) {
     super.poseFlinch(S, t);
     this.whiskers(S, -0.2, 0.5, 0.30, t);
   }
 
-  poseStagger(S: any, t: any) {
+  override poseStagger(S: any, t: any) {
     super.poseStagger(S, t);
     this.whiskers(S, -0.4, 0.7, 0.22, t);
   }
 
-  poseDeath(S: any, t: any) {
+  override poseDeath(S: any, t: any) {
     super.poseDeath(S, t);
     // the charge gutters out and the whiskers go limp
     const slack = smooth(clamp01(this.stateTime / 0.45));

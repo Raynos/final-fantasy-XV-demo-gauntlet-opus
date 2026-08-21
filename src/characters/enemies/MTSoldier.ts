@@ -439,14 +439,14 @@ function weather(geo: any, amount = 1) {
 }
 
 class MTSoldierEnemy extends BipedEnemy {
-  attackId!: any;
-  deathPush!: any;
-  deathSide!: any;
+  override attackId!: any;
+  override deathPush!: any;
+  override deathSide!: any;
   recoil!: any;
-  rig!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override rig!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(MT_SOLDIER, opts); }
 
   /** Muzzle in world space — the beam origin for `volley`. */
@@ -462,7 +462,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * stiffness is the point: it is the one enemy in the game that is obviously
    * not alive, and the gait has to say so before the model does.
    */
-  poseArms(S: any, t: any, swing: any, norm: any) {
+  override poseArms(S: any, t: any, swing: any, norm: any) {
     // Port arms. The weapon hangs off the right hand pointing along the hand's
     // local +Z, so the muzzle angle is just the *sum* of the shoulder and
     // elbow pitches — bending the elbow the same way as the shoulder points
@@ -485,7 +485,7 @@ class MTSoldierEnemy extends BipedEnemy {
       [1.02 * k + 0.30 * (1 - k) - kick * 0.16, 0, 0], [0, 0, 0]);
   }
 
-  poseWindUp(S: any, t: any, k: any, env: any) {
+  override poseWindUp(S: any, t: any, k: any, env: any) {
     const bayonet = this.attackId === 'bayonet';
     if (bayonet) {
       // shoulder the weapon back and drop into a lunge stance
@@ -504,7 +504,7 @@ class MTSoldierEnemy extends BipedEnemy {
     this.aim(S, k);
   }
 
-  poseSwing(S: any, t: any, k: any, env: any) {
+  override poseSwing(S: any, t: any, k: any, env: any) {
     const bayonet = this.attackId === 'bayonet';
     const kp = clamp01(k);
     if (bayonet) {
@@ -541,7 +541,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * limbs go slack in a different order from a living body, and the whole
    * thing goes over rigid, like dropped furniture.
    */
-  poseDeath(S: any, t: any) {
+  override poseDeath(S: any, t: any) {
     const A = this.A;
     const T = this.stateTime;
     const seize = Math.exp(-T * 9) * Math.sin(T * 60) * 0.10;      // the last spasm

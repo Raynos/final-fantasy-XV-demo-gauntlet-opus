@@ -20,6 +20,13 @@ import { clamp, smoothstep } from './Build.ts';
  *   regionAt(x, z) -> Room|Corridor|null
  */
 export class Layout {
+  chests!: any[];
+  doors!: any[];
+  encounters!: any[];
+  hazards!: any[];
+  lamps!: any[];
+  props!: any[];
+  rooms!: Map<any, any>;
   _critical!: any[];
   corridorHeight!: any;
   corridorWidth!: any;

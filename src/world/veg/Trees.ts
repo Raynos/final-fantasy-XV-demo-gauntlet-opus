@@ -134,6 +134,7 @@ function billboardGeo(width: any, height: any) {
 }
 
 export class Trees {
+  tiles!: Map<any, any>;
   _deadline!: number;
   _last!: THREE.Vector3;
   _pending!: boolean;

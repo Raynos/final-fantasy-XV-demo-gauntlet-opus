@@ -9,7 +9,7 @@ import { CHUNK_HASH } from '../../shaders/post/common.ts';
  */
 export class CasPass extends FilterPass {
   dither!: number;
-  material!: any;
+  override material!: any;
   sharpness!: number;
   constructor(fx: any) {
     super(fx);
@@ -55,9 +55,9 @@ export class CasPass extends FilterPass {
     });
   }
 
-  setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  override setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
-  beforeRender() {
+  override beforeRender() {
     this.material.uniforms.uSharpness.value = this.sharpness;
     this.material.uniforms.uDither.value = this.dither;
   }

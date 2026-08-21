@@ -33,6 +33,7 @@ const DPR_CAP = 2;
 const RANGE_STEPS = [140, 260, 480, 900];
 
 export class Minimap {
+  _onResize!: any;
   _a!: number;
   _discAt!: any;
   _flash!: any;
@@ -285,7 +286,7 @@ export class Minimap {
     // ---- party and hostiles ----
     c.save();
     c.translate(R, R);
-    const blip = (wx: any, wz: any, col: any, rad: any, ring: any) => {
+    const blip = (wx: any, wz: any, col: any, rad: any, ring?: any) => {
       const gx = lx(wx, wz), gy = ly(wx, wz);
       if (Math.hypot(gx, gy) > R - 5 * dpr) return;
       if (ring) {

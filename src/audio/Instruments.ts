@@ -16,6 +16,7 @@ import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.
  * source's `onended`. Nothing here holds a reference after the note dies.
  */
 export class Instruments {
+  _plucks!: Map<any, any>;
   ctx!: any;
   graph!: any;
   noise!: any;

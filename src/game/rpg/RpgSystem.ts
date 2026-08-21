@@ -72,6 +72,8 @@ const STARTER_QUESTS = {
 };
 
 export class RpgSystem {
+  _newGameAp!: any;
+  party!: PartyState;
   _autosaveTimer!: number;
   _newGameGil!: any;
   _newGameLevel!: any;

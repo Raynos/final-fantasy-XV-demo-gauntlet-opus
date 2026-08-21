@@ -14,7 +14,7 @@ export class PartBuilder {
    * @param geo consumed (cloned internally when transformed)
    * @param matrix optional transform
    */
-  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix: THREE.Matrix4 | null) {
+  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4 | null) {
     const g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
     // normalise attributes so merges never fail on a stray extra buffer
     const keep = ['position', 'normal', 'uv'];

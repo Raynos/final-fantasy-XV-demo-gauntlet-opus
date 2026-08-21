@@ -315,6 +315,8 @@ void main() {
  * composites, plus a tiling ground-shadow bake that every lit surface samples.
  */
 export class Clouds {
+  renderer!: any;
+  textures!: any;
   _marchQuad!: FullScreenQuad;
   _shadowQuad!: FullScreenQuad;
   marchUniforms!: any;

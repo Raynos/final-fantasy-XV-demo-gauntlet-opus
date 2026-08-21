@@ -24,6 +24,7 @@ import { Dropship } from './Dropship.ts';
  *   `encounter:warn`    {text}  — the "something is coming" beat
  */
 export class EncounterDirector {
+  active!: Map<any, any>;
   _clearTimer!: number;
   _hits!: any[];
   _offDamage!: any;

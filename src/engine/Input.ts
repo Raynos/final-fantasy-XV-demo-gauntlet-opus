@@ -22,6 +22,9 @@ import * as THREE from 'three';
  *    leaving the player looking at a live world with a dead mouse.
  */
 export class Input {
+  _onKeyDown!: any;
+  keys!: Set<any>;
+  pointerLockAllowed!: boolean;
   _gpPrev!: any[];
   _onCtx!: any;
   _onKeyUp!: any;

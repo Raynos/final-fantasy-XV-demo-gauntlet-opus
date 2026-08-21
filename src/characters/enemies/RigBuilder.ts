@@ -11,6 +11,7 @@ import { mergeCreature } from '../rig/Sculpt.ts';
  * while still animating limb by limb.
  */
 export class Rig {
+  bones!: any[];
   _world!: Map<any, any>;
   byName!: Map<any, any>;
   group!: any;

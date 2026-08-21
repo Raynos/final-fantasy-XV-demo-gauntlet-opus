@@ -306,6 +306,7 @@ export function buildExitVestibule(parent: any, rig: any, { x, y, z, facing = 0,
  * from the UI so a dungeon transition never depends on another system existing.
  */
 export class Fader {
+  _onBlack!: any;
   el!: any;
   speed!: number;
   target!: number;

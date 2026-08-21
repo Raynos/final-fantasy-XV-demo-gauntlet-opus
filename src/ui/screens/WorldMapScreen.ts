@@ -70,6 +70,9 @@ const ATLAS_BOX = { x: Math.round((1600 - BOX.h) / 2), y: BOX.y, w: BOX.h, h: BO
 const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
 export class WorldMapScreen {
+  _drag!: any;
+  _onResize!: any;
+  card!: any;
   _a!: number;
   _cardKey!: string;
   _cursor!: any;
@@ -326,7 +329,7 @@ export class WorldMapScreen {
    * cursor while the chart grows or shrinks around it.
    * @param dir -1 out, +1 in
    */
-  zoomBy(dir: number, ax: any, az: any) {
+  zoomBy(dir: number, ax?: any, az?: any) {
     const i = clamp(this.zoomI + dir, 0, ZOOMS.length - 1);
     if (i === this.zoomI) return;
     const k = this.zoom / ZOOMS[i];

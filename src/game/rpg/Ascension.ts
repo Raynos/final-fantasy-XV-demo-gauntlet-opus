@@ -287,6 +287,7 @@ export const EDGES = (() => {
  * bundle. Emits `node-unlocked` and `ap-gained` through the injected emitter.
  */
 export class Ascension {
+  unlocked!: Set<any>;
   _cooldowns!: any;
   _distance!: any;
   _effectsCache!: any;

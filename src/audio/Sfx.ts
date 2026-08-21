@@ -262,6 +262,7 @@ class Shot {
 /* ------------------------------------------------------------------------ */
 
 export class Sfx {
+  played!: number;
   _recent!: Map<any, any>;
   brown!: any;
   ctx!: any;

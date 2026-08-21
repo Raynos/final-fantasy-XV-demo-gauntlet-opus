@@ -18,6 +18,7 @@ import { CHUNK_COLOR } from '../../shaders/post/common.ts';
  * the band the integrator would happily expose midnight as noon.
  */
 export class Exposure {
+  _reset!: boolean;
   adapt!: any;
   adaptMat!: any;
   base!: number;

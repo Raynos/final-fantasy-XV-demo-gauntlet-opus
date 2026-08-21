@@ -20,6 +20,7 @@ import { DungeonMap } from './DungeonMap.ts';
  * `dispose()` gives all of it back.
  */
 export class Dungeon {
+  built!: boolean;
   def!: any;
   discovered!: Set<any>;
   game!: any;

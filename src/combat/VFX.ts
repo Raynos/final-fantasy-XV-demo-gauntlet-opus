@@ -30,6 +30,9 @@ const C = new THREE.Color();
  * slicing through it.
  */
 export class VFX {
+  _tracks!: any[];
+  airRings!: ParticleSystem;
+  flares!: ParticleSystem;
   _beamNext!: number;
   _depthSize!: THREE.Vector2;
   _postPatched!: boolean;

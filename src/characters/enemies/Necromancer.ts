@@ -256,10 +256,10 @@ function buildPrototype() {
 }
 
 class NecromancerEnemy extends Enemy {
-  attackId!: any;
-  rig!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override rig!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(NECROMANCER, opts); }
 
   /** Height it floats at right now — never zero, it has no feet. */
@@ -280,7 +280,7 @@ class NecromancerEnemy extends Enemy {
     }
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

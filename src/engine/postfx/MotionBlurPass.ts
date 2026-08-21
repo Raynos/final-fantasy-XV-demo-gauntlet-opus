@@ -12,9 +12,10 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  * background sharp behind a moving object instead of smearing the whole frame.
  */
 export class MotionBlurPass extends FilterPass {
+  _enabled!: boolean;
   _wanted!: boolean;
-  fx!: any;
-  material!: any;
+  override fx!: any;
+  override material!: any;
   maxRadius!: number;
   samples!: number;
   shutter!: number;
@@ -106,9 +107,9 @@ export class MotionBlurPass extends FilterPass {
    * debug flag both write it. The pass keeps that intent separately from the
    * per-frame decision below, so turning it off by hand stays off.
    */
-  get enabled() { return this._enabled; }
+  override get enabled() { return this._enabled; }
 
-  set enabled(v) { this._wanted = v; this._enabled = v; }
+  override set enabled(v) { this._wanted = v; this._enabled = v; }
 
   /**
    * Skip the pass on a frame with no motion at all.
@@ -122,12 +123,12 @@ export class MotionBlurPass extends FilterPass {
    */
   setMoving(moving: boolean) { this._enabled = this._wanted && moving; }
 
-  setSize(w: any, h: any) {
+  override setSize(w: any, h: any) {
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.material.uniforms.uResolution.value.set(w, h);
   }
 
-  beforeRender() {
+  override beforeRender() {
     const fx = this.fx, u = this.material.uniforms;
     u.tVelocity.value = fx.rtVel.texture;
     u.tDepth.value = fx.rtScene.depthTexture;

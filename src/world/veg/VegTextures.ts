@@ -179,7 +179,7 @@ function normalizeAlbedo(data: Uint8Array, target: number): number {
 }
 
 /** Apply the hand-built mip chain to an RGBA DataTexture. */
-function withAlphaMips(tex: any, data: any, size: any, alphaRef: any, tinyFade: any) {
+function withAlphaMips(tex: any, data: any, size: any, alphaRef: any, tinyFade?: any) {
   tex.mipmaps = buildAlphaMips(data, size, alphaRef, tinyFade);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearMipmapLinearFilter;

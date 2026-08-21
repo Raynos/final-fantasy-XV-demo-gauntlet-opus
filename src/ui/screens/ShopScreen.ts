@@ -62,6 +62,8 @@ function effectOf(def: any) {
 const MAX_ROWS = 14;
 
 export class ShopScreen {
+  _rows!: any;
+  shopId!: string;
   _age!: number;
   _cur!: any;
   _msg!: any;

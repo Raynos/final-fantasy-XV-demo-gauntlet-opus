@@ -24,6 +24,7 @@ import './dev.css';
  * way `TitleScreen` owns `#title`.
  */
 class DevSuite {
+  _toastT!: any;
   _inputWas!: any;
   _scale!: any;
   _tainted!: any;

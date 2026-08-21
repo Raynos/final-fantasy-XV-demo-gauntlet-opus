@@ -25,6 +25,8 @@ import { ACTIONS } from '../characters/rig/Anim.ts';
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
 export class AssetBrowser {
+  _weaponObj!: any;
+  familyAt!: number;
   _char!: any;
   _made!: any;
   _npcBody!: any;

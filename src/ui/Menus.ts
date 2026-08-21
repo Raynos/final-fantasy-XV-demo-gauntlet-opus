@@ -70,6 +70,7 @@ const FOOT = {
  * the latter toggle: press again (or Tab / Backspace / B) to close.
  */
 export class Menus {
+  _inputWas!: boolean;
   _foot!: any;
   _gpPrev!: any;
   _lockHeld!: boolean | null;

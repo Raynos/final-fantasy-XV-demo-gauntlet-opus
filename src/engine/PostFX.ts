@@ -49,6 +49,8 @@ const LIGHT_BUDGET = {
  *   post.resetHistory()
  */
 export class PostFX {
+  focusDistance!: number;
+  focusTarget!: any;
   _focusGoal!: number;
   _halton!: any;
   _head!: any;

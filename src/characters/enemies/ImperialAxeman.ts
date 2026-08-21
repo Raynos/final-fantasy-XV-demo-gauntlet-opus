@@ -250,10 +250,10 @@ function buildPrototype() {
 }
 
 class AxemanEnemy extends Enemy {
-  attackId!: any;
-  rig!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override rig!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(IMPERIAL_AXEMAN, opts); }
 
   /** World-space axe tip — the sweep origin for the cleave trail. */
@@ -264,7 +264,7 @@ class AxemanEnemy extends Enemy {
     return out.set(0.0, 1.32, 0.53).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

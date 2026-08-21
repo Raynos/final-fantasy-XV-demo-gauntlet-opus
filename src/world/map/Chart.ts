@@ -70,6 +70,8 @@ const LIGHT = [252, 240, 214];
  * source data other map layers reuse.
  */
 export class Chart {
+  height!: any;
+  water!: any;
   canvas!: any;
   ms!: any;
   ppm!: any;
@@ -117,7 +119,7 @@ let _chartFor: any = null;
  * terrain — three separate map surfaces ask for it and only one gets baked.
  * @param terrain the live `Terrain` system
  */
-export function getChart(terrain: any, opt: any): Chart {
+export function getChart(terrain: any, opt?: any): Chart {
   if (_chart && _chartFor === terrain) return _chart;
   _chart = bakeChart(terrain, opt);
   _chartFor = terrain;

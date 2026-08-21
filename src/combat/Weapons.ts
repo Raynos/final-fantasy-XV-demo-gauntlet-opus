@@ -730,6 +730,8 @@ export function makeWeaponMaterial() {
  * `root` is parented to the wielder's hand transform by the combat system.
  */
 export class Weapon {
+  _base!: THREE.Vector3;
+  _tip!: THREE.Vector3;
   baseLocal!: THREE.Vector3;
   def!: any;
   geometry!: any;

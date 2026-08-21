@@ -39,6 +39,10 @@ import { BANTER } from './GameData.ts';
  * `ffxv-banter`, `ffxv-hit`.
  */
 export class HUD {
+  _banterAt!: number;
+  _banterN!: any;
+  hints!: Hints;
+  toasts!: Toasts;
   _onResize!: any;
   bridge!: HudBridge;
   combat!: CombatHUD;

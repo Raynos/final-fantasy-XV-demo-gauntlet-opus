@@ -38,6 +38,9 @@ function engineCurve(v: any, maxForce: any, vMax: any) {
 }
 
 export class VehicleBody {
+  _groundAvg!: number;
+  _groundMax!: any;
+  _right!: THREE.Vector3;
   _axPrev!: any;
   _fwd!: THREE.Vector3;
   _gy!: number[];

@@ -111,7 +111,7 @@ export class VelocityPass extends Pass {
     return proxy;
   }
 
-  render(renderer: any) {
+  override render(renderer: any) {
     const fx = this.fx;
     const rt = fx.rtVel;
     if (!rt) return;

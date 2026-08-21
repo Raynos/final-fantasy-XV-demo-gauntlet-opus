@@ -28,6 +28,7 @@ const MAX_ROWS = 16;
  * from `game.time`; no CSS transitions.
  */
 export class QuestScreen {
+  _rows!: any;
   _age!: number;
   _cur!: any;
   _msg!: any;

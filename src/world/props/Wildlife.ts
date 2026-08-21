@@ -133,6 +133,10 @@ function birdGeometry() {
 }
 
 export class Wildlife {
+  birds!: any;
+  insects!: any;
+  smoke!: any;
+  waders!: any;
   eco!: any;
   herd!: any;
   quality!: any;

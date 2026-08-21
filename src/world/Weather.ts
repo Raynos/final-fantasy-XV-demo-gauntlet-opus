@@ -61,6 +61,7 @@ function dawnFogBoost(hours: any) {
  *   rainIntensity                           0..1
  */
 export class Weather {
+  _snap!: boolean;
   _camPos!: THREE.Vector3;
   _dustCol!: THREE.Vector3;
   _fogCol!: THREE.Vector3;

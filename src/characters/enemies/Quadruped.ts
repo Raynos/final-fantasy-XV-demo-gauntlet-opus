@@ -31,24 +31,24 @@ export class QuadrupedEnemy extends Enemy {
   _bindPos!: Map<any, any>;
   _chestPitch!: number;
   _comp!: any;
-  _dt!: any;
+  override _dt!: any;
   _normV!: any;
   _normW!: any;
-  anim!: any;
-  deathSide!: any;
-  hitPower!: any;
-  id!: any;
-  moveSpeed!: any;
-  rig!: any;
-  speed!: any;
-  state!: any;
-  stateTime!: any;
-  type!: any;
-  visual!: any;
+  override anim!: any;
+  override deathSide!: any;
+  override hitPower!: any;
+  override id!: any;
+  override moveSpeed!: any;
+  override rig!: any;
+  override speed!: any;
+  override state!: any;
+  override stateTime!: any;
+  override type!: any;
+  override visual!: any;
   /** @returns tuning block; subclasses must define it. */
   get A(): any { return this.constructor.ANIM; }
 
-  setupAnim(anim: any) {
+  override setupAnim(anim: any) {
     const A = this.A;
     anim.setTrunk(A.trunk);
     for (const id of ['fL', 'fR', 'bL', 'bR']) if (A.legs[id]) anim.leg(id, A.legs[id]);
@@ -58,7 +58,7 @@ export class QuadrupedEnemy extends Enemy {
    * @param state legacy pose vocabulary
    * @param t phase seconds
    */
-  pose(state: string, t: number) {
+  override pose(state: string, t: number) {
     if (!this.rig) return;
     // The trunk compensation is only knowable once the trunk has been posed,
     // so it is per-frame state: cleared here, filled by `spine()`, consumed by

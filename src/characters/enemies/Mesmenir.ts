@@ -306,13 +306,13 @@ function buildPrototype() {
 const GALLOP = { bR: 0, bL: 0.63, fR: 2.51, fL: 3.14 };
 
 class MesmenirEnemy extends Enemy {
-  attackId!: any;
-  rig!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override rig!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(MESMENIR, opts); }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

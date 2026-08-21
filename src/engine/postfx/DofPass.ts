@@ -221,7 +221,7 @@ export class DofPass extends Pass {
     this.gather.needsUpdate = true;
   }
 
-  setSize(w: any, h: any) {
+  override setSize(w: any, h: any) {
     this.width = w; this.height = h;
     const hw = Math.max(1, Math.floor(w / 2)), hh = Math.max(1, Math.floor(h / 2));
     if (this.rtPre) { this.rtPre.dispose(); this.rtBlur.dispose(); }
@@ -232,7 +232,7 @@ export class DofPass extends Pass {
     this.composite.uniforms.uTexel.value.set(1 / hw, 1 / hh);
   }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     const fx = this.fx;
     const cam = fx.rnd.camera;
     // vertical FOV -> focal length on a full-frame sensor
@@ -259,7 +259,7 @@ export class DofPass extends Pass {
     blit(renderer, this.composite, this.renderToScreen ? null : writeBuffer);
   }
 
-  dispose() {
+  override dispose() {
     this.rtPre.dispose(); this.rtBlur.dispose();
     this.prefilter.dispose(); this.gather.dispose(); this.composite.dispose();
   }

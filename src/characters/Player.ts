@@ -21,6 +21,8 @@ import { CharacterController } from '../world/collision/CharacterController.ts';
 const WALK_SHOTS = new Set(['party_walk', 'hud_field', 'vista_dusk']);
 
 export class Player {
+  _gazeOn!: boolean;
+  _gazeT!: number;
   _fwd!: THREE.Vector3;
   _gait!: number;
   _gazeSeq!: any;

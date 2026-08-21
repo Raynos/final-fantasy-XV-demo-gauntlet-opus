@@ -19,6 +19,7 @@ import * as THREE from 'three';
  *   `encounter:retry`
  */
 export class Downed {
+  reviver!: any;
   _allyPotion!: Map<any, any>;
   _checkTimer!: number;
   _downPos!: THREE.Vector3;

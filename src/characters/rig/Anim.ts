@@ -205,6 +205,7 @@ class Spring {
 }
 
 export class Animator {
+  lookTarget!: any;
   _gestureSeq!: number;
   _up!: THREE.Vector3;
   accel!: THREE.Vector3;

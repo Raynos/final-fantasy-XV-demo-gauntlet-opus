@@ -6,6 +6,8 @@ import * as THREE from 'three';
  * interactive session adapts to the machine.
  */
 export class Renderer {
+  _onResize!: any;
+  onResize!: any;
   camera!: THREE.PerspectiveCamera;
   container!: any;
   isWebGL2!: any;

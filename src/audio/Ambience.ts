@@ -12,6 +12,7 @@ import { noiseBuffer, makeRng, clamp, EPS, hit } from './Dsp.ts';
  * the same ambience the live game does.
  */
 export class Ambience {
+  _nextCricket!: number;
   _nextBird!: number;
   _nextCreak!: number;
   _nextDrip!: number;

@@ -219,6 +219,7 @@ function recipeTags(recipe: any) {
  * `recipe-learned`, `meal-cooked`, `buff-applied` and `buff-expired`.
  */
 export class PartyState {
+  techBarBonus!: number;
   activeBuffs!: any[];
   bonuses!: any;
   cookingLevel!: number;

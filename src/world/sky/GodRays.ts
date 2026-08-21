@@ -97,9 +97,9 @@ export class GodRaysPass extends Pass {
     this._quad = new FullScreenQuad(this.raysMaterial);
   }
 
-  setSize(w: any, h: any) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
+  override setSize(w: any, h: any) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     if (this.compositeMaterial.uniforms.uIntensity.value <= 0.0005) {
       // pass through untouched
       this.compositeMaterial.uniforms.tDiffuse.value = readBuffer.texture;
@@ -123,7 +123,7 @@ export class GodRaysPass extends Pass {
     this._quad.render(renderer);
   }
 
-  dispose() {
+  override dispose() {
     this.rt.dispose();
     this.raysMaterial.dispose();
     this.compositeMaterial.dispose();

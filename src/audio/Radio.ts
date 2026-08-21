@@ -88,6 +88,9 @@ export const STATIONS: Station[] = [
 /* ------------------------------------------------------------------ radio */
 
 export class Radio {
+  _duck!: number;
+  _next!: number;
+  _noiseBuf!: any;
   _duckUntil!: number;
   _melodyRng!: Rng;
   _rng!: Rng;

@@ -185,6 +185,7 @@ function padGeometry(seed: any) {
 }
 
 export class Bushes {
+  tiles!: Map<any, any>;
   _deadline!: number;
   _last!: THREE.Vector3;
   _pending!: boolean;

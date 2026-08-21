@@ -474,12 +474,12 @@ function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
 }
 
 class SabertuskEnemy extends QuadrupedEnemy {
-  attackId!: any;
+  override attackId!: any;
   constructor(opts: any) { super(SABERTUSK, opts); }
 
   /** A pounce coils harder and leaves the ground; a bite barely does either. */
-  telegraphScale() { return this.attackId === 'pounce' ? 1.15 : 0.8; }
-  leapScale() { return this.attackId === 'pounce' ? 1.0 : 0.4; }
+  override telegraphScale() { return this.attackId === 'pounce' ? 1.15 : 0.8; }
+  override leapScale() { return this.attackId === 'pounce' ? 1.0 : 0.4; }
 }
 
 SabertuskEnemy.ANIM = {

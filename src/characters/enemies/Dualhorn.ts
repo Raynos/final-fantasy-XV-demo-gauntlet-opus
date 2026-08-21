@@ -402,21 +402,21 @@ const mix = mixc;
 const col = colc;
 
 class DualhornEnemy extends QuadrupedEnemy {
-  anim!: any;
-  attackId!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override anim!: any;
+  override attackId!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(DUALHORN, opts); }
 
-  telegraphScale() {
+  override telegraphScale() {
     // a charge paws the ground and coils low; a stomp rears instead
     if (this.attackId === 'charge') return 1.25;
     if (this.attackId === 'stomp') return -0.85;
     return 0.9;
   }
 
-  leapScale() { return this.attackId === 'stomp' ? 1.0 : 0.25; }
+  override leapScale() { return this.attackId === 'stomp' ? 1.0 : 0.25; }
 
   /**
    * The stomp rears — the only move in this animal's set that goes *up*, so
@@ -424,7 +424,7 @@ class DualhornEnemy extends QuadrupedEnemy {
    * `telegraphScale` already inverts the body drop; this adds the forelegs
    * leaving the ground and the head going back, which is the readable part.
    */
-  poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: any) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'stomp') {
       if (this.attackId === 'charge') {
@@ -450,7 +450,7 @@ class DualhornEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.10 * rear;
   }
 
-  poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: any) {
     if (this.attackId !== 'stomp') { super.poseAttack(S, t); return; }
     // the drop: both forefeet come down together and the ground takes it
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());

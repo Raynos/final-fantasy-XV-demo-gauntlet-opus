@@ -339,8 +339,8 @@ const MARCH_SCALE = 0.4;
 
 export class VolumePass extends FilterPass {
   composite!: any;
-  fx!: any;
-  material!: any;
+  override fx!: any;
+  override material!: any;
   rtVol!: any;
   constructor(fx: import('../../engine/PostFX.ts').PostFX) {
     super(fx);
@@ -386,14 +386,14 @@ export class VolumePass extends FilterPass {
     this.enabled = true;
   }
 
-  setSize(w: any, h: any) {
+  override setSize(w: any, h: any) {
     const mw = Math.max(1, Math.round(w * MARCH_SCALE));
     const mh = Math.max(1, Math.round(h * MARCH_SCALE));
     this.rtVol.setSize(mw, mh);
     this.composite.uniforms.uVolRes.value.set(mw, mh);
   }
 
-  beforeRender() {
+  override beforeRender() {
     const fx = this.fx;
     const u = this.material.uniforms;
     u.tDepth.value = fx.rtScene.depthTexture;
@@ -407,7 +407,7 @@ export class VolumePass extends FilterPass {
     }
   }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     this.beforeRender();
     this.material.uniforms.tDiffuse.value = readBuffer.texture;
     blit(renderer, this.material, this.rtVol);
@@ -415,7 +415,7 @@ export class VolumePass extends FilterPass {
     blit(renderer, this.composite, this.renderToScreen ? null : writeBuffer);
   }
 
-  dispose() {
+  override dispose() {
     this.material.dispose();
     this.composite.dispose();
     this.rtVol.dispose();

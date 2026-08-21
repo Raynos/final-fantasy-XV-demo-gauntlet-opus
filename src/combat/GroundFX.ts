@@ -115,6 +115,8 @@ export class GroundPatch {
  * alpha-blended (scorch, frost, cracks). LRU reuse keeps draw calls bounded.
  */
 export class GroundFX {
+  decals!: any[];
+  rings!: any[];
   _decalNext!: number;
   _ringNext!: number;
   constructor(parent: any, { rings = 6, decals = 12 } = {}) {

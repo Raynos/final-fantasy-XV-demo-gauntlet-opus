@@ -90,11 +90,11 @@ export class FilterPass extends Pass {
   /** Shorthand so `pass.uniforms.x.value` works like a three ShaderPass. */
   get uniforms() { return this.material.uniforms; }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     if (this.material.uniforms.tDiffuse) this.material.uniforms.tDiffuse.value = readBuffer.texture;
     if (this.beforeRender) this.beforeRender(renderer, readBuffer);
     blit(renderer, this.material, this.renderToScreen ? null : writeBuffer);
   }
 
-  dispose() { if (this.material) this.material.dispose(); }
+  override dispose() { if (this.material) this.material.dispose(); }
 }

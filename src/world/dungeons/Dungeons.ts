@@ -39,6 +39,7 @@ const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
  * data is available for any other system to poll.
  */
 export class Dungeons {
+  _interaction!: any;
   _camLocal!: any;
   _hidden!: any[];
   _returnTo!: any;

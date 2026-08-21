@@ -22,6 +22,9 @@ const A2 = 110, A3 = 220, A4 = 440;
  * horizon of the whole session.
  */
 export class Score {
+  bar!: number;
+  intensity!: number;
+  state!: any;
   _at!: any;
   _queue!: any[];
   _timer!: any;

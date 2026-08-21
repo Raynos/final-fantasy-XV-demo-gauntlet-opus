@@ -23,6 +23,8 @@ function project(p: any, camera: any, w: any, h: any) {
  * renderable for captures.
  */
 export class CombatHUD {
+  callout!: any;
+  calloutSub!: any;
   _armPct!: any;
   _armigerDriven!: boolean;
   _beat!: number;

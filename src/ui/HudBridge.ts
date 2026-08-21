@@ -48,7 +48,7 @@ export class HudBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** A call-out banner, rate-limited so a flurry does not strobe. */
-  _call(key: any, sub: any) {
+  _call(key: any, sub?: any) {
     const now = this.game?.time?.now ?? 0;
     if (now - this._lastCall < 1.1) return;
     this._lastCall = now;

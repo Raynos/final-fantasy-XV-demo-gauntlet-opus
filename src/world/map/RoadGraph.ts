@@ -281,6 +281,7 @@ function resample(ctrl: any, step: any) {
  * writes `y` back into every sample.
  */
 export class RoadGraph {
+  routes!: any[];
   _cell!: number;
   _grid!: Map<any, any>;
   classes!: any;

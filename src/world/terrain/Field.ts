@@ -57,7 +57,7 @@ export const LANDMARKS = buildLandmarks();
 function buildLandmarks() {
   const byId = new Map(LANDFORMS.map((l) => [l.id, l]));
   const L = {};
-  const put = (key: any, id: any, kind: any) => {
+  const put = (key: any, id: any, kind?: any) => {
     const f = byId.get(id);
     if (f) L[key] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
   };
@@ -97,6 +97,7 @@ export function microDetail(x: any, z: any): number {
 }
 
 export class Field {
+  clear!: any;
   CELL!: any;
   HALF!: any;
   N!: any;

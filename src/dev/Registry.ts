@@ -26,6 +26,8 @@
 /** @typedef {{name:string, category:string, help:string, args?:string, exec:Function}} Command */
 
 export class Registry {
+  cmds!: Map<any, any>;
+  cvars!: Map<any, any>;
   defaults!: Map<any, any>;
   history!: any[];
   constructor() {

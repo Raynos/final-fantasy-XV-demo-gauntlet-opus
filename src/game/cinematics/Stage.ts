@@ -27,6 +27,8 @@ import { setPose } from './Poses.ts';
  * ```
  */
 export class Stage {
+  _suspended!: any[];
+  actors!: Map<any, any>;
   _restore!: any[] | null;
   _v!: THREE.Vector3;
   _v2!: THREE.Vector3;

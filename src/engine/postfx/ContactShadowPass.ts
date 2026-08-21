@@ -27,10 +27,10 @@ export class ContactShadowPass extends FilterPass {
   _lightDir!: THREE.Vector3;
   _lightTgt!: THREE.Vector3;
   bias!: number;
-  fx!: any;
+  override fx!: any;
   intensity!: number;
   length!: number;
-  material!: any;
+  override material!: any;
   maxDistance!: number;
   thickness!: number;
   tint!: THREE.Color;
@@ -150,9 +150,9 @@ export class ContactShadowPass extends FilterPass {
     });
   }
 
-  setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  override setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
-  beforeRender() {
+  override beforeRender() {
     const fx = this.fx, u = this.material.uniforms;
     u.tDepth.value = fx.rtScene.depthTexture;
     u.uInvViewProj.value.copy(fx.invViewProj);

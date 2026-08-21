@@ -278,7 +278,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
  * Ensure a geometry carries the `aFlex` stiffness attribute the wind shader
  * needs. `fn(x,y,z,i)` returns 0..1; without it we ramp on local Y.
  */
-export function bakeFlex(geo: any, fn: any) {
+export function bakeFlex(geo: any, fn?: any) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n);

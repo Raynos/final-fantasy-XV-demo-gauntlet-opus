@@ -16,6 +16,8 @@ import { Elemancy } from './Elemancy.ts';
  * confirms, lock-on changes, warp start/impact, stagger, death and MP.
  */
 export class CombatSystem {
+  _sweepTmp!: THREE.Vector3;
+  weaponSlot!: number;
   _armigerBeat!: number;
   _armigerCentre!: any;
   _armigerOpts!: any;

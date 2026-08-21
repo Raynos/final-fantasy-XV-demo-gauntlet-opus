@@ -50,6 +50,7 @@ function shard(seed: any, r: any, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 export class Megastructures {
+  dreadnought!: any;
   eco!: any;
   glows!: any[];
   mats!: any;
@@ -186,7 +187,7 @@ export class Megastructures {
     for (let i = 0; i < 3; i++) {
       const at = mat4([i * -128 + rng.gauss(0, 26), i * 22, i * -92 + rng.gauss(0, 26)],
         [0, rng.gauss(0, 0.06), 0], [1.6, 1.6, 1.6]);
-      const put = (mat: any, geo: any, p: any, r: any) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
+      const put = (mat: any, geo: any, p: any, r?: any) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
       put(M.hull, hullGeo, [0, 0, 0]);
       for (const sz of [-1, 1]) {
         put(M.hullDark, new THREE.BoxGeometry(15, 1.6, 16), [-2, 3, sz * 10], [sz * 0.2, 0, 0]);

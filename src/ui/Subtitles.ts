@@ -19,6 +19,7 @@ import { el, clamp, easeOut, easeOutQuint, Clip } from './UIKit.ts';
  * survives. In ordinary play `currentShot` is always `null` and this is inert.
  */
 export class Subtitles {
+  banter!: any;
   bubbles!: any[];
   chars!: any[];
   cur!: Clip | null;

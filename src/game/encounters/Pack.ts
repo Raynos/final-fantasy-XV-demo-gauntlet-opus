@@ -16,6 +16,7 @@
  * which is what turns a "there is an enemy over there" into an encounter.
  */
 export class Pack {
+  alerted!: boolean;
   _t!: number;
   encounter!: any;
   engaged!: any[];

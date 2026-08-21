@@ -439,7 +439,7 @@ export class Landmarks {
       return m.multiply(mat4(p, r, s));
     };
     const world = mat4([cx, base, cz]);
-    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r?: any, s?: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
 
     // stumpy foundation piers
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -496,7 +496,7 @@ export class Landmarks {
     const M = this.mats, eco = this.eco;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, site.yaw || 0, 0.03]);
-    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r?: any, s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // chassis + flatbed
     put(M.rust, new THREE.BoxGeometry(5.4, 0.22, 2.0), [0, 0.72, 0]);
@@ -537,7 +537,7 @@ export class Landmarks {
     const t = eco.roadTangent(z);
     const yaw = Math.atan2(t.x, t.y) + (side > 0 ? Math.PI : 0);
     const world = mat4([p.x, p.y, p.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pp: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
+    const put = (mat: any, geo: any, pp: any, r?: any, s?: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
     const kind = z > 0 ? M.signA : M.signB;
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [-0.9, 1.75, 0]);
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [0.9, 1.75, 0]);

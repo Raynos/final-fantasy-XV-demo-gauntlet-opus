@@ -24,29 +24,29 @@ import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase }
 export class BipedEnemy extends Enemy {
   _chestPitch!: any;
   _chestYaw!: number;
-  _dt!: any;
-  anim!: any;
-  deathPush!: any;
-  deathSide!: any;
-  hitPower!: any;
-  id!: any;
-  moveSpeed!: any;
-  rig!: any;
-  speed!: any;
-  state!: any;
-  stateTime!: any;
-  type!: any;
-  visual!: any;
+  override _dt!: any;
+  override anim!: any;
+  override deathPush!: any;
+  override deathSide!: any;
+  override hitPower!: any;
+  override id!: any;
+  override moveSpeed!: any;
+  override rig!: any;
+  override speed!: any;
+  override state!: any;
+  override stateTime!: any;
+  override type!: any;
+  override visual!: any;
   get A() { return this.constructor.ANIM; }
 
-  setupAnim(anim: any) {
+  override setupAnim(anim: any) {
     const A = this.A;
     anim.setTrunk(A.trunk);
     if (A.legs.L) anim.leg('fL', A.legs.L);
     if (A.legs.R) anim.leg('fR', A.legs.R);
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     if (!this.rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(this.rig, n, x, y, z);
     switch (state) {

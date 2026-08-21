@@ -35,7 +35,7 @@ export class ScenePass extends Pass {
     });
   }
 
-  render(renderer: any, writeBuffer: any) {
+  override render(renderer: any, writeBuffer: any) {
     const fx = this.fx;
     const { scene, camera } = fx.rnd;
 

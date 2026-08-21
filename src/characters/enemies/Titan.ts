@@ -381,12 +381,12 @@ function buildPrototype() {
 }
 
 class TitanEnemy extends Enemy {
-  attackId!: any;
-  rig!: any;
-  staggerTime!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override rig!: any;
+  override staggerTime!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(TITAN, opts); }
 
   /**
@@ -401,7 +401,7 @@ class TitanEnemy extends Enemy {
     return out.set(0, 0, 3.0).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

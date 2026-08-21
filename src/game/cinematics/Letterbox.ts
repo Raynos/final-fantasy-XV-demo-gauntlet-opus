@@ -18,6 +18,9 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 
  * byte-identical.
  */
 export class Letterbox {
+  line!: any;
+  lineR!: any;
+  lineT!: any;
   _onResize!: any;
   active!: boolean;
   bar!: number;

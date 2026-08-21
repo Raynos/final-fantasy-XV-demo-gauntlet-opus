@@ -14,6 +14,7 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_BICUBIC } from '../../shaders/post/comm
  * resampling does not turn the image to mush.
  */
 export class TaaPass extends Pass {
+  _reset!: boolean;
   clampScale!: number;
   copy!: any;
   feedbackMax!: number;
@@ -157,14 +158,14 @@ export class TaaPass extends Pass {
 
   reset() { this._reset = true; }
 
-  setSize(w: any, h: any) {
+  override setSize(w: any, h: any) {
     for (const rt of this.history) rt.setSize(w, h);
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.material.uniforms.uResolution.value.set(w, h);
     this._reset = true;
   }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     const fx = this.fx;
     const u = this.material.uniforms;
     const dst = 1 - this.ping;
@@ -188,7 +189,7 @@ export class TaaPass extends Pass {
     blit(renderer, this.copy, this.renderToScreen ? null : writeBuffer);
   }
 
-  dispose() {
+  override dispose() {
     for (const rt of this.history) rt.dispose();
     this.material.dispose();
     this.copy.dispose();

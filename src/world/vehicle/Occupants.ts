@@ -126,6 +126,7 @@ const _v = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
 export class Occupants {
+  _gaze!: any;
   _saved!: any;
   _t!: number;
   anchors!: any;

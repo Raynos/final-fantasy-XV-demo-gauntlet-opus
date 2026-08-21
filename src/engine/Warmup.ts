@@ -26,6 +26,7 @@ import * as THREE from 'three';
  * never the boot.
  */
 export class Warmup {
+  renderer!: any;
   camera!: any;
   game!: any;
   log!: any[];

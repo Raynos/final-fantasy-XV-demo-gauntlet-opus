@@ -60,6 +60,8 @@ const KEY = {
 const RANGE = 14000;
 
 export class RegaliaSystem {
+  autoDrive!: AutoDrive;
+  fuelStations!: any[];
   _ahead!: THREE.Vector3;
   _beam!: any;
   _brake!: number;

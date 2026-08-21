@@ -49,14 +49,14 @@ export const HUNT_RANKS = {
 /* Objective helpers                                                         */
 /* ------------------------------------------------------------------------ */
 
-const kill  = (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'kill', target, count, desc, waypoint });
-const fetch_= (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'fetch', target, count, desc, waypoint });
+const kill  = (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'kill', target, count, desc, waypoint });
+const fetch_= (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'fetch', target, count, desc, waypoint });
 const reach = (id: any, target: any, desc: any, waypoint: any, radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
 const talk  = (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
-const photo = (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'photo', target, count, desc, waypoint });
+const photo = (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'photo', target, count, desc, waypoint });
 const escort= (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
 const craft = (id: any, target: any, count: any, desc: any) => ({ id, type: 'craft', target, count, desc });
-const rest  = (id: any, desc: any, waypoint: any) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
+const rest  = (id: any, desc: any, waypoint?: any) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -386,6 +386,8 @@ export const HUNTS = QUEST_TABLE.filter((q) => q.type === 'hunt');
  * tick, with `{ quest, status, phase, objective? }`.
  */
 export class QuestLog {
+  states!: any;
+  tracked!: any;
   emitter!: any;
   flags!: Set<any>;
   hunterPoints!: number;

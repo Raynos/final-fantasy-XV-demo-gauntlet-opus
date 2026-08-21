@@ -49,6 +49,7 @@ const SYSTEM_ALIASES = {
  * must observe the final transforms (camera, HUD, culling).
  */
 export class Game {
+  state!: string;
   _hudCache!: any;
   _raf!: any;
   _registry!: Map<any, any>;
@@ -299,7 +300,7 @@ export class Game {
   }
 
   /** Advance one frame. Exposed so the screenshot harness can step deterministically. */
-  frame(fixedDt: any) {
+  frame(fixedDt?: any) {
     const t = this.time;
     if (fixedDt != null) {
       t.rawDt = fixedDt; t.raw += fixedDt;

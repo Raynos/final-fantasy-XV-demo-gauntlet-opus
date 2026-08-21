@@ -16,6 +16,7 @@ import { CombatAnim } from './rig/CombatAnim.ts';
  * long session never allocates a second skeleton for the same creature.
  */
 export class Enemies {
+  prototypes!: Map<any, any>;
   _ctx!: any;
   _dir!: THREE.Vector3;
   _tmp!: THREE.Vector3;

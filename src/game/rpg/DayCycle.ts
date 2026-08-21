@@ -57,6 +57,7 @@ export const HAVEN_RADIUS = 14;
  * `daemons-receding`, `haven-discovered` and `rested`.
  */
 export class DayCycle {
+  _phase!: any;
   _daemonsUp!: any;
   _lastHourInt!: any;
   absoluteHour!: any;

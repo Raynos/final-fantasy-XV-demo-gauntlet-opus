@@ -33,6 +33,7 @@ const MAX_ROWS = 16;
  * Controls: ↑↓ pick, ←→ change section. No CSS transitions.
  */
 export class ArchiveScreen {
+  _rows!: any;
   _age!: number;
   _cur!: any;
   _sig!: any;

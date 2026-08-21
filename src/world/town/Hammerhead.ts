@@ -47,6 +47,7 @@ import { TOWN_SHOPS } from './Shops.ts';
 const PAD = { u0: -28, u1: 29, v0: -31, v1: 17 };
 
 export class Hammerhead {
+  lights!: any[];
   _camPos!: THREE.Vector3;
   _cast!: any;
   _casters!: any;

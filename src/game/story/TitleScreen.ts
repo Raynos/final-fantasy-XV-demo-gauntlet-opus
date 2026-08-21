@@ -16,6 +16,9 @@ import { Noise } from '../../util/Noise.ts';
  * it loops forever with no seam and no state to reset.
  */
 export class TitleScreen {
+  chosen!: any;
+  onChoose!: any;
+  shown!: boolean;
   _camPos!: THREE.Vector3;
   _camTgt!: THREE.Vector3;
   _gp!: any;
@@ -188,7 +191,7 @@ export class TitleScreen {
   }
 
   /** Commit the highlighted item. */
-  choose(id: any) {
+  choose(id?: any) {
     const pick = id || this.items[this.index].id;
     if (!id && !this._enabled(this.index)) return;
     this.chosen = pick;

@@ -278,6 +278,7 @@ function buildDescription({ name, dominant, tier, damage, radius, effects }: any
  * and `spell-cast`.
  */
 export class Elemancy {
+  spells!: any[];
   bonuses!: any;
   capBonus!: number;
   deposits!: any;

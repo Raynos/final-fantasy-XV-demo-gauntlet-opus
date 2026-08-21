@@ -464,21 +464,21 @@ const mix = mixc;
 const col = colc;
 
 class VoretoothEnemy extends QuadrupedEnemy {
-  attackId!: any;
-  id!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override id!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(VORETOOTH, opts); }
 
   /** A lunge coils; a bite is a twitch; the tail-whip winds the body sideways. */
-  telegraphScale() {
+  override telegraphScale() {
     if (this.attackId === 'lunge') return 1.2;
     if (this.attackId === 'tailwhip') return 0.45;
     return 0.55;
   }
 
-  leapScale() { return this.attackId === 'lunge' ? 1.0 : 0.3; }
+  override leapScale() { return this.attackId === 'lunge' ? 1.0 : 0.3; }
 
   /**
    * The mandibles are the tell. They flare open through the wind-up and stay
@@ -491,7 +491,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     S('mnR', 0.10 * k, -0.95 * k - twitch, 0.55 * k);
   }
 
-  poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: any) {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     if (this.attackId === 'tailwhip') {
@@ -514,7 +514,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, k * (this.attackId === 'lunge' ? 1 : 0.7), Math.sin(t * 34) * 0.05 * k);
   }
 
-  poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: any) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'tailwhip') {
@@ -542,7 +542,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, open * clamp01(k + 0.5));
   }
 
-  poseDeath(S: any, t: any) {
+  override poseDeath(S: any, t: any) {
     super.poseDeath(S, t);
     // jaw and mandibles hang slack straight away — no muscle left to hold them
     const slack = smooth(clamp01(this.stateTime / 0.30));

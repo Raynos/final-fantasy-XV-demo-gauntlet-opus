@@ -584,6 +584,7 @@ const NB = BIOME_KEYS.length;
  * is the shared singleton every system reads.
  */
 export class WorldMap {
+  discovered!: Set<any>;
   _bBuf!: Float64Array;
   _buckets!: Map<any, any>;
   _cell!: number;

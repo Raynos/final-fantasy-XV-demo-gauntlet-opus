@@ -243,10 +243,10 @@ function buildPrototype() {
 }
 
 class SniperEnemy extends Enemy {
-  attackId!: any;
-  rig!: any;
-  stateTime!: any;
-  visual!: any;
+  override attackId!: any;
+  override rig!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(IMPERIAL_SNIPER, opts); }
 
   /** World-space muzzle position — the combat system spawns the tracer here. */
@@ -257,7 +257,7 @@ class SniperEnemy extends Enemy {
     return out.set(0.0, 0.03, 1.42).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

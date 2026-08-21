@@ -29,6 +29,9 @@ import { clamp } from './Dsp.ts';
  * which is what the offline verification harness uses.
  */
 export class AudioSystem {
+  _userVolume!: any;
+  _volume!: any;
+  state!: string;
   _camping!: boolean;
   _encounterKills!: number;
   _enemyState!: Map<any, any>;

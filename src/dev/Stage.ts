@@ -28,6 +28,7 @@ const KEY_OFFSET = 0.6;
  * get added and renamed; "is it a light" does not.
  */
 export class Stage {
+  _hidden!: any[];
   _current!: any;
   _keep!: Set<any>;
   _needFrame!: boolean;

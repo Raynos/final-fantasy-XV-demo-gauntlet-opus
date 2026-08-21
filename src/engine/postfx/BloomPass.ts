@@ -328,7 +328,7 @@ export class BloomPass extends Pass {
     this.setSize(w, h);
   }
 
-  setSize(w: any, h: any) {
+  override setSize(w: any, h: any) {
     if (this.mips) for (const rt of this.mips) rt.dispose();
     if (this.streak) for (const rt of this.streak) rt.dispose();
     this.mips = [];
@@ -346,7 +346,7 @@ export class BloomPass extends Pass {
     this.compositeMat.uniforms.uAspect.value = w / h;
   }
 
-  render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: any, writeBuffer: any, readBuffer: any) {
     const u = this.prefilterMat.uniforms;
     // the threshold is authored post-exposure; convert it into the scene-linear
     // units this buffer is actually in (see the field comment)
@@ -406,7 +406,7 @@ export class BloomPass extends Pass {
     blit(renderer, this.compositeMat, this.renderToScreen ? null : writeBuffer);
   }
 
-  dispose() {
+  override dispose() {
     for (const rt of this.mips) rt.dispose();
     for (const rt of this.streak) rt.dispose();
     this.dirt.dispose();

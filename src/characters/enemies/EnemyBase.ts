@@ -25,6 +25,7 @@ import { CreatureAnim } from '../rig/CreatureAnim.ts';
  * `this.attackId` directly for extra variants.
  */
 export class Enemy {
+  poise!: number;
   _atkCooldown!: number;
   _dt!: any;
   _kb!: any;

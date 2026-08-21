@@ -42,6 +42,7 @@ export function hash3(x: any, y: any, s: any) {
 }
 
 export class Ecology {
+  nPatch!: Noise;
   _clearings!: any;
   _terrainRoad!: boolean;
   game!: any;

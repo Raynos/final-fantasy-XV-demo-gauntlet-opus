@@ -24,6 +24,7 @@ const SHEET = 512;                 // 16 m per sheet pixel
 const BLUR = 1.3;                  // sheet px — a 21 m edge, crisp on purpose
 
 export class FogOfWar {
+  _sheet!: any;
   _ctx!: any;
   _dirty!: boolean;
   _maskCanvas!: any;

@@ -485,21 +485,21 @@ function hex(h: any) { return _c2.setHex(h, THREE.SRGBColorSpace); }
 function col(h: any) { return _c1.setHex(h, THREE.SRGBColorSpace); }
 
 class GarulaEnemy extends QuadrupedEnemy {
-  anim!: any;
-  attackId!: any;
-  state!: any;
-  stateTime!: any;
-  visual!: any;
+  override anim!: any;
+  override attackId!: any;
+  override state!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(GARULA, opts); }
 
-  telegraphScale() {
+  override telegraphScale() {
     // the barrel charge coils low and long; the quake rears instead
     if (this.attackId === 'barrel') return 1.30;
     if (this.attackId === 'quake') return -0.95;
     return 0.90;
   }
 
-  leapScale() { return this.attackId === 'quake' ? 1.0 : 0.18; }
+  override leapScale() { return this.attackId === 'quake' ? 1.0 : 0.18; }
 
   /**
    * `quake` is the only move that goes up, so it gets its own wind-up: the
@@ -507,7 +507,7 @@ class GarulaEnemy extends QuadrupedEnemy {
    * there for a beat before it comes down. The negative `telegraphScale`
    * already inverts the body drop; this adds the rear itself.
    */
-  poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: any) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'quake') {
       if (this.attackId === 'barrel') {
@@ -539,7 +539,7 @@ class GarulaEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.14 * rear;
   }
 
-  poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: any) {
     if (this.attackId !== 'quake') { super.poseAttack(S, t); return; }
     // and down: both forefeet together, the body driving through the ground
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack',

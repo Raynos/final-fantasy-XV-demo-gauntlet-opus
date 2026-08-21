@@ -36,7 +36,7 @@ export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = [
   return node;
 }
 
-function applyAttrs(node: any, attrs: any, isSvg: any) {
+function applyAttrs(node: any, attrs: any, isSvg?: any) {
   for (const k of Object.keys(attrs)) {
     const v = attrs[k];
     if (v == null || v === false) continue;

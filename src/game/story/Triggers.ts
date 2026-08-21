@@ -18,6 +18,9 @@ import { PLACES, REGION_CARDS } from './Chapters.ts';
  * predicate, so gating on chapter or story flags needs no extra machinery.
  */
 export class Triggers {
+  _places!: any;
+  place!: any;
+  region!: any;
   _hour!: any;
   _t!: number;
   game!: any;

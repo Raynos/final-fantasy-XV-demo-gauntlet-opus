@@ -138,6 +138,7 @@ export class LegChain {
  * additive layer that survives whatever the species pose function did.
  */
 export class CreatureAnim {
+  legs!: Map<any, any>;
   airPos!: THREE.Vector3;
   airVel!: THREE.Vector3;
   airborne!: boolean;

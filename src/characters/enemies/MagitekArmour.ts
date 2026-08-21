@@ -328,19 +328,19 @@ function buildPrototype() {
 }
 
 class MagitekArmourEnemy extends Enemy {
-  _dt!: any;
-  anim!: any;
-  attackId!: any;
-  moveSpeed!: any;
-  phaseIndex!: any;
-  rig!: any;
-  speed!: any;
-  stateTime!: any;
-  visual!: any;
+  override _dt!: any;
+  override anim!: any;
+  override attackId!: any;
+  override moveSpeed!: any;
+  override phaseIndex!: any;
+  override rig!: any;
+  override speed!: any;
+  override stateTime!: any;
+  override visual!: any;
   constructor(opts: any) { super(MAGITEK_ARMOUR, opts); }
 
   /** Reverse-jointed legs, solved with IK so six tonnes plants its feet. */
-  setupAnim(anim: any) {
+  override setupAnim(anim: any) {
     super.setupAnim(anim);
     anim.leg('fL', ['hpL', 'knL', 'anL', 'ftL']);
     anim.leg('fR', ['hpR', 'knR', 'anR', 'ftR']);
@@ -362,7 +362,7 @@ class MagitekArmourEnemy extends Enemy {
     return out.set(-0.04, -0.06, 0.62).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state: any, t: any) {
+  override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);

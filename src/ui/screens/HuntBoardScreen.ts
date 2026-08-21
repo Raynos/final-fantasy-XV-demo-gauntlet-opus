@@ -40,6 +40,9 @@ function ledgerOf(hunt: any, tipsters: any) {
 }
 
 export class HuntBoardScreen {
+  _rows!: any;
+  rankP!: any;
+  rankV!: any;
   _age!: number;
   _cur!: any;
   _msg!: any;
