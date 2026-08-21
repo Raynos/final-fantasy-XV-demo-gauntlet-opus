@@ -175,10 +175,17 @@ export class Rig {
 
 /**
  * Detail-map tiles per metre of surface. One tile of the shared hide/plate
- * normal covers ~14 cm of creature at this density, which is the scale a coat
- * or a rivet line reads at from five metres.
+ * normal covers 10 cm of creature at this density.
+ *
+ * Raised from 7 after an A/B on the sabertusk at 2.5 m and 8 m. At 7 the
+ * pebbling on a haunch read as reptile scale rather than short fur, and the
+ * coat had gone from the frame entirely by 8 m; at 10 the strands in
+ * `organicNormal()` land at about the width they should and the dorsal saddle
+ * still carries texture at distance. No shimmer at either range — the maps are
+ * mipped with `anisotropy: 8` and TAA is on — but this is the knob to check
+ * first if aliasing ever shows up on a moving creature.
  */
-export const DETAIL_TILES = 7;
+export const DETAIL_TILES = 10;
 
 /**
  * Rescale a part's UVs so its detail map tiles at a fixed density *in metres*,
