@@ -32,6 +32,54 @@ Closed by the coordinator, each verified by eye or by measurement:
 
 In flight in worktrees: B12 (enemies), B5 + B10 (ui), B13 + part of B7 (veg), B11 (heroart).
 
+### Merged and verified: B11 (heroart) — real progress, still short of the bar
+
+Merged and looked at across all 28 framings at 0.4 m. **All nine gates green.**
+
+**What genuinely landed.** The straw-hair read had three causes and the one that
+mattered was not geometry at all: **the Kajiya-Kay specular tint was acting as a
+brightness multiplier.** `sheenC` mixed toward `vColor.rgb * 3.2` — near-black
+hair needs that 3.2 to show any colour, but blond hair already at 0.8 albedo
+multiplies to 2.7 and **clips to white on every lock facing the sun.** Prompto's
+and Ignis's hair was correctly shaped and simply over-exposed; no amount of
+geometry work could ever have fixed it. Two aliasing bugs sat on top: the
+highlight break-up mask ran on `vMapUv.x` — the coordinate *across* the ribbon —
+at 34 cycles over a 3 mm strand, sub-pixel at every range, aliasing into the
+chrome speckle that made each lock read as a faceted blade.
+
+**The ear was a good catch.** The predecessor's helix, antihelix, tragus and lobe
+were correct and **completely invisible**: `ridge()` offsets by a fraction of
+`ex`, and `out: 0.055` is 4 mm against a plate 8 mm half-thick, so every ridge was
+buried inside it. A 24 mm red paint blob at the ear's pin texel was also flooding
+the whole ear salmon and painting a bruise across the temple.
+
+**Skin.** Face and body carried two different near-pure subsurface reds, so head
+and neck reddened differently as they turned from the sun — that was the other
+half of the jaw seam and most of the sunburnt-orange read.
+
+Confirmed by eye: skin is natural rather than orange, no bruising, Prompto's eye
+now has a real iris, lid and waterline, and no hair clips to white.
+
+**What it still is not.** Graded against shipped FFXV rather than against last
+round: **hair still reads as spiky straw** — Noctis as a black sea urchin, Prompto
+as dried grass — because the locks still separate into hard quills. Faces read
+childlike and doughy; the agent says that needs sculpt brushes, not paint. The far
+eye still goes dark in three-quarter views. **Hands are still mittens and outfits
+still flat black shapes — the two largest things in this area are untouched.**
+
+**Cost:** triangles up **30%** (`hero_full` 5.27 M → 6.87 M) for tripled strand
+count, draw calls unchanged. `project/handoff/heroart.md` §4.5 says exactly where
+to take it back if wanted.
+
+**Two probe framings are broken** and make review harder than it should be:
+`*_eyes` puts the camera inside the fringe (hair strands and a sliver of eye), and
+`*_hand` frames a shoulder, not a hand. `src/tools/_probe/heads.mjs`.
+
+> **Gotcha worth carrying (`heroart.md` §5.6): a clean `vite build` does not mean
+> the page runs.** A bad `perl` substitution prepended function-body code above the
+> imports — valid module syntax, clean build, and the only symptom was a 300 s
+> capture timeout with an empty console log.
+
 ### Merged and verified: B5 + B10 (ui) — and a correction to this ledger
 
 **B5 was misdiagnosed by everyone, including this file.** `combatloop.mjs` at
