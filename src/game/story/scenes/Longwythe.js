@@ -1,4 +1,7 @@
-import { frameAt, arrange, wide, attend } from './SceneKit.js';
+import * as THREE from 'three';
+import {
+  frameAt, arrange, wide, twoShot, single, ots, lowAngle, attend, poiPoint,
+} from './SceneKit.js';
 
 /**
  * CHAPTER I — the Longwythe hunt. The last beat before the player is ever asked
@@ -8,6 +11,18 @@ import { frameAt, arrange, wide, attend } from './SceneKit.js';
  *
  * Ends by materialising the Engine Blade in Noctis' hand, which is the game's
  * signature and the cleanest possible hand-off into combat.
+ *
+ * ### Where it is staged
+ * On open ground beside **Longwythe Rest Area**, with **Longwythe Peak** —
+ * the 430 m black horn the whole region is named for, 1.3 km due south and
+ * unobstructed all the way (measured: nothing on the sight line rises within
+ * 3 m of it) — standing directly behind the party.
+ *
+ * The scene axis therefore points *away* from the peak, so the four of them
+ * face the camera and the mountain is the backdrop of every set-up rather than
+ * something they have their backs to. The old staging used the roadside
+ * `regalia` Ecology site 1.1 km west, where nothing named Longwythe is in
+ * frame at all.
  */
 
 const DUR = 34;
@@ -19,23 +34,31 @@ export const LONGWYTHE = {
   duration: DUR,
 
   stage(ctx) {
-    const { game, stage } = ctx;
+    const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(17.6);
 
-    // On the highway beside the abandoned outpost at Longwythe. Staged on the
-    // carriageway rather than out in the scrub: off the road the rendered
-    // terrain and `Terrain.heightAt` diverge by most of a metre, and a
-    // cutscene actor placed on the sampled height sinks into the ground.
-    const F = frameAt(ctx, 'regalia', { fallback: [0, 14], offset: [-34, 0] });
+    const rest = poiPoint(ctx, 'longwythe_rest');
+    const peak = poiPoint(ctx, 'longwythe_peak');
+    // Face away from the peak: the mountain belongs behind them, not in front.
+    const away = rest && peak
+      ? new THREE.Vector3().subVectors(rest, peak).multiplyScalar(2).add(rest)
+      : null;
+    const F = frameAt(ctx, 'regalia', {
+      origin: rest || undefined,
+      facing: away || undefined,
+      offset: [30, -10],
+      fallback: [1120, 62],
+    });
     ctx.data.F = F;
+    ctx.data.peak = peak;
+
     arrange(ctx, F, {
-      at: -4.0, lift: 0.95,
       slots: {
-        noctis: [0.60, 0.80],
-        ignis: [-0.30, 1.15],
-        gladio: [0.20, -0.45],
-        prompto: [-1.05, -1.05],
+        noctis: [0.42, 0.22],
+        ignis: [-0.05, 1.44],
+        gladio: [0.20, -1.30],
+        prompto: [-1.12, -0.46],
       },
       poses: { gladio: 'hips', ignis: 'shade_eyes', prompto: 'breathe', noctis: 'pockets' },
     });
@@ -44,25 +67,51 @@ export const LONGWYTHE = {
   buildShots(ctx) {
     const F = ctx.data.F;
     return [
-      // the ground they are about to fight over
-      wide(ctx, F, { t0: 0, t1: 7.5, camF: -16.0, camL: -7.0, camU: 2.6, f: -4.0, l: 0.3, targetU: 1.6, fov: 40, driftF: 2.4, driftL: 1.6, aim: 'crew', aimU: 1.32 }),
-      // Ignis reading the scrub
-      wide(ctx, F, { t0: 7.5, t1: 14.4, camF: -10.4, camL: 5.0, camU: 2.05, f: -4.3, l: 1.15, targetU: 1.5, fov: 30, driftF: 0.8, driftL: -0.6, driftU: 0.04, aim: 'ignis', aimU: 1.30, fStop: 3.0, focus: 'ignis' }),
-      // Gladio, entirely unworried
-      wide(ctx, F, { t0: 14.4, t1: 20.6, camF: -11.0, camL: -4.6, camU: 1.95, f: -3.8, l: -0.45, targetU: 1.5, fov: 32, driftF: 0.9, driftL: 0.6, driftU: 0.04, aim: ['gladio', 'prompto'], aimU: 1.26, fStop: 3.2, focus: 'gladio' }),
-      // Prompto, entirely worried
-      wide(ctx, F, { t0: 20.6, t1: 25.4, camF: -12.6, camL: 6.4, camU: 2.05, f: -5.05, l: -1.05, targetU: 1.5, fov: 27, driftF: 0.8, driftL: -0.5, aim: 'prompto', aimU: 1.28, fStop: 2.8, focus: 'prompto' }),
-      // the blade
-      wide(ctx, F, { t0: 25.4, t1: DUR, camF: -11.6, camL: 4.2, camU: 1.9, f: -3.4, l: 0.8, targetU: 1.5, fov: 28, driftF: 1.2, driftL: -0.8, driftU: 0.05, aim: 'noctis', aimU: 1.26, fStop: 2.6, focus: 'noctis' }),
+      // 1 — THE PEAK. Long, low and far back so the mountain gets its full
+      // height in frame and the four of them are four small shapes under it.
+      wide(ctx, F, {
+        t0: 0, t1: 7.5, camF: 31.0, camL: 6.4, camU: 1.05, f: -0.2, l: 0.1, targetU: 3.30,
+        fov: 46, driftF: -4.2, driftL: -1.6, driftU: 0.35, aim: 'crew', aimU: 2.20, fStop: 9.0,
+      }),
+      // 2 — IGNIS reading the scrub. Dirty single past Noctis' shoulder, the
+      // peak's flank filling everything behind him.
+      ots(ctx, F, {
+        t0: 7.5, t1: 14.4,
+        nearF: 0.42, nearL: 0.22, farF: -0.05, farL: 1.44,
+        back: 1.7, side: 1.15, camU: 1.66, fov: 36, aim: 'ignis', aimU: 1.52, fStop: 2.6,
+      }),
+      // 3 — GLADIO, entirely unworried, with Prompto beside him.
+      twoShot(ctx, F, {
+        t0: 14.4, t1: 20.6, f: -0.46, l: -0.88, camF: 4.4, camL: -3.4, camU: 1.70,
+        fov: 36, targetU: 1.50, fStop: 3.0, focus: 'gladio',
+        aim: ['gladio', 'prompto'], aimU: 1.46, driftF: -0.5, driftL: 0.4,
+      }),
+      // 4 — PROMPTO, entirely worried. Tight, wide open, everything but his
+      // face gone.
+      single(ctx, F, {
+        t0: 20.6, t1: 25.4, f: -1.12, l: -0.46, camF: 2.0, camL: -1.9, camU: 1.62,
+        fov: 30, targetU: 1.54, fStop: 2.2, focus: 'prompto', aim: 'prompto', aimU: 1.50,
+      }),
+      // 5 — THE BLADE. Low off the ground on Noctis, the Engine Blade coming
+      // out of blue light with a mountain behind him and nothing else in frame.
+      lowAngle(ctx, F, {
+        t0: 25.4, t1: DUR, camF: 4.6, camL: -1.25, camU: 0.66, f: 0.42, l: 0.22, targetU: 1.90,
+        fov: 32, driftF: -0.7, driftL: 0.35, driftU: 0.45,
+        aim: 'noctis', aimU: 1.44, fStop: 3.2, focus: 'noctis',
+      }),
     ];
   },
 
   tick(t, dt, ctx) {
     const s = ctx.stage;
-    if (t > 7.0 && t < 14.4) attend(ctx, 'ignis');
-    else if (t >= 14.4 && t < 20.6) attend(ctx, 'gladio');
-    else if (t >= 20.6 && t < 25.4) attend(ctx, 'prompto');
-    else if (t >= 25.4) attend(ctx, 'noctis', ['noctis']);
+    const peak = ctx.data.peak;
+    if (t < 7.0) {
+      // all four reading the ground they are about to fight over
+      if (peak) for (const id of s.ids) s.look(id, peak);
+    } else if (t < 14.4) attend(ctx, 'ignis');
+    else if (t < 20.6) attend(ctx, 'gladio');
+    else if (t < 25.4) attend(ctx, 'prompto');
+    else attend(ctx, 'noctis', ['noctis']);
     if (t >= 25.4) s.look('noctis', null);
   },
 

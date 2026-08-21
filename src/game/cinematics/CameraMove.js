@@ -171,8 +171,27 @@ export class Frame {
     if (this.fwd.lengthSq() < 1e-6) this.fwd.set(0, 0, 1);
     this.right = new THREE.Vector3().crossVectors(this.fwd, UP).normalize().negate();
     this.up = UP.clone();
+    /**
+     * Surface `ground()` resolves against, when the scene does not stand on the
+     * terrain. Null means "ask the terrain".
+     * @type {number|null}
+     */
+    this.floor = null;
     this._v = new THREE.Vector3();
   }
+
+  /**
+   * Pin the frame to a built surface instead of the terrain heightfield.
+   *
+   * Hammerhead's apron is a graded pad three metres above the ground it was cut
+   * into, so a scene staged on it and snapped to `Terrain.heightAt` puts four
+   * actors and the camera underneath the tarmac. Anything authored on a deck,
+   * a pad or a bridge wants this.
+   *
+   * @param {number|null} y world height of the surface
+   * @returns {Frame} this
+   */
+  setFloor(y) { this.floor = y ?? null; return this; }
 
   /**
    * A world point from scene-local coordinates.
@@ -189,9 +208,13 @@ export class Frame {
     return [v.x, v.y, v.z];
   }
 
-  /** Same as {@link at} but snapped to the terrain, plus `u` metres. */
+  /**
+   * Same as {@link at} but snapped to the ground, plus `u` metres. "The ground"
+   * is {@link setFloor}'s surface if one was set, else the terrain.
+   */
   ground(terrain, f, r, u = 0) {
     const v = this._v.copy(this.origin).addScaledVector(this.fwd, f).addScaledVector(this.right, r);
+    if (this.floor != null) return [v.x, this.floor + u, v.z];
     const y = terrain && terrain.heightAt ? terrain.heightAt(v.x, v.z) : this.origin.y;
     return [v.x, y + u, v.z];
   }
