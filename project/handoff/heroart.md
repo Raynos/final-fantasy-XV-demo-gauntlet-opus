@@ -1,56 +1,112 @@
 # Handoff — `agent/heroart` (hero faces, hair, hands, outfits)
 
-Branch `agent/heroart`, worktree `agent-a643eb6a4f96d2893`, based on `main` @ `0be851f`.
-One commit: `1a5fa03` — the eye rebuild.
+Branch `worktree-agent-a353f058db623fd8f`. Carries the four rescued commits from
+`worktree-agent-ac20d4b7c74f55fa0` (the skull profile, the ear, the unified skin base,
+the hair-on-the-head pass) plus five of mine on top.
 
-**Read §5 first if you are short of time.** The gotchas are worth more than the code.
+**Read §5 first if you are short of time.** The gotchas are worth more than the code,
+and §5.6 is new and cost me forty minutes.
 
 ---
 
 ## 1. State
 
-### Done and verified by eye
+### Verified by eye at 0.4–0.6 m, this session
 
-**The eye region, on all four heroes, at 0.4–0.6 m.** This was priority 1 and it is
-the only thing that landed. Before: the aperture was a wall-eyed slot with a blank
-white bead for the far eye, the eyeball's lower hemisphere hung out of the face as a
-skin-coloured bucket, and the iris was a third too small. After: an open almond
-aperture, iris filling it, sclera reading as sclera, lids meeting at both canthi, no
-protruding shell. Compare `tmp/shots/ha0c/noctis_front.png` with `tmp/shots/ha6/noctis_front.png`
-and `tmp/shots/ha0c/noctis_eyes.png` with `tmp/shots/ha6/noctis_eyes.png`.
+Every claim below was checked in `tmp/shots/ha9` (the inherited state, before any
+change of mine) against `tmp/shots/ha22` / `ha23` (now). Use those two directories for
+any before/after.
 
-It is **better, not good**. It would still lose a blind side-by-side against FFXV.
+**The four inherited commits are good and are now verified.** `ignis_profile` was the
+priority: the skull has a real nasion, a mandible body between the gonial angle and
+the chin, and a chin that is no longer a point. The eye work from the session before
+that survives — `noctis_front` shows an open almond aperture with iris and sclera.
+Nothing in the four commits needed reverting.
 
-### Done but not verified
+**Hair — the big one, and the reason nothing else got much time.** It was straw:
+straight, wide, flat, faceted blades with sky between every one. Three separate causes,
+all now fixed, and the third was the one that actually mattered:
 
-- Corpus shots (`hero_face`, `hero_closeup`, `hero_full`, the three companion
-  closeups, `town_npcs`) were **not re-captured** after the final edit. The baseline
-  is in `tmp/shots/ha0/`; re-shoot and compare before merging.
-- The **caruncle** renders as a small dark bead that is visible at 0.4 m and sits at
-  the wrong corner on at least one side (see `tmp/shots/diag/solid_frontside.png` — the
-  black bead is temporal, not nasal, on the left eye). It is small enough to be
-  invisible at gameplay range but it is wrong. Fix or delete it.
-- NPCs (`NpcRig.js`) build from the same `buildHead`, so they inherit all of this
-  for free — but `town_npcs` was not re-shot.
+1. *One ribbon per root.* `Hair.js` now emits `clump` locks per root (3 on all four
+   heroes, 4 on the beard), sharing a direction and splaying toward the tips at a
+   fraction of the width each. Total cross-section is held; the density inside the
+   silhouette triples.
+2. *Two aliasing bugs in the shading.* The Kajiya-Kay break-up mask ran on `vMapUv.x`
+   — the coordinate **across** the ribbon — at 34 cycles over a 3 mm strand. That is
+   sub-pixel at every range a head is ever seen at, so it aliased into the chrome
+   speckle that made each lock read as a faceted blade. `hairStripe`'s 11 filament
+   bands across the same 3 mm had the same problem. Both are now at frequencies that
+   resolve.
+3. **The specular tint was a brightness multiplier.** `sheenC` mixed toward
+   `vColor.rgb * 3.2`. On near-black hair the 3.2 is what makes any colour show at
+   all; on blond hair, already at 0.8 albedo, it multiplies to 2.7 and **clips to
+   white on every lock facing the sun.** Prompto's and Ignis's hair was not badly
+   shaped — it was over-exposed, and no amount of geometry work could ever have fixed
+   it. The band, the backlit rim and the sky dome now all tint by a
+   luminance-normalised hue and scale their energy explicitly.
+
+Styling that followed from looking at the result: the hairline's front term was 0.049,
+putting it 40 mm above the brow on a 108 mm brow-to-crown skull — a receding hairline,
+now 0.038. The crown mat on all four heroes rooted only over the top half of the scalp
+(`phi` 0..0.5), leaving the back of the head as bare shell; it now spans 0..0.92 at
+1.5x the count with the direction jitter cut from 0.16 to 0.05, so the locks read as a
+combed flow rather than scattered chips. Prompto's quiff was a picket fence of equal
+spikes standing straight up off a thin ring; it now sweeps up **and back** off a much
+wider root band.
+
+**The scalp shell** was a 52x11 ellipsoid, and an ellipsoid under a directional key is a
+moulded plastic cap however its albedo is textured — that is what showed through every
+gap and read as a bald crown on Prompto and a black slab on Noctis. It is now 96x20
+with a noise displacement stretched along the flow, and its `hairStripe` UV runs at 34
+repeats around the skull (was 6, i.e. 2 cm "filaments") with a jittered phase so it
+does not read as corduroy.
+
+**The ear.** The helix, antihelix, tragus and lobe were all built by my predecessor,
+correctly shaped, and **completely invisible** — see §5.6. Three things were wrong and
+all three are fixed: the ridges sat inside the plate they roll over, the hairline's ear
+notch left the shell covering the top third of the helix, and a 24 mm red paint blob at
+the ear's pin texel flooded the whole ear with one flat salmon colour *and* painted a
+bruise across the temple. `noctis_profile` and `ignis_profile` in `tmp/shots/ha22` now
+have a visible ear with a lobe and a rim. It is *present*, not *good*.
+
+**Skin.** The face and the body carried two different near-pure subsurface reds
+(0xe02c12 and 0xd8321a), so head and neck reddened by different amounts as they turned
+from the sun — the half of the jaw seam that `SKIN_BASE` does not cover — and that term
+is most of why the cast read as sunburnt at closeup. Both now use one dull brick and
+the roughness / sheen / specular pairs are matched. The painted occlusion stack is
+damped 20% and lifted toward neutral in one place: individually every socket, temple
+and cheek-hollow value is right, but they multiply, and on Prompto's pale complexion
+the overlaps went to a saturated grey-brown that read as bruising. Compare
+`ha9/prompto_front.jpg` with `ha22/prompto_front.jpg` — this is the clearest
+before/after in the set.
+
+**Gladio's beard** was ~350 individual 15 mm thorns with bare skin between them. It is
+now 6 mm, at 1.7x the roots, four locks each, in a value close to the painted stubble —
+which is itself up from 0.55 to 0.88, so the skin under the beard is dark and the
+geometry only adds fuzz at the edge.
 
 ### Not started
 
-Everything else in the approved plan: **the profile head collapse (priority 2), the
-sea-urchin hair (priority 3), the faceted forearm (priority 4), hands, outfits, skin
-chroma.** Section 6 has what I learned about each before I ran out of time.
+- **Hands.** Still mittens. Untouched.
+- **Outfits.** Still flat black shapes with no layering or hardware. Untouched.
+- **The childlike face proportions.** Visible in `ha22/noctis_front.jpg`: round soft
+  cheeks, no cheekbone edge, small chin, cranium too wide for the face. The painted
+  cheekbone hollow is doing what it can; this needs sculpt brushes, not paint.
+- **The far eye in three-quarter views** still goes to a dark hole
+  (`ha22/gladio_tq.jpg`).
 
 ---
 
-## 2. Files changed
+## 2. Files changed by me
 
 | file | why |
 |---|---|
-| `src/characters/rig/Face.js` | New `EYE` constants + `lidMargin()` + `skinSnap()`; lid band rebuilt (closes at both canthi, rides outside the cornea, welds to the skull, takes the real face UV); waterline and caruncle added; iris angle and corneal dome retuned; eye-socket sculpt retuned; painted lash line / crease / waterline / tear-trough re-derived from the lid geometry instead of two hand-tuned remap constants; painted socket AO halved. |
-| `src/characters/rig/Materials.js` | Imports `EYE` from `Face.js` so the shader's iris angle can no longer disagree with the geometric limbus; sclera value, canthal self-shadowing, vessels; the sky ambient lift on the globe is now cut by `N·V`. |
-| `src/tools/_probe/heads.mjs` | New. The probe that makes any of this judgeable — see §7. |
+| `src/characters/rig/Hair.js` | clumping; shell density + noise relief + UV; hairline front term and ear notch; per-lock value spread; root value lift |
+| `src/characters/rig/Materials.js` | the luminance-normalised hair specular tint (the big one); the mask/filament frequency fixes; `SSS_RED` shared by face and body; matched roughness/sheen/specular between the two skin materials |
+| `src/characters/rig/Face.js` | `ao()` damped and lifted in one place; ear paint blob removed; ear ridges lifted clear of the plate; ear subsurface thickness halved and plate/concha given their own values |
+| `src/characters/Cast.js` | appearance data only: `clump` on all four heroes; crown-mat coverage and flow; Prompto's quiff; Noctis's crown spikes; Ignis and Prompto hair colour; Gladio's beard and stubble |
 
-Nothing outside my ownership was touched. `Cast.js` was **not** edited (I never got
-to the appearance-data work the coordinator authorised).
+Nothing outside my ownership was touched.
 
 ---
 
@@ -58,36 +114,40 @@ to the appearance-data work the coordinator authorised).
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** (enforced by `.githooks/pre-commit`, ran on the commit) |
+| `npx vite build` | **pass** (also enforced by `.githooks/pre-commit` on every commit) |
 | `node src/tools/integration.mjs` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
-| `node src/tools/orphans.mjs` | **1 orphan: `src/world/map/MapRaster.js`** — pre-existing, not mine, `src/world/map/**` is the coordinator's |
-| `node src/tools/perf.mjs` | **not run.** The machine was saturated with sibling agents the whole session and the numbers would have been meaningless. Baseline for comparison is in `tmp/shots/ha0/manifest.json`: hero shots 4.78–4.85 M tris / 485–525 calls, `town_npcs` 6.91 M / 841. |
+| `node src/tools/orphans.mjs` | **pass** — 272 modules, 272 reachable, no orphans |
+| draw calls | **unchanged.** `hero_full` 543, `hero_face` 478, `town_npcs` 839 — identical to the baseline at the merge |
+| triangles | **up 30%.** `hero_full` 5.27 M -> 6.87 M, `town_npcs` 7.88 M -> 9.63 M. That is the cost of tripling the strand count; I took 30% back by dropping clumped locks to 5 sides / 5 steps. See §4.2 if it needs to come down further. |
+| `node src/tools/perf.mjs` | **FAIL — but it failed before my changes too, and worse.** At the merge commit `b40394a`: mean 60.7 fps, worst 22.1 (`zone_nebulawood`). After my changes: mean 72.1 fps, worst 34.7 (`menu_title`). Run-to-run variance on a machine shared with sibling agents dominates both numbers. The perf failure is **not** mine, but the triangle increase is, and someone should measure it on a quiet machine. |
 
-The eye work **adds** geometry: lid `cols` 14→20, `rows` 4→5, lashes 11→17 per lid,
-plus a waterline strip and a caruncle. Roughly +1.5 k triangles per head, ~+10 k across
-a four-hero shot with NPCs. That is noise against 4.8 M, but measure it rather than
-believing me.
+The baseline numbers quoted in older docs (4.78-4.85 M tris) predate the four rescued
+commits. Measured at `b40394a`, the real baseline is 5.27 M.
 
 ---
 
 ## 4. Next steps, in priority order
 
-1. **Re-shoot the corpus and compare against `tmp/shots/ha0/`.** `PORT=<vite> node
-   src/tools/shoot.mjs hero_face hero_closeup hero_full gladio_closeup ignis_closeup
-   prompto_closeup town_npcs --out tmp/shots/ha7 --cold`. Then `node src/tools/perf.mjs`.
-   Nothing else should start until this is known good.
-2. **Settle the socket depth properly** — see §5.1. It is parked at a working value,
-   not a correct one, and it is the one thing in this commit that could regress if the
-   head sculpt changes underneath it.
-3. **Fix or delete the caruncle** (`Face.js`, in `buildLid`, the `!upper` block). It is
-   placed at fissure fraction `cf = 0.05`, which is the *inner* canthus only if
-   `EYE.arc[0]` is the nasal end — check the sign per side.
-4. **The profile head collapse** — the worst remaining frame. Evidence:
-   `tmp/shots/ha0c/ignis_profile.png`. The skull runs as one straight plane from forehead
-   to chin point with no nasion, no mandible body and no ear. §6.1 has specifics.
-5. **The hair.** Evidence: any `*_profile` or `*_front` in `tmp/shots/ha0c/`. §6.2.
-6. **Everything else in `/Users/raynos/.claude/plans/logical-finding-flute-agent-a5330eb3b9d22cb42.md`**,
-   which is still accurate apart from its eye diagnosis (which was wrong — see §5.1).
+1. **Hands.** They are mittens and they appear in `*_hand` in every probe run and in
+   every combat frame. Nothing has been done to them at all. This is the largest
+   untouched thing I own.
+2. **Outfits.** Flat black shapes, no layering, no hardware. Same: untouched.
+3. **The face reads as a child.** `ha22/noctis_front.jpg`. Needs cheekbone, jaw-width
+   and cranium-width brushes in `Face.js` `brushes()`, not more paint. Note
+   `look.cheek` / `look.jaw` already exist as brush drivers — start there.
+4. **The ear is present but flat.** Its ridges clear the plate now, but every vertex
+   still pins to a single texel (deliberately — §5.6), so it has no albedo variation
+   and reads as a smooth shape with faint rims. The right fix is probably a small
+   dedicated UV island for the ear rather than a pin.
+5. **Triangle budget**, if it needs to come down: the cheapest cut is the crown mat
+   (`n: 260-300` x `clump: 3` per hero). Dropping `clump` to 2 there costs little
+   visually and saves roughly a third of the hair. Do *not* reduce the clump on the
+   fringe or the beard — that is where it is doing the most work.
+6. **Prompto's hair still reads olive/straw rather than gold**, even after the
+   exposure fix and a warmer base (`0xe0ae52`). I ran out of turns before finding out
+   whether that is the albedo, the `hairStripe` multiply darkening it, or the
+   environment. Start by rendering him under `Sky.setTimeOfDay(12)` to take the golden
+   hour out of the equation.
 
 ---
 
@@ -195,39 +255,67 @@ Saves you the trip:
 
 ---
 
-## 6. What I learned about the work I did not get to
+### 5.6 A clean `vite build` does not mean the page runs
 
-### 6.1 Profile (priority 2) — `tmp/shots/ha0c/ignis_profile.png`
+A bad `perl -0pi -e 's|...|...|'` — the pattern contained `\|\|` and the delimiter was
+`|` — prepended seven lines of function-body code **above the imports** in `Hair.js`.
+That is valid module syntax, so `vite build` was clean and the pre-commit hook was
+happy. The page threw a `ReferenceError` on load, and the only symptom was a 300 s
+`framecam` timeout with an **empty** console log (`log: []`) and a
+`[vite] server connection lost` line under `VERBOSE=1`. I spent forty minutes on ports,
+daemons and `cleanup.mjs` before reading the top of the file I had just edited.
 
-The worst frame in the game. Concretely: no nasion (the forehead and the nose bridge
-are one straight plane), no mandible body between the gonial angle and the chin, the
-chin is a point, and the ear is not visible at all because the hair swallows it. The
-back of the skull is a large glossy dome. `profileW()` in `Face.js` handles the
-below-equator taper; the missing mass is above it, in the brush list.
+If a capture hangs immediately after an edit: `head -5` the file you touched, then
+`git diff` it, before touching the harness. And prefer the `Edit` tool over `perl` for
+anything whose pattern contains a `|`.
 
-### 6.2 Hair (priority 3)
+### 5.7 The ear pins every vertex to one texel, and that has consequences
 
-The plan says `out` defaults to 0.15 and everything shoots radially. **That is out of
-date** — `Cast.js` already carries `out: 0.6–0.87` per tuft, i.e. the strands are
-mostly following their styled direction, not the scalp normal. The sea-urchin read
-therefore is *not* a direction-field problem and retuning `out` will not fix it. What
-the pictures actually show is that each strand is a **straight, wide, flat, faceted
-blade** — a quill because of its *cross-section and lack of curvature*, not its
-direction. The fix is in `ribbon()` (`Geo.js:591`): give the strand a curved
-cross-section and real bend along its length, and clump several locks per root.
-Ignis's hair also reads khaki rather than ash-blond; the shell ramp
-(`0.74 + 0.62·crown²`) and the Kajiya-Kay `sheenC` mix toward white together bleach
-gold.
+`buildHead` gives every ear vertex the UV of the ear's own centre. That is deliberate
+and load-bearing: a blob whose UV spans 0..1 samples the *whole* face map, so the ear
+used to wear the lips and the nostrils. But it means **anything painted at that texel
+floods the entire ear with one flat colour**. There was a 24 mm `rgba(200,104,84,0.40)`
+blob there "because ears are redder"; it turned the ear into a salmon lump *and*
+painted a bruise across the temple on the skull. Ear colour belongs in vertex colour,
+where the plate, the concha and the rims can differ. Same trap applies to anything else
+you pin.
 
-### 6.3 Skin
+Related: `B.mat(r, m, thickness)` — `thickness` is the subsurface term's input and 1.0
+is its maximum. The ear was at 1.0, so it was back-lit to a uniform pink at every
+angle, which hid what little ridge relief it had.
 
-Over-saturated orange at closeup, and the **neck is a different colour from the face**
-with a hard seam and a visible woven normal-map pattern (`tmp/shots/ha6/noctis_front.png`,
-bottom). The body uses `skinMaterial()` with `c.pore` at `repeat(22,34)`; the face uses
-`poreFine` at `repeat(9,13)`. Those are different scales on either side of the jaw
-line, which is most of the seam.
+## 6. What is left, and what I know about it
 
----
+### 6.1 Profile — **done**, verified in `tmp/shots/ha22/ignis_profile.jpg`
+
+The nasion, the mandible body and a real chin all landed in the rescued commits and
+they hold up at 0.4 m. The ear is visible in profile for the first time. What is still
+weak: the jaw has no gonial angle worth the name from this angle, and there is a hard
+flat facet where the head mesh meets the neck (visible bottom-left of
+`ha22/noctis_profile.jpg`). That junction is `Body.js` + `Face.js` and it is mine, but I
+did not get to it.
+
+### 6.2 Hair — **substantially fixed**, see §1
+
+The old diagnosis in this document ("straight, wide, flat, faceted blades; the fix is
+in `ribbon()`") was *half* right. `ribbon()` already had the six-sided rolled section
+before I started — my predecessor added it — and it was not enough, because the
+faceted read was mostly the two aliasing bugs and the over-exposure described in §1.
+The remaining geometry lever was density, not cross-section.
+
+### 6.3 Skin — **improved, not solved**
+
+The orange is gone and the neck/face seam is much reduced (`SKIN_BASE` unified the
+value, `SSS_RED` unified the subsurface). What remains: the body's pore normal map
+tiles at `repeat(15,23)` on the body UV and the face's at `repeat(9,13)` on the face
+UV, which are different *texel densities* on either side of the jaw, and no amount of
+matching the shading parameters fixes that. Someone should measure the two densities
+properly and set the repeats so they agree.
+
+There is now a mild opposite risk: with the occlusion stack damped 20% and the
+subsurface pulled back, the skin is flatter and paler than it was. Judge it in
+`ha22/noctis_profile.jpg`. If it needs warmth back, put it in the *tonal zones* (the
+three portrait bands near the top of `paintFace`), not in the `ao()` stack.
 
 ## 7. How to judge this
 
@@ -246,8 +334,10 @@ The frames that matter, in order: `noctis_eyes` (is the eye an eye?),
 `ignis_profile` (the head sculpt), `gladio_tq` (the far eye and the beard),
 `prompto_front` (blond hair, freckles).
 
-Baselines on disk: `tmp/shots/ha0/` (corpus), `tmp/shots/ha0c/` (probe, before any change),
-`tmp/shots/ha6/` (probe, current). `tmp/shots/diag/` and `tmp/shots/diag2/` hold the
+Baselines on disk for **this** session: `tmp/shots/ha9/` (the inherited state, before
+any change of mine) and `tmp/shots/ha22/` + `tmp/shots/ha23/` (now). `ha10` through
+`ha21` are the intermediate rounds if you want to attribute a particular change.
+Older: `tmp/shots/ha0c/` (before the eye rebuild), `tmp/shots/ha6/` (after it). `tmp/shots/diag/` and `tmp/shots/diag2/` hold the
 head-hidden / winding-mode diagnostics behind §5.1 — worth a look before you touch
 the socket.
 
@@ -262,7 +352,15 @@ the socket.
 2. **`src/characters/rig/Anim.js:466`** — `this.char.eyes.rotation.set((this.eyePitch
    || 0) + 0.11, ...)`. The `+0.11` was compensating for an aperture that no longer
    exists; its comment is now false. `agent/idles` owns this file. Suggest 0.
-3. **`src/world/map/MapRaster.js`** — orphaned per `src/tools/orphans.mjs`, pre-existing,
-   coordinator's directory.
+3. **`src/world/map/MapRaster.js`** — no longer orphaned; `orphans.mjs` reports 272
+   modules, 272 reachable. Resolved by someone else. No action.
 4. The DOF finding from the earlier plan is **resolved on `main`**
    (`PostFX._headObject()` now racks focus onto the shot's `follow` subject). No action.
+5. **`src/tools/perf.mjs` fails on `main`, before any character work.** Measured at the
+   merge commit `b40394a`: mean 60.7 fps, worst 22.1 fps on `zone_nebulawood`. That is
+   nothing to do with characters and it is not in anyone's handoff that I can find.
+   Whoever owns the world/vegetation systems should see it.
+6. **Character triangle counts are up 30% from the hair clumping** (`hero_full`
+   5.27 M -> 6.87 M). Draw calls are unchanged. If the coordinator needs that back,
+   §4.5 says exactly where to take it from — but it should be a measured decision on a
+   quiet machine, not a reflex.
