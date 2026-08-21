@@ -207,7 +207,7 @@ function buildPrototype() {
     roughness: 0.88, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.65, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4 });
+  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.15, tick: 0.16, shade: 0.18, dust: 0.30, dustTop: 0.55 } });
 }
 
 class BandersnatchEnemy extends Enemy {

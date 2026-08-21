@@ -401,7 +401,7 @@ function buildPrototype() {
     roughness: 0.93, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.9, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.8 });
+  return rig.build(mat, { radius: 3.8, coat: { mottle: 0.16, tick: 0.20, light: 0xa89060, shade: 0.20, dust: 0.34, dustTop: 0.55 } });
 }
 
 /** A heavy three-toed foot: two front toes, a broad pad, a rear dewclaw. */

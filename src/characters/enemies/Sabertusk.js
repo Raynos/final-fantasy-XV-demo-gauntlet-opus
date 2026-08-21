@@ -416,7 +416,7 @@ function buildPrototype() {
     roughness: 0.95, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.85, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 2.0 });
+  return rig.build(mat, { radius: 2.0, coat: { mottle: 0.13, tick: 0.16, shade: 0.18, dust: 0.30, dustTop: 0.30 } });
 }
 
 /** Toe pad group: three digits and their claws. */

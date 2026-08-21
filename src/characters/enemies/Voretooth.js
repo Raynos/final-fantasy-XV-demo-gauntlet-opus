@@ -403,7 +403,7 @@ function buildPrototype() {
     roughness: 0.72, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.95, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 2.4 });
+  return rig.build(mat, { radius: 2.4, coat: { mottle: 0.15, tick: 0.10, shade: 0.20, dust: 0.24, dustTop: 0.32 } });
 }
 
 /** Three long reptilian toes with hooked claws. */

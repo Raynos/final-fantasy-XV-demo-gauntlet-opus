@@ -294,7 +294,7 @@ function buildPrototype() {
     roughness: 0.78, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.0 });
+  return rig.build(mat, { radius: 3.0, coat: { mottle: 0.12, tick: 0.14, shade: 0.16, dust: 0.26, dustTop: 0.50 } });
 }
 
 /**

@@ -198,7 +198,7 @@ function buildPrototype() {
     roughness: 0.84, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4 });
+  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.12, tick: 0.15, shade: 0.16, dust: 0.30, dustTop: 0.70 } });
 }
 
 class AnakEnemy extends Enemy {

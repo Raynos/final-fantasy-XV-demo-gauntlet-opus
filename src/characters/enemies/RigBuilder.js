@@ -146,7 +146,8 @@ export class Rig {
    * @param {THREE.Material} material
    * @returns {{group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>}}
    */
-  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES } = {}) {
+  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null } = {}) {
+    if (coat) for (const g of this.parts) weatherCoat(g, coat);
     if (uvTiles) for (const g of this.parts) detailUV(g, uvTiles);
     const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
     const group = new THREE.Group();
@@ -321,4 +322,84 @@ export function enableVertexMaterial(material) {
   };
   material.customProgramCacheKey = () => 'creatureVertexMat';
   return material;
+}
+
+const _ca = new THREE.Color();
+const _cb = new THREE.Color();
+
+/**
+ * Coat variation over the vertex colours a part has already authored.
+ *
+ * The organic half of the bestiary paints one flat value per body region —
+ * flank, saddle, belly — and nothing at all inside a region, so from ten
+ * metres every beast is two or three poster-paint patches. Real hide is never
+ * one number: it is mottled at body scale, the guard hairs over the topline
+ * are bleached at the tips, the underside sits in its own bounce shadow, and
+ * anything that walks in Leide carries dust up its legs.
+ *
+ * The counterpart to `EnemyBase.weatherPlate` for hide, and like that one it
+ * *modulates* rather than replaces, so the value structure a species author
+ * built survives. Applied over `Rig.parts` from `Rig.build({ coat })`, which
+ * is the one place every species already funnels through and where the
+ * geometry is still in bind-pose world space — so `dustTop` can be given in
+ * metres off the ground and mean it.
+ *
+ * @param {THREE.BufferGeometry} geo must carry a `color` attribute
+ * @param {object} [o]
+ * @param {number} [o.mottle] ± value swing of the body-scale mottle
+ * @param {number} [o.tick] strength of the sun-bleached tipping on the topline
+ * @param {number} [o.light] colour the tips lean toward; default is the vertex
+ *   colour lifted, which keeps a species' own hue
+ * @param {number} [o.shade] darkening on downward-facing surfaces
+ * @param {number} [o.dark] colour the underside shades toward
+ * @param {number} [o.dust] strength of ground dust carried up the legs
+ * @param {number} [o.dustTop] metres above the ground the dust dies out at
+ * @param {number} [o.dustColor]
+ */
+export function weatherCoat(geo, {
+  mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
+  dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
+} = {}) {
+  const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
+  if (!pos || !cl) return geo;
+  if (light != null) _ca.setHex(light, THREE.SRGBColorSpace);
+  _cb.setHex(dark, THREE.SRGBColorSpace);
+  const _du = new THREE.Color().setHex(dustColor, THREE.SRGBColorSpace);
+  for (let i = 0; i < cl.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const up = nr ? nr.getY(i) : 0;
+    let r = cl.getX(i), g = cl.getY(i), b = cl.getZ(i);
+
+    // body-scale mottle: three incommensurate frequencies so it does not
+    // resolve into stripes the way a single sine does
+    const m = Math.sin(x * 3.1 + y * 1.7) * 0.5
+      + Math.sin(z * 2.3 - y * 2.9) * 0.32
+      + Math.sin(x * 7.7 + z * 6.1) * 0.18;
+    const k = 1 + m * mottle;
+    r *= k; g *= k; b *= k;
+
+    // sun-bleached tips along the topline
+    if (tick > 0) {
+      const band = Math.max(0, Math.sin(x * 41 + z * 33 + Math.sin(y * 9) * 2));
+      const t = Math.pow(band, 2.0) * Math.max(0, up) * tick;
+      if (light != null) { r += (_ca.r - r) * t; g += (_ca.g - g) * t; b += (_ca.b - b) * t; }
+      else { const lift = 1 + t * 1.2; r *= lift; g *= lift; b *= lift; }
+    }
+
+    // the underside sits in its own bounce shadow
+    if (shade > 0) {
+      const t = Math.max(0, -up) * shade;
+      r += (_cb.r - r) * t; g += (_cb.g - g) * t; b += (_cb.b - b) * t;
+    }
+
+    // dust carried up the legs and belly, ragged at its upper edge
+    if (dust > 0 && y < dustTop * 1.6) {
+      const edge = 1 - Math.min(1, Math.max(0, y / Math.max(1e-3, dustTop)));
+      const ragged = 0.75 + 0.25 * Math.sin(x * 17 + z * 13);
+      const t = edge * edge * ragged * dust;
+      r += (_du.r - r) * t; g += (_du.g - g) * t; b += (_du.b - b) * t;
+    }
+    cl.setXYZ(i, r, g, b);
+  }
+  return geo;
 }
