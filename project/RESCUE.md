@@ -32,6 +32,78 @@ Closed by the coordinator, each verified by eye or by measurement:
 
 In flight in worktrees: B12 (enemies), B5 + B10 (ui), B13 + part of B7 (veg), B11 (heroart).
 
+### Merged and verified: terrain — and the chevron was misdiagnosed twice
+
+**The chevron hatch was never the heightfield.** §C of this file stated, as a
+measured result, that it lived in `Field.heightAt()` / the far normal texture.
+That was an *inference* from a correct negative (it is not the splat), and it was
+wrong. The terrain agent bisected instead of assuming: constant albedo →
+unchanged; constant up-normal with AO forced to 1 → unchanged; **`?post=nogtao`
+alone → gone completely.**
+
+**It is GTAO.** `PostFX.js` handed the pass our depth texture alone, which makes
+it *reconstruct* normals from depth — so it saw the raw triangles of every distant
+massif and drew their facets as a regular herringbone. `Terrain.js:409` already
+called `patchGBufferMaterial(post.gtao.normalMaterial)` for a normal pass that was
+never being run, leaving that patch as dead code for however long.
+
+Half of it genuinely was ours: the clipmap vertex shader point-sampled the 4 m
+heightfield at a 12–96 m vertex pitch — decimation, not filtering. `tf_heightLod`
+now low-passes by the level's own cell, with the morph target filtered at the
+*next* level's cell so the rings still meet exactly.
+
+Fixed by the coordinator: `this.gtao.setGBuffer()` with no arguments, so GTAO
+renders its own depth and normal buffer. **Verified by eye on `zone_longwythe` —
+the hatch is completely gone and the massifs read as rock with real form.**
+Cost, A/B'd on a quiet tree: mean **70.5 → 69.8 fps**, worst **37.9 → 34.4**. A
+cheaper alternative is written up in `project/handoff/terrain.md`: keep the depth
+reuse and fade the AO term past ~600 m, where a 0.62 m gather radius has no
+physical meaning anyway.
+
+**`Terrain.groundColorAt` did not exist.** Not "disagreed" — `Ecology.groundColor`
+called `groundColorAt`, then `colorAt`, and **neither had ever been defined**, so
+every plant in the world has always tinted itself from Ecology's hard-coded
+warm-brown moisture ramp. That is the whole 0.090 / r/g 1.34 measurement. Now
+mirrors the shader's far-LOD path: Leide r/g 1.27–1.63, Duscae/Cleigne 0.68–0.84.
+
+**The horizontal wood grain was the rock tile, not the strata.** The previous
+agent's negative result reproduced exactly (zeroing every strata term changes
+nothing) — but constant albedo removes it. `Layers.js` recipe 3 had
+`hueSel = 0.5 + 0.5*b2`: a pure sinusoid of world Y at two cycles per 12.2 m tile,
+red +20% against blue −14%, drawn triplanar. Living *inside the tile* is how it
+survived the regional `bedRegion` suppression. **`WorldMap.js` needed no change** —
+the `terrace` parameter was never implicated.
+
+**The `lowAlt` gate is correct as it stands**, measured rather than judged: mean
+1.000 above `green 0.6`. `zone_three_valleys` is bald because it is *authored*
+bald (`green 0.095`) and its ground sits at 33 m where the gate reads exactly 1.0.
+
+`_outcrops` RNG decoupled — nine draws per candidate regardless of the slope test.
+That closes the B14 item.
+
+### B1 and B6 — final measured state
+
+**B1 determinism**, same follow shot alone vs sixth in a batch, on a quiet tree:
+
+| state | delta |
+|---|---|
+| before any fix | **39.200** |
+| `Party.snap()` | 4.672 |
+| per-shot `resetClock()` | 2.068 |
+| after the vegetation and terrain merges | **1.511** |
+| control: two identical alone-runs | **0.373** |
+
+Now **below the harness's 2/255 threshold** and inside the documented 1.5–1.9
+corpus floor — but still ~4× this shot's *own* floor, so a little real
+order-dependence remains. Materially fixed; not perfect. Do not claim otherwise.
+
+**B6 perf, measured on a genuinely quiet tree for the first time** (every previous
+number in this project was taken with agents live and is worthless):
+**mean 69.8 fps, worst 34.4 fps on `vista_dawn` — FAIL against the 60 fps target.**
+This failure is real, pre-existing and independent of this session's work: the
+same run without the GTAO change gives 70.5 / 37.9, also a fail. `vista_dawn` is
+the standing perf problem and nobody has owned it.
+
 ### Merged and verified: B11 (heroart) — real progress, still short of the bar
 
 Merged and looked at across all 28 framings at 0.4 m. **All nine gates green.**
