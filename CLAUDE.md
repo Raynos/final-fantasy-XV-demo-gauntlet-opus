@@ -8,8 +8,8 @@ first, then `project/SESSION-STATE.md` for who currently owns what.
 
 Four buckets, and the root holds nothing but config and the three docs below.
 
-- **`src/`** — the game. **`public/`** — assets. **`tools/`** — the harness
-  (capture, probes, checks); `tools/probes/` holds scripts for `tools/probe.mjs`.
+- **`src/`** — the game. **`public/`** — assets. **`src/tools/`** — the harness
+  (capture, probes, checks); `src/tools/probes/` holds scripts for `src/tools/probe.mjs`.
 - **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
   `docs/WORLDMAP.md`, `docs/plans/`.
 - **`project/`** — working state: how the work is *going*. `project/HANDOFF.md`,
@@ -31,6 +31,25 @@ create new files inside your own directory and wire them from your system's `ini
 Two agents editing `_readInput` independently caused the only merge conflict in 114
 commits.
 
+## Committing
+
+**Commit early and often, and keep commits small.** One concern per commit: a
+fix, a system, a rename — not an afternoon. The reasons are specific to how work
+happens here:
+
+- The pre-commit hook runs `vite build`, so every commit is also a build check.
+  Committing often means a syntax error surfaces within minutes instead of after
+  a 120 s capture timeout you then have to bisect.
+- Agents work in parallel worktrees on disjoint directories. Small, frequent
+  commits are what keep the coordinator's merges trivial — the one merge conflict
+  in 114 commits came from two agents sitting on a large uncommitted change.
+- A retired or crashed agent loses only what it had not committed. This is the
+  same principle as `project/SESSION-STATE.md`: the state lives on disk.
+
+Do not batch unrelated changes to save a turn, and do not wait until a system is
+"finished" — commit the working intermediate step. Messages stay long-form: say
+what changed and *why*, the way the existing log does.
+
 ## Handing off
 
 Keep `project/handoff/<topic>.md` current as you work: what is done and verified, what is
@@ -47,15 +66,15 @@ date and stop at a sensible pause rather than opening a new line of investigatio
 Non-negotiable, per `BRIEF.md`: capture, then **read the image and actually look at it**.
 Structural correctness is not the bar.
 
-- Capture review frames with `--jpeg`: `node tools/shoot.mjs hero_full --out tmp/shots/x --jpeg`.
+- Capture review frames with `--jpeg`: `node src/tools/shoot.mjs hero_full --out tmp/shots/x --jpeg`.
   A 1600×900 capture is downscaled to a 1568 px long edge before you see it either way,
   so a 2.5 MB PNG shows you nothing a 250 KB JPEG doesn't — it just makes every later
-  turn carry it. Leave PNG as the default when the capture feeds `tools/imgdiff.mjs`,
+  turn carry it. Leave PNG as the default when the capture feeds `src/tools/imgdiff.mjs`,
   which measures pixels and has a 1.5–1.9/255 noise floor.
 - Contact sheets come out paginated: read `_sheet-1.jpg`, `_sheet-2.jpg` … one at a time.
   Never read a `_sheet.png` — the old single-image sheets reach 45 MB and 30 000 px tall,
   and arrive as an illegible strip.
-- Shot names are **positional** on `tools/shoot.mjs`, not `--shot`.
+- Shot names are **positional** on `src/tools/shoot.mjs`, not `--shot`.
 
 ## Reading tool output
 
@@ -71,4 +90,4 @@ slice those to the part you need.
 - `git config core.hooksPath .githooks` — the pre-commit hook runs `vite build`. A syntax
   error that the dev server tolerated will otherwise hang the next capture for 120 s with
   no useful error.
-- `node tools/cleanup.mjs` reports orphaned vite/chromium; `--kill` acts.
+- `node src/tools/cleanup.mjs` reports orphaned vite/chromium; `--kill` acts.
