@@ -12,10 +12,15 @@
  *   ignis   — precise, formal, deadpan, and quietly the funniest of the four
  *   prompto — loud, insecure, delighted by everything, always holding a camera
  *
- * @typedef {{who:string, line:string,
- *            reply?:{who:string, line:string, delay?:number},
- *            reply2?:{who:string, line:string, delay?:number}}} Line
  */
+
+/** One banter beat: who speaks, what they say, and who answers. */
+export interface Line {
+  who: string;
+  line: string;
+  reply?: { who: string, line: string, delay?: number };
+  reply2?: { who: string, line: string, delay?: number };
+}
 
 const N = 'Noctis', G = 'Gladiolus', I = 'Ignis', P = 'Prompto';
 

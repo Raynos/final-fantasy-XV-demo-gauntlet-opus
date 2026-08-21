@@ -114,14 +114,24 @@ export const BOSS_RIFF = [0, 0, 1, 0, 0, -2, 1, 0];
 /* ------------------------------------------------------------- states */
 
 /**
- * @typedef {object} MusicState
- * @property {number} tempo          BPM
- * @property {number} meter          beats per bar
- * @property {number} tonic          semitones above A (the key)
- * @property {{r:number,q:string}[]} prog  chord chart, one entry per bar
- * @property {Record<string, number>} layers  target gain per arrangement layer
- * @property {number} reverb         music send depth 0..1
  */
+
+/** A named musical state the score can be asked to move to. */
+export interface MusicState {
+  /** BPM. */
+  tempo: number;
+  /** Beats per bar. */
+  meter: number;
+  /** Semitones above A -- the key. */
+  tonic: number;
+  /** Chord chart, one entry per bar. */
+  prog: { r: number, q: string }[];
+  /** Target gain per arrangement layer. */
+  layers?: Record<string, number>;
+  /** Music send depth, 0..1. */
+  reverb: number;
+  [extra: string]: any;
+}
 
 export const STATES: Record<string, MusicState> = {
   /** Leide by day: open, wistful, the theme sung by strings over a harp bed. */

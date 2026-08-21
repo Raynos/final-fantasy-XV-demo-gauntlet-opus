@@ -1,4 +1,5 @@
 import { N, FAR_N } from './Field.ts';
+import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
 import {

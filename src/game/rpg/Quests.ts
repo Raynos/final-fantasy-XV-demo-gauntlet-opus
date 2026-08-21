@@ -63,13 +63,19 @@ const rest  = (id: any, desc: any, waypoint?: any) => ({ id, type: 'rest', targe
 /* ------------------------------------------------------------------------ */
 
 /**
- * @typedef {object} Quest
- * @property {string} id
- * @property {'main'|'side'|'hunt'} type
- * @property {string} name
- * @property {number} level  recommended party level
- * @property {string[]} requires  quest ids that must be complete first
  */
+
+/** One quest as authored in the table below. */
+export interface Quest {
+  id: string;
+  type: 'main' | 'side' | 'hunt';
+  name: string;
+  /** Recommended party level. */
+  level: number;
+  /** Quest ids that must be complete first. */
+  requires: string[];
+  [extra: string]: any;
+}
 
 const QUEST_TABLE: Quest[] = [
   /* ----------------------------- main story ---------------------------- */

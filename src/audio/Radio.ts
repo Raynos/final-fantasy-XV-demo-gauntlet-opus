@@ -29,10 +29,24 @@ const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const DORIAN = [0, 2, 3, 5, 7, 9, 10];
 
 /**
- * @typedef {{id:string, name:string, album:string, bpm:number, beats:number,
- *            root:number, scale:number[], chords:number[][],
- *            voices:string[], drums:string, mood:number}} Station
  */
+
+/** One radio station: a key, a chord chart and an arrangement. */
+export interface Station {
+  id: string;
+  name: string;
+  album: string;
+  bpm: number;
+  beats: number;
+  /** Tonic frequency, Hz. */
+  root: number;
+  scale: number[];
+  chords: number[][];
+  voices: string[];
+  drums: string;
+  /** 0 = sombre, 1 = bright. */
+  mood: number;
+}
 
 export const STATIONS: Station[] = [
   {

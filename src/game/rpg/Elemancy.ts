@@ -289,7 +289,7 @@ export class Elemancy {
   /**
    * @param [inventory] used to consume catalysts on craft
    */
-  constructor(emitter: import('./Emitter.ts').Emitter | null = null, inventory: Inventory = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null, inventory: import('./Inventory.ts').Inventory | null = null) {
     this.emitter = emitter;
     this.inventory = inventory;
     /** Stored energy per element. */

@@ -4,6 +4,7 @@ import { EncounterDirector } from './encounters/EncounterDirector.ts';
 import { Downed } from './encounters/Downed.ts';
 import { HuntRuntime } from './encounters/HuntRuntime.ts';
 import { PartyAI } from '../characters/ai/PartyAI.ts';
+import type { ScenarioName } from './Shots.ts';
 
 /**
  * Scenario director, and the host for the live gameplay systems.
@@ -181,7 +182,7 @@ export class Director {
   /**
    * Put the world into a named, reproducible gameplay state.
    */
-  setScenario(name: 'field' | 'combat' | 'warp') {
+  setScenario(name: ScenarioName) {
     // Deliberately NOT `if (name === this.scenario) return`.
     //
     // A scenario is a *reproducible world state*, so re-applying it has to

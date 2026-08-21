@@ -19,7 +19,8 @@ import { makeDataMap, normalFromHeight } from '../util/TextureGen.ts';
  * world booted with no RPG model behind it.
  */
 
-/** @typedef {'sword'|'greatsword'|'polearm'|'daggers'|'firearm'} WeaponClass */
+/** The five weapon classes a party member can equip. */
+export type WeaponClass = 'sword' | 'greatsword' | 'polearm' | 'daggers' | 'firearm';
 
 export const WEAPONS = {
   sword: {

@@ -10,7 +10,16 @@ import { entry as bestiaryEntry } from '../enemies/Bestiary.ts';
  * heal. `runTechnique` is the single entry point.
  */
 
-/** @typedef {{id:string,name:string,bars:number,duration:number,run:Function}} Tech */
+/** One party technique: what it costs in tech bars and what it does. */
+export interface Tech {
+  id: string;
+  name: string;
+  /** Tech bars consumed. */
+  bars: number;
+  /** Seconds the technique holds the camera and the sim. */
+  duration: number;
+  run: (...args: any[]) => any;
+}
 
 const V = new THREE.Vector3();
 

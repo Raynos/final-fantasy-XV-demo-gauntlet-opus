@@ -14,8 +14,23 @@
 
 const CELL = 48;
 
-/** @typedef {{i:number, s:number, lat:number, dist:number,
- *             x:number, y:number, z:number, tx:number, tz:number}} RoadHit */
+/** Where a query point sits on the road: which segment, how far along, how far off. */
+export interface RoadHit {
+  /** Segment index. */
+  i: number;
+  /** Arc length along the road, metres. */
+  s: number;
+  /** Signed lateral offset from the centre line, metres. */
+  lat: number;
+  /** Distance to the centre line. */
+  dist: number;
+  x: number;
+  y: number;
+  z: number;
+  /** Unit tangent at the hit. */
+  tx: number;
+  tz: number;
+}
 
 export class RoadPath {
   _grid!: Map<any, any>;

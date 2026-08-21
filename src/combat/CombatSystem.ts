@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Rng } from '../util/Rng.ts';
 import { WEAPONS, Weapon, Armiger } from './Weapons.ts';
 import { Elemancy } from './Elemancy.ts';
+import type { CombatEvents, CombatEventName } from './CombatEvents.ts';
 
 /**
  * Real-time action combat.
@@ -196,16 +197,16 @@ export class CombatSystem {
    *         `mp` {mp,maxMp,stasis}  `combo` {index,weapon}
    *         `parry` {enemy,position}  `link` {enemy,ally}
    */
-  on(name: any, fn: any) {
+  on<K extends CombatEventName>(name: K, fn: (detail: CombatEvents[K]) => void): () => void {
     if (!this._listeners.has(name)) this._listeners.set(name, new Set());
     this._listeners.get(name).add(fn);
     return () => this.off(name, fn);
   }
 
-  off(name: any, fn: any) { this._listeners.get(name)?.delete(fn); }
+  off<K extends CombatEventName>(name: K, fn: (detail: CombatEvents[K]) => void) { this._listeners.get(name)?.delete(fn); }
 
   /** Emit locally and mirror onto `window` as `combat:<name>` for HUD/audio. */
-  emit(name: any, detail: any) {
+  emit<K extends CombatEventName>(name: K, detail: CombatEvents[K]) {
     const set = this._listeners.get(name);
     if (set) for (const fn of set) fn(detail);
     if (typeof window !== 'undefined') {

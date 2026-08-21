@@ -107,6 +107,18 @@
 /** A world-space triple. Shots are authored as arrays, not `Vector3`s. */
 export type Vec3 = readonly [number, number, number];
 
+/**
+ * The reproducible world states `Director.setScenario` can be asked for.
+ *
+ * The JSDoc this replaced said `'field'|'combat'|'warp'` and had done for a
+ * long time, while the function grew four more branches -- the boss and daemon
+ * scenarios that six shots in this file depend on. The comment was never
+ * checked; this is.
+ */
+export type ScenarioName =
+  | 'field' | 'combat' | 'warp'
+  | 'boss_field' | 'boss_imperial' | 'boss_astral' | 'daemons';
+
 /** Everything a shot may set that is not the framing. */
 export interface ShotState {
   /** What the shot is for. Read by `corpus.mjs` when it indexes the sheets. */
@@ -117,7 +129,7 @@ export interface ShotState {
   fov: number;
   weather?: 'clear' | 'fog' | 'overcast' | 'storm';
   /** `Director.setScenario` -- what is happening in the world. */
-  scenario?: string;
+  scenario?: ScenarioName;
   /** HUD visible? Set last in `applyShot` and wins over the story system. */
   hud?: boolean;
   /** Enter this dungeon before framing. */

@@ -11,20 +11,33 @@ import * as THREE from 'three';
  */
 
 /**
- * @typedef {Object} GradePreset
- * @property {number[]} balance      white balance [temperature, tint] in -1..1
- * @property {number} contrast       contrast around scene-linear mid grey
- * @property {number} saturation     global saturation
- * @property {number[]} lift         scene-linear shadow lift (rgb)
- * @property {number[]} gain         scene-linear highlight gain (rgb)
- * @property {number} vignette       lens falloff strength
- * @property {number} chroma         lateral chromatic aberration
- * @property {number} grain          film grain amplitude
- * @property {number} key            auto-exposure key value (target luminance)
- * @property {Object} look           parameters baked into the LUT
  */
 
-export const GRADES: Object<string, GradePreset> = {
+/** One colour-grade preset, as consumed by the LUT builder and the grade pass. */
+export interface GradePreset {
+  /** White balance [temperature, tint] in -1..1. */
+  balance: number[];
+  /** Contrast around scene-linear mid grey. */
+  contrast: number;
+  saturation: number;
+  /** Scene-linear shadow lift (rgb). */
+  lift: number[];
+  /** Scene-linear highlight gain (rgb). */
+  gain: number[];
+  /** Lens falloff strength. */
+  vignette: number;
+  /** Lateral chromatic aberration. */
+  chroma: number;
+  /** Film grain amplitude. */
+  grain: number;
+  /** Auto-exposure key value (target luminance). */
+  key: number;
+  /** Parameters baked into the LUT. */
+  look?: any;
+  [extra: string]: any;
+}
+
+export const GRADES: Record<string, GradePreset> = {
   // Flat, neutral daylight. Slightly cool shadows, sun-bleached highlights.
   day: {
     balance: [0.04, 0.0],

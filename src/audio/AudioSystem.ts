@@ -46,7 +46,7 @@ export class AudioSystem {
   _wasInCombat!: boolean;
   amb!: Ambience;
   cpuMs!: number;
-  ctx!: Ctx | null;
+  ctx!: AudioContext | null;
   enabled!: boolean;
   game!: any;
   graph!: AudioGraph;

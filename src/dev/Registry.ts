@@ -22,8 +22,29 @@
  * the overlay watermarks itself once anything does.
  */
 
-/** @typedef {{name:string, category:string, help:string, get:Function, set:Function, min?:number, max?:number, step?:number, choices?:string[], cheat?:boolean}} Cvar */
-/** @typedef {{name:string, category:string, help:string, args?:string, exec:Function}} Command */
+/** A console variable: a named getter/setter pair with a range the UI can draw. */
+export interface Cvar {
+  name: string;
+  category: string;
+  help: string;
+  get: (...args: any[]) => any;
+  set: (...args: any[]) => any;
+  min?: number;
+  max?: number;
+  step?: number;
+  choices?: string[];
+  /** Hidden unless cheats are on. */
+  cheat?: boolean;
+}
+/** A console command. */
+export interface Command {
+  name: string;
+  category: string;
+  help: string;
+  /** Usage string shown in help. */
+  args?: string;
+  exec: (...args: any[]) => any;
+}
 
 export class Registry {
   cmds!: Map<any, any>;
