@@ -266,9 +266,9 @@ with no dedicated shot. Do not use one list to audit the other.
 **`macroMix` is now dead for layers 0,1,2,4,5** but is still computed and still used
 by the rock path. Do not delete it.
 
-**`public/baked/` is a gitignored deterministic cache.** `Layers.js` is in
+**`src/public/baked/` is a gitignored deterministic cache.** `Layers.js` is in
 `src/tools/bake.mjs` `SOURCES`, so editing it auto-invalidates the bake; `Biome.js` is
-not, deliberately. Delete `public/baked/` freely.
+not, deliberately. Delete `src/public/baked/` freely.
 
 ---
 

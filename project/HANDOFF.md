@@ -197,5 +197,5 @@ Merge them, verify, then re-run the critic pass.
   context, ~95% of everything it carries. Capture review frames with `--jpeg`;
   the model sees a 1568 px long edge either way.
 - **`tmp/shots/` is gitignored** and so is the terrain bake cache
-  (`public/baked/`, 32 MB, regenerated deterministically from the generators).
+  (`src/public/baked/`, 32 MB, regenerated deterministically from the generators).
 - Use worktrees, and clean them up: they reached 6.1 GB before pruning.

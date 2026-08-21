@@ -190,7 +190,7 @@ re-dispatch the rest with the same ownership table.
 - `git config core.hooksPath .githooks` must be set for the build hook. If a
   fresh clone skips it, a syntax error will pass commit and hang the harness for
   120 s with no useful error.
-- `tmp/shots/` and `public/baked/` are gitignored. The bake is a 32 MB cache
+- `tmp/shots/` and `src/public/baked/` are gitignored. The bake is a 32 MB cache
   regenerated deterministically from our own generators; delete it freely.
 - Worktrees reached 6.1 GB before pruning. `node src/tools/cleanup.mjs` handles
   orphaned processes; `git worktree remove --force` handles the directories.

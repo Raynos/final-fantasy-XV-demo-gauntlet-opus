@@ -146,7 +146,7 @@ This is same-origin localhost middleware, not asset acquisition — it does not
 violate BRIEF rule 1 ("no `fetch`, no CDN"), which is about pulling in art. The
 suite must degrade to a browser download if the endpoint 404s (static build).
 
-`.review/` goes in `.gitignore` alongside `tmp/shots/` and `public/baked/`.
+`.review/` goes in `.gitignore` alongside `tmp/shots/` and `src/public/baked/`.
 
 ### One dependency: `lil-gui`
 

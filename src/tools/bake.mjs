@@ -9,7 +9,7 @@
  * The project generates every texel and every vertex in code and keeps no
  * authored art. That rule is about *inputs*, not about recomputing the same
  * deterministic output on every page load — so this runs our own generators
- * once, at build time, into `public/baked/` (git-ignored — it is a cache).
+ * once, at build time, into `src/public/baked/` (git-ignored — it is a cache).
  * The browser inflates it instead of spending 7-15 s per load regenerating a
  * byte-identical answer, and falls back to generating in place if it is absent.
  *
@@ -25,7 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 /**
- * `public/` so Vite serves it in dev and copies it into `dist/` on build with
+ * `src/public/` so Vite serves it in dev and copies it into `dist/` on build with
  * no extra middleware. Git-ignored: it is a cache of our own generators, not a
  * checked-in asset.
  */
@@ -66,7 +66,7 @@ export async function isFresh() {
 }
 
 /**
- * Run the generators and write `public/baked/terrain.bin.gz`.
+ * Run the generators and write `src/public/baked/terrain.bin.gz`.
  * @param {{force?:boolean, quiet?:boolean}} [opts]
  * @returns {Promise<boolean>} true if it did work
  */
