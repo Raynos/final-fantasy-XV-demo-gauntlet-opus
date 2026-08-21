@@ -72,15 +72,79 @@ export class PartyAI {
     return this;
   }
 
-  /** Give a companion a real weapon in the hand socket. */
+  /**
+   * Arm a companion, and start them **sheathed**.
+   *
+   * FFXV's retinue do not walk the world holding drawn weapons: Gladiolus'
+   * greatsword rides his back, Ignis' kukris sit at the belt, Prompto's pistol
+   * is holstered on the thigh. They are only in hand once something is worth
+   * hitting. Every peaceful field frame and every character portrait in the
+   * corpus had a floating blade in it purely because this used to hard-wire
+   * `setReveal(1)` into the hand socket and leave it there forever.
+   *
+   * Ignis gets two kukris, because one kukri and one empty fist is not the
+   * silhouette.
+   *
+   * @param {object} m party member
+   * @param {string} kind weapon class
+   */
   _equip(m, kind) {
     if (!m.character || !m.character.attach) return;
-    const socket = m.character.attach.handR || m.character.root;
-    const w = new Weapon(kind);
-    w.setReveal(1);
-    socket.add(w.root);
-    m.weapon = w;
+    const carry = CARRY[m.key] || CARRY.gladio;
+    m.weaponList = [];
+    for (let i = 0; i < carry.stow.length; i++) {
+      const w = new Weapon(kind);
+      w.setReveal(1);
+      m.weaponList.push(w);
+    }
+    m.weapon = m.weaponList[0];
     m.weaponKind = kind;
+    m.drawn = false;
+    m.drawWant = false;
+    m.drawT = 1;
+    this._reparent(m, false);
+  }
+
+  /**
+   * Move a companion's weapons between their sheathed station and their hands.
+   * @param {object} m @param {boolean} drawn
+   */
+  _reparent(m, drawn) {
+    const carry = CARRY[m.key] || CARRY.gladio;
+    const set = drawn ? carry.hold : carry.stow;
+    const attach = m.character.attach;
+    for (let i = 0; i < m.weaponList.length; i++) {
+      const w = m.weaponList[i];
+      const t = set[Math.min(i, set.length - 1)];
+      const parent = attach[t.socket] || attach.handR || m.character.root;
+      parent.add(w.root);
+      w.root.position.fromArray(t.pos);
+      w.root.rotation.fromArray(t.rot);
+      w.root.scale.setScalar(t.scale || 1);
+    }
+    if (m.character.setGrip) {
+      m.character.setGrip('R', drawn ? 1 : 0);
+      m.character.setGrip('L', drawn && m.weaponList.length > 1 ? 1 : 0);
+    }
+  }
+
+  /**
+   * Draw or sheathe, using the same blue-crystal dissolve Noctis' armiger
+   * uses so the station swap is a materialisation rather than a pop.
+   * @param {object} m @param {boolean} want @param {number} dt
+   */
+  _carry(m, want, dt) {
+    if (!m.weaponList) return;
+    if (m.drawWant !== want) { m.drawWant = want; m.drawT = 0; }
+    if (m.drawT >= 1) return;
+    m.drawT = Math.min(1, m.drawT + dt * 3.6);
+    if (m.drawT >= 0.5 && m.drawn !== want) {
+      m.drawn = want;
+      this._reparent(m, want);
+    }
+    const k = m.drawT;
+    const rev = k < 0.5 ? 1 - k * 2 : (k - 0.5) * 2;
+    for (const w of m.weaponList) w.setReveal(rev);
   }
 
   /**
@@ -284,6 +348,9 @@ export class PartyAI {
     }
 
     for (const m of this.party.members) {
+      // draw / sheathe runs even for a downed companion, so a wipe does not
+      // leave three blades hanging in the air over the bodies
+      this._carry(m, inCombat && !m.downed, dt);
       if (m.downed) { this._poseDown(m, dt); continue; }
       m.aiTimer -= dt;
 
@@ -496,4 +563,43 @@ const ROLES = {
   },
 };
 
-export { ROLES };
+/**
+ * Where each companion's weapons ride sheathed, and how they sit in the hand.
+ *
+ * Transforms are local to the named `Character.attach` socket. The hand
+ * sockets are authored as a *fist frame* (see `Character._palmSocket`): the
+ * blade leaves along the thumb side and the cutting edge follows the fingers,
+ * so a plain melee grip needs no rotation here at all. The pistol does, since
+ * its geometry runs grip-down/barrel-forward rather than blade-along-+Y — one
+ * quarter turn about Y aims the bore where an index finger would point.
+ *
+ * The stow transforms are absolute metres, not multiples of the rig scale:
+ * a greatsword is 2.05 m of steel whoever is carrying it.
+ */
+const CARRY = {
+  gladio: {
+    // hilt above the right shoulder, blade near-vertical down the back with
+    // the tip out past the left heel — 2.05 m of steel on a 2.00 m man has to
+    // go somewhere, and this is where FFXV puts it
+    stow: [{ socket: 'back', pos: [-0.095, 0.008, -0.094], rot: [0.061, 0, 3.013] }],
+    hold: [{ socket: 'handR', pos: [0, 0, 0], rot: [0, 0, 0] }],
+  },
+  ignis: {
+    // a kukri on each side of the belt, hanging tip-down and raked back
+    stow: [
+      { socket: 'hip', pos: [-0.07, 0.02, 0.02], rot: [0.386, 0, 3.328] },
+      { socket: 'hip', pos: [0.35, 0.05, 0.02], rot: [0.386, Math.PI, 3.328] },
+    ],
+    hold: [
+      { socket: 'handR', pos: [0, 0, 0], rot: [0, 0, 0] },
+      { socket: 'handL', pos: [0, 0, 0], rot: [0, 0, 0] },
+    ],
+  },
+  prompto: {
+    // holstered on the right thigh, muzzle down, butt to the rear
+    stow: [{ socket: 'hip', pos: [-0.075, -0.145, 0.055], rot: [Math.PI * 0.5, 0, -0.20] }],
+    hold: [{ socket: 'handR', pos: [0, 0, 0], rot: [0, Math.PI * 0.5, 0] }],
+  },
+};
+
+export { ROLES, CARRY };

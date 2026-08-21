@@ -8,6 +8,10 @@ import { Animator } from './Anim.js';
 import { skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, lensMaterial, contactShadowMaterial } from './Materials.js';
 import { Rng } from '../../util/Rng.js';
 
+/** Scratch for the per-frame grip layer — allocating there would churn the GC. */
+const _ge = new THREE.Euler(0, 0, 0, 'YXZ');
+const _gq = new THREE.Quaternion();
+
 /**
  * A fully realised character: skeleton, skinned body, sculpted head, hair,
  * layered clothing and a procedural animator.
@@ -109,8 +113,8 @@ export class Character {
     };
     const s = rig.dims.s;
     this.attach = {
-      handR: socket('handR', 'handR', [0, -0.03 * s, 0.03 * s], [0.2, 0, 0]),
-      handL: socket('handL', 'handL', [0, -0.03 * s, 0.03 * s], [0.2, 0, 0]),
+      handR: this._palmSocket(rig, 'R'),
+      handL: this._palmSocket(rig, 'L'),
       back: socket('back', 'spine03', [0, 0.06 * s, -0.14 * s], [0, 0, 0.3]),
       hip: socket('hip', 'hips', [-0.14 * s, 0.02 * s, -0.02 * s], [0, 0, -0.2]),
       head: socket('headTop', 'head', [0, 0.16 * s, 0], null),
@@ -131,7 +135,89 @@ export class Character {
 
     this.anim = new Animator(this);
     this.height = rig.dims.height;
+    /** How closed each fist is, 0 open .. 1 gripping. See `setGrip`. */
+    this.grip = { L: 0, R: 0 };
     return this;
+  }
+
+  /**
+   * A weapon socket at the **centre of the closed fist**, not at the wrist.
+   *
+   * The old socket sat on the wrist bone with a token offset, so a hilt
+   * authored with its origin at the crossguard put the fist on the guard and
+   * hung the whole grip and pommel in mid air below an open hand. Weapons are
+   * now authored grip-at-origin (see `Weapons.js`) and this puts that origin
+   * where a hand can actually close around it: down the metacarpals to the
+   * middle of the palm, then in past the palm surface by about a grip radius.
+   *
+   * The frame is the one a fist imposes. The blade runs out of the *thumb*
+   * side (+Y local → ±X world, mirrored per hand), the cutting edge follows
+   * the fingers (+X local → down the metacarpals), and the flats lie in the
+   * plane of the palm. Anything that wants a different carry angle — a
+   * shouldered greatsword, a low ready — composes its own rotation on top;
+   * that is what `PartyAI`'s hold transforms do.
+   *
+   * @param {Object} rig
+   * @param {'L'|'R'} side
+   * @returns {THREE.Object3D}
+   */
+  _palmSocket(rig, side) {
+    const s = rig.dims.s;
+    const wr = rig.P[`hand${side}`], kn = rig.P[`fingers${side}`];
+    // the hand bone's bind rotation is identity, so its local frame is
+    // world-aligned and a world offset is also the local offset
+    const dir = new THREE.Vector3().subVectors(kn, wr).normalize();
+    const front = new THREE.Vector3().crossVectors(new THREE.Vector3(1, 0, 0), dir)
+      .normalize().multiplyScalar(-1);
+    const o = new THREE.Object3D();
+    o.name = `hand${side}`;
+    o.position.copy(dir).multiplyScalar(0.044 * s).addScaledVector(front, -0.020 * s);
+
+    const ex = side === 'R' ? 1 : -1;
+    const xA = dir.clone();
+    const yA = new THREE.Vector3(ex, 0, 0);
+    yA.addScaledVector(xA, -yA.dot(xA)).normalize();
+    const zA = new THREE.Vector3().crossVectors(xA, yA);
+    o.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA, yA, zA));
+    rig.byName[`hand${side}`].add(o);
+    return o;
+  }
+
+  /**
+   * Close a fist around whatever is in that socket.
+   *
+   * The rig has always had real finger, fingertip and thumb bones; nothing
+   * ever drove them, so every character held every weapon with a flat open
+   * paddle. Positive X on these bones curls toward the palm (the hand builder
+   * curls the fingers toward `-front`, which is −Z at bind), so this is a
+   * single additive layer written after the animator has posed the skeleton.
+   *
+   * @param {'L'|'R'} side
+   * @param {number} amount 0 open .. 1 closed around a grip
+   */
+  setGrip(side, amount) {
+    if (this.grip) this.grip[side] = THREE.MathUtils.clamp(amount, 0, 1);
+  }
+
+  /**
+   * Write the grip curl. Safe to run every frame: `Animator.apply` either
+   * `setFromEuler`s or identities *every* bone each tick, so this composes
+   * with the pose rather than accumulating onto it.
+   */
+  _applyGrip() {
+    const B = this.rig.byName;
+    for (const side of ['L', 'R']) {
+      const g = this.grip[side];
+      if (g <= 0.001) continue;
+      const sg = side === 'L' ? 1 : -1;
+      const f = B[`fingers${side}`];
+      if (f) f.quaternion.multiply(_gq.setFromEuler(_ge.set(1.24 * g, 0, 0, 'YXZ')));
+      const t = B[`fingerTip${side}`];
+      if (t) t.quaternion.multiply(_gq.setFromEuler(_ge.set(1.42 * g, 0, 0, 'YXZ')));
+      const th = B[`thumb${side}`];
+      // the thumb folds across the grip rather than curling into the palm
+      if (th) th.quaternion.multiply(_gq.setFromEuler(_ge.set(0.62 * g, sg * 0.52 * g, 0, 'YXZ')));
+    }
   }
 
   _skinned(geo, mat, name) {
@@ -186,7 +272,10 @@ export class Character {
   setLookTarget(v) { this.anim.setLookTarget(v); }
 
   /** @param {number} dt @param {Object} state */
-  update(dt, state) { this.anim.update(dt, state); }
+  update(dt, state) {
+    this.anim.update(dt, state);
+    if (this.grip && (this.grip.L > 0.001 || this.grip.R > 0.001)) this._applyGrip();
+  }
 
   setVisible(v) { for (const m of this.meshes) m.visible = v; }
 

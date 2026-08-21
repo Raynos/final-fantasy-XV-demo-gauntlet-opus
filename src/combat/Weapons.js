@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import {
-  loft, bladeCross, rectCross, circleCross, tube, slab, spike, place, tint, glow, merge,
-  enableVertexEmissive,
+  loft, circleCross, chamferCross, edgedCross, wrapCross,
+  tube, slab, place, tint, glow, surf, merge,
 } from './GeoKit.js';
+import { makeDataMap, normalFromHeight } from '../util/TextureGen.js';
 
 /**
  * Weapon definitions, procedural weapon geometry, the blue-crystal
@@ -78,43 +79,80 @@ export const WEAPONS = {
   },
 };
 
-const STEEL = 0xb8c2cc;
-const DARK = 0x24272e;
-const GOLD = 0xb08a3c;
-
 /* -------------------------------------------------------------- geometry */
 
 /**
- * Cross-section of a blade that has actually been ground: a wide primary face
- * falling to a real cutting bevel at each edge, with a fuller channel milled
- * down the centre line.
+ * ## Authoring convention
  *
- * The old blade used the smooth lens section, and a smooth lens with a
- * polished-metal shader is a *mirror*: every point on the face returns very
- * nearly the same slice of sky, so the whole thing renders as one flat lit
- * rectangle — a slab, exactly what the critic called it. Facets are what make
- * steel read as steel. Four planes at genuinely different angles return four
- * different pieces of the environment, the bevel catches a hard specular line
- * along the edge, and the channel throws a shadow down the middle.
+ * **`y = 0` is the point the main hand closes around** — not the crossguard.
+ * The blade runs +Y, the cutting edge faces +X, the flats face ±Z, and
+ * everything below the fist (the lower grip, the pommel) is negative Y.
  *
- * @param {number} [chan] channel half-width as a fraction of the blade
- * @returns {Array<[number, number]>} unit cross-section, CCW
+ * This is load-bearing. Every socket in the game — `Character.attach.handR`,
+ * `PartyAI._equip`, the `CombatSystem` weapon anchor — puts the *origin* of a
+ * weapon in the hand. While the origin was the crossguard, 7–50 cm of grip and
+ * pommel hung in mid air below the fist, which is exactly the "weapons float
+ * detached from the hands" read across forty screenshots. Moving an origin
+ * moves that weapon relative to every hand in the game: if you re-author one
+ * of these, keep the fist at y = 0 and update `WEAPON_ANCHORS` in the same
+ * edit.
+ *
+ * The firearm is the one exception in orientation. A pistol's *grip* is what
+ * the hand holds, so its grip runs down −Y from the origin and the slide and
+ * barrel run along +Z; its anchors say so.
  */
-function ridgedBladeCross(chan = 0.20) {
-  const upper = [
-    [1.00, 0.00],       // cutting edge
-    [0.80, 0.66],       // bevel shoulder
-    [0.40, 0.92],       // primary face
-    [chan + 0.06, 0.94],
-    [chan, 0.52],       // channel wall
-    [0.00, 0.48],       // channel floor
-  ];
-  const c = [];
-  for (const p of upper) c.push(p);
-  for (let i = upper.length - 2; i >= 0; i--) c.push([-upper[i][0], upper[i][1]]);
-  for (let i = 1; i < upper.length; i++) c.push([-upper[i][0], -upper[i][1]]);
-  for (let i = upper.length - 2; i >= 1; i--) c.push([upper[i][0], -upper[i][1]]);
-  return c;
+
+const STEEL_HI = 0xbcc5cf;     // polished flats and bevels
+const STEEL = 0x8e97a1;        // general blade body
+const STEEL_LO = 0x5d646d;     // fuller floors, spines, shadowed grinds
+const IRON = 0x3a3e46;         // dark furniture
+const BLACKOX = 0x1b1d22;      // blued / oxidised parts
+const BRONZE = 0x8f6a34;
+const BRASS = 0xc09648;
+const LEATHER = 0x2a2018;
+const GUNMETAL = 0x2c313a;
+const AMBER = 0xff8c1e;
+const LUCII = 0x3d94dd;        // the royal blue every Lucian arm carries
+
+/**
+ * Loft a blade and tint it *across its width* rather than flat.
+ *
+ * A blade is not one colour. The secondary bevel is a freshly ground strip
+ * that throws back nearly everything; the primary face is duller; the fuller
+ * floor and the spine sit in their own shadow. Painting one hex over the whole
+ * thing and leaving the shader to find the difference does not work, because a
+ * polished metal under a sky env returns nearly the same value from every
+ * facet — the flat blue plane the critic saw. This bakes the gradient in.
+ *
+ * The colour is keyed off the **cross-section index**, not the world x of the
+ * vertex, because a swept blade (the kukri, the axe bit) carries a `dx` far
+ * larger than its own half-width and world x would read the sweep as the
+ * grind. `loft` emits vertices section-major, so `i % cross.length` recovers
+ * exactly which point of the profile a vertex came from; the trailing cap
+ * centres fall through to the body colour.
+ *
+ * @param {Array<[number,number]>} cross section, cutting edge on +X
+ * @param {Array<object>} sections loft sections
+ * @param {number} edge colour at the cutting edge
+ * @param {number} body colour across the primary face
+ * @param {number} [spine] colour at the −X side (defaults to `body`)
+ */
+function groundBlade(cross, sections, edge, body, spine = body) {
+  const geo = loft(cross, sections);
+  const n = cross.length;
+  const p = geo.attributes.position;
+  const rows = Math.floor(p.count / n);
+  const cE = new THREE.Color(edge), cB = new THREE.Color(body), cS = new THREE.Color(spine);
+  const arr = new Float32Array(p.count * 3);
+  const t = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const k = i < rows * n ? THREE.MathUtils.clamp(cross[i % n][0], -1, 1) : 0;
+    t.copy(cB).lerp(k >= 0 ? cE : cS, Math.pow(Math.abs(k), 1.5));
+    arr[i * 3] = t.r; arr[i * 3 + 1] = t.g; arr[i * 3 + 2] = t.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  // faceted last: `toNonIndexed` carries the colour attribute through
+  return faceted(geo);
 }
 
 /** Faceted shading: every triangle keeps its own plane normal. */
@@ -125,202 +163,434 @@ function faceted(geo) {
   return g;
 }
 
-/** Noctis' Engine Blade: slim, angular, blue-lit fuller. */
+/**
+ * A leather- or cord-wrapped grip: a lobed section screwed up +Y so the ridges
+ * wind round it. `turns` is how many times a ridge travels the circumference
+ * over the length — that helix is what reads as wrapping rather than as a
+ * ribbed rubber tube, and the ridges catch the rim light that tells you a hand
+ * belongs there.
+ */
+function wrappedGrip(y0, y1, r0, r1,
+  { flat = 0.76, turns = 2.6, lobes = 4, steps = 16, waist = 0.10 } = {}) {
+  const secs = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const r = THREE.MathUtils.lerp(r0, r1, t) * (1 - waist * Math.sin(t * Math.PI));
+    secs.push({
+      y: THREE.MathUtils.lerp(y0, y1, t),
+      sx: r, sz: r * flat, rot: t * turns * Math.PI * 2,
+    });
+  }
+  return loft(wrapCross(12, lobes, 0.17), secs);
+}
+
+/** Noctis' Engine Blade: slim, single-edged, a machined engine block at the guard. */
 export function swordGeometry() {
   const parts = [];
-  const blade = faceted(loft(ridgedBladeCross(), [
-    { y: 0.00, sx: 0.048, sz: 0.0165 },
-    { y: 0.14, sx: 0.055, sz: 0.0178 },
-    { y: 0.46, sx: 0.052, sz: 0.0168 },
-    { y: 0.76, sx: 0.047, sz: 0.0152 },
-    { y: 0.94, sx: 0.038, sz: 0.0126 },
-    { y: 1.04, sx: 0.021, sz: 0.0078 },
-    { y: 1.10, sx: 0.005, sz: 0.0026 },
+
+  // --- blade: 84 cm of 59 x 12 mm single-edged steel, fuller near the spine
+  const sec = edgedCross({
+    edge: 0.05, bevel: 0.14, bevelRise: 0.42, ridge: 0.44,
+    fuller: 0.56, fullerAt: -0.34, fullerW: 0.18, spine: 0.84,
+  });
+  const blade = groundBlade(sec, [
+    { y: 0.186, sx: 0.0268, sz: 0.0063 },
+    { y: 0.250, sx: 0.0296, sz: 0.0061 },
+    { y: 0.480, sx: 0.0294, sz: 0.0058 },
+    { y: 0.700, sx: 0.0286, sz: 0.0054 },
+    { y: 0.860, sx: 0.0268, sz: 0.0050 },
+    { y: 0.945, sx: 0.0234, sz: 0.0045 },
+    { y: 0.992, sx: 0.0192, sz: 0.0038, dx: 0.0030 },
+    { y: 1.024, sx: 0.0108, sz: 0.0025, dx: 0.0078 },
+    { y: 1.048, sx: 0.0018, sz: 0.0007, dx: 0.0120 },
+  ], STEEL_HI, STEEL, STEEL_LO);
+  parts.push(blade);
+
+  // The Lucian blue lives *in* the fuller, recessed below the faces, so it
+  // reads as a line drawn along the blade rather than a painted stripe.
+  const inlay = loft(chamferCross(0.42), [
+    { y: 0.240, sx: 0.0026, sz: 0.0030, dx: -0.0100 },
+    { y: 0.900, sx: 0.0021, sz: 0.0025, dx: -0.0097 },
+  ]);
+  parts.push(glow(tint(inlay, 0x11284a), LUCII, 0.55));
+
+  // --- engine block above the guard: a milled housing with piston pots
+  const block = faceted(loft(chamferCross(0.30), [
+    { y: 0.106, sx: 0.0250, sz: 0.0180 },
+    { y: 0.124, sx: 0.0268, sz: 0.0192 },
+    { y: 0.168, sx: 0.0262, sz: 0.0186 },
+    { y: 0.186, sx: 0.0190, sz: 0.0128 },
   ]));
-  parts.push(tint(blade, 0xa2acb6, 0.07));
-
-  // The light lives *in* the fuller, recessed below the faces, so the glow is
-  // a line you read along the blade rather than a slab that out-shouts a face.
-  const fuller = loft(rectCross(0.5, 8), [
-    { y: 0.10, sx: 0.0088, sz: 0.0098 },
-    { y: 0.50, sx: 0.0082, sz: 0.0094 },
-    { y: 0.90, sx: 0.0060, sz: 0.0086 },
-  ]);
-  parts.push(glow(tint(fuller, 0x14355e), 0x3d94dd, 0.42));
-
-  // crossguard: a centre block with two swept quillons, all with real depth
-  const boss = place(slab(0.052, 0.058, 0.052, 0.012), { pos: [0, -0.012, 0] });
-  parts.push(tint(boss, DARK));
-  const quillon = (side) => place(faceted(loft(rectCross(0.5, 8), [
-    { y: 0.000, sx: 0.021, sz: 0.024 },
-    { y: 0.055, sx: 0.019, sz: 0.021 },
-    { y: 0.098, sx: 0.012, sz: 0.014 },
-    { y: 0.122, sx: 0.004, sz: 0.005 },
-  ])), { pos: [side * 0.022, -0.014, 0], rot: [0, 0, side * -Math.PI * 0.46] });
-  parts.push(tint(quillon(1), DARK), tint(quillon(-1), DARK));
-
-  // gold wing plates flaring off the guard, canted so they catch a highlight
-  const wing = (side) => place(slab(0.038, 0.088, 0.024, 0.007),
-    { pos: [side * 0.062, 0.028, 0], rot: [0, side * 0.35, side * -0.62] });
-  parts.push(tint(wing(1), GOLD), tint(wing(-1), GOLD));
-
-  // ricasso collar between guard and grip
-  const collar = place(slab(0.030, 0.024, 0.030, 0.008), { pos: [0, -0.048, 0] });
-  parts.push(tint(collar, 0x33373f));
-
-  const grip = loft(circleCross(10), [
-    { y: -0.058, sx: 0.0195, sz: 0.0135 },
-    { y: -0.110, sx: 0.0182, sz: 0.0126 },
-    { y: -0.165, sx: 0.0188, sz: 0.0130 },
-    { y: -0.205, sx: 0.0172, sz: 0.0120 },
-  ]);
-  parts.push(tint(grip, 0x1a1c22));
+  parts.push(tint(block, IRON, 0.05));
   for (let i = 0; i < 3; i++) {
-    const band = loft(circleCross(10), [
-      { y: -0.082 - i * 0.042, sx: 0.0206, sz: 0.0146 },
-      { y: -0.094 - i * 0.042, sx: 0.0206, sz: 0.0146 },
-    ]);
-    parts.push(tint(band, 0x121418));
+    const y = 0.124 + i * 0.021;
+    for (const sg of [1, -1]) {
+      const pot = place(loft(circleCross(8), [
+        { y: 0.0000, sx: 0.0068 }, { y: 0.0055, sx: 0.0072 }, { y: 0.0100, sx: 0.0050 },
+      ]), { pos: [0, y, sg * 0.0180], rot: [sg > 0 ? Math.PI / 2 : -Math.PI / 2, 0, 0] });
+      parts.push(tint(pot, i === 1 ? BRASS : 0x8d949d, 0.04));
+    }
   }
+  const port = place(slab(0.030, 0.012, 0.008, 0.002), { pos: [0, 0.152, 0.020] });
+  parts.push(glow(tint(port, 0x39230c), AMBER, 0.32));
 
-  const pommel = place(slab(0.046, 0.042, 0.034, 0.013), { pos: [0, -0.228, 0] });
-  parts.push(tint(pommel, GOLD));
-  const core = place(faceted(loft(circleCross(6), [
-    { y: -0.014, sx: 0.0095, sz: 0.0095 },
-    { y: 0.000, sx: 0.0125, sz: 0.0125 },
-    { y: 0.014, sx: 0.0085, sz: 0.0085 },
-  ])), { pos: [0, -0.228, 0.018], rot: [Math.PI / 2, 0, 0] });
-  parts.push(glow(tint(core, 0x16385f), 0x3d94dd, 0.45));
+  // --- crossguard: a compact angular cross-piece, not a pair of gold wings
+  const guard = place(slab(0.108, 0.030, 0.032, 0.006), { pos: [0, 0.090, 0] });
+  parts.push(tint(guard, IRON));
+  const quillon = (side) => place(faceted(loft(chamferCross(0.36), [
+    { y: 0.000, sx: 0.0130, sz: 0.0150 },
+    { y: 0.020, sx: 0.0110, sz: 0.0125 },
+    { y: 0.034, sx: 0.0042, sz: 0.0050 },
+  ])), { pos: [side * 0.052, 0.088, 0], rot: [0, 0, side * -Math.PI * 0.5] });
+  parts.push(tint(quillon(1), 0x4a4f58), tint(quillon(-1), 0x4a4f58));
+
+  // ferrule between guard and grip
+  const ferrule = faceted(loft(chamferCross(0.34), [
+    { y: 0.050, sx: 0.0150, sz: 0.0118 },
+    { y: 0.075, sx: 0.0162, sz: 0.0126 },
+  ]));
+  parts.push(tint(ferrule, BRASS, 0.05));
+
+  parts.push(surf(tint(wrappedGrip(-0.082, 0.050, 0.0134, 0.0128, { turns: 2.8 }), LEATHER, 0.05), 0.84, 0));
+
+  // --- pommel: a faceted block with the crystal core set into both cheeks
+  const pommel = faceted(loft(chamferCross(0.34), [
+    { y: -0.082, sx: 0.0160, sz: 0.0128 },
+    { y: -0.100, sx: 0.0215, sz: 0.0172 },
+    { y: -0.118, sx: 0.0182, sz: 0.0146 },
+  ]));
+  parts.push(tint(pommel, BRASS, 0.06));
+  for (const sg of [1, -1]) {
+    const core = place(faceted(loft(circleCross(6), [
+      { y: -0.006, sx: 0.0058 }, { y: 0.000, sx: 0.0084 }, { y: 0.006, sx: 0.0050 },
+    ])), { pos: [0, -0.100, sg * 0.0125], rot: [sg > 0 ? Math.PI / 2 : -Math.PI / 2, 0, 0] });
+    parts.push(glow(tint(core, 0x10294c), LUCII, 0.60));
+  }
   return merge(parts);
 }
 
-/** Gladiolus' greatsword: broad, heavy, chipped. */
+/** Gladiolus' greatsword: genuinely massive, but proportioned like a weapon. */
 export function greatswordGeometry() {
   const parts = [];
-  const blade = faceted(loft(ridgedBladeCross(0.16), [
-    { y: 0.00, sx: 0.115, sz: 0.026 },
-    { y: 0.30, sx: 0.135, sz: 0.029 },
-    { y: 1.05, sx: 0.125, sz: 0.025 },
-    { y: 1.48, sx: 0.095, sz: 0.019 },
-    { y: 1.62, sx: 0.048, sz: 0.010 },
-    { y: 1.68, sx: 0.010, sz: 0.004 },
+
+  // --- blade: 1.33 m of 192 x 30 mm steel with a broad shallow fuller
+  const sec = edgedCross({
+    edge: 0.07, bevel: 0.17, bevelRise: 0.46, ridge: 0.54,
+    fuller: 0.52, fullerAt: 0, fullerW: 0.36,
+  });
+  const blade = groundBlade(sec, [
+    { y: 0.270, sx: 0.0790, sz: 0.0154 },
+    { y: 0.360, sx: 0.0955, sz: 0.0150 },
+    { y: 0.780, sx: 0.0960, sz: 0.0142 },
+    { y: 1.160, sx: 0.0912, sz: 0.0130 },
+    { y: 1.380, sx: 0.0820, sz: 0.0118 },
+    { y: 1.490, sx: 0.0650, sz: 0.0100, dx: 0.006 },
+    { y: 1.560, sx: 0.0360, sz: 0.0070, dx: 0.014 },
+    { y: 1.600, sx: 0.0070, sz: 0.0026, dx: 0.020 },
+  ], STEEL_HI, STEEL_LO, STEEL_HI);
+  parts.push(blade);
+
+  // bronze inlay laid into the fuller — the furniture metal, not a painted
+  // emissive stripe. The old orange `spineGlow` was the stripe the critic saw.
+  const inlay = loft(chamferCross(0.40), [
+    { y: 0.340, sx: 0.0175, sz: 0.0092 },
+    { y: 1.330, sx: 0.0130, sz: 0.0076 },
+  ]);
+  parts.push(tint(inlay, BRONZE, 0.06));
+
+  // --- ricasso: a thick squared shoulder the blade grows out of
+  const ricasso = faceted(loft(chamferCross(0.26), [
+    { y: 0.150, sx: 0.0330, sz: 0.0210 },
+    { y: 0.185, sx: 0.0360, sz: 0.0215 },
+    { y: 0.248, sx: 0.0355, sz: 0.0198 },
+    { y: 0.272, sx: 0.0700, sz: 0.0158 },
   ]));
-  parts.push(tint(blade, 0x9aa4ae, 0.07));
-  const spineGlow = loft(rectCross(0.5, 6), [
-    { y: 0.12, sx: 0.014, sz: 0.016 },
-    { y: 1.35, sx: 0.010, sz: 0.014 },
-  ]);
-  parts.push(glow(tint(spineGlow, 0x3a2a1a), 0xff7a2a, 0.40));
-  const guard = place(slab(0.40, 0.055, 0.09, 0.016), { pos: [0, -0.035, 0] });
-  parts.push(tint(guard, 0x2c2019));
-  const grip = loft(circleCross(8), [
-    { y: -0.07, sx: 0.026, sz: 0.020 },
-    { y: -0.40, sx: 0.024, sz: 0.019 },
-  ]);
-  parts.push(tint(grip, 0x40301f));
-  const pommel = place(spike(0.045, 0.10, 6), { pos: [0, -0.50, 0] });
-  parts.push(tint(pommel, 0x6d5a33));
+  parts.push(tint(ricasso, 0x4c515a, 0.05));
+
+  // --- crossbar: short, heavy, swept forward. Not a 400 mm slab.
+  const bar = (side) => place(faceted(loft(chamferCross(0.32), [
+    { y: 0.000, sx: 0.0230, sz: 0.0250 },
+    { y: 0.048, sx: 0.0205, sz: 0.0215 },
+    { y: 0.092, sx: 0.0175, sz: 0.0170 },
+    { y: 0.116, sx: 0.0080, sz: 0.0080 },
+  ])), { pos: [side * 0.026, 0.116, 0], rot: [0.16, 0, side * -Math.PI * 0.47] });
+  parts.push(tint(bar(1), BRONZE, 0.05), tint(bar(-1), BRONZE, 0.05));
+  const boss = place(slab(0.062, 0.062, 0.052, 0.010), { pos: [0, 0.118, 0] });
+  parts.push(tint(boss, 0x3d424a));
+  const collar = faceted(loft(chamferCross(0.30), [
+    { y: 0.076, sx: 0.0250, sz: 0.0205 },
+    { y: 0.096, sx: 0.0270, sz: 0.0220 },
+  ]));
+  parts.push(tint(collar, BRONZE, 0.05));
+
+  // --- the long two-hand grip: lead hand at y = 0, off hand near -0.30
+  parts.push(surf(tint(wrappedGrip(-0.380, 0.076, 0.0225, 0.0215,
+    { turns: 6.2, steps: 26, waist: 0.05 }), LEATHER, 0.05), 0.84, 0));
+  const band = (y) => faceted(loft(chamferCross(0.30), [
+    { y: y - 0.008, sx: 0.0245, sz: 0.0198 },
+    { y: y + 0.008, sx: 0.0245, sz: 0.0198 },
+  ]));
+  parts.push(tint(band(-0.140), BRONZE, 0.04), tint(band(-0.270), BRONZE, 0.04));
+
+  // --- blunt weighted pommel
+  const pommel = faceted(loft(chamferCross(0.30), [
+    { y: -0.380, sx: 0.0240, sz: 0.0205 },
+    { y: -0.412, sx: 0.0340, sz: 0.0290 },
+    { y: -0.448, sx: 0.0270, sz: 0.0232 },
+  ]));
+  parts.push(tint(pommel, BRONZE, 0.06));
   return merge(parts);
 }
 
-/** Polearm with a leaf blade and a counterweight spike. */
+/** A real spear: wrapped haft, langets, a fullered leaf head and a butt spike. */
 export function polearmGeometry() {
   const parts = [];
-  const shaft = loft(circleCross(8), [
-    { y: -1.20, sx: 0.021 }, { y: 0.9, sx: 0.024 }, { y: 1.35, sx: 0.021 },
+  const haft = loft(circleCross(9), [
+    { y: -0.920, sx: 0.0182 }, { y: -0.300, sx: 0.0196 },
+    { y: 0.520, sx: 0.0200 }, { y: 1.020, sx: 0.0184 },
   ]);
-  parts.push(tint(shaft, 0x3a3f47));
-  const head = loft(bladeCross(12), [
-    { y: 1.35, sx: 0.030, sz: 0.014 },
-    { y: 1.52, sx: 0.078, sz: 0.020 },
-    { y: 1.95, sx: 0.062, sz: 0.016 },
-    { y: 2.22, sx: 0.010, sz: 0.005 },
+  parts.push(surf(tint(haft, 0x4a3a26, 0.05), 0.74, 0));
+  // wrapped section around the origin, where the lead hand closes
+  parts.push(surf(tint(wrappedGrip(-0.120, 0.150, 0.0212, 0.0208,
+    { flat: 1, turns: 3.0, waist: 0.03 }), LEATHER, 0.05), 0.84, 0));
+  const ring = (y) => loft(chamferCross(0.34), [
+    { y: y - 0.008, sx: 0.0222, sz: 0.0222 },
+    { y: y + 0.008, sx: 0.0222, sz: 0.0222 },
   ]);
-  parts.push(tint(head, 0xc4cdd6, 0.04));
-  const wingA = place(loft(bladeCross(10), [
-    { y: 0, sx: 0.024, sz: 0.010 }, { y: 0.30, sx: 0.040, sz: 0.012 }, { y: 0.44, sx: 0.006, sz: 0.003 },
-  ]), { pos: [0.05, 1.42, 0], rot: [0, 0, -1.15] });
-  const wingB = place(loft(bladeCross(10), [
-    { y: 0, sx: 0.024, sz: 0.010 }, { y: 0.30, sx: 0.040, sz: 0.012 }, { y: 0.44, sx: 0.006, sz: 0.003 },
-  ]), { pos: [-0.05, 1.42, 0], rot: [0, 0, 1.15] });
-  parts.push(tint(wingA, 0xc4cdd6), tint(wingB, 0xc4cdd6));
-  const collar = place(slab(0.08, 0.06, 0.08, 0.02), { pos: [0, 1.33, 0] });
-  parts.push(glow(tint(collar, 0x24406a), 0x3f9dff, 0.35));
-  const butt = place(spike(0.026, 0.16, 6), { pos: [0, -1.36, 0], rot: [Math.PI, 0, 0] });
-  parts.push(tint(butt, 0x8a9099));
+  parts.push(tint(ring(-0.135), BRONZE, 0.04), tint(ring(0.165), BRONZE, 0.04));
+
+  // langets: two steel straps running up the haft into the head socket
+  for (const sg of [1, -1]) {
+    const lang = place(slab(0.014, 0.190, 0.008, 0.002), { pos: [sg * 0.0195, 0.945, 0] });
+    parts.push(tint(lang, 0x878f99, 0.04));
+  }
+  const socket = faceted(loft(chamferCross(0.32), [
+    { y: 1.020, sx: 0.0206, sz: 0.0206 },
+    { y: 1.052, sx: 0.0242, sz: 0.0238 },
+    { y: 1.100, sx: 0.0200, sz: 0.0180 },
+  ]));
+  parts.push(tint(socket, 0x8d959f, 0.05));
+
+  const head = groundBlade(edgedCross({
+    edge: 0.06, bevel: 0.16, bevelRise: 0.44, ridge: 0.46,
+    fuller: 0.34, fullerAt: 0, fullerW: 0.24,
+  }), [
+    { y: 1.098, sx: 0.0180, sz: 0.0102 },
+    { y: 1.155, sx: 0.0420, sz: 0.0108 },
+    { y: 1.270, sx: 0.0470, sz: 0.0098 },
+    { y: 1.420, sx: 0.0330, sz: 0.0072 },
+    { y: 1.500, sx: 0.0140, sz: 0.0038 },
+    { y: 1.530, sx: 0.0030, sz: 0.0012 },
+  ], STEEL_HI, STEEL, STEEL_HI);
+  parts.push(head);
+  const crystal = place(faceted(loft(circleCross(6), [
+    { y: -0.006, sx: 0.0062 }, { y: 0.000, sx: 0.0090 }, { y: 0.006, sx: 0.0054 },
+  ])), { pos: [0, 1.072, 0.020], rot: [Math.PI / 2, 0, 0] });
+  parts.push(glow(tint(crystal, 0x12294a), LUCII, 0.50));
+
+  const butt = place(faceted(loft(chamferCross(0.34), [
+    { y: 0.000, sx: 0.0200, sz: 0.0200 },
+    { y: 0.030, sx: 0.0168, sz: 0.0168 },
+    { y: 0.110, sx: 0.0026, sz: 0.0026 },
+  ])), { pos: [0, -0.920, 0], rot: [Math.PI, 0, 0] });
+  parts.push(tint(butt, 0x8d959f, 0.05));
   return merge(parts);
 }
 
 /** Single kukri-style dagger (the pair is two instances). */
 export function daggerGeometry() {
   const parts = [];
-  const blade = loft(bladeCross(10), [
-    { y: 0.00, sx: 0.038, sz: 0.014 },
-    { y: 0.16, sx: 0.052, sz: 0.015, dx: 0.012 },
-    { y: 0.38, sx: 0.044, sz: 0.012, dx: 0.030 },
-    { y: 0.52, sx: 0.012, sz: 0.005, dx: 0.040 },
+  const sec = edgedCross({
+    edge: 0.05, bevel: 0.20, bevelRise: 0.50, ridge: 0.52, spine: 0.88,
+  });
+  const blade = groundBlade(sec, [
+    { y: 0.048, sx: 0.0165, sz: 0.0042 },
+    { y: 0.082, sx: 0.0205, sz: 0.0040, dx: 0.0035 },   // choil
+    { y: 0.150, sx: 0.0248, sz: 0.0037, dx: 0.0140 },
+    { y: 0.235, sx: 0.0262, sz: 0.0033, dx: 0.0330 },
+    { y: 0.300, sx: 0.0206, sz: 0.0027, dx: 0.0505 },
+    { y: 0.336, sx: 0.0090, sz: 0.0015, dx: 0.0610 },
+    { y: 0.352, sx: 0.0016, sz: 0.0006, dx: 0.0660 },
+  ], STEEL_HI, STEEL, STEEL_LO);
+  parts.push(blade);
+  // the hollow-ground flat: a narrow bright line chasing the spine
+  const flat = loft(chamferCross(0.40), [
+    { y: 0.095, sx: 0.0020, sz: 0.0032, dx: -0.0088 },
+    { y: 0.300, sx: 0.0016, sz: 0.0026, dx: 0.0410 },
   ]);
-  parts.push(tint(blade, 0xd2e4e0, 0.05));
-  const edge = loft(rectCross(0.5, 6), [
-    { y: 0.06, sx: 0.006, sz: 0.016 }, { y: 0.46, sx: 0.005, sz: 0.014, dx: 0.034 },
-  ]);
-  parts.push(glow(tint(edge, 0x1a4a42), 0x30e0b8, 0.45));
-  const guard = place(slab(0.10, 0.022, 0.04, 0.008), { pos: [0, -0.012, 0] });
-  parts.push(tint(guard, 0x22262b));
-  const grip = loft(circleCross(6), [{ y: -0.03, sx: 0.016, sz: 0.012 }, { y: -0.17, sx: 0.015, sz: 0.011 }]);
-  parts.push(tint(grip, 0x14161a));
+  parts.push(glow(tint(flat, 0x0f3a34), 0x30e0b8, 0.42));
+
+  const bolster = faceted(loft(chamferCross(0.34), [
+    { y: 0.022, sx: 0.0130, sz: 0.0098 },
+    { y: 0.038, sx: 0.0182, sz: 0.0118 },
+    { y: 0.050, sx: 0.0132, sz: 0.0086 },
+  ]));
+  parts.push(tint(bolster, IRON, 0.05));
+  parts.push(surf(tint(wrappedGrip(-0.078, 0.022, 0.0112, 0.0118,
+    { turns: 2.2, steps: 12 }), BLACKOX, 0.04), 0.70, 0));
+
+  // finger-ring pommel — the tell that says kukri and not letter-opener
+  const ringPts = [], ringR = [];
+  for (let i = 0; i <= 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    ringPts.push(new THREE.Vector3(Math.cos(a) * 0.0135, -0.098 + Math.sin(a) * 0.0135, 0));
+    ringR.push(0.0034);
+  }
+  parts.push(tint(tube(ringPts, ringR, { radialSeg: 5, capStart: false, capEnd: false }), IRON, 0.04));
+  const neck = faceted(loft(chamferCross(0.34), [
+    { y: -0.078, sx: 0.0110, sz: 0.0092 },
+    { y: -0.090, sx: 0.0074, sz: 0.0066 },
+  ]));
+  parts.push(tint(neck, IRON, 0.04));
   return merge(parts);
 }
 
-/** Prompto-style machine pistol. */
+/**
+ * Prompto's Quicksilver: a real pistol. The grip runs down −Y from the fist
+ * and the slide and barrel run along +Z — see the orientation note above.
+ */
 export function firearmGeometry() {
   const parts = [];
-  const body = place(slab(0.05, 0.10, 0.16, 0.012), { pos: [0, 0.02, 0] });
-  parts.push(tint(body, 0x2b3038));
-  const barrel = place(loft(circleCross(8), [{ y: 0, sx: 0.014 }, { y: 0.20, sx: 0.012 }]),
-    { pos: [0, 0.05, 0.08], rot: [Math.PI / 2, 0, 0] });
-  parts.push(tint(barrel, 0x8d949c));
-  const grip = place(slab(0.038, 0.13, 0.05, 0.010), { pos: [0, -0.08, -0.03], rot: [0.28, 0, 0] });
-  parts.push(tint(grip, 0x15171b));
-  const sight = place(slab(0.02, 0.02, 0.05, 0.004), { pos: [0, 0.08, 0.02] });
-  parts.push(glow(tint(sight, 0x30506a), 0x66d9ff, 0.30));
-  const mag = place(slab(0.03, 0.08, 0.04, 0.006), { pos: [0, -0.06, 0.0] });
-  parts.push(tint(mag, 0x1d2026));
+
+  // --- frame: the spine of the gun, backstrap forward under the slide
+  const frame = place(slab(0.022, 0.034, 0.150, 0.004), { pos: [0, 0.050, 0.028] });
+  parts.push(tint(frame, GUNMETAL, 0.04));
+  const dust = place(slab(0.026, 0.014, 0.108, 0.003), { pos: [0, 0.062, 0.052] });
+  parts.push(tint(dust, 0x3a4048, 0.04));
+
+  // --- slide: the mass on top, with an ejection port and rear serrations
+  const slide = faceted(loft(chamferCross(0.24), [
+    { y: 0.080, sx: 0.0142, sz: 0.0850, dz: 0.0300 },
+    { y: 0.100, sx: 0.0150, sz: 0.0860, dz: 0.0305 },
+    { y: 0.114, sx: 0.0138, sz: 0.0855, dz: 0.0300 },
+  ]));
+  parts.push(tint(slide, 0x656d77, 0.05));
+  const eject = place(slab(0.046, 0.016, 0.010, 0.002),
+    { pos: [0.0125, 0.104, 0.052], rot: [0, Math.PI / 2, 0] });
+  parts.push(tint(eject, BLACKOX));
+  for (let i = 0; i < 5; i++) {
+    const ser = place(slab(0.030, 0.026, 0.0035, 0.001),
+      { pos: [0, 0.100, -0.030 + i * 0.0075], rot: [0, Math.PI / 2, 0] });
+    parts.push(tint(ser, 0x4c535c));
+  }
+
+  // --- barrel and muzzle crown
+  const barrel = place(loft(circleCross(10), [
+    { y: 0.000, sx: 0.0088 }, { y: 0.052, sx: 0.0082 }, { y: 0.060, sx: 0.0092 },
+  ]), { pos: [0, 0.0965, 0.112], rot: [Math.PI / 2, 0, 0] });
+  parts.push(tint(barrel, 0x9aa2ab, 0.04));
+  const bore = place(loft(circleCross(8), [{ y: 0, sx: 0.0044 }, { y: 0.010, sx: 0.0044 }]),
+    { pos: [0, 0.0965, 0.160], rot: [Math.PI / 2, 0, 0] });
+  parts.push(tint(bore, 0x0a0b0d));
+
+  // --- sights, with a tritium dot on the front post
+  parts.push(tint(place(slab(0.008, 0.010, 0.007, 0.001), { pos: [0, 0.121, 0.104] }), BLACKOX));
+  parts.push(tint(place(slab(0.024, 0.010, 0.008, 0.001), { pos: [0, 0.121, -0.020] }), BLACKOX));
+  parts.push(glow(tint(place(slab(0.0035, 0.0035, 0.004, 0.001),
+    { pos: [0, 0.123, 0.106] }), 0x2a4a60), 0x66d9ff, 0.45));
+
+  // --- hammer
+  const hammer = place(faceted(loft(chamferCross(0.36), [
+    { y: 0.000, sx: 0.0058, sz: 0.0090 },
+    { y: 0.022, sx: 0.0052, sz: 0.0110 },
+    { y: 0.030, sx: 0.0040, sz: 0.0062 },
+  ])), { pos: [0, 0.092, -0.040], rot: [-0.42, 0, 0] });
+  parts.push(tint(hammer, 0x545b64, 0.04));
+
+  // --- trigger guard: a real loop, with a trigger inside it
+  const guardPts = [], guardR = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = -0.6 + (i / 12) * (Math.PI + 1.2);
+    guardPts.push(new THREE.Vector3(0, 0.020 + Math.sin(a) * -0.026, 0.036 + Math.cos(a) * 0.028));
+    guardR.push(0.0044);
+  }
+  parts.push(tint(tube(guardPts, guardR, { radialSeg: 5, flat: 1.3 }), GUNMETAL, 0.04));
+  const trigger = place(slab(0.007, 0.026, 0.006, 0.001), { pos: [0, 0.024, 0.030], rot: [0.18, 0, 0] });
+  parts.push(tint(trigger, 0x8d949c));
+
+  // --- grip: checkered, raked back, magazine floorplate under it
+  const gripSecs = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    gripSecs.push({
+      y: 0.042 - t * 0.104,
+      sx: 0.0155 + t * 0.0012,
+      sz: 0.0230 - t * 0.0026,
+      dz: -0.010 - t * 0.0225,
+    });
+  }
+  parts.push(surf(tint(faceted(loft(wrapCross(12, 8, 0.11), gripSecs)), BLACKOX, 0.05), 0.62, 0));
+  const floor = place(slab(0.036, 0.009, 0.052, 0.002), { pos: [0, -0.066, -0.033], rot: [0.23, 0, 0] });
+  parts.push(tint(floor, 0x3c424a));
+  const badge = place(slab(0.006, 0.014, 0.010, 0.001), { pos: [0.0155, -0.010, -0.024] });
+  parts.push(glow(tint(badge, 0x33210c), AMBER, 0.30));
   return merge(parts);
 }
 
-/** Broad battle-axe — Armiger filler. */
+/** Broad battle-axe — Armiger filler. Origin at the lead hand on the haft. */
 export function axeGeometry() {
   const parts = [];
-  const shaft = loft(circleCross(7), [{ y: -0.55, sx: 0.021 }, { y: 0.62, sx: 0.023 }]);
-  parts.push(tint(shaft, 0x33383f));
-  const head = loft(bladeCross(10), [
-    { y: 0.30, sx: 0.05, sz: 0.024, dx: 0.03 },
-    { y: 0.46, sx: 0.20, sz: 0.026, dx: 0.16 },
-    { y: 0.66, sx: 0.20, sz: 0.024, dx: 0.16 },
-    { y: 0.78, sx: 0.05, sz: 0.018, dx: 0.03 },
+  const haft = loft(circleCross(8), [
+    { y: -0.480, sx: 0.0185 }, { y: 0.100, sx: 0.0200 }, { y: 0.560, sx: 0.0192 },
   ]);
-  parts.push(tint(head, 0xaeb8c2, 0.05));
-  const top = place(spike(0.024, 0.16, 6), { pos: [0, 0.62, 0] });
-  parts.push(tint(top, 0xc0c8d0));
+  parts.push(surf(tint(haft, 0x4a3a26, 0.05), 0.74, 0));
+  parts.push(surf(tint(wrappedGrip(-0.110, 0.110, 0.0210, 0.0206,
+    { flat: 1, turns: 2.6, steps: 12, waist: 0.03 }), LEATHER, 0.05), 0.84, 0));
+  const head = groundBlade(edgedCross({ edge: 0.05, bevel: 0.22, bevelRise: 0.52, ridge: 0.58 }), [
+    { y: 0.300, sx: 0.038, sz: 0.0180, dx: 0.026 },
+    { y: 0.360, sx: 0.130, sz: 0.0190, dx: 0.108 },
+    { y: 0.520, sx: 0.135, sz: 0.0175, dx: 0.112 },
+    { y: 0.590, sx: 0.040, sz: 0.0120, dx: 0.030 },
+  ], STEEL_HI, STEEL, STEEL_LO);
+  parts.push(head);
+  const eye = faceted(loft(chamferCross(0.30), [
+    { y: 0.290, sx: 0.0270, sz: 0.0245 },
+    { y: 0.600, sx: 0.0260, sz: 0.0235 },
+  ]));
+  parts.push(tint(eye, IRON, 0.05));
+  const top = place(faceted(loft(chamferCross(0.34), [
+    { y: 0.000, sx: 0.0180, sz: 0.0180 }, { y: 0.120, sx: 0.0026, sz: 0.0026 },
+  ])), { pos: [0, 0.600, 0] });
+  parts.push(tint(top, 0x9aa2ab, 0.04));
+  const butt = place(faceted(loft(chamferCross(0.34), [
+    { y: 0.000, sx: 0.0210, sz: 0.0210 }, { y: 0.048, sx: 0.0150, sz: 0.0150 },
+  ])), { pos: [0, -0.528, 0] });
+  parts.push(tint(butt, BRONZE, 0.04));
   return merge(parts);
 }
 
-/** Long lance — Armiger filler. */
+/** Long lance — Armiger filler. Origin at the lead hand on the shaft. */
 export function lanceGeometry() {
   const parts = [];
-  const shaft = loft(circleCross(7), [{ y: -1.0, sx: 0.018 }, { y: 1.0, sx: 0.021 }]);
-  parts.push(tint(shaft, 0x3d434b));
-  const head = loft(bladeCross(10), [
-    { y: 1.00, sx: 0.030, sz: 0.014 },
-    { y: 1.18, sx: 0.055, sz: 0.018 },
-    { y: 1.70, sx: 0.014, sz: 0.006 },
+  const shaft = loft(circleCross(8), [
+    { y: -0.860, sx: 0.0160 }, { y: 0.000, sx: 0.0182 }, { y: 1.180, sx: 0.0152 },
   ]);
-  parts.push(tint(head, 0xccd5de, 0.04));
+  parts.push(tint(shaft, 0x3d434b, 0.05));
+  parts.push(surf(tint(wrappedGrip(-0.130, 0.140, 0.0196, 0.0192,
+    { flat: 1, turns: 3.0, steps: 12, waist: 0.03 }), LEATHER, 0.05), 0.84, 0));
+  const head = groundBlade(edgedCross({
+    edge: 0.05, bevel: 0.18, bevelRise: 0.46, ridge: 0.48,
+    fuller: 0.32, fullerAt: 0, fullerW: 0.22,
+  }), [
+    { y: 1.175, sx: 0.0150, sz: 0.0086 },
+    { y: 1.235, sx: 0.0380, sz: 0.0092 },
+    { y: 1.420, sx: 0.0340, sz: 0.0080 },
+    { y: 1.580, sx: 0.0140, sz: 0.0040 },
+    { y: 1.620, sx: 0.0026, sz: 0.0011 },
+  ], STEEL_HI, STEEL, STEEL_HI);
+  parts.push(head);
   for (let i = 0; i < 3; i++) {
-    const ring = place(slab(0.055, 0.03, 0.055, 0.012), { pos: [0, 0.2 + i * 0.3, 0] });
-    parts.push(glow(tint(ring, 0x2b4a72), 0x4aa8ff, 0.30));
+    const y = 0.34 + i * 0.28;
+    const r = loft(chamferCross(0.34), [
+      { y: y - 0.010, sx: 0.0215, sz: 0.0215 },
+      { y: y + 0.010, sx: 0.0215, sz: 0.0215 },
+    ]);
+    parts.push(glow(tint(r, 0x1e3450), LUCII, 0.38));
   }
+  const butt = place(faceted(loft(chamferCross(0.34), [
+    { y: 0.000, sx: 0.0180, sz: 0.0180 }, { y: 0.070, sx: 0.0022, sz: 0.0022 },
+  ])), { pos: [0, -0.860, 0], rot: [Math.PI, 0, 0] });
+  parts.push(tint(butt, 0x8d959f, 0.04));
   return merge(parts);
 }
 
@@ -334,7 +604,70 @@ export const WEAPON_GEOMETRY = {
   lance: lanceGeometry,
 };
 
+/**
+ * Where the damaging part of each weapon starts and ends, in the weapon's own
+ * frame. `CombatSystem` sweeps a capsule from `base` to `tip` for hit
+ * detection and pushes the same pair into the trail ribbon; `_shoot` uses
+ * `tip` as the muzzle.
+ *
+ * These used to be derived as `reach * 0.52`, which is a guess that happened
+ * to land near the tip for the melee classes and was catastrophically wrong
+ * for the gun: `firearm.reach` is 26 m, so every muzzle flash and tracer for
+ * Prompto's pistol originated **13 metres above his head**. Authored now.
+ */
+export const WEAPON_ANCHORS = {
+  sword: { base: [0, 0.190, 0], tip: [0.012, 1.048, 0] },
+  greatsword: { base: [0, 0.270, 0], tip: [0.020, 1.600, 0] },
+  polearm: { base: [0, 1.100, 0], tip: [0, 1.530, 0] },
+  daggers: { base: [0, 0.050, 0], tip: [0.066, 0.352, 0] },
+  firearm: { base: [0, 0.0965, 0.060], tip: [0, 0.0965, 0.168] },
+  axe: { base: [0.02, 0.300, 0], tip: [0.110, 0.560, 0] },
+  lance: { base: [0, 1.180, 0], tip: [0, 1.620, 0] },
+};
+
 /* --------------------------------------------------- materialise shader */
+
+/**
+ * Brushed-steel micro-surface, generated once and shared by every weapon.
+ *
+ * `metalness 0.84 / roughness 0.38` with no maps against the sky env RT is a
+ * *mirror*: every facet returns nearly the same slice of sky, so the whole
+ * blade renders as one flat blue plane. That is where the blue surfboard came
+ * from. Fine anisotropic streaks running lengthwise break the reflection into
+ * the stretched highlight that reads as ground steel, without needing a
+ * `MeshPhysicalMaterial` anisotropy upgrade.
+ *
+ * The maps are module-level and shared so that **every weapon material stays
+ * configuration-identical** — `CombatSystem._prebuildWeapons` relies on all
+ * five classes sharing one compiled program, so a weapon swap costs a
+ * visibility flip rather than a half-second stall.
+ */
+let STEEL_MAPS = null;
+function steelMaps() {
+  if (STEEL_MAPS) return STEEL_MAPS;
+  const N = 256;
+  const frac = (x) => x - Math.floor(x);
+  // `p` is the tiling period in cells, so the streaks wrap cleanly in u
+  const h1 = (i, p) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
+  const vn = (x, p) => {
+    const i = Math.floor(x), f = frac(x), s = f * f * (3 - 2 * f);
+    return h1(i, p) * (1 - s) + h1(i + 1, p) * s;
+  };
+  // Variation across the blade, near-constant along it: a brushed streak.
+  // The v terms must stay tiny — the loft's v runs the length of the blade,
+  // so any real drift skews the streaks into visible corrugation instead of
+  // a grind.
+  const height = (u, v) => (
+    0.58 * vn((u + v * 0.0016) * 17, 17) +
+    0.30 * vn((u + v * 0.0026) * 43, 43) +
+    0.12 * vn((u + v * 0.0040) * 97, 97)
+  );
+  STEEL_MAPS = {
+    rough: makeDataMap(N, (u, v) => 0.32 + 0.62 * height(u, v)),
+    norm: normalFromHeight(N, height, 0.30),
+  };
+  return STEEL_MAPS;
+}
 
 /**
  * Standard weapon material with a crystal materialisation dissolve.
@@ -342,10 +675,13 @@ export const WEAPON_GEOMETRY = {
  * boundary a band of blue crystal light burns, above it nothing is drawn.
  */
 export function makeWeaponMaterial() {
+  const maps = steelMaps();
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, vertexColors: true, roughness: 0.38, metalness: 0.84,
-    emissive: 0x000000,
+    color: 0xffffff, vertexColors: true, roughness: 0.70, metalness: 0.90,
+    emissive: 0x000000, roughnessMap: maps.rough, normalMap: maps.norm,
+    envMapIntensity: 0.48,
   });
+  mat.normalScale.set(0.16, 0.16);
   const uniforms = { uReveal: { value: 1 }, uEdge: { value: new THREE.Color(0x4fb6ff) } };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
@@ -353,19 +689,26 @@ export function makeWeaponMaterial() {
     shader.uniforms.uEdge = uniforms.uEdge;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>',
-        '#include <common>\nattribute vec3 aEmissive;\nvarying vec3 vEmissive;\nvarying float vLocalY;')
+        '#include <common>\nattribute vec3 aEmissive;\nattribute vec2 aSurf;\n'
+        + 'varying vec3 vEmissive;\nvarying vec2 vSurf;\nvarying float vLocalY;')
       .replace('#include <begin_vertex>',
-        '#include <begin_vertex>\nvEmissive = aEmissive;\nvLocalY = position.y;');
+        '#include <begin_vertex>\nvEmissive = aEmissive;\nvSurf = aSurf;\nvLocalY = position.y;');
     shader.fragmentShader = shader.fragmentShader
+      // per-vertex surface: the brushed-steel roughness map only applies where
+      // the part is actually metal; leather, wood and polymer take their own
+      .replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\nroughnessFactor = mix(vSurf.x, roughnessFactor, vSurf.y);')
+      .replace('#include <metalnessmap_fragment>',
+        '#include <metalnessmap_fragment>\nmetalnessFactor *= vSurf.y;')
       .replace('#include <common>',
-        '#include <common>\nvarying vec3 vEmissive;\nvarying float vLocalY;\nuniform float uReveal;\nuniform vec3 uEdge;')
+        '#include <common>\nvarying vec3 vEmissive;\nvarying vec2 vSurf;\nvarying float vLocalY;\nuniform float uReveal;\nuniform vec3 uEdge;')
       .replace('#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
-         float rev = mix(-0.7, 2.4, uReveal);
+         float rev = mix(-0.95, 2.4, uReveal);
          if (vLocalY > rev) discard;`)
       .replace('#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-         float band = smoothstep(0.30, 0.0, mix(-0.7, 2.4, uReveal) - vLocalY);
+         float band = smoothstep(0.30, 0.0, mix(-0.95, 2.4, uReveal) - vLocalY);
          totalEmissiveRadiance += vEmissive + uEdge * band * 6.0;`);
   };
   mat.customProgramCacheKey = () => 'weaponMaterialise';
@@ -388,8 +731,17 @@ export class Weapon {
     this.root = new THREE.Group();
     this.root.add(this.mesh);
     this.reveal = 1;
-    this.tipLocal = new THREE.Vector3(0, this.def.reach * 0.52, 0);
-    this.baseLocal = new THREE.Vector3(0, 0.06, 0);
+    const a = WEAPON_ANCHORS[kind];
+    if (a) {
+      this.baseLocal = new THREE.Vector3().fromArray(a.base);
+      this.tipLocal = new THREE.Vector3().fromArray(a.tip);
+    } else {
+      // an unlisted kind (modded gear): measure the geometry rather than guess
+      this.geometry.computeBoundingBox();
+      const bb = this.geometry.boundingBox;
+      this.baseLocal = new THREE.Vector3(0, bb.max.y * 0.18, 0);
+      this.tipLocal = new THREE.Vector3(0, bb.max.y, 0);
+    }
     this._tip = new THREE.Vector3();
     this._base = new THREE.Vector3();
   }
@@ -460,6 +812,11 @@ export class Armiger {
 
   /**
    * Lay out the ring around `center`.
+   *
+   * The weapons are hilt-inward, which since the re-origin means each one is
+   * pinned by the point a hand would hold — so the ring reads as a crown of
+   * arms waiting to be grasped rather than as blades skewered on a circle.
+   *
    * @param {THREE.Vector3} center
    * @param {number} t phase in seconds (deterministic when pinned)
    */
@@ -476,7 +833,6 @@ export class Armiger {
         center.y + tierY,
         center.z + Math.sin(a) * tierR
       );
-      // blades point outward-and-down, hilts toward the wielder, slight tumble
       // hilts inward, points swept outward and down — a crown of royal arms
       this._e.set(
         tilt + Math.sin(t * 1.3 + s.seed * 12) * 0.16,

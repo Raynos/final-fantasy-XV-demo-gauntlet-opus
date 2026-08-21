@@ -241,12 +241,37 @@ export function glow(geo, hex, strength = 1) {
   return geo;
 }
 
-/** Merge, filling in any missing color / aEmissive attributes with defaults. */
+/**
+ * Stamp per-vertex surface response: `(roughness, metalness)`.
+ *
+ * One merged weapon or creature is a single draw call sharing one material,
+ * which means one metalness for the steel, the leather wrap, the wooden haft
+ * and the polymer grip alike — and a *dielectric* rendered at metalness 1 is a
+ * dark mirror, not leather. A shader that reads this attribute (see
+ * `makeWeaponMaterial`) gets real material variety out of the same program.
+ *
+ * @param {THREE.BufferGeometry} geo
+ * @param {number} rough roughness to use where `metal` is 0
+ * @param {number} metal 0 dielectric .. 1 metal
+ */
+export function surf(geo, rough, metal) {
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { arr[i * 2] = rough; arr[i * 2 + 1] = metal; }
+  geo.setAttribute('aSurf', new THREE.BufferAttribute(arr, 2));
+  return geo;
+}
+
+/** Merge, filling in any missing color / aEmissive / aSurf attributes. */
 export function merge(geos) {
   const list = geos.filter(Boolean);
+  // only carry aSurf when somebody in the batch actually asked for it, so
+  // every creature in the game does not grow an attribute its shader ignores
+  const wantSurf = list.some((g) => g.attributes.aSurf);
   for (const g of list) {
     if (!g.attributes.color) tint(g, 0xffffff);
     if (!g.attributes.aEmissive) glow(g, 0x000000);
+    if (wantSurf && !g.attributes.aSurf) surf(g, 0.5, 1);
     if (!g.attributes.uv) {
       const n = g.attributes.position.count;
       g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
@@ -257,7 +282,7 @@ export function merge(geos) {
     }
     // drop attributes that would block the merge
     for (const k of Object.keys(g.attributes)) {
-      if (!['position', 'normal', 'uv', 'color', 'aEmissive', 'skinIndex', 'skinWeight'].includes(k)) {
+      if (!['position', 'normal', 'uv', 'color', 'aEmissive', 'aSurf', 'skinIndex', 'skinWeight'].includes(k)) {
         g.deleteAttribute(k);
       }
     }
@@ -284,4 +309,86 @@ export function enableVertexEmissive(material) {
   };
   material.customProgramCacheKey = () => 'vertexEmissive';
   return material;
+}
+
+/**
+ * Cross-section of a blade that has actually been ground on a wheel.
+ *
+ * `bladeCross` is a lens and `rectCross` is a rounded bar; neither has a
+ * cutting edge, and a polished lens under a sky env-map is a mirror — every
+ * point on the face returns nearly the same slice of sky, so the blade renders
+ * as one flat coloured plane. A real section has four distinct plane families
+ * meeting at hard lines: a narrow secondary bevel at the edge, a long primary
+ * grind, the ridge, and the fuller floor. Four different angles return four
+ * different pieces of the environment, and the ridge and fuller shoulders draw
+ * the hard specular lines that read as steel.
+ *
+ * Authored in unit space: x = ±1 at the width extremes, z = ±1 at full
+ * thickness. `loft` scales x by `sx` (half-width) and z by `sz`
+ * (half-thickness), so a 58 mm × 12 mm blade is `sx 0.029, sz 0.006`.
+ *
+ * @param {object} [o]
+ * @param {number} [o.edge] half-thickness right at the cutting edge
+ * @param {number} [o.bevel] width of the secondary bevel, fraction of half-width
+ * @param {number} [o.bevelRise] thickness at the bevel shoulder
+ * @param {number} [o.ridge] x of the thickest line (the grind ridge)
+ * @param {number} [o.fuller] fuller depth; 0 leaves the face solid
+ * @param {number} [o.fullerAt] x centre of the fuller channel
+ * @param {number} [o.fullerW] half-width of the fuller channel
+ * @param {number} [o.spine] >0 makes it single-edged with a flat back this thick
+ * @returns {Array<[number,number]>} closed unit cross-section
+ */
+export function edgedCross({
+  edge = 0.06, bevel = 0.10, bevelRise = 0.40, ridge = 0.34,
+  fuller = 0, fullerAt = 0, fullerW = 0.20, spine = 0,
+} = {}) {
+  const top = [[1, edge], [1 - bevel, bevelRise], [ridge, 1]];
+  if (fuller > 0.001) {
+    const a = fullerAt + fullerW, b = fullerAt - fullerW;
+    if (a < ridge - 0.02) {
+      top.push([a, 0.96], [fullerAt, 1 - fuller], [b, 0.96]);
+    }
+  }
+  if (spine > 0.001) {
+    // single-edged: the far side is a squared spine, not a second edge
+    top.push([-0.86, Math.max(spine, 0.9)], [-1, spine]);
+  } else {
+    top.push([-ridge, 1], [-(1 - bevel), bevelRise], [-1, edge]);
+  }
+  const c = top.slice();
+  const from = spine > 0.001 ? top.length - 1 : top.length - 2;
+  for (let i = from; i >= 1; i--) c.push([top[i][0], -top[i][1]]);
+  return c;
+}
+
+/**
+ * Rectangle with real chamfered corners — receivers, engine blocks, langets,
+ * anything machined. `rectCross`'s superellipse rounds every corner off and
+ * cannot hold a hard 45° cut, which is the whole read of a milled part.
+ * @param {number} [c] chamfer size as a fraction of the half-extent
+ * @returns {Array<[number,number]>}
+ */
+export function chamferCross(c = 0.22) {
+  const k = 1 - Math.min(0.48, c);
+  return [[1, -k], [1, k], [k, 1], [-k, 1], [-1, k], [-1, -k], [-k, -1], [k, -1]];
+}
+
+/**
+ * Lobed cross-section for a leather- or cord-wrapped grip. Loft it with a
+ * per-section `rot` that advances up the grip and the lobes screw into a
+ * helical ridge — a real wrap for the price of one loft, and the ridges catch
+ * the rim light that tells you a hand belongs there.
+ * @param {number} [n] points around
+ * @param {number} [lobes] ridges around the circumference
+ * @param {number} [depth] groove depth as a fraction of the radius
+ * @returns {Array<[number,number]>}
+ */
+export function wrapCross(n = 14, lobes = 4, depth = 0.13) {
+  const c = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const k = 1 - depth * (0.5 - 0.5 * Math.cos(a * lobes));
+    c.push([Math.cos(a) * k, Math.sin(a) * k]);
+  }
+  return c;
 }
