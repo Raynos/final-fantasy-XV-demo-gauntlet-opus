@@ -7,13 +7,13 @@ import {
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const CHAR = 0x1b1715;
-const CHAR_DARK = 0x0c0a09;
-const CHAR_LIGHT = 0x302924;
+const CHAR = 0x322c28;
+const CHAR_DARK = 0x1c1917;
+const CHAR_LIGHT = 0x4b423a;
 const EMBER = 0x40120a;
 const MOLTEN = 0xff8a1e;
 const MOLTEN_HOT = 0xffd28a;
-const BLADE = 0x3a332e;
+const BLADE = 0x504740;
 
 /**
  * Red Giant — the Iron Giant's furnace-hot cousin.
@@ -263,6 +263,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.66, metalness: 0.35,
+    rim: { color: 0xb06a34, strength: 0.06 },
     normalMap: metalNormal(), normalScale: 0.26, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 7.0 });

@@ -5,10 +5,10 @@ import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const FLESH = 0x4a3446;
-const FLESH_DARK = 0x241a29;
+const FLESH = 0x6d5068;
+const FLESH_DARK = 0x3b2c40;
 const BELLY = 0x6d5c3a;
-const RAG = 0x2a251f;
+const RAG = 0x453e33;
 const NAIL = 0xb0a68b;
 const TOOTH = 0xc4bda4;
 const EYE = 0xff4a12;
@@ -206,6 +206,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.74, metalness: 0.0,
+    rim: { color: 0x7d6f9c, strength: 0.055 },
     normalMap: organicNormal(), normalScale: 0.8, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 3.2 });

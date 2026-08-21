@@ -285,7 +285,7 @@ export function poseBoneMix(rig, name, x, y, z, k, order = 'XYZ') {
  */
 export function creatureMaterial({
   roughness = 0.72, metalness = 0.05, normalMap = null, normalScale = 0.7,
-  roughnessMap = null, envMapIntensity = 1.0,
+  roughnessMap = null, envMapIntensity = 1.0, rim = null,
 } = {}) {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff, vertexColors: true, roughness: 1, metalness: 1,
@@ -293,6 +293,7 @@ export function creatureMaterial({
   });
   if (normalMap) m.normalScale = new THREE.Vector2(normalScale, normalScale);
   m.userData.defMat = [roughness, metalness];
+  if (rim) m.userData.rim = rim;
   return enableVertexMaterial(m);
 }
 
@@ -301,9 +302,16 @@ export function creatureMaterial({
  * (vec2 roughness/metalness) vertex attributes. The base material carries
  * roughness = metalness = 1 so the attribute multiplies cleanly through any
  * roughness map that is also bound.
+ *
+ * `material.userData.rim` additionally adds a view-dependent emissive rim.
+ * That exists for the daemons, and it is a *readability* tool, not a stylistic
+ * one: it is a fixed radiance, so under the sun it is far below the diffuse
+ * term and invisible, while at 23:00 it is the only thing separating a
+ * near-black silhouette from the ground behind it. `{ color, power, strength }`.
  * @param {THREE.Material} material
  */
 export function enableVertexMaterial(material) {
+  const rim = (material.userData && material.userData.rim) || null;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>',
@@ -319,8 +327,24 @@ export function enableVertexMaterial(material) {
         '#include <metalnessmap_fragment>\nmetalnessFactor = clamp( metalnessFactor * vMatP.y, 0.0, 1.0 );')
       .replace('#include <emissivemap_fragment>',
         '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmissive;');
+    if (!rim) return;
+    // `<emissivemap_fragment>` runs after `<normal_fragment_maps>`, so `normal`
+    // is the final shading normal here; `vViewPosition` is the fragment-to-eye
+    // vector meshphysical declares unconditionally.
+    shader.uniforms.uRimCol = { value: new THREE.Color().setHex(rim.color ?? 0x6d7ea6, THREE.SRGBColorSpace) };
+    shader.uniforms.uRimPow = { value: rim.power ?? 2.6 };
+    shader.uniforms.uRimStr = { value: rim.strength ?? 0.06 };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>',
+        '#include <common>\nuniform vec3 uRimCol;\nuniform float uRimPow;\nuniform float uRimStr;')
+      .replace('totalEmissiveRadiance += vEmissive;',
+        'totalEmissiveRadiance += vEmissive;\n{ float rf = 1.0 - clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 );'
+        + '\n  totalEmissiveRadiance += uRimCol * ( pow( rf, uRimPow ) * uRimStr ); }');
   };
-  material.customProgramCacheKey = () => 'creatureVertexMat';
+  // Two variants, two keys. Sharing one key hands the rim program to every
+  // creature in the roster, or the plain one to every daemon, depending on
+  // which compiled first.
+  material.customProgramCacheKey = () => (rim ? 'creatureVertexMatRim' : 'creatureVertexMat');
   return material;
 }
 

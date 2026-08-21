@@ -5,12 +5,12 @@ import { tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCros
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const LACQUER = 0x1b1418;
-const LACQUER_RED = 0x571318;
-const LACQUER_HI = 0x2e2229;
-const CORD = 0x3a2c30;
+const LACQUER = 0x342830;
+const LACQUER_RED = 0x6d1c22;
+const LACQUER_HI = 0x4b3a44;
+const CORD = 0x52403f;
 const TRIM = 0x8c7742;
-const HAORI = 0x4a3b3f;
+const HAORI = 0x64515a;
 const STEEL = 0xb2bcc4;
 const VOID = 0x000000;
 const EMBER = 0xd8200a;
@@ -236,6 +236,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.44, metalness: 0.32,
+    rim: { color: 0x9a6a72, strength: 0.055 },
     normalMap: metalNormal(), normalScale: 0.28, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 3.0 });
