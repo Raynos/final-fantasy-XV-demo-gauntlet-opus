@@ -456,7 +456,11 @@
 /* ===================================================================== */
 /* MENUS                                                                 */
 /* ===================================================================== */
-.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.62), rgba(2,4,8,.90)); }
+/* The centre of the scrim was only 62% opaque, which is where every screen puts
+   its type — the world behind stayed legible enough to compete with a 9px
+   label. Deeper in the middle, same falloff, so the frame is still readable as
+   the place the player paused rather than a black plate. */
+.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.74), rgba(2,4,8,.93)); }
 .menu-grain { position: absolute; inset: 0; opacity: .5;
   background-image: linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px);
   background-size: 100% 3px; mix-blend-mode: overlay; }
