@@ -172,7 +172,7 @@ function parchmentTile(): HTMLCanvasElement {
   const cv = document.createElement('canvas');
   cv.width = S; cv.height = S;
   const c = cv.getContext('2d');
-  const img = c.createImageData(S, S);
+  const img = c!.createImageData(S, S);
   const d = img.data;
   for (let j = 0; j < S; j++) {
     for (let i = 0; i < S; i++) {
@@ -187,7 +187,7 @@ function parchmentTile(): HTMLCanvasElement {
       d[o + 3] = 178;
     }
   }
-  c.putImageData(img, 0, 0);
+  c!.putImageData(img, 0, 0);
   return cv;
 }
 

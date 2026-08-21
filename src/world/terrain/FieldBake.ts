@@ -117,7 +117,7 @@ export async function loadBaked(): Promise<{applyTo:(f:any)=>void, layers:()=>an
     // the time we see it — inflating again would abort the stream. Only decode
     // in JS when the transfer was opaque.
     const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
-    const body = encoded ? res.body : res.body.pipeThrough(new DecompressionStream('gzip'));
+    const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
     const buf = new Uint8Array(await new Response(body).arrayBuffer());
     unpackContainer(buf);            // validates magic and format version
     return { applyTo: (f) => applyBakedField(f, buf), layers: () => bakedLayers(buf) };

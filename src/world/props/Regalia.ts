@@ -148,26 +148,26 @@ function contactShadowTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, s, s);
+  ctx!.clearRect(0, 0, s, s);
   // body pool: a long soft ellipse
-  const g = ctx.createRadialGradient(s * 0.5, s * 0.5, 0, s * 0.5, s * 0.5, s * 0.5);
+  const g = ctx!.createRadialGradient(s * 0.5, s * 0.5, 0, s * 0.5, s * 0.5, s * 0.5);
   g.addColorStop(0.0, 'rgba(0,0,0,0.68)');
   g.addColorStop(0.42, 'rgba(0,0,0,0.42)');
   g.addColorStop(0.75, 'rgba(0,0,0,0.10)');
   g.addColorStop(1.0, 'rgba(0,0,0,0)');
-  ctx.save();
-  ctx.translate(s * 0.5, s * 0.5); ctx.scale(1, 0.44); ctx.translate(-s * 0.5, -s * 0.5);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
-  ctx.restore();
+  ctx!.save();
+  ctx!.translate(s * 0.5, s * 0.5); ctx!.scale(1, 0.44); ctx!.translate(-s * 0.5, -s * 0.5);
+  ctx!.fillStyle = g; ctx!.fillRect(0, 0, s, s);
+  ctx!.restore();
   // four hard little pools right under the contact patches
   for (const cx of [0.208, 0.792]) {
     for (const cy of [0.30, 0.70]) {
-      const w = ctx.createRadialGradient(s * cx, s * cy, 0, s * cx, s * cy, s * 0.085);
+      const w = ctx!.createRadialGradient(s * cx, s * cy, 0, s * cx, s * cy, s * 0.085);
       w.addColorStop(0, 'rgba(0,0,0,0.95)');
       w.addColorStop(0.45, 'rgba(0,0,0,0.6)');
       w.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = w;
-      ctx.fillRect(s * (cx - 0.1), s * (cy - 0.1), s * 0.2, s * 0.2);
+      ctx!.fillStyle = w;
+      ctx!.fillRect(s * (cx - 0.1), s * (cy - 0.1), s * 0.2, s * 0.2);
     }
   }
   const tex = new THREE.CanvasTexture(cv);

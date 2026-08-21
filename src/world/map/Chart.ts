@@ -228,7 +228,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
   canvas.width = size;
   canvas.height = size;
   const c = canvas.getContext('2d');
-  const img = c.createImageData(size, size);
+  const img = c!.createImageData(size, size);
   const d = img.data;
   const water = new Uint8Array(size * size);
 
@@ -407,7 +407,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
     }
   }
 
-  c.putImageData(img, 0, 0);
+  c!.putImageData(img, 0, 0);
   const ms = now() - t0;
   return new Chart(canvas, ppm, size, H, water, ms);
 }

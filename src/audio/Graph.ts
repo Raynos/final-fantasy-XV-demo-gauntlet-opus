@@ -79,7 +79,7 @@ export class AudioGraph {
   /**
    * @param {object} [o]
    * */
-  constructor(ctx: BaseAudioContext, o: { offline?: boolean } = {}) {
+  constructor(ctx: BaseAudioContext, o: { offline?: boolean, maxVoices?: any, masterVolume?: any } = {}) {
     this.ctx = ctx;
     this.offline = !!o.offline;
 

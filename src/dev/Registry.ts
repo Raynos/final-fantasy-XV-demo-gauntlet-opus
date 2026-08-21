@@ -178,8 +178,8 @@ export class Registry {
       if (!out.has(k)) out.set(k, { cvars: [], cmds: [] });
       return out.get(k);
     };
-    for (const c of this.cvars.values()) bucket(c.category || 'misc').cvars.push(c);
-    for (const c of this.cmds.values()) bucket(c.category || 'misc').cmds.push(c);
+    for (const c of this.cvars.values()) bucket(c.category || 'misc')!.cvars.push(c);
+    for (const c of this.cmds.values()) bucket(c.category || 'misc')!.cmds.push(c);
     return out;
   }
 }

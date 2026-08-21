@@ -1283,7 +1283,7 @@ export class Field {
         const hNew = (n00 * (1 - nfx) + n10 * nfx) * (1 - nfz) + (n01 * (1 - nfx) + n11 * nfx) * nfz;
         const dh = hNew - hOld;
 
-        flow[idx] += water;
+        flow![idx] += water;
         const cap = Math.max(-dh, minSlope) * speed * water * capacityF;
 
         if (carried > cap || dh > 0) {
@@ -1293,7 +1293,7 @@ export class Field {
           h[idx + 1] += amount * fx * (1 - fz);
           h[idx + N] += amount * (1 - fx) * fz;
           h[idx + N + 1] += amount * fx * fz;
-          sed[idx] += amount;
+          sed![idx] += amount;
         } else {
           const amount = Math.min((cap - carried) * erodeSpeed, -dh);
           for (let k = 0; k < bo.length; k++) {
@@ -1360,10 +1360,10 @@ export class Field {
 
     let flowMax = 0;
     const flow = this.flow, sed = this.sed;
-    for (let k = 0; k < flow.length; k++) if (flow[k] > flowMax) flowMax = flow[k];
+    for (let k = 0; k < flow!.length; k++) if (flow![k] > flowMax) flowMax = flow![k];
     const flowScale = 1 / Math.log(1 + flowMax * 0.35 + 1e-6);
     let sedMax = 1e-6;
-    for (let k = 0; k < sed.length; k++) if (sed[k] > sedMax) sedMax = sed[k];
+    for (let k = 0; k < sed!.length; k++) if (sed![k] > sedMax) sedMax = sed![k];
 
     const at = (i: any, j: any) => {
       const ii = i < 0 ? 0 : i > N - 1 ? N - 1 : i;
@@ -1371,13 +1371,13 @@ export class Field {
       return h[jj * N + ii];
     };
 
-    const fb = new Float32Array(flow.length);
+    const fb = new Float32Array(flow!.length);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
         const idx = j * N + i;
-        const a = flow[idx];
-        const l = flow[j * N + Math.max(0, i - 1)], r = flow[j * N + Math.min(N - 1, i + 1)];
-        const u = flow[Math.max(0, j - 1) * N + i], d = flow[Math.min(N - 1, j + 1) * N + i];
+        const a = flow![idx];
+        const l = flow![j * N + Math.max(0, i - 1)], r = flow![j * N + Math.min(N - 1, i + 1)];
+        const u = flow![Math.max(0, j - 1) * N + i], d = flow![Math.min(N - 1, j + 1) * N + i];
         fb[idx] = a * 0.44 + (l + r + u + d) * 0.14;
       }
     }
@@ -1401,7 +1401,7 @@ export class Field {
         const curv = (hl + hr + hd + hu) * 0.25 - c;
 
         const fl = Math.min(1, Math.log(1 + fb[idx] * 0.35) * flowScale);
-        const sd = Math.min(1, Math.pow(sed[idx] / sedMax, 0.32));
+        const sd = Math.min(1, Math.pow(sed![idx] / sedMax, 0.32));
 
         let rocky = smoothstep(0.35, 0.95, slope) * 0.85;
         rocky += Math.max(0, -curv) * 0.5;
@@ -1410,9 +1410,9 @@ export class Field {
         rocky = Math.max(0, Math.min(1, rocky - 0.12 * fl));
 
         const o = idx * 4;
-        const rm = this.roadMask[idx];
+        const rm = this.roadMask![idx];
         this.ctrl[o] = rm > 0.02
-          ? (Math.max(0, Math.min(1, this.roadLat[idx])) * 255) | 0
+          ? (Math.max(0, Math.min(1, this.roadLat![idx])) * 255) | 0
           : (Math.max(0, Math.min(1, fl)) * 255) | 0;
         this.ctrl[o + 1] = (Math.max(0, Math.min(1, sd * (1 - slope * 0.8))) * 255) | 0;
         this.ctrl[o + 2] = (Math.max(0, Math.min(1, rm)) * 255) | 0;

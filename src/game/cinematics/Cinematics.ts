@@ -143,7 +143,7 @@ export class Cinematics {
    */
   skip() {
     if (!this.playing || !this.skippable) return;
-    this.tl.fastForward((c) => this._cue(c, true));
+    this.tl!.fastForward((c) => this._cue(c, true));
     this.box.clearLine();
     this.stop({ skipped: true });
   }
@@ -207,8 +207,8 @@ export class Cinematics {
   seek(t: number, step: number = 1 / 30) {
     if (!this.playing) return;
     let guard = 0;
-    while (this.tl.t < t && guard++ < 4000) {
-      const dt = Math.min(step, t - this.tl.t);
+    while (this.tl!.t < t && guard++ < 4000) {
+      const dt = Math.min(step, t - this.tl!.t);
       this._advance(dt, dt);
       if (!this.playing) break;
     }
@@ -244,16 +244,16 @@ export class Cinematics {
       if (k >= 1) { this.game.time.scale = 1; this._slow = null; }
     }
 
-    const cut = this.tl.step(sceneDt, (c) => this._cue(c, false));
+    const cut = this.tl!.step(sceneDt, (c) => this._cue(c, false));
     if (cut) this._cut = true;
 
     if (def.tick) {
-      try { def.tick(this.tl.t, worldDt, ctx); } catch (e) { console.warn('[Cinematics] tick', e); }
+      try { def.tick(this.tl!.t, worldDt, ctx); } catch (e) { console.warn('[Cinematics] tick', e); }
     }
     this.stage.tick(worldDt);
     this.box.update(sceneDt, true);
 
-    if (this.tl.done) this.stop({ skipped: false });
+    if (this.tl!.done) this.stop({ skipped: false });
   }
 
   lateUpdate(dt: any, game: any) {

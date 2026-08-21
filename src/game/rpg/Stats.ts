@@ -162,7 +162,7 @@ export class Stats {
    * @param {object} [opts]
    * 
    */
-  constructor(id: string, opts: { level?: number } = {}) {
+  constructor(id: string, opts: { level?: number, exp?: any } = {}) {
     this.id = id;
     this.profile = GROWTH[id as keyof typeof GROWTH] || GROWTH.noctis;
     this.name = this.profile.name;

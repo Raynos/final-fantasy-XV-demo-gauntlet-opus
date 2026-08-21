@@ -698,7 +698,7 @@ export class AudioSystem {
    *
    * @param {object} o
    */
-  static async renderSession(o: { seconds: number, sampleRate?: number, script: (api:any)=>void }): Promise<{buffer:AudioBuffer, stats:any}> {
+  static async renderSession(o: { seconds: number, sampleRate?: number, script: (api:any)=>void, maxVoices?: any }): Promise<{buffer:AudioBuffer, stats:any}> {
     const seconds = o.seconds ?? 30;
     const sampleRate = o.sampleRate ?? 44100;
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;

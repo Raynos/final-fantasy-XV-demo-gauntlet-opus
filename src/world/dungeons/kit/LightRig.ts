@@ -43,7 +43,7 @@ export class LightRig {
    * @param {object} o
    * 
    */
-  constructor(o: { poolSize?: number, ambientSky?: number, ambientGround?: number, ambientIntensity?: number, moteColor?: number, moteCount?: number } = {}) {
+  constructor(o: { poolSize?: number, ambientSky?: number, ambientGround?: number, ambientIntensity?: number, moteColor?: number, moteCount?: number, gain?: any, lampColor?: any, lampIntensity?: any, lampRange?: any, moteBox?: any } = {}) {
     this.poolSize = o.poolSize || 12;
     /**
      * Emitters are authored in "how bright does this fixture feel" units, 1..12.

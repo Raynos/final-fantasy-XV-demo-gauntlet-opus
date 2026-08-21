@@ -785,7 +785,7 @@ export class WorldMap {
    * Nearest POI to a world position.
    * @param x @param z
    */
-  nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi:any, dist:number} | null {
+  nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi:any, dist:number, id?: any } | null {
     const { types = null, maxDist = Infinity, discoveredOnly = false } = opt;
     let best: any = null, bestD = maxDist;
     const ci = Math.floor(x / this._cell), cj = Math.floor(z / this._cell);

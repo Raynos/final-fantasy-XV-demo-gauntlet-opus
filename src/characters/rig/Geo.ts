@@ -274,7 +274,7 @@ export function mergeParts(geos: any) {
  *
  * @param {Object} o
  * */
-export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, ref?: any, colorAt?: any, matAt?: any }) {
+export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, ref?: any, colorAt?: any, matAt?: any, capStart?: any, capHeight?: any }) {
   const nodes = o.nodes;
   const steps = o.steps || 16;
   const seg = o.seg || 16;

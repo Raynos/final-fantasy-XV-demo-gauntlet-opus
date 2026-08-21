@@ -43,7 +43,7 @@ export class CharacterController {
   stepUp!: any;
   vy!: number;
   world!: any;
-  constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number} = {}) {
+  constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number, climbMax?: any, riseRate?: any } = {}) {
     this.world = world;
     this.radius = opts.radius != null ? opts.radius : 0.36;
     this.height = opts.height != null ? opts.height : 1.78;

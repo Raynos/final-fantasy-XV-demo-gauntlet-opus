@@ -764,7 +764,7 @@ function contrastMips(canvas: any) {
     const dst = document.createElement('canvas');
     dst.width = w; dst.height = h;
     const dctx = dst.getContext('2d', { willReadFrequently: true });
-    const out = dctx.createImageData(w, h);
+    const out = dctx!.createImageData(w, h);
     const od = out.data;
     // deviation is pushed harder the further down the chain we go: at mip 5 a
     // feature owns a single texel and nothing but the extreme is left of it
@@ -804,7 +804,7 @@ function contrastMips(canvas: any) {
         od[i + 2] = Math.min(255, od[i + 2] * g);
       }
     }
-    dctx.putImageData(out, 0, 0);
+    dctx!.putImageData(out, 0, 0);
     mips.push(dst);
     src = dst;
   }

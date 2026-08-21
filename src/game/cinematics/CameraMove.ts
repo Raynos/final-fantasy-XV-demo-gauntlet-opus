@@ -51,7 +51,7 @@ export class Shot {
   /**
    * @param {object} def
    * */
-  constructor(def: { t0: number, t1: number, keys: Array<any>, fov?: number, handheld?: number, breathe?: number, focus?: number | 'auto' | 'subject', fStop?: number, aim?: string | string[], aimU?: number, seed?: number }) {
+  constructor(def: { t0: number, t1: number, keys: Array<any>, fov?: number, handheld?: number, breathe?: number, focus?: number | 'auto' | 'subject', fStop?: number, aim?: string | string[], aimU?: number, seed?: number, ease?: any, spline?: any, label?: any }) {
     this.t0 = def.t0;
     this.t1 = def.t1;
     this.dur = Math.max(0.001, def.t1 - def.t0);

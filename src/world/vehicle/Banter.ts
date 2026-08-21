@@ -179,7 +179,7 @@ export class Banter {
    *
    * @param {object} ctx
    * */
-  observe(dt: number, ctx: { speed: number, driving: boolean, auto: boolean, roadDist: number, offRoadMode: boolean, slide: number, hour: number, weather: string, fuel: number, landmark: {name:string, dist:number} | null }) {
+  observe(dt: number, ctx: { speed: number, driving: boolean, auto: boolean, roadDist: number, offRoadMode: boolean, slide: number, hour: number, weather: string, fuel: number, landmark: {name:string, dist:number, kind?: any } | null }) {
     if (!this.enabled || this.muted) return;
     const st = this._state;
 

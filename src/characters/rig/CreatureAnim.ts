@@ -118,13 +118,13 @@ export class LegChain {
     // straight off the skeleton with no bind-matrix bookkeeping.
     this.seg = [];
     for (let i = 1; i < b.length; i++) {
-      const p = b[i].position;
+      const p = b[i]!.position;
       this.seg.push({ len: p.length(), phi: Math.atan2(p.z, -p.y), y: p.y, z: p.z });
     }
     // The IK solves the *upper* two segments only. On a digitigrade leg the
     // third segment is the pastern, which stays near-vertical and is levelled
     // afterwards — solving through it would let the ankle hyper-extend.
-    this.footRel = new THREE.Vector3().copy(b[1].position);
+    this.footRel = new THREE.Vector3().copy(b[1]!.position);
     if (b[2]) this.footRel.add(b[2].position);
     this.L1 = this.seg[0].len;
     this.L2 = this.seg.length > 1 ? this.seg[1].len : 0;

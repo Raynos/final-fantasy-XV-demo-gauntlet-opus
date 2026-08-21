@@ -80,7 +80,7 @@ export class InteractionSystem {
    *
    * @param {object} def
    */
-  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:any, item:any)=>void, enabled?: ()=>boolean }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
+  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:any, item:any)=>void, enabled?: ()=>boolean, key?: any }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
     const id = def.id || `ix${_nextId++}`;
     const item = {
       id,

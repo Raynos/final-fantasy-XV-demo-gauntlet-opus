@@ -68,7 +68,7 @@ export class Layout {
    *
    * @param {object} s
    * */
-  room(id: string, s: { x: number, z: number, w: number, d: number, y?: number, h?: number, style?: 'bunker' | 'mine' | 'cave', kind?: 'entry' | 'hall' | 'junction' | 'treasure' | 'boss' | 'shaft' | 'dead-end', name?: string }) {
+  room(id: string, s: { x: number, z: number, w: number, d: number, y?: number, h?: number, style?: 'bunker' | 'mine' | 'cave', kind?: 'entry' | 'hall' | 'junction' | 'treasure' | 'boss' | 'shaft' | 'dead-end', name?: string, platforms?: any, ramps?: any, pillars?: any, rubble?: any, water?: any }) {
     const r = {
       id, kind: s.kind || 'hall', name: s.name || null,
       x: s.x, z: s.z, w: s.w, d: s.d,

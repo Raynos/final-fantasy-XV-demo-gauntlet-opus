@@ -115,7 +115,7 @@ export class GearScreen {
         el('div.gc-stats', {}, statNodes.map((s) => s.node)),
       ]);
       this.grid.appendChild(card);
-      this.cards.push({ card, bar, hpVal, slots, statNodes, p, lvEl: card.firstChild.lastChild.lastChild });
+      this.cards.push({ card, bar, hpVal, slots, statNodes, p, lvEl: card.firstChild!.lastChild!.lastChild });
     });
   }
 

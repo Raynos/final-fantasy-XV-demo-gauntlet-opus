@@ -621,7 +621,7 @@ export class QuestLog {
    * Waypoint markers for the HUD: the next unfinished objective of every
    * active quest that has a position.
    */
-  waypoints(): Array<{questId:string, name:string, objective:string, pos:number[], tracked:boolean}> {
+  waypoints(): Array<{questId:string, name:string, objective:string, pos:number[], tracked:boolean, radius?: any }> {
     const out = [];
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];

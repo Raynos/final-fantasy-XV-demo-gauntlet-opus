@@ -206,13 +206,13 @@ function withAlphaMips(tex: any, data: any, size: any, alphaRef: any, tinyFade?:
  *   alpha-weighted mean *linear* luminance — see {@link normalizeAlbedo}; set
  *   it whenever this card is one LOD of something another ring also draws.
  */
-export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?:number, tinyFade?:number} = {}) {
+export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?:number, tinyFade?:number, albedo?: any } = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
-  ctx.clearRect(0, 0, size, size);
+  ctx!.clearRect(0, 0, size, size);
   draw(ctx, size);
-  const src = ctx.getImageData(0, 0, size, size).data;
+  const src = ctx!.getImageData(0, 0, size, size).data;
   // DataTexture ignores flipY, so flip rows here to keep the usual
   // "v=0 is the bottom of the canvas" convention every card geometry assumes.
   const data = new Uint8Array(size * size * 4);

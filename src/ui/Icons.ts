@@ -158,7 +158,7 @@ export function portrait(seedHue: number, tone: number = 0.5) {
   root.appendChild(g);
   root.appendChild(svg('rect', { width: 48, height: 20, y: 36, fill: `url(#${id}v)` }));
   root.appendChild(svg('rect', { width: 48, height: 56, fill: 'none', stroke: 'rgba(190,214,248,.24)', 'stroke-width': 1.2 }));
-  root.querySelector('defs').appendChild(svg('linearGradient', { id: `${id}v`, x1: 0, y1: 0, x2: 0, y2: 1 }, [
+  root.querySelector('defs')!.appendChild(svg('linearGradient', { id: `${id}v`, x1: 0, y1: 0, x2: 0, y2: 1 }, [
     svg('stop', { offset: 0, 'stop-color': 'rgba(3,6,11,0)' }),
     svg('stop', { offset: 1, 'stop-color': 'rgba(3,6,11,.72)' }),
   ]));

@@ -171,7 +171,7 @@ export function smoothNormals(geo: any, groups: any) {
  * @param {Object} o
  * @returns the ring index grid, so callers can stitch to it
  */
-export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[], ref?: any, capStart?: any, capEnd?: any, glowAt?: any }): number[][] {
+export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[], ref?: any, capStart?: any, capEnd?: any, glowAt?: any, theta0?: any, theta1?: any, uvScale?: any }): number[][] {
   const nodes = o.nodes;
   const steps = o.steps || 14;
   const seg = o.seg || 12;
@@ -416,7 +416,7 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
     if (!g.attributes.aEmissive) g.setAttribute('aEmissive', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     if (!g.attributes.aMat) g.setAttribute('aMat', new THREE.BufferAttribute(fill(n, 2, defMat), 2));
     vc += n;
-    ic += g.index.count;
+    ic += g.index!.count;
   }
   const out = new THREE.BufferGeometry();
   const specs = [
@@ -438,7 +438,7 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
   const iarr = vc > 65535 ? new Uint32Array(ic) : new Uint16Array(ic);
   let io = 0, vo = 0;
   for (const g of geos) {
-    const s = g.index.array;
+    const s = g.index!.array;
     for (let i = 0; i < s.length; i++) iarr[io + i] = s[i] + vo;
     io += s.length; vo += g.attributes.position.count;
   }

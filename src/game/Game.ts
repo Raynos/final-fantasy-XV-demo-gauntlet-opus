@@ -292,7 +292,7 @@ export class Game {
     const rig = this.get('CameraRig');
     if (shot.follow) {
       const p = this.followAnchor(shot.follow);
-      rig.setShot({
+      rig!.setShot({
         pos: [p.x + shot.offset[0], p.y + shot.offset[1], p.z + shot.offset[2]],
         target: [
           p.x + (shot.lookOffset?.[0] ?? 0),
@@ -301,10 +301,10 @@ export class Game {
         ],
         fov: shot.fov,
       });
-      rig.followShot = shot;
+      rig!.followShot = shot;
     } else {
-      rig.followShot = null;
-      rig.setShot({ pos: shot.pos, target: shot.target, fov: shot.fov });
+      rig!.followShot = null;
+      rig!.setShot({ pos: shot.pos, target: shot.target, fov: shot.fov });
     }
     return shot;
   }
@@ -320,10 +320,10 @@ export class Game {
    */
   followAnchor(who: string): THREE.Vector3 {
     const player = this.get('Player');
-    if (!who || who === 'player') return player.position;
+    if (!who || who === 'player') return player!.position;
     const party = this.get('Party');
     const m = party && party.get && party.get(who);
-    return (m && m.root && m.root.position) || player.position;
+    return (m && m.root && m.root.position) || player!.position;
   }
 
   /** Advance the simulation by `frames` fixed steps without presenting. */

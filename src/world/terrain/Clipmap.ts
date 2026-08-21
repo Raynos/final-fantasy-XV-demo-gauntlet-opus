@@ -21,7 +21,7 @@ export class Clipmap {
   /**
    * @param {object} opts
    * */
-  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }: { levels: number, n: number, cell0: number, makeMaterial: ((a0: number, a1: number) => {surface: THREE.Material, depth: any}) }) {
+  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }: { levels: number, n: number, cell0: number, makeMaterial: ((a0: number, a1: number) => {surface: THREE.Material, depth: any}), castShadow?: boolean }) {
     this.castShadow = castShadow;
     this.levels = levels;
     this.n = n;
@@ -39,7 +39,7 @@ export class Clipmap {
         for (let qx = 0; qx < 2; qx++) {
           const geo = this._quadrant(L, cell, qx ? 1 : -1, qz ? 1 : -1);
           if (!geo) continue;
-          this.triangles += geo.index.count / 3;
+          this.triangles += geo.index!.count / 3;
           const mesh = new THREE.Mesh(geo, mats.surface);
           mesh.name = `terrain-L${L}-${qx}${qz}`;
           mesh.matrixAutoUpdate = false;

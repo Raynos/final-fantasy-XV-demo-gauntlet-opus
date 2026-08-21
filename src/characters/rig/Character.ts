@@ -265,7 +265,7 @@ export class Character {
     let off = 0;
     for (const g of geos) {
       pos.push(...g.attributes.position.array);
-      for (const i of g.index.array) idx.push(i + off);
+      for (const i of g.index!.array) idx.push(i + off);
       off += g.attributes.position.count;
     }
     merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
