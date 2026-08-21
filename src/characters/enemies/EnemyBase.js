@@ -487,12 +487,21 @@ export class Enemy {
   }
 
   /**
-   * Species rebuilt against `CreatureAnim` author the whole body transform
-   * every frame, so it starts from zero; the older species still carry state
-   * across frames in `visual` and must not be reset under them.
+   * Clear the body transform so every `pose()` authors it from zero.
+   *
+   * This is unconditional on purpose. It used to be opt-in per species
+   * (`autoResetVisual`), on the theory that the older assign-style species
+   * carried state across frames and must not be reset under them — but they
+   * assign `visual.position`/`rotation` outright in every branch, so a reset
+   * to zero is invisible to them, while the newer base classes write
+   * `visual.position.y -= drop` and are only correct *because* of it. An
+   * opt-in reset means the two conventions coexist and the wrong one silently
+   * integrates: hold a `-=` pose for N frames without a reset and the
+   * creature sinks N × drop metres. Making it universal is what makes that
+   * class of bug impossible rather than merely unlikely.
    */
   _resetVisual() {
-    if (!this.autoResetVisual || !this.visual) return;
+    if (!this.visual) return;
     this.visual.position.set(0, 0, 0);
     this.visual.rotation.set(0, 0, 0);
     if (this.anim) { this.anim.bodyY = 0; this.anim.bodyRoll = 0; this.anim.bodyPitch = 0; }
@@ -795,7 +804,26 @@ export class Enemy {
     this.state = state;
     this.phase = phase;
     this.root.rotation.y = this.heading;
-    this.pose(state, phase, ctx);
+    this.repose(0, ctx);
+  }
+
+  /**
+   * Re-apply the held pose for one frame.
+   *
+   * A frozen enemy still has to be re-posed every frame — the pose reads
+   * `stateTime`, the impact springs and (for a boss) `phaseIndex`, and a
+   * capture settles for scores of frames before it shoots. That makes the
+   * frozen path exactly as sensitive to a missing `_resetVisual()` as the live
+   * one, and for a long time it did not have one: it called `pose()` straight
+   * out of `Enemies.update`, so the Iron Giant's telegraph crouch subtracted
+   * its 0.1 m drop once per settle frame and put the model 8.4 m underground
+   * by capture time. Everything a held pose needs goes through here.
+   */
+  repose(dt = 0, ctx = null) {
+    if (!this.frozenPose || !this.visual) return;
+    this._resetVisual();
+    this.pose(this.frozenPose.state, this.frozenPose.phase, ctx);
+    this._postPose(dt);
   }
 
   unfreeze() { this.frozenPose = null; }
