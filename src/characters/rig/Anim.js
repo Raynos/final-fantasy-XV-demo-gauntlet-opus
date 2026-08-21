@@ -345,7 +345,14 @@ export class Animator {
     this.add('shinR', 0.04 + freeR * 0.22 - lock * 0.02, 0, 0, w);
     this.add('footL', -freeL * 0.10, 0, 0, w);
     this.add('footR', -freeR * 0.10, 0, 0, w);
-    this.bobY = (this.bobY || 0) - 0.004 * w * (0.5 + 0.5 * br);
+    // Assign, never accumulate. The gait path (see the walk cycle above) sets
+    // `bobY` outright; this idle layer used `-=`, so standing still integrated
+    // about -0.0013 m per frame with no bound. Over a long session the party
+    // sank into the ground — measured hips-bone local Y going +0.844 at boot to
+    // -9.667 after 139 shots, monotonic, while their root stayed exactly on
+    // `Terrain.heightAt`. It read as the terrain rising and cost three separate
+    // investigations before it was traced here.
+    this.bobY = -0.004 * w * (0.5 + 0.5 * br);
   }
 
   /** Look-at, blink, lean and sway layers. */
