@@ -141,13 +141,52 @@ export class Player {
     // stops the legs rather than moonwalking on the spot.
     this._gait = THREE.MathUtils.damp(this._gait, this.speed * this.body.progress, 10, dt);
 
+    const combat = game.get('Combat');
+    this._gaze(dt, game, combat);
+
     this.character.update(dt, {
       speed: this._gait,
       velocity: this.velocity,
       turnRate,
       terrain: this.terrain,
       wind: 0.3,
+      // the animator needs to know a fight is happening — without this Noctis
+      // holds his relaxed field idle in the middle of every battle
+      combat: combat && combat.inCombat ? 1 : 0,
+      weaponHand: 'R',
     });
+  }
+
+  /**
+   * Where Noctis is looking.
+   *
+   * Nothing ever called `setLookTarget` on him, only on the companions, so in
+   * every captured frame he stared rigidly down his own root forward axis
+   * while the other three tracked each other. In combat he watches whatever he
+   * is fighting; in the field he glances at one of the retinue and then looks
+   * away again, on a deterministic timer so two capture runs match.
+   */
+  _gaze(dt, game, combat) {
+    if (combat && combat.inCombat) {
+      const lock = combat.lockTarget && !combat.lockTarget.dead ? combat.lockTarget : null;
+      const e = lock || (combat.autoTarget ? combat.autoTarget(28) : null);
+      if (e && e.root) {
+        this.character.setLookTarget(e.centre ? e.centre(this._look) : this._look.copy(e.root.position));
+        return;
+      }
+    }
+    this._gazeT = (this._gazeT ?? 0) - dt;
+    if (this._gazeT <= 0) {
+      this._gazeSeq = (this._gazeSeq || 0) + 1;
+      const r = Math.sin(this._gazeSeq * 17.31) * 0.5 + 0.5;
+      this._gazeOn = !this._gazeOn;
+      this._gazeT = this._gazeOn ? 1.5 + r * 2.1 : 4.5 + r * 6.0;
+    }
+    const party = this._gazeOn ? game.get('Party') : null;
+    const m = party && party.members ? party.members[(this._gazeSeq || 0) % party.members.length] : null;
+    if (!m) { this.character.setLookTarget(null); return; }
+    const h = m.character.rig.dims.headOrigin.y;
+    this.character.setLookTarget(this._look.set(m.root.position.x, m.root.position.y + h * 0.98, m.root.position.z));
   }
 
   lateUpdate(dt, game) {
