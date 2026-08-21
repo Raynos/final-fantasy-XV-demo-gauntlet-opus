@@ -91,6 +91,35 @@ export function buildHair(rig, look) {
     for (let c = 0; c < cols; c++) B.quad(shell[r][c], shell[r][c + 1], shell[r + 1][c + 1], shell[r + 1][c]);
   }
 
+  // ---- lie the hair on the head ------------------------------------------
+  // The sea-urchin read is not the direction field and it is not the ribbon —
+  // it is that a strand leaving a curved scalp in a straight line *keeps
+  // leaving it*. With ~35% of the root direction along the surface normal, a
+  // 5 cm lock ends a centimetre and a half proud of the skull and every one of
+  // them points somewhere different: a porcupine. Real hair is laid *on* the
+  // head and only lifts where the style says so.
+  //
+  // So each strand point is clamped to a standoff corridor measured against the
+  // sculpted skull: never inside it, never further out than `puff * len * t`.
+  // `hug: 0` opts a tuft out entirely — that is what a spike is.
+  const rrH = [HEAD_R[0] * (look.headWidth ?? 1), HEAD_R[1], HEAD_R[2]];
+  const _q = new THREE.Vector3();
+  const hugSkull = (v, maxOff, k) => {
+    // fade the clamp out below the jaw and above the crown, where the skull's
+    // spherical parameterisation stops meaning anything and a mane hanging past
+    // the shoulders would otherwise be shoved back into the neck
+    const yn = Math.abs(v.y) / rrH[1];
+    const fade = 1 - clamp01((yn - 0.88) / 0.24);
+    if (fade <= 0) return;
+    const th = Math.atan2(v.x / rrH[0], v.z / rrH[2]);
+    const ph = Math.acos(clamp01((v.y / rrH[1] + 1) / 2) * 2 - 1);
+    const { p: q, n } = sample(th, ph);
+    const off = _q.copy(v).sub(q).dot(n);
+    const lo = maxOff * 0.12;
+    const target = off > maxOff ? maxOff : (off < lo ? lo : off);
+    if (target !== off) v.addScaledVector(n, (target - off) * k * fade);
+  };
+
   // ---- tufts -------------------------------------------------------------
   for (const tuft of H.tufts) {
     const n = tuft.n || 8;
@@ -113,7 +142,17 @@ export function buildHair(rig, look) {
         d1.normalize();
       }
       const d0 = nrm.clone().lerp(d1, tuft.out ?? 0.15).normalize();
-      const segs = tuft.segs || 3;
+      // A lock bows. Straight is the single loudest tell that a strand is a
+      // generated primitive, so every one gets its own sideways arc, peaking
+      // mid-length and returning at the tip.
+      const bowAxis = new THREE.Vector3().crossVectors(d1, nrm);
+      if (bowAxis.lengthSq() < 1e-8) bowAxis.set(1, 0, 0);
+      bowAxis.normalize();
+      const bow = rng.gauss(0, tuft.bow ?? 0.11) * len;
+      const hug = tuft.hug ?? 0.85;
+      const puff = tuft.puff ?? 0.30;
+      const segs = tuft.segs || (tuft.steps && tuft.steps > 6 ? 5 : 4);
+      const baseOff = (H.shell ?? 0.011) * (H.volume ?? 1) * 0.8 + (tuft.lift ?? 0);
       const pts = [root.clone()];
       let cur = root.clone();
       for (let k = 1; k <= segs; k++) {
@@ -125,6 +164,8 @@ export function buildHair(rig, look) {
           cur.x += Math.sin(t * 4 + i) * tuft.curl * len * 0.2;
           cur.z += Math.cos(t * 4 + i) * tuft.curl * len * 0.2;
         }
+        cur.addScaledVector(bowAxis, bow * Math.sin(Math.PI * t));
+        if (hug > 0) hugSkull(cur, baseOff + puff * len * t, hug);
         pts.push(cur.clone());
       }
 
@@ -140,8 +181,12 @@ export function buildHair(rig, look) {
       ribbon(B, {
         points: pts.map((q) => put(q).toArray()),
         steps: tuft.steps || 6,
+        // six-sided: a flat diamond is what made every strand a faceted blade
+        sides: tuft.sides ?? 6,
         width: wid * scale,
-        thick: wid * scale * (tuft.thick ?? 0.5),
+        // a lock is a rolled bundle, not a ribbon: floor the depth-to-width
+        // ratio so the six-sided section is actually round
+        thick: wid * scale * Math.max(0.62, tuft.thick ?? 0.5),
         up: nrm.toArray(),
         // A wide per-lock value spread is the difference between "hair" and "a
         // black shape". Some clumps sit near the root value, some run almost to

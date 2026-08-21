@@ -585,19 +585,38 @@ export function blob(B, o) {
 }
 
 /**
- * Tapered ribbon along a curve — the unit hair cluster. A three-point cross
- * section (side / crest / side) gives the strand volume so it never reads flat.
+ * Tapered ribbon along a curve — the unit hair cluster.
+ *
+ * The cross section is an ellipse sampled at `sides` points, `width` across and
+ * `thick` deep. Four points is a flat diamond: two of its four facets face the
+ * camera edge-on at any given moment, so the strand reads as a **faceted blade**
+ * — a quill — no matter how the shading is tuned. Six or eight points on a
+ * cross section that is at least half as deep as it is wide gives a rolled lock
+ * with a continuous highlight running down it, which is what hair actually is.
+ * The default stays at four for the callers that want a flat card (eyebrows,
+ * hairline wisps) where the extra triangles buy nothing.
  */
 export function ribbon(B, o) {
   const pts = o.points.map((p) => new THREE.Vector3().fromArray(p));
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
   const steps = o.steps || 8;
+  const sides = o.sides || 4;
   const width = o.width || 0.02;
   const thick = o.thick ?? width * 0.45;
   const taper = o.taper || ((t) => 1 - t * t);
   const up = new THREE.Vector3().fromArray(o.up || [0, 0, 1]);
   const tipColor = o.tipColor;
   const baseColor = o.color;
+  // cross-section angles, starting on the +width axis so u=0 lands on a
+  // silhouette edge and the `hairStripe` map still runs across the clump
+  const cs = [];
+  for (let k = 0; k < sides; k++) {
+    // clockwise in the (right, front) plane — matches the winding the old
+    // four-point section had, so the outward face stays the outward face
+    const a = -(k / sides) * Math.PI * 2;
+    const f = (k * 2) / sides;
+    cs.push([Math.cos(a), Math.sin(a), f <= 1 ? f : 2 - f]);
+  }
   const rows = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -607,30 +626,32 @@ export function ribbon(B, o) {
     if (_f.lengthSq() < 1e-6) _f.set(0, 1, 0).addScaledVector(tan, -tan.y);
     _f.normalize();
     _r.crossVectors(_f, tan).normalize();
-    const w = width * taper(t);
-    const h = thick * taper(t);
+    const k = taper(t);
+    const w = width * k;
+    const h = thick * k;
     if (baseColor && tipColor) {
       B.color(new THREE.Color().copy(baseColor).lerp(tipColor, t * t));
     }
     // the strand tangent drives the anisotropic highlight band in the shader
     B.tang(tan.x, tan.y, tan.z);
-    rows.push([
-      B.vv(_t.copy(p).addScaledVector(_r, -w), 0, t),
-      B.vv(_t.copy(p).addScaledVector(_f, h), 0.5, t),
-      B.vv(_t.copy(p).addScaledVector(_r, w), 1, t),
-      B.vv(_t.copy(p).addScaledVector(_f, -h * 0.55), 0.5, t),
-    ]);
+    const row = [];
+    for (const [c, s2, u] of cs) {
+      row.push(B.vv(_t.copy(p).addScaledVector(_r, c * w).addScaledVector(_f, s2 * h), u, t));
+    }
+    rows.push(row);
   }
   for (let i = 0; i < steps; i++) {
     const a = rows[i], b = rows[i + 1];
-    for (let k = 0; k < 4; k++) {
-      const k2 = (k + 1) % 4;
+    for (let k = 0; k < sides; k++) {
+      const k2 = (k + 1) % sides;
       B.quad(a[k], a[k2], b[k2], b[k]);
     }
   }
-  // close the tip
+  // close the tip with a fan rather than leaving an open pipe
   const last = rows[steps];
-  B.tri(last[0], last[1], last[2]);
-  B.tri(last[0], last[2], last[3]);
+  const e = curve.getPoint(1);
+  B.tang(0, 1, 0);
+  const cap = B.vv(_t.copy(e), 0.5, 1);
+  for (let k = 0; k < sides; k++) B.tri(last[(k + 1) % sides], last[k], cap);
   return rows;
 }
