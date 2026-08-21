@@ -94,6 +94,32 @@ float tf_height(vec2 p) {
   return tf_grid(uHeightTex, p, uField) + tf_micro(p);
 }
 vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
+
+/**
+ * The height a clipmap level whose cells are "cell" metres across is allowed
+ * to carry.
+ *
+ * A vertex lattice cannot represent anything finer than its own spacing, so
+ * point-sampling the 4 m field at a 24 m or 48 m vertex pitch does not make a
+ * coarse mountain — it *decimates* one, and the mesh picks up several metres of
+ * pseudo-random per-vertex jitter. The shading normal is already low-passed
+ * with distance (tf_surfNormal); this is the other half of the same idea for
+ * the geometry, and it is what a geometry clipmap is supposed to do: filter the
+ * height pyramid, never decimate it.
+ *
+ * It matters far more than a silhouette tidy-up. GTAO is fed the scene depth
+ * buffer and reconstructs its normals from it, so it sees the raw triangles —
+ * and a grazing wall of 8-pixel facets with a few metres of random tilt each
+ * came back as the regular chevron hatch that wallpapered every conical peak in
+ * the world.
+ */
+float tf_heightLod(vec2 p, float cell) {
+  float w = (cell - 4.0) * 1.1;
+  if (w <= 0.25) return tf_height(p);
+  return tf_height(p) * 0.36
+    + (tf_height(p + vec2(w, 0.0)) + tf_height(p - vec2(w, 0.0))
+     + tf_height(p + vec2(0.0, w)) + tf_height(p - vec2(0.0, w))) * 0.16;
+}
 `;
 
 /**
@@ -121,16 +147,18 @@ vec3 tf_normal(vec2 p) {
 
 const VERT_BEGIN = /* glsl */`
 vec2 tfWP = (modelMatrix * vec4(position, 1.0)).xz;
-float tfH = tf_height(tfWP);
+float tfH = tf_heightLod(tfWP, uCell);
 if (aClip.x > 0.0) {
   float c2 = uCell * 2.0;
   vec2 g = tfWP / c2;
   vec2 g0 = floor(g);
   vec2 gt = g - g0;
-  float h00 = tf_height(g0 * c2);
-  float h10 = tf_height((g0 + vec2(1.0, 0.0)) * c2);
-  float h01 = tf_height((g0 + vec2(0.0, 1.0)) * c2);
-  float h11 = tf_height((g0 + vec2(1.0, 1.0)) * c2);
+  // the morph target is the *next* level's surface, so it has to be filtered
+  // with that level's cell or the two rings no longer meet and the seam cracks
+  float h00 = tf_heightLod(g0 * c2, c2);
+  float h10 = tf_heightLod((g0 + vec2(1.0, 0.0)) * c2, c2);
+  float h01 = tf_heightLod((g0 + vec2(0.0, 1.0)) * c2, c2);
+  float h11 = tf_heightLod((g0 + vec2(1.0, 1.0)) * c2, c2);
   tfH = mix(tfH, mix(mix(h00, h10, gt.x), mix(h01, h11, gt.x), gt.y), aClip.x);
 }
 vec3 transformed = vec3(position.x, tfH, position.z);
