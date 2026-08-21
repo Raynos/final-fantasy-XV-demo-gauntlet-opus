@@ -66,6 +66,7 @@ Five rules that produced most of the value:
 | `tools/imgdiff.mjs` | Visual regression. **Measured noise floor 1.5–1.9 mean/255** — anything above that needs justifying. |
 | `tools/sheet.mjs` | Contact sheet of a shot directory, paginated to `_sheet-1.jpg`, `_sheet-2.jpg` … at 12 shots a page. How critics review the whole game at once. |
 | `tools/cleanup.mjs` | Kills orphaned vite/chromium. Grades confidence so a live agent's server is never killed. |
+| `tools/shrink.mjs` | Recompresses the shot archive to JPEG in place, holding recent directories lossless for `imgdiff`. Dry run by default. |
 | `tools/agentstats.mjs` | What each live subagent costs: turns, context, p50/p90 model wait, screenshot MB, last tool. Tells *expensive* apart from *stuck*. |
 | `tools/roadcheck.mjs` | Asserts every drivable POI is reachable, grades and corner radii are legal. |
 | `tools/uxcheck.mjs`, `tools/combatloop.mjs` | Assert menus and combat mechanics respond to real input. |
