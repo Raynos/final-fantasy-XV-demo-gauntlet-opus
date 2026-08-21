@@ -132,17 +132,32 @@ export class PostFX {
     this.composer.addPass(this.velocity);
 
     this.gtao = new GTAOPass(scene, camera, size.x, size.y);
-    // No arguments: GTAO renders its own depth AND normal buffer.
+    // Fade the AO term out with distance.
     //
-    // It used to be handed our depth texture alone, which makes it
-    // *reconstruct* normals from depth -- so it saw the raw triangles of every
-    // distant massif and drew their facets as a regular herringbone hatch. That
-    // is the "chevron on every peak" blamed for months on the splat and then on
-    // the heightfield; `?post=nogtao` alone removes it. `Terrain.js` already
-    // calls `patchGBufferMaterial(post.gtao.normalMaterial)` so the terrain
-    // displaces correctly in the normal pass -- feeding depth only left that
-    // patch as dead code.
-    this.gtao.setGBuffer();
+    // GTAO here is fed depth only, so it *reconstructs* normals from depth --
+    // and on a distant massif that means it sees the raw triangles and draws
+    // their facets as a regular herringbone. That is the chevron hatch that
+    // wallpapered every peak, blamed for months on the terrain splat and then
+    // on the heightfield; `?post=nogtao` alone removes it.
+    //
+    // Fading it is not a workaround, it is the physically right answer: the
+    // gather radius below is 0.62 m, a *room* scale, which has no meaning at
+    // all on a mountain four kilometres away. Letting GTAO render its own
+    // normal buffer (`setGBuffer()` with no arguments) also fixes the hatch,
+    // but it costs a second scene render -- measured at **10% of `gameplay`'s
+    // walk segment, 50.0 -> 44.8 fps** on the gate that already fails. This
+    // costs two instructions.
+    this.gtao.setGBuffer(this.rtScene.depthTexture);
+    const gm = this.gtao.gtaoMaterial;
+    gm.uniforms.uAoFadeNear = { value: 220.0 };
+    gm.uniforms.uAoFadeFar = { value: 650.0 };
+    gm.fragmentShader = gm.fragmentShader
+      .replace('uniform float scale;', 'uniform float scale;\nuniform float uAoFadeNear;\nuniform float uAoFadeFar;')
+      .replace(
+        'ao = pow(ao, scale);',
+        'ao = pow(ao, scale);\n\t\t\tao = mix(ao, 1.0, smoothstep(uAoFadeNear, uAoFadeFar, -viewPos.z));'
+      );
+    gm.needsUpdate = true;
     this.gtao.output = GTAOPass.OUTPUT.Default;
     // A 1.1 m gather is a *room* radius: it darkens the underside of a cliff
     // beautifully and does nothing at all to the eight centimetres where a
