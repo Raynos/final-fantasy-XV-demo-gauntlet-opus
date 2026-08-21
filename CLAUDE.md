@@ -8,28 +8,27 @@ first, then `project/SESSION-STATE.md` for who currently owns what.
 
 Four buckets, and the root holds nothing but config and the three docs below.
 
-- **`src/`** — the game. **`public/`** — assets. **`src/tools/`** — the harness
-  (capture, probes, checks); `src/tools/probes/` holds scripts for `src/tools/probe.mjs`.
+- **`src/`** — everything the build reads. The game, plus `src/index.html` (vite's
+  `root`, so in-page dev-server URLs are `/world/...`, **not** `/src/world/...`),
+  `src/public/` (the generated terrain cache, ignored) and `src/tools/` (the
+  harness: capture, checks, probes for `src/tools/probe.mjs`).
 - **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
   `docs/WORLDMAP.md`, `docs/plans/`.
 - **`project/`** — working state: how the work is *going*. `project/HANDOFF.md`,
   `project/handoff/<topic>.md`, `project/SESSION-STATE.md`, `project/PROGRESS.md`,
   `project/journal/`, `project/TODO.md` (human-written).
-- **`tmp/`** — scratchpad, git-ignored wholesale. `tmp/shots/` is the default
-  capture root. Nothing may depend on it surviving.
+- **`tmp/`** — scratchpad. **Deleting it whole must cost nothing**: no build, no
+  deploy and no dev-server run may read anything in it. `tmp/shots/` (the default
+  `--out` for every capture tool) is what it is for.
+
+`dist/` is build output and `src/public/baked/` is the terrain cache — both
+generated, both ignored, neither belongs in `tmp/` because losing them costs a
+re-bake. The cache cannot live in `dist/` either: vite empties `dist/` on every
+build and never serves it in dev. It is copied into `dist/baked/` at build time.
 
 Root: `README.md` (the human's original brief), `CLAUDE.md`, `BRIEF.md` (the
 contract), and build config. New file that is none of the above? It belongs in one
 of the four buckets, not at the root.
-
-## Ownership
-
-Agents run in git worktrees and own directories. Anything outside your list is
-**reported, not edited** — the coordinator applies it. `src/game/Game.js` and
-`src/game/Shots.js` are shared and belong to the coordinator (`BRIEF.md` rule 4);
-create new files inside your own directory and wire them from your system's `init()`.
-Two agents editing `_readInput` independently caused the only merge conflict in 114
-commits.
 
 ## Committing
 

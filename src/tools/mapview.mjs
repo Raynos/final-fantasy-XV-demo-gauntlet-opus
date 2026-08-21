@@ -74,7 +74,7 @@ try {
   for (const [zoom, filter, revealAll] of states) {
     const meta = await page.evaluate(async ([zoom, filter, revealAll]) => {
       const g = window.GAME;
-      const { fog } = await import('/src/world/map/FogOfWar.js');
+      const { fog } = await import('/world/map/FogOfWar.js');
       if (revealAll) { fog.revealAll(); for (const p of g.get('Terrain').map.pois) g.get('Terrain').map.discover(p.id); }
       const menus = g.get('Menus');
       if (zoom < 0) {                       // field HUD only: measure the minimap

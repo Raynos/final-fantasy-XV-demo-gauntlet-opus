@@ -64,7 +64,7 @@ function sourceStamp() {
     }
   };
   walk(path.join(ROOT, 'src'));
-  for (const f of ['index.html', 'vite.config.js']) {
+  for (const f of ['src/index.html', 'vite.config.js']) {
     try { const st = statSync(path.join(ROOT, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
   }
   return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);

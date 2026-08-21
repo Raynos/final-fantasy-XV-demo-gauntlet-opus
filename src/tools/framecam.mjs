@@ -108,7 +108,7 @@ async function main() {
     for (const spec of specs) {
       const meta = await page.evaluate(async ([s, settle]) => {
         const g = window.GAME;
-        const { SHOTS } = await import('/src/game/Shots.js');
+        const { SHOTS } = await import('/game/Shots.js');
         // Terrain-relative recipe: `camAt`/`aimAt` are plan coordinates and
         // `eye`/`aimUp` are heights *above the ground there*, resolved against
         // the live heightfield. Written this way a camera can never end up

@@ -87,7 +87,7 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 const out = await page.evaluate(async (cfg) => {
   const g = window.GAME;
   const t = g.get('Terrain');
-  const tm = await import('/src/world/terrain/TerrainMaterial.js');
+  const tm = await import('/world/terrain/TerrainMaterial.js');
 
   // Constructors are harvested from live objects rather than imported: a bare
   // `three` specifier does not resolve inside `page.evaluate`, because the

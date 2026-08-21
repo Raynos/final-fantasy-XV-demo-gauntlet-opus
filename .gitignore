@@ -2,7 +2,7 @@ node_modules/
 dist/
 # Cached output of our own generators (src/tools/bake.mjs). Not an authored asset:
 # deleted, the game regenerates it at runtime; stale, the build step re-bakes.
-public/baked/
+src/public/
 .DS_Store
 .claude/worktrees/
 # Repo-local scratchpad: ignore everything in it except its README. Capture

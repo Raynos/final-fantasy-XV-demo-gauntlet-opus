@@ -29,7 +29,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  * no extra middleware. Git-ignored: it is a cache of our own generators, not a
  * checked-in asset.
  */
-export const BAKE_DIR = path.join(ROOT, 'public', 'baked');
+export const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'terrain.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'terrain.json');
 

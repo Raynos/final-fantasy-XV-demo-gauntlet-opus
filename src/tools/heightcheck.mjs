@@ -21,8 +21,8 @@ const out = await page.evaluate(async (shot) => {
   const g = window.GAME;
   const t = g.get('Terrain');
   g.applyShot(shot); g.settle(30);
-  const tm = await import('/src/world/terrain/TerrainMaterial.js');
-  const fld = await import('/src/world/terrain/Field.js');
+  const tm = await import('/world/terrain/TerrainMaterial.js');
+  const fld = await import('/world/terrain/Field.js');
   const FIELD = tm.TERRAIN_FIELD_GLSL;
 
   const mesh0 = t.clipmap.rings[0].meshes[0];

@@ -58,7 +58,7 @@ try {
   await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
   await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 240000 });
   const res = await page.evaluate(async ([crops]) => {
-    const { getChart } = await import('/src/world/map/Chart.js');
+    const { getChart } = await import('/world/map/Chart.js');
     const chart = getChart(window.GAME.get('Terrain'));
     const shrink = document.createElement('canvas');
     shrink.width = 1024; shrink.height = 1024;

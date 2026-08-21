@@ -94,7 +94,7 @@ async function main() {
     for (const target of opts.targets) {
       const meta = await page.evaluate(async ([t, o]) => {
         const g = window.GAME;
-        const wm = (await import('/src/world/map/WorldMap.js')).worldMap;
+        const wm = (await import('/world/map/WorldMap.js')).worldMap;
         let x = 0, z = 0;
         if (t.startsWith('at:')) {
           const [a, b] = t.slice(3).split(',').map(Number); x = a; z = b;
