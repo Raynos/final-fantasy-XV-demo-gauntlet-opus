@@ -341,19 +341,44 @@
 .dmg.heal { color: #b9f2c8; text-shadow: 0 0 10px rgba(120,240,160,.6), 0 2px 6px rgba(0,0,0,.9); }
 .dmg.taken { color: #ffb8a6; }
 
-/* ---- callouts ----------------------------------------------- */
+/* ---- callouts -----------------------------------------------
+   The word used to read as two overlapping copies of itself over bright
+   desert. Three compounding causes, all fixed here and in `_updateCallout`:
+
+   1. `transform: scale(1.14 -> 1.0)` promoted the glyph layer to its own
+      raster and resampled it every frame. Gone — the punch is letter-spacing
+      and opacity, both written per frame from `game.time`.
+   2. `left:50% + translate(-50%,-50%)` on an odd-width box landed the whole
+      composited layer on a half pixel. The box is now full-bleed with
+      `text-align: center`, and `top` is written as a rounded integer.
+   3. `text-shadow: 0 2px 10px` is an *offset* copy — over sand it reads as a
+      second, darker set of glyphs 2 px low. The shadow is now a tight
+      symmetric halo: no offset, so nothing to mistake for a second word.  */
 .callout {
-  position: absolute; left: 50%; top: 24%; transform: translate(-50%,-50%);
+  position: absolute; left: 0; right: 0; top: 22%;
   text-align: center; white-space: nowrap; z-index: 2;
 }
 .callout .co-word {
   font-size: 30px; font-weight: 200; letter-spacing: 0.42em; text-transform: uppercase;
-  color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.85), 0 0 32px rgba(140,196,255,.55);
+  color: #fff;
+  text-shadow: 0 0 2px rgba(4,8,14,.95), 0 0 5px rgba(4,8,14,.9),
+               0 0 13px rgba(4,8,14,.72), 0 0 28px rgba(4,8,14,.45),
+               0 0 40px rgba(140,196,255,.5);
   padding-left: 0.42em;
 }
-.callout .co-sub { font-size: 9px; letter-spacing: 0.5em; color: var(--ice); text-transform: uppercase; margin-top: 7px; padding-left: .5em; text-shadow: var(--sh-text); }
+.callout .co-sub {
+  font-size: 9.5px; font-weight: 500; letter-spacing: 0.5em; color: #e9f3ff;
+  text-transform: uppercase; margin-top: 7px; padding-left: .5em;
+  text-shadow: 0 0 2px rgba(4,8,14,.96), 0 0 5px rgba(4,8,14,.9),
+               0 0 12px rgba(4,8,14,.7), 0 0 22px rgba(4,8,14,.45);
+}
 .callout .co-rule { height: 1px; margin: 9px auto 0; background: linear-gradient(90deg, transparent, var(--hair-hot), transparent); }
-.callout.warm .co-word { text-shadow: 0 2px 10px rgba(0,0,0,.85), 0 0 32px rgba(255,178,96,.6); color: #fff2dd; }
+.callout.warm .co-word {
+  color: #fff2dd;
+  text-shadow: 0 0 2px rgba(14,8,4,.95), 0 0 5px rgba(14,8,4,.9),
+               0 0 13px rgba(14,8,4,.72), 0 0 28px rgba(14,8,4,.45),
+               0 0 40px rgba(255,178,96,.55);
+}
 .callout.warm .co-sub { color: var(--gold); }
 
 /* ===================================================================== */

@@ -211,7 +211,7 @@ export class CombatHUD {
     this._syncPlates(enemies, cam, w, h, dt, game, appear);
     this._updateReticle(dt, game, cam, w, h, enemies, appear);
     this._updateNumbers(dt, cam, w, h);
-    this._updateCallout(dt);
+    this._updateCallout(dt, h);
 
     // armiger — earned from damage dealt (see rpg/CombatBridge.js)
     if (!this._armigerDriven) {
@@ -463,7 +463,21 @@ export class CombatHUD {
 
   _retire(n) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
 
-  _updateCallout(dt) {
+  /**
+   * Drive the centre call-out. Every value is written from the clip's own
+   * accumulated time, never a CSS transition.
+   *
+   * The punch is carried by **letter-spacing and opacity only**. It used to
+   * also run a fractional `scale(1.14 -> 1.0)` on the word, which promoted the
+   * glyph layer to its own raster and resampled it every frame; stacked on a
+   * half-pixel `translate(-50%,-50%)` and an offset drop shadow, thin
+   * 200-weight type read as two overlapping copies of itself over bright
+   * desert. See the note above `.callout` in `ui.css`.
+   *
+   * @param {number} dt seconds
+   * @param {number} h viewport height in css px
+   */
+  _updateCallout(dt, h) {
     const c = this.callout;
     if (!c) { this.calloutNode.style.opacity = '0'; return; }
     c.clip.step(dt);
@@ -472,11 +486,17 @@ export class CombatHUD {
     const age = c.clip.age;
     const out = clamp((age - (c.clip.dur + c.clip.hold - 0.4)) / 0.4, 0, 1);
     const ls = 0.62 - 0.20 * easeOutQuint(t);
+    // the trailing letter-space is real box width, so an equal pad on the left
+    // is what keeps the word optically centred while the tracking collapses
     this.calloutWord.style.letterSpacing = `${ls.toFixed(3)}em`;
-    this.calloutWord.style.transform = `scale(${(1.14 - 0.14 * easeOutQuint(t)).toFixed(3)})`;
-    this.calloutRule.style.width = `${(easeOutQuint(clamp((age - 0.14) / 0.5, 0, 1)) * 300).toFixed(0)}px`;
+    this.calloutWord.style.paddingLeft = `${ls.toFixed(3)}em`;
+    this.calloutWord.style.opacity = (0.42 + 0.58 * easeOutQuint(t)).toFixed(3);
+    // even widths only: `margin: auto` on an odd box centres on a half pixel
+    const rw = easeOutQuint(clamp((age - 0.14) / 0.5, 0, 1)) * 300;
+    this.calloutRule.style.width = `${Math.round(rw / 2) * 2}px`;
     this.calloutSub.style.opacity = easeOut(clamp((age - 0.22) / 0.4, 0, 1)).toFixed(3);
     this.calloutNode.style.opacity = (easeOut(clamp(age / 0.16, 0, 1)) * (1 - out)).toFixed(3);
-    this.calloutNode.style.transform = `translate(-50%,-50%) translateY(${(-out * 12).toFixed(1)}px)`;
+    // integer scanline: a half-pixel top resamples every glyph in the block
+    this.calloutNode.style.top = `${Math.round(h * 0.215 - out * 12)}px`;
   }
 }
