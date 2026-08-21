@@ -2,14 +2,60 @@
 
 Owned: `src/characters/enemies/**`, `src/characters/rig/CreatureAnim.js`,
 `src/characters/Enemies.js`, `src/tools/creaturecheck.mjs`.
-Four commits on `agent/enemies`, branched from `main` @ `0be851f`.
 
-| commit | what |
-|---|---|
-| `4a2721f` | the grounding **drift** fix + `src/tools/creaturecheck.mjs` |
-| `c5b1c0f` | the 46 remaining **static** grounding failures |
-| `571de91` | systemic surface pass: `detailUV`, rebuilt detail maps, sabertusk |
-| `c8fa679` | deep rebuilds: goblin, iron giant, dualhorn/bloodhorn |
+> **Sections 1, 2, 3 and 6 are the previous agent's and are still accurate** —
+> the grounding fix, `creaturecheck.mjs`, the systemic surface pass and the
+> gotchas list. Sections 0, 4, 5, 7, 8 and 9 are this round's. Read **section 0
+> first**: it revises two claims the older text makes that turned out to be
+> false, and both of them were shipping visible bugs.
+
+---
+
+## 0. What this round found, and what it changes about the text below
+
+**Two species recorded as "deep rebuild, verified by eye" were rendering half
+black.** `Color.setHex` runs `Math.floor`, so a `THREE.Color` where a hex is
+expected yields `NaN` and the surface renders black with no error. Section 6
+says the sabertusk was the only casualty and that "`Dualhorn.js` has its own
+`mix` which already handles it". Neither is true:
+
+- **Dualhorn/bloodhorn**: whole flank, whole head, all four legs flat black.
+- **Coeurl**: whole torso.
+- **Voretooth**: dorsal and skull.
+
+And there is a second failure mode underneath the first that a type guard alone
+does *not* fix: two module-level scratch registers cannot survive nesting. JS
+evaluates arguments left to right, so in `mix(mix(A,B,s), mix(C,D,u), t)` the
+second inner call overwrites the register the first just returned, and the outer
+call blends a colour with itself. `Garula.js` had already discovered this and
+worked around it privately with `mix2`/`_c3`.
+
+**Fixed properly**: new `src/characters/enemies/Palette.js` — one blend for the
+whole bestiary, with a type guard on both ends and a ring of eight scratch
+colours, both arguments read into component scratch before an output register
+is claimed. Safe at any depth. Coeurl, Voretooth and Dualhorn import it.
+
+**If you add a species, use `mixc`/`colc` from `Palette.js`.** Do not write
+another local `mix`. Files still carrying their own are `Garula.js` (has the
+`mix2` workaround), `Goblin.js`, `IronGiant.js` and `Sabertusk.js` (all guarded,
+none nesting more than one deep) — they are correct today but they are four more
+copies of a footgun.
+
+**Second systemic finding: several species author patterns finer than their own
+mesh can carry.** A vertex colour cannot represent anything shorter than the
+vertex spacing, and a sweep's `th` term cannot represent more cycles than it has
+segments. Three real defects came from this, all of them read as ugly hard-edged
+streaking rather than as "slightly wrong":
+
+| site | was | samples/cycle | now |
+|---|---|---|---|
+| `RigBuilder.weatherCoat` tick | 12 cm band | ~0.5 | dorsal gradient broken at ~0.7 m |
+| `Garula` torso mane clumping | `sin(th*13)`, seg 20 | 1.5 | `sin(th*6)`, seg 26 |
+| `Coeurl` flank bars | (was two merged blobs) | — | 5 bars, steps 26→34 |
+
+**Rule of thumb that held every time: keep angular frequencies under ~6 cycles
+on a 20-26 segment ring, and axial frequencies under ~4 cycles on a 26-step
+sweep. Anything finer belongs in `organicNormal`, not in a vertex colour.**
 
 ---
 
@@ -180,51 +226,114 @@ to 0.25 m.
 
 ---
 
-## 4. Gate status (all run on this branch, machine under load)
+## 4. This round's work, species by species
 
-| gate | result |
-|---|---|
-| `npx vite build` | **pass** (also enforced by `.githooks/pre-commit` on all commits) |
-| `node src/tools/creaturecheck.mjs` | **pass** — 207 poses, 0 failures |
-| `node src/tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mjs` | **1 orphan, not mine** — `src/world/map/MapRaster.js`, pre-existing on `main` @ `0be851f` |
-| `node src/tools/combatloop.mjs` | **21/30 — pre-existing, not caused by this branch** |
+Everything below was captured and looked at. Shots live under `tmp/shots/`
+(`tmp/` is git-ignored, so re-shoot rather than trusting they are still there).
 
-**On `combatloop.mjs`: it is not 30/30 and it was not 30/30 before I started.**
-I reproduced *exactly* the same nine failures with `git checkout 0be851f --
-src/characters` in place, so no enemy change is implicated. The nine are
-companion techniques, energy draw, spell craft, spell cast, raw elemancy,
-nameplate HP, damage numbers, the Armiger gauge, and "kill an enemy -> EXP". The
-diagnostic line on the nameplate check reads `menuOpen=true menusA=1.00
-menu=controls`, i.e. **the controls menu is stuck open for the whole run**,
-which plausibly explains most or all of the others (input is being eaten). That
-is the thread to pull, and it is in `ui/**` / `game/**`, not mine.
+| species | what changed | shot |
+|---|---|---|
+| **dualhorn**/**bloodhorn** | NaN fix. Was: brown hump, everything else black. Now a coherent brown bison-bull — flank, pale muzzle band, orange eye, counter-shaded belly, black lower legs. | `v1` → `v2/dualhorn.jpg` |
+| **coeurl** | NaN fix, then re-marked. The tan "flank flashes" were two 0.15-wide gaussians that merged into one amber blot across the whole ribcage and read as a lens flare stuck to the animal. Now five broken bars; torso sweep 26→34 steps so they survive. | `v3/coeurl.jpg` |
+| **voretooth** | NaN fix, then fully re-valued. It was a lilac-grey over an 82 %-value belly — a black-and-pink plastic toy at 6 m. Now a warm Leide hide, a saddle that reaches down the flank cut by cross bars, and a dark brow mask (the head is this species' whole read and was its least legible part). | `v3/voretooth.jpg` |
+| **sabertusk** | Contrast, the open item from last round. The flank averaged a stop and a half off the saddle so the animal collapsed into one milk-chocolate silhouette. `FUR` 0x6f5e40→0x8b7750, `FUR_MID` 0x4c3e28→0x6b5936, `FUR_DARK` →0x1e180f, `BELLY` →0xc4b591. Dorsal, mask, cream throat and black points all read now. | `v2/sabertusk.jpg` |
+| **garula** | Mane rebuilt (see below). Torso ring de-aliased. | `v8/garula.jpg` |
+| **anak** | New `markings()` value pass. Half-lands — see section 5. | `v6/anak.jpg` |
+| **all 7 daemons** | Albedo lift + Fresnel rim (see below). | `dn` → `dn2` |
+
+### The garula mane — three rounds, and why
+
+Worth reading before you touch any species that hangs geometry off a sweep.
+
+The 26 mane locks were seeded on a *ring around the barrel* and aimed downward,
+so every one of them lay across the **side** of the shoulder: 7 cm cones painted
+`SHAG_LIT` (brighter than the hide behind them) and too thin to touch each
+other. The animal wore two dozen hard ochre bars that read as claw marks — the
+loudest defect on the whole roster, and the thing that made this look like a
+`weatherCoat` bug when it was not.
+
+Then: sinking them into the barrel traded that for three stray chips poking
+through. Then two attempts at a topline crest, at 2.56 m and 2.74 m, stayed
+buried.
+
+**The measurement that ended it:** `rz` in a `sweep` node is the *vertical*
+radius, so the barrel's topline is `p.y + rz` per node — and the mane term in
+`shape` swells that by up to 26 % over the withers. That gives 3.45 m, which is
+exactly the `top` column `creaturecheck` has been printing for garula all along.
+The crest now interpolates a `RIDGE` table taken from the sweep's own node list.
+**If you need to sit something on a sweep's surface, read `top` out of
+`creaturecheck` first — it is a free, exact measurement.**
+
+The crest reads now: a dark bristle ridge sweeping back over the withers,
+breaking the silhouette. Still slightly sparse — sky shows between locks. Fatter
+`r0` or 34 locks would close it.
+
+### Daemon night readability — measured, and it was albedo
+
+Section 5 of the old text asked whether this was exposure (`Sky`/`PostFX`, not
+ours) or albedo (ours). **It is albedo.** Two measurements:
+
+1. `tmp/shots/dn/bestiary_bussemand.jpg` — at 23:00 the terrain, grass, scrub
+   and rock faces all read comfortably. The daemon standing in front of them is
+   a flat black cut-out. The exposure is doing its job.
+2. Isolation stage at the same hour: a **sabertusk** renders as a legible
+   moonlit blue-grey with saddle and mask intact. The night rig lights a
+   mid-value hide perfectly well.
+
+The arachne's chitin sat at `0x131118` and its hair at `0x08080c` — 7 % and 3 %
+reflectance, below anything that exists in nature and far under the ~30 % ground
+it stands on. Every daemon lifted ~1.6×: hobgoblin, bussemand, arachne,
+necromancer, mesmenir, ronin, red giant. Plus a **Fresnel rim**: new `rim`
+option on `creatureMaterial`, patched into `enableVertexMaterial` right after
+the vertex emissive. Fixed radiance, so it is invisible under the sun and is the
+whole read at 23:00.
+
+> **Watch the program cache key.** `enableVertexMaterial` now returns
+> `'creatureVertexMatRim'` or `'creatureVertexMat'`. Sharing one key hands the
+> rim shader to the entire roster, or the plain one to every daemon, depending
+> on which compiled first.
+
+Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
+`daemon_night` (budget 800); two extra shader programs.
 
 ---
 
 ## 5. Next steps, in priority order
 
-1. **Chase the `combatloop.mjs` regression to 30/30.** Start from the stuck
-   `menu=controls` in the nameplate check's diagnostic line. Owner: whoever has
-   `src/ui/**`.
-2. **Daemon night readability.** `bestiary_hobgoblin`, `bestiary_bussemand`,
-   `bestiary_arachne` and `daemon_night` are near-black silhouettes with
-   nothing but an eye glow to read. Decide first whether that is exposure
-   (`Sky`/`PostFX`, not mine) or albedo (mine) — I did not get to measure it.
-   Cheapest enemy-side lever: raise daemon albedo values and add a faint
-   emissive rim, the way the iron giant's helm slit already works.
-3. **Per-species art for the remaining 17**, in screen-presence order:
-   `mt` (a thin dark stick at range, and it is in most Leide fights), then
-   `axeman`/`sniper` (plate seams, rivets, panel wear), then `garula`/`anak`/
-   `voretooth`/`coeurl` (coat pass plus head read), then `titan` (currently a
-   boxy grey rock pile with orange seams).
-4. **Sabertusk contrast is still soft.** The value structure is correct now but
-   the flank is close to the saddle under a bright sun. Worth another pass with
-   a wider spread between `FUR` and `FUR_DARK` in `Sabertusk.js`, checked in
-   both a lit and a shadowed shot — I only ever checked a backlit one.
-5. **Consider raising `DETAIL_TILES`** (`RigBuilder.js`, currently 7). At 7 the
-   coat is convincing at 3 m but nearly invisible at 20 m. 9-10 would carry
-   further; watch for shimmer.
+1. **Anak needs a sculpt rebuild, not more paint.** It is 2,770 tris and the
+   only species in the roster with **no `colorAt` anywhere** — it is built from
+   `GeoKit` primitives with one flat `tint()` per part, which is why it is a
+   single sheet of cream. The `markings()` pass added this round paints the
+   three bands a gazelle has, and it only half-lands: the lateral stripe is
+   largely occluded by the belly tube and the upper leg. Specific defects
+   visible in `tmp/shots/v6/anak.jpg`: **legs end in round brown balls, not
+   hooves**; the tail is a flat white card sticking out sideways; the
+   shoulder/neck join is a visible box; the whole body is faceted. Port it to
+   `CBuilder`/`sweep` the way `Sabertusk.js` is built.
+2. **Titan.** `tmp/shots/titan/bestiary_titan.jpg`. He reads better than the
+   "boxy grey rock pile" note suggests — a dark basalt colossus with a spiked
+   crown and a planted fist. But **a dozen `fissure()` wedges are floating free
+   above the terrain**, in arcs around and in front of the hands, detached from
+   the finger and palm geometry they are supposed to be rammed into. They are
+   blinding orange rectangles hovering over dirt and they look like a UI glitch.
+   The call sites are `Titan.js:336`, `:342` (palm furnace), `:360`, `:361`
+   (fingers) and `:368` — all positioned in absolute coordinates that no longer
+   match the hand slabs. Fix by measuring the hand geometry, not by dimming
+   them. His lower body is also one featureless matte-black mass.
+3. **Coeurl and mesmenir are still boxy.** Both have a hard rectangular
+   shoulder slab and a box neck where the sweep meets the limb blobs, and the
+   coeurl's head is a dark blob with no eye read at 6 m. The value work on both
+   is done; what is left is silhouette.
+4. **Mesmenir** (`tmp/shots/v1/mesmenir.jpg`) — the blue flame mane and tail are
+   genuinely good. The skull is a plain grey cylinder with a flat cut-off end,
+   and the exposed ribs are painted-on cream ovals that read as decals.
+5. **Voretooth head and neck** are still pale relative to the body; the mandible
+   blades are the species' signature and barely register in `idle`. Worth a look
+   in the `telegraph` pose specifically.
+6. **`weatherCoat`'s `dust` has never been verified as visible.** Every organic
+   species now passes it, but nothing in any capture obviously reads as ground
+   dust up the legs. Either raise it or drop it — it costs a per-vertex branch
+   on every species.
 
 ---
 
@@ -239,6 +348,10 @@ is the thread to pull, and it is in `ui/**` / `game/**`, not mine.
   `Sabertusk.js` and `mix` in `Goblin.js`/`IronGiant.js` now accept a Colour at
   either end. **Any other species that starts nesting these needs the same
   guard** — `Dualhorn.js` has its own `mix` which already handles it.
+  > **Correction, next round.** The last clause is wrong: `Dualhorn.js` did
+  > *not* handle it, and neither did `Coeurl.js` or `Voretooth.js`. All three
+  > were rendering large parts of the body flat black. A type guard is also only
+  > half the fix — see section 0. Blending now lives in `Palette.js`.
 - **Strided vertex sampling lies about depth.** See section 1, `poseFloor`. A
   480-sample stride over a 30k-vertex magitek under-reported by 0.33 m, which
   made the calibration curve produce a *wrong correction* that looked like a
@@ -272,17 +385,57 @@ is the thread to pull, and it is in `ui/**` / `game/**`, not mine.
 
 ## 7. Cross-boundary items — reported, not edited
 
-- **`src/game/Shots.js` ~726-732** — the `KNOWN BAD` comment saying the Iron
-  Giant shot is unfixable from there is **stale**. The shot works; the giant
-  stands on the ground. Delete the comment.
-- **`bestiary_titan` framing** — two black telegraph catenary lines run
-  straight through the Titan's chest across the entire frame. The same lines
-  cross `bestiary_bloodhorn`.
-- **`src/world/props/Grazer.js`** — the ambient garula herds in
-  `bestiary_sabertusk` and `bestiary_titan` are flat brown blobs with no coat.
-  They do **not** go through `RigBuilder`, so `detailUV` did not reach them;
-  the "grazers have no coat texture" note partly points here.
-- **`src/world/map/MapRaster.js`** — orphaned module, `orphans.mjs` fails on
-  it, pre-existing on `main` @ `0be851f`.
-- **`src/tools/combatloop.mjs` 21/30** — see section 4. Pre-existing; the stuck
-  `menu=controls` is the lead.
+- **`bestiary_titan` catenary lines are still there** and still cross
+  `bestiary_bloodhorn` — two black telegraph cables running the full width of
+  the frame straight through the Titan's chest. Confirmed this round in
+  `tmp/shots/titan/bestiary_titan.jpg`. Not in `src/characters/enemies/**`.
+- **The party is now darker than the daemons at night.** In
+  `tmp/shots/dn2/daemon_night.jpg` the four heroes in the foreground are the
+  blackest shapes in the frame while the daemon pack behind them reads. Whoever
+  owns `src/characters/Cast.js` / the hero materials should apply the same
+  measurement: compare hero albedo against the ~30 % ground.
+- **`src/game/Shots.js` ~726-732** — the `KNOWN BAD` comment on the Iron Giant
+  shot is stale (repeat of last round's report; still unactioned).
+- **`src/world/props/Grazer.js`** — the ambient garula herds are still flat
+  brown blobs with no coat, clearly visible in `bestiary_titan`. They bypass
+  `RigBuilder`, so `detailUV`, `weatherCoat` and the rim never reach them.
+- **`src/tools/creaturecheck.mjs` is still not wired into any npm script.**
+  Please add it; it is the gate for the whole grounding class of bug and it
+  caught nothing this round only because nothing broke.
+
+---
+
+## 8. Gate status
+
+| gate | result |
+|---|---|
+| `npx vite build` | **pass** (also enforced by `.githooks/pre-commit`) |
+| `node src/tools/creaturecheck.mjs` | **pass** — 207 poses, 0 failures |
+| `node src/tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mjs` | **pass** — 273 modules, 0 orphans (`MapRaster.js` was deleted upstream) |
+
+Draw calls measured at 505-567 across the daemon and titan shots; budget 800.
+Triangle deltas this round: coeurl +288, garula +420. Two extra shader programs
+for the daemon rim.
+
+---
+
+## 9. Reviewing a species without a bestiary shot
+
+Only 13 of the 23 species have a shot in `src/game/Shots.js`. The rest are
+reachable through the dev suite's **isolation stage**, and it is far faster than
+a corpus capture: `npm run dev`, `http://127.0.0.1:5410/?debug=1`, **F4**, then
+`←→` asset, `↑↓` family, `,` `.` pose, `O` ok, `K` flag, `U` unreviewed.
+
+For headless review this round used a throwaway script that drives the same
+machinery — boot with `?q=ultra&debug=1` (**not** `shoot=1`; `src/main.js:34`
+hard-gates the dev suite off under the capture harness), wait for `window.DEV`,
+then `DEV.reg.exec('assets on')`, `DEV.stage.spin = false`,
+`DEV.browser.select(i)`, `GAME.settle(n)`, screenshot. It was left in
+`tmp/creshot.mjs` — `tmp/` is disposable, so **rewrite it or promote it into
+`src/tools/`**; a stage-capture tool is worth having permanently, because the
+stage hides the world and shows you the model rather than the lighting.
+
+Note the stage gives the subject a full sky hemisphere with no occluders, which
+is exactly why a daemon reads on it and does not read in the world. Judge
+*form* on the stage and *readability* in a real shot.
