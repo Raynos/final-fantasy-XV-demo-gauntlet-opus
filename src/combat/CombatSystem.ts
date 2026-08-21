@@ -648,7 +648,7 @@ export class CombatSystem {
    *
    * @param slot 0..2
    */
-  castSpell(slot: number, at?: THREE.Vector3): {ok:boolean, reason?:string, spell?:any, damage?:number} {
+  castSpell(slot: number, at?: THREE.Vector3): {ok:boolean, reason?:string, spell?:any, damage?:number, remaining?: any, motion?: any } {
     const rpg = this.model;
     if (!rpg || !rpg.elemancy) return { ok: false, reason: 'no-elemancy' };
     const uid = rpg.elemancy.equipped[slot];

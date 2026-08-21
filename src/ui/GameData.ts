@@ -385,7 +385,7 @@ function slotView(slot: any, def: any) {
  * The tracked quest, its current objective and the real distance to its
  * waypoint. Everything the compass strip and the pause menu print.
  */
-export function readQuest(game: any): {title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null} {
+export function readQuest(game: any): {title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null, live?: boolean, id?: any, progress?: any, count?: any } {
   const hs = hudState(game);
   const t = hs && hs.tracked;
   if (!t) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };

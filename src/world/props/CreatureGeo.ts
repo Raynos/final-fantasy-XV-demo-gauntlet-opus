@@ -39,7 +39,7 @@ const _c = new THREE.Color();
 export function tube({
   nodes, steps = 14, seg = 10, ref = [0, 1, 0], shape = null,
   colorAt, region = 0, blendAt = null, capStart = 0, capEnd = 0,
-}: { nodes: Array<{p:number[], r:number, rz?:number}>, steps?: number, seg?: number, ref?: number[], shape?: (th:number,u:number)=>number, colorAt: (th:number,u:number,p:THREE.Vector3)=>THREE.Color, region?: number, blendAt?: (p:THREE.Vector3,u:number)=>number, capStart?: number, capEnd?: number }): THREE.BufferGeometry {
+}: { nodes: Array<{p:number[], r:number, rz?:number}>, steps?: number, seg?: number, ref?: number[], shape?: (th:number,u:number)=>number, colorAt: (th:number,u:number,p:THREE.Vector3)=>THREE.Color, region?: number, blendAt?: (p:THREE.Vector3,u:number)=>number, capStart?: number, capEnd?: number } | null): THREE.BufferGeometry {
   // Catmull-Rom needs three points to have a shape; a two-node segment gets a
   // midpoint so short parts (an eye, a lock of hair) do not degenerate.
   if (nodes.length < 3) {
@@ -58,7 +58,7 @@ export function tube({
   const up = new THREE.Vector3(ref[0], ref[1], ref[2]).normalize();
 
   const pos: any[] = [], col: any[] = [], rig: any[] = [], idx = [];
-  const secs: Array<{c:THREE.Vector3,n:THREE.Vector3,b:THREE.Vector3,rx:number,ry:number,u:number}> = [];
+  const secs: Array<{c:THREE.Vector3,n:THREE.Vector3,b:THREE.Vector3,rx:number,ry:number,u:number, t?: any }> = [];
 
   for (let i = 0; i <= steps; i++) {
     const u = i / steps;

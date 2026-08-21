@@ -231,7 +231,7 @@ export class PartyState {
   stats!: any;
   techCharge!: number;
   techChargeRate!: number;
-  constructor(emitter: import('./Emitter.ts').Emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
 
     /** @type {Record<string, Stats>} */
@@ -539,7 +539,7 @@ export class PartyState {
     };
   }
 
-  static fromJSON(data: any, emitter = null) {
+  static fromJSON(data: any, emitter: any = null) {
     const p = new PartyState(emitter);
     if (!data) return p;
     for (const m of MEMBERS) {

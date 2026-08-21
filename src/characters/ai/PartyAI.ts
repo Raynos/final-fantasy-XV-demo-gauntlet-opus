@@ -315,7 +315,7 @@ export class PartyAI {
    * @param memberKey 'gladio' | 'ignis' | 'prompto'
    * @param [techId] defaults to the best affordable one
    */
-  useTechnique(memberKey: string, techId: string = null) {
+  useTechnique(memberKey: string, techId: string | null = null) {
     const m = this.party?.members.find((x: any) => x.key === memberKey);
     if (!m || m.downed) return { ok: false, reason: 'unavailable' };
     const rpg = this.rpg;

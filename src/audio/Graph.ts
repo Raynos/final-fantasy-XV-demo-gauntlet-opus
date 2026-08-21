@@ -252,7 +252,7 @@ export class AudioGraph {
    * @param hold seconds at depth
    * @param release seconds back to unity
    */
-  duck(depth: number, hold: number = 0.2, release: number = 0.45, at = null) {
+  duck(depth: number, hold: number = 0.2, release: number = 0.45, at: any = null) {
     const t = at ?? this.now;
     const end = t + hold + release;
     // A deeper duck already running wins; never let a footstep undo a line.
@@ -306,7 +306,7 @@ export class AudioGraph {
   }
 
   /** Reverb depth for music (0..1). Camp and interiors want a drier score. */
-  setMusicReverb(v: any, glide = 1.2, at = null) {
+  setMusicReverb(v: any, glide = 1.2, at: any = null) {
     this.sendLong.gain.setTargetAtTime(clamp(v, 0, 1) * 0.5, at ?? this.now, glide);
   }
 
@@ -325,7 +325,7 @@ export class AudioGraph {
    * @param [at] when the sound starts; defaults to now
    * @returns handle, or null when the budget is spent
    */
-  take(priority: number = 1, at: number = null): {end:number} | null {
+  take(priority: number = 1, at: number | null = null): {end:number} | null {
     const t = at ?? this.now;
     const live = this._compact(t);
     const headroom = this.maxVoices - live;

@@ -391,7 +391,7 @@ export class QuestLog {
   emitter!: any;
   flags!: Set<any>;
   hunterPoints!: number;
-  constructor(emitter: import('./Emitter.ts').Emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     /** @type {Record<string, object>} runtime state per quest id */
     this.states = {};
@@ -653,7 +653,7 @@ export class QuestLog {
     return { states: this.states, tracked: this.tracked, hunterPoints: this.hunterPoints, flags: [...this.flags] };
   }
 
-  static fromJSON(data: any, emitter = null) {
+  static fromJSON(data: any, emitter: any = null) {
     const log = new QuestLog(emitter);
     if (!data) return log;
     for (const id of Object.keys(log.states)) {

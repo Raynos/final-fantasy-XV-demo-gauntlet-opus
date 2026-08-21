@@ -276,7 +276,7 @@ function uvOf(x: any, y: any, z: any) {
 /**
  * Build the head mesh (skull + lids + ears) in character space.
  */
-export function buildHead(rig: any, look: any): {geometry:THREE.BufferGeometry, map:THREE.Texture, eyes:any} {
+export function buildHead(rig: any, look: any): {geometry:THREE.BufferGeometry, map:THREE.Texture, eyes:any, origin?: any, scale?: any, uvOf?: any } {
   const { index: I, P, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;

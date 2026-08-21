@@ -15,7 +15,7 @@ export class DungeonMap {
     this.dungeon = dungeon;
   }
 
-  data(partyLocal = null): any {
+  data(partyLocal: any = null): any {
     const L = this.L;
     const seen = this.dungeon.discovered;
     const rooms = [];

@@ -537,7 +537,7 @@ export class Enemy {
     };
   }
 
-  die(killer = null) {
+  die(killer: any = null) {
     this.dead = true;
     this.killer = killer;
     this.invulnerable = true;
@@ -1080,7 +1080,7 @@ export class Enemy {
    * its 0.1 m drop once per settle frame and put the model 8.4 m underground
    * by capture time. Everything a held pose needs goes through here.
    */
-  repose(dt = 0, ctx = null) {
+  repose(dt = 0, ctx: any = null) {
     if (!this.frozenPose || !this.visual) return;
     this._resetVisual();
     this.pose(this.frozenPose.state, this.frozenPose.phase, ctx);

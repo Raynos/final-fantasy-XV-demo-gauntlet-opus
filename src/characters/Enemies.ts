@@ -174,7 +174,7 @@ export class Enemies {
   }
 
   /** Live (non-dead) enemies. */
-  alive(out = null) {
+  alive(out: any = null) {
     const o = out || [];
     o.length = 0;
     for (const e of this.list) if (!e.dead) o.push(e);

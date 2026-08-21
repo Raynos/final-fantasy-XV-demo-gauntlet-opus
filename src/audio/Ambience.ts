@@ -142,7 +142,7 @@ export class Ambience {
     this.scheduledTo = 0;
   }
 
-  _band(src: any, type: any, freq: any, q: any, dest = null) {
+  _band(src: any, type: any, freq: any, q: any, dest: any = null) {
     const ctx = this.ctx;
     const f = ctx.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -158,7 +158,7 @@ export class Ambience {
    * @param strength Weather.windStrength (0.3 still .. 3.4 storm)
    * @param [at] explicit schedule time (offline render)
    */
-  setWind(strength: number, at: number = null) {
+  setWind(strength: number, at: number | null = null) {
     const t = at ?? this.ctx.currentTime;
     this.wind = strength;
     // Map the vegetation contract onto a listening curve: still air is almost
@@ -177,7 +177,7 @@ export class Ambience {
   }
 
   /** @param intensity Weather.rainIntensity 0..1 */
-  setRain(intensity: number, at = null) {
+  setRain(intensity: number, at: any = null) {
     const t = at ?? this.ctx.currentTime;
     this.rain = intensity;
     const i = clamp(intensity, 0, 1);
@@ -191,7 +191,7 @@ export class Ambience {
    * @param hours 0..24
    * @param [nightDepth] 0..1 from DayCycle — deepens the daemon layer
    */
-  setTimeOfDay(hours: number, nightDepth: number = 0, at = null) {
+  setTimeOfDay(hours: number, nightDepth: number = 0, at: any = null) {
     const t = at ?? this.ctx.currentTime;
     this.hours = ((hours % 24) + 24) % 24;
     this.nightDepth = nightDepth;
@@ -207,7 +207,7 @@ export class Ambience {
   }
 
   /** 0 = outdoors, 1 = fully enclosed. Muffles wind and rain. */
-  setIndoors(v: any, at = null) {
+  setIndoors(v: any, at: any = null) {
     this.indoors = clamp(v, 0, 1);
     this.setWind(this.wind, at);
     this.setRain(this.rain, at);

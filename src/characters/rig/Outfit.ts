@@ -29,7 +29,7 @@ function aridge(th: any, c: any, w: any) {
  *
  * @param o garment piece description
  */
-function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[]} {
+function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[], seam?: any, wear?: any } {
   const base = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const rough = o.rough ?? 0.78;
   const metal = o.metal ?? 0;

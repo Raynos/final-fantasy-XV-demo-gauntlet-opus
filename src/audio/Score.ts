@@ -104,7 +104,7 @@ export class Score {
   get clock() { return this._at != null ? this._at : this.ctx.currentTime; }
 
   /** Begin the realtime scheduler. */
-  start(state = 'field', at = null) {
+  start(state = 'field', at: any = null) {
     if (this.running) return;
     this.running = true;
     this.nextBarTime = (at ?? this.ctx.currentTime) + 0.12;

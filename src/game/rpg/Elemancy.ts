@@ -289,7 +289,7 @@ export class Elemancy {
   /**
    * @param [inventory] used to consume catalysts on craft
    */
-  constructor(emitter: import('./Emitter.ts').Emitter = null, inventory: Inventory = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null, inventory: Inventory = null) {
     this.emitter = emitter;
     this.inventory = inventory;
     /** Stored energy per element. */
@@ -329,7 +329,7 @@ export class Elemancy {
    * Draw energy from a deposit.
    * @param [opts] `{ units, hour }` — units defaults to a full draw
    */
-  draw(depositId: string, opts: any = {}): {ok:boolean, reason?:string, element?:string, gained?:number} {
+  draw(depositId: string, opts: any = {}): {ok:boolean, reason?:string, element?:string, gained?:number, refillAt?: any, remaining?: number } {
     const def = DEPOSITS.find((d) => d.id === depositId);
     if (!def) return { ok: false, reason: 'unknown-deposit' };
     const st = this.deposits[depositId];
@@ -365,7 +365,7 @@ export class Elemancy {
   }
 
   /** Preview a craft without spending anything. */
-  preview(energy: any, catalyst = null, magic = 100) {
+  preview(energy: any, catalyst: any = null, magic = 100) {
     return craftSpell({
       energy, catalyst, magic,
       spellPower: this.bonuses.spellPower,
@@ -379,7 +379,7 @@ export class Elemancy {
    * result in the spell list.
    *
    */
-  craft(energy: {fire?:number, ice?:number, lightning?:number}, catalyst: {id:string, count:number} = null, magic: number = 100) {
+  craft(energy: {fire?:number, ice?:number, lightning?:number}, catalyst: {id:string, count:number} | null = null, magic: number = 100) {
     const want = {
       fire: Math.max(0, Math.floor(energy?.fire || 0)),
       ice: Math.max(0, Math.floor(energy?.ice || 0)),
@@ -459,7 +459,7 @@ export class Elemancy {
     return { energy: { ...this.energy }, deposits: this.deposits, spells: this.spells, equipped: this.equipped };
   }
 
-  static fromJSON(data: any, emitter = null, inventory = null) {
+  static fromJSON(data: any, emitter: any = null, inventory: any = null) {
     const el = new Elemancy(emitter, inventory);
     if (!data) return el;
     Object.assign(el.energy, data.energy || {});

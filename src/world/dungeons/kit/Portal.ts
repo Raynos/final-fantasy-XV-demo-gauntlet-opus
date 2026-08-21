@@ -67,7 +67,7 @@ function mound(mg: any, mat: any, F: any, rng: any, { r = 0, f = 0, radius = 9, 
  * Keycatrich: an imperial blockhouse driven into a spoil berm, with a cut
  * trench approach, a blast door and a great deal of rusted steel.
  */
-export function buildBunkerEntrance(terrain: any, x: any, z: any, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3} {
+export function buildBunkerEntrance(terrain: any, x: any, z: any, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3, lamp?: any } {
   const g = new THREE.Group();
   g.name = 'keycatrich-entrance';
   const mg = new InteriorMerger();
@@ -266,7 +266,7 @@ export function buildCaveMouth(terrain: any, x: any, z: any, heading = 0, seed =
  * that is allowed to be bright, and the reason the rest reads as dark.
  *
  */
-export function buildExitVestibule(parent: any, rig: any, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }: any): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh} {
+export function buildExitVestibule(parent: any, rig: any, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }: any): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh, halo?: any } {
   const group = new THREE.Group();
   const card = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),

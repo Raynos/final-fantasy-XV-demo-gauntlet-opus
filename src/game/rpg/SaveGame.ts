@@ -127,7 +127,7 @@ export function save(rpg: import('./RpgSystem.ts').RpgSystem, slot: string = AUT
  * Read a save without applying it.
  * @param [slot='auto']
  */
-export function load(slot: string = AUTOSAVE_SLOT): {ok:boolean, data?:any, migrated?:boolean, reason?:string} {
+export function load(slot: string = AUTOSAVE_SLOT): {ok:boolean, data?:any, migrated?:boolean, reason?:string, from?: any } {
   const raw = storage.getItem(SAVE_PREFIX + slot);
   if (!raw) return { ok: false, reason: 'no-save' };
   let parsed;

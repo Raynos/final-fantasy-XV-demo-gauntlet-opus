@@ -51,7 +51,7 @@ export class AutoDrive {
    * Set the destination by arc length along the highway.
    * @param s metres along the spline
    */
-  setTargetS(s: number, name: string = null) {
+  setTargetS(s: number, name: string | null = null) {
     this.targetS = Math.max(0, Math.min(this.road.length, s));
     this.destination = name;
     this.arrived = false;
@@ -62,7 +62,7 @@ export class AutoDrive {
    * on the highway, because the Regalia does not go cross-country.
    * @param x @param z @param [name]
    */
-  setTargetPos(x: number, z: number, name: string = null) {
+  setTargetPos(x: number, z: number, name: string | null = null) {
     const hit = this.road.nearest(x, z, this.road.makeHit());
     this.setTargetS(hit.s, name);
   }

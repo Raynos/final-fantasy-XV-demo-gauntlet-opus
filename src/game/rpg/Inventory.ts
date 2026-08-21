@@ -175,7 +175,7 @@ const KEY_ITEMS = [
  * @param special free-text special effect (combat reads `tags`)
  * @param tags machine-readable effect tags
  */
-const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders = null) => ({
+const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders: any = null) => ({
   id, name, category: 'weapon', class: cls, attack, price, mods: mods || {},
   special, tags: tags || [], desc,
   // null = anyone whose class permission covers it; royal arms are Noctis-only.
@@ -339,7 +339,7 @@ export class Inventory {
   equipment!: any;
   gil!: number;
   sellBonus!: number;
-  constructor(emitter: import('./Emitter.ts').Emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     /** @type {Record<string, number>} id -> count */
     this.bag = {};
@@ -396,7 +396,7 @@ export class Inventory {
   }
 
   /** Every stack, hydrated with its definition, optionally filtered. */
-  list(category = null) {
+  list(category: any = null) {
     return Object.keys(this.bag)
       .map((id) => ({ id, count: this.bag[id], def: ITEMS[id] }))
       .filter((e) => e.def && (!category || e.def.category === category))
@@ -617,7 +617,7 @@ export class Inventory {
 
   toJSON() { return { bag: { ...this.bag }, gil: this.gil, equipment: this.equipment, sellBonus: this.sellBonus }; }
 
-  static fromJSON(data: any, emitter = null) {
+  static fromJSON(data: any, emitter: any = null) {
     const inv = new Inventory(emitter);
     if (!data) return inv;
     for (const id of Object.keys(data.bag || {})) if (ITEMS[id]) inv.bag[id] = data.bag[id];

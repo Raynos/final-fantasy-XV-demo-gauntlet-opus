@@ -379,7 +379,7 @@ export class ExpBank {
    * Convert the bank into levels for a party.
    * @param lodging one of LODGINGS
    */
-  redeem(party: Stats[], lodging: any = LODGINGS.haven): {total:number, bonus:number, perMember:any[], sources:any} {
+  redeem(party: Stats[], lodging: any = LODGINGS.haven): {total:number, bonus:number, perMember:any[], sources:any, base?: number } {
     const bonus = lodging?.bonus ?? 1;
     const total = Math.round(this.banked * bonus);
     const perMember = party.map((s) => {
@@ -459,7 +459,7 @@ export function resolveElement(resistPercent: number): {mult:number, kind:'absor
  *
  * @param {object} opts
  */
-export function computeDamage(opts: { attacker: Stats | any, target: any, motion?: number, kind?: 'physical' | 'magical', element?: string, weaponClass?: string, staggerMult?: number, isBackAttack?: boolean, isWarpStrike?: boolean, hour?: number, targetIsDaemon?: boolean, rng?: Rng }): {damage:number, crit:boolean, kind:string, element:string, elementKind:string, absorbed:boolean, weakness:boolean, breakdown:any} {
+export function computeDamage(opts: { attacker: Stats | any, target: any, motion?: number, kind?: 'physical' | 'magical', element?: string, weaponClass?: string, staggerMult?: number, isBackAttack?: boolean, isWarpStrike?: boolean, hour?: number, targetIsDaemon?: boolean, rng?: Rng }): {damage:number, crit:boolean, kind:string, element:string, elementKind:string, absorbed:boolean, weakness:boolean, breakdown:any, healed?: number } {
   const {
     attacker, target,
     motion = 1,
@@ -548,7 +548,7 @@ export function computeDamage(opts: { attacker: Stats | any, target: any, motion
  *
  * @param enemy {level, expClass?: 'trash'|'normal'|'elite'|'boss'|'daemon'}
  */
-export function expForKill(enemy: any, hour: number = null) {
+export function expForKill(enemy: any, hour: number | null = null) {
   const CLASS_MULT = { trash: 0.5, normal: 1, elite: 2.2, boss: 6, daemon: 1.6 };
   const m = CLASS_MULT[enemy.expClass as keyof typeof CLASS_MULT] ?? 1;
   const lv = enemy.level || 1;

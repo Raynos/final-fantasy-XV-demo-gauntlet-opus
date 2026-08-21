@@ -383,7 +383,7 @@ function asColor(out: THREE.Color, v: number | THREE.Color) {
 export function weatherCoat(geo: THREE.BufferGeometry, {
   mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
   dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
-}: { mottle?: number, tick?: number, light?: number, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } = {}) {
+}: { mottle?: number, tick?: number, light?: number, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } | null = {}) {
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;
   // `Color.setHex` runs `Math.floor` on its argument, so handing it a

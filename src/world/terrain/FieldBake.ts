@@ -23,7 +23,7 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
  * @param meta extra header fields (seed, source hash)
  * @returns the uncompressed container
  */
-export function encodeField(field: Field, meta: any = {}, layers = null): Uint8Array {
+export function encodeField(field: Field, meta: any = {}, layers: any = null): Uint8Array {
   const roadY = field.network.captureElevations();
   const sections = [
     { name: 'h', kind: 'f32planes', n: N * N, bytes: encodeF32Planes(field.h) },

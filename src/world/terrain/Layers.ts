@@ -320,7 +320,7 @@ export function buildLayerData(size: number = 512): {size:number, detailSize:num
  * @param [data] pre-baked texels from `buildLayerData`; synthesised when absent
  * @param [lut] the two biome palette layers from `Biome.buildBiomeLut`
  */
-export function buildLayerTextures(size: number = 512, data: any = null, lut: Uint8Array = null): {albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture} {
+export function buildLayerTextures(size: number = 512, data: any = null, lut: Uint8Array | null = null): {albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture} {
   const d = data && data.size === size ? data : buildLayerData(size);
   const { albedo, surf, detail, detailSize } = d;
 
@@ -374,7 +374,7 @@ function buildDetailData(size: any): Uint8Array {
   return data;
 }
 
-function buildDetailArray(size: any, data = buildDetailData(size), lut = null) {
+function buildDetailArray(size: any, data = buildDetailData(size), lut: any = null) {
   const palette = lut || buildBiomeLut(size);
   const px = size * size;
   const all = new Uint8Array(px * 4 * DETAIL_LAYERS);

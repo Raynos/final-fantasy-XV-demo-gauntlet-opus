@@ -69,7 +69,7 @@ export class DayCycle {
   minutesPerSecond!: number;
   running!: boolean;
   syncFromSky!: boolean;
-  constructor(emitter: import('./Emitter.ts').Emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     /** Current hour, 0..24. */
     this.hour = 9.0;
@@ -206,7 +206,7 @@ export class DayCycle {
    * How hard the night is pushing right now — the Enemies system can read this
    * directly to decide spawn counts and levels.
    */
-  daemonPressure(partyLevel = 1): {spawn:boolean, density:number, levelBonus:number, depth:number} {
+  daemonPressure(partyLevel = 1): {spawn:boolean, density:number, levelBonus:number, depth:number, level?: number, attack?: number, defense?: number, hp?: number } {
     const s = nightScaling(this.hour, true);
     return {
       spawn: this.isNight,
@@ -329,7 +329,7 @@ export class DayCycle {
     };
   }
 
-  static fromJSON(data: any, emitter = null) {
+  static fromJSON(data: any, emitter: any = null) {
     const d = new DayCycle(emitter);
     if (!data) return d;
     d.day = data.day || 1;

@@ -295,7 +295,7 @@ export class Ascension {
   apLifetime!: number;
   apSpent!: number;
   emitter!: any;
-  constructor(emitter: import('./Emitter.ts').Emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     this.ap = 0;
     this.apSpent = 0;
@@ -464,7 +464,7 @@ export class Ascension {
     return { ap: this.ap, apSpent: this.apSpent, apLifetime: this.apLifetime, unlocked: [...this.unlocked], distance: this._distance };
   }
 
-  static fromJSON(data: any, emitter = null) {
+  static fromJSON(data: any, emitter: any = null) {
     const a = new Ascension(emitter);
     if (!data) return a;
     a.ap = data.ap || 0;
