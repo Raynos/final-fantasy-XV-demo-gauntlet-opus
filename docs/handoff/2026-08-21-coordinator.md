@@ -80,6 +80,16 @@ Landed and **verified by eye** this session:
   fist closed on the guard and the grip dangled below. The socket wiring was
   never the bug — do not re-investigate it. Companions now carry sheathed in
   the field.
+- **A dungeon visit hid the sky for the rest of the session.** `sky.dome` is a
+  direct child of `game.scene`, so `_hideExterior()` cleared its visible flag
+  *before* `_saveWorldLighting()` snapshotted it; on leave the false snapshot
+  was written back over the correct value. Every cutscene then rendered
+  correctly-lit golden-hour ground under an absolutely black sky. It only
+  reproduces when a `dun_*` shot runs earlier in the same page, which is exactly
+  how it survived a whole corpus review and was nearly filed "cannot reproduce".
+- **`zone_mencemoor` reframed** — its camera ended up inside the meteor once the
+  meteor moved to its own zone centre. A shot that frames a landmark from 710 m
+  is inside anything with an 857 m radius.
 - **The dev suite**, above.
 
 ---
@@ -89,15 +99,18 @@ Landed and **verified by eye** this session:
 Each agent wrote its own handoff into its worktree at `docs/handoff/<name>.md`.
 Merging the branch brings the handoff with it.
 
-| branch | owns | handoff |
+All seven branches are **merged into `main`**. Each agent's own handoff is at
+`docs/handoff/<name>.md` and carries far more detail than this summary.
+
+| agent | landed and verified | left undone |
 |---|---|---|
-| `agent/weapons` | `combat/Weapons.js`, `GeoKit.js`, `rig/Character.js`, `ai/PartyAI.js` | `docs/handoff/weapons.md` — **merged to main** |
-| `agent/enemies` | `characters/enemies/**`, `rig/CreatureAnim.js`, `Enemies.js` | `docs/handoff/enemies.md` |
-| `agent/grass` | `world/veg/**`, `Vegetation.js` | `docs/handoff/grass.md` |
-| `agent/splat` | `world/terrain/**`, `Terrain.js` | `docs/handoff/splat.md` |
-| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/**`, `Cast.js` *appearance only* | `docs/handoff/heroart.md` |
-| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | `docs/handoff/cineui.md` |
-| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `rig/Posture.js`, `Party.js`, `Player.js` | `docs/handoff/idles.md` — **written by the coordinator**, the agent's session was lost |
+| `weapons` | Grip-centred origins put every hilt in the hand; companions carry sheathed in the field. The socket wiring was never the bug. | Blade **material**: at `metalness 0.90` blades take their colour entirely from the sky env map — flat navy planes, no edge highlight. |
+| `enemies` | Grounding drift **52/207 poses → 0**, worst −321 m → 0, plus the 46 static failures → 0, with corrections *measured* rather than hand-tuned. Systemic texel-density fix across all 23 species. Deep rebuilds of goblin, iron giant, dualhorn/bloodhorn, sabertusk. Ships `tools/creaturecheck.mjs` as a permanent gate. | Remaining 18 species are surfaced but not rebuilt. |
+| `splat` | Regional palette works — `zone_lestallum` went from red-ochre desert to green Cleigne upland, Leide unchanged in character. 27 m mega-plates gone. LUT packing proved numerically over all 19 zone centres (worst error 0.007). `heightcheck`/`driftcheck` both 0.000 m, confirming colour-only. | `perf.mjs` never run — `tf_stoch` adds ~4 fetches/pixel and is the one unmeasured risk. Five zones unviewed. |
+| `heroart` | The eye region on all four heroes, verified at 0.4 m. Six compounding defects, each measured: lower lid never closed at either canthus (the blank-white far eye), iris a third too small, lid riding inside the corneal dome, lid band hanging off the cheek, lid UV pinned to (0.5, 0.5), sclera blowing to paper white at grazing angles. | Profile head collapse, hair, hands, outfits, skin. `Cast.js` untouched. |
+| `grass` | LOD albedo bug fixed and verified — card rings rendered **3× darker** than the blade ring. Blade heights re-unified from a 1 : 2 : 3.5 drift to 1 : 1.20 : 1.80; Leide is an ankle tuft again. Tint chain rewritten: r/g 1.76 → 1.30, b/g 0.21 → 0.57. | Trees and bushes untouched — the leaf cards may carry the same unpinned-albedo bug. |
+| `cineui` | **Found the black-sky root cause** (see §2) and re-staged `cine_hammerhead` and `cine_longwythe` at real world anchors. | `cine_astral`, all `src/ui/**`, BLINDSIDE doubling. **No `map_wide` screen was registered — do not add `menu: 'map_wide'` to `Shots.js`, it would point at nothing.** |
+| `idles` | Weighted asymmetric idles, a real fighting stance, two inverted signs fixed, `footYaw` finally read. `Animator.rest()`. | **Not verified by eye at all** — the agent stalled before any capture round. `Party.snap()` never written. See open item 1. |
 
 **Ownership is disjoint by construction and must stay that way.** Two agents in
 one directory corrupt each other's work; it happened once with `terrain/**` and
@@ -141,24 +154,21 @@ afternoon. The cause is machine saturation, not agent error — see §6.
    re-anchor convergence loop (formation drifts between iterations, camera lands
    inside whoever is in the way) and a long settle for follow shots (240 extra
    frames × 47 shots, did not fix ordering). The fix belongs in `Party`.
-2. **Every cutscene renders a pure-black sky** under correctly-lit golden-hour
-   ground, while `vista_dusk` from the same build renders a full cloudscape.
-   See `docs/handoff/cineui.md`.
-3. **Blade material.** Geometry is fixed but at `metalness 0.90` blades take
+2. **Blade material.** Geometry is fixed but at `metalness 0.90` blades take
    their colour entirely from the sky env map — every blade is a flat navy plane
    with no edge highlight. See `docs/handoff/weapons.md`.
-4. **Perf gate.** `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
+3. **Perf gate.** `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
    best measured; shadow cascades ~22 ms dominate). **Never trust a perf number
    taken while agents are running.**
-5. **A fresh harsh-critic pass.** Scores are badly stale — the last read 4.5/10
+4. **A fresh harsh-critic pass.** Scores are badly stale — the last read 4.5/10
    and predates clouds, cartography, collision, menus, combat, the rebuilt
    bestiary, biomes, dressing and everything in this session.
-6. `caem_shore` fishing POI at (−2564, 1966) in `WorldMap.js` is reportedly
+5. `caem_shore` fishing POI at (−2564, 1966) in `WorldMap.js` is reportedly
    mis-authored. Never verified by measurement.
-7. `_outcrops` consumes its RNG stream conditionally on local slope, so any
+6. `_outcrops` consumes its RNG stream conditionally on local slope, so any
    height change anywhere reshuffles every later boulder. Worth decoupling.
-8. `src/world/map/MapRaster.js` is orphaned (`tools/orphans.mjs`), pre-existing.
-9. **TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
+7. `src/world/map/MapRaster.js` is orphaned (`tools/orphans.mjs`), pre-existing.
+8. **TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
 
 ---
 
