@@ -403,7 +403,7 @@ function buildPrototype() {
     roughness: 0.86, metalness: 0.02,
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 2.6 });
+  return rig.build(mat, { radius: 2.6, coat: { mottle: 0.11, tick: 0.18, light: 0x8f88a4, shade: 0.18, dust: 0.12, dustTop: 0.26 } });
 }
 
 /** Broad cat paw: four toes, retractable claws left out. */
