@@ -1,7 +1,7 @@
 # Session state
 
 Live snapshot for resuming after an interruption (usage limit, crash, new session).
-Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-21 · `main` @ 128 commits.
+Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-21 · `main` @ 131 commits.
 **7 agents running.**
 
 ---
@@ -41,17 +41,52 @@ Ranked by how many of the 139 shots each defect touches:
 6. **Enemies are unreadable blobs** — the sabertusk is a legless tan mass
    floating above the ground.
 
+## The in-game dev/review suite
+
+Plan: **`docs/dev-suite-plan.md`**. Phase 0 + the freecam and review inbox have
+landed (`src/dev/**`, `tools/vite-plugin-review.mjs`).
+
+```bash
+npm run dev      # then open http://127.0.0.1:5173/?debug=1
+```
+
+`` ` `` console · **F8** fly · **P** pause+fly · **F9** file a review note ·
+**F2** stats. `help` in the console lists everything. Notes land in
+`.review/inbox/` as JSON + PNG; the `/drain-inbox` skill turns them into
+dispatched agent work.
+
+The suite refuses to load when `?shoot` is present, so it can never appear in a
+capture. Verified: two cold captures diff at 1.555/255, the documented noise
+floor. Do not weaken that guard.
+
+**F4** opens the asset browser: 23 enemies, 4 heroes, 8 NPCs and 5 weapons on a
+sun-keyed turntable, with pose scrubbing (`,` `.` `Space`) and a persisted
+`ok`/`flag` review status (`O` / `K`, `U` filters to unreviewed). `view
+wireframe|unlit|normals|overdraw` overrides the scene material.
+
+Still to build: trees, props and the Regalia in the browser (props need a
+registry introduced — the kind tables exist but are module-private), the
+world/zone navigator panel, frozen-frustum culling inspection, and
+`review.restore <id>`. `lil-gui` was deliberately **not** added — a new npm dep
+triggers Vite re-optimisation, which reloads pages mid-capture and would
+corrupt running agents. Add it on a quiet tree if hand-rolled panels chafe.
+
+Defects the browser surfaced on its first pass, none of which were visible at
+corpus framing: the coeurl's whiskers are segmented glowing polylines, the
+sabertusk has no eye read and a featureless coat, and both blades are flat
+slabs (which independently confirms the weapons agent's diagnosis).
+
 ## Agents in flight (7)
 
 | branch | owns | doing |
 |---|---|---|
 | `agent/weapons` | `combat/Weapons.js`, `GeoKit.js`, `rig/Character.js`, `ai/PartyAI.js` | Floating-weapon bug + rebuild weapon geometry |
-| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `Party.js`, `Player.js`, `Cast.js` | Kill the A-pose lineup; weighted per-character idles + combat stance |
-| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/NpcRig.js`, `npc/NpcCast.js` | Faces, hands, hair, outfit detail |
+| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `rig/Posture.js` (new), `Party.js`, `Player.js` | Kill the A-pose lineup; weighted per-character idles + combat stance |
+| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/**`, `Cast.js` *appearance only* | Faces, hands, hair, outfit detail |
 | `agent/grass` | `world/veg/**`, `Vegetation.js` | Grass scale/colour/translucency, biome palettes |
 | `agent/splat` | `world/terrain/**`, `Terrain.js` | Regional ground colour + kill the macro tiling |
 | `agent/enemies` | `characters/enemies/**`, `rig/CreatureAnim.js`, `Enemies.js` | Root-offset bug (Iron Giant −8.41 m) + model quality |
-| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | 3 empty `cine_*` shots, `menu_map_wide`/`menu_world` duplicates, doubled HUD text |
+| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | **Black cutscene sky (re-prioritised to first)**, `menu_map_wide` duplicate, doubled HUD text |
 
 **Ownership is disjoint by construction. Do not dispatch a second agent onto any
 directory in that table** — it happened once with `terrain/**` and an agent had
@@ -68,6 +103,35 @@ Coordinator keeps `src/game/Shots.js`, `src/world/props/**`, `src/world/map/**`.
   slabs floating above the sea. That is the "Cape Caem slabs" defect the terrain
   agent handed back. Moved to the zone centre, which is also where the
   `discCrater` landform puts the impact bowl.
+
+## Fixed: companion closeups were focusing on Noctis
+
+`PostFX._headObject()` resolved the player unconditionally, so a
+`follow: 'gladio'` shot racked focus onto Noctis behind the subject. The two
+head distances disagree by less than `headFocusWindow` (3.2 m) so the snap
+always fired, and at f/4.6 the real subject fell outside the depth of field.
+Now resolves the head of whoever `rig.followShot.follow` names, cached on the
+subject as well as liveness. **Verified by eye on `ignis_closeup`.**
+
+## Open, and more serious than it looks: the party formation never settles
+
+`prompto_closeup` stayed soft after the focus fix. It is **not** a DOF bug:
+re-shot alone with `--settle 300` it is sharp and well framed. The camera is
+anchored to a subject that is still steering to its wandering formation slot,
+and TAA plus motion blur then smear the *entire* frame. Prompto is worst — his
+spec has the smallest `lag` (0.10) and the highest `speedMul` (1.05).
+
+**The real defect is order dependence.** The same shot in a batch on the same
+warm page put the camera *inside another party member*. Formation state carries
+across shots, so a follow shot's result depends on what ran before it. That
+undermines the determinism guarantee for all 47 follow shots.
+
+Two harness fixes were tried and **both reverted** as unproven: a re-anchor
+convergence loop (formation keeps drifting between iterations) and a long
+settle for follow shots (240 extra frames × 47 shots, did not fix ordering).
+The right fix is a `Party.snap()` that places each member on its slot and zeroes
+its velocity, called from `Game.applyShot`. Routed to `agent/idles`, who owns
+`Party.js`; `Game.js` is the coordinator's.
 
 ## Still open, unassigned
 
@@ -116,6 +180,7 @@ re-dispatch the rest with the same ownership table.
 | `tools/gameplay.mjs` | **fails** — streaming/weather hitches remain |
 | `tools/roadcheck.mjs` | 39/39 drivable POIs reachable, 0 failures |
 | `tools/uxcheck.mjs` | 86/86 |
+| dev suite determinism | 1.555/255, at the documented noise floor |
 | `tools/combatloop.mjs` | 30/30 |
 | `tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
 | `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
