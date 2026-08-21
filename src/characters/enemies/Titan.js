@@ -113,6 +113,11 @@ function buildPrototype() {
   const plate = (bone, w, h, d, pos, rot, col = BASALT) =>
     rig.attach(tint(place(slab(w, h, d, Math.min(w, h, d) * 0.24), { pos, rot }), col, 0.055), bone);
   // A fissure is a faceted wedge of light rammed into the gap between two
+  //
+  // **Bind it to the same bone as the plates it sits between.** Every fissure in
+  // the arm and hand used to pass 'coreC', so the glow stayed with the torso
+  // while the limb geometry moved with its own bones -- a dozen orange wedges
+  // floating free above the dirt, clearly visible in `bestiary_titan`.
   // plates — a sixth of the cost of a bevelled slab, which matters when
   // there are fifty of them and the budget belongs to the hands.
   const fissure = (bone, w, h, d, pos, rot, str = 2.2) => {
@@ -312,7 +317,7 @@ function buildPrototype() {
         [(8.4 + f * 3.0) * s, 15.6 - f * 5.2, 0.2 + f * 0.7], [0.08, 0, (-0.24 + f * 0.1) * s],
         i === 1 ? GRANITE : BASALT);
     }
-    fissure('coreC', 0.5, 4.6, 0.5, [(10.6) * s, 13.4, 2.9], [0.42, 0, -0.2 * s], 1.8);
+    fissure(`sh${n}`, 0.5, 4.6, 0.5, [(10.6) * s, 13.4, 2.9], [0.42, 0, -0.2 * s], 1.8);
 
     // elbow: a boulder with spurs
     plate(`el${n}`, 4.6, 4.2, 4.4, [11.8 * s, 9.2, 0.9], [0, 0, -0.12 * s], GRANITE_L);
@@ -326,20 +331,20 @@ function buildPrototype() {
       plate(`el${n}`, 3.9 - i * 0.22, 2.3, 3.9 - i * 0.22,
         [(11.9 + f * 1.2) * s, 8.2 - f * 5.4, 1.4 + f * 4.6], [0.72, 0, -0.1 * s],
         i % 2 ? GRANITE : BASALT);
-      if (i < 3) fissure('coreC', 3.0, 0.5, 0.5, [(12.1 + f * 1.2) * s, 7.0 - f * 5.4, 1.9 + f * 4.6], [0.72, 0, 0], 1.7);
+      if (i < 3) fissure(`el${n}`, 3.0, 0.5, 0.5, [(12.1 + f * 1.2) * s, 7.0 - f * 5.4, 1.9 + f * 4.6], [0.72, 0, 0], 1.7);
     }
 
     /* ---- the hand: a palm of layered slabs and five fingers of stacked
        blocks. Roughly the footprint of a house, and the only part of him
        the player will ever stand next to. ---- */
     plate(`wr${n}`, 6.6, 2.8, 3.2, [12.9 * s, 2.9, 7.0], [0.62, 0, 0], GRANITE_L);
-    fissure('coreC', 5.0, 0.55, 0.5, [12.9 * s, 3.9, 7.4], [0.62, 0, 0], 2.2);
+    fissure(`wr${n}`, 5.0, 0.55, 0.5, [12.9 * s, 3.9, 7.4], [0.62, 0, 0], 2.2);
 
     plate(`hand${n}`, 7.4, 2.7, 4.6, [13.2 * s, 2.0, 9.6], [0.14, 0, 0], BASALT);
     plate(`hand${n}`, 6.6, 1.5, 3.6, [13.2 * s, 3.2, 9.4], [-0.1, 0, 0], GRANITE);
     plate(`hand${n}`, 5.6, 2.0, 2.6, [12.6 * s, 1.4, 8.0], [0.2, 0, -0.15 * s], GRANITE_L);
     plate(`hand${n}`, 2.6, 2.2, 3.6, [15.9 * s, 1.9, 9.8], [0, 0, -0.3 * s], GRANITE);
-    fissure('coreC', 5.4, 0.5, 3.0, [13.2 * s, 0.75, 9.7], [0, 0, 0], 2.6);   // furnace in the palm
+    fissure(`hand${n}`, 5.4, 0.5, 3.0, [13.2 * s, 0.75, 9.7], [0, 0, 0], 2.6);   // furnace in the palm
     // knuckle course, each one crowned with a broken spur
     for (let k = 0; k < 4; k++) {
       const o = -2.55 + k * 1.7;
@@ -357,15 +362,15 @@ function buildPrototype() {
       plate(`fing${n}`, wid - 0.14, 1.8, 2.2, [(13.2 + o * 1.06) * s, 1.6 - droop * 1.6, 15.0], [0.12, 0, 0], GRANITE);
       plate(`fing${n}`, wid - 0.36, 1.4, 1.8, [(13.2 + o * 1.11) * s, 1.2 - droop * 2.2, 16.8], [0.2, 0, 0], BASALT_D);
       shard(`fing${n}`, 0.45, 1.5, [(13.2 + o * 1.13) * s, 0.9 - droop * 2.4, 17.6], [1.35, 0, 0], OBSIDIAN);
-      fissure('coreC', wid * 0.8, 0.42, 0.42, [(13.2 + o * 1.03) * s, 2.0 - droop * 1.3, 14.0], [0.1, 0, 0], 2.0);
-      fissure('coreC', wid * 0.7, 0.38, 0.38, [(13.2 + o * 1.09) * s, 1.7 - droop * 1.9, 16.0], [0.16, 0, 0], 2.0);
+      fissure(`fing${n}`, wid * 0.8, 0.42, 0.42, [(13.2 + o * 1.03) * s, 2.0 - droop * 1.3, 14.0], [0.1, 0, 0], 2.0);
+      fissure(`fing${n}`, wid * 0.7, 0.38, 0.38, [(13.2 + o * 1.09) * s, 1.7 - droop * 1.9, 16.0], [0.16, 0, 0], 2.0);
     }
 
     // thumb: two blocks laid across the heel of the hand
     plate(`thumb${n}`, 2.8, 2.4, 3.0, [10.3 * s, 1.7, 11.0], [0.1, 0.34 * s, 0], BASALT);
     plate(`thumb${n}`, 2.3, 2.0, 2.6, [9.5 * s, 1.4, 13.0], [0.18, 0.48 * s, 0], GRANITE);
     shard(`thumb${n}`, 0.5, 1.7, [9.0 * s, 1.1, 14.2], [1.2, 0.5 * s, 0], OBSIDIAN);
-    fissure('coreC', 1.9, 0.42, 0.42, [9.9 * s, 1.9, 12.0], [0.14, 0.4 * s, 0], 2.0);
+    fissure(`thumb${n}`, 1.9, 0.42, 0.42, [9.9 * s, 1.9, 12.0], [0.14, 0.4 * s, 0], 2.0);
   }
 
   const mat = creatureMaterial({
