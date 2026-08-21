@@ -14,6 +14,66 @@ summary) and the seven per-agent handoffs.
 
 ---
 
+## Progress — 2026-08-21
+
+Closed by the coordinator, each verified by eye or by measurement:
+
+| item | state |
+|---|---|
+| B1 determinism | **Substantially fixed, not closed.** `Party.snap()` written and called. Two larger causes were found underneath and are *not* in any handoff: `Director.setScenario` early-returned when the name was unchanged, so consecutive `field` shots skipped the reset entirely; and `resetClock()` ran once per page, not per shot. Alone vs sixth in a batch: **39.200 → 2.068** mean/255, against a **measured control of 0.305** for that shot. The residual is real — likely vegetation tile streaming. |
+| B2 idles verified | **Done.** The A-pose lineup is gone: four distinct stances, weight shifted, feet no longer parallel (`hero_face`). |
+| B3 Noctis' hand | **Done.** Anchor mirrored to `x = -0.30` with its rotations mirrored to match; `weaponIK` returns the driving side and `CombatAnim` closes that fist. |
+| B4 blade material | **Done.** 0.76 metalness / 0.42 roughness / 0.82 envMapIntensity, neutral-warm `STEEL`. Reads as steel in `hero_face` and `combat_wide`. |
+| B8 `cine_opening` | **Done.** Stages the visible prop through `takeCar`/`releaseCar` instead of the hidden one. |
+| B9 `cine_astral` | **Done.** On the crater floor at (−1122, −1752); `storm` reconciled with `Shots.js`. |
+| B14 gate suite | **Done.** `npm run check` runs all nine gates in one table; `--perf` opt-in. `heightcheck`/`driftcheck` get their own server. |
+| B14 `MapRaster.js` | **Done** by a peer session. `orphans.mjs` clean at 272/272. |
+| SESSION-STATE, claude-resume | **Done.** |
+
+In flight in worktrees: B12 (enemies), B5 + B10 (ui), B13 + part of B7 (veg), B11 (heroart).
+
+### Findings from the B7 zone review (2026-08-21)
+
+Five never-viewed zones plus `zone_galdin`, captured and looked at:
+
+- **`zone_callaegh`** — correct Leide ochre badland. No action.
+- **`zone_cape_caem`** — the meteor slabs are gone. Reads acceptable; the water is
+  flat grey and might want a pass eventually. No action now.
+- **`zone_galdin`** — **the earlier suspicion was right.** Re-shot in neutral
+  light rather than backlit, it still reads as green parkland with trees, not the
+  bleached coast its `green: 0.32, damp: 0.14` entry intends. The ground *between*
+  the trees is correctly pale, so this is **vegetation density, not the splat
+  palette**. Do not retune the `SURFACE` entry.
+- **`zone_malacchi`** — confirms B13 exactly: candy-green canopy with blown,
+  nearly white highlights. Being worked.
+- **`zone_malmalam`** — correctly dark, humid and hazed. **Do not lighten.**
+- **`zone_pallareth`** — the horizontal terracing bands are clearly visible on
+  every slope. Confirms §C: this is **geometric**, from the per-zone `terrace`
+  biome parameter in the heightfield, and cannot be fixed from `TerrainMaterial.js`.
+
+> **`zone_weaverwilds` does not exist as a shot.** It is a zone *id*. The splat
+> handoff warns "do not use one list to audit the other" and I walked straight
+> into it. Zone ids with no dedicated shot: `cauthess`, `weaverwilds`, `meldacio`,
+> `balouve`, `kelbass`, `crown_verge`, `lestallum_shelf`. If `weaverwilds` is to
+> be reviewed — and it should be, it is the highest `green` entry at 0.86 and so
+> the most extreme test of the grass path — **a shot has to be authored for it.**
+
+### Upgraded: the subtitle leak is corpus-wide (was B10 item 6)
+
+Recorded as "`menu_title` after a `cine_*` shot shows the previous subtitle".
+It is worse: a stale subtitle burns into **any** later shot on the same page.
+`zone_malmalam`, captured after `cine_astral` on a warm daemon, came back with
+"PROMPTO / The ground — the ground is moving, the ground is actually—" across the
+frame. **This silently corrupts full-corpus runs**, which is how everyone reviews
+this game.
+
+`Subtitles` has `say`, `bant` and `update` but **no `clear()`**, and neither
+`title.hide()` nor `cine.stop()` can empty the box. The `ui` agent owns
+`src/ui/Subtitles.js` and has been asked to add `clear()`; the call sites in
+`Cinematics.stop()` and `StorySystem.applyShot` are the coordinator's.
+
+---
+
 ## A. Already landed — verified in source, no action needed
 
 Do not re-investigate these. Each was checked against the file and line.
