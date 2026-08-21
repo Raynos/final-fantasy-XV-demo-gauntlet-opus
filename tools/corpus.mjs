@@ -8,7 +8,7 @@
  *   node tools/corpus.mjs --only zones,ui       # just those categories
  *   node tools/corpus.mjs --sheet               # re-sheet what is on disk
  *   node tools/corpus.mjs --list                # print the category index
- *   node tools/corpus.mjs --out shots/corpus --cols 3 --w 1536
+ *   node tools/corpus.mjs --out tmp/shots/corpus --cols 3 --w 1536
  *
  * Sheets are JPEG and sized so a page lands under the 1568 px long edge a model
  * sees. A 3200 px sheet of 20 shots was 45 MB and arrived as an illegible strip.
@@ -53,7 +53,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function parseArgs(argv) {
   const o = {
-    out: 'shots/corpus', cols: 3, w: 1536, chunk: 0, sheetOnly: false, list: false,
+    out: 'tmp/shots/corpus', cols: 3, w: 1536, chunk: 0, sheetOnly: false, list: false,
     only: null, settle: 60, warm: false, frame: null, scout: null,
   };
   for (let i = 0; i < argv.length; i++) {

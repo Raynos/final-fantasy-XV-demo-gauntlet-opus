@@ -4,7 +4,7 @@
  *
  *   node tools/shoot.mjs                       # every shot in Shots.js
  *   node tools/shoot.mjs vista_dusk hero_full  # named shots only
- *   node tools/shoot.mjs --out shots/round3    # output directory
+ *   node tools/shoot.mjs --out tmp/shots/round3    # output directory
  *   node tools/shoot.mjs --w 1920 --h 1080     # resolution (default 1600x900)
  *   node tools/shoot.mjs --settle 90           # sim frames before capture
  *   node tools/shoot.mjs --prod                # build + serve the real bundle

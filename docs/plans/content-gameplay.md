@@ -108,7 +108,7 @@ in-car banter. No title screen or save/load UI. No chapter/story progression.
 
 ## 2. Performance — the honest numbers
 
-From `shots/perf-baseline.json` and `shots/gameplay-baseline.json` in the repo:
+From `tmp/shots/perf-baseline.json` and `tmp/shots/gameplay-baseline.json` in the repo:
 
 **Steady-state (posed shots, 1600×900, ultra):**
 
@@ -236,7 +236,7 @@ frame, before any gameplay object exists. Adding six NPCs, one vehicle and a
 dozen enemies moves that number by single-digit percent. Content work is not
 what made this slow and holding content until it is fixed buys nothing. Run
 WS-0b as a **dedicated parallel workstream owned by a rendering agent**, with
-`shots/perf-baseline.json` as the scoreboard and these targets:
+`tmp/shots/perf-baseline.json` as the scoreboard and these targets:
 
 - `storm` off the floor: 8.3 → ≥25 fps.
 - draw calls: 10,000 → under 2,500 (the honest interim target; 400 is not
@@ -297,7 +297,7 @@ zero `failures[]` entries across all 13 segments.
 cut the finest clipmap ring, cut LOD0 grass instance count and widen the tile
 band, share the GTAO and VFX depth prepasses instead of running two, budget the
 grass tile generator per frame.
-**Scoreboard:** `node tools/perf.mjs --out shots/perf-baseline.json` and
+**Scoreboard:** `node tools/perf.mjs --out tmp/shots/perf-baseline.json` and
 `node tools/gameplay.mjs`. Must not regress `tools/detcheck.mjs`.
 
 ### WS-1 — The wire: RPG ↔ UI ↔ combat ↔ world · **FIRST CONTENT WORKSTREAM**
@@ -749,7 +749,7 @@ a Dualhorn species; we have Sabertusk, Goblin, MT Soldier and Iron Giant. So:
    cascades, a GTAO depth prepass and a separate VFX depth prepass. Should
    WS-0b renegotiate it to ~2,500, or should it cut a pass?
 2. **Do we keep `Director.js`'s frozen screenshot scenarios?** They are how
-   every combat and warp capture in `shots/` was made. My assumption is yes,
+   every combat and warp capture in `tmp/shots/` was made. My assumption is yes,
    kept alongside the live `EncounterDirector`, since the harness depends on
    them and determinism is a hard rule.
 3. **Is the harsh-critic agent judging screenshots only, or play?** If

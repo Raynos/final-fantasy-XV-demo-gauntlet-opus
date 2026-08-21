@@ -46,8 +46,8 @@ read across the whole shot corpus.
 **Status: fixed, and verified by eye.** Every weapon is re-authored grip-at-origin
 (convention documented at the top of the geometry section of `Weapons.js`), and
 `Character._palmSocket` now puts the socket at the **centre of the closed fist**
-rather than on the wrist bone. In `shots/wp1/hero_face.png` and
-`shots/wp1/gladio_closeup.png` no weapon floats: Noctis' blade sits *in* the hand,
+rather than on the wrist bone. In `tmp/shots/wp1/hero_face.png` and
+`tmp/shots/wp1/gladio_closeup.png` no weapon floats: Noctis' blade sits *in* the hand,
 Gladiolus' greatsword rides his back, Ignis' kukris and Prompto's pistol are
 stowed.
 
@@ -138,7 +138,7 @@ Hold transforms are identity for the melee classes, because the hand sockets are
 authored as a *fist frame*. The pistol needs `rot [0, π/2, 0]` because its geometry
 runs grip-down / barrel-along-+Z rather than blade-along-+Y.
 
-Verified in `shots/wp1/{gladio_closeup,ignis_closeup,prompto_closeup,hero_face}.png`:
+Verified in `tmp/shots/wp1/{gladio_closeup,ignis_closeup,prompto_closeup,hero_face}.png`:
 no companion has a drawn weapon in a field frame any more. **Tuning still wanted:**
 in `gladio_closeup` the greatsword hangs a visible gap *off* his back rather than
 against it — pull it in along the socket's local −Z by ~4 cm and give it a little
@@ -159,7 +159,7 @@ index* — edge bright, face mid, spine/fuller dark. The greatsword came down fr
 bronze inlay laid into the fuller), and the sword's Lucian blue is now a **recessed
 channel** in the fuller instead of a painted slab.
 
-At 3× in `shots/wp1/gladio_closeup.png` the greatsword's grip reads genuinely well:
+At 3× in `tmp/shots/wp1/gladio_closeup.png` the greatsword's grip reads genuinely well:
 helical leather wrap, two bronze bands, a blunt weighted pommel. The silhouettes
 in the asset browser are correct — slim single-edged Engine Blade with a clipped
 false-edge point, an engine block with piston pots above the guard, a broad
@@ -195,8 +195,8 @@ in this session's scratchpad (see Gotchas).
    module-level.
 2. **Re-probe the anchors.** Assert numerically that `weapon.tip()` is at the
    blade tip and the firearm muzzle is ~0.17 m from the hand, not 13 m up.
-   `tools/probe.mjs` exists; there is no `probes/weapons.js` yet (only
-   `probes/meteor.mjs`) — write one.
+   `tools/probe.mjs` exists; there is no `tools/probes/weapons.js` yet (only
+   `tools/probes/meteor.mjs`) — write one.
 3. **Eyeball the swing arcs.** Re-origining moved every weapon relative to every
    swing arc and trail anchor. `combat_wide`, `combat_armiger` and `warp_strike`
    have not been shot since the rebuild. `Armiger.layout` scales by 0.46 and
@@ -281,7 +281,7 @@ in this session's scratchpad (see Gotchas).
    `this.hand.position.set(0.30, 1.12, 0.12)`. The rig faces +Z with its right
    side at −X (`Skeleton.js:11`), and `CombatAnim.js:415` picks the arm with
    `const main = local.x >= 0 ? 'L' : 'R'` — so a positive x anchor puts the
-   sword in his **left** hand. Confirmed by eye in `shots/wp1/hero_face.png`.
+   sword in his **left** hand. Confirmed by eye in `tmp/shots/wp1/hero_face.png`.
    Flipping the anchor to x ≈ **−0.30** (and mirroring z / rotation to match, and
    the two other literals at `CombatSystem.js:1174` and the `REST_POS` at
    `CombatSystem.js:1367`) puts it in his sword hand. `CombatSystem.js` is not

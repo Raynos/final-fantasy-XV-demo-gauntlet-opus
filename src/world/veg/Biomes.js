@@ -11,7 +11,7 @@ import { srgb } from '../../util/TextureGen.js';
  * world grew one biome — dry Leide scrub — because `Ecology.moisture()` is a
  * global fbm that has never heard of the cartography. The Nebulawood, Malmalam
  * Thicket, the Vesperpool and the whole of Duscae are *defined* as closed wet
- * forest and wetland in `WORLDMAP.md`, and they were bare dirt.
+ * forest and wetland in `docs/WORLDMAP.md`, and they were bare dirt.
  *
  * Field reference
  *   grassD     density multiplier for the grass field

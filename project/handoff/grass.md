@@ -4,7 +4,7 @@ Branch `agent/grass`, four commits ahead of `main` @ `76e19ae`.
 Owned files, and the only files touched: `src/world/veg/{GrassField,VegTextures,VegMaterial,Ecology,Biomes}.js`.
 Nothing under `src/world/terrain/**` was edited.
 
-Capture rounds live in `shots/gr0` (baseline) through `shots/gr7`. Every PNG in
+Capture rounds live in `tmp/shots/gr0` (baseline) through `tmp/shots/gr7`. Every PNG in
 every round was looked at.
 
 ---
@@ -18,7 +18,7 @@ every round was looked at.
 | Grass scale — Leide back to an ankle tuft | **Done, verified by eye** |
 | Tint maths rewrite — the acid yellow | **Done, verified by eye and by measurement** |
 | Leide palette re-authored toward dusty khaki | **Done, verified by eye** |
-| Duscae / Cleigne read as green | **Verified, no change needed** (`shots/gr7/poi_chocobo.png`) |
+| Duscae / Cleigne read as green | **Verified, no change needed** (`tmp/shots/gr7/poi_chocobo.png`) |
 | Blade silhouette, per-blade bend | **Done, verified by eye** |
 | Backlit translucency on the card rings | Done, **partially verified** — see §6 |
 | Per-clump wind (no more single plane wave) | Done, **not verified** — stills cannot show it |
@@ -42,7 +42,7 @@ Product: card ring **0.230** against blade ring **0.688** — the card rings
 rendered **3× darker** than the ring they take over from, at the same instance
 tint under the same sun. On screen: glowing straw out to thirty metres and a
 carpet of near-black gravel immediately past it, in one frame. Worst in
-`shots/gr0/zone_fallgrove.png`, `zone_longwythe.png` midground, and the entire
+`tmp/shots/gr0/zone_fallgrove.png`, `zone_longwythe.png` midground, and the entire
 foreground of `haven_dusk.png`.
 
 No palette or lighting change could ever have reached it. It is a property of
@@ -70,7 +70,7 @@ Card ring now lands at 0.931 × 0.58 = **0.54**, about four-fifths of the blade
 ring. Deliberately not equal — a card is a whole tuft at thirty metres with its
 own self-shadowing — but four-fifths is a shade and 3× is a different material.
 
-**Verified**: `shots/gr1/zone_fallgrove.png` versus `shots/gr0/zone_fallgrove.png`
+**Verified**: `tmp/shots/gr1/zone_fallgrove.png` versus `tmp/shots/gr0/zone_fallgrove.png`
 — the black gravel is gone and reads as sage-green scrub. `haven_dusk`'s
 foreground reads as grass instead of a void.
 
@@ -141,7 +141,7 @@ Replaced (commit `c08c1a4`) with four steps that are all bounded by the palette:
 **A trap worth knowing**: in Leide the local grass colour is *already* the ramp's
 dry end, so with nothing further along to interpolate toward, step 1 alone did
 literally nothing and the whole flats came out uniformly sage
-(`shots/gr3/hero_face.png`). `dry` therefore also pushes the hue axis, which is
+(`tmp/shots/gr3/hero_face.png`). `dry` therefore also pushes the hue axis, which is
 luminance-preserving and still bounded by step 3.
 
 Also: the blade's root-to-tip vertex ramp now carries hue as well as value (base
@@ -172,7 +172,7 @@ regionally correct. Nothing else in my work depends on the ground.
 
 I also did **not** touch the `lowAlt` gate that `agent/splat` reported gates
 grass off above 120 m — it is on their side of the boundary. It is visible in
-`shots/gr5/zone_three_valleys.png`, which is a high aerial with almost no grass.
+`tmp/shots/gr5/zone_three_valleys.png`, which is a high aerial with almost no grass.
 
 ---
 
@@ -185,7 +185,7 @@ as indicative only; re-measure on a quiet tree before judging.**
   **mean 73.6 fps, worst 39.1 fps (`vista_dawn`)**, which the tool reports as a
   FAIL against its 60 fps target. **I have no before/after comparison** — I did
   not baseline `perf.mjs` before the first edit, which was a mistake. `perf.mjs`
-  was already failing its gate on `main` per `SESSION-STATE.md` (`gameplay.mjs`
+  was already failing its gate on `main` per `project/SESSION-STATE.md` (`gameplay.mjs`
   `walk` at ~57.5 fps, shadow cascades ~22 ms dominating), so the failure is
   very unlikely to be mine, but that is an inference and not a measurement.
 - What I *can* state as a direct comparison, from the capture manifests, same
@@ -207,7 +207,7 @@ was contended.
 
 1. **Re-judge grass against the new terrain** once `agent/splat` merges. See §5.
    This is first because it may invalidate small colour calls cheaply.
-2. **Trees and bushes — plan item F, not started.** `shots/gr7/zone_malacchi.png`
+2. **Trees and bushes — plan item F, not started.** `tmp/shots/gr7/zone_malacchi.png`
    is the evidence: the broadleaf canopy is candy green with blown, nearly white
    highlights in the sun. Two specific leads, both already scouted:
    - `VegTextures.leafClusterTex('broad')` draws at `g = 66 + shade*62` with
@@ -219,13 +219,13 @@ was contended.
    - `Trees.js:288` and `:326` compose `shade * SPECIES_TINT[sp] * b.treeTint`
      with `shade = 0.62 + rng.next()*0.40` — up to 1.02 before either tint. Same
      "albedo over 1" shape as the grass tint bug had.
-   - The Nebulawood and Malmalam interiors (`shots/gr5/zone_nebulawood.png`,
+   - The Nebulawood and Malmalam interiors (`tmp/shots/gr5/zone_nebulawood.png`,
      `zone_malmalam.png`) are dark, humid and heavily hazed — I judged them
      **correct for the brief**, not too dark. Do not "fix" them.
 3. **Verify the wind by eye in motion.** Stills cannot show it. The gust is no
    longer a plane wave; that needs a moving capture or a live look.
 4. **Baseline and re-measure `perf.mjs` and `gameplay.mjs`** on a quiet tree.
-5. Optional polish: the near field in `shots/gr6/hero_face.png` still leans a
+5. Optional polish: the near field in `tmp/shots/gr6/hero_face.png` still leans a
    touch uniformly green for Leide. The lever is the `dry * 0.55` hue push in
    `GrassField._makeTile`, not the palette.
 
@@ -241,7 +241,7 @@ was contended.
   than a kilometre from Hammerhead floods to 100% sky inscatter — flat
   blue-white cards over brown ground. The existing comment says all this; I left
   it intact and verified distant vegetation is clean on
-  `shots/gr5/vista_noon.png` and `zone_three_valleys.png` after every shader
+  `tmp/shots/gr5/vista_noon.png` and `zone_three_valleys.png` after every shader
   edit. **Check those two shots after any change to `VegMaterial.js`.**
 - **GLSL reserved words cost me two full rounds.** A local in the vegetation
   shader may not be called `cross` or `patch` — both are reserved, and both fail
@@ -279,7 +279,7 @@ was contended.
   either function changes my grass. See §5.
 - `src/world/terrain/**` `lowAlt` gate — reported by `agent/splat` as gating
   grass off above 120 m. **Not mine, not touched.** Visible in
-  `shots/gr5/zone_three_valleys.png`.
+  `tmp/shots/gr5/zone_three_valleys.png`.
 - `tools/orphans.mjs` reports one orphan, `src/world/map/MapRaster.js`. It is
   pre-existing and belongs to the coordinator's `src/world/map/**`. Not mine.
 

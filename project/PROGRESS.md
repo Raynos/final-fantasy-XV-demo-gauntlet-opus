@@ -1,6 +1,6 @@
 # FINAL FANTASY XV — Eos. Scope & Progress
 
-> **Taking over? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md).**
+> **Taking over? Start with [`project/HANDOFF.md`](project/HANDOFF.md).**
 
 **Started** 2026-08-16 22:13 · **Last updated** 2026-08-17 ~08:30 · **Elapsed ~10h**
 **98 commits · 235 source files · ~79,500 lines**
@@ -20,7 +20,7 @@ throttle · 3 dungeons enter and leave · title + attract camera + opening scene
 audio graph running · 124 POIs on the minimap · rest at a lodging.
 
 **Queued after the current wave:** a full TypeScript port to match the sibling
-attempts — see **`docs/typescript-port-plan.md`**. Blocked until every agent branch is merged —
+attempts — see **`docs/plans/typescript-port.md`**. Blocked until every agent branch is merged —
 porting 235 modules while six agents edit them would conflict with everything.
 
 **Known gaps from live play (user-reported, not yet fixed):**
@@ -203,7 +203,7 @@ The HUD displayed hardcoded literals over a fully-implemented simulation.
 | Dungeons & interiors | `world/dungeons/**` | 🟡 |
 | Story, chapters, cutscenes | `game/story/**`, `game/cinematics/**` | 🟡 |
 | Audio & music | `audio/**` (except `Radio.js`) | 🟡 |
-| Design plan (`PLAN.md`) | — | ✅ delivered |
+| Design plan (`docs/plans/content-gameplay.md`) | — | ✅ delivered |
 
 ## 10. Notable bugs found and fixed
 

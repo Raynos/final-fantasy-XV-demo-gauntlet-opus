@@ -2,8 +2,8 @@
 /**
  * Candidate-framing probe for the shot-corpus repair pass.
  *
- *   node tools/framecam.mjs candidates.json --out shots/probe
- *   node tools/framecam.mjs candidates.json --out shots/probe --probe probe.mjs
+ *   node tools/framecam.mjs candidates.json --out tmp/shots/probe
+ *   node tools/framecam.mjs candidates.json --out tmp/shots/probe --probe probe.mjs
  *
  * `tools/shoot.mjs` can only capture shots that already exist in
  * `src/game/Shots.js`, and every edit to that file invalidates the capture
@@ -56,7 +56,7 @@ async function ensureServer() {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const opts = { out: 'shots/probe', settle: 60, file: null, probe: null, w: 1600, h: 900 };
+  const opts = { out: 'tmp/shots/probe', settle: 60, file: null, probe: null, w: 1600, h: 900 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out') opts.out = argv[++i];

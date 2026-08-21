@@ -2,7 +2,7 @@
 /**
  * Chart inspector for the cartography workstream.
  *
- *   node tools/chartshoot.mjs --out shots/chart
+ *   node tools/chartshoot.mjs --out tmp/shots/chart
  *
  * Boots the game, bakes the world chart out of the live heightfield and writes
  * the raw raster to disk, plus a 1:1 crop, so palette and relief-shading work
@@ -39,7 +39,7 @@ async function ensureServer() {
 }
 
 const argv = process.argv.slice(2);
-let out = 'shots/chart';
+let out = 'tmp/shots/chart';
 const crops = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--out') out = argv[++i];

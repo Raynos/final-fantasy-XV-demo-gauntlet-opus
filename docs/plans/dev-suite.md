@@ -146,7 +146,7 @@ This is same-origin localhost middleware, not asset acquisition — it does not
 violate BRIEF rule 1 ("no `fetch`, no CDN"), which is about pulling in art. The
 suite must degrade to a browser download if the endpoint 404s (static build).
 
-`.review/` goes in `.gitignore` alongside `shots/` and `public/baked/`.
+`.review/` goes in `.gitignore` alongside `tmp/shots/` and `public/baked/`.
 
 ### One dependency: `lil-gui`
 
@@ -320,9 +320,9 @@ node tools/gameplay.mjs             # 60 fps gate must not move
 node tools/perf.mjs                 # unchanged
 
 # determinism — the critical one: the suite must be invisible to captures
-node tools/shoot.mjs hero_face combat_wide --out shots/dev-a --cold
-node tools/shoot.mjs hero_face combat_wide --out shots/dev-b --cold
-node tools/imgdiff.mjs shots/dev-a shots/dev-b   # must be at the 1.5-1.9/255 noise floor
+node tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-a --cold
+node tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-b --cold
+node tools/imgdiff.mjs tmp/shots/dev-a tmp/shots/dev-b   # must be at the 1.5-1.9/255 noise floor
 
 # the suite itself
 npm run dev      # then open http://127.0.0.1:5173/?debug=1

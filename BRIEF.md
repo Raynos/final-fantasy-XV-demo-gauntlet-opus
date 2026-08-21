@@ -2,7 +2,7 @@
 
 Read this fully before writing code. Every agent works against this contract.
 
-> Coordinating rather than implementing? Read **[`docs/HANDOFF.md`](docs/HANDOFF.md)** first.
+> Coordinating rather than implementing? Read **[`project/HANDOFF.md`](project/HANDOFF.md)** first.
 
 ## The bar
 
@@ -97,9 +97,9 @@ Cross-system APIs other code already calls — **implement these if you own the 
 ## The screenshot harness — this is how you check your work
 
 ```bash
-node tools/shoot.mjs                        # all shots -> shots/
+node tools/shoot.mjs                        # all shots -> tmp/shots/
 node tools/shoot.mjs vista_dusk hero_full   # named shots
-node tools/shoot.mjs --out shots/veg-r2 --w 1920 --h 1080 --settle 90
+node tools/shoot.mjs --out tmp/shots/veg-r2 --w 1920 --h 1080 --settle 90
 ```
 
 It boots vite, waits for `window.GAME.ready`, steps the sim with a fixed

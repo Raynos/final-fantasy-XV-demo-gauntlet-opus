@@ -7,17 +7,17 @@ code. This document is what I wish I had been handed.
 **State at handoff:** 114 commits · 249 source files · ~86,300 lines · 39 shots ·
 25 registered systems · SCOPE 251 shipped / 3 in progress / 90 not started.
 
-**Resuming mid-session?** `SESSION-STATE.md` at the repo root has the live
+**Resuming mid-session?** `project/SESSION-STATE.md` has the live
 agent ids, what each is doing, and how to pick up if a session died.
 
 For the narrative version of how this got built — including what went wrong
-and why several things are the way they are — see `journal/2026-08-17-51c0b82c.md`.
+and why several things are the way they are — see `project/journal/2026-08-17-51c0b82c.md`.
 
 Read next, in this order: `BRIEF.md` (the contract every agent works against),
-`SCOPE.md` (atomic checklist), `PROGRESS.md` (status + bug log), `PLAN.md`
-**`docs/handoff/2026-08-21-coordinator.md`** (start here — latest
-session handoff), `WORLDMAP.md` (cartography), `docs/dev-suite-plan.md`
-(in-game debug/review suite), `docs/typescript-port-plan.md`.
+`docs/SCOPE.md` (atomic checklist), `project/PROGRESS.md` (status + bug log), `docs/plans/content-gameplay.md`
+**`project/handoff/2026-08-21-coordinator.md`** (start here — latest
+session handoff), `docs/WORLDMAP.md` (cartography), `docs/plans/dev-suite.md`
+(in-game debug/review suite), `docs/plans/typescript-port.md`.
 
 ---
 
@@ -46,10 +46,10 @@ Five rules that produced most of the value:
    Anything cross-boundary is *reported*, not edited, and the coordinator
    applies it. Two agents editing `_readInput` independently caused the only
    merge conflict in 114 commits.
-5. **Every agent keeps `docs/handoff/<topic>.md` current.** An agent that can be
+5. **Every agent keeps `project/handoff/<topic>.md` current.** An agent that can be
    replaced by its handoff is one you can retire the moment it stops being worth
    its cost; one that can't has taken its afternoon hostage. It is the same
-   principle `SESSION-STATE.md` applies to me — the state lives on disk, not in
+   principle `project/SESSION-STATE.md` applies to me — the state lives on disk, not in
    a context window.
 
 ## 2. Tooling — learn these before writing code
@@ -169,12 +169,12 @@ Merge them, verify, then re-run the critic pass.
    it — the terrain displaces in the *vertex shader*, so a CPU raycast hits the
    undisplaced lattice. It needs a GPU readback. If true, everything placed on
    the ground is subtly wrong.
-6. **The in-game dev/review suite** — `docs/dev-suite-plan.md`. Freecam, asset
+6. **The in-game dev/review suite** — `docs/plans/dev-suite.md`. Freecam, asset
    browser, world navigator and a feedback inbox that writes `.review/inbox/`.
    Written because every defect in the r4 corpus round was *visible* but not
    *findable*: the only way to look at the game was a 20-minute batch capture of
    fixed cameras.
-7. **The TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
+7. **The TypeScript port** — `docs/plans/typescript-port.md`, gated on a quiet tree.
 7. **Content still missing:** chocobos, fishing, photo-mode capture, camping at
    havens (only the Hammerhead caravan works), fast travel, the remaining towns.
 
@@ -196,6 +196,6 @@ Merge them, verify, then re-run the critic pass.
 - **Screenshots dominate an agent's transcript.** 20 PNG reads is 12–15 MB of
   context, ~95% of everything it carries. Capture review frames with `--jpeg`;
   the model sees a 1568 px long edge either way.
-- **`shots/` is gitignored** and so is the terrain bake cache
+- **`tmp/shots/` is gitignored** and so is the terrain bake cache
   (`public/baked/`, 32 MB, regenerated deterministically from the generators).
 - Use worktrees, and clean them up: they reached 6.1 GB before pruning.

@@ -2,7 +2,7 @@
 /**
  * Map-screen framing harness for the cartography workstream.
  *
- *   node tools/mapview.mjs --out shots/mapview --state 0,0,1 --state 3,4,0
+ *   node tools/mapview.mjs --out tmp/shots/mapview --state 0,0,1 --state 3,4,0
  *
  * `--state zoom,filter,revealAll` opens the real `map` menu screen through
  * `Menus`, sets the zoom step / filter row / survey state, settles the sim and
@@ -40,7 +40,7 @@ async function ensureServer() {
 }
 
 const argv = process.argv.slice(2);
-let out = 'shots/mapview';
+let out = 'tmp/shots/mapview';
 const states = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--out') out = argv[++i];

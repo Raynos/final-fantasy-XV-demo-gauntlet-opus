@@ -2,12 +2,12 @@
 /**
  * Contact sheet: tile a directory of shot images into pages a critic can read.
  *
- *   node tools/sheet.mjs shots/round1                 -> shots/round1/_sheet-1.jpg ...
- *   node tools/sheet.mjs shots/round1 --cols 3 --rows 4 --w 1536
- *   node tools/sheet.mjs shots/round1 --png           -> lossless pages instead
+ *   node tools/sheet.mjs tmp/shots/round1                 -> tmp/shots/round1/_sheet-1.jpg ...
+ *   node tools/sheet.mjs tmp/shots/round1 --cols 3 --rows 4 --w 1536
+ *   node tools/sheet.mjs tmp/shots/round1 --png           -> lossless pages instead
  *
  * Paginated on purpose. The old single-image sheet grew with the corpus --
- * `shots/full/_sheet.png` reached 45 MB and roughly 30 000 px tall, and an agent
+ * `tmp/shots/full/_sheet.png` reached 45 MB and roughly 30 000 px tall, and an agent
  * reading it got the whole thing squeezed into a 1568 px long edge, i.e. a
  * thumbnail strip in which nothing is legible. A page of 12 shots at 1536 px
  * wide lands just under that limit, so every page is read at full fidelity.

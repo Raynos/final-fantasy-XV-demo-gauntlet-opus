@@ -2,9 +2,9 @@
 /**
  * Free-camera diagnostic capture for the world-dressing pass.
  *
- *   node tools/dresscam.mjs longwythe alstor ravatogh --out shots/dress
- *   node tools/dresscam.mjs poi:tomb_just poi:wiz_chocobo --out shots/poi
- *   node tools/dresscam.mjs at:1200,-400 --out shots/spot
+ *   node tools/dresscam.mjs longwythe alstor ravatogh --out tmp/shots/dress
+ *   node tools/dresscam.mjs poi:tomb_just poi:wiz_chocobo --out tmp/shots/poi
+ *   node tools/dresscam.mjs at:1200,-400 --out tmp/shots/spot
  *
  * `src/game/Shots.js` is owned by the coordinator, so this tool exists to let
  * the dressing work be *judged* without editing it: it drives `CameraRig`
@@ -59,7 +59,7 @@ async function ensureServer() {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const opts = { out: 'shots/dresscam', dist: 70, eye: 12, look: 4, yaw: 135, time: 11.5, settle: 90, targets: [] };
+  const opts = { out: 'tmp/shots/dresscam', dist: 70, eye: 12, look: 4, yaw: 135, time: 11.5, settle: 90, targets: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out') opts.out = argv[++i];

@@ -3,10 +3,10 @@
 Every discrete thing the game should contain, one line each, checkable.
 `[x]` shipped and verified · `[~]` in progress right now · `[ ]` not started.
 
-Taking over? Start with **[`docs/HANDOFF.md`](docs/HANDOFF.md)**.
+Taking over? Start with **[`project/HANDOFF.md`](project/HANDOFF.md)**.
 
-Companion docs: `PROGRESS.md` (status by area, scoreboard, bug log) ·
-`PLAN.md` (design audit and sequencing) · `WORLDMAP.md` (cartographic design, pending) ·
+Companion docs: `project/PROGRESS.md` (status by area, scoreboard, bug log) ·
+`docs/plans/content-gameplay.md` (design audit and sequencing) · `docs/WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
 
 **Counts at last update (2026-08-17 ~08:00, verified against `main` @ 98 commits):**
@@ -17,9 +17,9 @@ report. Where a claim was only partly true it has been reworded rather than tick
 
 Recount with:
 ```sh
-grep -c '^- \[x\]' SCOPE.md   # shipped
-grep -c '^- \[~\]' SCOPE.md   # in progress
-grep -c '^- \[ \]' SCOPE.md   # not started
+grep -c '^- \[x\]' docs/SCOPE.md   # shipped
+grep -c '^- \[~\]' docs/SCOPE.md   # in progress
+grep -c '^- \[ \]' docs/SCOPE.md   # not started
 ```
 
 ---
@@ -27,7 +27,7 @@ grep -c '^- \[ \]' SCOPE.md   # not started
 ## 1. World map & zones
 
 ### 1.1 Cartography
-- [x] Authored world map design (`WORLDMAP.md`) — not noise-grown terrain
+- [x] Authored world map design (`docs/WORLDMAP.md`) — not noise-grown terrain
 - [x] `WorldMap.js` as single source of truth: zones, POIs, road graph, biome params
 - [x] Zone query API — `zoneAt`, `nearestPOI`, `poiById`, `discover`, `roadGraph`
 - [x] Terrain generated *from* the map design rather than decorated after the fact
@@ -465,7 +465,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 
 ## 14. TypeScript port (planned — blocked on the current agent wave)
 
-Full detail in **[`docs/typescript-port-plan.md`](docs/typescript-port-plan.md)**.
+Full detail in **[`docs/plans/typescript-port.md`](docs/plans/typescript-port.md)**.
 
 Match the sibling attempts `../final-fantasy-XV-demo-opus` (172 `.ts`) and
 `../final-fantasy-XV-demo-ogl-opus` (100 `.ts`), which are 100% TypeScript with

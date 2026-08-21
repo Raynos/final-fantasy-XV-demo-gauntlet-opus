@@ -1,8 +1,26 @@
 # Working in this repo
 
 `BRIEF.md` is the contract — art direction, engine contracts, definition of done.
-Read it before writing code. Coordinating rather than implementing? `docs/HANDOFF.md`
-first, then `SESSION-STATE.md` for who currently owns what.
+Read it before writing code. Coordinating rather than implementing? `project/HANDOFF.md`
+first, then `project/SESSION-STATE.md` for who currently owns what.
+
+## Layout
+
+Four buckets, and the root holds nothing but config and the three docs below.
+
+- **`src/`** — the game. **`public/`** — assets. **`tools/`** — the harness
+  (capture, probes, checks); `tools/probes/` holds scripts for `tools/probe.mjs`.
+- **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
+  `docs/WORLDMAP.md`, `docs/plans/`.
+- **`project/`** — working state: how the work is *going*. `project/HANDOFF.md`,
+  `project/handoff/<topic>.md`, `project/SESSION-STATE.md`, `project/PROGRESS.md`,
+  `project/journal/`, `project/TODO.md` (human-written).
+- **`tmp/`** — scratchpad, git-ignored wholesale. `tmp/shots/` is the default
+  capture root. Nothing may depend on it surviving.
+
+Root: `README.md` (the human's original brief), `CLAUDE.md`, `BRIEF.md` (the
+contract), and build config. New file that is none of the above? It belongs in one
+of the four buckets, not at the root.
 
 ## Ownership
 
@@ -15,7 +33,7 @@ commits.
 
 ## Handing off
 
-Keep `docs/handoff/<topic>.md` current as you work: what is done and verified, what is
+Keep `project/handoff/<topic>.md` current as you work: what is done and verified, what is
 left, the exact next step, files touched, open questions, and the shots that show the
 current state. It is what lets a fresh agent pick your work up, and it means retiring
 you costs one turn instead of losing an afternoon.
@@ -29,7 +47,7 @@ date and stop at a sensible pause rather than opening a new line of investigatio
 Non-negotiable, per `BRIEF.md`: capture, then **read the image and actually look at it**.
 Structural correctness is not the bar.
 
-- Capture review frames with `--jpeg`: `node tools/shoot.mjs hero_full --out shots/x --jpeg`.
+- Capture review frames with `--jpeg`: `node tools/shoot.mjs hero_full --out tmp/shots/x --jpeg`.
   A 1600×900 capture is downscaled to a 1568 px long edge before you see it either way,
   so a 2.5 MB PNG shows you nothing a 250 KB JPEG doesn't — it just makes every later
   turn carry it. Leave PNG as the default when the capture feeds `tools/imgdiff.mjs`,

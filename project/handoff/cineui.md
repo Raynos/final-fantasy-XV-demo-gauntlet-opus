@@ -13,12 +13,12 @@ Wound down early on coordinator instruction. Everything below is either
 **None of my three hypotheses was right.** It is not cloud-buffer
 reprojection, not a NaN in `uCamAlt`, not a double `setTimeOfDay`. It is a
 **state leak out of `Dungeons`**, and it is triggered by *shot ordering in a
-full-corpus run*, which is why `shots/r4` had it and a targeted re-shoot of the
+full-corpus run*, which is why `tmp/shots/r4` had it and a targeted re-shoot of the
 same commit does not.
 
 ### How I found it
 
-`shots/r4` reproduced the defect; my own cold capture of the same six `cine_*`
+`tmp/shots/r4` reproduced the defect; my own cold capture of the same six `cine_*`
 shots at `0be851f` did **not** — full cloudscape, correct sky, every one. The
 difference is that `r4` shot all 139 shots in `Shots.js` declaration order, and
 the twelve `dun_*` dungeon shots sit **immediately before** `menu_title` and the
@@ -27,7 +27,7 @@ six `cine_*` shots.
 Reproduced deterministically in two shots:
 
 ```bash
-PORT=5390 node tools/shoot.mjs --out shots/x dun_keycatrich_hall cine_opening
+PORT=5390 node tools/shoot.mjs --out tmp/shots/x dun_keycatrich_hall cine_opening
 ```
 
 `cine_opening` comes back with a pure-black sky, an over-bright ground and a
@@ -136,7 +136,7 @@ Now staged on the **garage apron at Hammerhead**, frame anchored
 now wide → front-on medium → dirty single → two-shot → low angle, all shot from
 the pump side so the party faces the lens and the SERVICE shed, the canopy, the
 mesa and Insomnia's skyline are the background.
-`shots/cut-hh3/` holds all five set-ups.
+`tmp/shots/cut-hh3/` holds all five set-ups.
 
 ### `cine_longwythe` — was the same roadside site, 1.1 km from anything named Longwythe
 
@@ -144,7 +144,7 @@ Now anchored on `poiPoint('longwythe_rest')` with the scene axis pointing
 **away** from `poiPoint('longwythe_peak')`, so the 430 m horn stands behind the
 party in every set-up. Sight line measured through `/eval`: over the full
 1261 m nothing rises within 3.3 m of the line to the summit — it is genuinely
-unobstructed. `shots/cut-lw/cine_longwythe_t0004.png` is the best frame either
+unobstructed. `tmp/shots/cut-lw/cine_longwythe_t0004.png` is the best frame either
 cutscene has produced.
 
 ### `cine_astral` — NOT STARTED
@@ -345,26 +345,26 @@ would break if the shot time changed. Worth generalising into `SceneKit`.
    spot. Map is the coordinator's.
 5. **`src/world/town/Hammerhead.js`** — a **blue pickup truck floats in mid-air**
    inside the garage bay, roughly 2 m off the deck. Clearly visible in
-   `shots/cut-hh3/cine_hammerhead_t0014.png` and `_t0042.png`, and in
-   `shots/cu-ref/town_regalia_bay.png` on `main`, so it predates this branch.
+   `tmp/shots/cut-hh3/cine_hammerhead_t0014.png` and `_t0042.png`, and in
+   `tmp/shots/cu-ref/town_regalia_bay.png` on `main`, so it predates this branch.
 6. **`src/game/story/TitleScreen.js` / `src/ui/Subtitles.js`** (mine, not done)
    — `menu_title` captured after a `cine_*` shot still shows the previous
    scene's subtitle ("For the record, nobody was listening.") burned over the
-   title card. Visible in `shots/cu-seq/menu_title.png`. Subtitles are not
+   title card. Visible in `tmp/shots/cu-seq/menu_title.png`. Subtitles are not
    cleared when a scene is stopped by a new shot.
 
 ---
 
 ## 8. Where the images are
 
-`shots/` is gitignored; these exist in the worktree only.
+`tmp/shots/` is gitignored; these exist in the worktree only.
 
 | dir | what |
 |---|---|
-| `shots/cu0/` | baseline at `0be851f`, 13 shots |
-| `shots/cu-seq/` | **the black-sky reproduction** — dungeon, then cutscenes |
-| `shots/cu-fix/` | the same sequence with the `Dungeons.js` fix applied — sky restored |
-| `shots/cu-ref/` | town / zone backdrops used to choose the staging |
-| `shots/cut-hh3/` | all five Hammerhead set-ups, final |
-| `shots/cut-lw/` | all five Longwythe set-ups |
-| `shots/cu-final/` | committed state through `shoot.mjs`, letterbox and subtitles included |
+| `tmp/shots/cu0/` | baseline at `0be851f`, 13 shots |
+| `tmp/shots/cu-seq/` | **the black-sky reproduction** — dungeon, then cutscenes |
+| `tmp/shots/cu-fix/` | the same sequence with the `Dungeons.js` fix applied — sky restored |
+| `tmp/shots/cu-ref/` | town / zone backdrops used to choose the staging |
+| `tmp/shots/cut-hh3/` | all five Hammerhead set-ups, final |
+| `tmp/shots/cut-lw/` | all five Longwythe set-ups |
+| `tmp/shots/cu-final/` | committed state through `shoot.mjs`, letterbox and subtitles included |

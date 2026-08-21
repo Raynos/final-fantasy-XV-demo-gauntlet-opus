@@ -2,7 +2,7 @@
 /**
  * Pixel diff between two shot directories (or two PNGs).
  *
- *   node tools/imgdiff.mjs shots/before shots/after
+ *   node tools/imgdiff.mjs tmp/shots/before tmp/shots/after
  *   node tools/imgdiff.mjs a.png b.png
  *
  * Prints mean and max per-channel delta and the fraction of pixels that differ

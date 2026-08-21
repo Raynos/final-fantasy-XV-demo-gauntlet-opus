@@ -6,8 +6,8 @@
  * has many more states worth eyeballing. This drives them by calling the public
  * HUD / Menus API after applying a base shot.
  *
- *   PORT=5206 node tools/ui-shoot.mjs --out shots/ui-r1
- *   PORT=5206 node tools/ui-shoot.mjs menu_ascension photo_mode --out shots/x
+ *   PORT=5206 node tools/ui-shoot.mjs --out tmp/shots/ui-r1
+ *   PORT=5206 node tools/ui-shoot.mjs menu_ascension photo_mode --out tmp/shots/x
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -70,7 +70,7 @@ async function ensureServer() {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const opts = { w: 1600, h: 900, out: 'shots/ui', names: [] };
+  const opts = { w: 1600, h: 900, out: 'tmp/shots/ui', names: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out') opts.out = argv[++i];

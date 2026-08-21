@@ -2,7 +2,7 @@
 /**
  * Ad-hoc framing harness for the world-map workstream.
  *
- *   node tools/mapshoot.mjs tools/mapshots.json --out shots/map-r1
+ *   node tools/mapshoot.mjs tools/mapshots.json --out tmp/shots/map-r1
  *
  * `tools/shoot.mjs` can only render shots that already exist in `Shots.js`,
  * which is owned by another agent. This drives the camera rig directly from a
@@ -43,7 +43,7 @@ async function ensureServer() {
 
 async function main() {
   const argv = process.argv.slice(2);
-  let out = 'shots/map', file = 'tools/mapshots.json', w = 1600, h = 900, settle = 60;
+  let out = 'tmp/shots/map', file = 'tools/mapshots.json', w = 1600, h = 900, settle = 60;
   const only = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--out') out = argv[++i];

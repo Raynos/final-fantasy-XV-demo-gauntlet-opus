@@ -17,7 +17,7 @@ import { ROUTES, NODES, ROAD_CLASS, RoadGraph } from './RoadGraph.js';
  *     as it is in the game, and it is where the player starts.
  *
  * The full cartographic design — borders, character, pacing, traversal times,
- * per-zone terrain requirements — lives in `WORLDMAP.md` at the repo root.
+ * per-zone terrain requirements — lives in `docs/WORLDMAP.md`.
  */
 
 export const WORLD = {

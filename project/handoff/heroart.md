@@ -16,8 +16,8 @@ the only thing that landed. Before: the aperture was a wall-eyed slot with a bla
 white bead for the far eye, the eyeball's lower hemisphere hung out of the face as a
 skin-coloured bucket, and the iris was a third too small. After: an open almond
 aperture, iris filling it, sclera reading as sclera, lids meeting at both canthi, no
-protruding shell. Compare `shots/ha0c/noctis_front.png` with `shots/ha6/noctis_front.png`
-and `shots/ha0c/noctis_eyes.png` with `shots/ha6/noctis_eyes.png`.
+protruding shell. Compare `tmp/shots/ha0c/noctis_front.png` with `tmp/shots/ha6/noctis_front.png`
+and `tmp/shots/ha0c/noctis_eyes.png` with `tmp/shots/ha6/noctis_eyes.png`.
 
 It is **better, not good**. It would still lose a blind side-by-side against FFXV.
 
@@ -25,9 +25,9 @@ It is **better, not good**. It would still lose a blind side-by-side against FFX
 
 - Corpus shots (`hero_face`, `hero_closeup`, `hero_full`, the three companion
   closeups, `town_npcs`) were **not re-captured** after the final edit. The baseline
-  is in `shots/ha0/`; re-shoot and compare before merging.
+  is in `tmp/shots/ha0/`; re-shoot and compare before merging.
 - The **caruncle** renders as a small dark bead that is visible at 0.4 m and sits at
-  the wrong corner on at least one side (see `shots/diag/solid_frontside.png` — the
+  the wrong corner on at least one side (see `tmp/shots/diag/solid_frontside.png` — the
   black bead is temporal, not nasal, on the left eye). It is small enough to be
   invisible at gameplay range but it is wrong. Fix or delete it.
 - NPCs (`NpcRig.js`) build from the same `buildHead`, so they inherit all of this
@@ -61,7 +61,7 @@ to the appearance-data work the coordinator authorised).
 | `npx vite build` | **pass** (enforced by `.githooks/pre-commit`, ran on the commit) |
 | `node tools/integration.mjs` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
 | `node tools/orphans.mjs` | **1 orphan: `src/world/map/MapRaster.js`** — pre-existing, not mine, `src/world/map/**` is the coordinator's |
-| `node tools/perf.mjs` | **not run.** The machine was saturated with sibling agents the whole session and the numbers would have been meaningless. Baseline for comparison is in `shots/ha0/manifest.json`: hero shots 4.78–4.85 M tris / 485–525 calls, `town_npcs` 6.91 M / 841. |
+| `node tools/perf.mjs` | **not run.** The machine was saturated with sibling agents the whole session and the numbers would have been meaningless. Baseline for comparison is in `tmp/shots/ha0/manifest.json`: hero shots 4.78–4.85 M tris / 485–525 calls, `town_npcs` 6.91 M / 841. |
 
 The eye work **adds** geometry: lid `cols` 14→20, `rows` 4→5, lashes 11→17 per lid,
 plus a waterline strip and a caruncle. Roughly +1.5 k triangles per head, ~+10 k across
@@ -72,9 +72,9 @@ believing me.
 
 ## 4. Next steps, in priority order
 
-1. **Re-shoot the corpus and compare against `shots/ha0/`.** `PORT=<vite> node
+1. **Re-shoot the corpus and compare against `tmp/shots/ha0/`.** `PORT=<vite> node
    tools/shoot.mjs hero_face hero_closeup hero_full gladio_closeup ignis_closeup
-   prompto_closeup town_npcs --out shots/ha7 --cold`. Then `node tools/perf.mjs`.
+   prompto_closeup town_npcs --out tmp/shots/ha7 --cold`. Then `node tools/perf.mjs`.
    Nothing else should start until this is known good.
 2. **Settle the socket depth properly** — see §5.1. It is parked at a working value,
    not a correct one, and it is the one thing in this commit that could regress if the
@@ -83,9 +83,9 @@ believing me.
    placed at fissure fraction `cf = 0.05`, which is the *inner* canthus only if
    `EYE.arc[0]` is the nasal end — check the sign per side.
 4. **The profile head collapse** — the worst remaining frame. Evidence:
-   `shots/ha0c/ignis_profile.png`. The skull runs as one straight plane from forehead
+   `tmp/shots/ha0c/ignis_profile.png`. The skull runs as one straight plane from forehead
    to chin point with no nasion, no mandible body and no ear. §6.1 has specifics.
-5. **The hair.** Evidence: any `*_profile` or `*_front` in `shots/ha0c/`. §6.2.
+5. **The hair.** Evidence: any `*_profile` or `*_front` in `tmp/shots/ha0c/`. §6.2.
 6. **Everything else in `/Users/raynos/.claude/plans/logical-finding-flute-agent-a5330eb3b9d22cb42.md`**,
    which is still accurate apart from its eye diagnosis (which was wrong — see §5.1).
 
@@ -184,7 +184,7 @@ Saves you the trip:
 
 - The eyeball geometry itself is good. Rendered on its own (head hidden) it is a
   clean sclera, a fibrous iris, a limbal ring and a decent glint. See
-  `shots/diag/diag_nohead.png` — that is what is hiding behind the face.
+  `tmp/shots/diag/diag_nohead.png` — that is what is hiding behind the face.
 - The globes are positioned correctly. Pupillary distance / head width = 0.43, which
   is the real ratio. `dims.eyeY`/`eyeZ` in `Skeleton.js` match `FACE.eye` exactly.
 - `Anim.js:466`'s `+0.11` rad gaze pitch is small (6.3°) and not the cause of
@@ -197,7 +197,7 @@ Saves you the trip:
 
 ## 6. What I learned about the work I did not get to
 
-### 6.1 Profile (priority 2) — `shots/ha0c/ignis_profile.png`
+### 6.1 Profile (priority 2) — `tmp/shots/ha0c/ignis_profile.png`
 
 The worst frame in the game. Concretely: no nasion (the forehead and the nose bridge
 are one straight plane), no mandible body between the gonial angle and the chin, the
@@ -222,7 +222,7 @@ gold.
 ### 6.3 Skin
 
 Over-saturated orange at closeup, and the **neck is a different colour from the face**
-with a hard seam and a visible woven normal-map pattern (`shots/ha6/noctis_front.png`,
+with a hard seam and a visible woven normal-map pattern (`tmp/shots/ha6/noctis_front.png`,
 bottom). The body uses `skinMaterial()` with `c.pore` at `repeat(22,34)`; the face uses
 `poreFine` at `repeat(9,13)`. Those are different scales on either side of the jaw
 line, which is most of the seam.
@@ -233,7 +233,7 @@ line, which is most of the seam.
 
 ```bash
 PORT=<unique vite port> node tools/framecam.mjs \
-  --probe tools/_probe/heads.mjs --out shots/<round> --settle 8
+  --probe tools/_probe/heads.mjs --out tmp/shots/<round> --settle 8
 ```
 
 Emits 28 framings — for each of the four heroes: `_front`, `_eyes` (0.4 m, fov 13),
@@ -246,8 +246,8 @@ The frames that matter, in order: `noctis_eyes` (is the eye an eye?),
 `ignis_profile` (the head sculpt), `gladio_tq` (the far eye and the beard),
 `prompto_front` (blond hair, freckles).
 
-Baselines on disk: `shots/ha0/` (corpus), `shots/ha0c/` (probe, before any change),
-`shots/ha6/` (probe, current). `shots/diag/` and `shots/diag2/` hold the
+Baselines on disk: `tmp/shots/ha0/` (corpus), `tmp/shots/ha0c/` (probe, before any change),
+`tmp/shots/ha6/` (probe, current). `tmp/shots/diag/` and `tmp/shots/diag2/` hold the
 head-hidden / winding-mode diagnostics behind §5.1 — worth a look before you touch
 the socket.
 

@@ -7,9 +7,9 @@
  *   node tools/shrink.mjs --keep r4,r5        # leave these dirs lossless
  *   node tools/shrink.mjs --keep-latest 3     # ...and the N most recent (default 3)
  *   node tools/shrink.mjs --quality 82 --apply
- *   node tools/shrink.mjs shots/full --apply  # one directory
+ *   node tools/shrink.mjs tmp/shots/full --apply  # one directory
  *
- * `shots/` reached 1.7 GB of lossless captures that exist to be looked at. A
+ * `tmp/shots/` reached 1.7 GB of lossless captures that exist to be looked at. A
  * 1600x900 PNG is ~2.5 MB and the same frame as JPEG is ~250 KB, indexes and
  * opens the same, and looks the same at review size -- the archive is worth
  * keeping, the bytes are not.

@@ -1,7 +1,7 @@
 # Coordinator handoff — 2026-08-21, session `07642602`
 
 Written for whoever picks this project up next. Read this first, then
-`docs/HANDOFF.md` (method and scar tissue), `BRIEF.md` (the contract), `SCOPE.md`,
+`project/HANDOFF.md` (method and scar tissue), `BRIEF.md` (the contract), `docs/SCOPE.md`,
 then the per-agent handoffs listed below.
 
 This session resumed `51c0b82c`, which had run out of weekly usage mid-round.
@@ -49,7 +49,7 @@ present**, so it can never appear in a capture. Verified, not assumed — two co
 captures diff at 1.555/255, the documented noise floor. **Do not weaken that
 guard.**
 
-Full design and rationale: **`docs/dev-suite-plan.md`**.
+Full design and rationale: **`docs/plans/dev-suite.md`**.
 
 Not yet built: trees/props/Regalia in the browser (props need a registry
 introduced — the kind tables exist but are module-private), the world/zone
@@ -96,11 +96,11 @@ Landed and **verified by eye** this session:
 
 ## 3. The agent round — branches and handoffs
 
-Each agent wrote its own handoff into its worktree at `docs/handoff/<name>.md`.
+Each agent wrote its own handoff into its worktree at `project/handoff/<name>.md`.
 Merging the branch brings the handoff with it.
 
 All seven branches are **merged into `main`**. Each agent's own handoff is at
-`docs/handoff/<name>.md` and carries far more detail than this summary.
+`project/handoff/<name>.md` and carries far more detail than this summary.
 
 | agent | landed and verified | left undone |
 |---|---|---|
@@ -156,7 +156,7 @@ afternoon. The cause is machine saturation, not agent error — see §6.
    frames × 47 shots, did not fix ordering). The fix belongs in `Party`.
 2. **Blade material.** Geometry is fixed but at `metalness 0.90` blades take
    their colour entirely from the sky env map — every blade is a flat navy plane
-   with no edge highlight. See `docs/handoff/weapons.md`.
+   with no edge highlight. See `project/handoff/weapons.md`.
 3. **Perf gate.** `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
    best measured; shadow cascades ~22 ms dominate). **Never trust a perf number
    taken while agents are running.**
@@ -168,7 +168,7 @@ afternoon. The cause is machine saturation, not agent error — see §6.
 6. `_outcrops` consumes its RNG stream conditionally on local slope, so any
    height change anywhere reshuffles every later boulder. Worth decoupling.
 7. `src/world/map/MapRaster.js` is orphaned (`tools/orphans.mjs`), pre-existing.
-8. **TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
+8. **TypeScript port** — `docs/plans/typescript-port.md`, gated on a quiet tree.
 
 ---
 
@@ -194,7 +194,7 @@ pruned.
 **The `combatloop` regression is worth its own note.** `agent/enemies`
 reproduced the identical nine failures with `src/characters` reverted to
 `0be851f`, so it predates this round. Its lead: a stuck `menu=controls` eating
-input, in `src/ui/**`. `SESSION-STATE.md` recorded 30/30 at some earlier point,
+input, in `src/ui/**`. `project/SESSION-STATE.md` recorded 30/30 at some earlier point,
 so it broke between then and now and nobody noticed — which is an argument for
 running the full gate suite at every merge, not just the cheap ones.
 
@@ -241,15 +241,15 @@ node tools/integration.mjs
 ```
 
 To merge the round: for each `agent/*` branch, read its
-`docs/handoff/<name>.md` **first**, check `git log main..<branch>` for `WIP:`
+`project/handoff/<name>.md` **first**, check `git log main..<branch>` for `WIP:`
 prefixes (those are explicitly unverified), merge, then **shoot the affected
 shots and look at them yourself**. Do not trust a merge you have not seen.
 
 Then prune: `git worktree remove --force <path>` for each, and
-`git branch -d agent/<name>`. `shots/` is 1.7 GB of gitignored captures from
+`git branch -d agent/<name>`. `tmp/shots/` is 1.7 GB of gitignored captures from
 many sessions and can be emptied freely.
 
-**The standing loop** (`docs/HANDOFF.md` §1): dispatch parallel agents on
+**The standing loop** (`project/HANDOFF.md` §1): dispatch parallel agents on
 disjoint directories → each iterates shoot/look/fix → coordinator merges and
 verifies → harsh critics → feed critique into the next round. The user's
 standing instruction: *"Always focus on broad perfection across all details of
@@ -257,6 +257,6 @@ the game, never pigeonhole, always see the forest through the trees, always work
 on the biggest highest-impact levers, never spend 5 rounds tweaking some tiny
 detail on one screenshot in one direction."*
 
-And the rule that matters most, from `docs/HANDOFF.md` §1: **agents must look at
+And the rule that matters most, from `project/HANDOFF.md` §1: **agents must look at
 their own output.** Every brief says read the PNGs and actually look at them.
 The dev suite exists to make that cheap.

@@ -47,11 +47,11 @@ triplanar path.
 
 - The regional palette reaches the shader and reads correctly across all three
   regions. **Duscae and Cleigne are no longer ochre** — this is the headline win and
-  it is unambiguous in an A/B: `shots/sp0/zone_lestallum.png` (pre-change) is a
-  red-ochre desert with trees on it; `shots/sp1/zone_lestallum.png` is green Cleigne
+  it is unambiguous in an A/B: `tmp/shots/sp0/zone_lestallum.png` (pre-change) is a
+  red-ochre desert with trees on it; `tmp/shots/sp1/zone_lestallum.png` is green Cleigne
   upland. Same for Fallgrove, Taelpar, Alstor, Vesperpool.
-- **Leide is unchanged in character** — `shots/sp0/zone_longwythe.png` vs
-  `shots/sp2/zone_longwythe.png` are visually identical warm red-ochre badlands.
+- **Leide is unchanged in character** — `tmp/shots/sp0/zone_longwythe.png` vs
+  `tmp/shots/sp2/zone_longwythe.png` are visually identical warm red-ochre badlands.
 - The 27 m mega-plates are gone from `combat_wide`; the foreground now reads as
   cracked ground at a believable ~1 m scale rather than 3-5 m plates.
 - Cleigne cliffs are pale and cool (`zone_vesperpool`), Leide cliffs still rust
@@ -137,15 +137,15 @@ looked at, not just captured:
   `zone_mencemoor` (blocked, see below)
 - **Cleigne** — `zone_lestallum`, `zone_vesperpool`, `zone_ravatogh`
 - **Ground-level read** — `combat_wide`, `hero_face`
-- **A/B baseline** (pre-change build) — `shots/sp0/`: `zone_lestallum`,
+- **A/B baseline** (pre-change build) — `tmp/shots/sp0/`: `zone_lestallum`,
   `zone_fallgrove`, `zone_longwythe`, `combat_wide`
 
 Captured but **not** individually opened: `zone_callaegh`. Never captured this
 session: `zone_malacchi`, `zone_pallareth`, `zone_malmalam`, `zone_cape_caem`,
 `zone_weaverwilds`. Those five are the gap.
 
-Shot directories: `shots/sp0` (pre-change baseline), `shots/sp1` (first verified
-round), `shots/sp2` (after the bedding fix).
+Shot directories: `tmp/shots/sp0` (pre-change baseline), `tmp/shots/sp1` (first verified
+round), `tmp/shots/sp2` (after the bedding fix).
 
 ---
 
@@ -224,7 +224,7 @@ past 1100 m, where `detailAmt` has reached zero and the layer arrays are not sam
 at all. I proved it directly: forcing `cliffAmt = bedThrough = runnelAmt = 0.0`
 immediately after the strata block — which removes every scrap of bedding, strata
 colour and runnel darkening — leaves the chevrons **completely unchanged**
-(`shots/probeA/zone_longwythe.png`). They are in the **heightfield normals**, i.e.
+(`tmp/shots/probeA/zone_longwythe.png`). They are in the **heightfield normals**, i.e.
 `Field.heightAt()` / the far normal texture. Softening the `form` term from
 `3.6/2.0/1.4` down to `1.9/1.1/0.8` had no visible effect on them for the same
 reason. Fixing this needs a height change, which this branch is forbidden to make.
@@ -233,14 +233,14 @@ reason. Fixing this needs a height change, which this branch is forbidden to mak
 tightened the regional bedding suppression for it (and that was correct — it removed
 the *rust colour* component), but a second probe with all three strata terms forced
 to zero shows the horizontal banding still there and essentially unchanged
-(`shots/probeB/zone_taelpar.png` vs `shots/sp2/zone_taelpar.png`). It is geometric —
+(`tmp/shots/probeB/zone_taelpar.png` vs `tmp/shots/sp2/zone_taelpar.png`). It is geometric —
 almost certainly the per-zone `terrace` biome parameter stepping the heightfield.
 **Do not try to fix either of these from `TerrainMaterial.js`. You cannot.**
 
 **Dark near-ground in green zones is pre-existing, not the palette.** Fallgrove,
 Lestallum and Vannath all show a near-black foreground under bright green midground,
 and it looks exactly like a bug the palette introduced. It is not: the pre-change
-`shots/sp0/zone_lestallum.png` has an identically dark foreground. It is vegetation
+`tmp/shots/sp0/zone_lestallum.png` has an identically dark foreground. It is vegetation
 density plus cloud shadow. I nearly retuned the table over this — the A/B is what
 saved it, which is the general lesson: **shoot the baseline before believing any
 "regression" in this shader.**
@@ -301,4 +301,4 @@ every shot above therefore has its vegetation over my ground. What I assumed:
 | Chevron hatch on all conical peaks — heightfield normals, see *Gotchas*. Owner is whoever owns `Field.heightAt()` / the far normal texture (`agent/terrainfix`?). | `src/world/terrain/Field.js` (height), not `TerrainMaterial.js` |
 | Horizontal terracing bands on Taelpar's valley walls — geometric, almost certainly the per-zone `terrace` biome parameter. | `src/world/map/WorldMap.js` `biome.terrace`; realised in `Field.js` |
 | `src/world/map/MapRaster.js` is orphaned and fails `tools/orphans.mjs`. Nothing imports it. | `src/world/map/MapRaster.js` |
-| `SESSION-STATE.md` records `tools/gameplay.mjs` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |
+| `project/SESSION-STATE.md` records `tools/gameplay.mjs` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |

@@ -8,11 +8,11 @@ Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-21 · `main` @ 1
 
 ## What I (the coordinator) am doing
 
-Running the loop from `docs/HANDOFF.md` §1: dispatch parallel agents on disjoint
+Running the loop from `project/HANDOFF.md` §1: dispatch parallel agents on disjoint
 directories → each iterates shoot/look/fix → I merge and verify → harsh critics
 → feed critique into the next round.
 
-Round 4 is captured and reviewed. `shots/r4/` holds all 139 shots plus
+Round 4 is captured and reviewed. `tmp/shots/r4/` holds all 139 shots plus
 `_sheet.png`. **The party-sinking bug is fixed and confirmed by eye** — every
 character now stands on the ground in every frame.
 
@@ -43,7 +43,7 @@ Ranked by how many of the 139 shots each defect touches:
 
 ## The in-game dev/review suite
 
-Plan: **`docs/dev-suite-plan.md`**. Phase 0 + the freecam and review inbox have
+Plan: **`docs/plans/dev-suite.md`**. Phase 0 + the freecam and review inbox have
 landed (`src/dev/**`, `tools/vite-plugin-review.mjs`).
 
 ```bash
@@ -146,7 +146,7 @@ its velocity, called from `Game.applyShot`. Routed to `agent/idles`, who owns
 - Fresh harsh-critic pass on the corpus. Scores are badly stale (last read
   4.5/10 and predates clouds, cartography, collision, menus, combat, bestiary,
   biomes and dressing).
-- TypeScript port per `docs/typescript-port-plan.md`, gated on a quiet tree.
+- TypeScript port per `docs/plans/typescript-port.md`, gated on a quiet tree.
 
 ## Resuming after a usage limit
 
@@ -167,8 +167,8 @@ To recover an interrupted round: for each `agent/*` branch, check whether it has
 commits worth keeping (`git log main..agent/x`), merge what is good, and
 re-dispatch the rest with the same ownership table.
 
-**Read in this order to rebuild context:** `docs/HANDOFF.md` → `SCOPE.md` →
-`PROGRESS.md` → `journal/2026-08-17-51c0b82c.md`.
+**Read in this order to rebuild context:** `project/HANDOFF.md` → `docs/SCOPE.md` →
+`project/PROGRESS.md` → `project/journal/2026-08-17-51c0b82c.md`.
 
 ## Verification state at snapshot
 
@@ -190,7 +190,7 @@ re-dispatch the rest with the same ownership table.
 - `git config core.hooksPath .githooks` must be set for the build hook. If a
   fresh clone skips it, a syntax error will pass commit and hang the harness for
   120 s with no useful error.
-- `shots/` and `public/baked/` are gitignored. The bake is a 32 MB cache
+- `tmp/shots/` and `public/baked/` are gitignored. The bake is a 32 MB cache
   regenerated deterministically from our own generators; delete it freely.
 - Worktrees reached 6.1 GB before pruning. `node tools/cleanup.mjs` handles
   orphaned processes; `git worktree remove --force` handles the directories.
