@@ -1073,49 +1073,123 @@ const POSE_MAP = {
 let _organic = null, _metal = null, _organicRough = null, _metalRough = null;
 const texNoise = new Noise(777);
 
-/** Hide / scale detail normal map shared by the organic enemies. */
+/**
+ * Make a noise field periodic over the unit square by cross-fading it with its
+ * own shifted copies.
+ *
+ * The detail maps now tile several times per metre (see `RigBuilder.detailUV`),
+ * and simplex/worley are not periodic, so the discontinuity at u=1 that used to
+ * hide inside one tile per body part is now a hard line repeating every 14 cm
+ * down every limb. Four samples per texel, once, at bake time.
+ *
+ * @param {(u:number, v:number) => number} f
+ */
+function tileable(f) {
+  return (u, v) => {
+    const a = f(u, v), b = f(u - 1, v), c = f(u, v - 1), d = f(u - 1, v - 1);
+    const iu = 1 - u, iv = 1 - v;
+    return a * iu * iv + b * u * iv + c * iu * v + d * u * v;
+  };
+}
+
+/**
+ * Hide and coat for the organic bestiary.
+ *
+ * Three layers, because a single noise octave is what makes a creature read as
+ * a lump of clay: **guard hairs** as fine strokes lying along v and clumped
+ * into locks by a slow warp across u; **pores and slack** under them; and
+ * **loose folds** at body scale. `detailUV` fixes one tile at ~14 cm of animal,
+ * so a strand here is about a millimetre wide on a real Bloodhorn instead of
+ * the 3 cm curd the old one-tile-per-body-part mapping produced.
+ */
 export function organicNormal() {
   if (!_organic) {
+    const fold = tileable((u, v) => texNoise.warped2(u * 3.5 + 11, v * 3.5 + 5, 1.3, 4));
+    const pore = tileable((u, v) => 1 - texNoise.worley2(u * 22 + 3, v * 22 + 7).f1);
+    const clump = tileable((u, v) => texNoise.fbm2(u * 5 + 21, v * 2.5 + 2, 3));
+    const flow = tileable((u, v) => texNoise.fbm2(u * 9 + 31, v * 9 + 13, 2));
     _organic = normalFromHeight(256, (u, v) => {
-      const w = texNoise.warped2(u * 9, v * 9, 1.1, 4);
-      const cell = texNoise.worley2(u * 16, v * 16).f1;
-      return w * 0.5 + (1 - cell) * 0.35;
-    }, 1.6, { repeat: 3 });
+      // strands: a rectified sine across u, drifted so they gather into locks
+      const strand = Math.sin((u + clump(u, v) * 0.06) * Math.PI * 2 * 44);
+      // ...and broken along their length so they read as hair, not corduroy
+      const along = 0.45 + 0.55 * Math.max(0, Math.sin(v * Math.PI * 2 * 7 + flow(u, v) * 5));
+      const hair = Math.pow(Math.max(0, strand), 2.2) * along * 0.55;
+      return hair + pore(u, v) * 0.16 + fold(u, v) * 0.34;
+    }, 1.5, { repeat: 1 });
     _organic.wrapS = _organic.wrapT = THREE.RepeatWrapping;
+    _organic.anisotropy = 8;
   }
   return _organic;
 }
 
+/**
+ * Gloss variation for hide. Skin is not uniformly matte: the crown of a fold
+ * catches light, the crease under it is dry and dark, and worn patches over
+ * bone go smoother. Without this every surface on a creature answers the light
+ * identically, which is one of the loudest tells that a model was assembled
+ * from primitives.
+ */
 export function organicRoughness() {
   if (!_organicRough) {
-    _organicRough = makeDataMap(128, (u, v) => 0.55 + 0.4 * (texNoise.fbm2(u * 11, v * 11, 4) * 0.5 + 0.5), { repeat: 3 });
+    const broad = tileable((u, v) => texNoise.fbm2(u * 4 + 17, v * 4 + 29, 4));
+    const fine = tileable((u, v) => texNoise.fbm2(u * 19 + 5, v * 19 + 41, 2));
+    _organicRough = makeDataMap(256, (u, v) => {
+      const b = broad(u, v) * 0.5 + 0.5;
+      const f = fine(u, v) * 0.5 + 0.5;
+      // 0.5 is a waxy, healthy hide; 0.95 is dry dusty fur in a crease
+      return 0.50 + 0.34 * b + 0.14 * f;
+    }, { repeat: 1 });
     _organicRough.wrapS = _organicRough.wrapT = THREE.RepeatWrapping;
   }
   return _organicRough;
 }
 
-/** Brushed / panelled metal detail for magitek and iron constructs. */
+/**
+ * Plate for the magitek and iron constructs.
+ *
+ * Rolled steel, not stucco: a fine unidirectional brush, hammer dishing at
+ * hand scale, rivet heads on a grid, and shallow panel seams. At `detailUV`
+ * density one tile is ~14 cm, so the rivets land roughly a hand apart, which
+ * is what makes a six-metre walker read as fabricated rather than extruded.
+ */
 export function metalNormal() {
   if (!_metal) {
+    const dish = tileable((u, v) => texNoise.fbm2(u * 6 + 2, v * 6 + 19, 3));
+    const grime = tileable((u, v) => texNoise.fbm2(u * 24 + 37, v * 24 + 3, 2));
     _metal = normalFromHeight(256, (u, v) => {
-      // fine hammered/brushed surface with only a hint of panel seams
-      const grain = texNoise.fbm2(u * 26, v * 26, 4) * 0.35;
-      const brush = texNoise.fbm2(u * 90, v * 9, 3) * 0.12;
-      const seamU = 1 - Math.pow(Math.max(0, 1 - Math.abs((u * 3) % 1 - 0.5) * 26), 3) * 0.5;
-      return (grain + brush) * seamU;
-    }, 0.9, { repeat: 2 });
+      // brushed grain: high frequency along u only
+      const brush = Math.sin(u * Math.PI * 2 * 96 + grime(u, v) * 3) * 0.05;
+      // rivets: a domed head every quarter tile, on the seam lines
+      const ru = (u * 4) % 1 - 0.5, rv = (v * 4) % 1 - 0.5;
+      const rd = Math.hypot(ru, rv) / 0.10;
+      const rivet = rd < 1 ? Math.sqrt(1 - rd * rd) * 0.34 : 0;
+      // panel seams: a narrow crease every half tile in both directions
+      const su = Math.min(Math.abs((u * 2) % 1 - 0.5), 0.5);
+      const sv = Math.min(Math.abs((v * 2) % 1 - 0.5), 0.5);
+      const seam = -Math.max(Math.pow(Math.max(0, 1 - su * 26), 3), Math.pow(Math.max(0, 1 - sv * 26), 3)) * 0.30;
+      return dish(u, v) * 0.22 + brush + rivet + seam;
+    }, 1.4, { repeat: 1 });
     _metal.wrapS = _metal.wrapT = THREE.RepeatWrapping;
+    _metal.anisotropy = 8;
   }
   return _metal;
 }
 
+/**
+ * Wear map for plate. Paint holds a low roughness; where it has been scoured
+ * off, bare metal underneath comes up glossier still, and the oxidised patches
+ * between them go flat. Three levels, not a single noisy average.
+ */
 export function metalRoughness() {
   if (!_metalRough) {
-    _metalRough = makeDataMap(128, (u, v) => {
-      const n = texNoise.fbm2(u * 14, v * 14, 4) * 0.5 + 0.5;
-      const wear = Math.max(0, texNoise.warped2(u * 5, v * 5, 1.4, 3));
-      return 0.34 + 0.38 * n + 0.24 * wear;
-    }, { repeat: 2 });
+    const patch = tileable((u, v) => texNoise.warped2(u * 5 + 43, v * 5 + 7, 1.4, 3));
+    const grain = tileable((u, v) => texNoise.fbm2(u * 15 + 61, v * 15 + 23, 3));
+    _metalRough = makeDataMap(256, (u, v) => {
+      const p = patch(u, v);
+      const rust = Math.max(0, p) * 0.9;          // oxidised, flat
+      const scour = Math.max(0, -p - 0.25) * 1.4; // rubbed back to metal
+      return Math.min(1, 0.40 + 0.42 * rust - 0.24 * scour + 0.10 * (grain(u, v) * 0.5 + 0.5));
+    }, { repeat: 1 });
     _metalRough.wrapS = _metalRough.wrapT = THREE.RepeatWrapping;
   }
   return _metalRough;
