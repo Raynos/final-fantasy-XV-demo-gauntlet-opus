@@ -316,7 +316,7 @@ export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4, albedo = 
  * belongs, and — more importantly — it is now a *known* number instead of
  * whatever fell out of the ink.
  */
-export const LEAF_CARD_ALBEDO = 0.135;
+export const LEAF_CARD_ALBEDO = 0.125;
 
 /**
  * Leafy canopy card — a mass of small leaves, used on tree branch tips.
@@ -342,11 +342,16 @@ export function leafClusterTex(kind = 'broad') {
   return memo(`leaf${kind}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(kind === 'broad' ? 8811 : kind === 'conifer' ? 5150 : 3320);
     const n = kind === 'conifer' ? 190 : 120;
-    // Residual hue, and *only* the residual: warm for last season's dry leaf,
-    // a hair cool for a needle, all but neutral for a broadleaf.
-    const HUE = kind === 'dry' ? [1.07, 1, 0.88]
-      : kind === 'conifer' ? [0.95, 1, 0.99]
-        : [0.97, 1, 0.95];
+    // The leaf's own hue, and only the leaf's: warm for last season's dry one,
+    // cool for a needle. Roughly half the chroma these ratios used to carry —
+    // a real leaf's albedo genuinely is a saturated green (linear b/g near
+    // 0.35), so neutralising this outright is as wrong as stacking it, and the
+    // first attempt at that turned every canopy in Duscae to dusty mint against
+    // a vivid grass mat (tmp/shots/veg2/poi_chocobo.jpg). What had to stop was
+    // the *stacking*; the leaf keeps its own colour.
+    const HUE = kind === 'dry' ? [1.06, 1, 0.80]
+      : kind === 'conifer' ? [0.87, 1, 0.90]
+        : [0.91, 1, 0.79];
     const ink = (g) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
