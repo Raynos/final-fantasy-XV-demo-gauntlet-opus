@@ -43,7 +43,7 @@ Ranked by how many of the 139 shots each defect touches:
 
 ## The in-game dev/review suite
 
-Plan: **`docs/plans/2026-08-21-dev-suite.md`**. Phase 0 + the freecam and review inbox have
+Plan: **`docs/plans/2026-08-21-opus-dev-suite.md`**. Phase 0 + the freecam and review inbox have
 landed (`src/dev/**`, `src/tools/vite-plugin-review.mjs`).
 
 ```bash
@@ -146,7 +146,7 @@ its velocity, called from `Game.applyShot`. Routed to `agent/idles`, who owns
 - Fresh harsh-critic pass on the corpus. Scores are badly stale (last read
   4.5/10 and predates clouds, cartography, collision, menus, combat, bestiary,
   biomes and dressing).
-- TypeScript port per `docs/plans/2026-08-17-typescript-port.md`, gated on a quiet tree.
+- TypeScript port per `docs/plans/2026-08-17-opus-typescript-port.md`, gated on a quiet tree.
 
 ## Resuming after a usage limit
 

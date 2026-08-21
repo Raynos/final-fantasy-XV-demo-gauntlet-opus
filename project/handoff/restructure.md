@@ -16,7 +16,7 @@ the durable statement of the rule — read that, not this file, for the conventi
 | `public/` | `src/public/` (vite's `publicDir`) |
 | `shots/` | `tmp/shots/` (default `--out` for every capture tool) |
 | `docs/HANDOFF.md`, `docs/handoff/` | `project/HANDOFF.md`, `project/handoff/` |
-| `SCOPE.md`, `WORLDMAP.md`, `PLAN.md` | `docs/SCOPE.md`, `docs/WORLDMAP.md`, `docs/plans/2026-08-17-content-gameplay.md` |
+| `SCOPE.md`, `WORLDMAP.md`, `PLAN.md` | `docs/SCOPE.md`, `docs/WORLDMAP.md`, `docs/plans/2026-08-17-opus-content-gameplay.md` |
 | `PROGRESS.md`, `SESSION-STATE.md`, `TODO.md`, `journal/` | under `project/` |
 | `probes/` | `src/tools/probes/` |
 

@@ -20,7 +20,7 @@ throttle · 3 dungeons enter and leave · title + attract camera + opening scene
 audio graph running · 124 POIs on the minimap · rest at a lodging.
 
 **Queued after the current wave:** a full TypeScript port to match the sibling
-attempts — see **`docs/plans/2026-08-17-typescript-port.md`**. Blocked until every agent branch is merged —
+attempts — see **`docs/plans/2026-08-17-opus-typescript-port.md`**. Blocked until every agent branch is merged —
 porting 235 modules while six agents edit them would conflict with everything.
 
 **Known gaps from live play (user-reported, not yet fixed):**
@@ -203,7 +203,7 @@ The HUD displayed hardcoded literals over a fully-implemented simulation.
 | Dungeons & interiors | `world/dungeons/**` | 🟡 |
 | Story, chapters, cutscenes | `game/story/**`, `game/cinematics/**` | 🟡 |
 | Audio & music | `audio/**` (except `Radio.js`) | 🟡 |
-| Design plan (`docs/plans/2026-08-17-content-gameplay.md`) | — | ✅ delivered |
+| Design plan (`docs/plans/2026-08-17-opus-content-gameplay.md`) | — | ✅ delivered |
 
 ## 10. Notable bugs found and fixed
 

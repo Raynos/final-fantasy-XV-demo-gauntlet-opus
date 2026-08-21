@@ -49,7 +49,7 @@ present**, so it can never appear in a capture. Verified, not assumed — two co
 captures diff at 1.555/255, the documented noise floor. **Do not weaken that
 guard.**
 
-Full design and rationale: **`docs/plans/2026-08-21-dev-suite.md`**.
+Full design and rationale: **`docs/plans/2026-08-21-opus-dev-suite.md`**.
 
 Not yet built: trees/props/Regalia in the browser (props need a registry
 introduced — the kind tables exist but are module-private), the world/zone
@@ -171,7 +171,7 @@ afternoon. The cause is machine saturation, not agent error — see §6.
    facade left by the `5fd2876` cartography split, with a `@deprecated`
    `drawWorldRaster` alias kept for callers that never existed. Deleted;
    `orphans.mjs` is now clean at 272/272.
-8. **TypeScript port** — `docs/plans/2026-08-17-typescript-port.md`, gated on a quiet tree.
+8. **TypeScript port** — `docs/plans/2026-08-17-opus-typescript-port.md`, gated on a quiet tree.
 
 ---
 
