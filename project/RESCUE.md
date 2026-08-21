@@ -32,6 +32,83 @@ Closed by the coordinator, each verified by eye or by measurement:
 
 In flight in worktrees: B12 (enemies), B5 + B10 (ui), B13 + part of B7 (veg), B11 (heroart).
 
+### Merged and verified: B12 enemies, B13 vegetation
+
+**B12 (enemies), merged and looked at.** The headline is a correction to the
+record: `project/handoff/enemies.md` listed dualhorn/bloodhorn as a *"deep
+rebuild, verified by eye"* and said `Dualhorn.js` "already handles" the
+`Color.setHex` NaN trap. **Both were false** — the whole flank, head and all four
+legs were rendering flat black, as were the coeurl torso and the voretooth dorsal
+and skull. New `src/characters/enemies/Palette.js` fixes the type guard *and* a
+second failure mode nobody had generalised: two scratch colour registers cannot
+survive a nested `mix()`, because arguments evaluate left to right and the inner
+call clobbers the outer. `Garula.js` had privately worked around this with `mix2`.
+
+Daemon night readability was **measured, not guessed**: at 23:00 the terrain,
+grass and rock read fine while the daemon was a black cut-out, and a sabertusk on
+the stage at the same hour read perfectly — so it was **albedo, not exposure**.
+The arachne's chitin was at 7% reflectance. Seven daemons lifted ~1.6× plus a
+Fresnel rim. Confirmed by eye in `bestiary_arachne`, `_bussemand`, `_hobgoblin`.
+
+Closed afterwards by the coordinator:
+- **Titan's floating slabs.** Every `plate`/`shard` in the arm and hand bound to
+  its own bone while **every `fissure` there passed `'coreC'`**, so the furnace
+  glow stayed with the torso and a dozen orange wedges floated free above the dirt.
+- **The "telegraph catenary lines"** are ordinary power cables at correct scale
+  (2.6–4 cm, hung ~8 m, sagging to ~5 m). The `bestiary_titan` camera at 7 m sat
+  *inside* the wire band. Reframed to 22/13/10. `bestiary_bloodhorn` still catches
+  the run across its upper third and reads as environment; left alone.
+
+Still open in enemies: **anak needs a sculpt rebuild, not paint** (2,770 tris, the
+only species with no `colorAt` anywhere, ball feet instead of hooves, a flat card
+tail); coeurl and mesmenir silhouettes are still boxy.
+
+**B13 (vegetation), merged and looked at.** All four inherited commits were
+genuine and are confirmed — the bark albedo fix above all (`barkMaps` wrote linear
+into an sRGB byte texture *and* double-applied the species tint, so **every trunk
+in the game rendered at ~0.003**).
+
+The new find is bigger: **the world was a monoculture.** `Ecology.treeSpecies`
+picked from one simplex at 0.0022 (~450 m lobes) while `Trees.geoRange` is 88 m —
+the near ring is smaller than a single lobe, so every grove resolved to one
+species. Measured at the chocobo post, **76% of the 88 m disc resolved to `dead`:
+116 dead instances, 0 swamp, 0 duscae**, against authored weights of .58/.18/.14/.10.
+A ~40 m second octave brings world-wide species share within ~2 points of the
+authored weights everywhere. `poi_chocobo` is now a genuinely mixed grove.
+
+`GROUND_BLEED` went 0.22 → **0.34** on a matched A/B, as B7 predicted it might
+once the ground became regionally correct. Crown cull now scales with tree height
+(`0.55*h + 3` rather than a flat 12 m), which turned `zone_alstor` from an almost
+black frame with no instance within 10 m of the lens into a layered wetland vista.
+Wind confirmed in motion: trunks rigid, tips whipping, neighbouring trees at
+different amplitudes — patchy, not a plane wave.
+
+Coordinator afterwards: **`zone_malacchi` reframed.** Its doc says "open chocobo
+prairie broken by lone broadleaf stands" and the lens was *inside* a stand, so the
+whole frame was leaf card.
+
+Still open in vegetation: **`Bushes.js` (491 lines) has never been audited by
+anyone, and its cards' albedo has never been pinned** — that is the third time
+this same class of bug would have been found by looking.
+
+### Dispatched: a terrain agent (nobody owned `src/world/terrain/**`)
+
+Two verified defects had no owner, and reframing `zone_malacchi` made the first
+unmissable:
+
+1. **The chevron hatch on every peak and hill.** Proven *not* the splat — forcing
+   `cliffAmt = bedThrough = runnelAmt = 0` left it completely unchanged, and those
+   peaks are past 1100 m where the layer arrays are not sampled at all. It is in
+   the heightfield normals.
+2. **`Terrain.groundColorAt` disagrees with the ground the terrain renders** —
+   at `zone_fallgrove` it returns a warm brown (linear lum 0.090, r/g 1.34) while
+   the rendered ground is pale desaturated grey-green. **All vegetation tints
+   itself from that sampler**, so this silently miscolours the whole world's plants.
+
+Plus the Taelpar/Pallareth terracing, the `lowAlt` gate, and decoupling the
+`_outcrops` RNG stream. That agent is constrained by `roadcheck` (roads are cut
+into the heightfield) and `heightcheck` staying at 0.000 m.
+
 ### Findings from the B7 zone review (2026-08-21)
 
 Five never-viewed zones plus `zone_galdin`, captured and looked at:
