@@ -176,6 +176,13 @@ export class Game {
     if (!shot) throw new Error(`unknown shot: ${name}`);
     this.currentShot = name;
 
+    // Rewind the clock per shot, not once per page. Everything phased off
+    // `time.now` -- wind, grass sway, water, ambient wildlife, film grain, the
+    // TAA history -- otherwise sits at a different phase depending on how many
+    // shots ran before this one, so the same shot alone and sixth in a batch
+    // came back measurably different. `settle()` then advances from zero.
+    this.resetClock();
+
     const sky = this.get('Sky');
     if (shot.time != null && sky && sky.setTimeOfDay) sky.setTimeOfDay(shot.time);
 
