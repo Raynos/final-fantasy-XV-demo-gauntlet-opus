@@ -825,28 +825,50 @@ export class Field {
     }
   }
 
+  /**
+   * Scattered boulders and rock ribs.
+   *
+   * **Every candidate draws the same nine numbers in the same order whether it
+   * is placed or not.** It used to draw two, three or eight depending on the
+   * local slope and on whether the boulder came out big — so any change to the
+   * heightfield anywhere re-phased the stream from that point on and reshuffled
+   * every boulder downstream of it. That made a one-line height experiment
+   * indistinguishable from a scatter regression in an A/B, and it is why the
+   * terrain gates could never be read as "only the thing I touched moved".
+   * Draw first, decide after; it costs nine `next()` calls per candidate
+   * instead of an average of about four, on nine thousand candidates, once, at
+   * bake time.
+   */
   _outcrops() {
     const rng = new Rng(4242);
     for (let k = 0; k < 9000; k++) {
       const cx = rng.range(-HALF + 40, HALF - 40);
       const cz = rng.range(-HALF + 40, HALF - 40);
+      const accept = rng.next();
+      const big = rng.next() < 0.12;
+      const rBig = rng.range(16, 40), rSmall = rng.range(3.5, 16);
+      const hBig = rng.range(4, 13), hSmall = rng.range(0.9, 4.4);
+      const ph = rng.range(0, 6.283);
+      const ecc = rng.range(0.6, 1.0);
+
       const i = Math.round((cx + HALF) / CELL), j = Math.round((cz + HALF) / CELL);
       if (i < 4 || j < 4 || i > N - 5 || j > N - 5) continue;
       const s = this.slope0 ? this.slope0[j * N + i] : 0.2;
-      if (rng.next() > 0.24 + s * 1.5) continue;
-      const big = rng.next() < 0.12;
-      const r = (big ? rng.range(16, 40) : rng.range(3.5, 16)) * (0.75 + s);
-      const hh = (big ? rng.range(4, 13) : rng.range(0.9, 4.4)) * (0.6 + s * 2.0);
-      this._outcrop(cx, cz, r, hh, rng);
+      if (accept > 0.24 + s * 1.5) continue;
+      const r = (big ? rBig : rSmall) * (0.75 + s);
+      const hh = (big ? hBig : hSmall) * (0.6 + s * 2.0);
+      this._outcrop(cx, cz, r, hh, ph, ecc);
     }
   }
 
-  _outcrop(cx, cz, radius, height, rng) {
+  /**
+   * @param {number} ph rotation, radians — drawn by the caller, see `_outcrops`
+   * @param {number} ecc 0.6-1.0 cross-axis squash
+   */
+  _outcrop(cx, cz, radius, height, ph, ecc) {
     const h = this.h, n = this.n3;
     const R = radius * 2.2;
     const box = this._box(cx, cz, R);
-    const ph = rng.range(0, 6.283);
-    const ecc = rng.range(0.6, 1.0);
     const ca = Math.cos(ph), sa = Math.sin(ph);
     for (let j = box.j0; j <= box.j1; j++) {
       const z = -HALF + j * CELL;
