@@ -40,23 +40,56 @@ const FILTERS = [
   { id: 'landmark', label: 'Landmarks', types: ['landmark'], glyph: 'landmark' },
 ];
 
-/** Css px per world metre. The first step fits the whole continent. */
-const ZOOMS = [0.118, 0.175, 0.26, 0.38, 0.55];
+/**
+ * Css px per world metre.
+ *
+ * Step 0 is the fit-all: `WORLD.size` is 8192 m and the sheet is 1520x676, so
+ * the continent fits at `676 / 8192 = 0.0825` px/m (height binds, not width —
+ * width would allow 0.1855). The old first step of 0.118 was documented as
+ * "fits the whole continent" and did not: it puts the field 967 px tall in a
+ * 676 px box, so a third of Lucis was always off the sheet and the region
+ * names — which fade out above 0.205 px/m — had nowhere legible to land.
+ */
+const ZOOMS = [0.0825, 0.118, 0.175, 0.26, 0.38, 0.55];
+
+/** Default step. Index 3 (0.26 px/m) is the scale the chart opens at. */
+const HOME_ZOOM = 3;
 
 /** Chart geometry inside the 1600×900 menu space. */
 const BOX = { x: 40, y: 132, w: 1520, h: 676 };
 
+/**
+ * The atlas sheet is square, because Lucis is: at the fit-all scale the
+ * continent is 676x676 inside a 1520-wide frame, and the 422 px of empty sheet
+ * either side reads as a printing error rather than as margin. Hugging the
+ * landmass puts the filter rail, the sheet and the detail card on three even
+ * columns instead.
+ */
+const ATLAS_BOX = { x: Math.round((1600 - BOX.h) / 2), y: BOX.y, w: BOX.h, h: BOX.h };
+
 const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
 export class WorldMapScreen {
-  /** @param {import('../Menus.js').Menus} menus */
-  constructor(menus) {
+  /**
+   * @param {import('../Menus.js').Menus} menus
+   * @param {{atlas?:boolean}} [opts] `atlas: true` registers the second,
+   *   fully-surveyed variant: the whole continent at the fit-all scale with no
+   *   unsurveyed haze and every point plotted. It reads the fog as fully
+   *   revealed rather than calling `fog.revealAll()`, because the mask is
+   *   shared with the minimap and the ordinary chart — mutating it here would
+   *   make `menu_world` depend on whether `menu_map_wide` was captured first,
+   *   which is exactly the order-dependence the capture harness forbids.
+   */
+  constructor(menus, opts = {}) {
     this.menus = menus;
-    this.title = 'Map';
-    this.sub = 'Lucis  ·  Leide · Duscae · Cleigne';
+    this.atlas = !!opts.atlas;
+    this.title = this.atlas ? 'Atlas' : 'Map';
+    this.sub = this.atlas
+      ? 'Lucis  ·  The full survey'
+      : 'Lucis  ·  Leide · Duscae · Cleigne';
     this.filter = 0;
-    this.zoomI = 2;
-    this.zoom = ZOOMS[2];
+    this.zoomI = this.atlas ? 0 : HOME_ZOOM;
+    this.zoom = ZOOMS[this.zoomI];
     this.cam = { x: 0, z: 0 };
     this.camT = { x: 0, z: 0 };
     this.sel = 0;
@@ -136,11 +169,18 @@ export class WorldMapScreen {
 
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.w = BOX.w; this.h = BOX.h; this.dpr = dpr;
-    this.canvas.width = Math.round(BOX.w * dpr);
-    this.canvas.height = Math.round(BOX.h * dpr);
-    this.canvas.style.width = `${BOX.w}px`;
-    this.canvas.style.height = `${BOX.h}px`;
+    const box = this.atlas ? ATLAS_BOX : BOX;
+    this.w = box.w; this.h = box.h; this.dpr = dpr;
+    this.canvas.width = Math.round(box.w * dpr);
+    this.canvas.height = Math.round(box.h * dpr);
+    this.canvas.style.width = `${box.w}px`;
+    this.canvas.style.height = `${box.h}px`;
+    if (this.atlas) {
+      this.wrap.style.left = `${box.x}px`;
+      this.wrap.style.top = `${box.y}px`;
+      this.wrap.style.width = `${box.w}px`;
+      this.wrap.style.height = `${box.h}px`;
+    }
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -154,13 +194,22 @@ export class WorldMapScreen {
     if (p) { this.cam.x = this.camT.x = p.position.x; this.cam.z = this.camT.z = p.position.z; }
     this.zoom = ZOOMS[this.zoomI];
     this._rebuildList();
-    const near = this.map.nearestPOI(this.cam.x, this.cam.z, { discoveredOnly: true });
-    if (near) {
-      const i = this.list.indexOf(near.poi);
-      if (i >= 0) this.sel = i;
+    if (this.atlas) {
+      // the atlas is a sheet of the whole continent, not a view of where the
+      // player happens to be standing: centre the field, not the party
+      this.cam.x = this.camT.x = 0;
+      this.cam.z = this.camT.z = 0;
+      this.zoomI = 0;
+      this.zoom = ZOOMS[0];
+    } else {
+      const near = this.map.nearestPOI(this.cam.x, this.cam.z, { discoveredOnly: true });
+      if (near) {
+        const i = this.list.indexOf(near.poi);
+        if (i >= 0) this.sel = i;
+      }
+      const sp = this.list[this.sel];
+      if (sp) { this.camT.x = sp.x; this.camT.z = sp.z; }
     }
-    const sp = this.list[this.sel];
-    if (sp) { this.camT.x = sp.x; this.camT.z = sp.z; }
     this._keys = (e) => this._onKey(e);
     window.addEventListener('keydown', this._keys);
   }
@@ -172,9 +221,16 @@ export class WorldMapScreen {
     this._drag = null;
   }
 
+  /**
+   * Has the player charted this point? On the atlas every point is charted by
+   * definition — that is what "fully surveyed" means.
+   * @param {object} p @returns {boolean}
+   */
+  _known(p) { return this.atlas || this.map.discovered.has(p.id); }
+
   _rebuildList() {
     const f = FILTERS[this.filter];
-    const seen = (p) => this.map.discovered.has(p.id) || fog.at(p.x, p.z) > 0.5;
+    const seen = (p) => this._known(p) || fog.at(p.x, p.z) > 0.5;
     this.list = this.map.pois.filter((p) => seen(p) && (!f.types || f.types.includes(p.type)));
     if (!this.list.length) this.list = this.map.pois.filter(seen);
     this.sel = clamp(this.sel, 0, Math.max(0, this.list.length - 1));
@@ -337,7 +393,7 @@ export class WorldMapScreen {
   _card(game) {
     const p = this.list?.[this.sel];
     if (!p) { this.cardName.textContent = ''; return; }
-    const known = this.map.discovered.has(p.id);
+    const known = this._known(p);
     const player = game.get('Player');
     const px = player?.position?.x ?? 0, pz = player?.position?.z ?? 0;
     const zone = this.map.zoneById.get(p.zone);
@@ -450,26 +506,35 @@ export class WorldMapScreen {
     drawJunctions(c, sx, sy, dpr * (0.5 + this.zoom * 1.6), 0.5 * rev);
 
     // ---- unsurveyed country ----------------------------------------------
-    const sheet = fog.sheet();
-    c.save();
-    const fk = ppm / sheet.ppm;
-    c.imageSmoothingEnabled = true;
-    c.translate(W / 2, H / 2);
-    c.scale(fk, fk);
-    c.translate(-sheet.toPx(this.cam.x), -sheet.toPz(this.cam.z));
-    c.globalAlpha = 0.86 * rev;
-    c.drawImage(sheet.canvas, 0, 0);
-    c.restore();
-    c.globalAlpha = 1;
+    // the atlas is the surveyed sheet, so there is nothing to haze over
+    if (!this.atlas) {
+      const sheet = fog.sheet();
+      c.save();
+      const fk = ppm / sheet.ppm;
+      c.imageSmoothingEnabled = true;
+      c.translate(W / 2, H / 2);
+      c.scale(fk, fk);
+      c.translate(-sheet.toPx(this.cam.x), -sheet.toPz(this.cam.z));
+      c.globalAlpha = 0.86 * rev;
+      c.drawImage(sheet.canvas, 0, 0);
+      c.restore();
+      c.globalAlpha = 1;
+    }
 
     // ---- type ------------------------------------------------------------
     // The chrome is reserved in the placer rather than tested for later, so a
     // label never ends up half under the filter rail or the detail card.
     const place = new LabelPlacer(3 * dpr);
-    place.reserve(0, 0, 248 * dpr, 404 * dpr);                    // filter rail
-    place.reserve((this.w - 356) * dpr, 0, W, 372 * dpr);         // detail card
-    place.reserve(0, (this.h - 74) * dpr, 250 * dpr, H);          // scale bar
-    place.reserve((this.w - 300) * dpr, (this.h - 78) * dpr, W, H); // survey
+    // On the atlas the rail, card, scale bar and survey read-out all sit
+    // *outside* the square sheet, so reserving their footprints would blank out
+    // a third of the continent for no reason. Only the compass is drawn into
+    // the canvas either way.
+    if (!this.atlas) {
+      place.reserve(0, 0, 248 * dpr, 404 * dpr);                    // filter rail
+      place.reserve((this.w - 356) * dpr, 0, W, 372 * dpr);         // detail card
+      place.reserve(0, (this.h - 74) * dpr, 250 * dpr, H);          // scale bar
+      place.reserve((this.w - 300) * dpr, (this.h - 78) * dpr, W, H); // survey
+    }
     place.reserve((this.w - 96) * dpr, 0, W, 96 * dpr);           // compass
     const pp = game.get('Player')?.position;
     if (pp) place.reserve(sx(pp.x) - 12 * dpr, sy(pp.z) - 12 * dpr, sx(pp.x) + 12 * dpr, sy(pp.z) + 12 * dpr);
@@ -510,7 +575,8 @@ export class WorldMapScreen {
     this.scaleTxt.textContent = bar >= 1000 ? `${bar / 1000} KM` : `${bar} M`;
     let seen = 0;
     for (let i = 0; i < fog.mask.length; i++) if (fog.mask[i]) seen++;
-    this.surveyV.textContent = `${((seen / fog.mask.length) * 100).toFixed(1)} %`;
+    this.surveyV.textContent = this.atlas
+      ? '100.0 %' : `${((seen / fog.mask.length) * 100).toFixed(1)} %`;
   }
 
   _regionLabels(c, sx, sy, ppm, dpr, rev, place) {
@@ -519,21 +585,52 @@ export class WorldMapScreen {
     for (const r of REGIONS) {
       const zs = this.map.zones.filter((z) => z.region === r.id);
       if (!zs.length) continue;
-      let cx = 0, cz = 0;
-      for (const z of zs) { cx += z.cx; cz += z.cz; }
-      cx /= zs.length; cz /= zs.length;
-      const x = sx(cx), y = sy(cz);
-      // the rail and the card own the outer thirds of the sheet
-      if (x < 300 * dpr || x > (this.w - 340) * dpr || y < 40 * dpr || y > (this.h - 40) * dpr) continue;
+      // area-weighted, so a region's name lands over its own bulk rather than
+      // at the arithmetic mean of its zone centres — at the fit-all scale the
+      // three unweighted means crowd into the middle of the sheet
+      let cx = 0, cz = 0, wsum = 0;
+      for (const z of zs) {
+        const w2 = Math.max(1, (z.rx || 1) * (z.rz || 1));
+        cx += z.cx * w2; cz += z.cz * w2; wsum += w2;
+      }
+      cx /= wsum; cz /= wsum;
+      const x = sx(cx);
+      let y = sy(cz);
+      // the rail and the card own the outer thirds of the chart sheet; on the
+      // atlas they are outside it, so only a print margin is out of bounds
+      const ml = (this.atlas ? 30 : 300) * dpr;
+      const mr = (this.atlas ? 30 : 340) * dpr;
+      if (x < ml || x > this.w * dpr - mr || y < 40 * dpr || y > (this.h - 40) * dpr) continue;
       c.font = `100 ${Math.round(32 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
       const w = spacedWidth(c, r.name.toUpperCase(), 16 * dpr);
-      place.reserve(x - w / 2, y - 22 * dpr, x + w / 2, y + 26 * dpr);
-      c.fillStyle = `rgba(240,248,255,${(0.46 * a).toFixed(3)})`;
+      // the sub-line is usually the wider of the two ("The Ochre Marches" vs
+      // "Leide"), so reserving only the name leaves its overhang unprotected
+      // and a zone label lands straight on it
+      c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      const ws = spacedWidth(c, r.sub.toUpperCase(), 6 * dpr);
+      const wm = Math.max(w, ws);
+      // Three region names over an 8192 m field land within ~50 px of each
+      // other at the fit-all scale, and each block is ~52 px tall, so the
+      // second one prints straight through the first one's sub-line. Nudge
+      // along the vertical before giving up — a region name a little off its
+      // centroid is still over its own country.
+      let dy = 0;
+      for (const off of [0, -40, 40, -76, 76, -112, 112]) {
+        if (place.place(x - wm / 2, y + off - 22 * dpr, x + wm / 2, y + off + 30 * dpr)) { dy = off; break; }
+      }
+      // headline type wins a collision it cannot dodge
+      if (dy === 0) place.reserve(x - wm / 2, y - 22 * dpr, x + wm / 2, y + 30 * dpr);
+      y += dy;
+      c.font = `100 ${Math.round(32 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+      // on the atlas the region names are the sheet's headline type, not a
+      // watermark under a chart the player is navigating
+      const rk = this.atlas ? 1.72 : 1;
+      c.fillStyle = `rgba(240,248,255,${(0.46 * rk * a).toFixed(3)})`;
       c.shadowColor = 'rgba(3,7,14,0.9)';
       c.shadowBlur = 12 * dpr;
       spacedText(c, r.name.toUpperCase(), x, y, 16 * dpr);
       c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
-      c.fillStyle = `rgba(206,224,248,${(0.34 * a).toFixed(3)})`;
+      c.fillStyle = `rgba(206,224,248,${(0.34 * rk * a).toFixed(3)})`;
       spacedText(c, r.sub.toUpperCase(), x, y + 24 * dpr, 6 * dpr);
       c.shadowBlur = 0;
     }
@@ -545,7 +642,7 @@ export class WorldMapScreen {
     // biggest zones first, so a small zone yields its label to a large one
     const zs = this.map.zones.slice().sort((p, q) => q.rx * q.rz - p.rx * p.rz);
     for (const z of zs) {
-      if (fog.at(z.cx, z.cz) < 0.4) continue;
+      if (!this.atlas && fog.at(z.cx, z.cz) < 0.4) continue;
       const x = sx(z.cx), y = sy(z.cz);
       // a label the sheet edge would slice in half is worse than no label
       const W = this.w * dpr, H = this.h * dpr;
@@ -582,7 +679,7 @@ export class WorldMapScreen {
         if (!p) continue;
         const x = sx(p.x), y = sy(p.z);
         if (x < 40 || x > this.w * dpr - 40 || y < 20 || y > this.h * dpr - 20) continue;
-        if (fog.at(p.x, p.z) < 0.5) continue;
+        if (!this.atlas && fog.at(p.x, p.z) < 0.5) continue;
         const label = r.name.split('—')[0].trim().toUpperCase();
         const w = spacedWidth(c, label, 3.4 * dpr);
         const ang = Math.atan2(p.tz || 0, p.tx || 1);
@@ -610,7 +707,7 @@ export class WorldMapScreen {
     // draw order: dimmed first, then normal, then the selection on top
     const rows = [];
     for (const p of this.map.pois) {
-      const known = this.map.discovered.has(p.id);
+      const known = this._known(p);
       if (!known && fog.at(p.x, p.z) < 0.5) continue;
       const x = sx(p.x), y = sy(p.z);
       if (x < -60 || x > W + 60 || y < -60 || y > H + 60) continue;
@@ -654,6 +751,8 @@ export class WorldMapScreen {
       ];
       let put = null;
       for (const s of slots) {
+        // a name the sheet edge slices in half is worse than no name
+        if (s[0] < 6 * dpr || s[0] + w > W - 6 * dpr) continue;
         if (place.place(s[0], s[1] - 6.5 * dpr, s[0] + w, s[1] + 6.5 * dpr)) { put = s; break; }
       }
       // the selected point always carries its name, collision or not

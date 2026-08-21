@@ -37,6 +37,7 @@ const FOOT = {
   shop: [['↑↓', 'Select'], ['←→', 'Shelf'], ['Enter', 'Deal'], ['Bksp', 'Leave']],
   hunts: [['↑↓', 'Select'], ['←→', 'Ledger'], ['Enter', 'Accept'], ['Bksp', 'Leave']],
   world: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['M', 'Close'], ['Tab', 'Close']],
+  map_wide: [['↑↓←→', 'Navigate'], ['Enter', 'Select'], ['Bksp', 'Back'], ['Tab', 'Close']],
   map: [['↑↓', 'Marker'], ['Bksp', 'Back'], ['Tab', 'Close']],
 };
 
@@ -103,6 +104,9 @@ export class Menus {
       armiger: new ArmigerScreen(this),
       map: new MapScreen(this),
       world: new WorldMapScreen(this),
+      // the same chart at the fit-all scale with the survey complete — the
+      // continent on one sheet, which is what `menu_map_wide` wants
+      map_wide: new WorldMapScreen(this, { atlas: true }),
       gear: new GearScreen(this),
       quests: new QuestScreen(this),
       archives: new ArchiveScreen(this),
