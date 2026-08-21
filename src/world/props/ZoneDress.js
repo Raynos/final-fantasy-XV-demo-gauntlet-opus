@@ -23,7 +23,8 @@ import { worldMap } from '../map/WorldMap.js';
  *   kinds    weights for the *anchor* rock of a cluster
  *   frag     weights for the spalled fragments around the anchor
  *   litter   per-kind density for the small-debris layer, 0..~1.5
- *   life     {birds, herd} wildlife density
+ *   life     {birds, herd, shore} wildlife density — raptors on thermals,
+ *            grazing stock, and waders working the water's edge
  */
 
 /** Fragment mixes reused by several zones. */
@@ -36,7 +37,7 @@ const BASE = {
   kinds: { granite: 0.15, bedded: 0.16, slab: 0.12, spire: 0.06, worn: 0.14, cobble: 0.37 },
   frag: FRAG_ANGULAR,
   litter: { branch: 0.15, bones: 0.1 },
-  life: { birds: 1, herd: 0 },
+  life: { birds: 1, herd: 0, shore: 0.25 },
 };
 
 const mk = (o) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
@@ -53,14 +54,14 @@ export const ZONE_DRESS = {
     kinds: { bedded: 0.26, slab: 0.20, granite: 0.10, spire: 0.06, worn: 0.10, cobble: 0.28 },
     frag: FRAG_ANGULAR,
     litter: { bones: 0.55, branch: 0.30, planks: 0.10, cairn: 0.06 },
-    life: { birds: 1.2, herd: 0.45 },
+    life: { birds: 1.2, herd: 0.8, shore: 0.2 },
   }),
   three_valleys: mk({
     rockD: 1.35, rockS: 1.0, tint: [1.22, 0.94, 0.70], bright: 0.98,
     kinds: { bedded: 0.24, slab: 0.16, spire: 0.16, granite: 0.12, worn: 0.06, cobble: 0.26 },
     frag: FRAG_SCREE,
     litter: { bones: 0.85, branch: 0.22, cairn: 0.12 },
-    life: { birds: 1.1, herd: 0.2 },
+    life: { birds: 1.1, herd: 0.3, shore: 0.1 },
   }),
   crown_verge: mk({
     rockD: 1.2, rockS: 1.2, tint: [1.05, 0.98, 0.94], bright: 0.94,
@@ -68,21 +69,21 @@ export const ZONE_DRESS = {
     frag: FRAG_ANGULAR,
     // the shattered approach to Insomnia: broken carriageway, rebar, burnt kit
     litter: { rubble: 1.1, planks: 0.35, barrel: 0.3, bones: 0.12 },
-    life: { birds: 0.7, herd: 0 },
+    life: { birds: 0.7, herd: 0, shore: 0 },
   }),
   kelbass: mk({
     rockD: 0.5, rockS: 0.9, tint: [1.16, 1.0, 0.80], bright: 1.05,
     kinds: { worn: 0.30, cobble: 0.36, bedded: 0.14, slab: 0.12, granite: 0.08 },
     frag: FRAG_ROUND,
     litter: { bones: 0.4, branch: 0.3, planks: 0.14 },
-    life: { birds: 1.0, herd: 1.3 },
+    life: { birds: 1.0, herd: 1.2, shore: 0.4 },
   }),
   galdin: mk({
     rockD: 0.6, rockS: 0.85, tint: [1.10, 1.06, 0.98], bright: 1.16,
     kinds: { worn: 0.44, cobble: 0.34, slab: 0.10, bedded: 0.08, granite: 0.04 },
     frag: FRAG_ROUND,
     litter: { driftwood: 0.9, planks: 0.3, branch: 0.1, reeds: 0.35 },
-    life: { birds: 1.6, herd: 0 },
+    life: { birds: 1.6, herd: 0, shore: 1.5 },
   }),
   keycatrich: mk({
     rockD: 1.05, rockS: 1.0, tint: [1.12, 1.0, 0.86], bright: 0.92,
@@ -90,7 +91,7 @@ export const ZONE_DRESS = {
     frag: FRAG_ANGULAR,
     // a spa town swallowed by dust
     litter: { rubble: 0.95, planks: 0.5, bones: 0.2, barrel: 0.18 },
-    life: { birds: 0.8, herd: 0 },
+    life: { birds: 0.8, herd: 0, shore: 0 },
   }),
   balouve: mk({
     rockD: 1.45, rockS: 1.05, tint: [1.00, 0.94, 0.86], bright: 0.9,
@@ -98,7 +99,7 @@ export const ZONE_DRESS = {
     frag: FRAG_SCREE,
     // mine spoil: broken timber, drums, sorted stone
     litter: { planks: 0.7, barrel: 0.45, rubble: 0.5, cairn: 0.1 },
-    life: { birds: 0.7, herd: 0 },
+    life: { birds: 0.7, herd: 0, shore: 0 },
   }),
 
   // --------------------------------------------------------------- DUSCAE
@@ -108,14 +109,14 @@ export const ZONE_DRESS = {
     kinds: { worn: 0.5, cobble: 0.3, slab: 0.12, bedded: 0.08 },
     frag: FRAG_ROUND,
     litter: { log: 0.8, driftwood: 0.7, deadtrunk: 1.0, branch: 0.5, leaves: 0.3, stump: 0.3, reeds: 1.3 },
-    life: { birds: 1.5, herd: 0.35 },
+    life: { birds: 1.5, herd: 0.7, shore: 1.4 },
   }),
   weaverwilds: mk({
     rockD: 0.45, rockS: 0.9, tint: [1.0, 1.0, 0.88], bright: 1.0,
     kinds: { worn: 0.36, cobble: 0.34, bedded: 0.14, slab: 0.10, granite: 0.06 },
     frag: FRAG_ROUND,
     litter: { branch: 0.5, log: 0.3, stump: 0.25, leaves: 0.25, bones: 0.12 },
-    life: { birds: 1.3, herd: 1.5 },
+    life: { birds: 1.3, herd: 1.4, shore: 0.5 },
   }),
   nebulawood: mk({
     rockD: 0.95, rockS: 1.1, tint: [0.84, 0.96, 0.82], bright: 0.84,
@@ -123,7 +124,7 @@ export const ZONE_DRESS = {
     frag: FRAG_ROUND,
     // the floor of a closed canopy is timber and leaf drift, not gravel
     litter: { log: 1.35, branch: 1.1, stump: 0.75, leaves: 1.1, deadtrunk: 0.35 },
-    life: { birds: 0.8, herd: 0.15 },
+    life: { birds: 0.8, herd: 0.06, shore: 0.3 },
   }),
   cauthess: mk({
     rockD: 1.5, rockS: 1.3, tint: [0.94, 0.84, 0.82], bright: 0.8,
@@ -131,14 +132,14 @@ export const ZONE_DRESS = {
     frag: FRAG_SCREE,
     // ejecta field: scorched stone and nothing that grows
     litter: { rubble: 0.5, bones: 0.2, branch: 0.1, cairn: 0.05 },
-    life: { birds: 0.5, herd: 0 },
+    life: { birds: 0.5, herd: 0, shore: 0 },
   }),
   taelpar: mk({
     rockD: 1.3, rockS: 1.15, tint: [1.08, 0.96, 0.84], bright: 0.9,
     kinds: { slab: 0.26, bedded: 0.24, spire: 0.14, granite: 0.14, cobble: 0.22 },
     frag: FRAG_SCREE,
     litter: { branch: 0.35, log: 0.3, cairn: 0.14, bones: 0.15 },
-    life: { birds: 1.4, herd: 0.1 },
+    life: { birds: 1.4, herd: 0.05, shore: 0.1 },
   }),
   fallgrove: mk({
     rockD: 0.6, rockS: 0.95, tint: [1.0, 0.99, 0.86], bright: 0.96,
@@ -146,7 +147,7 @@ export const ZONE_DRESS = {
     frag: FRAG_ROUND,
     // ringed by dead grovewood
     litter: { deadtrunk: 0.8, log: 0.7, stump: 0.6, branch: 0.6, leaves: 0.4 },
-    life: { birds: 1.1, herd: 1.0 },
+    life: { birds: 1.1, herd: 1.0, shore: 0.5 },
   }),
 
   // -------------------------------------------------------------- CLEIGNE
@@ -156,14 +157,14 @@ export const ZONE_DRESS = {
     kinds: { spire: 0.26, slab: 0.24, granite: 0.20, bedded: 0.12, cobble: 0.18 },
     frag: FRAG_ANGULAR,
     litter: { rubble: 0.55, barrel: 0.3, planks: 0.3 },
-    life: { birds: 0.9, herd: 0 },
+    life: { birds: 0.9, herd: 0, shore: 0.1 },
   }),
   malmalam: mk({
     rockD: 0.8, rockS: 1.0, tint: [0.80, 0.94, 0.78], bright: 0.8,
     kinds: { granite: 0.24, worn: 0.3, slab: 0.14, bedded: 0.12, cobble: 0.20 },
     frag: FRAG_ROUND,
     litter: { log: 1.4, branch: 1.2, stump: 0.9, leaves: 1.2, deadtrunk: 0.3, reeds: 0.4 },
-    life: { birds: 0.6, herd: 0 },
+    life: { birds: 0.6, herd: 0, shore: 0.5 },
   }),
   vesperpool: mk({
     rockD: 0.5, rockS: 0.9, tint: [0.86, 0.92, 0.88], bright: 0.84,
@@ -171,7 +172,7 @@ export const ZONE_DRESS = {
     frag: FRAG_ROUND,
     // a drowned forest: standing dead trunks are the whole silhouette
     litter: { deadtrunk: 2.1, driftwood: 0.9, log: 0.6, branch: 0.4, stump: 0.5, reeds: 1.1 },
-    life: { birds: 1.5, herd: 0.1 },
+    life: { birds: 1.5, herd: 0.35, shore: 1.6 },
   }),
   ravatogh: mk({
     rockD: 1.7, rockS: 1.15, tint: [0.70, 0.66, 0.66], bright: 0.82,
@@ -179,7 +180,7 @@ export const ZONE_DRESS = {
     kinds: { spire: 0.20, granite: 0.22, slab: 0.20, bedded: 0.12, cobble: 0.26 },
     frag: FRAG_SCREE,
     litter: { rubble: 0.35, cairn: 0.08 },
-    life: { birds: 0.4, herd: 0 },
+    life: { birds: 0.4, herd: 0, shore: 0 },
   }),
   meldacio: mk({
     rockD: 1.3, rockS: 1.12, tint: [0.94, 0.94, 0.92], bright: 0.88,
@@ -187,21 +188,21 @@ export const ZONE_DRESS = {
     frag: FRAG_SCREE,
     // hunter country: waymark cairns and firewood at every layby
     litter: { cairn: 0.4, branch: 0.6, log: 0.4, bones: 0.3, planks: 0.2 },
-    life: { birds: 1.2, herd: 0.2 },
+    life: { birds: 1.2, herd: 0.25, shore: 0.3 },
   }),
   cape_caem: mk({
     rockD: 0.7, rockS: 0.9, tint: [0.94, 1.0, 0.9], bright: 1.0,
     kinds: { worn: 0.4, cobble: 0.3, slab: 0.14, bedded: 0.1, granite: 0.06 },
     frag: FRAG_ROUND,
     litter: { driftwood: 0.8, planks: 0.45, branch: 0.35, log: 0.25, leaves: 0.2, reeds: 0.5 },
-    life: { birds: 1.7, herd: 0.3 },
+    life: { birds: 1.7, herd: 0.4, shore: 1.3 },
   }),
 
   // the frontier: generic upland
   _default: mk({
     rockD: 0.9, rockS: 1.0, tint: [1.02, 0.98, 0.9], bright: 0.9,
     litter: { branch: 0.3, bones: 0.2, log: 0.15 },
-    life: { birds: 0.9, herd: 0.15 },
+    life: { birds: 0.9, herd: 0.15, shore: 0.3 },
   }),
 };
 

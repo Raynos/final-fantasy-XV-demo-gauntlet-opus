@@ -5,15 +5,26 @@ import { hash3 } from '../veg/Ecology.js';
 import { TileStream } from './TileStream.js';
 import { dressAt } from './ZoneDress.js';
 import { puffTexture } from './PropMaterials.js';
+import { garulaGeometry, grazerMaterials, walkCycle, CYCLE_DISTANCE } from './Grazer.js';
+import { waderGeometry, waderMaterial } from './Waders.js';
+import { WORLD } from '../map/WorldMap.js';
 
 /**
  * The moving half of "inhabited".
  *
- * Three populations, one draw call each: raptors riding thermals over the
- * badlands, herds of garula grazing across the midground, and clouds of
- * insects that only come out near the camera at dusk. Nothing here is
- * simulated — every animal is a closed-form function of time, so a capture of
- * frame 60 is identical every run.
+ * Four populations, one draw call each: raptors riding thermals over the
+ * badlands, herds of garula grazing across the midground, waders working the
+ * edge of every lake, and clouds of insects that only come out near the camera
+ * at dusk. Nothing here is simulated — every animal is a closed-form function
+ * of time, so a capture of frame 60 is identical every run.
+ *
+ * The two ground populations are *articulated* as well as placed, and the
+ * articulation is entirely in the vertex shader (see `Grazer.js` and
+ * `Waders.js`). The CPU's whole job per animal is one matrix and four floats:
+ * where it stands, which way it faces, and what phase of its cycle it is in.
+ * Heads drop into the grass, tails flick, legs swing and necks stab without
+ * the main thread knowing about any of it, which is the only way seventy-odd
+ * animated animals fit in one draw call and a rounding error of frame time.
  */
 
 const _m = new THREE.Matrix4();
@@ -21,6 +32,10 @@ const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
+const _up = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _worldUp = new THREE.Vector3(0, 1, 0);
 
 /**
  * Merge a list of primitives into one buffer, stripping everything but
@@ -118,137 +133,6 @@ function birdGeometry() {
   return mergeTinted(parts);
 }
 
-/**
- * Garula: the shaggy, horned grazer of the Leide plains.
- *
- * At a hundred metres only three things carry: the mass over the shoulders,
- * the head hung low and forward of it, and daylight between four load-bearing
- * legs. So the body is a barrel with a sloping croup rather than an ellipsoid,
- * the legs are jointed (femur angled back, cannon bone dropping vertically,
- * splayed hoof) with a real gap under the belly, and the horns are a heavy
- * forward-curving pair on a broad skull. Roughly 3.6 m nose to tail and 2.3 m
- * at the hump — twice the height of a 1.8 m character.
- */
-function garulaGeometry() {
-  const parts = [];
-  const coat = [0.52, 0.44, 0.34];
-  const belly = [0.30, 0.25, 0.20];
-  const mane = [0.38, 0.30, 0.23];
-  const bone = [0.78, 0.74, 0.64];
-  const hoofC = [0.20, 0.18, 0.16];
-
-  // --- barrel body: ribcage forward, narrower croup behind ---------------
-  const chest = new THREE.SphereGeometry(1.0, 11, 8);
-  chest.scale(1.05, 0.98, 0.9);
-  chest.translate(0.45, 1.42, 0);
-  parts.push({ geo: chest, c: coat });
-  const rump = new THREE.SphereGeometry(1.0, 10, 7);
-  rump.scale(0.95, 0.8, 0.76);
-  rump.translate(-0.95, 1.30, 0);
-  parts.push({ geo: rump, c: coat });
-  const flank = new THREE.CylinderGeometry(0.86, 0.78, 1.6, 10);
-  flank.rotateZ(Math.PI / 2);
-  flank.scale(1, 1, 0.92);
-  flank.translate(-0.25, 1.36, 0);
-  parts.push({ geo: flank, c: coat });
-  const under = new THREE.SphereGeometry(0.78, 9, 6);
-  under.scale(1.5, 0.5, 0.85);
-  under.translate(-0.1, 1.02, 0);
-  parts.push({ geo: under, c: belly });
-
-  // --- withers hump: the highest point of the animal ---------------------
-  const hump = new THREE.SphereGeometry(0.78, 9, 7);
-  hump.scale(1.15, 0.92, 0.8);
-  hump.translate(0.55, 2.02, 0);
-  parts.push({ geo: hump, c: mane });
-  // shaggy mane spilling off the hump and down the neck
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6;
-    const tuft = new THREE.ConeGeometry(0.22 - t * 0.06, 0.62, 5);
-    tuft.rotateZ(0.9 + t * 0.5);
-    tuft.translate(0.9 + t * 0.75, 2.28 - t * 0.5, (i % 2 ? 0.16 : -0.16) * (1 - t));
-    parts.push({ geo: tuft, c: mane });
-  }
-
-  // --- neck and skull: slung low and forward -----------------------------
-  const neck = new THREE.CylinderGeometry(0.40, 0.62, 1.25, 8);
-  neck.rotateZ(-1.02);
-  neck.translate(1.62, 1.52, 0);
-  parts.push({ geo: neck, c: mane });
-  const skull = new THREE.SphereGeometry(0.44, 9, 7);
-  skull.scale(1.6, 0.86, 0.92);
-  skull.translate(2.42, 1.02, 0);
-  parts.push({ geo: skull, c: coat });
-  const muzzle = new THREE.CylinderGeometry(0.22, 0.29, 0.5, 7);
-  muzzle.rotateZ(-1.35);
-  muzzle.translate(2.98, 0.90, 0);
-  parts.push({ geo: muzzle, c: belly });
-  // brow ridge the horns spring from
-  const brow = new THREE.BoxGeometry(0.3, 0.2, 0.86);
-  brow.translate(2.34, 1.28, 0);
-  parts.push({ geo: brow, c: bone });
-  for (const s of [-1, 1]) {
-    // heavy forward-curving horn built from three tapering segments
-    let px = 2.34, py = 1.36, pz = s * 0.4;
-    const seg = [[0.30, 0.15, 0.55, 0.36], [0.34, 0.30, 0.28, 0.5], [0.34, 0.34, 0.10, 0.26]];
-    let r = 0.15;
-    for (const [dx, dy, dz, rr] of seg) {
-      const h = Math.hypot(dx, dy, dz);
-      const c = new THREE.CylinderGeometry(rr * 0.75, r, h, 6);
-      // orient +Y along the segment
-      const q = new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, dy, s * dz).normalize());
-      c.applyQuaternion(q);
-      c.translate(px + dx / 2, py + dy / 2, pz + s * dz / 2);
-      parts.push({ geo: c, c: bone });
-      px += dx; py += dy; pz += s * dz; r = rr * 0.75;
-    }
-    const tip = new THREE.ConeGeometry(r, 0.3, 6);
-    tip.rotateZ(-0.6);
-    tip.translate(px + 0.08, py + 0.1, pz);
-    parts.push({ geo: tip, c: bone });
-    // ear
-    const ear = new THREE.ConeGeometry(0.1, 0.3, 5);
-    ear.rotateX(s * 1.2);
-    ear.translate(2.16, 1.2, s * 0.42);
-    parts.push({ geo: ear, c: coat });
-  }
-
-  // --- jointed legs -------------------------------------------------------
-  // front pair sits under the chest, rear pair under the croup, and each is
-  // femur -> cannon -> hoof so there is a visible knee and real ground gap
-  const leg = (ax, az, femurLean, upperR, lowerR, top) => {
-    const knee = 0.72;
-    const dx = femurLean * (top - knee);
-    const fem = new THREE.CylinderGeometry(lowerR * 1.05, upperR, top - knee, 6);
-    fem.rotateZ(Math.atan2(-dx, top - knee));
-    fem.translate(ax + dx * 0.5, (top + knee) * 0.5, az);
-    parts.push({ geo: fem, c: coat });
-    const cannon = new THREE.CylinderGeometry(lowerR * 0.8, lowerR * 1.02, knee - 0.13, 6);
-    cannon.translate(ax + dx, (knee + 0.13) * 0.5, az);
-    parts.push({ geo: cannon, c: belly });
-    const hoof = new THREE.CylinderGeometry(lowerR * 1.25, lowerR * 1.5, 0.17, 6);
-    hoof.translate(ax + dx, 0.085, az);
-    parts.push({ geo: hoof, c: hoofC });
-  };
-  for (const sz of [-1, 1]) {
-    leg(1.02, sz * 0.62, 0.16, 0.30, 0.16, 1.36);   // foreleg, shoulder high
-    leg(-1.12, sz * 0.6, -0.2, 0.34, 0.17, 1.24);   // hind leg, hock kicked back
-  }
-
-  // --- tail ---------------------------------------------------------------
-  const tail = new THREE.CylinderGeometry(0.08, 0.035, 0.95, 5);
-  tail.rotateZ(0.42);
-  tail.translate(-1.92, 1.12, 0);
-  parts.push({ geo: tail, c: coat });
-  const tuft = new THREE.SphereGeometry(0.15, 6, 5);
-  tuft.scale(0.8, 1.4, 0.8);
-  tuft.translate(-2.12, 0.68, 0);
-  parts.push({ geo: tuft, c: mane });
-
-  return mergeTinted(parts);
-}
-
 export class Wildlife {
   /**
    * @param {import('../veg/Ecology.js').Ecology} eco
@@ -259,6 +143,8 @@ export class Wildlife {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
+    /** Shared clock uniform for every vertex-animated population. */
+    this.timeRef = { value: 0 };
     this.root = new THREE.Group();
     this.root.name = 'wildlife';
     this.scene.add(this.root);
@@ -267,6 +153,7 @@ export class Wildlife {
   build() {
     this._birds();
     this._herds();
+    this._waders();
     this._insects();
     this._smoke();
   }
@@ -332,20 +219,25 @@ export class Wildlife {
   // ------------------------------------------------------------------ herds
 
   /**
-   * Grazing herds, streamed and zone-weighted.
+   * Grazing garula, streamed and zone-weighted.
    *
-   * Dualhorn on the Vannath prairie, garula on the Malacchi chocobo downs, a
-   * few head on the Leide flats and nothing at all on a volcano. The old
-   * version read four hand-placed anchors from `Ecology.sites`, all of them
-   * inside four hundred metres of the spawn.
+   * Thick on the Kelbass downs and the Weaverwilds, a working herd on the
+   * Longwythe flats where most of the Leide frames are shot, a token few in
+   * the deep woods and none at all on a volcano, in a ruin, or on the
+   * approach to a dungeon — see `life.herd` in `ZoneDress.js`.
+   *
+   * The mesh carries a matching `customDepthMaterial`, so the animal's
+   * *shadow* grazes with it rather than standing in the bind pose with its
+   * head up while the animal's nose is in the grass.
    */
   _herds() {
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x8c7c67, roughness: 0.92, metalness: 0, vertexColors: true,
-    });
-    mat.name = 'garula';
-    const CAP = Math.round(80 * this.quality);
-    const mesh = new THREE.InstancedMesh(garulaGeometry(), mat, CAP);
+    const { material, depth } = grazerMaterials(this.timeRef);
+    const CAP = Math.round(72 * this.quality);
+    const geo = garulaGeometry();
+    // per-instance animation: phase, cycle rate, alertness, coat brightness
+    geo.setAttribute('aanim', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4));
+    const mesh = new THREE.InstancedMesh(geo, material, CAP);
+    mesh.customDepthMaterial = depth;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -353,7 +245,7 @@ export class Wildlife {
     mesh.name = 'wildlife_herd';
     this.root.add(mesh);
     this.herd = {
-      mesh, cap: CAP, range: 480,
+      mesh, cap: CAP, range: 440, anim: geo.attributes.aanim,
       stream: new TileStream({
         cell: 260, radius: 620, budget: 4,
         gen: (cx, cz, out) => this._genHerd(cx, cz, out),
@@ -362,6 +254,19 @@ export class Wildlife {
     this.herd.stream.flush(new THREE.Vector3());
   }
 
+  /**
+   * One herd per cell, on open grazing ground.
+   *
+   * Stock want three things and the test is all three: grass to eat, ground
+   * flat enough to stand a two-and-a-half tonne animal on, and a zone that
+   * keeps stock at all. That rules out cliff faces, scree and the dungeon
+   * approaches on its own — `grassDensity` is already zero on bare rock and
+   * the slope term kills anything above about twenty degrees.
+   *
+   * Each animal gets a wander circle rather than a fixed post: it walks a
+   * few paces along the arc every cycle and crops with its head down in
+   * between, so a herd slowly redistributes itself across the pasture.
+   */
   _genHerd(cx, cz, out) {
     const c = 260, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x2b91));
@@ -370,21 +275,151 @@ export class Wildlife {
     const want = dress.life.herd;
     if (want <= 0.01) return;
     // stock stand on grass, on the flat, away from the carriageway
-    const graze = eco.grassDensity(x, z) * (1 - THREE.MathUtils.smoothstep(eco.slope01(x, z), 0.12, 0.4));
+    const flat = 1 - THREE.MathUtils.smoothstep(eco.slope01(x, z), 0.10, 0.34);
+    // and they come down to the water: the strip of ground a metre or two
+    // above the lake surface is where a real herd spends its afternoon
+    const above = eco.height(x, z) - WORLD.seaLevel;
+    const shore = (1 - THREE.MathUtils.smoothstep(above, 1.5, 11)) * THREE.MathUtils.smoothstep(above, -0.5, 0.8);
+    const graze = eco.grassDensity(x, z) * flat * (1 + shore * 0.9);
     if (rng.next() > want * graze * 1.4) return;
-    const range = rng.range(24, 48);
+    const range = rng.range(22, 46);
     const n = 4 + Math.floor(rng.next() * 9 * Math.min(1.4, want));
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
       const d = Math.sqrt(rng.next()) * range;
+      const ax = x + Math.cos(a) * d, az = z + Math.sin(a) * d;
+      // a beast that would be standing on a boulder or a cliff edge is
+      // simply not born
+      if (eco.slope01(ax, az) > 0.30) continue;
+      const calf = rng.next() < 0.20;
+      // the animal walks an arc; the arc's centre is placed so that at t=0 it
+      // stands exactly on its anchor, otherwise a "herd" scatters itself over
+      // twice the wander radius the moment the clock starts
+      const radius = rng.range(9, 22);
+      const theta0 = rng.next() * Math.PI * 2;
       out.push({
-        ax: x + Math.cos(a) * d, az: z + Math.sin(a) * d,
-        wander: rng.range(4, 13), phase: rng.next() * Math.PI * 2,
-        rate: rng.range(0.016, 0.045),
-        scale: rng.range(0.85, 1.35) * (rng.next() < 0.18 ? 0.6 : 1),
-        bob: rng.range(0.5, 1.6),
+        cx: ax - Math.cos(theta0) * radius, cz: az - Math.sin(theta0) * radius,
+        radius,
+        theta0,
+        ax, az,
+        dir: rng.next() < 0.5 ? -1 : 1,
+        phase: rng.next(),
+        rate: rng.range(1 / 21, 1 / 11) * (calf ? 1.7 : 1),
+        scale: (calf ? rng.range(0.42, 0.56) : rng.range(0.78, 1.04)),
+        // a couple of head in every group stand watch instead of cropping —
+        // a field where every animal has its nose in the grass reads as a
+        // field of identical props, which is precisely what it would be
+        idle: rng.next() < 0.18 ? rng.range(0.55, 0.9) : 0,
+        tint: rng.next(),
       });
     }
+  }
+
+  // ------------------------------------------------------------------ shore
+
+  /**
+   * Waders along the waterline.
+   *
+   * The hard part is finding the waterline at all: the world is 8 km on a side
+   * and almost none of it is within a metre of the lake surface, so a blind
+   * scatter would test tens of thousands of points to find one. Instead each
+   * cell rejects itself on a single height sample if it is nowhere near the
+   * water, then hunts the band with a couple of dozen samples only if it might
+   * be. Birds stand *in* the shallows — their feet clamp to just under the
+   * surface — because a heron on dry ground beside a lake looks lost.
+   */
+  _waders() {
+    const CAP = Math.round(64 * this.quality);
+    const geo = waderGeometry();
+    geo.setAttribute('aanim', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4));
+    const mesh = new THREE.InstancedMesh(geo, waderMaterial(this.timeRef), CAP);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    mesh.count = 0;
+    mesh.name = 'wildlife_waders';
+    this.root.add(mesh);
+    this.waders = {
+      mesh, cap: CAP, range: 300, anim: geo.attributes.aanim,
+      stream: new TileStream({
+        cell: 180, radius: 420, budget: 3,
+        gen: (cx, cz, out) => this._genWaders(cx, cz, out),
+      }),
+    };
+    this.waders.stream.flush(new THREE.Vector3());
+  }
+
+  _genWaders(cx, cz, out) {
+    const c = 180, eco = this.eco, sea = WORLD.seaLevel;
+    // one sample rejects every cell that is not lake country
+    if (eco.height((cx + 0.5) * c, (cz + 0.5) * c) > sea + 60) return;
+    const rng = new Rng(hash3(cx, cz, 0x53a7));
+    const dress = dressAt((cx + 0.5) * c, (cz + 0.5) * c);
+    const want = dress.life.shore;
+    if (want <= 0.02) return;
+    for (let a = 0; a < 24; a++) {
+      const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
+      const d = eco.height(x, z) - sea;
+      if (d < -0.5 || d > 0.9) continue;
+      if (rng.next() > want * 0.55) continue;
+      // a loose scatter of two to six birds working the same bay
+      const n = 2 + Math.floor(rng.next() * 5 * Math.min(1.4, want));
+      for (let i = 0; i < n; i++) {
+        const ang = rng.next() * Math.PI * 2;
+        const r = Math.sqrt(rng.next()) * rng.range(5, 16);
+        const bx = x + Math.cos(ang) * r, bz = z + Math.sin(ang) * r;
+        const bd = eco.height(bx, bz) - sea;
+        if (bd < -0.9 || bd > 1.3) continue;
+        out.push({
+          x: bx, z: bz,
+          y: Math.max(eco.height(bx, bz), sea - 0.12),
+          yaw: rng.next() * Math.PI * 2,
+          sway: rng.range(0.25, 0.9),
+          phase: rng.next(),
+          rate: rng.range(1 / 14, 1 / 5),
+          scale: rng.range(0.86, 1.16),
+          // two thirds egret-pale, the rest grey-brown herons
+          tint: rng.next() < 0.66 ? rng.range(0.72, 1.0) : rng.range(0.06, 0.3),
+        });
+      }
+      if (out.length > 40) return;
+    }
+  }
+
+  /**
+   * @param {number} t seconds
+   * @param {THREE.Vector3} camPos
+   */
+  _updateWaders(t, camPos) {
+    const g = this.waders;
+    if (camPos) g.stream.update(camPos);
+    const anim = g.anim.array;
+    let i = 0;
+    for (const arr of g.stream.live.values()) {
+      for (const b of arr) {
+        if (i >= g.cap) break;
+        if (camPos) {
+          const dx = b.x - camPos.x, dz = b.z - camPos.z;
+          if (dx * dx + dz * dz > g.range * g.range) continue;
+        }
+        _e.set(0, b.yaw + Math.sin(t * 0.11 + b.phase * 19) * b.sway, 0);
+        _q.setFromEuler(_e);
+        _p.set(b.x, b.y, b.z);
+        _s.setScalar(b.scale);
+        _m.compose(_p, _q, _s);
+        _m.toArray(g.mesh.instanceMatrix.array, i * 16);
+        anim[i * 4] = b.phase;
+        anim[i * 4 + 1] = b.rate;
+        anim[i * 4 + 2] = 0;
+        anim[i * 4 + 3] = b.tint;
+        i++;
+      }
+      if (i >= g.cap) break;
+    }
+    g.mesh.count = i;
+    g.mesh.visible = i > 0;
+    g.mesh.instanceMatrix.needsUpdate = true;
+    g.anim.needsUpdate = true;
   }
 
   // ---------------------------------------------------------------- insects
@@ -458,12 +493,72 @@ export class Wildlife {
   // ----------------------------------------------------------------- update
 
   /**
+   * Place the herd for this frame.
+   *
+   * The CPU only ever does two things per animal: work out where on its
+   * wander arc it has got to, and stand it on the ground facing the way it
+   * is walking. Every joint — head down cropping, the look-up, the tail
+   * flick, the legs — happens in the vertex shader off `aanim`, which is why
+   * seventy-two animated garula are still one draw call and about forty
+   * microseconds of JavaScript.
+   *
+   * @param {number} t seconds
+   * @param {THREE.Vector3} camPos
+   */
+  _updateHerd(t, camPos) {
+    const g = this.herd, eco = this.eco;
+    if (camPos) g.stream.update(camPos);
+    const anim = g.anim.array;
+    let i = 0;
+    for (const arr of g.stream.live.values()) {
+      for (const h of arr) {
+        if (i >= g.cap) break;
+        if (camPos) {
+          const dx = h.ax - camPos.x, dz = h.az - camPos.z;
+          if (dx * dx + dz * dz > g.range * g.range) continue;
+        }
+        // walk along the arc only while the shader is swinging the legs
+        const { u, s } = walkCycle(t, h.phase, h.rate);
+        const dist = (Math.floor(u) + s) * CYCLE_DISTANCE * h.scale;
+        const th = h.theta0 + (dist / h.radius) * h.dir;
+        const x = h.cx + Math.cos(th) * h.radius;
+        const z = h.cz + Math.sin(th) * h.radius;
+        // heading is the tangent of the arc
+        _fwd.set(-Math.sin(th) * h.dir, 0, Math.cos(th) * h.dir).normalize();
+        // plant it on the slope, but only three-quarters of the way — a
+        // fully slope-aligned animal on a lumpy field looks drunk
+        eco.normal(x, z, _up).lerp(_worldUp, 0.28).normalize();
+        _right.crossVectors(_up, _fwd).normalize();
+        _fwd.crossVectors(_right, _up).normalize();
+        _m.makeBasis(_right, _up, _fwd);
+        _m.scale(_s.setScalar(h.scale));
+        _m.setPosition(x, eco.height(x, z) - 0.04, z);
+        _m.toArray(g.mesh.instanceMatrix.array, i * 16);
+
+        anim[i * 4] = h.phase;
+        anim[i * 4 + 1] = h.rate;
+        // heads come up when something the size of a Regalia is close
+        anim[i * 4 + 2] = Math.max(h.idle, camPos
+          ? 1 - THREE.MathUtils.smoothstep(camPos.distanceTo(_p.set(x, camPos.y, z)), 16, 42) : 0);
+        anim[i * 4 + 3] = h.tint;
+        i++;
+      }
+      if (i >= g.cap) break;
+    }
+    g.mesh.count = i;
+    g.mesh.visible = i > 0;
+    g.mesh.instanceMatrix.needsUpdate = true;
+    g.anim.needsUpdate = true;
+  }
+
+  /**
    * @param {number} dt
    * @param {number} t seconds
    * @param {number} night 0 by day, 1 after dark
    * @param {THREE.Vector3} camPos
    */
   update(dt, t, night, camPos) {
+    this.timeRef.value = t;
     if (this.birds) {
       const g = this.birds;
       if (camPos) g.stream.update(camPos);
@@ -489,36 +584,8 @@ export class Wildlife {
       g.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    if (this.herd) {
-      const g = this.herd;
-      const eco = this.eco;
-      if (camPos) g.stream.update(camPos);
-      let i = 0;
-      for (const arr of g.stream.live.values()) for (const h of arr) {
-        if (i >= g.cap) break;
-        if (camPos) {
-          const dx = h.ax - camPos.x, dz = h.az - camPos.z;
-          if (dx * dx + dz * dz > g.range * g.range) continue;
-        }
-        const a = h.phase + t * h.rate;
-        const x = h.ax + Math.cos(a) * h.wander;
-        const z = h.az + Math.sin(a * 0.73) * h.wander * 0.7;
-        const yaw = Math.atan2(-Math.sin(a) * h.wander * h.rate,
-          Math.cos(a * 0.73) * 0.73 * h.wander * 0.7 * h.rate) + Math.PI / 2;
-        // graze: nose dips every few seconds
-        const dip = Math.max(0, Math.sin(t * 0.35 + h.phase * 3)) * 0.22;
-        _e.set(dip, yaw, 0);
-        _q.setFromEuler(_e);
-        _p.set(x, eco.height(x, z) - 0.05, z);
-        _s.setScalar(h.scale);
-        _m.compose(_p, _q, _s);
-        _m.toArray(g.mesh.instanceMatrix.array, i * 16);
-        i++;
-      }
-      g.mesh.count = i;
-      g.mesh.visible = i > 0;
-      g.mesh.instanceMatrix.needsUpdate = true;
-    }
+    if (this.herd) this._updateHerd(t, camPos);
+    if (this.waders) this._updateWaders(t, camPos);
 
     if (this.insects && camPos) {
       const s = this.insects;
