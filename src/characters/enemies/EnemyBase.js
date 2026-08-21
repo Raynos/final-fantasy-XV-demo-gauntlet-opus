@@ -163,6 +163,7 @@ export class Enemy {
     this.setState('idle');
     this.stateTime = 0;
     this.hitPower = 0;
+    this.restBones();
     if (this._kb) this._kb.set(0, 0, 0);
     if (this.anim) {
       for (const s of [this.anim.hitPitch, this.anim.hitRoll, this.anim.hitYaw, this.anim.pushZ, this.anim.pushX]) s.reset();
@@ -180,9 +181,192 @@ export class Enemy {
     return this;
   }
 
+  /**
+   * Put every bone back in its bind rotation.
+   *
+   * `pose()` only writes the bones it cares about, so whatever the previous
+   * pose left in the others carries over. That is usually wanted — a goblin's
+   * attack deliberately keeps the crouch its telegraph put in the legs — but
+   * it is wrong across a *discontinuity*: a pooled sabertusk respawning must
+   * not begin life folded into the corpse the last one died in, a corpse must
+   * not inherit the bent ankles of the stagger that preceded it, and a
+   * screenshot pose must not depend on which pose the instance happened to
+   * hold before it. Called at those four boundaries only, never per frame.
+   */
+  restBones() {
+    if (!this.rig) return;
+    for (const [name, bone] of this.rig.byName) {
+      const r = this.rig.rest.get(name);
+      if (r) bone.quaternion.copy(r);
+    }
+  }
+
   /** Centre of mass in world space — the point VFX and lock-on aim at. */
   centre(out = new THREE.Vector3()) {
     return out.set(this.root.position.x, this.root.position.y + this.height * 0.55 * this.scale, this.root.position.z);
+  }
+
+  /**
+   * Lowest point the *skinned* body currently reaches, in metres relative to
+   * the root — which sits on the terrain. Zero means the model is standing
+   * exactly on the ground; negative is underground.
+   *
+   * Every vertex goes through `applyBoneTransform`: `Box3.setFromObject` on a
+   * `SkinnedMesh` reads `geometry.boundingBox`, which is the *bind* pose, so
+   * it cannot see a skeleton that has folded through the floor — the whole
+   * question being asked here.
+   *
+   * Two passes, because a body is up to 50k vertices and this is asked a few
+   * hundred times per species: a strided sweep to find roughly where the low
+   * point is, then an exhaustive sweep of the vertices *around* it. Parts are
+   * built one after another, so neighbouring indices are neighbouring
+   * geometry and the refinement lands on the same foot the coarse pass found.
+   * Strided sampling alone is not enough — it under-reports depth by up to
+   * half a metre on a big machine, which is precisely the error it is being
+   * used to correct.
+   *
+   * @returns {number} metres; negative is underground
+   */
+  poseFloor() {
+    if (!this.visual) return 0;
+    this.root.updateMatrixWorld(true);
+    const ry = this.root.matrixWorld.elements[13];
+    const v = _calV;
+    let minY = Infinity, bestObj = null, bestIdx = 0, bestStep = 1;
+    this.visual.traverse((o) => {
+      const geo = o.geometry;
+      if (!geo || !geo.attributes || !geo.attributes.position) return;
+      const pos = geo.attributes.position;
+      if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
+      const step = Math.max(1, Math.floor(pos.count / 900));
+      for (let i = 0; i < pos.count; i += step) {
+        v.fromBufferAttribute(pos, i);
+        if (o.isSkinnedMesh) o.applyBoneTransform(i, v);
+        v.applyMatrix4(o.matrixWorld);
+        if (v.y < minY) { minY = v.y; bestObj = o; bestIdx = i; bestStep = step; }
+      }
+    });
+    if (bestObj && bestStep > 1) {
+      const pos = bestObj.geometry.attributes.position;
+      const lo = Math.max(0, bestIdx - bestStep * 3);
+      const hi = Math.min(pos.count, bestIdx + bestStep * 3);
+      for (let i = lo; i < hi; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (bestObj.isSkinnedMesh) bestObj.applyBoneTransform(i, v);
+        v.applyMatrix4(bestObj.matrixWorld);
+        if (v.y < minY) minY = v.y;
+      }
+    }
+    if (!isFinite(minY)) return 0;
+    return minY - ry;
+  }
+
+  /**
+   * Measure, once per species, how far each named pose actually reaches below
+   * the ground, and cache the lift that puts it back on it.
+   *
+   * The poses that settle a body — a corpse going over, a stagger crouching —
+   * were authored as a *downward translation* with a hand-picked constant:
+   * `visual.position.y = -0.80 * e`. That is not a settle, it is a burial. The
+   * body rotates about `visual`, which sits on the terrain, so the roll
+   * already swings the model down through the floor; subtracting a constant on
+   * top of it put fifteen corpses between 0.5 m and 1.3 m underground and the
+   * magitek walker 1.7 m under during a stagger. A corpse lingers six seconds
+   * in live combat, so this is visible in play, not only in captures.
+   *
+   * Constants also cannot be right for long: the offset a pose needs scales
+   * with the creature's size and with its silhouette, so every sculpt change
+   * invalidates every number. Measuring the model instead means the correction
+   * follows the model. The pose runs at a spread of `stateTime` values and the
+   * shortfall is stored as a curve, because the amount needed changes
+   * throughout the pose and a single worst-case number would hold a corpse in
+   * the air for the first half of its fall.
+   *
+   * Cheap: a few hundred vertices × twelve samples × a handful of poses, once
+   * per species, on the frame that species first spawns.
+   *
+   * @param {string[]} poses pose names to calibrate
+   */
+  calibrateGround(poses = GROUND_CAL_POSES) {
+    if (this.type._groundCal || !this.rig || !this.visual) return;
+    // A creature whose model deliberately continues below the ground has no
+    // "foot" to measure — see `TITAN.buriedBase`.
+    if (this.type.buriedBase) { this.type._groundCal = {}; return; }
+    const cal = {};
+    // Published before posing, so `groundLift()` reads zero for the pose it is
+    // currently measuring and the measurement stays a measurement.
+    this.type._groundCal = cal;
+
+    const bones = [...this.rig.byName.values()];
+    const saved = bones.map((b) => b.quaternion.clone());
+    const savePos = this.visual.position.clone();
+    const saveRot = this.visual.rotation.clone();
+    const saveState = this.stateTime, savePhase = this.phase;
+    const saveHit = this.hitPower;
+    this.hitPower = 1;
+
+    const saveAtk = this.attack, saveAtkId = this.attackId;
+    for (const pose of poses) {
+      // A telegraph and a strike are a different shape for every attack the
+      // species owns, so each gets its own curve; `groundLift` prefers the
+      // specific one and falls back to the generic.
+      const variants = (POSE_PER_ATTACK.has(pose) && this.attacks)
+        ? this.attacks.map((a) => [`${pose}:${a.id}`, a]) : [];
+      for (const [key, atk] of [[pose, null], ...variants]) {
+        this.attack = atk;
+        this.attackId = atk ? atk.id : null;
+        const curve = new Float64Array(GROUND_CAL_T.length);
+        let any = false;
+        for (let i = 0; i < GROUND_CAL_T.length; i++) {
+          this.stateTime = GROUND_CAL_T[i];
+          this.phase = GROUND_CAL_T[i];
+          // Same entry conditions the live and frozen paths give the pose, so
+          // the number measured here is the number that will be needed there.
+          this.restBones();
+          this._resetVisual();
+          this.pose(pose, this.phase, null);
+          const lift = Math.max(0, -this.poseFloor() - GROUND_SINK) / (this.scale || 1);
+          curve[i] = lift;
+          if (lift > 1e-4) any = true;
+        }
+        if (any) cal[key] = curve;
+      }
+    }
+    this.attack = saveAtk;
+    this.attackId = saveAtkId;
+
+    for (let i = 0; i < bones.length; i++) bones[i].quaternion.copy(saved[i]);
+    this.visual.position.copy(savePos);
+    this.visual.rotation.copy(saveRot);
+    this.stateTime = saveState;
+    this.phase = savePhase;
+    this.hitPower = saveHit;
+    this.root.updateMatrixWorld(true);
+  }
+
+  /**
+   * Metres to add to `visual.position.y` so the named pose stands on the
+   * ground at the current `stateTime`. Zero until `calibrateGround()` has run,
+   * and zero for any pose that never reached below it.
+   *
+   * @param {string} pose pose name, as passed to `pose()`
+   */
+  groundLift(pose) {
+    const cal = this.type._groundCal;
+    if (!cal) return 0;
+    const curve = (this.attackId && cal[`${pose}:${this.attackId}`]) || cal[pose];
+    if (!curve) return 0;
+    const T = GROUND_CAL_T;
+    const t = this.stateTime;
+    const s = this.scale || 1;
+    if (t <= T[0]) return curve[0] * s;
+    for (let i = 1; i < T.length; i++) {
+      if (t <= T[i]) {
+        const f = (t - T[i - 1]) / (T[i] - T[i - 1]);
+        return (curve[i - 1] + (curve[i] - curve[i - 1]) * f) * s;
+      }
+    }
+    return curve[T.length - 1] * s;
   }
 
   /**
@@ -239,6 +423,7 @@ export class Enemy {
         this.staggered = true;
         this.staggerTime = this.type.staggerDuration || 2.4;
         this._endAttack();
+        this.restBones();
         this.setState('stagger');
       } else if (this.state !== 'stagger' && !o.noFlinch && !this.superArmour
         && this.state !== 'attack' && this.state !== 'telegraph') {
@@ -285,6 +470,7 @@ export class Enemy {
     this.invulnerable = true;
     this.corpseTime = 0;
     this.attack = null;
+    this.restBones();
     /**
      * Which way the corpse goes down. A death that always folds the same way
      * looks scripted; taking the side from the killing blow means the same
@@ -431,6 +617,7 @@ export class Enemy {
       this._slide(dt, ctx);
       this._resetVisual();
       this.pose('death', this.phase, ctx);
+      this.visual.position.y += this.groundLift('death');
       this._postPose(dt);
       return;
     }
@@ -481,8 +668,10 @@ export class Enemy {
       this.root.position.y = this.airborne ? Math.max(gy, this.root.position.y) : gy;
     }
     this.root.rotation.y = this.heading;
+    const pose = POSE_MAP[this.state] || 'idle';
     this._resetVisual();
-    this.pose(POSE_MAP[this.state] || 'idle', this.phase, ctx);
+    this.pose(pose, this.phase, ctx);
+    this.visual.position.y += this.groundLift(pose);
     this._postPose(dt);
   }
 
@@ -804,6 +993,7 @@ export class Enemy {
     this.state = state;
     this.phase = phase;
     this.root.rotation.y = this.heading;
+    this.restBones();
     this.repose(0, ctx);
   }
 
@@ -823,6 +1013,7 @@ export class Enemy {
     if (!this.frozenPose || !this.visual) return;
     this._resetVisual();
     this.pose(this.frozenPose.state, this.frozenPose.phase, ctx);
+    this.visual.position.y += this.groundLift(this.frozenPose.state);
     this._postPose(dt);
   }
 
@@ -832,6 +1023,38 @@ export class Enemy {
 const EMPTY = [];
 const DEFAULT_TIMING = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
 const _addEuler = new THREE.Euler();
+const _calV = new THREE.Vector3();
+
+/**
+ * `stateTime` values the ground calibration samples, dense early where a
+ * settle pose is actually moving and sparse late where it has converged.
+ */
+const GROUND_CAL_T = [0.04, 0.1, 0.18, 0.3, 0.45, 0.65, 0.9, 1.25, 1.7, 2.3, 3.0, 4.0];
+
+/**
+ * Poses the ground correction is measured for.
+ *
+ * All of them are driven by `stateTime`, which is what the correction is
+ * indexed on. The gaits — `approach`, `run` — are deliberately absent: their
+ * vertical motion is driven by `gaitPhase`, so a curve read off `stateTime`
+ * would inject an arbitrary bob into the stride rather than remove a sink.
+ * `pounce` is absent because being off the ground is the point of it.
+ */
+const GROUND_CAL_POSES = ['idle', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
+
+/**
+ * Poses whose shape depends on *which* attack is being performed, so the
+ * correction has to be measured per attack rather than once.
+ */
+const POSE_PER_ATTACK = new Set(['telegraph', 'attack']);
+
+/**
+ * Ground penetration left uncorrected, metres. A foot pressing a few
+ * centimetres into dirt is how contact reads as weight rather than as a model
+ * balanced on a plane; correcting to exactly zero makes everything look like
+ * it is hovering. Well inside the 0.25 m gate in `tools/creaturecheck.mjs`.
+ */
+const GROUND_SINK = 0.05;
 const _addQ = new THREE.Quaternion();
 
 /**

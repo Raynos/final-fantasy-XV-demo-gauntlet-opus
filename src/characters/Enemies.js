@@ -91,6 +91,10 @@ export class Enemies {
         scale: o.scale ?? 1, level: o.level,
       });
       e.attachVisual(this.prototype(key));
+      // Once per species, on the frame it first appears: measure how far its
+      // settle poses reach below the ground so they can be corrected from the
+      // model instead of from a hand-picked constant. See `calibrateGround`.
+      e.calibrateGround();
       if (o.hp) { e.maxHp = o.hp; e.hp = o.hp; }
       if (o.damage) e.damage = o.damage;
     }

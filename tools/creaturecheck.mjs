@@ -113,6 +113,33 @@ try {
     const AIRBORNE = new Set(['pounce']);
 
     /**
+     * Species/pose pairs that are *meant* not to stand on the ground, each
+     * with the reason. These are exemptions, not a relaxed threshold: every
+     * other pose is still held to `--tol`, and adding one here is a claim
+     * about art direction that has been checked by eye in the bestiary shot.
+     *
+     * `*` exempts every pose of that species.
+     */
+    const INTENTIONAL = {
+      // Modelled from the pelvis up: the arena the player fights in sits at
+      // Titan's waist, so tens of metres of him are below the ground by
+      // design and there is no foot to measure. See `TITAN.buriedBase`.
+      titan: '*',
+      // A floating daemon. The necromancer never touches the ground — it
+      // hangs 0.3-0.7 m above it and its robe trails, which is the read.
+      // Its death is the one pose where it comes down, so that one is
+      // deliberately *not* exempt.
+      necromancer: ['idle', 'approach', 'run', 'telegraph', 'attack', 'flinch', 'stagger'],
+      // A leaping gait: the hobgoblin bounds rather than walks, so its
+      // approach and run are airborne for most of the cycle on purpose.
+      hobgoblin: ['approach', 'run'],
+    };
+    const exempt = (key, pose) => {
+      const e = INTENTIONAL[key];
+      return e === '*' || (Array.isArray(e) && e.includes(pose));
+    };
+
+    /**
      * World-space AABB of what will actually be drawn. Skinned vertices are
      * transformed by the live skeleton; static children (weapons, shells) come
      * through their own world matrices.
@@ -170,6 +197,13 @@ try {
 
         enemies.update(1 / 60, g);
         const first = drawnBox(e);
+        // What the pose itself wrote to the body transform, separately from
+        // what the skeleton did. `foot - bodyY` is the pose's foot clearance
+        // *before* its own crouch/settle offset, i.e. how much of a drop the
+        // pose can actually afford before the feet leave the ground — the
+        // number you want when deciding how far to cap one.
+        const bodyY = e.visual.position.y;
+        const bodyRoll = e.visual.rotation.z, bodyPitch = e.visual.rotation.x;
         for (let i = 0; i < cfg.hold; i++) enemies.update(1 / 60, g);
         const held = drawnBox(e);
 
@@ -177,14 +211,23 @@ try {
         out.push({
           key,
           pose,
-          airborne: AIRBORNE.has(pose),
+          airborne: AIRBORNE.has(pose) || exempt(key, pose),
+          exempt: exempt(key, pose),
           samples: first.n,
           height: e.height * e.scale,
+          bodyY: +bodyY.toFixed(4),
+          bodyRoll: +bodyRoll.toFixed(4),
+          bodyPitch: +bodyPitch.toFixed(4),
+          headroom: +(first.minY - ry - bodyY).toFixed(4),
           foot: +(first.minY - ry).toFixed(4),
           top: +(first.maxY - ry).toFixed(4),
           width: +Math.max(first.maxX - first.minX, first.maxZ - first.minZ).toFixed(3),
           drift: +(held.minY - first.minY).toFixed(4),
           rootVsTerrain: +(ry - gy).toFixed(4),
+          // The measured ground-correction curve `calibrateGround()` built for
+          // this pose, so a wrong lift can be told apart from a wrong pose.
+          cal: e.type._groundCal && e.type._groundCal[pose]
+            ? Array.from(e.type._groundCal[pose], (n) => +n.toFixed(3)) : null,
         });
         enemies.clear();
         enemies.frozen = false;
@@ -212,13 +255,15 @@ for (const r of rows) {
 if (!opts.quiet) {
   const pad = (s, n) => String(s).padEnd(n);
   const num = (v, n = 8) => String(v.toFixed(3)).padStart(n);
-  console.log(`${pad('species', 16)}${pad('pose', 11)}${'foot'.padStart(8)}${'top'.padStart(8)}${'height'.padStart(8)}${'drift'.padStart(9)}`);
+  console.log(`${pad('species', 16)}${pad('pose', 11)}${'foot'.padStart(8)}${'bodyY'.padStart(8)}${'headrm'.padStart(8)}${'roll'.padStart(7)}${'top'.padStart(8)}${'height'.padStart(8)}${'drift'.padStart(9)}`);
   for (const [key, list] of byKey) {
     for (const r of list) {
       if (r.error) { console.log(`${pad(key, 16)}${pad(r.pose, 11)}  ERROR ${r.error}`); continue; }
       const flagD = Math.abs(r.drift) > opts.driftTol ? ' DRIFT' : '';
       const flagF = !r.airborne && Math.abs(r.foot) > opts.tol ? ' LOW' : '';
-      console.log(`${pad(key, 16)}${pad(r.pose, 11)}${num(r.foot)}${num(r.top)}${num(r.height)}${num(r.drift, 9)}${flagD}${flagF}`);
+      if (r.exempt) { console.log(`${pad(key, 16)}${pad(r.pose, 11)}${num(r.foot)}${' '.repeat(31)}  exempt`); continue; }
+      const roll = Math.abs(r.bodyRoll) > Math.abs(r.bodyPitch) ? r.bodyRoll : r.bodyPitch;
+      console.log(`${pad(key, 16)}${pad(r.pose, 11)}${num(r.foot)}${num(r.bodyY)}${num(r.headroom)}${num(roll, 7)}${num(r.top)}${num(r.height)}${num(r.drift, 9)}${flagD}${flagF}`);
     }
   }
 }

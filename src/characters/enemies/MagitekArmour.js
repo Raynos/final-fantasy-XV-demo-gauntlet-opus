@@ -394,16 +394,27 @@ class MagitekArmourEnemy extends Enemy {
         const pR = legPhase(a.gaitPhase - 0.5, gait);
         const stride = 1.05 * (0.5 + 0.5 * norm);
         const lift = 0.60 * (0.35 + 0.65 * norm);
-        for (const [id, p] of [['fL', pL], ['fR', pR]]) {
-          a.solveLeg(id, p.reach * stride, p.lift * lift, S, {
-            kneeSign: 1, footPitch: 0.10 - p.lift * 0.45,
-          });
-        }
         const support = pL.load + pR.load;
         const sway = (pL.load - pR.load);
-        // the chassis rides over the loaded leg and the pod rocks a beat behind
+        // The chassis rides over the loaded leg and the pod rocks a beat
+        // behind. Solved before the legs, because the IK aims each foot at a
+        // point measured *from the hip*: without telling it the chassis has
+        // dropped, the feet ride down with it and six tonnes of walker paddles
+        // along 0.73 m inside the ground.
+        const chassis = (support / 1.4 - 1) * 0.16;
+        for (const [id, p] of [['fL', pL], ['fR', pR]]) {
+          // `footPitch` is the *world* pitch the solver levels the pastern to.
+          // On this reverse-jointed leg the metatarsus is raked ~40 deg in
+          // bind pose, so asking for "near horizontal" swings the foot down
+          // and back off the end of a 0.9 m segment. Hold it at its own bind
+          // rake and vary about that instead.
+          const rake = a.legs.get(id)?.seg[2]?.phi ?? 0;
+          a.solveLeg(id, p.reach * stride, p.lift * lift, S, {
+            kneeSign: 1, footPitch: rake + 0.10 - p.lift * 0.45, rootDY: chassis,
+          });
+        }
         this.visual.position.x = sway * 0.24;
-        this.visual.position.y = (support / 1.4 - 1) * 0.16;
+        this.visual.position.y = chassis;
         S('core', (1 - support) * 0.05, sway * 0.06, sway * 0.09);
         S('pod', 0.04 + (1 - support) * 0.05, -sway * 0.10, sway * 0.05);
         S('visor', 0, Math.sin(a.gaitPhase * Math.PI) * 0.05, 0);
