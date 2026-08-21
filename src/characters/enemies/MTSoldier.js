@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.js';
-import { metalNormal, metalRoughness } from './EnemyBase.js';
+import { metalNormal, metalRoughness, weatherPlate } from './EnemyBase.js';
 import { BipedEnemy } from './Biped.js';
 import { CBuilder, sweep, plate, horn, sculptBlob } from '../rig/Sculpt.js';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
@@ -433,46 +433,9 @@ function col(hex, k = 1) {
   return _c;
 }
 
-const _sc = new THREE.Color();
-/**
- * Field wear, applied to the vertex colours a part has already authored.
- *
- * A flat enamel value is what makes a machine read as a toy: every plate
- * answers the light with the same number, so the only thing separating one
- * from the next is its silhouette. Real issue plate has paint scoured off the
- * upstanding faces and edges — going warm and bare — and dust and oil packed
- * into everything that faces down.
- *
- * This *modulates* rather than replaces, unlike `IronGiant.aged()`, because
- * the MT already paints its own panel colours per part and throwing them away
- * to re-derive them from position would flatten the chest plate into the
- * backpack. The three terms are: upward-facing wear, a plate-scale streak, and
- * a downward-facing grime multiplier.
- *
- * @param {THREE.BufferGeometry} geo
- * @param {number} amount 0 leaves the part alone; 1 is full field wear
- */
+/** Field wear; see `EnemyBase.weatherPlate`. */
 function weather(geo, amount = 1) {
-  if (amount <= 0) return geo;
-  const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
-  if (!pos || !cl) return geo;
-  _sc.setHex(SCUFF, THREE.SRGBColorSpace);
-  for (let i = 0; i < cl.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const up = nr ? nr.getY(i) : 0;
-    // a slow streak down the plate crossed by a fine one across it
-    const streak = Math.sin(x * 11.3 + z * 7.7 + y * 1.9) * 0.55
-      + Math.sin(x * 27.1 - z * 18.3) * 0.25;
-    const wear = Math.min(1, (Math.max(0, up) * 0.55 + Math.max(0, streak) * 0.50)) * amount;
-    const grime = Math.max(0, -up) * 0.34 * amount;
-    const t = wear * 0.42;
-    const k = 1 - grime;
-    cl.setXYZ(i,
-      (cl.getX(i) * (1 - t) + _sc.r * t) * k,
-      (cl.getY(i) * (1 - t) + _sc.g * t) * k,
-      (cl.getZ(i) * (1 - t) + _sc.b * t) * k);
-  }
-  return geo;
+  return weatherPlate(geo, { scuff: SCUFF, amount });
 }
 
 class MTSoldierEnemy extends BipedEnemy {

@@ -1,16 +1,24 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.js';
-import { Enemy, metalNormal, metalRoughness } from './EnemyBase.js';
+import { Enemy, metalNormal, metalRoughness, weatherPlate } from './EnemyBase.js';
 import {
   tube, blob, slab, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.js';
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const PLATE = 0x33383f;
-const PLATE_DARK = 0x191c21;
-const JOINT = 0x14161a;
-const TRIM = 0x555b63;
+/* Albedo, and it was charcoal: PLATE at 0x33383f is 3.9% linear reflectance
+ * and JOINT at 0x14161a is 0.9% — darker than any real surface outside a
+ * light trap. Measured area-weighted mean over the whole roster, this species
+ * sat at 0.035 while the Leide ground it fights on is 0.20-0.30, so it read
+ * as a black cut-out with a red slit at every distance and every hour. The
+ * ladder below keeps the same *relationships* and moves the whole thing up to
+ * where weathered painted steel actually sits (0.10-0.18). */
+const PLATE = 0x5d6772;
+const PLATE_DARK = 0x363c44;
+const JOINT = 0x2b2f35;
+const TRIM = 0x8b939d;
+const SCUFF = 0x8a7f70;      // paint scoured back to warm bare steel
 const MAGITEK = 0xff2f12;
 
 /**
@@ -54,6 +62,15 @@ export const IMPERIAL_SNIPER = {
   make(opts) { return new SniperEnemy(opts); },
 };
 
+/**
+ * `tint` plus the shared field-wear pass, so a plate is not one flat number.
+ * @param {THREE.BufferGeometry} geo @param {number} hex
+ * @param {number} [jitter] @param {number} [amount] 0 leaves the part alone
+ */
+function wtint(geo, hex, jitter = 0, amount = 1) {
+  return weatherPlate(tint(geo, hex, jitter), { scuff: SCUFF, amount });
+}
+
 function buildPrototype() {
   const rig = new Rig();
   rig.bone('root', null, [0, 0, 0]);
@@ -79,86 +96,88 @@ function buildPrototype() {
     { y: 1.36, sx: 0.155, sz: 0.110 },
     { y: 1.56, sx: 0.145, sz: 0.102 },
   ]);
-  rig.attachBlend(tint(core, PLATE_DARK, 0.03), 'pelvis', 'chest', 1.4);
+  rig.attachBlend(wtint(core, PLATE_DARK, 0.03), 'pelvis', 'chest', 1.4);
 
   const breast = place(slab(0.34, 0.30, 0.21, 0.03), { pos: [0, 1.40, 0.01] });
-  rig.attach(tint(breast, PLATE, 0.03), 'chest');
+  rig.attach(wtint(breast, PLATE, 0.03), 'chest');
   const gorget = place(slab(0.22, 0.08, 0.18, 0.022), { pos: [0, 1.58, 0.0] });
-  rig.attach(tint(gorget, PLATE_DARK), 'chest');
+  rig.attach(wtint(gorget, PLATE_DARK), 'chest');
   const abdo = place(slab(0.25, 0.20, 0.18, 0.028), { pos: [0, 1.16, 0.0] });
-  rig.attach(tint(abdo, PLATE, 0.03), 'spine');
+  rig.attach(wtint(abdo, PLATE, 0.03), 'spine');
   const belt = place(slab(0.29, 0.09, 0.21, 0.02), { pos: [0, 0.96, 0] });
-  rig.attach(tint(belt, PLATE_DARK), 'pelvis');
+  rig.attach(wtint(belt, PLATE_DARK), 'pelvis');
   const skirtF = place(slab(0.22, 0.19, 0.05, 0.015), { pos: [0, 0.84, 0.11], rot: [0.16, 0, 0] });
-  rig.attach(tint(skirtF, PLATE), 'pelvis');
+  rig.attach(wtint(skirtF, PLATE), 'pelvis');
 
   // magitek core and vents — the same furnace the whole line runs on
   const coreGlow = place(slab(0.09, 0.09, 0.05, 0.018), { pos: [0, 1.42, 0.115] });
-  rig.attach(glow(tint(coreGlow, 0x3a0d05), MAGITEK, 3.0), 'chest');
+  rig.attach(glow(wtint(coreGlow, 0x3a0d05), MAGITEK, 3.0), 'chest');
   for (let i = 0; i < 2; i++) {
     const vent = place(slab(0.17, 0.016, 0.03, 0.004), { pos: [0, 1.25 + i * 0.05, 0.10] });
-    rig.attach(glow(tint(vent, 0x2a0a04), MAGITEK, 1.6), 'spine');
+    rig.attach(glow(wtint(vent, 0x2a0a04), MAGITEK, 1.6), 'spine');
   }
 
   // back power unit with the stabiliser fin folded off the top of it
   const pack = place(slab(0.24, 0.28, 0.12, 0.028), { pos: [0, 1.38, -0.15] });
-  rig.attach(tint(pack, PLATE_DARK, 0.03), 'chest');
+  rig.attach(wtint(pack, PLATE_DARK, 0.03), 'chest');
   const fin = place(slab(0.055, 0.52, 0.30, 0.02), { pos: [0, 1.62, -0.29], rot: [-0.42, 0, 0] });
-  rig.attach(tint(fin, PLATE, 0.03), 'chest');
+  rig.attach(wtint(fin, PLATE, 0.03), 'chest');
   const finEdge = place(slab(0.02, 0.46, 0.035, 0.006), { pos: [0, 1.70, -0.43], rot: [-0.42, 0, 0] });
-  rig.attach(glow(tint(finEdge, 0x2a0a04), MAGITEK, 1.4), 'chest');
+  rig.attach(glow(wtint(finEdge, 0x2a0a04), MAGITEK, 1.4), 'chest');
   const spar = place(loft(circleCross(6), [{ y: 0, sx: 0.022 }, { y: 0.22, sx: 0.018 }]),
     { pos: [0, 1.42, -0.20], rot: [-1.1, 0, 0] });
-  rig.attach(tint(spar, TRIM), 'chest');
+  rig.attach(wtint(spar, TRIM), 'chest');
 
   /* --- head: faceless helm, visor slit, and the asymmetric optic --- */
   const neck = place(loft(circleCross(8), [{ y: 1.58, sx: 0.048 }, { y: 1.68, sx: 0.048 }]), {});
-  rig.attachBlend(tint(neck, JOINT), 'chest', 'head', 1.0);
+  rig.attachBlend(wtint(neck, JOINT), 'chest', 'head', 1.0);
   const helm = place(slab(0.185, 0.21, 0.22, 0.04), { pos: [0, 1.78, 0.0] });
-  rig.attach(tint(helm, PLATE, 0.03), 'head');
+  rig.attach(wtint(helm, PLATE, 0.03), 'head');
   const crest = place(slab(0.04, 0.17, 0.21, 0.018), { pos: [0, 1.89, -0.01] });
-  rig.attach(tint(crest, PLATE_DARK), 'head');
+  rig.attach(wtint(crest, PLATE_DARK), 'head');
   const chin = place(slab(0.14, 0.085, 0.10, 0.02), { pos: [0, 1.685, 0.07] });
-  rig.attach(tint(chin, PLATE_DARK), 'head');
+  rig.attach(wtint(chin, PLATE_DARK), 'head');
   const visor = place(slab(0.15, 0.028, 0.03, 0.007), { pos: [0, 1.795, 0.118] });
-  rig.attach(glow(tint(visor, 0x3d0e05), MAGITEK, 4.0), 'head');
+  rig.attach(glow(wtint(visor, 0x3d0e05), MAGITEK, 3.0), 'head');
   const visorRim = place(slab(0.175, 0.07, 0.035, 0.012), { pos: [0, 1.795, 0.104] });
-  rig.attach(tint(visorRim, JOINT), 'head');
+  rig.attach(wtint(visorRim, JOINT), 'head');
 
   // the tell: a single-lens targeting optic clamped to the right of the helm
   const optic = place(slab(0.085, 0.11, 0.20, 0.02), { pos: [0.125, 1.815, 0.03] });
-  rig.attach(tint(optic, PLATE_DARK, 0.03), 'head');
+  rig.attach(wtint(optic, PLATE_DARK, 0.03), 'head');
+  // A pale hood this far forward of the visor read as a nose on the front of
+  // the face; it is a shade of the plate, not the trim highlight.
   const lensHood = place(loft(circleCross(8), [
-    { y: 0, sx: 0.052 }, { y: 0.07, sx: 0.046 }, { y: 0.12, sx: 0.040 },
-  ]), { pos: [0.125, 1.815, 0.11], rot: [Math.PI / 2, 0, 0] });
-  rig.attach(tint(lensHood, TRIM), 'head');
-  const lens = place(blob(0.036, 0.036, 0.014, 9, 6), { pos: [0.125, 1.815, 0.235], rot: [Math.PI / 2, 0, 0] });
-  rig.attach(glow(tint(lens, 0x420f05), MAGITEK, 5.0), 'head');
+    { y: 0, sx: 0.052 }, { y: 0.05, sx: 0.046 }, { y: 0.085, sx: 0.040 },
+  ]), { pos: [0.125, 1.815, 0.10], rot: [Math.PI / 2, 0, 0] });
+  rig.attach(wtint(lensHood, PLATE_DARK, 0.03), 'head');
+  const lens = place(blob(0.036, 0.036, 0.014, 9, 6), { pos: [0.125, 1.815, 0.196], rot: [Math.PI / 2, 0, 0] });
+  rig.attach(glow(wtint(lens, 0x420f05), MAGITEK, 5.0), 'head');
   const antenna = place(loft(circleCross(5), [{ y: 0, sx: 0.011 }, { y: 0.26, sx: 0.006 }]),
     { pos: [0.10, 1.87, -0.05], rot: [-0.25, 0, 0.24] });
-  rig.attach(tint(antenna, TRIM), 'head');
+  rig.attach(wtint(antenna, TRIM), 'head');
 
   /* --- arms: thin, all cable and bracer --- */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
     const pauldron = place(slab(0.155, 0.145, 0.175, 0.03), { pos: [0.235 * s, 1.545, 0], rot: [0, 0, -0.24 * s] });
-    rig.attach(tint(pauldron, PLATE, 0.03), `sh${n}`);
+    rig.attach(wtint(pauldron, PLATE, 0.03), `sh${n}`);
     const paulTrim = place(slab(0.045, 0.115, 0.165, 0.01), { pos: [0.30 * s, 1.53, 0], rot: [0, 0, -0.24 * s] });
-    rig.attach(tint(paulTrim, TRIM), `sh${n}`);
+    rig.attach(wtint(paulTrim, TRIM), `sh${n}`);
 
     const upArm = tube([P(0.215 * s, 1.50, 0), P(0.25 * s, 1.34, 0.01), P(0.28 * s, 1.20, 0.02)],
       [0.050, 0.045, 0.041], { radialSeg: 8 });
-    rig.attachBlend(tint(upArm, JOINT), `sh${n}`, `el${n}`, 1.0);
+    rig.attachBlend(wtint(upArm, JOINT), `sh${n}`, `el${n}`, 1.0);
 
     const elbow = place(blob(0.046, 0.046, 0.046, 7, 5), { pos: [0.28 * s, 1.19, 0.02] });
-    rig.attach(tint(elbow, JOINT), `el${n}`);
+    rig.attach(wtint(elbow, JOINT), `el${n}`);
     const loArm = tube([P(0.28 * s, 1.18, 0.02), P(0.28 * s, 1.04, 0.06), P(0.28 * s, 0.92, 0.10)],
       [0.041, 0.038, 0.035], { radialSeg: 8 });
-    rig.attachBlend(tint(loArm, JOINT), `el${n}`, `hd${n}`, 1.0);
+    rig.attachBlend(wtint(loArm, JOINT), `el${n}`, `hd${n}`, 1.0);
     const bracer = place(slab(0.095, 0.17, 0.095, 0.018), { pos: [0.28 * s, 1.06, 0.06] });
-    rig.attach(tint(bracer, PLATE, 0.03), `el${n}`);
+    rig.attach(wtint(bracer, PLATE, 0.03), `el${n}`);
     const hand = place(slab(0.065, 0.09, 0.055, 0.015), { pos: [0.28 * s, 0.875, 0.115] });
-    rig.attach(tint(hand, PLATE_DARK), `hd${n}`);
+    rig.attach(wtint(hand, PLATE_DARK), `hd${n}`);
   }
 
   /* --- legs --- */
@@ -166,44 +185,59 @@ function buildPrototype() {
     const n = s < 0 ? 'L' : 'R';
     const thigh = tube([P(0.125 * s, 0.90, 0), P(0.13 * s, 0.70, 0.02), P(0.135 * s, 0.52, 0.03)],
       [0.062, 0.056, 0.048], { radialSeg: 8 });
-    rig.attachBlend(tint(thigh, JOINT), `hp${n}`, `kn${n}`, 1.0);
+    rig.attachBlend(wtint(thigh, JOINT), `hp${n}`, `kn${n}`, 1.0);
     const thighP = place(slab(0.13, 0.29, 0.135, 0.024), { pos: [0.13 * s, 0.71, 0.015] });
-    rig.attach(tint(thighP, PLATE, 0.03), `hp${n}`);
+    rig.attach(wtint(thighP, PLATE, 0.03), `hp${n}`);
     const knee = place(slab(0.11, 0.10, 0.11, 0.026), { pos: [0.135 * s, 0.50, 0.045] });
-    rig.attach(tint(knee, TRIM), `kn${n}`);
+    rig.attach(wtint(knee, TRIM), `kn${n}`);
     const shin = tube([P(0.135 * s, 0.49, 0.03), P(0.135 * s, 0.30, 0.015), P(0.135 * s, 0.12, 0.0)],
       [0.044, 0.039, 0.035], { radialSeg: 8 });
-    rig.attachBlend(tint(shin, JOINT), `kn${n}`, `ft${n}`, 1.0);
+    rig.attachBlend(wtint(shin, JOINT), `kn${n}`, `ft${n}`, 1.0);
     const shinP = place(slab(0.115, 0.29, 0.125, 0.022), { pos: [0.135 * s, 0.31, 0.02] });
-    rig.attach(tint(shinP, PLATE, 0.03), `kn${n}`);
+    rig.attach(wtint(shinP, PLATE, 0.03), `kn${n}`);
     const foot = place(slab(0.125, 0.08, 0.28, 0.022), { pos: [0.135 * s, 0.05, 0.06] });
-    rig.attach(tint(foot, PLATE_DARK), `ft${n}`);
+    rig.attach(wtint(foot, PLATE_DARK), `ft${n}`);
   }
 
   /* --- the magitek rail rifle, welded to the right hand --- */
   const gun = [];
   const GX = 0.28, GY = 0.905;
-  gun.push(tint(place(slab(0.05, 0.095, 0.66, 0.012), { pos: [GX, GY, 0.36] }), PLATE_DARK));
-  gun.push(tint(place(slab(0.04, 0.14, 0.16, 0.012), { pos: [GX, GY - 0.03, 0.06] }), PLATE));
-  gun.push(tint(place(slab(0.032, 0.13, 0.055, 0.01), { pos: [GX, 0.83, 0.24], rot: [0.3, 0, 0] }), JOINT));
+  gun.push(wtint(place(slab(0.05, 0.095, 0.66, 0.012), { pos: [GX, GY, 0.36] }), PLATE_DARK));
+  gun.push(wtint(place(slab(0.04, 0.14, 0.16, 0.012), { pos: [GX, GY - 0.03, 0.06] }), PLATE));
+  gun.push(wtint(place(slab(0.032, 0.13, 0.055, 0.01), { pos: [GX, 0.83, 0.24], rot: [0.3, 0, 0] }), JOINT));
   // the barrel: absurdly long, the whole point of the silhouette
-  gun.push(tint(place(loft(circleCross(8), [
+  gun.push(wtint(place(loft(circleCross(8), [
     { y: 0, sx: 0.024 }, { y: 0.45, sx: 0.021 }, { y: 0.74, sx: 0.019 },
   ]), { pos: [GX, GY, 0.68], rot: [Math.PI / 2, 0, 0] }), TRIM));
-  gun.push(tint(place(slab(0.055, 0.055, 0.11, 0.012), { pos: [GX, GY, 1.44] }), PLATE_DARK));
+  // A bare 1.4 m pole reads as a fishing rod, so the rear two thirds carry a
+  // ribbed heat jacket and only the last stretch is exposed rifling.
+  gun.push(wtint(place(loft(circleCross(8), [
+    { y: 0, sx: 0.040 }, { y: 0.06, sx: 0.046 }, { y: 0.50, sx: 0.043 }, { y: 0.56, sx: 0.030 },
+  ]), { pos: [GX, GY, 0.68], rot: [Math.PI / 2, 0, 0] }), PLATE_DARK, 0.03));
+  // scope: a long tube over the receiver, the reason it out-ranges the line
+  gun.push(wtint(place(loft(circleCross(8), [
+    { y: 0, sx: 0.030 }, { y: 0.05, sx: 0.036 }, { y: 0.26, sx: 0.036 }, { y: 0.31, sx: 0.028 },
+  ]), { pos: [GX, GY + 0.085, 0.28], rot: [Math.PI / 2, 0, 0] }), JOINT));
+  for (const dz of [0.30, 0.50]) {
+    gun.push(wtint(place(slab(0.046, 0.030, 0.022, 0.006), { pos: [GX, GY + 0.05, dz] }), TRIM));
+  }
+  gun.push(wtint(place(slab(0.055, 0.055, 0.11, 0.012), { pos: [GX, GY, 1.44] }), PLATE_DARK));
   // accelerator coils along the barrel, lit red
   for (let i = 0; i < 3; i++) {
-    gun.push(glow(tint(place(loft(circleCross(7), [{ y: 0, sx: 0.038 }, { y: 0.045, sx: 0.038 }]),
-      { pos: [GX, GY, 0.78 + i * 0.22], rot: [Math.PI / 2, 0, 0] }), 0x2a0a04), MAGITEK, 2.0));
+    gun.push(glow(wtint(place(loft(circleCross(7), [{ y: 0, sx: 0.038 }, { y: 0.045, sx: 0.038 }]),
+      { pos: [GX, GY, 0.90 + i * 0.19], rot: [Math.PI / 2, 0, 0] }), 0x2a0a04), MAGITEK, 1.3));
   }
   // rail strips down the receiver
-  gun.push(glow(tint(place(slab(0.018, 0.026, 0.30, 0.005), { pos: [GX + 0.026, GY + 0.05, 0.36] }), 0x3a0d05), MAGITEK, 2.2));
-  gun.push(glow(tint(place(slab(0.018, 0.026, 0.30, 0.005), { pos: [GX - 0.026, GY + 0.05, 0.36] }), 0x3a0d05), MAGITEK, 2.2));
+  gun.push(glow(wtint(place(slab(0.018, 0.026, 0.30, 0.005), { pos: [GX + 0.026, GY + 0.05, 0.36] }), 0x3a0d05), MAGITEK, 2.2));
+  gun.push(glow(wtint(place(slab(0.018, 0.026, 0.30, 0.005), { pos: [GX - 0.026, GY + 0.05, 0.36] }), 0x3a0d05), MAGITEK, 2.2));
   for (const g of gun) rig.attach(g, 'hdR');
 
   const mat = creatureMaterial({
-    roughness: 0.48, metalness: 0.42,
-    normalMap: metalNormal(), normalScale: 0.22, roughnessMap: metalRoughness(),
+    // roughness multiplies metalRoughness() (0.40-0.82), so 0.48 landed at an
+    // effective 0.19-0.39 — a showroom gloss on a machine that lives in a
+    // dust bowl. normalScale 0.22 kept the rivets and panel seams off screen.
+    roughness: 0.72, metalness: 0.34,
+    normalMap: metalNormal(), normalScale: 0.70, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 2.4 });
 }
