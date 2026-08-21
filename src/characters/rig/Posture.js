@@ -83,10 +83,10 @@ export const POSTURE = {
   noctis: {
     weight: -0.55, shift: 0.35, shiftRate: 0.048,
     stanceW: 0.98, toeOut: 0.26,
-    slouch: 0.45, chest: 0,
+    slouch: 0.65, chest: 0,
     armOut: 0.02, elbow: 0.42, armTwist: 0.10, asym: 0.40,
     breathRate: 0.215, breathDepth: 1.0,
-    headRate: 0.075, headAmp: 0.20, headDown: 0.055, headTilt: 0.035,
+    headRate: 0.075, headAmp: 0.20, headDown: 0.10, headTilt: 0.04,
     fidget: 0.75, biasW: 0.45,
     lead: 1, guard: 1.0,
     gestures: ['pocket', 'shoulder_roll'], gestureGap: [7.5, 13.0],

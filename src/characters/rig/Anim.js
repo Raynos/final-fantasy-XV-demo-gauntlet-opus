@@ -210,6 +210,9 @@ export class Animator {
     this.bones = this.rig.byName;
     this.phase = character.seedRnd ? character.seedRnd.next() : 0;
     this.t = character.seedRnd ? character.seedRnd.next() * 40 : 0;
+    // kept so `rest()` can wind the clock back to exactly here
+    this.phase0 = this.phase;
+    this.t0 = this.t;
     this.g = { ...IDLE_G };
     this.pose = new Map();
     this.speed = 0;
@@ -222,6 +225,7 @@ export class Animator {
     this.coat = { x: new Spring(110, 12), z: new Spring(110, 12) };
     this.tail = { x: new Spring(130, 13), z: new Spring(130, 13) };
     this.blinkTimer = 1 + (character.seedRnd ? character.seedRnd.next() * 3 : 1.5);
+    this.blinkTimer0 = this.blinkTimer;
     this.blink = 0;
     // which leg carries the weight at rest; deterministic, per character
     this.stanceBias = (character.look && character.look.stance) ??
@@ -251,6 +255,7 @@ export class Animator {
     this.gesture = null;
     this._gestureSeq = 0;
     this.gestureTimer = 2 + (character.seedRnd ? character.seedRnd.next() * 6 : 3);
+    this.gestureTimer0 = this.gestureTimer;
     this.action = null;
     this.lookTarget = null;
     this.lookW = 0;
@@ -259,6 +264,45 @@ export class Animator {
     this.accel = new THREE.Vector3();
     this.footYaw = [0, 0];
     this._up = new THREE.Vector3(0, 1, 0);
+  }
+
+  /**
+   * Drop the animator back to a settled standing pose, deterministically.
+   *
+   * Every piece of state that *integrates* — the clock the posture drive reads,
+   * the cloth and lean springs, the foot-IK dip, the blink and gesture timers,
+   * the look-at blend — is restored to what it was at construction. A posed
+   * capture applied after five other captures therefore renders the same frame
+   * as one applied first; without this, `t` alone carries minutes of history
+   * from shot to shot and no two runs of a corpus agree.
+   */
+  rest() {
+    this.t = this.t0;
+    this.phase = this.phase0;
+    this.speed = 0;
+    this.plant[0] = 0; this.plant[1] = 0;
+    this.pelvisIK = 0;
+    this.bobY = 0;
+    this.hipShift = 0;
+    this.stanceDrop = 0;
+    this.footYaw[0] = 0; this.footYaw[1] = 0;
+    this.combatW = 0;
+    this.gesture = null;
+    this._gestureSeq = 0;
+    this.gestureTimer = this.gestureTimer0;
+    this.blinkTimer = this.blinkTimer0;
+    this.blinkSeq = 0;
+    this.blink = 0;
+    this.lidClose = 0;
+    this.action = null;
+    this.lookTarget = null;
+    this.lookW = 0;
+    this.look.yaw = 0; this.look.pitch = 0;
+    this.eyeYaw = 0; this.eyePitch = 0;
+    this.prevVel.set(0, 0, 0);
+    this.accel.set(0, 0, 0);
+    for (const s of [this.leanSpring, this.turnSpring, this.sway.x, this.sway.z,
+      this.coat.x, this.coat.z, this.tail.x, this.tail.z]) { s.x = 0; s.v = 0; }
   }
 
   /** Start a keyframed action. @param {string} name @param {Object} opts */
@@ -488,15 +532,15 @@ export class Animator {
 
     // ---- personality: slouch vs open chest --------------------------------
     const sl = p.slouch * rw, ch = p.chest * rw;
-    this.add('spine01', sl * 0.030 - ch * 0.040, 0, 0);
-    this.add('spine02', sl * 0.080 - ch * 0.042, 0, 0);
-    this.add('spine03', sl * 0.095 - ch * 0.050, 0, 0);
-    this.add('neck', -sl * 0.060 + ch * 0.032, 0, 0);
-    this.add('head', -sl * 0.040 + ch * 0.026, 0, 0);
+    this.add('spine01', sl * 0.040 - ch * 0.052, 0, 0);
+    this.add('spine02', sl * 0.105 - ch * 0.055, 0, 0);
+    this.add('spine03', sl * 0.125 - ch * 0.065, 0, 0);
+    this.add('neck', -sl * 0.075 + ch * 0.042, 0, 0);
+    this.add('head', -sl * 0.050 + ch * 0.034, 0, 0);
     // resting shoulder drop, protracted forward when slouched and pulled back
     // and down when the chest is open
-    this.add('clavicleL', -sl * 0.24 + ch * 0.16, -sl * 0.15 + ch * 0.09, -0.030 - sl * 0.050 + ch * 0.060);
-    this.add('clavicleR', -sl * 0.24 + ch * 0.16, sl * 0.15 - ch * 0.09, 0.030 + sl * 0.050 - ch * 0.060);
+    this.add('clavicleL', -sl * 0.30 + ch * 0.20, -sl * 0.19 + ch * 0.11, -0.030 - sl * 0.060 + ch * 0.075);
+    this.add('clavicleR', -sl * 0.30 + ch * 0.20, sl * 0.19 - ch * 0.11, 0.030 + sl * 0.060 - ch * 0.075);
 
     // ---- arms -------------------------------------------------------------
     // Nobody hangs both arms identically and nobody hangs them straight. The
