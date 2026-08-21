@@ -23,8 +23,14 @@ function project(p, camera, w, h) {
  * renderable for captures.
  */
 export class CombatHUD {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  /**
+   * @param {HTMLElement} parent full-screen layer for world-anchored chrome
+   * @param {HTMLElement} [corner] the bottom-left corner slot owned by
+   *   `PartyPanel`, which the Armiger gauge and technique rail flow into. They
+   *   used to be absolutely positioned at hand-measured `bottom:` offsets and
+   *   would collide with the party stack the moment a toast pushed it upward.
+   */
+  constructor(parent, corner) {
     this.root = el('div.combat-layer');
     parent.appendChild(this.root);
 
@@ -36,12 +42,13 @@ export class CombatHUD {
     this.reticle = this._buildReticle();
     this.root.appendChild(this.reticle.node);
 
+    this.corner = corner || this.root;
     this.armiger = this._buildArmiger();
-    this.root.appendChild(this.armiger.node);
+    this.corner.appendChild(this.armiger.node);
 
     // the tech rack is built on the first frame, once the RPG roster is up
     this.techs = { node: el('div.techs'), rows: [] };
-    this.root.appendChild(this.techs.node);
+    this.corner.appendChild(this.techs.node);
 
     this.calloutNode = el('div.callout');
     this.calloutWord = el('div.co-word');
@@ -201,6 +208,10 @@ export class CombatHUD {
     const active = appear > 0.01;
     if (active && !this._wasActive) this.resetDemo();
     this._wasActive = active;
+    // the Armiger/technique rail lives in the shared bottom-left column now, so
+    // it has to be collapsed out of the flow explicitly — otherwise it would
+    // reserve height in every field shot and lift the party stack off the floor
+    if (this.corner !== this.root) this.corner.style.display = active ? '' : 'none';
     if (!active) { this.root.style.display = 'none'; return; }
     this.root.style.display = '';
 
@@ -211,7 +222,7 @@ export class CombatHUD {
     this._syncPlates(enemies, cam, w, h, dt, game, appear);
     this._updateReticle(dt, game, cam, w, h, enemies, appear);
     this._updateNumbers(dt, cam, w, h);
-    this._updateCallout(dt);
+    this._updateCallout(dt, h);
 
     // armiger — earned from damage dealt (see rpg/CombatBridge.js)
     if (!this._armigerDriven) {
@@ -229,7 +240,8 @@ export class CombatHUD {
       ? `drop-shadow(0 0 ${(8 + 6 * Math.sin(game.time.now * 7)).toFixed(1)}px rgba(150,206,255,.8))` : '';
     const ae = easeOut(clamp((appear - 0.08) / 0.7, 0, 1));
     this.armiger.node.style.transform = `translateX(${((1 - ae) * -22).toFixed(2)}px)`;
-    this.armiger.node.style.opacity = ae.toFixed(3);
+    // no longer a child of `.combat-layer`, so it carries the layer fade itself
+    this.armiger.node.style.opacity = (ae * e).toFixed(3);
 
     // techniques — the tech bar is charged by PartyState while `inCombat`
     const hs = hudState(game);
@@ -242,7 +254,7 @@ export class CombatHUD {
       const on = ready > 0.999;
       if (r._on !== on) { r.row.classList.toggle('ready', on); r._on = on; }
       const te = easeOut(clamp((appear - 0.12 - i * 0.05) / 0.62, 0, 1));
-      r.row.style.opacity = te.toFixed(3);
+      r.row.style.opacity = (te * e).toFixed(3);
       r.row.style.transform = `translateX(${((1 - te) * -20).toFixed(2)}px)`;
     });
   }
@@ -463,7 +475,21 @@ export class CombatHUD {
 
   _retire(n) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
 
-  _updateCallout(dt) {
+  /**
+   * Drive the centre call-out. Every value is written from the clip's own
+   * accumulated time, never a CSS transition.
+   *
+   * The punch is carried by **letter-spacing and opacity only**. It used to
+   * also run a fractional `scale(1.14 -> 1.0)` on the word, which promoted the
+   * glyph layer to its own raster and resampled it every frame; stacked on a
+   * half-pixel `translate(-50%,-50%)` and an offset drop shadow, thin
+   * 200-weight type read as two overlapping copies of itself over bright
+   * desert. See the note above `.callout` in `ui.css`.
+   *
+   * @param {number} dt seconds
+   * @param {number} h viewport height in css px
+   */
+  _updateCallout(dt, h) {
     const c = this.callout;
     if (!c) { this.calloutNode.style.opacity = '0'; return; }
     c.clip.step(dt);
@@ -472,11 +498,17 @@ export class CombatHUD {
     const age = c.clip.age;
     const out = clamp((age - (c.clip.dur + c.clip.hold - 0.4)) / 0.4, 0, 1);
     const ls = 0.62 - 0.20 * easeOutQuint(t);
+    // the trailing letter-space is real box width, so an equal pad on the left
+    // is what keeps the word optically centred while the tracking collapses
     this.calloutWord.style.letterSpacing = `${ls.toFixed(3)}em`;
-    this.calloutWord.style.transform = `scale(${(1.14 - 0.14 * easeOutQuint(t)).toFixed(3)})`;
-    this.calloutRule.style.width = `${(easeOutQuint(clamp((age - 0.14) / 0.5, 0, 1)) * 300).toFixed(0)}px`;
+    this.calloutWord.style.paddingLeft = `${ls.toFixed(3)}em`;
+    this.calloutWord.style.opacity = (0.42 + 0.58 * easeOutQuint(t)).toFixed(3);
+    // even widths only: `margin: auto` on an odd box centres on a half pixel
+    const rw = easeOutQuint(clamp((age - 0.14) / 0.5, 0, 1)) * 300;
+    this.calloutRule.style.width = `${Math.round(rw / 2) * 2}px`;
     this.calloutSub.style.opacity = easeOut(clamp((age - 0.22) / 0.4, 0, 1)).toFixed(3);
     this.calloutNode.style.opacity = (easeOut(clamp(age / 0.16, 0, 1)) * (1 - out)).toFixed(3);
-    this.calloutNode.style.transform = `translate(-50%,-50%) translateY(${(-out * 12).toFixed(1)}px)`;
+    // integer scanline: a half-pixel top resamples every glyph in the block
+    this.calloutNode.style.top = `${Math.round(h * 0.215 - out * 12)}px`;
   }
 }

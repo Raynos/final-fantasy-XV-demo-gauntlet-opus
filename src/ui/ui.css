@@ -26,8 +26,15 @@
   --hair:       rgba(206, 224, 250, 0.26);
   --hair-hot:   rgba(214, 234, 255, 0.62);
 
-  --sh-text:    0 1px 2px rgba(0, 0, 0, 0.72), 0 0 14px rgba(0, 0, 0, 0.42);
-  --sh-text-lg: 0 2px 6px rgba(0, 0, 0, 0.78), 0 0 26px rgba(0, 0, 0, 0.5);
+  /* Symmetric halos, never an offset drop.
+     A `0 1px 2px` shadow under 8-10 px pale type is a second, darker copy of
+     the glyph one pixel low: over sunlit Leide the HUD labels ghost exactly the
+     way the BLINDSIDE call-out did. These are centred rings — they darken the
+     ground the type sits on without printing anything the eye can read as a
+     second word. Every pale-on-bright label in the HUD and the menus is on
+     these two tokens, so this is the one place the class of defect is fixed. */
+  --sh-text:    0 0 2px rgba(2, 5, 10, 0.84), 0 0 6px rgba(2, 5, 10, 0.58), 0 0 15px rgba(2, 5, 10, 0.34);
+  --sh-text-lg: 0 0 3px rgba(2, 5, 10, 0.86), 0 0 9px rgba(2, 5, 10, 0.64), 0 0 28px rgba(2, 5, 10, 0.44);
   --sh-plate:   0 10px 34px rgba(0, 0, 0, 0.42);
   --cut:        9px;
 }
@@ -137,7 +144,12 @@
 /* FIELD HUD                                                             */
 /* ===================================================================== */
 .hud-corner { position: absolute; }
-#hud .bl { left: 34px; bottom: 30px; }
+/* One owner for the bottom-left corner: a bottom-anchored column with a fixed
+   slot order (combat rail, toasts, party). See `PartyPanel`'s class note. */
+#hud .bl { left: 34px; bottom: 30px; display: flex; flex-direction: column; align-items: flex-start; }
+.bl-combat { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 34px; }
+.bl-banter { display: flex; flex-direction: column; align-items: flex-start; }
+.bl-notice { display: flex; flex-direction: column; align-items: flex-start; }
 #hud .br { right: 34px; bottom: 30px; }
 #hud .tr { right: 34px; top: 26px; }
 /* a whisper of shade so pale HUD type survives a bright sky */
@@ -205,7 +217,7 @@
   text-shadow: var(--sh-text); line-height: 1; min-width: 76px; text-align: right; white-space: nowrap;
 }
 .party-row.lead .hp-line .val { font-size: 16px; min-width: 100px; }
-.hp-line .val .max { font-size: 9px; color: var(--ink-3); letter-spacing: 0.05em; }
+.hp-line .val .max { font-size: 9px; color: var(--ink-2); letter-spacing: 0.05em; }
 .mp-line { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
 .mp-line .tag { font-size: 8px; letter-spacing: 0.28em; color: var(--ink-3); text-shadow: var(--sh-text); }
 .mp-line .gauge { flex: 1 1 auto; }
@@ -298,13 +310,13 @@
 .nameplate .gauge { margin-top: 5px; }
 .nameplate.focus .np-name { color: #fff; text-shadow: 0 0 12px rgba(170,214,255,.5), var(--sh-text); }
 
-.armiger { position: absolute; }
+.armiger { position: relative; }
 .armiger .ar-head { display: flex; align-items: center; gap: 8px; }
 .armiger .ar-lb { font-size: 9px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
 .armiger .ar-pct { font-size: 15px; font-weight: 200; letter-spacing: .04em; color: var(--ink); text-shadow: var(--sh-text); }
 .armiger .ico { color: var(--ice); }
 
-.techs { position: absolute; left: 34px; bottom: 30px; display: flex; flex-direction: column; gap: 6px; }
+.techs { position: relative; display: flex; flex-direction: column; gap: 6px; }
 .tech { display: flex; align-items: center; gap: 9px; width: 210px; }
 .tech .tk-ico {
   width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center;
@@ -317,7 +329,11 @@
 .tech .tk-body { flex: 1; }
 .tech .tk-nm { font-size: 10px; letter-spacing: .20em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); line-height: 1.2; }
 .tech.ready .tk-nm { color: var(--ink); }
-.tech .tk-ow { font-size: 8px; letter-spacing: .22em; color: var(--ink-3); text-transform: uppercase; line-height: 1.3; margin-top: 3px; }
+/* the owner/cost line had no shadow at all and sat at 8px over sunlit scrub */
+.tech .tk-ow {
+  font-size: 8.5px; letter-spacing: .22em; color: var(--ink-2); text-transform: uppercase;
+  line-height: 1.3; margin-top: 3px; text-shadow: var(--sh-text);
+}
 .tech .tk-body .gauge { margin-top: 9px; }
 .tech .tk-key { font-size: 8.5px; letter-spacing: .16em; color: var(--ink-3); text-shadow: var(--sh-text); }
 
@@ -341,19 +357,44 @@
 .dmg.heal { color: #b9f2c8; text-shadow: 0 0 10px rgba(120,240,160,.6), 0 2px 6px rgba(0,0,0,.9); }
 .dmg.taken { color: #ffb8a6; }
 
-/* ---- callouts ----------------------------------------------- */
+/* ---- callouts -----------------------------------------------
+   The word used to read as two overlapping copies of itself over bright
+   desert. Three compounding causes, all fixed here and in `_updateCallout`:
+
+   1. `transform: scale(1.14 -> 1.0)` promoted the glyph layer to its own
+      raster and resampled it every frame. Gone — the punch is letter-spacing
+      and opacity, both written per frame from `game.time`.
+   2. `left:50% + translate(-50%,-50%)` on an odd-width box landed the whole
+      composited layer on a half pixel. The box is now full-bleed with
+      `text-align: center`, and `top` is written as a rounded integer.
+   3. `text-shadow: 0 2px 10px` is an *offset* copy — over sand it reads as a
+      second, darker set of glyphs 2 px low. The shadow is now a tight
+      symmetric halo: no offset, so nothing to mistake for a second word.  */
 .callout {
-  position: absolute; left: 50%; top: 24%; transform: translate(-50%,-50%);
+  position: absolute; left: 0; right: 0; top: 22%;
   text-align: center; white-space: nowrap; z-index: 2;
 }
 .callout .co-word {
   font-size: 30px; font-weight: 200; letter-spacing: 0.42em; text-transform: uppercase;
-  color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.85), 0 0 32px rgba(140,196,255,.55);
+  color: #fff;
+  text-shadow: 0 0 2px rgba(4,8,14,.95), 0 0 5px rgba(4,8,14,.9),
+               0 0 13px rgba(4,8,14,.72), 0 0 28px rgba(4,8,14,.45),
+               0 0 40px rgba(140,196,255,.5);
   padding-left: 0.42em;
 }
-.callout .co-sub { font-size: 9px; letter-spacing: 0.5em; color: var(--ice); text-transform: uppercase; margin-top: 7px; padding-left: .5em; text-shadow: var(--sh-text); }
+.callout .co-sub {
+  font-size: 9.5px; font-weight: 500; letter-spacing: 0.5em; color: #e9f3ff;
+  text-transform: uppercase; margin-top: 7px; padding-left: .5em;
+  text-shadow: 0 0 2px rgba(4,8,14,.96), 0 0 5px rgba(4,8,14,.9),
+               0 0 12px rgba(4,8,14,.7), 0 0 22px rgba(4,8,14,.45);
+}
 .callout .co-rule { height: 1px; margin: 9px auto 0; background: linear-gradient(90deg, transparent, var(--hair-hot), transparent); }
-.callout.warm .co-word { text-shadow: 0 2px 10px rgba(0,0,0,.85), 0 0 32px rgba(255,178,96,.6); color: #fff2dd; }
+.callout.warm .co-word {
+  color: #fff2dd;
+  text-shadow: 0 0 2px rgba(14,8,4,.95), 0 0 5px rgba(14,8,4,.9),
+               0 0 13px rgba(14,8,4,.72), 0 0 28px rgba(14,8,4,.45),
+               0 0 40px rgba(255,178,96,.55);
+}
 .callout.warm .co-sub { color: var(--gold); }
 
 /* ===================================================================== */
@@ -403,6 +444,9 @@
 .subs .sr { height: 1px; width: 46px; margin: 0 auto 10px; background: linear-gradient(90deg, transparent, var(--hair-hot), transparent); }
 
 .banter { position: absolute; display: flex; flex-direction: column; gap: 5px; }
+/* in the bottom-left column the corner places it — see `PartyPanel` */
+.banter.inflow { position: relative; left: auto; bottom: auto; align-items: flex-start; margin-bottom: 16px; }
+.banter.inflow:empty { display: none; }
 .banter .bb {
   position: relative; padding: 9px 15px 10px; max-width: 340px;
   background: linear-gradient(104deg, rgba(9,14,24,.66), rgba(9,14,24,.34));
@@ -416,7 +460,11 @@
 /* ===================================================================== */
 /* MENUS                                                                 */
 /* ===================================================================== */
-.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.62), rgba(2,4,8,.90)); }
+/* The centre of the scrim was only 62% opaque, which is where every screen puts
+   its type — the world behind stayed legible enough to compete with a 9px
+   label. Deeper in the middle, same falloff, so the frame is still readable as
+   the place the player paused rather than a black plate. */
+.menu-scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 80% at 32% 46%, rgba(4,7,13,.74), rgba(2,4,8,.93)); }
 .menu-grain { position: absolute; inset: 0; opacity: .5;
   background-image: linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px);
   background-size: 100% 3px; mix-blend-mode: overlay; }
@@ -431,11 +479,25 @@
 .menu-foot .rule { position: absolute; top: -16px; left: 0; right: 0; }
 
 /* ---- main menu list ----------------------------------------- */
+/* The nav column and the info column used to float straight on the terrain:
+   pale 8.5px type over sunlit rock, no ground of its own. These are scrims, not
+   panels — a soft directional wash off each screen edge, which is how FFXV
+   seats its pause menu without boxing it in. */
 .mlist { position: absolute; left: 68px; top: 178px; width: 320px; }
+.mlist::before {
+  content: ''; position: absolute; left: -68px; top: -178px; width: 560px; height: 900px;
+  background: linear-gradient(100deg, rgba(4,8,15,.62) 0%, rgba(4,8,15,.40) 42%, rgba(4,8,15,0) 100%);
+  pointer-events: none; z-index: -1;
+}
+.mpreview::before {
+  content: ''; position: absolute; right: -74px; top: -156px; width: 720px; height: 900px;
+  background: linear-gradient(260deg, rgba(4,8,15,.58) 0%, rgba(4,8,15,.34) 46%, rgba(4,8,15,0) 100%);
+  pointer-events: none; z-index: -1;
+}
 .mrow { position: relative; display: flex; align-items: center; gap: 16px; padding: 11px 14px 11px 4px; }
 .mrow .ico { color: var(--ink-3); flex: none; }
 .mrow .mr-t { font-size: 14px; font-weight: 300; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
-.mrow .mr-d { font-size: 8.5px; letter-spacing: 0.2em; color: var(--ink-4); text-transform: uppercase; margin-top: 3px; }
+.mrow .mr-d { font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-top: 3px; text-shadow: var(--sh-text); white-space: nowrap; }
 .mrow .mr-bar { position: absolute; left: -18px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(180deg, transparent, var(--accent-hot), transparent); opacity: 0; }
 .mrow .mr-bg {
   position: absolute; left: -18px; right: -10px; top: 0; bottom: 0; opacity: 0;
@@ -447,10 +509,12 @@
 .mrow.on .mr-d { color: var(--ink-3); }
 
 .mpreview { position: absolute; right: 74px; top: 156px; width: 470px; }
+/* every small key/caption in this screen was pale ink with no shadow at all */
+.mpv-stat .k, .mpv-track .k, .mpv-track .s, .mp-card .lv { text-shadow: var(--sh-text); }
 .mpv-t { font-size: 15px; font-weight: 300; letter-spacing: .26em; text-transform: uppercase; color: #fff; text-shadow: var(--sh-text); }
 .mpv-b { margin-top: 14px; }
 .mpv-stats { display: flex; gap: 34px; margin-top: 26px; }
-.mpv-stat .k { font-size: 8.5px; letter-spacing: .3em; text-transform: uppercase; color: var(--ink-4); }
+.mpv-stat .k { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: var(--ink-3); }
 .mpv-stat .v { font-size: 17px; font-weight: 200; letter-spacing: .04em; color: var(--ink); margin-top: 5px; text-shadow: var(--sh-text); }
 .mpv-stat .v small { font-size: 9px; color: var(--ink-3); letter-spacing: .16em; margin-left: 3px; }
 
@@ -462,14 +526,14 @@
 .mp-card .pfw::after { content: ''; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(120,168,224,.04) 30%, rgba(2,5,10,.70)); }
 .mp-card .nm { font-size: 10px; letter-spacing: .26em; text-transform: uppercase; margin-top: 11px; color: var(--ink); text-shadow: var(--sh-text); }
-.mp-card .lv { font-size: 8.5px; letter-spacing: .12em; color: var(--ink-3); margin-top: 6px; white-space: nowrap; }
+.mp-card .lv { font-size: 9px; letter-spacing: .12em; color: var(--ink-2); margin-top: 6px; white-space: nowrap; }
 .mp-card .gauge { margin-top: 8px; }
 
 .mpv-mark { position: absolute; right: -24px; top: 236px; color: rgba(178,208,246,.075); pointer-events: none; }
 .mpv-track { margin-top: 34px; }
-.mpv-track .k { font-size: 8.5px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-4); }
+.mpv-track .k { font-size: 9px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-3); }
 .mpv-track .q { font-size: 13px; font-weight: 300; letter-spacing: .12em; color: var(--ice); margin-top: 9px; text-shadow: var(--sh-text); }
-.mpv-track .s { font-size: 10px; letter-spacing: .06em; color: var(--ink-3); margin-top: 6px; }
+.mpv-track .s { font-size: 10px; letter-spacing: .06em; color: var(--ink-2); margin-top: 6px; }
 
 /* ---- generic two-column screens ----------------------------- */
 .cols { position: absolute; left: 68px; right: 68px; top: 170px; bottom: 96px; display: flex; gap: 40px; }
@@ -601,14 +665,18 @@
   filter: drop-shadow(0 0 4px rgba(140,190,245,.7)); }
 .wslot.on .wel { color: #dff0ff; }
 
-/* combat left-edge stack sits above the party panel */
-.armiger { left: 34px; bottom: 434px; width: 300px; text-align: left; }
+/* The combat left-edge stack is the top slot of the bottom-left column, so it
+   flows above the toasts and the party stack instead of being parked at a
+   hand-measured `bottom:` that a single toast could push the party through. */
+.armiger { width: 300px; text-align: left; margin-bottom: 32px; }
 .armiger .ar-head { margin-bottom: 8px; }
 .armiger .ar-lb { flex: 1; }
 .armiger .ar-pct { font-size: 16px; }
 .armiger .ar-note { font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-4); }
-.techs { left: 34px; bottom: 276px; }
-.tech { width: 300px; }
+/* narrower than the party stack's 326 px on purpose: five stacked white
+   hairlines of the same length read as one panel, and the rail was being
+   mistaken for part of the party's HP block */
+.tech { width: 232px; }
 
 /* banter bubbles ride above the party stack when not fighting */
 .banter { left: 34px; bottom: 268px; align-items: flex-start; }
