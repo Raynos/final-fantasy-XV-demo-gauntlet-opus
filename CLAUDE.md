@@ -93,3 +93,8 @@ slice those to the part you need.
   error that the dev server tolerated will otherwise hang the next capture for 120 s with
   no useful error.
 - `node src/tools/cleanup.mjs` reports orphaned vite/chromium; `--kill` acts.
+- **`npm run check` runs the whole gate suite** and prints one table. Run it at
+  every merge, not just the cheap gates -- `combatloop.mjs` slid from 30/30 to
+  21/30 and went unnoticed for weeks because the expensive gates were skipped.
+  `npm run check:perf` adds `perf.mjs` and `gameplay.mjs`; only ever pass that on
+  a **quiet tree**, since a perf number taken while agents run is meaningless.
