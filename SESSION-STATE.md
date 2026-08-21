@@ -104,6 +104,35 @@ Coordinator keeps `src/game/Shots.js`, `src/world/props/**`, `src/world/map/**`.
   agent handed back. Moved to the zone centre, which is also where the
   `discCrater` landform puts the impact bowl.
 
+## Fixed: companion closeups were focusing on Noctis
+
+`PostFX._headObject()` resolved the player unconditionally, so a
+`follow: 'gladio'` shot racked focus onto Noctis behind the subject. The two
+head distances disagree by less than `headFocusWindow` (3.2 m) so the snap
+always fired, and at f/4.6 the real subject fell outside the depth of field.
+Now resolves the head of whoever `rig.followShot.follow` names, cached on the
+subject as well as liveness. **Verified by eye on `ignis_closeup`.**
+
+## Open, and more serious than it looks: the party formation never settles
+
+`prompto_closeup` stayed soft after the focus fix. It is **not** a DOF bug:
+re-shot alone with `--settle 300` it is sharp and well framed. The camera is
+anchored to a subject that is still steering to its wandering formation slot,
+and TAA plus motion blur then smear the *entire* frame. Prompto is worst — his
+spec has the smallest `lag` (0.10) and the highest `speedMul` (1.05).
+
+**The real defect is order dependence.** The same shot in a batch on the same
+warm page put the camera *inside another party member*. Formation state carries
+across shots, so a follow shot's result depends on what ran before it. That
+undermines the determinism guarantee for all 47 follow shots.
+
+Two harness fixes were tried and **both reverted** as unproven: a re-anchor
+convergence loop (formation keeps drifting between iterations) and a long
+settle for follow shots (240 extra frames × 47 shots, did not fix ordering).
+The right fix is a `Party.snap()` that places each member on its slot and zeroes
+its velocity, called from `Game.applyShot`. Routed to `agent/idles`, who owns
+`Party.js`; `Game.js` is the coordinator's.
+
 ## Still open, unassigned
 
 - `caem_shore` fishing POI at (−2564, 1966) in `WorldMap.js` is reportedly
@@ -151,6 +180,7 @@ re-dispatch the rest with the same ownership table.
 | `tools/gameplay.mjs` | **fails** — streaming/weather hitches remain |
 | `tools/roadcheck.mjs` | 39/39 drivable POIs reachable, 0 failures |
 | `tools/uxcheck.mjs` | 86/86 |
+| dev suite determinism | 1.555/255, at the documented noise floor |
 | `tools/combatloop.mjs` | 30/30 |
 | `tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
 | `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
