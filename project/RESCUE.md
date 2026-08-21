@@ -32,6 +32,47 @@ Closed by the coordinator, each verified by eye or by measurement:
 
 In flight in worktrees: B12 (enemies), B5 + B10 (ui), B13 + part of B7 (veg), B11 (heroart).
 
+### Merged and verified: B5 + B10 (ui) — and a correction to this ledger
+
+**B5 was misdiagnosed by everyone, including this file.** `combatloop.mjs` at
+21/30 was recorded here, in the coordinator handoff and in `enemies.md` as *"a
+pre-existing regression in the game"*. **The game was never broken — the test was
+stale.** Commit `4693e3f` introduced a collision-free keymap and moved the
+companion techniques from **G/H/J to G/J/K** so `H` could open the controls card.
+`PartyAI.js`, `ControlsScreen.js` and `uxcheck.mjs` all agree on G/J/K;
+`combatloop.mjs` never got the memo. Its `tap('KeyH')` opened the controls
+screen, nothing closed it, `Menus._pointerLock` set `input.enabled = false`, and
+**every later check that needed a key press failed** — exactly the
+`menuOpen=true menusA=1.00 menu=controls` diagnostic that was the standing lead.
+Two taps repointed. **Nothing in `src/ui` needed to change.**
+
+The lesson generalises: the diagnostic was read as evidence about the *game* when
+it was evidence about the *harness*. `agent/enemies` had even proved the failures
+predated its branch, which was taken as confirming a game regression rather than
+as pointing at the test.
+
+**`combatloop` 30/30. `uxcheck` 86/86 → 89/89** (three new checks, because it
+audits every registered screen and `map_wide` is now real). **All nine gates green.**
+
+Also landed and verified by eye: BLINDSIDE doubling fixed at all three causes with
+no CSS transitions added; **one owner for the bottom-left corner** — toasts and the
+tech rail overlapped by a measured 136 px; **`map_wide` registered** with a new
+0.0825 px/m fit-all step, all 124 points and region names visible for the first
+time, surveyed **without touching the shared fog mask** so it adds no capture-order
+dependency; a project-wide type pass replacing the offset `--sh-text` drop with
+symmetric halos; `menu_main` given a ground and legible sub-labels.
+
+**The subtitle leak was also misdiagnosed — by me.** I recorded it as `Subtitles`
+lacking a `clear()`. It is not the HUD stack at all: the line is drawn by
+**`Letterbox` (`#cine .cine-line`)**, deliberately separate, and `clearLine()`
+already existed but was called only from `skip()`, never from `stop()`. One line
+in `Cinematics.stop()`. Verified on both repros — `cine_astral → zone_malmalam`
+and `cine_opening → menu_title`.
+
+Still open in ui: `MapScreen` (`menu_map`) is a 22-line stub and now looks poor
+beside the new atlas; six `menu_*` screens inherited the type pass but got no
+layout attention.
+
 ### Merged and verified: B12 enemies, B13 vegetation
 
 **B12 (enemies), merged and looked at.** The headline is a correction to the
@@ -247,7 +288,7 @@ cancelled rather than reinforced.
 `customProgramCacheKey` returns a constant and `CombatSystem._prebuildWeapons`
 depends on one shared compiled program. Keep the maps module-level.
 
-### B5. `combatloop.mjs` sits at 21/30 and nobody owns it
+### B5. `combatloop.mjs` sits at 21/30 and nobody owns it — **CLOSED, and it was the test**
 
 Nine failing checks: companion techniques, energy draw, spell craft, spell cast,
 raw elemancy, nameplate HP, damage numbers, the Armiger gauge, and "kill an enemy
