@@ -217,7 +217,7 @@ export const SHOTS = {
   },
   menu_map_wide: {
     doc: 'The atlas of Lucis fully surveyed, all 124 points shown',
-    time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'map',
+    time: 17.0, weather: 'clear', follow: 'player', hud: true, menu: 'map_wide',
     offset: [1.7, 2.35, 5.4], lookOffset: [0, 1.35, 0], fov: 50,
   },
   menu_world: {

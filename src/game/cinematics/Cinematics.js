@@ -159,6 +159,14 @@ export class Cinematics {
       this._dofWas = null;
     }
 
+    // Drop the subtitle before the bars go. The line lives on `Letterbox`
+    // (`#cine .cine-line`), deliberately separate from the HUD's `Subtitles`
+    // stack, and `clearLine()` was only ever called from `skip()` -- so a scene
+    // ended by a new shot left its last line on screen. It then burned into
+    // *every* later capture on the same page, not just `menu_title`:
+    // `zone_malmalam` shot after `cine_astral` came back with "the ground is
+    // moving" across the frame, silently corrupting full-corpus runs.
+    if (this.box.clearLine) this.box.clearLine();
     this.box.setBars(0);
     this.box.setFade(0, def && def.closeFadeOut ? def.closeFadeOut : 0.9);
 
