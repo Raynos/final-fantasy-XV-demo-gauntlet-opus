@@ -348,8 +348,11 @@ export const SHOTS = {
   },
   zone_malacchi: {
     doc: 'The Malacchi Hills: open chocobo prairie broken by lone broadleaf stands',
+    // Lifted out of the canopy. At y 44 the lens sat *inside* a broadleaf
+    // stand and the whole frame was leaf card, which is the opposite of the
+    // open prairie this shot is meant to establish.
     time: 16.0, weather: 'clear',
-    pos: [-1750, 44.1, 620], target: [-2010, 30.9, 470], fov: 46,
+    pos: [-1640, 108.0, 690], target: [-2010, 28.0, 470], fov: 46,
   },
   zone_nebulawood: {
     doc: 'The Nebulawood: wet forest floor with the Niflheim dreadnought over it',
