@@ -326,6 +326,16 @@ export function enableVertexMaterial(material) {
 
 const _ca = new THREE.Color();
 const _cb = new THREE.Color();
+const _du = new THREE.Color();
+
+/**
+ * Write `v` into `out` whether it arrives as a hex literal or a `THREE.Color`.
+ * @param {THREE.Color} out @param {number|THREE.Color} v
+ */
+function asColor(out, v) {
+  if (v && v.isColor) return out.copy(v);
+  return out.setHex(v, THREE.SRGBColorSpace);
+}
 
 /**
  * Coat variation over the vertex colours a part has already authored.
@@ -362,9 +372,13 @@ export function weatherCoat(geo, {
 } = {}) {
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;
-  if (light != null) _ca.setHex(light, THREE.SRGBColorSpace);
-  _cb.setHex(dark, THREE.SRGBColorSpace);
-  const _du = new THREE.Color().setHex(dustColor, THREE.SRGBColorSpace);
+  // `Color.setHex` runs `Math.floor` on its argument, so handing it a
+  // `THREE.Color` yields NaN and the surface renders black with no error
+  // anywhere. That bug hid in the sabertusk's head for its entire existence.
+  // Every colour-ish option here therefore goes through `asColor`.
+  if (light != null) asColor(_ca, light);
+  asColor(_cb, dark);
+  asColor(_du, dustColor);
   for (let i = 0; i < cl.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const up = nr ? nr.getY(i) : 0;
@@ -378,10 +392,19 @@ export function weatherCoat(geo, {
     const k = 1 + m * mottle;
     r *= k; g *= k; b *= k;
 
-    // sun-bleached tips along the topline
+    // Sun-bleached guard hairs along the topline.
+    //
+    // This reads as a *gradient down the back*, never as stripes. A vertex
+    // colour cannot carry a pattern finer than the vertex spacing, and the
+    // first version of this banded at a 12 cm wavelength: on the garula's
+    // shoulder — where the sculpt's quads are a good 20 cm across — it aliased
+    // into half-metre diagonal ochre smears that looked like claw marks. Keep
+    // every frequency here above ~0.5 m and let `organicNormal` carry the
+    // actual hair, which is what a normal map is for.
     if (tick > 0) {
-      const band = Math.max(0, Math.sin(x * 41 + z * 33 + Math.sin(y * 9) * 2));
-      const t = Math.pow(band, 2.0) * Math.max(0, up) * tick;
+      const u = Math.max(0, up);
+      const brk = 0.72 + 0.28 * Math.sin(x * 9.3 + z * 7.1 + y * 4.7);
+      const t = u * u * brk * tick;
       if (light != null) { r += (_ca.r - r) * t; g += (_ca.g - g) * t; b += (_ca.b - b) * t; }
       else { const lift = 1 + t * 1.2; r *= lift; g *= lift; b *= lift; }
     }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.js';
+import { mixc, colc } from './Palette.js';
 import { organicNormal, organicRoughness } from './EnemyBase.js';
 import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
@@ -435,13 +436,10 @@ function reset(B) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-function mix(a, b, t) {
-  _c1.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c1.lerp(_c2, clamp01(t));
-}
-function col(hex) { return _c1.setHex(hex, THREE.SRGBColorSpace); }
+// Blending lives in `Palette.js`: the two-register local version this file
+// used could not survive `mix(mix(...), ...)` — see the note there.
+const mix = mixc;
+const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
   constructor(opts) { super(COEURL, opts); }

@@ -11,10 +11,17 @@ import { clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
  * and the lower legs. The old palette put every one of these within a few
  * percent of the same brown, which is why the model came back described as a
  * "legless tan mass" — there was no edge anywhere for the eye to catch. */
-const FUR = 0x6f5e40;         // flank, the animal's base value
-const FUR_DARK = 0x241d12;    // saddle, mask and points
-const FUR_MID = 0x4c3e28;     // transition band down the flank
-const BELLY = 0xb0a184;       // throat, chest and underside
+/* The flank is deliberately a good deal lighter than the saddle it sits under.
+ * The previous values (FUR 0x6f5e40 over FUR_MID 0x4c3e28) averaged to about
+ * 0x5f4f36 once the ticking was applied, which is only a stop and a half off
+ * the saddle — under a bright sun the whole animal collapsed into one milk
+ * chocolate silhouette with no dorsal read at all. Widened here: a real dun
+ * flank, a near-black saddle, and a cream that is bright enough to survive
+ * being in the animal's own shadow. */
+const FUR = 0x8b7750;         // flank, the animal's base value
+const FUR_DARK = 0x1e180f;    // saddle, mask and points
+const FUR_MID = 0x6b5936;     // transition band down the flank
+const BELLY = 0xc4b591;       // throat, chest and underside
 const RUFF = 0x30261a;        // the collar of longer guard hair
 const TUSK = 0xe6ddc4;
 const CLAW = 0x2a251f;

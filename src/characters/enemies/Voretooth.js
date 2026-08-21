@@ -1,17 +1,27 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.js';
+import { mixc, colc } from './Palette.js';
 import { organicNormal, organicRoughness } from './EnemyBase.js';
 import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
-/* Hairless, so the palette has to do the work fur would: a mottled lilac-grey
- * that lifts to a pale underside, with bone and claw reading much brighter. */
-const SKIN = 0x9d9095;
-const SKIN_MID = 0x7e7278;
-const SKIN_DARK = 0x5b5259;
-const BELLY = 0xd3cac5;
-const CREST = 0x7a6d75;
+/* Hairless, so the palette has to do the work fur would: a mottled hide that
+ * lifts to a paler underside, with bone and claw reading much brighter.
+ *
+ * Re-valued off a capture. The first pass was a lilac-grey over a near-white
+ * belly, and at six metres that is not a starved desert predator — it is a
+ * black-and-pink plastic toy, because `BELLY` at 0xd3cac5 sits at 82 % value
+ * and covered the whole of both hind limbs and the underside of the neck.
+ * Leide is red-ochre badlands: everything that lives there is dusty and warm,
+ * and the belly of a hairless animal is *sandy*, not bleached. The spread
+ * between `SKIN` and `SKIN_DARK` is also widened, because the dorsal blotching
+ * is the only large-scale pattern this species has. */
+const SKIN = 0x8f8172;
+const SKIN_MID = 0x6f6252;
+const SKIN_DARK = 0x413729;
+const BELLY = 0xa89a7d;
+const CREST = 0x6b5646;
 const BONE = 0xe4dcc6;
 const BONE_DARK = 0xa89e86;
 const CLAW = 0x2c2634;
@@ -435,13 +445,10 @@ function reset(B) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-function mix(a, b, t) {
-  _c1.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c1.lerp(_c2, clamp01(t));
-}
-function col(hex) { return _c1.setHex(hex, THREE.SRGBColorSpace); }
+// Blending lives in `Palette.js`: the two-register local version this file
+// used could not survive `mix(mix(...), ...)` — see the note there.
+const mix = mixc;
+const col = colc;
 
 class VoretoothEnemy extends QuadrupedEnemy {
   constructor(opts) { super(VORETOOTH, opts); }
