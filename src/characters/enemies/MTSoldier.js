@@ -6,21 +6,35 @@ import { CBuilder, sweep, plate, horn, sculptBlob } from '../rig/Sculpt.js';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
 
 /* Niflheim issue: a dark blue-grey enamel over gunmetal, with the daemon
- * furnace showing through every seam as a hard orange-red. */
-const SHELL = 0x2f353d;
-const SHELL_LIT = 0x424b55;
-const SHELL_DARK = 0x181c21;
-const RUBBER = 0x101215;
-const PISTON = 0x8d9199;
-const BRASS = 0x6d5c3c;
+ * furnace showing through every seam as a hard orange-red.
+ *
+ * **These values are albedo, and they were charcoal.** The first pass authored
+ * the shell at 0x2f353d, which is 3.6% linear reflectance — darker than fresh
+ * asphalt. Measured over the whole roster, the imperial and construct species
+ * all sat at 0.015-0.04 mean linear albedo while the ground they stand on is
+ * 0.20-0.30, so every one of them rendered as a flat black cut-out with a glow
+ * where its eyes are, day or night. Painted steel in daylight is 0.10-0.18;
+ * the shell now sits at ~0.10 and the lit plate at ~0.19, which is still a
+ * *dark* machine but one whose form the light can find.
+ */
+const SHELL = 0x59626e;
+const SHELL_LIT = 0x7b8794;
+const SHELL_DARK = 0x353b43;
+const SCUFF = 0x8a7f70;           // paint scoured back to warm bare steel
+const RUBBER = 0x26292e;
+const PISTON = 0xa7acb4;
+const BRASS = 0x8a7548;
 const MAGITEK = 0xff2f12;
 const EMBER = 0x3a0d05;
 
-const M_ENAMEL = [0.34, 0.22];   // painted plate: tight highlight, low metal
-const M_GUN = [0.46, 0.85];      // bare gunmetal
-const M_RUBBER = [0.82, 0.05];   // seals and boot soles
-const M_PISTON = [0.20, 0.95];   // chromed rod
-const M_SCUFF = [0.62, 0.55];    // worn edges where paint has gone
+/* Roughness here multiplies `metalRoughness()`, which runs 0.40-0.82, so the
+ * old M_ENAMEL of 0.34 produced an effective 0.14-0.28 — a wet-looking piano
+ * gloss on a field machine. Weathered enamel wants 0.25-0.5 effective. */
+const M_ENAMEL = [0.62, 0.26];   // painted plate: broad highlight, low metal
+const M_GUN = [0.60, 0.88];      // bare gunmetal
+const M_RUBBER = [0.95, 0.04];   // seals and boot soles
+const M_PISTON = [0.28, 0.95];   // chromed rod
+const M_SCUFF = [0.74, 0.62];    // worn edges where paint has gone
 
 /**
  * Imperial MT — a magitek trooper.
@@ -79,7 +93,7 @@ function buildPrototype() {
 
   const B = new CBuilder();
   const P = [];
-  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind, wear = 1) => { P.push({ geo: weather(B.build(), wear), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -193,8 +207,13 @@ function buildPrototype() {
       { p: [0.072, 1.755, 0.02], r: [0.05, 0.09, 0.09], amt: -0.014, dir: 'normal', mirror: true },
       { p: [0, 1.665, 0.0], r: [0.09, 0.05, 0.10], amt: -0.020, dir: [0, 1, 0] },       // jaw undercut
     ],
-    colorAt: (u, v, p) => col(p.y > 1.79 ? SHELL_LIT : SHELL, 1),
-    matAt: () => M_ENAMEL,
+    // Three values, not one: a light dome, the shell over the cheeks, and a
+    // dark muzzle. A single colour over a smooth blob is exactly what made the
+    // helm read as an egg with a light in it.
+    colorAt: (u, v, p) => (p.z > 0.075 && p.y < 1.775
+      ? col(SHELL_DARK)
+      : col(p.y > 1.795 ? SHELL_LIT : SHELL, p.y > 1.795 ? 1 : 0.95)),
+    matAt: (u, v, p) => (p.z > 0.075 && p.y < 1.775 ? M_GUN : M_ENAMEL),
   });
   // the visor slit
   B.glow(MAGITEK, 4.6);
@@ -221,7 +240,7 @@ function buildPrototype() {
     shape: (th, u) => 1 + Math.sin(u * 12) * 0.10,
     colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
   });
-  emit(['bone', 'head']);
+  emit(['bone', 'head'], 0.85);
 
   /* ------------------------------------------------------------- arms -- */
   for (const s of [-1, 1]) {
@@ -301,7 +320,7 @@ function buildPrototype() {
   // receiver
   plate(B, {
     size: [0.052, 0.088, 0.34], center: [gx, gy + 0.03, gz + 0.10], power: 6, segU: 10, segV: 8,
-    colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+    colorAt: (u, v, p) => col(p.y > gy + 0.045 ? SHELL : SHELL_DARK), matAt: () => M_GUN,
   });
   // barrel shroud with cooling ribs
   sweep(B, {
@@ -312,7 +331,7 @@ function buildPrototype() {
     ],
     steps: 14, seg: 9, ref: [0, 1, 0], capStart: false, capEnd: 0.3,
     shape: (th, u) => 1 + Math.max(0, Math.sin(u * 42)) * 0.20,
-    colorAt: () => col(SHELL_DARK), matAt: () => M_GUN,
+    colorAt: (th, u) => col(u > 0.55 ? SCUFF : SHELL, u > 0.55 ? 0.72 : 1), matAt: () => M_GUN,
   });
   // magitek rail: the glowing charge line down the top of the weapon
   B.glow(MAGITEK, 2.2);
@@ -386,7 +405,7 @@ function buildPrototype() {
         r0: 0.017, r1: 0.004, seg: 5, steps: 3, colorAt: () => col(RUBBER), matAt: () => M_RUBBER,
       });
     }
-    emit(['bone', `ft${n}`]);
+    emit(['bone', `ft${n}`], 0.45);
   }
 
   for (const p of P) {
@@ -396,7 +415,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.42, metalness: 0.40,
-    normalMap: metalNormal(), normalScale: 0.35, roughnessMap: metalRoughness(),
+    normalMap: metalNormal(), normalScale: 0.72, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 2.2 });
 }
@@ -412,6 +431,48 @@ function col(hex, k = 1) {
   _c.setHex(hex, THREE.SRGBColorSpace);
   if (k !== 1) _c.multiplyScalar(k);
   return _c;
+}
+
+const _sc = new THREE.Color();
+/**
+ * Field wear, applied to the vertex colours a part has already authored.
+ *
+ * A flat enamel value is what makes a machine read as a toy: every plate
+ * answers the light with the same number, so the only thing separating one
+ * from the next is its silhouette. Real issue plate has paint scoured off the
+ * upstanding faces and edges — going warm and bare — and dust and oil packed
+ * into everything that faces down.
+ *
+ * This *modulates* rather than replaces, unlike `IronGiant.aged()`, because
+ * the MT already paints its own panel colours per part and throwing them away
+ * to re-derive them from position would flatten the chest plate into the
+ * backpack. The three terms are: upward-facing wear, a plate-scale streak, and
+ * a downward-facing grime multiplier.
+ *
+ * @param {THREE.BufferGeometry} geo
+ * @param {number} amount 0 leaves the part alone; 1 is full field wear
+ */
+function weather(geo, amount = 1) {
+  if (amount <= 0) return geo;
+  const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
+  if (!pos || !cl) return geo;
+  _sc.setHex(SCUFF, THREE.SRGBColorSpace);
+  for (let i = 0; i < cl.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const up = nr ? nr.getY(i) : 0;
+    // a slow streak down the plate crossed by a fine one across it
+    const streak = Math.sin(x * 11.3 + z * 7.7 + y * 1.9) * 0.55
+      + Math.sin(x * 27.1 - z * 18.3) * 0.25;
+    const wear = Math.min(1, (Math.max(0, up) * 0.55 + Math.max(0, streak) * 0.50)) * amount;
+    const grime = Math.max(0, -up) * 0.34 * amount;
+    const t = wear * 0.42;
+    const k = 1 - grime;
+    cl.setXYZ(i,
+      (cl.getX(i) * (1 - t) + _sc.r * t) * k,
+      (cl.getY(i) * (1 - t) + _sc.g * t) * k,
+      (cl.getZ(i) * (1 - t) + _sc.b * t) * k);
+  }
+  return geo;
 }
 
 class MTSoldierEnemy extends BipedEnemy {
