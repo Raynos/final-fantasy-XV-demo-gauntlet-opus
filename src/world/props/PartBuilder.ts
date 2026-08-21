@@ -63,7 +63,7 @@ export class PartBuilder {
  * Loft a closed tube through a list of cross-sections.
  * @param sections rings of [y,z]
  */
-export function loft(sections: {x:number, pts:Array<[number,number]>}[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
+export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const pos = new Float32Array(S * N * 3);

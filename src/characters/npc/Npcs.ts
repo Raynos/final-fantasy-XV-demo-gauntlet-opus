@@ -313,7 +313,7 @@ export class Npcs {
 
       // Head/eye tracking. FFXV NPCs notice you well before you reach them,
       // which is most of why its outposts feel inhabited.
-      let look = null;
+      let look: any = null;
       if (p) {
         const dist = p.distanceTo(npc.pos);
         const want = dist < 9.5 && !npc.route ? 1 : dist < 5.0 ? 1 : 0;

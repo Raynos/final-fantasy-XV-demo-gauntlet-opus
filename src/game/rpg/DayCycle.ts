@@ -241,7 +241,7 @@ export class DayCycle {
    * @param [discoveredOnly=false]
    */
   nearestHaven(pos: {x:number, z:number}, discoveredOnly: boolean = false) {
-    let best = null, bestD = Infinity;
+    let best: any = null, bestD = Infinity;
     for (const h of this.havens()) {
       if (discoveredOnly && !h.discovered) continue;
       const d = Math.hypot(pos.x - h.pos[0], pos.z - h.pos[2]);

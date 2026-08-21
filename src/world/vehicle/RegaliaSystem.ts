@@ -426,7 +426,7 @@ export class RegaliaSystem {
       const f = b.forward();
       this._ahead.copy(b.pos).addScaledVector(f, 26); this._ahead.y += 1.2;
       const lm = this._nearestLandmark();
-      let interest = null;
+      let interest: any = null;
       if (lm && lm.dist < 260) { this._interest.set(lm.x, lm.y + 30, lm.z); interest = this._interest; }
       this.occupants.gaze(this._ahead, interest);
       this.occupants.update(dt, {
@@ -626,7 +626,7 @@ export class RegaliaSystem {
     const t = this.terrain;
     if (!t || !t.landmarks) return null;
     const out = this._lm || (this._lm = { name: '', x: 0, y: 0, z: 0, dist: 0, kind: '' });
-    let best = Infinity, bn = null;
+    let best = Infinity, bn: any = null;
     for (const k in t.landmarks) {
       const l = t.landmarks[k];
       if (l.kind === 'basin') continue;

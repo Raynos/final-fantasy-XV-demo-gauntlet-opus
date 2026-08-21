@@ -237,7 +237,7 @@ export class Bushes {
         normalScale: new THREE.Vector2(0.6, 0.6),
       }), { bend: 0.28, flutter: 0.22, gustFreq: 0.05, flexPow: 1.9 });
 
-      let leafMat = null;
+      let leafMat: any = null;
       if (spec.params.leafCount > 0) {
         leafMat = patchVeg(new THREE.MeshStandardMaterial({
           map: leafClusterTex(spec.params.leafKind), color: 0xffffff,
@@ -257,7 +257,7 @@ export class Bushes {
         wood.count = 0; wood.visible = false; wood.frustumCulled = false;
         wood.name = `bush_${key}_${v}`;
         this.group.add(wood);
-        let leaves = null;
+        let leaves: any = null;
         if (t.leaves && leafMat) {
           leaves = new THREE.InstancedMesh(t.leaves, leafMat, per);
           leaves.castShadow = true; leaves.receiveShadow = true;
@@ -375,7 +375,7 @@ export class Bushes {
         const b = eco.veg(x, z);
         const depth = bil(wg, u, v);
         const roll = rng.next();
-        let kind = null, y = 0;
+        let kind: any = null, y = 0;
 
         if (depth > 0.45 && b.lilyD > 0) {
           // open water: lily pads, floating on the plane itself

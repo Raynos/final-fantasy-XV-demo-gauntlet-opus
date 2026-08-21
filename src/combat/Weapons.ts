@@ -141,7 +141,7 @@ const LUCII = 0x3d94dd;        // the royal blue every Lucian arm carries
  * @param body colour across the primary face
  * @param [spine] colour at the −X side (defaults to `body`)
  */
-function groundBlade(cross: Array<[number,number]>, sections: Array<any>, edge: number, body: number, spine: number = body) {
+function groundBlade(cross: number[][], sections: Array<any>, edge: number, body: number, spine: number = body) {
   const geo = loft(cross, sections);
   const n = cross.length;
   const p = geo.attributes.position;

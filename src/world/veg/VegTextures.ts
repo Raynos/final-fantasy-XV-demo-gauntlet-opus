@@ -442,7 +442,7 @@ export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: any, size: 
     map: src.woodMap, color: src.woodColor,
   });
   scene.add(new THREE.Mesh(src.wood, woodMat));
-  let leafMat = null;
+  let leafMat: any = null;
   if (src.leaves) {
     leafMat = new THREE.MeshBasicMaterial({
       map: src.leafMap, color: 0xffffff, vertexColors: true,

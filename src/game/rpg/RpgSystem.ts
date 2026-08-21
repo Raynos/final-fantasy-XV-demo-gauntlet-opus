@@ -471,7 +471,7 @@ export class RpgSystem {
       if (!check.ok) return { ok: false, reason: check.reason, haven: check.haven };
     }
 
-    let meal = null;
+    let meal: any = null;
     if (opts.recipe) {
       const cooked = this.party.cook(opts.recipe, this.inventory, this.day.absoluteHour);
       if (!cooked.ok) return { ok: false, reason: cooked.reason, missing: cooked.missing };
@@ -512,7 +512,7 @@ export class RpgSystem {
    * @param [radius=8]
    */
   drawNearby(pos: {x:number, z:number}, radius: number = 8) {
-    let best = null, bestD = Infinity;
+    let best: any = null, bestD = Infinity;
     for (const d of DEPOSITS) {
       const dist = Math.hypot(pos.x - d.pos[0], pos.z - d.pos[2]);
       if (dist < bestD) { bestD = dist; best = d; }

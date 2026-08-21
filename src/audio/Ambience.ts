@@ -385,7 +385,7 @@ export class Ambience {
     const base = 2400 + this.rng() * 2600;
     const n = 2 + Math.floor(this.rng() * 4);
     const gap = 0.055 + this.rng() * 0.07;
-    let last = null, lastEnd = 0;
+    let last: any = null, lastEnd = 0;
     for (let i = 0; i < n; i++) {
       const st = t + i * gap;
       const dur = 0.035 + this.rng() * 0.05;

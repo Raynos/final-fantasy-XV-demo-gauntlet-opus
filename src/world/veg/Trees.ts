@@ -218,7 +218,7 @@ export class Trees {
         normalScale: new THREE.Vector2(0.85, 0.85),
       }), { bend: 0.55, flutter: 0.1, gustFreq: 0.03, flexPow: 2.4 });
 
-      let leafMat = null;
+      let leafMat: any = null;
       if (S.leafCount > 0) {
         leafMat = patchVeg(new THREE.MeshStandardMaterial({
           map: leafClusterTex(S.leafKind),
@@ -231,7 +231,7 @@ export class Trees {
         });
       }
 
-      let canopySrc = null;
+      let canopySrc: any = null;
       for (let v = 0; v < VARIANTS; v++) {
         const t = buildTree(sp, 9001 + v * 733 + sp.length * 37);
         const wood = new THREE.InstancedMesh(t.wood, woodMat, perVariant);
@@ -240,7 +240,7 @@ export class Trees {
         wood.name = `tree_${sp}_${v}_wood`;
         this.group.add(wood);
 
-        let leaves = null;
+        let leaves: any = null;
         if (t.leaves && leafMat) {
           leaves = new THREE.InstancedMesh(t.leaves, leafMat, perVariant);
           leaves.castShadow = true; leaves.receiveShadow = true;

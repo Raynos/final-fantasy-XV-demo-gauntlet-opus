@@ -738,7 +738,7 @@ export class WorldMap {
    * @returns the zone record, or null on the frontier
    */
   zoneAt(x: any, z: any): any | null {
-    let best = null, bestW = 0.0001;
+    let best: any = null, bestW = 0.0001;
     for (let i = 0; i < ZONES.length; i++) {
       const zn = ZONES[i];
       const dx = x - zn.cx, dz = z - zn.cz;
@@ -787,7 +787,7 @@ export class WorldMap {
    */
   nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi:any, dist:number} | null {
     const { types = null, maxDist = Infinity, discoveredOnly = false } = opt;
-    let best = null, bestD = maxDist;
+    let best: any = null, bestD = maxDist;
     const ci = Math.floor(x / this._cell), cj = Math.floor(z / this._cell);
     const ring = Math.min(9, Math.ceil(maxDist === Infinity ? 9 : maxDist / this._cell) + 1);
     for (let r = 0; r <= ring; r++) {

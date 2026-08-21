@@ -344,7 +344,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   // One template built once, then shared four ways: a steer pivot for the yaw
   // of the knuckle, and a spin node inside it for the road speed. Two meshes
   // per corner (dark rubber, bright face), so all four cost eight draw calls.
-  let wheels = null;
+  let wheels: any = null;
   if (drivable) {
     // one template per side, so the dish of the rim faces outward on both
     // without mirroring a group (which would invert the winding and the

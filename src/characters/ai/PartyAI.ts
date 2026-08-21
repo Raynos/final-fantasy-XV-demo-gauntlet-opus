@@ -193,7 +193,7 @@ export class PartyAI {
     const list = this.enemies.list;
     const from = m.root.position;
     const lock = this.combat && this.combat.lockTarget;
-    let best = null, bestScore = Infinity;
+    let best: any = null, bestScore = Infinity;
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (e.dead) continue;

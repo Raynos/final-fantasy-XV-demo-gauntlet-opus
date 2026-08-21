@@ -251,7 +251,7 @@ export class RoadFurniture {
       run = [];
     };
     for (const p of c.samples) {
-      let best = null;
+      let best: any = null;
       for (const side of [-1, 1]) {
         const near = this._side(p, side * 7.5);
         const far = this._side(p, side * 17);
@@ -432,7 +432,7 @@ export class RoadFurniture {
   update(camPos: any) {
     const BUILD = 420, DRAW = 340, CAST = 110, FREE = 900;
     let made = 0;
-    let bestD = BUILD * BUILD, best = null;
+    let bestD = BUILD * BUILD, best: any = null;
     for (const c of this.chunks) {
       const dx = c.center.x - camPos.x, dz = c.center.z - camPos.z;
       const d2 = dx * dx + dz * dz;
@@ -452,7 +452,7 @@ export class RoadFurniture {
     if (best) { this._buildChunk(best); made++; }
     if (made && this._live.length > 1) {
       // a second chunk per call, so a fast car never outruns the furniture
-      let b2 = null, d2b = BUILD * BUILD;
+      let b2: any = null, d2b = BUILD * BUILD;
       for (const c of this.chunks) {
         if (c.group) continue;
         const dx = c.center.x - camPos.x, dz = c.center.z - camPos.z;

@@ -239,7 +239,7 @@ export class Enemies {
    * whatever is nearest the camera's forward axis.
    */
   pickTarget(from: any, forward: any, maxDist = 30, coneDot = 0.1) {
-    let best = null, bestScore = Infinity;
+    let best: any = null, bestScore = Infinity;
     for (const e of this.list) {
       if (e.dead) continue;
       this._dir.subVectors(e.root.position, from);
@@ -256,7 +256,7 @@ export class Enemies {
 
   /** Nearest live enemy to a point, or null. */
   nearest(p: any, maxDist = Infinity) {
-    let best = null, bestD = maxDist;
+    let best: any = null, bestD = maxDist;
     for (const e of this.list) {
       if (e.dead) continue;
       const d = e.root.position.distanceTo(p);

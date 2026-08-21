@@ -104,7 +104,7 @@ export class Instruments {
     nodes.push(env);
     filt.connect(env);
 
-    let last = null;
+    let last: any = null;
     const spread = o.spread ?? 9;
     for (let i = 0; i < unison; i++) {
       const osc = ctx.createOscillator();
@@ -176,7 +176,7 @@ export class Instruments {
     filt.connect(env);
     nodes.push(env);
 
-    let last = null;
+    let last: any = null;
     for (let i = 0; i < 2; i++) {
       const osc = ctx.createOscillator();
       osc.setPeriodicWave(w);
@@ -285,7 +285,7 @@ export class Instruments {
     nodes.push(dry);
 
     const w = wave(ctx, 'choir');
-    let last = null;
+    let last: any = null;
     for (let i = 0; i < 2; i++) {
       const osc = ctx.createOscillator();
       osc.setPeriodicWave(w);
@@ -448,7 +448,7 @@ export class Instruments {
     nodes.push(env);
     const decay = o.decay ?? 1.5;
     const parts = [[1, 1, decay], [1.504, 0.30, decay * 0.55], [1.742, 0.18, decay * 0.4]];
-    let last = null;
+    let last: any = null;
     for (const [mult, amp, dec] of parts) {
       const osc = ctx.createOscillator();
       osc.type = 'sine';

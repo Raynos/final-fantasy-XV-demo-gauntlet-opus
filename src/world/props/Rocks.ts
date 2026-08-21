@@ -559,7 +559,7 @@ export class Rocks {
         if (!g) continue;
         const dx = it.x - cx, dz = it.z - cz;
         const d2 = dx * dx + dz * dz;
-        let mesh = null, slot = 0;
+        let mesh: any = null, slot = 0;
         if (d2 < g.nearRange * g.nearRange && g.nw < g.nearMax) {
           mesh = g.near; slot = g.nw++;
         } else if (g.far) {

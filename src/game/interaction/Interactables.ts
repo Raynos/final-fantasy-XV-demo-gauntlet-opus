@@ -188,7 +188,7 @@ export class InteractionSystem {
     const h = player.heading ?? 0;
     _fwd.set(Math.sin(h), 0, Math.cos(h));
 
-    let best = null;
+    let best: any = null;
     let bestScore = Infinity;
     for (const item of this.items.values()) {
       if (!item.enabled()) continue;

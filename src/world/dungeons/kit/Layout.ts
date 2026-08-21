@@ -247,7 +247,7 @@ export class Layout {
       return [x, z];
     }
     // outside: snap to the nearest region
-    let best = null, bestD = Infinity, bestP = null;
+    let best: any = null, bestD = Infinity, bestP: any = null;
     for (const r of this.rooms.values()) {
       const p = nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
       const d = (p[0] - x) ** 2 + (p[1] - z) ** 2;
@@ -397,7 +397,7 @@ function distToSeg(a: any, b: any, x: any, z: any) {
 }
 
 function corridorFloor(c: any, x: any, z: any) {
-  let best = null, bestD = Infinity;
+  let best: any = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);
     if (s.d < bestD) {
@@ -434,7 +434,7 @@ function nearestInRect(cx: any, cz: any, w: any, d: any, x: any, z: any, margin:
 }
 
 function nearestOnCorridor(c: any, x: any, z: any, margin: any) {
-  let best = null, bestD = Infinity;
+  let best: any = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);
     if (s.d < bestD) { bestD = s.d; best = s; }

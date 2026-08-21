@@ -186,7 +186,7 @@ export class Enemy {
   attachVisual(proto: any) {
     const group = cloneSkinned(proto.group);
     const byName = new Map(), rest = new Map();
-    let mesh = null;
+    let mesh: any = null;
     group.traverse((o) => {
       if (o.isBone) { byName.set(o.name, o); rest.set(o.name, o.quaternion.clone()); }
       if (o.isSkinnedMesh) mesh = o;
@@ -307,7 +307,7 @@ export class Enemy {
     this.root.updateMatrixWorld(true);
     const ry = this.root.matrixWorld.elements[13];
     const v = _calV;
-    let minY = Infinity, bestObj = null, bestIdx = 0, bestStep = 1;
+    let minY = Infinity, bestObj: any = null, bestIdx = 0, bestStep = 1;
     this.visual.traverse((o: any) => {
       const geo = o.geometry;
       if (!geo || !geo.attributes || !geo.attributes.position) return;
@@ -820,7 +820,7 @@ export class Enemy {
       return;
     }
 
-    let best = null, bestScore = 0;
+    let best: any = null, bestScore = 0;
     const cands = ctx.threats || (ctx.player ? [ctx.player] : EMPTY);
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];

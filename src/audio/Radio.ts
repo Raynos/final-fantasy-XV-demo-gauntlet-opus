@@ -458,14 +458,14 @@ export class Radio {
     g.gain.exponentialRampToValueAtTime(0.0001, end + 0.02);
 
     o.connect(f);
-    let o2 = null;
+    let o2: any = null;
     if (detune) {
       o2 = ctx.createOscillator();
       o2.type = type;
       o2.frequency.value = freq * detune;
       o2.connect(f);
     }
-    let lfo = null, lg = null;
+    let lfo: any = null, lg: any = null;
     if (vibrato) {
       lfo = ctx.createOscillator();
       lfo.frequency.value = vibrato;

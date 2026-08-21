@@ -77,7 +77,7 @@ export class PartyPanel {
       const hpLine = el('div.hp-line', {}, [hpBar.node, hpVal]);
 
       const body = el('div.party-body', {}, [head, hpLine]);
-      let mpBar = null; let mpVal = null;
+      let mpBar: any = null; let mpVal: any = null;
       if (lead) {
         mpBar = new Bar({ cls: 'slim', chase: false }).tint('mp');
         mpVal = el('div.val');

@@ -171,7 +171,7 @@ export function smoothNormals(geo: any, groups: any) {
  * @param {Object} o
  * @returns the ring index grid, so callers can stitch to it
  */
-export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[], ref?: any, capStart?: number, capEnd?: number, glowAt?: any }): number[][] {
+export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[], ref?: any, capStart?: any, capEnd?: any, glowAt?: any }): number[][] {
   const nodes = o.nodes;
   const steps = o.steps || 14;
   const seg = o.seg || 12;

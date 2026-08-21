@@ -163,7 +163,7 @@ export class Dungeons {
       const list = this.current.near(pos, 0);
       return list.length ? list[0] : null;
     }
-    let best = null, bestD = Infinity;
+    let best: any = null, bestD = Infinity;
     for (const e of this.entrances) {
       const d = e.pos.distanceTo(pos);
       if (d <= e.radius && d < bestD) { bestD = d; best = e; }

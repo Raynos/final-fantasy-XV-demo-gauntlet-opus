@@ -493,7 +493,7 @@ export class PostFX {
     this._head = null;
     this._headWho = who;
 
-    let char = null;
+    let char: any = null;
     if (who !== 'player') {
       const party = game.get('Party');
       const m = party && party.get && party.get(who);

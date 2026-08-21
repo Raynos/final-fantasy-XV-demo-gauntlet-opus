@@ -637,7 +637,7 @@ export class AudioSystem {
     // shore in front of us rather than the centre of the basin.
     const water = game.get('Water');
     if (water && water.bodies && water.bodies.length) {
-      let best = null, bestD = Infinity;
+      let best: any = null, bestD = Infinity;
       for (const b of water.bodies) {
         const x = clamp(p.x, b.cx - b.w * 0.5, b.cx + b.w * 0.5);
         const z = clamp(p.z, b.cz - b.d * 0.5, b.cz + b.d * 0.5);
@@ -651,7 +651,7 @@ export class AudioSystem {
     const props = game.get('Props');
     const lights = props && props.outposts && props.outposts.lights;
     if (lights && lights.length) {
-      let best = null, bestD = Infinity;
+      let best: any = null, bestD = Infinity;
       for (const l of lights) {
         const lp = l.light.position;
         const dd = Math.hypot(p.x - lp.x, p.z - lp.z);

@@ -633,7 +633,7 @@ export class Landmarks {
     ];
     for (const run of runs) {
       const n = Math.round((run.z1 - run.z0) / 3.1);
-      let prev = null;
+      let prev: any = null;
       for (let i = 0; i <= n; i++) {
         const z = run.z0 + (run.z1 - run.z0) * (i / n);
         const p = eco.roadPoint(z, run.side, run.off, new THREE.Vector3());

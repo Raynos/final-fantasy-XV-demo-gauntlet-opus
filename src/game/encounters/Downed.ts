@@ -332,7 +332,7 @@ export class Downed {
   }
 
   _nearest(list: any, p: any) {
-    let best = null, bd = Infinity;
+    let best: any = null, bd = Infinity;
     for (const m of list) {
       const d = m.root.position.distanceTo(p);
       if (d < bd) { bd = d; best = m; }

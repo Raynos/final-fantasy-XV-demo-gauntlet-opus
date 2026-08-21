@@ -33,7 +33,7 @@ export class ParticleSystem {
   capacity!: any;
   cursor!: number;
   live!: number;
-  material!: THREE.ShaderMaterial;
+  material!: any;
   mesh!: THREE.Mesh;
   uniforms!: any;
   useFog!: any;

@@ -16,7 +16,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * @param cross unit cross-section, CCW, roughly radius 1
  * @param opts {capStart, capEnd, uScale}
  */
-export function loft(cross: Array<[number,number]>, sections: Array<{y:number,sx:number,sz:number,dx?:number,dz?:number,rot?:number}>, { capStart = true, capEnd = true }: any = {}) {
+export function loft(cross: number[][], sections: Array<{y:number,sx:number,sz?:number,dx?:number,dz?:number,rot?:number}>, { capStart = true, capEnd = true }: any = {}) {
   const n = cross.length, m = sections.length;
   const pos = [], uv = [], idx = [];
   for (let s = 0; s < m; s++) {
@@ -98,7 +98,7 @@ export function tube(points: any, radii: any, { radialSeg = 8, capStart = true, 
   const pos = [], uv = [], idx = [];
   const up = new THREE.Vector3(0, 1, 0);
   const tan = new THREE.Vector3(), nrm = new THREE.Vector3(), bin = new THREE.Vector3();
-  let prevN = null;
+  let prevN: any = null;
   for (let s = 0; s < m; s++) {
     const p0 = points[Math.max(0, s - 1)], p1 = points[Math.min(m - 1, s + 1)];
     tan.subVectors(p1, p0);

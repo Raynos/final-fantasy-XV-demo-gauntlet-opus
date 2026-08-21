@@ -310,7 +310,7 @@ export class RoadGraph {
       const cls = classes[r.cls];
       // Split the path at node ids into per-edge control lists.
       const chunks = [];
-      let cur = null;
+      let cur: any = null;
       for (const step of r.path) {
         if (typeof step === 'string') {
           const nd = this.nodes.get(step);
@@ -404,7 +404,7 @@ export class RoadGraph {
 
     // refine against the two adjacent segments
     const e = this.edges[bestEi];
-    let best = null, bestD = Math.sqrt(bestD2);
+    let best: any = null, bestD = Math.sqrt(bestD2);
     const pts = e.pts;
     for (let k = -1; k <= 0; k++) {
       const ia = Math.max(0, Math.min(pts.length - 2, bestI + k));
@@ -480,7 +480,7 @@ export class RoadGraph {
       }
     }
 
-    let bestNode = null, bestCost = Infinity;
+    let bestNode: any = null, bestCost = Infinity;
     for (const [n, tail] of goal) {
       const d = dist.has(n) ? dist.get(n) + tail : Infinity;
       if (d < bestCost) { bestCost = d; bestNode = n; }

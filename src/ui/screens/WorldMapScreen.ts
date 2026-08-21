@@ -401,7 +401,7 @@ export class WorldMapScreen {
 
   /** Nearest drawn point within 16 css px of a chart position. */
   _pick(px: any, py: any) {
-    let best = null, bd = 16 * 16;
+    let best: any = null, bd = 16 * 16;
     for (const [p, s] of this._screenPos) {
       const dx = s[0] - px, dy = s[1] - py;
       const d = dx * dx + dy * dy;
@@ -818,7 +818,7 @@ export class WorldMapScreen {
         [r.x + gap, r.y], [r.x - gap - w, r.y],
         [r.x - w / 2, r.y - gap - 4 * dpr], [r.x - w / 2, r.y + gap + 4 * dpr],
       ];
-      let put = null;
+      let put: any = null;
       for (const s of slots) {
         // a name the sheet edge slices in half is worse than no name
         if (s[0] < 6 * dpr || s[0] + w > W - 6 * dpr) continue;

@@ -397,7 +397,7 @@ export class GrassField {
     if (this._primed && performance.now() > this._deadline) return null;
 
     const t = this._makeTile(li, tx, tz);
-    let mesh = null;
+    let mesh: any = null;
     if (t.n > 0) {
       mesh = new THREE.InstancedMesh(ring.geo, ring.mat, 0);
       mesh.instanceMatrix = new THREE.InstancedBufferAttribute(t.m, 16);

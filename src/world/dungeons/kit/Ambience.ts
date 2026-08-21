@@ -66,7 +66,7 @@ export class DungeonAmbience {
     noise.start();
 
     // --- mains hum: only where there is machinery running ----------------
-    let humNodes = null;
+    let humNodes: any = null;
     if (desc.hum) {
       const h = ctx.createOscillator();
       h.type = 'sawtooth';

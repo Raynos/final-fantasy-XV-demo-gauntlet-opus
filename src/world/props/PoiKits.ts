@@ -219,7 +219,7 @@ export class PoiKits {
   _yaw(p: any, rng: any) {
     const road = this.eco.terrain && this.eco.terrain.map && this.eco.terrain.map.roadGraph;
     if (road) {
-      let bestD = 90, bestA = null;
+      let bestD = 90, bestA: any = null;
       for (const e of road.edges) {
         for (let i = 0; i < e.pts.length; i += 4) {
           const q = e.pts[i];
@@ -846,7 +846,7 @@ export class PoiKits {
    */
   update(dt: number, t: number, night: number, camPos: THREE.Vector3, game: any) {
     // build at most one POI per frame, nearest first
-    let best = null, bestD = BUILD_R * BUILD_R;
+    let best: any = null, bestD = BUILD_R * BUILD_R;
     for (const s of this.sites) {
       if (s.group) continue;
       const dx = s.poi.x - camPos.x, dz = s.poi.z - camPos.z;
