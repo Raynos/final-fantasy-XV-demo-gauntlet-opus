@@ -539,12 +539,15 @@ export class WorldMapScreen {
     const pp = game.get('Player')?.position;
     if (pp) place.reserve(sx(pp.x) - 12 * dpr, sy(pp.z) - 12 * dpr, sx(pp.x) + 12 * dpr, sy(pp.z) + 12 * dpr);
     c.textBaseline = 'middle';
-    this._regionLabels(c, sx, sy, ppm, dpr, rev, place);
+    // on the atlas the names are reserved now and painted after the glyphs, so
+    // a settlement symbol never lands in the middle of the word LEIDE
+    this._regionLabels(c, sx, sy, ppm, dpr, rev, place, !this.atlas);
     this._zoneLabels(c, sx, sy, ppm, dpr, rev, place, zoneFade);
     this._routeLabels(c, sx, sy, ppm, dpr, rev, place);
 
     // ---- points of interest ----------------------------------------------
     this._pois(c, sx, sy, ppm, dpr, rev, t, place, W, H);
+    if (this.atlas) this._regionLabels(c, sx, sy, ppm, dpr, rev, place, true);
 
     // ---- the player and the measured line --------------------------------
     this._player(c, sx, sy, ppm, dpr, t);
@@ -579,9 +582,25 @@ export class WorldMapScreen {
       ? '100.0 %' : `${((seen / fog.mask.length) * 100).toFixed(1)} %`;
   }
 
-  _regionLabels(c, sx, sy, ppm, dpr, rev, place) {
+  /**
+   * Region names — the sheet's headline type.
+   *
+   * Split into a measure pass and a paint pass so the atlas can reserve their
+   * boxes *before* the zone and route labels compete for the same ground, and
+   * still paint them *after* the 124 point glyphs. Drawn in one pass they came
+   * out with a settlement symbol sitting in the middle of every name.
+   *
+   * @param {boolean} paint false = measure and reserve only, true = draw
+   */
+  _regionLabels(c, sx, sy, ppm, dpr, rev, place, paint = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
-    if (a <= 0.01) return;
+    if (a <= 0.01) { this._regionPlaced = []; return; }
+    if (paint && this._regionPlaced) {
+      for (const g of this._regionPlaced) this._paintRegion(c, g, dpr, a);
+      this._regionPlaced = null;
+      return;
+    }
+    const placed = [];
     for (const r of REGIONS) {
       const zs = this.map.zones.filter((z) => z.region === r.id);
       if (!zs.length) continue;
@@ -621,19 +640,27 @@ export class WorldMapScreen {
       // headline type wins a collision it cannot dodge
       if (dy === 0) place.reserve(x - wm / 2, y - 22 * dpr, x + wm / 2, y + 30 * dpr);
       y += dy;
-      c.font = `100 ${Math.round(32 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
-      // on the atlas the region names are the sheet's headline type, not a
-      // watermark under a chart the player is navigating
-      const rk = this.atlas ? 1.72 : 1;
-      c.fillStyle = `rgba(240,248,255,${(0.46 * rk * a).toFixed(3)})`;
-      c.shadowColor = 'rgba(3,7,14,0.9)';
-      c.shadowBlur = 12 * dpr;
-      spacedText(c, r.name.toUpperCase(), x, y, 16 * dpr);
-      c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
-      c.fillStyle = `rgba(206,224,248,${(0.34 * rk * a).toFixed(3)})`;
-      spacedText(c, r.sub.toUpperCase(), x, y + 24 * dpr, 6 * dpr);
-      c.shadowBlur = 0;
+      placed.push({ x, y, name: r.name.toUpperCase(), sub: r.sub.toUpperCase() });
+      if (paint) this._paintRegion(c, placed[placed.length - 1], dpr, a);
     }
+    this._regionPlaced = paint ? null : placed;
+  }
+
+  /** @param {{x:number,y:number,name:string,sub:string}} g */
+  _paintRegion(c, g, dpr, a) {
+    // on the atlas the region names are the sheet's headline type, not a
+    // watermark under a chart the player is navigating
+    const rk = this.atlas ? 1.72 : 1;
+    c.textBaseline = 'middle';
+    c.font = `100 ${Math.round(32 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+    c.fillStyle = `rgba(240,248,255,${(0.46 * rk * a).toFixed(3)})`;
+    c.shadowColor = 'rgba(3,7,14,0.9)';
+    c.shadowBlur = 12 * dpr;
+    spacedText(c, g.name, g.x, g.y, 16 * dpr);
+    c.font = `300 ${Math.round(9.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
+    c.fillStyle = `rgba(206,224,248,${(0.34 * rk * a).toFixed(3)})`;
+    spacedText(c, g.sub, g.x, g.y + 24 * dpr, 6 * dpr);
+    c.shadowBlur = 0;
   }
 
   _zoneLabels(c, sx, sy, ppm, dpr, rev, place, fade) {
