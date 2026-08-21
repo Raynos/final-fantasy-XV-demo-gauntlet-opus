@@ -174,18 +174,29 @@ afternoon. The cause is machine saturation, not agent error — see §6.
 
 ## 5. Verification state
 
+Measured on a **quiet tree** after every branch was merged and all worktrees
+pruned.
+
 | check | result |
 |---|---|
 | `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
 | `tools/integration.mjs` | 18 pass · 0 fail |
 | `tools/uxcheck.mjs` | 86/86 |
-| `tools/orphans.mjs` | 267/268 reachable; `MapRaster.js` orphaned, pre-existing |
-| `tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
+| `tools/creaturecheck.mjs` | **207 poses across 23 species · 0 failures** (new gate) |
+| `tools/heightcheck.mjs` / `driftcheck.mjs` | 0.000 m — confirms the splat change was colour-only |
+| `tools/roadcheck.mjs` | 0 failures |
+| `tools/orphans.mjs` | 1 orphan, `src/world/map/MapRaster.js`, pre-existing from `5fd2876` |
 | dev-suite determinism | 1.555/255 — at the documented noise floor |
-| `tools/gameplay.mjs` | **fails** — see open item 4 |
-| `tools/perf.mjs` | ~87 fps mean, ~47 worst — but measured under load |
+| `tools/combatloop.mjs` | **21/30 — a pre-existing regression, not from this round** |
+| `tools/gameplay.mjs` | **fails** — see open item 3 |
+| `tools/perf.mjs` | not re-measured on a quiet tree — do this first next session |
 
----
+**The `combatloop` regression is worth its own note.** `agent/enemies`
+reproduced the identical nine failures with `src/characters` reverted to
+`0be851f`, so it predates this round. Its lead: a stuck `menu=controls` eating
+input, in `src/ui/**`. `SESSION-STATE.md` recorded 30/30 at some earlier point,
+so it broke between then and now and nobody noticed — which is an argument for
+running the full gate suite at every merge, not just the cheap ones.
 
 ## 6. Landmines — all measured, all previously cost real time
 
