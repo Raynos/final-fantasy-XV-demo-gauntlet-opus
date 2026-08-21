@@ -15,7 +15,8 @@ and why several things are the way they are — see `journal/2026-08-17-51c0b82c
 
 Read next, in this order: `BRIEF.md` (the contract every agent works against),
 `SCOPE.md` (atomic checklist), `PROGRESS.md` (status + bug log), `PLAN.md`
-(design audit), `WORLDMAP.md` (cartography), `docs/typescript-port-plan.md`.
+(design audit), `WORLDMAP.md` (cartography), `docs/dev-suite-plan.md`
+(in-game debug/review suite), `docs/typescript-port-plan.md`.
 
 ---
 
@@ -160,7 +161,12 @@ Merge them, verify, then re-run the critic pass.
    it — the terrain displaces in the *vertex shader*, so a CPU raycast hits the
    undisplaced lattice. It needs a GPU readback. If true, everything placed on
    the ground is subtly wrong.
-6. **The TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
+6. **The in-game dev/review suite** — `docs/dev-suite-plan.md`. Freecam, asset
+   browser, world navigator and a feedback inbox that writes `.review/inbox/`.
+   Written because every defect in the r4 corpus round was *visible* but not
+   *findable*: the only way to look at the game was a 20-minute batch capture of
+   fixed cameras.
+7. **The TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
 7. **Content still missing:** chocobos, fishing, photo-mode capture, camping at
    havens (only the Hammerhead caravan works), fast travel, the remaining towns.
 

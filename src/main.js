@@ -23,7 +23,19 @@ game.init().then(() => {
   // Under the capture harness the page must not free-run: any wall-clock frame
   // between "ready" and the harness taking over would advance TAA history, the
   // exposure integrator and enemy AI by a nondeterministic amount.
-  if (!new URLSearchParams(location.search).has('shoot')) game.start();
+  const qs = new URLSearchParams(location.search);
+  if (!qs.has('shoot')) game.start();
+
+  // In-game developer / review suite. A dynamic import keeps it in its own
+  // async chunk, so it ships in the production build (one build, no drift --
+  // you review the bundle you actually ship) without loading on the normal
+  // path. The `!shoot` guard is a hard determinism gate: the capture harness
+  // loads `?q=ultra&shoot=1`, so the suite can never appear in a screenshot.
+  if (qs.has('debug') && !qs.has('shoot')) {
+    import('./dev/DevSuite.js')
+      .then((m) => m.installDevSuite(game))
+      .catch((err) => console.error('[dev] suite failed to load', err));
+  }
 }).catch((err) => {
   label.textContent = 'ERROR';
   console.error(err);
