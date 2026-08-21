@@ -188,34 +188,76 @@ export function buildHair(rig, look) {
       const tRoot = tBase.clone().multiplyScalar(0.62);
       const spike = tuft.spike ?? 0.9;
       const wid = (tuft.width || 0.014) * 1.38 * (1 + rng.gauss(0, 0.18));
-      const bone = tuft.spring ? I.tail : I.head;
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
       B.mat(tuft.rough ?? H.rough ?? 0.36, 0, 1);
-      ribbon(B, {
-        points: pts.map((q) => put(q).toArray()),
-        steps: tuft.steps || 6,
-        // six-sided: a flat diamond is what made every strand a faceted blade
-        sides: tuft.sides ?? 6,
-        width: wid * scale,
-        // a lock is a rolled bundle, not a ribbon: floor the depth-to-width
-        // ratio so the six-sided section is actually round
-        thick: wid * scale * Math.max(0.62, tuft.thick ?? 0.5),
-        up: nrm.toArray(),
-        // A wide per-lock value spread is the difference between "hair" and "a
-        // black shape". Some clumps sit near the root value, some run almost to
-        // the tip value at their base — that is what makes the mass legible
-        // once every individual ribbon is thinner than a pixel.
-        color: tRoot.clone().lerp(tTip, 0.18 + 0.58 * Math.pow(rng.next(), 1.3)),
-        tipColor: tTip.clone().multiplyScalar(0.78 + 0.34 * rng.next()),
-        // Clump profile. Holding the width through the body of the strand and
-        // dropping it at the end is an *arrowhead*: a broad blade converging to
-        // a point in a straight line, which is precisely what read as a quill.
-        // A lock narrows continuously from a wide root to a hair-fine tip, so
-        // the width is a plain power curve and the root is correspondingly
-        // wider to keep the same mass in the silhouette.
-        taper: (t) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
-      });
+
+      // ---- clumping -------------------------------------------------------
+      // One ribbon per root is what read as straw. At any strand width fine
+      // enough not to be a blade, a single lock cannot fill the space between
+      // itself and its neighbour, so sky shows between every strand and each one
+      // reads as a separate object. Real hair separates into *clumps*: several
+      // locks sharing a root and a direction, splaying apart toward the tips.
+      // Emitting `clump` locks per root multiplies the density inside the
+      // silhouette at a fraction of the width each, which is the difference
+      // between a mass of hair and a handful of quills.
+      const clumpN = Math.max(1, Math.round(tuft.clump ?? H.clump ?? 1));
+      // lateral basis for the splay: two axes perpendicular to the mean flow
+      const ax = bowAxis.clone();
+      const ay = new THREE.Vector3().crossVectors(d1, ax);
+      if (ay.lengthSq() < 1e-8) ay.set(0, 1, 0);
+      ay.normalize();
+      const splay = (tuft.splay ?? 0.20) * len;
+      // Total cross-section is held roughly constant, so a clumped tuft is not
+      // a fatter tuft: it is the same mass resolved into finer filaments.
+      const cwid = clumpN > 1 ? wid * (0.42 + 0.34 / clumpN) : wid;
+      const steps = tuft.steps || 6;
+
+      for (let c2 = 0; c2 < clumpN; c2++) {
+        let cpts = pts;
+        if (clumpN > 1) {
+          const ang = (c2 / clumpN) * Math.PI * 2 + rng.range(-0.5, 0.5);
+          const rad = c2 === 0 ? rng.range(0, 0.25) : rng.range(0.45, 1.0);
+          const ox = Math.cos(ang) * rad, oy = Math.sin(ang) * rad;
+          cpts = pts.map((q, k) => {
+            const t = k / segs;
+            // the locks are together at the root and apart at the tip
+            const s = splay * (0.10 + 0.90 * t * t);
+            const v = q.clone().addScaledVector(ax, ox * s).addScaledVector(ay, oy * s);
+            if (hug > 0) hugSkull(v, baseOff + puff * len * t + splay * 0.6, hug * 0.8);
+            return v;
+          });
+        }
+        const w2 = cwid * (0.78 + 0.44 * rng.next());
+        ribbon(B, {
+          points: cpts.map((q) => put(q).toArray()),
+          steps,
+          // six-sided: a flat diamond is what made every strand a faceted blade
+          sides: tuft.sides ?? 6,
+          width: w2 * scale,
+          // a lock is a rolled bundle, not a ribbon: floor the depth-to-width
+          // ratio so the six-sided section is actually round
+          thick: w2 * scale * Math.max(0.62, tuft.thick ?? 0.5),
+          up: nrm.toArray(),
+          // A wide per-lock value spread is the difference between "hair" and "a
+          // black shape". Some clumps sit near the root value, some run almost to
+          // the tip value at their base — that is what makes the mass legible
+          // once every individual ribbon is thinner than a pixel.
+          color: tRoot.clone().lerp(tTip, 0.14 + 0.50 * Math.pow(rng.next(), 1.3)),
+          // The tip value used to be lifted *above* the style's tip colour on
+          // half the locks. The tip is the part that sits against the sky, so a
+          // lifted tip is exactly the pixel that makes one strand read as a
+          // separate straw. Tips now sit at or below the style value.
+          tipColor: tTip.clone().multiplyScalar(0.66 + 0.30 * rng.next()),
+          // Clump profile. Holding the width through the body of the strand and
+          // dropping it at the end is an *arrowhead*: a broad blade converging to
+          // a point in a straight line, which is precisely what read as a quill.
+          // A lock narrows continuously from a wide root to a hair-fine tip, so
+          // the width is a plain power curve and the root is correspondingly
+          // wider to keep the same mass in the silhouette.
+          taper: (t) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
+        });
+      }
     }
   }
 

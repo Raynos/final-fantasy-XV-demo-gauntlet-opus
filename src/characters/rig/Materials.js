@@ -161,9 +161,12 @@ function patch(mat, o = {}) {
   float s1 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d1 * d1 ) ) ), ${exp1.toFixed(1)} );
   float s2 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d2 * d2 ) ) ), ${exp2.toFixed(1)} );
   float vis = clamp( dot( hN, hL ) * 0.7 + 0.3, 0.0, 1.0 );
-  // break the band along the strand so it reads as filaments catching light
-  // rather than a chrome stripe painted down a tube
-  float mask = 0.28 + 0.72 * abs( sin( vMapUv.x * 34.0 + jit * 7.0 ) );
+  // Break the band along the strand so it reads as filaments catching light
+  // rather than a chrome stripe painted down a tube. This ran on vMapUv.x,
+  // which is the coordinate *across* the ribbon: 34 cycles across a 3 mm strand
+  // is far below a pixel at any range, so it aliased into the chrome speckle
+  // that made every lock read as a faceted blade. It has to run along .y.
+  float mask = 0.34 + 0.66 * abs( sin( vMapUv.y * 9.0 + jit * 7.0 ) );
   vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
   // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
   // matte value floor or its broad highlight reads as a moulded plastic dome
@@ -308,8 +311,11 @@ function cache() {
     // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
     // crest), v along its length
     const across = Math.abs(u - 0.5) * 2;
-    const fil = 0.62 + 0.38 * Math.abs(Math.sin(u * Math.PI * 11.0 + n.simplex2(u * 14, v * 2) * 3.4));
-    const along = 0.86 + 0.14 * n.simplex2(u * 8, v * 26);
+    // Four filaments across the ribbon, not eleven: a lock is 2-3 mm wide, so
+    // eleven bands across it are sub-pixel at every range the head is ever
+    // seen at and alias into sparkle instead of resolving as strands.
+    const fil = 0.66 + 0.34 * Math.abs(Math.sin(u * Math.PI * 4.0 + n.simplex2(u * 6, v * 2) * 2.2));
+    const along = 0.80 + 0.20 * n.simplex2(u * 8, v * 26);
     // edges of a clump are always darker than its crest
     const edge = 0.70 + 0.30 * (1.0 - across * across);
     c[0] = c[1] = c[2] = fil * along * edge;
@@ -398,7 +404,7 @@ export function hairMaterial() {
   });
   return patch(m, {
     sss: 0,
-    hair: { spec: 0.55, shift: 0.055, exp1: 150.0, exp2: 20.0, tint: 0.85 },
+    hair: { spec: 0.40, shift: 0.055, exp1: 90.0, exp2: 16.0, tint: 0.85 },
   });
 }
 

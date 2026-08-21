@@ -94,7 +94,7 @@ export const CAST = {
       // narrow enough to leave gaps between them.
       hair: {
         color: 0x18191f, tipColor: 0x40414a, rough: 0.36, shell: 0.0125, volume: 0.92,
-        hairline: 0.002, peak: 0.35, wisps: 46, wispLen: 0.85,
+        hairline: 0.002, peak: 0.35, wisps: 46, wispLen: 0.85, clump: 3,
         tufts: [
           // Layered clumps that lie *along* the skull. Pushing strands out along
           // the surface normal (`out` near 1) is what turned this into a sea
@@ -159,7 +159,7 @@ export const CAST = {
       tattoo: eagleInk,
       hair: {
         color: 0x261b11, tipColor: 0x55402a, rough: 0.42, shell: 0.0125, volume: 0.92,
-        hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9,
+        hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9, clump: 3,
         tufts: [
           { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.52], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.036, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.16, lenVar: 0.32 },
           { n: 52, th: [-1.1, 1.1], phi: [0.84, 1.0], dir: [0, -0.30, -0.95], out: 0.71, bend: 1.0, len: 0.080, thick: 0.34, width: 0.0022, spike: 0.6, dirJit: 0.07, lenVar: 0.18 },
@@ -172,13 +172,13 @@ export const CAST = {
           { n: 20, th: [-1.62, -1.12], phi: [0.92, 1.0], dir: [-0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
           { n: 44, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.16, -0.98], out: 0.62, hug: 0.30, puff: 1.2, bend: 0.86, len: 0.084, width: 0.0016, thick: 0.4, spike: 1.0, dirJit: 0.28, lenVar: 0.34 },
           // ---- full beard: rooted below the equator, so `absPhi` ------------
-          { n: 150, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0155, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.22, lenVar: 0.34, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 90, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0195, width: 0.0012, thick: 0.45, spike: 0.8, dirJit: 0.20, lenVar: 0.32, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 150, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0102, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.55, dirJit: 0.22, lenVar: 0.34, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 90, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0128, width: 0.0012, thick: 0.45, spike: 0.8, clump: 5, splay: 0.55, dirJit: 0.20, lenVar: 0.32, color: 0x2a1f14, tipColor: 0x553f26 },
           // moustache
-          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0125, width: 0.0011, thick: 0.45, spike: 0.9, dirJit: 0.20, lenVar: 0.30, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0086, width: 0.0011, thick: 0.45, spike: 0.9, clump: 5, splay: 0.55, dirJit: 0.20, lenVar: 0.30, color: 0x2a1f14, tipColor: 0x553f26 },
           // sideburns tying the beard into the hairline
-          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0110, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.50, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0110, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.50, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
         ],
       },
       outfit: [
@@ -225,7 +225,7 @@ export const CAST = {
       gloves: { color: srgb(0x1b1b21), rough: 0.62 },
       hair: {
         color: 0x836b44, tipColor: 0xb99d6a, rough: 0.34, shell: 0.011, volume: 0.85,
-        hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75,
+        hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         tufts: [
           { n: 170, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.030, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.13, lenVar: 0.28 },
           // slicked-up quiff: front hair lifts off the brow, then sweeps back
@@ -280,7 +280,7 @@ export const CAST = {
       brows: { color: 0xa07a40, len: 0.012, width: 0.0052 },
       hair: {
         color: 0xcaa451, tipColor: 0xeed896, rough: 0.30, shell: 0.011, volume: 0.86,
-        hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8,
+        hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         tufts: [
           { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.029, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.18, lenVar: 0.30 },
           // short up-swept front spikes — the whole read, but half the height
