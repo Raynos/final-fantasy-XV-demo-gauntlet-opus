@@ -94,16 +94,19 @@ export const CAST = {
       // narrow enough to leave gaps between them.
       hair: {
         color: 0x18191f, tipColor: 0x40414a, rough: 0.36, shell: 0.0125, volume: 0.92,
-        hairline: 0.002, peak: 0.35, wisps: 46, wispLen: 0.85, clump: 3,
+        // Noctis carries a long fringe, so he is the one character the lower global
+        // hairline actually hurt: it dropped the fringe roots 11 mm and the locks
+        // ended up over both eyes. He gets most of it back per-character.
+        hairline: 0.013, peak: 0.35, wisps: 46, wispLen: 0.85, clump: 3,
         tufts: [
           // Layered clumps that lie *along* the skull. Pushing strands out along
           // the surface normal (`out` near 1) is what turned this into a sea
           // urchin; a hairstyle is locks following a flow, not quills.
           { n: 300, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.052, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.05, lenVar: 0.30, steps: 4, sides: 5 },
           // long asymmetric fringe sweeping across the brow — clearing the lids
-          { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.46, 0.76], out: 0.71, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.033, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18, steps: 6 },
-          { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.62, -0.44, 0.65], out: 0.68, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.040, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.05, dirJit: 0.06, lenVar: 0.20, steps: 6 },
-          { n: 48, th: [0.20, 1.04], phi: [0.88, 1.0], dir: [0.38, -0.40, 0.83], out: 0.72, hug: 0.55, puff: 0.85, bend: 0.98, len: 0.035, width: 0.0030, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18 },
+          { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.46, 0.76], out: 0.71, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.029, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.01, dirJit: 0.07, lenVar: 0.18, steps: 6 },
+          { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.62, -0.44, 0.65], out: 0.68, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.034, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.02, dirJit: 0.06, lenVar: 0.20, steps: 6 },
+          { n: 48, th: [0.20, 1.04], phi: [0.88, 1.0], dir: [0.38, -0.40, 0.83], out: 0.72, hug: 0.55, puff: 0.85, bend: 0.98, len: 0.031, width: 0.0030, thick: 0.34, spike: 0.62, sag: 0.01, dirJit: 0.07, lenVar: 0.18 },
           // crown layers, swept back
           { n: 140, th: [-2.75, 2.75], phi: [0.20, 0.78], dir: [0, -0.10, -0.99], out: 0.60, puff: 0.55, bend: 0.94, len: 0.046, width: 0.0024, thick: 0.36, spike: 0.72, dirJit: 0.14, lenVar: 0.32 },
           // crown spikes: the one thing that makes Noctis readable in silhouette
