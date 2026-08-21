@@ -260,7 +260,7 @@ function queue(fn) {
 }
 
 async function routeShots(body) {
-  const { shots, settle = 60, out, ...rest } = body;
+  const { shots, settle = 60, out, jpeg = 0, ...rest } = body;
   const page = await harness.page_(rest);
   const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
   await mkdir(outDir, { recursive: true });
@@ -282,9 +282,9 @@ async function routeShots(body) {
         programs: g.renderer.info.programs?.length ?? 0,
       };
     }, [name, settle]);
-    const file = path.join(outDir, `${name}.png`);
-    await writeFile(file, await page.screenshot({ type: 'png' }));
-    results.push({ name, file, ...meta, ms: Date.now() - t0 });
+    const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
+    await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
+    results.push({ name, file: path.relative(ROOT, file), ...meta, ms: Date.now() - t0 });
   }
   return { results, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses, bootMs: harness.bootMs };
 }

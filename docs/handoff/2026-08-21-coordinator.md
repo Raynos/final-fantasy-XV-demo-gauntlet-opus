@@ -1,0 +1,241 @@
+# Coordinator handoff — 2026-08-21, session `07642602`
+
+Written for whoever picks this project up next. Read this first, then
+`docs/HANDOFF.md` (method and scar tissue), `BRIEF.md` (the contract), `SCOPE.md`,
+then the per-agent handoffs listed below.
+
+This session resumed `51c0b82c`, which had run out of weekly usage mid-round.
+
+---
+
+## 1. The one thing that changed how this project is worked on
+
+**There is now an in-game developer / review suite.** Before it, the only way to
+look at the game was `tools/shoot.mjs` — a ~20 minute batch capture of 139 fixed
+cameras, then squinting at a contact sheet. That loop cannot answer "what does
+this enemy's walk cycle look like from behind" or "why is the ground ochre
+*here*", which is why several defects survived for months while being plainly
+visible.
+
+```bash
+npm run dev      # then open http://127.0.0.1:5173/?debug=1
+npm run preview  # the built bundle, same URL suffix — the inbox still writes
+```
+
+| key | does |
+|---|---|
+| `` ` `` | console — `help` lists every command and cvar, Tab completes |
+| `F8` | freecam, simulation keeps running |
+| `P` | pause the world and fly (`game.paused` skips `update()`, not `lateUpdate()`) |
+| `F4` | asset browser — 23 enemies, 4 heroes, 8 NPCs, 5 weapons on a turntable |
+| `F9` | capture the frame and file a review note |
+| `F2` | fps / frame-time graph / draw calls |
+
+Console verbs: `warp <poiId|zoneId>`, `goto <x> <z>`, `where`, `shot <name|next|prev>`,
+`eject`, `shot.save`, `mark <slot>` / `jump <slot>`, `view wireframe|unlit|normals|overdraw`,
+`post nodof,nobloom`, `quality ultra`, `sky.time 18.5`, `sky.weather storm`,
+`time.scale 0.25`, `asset enemies irongiant`, `note`, `reset`, `dump`.
+
+In the asset browser: `←→` asset, `↑↓` family, `,` `.` pose, `Space` play,
+`O` mark ok, `K` flag, `U` filter to unreviewed, `F4` close.
+
+Notes land in `.review/inbox/` as a JSON + PNG pair carrying seed, camera
+transform, shot, zone, weather, perf, build SHA and every cvar changed from
+boot. The **`/drain-inbox` skill** (`.claude/skills/drain-inbox/`) reads them,
+groups by owning directory and dispatches agents.
+
+Design detail worth keeping: the suite **refuses to load when `?shoot` is
+present**, so it can never appear in a capture. Verified, not assumed — two cold
+captures diff at 1.555/255, the documented noise floor. **Do not weaken that
+guard.**
+
+Full design and rationale: **`docs/dev-suite-plan.md`**.
+
+Not yet built: trees/props/Regalia in the browser (props need a registry
+introduced — the kind tables exist but are module-private), the world/zone
+navigator panel, frozen-frustum culling inspection, and `review.restore <id>`.
+`lil-gui` was deliberately **not** added — a new npm dep triggers Vite
+re-optimisation, which reloads pages mid-capture and corrupts running agents.
+
+---
+
+## 2. State of `main`
+
+Landed and **verified by eye** this session:
+
+- **The party no longer sinks.** `Anim.js` accumulated `bobY` with `-=` on the
+  idle layer, unbounded — hips went +0.844 at boot to −9.667 after 139 shots.
+  Idle layers must **assign**, never accumulate.
+- **The Disc of Cauthess meteor was 4 km from its own zone.** Placed at
+  (−2010, 1890) in Cleigne while the `cauthess` zone it belongs to is centred at
+  (−1020, −2160) in Duscae. Its 857 m outer shards leaned over the Cape Caem
+  headland and rendered as unexplained slabs above the sea. This was diagnosed
+  for weeks as a *terrain* bug. It was a prop in the wrong place.
+- **Companion closeups focused on Noctis.** `PostFX._headObject()` resolved the
+  player unconditionally, so a `follow: 'gladio'` shot racked focus onto Noctis
+  behind the subject; the distances differ by less than `headFocusWindow`
+  (3.2 m) so the snap always fired. Now resolves the head of whoever
+  `rig.followShot.follow` names.
+- **Weapons are in hands.** Every weapon authored its crossguard at y=0, so the
+  fist closed on the guard and the grip dangled below. The socket wiring was
+  never the bug — do not re-investigate it. Companions now carry sheathed in
+  the field.
+- **The dev suite**, above.
+
+---
+
+## 3. The agent round — branches and handoffs
+
+Each agent wrote its own handoff into its worktree at `docs/handoff/<name>.md`.
+Merging the branch brings the handoff with it.
+
+| branch | owns | handoff |
+|---|---|---|
+| `agent/weapons` | `combat/Weapons.js`, `GeoKit.js`, `rig/Character.js`, `ai/PartyAI.js` | `docs/handoff/weapons.md` — **merged to main** |
+| `agent/enemies` | `characters/enemies/**`, `rig/CreatureAnim.js`, `Enemies.js` | `docs/handoff/enemies.md` |
+| `agent/grass` | `world/veg/**`, `Vegetation.js` | `docs/handoff/grass.md` |
+| `agent/splat` | `world/terrain/**`, `Terrain.js` | `docs/handoff/splat.md` |
+| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/**`, `Cast.js` *appearance only* | `docs/handoff/heroart.md` |
+| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | `docs/handoff/cineui.md` |
+| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `rig/Posture.js`, `Party.js`, `Player.js` | `docs/handoff/idles.md` — **written by the coordinator**, the agent's session was lost |
+
+**Ownership is disjoint by construction and must stay that way.** Two agents in
+one directory corrupt each other's work; it happened once with `terrain/**` and
+an agent had to be warned mid-flight that the ground had been rewritten under
+it. `Cast.js` was split mid-round: `agent/heroart` owns appearance (hair, scar,
+vest, coat), `agent/idles` moved posture out into a new `rig/Posture.js`.
+
+Shared files — `src/game/Game.js`, `src/game/Shots.js` — are the coordinator's
+per BRIEF rule 4. Agents report changes to them rather than editing.
+
+### Three agents stalled and were salvaged
+
+`agent/splat`, `agent/weapons` and `agent/idles` all stalled with the watchdog
+message "no progress for 600s". In every case the work was **uncommitted** and
+would have been lost: ~280 lines plus a new `Biome.js`, ~860 lines, and
+`Animator.rest()` respectively. All three were recovered by committing the
+worktree directly.
+
+**Lesson for the next round: tell agents to commit early and often, even
+unverified `WIP:` commits.** An ugly commit is enormously cheaper than a lost
+afternoon. The cause is machine saturation, not agent error — see §6.
+
+---
+
+## 4. Open items, ranked
+
+1. **The party formation never settles, and follow shots are order-dependent.**
+   This is the most serious open defect because it undermines determinism for
+   all 47 `follow` shots. `prompto_closeup` reads as out of focus; it is not a
+   DOF bug. Re-shot **alone** with `--settle 300` it is sharp. Companions are
+   still steering to their wandering formation slots, and a camera anchored to a
+   moving subject smears the *whole* frame through TAA and motion blur. Prompto
+   is worst — smallest `lag` (0.10), highest `speedMul` (1.05).
+   The same shot in a batch on the same warm page put the camera *inside another
+   party member*: same shot, same settle, different result purely from what ran
+   before it. **Some framings previously judged "broken" may simply never have
+   settled.**
+   `Animator.rest()` exists on `agent/idles`; `Party.snap()` does not. Build it,
+   then call it from `Game.applyShot`.
+   **Two harness fixes were tried and both reverted — do not repeat them:** a
+   re-anchor convergence loop (formation drifts between iterations, camera lands
+   inside whoever is in the way) and a long settle for follow shots (240 extra
+   frames × 47 shots, did not fix ordering). The fix belongs in `Party`.
+2. **Every cutscene renders a pure-black sky** under correctly-lit golden-hour
+   ground, while `vista_dusk` from the same build renders a full cloudscape.
+   See `docs/handoff/cineui.md`.
+3. **Blade material.** Geometry is fixed but at `metalness 0.90` blades take
+   their colour entirely from the sky env map — every blade is a flat navy plane
+   with no edge highlight. See `docs/handoff/weapons.md`.
+4. **Perf gate.** `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
+   best measured; shadow cascades ~22 ms dominate). **Never trust a perf number
+   taken while agents are running.**
+5. **A fresh harsh-critic pass.** Scores are badly stale — the last read 4.5/10
+   and predates clouds, cartography, collision, menus, combat, the rebuilt
+   bestiary, biomes, dressing and everything in this session.
+6. `caem_shore` fishing POI at (−2564, 1966) in `WorldMap.js` is reportedly
+   mis-authored. Never verified by measurement.
+7. `_outcrops` consumes its RNG stream conditionally on local slope, so any
+   height change anywhere reshuffles every later boulder. Worth decoupling.
+8. `src/world/map/MapRaster.js` is orphaned (`tools/orphans.mjs`), pre-existing.
+9. **TypeScript port** — `docs/typescript-port-plan.md`, gated on a quiet tree.
+
+---
+
+## 5. Verification state
+
+| check | result |
+|---|---|
+| `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
+| `tools/integration.mjs` | 18 pass · 0 fail |
+| `tools/uxcheck.mjs` | 86/86 |
+| `tools/orphans.mjs` | 267/268 reachable; `MapRaster.js` orphaned, pre-existing |
+| `tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
+| dev-suite determinism | 1.555/255 — at the documented noise floor |
+| `tools/gameplay.mjs` | **fails** — see open item 4 |
+| `tools/perf.mjs` | ~87 fps mean, ~47 worst — but measured under load |
+
+---
+
+## 6. Landmines — all measured, all previously cost real time
+
+- **The machine saturates.** Six or more concurrent headless Chromiums make
+  every measurement worthless *and* stall agents outright. This session lost
+  three agents to it. Cap concurrency at ~4, give each worktree a unique `PORT`
+  (the capture daemon uses `PORT+1`), and prefer the warm daemon over `--cold`.
+- **Toggling a light's `visible` recompiled 43 programs — a measured 9.5 s
+  freeze.** `engine/LightBudget.js` pins the counts. The dev suite's isolation
+  stage deliberately adds **no** lights for this reason.
+- **A stale capture-daemon page once produced a completely false diagnosis** that
+  cost three separate investigations. `sourceStamp()` in `tools/daemon.mjs` now
+  reboots the page on any `src/` edit, and the daemon refuses to serve a
+  different checkout. This is also why the dev suite writes tuning to
+  `.review/`, never to `src/`.
+- `constructor.name` is mangled in production builds — register systems with
+  explicit string keys, always.
+- Do **not** add `--disable-frame-rate-limit` to `tools/chromium.mjs`; measured
+  3× idle CPU for zero benefit.
+- **Shot names are positional** on `tools/shoot.mjs`, not `--shot`.
+- `tools/framecam.mjs` needs `PORT` = the **vite** port; the daemon uses
+  `PORT+1` and aiming framecam at it hangs for the full 300 s timeout.
+- **No CSS transitions in `src/ui`** — every animation is written per frame from
+  `game.time` or deterministic captures break. `src/dev/**` is exempt because it
+  cannot appear in a capture.
+- `bestiary_coeurl` does not exist. Do not chase it.
+- **Never `-=` on an idle layer.** See §2.
+
+---
+
+## 7. Resuming
+
+```bash
+cd ~/projects/game-demos/final-fantasy-XV-demo-gauntlet-opus
+git status                          # expect clean, on main
+git config core.hooksPath .githooks # if a fresh clone
+git branch --list 'agent/*'         # unmerged round-5 work
+git worktree list                   # ~19 worktrees, 6.9 GB — prune after merging
+node tools/cleanup.mjs              # report orphaned vite/chromium; --kill to act
+npx vite build
+node tools/integration.mjs
+```
+
+To merge the round: for each `agent/*` branch, read its
+`docs/handoff/<name>.md` **first**, check `git log main..<branch>` for `WIP:`
+prefixes (those are explicitly unverified), merge, then **shoot the affected
+shots and look at them yourself**. Do not trust a merge you have not seen.
+
+Then prune: `git worktree remove --force <path>` for each, and
+`git branch -d agent/<name>`. `shots/` is 1.7 GB of gitignored captures from
+many sessions and can be emptied freely.
+
+**The standing loop** (`docs/HANDOFF.md` §1): dispatch parallel agents on
+disjoint directories → each iterates shoot/look/fix → coordinator merges and
+verifies → harsh critics → feed critique into the next round. The user's
+standing instruction: *"Always focus on broad perfection across all details of
+the game, never pigeonhole, always see the forest through the trees, always work
+on the biggest highest-impact levers, never spend 5 rounds tweaking some tiny
+detail on one screenshot in one direction."*
+
+And the rule that matters most, from `docs/HANDOFF.md` §1: **agents must look at
+their own output.** Every brief says read the PNGs and actually look at them.
+The dev suite exists to make that cheap.

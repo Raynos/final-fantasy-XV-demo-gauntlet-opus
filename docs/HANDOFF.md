@@ -15,7 +15,8 @@ and why several things are the way they are — see `journal/2026-08-17-51c0b82c
 
 Read next, in this order: `BRIEF.md` (the contract every agent works against),
 `SCOPE.md` (atomic checklist), `PROGRESS.md` (status + bug log), `PLAN.md`
-(design audit), `WORLDMAP.md` (cartography), `docs/dev-suite-plan.md`
+**`docs/handoff/2026-08-21-coordinator.md`** (start here — latest
+session handoff), `WORLDMAP.md` (cartography), `docs/dev-suite-plan.md`
 (in-game debug/review suite), `docs/typescript-port-plan.md`.
 
 ---
@@ -32,7 +33,7 @@ dispatch parallel agents on disjoint files
   -> feed critique back as the next round's briefs
 ```
 
-Four rules that produced most of the value:
+Five rules that produced most of the value:
 
 1. **Agents must look at their own output.** Every brief says "read the PNGs with
    the Read tool and actually look at them". Agents that only check for absence
@@ -45,12 +46,17 @@ Four rules that produced most of the value:
    Anything cross-boundary is *reported*, not edited, and the coordinator
    applies it. Two agents editing `_readInput` independently caused the only
    merge conflict in 114 commits.
+5. **Every agent keeps `docs/handoff/<topic>.md` current.** An agent that can be
+   replaced by its handoff is one you can retire the moment it stops being worth
+   its cost; one that can't has taken its afternoon hostage. It is the same
+   principle `SESSION-STATE.md` applies to me — the state lives on disk, not in
+   a context window.
 
 ## 2. Tooling — learn these before writing code
 
 | tool | what it is for |
 |---|---|
-| `tools/shoot.mjs` | Capture named shots from `src/game/Shots.js`. Fixed timestep, exits non-zero on any console error. `--prod` builds and serves the real bundle. |
+| `tools/shoot.mjs` | Capture named shots from `src/game/Shots.js`. Fixed timestep, exits non-zero on any console error. `--prod` builds and serves the real bundle. `--jpeg` writes review-sized JPEGs — use it for anything an agent will read back. |
 | `tools/daemon.mjs` | Holds one vite + one Chromium + one booted page across invocations. A warm capture is ~1.5 s vs ~24 s cold. Used by `shoot.mjs` by default. |
 | `tools/perf.mjs` | Posed frame-time benchmark. `gl.finish()`-bracketed, reports median/min/mean/p95. |
 | `tools/gameplay.mjs` | **The primary perf gate.** Drives the real loop with synthetic input across 13 segments (walk, sprint, combat, warp, menus, streaming, weather). Posed shots hide the hitches that ruin play. |
@@ -58,8 +64,9 @@ Four rules that produced most of the value:
 | `tools/integration.mjs` | **Proves features are reachable in play**, not merely present. 18 checks. |
 | `tools/orphans.mjs` | Static reachability from `main.js`. Catches dead code. |
 | `tools/imgdiff.mjs` | Visual regression. **Measured noise floor 1.5–1.9 mean/255** — anything above that needs justifying. |
-| `tools/sheet.mjs` | Contact sheet of a shot directory. How critics review the whole game at once. |
+| `tools/sheet.mjs` | Contact sheet of a shot directory, paginated to `_sheet-1.jpg`, `_sheet-2.jpg` … at 12 shots a page. How critics review the whole game at once. |
 | `tools/cleanup.mjs` | Kills orphaned vite/chromium. Grades confidence so a live agent's server is never killed. |
+| `tools/agentstats.mjs` | What each live subagent costs: turns, context, p50/p90 model wait, screenshot MB, last tool. Tells *expensive* apart from *stuck*. |
 | `tools/roadcheck.mjs` | Asserts every drivable POI is reachable, grades and corner radii are legal. |
 | `tools/uxcheck.mjs`, `tools/combatloop.mjs` | Assert menus and combat mechanics respond to real input. |
 
@@ -179,6 +186,15 @@ Merge them, verify, then re-run the critic pass.
 - **The machine saturates.** Six-plus concurrent agents each running headless
   Chromium pushes load average past 18 and makes every measurement worthless.
   Agents will report numbers taken under contention — ask about load conditions.
+- **A slow agent is usually not a stuck one, and the difference is invisible from
+  outside.** `node tools/agentstats.mjs` shows both: a healthy `last tool` with a
+  p90 in the hundreds of seconds means expensive, and a `last tool` minutes old
+  with no result means blocked — one agent sat 94 minutes inside a single
+  `git reset --hard`. Turn latency does not track context size on a good day; on a
+  bad one it tracks it steeply, which is when the big agents are worth retiring.
+- **Screenshots dominate an agent's transcript.** 20 PNG reads is 12–15 MB of
+  context, ~95% of everything it carries. Capture review frames with `--jpeg`;
+  the model sees a 1568 px long edge either way.
 - **`shots/` is gitignored** and so is the terrain bake cache
   (`public/baked/`, 32 MB, regenerated deterministically from the generators).
 - Use worktrees, and clean them up: they reached 6.1 GB before pruning.

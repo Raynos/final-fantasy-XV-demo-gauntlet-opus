@@ -10,6 +10,8 @@
  *   node tools/shoot.mjs --prod                # build + serve the real bundle
  *   node tools/shoot.mjs --cold                # force a fresh boot, no page reuse
  *   node tools/shoot.mjs --no-daemon           # own the browser in-process (old path)
+ *   node tools/shoot.mjs --jpeg               # write .jpg instead of .png (review captures)
+ *   node tools/shoot.mjs --jpeg 70            # ...at a chosen quality (default 82)
  *
  * By default this hands the work to `tools/daemon.mjs`, which keeps one vite
  * server, one Chromium and one booted page alive between invocations — so the
@@ -20,6 +22,11 @@
  * Either way it waits for `GAME.ready`, drives the game with fixed timesteps,
  * and writes PNGs. Exits non-zero on any page error so agents can't mistake a
  * blank canvas for success.
+ *
+ * PNG is the default because `tools/imgdiff.mjs` compares pixels and its 1.5-1.9/255
+ * noise floor is measured on lossless frames. `--jpeg` is for the shoot -> look -> fix
+ * loop: an agent reading a 1600x900 capture gets it downscaled to a 1568 px long edge
+ * anyway, so the extra ~2.3 MB a PNG costs buys nothing it can see.
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mjs';
@@ -38,13 +45,19 @@ const URL_BASE = `http://127.0.0.1:${PORT}`;
 function parseArgs(argv) {
   const opts = {
     w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false,
-    timeout: 120000, nobake: false, daemon: true, cold: false,
+    timeout: 120000, nobake: false, daemon: true, cold: false, jpeg: 0,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--nobake') opts.nobake = true;
     else if (a === '--no-daemon') opts.daemon = false;
     else if (a === '--cold') opts.cold = true;
+    // `--jpeg` alone means quality 82; a bare number after it overrides. Anything
+    // else is the next flag or a shot name, so it is left for the loop to handle.
+    else if (a === '--jpeg') {
+      const q = Number(argv[i + 1]);
+      opts.jpeg = Number.isFinite(q) && argv[i + 1] !== undefined && argv[i + 1] !== '' ? (i++, q) : 82;
+    }
     else if (a === '--w') opts.w = Number(argv[++i]);
     else if (a === '--h') opts.h = Number(argv[++i]);
     else if (a === '--settle') opts.settle = Number(argv[++i]);
@@ -99,11 +112,21 @@ async function listShots() {
   return [...src.matchAll(/^\s{2}([a-zA-Z0-9_]+):\s*\{/gm)].map((m) => m[1]);
 }
 
+/**
+ * One JSON line per shot, so a manifest can be grepped or tailed instead of read
+ * whole. Pretty-printing 139 results at indent 2 ran to 1500+ lines.
+ */
+function manifest({ results, ...rest }) {
+  const head = JSON.stringify(rest);
+  return `{"results":[\n${results.map((r) => '  ' + JSON.stringify(r)).join(',\n')}\n],`
+    + `${head === '{}' ? '' : head.slice(1, -1) + ','}"count":${results.length}}\n`;
+}
+
 /** Report one shot the way this tool has always reported it. */
 function line(r) {
   console.log(
     `✓ ${r.name.padEnd(16)} ${String(r.triangles).padStart(9)} tris  ` +
-    `${String(r.calls).padStart(4)} calls  ${String(r.ms).padStart(5)}ms  -> ${path.relative(ROOT, r.file)}`
+    `${String(r.calls).padStart(4)} calls  ${String(r.ms).padStart(5)}ms  -> ${r.file}`
   );
 }
 
@@ -113,7 +136,7 @@ async function viaDaemon(opts, shots, outDir) {
   if (started) console.log('[shoot] started capture daemon');
   const out = await call('/shots', {
     shots, out: outDir, settle: opts.settle, w: opts.w, h: opts.h,
-    nobake: opts.nobake, prod: opts.prod, cold: opts.cold,
+    nobake: opts.nobake, prod: opts.prod, cold: opts.cold, jpeg: opts.jpeg,
   });
   for (const r of out.results) line(r);
   console.log(`[shoot] daemon: ${out.boots} boot(s), ${out.reuses} page reuse(s), last boot ${out.bootMs} ms`);
@@ -128,7 +151,7 @@ async function main() {
 
   if (opts.daemon) {
     const out = await viaDaemon(opts, shots, outDir);
-    await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(out, null, 2));
+    await writeFile(path.join(outDir, 'manifest.json'), manifest(out));
     if (out.errors.length) {
       console.error(`\n${out.errors.length} page error(s):`);
       for (const e of [...new Set(out.errors)].slice(0, 20)) console.error('  ' + e.split('\n')[0]);
@@ -193,11 +216,13 @@ async function main() {
         };
       }, [name, opts.settle]);
 
-      const file = path.join(outDir, `${name}.png`);
-      const buf = await page.screenshot({ type: 'png' });
+      const file = path.join(outDir, `${name}.${opts.jpeg ? 'jpg' : 'png'}`);
+      const buf = await page.screenshot(
+        opts.jpeg ? { type: 'jpeg', quality: opts.jpeg } : { type: 'png' }
+      );
       await writeFile(file, buf);
       const ms = Date.now() - t0;
-      results.push({ name, file, ...meta, ms });
+      results.push({ name, file: path.relative(ROOT, file), ...meta, ms });
       line(results[results.length - 1]);
     }
   } finally {
@@ -205,7 +230,7 @@ async function main() {
     if (server) server.kill();
   }
 
-  await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify({ results, errors }, null, 2));
+  await writeFile(path.join(outDir, 'manifest.json'), manifest({ results, errors }));
 
   if (errors.length) {
     console.error(`\n${errors.length} page error(s):`);

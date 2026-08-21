@@ -8,7 +8,10 @@
  *   node tools/corpus.mjs --only zones,ui       # just those categories
  *   node tools/corpus.mjs --sheet               # re-sheet what is on disk
  *   node tools/corpus.mjs --list                # print the category index
- *   node tools/corpus.mjs --out shots/corpus --cols 4 --w 3200
+ *   node tools/corpus.mjs --out shots/corpus --cols 3 --w 1536
+ *
+ * Sheets are JPEG and sized so a page lands under the 1568 px long edge a model
+ * sees. A 3200 px sheet of 20 shots was 45 MB and arrived as an illegible strip.
  *
  * Two authoring aids, because a shot is only worth taking if its subject is
  * actually in frame and both of these were hand-arithmetic before:
@@ -50,7 +53,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function parseArgs(argv) {
   const o = {
-    out: 'shots/corpus', cols: 4, w: 3200, chunk: 0, sheetOnly: false, list: false,
+    out: 'shots/corpus', cols: 3, w: 1536, chunk: 0, sheetOnly: false, list: false,
     only: null, settle: 60, warm: false, frame: null, scout: null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -162,7 +165,9 @@ async function sheet(dir, names, docs, { cols, w, title, out }) {
   const page = await browser.newPage({ viewport: { width: w, height: 900 } });
   await page.setContent(html);
   await page.waitForLoadState('networkidle');
-  await writeFile(out, await page.locator('.page').screenshot());
+  await writeFile(out, await page.locator('.page').screenshot(
+    out.endsWith('.png') ? { type: 'png' } : { type: 'jpeg', quality: 86 }
+  ));
   await browser.close();
   return cells.length;
 }
@@ -282,18 +287,18 @@ async function main() {
   let total = 0;
   for (const c of cats) {
     const n = await sheet(outDir, groups.get(c), docs, {
-      cols: o.cols, w: o.w, title: c.replace(/_/g, ' '), out: path.join(outDir, `_sheet-${c}.png`),
+      cols: o.cols, w: o.w, title: c.replace(/_/g, ' '), out: path.join(outDir, `_sheet-${c}.jpg`),
     });
-    if (n) console.log(`  _sheet-${c}.png  ${n}`);
+    if (n) console.log(`  _sheet-${c}.jpg  ${n}`);
     total += n;
   }
   // One "everything" sheet, in slices: a single page holding 128 full-res PNGs
   // as data URIs is several hundred MB of DOM and takes the render tab down.
   const all = (await readdir(outDir)).filter((f) => f.endsWith('.png') && !f.startsWith('_'))
     .map((f) => path.basename(f, '.png')).sort();
-  const SLICE = 20;
+  const SLICE = 12;
   for (let i = 0, page = 1; i < all.length; i += SLICE, page++) {
-    const out = all.length <= SLICE ? '_sheet.png' : `_sheet-all-${page}.png`;
+    const out = all.length <= SLICE ? '_sheet.jpg' : `_sheet-all-${page}.jpg`;
     await sheet(outDir, all.slice(i, i + SLICE), docs, {
       cols: o.cols, w: o.w, title: `corpus ${i + 1}-${Math.min(i + SLICE, all.length)}`,
       out: path.join(outDir, out),
