@@ -3,6 +3,9 @@ import { DevConsole } from './Console.js';
 import { StatsHud } from './StatsHud.js';
 import { Freecam } from './Freecam.js';
 import { Inbox } from './Inbox.js';
+import { Stage } from './Stage.js';
+import { AssetBrowser } from './AssetBrowser.js';
+import { ViewModes } from './ViewModes.js';
 import { SHOTS } from '../game/Shots.js';
 import { worldMap } from '../world/map/WorldMap.js';
 import './dev.css';
@@ -42,10 +45,13 @@ class DevSuite {
     this.console.installHelp();
     this.cam = new Freecam();
     this.inbox = new Inbox(this.root, game, this.reg);
+    this.stage = new Stage();
+    this.browser = new AssetBrowser(this.root, game, this.stage);
+    this.views = new ViewModes();
 
     this.hint = document.createElement('div');
     this.hint.className = 'dev-hint';
-    this.hint.innerHTML = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F9</b> note · <b>F2</b> stats';
+    this.hint.innerHTML = HINT;
     this.root.appendChild(this.hint);
 
     this.taint = document.createElement('div');
@@ -202,6 +208,53 @@ class DevSuite {
       name: 'reset', category: 'console', help: 'restore every cvar to its boot value',
       exec: () => { reg.reset(); this._scale = null; return 'cvars restored'; },
     });
+
+    // -------- asset browser
+
+    reg.cmd({
+      name: 'assets', category: 'assets', args: '[on|off]',
+      help: 'isolation stage: step every enemy, hero, NPC and weapon',
+      exec: (a) => {
+        const on = a ? a !== 'off' : !this.browser.open;
+        this.browser.setOpen(on);
+        // The stage writes `cam.pos`, but only `Freecam.apply` puts it on the
+        // real camera -- so the browser is useless unless flight is on.
+        this._setFly(on);
+        return on ? 'browser open — arrows to step, F4 to close' : 'browser closed';
+      },
+    });
+    reg.cmd({
+      name: 'asset', category: 'assets', args: '<family> <key>',
+      help: 'stage one named asset, e.g. `asset enemies irongiant`',
+      exec: (a) => {
+        const [fam, key] = a.split(/\s+/);
+        const i = this.browser.families.findIndex((f) => f.id === fam);
+        if (i < 0) throw new Error(`family: ${this.browser.families.map((f) => f.id).join(' | ')}`);
+        if (!this.browser.open) this.browser.setOpen(true);
+        this.browser.familyAt = i;
+        const keys = this.browser.list();
+        const at = keys.indexOf(key);
+        if (at < 0) throw new Error(`${fam}: ${keys.join(' ')}`);
+        this.browser.select(at);
+        return `${fam}/${key}`;
+      },
+    });
+    reg.cvar({
+      name: 'stage.spin', category: 'assets', help: 'turntable auto-rotate',
+      get: () => this.stage.spin, set: (v) => { this.stage.spin = !!v; },
+    });
+    reg.cvar({
+      name: 'stage.rate', category: 'assets', help: 'turntable radians/sec',
+      min: 0, max: 3, get: () => this.stage.rate, set: (v) => { this.stage.rate = v; },
+    });
+
+    // -------- render debug views
+
+    reg.cmd({
+      name: 'view', category: 'render', args: `<${ViewModes.names.join('|')}>`,
+      help: 'whole-scene material override',
+      exec: (a) => `view: ${this.views.set(a.trim() || 'off', game.scene)}`,
+    });
   }
 
   // ------------------------------------------------------------- actions
@@ -307,9 +360,22 @@ class DevSuite {
   _toast(text) {
     this.hint.textContent = text;
     clearTimeout(this._toastT);
-    this._toastT = setTimeout(() => {
-      this.hint.innerHTML = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F9</b> note · <b>F2</b> stats';
-    }, 4000);
+    this._toastT = setTimeout(() => { this.hint.innerHTML = HINT; }, 4000);
+  }
+
+  /** Browser navigation. Only bound while the browser is open. */
+  _browserKeys(input) {
+    const b = this.browser;
+    if (input.keyDown('ArrowRight')) b.step(1);
+    if (input.keyDown('ArrowLeft')) b.step(-1);
+    if (input.keyDown('ArrowDown')) b.stepFamily(1);
+    if (input.keyDown('ArrowUp')) b.stepFamily(-1);
+    if (input.keyDown('Comma')) b.stepPose(-1);
+    if (input.keyDown('Period')) b.stepPose(1);
+    if (input.keyDown('Space')) { b.playing = !b.playing; b.render(); }
+    if (input.keyDown('KeyO')) b.mark('ok');
+    if (input.keyDown('KeyK')) b.mark('flag');
+    if (input.keyDown('KeyU')) { b.unreviewedOnly = !b.unreviewedOnly; b.select(0); }
   }
 
   // ------------------------------------------------------------- per frame
@@ -323,6 +389,8 @@ class DevSuite {
       if (input.keyDown('F2')) this.stats.setVisible(!this.stats.visible);
       if (input.keyDown('F8')) this._setFly(!this.cam.enabled);
       if (input.keyDown('F9')) this.inbox.begin();
+      if (input.keyDown('F4')) this.reg.exec('assets');
+      if (this.browser.open) this._browserKeys(input);
       if (input.keyDown('KeyP')) {
         game.paused = !game.paused;
         this._setFly(game.paused || this.cam.enabled);
@@ -335,6 +403,10 @@ class DevSuite {
     }
 
     if (!typing) this.cam.update(dt, input);
+    this.browser.update(dt);
+    // Turntable writes the camera *before* apply(), so manual flight still
+    // wins whenever `stage.spin` is off.
+    this.stage.update(dt, this.cam, game);
     this.cam.apply(game.camera);
 
     // Written here, after every update(), so nothing can damp it back.
@@ -349,6 +421,8 @@ class DevSuite {
     }
   }
 }
+
+const HINT = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F4</b> assets · <b>F9</b> note · <b>F2</b> stats';
 
 const load = (k, fallback) => {
   try { return JSON.parse(localStorage.getItem(k)) || fallback; } catch { return fallback; }

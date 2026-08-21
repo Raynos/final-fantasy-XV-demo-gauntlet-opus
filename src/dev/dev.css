@@ -179,3 +179,38 @@
   color: #ffd9cc;
   letter-spacing: 0.08em;
 }
+
+/* ---------------------------------------------------------------- browser */
+
+.dev-browser {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  min-width: 260px;
+  max-width: 340px;
+  background: rgba(12, 14, 18, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  padding: 9px 11px;
+}
+
+.dev-b-head { display: flex; gap: 8px; align-items: baseline; color: #8b94a3; }
+.dev-b-head b { color: #6fb3ff; text-transform: uppercase; letter-spacing: 0.06em; }
+.dev-b-head em { color: #ffd166; font-style: normal; margin-left: auto; }
+
+.dev-b-name { font-size: 15px; color: #fff; margin: 3px 0 5px; }
+.dev-b-name i { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 2px; vertical-align: middle; }
+.dev-b-name i.ok   { background: rgba(60, 140, 70, 0.5); color: #cdeccf; }
+.dev-b-name i.flag { background: rgba(150, 60, 40, 0.55); color: #ffd9cc; }
+
+.dev-b-sub { color: #9aa3b0; }
+.dev-b-sub b { color: #fff; }
+.dev-b-err { color: #ff7b72; margin-top: 5px; word-break: break-word; }
+
+.dev-b-keys {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: #79828f;
+  line-height: 1.7;
+}
