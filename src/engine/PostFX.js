@@ -395,14 +395,45 @@ export class PostFX {
    * handles disappearing must cost us the head lock, never a frame.
    * @returns {THREE.Object3D|null}
    */
+  /**
+   * The head the auto-focus should rack onto.
+   *
+   * This must follow **the subject of the current shot**, not always Noctis.
+   * It used to resolve the player unconditionally, which quietly ruined every
+   * companion closeup in the 139-shot corpus: a `follow: 'gladio'` shot frames
+   * Gladiolus at ~1.5 m with Noctis a couple of metres behind him, the two
+   * distances disagree by less than `headFocusWindow` (3.2 m), so the snap
+   * fired and put the focal plane on Noctis. At f/4.6 the actual subject
+   * landed outside the depth of field and the whole frame read as soft.
+   */
   _headObject() {
-    if (this._head && this._head.parent) return this._head;
-    this._head = null;
     const game = this.game;
     if (!game || !game.get) return null;
-    const player = game.get('Player');
-    const char = player && player.character;
+
+    // Whoever the active shot follows; `undefined` for an absolute pos/target
+    // shot, which falls through to the player as before.
+    const rig = game.get('Camera');
+    const who = (rig && rig.followShot && rig.followShot.follow) || 'player';
+
+    // The cache is keyed on the subject as well as liveness — otherwise the
+    // previous shot's head survives into the next one and the bug comes back
+    // for exactly one shot at a time, which is far harder to spot.
+    if (this._head && this._head.parent && this._headWho === who) return this._head;
+    this._head = null;
+    this._headWho = who;
+
+    let char = null;
+    if (who !== 'player') {
+      const party = game.get('Party');
+      const m = party && party.get && party.get(who);
+      char = m && m.character;
+    }
+    if (!char) {
+      const player = game.get('Player');
+      char = player && player.character;
+    }
     if (!char) return null;
+
     const rigBones = char.rig && char.rig.byName;
     this._head = char.eyes
       || (char.attach && char.attach.head)
