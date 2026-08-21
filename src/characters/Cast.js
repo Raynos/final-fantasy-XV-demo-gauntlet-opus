@@ -224,7 +224,7 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x1b1b21), rough: 0.62 },
       hair: {
-        color: 0x836b44, tipColor: 0xb99d6a, rough: 0.34, shell: 0.011, volume: 0.85,
+        color: 0x9a8261, tipColor: 0xcab596, rough: 0.34, shell: 0.011, volume: 0.85,
         hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         tufts: [
           { n: 170, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.030, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.13, lenVar: 0.28 },
@@ -277,9 +277,9 @@ export const CAST = {
       lashColor: 0x2a1c14,
       fringeShadow: 0.28,
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
-      brows: { color: 0xa07a40, len: 0.012, width: 0.0052 },
+      brows: { color: 0xa8823f, len: 0.013, width: 0.0058 },
       hair: {
-        color: 0xcaa451, tipColor: 0xeed896, rough: 0.30, shell: 0.011, volume: 0.86,
+        color: 0xd49f46, tipColor: 0xf3d78e, rough: 0.30, shell: 0.011, volume: 0.86,
         hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         tufts: [
           { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.029, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.18, lenVar: 0.30 },

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MeshBuilder, ribbon, clamp01, smooth, lerp } from './Geo.js';
 import { skullSampler, HEAD_R } from './Face.js';
 import { Rng } from '../../util/Rng.js';
+import { Noise } from '../../util/Noise.js';
 
 /**
  * Hair.
@@ -59,8 +60,13 @@ export function buildHair(rig, look) {
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
 
   // ---- scalp shell -------------------------------------------------------
-  const cols = 52, rows = 11;
+  // A denser shell, because the thing it has to stop being is *smooth*: at
+  // 52x11 it was an ellipsoid, and an ellipsoid under a directional key is a
+  // moulded plastic cap however its albedo is textured. The lock-scale
+  // displacement below needs enough vertices to resolve.
+  const cols = 96, rows = 20;
   const shell = [];
+  const shellN = new Noise((look.seed || 7) * 3 + 17);
   B.color(base).mat((H.rough ?? 0.36) + 0.22, 0, 0).skin([[I.head, 1]]);
   const shellPoint = (th, t) => {
     const pm = phiOf(th);
@@ -71,7 +77,18 @@ export function buildHair(rig, look) {
     let off = vol * (0.22 + 0.9 * smooth(1 - t));
     if (t >= 0.999) off = 0.0012;
     if (H.shellShape) off *= H.shellShape(th, 1 - t);
-    return { p: p.clone().addScaledVector(n, off), n };
+    // Lock-scale relief. Hair in mass is not a surface, it is a bundle of
+    // ridges a centimetre or so apart running crown-to-hairline; the shell has
+    // to carry that in geometry, not only in a normal map, or every gap the
+    // strands leave shows a glossy dome underneath. The noise is stretched
+    // along the flow (low frequency in `t`, high in `th`) so it reads as
+    // partings rather than as lumps. It fades out at the hairline lip so the
+    // shell still meets the forehead cleanly.
+    const relief = (
+      0.62 * shellN.simplex2(Math.cos(th) * 11, Math.sin(th) * 11 + t * 2.2)
+      + 0.38 * shellN.simplex2(Math.cos(th) * 26, Math.sin(th) * 26 + t * 4.5)
+    ) * vol * 0.85 * smooth(clamp01((1 - t) * 2.4));
+    return { p: p.clone().addScaledVector(n, off + relief), n };
   };
   for (let r = 0; r <= rows; r++) {
     const row = [];
@@ -97,7 +114,14 @@ export function buildHair(rig, look) {
       // long way below the strand mid-tone, and every gap read as a hole —
       // which is most of what made the scalp look like a moulded black cap.
       B.color(shellC.clone().multiplyScalar(0.82 + 0.46 * crown * crown));
-      row.push(B.v(w.x, w.y, w.z, (c / cols) * 6, t * 1.5));
+      // The shell carries `hairStripe` too, and `u` on that map is the filament
+      // axis. At 6 repeats around a 55 cm skull it laid 24 filaments over the
+      // whole head — a spacing of 2 cm, which is not a strand, it is a smooth
+      // moulded dome with faint bands on it. That dome is exactly what read as
+      // a bald patch wherever the locks did not cover it. At 34 repeats the
+      // filaments land at ~4 mm, which is a real lock, so the gaps between the
+      // strands read as more hair instead of as scalp.
+      row.push(B.v(w.x, w.y, w.z, (c / cols) * 34, t * 3.2));
     }
     shell.push(row);
   }
@@ -207,7 +231,7 @@ export function buildHair(rig, look) {
       const ay = new THREE.Vector3().crossVectors(d1, ax);
       if (ay.lengthSq() < 1e-8) ay.set(0, 1, 0);
       ay.normalize();
-      const splay = (tuft.splay ?? 0.20) * len;
+      const splay = (tuft.splay ?? 0.14) * len;
       // Total cross-section is held roughly constant, so a clumped tuft is not
       // a fatter tuft: it is the same mass resolved into finer filaments.
       const cwid = clumpN > 1 ? wid * (0.42 + 0.34 / clumpN) : wid;

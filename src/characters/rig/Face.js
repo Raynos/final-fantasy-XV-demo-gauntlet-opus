@@ -959,7 +959,17 @@ function paintFace(look, uv) {
     soft([-0.070, -0.026, -0.004], 0.024, 0.028, 'rgba(200,104,84,0.40)', 1.0);
 
     // ---- occlusion --------------------------------------------------------
-    const ao = (p, rx, ry, a, col = '104,68,62') => soft(p, rx, ry, `rgba(${col},${a})`, 1, 'multiply');
+    // Every one of the occlusions below is a real value on a real face, and
+    // each was tuned on its own against a mid-brown complexion. Stacked — the
+    // socket over the brow shadow over the temple over the outer face plane —
+    // they multiply, and on a pale skin the overlaps went to a saturated
+    // grey-brown that reads as dirt or bruising rather than as shadow. Damping
+    // the whole stack in one place keeps the relative structure (which is what
+    // survives to mip 5) and stops the pile-up.
+    const ao = (p, rx, ry, a, col = '104,68,62') => {
+      const rgbv = col.split(',').map((k) => Math.round(+k + (205 - +k) * 0.22));
+      return soft(p, rx, ry, `rgba(${rgbv.join(',')},${a * 0.80})`, 1, 'multiply');
+    };
     // the orbit: a real socket is 40mm wide and 28mm tall, and it is the
     // strongest value on a face. Eyes read as eyes because they sit in a hole.
     // The socket is also the one feature that has to hold at 20 px, so it is

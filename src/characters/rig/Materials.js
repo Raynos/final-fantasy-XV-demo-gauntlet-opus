@@ -326,12 +326,25 @@ function cache() {
 }
 
 /** Shared skin material for bodies (heads use `faceMaterial`). */
+/**
+ * Subsurface tint, shared by the face and the body.
+ *
+ * They were 0xe02c12 and 0xd8321a — near-pure red at full saturation, and two
+ * *different* near-pure reds, so the head and the neck reddened by different
+ * amounts as they turned away from the sun. That is the second half of the jaw
+ * seam (the first is the base value, which `SKIN_BASE` already unifies), and at
+ * closeup the term is most of why the cast reads as sunburnt orange rather than
+ * as skin. Real subsurface in skin is haemoglobin through dermis: a dull brick,
+ * not a signal red.
+ */
+const SSS_RED = 0xb8503a;
+
 export function skinMaterial() {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
-    roughness: 0.52,
+    roughness: 0.48,
     metalness: 0,
     normalMap: c.pore,
     // 0.42 on a 128px map tiled 22x34 aliased into a visible woven weave on the
@@ -340,16 +353,16 @@ export function skinMaterial() {
     normalScale: new THREE.Vector2(0.30, 0.30),
     // a whisper of oily sheen. Clearcoat here is what made skin read as a
     // vacuum-formed plastic shell, so there is none.
-    sheen: 0.22,
-    sheenColor: srgb(0xffc9a8),
-    sheenRoughness: 0.72,
-    specularIntensity: 0.42,
+    sheen: 0.18,
+    sheenColor: srgb(0xffc0a0),
+    sheenRoughness: 0.64,
+    specularIntensity: 0.36,
     specularColor: srgb(0xfff0e4),
-  }), { sss: 0.17, sssColor: 0xd8321a, translucency: 0.9 });
+  }), { sss: 0.155, sssColor: SSS_RED, translucency: 0.95 });
 }
 
 /** Per-character face material — carries the painted face map. */
-export function faceMaterial(map, sss = 0.19) {
+export function faceMaterial(map, sss = 0.16) {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     map,
@@ -363,7 +376,7 @@ export function faceMaterial(map, sss = 0.19) {
     sheenRoughness: 0.62,
     specularIntensity: 0.35,
     specularColor: srgb(0xfff2e8),
-  }), { sss, sssColor: 0xe02c12, translucency: 1.0 });
+  }), { sss, sssColor: SSS_RED, translucency: 1.0 });
 }
 
 /** Shared garment material — colour and finish come from vertex attributes. */
