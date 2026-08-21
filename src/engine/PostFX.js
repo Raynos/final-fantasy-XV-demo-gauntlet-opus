@@ -132,8 +132,17 @@ export class PostFX {
     this.composer.addPass(this.velocity);
 
     this.gtao = new GTAOPass(scene, camera, size.x, size.y);
-    // reuse our depth buffer: no second scene render, normals from depth
-    this.gtao.setGBuffer(this.rtScene.depthTexture);
+    // No arguments: GTAO renders its own depth AND normal buffer.
+    //
+    // It used to be handed our depth texture alone, which makes it
+    // *reconstruct* normals from depth -- so it saw the raw triangles of every
+    // distant massif and drew their facets as a regular herringbone hatch. That
+    // is the "chevron on every peak" blamed for months on the splat and then on
+    // the heightfield; `?post=nogtao` alone removes it. `Terrain.js` already
+    // calls `patchGBufferMaterial(post.gtao.normalMaterial)` so the terrain
+    // displaces correctly in the normal pass -- feeding depth only left that
+    // patch as dead code.
+    this.gtao.setGBuffer();
     this.gtao.output = GTAOPass.OUTPUT.Default;
     // A 1.1 m gather is a *room* radius: it darkens the underside of a cliff
     // beautifully and does nothing at all to the eight centimetres where a
