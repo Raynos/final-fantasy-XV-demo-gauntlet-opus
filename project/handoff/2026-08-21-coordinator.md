@@ -167,7 +167,10 @@ afternoon. The cause is machine saturation, not agent error — see §6.
    mis-authored. Never verified by measurement.
 6. `_outcrops` consumes its RNG stream conditionally on local slope, so any
    height change anywhere reshuffles every later boulder. Worth decoupling.
-7. `src/world/map/MapRaster.js` is orphaned (`src/tools/orphans.mjs`), pre-existing.
+7. ~~`src/world/map/MapRaster.js` is orphaned.~~ **Done** — it was a re-export
+   facade left by the `5fd2876` cartography split, with a `@deprecated`
+   `drawWorldRaster` alias kept for callers that never existed. Deleted;
+   `orphans.mjs` is now clean at 272/272.
 8. **TypeScript port** — `docs/plans/typescript-port.md`, gated on a quiet tree.
 
 ---
@@ -185,7 +188,7 @@ pruned.
 | `src/tools/creaturecheck.mjs` | **207 poses across 23 species · 0 failures** (new gate) |
 | `src/tools/heightcheck.mjs` / `driftcheck.mjs` | 0.000 m — confirms the splat change was colour-only |
 | `src/tools/roadcheck.mjs` | 0 failures |
-| `src/tools/orphans.mjs` | 1 orphan, `src/world/map/MapRaster.js`, pre-existing from `5fd2876` |
+| `src/tools/orphans.mjs` | **clean, 272/272** — the `MapRaster.js` orphan is deleted |
 | dev-suite determinism | 1.555/255 — at the documented noise floor |
 | `src/tools/combatloop.mjs` | **21/30 — a pre-existing regression, not from this round** |
 | `src/tools/gameplay.mjs` | **fails** — see open item 3 |
