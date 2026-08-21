@@ -52,13 +52,23 @@ heightfield at a 12–96 m vertex pitch — decimation, not filtering. `tf_heigh
 now low-passes by the level's own cell, with the morph target filtered at the
 *next* level's cell so the rings still meet exactly.
 
-Fixed by the coordinator: `this.gtao.setGBuffer()` with no arguments, so GTAO
-renders its own depth and normal buffer. **Verified by eye on `zone_longwythe` —
-the hatch is completely gone and the massifs read as rock with real form.**
-Cost, A/B'd on a quiet tree: mean **70.5 → 69.8 fps**, worst **37.9 → 34.4**. A
-cheaper alternative is written up in `project/handoff/terrain.md`: keep the depth
-reuse and fade the AO term past ~600 m, where a 0.62 m gather radius has no
-physical meaning anyway.
+Fixed by the coordinator, **and the first fix was the wrong one.** Letting GTAO
+render its own normal buffer (`setGBuffer()` with no arguments) did kill the
+hatch — but the A/B that appeared to make it cheap was invalid: the tree was
+already clean, so `git stash` stashed nothing and both runs used the same build.
+Measured properly it costs **10% of `gameplay.mjs`'s walk segment, 50.0 → 44.8
+fps**, on the gate that already fails, plus 460 → 644 draw calls.
+
+Shipped instead: **fade the AO term with view depth**, two instructions in the
+GTAO fragment shader smoothstepped over 220–650 m. Not a workaround — the gather
+radius is 0.62 m, a *room* scale, which has no physical meaning on a mountain four
+kilometres away. **Hatch gone, verified by eye on `zone_longwythe`; walk back to
+49.8 fps and draws back to 460.** Same visual result for no measurable cost.
+
+> The lesson: `git stash` on a clean tree silently stashes nothing, so an A/B
+> built around it compares a build against itself. Both numbers looked plausible
+> (44.8 vs 44.6) and the conclusion — "GTAO is not the cause" — was exactly
+> backwards.
 
 **`Terrain.groundColorAt` did not exist.** Not "disagreed" — `Ecology.groundColor`
 called `groundColorAt`, then `colorAt`, and **neither had ever been defined**, so
@@ -99,10 +109,17 @@ order-dependence remains. Materially fixed; not perfect. Do not claim otherwise.
 
 **B6 perf, measured on a genuinely quiet tree for the first time** (every previous
 number in this project was taken with agents live and is worthless):
-**mean 69.8 fps, worst 34.4 fps on `vista_dawn` — FAIL against the 60 fps target.**
-This failure is real, pre-existing and independent of this session's work: the
-same run without the GTAO change gives 70.5 / 37.9, also a fail. `vista_dawn` is
-the standing perf problem and nobody has owned it.
+
+| gate | result |
+|---|---|
+| `perf.mjs` | mean **~70 fps**, worst **37.9 fps on `vista_dawn`** — **FAIL** |
+| `gameplay.mjs` | worst segment **walk at 49.8 fps** — **FAIL** |
+
+Both failures are real, pre-existing and independent of this session's work.
+Note `walk` is **worse than the ~57.5 fps** recorded in the old
+`SESSION-STATE.md`; that figure was taken under load and was never trustworthy.
+`vista_dawn` and `walk` are the two standing perf problems and **nobody owns
+either.** They are the obvious next agent after the port.
 
 ### Merged and verified: B11 (heroart) — real progress, still short of the bar
 
