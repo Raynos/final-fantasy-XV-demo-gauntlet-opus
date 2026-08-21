@@ -551,15 +551,26 @@ void tf_shade() {
   // Sedimentary banding is a *badland* signature. Where the region is green the
   // same face is under soil and root mat, and drawing rust strata through it is
   // what made every Duscae and Cleigne hillside read as printed wood grain.
-  float bedRegion = mix(1.0, 0.30, bioGreen);
+  //
+  // This has to be a *threshold*, not a lerp. A plain mix() left a mid-green
+  // region like Taelpar at 0.63 of full bedding strength, and since the same
+  // expression then multiplies the contrast back up by 2.1x with distance, a
+  // 300-900 m hillside came out more strongly banded than a near one: the
+  // Taelpar valley walls read as varnished plywood. Bedding is either the
+  // exposed rock of a badland or it is buried, so the curve should switch, and
+  // it should be all the way off by the time a region is properly vegetated.
+  float bedRegion = mix(1.0, 0.08, smoothstep(0.12, 0.50, bioGreen));
   cliffAmt = clamp(smoothstep(0.34, 0.78, structSlope) * bandFade
     * (0.45 + 0.80 * mr1) * bedStr * bedRegion
     * (1.0 + 1.10 * smoothstep(250.0, 1200.0, vTDist)), 0.0, 1.0);
 
   bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope) * bedRegion, 0.0, 1.0);
   // the runnels darken independently of the bedding, at every distance, so even
-  // a range past the band fade still has vertical structure
-  runnelAmt = smoothstep(0.30, 0.72, structSlope) * mix(1.0, 0.55, bioGreen)
+  // a range past the band fade still has vertical structure. These survive a
+  // green region far better than the beds do — a wooded valley wall still has
+  // gullies raked down it — so they are only damped, never switched off.
+  runnelAmt = smoothstep(0.30, 0.72, structSlope)
+            * mix(1.0, 0.45, smoothstep(0.12, 0.50, bioGreen))
             * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
   }
 

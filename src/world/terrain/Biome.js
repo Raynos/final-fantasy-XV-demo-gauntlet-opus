@@ -80,7 +80,18 @@ export const SURFACE = {
   vesperpool: { ground: [0.64, 0.80, 0.54], rock: [1.03, 1.32, 1.62], green: 0.70, damp: 0.90 },
   cape_caem: { ground: [0.74, 0.90, 0.56], rock: [1.06, 1.35, 1.62], green: 0.84, damp: 0.44 },
   // The Rock of Ravatogh is a live volcano: basalt, ash and clinker.
-  ravatogh: { ground: [0.44, 0.42, 0.41], rock: [0.32, 0.38, 0.44], green: 0.03, damp: 0.00 },
+  //
+  // Pre-compensated. Ravatogh is the one entry the blend cannot deliver as
+  // authored: it is an 880 m zone ringed by five much greener, much paler
+  // neighbours, so even after `BLEND_POW` it holds only ~78 % of the weight at
+  // its own summit and the remaining 22 % of pale Cleigne limestone is enough
+  // to drag basalt up to a mid blue-grey — measured, the authored 0.44 blue
+  // arrived as 0.58 and the cone read as just another hazy peak. Every other
+  // zone lands within 0.05 of its table value, so the fix belongs here rather
+  // than in a sharper global blend that would narrow all eighteen other
+  // transitions to cure one. These numbers are chosen so the *blended* result
+  // is the basalt above: ground ~[0.44,0.42,0.41], rock ~[0.32,0.38,0.44].
+  ravatogh: { ground: [0.41, 0.36, 0.40], rock: [0.20, 0.24, 0.26], green: 0.00, damp: 0.00 },
 
   // The frontier beyond every zone's reach: neutral Lucian highland.
   _default: { ground: [0.92, 0.97, 0.84], rock: [1.06, 1.23, 1.37], green: 0.34, damp: 0.06 },
