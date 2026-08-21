@@ -149,7 +149,26 @@ export function packContainer(meta: any, sections: Array<{name:string, kind:stri
   return out;
 }
 
-export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:string)=>Uint8Array|null} {
+/**
+ * One section of a bake container: its header entry plus a view onto its bytes.
+ * The header fields differ per section kind -- `n` for plane counts, `w`/`h`/`ch`
+ * for an 8-bit control map -- so the index signature stays.
+ */
+export interface BakeSection {
+  name: string;
+  kind: string;
+  /** A view into the container buffer, not a copy. */
+  bytes: Uint8Array;
+  offset: number;
+  length: number;
+  n?: number;
+  w?: number;
+  h?: number;
+  ch?: number;
+  [k: string]: any;
+}
+
+export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:string)=>BakeSection|null} {
   if (dec.decode(buf.subarray(0, 8)) !== MAGIC) throw new Error('bad bake magic');
   const hlen = new DataView(buf.buffer, buf.byteOffset).getUint32(8, true);
   const meta = JSON.parse(dec.decode(buf.subarray(12, 12 + hlen)));

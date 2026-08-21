@@ -26,9 +26,12 @@ export function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
 
 /* -- shared primitives, built once and re-transformed ---------------------- */
 
-const G = {};
+const G: Record<string, THREE.BufferGeometry> = {};
 /** Memoised primitive geometry. */
-export function geo(key: any, make: any) { if (!G[key as keyof typeof G]) G[key as keyof typeof G] = make(); return G[key as keyof typeof G]; }
+export function geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  if (!G[key]) G[key] = make();
+  return G[key];
+}
 
 export const box = (w: any, h: any, d: any) => geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
 export const cyl = (rt: any, rb: any, h: any, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));

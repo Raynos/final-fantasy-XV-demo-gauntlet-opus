@@ -857,7 +857,16 @@ export class Sfx {
 /* ------------------------------------------------------------------ tables */
 
 /** Swing character per weapon class. Heavier = lower, longer, more body. */
-const SWING = {
+/** One weapon's swing: how many strokes, and the filtered noise burst each is. */
+interface SwingVoice {
+  strokes: number; gap: number; dur: number;
+  /** Filter sweep, Hz. */
+  f0: number; f1: number; Q: number;
+  /** Body resonance, Hz. 0 for a weapon with no heft. */
+  body: number;
+}
+
+const SWING: Record<string, SwingVoice> = {
   sword: { strokes: 1, gap: 0, dur: 0.20, f0: 1500, f1: 380, Q: 2.6, body: 210 },
   greatsword: { strokes: 1, gap: 0, dur: 0.38, f0: 760, f1: 150, Q: 1.6, body: 96 },
   polearm: { strokes: 2, gap: 0.11, dur: 0.24, f0: 1180, f1: 300, Q: 3.2, body: 150 },
@@ -867,7 +876,18 @@ const SWING = {
 };
 
 /** What was struck. */
-const MATERIAL = {
+/** What an impact sounds like against one material. */
+interface MaterialVoice {
+  body: number; bodyDur: number; crack: number; crackDur: number;
+  filter: string; f0: number; f1?: number; Q: number;
+  /** Reverb send, 0..1. */
+  send: number;
+  pink?: boolean;
+  /** Metallic ring partial, Hz, with its inharmonic ratio and decay. */
+  ring?: number; ratio?: number; ringDur?: number;
+}
+
+const MATERIAL: Record<string, MaterialVoice> = {
   flesh: { body: 105, bodyDur: 0.20, crack: 0.55, crackDur: 0.13, filter: 'lowpass', f0: 1300, f1: 380, Q: 0.7, send: 0.16, pink: true },
   metal: { body: 130, bodyDur: 0.12, crack: 0.8, crackDur: 0.05, filter: 'highpass', f0: 3200, Q: 0.6, ring: 1750, ratio: 1.71, ringDur: 1.1, send: 0.38 },
   armour: { body: 118, bodyDur: 0.15, crack: 0.62, crackDur: 0.07, filter: 'bandpass', f0: 1900, f1: 700, Q: 1.4, ring: 900, ratio: 2.3, ringDur: 0.45, send: 0.3 },
@@ -878,7 +898,16 @@ const MATERIAL = {
 };
 
 /** Footstep character per `Terrain.sampleMaterial()` name. */
-const SURFACE = {
+/** One footstep: a filtered noise burst, a thud, and optional loose grains. */
+interface SurfaceVoice {
+  dur: number; f0: number; f1: number; Q: number; crack: number;
+  thud: number; thudDur?: number;
+  pink?: boolean;
+  /** Grain count for a loose surface. */
+  grains?: number;
+}
+
+const SURFACE: Record<string, SurfaceVoice> = {
   grass: { dur: 0.10, f0: 2200, f1: 900, Q: 1.0, crack: 0.30, thud: 92, thudDur: 0.07, pink: true },
   dirt: { dur: 0.085, f0: 1000, f1: 400, Q: 1.1, crack: 0.34, thud: 84, thudDur: 0.08, pink: true },
   sand: { dur: 0.14, f0: 1700, f1: 800, Q: 0.7, crack: 0.30, thud: 62, thudDur: 0.06, pink: true, grains: 0 },
@@ -894,7 +923,15 @@ const SURFACE = {
  * amplitude-modulates the source (a big animal's vocal folds beat slowly), and
  * `sub` adds the chest tone you feel rather than hear.
  */
-const SPECIES = {
+/** One creature voice. See the note above for what each part does. */
+interface SpeciesVoice {
+  /** `[hz, gain, q]` per resonance. */
+  formants: number[][];
+  growl: number; rasp: number; sub: number;
+  [call: string]: any;
+}
+
+const SPECIES: Record<string, SpeciesVoice> = {
   sabertusk: {
     formants: [[380, 1, 6], [900, 0.55, 8], [2100, 0.2, 9]],
     growl: 38, rasp: 0.45, sub: 58,

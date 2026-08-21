@@ -21,6 +21,49 @@ import * as THREE from 'three';
 
 const _v3 = new THREE.Vector3();
 
+/**
+ * One particle. `pos` is the only field every caller sets; the rest default,
+ * which is what lets a call site say "a spark here, for 0.4 s" and nothing else.
+ *
+ * `pos`/`vel`/`color` accept a `Vector3`/`Color` or a plain triple because both
+ * are passed all over the VFX code, and normalising them at 4,000 emissions a
+ * frame would cost more than reading two shapes.
+ */
+/** How one pool is built. Every field has a default; `map` is the sprite. */
+export interface PoolOpts {
+  capacity?: number;
+  map?: THREE.Texture;
+  blending?: THREE.Blending;
+  fog?: boolean;
+  /** Depth-softening distance, world units. */
+  softness?: number;
+  renderOrder?: number;
+  name?: string;
+  depthTest?: boolean;
+}
+
+export interface ParticleSpec {
+  pos: THREE.Vector3 | number[];
+  vel?: THREE.Vector3 | number[];
+  color?: THREE.Color | number[];
+  /** Birth time, seconds on the effect clock. */
+  t0?: number;
+  /** Lifetime, seconds. */
+  life?: number;
+  size0?: number;
+  size1?: number;
+  drag?: number;
+  gravity?: number;
+  spin?: number;
+  spinRate?: number;
+  /** Velocity-aligned stretch, for sparks and rain. */
+  stretch?: number;
+  turbulence?: number;
+  intensity?: number;
+  fade?: number;
+  [extra: string]: any;
+}
+
 export class ParticleSystem {
   _dirtyHi!: any;
   _dirtyLo!: any;
@@ -37,13 +80,10 @@ export class ParticleSystem {
   mesh!: THREE.Mesh;
   uniforms!: any;
   useFog!: any;
-  /**
-   * @param {object} o
-   * */
   constructor({
     capacity = 2048, map, blending = THREE.AdditiveBlending, fog = false,
     softness = 0.9, renderOrder = 20, name = 'particles', depthTest = true,
-  }: { capacity: number, map: THREE.Texture, blending: number, fog: boolean, softness: number, renderOrder: number } = {}) {
+  }: PoolOpts = {}) {
     this.capacity = capacity;
     this.cursor = 0;
     this.live = 0;
@@ -114,25 +154,25 @@ export class ParticleSystem {
     this.useFog = fog;
   }
 
-  /**
-   * Emit a single particle.
-   * @param {object} p
-   * */
-  emit(p: { pos: THREE.Vector3 | number[], vel: THREE.Vector3 | number[], color: THREE.Color | number[], t0: number, life: number, size0: number, size1: number, drag: number, gravity: number, spin: number, spinRate: number, stretch: number, turbulence: number, intensity: number, fade: number }) {
+  /** Emit a single particle. */
+  emit(p: ParticleSpec) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
-    const pos = p.pos, vel = p.vel || ZERO, col = p.color || WHITE;
+    // Read either shape without narrowing: callers pass a Vector3 or a plain
+    // triple, and the `.x ?? [0]` form is the check. Typed as the union, every
+    // one of these six accesses is an error on one arm or the other.
+    const pos = p.pos as any, vel = (p.vel || ZERO) as any, col = (p.color || WHITE) as any;
 
     const a = this.aPos0.array, b = this.aVel.array, c = this.aColor.array;
-    a[i * 3] = pos.x !== undefined ? pos.x : pos[0 as keyof typeof pos];
-    a[i * 3 + 1] = pos.y !== undefined ? pos.y : pos[1 as keyof typeof pos];
-    a[i * 3 + 2] = pos.z !== undefined ? pos.z : pos[2 as keyof typeof pos];
-    b[i * 3] = vel.x !== undefined ? vel.x : vel[0 as keyof typeof vel];
-    b[i * 3 + 1] = vel.y !== undefined ? vel.y : vel[1 as keyof typeof vel];
-    b[i * 3 + 2] = vel.z !== undefined ? vel.z : vel[2 as keyof typeof vel];
-    c[i * 3] = col.r !== undefined ? col.r : col[0 as keyof typeof col];
-    c[i * 3 + 1] = col.g !== undefined ? col.g : col[1 as keyof typeof col];
-    c[i * 3 + 2] = col.b !== undefined ? col.b : col[2 as keyof typeof col];
+    a[i * 3] = pos.x !== undefined ? pos.x : pos[0];
+    a[i * 3 + 1] = pos.y !== undefined ? pos.y : pos[1];
+    a[i * 3 + 2] = pos.z !== undefined ? pos.z : pos[2];
+    b[i * 3] = vel.x !== undefined ? vel.x : vel[0];
+    b[i * 3 + 1] = vel.y !== undefined ? vel.y : vel[1];
+    b[i * 3 + 2] = vel.z !== undefined ? vel.z : vel[2];
+    c[i * 3] = col.r !== undefined ? col.r : col[0];
+    c[i * 3 + 1] = col.g !== undefined ? col.g : col[1];
+    c[i * 3 + 2] = col.b !== undefined ? col.b : col[2];
 
     const q = this.aParams.array;
     q[i * 4] = p.t0; q[i * 4 + 1] = p.life;
