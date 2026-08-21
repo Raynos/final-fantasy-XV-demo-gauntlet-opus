@@ -672,9 +672,9 @@ export function reedTex() {
  * that leaves the species colour where it was authored is 1.0. It cannot be
  * 1.0 in an eight-bit map that also has to carry ridge contrast, so it is a
  * little under, and the species hexes (linear luminance 0.073-0.193) land at a
- * final 0.057-0.15 — which is where real bark sits.
+ * final 0.047-0.12 — which is where real bark sits.
  */
-const BARK_DETAIL_MEAN = 0.78;
+const BARK_DETAIL_MEAN = 0.64;
 
 /**
  * Bark albedo + normal, shared by every woody thing.

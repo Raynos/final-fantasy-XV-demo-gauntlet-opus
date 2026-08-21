@@ -18,7 +18,7 @@ export const TREE_SPECIES = {
     lenFall: 0.76, radFall: 0.62, curl: 0.75, droop: 0.02, upBias: 0.12,
     trunkFrac: 0.4,
     leafDepth: 99, leafCount: 0, leafSize: 0, leafKind: 'dry',
-    bark: 0x8a7761, barkRough: 0.95,
+    bark: 0x8a7e72, barkRough: 0.95,   // sun-silvered driftwood, not orange
   },
   // Broad flat-topped savanna tree.
   savanna: {
@@ -26,7 +26,7 @@ export const TREE_SPECIES = {
     lenFall: 0.78, radFall: 0.64, curl: 0.34, droop: 0.0, upBias: 0.34,
     trunkFrac: 0.46, flatten: 0.6,
     leafDepth: 3, leafCount: 17, leafSize: 1.12, leafKind: 'broad',
-    bark: 0x94795a, barkRough: 0.9,
+    bark: 0x8d7b63, barkRough: 0.9,
   },
   // Tall conifer for the wet green region.
   conifer: {
