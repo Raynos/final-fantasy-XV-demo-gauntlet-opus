@@ -18,7 +18,7 @@ export const TREE_SPECIES = {
     lenFall: 0.76, radFall: 0.62, curl: 0.75, droop: 0.02, upBias: 0.12,
     trunkFrac: 0.4,
     leafDepth: 99, leafCount: 0, leafSize: 0, leafKind: 'dry',
-    bark: 0x8a7761, barkRough: 0.95,
+    bark: 0x8a7e72, barkRough: 0.95,   // sun-silvered driftwood, not orange
   },
   // Broad flat-topped savanna tree.
   savanna: {
@@ -26,7 +26,7 @@ export const TREE_SPECIES = {
     lenFall: 0.78, radFall: 0.64, curl: 0.34, droop: 0.0, upBias: 0.34,
     trunkFrac: 0.46, flatten: 0.6,
     leafDepth: 3, leafCount: 17, leafSize: 1.12, leafKind: 'broad',
-    bark: 0x94795a, barkRough: 0.9,
+    bark: 0x8d7b63, barkRough: 0.9,
   },
   // Tall conifer for the wet green region.
   conifer: {
@@ -186,7 +186,13 @@ export function buildTree(name, seed, over = {}) {
       _n.set(vx, (vy - canopyY) * 0.8, vz).normalize();
       leaf.n.push(_n.x * 0.6, _n.y * 0.5 + 0.62, _n.z * 0.6);
       leaf.uv.push(sx * 0.5 + 0.5, sy);
-      const sh = depthShade * varia * (0.86 + sy * 0.2);
+      // A shade, so it may darken and must not brighten: three factors each
+      // allowed a little over one multiplied out to 1.42, and a leaf card whose
+      // vertex colour is 1.42 blows to white the moment the sun is on it. That
+      // is the blown, near-white canopy highlight in tmp/shots/veg0/
+      // zone_malacchi.jpg. Luminance-only either way — the instance tint owns
+      // the hue, the same contract the grass clump card is built on.
+      const sh = Math.min(1, depthShade * varia * (0.86 + sy * 0.2));
       leaf.c.push(sh, sh, sh);
       leaf.f.push(Math.min(1, f + 0.2));
       if (vy > maxY) maxY = vy;
