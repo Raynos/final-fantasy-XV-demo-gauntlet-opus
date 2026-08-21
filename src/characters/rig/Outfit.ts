@@ -3,7 +3,6 @@ import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp
 import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape } from './Anatomy.ts';
 import { Noise } from '../../util/Noise.ts';
 
-const _c = new THREE.Color();
 const _cloth = new Noise(9137);
 
 /** Gaussian ridge centred on `c`, half-width `w`. */
@@ -114,7 +113,6 @@ piece('shirt', (B: any, ctx: any, o: any) => {
   const nodes = drape(ctx.torso, u0, u1, 10, o.pad ?? 0.010, o.padZ);
   const cut = o.neckCut ?? 0.55;
   const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.92);
-  const base = _c.clone().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const printC = new THREE.Color().setHex(o.printColor ?? 0xcccccc, THREE.SRGBColorSpace);
   const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.52, Math.PI * 1.48], yoke: o.yoke ?? 0.86 });
   const tee = new THREE.Color();
@@ -380,7 +378,6 @@ piece('boots', (B: any, ctx: any, o: any) => {
   const s = ctx.s;
   for (const side of ['L', 'R']) {
     const an = rig.P[`foot${side}`];
-    const sg = side === 'L' ? 1 : -1;
     const w = (o.width ?? 0.048) * s, hgt = (o.height ?? 0.036) * s;
     const soleY = (o.sole ?? 0.004) * s;
     const fw = [[I[`foot${side}`], 1]];
@@ -567,8 +564,7 @@ piece('glasses', (B: any, ctx: any, o: any) => {
 
 /** Small pouch / holster block on the thigh or belt. */
 piece('pouch', (B: any, ctx: any, o: any) => {
-  const { rig } = ctx;
-  const I = rig.index;
+  const {  } = ctx;
   const s = ctx.s;
   for (const side of (o.sides || ['R'])) {
     const nodes = drape(ctx.leg(side), o.u ?? 0.22, o.u ?? 0.22, 1, 0);

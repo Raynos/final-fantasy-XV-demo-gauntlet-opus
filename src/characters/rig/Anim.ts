@@ -181,11 +181,6 @@ export const ACTIONS = {
   },
 };
 
-const UPPER = new Set([
-  'spine01', 'spine02', 'spine03', 'neck', 'head', 'clavicleL', 'clavicleR',
-  'upperArmL', 'lowerArmL', 'handL', 'fingersL', 'thumbL', 'twistL',
-  'upperArmR', 'lowerArmR', 'handR', 'fingersR', 'thumbR', 'twistR',
-]);
 
 /** A critically-ish damped angular spring used for cloth and hair bones. */
 class Spring {
@@ -463,7 +458,6 @@ export class Animator {
       this.add(`toe${side}`, Math.max(0, -ankle) * 0.6, 0, 0, w);
 
       // arms swing opposite the same-side leg
-      const other = i === 0 ? 1 : -1;
       const q = Math.sin((u + 0.5) * Math.PI * 2);
       const aSide = side === 'L' ? 'L' : 'R';
       this.add(`upperArm${aSide}`, q * g.arm, 0, 0, w);
@@ -777,7 +771,6 @@ export class Animator {
   /** Look-at, blink, lean and sway layers. */
   evalAdditive(dt: any, st: any, moveW: any) {
     // ---- look-at
-    const head = this.bones.head;
     let yaw = 0, pitch = 0, want = 0;
     if (this.lookTarget) {
       this.char.root.updateMatrixWorld(true);

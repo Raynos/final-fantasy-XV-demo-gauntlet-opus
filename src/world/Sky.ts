@@ -487,7 +487,6 @@ export class Sky {
     const elevDeg = Math.asin(THREE.MathUtils.clamp(this.sunDir.y, -1, 1)) / DEG;
     const night = 1 - smoothstep(-9, -2.5, elevDeg);
     const day = smoothstep(-1, 9, elevDeg);
-    const twilight = smoothstep(-15, -1, elevDeg);
     u.uNight.value = night;
 
     // --- moon --------------------------------------------------------------

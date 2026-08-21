@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
+import { Rig, creatureMaterial } from './RigBuilder.ts';
 import { metalNormal, metalRoughness } from './EnemyBase.ts';
 import { BipedEnemy } from './Biped.ts';
-import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/CreatureAnim.ts';
+import { clamp01, smooth, decelerate } from '../rig/CreatureAnim.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';

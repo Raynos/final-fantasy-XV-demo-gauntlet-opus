@@ -46,7 +46,6 @@ const SLOTS = {
 };
 
 /** Chest height used when aiming at the group rather than at one of them. */
-const CHEST = 1.30;
 
 export const OPENING = {
   id: 'ch1_opening_push',
@@ -303,7 +302,6 @@ function buildShots(ctx: any) {
   const crew = (t: any, u: any) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */
   const man = (t: any, id: any, u: any) => G(carF(t) + SLOTS[id as keyof typeof SLOTS][0], SLOTS[id as keyof typeof SLOTS][1] / S, u);
-  const stopF = ctx.data.stopF ?? 40;
   const stopL = (ctx.data.stopL ?? 0) / (S || 1);
 
   return [

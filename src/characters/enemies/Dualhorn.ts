@@ -1,10 +1,9 @@
-import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
 import { mixc, colc } from './Palette.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
-import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
+import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.ts';
 
 const HIDE = 0x6e5b41;
 const HIDE_DARK = 0x3c3123;

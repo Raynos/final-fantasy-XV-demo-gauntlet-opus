@@ -14,7 +14,6 @@ import {
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
-import { TOWN_SHOPS } from './Shops.ts';
 
 /**
  * HAMMERHEAD — Leide's one working truck stop, and the hub the whole quest

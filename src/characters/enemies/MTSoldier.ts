@@ -3,7 +3,7 @@ import { Rig, creatureMaterial } from './RigBuilder.ts';
 import { metalNormal, metalRoughness, weatherPlate } from './EnemyBase.ts';
 import { BipedEnemy } from './Biped.ts';
 import { CBuilder, sweep, plate, horn, sculptBlob } from '../rig/Sculpt.ts';
-import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
+import { clamp01, smooth } from '../rig/CreatureAnim.ts';
 
 /* Niflheim issue: a dark blue-grey enamel over gunmetal, with the daemon
  * furnace showing through every seam as a hard orange-red.

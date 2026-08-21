@@ -22,7 +22,6 @@ const cyl = (seg = 10) => geo(`cyl${seg}`, () => new THREE.CylinderGeometry(0.5,
 const cone = (seg = 9) => geo(`cone${seg}`, () => new THREE.ConeGeometry(0.5, 1, seg));
 const sph = (seg = 10) => geo(`sph${seg}`, () => new THREE.SphereGeometry(0.5, seg, Math.max(4, seg >> 1)));
 const plane = () => geo('plane', () => new THREE.PlaneGeometry(1, 1));
-const torus = () => geo('torus', () => new THREE.TorusGeometry(0.5, 0.12, 6, 14));
 
 export class PropKit {
   L!: any;

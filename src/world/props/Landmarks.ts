@@ -14,7 +14,6 @@ import {
  * so the whole set of landmarks costs under a dozen draw calls.
  */
 
-const _m = new THREE.Matrix4();
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();

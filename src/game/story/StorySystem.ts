@@ -1,4 +1,4 @@
-import { CHAPTERS, CHAPTER_BY_N, chapterOfQuest, REGION_CARDS } from './Chapters.ts';
+import { CHAPTERS, CHAPTER_BY_N, chapterOfQuest } from './Chapters.ts';
 import { SCENES } from './scenes/index.ts';
 import { Triggers } from './Triggers.ts';
 import { Conversation } from './Dialogue.ts';

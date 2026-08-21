@@ -171,7 +171,6 @@ export class BipedEnemy extends Enemy {
   }
 
   poseTelegraph(S: any, t: any) {
-    const A = this.A;
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     this.poseWindUp(S, t, k, env);
@@ -210,7 +209,6 @@ export class BipedEnemy extends Enemy {
   }
 
   poseFlinch(S: any, t: any) {
-    const A = this.A;
     const k = hitCurve(this.stateTime, 0.34, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
     const yaw = Math.sign(this.anim.hitYaw.x || 1);
@@ -225,7 +223,6 @@ export class BipedEnemy extends Enemy {
   }
 
   poseStagger(S: any, t: any) {
-    const A = this.A;
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));
     const wob = Math.sin(this.stateTime * 5.2) * k;

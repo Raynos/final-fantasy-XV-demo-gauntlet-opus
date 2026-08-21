@@ -25,9 +25,6 @@ import * as THREE from 'three';
  * applied by `Enemy` after `pose()` returns, so a species opts in per feature.
  */
 
-const _e = new THREE.Euler();
-const _q = new THREE.Quaternion();
-const _v = new THREE.Vector3();
 
 /** Critically-ish damped angular spring. */
 export class Spring {

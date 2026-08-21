@@ -3,7 +3,6 @@ import { icon, dpad } from './Icons.ts';
 import { readWeapons } from './GameData.ts';
 
 const POS = { up: [84, 26], right: [142, 84], down: [84, 142], left: [26, 84] };
-const HINT = { up: '↑', right: '→', down: '↓', left: '←' };
 
 /**
  * Bottom-right weapon / action wheel: four equipped slots laid out on a

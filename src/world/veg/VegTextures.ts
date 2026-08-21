@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { canvasTexture, makeTexture, normalFromHeight } from '../../util/TextureGen.ts';
+import { makeTexture, normalFromHeight } from '../../util/TextureGen.ts';
 import { Noise } from '../../util/Noise.ts';
 
 /**

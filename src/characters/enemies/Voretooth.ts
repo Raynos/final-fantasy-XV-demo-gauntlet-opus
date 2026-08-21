@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
 import { mixc, colc } from './Palette.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';

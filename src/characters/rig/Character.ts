@@ -250,7 +250,6 @@ export class Character {
   _lensGeo(rig: any) {
     const s = rig.dims.headScale;
     const org = rig.dims.headOrigin;
-    const shapes = [];
     const geos = [];
     for (const sg of [1, -1]) {
       const g = new THREE.SphereGeometry(0.0275 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.34);

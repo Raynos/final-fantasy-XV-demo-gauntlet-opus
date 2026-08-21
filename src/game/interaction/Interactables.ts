@@ -35,7 +35,6 @@ import { Dialogue } from './Dialogue.ts';
  *     normalised distance.
  */
 
-const _v = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _to = new THREE.Vector3();
 

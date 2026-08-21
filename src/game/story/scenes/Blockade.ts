@@ -22,7 +22,7 @@ export const BLOCKADE = {
   duration: DUR,
 
   stage(ctx: any) {
-    const { game, stage } = ctx;
+    const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(18.9);
 

@@ -1,5 +1,5 @@
 import { el, damp, easeOut } from './UIKit.ts';
-import { worldMap, WORLD, POI_TYPES } from '../world/map/WorldMap.ts';
+import { worldMap, POI_TYPES } from '../world/map/WorldMap.ts';
 import { getChart } from '../world/map/Chart.ts';
 import { drawRoads } from '../world/map/MapDraw.ts';
 import { drawGlyph, POI_GLYPH } from '../world/map/MapGlyphs.ts';

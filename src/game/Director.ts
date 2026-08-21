@@ -688,6 +688,4 @@ export class Director {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
-const AXIS_SWING = new THREE.Vector3(0.12, 1, 0.08).normalize();
-const SWING_AXIS_COMBAT = new THREE.Vector3(0.55, 0.78, 0.30).normalize();
 const AMBIENT_COL = new THREE.Color(0xffd9a8);

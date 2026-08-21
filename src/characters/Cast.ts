@@ -12,7 +12,6 @@ import { smoothIn, clamp01 } from './rig/Geo.ts';
  */
 
 const srgb = (hex: any) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
-const _c = new THREE.Color();
 
 /** Gladiolus's eagle tattoo, drawn in torso-sweep space onto the skin mesh. */
 function eagleInk(th: any, t: any) {
@@ -40,7 +39,6 @@ function eagleInk(th: any, t: any) {
 function skullPrint(th: any, t: any) {
   let d = th;
   if (d > Math.PI) d -= Math.PI * 2;
-  const ad = Math.abs(d);
   const cy = 0.70;
   const x = d / 0.30, y = (t - cy) / 0.115;
   const r = Math.hypot(x, y * 0.9);

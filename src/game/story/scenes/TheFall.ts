@@ -20,7 +20,7 @@ export const THE_FALL = {
   duration: DUR,
 
   stage(ctx: any) {
-    const { game, stage } = ctx;
+    const { game } = ctx;
     const sky = game.get('Sky');
     // First light. Everything is grey and pink and far too calm.
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(6.4);

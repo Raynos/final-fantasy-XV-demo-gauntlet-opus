@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
 import { mixc, colc } from './Palette.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
@@ -24,7 +23,6 @@ const ARC = 0x9fdcff;
 
 const M_FUR = [0.92, 0];
 const M_FUR_SLEEK = [0.68, 0];   // the sleek coat over shoulder and haunch
-const M_TAN = [0.80, 0];
 const M_CLAW = [0.26, 0.06];
 const M_WHISK = [0.30, 0.35];    // segmented, faintly metallic
 const M_WET = [0.12, 0];

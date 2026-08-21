@@ -472,7 +472,6 @@ export class PartyState {
 
   /** Drop buffs whose time is up. Call from the day cycle. */
   expireBuffs(hour: any) {
-    const before = this.activeBuffs.length;
     const expired = this.activeBuffs.filter((b) => hour >= b.expiresAt);
     if (!expired.length) return [];
     this.activeBuffs = this.activeBuffs.filter((b) => hour < b.expiresAt);

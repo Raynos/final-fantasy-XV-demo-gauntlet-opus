@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { speciesKeys, TYPES, entry as bestiaryEntry } from '../characters/enemies/Bestiary.ts';
+import { speciesKeys, entry as bestiaryEntry } from '../characters/enemies/Bestiary.ts';
 import { CAST, makeCharacter } from '../characters/Cast.ts';
 import { NPC_CAST } from '../characters/npc/NpcCast.ts';
 import { archetype, NpcBody } from '../characters/npc/NpcRig.ts';

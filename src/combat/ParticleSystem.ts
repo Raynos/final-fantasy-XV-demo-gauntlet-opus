@@ -19,7 +19,6 @@ import * as THREE from 'three';
  *  - manual exponential fog so alpha-blended smoke sits in the aerial perspective
  */
 
-const _v3 = new THREE.Vector3();
 
 /**
  * One particle. `pos` is the only field every caller sets; the rest default,

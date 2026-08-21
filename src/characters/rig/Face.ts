@@ -277,7 +277,7 @@ function uvOf(x: any, y: any, z: any) {
  * Build the head mesh (skull + lids + ears) in character space.
  */
 export function buildHead(rig: any, look: any): {geometry:THREE.BufferGeometry, map:THREE.Texture, eyes:any, origin?: any, scale?: any, uvOf?: any } {
-  const { index: I, P, dims } = rig;
+  const { index: I, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;
   // accepts either a Vector3 or an [x,y,z] triple
@@ -503,7 +503,7 @@ function eyePoint(ec: any, sg: any, a: any, e: any, rad: any, f: any) {
  * corners so the opening reads as an almond rather than a circle.
  */
 function buildLid(B: any, o: any) {
-  const { put, scale, ec, sg, upper, bone, head, look, onSkull, uv } = o;
+  const { put, ec, sg, upper, bone, head, look, onSkull, uv } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
   const cols = 20, rows = 5;
@@ -913,7 +913,7 @@ function paintFace(look: any, uv: any) {
       ctx.beginPath();
       ctx.moveTo(q[0][0], q[0][1]);
       for (let i = 0; i < q.length; i++) {
-        const p0 = q[i], p1 = q[(i + 1) % q.length], p2 = q[(i + 2) % q.length];
+        const p1 = q[(i + 1) % q.length], p2 = q[(i + 2) % q.length];
         ctx.quadraticCurveTo(p1[0], p1[1], (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
       }
       ctx.closePath();

@@ -25,7 +25,6 @@ import { Noise } from '../../util/Noise.ts';
  * (first person over the wing mirrors).
  */
 
-const UP = new THREE.Vector3(0, 1, 0);
 
 export class DriveCamera {
   _first!: boolean;

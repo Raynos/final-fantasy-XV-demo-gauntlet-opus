@@ -19,7 +19,6 @@ import { alphaTex } from '../veg/VegTextures.ts';
  * follows the whole 30 km network, not just the stretch outside the town.
  */
 
-const _m = new THREE.Matrix4();
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
