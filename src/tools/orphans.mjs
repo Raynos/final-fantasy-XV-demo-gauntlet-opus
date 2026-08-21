@@ -7,7 +7,7 @@
  * directory ever imported, while the HUD drew invented numbers over them.
  * Existence is not integration.
  *
- * Walks the real import graph from `src/main.js` and reports every module that
+ * Walks the real import graph from `src/main.ts` and reports every module that
  * is never reached, plus every exported symbol nothing imports.
  *
  *   node src/tools/orphans.mjs
@@ -24,11 +24,11 @@ const WANT_EXPORTS = process.argv.includes('--exports');
 async function walk(dir, out = []) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     // `src/tools/` is the harness, not the game: it never appears in the import
-    // graph from `main.js`, so walking it would report every tool as an orphan.
+    // graph from `main.ts`, so walking it would report every tool as an orphan.
     if (e.isDirectory() && dir === SRC && e.name === 'tools') continue;
     const f = path.join(dir, e.name);
     if (e.isDirectory()) await walk(f, out);
-    else if (e.name.endsWith('.js')) out.push(f);
+    else if (e.name.endsWith('.ts')) out.push(f);
   }
   return out;
 }
@@ -42,7 +42,7 @@ function resolve(from, spec) {
   if (!spec.startsWith('.')) return null;
   let p = path.resolve(path.dirname(from), spec);
   if (source.has(p)) return p;
-  for (const ext of ['.js', '/index.js']) if (source.has(p + ext)) return p + ext;
+  for (const ext of ['.ts', '/index.ts']) if (source.has(p + ext)) return p + ext;
   return null;
 }
 
@@ -59,7 +59,7 @@ for (const [f, src] of source) {
 }
 
 // reachability from the real entry point
-const entry = path.join(SRC, 'main.js');
+const entry = path.join(SRC, 'main.ts');
 const seen = new Set([entry]);
 const stack = [entry];
 while (stack.length) {
@@ -71,7 +71,7 @@ while (stack.length) {
 const orphans = all.filter((f) => !seen.has(f)).sort();
 const rel = (f) => path.relative(ROOT, f);
 
-console.log(`${all.length} modules under src/, ${seen.size} reachable from main.js\n`);
+console.log(`${all.length} modules under src/, ${seen.size} reachable from main.ts\n`);
 if (!orphans.length) console.log('no orphaned modules — every file is reachable');
 else {
   console.log(`${orphans.length} ORPHANED module(s) — present but never imported:`);

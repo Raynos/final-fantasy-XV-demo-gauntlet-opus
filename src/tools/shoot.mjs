@@ -108,7 +108,7 @@ async function ensureServer(prod) {
 }
 
 async function listShots() {
-  const src = await readFile(path.join(ROOT, 'src/game/Shots.js'), 'utf8');
+  const src = await readFile(path.join(ROOT, 'src/game/Shots.ts'), 'utf8');
   return [...src.matchAll(/^\s{2}([a-zA-Z0-9_]+):\s*\{/gm)].map((m) => m[1]);
 }
 

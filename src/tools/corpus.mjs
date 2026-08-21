@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Corpus driver: capture every shot in `src/game/Shots.js` and lay the result
+ * Corpus driver: capture every shot in `src/game/Shots.ts` and lay the result
  * out as one contact sheet per category, so a reviewer can look at "every
  * zone", "every dungeon room" or "every enemy" as a single image.
  *
@@ -23,7 +23,7 @@
  *     `pos`/`target`/`fov` triple to paste into Shots.js.
  *
  *   node src/tools/corpus.mjs --scout '[{"name":"x","sx":900,"sz":-1180,"dist":[600,1400]}]'
- *     Builds the real heightfield (`src/world/terrain/Field.js`, ~8 s) and
+ *     Builds the real heightfield (`src/world/terrain/Field.ts`, ~8 s) and
  *     sweeps a ring of camera positions around a subject, scoring each on
  *     elevation above it, an unobstructed sight line, and how much relief lies
  *     beyond it. Prints the best stand. Use it before inventing coordinates:
@@ -80,7 +80,7 @@ function parseArgs(argv) {
  * @returns {{order:string[], groups:Map<string,string[]>, docs:Map<string,string>}}
  */
 async function index() {
-  const src = await readFile(path.join(ROOT, 'src/game/Shots.js'), 'utf8');
+  const src = await readFile(path.join(ROOT, 'src/game/Shots.ts'), 'utf8');
   const body = src.slice(src.indexOf('export const SHOTS'));
   const groups = new Map();
   const docs = new Map();
@@ -201,7 +201,7 @@ function frame(jobs, aspect = 1600 / 900) {
  * + how much relief sits behind it, which is what makes a vista read.
  */
 async function scout(jobs) {
-  const { Field } = await import('../world/terrain/Field.js');
+  const { Field } = await import('../world/terrain/Field.ts');
   const t0 = Date.now();
   const field = new Field(1337);
   field.build();

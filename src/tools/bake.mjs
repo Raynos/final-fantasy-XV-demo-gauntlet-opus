@@ -35,15 +35,15 @@ const STAMP = path.join(BAKE_DIR, 'terrain.json');
 
 /** Everything whose contents can change the baked bytes. */
 const SOURCES = [
-  'src/world/terrain/Field.js',
-  'src/world/terrain/Road.js',
-  'src/world/terrain/FieldCodec.js',
-  'src/world/terrain/FieldBake.js',
-  'src/world/terrain/Layers.js',
-  'src/world/map/WorldMap.js',
-  'src/world/map/RoadGraph.js',
-  'src/util/Noise.js',
-  'src/util/Rng.js',
+  'src/world/terrain/Field.ts',
+  'src/world/terrain/Road.ts',
+  'src/world/terrain/FieldCodec.ts',
+  'src/world/terrain/FieldBake.ts',
+  'src/world/terrain/Layers.ts',
+  'src/world/map/WorldMap.ts',
+  'src/world/map/RoadGraph.ts',
+  'src/util/Noise.ts',
+  'src/util/Rng.ts',
 ];
 
 /** @returns {Promise<string>} content hash of the generator sources */
@@ -75,9 +75,9 @@ export async function bake(opts = {}) {
   const log = opts.quiet ? () => {} : (...a) => console.log('[bake]', ...a);
   const t0 = Date.now();
 
-  const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.js')).href);
-  const { encodeField } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.js')).href);
-  const { buildLayerData } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Layers.js')).href);
+  const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.ts')).href);
+  const { encodeField } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/FieldBake.ts')).href);
+  const { buildLayerData } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Layers.ts')).href);
 
   log('building terrain field (2048^2 heightfield + 420k-droplet erosion)...');
   const field = new Field(1337);

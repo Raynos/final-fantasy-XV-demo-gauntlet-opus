@@ -6,7 +6,7 @@
  *   node src/tools/framecam.mjs candidates.json --out tmp/shots/probe --probe probe.mjs
  *
  * `src/tools/shoot.mjs` can only capture shots that already exist in
- * `src/game/Shots.js`, and every edit to that file invalidates the capture
+ * `src/game/Shots.ts`, and every edit to that file invalidates the capture
  * daemon's warm page — so iterating a framing costs a full boot per attempt.
  * This tool boots the game **once** and then applies an arbitrary list of shot
  * *objects* (exactly the shape `Game.applyShot` consumes) by injecting them
@@ -108,7 +108,7 @@ async function main() {
     for (const spec of specs) {
       const meta = await page.evaluate(async ([s, settle]) => {
         const g = window.GAME;
-        const { SHOTS } = await import('/game/Shots.js');
+        const { SHOTS } = await import('/game/Shots.ts');
         // Terrain-relative recipe: `camAt`/`aimAt` are plan coordinates and
         // `eye`/`aimUp` are heights *above the ground there*, resolved against
         // the live heightfield. Written this way a camera can never end up

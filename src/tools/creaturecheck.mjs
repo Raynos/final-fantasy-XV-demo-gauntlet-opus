@@ -98,7 +98,7 @@ try {
     const g = window.GAME;
     const enemies = g.get('Enemies');
     const terrain = g.get('Terrain');
-    const bes = await import('/characters/enemies/Bestiary.js');
+    const bes = await import('/characters/enemies/Bestiary.ts');
     const V3 = g.scene.position.constructor;
 
     /**

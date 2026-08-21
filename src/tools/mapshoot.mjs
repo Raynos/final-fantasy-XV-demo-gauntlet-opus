@@ -86,13 +86,13 @@ async function main() {
     // handed over.
     await page.evaluate(async () => {
       const g = window.GAME;
-      const { Minimap } = await import('/ui/Minimap.js');
+      const { Minimap } = await import('/ui/Minimap.ts');
       const mm = new Minimap();
       await mm.init(g);
       g.add(mm, 'Minimap');
       window.__mm = mm;
 
-      const { WorldMapScreen } = await import('/ui/screens/WorldMapScreen.js');
+      const { WorldMapScreen } = await import('/ui/screens/WorldMapScreen.ts');
       const host = document.createElement('div');
       host.className = 'screen s-world';
       host.style.cssText = 'position:absolute;inset:0;display:none;z-index:4;'

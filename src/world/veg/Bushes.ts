@@ -1,0 +1,491 @@
+import * as THREE from 'three';
+import { Rng } from '../../util/Rng.ts';
+import { hash3 } from './Ecology.ts';
+import { pickFrom } from './Biomes.ts';
+import { WORLD } from '../map/WorldMap.ts';
+import { buildTree } from './TreeBuilder.ts';
+import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
+import { leafClusterTex, fernTex, reedTex, padTex, barkMaps } from './VegTextures.ts';
+
+/**
+ * The ground layer: scrub, undergrowth and the water's edge.
+ *
+ * Streamed on a 32 m tile grid around the camera, the same way `Trees` and
+ * `GrassField` are. It used to be a single fixed scatter inside a 165 m disc
+ * around the world origin, so on an 8 km map there was literally no scrub
+ * anywhere except Hammerhead — and a forest with no undergrowth reads as a
+ * park, which is most of why the Nebulawood and Malmalam had nothing at all.
+ *
+ * Which kinds appear is the zone's business, not this file's: every recipe in
+ * `Biomes.js` carries a `scrub` mix, so Leide grows sage and thorn on its dry
+ * slopes, Duscae grows fern and bracken under its canopy, the Vesperpool and
+ * Alstor Slough grow reeds at the water line and lily pads on the water, and
+ * Ravatogh grows almost nothing.
+ */
+
+const TILE = 32;
+/** Candidate slots per axis inside a tile — 4 m nominal scrub spacing. */
+const GRID = 8;
+/** Density samples per axis (a (DG+1)^2 grid, bilerped per candidate). */
+const DG = 4;
+
+/**
+ * The woody kinds are grown by the same recursive branch generator the trees
+ * use, just at a different scale, which keeps their twig structure consistent
+ * with the canopies above them.
+ */
+const WOODY = {
+  sage: {
+    base: 'broadleaf', variants: 2,
+    params: {
+      height: 1.05, trunkR: 0.045, depth: 3, kids: [3, 4], spread: [0.85, 1.5],
+      lenFall: 0.72, radFall: 0.6, curl: 0.5, droop: -0.05, upBias: 0.55,
+      trunkFrac: 0.34, leafDepth: 2, leafCount: 7, leafSize: 0.3,
+      leafKind: 'dry', bark: 0x8b7d63, barkRough: 0.95,
+    },
+    tint: [0.88, 0.86, 0.58], scale: [0.55, 1.75],
+  },
+  thorn: {
+    base: 'dead', variants: 2,
+    params: {
+      height: 1.35, trunkR: 0.05, depth: 4, kids: [2, 3], spread: [1.0, 1.8],
+      lenFall: 0.7, radFall: 0.6, curl: 1.1, droop: -0.02, upBias: 0.42,
+      trunkFrac: 0.3, leafDepth: 99, leafCount: 0,
+      bark: 0x6f5c46, barkRough: 0.95,
+    },
+    tint: [1.0, 0.95, 0.82], scale: [0.5, 1.6],
+  },
+  shrub: {
+    base: 'broadleaf', variants: 2,
+    params: {
+      height: 1.5, trunkR: 0.06, depth: 3, kids: [3, 4], spread: [0.7, 1.2],
+      lenFall: 0.72, radFall: 0.62, curl: 0.45, droop: 0.0, upBias: 0.6,
+      trunkFrac: 0.34, leafDepth: 2, leafCount: 9, leafSize: 0.42,
+      leafKind: 'broad', bark: 0x6a5a44, barkRough: 0.92,
+    },
+    tint: [0.78, 0.88, 0.54], scale: [0.55, 1.6],
+  },
+};
+
+/** Kinds drawn as alpha cards rather than branch geometry. */
+const CARDS = {
+  // forest floor: a tight radial spray of arching fronds
+  fern: { tint: [0.86, 1.0, 0.74], scale: [0.7, 1.5] },
+  // wider, lower, leafier — the mass between the ferns
+  bracken: { tint: [0.80, 0.94, 0.66], scale: [0.9, 2.0] },
+  // tall marsh stems at the water line
+  reed: { tint: [0.86, 0.92, 0.58], scale: [1.1, 2.4] },
+};
+
+const _m = new THREE.Matrix4();
+const _q = new THREE.Quaternion();
+const _e = new THREE.Euler();
+const _p = new THREE.Vector3();
+const _s = new THREE.Vector3();
+
+/**
+ * Radial spray of arching fronds. `wide` flattens the spray and lengthens the
+ * fronds, which turns a fern into a bracken mat.
+ */
+function frondGeometry(seed, { fronds = 8, lean = [0.35, 0.75], len = [0.40, 0.68], wid = 0.44 } = {}) {
+  const rng = new Rng(seed);
+  const p = [], n = [], uv = [], col = [], idx = [], flex = [];
+  for (let i = 0; i < fronds; i++) {
+    const a = (i / fronds) * Math.PI * 2 + rng.gauss(0, 0.25);
+    const ln = rng.range(lean[0], lean[1]);
+    const L = rng.range(len[0], len[1]);
+    const W = L * wid;
+    const dx = Math.cos(a), dz = Math.sin(a);
+    const uy = 1 - ln, ux = dx * ln, uz = dz * ln;
+    const sx = -dz, sz = dx;
+    const base = p.length / 3;
+    const corners = [[-1, 0], [1, 0], [1, 1], [-1, 1]];
+    for (const [cx, cy] of corners) {
+      p.push(sx * cx * W * 0.5 + ux * cy * L, uy * cy * L, sz * cx * W * 0.5 + uz * cy * L);
+      n.push(dx * 0.3, 0.9, dz * 0.3);
+      uv.push(cx * 0.5 + 0.5, cy);
+      const sh = 0.7 + cy * 0.45;
+      col.push(sh, sh, sh);
+      flex.push(cy);
+    }
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aFlex', new THREE.Float32BufferAttribute(flex, 1));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** N crossed vertical quads, unit height — a stand of reeds. */
+function stemCardGeometry(planes = 3, width = 0.5) {
+  const pos = [], nor = [], uv = [], col = [], idx = [];
+  let v = 0;
+  for (let k = 0; k < planes; k++) {
+    const a = (k / planes) * Math.PI;
+    const cx = Math.cos(a) * width * 0.5, cz = Math.sin(a) * width * 0.5;
+    for (const [x, y, z, u, vv] of [
+      [-cx, 0, -cz, 0, 0], [cx, 0, cz, 1, 0], [cx, 1, cz, 1, 1], [-cx, 1, -cz, 0, 1],
+    ]) {
+      pos.push(x, y, z);
+      nor.push(-Math.sin(a) * 0.3, 0.94, Math.cos(a) * 0.3);
+      uv.push(u, vv);
+      const sh = 0.55 + vv * 0.5;
+      col.push(sh, sh, sh);
+    }
+    idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+    v += 4;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  bakeFlex(g);
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** A raft of flat pads lying on the water. */
+function padGeometry(seed) {
+  const rng = new Rng(seed);
+  const pos = [], nor = [], uv = [], col = [], idx = [];
+  let v = 0;
+  for (let i = 0; i < 4; i++) {
+    const r = rng.range(0.26, 0.5);
+    const ox = rng.gauss(0, 0.34), oz = rng.gauss(0, 0.34);
+    const a = rng.next() * Math.PI * 2;
+    const ca = Math.cos(a) * r, sa = Math.sin(a) * r;
+    for (const [sx, sz, u, vv] of [
+      [-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, 1, 0, 1],
+    ]) {
+      pos.push(ox + sx * ca - sz * sa, 0.02 + i * 0.004, oz + sx * sa + sz * ca);
+      nor.push(0, 1, 0);
+      uv.push(u, vv);
+      const sh = 0.78 + rng.next() * 0.3;
+      col.push(sh, sh, sh);
+    }
+    idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+    v += 4;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  bakeFlex(g, () => 0.2);
+  g.computeBoundingSphere();
+  return g;
+}
+
+export class Bushes {
+  constructor(eco, scene, { quality = 1, range = 132 } = {}) {
+    this.eco = eco;
+    this.scene = scene;
+    /** Named parent so the whole ground layer can be priced or hidden at once. */
+    this.group = new THREE.Group();
+    this.group.name = 'scrub';
+    this.group.matrixAutoUpdate = false;
+    scene.add(this.group);
+    this.quality = quality;
+    this.range = range;
+    /** kind -> { variants: [{mesh, leaves, max}], tint, scale } */
+    this.kinds = new Map();
+    this.tiles = new Map();
+    this._last = new THREE.Vector3(1e9, 0, 1e9);
+    this._pending = true;
+    this._primed = false;
+    this._deadline = 0;
+    this._stamp = 0;
+    this.budgetMs = 2;
+    this.budget = Math.max(300, Math.round(2000 * quality));
+    this.tileCacheMax = 220;
+  }
+
+  build() {
+    const bark = barkMaps(0x7a6650);
+    const per = Math.max(48, Math.round(420 * this.quality));
+
+    for (const key of Object.keys(WOODY)) {
+      const spec = WOODY[key];
+      const woodMat = patchVeg(new THREE.MeshStandardMaterial({
+        color: spec.params.bark, roughness: spec.params.barkRough, metalness: 0,
+        map: bark.map, normalMap: bark.normalMap,
+        normalScale: new THREE.Vector2(0.6, 0.6),
+      }), { bend: 0.28, flutter: 0.22, gustFreq: 0.05, flexPow: 1.9 });
+
+      let leafMat = null;
+      if (spec.params.leafCount > 0) {
+        leafMat = patchVeg(new THREE.MeshStandardMaterial({
+          map: leafClusterTex(spec.params.leafKind), color: 0xffffff,
+          vertexColors: true, alphaTest: 0.4, transparent: false,
+          side: THREE.DoubleSide, roughness: 0.86, metalness: 0,
+        }), {
+          bend: 0.42, flutter: 0.55, gustFreq: 0.05, flexPow: 1.7,
+          translucency: 0.9, twoSidedNormals: true, specular: 0.1,
+        });
+      }
+
+      const variants = [];
+      for (let v = 0; v < spec.variants; v++) {
+        const t = buildTree(spec.base, 4242 + v * 613 + key.length * 71, spec.params);
+        const wood = new THREE.InstancedMesh(t.wood, woodMat, per);
+        wood.castShadow = true; wood.receiveShadow = true;
+        wood.count = 0; wood.visible = false; wood.frustumCulled = false;
+        wood.name = `bush_${key}_${v}`;
+        this.group.add(wood);
+        let leaves = null;
+        if (t.leaves && leafMat) {
+          leaves = new THREE.InstancedMesh(t.leaves, leafMat, per);
+          leaves.castShadow = true; leaves.receiveShadow = true;
+          leaves.count = 0; leaves.visible = false; leaves.frustumCulled = false;
+          leaves.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+          leaves.name = `bush_${key}_${v}_leaf`;
+          registerAlphaCard(leaves);
+          this.group.add(leaves);
+        }
+        variants.push({ wood, leaves, max: per });
+      }
+      this.kinds.set(key, { variants, tint: spec.tint, scale: spec.scale });
+    }
+
+    const cardMat = (map, opts) => patchVeg(new THREE.MeshStandardMaterial({
+      map, color: 0xffffff, vertexColors: true,
+      alphaTest: 0.38, transparent: false, side: THREE.DoubleSide,
+      roughness: 0.92, metalness: 0,
+    }), {
+      bend: 0.4, flutter: 0.6, gustFreq: 0.05, flexPow: 1.6,
+      translucency: 1.0, twoSidedNormals: true, trample: 0.5, specular: 0.08,
+      ...opts,
+    });
+
+    const cardGeo = {
+      fern: frondGeometry(88, { fronds: 8 }),
+      bracken: frondGeometry(311, { fronds: 10, lean: [0.55, 0.92], len: [0.5, 0.9], wid: 0.6 }),
+      reed: stemCardGeometry(3, 0.45),
+    };
+    const cardTex = { fern: fernTex(), bracken: fernTex(), reed: reedTex() };
+
+    for (const key of Object.keys(CARDS)) {
+      const spec = CARDS[key];
+      const mat = cardMat(cardTex[key], key === 'reed'
+        ? { bend: 0.62, flutter: 0.45, translucency: 1.1 } : {});
+      // A one-metre frond contributes nothing legible to a 2 km cascade and
+      // there are two thousand of them; the shadow pass is not the place.
+      const mesh = new THREE.InstancedMesh(cardGeo[key], mat, per);
+      mesh.castShadow = false; mesh.receiveShadow = true;
+      mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+      mesh.name = `scrub_${key}`;
+      registerAlphaCard(mesh);
+      this.group.add(mesh);
+      this.kinds.set(key, {
+        variants: [{ wood: mesh, leaves: null, max: per }],
+        tint: spec.tint, scale: spec.scale,
+      });
+    }
+
+    // Lily pads sit on the water plane, not on the ground, so they get their
+    // own flat geometry and no wind bend to speak of.
+    const lilyMat = patchVeg(new THREE.MeshStandardMaterial({
+      map: padTex(), color: 0xffffff, vertexColors: true,
+      alphaTest: 0.35, transparent: false, side: THREE.DoubleSide,
+      roughness: 0.55, metalness: 0,
+    }), {
+      bend: 0.05, flutter: 0.04, gustFreq: 0.04, flexPow: 1.0,
+      translucency: 0.5, twoSidedNormals: true, specular: 0.25,
+    });
+    const lilyMax = Math.max(48, Math.round(420 * this.quality));
+    const lily = new THREE.InstancedMesh(padGeometry(4210), lilyMat, lilyMax);
+    lily.castShadow = false; lily.receiveShadow = true;
+    lily.count = 0; lily.visible = false; lily.frustumCulled = false;
+    lily.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(lilyMax * 3), 3);
+    lily.name = 'scrub_lily';
+    registerAlphaCard(lily);
+    this.group.add(lily);
+    this.kinds.set('lily', {
+      variants: [{ wood: lily, leaves: null, max: lilyMax }],
+      tint: [0.8, 0.95, 0.66], scale: [1.0, 2.2],
+    });
+  }
+
+  // ------------------------------------------------------------------ tiles
+
+  /** Build one 32 m tile's worth of ground layer. */
+  _makeTile(tx, tz) {
+    const eco = this.eco;
+    const x0 = tx * TILE, z0 = tz * TILE;
+    const rng = new Rng(hash3(tx, tz, 0x1b0b));
+    const out = [];
+
+    const b0 = eco.veg(x0 + TILE * 0.5, z0 + TILE * 0.5);
+    const dg = new Float32Array((DG + 1) * (DG + 1));
+    const wg = new Float32Array((DG + 1) * (DG + 1));
+    let any = 0, wetAny = -1e9;
+    for (let j = 0; j <= DG; j++) {
+      for (let i = 0; i <= DG; i++) {
+        const x = x0 + (i / DG) * TILE, z = z0 + (j / DG) * TILE;
+        const k = j * (DG + 1) + i;
+        dg[k] = eco.scrubDensity(x, z);
+        wg[k] = eco.waterDepth(x, z);
+        if (dg[k] > any) any = dg[k];
+        if (wg[k] > wetAny) wetAny = wg[k];
+      }
+    }
+    const wantWater = (b0.reedD > 0 || b0.lilyD > 0) && wetAny > -2.0;
+    if (any < 0.02 && !wantWater) return out;
+
+    const bil = (a, u, v) => {
+      const fu = u * DG, fv = v * DG;
+      const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
+      const su = fu - iu, sv = fv - iv;
+      const p = a[iv * (DG + 1) + iu], q = a[iv * (DG + 1) + iu + 1];
+      const r = a[(iv + 1) * (DG + 1) + iu], s = a[(iv + 1) * (DG + 1) + iu + 1];
+      return (p * (1 - su) + q * su) * (1 - sv) + (r * (1 - su) + s * su) * sv;
+    };
+
+    for (let gz = 0; gz < GRID; gz++) {
+      for (let gx = 0; gx < GRID; gx++) {
+        const u = (gx + rng.next()) / GRID, v = (gz + rng.next()) / GRID;
+        const x = x0 + u * TILE, z = z0 + v * TILE;
+        if (Math.hypot(x, z) > eco.worldRadius) continue;
+        const b = eco.veg(x, z);
+        const depth = bil(wg, u, v);
+        const roll = rng.next();
+        let kind = null, y = 0;
+
+        if (depth > 0.45 && b.lilyD > 0) {
+          // open water: lily pads, floating on the plane itself
+          if (roll > b.lilyD * 0.34 * Math.min(1, depth * 0.5)) continue;
+          kind = 'lily';
+          y = WORLD.seaLevel;
+        } else if (depth > -1.1 && depth < 0.5 && b.reedD > 0) {
+          // the water line — a band about a metre and a half wide
+          if (roll > b.reedD * 0.72) continue;
+          kind = 'reed';
+          y = eco.height(x, z);
+        } else if (depth > 0.05) {
+          continue;                        // submerged, and nothing floats here
+        } else {
+          const d = bil(dg, u, v);
+          if (d < 0.02 || roll > d * 0.85) continue;
+          kind = pickFrom(b.scrubTable, rng.next()) || 'shrub';
+          if (kind === 'reed') kind = 'shrub';    // reeds only at the water
+          y = eco.height(x, z);
+        }
+
+        const spec = this.kinds.get(kind);
+        if (!spec) continue;
+        const nv = spec.variants.length;
+        const sc = spec.scale;
+        // heavy-tailed size: mostly knee-high, the odd waist-high bush
+        const s = (0.62 + rng.next() * 0.5)
+          * (sc[0] + Math.pow(rng.next(), 2.0) * (sc[1] - sc[0]));
+        const t = spec.tint;
+        const shade = (0.8 + rng.next() * 0.42) * (kind === 'reed' || kind === 'lily'
+          ? 1 : 1 - b.mossy * 0.12);
+        out.push({
+          x, y, z, kind, vi: (rng.next() * nv) | 0,
+          s, yaw: rng.next() * Math.PI * 2, tilt: rng.gauss(0, 0.09),
+          r: shade * t[0], g: shade * t[1], b: shade * t[2],
+        });
+      }
+    }
+    return out;
+  }
+
+  /** @returns {Array|null} null when this frame's generation budget is spent */
+  _tile(tx, tz) {
+    const key = (tx & 4095) * 8192 + (tz & 4095);
+    const e = this.tiles.get(key);
+    if (e) { e.stamp = this._stamp; return e.list; }
+    if (this._primed && performance.now() > this._deadline) return null;
+    const list = this._makeTile(tx, tz);
+    this.tiles.set(key, { list, stamp: this._stamp });
+    if (this.tiles.size > this.tileCacheMax) {
+      const target = Math.round(this.tileCacheMax * 0.8);
+      for (const [k, val] of this.tiles) {
+        if (this.tiles.size <= target) break;
+        if (val.stamp === this._stamp) continue;
+        this.tiles.delete(k);
+      }
+    }
+    return list;
+  }
+
+  /** @param {THREE.Vector3} camPos — see {@link Trees#update} for the throttles */
+  update(camPos) {
+    const moved = this._last.distanceToSquared(camPos);
+    if (moved < 100) {
+      if (!this._pending) return;
+      if ((this._tick = (this._tick | 0) + 1) % 5 !== 0) return;
+    }
+    this._last.copy(camPos);
+    this._deadline = performance.now() + this.budgetMs;
+    this._stamp++;
+    let pending = false;
+
+    for (const [, k] of this.kinds) for (const v of k.variants) v._w = 0;
+
+    const r2 = this.range * this.range;
+    const rt = Math.ceil(this.range / TILE) + 1;
+    const cx = Math.floor(camPos.x / TILE), cz = Math.floor(camPos.z / TILE);
+    let n = 0;
+    for (let dz = -rt; dz <= rt; dz++) {
+      for (let dx = -rt; dx <= rt; dx++) {
+        const tx = cx + dx, tz = cz + dz;
+        const ox = (tx + 0.5) * TILE - camPos.x, oz = (tz + 0.5) * TILE - camPos.z;
+        if (Math.hypot(ox, oz) > this.range + TILE) continue;
+        const list = this._tile(tx, tz);
+        if (!list) { pending = true; continue; }
+        for (let i = 0; i < list.length && n < this.budget; i++) {
+          const p = list[i];
+          const ddx = p.x - camPos.x, ddz = p.z - camPos.z;
+          if (ddx * ddx + ddz * ddz > r2) continue;
+          const spec = this.kinds.get(p.kind);
+          const v = spec && spec.variants[p.vi];
+          if (!v || v._w >= v.max) continue;
+          const w = v._w++;
+          n++;
+          _e.set(p.tilt, p.yaw, p.tilt * 0.6);
+          _q.setFromEuler(_e);
+          _p.set(p.x, p.y - 0.06, p.z);
+          _s.set(p.s, p.s * 0.94, p.s);
+          _m.compose(_p, _q, _s);
+          _m.toArray(v.wood.instanceMatrix.array, w * 16);
+          const c = v.wood.instanceColor;
+          if (c) { c.array[w * 3] = p.r; c.array[w * 3 + 1] = p.g; c.array[w * 3 + 2] = p.b; }
+          if (v.leaves) {
+            _m.toArray(v.leaves.instanceMatrix.array, w * 16);
+            const lc = v.leaves.instanceColor.array;
+            lc[w * 3] = p.r; lc[w * 3 + 1] = p.g; lc[w * 3 + 2] = p.b;
+          }
+        }
+      }
+    }
+
+    for (const [, k] of this.kinds) {
+      for (const v of k.variants) {
+        v.wood.count = v._w;
+        v.wood.visible = v._w > 0;
+        v.wood.instanceMatrix.needsUpdate = true;
+        if (v.wood.instanceColor) v.wood.instanceColor.needsUpdate = true;
+        if (v.leaves) {
+          v.leaves.count = v._w;
+          v.leaves.visible = v._w > 0;
+          v.leaves.instanceMatrix.needsUpdate = true;
+          v.leaves.instanceColor.needsUpdate = true;
+        }
+      }
+    }
+    this.count = n;
+    this._pending = pending;
+    this._primed = true;
+  }
+}

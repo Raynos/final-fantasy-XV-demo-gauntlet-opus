@@ -7,7 +7,7 @@
  *   node src/tools/bootprof.mjs --prod     # against the production bundle
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
- * `init()` breakdown collected by `src/engine/BootProfile.js`.
+ * `init()` breakdown collected by `src/engine/BootProfile.ts`.
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';

@@ -377,11 +377,11 @@ ok('hints are suppressed during a capture', hints.mutedShows === false);
 /* the keymap is collision-free across the systems that share a mode     */
 
 const SRC = {
-  combat: 'src/combat/CombatSystem.js',
-  party: 'src/characters/ai/PartyAI.js',
-  menus: 'src/ui/Menus.js',
-  regalia: 'src/world/vehicle/RegaliaSystem.js',
-  audio: 'src/audio/AudioSystem.js',
+  combat: 'src/combat/CombatSystem.ts',
+  party: 'src/characters/ai/PartyAI.ts',
+  menus: 'src/ui/Menus.ts',
+  regalia: 'src/world/vehicle/RegaliaSystem.ts',
+  audio: 'src/audio/AudioSystem.ts',
 };
 // WASD is move / drive / menu-cursor by universal convention; those are modal
 // and are not what "collision" means here.
