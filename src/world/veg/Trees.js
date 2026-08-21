@@ -441,7 +441,15 @@ export class Trees {
     // On foot the camera rides two or three metres up, below that floor, so
     // nothing ever blinks out while you walk through a wood; it only bites when
     // the camera is on a bank looking down into the canopy next to it.
-    const cullR2 = 12.0 * 12.0;
+    //
+    // The radius has to scale with the tree, and a flat 12 m did not. A Duscae
+    // canopy tree stands 19 m before its scale multiplier and carries a crown
+    // eight metres or more across, so one rooted 15 m away still wraps a camera
+    // sitting up in the canopy — outside the flat radius, and `zone_alstor`
+    // came back an almost entirely black frame with no instance of anything
+    // within 10 m of the lens. `0.55 * h + 3` is roughly the crown radius plus
+    // a margin: ~16 m for that Duscae tree, ~8 m for a Leide scrub tree, which
+    // is what the flat number was tuned on in the first place.
     const cullFloor = 3.5;
     const impR2 = this.impRange * this.impRange;
     const near = [];
@@ -462,7 +470,10 @@ export class Trees {
           const ddx = p.x - camPos.x, ddz = p.z - camPos.z;
           const d2 = ddx * ddx + ddz * ddz;
           if (d2 > impR2) continue;
-          if (d2 < cullR2 && camPos.y > p.y + cullFloor && camPos.y < p.y + p.h) continue;
+          if (camPos.y > p.y + cullFloor && camPos.y < p.y + p.h) {
+            const cr = 0.55 * p.h + 3;
+            if (d2 < cr * cr) continue;
+          }
           if (d2 < geoR2) near.push(d2, p);
           else if (far < this.impBudget && this._writeImpostor(p)) far++;
         }
