@@ -8,13 +8,22 @@ import * as THREE from 'three';
  *   const { map, normalMap, roughnessMap, aoMap } = pbrFromHeight(512, (u,v) => {...});
  */
 
+/** Shared options for every generator here. */
+export interface TextureOpts {
+  /** `THREE.NoColorSpace` for data maps -- roughness, normals, AO. */
+  colorSpace?: THREE.ColorSpace;
+  repeat?: number;
+  anisotropy?: number;
+  generateMipmaps?: boolean;
+}
+
 /** Build an RGBA DataTexture from a per-texel callback returning [r,g,b] in 0..1. */
 export function makeTexture(size: any, fn: any, {
   colorSpace = THREE.SRGBColorSpace,
   repeat = 1,
   anisotropy = 16,
   generateMipmaps = true,
-} = {}) {
+}: TextureOpts = {}) {
   const data = new Uint8Array(size * size * 4);
   const c = [0, 0, 0];
   for (let y = 0; y < size; y++) {

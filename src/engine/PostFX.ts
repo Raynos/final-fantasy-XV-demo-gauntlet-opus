@@ -355,7 +355,7 @@ export class PostFX {
    *
    */
   guardOverrides(scene: THREE.Scene) {
-    scene.traverse((o) => {
+    scene.traverse((o: any) => {
       const m = o.material;
       if (!m) return;
       const list = Array.isArray(m) ? m : [m];

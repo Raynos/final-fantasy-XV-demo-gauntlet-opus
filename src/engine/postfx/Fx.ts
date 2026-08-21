@@ -41,7 +41,7 @@ export function fsMaterial({ uniforms, fragmentShader, defines = {}, blending = 
 }
 
 /** One reusable fullscreen triangle for the whole chain. */
-export const quad = new FullScreenQuad(null);
+export const quad = new FullScreenQuad(null as unknown as THREE.Material);
 
 /**
  * Render `material` over `target` (null = screen). Never clears depth so a
@@ -76,9 +76,11 @@ export function blit(renderer: THREE.WebGLRenderer, material: THREE.Material, ta
  * `beforeRender()`.
  */
 export class FilterPass extends Pass {
-  beforeRender!: any;
   fx!: any;
   material!: any;
+
+  /** Subclass hook, run after `tDiffuse` is bound and before the blit. */
+  beforeRender?(renderer: THREE.WebGLRenderer, readBuffer: THREE.WebGLRenderTarget): void;
   constructor(fx: any) {
     super();
     this.fx = fx;

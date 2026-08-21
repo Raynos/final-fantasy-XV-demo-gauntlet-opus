@@ -35,8 +35,23 @@ export function bootPhase(name: string, fn: ((...args: any[]) => any)) {
  * Install the profiler on a game instance before `init()` is called.
  * @returns the profile record, filled in as boot proceeds
  */
-export function installBootProfile(game: any): any {
-  const profile = {
+export interface BootProfile {
+  /** `performance.timeOrigin` -- the navigation start the marks are relative to. */
+  nav: number;
+  /** When this module was evaluated, in page time. */
+  moduleEval: number;
+  /** One entry per timed phase, in the order they finished. */
+  marks: { name: string, ms: number }[];
+  /** Total `init()` duration, filled in when init resolves. */
+  total: number;
+  /** Page time at which the game reported ready. */
+  ready?: number;
+  /** `Warmup`'s report, when the warm-up ran. */
+  warmup?: any;
+}
+
+export function installBootProfile(game: any): BootProfile {
+  const profile: BootProfile = {
     nav: typeof performance !== 'undefined' && performance.timeOrigin ? performance.timeOrigin : 0,
     moduleEval: now(),
     marks: [],

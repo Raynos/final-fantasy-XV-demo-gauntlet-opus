@@ -45,7 +45,7 @@ export class Warmup {
    * Run the whole sweep. Blocking, and meant to be: it belongs on the loading
    * screen. Restores every piece of state it touches.
    */
-  run(): {ms:number, programs:number, steps:Array} {
+  run(): {ms:number, programs:number, steps:any[]} {
     const t0 = performance.now();
     const rt = new THREE.WebGLRenderTarget(64, 64, { depthBuffer: true });
     const prevTarget = this.renderer.getRenderTarget();

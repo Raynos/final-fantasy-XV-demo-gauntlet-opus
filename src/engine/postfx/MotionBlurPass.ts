@@ -107,6 +107,10 @@ export class MotionBlurPass extends FilterPass {
    * debug flag both write it. The pass keeps that intent separately from the
    * per-frame decision below, so turning it off by hand stays off.
    */
+  // @ts-expect-error three declares `Pass.enabled` as a property; this pass
+  // deliberately replaces it with an accessor pair so the public switch and the
+  // per-frame decision below can be kept apart. The base constructor's
+  // `this.enabled = true` runs the setter, which is exactly what is wanted.
   override get enabled() { return this._enabled; }
 
   override set enabled(v) { this._wanted = v; this._enabled = v; }

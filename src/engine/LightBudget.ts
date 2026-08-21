@@ -90,7 +90,8 @@ export class LightBudget {
       l.userData.lightBallast = true;
       l.name = `ballast-${kind}-${pool.length}`;
       this.scene.add(l);
-      if (l.target) { l.target.position.set(0, -9001, 0); this.scene.add(l.target); }
+      const target = (l as THREE.SpotLight).target;
+      if (target) { target.position.set(0, -9001, 0); this.scene.add(target); }
       pool.push(l);
     }
   }

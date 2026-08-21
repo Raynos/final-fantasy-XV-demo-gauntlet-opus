@@ -75,13 +75,14 @@ function parseArgs(argv) {
 }
 
 /**
- * Read Shots.js and bucket every shot name under the `// --- header ---`
+ * Read Shots.ts and bucket every shot name under the `// --- header ---`
  * comment that precedes it.
  * @returns {{order:string[], groups:Map<string,string[]>, docs:Map<string,string>}}
  */
 async function index() {
   const src = await readFile(path.join(ROOT, 'src/game/Shots.ts'), 'utf8');
-  const body = src.slice(src.indexOf('export const SHOTS'));
+  // `SHOT_TABLE` is the literal; `SHOTS` below it is the typed re-export.
+  const body = src.slice(src.indexOf('const SHOT_TABLE'));
   const groups = new Map();
   const docs = new Map();
   const order = [];

@@ -29,6 +29,54 @@ import { Cinematics } from './cinematics/Cinematics.ts';
 import { StorySystem } from './story/StorySystem.ts';
 import { Dungeons } from '../world/dungeons/Dungeons.ts';
 import { SHOTS } from './Shots.ts';
+import type { System } from '../engine/System.ts';
+
+/**
+ * Every key the registry answers to, and what comes back for each.
+ *
+ * This union is the reason `add()` takes an explicit name. Lookup once keyed on
+ * `constructor.name`, which worked in dev and returned `undefined` for *every*
+ * system in a production build, because the minifier mangles class names -- the
+ * game crashed on load in `vite preview` while the capture harness, which only
+ * ever ran the dev server, stayed green. A literal union makes `get('Terain')`
+ * a compile error and `get('Terrain')` a `Terrain` rather than an `any`.
+ */
+export interface SystemRegistry {
+  Sky: Sky;
+  Terrain: Terrain;
+  Water: Water;
+  Vegetation: Vegetation;
+  Props: Props;
+  Weather: Weather;
+  VFX: VFX;
+  Player: Player;
+  Party: Party;
+  Enemies: Enemies;
+  Combat: CombatSystem;
+  Camera: CameraRig;
+  Regalia: RegaliaSystem;
+  Audio: AudioSystem;
+  Rpg: RpgSystem;
+  HUD: HUD;
+  Minimap: Minimap;
+  Menus: Menus;
+  Cinematics: Cinematics;
+  Story: StorySystem;
+  Interaction: InteractionSystem;
+  Town: Hammerhead;
+  Npcs: Npcs;
+  Director: Director;
+  Dungeons: Dungeons;
+  // aliases -- callers grew up using the class name as well as the short label
+  CombatSystem: CombatSystem;
+  CameraRig: CameraRig;
+  AudioSystem: AudioSystem;
+  RpgSystem: RpgSystem;
+  StorySystem: StorySystem;
+}
+
+/** Any key `Game.get()` accepts. */
+export type SystemKey = keyof SystemRegistry;
 
 /**
  * Extra keys each system answers to. Callers grew up using both the short
@@ -52,7 +100,7 @@ export class Game {
   state!: string;
   _hudCache!: any;
   _raf!: any;
-  _registry!: Map<any, any>;
+  _registry!: Map<string, System>;
   _running!: boolean;
   camera!: any;
   container!: any;
@@ -67,7 +115,7 @@ export class Game {
   rnd!: Renderer;
   scene!: any;
   seed!: number;
-  systems!: any[];
+  systems!: System[];
   time!: Time;
   uiRoot!: any;
   constructor({ container, uiRoot, onProgress }: any) {
@@ -91,7 +139,7 @@ export class Game {
    *
    * @param [name] registry key; defaults to the (dev-only) class name
    */
-  add(system: any, name?: string) {
+  add<K extends SystemKey>(system: SystemRegistry[K] & System, name?: K): SystemRegistry[K] {
     this.systems.push(system);
     const key = name || system.constructor.name;
     this._registry.set(key, system);
@@ -99,8 +147,8 @@ export class Game {
     return system;
   }
 
-  /** @param name registry key or alias @returns */
-  get(name: string): any | undefined { return this._registry.get(name); }
+  /** @param name registry key or alias */
+  get<K extends SystemKey>(name: K): SystemRegistry[K] | undefined { return this._registry.get(name) as SystemRegistry[K] | undefined; }
 
   async init() {
     const p = this.onProgress;
@@ -115,7 +163,7 @@ export class Game {
     // Deterministic seeded RNG so every screenshot of the same shot matches.
     this.seed = 1337;
 
-    const order = [
+    const order: [SystemKey, () => System][] = [
       ['Sky', () => new Sky()],
       ['Terrain', () => new Terrain()],
       ['Water', () => new Water()],

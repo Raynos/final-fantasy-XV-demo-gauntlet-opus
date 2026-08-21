@@ -104,7 +104,63 @@
  * Add shots here — src/tools/shoot.mjs discovers them automatically, and
  * `src/tools/sheet.mjs` tiles a shot directory into one contact sheet to review.
  */
-export const SHOTS = {
+/** A world-space triple. Shots are authored as arrays, not `Vector3`s. */
+export type Vec3 = readonly [number, number, number];
+
+/** Everything a shot may set that is not the framing. */
+export interface ShotState {
+  /** What the shot is for. Read by `corpus.mjs` when it indexes the sheets. */
+  doc: string;
+  /** Hour of day, 0..24. */
+  time: number;
+  /** Vertical field of view, degrees. */
+  fov: number;
+  weather?: 'clear' | 'fog' | 'overcast' | 'storm';
+  /** `Director.setScenario` -- what is happening in the world. */
+  scenario?: string;
+  /** HUD visible? Set last in `applyShot` and wins over the story system. */
+  hud?: boolean;
+  /** Enter this dungeon before framing. */
+  dungeon?: string;
+  /** Open this menu screen. */
+  menu?: string;
+  /** A story beat: either a screen name, or a scene seeked to `at` seconds. */
+  story?: string | { scene: string, at?: number };
+  /** Player gait for the shot, where standing still would read wrong. */
+  gait?: string;
+}
+
+/**
+ * A shot framed by absolute world coordinates.
+ *
+ * `pos`/`target` and `follow`/`offset` are the two framing modes, and mixing
+ * them is what broke several shots historically -- an `offset` on a `pos` shot
+ * is silently ignored, so the frame lands somewhere nobody authored. The `never`
+ * members are what make that a compile error rather than a black frame.
+ */
+export interface FixedShot extends ShotState {
+  pos: Vec3;
+  target: Vec3;
+  follow?: never;
+  offset?: never;
+  lookOffset?: never;
+}
+
+/** A shot framed relative to a character, resolved every frame. */
+export interface FollowShot extends ShotState {
+  /** `'player'` or a party member key -- see `Game.followAnchor`. */
+  follow: string;
+  /** Camera offset from the anchor, in world axes. */
+  offset: Vec3;
+  /** Aim point offset from the anchor. Defaults to `[0, 1.2, 0]`. */
+  lookOffset?: Vec3;
+  pos?: never;
+  target?: never;
+}
+
+export type Shot = FixedShot | FollowShot;
+
+const SHOT_TABLE = {
   // --- character --------------------------------------------------------
   // These run FIRST in the file on purpose — see "Order matters" above. Left
   // where they were, the party is buried to the shoulders in terrain that has
@@ -902,4 +958,14 @@ export const SHOTS = {
     time: 15.0, weather: 'storm', story: { scene: 'ch5_astral_awakening', at: 18 },
     pos: [0, 0, 0], target: [0, 0, 0], fov: 34,
   },
-};
+} as const satisfies Record<string, Shot>;
+
+/** Every shot name, as a literal union: `applyShot('vista_dsuk')` is a typo the compiler catches. */
+export type ShotName = keyof typeof SHOT_TABLE;
+
+/**
+ * The table, with every entry checked against `Shot` and read back as one.
+ * `satisfies` on the literal is what keeps the key union exact while still
+ * rejecting a shot that mixes the two framing modes.
+ */
+export const SHOTS: Record<ShotName, Shot> = SHOT_TABLE;
