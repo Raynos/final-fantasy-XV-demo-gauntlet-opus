@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Frame } from '../../cinematics/CameraMove.js';
+import { worldMap } from '../../../world/map/WorldMap.js';
 
 /**
  * Shared staging vocabulary for the dialogue scenes.
@@ -8,29 +9,152 @@ import { Frame } from '../../cinematics/CameraMove.js';
  * three moves — build a frame at a place, arrange the four in a loose arc, cut
  * between a wide, a two-shot and a single — so those live here once instead of
  * five times.
+ *
+ * ### Anchoring
+ * A scene never hard-codes a coordinate. It asks for the place by name and gets
+ * whatever the world currently says that place is:
+ *
+ * | helper | source | example |
+ * |---|---|---|
+ * | {@link townAnchor} | `Town.anchors` | `'garageBay'`, `'caravan'`, `'pylon'` |
+ * | {@link poiPoint} | `WorldMap` POI table | `'longwythe_peak'`, `'disc_overlook'` |
+ * | {@link frameAt} `siteType` | `Props.ecology.sites` | `'regalia'`, `'layby'` |
+ *
+ * All three resolve live, every time the scene is staged, because coordinates
+ * in this project go stale every time the terrain or the world size changes.
  */
 
 /**
- * A scene frame anchored on an Ecology site (or a fallback world point),
- * facing whatever direction the scene wants to look.
+ * A named world-space anchor published by the town system — the garage bay, the
+ * caravan, the pylon sign — ground truth for anything staged in Hammerhead.
  *
  * @param {object} ctx cinematic context
- * @param {string} siteType Ecology site type, e.g. `'reststop'`
- * @param {object} [opts] `{ fallback:[x,z], facing:[x,z], offset:[f,l] }`
+ * @param {string} [name] key in `Town.anchors`; omit for the town origin
+ * @returns {THREE.Vector3|null} null when the town has not been built
+ */
+export function townAnchor(ctx, name) {
+  const town = ctx.game.get('Town');
+  if (!town) return null;
+  const a = name && town.anchors ? town.anchors[name] : null;
+  if (a) return a.clone();
+  return town.origin ? town.origin.clone() : null;
+}
+
+/**
+ * A world point for a `WorldMap` point of interest, snapped to the terrain.
+ *
+ * POIs written as `at: 'n_hammerhead'` inherit their position from a road node,
+ * so this is the only honest way to ask where one of them ended up.
+ *
+ * @param {object} ctx cinematic context
+ * @param {string} id POI id, e.g. `'longwythe_peak'`
+ * @returns {THREE.Vector3|null}
+ */
+export function poiPoint(ctx, id) {
+  const p = worldMap.byId ? worldMap.byId.get(id) : null;
+  if (!p) return null;
+  const terrain = ctx.terrain || ctx.game.get('Terrain');
+  const y = terrain && terrain.heightAt ? terrain.heightAt(p.x, p.z) : 0;
+  return new THREE.Vector3(p.x, y, p.z);
+}
+
+/**
+ * Borrow the Regalia for the length of a scene.
+ *
+ * There are two Regalias. `Props.regalia` is the static prop the world builds
+ * at the roadside breakdown site; `Regalia` (the vehicle sim) builds a second,
+ * drivable one and **leaves the prop hidden**, writing its own root transform
+ * from `body.pos` every frame. A cutscene that moves `Props.regalia` therefore
+ * moves an invisible object and stages its actors around nothing — which is
+ * exactly what the opening did: four men pushing empty air while the real car
+ * sat parked forty metres up the road.
+ *
+ * This shows the prop, hides the drivable one so there is never a duplicate in
+ * shot, and returns the object the scene should position.
+ * {@link releaseCar} puts both back.
+ *
+ * @param {object} ctx cinematic context
+ * @returns {THREE.Object3D|null}
+ */
+export function takeCar(ctx) {
+  const props = ctx.game.get('Props');
+  const car = props && props.regalia;
+  if (!car) return null;
+  const sim = ctx.game.get('Regalia');
+  ctx.data._car = {
+    car,
+    pos: car.position.clone(),
+    rot: car.rotation.clone(),
+    visible: car.visible,
+    sim: sim && sim.root ? sim.root : null,
+    simVisible: sim && sim.root ? sim.root.visible : null,
+  };
+  car.visible = true;
+  if (sim && sim.root) sim.root.visible = false;
+  return car;
+}
+
+/** Undo {@link takeCar}. Safe to call when it was never called. */
+export function releaseCar(ctx) {
+  const s = ctx.data && ctx.data._car;
+  if (!s) return;
+  s.car.position.copy(s.pos);
+  s.car.rotation.copy(s.rot);
+  s.car.visible = s.visible;
+  if (s.sim) s.sim.visible = s.simVisible;
+  ctx.data._car = null;
+}
+
+/**
+ * Point a car's nose up-frame. The hull's forward axis is local +X, so the yaw
+ * that drives it along the scene axis is a quarter turn off the "face along +Z"
+ * convention the actors use.
+ *
+ * @param {THREE.Object3D} car
+ * @param {Frame} F
+ * @param {number} [turn] extra yaw, radians (a quarter turn parks it broadside)
+ */
+export function aimCar(car, F, turn = 0) {
+  if (!car) return;
+  const c = Math.cos(turn), s = Math.sin(turn);
+  const fx = F.fwd.x * c - F.fwd.z * s;
+  const fz = F.fwd.x * s + F.fwd.z * c;
+  car.rotation.set(0, Math.atan2(-fz, fx), 0);
+}
+
+/**
+ * A scene frame anchored on a place, facing whatever direction the scene wants
+ * to look.
+ *
+ * The anchor resolves in order: an explicit `origin` (from {@link townAnchor}
+ * or {@link poiPoint}), then the named Ecology site, then `fallback`. A scene
+ * therefore degrades to something sane if the town has not been built or a POI
+ * has been renamed, instead of staging itself at the world origin.
+ *
+ * @param {object} ctx cinematic context
+ * @param {string|null} siteType Ecology site type, e.g. `'reststop'`
+ * @param {object} [opts] `{ origin:Vector3, fallback:[x,z], facing:[x,z]|Vector3, offset:[f,l] }`
  * @returns {Frame}
  */
 export function frameAt(ctx, siteType, opts = {}) {
   const { game, terrain } = ctx;
   const props = game.get('Props');
   const eco = props && props.ecology;
-  const site = eco && eco.sites.find((s) => s.type === siteType);
+  const site = siteType && eco ? eco.sites.find((s) => s.type === siteType) : null;
   const fb = opts.fallback || [0, 0];
-  const o = new THREE.Vector3(site ? site.x : fb[0], 0, site ? site.z : fb[1]);
-  o.y = terrain && terrain.heightAt ? terrain.heightAt(o.x, o.z) : 0;
+  const o = opts.origin
+    ? new THREE.Vector3(opts.origin.x, 0, opts.origin.z)
+    : new THREE.Vector3(site ? site.x : fb[0], 0, site ? site.z : fb[1]);
+  // A frame with a floor keeps its origin *on* that floor, so `at()` and
+  // `ground()` agree; otherwise anything placed with `at()` — a car, a look
+  // target — resolves three metres under the tarmac.
+  o.y = opts.floor ?? (terrain && terrain.heightAt ? terrain.heightAt(o.x, o.z) : 0);
 
   let fwd;
   if (opts.facing) {
-    fwd = new THREE.Vector3(opts.facing[0] - o.x, 0, opts.facing[1] - o.z);
+    const fx = opts.facing.x ?? opts.facing[0];
+    const fz = opts.facing.z ?? opts.facing[1];
+    fwd = new THREE.Vector3(fx - o.x, 0, fz - o.z);
   } else if (eco && eco.roadTangent) {
     const t = eco.roadTangent(o.z, new THREE.Vector2());
     fwd = new THREE.Vector3(t.x, 0, t.y);
@@ -38,12 +162,12 @@ export function frameAt(ctx, siteType, opts = {}) {
     fwd = new THREE.Vector3(0, 0, 1);
   }
   if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
-  const F = new Frame(o, fwd);
+  const F = new Frame(o, fwd).setFloor(opts.floor ?? null);
   if (opts.offset) {
     const [f, l] = opts.offset;
     const p = F.vec(f, l, 0);
-    p.y = terrain && terrain.heightAt ? terrain.heightAt(p.x, p.z) : o.y;
-    return new Frame(p, fwd);
+    p.y = opts.floor ?? (terrain && terrain.heightAt ? terrain.heightAt(p.x, p.z) : o.y);
+    return new Frame(p, fwd).setFloor(opts.floor ?? null);
   }
   return F;
 }
@@ -74,9 +198,12 @@ export function arrange(ctx, F, opts = {}) {
   // has its foot IK fold its legs up to reach daylight, which reads as four men
   // sitting in the dirt. Measured per scene, from a screenshot.
   const lift = opts.lift ?? 0;
+  // A frame pinned to a built surface has already answered "how high is the
+  // ground here"; re-snapping to the terrain would drop the actor through it.
+  const snap = lift === 0 && F.floor == null;
   for (const id of Object.keys(slots)) {
     const [df, dl] = slots[id];
-    stage.place(id, F.ground(terrain, at + df * spread, dl * spread, lift), F.yaw, lift === 0);
+    stage.place(id, F.ground(terrain, at + df * spread, dl * spread, lift), F.yaw, snap);
     stage.walk(id, null, 0);
     stage.pose(id, poses[id] ?? null);
     if (opts.look) stage.look(id, opts.look);
@@ -155,6 +282,67 @@ export function twoShot(ctx, F, o) {
       },
     ],
   };
+}
+
+/**
+ * A **dirty single**: the subject held clean in the middle of the frame with a
+ * second actor's shoulder raking one edge, soft and dark. Television calls it
+ * an over-the-shoulder; it is the shot that turns a line-up into a conversation.
+ *
+ * The camera is *derived* from the two actors, never authored: it sits `back`
+ * metres up-frame of the near man and `side` metres laterally past him on the
+ * side away from the subject, so the sightline to the subject clips the near
+ * man's shoulder. Hand-placing that means re-tuning it every time a staging slot
+ * moves twenty centimetres.
+ *
+ * Both actors face up-frame — this is a line-up, not two people squared off —
+ * so `near` is whoever is closest to the lens, not whoever is talking.
+ *
+ * @param {object} ctx
+ * @param {Frame} F
+ * @param {object} o `{ t0, t1, nearF, nearL, farF, farL, back, side, camU, fov }`
+ */
+export function ots(ctx, F, o) {
+  const terrain = ctx.game.get('Terrain');
+  const G = (f, l, u) => F.ground(terrain, f, l, u);
+  const back = o.back ?? 1.45;     // metres up-frame of the near shoulder
+  const side = o.side ?? 0.95;     // metres past him, away from the subject
+  const away = Math.sign(o.nearL - o.farL) || 1;
+  const camF = o.nearF + back;
+  const camL = o.nearL + away * side;
+  const camU = o.camU ?? 1.62;
+  // Focus is given in metres rather than by name: at f/2.2 the near shoulder is
+  // inside the circle of confusion of anything focused by actor id, and the
+  // wrong man ends up sharp.
+  const dist = Math.hypot(camF - o.farF, camL - o.farL);
+  return {
+    t0: o.t0, t1: o.t1, fov: o.fov ?? 38, handheld: o.handheld ?? 0.6, breathe: 0.55,
+    fStop: o.fStop ?? 2.4, focus: o.focus ?? dist, aim: o.aim || null, aimU: o.aimU ?? 1.50,
+    keys: [
+      { t: 0, pos: G(camF, camL, camU), target: G(o.farF, o.farL, o.targetU ?? 1.52) },
+      {
+        t: o.t1 - o.t0, ease: 'inOutSine',
+        pos: G(camF + (o.driftF ?? -0.24), camL + (o.driftL ?? 0.14), camU + 0.025),
+        target: G(o.farF, o.farL, o.targetU ?? 1.52),
+      },
+    ],
+  };
+}
+
+/**
+ * A low set-up that puts heads against sky instead of against ground: camera
+ * near knee height, target above eye line. The cheapest way to make four people
+ * standing in a field read as a composition rather than an inventory.
+ *
+ * @param {object} ctx
+ * @param {Frame} F
+ * @param {object} o same keys as {@link wide}
+ */
+export function lowAngle(ctx, F, o) {
+  return wide(ctx, F, {
+    camU: 0.52, targetU: 1.86, fov: 34, fStop: 5.0, handheld: 0.3,
+    driftU: 0.16, ...o,
+  });
 }
 
 /** Point every actor's gaze at one of them (or at a world point). */
