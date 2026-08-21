@@ -248,7 +248,12 @@ export function buildHair(rig, look) {
       // Total cross-section is held roughly constant, so a clumped tuft is not
       // a fatter tuft: it is the same mass resolved into finer filaments.
       const cwid = clumpN > 1 ? wid * (0.42 + 0.34 / clumpN) : wid;
-      const steps = tuft.steps || 6;
+      // A clumped lock is three ribbons where there used to be one, so each can
+      // be cheaper: at 5 sides and 5 steps a 4 cm lock is visually identical to
+      // the 6x6 it replaced, and three of them together read as far more hair
+      // than one 6x6 did. That takes 30% back off the tripling.
+      const steps = tuft.steps || (clumpN > 1 ? 5 : 6);
+      const sides = tuft.sides ?? (clumpN > 1 ? 5 : 6);
 
       for (let c2 = 0; c2 < clumpN; c2++) {
         let cpts = pts;
@@ -269,8 +274,8 @@ export function buildHair(rig, look) {
         ribbon(B, {
           points: cpts.map((q) => put(q).toArray()),
           steps,
-          // six-sided: a flat diamond is what made every strand a faceted blade
-          sides: tuft.sides ?? 6,
+          // never four-sided: a flat diamond is what made every strand a blade
+          sides,
           width: w2 * scale,
           // a lock is a rolled bundle, not a ribbon: floor the depth-to-width
           // ratio so the six-sided section is actually round

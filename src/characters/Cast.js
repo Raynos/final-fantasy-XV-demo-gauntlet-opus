@@ -153,7 +153,7 @@ export const CAST = {
       browShadow: 'rgba(34,25,20,0.62)',
       lashColor: 0x0c0908,
       fringeShadow: 0.50,
-      stubble: 0.55, stubbleColor: '#3b2f24',
+      stubble: 0.88, stubbleColor: '#3b2f24',
       scar: { from: [0.054, 0.036, 0.050], to: [0.028, -0.032, 0.080], color: 'rgba(168,116,100,0.9)', width: 6 },
       brows: { color: 0x3a2f22, len: 0.016, width: 0.0072, lift: -0.001 },
       tattoo: eagleInk,
@@ -172,13 +172,13 @@ export const CAST = {
           { n: 20, th: [-1.62, -1.12], phi: [0.92, 1.0], dir: [-0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
           { n: 44, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.16, -0.98], out: 0.62, hug: 0.30, puff: 1.2, bend: 0.86, len: 0.084, width: 0.0016, thick: 0.4, spike: 1.0, dirJit: 0.28, lenVar: 0.34 },
           // ---- full beard: rooted below the equator, so `absPhi` ------------
-          { n: 150, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0102, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.55, dirJit: 0.22, lenVar: 0.34, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 90, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0128, width: 0.0012, thick: 0.45, spike: 0.8, clump: 5, splay: 0.55, dirJit: 0.20, lenVar: 0.32, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 260, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0058, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.55, steps: 3, dirJit: 0.22, lenVar: 0.34, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 160, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0076, width: 0.0010, thick: 0.45, spike: 0.8, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.32, color: 0x40301d, tipColor: 0x6a5232 },
           // moustache
-          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0086, width: 0.0011, thick: 0.45, spike: 0.9, clump: 5, splay: 0.55, dirJit: 0.20, lenVar: 0.30, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0054, width: 0.0009, thick: 0.45, spike: 0.9, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.30, color: 0x40301d, tipColor: 0x6a5232 },
           // sideburns tying the beard into the hairline
-          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0110, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.50, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0110, width: 0.0011, thick: 0.45, spike: 0.85, clump: 5, splay: 0.50, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
         ],
       },
       outfit: [
