@@ -6,7 +6,7 @@ Every discrete thing the game should contain, one line each, checkable.
 Taking over? Start with **[`project/HANDOFF.md`](project/HANDOFF.md)**.
 
 Companion docs: `project/PROGRESS.md` (status by area, scoreboard, bug log) ·
-`docs/plans/content-gameplay.md` (design audit and sequencing) · `docs/WORLDMAP.md` (cartographic design, pending) ·
+`docs/plans/2026-08-17-content-gameplay.md` (design audit and sequencing) · `docs/WORLDMAP.md` (cartographic design, pending) ·
 `BRIEF.md` (engineering + art contract).
 
 **Counts at last update (2026-08-17 ~08:00, verified against `main` @ 98 commits):**
@@ -465,7 +465,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 
 ## 14. TypeScript port (planned — blocked on the current agent wave)
 
-Full detail in **[`docs/plans/typescript-port.md`](docs/plans/typescript-port.md)**.
+Full detail in **[`docs/plans/2026-08-17-typescript-port.md`](docs/plans/2026-08-17-typescript-port.md)**.
 
 Match the sibling attempts `../final-fantasy-XV-demo-opus` (172 `.ts`) and
 `../final-fantasy-XV-demo-ogl-opus` (100 `.ts`), which are 100% TypeScript with

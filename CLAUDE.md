@@ -13,7 +13,9 @@ Four buckets, and the root holds nothing but config and the three docs below.
   `src/public/` (the generated terrain cache, ignored) and `src/tools/` (the
   harness: capture, checks, probes for `src/tools/probe.mjs`).
 - **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
-  `docs/WORLDMAP.md`, `docs/plans/`.
+  `docs/WORLDMAP.md`, `docs/plans/<YYYY-MM-DD>-<topic>.md` — every plan is named
+  with the date it was written, so the directory sorts chronologically and a stale
+  plan is obvious at a glance.
 - **`project/`** — working state: how the work is *going*. `project/HANDOFF.md`,
   `project/handoff/<topic>.md`, `project/SESSION-STATE.md`, `project/PROGRESS.md`,
   `project/journal/`, `project/TODO.md` (human-written).
