@@ -117,7 +117,18 @@ function bladeGeometry(segs = 4) {
   return g;
 }
 
-/** N crossed quads, unit height, used for clump cards. */
+/**
+ * N crossed quads, unit height, used for clump cards.
+ *
+ * The vertical vertex ramp is deliberately shallow (0.86 at the root to 1.06 at
+ * the tip, coverage-weighted mean 0.931). It used to run 0.50 to 0.98, which
+ * *double-counted* the root-to-tip gradient the clump texture already paints
+ * into every blade it draws, and then `aoBoost` darkened the base a third time.
+ * Three stacked occlusion ramps on a card that is one tuft seen from thirty
+ * metres is most of why the card rings rendered as black gravel. The texture
+ * owns that gradient now; this ramp only keeps the mass from reading as a flat
+ * decal.
+ */
 function crossCardGeometry(planes = 3, width = 1.0) {
   const pos = [], nor = [], uv = [], col = [], idx = [];
   let v = 0;
@@ -133,7 +144,7 @@ function crossCardGeometry(planes = 3, width = 1.0) {
       pos.push(x, y, z);
       nor.push(nx * 0.35, 0.9, nz * 0.35);
       uv.push(u, vv);
-      const shade = 0.5 + vv * 0.48;
+      const shade = 0.86 + vv * 0.20;
       col.push(shade, shade, shade);
     }
     idx.push(v, v + 1, v + 2, v, v + 2, v + 3);

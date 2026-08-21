@@ -99,6 +99,85 @@ function buildAlphaMips(data, size, alphaRef = 0.42, tinyFade = 1.0) {
   return mips;
 }
 
+/**
+ * Force a card's albedo to a known mean, so every LOD ring of the same plant
+ * renders at the same *value*.
+ *
+ * This is the fix for the worst artefact the grass had: LOD0 is real blade
+ * geometry with no map at all (an implicit albedo of 1.0 modulated only by its
+ * vertex colours, area-weighted mean 0.688), while LOD1/LOD2 are cards whose
+ * map was drawn as luminance in the 96-224 sRGB band — a coverage-weighted mean
+ * linear luminance of 0.343. Same instance tint, same sun, and the card rings
+ * came out **3x darker** than the blade ring they take over from. On screen
+ * that is glowing straw out to thirty metres and a carpet of near-black gravel
+ * immediately past it, in the same frame. No palette or lighting change can
+ * reach it, because it is a property of the texture, not of the world.
+ *
+ * The correction is a gamma on *luminance*, binary-searched to hit the target
+ * mean, with the RGB scaled by the resulting luminance ratio. Two properties
+ * matter and a flat multiply has neither: it cannot clip (0..1 maps to 0..1, so
+ * the tips stay tips instead of railing to white), and scaling by the ratio
+ * leaves each texel's chroma exactly where it was drawn, which keeps the
+ * "luminance-only, the instance colour supplies the hue" contract intact.
+ *
+ * Run before the mip chain is built, so every level inherits the corrected
+ * albedo.
+ *
+ * @param {Uint8Array} data RGBA bytes, sRGB-encoded
+ * @param {number} target alpha-weighted mean linear luminance to land on
+ * @returns {number} the gamma applied (1 == no change), for logging
+ */
+function normalizeAlbedo(data, target) {
+  const toLin = (b) => {
+    const s = b / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const toSrgb = (v) => {
+    const c = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+    return Math.max(0, Math.min(255, Math.round(c * 255)));
+  };
+  // Alpha-weighted luminance histogram: the gamma search then costs 256 pows
+  // per iteration instead of one per texel.
+  const BINS = 256;
+  const hist = new Float64Array(BINS);
+  const lum = new Float32Array(data.length / 4);
+  let wsum = 0;
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const a = data[i + 3] / 255;
+    if (a <= 0) { lum[p] = 0; continue; }
+    const L = 0.2126 * toLin(data[i]) + 0.7152 * toLin(data[i + 1]) + 0.0722 * toLin(data[i + 2]);
+    lum[p] = L;
+    hist[Math.min(BINS - 1, (L * BINS) | 0)] += a;
+    wsum += a;
+  }
+  if (wsum <= 0) return 1;
+  const meanAt = (g) => {
+    let s = 0;
+    for (let b = 0; b < BINS; b++) {
+      if (hist[b] === 0) continue;
+      s += hist[b] * Math.pow((b + 0.5) / BINS, g);
+    }
+    return s / wsum;
+  };
+  if (Math.abs(meanAt(1) - target) < 0.005) return 1;
+  // mean is monotonically decreasing in gamma
+  let lo = 0.15, hi = 4;
+  for (let it = 0; it < 24; it++) {
+    const mid = (lo + hi) * 0.5;
+    if (meanAt(mid) > target) lo = mid; else hi = mid;
+  }
+  const gamma = (lo + hi) * 0.5;
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const L = lum[p];
+    if (L <= 1e-5) continue;
+    const k = Math.pow(L, gamma) / L;
+    data[i] = toSrgb(Math.min(1, toLin(data[i]) * k));
+    data[i + 1] = toSrgb(Math.min(1, toLin(data[i + 1]) * k));
+    data[i + 2] = toSrgb(Math.min(1, toLin(data[i + 2]) * k));
+  }
+  return gamma;
+}
+
 /** Apply the hand-built mip chain to an RGBA DataTexture. */
 function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
   tex.mipmaps = buildAlphaMips(data, size, alphaRef, tinyFade);
@@ -124,7 +203,9 @@ function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
  *   to the material's own `alphaTest`. `tinyFade` (<1) dissolves the sub-8px
  *   mips instead of holding their coverage; use it for cards that are dense
  *   enough to hide the loss, and never for a lone silhouette like a tree
- *   impostor that has to survive to the horizon.
+ *   impostor that has to survive to the horizon. `albedo` pins the card's
+ *   alpha-weighted mean *linear* luminance — see {@link normalizeAlbedo}; set
+ *   it whenever this card is one LOD of something another ring also draws.
  */
 export function alphaTex(size, draw, opts = {}) {
   const cv = document.createElement('canvas');
@@ -140,6 +221,7 @@ export function alphaTex(size, draw, opts = {}) {
   for (let y = 0; y < size; y++) {
     data.set(src.subarray((size - 1 - y) * row, (size - y) * row), y * row);
   }
+  if (opts.albedo > 0) normalizeAlbedo(data, opts.albedo);
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -173,15 +255,32 @@ function blade(ctx, x0, y0, len, wid, lean, colA, colB) {
 }
 
 /**
+ * The one albedo every grass LOD is matched against.
+ *
+ * The blade ring carries no map, so its albedo is its vertex colour: an
+ * area-weighted mean of 0.688 over the taper. A clump card multiplies its own
+ * vertex ramp (coverage-weighted mean 0.931 — see `crossCardGeometry`) by this
+ * map, so 0.58 lands the card ring at 0.54, about four-fifths of the blade
+ * ring. Deliberately not equal: a card is a whole tuft seen from thirty metres
+ * with its own self-shadowing, and matching the *lit* blade exactly makes the
+ * far field read a shade too bright. Anything near 3x, which is where it was,
+ * is not a shade — it is a different material.
+ */
+export const GRASS_CARD_ALBEDO = 0.58;
+
+/**
  * Dense clump of grass blades on a transparent card.
  *
  * @param {number} variant
  * @param {number} count blades per card
  * @param {number} [alphaRef] the material's alphaTest, so the mip chain
  *   preserves the coverage that will actually be tested
+ * @param {number} [albedo] mean linear luminance to normalise to — this is
+ *   what keeps the card rings the same *value* as the blade ring they replace.
+ *   {@link GRASS_CARD_ALBEDO} is the number the field is tuned against.
  */
-export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4) {
-  return memo(`clump${variant}${count}${alphaRef}`, () => alphaTex(256, (ctx, s) => {
+export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4, albedo = GRASS_CARD_ALBEDO) {
+  return memo(`clump${variant}${count}${alphaRef}${albedo}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(4242 + variant * 977);
     for (let i = 0; i < count; i++) {
       const x = s * 0.5 + rng.gauss(0, s * 0.19);
@@ -202,7 +301,7 @@ export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4) {
     // foreshortened to a sliver — which is what an elevated camera does to a
     // vertical quad forty metres out — can dissolve without leaving a hole.
     // Holding its coverage instead is what let it stamp a solid rectangle.
-  }, { alphaRef, tinyFade: 0.62 }));
+  }, { alphaRef, tinyFade: 0.62, albedo }));
 }
 
 /** Leafy canopy card — a mass of small leaves, used on tree branch tips. */
