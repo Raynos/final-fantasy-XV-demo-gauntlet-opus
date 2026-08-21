@@ -75,17 +75,34 @@ varying float vFlexOut;
 // normalised stiffness weight f (0 at the anchor, 1 at the tip).
 vec3 vegSway(vec3 o, float f, float bend, float flutter, float gustFreq) {
   vec2 wd = normalize(uWindDir);
-  // large-scale gust front sweeping across the field
-  float phase = dot(o.xz, wd) * gustFreq - uTime * 1.35;
+  vec2 perp = vec2(-wd.y, wd.x);
+
+  // The gust front is not a plane wave. It used to be exactly that — the phase
+  // was dot(o.xz, wd) * gustFreq - time and nothing else — so every clump in
+  // sight lifted and dropped in perfect unison, which is the one thing a real
+  // field never does. A slower cross-wind wave now beats against the front and
+  // shifts the phase along it, and a second, much larger, drifting field
+  // modulates the amplitude. Both are smooth functions of world position,
+  // deliberately: a per-instance hash would give the blades inside one tuft
+  // different phases and shred the tuft, because an instance origin here is one
+  // blade, not one plant.
+  //
+  // Two naming traps here, both of which cost a round: neither of these locals
+  // may be called cross or patch. Both are GLSL reserved words, and both fail
+  // as "Illegal use of reserved word" at *link* time behind the unhelpful
+  // VALIDATE_STATUS false. (This is also a JS template literal, so no
+  // backticks in these comments either.)
+  float crossWave = sin(dot(o.xz, perp) * gustFreq * 0.63 + uTime * 0.41);
+  float phase = dot(o.xz, wd) * gustFreq - uTime * 1.35 + crossWave * 1.9;
   float gust = sin(phase) * 0.5 + 0.5;
   gust = gust * gust * (0.55 + 0.45 * (sin(phase * 0.37 + 1.7) * 0.5 + 0.5));
-  float amp = uWindStrength * (0.22 + 1.05 * gust);
+  float windPatch = sin(o.x * 0.031 + uTime * 0.17) * sin(o.z * 0.027 - uTime * 0.13);
+  float amp = uWindStrength * (0.22 + 1.05 * gust) * (0.78 + 0.34 * windPatch);
 
   // per-instance high frequency flutter, phase-offset by world position
   float ph = o.x * 1.93 + o.z * 2.71;
   float fl = sin(uTime * 5.4 + ph) * 0.6 + sin(uTime * 9.1 + ph * 1.63) * 0.4;
 
-  vec2 perp = vec2(-wd.y, wd.x);
   vec2 lat = wd * (amp * bend * f) + perp * (fl * flutter * amp * f);
 
   // keep length roughly constant: dip as we lean

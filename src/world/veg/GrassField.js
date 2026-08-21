@@ -119,11 +119,22 @@ const _cGround = new THREE.Color();
  * The tip is a single vertex, so the blade tapers to a real point and we spend
  * one triangle there instead of a degenerate quad.
  */
-function bladeGeometry(segs = 4) {
+function bladeGeometry(segs = 5) {
   const pos = [], nor = [], uv = [], col = [], flex = [], idx = [];
-  const HALF_W = 0.043;   // half width at the root, as a fraction of height
+  const HALF_W = 0.046;   // half width at the root, as a fraction of height
   const CURVE = 0.34;     // tip offset along +Z, as a fraction of height
+  const SWAY = 0.085;     // lateral S, as a fraction of height
   const FAN = 0.95;       // lateral normal spread -> rounded cross-section
+  // Width profile: a real blade is near enough parallel-sided for its lower
+  // half and then draws to a point over the last quarter. `pow(1 - t, 0.6)`
+  // did the opposite — it took a sixth of the width off in the first eighth of
+  // the length, which is a spear, and a field of spears is the "spiky star"
+  // read the tufts had.
+  const widthAt = (t) => HALF_W * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2.2)));
+  // A slight lateral S on top of the forward droop, so a blade is not a plane
+  // curve. Instance yaw is already random, so this reads as blades twisting out
+  // of the tuft rather than as a field all bending one way.
+  const swayAt = (t) => SWAY * t * t * (1.35 - t);
   const shadeAt = (t) => 0.40 + Math.pow(t, 0.75) * 0.62;
   // The root-to-tip ramp carries *hue* as well as value. A real blade loses
   // chroma into the shaded litter it grows out of and bleaches warm at the tip,
@@ -134,10 +145,11 @@ function bladeGeometry(segs = 4) {
   const coolAt = (t) => 0.94 - t * 0.20;
   for (let i = 0; i < segs; i++) {
     const t = i / segs;
-    const w = HALF_W * Math.pow(1 - t, 0.6);
+    const w = widthAt(t);
     const z = CURVE * t * t;
+    const sx = swayAt(t);
     for (let s = -1; s <= 1; s += 2) {
-      pos.push(s * w, t, z);
+      pos.push(sx + s * w, t, z);
       // the blade leans further off vertical as it droops, so the face normal
       // tips forward with it
       nor.push(s * FAN, 0.9, 0.42 + t * 0.72);
@@ -147,7 +159,7 @@ function bladeGeometry(segs = 4) {
       flex.push(t);
     }
   }
-  pos.push(0, 1, CURVE);
+  pos.push(swayAt(1), 1, CURVE);
   nor.push(0, 0.9, 1.14);
   uv.push(0.5, 1);
   const st = shadeAt(1);
@@ -253,7 +265,11 @@ export class GrassField {
   }
 
   build() {
-    const bladeGeo = bladeGeometry(4);
+    // Five segments, not four. The blade now has a real S in it and a tip that
+    // draws to a point over the last quarter, and four segments cannot describe
+    // either — the curve came out as two straight facets with a visible kink.
+    // Two extra triangles per blade is the cheapest silhouette in the file.
+    const bladeGeo = bladeGeometry(5);
     const clumpGeo = crossCardGeometry(3, 1.0);
     const farGeo = crossCardGeometry(2, 1.0);
 
@@ -265,6 +281,12 @@ export class GrassField {
     // roughness low enough that the rounded cross-section actually catches a
     // specular streak down the midrib; translucency so backlit blades glow
     // at dawn/dusk instead of going to silhouette.
+    // Backlit glow is not a near-field luxury: the blade ring had
+    // `translucency 1.05` and both card rings had none, so a field lit from
+    // behind at dawn or dusk *dropped to silhouette exactly at the LOD ring* —
+    // a hard dark arc drawn across the grass at twenty-odd metres. The cards
+    // carry it too now, scaled down because a whole tuft transmits less than a
+    // single blade does.
     const m0 = grassMat({
       mat: { roughness: 0.62 },
       veg: {
@@ -289,14 +311,14 @@ export class GrassField {
       mat: { map: clumpTexA, alphaTest: 0.42, transparent: false, roughness: 0.94 },
       veg: {
         bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.7, flexPow: 2.0,
-        twoSidedNormals: true, aoBoost: 0.3, specular: 0,
+        twoSidedNormals: true, aoBoost: 0.3, specular: 0, translucency: 0.62,
       },
     });
     const m2 = grassMat({
       mat: { map: clumpTexB, alphaTest: 0.42, transparent: false, roughness: 0.96 },
       veg: {
         bend: 0.24, flutter: 0.1, gustFreq: 0.045, flexPow: 2.0,
-        twoSidedNormals: true, aoBoost: 0.2, specular: 0,
+        twoSidedNormals: true, aoBoost: 0.2, specular: 0, translucency: 0.34,
       },
     });
 
@@ -571,11 +593,16 @@ export class GrassField {
             // so that the tallest of them lands on `hTuft` and not past it —
             // that is the contract the card rings are matched against.
             const h = hTuft * (0.30 + Math.pow(rng.next(), 0.7) * 0.72) * (1 - edge * 0.28);
-            const lean = (0.10 + edge * 0.42) * (0.6 + rng.next() * 0.9);
+            // Lean and droop both scale with the blade's own share of the
+            // tuft's height. A tall stem lies over under its own weight while
+            // its short neighbour stands up, which is what stops a tuft reading
+            // as one shape scaled N times.
+            const hRel = h / Math.max(hTuft, 1e-4);
+            const lean = (0.08 + edge * 0.40) * (0.55 + rng.next() * 0.85)
+              * (0.62 + hRel * 0.85);
             const yaw = a + rng.gauss(0, 0.5);
-            // droop grows faster than height: a half-metre stem lies over
-            // under its own weight, an ankle-high one stands up
-            const zj = (0.55 + h * 2.4) * (0.7 + rng.next() * 0.7);
+            const zj = (0.42 + h * 3.4) * (0.55 + rng.next() * 1.05)
+              * (0.70 + hRel * 0.55);
             _e.set(Math.sin(a) * lean + Math.sin(tuftA) * tuftL,
               yaw, -Math.cos(a) * lean - Math.cos(tuftA) * tuftL);
             _q.setFromEuler(_e);
