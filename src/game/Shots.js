@@ -760,8 +760,11 @@ export const SHOTS = {
   },
   bestiary_titan: {
     doc: 'Titan: the Archaean, filling frame from fifty metres away',
+    // Camera lifted clear of the highway catenary. At 7 m it sat inside the
+    // wire band and two power lines crossed the Archaean's chest through the
+    // whole frame; the wires hang from ~8 m and sag to ~5 m at midspan.
     time: 15.0, weather: 'clear', scenario: 'boss_astral', follow: 'player',
-    offset: [14, 7.0, 6.0], lookOffset: [4, 18, -46], fov: 46,
+    offset: [22, 13.0, 10.0], lookOffset: [4, 20, -46], fov: 46,
   },
   bestiary_hobgoblin: {
     doc: 'Hobgoblin: the daemon that grows out of a goblin',
