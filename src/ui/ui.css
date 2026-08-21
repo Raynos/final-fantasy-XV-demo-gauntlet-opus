@@ -26,8 +26,15 @@
   --hair:       rgba(206, 224, 250, 0.26);
   --hair-hot:   rgba(214, 234, 255, 0.62);
 
-  --sh-text:    0 1px 2px rgba(0, 0, 0, 0.72), 0 0 14px rgba(0, 0, 0, 0.42);
-  --sh-text-lg: 0 2px 6px rgba(0, 0, 0, 0.78), 0 0 26px rgba(0, 0, 0, 0.5);
+  /* Symmetric halos, never an offset drop.
+     A `0 1px 2px` shadow under 8-10 px pale type is a second, darker copy of
+     the glyph one pixel low: over sunlit Leide the HUD labels ghost exactly the
+     way the BLINDSIDE call-out did. These are centred rings — they darken the
+     ground the type sits on without printing anything the eye can read as a
+     second word. Every pale-on-bright label in the HUD and the menus is on
+     these two tokens, so this is the one place the class of defect is fixed. */
+  --sh-text:    0 0 2px rgba(2, 5, 10, 0.84), 0 0 6px rgba(2, 5, 10, 0.58), 0 0 15px rgba(2, 5, 10, 0.34);
+  --sh-text-lg: 0 0 3px rgba(2, 5, 10, 0.86), 0 0 9px rgba(2, 5, 10, 0.64), 0 0 28px rgba(2, 5, 10, 0.44);
   --sh-plate:   0 10px 34px rgba(0, 0, 0, 0.42);
   --cut:        9px;
 }
@@ -321,7 +328,11 @@
 .tech .tk-body { flex: 1; }
 .tech .tk-nm { font-size: 10px; letter-spacing: .20em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); line-height: 1.2; }
 .tech.ready .tk-nm { color: var(--ink); }
-.tech .tk-ow { font-size: 8px; letter-spacing: .22em; color: var(--ink-3); text-transform: uppercase; line-height: 1.3; margin-top: 3px; }
+/* the owner/cost line had no shadow at all and sat at 8px over sunlit scrub */
+.tech .tk-ow {
+  font-size: 8.5px; letter-spacing: .22em; color: var(--ink-2); text-transform: uppercase;
+  line-height: 1.3; margin-top: 3px; text-shadow: var(--sh-text);
+}
 .tech .tk-body .gauge { margin-top: 9px; }
 .tech .tk-key { font-size: 8.5px; letter-spacing: .16em; color: var(--ink-3); text-shadow: var(--sh-text); }
 
@@ -460,11 +471,25 @@
 .menu-foot .rule { position: absolute; top: -16px; left: 0; right: 0; }
 
 /* ---- main menu list ----------------------------------------- */
+/* The nav column and the info column used to float straight on the terrain:
+   pale 8.5px type over sunlit rock, no ground of its own. These are scrims, not
+   panels — a soft directional wash off each screen edge, which is how FFXV
+   seats its pause menu without boxing it in. */
 .mlist { position: absolute; left: 68px; top: 178px; width: 320px; }
+.mlist::before {
+  content: ''; position: absolute; left: -68px; top: -178px; width: 560px; height: 900px;
+  background: linear-gradient(100deg, rgba(4,8,15,.62) 0%, rgba(4,8,15,.40) 42%, rgba(4,8,15,0) 100%);
+  pointer-events: none; z-index: -1;
+}
+.mpreview::before {
+  content: ''; position: absolute; right: -74px; top: -156px; width: 720px; height: 900px;
+  background: linear-gradient(260deg, rgba(4,8,15,.58) 0%, rgba(4,8,15,.34) 46%, rgba(4,8,15,0) 100%);
+  pointer-events: none; z-index: -1;
+}
 .mrow { position: relative; display: flex; align-items: center; gap: 16px; padding: 11px 14px 11px 4px; }
 .mrow .ico { color: var(--ink-3); flex: none; }
 .mrow .mr-t { font-size: 14px; font-weight: 300; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
-.mrow .mr-d { font-size: 8.5px; letter-spacing: 0.2em; color: var(--ink-4); text-transform: uppercase; margin-top: 3px; }
+.mrow .mr-d { font-size: 9px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-top: 3px; text-shadow: var(--sh-text); white-space: nowrap; }
 .mrow .mr-bar { position: absolute; left: -18px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(180deg, transparent, var(--accent-hot), transparent); opacity: 0; }
 .mrow .mr-bg {
   position: absolute; left: -18px; right: -10px; top: 0; bottom: 0; opacity: 0;
@@ -476,10 +501,12 @@
 .mrow.on .mr-d { color: var(--ink-3); }
 
 .mpreview { position: absolute; right: 74px; top: 156px; width: 470px; }
+/* every small key/caption in this screen was pale ink with no shadow at all */
+.mpv-stat .k, .mpv-track .k, .mpv-track .s, .mp-card .lv { text-shadow: var(--sh-text); }
 .mpv-t { font-size: 15px; font-weight: 300; letter-spacing: .26em; text-transform: uppercase; color: #fff; text-shadow: var(--sh-text); }
 .mpv-b { margin-top: 14px; }
 .mpv-stats { display: flex; gap: 34px; margin-top: 26px; }
-.mpv-stat .k { font-size: 8.5px; letter-spacing: .3em; text-transform: uppercase; color: var(--ink-4); }
+.mpv-stat .k { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: var(--ink-3); }
 .mpv-stat .v { font-size: 17px; font-weight: 200; letter-spacing: .04em; color: var(--ink); margin-top: 5px; text-shadow: var(--sh-text); }
 .mpv-stat .v small { font-size: 9px; color: var(--ink-3); letter-spacing: .16em; margin-left: 3px; }
 
@@ -491,14 +518,14 @@
 .mp-card .pfw::after { content: ''; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(120,168,224,.04) 30%, rgba(2,5,10,.70)); }
 .mp-card .nm { font-size: 10px; letter-spacing: .26em; text-transform: uppercase; margin-top: 11px; color: var(--ink); text-shadow: var(--sh-text); }
-.mp-card .lv { font-size: 8.5px; letter-spacing: .12em; color: var(--ink-3); margin-top: 6px; white-space: nowrap; }
+.mp-card .lv { font-size: 9px; letter-spacing: .12em; color: var(--ink-2); margin-top: 6px; white-space: nowrap; }
 .mp-card .gauge { margin-top: 8px; }
 
 .mpv-mark { position: absolute; right: -24px; top: 236px; color: rgba(178,208,246,.075); pointer-events: none; }
 .mpv-track { margin-top: 34px; }
-.mpv-track .k { font-size: 8.5px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-4); }
+.mpv-track .k { font-size: 9px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-3); }
 .mpv-track .q { font-size: 13px; font-weight: 300; letter-spacing: .12em; color: var(--ice); margin-top: 9px; text-shadow: var(--sh-text); }
-.mpv-track .s { font-size: 10px; letter-spacing: .06em; color: var(--ink-3); margin-top: 6px; }
+.mpv-track .s { font-size: 10px; letter-spacing: .06em; color: var(--ink-2); margin-top: 6px; }
 
 /* ---- generic two-column screens ----------------------------- */
 .cols { position: absolute; left: 68px; right: 68px; top: 170px; bottom: 96px; display: flex; gap: 40px; }
@@ -638,7 +665,10 @@
 .armiger .ar-lb { flex: 1; }
 .armiger .ar-pct { font-size: 16px; }
 .armiger .ar-note { font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-4); }
-.tech { width: 300px; }
+/* narrower than the party stack's 326 px on purpose: five stacked white
+   hairlines of the same length read as one panel, and the rail was being
+   mistaken for part of the party's HP block */
+.tech { width: 232px; }
 
 /* banter bubbles ride above the party stack when not fighting */
 .banter { left: 34px; bottom: 268px; align-items: flex-start; }

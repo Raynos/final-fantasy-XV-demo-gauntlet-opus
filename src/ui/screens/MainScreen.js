@@ -27,7 +27,7 @@ const ENTRIES = [
     body: 'Every contract in hand, every lead not yet followed, and every objective still outstanding.' },
   { key: 'archives', label: 'Archives', icon: 'archives', hint: 'Datalog & bestiary', to: 'archives',
     body: 'Everything the retinue has learned about Eos: her people, her daemons, and the Crystal at the centre of it.' },
-  { key: 'help', label: 'Controls', icon: 'camera', hint: 'Every binding, on foot and at the wheel', to: 'controls',
+  { key: 'help', label: 'Controls', icon: 'camera', hint: 'Bindings, on foot and driving', to: 'controls',
     body: 'The whole control sheet — movement, camera, attack, dodge, warp, weapon swap, photo mode, and how to drive the Regalia.' },
   { key: 'system', label: 'System', icon: 'system', hint: 'Save, settings, title', to: 'system',
     body: 'Volume, graphics tier, camera inversion and look sensitivity — plus a save slot and the road back to the title screen.' },

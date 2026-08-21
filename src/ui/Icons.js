@@ -128,9 +128,14 @@ export function portrait(seedHue, tone = 0.5) {
     + 'c2.3-.7 3.6-1.3 3.6-2.4Z';
   root.appendChild(svg('defs', {}, [
     svg('linearGradient', { id: `${id}b`, x1: 0.1, y1: 0, x2: 0.9, y2: 1 }, [
-      svg('stop', { offset: 0, 'stop-color': `hsl(${seedHue} 30% ${30 + tone * 16}%)` }),
-      svg('stop', { offset: 0.55, 'stop-color': `hsl(${seedHue + 8} 26% ${14 + tone * 8}%)` }),
-      svg('stop', { offset: 1, 'stop-color': `hsl(${seedHue + 18} 24% 6%)` }),
+      // Near-monochrome on purpose. At HUD size these are 38 px chips, but the
+      // pause menu blows them up to 112x132 and at 26-30% saturation the four
+      // of them read as an orange/purple/olive colour swatch strip — nothing
+      // like FFXV's portrait cards, which are almost grey with a breath of the
+      // character's colour in the shadow.
+      svg('stop', { offset: 0, 'stop-color': `hsl(${seedHue} 11% ${28 + tone * 15}%)` }),
+      svg('stop', { offset: 0.55, 'stop-color': `hsl(${seedHue + 8} 9% ${13 + tone * 7}%)` }),
+      svg('stop', { offset: 1, 'stop-color': `hsl(${seedHue + 18} 8% 6%)` }),
     ]),
     svg('linearGradient', { id: `${id}f`, x1: 0.15, y1: 0, x2: 0.95, y2: 0.9 }, [
       svg('stop', { offset: 0, 'stop-color': 'rgba(16,22,34,.30)' }),
