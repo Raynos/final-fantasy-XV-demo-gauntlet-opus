@@ -6,10 +6,11 @@ import { Clipmap } from './terrain/Clipmap.js';
 import { loadBaked } from './terrain/FieldBake.js';
 import { bootPhase } from '../engine/BootProfile.js';
 import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
+import { buildBiomeLut, surfaceAt } from './terrain/Biome.js';
 import {
   createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
 } from './terrain/TerrainMaterial.js';
-import { worldMap } from './map/WorldMap.js';
+import { worldMap, WORLD } from './map/WorldMap.js';
 
 /**
  * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
@@ -55,14 +56,20 @@ export class Terrain {
 
     const quality = game.rnd ? game.rnd.quality : 'high';
     const layerSize = quality === 'low' ? 256 : 512;
+    // The regional palette rides in two extra layers of the detail array rather
+    // than a sampler of its own — see `terrain/Biome.js`. It is not baked: it
+    // costs a few milliseconds and depends on the cartography, not on the layer
+    // recipes, so baking it would only add a second staleness dependency.
+    const detailSize = Math.min(512, layerSize);
+    const lut = bootPhase('Terrain.biome', () => buildBiomeLut(detailSize));
     const layers = bootPhase('Terrain.layers',
-      () => buildLayerTextures(layerSize, baked && baked.layers()));
+      () => buildLayerTextures(layerSize, baked && baked.layers(), lut));
     this.textures = { ...layers, ...bootPhase('Terrain.upload', () => this._uploadFieldTextures()) };
 
     this.res = {
       uniforms: makeTerrainUniforms(this.textures, {
         HALF, CELL, N, BLEND_OUT, FAR_HALF, FAR_CELL, FAR_N,
-      }),
+      }, WORLD),
       finestCell: 1.5,
     };
 
@@ -259,27 +266,39 @@ export class Terrain {
     const p1 = gnoise2(x * 0.0125 + 3.3, z * 0.0125 + 3.3);
     const p2 = gnoise2(x * 0.043 - 9.1, z * 0.043 - 9.1);
     const patchN = 0.62 * p1 + 0.38 * p2;
-    const dryness = Math.max(0, Math.min(1, 0.5 + 0.45 * m1 + 0.55 * patchN));
+    // Regional palette — the CPU twin of the shader's two biome-LUT fetches.
+    // Only `green` reaches the weights; the tints are colour-only.
+    const bio = surfaceAt(x, z, this._bio || (this._bio = {
+      ground: [0, 0, 0], rock: [0, 0, 0], green: 0, damp: 0,
+    }));
+    const green = bio.green;
+    const dryness = Math.max(0, Math.min(1, 0.5 + 0.45 * m1 + 0.55 * patchN - 0.40 * green));
     const flatAmt = 1 - ss(0.06, 0.28, slope);
-    const lowAlt = 1 - ss(48, 120, h);
+    // A humid basin's grassland sits at 66-120 m and Cleigne's shelf at 100 m,
+    // so a fixed 48-120 m gate switched the grass off in exactly the regions
+    // that are defined as green. The gate now rises with the region itself.
+    const lowAlt = 1 - ss(48 + 190 * green, 120 + 320 * green, h);
 
     // ctrl.r doubles as the road lateral offset where the mask is set
     const flow = c.road > 0.02 ? 0 : c.flow;
     const w = {
-      sand: flatAmt * lowAlt * (0.14 + 1.05 * c.sediment + 1.70 * ss(0.60, 0.95, dryness)),
+      sand: flatAmt * lowAlt * (0.14 + 1.05 * c.sediment + 1.70 * ss(0.60, 0.95, dryness))
+        * (1 - 0.80 * green),
       dirt: 0.72 + 0.55 * (0.5 + 0.5 * p2) - 1.35 * ss(0.10, 0.44, slope),
       gravel: ss(0.14, 0.42, slope) * (0.5 + 0.8 * (0.5 + 0.5 * m2))
-        + 1.20 * flow + 0.40 * c.rocky + 0.62 * ss(0.34, 0.04, dryness) * flatAmt,
+        + 1.20 * flow + 0.40 * c.rocky
+        + 0.62 * ss(0.34, 0.04, dryness) * flatAmt * (1 - 0.70 * green),
       rock: ss(0.20, 0.48, slope) * 1.80 + 1.10 * c.rocky + 0.65 * ss(80, 175, h),
-      grass: flatAmt * lowAlt * 1.30
-        * ss(0.12, 0.66, 0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * c.sediment),
+      grass: flatAmt * lowAlt * (1.30 + 3.20 * green)
+        * ss(0.12 - 0.26 * green, 0.66 - 0.44 * green,
+          0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * c.sediment),
       road: c.road * 5.5 * (1 - ss(0.30, 0.55, slope)),
     };
     // talus / scree band under the cliffs — mirrors the shader exactly
     const scree = ss(0.15, 0.31, slope) * (1 - ss(0.33, 0.52, slope)) * ss(0.30, 0.70, c.rocky)
       * (0.55 + 0.45 * (0.5 + 0.5 * gnoise2(x * 0.021 - 3, z * 0.021 - 3)));
-    w.gravel += 0.55 * scree;
-    w.rock -= 0.22 * scree;
+    w.gravel += 0.70 * scree;
+    w.rock -= 0.26 * scree;
     let sum = 0;
     for (const k in w) { w[k] = Math.pow(Math.max(w[k], 0), 1.7); sum += w[k]; }
     sum = Math.max(sum, 1e-4);
