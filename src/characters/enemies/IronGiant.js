@@ -9,11 +9,16 @@ import {
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const IRON = 0x2c2e33;
-const IRON_DARK = 0x15161a;
-const IRON_LIGHT = 0x44484f;
+/* Oxidised wrought iron, not battleship grey. The old palette was blue-grey
+ * with a cool highlight, which is a Battletech mech; an Iron Giant is a suit
+ * of dead armour that has been standing in the dark for an age, so every value
+ * is warm, and the light plate is *rust* rather than polish. */
+const IRON = 0x3a3129;        // plate
+const IRON_DARK = 0x14100d;   // shadowed plate, rivets, mail
+const IRON_LIGHT = 0x574636;  // proud edges, oxidised
+const RUST = 0x5e3a1e;        // bloom in the runnels and around fixings
 const RUNE = 0xff5a12;
-const BLADE = 0x5a6068;
+const BLADE = 0x7d7466;       // tarnished steel — still the brightest thing on it
 
 /**
  * Iron Giant — the armour-plated colossus that drops out of the daemon
@@ -78,22 +83,22 @@ function buildPrototype() {
     { y: 4.10, sx: 0.72, sz: 0.44 },
     { y: 4.42, sx: 0.50, sz: 0.34 },
   ]);
-  rig.attachBlend(tint(core, IRON, 0.04), 'pelvis', 'chest', 1.5);
+  rig.attachBlend(aged(core, IRON, 0.9), 'pelvis', 'chest', 1.5);
 
   const breast = place(slab(1.30, 0.90, 0.72, 0.12), { pos: [0, 3.95, 0.02] });
-  rig.attach(tint(breast, IRON_LIGHT, 0.04), 'chest');
+  rig.attach(aged(breast, IRON_LIGHT, 1.0), 'chest');
   const ridge = place(slab(0.18, 0.95, 0.80, 0.05), { pos: [0, 3.95, 0.06] });
   rig.attach(tint(ridge, IRON_DARK), 'chest');
   const abdo = place(slab(0.92, 0.62, 0.60, 0.08), { pos: [0, 3.18, 0] });
-  rig.attach(tint(abdo, IRON, 0.04), 'spine');
+  rig.attach(aged(abdo, IRON, 0.9), 'spine');
   const belt = place(slab(1.10, 0.30, 0.72, 0.06), { pos: [0, 2.62, 0] });
   rig.attach(tint(belt, IRON_DARK), 'pelvis');
   for (const s of [-1, 1]) {
     const tass = place(slab(0.42, 0.90, 0.16, 0.04), { pos: [0.30 * s, 2.10, 0.28], rot: [0.18, 0, 0.06 * s] });
-    rig.attach(tint(tass, IRON, 0.04), 'pelvis');
+    rig.attach(aged(tass, IRON, 1.0), 'pelvis');
   }
   const tassB = place(slab(0.90, 0.85, 0.16, 0.05), { pos: [0, 2.12, -0.32], rot: [-0.14, 0, 0] });
-  rig.attach(tint(tassB, IRON, 0.04), 'pelvis');
+  rig.attach(aged(tassB, IRON, 1.0), 'pelvis');
 
   // rune seams: molten light bleeding out between the plates
   for (let i = 0; i < 5; i++) {
@@ -107,11 +112,11 @@ function buildPrototype() {
   const neck = place(loft(circleCross(9), [{ y: 4.36, sx: 0.20 }, { y: 4.60, sx: 0.19 }]), {});
   rig.attachBlend(tint(neck, IRON_DARK), 'chest', 'head', 1.0);
   const helm = place(slab(0.62, 0.62, 0.66, 0.12), { pos: [0, 4.80, 0.02] });
-  rig.attach(tint(helm, IRON_LIGHT, 0.03), 'head');
+  rig.attach(aged(helm, IRON_LIGHT, 0.85), 'head');
   const brow = place(slab(0.66, 0.16, 0.24, 0.04), { pos: [0, 4.76, 0.30], rot: [0.24, 0, 0] });
   rig.attach(tint(brow, IRON_DARK), 'head');
   const jawPlate = place(slab(0.46, 0.24, 0.34, 0.05), { pos: [0, 4.52, 0.18] });
-  rig.attach(tint(jawPlate, IRON, 0.03), 'head');
+  rig.attach(aged(jawPlate, IRON, 0.8), 'head');
   const slit = place(slab(0.44, 0.075, 0.06, 0.015), { pos: [0, 4.665, 0.335] });
   rig.attach(glow(tint(slit, 0x3a1004), RUNE, 5.0), 'head');
   const crest = place(slab(0.09, 0.42, 0.60, 0.03), { pos: [0, 5.10, -0.02] });
@@ -127,21 +132,21 @@ function buildPrototype() {
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
     const pauldron = place(slab(0.78, 0.66, 0.86, 0.10), { pos: [0.90 * s, 4.34, 0], rot: [0, 0, -0.22 * s] });
-    rig.attach(tint(pauldron, IRON_LIGHT, 0.04), `sh${n}`);
+    rig.attach(aged(pauldron, IRON_LIGHT, 1.0), `sh${n}`);
     for (let i = 0; i < 3; i++) {
       const sp = place(spike(0.075, 0.30, 5), { pos: [(1.06 + i * 0.02) * s, 4.52 - i * 0.24, -0.02], rot: [0, 0, 1.25 * s] });
       rig.attach(tint(sp, IRON_DARK), `sh${n}`);
     }
     const upArm = tube([P(0.80 * s, 4.22, 0), P(0.94 * s, 3.76, 0.02), P(1.02 * s, 3.36, 0.05)],
       [0.30, 0.27, 0.22], { radialSeg: 9 });
-    rig.attachBlend(tint(upArm, IRON, 0.04), `sh${n}`, `el${n}`, 1.0);
+    rig.attachBlend(aged(upArm, IRON, 0.8), `sh${n}`, `el${n}`, 1.0);
     const elbow = place(slab(0.44, 0.36, 0.44, 0.07), { pos: [1.02 * s, 3.30, 0.05] });
-    rig.attach(tint(elbow, IRON_LIGHT, 0.03), `el${n}`);
+    rig.attach(aged(elbow, IRON_LIGHT, 1.0), `el${n}`);
     const loArm = tube([P(1.02 * s, 3.26, 0.06), P(1.04 * s, 2.84, 0.13), P(1.05 * s, 2.46, 0.20)],
       [0.24, 0.235, 0.20], { radialSeg: 9 });
-    rig.attachBlend(tint(loArm, IRON, 0.04), `el${n}`, `hd${n}`, 1.0);
+    rig.attachBlend(aged(loArm, IRON, 0.8), `el${n}`, `hd${n}`, 1.0);
     const vamb = place(slab(0.50, 0.72, 0.50, 0.07), { pos: [1.04 * s, 2.86, 0.14] });
-    rig.attach(tint(vamb, IRON_LIGHT, 0.03), `el${n}`);
+    rig.attach(aged(vamb, IRON_LIGHT, 1.0), `el${n}`);
     const seam = place(slab(0.06, 0.55, 0.10, 0.015), { pos: [(1.30 * s), 2.86, 0.14] });
     rig.attach(glow(tint(seam, 0x2a0e03), RUNE, 1.5), `el${n}`);
     const fist = place(slab(0.44, 0.46, 0.40, 0.09), { pos: [1.05 * s, 2.32, 0.24] });
@@ -153,18 +158,18 @@ function buildPrototype() {
     const n = s < 0 ? 'L' : 'R';
     const thigh = tube([P(0.42 * s, 2.50, 0), P(0.44 * s, 1.92, 0.04), P(0.46 * s, 1.40, 0.06)],
       [0.34, 0.31, 0.25], { radialSeg: 9 });
-    rig.attachBlend(tint(thigh, IRON, 0.04), `hp${n}`, `kn${n}`, 1.0);
+    rig.attachBlend(aged(thigh, IRON, 0.85), `hp${n}`, `kn${n}`, 1.0);
     const thighP = place(slab(0.58, 0.92, 0.56, 0.08), { pos: [0.43 * s, 1.98, 0.03] });
-    rig.attach(tint(thighP, IRON_LIGHT, 0.03), `hp${n}`);
+    rig.attach(aged(thighP, IRON_LIGHT, 1.0), `hp${n}`);
     const knee = place(slab(0.50, 0.40, 0.50, 0.08), { pos: [0.46 * s, 1.34, 0.10] });
     rig.attach(tint(knee, IRON_DARK), `kn${n}`);
     const shin = tube([P(0.46 * s, 1.30, 0.05), P(0.46 * s, 0.80, 0.02), P(0.46 * s, 0.32, -0.01)],
       [0.25, 0.235, 0.20], { radialSeg: 9 });
-    rig.attachBlend(tint(shin, IRON, 0.04), `kn${n}`, `ft${n}`, 1.0);
+    rig.attachBlend(aged(shin, IRON, 0.85), `kn${n}`, `ft${n}`, 1.0);
     const shinP = place(slab(0.46, 0.80, 0.48, 0.07), { pos: [0.46 * s, 0.82, 0.06] });
-    rig.attach(tint(shinP, IRON_LIGHT, 0.03), `kn${n}`);
+    rig.attach(aged(shinP, IRON_LIGHT, 1.0), `kn${n}`);
     const foot = place(slab(0.52, 0.28, 1.00, 0.07), { pos: [0.46 * s, 0.16, 0.18] });
-    rig.attach(tint(foot, IRON_DARK, 0.03), `ft${n}`);
+    rig.attach(aged(foot, IRON_DARK, 1.0), `ft${n}`);
     for (let i = -1; i <= 1; i++) {
       const claw = place(spike(0.07, 0.24, 5), { pos: [(0.46 + i * 0.16) * s, 0.10, 0.68], rot: [1.45, 0, 0] });
       rig.attach(tint(claw, IRON_LIGHT), `ft${n}`);
@@ -177,15 +182,18 @@ function buildPrototype() {
     { pos: [1.05, 1.85, 0.28] });
   swordParts.push(tint(grip, IRON_DARK));
   const cross = place(slab(0.95, 0.16, 0.24, 0.04), { pos: [1.05, 2.78, 0.28] });
-  swordParts.push(tint(cross, IRON_LIGHT));
+  swordParts.push(aged(cross, IRON_LIGHT, 1.0));
+  // Wider and thicker than a sword has any business being: at five and a half
+  // metres of wielder the blade has to be a *slab* or it disappears into the
+  // arm holding it, which is exactly what it was doing.
   const bl = place(loft(bladeCross(12), [
-    { y: 0.00, sx: 0.34, sz: 0.075 },
-    { y: 0.55, sx: 0.40, sz: 0.080 },
-    { y: 2.60, sx: 0.36, sz: 0.070 },
-    { y: 3.35, sx: 0.24, sz: 0.050 },
-    { y: 3.70, sx: 0.045, sz: 0.018 },
+    { y: 0.00, sx: 0.46, sz: 0.105 },
+    { y: 0.55, sx: 0.56, sz: 0.115 },
+    { y: 2.60, sx: 0.50, sz: 0.100 },
+    { y: 3.35, sx: 0.34, sz: 0.070 },
+    { y: 3.85, sx: 0.055, sz: 0.022 },
   ]), { pos: [1.05, 2.86, 0.28] });
-  swordParts.push(tint(bl, BLADE, 0.05));
+  swordParts.push(aged(bl, BLADE, 0.40));
   const fuller = place(loft(rectCross(0.4, 8), [
     { y: 0.30, sx: 0.05, sz: 0.09 }, { y: 3.10, sx: 0.035, sz: 0.085 },
   ]), { pos: [1.05, 2.86, 0.28] });
@@ -194,9 +202,13 @@ function buildPrototype() {
   swordParts.push(tint(pommel, IRON_LIGHT));
   for (const g of swordParts) rig.attach(g, 'hdR');
 
+  // Rougher and less metallic than polished armour: rust is a dielectric, and
+  // a high metalness with a low roughness is what made five tonnes of iron read
+  // as injection-moulded plastic. `normalScale` is up from 0.22 because the
+  // plate map now carries rivets and panel seams worth seeing.
   const mat = creatureMaterial({
-    roughness: 0.58, metalness: 0.4,
-    normalMap: metalNormal(), normalScale: 0.22, roughnessMap: metalRoughness(),
+    roughness: 0.76, metalness: 0.22,
+    normalMap: metalNormal(), normalScale: 0.65, roughnessMap: metalRoughness(),
   });
   return rig.build(mat, { radius: 6.5 });
 }
@@ -368,3 +380,44 @@ IronGiantEnemy.ANIM = {
 
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
+
+
+const _ic = new THREE.Color(), _id = new THREE.Color();
+/** sRGB mix accepting a hex or an already-mixed Colour at either end. */
+function mix(a, b, t) {
+  if (typeof b === 'number') _id.setHex(b, THREE.SRGBColorSpace); else _id.copy(b);
+  if (typeof a === 'number') _ic.setHex(a, THREE.SRGBColorSpace); else if (a !== _ic) _ic.copy(a);
+  return _ic.lerp(_id, t < 0 ? 0 : t > 1 ? 1 : t);
+}
+
+/**
+ * Paint a plate with age.
+ *
+ * Rust does not fall evenly: it blooms where water sits and then *runs*, so
+ * the tell is vertical streaking below every fixing and lip, over a body that
+ * is darker in its recesses than on its proud edges. `tint` could only give
+ * one flat colour plus hash jitter, and a five-metre wall of one flat colour
+ * is why the giant read as a boxy grey mech rather than as armour.
+ *
+ * @param {THREE.BufferGeometry} geo
+ * @param {number} base plate colour
+ * @param {number} [amount] 0..1 how far gone this piece is
+ */
+function aged(geo, base, amount = 1) {
+  const pos = geo.attributes.position;
+  const n = pos.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // streaks: high frequency across the plate, low frequency down it
+    const streak = Math.sin(x * 8.3 + z * 5.1) * 0.5 + Math.sin(x * 19.7 - z * 12.3) * 0.3;
+    const run = Math.sin(y * 1.7 + x * 2.3) * 0.5 + 0.5;
+    const bloom = Math.max(0, streak) * (0.35 + 0.65 * run) * amount;
+    // the underside of everything sits in its own shadow
+    const shade = Math.max(0, -Math.sin(y * 3.1 + z * 4.7)) * 0.25;
+    const c = mix(base, RUST, bloom * 0.55);
+    arr[i * 3] = c.r * (1 - shade); arr[i * 3 + 1] = c.g * (1 - shade); arr[i * 3 + 2] = c.b * (1 - shade);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}

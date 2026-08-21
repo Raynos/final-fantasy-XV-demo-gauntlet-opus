@@ -122,8 +122,13 @@ function buildPrototype() {
     colorAt: (th, u) => {
       const b = Math.cos(th);
       const shaggy = clamp01((b - 0.1) / 0.9) * smooth((u - 0.45) / 0.35);
-      if (b < -0.4) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.6) * 0.8);
-      return mix(mix(HIDE, HIDE_DARK, 0.3 + 0.25 * Math.sin(u * 21 + th * 4)), SHAG, shaggy);
+      // Counter-shading, and it was the wrong way round: the old ramp put
+      // near-black on the *lower flank* and the pale value only right under
+      // the belly, so a three-metre bull read as one black mass with a pale
+      // hump floating on it. Dark on top, mid on the flank, pale underneath.
+      const hide = mix(HIDE, HIDE_DARK, 0.14 + 0.22 * Math.sin(u * 21 + th * 4));
+      if (b < -0.25) return mix(hide, BELLY, clamp01((-b - 0.25) / 0.55) * 0.85);
+      return mix(mix(hide, HIDE_DARK, clamp01((b - 0.45) / 0.5) * 0.55), SHAG, shaggy);
     },
     matAt: (th, u) => (Math.cos(th) > 0.25 && u > 0.55 ? M_SHAG : M_HIDE),
   });
@@ -265,14 +270,20 @@ function buildPrototype() {
     const n = s < 0 ? 'L' : 'R';
     B.group(6);
     sweep(B, {
+      // A bull's foreleg is not a taper, it is four alternating swells and
+      // pinches, and the pinches have to be *hard* or the leg comes out as the
+      // smooth boneless tube this one was. The cannon in particular is bone
+      // and tendon with almost no flesh on it, so it is barely half the width
+      // of the forearm above it and the fetlock swells again below.
       nodes: [
-        { p: [0.42 * s, 2.02, 0.34], rx: 0.26, rz: 0.30 },
-        { p: [0.46 * s, 1.62, 0.38], rx: 0.24, rz: 0.28 },   // shoulder muscle
-        { p: [0.49 * s, 1.28, 0.42], rx: 0.175, rz: 0.20 },  // elbow
-        { p: [0.51 * s, 0.94, 0.34], rx: 0.135, rz: 0.155 },
-        { p: [0.52 * s, 0.62, 0.28], rx: 0.115, rz: 0.125 }, // knee (carpus)
-        { p: [0.53 * s, 0.30, 0.32], rx: 0.095, rz: 0.105 }, // cannon
-        { p: [0.53 * s, 0.16, 0.34], rx: 0.100, rz: 0.110 },
+        { p: [0.42 * s, 2.02, 0.34], rx: 0.265, rz: 0.305 },
+        { p: [0.46 * s, 1.62, 0.38], rx: 0.250, rz: 0.290 },  // shoulder muscle
+        { p: [0.49 * s, 1.28, 0.42], rx: 0.150, rz: 0.170 },  // elbow, pinched
+        { p: [0.51 * s, 0.94, 0.34], rx: 0.148, rz: 0.168 },  // forearm, extensor mass
+        { p: [0.52 * s, 0.62, 0.28], rx: 0.084, rz: 0.094 },  // carpus, all bone
+        { p: [0.53 * s, 0.34, 0.32], rx: 0.060, rz: 0.068 },  // cannon
+        { p: [0.53 * s, 0.20, 0.34], rx: 0.094, rz: 0.102 },  // fetlock
+        { p: [0.53 * s, 0.15, 0.35], rx: 0.082, rz: 0.090 },  // pastern
       ],
       steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
       shape: (th, u) => {
@@ -280,7 +291,12 @@ function buildPrototype() {
         return 1 + Math.max(0, back) * 0.22 * Math.exp(-Math.pow((u - 0.16) / 0.20, 2))
           + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.50) / 0.12, 2));
       },
-      colorAt: (th, u) => mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9),
+      // black points below the knee and a pale inner face, so four legs read as
+      // four legs instead of as one dark mass under the body
+      colorAt: (th, u) => {
+        const inner = clamp01(Math.sin(th) * s * -1) * clamp01((0.45 - u) / 0.4);
+        return mix(mix(HIDE, BELLY, inner * 0.4), HIDE_DARK, clamp01((u - 0.52) / 0.28) * 0.95);
+      },
       matAt: () => M_HIDE,
     });
     P.push({ geo: B.build(), bind: ['chain', [`fsh${n}`, `fel${n}`, `fkn${n}`, `fhf${n}`]] });
@@ -293,20 +309,26 @@ function buildPrototype() {
     B.group(6);
     sweep(B, {
       nodes: [
-        { p: [0.40 * s, 1.86, -1.06], rx: 0.28, rz: 0.34 },
-        { p: [0.44 * s, 1.46, -1.18], rx: 0.27, rz: 0.32 },  // thigh
-        { p: [0.46 * s, 1.12, -1.30], rx: 0.185, rz: 0.21 }, // stifle
-        { p: [0.47 * s, 0.84, -1.18], rx: 0.140, rz: 0.155 },
-        { p: [0.48 * s, 0.58, -1.02], rx: 0.110, rz: 0.120 }, // hock
-        { p: [0.49 * s, 0.30, -1.02], rx: 0.092, rz: 0.100 },
-        { p: [0.49 * s, 0.16, -1.04], rx: 0.098, rz: 0.106 },
+        { p: [0.40 * s, 1.86, -1.06], rx: 0.285, rz: 0.345 },
+        { p: [0.44 * s, 1.46, -1.18], rx: 0.278, rz: 0.330 }, // thigh
+        { p: [0.46 * s, 1.12, -1.30], rx: 0.165, rz: 0.188 }, // stifle
+        { p: [0.47 * s, 0.84, -1.18], rx: 0.155, rz: 0.175 }, // gaskin, the drive muscle
+        { p: [0.48 * s, 0.58, -1.02], rx: 0.078, rz: 0.088 }, // hock, bone and tendon
+        { p: [0.49 * s, 0.32, -1.02], rx: 0.058, rz: 0.066 }, // cannon
+        { p: [0.49 * s, 0.20, -1.04], rx: 0.092, rz: 0.100 }, // fetlock
+        { p: [0.49 * s, 0.15, -1.05], rx: 0.080, rz: 0.088 }, // pastern
       ],
       steps: 22, seg: 12, ref: [0, 0, 1], capStart: 0.5, capEnd: false,
       shape: (th, u) => {
         const back = -Math.cos(th);
         return 1 + Math.max(0, back) * 0.28 * Math.exp(-Math.pow((u - 0.14) / 0.22, 2));
       },
-      colorAt: (th, u) => mix(HIDE, HIDE_DARK, clamp01((u - 0.4) / 0.55) * 0.9),
+      // black points below the knee and a pale inner face, so four legs read as
+      // four legs instead of as one dark mass under the body
+      colorAt: (th, u) => {
+        const inner = clamp01(Math.sin(th) * s * -1) * clamp01((0.45 - u) / 0.4);
+        return mix(mix(HIDE, BELLY, inner * 0.4), HIDE_DARK, clamp01((u - 0.52) / 0.28) * 0.95);
+      },
       matAt: () => M_HIDE,
     });
     P.push({ geo: B.build(), bind: ['chain', [`bhp${n}`, `bkn${n}`, `bhk${n}`, `bhf${n}`]] });

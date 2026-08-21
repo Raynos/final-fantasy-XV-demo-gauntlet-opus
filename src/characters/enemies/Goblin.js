@@ -5,9 +5,16 @@ import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const SKIN = 0x3b2b3e;
-const SKIN_DARK = 0x1e1522;
-const RAG = 0x2a2420;
+/* Daemon flesh, not a colour swatch. The goblin used to be one flat violet
+ * from ear to claw, which is what made it read as a purple mannequin: no value
+ * change means no form, and no form means the eye sees a silhouette and stops.
+ * Four values now — a bruised violet back, a sallow grey-green belly, near
+ * black at the extremities, and bone. */
+const SKIN = 0x39303f;        // back and outer limbs
+const SKIN_PALE = 0x726c5c;   // belly, throat, inner arm — sallow, not pink
+const SKIN_DARK = 0x191220;   // hands, feet, joints, the shadow side
+const BLOTCH = 0x241c27;      // mottling
+const RAG = 0x2b2618;
 const CLAW = 0xc9c2ae;
 const EYE = 0xff3018;
 
@@ -67,10 +74,12 @@ function buildPrototype() {
   const torso = tube([
     P(0, 0.55, 0.02), P(0, 0.72, 0.03), P(0, 0.88, -0.05), P(0, 1.02, -0.08),
   ], [[0.19, 0.15], [0.235, 0.20], [0.21, 0.17], [0.175, 0.14]], { radialSeg: 10 });
-  rig.attachBlend(tint(torso, SKIN, 0.05), 'pelvis', 'chest', 1.3);
+  rig.attachBlend(paint(torso, (x, y, z) => goblinSkin(x, y, z)), 'pelvis', 'chest', 1.3);
 
   const gut = place(blob(0.20, 0.16, 0.17, 10, 8), { pos: [0, 0.70, 0.07] });
-  rig.attach(tint(gut, 0x4c3a4a, 0.05), 'pelvis');
+  // the belly is the one pale thing on the body, so it catches bounce light and
+  // gives the hunched silhouette an inside
+  rig.attach(paint(gut, (x, y, z) => goblinSkin(x, y, z - 0.03)), 'pelvis');
 
   // spine ridge of little horns
   for (let i = 0; i < 6; i++) {
@@ -80,20 +89,41 @@ function buildPrototype() {
     rig.attach(tint(q, SKIN_DARK), t < 0.5 ? 'spine' : 'chest');
   }
 
-  // loincloth
-  const rag = place(slab(0.34, 0.26, 0.05, 0.03), { pos: [0, 0.50, 0.02], rot: [0.1, 0, 0] });
-  rig.attach(tint(rag, RAG, 0.06), 'pelvis');
+  // A wrap of looted rag, hanging in torn strips of unequal length. The point
+  // is the silhouette: a bare hunched body is a single smooth outline and the
+  // eye slides off it, whereas a fringe that breaks the waistline tells you
+  // where the hips are and that the thing dresses itself in what it kills.
+  const belt = place(slab(0.36, 0.10, 0.30, 0.04), { pos: [0, 0.545, 0.005], rot: [0.08, 0, 0] });
+  rig.attach(tint(belt, RAG, 0.07), 'pelvis');
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.3;
+    const len = 0.11 + ((i * 7) % 5) * 0.035;
+    const w = 0.055 + ((i * 3) % 4) * 0.012;
+    const strip = place(slab(w, len, 0.035, 0.02), {
+      pos: [Math.sin(a) * 0.145, 0.50 - len * 0.5, Math.cos(a) * 0.115 + 0.01],
+      rot: [0.10 + ((i * 5) % 3) * 0.10, a, ((i * 11) % 5 - 2) * 0.09],
+    });
+    rig.attach(tint(strip, i % 3 ? RAG : 0x1d1910, 0.06), 'pelvis');
+  }
 
   /* head — oversized, wedge-shaped skull */
   const neck = tube([P(0, 1.00, -0.05), P(0, 1.12, 0.0)], [0.085, 0.075], { radialSeg: 7 });
   rig.attachBlend(tint(neck, SKIN_DARK), 'chest', 'head', 1.0);
 
   const skull = place(blob(0.155, 0.145, 0.170, 12, 9), { pos: [0, 1.20, 0.02] });
-  rig.attach(tint(skull, SKIN, 0.04), 'head');
-  const brow = place(slab(0.24, 0.05, 0.10, 0.02), { pos: [0, 1.235, 0.13], rot: [0.28, 0, 0] });
+  // dark over the cranium, sallow down the muzzle and under the cheekbones, so
+  // the brow shelf and the jaw separate instead of being one purple egg
+  rig.attach(paint(skull, (x, y, z) => mix(goblinSkin(x, y, z - 1.10),
+    SKIN_DARK, Math.max(0, (y - 1.22) * 4.5))), 'head');
+  const brow = place(slab(0.26, 0.055, 0.11, 0.02), { pos: [0, 1.238, 0.13], rot: [0.28, 0, 0] });
   rig.attach(tint(brow, SKIN_DARK), 'head');
-  const snout = place(blob(0.075, 0.055, 0.075, 8, 6), { pos: [0, 1.155, 0.17] });
-  rig.attach(tint(snout, SKIN_DARK), 'head');
+  // cheekbones: the shelf that makes a skull read as a skull
+  for (const s of [-1, 1]) {
+    const zyg = place(blob(0.040, 0.030, 0.062, 7, 5), { pos: [0.118 * s, 1.185, 0.105], scale: [1, 1, 1] });
+    rig.attach(tint(zyg, SKIN, 0.05), 'head');
+  }
+  const snout = place(blob(0.078, 0.058, 0.078, 8, 6), { pos: [0, 1.155, 0.17] });
+  rig.attach(paint(snout, () => mix(SKIN_PALE, SKIN_DARK, 0.55)), 'head');
 
   // grin: a dark slot with a row of teeth
   const mouth = place(slab(0.19, 0.045, 0.06, 0.01), { pos: [0, 1.105, 0.145] });
@@ -104,8 +134,14 @@ function buildPrototype() {
     const lo = place(spike(0.011, 0.038, 4), { pos: [i * 0.026 + 0.013, 1.085, 0.152], rot: [-0.1, 0, 0] });
     rig.attach(tint(lo, CLAW), 'jaw');
   }
-  const jawG = place(blob(0.10, 0.045, 0.085, 8, 5), { pos: [0, 1.075, 0.115] });
-  rig.attach(tint(jawG, SKIN_DARK), 'jaw');
+  // A lantern jaw, undershot and half the width of the skull — the goblin's
+  // one memorable feature, and it was previously smaller than its own ear.
+  const jawG = place(blob(0.125, 0.058, 0.105, 10, 6), { pos: [0, 1.070, 0.118] });
+  rig.attach(paint(jawG, (x, y, z) => mix(SKIN_PALE, SKIN_DARK, 0.42 + Math.max(0, (1.09 - y) * 6))), 'jaw');
+  for (const s of [-1, 1]) {
+    const tusk = place(spike(0.016, 0.062, 5), { pos: [0.072 * s, 1.098, 0.135], rot: [-0.18, 0, -0.12 * s] });
+    rig.attach(tint(tusk, CLAW), 'jaw');
+  }
 
   // ears: long, swept, membrane-thin
   for (const s of [-1, 1]) {
@@ -129,12 +165,18 @@ function buildPrototype() {
     const n = s < 0 ? 'L' : 'R';
     const shoulder = place(blob(0.075, 0.075, 0.075, 8, 6), { pos: [0.19 * s, 1.03, -0.04] });
     rig.attach(tint(shoulder, SKIN_DARK, 0.05), `sh${n}`);
-    const up = tube([P(0.19 * s, 1.02, -0.04), P(0.28 * s, 0.90, 0.0), P(0.33 * s, 0.80, 0.04)],
-      [0.062, 0.052, 0.044], { radialSeg: 6 });
-    rig.attachBlend(tint(up, SKIN, 0.05), `sh${n}`, `el${n}`, 1.0);
-    const lo = tube([P(0.33 * s, 0.80, 0.04), P(0.36 * s, 0.68, 0.10), P(0.39 * s, 0.57, 0.16)],
-      [0.044, 0.038, 0.034], { radialSeg: 6 });
-    rig.attachBlend(tint(lo, SKIN, 0.05), `el${n}`, `hd${n}`, 1.0);
+    // Radii pinch at the joints and swell over the muscle bellies. The old
+    // arm was a smooth taper from shoulder to wrist — a tube, and a tube reads
+    // as a mannequin's arm no matter what colour it is painted.
+    const up = tube([P(0.19 * s, 1.02, -0.04), P(0.245 * s, 0.955, -0.02), P(0.28 * s, 0.90, 0.0), P(0.33 * s, 0.80, 0.04)],
+      [0.058, 0.068, 0.050, 0.038], { radialSeg: 7 });
+    rig.attachBlend(paint(up, (x, y, z) => goblinSkin(x, y, z, Math.max(0, (0.95 - y) * 0.5))), `sh${n}`, `el${n}`, 1.0);
+    // elbow: a bare knob of bone standing proud of the limb
+    const elbow = place(blob(0.046, 0.048, 0.044, 8, 6), { pos: [0.332 * s, 0.797, 0.030] });
+    rig.attach(tint(elbow, SKIN_DARK, 0.05), `el${n}`);
+    const lo = tube([P(0.33 * s, 0.80, 0.04), P(0.352 * s, 0.725, 0.075), P(0.36 * s, 0.68, 0.10), P(0.39 * s, 0.57, 0.16)],
+      [0.038, 0.046, 0.040, 0.030], { radialSeg: 7 });
+    rig.attachBlend(paint(lo, (x, y, z) => goblinSkin(x, y, z, Math.max(0, (0.80 - y) * 1.5))), `el${n}`, `hd${n}`, 1.0);
     const palm = place(blob(0.048, 0.030, 0.052, 7, 5), { pos: [0.395 * s, 0.545, 0.19] });
     rig.attach(tint(palm, SKIN_DARK), `hd${n}`);
     for (let c = -1; c <= 1; c++) {
@@ -147,12 +189,15 @@ function buildPrototype() {
   /* legs — short, bandy, digitigrade */
   for (const s of [-1, 1]) {
     const n = s < 0 ? 'L' : 'R';
-    const up = tube([P(0.115 * s, 0.58, 0), P(0.128 * s, 0.44, 0.05), P(0.135 * s, 0.33, 0.09)],
-      [0.085, 0.072, 0.058], { radialSeg: 7 });
-    rig.attachBlend(tint(up, SKIN, 0.04), `hp${n}`, `kn${n}`, 1.0);
-    const lo = tube([P(0.135 * s, 0.33, 0.09), P(0.135 * s, 0.18, 0.04), P(0.135 * s, 0.07, 0.01)],
-      [0.056, 0.044, 0.038], { radialSeg: 7 });
-    rig.attachBlend(tint(lo, SKIN_DARK, 0.04), `kn${n}`, `ft${n}`, 1.0);
+    const up = tube([P(0.115 * s, 0.58, 0), P(0.124 * s, 0.50, 0.025), P(0.128 * s, 0.44, 0.05), P(0.135 * s, 0.33, 0.09)],
+      [0.082, 0.092, 0.074, 0.048], { radialSeg: 8 });
+    rig.attachBlend(paint(up, (x, y, z) => goblinSkin(x, y, z, Math.max(0, (0.46 - y) * 1.2))), `hp${n}`, `kn${n}`, 1.0);
+    // knee cap, and a calf that is a shape rather than a taper
+    const knee = place(blob(0.050, 0.050, 0.048, 8, 6), { pos: [0.135 * s, 0.328, 0.082] });
+    rig.attach(tint(knee, SKIN_DARK, 0.05), `kn${n}`);
+    const lo = tube([P(0.135 * s, 0.33, 0.09), P(0.137 * s, 0.255, 0.062), P(0.135 * s, 0.18, 0.04), P(0.135 * s, 0.07, 0.01)],
+      [0.046, 0.056, 0.042, 0.030], { radialSeg: 8 });
+    rig.attachBlend(paint(lo, (x, y, z) => mix(goblinSkin(x, y, z), SKIN_DARK, Math.max(0, (0.30 - y) * 2.2))), `kn${n}`, `ft${n}`, 1.0);
     const foot = place(blob(0.055, 0.035, 0.085, 7, 5), { pos: [0.135 * s, 0.038, 0.055] });
     rig.attach(tint(foot, SKIN_DARK), `ft${n}`);
     for (let c = -1; c <= 1; c++) {
@@ -293,4 +338,54 @@ class GoblinEnemy extends Enemy {
       }
     }
   }
+}
+
+
+const _pc = new THREE.Color(), _pd = new THREE.Color();
+/**
+ * Per-vertex colour from bind-pose position.
+ *
+ * `GeoKit.tint` paints one flat colour with an optional hash jitter, which is
+ * all the goblin ever had — and a body that answers the light with one value
+ * everywhere reads as a mannequin however good its silhouette is. This paints
+ * counter-shading and blotching as a function of where the vertex actually is
+ * on the body, which is the same thing the swept species get from `colorAt`.
+ *
+ * @param {THREE.BufferGeometry} geo
+ * @param {(x:number,y:number,z:number)=>[number|THREE.Color, number]} fn
+ *   returns `[colour, blotchAmount]` for a bind-pose position
+ */
+function paint(geo, fn) {
+  const pos = geo.attributes.position;
+  const n = pos.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const c = fn(x, y, z);
+    arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
+
+/** sRGB mix that accepts a hex or an already-mixed Colour at either end. */
+function mix(a, b, t) {
+  if (typeof b === 'number') _pd.setHex(b, THREE.SRGBColorSpace); else _pd.copy(b);
+  if (typeof a === 'number') _pc.setHex(a, THREE.SRGBColorSpace); else if (a !== _pc) _pc.copy(a);
+  return _pc.lerp(_pd, t < 0 ? 0 : t > 1 ? 1 : t);
+}
+
+/**
+ * The goblin's skin at a bind-pose point: sallow underneath, bruised on top,
+ * black at the extremities, blotched everywhere. `down` is how far under the
+ * body the point faces, `ext` how far out along a limb it is.
+ */
+function goblinSkin(x, y, z, ext = 0) {
+  // three incommensurate sines make a blotch field that never repeats visibly
+  const n = Math.sin(x * 23.7 + y * 11.3) * 0.5 + Math.sin(y * 17.1 - z * 13.9) * 0.35
+    + Math.sin(z * 29.3 + x * 7.7) * 0.25;
+  const belly = Math.max(0, (z - 0.02) * 2.6) * Math.max(0, 1 - Math.abs(x) * 3.2);
+  const c = mix(SKIN, SKIN_PALE, Math.min(0.85, belly * 0.9));
+  const withBlotch = mix(c, BLOTCH, Math.max(0, n) * 0.45);
+  return mix(withBlotch, SKIN_DARK, ext);
 }
