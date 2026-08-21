@@ -2,12 +2,12 @@
 /**
  * Frame-time benchmark.
  *
- *   node tools/perf.mjs                     # every shot, ultra
- *   node tools/perf.mjs vista_noon storm    # named shots
- *   node tools/perf.mjs --q high            # quality tier (low|medium|high|ultra)
- *   node tools/perf.mjs --frames 180        # samples per shot
- *   node tools/perf.mjs --w 1920 --h 1080
- *   node tools/perf.mjs --breakdown         # also time the scene pass alone
+ *   node src/tools/perf.mjs                     # every shot, ultra
+ *   node src/tools/perf.mjs vista_noon storm    # named shots
+ *   node src/tools/perf.mjs --q high            # quality tier (low|medium|high|ultra)
+ *   node src/tools/perf.mjs --frames 180        # samples per shot
+ *   node src/tools/perf.mjs --w 1920 --h 1080
+ *   node src/tools/perf.mjs --breakdown         # also time the scene pass alone
  *
  * Steps the simulation manually and brackets each batch with `gl.finish()` so
  * the number reported is real CPU+GPU wall time per frame, not just the cost of
@@ -24,7 +24,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv) {

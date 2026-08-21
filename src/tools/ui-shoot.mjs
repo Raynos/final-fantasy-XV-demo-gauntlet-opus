@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * UI capture harness (companion to tools/shoot.mjs, owned by the UI agent).
+ * UI capture harness (companion to src/tools/shoot.mjs, owned by the UI agent).
  *
  * The shared Shots.js only has `hud_field` and `menu_main`, but the UI layer
  * has many more states worth eyeballing. This drives them by calling the public
  * HUD / Menus API after applying a base shot.
  *
- *   PORT=5206 node tools/ui-shoot.mjs --out tmp/shots/ui-r1
- *   PORT=5206 node tools/ui-shoot.mjs menu_ascension photo_mode --out tmp/shots/x
+ *   PORT=5206 node src/tools/ui-shoot.mjs --out tmp/shots/ui-r1
+ *   PORT=5206 node src/tools/ui-shoot.mjs menu_ascension photo_mode --out tmp/shots/x
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -16,7 +16,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 

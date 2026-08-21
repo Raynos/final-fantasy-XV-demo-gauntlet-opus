@@ -8,10 +8,10 @@
  * opening menus, crossing the map to force streaming, moving the sun, changing
  * the weather — and reports per-segment frame times plus every hitch.
  *
- *   node tools/gameplay.mjs                  # full session, ultra
- *   node tools/gameplay.mjs --q high
- *   node tools/gameplay.mjs --scale 2        # longer segments
- *   node tools/gameplay.mjs --out perf.json
+ *   node src/tools/gameplay.mjs                  # full session, ultra
+ *   node src/tools/gameplay.mjs --q high
+ *   node src/tools/gameplay.mjs --scale 2        # longer segments
+ *   node src/tools/gameplay.mjs --out perf.json
  *
  * A hitch is a single frame over 33 ms (a dropped frame at 30 fps). Those are
  * what players actually feel; a good median with 100 ms spikes is a bad game.
@@ -25,7 +25,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv) {

@@ -166,7 +166,7 @@ const TINT_SCALE = 255 / 2;
  * than anything the table can express. That keeps the whole bake in single-
  * digit milliseconds at boot instead of a quarter of a second.
  *
- * Not part of `tools/bake.mjs`: it is cheap, and it depends on `WorldMap`
+ * Not part of `src/tools/bake.mjs`: it is cheap, and it depends on `WorldMap`
  * rather than on the layer recipes, so baking it would only add a second
  * staleness dependency for no measurable gain.
  *

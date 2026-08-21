@@ -10,19 +10,22 @@
  * Walks the real import graph from `src/main.js` and reports every module that
  * is never reached, plus every exported symbol nothing imports.
  *
- *   node tools/orphans.mjs
- *   node tools/orphans.mjs --exports    # also list unused named exports
+ *   node src/tools/orphans.mjs
+ *   node src/tools/orphans.mjs --exports    # also list unused named exports
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = path.join(ROOT, 'src');
 const WANT_EXPORTS = process.argv.includes('--exports');
 
 async function walk(dir, out = []) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
+    // `src/tools/` is the harness, not the game: it never appears in the import
+    // graph from `main.js`, so walking it would report every tool as an orphan.
+    if (e.isDirectory() && dir === SRC && e.name === 'tools') continue;
     const f = path.join(dir, e.name);
     if (e.isDirectory()) await walk(f, out);
     else if (e.name.endsWith('.js')) out.push(f);

@@ -81,10 +81,10 @@ session's contribution is the *verification* of it, plus the merge of `main`.
 Gates, all run this session on the merged tree:
 
 * `npx vite build` — **pass** (353 ms; the >500 kB chunk warning is pre-existing).
-* `node tools/integration.mjs` — **18 pass, 0 wired-but-unproven, 0 not
+* `node src/tools/integration.mjs` — **18 pass, 0 wired-but-unproven, 0 not
   integrated.** Includes `combat / weapon swap is free — 5 swaps in 24 ms`, which
   cycles all five classes and so exercises the new anchors.
-* `node tools/orphans.mjs` — **1 orphan, `src/world/map/MapRaster.js`,
+* `node src/tools/orphans.mjs` — **1 orphan, `src/world/map/MapRaster.js`,
   pre-existing on `main` and not ours.**
 * Shot manifest: `gladio_closeup` 512 calls, `hero_face` 485 calls — inside the
   800 budget, no regression.
@@ -195,8 +195,8 @@ in this session's scratchpad (see Gotchas).
    module-level.
 2. **Re-probe the anchors.** Assert numerically that `weapon.tip()` is at the
    blade tip and the firearm muzzle is ~0.17 m from the hand, not 13 m up.
-   `tools/probe.mjs` exists; there is no `tools/probes/weapons.js` yet (only
-   `tools/probes/meteor.mjs`) — write one.
+   `src/tools/probe.mjs` exists; there is no `src/tools/probes/weapons.js` yet (only
+   `src/tools/probes/meteor.mjs`) — write one.
 3. **Eyeball the swing arcs.** Re-origining moved every weapon relative to every
    swing arc and trail anchor. `combat_wide`, `combat_armiger` and `warp_strike`
    have not been shot since the rebuild. `Armiger.layout` scales by 0.46 and
@@ -237,8 +237,8 @@ in this session's scratchpad (see Gotchas).
   `<scratchpad>/wshoot.mjs` — `PORT=5341 node wshoot.mjs <outdir> weapons sword
   greatsword daggers firearm polearm`. It is ~70 lines; re-deriving it costs
   half an hour of the mistakes above. It was deliberately **not** committed
-  (`tools/` is not owned by this agent).
-* **Ports.** Six-plus agents share this machine and `tools/daemon.mjs` uses
+  (`src/tools/` is not owned by this agent).
+* **Ports.** Six-plus agents share this machine and `src/tools/daemon.mjs` uses
   `PORT+1`. `5261/5262`, `5299`, `5311/5312`, `5410/5411` were taken. This
   session used `PORT=5341 DAEMON_PORT=5342`. A daemon on a port owned by another
   checkout fails loudly with the two paths printed, which is the good case.

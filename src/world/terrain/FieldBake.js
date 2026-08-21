@@ -8,7 +8,7 @@ import {
 /**
  * Load / store side of the baked heightfield.
  *
- * `encodeField` runs in the build step (`tools/bake.mjs`); `loadBakedField`
+ * `encodeField` runs in the build step (`src/tools/bake.mjs`); `loadBakedField`
  * runs in the browser and is a pure optimisation — every failure path returns
  * `false` and the caller regenerates with the same generator that produced the
  * artifact in the first place.

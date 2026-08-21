@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
-import { bakePlugin } from './tools/vite-plugin-bake.mjs';
-import { reviewPlugin } from './tools/vite-plugin-review.mjs';
+import { bakePlugin } from './src/tools/vite-plugin-bake.mjs';
+import { reviewPlugin } from './src/tools/vite-plugin-review.mjs';
 
 export default defineConfig({
   plugins: [bakePlugin(), reviewPlugin()],

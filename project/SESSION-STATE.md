@@ -44,7 +44,7 @@ Ranked by how many of the 139 shots each defect touches:
 ## The in-game dev/review suite
 
 Plan: **`docs/plans/dev-suite.md`**. Phase 0 + the freecam and review inbox have
-landed (`src/dev/**`, `tools/vite-plugin-review.mjs`).
+landed (`src/dev/**`, `src/tools/vite-plugin-review.mjs`).
 
 ```bash
 npm run dev      # then open http://127.0.0.1:5173/?debug=1
@@ -139,7 +139,7 @@ its velocity, called from `Game.applyShot`. Routed to `agent/idles`, who owns
   mis-authored. Not yet verified by measurement.
 - `_outcrops` consumes its RNG stream conditionally on local slope, so any
   height change anywhere reshuffles every later boulder. Worth decoupling.
-- Perf gate: `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps best
+- Perf gate: `src/tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps best
   measured; shadow cascades ~22 ms dominate). **Do not trust perf numbers taken
   while agents are running** — machine load makes them meaningless. Re-measure
   on a quiet tree.
@@ -157,10 +157,10 @@ cd ~/projects/game-demos/final-fantasy-XV-demo-gauntlet-opus
 git status                 # expect clean, on main
 git branch --list 'agent/*'   # unmerged agent work from the round above
 git worktree list          # agents run in worktrees; prune dead ones
-node tools/cleanup.mjs     # report orphaned vite/chromium; --kill to act
+node src/tools/cleanup.mjs     # report orphaned vite/chromium; --kill to act
 git config core.hooksPath .githooks   # if a fresh clone
 npx vite build             # sanity
-node tools/integration.mjs # 18 pass / 0 fail
+node src/tools/integration.mjs # 18 pass / 0 fail
 ```
 
 To recover an interrupted round: for each `agent/*` branch, check whether it has
@@ -174,15 +174,15 @@ re-dispatch the rest with the same ownership table.
 
 | check | result |
 |---|---|
-| `tools/orphans.mjs` | 249/249 modules reachable, no dead code |
-| `tools/integration.mjs` | 18 pass · 0 wired · 0 not integrated |
-| `tools/perf.mjs` | mean ~87 fps, worst ~47 |
-| `tools/gameplay.mjs` | **fails** — streaming/weather hitches remain |
-| `tools/roadcheck.mjs` | 39/39 drivable POIs reachable, 0 failures |
-| `tools/uxcheck.mjs` | 86/86 |
+| `src/tools/orphans.mjs` | 249/249 modules reachable, no dead code |
+| `src/tools/integration.mjs` | 18 pass · 0 wired · 0 not integrated |
+| `src/tools/perf.mjs` | mean ~87 fps, worst ~47 |
+| `src/tools/gameplay.mjs` | **fails** — streaming/weather hitches remain |
+| `src/tools/roadcheck.mjs` | 39/39 drivable POIs reachable, 0 failures |
+| `src/tools/uxcheck.mjs` | 86/86 |
 | dev suite determinism | 1.555/255, at the documented noise floor |
-| `tools/combatloop.mjs` | 30/30 |
-| `tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
+| `src/tools/combatloop.mjs` | 30/30 |
+| `src/tools/heightcheck.mjs` | 0.000 m GPU-vs-`heightAt` error over 64 probes |
 | `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
 
 ## Housekeeping notes
@@ -192,11 +192,11 @@ re-dispatch the rest with the same ownership table.
   120 s with no useful error.
 - `tmp/shots/` and `public/baked/` are gitignored. The bake is a 32 MB cache
   regenerated deterministically from our own generators; delete it freely.
-- Worktrees reached 6.1 GB before pruning. `node tools/cleanup.mjs` handles
+- Worktrees reached 6.1 GB before pruning. `node src/tools/cleanup.mjs` handles
   orphaned processes; `git worktree remove --force` handles the directories.
 - The capture daemon keys page reuse on a source fingerprint (`sourceStamp()` in
-  `tools/daemon.mjs`) so any edit forces a reboot, and refuses to serve a
+  `src/tools/daemon.mjs`) so any edit forces a reboot, and refuses to serve a
   different checkout. Both guards exist because a stale daemon page once caused
   a completely false diagnosis that cost three investigations.
-- `tools/sheet.mjs` writes `_sheet.html` beside the shots and references PNGs
+- `src/tools/sheet.mjs` writes `_sheet.html` beside the shots and references PNGs
   relatively. Do not go back to inlining base64 — at 139 shots it kills the page.

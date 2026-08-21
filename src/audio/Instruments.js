@@ -87,7 +87,7 @@ export class Instruments {
     // Every ramp here *ends*. A BiquadFilter whose frequency has pending
     // automation recomputes its coefficients every sample instead of once per
     // render quantum, so an open-ended `setTargetAtTime` would make one string
-    // voice cost as much as ten — measured, not guessed (see tools/profile.mjs).
+    // voice cost as much as ten — measured, not guessed (see src/tools/profile.mjs).
     filt.frequency.setValueAtTime(clamp(f * 1.6, 90, 12000), t);
     filt.frequency.linearRampToValueAtTime(clamp(f * 7.5 * bright, 220, 15000), t + 0.22);
     filt.frequency.linearRampToValueAtTime(clamp(f * 4.0 * bright, 180, 12000), t + 0.75);

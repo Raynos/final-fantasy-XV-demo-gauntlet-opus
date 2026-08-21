@@ -26,11 +26,11 @@
  * (`Enemy.freeze` + `Enemies.update` with `frozen = true`) so the tool measures
  * the code that produces the bestiary shots rather than an idealised call.
  *
- *   node tools/creaturecheck.mjs                # whole roster, every pose
- *   node tools/creaturecheck.mjs --species sabertusk,irongiant
- *   node tools/creaturecheck.mjs --hold 240     # frames to hold each pose
- *   node tools/creaturecheck.mjs --tol 0.25     # fail above this |foot|, metres
- *   node tools/creaturecheck.mjs --json out.json
+ *   node src/tools/creaturecheck.mjs                # whole roster, every pose
+ *   node src/tools/creaturecheck.mjs --species sabertusk,irongiant
+ *   node src/tools/creaturecheck.mjs --hold 240     # frames to hold each pose
+ *   node src/tools/creaturecheck.mjs --tol 0.25     # fail above this |foot|, metres
+ *   node src/tools/creaturecheck.mjs --json out.json
  *
  * Exits non-zero if any pose drifts, or if any pose leaves the model further
  * off the ground than `--tol` (airborne poses — a pounce, a leap — are exempt
@@ -44,7 +44,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv) {

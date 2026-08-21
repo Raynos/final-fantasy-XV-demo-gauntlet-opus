@@ -2,9 +2,9 @@
 /**
  * Boot / page-load profiler.
  *
- *   node tools/bootprof.mjs            # one cold + one warm load, per-system breakdown
- *   node tools/bootprof.mjs --n 3      # 3 loads, report each
- *   node tools/bootprof.mjs --prod     # against the production bundle
+ *   node src/tools/bootprof.mjs            # one cold + one warm load, per-system breakdown
+ *   node src/tools/bootprof.mjs --n 3      # 3 loads, report each
+ *   node src/tools/bootprof.mjs --prod     # against the production bundle
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.js`.
@@ -15,7 +15,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 const portOpen = (p) => new Promise((res) => {

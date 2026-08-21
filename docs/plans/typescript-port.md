@@ -49,7 +49,7 @@ Leaf-first, so each stage compiles against already-typed dependencies.
 | 7 | `src/world/**` | 68 | Largest area; depends on engine + util |
 | 8 | `src/ui/**` | 25 | Depends on rpg + combat event types |
 | 9 | `src/game/**` (rest) | ~37 | `Game`, `Shots`, story, cinematics, encounters, interaction |
-| 10 | `tools/**` → `.mts` | 20 | Under `erasableSyntaxOnly` (see §5) |
+| 10 | `src/tools/**` → `.mts` | 20 | Under `erasableSyntaxOnly` (see §5) |
 
 ## 4. `tsconfig.json` (src)
 
@@ -106,7 +106,7 @@ is what stops us writing syntax that type-checks but Node then refuses to run.
     "erasableSyntaxOnly": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["tools/**/*.mts"]
+  "include": ["src/tools/**/*.mts"]
 }
 ```
 
@@ -149,11 +149,11 @@ Most of the port is mechanical. These few are where the value is:
 - [ ] `pnpm typecheck` and `pnpm typecheck:tools` both clean
 - [ ] Zero `.js` files under `src/`
 - [ ] `npx vite build` passes
-- [ ] `node tools/orphans.mjs` — still 100% reachable
-- [ ] `node tools/integration.mjs` — still 0 failures
-- [ ] `node tools/shoot.mjs` — exits 0, and `tools/imgdiff.mjs` shows no shot
+- [ ] `node src/tools/orphans.mjs` — still 100% reachable
+- [ ] `node src/tools/integration.mjs` — still 0 failures
+- [ ] `node src/tools/shoot.mjs` — exits 0, and `src/tools/imgdiff.mjs` shows no shot
       above the measured harness noise floor (1.58–1.99 mean/255)
-- [ ] `node tools/gameplay.mjs` — no worse than before the port
+- [ ] `node src/tools/gameplay.mjs` — no worse than before the port
 - [ ] Both typechecks added to `.githooks/pre-commit` alongside the build
 
 ## 9. Explicitly not in scope

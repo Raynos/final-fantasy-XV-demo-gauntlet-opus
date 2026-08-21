@@ -181,7 +181,7 @@ grass off above 120 m — it is on their side of the boundary. It is visible in
 **Every number below was taken with six or more sibling agents live. Treat them
 as indicative only; re-measure on a quiet tree before judging.**
 
-- `tools/perf.mjs`, load average 2.3 rising to 5.1 during the run:
+- `src/tools/perf.mjs`, load average 2.3 rising to 5.1 during the run:
   **mean 73.6 fps, worst 39.1 fps (`vista_dawn`)**, which the tool reports as a
   FAIL against its 60 fps target. **I have no before/after comparison** — I did
   not baseline `perf.mjs` before the first edit, which was a mistake. `perf.mjs`
@@ -198,7 +198,7 @@ as indicative only; re-measure on a quiet tree before judging.**
     five-segment blade put ~3.5% back.
 - Draw calls across the twelve-shot set stayed in 378–596, inside the 800 budget.
 
-`tools/gameplay.mjs` was **not run** — it is the expensive one and the machine
+`src/tools/gameplay.mjs` was **not run** — it is the expensive one and the machine
 was contended.
 
 ---
@@ -280,7 +280,7 @@ was contended.
 - `src/world/terrain/**` `lowAlt` gate — reported by `agent/splat` as gating
   grass off above 120 m. **Not mine, not touched.** Visible in
   `tmp/shots/gr5/zone_three_valleys.png`.
-- `tools/orphans.mjs` reports one orphan, `src/world/map/MapRaster.js`. It is
+- `src/tools/orphans.mjs` reports one orphan, `src/world/map/MapRaster.js`. It is
   pre-existing and belongs to the coordinator's `src/world/map/**`. Not mine.
 
 ---
@@ -290,8 +290,8 @@ was contended.
 | gate | result |
 |---|---|
 | `npx vite build` | **PASS** (also enforced by the pre-commit hook on all four commits) |
-| `node tools/integration.mjs` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node tools/orphans.mjs` | **PASS for my files** — 260/261 reachable; the one orphan is the pre-existing `src/world/map/MapRaster.js` |
-| `node tools/shoot.mjs` page errors | **0** across the final twelve-shot set |
-| `node tools/perf.mjs` | **FAIL at `vista_dawn` 39.1 fps**, under heavy contention, with no before-baseline. See §6 |
-| `node tools/gameplay.mjs` | **not run** |
+| `node src/tools/integration.mjs` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mjs` | **PASS for my files** — 260/261 reachable; the one orphan is the pre-existing `src/world/map/MapRaster.js` |
+| `node src/tools/shoot.mjs` page errors | **0** across the final twelve-shot set |
+| `node src/tools/perf.mjs` | **FAIL at `vista_dawn` 39.1 fps**, under heavy contention, with no before-baseline. See §6 |
+| `node src/tools/gameplay.mjs` | **not run** |

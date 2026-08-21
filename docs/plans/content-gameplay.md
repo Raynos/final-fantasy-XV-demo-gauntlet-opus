@@ -41,7 +41,7 @@ work, and that piece is a one-day fix.
 | Enemies | `src/characters/Enemies.js` + `enemies/{Sabertusk,Goblin,MTSoldier,IronGiant}.js` | 4 species, one draw call each, per-species AI states (run/pounce/telegraph/attack/stagger), HP, damage, death. Real. |
 | UI chrome | `src/ui/**` (13 files + 6 screens) | Field HUD, combat HUD, weapon wheel, compass, subtitles, damage numbers, call-outs; main / inventory / ascension / map / gear / photo screens with cross-fades. Real, but see §1.2. |
 | RPG logic | `src/game/rpg/**` (5,765 lines) | Level curve to 99 + EXP banking, 106-node Ascension across 9 constellations, 137 items / 37 weapons / 18 accessories / 5 shops, computed elemancy, 30 quests (7 main, 12 hunts, 11 side) with 6 tipsters and a 10-rank hunt table, 13 techniques, 30 recipes, bond levels, 10 havens, save/load with migration. Real, correct-looking, **and dead code**. |
-| Tooling | `tools/{shoot,perf,gameplay,detcheck,ui-shoot,sheet,attrib}.mjs` | Screenshot harness, frame-time benchmark, scripted-input gameplay benchmark, determinism checker. Excellent — better than most real projects have. |
+| Tooling | `src/tools/{shoot,perf,gameplay,detcheck,ui-shoot,sheet,attrib}.mjs` | Screenshot harness, frame-time benchmark, scripted-input gameplay benchmark, determinism checker. Excellent — better than most real projects have. |
 
 ### 1.2 What is stubbed — the load-bearing finding
 
@@ -121,7 +121,7 @@ From `tmp/shots/perf-baseline.json` and `tmp/shots/gameplay-baseline.json` in th
 | triangles / frame | **100 M – 169 M** | — | absurd |
 | programs | 170 → 369 during a session | — | see below |
 
-**Scripted gameplay (`tools/gameplay.mjs`):**
+**Scripted gameplay (`src/tools/gameplay.mjs`):**
 
 | segment | median | p99 | max |
 |---|---|---|---|
@@ -284,8 +284,8 @@ rule 4.
 - Use `KHR_parallel_shader_compile` (`COMPLETION_STATUS_KHR`) so the boot bar
   advances instead of the tab hanging.
 - Fix `Cannot destructure property 'pos' of 'undefined'` in the elemancy cast
-  path (reproduces 3× per `node tools/gameplay.mjs` run).
-**Done when:** `tools/gameplay.mjs` reports `weapon-swap` p99 under 50 ms and
+  path (reproduces 3× per `node src/tools/gameplay.mjs` run).
+**Done when:** `src/tools/gameplay.mjs` reports `weapon-swap` p99 under 50 ms and
 zero `failures[]` entries across all 13 segments.
 
 ### WS-0b — Rendering performance · **parallel, whole-run**
@@ -297,8 +297,8 @@ zero `failures[]` entries across all 13 segments.
 cut the finest clipmap ring, cut LOD0 grass instance count and widen the tile
 band, share the GTAO and VFX depth prepasses instead of running two, budget the
 grass tile generator per frame.
-**Scoreboard:** `node tools/perf.mjs --out tmp/shots/perf-baseline.json` and
-`node tools/gameplay.mjs`. Must not regress `tools/detcheck.mjs`.
+**Scoreboard:** `node src/tools/perf.mjs --out tmp/shots/perf-baseline.json` and
+`node src/tools/gameplay.mjs`. Must not regress `src/tools/detcheck.mjs`.
 
 ### WS-1 — The wire: RPG ↔ UI ↔ combat ↔ world · **FIRST CONTENT WORKSTREAM**
 

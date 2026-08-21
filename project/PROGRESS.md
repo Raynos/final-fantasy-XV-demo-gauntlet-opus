@@ -7,8 +7,8 @@
 
 ## Integration status (verified, not claimed)
 
-`node tools/orphans.mjs` — 235/235 modules reachable from `main.js`, no dead code.
-`node tools/integration.mjs` — drives the real page and asserts observable state:
+`node src/tools/orphans.mjs` — 235/235 modules reachable from `main.js`, no dead code.
+`node src/tools/integration.mjs` — drives the real page and asserts observable state:
 **17 pass · 1 wired-but-unproven · 0 not integrated.**
 
 Verified end to end: 25 systems registered · HUD mirrors the real stat model ·
@@ -57,8 +57,8 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 
 | metric | baseline | target |
 |---|---|---|
-| Posed shots (`tools/perf.mjs`) | mean → **~87 fps**, worst **~47** | ≥60 fps every shot |
-| Gameplay (`tools/gameplay.mjs`) | worst segment 15.7 → **27.2 fps** | ≥60 fps every segment |
+| Posed shots (`src/tools/perf.mjs`) | mean → **~87 fps**, worst **~47** | ≥60 fps every shot |
+| Gameplay (`src/tools/gameplay.mjs`) | worst segment 15.7 → **27.2 fps** | ≥60 fps every segment |
 | Hitches > 33 ms in a session | 870 → **183** | 0 |
 | Worst single frame | 15,820 ms → **22 ms** ✅ | < 20 ms |
 
@@ -71,11 +71,11 @@ Harsh-critic scores, graded against *shipped* FFXV (not against improvement):
 | Vite + three 0.185, systems architecture | ✅ | `Game` orchestrator, ordered `init`/`update`/`lateUpdate` |
 | Seeded RNG + simplex/fbm/ridged/worley/warp noise | ✅ | `src/util/` |
 | Procedural PBR texture synthesis | ✅ | normal-from-height, cavity AO, sprites, blue noise |
-| Screenshot harness | ✅ | `tools/shoot.mjs` — 15 shots, fixed timestep, exits non-zero on any console error |
-| Contact sheet | ✅ | `tools/sheet.mjs` |
-| **FPS benchmark (posed)** | ✅ | `tools/perf.mjs` — median/min/mean/p95, `gl.finish()` bracketed |
-| **FPS benchmark (real gameplay)** | ✅ | `tools/gameplay.mjs` — 13 scripted input segments, per-segment percentiles + hitch log |
-| Cost attribution | ✅ | `tools/attrib.mjs` — A/B/A per-subsystem |
+| Screenshot harness | ✅ | `src/tools/shoot.mjs` — 15 shots, fixed timestep, exits non-zero on any console error |
+| Contact sheet | ✅ | `src/tools/sheet.mjs` |
+| **FPS benchmark (posed)** | ✅ | `src/tools/perf.mjs` — median/min/mean/p95, `gl.finish()` bracketed |
+| **FPS benchmark (real gameplay)** | ✅ | `src/tools/gameplay.mjs` — 13 scripted input segments, per-segment percentiles + hitch log |
+| Cost attribution | ✅ | `src/tools/attrib.mjs` — A/B/A per-subsystem |
 | Production build verified | ✅ | `--prod` flag; fixed a minifier-only crash |
 | Capture determinism | ✅ | visually stable (mean Δ 0.39/255); not bit-exact |
 | Cloud raymarch upsample blockiness | ✅ | Halton-jittered half-res march, TAA supersamples it |

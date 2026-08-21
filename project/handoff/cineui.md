@@ -27,14 +27,14 @@ six `cine_*` shots.
 Reproduced deterministically in two shots:
 
 ```bash
-PORT=5390 node tools/shoot.mjs --out tmp/shots/x dun_keycatrich_hall cine_opening
+PORT=5390 node src/tools/shoot.mjs --out tmp/shots/x dun_keycatrich_hall cine_opening
 ```
 
 `cine_opening` comes back with a pure-black sky, an over-bright ground and a
 glowing sword — pixel-for-pixel the `r4` defect. `menu_title` shot after a
 dungeon is black too.
 
-Then the runtime bisect through `tools/daemon.mjs`'s `/eval` route (which had no
+Then the runtime bisect through `src/tools/daemon.mjs`'s `/eval` route (which had no
 callers; it works exactly as advertised — `{fn: "<source>", arg}` on `PORT+1`).
 I read `Sky`/`Dungeons`/camera/post state for `cine_opening` before and after a
 dungeon shot:
@@ -174,10 +174,10 @@ Zero work done on any of these. `src/ui/**` is **untouched** on this branch.
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (also passed via `.githooks/pre-commit`) |
-| `node tools/integration.mjs` | **18 pass · 0 wired · 0 not integrated** |
-| `node tools/orphans.mjs` | **260/261 reachable** — 1 orphan, `src/world/map/MapRaster.js`, **pre-existing** (introduced by `5fd2876` "Cartography"; nothing has ever imported it). Not caused by this branch. |
-| `node tools/uxcheck.mjs` | **86/86**, 0 failures. Unchanged — no screen was registered. |
-| `tools/shoot.mjs` on `cine_hammerhead cine_longwythe cine_opening` | 0 console errors, 891 / 485 / 579 draw calls |
+| `node src/tools/integration.mjs` | **18 pass · 0 wired · 0 not integrated** |
+| `node src/tools/orphans.mjs` | **260/261 reachable** — 1 orphan, `src/world/map/MapRaster.js`, **pre-existing** (introduced by `5fd2876` "Cartography"; nothing has ever imported it). Not caused by this branch. |
+| `node src/tools/uxcheck.mjs` | **86/86**, 0 failures. Unchanged — no screen was registered. |
+| `src/tools/shoot.mjs` on `cine_hammerhead cine_longwythe cine_opening` | 0 console errors, 891 / 485 / 579 draw calls |
 
 ---
 
@@ -292,7 +292,7 @@ There is no screenshot-after-eval daemon route, but
 that gives a five-frames-of-a-cutscene contact sheet in one round trip, which is
 how §2 was actually iterated. It captures the canvas only — DOM letterbox,
 subtitles and HUD are absent, so use `shoot.mjs` for the final look. Worth
-promoting into `tools/`.
+promoting into `src/tools/`.
 
 ### 6.6 An over-the-shoulder is not available on a line-up
 All four face up-frame, so a camera placed on the near/far *axis* just ends up

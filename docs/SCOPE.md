@@ -92,7 +92,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Every drivable POI reachable by road
 - [ ] Bridges over canyons/water
 - [ ] Tunnels
-- [x] Drivability assertion test — `tools/roadcheck.mjs`, 39/39 reachable, 0 failures
+- [x] Drivability assertion test — `src/tools/roadcheck.mjs`, 39/39 reachable, 0 failures
 
 ### 1.5 Minimap & world map
 - [x] Minimap — baked relief chart shared with the atlas, roads, glyphs, compass; 0.5-0.7 ms/frame
@@ -435,17 +435,17 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 ## 13. Performance & engineering
 
 - [x] Screenshot harness with error gating
-- [x] Posed FPS benchmark (`tools/perf.mjs`)
-- [x] Gameplay FPS benchmark with scripted input (`tools/gameplay.mjs`)
-- [x] Subsystem cost attribution (`tools/attrib.mjs`)
+- [x] Posed FPS benchmark (`src/tools/perf.mjs`)
+- [x] Gameplay FPS benchmark with scripted input (`src/tools/gameplay.mjs`)
+- [x] Subsystem cost attribution (`src/tools/attrib.mjs`)
 - [x] Production build verified (`--prod`)
 - [x] Contact sheets for critic review
 - [x] Build-time bake + Vite plugin — terrain init 8,320 ms → 285 ms
 - [x] Capture daemon — warm single-shot capture 23.6 s → 1.5 s
-- [x] Image-diff regression tool (`tools/imgdiff.mjs`), noise floor 1.58–1.99/255
+- [x] Image-diff regression tool (`src/tools/imgdiff.mjs`), noise floor 1.58–1.99/255
 - [x] Pre-commit build check (`.githooks/pre-commit`)
-- [x] Orphan process cleanup (`tools/cleanup.mjs`)
-- [x] Boot profiler (`tools/bootprof.mjs`), road drivability check (`tools/roadcheck.mjs`)
+- [x] Orphan process cleanup (`src/tools/cleanup.mjs`)
+- [x] Boot profiler (`src/tools/bootprof.mjs`), road drivability check (`src/tools/roadcheck.mjs`)
 - [x] Shader pre-warm (programs climb 174 → 369 in-session)
 - [x] Weapon swap freeze (15.8 s) eliminated
 - [x] Shadow cascade cost (83% of frame)
@@ -458,7 +458,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [ ] 60 fps on all 13 gameplay segments
 - [ ] Zero frames over 33 ms in a session
 - [x] Draw-call budget renegotiated in `BRIEF.md` — 400 → 800
-- [x] Automated visual regression diffing (`tools/imgdiff.mjs`)
+- [x] Automated visual regression diffing (`src/tools/imgdiff.mjs`)
 - [ ] Quality tiers (low/medium/high/ultra) verified meaningful
 
 ---
@@ -497,7 +497,7 @@ with everything. Order:
       (`init`/`update`/`lateUpdate`), `Game`'s registry, and a typed `SHOTS` shape
 - [ ] Port `src/game/rpg/**` — pure logic, no three.js, highest type value
 - [ ] Port `src/world/**`, `src/characters/**`, `src/combat/**`, `src/ui/**`
-- [ ] Port `tools/**` to `.mts` under `erasableSyntaxOnly`
+- [ ] Port `src/tools/**` to `.mts` under `erasableSyntaxOnly`
 - [ ] `typecheck` and `typecheck:tools` clean, `vite build` passes, and the
       integration audit still reports 0 failures
 - [ ] Add both typechecks to the pre-commit hook alongside the build

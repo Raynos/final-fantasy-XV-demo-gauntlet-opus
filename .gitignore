@@ -1,6 +1,6 @@
 node_modules/
 dist/
-# Cached output of our own generators (tools/bake.mjs). Not an authored asset:
+# Cached output of our own generators (src/tools/bake.mjs). Not an authored asset:
 # deleted, the game regenerates it at runtime; stale, the build step re-bakes.
 public/baked/
 .DS_Store
@@ -11,6 +11,6 @@ public/baked/
 tmp/*
 !tmp/README.md
 # Review notes and camera tuning written by the in-game dev suite
-# (tools/vite-plugin-review.mjs). Authored observations, not build output --
+# (src/tools/vite-plugin-review.mjs). Authored observations, not build output --
 # drained by hand or by an agent, then deleted.
 .review/

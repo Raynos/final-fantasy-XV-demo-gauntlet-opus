@@ -27,7 +27,7 @@
  * renders black. Eight shots in this file were doing that.
  *
  * ### Deriving coordinates
- * Never write a camera by hand. `tools/framecam.mjs` boots the game once and
+ * Never write a camera by hand. `src/tools/framecam.mjs` boots the game once and
  * applies a list of shot *recipes* — `camAt:[x,z]`, `eye` (metres above the
  * ground there), `aimAt:[x,z]`, `aimUp` — resolving them against the live
  * heightfield and printing the absolute `pos`/`target` to paste back here. A
@@ -101,8 +101,8 @@
  *    turn Noctis to face -Z and nothing turns him back, so the character
  *    framings run before those too.
  *
- * Add shots here — tools/shoot.mjs discovers them automatically, and
- * `tools/sheet.mjs` tiles a shot directory into one contact sheet to review.
+ * Add shots here — src/tools/shoot.mjs discovers them automatically, and
+ * `src/tools/sheet.mjs` tiles a shot directory into one contact sheet to review.
  */
 export const SHOTS = {
   // --- character --------------------------------------------------------
@@ -732,7 +732,7 @@ export const SHOTS = {
   // frozen in `telegraph`, so it sat entirely underground whatever the camera
   // did. Fixed in `EnemyBase` — `_resetVisual()` was opt-in and the frozen-pose
   // path never called it, so relative pose offsets integrated once per settle
-  // frame. `tools/creaturecheck.mjs` now gates it at 0 drifting poses of 207.
+  // frame. `src/tools/creaturecheck.mjs` now gates it at 0 drifting poses of 207.
   bestiary_irongiant: {
     doc: 'Iron Giant winding up: rusted plate and one huge blade',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',

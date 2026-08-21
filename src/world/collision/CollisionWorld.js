@@ -41,7 +41,7 @@ const BURIED = 0.4;
  * Built **incrementally** off the first few frames, because the sources that
  * feed it (the town, the dungeons' entrances, the props) are constructed after
  * `Player.init` and a 100 ms harvest in one frame would show up as a hitch in
- * `tools/gameplay.mjs`.
+ * `src/tools/gameplay.mjs`.
  *
  * Query API:
  *   groundAt(x, z, fromY, stepUp, stepDown) -> {y, nx, ny, nz, onProp}

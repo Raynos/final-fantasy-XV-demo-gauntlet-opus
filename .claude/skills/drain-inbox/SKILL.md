@@ -41,10 +41,10 @@ Reproduce with those cvars restored before believing the note.
 For each note worth acting on, confirm it is real and current:
 
 ```bash
-node tools/shoot.mjs <shot> --out tmp/shots/drain --cold      # if it names a shot
+node src/tools/shoot.mjs <shot> --out tmp/shots/drain --cold      # if it names a shot
 ```
 
-If it has no shot, the camera transform is the repro — use `tools/framecam.mjs`
+If it has no shot, the camera transform is the repro — use `src/tools/framecam.mjs`
 with a candidate built from `note.camera`, or boot `?debug=1` yourself and run
 `goto <x> <z>` / `warp <poiId>` from the console.
 
@@ -66,7 +66,7 @@ because two agents in one directory corrupt each other's work. Map roughly:
 | `combat` | `src/combat/**` |
 | `ui` | `src/ui/**` |
 | `camera` | `src/game/CameraRig.js`, `src/game/Shots.js` |
-| `perf` | wherever the profile points — attribute first with `tools/attrib.mjs` |
+| `perf` | wherever the profile points — attribute first with `src/tools/attrib.mjs` |
 
 **Read `project/SESSION-STATE.md` before dispatching.** It carries the live ownership
 table. If an agent already owns a directory, do not dispatch a second one into
@@ -84,12 +84,12 @@ Each brief must contain:
 - The repro: shot name, or camera coordinates plus `warp`/`goto` command.
 - Its exact ownership list, and an instruction to *report* rather than edit
   anything outside it.
-- The standing gates: `npx vite build`, `node tools/integration.mjs`,
-  `node tools/orphans.mjs`, plus any area-specific check (`roadcheck`,
+- The standing gates: `npx vite build`, `node src/tools/integration.mjs`,
+  `node src/tools/orphans.mjs`, plus any area-specific check (`roadcheck`,
   `heightcheck`, `driftcheck`, `combatloop`, `uxcheck`, `creaturecheck`).
 - **"Look at your own output with the Read tool."** Non-negotiable.
 
-Remind agents that shot names are **positional** on `tools/shoot.mjs`, not
+Remind agents that shot names are **positional** on `src/tools/shoot.mjs`, not
 `--shot`, and that each worktree needs a unique `PORT` (the capture daemon uses
 `PORT+1`).
 

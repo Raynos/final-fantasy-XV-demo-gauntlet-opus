@@ -5,7 +5,7 @@
  * A feature is only done if a player can reach it through the running game.
  * This project has already shipped one complete subsystem — 5,765 lines of RPG
  * model — that was constructed, ticked, and read by nothing, while the HUD drew
- * invented numbers on top of it. `tools/orphans.mjs` catches modules nobody
+ * invented numbers on top of it. `src/tools/orphans.mjs` catches modules nobody
  * imports; this catches modules that are imported and still do nothing.
  *
  * Each check drives the real page and asserts on observable state. A check
@@ -13,8 +13,8 @@
  * connected but a behaviour could not be exercised here; FAIL means present in
  * source but not reachable in play.
  *
- *   node tools/integration.mjs
- *   node tools/integration.mjs --json
+ *   node src/tools/integration.mjs
+ *   node src/tools/integration.mjs --json
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -23,7 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 const JSON_OUT = process.argv.includes('--json');
 

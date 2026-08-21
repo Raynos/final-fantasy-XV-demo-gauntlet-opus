@@ -236,7 +236,7 @@ Roads are not drawn on the terrain; the terrain is **cut for them**.
    neck); the Disc crater is held back 130 m (which is what puts the overlook
    on a spur of the rim rather than in the hole).
 
-`node tools/roadcheck.mjs` builds the real heightfield and asserts all of it.
+`node src/tools/roadcheck.mjs` builds the real heightfield and asserts all of it.
 
 ---
 

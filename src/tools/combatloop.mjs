@@ -9,7 +9,7 @@
  * MP runs out and comes back, that a spell can be drawn, crafted and cast, and
  * that Noctis can be killed and picked back up.
  *
- *   node tools/combatloop.mjs
+ *   node src/tools/combatloop.mjs
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5199);
 
 const portOpen = (p) => new Promise((res) => {

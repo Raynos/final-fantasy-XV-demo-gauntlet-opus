@@ -16,7 +16,7 @@ if [ -n "$SKIP_BUILD_CHECK" ]; then
 fi
 
 # Only worth running when source actually changed.
-if ! git diff --cached --name-only | grep -qE '^(src/|tools/|index\.html|vite\.config\.js|package\.json)'; then
+if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.js|package\.json)'; then
   exit 0
 fi
 

@@ -47,7 +47,7 @@ chroma.** Section 6 has what I learned about each before I ran out of time.
 |---|---|
 | `src/characters/rig/Face.js` | New `EYE` constants + `lidMargin()` + `skinSnap()`; lid band rebuilt (closes at both canthi, rides outside the cornea, welds to the skull, takes the real face UV); waterline and caruncle added; iris angle and corneal dome retuned; eye-socket sculpt retuned; painted lash line / crease / waterline / tear-trough re-derived from the lid geometry instead of two hand-tuned remap constants; painted socket AO halved. |
 | `src/characters/rig/Materials.js` | Imports `EYE` from `Face.js` so the shader's iris angle can no longer disagree with the geometric limbus; sclera value, canthal self-shadowing, vessels; the sky ambient lift on the globe is now cut by `N·V`. |
-| `tools/_probe/heads.mjs` | New. The probe that makes any of this judgeable — see §7. |
+| `src/tools/_probe/heads.mjs` | New. The probe that makes any of this judgeable — see §7. |
 
 Nothing outside my ownership was touched. `Cast.js` was **not** edited (I never got
 to the appearance-data work the coordinator authorised).
@@ -59,9 +59,9 @@ to the appearance-data work the coordinator authorised).
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (enforced by `.githooks/pre-commit`, ran on the commit) |
-| `node tools/integration.mjs` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
-| `node tools/orphans.mjs` | **1 orphan: `src/world/map/MapRaster.js`** — pre-existing, not mine, `src/world/map/**` is the coordinator's |
-| `node tools/perf.mjs` | **not run.** The machine was saturated with sibling agents the whole session and the numbers would have been meaningless. Baseline for comparison is in `tmp/shots/ha0/manifest.json`: hero shots 4.78–4.85 M tris / 485–525 calls, `town_npcs` 6.91 M / 841. |
+| `node src/tools/integration.mjs` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
+| `node src/tools/orphans.mjs` | **1 orphan: `src/world/map/MapRaster.js`** — pre-existing, not mine, `src/world/map/**` is the coordinator's |
+| `node src/tools/perf.mjs` | **not run.** The machine was saturated with sibling agents the whole session and the numbers would have been meaningless. Baseline for comparison is in `tmp/shots/ha0/manifest.json`: hero shots 4.78–4.85 M tris / 485–525 calls, `town_npcs` 6.91 M / 841. |
 
 The eye work **adds** geometry: lid `cols` 14→20, `rows` 4→5, lashes 11→17 per lid,
 plus a waterline strip and a caruncle. Roughly +1.5 k triangles per head, ~+10 k across
@@ -73,8 +73,8 @@ believing me.
 ## 4. Next steps, in priority order
 
 1. **Re-shoot the corpus and compare against `tmp/shots/ha0/`.** `PORT=<vite> node
-   tools/shoot.mjs hero_face hero_closeup hero_full gladio_closeup ignis_closeup
-   prompto_closeup town_npcs --out tmp/shots/ha7 --cold`. Then `node tools/perf.mjs`.
+   src/tools/shoot.mjs hero_face hero_closeup hero_full gladio_closeup ignis_closeup
+   prompto_closeup town_npcs --out tmp/shots/ha7 --cold`. Then `node src/tools/perf.mjs`.
    Nothing else should start until this is known good.
 2. **Settle the socket depth properly** — see §5.1. It is parked at a working value,
    not a correct one, and it is the one thing in this commit that could regress if the
@@ -149,7 +149,7 @@ bucket.
 
 `hero_face` frames the whole party at ~4 m; Noctis's head is about 100 px tall. None
 of the defects in this document are visible in it, and none of the fixes are either.
-**Face work must be judged through `tools/framecam.mjs`.** Everything I found, I found
+**Face work must be judged through `src/tools/framecam.mjs`.** Everything I found, I found
 at 0.4–0.6 m and nowhere else.
 
 ### 5.3 `framecam.mjs` traps
@@ -161,7 +161,7 @@ at 0.4–0.6 m and nowhere else.
   captures, so a framing measured once in the probe is further out of frame with
   every later shot in the list — by the 13th spec the subject was completely gone. Use
   `follow` shots instead; the camera rig re-anchors on the live root every frame.
-  `tools/_probe/heads.mjs` emits follow shots for exactly this reason.
+  `src/tools/_probe/heads.mjs` emits follow shots for exactly this reason.
 - `import 'three'` fails inside a probe (no bare-specifier resolution in
   `page.evaluate`) and `/node_modules/three/build/three.module.js` 404s under vite.
   Do the vector maths by hand, or read matrix elements directly:
@@ -232,8 +232,8 @@ line, which is most of the seam.
 ## 7. How to judge this
 
 ```bash
-PORT=<unique vite port> node tools/framecam.mjs \
-  --probe tools/_probe/heads.mjs --out tmp/shots/<round> --settle 8
+PORT=<unique vite port> node src/tools/framecam.mjs \
+  --probe src/tools/_probe/heads.mjs --out tmp/shots/<round> --settle 8
 ```
 
 Emits 28 framings — for each of the four heroes: `_front`, `_eyes` (0.4 m, fov 13),
@@ -262,7 +262,7 @@ the socket.
 2. **`src/characters/rig/Anim.js:466`** — `this.char.eyes.rotation.set((this.eyePitch
    || 0) + 0.11, ...)`. The `+0.11` was compensating for an aperture that no longer
    exists; its comment is now false. `agent/idles` owns this file. Suggest 0.
-3. **`src/world/map/MapRaster.js`** — orphaned per `tools/orphans.mjs`, pre-existing,
+3. **`src/world/map/MapRaster.js`** — orphaned per `src/tools/orphans.mjs`, pre-existing,
    coordinator's directory.
 4. The DOF finding from the earlier plan is **resolved on `main`**
    (`PostFX._headObject()` now racks focus onto the shot's `follow` subject). No action.

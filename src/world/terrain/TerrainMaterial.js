@@ -142,7 +142,7 @@ vTDist = length(cameraPosition - vTW);
  * The vertex-side displacement chunks, exported so a regression tool can build
  * a probe material that displaces *bit-identically* to the rendered terrain —
  * including the clipmap LOD morph, which a fragment-only probe of `tf_height`
- * cannot see. `tools/driftcheck.mjs` is the consumer.
+ * cannot see. `src/tools/driftcheck.mjs` is the consumer.
  */
 export const TERRAIN_VERT_PARS = VERT_PARS;
 export const TERRAIN_VERT_BEGIN = VERT_BEGIN;

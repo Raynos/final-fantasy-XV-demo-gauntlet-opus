@@ -8,7 +8,7 @@
  * Everything downstream — the heightfield carve, the driving system, the
  * minimap, the world map screen, the pathfinder — reads this one graph.
  *
- * Design constraints, enforced by `tools/roadcheck.mjs`:
+ * Design constraints, enforced by `src/tools/roadcheck.mjs`:
  *   - every POI with `drive: true` sits within `reach` metres of a drivable edge
  *   - no sustained grade steeper than the class limit
  *   - no corner tighter than the class minimum radius

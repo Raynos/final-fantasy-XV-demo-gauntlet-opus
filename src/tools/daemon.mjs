@@ -3,18 +3,18 @@
  * Capture daemon: one vite server, one Chromium, one warm page, reused across
  * every tool invocation.
  *
- *   node tools/daemon.mjs            # run in the foreground (clients autostart it)
- *   node tools/daemon.mjs --stop     # stop it and its server
- *   node tools/daemon.mjs --health
+ *   node src/tools/daemon.mjs            # run in the foreground (clients autostart it)
+ *   node src/tools/daemon.mjs --stop     # stop it and its server
+ *   node src/tools/daemon.mjs --health
  *
  * Why this exists: booting the game is the dominant cost of every capture. A
- * cold `tools/shoot.mjs` pays chromium launch + vite start + module transform +
+ * cold `src/tools/shoot.mjs` pays chromium launch + vite start + module transform +
  * world build + ~110 shader compiles before it can take its first picture, and
  * every tool paid it separately, every time. Holding the page open makes the
  * second and subsequent runs cost only their own frames — and it removes the
  * repeated boot from a machine that several agents are already saturating.
  *
- * Safety of reuse: `tools/shoot.mjs` has always rendered all of its shots on one
+ * Safety of reuse: `src/tools/shoot.mjs` has always rendered all of its shots on one
  * page in sequence, so cross-shot reuse is the established contract; this only
  * extends it across invocations. `/reset` restores the same starting condition
  * the harness sets up after a fresh load (rAF stopped, clock zeroed, shot state
@@ -70,7 +70,7 @@ function sourceStamp() {
   return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
 }
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const APP_PORT = Number(process.env.PORT || 5173);
 export const DAEMON_PORT = APP_PORT + 1;
 const BROWSER_IDLE_MS = Number(process.env.BROWSER_IDLE_MIN || 6) * 60_000;
@@ -121,7 +121,7 @@ export async function ensureDaemon() {
     }
     return false;
   }
-  const child = spawn(process.execPath, [path.join(ROOT, 'tools/daemon.mjs')], {
+  const child = spawn(process.execPath, [path.join(ROOT, 'src/tools/daemon.mjs')], {
     cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, PORT: String(APP_PORT) },
   });
   child.unref();

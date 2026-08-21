@@ -5,7 +5,7 @@
  * grids, every time. Running it in the browser on every page load costs 7-15 s
  * of pure CPU that produces a byte-identical result each time, so the build step
  * runs it once and this module writes the answer down. The generator stays the
- * source of truth — `tools/bake.mjs` calls it, nothing is hand-authored, and the
+ * source of truth — `src/tools/bake.mjs` calls it, nothing is hand-authored, and the
  * runtime falls back to generating in place whenever the artifact is missing.
  *
  * Only the grids that are *expensive* are stored. Normals are derived from the

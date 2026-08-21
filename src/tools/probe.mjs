@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Ad-hoc in-page probe: `node tools/probe.mjs tools/probes/foo.js` runs the file's body in the page. */
+/** Ad-hoc in-page probe: `node src/tools/probe.mjs src/tools/probes/foo.js` runs the file's body in the page. */
 import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -7,7 +7,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 const portOpen = (p) => new Promise((res) => {
   const s = net.connect(p, '127.0.0.1');

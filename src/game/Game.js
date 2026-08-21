@@ -169,7 +169,7 @@ export class Game {
 
   /**
    * Put the world into a named, reproducible state (see Shots.js) and lock the
-   * camera. Used by tools/shoot.mjs and by photo mode.
+   * camera. Used by src/tools/shoot.mjs and by photo mode.
    */
   applyShot(name) {
     const shot = SHOTS[name];

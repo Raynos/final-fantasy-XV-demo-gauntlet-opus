@@ -4,11 +4,11 @@
  * out as one contact sheet per category, so a reviewer can look at "every
  * zone", "every dungeon room" or "every enemy" as a single image.
  *
- *   node tools/corpus.mjs                       # capture all, then sheet all
- *   node tools/corpus.mjs --only zones,ui       # just those categories
- *   node tools/corpus.mjs --sheet               # re-sheet what is on disk
- *   node tools/corpus.mjs --list                # print the category index
- *   node tools/corpus.mjs --out tmp/shots/corpus --cols 3 --w 1536
+ *   node src/tools/corpus.mjs                       # capture all, then sheet all
+ *   node src/tools/corpus.mjs --only zones,ui       # just those categories
+ *   node src/tools/corpus.mjs --sheet               # re-sheet what is on disk
+ *   node src/tools/corpus.mjs --list                # print the category index
+ *   node src/tools/corpus.mjs --out tmp/shots/corpus --cols 3 --w 1536
  *
  * Sheets are JPEG and sized so a page lands under the 1568 px long edge a model
  * sees. A 3200 px sheet of 20 shots was 45 MB and arrived as an illegible strip.
@@ -16,13 +16,13 @@
  * Two authoring aids, because a shot is only worth taking if its subject is
  * actually in frame and both of these were hand-arithmetic before:
  *
- *   node tools/corpus.mjs --frame '[{"cam":[x,y,z],"sub":[x,y,z],"fov":42,"u":0.3,"v":0.1}]'
+ *   node src/tools/corpus.mjs --frame '[{"cam":[x,y,z],"sub":[x,y,z],"fov":42,"u":0.3,"v":0.1}]'
  *     `target` is the point the frame centres on, so a landmark only lands on
  *     a third if you aim *beside* it. Give a camera, the subject and where it
  *     should sit on screen (u right, v up, both -1..1) and this prints the
  *     `pos`/`target`/`fov` triple to paste into Shots.js.
  *
- *   node tools/corpus.mjs --scout '[{"name":"x","sx":900,"sz":-1180,"dist":[600,1400]}]'
+ *   node src/tools/corpus.mjs --scout '[{"name":"x","sx":900,"sz":-1180,"dist":[600,1400]}]'
  *     Builds the real heightfield (`src/world/terrain/Field.js`, ~8 s) and
  *     sweeps a ring of camera positions around a subject, scoring each on
  *     elevation above it, an unobstructed sight line, and how much relief lies
@@ -33,7 +33,7 @@
  * Categories come from the `// --- name ---` comment headers in Shots.js, so
  * adding a shot under a header files it automatically.
  *
- * Why this exists rather than a plain `tools/shoot.mjs` run:
+ * Why this exists rather than a plain `src/tools/shoot.mjs` run:
  *   - the capture daemon answers one HTTP request per run and undici gives up
  *     on response *headers* after 300 s, so a ~140-shot corpus fails at the
  *     client even though every frame rendered; this talks to the daemon over
@@ -49,7 +49,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDaemon, APP_PORT, DAEMON_PORT } from './daemon.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 function parseArgs(argv) {
   const o = {

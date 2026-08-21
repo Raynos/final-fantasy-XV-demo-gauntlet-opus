@@ -23,7 +23,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const REVIEW = path.join(ROOT, '.review');
 const INBOX = path.join(REVIEW, 'inbox');
 const TUNING = path.join(REVIEW, 'tuning');

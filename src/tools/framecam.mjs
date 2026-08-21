@@ -2,10 +2,10 @@
 /**
  * Candidate-framing probe for the shot-corpus repair pass.
  *
- *   node tools/framecam.mjs candidates.json --out tmp/shots/probe
- *   node tools/framecam.mjs candidates.json --out tmp/shots/probe --probe probe.mjs
+ *   node src/tools/framecam.mjs candidates.json --out tmp/shots/probe
+ *   node src/tools/framecam.mjs candidates.json --out tmp/shots/probe --probe probe.mjs
  *
- * `tools/shoot.mjs` can only capture shots that already exist in
+ * `src/tools/shoot.mjs` can only capture shots that already exist in
  * `src/game/Shots.js`, and every edit to that file invalidates the capture
  * daemon's warm page — so iterating a framing costs a full boot per attempt.
  * This tool boots the game **once** and then applies an arbitrary list of shot
@@ -31,7 +31,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 const portOpen = (p) => new Promise((res) => {

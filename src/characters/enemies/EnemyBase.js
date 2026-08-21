@@ -1052,7 +1052,7 @@ const POSE_PER_ATTACK = new Set(['telegraph', 'attack']);
  * Ground penetration left uncorrected, metres. A foot pressing a few
  * centimetres into dirt is how contact reads as weight rather than as a model
  * balanced on a plane; correcting to exactly zero makes everything look like
- * it is hovering. Well inside the 0.25 m gate in `tools/creaturecheck.mjs`.
+ * it is hovering. Well inside the 0.25 m gate in `src/tools/creaturecheck.mjs`.
  */
 const GROUND_SINK = 0.05;
 const _addQ = new THREE.Quaternion();

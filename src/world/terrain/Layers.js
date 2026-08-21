@@ -242,7 +242,7 @@ const RECIPES = [
 
 /**
  * Synthesise every layer's texels. Split out from the texture construction so
- * the build step can bake the bytes once (`tools/bake.mjs`) instead of every
+ * the build step can bake the bytes once (`src/tools/bake.mjs`) instead of every
  * page load spending a second evaluating 1.6 M per-texel recipes.
  *
  * @param {number} size texel resolution per layer

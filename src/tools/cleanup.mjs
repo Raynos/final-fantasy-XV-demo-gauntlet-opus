@@ -2,8 +2,8 @@
 /**
  * Kill orphaned dev servers and headless browsers left behind by this project.
  *
- *   node tools/cleanup.mjs          # list what it would kill
- *   node tools/cleanup.mjs --kill   # actually kill it
+ *   node src/tools/cleanup.mjs          # list what it would kill
+ *   node src/tools/cleanup.mjs --kill   # actually kill it
  *
  * The capture tools spawn a vite server and kill it on exit, so a healthy run
  * leaves nothing. Two things do leak:
@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const KILL = process.argv.includes('--kill');
 const ps = execSync('ps -Ao pid,ppid,etime,rss,args', { encoding: 'utf8' }).split('\n').slice(1);
@@ -36,7 +36,7 @@ const isOurs = (r) => /final-fantasy-XV-demo-gauntlet/.test(r.args) || /vite --p
  * A vite server reparented to PID 1 is not automatically dead weight: agents
  * start theirs detached too, and one still serving a working agent must not be
  * killed. So a server is only an orphan if nothing else alive belongs to the
- * same worktree — no `node tools/…` run, no child vite process of its own.
+ * same worktree — no `node src/tools/…` run, no child vite process of its own.
  */
 const worktreeOf = (args) => (args.match(/worktrees\/(agent-[a-z0-9]+)/) || [])[1] || 'main';
 const liveWorktrees = new Set(

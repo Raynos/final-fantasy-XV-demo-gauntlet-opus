@@ -2,23 +2,23 @@
 /**
  * Recompress the shot archive to JPEG, keeping every frame.
  *
- *   node tools/shrink.mjs                     # dry run: what would change
- *   node tools/shrink.mjs --apply
- *   node tools/shrink.mjs --keep r4,r5        # leave these dirs lossless
- *   node tools/shrink.mjs --keep-latest 3     # ...and the N most recent (default 3)
- *   node tools/shrink.mjs --quality 82 --apply
- *   node tools/shrink.mjs tmp/shots/full --apply  # one directory
+ *   node src/tools/shrink.mjs                     # dry run: what would change
+ *   node src/tools/shrink.mjs --apply
+ *   node src/tools/shrink.mjs --keep r4,r5        # leave these dirs lossless
+ *   node src/tools/shrink.mjs --keep-latest 3     # ...and the N most recent (default 3)
+ *   node src/tools/shrink.mjs --quality 82 --apply
+ *   node src/tools/shrink.mjs tmp/shots/full --apply  # one directory
  *
  * `tmp/shots/` reached 1.7 GB of lossless captures that exist to be looked at. A
  * 1600x900 PNG is ~2.5 MB and the same frame as JPEG is ~250 KB, indexes and
  * opens the same, and looks the same at review size -- the archive is worth
  * keeping, the bytes are not.
  *
- * Two things stay lossless. `tools/imgdiff.mjs` decodes PNG only and measures a
+ * Two things stay lossless. `src/tools/imgdiff.mjs` decodes PNG only and measures a
  * 1.5-1.9/255 noise floor, so the directories you are still diffing against must
  * keep their PNGs: the N most recent are held back automatically and `--keep`
  * names any others. And `_sheet*.png` files are not captures at all -- they are
- * derivatives `tools/sheet.mjs` rebuilds in seconds, so they are deleted rather
+ * derivatives `src/tools/sheet.mjs` rebuilds in seconds, so they are deleted rather
  * than converted.
  *
  * Directories written in the last 10 minutes are skipped: a capture may be in
@@ -34,7 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const exec = promisify(execFile);
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);

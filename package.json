@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "shoot": "node tools/shoot.mjs"
+    "shoot": "node src/tools/shoot.mjs"
   },
   "keywords": [],
   "author": "",

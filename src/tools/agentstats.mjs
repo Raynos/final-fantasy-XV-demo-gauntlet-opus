@@ -2,11 +2,11 @@
 /**
  * What each subagent is costing, from the session transcripts on disk.
  *
- *   node tools/agentstats.mjs                  # agents active in the last 15 min
- *   node tools/agentstats.mjs --all            # every agent this session ever ran
- *   node tools/agentstats.mjs --session 51c0b82c
- *   node tools/agentstats.mjs --since 1h       # percentiles over recent turns only
- *   node tools/agentstats.mjs --json
+ *   node src/tools/agentstats.mjs                  # agents active in the last 15 min
+ *   node src/tools/agentstats.mjs --all            # every agent this session ever ran
+ *   node src/tools/agentstats.mjs --session 51c0b82c
+ *   node src/tools/agentstats.mjs --since 1h       # percentiles over recent turns only
+ *   node src/tools/agentstats.mjs --json
  *
  * Dispatching agents is cheap and watching them is not: `ps` shows a node
  * process, the harness shows a spinner, and neither tells you whether an agent
@@ -38,7 +38,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /**
  * Agents run in worktrees, but their transcripts live under the *coordinator's*

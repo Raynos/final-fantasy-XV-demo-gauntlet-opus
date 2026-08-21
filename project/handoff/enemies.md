@@ -1,12 +1,12 @@
 # Handoff — `agent/enemies`
 
 Owned: `src/characters/enemies/**`, `src/characters/rig/CreatureAnim.js`,
-`src/characters/Enemies.js`, `tools/creaturecheck.mjs`.
+`src/characters/Enemies.js`, `src/tools/creaturecheck.mjs`.
 Four commits on `agent/enemies`, branched from `main` @ `0be851f`.
 
 | commit | what |
 |---|---|
-| `4a2721f` | the grounding **drift** fix + `tools/creaturecheck.mjs` |
+| `4a2721f` | the grounding **drift** fix + `src/tools/creaturecheck.mjs` |
 | `c5b1c0f` | the 46 remaining **static** grounding failures |
 | `571de91` | systemic surface pass: `detailUV`, rebuilt detail maps, sabertusk |
 | `c8fa679` | deep rebuilds: goblin, iron giant, dualhorn/bloodhorn |
@@ -100,19 +100,19 @@ pose, swinging the foot down and back off the end of a 0.9 m segment.
 
 ---
 
-## 2. `tools/creaturecheck.mjs` — the regression gate
+## 2. `src/tools/creaturecheck.mjs` — the regression gate
 
 **Please keep this wired into the check suite.** It is the gate for the whole
 class of bug above, and it is what proves a sculpt change has not re-buried
 anything.
 
 ```bash
-node tools/creaturecheck.mjs                     # whole roster, every pose
-node tools/creaturecheck.mjs --species sabertusk,irongiant
-node tools/creaturecheck.mjs --hold 240          # frames to hold each pose
-node tools/creaturecheck.mjs --tol 0.25          # fail above this |foot|, metres
-node tools/creaturecheck.mjs --json out.json     # includes the calibration curves
-PORT=5399 node tools/creaturecheck.mjs           # pick a free port
+node src/tools/creaturecheck.mjs                     # whole roster, every pose
+node src/tools/creaturecheck.mjs --species sabertusk,irongiant
+node src/tools/creaturecheck.mjs --hold 240          # frames to hold each pose
+node src/tools/creaturecheck.mjs --tol 0.25          # fail above this |foot|, metres
+node src/tools/creaturecheck.mjs --json out.json     # includes the calibration curves
+PORT=5399 node src/tools/creaturecheck.mjs           # pick a free port
 ```
 
 It measures the **skinned** AABB — every vertex through `applyBoneTransform`;
@@ -185,10 +185,10 @@ to 0.25 m.
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (also enforced by `.githooks/pre-commit` on all commits) |
-| `node tools/creaturecheck.mjs` | **pass** — 207 poses, 0 failures |
-| `node tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node tools/orphans.mjs` | **1 orphan, not mine** — `src/world/map/MapRaster.js`, pre-existing on `main` @ `0be851f` |
-| `node tools/combatloop.mjs` | **21/30 — pre-existing, not caused by this branch** |
+| `node src/tools/creaturecheck.mjs` | **pass** — 207 poses, 0 failures |
+| `node src/tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mjs` | **1 orphan, not mine** — `src/world/map/MapRaster.js`, pre-existing on `main` @ `0be851f` |
+| `node src/tools/combatloop.mjs` | **21/30 — pre-existing, not caused by this branch** |
 
 **On `combatloop.mjs`: it is not 30/30 and it was not 30/30 before I started.**
 I reproduced *exactly* the same nine failures with `git checkout 0be851f --
@@ -284,5 +284,5 @@ is the thread to pull, and it is in `ui/**` / `game/**`, not mine.
   the "grazers have no coat texture" note partly points here.
 - **`src/world/map/MapRaster.js`** — orphaned module, `orphans.mjs` fails on
   it, pre-existing on `main` @ `0be851f`.
-- **`tools/combatloop.mjs` 21/30** — see section 4. Pre-existing; the stuck
+- **`src/tools/combatloop.mjs` 21/30** — see section 4. Pre-existing; the stuck
   `menu=controls` is the lead.

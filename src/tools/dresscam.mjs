@@ -2,9 +2,9 @@
 /**
  * Free-camera diagnostic capture for the world-dressing pass.
  *
- *   node tools/dresscam.mjs longwythe alstor ravatogh --out tmp/shots/dress
- *   node tools/dresscam.mjs poi:tomb_just poi:wiz_chocobo --out tmp/shots/poi
- *   node tools/dresscam.mjs at:1200,-400 --out tmp/shots/spot
+ *   node src/tools/dresscam.mjs longwythe alstor ravatogh --out tmp/shots/dress
+ *   node src/tools/dresscam.mjs poi:tomb_just poi:wiz_chocobo --out tmp/shots/poi
+ *   node src/tools/dresscam.mjs at:1200,-400 --out tmp/shots/spot
  *
  * `src/game/Shots.js` is owned by the coordinator, so this tool exists to let
  * the dressing work be *judged* without editing it: it drives `CameraRig`
@@ -30,7 +30,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 

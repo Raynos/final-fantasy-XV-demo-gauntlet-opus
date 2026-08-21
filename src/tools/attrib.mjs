@@ -3,7 +3,7 @@
  * Cost attribution: measure a shot, then re-measure with one subsystem
  * disabled at a time. The delta is what that subsystem costs.
  *
- *   node tools/attrib.mjs vista_dusk
+ *   node src/tools/attrib.mjs vista_dusk
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mjs';

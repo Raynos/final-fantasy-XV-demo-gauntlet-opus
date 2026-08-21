@@ -8,7 +8,7 @@
  * `Game.js` (shared, owned by another workstream) having to change.
  *
  * Results land on `window.BOOT_PROFILE` as
- * `{ marks: [{name, ms}], total, nav }` and are printed by `tools/bootprof.mjs`.
+ * `{ marks: [{name, ms}], total, nav }` and are printed by `src/tools/bootprof.mjs`.
  */
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

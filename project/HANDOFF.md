@@ -56,26 +56,26 @@ Five rules that produced most of the value:
 
 | tool | what it is for |
 |---|---|
-| `tools/shoot.mjs` | Capture named shots from `src/game/Shots.js`. Fixed timestep, exits non-zero on any console error. `--prod` builds and serves the real bundle. `--jpeg` writes review-sized JPEGs — use it for anything an agent will read back. |
-| `tools/daemon.mjs` | Holds one vite + one Chromium + one booted page across invocations. A warm capture is ~1.5 s vs ~24 s cold. Used by `shoot.mjs` by default. |
-| `tools/perf.mjs` | Posed frame-time benchmark. `gl.finish()`-bracketed, reports median/min/mean/p95. |
-| `tools/gameplay.mjs` | **The primary perf gate.** Drives the real loop with synthetic input across 13 segments (walk, sprint, combat, warp, menus, streaming, weather). Posed shots hide the hitches that ruin play. |
-| `tools/attrib.mjs` | Per-subsystem cost attribution, A/B/A baselined. |
-| `tools/integration.mjs` | **Proves features are reachable in play**, not merely present. 18 checks. |
-| `tools/orphans.mjs` | Static reachability from `main.js`. Catches dead code. |
-| `tools/imgdiff.mjs` | Visual regression. **Measured noise floor 1.5–1.9 mean/255** — anything above that needs justifying. |
-| `tools/sheet.mjs` | Contact sheet of a shot directory, paginated to `_sheet-1.jpg`, `_sheet-2.jpg` … at 12 shots a page. How critics review the whole game at once. |
-| `tools/cleanup.mjs` | Kills orphaned vite/chromium. Grades confidence so a live agent's server is never killed. |
-| `tools/shrink.mjs` | Recompresses the shot archive to JPEG in place, holding recent directories lossless for `imgdiff`. Dry run by default. |
-| `tools/agentstats.mjs` | What each live subagent costs: turns, context, p50/p90 model wait, screenshot MB, last tool. Tells *expensive* apart from *stuck*. |
-| `tools/roadcheck.mjs` | Asserts every drivable POI is reachable, grades and corner radii are legal. |
-| `tools/uxcheck.mjs`, `tools/combatloop.mjs` | Assert menus and combat mechanics respond to real input. |
+| `src/tools/shoot.mjs` | Capture named shots from `src/game/Shots.js`. Fixed timestep, exits non-zero on any console error. `--prod` builds and serves the real bundle. `--jpeg` writes review-sized JPEGs — use it for anything an agent will read back. |
+| `src/tools/daemon.mjs` | Holds one vite + one Chromium + one booted page across invocations. A warm capture is ~1.5 s vs ~24 s cold. Used by `shoot.mjs` by default. |
+| `src/tools/perf.mjs` | Posed frame-time benchmark. `gl.finish()`-bracketed, reports median/min/mean/p95. |
+| `src/tools/gameplay.mjs` | **The primary perf gate.** Drives the real loop with synthetic input across 13 segments (walk, sprint, combat, warp, menus, streaming, weather). Posed shots hide the hitches that ruin play. |
+| `src/tools/attrib.mjs` | Per-subsystem cost attribution, A/B/A baselined. |
+| `src/tools/integration.mjs` | **Proves features are reachable in play**, not merely present. 18 checks. |
+| `src/tools/orphans.mjs` | Static reachability from `main.js`. Catches dead code. |
+| `src/tools/imgdiff.mjs` | Visual regression. **Measured noise floor 1.5–1.9 mean/255** — anything above that needs justifying. |
+| `src/tools/sheet.mjs` | Contact sheet of a shot directory, paginated to `_sheet-1.jpg`, `_sheet-2.jpg` … at 12 shots a page. How critics review the whole game at once. |
+| `src/tools/cleanup.mjs` | Kills orphaned vite/chromium. Grades confidence so a live agent's server is never killed. |
+| `src/tools/shrink.mjs` | Recompresses the shot archive to JPEG in place, holding recent directories lossless for `imgdiff`. Dry run by default. |
+| `src/tools/agentstats.mjs` | What each live subagent costs: turns, context, p50/p90 model wait, screenshot MB, last tool. Tells *expensive* apart from *stuck*. |
+| `src/tools/roadcheck.mjs` | Asserts every drivable POI is reachable, grades and corner radii are legal. |
+| `src/tools/uxcheck.mjs`, `src/tools/combatloop.mjs` | Assert menus and combat mechanics respond to real input. |
 
 `.githooks/pre-commit` runs `vite build` (enabled via `core.hooksPath`). A syntax
 error in a module the dev server already parsed still boots in dev, fails the
 build, and hangs the harness on `waitForFunction` for 120 s with no useful error.
 
-**Chromium flags live in `tools/chromium.mjs`.** `--disable-frame-rate-limit` is
+**Chromium flags live in `src/tools/chromium.mjs`.** `--disable-frame-rate-limit` is
 deliberately absent — measured 3× idle CPU for zero benefit. Do not add it back.
 
 ## 3. Architecture
@@ -115,7 +115,7 @@ Every one of these cost real time and none were obvious:
   and `shoot.mjs --prod` exists so it cannot recur.
 - **5,765 lines of RPG systems were dead code** — constructed, ticked, read by
   nothing, while the HUD drew invented literals over them. Existence is not
-  integration. That is why `tools/integration.mjs` exists.
+  integration. That is why `src/tools/integration.mjs` exists.
 - **`spec.at ?? 6`** — `spec` can be the string `'title'`, and
   `String.prototype.at` *is a function, not undefined*, so `??` never fired. The
   title camera resolved to `NaN` and rendered black.
@@ -188,7 +188,7 @@ Merge them, verify, then re-run the critic pass.
   Chromium pushes load average past 18 and makes every measurement worthless.
   Agents will report numbers taken under contention — ask about load conditions.
 - **A slow agent is usually not a stuck one, and the difference is invisible from
-  outside.** `node tools/agentstats.mjs` shows both: a healthy `last tool` with a
+  outside.** `node src/tools/agentstats.mjs` shows both: a healthy `last tool` with a
   p90 in the hundreds of seconds means expensive, and a `last tool` minutes old
   with no result means blocked — one agent sat 94 minutes inside a single
   `git reset --hard`. Turn latency does not track context size on a good day; on a

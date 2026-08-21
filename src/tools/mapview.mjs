@@ -2,11 +2,11 @@
 /**
  * Map-screen framing harness for the cartography workstream.
  *
- *   node tools/mapview.mjs --out tmp/shots/mapview --state 0,0,1 --state 3,4,0
+ *   node src/tools/mapview.mjs --out tmp/shots/mapview --state 0,0,1 --state 3,4,0
  *
  * `--state zoom,filter,revealAll` opens the real `map` menu screen through
  * `Menus`, sets the zoom step / filter row / survey state, settles the sim and
- * captures the frame. `tools/shoot.mjs` can only render the states baked into
+ * captures the frame. `src/tools/shoot.mjs` can only render the states baked into
  * `Shots.js`, which another agent owns; this drives the live screen instead so
  * every zoom level can be looked at. Temporary tooling.
  */
@@ -17,7 +17,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
 const portOpen = (port) => new Promise((res) => {
@@ -29,7 +29,7 @@ const portOpen = (port) => new Promise((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const p = spawn('npx', ['vite', '--config', 'tools/vite.map.config.js', '--port', String(PORT), '--strictPort'],
+  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.js', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
   p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
   for (let i = 0; i < 160; i++) {

@@ -11,7 +11,7 @@ This session resumed `51c0b82c`, which had run out of weekly usage mid-round.
 ## 1. The one thing that changed how this project is worked on
 
 **There is now an in-game developer / review suite.** Before it, the only way to
-look at the game was `tools/shoot.mjs` — a ~20 minute batch capture of 139 fixed
+look at the game was `src/tools/shoot.mjs` — a ~20 minute batch capture of 139 fixed
 cameras, then squinting at a contact sheet. That loop cannot answer "what does
 this enemy's walk cycle look like from behind" or "why is the ground ochre
 *here*", which is why several defects survived for months while being plainly
@@ -105,7 +105,7 @@ All seven branches are **merged into `main`**. Each agent's own handoff is at
 | agent | landed and verified | left undone |
 |---|---|---|
 | `weapons` | Grip-centred origins put every hilt in the hand; companions carry sheathed in the field. The socket wiring was never the bug. | Blade **material**: at `metalness 0.90` blades take their colour entirely from the sky env map — flat navy planes, no edge highlight. |
-| `enemies` | Grounding drift **52/207 poses → 0**, worst −321 m → 0, plus the 46 static failures → 0, with corrections *measured* rather than hand-tuned. Systemic texel-density fix across all 23 species. Deep rebuilds of goblin, iron giant, dualhorn/bloodhorn, sabertusk. Ships `tools/creaturecheck.mjs` as a permanent gate. | Remaining 18 species are surfaced but not rebuilt. |
+| `enemies` | Grounding drift **52/207 poses → 0**, worst −321 m → 0, plus the 46 static failures → 0, with corrections *measured* rather than hand-tuned. Systemic texel-density fix across all 23 species. Deep rebuilds of goblin, iron giant, dualhorn/bloodhorn, sabertusk. Ships `src/tools/creaturecheck.mjs` as a permanent gate. | Remaining 18 species are surfaced but not rebuilt. |
 | `splat` | Regional palette works — `zone_lestallum` went from red-ochre desert to green Cleigne upland, Leide unchanged in character. 27 m mega-plates gone. LUT packing proved numerically over all 19 zone centres (worst error 0.007). `heightcheck`/`driftcheck` both 0.000 m, confirming colour-only. | `perf.mjs` never run — `tf_stoch` adds ~4 fetches/pixel and is the one unmeasured risk. Five zones unviewed. |
 | `heroart` | The eye region on all four heroes, verified at 0.4 m. Six compounding defects, each measured: lower lid never closed at either canthus (the blank-white far eye), iris a third too small, lid riding inside the corneal dome, lid band hanging off the cheek, lid UV pinned to (0.5, 0.5), sclera blowing to paper white at grazing angles. | Profile head collapse, hair, hands, outfits, skin. `Cast.js` untouched. |
 | `grass` | LOD albedo bug fixed and verified — card rings rendered **3× darker** than the blade ring. Blade heights re-unified from a 1 : 2 : 3.5 drift to 1 : 1.20 : 1.80; Leide is an ankle tuft again. Tint chain rewritten: r/g 1.76 → 1.30, b/g 0.21 → 0.57. | Trees and bushes untouched — the leaf cards may carry the same unpinned-albedo bug. |
@@ -157,7 +157,7 @@ afternoon. The cause is machine saturation, not agent error — see §6.
 2. **Blade material.** Geometry is fixed but at `metalness 0.90` blades take
    their colour entirely from the sky env map — every blade is a flat navy plane
    with no edge highlight. See `project/handoff/weapons.md`.
-3. **Perf gate.** `tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
+3. **Perf gate.** `src/tools/gameplay.mjs` still fails 60 fps on `walk` (~57.5 fps
    best measured; shadow cascades ~22 ms dominate). **Never trust a perf number
    taken while agents are running.**
 4. **A fresh harsh-critic pass.** Scores are badly stale — the last read 4.5/10
@@ -167,7 +167,7 @@ afternoon. The cause is machine saturation, not agent error — see §6.
    mis-authored. Never verified by measurement.
 6. `_outcrops` consumes its RNG stream conditionally on local slope, so any
    height change anywhere reshuffles every later boulder. Worth decoupling.
-7. `src/world/map/MapRaster.js` is orphaned (`tools/orphans.mjs`), pre-existing.
+7. `src/world/map/MapRaster.js` is orphaned (`src/tools/orphans.mjs`), pre-existing.
 8. **TypeScript port** — `docs/plans/typescript-port.md`, gated on a quiet tree.
 
 ---
@@ -180,16 +180,16 @@ pruned.
 | check | result |
 |---|---|
 | `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
-| `tools/integration.mjs` | 18 pass · 0 fail |
-| `tools/uxcheck.mjs` | 86/86 |
-| `tools/creaturecheck.mjs` | **207 poses across 23 species · 0 failures** (new gate) |
-| `tools/heightcheck.mjs` / `driftcheck.mjs` | 0.000 m — confirms the splat change was colour-only |
-| `tools/roadcheck.mjs` | 0 failures |
-| `tools/orphans.mjs` | 1 orphan, `src/world/map/MapRaster.js`, pre-existing from `5fd2876` |
+| `src/tools/integration.mjs` | 18 pass · 0 fail |
+| `src/tools/uxcheck.mjs` | 86/86 |
+| `src/tools/creaturecheck.mjs` | **207 poses across 23 species · 0 failures** (new gate) |
+| `src/tools/heightcheck.mjs` / `driftcheck.mjs` | 0.000 m — confirms the splat change was colour-only |
+| `src/tools/roadcheck.mjs` | 0 failures |
+| `src/tools/orphans.mjs` | 1 orphan, `src/world/map/MapRaster.js`, pre-existing from `5fd2876` |
 | dev-suite determinism | 1.555/255 — at the documented noise floor |
-| `tools/combatloop.mjs` | **21/30 — a pre-existing regression, not from this round** |
-| `tools/gameplay.mjs` | **fails** — see open item 3 |
-| `tools/perf.mjs` | not re-measured on a quiet tree — do this first next session |
+| `src/tools/combatloop.mjs` | **21/30 — a pre-existing regression, not from this round** |
+| `src/tools/gameplay.mjs` | **fails** — see open item 3 |
+| `src/tools/perf.mjs` | not re-measured on a quiet tree — do this first next session |
 
 **The `combatloop` regression is worth its own note.** `agent/enemies`
 reproduced the identical nine failures with `src/characters` reverted to
@@ -208,16 +208,16 @@ running the full gate suite at every merge, not just the cheap ones.
   freeze.** `engine/LightBudget.js` pins the counts. The dev suite's isolation
   stage deliberately adds **no** lights for this reason.
 - **A stale capture-daemon page once produced a completely false diagnosis** that
-  cost three separate investigations. `sourceStamp()` in `tools/daemon.mjs` now
+  cost three separate investigations. `sourceStamp()` in `src/tools/daemon.mjs` now
   reboots the page on any `src/` edit, and the daemon refuses to serve a
   different checkout. This is also why the dev suite writes tuning to
   `.review/`, never to `src/`.
 - `constructor.name` is mangled in production builds — register systems with
   explicit string keys, always.
-- Do **not** add `--disable-frame-rate-limit` to `tools/chromium.mjs`; measured
+- Do **not** add `--disable-frame-rate-limit` to `src/tools/chromium.mjs`; measured
   3× idle CPU for zero benefit.
-- **Shot names are positional** on `tools/shoot.mjs`, not `--shot`.
-- `tools/framecam.mjs` needs `PORT` = the **vite** port; the daemon uses
+- **Shot names are positional** on `src/tools/shoot.mjs`, not `--shot`.
+- `src/tools/framecam.mjs` needs `PORT` = the **vite** port; the daemon uses
   `PORT+1` and aiming framecam at it hangs for the full 300 s timeout.
 - **No CSS transitions in `src/ui`** — every animation is written per frame from
   `game.time` or deterministic captures break. `src/dev/**` is exempt because it
@@ -235,9 +235,9 @@ git status                          # expect clean, on main
 git config core.hooksPath .githooks # if a fresh clone
 git branch --list 'agent/*'         # unmerged round-5 work
 git worktree list                   # ~19 worktrees, 6.9 GB — prune after merging
-node tools/cleanup.mjs              # report orphaned vite/chromium; --kill to act
+node src/tools/cleanup.mjs              # report orphaned vite/chromium; --kill to act
 npx vite build
-node tools/integration.mjs
+node src/tools/integration.mjs
 ```
 
 To merge the round: for each `agent/*` branch, read its

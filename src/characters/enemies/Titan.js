@@ -36,7 +36,7 @@ export const TITAN = {
    * tens of metres below the ground the player stands on. Opts him out of the
    * ground calibration in `EnemyBase`, which would otherwise measure the cut
    * edge of his hips as a sunk foot and hoist the whole mountain out of the
-   * arena; `tools/creaturecheck.mjs` exempts him for the same reason.
+   * arena; `src/tools/creaturecheck.mjs` exempts him for the same reason.
    */
   buriedBase: true,
   stats: {

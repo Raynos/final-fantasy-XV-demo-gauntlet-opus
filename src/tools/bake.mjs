@@ -2,9 +2,9 @@
 /**
  * Build-step asset bake.
  *
- *   node tools/bake.mjs            # bake if stale
- *   node tools/bake.mjs --force    # always re-bake
- *   node tools/bake.mjs --check    # exit 0 if fresh, 1 if stale (no work)
+ *   node src/tools/bake.mjs            # bake if stale
+ *   node src/tools/bake.mjs --force    # always re-bake
+ *   node src/tools/bake.mjs --check    # exit 0 if fresh, 1 if stale (no work)
  *
  * The project generates every texel and every vertex in code and keeps no
  * authored art. That rule is about *inputs*, not about recomputing the same
@@ -23,7 +23,7 @@ import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 /**
  * `public/` so Vite serves it in dev and copies it into `dist/` on build with
  * no extra middleware. Git-ignored: it is a cache of our own generators, not a

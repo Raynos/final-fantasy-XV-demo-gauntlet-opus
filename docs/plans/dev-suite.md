@@ -3,7 +3,7 @@
 ## Context
 
 The project is a 139-shot, 19-zone, 8192 m procedural ThreeJS action RPG with a
-mature *offline* harness (`tools/shoot.mjs`, `daemon.mjs`, `framecam.mjs`,
+mature *offline* harness (`src/tools/shoot.mjs`, `daemon.mjs`, `framecam.mjs`,
 `sheet.mjs`, `perf.mjs`, …) but **zero in-game debug affordances**. Today
 `?debug` only enables five `console.log` calls; there is no free camera, no
 stats overlay, no way to isolate an asset, and no way to record a review note
@@ -53,7 +53,7 @@ Three consequences worth stating:
 - **`await import()` puts the whole suite in its own async chunk.** It ships in
   `vite build` (one build, zero drift, review the real bundle) but costs the
   normal path only a dead branch.
-- **`&& !qs.has('shoot')` is a hard determinism guard.** `tools/shoot.mjs` loads
+- **`&& !qs.has('shoot')` is a hard determinism guard.** `src/tools/shoot.mjs` loads
   `?q=ultra&shoot=1`, so the suite can never appear in a capture and cannot
   violate BRIEF rule 2 ("two runs must produce identical images"). It also frees
   the suite from the "no CSS transitions in `src/ui`" rule, which exists purely
@@ -131,8 +131,8 @@ and the inbox viewer says so explicitly.
 ### Disk I/O: a Vite plugin on both servers
 
 Nothing in the repo hooks `configureServer` or `configurePreviewServer` today —
-`tools/vite-plugin-bake.mjs` uses only `configResolved`. This is uncontested
-greenfield. New `tools/vite-plugin-review.mjs`, added to `vite.config.js`'s
+`src/tools/vite-plugin-bake.mjs` uses only `configResolved`. This is uncontested
+greenfield. New `src/tools/vite-plugin-review.mjs`, added to `vite.config.js`'s
 plugin array, registers identical middleware on both hooks:
 
 | route | method | does |
@@ -177,7 +177,7 @@ Stats come from `Time.fps` and `renderer.info` (already reset every frame in
 | `src/dev/Overlay.js` | DOM host + lil-gui mount, `pointer-events` discipline |
 | `src/dev/StatsHud.js` | fps, frame ms, draw calls, triangles, geometries, textures, programs, rolling graph |
 | `src/dev/dev.css` | utilitarian styling, deliberately unlike the game UI |
-| `tools/vite-plugin-review.mjs` | the four routes above, on dev **and** preview |
+| `src/tools/vite-plugin-review.mjs` | the four routes above, on dev **and** preview |
 
 Input: read edges via `game.input.keyDown(code)` in `lateUpdate`. `Input.pressed`
 is a `Set` nobody consumes, so multiple readers see the same edge — no stealing.
@@ -197,7 +197,7 @@ digits `6`–`0`. Note `Input` only `preventDefault`s `Space/Tab/Backspace/F1/F5
   Cheap, and the research singles it out as the feature that most changes review
   throughput on a large world.
 - **Shot browser**: all 139 `SHOTS`, labelled by their existing `doc` string,
-  grouped by the `// --- section ---` comments (`tools/corpus.mjs` already
+  grouped by the `// --- section ---` comments (`src/tools/corpus.mjs` already
   parses those). `[` / `]` step; `Enter` **ejects from the posed shot into
   freecam from that exact transform** — the headline request.
 - **Capture-as-framing**: `shot.save` writes the live camera back as
@@ -205,7 +205,7 @@ digits `6`–`0`. Note `Input` only `preventDefault`s `Space/Tab/Backspace/F1/F5
   name. This is the direct fix for framing bugs like `zone_mencemoor`, where
   moving the meteor onto its zone centre buried the zone camera inside it.
 - Shots are applied via the live-`SHOTS` mutation pattern already proven by
-  `tools/framecam.mjs` (`SHOTS.__probe = s; g.applyShot('__probe')`), so
+  `src/tools/framecam.mjs` (`SHOTS.__probe = s; g.applyShot('__probe')`), so
   arbitrary candidate framings work without editing `Shots.js`.
 
 ## Phase 2 — feedback inbox + capture
@@ -313,16 +313,16 @@ review *suite* and, per the research, almost nobody builds it.
 
 ```bash
 npx vite build                      # must pass; enforced by .githooks/pre-commit
-node tools/orphans.mjs              # src/dev must be reachable, no dead modules
-node tools/integration.mjs          # 18 pass / 0 fail — unchanged
-node tools/uxcheck.mjs              # 86/86 — the suite must not register a Menus screen
-node tools/gameplay.mjs             # 60 fps gate must not move
-node tools/perf.mjs                 # unchanged
+node src/tools/orphans.mjs              # src/dev must be reachable, no dead modules
+node src/tools/integration.mjs          # 18 pass / 0 fail — unchanged
+node src/tools/uxcheck.mjs              # 86/86 — the suite must not register a Menus screen
+node src/tools/gameplay.mjs             # 60 fps gate must not move
+node src/tools/perf.mjs                 # unchanged
 
 # determinism — the critical one: the suite must be invisible to captures
-node tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-a --cold
-node tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-b --cold
-node tools/imgdiff.mjs tmp/shots/dev-a tmp/shots/dev-b   # must be at the 1.5-1.9/255 noise floor
+node src/tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-a --cold
+node src/tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-b --cold
+node src/tools/imgdiff.mjs tmp/shots/dev-a tmp/shots/dev-b   # must be at the 1.5-1.9/255 noise floor
 
 # the suite itself
 npm run dev      # then open http://127.0.0.1:5173/?debug=1
@@ -348,11 +348,11 @@ a corrected framing to `.review/tuning/shots.patch.json`.
   This is a large part of why tuning goes to `.review/` patch files.
 - `constructor.name` is mangled in prod builds — register with explicit string
   keys, always.
-- Do **not** add `--disable-frame-rate-limit` to `tools/chromium.mjs`; measured
+- Do **not** add `--disable-frame-rate-limit` to `src/tools/chromium.mjs`; measured
   3× idle CPU for zero benefit.
 - `game.currentShot` is a de-facto global "a posed capture is running" signal
   that eight systems poll to mute themselves. The suite should not set it.
-- `tools/framecam.mjs` needs `PORT` = the **vite** port; `daemon.mjs` uses
+- `src/tools/framecam.mjs` needs `PORT` = the **vite** port; `daemon.mjs` uses
   `PORT+1`, and aiming framecam at the daemon hangs for the full 300 s timeout.
 
 ---
@@ -373,7 +373,7 @@ took a capture round, a contact sheet and a dispatched agent each:
   opt-in and the frozen-pose path never called it, so relative pose offsets
   (`visual.position.y -= drop`) integrated every frame — 52 of 207 poses
   drifting, worst −321 m, Iron Giant telegraph −62.8 m. `MagitekArmour`
-  integrated in live play too. Now gated by `tools/creaturecheck.mjs`.
+  integrated in live play too. Now gated by `src/tools/creaturecheck.mjs`.
 - **Weapons floated beside hands** because every weapon authors its crossguard
   at y=0, so the fist closes on the guard and the grip dangles below. The socket
   wiring was fine all along.
