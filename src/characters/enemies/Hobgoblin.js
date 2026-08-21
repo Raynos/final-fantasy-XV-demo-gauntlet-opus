@@ -7,13 +7,13 @@ import {
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const SKIN = 0x483340;
-const SKIN_DARK = 0x231a24;
+const SKIN = 0x6a5060;
+const SKIN_DARK = 0x3a2c3c;
 const GUT = 0x6b5a37;
-const RAG = 0x2b2521;
-const RUST = 0x5c3a24;
-const IRON = 0x3a3733;
-const WOOD = 0x3c3124;
+const RAG = 0x453c34;
+const RUST = 0x76492c;
+const IRON = 0x565049;
+const WOOD = 0x574839;
 const CLAW = 0xc0b9a2;
 const EYE = 0xff3018;
 
@@ -261,6 +261,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.72, metalness: 0.12,
+    rim: { color: 0x7d6f9c, strength: 0.055 },
     normalMap: organicNormal(), normalScale: 0.7, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 2.2 });

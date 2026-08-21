@@ -7,9 +7,9 @@ const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const SKIN = 0xbdb6a4;
 const SKIN_DARK = 0x8b8474;
-const CHITIN = 0x131118;
-const CHITIN_HI = 0x2b2833;
-const HAIR = 0x08080c;
+const CHITIN = 0x302c3a;
+const CHITIN_HI = 0x4c4759;
+const HAIR = 0x1c1c24;
 const FANG = 0xd9d2be;
 const SPIN = 0xc41a10;
 const EYE = 0xff3a1c;
@@ -236,6 +236,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.52, metalness: 0.08,
+    rim: { color: 0x8c7ea8, strength: 0.075 },
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 3.2 });

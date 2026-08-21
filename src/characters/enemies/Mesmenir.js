@@ -5,14 +5,14 @@ import { tube, blob, spike, slab, place, tint, glow, loft, bladeCross } from '..
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const HIDE = 0x131218;
-const HIDE_DARK = 0x07070b;
+const HIDE = 0x2c2a36;
+const HIDE_DARK = 0x161520;
 const BONE = 0x968d7b;
 const BONE_DARK = 0x5c5548;
 const FLAME = 0x7ec8ff;
 const FLAME_HOT = 0xd8eeff;
-const MIASMA = 0x1b1533;
-const HOOF = 0x0c0b11;
+const MIASMA = 0x2e2550;
+const HOOF = 0x1d1c26;
 
 /**
  * Mesmenir — the spectral daemon horse that runs the Duscae roads after dark.
@@ -292,9 +292,10 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.78, metalness: 0.0,
+    rim: { color: 0x7fa8d6, strength: 0.075 },
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.0 });
+  return rig.build(mat, { radius: 3.0, coat: { mottle: 0.12, tick: 0.14, shade: 0.16, dust: 0.26, dustTop: 0.50 } });
 }
 
 /**

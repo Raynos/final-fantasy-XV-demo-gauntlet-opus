@@ -1194,3 +1194,46 @@ export function metalRoughness() {
   }
   return _metalRough;
 }
+
+/**
+ * Field wear over the vertex colours a part has already authored.
+ *
+ * A flat enamel value is what makes a machine read as a toy: every plate
+ * answers the light with the same number, so nothing but the silhouette
+ * separates one from the next. Real issue plate has paint scoured off its
+ * upstanding faces and edges — going warm and bare — and dust and oil packed
+ * into everything facing down.
+ *
+ * This *modulates* rather than replaces, unlike `IronGiant.aged()`: the
+ * species that use it already paint their own panel values per part, and
+ * re-deriving those from position would flatten the chest plate into the
+ * backpack. Three terms — wear on upward faces, a plate-scale streak toward
+ * `scuff`, and a grime multiplier under everything facing down.
+ *
+ * @param {THREE.BufferGeometry} geo must already carry a `color` attribute
+ * @param {{scuff?:number, amount?:number, grime?:number}} [opts]
+ * @returns {THREE.BufferGeometry} the same geometry, modified in place
+ */
+export function weatherPlate(geo, { scuff = 0x8a7f70, amount = 1, grime = 0.34 } = {}) {
+  if (amount <= 0) return geo;
+  const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
+  if (!pos || !cl) return geo;
+  _wc.setHex(scuff, THREE.SRGBColorSpace);
+  for (let i = 0; i < cl.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const up = nr ? nr.getY(i) : 0;
+    // a slow streak down the plate crossed by a fine one across it
+    const streak = Math.sin(x * 11.3 + z * 7.7 + y * 1.9) * 0.55
+      + Math.sin(x * 27.1 - z * 18.3) * 0.25;
+    const wear = Math.min(1, (Math.max(0, up) * 0.55 + Math.max(0, streak) * 0.50)) * amount;
+    const k = 1 - Math.max(0, -up) * grime * amount;
+    const t = wear * 0.42;
+    cl.setXYZ(i,
+      (cl.getX(i) * (1 - t) + _wc.r * t) * k,
+      (cl.getY(i) * (1 - t) + _wc.g * t) * k,
+      (cl.getZ(i) * (1 - t) + _wc.b * t) * k);
+  }
+  return geo;
+}
+
+const _wc = new THREE.Color();

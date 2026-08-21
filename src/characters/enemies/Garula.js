@@ -113,14 +113,19 @@ function buildPrototype() {
       { p: [0, 2.14, 0.86], rx: 0.72, rz: 0.88 },
       { p: [0, 2.10, 1.10], rx: 0.50, rz: 0.62 },
     ],
-    steps: 28, seg: 20, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
+    // 26 segments round, not 20. Everything below clumps the mane around the
+    // barrel, and a 20-segment ring cannot carry a 13-cycle clump: it aliases
+    // into a handful of broad hard-edged bands with arbitrary phase, which is
+    // what put the coarse ochre streaking across the shoulder. Every angular
+    // frequency here is now under six cycles, i.e. four-plus samples each.
+    steps: 28, seg: 26, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
     shape: (th, u) => {
       const b = Math.cos(th);                       // +1 spine, -1 belly
       const side = Math.abs(Math.sin(th));
       let m = 1;
       // the shoulder mane rides as a raised, clumped mass over the withers
       const mane = Math.max(0, b) * Math.exp(-Math.pow((u - 0.74) / 0.22, 2));
-      m += mane * (0.26 + Math.sin(th * 7 + u * 16) * 0.06 + Math.sin(th * 15) * 0.03);
+      m += mane * (0.26 + Math.sin(th * 5 + u * 11) * 0.06 + Math.sin(th * 3) * 0.03);
       // flattish spine, heavy sagging gut
       m += b > 0 ? -0.06 * b * b * (1 - smooth((u - 0.6) / 0.2)) : 0.11 * b * b;
       // shoulder and haunch bosses
@@ -128,7 +133,7 @@ function buildPrototype() {
       m += side * 0.09 * Math.exp(-Math.pow((u - 0.20) / 0.16, 2));
       // shag hanging off the flank in coarse vertical clumps
       m += Math.max(0, -b + 0.5) * side * 0.045
-        * Math.max(0, Math.sin(th * 13 + u * 5)) * smooth((u - 0.3) / 0.4);
+        * Math.max(0, Math.sin(th * 6 + u * 5)) * smooth((u - 0.3) / 0.4);
       return m;
     },
     colorAt: (th, u) => {
@@ -136,7 +141,7 @@ function buildPrototype() {
       const shaggy = clamp01((b + 0.15) / 0.9) * smooth((u - 0.30) / 0.40);
       if (b < -0.55) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.45) * 0.85);
       const base = mix(HIDE, HIDE_DARK, 0.35 + 0.2 * Math.sin(u * 19 + th * 4));
-      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 13 + u * 5) * 0.5 + 0.5)), shaggy);
+      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 6 + u * 5) * 0.5 + 0.5)), shaggy);
     },
     matAt: (th, u) => (Math.cos(th) > -0.1 && u > 0.30 ? M_SHAG : M_HIDE),
   });
@@ -144,21 +149,53 @@ function buildPrototype() {
   reset(B);
 
   /* ---------------------------------------------------- mane over withers */
-  // Coarse locks hanging *down* off the shoulder, not arcing off it. Aiming
-  // them backward and up read as a pair of scythes growing out of the withers
-  // — hair falls, so they start on the flank at the top of the shoulder and
-  // drop, splaying slightly outward as they go.
+  // A crest along the topline, not locks pinned to the flank.
+  //
+  // The locks used to be seeded on a ring around the barrel and aimed
+  // downward, which put every one of them across the *side* of the shoulder —
+  // 7 cm cones painted brighter than the hide behind them, so the animal wore
+  // two dozen hard ochre bars that read as claw marks. Sinking them into the
+  // barrel only traded that for three stray chips poking through.
+  //
+  // A mane is legible for the same reason the sabertusk's ruff is: it breaks
+  // the *silhouette* against the sky. So they now sit on the spine ridge at
+  // the top of the barrel — centre y 2.12, half-height ~0.5, and the mane
+  // term in `shape` swells that to ~0.63, so the ridge sits at 2.74 — and
+  // sweep back and out. Dark at the root, lifted only at the tips, which is
+  // how hair actually reads — never a bright bar over a dark base.
+  //
+  // The root height is *measured*, not guessed. `rz` in the torso sweep is the
+  // vertical radius, so the barrel's topline is `p.y + rz` per node — and the
+  // mane bulge in `shape` swells that by up to 26 % over the withers, which is
+  // exactly the 3.45 m `creaturecheck` reports as this species' `top`. Two
+  // rounds were lost seeding the crest at 2.56 and then 2.74 and finding it
+  // buried both times; the table below is the sweep's own node list.
+  const RIDGE = [[-1.86, 2.34], [-1.42, 2.68], [-0.82, 2.88], [-0.16, 3.06],
+    [0.42, 3.18], [0.86, 3.02], [1.10, 2.72]];
+  const ridgeY = (z) => {
+    for (let k = 1; k < RIDGE.length; k++) {
+      if (z <= RIDGE[k][0] || k === RIDGE.length - 1) {
+        const [z0, y0] = RIDGE[k - 1], [z1, y1] = RIDGE[k];
+        const f = clamp01((z - z0) / (z1 - z0));
+        return y0 + (y1 - y0) * f;
+      }
+    }
+    return RIDGE[0][1];
+  };
   B.group(2);
   for (let i = 0; i < 26; i++) {
-    const a = (i / 26) * Math.PI * 2;
-    const side = Math.sin(a) >= 0 ? 1 : -1;
-    const zc = 0.42 + Math.cos(a) * 0.62;
-    const x = side * (0.72 + (i % 3) * 0.05) * (0.55 + 0.45 * Math.abs(Math.sin(a)));
-    const y = 2.56 - Math.abs(Math.cos(a)) * 0.26;
+    const side = i % 2 === 0 ? 1 : -1;
+    const t = Math.floor(i / 2) / 12;                 // 0..1 along the withers
+    const zc = 0.98 - t * 1.62;
+    const x = side * (0.07 + (i % 3) * 0.055);
+    // and add the mane bulge back on, otherwise the locks over the withers —
+    // where the crest most needs to read — are the only ones still buried
+    const y = ridgeY(zc) - 0.10 + 0.34 * Math.exp(-Math.pow((zc - 0.33) / 0.62, 2));
     horn(B, {
-      from: [x, y, zc], dir: [side * 0.42, -0.88, -0.22], len: 0.40 + (i % 4) * 0.11,
-      curve: [side * 0.10, -0.10, -0.06], r0: 0.070, r1: 0.006, flat: 0.26, seg: 5, steps: 4,
-      colorAt: (th, u) => mix(mix2(SHAG_LIT, SHAG, (i % 5) / 5), SHAG_DARK, u * 0.45),
+      from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
+      curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
+      colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+        SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
   }
@@ -401,7 +438,7 @@ function buildPrototype() {
     roughness: 0.93, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.9, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.8 });
+  return rig.build(mat, { radius: 3.8, coat: { mottle: 0.16, tick: 0.20, light: 0xa89060, shade: 0.20, dust: 0.34, dustTop: 0.55 } });
 }
 
 /** A heavy three-toed foot: two front toes, a broad pad, a rear dewclaw. */

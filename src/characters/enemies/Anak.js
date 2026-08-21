@@ -97,13 +97,21 @@ function buildPrototype() {
     rig.attach(tint(hn, DUN, 0.05), 'hips');
     const sh = place(blob(0.105, 0.150, 0.150, 9, 7), { pos: [0.155 * s, 2.02, 0.26] });
     rig.attach(tint(sh, DUN, 0.05), 'chest');
-    // cream flank flash, the field mark you spot it by at range
-    const fl = place(blob(0.055, 0.11, 0.26, 8, 6), { pos: [0.235 * s, 1.90, -0.06] });
+    // Cream flank flash, the field mark you spot it by at range. Dropped 8 cm
+    // so it sits *below* the lateral stripe `markings()` paints rather than
+    // straddling it — at 1.90 it read as a white lozenge stuck to the side.
+    const fl = place(blob(0.055, 0.11, 0.26, 8, 6), { pos: [0.235 * s, 1.82, -0.06] });
     rig.attach(tint(fl, CREAM, 0.04), 'spine');
   }
   // a low withers ridge so the topline is not a bare cylinder
   const withers = place(blob(0.13, 0.075, 0.22, 8, 6), { pos: [0, 2.16, 0.20] });
   rig.attach(tint(withers, DUN_DARK, 0.05), 'chest');
+  // Everything attached so far is the body; the neck, skull and legs follow.
+  // `markings()` works in world-space heights, and the upper leg spans
+  // y 1.34-2.02 — the same band as the belly — so it has to be handed the
+  // body parts explicitly rather than filtered by height. Painting all of
+  // them put white sleeves on the thighs.
+  const bodyParts = rig.parts.slice();
 
   /* ---- long neck ---- */
   const nk1 = tube([P(0, 2.10, 0.34), P(0, 2.30, 0.47), P(0, 2.46, 0.52)],
@@ -194,11 +202,59 @@ function buildPrototype() {
   const tuft = place(spike(0.055, 0.16, 6), { pos: [0, 1.79, -0.74], rot: [-2.5, 0, 0] });
   rig.attach(tint(tuft, CREAM, 0.06), 'tail2');
 
+  markings(bodyParts);
+
   const mat = creatureMaterial({
     roughness: 0.84, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4 });
+  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.14, tick: 0.16, shade: 0.20, dust: 0.30, dustTop: 0.70 } });
+}
+
+/**
+ * Gazelle value structure, painted over the flat part tints.
+ *
+ * This species is the oldest sculpt in the roster and the only one with no
+ * `colorAt` anywhere: every piece is a single flat `tint()` plus 4-5 % of
+ * jitter, so from ten metres the whole animal is one sheet of cream with a
+ * white lozenge stuck on the flank. Nothing in the palette was wrong — there
+ * was simply no *pattern*, and on a pale animal against pale Leide ground the
+ * pattern is the entire read.
+ *
+ * Three bands, and they are the three a real gazelle has: a darker saddle over
+ * the topline, a hard dark lateral stripe where dun meets belly, and the cream
+ * underside below it. Applied over `rig.parts` before `Rig.build`, while the
+ * geometry is still in bind-pose world space, so every threshold below is a
+ * height in metres off the ground and means it. Gated on `z` so the neck and
+ * skull — which live above the same heights as the saddle — are left alone.
+ * @param {THREE.BufferGeometry[]} parts
+ */
+function markings(parts) {
+  const cl01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const dark = new THREE.Color().setHex(0x584730, THREE.SRGBColorSpace);
+  const saddle = new THREE.Color().setHex(0x8f7852, THREE.SRGBColorSpace);
+  const pale = new THREE.Color().setHex(0xe8dcc0, THREE.SRGBColorSpace);
+  for (const geo of parts) {
+    const pos = geo.attributes.position, cl = geo.attributes.color;
+    if (!pos || !cl) continue;
+    for (let i = 0; i < cl.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i);
+      let r = cl.getX(i), g = cl.getY(i), b = cl.getZ(i);
+      const flank = cl01((Math.abs(x) - 0.09) / 0.09);
+
+      const top = cl01((y - 1.99) / 0.22);
+      r += (saddle.r - r) * top * 0.72; g += (saddle.g - g) * top * 0.72; b += (saddle.b - b) * top * 0.72;
+
+      const under = cl01((1.83 - y) / 0.10);
+      r += (pale.r - r) * under * 0.80; g += (pale.g - g) * under * 0.80; b += (pale.b - b) * under * 0.80;
+
+      // the lateral stripe: narrow, hard-edged, and only on the sides
+      const band = Math.exp(-Math.pow((y - 1.875) / 0.038, 2)) * flank;
+      r += (dark.r - r) * band * 0.85; g += (dark.g - g) * band * 0.85; b += (dark.b - b) * band * 0.85;
+
+      cl.setXYZ(i, r, g, b);
+    }
+  }
 }
 
 class AnakEnemy extends Enemy {

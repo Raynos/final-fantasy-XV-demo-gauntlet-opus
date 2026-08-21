@@ -7,9 +7,9 @@ import {
 
 const P = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const ROBE = 0x241d27;
-const ROBE_DARK = 0x110d14;
-const ROBE_ASH = 0x3b333a;
+const ROBE = 0x3d3342;
+const ROBE_DARK = 0x241d28;
+const ROBE_ASH = 0x574d57;
 const STAIN = 0x5f5330;
 const BONE = 0xb6ae97;
 const BONE_DARK = 0x6b6350;
@@ -249,6 +249,7 @@ function buildPrototype() {
 
   const mat = creatureMaterial({
     roughness: 0.82, metalness: 0.0,
+    rim: { color: 0x6f8f7a, strength: 0.06 },
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
   return rig.build(mat, { radius: 3.0 });

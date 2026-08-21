@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.js';
+import { mixc, colc } from './Palette.js';
 import { organicNormal, organicRoughness } from './EnemyBase.js';
 import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
@@ -129,7 +130,10 @@ function buildPrototype() {
       { p: [0, 0.925, 0.54], rx: 0.235, rz: 0.280 },
       { p: [0, 0.935, 0.66], rx: 0.170, rz: 0.195 },
     ],
-    steps: 26, seg: 18, ref: [0, 1, 0], capStart: 0.7, capEnd: 0.2,
+    // 34 rather than 26 steps along the body: the flank carries five tan bars
+    // and a bar pattern needs about seven samples per cycle before the sweep
+    // starts eating it. The extra 288 triangles are cheap next to a smear.
+    steps: 34, seg: 18, ref: [0, 1, 0], capStart: 0.7, capEnd: 0.2,
     shape: (th, u) => {
       const b = Math.cos(th);
       const side = Math.abs(Math.sin(th));
@@ -146,11 +150,18 @@ function buildPrototype() {
     colorAt: (th, u) => {
       const b = Math.cos(th);
       const side = Math.abs(Math.sin(th));
-      // tan flank flashes: two soft bands where the light would break anyway
-      const flash = Math.exp(-Math.pow((u - 0.33) / 0.15, 2)) + Math.exp(-Math.pow((u - 0.62) / 0.13, 2));
-      const t = clamp01(flash * side * clamp01(-b + 0.85) * 1.25);
       if (b < -0.45) return mix(FUR_LIGHT, MUZZLE, clamp01((-b - 0.45) / 0.55) * 0.55);
-      return mix(mix(FUR, FUR_DARK, clamp01(b) * 0.55), mix(TAN, TAN_DARK, 0.30), t * 0.95);
+      const base = mix(FUR, FUR_DARK, clamp01(b) * 0.62);
+      // Five broken tan bars down the flank, wavering as they climb the ribs.
+      //
+      // The first version was two 0.15-wide gaussians, which merged into one
+      // amber blot across the entire ribcage: at six metres the animal looked
+      // like it had a lens flare stuck to its side rather than markings. Bars
+      // are also what a coeurl *is* — the read has to survive being a black
+      // cat, and a broken vertical rhythm survives where a soft patch does not.
+      const bar = Math.pow(clamp01(Math.sin(u * 31.4 + Math.cos(th * 2.0) * 0.55) * 0.5 + 0.5), 3.5);
+      const t = bar * side * clamp01(-b + 0.72) * 0.66;
+      return mix(base, mix(TAN, TAN_DARK, 0.55), t);
     },
     matAt: (th, u) => (Math.abs(Math.sin(th)) > 0.6 ? M_FUR_SLEEK : M_FUR),
   });
@@ -403,7 +414,7 @@ function buildPrototype() {
     roughness: 0.86, metalness: 0.02,
     normalMap: organicNormal(), normalScale: 0.55, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 2.6 });
+  return rig.build(mat, { radius: 2.6, coat: { mottle: 0.11, tick: 0.18, light: 0x8f88a4, shade: 0.18, dust: 0.12, dustTop: 0.26 } });
 }
 
 /** Broad cat paw: four toes, retractable claws left out. */
@@ -435,13 +446,10 @@ function reset(B) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-function mix(a, b, t) {
-  _c1.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c1.lerp(_c2, clamp01(t));
-}
-function col(hex) { return _c1.setHex(hex, THREE.SRGBColorSpace); }
+// Blending lives in `Palette.js`: the two-register local version this file
+// used could not survive `mix(mix(...), ...)` — see the note there.
+const mix = mixc;
+const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
   constructor(opts) { super(COEURL, opts); }

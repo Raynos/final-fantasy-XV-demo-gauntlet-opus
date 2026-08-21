@@ -146,7 +146,8 @@ export class Rig {
    * @param {THREE.Material} material
    * @returns {{group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>}}
    */
-  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES } = {}) {
+  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null } = {}) {
+    if (coat) for (const g of this.parts) weatherCoat(g, coat);
     if (uvTiles) for (const g of this.parts) detailUV(g, uvTiles);
     const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
     const group = new THREE.Group();
@@ -175,10 +176,17 @@ export class Rig {
 
 /**
  * Detail-map tiles per metre of surface. One tile of the shared hide/plate
- * normal covers ~14 cm of creature at this density, which is the scale a coat
- * or a rivet line reads at from five metres.
+ * normal covers 10 cm of creature at this density.
+ *
+ * Raised from 7 after an A/B on the sabertusk at 2.5 m and 8 m. At 7 the
+ * pebbling on a haunch read as reptile scale rather than short fur, and the
+ * coat had gone from the frame entirely by 8 m; at 10 the strands in
+ * `organicNormal()` land at about the width they should and the dorsal saddle
+ * still carries texture at distance. No shimmer at either range — the maps are
+ * mipped with `anisotropy: 8` and TAA is on — but this is the knob to check
+ * first if aliasing ever shows up on a moving creature.
  */
-export const DETAIL_TILES = 7;
+export const DETAIL_TILES = 10;
 
 /**
  * Rescale a part's UVs so its detail map tiles at a fixed density *in metres*,
@@ -277,7 +285,7 @@ export function poseBoneMix(rig, name, x, y, z, k, order = 'XYZ') {
  */
 export function creatureMaterial({
   roughness = 0.72, metalness = 0.05, normalMap = null, normalScale = 0.7,
-  roughnessMap = null, envMapIntensity = 1.0,
+  roughnessMap = null, envMapIntensity = 1.0, rim = null,
 } = {}) {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff, vertexColors: true, roughness: 1, metalness: 1,
@@ -285,6 +293,7 @@ export function creatureMaterial({
   });
   if (normalMap) m.normalScale = new THREE.Vector2(normalScale, normalScale);
   m.userData.defMat = [roughness, metalness];
+  if (rim) m.userData.rim = rim;
   return enableVertexMaterial(m);
 }
 
@@ -293,9 +302,16 @@ export function creatureMaterial({
  * (vec2 roughness/metalness) vertex attributes. The base material carries
  * roughness = metalness = 1 so the attribute multiplies cleanly through any
  * roughness map that is also bound.
+ *
+ * `material.userData.rim` additionally adds a view-dependent emissive rim.
+ * That exists for the daemons, and it is a *readability* tool, not a stylistic
+ * one: it is a fixed radiance, so under the sun it is far below the diffuse
+ * term and invisible, while at 23:00 it is the only thing separating a
+ * near-black silhouette from the ground behind it. `{ color, power, strength }`.
  * @param {THREE.Material} material
  */
 export function enableVertexMaterial(material) {
+  const rim = (material.userData && material.userData.rim) || null;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>',
@@ -311,7 +327,126 @@ export function enableVertexMaterial(material) {
         '#include <metalnessmap_fragment>\nmetalnessFactor = clamp( metalnessFactor * vMatP.y, 0.0, 1.0 );')
       .replace('#include <emissivemap_fragment>',
         '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmissive;');
+    if (!rim) return;
+    // `<emissivemap_fragment>` runs after `<normal_fragment_maps>`, so `normal`
+    // is the final shading normal here; `vViewPosition` is the fragment-to-eye
+    // vector meshphysical declares unconditionally.
+    shader.uniforms.uRimCol = { value: new THREE.Color().setHex(rim.color ?? 0x6d7ea6, THREE.SRGBColorSpace) };
+    shader.uniforms.uRimPow = { value: rim.power ?? 2.6 };
+    shader.uniforms.uRimStr = { value: rim.strength ?? 0.06 };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>',
+        '#include <common>\nuniform vec3 uRimCol;\nuniform float uRimPow;\nuniform float uRimStr;')
+      .replace('totalEmissiveRadiance += vEmissive;',
+        'totalEmissiveRadiance += vEmissive;\n{ float rf = 1.0 - clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 );'
+        + '\n  totalEmissiveRadiance += uRimCol * ( pow( rf, uRimPow ) * uRimStr ); }');
   };
-  material.customProgramCacheKey = () => 'creatureVertexMat';
+  // Two variants, two keys. Sharing one key hands the rim program to every
+  // creature in the roster, or the plain one to every daemon, depending on
+  // which compiled first.
+  material.customProgramCacheKey = () => (rim ? 'creatureVertexMatRim' : 'creatureVertexMat');
   return material;
+}
+
+const _ca = new THREE.Color();
+const _cb = new THREE.Color();
+const _du = new THREE.Color();
+
+/**
+ * Write `v` into `out` whether it arrives as a hex literal or a `THREE.Color`.
+ * @param {THREE.Color} out @param {number|THREE.Color} v
+ */
+function asColor(out, v) {
+  if (v && v.isColor) return out.copy(v);
+  return out.setHex(v, THREE.SRGBColorSpace);
+}
+
+/**
+ * Coat variation over the vertex colours a part has already authored.
+ *
+ * The organic half of the bestiary paints one flat value per body region —
+ * flank, saddle, belly — and nothing at all inside a region, so from ten
+ * metres every beast is two or three poster-paint patches. Real hide is never
+ * one number: it is mottled at body scale, the guard hairs over the topline
+ * are bleached at the tips, the underside sits in its own bounce shadow, and
+ * anything that walks in Leide carries dust up its legs.
+ *
+ * The counterpart to `EnemyBase.weatherPlate` for hide, and like that one it
+ * *modulates* rather than replaces, so the value structure a species author
+ * built survives. Applied over `Rig.parts` from `Rig.build({ coat })`, which
+ * is the one place every species already funnels through and where the
+ * geometry is still in bind-pose world space — so `dustTop` can be given in
+ * metres off the ground and mean it.
+ *
+ * @param {THREE.BufferGeometry} geo must carry a `color` attribute
+ * @param {object} [o]
+ * @param {number} [o.mottle] ± value swing of the body-scale mottle
+ * @param {number} [o.tick] strength of the sun-bleached tipping on the topline
+ * @param {number} [o.light] colour the tips lean toward; default is the vertex
+ *   colour lifted, which keeps a species' own hue
+ * @param {number} [o.shade] darkening on downward-facing surfaces
+ * @param {number} [o.dark] colour the underside shades toward
+ * @param {number} [o.dust] strength of ground dust carried up the legs
+ * @param {number} [o.dustTop] metres above the ground the dust dies out at
+ * @param {number} [o.dustColor]
+ */
+export function weatherCoat(geo, {
+  mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
+  dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
+} = {}) {
+  const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
+  if (!pos || !cl) return geo;
+  // `Color.setHex` runs `Math.floor` on its argument, so handing it a
+  // `THREE.Color` yields NaN and the surface renders black with no error
+  // anywhere. That bug hid in the sabertusk's head for its entire existence.
+  // Every colour-ish option here therefore goes through `asColor`.
+  if (light != null) asColor(_ca, light);
+  asColor(_cb, dark);
+  asColor(_du, dustColor);
+  for (let i = 0; i < cl.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const up = nr ? nr.getY(i) : 0;
+    let r = cl.getX(i), g = cl.getY(i), b = cl.getZ(i);
+
+    // body-scale mottle: three incommensurate frequencies so it does not
+    // resolve into stripes the way a single sine does
+    const m = Math.sin(x * 3.1 + y * 1.7) * 0.5
+      + Math.sin(z * 2.3 - y * 2.9) * 0.32
+      + Math.sin(x * 7.7 + z * 6.1) * 0.18;
+    const k = 1 + m * mottle;
+    r *= k; g *= k; b *= k;
+
+    // Sun-bleached guard hairs along the topline.
+    //
+    // This reads as a *gradient down the back*, never as stripes. A vertex
+    // colour cannot carry a pattern finer than the vertex spacing, and the
+    // first version of this banded at a 12 cm wavelength: on the garula's
+    // shoulder — where the sculpt's quads are a good 20 cm across — it aliased
+    // into half-metre diagonal ochre smears that looked like claw marks. Keep
+    // every frequency here above ~0.5 m and let `organicNormal` carry the
+    // actual hair, which is what a normal map is for.
+    if (tick > 0) {
+      const u = Math.max(0, up);
+      const brk = 0.72 + 0.28 * Math.sin(x * 9.3 + z * 7.1 + y * 4.7);
+      const t = u * u * brk * tick;
+      if (light != null) { r += (_ca.r - r) * t; g += (_ca.g - g) * t; b += (_ca.b - b) * t; }
+      else { const lift = 1 + t * 1.2; r *= lift; g *= lift; b *= lift; }
+    }
+
+    // the underside sits in its own bounce shadow
+    if (shade > 0) {
+      const t = Math.max(0, -up) * shade;
+      r += (_cb.r - r) * t; g += (_cb.g - g) * t; b += (_cb.b - b) * t;
+    }
+
+    // dust carried up the legs and belly, ragged at its upper edge
+    if (dust > 0 && y < dustTop * 1.6) {
+      const edge = 1 - Math.min(1, Math.max(0, y / Math.max(1e-3, dustTop)));
+      const ragged = 0.75 + 0.25 * Math.sin(x * 17 + z * 13);
+      const t = edge * edge * ragged * dust;
+      r += (_du.r - r) * t; g += (_du.g - g) * t; b += (_du.b - b) * t;
+    }
+    cl.setXYZ(i, r, g, b);
+  }
+  return geo;
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.js';
+import { mixc, colc } from './Palette.js';
 import { organicNormal, organicRoughness } from './EnemyBase.js';
 import { QuadrupedEnemy } from './Quadruped.js';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.js';
@@ -193,8 +194,8 @@ function buildPrototype() {
     colorAt: (u, v, p) => {
       const nose = clamp01((p.z - 1.80) / 0.10);
       const under = clamp01((1.66 - p.y) / 0.12);
-      return mix(mix(HIDE, HIDE_DARK, clamp01((p.z - 1.5) / 0.3) * 0.6), NOSE, nose * 0.9)
-        .lerp(new THREE.Color().setHex(BELLY, THREE.SRGBColorSpace), under * 0.3);
+      return mix(mix(mix(HIDE, HIDE_DARK, clamp01((p.z - 1.5) / 0.3) * 0.6), NOSE, nose * 0.9),
+        BELLY, under * 0.3);
     },
     matAt: (u, v, p) => (p.z > 1.82 ? M_WET : M_HIDE),
   });
@@ -366,7 +367,7 @@ function buildPrototype() {
     roughness: 0.93, metalness: 0.0,
     normalMap: organicNormal(), normalScale: 0.85, roughnessMap: organicRoughness(),
   });
-  return rig.build(mat, { radius: 3.4 });
+  return rig.build(mat, { radius: 3.4, coat: { mottle: 0.14, tick: 0.18, shade: 0.18, dust: 0.30, dustTop: 0.55 } });
 }
 
 /** A cloven hoof: two keratin toes with a dewclaw behind. */
@@ -395,13 +396,10 @@ function reset(B) {
   B.glow(null);
 }
 
-const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-function mix(a, b, t) {
-  _c1.setHex(a, THREE.SRGBColorSpace);
-  _c2.setHex(b, THREE.SRGBColorSpace);
-  return _c1.lerp(_c2, clamp01(t));
-}
-function col(hex) { return _c1.setHex(hex, THREE.SRGBColorSpace); }
+// Blending lives in `Palette.js`: the two-register local version this file
+// used could not survive `mix(mix(...), ...)` — see the note there.
+const mix = mixc;
+const col = colc;
 
 class DualhornEnemy extends QuadrupedEnemy {
   constructor(opts) { super(DUALHORN, opts); }
