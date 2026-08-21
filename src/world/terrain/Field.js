@@ -6,6 +6,7 @@ import { worldMap, LANDFORMS, WORLD } from '../map/WorldMap.js';
 
 // packed biome vector slots, see WorldMap.BIOME_KEYS
 const B_BASE = 0, B_RELIEF = 1, B_RIDGE = 2, B_RIDGEIN = 3, B_TERRACE = 4, B_STYLE = 9, B_WARP = 6;
+const B_MOIST = 7;
 
 /**
  * The CPU heightfield — **driven by `world/map/WorldMap.js`, not by taste.**
@@ -403,7 +404,21 @@ export class Field {
     const n = this.n, n2 = this.n2;
     const b = this.map.biomeVec(x, z);
     const bRelief = b[B_RELIEF], bRidge = b[B_RIDGE], bTerrace = b[B_TERRACE];
-    this.lastTerrace = bTerrace;
+    // Benching is a *badland* landform: bare bedded rock shedding its cover in
+    // steps. Under a soil and root mat there is no bench — the slope creeps
+    // smooth — so a humid region keeps only a trace of the map's terrace value.
+    //
+    // This is the fix for the horizontal "wood grain" that ran up every Duscae
+    // and Cleigne valley wall. It was diagnosed twice as strata and it is not:
+    // forcing every strata term to zero leaves it untouched, but a flat albedo
+    // removes it, which rules out both. What it actually is: `terrace` 0.68 at
+    // Taelpar pulls the ground 56 % of the way onto a 22 m staircase, and the
+    // splat then reads the tread as dirt and the riser as rock. A step barely
+    // visible in the geometry comes out as a hard alternating colour band.
+    //
+    // Leide is where terracing belongs and is untouched: `moist` runs
+    // 0.18-0.24 there, so the gate never opens.
+    this.lastTerrace = bTerrace * (1 - 0.88 * smoothstep(0.28, 0.60, b[B_MOIST]));
 
     // large domain warp — kills the "obviously procedural" grid feel
     const q1 = n2.fbm2(x * 0.00032 + 3.1, z * 0.00032 + 7.7, 3);
@@ -499,7 +514,12 @@ export class Field {
         const tw = terr[Math.min(COARSE - 1, (j >> 2)) * COARSE + Math.min(COARSE - 1, (i >> 2))];
 
         if (v > 26 && tw > 0.05) {
-          const step = 22 + 11 * n2.simplex2(x * 0.00041 + 4.4, z * 0.00041 - 2.1);
+          // Two pitches, not one. The 2.4 km field alone gives a whole massif a
+          // single riser spacing, and one spacing repeated up a face is what
+          // reads as corduroy rather than as bedrock; the 260 m field breaks it
+          // into packages the way a real stratigraphic column does.
+          const step = 22 + 11 * n2.simplex2(x * 0.00041 + 4.4, z * 0.00041 - 2.1)
+            + 6 * n2.simplex2(x * 0.0038 - 6.1, z * 0.0038 + 3.7);
           const t = v / step, fl = Math.floor(t), fr = t - fl;
           const k = smoothstep(0.46, 0.9, fr);
           const terraced = (fl + k) * step;
