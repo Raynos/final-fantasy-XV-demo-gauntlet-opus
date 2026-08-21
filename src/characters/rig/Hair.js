@@ -34,6 +34,9 @@ export function buildHair(rig, look) {
   const base = new THREE.Color().setHex(H.color, THREE.SRGBColorSpace);
   const tip = new THREE.Color().setHex(H.tipColor ?? H.color, THREE.SRGBColorSpace);
   const rootC = base.clone().multiplyScalar(0.84);
+  // the value the gaps between locks should sit at: the root colour carried a
+  // third of the way toward the tips, which is roughly the strand mid-tone
+  const shellC = rootC.clone().lerp(tip, 0.34);
 
   // hairline elevation in canonical y for a given azimuth
   // A hairline is not a circle. It rides high across the forehead, plunges at
@@ -44,6 +47,13 @@ export function buildHair(rig, look) {
     let y = -0.012 + 0.049 * c + (H.hairline || 0);
     y -= (H.temple ?? 0.030) * Math.pow(Math.abs(Math.sin(th)), 1.2);
     y += (H.peak || 0) * 0.012 * Math.max(0, Math.cos(th * 2));
+    // Ear notch. A hairline goes *around* the ear; this one ran straight across
+    // it, so the scalp shell buried the top half of both ears and no `_profile`
+    // frame in the game had a visible ear at all. `FACE.ear` sits at azimuth
+    // ~1.66 rad, and the notch is a local dip there rather than a global
+    // `temple` increase, which would open bald patches beside the eyes.
+    const ath = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
+    y -= (H.earNotch ?? 0.022) * Math.exp(-Math.pow((ath - 1.66) / 0.40, 2));
     return y;
   };
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
@@ -82,7 +92,11 @@ export function buildHair(rig, look) {
       // 6 m. It now carries a real crown-to-nape ramp so the mass has a lit
       // side even before a single strand catches the sun.
       const crown = smooth(1 - t * 1.15);
-      B.color(rootC.clone().multiplyScalar(0.74 + 0.62 * crown * crown));
+      // The shell is what shows *between* the locks, so it has to sit in the
+      // same value range they do. At 0.74-1.36 of a 0.84 root colour it was a
+      // long way below the strand mid-tone, and every gap read as a hole —
+      // which is most of what made the scalp look like a moulded black cap.
+      B.color(shellC.clone().multiplyScalar(0.82 + 0.46 * crown * crown));
       row.push(B.v(w.x, w.y, w.z, (c / cols) * 6, t * 1.5));
     }
     shell.push(row);
@@ -173,7 +187,7 @@ export function buildHair(rig, look) {
       const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
       const tRoot = tBase.clone().multiplyScalar(0.62);
       const spike = tuft.spike ?? 0.9;
-      const wid = (tuft.width || 0.014) * (1 + rng.gauss(0, 0.18));
+      const wid = (tuft.width || 0.014) * 1.38 * (1 + rng.gauss(0, 0.18));
       const bone = tuft.spring ? I.tail : I.head;
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
@@ -194,9 +208,13 @@ export function buildHair(rig, look) {
         // once every individual ribbon is thinner than a pixel.
         color: tRoot.clone().lerp(tTip, 0.20 + 0.75 * Math.pow(rng.next(), 1.4)),
         tipColor: tTip.clone().multiplyScalar(0.82 + 0.55 * rng.next()),
-        // clump profile: hold width through the body of the strand and only
-        // taper near the tip, so hair reads as locks rather than quills
-        taper: (t) => Math.pow(clamp01(1 - Math.pow(t, 1.5 + spike)), 0.62),
+        // Clump profile. Holding the width through the body of the strand and
+        // dropping it at the end is an *arrowhead*: a broad blade converging to
+        // a point in a straight line, which is precisely what read as a quill.
+        // A lock narrows continuously from a wide root to a hair-fine tip, so
+        // the width is a plain power curve and the root is correspondingly
+        // wider to keep the same mass in the silhouette.
+        taper: (t) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
       });
     }
   }

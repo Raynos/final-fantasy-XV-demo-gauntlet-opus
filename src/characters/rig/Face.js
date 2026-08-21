@@ -64,6 +64,17 @@ export function lidMargin(f, upper, openU) {
   return (upper ? 1 : -1) * (0.012 + lift * openU * Math.pow(shape, 0.72));
 }
 
+/**
+ * The value the painted face texture and the body's vertex colour both start
+ * from, as a multiplier on `look.skin`.
+ *
+ * These were 0.88 and 1.0 respectively, i.e. the face was 12% darker than the
+ * neck it sits on — a hard tonal break running along the jaw in every frame,
+ * which no amount of normal-map or roughness matching can hide. They are one
+ * number now, and `Body.js` reads it from here.
+ */
+export const SKIN_BASE = 0.88;
+
 /** Canonical head half-extents before sculpting. */
 const HR = [0.0785, 0.1130, 0.0960];
 
@@ -107,6 +118,13 @@ function brushes(look) {
   // brow ridge + glabella
   add({ p: [0.030, 0.0155, 0.079], r: [0.048, 0.017, 0.052], amt: 0.0125 + 0.006 * brow, dir: [0, 0, 1], mirror: true });
   add({ p: [0, 0.009, 0.082], r: [0.022, 0.016, 0.040], amt: 0.0045 + 0.002 * brow, dir: [0, 0, 1] });
+  // Nasion. The single deepest point of the facial profile, at eye level
+  // between the two orbits: the glabella above it comes forward, the nasal
+  // bridge below it comes forward, and the notch between them is what makes a
+  // profile read as a face rather than as a wedge. Without it the forehead and
+  // the nose are one straight plane all the way from hairline to tip, which is
+  // exactly what every `*_profile` frame showed.
+  add({ p: [0, 0.0015, 0.0865], r: [0.0145, 0.0115, 0.030], amt: -0.0082, dir: [0, 0, 1] });
   add({ p: [0.049, 0.010, 0.067], r: [0.028, 0.020, 0.042], amt: 0.0045, dir: 'normal', mirror: true });
   // shadowed hollow directly under the brow
   add({ p: [0.033, 0.0035, 0.078], r: [0.036, 0.009, 0.040], amt: -0.0055, dir: [0, 0, 1], mirror: true });
@@ -163,7 +181,10 @@ function brushes(look) {
 
   // chin + jaw
   add({ p: [0, -0.0945, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
-  add({ p: [0, -0.1075, 0.0735], r: [0.028, 0.026, 0.040], amt: 0.0215 + 0.009 * jaw, dir: [0, 0.06, 1] });
+  add({ p: [0, -0.1075, 0.0735], r: [0.032, 0.026, 0.040], amt: 0.0200 + 0.009 * jaw, dir: [0, 0.06, 1] });
+  // mental tubercles — a chin is a shelf with two corners, not a cone. One
+  // central bump is what made every chin in the cast come to a point.
+  add({ p: [0.0165, -0.1035, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
   add({ p: [0.064, -0.056, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
   // gonial angle — the corner where the ramus turns forward into the body of
@@ -172,7 +193,15 @@ function brushes(look) {
   add({ p: [0.0605, -0.0800, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.010 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.0575, -0.0915, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.054, -0.078, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.050, -0.101, 0.030], r: [0.046, 0.030, 0.062], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
+  // Body of the mandible: the run from the gonial angle forward to the chin.
+  // There was nothing here, so the lower face went straight from the jaw corner
+  // to the chin point with a hollow between them and the profile lost its whole
+  // lower third.
+  add({ p: [0.0400, -0.0975, 0.0500], r: [0.0280, 0.0140, 0.0300], amt: 0.0105 + 0.008 * jaw, dir: 'normal', mirror: true });
+  // The undercut below the jawline. At r_z 0.062 centred on z = 0.030 it reached
+  // z = 0.092 — past the chin — and took the mandible body out with it; it now
+  // cuts behind and below the jaw only.
+  add({ p: [0.050, -0.1030, 0.0180], r: [0.046, 0.028, 0.0480], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.042, -0.036, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
 
   // neck tie-in — tuck the underside so the jawline reads as an edge
@@ -754,6 +783,7 @@ function paintFace(look, uv) {
   const PX = S / (0.085 * Math.PI * 2);
   const PY = S / (FACE.yMax - FACE.yMin);
   const skin = new THREE.Color().setHex(look.skin.getHex(THREE.SRGBColorSpace), THREE.SRGBColorSpace);
+  // (the base tone itself is applied below via SKIN_BASE, shared with Body.js)
   const hexOf = (c) => `#${c.getHexString(THREE.SRGBColorSpace)}`;
   const rng = new Rng(look.seed || 7);
   const n = new Noise((look.seed || 7) + 11);
@@ -766,7 +796,7 @@ function paintFace(look, uv) {
   const fx = (x, y) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
   return faceTexture(S, (ctx) => {
-    ctx.fillStyle = hexOf(skin.clone().multiplyScalar(0.88));
+    ctx.fillStyle = hexOf(skin.clone().multiplyScalar(SKIN_BASE));
     ctx.fillRect(0, 0, S, S);
 
     // large-scale tonal variation + fine mottling

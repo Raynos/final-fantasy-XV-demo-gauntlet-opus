@@ -290,7 +290,7 @@ function cache() {
     + 0.3 * n.simplex2(u * 210, v * 210)
     + 0.22 * n.simplex2(u * 420, v * 420)
   ), 0.85);
-  pore.repeat.set(22, 34);
+  pore.repeat.set(15, 23);
 
   const poreFine = pore.clone();
   poreFine.repeat.set(9, 13);
@@ -328,7 +328,10 @@ export function skinMaterial() {
     roughness: 0.52,
     metalness: 0,
     normalMap: c.pore,
-    normalScale: new THREE.Vector2(0.42, 0.42),
+    // 0.42 on a 128px map tiled 22x34 aliased into a visible woven weave on the
+    // neck, right beside the face's 0.34 at a third of the tiling — the two
+    // together are most of what read as a seam along the jaw
+    normalScale: new THREE.Vector2(0.30, 0.30),
     // a whisper of oily sheen. Clearcoat here is what made skin read as a
     // vacuum-formed plastic shell, so there is none.
     sheen: 0.22,

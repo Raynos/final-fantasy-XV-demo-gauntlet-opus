@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, blob, abump, bump, clamp01 } from './Geo.js';
 import { torsoNodes, armNodes, legNodes, torsoShape, armShape, legShape, drape } from './Anatomy.js';
+import { SKIN_BASE } from './Face.js';
 
 const _ink = new THREE.Color();
 
@@ -24,7 +25,9 @@ export function buildBody(rig, look) {
   const s = dims.s;
   const m = rig.profile.muscle;
   const B = new MeshBuilder('body');
-  const base = look.skin;
+  // the *same* base tone the face texture is painted from — the body used to
+  // sit 12% lighter, which put a hard tonal seam along the jaw
+  const base = look.skin.clone().multiplyScalar(SKIN_BASE);
   B.color(base).mat(0.57, 0);
 
   const y = (v) => v * s;
@@ -126,7 +129,7 @@ function buildHand(B, rig, side, look) {
   const { index: I, P, dims } = rig;
   const gl = look.gloves;
   if (gl) B.color(gl.color).mat(gl.rough ?? 0.72, 0);
-  else B.color(look.skin).mat(0.57, 0);
+  else B.color(look.skin.clone().multiplyScalar(SKIN_BASE)).mat(0.57, 0);
   const s = dims.s;
   const sg = side === 'L' ? 1 : -1;
   const R = (v) => v * s;
