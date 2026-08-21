@@ -137,7 +137,11 @@
 /* FIELD HUD                                                             */
 /* ===================================================================== */
 .hud-corner { position: absolute; }
-#hud .bl { left: 34px; bottom: 30px; }
+/* One owner for the bottom-left corner: a bottom-anchored column with a fixed
+   slot order (combat rail, toasts, party). See `PartyPanel`'s class note. */
+#hud .bl { left: 34px; bottom: 30px; display: flex; flex-direction: column; align-items: flex-start; }
+.bl-combat { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 34px; }
+.bl-notice { display: flex; flex-direction: column; align-items: flex-start; }
 #hud .br { right: 34px; bottom: 30px; }
 #hud .tr { right: 34px; top: 26px; }
 /* a whisper of shade so pale HUD type survives a bright sky */
@@ -298,13 +302,13 @@
 .nameplate .gauge { margin-top: 5px; }
 .nameplate.focus .np-name { color: #fff; text-shadow: 0 0 12px rgba(170,214,255,.5), var(--sh-text); }
 
-.armiger { position: absolute; }
+.armiger { position: relative; }
 .armiger .ar-head { display: flex; align-items: center; gap: 8px; }
 .armiger .ar-lb { font-size: 9px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--sh-text); }
 .armiger .ar-pct { font-size: 15px; font-weight: 200; letter-spacing: .04em; color: var(--ink); text-shadow: var(--sh-text); }
 .armiger .ico { color: var(--ice); }
 
-.techs { position: absolute; left: 34px; bottom: 30px; display: flex; flex-direction: column; gap: 6px; }
+.techs { position: relative; display: flex; flex-direction: column; gap: 6px; }
 .tech { display: flex; align-items: center; gap: 9px; width: 210px; }
 .tech .tk-ico {
   width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center;
@@ -626,13 +630,14 @@
   filter: drop-shadow(0 0 4px rgba(140,190,245,.7)); }
 .wslot.on .wel { color: #dff0ff; }
 
-/* combat left-edge stack sits above the party panel */
-.armiger { left: 34px; bottom: 434px; width: 300px; text-align: left; }
+/* The combat left-edge stack is the top slot of the bottom-left column, so it
+   flows above the toasts and the party stack instead of being parked at a
+   hand-measured `bottom:` that a single toast could push the party through. */
+.armiger { width: 300px; text-align: left; margin-bottom: 32px; }
 .armiger .ar-head { margin-bottom: 8px; }
 .armiger .ar-lb { flex: 1; }
 .armiger .ar-pct { font-size: 16px; }
 .armiger .ar-note { font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-4); }
-.techs { left: 34px; bottom: 276px; }
 .tech { width: 300px; }
 
 /* banter bubbles ride above the party stack when not fighting */

@@ -15,8 +15,9 @@ export class Toasts {
   /** @param {HTMLElement} parent */
   constructor(parent) {
     this.root = el('div.toasts');
-    // above the party stack, not below it
-    parent.insertBefore(this.root, parent.firstChild);
+    // `parent` is the bottom-left corner's notice slot, which sits above the
+    // party stack and below the combat rail — see `PartyPanel`'s class note.
+    parent.appendChild(this.root);
     /** @type {Array<{node:HTMLElement, clip:Clip}>} */
     this.items = [];
     this.max = 5;

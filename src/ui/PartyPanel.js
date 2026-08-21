@@ -8,12 +8,39 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
 /**
  * Bottom-left party status stack: three companions above, Noctis at the bottom
  * with a larger plate, an MP gauge and a level readout.
+ *
+ * ### This class owns the whole bottom-left corner
+ *
+ * Four things want to live here — the Armiger gauge, the technique rail, the
+ * toast column and the party stack — and until now three of them were parked at
+ * hand-measured `bottom:` offsets while the fourth (toasts) grew inside the same
+ * bottom-anchored box. Every toast therefore shoved the party stack *up* by
+ * ~33 px, and after one or two pickups the DAWNHAMMER / REGROUP / STARSHELL rail
+ * was drawing straight through the party's HP numbers.
+ *
+ * So the corner is one bottom-anchored flex column with a fixed slot order, and
+ * flow — not arithmetic — keeps the four apart:
+ *
+ * ```
+ *   .bl-combat   Armiger gauge + technique rail   (combat only, display:none otherwise)
+ *   .bl-notice   toast column                     (transient)
+ *   .party       party stack                      (always, pinned to the bottom)
+ * ```
+ *
+ * `CombatHUD` fills `combatSlot` and `Toasts` fills `noticeSlot`; nothing in
+ * either needs to know how tall the others are.
  */
 export class PartyPanel {
   /** @param {HTMLElement} parent */
   constructor(parent) {
     this.root = el('div.hud-corner.bl');
+    /** Armiger + technique rail live here — see the class note. */
+    this.combatSlot = el('div.bl-combat');
+    /** The toast column lives here. */
+    this.noticeSlot = el('div.bl-notice');
     this.list = el('div.party');
+    this.root.appendChild(this.combatSlot);
+    this.root.appendChild(this.noticeSlot);
     this.root.appendChild(this.list);
     parent.appendChild(this.root);
     this.rows = [];
