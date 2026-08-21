@@ -7,9 +7,12 @@ import { grassClumpTex } from './VegTextures.js';
 /**
  * Camera-following instanced grass with three LOD rings:
  *
- *   0  real tapered blade geometry, grown in tufts, 0-30 m
- *   1  crossed alpha-cut tuft cards, 25-95 m
- *   2  big sparse clump cards, 88-190 m
+ *   0  real tapered blade geometry, grown in tufts, 0-26 m
+ *   1  crossed alpha-cut tuft cards, 21-84 m
+ *   2  sparse multi-tuft clump cards, 78-155 m
+ *
+ * All three read their height from one place — {@link tuftHeight} — because
+ * they had drifted to a measured 1 : 2 : 3.5 when each computed its own.
  *
  * Placement is *position-hashed*, never sequence-dependent, so a tile
  * regenerates byte-identically no matter which order tiles stream in.
@@ -21,11 +24,14 @@ import { grassClumpTex } from './VegTextures.js';
 
 // Ring sizing, two rules:
 //
-// The blade ring is short because Leide grass is ankle-to-calf high. Past
-// thirty metres a whole tuft is a couple of pixels, and one textured card per
-// tuft is then both cheaper and *more* accurate than a hundred sub-pixel
-// triangles. `spacing` on that ring is therefore the tuft grid, not the blade
-// grid: every accepted cell spawns a whole clump.
+// The blade ring is short because Leide grass is an ankle tuft. Past twenty-odd
+// metres a whole tuft is a couple of pixels, and one textured card per tuft is
+// then both cheaper and *more* accurate than a hundred sub-pixel triangles.
+// `spacing` on that ring is therefore the tuft grid, not the blade grid: every
+// accepted cell spawns a whole clump. Every ring came in when the grass got
+// shorter (30/95/190 -> 26/84/155) for exactly that reason: a 0.16 m tuft goes
+// sub-pixel sooner than the 0.34 m one the old numbers were drawn around, and
+// the metres bought back pay for the tighter tuft grid.
 //
 // The outer ring used to reach 300 m. An alpha-cut card that small samples the
 // coarsest mips, where its silhouette no longer exists, so the whole quad
@@ -34,13 +40,43 @@ import { grassClumpTex } from './VegTextures.js';
 // and handing the rest to the terrain's own grass tint reads far better than
 // stamping geometry the alpha test cannot resolve.
 const LODS = [
-  { name: 'blade', tile: 12, far: 30, spacing: 0.36, max: 240000 },
-  { name: 'clump', tile: 24, near: 25, far: 95, spacing: 0.46, max: 105000 },
-  { name: 'far', tile: 48, near: 88, far: 190, spacing: 1.7, max: 44000 },
+  { name: 'blade', tile: 12, far: 26, spacing: 0.27, max: 240000, hMul: 1.0 },
+  { name: 'clump', tile: 24, near: 21, far: 84, spacing: 0.40, max: 105000, hMul: 1.05 },
+  { name: 'far', tile: 48, near: 78, far: 155, spacing: 1.35, max: 44000, hMul: 1.45 },
 ];
 
 /** Blades in the fattest tuft. Sizes the tile scratch buffer. */
 const MAX_PER_CLUMP = 22;
+
+/**
+ * The one height law for the whole field: the apparent height in metres of a
+ * single tuft — the number the blade ring's tallest stems reach, and the number
+ * a clump card that replaces that tuft is built to.
+ *
+ * It exists because the three rings were each computing their own height from
+ * the same inputs and had drifted badly apart. Measured in the field at
+ * Hammerhead before this change: blade ring mean 0.171 m / max 0.407 m, LOD1
+ * cards 0.340 / 0.668, LOD2 cards 0.604 / 1.068 — a ratio of **1 : 2 : 3.5**
+ * across a boundary the eye is supposed to be unable to find. Half of why the
+ * grass read as knee-high straw is simply that a metre-tall card was standing
+ * where a 0.2 m tussock belongs. Leide grass is an ankle tuft; at d = 0.68 this
+ * gives 0.10-0.25 m with a mean of 0.157, and the zone `grassH` multiplier
+ * still takes Alstor Slough and the Vesperpool to waist-high reed.
+ *
+ * Every ring multiplies this by its own `LODS[i].hMul` and nothing else. A card
+ * ring is allowed to be slightly taller than one tuft because it stands in for
+ * several at once and inherits the tallest — but "slightly" is 1.05 and 1.45,
+ * not 2 and 3.5.
+ *
+ * @param {number} d    local grass density 0..1
+ * @param {number} wet  local wetness 0..1
+ * @param {number} hMul the zone's `grassH`
+ * @param {number} jitter per-tuft 0..1 draw
+ * @returns {number} metres
+ */
+function tuftHeight(d, wet, hMul, jitter) {
+  return (0.100 + 0.090 * d + 0.130 * wet * wet) * hMul * (0.62 + jitter * 0.88);
+}
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -440,16 +476,22 @@ export class GrassField {
           // in the middle. Radius and population both vary, so the field is
           // tufts-and-dirt rather than an even scatter.
           // heavy-tailed tuft size: mostly small sprigs, the odd fat tussock
-          const vig = 0.55 + Math.pow(clumpRnd, 1.7) * 1.35;
-          const rad = (0.05 + clumpRnd * 0.13 + rng.next() * 0.07) * vig;
+          const hTuft = tuftHeight(d, wet, hMul, Math.pow(clumpRnd, 1.7)) * lod.hMul;
+          // Radius follows height. It used to be an absolute range that worked
+          // out at ~0.83x the tuft's own height, which is not a tussock, it is
+          // a pancake — and a pancake of blades is exactly the shape that reads
+          // as an unbroken mat rather than as separate plants.
+          const rad = hTuft * (0.26 + rng.next() * 0.30);
           // whole-tuft lean: a real tussock is combed over by the prevailing
           // wind, so it is never the radially symmetric pom-pom that a pure
           // outward splay produces
           const tuftA = rng.next() * Math.PI * 2;
           const tuftL = rng.next() * 0.30;
+          // Fewer blades per tuft than before, over a tighter tuft grid: same
+          // instance budget spent on more, smaller plants, which is what puts
+          // open dirt back between them.
           const nb = Math.min(MAX_PER_CLUMP,
-            Math.max(3, Math.round((4 + d * 14) * (0.55 + rng.next() * 0.95))));
-          const hBase = (0.10 + 0.10 * d + 0.13 * wet * wet) * (0.68 + vig * 0.38) * hMul;
+            Math.max(3, Math.round((2 + d * 6.5) * (0.55 + rng.next() * 0.95))));
           const k = (dead ? 0.92 : 0.62) + colRnd * 0.62;
           for (let bI = 0; bI < nb; bI++) {
             if (count >= cap) break;
@@ -457,8 +499,10 @@ export class GrassField {
             const rr = Math.sqrt(rng.next()) * rad;
             // blades at the edge of a tuft are shorter and lean out further
             const edge = rr / Math.max(rad, 1e-4);
-            // long tail on the height so a few stems overtop the tuft
-            const h = hBase * (0.45 + Math.pow(rng.next(), 0.7) * 1.15) * (1 - edge * 0.28);
+            // Long tail on the height so a few stems overtop the tuft, scaled
+            // so that the tallest of them lands on `hTuft` and not past it —
+            // that is the contract the card rings are matched against.
+            const h = hTuft * (0.30 + Math.pow(rng.next(), 0.7) * 0.72) * (1 - edge * 0.28);
             const lean = (0.10 + edge * 0.42) * (0.6 + rng.next() * 0.9);
             const yaw = a + rng.gauss(0, 0.5);
             // droop grows faster than height: a half-metre stem lies over
@@ -477,22 +521,21 @@ export class GrassField {
           continue;
         }
 
+        // One card is one tuft (LOD1) or a small stand of them (LOD2), and both
+        // get their height from the same law the blade ring does — that is the
+        // whole point of `tuftHeight`. The cards are proportionally *wider*
+        // than they used to be so that halving their height does not quarter
+        // the coverage: a tuft seen at fifty metres is a low sprawling shape,
+        // not a tall narrow one.
         const jitter = rng.next();
-        let h, w;
-        if (li === 1) {
-          // one card == one tuft, matched to the blade ring it takes over from
-          h = (0.16 + 0.22 * d + 0.2 * wet * wet) * (0.75 + jitter * 0.85) * hMul;
-          w = h * (1.5 + rng.next() * 1.1);
-        } else {
-          // bigger cards on the outer ring: a few large clumps resolve, a
-          // scatter of tiny ones only aliases
-          h = (0.3 + 0.4 * d) * (0.8 + jitter * 0.8) * hMul;
-          w = h * (1.8 + rng.next() * 1.2);
-        }
+        const h = tuftHeight(d, wet, hMul, jitter) * lod.hMul;
+        const w = h * (li === 1 ? 2.2 + rng.next() * 1.5 : 2.6 + rng.next() * 1.8);
         const yaw = rng.next() * Math.PI * 2;
         _e.set(rng.gauss(0, 0.07), yaw, rng.gauss(0, 0.06));
         _q.setFromEuler(_e);
-        _pos.set(x, y - 0.03, z);
+        // sink proportionally, not absolutely: 3 cm hid the root of a 0.6 m
+        // card and buries a fifth of a 0.16 m one
+        _pos.set(x, y - h * 0.07, z);
         _scl.set(w, h, w);
         _m.compose(_pos, _q, _scl);
         _m.toArray(mArr, count * 16);
