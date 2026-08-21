@@ -93,11 +93,11 @@ escapes. Skip the "genre leak" regexes — that is their journal problem.
 
 ### 4. A closed Status vocabulary on plans, and archive-when-done
 
-**Why now.** This is our live bug. `docs/plans/` today holds
+**Why now.** This was our live bug. `docs/plans/` held
 `2026-08-21-harness-daemon.md` *and* `2026-08-21-opus-harness-daemon.md` — two
-near-identical plans from the same day, one missing the model prefix we adopted
-three commits ago, and **not one of our five plans states whether it is
-proposed, in progress, or already built**. A reader cannot tell live work from
+overlapping plans from the same day, one missing the model prefix we adopted
+three commits ago (since merged into the prefixed file) — and **not one of our
+five plans states whether it is proposed, in progress, or already built**. A reader cannot tell live work from
 landed work without opening all five.
 
 **Do:** two conventions, both enforceable in the same pre-commit block as 3:
@@ -107,8 +107,9 @@ landed work without opening all five.
 - `DONE`/`SUPERSEDED` moves to `project/archive/` (new dir), so `docs/plans/`
   lists only live work — which is what makes item 2's brief honest.
 
-Backfill the five existing plans and reconcile the two harness-daemon files in
-the same commit.
+Backfill the five existing plans. The two harness-daemon files are already
+reconciled; the merged plan carries the first `Status:` line, with Decision 1
+(drop worktrees) marked `LOCKED`.
 
 ### 5. "If it isn't in the queue, it doesn't exist"
 
