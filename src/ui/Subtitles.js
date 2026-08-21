@@ -19,8 +19,14 @@ import { el, clamp, easeOut, easeOutQuint, Clip } from './UIKit.js';
  * survives. In ordinary play `currentShot` is always `null` and this is inert.
  */
 export class Subtitles {
-  /** @param {HTMLElement} parent @param {object} [game] */
-  constructor(parent, game) {
+  /**
+   * @param {HTMLElement} parent full-screen layer for the lower third
+   * @param {object} [game]
+   * @param {HTMLElement} [banterParent] the bottom-left corner's banter slot,
+   *   owned by `PartyPanel`. Without it the bubbles fall back to this layer and
+   *   the stylesheet's absolute placement, which is what they used to do.
+   */
+  constructor(parent, game, banterParent) {
     this.game = game || null;
     this.root = el('div.subs-layer');
     parent.appendChild(this.root);
@@ -36,7 +42,8 @@ export class Subtitles {
     this.cur = null;
 
     this.banter = el('div.banter');
-    this.root.appendChild(this.banter);
+    if (banterParent) { this.banter.classList.add('inflow'); banterParent.appendChild(this.banter); }
+    else this.root.appendChild(this.banter);
     this.bubbles = [];
 
     window.addEventListener('ffxv-say', (e) => this.say(e.detail?.who, e.detail?.line, e.detail?.dur));

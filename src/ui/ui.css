@@ -148,6 +148,7 @@
    slot order (combat rail, toasts, party). See `PartyPanel`'s class note. */
 #hud .bl { left: 34px; bottom: 30px; display: flex; flex-direction: column; align-items: flex-start; }
 .bl-combat { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 34px; }
+.bl-banter { display: flex; flex-direction: column; align-items: flex-start; }
 .bl-notice { display: flex; flex-direction: column; align-items: flex-start; }
 #hud .br { right: 34px; bottom: 30px; }
 #hud .tr { right: 34px; top: 26px; }
@@ -216,7 +217,7 @@
   text-shadow: var(--sh-text); line-height: 1; min-width: 76px; text-align: right; white-space: nowrap;
 }
 .party-row.lead .hp-line .val { font-size: 16px; min-width: 100px; }
-.hp-line .val .max { font-size: 9px; color: var(--ink-3); letter-spacing: 0.05em; }
+.hp-line .val .max { font-size: 9px; color: var(--ink-2); letter-spacing: 0.05em; }
 .mp-line { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
 .mp-line .tag { font-size: 8px; letter-spacing: 0.28em; color: var(--ink-3); text-shadow: var(--sh-text); }
 .mp-line .gauge { flex: 1 1 auto; }
@@ -443,6 +444,9 @@
 .subs .sr { height: 1px; width: 46px; margin: 0 auto 10px; background: linear-gradient(90deg, transparent, var(--hair-hot), transparent); }
 
 .banter { position: absolute; display: flex; flex-direction: column; gap: 5px; }
+/* in the bottom-left column the corner places it — see `PartyPanel` */
+.banter.inflow { position: relative; left: auto; bottom: auto; align-items: flex-start; margin-bottom: 16px; }
+.banter.inflow:empty { display: none; }
 .banter .bb {
   position: relative; padding: 9px 15px 10px; max-width: 340px;
   background: linear-gradient(104deg, rgba(9,14,24,.66), rgba(9,14,24,.34));

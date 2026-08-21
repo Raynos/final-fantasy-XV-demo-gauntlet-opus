@@ -53,7 +53,7 @@ export class HUD {
     this.compass = new CompassBar(this.root);
     this.combat = new CombatHUD(this.root, this.party.combatSlot);
     this.prompts = new Prompts(this.root);
-    this.subtitles = new Subtitles(this.root, game);
+    this.subtitles = new Subtitles(this.root, game, this.party.banterSlot);
     this.toasts = new Toasts(this.party.noticeSlot);
     this.fx = new ScreenFX(game.uiRoot);
     // Hints sit in their own layer above the menus, so the "how do I get out

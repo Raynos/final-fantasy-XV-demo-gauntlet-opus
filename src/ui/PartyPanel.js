@@ -23,12 +23,16 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
  *
  * ```
  *   .bl-combat   Armiger gauge + technique rail   (combat only, display:none otherwise)
+ *   .bl-banter   party banter bubbles              (field only, transient)
  *   .bl-notice   toast column                     (transient)
  *   .party       party stack                      (always, pinned to the bottom)
  * ```
  *
- * `CombatHUD` fills `combatSlot` and `Toasts` fills `noticeSlot`; nothing in
- * either needs to know how tall the others are.
+ * `CombatHUD` fills `combatSlot`, `Subtitles` fills `banterSlot` and `Toasts`
+ * fills `noticeSlot`; nothing in any of them needs to know how tall the others
+ * are. The banter bubbles were the last thing down here still pinned to a
+ * hand-measured `bottom:` — at `268px` they sat 33 px above the party stack and
+ * a single toast printed straight through them.
  */
 export class PartyPanel {
   /** @param {HTMLElement} parent */
@@ -36,10 +40,13 @@ export class PartyPanel {
     this.root = el('div.hud-corner.bl');
     /** Armiger + technique rail live here — see the class note. */
     this.combatSlot = el('div.bl-combat');
+    /** Party banter bubbles live here. */
+    this.banterSlot = el('div.bl-banter');
     /** The toast column lives here. */
     this.noticeSlot = el('div.bl-notice');
     this.list = el('div.party');
     this.root.appendChild(this.combatSlot);
+    this.root.appendChild(this.banterSlot);
     this.root.appendChild(this.noticeSlot);
     this.root.appendChild(this.list);
     parent.appendChild(this.root);
