@@ -31,12 +31,12 @@ export function buildSkeleton(profile: any = {}): any {
   const sw = p.shoulder;
 
   // --- bind-pose world positions -----------------------------------------
-  const Y = (v) => v * s;
+  const Y = (v: any) => v * s;
   const shoulderY = Y(1.425);
   const shX = 0.178 * s * sw;
 
   // A-pose arm chain: down, 11° out, a touch forward, slight elbow break
-  const armDir = (deg, fwd) => {
+  const armDir = (deg: any, fwd: any) => {
     const r = (deg * Math.PI) / 180;
     return [Math.sin(r), -Math.cos(r), fwd];
   };
@@ -86,7 +86,7 @@ export function buildSkeleton(profile: any = {}): any {
 
   for (const side of ['L', 'R']) {
     const m = side === 'L' ? 1 : -1;
-    const mx = (a) => [a[0] * m, a[1], a[2]];
+    const mx = (a: any) => [a[0] * m, a[1], a[2]];
     defs.push(
       [`clavicle${side}`, 'spine03', mx([0.038 * s * sw, Y(1.432), 0.024 * s])],
       [`upperArm${side}`, `clavicle${side}`, mx([shX, shoulderY, 0.004 * s])],
@@ -148,7 +148,7 @@ export function buildSkeleton(profile: any = {}): any {
 }
 
 /** Convenience: skin-weight pair list from bone names. */
-export function W(index, ...pairs) {
+export function W(index: any, ...pairs) {
   const out = [];
   for (let i = 0; i < pairs.length; i += 2) out.push([index[pairs[i]], pairs[i + 1]]);
   return out;

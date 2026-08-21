@@ -4,7 +4,7 @@ import {
 } from '../../combat/GeoKit.ts';
 import { metalNormal, metalRoughness } from '../../characters/enemies/EnemyBase.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const HULL = 0x2a2d33;
 const HULL_DARK = 0x14161a;
@@ -20,6 +20,20 @@ const RED = 0xff2a18;
  * draw call), built once and reused for every arrival.
  */
 export class Dropship {
+  _acc!: number;
+  _dropped!: number;
+  _tmp!: THREE.Vector3;
+  at!: THREE.Vector3;
+  exit!: any;
+  from!: THREE.Vector3;
+  game!: any;
+  mesh!: any;
+  payload!: any[];
+  root!: THREE.Group;
+  state!: string;
+  t!: number;
+  terrain!: any;
+  vfx!: any;
   init(game: any) {
     this.game = game;
     this.terrain = game.get('Terrain');
@@ -67,7 +81,7 @@ export class Dropship {
     return this;
   }
 
-  update(dt) {
+  update(dt: any) {
     if (this.state === 'idle') return;
     this.t += dt;
     const target = this._tmp.set(this.at.x, this.at.y + HOVER, this.at.z);
@@ -157,7 +171,7 @@ export class Dropship {
   }
 
   /** Thruster wash — a downdraught of dust and hot exhaust. */
-  _thrusters(dt, power) {
+  _thrusters(dt: any, power: any) {
     const vfx = this.vfx;
     if (!vfx) return;
     this._acc = (this._acc || 0) + dt * power * 22;

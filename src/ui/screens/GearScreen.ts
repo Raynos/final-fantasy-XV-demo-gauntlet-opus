@@ -23,6 +23,22 @@ const CLASS_OK = {
  * gear, buffs and Ascension folded in, and the technique list from `PartyState`.
  */
 export class GearScreen {
+  _key!: any;
+  _msg!: any;
+  _msgAge!: number;
+  cards!: any[];
+  game!: any;
+  grid!: any;
+  i!: number;
+  j!: number;
+  menus!: any;
+  msg!: any;
+  pick!: any;
+  pickH!: any;
+  pickList!: any;
+  picker!: any;
+  sub!: string;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -36,7 +52,7 @@ export class GearScreen {
     this._msgAge = 9;
   }
 
-  build(root: HTMLElement, game) {
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.grid = el('div.gear-grid');
     root.appendChild(this.grid);
@@ -58,13 +74,13 @@ export class GearScreen {
     root.appendChild(this.msg);
   }
 
-  _build(game, party) {
+  _build(game: any, party: any) {
     const r = rpg(game);
-    party.forEach((p) => {
+    party.forEach((p: any) => {
       const list = readGear(game, p.id);
       const bar = new Bar({ cls: 'slim' });
       const hpVal = el('div.gv');
-      const slots = list.map((s) => {
+      const slots = list.map((s: any) => {
         const n = el('div.gslot', {}, [
           el('div.gs-k', {}, [icon(SLOT_ICON[s.slot] || 'sword', { size: 11, stroke: 1.3 }), el('span', { text: ` ${s.slot}` })]),
           el('div.gs-n', { text: s.name }),
@@ -86,11 +102,11 @@ export class GearScreen {
         ]),
         el('div.rule', { style: 'margin-top:16px' }),
         el('div.gc-hp', {}, [el('span.k', { text: 'HP' }), bar.node, hpVal]),
-        el('div.gc-slots', {}, slots.map((s) => s.n)),
+        el('div.gc-slots', {}, slots.map((s: any) => s.n)),
         el('div.rule', { style: 'margin-top:26px' }),
         el('div.gc-abil', {}, [
           el('div.k', { text: 'Techniques' }),
-          ...(techs.length ? techs : [{ name: '—', bars: 0 }]).map((t) => el('div.ab', {}, [
+          ...(techs.length ? techs : [{ name: '—', bars: 0 }]).map((t: any) => el('div.ab', {}, [
             icon('ascension', { size: 11, stroke: 1.3 }),
             el('span', { text: t.bars ? `${t.name}   ·   ${t.bars} bar${t.bars === 1 ? '' : 's'}` : t.name }),
           ])),
@@ -103,7 +119,7 @@ export class GearScreen {
     });
   }
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     if (this.picker) {
       const n = this.picker.rows.length || 1;
       if (dy) this.picker.i = (this.picker.i + dy + n) % n;
@@ -130,7 +146,7 @@ export class GearScreen {
     const slot = layout[this.j];
     if (!slot) return;
     const kind = slot.slot === 'Weapon' ? 'weapon' : 'accessory';
-    const index = layout.slice(0, this.j).filter((s) => s.slot === slot.slot).length;
+    const index = layout.slice(0, this.j).filter((s: any) => s.slot === slot.slot).length;
     const options = this._candidates(r, card.p.id, kind, slot);
     this.picker = { charId: card.p.id, kind, index, rows: options, i: 0, slotName: slot.slot };
     this._renderPicker();
@@ -145,7 +161,7 @@ export class GearScreen {
   }
 
   /** Everything in the bag this member is allowed to put in this slot. */
-  _candidates(r, charId, kind, slot) {
+  _candidates(r: any, charId: any, kind: any, slot: any) {
     const rows = [];
     if (!slot.empty) rows.push({ id: null, name: '— Remove —', stat: 'Back into the bag', count: 0 });
     const allowed = CLASS_OK[charId] || CLASS_OK.noctis;
@@ -171,7 +187,7 @@ export class GearScreen {
     this.pick.style.display = '';
     this.pickH.textContent = `${p.charId.toUpperCase()}  ·  ${p.slotName} slot ${p.index + 1}`;
     clear(this.pickList);
-    p.nodes = p.rows.map((row) => {
+    p.nodes = p.rows.map((row: any) => {
       const bg = el('div.mr-bg');
       const node = el('div.eprow', {}, [
         bg,
@@ -205,9 +221,9 @@ export class GearScreen {
     this.back();
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
-  enter(game) {
+  enter(game: any) {
     if (game) this.game = game;
     this._key = null;
     this.picker = null;

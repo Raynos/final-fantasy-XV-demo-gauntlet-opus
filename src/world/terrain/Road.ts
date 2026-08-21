@@ -19,6 +19,12 @@ import { Noise } from '../../util/Noise.ts';
  * driving system keep working unchanged.
  */
 export class RoadNetwork {
+  _noise!: Noise;
+  graph!: any;
+  nodeY!: any;
+  shoulder!: number;
+  spine!: any;
+  width!: number;
   constructor(graph: import('../map/RoadGraph.ts').RoadGraph) {
     this.graph = graph;
     this._noise = new Noise(551133);
@@ -35,7 +41,7 @@ export class RoadNetwork {
    * steeper than its class allows. Without this a junction sitting on a slope
    * makes both roads that meet there jump.
    */
-  _fitNodes(field) {
+  _fitNodes(field: any) {
     const g = this.graph;
     const y = new Map();
     const ground = new Map();
@@ -80,7 +86,7 @@ export class RoadNetwork {
    * Smoothed, grade-limited centreline elevation for one edge, with the two
    * junction elevations pinned.
    */
-  _fitEdge(edge, field) {
+  _fitEdge(edge: any, field: any) {
     const p = edge.pts;
     const ground = new Float32Array(p.length);
     for (let i = 0; i < p.length; i++) {
@@ -140,7 +146,7 @@ export class RoadNetwork {
   // ---------------------------------------------------------------- queries
 
   /** Metres to the nearest road centreline. */
-  distance(x, z) { return this.graph.distance(x, z, 320); }
+  distance(x: any, z: any) { return this.graph.distance(x, z, 320); }
 
   // -------------------------------------------------------- bake / restore
 
@@ -210,7 +216,7 @@ export class RoadNetwork {
     this.spine = this._makeSpine();
   }
 
-  _carveEdge(edge, field) {
+  _carveEdge(edge: any, field: any) {
     const { N, HALF, CELL, h, road, roadLat } = field;
     const n = this._noise;
     const cls = edge.clsDef;
@@ -281,7 +287,7 @@ export class RoadNetwork {
    * Level aprons at parking spots, turning circles and station forecourts, so
    * a car can stop, turn and be parked without hanging off a slope.
    */
-  _carveBays(field) {
+  _carveBays(field: any) {
     const { N, HALF, CELL, h, road } = field;
     const g = this.graph;
     for (const [id, node] of g.nodes) {
@@ -314,7 +320,7 @@ export class RoadNetwork {
    * road alike. Pre-subtracting it from the carved cells is what keeps a
    * highway smooth without the vertex shader having to sample a road mask.
    */
-  _compensateMicro(field) {
+  _compensateMicro(field: any) {
     const { N, HALF, CELL, h, road, micro } = field;
     if (!micro) return;
     for (let j = 0; j < N; j++) {
@@ -342,7 +348,7 @@ export class RoadNetwork {
       width: g.classes.highway.half,
       shoulder: g.classes.highway.shoulder,
       /** Point on the highway centreline at arc-length `s` metres. */
-      pointAt(s) {
+      pointAt(s: any) {
         if (!pts.length) return { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
         const t = Math.max(0, Math.min(this.length, s));
         let lo = 0, hi = pts.length - 1;
@@ -358,12 +364,12 @@ export class RoadNetwork {
         };
       },
       /** Distance to the nearest road of any class, metres. */
-      distance(x, z) { return self.distance(x, z); },
+      distance(x: any, z: any) { return self.distance(x, z); },
     };
   }
 }
 
-function smoothstep(a, b, x) {
+function smoothstep(a: any, b: any, x: any) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }

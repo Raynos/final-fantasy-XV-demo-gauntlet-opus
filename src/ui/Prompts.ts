@@ -35,6 +35,9 @@ const SETS = {
  * mode and cross-fades rather than snapping.
  */
 export class Prompts {
+  mode!: any;
+  root!: any;
+  row!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bc');
     this.row = el('div.prompts');
@@ -43,7 +46,7 @@ export class Prompts {
     this.mode = null;
   }
 
-  _render(mode) {
+  _render(mode: any) {
     this.row.textContent = '';
     for (const [key, label] of SETS[mode] || SETS.field) {
       this.row.appendChild(el('div.prompt.key', {}, [

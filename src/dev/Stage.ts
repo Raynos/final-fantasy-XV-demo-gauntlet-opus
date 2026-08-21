@@ -28,6 +28,20 @@ const KEY_OFFSET = 0.6;
  * get added and renamed; "is it a light" does not.
  */
 export class Stage {
+  _current!: any;
+  _keep!: Set<any>;
+  _needFrame!: boolean;
+  _timeWas!: any;
+  _uiWas!: any[] | null;
+  active!: boolean;
+  dist!: number;
+  faceOffset!: number;
+  group!: THREE.Group;
+  pitch!: number;
+  pivot!: THREE.Vector3;
+  rate!: number;
+  spin!: boolean;
+  yaw!: number;
   constructor() {
     this.active = false;
     this.spin = true;
@@ -180,13 +194,13 @@ export class Stage {
    * cvar — move the sun and the next asset should still be lit, not silhouetted.
    */
   keyToSun(game: any) {
-    let sun = null;
+    let sun: any = null;
     const sky = game.get('Sky');
     for (const k of ['sun', 'light', 'dirLight', 'sunLight']) {
       if (sky && sky[k] && sky[k].isDirectionalLight) { sun = sky[k]; break; }
     }
     if (!sun) {
-      game.scene.traverse((o) => { if (!sun && o.isDirectionalLight) sun = o; });
+      game.scene.traverse((o: any) => { if (!sun && o.isDirectionalLight) sun = o; });
     }
     if (!sun) return;
     // A directional light's position points *towards* where the light comes
@@ -209,11 +223,11 @@ export class Stage {
   stats() {
     let tris = 0, meshes = 0, mats = new Set(), bones = 0;
     if (this._current) {
-      this._current.traverse((o) => {
+      this._current.traverse((o: any) => {
         if (o.isSkinnedMesh && o.skeleton) bones = Math.max(bones, o.skeleton.bones.length);
         if (o.isMesh && o.geometry) {
           meshes++;
-          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m.uuid));
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: any) => mats.add(m.uuid));
           const g = o.geometry;
           tris += g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
         }
@@ -227,7 +241,7 @@ export class Stage {
    * the camera, so manual flight still wins when the turntable is off.
    * @param dt @param cam
    */
-  update(dt: number, cam: import('./Freecam.ts').Freecam, game) {
+  update(dt: number, cam: import('./Freecam.ts').Freecam, game: any) {
     if (!this.active) return;
     if (game) this._hide(game);
     if (!this.spin && !this._needFrame) return;

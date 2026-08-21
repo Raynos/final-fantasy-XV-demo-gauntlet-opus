@@ -57,7 +57,7 @@ export const LANDMARKS = buildLandmarks();
 function buildLandmarks() {
   const byId = new Map(LANDFORMS.map((l) => [l.id, l]));
   const L = {};
-  const put = (key, id, kind) => {
+  const put = (key: any, id: any, kind: any) => {
     const f = byId.get(id);
     if (f) L[key] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
   };
@@ -87,7 +87,7 @@ function buildLandmarks() {
  * equivalent to `tf_micro` in `TerrainMaterial.js`.
  * @returns metres to add to the grid height
  */
-export function microDetail(x, z): number {
+export function microDetail(x: any, z: any): number {
   // Two octaves, not three. `heightAt()` is called tens of thousands of times a
   // frame by the grass streamer alone, so this is a hot path: the third octave
   // that used to modulate the amplitude cost 33% of the whole function and was
@@ -97,6 +97,35 @@ export function microDetail(x, z): number {
 }
 
 export class Field {
+  CELL!: any;
+  HALF!: any;
+  N!: any;
+  _b!: any;
+  _coarse!: any;
+  _farMs!: any;
+  _terr!: any;
+  corr!: any;
+  ctrl!: Uint8Array;
+  far!: Float32Array;
+  farCtrl!: Uint8Array;
+  farNrm!: Uint16Array;
+  flow!: Float32Array | null;
+  h!: Float32Array;
+  lastTerrace!: number;
+  map!: any;
+  massRaise!: Float32Array;
+  n!: Noise;
+  n2!: Noise;
+  n3!: Noise;
+  network!: RoadNetwork;
+  nrm!: Uint16Array;
+  road!: any;
+  roadLat!: Float32Array | null;
+  roadMask!: Float32Array | null;
+  roadSpline!: any;
+  sed!: Float32Array | null;
+  slope0!: any;
+  stats!: any;
   constructor(seed = 1337) {
     this.N = N; this.HALF = HALF; this.CELL = CELL;
     this.n = new Noise(seed);
@@ -139,7 +168,7 @@ export class Field {
     this._settlementPads();
     this.network.carve({
       N, HALF, CELL, h: this.h, road: this.roadMask, roadLat: this.roadLat,
-      rawHeightAt: (x, z) => this.rawHeightAt(x, z),
+      rawHeightAt: (x: any, z: any) => this.rawHeightAt(x, z),
       micro: microDetail,
     });
     /** Legacy single-spline handle: the main highway. */
@@ -169,7 +198,7 @@ export class Field {
     const c = new Float32Array(COARSE * COARSE).fill(1e6);
     const g = this.map.roadGraph;
 
-    const stamp = (x, z, extra) => {
+    const stamp = (x: any, z: any, extra: any) => {
       const R = 520 + extra;
       const i0 = Math.max(0, Math.floor((x - R + HALF) / COARSE_CELL));
       const i1 = Math.min(COARSE - 1, Math.ceil((x + R + HALF) / COARSE_CELL));
@@ -204,7 +233,7 @@ export class Field {
     // procedural ridge belt is faded out against it, so a hero mesa is never
     // buried under a generic range that happened to grow on the same spot.
     const cl = new Float32Array(COARSE * COARSE).fill(1e6);
-    const stampClear = (x, z, extra) => {
+    const stampClear = (x: any, z: any, extra: any) => {
       const R = 700 + extra;
       const i0 = Math.max(0, Math.floor((x - R + HALF) / COARSE_CELL));
       const i1 = Math.min(COARSE - 1, Math.ceil((x + R + HALF) / COARSE_CELL));
@@ -238,7 +267,7 @@ export class Field {
   }
 
   /** Bilinear distance to the nearest authored landform, metres. */
-  clearAt(x, z) {
+  clearAt(x: any, z: any) {
     const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -250,7 +279,7 @@ export class Field {
   }
 
   /** Bilinear corridor distance, metres. */
-  corridorAt(x, z) {
+  corridorAt(x: any, z: any) {
     const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -305,7 +334,7 @@ export class Field {
    * capping, benching, talus aprons) is kept — it is what stops a horizon
    * reading as N copies of one cone.
    */
-  farHeight(x, z) {
+  farHeight(x: any, z: any) {
     const n = this.n, n2 = this.n2, n3 = this.n3;
     const wx = x * 0.000158, wz = z * 0.000158;
     const q1 = n2.fbm2(wx * 0.62 + 11.3, wz * 0.62 - 4.1, 3);
@@ -366,7 +395,7 @@ export class Field {
       const z = -FAR_HALF + j * MC;
       for (let i = 0; i < M; i++) c[j * M + i] = this.farHeight(-FAR_HALF + i * MC, z);
     }
-    const cAt = (i, j) => c[Math.min(M - 1, Math.max(0, j)) * M + Math.min(M - 1, Math.max(0, i))];
+    const cAt = (i: any, j: any) => c[Math.min(M - 1, Math.max(0, j)) * M + Math.min(M - 1, Math.max(0, i))];
     for (let j = 0; j < FAR_N; j++) {
       const fj = j * 0.5, j0 = Math.floor(fj), tz = fj - j0;
       for (let i = 0; i < FAR_N; i++) {
@@ -388,7 +417,7 @@ export class Field {
     }
   }
 
-  _farAt(i, j) {
+  _farAt(i: any, j: any) {
     const ii = i < 0 ? 0 : i > FAR_N - 1 ? FAR_N - 1 : i;
     const jj = j < 0 ? 0 : j > FAR_N - 1 ? FAR_N - 1 : j;
     return this.far[jj * FAR_N + ii];
@@ -400,7 +429,7 @@ export class Field {
    * Macro landscape from the map's blended biome parameters. Evaluated on the
    * 16 m grid, then bicubically upsampled.
    */
-  macroHeight(x, z) {
+  macroHeight(x: any, z: any) {
     const n = this.n, n2 = this.n2;
     const b = this.map.biomeVec(x, z);
     const bRelief = b[B_RELIEF], bRidge = b[B_RIDGE], bTerrace = b[B_TERRACE];
@@ -476,12 +505,12 @@ export class Field {
     this._coarse = c;
     this._terr = terr;
 
-    const at = (i, j) => {
+    const at = (i: any, j: any) => {
       const ii = i < 0 ? 0 : i > COARSE - 1 ? COARSE - 1 : i;
       const jj = j < 0 ? 0 : j > COARSE - 1 ? COARSE - 1 : j;
       return c[jj * COARSE + ii];
     };
-    const cr = (p0, p1, p2, p3, t) => {
+    const cr = (p0: any, p1: any, p2: any, p3: any, t: any) => {
       const t2 = t * t, t3 = t2 * t;
       return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
         (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
@@ -582,7 +611,7 @@ export class Field {
   _applyLandforms() {
     const rng = new Rng(9931);
     this.massRaise = new Float32Array(N * N);
-    const mass = (x, z, r, fn) => this._mass(x, z, r, fn);
+    const mass = (x: any, z: any, r: any, fn: any) => this._mass(x, z, r, fn);
     for (const f of LANDFORMS) {
       switch (f.kind) {
         case 'mesa':
@@ -618,7 +647,7 @@ export class Field {
    * @param r core radius in metres
    * @param fn the stamp
    */
-  _mass(cx, cz, r: number, fn: (() => void)) {
+  _mass(cx: any, cz: any, r: number, fn: (() => void)) {
     const box = this._box(cx, cz, r);
     const w = box.i1 - box.i0 + 1, hgt = box.j1 - box.j0 + 1;
     const before = new Float32Array(w * hgt);
@@ -639,7 +668,7 @@ export class Field {
     }
   }
 
-  _spireRidge(cx, cz, spanX, spanZ, count, rng) {
+  _spireRidge(cx: any, cz: any, spanX: any, spanZ: any, count: any, rng: any) {
     for (let k = 0; k < count; k++) {
       const t = k / (count - 1) - 0.5;
       const sx = cx + t * spanX + rng.range(-40, 40);
@@ -656,7 +685,7 @@ export class Field {
    * A big mountain: conical bulk with ridged flanks and a laid-back foot.
    * Used for Longwythe Peak — the one landform in Leide with real prominence.
    */
-  _peak(cx, cz, radius, height) {
+  _peak(cx: any, cz: any, radius: any, height: any) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const box = this._box(cx, cz, radius);
     for (let j = box.j0; j <= box.j1; j++) {
@@ -685,7 +714,7 @@ export class Field {
    * Impact crater: a raised rim ring, a sunken floor, and a central mass.
    * The Disc of Cauthess.
    */
-  _crater(f) {
+  _crater(f: any) {
     const h = this.h, n = this.n2;
     const { x: cx, z: cz, r, rim, depth, core } = f;
     const box = this._box(cx, cz, r * 1.15);
@@ -714,7 +743,7 @@ export class Field {
   }
 
   /** Stratovolcano: steep cone, crater bowl, rim lip, ash apron. */
-  _volcano(f) {
+  _volcano(f: any) {
     const h = this.h, n = this.n2;
     const { x: cx, z: cz, r, h: height } = f;
     const cr = (f.crater || 0.25) * r;
@@ -746,7 +775,7 @@ export class Field {
    * result is a lake — and roads are protected, so the highway crosses on a
    * causeway instead of drowning.
    */
-  _basin(f) {
+  _basin(f: any) {
     const h = this.h, n = this.n2, mr = this.massRaise;
     const { x: cx, z: cz, r } = f;
     const target = f.h;
@@ -795,7 +824,7 @@ export class Field {
    * A structural terrace: a level bench at elevation `h` inside a rotated
    * ellipse, edged by a cliff. Lestallum stands on one of these.
    */
-  _terrace(f) {
+  _terrace(f: any) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const { x: cx, z: cz, rx, rz, rot } = f;
     const ca = Math.cos(rot || 0), sa = Math.sin(rot || 0);
@@ -865,7 +894,7 @@ export class Field {
    * @param ph rotation, radians — drawn by the caller, see `_outcrops`
    * @param ecc 0.6-1.0 cross-axis squash
    */
-  _outcrop(cx, cz, radius, height, ph: number, ecc: number) {
+  _outcrop(cx: any, cz: any, radius: any, height: any, ph: number, ecc: number) {
     const h = this.h, n = this.n3;
     const R = radius * 2.2;
     const box = this._box(cx, cz, R);
@@ -896,7 +925,7 @@ export class Field {
    *
    * @param wallFrac 0..1 — how much of the radius the cliff occupies
    */
-  _mesa(cx, cz, radius, height, wallFrac: number, opt: any = {}) {
+  _mesa(cx: any, cz: any, radius: any, height: any, wallFrac: number, opt: any = {}) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const benches = opt.benches === undefined ? 1 : opt.benches;
     const tiltAmt = opt.tilt === undefined ? 0.045 : opt.tilt;
@@ -981,7 +1010,7 @@ export class Field {
    * long dip slope on the other, notched along its crest and tapered at both
    * ends.
    */
-  _fin(x0, z0, x1, z1, halfW, height, opt = {}) {
+  _fin(x0: any, z0: any, x1: any, z1: any, halfW: any, height: any, opt = {}) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const flip = opt.flip ? -1 : 1;
     const dipRun = opt.dip === undefined ? 3.2 : opt.dip;
@@ -1026,7 +1055,7 @@ export class Field {
     }
   }
 
-  _spire(cx, cz, radius, height) {
+  _spire(cx: any, cz: any, radius: any, height: any) {
     const h = this.h, n = this.n3;
     const R = radius * 3.2;
     const box = this._box(cx, cz, R);
@@ -1052,7 +1081,7 @@ export class Field {
    * cut is held back from the road corridor, so where the highway meets the
    * gorge the walls close into a narrow neck the bridge can stand on.
    */
-  _canyon(f) {
+  _canyon(f: any) {
     const h = this.h, n = this.n2;
     const halfW = f.halfW, depth = f.depth;
     const R = halfW * 3.2;
@@ -1130,7 +1159,7 @@ export class Field {
     }
   }
 
-  _box(cx, cz, R) {
+  _box(cx: any, cz: any, R: any) {
     return {
       i0: Math.max(0, Math.floor((cx - R + HALF) / CELL)),
       i1: Math.min(N - 1, Math.ceil((cx + R + HALF) / CELL)),
@@ -1335,7 +1364,7 @@ export class Field {
     let sedMax = 1e-6;
     for (let k = 0; k < sed.length; k++) if (sed[k] > sedMax) sedMax = sed[k];
 
-    const at = (i, j) => {
+    const at = (i: any, j: any) => {
       const ii = i < 0 ? 0 : i > N - 1 ? N - 1 : i;
       const jj = j < 0 ? 0 : j > N - 1 ? N - 1 : j;
       return h[jj * N + ii];
@@ -1424,7 +1453,7 @@ export class Field {
   // -------------------------------------------------------------- public API
 
   /** Bilinear sample of the near grid (no far-field switch, no micro relief). */
-  rawHeightAt(x, z) {
+  rawHeightAt(x: any, z: any) {
     const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -1435,7 +1464,7 @@ export class Field {
     return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
   }
 
-  sampleFar(x, z) {
+  sampleFar(x: any, z: any) {
     const fx = (x + FAR_HALF) / FAR_CELL, fz = (z + FAR_HALF) / FAR_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -1447,14 +1476,14 @@ export class Field {
   }
 
   /** Exactly what the GPU draws: grid + analytic micro-relief. */
-  heightAt(x, z) {
+  heightAt(x: any, z: any) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const base = q >= BLEND_OUT ? this.sampleFar(x, z) : this.rawHeightAt(x, z);
     return base + microDetail(x, z);
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
-  ctrlAt(x, z, out = {}) {
+  ctrlAt(x: any, z: any, out = {}) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const arr = q >= BLEND_OUT ? this.farCtrl : this.ctrl;
     const n = q >= BLEND_OUT ? FAR_N : N;
@@ -1472,12 +1501,12 @@ export class Field {
   }
 }
 
-function smoothstep(a, b, x) {
+function smoothstep(a: any, b: any, x: any) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+function clamp01(x: any) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 /**
  * The exact JS twin of `tf_snoise` in TerrainMaterial.js (Ashima simplex).
@@ -1485,7 +1514,7 @@ function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
  * the shader draws, so the CPU cannot use a differently-seeded noise here.
  * @returns roughly -1..1
  */
-export function gnoise2(xin, yin): number {
+export function gnoise2(xin: any, yin: any): number {
   const C0 = 0.211324865405187, C1 = 0.366025403784439;
   const C2 = -0.577350269189626, C3 = 0.024390243902439;
   const s = (xin + yin) * C1;
@@ -1508,9 +1537,9 @@ export function gnoise2(xin, yin): number {
   return 130 * g;
 }
 
-function mod289(x) { return x - Math.floor(x / 289) * 289; }
-function perm(x) { return mod289(((x * 34) + 1) * x); }
-function grad(p, x, y, C3) {
+function mod289(x: any) { return x - Math.floor(x / 289) * 289; }
+function perm(x: any) { return mod289(((x * 34) + 1) * x); }
+function grad(p: any, x: any, y: any, C3: any) {
   let m = Math.max(0.5 - (x * x + y * y), 0);
   m *= m; m *= m;
   const v = 2 * fract(p * C3) - 1;
@@ -1519,4 +1548,4 @@ function grad(p, x, y, C3) {
   m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
   return m * (a0 * x + h * y);
 }
-function fract(v) { return v - Math.floor(v); }
+function fract(v: any) { return v - Math.floor(v); }

@@ -6,7 +6,13 @@ import * as THREE from 'three';
  * interactive session adapts to the machine.
  */
 export class Renderer {
-  constructor(container, opts = {}) {
+  camera!: THREE.PerspectiveCamera;
+  container!: any;
+  isWebGL2!: any;
+  quality!: any;
+  renderer!: THREE.WebGLRenderer;
+  scene!: THREE.Scene;
+  constructor(container: any, opts = {}) {
     this.container = container;
 
     const params = new URLSearchParams(location.search);

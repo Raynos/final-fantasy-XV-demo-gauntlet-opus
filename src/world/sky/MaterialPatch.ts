@@ -17,6 +17,9 @@ import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
  * the scene; any onBeforeCompile they already installed is preserved.
  */
 export class MaterialPatch {
+  count!: number;
+  csm!: any;
+  uniforms!: any;
   /**
    * @param uniforms shared uniform objects (LUTs, fog, cloud shadow)
    */
@@ -27,8 +30,8 @@ export class MaterialPatch {
   }
 
   /** Walk the scene and patch anything new. Cheap enough to run every frame. */
-  scan(scene) {
-    scene.traverse((o) => {
+  scan(scene: any) {
+    scene.traverse((o: any) => {
       const m = o.material;
       if (!m) return;
       if (Array.isArray(m)) { for (const mm of m) this.patch(mm); } else this.patch(m);
@@ -48,7 +51,7 @@ export class MaterialPatch {
     const csmHook = mat.onBeforeCompile;
     const self = this;
 
-    mat.onBeforeCompile = function (shader, renderer) {
+    mat.onBeforeCompile = function (shader: any, renderer: any) {
       if (prev) prev.call(this, shader, renderer);
       if (csmHook) csmHook.call(this, shader, renderer);
       self.inject(shader);

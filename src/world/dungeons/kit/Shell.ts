@@ -26,6 +26,11 @@ const STYLE = {
 };
 
 export class ShellBuilder {
+  L!: any;
+  _ao!: any;
+  n!: Noise;
+  opts!: any;
+  surfaces!: Map<any, any>;
   /**
    * @param opts
    *        materials may be a single material or a `(region)=>material` picker
@@ -36,24 +41,24 @@ export class ShellBuilder {
     this.n = new Noise(opts.seed || 4242);
     /** @type {Map<object, SurfaceBuilder>} */
     this.surfaces = new Map();
-    this._ao = (x, y, z) => layout.occlusion(x, y, z);
+    this._ao = (x: any, y: any, z: any) => layout.occlusion(x, y, z);
   }
 
-  sb(mat) {
+  sb(mat: any) {
     if (!this.surfaces.has(mat)) this.surfaces.set(mat, new SurfaceBuilder());
     return this.surfaces.get(mat);
   }
 
-  pick(which, region) {
+  pick(which: any, region: any) {
     const m = this.opts[which];
     return typeof m === 'function' ? m(region) : m;
   }
 
   /** Displacement field for a style, in metres along the surface normal. */
-  disp(style, amount, freq = 0.35) {
+  disp(style: any, amount: any, freq = 0.35) {
     const n = this.n;
     if (amount <= 0.001) return null;
-    return (x, y, z) => {
+    return (x: any, y: any, z: any) => {
       const a = n.fbm2(x * freq + z * 0.07, y * freq * 1.35 + z * freq, 4) * amount;
       const b = n.fbm2(x * freq * 3.1 - 11, z * freq * 3.1 + y * 0.9, 3) * amount * 0.42;
       return a + b;
@@ -61,7 +66,7 @@ export class ShellBuilder {
   }
 
   /** Build everything and merge into `merger`. */
-  build(merger) {
+  build(merger: any) {
     for (const r of this.L.rooms.values()) {
       if (r.style === 'cave') this.caveChamber(r);
       else this.boxRoom(r);
@@ -79,7 +84,7 @@ export class ShellBuilder {
   // ------------------------------------------------------------------ rooms
 
   /** A concrete or hewn box: floor, ceiling, four walls with doorways cut. */
-  boxRoom(r) {
+  boxRoom(r: any) {
     const s = STYLE[r.style] || STYLE.bunker;
     const wallMat = this.pick('wallMat', r);
     const floorMat = this.pick('floorMat', r);
@@ -117,7 +122,7 @@ export class ShellBuilder {
       { key: 'z+', o: [r.x - hx, r.y, r.z + hz], u: [1, 0, 0], len: r.w, flip: false, base: r.x - hx },
     ];
     for (const side of sides) {
-      const openings = r.openings.filter((o) => o.side === side.key).map((o) => ({
+      const openings = r.openings.filter((o: any) => o.side === side.key).map((o: any) => ({
         u0: o.u0 - side.base, u1: o.u1 - side.base, v0: o.v0, v1: o.v1,
       }));
       this.wall(wallMat, side, r.h, openings, s, r.style);
@@ -125,11 +130,11 @@ export class ShellBuilder {
   }
 
   /** A wall panel with rectangular doorways subtracted. */
-  wall(mat, side, height, openings, s, style) {
+  wall(mat: any, side: any, height: any, openings: any, s: any, style: any) {
     const sb = this.sb(mat);
     const ao = this._ao;
     const disp = this.disp(style, s.wall, 0.4);
-    const emit = (u0, u1, v0, v1) => {
+    const emit = (u0: any, u1: any, v0: any, v1: any) => {
       if (u1 - u0 < 0.05 || v1 - v0 < 0.05) return;
       sb.patch({
         origin: [
@@ -142,7 +147,7 @@ export class ShellBuilder {
         uvOffset: [u0 + side.o[0] + side.o[2], v0],
       });
     };
-    const ops = openings.slice().sort((a, b) => a.u0 - b.u0);
+    const ops = openings.slice().sort((a: any, b: any) => a.u0 - b.u0);
     let cursor = 0;
     for (const o of ops) {
       const u0 = clamp(o.u0, 0, side.len), u1 = clamp(o.u1, 0, side.len);
@@ -156,7 +161,7 @@ export class ShellBuilder {
   }
 
   /** A raised platform inside a room: top face plus four skirts. */
-  slab(topMat, sideMat, p, r, s) {
+  slab(topMat: any, sideMat: any, p: any, r: any, s: any) {
     const hx = p.w * 0.5, hz = p.d * 0.5;
     const ao = this._ao;
     this.sb(topMat).patch({
@@ -180,7 +185,7 @@ export class ShellBuilder {
   }
 
   /** A sloped walkway between two floor heights. */
-  ramp(mat, m, r, s) {
+  ramp(mat: any, m: any, r: any, s: any) {
     const hx = m.w * 0.5, hz = m.d * 0.5;
     const ao = this._ao;
     const sb = this.sb(mat);
@@ -204,7 +209,7 @@ export class ShellBuilder {
   // -------------------------------------------------------------- corridors
 
   /** A square-section run with elbow patches at every corner. */
-  boxCorridor(c) {
+  boxCorridor(c: any) {
     const s = STYLE[c.style] || STYLE.bunker;
     const wallMat = this.pick('wallMat', c);
     const floorMat = this.pick('floorMat', c);
@@ -270,7 +275,7 @@ export class ShellBuilder {
   }
 
   /** The square where two corridor legs meet: floor, ceiling and two walls. */
-  elbow(c, p, inDir, outDir, s, mats, hw) {
+  elbow(c: any, p: any, inDir: any, outDir: any, s: any, mats: any, hw: any) {
     const ao = this._ao;
     const y = p[2];
     this.sb(mats.floorMat).patch({
@@ -304,7 +309,7 @@ export class ShellBuilder {
   // ------------------------------------------------------------- cave forms
 
   /** A natural passage: an irregular swept tube you can stand up inside. */
-  caveTunnel(c) {
+  caveTunnel(c: any) {
     const s = STYLE.cave;
     const mat = this.pick('wallMat', c);
     const floorMat = this.pick('floorMat', c);
@@ -316,7 +321,7 @@ export class ShellBuilder {
     // resample the polyline so the sweep bends instead of kinking
     const dense = resample(c.path, 1.4);
     const path = dense.map((p) => [p[0], p[2] + axisY, p[1]]);
-    this.sb(mat).tube(path, (t, th, x, y, z) => {
+    this.sb(mat).tube(path, (t: any, th: any, x: any, y: any, z: any) => {
       const bulge = 1 + 0.26 * n.fbm2(x * 0.14 + z * 0.10, y * 0.22 + th * 0.40, 3);
       const squeeze = 1 - 0.20 * Math.sin(t * Math.PI * 3.1 + 1.2);
       return r0 * bulge * squeeze * (1 + 0.07 * Math.sin(th * 3 + t * 9));
@@ -336,7 +341,7 @@ export class ShellBuilder {
         origin: [a[0] - right[0] * w * 0.5, a[2] - 0.02, a[1] - right[2] * w * 0.5],
         uAxis: [dir[0] / dl, dir[1] / dl, dir[2] / dl], vAxis: right,
         uLen: len * dl, vLen: w, cell: 1.1, uvScale: s.uv,
-        displace: (x, y, z) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
+        displace: (x: any, y: any, z: any) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
         uvOffset: [a[0], a[1]],
       });
     }
@@ -347,7 +352,7 @@ export class ShellBuilder {
    * also what the mine's bottom cavern uses — a hewn shaft never reads as
    * "vast", but a chamber whose walls fall away from you does.
    */
-  caveChamber(r) {
+  caveChamber(r: any) {
     const mat = this.pick('wallMat', r);
     const floorMat = this.pick('floorMat', r);
     const n = this.n;
@@ -356,7 +361,7 @@ export class ShellBuilder {
     const RINGS = 14, SIDES = 30;
     const a = r.w * 0.5, b = r.d * 0.5;
 
-    const radius = (th, k) => {
+    const radius = (th: any, k: any) => {
       const t = k / RINGS;
       const ct = Math.cos(th), st = Math.sin(th);
       const ell = 1 / Math.sqrt((ct / a) ** 2 + (st / b) ** 2);
@@ -379,7 +384,7 @@ export class ShellBuilder {
       }
     }
     const holes = r.holes || [];
-    const inHole = (th, yLo, yHi) => {
+    const inHole = (th: any, yLo: any, yHi: any) => {
       for (const h of holes) {
         let d = th - h.theta;
         while (d > Math.PI) d -= Math.PI * 2;
@@ -451,7 +456,7 @@ export function cutDoorways(layout: import('./Layout.ts').Layout) {
   }
 }
 
-function cutEnd(layout, c, roomId, end, inner) {
+function cutEnd(layout: any, c: any, roomId: any, end: any, inner: any) {
   const r = layout.rooms.get(roomId);
   if (!r || !end || !inner) return;
 
@@ -492,19 +497,19 @@ function cutEnd(layout, c, roomId, end, inner) {
 
 /* ---------------------------------------------------------------- helpers */
 
-function dirOf(a, b) {
+function dirOf(a: any, b: any) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   return Math.abs(dx) > Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
 }
 
 /** Which face of an elbow square a leg enters or leaves through. */
-function faceKey(d, incoming) {
+function faceKey(d: any, incoming: any) {
   const s = incoming ? -1 : 1;
   if (d[0] !== 0) return d[0] * s > 0 ? 'x+' : 'x-';
   return d[1] * s > 0 ? 'z+' : 'z-';
 }
 
-function resample(path, step) {
+function resample(path: any, step: any) {
   const out = [];
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i], b = path[i + 1];

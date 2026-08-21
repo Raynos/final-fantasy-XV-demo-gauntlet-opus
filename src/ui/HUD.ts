@@ -39,6 +39,23 @@ import { BANTER } from './GameData.ts';
  * `ffxv-banter`, `ffxv-hit`.
  */
 export class HUD {
+  _onResize!: any;
+  bridge!: HudBridge;
+  combat!: CombatHUD;
+  combatA!: number;
+  compass!: CompassBar;
+  fieldA!: number;
+  fx!: ScreenFX;
+  game!: any;
+  menuOpen!: boolean;
+  mode!: string;
+  party!: PartyPanel;
+  prompts!: Prompts;
+  root!: any;
+  subtitles!: Subtitles;
+  uiScale!: any;
+  visible!: boolean;
+  wheel!: WeaponWheel;
   async init(game: any) {
     this.game = game;
     this.root = el('div', { id: 'hud' });
@@ -80,7 +97,7 @@ export class HUD {
   }
 
   /** Push a line onto the notification column. @param k @param v */
-  toast(k: string, v: string, ico, tone) { this.toasts.push(k, v, ico, tone); }
+  toast(k: string, v: string, ico: any, tone: any) { this.toasts.push(k, v, ico, tone); }
 
   /** UI is authored at 1600x900; scale it crisply for other viewport sizes. */
   _scale() {

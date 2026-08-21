@@ -92,7 +92,7 @@ export function walkCycle(t: number, phase: number, rate: number): {u:number, s:
  * every few vertices and actually shows; a world-space noise lands between
  * vertices and averages back out to a flat wash.
  */
-function fur(th, u) {
+function fur(th: any, u: any) {
   return 0.5 + 0.5 * Math.sin(th * 5.0 + u * 9.0) * Math.sin(th * 11.0 - u * 27.0);
 }
 
@@ -158,7 +158,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
   /* ------------------------------------------------------- neck and head */
   // Slung low and forward — this animal grazes, so its head hangs below the
   // line of its back even at rest.
-  const neckBlend = (p) => smooth(0.70, 1.16, p.z);
+  const neckBlend = (p: any) => smooth(0.70, 1.16, p.z);
   parts.push(tube({
     nodes: [
       { p: [0, 2.12, 0.72], r: 0.56, rz: 0.58 },
@@ -238,13 +238,13 @@ export function garulaGeometry(): THREE.BufferGeometry {
   }
 
   /* -------------------------------------------------------------- legs -- */
-  const legColor = (th, u, p) => {
+  const legColor = (th: any, u: any, p: any) => {
     if (p.y < 0.28) return mix(HOOF, HIDE_DARK, smooth(0.28, 0.16, p.y) * 0.2);
     const feather = 1 - smooth(0.26, 0.52, u);
     return mix(mix(HIDE, HIDE_DARK, smooth(0.30, 0.95, u) * 0.75).getHex(THREE.SRGBColorSpace),
       SHAG_DARK, feather * 0.45 * (0.6 + fur(th, u) * 0.4));
   };
-  const legShape = (th, u) => {
+  const legShape = (th: any, u: any) => {
     const back = -Math.cos(th);
     return 1 + Math.max(0, back) * 0.26 * Math.exp(-Math.pow((u - 0.14) / 0.20, 2))
       + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.46) / 0.12, 2));
@@ -299,7 +299,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
 
 // ---------------------------------------------------------------- shader
 
-const V3 = (a) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
+const V3 = (a: any) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
 
 const RIG_GLSL = RIG_PREAMBLE + /* glsl */`
 // aanim = (phase, cycle rate, alertness, coat brightness)

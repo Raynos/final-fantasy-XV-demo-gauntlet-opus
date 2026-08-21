@@ -84,10 +84,10 @@ const SHADE_MIN = 0.70, SHADE_SPAN = 0.30;
  * not a hue.
  */
 const BIOME_HUE = 0.5;
-const _lum = (c) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
+const _lum = (c: any) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
 /** biome tint array -> species key -> composed [r,g,b]. Keyed by identity. */
 const _tintCache = new WeakMap();
-function composeTint(sp, t, bt) {
+function composeTint(sp: any, t: any, bt: any) {
   let bySpecies = _tintCache.get(bt);
   if (!bySpecies) { bySpecies = new Map(); _tintCache.set(bt, bySpecies); }
   let out = bySpecies.get(sp);
@@ -110,7 +110,7 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 /** Impostor: two crossed quads anchored at the base. */
-function billboardGeo(width, height) {
+function billboardGeo(width: any, height: any) {
   const g = new THREE.BufferGeometry();
   const p = [], n = [], uv = [], idx = [], col = [];
   const hw = width * 0.5;
@@ -134,7 +134,34 @@ function billboardGeo(width, height) {
 }
 
 export class Trees {
-  constructor(eco, scene, {
+  _deadline!: number;
+  _last!: THREE.Vector3;
+  _pending!: boolean;
+  _primed!: boolean;
+  _stamp!: number;
+  _tick!: any;
+  budgetMs!: number;
+  byKey!: Map<any, any>;
+  canBudget!: any;
+  canCount!: any;
+  canopies!: Map<any, any>;
+  canopyNear!: any;
+  canopyRange!: any;
+  ctiles!: Map<any, any>;
+  eco!: any;
+  geoBudget!: any;
+  geoCount!: any;
+  geoRange!: any;
+  group!: THREE.Group;
+  impBudget!: any;
+  impCount!: any;
+  impRange!: any;
+  impostors!: Map<any, any>;
+  quality!: any;
+  scene!: any;
+  tileCacheMax!: number;
+  variants!: any[];
+  constructor(eco: any, scene: any, {
     quality = 1, geoRange = 88, impRange = 330,
     canopyNear = 296, canopyRange = 1250,
   } = {}) {
@@ -292,7 +319,7 @@ export class Trees {
    * probes and evaluating it once per candidate would put tens of milliseconds
    * into a stream-in.
    */
-  _makeTile(tx, tz) {
+  _makeTile(tx: any, tz: any) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
     const rng = new Rng(hash3(tx, tz, 0x7ee5));
@@ -308,7 +335,7 @@ export class Trees {
     }
     if (any < 0.015) return [];
 
-    const bil = (u, v) => {
+    const bil = (u: any, v: any) => {
       const fu = u * DG, fv = v * DG;
       const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;
@@ -350,7 +377,7 @@ export class Trees {
   }
 
   /** Build (and cache) the far canopy stand cards for one 256 m tile. */
-  _makeCanopyTile(tx, tz) {
+  _makeCanopyTile(tx: any, tz: any) {
     const eco = this.eco;
     const x0 = tx * CTILE, z0 = tz * CTILE;
     const rng = new Rng(hash3(tx, tz, 0x51c0));
@@ -388,7 +415,7 @@ export class Trees {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(map, key, make): any[] | null {
+  _tile(map: any, key: any, make: any): any[] | null {
     const e = map.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
     if (this._primed && performance.now() > this._deadline) return null;
@@ -452,7 +479,7 @@ export class Trees {
     // is what the flat number was tuned on in the first place.
     const cullFloor = 3.5;
     const impR2 = this.impRange * this.impRange;
-    const near = [];
+    const near: any[] = [];
     let far = 0;
 
     const rTiles = Math.ceil(this.impRange / TILE) + 1;
@@ -576,7 +603,7 @@ export class Trees {
   }
 
   /** @returns true if the placement found a slot */
-  _writeImpostor(p): boolean {
+  _writeImpostor(p: any): boolean {
     const im = this.impostors.get(`${p.sp}_${p.vi}`);
     if (!im || im._w >= im.max) return false;
     const w = im._w++;

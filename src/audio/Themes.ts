@@ -34,7 +34,7 @@ export const CHORDS = {
 };
 
 /** Shorthand: `c(0,'min')` is the tonic minor triad. */
-const c = (r, q) => ({ r, q });
+const c = (r: any, q: any) => ({ r, q });
 
 /* ------------------------------------------------------------------ motifs */
 

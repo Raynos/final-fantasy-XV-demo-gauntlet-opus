@@ -25,7 +25,81 @@ import { CreatureAnim } from '../rig/CreatureAnim.ts';
  * `this.attackId` directly for extra variants.
  */
 export class Enemy {
-  constructor(type, opts = {}) {
+  _atkCooldown!: number;
+  _dt!: any;
+  _kb!: any;
+  _lostTimer!: number;
+  _roleTimer!: number;
+  _senseTimer!: number;
+  _strafeDir!: number;
+  _swung!: boolean;
+  _wanderAngle!: number;
+  _wanderTimer!: number;
+  aggroRange!: any;
+  airborne!: any;
+  anim!: CreatureAnim;
+  attack!: any;
+  attackCooldown!: any;
+  attackId!: any;
+  attackRange!: any;
+  attacks!: any;
+  awareness!: number;
+  baseMaxHp!: any;
+  boss!: boolean;
+  corpseTime!: number;
+  damage!: any;
+  dead!: boolean;
+  deathPush!: any;
+  deathSide!: any;
+  expClass!: any;
+  faction!: any;
+  flinchDir!: any;
+  flinchTime!: number;
+  fov!: any;
+  frozenPose!: any;
+  heading!: number;
+  hearing!: any;
+  height!: any;
+  hitPower!: number;
+  home!: THREE.Vector3;
+  hp!: number;
+  id!: any;
+  invulnerable!: boolean;
+  killer!: any;
+  knockbackCap!: any;
+  lastHitAt!: any;
+  leash!: any;
+  level!: any;
+  locked!: boolean;
+  maxHp!: any;
+  maxPoise!: any;
+  mesh!: any;
+  moveSpeed!: number;
+  name!: any;
+  nocturnal!: boolean;
+  pack!: any;
+  packRole!: string;
+  patrol!: any;
+  phase!: number;
+  phaseIndex!: number;
+  radius!: any;
+  rig!: any;
+  root!: THREE.Group;
+  scale!: any;
+  sight!: any;
+  slotAngle!: number;
+  speciesId!: any;
+  speed!: any;
+  staggerTime!: number;
+  staggered!: boolean;
+  state!: string;
+  stateTime!: number;
+  superArmour!: boolean;
+  target!: any;
+  type!: any;
+  velocity!: THREE.Vector3;
+  visual!: any;
+  constructor(type: any, opts = {}) {
     this.type = type;
     this.id = opts.id ?? 0;
     this.root = new THREE.Group();
@@ -108,7 +182,7 @@ export class Enemy {
   get hpFraction() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
 
   /** Instantiate the shared prototype for this enemy. */
-  attachVisual(proto) {
+  attachVisual(proto: any) {
     const group = cloneSkinned(proto.group);
     const byName = new Map(), rest = new Map();
     let mesh = null;
@@ -135,8 +209,8 @@ export class Enemy {
   }
 
   /** Species hook: register leg chains and the trunk for the impact layer. */
-  setupAnim(anim) {
-    const has = (n) => this.rig.byName.has(n);
+  setupAnim(anim: any) {
+    const has = (n: any) => this.rig.byName.has(n);
     const trunk = ['hips', 'pelvis', 'spine', 'spineA', 'spineB', 'chest', 'core', 'pod', 'neck', 'head'];
     anim.setTrunk(trunk.filter(has));
   }
@@ -233,7 +307,7 @@ export class Enemy {
     const ry = this.root.matrixWorld.elements[13];
     const v = _calV;
     let minY = Infinity, bestObj = null, bestIdx = 0, bestStep = 1;
-    this.visual.traverse((o) => {
+    this.visual.traverse((o: any) => {
       const geo = o.geometry;
       if (!geo || !geo.attributes || !geo.attributes.position) return;
       const pos = geo.attributes.position;
@@ -311,7 +385,7 @@ export class Enemy {
       // species owns, so each gets its own curve; `groundLift` prefers the
       // specific one and falls back to the generic.
       const variants = (POSE_PER_ATTACK.has(pose) && this.attacks)
-        ? this.attacks.map((a) => [`${pose}:${a.id}`, a]) : [];
+        ? this.attacks.map((a: any) => [`${pose}:${a.id}`, a]) : [];
       for (const [key, atk] of [[pose, null], ...variants]) {
         this.attack = atk;
         this.attackId = atk ? atk.id : null;
@@ -482,7 +556,7 @@ export class Enemy {
     if (this.pack) this.pack.onDeath(this);
   }
 
-  setState(s) {
+  setState(s: any) {
     if (this.state === s) return;
     this.state = s;
     this.stateTime = 0;
@@ -521,7 +595,7 @@ export class Enemy {
   /* ------------------------------------------------------------ combat */
 
   /** Pick the next attack whose range covers `dist`, weighted. */
-  _chooseAttack(dist, rng) {
+  _chooseAttack(dist: any, rng: any) {
     const list = this.attacks;
     if (!list || !list.length) return null;
     let total = 0;
@@ -571,7 +645,7 @@ export class Enemy {
     return m * this.scale;
   }
 
-  _beginAttack(a) {
+  _beginAttack(a: any) {
     this.attack = a;
     this.attackId = a ? a.id : null;
     this._swung = false;
@@ -585,7 +659,7 @@ export class Enemy {
   }
 
   /** Timing for the current attack, falling back to the legacy table. */
-  _timing(field) {
+  _timing(field: any) {
     const t = this.type.timing || DEFAULT_TIMING;
     if (this.attack && this.attack[field] != null) return this.attack[field];
     return t[field] != null ? t[field] : DEFAULT_TIMING[field];
@@ -696,7 +770,7 @@ export class Enemy {
    * Knockback decay. Being hit shoves a creature and it has to dig in and stop
    * — that friction is a large part of why a hit reads as having landed.
    */
-  _slide(dt, ctx) {
+  _slide(dt: any, ctx: any) {
     const kb = this._kb;
     if (!kb || kb.lengthSq() < 1e-5) return;
     this.root.position.x += kb.x * dt;
@@ -709,10 +783,10 @@ export class Enemy {
    * Additive layer applied after the species pose: impact springs whipping
    * through the spine, the gait's vertical bounce, and the residual shove.
    */
-  _postPose(dt) {
+  _postPose(dt: any) {
     const a = this.anim;
     if (!a || !this.rig) return;
-    a.commit(dt, (name, x, y, z) => {
+    a.commit(dt, (name: any, x: any, y: any, z: any) => {
       const b = this.rig.byName.get(name);
       if (!b) return;
       _addEuler.set(x, y, z, 'XYZ');
@@ -731,7 +805,7 @@ export class Enemy {
   }
 
   /** Notice things, lose interest in things. */
-  _sense(dt, ctx) {
+  _sense(dt: any, ctx: any) {
     this._senseTimer -= dt;
     if (this._senseTimer > 0) return;
     this._senseTimer = 0.22;
@@ -808,7 +882,7 @@ export class Enemy {
     this.setState('return');
   }
 
-  _tickIdle(dt, ctx) {
+  _tickIdle(dt: any, ctx: any) {
     if (this.patrol) { this.setState('patrol'); return; }
     this._wanderTimer -= dt;
     if (this._wanderTimer <= 0) {
@@ -818,7 +892,7 @@ export class Enemy {
     this.heading += (this._wanderAngle - this.heading) * Math.min(1, dt * 0.8);
   }
 
-  _tickPatrol(dt, ctx) {
+  _tickPatrol(dt: any, ctx: any) {
     const p = this.patrol;
     if (!p || !p.points.length) { this.setState('idle'); return; }
     const wp = p.points[p.index % p.points.length];
@@ -834,13 +908,13 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.32, ctx);
   }
 
-  _tickAlert(dt, ctx, tp) {
+  _tickAlert(dt: any, ctx: any, tp: any) {
     // stand up, look toward whatever it was
     if (tp) this._face(tp, dt, 3.0);
     if (this.stateTime > 4.5 && this.awareness < 0.2) this.setState('patrol');
   }
 
-  _tickReturn(dt, ctx) {
+  _tickReturn(dt: any, ctx: any) {
     if (this.home.lengthSq() === 0) { this.setState('idle'); return; }
     const dx = this.home.x - this.root.position.x, dz = this.home.z - this.root.position.z;
     const d = Math.hypot(dx, dz);
@@ -849,7 +923,7 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.55, ctx);
   }
 
-  _tickChase(dt, ctx, target, tp, dist) {
+  _tickChase(dt: any, ctx: any, target: any, tp: any, dist: any) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 5);
@@ -876,7 +950,7 @@ export class Enemy {
   }
 
   /** Circle the target waiting for a turn. This is what stops the conga line. */
-  _tickStrafe(dt, ctx, target, tp, dist) {
+  _tickStrafe(dt: any, ctx: any, target: any, tp: any, dist: any) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 4.5);
@@ -903,7 +977,7 @@ export class Enemy {
     if (this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
   }
 
-  _tickTelegraph(dt, ctx, tp, dist) {
+  _tickTelegraph(dt: any, ctx: any, tp: any, dist: any) {
     const a = this.attack;
     this._face(tp, dt, a && a.tracking != null ? a.tracking : 2.4);
     if (a && a.approachDuring && tp) {
@@ -914,7 +988,7 @@ export class Enemy {
     if (this.stateTime > this._timing('telegraph')) this.setState('attack');
   }
 
-  _tickAttack(dt, ctx, target, tp, dist) {
+  _tickAttack(dt: any, ctx: any, target: any, tp: any, dist: any) {
     const a = this.attack;
     // a lunge carries all the way through the active window, decaying, so a
     // leap actually arrives instead of stopping short of its own target
@@ -938,7 +1012,7 @@ export class Enemy {
   }
 
   /** Ask the pack whether we hold the engage token. */
-  _role(dt) {
+  _role(dt: any) {
     this._roleTimer -= dt;
     if (this._roleTimer > 0) return;
     this._roleTimer = 0.55;
@@ -946,7 +1020,7 @@ export class Enemy {
     else this.packRole = 'engage';
   }
 
-  _face(p, dt, k = 6) {
+  _face(p: any, dt: any, k = 6) {
     if (!p) return;
     const want = Math.atan2(p.x - this.root.position.x, p.z - this.root.position.z);
     let d = want - this.heading;
@@ -956,7 +1030,7 @@ export class Enemy {
   }
 
   /** Move along a unit direction with pack separation. */
-  _move(dt, nx, nz, sp, ctx, skipSeparation = false) {
+  _move(dt: any, nx: any, nz: any, sp: any, ctx: any, skipSeparation = false) {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);
@@ -984,7 +1058,7 @@ export class Enemy {
   pose() {}
 
   /** Force a specific pose/phase and stop the AI (screenshot scenarios). */
-  freeze(state, phase, ctx) {
+  freeze(state: any, phase: any, ctx: any) {
     this.frozenPose = { state, phase };
     this.state = state;
     this.phase = phase;
@@ -1016,7 +1090,7 @@ export class Enemy {
   unfreeze() { this.frozenPose = null; }
 }
 
-const EMPTY = [];
+const EMPTY: any[] = [];
 const DEFAULT_TIMING = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
 const _addEuler = new THREE.Euler();
 const _calV = new THREE.Vector3();
@@ -1066,7 +1140,7 @@ const POSE_MAP = {
 
 /* ------------------------------------------------------------ textures */
 
-let _organic = null, _metal = null, _organicRough = null, _metalRough = null;
+let _organic: any = null, _metal: any = null, _organicRough: any = null, _metalRough: any = null;
 const texNoise = new Noise(777);
 
 /**
@@ -1080,7 +1154,7 @@ const texNoise = new Noise(777);
  *
  */
 function tileable(f: (u:number, v:number) => number) {
-  return (u, v) => {
+  return (u: any, v: any) => {
     const a = f(u, v), b = f(u - 1, v), c = f(u, v - 1), d = f(u - 1, v - 1);
     const iu = 1 - u, iv = 1 - v;
     return a * iu * iv + b * u * iv + c * iu * v + d * u * v;
@@ -1103,7 +1177,7 @@ export function organicNormal() {
     const pore = tileable((u, v) => 1 - texNoise.worley2(u * 22 + 3, v * 22 + 7).f1);
     const clump = tileable((u, v) => texNoise.fbm2(u * 5 + 21, v * 2.5 + 2, 3));
     const flow = tileable((u, v) => texNoise.fbm2(u * 9 + 31, v * 9 + 13, 2));
-    _organic = normalFromHeight(256, (u, v) => {
+    _organic = normalFromHeight(256, (u: any, v: any) => {
       // strands: a rectified sine across u, drifted so they gather into locks
       const strand = Math.sin((u + clump(u, v) * 0.06) * Math.PI * 2 * 44);
       // ...and broken along their length so they read as hair, not corduroy
@@ -1128,7 +1202,7 @@ export function organicRoughness() {
   if (!_organicRough) {
     const broad = tileable((u, v) => texNoise.fbm2(u * 4 + 17, v * 4 + 29, 4));
     const fine = tileable((u, v) => texNoise.fbm2(u * 19 + 5, v * 19 + 41, 2));
-    _organicRough = makeDataMap(256, (u, v) => {
+    _organicRough = makeDataMap(256, (u: any, v: any) => {
       const b = broad(u, v) * 0.5 + 0.5;
       const f = fine(u, v) * 0.5 + 0.5;
       // 0.5 is a waxy, healthy hide; 0.95 is dry dusty fur in a crease
@@ -1151,7 +1225,7 @@ export function metalNormal() {
   if (!_metal) {
     const dish = tileable((u, v) => texNoise.fbm2(u * 6 + 2, v * 6 + 19, 3));
     const grime = tileable((u, v) => texNoise.fbm2(u * 24 + 37, v * 24 + 3, 2));
-    _metal = normalFromHeight(256, (u, v) => {
+    _metal = normalFromHeight(256, (u: any, v: any) => {
       // brushed grain: high frequency along u only
       const brush = Math.sin(u * Math.PI * 2 * 96 + grime(u, v) * 3) * 0.05;
       // rivets: a domed head every quarter tile, on the seam lines
@@ -1179,7 +1253,7 @@ export function metalRoughness() {
   if (!_metalRough) {
     const patch = tileable((u, v) => texNoise.warped2(u * 5 + 43, v * 5 + 7, 1.4, 3));
     const grain = tileable((u, v) => texNoise.fbm2(u * 15 + 61, v * 15 + 23, 3));
-    _metalRough = makeDataMap(256, (u, v) => {
+    _metalRough = makeDataMap(256, (u: any, v: any) => {
       const p = patch(u, v);
       const rust = Math.max(0, p) * 0.9;          // oxidised, flat
       const scour = Math.max(0, -p - 0.25) * 1.4; // rubbed back to metal

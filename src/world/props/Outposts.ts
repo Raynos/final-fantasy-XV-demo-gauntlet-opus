@@ -23,7 +23,7 @@ import {
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -33,9 +33,9 @@ function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
 }
 
 /** Four-leg lattice tower: legs, X-bracing, horizontal belts. */
-function lattice(B, mat, world, { height, baseW, topW, bays = 6, leg = 0.11 }) {
-  const put = (geo, p, r) => B.add(mat, geo, world.clone().multiply(mat4(p, r)));
-  const wAt = (t) => baseW + (topW - baseW) * t;
+function lattice(B: any, mat: any, world: any, { height, baseW, topW, bays = 6, leg = 0.11 }: any) {
+  const put = (geo: any, p: any, r: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r)));
+  const wAt = (t: any) => baseW + (topW - baseW) * t;
   for (let i = 0; i < bays; i++) {
     const t0 = i / bays, t1 = (i + 1) / bays;
     const y0 = t0 * height, y1 = t1 * height;
@@ -70,6 +70,14 @@ function lattice(B, mat, world, { height, baseW, topW, bays = 6, leg = 0.11 }) {
 }
 
 export class Outposts {
+  crash!: any;
+  eco!: any;
+  groups!: any[];
+  lights!: any[];
+  mats!: any;
+  root!: THREE.Group;
+  scene!: any;
+  spinners!: any[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
@@ -132,7 +140,7 @@ export class Outposts {
   }
 
   /** Lowest ground under a footprint, so slabs never float on one corner. */
-  _base(x, z, r) {
+  _base(x: any, z: any, r: any) {
     let base = this.eco.height(x, z);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
@@ -144,13 +152,13 @@ export class Outposts {
   // -------------------------------------------------------------- rest stop
 
   /** Fuel canopy, shop, pylon sign — the one lit thing on this road at night. */
-  _restStop(B, site) {
+  _restStop(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(1701);
     const base = this._base(site.x, site.z, 12);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // forecourt slab
     put(M.concrete, new THREE.BoxGeometry(20, 0.3, 15), [0, 0.12, 0]);
@@ -219,13 +227,13 @@ export class Outposts {
   // --------------------------------------------------------------- blockade
 
   /** Niflheim roadblock: barriers, boom, floodlights and a standing walker. */
-  _blockade(B, site) {
+  _blockade(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(4499);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const base = this._base(site.x, site.z, 8);
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // staggered jersey barriers forcing a chicane
     const jersey = new THREE.BoxGeometry(3.0, 0.95, 0.62);
@@ -284,9 +292,9 @@ export class Outposts {
   }
 
   /** Bipedal magitek armour: reverse-jointed legs, slab torso, one red eye. */
-  _walker(B, world) {
+  _walker(B: any, world: any) {
     const M = this.mats;
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
     for (const s of [-1, 1]) {
       put(M.magitek, new THREE.BoxGeometry(0.42, 1.5, 0.5), [s * 0.55, 2.35, 0.15], [0.35, 0, 0]);
       put(M.magitek, new THREE.BoxGeometry(0.36, 1.6, 0.42), [s * 0.55, 1.28, -0.28], [-0.42, 0, 0]);
@@ -306,12 +314,12 @@ export class Outposts {
   // ------------------------------------------------------------------ layby
 
   /** Gravel pull-in with a bus shelter, a bin and a noticeboard. */
-  _layby(B, site) {
+  _layby(B: any, site: any) {
     const M = this.mats;
     const base = this._base(site.x, site.z, 6);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     put(M.concrete, new THREE.BoxGeometry(11, 0.22, 5), [0, 0.09, 0]);
     for (const sx of [-1, 1]) {
@@ -331,13 +339,13 @@ export class Outposts {
   // ------------------------------------------------------------------ wreck
 
   /** A burnt-out sedan (kind 0) or an overturned hauler (kind 1). */
-  _wreck(B, site) {
+  _wreck(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(920 + (site.kind || 0) * 37);
     const y = this.eco.height(site.x, site.z);
     const yaw = (site.yaw || 0) + (site.kind ? 1.1 : 0.35);
     const world = mat4([site.x, y, site.z], [0, yaw, site.kind ? 0.9 : 0.02]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     if (!site.kind) {
       put(M.rust, new THREE.BoxGeometry(4.2, 0.5, 1.75), [0, 0.55, 0]);
@@ -375,14 +383,14 @@ export class Outposts {
   // -------------------------------------------------------------- crash site
 
   /** Magitek dropship down in the basin, broken-backed in its own furrow. */
-  _crashSite(B, site) {
+  _crashSite(B: any, site: any) {
     const M = this.mats;
     const eco = this.eco;
     const rng = new Rng(7373);
     const yaw = site.yaw || 0;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, yaw, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // forward hull, nose buried and tail up
     put(M.magitek, new THREE.BoxGeometry(15, 5.2, 8.6), [0, 1.6, 0], [0, 0, -0.22]);
@@ -427,12 +435,12 @@ export class Outposts {
   // ------------------------------------------------------------ mesa outpost
 
   /** Comms mast, containers and a truck at the foot of Blackrock Mesa. */
-  _mesaOutpost(B, site) {
+  _mesaOutpost(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(3030);
     const base = this._base(site.x, site.z, 10);
     const world = mat4([site.x, base, site.z], [0, 0.7, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     put(M.concrete, new THREE.BoxGeometry(6, 0.5, 6), [0, 0.2, 0]);
     lattice(B, M.steel, world.clone().multiply(mat4([0, 0.4, 0])),
@@ -472,11 +480,11 @@ export class Outposts {
   // ----------------------------------------------------------- water tower
 
   /** Riveted tank on lattice legs — pure vertical scale next to the buttes. */
-  _waterTower(B, site) {
+  _waterTower(B: any, site: any) {
     const M = this.mats;
     const base = this._base(site.x, site.z, 6);
     const world = mat4([site.x, base, site.z], [0, 0.4, 0]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     lattice(B, M.steel, world, { height: 16, baseW: 5.2, topW: 3.4, bays: 4, leg: 0.15 });
     put(M.rust, new THREE.CylinderGeometry(3.4, 3.4, 6.2, 14), [0, 19.4, 0]);
@@ -496,7 +504,7 @@ export class Outposts {
   // ------------------------------------------------------------------ ruins
 
   /** A Solheim colonnade, half standing, half fallen into the scrub. */
-  _ruins(B, site) {
+  _ruins(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(6060);
     const eco = this.eco;
@@ -547,12 +555,12 @@ export class Outposts {
   // -------------------------------------------------------------- wind pump
 
   /** Farm windmill and stock pens: the sign that somebody worked this land. */
-  _windPump(B, site) {
+  _windPump(B: any, site: any) {
     const M = this.mats;
     const rng = new Rng(1515);
     const base = this._base(site.x, site.z, 5);
     const world = mat4([site.x, base, site.z]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     lattice(B, M.steel, world, { height: 11, baseW: 2.6, topW: 0.9, bays: 4, leg: 0.09 });
     put(M.steel, new THREE.BoxGeometry(0.6, 0.5, 0.6), [0, 11.2, 0]);

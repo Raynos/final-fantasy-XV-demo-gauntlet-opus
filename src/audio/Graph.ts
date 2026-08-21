@@ -44,6 +44,38 @@ export const BUSES = ['music', 'sfx', 'amb', 'ui', 'voice'];
 const BUS_TRIM = { music: 0.13, sfx: 0.32, amb: 0.20, ui: 0.24, voice: 0.55 };
 
 export class AudioGraph {
+  _duckDepth!: number;
+  _duckUntil!: number;
+  _live!: any[];
+  _pendingReap!: any[];
+  _preMuteVolume!: number;
+  _spaceSwap!: any;
+  bus!: any;
+  ctx!: any;
+  dcBlock!: any;
+  dropped!: number;
+  duckGain!: any;
+  glue!: any;
+  hasParamListener!: boolean;
+  hrtfLive!: number;
+  limiter!: any;
+  master!: any;
+  maxVoices!: any;
+  muted!: boolean;
+  nodesFreed!: number;
+  nodesMade!: number;
+  offline!: boolean;
+  peakVoices!: number;
+  revLong!: any;
+  revLongGain!: any;
+  revShort!: any;
+  revShortGain!: any;
+  saturator!: any;
+  sendLong!: any;
+  sendShort!: any;
+  space!: string;
+  voices!: number;
+  volume!: any;
   /**
    * @param {object} [o]
    * */
@@ -274,7 +306,7 @@ export class AudioGraph {
   }
 
   /** Reverb depth for music (0..1). Camp and interiors want a drier score. */
-  setMusicReverb(v, glide = 1.2, at = null) {
+  setMusicReverb(v: any, glide = 1.2, at = null) {
     this.sendLong.gain.setTargetAtTime(clamp(v, 0, 1) * 0.5, at ?? this.now, glide);
   }
 
@@ -310,7 +342,7 @@ export class AudioGraph {
   }
 
   /** Drop finished voices and return how many are still sounding at `t`. */
-  _compact(t) {
+  _compact(t: any) {
     const e = this._live;
     let k = 0;
     for (let i = 0; i < e.length; i++) if (e[i].end > t) e[k++] = e[i];
@@ -320,7 +352,7 @@ export class AudioGraph {
   }
 
   /** Release a voice slot and tear its nodes down. */
-  release(nodes, handle) {
+  release(nodes: any, handle: any) {
     if (handle) handle.end = -1;
     this.nodesFreed++;
     if (nodes) for (const n of nodes) { try { n.disconnect(); } catch { /* ok */ } }
@@ -341,7 +373,7 @@ export class AudioGraph {
     src.onended = () => this._finalise(entry);
   }
 
-  _finalise(entry) {
+  _finalise(entry: any) {
     if (entry.done) return;
     entry.done = true;
     this.release(entry.nodes, entry.handle);
@@ -397,7 +429,7 @@ export class AudioGraph {
   }
 
   /** Move the listener to the camera. Called once a frame. */
-  setListener(pos, forward, up) {
+  setListener(pos: any, forward: any, up: any) {
     const L = this.ctx.listener;
     if (!L) return;
     if (this.hasParamListener) {

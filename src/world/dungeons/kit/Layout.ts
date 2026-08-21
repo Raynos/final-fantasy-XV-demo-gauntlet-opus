@@ -20,6 +20,15 @@ import { clamp, smoothstep } from './Build.ts';
  *   regionAt(x, z) -> Room|Corridor|null
  */
 export class Layout {
+  _critical!: any[];
+  corridorHeight!: any;
+  corridorWidth!: any;
+  corridors!: any[];
+  exitAt!: number[];
+  id!: any;
+  name!: any;
+  spawn!: number[];
+  style!: any;
   constructor(id: string, opts: {name?:string, style?:string, corridorWidth?:number, corridorHeight?:number} = {}) {
     this.id = id;
     this.name = opts.name || id;
@@ -172,14 +181,14 @@ export class Layout {
   }
 
   /** Set dressing: `kind` is resolved by the dungeon's prop kit. */
-  prop(kind, at, s = {}) {
+  prop(kind: any, at: any, s = {}) {
     const p = { kind, at, y: s.y, rot: s.rot || 0, scale: s.scale || 1, ...s };
     this.props.push(p);
     return p;
   }
 
   /** A scripted encounter marker (the Enemies system may consume these). */
-  encounter(s) {
+  encounter(s: any) {
     const e = { id: `enc${this.encounters.length}`, ...s };
     this.encounters.push(e);
     return e;
@@ -188,7 +197,7 @@ export class Layout {
   // ------------------------------------------------------------------ query
 
   /** Room or corridor containing a point, or null. Rooms win over corridors. */
-  regionAt(x, z) {
+  regionAt(x: any, z: any) {
     for (const r of this.rooms.values()) {
       if (Math.abs(x - r.x) <= r.w * 0.5 && Math.abs(z - r.z) <= r.d * 0.5) return r;
     }
@@ -201,14 +210,14 @@ export class Layout {
   /**
    * Walkable floor height, or null outside the dungeon.
    */
-  floorAt(x, z): number | null {
+  floorAt(x: any, z: any): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     if (r.isRoom) return roomFloor(r, x, z);
     return corridorFloor(r, x, z);
   }
 
-  ceilingAt(x, z): number | null {
+  ceilingAt(x: any, z: any): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     return r.isRoom ? r.y + r.h : corridorFloor(r, x, z) + r.height;
@@ -220,7 +229,7 @@ export class Layout {
    * doorways where two regions overlap.
    * @returns [x, z]
    */
-  clampInside(x, z, margin = 0.55): number[] {
+  clampInside(x: any, z: any, margin = 0.55): number[] {
     if (this.regionAt(x, z)) {
       // already inside: only nudge if a wall is closer than the margin *and*
       // no neighbouring region covers the overlap (i.e. it is not a doorway)
@@ -245,7 +254,7 @@ export class Layout {
     return best ? bestP : [x, z];
   }
 
-  _coveredElsewhere(self, x, z) {
+  _coveredElsewhere(self: any, x: any, z: any) {
     for (const r of this.rooms.values()) {
       if (r === self) continue;
       if (Math.abs(x - r.x) <= r.w * 0.5 + 1.2 && Math.abs(z - r.z) <= r.d * 0.5 + 1.2) return true;
@@ -261,7 +270,7 @@ export class Layout {
    * Vertex occlusion at a point: 1 fully open, ~0.25 in a corner. The shell
    * builder bakes this into the colour attribute.
    */
-  occlusion(x, y, z): number {
+  occlusion(x: any, y: any, z: any): number {
     const r = this.regionAt(x, z);
     if (!r) return 0.55;
     let wall;
@@ -308,7 +317,7 @@ export class Layout {
 /* ---------------------------------------------------------------- internals */
 
 /** Insert elbows so every leg of a polyline is axis aligned. */
-function elbow(pts, order) {
+function elbow(pts: any, order: any) {
   const out = [pts[0]];
   for (let i = 1; i < pts.length; i++) {
     const p = out[out.length - 1], q = pts[i];
@@ -325,9 +334,9 @@ function elbow(pts, order) {
  * Trim a corridor path so it begins on the room's wall rather than at its
  * centre. Without this every corridor would tunnel through the room's floor.
  */
-function clipToRoom(path, room, width, fromEnd) {
+function clipToRoom(path: any, room: any, width: any, fromEnd: any) {
   const hx = room.w * 0.5, hz = room.d * 0.5;
-  const inside = (p) => Math.abs(p[0] - room.x) < hx - 0.01 && Math.abs(p[1] - room.z) < hz - 0.01;
+  const inside = (p: any) => Math.abs(p[0] - room.x) < hx - 0.01 && Math.abs(p[1] - room.z) < hz - 0.01;
   if (fromEnd) {
     while (path.length > 2 && inside(path[path.length - 2])) path.pop();
     const n = path.length - 1;
@@ -339,7 +348,7 @@ function clipToRoom(path, room, width, fromEnd) {
 }
 
 /** Where the segment from `outside` to `centre` crosses the room's wall. */
-function wallPoint(outside, centre, room) {
+function wallPoint(outside: any, centre: any, room: any) {
   const hx = room.w * 0.5, hz = room.d * 0.5;
   const dx = centre[0] - outside[0], dz = centre[1] - outside[1];
   let t = 1;
@@ -359,11 +368,11 @@ function wallPoint(outside, centre, room) {
   return [outside[0] + dx * t, outside[1] + dz * t, y0 + (y1 - y0) * t];
 }
 
-export function corridorContains(c, x, z, pad) {
+export function corridorContains(c: any, x: any, z: any, pad: any) {
   return distToPath(c.path, x, z) <= c.width * 0.5 + pad;
 }
 
-export function distToPath(path, x, z) {
+export function distToPath(path: any, x: any, z: any) {
   let best = Infinity;
   for (let i = 0; i < path.length - 1; i++) {
     best = Math.min(best, distToSeg(path[i], path[i + 1], x, z).d);
@@ -371,7 +380,7 @@ export function distToPath(path, x, z) {
   return best;
 }
 
-function distToSeg(a, b, x, z) {
+function distToSeg(a: any, b: any, x: any, z: any) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   const len2 = dx * dx + dz * dz || 1e-6;
   let t = ((x - a[0]) * dx + (z - a[1]) * dz) / len2;
@@ -380,7 +389,7 @@ function distToSeg(a, b, x, z) {
   return { d: Math.hypot(x - px, z - pz), t, px, pz };
 }
 
-function corridorFloor(c, x, z) {
+function corridorFloor(c: any, x: any, z: any) {
   let best = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);
@@ -392,7 +401,7 @@ function corridorFloor(c, x, z) {
   return best != null ? best : c.path[0][2];
 }
 
-function roomFloor(r, x, z) {
+function roomFloor(r: any, x: any, z: any) {
   for (const p of r.platforms) {
     if (Math.abs(x - p.x) <= p.w * 0.5 && Math.abs(z - p.z) <= p.d * 0.5) return p.y;
   }
@@ -407,17 +416,17 @@ function roomFloor(r, x, z) {
   return r.y;
 }
 
-function pushIn(r, x, z, margin) {
+function pushIn(r: any, x: any, z: any, margin: any) {
   if (r.isRoom) return nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
   return nearestOnCorridor(r, x, z, margin);
 }
 
-function nearestInRect(cx, cz, w, d, x, z, margin) {
+function nearestInRect(cx: any, cz: any, w: any, d: any, x: any, z: any, margin: any) {
   const hx = Math.max(0.2, w * 0.5 - margin), hz = Math.max(0.2, d * 0.5 - margin);
   return [clamp(x, cx - hx, cx + hx), clamp(z, cz - hz, cz + hz)];
 }
 
-function nearestOnCorridor(c, x, z, margin) {
+function nearestOnCorridor(c: any, x: any, z: any, margin: any) {
   let best = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);

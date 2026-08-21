@@ -19,7 +19,7 @@ export const THE_FALL = {
   openFromBlack: true,
   duration: DUR,
 
-  stage(ctx) {
+  stage(ctx: any) {
     const { game, stage } = ctx;
     const sky = game.get('Sky');
     // First light. Everything is grey and pink and far too calm.
@@ -44,7 +44,7 @@ export const THE_FALL = {
     });
   },
 
-  buildShots(ctx) {
+  buildShots(ctx: any) {
     const F = ctx.data.F;
     return [
       // the horizon they are all looking at
@@ -60,7 +60,7 @@ export const THE_FALL = {
     ];
   },
 
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     const s = ctx.stage;
     const F = ctx.data.F;
     const far = F.at(140, -10, 22);
@@ -94,7 +94,7 @@ export const THE_FALL = {
     },
   ],
 
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     const rpg = ctx.game.get('Rpg');
     const weather = ctx.game.get('Weather');
     if (weather && weather.set) weather.set('clear');

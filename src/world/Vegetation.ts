@@ -13,7 +13,17 @@ import { VegUniforms, VEG_ACTOR_MAX, installAlphaCardGuard } from './veg/VegMate
  * here drives every patched vegetation shader in the scene.
  */
 export class Vegetation {
-  async init(game) {
+  _actors!: any[];
+  _camPos!: THREE.Vector3;
+  _gust!: number;
+  _pool!: any[];
+  actorRange!: number;
+  bushes!: Bushes;
+  ecology!: Ecology;
+  game!: any;
+  grass!: GrassField;
+  trees!: Trees;
+  async init(game: any) {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.45
       : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0;
@@ -44,7 +54,7 @@ export class Vegetation {
   }
 
   /** Wind strength, 0.4 = still air, 2.5 = storm. Weather can drive this. */
-  setWind(strength, dirRadians) {
+  setWind(strength: any, dirRadians: any) {
     VegUniforms.uWindStrength.value = strength;
     if (dirRadians != null) VegUniforms.uWindDir.value.set(Math.cos(dirRadians), Math.sin(dirRadians));
   }
@@ -64,7 +74,7 @@ export class Vegetation {
     const out = this._actors;
     const pool = this._pool;
     out.length = 0;
-    const add = (obj, radius) => {
+    const add = (obj: any, radius: any) => {
       const p = obj && (obj.position || (obj.root && obj.root.position));
       if (!p) return;
       const d2 = (p.x - centre.x) ** 2 + (p.z - centre.z) ** 2;
@@ -100,7 +110,7 @@ export class Vegetation {
     VegUniforms.uActorCount.value = n;
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     VegUniforms.uTime.value = game.time.now;
 
     const player = game.get('Player');

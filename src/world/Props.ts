@@ -17,7 +17,22 @@ import { PoiKits } from './props/PoiKits.ts';
  * plants all agree about where the road, the cliffs and the campsite are.
  */
 export class Props {
-  async init(game) {
+  _camPos!: THREE.Vector3;
+  debris!: Debris;
+  ecology!: any;
+  game!: any;
+  landmarks!: Landmarks;
+  mega!: Megastructures;
+  outposts!: Outposts;
+  poiKits!: PoiKits;
+  regalia!: any;
+  regaliaLamp!: any;
+  regaliaLights!: any;
+  regaliaTail!: any;
+  roadKit!: RoadFurniture;
+  rocks!: Rocks;
+  wildlife!: Wildlife;
+  async init(game: any) {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.5
       : game.rnd && game.rnd.quality === 'medium' ? 0.75 : 1.0;
@@ -59,7 +74,7 @@ export class Props {
    * A tiny PMREM sky so chrome and black lacquer have something to reflect
    * even before the Sky system publishes a real environment.
    */
-  _fallbackEnv(game) {
+  _fallbackEnv(game: any) {
     if (game.scene.environment) return null;
     const W = 64, H = 32;
     const data = new Float32Array(W * H * 4);
@@ -88,9 +103,9 @@ export class Props {
     return env;
   }
 
-  _buildRegalia(game) {
+  _buildRegalia(game: any) {
     const eco = this.ecology;
-    const site = eco.sites.find((s) => s.type === 'regalia');
+    const site = eco.sites.find((s: any) => s.type === 'regalia');
     if (!site) return;
     const env = this._fallbackEnv(game);
     const { group, lights, lamp, tail } = buildRegalia({ envMap: env });
@@ -119,7 +134,7 @@ export class Props {
   }
 
   /** 0 in full daylight, 1 once the sun is well below the horizon. */
-  _night(game) {
+  _night(game: any) {
     const sky = game.get('Sky');
     if (!sky || !sky.sun || !sky.sun.position) return 0;
     const p = sky.sun.position;
@@ -127,7 +142,7 @@ export class Props {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     const t = game.time.now;
     const night = this._night(game);
     if (this.landmarks) this.landmarks.update(dt, t, night);

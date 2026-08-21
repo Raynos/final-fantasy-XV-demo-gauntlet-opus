@@ -30,7 +30,7 @@ import * as THREE from 'three';
 const G = 9.81;
 
 /** Longitudinal drive force available at a given road speed, newtons. */
-function engineCurve(v, maxForce, vMax) {
+function engineCurve(v: any, maxForce: any, vMax: any) {
   if (v < 0) return maxForce;                       // rolling backwards: full shove
   const t = Math.min(1, v / vMax);
   // flat-ish to 35% of vMax then falling away; zero at vMax
@@ -38,8 +38,73 @@ function engineCurve(v, maxForce, vMax) {
 }
 
 export class VehicleBody {
+  _axPrev!: any;
+  _fwd!: THREE.Vector3;
+  _gy!: number[];
+  _gyF!: number;
+  _gyL!: number;
+  _gyR!: number;
+  _gyRt!: number;
+  _hit!: any;
+  _n!: THREE.Vector3;
+  _noiseT!: number;
+  a!: number;
+  airborne!: boolean;
+  b!: number;
+  bound!: any;
+  brakeForce!: number;
+  chassisY!: number;
+  collision!: any;
+  cornerF!: number;
+  cornerR!: number;
+  dragK!: number;
+  hCG!: number;
+  halfTrack!: number;
+  handbrakeForce!: number;
+  heading!: number;
+  heaveV!: number;
+  izz!: number;
+  landImpact!: number;
+  mass!: number;
+  maxForce!: number;
+  muDirt!: number;
+  muRoad!: number;
+  muShoulder!: number;
+  muTypeD!: number;
+  odometer!: number;
+  offRoadMode!: boolean;
+  pitch!: number;
+  pos!: THREE.Vector3;
+  reverseForce!: number;
+  road!: any;
+  roadDist!: number;
+  roadLat!: number;
+  roadS!: number;
+  roll!: number;
+  rollK!: number;
+  rough!: number;
+  slide!: number;
+  speed!: number;
+  spin!: number;
+  steer!: number;
+  steerMaxHigh!: number;
+  steerMaxLow!: number;
+  steerRate!: number;
+  steerReturn!: number;
+  terrain!: any;
+  travel!: number;
+  vLat!: number;
+  vLong!: number;
+  vMax!: number;
+  vMaxReverse!: number;
+  vel!: THREE.Vector3;
+  wetness!: number;
+  wheelR!: number;
+  wheels!: any[];
+  yawDamp!: number;
+  yawRate!: number;
   /** Highest support under a wheel: town slabs and pads before raw terrain. */
-  _groundAt(t, x, z, fromY) {
+  _groundAt(t: any, x: any, z: any, fromY: any) {
     if (this.collision && this.collision.ready) {
       const g = this.collision.groundAt(x, z, fromY, 1.2, 4);
       if (g) return g.y;
@@ -148,7 +213,7 @@ export class VehicleBody {
   }
 
   /** Place the car, at rest, facing `heading`. */
-  reset(x, z, heading) {
+  reset(x: any, z: any, heading: any) {
     this.pos.set(x, 0, z);
     this.heading = heading;
     this.yawRate = 0;
@@ -169,7 +234,7 @@ export class VehicleBody {
   right(): THREE.Vector3 { return this._right.set(Math.cos(this.heading), 0, -Math.sin(this.heading)); }
 
   /** Local (forward, right) offset of a wheel from the CG. */
-  _wheelOffset(w, out) {
+  _wheelOffset(w: any, out: any) {
     out.x = w.front ? this.a : -this.b;              // forward
     out.y = -w.side * this.halfTrack;                // right (+side is left)
     return out;
@@ -240,7 +305,7 @@ export class VehicleBody {
     for (let i = 0; i < n; i++) this._substep(sub, c);
   }
 
-  _substep(dt, c) {
+  _substep(dt: any, c: any) {
     const throttle = clamp01(c.throttle || 0);
     const brake = clamp01(c.brake || 0);
     const hand = c.handbrake ? 1 : 0;
@@ -495,7 +560,7 @@ export class VehicleBody {
   get kmh() { return this.speed * 3.6; }
 }
 
-function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
-function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
-function lerp(a, b, t) { return a + (b - a) * t; }
-function damp(a, b, lambda, dt) { return b + (a - b) * Math.exp(-lambda * dt); }
+function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
+function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
+function damp(a: any, b: any, lambda: any, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }

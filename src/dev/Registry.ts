@@ -26,6 +26,8 @@
 /** @typedef {{name:string, category:string, help:string, args?:string, exec:Function}} Command */
 
 export class Registry {
+  defaults!: Map<any, any>;
+  history!: any[];
   constructor() {
     /** @type {Map<string, Cvar>} */ this.cvars = new Map();
     /** @type {Map<string, Command>} */ this.cmds = new Map();
@@ -149,7 +151,7 @@ export class Registry {
   /** Grouped listing for `help` and for building panels. */
   byCategory() {
     const out: Map<string, {cvars:Cvar[], cmds:Command[]}> = new Map();
-    const bucket = (k) => {
+    const bucket = (k: any) => {
       if (!out.has(k)) out.set(k, { cvars: [], cmds: [] });
       return out.get(k);
     };

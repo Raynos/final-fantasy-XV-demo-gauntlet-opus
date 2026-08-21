@@ -31,7 +31,26 @@ const UP = new THREE.Vector3(0, 1, 0);
  * `lateUpdate` runs the VFX depth prepass and needs the final camera).
  */
 export class Cinematics {
-  async init(game) {
+  _cam!: any;
+  _cut!: boolean;
+  _dofWas!: any;
+  _prevHud!: boolean;
+  _prevScale!: number;
+  _prevState!: string;
+  _resolve!: any;
+  _skipHeld!: number;
+  _slow!: any;
+  _v!: THREE.Vector3;
+  box!: Letterbox;
+  ctx!: any;
+  external!: any;
+  game!: any;
+  playing!: boolean;
+  scene!: any;
+  skippable!: any;
+  stage!: Stage;
+  tl!: Timeline | null;
+  async init(game: any) {
     this.game = game;
     this.box = new Letterbox(game.uiRoot);
     this.stage = new Stage(game);
@@ -197,7 +216,7 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.playing) { this.box.update(dt, false); return; }
     // `hud.setVisible(false)` only stands the *field* HUD down; the combat
     // layer follows combat state on its own, so a scene that spawns enemies as
@@ -212,7 +231,7 @@ export class Cinematics {
   }
 
   /** One timeline step. `sceneDt` drives cues, `worldDt` drives the actors. */
-  _advance(sceneDt, worldDt) {
+  _advance(sceneDt: any, worldDt: any) {
     const def = this.scene;
     const ctx = this.ctx;
 
@@ -237,7 +256,7 @@ export class Cinematics {
     if (this.tl.done) this.stop({ skipped: false });
   }
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (!this.playing || !this.tl) return;
     const i = this.tl.shotIndex >= 0 ? this.tl.shotIndex : 0;
     const shot = this.tl.shots[i];
@@ -306,7 +325,7 @@ export class Cinematics {
   }
 
   /** `focus: 'noctis'` etc. — pull focus onto a staged actor's eyes. */
-  _resolveFocus(name) {
+  _resolveFocus(name: any) {
     const a = this.stage.actor(name);
     if (a) return this.stage.eyeOf(name, this._v);
     return this._cam.target;
@@ -314,7 +333,7 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- cues -- */
 
-  _cue(c, skipping) {
+  _cue(c: any, skipping: any) {
     const ctx = this.ctx;
     try {
       if (c.fn) c.fn(ctx, skipping);
@@ -344,11 +363,11 @@ export class Cinematics {
     }
   }
 
-  _input(game) {
+  _input(game: any) {
     const inp = game.input;
     if (!inp || !this.skippable) return;
-    const down = (k) => inp.keyDown && inp.keyDown(k);
-    const gp = (i) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
+    const down = (k: any) => inp.keyDown && inp.keyDown(k);
+    const gp = (i: any) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
     if (down('Escape') || down('Enter') || down('Space') || gp(1)) this.skip();
   }
 }

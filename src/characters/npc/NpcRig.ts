@@ -29,7 +29,7 @@ import { Rng } from '../../util/Rng.ts';
  * at distance and culled entirely past ~110 m.
  */
 
-let SHARED = null;
+let SHARED: any = null;
 function shared() {
   if (!SHARED) {
     SHARED = {
@@ -92,6 +92,23 @@ export function archetype(key: string, def: any) {
  * per-instance build cost.
  */
 export class NpcBody {
+  _lod!: any;
+  anim!: Animator;
+  arch!: any;
+  body!: any;
+  eyeMesh!: THREE.Mesh;
+  eyes!: any;
+  groundShadow!: any;
+  hair!: any;
+  head!: any;
+  height!: any;
+  look!: any;
+  meshes!: any[];
+  name!: any;
+  outfit!: any;
+  rig!: any;
+  root!: THREE.Group;
+  seedRnd!: Rng;
   /**
    * @param arch result of {@link archetype}
    * @param seed per-instance seed — drives blink timing, stance and
@@ -137,7 +154,7 @@ export class NpcBody {
     this.height = rig.dims.height;
   }
 
-  _skinned(geo, mat, name) {
+  _skinned(geo: any, mat: any, name: any) {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `npc_${this.arch.key}_${name}`;
     mesh.castShadow = true;

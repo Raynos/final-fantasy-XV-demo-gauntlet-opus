@@ -18,7 +18,61 @@ const UP = new THREE.Vector3(0, 1, 0);
  *   rig.followShot = shot                                -> track the player
  */
 export class CameraRig {
-  async init(game) {
+  _collideAge!: number;
+  _colliders!: any;
+  _desired!: THREE.Vector3;
+  _dir!: THREE.Vector3;
+  _first!: boolean;
+  _focus!: THREE.Vector3;
+  _focusSmooth!: THREE.Vector3;
+  _lookAt!: THREE.Vector3;
+  _noise!: Noise;
+  _ray!: THREE.Raycaster;
+  _smooth!: THREE.Vector3;
+  _t!: number;
+  _tmp!: THREE.Vector3;
+  _tmp2!: THREE.Vector3;
+  _traumaDir!: THREE.Vector3;
+  baseFov!: number;
+  cam!: any;
+  combatFraming!: number;
+  distance!: number;
+  followShot!: any;
+  fov!: number;
+  fovMax!: number;
+  fovSpeedGain!: number;
+  game!: any;
+  handheld!: number;
+  height!: number;
+  lockOn!: any;
+  lookAhead!: number;
+  lookAheadMax!: number;
+  lookDamp!: number;
+  maxDistance!: number;
+  minDistance!: number;
+  pitch!: number;
+  pitchMax!: number;
+  pitchMin!: number;
+  pitchTarget!: any;
+  posDamp!: number;
+  posDampY!: number;
+  probeRadius!: number;
+  restDistance!: number;
+  rotDamp!: number;
+  sensitivity!: number;
+  shakeFreq!: number;
+  shakePos!: number;
+  shakeRot!: number;
+  shot!: any;
+  shoulder!: number;
+  sprintFov!: number;
+  targetDistance!: number;
+  trauma!: number;
+  traumaDecay!: number;
+  traumaMax!: number;
+  yaw!: number;
+  yawTarget!: number;
+  async init(game: any) {
     this.game = game;
     this.cam = game.camera;
 
@@ -94,7 +148,7 @@ export class CameraRig {
   // ------------------------------------------------------------------ API
 
   /** Freeze the camera on a cinematic shot. */
-  setShot(shot) {
+  setShot(shot: any) {
     this.shot = shot;
     this._cut();
   }
@@ -120,10 +174,10 @@ export class CameraRig {
   }
 
   /** Lock-on framing target (an Object3D or null). */
-  setLockOn(target) { this.lockOn = target || null; }
+  setLockOn(target: any) { this.lockOn = target || null; }
 
   /** Nudge the orbit directly (used by cutscenes / auto-follow). */
-  setOrbit(yaw, pitch) {
+  setOrbit(yaw: any, pitch: any) {
     this.yawTarget = yaw;
     this.pitchTarget = THREE.MathUtils.clamp(pitch, this.pitchMin, this.pitchMax);
   }
@@ -136,7 +190,7 @@ export class CameraRig {
   }
 
   /** Meshes the camera arm should not pass through. */
-  _collisionMeshes(game) {
+  _collisionMeshes(game: any) {
     if (this._collideAge === game.time.frame >> 5) return this._colliders;
     this._collideAge = game.time.frame >> 5;
     // opt-in only: raycasting a whole prop group (instanced foliage, etc.)
@@ -151,7 +205,7 @@ export class CameraRig {
    * Sweep the arm from the focus point outward and return the first distance
    * at which the camera would clip something.
    */
-  _armDistance(game, focus, dir, wanted) {
+  _armDistance(game: any, focus: any, dir: any, wanted: any) {
     let d = wanted;
     const terrain = game.get('Terrain');
     if (terrain && terrain.heightAt) {
@@ -182,12 +236,12 @@ export class CameraRig {
     return d;
   }
 
-  _shakeOffset(dt, out, rot) {
+  _shakeOffset(dt: any, out: any, rot: any) {
     const tr = this.trauma;
     if (tr <= 0.0001) { out.set(0, 0, 0); rot.set(0, 0, 0); return; }
     const s = tr * tr;                       // quadratic falloff reads better
     const t = this._t * this.shakeFreq;
-    const n = (o) => this._noise.simplex2(t, o);
+    const n = (o: any) => this._noise.simplex2(t, o);
     out.set(n(0.0), n(11.3), n(23.7)).multiplyScalar(s * this.shakePos);
     if (this._traumaDir.lengthSq() > 0.01) {
       out.addScaledVector(this._traumaDir, s * this.shakePos * 0.9 * n(31.1));
@@ -195,7 +249,7 @@ export class CameraRig {
     rot.set(n(41.2) * this.shakeRot * s, n(53.9) * this.shakeRot * s, n(67.5) * this.shakeRot * 1.6 * s);
   }
 
-  _drivePost(game, focusPoint) {
+  _drivePost(game: any, focusPoint: any) {
     const post = game.post;
     if (!post) return;
     if (!post.game && post.attach) post.attach(game);
@@ -206,7 +260,7 @@ export class CameraRig {
 
   // ------------------------------------------------------------- main tick
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     this._t += dt;
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
 
@@ -321,7 +375,7 @@ export class CameraRig {
     const hh = this.handheld;
     if (hh > 0) {
       const t = this._t;
-      const n = (o, f) => this._noise.simplex2(t * f, o);
+      const n = (o: any, f: any) => this._noise.simplex2(t * f, o);
       this._smooth.x += n(3.1, 0.42) * 0.020 * hh;
       this._smooth.y += n(9.7, 0.31) * 0.026 * hh;
       this._smooth.z += n(15.3, 0.37) * 0.020 * hh;
@@ -360,7 +414,7 @@ export class CameraRig {
 }
 
 /** Shortest-arc lerp between two angles. */
-function angleLerp(a, b, t) {
+function angleLerp(a: any, b: any, t: any) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

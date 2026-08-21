@@ -21,6 +21,17 @@
  * instances themselves fade out.
  */
 export class TileStream {
+  _first!: number;
+  _pendCx!: number;
+  _pendCz!: number;
+  _pending!: any[];
+  budget!: any;
+  cell!: any;
+  dirty!: boolean;
+  gen!: any;
+  keep2!: number;
+  live!: Map<any, any>;
+  radius!: any;
   /**
    * @param {object} o
    * */
@@ -37,7 +48,7 @@ export class TileStream {
     this._pendCx = 0; this._pendCz = 0;
   }
 
-  static key(cx, cz) { return ((cx & 0x3fff) << 15) | (cz & 0x3fff) | 0x40000000; }
+  static key(cx: any, cz: any) { return ((cx & 0x3fff) << 15) | (cz & 0x3fff) | 0x40000000; }
 
   /**
    * Bring the window to `camPos`. Cheap when the camera has not crossed a
@@ -55,7 +66,7 @@ export class TileStream {
       // rebuild the wanted list, nearest first so the hole in front of the
       // camera fills before the one behind it
       const n = Math.ceil(this.radius / c);
-      const want = [];
+      const want: any[] = [];
       for (let dz = -n; dz <= n; dz++) {
         for (let dx = -n; dx <= n; dx++) {
           const d2 = (dx * dx + dz * dz) * c * c;
@@ -88,7 +99,7 @@ export class TileStream {
       const [gx, gz] = this._pending.shift();
       const k = TileStream.key(gx, gz);
       if (this.live.has(k)) continue;
-      const out = [];
+      const out: any[] = [];
       this.gen(gx, gz, out);
       this.live.set(k, out);
       made++; changed = true;
@@ -102,7 +113,7 @@ export class TileStream {
   get settling() { return this._pending.length > 0; }
 
   /** Drain the whole backlog now. Used once at build time. */
-  flush(camPos, maxCells = 4000) {
+  flush(camPos: any, maxCells = 4000) {
     const b = this.budget;
     this.budget = maxCells;
     this.update(camPos);

@@ -60,7 +60,7 @@ export const DUALHORN = {
       telegraph: 0.85, strike: 0.30, attack: 0.9, recover: 1.2, cooldown: 3.2, aoe: true },
   ],
   buildPrototype,
-  make(opts) { return new DualhornEnemy(opts); },
+  make(opts: any) { return new DualhornEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -88,7 +88,7 @@ function buildPrototype() {
 
   const B = new CBuilder();
   const P = [];
-  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -191,13 +191,13 @@ function buildPrototype() {
       { p: [0, 1.60, 1.82], r: [0.20, 0.14, 0.16], amt: 0.048, dir: [0, -0.4, 1] },     // squared nose pad
       { p: [0, 1.78, 1.64], r: [0.10, 0.10, 0.20], amt: 0.020, dir: [0, 1, 0] },        // nasal bone
     ],
-    colorAt: (u, v, p) => {
+    colorAt: (u: any, v: any, p: any) => {
       const nose = clamp01((p.z - 1.80) / 0.10);
       const under = clamp01((1.66 - p.y) / 0.12);
       return mix(mix(mix(HIDE, HIDE_DARK, clamp01((p.z - 1.5) / 0.3) * 0.6), NOSE, nose * 0.9),
         BELLY, under * 0.3);
     },
-    matAt: (u, v, p) => (p.z > 1.82 ? M_WET : M_HIDE),
+    matAt: (u: any, v: any, p: any) => (p.z > 1.82 ? M_WET : M_HIDE),
   });
   for (const s of [-1, 1]) {
     B.glow(EYE, 2.4);
@@ -221,7 +221,7 @@ function buildPrototype() {
       from: [0.20 * s, 1.96, 1.34], dir: [0.66 * s, 0.26, 0.70], len: 0.86,
       curve: [-0.22 * s, 0.54, 0.10], r0: 0.115, r1: 0.012, taper: 0.72,
       seg: 9, steps: 9, flat: 0.88,
-      colorAt: (th, u) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
+      colorAt: (th: any, u: any) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
       matAt: () => M_HORN,
     });
     // ridged sheath at the horn base
@@ -371,7 +371,7 @@ function buildPrototype() {
 }
 
 /** A cloven hoof: two keratin toes with a dewclaw behind. */
-function hoof(B, x, y, z) {
+function hoof(B: any, x: any, y: any, z: any) {
   const s = Math.sign(x) || 1;
   for (const i of [-1, 1]) {
     sweep(B, {
@@ -390,7 +390,7 @@ function hoof(B, x, y, z) {
   });
 }
 
-function reset(B) {
+function reset(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -402,7 +402,12 @@ const mix = mixc;
 const col = colc;
 
 class DualhornEnemy extends QuadrupedEnemy {
-  constructor(opts) { super(DUALHORN, opts); }
+  anim!: any;
+  attackId!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(DUALHORN, opts); }
 
   telegraphScale() {
     // a charge paws the ground and coils low; a stomp rears instead
@@ -419,7 +424,7 @@ class DualhornEnemy extends QuadrupedEnemy {
    * `telegraphScale` already inverts the body drop; this adds the forelegs
    * leaving the ground and the head going back, which is the readable part.
    */
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'stomp') {
       if (this.attackId === 'charge') {
@@ -445,7 +450,7 @@ class DualhornEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.10 * rear;
   }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     if (this.attackId !== 'stomp') { super.poseAttack(S, t); return; }
     // the drop: both forefeet come down together and the ground takes it
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());

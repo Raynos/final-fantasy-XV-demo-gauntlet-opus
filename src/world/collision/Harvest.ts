@@ -43,9 +43,9 @@ const SOURCES = [
  * Collect the meshes that should contribute triangles.
  */
 export function collectMeshes(game: any): {mesh:THREE.Mesh, source:string}[] {
-  const out = [];
+  const out: any[] = [];
   const exclude = new Set();
-  const mark = (o) => { if (o && o.isObject3D) exclude.add(o); };
+  const mark = (o: any) => { if (o && o.isObject3D) exclude.add(o); };
   for (const name of ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director', 'Npcs']) {
     const s = game.get(name);
     if (!s) continue;
@@ -66,7 +66,7 @@ export function collectMeshes(game: any): {mesh:THREE.Mesh, source:string}[] {
       continue;
     }
     child.updateMatrixWorld(true);
-    child.traverse((o) => {
+    child.traverse((o: any) => {
       if (!o.isMesh || o.isInstancedMesh || !o.geometry) return;
       if (SKIP_MESH.test(o.name || '')) return;
       const g = o.geometry;
@@ -129,14 +129,14 @@ export function collectRockProxies(game: any, minSize: number = 0.55): {cx:numbe
  * An oriented box proxy for a whole object, from its world transform and the
  * union of its geometry bounds. Used for the two Regalias.
  */
-export function objectBox(obj, shrink = 0.92): {obj:THREE.Object3D, cx:number,cy:number,cz:number,hx:number,hy:number,hz:number} | null {
+export function objectBox(obj: any, shrink = 0.92): {obj:THREE.Object3D, cx:number,cy:number,cz:number,hx:number,hy:number,hz:number} | null {
   if (!obj) return null;
   obj.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
   const local = new THREE.Matrix4();
   _box.makeEmpty();
   let any = false;
-  obj.traverse((o) => {
+  obj.traverse((o: any) => {
     if (!o.isMesh || !o.geometry) return;
     if (SKIP_MESH.test(o.name || '')) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
@@ -165,8 +165,8 @@ export function objectBox(obj, shrink = 0.92): {obj:THREE.Object3D, cx:number,cy
  */
 export function boxTriangles(b: any, sink: number[]) {
   const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
-  const px = (x, z) => b.cx + x * c + z * s;
-  const pz = (x, z) => b.cz - x * s + z * c;
+  const px = (x: any, z: any) => b.cx + x * c + z * s;
+  const pz = (x: any, z: any) => b.cz - x * s + z * c;
   const y0 = b.cy - b.hy, y1 = b.cy + b.hy;
   const corners = [[-b.hx, -b.hz], [b.hx, -b.hz], [b.hx, b.hz], [-b.hx, b.hz]];
   const w = corners.map(([x, z]) => [px(x, z), pz(x, z)]);

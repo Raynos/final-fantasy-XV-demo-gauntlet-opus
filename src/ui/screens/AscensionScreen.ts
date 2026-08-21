@@ -22,6 +22,43 @@ const CAPSTONE_AP = 88;
  * is also what makes the constellations read as constellations.
  */
 export class AscensionScreen {
+  _ap!: any;
+  _curKey!: any;
+  _selAge!: number;
+  ap!: number;
+  apEl!: any;
+  apHud!: any;
+  apSub!: any;
+  bracket!: any;
+  byId!: Map<any, any>;
+  cC!: any;
+  cC2!: any;
+  cD!: any;
+  cK!: any;
+  cN!: any;
+  cReq!: any;
+  card!: any;
+  constellations!: any;
+  edgeEls!: any;
+  edgeG!: any;
+  edges!: any;
+  flowG!: any;
+  flows!: any;
+  game!: any;
+  labelG!: any;
+  labels!: any;
+  legend!: any;
+  menus!: any;
+  nodeEls!: any;
+  nodeG!: any;
+  nodes!: any;
+  place!: any;
+  sel!: any;
+  src!: any;
+  sub!: string;
+  svg!: any;
+  title!: string;
+  wrap!: any;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Ascension';
@@ -29,7 +66,7 @@ export class AscensionScreen {
     this.ap = 0;
   }
 
-  build(root: HTMLElement, game) {
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.wrap = el('div.asc');
     this.svg = svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
@@ -40,7 +77,7 @@ export class AscensionScreen {
     this._graph(game);
     this._draw();
     this._chrome(root);
-    this.sel = Math.max(0, this.nodes.findIndex((n) => n.state === 'open'));
+    this.sel = Math.max(0, this.nodes.findIndex((n: any) => n.state === 'open'));
   }
 
   _defs() {
@@ -65,7 +102,7 @@ export class AscensionScreen {
   }
 
   /** Read the authored graph and fit its normalised layout to the safe box. */
-  _graph(game) {
+  _graph(game: any) {
     const src = readAscension(game);
     this.src = src;
     this.ap = src.ap;
@@ -82,7 +119,7 @@ export class AscensionScreen {
     const cx = (SAFE.x0 + SAFE.x1) / 2, cy = (SAFE.y0 + SAFE.y1) / 2;
     const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
     /** normalised layout space -> screen */
-    this.place = (p) => [cx + (p[0] - mx) * sx, cy + (p[1] - my) * sy];
+    this.place = (p: any) => [cx + (p[0] - mx) * sx, cy + (p[1] - my) * sy];
 
     this.byId = new Map();
     this.nodes = ids.map((id, i) => {
@@ -98,8 +135,8 @@ export class AscensionScreen {
     });
 
     this.edges = src.edges
-      .filter((e) => this.byId.has(e.from) && this.byId.has(e.to))
-      .map((e) => {
+      .filter((e: any) => this.byId.has(e.from) && this.byId.has(e.to))
+      .map((e: any) => {
         const a = this.nodes[this.byId.get(e.from)];
         const b = this.nodes[this.byId.get(e.to)];
         const dx = b.x - a.x, dy = b.y - a.y;
@@ -114,12 +151,12 @@ export class AscensionScreen {
     // Constellation names live in the page margins, not on top of their own
     // nodes: the outer constellations put their label to the left or right of
     // their bounding box, the three central ones sit above theirs.
-    this.constellations = src.constellations.map((c) => {
-      const pts = c.nodeIds.filter((id) => this.byId.has(id)).map((id) => this.nodes[this.byId.get(id)]);
-      const ax = pts.reduce((a, p) => a + p.x, 0) / Math.max(1, pts.length);
-      const ay = pts.reduce((a, p) => a + p.y, 0) / Math.max(1, pts.length);
-      const bw = Math.max(...pts.map((p) => Math.abs(p.x - ax)), 10);
-      const bh = Math.max(...pts.map((p) => Math.abs(p.y - ay)), 10);
+    this.constellations = src.constellations.map((c: any) => {
+      const pts = c.nodeIds.filter((id: any) => this.byId.has(id)).map((id: any) => this.nodes[this.byId.get(id)]);
+      const ax = pts.reduce((a: any, p: any) => a + p.x, 0) / Math.max(1, pts.length);
+      const ay = pts.reduce((a: any, p: any) => a + p.y, 0) / Math.max(1, pts.length);
+      const bw = Math.max(...pts.map((p: any) => Math.abs(p.x - ax)), 10);
+      const bh = Math.max(...pts.map((p: any) => Math.abs(p.y - ay)), 10);
       const side = Math.abs(c.origin[0]) >= 1.0 ? Math.sign(c.origin[0]) : 0;
       const lx = side ? clamp(ax + side * (bw + 26), 132, W - 132) : clamp(ax, 160, W - 160);
       const ly = side ? clamp(ay - 4, 150, H - 190) : clamp(ay - bh - 24, 142, H - 200);
@@ -142,17 +179,17 @@ export class AscensionScreen {
       n.state = c.ok ? 'open' : c.reason === 'not-enough-ap' ? 'reach' : 'locked';
     }
     for (const c of this.constellations) {
-      c.owned = c.nodeIds.filter((id) => s.isUnlocked(id)).length;
+      c.owned = c.nodeIds.filter((id: any) => s.isUnlocked(id)).length;
     }
   }
 
-  _nodeFill(st) {
+  _nodeFill(st: any) {
     return st === 'done' ? 'url(#ascNode)'
       : st === 'open' ? 'rgba(24,42,68,.88)'
         : st === 'reach' ? 'rgba(18,30,50,.80)' : 'rgba(14,20,32,.72)';
   }
 
-  _nodeStroke(n) {
+  _nodeStroke(n: any) {
     return n.state === 'done' ? 'rgba(226,242,255,.92)'
       : n.state === 'open' ? 'rgba(206,232,255,.95)'
         : n.state === 'reach' ? n.def.color : 'rgba(150,178,214,.28)';
@@ -174,7 +211,7 @@ export class AscensionScreen {
 
     this.edgeG = svg('g');
     this.svg.appendChild(this.edgeG);
-    this.edgeEls = this.edges.map((e2) => {
+    this.edgeEls = this.edges.map((e2: any) => {
       const a = this.nodes[e2.a], b = this.nodes[e2.b];
       const p = svg('path', {
         d: `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q${e2.cx.toFixed(1)} ${e2.cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`,
@@ -188,7 +225,7 @@ export class AscensionScreen {
     // energy flowing along the edges the party has actually bought
     this.flowG = svg('g');
     this.svg.appendChild(this.flowG);
-    this.flows = this.edges.map((e2, i) => {
+    this.flows = this.edges.map((e2: any, i: any) => {
       const a = this.nodes[e2.a], b = this.nodes[e2.b];
       const p = svg('path', {
         d: `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q${e2.cx.toFixed(1)} ${e2.cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`,
@@ -201,7 +238,7 @@ export class AscensionScreen {
 
     this.nodeG = svg('g');
     this.svg.appendChild(this.nodeG);
-    this.nodeEls = this.nodes.map((n) => {
+    this.nodeEls = this.nodes.map((n: any) => {
       const s = n.major ? 10.5 : 7;
       const g = svg('g', { transform: `translate(${n.x.toFixed(1)} ${n.y.toFixed(1)})` });
       const halo = svg('path', {
@@ -222,7 +259,7 @@ export class AscensionScreen {
     // constellation labels, with how much of each the party owns
     this.labelG = svg('g');
     this.svg.appendChild(this.labelG);
-    this.labels = this.constellations.map((c) => {
+    this.labels = this.constellations.map((c: any) => {
       const g = svg('g');
       const t = svg('text', {
         x: c.lx.toFixed(1), y: c.ly.toFixed(1), 'text-anchor': c.anchor,
@@ -251,7 +288,7 @@ export class AscensionScreen {
     this.svg.appendChild(this.bracket);
   }
 
-  _chrome(root) {
+  _chrome(root: any) {
     const hud = el('div.asc-hud', {}, [
       el('div.ap-k', { text: 'Ability Points' }),
       el('div.ap-v', { text: String(this.ap) }),
@@ -287,7 +324,7 @@ export class AscensionScreen {
   }
 
   /** Move the selection to the nearest node in a screen direction. */
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const cur = this.nodes[this.sel];
     if (!cur) return;
     let best = -1, bestScore = Infinity;
@@ -336,14 +373,14 @@ export class AscensionScreen {
     }
   }
 
-  enter(game) {
+  enter(game: any) {
     this._selAge = 0;
     if (game) this.game = game;
     this._syncStates();
     this._restyleAll();
     this._curKey = null;
     if (this.nodes[this.sel]?.state === 'locked') {
-      const open = this.nodes.findIndex((n) => n.state === 'open');
+      const open = this.nodes.findIndex((n: any) => n.state === 'open');
       if (open >= 0) this.sel = open;
     }
   }
@@ -410,7 +447,7 @@ export class AscensionScreen {
       this.cC2.textContent = def.constellationName;
       this.cC2.style.color = def.color;
       this.cD.textContent = def.desc;
-      const missing = (check.missing || []).map((m) => this.src.nodes[m]?.name).filter(Boolean);
+      const missing = (check.missing || []).map((m: any) => this.src.nodes[m]?.name).filter(Boolean);
       this.cReq.textContent = missing.length ? `Requires  ·  ${missing.join('  ·  ')}` : '';
       this.cReq.style.display = missing.length ? '' : 'none';
       this.cC.lastChild.textContent = cur.state === 'done' ? 'Owned' : `${def.ap} AP`;

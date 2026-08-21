@@ -39,6 +39,25 @@ const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
  * data is available for any other system to poll.
  */
 export class Dungeons {
+  _camLocal!: any;
+  _hidden!: any[];
+  _returnTo!: any;
+  _saved!: any;
+  _shotSeen!: any;
+  _tmp!: THREE.Vector3;
+  ambience!: DungeonAmbience;
+  built!: Map<any, any>;
+  current!: any;
+  defs!: Map<any, any>;
+  entrances!: any[];
+  fader!: Fader;
+  game!: any;
+  keys!: Set<any>;
+  prompt!: any;
+  sky!: any;
+  state!: string;
+  stats!: any;
+  terrain!: any;
   constructor() {
     /** @type {Map<string, object>} id -> definition */
     this.defs = new Map(DEFS.map((d) => [d.id, d]));
@@ -174,7 +193,7 @@ export class Dungeons {
   /**
    * Draw the current dungeon map onto a 2D context.
    */
-  drawMap(ctx: CanvasRenderingContext2D, w, h, opts) {
+  drawMap(ctx: CanvasRenderingContext2D, w: any, h: any, opts: any) {
     if (!this.current || !this.current.map) return false;
     const p = this.game.get('Player');
     const local = p ? this._tmp.copy(p.position).sub(this.current.origin) : null;
@@ -183,11 +202,11 @@ export class Dungeons {
   }
 
   /** World-space floor height inside the current dungeon, else null. */
-  floorAt(x, z) { return this.current ? this.current.floorAt(x, z) : null; }
+  floorAt(x: any, z: any) { return this.current ? this.current.floorAt(x, z) : null; }
 
   // -------------------------------------------------------------- transition
 
-  _doEnter(def) {
+  _doEnter(def: any) {
     const game = this.game;
     let d = this.built.get(def.id);
     if (!d) {
@@ -279,7 +298,7 @@ export class Dungeons {
   }
 
   /** Where the party is standing when they step back out. */
-  _exitPoint(def) {
+  _exitPoint(def: any) {
     const e = def.entrance;
     const c = Math.cos(e.heading), s = Math.sin(e.heading);
     const x = e.x + s * -7.5, z = e.z + c * -7.5;
@@ -295,7 +314,7 @@ export class Dungeons {
   _hideExterior() {
     const game = this.game;
     const keep = new Set();
-    const add = (o) => { if (o && o.isObject3D) keep.add(o); };
+    const add = (o: any) => { if (o && o.isObject3D) keep.add(o); };
     for (const name of ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director']) {
       const s = game.get(name);
       if (!s) continue;
@@ -340,11 +359,11 @@ export class Dungeons {
     const origH = t.heightAt.bind(t);
     const origN = t.normalAt.bind(t);
     const self = this;
-    t.heightAt = function (x, z) {
+    t.heightAt = function (x: any, z: any) {
       const h = self.floorAt(x, z);
       return h != null ? h : origH(x, z);
     };
-    t.normalAt = function (x, z, out) {
+    t.normalAt = function (x: any, z: any, out: any) {
       const h = self.floorAt(x, z);
       if (h != null) return (out || new THREE.Vector3()).set(0, 1, 0);
       return origN(x, z, out);
@@ -366,7 +385,7 @@ export class Dungeons {
     this._saved = {
       ambient: sky.ambient ? sky.ambient.intensity : 0,
       env: this.game.scene.environmentIntensity,
-      shadows: sky.csm ? sky.csm.lights.map((l) => l.castShadow) : [],
+      shadows: sky.csm ? sky.csm.lights.map((l: any) => l.castShadow) : [],
       domeVisible: sky.dome ? sky.dome.visible : true,
       autoGrade: this.game.post ? this.game.post.autoGrade : true,
     };
@@ -377,7 +396,7 @@ export class Dungeons {
   _restoreWorldLighting() {
     const sky = this.sky;
     if (!sky || !this._saved) return;
-    if (sky.csm) sky.csm.lights.forEach((l, i) => { l.castShadow = this._saved.shadows[i] !== false; });
+    if (sky.csm) sky.csm.lights.forEach((l: any, i: any) => { l.castShadow = this._saved.shadows[i] !== false; });
     if (sky.dome) sky.dome.visible = this._saved.domeVisible;
     if (sky.ambient) sky.ambient.intensity = this._saved.ambient;
     this.game.scene.environmentIntensity = this._saved.env;
@@ -389,7 +408,7 @@ export class Dungeons {
 
   // ----------------------------------------------------------------- verbs
 
-  _openDoor(item) {
+  _openDoor(item: any) {
     if (item.open) return { ok: true };
     const key = item.spec.key;
     if (key && !this.keys.has(key)) {
@@ -402,7 +421,7 @@ export class Dungeons {
     return { ok: true };
   }
 
-  _openChest(item) {
+  _openChest(item: any) {
     if (item.opened) return { ok: false, reason: 'empty' };
     item.opened = true;
     if (item.spec) item.spec.opened = true;
@@ -424,7 +443,7 @@ export class Dungeons {
 
   // ---------------------------------------------------------------- ticking
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     this.fader.update(dt);
 
     // the capture harness selects a dungeon through the shot definition
@@ -459,7 +478,7 @@ export class Dungeons {
     }
   }
 
-  _confine(pos, margin) {
+  _confine(pos: any, margin: any) {
     const p = this.current.clamp(pos.x, pos.z, margin);
     pos.x = p[0];
     pos.z = p[1];
@@ -477,7 +496,7 @@ export class Dungeons {
     }
   }
 
-  _hazards(dt, player) {
+  _hazards(dt: any, player: any) {
     const L = this.current.layout;
     const o = this.current.origin;
     const lx = player.position.x - o.x, lz = player.position.z - o.z;
@@ -490,7 +509,7 @@ export class Dungeons {
     }
   }
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     // exterior entrances are only worth drawing when they are in reach
     if (!this.isInside) {
       const cp = game.camera.position;

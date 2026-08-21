@@ -57,6 +57,17 @@ export const HAVEN_RADIUS = 14;
  * `daemons-receding`, `haven-discovered` and `rested`.
  */
 export class DayCycle {
+  _daemonsUp!: any;
+  _lastHourInt!: any;
+  absoluteHour!: any;
+  day!: number;
+  driveSky!: boolean;
+  emitter!: any;
+  havenState!: any;
+  hour!: number;
+  minutesPerSecond!: number;
+  running!: boolean;
+  syncFromSky!: boolean;
   constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** Current hour, 0..24. */
@@ -215,7 +226,7 @@ export class DayCycle {
   havens() { return HAVENS.map((h) => ({ ...h, discovered: this.havenState[h.id].discovered })); }
 
   /** Mark a haven as found. */
-  discoverHaven(id) {
+  discoverHaven(id: any) {
     const st = this.havenState[id];
     if (!st || st.discovered) return false;
     st.discovered = true;
@@ -304,7 +315,7 @@ export class DayCycle {
   }
 
   /** Skip time without sleeping (waiting out the night at a haven). */
-  wait(hours, ctx = {}) {
+  wait(hours: any, ctx = {}) {
     this.advance(hours);
     if (ctx.party) ctx.party.expireBuffs(this.absoluteHour);
     return { ok: true, hour: this.hour, clock: this.clockString, day: this.day };
@@ -317,7 +328,7 @@ export class DayCycle {
     };
   }
 
-  static fromJSON(data, emitter = null) {
+  static fromJSON(data: any, emitter = null) {
     const d = new DayCycle(emitter);
     if (!data) return d;
     d.day = data.day || 1;

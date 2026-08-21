@@ -20,7 +20,27 @@ import { PartyAI } from '../characters/ai/PartyAI.ts';
  * already written its final transform.
  */
 export class Director {
-  async init(game) {
+  _ambient!: number;
+  _frozenPlayer!: any;
+  _swing!: any;
+  _tmp!: THREE.Vector3;
+  combat!: any;
+  downed!: any;
+  encounters!: any;
+  enemies!: any;
+  game!: any;
+  home!: any;
+  homeHeading!: any;
+  hunts!: any;
+  live!: any;
+  partyAI!: any;
+  pinTime!: number;
+  player!: any;
+  rng!: Rng;
+  scenario!: string | null;
+  terrain!: any;
+  vfx!: any;
+  async init(game: any) {
     this.game = game;
     this.rng = new Rng(88123);
     this.scenario = null;
@@ -101,14 +121,14 @@ export class Director {
   /* --------------------------------------------------------- helpers */
 
   /** World position relative to the scenario anchor, snapped to the terrain. */
-  at(dx, dz, dy = 0) {
+  at(dx: any, dz: any, dy = 0) {
     const p = new THREE.Vector3(this.home.x + dx, 0, this.home.z + dz);
     p.y = (this.terrain ? this.terrain.heightAt(p.x, p.z) : 0) + dy;
     return p;
   }
 
   /** Face `e` toward a world point. */
-  face(e, p) {
+  face(e: any, p: any) {
     e.heading = Math.atan2(p.x - e.root.position.x, p.z - e.root.position.z);
     e.root.rotation.y = e.heading;
     return e;
@@ -119,7 +139,7 @@ export class Director {
    * the past, so a *frozen* frame still shows a fully populated, mid-life
    * particle field instead of a single burst.
    */
-  seedAmbient(centre, radius, t0, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
+  seedAmbient(centre: any, radius: any, t0: any, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
     const vfx = this.vfx, rng = this.rng;
     const c = new THREE.Color(color);
     for (let i = 0; i < motes; i++) {
@@ -237,7 +257,7 @@ export class Director {
     boss.stateTime = 0.7;
     boss.phaseIndex = key === 'titan' ? 1 : 2;
     boss.attackId = key === 'titan' ? 'slam_r' : key === 'magitek_armour' ? 'overload' : 'charge';
-    boss.attack = (boss.attacks || []).find((a) => a.id === boss.attackId) || null;
+    boss.attack = (boss.attacks || []).find((a: any) => a.id === boss.attackId) || null;
     boss.freeze('telegraph', key === 'titan' ? 6.2 : 4.4);
 
     if (key === 'magitek_armour') {
@@ -628,7 +648,7 @@ export class Director {
 
   /* ------------------------------------------------------------- tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     // hold the authored player transform against Player.update
     if (this._frozenPlayer && this.player) {
       this.player.root.position.copy(this._frozenPlayer.pos);
@@ -661,7 +681,7 @@ export class Director {
    * VFX depth prepass runs (soft particles need scene depth from this frame's
    * viewpoint).
    */
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (this.vfx && this.vfx.renderDepthPrepass) this.vfx.renderDepthPrepass(game);
   }
 }

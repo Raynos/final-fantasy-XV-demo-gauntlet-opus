@@ -26,7 +26,7 @@ export function bootPhase(name: string, fn: ((...args: any[]) => any)) {
   const r = fn();
   const p = typeof window !== 'undefined' && window.BOOT_PROFILE;
   const done = () => { if (p) p.marks.push({ name: `  ${name}`, ms: +(now() - t0).toFixed(1) }); };
-  if (r && typeof r.then === 'function') return r.then((v) => { done(); return v; });
+  if (r && typeof r.then === 'function') return r.then((v: any) => { done(); return v; });
   done();
   return r;
 }
@@ -45,13 +45,13 @@ export function installBootProfile(game: any): any {
   if (typeof window !== 'undefined') window.BOOT_PROFILE = profile;
 
   const add = game.add.bind(game);
-  let last = null;
-  game.add = (system, name) => {
+  let last: any = null;
+  game.add = (system: any, name: any) => {
     const key = name || 'anon';
     const sys = add(system, name);
     if (sys && sys.init) {
       const orig = sys.init.bind(sys);
-      sys.init = async (g) => {
+      sys.init = async (g: any) => {
         const t0 = now();
         try {
           return await orig(g);

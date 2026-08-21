@@ -15,7 +15,7 @@
  */
 
 /** Two-key hold: rest → pose, then park. */
-function hold(pose, blend = 0.42) {
+function hold(pose: any, blend = 0.42) {
   return { dur: blend, hold: true, mask: 'upper', keys: [{ t: 0, pose: {} }, { t: blend, pose }] };
 }
 

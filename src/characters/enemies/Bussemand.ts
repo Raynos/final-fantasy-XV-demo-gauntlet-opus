@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const FLESH = 0x6d5068;
 const FLESH_DARK = 0x3b2c40;
@@ -56,7 +56,7 @@ export const BUSSEMAND = {
     },
   ],
   buildPrototype,
-  make(opts) { return new BussemandEnemy(opts); },
+  make(opts: any) { return new BussemandEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -213,12 +213,16 @@ function buildPrototype() {
 }
 
 class BussemandEnemy extends Enemy {
-  constructor(opts) { super(BUSSEMAND, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(BUSSEMAND, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     // the hunch is permanent — it cannot stand up, only lean further over
     const hunch = (k = 1) => {
       S('spine', 0.26 * k, 0, 0);

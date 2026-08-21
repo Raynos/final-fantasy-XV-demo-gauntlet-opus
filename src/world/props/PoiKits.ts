@@ -50,7 +50,7 @@ const SKIP_IDS = new Set(['hammerhead']);
 
 const _v = new THREE.Vector3();
 
-function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
   return new THREE.Matrix4().compose(
     new THREE.Vector3(pos[0], pos[1], pos[2]),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -59,12 +59,12 @@ function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
 }
 
 /** Flat-coloured PBR material — no map, so it cannot stretch. */
-function plain(hex, rough = 0.85, metal = 0) {
+function plain(hex: any, rough = 0.85, metal = 0) {
   return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
 }
 
 /** A slab with a slightly irregular top — reads as cut stone, not a cube. */
-function roughBox(seed, w, h, d, amp = 0.05) {
+function roughBox(seed: any, w: any, h: any, d: any, amp = 0.05) {
   const g = new THREE.BoxGeometry(w, h, d, 2, 1, 2);
   const rng = new Rng(seed);
   const p = g.attributes.position;
@@ -78,6 +78,13 @@ function roughBox(seed, w, h, d, amp = 0.05) {
 }
 
 export class PoiKits {
+  _exclusions!: any;
+  eco!: any;
+  mats!: any;
+  quality!: any;
+  root!: THREE.Group;
+  scene!: any;
+  sites!: any[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
@@ -161,7 +168,7 @@ export class PoiKits {
    * below the point the map actually names, and the skirt in {@link _apron}
    * covers whatever gap is left on the downhill side.
    */
-  _base(x, z, r, drop = 2.2) {
+  _base(x: any, z: any, r: any, drop = 2.2) {
     const h0 = this.eco.height(x, z);
     let sum = 0, lo = h0;
     for (let i = 0; i < 10; i++) {
@@ -178,7 +185,7 @@ export class PoiKits {
    * and a sloping hillside. Cheaper and far more robust than trying to level
    * the heightfield from here — the terrain belongs to another system.
    */
-  _apron(B, r, depth, seed, mat) {
+  _apron(B: any, r: any, depth: any, seed: any, mat: any) {
     const M = this.mats;
     const rng = new Rng(seed);
     // A tapering, faceted drum rather than a smooth cylinder: on a hillside
@@ -208,7 +215,7 @@ export class PoiKits {
   }
 
   /** Which way the structure faces: down the nearest road, else seeded. */
-  _yaw(p, rng) {
+  _yaw(p: any, rng: any) {
     const road = this.eco.terrain && this.eco.terrain.map && this.eco.terrain.map.roadGraph;
     if (road) {
       let bestD = 90, bestA = null;
@@ -230,7 +237,7 @@ export class PoiKits {
    * A haven: the rune-marked camp rock. Raised shelf, a ring of glyphs the
    * player can see from a distance at night, a fire ring and camp stones.
    */
-  _haven(B, s, ctx) {
+  _haven(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, dress } = ctx;
     const r = 9.6;
     // A haven is a *raised* shelf you climb onto, not a disc painted on the
@@ -292,11 +299,11 @@ export class PoiKits {
   }
 
   /** A gravel pull-in: apron, wheel stops, a barrier on the drop side, signs. */
-  _parking(B, s, ctx) {
+  _parking(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const w = 22, d = 13;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 13.5, 6.0, 91);
     put(M.gravel, new THREE.BoxGeometry(w, 0.26, d), [0, 0.13, 0]);
     // bay markings as thin raised strips: paint on a procedural world is a
@@ -324,10 +331,10 @@ export class PoiKits {
   }
 
   /** Fuel canopy, shop and a pylon sign — the lit thing on a night road. */
-  _restStop(B, s, ctx) {
+  _restStop(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 19, 8.0, 55);
     put(M.gravel, new THREE.BoxGeometry(30, 0.3, 22), [0, 0.14, 0]);
     // canopy
@@ -365,10 +372,10 @@ export class PoiKits {
   }
 
   /** A wayside outpost: prefab huts, a pump, containers and a comms mast. */
-  _outpost(B, s, ctx) {
+  _outpost(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 14, 8.0, 71);
     put(M.gravel, new THREE.BoxGeometry(22, 0.3, 16), [0, 0.14, 0]);
     const huts = 2 + Math.floor(rng.next() * 2);
@@ -421,10 +428,10 @@ export class PoiKits {
    * heights, parapets to break the silhouette, and one vertical — a chimney
    * or a water tower — tall enough to name the place on the horizon.
    */
-  _town(B, s, ctx) {
+  _town(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 52, 18, 33);
     put(M.gravel, new THREE.CylinderGeometry(51, 52, 0.6, 26), [0, 0.2, 0]);
     // a street grid rather than a scatter: blocks share walls and align
@@ -497,11 +504,11 @@ export class PoiKits {
    * itself hanging over the sarcophagus. This is the kit that most has to read
    * from a kilometre away — a tomb is a landmark before it is a room.
    */
-  _tomb(B, s, ctx) {
+  _tomb(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     // 1.4x: a royal tomb has to hold its own against a 200 m mesa behind it
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.4, 1.4, 1.4]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 13, 11, 17);
     // three steps
     for (let i = 0; i < 3; i++) {
@@ -549,10 +556,10 @@ export class PoiKits {
   }
 
   /** A magitek base: wall, towers, landing pad, banners, floodlights. */
-  _imperial(B, s, ctx) {
+  _imperial(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 34, 13, 47);
     put(M.gravel, new THREE.BoxGeometry(64, 0.4, 52), [0, 0.18, 0]);
     // perimeter wall with a gate and a breach
@@ -615,10 +622,10 @@ export class PoiKits {
   }
 
   /** A chocobo post: paddock rails, barn, feed silo, trough, signboard. */
-  _chocobo(B, s, ctx) {
+  _chocobo(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 22, 9, 63);
     put(M.gravel, new THREE.CylinderGeometry(22, 23, 0.4, 20), [0, 0.16, 0]);
     // paddock: post and two rails, all the way round
@@ -655,10 +662,10 @@ export class PoiKits {
   }
 
   /** A fishing spot: a timber jetty on piles, a tackle shack and a boat. */
-  _fishing(B, s, ctx) {
+  _fishing(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     // the deck has to clear the water, whatever the ground is doing
     const deck = Math.max(1.4, WORLD.seaLevel + 1.5 - ctx.base);
     const L = 22;
@@ -700,10 +707,10 @@ export class PoiKits {
   }
 
   /** A viewpoint: waymark stele, cairn, a bench. Lighthouses get a tower. */
-  _landmark(B, s, ctx) {
+  _landmark(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     if (/lighthouse/.test(s.poi.id)) {
       this._apron(B, 6, 9, 21);
       put(M.cream, new THREE.CylinderGeometry(2.0, 3.2, 20, 16), [0, 10, 0]);
@@ -741,10 +748,10 @@ export class PoiKits {
   }
 
   /** A menace lair: a sealed sigil in a ring of leaning stones. */
-  _menace(B, s, ctx) {
+  _menace(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.3, 1.3, 1.3]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 12, 9, 83);
     put(M.dark, new THREE.CylinderGeometry(9.4, 10, 0.6, 22), [0, 0.24, 0]);
     for (let i = 0; i < 9; i++) {
@@ -765,10 +772,10 @@ export class PoiKits {
   }
 
   /** A dungeon mouth: dressed jambs and a lintel set into a rubble mound. */
-  _dungeon(B, s, ctx) {
+  _dungeon(B: any, s: any, ctx: any) {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.35, 1.35, 1.35]);
-    const put = (mat, geo, pos, rot, sc) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: any, geo: any, pos: any, rot: any, sc: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 11, 9, 29);
     // the mound the portal is cut into
     put(M.dark, new THREE.SphereGeometry(9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
@@ -796,7 +803,7 @@ export class PoiKits {
   // ---------------------------------------------------------------- stream
 
   /** Positions we must not build on: another system already owns them. */
-  _exclude(game) {
+  _exclude(game: any) {
     if (this._exclusions) return this._exclusions;
     const out = [];
     const d = game && game.get && game.get('Dungeons');
@@ -807,7 +814,7 @@ export class PoiKits {
     return out;
   }
 
-  _make(site, game) {
+  _make(site: any, game: any) {
     const p = site.poi;
     for (const e of this._exclude(game)) {
       if (Math.hypot(e.x - p.x, e.z - p.z) < 130) { site.group = new THREE.Group(); return; }
@@ -871,7 +878,7 @@ export class PoiKits {
 }
 
 /** Stable 32-bit hash of a POI id, so every kit varies but never drifts. */
-function hashId(str) {
+function hashId(str: any) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);

@@ -68,7 +68,7 @@ export const GARULA = {
       telegraph: 1.00, strike: 0.32, attack: 1.05, recover: 1.55, cooldown: 4.2 },
   ],
   buildPrototype,
-  make(opts) { return new GarulaEnemy(opts); },
+  make(opts: any) { return new GarulaEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -96,7 +96,7 @@ function buildPrototype() {
 
   const B = new CBuilder();
   const P = [];
-  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   // One continuous barrel. Deepest and widest just behind the shoulder, then
@@ -172,7 +172,7 @@ function buildPrototype() {
   // buried both times; the table below is the sweep's own node list.
   const RIDGE = [[-1.86, 2.34], [-1.42, 2.68], [-0.82, 2.88], [-0.16, 3.06],
     [0.42, 3.18], [0.86, 3.02], [1.10, 2.72]];
-  const ridgeY = (z) => {
+  const ridgeY = (z: any) => {
     for (let k = 1; k < RIDGE.length; k++) {
       if (z <= RIDGE[k][0] || k === RIDGE.length - 1) {
         const [z0, y0] = RIDGE[k - 1], [z1, y1] = RIDGE[k];
@@ -194,7 +194,7 @@ function buildPrototype() {
     horn(B, {
       from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
       curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
-      colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+      colorAt: (th: any, u: any) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
         SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
@@ -242,14 +242,14 @@ function buildPrototype() {
       { p: [0, 1.54, 2.10], r: [0.22, 0.16, 0.16], amt: 0.040, dir: [0, -0.6, 1] },        // nose pad
       { p: [0, 2.02, 1.72], r: [0.16, 0.14, 0.24], amt: 0.026, dir: [0, 1, 0] },           // nasal ridge
     ],
-    colorAt: (u, v, p) => {
+    colorAt: (u: any, v: any, p: any) => {
       const nose = clamp01((p.z - 2.06) / 0.12);
       const face = clamp01((p.z - 1.90) / 0.16) * clamp01((p.y - 1.70) / 0.14);
       const top = clamp01((p.y - 2.02) / 0.14);
       return mix(mix2(HIDE, PLATE, face * 0.85), NOSE, nose * 0.9)
         .lerp(hex(SHAG_DARK), top * 0.55);
     },
-    matAt: (u, v, p) => {
+    matAt: (u: any, v: any, p: any) => {
       if (p.z > 2.08) return M_WET;
       const face = clamp01((p.z - 1.92) / 0.14) * clamp01((p.y - 1.70) / 0.14);
       return face > 0.5 ? M_PLATE : M_HIDE;
@@ -319,7 +319,7 @@ function buildPrototype() {
       from: [0.30 * s, 1.58, 1.88], dir: [0.52 * s, 0.02, 0.85], len: 1.15,
       curve: [0.10 * s, 1.05, -0.30], r0: 0.115, r1: 0.012, taper: 0.70,
       seg: 8, steps: 9, flat: 0.90,
-      colorAt: (th, u) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
+      colorAt: (th: any, u: any) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
       matAt: () => M_TUSK,
     });
     // second, smaller tusk inboard of it
@@ -442,7 +442,7 @@ function buildPrototype() {
 }
 
 /** A heavy three-toed foot: two front toes, a broad pad, a rear dewclaw. */
-function hoof(B, x, y, z) {
+function hoof(B: any, x: any, y: any, z: any) {
   const s = Math.sign(x) || 1;
   for (const i of [-1, 1]) {
     sweep(B, {
@@ -461,7 +461,7 @@ function hoof(B, x, y, z) {
   });
 }
 
-function reset(B) {
+function reset(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -469,23 +469,28 @@ function reset(B) {
 
 const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _c3 = new THREE.Color();
 /** Blend two sRGB hexes into the shared working colour. */
-function mix(a, b, t) {
+function mix(a: any, b: any, t: any) {
   _c1.setHex(a, THREE.SRGBColorSpace);
   _c2.setHex(b, THREE.SRGBColorSpace);
   return _c1.lerp(_c2, clamp01(t));
 }
 /** Same blend, but returns a hex so it can be fed back into `mix`/`hex`. */
-function mix2(a, b, t) {
+function mix2(a: any, b: any, t: any) {
   _c3.setHex(a, THREE.SRGBColorSpace);
   _c2.setHex(b, THREE.SRGBColorSpace);
   return _c3.lerp(_c2, clamp01(t)).getHex();
 }
 /** A second scratch colour, so a `.lerp` target does not clobber `mix`. */
-function hex(h) { return _c2.setHex(h, THREE.SRGBColorSpace); }
-function col(h) { return _c1.setHex(h, THREE.SRGBColorSpace); }
+function hex(h: any) { return _c2.setHex(h, THREE.SRGBColorSpace); }
+function col(h: any) { return _c1.setHex(h, THREE.SRGBColorSpace); }
 
 class GarulaEnemy extends QuadrupedEnemy {
-  constructor(opts) { super(GARULA, opts); }
+  anim!: any;
+  attackId!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(GARULA, opts); }
 
   telegraphScale() {
     // the barrel charge coils low and long; the quake rears instead
@@ -502,7 +507,7 @@ class GarulaEnemy extends QuadrupedEnemy {
    * there for a beat before it comes down. The negative `telegraphScale`
    * already inverts the body drop; this adds the rear itself.
    */
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'quake') {
       if (this.attackId === 'barrel') {
@@ -534,7 +539,7 @@ class GarulaEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.14 * rear;
   }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     if (this.attackId !== 'quake') { super.poseAttack(S, t); return; }
     // and down: both forefeet together, the body driving through the ground
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack',

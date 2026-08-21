@@ -584,6 +584,24 @@ const NB = BIOME_KEYS.length;
  * is the shared singleton every system reads.
  */
 export class WorldMap {
+  _bBuf!: Float64Array;
+  _buckets!: Map<any, any>;
+  _cell!: number;
+  _defB!: Float64Array;
+  _nz!: any;
+  _wBuf!: Float64Array;
+  _zb!: Float64Array;
+  _zc!: Float64Array;
+  byId!: Map<any, any>;
+  landforms!: any;
+  poiTypes!: any;
+  pois!: any;
+  regionById!: Map<any, any>;
+  regions!: any;
+  roadGraph!: RoadGraph;
+  world!: any;
+  zoneById!: Map<any, any>;
+  zones!: any;
   constructor() {
     this.world = WORLD;
     this.regions = REGIONS;
@@ -649,7 +667,7 @@ export class WorldMap {
     }
   }
 
-  _key(x, z) {
+  _key(x: any, z: any) {
     return `${Math.floor(x / this._cell)},${Math.floor(z / this._cell)}`;
   }
 
@@ -665,7 +683,7 @@ export class WorldMap {
    * "frontier" weight. The hot inner loop; no allocation.
    * @returns weight of the generic highland fallback
    */
-  _weigh(x, z): number {
+  _weigh(x: any, z: any): number {
     const zc = this._zc, w = this._wBuf, nz = this._nz;
     let sum = 0;
     for (let i = 0; i < nz; i++) {
@@ -688,7 +706,7 @@ export class WorldMap {
     return rest * inv;
   }
 
-  zoneWeights(x, z, out = {}) {
+  zoneWeights(x: any, z: any, out = {}) {
     for (const k in out) delete out[k];
     const rest = this._weigh(x, z);
     const w = this._wBuf;
@@ -701,7 +719,7 @@ export class WorldMap {
    * Blended biome parameters as a packed `Float64Array` in {@link BIOME_KEYS}
    * order. Reuses one buffer — copy it if you need to keep it.
    */
-  biomeVec(x, z): Float64Array {
+  biomeVec(x: any, z: any): Float64Array {
     const rest = this._weigh(x, z);
     const w = this._wBuf, zb = this._zb, out = this._bBuf, def = this._defB;
     for (let k = 0; k < NB; k++) out[k] = def[k] * rest;
@@ -718,7 +736,7 @@ export class WorldMap {
    * The zone whose influence is strongest here.
    * @returns the zone record, or null on the frontier
    */
-  zoneAt(x, z): any | null {
+  zoneAt(x: any, z: any): any | null {
     let best = null, bestW = 0.0001;
     for (let i = 0; i < ZONES.length; i++) {
       const zn = ZONES[i];
@@ -735,7 +753,7 @@ export class WorldMap {
   }
 
   /** The region record covering this point (via its dominant zone). */
-  regionAt(x, z) {
+  regionAt(x: any, z: any) {
     const zn = this.zoneAt(x, z);
     return zn ? this.regionById.get(zn.region) : null;
   }
@@ -746,7 +764,7 @@ export class WorldMap {
    * @param [out] reused object
    * @returns same shape as `ZONES[i].biome`
    */
-  biomeAt(x, z, out: any = {}): any {
+  biomeAt(x: any, z: any, out: any = {}): any {
     const v = this.biomeVec(x, z);
     for (let k = 0; k < NB; k++) out[BIOME_KEYS[k]] = v[k];
     return out;
@@ -754,13 +772,13 @@ export class WorldMap {
 
   // ------------------------------------------------------------------- POIs
 
-  poiById(id): any | undefined { return this.byId.get(id); }
+  poiById(id: any): any | undefined { return this.byId.get(id); }
 
   /** Every POI of a given type. @returns */
-  poisOfType(type): any[] { return POIS.filter((p) => p.type === type); }
+  poisOfType(type: any): any[] { return POIS.filter((p) => p.type === type); }
 
   /** Every POI inside a zone. @returns */
-  poisInZone(zoneId): any[] { return POIS.filter((p) => p.zone === zoneId); }
+  poisInZone(zoneId: any): any[] { return POIS.filter((p) => p.zone === zoneId); }
 
   /**
    * Nearest POI to a world position.
@@ -800,14 +818,14 @@ export class WorldMap {
     return true;
   }
 
-  isDiscovered(id): boolean { return this.discovered.has(id); }
+  isDiscovered(id: any): boolean { return this.discovered.has(id); }
 
   /**
    * Reveal everything whose discovery radius contains this point. Call it once
    * per second or so from whatever tracks the player.
    * @returns POIs newly discovered this call
    */
-  discoverAround(x, z): any[] {
+  discoverAround(x: any, z: any): any[] {
     const found = [];
     for (const p of POIS) {
       if (this.discovered.has(p.id)) continue;
@@ -826,7 +844,7 @@ export class WorldMap {
    * @returns road distance for
    *   `drive`/`chocobo`, straight line for the rest.
    */
-  travel(ax, az, bx, bz, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
+  travel(ax: any, az: any, bx: any, bz: any, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
     const SPEED = { walk: 2.4, sprint: 5.6, chocobo: 11.0, drive: 26.0 };
     const v = SPEED[mode] || SPEED.walk;
     let dist;

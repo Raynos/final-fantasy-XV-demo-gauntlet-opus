@@ -82,7 +82,7 @@ export function waderGeometry(): THREE.BufferGeometry {
   }
 
   // neck: the S every wader stands in, straightening as it stabs
-  const neckBlend = (p) => smooth(0.70, 0.92, p.y);
+  const neckBlend = (p: any) => smooth(0.70, 0.92, p.y);
   parts.push(tube({
     nodes: [
       { p: [0, 0.72, 0.12], r: 0.055 },
@@ -119,7 +119,7 @@ export function waderGeometry(): THREE.BufferGeometry {
 
 // ---------------------------------------------------------------- shader
 
-const V3 = (a) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
+const V3 = (a: any) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
 
 const RIG_GLSL = RIG_PREAMBLE + /* glsl */`
 // aanim = (phase, stab rate, spare, plumage brightness)

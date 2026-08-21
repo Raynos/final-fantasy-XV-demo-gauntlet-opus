@@ -81,6 +81,14 @@ const GROUPS = [
  * is Tab / Backspace / B, like everywhere else.
  */
 export class ControlsScreen {
+  cols!: any;
+  grid!: any;
+  i!: number;
+  j!: number;
+  menus!: any;
+  note!: any;
+  sub!: string;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Controls';
@@ -93,7 +101,7 @@ export class ControlsScreen {
     this.cols = GROUPS.map((g) => {
       const rows = g.rows.map(([keys, pad, label, note]) => {
         // '-' between two keys means "this range", not a key of its own
-        const glyphs = el('div.cr-k', {}, keys.map((k) => (k === '-'
+        const glyphs = el('div.cr-k', {}, keys.map((k: any) => (k === '-'
           ? el('span.cr-dash', { text: '–' })
           : button(k, { size: k.length > 2 ? 25 : 21 }))));
         const node = el('div.crow', {}, [
@@ -125,7 +133,7 @@ export class ControlsScreen {
   }
 
   /** Left/right walks the columns, up/down the rows inside one. */
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const n = this.cols.length;
     if (dx) { this.i = clamp(this.i + dx, 0, n - 1); this.j = 0; }
     if (dy) {

@@ -51,7 +51,13 @@ const VEL_FRAG = /* glsl */`
 `;
 
 export class VelocityPass extends Pass {
-  constructor(fx) {
+  _black!: THREE.Color;
+  _frame!: number;
+  fx!: any;
+  moverCount!: any;
+  proxyScene!: THREE.Scene;
+  tracked!: Map<any, any>;
+  constructor(fx: any) {
     super();
     this.fx = fx;
     this.needsSwap = false;
@@ -64,7 +70,7 @@ export class VelocityPass extends Pass {
     this._black = new THREE.Color(0, 0, 0);
   }
 
-  _makeMaterial(src) {
+  _makeMaterial(src: any) {
     return new THREE.ShaderMaterial({
       uniforms: {
         uPrevModel: { value: new THREE.Matrix4() },
@@ -82,7 +88,7 @@ export class VelocityPass extends Pass {
     });
   }
 
-  _proxyFor(src, entry) {
+  _proxyFor(src: any, entry: any) {
     if (entry.proxy) return entry.proxy;
     const mat = this._makeMaterial(src);
     let proxy;
@@ -105,14 +111,14 @@ export class VelocityPass extends Pass {
     return proxy;
   }
 
-  render(renderer) {
+  render(renderer: any) {
     const fx = this.fx;
     const rt = fx.rtVel;
     if (!rt) return;
     this._frame++;
 
-    const movers = [];
-    fx.rnd.scene.traverse((o) => {
+    const movers: any[] = [];
+    fx.rnd.scene.traverse((o: any) => {
       if (!o.visible || !o.isMesh) return;
       if (o.userData && o.userData.noVelocity) return;
       if (!o.geometry || !o.material || o.material.transparent) return;
@@ -169,7 +175,7 @@ export class VelocityPass extends Pass {
   }
 }
 
-function matrixNearlyEqual(a, b) {
+function matrixNearlyEqual(a: any, b: any) {
   const ae = a.elements, be = b.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(ae[i] - be[i]) > 1e-6) return false;
   return true;

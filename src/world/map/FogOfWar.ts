@@ -24,6 +24,15 @@ const SHEET = 512;                 // 16 m per sheet pixel
 const BLUR = 1.3;                  // sheet px — a 21 m edge, crisp on purpose
 
 export class FogOfWar {
+  _ctx!: any;
+  _dirty!: boolean;
+  _maskCanvas!: any;
+  _maskCtx!: any;
+  _maskImg!: any;
+  _parchment!: any;
+  cell!: number;
+  mask!: Uint8Array;
+  n!: any;
   constructor(n = CELLS) {
     this.n = n;
     this.cell = WORLD.size / n;
@@ -34,7 +43,7 @@ export class FogOfWar {
   }
 
   /** Reveal every cell whose centre is within `r` metres of (x, z). */
-  reveal(x, z, r) {
+  reveal(x: any, z: any, r: any) {
     const c = this.cell, n = this.n;
     const i0 = Math.max(0, Math.floor((x - r + WORLD.half) / c));
     const i1 = Math.min(n - 1, Math.ceil((x + r + WORLD.half) / c));
@@ -79,7 +88,7 @@ export class FogOfWar {
   }
 
   /** 0..1 how surveyed the cell containing this point is. */
-  at(x, z) {
+  at(x: any, z: any) {
     const n = this.n;
     let i = Math.floor((x + WORLD.half) / this.cell);
     let j = Math.floor((z + WORLD.half) / this.cell);
@@ -113,8 +122,8 @@ export class FogOfWar {
     this._sheet = {
       canvas,
       ppm,
-      toPx: (x) => (x + WORLD.half) * ppm,
-      toPz: (z) => (z + WORLD.half) * ppm,
+      toPx: (x: any) => (x + WORLD.half) * ppm,
+      toPz: (z: any) => (z + WORLD.half) * ppm,
     };
     this._parchment = this._ctx.createPattern(parchmentTile(), 'repeat');
   }
@@ -182,13 +191,13 @@ function parchmentTile(): HTMLCanvasElement {
 }
 
 /** Wrapping value noise on a `p`-cell lattice over an `S` px tile. */
-function vnoise(x, y, p, S) {
+function vnoise(x: any, y: any, p: any, S: any) {
   const cell = S / p;
   const fx = x / cell, fy = y / cell;
   const i0 = Math.floor(fx), j0 = Math.floor(fy);
   const tx = fx - i0, ty = fy - j0;
   const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
-  const h = (a, b) => {
+  const h = (a: any, b: any) => {
     let n = Math.imul(((a % p) + p) % p, 0x27d4eb2d) ^ Math.imul(((b % p) + p) % p, 0x165667b1);
     n = Math.imul(n ^ (n >>> 15), 0x2545f491);
     return ((n ^ (n >>> 13)) >>> 0) / 4294967296;

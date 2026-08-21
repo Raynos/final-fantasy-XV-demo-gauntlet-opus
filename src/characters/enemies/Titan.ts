@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, spike, slab, place, tint, glow, rectCross, loft } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const BASALT = 0x2b2723;      // the bulk of him: dark grey-brown slabbed rock
 const BASALT_D = 0x151311;    // shadowed undersides, deep fissure walls
@@ -80,7 +80,7 @@ export const TITAN = {
     },
   ],
   buildPrototype,
-  make(opts) { return new TitanEnemy(opts); },
+  make(opts: any) { return new TitanEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -110,7 +110,7 @@ function buildPrototype() {
   }
 
   /* ---- helpers: everything on him is a slab of rock or a burning crack ---- */
-  const plate = (bone, w, h, d, pos, rot, col = BASALT) =>
+  const plate = (bone: any, w: any, h: any, d: any, pos: any, rot: any, col = BASALT) =>
     rig.attach(tint(place(slab(w, h, d, Math.min(w, h, d) * 0.24), { pos, rot }), col, 0.055), bone);
   // A fissure is a faceted wedge of light rammed into the gap between two
   //
@@ -120,14 +120,14 @@ function buildPrototype() {
   // floating free above the dirt, clearly visible in `bestiary_titan`.
   // plates — a sixth of the cost of a bevelled slab, which matters when
   // there are fifty of them and the budget belongs to the hands.
-  const fissure = (bone, w, h, d, pos, rot, str = 2.2) => {
+  const fissure = (bone: any, w: any, h: any, d: any, pos: any, rot: any, str = 2.2) => {
     const g = loft(rectCross(0.4, 6), [
       { y: -h / 2, sx: w / 2, sz: d / 2 },
       { y: h / 2, sx: w / 2, sz: d / 2 },
     ]);
     return rig.attach(glow(tint(place(g, { pos, rot }), SCORCH), MAGMA, str), bone);
   };
-  const shard = (bone, r, h, pos, rot, col = BASALT_D) =>
+  const shard = (bone: any, r: any, h: any, pos: any, rot: any, col = BASALT_D) =>
     rig.attach(tint(place(spike(r, h, 6), { pos, rot }), col, 0.05), bone);
 
   /* ------------------------------------------------------------ torso core
@@ -381,7 +381,13 @@ function buildPrototype() {
 }
 
 class TitanEnemy extends Enemy {
-  constructor(opts) { super(TITAN, opts); }
+  attackId!: any;
+  rig!: any;
+  staggerTime!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(TITAN, opts); }
 
   /**
    * World-space centre of one palm — the fight code uses it to place the
@@ -395,24 +401,24 @@ class TitanEnemy extends Enemy {
     return out.set(0, 0, 3.0).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     /** Swell or gutter the molten cores behind the fissures. */
-    const core = (k) => {
+    const core = (k: any) => {
       const a = rig.byName.get('coreC'), b = rig.byName.get('coreT');
       if (a) a.scale.setScalar(k);
       if (b) b.scale.setScalar(k);
     };
     /** Close a hand into a fist (k=1) or lay it flat open (k=0). */
-    const grip = (n, k) => {
+    const grip = (n: any, k: any) => {
       S(`hand${n}`, 0.12 * k, 0, 0);
       S(`fing${n}`, 1.35 * k, 0, 0);
       S(`thumb${n}`, 0.95 * k, -0.4 * k, 0);
     };
     /** The arm at rest: hanging, braced, fingers loosely curled. */
-    const rest = (n, s, k = 1) => {
+    const rest = (n: any, s: any, k = 1) => {
       S(`sh${n}`, 0.04 * k, 0, -0.05 * k * s);
       S(`el${n}`, -0.06 * k, 0, 0);
       S(`wr${n}`, 0.04 * k, 0, 0);

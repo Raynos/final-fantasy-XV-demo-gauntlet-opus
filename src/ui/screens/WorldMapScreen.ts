@@ -70,6 +70,47 @@ const ATLAS_BOX = { x: Math.round((1600 - BOX.h) / 2), y: BOX.y, w: BOX.h, h: BO
 const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
 export class WorldMapScreen {
+  _a!: number;
+  _cardKey!: string;
+  _cursor!: any;
+  _keys!: any;
+  _regionPlaced!: any[] | null;
+  _rowEls!: any;
+  _screenPos!: Map<any, any>;
+  atlas!: boolean;
+  cam!: any;
+  camT!: any;
+  canvas!: any;
+  cardDoes!: any;
+  cardFt!: any;
+  cardGlyph!: any;
+  cardName!: any;
+  cardRows!: any;
+  cardType!: any;
+  chart!: any;
+  ctx!: any;
+  dpr!: any;
+  filter!: number;
+  filterEls!: any;
+  game!: any;
+  h!: any;
+  hover!: any;
+  list!: any;
+  map!: any;
+  menus!: any;
+  rail!: any;
+  scaleBar!: any;
+  scaleLine!: any;
+  scaleTxt!: any;
+  sel!: number;
+  sub!: any;
+  survey!: any;
+  surveyV!: any;
+  title!: any;
+  w!: any;
+  wrap!: any;
+  zoom!: any;
+  zoomI!: number;
   /**
    * @param [opts] `atlas: true` registers the second,
    *   fully-surveyed variant: the whole continent at the fit-all scale with no
@@ -185,7 +226,7 @@ export class WorldMapScreen {
   // ------------------------------------------------------------- lifecycle
 
   /** Called by Menus when the screen becomes visible. */
-  enter(game) {
+  enter(game: any) {
     this.game = game;
     const t = game.get('Terrain');
     if (!this.chart) this.chart = getChart(t);
@@ -209,7 +250,7 @@ export class WorldMapScreen {
       const sp = this.list[this.sel];
       if (sp) { this.camT.x = sp.x; this.camT.z = sp.z; }
     }
-    this._keys = (e) => this._onKey(e);
+    this._keys = (e: any) => this._onKey(e);
     window.addEventListener('keydown', this._keys);
   }
 
@@ -229,18 +270,18 @@ export class WorldMapScreen {
 
   _rebuildList() {
     const f = FILTERS[this.filter];
-    const seen = (p) => this._known(p) || fog.at(p.x, p.z) > 0.5;
-    this.list = this.map.pois.filter((p) => seen(p) && (!f.types || f.types.includes(p.type)));
+    const seen = (p: any) => this._known(p) || fog.at(p.x, p.z) > 0.5;
+    this.list = this.map.pois.filter((p: any) => seen(p) && (!f.types || f.types.includes(p.type)));
     if (!this.list.length) this.list = this.map.pois.filter(seen);
     this.sel = clamp(this.sel, 0, Math.max(0, this.list.length - 1));
     for (let i = 0; i < FILTERS.length; i++) {
       const ff = FILTERS[i];
-      const n = this.map.pois.filter((p) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
+      const n = this.map.pois.filter((p: any) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
       this.filterEls[i]._count.textContent = String(n);
     }
   }
 
-  _setFilter(i) {
+  _setFilter(i: any) {
     this.filter = (i + FILTERS.length) % FILTERS.length;
     for (let k = 0; k < this.filterEls.length; k++) {
       this.filterEls[k].classList.toggle('on', k === this.filter);
@@ -256,7 +297,7 @@ export class WorldMapScreen {
    * D-pad: up/down steps the filter rail, left/right steps the selection and
    * pans the chart to it.
    */
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     if (dy) this._setFilter(this.filter + (dy > 0 ? 1 : -1));
     if (dx && this.list.length) {
       this.sel = (this.sel + (dx > 0 ? 1 : -1) + this.list.length) % this.list.length;
@@ -285,7 +326,7 @@ export class WorldMapScreen {
    * cursor while the chart grows or shrinks around it.
    * @param dir -1 out, +1 in
    */
-  zoomBy(dir: number, ax, az) {
+  zoomBy(dir: number, ax: any, az: any) {
     const i = clamp(this.zoomI + dir, 0, ZOOMS.length - 1);
     if (i === this.zoomI) return;
     const k = this.zoom / ZOOMS[i];
@@ -296,7 +337,7 @@ export class WorldMapScreen {
     }
   }
 
-  _onKey(e) {
+  _onKey(e: any) {
     if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'KeyE') this.zoomBy(1);
     else if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'KeyQ') this.zoomBy(-1);
     else return;
@@ -305,7 +346,7 @@ export class WorldMapScreen {
 
   _bindPointer() {
     const cv = this.canvas;
-    const world = (ev) => {
+    const world = (ev: any) => {
       const r = cv.getBoundingClientRect();
       const px = (ev.clientX - r.left) / r.width * this.w;
       const py = (ev.clientY - r.top) / r.height * this.h;
@@ -315,12 +356,12 @@ export class WorldMapScreen {
         px, py,
       };
     };
-    cv.addEventListener('pointerdown', (ev) => {
+    cv.addEventListener('pointerdown', (ev: any) => {
       const w = world(ev);
       this._drag = { x: w.x, z: w.z, cx: this.camT.x, cz: this.camT.z, moved: 0 };
       cv.setPointerCapture?.(ev.pointerId);
     });
-    cv.addEventListener('pointermove', (ev) => {
+    cv.addEventListener('pointermove', (ev: any) => {
       const w = world(ev);
       this._cursor = w;
       if (this._drag) {
@@ -335,7 +376,7 @@ export class WorldMapScreen {
         this.hover = this._pick(w.px, w.py);
       }
     });
-    cv.addEventListener('pointerup', (ev) => {
+    cv.addEventListener('pointerup', (ev: any) => {
       const w = world(ev);
       if (this._drag && this._drag.moved < 12) {
         const hit = this._pick(w.px, w.py);
@@ -348,7 +389,7 @@ export class WorldMapScreen {
       cv.releasePointerCapture?.(ev.pointerId);
     });
     cv.addEventListener('pointerleave', () => { this.hover = null; this._drag = null; });
-    cv.addEventListener('wheel', (ev) => {
+    cv.addEventListener('wheel', (ev: any) => {
       const w = world(ev);
       this.zoomBy(ev.deltaY < 0 ? 1 : -1, w.x, w.z);
       ev.preventDefault();
@@ -356,7 +397,7 @@ export class WorldMapScreen {
   }
 
   /** Nearest drawn point within 16 css px of a chart position. */
-  _pick(px, py) {
+  _pick(px: any, py: any) {
     let best = null, bd = 16 * 16;
     for (const [p, s] of this._screenPos) {
       const dx = s[0] - px, dy = s[1] - py;
@@ -389,7 +430,7 @@ export class WorldMapScreen {
     this._card(game);
   }
 
-  _card(game) {
+  _card(game: any) {
     const p = this.list?.[this.sel];
     if (!p) { this.cardName.textContent = ''; return; }
     const known = this._known(p);
@@ -438,7 +479,7 @@ export class WorldMapScreen {
     this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
   }
 
-  _draw(game, t, rev) {
+  _draw(game: any, t: any, rev: any) {
     const c = this.ctx, dpr = this.dpr;
     const W = this.w * dpr, H = this.h * dpr;
     const ppm = this.zoom * dpr;
@@ -457,8 +498,8 @@ export class WorldMapScreen {
     c.fillStyle = bg;
     c.fillRect(0, 0, W, H);
 
-    const sx = (wx) => W / 2 + (wx - this.cam.x) * ppm;
-    const sy = (wz) => H / 2 + (wz - this.cam.z) * ppm;
+    const sx = (wx: any) => W / 2 + (wx - this.cam.x) * ppm;
+    const sy = (wz: any) => H / 2 + (wz - this.cam.z) * ppm;
     const bounds = {
       x0: this.cam.x - W / 2 / ppm - 200, x1: this.cam.x + W / 2 / ppm + 200,
       z0: this.cam.z - H / 2 / ppm - 200, z1: this.cam.z + H / 2 / ppm + 200,
@@ -591,7 +632,7 @@ export class WorldMapScreen {
    *
    * @param paint false = measure and reserve only, true = draw
    */
-  _regionLabels(c, sx, sy, ppm, dpr, rev, place, paint: boolean = true) {
+  _regionLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any, paint: boolean = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
     if (a <= 0.01) { this._regionPlaced = []; return; }
     if (paint && this._regionPlaced) {
@@ -601,7 +642,7 @@ export class WorldMapScreen {
     }
     const placed = [];
     for (const r of REGIONS) {
-      const zs = this.map.zones.filter((z) => z.region === r.id);
+      const zs = this.map.zones.filter((z: any) => z.region === r.id);
       if (!zs.length) continue;
       // area-weighted, so a region's name lands over its own bulk rather than
       // at the arithmetic mean of its zone centres — at the fit-all scale the
@@ -645,7 +686,7 @@ export class WorldMapScreen {
     this._regionPlaced = paint ? null : placed;
   }
 
-  _paintRegion(c, g: {x:number,y:number,name:string,sub:string}, dpr, a) {
+  _paintRegion(c: any, g: {x:number,y:number,name:string,sub:string}, dpr: any, a: any) {
     // on the atlas the region names are the sheet's headline type, not a
     // watermark under a chart the player is navigating
     const rk = this.atlas ? 1.72 : 1;
@@ -661,11 +702,11 @@ export class WorldMapScreen {
     c.shadowBlur = 0;
   }
 
-  _zoneLabels(c, sx, sy, ppm, dpr, rev, place, fade) {
+  _zoneLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any, fade: any) {
     const a = fade * rev;
     if (a <= 0.01) return;
     // biggest zones first, so a small zone yields its label to a large one
-    const zs = this.map.zones.slice().sort((p, q) => q.rx * q.rz - p.rx * p.rz);
+    const zs = this.map.zones.slice().sort((p: any, q: any) => q.rx * q.rz - p.rx * p.rz);
     for (const z of zs) {
       if (!this.atlas && fog.at(z.cx, z.cz) < 0.4) continue;
       const x = sx(z.cx), y = sy(z.cz);
@@ -691,7 +732,7 @@ export class WorldMapScreen {
     }
   }
 
-  _routeLabels(c, sx, sy, ppm, dpr, rev, place) {
+  _routeLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any) {
     const a = clamp((ppm / dpr - 0.3) / 0.14, 0, 1) * rev;
     if (a <= 0.01) return;
     c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
@@ -725,7 +766,7 @@ export class WorldMapScreen {
     }
   }
 
-  _pois(c, sx, sy, ppm, dpr, rev, t, place, W, H) {
+  _pois(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, t: any, place: any, W: any, H: any) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
@@ -814,7 +855,7 @@ export class WorldMapScreen {
     }
   }
 
-  _player(c, sx, sy, ppm, dpr, t) {
+  _player(c: any, sx: any, sy: any, ppm: any, dpr: any, t: any) {
     const player = this.game?.get('Player');
     if (!player?.position) return;
     const px = sx(player.position.x), py = sy(player.position.z);
@@ -880,7 +921,7 @@ export class WorldMapScreen {
     c.restore();
   }
 
-  _compass(c, W, H, dpr, rev) {
+  _compass(c: any, W: any, H: any, dpr: any, rev: any) {
     const R = 30 * dpr;
     const x = W - R - 30 * dpr, y = R + 30 * dpr;
     c.save();
@@ -920,7 +961,7 @@ export class WorldMapScreen {
   }
 }
 
-function fmtTime(sec) {
+function fmtTime(sec: any) {
   if (!isFinite(sec)) return '—';
   const m = Math.floor(sec / 60), s = Math.round(sec % 60);
   if (m >= 60) return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;

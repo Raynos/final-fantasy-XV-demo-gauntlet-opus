@@ -17,6 +17,25 @@ const QUALITY = ['low', 'medium', 'high', 'ultra'];
  * Everything animates from `game.time`; no CSS transitions.
  */
 export class SystemScreen {
+  _age!: number;
+  _cur!: any;
+  _msg!: any;
+  _msgAge!: number;
+  cols!: any;
+  dD!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dRule!: any;
+  detail!: any;
+  game!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  msg!: any;
+  nodes!: any;
+  sub!: string;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -33,7 +52,7 @@ export class SystemScreen {
    * The setting table. Each row reads and writes live engine state; nothing is
    * mirrored into a settings object that could drift out of sync with it.
    */
-  _rows(game) {
+  _rows(game: any) {
     // Resolved on every read, never captured: this screen is built during
     // `Menus.init`, and `Story` (among others) is constructed *after* Menus in
     // the boot order — capturing it here left Return to Title permanently and
@@ -43,13 +62,13 @@ export class SystemScreen {
     const rnd = () => this.game?.rnd;
     const rpg = () => this.game?.get?.('Rpg');
     const story = () => this.game?.get?.('Story');
-    const pct = (v) => `${Math.round(v * 100)}%`;
+    const pct = (v: any) => `${Math.round(v * 100)}%`;
     void game;
 
-    const bus = (id, name, desc) => ({
+    const bus = (id: any, name: any, desc: any) => ({
       key: id, name, kind: 'slider', desc,
       get: () => (audio() ? audio().volumeOf(id === 'master' ? 'master' : id) : 0),
-      set: (v) => audio() && audio().setVolume(id, v),
+      set: (v: any) => audio() && audio().setVolume(id, v),
       value: () => (audio() ? pct(audio().volumeOf(id)) : '—'),
       enabled: () => !!audio(),
       why: 'The audio system is not running in this session.',
@@ -65,7 +84,7 @@ export class SystemScreen {
           + 'render scale, all in one tier. Drop it if the frame rate is fighting you.',
         options: QUALITY,
         index: () => Math.max(0, QUALITY.indexOf(rnd() ? rnd().quality : 'high')),
-        pick: (n) => {
+        pick: (n: any) => {
           const tier = QUALITY[n];
           if (rnd()?.setQuality) rnd().setQuality(tier);
           if (this.game?.post?.setQuality) this.game.post.setQuality(tier);
@@ -78,7 +97,7 @@ export class SystemScreen {
         key: 'invertY', name: 'Invert Camera (Y)', kind: 'toggle',
         desc: 'Push the stick or the mouse forward to look down instead of up.',
         get: () => !!input()?.invertY,
-        set: (v) => { if (input()) input().invertY = v; },
+        set: (v: any) => { if (input()) input().invertY = v; },
         value: () => (input()?.invertY ? 'ON' : 'OFF'),
         enabled: () => !!input(),
         why: 'No input device bound.',
@@ -87,7 +106,7 @@ export class SystemScreen {
         key: 'sens', name: 'Look Sensitivity', kind: 'slider',
         desc: 'How far the camera swings for a given flick of the mouse or stick.',
         get: () => clamp(((input()?.lookScale ?? 1) - 0.25) / 2.75, 0, 1),
-        set: (v) => { if (input()) input().lookScale = 0.25 + v * 2.75; },
+        set: (v: any) => { if (input()) input().lookScale = 0.25 + v * 2.75; },
         value: () => `${(input()?.lookScale ?? 1).toFixed(2)}×`,
         enabled: () => !!input(),
         why: 'No input device bound.',
@@ -172,13 +191,13 @@ export class SystemScreen {
     });
   }
 
-  enter(game) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
+  enter(game: any) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const n = this.nodes.length;
     if (dy) this.i = (this.i + dy + n) % n;
     if (!dx) return;

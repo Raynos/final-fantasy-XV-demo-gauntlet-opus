@@ -18,6 +18,17 @@ const A_LAT = 5.6;                // comfortable lateral acceleration
 const A_BRAKE = 4.2;              // how hard he is willing to slow
 
 export class AutoDrive {
+  _p!: any;
+  _steerSmooth!: number;
+  _targetSpeed!: number;
+  arrived!: boolean;
+  controls!: any;
+  cruise!: any;
+  destination!: any;
+  dir!: number;
+  enabled!: boolean;
+  road!: any;
+  targetS!: any;
   constructor(road: import('./RoadPath.ts').RoadPath) {
     this.road = road;
     this.enabled = false;
@@ -154,4 +165,4 @@ export class AutoDrive {
   }
 }
 
-function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }

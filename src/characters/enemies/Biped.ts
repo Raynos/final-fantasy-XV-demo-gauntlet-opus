@@ -22,18 +22,33 @@ import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase }
  * ```
  */
 export class BipedEnemy extends Enemy {
+  _chestPitch!: any;
+  _chestYaw!: number;
+  _dt!: any;
+  anim!: any;
+  deathPush!: any;
+  deathSide!: any;
+  hitPower!: any;
+  id!: any;
+  moveSpeed!: any;
+  rig!: any;
+  speed!: any;
+  state!: any;
+  stateTime!: any;
+  type!: any;
+  visual!: any;
   get A() { return this.constructor.ANIM; }
 
-  setupAnim(anim) {
+  setupAnim(anim: any) {
     const A = this.A;
     anim.setTrunk(A.trunk);
     if (A.legs.L) anim.leg('fL', A.legs.L);
     if (A.legs.R) anim.leg('fR', A.legs.R);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     if (!this.rig) return;
-    const S = (n, x, y, z) => poseBone(this.rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'walk':
@@ -50,7 +65,7 @@ export class BipedEnemy extends Enemy {
   /* ------------------------------------------------------------ helpers */
 
   /** Both feet at an offset from bind; `drop` lowers the body, not the legs. */
-  stance(S, o) {
+  stance(S: any, o: any) {
     const a = this.anim, A = this.A;
     const drop = o.drop || 0;
     const l = o.L || o, r = o.R || o;
@@ -64,7 +79,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Arm pose as three joint angles per side. */
-  arm(S, side, sh, el, hd) {
+  arm(S: any, side: any, sh: any, el: any, hd: any) {
     const c = this.A.arms[side];
     if (!c) return;
     S(c[0], sh[0], sh[1], sh[2]);
@@ -77,7 +92,7 @@ export class BipedEnemy extends Enemy {
    * run from hips to chest — written raw they compound down the parent chain
    * and a 0.3 rad lean arrives at the shoulders as 1.1 rad.
    */
-  spine(S, pitch, yaw = 0, roll = 0) {
+  spine(S: any, pitch: any, yaw = 0, roll = 0) {
     const t = this.A.trunk, w = this.A.spineW || SPINE_W;
     let sum = 0;
     for (let i = 0; i <= t.length - 3; i++) sum += w[Math.min(w.length - 1, i)];
@@ -98,7 +113,7 @@ export class BipedEnemy extends Enemy {
    * lean and twist the body makes, so a soldier bracing to fire ends up
    * looking at his own boots.
    */
-  aimHead(S, o = {}) {
+  aimHead(S: any, o = {}) {
     const t = this.A.trunk;
     const stab = (this._chestPitch || 0) * (o.stabilise ?? 0.9);
     const sy = (this._chestYaw || 0) * (o.stabilise ?? 0.9);
@@ -116,7 +131,7 @@ export class BipedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S, t) {
+  poseLocomotion(S: any, t: any) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -149,13 +164,13 @@ export class BipedEnemy extends Enemy {
    * Arms during locomotion. Default is a counter-swing; a species carrying a
    * weapon overrides this to keep the weapon on target instead.
    */
-  poseArms(S, t, swing, norm) {
+  poseArms(S: any, t: any, swing: any, norm: any) {
     const A = this.A;
     this.arm(S, 'L', [swing, 0, A.armOut ?? 0.10], [-(A.elbow ?? 0.4) - Math.max(0, swing) * 0.5, 0, 0], null);
     this.arm(S, 'R', [-swing, 0, -(A.armOut ?? 0.10)], [-(A.elbow ?? 0.4) - Math.max(0, -swing) * 0.5, 0, 0], null);
   }
 
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     const A = this.A;
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
@@ -163,7 +178,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Species wind-up. Default: shoulders load back, weight onto the rear foot. */
-  poseWindUp(S, t, k, env) {
+  poseWindUp(S: any, t: any, k: any, env: any) {
     const A = this.A;
     this.stance(S, {
       drop: (A.crouch ?? 0.06) * k,
@@ -175,13 +190,13 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'L', [-0.3 * k, 0.35 * k, 0.4 * k], [-1.0 * k, 0, 0], null);
   }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     this.poseSwing(S, t, env.k, env);
   }
 
   /** Species strike. Default: a committed downward swing with follow-through. */
-  poseSwing(S, t, k, env) {
+  poseSwing(S: any, t: any, k: any, env: any) {
     const A = this.A;
     const kp = clamp01(k);
     this.stance(S, {
@@ -194,7 +209,7 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'L', [-0.3 + 0.4 * k, -0.2 * k, -0.3 * k], [-0.8, 0, 0], null);
   }
 
-  poseFlinch(S, t) {
+  poseFlinch(S: any, t: any) {
     const A = this.A;
     const k = hitCurve(this.stateTime, 0.34, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
@@ -209,7 +224,7 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'R', [0.5 * k * p, -0.3 * k, -0.6 * k * p], [-1.3 * k * p, 0, 0], null);
   }
 
-  poseStagger(S, t) {
+  poseStagger(S: any, t: any) {
     const A = this.A;
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));
@@ -227,7 +242,7 @@ export class BipedEnemy extends Enemy {
     this.visual.rotation.x += 0.10 * k;
   }
 
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;
@@ -256,7 +271,7 @@ export class BipedEnemy extends Enemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  poseIdle(S, t) {
+  poseIdle(S: any, t: any) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.4)) * 0.02;
     const load = Math.sin(t * 0.33 + this.id) * (A.marchStiff ? 0.15 : 0.6);

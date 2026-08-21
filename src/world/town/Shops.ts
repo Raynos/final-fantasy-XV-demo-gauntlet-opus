@@ -81,8 +81,8 @@ export const TOWN_SHOPS = {
     // The van carries the whole catalogue that is actually for sale: royal arms
     // are never stock, and neither is anything with no price.
     filter: {
-      Weapons: (def) => def.category === 'weapon' && def.price > 0 && !def.tags.includes('royal'),
-      Accessories: (def) => def.category === 'accessory' && def.price > 0,
+      Weapons: (def: any) => def.category === 'weapon' && def.price > 0 && !def.tags.includes('royal'),
+      Accessories: (def: any) => def.category === 'accessory' && def.price > 0,
     },
     sellCategories: ['weapon', 'accessory', 'treasure', 'catalyst'],
   },
@@ -100,7 +100,7 @@ export function stockFor(shop: any, tab: string, items: any): any[] {
   if (shop.filter && shop.filter[tab]) {
     list = Object.values(items).filter(shop.filter[tab]);
   } else {
-    list = (shop.stock?.[tab] || []).map((id) => items[id]).filter(Boolean);
+    list = (shop.stock?.[tab] || []).map((id: any) => items[id]).filter(Boolean);
   }
-  return list.slice().sort((a, b) => (a.price - b.price) || a.name.localeCompare(b.name));
+  return list.slice().sort((a: any, b: any) => (a.price - b.price) || a.name.localeCompare(b.name));
 }

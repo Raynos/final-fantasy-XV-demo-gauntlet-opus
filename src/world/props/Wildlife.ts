@@ -133,6 +133,12 @@ function birdGeometry() {
 }
 
 export class Wildlife {
+  eco!: any;
+  herd!: any;
+  quality!: any;
+  root!: THREE.Group;
+  scene!: any;
+  timeRef!: any;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
@@ -187,7 +193,7 @@ export class Wildlife {
     this.birds.stream.flush(new THREE.Vector3());
   }
 
-  _genKettle(cx, cz, out) {
+  _genKettle(cx: any, cz: any, out: any) {
     const c = 340;
     const rng = new Rng(hash3(cx, cz, 0x8175));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -261,7 +267,7 @@ export class Wildlife {
    * few paces along the arc every cycle and crops with its head down in
    * between, so a herd slowly redistributes itself across the pasture.
    */
-  _genHerd(cx, cz, out) {
+  _genHerd(cx: any, cz: any, out: any) {
     const c = 260, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x2b91));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -343,7 +349,7 @@ export class Wildlife {
     this.waders.stream.flush(new THREE.Vector3());
   }
 
-  _genWaders(cx, cz, out) {
+  _genWaders(cx: any, cz: any, out: any) {
     const c = 180, eco = this.eco, sea = WORLD.seaLevel;
     // one sample rejects every cell that is not lake country
     if (eco.height((cx + 0.5) * c, (cz + 0.5) * c) > sea + 60) return;
@@ -452,7 +458,7 @@ export class Wildlife {
 
   /** The column still coming off the downed dropship. One draw call. */
   _smoke() {
-    const site = this.eco.sites.find((s) => s.type === 'crashsite');
+    const site = this.eco.sites.find((s: any) => s.type === 'crashsite');
     if (!site) return;
     const rng = new Rng(9090);
     // Many faint puffs rather than few solid ones: a handful of half-opaque

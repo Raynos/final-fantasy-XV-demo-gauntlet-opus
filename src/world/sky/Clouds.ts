@@ -20,7 +20,7 @@ const MARCH_SCALE = 0.45;
  * offsets cover their respective cells evenly over the same eight frames.
  */
 const HALTON = (() => {
-  const radical = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+  const radical = (i: any, b: any) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
   const out = [];
   for (let i = 1; i <= 8; i++) out.push([radical(i, 2), radical(i, 3)]);
   return out;
@@ -315,6 +315,13 @@ void main() {
  * composites, plus a tiling ground-shadow bake that every lit surface samples.
  */
 export class Clouds {
+  _marchQuad!: FullScreenQuad;
+  _shadowQuad!: FullScreenQuad;
+  marchUniforms!: any;
+  rt!: THREE.WebGLRenderTarget;
+  shadowRT!: THREE.WebGLRenderTarget;
+  shadowUniforms!: any;
+  shared!: any;
   /**
    * @param shared shared cloud uniform objects (see Sky.js)
    */
@@ -391,14 +398,14 @@ export class Clouds {
   get texture() { return this.rt.texture; }
   get shadowTexture() { return this.shadowRT.texture; }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     const sw = Math.max(2, Math.floor(w * MARCH_SCALE));
     const sh = Math.max(2, Math.floor(h * MARCH_SCALE));
     if (sw !== this.rt.width || sh !== this.rt.height) this.rt.setSize(sw, sh);
   }
 
   /** Raymarch the layer for the current camera. */
-  render(camera, frame) {
+  render(camera: any, frame: any) {
     const u = this.marchUniforms;
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
     u.uInvViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();

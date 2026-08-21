@@ -25,6 +25,23 @@ import { ACTIONS } from '../characters/rig/Anim.ts';
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
 export class AssetBrowser {
+  _char!: any;
+  _made!: any;
+  _npcBody!: any;
+  _spawned!: any;
+  error!: string | null;
+  families!: any;
+  game!: any;
+  info!: any;
+  itemAt!: number;
+  node!: any;
+  open!: boolean;
+  phase!: number;
+  playing!: boolean;
+  poseAt!: number;
+  stage!: any;
+  status!: any;
+  unreviewedOnly!: boolean;
   constructor(root: HTMLElement, game: any, stage: import('./Stage.ts').Stage) {
     this.game = game;
     this.stage = stage;
@@ -38,10 +55,10 @@ export class AssetBrowser {
     this.unreviewedOnly = false;
 
     this.families = [
-      { id: 'enemies', keys: () => speciesKeys(), make: (k, at) => this._enemy(k, at), poses: () => ENEMY_POSES },
-      { id: 'heroes', keys: () => Object.keys(CAST), make: (k, at) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
-      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k, at) => this._npc(k, at), poses: () => [] },
-      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k, at) => this._weapon(k, at), poses: () => [] },
+      { id: 'enemies', keys: () => speciesKeys(), make: (k: any, at: any) => this._enemy(k, at), poses: () => ENEMY_POSES },
+      { id: 'heroes', keys: () => Object.keys(CAST), make: (k: any, at: any) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
+      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k: any, at: any) => this._npc(k, at), poses: () => [] },
+      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k: any, at: any) => this._weapon(k, at), poses: () => [] },
     ];
 
     this.node = document.createElement('div');
@@ -57,11 +74,11 @@ export class AssetBrowser {
     const all = this.family.keys();
     if (!this.unreviewedOnly) return all;
     const f = this.family.id;
-    const some = all.filter((k) => !this.status[`${f}/${k}`]);
+    const some = all.filter((k: any) => !this.status[`${f}/${k}`]);
     return some.length ? some : all;
   }
 
-  setOpen(v) {
+  setOpen(v: any) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
     if (this.open) { this.stage.enter(this.game); this.select(0); }
@@ -115,7 +132,7 @@ export class AssetBrowser {
   }
 
   /** Cycle the animation state for families that have one. */
-  stepPose(d) {
+  stepPose(d: any) {
     const poses = this.family.poses();
     if (!poses.length) return;
     this.poseAt = (this.poseAt + d + poses.length) % poses.length;
@@ -144,7 +161,7 @@ export class AssetBrowser {
 
   // ------------------------------------------------------------- factories
 
-  _enemy(key, at) {
+  _enemy(key: any, at: any) {
     const enemies = this.game.get('Enemies');
     const e = enemies.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
     enemies.frozen = true;
@@ -153,14 +170,14 @@ export class AssetBrowser {
     return { kind: 'enemy', enemy: e, object: e.root, pivot: e.root.position.clone().setY(e.root.position.y + pivotY) };
   }
 
-  _hero(key, at) {
+  _hero(key: any, at: any) {
     const c = makeCharacter(key);
     c.root.position.copy(at);
     this._char = c;
     return { kind: 'hero', character: c, object: c.root, pivot: at.clone().setY(at.y + c.height * 0.55) };
   }
 
-  _npc(key, at) {
+  _npc(key: any, at: any) {
     const arch = archetype(key, NPC_CAST[key]);
     const body = new NpcBody(arch, 7);
     body.root.position.copy(at);
@@ -168,7 +185,7 @@ export class AssetBrowser {
     return { kind: 'npc', body, object: body.root, pivot: at.clone().setY(at.y + (body.height || 1.75) * 0.55) };
   }
 
-  _weapon(key, at) {
+  _weapon(key: any, at: any) {
     const w = new Weapon(key);
     w.setReveal(1);
     w.root.position.copy(at).setY(at.y + 1.1);
@@ -191,7 +208,7 @@ export class AssetBrowser {
 
   // ------------------------------------------------------------- per frame
 
-  update(dt) {
+  update(dt: any) {
     if (!this.open) return;
     const m = this._made;
     if (!m) return;
@@ -237,5 +254,5 @@ export class AssetBrowser {
   }
 }
 
-const load = (k, f) => { try { return JSON.parse(localStorage.getItem(k)) || f; } catch { return f; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+const load = (k: any, f: any) => { try { return JSON.parse(localStorage.getItem(k)) || f; } catch { return f; } };
+const save = (k: any, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };

@@ -18,7 +18,24 @@ import { CHUNK_COLOR } from '../../shaders/post/common.ts';
  * the band the integrator would happily expose midnight as noon.
  */
 export class Exposure {
-  constructor(w, h) {
+  adapt!: any;
+  adaptMat!: any;
+  base!: number;
+  ceiling!: any;
+  chain!: any[];
+  compensation!: number;
+  downMat!: any;
+  enabled!: boolean;
+  key!: number;
+  logMat!: any;
+  max!: number;
+  min!: number;
+  pingpong!: number;
+  rangeHi!: number;
+  rangeLo!: number;
+  speedDown!: number;
+  speedUp!: number;
+  constructor(w: any, h: any) {
     this.enabled = true;
     this.key = 0.19;            // target middle-grey luminance
     this.speedUp = 3.2;         // adaptation to brighter scenes (per second)
@@ -127,7 +144,7 @@ export class Exposure {
     return [lo, hi];
   }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     if (this.chain) for (const rt of this.chain) rt.dispose();
     this.chain = [];
     let cw = Math.max(1, Math.floor(w / 4));

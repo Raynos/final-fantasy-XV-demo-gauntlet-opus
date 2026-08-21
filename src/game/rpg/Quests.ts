@@ -49,14 +49,14 @@ export const HUNT_RANKS = {
 /* Objective helpers                                                         */
 /* ------------------------------------------------------------------------ */
 
-const kill  = (id, target, count, desc, waypoint) => ({ id, type: 'kill', target, count, desc, waypoint });
-const fetch_= (id, target, count, desc, waypoint) => ({ id, type: 'fetch', target, count, desc, waypoint });
-const reach = (id, target, desc, waypoint, radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
-const talk  = (id, target, desc, waypoint) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
-const photo = (id, target, count, desc, waypoint) => ({ id, type: 'photo', target, count, desc, waypoint });
-const escort= (id, target, desc, waypoint) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
-const craft = (id, target, count, desc) => ({ id, type: 'craft', target, count, desc });
-const rest  = (id, desc, waypoint) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
+const kill  = (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'kill', target, count, desc, waypoint });
+const fetch_= (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'fetch', target, count, desc, waypoint });
+const reach = (id: any, target: any, desc: any, waypoint: any, radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
+const talk  = (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
+const photo = (id: any, target: any, count: any, desc: any, waypoint: any) => ({ id, type: 'photo', target, count, desc, waypoint });
+const escort= (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
+const craft = (id: any, target: any, count: any, desc: any) => ({ id, type: 'craft', target, count, desc });
+const rest  = (id: any, desc: any, waypoint: any) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -386,6 +386,9 @@ export const HUNTS = QUEST_TABLE.filter((q) => q.type === 'hunt');
  * tick, with `{ quest, status, phase, objective? }`.
  */
 export class QuestLog {
+  emitter!: any;
+  flags!: Set<any>;
+  hunterPoints!: number;
   constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** @type {Record<string, object>} runtime state per quest id */
@@ -394,7 +397,7 @@ export class QuestLog {
       this.states[q.id] = {
         id: q.id,
         status: q.autoAvailable ? 'available' : 'locked',
-        objectives: q.objectives.map((o) => ({ id: o.id, progress: 0, done: false })),
+        objectives: q.objectives.map((o: any) => ({ id: o.id, progress: 0, done: false })),
       };
     }
     /** The quest whose waypoint the compass points at. */
@@ -407,19 +410,19 @@ export class QuestLog {
   }
 
   /** Definition lookup. */
-  def(id) { return QUESTS[id] || null; }
+  def(id: any) { return QUESTS[id] || null; }
   /** Runtime state lookup. */
-  state(id) { return this.states[id] || null; }
+  state(id: any) { return this.states[id] || null; }
   /** Status string for a quest. */
-  status(id) { return this.states[id]?.status || 'unknown'; }
+  status(id: any) { return this.states[id]?.status || 'unknown'; }
 
   /** Recompute which locked quests have become available. */
   refresh() {
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
       if (st.status !== 'locked') continue;
-      const ready = (q.requires || []).every((r) => this.states[r]?.status === 'complete');
-      const flagsOk = (q.requiresFlags || []).every((f) => this.flags.has(f));
+      const ready = (q.requires || []).every((r: any) => this.states[r]?.status === 'complete');
+      const flagsOk = (q.requiresFlags || []).every((f: any) => this.flags.has(f));
       if (ready && flagsOk) {
         st.status = 'available';
         this.emitter?.emit('quest-updated', { quest: q, status: 'available', phase: 'available' });
@@ -428,16 +431,16 @@ export class QuestLog {
   }
 
   /** Set a story flag and re-evaluate availability. */
-  setFlag(flag) { this.flags.add(flag); this.refresh(); }
+  setFlag(flag: any) { this.flags.add(flag); this.refresh(); }
 
   /** Quests in a given status, hydrated with their definitions. */
-  byStatus(status) {
+  byStatus(status: any) {
     return QUEST_TABLE.filter((q) => this.states[q.id].status === status)
       .map((q) => this.view(q.id));
   }
 
   /** Everything the UI needs to draw one quest. */
-  view(id) {
+  view(id: any) {
     const q = QUESTS[id];
     const st = this.states[id];
     if (!q || !st) return null;
@@ -446,13 +449,13 @@ export class QuestLog {
       status: st.status,
       rank: q.rank ? { ...HUNT_RANKS[q.rank], rank: q.rank } : null,
       tipster: q.tipster ? TIPSTERS[q.tipster] : null,
-      objectives: q.objectives.map((o, i) => ({
+      objectives: q.objectives.map((o: any, i: any) => ({
         ...o,
         progress: st.objectives[i].progress,
         done: st.objectives[i].done,
         label: `${o.desc}${o.count > 1 ? ` (${st.objectives[i].progress}/${o.count})` : ''}`,
       })),
-      progress: st.objectives.filter((o) => o.done).length / Math.max(1, st.objectives.length),
+      progress: st.objectives.filter((o: any) => o.done).length / Math.max(1, st.objectives.length),
     };
   }
 
@@ -464,7 +467,7 @@ export class QuestLog {
   get completed() { return this.byStatus('complete'); }
 
   /** Hunts available at one tipster. */
-  huntsAt(tipsterId) {
+  huntsAt(tipsterId: any) {
     return HUNTS.filter((h) => h.tipster === tipsterId && ['available', 'active'].includes(this.states[h.id].status))
       .map((h) => this.view(h.id));
   }
@@ -485,18 +488,18 @@ export class QuestLog {
   }
 
   /** Drop an active quest back to available. */
-  abandon(id) {
+  abandon(id: any) {
     const st = this.states[id];
     if (!st || st.status !== 'active') return false;
     st.status = 'available';
-    st.objectives.forEach((o) => { o.progress = 0; o.done = false; });
+    st.objectives.forEach((o: any) => { o.progress = 0; o.done = false; });
     if (this.tracked === id) this.tracked = this.active[0]?.id || null;
     this.emitter?.emit('quest-updated', { quest: QUESTS[id], status: 'available', phase: 'abandoned' });
     return true;
   }
 
   /** Fail a quest (a dead escort, a blown timer). */
-  fail(id, reason = 'failed') {
+  fail(id: any, reason = 'failed') {
     const st = this.states[id];
     if (!st || st.status !== 'active') return false;
     st.status = 'failed';
@@ -505,7 +508,7 @@ export class QuestLog {
   }
 
   /** Make the compass point at this quest. */
-  track(id) {
+  track(id: any) {
     if (!this.states[id]) return false;
     this.tracked = id;
     this.emitter?.emit('quest-updated', { quest: QUESTS[id], status: this.states[id].status, phase: 'tracked' });
@@ -534,7 +537,7 @@ export class QuestLog {
         const os = st.objectives[i];
         if (os.done || o.type !== type) continue;
         // Objectives complete in order: an earlier unfinished objective blocks.
-        if (st.objectives.slice(0, i).some((p) => !p.done)) continue;
+        if (st.objectives.slice(0, i).some((p: any) => !p.done)) continue;
         if (o.target !== 'any' && o.target !== target && !String(o.target).startsWith(`${target}:`)) continue;
 
         os.progress = Math.min(o.count, os.progress + amount);
@@ -547,22 +550,22 @@ export class QuestLog {
 
       if (touched) {
         changed.push(q.id);
-        if (st.objectives.every((o) => o.done)) this.complete(q.id);
+        if (st.objectives.every((o: any) => o.done)) this.complete(q.id);
       }
     }
     return changed.map((id) => this.view(id));
   }
 
   /** Force an objective complete (debug / cutscene shortcuts). */
-  forceObjective(questId, objectiveId) {
+  forceObjective(questId: any, objectiveId: any) {
     const q = QUESTS[questId];
     const st = this.states[questId];
     if (!q || !st || st.status !== 'active') return false;
-    const i = q.objectives.findIndex((o) => o.id === objectiveId);
+    const i = q.objectives.findIndex((o: any) => o.id === objectiveId);
     if (i < 0) return false;
     st.objectives[i].done = true;
     st.objectives[i].progress = q.objectives[i].count;
-    if (st.objectives.every((o) => o.done)) this.complete(questId);
+    if (st.objectives.every((o: any) => o.done)) this.complete(questId);
     return true;
   }
 
@@ -570,13 +573,13 @@ export class QuestLog {
    * Mark a quest complete and emit its rewards. RpgSystem listens for the
    * `complete` phase and actually grants them.
    */
-  complete(id) {
+  complete(id: any) {
     const st = this.states[id];
     const q = QUESTS[id];
     if (!st || !q || st.status === 'complete') return false;
     st.status = 'complete';
     st.completedAt = Date.now();
-    st.objectives.forEach((o, i) => { o.done = true; o.progress = q.objectives[i].count; });
+    st.objectives.forEach((o: any, i: any) => { o.done = true; o.progress = q.objectives[i].count; });
 
     const rewards = this.rewardsFor(id);
     if (q.type === 'hunt' && q.rank) this.hunterPoints += HUNT_RANKS[q.rank].hunterPoints;
@@ -590,7 +593,7 @@ export class QuestLog {
   }
 
   /** Final reward payload, with hunt rank scaling applied. */
-  rewardsFor(id) {
+  rewardsFor(id: any) {
     const q = QUESTS[id];
     if (!q) return null;
     const r = q.rewards || {};
@@ -615,7 +618,7 @@ export class QuestLog {
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
       if (st.status !== 'active') continue;
-      const i = st.objectives.findIndex((o) => !o.done);
+      const i = st.objectives.findIndex((o: any) => !o.done);
       if (i < 0) continue;
       const o = q.objectives[i];
       if (!o.waypoint) continue;
@@ -636,7 +639,7 @@ export class QuestLog {
     for (const w of this.waypoints()) {
       const st = this.states[w.questId];
       const q = QUESTS[w.questId];
-      const i = st.objectives.findIndex((o) => !o.done);
+      const i = st.objectives.findIndex((o: any) => !o.done);
       if (i < 0 || q.objectives[i].type !== 'reach') continue;
       const [x, , z] = w.pos;
       const d = Math.hypot(pos.x - x, pos.z - z);
@@ -648,7 +651,7 @@ export class QuestLog {
     return { states: this.states, tracked: this.tracked, hunterPoints: this.hunterPoints, flags: [...this.flags] };
   }
 
-  static fromJSON(data, emitter = null) {
+  static fromJSON(data: any, emitter = null) {
     const log = new QuestLog(emitter);
     if (!data) return log;
     for (const id of Object.keys(log.states)) {
@@ -656,7 +659,7 @@ export class QuestLog {
       if (!src) continue;
       log.states[id].status = src.status || log.states[id].status;
       const objs = src.objectives || [];
-      log.states[id].objectives.forEach((o, i) => {
+      log.states[id].objectives.forEach((o: any, i: any) => {
         if (objs[i]) { o.progress = objs[i].progress || 0; o.done = !!objs[i].done; }
       });
       log.states[id].startedAt = src.startedAt;

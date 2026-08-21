@@ -12,6 +12,41 @@ import { noiseBuffer, makeRng, clamp, EPS, hit } from './Dsp.ts';
  * the same ambience the live game does.
  */
 export class Ambience {
+  _nextBird!: number;
+  _nextCreak!: number;
+  _nextDrip!: number;
+  _nextHowl!: number;
+  brown!: any;
+  cicada!: any;
+  cicadaLfo!: any;
+  cicadaSrc!: any;
+  ctx!: any;
+  graph!: any;
+  gustA!: any;
+  gustAG!: any;
+  gustB!: any;
+  gustBG!: any;
+  hours!: number;
+  hum!: any;
+  indoors!: number;
+  nightBed!: any;
+  nightDepth!: number;
+  nightSrc!: any;
+  out!: any;
+  pink!: any;
+  rain!: number;
+  rainHiss!: any;
+  rainPatter!: any;
+  rainRoar!: any;
+  rainSrc!: any;
+  rng!: any;
+  scheduledTo!: number;
+  sfx!: any;
+  water!: any;
+  white!: any;
+  wind!: number;
+  windBands!: any[];
+  windSrc!: any;
   constructor(graph: import('./Graph.ts').AudioGraph, sfx: import('./Sfx.ts').Sfx) {
     this.graph = graph;
     this.sfx = sfx;
@@ -106,7 +141,7 @@ export class Ambience {
     this.scheduledTo = 0;
   }
 
-  _band(src, type, freq, q, dest = null) {
+  _band(src: any, type: any, freq: any, q: any, dest = null) {
     const ctx = this.ctx;
     const f = ctx.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -171,7 +206,7 @@ export class Ambience {
   }
 
   /** 0 = outdoors, 1 = fully enclosed. Muffles wind and rain. */
-  setIndoors(v, at = null) {
+  setIndoors(v: any, at = null) {
     this.indoors = clamp(v, 0, 1);
     this.setWind(this.wind, at);
     this.setRain(this.rain, at);
@@ -331,7 +366,7 @@ export class Ambience {
    * Birdsong: two to five syllables, each a fast frequency sweep. Real birds
    * chirp in units; a single sine blip sounds like a game menu.
    */
-  _bird(t, origin) {
+  _bird(t: any, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
@@ -372,7 +407,7 @@ export class Ambience {
   }
 
   /** A cricket: a short burst of a resonant band, repeated in a trill. */
-  _cricket(t, origin) {
+  _cricket(t: any, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
@@ -406,7 +441,7 @@ export class Ambience {
   }
 
   /** A drop off a rock or a leaf — what makes rain sound like a place. */
-  _drip(t, origin) {
+  _drip(t: any, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
@@ -433,7 +468,7 @@ export class Ambience {
   }
 
   /** Realtime tick: keep the look-ahead window fed. */
-  update(origin) {
+  update(origin: any) {
     this.scheduleUntil(this.ctx.currentTime + 1.2, origin);
   }
 

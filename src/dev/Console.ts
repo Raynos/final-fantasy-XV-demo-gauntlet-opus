@@ -13,6 +13,13 @@
  * the bubble phase at the target keeps the event from ever reaching it.
  */
 export class DevConsole {
+  hist!: any[];
+  histAt!: number;
+  input!: any;
+  log!: any;
+  node!: any;
+  open!: boolean;
+  reg!: any;
   constructor(root: HTMLElement, reg: import('./Registry.ts').Registry) {
     this.reg = reg;
     this.open = false;
@@ -30,15 +37,15 @@ export class DevConsole {
     this.input = this.node.querySelector('input');
     this.node.style.display = 'none';
 
-    this.input.addEventListener('keydown', (e) => this._onKey(e));
+    this.input.addEventListener('keydown', (e: any) => this._onKey(e));
     // Any key typed into the console belongs to the console, full stop.
-    this.input.addEventListener('keyup', (e) => e.stopPropagation());
-    this.input.addEventListener('keypress', (e) => e.stopPropagation());
+    this.input.addEventListener('keyup', (e: any) => e.stopPropagation());
+    this.input.addEventListener('keypress', (e: any) => e.stopPropagation());
 
     this.print('dev console — `help` lists everything, Tab completes.', 'dim');
   }
 
-  setOpen(v) {
+  setOpen(v: any) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
     if (this.open) { this.input.focus(); this.input.select(); }
@@ -57,7 +64,7 @@ export class DevConsole {
     this.log.scrollTop = this.log.scrollHeight;
   }
 
-  _onKey(e) {
+  _onKey(e: any) {
     e.stopPropagation();
 
     if (e.key === 'Escape' || e.key === '`') { e.preventDefault(); this.setOpen(false); return; }
@@ -114,7 +121,7 @@ export class DevConsole {
       category: 'console',
       args: '[prefix]',
       help: 'list commands and cvars',
-      exec: (arg) => {
+      exec: (arg: any) => {
         const cats = reg.byCategory();
         const want = String(arg || '').trim();
         for (const [cat, { cvars, cmds }] of [...cats].sort()) {

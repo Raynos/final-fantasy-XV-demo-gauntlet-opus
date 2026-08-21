@@ -22,6 +22,23 @@ import { glowCardMaterial, glowSprite } from './InteriorMaterials.ts';
  *     still frame still reads as a volume rather than as a diorama.
  */
 export class LightRig {
+  _time!: number;
+  _tmp!: THREE.Vector3;
+  ambient!: THREE.HemisphereLight;
+  emitters!: any[];
+  gain!: any;
+  glow!: THREE.Mesh;
+  glowMat!: any;
+  group!: THREE.Group;
+  lamp!: THREE.PointLight;
+  moteBox!: any;
+  moteColor!: any;
+  moteCount!: any;
+  moteMat!: THREE.ShaderMaterial;
+  motes!: THREE.Points;
+  pool!: any[];
+  poolSize!: any;
+  shafts!: any[];
   /**
    * @param {object} o
    * 
@@ -95,7 +112,7 @@ export class LightRig {
   }
 
   /** A visible light shaft or lamp cone; its material's clock is ticked here. */
-  addShaft(mesh) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
+  addShaft(mesh: any) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
 
   /**
    * Build the single-draw-call glow layer and the mote volume. Call once, after
@@ -266,7 +283,7 @@ export class LightRig {
   }
 
   /** Cross-fade the whole rig, used by the portal transition. */
-  setFade(f) {
+  setFade(f: any) {
     if (this.glowMat) this.glowMat.uniforms.uFade.value = f;
     if (this.moteMat) this.moteMat.uniforms.uFade.value = f;
   }
@@ -277,7 +294,7 @@ export class LightRig {
   }
 }
 
-function hash(i) {
+function hash(i: any) {
   let s = (i * 2654435761) >>> 0;
   s = Math.imul(s ^ (s >>> 15), s | 1);
   s ^= s + Math.imul(s ^ (s >>> 7), s | 61);

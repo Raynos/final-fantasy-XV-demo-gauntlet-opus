@@ -23,7 +23,7 @@ const ARRIVE = 66;           // scene time at which the car reaches its home spo
 const DUR = 72;
 
 /** Forward distance of the car, in scene-frame metres (negative = further back). */
-const carF = (t) => (Math.min(t, ARRIVE) - ARRIVE) * SPEED;
+const carF = (t: any) => (Math.min(t, ARRIVE) - ARRIVE) * SPEED;
 
 /**
  * Where each of the four stands, as [forward-of-car, left-of-centre].
@@ -57,7 +57,7 @@ export const OPENING = {
   restorePositions: false,
 
   /* ------------------------------------------------------------- staging -- */
-  stage(ctx) {
+  stage(ctx: any) {
     const { game, stage, terrain } = ctx;
     const props = game.get('Props');
     const eco = props && props.ecology;
@@ -70,8 +70,8 @@ export const OPENING = {
     if (weather && weather.set) weather.set('clear');
 
     // ---- anchor on the parked Regalia and the fuel stop up the road --------
-    const site = eco && eco.sites.find((s) => s.type === 'regalia');
-    const stop = eco && eco.sites.find((s) => s.type === 'reststop');
+    const site = eco && eco.sites.find((s: any) => s.type === 'regalia');
+    const stop = eco && eco.sites.find((s: any) => s.type === 'reststop');
     const origin = new THREE.Vector3(
       site ? site.x : 0,
       0,
@@ -140,7 +140,7 @@ export const OPENING = {
   },
 
   /* ---------------------------------------------------------- per frame -- */
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     placeCrew(ctx, t);
   },
 
@@ -189,7 +189,7 @@ export const OPENING = {
   ],
 
   /* ---------------------------------------------------------------- end -- */
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     const { game, stage } = ctx;
     // Park the car exactly where the world had it, then leave the four of them
     // standing beside it facing Hammerhead. Whether the scene played out or was
@@ -217,12 +217,12 @@ export const OPENING = {
 /* -------------------------------------------------------------------------- */
 
 /** Drive the car and the four pushers to their positions at scene time `t`. */
-function placeCrew(ctx, t) {
+function placeCrew(ctx: any, t: any) {
   const { stage, terrain } = ctx;
   const F = ctx.data.F;
   if (!F) return;
   const f = carF(t);
-  const yawAt = (ff) => (F.yawAt ? F.yawAt(ff) : F.yaw);
+  const yawAt = (ff: any) => (F.yawAt ? F.yawAt(ff) : F.yaw);
 
   // ---- the Regalia -------------------------------------------------------
   const car = ctx.data.car;
@@ -264,13 +264,13 @@ function placeCrew(ctx, t) {
 }
 
 /** Terrain height at a scene-frame offset. */
-function height(terrain, F, f, l) {
+function height(terrain: any, F: any, f: any, l: any) {
   const p = F.at(f, l, 0);
   return terrain.heightAt(p[0], p[2]);
 }
 
 /** Unwind the wheel spin. `releaseCar` handles everything else. */
-function restoreInner(ctx) {
+function restoreInner(ctx: any) {
   const car = ctx.data.car;
   const home = ctx.data.carHome;
   if (!car || !home || !home.inner || !car.children[0]) return;
@@ -298,11 +298,11 @@ function buildShots(ctx: any) {
    * the move — the sort of error that reads as "the framing is a bit off" and
    * is actually a coordinate bug.
    */
-  const G = (f, l, u) => F.ground(terrain, f, l * S, u);
+  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l * S, u);
   /** The centre of the pushing line at scene time `t`. */
-  const crew = (t, u) => G(carF(t) - 3.4, 0, u);
+  const crew = (t: any, u: any) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */
-  const man = (t, id, u) => G(carF(t) + SLOTS[id][0], SLOTS[id][1] / S, u);
+  const man = (t: any, id: any, u: any) => G(carF(t) + SLOTS[id][0], SLOTS[id][1] / S, u);
   const stopF = ctx.data.stopF ?? 40;
   const stopL = (ctx.data.stopL ?? 0) / (S || 1);
 

@@ -18,6 +18,10 @@ import { PLACES, REGION_CARDS } from './Chapters.ts';
  * predicate, so gating on chapter or story flags needs no extra machinery.
  */
 export class Triggers {
+  _hour!: any;
+  _t!: number;
+  game!: any;
+  list!: any[];
   constructor(game: any) {
     this.game = game;
     this.list = [];
@@ -39,7 +43,7 @@ export class Triggers {
   }
 
   /** Remove every trigger added with a given tag. */
-  clear(tag) {
+  clear(tag: any) {
     if (!tag) { this.list.length = 0; return; }
     this.list = this.list.filter((t) => t.tag !== tag);
   }
@@ -50,14 +54,14 @@ export class Triggers {
     const props = this.game.get('Props');
     const eco = props && props.ecology;
     this._places = PLACES.map((p) => {
-      const site = eco && eco.sites.find((s) => s.type === p.site);
+      const site = eco && eco.sites.find((s: any) => s.type === p.site);
       return site ? { ...p, x: site.x, z: site.z } : null;
     }).filter(Boolean);
     return this._places;
   }
 
   /** The place id containing a world position, or null. */
-  placeAt(pos) {
+  placeAt(pos: any) {
     for (const p of this.places()) {
       if (Math.hypot(pos.x - p.x, pos.z - p.z) <= p.radius) return p;
     }
@@ -69,7 +73,7 @@ export class Triggers {
    * exist so the plumbing is real rather than a stub, and so a later agent
    * adding Duscae terrain gets region cards for free.
    */
-  regionAt(pos) {
+  regionAt(pos: any) {
     if (pos.z > 520 || pos.x < -700) return 'duscae';
     if (pos.z < -640) return 'cleigne';
     return 'leide';
@@ -127,9 +131,9 @@ export class Triggers {
   }
 
   /** Push an external event (quest / combat) through the same matcher. */
-  notify(kind, payload, fire) { this._match(kind, payload, fire); }
+  notify(kind: any, payload: any, fire: any) { this._match(kind, payload, fire); }
 
-  _match(kind, payload, fire) {
+  _match(kind: any, payload: any, fire: any) {
     for (const t of this.list) {
       if (t.kind !== kind || (t.once && t.fired)) continue;
       if (t.id != null && t.id !== payload.id) continue;
@@ -142,7 +146,7 @@ export class Triggers {
     }
   }
 
-  _allow(t) {
+  _allow(t: any) {
     if (!t.require) return true;
     try { return !!t.require(this.game); } catch { return false; }
   }

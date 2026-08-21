@@ -51,7 +51,7 @@ export const FOCIAUGH = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L) {
+  author(L: any) {
     L.room('mouth', { x: 0, z: 0, w: 13, d: 11, y: 0, h: 7.5, kind: 'entry', name: 'Cave Mouth' });
     L.room('gallery', {
       x: 0, z: -24, w: 20, d: 17, y: -5.0, h: 10.0, kind: 'hall', name: 'Dripstone Gallery',
@@ -107,8 +107,8 @@ export const FOCIAUGH = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit, L) {
-    const F = (x, y, z, o) => kit.fungus(x, y, z, o);
+  dress(kit: any, L: any) {
+    const F = (x: any, y: any, z: any, o: any) => kit.fungus(x, y, z, o);
 
     // ---- cave mouth: daylight dying about six metres in -------------------
     kit.dripField(0, 7.0, -1.5, { count: 14, radius: 5.0, len: 1.5, r: 0.24 });
@@ -206,7 +206,7 @@ export const FOCIAUGH = {
    * The one shaft of daylight, falling through the collapse at the mouth, and a
    * second, weaker one through a fissure over the Hollow.
    */
-  extras(dungeon) {
+  extras(dungeon: any) {
     const rig = dungeon.rig;
     const a = new THREE.Mesh(
       new THREE.CylinderGeometry(1.1, 3.8, 9.5, 12, 1, true),

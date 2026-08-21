@@ -32,15 +32,15 @@ const CONE = new THREE.ConeGeometry(0.5, 1, 8);
  * scatter wants — spoil, sandbags and boulders laid out in door space float
  * off a slope, and a Leide slope moves twenty metres in thirty.
  */
-function frame(terrain, x, z, heading) {
+function frame(terrain: any, x: any, z: any, heading: any) {
   const y = terrain.heightAt(x, z);
   const c = Math.cos(heading), s = Math.sin(heading);
-  const w = (r, f) => [x + c * r + s * f, z - s * r + c * f];
+  const w = (r: any, f: any) => [x + c * r + s * f, z - s * r + c * f];
   return {
     y,
-    P: (r, f, u) => { const p = w(r, f); return [p[0], y + u, p[1]]; },
-    G: (r, f, u) => { const p = w(r, f); return [p[0], terrain.heightAt(p[0], p[1]) + u, p[1]]; },
-    ground: (r, f) => { const p = w(r, f); return terrain.heightAt(p[0], p[1]); },
+    P: (r: any, f: any, u: any) => { const p = w(r, f); return [p[0], y + u, p[1]]; },
+    G: (r: any, f: any, u: any) => { const p = w(r, f); return [p[0], terrain.heightAt(p[0], p[1]) + u, p[1]]; },
+    ground: (r: any, f: any) => { const p = w(r, f); return terrain.heightAt(p[0], p[1]); },
   };
 }
 
@@ -49,7 +49,7 @@ function frame(terrain, x, z, heading) {
  * whose bases are pinned to the ground under each one. A single big box reads
  * as a crate dropped on the landscape from orbit; this reads as an outcrop.
  */
-function mound(mg, mat, F, rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }) {
+function mound(mg: any, mat: any, F: any, rng: any, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }) {
   for (let i = 0; i < blobs; i++) {
     const a = rng.range(0, Math.PI * 2);
     const d = Math.pow(rng.next(), 0.6) * radius;
@@ -67,7 +67,7 @@ function mound(mg, mat, F, rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 
  * Keycatrich: an imperial blockhouse driven into a spoil berm, with a cut
  * trench approach, a blast door and a great deal of rusted steel.
  */
-export function buildBunkerEntrance(terrain, x, z, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3} {
+export function buildBunkerEntrance(terrain: any, x: any, z: any, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3} {
   const g = new THREE.Group();
   g.name = 'keycatrich-entrance';
   const mg = new InteriorMerger();
@@ -143,7 +143,7 @@ export function buildBunkerEntrance(terrain, x, z, heading = 0, seed = 11): {gro
  * Balouve: an adit driven into an outcrop under a timber-and-steel headframe,
  * with the rail running out of the portal to a spoil tip.
  */
-export function buildMineHead(terrain, x, z, heading = 0, seed = 22) {
+export function buildMineHead(terrain: any, x: any, z: any, heading = 0, seed = 22) {
   const g = new THREE.Group();
   g.name = 'balouve-entrance';
   const mg = new InteriorMerger();
@@ -219,7 +219,7 @@ export function buildMineHead(terrain, x, z, heading = 0, seed = 22) {
  * Fociaugh: a collapse-dolined cave mouth under a limestone overhang, ringed by
  * breakdown blocks. No architecture at all — the world just opens.
  */
-export function buildCaveMouth(terrain, x, z, heading = 0, seed = 33) {
+export function buildCaveMouth(terrain: any, x: any, z: any, heading = 0, seed = 33) {
   const g = new THREE.Group();
   g.name = 'fociaugh-entrance';
   const mg = new InteriorMerger();
@@ -266,7 +266,7 @@ export function buildCaveMouth(terrain, x, z, heading = 0, seed = 33) {
  * that is allowed to be bright, and the reason the rest reads as dark.
  *
  */
-export function buildExitVestibule(parent, rig, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh} {
+export function buildExitVestibule(parent: any, rig: any, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }: any): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh} {
   const group = new THREE.Group();
   const card = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
@@ -306,6 +306,10 @@ export function buildExitVestibule(parent, rig, { x, y, z, facing = 0, w = 3.2, 
  * from the UI so a dungeon transition never depends on another system existing.
  */
 export class Fader {
+  el!: any;
+  speed!: number;
+  target!: number;
+  value!: number;
   constructor(root: HTMLElement) {
     this.el = document.createElement('div');
     this.el.style.cssText = [
@@ -323,7 +327,7 @@ export class Fader {
   toBlack(atBlack: ()=>void) { this.target = 1; this._onBlack = atBlack || null; }
   toClear() { this.target = 0; }
 
-  update(dt) {
+  update(dt: any) {
     const d = this.target - this.value;
     if (Math.abs(d) < 0.001) {
       if (this.value >= 0.999 && this._onBlack) {
@@ -339,5 +343,5 @@ export class Fader {
   }
 
   /** Snap, used by the deterministic capture harness. */
-  set(v) { this.value = this.target = v; this.el.style.opacity = String(v); }
+  set(v: any) { this.value = this.target = v; this.el.style.opacity = String(v); }
 }

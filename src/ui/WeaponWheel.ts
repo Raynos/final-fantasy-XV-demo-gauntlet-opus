@@ -11,6 +11,19 @@ const HINT = { up: '↑', right: '→', down: '↓', left: '←' };
  * called out above.
  */
 export class WeaponWheel {
+  _capKey!: any;
+  active!: number;
+  built!: boolean;
+  cap!: any;
+  capKind!: any;
+  capName!: any;
+  col!: any;
+  hub!: any;
+  hubPad!: any;
+  root!: any;
+  slots!: any[];
+  spokes!: any;
+  wheel!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.br');
     this.col = el('div.wpn-col');
@@ -34,7 +47,7 @@ export class WeaponWheel {
     this.built = false;
   }
 
-  _build(weapons) {
+  _build(weapons: any) {
     for (const w of weapons) {
       const [x, y] = POS[w.slot] || POS.up;
       this.spokes.appendChild(svg('line', {
@@ -51,7 +64,7 @@ export class WeaponWheel {
     this.hub.appendChild(dpad('up', 26));
     this.hubPad = this.hub.firstChild;
 
-    weapons.forEach((w, i) => {
+    weapons.forEach((w: any, i: any) => {
       const [x, y] = POS[w.slot] || POS.up;
       const node = el('div.wslot', { style: `left:${x}px;top:${y}px` }, [
         el('div.ring'),

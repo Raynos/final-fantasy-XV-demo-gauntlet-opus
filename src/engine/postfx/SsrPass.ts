@@ -14,7 +14,13 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  *   game.post.ssr.maxHeight = 2.0;   // world Y below which surfaces reflect
  */
 export class SsrPass extends FilterPass {
-  constructor(fx) {
+  fx!: any;
+  intensity!: number;
+  material!: any;
+  maxDistance!: number;
+  maxHeight!: number;
+  roughness!: number;
+  constructor(fx: any) {
     super(fx);
     this.enabled = false;
     this.intensity = 0.55;
@@ -107,7 +113,7 @@ export class SsrPass extends FilterPass {
     });
   }
 
-  setSize(w, h) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
   beforeRender() {
     const fx = this.fx, u = this.material.uniforms;

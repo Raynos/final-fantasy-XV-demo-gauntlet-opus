@@ -189,7 +189,7 @@ export const QUEST = {
 /* ------------------------------------------------------------------------ */
 
 /** The RpgSystem, or null when the world was booted without it. */
-export function rpg(game) {
+export function rpg(game: any) {
   const r = game?.get?.('Rpg');
   return r && r.party ? r : null;
 }
@@ -219,7 +219,7 @@ export function hudState(game: any): any | null {
 export function readParty(game: any): Array<any> {
   const hs = hudState(game);
   if (!hs || !hs.party || !hs.party.length) return PARTY.map((p) => ({ ...p }));
-  return hs.party.map((m, i) => {
+  return hs.party.map((m: any, i: any) => {
     const ui = MEMBER_UI[m.id] || MEMBER_UI.noctis;
     return {
       id: m.id,
@@ -241,7 +241,7 @@ export function readParty(game: any): Array<any> {
  * Status icons for one member. Real state only: a KO badge, a critical-HP
  * warning, and one icon per active meal/spell buff mapped onto the icon set.
  */
-function statusIcons(hs, m) {
+function statusIcons(hs: any, m: any) {
   const out = [];
   if (m.ko) out.push('poison');
   for (const b of hs.buffs || []) {
@@ -267,7 +267,7 @@ export function readWeapons(game: any) {
   return slots.map((slot, i) => {
     const def = rack[i];
     if (!def) return { slot, key: 'sword', name: 'Empty', kind: 'No armament', atk: 0, element: null, id: null };
-    const el = (def.tags || []).find((t) => t.startsWith('element:'));
+    const el = (def.tags || []).find((t: any) => t.startsWith('element:'));
     return {
       slot, id: def.id,
       key: CLASS_ICON[def.class] || 'sword',
@@ -295,12 +295,12 @@ export function readItems(game: any, tab: number = -1): Array<any> {
   }
   const cats = tab < 0 ? null : (ITEM_TABS[tab]?.cats || null);
   return r.inventory.list()
-    .filter((e) => !cats || cats.includes(e.def.category))
-    .map((e) => itemView(e.def, e.count, r));
+    .filter((e: any) => !cats || cats.includes(e.def.category))
+    .map((e: any) => itemView(e.def, e.count, r));
 }
 
 /** One item stack, hydrated for the detail column. */
-function itemView(def, count, r) {
+function itemView(def: any, count: any, r: any) {
   const use = def.use || null;
   let effect = '—';
   if (use) {
@@ -328,7 +328,7 @@ function itemView(def, count, r) {
 }
 
 /** Pick the icon that says the most about what an item actually does. */
-function itemIcon(def) {
+function itemIcon(def: any) {
   const u = def.use;
   if (u) {
     if (u.type === 'revive') return 'regen';
@@ -349,7 +349,7 @@ function itemIcon(def) {
 }
 
 /** "STR +40  ·  HP +300" from a modifier bucket. */
-function modLine(mods) {
+function modLine(mods: any) {
   if (!mods) return '';
   const K = { hp: 'HP', mp: 'MP', strength: 'STR', vitality: 'VIT', magic: 'MAG', spirit: 'SPR', attack: 'ATK', defense: 'DEF', magicAttack: 'M.ATK', magicDefense: 'M.DEF' };
   const bits = [];
@@ -365,15 +365,15 @@ function modLine(mods) {
  */
 export function readGear(game: any, id: string) {
   const r = rpg(game);
-  if (!r) return (GEAR[id] || GEAR.noctis).map((g) => ({ ...g }));
+  if (!r) return (GEAR[id] || GEAR.noctis).map((g: any) => ({ ...g }));
   const eq = r.inventory.equipped(id);
-  const out = [];
-  eq.weapon.forEach((def) => out.push(slotView('Weapon', def)));
-  eq.accessory.forEach((def) => out.push(slotView('Accessory', def)));
+  const out: any[] = [];
+  eq.weapon.forEach((def: any) => out.push(slotView('Weapon', def)));
+  eq.accessory.forEach((def: any) => out.push(slotView('Accessory', def)));
   return out;
 }
 
-function slotView(slot, def) {
+function slotView(slot: any, def: any) {
   if (!def) return { slot, name: '— Empty —', stat: '', empty: true, id: null };
   return {
     slot, id: def.id, name: def.name,
@@ -389,8 +389,8 @@ export function readQuest(game: any): {title:string, step:string, dist:number, r
   const hs = hudState(game);
   const t = hs && hs.tracked;
   if (!t) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };
-  const obj = (t.objectives || []).find((o) => !o.done) || t.objectives?.[t.objectives.length - 1];
-  const wp = (hs.waypoints || []).find((w) => w.questId === t.id) || null;
+  const obj = (t.objectives || []).find((o: any) => !o.done) || t.objectives?.[t.objectives.length - 1];
+  const wp = (hs.waypoints || []).find((w: any) => w.questId === t.id) || null;
   const p = game?.get?.('Player')?.position;
   let dist = 0;
   if (wp && p) dist = Math.round(Math.hypot(p.x - wp.pos[0], p.z - wp.pos[2]));
@@ -475,9 +475,9 @@ export function readAscension(game: any) {
     ap: asc ? asc.ap : 0,
     total: asc ? asc.totalApRequired : Object.values(NODES).reduce((a, n) => a + n.ap, 0),
     unlockedCount: asc ? asc.unlocked.size : 0,
-    isUnlocked: (id) => !!asc && asc.isUnlocked(id),
-    canUnlock: (id) => (asc ? asc.canUnlock(id) : { ok: false, reason: 'locked', missing: [], ap: 0 }),
-    unlock: (id) => (r ? r.unlockNode(id) : false),
+    isUnlocked: (id: any) => !!asc && asc.isUnlocked(id),
+    canUnlock: (id: any) => (asc ? asc.canUnlock(id) : { ok: false, reason: 'locked', missing: [], ap: 0 }),
+    unlock: (id: any) => (r ? r.unlockNode(id) : false),
   };
 }
 

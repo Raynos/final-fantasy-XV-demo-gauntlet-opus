@@ -10,7 +10,7 @@ import { Noise } from '../../util/Noise.ts';
  */
 
 const cache = new Map();
-function memo(key, make) {
+function memo(key: any, make: any) {
   if (!cache.has(key)) cache.set(key, make());
   return cache.get(key);
 }
@@ -37,8 +37,8 @@ function memo(key, make) {
  */
 const MIN_COVERAGE_SIZE = 16;
 
-function buildAlphaMips(data, size, alphaRef = 0.42, tinyFade = 1.0) {
-  const coverageOf = (buf, scale) => {
+function buildAlphaMips(data: any, size: any, alphaRef = 0.42, tinyFade = 1.0) {
+  const coverageOf = (buf: any, scale: any) => {
     let n = 0;
     for (let i = 3; i < buf.length; i += 4) if ((buf[i] / 255) * scale >= alphaRef) n++;
     return n / (buf.length / 4);
@@ -128,11 +128,11 @@ function buildAlphaMips(data, size, alphaRef = 0.42, tinyFade = 1.0) {
  * @returns the gamma applied (1 == no change), for logging
  */
 function normalizeAlbedo(data: Uint8Array, target: number): number {
-  const toLin = (b) => {
+  const toLin = (b: any) => {
     const s = b / 255;
     return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
   };
-  const toSrgb = (v) => {
+  const toSrgb = (v: any) => {
     const c = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
     return Math.max(0, Math.min(255, Math.round(c * 255)));
   };
@@ -151,7 +151,7 @@ function normalizeAlbedo(data: Uint8Array, target: number): number {
     wsum += a;
   }
   if (wsum <= 0) return 1;
-  const meanAt = (g) => {
+  const meanAt = (g: any) => {
     let s = 0;
     for (let b = 0; b < BINS; b++) {
       if (hist[b] === 0) continue;
@@ -179,7 +179,7 @@ function normalizeAlbedo(data: Uint8Array, target: number): number {
 }
 
 /** Apply the hand-built mip chain to an RGBA DataTexture. */
-function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
+function withAlphaMips(tex: any, data: any, size: any, alphaRef: any, tinyFade: any) {
   tex.mipmaps = buildAlphaMips(data, size, alphaRef, tinyFade);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -230,7 +230,7 @@ export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size
 }
 
 /** One tapered, curved blade stroke. */
-function blade(ctx, x0, y0, len, wid, lean, colA, colB) {
+function blade(ctx: any, x0: any, y0: any, len: any, wid: any, lean: any, colA: any, colB: any) {
   const steps = 8;
   const left = [], right = [];
   for (let i = 0; i <= steps; i++) {
@@ -350,7 +350,7 @@ export function leafClusterTex(kind = 'broad') {
     const HUE = kind === 'dry' ? [1.06, 1, 0.80]
       : kind === 'conifer' ? [0.87, 1, 0.90]
         : [0.91, 1, 0.79];
-    const ink = (g) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
+    const ink = (g: any) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = Math.pow(rng.next(), 0.62) * s * 0.47;
@@ -534,7 +534,7 @@ export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: any, opts: {c
     const x = (t - 0.5) * halfW * 1.72 + rng.gauss(0, src.radius * 0.28);
     const z = rng.range(-1, 1) * src.radius * 1.2;
     const s = rng.range(0.72, 1.18);
-    const add = (geo, mat) => {
+    const add = (geo: any, mat: any) => {
       if (!geo) return;
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, 0, z);
@@ -703,7 +703,7 @@ export function barkMaps(tint = 0x6b5642) {
     const hr = 1 + (base.r / bl - 1) * HUE;
     const hg = 1 + (base.g / bl - 1) * HUE;
     const hb = 1 + (base.b / bl - 1) * HUE;
-    const h = (u, v) => {
+    const h = (u: any, v: any) => {
       const rings = Math.sin(v * 90 + n.fbm2(u * 5, v * 30, 3) * 6) * 0.5 + 0.5;
       const streak = n.fbm2(u * 7, v * 44, 4) * 0.5 + 0.5;
       return rings * 0.35 + streak * 0.65;
@@ -712,8 +712,8 @@ export function barkMaps(tint = 0x6b5642) {
     // compressed to 0.72x, the brightest ridge lands just under 1.0 at the
     // target mean, so the ridge contrast survives without clipping to white.
     const KMEAN = 0.925, KCONTRAST = 0.72;
-    const toSrgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
-    const map = makeTexture(256, (u, v, c) => {
+    const toSrgb = (v: any) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
+    const map = makeTexture(256, (u: any, v: any, c: any) => {
       const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
       const L = BARK_DETAIL_MEAN * k;
       const moss = Math.max(0, n.fbm2(u * 4 + 30, v * 4, 3)) * 0.35;

@@ -50,7 +50,7 @@ export const BALOUVE = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L) {
+  author(L: any) {
     L.room('adit', { x: 0, z: 0, w: 11, d: 9, y: 0, h: 4.4, kind: 'entry', name: 'The Adit' });
     L.room('landing', { x: 0, z: -28, w: 14, d: 13, y: -2.0, h: 4.8, kind: 'junction', name: 'Level One' });
     L.room('stope', {
@@ -117,7 +117,7 @@ export const BALOUVE = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit, L) {
+  dress(kit: any, L: any) {
     // ---- adit ------------------------------------------------------------
     kit.timberFrame(0, 0, 1.6, { rot: 0, width: 4.6, height: 3.4 });
     kit.timberFrame(0, 0, -1.6, { rot: 0, width: 4.6, height: 3.4 });
@@ -246,7 +246,7 @@ export const BALOUVE = {
    * The column of daylight falling nineteen metres down the shaft from the
    * headgear. This is the shot the whole dungeon is built around.
    */
-  extras(dungeon) {
+  extras(dungeon: any) {
     const rig = dungeon.rig;
     const shaft = new THREE.Mesh(
       new THREE.CylinderGeometry(2.4, 5.2, 21, 16, 1, true),

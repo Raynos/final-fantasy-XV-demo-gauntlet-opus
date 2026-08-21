@@ -11,6 +11,12 @@ import * as THREE from 'three';
  * volume, and a delayed thunder crack.
  */
 export class Lightning {
+  _schedule!: any;
+  _thunder!: any[];
+  color!: THREE.Vector3;
+  flash!: number;
+  light!: THREE.HemisphereLight;
+  seed!: any;
   constructor(seed: number) {
     this.seed = seed >>> 0;
     /** Current flash strength, 0..~1.6. */
@@ -30,7 +36,7 @@ export class Lightning {
   }
 
   /** Strike times, in seconds since the clock reset, out to `horizon`. */
-  _build(period, horizon) {
+  _build(period: any, horizon: any) {
     let s = this.seed;
     const rnd = () => {
       s = (Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
@@ -100,8 +106,8 @@ export class Lightning {
  * Real lightning is a stroke plus two or three return strokes, which is why it
  * flickers rather than fading smoothly.
  */
-function envelope(age, bias) {
-  const pulse = (t0, amp, decay) => {
+function envelope(age: any, bias: any) {
+  const pulse = (t0: any, amp: any, decay: any) => {
     const a = age - t0;
     return a < 0 ? 0 : amp * Math.exp(-a * decay);
   };

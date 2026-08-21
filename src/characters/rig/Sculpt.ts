@@ -26,6 +26,17 @@ const _r = new THREE.Vector3();
 
 /** Accumulates triangles carrying colour, emissive and material response. */
 export class CBuilder {
+  _c!: number[];
+  _e!: number[];
+  _g!: number;
+  _m!: number[];
+  col!: any[];
+  emi!: any[];
+  grp!: any[];
+  idx!: any[];
+  mp!: any[];
+  pos!: any[];
+  uv!: any[];
   constructor() {
     this.pos = [];
     this.uv = [];
@@ -41,20 +52,20 @@ export class CBuilder {
   }
 
   /** Smoothing group — normals only average between vertices sharing one. */
-  group(g) { this._g = g; return this; }
+  group(g: any) { this._g = g; return this; }
 
   /** Base colour for subsequent vertices. */
-  color(c) {
+  color(c: any) {
     const col = c instanceof THREE.Color ? c : _col.setHex(c, THREE.SRGBColorSpace);
     this._c = [col.r, col.g, col.b];
     return this;
   }
 
   /** Multiply the current colour — cheap value variation within one part. */
-  tint(k) { this._c = [this._c[0] * k, this._c[1] * k, this._c[2] * k]; return this; }
+  tint(k: any) { this._c = [this._c[0] * k, this._c[1] * k, this._c[2] * k]; return this; }
 
   /** Emissive radiance added on top of the lit result (eyes, magitek seams). */
-  glow(c, strength = 1) {
+  glow(c: any, strength = 1) {
     if (!c) { this._e = [0, 0, 0]; return this; }
     const col = c instanceof THREE.Color ? c : _col.setHex(c, THREE.SRGBColorSpace);
     this._e = [col.r * strength, col.g * strength, col.b * strength];
@@ -62,9 +73,9 @@ export class CBuilder {
   }
 
   /** Per-vertex roughness / metalness. This is what separates hide from steel. */
-  mat(rough, metal = 0) { this._m = [rough, metal]; return this; }
+  mat(rough: any, metal = 0) { this._m = [rough, metal]; return this; }
 
-  v(x, y, z, u = 0, w = 0) {
+  v(x: any, y: any, z: any, u = 0, w = 0) {
     this.pos.push(x, y, z);
     this.uv.push(u, w);
     this.col.push(this._c[0], this._c[1], this._c[2]);
@@ -74,15 +85,15 @@ export class CBuilder {
     return this.pos.length / 3 - 1;
   }
 
-  vv(p, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
+  vv(p: any, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
-  tri(a, b, c) { this.idx.push(a, b, c); return this; }
-  quad(a, b, c, d) { this.idx.push(a, b, c, a, c, d); return this; }
+  tri(a: any, b: any, c: any) { this.idx.push(a, b, c); return this; }
+  quad(a: any, b: any, c: any, d: any) { this.idx.push(a, b, c, a, c, d); return this; }
 
   get count() { return this.pos.length / 3; }
 
   /** Darken vertex colours near a point — baked contact occlusion in creases. */
-  occlude(px, py, pz, radius, amount) {
+  occlude(px: any, py: any, pz: any, radius: any, amount: any) {
     const n = this.count;
     for (let i = 0; i < n; i++) {
       const dx = this.pos[i * 3] - px, dy = this.pos[i * 3 + 1] - py, dz = this.pos[i * 3 + 2] - pz;
@@ -111,7 +122,7 @@ export class CBuilder {
 const _col = new THREE.Color();
 
 /** Area-weighted normals, welded across coincident vertices in a group. */
-export function smoothNormals(geo, groups) {
+export function smoothNormals(geo: any, groups: any) {
   const pos = geo.attributes.position.array;
   const idx = geo.index.array;
   const n = pos.length / 3;
@@ -234,7 +245,7 @@ export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: numb
 }
 
 /** Dome a sweep end so it reads as an end of a limb, not an open pipe. */
-function capRing(B, ring, p, tan, sign, height) {
+function capRing(B: any, ring: any, p: any, tan: any, sign: any, height: any) {
   const n = ring.length;
   // measure the ring radius so the dome matches the tube it closes
   let rad = 0;
@@ -281,7 +292,7 @@ function capRing(B, ring, p, tan, sign, height) {
  *
  * brush: {p:[x,y,z], r:[rx,ry,rz], amt, dir:[x,y,z]|'normal', mirror?, pow?}
  */
-export function sculptBlob(B: CBuilder, o) {
+export function sculptBlob(B: CBuilder, o: any) {
   const segU = o.segU || 16, segV = o.segV || 12;
   const scale = new THREE.Vector3().fromArray(o.scale);
   const center = new THREE.Vector3().fromArray(o.center || [0, 0, 0]);
@@ -318,7 +329,7 @@ export function sculptBlob(B: CBuilder, o) {
  * Bevelled box built as a superellipsoid — the magitek panel primitive.
  * `power` 2 is a pill, 8 is a hard-edged plate with a crisp chamfer.
  */
-export function plate(B, o) {
+export function plate(B: any, o: any) {
   const s = o.size;
   const c = o.center || [0, 0, 0];
   const pw = o.power ?? 7;
@@ -436,7 +447,7 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
   return out;
 }
 
-function fill(n, size, vals) {
+function fill(n: any, size: any, vals: any) {
   const a = new Float32Array(n * size);
   for (let i = 0; i < n; i++) for (let k = 0; k < size; k++) a[i * size + k] = vals[k];
   return a;

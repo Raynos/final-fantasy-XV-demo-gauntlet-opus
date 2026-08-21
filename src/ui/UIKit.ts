@@ -36,7 +36,7 @@ export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = [
   return node;
 }
 
-function applyAttrs(node, attrs, isSvg) {
+function applyAttrs(node: any, attrs: any, isSvg: any) {
   for (const k of Object.keys(attrs)) {
     const v = attrs[k];
     if (v == null || v === false) continue;
@@ -48,7 +48,7 @@ function applyAttrs(node, attrs, isSvg) {
   }
 }
 
-function append(node, kids) {
+function append(node: any, kids: any) {
   const list = Array.isArray(kids) ? kids : [kids];
   for (const k of list) {
     if (k == null || k === false) continue;
@@ -57,28 +57,28 @@ function append(node, kids) {
 }
 
 /** Remove every child of `node`. */
-export function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+export function clear(node: any) { while (node.firstChild) node.removeChild(node.firstChild); }
 
 /** Toggle a class without touching the rest of the class list. */
-export function cls(node, name, on) { node.classList.toggle(name, !!on); }
+export function cls(node: any, name: any, on: any) { node.classList.toggle(name, !!on); }
 
-export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-export const lerp = (a, b, t) => a + (b - a) * t;
+export const clamp = (v: any, a: any, b: any) => (v < a ? a : v > b ? b : v);
+export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 /** Frame-rate independent exponential approach. */
-export const damp = (a, b, lambda, dt) => lerp(a, b, 1 - Math.exp(-lambda * dt));
-export const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-export const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
-export const easeOutQuint = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
-export const easeIn = (t) => Math.pow(clamp(t, 0, 1), 3);
+export const damp = (a: any, b: any, lambda: any, dt: any) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+export const smooth = (t: any) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+export const easeOut = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+export const easeOutQuint = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
+export const easeIn = (t: any) => Math.pow(clamp(t, 0, 1), 3);
 /** Overshoot ease used for pop-in of damage numbers and callouts. */
-export function easeBack(t) {
+export function easeBack(t: any) {
   const c = 1.70158 + 1;
   const x = clamp(t, 0, 1) - 1;
   return 1 + c * x * x * x + 1.70158 * x * x;
 }
 
 /** Deterministic 32-bit hash-based RNG (mulberry32). */
-export function rng(seed) {
+export function rng(seed: any) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -90,13 +90,13 @@ export function rng(seed) {
 }
 
 /** 1234567 -> "1,234,567" */
-export function commas(n) {
+export function commas(n: any) {
   const v = Math.max(0, Math.round(n));
   return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /** Fractional hours -> "17:42" */
-export function clock(hours) {
+export function clock(hours: any) {
   const h = ((hours % 24) + 24) % 24;
   const hh = Math.floor(h);
   const mm = Math.floor((h - hh) * 60);
@@ -107,7 +107,7 @@ export function clock(hours) {
  * Split a string into per-character spans so it can be revealed letter by
  * letter (used by the area title card and menu headings).
  */
-export function letters(text, tag = 'span.ltr'): {node: HTMLElement, chars: HTMLElement[]} {
+export function letters(text: any, tag = 'span.ltr'): {node: HTMLElement, chars: HTMLElement[]} {
   const node = el('span.letters');
   const chars = [];
   for (const ch of text) {
@@ -123,8 +123,11 @@ export function letters(text, tag = 'span.ltr'): {node: HTMLElement, chars: HTML
  * stays at 1; `alive` stays true until `dur + hold` has elapsed.
  */
 export class Clip {
-  constructor(dur, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
-  step(dt) { this.age += dt; return this; }
+  age!: number;
+  dur!: any;
+  hold!: any;
+  constructor(dur: any, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
+  step(dt: any) { this.age += dt; return this; }
   get t() { return clamp(this.age / this.dur, 0, 1); }
   get alive() { return this.age < this.dur + this.hold; }
 }

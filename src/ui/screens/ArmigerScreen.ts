@@ -17,6 +17,36 @@ import { readAscension, readArmiger, rpg } from '../GameData.ts';
  * Controls: ↑↓ pick an ability, Enter unlock. No CSS transitions.
  */
 export class ArmigerScreen {
+  _age!: number;
+  _cur!: any;
+  _msg!: any;
+  _msgAge!: number;
+  _rows!: any;
+  _sig!: any;
+  act!: any;
+  actLb!: any;
+  cols!: any;
+  dD!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dRule!: any;
+  dSpecs!: any;
+  detail!: any;
+  game!: any;
+  gauge!: any;
+  gaugeBar!: Bar;
+  gaugeD!: any;
+  gaugeV!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  msg!: any;
+  rowNodes!: any;
+  specVals!: any;
+  src!: any;
+  sub!: string;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -79,24 +109,24 @@ export class ArmigerScreen {
     root.appendChild(this.gauge);
   }
 
-  enter(game) { if (game) this.game = game; this._sig = null; this._msg = null; this._msgAge = 9; }
+  enter(game: any) { if (game) this.game = game; this._sig = null; this._msg = null; this._msgAge = 9; }
 
   /* -------------------------------------------------------------- data */
 
   /** The Armiger constellation, with every node's live state. */
   _nodes() {
     const src = this.src = readAscension(this.game);
-    const con = (src.constellations || []).find((c) => c.id === 'armiger');
+    const con = (src.constellations || []).find((c: any) => c.id === 'armiger');
     const ids = con ? con.nodeIds : Object.keys(src.nodes).filter((id) => id.startsWith('arm_'));
-    return ids.filter((id) => src.nodes[id]).map((id) => {
+    return ids.filter((id: any) => src.nodes[id]).map((id: any) => {
       const def = src.nodes[id];
       const done = src.isUnlocked(id);
       const can = done ? { ok: false, reason: 'owned' } : src.canUnlock(id);
       return { id, def, done, can };
-    }).sort((a, b) => a.def.ap - b.def.ap);
+    }).sort((a: any, b: any) => a.def.ap - b.def.ap);
   }
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const n = (this._rows || []).length || 1;
     if (dy) this.i = (this.i + dy + n) % n;
   }
@@ -108,19 +138,19 @@ export class ArmigerScreen {
     if (!row.can.ok) {
       this._say(row.can.reason === 'not-enough-ap'
         ? `Not enough AP — ${row.def.ap} needed.`
-        : `Unlock ${row.can.missing.map((id) => this.src.nodes[id]?.name || id).join(', ')} first.`, false);
+        : `Unlock ${row.can.missing.map((id: any) => this.src.nodes[id]?.name || id).join(', ')} first.`, false);
       return;
     }
     if (this.src.unlock(row.id)) { this._say(`${row.def.name} unlocked.`, true); this._sig = null; }
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows) {
+  _renderRows(rows: any) {
     this.list.textContent = '';
-    this.rowNodes = rows.map((row) => {
+    this.rowNodes = rows.map((row: any) => {
       const bg = el('div.mr-bg');
       const node = el('div.qrow', {}, [
         bg,
@@ -142,7 +172,7 @@ export class ArmigerScreen {
     const rows = this._rows = this._nodes();
     if (this.i >= rows.length) this.i = Math.max(0, rows.length - 1);
 
-    const sig = rows.map((r) => `${r.id}${r.done}${r.can.ok}`).join();
+    const sig = rows.map((r: any) => `${r.id}${r.done}${r.can.ok}`).join();
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows); this._cur = null; }
 
     for (let i = 0; i < (this.rowNodes || []).length; i++) {
@@ -169,7 +199,7 @@ export class ArmigerScreen {
         this.specVals[0].textContent = `${commas(row.def.ap)} AP`;
         this.specVals[1].textContent = row.done ? 'Unlocked' : row.can.ok ? 'Ready to unlock' : 'Locked';
         this.specVals[2].textContent = (row.def.req || []).length
-          ? row.def.req.map((id) => this.src.nodes[id]?.name || id).join(', ') : 'nothing';
+          ? row.def.req.map((id: any) => this.src.nodes[id]?.name || id).join(', ') : 'nothing';
         this.specVals[3].textContent = commas(this.src.ap);
         this.actLb.textContent = row.done ? 'Already yours'
           : row.can.ok ? `Enter — spend ${row.def.ap} AP` : 'Locked';

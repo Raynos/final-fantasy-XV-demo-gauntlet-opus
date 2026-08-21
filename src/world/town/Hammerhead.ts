@@ -47,6 +47,26 @@ import { TOWN_SHOPS } from './Shops.ts';
 const PAD = { u0: -28, u1: 29, v0: -31, v1: 17 };
 
 export class Hammerhead {
+  _camPos!: THREE.Vector3;
+  _cast!: any;
+  _casters!: any;
+  _handles!: any[];
+  _restFail!: any;
+  _restSummary!: any;
+  anchors!: any;
+  base!: any;
+  clutter!: THREE.Group;
+  eco!: any;
+  game!: any;
+  mats!: any;
+  origin!: THREE.Vector3;
+  rng!: Rng;
+  root!: THREE.Group;
+  shell!: THREE.Group;
+  site!: any;
+  stats!: any;
+  world!: any;
+  yaw!: any;
   constructor() {
     this.root = new THREE.Group();
     this.root.name = 'hammerhead';
@@ -65,7 +85,7 @@ export class Hammerhead {
     if (!eco) { console.warn('[Hammerhead] no Ecology; town not built'); return this; }
     this.eco = eco;
 
-    const site = eco.sites.find((s) => s.type === 'reststop');
+    const site = eco.sites.find((s: any) => s.type === 'reststop');
     if (!site) { console.warn('[Hammerhead] no reststop site'); return this; }
     this.site = site;
     // Widen the clearing so scrub stops at the edge of the tarmac. Ecology is
@@ -112,7 +132,7 @@ export class Hammerhead {
    * in `_berm` carries that fill down to the terrain the way a real earthworks
    * would.
    */
-  _padHeight(x, z) {
+  _padHeight(x: any, z: any) {
     const hs = [];
     for (let i = 0; i <= 10; i++) {
       for (let j = 0; j <= 10; j++) {
@@ -137,7 +157,7 @@ export class Hammerhead {
    * ground happens to be, or the whole town reads as a slab dropped on top of
    * the landscape — which is precisely how it read before this existed.
    */
-  _berm(put, M) {
+  _berm(put: any, M: any) {
     const W = 13.0;                                 // how far the fill runs out
     const step = 3.0;
     const pos = [];
@@ -181,14 +201,14 @@ export class Hammerhead {
   }
 
   /** Local (u, v) around an arbitrary origin -> world [x, z]. */
-  _toWorldFlat(ox, oz, u, v) {
+  _toWorldFlat(ox: any, oz: any, u: any, v: any) {
     // rotationY(yaw): (1,0,0) -> (cos, 0, -sin); (0,0,1) -> (sin, 0, cos)
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     return [ox + u * c + v * s, oz - u * s + v * c];
   }
 
   /** Local (u, y, v) -> world Vector3. */
-  local(u, y, v, out = new THREE.Vector3()) {
+  local(u: any, y: any, v: any, out = new THREE.Vector3()) {
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     return out.set(
       this.origin.x + u * c + v * s,
@@ -198,18 +218,18 @@ export class Hammerhead {
   }
 
   /** Hide the generic fuel stop `Outposts` built on this site. */
-  _removePlaceholder(props) {
+  _removePlaceholder(props: any) {
     const out = props && props.outposts;
     if (!out || !out.root) return;
-    const dead = out.root.children.filter((c) => c.name === 'site_reststop');
+    const dead = out.root.children.filter((c: any) => c.name === 'site_reststop');
     for (const g of dead) out.root.remove(g);
     if (out.groups) {
-      out.groups = out.groups.filter((g) => g.group.name !== 'site_reststop');
+      out.groups = out.groups.filter((g: any) => g.group.name !== 'site_reststop');
     }
     // and its canopy point light, which sat at the old canopy's centre
     if (out.lights) {
       const d = this.site;
-      out.lights = out.lights.filter((l) => {
+      out.lights = out.lights.filter((l: any) => {
         const near = Math.hypot(l.light.position.x - d.x, l.light.position.z - d.z) < 6;
         if (near) out.root.remove(l.light);
         return !near;
@@ -259,8 +279,8 @@ export class Hammerhead {
     // Two builders: the shell (always drawn) and the clutter (culled far away).
     const S = new PartBuilder();
     const C = new PartBuilder();
-    const putS = (m, g, p, r, sc) => S.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
-    const putC = (m, g, p, r, sc) => C.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
+    const putS = (m: any, g: any, p: any, r: any, sc: any) => S.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
+    const putC = (m: any, g: any, p: any, r: any, sc: any) => C.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
 
     this._ground(putS, M);
     this._canopy(putS, putC, M, rng);
@@ -304,7 +324,7 @@ export class Hammerhead {
 
   // ---- the ground the whole place stands on -----------------------------
 
-  _ground(put, M) {
+  _ground(put: any, M: any) {
     const w = PAD.u1 - PAD.u0, d = PAD.v1 - PAD.v0;
     const cu = (PAD.u0 + PAD.u1) / 2, cv = (PAD.v0 + PAD.v1) / 2;
 
@@ -323,7 +343,7 @@ export class Hammerhead {
     // The apron flaring out to the highway — two throats of tarmac laid over
     // the berm so the town has an approach rather than an edge.
     // tilted so it ramps down onto the verge instead of ending in a step
-    const throat = (u) => {
+    const throat = (u: any) => {
       put(M.asphalt, uvScale(box(13, 6, 12).clone(), 1.4, 1.3), [u, -3.55, PAD.v0 - 5.6], [0.09, 0, 0]);
     };
     throat(-13);
@@ -336,7 +356,7 @@ export class Hammerhead {
     put(M.gravel, uvScale(box(26, 0.3, 13).clone(), 3.0, 1.6), [16, 0.13, 12]);
 
     // Painted bay markings for the car park, and the Regalia's own bay.
-    const line = (u, v, len, yaw = 0, mat = M.paint) =>
+    const line = (u: any, v: any, len: any, yaw = 0, mat = M.paint) =>
       put(mat, box(0.12, 0.02, len), [u, 0.29, v], [0, yaw, 0]);
     for (let i = 0; i < 6; i++) line(-25 + i * 3.2, -6.6, 5.4);
     line(-25 + 6 * 3.2, -6.6, 5.4);
@@ -348,7 +368,7 @@ export class Hammerhead {
 
   // ---- fuel canopy and pumps --------------------------------------------
 
-  _canopy(put, putC, M, rng) {
+  _canopy(put: any, putC: any, M: any, rng: any) {
     const cu = -6, cv = -19;
     const deck = 5.35;
     // four columns
@@ -412,7 +432,7 @@ export class Hammerhead {
 
   // ---- the pylon sign ----------------------------------------------------
 
-  _pylon(put, M) {
+  _pylon(put: any, M: any) {
     const u = -25.5, v = -27.5;
     put(M.galv, cyl(0.26, 0.36, 11.6, 10), [u, 5.8, v]);
     put(M.slab, box(1.7, 0.6, 1.7), [u, 0.4, v]);
@@ -433,7 +453,7 @@ export class Hammerhead {
 
   // ---- the Crow's Nest ---------------------------------------------------
 
-  _diner(put, putC, M, rng) {
+  _diner(put: any, putC: any, M: any, rng: any) {
     const cu = -16, cv = 3.6;
     const W = 14.4, D = 9.6, H = 3.9;
 
@@ -520,7 +540,7 @@ export class Hammerhead {
 
   // ---- Cid's garage ------------------------------------------------------
 
-  _garage(put, putC, M, rng) {
+  _garage(put: any, putC: any, M: any, rng: any) {
     const cu = 13, cv = 3.4;
     const W = 18.0, D = 12.0, H = 5.6;
 
@@ -604,12 +624,12 @@ export class Hammerhead {
 
   // ---- the caravan -------------------------------------------------------
 
-  _caravan(put, putC, M) {
+  _caravan(put: any, putC: any, M: any) {
     const cu = 23.0, cv = -14.5, yaw = 0.30;
     const c = Math.cos(yaw), s = Math.sin(yaw);
-    const P = (m, g, u, y, v, rot = [0, 0, 0]) => put(m, g,
+    const P = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => put(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
-    const PC = (m, g, u, y, v, rot = [0, 0, 0]) => putC(m, g,
+    const PC = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => putC(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
 
     // Body. Squatter than the first pass — a caravan roof sits at about 2.9 m,
@@ -663,7 +683,7 @@ export class Hammerhead {
 
   // ---- the parts yard ----------------------------------------------------
 
-  _yard(put, putC, M, rng) {
+  _yard(put: any, putC: any, M: any, rng: any) {
     const F = { u0: 3.5, u1: 28.5, v0: 10.0, v1: 16.5 };
     fenceRun(put, M, [F.u0, F.v1], [F.u1, F.v1]);
     fenceRun(put, M, [F.u1, F.v0], [F.u1, F.v1]);
@@ -704,7 +724,7 @@ export class Hammerhead {
 
   // ---- parked vehicles ---------------------------------------------------
 
-  _carPark(put, putC, M, rng) {
+  _carPark(put: any, putC: any, M: any, rng: any) {
     // Nose-in to the bays, clear of the diner porch — a car parked across the
     // door is the fastest way to make a lot read as a render rather than a
     // place somebody actually uses.
@@ -728,7 +748,7 @@ export class Hammerhead {
     // Culless Munitions van, backed onto the lot edge with its shutter up
     const vu = -26.0, vv = -14.5, vyaw = -0.5;
     const c = Math.cos(vyaw), s = Math.sin(vyaw);
-    const V = (m, g, u, y, v, rot = [0, 0, 0]) => put(m, g,
+    const V = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => put(m, g,
       [vu + u * c + v * s, y, vv - u * s + v * c], [rot[0], vyaw + rot[1], rot[2]]);
     V(M.panelBlue, box(2.4, 2.3, 5.4), 0, 1.75, 0);
     V(M.panelBlue, box(2.2, 1.2, 1.6), 0, 1.5, -3.2);
@@ -748,7 +768,7 @@ export class Hammerhead {
 
   // ---- everything else that makes it look lived in -----------------------
 
-  _streetFurniture(put, putC, M, rng) {
+  _streetFurniture(put: any, putC: any, M: any, rng: any) {
     // telegraph pole feeding the site, with a stay wire
     put(M.wood, cyl(0.18, 0.24, 9.0, 8), [-27.5, 4.5, -20.0]);
     put(M.wood, box(0.14, 0.14, 2.4), [-27.5, 8.4, -20.0]);
@@ -789,7 +809,7 @@ export class Hammerhead {
 
   // ---- lighting ----------------------------------------------------------
 
-  _lights(put, M) {
+  _lights(put: any, M: any) {
     const masts = [
       [[-25.0, -12.0], 0.0], [[-25.5, 8.0], 0.2],
       [[2.0, -27.0], 0.0], [[26.0, -22.0], 0.4], [[27.0, 8.0], -0.3],
@@ -830,10 +850,10 @@ export class Hammerhead {
   /* --------------------------------------------------------- integration */
 
   /** Attach the two new screens to the existing menu stack. */
-  _registerScreens(game) {
+  _registerScreens(game: any) {
     const menus = game.get('Menus');
     if (!menus || !menus.screens || !menus.wrap) return;
-    const add = (key, Screen) => {
+    const add = (key: any, Screen: any) => {
       if (menus.screens[key]) return;
       const s = new Screen(menus);
       s.node = document.createElement('div');
@@ -848,12 +868,12 @@ export class Hammerhead {
   }
 
   /** Everything at Hammerhead you can walk up to and press E at. */
-  _registerInteractables(game) {
+  _registerInteractables(game: any) {
     const ix = game.get('Interaction');
     if (!ix) { console.warn('[Hammerhead] no InteractionSystem'); return; }
     const A = this.anchors;
 
-    const openShop = (id) => {
+    const openShop = (id: any) => {
       const menus = game.get('Menus');
       const screen = menus?.screens?.shop;
       if (screen && screen.setShop) screen.setShop(id);
@@ -945,7 +965,7 @@ export class Hammerhead {
   }
 
   /** Book a night in the caravan through the real day cycle. */
-  _rest(game) {
+  _rest(game: any) {
     const ix = game.get('Interaction');
     const rpg = game.get('RpgSystem');
     if (!rpg) return;
@@ -992,10 +1012,10 @@ export class Hammerhead {
         slept: {
           lines: () => {
             const r = this._restSummary;
-            const lv = (r?.exp?.perMember || []).filter((m) => m.levels && m.levels.length);
+            const lv = (r?.exp?.perMember || []).filter((m: any) => m.levels && m.levels.length);
             const out = [`You sleep through to ${r?.wokeAt || '06:30'}. Somewhere outside, Cid is already swearing at something.`];
             if (lv.length) {
-              out.push(lv.map((m) => `${m.name} reached level ${m.levels[m.levels.length - 1]}`).join('. ') + '.');
+              out.push(lv.map((m: any) => `${m.name} reached level ${m.levels[m.levels.length - 1]}`).join('. ') + '.');
             } else if ((r?.exp?.total ?? 0) > 0) {
               out.push(`${Math.round(r.exp.total).toLocaleString()} EXP cashed in. Nobody quite made the next level.`);
             }
@@ -1010,7 +1030,7 @@ export class Hammerhead {
   }
 
   /** Fill the Regalia's tank. Real gil, real transaction. */
-  _refuel(game) {
+  _refuel(game: any) {
     const ix = game.get('Interaction');
     const rpg = game.get('RpgSystem');
     const car = game.get('Regalia') || game.get('Vehicle');
@@ -1047,7 +1067,7 @@ export class Hammerhead {
   /* -------------------------------------------------------------- update */
 
   /** 0 in full daylight, 1 once the sun is well below the horizon. */
-  _night(game) {
+  _night(game: any) {
     const sky = game.get('Sky');
     if (!sky || !sky.sun || !sky.sun.position) return 0;
     const p = sky.sun.position;
@@ -1055,7 +1075,7 @@ export class Hammerhead {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.shell) return;
     const night = this._night(game);
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
@@ -1088,7 +1108,7 @@ export class Hammerhead {
 }
 
 /** Scale a geometry's UVs so a tiling material keeps a constant texel size. */
-function uvScale(g, su, sv) {
+function uvScale(g: any, su: any, sv: any) {
   const uv = g.attributes.uv;
   if (!uv) return g;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
@@ -1096,9 +1116,9 @@ function uvScale(g, su, sv) {
   return g;
 }
 
-function countTris(group) {
+function countTris(group: any) {
   let n = 0;
-  group.traverse((o) => { if (o.isMesh && o.geometry?.index) n += o.geometry.index.count / 3; });
+  group.traverse((o: any) => { if (o.isMesh && o.geometry?.index) n += o.geometry.index.count / 3; });
   return n;
 }
 

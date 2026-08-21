@@ -8,6 +8,8 @@
  * or a HUD inset can call straight onto a 2D context.
  */
 export class DungeonMap {
+  L!: any;
+  dungeon!: any;
   constructor(layout: import('./Layout.ts').Layout, dungeon: import('./Dungeon.ts').Dungeon) {
     this.L = layout;
     this.dungeon = dungeon;
@@ -24,9 +26,9 @@ export class DungeonMap {
         seen: seen.has(r.id),
       });
     }
-    const runs = L.corridors.map((c) => ({
+    const runs = L.corridors.map((c: any) => ({
       id: c.id, width: c.width, kind: c.kind,
-      path: c.path.map((p) => [p[0], p[1]]),
+      path: c.path.map((p: any) => [p[0], p[1]]),
       seen: seen.has(c.id),
     }));
     const markers = [];
@@ -58,8 +60,8 @@ export class DungeonMap {
     const s = Math.min(sx, sz);
     const ox = pad + ((w - pad * 2) - (b.x1 - b.x0) * s) * 0.5;
     const oz = pad + ((h - pad * 2) - (b.z1 - b.z0) * s) * 0.5;
-    const X = (x) => ox + (x - b.x0) * s;
-    const Z = (z) => oz + (z - b.z0) * s;
+    const X = (x: any) => ox + (x - b.x0) * s;
+    const Z = (z: any) => oz + (z - b.z0) * s;
 
     ctx.clearRect(0, 0, w, h);
     ctx.lineJoin = 'miter';
@@ -70,7 +72,7 @@ export class DungeonMap {
       ctx.strokeStyle = on ? 'rgba(150,196,226,0.50)' : 'rgba(120,150,170,0.14)';
       ctx.lineWidth = Math.max(1.5, r.width * s * 0.8);
       ctx.beginPath();
-      r.path.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Z(p[1])) : ctx.moveTo(X(p[0]), Z(p[1]))));
+      r.path.forEach((p: any, i: any) => (i ? ctx.lineTo(X(p[0]), Z(p[1])) : ctx.moveTo(X(p[0]), Z(p[1]))));
       ctx.stroke();
     }
 

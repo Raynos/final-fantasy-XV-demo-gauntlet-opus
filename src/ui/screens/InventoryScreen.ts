@@ -14,6 +14,37 @@ const MAX_ROWS = 22;
  * the placeholder list never did.
  */
 export class InventoryScreen {
+  _age!: number;
+  _cur!: any;
+  _gil!: any;
+  _key!: any;
+  _msg!: any;
+  _msgAge!: number;
+  act!: any;
+  actLb!: any;
+  cols!: any;
+  dD!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dRule!: any;
+  dSpecs!: any;
+  detail!: any;
+  game!: any;
+  gil!: any;
+  gilVal!: any;
+  i!: number;
+  items!: any[];
+  list!: any;
+  menus!: any;
+  msg!: any;
+  rows!: any[];
+  specVals!: any;
+  sub!: string;
+  tab!: number;
+  tabNodes!: any;
+  tabsEl!: any;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -26,7 +57,7 @@ export class InventoryScreen {
     this._msgAge = 9;
   }
 
-  build(root: HTMLElement, game) {
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.cols');
     const l = el('div.col-l');
@@ -80,7 +111,7 @@ export class InventoryScreen {
   }
 
   /** Rebuild the row list for the current tab. */
-  _rebuild(items, key, game) {
+  _rebuild(items: any, key: any, game: any) {
     this.items = items;
     this.list.textContent = '';
     this.rows = this.items.slice(0, MAX_ROWS).map((it) => {
@@ -107,7 +138,7 @@ export class InventoryScreen {
     if (this.menus.name === 'inventory') this.menus.headS.textContent = sub;
   }
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     if (dy && this.rows.length) this.i = (this.i + dy + this.rows.length) % this.rows.length;
     if (dx) { this.tab = (this.tab + dx + ITEM_TABS.length) % ITEM_TABS.length; this.i = 0; this._key = null; }
   }
@@ -130,19 +161,19 @@ export class InventoryScreen {
     if (!def || !def.use) { this._say(`${it.name} is not something you can use.`, false); return; }
 
     const roster = r.party.roster;
-    const alive = roster.filter((s) => !s.ko);
+    const alive = roster.filter((s: any) => !s.ko);
     let targets;
     if (def.use.target === 'party') targets = roster;
-    else if (def.use.type === 'revive') targets = roster.filter((s) => s.ko).slice(0, 1);
+    else if (def.use.type === 'revive') targets = roster.filter((s: any) => s.ko).slice(0, 1);
     else {
       const pool = alive.length ? alive : roster;
-      targets = [pool.slice().sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]];
+      targets = [pool.slice().sort((a: any, b: any) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]];
     }
 
     const res = r.inventory.use(it.id, targets.filter(Boolean), { curativePower: r.ascension.value('curativePower') || 0 });
     if (res.ok) {
-      const healed = res.results.reduce((s, x) => s + (x.healed || 0), 0);
-      const revived = res.results.some((x) => x.revived);
+      const healed = res.results.reduce((s: any, x: any) => s + (x.healed || 0), 0);
+      const revived = res.results.some((x: any) => x.revived);
       this._say(revived ? `${it.name} — back on their feet.`
         : healed ? `${it.name} — ${commas(healed)} HP restored.`
           : `${it.name} used.`, true);
@@ -156,9 +187,9 @@ export class InventoryScreen {
     }
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
-  enter(game) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
+  enter(game: any) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 
   /** @param dt @param game @param a */
   update(dt: number, game: any, a: number) {

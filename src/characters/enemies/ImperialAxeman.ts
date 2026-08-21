@@ -5,7 +5,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 /* Albedo, and it was charcoal: PLATE at 0x33383f is 3.9% linear reflectance
  * and JOINT at 0x14161a is 0.9% — darker than any real surface outside a
@@ -64,7 +64,7 @@ export const IMPERIAL_AXEMAN = {
     },
   ],
   buildPrototype,
-  make(opts) { return new AxemanEnemy(opts); },
+  make(opts: any) { return new AxemanEnemy(opts); },
 };
 
 /**
@@ -250,7 +250,11 @@ function buildPrototype() {
 }
 
 class AxemanEnemy extends Enemy {
-  constructor(opts) { super(IMPERIAL_AXEMAN, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(IMPERIAL_AXEMAN, opts); }
 
   /** World-space axe tip — the sweep origin for the cleave trail. */
   axeTip(out = new THREE.Vector3()) {
@@ -260,10 +264,10 @@ class AxemanEnemy extends Enemy {
     return out.set(0.0, 1.32, 0.53).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     this.visual.rotation.y = 0;
 
     // axe shouldered across the body, both hands on the haft
@@ -276,7 +280,7 @@ class AxemanEnemy extends Enemy {
       S('hdL', 0, -0.35 * k, 0);
     };
     // both arms hauled over the right shoulder, axe head high behind the helm
-    const wound = (e) => {
+    const wound = (e: any) => {
       S('shR', 0.28 - 3.20 * e, -0.10 - 0.35 * e, -0.42 + 0.60 * e);
       S('elR', -0.80 - 0.70 * e, 0, 0);
       S('hdR', -0.30 + 0.28 * e, 0, 0);

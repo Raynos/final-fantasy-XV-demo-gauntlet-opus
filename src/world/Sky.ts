@@ -8,7 +8,7 @@ import { SHOTS } from '../game/Shots.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
-const smoothstep = (a, b, x) => {
+const smoothstep = (a: any, b: any, x: any) => {
   const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
@@ -124,6 +124,46 @@ const WEATHER = {
  *   setTimeOfDay(hours)  setWeather(name)  sun  moon  cloudShadowTexture
  */
 export class Sky {
+  _camAnchor!: any;
+  _camAspect!: number;
+  _camFov!: number;
+  _envHours!: number;
+  _envIntensity!: number;
+  _godRayBase!: number;
+  _keyDir!: THREE.Vector3;
+  _lastPreFrame!: number;
+  _lightPos!: any;
+  _lightTgt!: any;
+  _raysInserted!: boolean;
+  _scanCountdown!: number;
+  _shadowDirty!: boolean;
+  _shotSeen!: any;
+  _weatherExternal!: boolean;
+  _windOffset!: THREE.Vector2;
+  ambient!: THREE.HemisphereLight;
+  atmo!: Atmosphere;
+  cascadeRes!: any;
+  cascadeStride!: any;
+  clouds!: Clouds;
+  csm!: CSM;
+  dome!: any;
+  envRT!: any;
+  envScene!: THREE.Scene;
+  exposure!: number;
+  exposureCeiling!: number;
+  game!: any;
+  godRays!: GodRaysPass;
+  hours!: number;
+  moon!: THREE.DirectionalLight;
+  moonDir!: THREE.Vector3;
+  params!: any;
+  patch!: MaterialPatch;
+  pmrem!: THREE.PMREMGenerator;
+  sun!: THREE.DirectionalLight;
+  sunDir!: THREE.Vector3;
+  target!: any;
+  u!: any;
+  weather!: string;
   constructor() {
     this.hours = 12;
     this.weather = 'clear';
@@ -235,7 +275,7 @@ export class Sky {
     // final once the camera rig has run; scene.onBeforeRender gives us exactly
     // that, one step before the render list is built.
     const prevHook = scene.onBeforeRender;
-    scene.onBeforeRender = (r, sc, cam, rt) => {
+    scene.onBeforeRender = (r: any, sc: any, cam: any, rt: any) => {
       if (prevHook) prevHook.call(scene, r, sc, cam, rt);
       this._preRender(r, cam);
     };
@@ -350,7 +390,7 @@ export class Sky {
 
   // -------------------------------------------------------------- internals
 
-  _sunAngles(h) {
+  _sunAngles(h: any) {
     let elev, az;
     if (h >= SUNRISE && h <= SUNSET) {
       const f = (h - SUNRISE) / (SUNSET - SUNRISE);
@@ -365,7 +405,7 @@ export class Sky {
     return { elev, az };
   }
 
-  _moonAngles(h) {
+  _moonAngles(h: any) {
     const nh = h < MOONRISE ? h + 24 : h;
     const f = (nh - MOONRISE) / (MOONSET - MOONRISE);
     const elev = f <= 1 ? MOON_MAX_ELEV * Math.sin(Math.PI * f) : -25;
@@ -373,7 +413,7 @@ export class Sky {
     return { elev, az };
   }
 
-  static dirFrom(elevDeg, azDeg, out) {
+  static dirFrom(elevDeg: any, azDeg: any, out: any) {
     const e = elevDeg * DEG, a = azDeg * DEG;
     return out.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).normalize();
   }
@@ -383,7 +423,7 @@ export class Sky {
    * the given elevation. This is what reddens the sun near the horizon; the
    * light colour is not hand authored.
    */
-  static sunTransmittance(sinElev) {
+  static sunTransmittance(sinElev: any) {
     const Rg = 6360e3, Rt = 6460e3;
     const bR = [5.802e-6, 13.558e-6, 33.1e-6];
     const bM = 4.44e-6;
@@ -412,7 +452,7 @@ export class Sky {
     ];
   }
 
-  _applyTimeOfDay(force) {
+  _applyTimeOfDay(force: any) {
     const u = this.u;
     const h = this.hours;
     const p = this.params;
@@ -652,7 +692,7 @@ export class Sky {
   }
 
   /** Cloud/weather lerp + wind advection. */
-  update(dt) {
+  update(dt: any) {
     // fall back to the shot's declared weather until a Weather system drives us
     if (!this._weatherExternal && this.game && this.game.currentShot !== this._shotSeen) {
       this._shotSeen = this.game.currentShot;
@@ -813,7 +853,7 @@ export class Sky {
   }
 
   /** Runs immediately before the scene render, with the final camera. */
-  _preRender(renderer, camera) {
+  _preRender(renderer: any, camera: any) {
     // The dome rides with whatever camera is drawing it — including the water
     // reflection pass — so this part is unconditional.
     camera.updateMatrixWorld();

@@ -82,6 +82,12 @@ const _u = new THREE.Vector3(), _v = new THREE.Vector3();
 const _r = new THREE.Vector3(), _n = new THREE.Vector3(), _ref = new THREE.Vector3();
 
 class MeshAccum {
+  c!: any[];
+  f!: any[];
+  i!: any[];
+  n!: any[];
+  p!: any[];
+  uv!: any[];
   constructor() { this.p = []; this.n = []; this.uv = []; this.f = []; this.i = []; this.c = []; }
   get verts() { return this.p.length / 3; }
   geometry() {
@@ -100,7 +106,7 @@ class MeshAccum {
 }
 
 /** Perpendicular basis for a direction, stable enough for tube rings. */
-function frame(dir, u, v) {
+function frame(dir: any, u: any, v: any) {
   const ref = Math.abs(dir.y) > 0.92 ? _ref.set(1, 0, 0) : _ref.set(0, 1, 0);
   u.crossVectors(dir, ref).normalize();
   v.crossVectors(dir, u).normalize();
@@ -119,7 +125,7 @@ export function buildTree(name: string, seed: number, over: any = {}): any {
   let maxY = 0, maxR = 0;
   const canopyY = S.height * 0.6;
 
-  const tube = (p0, p1, r0, r1, sides, f0, f1, vOff) => {
+  const tube = (p0: any, p1: any, r0: any, r1: any, sides: any, f0: any, f1: any, vOff: any) => {
     _r.copy(p1).sub(p0);
     const len = _r.length();
     if (len < 1e-4) return len;
@@ -156,7 +162,7 @@ export function buildTree(name: string, seed: number, over: any = {}): any {
     return len;
   };
 
-  const addLeafCard = (px, py, pz, dir, size, f) => {
+  const addLeafCard = (px: any, py: any, pz: any, dir: any, size: any, f: any) => {
     frame(dir, _u, _v);
     const ang = rng.next() * Math.PI * 2;
     const bx = _u.x * Math.cos(ang) + _v.x * Math.sin(ang);
@@ -200,7 +206,7 @@ export function buildTree(name: string, seed: number, over: any = {}): any {
   };
 
   /** @param p @param dir */
-  const grow = (p: THREE.Vector3, dir: THREE.Vector3, len, rad, depth, flexStart) => {
+  const grow = (p: THREE.Vector3, dir: THREE.Vector3, len: any, rad: any, depth: any, flexStart: any) => {
     const sides = depth === 0 ? 8 : depth === 1 ? 5 : depth === 2 ? 4 : 3;
     const sub = depth === 0 ? 4 : depth === 1 ? 2 : 1;
     const flexEnd = Math.min(1, flexStart + len / S.height);

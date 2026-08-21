@@ -26,6 +26,11 @@ import * as THREE from 'three';
  * never the boot.
  */
 export class Warmup {
+  camera!: any;
+  game!: any;
+  log!: any[];
+  ms!: number;
+  scene!: any;
   constructor(game: any) {
     this.game = game;
     this.renderer = game.renderer;
@@ -66,7 +71,7 @@ export class Warmup {
     };
   }
 
-  _step(name, fn) {
+  _step(name: any, fn: any) {
     const t = performance.now();
     const p0 = this.renderer.info.programs.length;
     try { fn(); } catch (e) {
@@ -95,7 +100,7 @@ export class Warmup {
   }
 
   /** One render of the whole scene into a tiny target, shadows included. */
-  _render(rt, { shadows = false } = {}) {
+  _render(rt: any, { shadows = false } = {}) {
     this._patchAll();
     const r = this.renderer;
     const sky = this.game.get('Sky');
@@ -105,7 +110,7 @@ export class Warmup {
     r.setRenderTarget(null);
   }
 
-  _compileScene(rt) {
+  _compileScene(rt: any) {
     this._patchAll();
     this.renderer.compile(this.scene, this.camera);
     this._render(rt);
@@ -115,9 +120,9 @@ export class Warmup {
    * Draw every mesh in the scene once, visible, with the cascades forced to
    * refresh — that is the only way three builds the depth variants.
    */
-  _warmShadows(rt) {
-    const hidden = [];
-    this.scene.traverse((o) => {
+  _warmShadows(rt: any) {
+    const hidden: any[] = [];
+    this.scene.traverse((o: any) => {
       // Lights are deliberately left alone: their visibility is the light
       // budget's business, and showing them all would push the count past it.
       if (o.isLight) return;
@@ -131,7 +136,7 @@ export class Warmup {
   }
 
   /** Every weapon class and the Armiger swarm, drawn once. */
-  _warmWeapons(rt) {
+  _warmWeapons(rt: any) {
     const combat = this.game.get('Combat');
     if (!combat) return;
     const current = combat.weapon && combat.weapon.kind;
@@ -169,11 +174,11 @@ export class Warmup {
    * compile the first time something is actually on screen. Drawing them once
    * with everything visible is enough — the geometry can stay empty.
    */
-  _warmVfx(rt) {
+  _warmVfx(rt: any) {
     const vfx = this.game.get('VFX');
     if (!vfx || !vfx.root) return;
-    const hidden = [];
-    vfx.root.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    const hidden: any[] = [];
+    vfx.root.traverse((o: any) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
     const wasRoot = vfx.root.visible;
     vfx.root.visible = true;
     try {
@@ -185,7 +190,7 @@ export class Warmup {
   }
 
   /** Every weather preset, including the wet-surface variants. */
-  _warmWeather(rt) {
+  _warmWeather(rt: any) {
     const wx = this.game.get('Weather');
     if (!wx || !wx.set) return;
     const back = wx.name || 'clear';
@@ -242,7 +247,7 @@ export class Warmup {
    * Night swaps the key light from sun to moon and turns the world's emissive
    * and lamp materials on, which is a different shader state from noon.
    */
-  _warmTimeOfDay(rt) {
+  _warmTimeOfDay(rt: any) {
     const sky = this.game.get('Sky');
     if (!sky || !sky.setTimeOfDay) return;
     const back = sky.timeOfDay ?? sky.hours ?? sky.hour ?? 12;

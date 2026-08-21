@@ -70,6 +70,28 @@ const FOOT = {
  * the latter toggle: press again (or Tab / Backspace / B) to close.
  */
 export class Menus {
+  _foot!: any;
+  _gpPrev!: any;
+  _lockHeld!: boolean | null;
+  _onResize!: any;
+  a!: number;
+  foot!: any;
+  footRule!: any;
+  game!: any;
+  grain!: any;
+  head!: any;
+  headR!: any;
+  headS!: any;
+  headT!: any;
+  name!: any;
+  open!: boolean;
+  pending!: any;
+  root!: any;
+  screens!: any;
+  scrim!: any;
+  shown!: any;
+  stack!: any[];
+  wrap!: any;
   async init(game: any) {
     this.game = game;
     this.root = el('div', { id: 'menus' });
@@ -140,7 +162,7 @@ export class Menus {
     this.wrap.style.zoom = s.toFixed(4);
   }
 
-  _renderFoot(kind) {
+  _renderFoot(kind: any) {
     if (this._foot === kind) return;
     this._foot = kind;
     while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild);
@@ -165,7 +187,7 @@ export class Menus {
   }
 
   /** Push a screen, remembering where to return to on back. */
-  push(name) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
+  push(name: any) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
 
   /**
    * Go back one level: first to whatever modal the current screen is holding
@@ -186,7 +208,7 @@ export class Menus {
     this.shown = null;
   }
 
-  _activate(name) {
+  _activate(name: any) {
     this._hideShown();
     this.name = name;
     this.shown = name;
@@ -291,12 +313,12 @@ export class Menus {
     this.setScreen(name);
   }
 
-  _input(game) {
+  _input(game: any) {
     const inp = game.input;
     if (!inp) return;
-    const down = (c) => inp.keyDown?.(c);
-    const gp = (i) => inp.gamepad?.buttons?.[i]?.pressed;
-    const edge = (k, v) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
+    const down = (c: any) => inp.keyDown?.(c);
+    const gp = (i: any) => inp.gamepad?.buttons?.[i]?.pressed;
+    const edge = (k: any, v: any) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
     // read every pad edge every frame, or a button held across a frame where it
     // was not consulted reads as a fresh press the next time it is
     const b = {

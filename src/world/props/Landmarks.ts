@@ -19,7 +19,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
-function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -29,7 +29,7 @@ function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
 }
 
 /** Corrugated sheet: a plane rippled along its width. */
-function corrugated(w, h, pitch = 0.16, amp = 0.028) {
+function corrugated(w: any, h: any, pitch = 0.16, amp = 0.028) {
   const segs = Math.max(8, Math.round(w / pitch) * 2);
   const g = new THREE.PlaneGeometry(w, h, segs, 2);
   const p = g.attributes.position;
@@ -41,7 +41,7 @@ function corrugated(w, h, pitch = 0.16, amp = 0.028) {
 }
 
 /** Lumpy stone block, used for rubble, camp rocks and pylon debris. */
-function block(seed, w, h, d, rough = 0.16) {
+function block(seed: any, w: any, h: any, d: any, rough = 0.16) {
   const g = new THREE.BoxGeometry(w, h, d, 3, 3, 3);
   const n = new Noise(seed);
   const p = g.attributes.position;
@@ -55,7 +55,16 @@ function block(seed, w, h, d, rough = 0.16) {
 }
 
 export class Landmarks {
-  constructor(eco, scene) {
+  B!: any;
+  eco!: any;
+  flames!: any;
+  havenTop!: any;
+  lights!: any[];
+  mats!: any;
+  root!: THREE.Group;
+  runeMesh!: any;
+  scene!: any;
+  constructor(eco: any, scene: any) {
     this.eco = eco;
     this.scene = scene;
     this.root = new THREE.Group();
@@ -113,7 +122,7 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ haven
 
-  _haven(B, site) {
+  _haven(B: any, site: any) {
     const eco = this.eco, M = this.mats;
     const rng = new Rng(9182);
     const cx = site.x, cz = site.z;
@@ -289,7 +298,7 @@ export class Landmarks {
     B.add(M.wood, new THREE.BoxGeometry(0.64, 0.46, 0.54), mat4([kx - 1.4, top + 0.74, kz - 0.25], [0, 0.35, 0]));
 
     // ------------------------------------------------------------ lanterns
-    const lanternAt = (lx, lz, poleH) => {
+    const lanternAt = (lx: any, lz: any, poleH: any) => {
       if (poleH > 0) {
         B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.04, poleH, 6), mat4([lx, top + poleH / 2, lz]));
         B.add(M.steel, new THREE.BoxGeometry(0.34, 0.03, 0.03), mat4([lx + 0.15, top + poleH, lz]));
@@ -379,7 +388,7 @@ export class Landmarks {
 
   // ---------------------------------------------------------------- obelisk
 
-  _obelisk(B, site) {
+  _obelisk(B: any, site: any) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(1300 + Math.round(site.x));
     const h = site.tall || 20;
@@ -414,7 +423,7 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ shack
 
-  _shack(B, site) {
+  _shack(B: any, site: any) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(2077);
     const cx = site.x, cz = site.z;
@@ -425,12 +434,12 @@ export class Landmarks {
     }
     const yaw = -0.35;
     const W = 5.4, D = 4.2, H = 2.9;
-    const T = (p, r = [0, 0, 0], s) => {
+    const T = (p: any, r = [0, 0, 0], s: any) => {
       const m = mat4([0, 0, 0], [0, yaw, 0]);
       return m.multiply(mat4(p, r, s));
     };
     const world = mat4([cx, base, cz]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
 
     // stumpy foundation piers
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -483,11 +492,11 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ truck
 
-  _truck(B, site) {
+  _truck(B: any, site: any) {
     const M = this.mats, eco = this.eco;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, site.yaw || 0, 0.03]);
-    const put = (mat, geo, p, r, s) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // chassis + flatbed
     put(M.rust, new THREE.BoxGeometry(5.4, 0.22, 2.0), [0, 0.72, 0]);
@@ -521,14 +530,14 @@ export class Landmarks {
 
   // ------------------------------------------------------------------- sign
 
-  _sign(B, site) {
+  _sign(B: any, site: any) {
     const M = this.mats, eco = this.eco;
     const z = site.roadZ, side = site.side;
     const p = eco.roadPoint(z, side, 6.2, _v.clone());
     const t = eco.roadTangent(z);
     const yaw = Math.atan2(t.x, t.y) + (side > 0 ? Math.PI : 0);
     const world = mat4([p.x, p.y, p.z], [0, yaw, 0]);
-    const put = (mat, geo, pp, r, s) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
+    const put = (mat: any, geo: any, pp: any, r: any, s: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
     const kind = z > 0 ? M.signA : M.signB;
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [-0.9, 1.75, 0]);
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [0.9, 1.75, 0]);
@@ -541,7 +550,7 @@ export class Landmarks {
 
   // -------------------------------------------------------------- telegraph
 
-  _telegraph(B) {
+  _telegraph(B: any) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(4004);
     const step = 34;
@@ -589,8 +598,8 @@ export class Landmarks {
     const SAG = 3.1;
     // cosh-based drop, normalised to 1 at the midspan
     const A = 2.6;
-    const cosh = (t) => (Math.exp(t) + Math.exp(-t)) * 0.5;
-    const drop = (t) => (cosh(A * (t - 0.5) * 2) - cosh(A)) / (1 - cosh(A));
+    const cosh = (t: any) => (Math.exp(t) + Math.exp(-t)) * 0.5;
+    const drop = (t: any) => (cosh(A * (t - 0.5) * 2) - cosh(A)) / (1 - cosh(A));
     for (let i = 0; i < tops.length - 1; i++) {
       const a = tops[i], b = tops[i + 1];
       const near = Math.min(Math.hypot(a[0].x, a[0].z), Math.hypot(b[0].x, b[0].z));
@@ -615,7 +624,7 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ fence
 
-  _fences(B) {
+  _fences(B: any) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(6006);
     const runs = [

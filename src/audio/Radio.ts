@@ -88,6 +88,21 @@ export const STATIONS: Station[] = [
 /* ------------------------------------------------------------------ radio */
 
 export class Radio {
+  _duckUntil!: number;
+  _melodyRng!: Rng;
+  _rng!: Rng;
+  _timer!: any;
+  bar!: number;
+  ctx!: any;
+  duckGain!: any;
+  enabled!: boolean;
+  engaged!: boolean;
+  index!: number;
+  on!: boolean;
+  out!: any;
+  send!: any;
+  tone!: any;
+  volume!: number;
   constructor() {
     /** @type {AudioContext|null} */
     this.ctx = null;
@@ -149,7 +164,7 @@ export class Radio {
   }
 
   /** Player got in or out of the car. */
-  setEngaged(v) {
+  setEngaged(v: any) {
     this.engaged = !!v;
     this._applyGain();
   }
@@ -229,7 +244,7 @@ export class Radio {
     }
   }
 
-  _renderBar(st, t0, beat) {
+  _renderBar(st: any, t0: any, beat: any) {
     const chord = st.chords[this.bar % st.chords.length];
     const barLen = beat * st.beats;
     const rng = this._melodyRng;
@@ -244,11 +259,11 @@ export class Radio {
     if (st.drums !== 'none') this._drums(st, t0, beat);
   }
 
-  _f(st, semis, octave = 0) { return st.root * Math.pow(2, semis / 12 + octave); }
+  _f(st: any, semis: any, octave = 0) { return st.root * Math.pow(2, semis / 12 + octave); }
 
   /* --------------------------------------------------------------- voices */
 
-  _voicePad(st, chord, t, dur) {
+  _voicePad(st: any, chord: any, t: any, dur: any) {
     for (let i = 0; i < chord.length; i++) {
       this._osc({
         freq: this._f(st, chord[i], 2), t: t + i * 0.012, dur: dur * 1.02,
@@ -258,7 +273,7 @@ export class Radio {
     }
   }
 
-  _voiceBass(st, chord, t, beat) {
+  _voiceBass(st: any, chord: any, t: any, beat: any) {
     const n = st.beats;
     for (let b = 0; b < n; b++) {
       const semi = b % 2 === 0 ? chord[0] : chord[Math.min(1, chord.length - 1)];
@@ -269,7 +284,7 @@ export class Radio {
     }
   }
 
-  _voiceArp(st, chord, t, beat) {
+  _voiceArp(st: any, chord: any, t: any, beat: any) {
     const steps = st.beats * 2;
     for (let s = 0; s < steps; s++) {
       const up = Math.floor(s / chord.length) % 2 === 0;
@@ -281,7 +296,7 @@ export class Radio {
     }
   }
 
-  _voiceRiff(st, chord, t, beat) {
+  _voiceRiff(st: any, chord: any, t: any, beat: any) {
     // driving eighths on the chord root and fifth — the rock stations' engine
     const steps = st.beats * 2;
     for (let s = 0; s < steps; s++) {
@@ -293,7 +308,7 @@ export class Radio {
     }
   }
 
-  _voiceLead(st, chord, t, beat, rng) {
+  _voiceLead(st: any, chord: any, t: any, beat: any, rng: any) {
     // A phrase per bar: chord tones on the strong beats, scale steps between,
     // with a contour that rises then falls. Deterministic per station.
     const n = st.beats * 2;
@@ -317,7 +332,7 @@ export class Radio {
     }
   }
 
-  _nearestScale(st, semi) {
+  _nearestScale(st: any, semi: any) {
     const oct = Math.floor(semi / 12);
     const pc = ((semi % 12) + 12) % 12;
     let best = st.scale[0], bd = 99;
@@ -327,7 +342,7 @@ export class Radio {
 
   /* ---------------------------------------------------------------- drums */
 
-  _drums(st, t, beat) {
+  _drums(st: any, t: any, beat: any) {
     const kit = st.drums;
     const n = st.beats;
     for (let b = 0; b < n; b++) {
@@ -347,7 +362,7 @@ export class Radio {
     }
   }
 
-  _kick(t, amp) {
+  _kick(t: any, amp: any) {
     const ctx = this.ctx;
     const o = ctx.createOscillator();
     o.type = 'sine';
@@ -360,7 +375,7 @@ export class Radio {
     o.start(t); o.stop(t + 0.26);
   }
 
-  _snare(t, amp, dur) {
+  _snare(t: any, amp: any, dur: any) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();
@@ -373,7 +388,7 @@ export class Radio {
     src.start(t); src.stop(t + dur + 0.12);
   }
 
-  _hat(t, amp) {
+  _hat(t: any, amp: any) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();
@@ -406,7 +421,7 @@ export class Radio {
    * a vibrato LFO). Everything above is built out of this.
    */
   _osc({ freq, t, dur, type = 'sawtooth', gain = 0.06, attack = 0.01,
-    release = 0.2, cut = 2600, detune = 0, vibrato = 0 }) {
+    release = 0.2, cut = 2600, detune = 0, vibrato = 0 }: any) {
     const ctx = this.ctx;
     const end = t + dur;
     const o = ctx.createOscillator();

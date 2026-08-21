@@ -15,6 +15,8 @@ const GRAD3 = new Float32Array([
 ]);
 
 export class Noise {
+  perm!: Uint8Array;
+  permMod12!: Uint8Array;
   constructor(seed = 1337) {
     this.perm = new Uint8Array(512);
     this.permMod12 = new Uint8Array(512);
@@ -40,7 +42,7 @@ export class Noise {
   }
 
   /** 2D simplex noise, range roughly [-1, 1]. */
-  simplex2(xin, yin) {
+  simplex2(xin: any, yin: any) {
     const perm = this.perm, permMod12 = this.permMod12;
     let n0 = 0, n1 = 0, n2 = 0;
     const s = (xin + yin) * F2;
@@ -72,7 +74,7 @@ export class Noise {
   }
 
   /** 3D simplex noise, range roughly [-1, 1]. */
-  simplex3(xin, yin, zin) {
+  simplex3(xin: any, yin: any, zin: any) {
     const perm = this.perm, permMod12 = this.permMod12;
     let n0 = 0, n1 = 0, n2 = 0, n3 = 0;
     const s = (xin + yin + zin) * F3;
@@ -118,7 +120,7 @@ export class Noise {
   }
 
   /** Fractal brownian motion. */
-  fbm2(x, y, octaves = 5, lacunarity = 2.0, gain = 0.5) {
+  fbm2(x: any, y: any, octaves = 5, lacunarity = 2.0, gain = 0.5) {
     let a = 1, f = 1, sum = 0, norm = 0;
     for (let o = 0; o < octaves; o++) {
       sum += a * this.simplex2(x * f, y * f);
@@ -127,7 +129,7 @@ export class Noise {
     return sum / norm;
   }
 
-  fbm3(x, y, z, octaves = 5, lacunarity = 2.0, gain = 0.5) {
+  fbm3(x: any, y: any, z: any, octaves = 5, lacunarity = 2.0, gain = 0.5) {
     let a = 1, f = 1, sum = 0, norm = 0;
     for (let o = 0; o < octaves; o++) {
       sum += a * this.simplex3(x * f, y * f, z * f);
@@ -137,7 +139,7 @@ export class Noise {
   }
 
   /** Ridged multifractal — the workhorse for mountain silhouettes. */
-  ridged2(x, y, octaves = 5, lacunarity = 2.0, gain = 0.5) {
+  ridged2(x: any, y: any, octaves = 5, lacunarity = 2.0, gain = 0.5) {
     let a = 1, f = 1, sum = 0, norm = 0;
     for (let o = 0; o < octaves; o++) {
       const n = 1 - Math.abs(this.simplex2(x * f, y * f));
@@ -147,14 +149,14 @@ export class Noise {
   }
 
   /** Domain-warped fbm — breaks up the "obviously procedural" look. */
-  warped2(x, y, strength = 1.2, octaves = 5) {
+  warped2(x: any, y: any, strength = 1.2, octaves = 5) {
     const qx = this.fbm2(x + 5.2, y + 1.3, 3);
     const qy = this.fbm2(x + 9.2, y + 7.7, 3);
     return this.fbm2(x + strength * qx, y + strength * qy, octaves);
   }
 
   /** Cellular / worley noise. Returns { f1, f2, id } distances in cell units. */
-  worley2(x, y) {
+  worley2(x: any, y: any) {
     const xi = Math.floor(x), yi = Math.floor(y);
     let f1 = 1e9, f2 = 1e9, id = 0;
     for (let dy = -1; dy <= 1; dy++) {

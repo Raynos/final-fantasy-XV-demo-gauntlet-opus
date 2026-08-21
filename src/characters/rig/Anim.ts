@@ -43,7 +43,7 @@ const SPRINT_G = {
   bob: 0.055, pelvisYaw: 0.16, chestYaw: 0.28, roll: 0.055, foot: 0.70, lift: 0.16,
 };
 
-function blendG(a, b, t, out) {
+function blendG(a: any, b: any, t: any, out: any) {
   for (const k in a) out[k] = a[k] + (b[k] - a[k]) * t;
   return out;
 }
@@ -71,7 +71,7 @@ function breathe(t: number, rate: number): number {
 }
 
 /** Bell envelope for a one-shot gesture: ease in, hold, ease out. */
-function bell(u, holdFrac) {
+function bell(u: any, holdFrac: any) {
   const inT = (1 - holdFrac) * 0.37;
   const outT = (1 - holdFrac) * 0.63;
   if (u <= 0 || u >= 1) return 0;
@@ -189,18 +189,66 @@ const UPPER = new Set([
 
 /** A critically-ish damped angular spring used for cloth and hair bones. */
 class Spring {
+  c!: any;
+  k!: any;
+  v!: number;
+  x!: number;
   constructor(k = 90, c = 13) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target, dt) {
+  step(target: any, dt: any) {
     const a = this.k * (target - this.x) - this.c * this.v;
     this.v += a * dt;
     this.x += this.v * dt;
     if (!Number.isFinite(this.x)) { this.x = 0; this.v = 0; }
     return this.x;
   }
-  kick(v) { this.v += v; }
+  kick(v: any) { this.v += v; }
 }
 
 export class Animator {
+  _gestureSeq!: number;
+  _up!: THREE.Vector3;
+  accel!: THREE.Vector3;
+  action!: any;
+  actionEnv!: any;
+  actionMask!: any;
+  blink!: number;
+  blinkSeq!: number;
+  blinkTimer!: number;
+  blinkTimer0!: any;
+  bobY!: number;
+  bones!: any;
+  char!: any;
+  coat!: any;
+  combatW!: number;
+  eyePitch!: number;
+  eyeYaw!: number;
+  footYaw!: number[];
+  g!: any;
+  gesture!: any;
+  gestureTimer!: number;
+  gestureTimer0!: any;
+  hipShift!: number;
+  lean!: number;
+  leanSpring!: Spring;
+  lidClose!: number;
+  look!: any;
+  lookW!: number;
+  p!: any;
+  pelvisIK!: number;
+  phase!: number;
+  phase0!: any;
+  plant!: number[];
+  pose!: Map<any, any>;
+  prevVel!: THREE.Vector3;
+  rig!: any;
+  speed!: number;
+  stanceBias!: any;
+  stanceDrop!: number;
+  sway!: any;
+  t!: number;
+  t0!: any;
+  tail!: any;
+  turnSpring!: Spring;
   /**
    * @param character owning Character instance
    */
@@ -315,16 +363,16 @@ export class Animator {
   stopAction() { if (this.action) this.action.hold = false; }
 
   /** Where the character should be looking, or null to release. */
-  setLookTarget(v) { this.lookTarget = v; }
+  setLookTarget(v: any) { this.lookTarget = v; }
 
   // -- pose accumulation ---------------------------------------------------
-  set(name, x, y, z) {
+  set(name: any, x: any, y: any, z: any) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] = x; e[1] = y; e[2] = z;
   }
 
-  add(name, x, y, z, w = 1) {
+  add(name: any, x: any, y: any, z: any, w = 1) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] += x * w; e[1] += y * w; e[2] += z * w;
@@ -384,7 +432,7 @@ export class Animator {
   }
 
   /** The parametric locomotion cycle. */
-  evalGait(p, g, w, st) {
+  evalGait(p: any, g: any, w: any, st: any) {
     if (w <= 0.001) return;
     const legs = ['L', 'R'];
     for (let i = 0; i < 2; i++) {
@@ -497,7 +545,7 @@ export class Animator {
     // vertical. Solve in the root's frame and take the roll back out.
     const roll = (this.pose.get('hips') || [0, 0, 0])[2];
     const cr = Math.cos(roll), sr = Math.sin(roll);
-    const solveZ = (sgn, free) => {
+    const solveZ = (sgn: any, free: any) => {
       const bind = sgn * hipX;
       const joint = this.hipShift + bind * cr - hipDy * sr;
       const want = lerp(bind, sgn * (0.055 + free * 0.120) * stW * this.rig.dims.s, fw);
@@ -726,7 +774,7 @@ export class Animator {
   }
 
   /** Look-at, blink, lean and sway layers. */
-  evalAdditive(dt, st, moveW) {
+  evalAdditive(dt: any, st: any, moveW: any) {
     // ---- look-at
     const head = this.bones.head;
     let yaw = 0, pitch = 0, want = 0;
@@ -775,7 +823,7 @@ export class Animator {
   }
 
   /** Keyframed action layer. */
-  evalAction(dt) {
+  evalAction(dt: any) {
     const a = this.action;
     if (!a) return;
     a.t += dt * a.speed;
@@ -804,7 +852,7 @@ export class Animator {
   }
 
   /** Write the accumulated pose onto the skeleton. */
-  apply(st) {
+  apply(st: any) {
     const bones = this.rig.byName;
     const P = this.rig.P;
     for (const name in bones) {
@@ -839,7 +887,7 @@ export class Animator {
   }
 
   /** Coat tails and long hair — angular springs driven by motion and wind. */
-  springs(dt, st) {
+  springs(dt: any, st: any) {
     const vel = st.velocity || _v.set(0, 0, 0);
     const yawInv = -(this.char.root.rotation.y);
     const cos = Math.cos(yawInv), sin = Math.sin(yawInv);
@@ -870,7 +918,7 @@ export class Animator {
    * to the slope and dips the pelvis when a foot needs to reach below the
    * animated pose.
    */
-  footIK(dt, st) {
+  footIK(dt: any, st: any) {
     const terrain = st.terrain;
     const rig = this.rig;
     const root = this.char.root;
@@ -977,7 +1025,7 @@ export class Animator {
  * Rotate `bone` so the segment toward its child points at `target`, keeping the
  * given pole direction as the joint's forward reference.
  */
-function aimBone(bone, bindFrom, bindTo, target, pole) {
+function aimBone(bone: any, bindFrom: any, bindTo: any, target: any, pole: any) {
   bone.parent.updateMatrixWorld();
   const parentQ = bone.parent.getWorldQuaternion(_q).clone();
   const worldPos = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
@@ -994,7 +1042,7 @@ function aimBone(bone, bindFrom, bindTo, target, pole) {
   bone.quaternion.copy(parentQ).invert().multiply(world);
 }
 
-function basis(m, z, up) {
+function basis(m: any, z: any, up: any) {
   _v.copy(z).normalize();
   _v2.copy(up).addScaledVector(_v, -up.dot(_v));
   if (_v2.lengthSq() < 1e-8) _v2.set(_v.y, -_v.x, 0);

@@ -21,6 +21,19 @@ import { readQuest } from './GameData.ts';
 const HOLD = 9;
 
 export class Hints {
+  a!: number;
+  age!: number;
+  body!: any;
+  card!: any;
+  cur!: any;
+  icoW!: any;
+  keys!: any;
+  muted!: boolean;
+  queue!: any[];
+  root!: any;
+  seen!: Set<any>;
+  ttl!: any;
+  txt!: any;
   /** @param parent usually `game.uiRoot` */
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'hints' });
@@ -68,7 +81,7 @@ export class Hints {
   }
 
   /** Put a hint on screen now. */
-  _present({ id, title, text, keys, ico }) {
+  _present({ id, title, text, keys, ico }: any) {
     this.cur = { id, title, text, keys, ico };
     this.age = 0;
     this.ttl.textContent = title;

@@ -38,8 +38,8 @@ export function capture(game: any): string | null {
   }
 }
 
-const r1 = (n) => Number(Number(n).toFixed(1));
-const r3 = (n) => Number(Number(n).toFixed(3));
+const r1 = (n: any) => Number(Number(n).toFixed(1));
+const r3 = (n: any) => Number(Number(n).toFixed(3));
 
 /**
  * Assemble the metadata block.
@@ -120,7 +120,7 @@ export function gather(game: any, reg: import('./Registry.ts').Registry, extra: 
 }
 
 /** Unmasked GPU string — worth having when a report is about a visual artefact. */
-function gpuString(game) {
+function gpuString(game: any) {
   try {
     const gl = game.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');

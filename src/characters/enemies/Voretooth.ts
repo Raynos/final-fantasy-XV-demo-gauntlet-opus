@@ -85,7 +85,7 @@ export const VORETOOTH = {
     },
   ],
   buildPrototype,
-  make(opts) { return new VoretoothEnemy(opts); },
+  make(opts: any) { return new VoretoothEnemy(opts); },
 };
 
 /* Crest at y ≈ 1.30, shoulder 1.00, snout tip z ≈ 1.34, tail tip z ≈ -1.92. */
@@ -119,7 +119,7 @@ function buildPrototype() {
 
   const B = new CBuilder();
   const P = [];
-  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -207,7 +207,7 @@ function buildPrototype() {
       { p: [0, 1.012, 1.31], r: [0.085, 0.060, 0.15], amt: 0.018, dir: [0, -1, 0.25] },   // flat top jaw
       { p: [0, 0.998, 1.16], r: [0.095, 0.055, 0.14], amt: -0.022, dir: [0, 1, 0] },        // undercut lip line
     ],
-    colorAt: (u, v, p) => {
+    colorAt: (u: any, v: any, p: any) => {
       const snout = clamp01((p.z - 1.14) / 0.20);
       const under = clamp01((1.022 - p.y) / 0.065);
       // A dark mask over the brow and down the bridge, so the head is not a
@@ -217,7 +217,7 @@ function buildPrototype() {
       const base = mix(mix(SKIN, SKIN_DARK, snout * 0.85), BELLY, under * 0.45);
       return mix(base, CREST, brow * 0.72);
     },
-    matAt: (u, v, p) => (p.z > 1.35 ? M_WET : M_HIDE),
+    matAt: (u: any, v: any, p: any) => (p.z > 1.35 ? M_WET : M_HIDE),
   });
 
   // the crest: three bony blades sweeping back off the skull roof
@@ -226,7 +226,7 @@ function buildPrototype() {
       from: [ox, 1.135, 1.045], dir: [spread, 0.56, -0.82], len,
       curve: [spread * 0.4, -0.09, -0.05], r0: 0.050, r1: 0.006, flat: 0.28,
       seg: 6, steps: 5,
-      colorAt: (th, u) => mix(BONE_DARK, BONE, smooth(u)), matAt: () => M_BONE,
+      colorAt: (th: any, u: any) => mix(BONE_DARK, BONE, smooth(u)), matAt: () => M_BONE,
     });
   }
   // scutes marching down the skull between the crest roots
@@ -326,7 +326,7 @@ function buildPrototype() {
         from: [0, 1.02 + Math.sin(g * Math.PI) * 0.045, z], dir: [0, 0.72, -0.69],
         len: h, curve: [0, -0.015, -0.02], r0: 0.030, r1: 0.003, flat: 0.32,
         seg: 5, steps: 3,
-        colorAt: (th, u) => mix(CREST, BONE_DARK, u * 0.55), matAt: () => M_SCUTE,
+        colorAt: (th: any, u: any) => mix(CREST, BONE_DARK, u * 0.55), matAt: () => M_SCUTE,
       });
     }
     P.push({ geo: B.build(), bind: ['bone', bone] });
@@ -430,7 +430,7 @@ function buildPrototype() {
 }
 
 /** Three long reptilian toes with hooked claws. */
-function foot(B, x, y, z, dir) {
+function foot(B: any, x: any, y: any, z: any, dir: any) {
   const sgn = Math.sign(x) || 1;
   for (let i = -1; i <= 1; i++) {
     const ox = x + i * 0.030 * sgn;
@@ -452,7 +452,7 @@ function foot(B, x, y, z, dir) {
   }
 }
 
-function reset(B) {
+function reset(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -464,7 +464,12 @@ const mix = mixc;
 const col = colc;
 
 class VoretoothEnemy extends QuadrupedEnemy {
-  constructor(opts) { super(VORETOOTH, opts); }
+  attackId!: any;
+  id!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(VORETOOTH, opts); }
 
   /** A lunge coils; a bite is a twitch; the tail-whip winds the body sideways. */
   telegraphScale() {
@@ -481,12 +486,12 @@ class VoretoothEnemy extends QuadrupedEnemy {
    * before the bite lands — readable at range, unlike a jaw angle.
    * @param k 0..1 open
    */
-  maw(S, k: number, twitch = 0) {
+  maw(S: any, k: number, twitch = 0) {
     S('mnL', 0.10 * k, 0.95 * k + twitch, -0.55 * k);
     S('mnR', 0.10 * k, -0.95 * k - twitch, 0.55 * k);
   }
 
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     if (this.attackId === 'tailwhip') {
@@ -509,7 +514,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, k * (this.attackId === 'lunge' ? 1 : 0.7), Math.sin(t * 34) * 0.05 * k);
   }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'tailwhip') {
@@ -537,7 +542,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, open * clamp01(k + 0.5));
   }
 
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     super.poseDeath(S, t);
     // jaw and mandibles hang slack straight away — no muscle left to hold them
     const slack = smooth(clamp01(this.stateTime / 0.30));

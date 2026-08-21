@@ -49,7 +49,27 @@ const SYSTEM_ALIASES = {
  * must observe the final transforms (camera, HUD, culling).
  */
 export class Game {
-  constructor({ container, uiRoot, onProgress }) {
+  _hudCache!: any;
+  _raf!: any;
+  _registry!: Map<any, any>;
+  _running!: boolean;
+  camera!: any;
+  container!: any;
+  currentShot!: any;
+  debug!: any;
+  input!: Input;
+  onProgress!: any;
+  paused!: boolean;
+  post!: PostFX;
+  ready!: boolean;
+  renderer!: any;
+  rnd!: Renderer;
+  scene!: any;
+  seed!: number;
+  systems!: any[];
+  time!: Time;
+  uiRoot!: any;
+  constructor({ container, uiRoot, onProgress }: any) {
     this.container = container;
     this.uiRoot = uiRoot;
     this.onProgress = onProgress || (() => {});
@@ -170,7 +190,7 @@ export class Game {
    * Put the world into a named, reproducible state (see Shots.js) and lock the
    * camera. Used by src/tools/shoot.mjs and by photo mode.
    */
-  applyShot(name) {
+  applyShot(name: any) {
     const shot = SHOTS[name];
     if (!shot) throw new Error(`unknown shot: ${name}`);
     this.currentShot = name;
@@ -279,7 +299,7 @@ export class Game {
   }
 
   /** Advance one frame. Exposed so the screenshot harness can step deterministically. */
-  frame(fixedDt) {
+  frame(fixedDt: any) {
     const t = this.time;
     if (fixedDt != null) {
       t.rawDt = fixedDt; t.raw += fixedDt;

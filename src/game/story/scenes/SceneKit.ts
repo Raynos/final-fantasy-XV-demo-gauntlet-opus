@@ -93,7 +93,7 @@ export function takeCar(ctx: any): THREE.Object3D | null {
 }
 
 /** Undo {@link takeCar}. Safe to call when it was never called. */
-export function releaseCar(ctx) {
+export function releaseCar(ctx: any) {
   const s = ctx.data && ctx.data._car;
   if (!s) return;
   s.car.position.copy(s.pos);
@@ -135,7 +135,7 @@ export function frameAt(ctx: any, siteType: string | null, opts: any = {}): Fram
   const { game, terrain } = ctx;
   const props = game.get('Props');
   const eco = props && props.ecology;
-  const site = siteType && eco ? eco.sites.find((s) => s.type === siteType) : null;
+  const site = siteType && eco ? eco.sites.find((s: any) => s.type === siteType) : null;
   const fb = opts.fallback || [0, 0];
   const o = opts.origin
     ? new THREE.Vector3(opts.origin.x, 0, opts.origin.z)
@@ -211,10 +211,10 @@ export function arrange(ctx: any, F: Frame, opts: any = {}) {
  */
 export function single(ctx: any, F: Frame, o: any) {
   const terrain = ctx.game.get('Terrain');
-  const G = (f, l, u) => F.ground(terrain, f, l, u);
+  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f, l, u) => F.ground(terrain, f, l, u);
+  const A = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   const push = o.push ?? 0.35;
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 40, handheld: o.handheld ?? 0.5, breathe: 0.6,
@@ -234,12 +234,12 @@ export function single(ctx: any, F: Frame, o: any) {
  * A wide establishing set-up with a slow lateral drift, the shot that tells the
  * player where they are before anybody opens their mouth.
  */
-export function wide(ctx, F, o) {
+export function wide(ctx: any, F: any, o: any) {
   const terrain = ctx.game.get('Terrain');
-  const G = (f, l, u) => F.ground(terrain, f, l, u);
+  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f, l, u) => F.ground(terrain, f, l, u);
+  const A = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 46, handheld: o.handheld ?? 0.22, breathe: 1.0,
     fStop: o.fStop ?? 6.0, focus: o.focus ?? 'auto', aim: o.aim || null, aimU: o.aimU ?? 1.30,
@@ -255,12 +255,12 @@ export function wide(ctx, F, o) {
 }
 
 /** A two-shot: both actors in frame, camera outside the arc looking in. */
-export function twoShot(ctx, F, o) {
+export function twoShot(ctx: any, F: any, o: any) {
   const terrain = ctx.game.get('Terrain');
-  const G = (f, l, u) => F.ground(terrain, f, l, u);
+  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f, l, u) => F.ground(terrain, f, l, u);
+  const A = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 44, handheld: o.handheld ?? 0.55, breathe: 0.7,
     fStop: o.fStop ?? 2.8, focus: o.focus ?? 'auto', aim: o.aim || null, aimU: o.aimU ?? 1.46,
@@ -293,7 +293,7 @@ export function twoShot(ctx, F, o) {
  */
 export function ots(ctx: any, F: Frame, o: any) {
   const terrain = ctx.game.get('Terrain');
-  const G = (f, l, u) => F.ground(terrain, f, l, u);
+  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
   const back = o.back ?? 1.45;     // metres up-frame of the near shoulder
   const side = o.side ?? 0.95;     // metres past him, away from the subject
   const away = Math.sign(o.nearL - o.farL) || 1;
@@ -333,7 +333,7 @@ export function lowAngle(ctx: any, F: Frame, o: any) {
 }
 
 /** Point every actor's gaze at one of them (or at a world point). */
-export function attend(ctx, target, except = []) {
+export function attend(ctx: any, target: any, except = []) {
   for (const id of ctx.stage.ids) {
     if (except.includes(id) || id === target) continue;
     ctx.stage.look(id, target);

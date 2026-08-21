@@ -34,7 +34,7 @@ const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
 
 /** Cheap integer hash so tile content is position-derived, not sequence-derived. */
-export function hash3(x, y, s) {
+export function hash3(x: any, y: any, s: any) {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041);
   h = (h ^ (h >>> 13)) >>> 0;
   h = Math.imul(h, 1274126177) >>> 0;
@@ -42,6 +42,16 @@ export function hash3(x, y, s) {
 }
 
 export class Ecology {
+  _clearings!: any;
+  _terrainRoad!: boolean;
+  game!: any;
+  nGrove!: Noise;
+  nMoist!: Noise;
+  nTint!: Noise;
+  seed!: any;
+  sites!: any;
+  terrain!: any;
+  worldRadius!: any;
   /**
    * @param game the Game instance (needs .get('Terrain'))
    * @param seed master seed
@@ -102,7 +112,7 @@ export class Ecology {
   }
 
   /** 1 where a settlement or camp has cleared the ground, 0 in open country. */
-  poiClear(x, z) {
+  poiClear(x: any, z: any) {
     const { cell, grid } = this._clearings;
     const a = grid.get(Math.floor(x / cell) * 65536 + Math.floor(z / cell));
     if (!a) return 0;
@@ -118,10 +128,10 @@ export class Ecology {
   // ---------------------------------------------------------------- terrain
 
   /** Ground height. */
-  height(x, z) { return this.terrain.heightAt(x, z); }
+  height(x: any, z: any) { return this.terrain.heightAt(x, z); }
 
   /** Ground normal, computed locally so we never depend on Terrain's out-param. */
-  normal(x, z, out = _v) {
+  normal(x: any, z: any, out = _v) {
     const e = 0.7, t = this.terrain;
     const hL = t.heightAt(x - e, z), hR = t.heightAt(x + e, z);
     const hD = t.heightAt(x, z - e), hU = t.heightAt(x, z + e);
@@ -129,7 +139,7 @@ export class Ecology {
   }
 
   /** 0 = dead flat, 1 = vertical cliff. */
-  slope01(x, z) {
+  slope01(x: any, z: any) {
     const n = this.normal(x, z, _v);
     return 1 - Math.max(0, Math.min(1, n.y));
   }
@@ -145,7 +155,7 @@ export class Ecology {
    * badland. The old version was fbm alone plus an absolute-height penalty,
    * which made every highland arid and every zone identical.
    */
-  moisture(x, z) {
+  moisture(x: any, z: any) {
     const zm = zoneMoist(x, z);
     let m = 0.10 + 0.92 * zm;
     m += (this.nMoist.fbm2(x * 0.0013, z * 0.0013, 4)) * 0.16;
@@ -157,16 +167,16 @@ export class Ecology {
   }
 
   /** The vegetation recipe for this point. @returns */
-  veg(x, z): any { return vegAt(x, z); }
+  veg(x: any, z: any): any { return vegAt(x, z); }
 
   /**
    * Metres of water over this point, negative on dry land. Reeds want the
    * 0..1.2 m band, lily pads want > 0.4 m of standing water.
    */
-  waterDepth(x, z) { return WORLD.seaLevel - this.height(x, z); }
+  waterDepth(x: any, z: any) { return WORLD.seaLevel - this.height(x, z); }
 
   /** Local patchiness — the thing that stops scatter looking uniform. */
-  patch(x, z, scale = 0.02, oct = 3) {
+  patch(x: any, z: any, scale = 0.02, oct = 3) {
     return this.nPatch.fbm2(x * scale, z * scale, oct) * 0.5 + 0.5;
   }
 
@@ -178,7 +188,7 @@ export class Ecology {
    * where the only genuinely green grass in Leide grows. It is what turns a
    * flat noise-driven meadow into a landscape with gulleys you can read.
    */
-  drainage(x, z) {
+  drainage(x: any, z: any) {
     const t = this.terrain, e = 4.0;
     const h = t.heightAt(x, z);
     const avg = (t.heightAt(x - e, z) + t.heightAt(x + e, z)
@@ -196,7 +206,7 @@ export class Ecology {
    * as a basin — and it also keeps the viewpoints clear, because a viewpoint is
    * by definition a convex piece of ground.
    */
-  exposure(x, z) {
+  exposure(x: any, z: any) {
     const t = this.terrain, e = 12.0;
     const h = t.heightAt(x, z);
     const avg = (t.heightAt(x - e, z) + t.heightAt(x + e, z)
@@ -209,7 +219,7 @@ export class Ecology {
    * Kept separate from {@link moisture} so the climate-scale sampler stays
    * cheap for the callers (tree/scrub scatter) that evaluate it 100k times.
    */
-  wetness(x, z) {
+  wetness(x: any, z: any) {
     const m = this.moisture(x, z);
     return THREE.MathUtils.clamp(m + this.drainage(x, z) * 0.34, 0, 1);
   }
@@ -217,26 +227,26 @@ export class Ecology {
   // ------------------------------------------------------------------- road
 
   /** X of the road centreline at a given Z. */
-  roadCenterX(z) {
+  roadCenterX(z: any) {
     if (this._terrainRoad) return this.terrain.roadCenterX(z);
     return 26 * Math.sin(z * 0.0042) + 20 * Math.sin(z * 0.0013 + 1.1) - 10;
   }
 
   /** Perpendicular distance (metres) from the road centreline. */
-  roadDist(x, z) {
+  roadDist(x: any, z: any) {
     const cx = this.roadCenterX(z);
     const dz = (this.roadCenterX(z + 2) - this.roadCenterX(z - 2)) * 0.25;
     return Math.abs(x - cx) / Math.sqrt(1 + dz * dz);
   }
 
   /** Unit tangent of the road at Z (XZ plane). */
-  roadTangent(z, out = new THREE.Vector2()) {
+  roadTangent(z: any, out = new THREE.Vector2()) {
     const dz = (this.roadCenterX(z + 2) - this.roadCenterX(z - 2)) * 0.25;
     return out.set(dz, 1).normalize();
   }
 
   /** World point on the road shoulder. `side` is -1 / +1, `off` metres out. */
-  roadPoint(z, side = 1, off = 6, out = new THREE.Vector3()) {
+  roadPoint(z: any, side = 1, off = 6, out = new THREE.Vector3()) {
     const t = this.roadTangent(z, new THREE.Vector2());
     const nx = t.y * side, nz = -t.x * side;
     const x = this.roadCenterX(z) + nx * off;
@@ -277,8 +287,8 @@ export class Ecology {
   // -------------------------------------------------------------- landmarks
 
   _layoutSites() {
-    const s = [];
-    const put = (type, x, z, r, extra = {}) => {
+    const s: any[] = [];
+    const put = (type: any, x: any, z: any, r: any, extra = {}) => {
       s.push({ type, x, z, r, y: this.height(x, z), ...extra });
     };
 
@@ -316,11 +326,11 @@ export class Ecology {
 
     // ---- inhabited world: outposts, wrecks, ruins and grazing ground ----
 
-    const roadYaw = (z) => {
+    const roadYaw = (z: any) => {
       const t = this.roadTangent(z, new THREE.Vector2());
       return Math.atan2(t.x, t.y);
     };
-    const beside = (type, z, side, off, r, extra = {}) => {
+    const beside = (type: any, z: any, side: any, off: any, r: any, extra = {}) => {
       const p = this.roadPoint(z, side, off, new THREE.Vector3());
       put(type, p.x, p.z, r, { roadZ: z, side, yaw: roadYaw(z), ...extra });
     };
@@ -364,7 +374,7 @@ export class Ecology {
   }
 
   /** Search a small ring for the flattest spot near (x,z) — keeps camps level. */
-  _findFlat(x, z, radius, tries) {
+  _findFlat(x: any, z: any, radius: any, tries: any) {
     let best = { x, z, s: this.slope01(x, z) };
     for (let i = 0; i < tries; i++) {
       const a = (i / tries) * Math.PI * 2;
@@ -376,7 +386,7 @@ export class Ecology {
   }
 
   /** 1 where a landmark has cleared the ground, 0 in open country. */
-  siteBlock(x, z) {
+  siteBlock(x: any, z: any) {
     let b = 0;
     for (let i = 0; i < this.sites.length; i++) {
       const s = this.sites[i];
@@ -392,7 +402,7 @@ export class Ecology {
    * Grass wants flats, valleys and moisture. It stops dead on the carriageway
    * and thins out on the verge so the road reads as travelled.
    */
-  grassDensity(x, z) {
+  grassDensity(x: any, z: any) {
     const slope = this.slope01(x, z);
     if (slope > 0.66) return 0;
     if (this.waterDepth(x, z) > 0.15) return 0;      // nothing grows under a lake
@@ -414,7 +424,7 @@ export class Ecology {
   }
 
   /** Scrub is the opposite: it loves the dry slopes grass abandons. */
-  scrubDensity(x, z) {
+  scrubDensity(x: any, z: any) {
     const slope = this.slope01(x, z);
     if (slope > 0.78) return 0;
     if (this.waterDepth(x, z) > 0.15) return 0;
@@ -443,7 +453,7 @@ export class Ecology {
    * at canopy 1 the cover is continuous and only slope, road and clearings
    * punch holes in it (the Nebulawood, Malmalam Thicket).
    */
-  treeDensity(x, z) {
+  treeDensity(x: any, z: any) {
     const slope = this.slope01(x, z);
     if (slope > 0.5) return 0;
     if (this.waterDepth(x, z) > 0.3) return 0;
@@ -499,7 +509,7 @@ export class Ecology {
    * last species). The total is raised from 0.62 to 0.72 to put the measured
    * world-wide share back within a couple of points of the authored weights.
    */
-  treeSpecies(x, z) {
+  treeSpecies(x: any, z: any) {
     const b = vegAt(x, z);
     const grove = this.nGrove.simplex2(x * 0.0022 + 11, z * 0.0022 - 7);
     const local = this.nGrove.simplex2(x * 0.026 - 41, z * 0.026 + 63);
@@ -514,7 +524,7 @@ export class Ecology {
    * Approximate ground albedo so vegetation roots can be tinted to match and
    * don't look pasted on. Prefers a real Terrain sampler if one exists.
    */
-  groundColor(x, z, out = new THREE.Color()): THREE.Color {
+  groundColor(x: any, z: any, out = new THREE.Color()): THREE.Color {
     const t = this.terrain;
     if (t && typeof t.groundColorAt === 'function') return t.groundColorAt(x, z, out);
     if (t && typeof t.colorAt === 'function') return t.colorAt(x, z, out);
@@ -534,7 +544,7 @@ export class Ecology {
    * straw end of the ramp, and green is reserved for the drainage lines that
    * {@link wetness} picks out.
    */
-  grassColor(x, z, out = new THREE.Color()) {
+  grassColor(x: any, z: any, out = new THREE.Color()) {
     const b = vegAt(x, z);
     const m = this.wetness(x, z) + b.wetBias;
     return this._grassRamp(b, x, z, THREE.MathUtils.smoothstep(m, 0.22, 0.86), out);
@@ -551,7 +561,7 @@ export class Ecology {
    * palette entirely, and did — it put Leide's grass at 1.76x red over green,
    * which is highlighter yellow, from a ramp whose own dry end is 1.33x.
    */
-  grassDryColor(x, z, out = new THREE.Color()) {
+  grassDryColor(x: any, z: any, out = new THREE.Color()) {
     return this._grassRamp(vegAt(x, z), x, z, 0, out);
   }
 
@@ -562,7 +572,7 @@ export class Ecology {
    * than Leide's lush end.
    * @private
    */
-  _grassRamp(b, x, z, t, out) {
+  _grassRamp(b: any, x: any, z: any, t: any, out: any) {
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
     out.copy(b.dryC).lerp(b.lushC, t);
     const k = 0.86 + v * 0.3;
@@ -570,10 +580,10 @@ export class Ecology {
   }
 
   /** Height multiplier for the grass field: ankle tuft .. waist-high reed. */
-  grassScale(x, z) { return vegAt(x, z).grassH; }
+  grassScale(x: any, z: any) { return vegAt(x, z).grassH; }
 
   /** Fraction of tufts that are last season's, bleached whatever the ground does. */
-  grassDead(x, z) { return vegAt(x, z).grassDead; }
+  grassDead(x: any, z: any) { return vegAt(x, z).grassDead; }
 
   // ------------------------------------------------------------ distribution
 
@@ -583,10 +593,10 @@ export class Ecology {
    * rejection-sampled against `density`. Returns [{x,z,y,w}] where w is the
    * local density (useful for size/health variation).
    */
-  scatterClustered(seed, {
+  scatterClustered(seed: any, {
     radius, inner = 0, cellSize = 46, perCell = 6, spread = 13,
     density, jitterLone = 0.22, maxCount = 100000, center = { x: 0, z: 0 },
-  }) {
+  }: any) {
     const out = [];
     const half = Math.ceil(radius / cellSize);
     const cx0 = Math.round(center.x / cellSize), cz0 = Math.round(center.z / cellSize);

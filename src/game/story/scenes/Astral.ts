@@ -22,7 +22,7 @@ export const ASTRAL = {
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx) {
+  stage(ctx: any) {
     const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(13.4);
@@ -60,7 +60,7 @@ export const ASTRAL = {
     });
   },
 
-  buildShots(ctx) {
+  buildShots(ctx: any) {
     const F = ctx.data.F;
     const T = ctx.terrain;
     return [
@@ -84,7 +84,7 @@ export const ASTRAL = {
     ];
   },
 
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     const s = ctx.stage;
     const F = ctx.data.F;
     const far = F.at(150, 18, 30);
@@ -118,7 +118,7 @@ export const ASTRAL = {
     { t: 23.2, presentational: true, say: ['Noctis', '...You heard that.'], dur: 2.4 },
     {
       t: 25.4, shake: 0.95, slowmo: { scale: 0.35, dur: 2.2 }, sfx: 'hit',
-      fn: (ctx) => {
+      fn: (ctx: any) => {
         const vfx = ctx.vfx;
         const F = ctx.data.F;
         if (!vfx) return;
@@ -139,7 +139,7 @@ export const ASTRAL = {
     { t: 36.0, chapter: { n: 5, name: 'Dark Clouds', sub: 'Duscae — the Disc of Cauthess' } },
   ],
 
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     const weather = ctx.game.get('Weather');
     if (weather && weather.set) weather.set('clear');
     const rpg = ctx.game.get('Rpg');

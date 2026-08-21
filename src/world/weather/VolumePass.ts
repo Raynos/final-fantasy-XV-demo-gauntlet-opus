@@ -338,6 +338,10 @@ void main() {
 const MARCH_SCALE = 0.4;
 
 export class VolumePass extends FilterPass {
+  composite!: any;
+  fx!: any;
+  material!: any;
+  rtVol!: any;
   constructor(fx: import('../../engine/PostFX.ts').PostFX) {
     super(fx);
     this.material = fsMaterial({
@@ -382,7 +386,7 @@ export class VolumePass extends FilterPass {
     this.enabled = true;
   }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     const mw = Math.max(1, Math.round(w * MARCH_SCALE));
     const mh = Math.max(1, Math.round(h * MARCH_SCALE));
     this.rtVol.setSize(mw, mh);
@@ -403,7 +407,7 @@ export class VolumePass extends FilterPass {
     }
   }
 
-  render(renderer, writeBuffer, readBuffer) {
+  render(renderer: any, writeBuffer: any, readBuffer: any) {
     this.beforeRender();
     this.material.uniforms.tDiffuse.value = readBuffer.texture;
     blit(renderer, this.material, this.rtVol);

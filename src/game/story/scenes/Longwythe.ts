@@ -33,7 +33,7 @@ export const LONGWYTHE = {
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx) {
+  stage(ctx: any) {
     const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(17.6);
@@ -64,7 +64,7 @@ export const LONGWYTHE = {
     });
   },
 
-  buildShots(ctx) {
+  buildShots(ctx: any) {
     const F = ctx.data.F;
     return [
       // 1 — THE PEAK. Long, low and far back so the mountain gets its full
@@ -102,7 +102,7 @@ export const LONGWYTHE = {
     ];
   },
 
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     const s = ctx.stage;
     const peak = ctx.data.peak;
     if (t < 7.0) {
@@ -125,7 +125,7 @@ export const LONGWYTHE = {
     {
       t: 26.6, presentational: true, say: ['Noctis', 'Stay behind me.'], dur: 2.4,
       // the Engine Blade materialises out of blue crystal light
-      fn: (ctx) => {
+      fn: (ctx: any) => {
         const combat = ctx.game.get('Combat');
         if (combat && combat.setWeapon) combat.setWeapon('sword', { materialise: true });
         if (ctx.audio && ctx.audio.play) ctx.audio.play('warp');
@@ -135,7 +135,7 @@ export const LONGWYTHE = {
     { t: 31.4, objective: { title: 'Fangs of the Wasteland', sub: 'Cull the Sabertusk pack' } },
   ],
 
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     const rpg = ctx.game.get('Rpg');
     if (!rpg) return;
     if (rpg.quests.status('hunt_sabertusks') === 'available') rpg.quests.accept('hunt_sabertusks');

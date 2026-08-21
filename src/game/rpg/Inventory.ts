@@ -114,7 +114,7 @@ const TREASURES = [
 /* Ingredients                                                               */
 /* ------------------------------------------------------------------------ */
 
-const ING = (id, name, price, desc, tags) => ({ id, name, price, desc, tags });
+const ING = (id: any, name: any, price: any, desc: any, tags: any) => ({ id, name, price, desc, tags });
 
 const INGREDIENTS = [
   ING('lucian_tomato',   'Lucian Tomato',        60,   'Sun-fat and sweet. Grows wild along the Leide roadside.', ['vegetable']),
@@ -239,7 +239,7 @@ const WEAPONS = [
 /* Accessories                                                               */
 /* ------------------------------------------------------------------------ */
 
-const A = (id, name, price, mods, desc, tags = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
+const A = (id: any, name: any, price: any, mods: any, desc: any, tags = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
 
 const ACCESSORIES = [
   A('bronze_bangle',   'Bronze Bangle',     400,   { hp: 300 },                                'A plain band. Adds a little padding.'),
@@ -269,7 +269,7 @@ const ACCESSORIES = [
 /** Every item definition in the game, keyed by id. */
 export const ITEMS = (() => {
   const map: Record<string, any> = {};
-  const push = (list, category) => {
+  const push = (list: any, category: any) => {
     for (const it of list) {
       const price = it.price ?? 0;
       map[it.id] = {
@@ -298,10 +298,10 @@ export const ITEMS = (() => {
 export const ITEM_COUNT = Object.keys(ITEMS).length;
 
 /** Look an item definition up. Returns null for unknown ids. */
-export function itemDef(id) { return ITEMS[id] || null; }
+export function itemDef(id: any) { return ITEMS[id] || null; }
 
 /** All items in a category. */
-export function itemsInCategory(category) {
+export function itemsInCategory(category: any) {
   return Object.values(ITEMS).filter((i) => i.category === category);
 }
 
@@ -334,6 +334,11 @@ export const CLASS_PERMISSION = {
  * `item-lost`, `item-used`, `gil-changed` and `equipment-changed`.
  */
 export class Inventory {
+  bag!: any;
+  emitter!: any;
+  equipment!: any;
+  gil!: number;
+  sellBonus!: number;
   constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** @type {Record<string, number>} id -> count */
@@ -354,10 +359,10 @@ export class Inventory {
   /* -- Bag --------------------------------------------------------------- */
 
   /** How many of an item the party is carrying. */
-  count(id) { return this.bag[id] || 0; }
+  count(id: any) { return this.bag[id] || 0; }
 
   /** True if the party has at least `n`. */
-  has(id, n = 1) { return this.count(id) >= n; }
+  has(id: any, n = 1) { return this.count(id) >= n; }
 
   /**
    * Add items. Respects stack limits; returns how many were actually taken.
@@ -407,13 +412,13 @@ export class Inventory {
 
   /* -- Gil --------------------------------------------------------------- */
 
-  addGil(n, source = 'reward') {
+  addGil(n: any, source = 'reward') {
     this.gil = Math.max(0, this.gil + Math.round(n));
     this.emitter?.emit('gil-changed', { gil: this.gil, delta: Math.round(n), source });
     return this.gil;
   }
 
-  spendGil(n) {
+  spendGil(n: any) {
     if (this.gil < n) return false;
     this.addGil(-n, 'spend');
     return true;
@@ -510,12 +515,12 @@ export class Inventory {
   }
 
   /** Equipped item definitions for a character. */
-  equipped(charId) {
+  equipped(charId: any) {
     const rack = this.equipment[charId];
     if (!rack) return { weapon: [], accessory: [] };
     return {
-      weapon: rack.weapon.map((id) => (id ? ITEMS[id] : null)),
-      accessory: rack.accessory.map((id) => (id ? ITEMS[id] : null)),
+      weapon: rack.weapon.map((id: any) => (id ? ITEMS[id] : null)),
+      accessory: rack.accessory.map((id: any) => (id ? ITEMS[id] : null)),
     };
   }
 
@@ -545,7 +550,7 @@ export class Inventory {
   }
 
   /** Tags contributed by everything a character has on (e.g. 'status-immune'). */
-  tagsFor(charId) {
+  tagsFor(charId: any) {
     const tags = new Set();
     const rack = this.equipment[charId];
     if (!rack) return tags;
@@ -569,7 +574,7 @@ export class Inventory {
   }
 
   /** Gil paid for one unit, including the Bargain Hunter bonus. */
-  sellPrice(id) {
+  sellPrice(id: any) {
     const def = ITEMS[id];
     if (!def) return 0;
     return Math.round((def.sell || 0) * (1 + this.sellBonus));
@@ -581,7 +586,7 @@ export class Inventory {
   /**
    * Sell items.
    */
-  sell(id, n = 1): {ok:boolean, reason?:string, gil?:number} {
+  sell(id: any, n = 1): {ok:boolean, reason?:string, gil?:number} {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.sell <= 0 || def.category === 'key') return { ok: false, reason: 'not-sellable' };
@@ -612,7 +617,7 @@ export class Inventory {
 
   toJSON() { return { bag: { ...this.bag }, gil: this.gil, equipment: this.equipment, sellBonus: this.sellBonus }; }
 
-  static fromJSON(data, emitter = null) {
+  static fromJSON(data: any, emitter = null) {
     const inv = new Inventory(emitter);
     if (!data) return inv;
     for (const id of Object.keys(data.bag || {})) if (ITEMS[id]) inv.bag[id] = data.bag[id];

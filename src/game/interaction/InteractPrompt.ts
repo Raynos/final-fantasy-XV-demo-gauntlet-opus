@@ -16,6 +16,21 @@ import { ensureInteractCss } from './interact.css.ts';
 const _v = new THREE.Vector3();
 
 export class InteractPrompt {
+  _age!: number;
+  _key!: any;
+  _sig!: any;
+  body!: any;
+  dot!: any;
+  hint!: any;
+  keyWrap!: any;
+  node!: any;
+  ring!: any;
+  root!: any;
+  stem!: any;
+  sub!: any;
+  txt!: any;
+  uiScale!: any;
+  verb!: any;
   /** @param parent usually `game.uiRoot` */
   constructor(parent: HTMLElement) {
     ensureInteractCss();
@@ -55,7 +70,7 @@ export class InteractPrompt {
     this.uiScale = s;
   }
 
-  _render(item) {
+  _render(item: any) {
     const sig = `${item.key}|${item.verb}|${item.label}|${item.hint}`;
     if (sig === this._sig) return;
     this._sig = sig;

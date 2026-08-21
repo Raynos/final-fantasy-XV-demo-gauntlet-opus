@@ -18,6 +18,36 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 
  * byte-identical.
  */
 export class Letterbox {
+  _onResize!: any;
+  active!: boolean;
+  bar!: number;
+  barMax!: number;
+  barTarget!: number;
+  bot!: any;
+  chap!: any;
+  chapK!: any;
+  chapN!: any;
+  chapR!: any;
+  chapS!: any;
+  chapState!: any;
+  chars!: any[];
+  fade!: any;
+  fadeAmt!: number;
+  fadeGoal!: number;
+  fadeRate!: number;
+  lineSp!: any;
+  lineState!: Clip | null;
+  obj!: any;
+  objK!: any;
+  objR!: any;
+  objS!: any;
+  objState!: Clip | null;
+  objT!: any;
+  root!: any;
+  skip!: any;
+  skipShown!: number;
+  top!: any;
+  uiScale!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'cine' });
     parent.appendChild(this.root);
@@ -100,7 +130,7 @@ export class Letterbox {
   setBars(v: number) { this.barTarget = clamp(v, 0, 1); }
 
   /** Snap the matte with no travel (used on a hard cut into a scene). */
-  snapBars(v) { this.barTarget = this.bar = clamp(v, 0, 1); }
+  snapBars(v: any) { this.barTarget = this.bar = clamp(v, 0, 1); }
 
   /**
    * Fade to or from a flat colour.
@@ -115,7 +145,7 @@ export class Letterbox {
   }
 
   /** Jump the fade with no travel. */
-  snapFade(v, colour = 'black') {
+  snapFade(v: any, colour = 'black') {
     this.fade.classList.toggle('white', colour === 'white');
     this.fadeAmt = this.fadeGoal = clamp(v, 0, 1);
   }
@@ -220,7 +250,7 @@ export class Letterbox {
     this._objective(dt);
   }
 
-  _line(dt) {
+  _line(dt: any) {
     const s = this.lineState;
     if (!s) { this.line.style.opacity = '0'; return; }
     s.step(dt);
@@ -241,7 +271,7 @@ export class Letterbox {
     this.line.style.bottom = `${(9.5 + this.bar * this.barMax * 100 * 0.62).toFixed(2)}%`;
   }
 
-  _chapter(dt) {
+  _chapter(dt: any) {
     const s = this.chapState;
     if (!s) { this.chap.style.opacity = '0'; return; }
     s.clip.step(dt);
@@ -263,7 +293,7 @@ export class Letterbox {
     this.chap.style.transform = `translateY(${(-out * 8).toFixed(2)}px)`;
   }
 
-  _objective(dt) {
+  _objective(dt: any) {
     const s = this.objState;
     if (!s) { this.obj.style.opacity = '0'; return; }
     s.step(dt);

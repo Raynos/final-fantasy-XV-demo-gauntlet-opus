@@ -18,6 +18,25 @@ import { TitanArena } from './TitanArena.ts';
  *               there; you climb it and hit the wrist.
  */
 export class BossFight {
+  _announced!: boolean;
+  _done!: boolean;
+  _phaseHold!: number;
+  _rise!: number;
+  _tmp!: THREE.Vector3;
+  adds!: any[];
+  arena!: TitanArena | null;
+  boss!: any;
+  centre!: THREE.Vector3;
+  def!: any;
+  dir!: any;
+  enemies!: any;
+  game!: any;
+  pack!: Pack | null;
+  phase!: number;
+  thresholds!: any;
+  time!: number;
+  vfx!: any;
+  window!: number;
   /**
    * @param def a `SET_PIECES` entry
    */
@@ -41,7 +60,7 @@ export class BossFight {
   }
 
   /** Is `e` part of this fight? */
-  owns(e) { return e === this.boss || this.adds.includes(e); }
+  owns(e: any) { return e === this.boss || this.adds.includes(e); }
 
   /**
    * Put the boss in the world.
@@ -106,7 +125,7 @@ export class BossFight {
   }
 
   /** Custom strike resolution so a forty-metre fist hits where it lands. */
-  resolveStrike(e, a) {
+  resolveStrike(e: any, a: any) {
     if (e !== this.boss || this.def.kind !== 'astral') return false;
     const hand = a.id === 'slam_l' ? 'handL' : 'handR';
     const p = this._handPos(hand);
@@ -116,7 +135,7 @@ export class BossFight {
   }
 
   /** World position of one of Titan's hands. */
-  _handPos(name) {
+  _handPos(name: any) {
     const b = this.boss?.rig?.byName?.get(name);
     if (!b) return null;
     b.updateWorldMatrix(true, false);
@@ -154,7 +173,7 @@ export class BossFight {
 
   /* ------------------------------------------------------------- phases */
 
-  _enterPhase(n) {
+  _enterPhase(n: any) {
     if (n <= this.phase) return;
     this.phase = n;
     const b = this.boss;
@@ -186,7 +205,7 @@ export class BossFight {
     }));
   }
 
-  _imperialPhase(n) {
+  _imperialPhase(n: any) {
     const dir = this.dir;
     if (n === 1) {
       // the missile arm goes; the garrison sends more bodies
@@ -207,7 +226,7 @@ export class BossFight {
     }
   }
 
-  _fieldPhase(n) {
+  _fieldPhase(n: any) {
     const b = this.boss;
     if (!b) return;
     // it gets faster and angrier, and stops queueing behind its own adds
@@ -218,7 +237,7 @@ export class BossFight {
 
   /* --------------------------------------------------------------- tick */
 
-  update(dt) {
+  update(dt: any) {
     const b = this.boss;
     this.time += dt;
     if (this.arena) this.arena.update(dt);
@@ -271,7 +290,7 @@ export class BossFight {
   }
 
   /** The boss died. */
-  onBossDeath(e) {
+  onBossDeath(e: any) {
     if (e !== this.boss) return;
     const c = e.centre();
     if (this.vfx) {

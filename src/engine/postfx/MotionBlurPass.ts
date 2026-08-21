@@ -12,7 +12,13 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  * background sharp behind a moving object instead of smearing the whole frame.
  */
 export class MotionBlurPass extends FilterPass {
-  constructor(fx) {
+  _wanted!: boolean;
+  fx!: any;
+  material!: any;
+  maxRadius!: number;
+  samples!: number;
+  shutter!: number;
+  constructor(fx: any) {
     super(fx);
     this._wanted = true;
     this._enabled = true;
@@ -116,7 +122,7 @@ export class MotionBlurPass extends FilterPass {
    */
   setMoving(moving: boolean) { this._enabled = this._wanted && moving; }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.material.uniforms.uResolution.value.set(w, h);
   }

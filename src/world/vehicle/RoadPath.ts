@@ -18,6 +18,17 @@ const CELL = 48;
  *             x:number, y:number, z:number, tx:number, tz:number}} RoadHit */
 
 export class RoadPath {
+  _grid!: Map<any, any>;
+  _h!: any;
+  _hit!: any;
+  _lastI!: number;
+  _t0!: any;
+  _t1!: any;
+  length!: any;
+  pts!: any;
+  road!: any;
+  shoulder!: any;
+  width!: any;
   constructor(road: {points:Array, length:number, width:number, shoulder:number}) {
     this.road = road;
     this.pts = road && road.points ? road.points : [];
@@ -47,7 +58,7 @@ export class RoadPath {
     }
   }
 
-  _key(cx, cz) { return cx * 73856093 ^ cz * 19349663; }
+  _key(cx: any, cz: any) { return cx * 73856093 ^ cz * 19349663; }
 
   /**
    * Closest point on the centreline, with signed lateral offset.
@@ -160,7 +171,7 @@ export class RoadPath {
     return worst;
   }
 
-  _curvatureAt(s, h) {
+  _curvatureAt(s: any, h: any) {
     const a = this._t0 || (this._t0 = { x: 0, y: 0, z: 0, tx: 0, tz: 1 });
     const b = this._t1 || (this._t1 = { x: 0, y: 0, z: 0, tx: 0, tz: 1 });
     this.at(s - h, a);

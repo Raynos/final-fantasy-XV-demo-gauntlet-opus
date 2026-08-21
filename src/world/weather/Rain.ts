@@ -155,7 +155,7 @@ void main() {
 `;
 
 /** Build an instanced quad field with a per-instance seed attribute. */
-function instancedQuad(count, seedSize, rand) {
+function instancedQuad(count: any, seedSize: any, rand: any) {
   const base = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
   geo.index = base.index;
@@ -171,6 +171,15 @@ function instancedQuad(count, seedSize, rand) {
 }
 
 export class Rain {
+  intensity!: number;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  quality!: any;
+  scene!: any;
+  splash!: THREE.Mesh;
+  splashMaterial!: THREE.ShaderMaterial;
+  stats!: any;
+  terrainUniforms!: any;
   /**
    * @param {object} opts
    * */
@@ -181,7 +190,7 @@ export class Rain {
     this.intensity = 0;
   }
 
-  build(rand) {
+  build(rand: any) {
     const q = this.quality;
     const dropCount = Math.round(92000 * q);
 

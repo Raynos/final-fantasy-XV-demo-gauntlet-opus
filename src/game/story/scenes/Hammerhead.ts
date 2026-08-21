@@ -33,7 +33,7 @@ export const HAMMERHEAD = {
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx) {
+  stage(ctx: any) {
     const { game, stage } = ctx;
     const sky = game.get('Sky');
     // Late blue-gold: the canopy strip has to read as the brightest thing on
@@ -81,7 +81,7 @@ export const HAMMERHEAD = {
     for (const id of stage.ids) stage.look(id, F.at(2.2, -2.9, 0.6));
   },
 
-  buildShots(ctx) {
+  buildShots(ctx: any) {
     const F = ctx.data.F;
     return [
       // 1 — THE PLACE. Three-quarter wide from out on the forecourt: canopy
@@ -123,7 +123,7 @@ export const HAMMERHEAD = {
     ];
   },
 
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     // Heads turn to whoever is speaking. Nothing sells a conversation like
     // three people looking at the fourth a beat before he talks.
     const s = ctx.stage;
@@ -155,7 +155,7 @@ export const HAMMERHEAD = {
     },
   ],
 
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     // Put the Regalia back where the world had it, played or skipped.
     releaseCar(ctx);
 

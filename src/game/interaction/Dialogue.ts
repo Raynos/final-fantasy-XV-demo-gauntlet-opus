@@ -35,6 +35,31 @@ import { ensureInteractCss } from './interact.css.ts';
 const TYPE_RATE = 46;
 
 export class Dialogue {
+  _full!: any;
+  _gp!: any;
+  _lineIdx!: number;
+  _lines!: any;
+  _portraitHue!: any;
+  _sel!: number;
+  _typed!: number;
+  a!: number;
+  active!: boolean;
+  chNodes!: any[];
+  choices!: any;
+  foot!: any;
+  footLb!: any;
+  game!: any;
+  head!: any;
+  line!: any;
+  nm!: any;
+  node!: any;
+  nodeId!: any;
+  pf!: any;
+  role!: any;
+  root!: any;
+  rule!: any;
+  script!: any;
+  wrap!: any;
   constructor(parent: HTMLElement) {
     ensureInteractCss();
     this.root = el('div', { id: 'dialogue' });
@@ -95,7 +120,7 @@ export class Dialogue {
     this.script = null;
   }
 
-  _goto(id) {
+  _goto(id: any) {
     const node = this.script.nodes[id];
     if (!node) { this.end(); return; }
     this.node = node;
@@ -151,7 +176,7 @@ export class Dialogue {
   /** Choices whose `when` predicate passes right now. */
   _visibleChoices() {
     const raw = this.node?.choices || [];
-    return raw.filter((c) => !c.when || c.when(this.game));
+    return raw.filter((c: any) => !c.when || c.when(this.game));
   }
 
   /** True when the current line has finished typing. */
@@ -186,7 +211,7 @@ export class Dialogue {
     this.end();
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     const target = this.active ? 1 : 0;
     const rate = dt / 0.22;
     this.a = clamp(this.a + (target > this.a ? rate : -rate * 1.6), 0, 1);
@@ -226,12 +251,12 @@ export class Dialogue {
     this.foot.style.opacity = easeOut(clamp((this.a - 0.3) / 0.5, 0, 1)).toFixed(3);
   }
 
-  _input(game) {
+  _input(game: any) {
     const inp = game.input;
     if (!inp) return;
-    const down = (c) => inp.keyDown?.(c);
-    const gp = (i) => !!inp.gamepad?.buttons?.[i]?.pressed;
-    const edge = (k, v) => { const p = this._gp?.[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
+    const down = (c: any) => inp.keyDown?.(c);
+    const gp = (i: any) => !!inp.gamepad?.buttons?.[i]?.pressed;
+    const edge = (k: any, v: any) => { const p = this._gp?.[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
 
     const hasChoices = !!(this.chNodes && this.chNodes.length);
     const choosing = hasChoices && this._lineDone && this._lineIdx >= this._lines.length - 1;

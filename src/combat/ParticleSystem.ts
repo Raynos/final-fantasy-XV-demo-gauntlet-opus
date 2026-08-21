@@ -22,6 +22,21 @@ import * as THREE from 'three';
 const _v3 = new THREE.Vector3();
 
 export class ParticleSystem {
+  _dirtyHi!: any;
+  _dirtyLo!: any;
+  aColor!: any;
+  aParams!: any;
+  aParams2!: any;
+  aParams3!: any;
+  aPos0!: any;
+  aVel!: any;
+  capacity!: any;
+  cursor!: number;
+  live!: number;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  uniforms!: any;
+  useFog!: any;
   /**
    * @param {object} o
    * */
@@ -43,7 +58,7 @@ export class ParticleSystem {
     geo.setIndex([0, 1, 2, 0, 2, 3]);
     geo.instanceCount = capacity;
 
-    const mk = (n) => {
+    const mk = (n: any) => {
       const a = new THREE.InstancedBufferAttribute(new Float32Array(capacity * n), n);
       a.setUsage(THREE.DynamicDrawUsage);
       return a;
@@ -156,14 +171,14 @@ export class ParticleSystem {
   setClock(clock: number) { this.uniforms.uTime.value = clock; }
 
   /** Wire the shared depth texture for soft-particle fading. */
-  setDepth(texture, near, far) {
+  setDepth(texture: any, near: any, far: any) {
     this.uniforms.uDepth.value = texture;
     this.uniforms.uSoft.value = texture ? 1 : 0;
     this.uniforms.uCamNF.value.set(near, far);
   }
 
   /** Read fog from the scene so smoke matches the world's aerial perspective. */
-  syncFog(scene) {
+  syncFog(scene: any) {
     if (!this.useFog) return;
     const f = scene.fog;
     if (!f) { this.uniforms.uFogDensity.value = 0; return; }

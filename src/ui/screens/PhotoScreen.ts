@@ -13,6 +13,31 @@ const FRAMES = ['3:2 Full', '16:9 Wide', '1:1 Square', 'Polaroid'];
  * Chrome-free: the shared menu heading and footer are suppressed.
  */
 export class PhotoScreen {
+  _ap!: any;
+  age!: number;
+  apBar!: any;
+  apV!: any;
+  aperture!: number;
+  bars!: any;
+  chrome!: boolean;
+  corners!: any;
+  dials!: any;
+  exBar!: any;
+  exV!: any;
+  exposure!: number;
+  filter!: number;
+  flashAt!: number;
+  frV!: any;
+  frame!: number;
+  frameEl!: any;
+  grid!: any;
+  gridLines!: any[];
+  menus!: any;
+  rows!: any;
+  scrim!: boolean;
+  side!: any;
+  title!: string;
+  title2!: any;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Photo';
@@ -84,7 +109,7 @@ export class PhotoScreen {
     root.appendChild(this.dials);
   }
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     if (dy) this.filter = (this.filter + dy + FILTERS.length) % FILTERS.length;
     if (dx) this.aperture = clamp(Math.round((this.aperture + dx * 0.4) * 10) / 10, 1.2, 16);
   }

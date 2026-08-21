@@ -26,7 +26,7 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 /** A few bent sticks lying together. */
-function branchGeometry(seed) {
+function branchGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const n = 2 + Math.floor(rng.next() * 3);
@@ -68,7 +68,7 @@ function branchGeometry(seed) {
 }
 
 /** Flat drift of dry leaves, lying on the ground. */
-function leafDriftGeometry(seed) {
+function leafDriftGeometry(seed: any) {
   const rng = new Rng(seed);
   const p = [], n = [], uv = [], idx = [], flex = [], col = [];
   const cards = 4;
@@ -105,7 +105,7 @@ function leafDriftGeometry(seed) {
 }
 
 /** Half-buried skull and ribs. */
-function bonesGeometry(seed) {
+function bonesGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const skull = new THREE.SphereGeometry(0.24, 12, 9);
@@ -145,7 +145,7 @@ function bonesGeometry(seed) {
 }
 
 /** A fallen trunk: tapered, bark-rough, one broken end and a couple of stubs. */
-function logGeometry(seed) {
+function logGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const len = rng.range(4.0, 7.5);
@@ -184,7 +184,7 @@ function logGeometry(seed) {
 }
 
 /** A broken stump with buttress roots spreading into the soil. */
-function stumpGeometry(seed) {
+function stumpGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const r = rng.range(0.3, 0.55);
@@ -221,7 +221,7 @@ function stumpGeometry(seed) {
  * hundred of these standing in black water is the drowned forest; without
  * them the Vesperpool is a lake with nothing in it.
  */
-function deadTrunkGeometry(seed) {
+function deadTrunkGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const h = rng.range(4.5, 9.0);
@@ -254,7 +254,7 @@ function deadTrunkGeometry(seed) {
 }
 
 /** Sun-bleached driftwood: a root ball with a few bare arms. */
-function driftwoodGeometry(seed) {
+function driftwoodGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const core = new THREE.DodecahedronGeometry(rng.range(0.3, 0.5), 0);
@@ -279,7 +279,7 @@ function driftwoodGeometry(seed) {
 }
 
 /** A chunk of broken carriageway: slab, aggregate face, bent rebar. */
-function rubbleGeometry(seed) {
+function rubbleGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const w = rng.range(0.8, 2.0), h = rng.range(0.18, 0.4), d = rng.range(0.6, 1.5);
@@ -306,7 +306,7 @@ function rubbleGeometry(seed) {
 }
 
 /** A hunter's waymark: five or six flat stones stacked and settled. */
-function cairnGeometry(seed) {
+function cairnGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   let y = 0;
@@ -328,7 +328,7 @@ function cairnGeometry(seed) {
 }
 
 /** An oil drum, standing or fallen. */
-function barrelGeometry(seed) {
+function barrelGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12, 1)];
   for (const y of [-0.22, 0.22]) {
@@ -359,7 +359,7 @@ function barrelGeometry(seed) {
  * a thin solid blade anyway. This is the band that turns Alstor Slough and the
  * Vesperpool from "a lake" into "a wetland".
  */
-function reedGeometry(seed) {
+function reedGeometry(seed: any) {
   const rng = new Rng(seed);
   const parts = [];
   const n = 8 + Math.floor(rng.next() * 4);
@@ -383,7 +383,7 @@ function reedGeometry(seed) {
   return out;
 }
 
-function stripAttrs(g) {
+function stripAttrs(g: any) {
   for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
   if (!g.attributes.normal) g.computeVertexNormals();
   if (!g.attributes.uv) {
@@ -429,7 +429,16 @@ const CAPS = {
 };
 
 export class Debris {
-  constructor(eco, scene, { quality = 1 } = {}) {
+  _last!: THREE.Vector3;
+  cell!: number;
+  eco!: any;
+  groups!: Map<any, any>;
+  mats!: any;
+  quality!: any;
+  radius!: number;
+  scene!: any;
+  stream!: TileStream;
+  constructor(eco: any, scene: any, { quality = 1 } = {}) {
     this.eco = eco; this.scene = scene; this.quality = quality;
     this.groups = new Map();
     this.cell = 64;
@@ -490,7 +499,7 @@ export class Debris {
    * zone table does not know: a zone can want driftwood, but only the water's
    * edge can actually have any.
    */
-  _fit(key, x, z) {
+  _fit(key: any, x: any, z: any) {
     const eco = this.eco;
     const slope = eco.slope01(x, z);
     if (slope > 0.72) return 0;
@@ -549,7 +558,7 @@ export class Debris {
     }
   }
 
-  _genCell(cx, cz, out) {
+  _genCell(cx: any, cz: any, out: any) {
     const c = this.cell;
     const rng = new Rng(hash3(cx, cz, 0x5d13));
     const bx = cx * c, bz = cz * c;
@@ -575,7 +584,7 @@ export class Debris {
     }
   }
 
-  update(camPos) {
+  update(camPos: any) {
     const moved = this._last.distanceToSquared(camPos) >= 100;
     const changed = this.stream.update(camPos);
     if (!moved && !changed) return;

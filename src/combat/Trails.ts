@@ -13,6 +13,21 @@ import { turbulence } from './VfxTextures.ts';
 const MAX_SEG = 34;
 
 export class TrailRibbon {
+  _samples!: any[];
+  active!: boolean;
+  ageAttr!: any;
+  ages!: Float32Array;
+  count!: number;
+  life!: any;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  posAttr!: any;
+  positions!: Float32Array;
+  segments!: any;
+  strength!: number;
+  uniforms!: any;
+  uvAttr!: any;
+  uvs!: Float32Array;
   constructor({
     segments = MAX_SEG, head = 0x9fd8ff, tail = 0x1a4c9c, core = 0xffffff,
     life = 0.34, intensity = 2.6, headBias = 0.55, renderOrder = 22,
@@ -80,7 +95,7 @@ export class TrailRibbon {
     }
   }
 
-  setColors(head, tail, core) {
+  setColors(head: any, tail: any, core: any) {
     this.uniforms.uHead.value.set(head);
     this.uniforms.uTail.value.set(tail);
     if (core !== undefined) this.uniforms.uCore.value.set(core);
@@ -96,7 +111,7 @@ export class TrailRibbon {
   }
 
   /** Append one blade sample. Call once per frame while swinging. */
-  push(base, tip) {
+  push(base: any, tip: any) {
     // shift (small N, cheap)
     const s = this._samples;
     const last = s[s.length - 1];
@@ -140,7 +155,7 @@ export class TrailRibbon {
   /** Stop emitting; the ribbon dissolves over `life`. */
   release() { this.active = false; }
 
-  update(dt, clock) {
+  update(dt: any, clock: any) {
     this.uniforms.uTime.value = clock;
     if (!this.mesh.visible) return;
     let alive = false;
@@ -188,7 +203,9 @@ export class TrailRibbon {
 
 /** Small recycling pool so the combat system never allocates mid-fight. */
 export class TrailPool {
-  constructor(parent, size = 8, opts = {}) {
+  _next!: number;
+  items!: any[];
+  constructor(parent: any, size = 8, opts = {}) {
     this.items = [];
     for (let i = 0; i < size; i++) {
       const t = new TrailRibbon(opts);
@@ -207,7 +224,7 @@ export class TrailPool {
     return t;
   }
 
-  update(dt, clock) { for (const t of this.items) t.update(dt, clock); }
+  update(dt: any, clock: any) { for (const t of this.items) t.update(dt, clock); }
   clear() { for (const t of this.items) t.reset(); }
 }
 

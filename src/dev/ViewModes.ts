@@ -20,6 +20,8 @@ import * as THREE from 'three';
  *     Vegetation cards are the usual culprit.
  */
 export class ViewModes {
+  _mats!: any;
+  mode!: string;
   constructor() {
     this.mode = 'off';
     this._mats = null;

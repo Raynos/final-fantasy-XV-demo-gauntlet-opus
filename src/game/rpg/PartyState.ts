@@ -78,7 +78,7 @@ export const BOND_LEVELS = [
 ];
 
 /** Bond level object for a raw affinity value. */
-export function bondFor(affinity) {
+export function bondFor(affinity: any) {
   let out = BOND_LEVELS[0];
   for (const b of BOND_LEVELS) if (affinity >= b.at) out = b;
   return out;
@@ -200,7 +200,7 @@ export const RECIPES = [
 export const RECIPE_TABLE = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 
 /** Extra effect tags parsed out of the human-readable effect lines. */
-function recipeTags(recipe) {
+function recipeTags(recipe: any) {
   const tags = {};
   for (const line of recipe.effects) {
     const exp = /EXP earned \+(\d+)%/.exec(line);
@@ -219,6 +219,17 @@ function recipeTags(recipe) {
  * `recipe-learned`, `meal-cooked`, `buff-applied` and `buff-expired`.
  */
 export class PartyState {
+  activeBuffs!: any[];
+  bonuses!: any;
+  cookingLevel!: number;
+  emitter!: any;
+  flags!: Set<any>;
+  knownRecipes!: Set<any>;
+  mealsCooked!: number;
+  members!: any;
+  stats!: any;
+  techCharge!: number;
+  techChargeRate!: number;
   constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
 
@@ -228,7 +239,7 @@ export class PartyState {
     this.members = {};
     for (const m of MEMBERS) {
       this.stats[m.id] = new Stats(m.id, { level: 1 });
-      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id].filter((t) => !t.advanced && !t.requiresFlag).map((t) => t.id) };
+      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id].filter((t: any) => !t.advanced && !t.requiresFlag).map((t: any) => t.id) };
     }
 
     /** Tech bar, 0..maxTechBars in continuous units. */
@@ -277,16 +288,16 @@ export class PartyState {
     }[id] || [];
     const known = this.techniquesFor(id);
     for (const p of prefs) {
-      const t = known.find((k) => k.id === p);
+      const t = known.find((k: any) => k.id === p);
       if (t) return t;
     }
     return known[0] || null;
   }
 
   /** Techniques a member currently has, hydrated. */
-  techniquesFor(id) {
+  techniquesFor(id: any) {
     const known = this.members[id]?.techniques || [];
-    return (TECHNIQUES[id] || []).filter((t) => known.includes(t.id));
+    return (TECHNIQUES[id] || []).filter((t: any) => known.includes(t.id));
   }
 
   /** Every technique the party could fire right now, with affordability. */
@@ -301,7 +312,7 @@ export class PartyState {
   }
 
   /** Charge the tech bar (call with dt while in combat). */
-  chargeTech(dt, inCombat = true) {
+  chargeTech(dt: any, inCombat = true) {
     if (!inCombat) return;
     const rate = this.techChargeRate * (1 + this.bonuses.techCharge + this.bondBonus('techCharge'));
     this.techCharge = Math.min(this.maxTechBars, this.techCharge + rate * dt);
@@ -311,7 +322,7 @@ export class PartyState {
    * Fire a technique. Spends bars and awards affinity.
    */
   useTechnique(memberId: string, techId: string) {
-    const tech = (TECHNIQUES[memberId] || []).find((t) => t.id === techId);
+    const tech = (TECHNIQUES[memberId] || []).find((t: any) => t.id === techId);
     if (!tech) return { ok: false, reason: 'unknown-technique' };
     if (!this.members[memberId]?.techniques.includes(techId)) return { ok: false, reason: 'not-learned' };
     if (this.techCharge < tech.bars) return { ok: false, reason: 'not-enough-tech' };
@@ -323,10 +334,10 @@ export class PartyState {
   }
 
   /** Teach a technique (from an Ascension node). */
-  learnTechnique(memberId, techId) {
+  learnTechnique(memberId: any, techId: any) {
     const list = this.members[memberId]?.techniques;
     if (!list || list.includes(techId)) return false;
-    if (!(TECHNIQUES[memberId] || []).some((t) => t.id === techId)) return false;
+    if (!(TECHNIQUES[memberId] || []).some((t: any) => t.id === techId)) return false;
     list.push(techId);
     return true;
   }
@@ -334,7 +345,7 @@ export class PartyState {
   /* -- Affinity ---------------------------------------------------------- */
 
   /** Raise a companion's affinity. */
-  addAffinity(memberId, amount) {
+  addAffinity(memberId: any, amount: any) {
     const m = this.members[memberId];
     if (!m || memberId === 'noctis') return 0;
     const before = bondFor(m.affinity).level;
@@ -348,10 +359,10 @@ export class PartyState {
   }
 
   /** Bond level object for a member. */
-  bond(memberId) { return bondFor(this.members[memberId]?.affinity || 0); }
+  bond(memberId: any) { return bondFor(this.members[memberId]?.affinity || 0); }
 
   /** Sum of one bond effect across the three companions. */
-  bondBonus(key) {
+  bondBonus(key: any) {
     let sum = 0;
     for (const m of MEMBERS) {
       if (m.id === 'noctis') continue;
@@ -372,7 +383,7 @@ export class PartyState {
   }
 
   /** Teach Ignis a recipe. */
-  learnRecipe(id) {
+  learnRecipe(id: any) {
     if (!RECIPE_TABLE[id] || this.knownRecipes.has(id)) return false;
     this.knownRecipes.add(id);
     this.emitter?.emit('recipe-learned', { recipe: RECIPE_TABLE[id] });
@@ -394,7 +405,7 @@ export class PartyState {
   }
 
   /** Every recipe Ignis could cook right now with the bag as it stands. */
-  cookableNow(inventory) {
+  cookableNow(inventory: any) {
     return this.cookbook.filter((r) => this.canCook(r.id, inventory).ok);
   }
 
@@ -459,7 +470,7 @@ export class PartyState {
   }
 
   /** Drop buffs whose time is up. Call from the day cycle. */
-  expireBuffs(hour) {
+  expireBuffs(hour: any) {
     const before = this.activeBuffs.length;
     const expired = this.activeBuffs.filter((b) => hour >= b.expiresAt);
     if (!expired.length) return [];
@@ -490,7 +501,7 @@ export class PartyState {
   }
 
   /** Pull Ascension tunables in. */
-  applyAscension(ascension) {
+  applyAscension(ascension: any) {
     this.bonuses.techCharge = ascension.value('techCharge');
     this.bonuses.techDamage = ascension.value('techDamage');
     this.bonuses.affinityGain = ascension.value('affinityGain');
@@ -527,7 +538,7 @@ export class PartyState {
     };
   }
 
-  static fromJSON(data, emitter = null) {
+  static fromJSON(data: any, emitter = null) {
     const p = new PartyState(emitter);
     if (!data) return p;
     for (const m of MEMBERS) {
@@ -538,7 +549,7 @@ export class PartyState {
     p.cookingLevel = data.cookingLevel || 1;
     p.mealsCooked = data.mealsCooked || 0;
     p.knownRecipes = new Set(data.knownRecipes || [...p.knownRecipes]);
-    p.activeBuffs = (data.activeBuffs || []).map((b) => ({ ...b, recipe: RECIPE_TABLE[b.id] || null }));
+    p.activeBuffs = (data.activeBuffs || []).map((b: any) => ({ ...b, recipe: RECIPE_TABLE[b.id] || null }));
     p.techCharge = data.techCharge || 0;
     p.applyBuffs();
     return p;

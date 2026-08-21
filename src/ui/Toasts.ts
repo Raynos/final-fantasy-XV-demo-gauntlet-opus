@@ -12,6 +12,9 @@ import { icon } from './Icons.ts';
  * no CSS transitions, so a capture after N fixed steps is reproducible.
  */
 export class Toasts {
+  items!: any[];
+  max!: number;
+  root!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div.toasts');
     // `parent` is the bottom-left corner's notice slot, which sits above the
@@ -42,7 +45,7 @@ export class Toasts {
     while (this.items.length > this.max) this._retire(this.items.shift());
   }
 
-  _retire(t) { if (t && t.node.parentNode) t.node.parentNode.removeChild(t.node); }
+  _retire(t: any) { if (t && t.node.parentNode) t.node.parentNode.removeChild(t.node); }
 
   /** Drop everything immediately — used by the capture harness between shots. */
   clear() {

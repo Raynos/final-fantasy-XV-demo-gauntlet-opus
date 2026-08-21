@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const DUN = 0xb59b70;
 const DUN_DARK = 0x8a7350;
@@ -54,7 +54,7 @@ export const ANAK = {
     },
   ],
   buildPrototype,
-  make(opts) { return new AnakEnemy(opts); },
+  make(opts: any) { return new AnakEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -229,7 +229,7 @@ function buildPrototype() {
  * skull — which live above the same heights as the saddle — are left alone.
  */
 function markings(parts: THREE.BufferGeometry[]) {
-  const cl01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const cl01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
   const dark = new THREE.Color().setHex(0x584730, THREE.SRGBColorSpace);
   const saddle = new THREE.Color().setHex(0x8f7852, THREE.SRGBColorSpace);
   const pale = new THREE.Color().setHex(0xe8dcc0, THREE.SRGBColorSpace);
@@ -257,20 +257,24 @@ function markings(parts: THREE.BufferGeometry[]) {
 }
 
 class AnakEnemy extends Enemy {
-  constructor(opts) { super(ANAK, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(ANAK, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     // neck as one curve: 0 = head up and alert, 1 = muzzle in the grass
-    const neck = (down, yaw = 0, roll = 0) => {
+    const neck = (down: any, yaw = 0, roll = 0) => {
       S('neck1', 0.55 * down - 0.10, yaw * 0.35, roll * 0.3);
       S('neck2', 0.60 * down, yaw * 0.45, roll * 0.35);
       S('head', 0.35 * down - 0.12, yaw * 0.55, roll * 0.4);
     };
     // long-legged loping trot; the legs swing from the shoulder like pendulums
-    const gait = (phase, amp, kneeAmp, front) => {
+    const gait = (phase: any, amp: any, kneeAmp: any, front: any) => {
       for (const s of [-1, 1]) {
         const n = s < 0 ? 'L' : 'R';
         const off = (s < 0 ? 0 : Math.PI) + (front ? 0 : Math.PI * 0.45);

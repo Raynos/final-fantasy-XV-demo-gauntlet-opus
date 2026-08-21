@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * draw calls is the whole point.
  */
 export class PartBuilder {
+  byMat!: Map<any, any>;
   constructor() { this.byMat = new Map(); }
 
   /**
@@ -33,7 +34,7 @@ export class PartBuilder {
   }
 
   /** Convenience: place a primitive with position / rotation / scale. */
-  place(mat, geo, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
+  place(mat: any, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(pos[0], pos[1], pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -91,8 +92,8 @@ export function loft(sections: {x:number, pts:Array<[number,number]>}[], { caps 
 
   if (caps) {
     // fan-cap both ends by adding a centre vertex each
-    const extra = [];
-    const addCap = (i, flip) => {
+    const extra: any[] = [];
+    const addCap = (i: any, flip: any) => {
       let cy = 0, cz = 0;
       for (let j = 0; j < N; j++) { cy += sections[i].pts[j][0]; cz += sections[i].pts[j][1]; }
       cy /= N; cz /= N;
@@ -122,7 +123,7 @@ export function loft(sections: {x:number, pts:Array<[number,number]>}[], { caps 
 }
 
 /** A superelliptic ring in the YZ plane, used for lofted car bodies. */
-export function ring(n, halfWidth, yLow, yHigh, power = 3.6, shear = 0) {
+export function ring(n: any, halfWidth: any, yLow: any, yHigh: any, power = 3.6, shear = 0) {
   const pts = [];
   const cy = (yLow + yHigh) * 0.5, hh = (yHigh - yLow) * 0.5;
   const e = 2 / power;
@@ -137,7 +138,7 @@ export function ring(n, halfWidth, yLow, yHigh, power = 3.6, shear = 0) {
 }
 
 /** Extract a contiguous band of a loft's rings as an open shell. */
-export function loftBand(sections, j0, j1, offsetOut = 0) {
+export function loftBand(sections: any, j0: any, j1: any, offsetOut = 0) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const cols = [];

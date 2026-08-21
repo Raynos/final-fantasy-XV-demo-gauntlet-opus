@@ -12,6 +12,17 @@ import { Rng } from '../../util/Rng.ts';
  * and being unable to run away is most of what makes it feel like an Astral.
  */
 export class TitanArena {
+  _tmp!: THREE.Vector3;
+  centre!: any;
+  game!: any;
+  mesh!: THREE.Mesh;
+  radius!: any;
+  risen!: number;
+  rng!: Rng;
+  root!: THREE.Group;
+  shake!: number;
+  terrain!: any;
+  vfx!: any;
   constructor(game: any, centre: THREE.Vector3, radius: number = 60) {
     this.game = game;
     this.centre = centre.clone();
@@ -106,7 +117,7 @@ export class TitanArena {
   }
 
   /** Each new phase splits the floor a little further open. */
-  riseSpires(phase) {
+  riseSpires(phase: any) {
     this.risen = phase;
     this.quake(1.2);
     if (!this.vfx) return;
@@ -126,7 +137,7 @@ export class TitanArena {
    * Keep the party inside the ring, and bleed the quake off. Called from the
    * fight's tick, so no other system has to know the arena exists.
    */
-  update(dt) {
+  update(dt: any) {
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 0.9);
     const player = this.game.get('Player');
     if (player) this._contain(player.root.position);
@@ -134,7 +145,7 @@ export class TitanArena {
     if (party && party.members) for (const m of party.members) this._contain(m.root.position);
   }
 
-  _contain(p) {
+  _contain(p: any) {
     const dx = p.x - this.centre.x, dz = p.z - this.centre.z;
     const d = Math.hypot(dx, dz);
     const lim = this.radius - 4;

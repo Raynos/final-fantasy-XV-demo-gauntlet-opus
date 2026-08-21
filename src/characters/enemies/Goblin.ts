@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 /* Daemon flesh, not a colour swatch. The goblin used to be one flat violet
  * from ear to claw, which is what made it read as a purple mannequin: no value
@@ -48,7 +48,7 @@ export const GOBLIN = {
       telegraph: 0.5, strike: 0.16, attack: 0.5, recover: 0.8, cooldown: 4, lunge: 10 },
   ],
   buildPrototype,
-  make(opts) { return new GoblinEnemy(opts); },
+  make(opts: any) { return new GoblinEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -214,12 +214,15 @@ function buildPrototype() {
 }
 
 class GoblinEnemy extends Enemy {
-  constructor(opts) { super(GOBLIN, opts); }
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(GOBLIN, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     // permanent hunch — the goblin is never upright
     const hunch = () => { S('spine', 0.30, 0, 0); S('chest', 0.20, 0, 0); S('neck', -0.30, 0, 0); };
 
@@ -368,7 +371,7 @@ function paint(geo: THREE.BufferGeometry, fn: (x:number,y:number,z:number)=>[num
 }
 
 /** sRGB mix that accepts a hex or an already-mixed Colour at either end. */
-function mix(a, b, t) {
+function mix(a: any, b: any, t: any) {
   if (typeof b === 'number') _pd.setHex(b, THREE.SRGBColorSpace); else _pd.copy(b);
   if (typeof a === 'number') _pc.setHex(a, THREE.SRGBColorSpace); else if (a !== _pc) _pc.copy(a);
   return _pc.lerp(_pd, t < 0 ? 0 : t > 1 ? 1 : t);
@@ -379,7 +382,7 @@ function mix(a, b, t) {
  * black at the extremities, blotched everywhere. `down` is how far under the
  * body the point faces, `ext` how far out along a limb it is.
  */
-function goblinSkin(x, y, z, ext = 0) {
+function goblinSkin(x: any, y: any, z: any, ext = 0) {
   // three incommensurate sines make a blotch field that never repeats visibly
   const n = Math.sin(x * 23.7 + y * 11.3) * 0.5 + Math.sin(y * 17.1 - z * 13.9) * 0.35
     + Math.sin(z * 29.3 + x * 7.7) * 0.25;

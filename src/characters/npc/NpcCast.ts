@@ -14,12 +14,12 @@ import * as THREE from 'three';
  * her weight on one hip; Dave is tall, lean and never takes the cap off.
  */
 
-const srgb = (hex) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
+const srgb = (hex: any) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
 
 /** A compact hair set: crown mat, a sweep and a back layer. Three tufts, not ten. */
 function hairSet({
   color, tip, len = 0.036, back = 0.05, n = 130, sweep = 0.0, spring = 0.25, rough = 0.38,
-}) {
+}: any) {
   return {
     color, tipColor: tip, rough, shell: 0.0125, volume: 0.9,
     hairline: 0.004, peak: 0.3, wisps: 18, wispLen: 0.7,
@@ -32,7 +32,7 @@ function hairSet({
 }
 
 /** A long ponytail dropping from the back of the crown. */
-function ponytail(color, tip, len = 0.20) {
+function ponytail(color: any, tip: any, len = 0.20) {
   return {
     n: 84, th: [2.6, 3.7], phi: [0.55, 0.95], dir: [0, -0.94, -0.34], out: 0.58, bend: 1.0,
     len, width: 0.0030, thick: 0.34, spike: 0.5, sag: 0.16, dirJit: 0.05, lenVar: 0.16,
@@ -41,7 +41,7 @@ function ponytail(color, tip, len = 0.20) {
 }
 
 /** A short beard rooted below the equator. */
-function beard(color, tip, len = 0.016, n = 110) {
+function beard(color: any, tip: any, len = 0.016, n = 110) {
   return [
     { n, th: [-1.45, 1.45], phi: [2.05, 2.75], absPhi: true, dir: [0, -0.9, 0.36], out: 0.86, bend: 0.94, len, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.22, lenVar: 0.34, color, tipColor: tip },
     { n: Math.round(n * 0.4), th: [-0.6, 0.6], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: len * 0.8, width: 0.0011, thick: 0.45, spike: 0.9, dirJit: 0.2, lenVar: 0.3, color, tipColor: tip },

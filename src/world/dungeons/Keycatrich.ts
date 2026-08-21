@@ -52,7 +52,7 @@ export const KEYCATRICH = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L) {
+  author(L: any) {
     L.room('entry', { x: 0, z: 0, w: 11, d: 9, y: 0, h: 4.2, kind: 'entry', name: 'Trench Head' });
     L.room('guard', { x: 0, z: -24, w: 10, d: 10, y: -1.6, h: 4.0, kind: 'junction', name: 'Guard Post' });
     L.room('sap', { x: -14, z: -24, w: 8, d: 6.5, y: -1.6, h: 3.2, kind: 'dead-end', name: 'Collapsed Sap' });
@@ -105,8 +105,8 @@ export const KEYCATRICH = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit, L) {
-    const strip = (x, z, y, rot, live = true, o = {}) => {
+  dress(kit: any, L: any) {
+    const strip = (x: any, z: any, y: any, rot: any, live = true, o = {}) => {
       if (live) kit.emergencyStrip(x, y, z, { rot, ...o });
       else kit.deadStrip(x, y, z, { rot });
     };
@@ -247,7 +247,7 @@ export const KEYCATRICH = {
    * The shaft of light the entrance throws down the first corridor. Built after
    * the shell so it can be positioned against the finished geometry.
    */
-  extras(dungeon) {
+  extras(dungeon: any) {
     const rig = dungeon.rig;
     const geo = new THREE.CylinderGeometry(0.9, 3.4, 9, 12, 1, true);
     const mesh = new THREE.Mesh(geo, M.shaftMaterial(0xdce8ff, 0.10));

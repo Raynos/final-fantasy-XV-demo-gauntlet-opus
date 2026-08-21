@@ -11,6 +11,16 @@ import { turbulence } from './VfxTextures.ts';
  * gives the streak a genuine chromatic dispersion instead of a flat tint.
  */
 export class PolyBeam {
+  _tmpA!: THREE.Vector3;
+  _tmpB!: THREE.Vector3;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  pathPos!: Float32Array;
+  pathTan!: Float32Array;
+  posAttr!: any;
+  segments!: any;
+  tanAttr!: any;
+  uniforms!: any;
   constructor({
     segments = 56, head = 0xbfe8ff, tail = 0x1b3f8f, core = 0xffffff,
     width = 0.22, taper = 0.85, headBulge = 0.0, falloff = 0.7,
@@ -84,7 +94,7 @@ export class PolyBeam {
   }
 
   /** Straight streak between two world points. */
-  setLine(from, to) {
+  setLine(from: any, to: any) {
     const n = this.segments + 1;
     const p = this.pathPos, t = this.pathTan;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
@@ -105,7 +115,7 @@ export class PolyBeam {
   }
 
   /** Arbitrary path (resampled linearly onto the ribbon's segment count). */
-  setPath(points) {
+  setPath(points: any) {
     const n = this.segments + 1;
     const p = this.pathPos, t = this.pathTan;
     const m = points.length;
@@ -133,15 +143,15 @@ export class PolyBeam {
 
   set strength(v) { this.uniforms.uStrength.value = v; this.mesh.visible = v > 0.001; }
   get strength() { return this.uniforms.uStrength.value; }
-  set width(v) { this.uniforms.uWidth.value = v; }
+  set width(v: any) { this.uniforms.uWidth.value = v; }
 
-  setClock(c) { this.uniforms.uTime.value = c; }
+  setClock(c: any) { this.uniforms.uTime.value = c; }
   hide() { this.mesh.visible = false; }
   dispose() { this.mesh.geometry.dispose(); this.material.dispose(); }
 }
 
 /** Build a jagged branching lightning path between two points. */
-export function lightningPath(from, to, rng, { jitter = 0.5, points = 14 } = {}) {
+export function lightningPath(from: any, to: any, rng: any, { jitter = 0.5, points = 14 } = {}) {
   const pts = [];
   const dir = new THREE.Vector3().subVectors(to, from);
   const len = dir.length();

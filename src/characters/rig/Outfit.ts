@@ -7,10 +7,10 @@ const _c = new THREE.Color();
 const _cloth = new Noise(9137);
 
 /** Gaussian ridge centred on `c`, half-width `w`. */
-const ridge = (x, c, w) => Math.exp(-((x - c) / w) * ((x - c) / w));
+const ridge = (x: any, c: any, w: any) => Math.exp(-((x - c) / w) * ((x - c) / w));
 
 /** Same, on an angle, wrapping at 2π. */
-function aridge(th, c, w) {
+function aridge(th: any, c: any, w: any) {
   let d = Math.abs(th - c) % (Math.PI * 2);
   if (d > Math.PI) d = Math.PI * 2 - d;
   return Math.exp(-(d / w) * (d / w));
@@ -37,17 +37,17 @@ function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:n
   const yoke = o.yoke ?? 0.76;
   const wear = o.wear ?? 1;
   const out = new THREE.Color();
-  const seamK = (th, t) => {
+  const seamK = (th: any, t: any) => {
     let s = 0;
     for (const c of seams) s = Math.max(s, aridge(th, c, o.seamW ?? 0.055));
     s = Math.max(s, ridge(t, yoke, 0.020) * 0.9);
     return s;
   };
-  const wearK = (th, t) => wear * (
+  const wearK = (th: any, t: any) => wear * (
     0.85 * ridge(t, o.hemAt ?? 0.030, 0.042)
     + 0.45 * ridge(t, 0.885, 0.055) * Math.pow(Math.abs(Math.sin(th)), 2.0)
   );
-  const mottle = (th, t) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
+  const mottle = (th: any, t: any) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
   return {
     /** Seam mask, 0..1 — also drives the raised topstitch ridge in `shape`. */
     seam: seamK,
@@ -60,8 +60,8 @@ function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:n
 }
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
-function under(fn, u0, u1, damp = 0.88) {
-  return (th, t) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
+function under(fn: any, u0: any, u1: any, damp = 0.88) {
+  return (th: any, t: any) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
 }
 
 /**
@@ -86,8 +86,8 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
     rig,
     look,
     torso: torsoNodes(rig),
-    arm: (side) => armNodes(rig, side),
-    leg: (side) => legNodes(rig, side),
+    arm: (side: any) => armNodes(rig, side),
+    leg: (side: any) => legNodes(rig, side),
     s: rig.dims.s,
   };
   let g = 10;
@@ -102,14 +102,14 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
 }
 
 /** Register a garment type. */
-function piece(name, fn) { PIECES[name] = fn; }
+function piece(name: any, fn: any) { PIECES[name] = fn; }
 
 // ---------------------------------------------------------------------------
 // torso layers
 // ---------------------------------------------------------------------------
 
 /** Closed torso layer — tee, tank top, undershirt. */
-piece('shirt', (B, ctx, o) => {
+piece('shirt', (B: any, ctx: any, o: any) => {
   const u0 = o.u0 ?? 0.28, u1 = o.u1 ?? 0.96;
   const nodes = drape(ctx.torso, u0, u1, 10, o.pad ?? 0.010, o.padZ);
   const cut = o.neckCut ?? 0.55;
@@ -132,13 +132,13 @@ piece('shirt', (B, ctx, o) => {
       + (o.neckRib ?? 0.013) * ridge(t, 0.965, 0.030)
       + (o.hemRib ?? 0.011) * ridge(t, 0.030, 0.026),
     colorAt: o.print
-      ? (th, t) => tee.copy(shade.color(th, t))
+      ? (th: any, t: any) => tee.copy(shade.color(th, t))
         .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026))
         .lerp(printC, o.print(th, t))
-      : (th, t) => tee.copy(shade.color(th, t))
+      : (th: any, t: any) => tee.copy(shade.color(th, t))
         .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026)),
     matAt: o.print
-      ? (th, t) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * o.print(th, t)), m[1], 0]; }
+      ? (th: any, t: any) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * o.print(th, t)), m[1], 0]; }
       : shade.mat,
     uvScale: [1.4, 2.4],
   });
@@ -147,18 +147,18 @@ piece('shirt', (B, ctx, o) => {
 });
 
 /** Open-front jacket / coat body, with lapels, thickness and a flared hem. */
-piece('jacket', (B, ctx, o) => {
+piece('jacket', (B: any, ctx: any, o: any) => {
   const gap = o.gap ?? 0.42;
   const u0 = o.u0 ?? 0.30, u1 = o.u1 ?? 0.96;
   // the pad tucks in toward the yoke so the cut edge hides against the shoulder
   const base = o.pad ?? 0.026;
-  const padFn = (t) => base * (1 - 0.62 * smooth((t - 0.70) / 0.30));
+  const padFn = (t: any) => base * (1 - 0.62 * smooth((t - 0.70) / 0.30));
   const nodes = drape(ctx.torso, u0, u1, 12, padFn, padFn);
   const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.90);
   const shade = clothShade(o);
   const jc = new THREE.Color();
   /** How proud of the panel a point sits: placket band plus hem band. */
-  const proud = (th, t) => {
+  const proud = (th: any, t: any) => {
     const pl = Math.min(
       Math.abs(th - (gap + 0.20)),
       Math.abs(th - (Math.PI * 2 - gap - 0.20))
@@ -174,7 +174,7 @@ piece('jacket', (B, ctx, o) => {
     nodes, steps: o.steps ?? 26, seg: o.seg ?? 38,
     theta0: gap, theta1: Math.PI * 2 - gap,
     thickness: o.thickness ?? 0.013,
-    shape: (th, t) => {
+    shape: (th: any, t: any) => {
       let k = body(th, t);
       // lapel roll: the front edges peel outward across the chest only — let it
       // reach the yoke and the shoulder grows a pointed epaulette
@@ -215,25 +215,25 @@ piece('jacket', (B, ctx, o) => {
     },
     // the top edge follows the trapezius down toward the acromion — a flat
     // horizontal ring here is what produces boxy pauldron corners
-    offset: (th, t, out) => {
+    offset: (th: any, t: any, out: any) => {
       const drop = (o.shoulderDrop ?? 0.008) * ctx.s;
       out.y = -drop * smooth((t - 0.62) / 0.38) * Math.pow(Math.abs(Math.sin(th)), 1.6);
     },
     uvScale: [1.6, 2.6],
     // the placket and the hem are proud of the panel, so they take the light:
     // a shade lighter and a good deal smoother than the cloth behind them
-    colorAt: (th, t) => jc.copy(shade.color(th, t)).multiplyScalar(1 + 0.45 * proud(th, t)),
-    matAt: (th, t) => { const m = shade.mat(th, t); return [clamp01(m[0] - 0.26 * proud(th, t)), m[1], 0]; },
+    colorAt: (th: any, t: any) => jc.copy(shade.color(th, t)).multiplyScalar(1 + 0.45 * proud(th, t)),
+    matAt: (th: any, t: any) => { const m = shade.mat(th, t); return [clamp01(m[0] - 0.26 * proud(th, t)), m[1], 0]; },
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
   if (o.collar !== false) collar(B, ctx, o);
 });
 
 /** Stand-up or fold-down collar wrapped around the neck. */
-function collar(B, ctx, o) {
+function collar(B: any, ctx: any, o: any) {
   const { rig } = ctx;
   const s = ctx.s;
-  const y = (v) => v * s;
+  const y = (v: any) => v * s;
   const h = o.collarH ?? 0.055;
   const gap = o.collarGap ?? (o.gap ?? 0.42) * 0.8;
   const r0 = (o.collarR ?? 0.085) * s;
@@ -254,21 +254,21 @@ function collar(B, ctx, o) {
     nodes, steps: 7, seg: 24,
     theta0: gap, theta1: Math.PI * 2 - gap,
     thickness: o.thickness ?? 0.012,
-    shape: (th, t) => 1 + 0.16 * t * Math.exp(-Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap))) * 3)
+    shape: (th: any, t: any) => 1 + 0.16 * t * Math.exp(-Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap))) * 3)
       + 0.020 * Math.sin(th * 6.0 + 1.4) * t,
-    colorAt: (th, t) => out.copy(cCol).multiplyScalar(1 + 0.55 * Math.pow(t, 2.2) + 0.05 * Math.sin(th * 5.0)),
-    matAt: (th, t) => [clamp01(cRough - 0.22 * Math.pow(t, 2.2)), o.metal ?? 0, 0],
+    colorAt: (th: any, t: any) => out.copy(cCol).multiplyScalar(1 + 0.55 * Math.pow(t, 2.2) + 0.05 * Math.sin(th * 5.0)),
+    matAt: (th: any, t: any) => [clamp01(cRough - 0.22 * Math.pow(t, 2.2)), o.metal ?? 0, 0],
     uvScale: [1, 0.5],
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
 }
 
 /** Skirt / coat tails hanging from the waist, driven by the coat spring bones. */
-piece('skirt', (B, ctx, o) => {
+piece('skirt', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
-  const y = (v) => v * s;
+  const y = (v: any) => v * s;
   const top = o.top ?? 1.02, bot = o.bottom ?? 0.72;
   const rTop = (o.rTop ?? 0.175) * s, rBot = (o.rBot ?? 0.20) * s;
   const steps = o.steps ?? 10;
@@ -291,16 +291,16 @@ piece('skirt', (B, ctx, o) => {
     nodes, steps, seg: o.seg ?? 22,
     theta0: gap, theta1: Math.PI * 2 - gap,
     thickness: o.thickness ?? 0.012,
-    shape: (th, t) => 1
+    shape: (th: any, t: any) => 1
       + (o.wave ?? 0.05) * Math.sin(th * 6) * t
       + (o.backLong ?? 0) * abump(th, Math.PI, 1.4) * t,
-    offset: (th, t, out) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
+    offset: (th: any, t: any, out: any) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
     uvScale: [1.6, 1.2],
   });
 });
 
 /** Sleeve over the arm; `u1` sets short / three-quarter / full length. */
-piece('sleeve', (B, ctx, o) => {
+piece('sleeve', (B: any, ctx: any, o: any) => {
   for (const side of (o.sides || ['L', 'R'])) {
     // The sleeve now starts at the *clavicle root*, i.e. buried inside the
     // torso shell, and simply emerges from under the jacket yoke. Cutting it at
@@ -340,7 +340,7 @@ piece('sleeve', (B, ctx, o) => {
 });
 
 /** Trousers — one closed tube per leg plus a waistband. */
-piece('pants', (B, ctx, o) => {
+piece('pants', (B: any, ctx: any, o: any) => {
   for (const side of ['L', 'R']) {
     const u0 = o.u0 ?? 0.02, u1 = o.u1 ?? 0.93;
     const nodes = drape(ctx.leg(side), u0, u1, 10,
@@ -374,7 +374,7 @@ piece('pants', (B, ctx, o) => {
 });
 
 /** Boots: a foot shell swept heel-to-toe plus a shaft up the shin. */
-piece('boots', (B, ctx, o) => {
+piece('boots', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
@@ -429,7 +429,7 @@ piece('boots', (B, ctx, o) => {
 });
 
 /** Belt or waist strap. */
-piece('belt', (B, ctx, o) => {
+piece('belt', (B: any, ctx: any, o: any) => {
   const nodes = drape(ctx.torso, (o.u ?? 0.36) - 0.03, (o.u ?? 0.36) + 0.03, 3, o.pad ?? 0.020, (o.padZ ?? o.pad ?? 0.020));
   sweepTube(B, {
     nodes, steps: 3, seg: o.seg ?? 22,
@@ -449,13 +449,13 @@ piece('belt', (B, ctx, o) => {
 });
 
 /** Shoulder-to-hip strap (camera strap, sword harness). */
-piece('strap', (B, ctx, o) => {
+piece('strap', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
   const sg = o.side === 'R' ? -1 : 1;
   const w = (o.width ?? 0.020) * s;
-  const end = o.to ? o.to.map((v) => v * s) : [-sg * 0.070 * s, rig.dims.shoulderY - 0.30 * s, 0.090 * s];
+  const end = o.to ? o.to.map((v: any) => v * s) : [-sg * 0.070 * s, rig.dims.shoulderY - 0.30 * s, 0.090 * s];
   const pts = [
     { p: [sg * 0.058 * s, rig.dims.shoulderY + 0.020 * s, -0.052 * s], w: [[I.spine03, 1]] },
     { p: [sg * 0.082 * s, rig.dims.shoulderY + 0.012 * s, 0.028 * s], w: [[I.spine03, 1]] },
@@ -469,7 +469,7 @@ piece('strap', (B, ctx, o) => {
 });
 
 /** Wrist / arm band. */
-piece('band', (B, ctx, o) => {
+piece('band', (B: any, ctx: any, o: any) => {
   for (const side of (o.sides || ['L', 'R'])) {
     const nodes = drape(ctx.arm(side), (o.u ?? 0.88) - 0.035, (o.u ?? 0.88) + 0.035, 4, o.pad ?? 0.008);
     sweepTube(B, {
@@ -481,7 +481,7 @@ piece('band', (B, ctx, o) => {
 });
 
 /** Shoulder guard / pauldron-ish pad. */
-piece('pad', (B, ctx, o) => {
+piece('pad', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
@@ -500,11 +500,11 @@ piece('pad', (B, ctx, o) => {
 });
 
 /** A camera body with lens, hanging where a strap would carry it. */
-piece('camera', (B, ctx, o) => {
+piece('camera', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
-  const p = [(o.at ?? [-0.10, 1.06, 0.135]).map((v, i) => v * s)[0],
+  const p = [(o.at ?? [-0.10, 1.06, 0.135]).map((v: any, i: any) => v * s)[0],
     (o.at ?? [-0.10, 1.06, 0.135])[1] * s, (o.at ?? [-0.10, 1.06, 0.135])[2] * s];
   B.skin([[I.spine01, 0.65], [I.spine02, 0.35]]);
   B.color(o.color ?? 0x1c1d22).mat(0.45, 0.15);
@@ -522,12 +522,12 @@ piece('camera', (B, ctx, o) => {
 });
 
 /** Rectangular spectacles: frame rims plus temple arms. */
-piece('glasses', (B, ctx, o) => {
+piece('glasses', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = rig.dims.headScale;
   const org = rig.dims.headOrigin;
-  const put = (x, y, z) => [org.x + x * s, org.y + y * s, org.z + z * s];
+  const put = (x: any, y: any, z: any) => [org.x + x * s, org.y + y * s, org.z + z * s];
   B.skin([[I.head, 1]]);
   B.color(o.color ?? 0x23262c).mat(0.26, 0.55);
   const w = 0.0345, h = 0.0145;
@@ -566,7 +566,7 @@ piece('glasses', (B, ctx, o) => {
 });
 
 /** Small pouch / holster block on the thigh or belt. */
-piece('pouch', (B, ctx, o) => {
+piece('pouch', (B: any, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
@@ -585,7 +585,7 @@ piece('pouch', (B, ctx, o) => {
 });
 
 /** Decorative panel — a flat plate laid on the chest or back (armour, tattoo pad). */
-piece('plate', (B, ctx, o) => {
+piece('plate', (B: any, ctx: any, o: any) => {
   const nodes = drape(ctx.torso, o.u0 ?? 0.6, o.u1 ?? 0.95, 5, (o.pad ?? 0.004));
   sweepTube(B, {
     nodes, steps: 6, seg: 18,
@@ -594,7 +594,7 @@ piece('plate', (B, ctx, o) => {
   });
 });
 
-function hemBand(B, ctx, node, o) {
+function hemBand(B: any, ctx: any, node: any, o: any) {
   const nodes = drape(ctx.torso, o.u0 ?? 0.28, (o.u0 ?? 0.28) + 0.05, 3, (o.pad ?? 0.010) + 0.004);
   sweepTube(B, { nodes, steps: 3, seg: 20, uvScale: [1, 0.2] });
 }

@@ -37,7 +37,7 @@ export function routeClass(route: {cls:string|{id:string}}): string {
 }
 
 /** Cached decimated route geometry, one entry per level of detail. */
-let _lods = null;
+let _lods: any = null;
 
 function lods() {
   if (_lods) return _lods;
@@ -104,7 +104,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
       } else {
         c.strokeStyle = `rgba(${st.col[0]},${st.col[1]},${st.col[2]},${(st.a * alpha).toFixed(3)})`;
         c.lineWidth = w;
-        c.setLineDash(st.dash ? st.dash.map((v) => v * Math.min(2.2, Math.max(0.6, scale))) : []);
+        c.setLineDash(st.dash ? st.dash.map((v: any) => v * Math.min(2.2, Math.max(0.6, scale))) : []);
       }
       c.stroke();
     }
@@ -117,7 +117,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
  * Junction pips — a small tick where two named routes meet, which is what
  * makes a road network read as a network rather than as crossing lines.
  */
-export function drawJunctions(c, sx, sy, scale, alpha) {
+export function drawJunctions(c: any, sx: any, sy: any, scale: any, alpha: any) {
   const g = worldMap.roadGraph;
   c.save();
   c.globalAlpha = alpha;
@@ -133,7 +133,7 @@ export function drawJunctions(c, sx, sy, scale, alpha) {
 
 // ------------------------------------------------------------ zone borders
 
-let _borders = null;
+let _borders: any = null;
 
 /**
  * Trace the boundary between zones of influence.
@@ -183,10 +183,10 @@ export function zoneBorders(): Array<Float32Array> {
   }
 
   // dual-grid segments between differing cells
-  const segs = [];
-  const key = (a, b) => a * 4096 + b;
+  const segs: any[] = [];
+  const key = (a: any, b: any) => a * 4096 + b;
   const at = new Map();
-  const push = (ax, ay, bx, by) => {
+  const push = (ax: any, ay: any, bx: any, by: any) => {
     const idx = segs.length;
     segs.push([ax, ay, bx, by, false]);
     for (const k of [key(ax, ay), key(bx, by)]) {
@@ -205,7 +205,7 @@ export function zoneBorders(): Array<Float32Array> {
 
   // walk chains of segments into polylines
   const out = [];
-  const toWorld = (a) => -WORLD.half + a * step;
+  const toWorld = (a: any) => -WORLD.half + a * step;
   for (let s = 0; s < segs.length; s++) {
     if (segs[s][4]) continue;
     const chain = [[segs[s][0], segs[s][1]], [segs[s][2], segs[s][3]]];
@@ -234,7 +234,7 @@ export function zoneBorders(): Array<Float32Array> {
   return out;
 }
 
-function chaikin(p) {
+function chaikin(p: any) {
   const out = [p[0]];
   for (let i = 0; i < p.length - 1; i++) {
     const a = p[i], b = p[i + 1];
@@ -249,7 +249,7 @@ function chaikin(p) {
  * Stroke the zone borders as a fine broken hairline, the way an atlas draws an
  * administrative boundary.
  */
-export function drawZoneBorders(c, sx, sy, opt = {}) {
+export function drawZoneBorders(c: any, sx: any, sy: any, opt = {}) {
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
   const scale = opt.scale || 1;
@@ -299,7 +299,7 @@ export function spacedText(c: CanvasRenderingContext2D, text: string, x: number,
 }
 
 /** Width a `spacedText` run would take. */
-export function spacedWidth(c, text, spacing) {
+export function spacedWidth(c: any, text: any, spacing: any) {
   let total = 0;
   for (const ch of text) total += c.measureText(ch).width + spacing;
   return total - spacing;
@@ -311,10 +311,12 @@ export function spacedWidth(c, text, spacing) {
  * rather than allowed to overlap.
  */
 export class LabelPlacer {
+  pad!: any;
+  rects!: any[];
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }
   /** @returns true if the box was free, in which case it is reserved */
-  place(x0, y0, x1, y1): boolean {
+  place(x0: any, y0: any, x1: any, y1: any): boolean {
     const p = this.pad;
     for (const r of this.rects) {
       if (x0 - p < r[2] && x1 + p > r[0] && y0 - p < r[3] && y1 + p > r[1]) return false;
@@ -323,5 +325,5 @@ export class LabelPlacer {
     return true;
   }
   /** Reserve a box without testing it (for marks that must always show). */
-  reserve(x0, y0, x1, y1) { this.rects.push([x0, y0, x1, y1]); }
+  reserve(x0: any, y0: any, x1: any, y1: any) { this.rects.push([x0, y0, x1, y1]); }
 }

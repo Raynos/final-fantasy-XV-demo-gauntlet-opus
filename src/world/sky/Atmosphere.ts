@@ -58,7 +58,17 @@ void main() {
  * no dome seam and no interpolation error on the sun disc.
  */
 export class Atmosphere {
-  constructor(renderer) {
+  _skyQuad!: FullScreenQuad;
+  _transQuad!: FullScreenQuad;
+  envMaterial!: any;
+  envMesh!: any;
+  material!: any;
+  mesh!: any;
+  renderer!: any;
+  skyViewRT!: THREE.WebGLRenderTarget;
+  transmittanceRT!: THREE.WebGLRenderTarget;
+  uniforms!: any;
+  constructor(renderer: any) {
     this.renderer = renderer;
 
     this.transmittanceRT = new THREE.WebGLRenderTarget(256, 64, {
@@ -123,7 +133,7 @@ export class Atmosphere {
    * screen dome and the environment-probe dome always agree; only the cloud
    * source differs.
    */
-  createDome(uniforms) {
+  createDome(uniforms: any) {
     this.uniforms = uniforms;
     const geo = new THREE.SphereGeometry(4000, 48, 32);
     const mat = new THREE.ShaderMaterial({

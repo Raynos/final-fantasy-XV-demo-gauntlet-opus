@@ -73,7 +73,7 @@ export const SABERTUSK = {
       telegraph: 0.52, strike: 0.18, attack: 0.55, recover: 0.9, cooldown: 3.2, lunge: 13, tracking: 1.0 },
   ],
   buildPrototype,
-  make(opts) { return new SabertuskEnemy(opts); },
+  make(opts: any) { return new SabertuskEnemy(opts); },
 };
 
 /* Shoulder height 0.86; nose at z ≈ 1.28; rump at z ≈ -0.78. */
@@ -109,7 +109,7 @@ function buildPrototype() {
   // theta 0 = +Z side of the ring; because the sweep runs along +Z the ring
   // frame puts theta = π/2 on the animal's left and 0 on its back.
   B.group(1);
-  const backline = (th) => Math.cos(th);           // +1 on the spine, -1 on the belly
+  const backline = (th: any) => Math.cos(th);           // +1 on the spine, -1 on the belly
   sweep(B, {
     nodes: [
       { p: [0, 0.70, -0.80], rx: 0.145, rz: 0.155 },
@@ -202,7 +202,7 @@ function buildPrototype() {
       { p: [0, 0.86, 1.06], r: [0.045, 0.05, 0.11], amt: 0.012, dir: [0, 1, 0] },       // nasal bone
       { p: [0.05, 0.79, 1.10], r: [0.05, 0.05, 0.10], amt: 0.014, dir: [1, 0, 0], mirror: true }, // flews
     ],
-    colorAt: (u, v, p) => {
+    colorAt: (u: any, v: any, p: any) => {
       // A bandit mask: black from the brow through the eye and down the bridge
       // of the nose, cream on the cheek and under the jaw. This is the single
       // change that makes the head read as a head instead of a knuckle on the
@@ -214,7 +214,7 @@ function buildPrototype() {
       const base = blend(FUR, BELLY, Math.max(cheek * 0.65, under * 0.8));
       return blend(base, FUR_DARK, clamp01(Math.max(mask, bridge)) * 0.9);
     },
-    matAt: (u, v, p) => (p.z > 1.19 ? M_WET : M_FUR),
+    matAt: (u: any, v: any, p: any) => (p.z > 1.19 ? M_WET : M_FUR),
   });
   // nose leather
   sculptBlob(B, {
@@ -427,7 +427,7 @@ function buildPrototype() {
 }
 
 /** Toe pad group: three digits and their claws. */
-function paw(B, x, y, z, dir) {
+function paw(B: any, x: any, y: any, z: any, dir: any) {
   const sgn = Math.sign(x) || 1;
   for (let i = -1; i <= 1; i++) {
     const ox = x + i * 0.033 * sgn;
@@ -449,7 +449,7 @@ function paw(B, x, y, z, dir) {
   }
 }
 
-function resetB(B) {
+function resetB(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -474,7 +474,8 @@ function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
 }
 
 class SabertuskEnemy extends QuadrupedEnemy {
-  constructor(opts) { super(SABERTUSK, opts); }
+  attackId!: any;
+  constructor(opts: any) { super(SABERTUSK, opts); }
 
   /** A pounce coils harder and leaves the ground; a bite barely does either. */
   telegraphScale() { return this.attackId === 'pounce' ? 1.15 : 0.8; }

@@ -29,7 +29,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   const sample = skullSampler(look);
   const B = new MeshBuilder('hair');
 
-  const put = (p) => new THREE.Vector3(p.x, p.y, p.z).multiplyScalar(scale).add(origin);
+  const put = (p: any) => new THREE.Vector3(p.x, p.y, p.z).multiplyScalar(scale).add(origin);
   const base = new THREE.Color().setHex(H.color, THREE.SRGBColorSpace);
   const tip = new THREE.Color().setHex(H.tipColor ?? H.color, THREE.SRGBColorSpace);
   const rootC = base.clone().multiplyScalar(0.84);
@@ -41,7 +41,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   // A hairline is not a circle. It rides high across the forehead, plunges at
   // the temples, and drops lowest at the nape — and if the temples do not drop
   // the character has two bald patches beside the eyes from every angle.
-  const hairline = (th) => {
+  const hairline = (th: any) => {
     const c = Math.cos(th);
     // The front term was 0.049, which put the hairline 40 mm above the brow on a
     // 108 mm brow-to-crown skull. That is a 20-year-old with a receding
@@ -64,7 +64,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
     y += (H.earNotch ?? 0.056) * Math.exp(-Math.pow((ath - 1.66) / 0.34, 2));
     return y;
   };
-  const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
+  const phiOf = (th: any) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
 
   // ---- scalp shell -------------------------------------------------------
   // A denser shell, because the thing it has to stop being is *smooth*: at
@@ -75,7 +75,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   const shell = [];
   const shellN = new Noise((look.seed || 7) * 3 + 17);
   B.color(base).mat((H.rough ?? 0.36) + 0.22, 0, 0).skin([[I.head, 1]]);
-  const shellPoint = (th, t) => {
+  const shellPoint = (th: any, t: any) => {
     const pm = phiOf(th);
     const phi = pm * Math.min(1, t * 1.02);
     const { p, n } = sample(th, phi);
@@ -153,7 +153,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   // `hug: 0` opts a tuft out entirely — that is what a spike is.
   const rrH = [HEAD_R[0] * (look.headWidth ?? 1), HEAD_R[1], HEAD_R[2]];
   const _q = new THREE.Vector3();
-  const hugSkull = (v, maxOff, k) => {
+  const hugSkull = (v: any, maxOff: any, k: any) => {
     // fade the clamp out below the jaw and above the crown, where the skull's
     // spherical parameterisation stops meaning anything and a mane hanging past
     // the shoulders would otherwise be shoved back into the neck
@@ -295,7 +295,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
           // A lock narrows continuously from a wide root to a hair-fine tip, so
           // the width is a plain power curve and the root is correspondingly
           // wider to keep the same mass in the silhouette.
-          taper: (t) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
+          taper: (t: any) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
         });
       }
     }
@@ -330,7 +330,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
         up: nrm.toArray(),
         color: rootC.clone().multiplyScalar(0.9 + 0.3 * rng.next()),
         tipColor: base,
-        taper: (t) => Math.pow(1 - t, 0.5),
+        taper: (t: any) => Math.pow(1 - t, 0.5),
       });
     }
   }
@@ -358,7 +358,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
         width: (bw.width ?? 0.0055) * scale,
         thick: (bw.width ?? 0.0055) * scale * 0.35,
         up: out.toArray(),
-        taper: (t2) => Math.pow(1 - t2, 0.65),
+        taper: (t2: any) => Math.pow(1 - t2, 0.65),
       });
     }
   }

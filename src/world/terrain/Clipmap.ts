@@ -11,6 +11,13 @@ import * as THREE from 'three';
  * crack-free.
  */
 export class Clipmap {
+  castShadow!: any;
+  cell0!: any;
+  group!: THREE.Group;
+  levels!: any;
+  n!: any;
+  rings!: any[];
+  triangles!: number;
   /**
    * @param {object} opts
    * */
@@ -49,7 +56,7 @@ export class Clipmap {
   }
 
   /** One quadrant of one ring, in level-local metres. */
-  _quadrant(level, cell, sx, sz) {
+  _quadrant(level: any, cell: any, sx: any, sz: any) {
     const n = this.n;
     const outer = 2 * n;              // cells from centre to edge
     const hole = level === 0 ? 0 : n - 4;
@@ -102,7 +109,7 @@ export class Clipmap {
   }
 
   /** Re-centre every ring on the camera. Cheap: only matrices change. */
-  update(camX, camZ) {
+  update(camX: any, camZ: any) {
     for (const ring of this.rings) {
       const x = Math.round(camX / ring.snap) * ring.snap;
       const z = Math.round(camZ / ring.snap) * ring.snap;

@@ -58,7 +58,11 @@ void main() {
  * strongest when the sun is low and near the frame.
  */
 export class GodRaysPass extends Pass {
-  constructor(width, height) {
+  _quad!: FullScreenQuad;
+  compositeMaterial!: THREE.ShaderMaterial;
+  raysMaterial!: THREE.ShaderMaterial;
+  rt!: THREE.WebGLRenderTarget;
+  constructor(width: any, height: any) {
     super();
     this.needsSwap = true;
     this.enabled = true;
@@ -93,9 +97,9 @@ export class GodRaysPass extends Pass {
     this._quad = new FullScreenQuad(this.raysMaterial);
   }
 
-  setSize(w, h) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
+  setSize(w: any, h: any) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
 
-  render(renderer, writeBuffer, readBuffer) {
+  render(renderer: any, writeBuffer: any, readBuffer: any) {
     if (this.compositeMaterial.uniforms.uIntensity.value <= 0.0005) {
       // pass through untouched
       this.compositeMaterial.uniforms.tDiffuse.value = readBuffer.texture;

@@ -22,19 +22,19 @@ const _t = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _r = new THREE.Vector3();
 
-export const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
-export const smooth = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
-export const smoothIn = (a, b, x) => smooth((x - a) / (b - a));
-export const lerp = (a, b, t) => a + (b - a) * t;
+export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
+export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
+export const smoothIn = (a: any, b: any, x: any) => smooth((x - a) / (b - a));
+export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 
 /** Cosine bump centred on `c` with half-width `w`, in units of the input. */
-export function bump(x, c, w, amp = 1) {
+export function bump(x: any, c: any, w: any, amp = 1) {
   const d = Math.abs(x - c) / w;
   return d >= 1 ? 0 : amp * 0.5 * (1 + Math.cos(d * Math.PI));
 }
 
 /** Angular cosine bump — handles wrap-around at 2π. */
-export function abump(theta, c, w, amp = 1) {
+export function abump(theta: any, c: any, w: any, amp = 1) {
   let d = Math.abs(theta - c) % (Math.PI * 2);
   if (d > Math.PI) d = Math.PI * 2 - d;
   d /= w;
@@ -42,7 +42,7 @@ export function abump(theta, c, w, amp = 1) {
 }
 
 /** Catmull-Rom through a scalar array, `u` in [0,1] over (n-1) spans. */
-export function crScalar(vals, u) {
+export function crScalar(vals: any, u: any) {
   const n = vals.length;
   if (n === 1) return vals[0];
   const p = clamp01(u) * (n - 1);
@@ -59,6 +59,21 @@ export function crScalar(vals, u) {
  * emitting geometry stays terse.
  */
 export class MeshBuilder {
+  _c!: number[];
+  _g!: number;
+  _m!: number[];
+  _s!: number[];
+  _t!: number[];
+  col!: any[];
+  grp!: any[];
+  idx!: any[];
+  mp!: any[];
+  name!: any;
+  pos!: any[];
+  si!: any[];
+  sw!: any[];
+  tn!: any[];
+  uv!: any[];
   constructor(name = 'part') {
     this.name = name;
     this.pos = [];
@@ -78,41 +93,41 @@ export class MeshBuilder {
   }
 
   /** Smoothing group: normals are only averaged between vertices sharing one. */
-  group(g) { this._g = g; return this; }
+  group(g: any) { this._g = g; return this; }
 
   /** Base colour for subsequent vertices (linear-ish sRGB THREE.Color or hex). */
-  color(c) {
+  color(c: any) {
     const col = c instanceof THREE.Color ? c : new THREE.Color().setHex(c, THREE.SRGBColorSpace);
     this._c = [col.r, col.g, col.b];
     return this;
   }
 
-  tint(mul) { this._c = [this._c[0] * mul, this._c[1] * mul, this._c[2] * mul]; return this; }
+  tint(mul: any) { this._c = [this._c[0] * mul, this._c[1] * mul, this._c[2] * mul]; return this; }
 
   /**
    * Per-vertex roughness / metalness / translucent thickness.
    * `thick` is 0 for opaque bulk and 1 for a paper-thin part light shines
    * through (ear rims, nostril wings, fingers, the web of the hand).
    */
-  mat(rough, metal = 0, thick = this._m[2]) { this._m = [rough, metal, thick]; return this; }
+  mat(rough: any, metal = 0, thick = this._m[2]) { this._m = [rough, metal, thick]; return this; }
 
   /** Translucent thickness alone, leaving roughness/metalness as they are. */
-  thick(t) { this._m = [this._m[0], this._m[1], t]; return this; }
+  thick(t: any) { this._m = [this._m[0], this._m[1], t]; return this; }
 
   /**
    * Flow direction for anisotropic shading — the strand tangent on hair, the
    * weave direction on cloth. Object space; the shader skins and view-transforms
    * it. Defaults to +Y, which is what an unset surface gets.
    */
-  tang(x, y, z) {
+  tang(x: any, y: any, z: any) {
     const l = Math.hypot(x, y, z) || 1;
     this._t = [x / l, y / l, z / l];
     return this;
   }
 
   /** Skin binding: array of [boneIndex, weight]; normalised, max 4. */
-  skin(pairs) {
-    const p = pairs.slice().sort((a, b) => b[1] - a[1]).slice(0, 4);
+  skin(pairs: any) {
+    const p = pairs.slice().sort((a: any, b: any) => b[1] - a[1]).slice(0, 4);
     let sum = 0;
     for (const q of p) sum += q[1];
     if (sum <= 0) { this._s = [0, 0, 0, 0, 1, 0, 0, 0]; return this; }
@@ -123,7 +138,7 @@ export class MeshBuilder {
   }
 
   /** Emit a vertex; returns its index. */
-  v(x, y, z, u = 0, w = 0) {
+  v(x: any, y: any, z: any, u = 0, w = 0) {
     this.pos.push(x, y, z);
     this.uv.push(u, w);
     this.col.push(this._c[0], this._c[1], this._c[2]);
@@ -135,15 +150,15 @@ export class MeshBuilder {
     return this.pos.length / 3 - 1;
   }
 
-  vv(p, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
+  vv(p: any, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
-  tri(a, b, c) { this.idx.push(a, b, c); return this; }
-  quad(a, b, c, d) { this.idx.push(a, b, c, a, c, d); return this; }
+  tri(a: any, b: any, c: any) { this.idx.push(a, b, c); return this; }
+  quad(a: any, b: any, c: any, d: any) { this.idx.push(a, b, c, a, c, d); return this; }
 
   get count() { return this.pos.length / 3; }
 
   /** Darken vertex colours near a world point — cheap baked contact occlusion. */
-  occlude(px, py, pz, radius, amount) {
+  occlude(px: any, py: any, pz: any, radius: any, amount: any) {
     const n = this.count;
     for (let i = 0; i < n; i++) {
       const dx = this.pos[i * 3] - px, dy = this.pos[i * 3 + 1] - py, dz = this.pos[i * 3 + 2] - pz;
@@ -176,7 +191,7 @@ export class MeshBuilder {
  * sharing a smoothing group — this is what removes the seam you would
  * otherwise see where a swept tube wraps back on itself.
  */
-export function computeSmoothNormals(geo, groups) {
+export function computeSmoothNormals(geo: any, groups: any) {
   const pos = geo.attributes.position.array;
   const idx = geo.index.array;
   const n = pos.length / 3;
@@ -215,8 +230,8 @@ export function computeSmoothNormals(geo, groups) {
 }
 
 /** Merge geometries that share the character attribute layout. */
-export function mergeParts(geos) {
-  const list = geos.filter((g) => g && g.attributes.position.count);
+export function mergeParts(geos: any) {
+  const list = geos.filter((g: any) => g && g.attributes.position.count);
   if (!list.length) return null;
   if (list.length === 1) return list[0];
 
@@ -381,9 +396,9 @@ export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg:
  * Sweep an open shell with thickness (a garment panel): outer surface, inner
  * surface and a rim joining them, so an open jacket shows real cloth edges.
  */
-export function sweepShell(B, o) {
+export function sweepShell(B: any, o: any) {
   const thick = o.thickness ?? 0.014;
-  const rxs = o.nodes.map((n) => n.rx);
+  const rxs = o.nodes.map((n: any) => n.rx);
   const outer = sweepTube(B, o);
   const mark = B.idx.length;
   const inner = sweepTube(B, {
@@ -411,7 +426,7 @@ export function sweepShell(B, o) {
 }
 
 /** Interpolated skin weights between node weight maps. */
-export function weightsAt(nodes, u) {
+export function weightsAt(nodes: any, u: any) {
   const n = nodes.length;
   const p = clamp01(u) * (n - 1);
   let i = Math.min(n - 2, Math.floor(p));
@@ -430,7 +445,7 @@ export function weightsAt(nodes, u) {
  *
  * brush: { p:[x,y,z], r:[rx,ry,rz], amt, dir:[x,y,z]|'normal', mirror?:bool, pow?:number }
  */
-export function sculptSphere(B, o) {
+export function sculptSphere(B: any, o: any) {
   const segU = o.segU || 48, segV = o.segV || 36;
   const scale = new THREE.Vector3().fromArray(o.scale || [1, 1, 1]);
   const center = new THREE.Vector3().fromArray(o.center || [0, 0, 0]);
@@ -456,7 +471,7 @@ export function sculptSphere(B, o) {
 }
 
 /** Duplicate every `mirror: true` brush onto the other side of the face. */
-export function expandMirrors(list) {
+export function expandMirrors(list: any) {
   const out = [];
   for (const br of list) {
     out.push(br);
@@ -477,7 +492,7 @@ export function expandMirrors(list) {
  * cheeks) push a midline vertex differently from left to right and leave the
  * face subtly asymmetric.
  */
-export function applyBrushes(p, nrm, brushes) {
+export function applyBrushes(p: any, nrm: any, brushes: any) {
   const d = new THREE.Vector3();
   const acc = _a.set(0, 0, 0);
   const px = p.x, py = p.y, pz = p.z;
@@ -498,21 +513,21 @@ export function applyBrushes(p, nrm, brushes) {
 }
 
 /** Cylindrical head/face UV — shared by mesh generation and texture painting. */
-export function faceUV(x, y, z, o) {
+export function faceUV(x: any, y: any, z: any, o: any) {
   const u = 0.5 + Math.atan2(x, z) / (Math.PI * 2);
   const v = clamp01((y - o.y0) / (o.y1 - o.y0));
   return [u, v];
 }
 
 /** Rounded box, handy for props (cameras, buckles, soles). */
-export function roundedBox(B, o) {
+export function roundedBox(B: any, o: any) {
   const [sx, sy, sz] = o.size;
   const c = o.center || [0, 0, 0];
   const bev = o.bevel ?? Math.min(sx, sy, sz) * 0.18;
   const q = new THREE.Quaternion();
   if (o.rot) q.setFromEuler(new THREE.Euler().fromArray(o.rot));
   const seg = o.seg || 3;
-  const push = (x, y, z) => {
+  const push = (x: any, y: any, z: any) => {
     const p = new THREE.Vector3(x, y, z).applyQuaternion(q).add(new THREE.Vector3().fromArray(c));
     return B.vv(p, (x / sx) + 0.5, (y / sy) + 0.5);
   };
@@ -550,7 +565,7 @@ export function roundedBox(B, o) {
 }
 
 /** Sphere/ellipsoid blob, welded, for muscle caps and joints. */
-export function blob(B, o) {
+export function blob(B: any, o: any) {
   const segU = o.segU || 12, segV = o.segV || 8;
   const c = o.center;
   const s = o.scale;
@@ -593,14 +608,14 @@ export function blob(B, o) {
  * The default stays at four for the callers that want a flat card (eyebrows,
  * hairline wisps) where the extra triangles buy nothing.
  */
-export function ribbon(B, o) {
-  const pts = o.points.map((p) => new THREE.Vector3().fromArray(p));
+export function ribbon(B: any, o: any) {
+  const pts = o.points.map((p: any) => new THREE.Vector3().fromArray(p));
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
   const steps = o.steps || 8;
   const sides = o.sides || 4;
   const width = o.width || 0.02;
   const thick = o.thick ?? width * 0.45;
-  const taper = o.taper || ((t) => 1 - t * t);
+  const taper = o.taper || ((t: any) => 1 - t * t);
   const up = new THREE.Vector3().fromArray(o.up || [0, 0, 1]);
   const tipColor = o.tipColor;
   const baseColor = o.color;

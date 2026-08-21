@@ -79,7 +79,7 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
  * Decode the layer texels out of a container.
  * @returns `buildLayerData`-shaped texels, or null if absent
  */
-export function bakedLayers(buf): any | null {
+export function bakedLayers(buf: any): any | null {
   const c = unpackContainer(buf);
   const meta = c.section('layerMeta');
   const a = c.section('layerAlbedo'), s = c.section('layerSurf'), d = c.section('layerDetail');

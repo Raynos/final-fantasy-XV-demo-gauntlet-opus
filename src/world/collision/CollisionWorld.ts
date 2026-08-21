@@ -17,7 +17,7 @@ const COARSE = CELL * 16;
 const INV_COARSE = 1 / COARSE;
 /** Cell index bias so the key packs into a positive 32-bit-ish integer. */
 const KEY_OFF = 16384;
-const cellKey = (ix, iz) => (ix + KEY_OFF) * 32768 + (iz + KEY_OFF);
+const cellKey = (ix: any, iz: any) => (ix + KEY_OFF) * 32768 + (iz + KEY_OFF);
 
 /** cos of the steepest surface a character may stand on. */
 const WALKABLE_Y = Math.cos(50 * Math.PI / 180);
@@ -49,6 +49,25 @@ const BURIED = 0.4;
  *   blocked(x, z, feetY, radius, height, stepUp) -> boolean
  */
 export class CollisionWorld {
+  _dyn!: any[];
+  _ground!: any;
+  _job!: any;
+  _n!: THREE.Vector3;
+  _t0!: number;
+  _v!: THREE.Vector3;
+  enabled!: boolean;
+  floor!: Float32Array;
+  floorCoarse!: any;
+  floorGrid!: any;
+  floorN!: Float32Array;
+  game!: any;
+  ready!: boolean;
+  stats!: any;
+  terrain!: any;
+  wall!: Float32Array;
+  wallCoarse!: any;
+  wallGrid!: any;
+  wallN!: Float32Array;
   constructor() {
     this.ready = false;
     this.enabled = true;
@@ -94,16 +113,16 @@ export class CollisionWorld {
   * _startJob() {
     const game = this.game;
     const terrain = this.terrain;
-    const floors = [];
-    const walls = [];
-    const wallMeta = [];                  // nx, ny, nz, yMax per wall triangle
-    const floorMeta = [];                 // nx, ny, nz, d  (plane) per floor tri
+    const floors: any[] = [];
+    const walls: any[] = [];
+    const wallMeta: any[] = [];                  // nx, ny, nz, yMax per wall triangle
+    const floorMeta: any[] = [];                 // nx, ny, nz, d  (plane) per floor tri
     const sources = this.stats.sources;
 
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
     const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
 
-    const emit = (source) => {
+    const emit = (source: any) => {
       // classify + cull the triangle sitting in a/b/c
       e1.subVectors(b, a); e2.subVectors(c, a);
       n.crossVectors(e1, e2);
@@ -153,7 +172,7 @@ export class CollisionWorld {
     // ---- 2. instanced boulders as analytic boxes --------------------------
     const rocks = collectRockProxies(game);
     this.stats.rockProxies = rocks.length;
-    const tmp = [];
+    const tmp: any[] = [];
     for (const r of rocks) {
       tmp.length = 0;
       boxTriangles(r, tmp);
@@ -201,7 +220,7 @@ export class CollisionWorld {
   /**
    * Bucket a triangle array into a two-level sparse uniform grid.
    */
-  * _grid(tri): {grid:Map, coarse:Map} {
+  * _grid(tri: any): {grid: Map<any, any>, coarse: Map<any, any>} {
     const SPAN = 16;
     const fine = new Map();
     const big = new Map();
@@ -228,7 +247,7 @@ export class CollisionWorld {
       }
       if (work > 3000) { work = 0; yield; }
     }
-    const bake = function* (src) {
+    const bake = function* (src: any) {
       const out = new Map();
       let i = 0;
       for (const [k, list] of src) {
@@ -292,7 +311,7 @@ export class CollisionWorld {
    * moment their centre crosses the lip; sampling the disc keeps them on it
    * until their feet genuinely leave.
    */
-  groundDisc(x, z, fromY, radius, stepUp = 0.45, stepDown = 2.0, out = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
+  groundDisc(x: any, z: any, fromY: any, radius: any, stepUp = 0.45, stepDown = 2.0, out = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
     const g = this.groundAt(x, z, fromY, stepUp, stepDown);
     out.y = g.y; out.nx = g.nx; out.ny = g.ny; out.nz = g.nz; out.onProp = g.onProp;
     if (!this.ready || !this.enabled) return out;
@@ -328,7 +347,7 @@ export class CollisionWorld {
     return moved + this._resolveDynamic(pos, radius, height, stepUp);
   }
 
-  _resolvePass(pos, radius, height, stepUp) {
+  _resolvePass(pos: any, radius: any, height: any, stepUp: any) {
     const tri = this.wall, meta = this.wallN, grid = this.wallGrid;
     const ax = pos.x, az = pos.z;
     const ay0 = pos.y + Math.min(0.18, stepUp * 0.4);
@@ -337,7 +356,7 @@ export class CollisionWorld {
     const ix0 = Math.floor((ax - radius) * INV_CELL), ix1 = Math.floor((ax + radius) * INV_CELL);
     const iz0 = Math.floor((az - radius) * INV_CELL), iz1 = Math.floor((az + radius) * INV_CELL);
     let total = 0;
-    const sweep = (list) => {
+    const sweep = (list: any) => {
       for (let i = 0; i < list.length; i++) {
         const t3 = list[i], o = t3 * 9, m = t3 * 4;
         if (meta[m + 3] <= skipTop) continue;                 // steppable
@@ -357,7 +376,7 @@ export class CollisionWorld {
   }
 
   /** Oriented-box proxies for the two Regalias, tested in the box's own frame. */
-  _resolveDynamic(pos, radius, height, stepUp) {
+  _resolveDynamic(pos: any, radius: any, height: any, stepUp: any) {
     let total = 0;
     for (const b of this._dyn) {
       const obj = b.obj;
@@ -386,7 +405,7 @@ export class CollisionWorld {
    * Would a capsule at (x, z) be inside a wall? Used by the companions' steering
    * to pick a way round rather than a way through.
    */
-  blocked(x, z, feetY, radius, height, stepUp): boolean {
+  blocked(x: any, z: any, feetY: any, radius: any, height: any, stepUp: any): boolean {
     if (!this.ready || !this.enabled) return false;
     this._v.set(x, feetY, z);
     const before = this._v.x + this._v.z;
@@ -398,7 +417,7 @@ export class CollisionWorld {
 /* ------------------------------------------------------------------ helpers */
 
 /** 2-D point-in-triangle, XZ plane. */
-function inTri2D(px, pz, ax, az, bx, bz, cx, cz) {
+function inTri2D(px: any, pz: any, ax: any, az: any, bx: any, bz: any, cx: any, cz: any) {
   const d1 = (px - bx) * (az - bz) - (ax - bx) * (pz - bz);
   const d2 = (px - cx) * (bz - cz) - (bx - cx) * (pz - cz);
   const d3 = (px - ax) * (cz - az) - (cx - ax) * (pz - az);
@@ -417,7 +436,7 @@ const _bp = new THREE.Vector3(), _cp = new THREE.Vector3(), _bc = new THREE.Vect
  * Push a vertical capsule segment [y0, y1] at (pos.x, pos.z) out of one
  * triangle, horizontally. Returns the distance moved.
  */
-function pushOut(pos, radius, y0, y1, tri, o, nx, ny, nz) {
+function pushOut(pos: any, radius: any, y0: any, y1: any, tri: any, o: any, nx: any, ny: any, nz: any) {
   _va.set(tri[o], tri[o + 1], tri[o + 2]);
   _vb.set(tri[o + 3], tri[o + 4], tri[o + 5]);
   _vc.set(tri[o + 6], tri[o + 7], tri[o + 8]);
@@ -465,7 +484,7 @@ function pushOut(pos, radius, y0, y1, tri, o, nx, ny, nz) {
 }
 
 /** Closest point on a triangle to a point (Ericson, Real-Time Collision Detection). */
-function closestOnTriangle(p, a, b, c, out) {
+function closestOnTriangle(p: any, a: any, b: any, c: any, out: any) {
   _ab.subVectors(b, a); _ac.subVectors(c, a); _ap.subVectors(p, a);
   const d1 = _ab.dot(_ap), d2 = _ac.dot(_ap);
   if (d1 <= 0 && d2 <= 0) return out.copy(a);

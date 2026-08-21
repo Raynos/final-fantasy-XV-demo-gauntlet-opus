@@ -21,7 +21,7 @@ export const BLOCKADE = {
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx) {
+  stage(ctx: any) {
     const { game, stage } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(18.9);
@@ -47,7 +47,7 @@ export const BLOCKADE = {
     const enemies = game.get('Enemies');
     ctx.data.spawned = [];
     if (enemies && enemies.spawn) {
-      const put = (f, l, state, at) => {
+      const put = (f: any, l: any, state: any, at: any) => {
         const p = F.ground(ctx.terrain, f, l, 0.95);
         const e = enemies.spawn('mt', { pos: new THREE.Vector3(p[0], p[1], p[2]) });
         if (!e) return;
@@ -64,7 +64,7 @@ export const BLOCKADE = {
     }
   },
 
-  buildShots(ctx) {
+  buildShots(ctx: any) {
     const F = ctx.data.F;
     return [
       // the checkpoint, lit, straddling a road that is supposed to be ours
@@ -87,7 +87,7 @@ export const BLOCKADE = {
     ];
   },
 
-  tick(t, dt, ctx) {
+  tick(t: any, dt: any, ctx: any) {
     const s = ctx.stage;
     if (t > 8.0 && t < 15.0) attend(ctx, 'ignis');
     else if (t >= 15.0 && t < 23.0) attend(ctx, 'gladio');
@@ -114,7 +114,7 @@ export const BLOCKADE = {
     { t: 21.8, presentational: true, say: ['Ignis', 'Around.'], dur: 1.6 },
     {
       t: 23.6, shake: 0.55, slowmo: { scale: 0.42, dur: 1.6 }, sfx: 'warp',
-      fn: (ctx) => {
+      fn: (ctx: any) => {
         // a low pass: dust off the shoulder, a hard downwash
         const F = ctx.data.F;
         const vfx = ctx.vfx;
@@ -132,7 +132,7 @@ export const BLOCKADE = {
     { t: 35.0, objective: { title: 'No Turning Back', sub: 'Drive to Galdin Quay' } },
   ],
 
-  onEnd(ctx) {
+  onEnd(ctx: any) {
     const enemies = ctx.game.get('Enemies');
     if (enemies && enemies.clear) { enemies.clear(); enemies.frozen = false; }
     const rpg = ctx.game.get('Rpg');

@@ -49,7 +49,60 @@ const LIGHT_BUDGET = {
  *   post.resetHistory()
  */
 export class PostFX {
-  constructor(rnd) {
+  _focusGoal!: number;
+  _halton!: any;
+  _head!: any;
+  _headWho!: any;
+  _prevCamPos!: THREE.Vector3;
+  _v!: THREE.Vector3;
+  _v2!: THREE.Vector3;
+  _warmed!: boolean;
+  aaMode!: any;
+  aoScale!: number;
+  autoFocusHead!: boolean;
+  autoGrade!: boolean;
+  bloom!: BloomPass;
+  camera!: any;
+  cas!: CasPass;
+  composer!: EffectComposer;
+  contact!: ContactShadowPass;
+  dof!: DofPass;
+  dt!: number;
+  exposure!: Exposure;
+  focusSpeed!: number;
+  frame!: number;
+  game!: any;
+  grade!: GradePass;
+  gradeA!: string;
+  gradeB!: string;
+  gradeMix!: number;
+  gtao!: GTAOPass;
+  headFocusWindow!: number;
+  height!: any;
+  invViewProj!: THREE.Matrix4;
+  jitter!: boolean;
+  jitterUv!: THREE.Vector2;
+  lights!: LightBudget;
+  motionBlur!: MotionBlurPass;
+  oneTexture!: THREE.DataTexture;
+  prevViewProj!: THREE.Matrix4;
+  quality!: any;
+  rnd!: any;
+  rtScene!: THREE.WebGLRenderTarget;
+  rtVel!: THREE.WebGLRenderTarget;
+  scene!: any;
+  scenePass!: ScenePass;
+  smaa!: SMAAPass;
+  ssr!: SsrPass;
+  sun!: any;
+  sunColor!: THREE.Vector3;
+  sunScreen!: THREE.Vector4;
+  taa!: TaaPass;
+  velocity!: VelocityPass;
+  viewProj!: THREE.Matrix4;
+  warmupReport!: any;
+  width!: any;
+  constructor(rnd: any) {
     this.rnd = rnd;
     const { renderer, scene, camera } = rnd;
     this.scene = scene;
@@ -118,7 +171,7 @@ export class PostFX {
     // it warms are the ones the budgeted light count will actually ask for.
     this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality] || LIGHT_BUDGET.high);
     const prevBefore = scene.onBeforeRender;
-    scene.onBeforeRender = (r, sc, cam, rt) => {
+    scene.onBeforeRender = (r: any, sc: any, cam: any, rt: any) => {
       // Every render — beauty pass, water reflection, VFX depth prepass — goes
       // through the program cache, so every one of them has to see the budget.
       this.lights.balance(cam);
@@ -238,7 +291,7 @@ export class PostFX {
     this.setQuality(rnd.quality || 'high');
     this.setSize(rnd.width, rnd.height);
 
-    rnd.onResize = (w, h) => this.setSize(w, h);
+    rnd.onResize = (w: any, h: any) => this.setSize(w, h);
 
     const dbg = new URLSearchParams(location.search).get('post');
     if (dbg) this.debugToggle(dbg);
@@ -385,7 +438,7 @@ export class PostFX {
   }
 
   /** Pick and cross-fade the grade from a 0..24 clock. */
-  setGradeForTimeOfDay(h) {
+  setGradeForTimeOfDay(h: any) {
     const [a, b, t] = todGrade(h);
     this.setGradeBlend(a, b, t);
   }
@@ -396,7 +449,7 @@ export class PostFX {
   setFocusTarget(target: THREE.Object3D | THREE.Vector3 | null) { this.focusTarget = target || null; }
 
   /** Focus at an explicit distance in metres. */
-  setFocusDistance(d) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
+  setFocusDistance(d: any) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
 
   /** Snap the focus instead of pulling to it (camera cuts). */
   snapFocus() {
@@ -494,8 +547,8 @@ export class PostFX {
 
   _findSun() {
     if (this.sun && this.sun.parent) return this.sun;
-    let found = null;
-    this.scene.traverse((o) => {
+    let found: any = null;
+    this.scene.traverse((o: any) => {
       if (!found && o.isDirectionalLight) found = o;
     });
     this.sun = found;
@@ -531,7 +584,7 @@ export class PostFX {
 
   // ----------------------------------------------------------- lifecycle
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     const dpr = this.rnd.renderer.getPixelRatio();
     const dw = Math.max(1, Math.round(w * dpr));
     const dh = Math.max(1, Math.round(h * dpr));
@@ -675,7 +728,7 @@ export class PostFX {
 /**
  * Grade preset pair + blend weight for a 0..24 clock.
  */
-function todGrade(hours): [string, string, number] {
+function todGrade(hours: any): [string, string, number] {
   const h = ((hours % 24) + 24) % 24;
   if (h < 4.6) return ['night', 'night', 0];
   if (h < 6.6) return ['night', 'golden', smooth((h - 4.6) / 2.0)];
@@ -687,22 +740,22 @@ function todGrade(hours): [string, string, number] {
 }
 
 /** Are two view-projection matrices the same to within a sub-pixel shift? */
-function matricesClose(a, b) {
+function matricesClose(a: any, b: any) {
   const ae = a.elements, be = b.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(ae[i] - be[i]) > 1e-7) return false;
   return true;
 }
 
-function lerp(a, b, t) { return a + (b - a) * t; }
-function smooth(t) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
+function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
+function smooth(t: any) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
 
 /** Halton(2,3) low-discrepancy sequence for the TAA jitter. */
-function haltonSequence(n) {
+function haltonSequence(n: any) {
   const out = [];
   for (let i = 1; i <= n; i++) out.push([radical(i, 2), radical(i, 3)]);
   return out;
 }
-function radical(index, base) {
+function radical(index: any, base: any) {
   let f = 1, r = 0, i = index;
   while (i > 0) { f /= base; r += f * (i % base); i = Math.floor(i / base); }
   return r;

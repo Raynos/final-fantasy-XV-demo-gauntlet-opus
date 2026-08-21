@@ -57,7 +57,7 @@ export const POI_GLYPH = {
 };
 
 const _p2d = new Map();
-function path2d(key, d) {
+function path2d(key: any, d: any) {
   let p = _p2d.get(key);
   if (!p) { p = new Path2D(d); _p2d.set(key, p); }
   return p;
@@ -99,7 +99,7 @@ export function drawGlyph(c: CanvasRenderingContext2D, kind: string, x: number, 
   c.strokeStyle = colour;
   c.fillStyle = colour;
   c.lineWidth = weight / s;
-  if (g.dash) c.setLineDash(g.dash.map((v) => v));
+  if (g.dash) c.setLineDash(g.dash.map((v: any) => v));
   c.stroke(p);
   c.setLineDash([]);
   if (g.fill) c.fill(path2d(`${kind}:f`, g.fill));
@@ -126,7 +126,7 @@ export function glyphSvg(kind: string, opt: {size?:number, stroke?:number} = {})
 }
 
 /** Minimal namespaced element helper — this module must not depend on the UI. */
-function svgEl(tag, attrs) {
+function svgEl(tag: any, attrs: any) {
   const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const k of Object.keys(attrs)) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
   return n;

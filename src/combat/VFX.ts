@@ -30,7 +30,31 @@ const C = new THREE.Color();
  * slicing through it.
  */
 export class VFX {
-  async init(game) {
+  _beamNext!: number;
+  _depthSize!: THREE.Vector2;
+  _postPatched!: boolean;
+  beams!: any[];
+  clock!: number;
+  depthRT!: THREE.WebGLRenderTarget | null;
+  dust!: ParticleSystem;
+  exposure!: number;
+  game!: any;
+  ground!: GroundFX;
+  lights!: any[];
+  motes!: ParticleSystem;
+  pinned!: any;
+  rng!: Rng;
+  root!: THREE.Group;
+  shardSprites!: ParticleSystem;
+  shards!: CrystalShards;
+  smoke!: ParticleSystem;
+  softEnabled!: boolean;
+  sparks!: ParticleSystem;
+  systems!: any;
+  tex!: any;
+  trails!: TrailPool;
+  usingGtaoDepth!: boolean;
+  async init(game: any) {
     this.game = game;
     this.rng = new Rng(20114);
     this.clock = 0;
@@ -114,7 +138,7 @@ export class VFX {
   }
 
   /** Scale every additive/alpha particle system at once (0..1+). */
-  setExposure(v) {
+  setExposure(v: any) {
     this.exposure = v;
     for (const s of this.systems) {
       s.uniforms.uGlobal.value = s.useFog ? Math.min(1, v * 1.7) : v;
@@ -126,7 +150,7 @@ export class VFX {
   /* ------------------------------------------------------------ clock */
 
   /** Freeze the effect clock at `t` (screenshot scenarios). */
-  pin(t) { this.pinned = t; this.clock = t; this._sync(); }
+  pin(t: any) { this.pinned = t; this.clock = t; this._sync(); }
   /** Resume real-time playback. */
   unpin() { this.pinned = null; }
 
@@ -141,7 +165,7 @@ export class VFX {
    * Survives freezing, which is what lets a pinned frame show a beam at 70%
    * of its fade and a light at 40% of its falloff simultaneously.
    */
-  track(t0, life, fn) { this._tracks.push({ t0, life, fn }); }
+  track(t0: any, life: any, fn: any) { this._tracks.push({ t0, life, fn }); }
 
   /* ------------------------------------------------------- primitives */
 
@@ -172,7 +196,7 @@ export class VFX {
     pos, count = 20, speed = 1.6, spread = Math.PI, color = 0x66ccff,
     life = 1.1, t0 = this.clock, size = 0.22, gravity = 0.8, dir = V2.set(0, 1, 0),
     intensity = 3.2, turbulence = 0.35, drag = 1.4, jitter = 0,
-  }) {
+  }: any) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -195,7 +219,7 @@ export class VFX {
   dustPuff({
     pos, count = 22, radius = 0.5, speed = 2.4, life = 1.5, t0 = this.clock,
     color = 0xbfae95, size = 0.9, grow = 3.2, up = 0.5, intensity = 0.85,
-  }) {
+  }: any) {
     const rng = this.rng;
     C.set(color);
     for (let i = 0; i < count; i++) {
@@ -216,7 +240,7 @@ export class VFX {
     pos, count = 16, speed = 1.4, life = 3.0, t0 = this.clock,
     color = 0x2a2a30, size = 0.7, grow = 3.4, rise = 1.6, intensity = 0.6,
     radius = 0.4, turbulence = 0.45,
-  }) {
+  }: any) {
     const rng = this.rng;
     C.set(color);
     for (let i = 0; i < count; i++) {
@@ -233,7 +257,7 @@ export class VFX {
   }
 
   /** Fine red mist on a flesh hit. */
-  bloodMist({ pos, dir, count = 14, t0 = this.clock, speed = 3.2, life = 0.8 }) {
+  bloodMist({ pos, dir, count = 14, t0 = this.clock, speed = 3.2, life = 0.8 }: any) {
     const rng = this.rng;
     C.set(0x5a0d10);
     const d = V.copy(dir).normalize();
@@ -249,7 +273,7 @@ export class VFX {
   }
 
   /** Camera-facing anisotropic star — put one at every heavy impact. */
-  flare({ pos, color = 0xbfe8ff, size = 1.4, life = 0.30, t0 = this.clock, intensity = 3 }) {
+  flare({ pos, color = 0xbfe8ff, size = 1.4, life = 0.30, t0 = this.clock, intensity = 3 }: any) {
     C.set(color);
     this.flares.emit({
       pos, vel: V.set(0, 0, 0), color: C, t0, life,
@@ -263,7 +287,7 @@ export class VFX {
    * impact as an *event in the air* rather than a bright dot — it reads at a
    * glance even when the core is blown out.
    */
-  airRing({ pos, color = 0xbfe8ff, from = 0.4, to = 6, life = 0.45, t0 = this.clock, intensity = 2.2, spin = 0 }) {
+  airRing({ pos, color = 0xbfe8ff, from = 0.4, to = 6, life = 0.45, t0 = this.clock, intensity = 2.2, spin = 0 }: any) {
     C.set(color);
     this.airRings.emit({
       pos, vel: V.set(0, 0, 0), color: C, t0, life,
@@ -278,7 +302,7 @@ export class VFX {
    * Fire a pooled dynamic PointLight. Hard budget of 8; the lowest-priority
    * light is stolen when the pool is full so a big hit always lights the world.
    */
-  flash({ pos, color = 0xffd08a, intensity = 40, distance = 12, life = 0.25, t0 = this.clock, priority = 1 }) {
+  flash({ pos, color = 0xffd08a, intensity = 40, distance = 12, life = 0.25, t0 = this.clock, priority = 1 }: any) {
     let slot = this.lights.find((s) => !s.light.visible);
     if (!slot) {
       slot = this.lights.reduce((a, b) => (b.priority < a.priority ? b : a));
@@ -291,7 +315,7 @@ export class VFX {
     l.visible = true;
     l.intensity = 0;
     slot.priority = priority;
-    this.track(t0, life, (n) => {
+    this.track(t0, life, (n: any) => {
       if (n < 0 || n > 1) { l.visible = false; l.intensity = 0; slot.priority = 0; return; }
       l.visible = true;
       // sharp attack, exponential decay — reads as a real muzzle/impact flash
@@ -348,7 +372,7 @@ export class VFX {
   }
 
   /** Expanding ground shockwave + air ring + dust wall. */
-  shockwave({ pos, terrain, radius = 5, color = 0x9fd8ff, t0 = this.clock, dust = true, intensity = 3.4 }) {
+  shockwave({ pos, terrain, radius = 5, color = 0x9fd8ff, t0 = this.clock, dust = true, intensity = 3.4 }: any) {
     if (terrain) {
       const age = this.clock - t0;
       this.ground.ring({ pos, terrain, radius, color, life: 0.85, intensity, opacity: 1, age });
@@ -369,7 +393,7 @@ export class VFX {
     pos, count = 34, speed = 6.5, t0 = this.clock, life = 0.7, size = 0.30,
     color = 0x39a7ff, gravity = -6, spread = Math.PI, dir = V2.set(0, 1, 0),
     stretch = 0, drag = 2.2,
-  }) {
+  }: any) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -451,7 +475,7 @@ export class VFX {
       V.copy(origin).setY(origin.y - 0.2),
       V2.copy(origin).setY(origin.y + 2.6 * scale)
     );
-    this.track(t0 - 0.22, 0.5, (n) => {
+    this.track(t0 - 0.22, 0.5, (n: any) => {
       column.strength = n < 0 || n > 1 ? 0 : Math.min(1, n / 0.2) * Math.pow(1 - n, 1.6) * 1.4;
       column.uniforms.uWidth.value = 0.22 * scale * (1 - n * 0.75);
     });
@@ -470,7 +494,7 @@ export class VFX {
     streak.uniforms.uScroll.value = 2.4;
     streak.width = 1.25 * scale;
     streak.setLine(origin, target);
-    this.track(t0, dash + 0.44, (n) => {
+    this.track(t0, dash + 0.44, (n: any) => {
       if (n < 0 || n > 1) { streak.strength = 0; return; }
       const grow = Math.min(1, n / (dash / (dash + 0.44)));   // reaches full length at impact
       const fade = n <= grow ? 1 : Math.pow(1 - (n - 0.28) / 0.72, 1.8);
@@ -493,7 +517,7 @@ export class VFX {
     halo.uniforms.uScroll.value = 1.1;
     halo.width = 1.05 * scale;
     halo.setLine(origin, target);
-    this.track(t0, dash + 0.5, (n) => {
+    this.track(t0, dash + 0.5, (n: any) => {
       halo.strength = n < 0 || n > 1 ? 0 : Math.min(1, n / 0.15) * Math.pow(1 - n, 1.5) * 0.6;
       halo.uniforms.uWidth.value = 1.05 * scale * (0.5 + 1.1 * n);
     });
@@ -601,14 +625,14 @@ export class VFX {
   }
 
   /** Short repositioning warp (no strike). */
-  warpTo({ from, to, t0 = this.clock, terrain = null }) {
+  warpTo({ from, to, t0 = this.clock, terrain = null }: any) {
     this.crystalBurst({ pos: from, count: 18, speed: 4.5, t0, life: 0.5, size: 0.2 });
     const b = this.acquireBeam();
     b.uniforms.uTaper.value = 0.8;
     b.uniforms.uIntensity.value = 2.4;
     b.width = 0.16;
     b.setLine(from, to);
-    this.track(t0, 0.32, (n) => { b.strength = n < 0 || n > 1 ? 0 : Math.pow(1 - n, 1.4); });
+    this.track(t0, 0.32, (n: any) => { b.strength = n < 0 || n > 1 ? 0 : Math.pow(1 - n, 1.4); });
     this.crystalBurst({ pos: to, count: 22, speed: 5, t0: t0 + 0.12, life: 0.6, size: 0.22 });
     this.flash({ pos: to, color: 0x59b8ff, intensity: 30, distance: 9, life: 0.28, t0: t0 + 0.12 });
     if (terrain) this.ground.ring({ pos: to, terrain, radius: 2.0, color: 0x8ed4ff, life: 0.5, age: this.clock - t0 - 0.12 });
@@ -616,22 +640,22 @@ export class VFX {
 
   /* ---------------------------------------------------------- decals */
 
-  scorch(pos, size = 3, terrain = this.game.get('Terrain')) {
+  scorch(pos: any, size = 3, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.scorch, color: 0xffffff, opacity: 0.95, life: 40, rotate: this.rng.next() * 6.28 });
   }
 
-  crack(pos, size = 3.5, terrain = this.game.get('Terrain')) {
+  crack(pos: any, size = 3.5, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.crack, color: 0x1b2026, opacity: 0.9, life: 40, rotate: this.rng.next() * 6.28 });
   }
 
-  frost(pos, size = 4, terrain = this.game.get('Terrain')) {
+  frost(pos: any, size = 4, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.frost, color: 0xbfe6ff, opacity: 0.85, life: 22, rotate: this.rng.next() * 6.28, intensity: 1.6 });
   }
 
   /* ------------------------------------------------------- lightning */
 
   /** Jagged branching arc between two points, with a flash light. */
-  lightningArc({ from, to, t0 = this.clock, life = 0.20, color = 0xc0d8ff, width = 0.10, branches = 2 }) {
+  lightningArc({ from, to, t0 = this.clock, life = 0.20, color = 0xc0d8ff, width = 0.10, branches = 2 }: any) {
     const main = this.acquireBeam();
     main.uniforms.uHead.value.set(color);
     main.uniforms.uTail.value.set(color);
@@ -642,7 +666,7 @@ export class VFX {
     main.uniforms.uWobble.value = 0;
     main.width = width;
     main.setPath(lightningPath(from, to, this.rng, { jitter: 1.0, points: 16 }));
-    this.track(t0, life, (n) => {
+    this.track(t0, life, (n: any) => {
       if (n < 0 || n > 1) { main.strength = 0; return; }
       // strobe: three sharp flickers over the life
       main.strength = (0.35 + 0.65 * Math.abs(Math.sin(n * 11.0))) * (1 - n * 0.4);
@@ -661,7 +685,7 @@ export class VFX {
         this.rng.gauss(0, 1.6), this.rng.gauss(0, 1.0), this.rng.gauss(0, 1.6)
       ));
       b.setPath(lightningPath(mid, end, this.rng, { jitter: 1.4, points: 8 }));
-      this.track(t0, life * 0.7, (n) => {
+      this.track(t0, life * 0.7, (n: any) => {
         b.strength = n < 0 || n > 1 ? 0 : (0.3 + 0.7 * Math.abs(Math.sin(n * 14))) * (1 - n);
       });
     }
@@ -670,7 +694,7 @@ export class VFX {
 
   /* ----------------------------------------------------------- depth */
 
-  _initDepth(game) {
+  _initDepth(game: any) {
     this.softEnabled = game.rnd.quality !== 'low';
     if (!this.softEnabled) return;
     const size = game.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -688,7 +712,7 @@ export class VFX {
    *     prepass — one frame of latency, invisible in motion and exact once a
    *     screenshot has settled.
    */
-  attachPost(game) {
+  attachPost(game: any) {
     if (this._postPatched || !game.post) return;
     const gtao = game.post.gtao;
     if (!gtao) return;
@@ -707,7 +731,7 @@ export class VFX {
     }
   }
 
-  _makeDepthRT(w, h) {
+  _makeDepthRT(w: any, h: any) {
     if (this.depthRT) this.depthRT.dispose();
     const dt = new THREE.DepthTexture(w, h);
     dt.format = THREE.DepthFormat;
@@ -726,7 +750,7 @@ export class VFX {
    * Half-resolution depth prepass. Called from `Director.lateUpdate` — the
    * last lateUpdate in the frame — so the camera transform is already final.
    */
-  renderDepthPrepass(game) {
+  renderDepthPrepass(game: any) {
     this.attachPost(game);
     if (this.usingGtaoDepth) {
       const cam = game.camera;
@@ -757,7 +781,7 @@ export class VFX {
 
   /* ----------------------------------------------------------- frame */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (this.pinned === null) this.clock += dt;
     else this.clock = this.pinned;
     const c = this.clock;
@@ -795,7 +819,7 @@ export class VFX {
 const V2D = new THREE.Vector2();
 
 /** Uniformly sample a direction inside a cone of half-angle `spread` about `dir`. */
-function randomCone(rng, dir, spread, out) {
+function randomCone(rng: any, dir: any, spread: any, out: any) {
   const cosMax = Math.cos(Math.min(Math.PI, spread));
   const z = rng.range(cosMax, 1);
   const s = Math.sqrt(Math.max(0, 1 - z * z));

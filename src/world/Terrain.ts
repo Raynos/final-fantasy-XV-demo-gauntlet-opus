@@ -30,6 +30,23 @@ import { worldMap, WORLD } from './map/WorldMap.ts';
  *   landmarks                          named hero features for shot framing
  */
 export class Terrain {
+  _bio!: any;
+  _biome!: any;
+  _ctrl!: any;
+  _gbufferPatched!: boolean;
+  _roadIdx!: any;
+  _v!: THREE.Vector3;
+  clipmap!: any;
+  field!: Field;
+  game!: any;
+  landmarks!: any;
+  layerNames!: any;
+  map!: any;
+  res!: any;
+  road!: any;
+  size!: number;
+  stats!: any;
+  textures!: any;
   constructor() {
     /** Full span of the detailed heightfield, metres. */
     this.size = HALF * 2;
@@ -42,7 +59,7 @@ export class Terrain {
     this._ctrl = {};
   }
 
-  async init(game) {
+  async init(game: any) {
     this.game = game;
 
     this.field = new Field(game.seed || 1337);
@@ -156,12 +173,12 @@ export class Terrain {
   /**
    * Surface height at a world position — exactly what the GPU renders.
    */
-  heightAt(x, z): number { return this.field.heightAt(x, z); }
+  heightAt(x: any, z: any): number { return this.field.heightAt(x, z); }
 
   /**
    * Surface normal at a world position.
    */
-  normalAt(x, z, out = new THREE.Vector3()): THREE.Vector3 {
+  normalAt(x: any, z: any, out = new THREE.Vector3()): THREE.Vector3 {
     const e = CELL;
     const f = this.field;
     const hL = f.heightAt(x - e, z), hR = f.heightAt(x + e, z);
@@ -181,7 +198,7 @@ export class Terrain {
   }
 
   /** Steepness in 0..1 (0 = flat, 1 = vertical). */
-  slopeAt(x, z) {
+  slopeAt(x: any, z: any) {
     const n = this.normalAt(x, z, this._v);
     return 1 - n.y;
   }
@@ -189,17 +206,17 @@ export class Terrain {
   /**
    * Distance in metres from the road centreline. Cheap enough for scattering.
    */
-  roadDistance(x, z): number {
+  roadDistance(x: any, z: any): number {
     return this.field && this.field.network ? this.field.network.distance(x, z) : 1e5;
   }
 
   /**
    * The zone record covering this point, or null on the frontier.
    */
-  zoneAt(x, z): any | null { return this.map.zoneAt(x, z); }
+  zoneAt(x: any, z: any): any | null { return this.map.zoneAt(x, z); }
 
   /** Blended biome humidity, 0 = Leide badlands, 1 = the Vesperpool. */
-  moistureAt(x, z) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
+  moistureAt(x: any, z: any) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
 
   /**
    * X of the road centreline at a given Z.
@@ -227,13 +244,13 @@ export class Terrain {
     return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
   }
 
-  _bracketsZ(pts, i, z) {
+  _bracketsZ(pts: any, i: any, z: any) {
     const a = pts[i].z, b = pts[i + 1].z;
     return z >= Math.min(a, b) && z <= Math.max(a, b);
   }
 
   /** Nearest segment in Z; falls back to the closest endpoint off the ends. */
-  _findRoadSegment(pts, z) {
+  _findRoadSegment(pts: any, z: any) {
     let best = 0, bestD = Infinity;
     for (let i = 0; i < pts.length - 1; i++) {
       if (this._bracketsZ(pts, i, z)) return i;
@@ -247,7 +264,7 @@ export class Terrain {
    * Rough surface classification, mirroring the splat weights the shader uses.
    * Vegetation should look at `weights.grass` and `sediment`.
    */
-  sampleMaterial(x, z): any {
+  sampleMaterial(x: any, z: any): any {
     const f = this.field;
     const c = f.ctrlAt(x, z, this._ctrl);
     const h = f.heightAt(x, z);
@@ -391,7 +408,7 @@ export class Terrain {
 
   // ------------------------------------------------------------------ update
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     const p = game.camera.position;
     this.clipmap.update(p.x, p.z);
     if (!this._gbufferPatched && game.post && game.post.gtao) {
@@ -403,9 +420,9 @@ export class Terrain {
   update() {}
 }
 
-function ss(a, b, x) {
+function ss(a: any, b: any, x: any) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-function mix(a, b, t) { return a + (b - a) * t; }
+function mix(a: any, b: any, t: any) { return a + (b - a) * t; }

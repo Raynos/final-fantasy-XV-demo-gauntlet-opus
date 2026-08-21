@@ -36,9 +36,9 @@ import { worldMap, WORLD } from './WorldMap.ts';
  * Everything here is deterministic: same terrain in, byte-identical chart out.
  */
 
-const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const mix = (a, b, t) => a + (b - a) * t;
-const ss = (e0, e1, x) => {
+const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const mix = (a: any, b: any, t: any) => a + (b - a) * t;
+const ss = (e0: any, e1: any, x: any) => {
   const t = clamp01((x - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
 };
@@ -70,7 +70,11 @@ const LIGHT = [252, 240, 214];
  * source data other map layers reuse.
  */
 export class Chart {
-  constructor(canvas, ppm, size, height, water, ms) {
+  canvas!: any;
+  ms!: any;
+  ppm!: any;
+  size!: any;
+  constructor(canvas: any, ppm: any, size: any, height: any, water: any, ms: any) {
     /** @type {HTMLCanvasElement} */
     this.canvas = canvas;
     /** Canvas pixels per world metre. */
@@ -86,34 +90,34 @@ export class Chart {
   }
 
   /** World x -> chart px. */
-  toPx(x) { return (x + WORLD.half) * this.ppm; }
+  toPx(x: any) { return (x + WORLD.half) * this.ppm; }
   /** World z -> chart px. */
-  toPz(z) { return (z + WORLD.half) * this.ppm; }
+  toPz(z: any) { return (z + WORLD.half) * this.ppm; }
 
   /** Elevation at a world position, straight off the baked grid. */
-  heightAt(x, z) {
+  heightAt(x: any, z: any) {
     const i = Math.round(this.toPx(x)), j = Math.round(this.toPz(z));
     if (i < 0 || j < 0 || i >= this.size || j >= this.size) return 0;
     return this.height[j * this.size + i];
   }
 
   /** True if this world position is under the water plane. */
-  isWater(x, z) {
+  isWater(x: any, z: any) {
     const i = Math.round(this.toPx(x)), j = Math.round(this.toPz(z));
     if (i < 0 || j < 0 || i >= this.size || j >= this.size) return false;
     return !!this.water[j * this.size + i];
   }
 }
 
-let _chart = null;
-let _chartFor = null;
+let _chart: any = null;
+let _chartFor: any = null;
 
 /**
  * The shared chart. Built on first call and reused for the lifetime of the
  * terrain — three separate map surfaces ask for it and only one gets baked.
  * @param terrain the live `Terrain` system
  */
-export function getChart(terrain: any, opt): Chart {
+export function getChart(terrain: any, opt: any): Chart {
   if (_chart && _chartFor === terrain) return _chart;
   _chart = bakeChart(terrain, opt);
   _chartFor = terrain;
@@ -409,7 +413,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
 // ------------------------------------------------------------------ helpers
 
 /** Separable box blur with running sums. @returns */
-function boxBlur2D(src, n, r): Float32Array {
+function boxBlur2D(src: any, n: any, r: any): Float32Array {
   const tmp = new Float32Array(n * n);
   const out = new Float32Array(n * n);
   const inv = 1 / (r * 2 + 1);
@@ -433,9 +437,9 @@ function boxBlur2D(src, n, r): Float32Array {
   return out;
 }
 
-const clampI = (v, n) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
+const clampI = (v: any, n: any) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
 
-function sampleBilinear(a, n, x, y) {
+function sampleBilinear(a: any, n: any, x: any, y: any) {
   let i = x | 0, j = y | 0;
   if (i < 0) i = 0; else if (i > n - 2) i = n - 2;
   if (j < 0) j = 0; else if (j > n - 2) j = n - 2;
@@ -446,14 +450,14 @@ function sampleBilinear(a, n, x, y) {
 }
 
 /** Deterministic 0..1 hash of two integers — the paper grain. */
-function hash2(i, j) {
+function hash2(i: any, j: any) {
   let h = Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1);
   h = Math.imul(h ^ (h >>> 15), 0x2545f491);
   return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
 }
 
 /** Smooth value noise on a `p`-pixel lattice. 0..1. */
-function lnoise(i, j, p) {
+function lnoise(i: any, j: any, p: any) {
   const fx = i / p, fy = j / p;
   const i0 = Math.floor(fx), j0 = Math.floor(fy);
   const tx = fx - i0, ty = fy - j0;

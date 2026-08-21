@@ -24,7 +24,38 @@ import { Dropship } from './Dropship.ts';
  *   `encounter:warn`    {text}  — the "something is coming" beat
  */
 export class EncounterDirector {
-  async init(game) {
+  _clearTimer!: number;
+  _hits!: any[];
+  _offDamage!: any;
+  _offDeath!: any;
+  _roamTimer!: number;
+  _streamTimer!: number;
+  _tmp!: THREE.Vector3;
+  _tmp2!: THREE.Vector3;
+  boss!: any;
+  budget!: number;
+  combat!: any;
+  cooldowns!: Map<any, any>;
+  dropship!: Dropship;
+  enabled!: boolean;
+  encounter!: any;
+  enemies!: any;
+  game!: any;
+  hunts!: any;
+  night!: number;
+  packs!: any[];
+  party!: any;
+  player!: any;
+  rng!: Rng;
+  rpg!: any;
+  sky!: any;
+  state!: string;
+  stats!: any;
+  suppressRoamers!: boolean;
+  terrain!: any;
+  threats!: any[];
+  vfx!: any;
+  async init(game: any) {
     this.game = game;
     this.rng = new Rng(20259);
     this.enemies = game.get('Enemies');
@@ -64,18 +95,18 @@ export class EncounterDirector {
     this._tmp2 = new THREE.Vector3();
     this._hits = [];
 
-    this.enemies.onStrike = (e, atk) => this.resolveStrike(e, atk);
+    this.enemies.onStrike = (e: any, atk: any) => this.resolveStrike(e, atk);
     this.enemies.threats = this.threats;
 
-    this._offDeath = this.combat ? this.combat.on('death', (d) => this.onDeath(d.enemy, 'player')) : null;
-    this._offDamage = this.combat ? this.combat.on('damage', (d) => this.onPlayerDamage(d)) : null;
+    this._offDeath = this.combat ? this.combat.on('death', (d: any) => this.onDeath(d.enemy, 'player')) : null;
+    this._offDamage = this.combat ? this.combat.on('damage', (d: any) => this.onPlayerDamage(d)) : null;
     return this;
   }
 
   /* ------------------------------------------------------------ helpers */
 
   /** Ground the point `x,z` and return a scratch vector. */
-  ground(x, z, out = this._tmp) {
+  ground(x: any, z: any, out = this._tmp) {
     out.set(x, this.terrain ? this.terrain.heightAt(x, z) : 0, z);
     return out;
   }
@@ -150,7 +181,7 @@ export class EncounterDirector {
   }
 
   /** A closed patrol loop around the territory anchor. */
-  _patrolRoute(def) {
+  _patrolRoute(def: any) {
     const pts = [];
     const n = 3 + (this.rng.next() * 2 | 0);
     for (let i = 0; i < n; i++) {
@@ -162,26 +193,26 @@ export class EncounterDirector {
   }
 
   /** Give each member a rotated copy of the route so they string out. */
-  _offsetRoute(route, i) {
+  _offsetRoute(route: any, i: any) {
     if (i === 0) return route;
     const out = route.slice();
     for (let k = 0; k < i % route.length; k++) out.push(out.shift());
     return out;
   }
 
-  _shouldSleep(def) {
+  _shouldSleep(def: any) {
     const p = this.pressure();
     if (def.faction === 'daemon') return !p.spawn;
     return p.spawn && def.when === 'day';
   }
 
-  _count(c) {
+  _count(c: any) {
     if (!Array.isArray(c)) return c | 0;
     return c[0] + Math.floor(this.rng.next() * (c[1] - c[0] + 1));
   }
 
   /** Retire a territory and pool its enemies. */
-  deactivate(id) {
+  deactivate(id: any) {
     const rec = this.active.get(id);
     if (!rec) return;
     // only retire what this territory still owns — a pooled instance may have
@@ -279,7 +310,7 @@ export class EncounterDirector {
   }
 
   /** Tear down the active boss fight. */
-  endBoss(victory) {
+  endBoss(victory: any) {
     const b = this.boss;
     if (!b) return;
     this.boss = null;
@@ -296,7 +327,7 @@ export class EncounterDirector {
     const t = HUNT_TARGETS[questId];
     if (!t) return null;
     const quest = this.rpg?.quests?.def(questId);
-    const obj = quest?.objectives?.find((o) => o.type === 'kill') || quest?.objectives?.[0];
+    const obj = quest?.objectives?.find((o: any) => o.type === 'kill') || quest?.objectives?.[0];
     const wp = obj?.waypoint || [0, 0, 0];
     const pack = new Pack({ id: `hunt-${questId}`, encounter: this, maxEngaged: 3 });
     const n = Math.min(t.count, t.maxAlive || t.count);
@@ -324,7 +355,7 @@ export class EncounterDirector {
   }
 
   /** Top a hunt up if it wants more marks than fit on the field at once. */
-  _topUpHunt(questId) {
+  _topUpHunt(questId: any) {
     const h = this.hunts && this.hunts.get(questId);
     if (!h || h.remaining <= 0) return;
     const alive = h.pack.alive;
@@ -384,7 +415,7 @@ export class EncounterDirector {
   }
 
   /** A visible line for ranged shots so the player can read where it came from. */
-  _tracer(e, a) {
+  _tracer(e: any, a: any) {
     if (!this.vfx) return;
     const from = e.centre();
     from.y += e.height * 0.15 * e.scale;
@@ -399,7 +430,7 @@ export class EncounterDirector {
     b.uniforms.uIntensity.value = 3.0;
     b.width = 0.05;
     b.setLine(from, this._tmp);
-    this.vfx.track(this.vfx.clock, 0.11, (k) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+    this.vfx.track(this.vfx.clock, 0.11, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
     this.vfx.flash({ pos: from, color: hot, intensity: 16, distance: 5, life: 0.08 });
   }
 
@@ -449,7 +480,7 @@ export class EncounterDirector {
   }
 
   /** Dodge i-frames, warp invulnerability and the phase parry. */
-  _playerAvoids(e, a) {
+  _playerAvoids(e: any, a: any) {
     const c = this.combat;
     if (!c) return false;
     if (c.state === 'warp') return true;
@@ -462,7 +493,7 @@ export class EncounterDirector {
     return false;
   }
 
-  _emitCombat(name, detail) {
+  _emitCombat(name: any, detail: any) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }
@@ -475,7 +506,7 @@ export class EncounterDirector {
    */
   onAlerted(pack: any, target: any) {
     if (this.state === 'combat') return;
-    const first = pack.members.find((m) => !m.dead);
+    const first = pack.members.find((m: any) => !m.dead);
     window.dispatchEvent(new CustomEvent('encounter:spotted', {
       detail: { pack: pack.id, name: first ? first.name : '', count: pack.alive },
     }));
@@ -485,7 +516,7 @@ export class EncounterDirector {
    * A pack member died. If that was the last of them, the fight is over as
    * far as this pack is concerned.
    */
-  onMemberDied(pack, e) {
+  onMemberDied(pack: any, e: any) {
     if (pack.alive > 0) return;
     pack.alerted = false;
     window.dispatchEvent(new CustomEvent('encounter:pack-cleared', {
@@ -548,7 +579,7 @@ export class EncounterDirector {
   }
 
   /** Warp-strike / technique / spell kills that come through the damage event. */
-  onPlayerDamage(d) {
+  onPlayerDamage(d: any) {
     if (d && d.killed && d.enemy) this.onDeath(d.enemy, 'player');
   }
 
@@ -585,7 +616,7 @@ export class EncounterDirector {
     }));
   }
 
-  _exitCombat(victory) {
+  _exitCombat(victory: any) {
     if (this.state !== 'combat') return;
     this.state = 'field';
     this.game.state = 'field';
@@ -599,13 +630,13 @@ export class EncounterDirector {
     this.encounter = null;
   }
 
-  _warn(text) {
+  _warn(text: any) {
     window.dispatchEvent(new CustomEvent('encounter:warn', { detail: { text } }));
   }
 
   /* ------------------------------------------------------------ tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.enabled || this.enemies.frozen) return;
     const p = this.player;
     if (!p) return;
@@ -687,7 +718,7 @@ export class EncounterDirector {
   }
 
   /** Activate what is near, retire what is not. */
-  _stream(pressure, pp) {
+  _stream(pressure: any, pp: any) {
     // timed marks (Ignis' Analyse, Gladio's Coverage) tick on the slow clock
     for (const e of this.enemies.list) if (e.analysed > 0) e.analysed -= 0.5;
     if (this.party) for (const m of this.party.members) if (m.taunting > 0) m.taunting -= 0.5;

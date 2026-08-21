@@ -20,6 +20,21 @@ import { DungeonMap } from './DungeonMap.ts';
  * `dispose()` gives all of it back.
  */
 export class Dungeon {
+  def!: any;
+  discovered!: Set<any>;
+  game!: any;
+  group!: THREE.Group;
+  id!: any;
+  interactables!: any;
+  keys!: Set<any>;
+  kit!: any;
+  layout!: any;
+  map!: DungeonMap;
+  name!: any;
+  origin!: THREE.Vector3;
+  rig!: any;
+  stats!: any;
+  vestibule!: any;
   /**
    * @param def dungeon definition
    */
@@ -108,7 +123,7 @@ export class Dungeon {
   }
 
   /** Resolve a layout lamp declaration into fixture geometry plus an emitter. */
-  _lamp(kit, l) {
+  _lamp(kit: any, l: any) {
     const [x, z] = l.at;
     const floor = this.layout.floorAt(x, z);
     const y = l.y != null ? l.y : (floor != null ? floor + 2.6 : 2.6);
@@ -123,13 +138,13 @@ export class Dungeon {
   // --------------------------------------------------------------- runtime
 
   /** World-space walkable height, or null when the point is outside. */
-  floorAt(wx, wz) {
+  floorAt(wx: any, wz: any) {
     const h = this.layout.floorAt(wx - this.origin.x, wz - this.origin.z);
     return h == null ? null : h + this.origin.y;
   }
 
   /** Push a world-space point back inside the shell. */
-  clamp(wx, wz, margin = 0.6) {
+  clamp(wx: any, wz: any, margin = 0.6) {
     const p = this.layout.clampInside(wx - this.origin.x, wz - this.origin.z, margin);
     return [p[0] + this.origin.x, p[1] + this.origin.z];
   }
@@ -142,7 +157,7 @@ export class Dungeon {
   }
 
   /** Interactables in world space, nearest first. */
-  near(worldPos, extra = 0) {
+  near(worldPos: any, extra = 0) {
     const lx = worldPos.x - this.origin.x, ly = worldPos.y - this.origin.y, lz = worldPos.z - this.origin.z;
     const out = [];
     for (const it of this.interactables) {
@@ -153,7 +168,7 @@ export class Dungeon {
     return out.map((o) => o.it);
   }
 
-  update(dt, now, cameraLocal) {
+  update(dt: any, now: any, cameraLocal: any) {
     this.kit.update(dt, now);
     this.rig.update(dt, cameraLocal, now);
     // reveal the map as the party moves through
@@ -171,7 +186,7 @@ export class Dungeon {
   }
 }
 
-function rigOnly(rig, x, y, z, l) {
+function rigOnly(rig: any, x: any, y: any, z: any, l: any) {
   rig.add({
     pos: [x, y, z], color: l.color, intensity: l.intensity,
     range: l.range, flicker: l.flicker, glow: l.glow,

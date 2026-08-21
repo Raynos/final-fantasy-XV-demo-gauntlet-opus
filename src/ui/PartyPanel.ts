@@ -35,6 +35,13 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
  * a single toast printed straight through them.
  */
 export class PartyPanel {
+  banterSlot!: any;
+  built!: boolean;
+  combatSlot!: any;
+  list!: any;
+  noticeSlot!: any;
+  root!: any;
+  rows!: any[];
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bl');
     /** Armiger + technique rail live here — see the class note. */
@@ -53,7 +60,7 @@ export class PartyPanel {
     this.built = false;
   }
 
-  _build(party) {
+  _build(party: any) {
     // companions first (stacked above), lead last so it sits at the bottom
     const order = [1, 2, 3, 0];
     for (const idx of order) {

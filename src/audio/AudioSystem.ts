@@ -29,7 +29,30 @@ import { clamp } from './Dsp.ts';
  * which is what the offline verification harness uses.
  */
 export class AudioSystem {
-  async init(game) {
+  _camping!: boolean;
+  _encounterKills!: number;
+  _enemyState!: Map<any, any>;
+  _enemyStride!: Map<any, any>;
+  _lastMenu!: any;
+  _matCache!: Map<any, any>;
+  _musicState!: string;
+  _probeTimer!: number;
+  _scoreSuspended!: boolean;
+  _stride!: number;
+  _sweepAt!: number;
+  _wasInCombat!: boolean;
+  amb!: Ambience;
+  cpuMs!: number;
+  ctx!: Ctx | null;
+  enabled!: boolean;
+  game!: any;
+  graph!: AudioGraph;
+  headless!: any;
+  inst!: Instruments;
+  score!: Score;
+  sfx!: Sfx;
+  weatherName!: any;
+  async init(game: any) {
     this.game = game;
     this.enabled = false;
     this.ctx = null;
@@ -113,11 +136,11 @@ export class AudioSystem {
    * needs a line of code added to make the game audible.
    */
   _wireEvents() {
-    const on = (name, fn) => window.addEventListener(`combat:${name}`, (e) => {
+    const on = (name: any, fn: any) => window.addEventListener(`combat:${name}`, (e) => {
       try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
     });
 
-    on('combo', (d) => {
+    on('combo', (d: any) => {
       const kind = d.weapon || 'sword';
       if (kind === 'firearm') return;                 // the shot is the sound
       this.sfx.play(`swing:${kind}`, this._playerPos(), { volume: 0.85 });
@@ -125,14 +148,14 @@ export class AudioSystem {
       if (d.index > 0) this.sfx.play('combo', null, { index: d.index });
     });
 
-    on('hit', (d) => {
+    on('hit', (d: any) => {
       const mat = this._enemyMaterial(d.enemy);
       this.sfx.play(`impact:${mat}`, d.position, {
         hrtf: true, scale: d.blindside ? 1.45 : 1.0, crit: !!d.blindside, volume: 0.95,
       });
     });
 
-    on('damage', (d) => {
+    on('damage', (d: any) => {
       if (d.killed) return;                            // the death cue covers it
       const key = this._speciesOf(d.enemy);
       if (key && this.sfx.rng() < 0.55) {
@@ -141,7 +164,7 @@ export class AudioSystem {
       if (d.crit) this.graph.duck(0.78, 0.06, 0.28);
     });
 
-    on('death', (d) => {
+    on('death', (d: any) => {
       this._encounterKills++;
       const key = this._speciesOf(d.enemy);
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
@@ -150,23 +173,23 @@ export class AudioSystem {
       if (d.enemy) this._enemyState.delete(d.enemy);
     });
 
-    on('stagger', (d) => {
+    on('stagger', (d: any) => {
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
       this.sfx.play('stagger', at, { volume: 0.9 });
     });
 
-    on('parry', (d) => {
+    on('parry', (d: any) => {
       this.sfx.play('parry', d.position, { hrtf: true, volume: 1.0 });
       this.score.setFilter(1400, 0.08);
       setTimeout(() => this.score.setFilter(20000, 0.5), 620);
     });
 
-    on('warp', (d) => {
+    on('warp', (d: any) => {
       if (d.phase === 'impact') this.sfx.play('warp:impact', d.to, { hrtf: true });
       else this.sfx.play('warp:start', d.from, { hrtf: true });
     });
 
-    on('link', (d) => {
+    on('link', (d: any) => {
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
       this.sfx.play('link', at, { volume: 0.95 });
     });
@@ -176,40 +199,40 @@ export class AudioSystem {
       this.score.setIntensity(1);
     });
 
-    on('spell', (d) => {
+    on('spell', (d: any) => {
       this.sfx.play(`spell:${d.element || 'fire'}`, d.position, { hrtf: true });
     });
 
-    on('playerHit', (d) => {
+    on('playerHit', (d: any) => {
       this.sfx.play('grunt', null, {});
       this.sfx.play('impact:flesh', d.position, { scale: 1.2, volume: 0.9 });
       if (d.hp <= 0) this.sfx.play('death', null, {});
     });
 
-    on('mp', (d) => { if (d.stasis) this.sfx.play('stasis', null, {}); });
-    on('lockon', (d) => { if (d.enemy) this.sfx.play('lockon', null, {}); });
+    on('mp', (d: any) => { if (d.stasis) this.sfx.play('stasis', null, {}); });
+    on('lockon', (d: any) => { if (d.enemy) this.sfx.play('lockon', null, {}); });
 
     // Events the combat system does not emit yet. Each is a one-line `emit()`
     // at the matching call site; until then these listeners simply never fire.
-    on('materialise', (d) => this.sfx.play('materialise', d.position || this._playerPos(), {}));
-    on('shot', (d) => this.sfx.play('gunshot', d.position, { hrtf: true }));
+    on('materialise', (d: any) => this.sfx.play('materialise', d.position || this._playerPos(), {}));
+    on('shot', (d: any) => this.sfx.play('gunshot', d.position, { hrtf: true }));
     on('dodge', () => {
       this.sfx.play('cloth', null, { volume: 1.1 });
       this.sfx.play('step:dirt', null, { run: true, volume: 0.7 });
     });
-    on('armigerHit', (d) => this.sfx.play('armigerHit', d.position, {}));
+    on('armigerHit', (d: any) => this.sfx.play('armigerHit', d.position, {}));
 
     /* ---- RPG: level ups, quests, loot -------------------------------- */
     const rpg = this.game && this.game.get('Rpg');
     if (rpg && rpg.on) {
       rpg.on('level-up', () => this.sfx.play('levelup', null, {}));
-      rpg.on('quest-updated', (p) => {
+      rpg.on('quest-updated', (p: any) => {
         if (p && (p.phase === 'complete' || p.phase === 'accepted' || p.phase === 'objective')) {
           this.sfx.play('quest', null, {});
         }
       });
       rpg.on('item-gained', () => this.sfx.play('item', null, {}));
-      rpg.on('gil-changed', (p) => { if (p && p.delta > 0) this.sfx.play('ui:move', null, {}); });
+      rpg.on('gil-changed', (p: any) => { if (p && p.delta > 0) this.sfx.play('ui:move', null, {}); });
       rpg.on('rested', () => { this._camping = false; this.sfx.play('quest', null, {}); });
       rpg.on('game-saved', () => this.sfx.play('ui:confirm', null, {}));
     }
@@ -313,14 +336,14 @@ export class AudioSystem {
   }
 
   /** Current user setting for a bus, 0..1. */
-  volumeOf(bus) { return this._userVolume[bus] ?? 1; }
+  volumeOf(bus: any) { return this._userVolume[bus] ?? 1; }
 
   setMuted(on?: boolean) { return this.graph ? this.graph.setMuted(on) : false; }
 
   /** Master volume, 0..1. */
   get volume() { return this._volume ?? 1; }
 
-  _nudgeVolume(d) {
+  _nudgeVolume(d: any) {
     this._volume = clamp((this._volume ?? 1) + d, 0, 1);
     this.graph.setVolume('master', this._volume);
     this.sfx.play('ui:move', null, {});
@@ -353,7 +376,7 @@ export class AudioSystem {
   }
 
   /** Acoustic space for the short reverb. */
-  setSpace(name) { if (this.graph) this.graph.setSpace(name); }
+  setSpace(name: any) { if (this.graph) this.graph.setSpace(name); }
 
   /** Everything the verification harness and the debug overlay want. */
   stats() {
@@ -371,7 +394,7 @@ export class AudioSystem {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.enabled) return;
     const t0 = performance.now();
 
@@ -402,7 +425,7 @@ export class AudioSystem {
     return p && p.position ? p.position : null;
   }
 
-  _listener(game) {
+  _listener(game: any) {
     const cam = game.camera;
     cam.getWorldDirection(FWD);
     UP.set(0, 1, 0).applyQuaternion(cam.quaternion);
@@ -412,7 +435,7 @@ export class AudioSystem {
 
   /* ------------------------------------------------------------- music */
 
-  _music(dt, game) {
+  _music(dt: any, game: any) {
     const combat = game.get('Combat');
     const enemies = game.get('Enemies');
     const sky = game.get('Sky');
@@ -479,7 +502,7 @@ export class AudioSystem {
   }
 
   /** Any enemy big enough to warrant the boss cue. */
-  _bossPresent(enemies, player) {
+  _bossPresent(enemies: any, player: any) {
     if (!enemies || !player) return false;
     for (const e of enemies.list) {
       if (e.dead) continue;
@@ -490,7 +513,7 @@ export class AudioSystem {
   }
 
   /** Enemies aware of us but not yet engaged — the tension bed. */
-  _threat(enemies, player) {
+  _threat(enemies: any, player: any) {
     if (!enemies || !player) return 0;
     let n = 0;
     for (const e of enemies.list) {
@@ -502,7 +525,7 @@ export class AudioSystem {
 
   /* --------------------------------------------------------- footsteps */
 
-  _footsteps(dt, game) {
+  _footsteps(dt: any, game: any) {
     const p = game.get('Player');
     if (!p || !p.position) return;
     const speed = p.speed || 0;
@@ -523,7 +546,7 @@ export class AudioSystem {
   }
 
   /** Terrain material, cached on a 3 m grid — `sampleMaterial` is not free. */
-  _surfaceAt(x, z) {
+  _surfaceAt(x: any, z: any) {
     const terrain = this.game.get('Terrain');
     if (!terrain || !terrain.sampleMaterial) return 'dirt';
     const water = this.game.get('Water');
@@ -543,7 +566,7 @@ export class AudioSystem {
 
   /* ----------------------------------------------------------- enemies */
 
-  _enemies(dt, game) {
+  _enemies(dt: any, game: any) {
     const enemies = game.get('Enemies');
     const player = game.get('Player');
     if (!enemies || !player) return;
@@ -578,14 +601,14 @@ export class AudioSystem {
   }
 
   /** What a hit on this enemy should sound like. */
-  _enemyMaterial(enemy) {
+  _enemyMaterial(enemy: any) {
     const key = this._speciesOf(enemy);
     if (key === 'mt') return 'metal';
     if (key === 'irongiant') return 'armour';
     return 'flesh';
   }
 
-  _speciesOf(enemy) {
+  _speciesOf(enemy: any) {
     if (!enemy) return null;
     return (enemy.type && enemy.type.key) || null;
   }
@@ -593,7 +616,7 @@ export class AudioSystem {
   /* ------------------------------------------------------- environment */
 
   /** Weather, clock, nearby water, floodlights and the shape of the space. */
-  _environment(game) {
+  _environment(game: any) {
     const weather = game.get('Weather');
     if (weather) {
       this.amb.setWind(weather.windStrength ?? 1);

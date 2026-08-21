@@ -42,6 +42,17 @@ const _to = new THREE.Vector3();
 let _nextId = 0;
 
 export class InteractionSystem {
+  _firedAt!: number;
+  _gpPrev!: boolean;
+  _hyst!: number;
+  _playerPos!: THREE.Vector3;
+  appear!: number;
+  blocked!: boolean;
+  current!: any;
+  dialogue!: Dialogue;
+  game!: any;
+  items!: Map<any, any>;
+  prompt!: InteractPrompt;
   constructor() {
     /** @type {Map<string, object>} live interactables keyed by id */
     this.items = new Map();
@@ -97,7 +108,7 @@ export class InteractionSystem {
   unregister(id: string) { this.items.delete(id); }
 
   /** Look an interactable up by id. */
-  get(id) { return this.items.get(id) || null; }
+  get(id: any) { return this.items.get(id) || null; }
 
   /**
    * Start a conversation. While one is running the interaction verb is blocked
@@ -122,7 +133,7 @@ export class InteractionSystem {
     return true;
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     const player = game.get('Player');
     const menus = game.get('Menus');
     const menuOpen = !!(menus && menus.name);
@@ -169,7 +180,7 @@ export class InteractionSystem {
   }
 
   /** Nearest valid interactable, with hysteresis for the incumbent. */
-  _pick(player) {
+  _pick(player: any) {
     const p = this._playerPos.copy(player.position);
     // Face the way the player's body is pointing, not the camera: FFXV's prompt
     // follows the character, which is what makes walking past a pump feel like

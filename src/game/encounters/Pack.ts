@@ -16,6 +16,14 @@
  * which is what turns a "there is an enemy over there" into an encounter.
  */
 export class Pack {
+  _t!: number;
+  encounter!: any;
+  engaged!: any[];
+  id!: any;
+  maxEngaged!: any;
+  members!: any[];
+  rotate!: any;
+  target!: any;
   /**
    * @param [o] `{ maxEngaged, rotate, id }`
    */
@@ -82,7 +90,7 @@ export class Pack {
   }
 
   /** A member died: free its token and re-spread the survivors. */
-  onDeath(e) {
+  onDeath(e: any) {
     const j = this.engaged.indexOf(e);
     if (j >= 0) this.engaged.splice(j, 1);
     this._reslot();

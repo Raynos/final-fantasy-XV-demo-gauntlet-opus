@@ -40,7 +40,7 @@ const BASE = {
   life: { birds: 1, herd: 0, shore: 0.25 },
 };
 
-const mk = (o) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
+const mk = (o: any) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
 
 export const ZONE_DRESS: Object<string, any> = {
   // ---------------------------------------------------------------- LEIDE
@@ -247,7 +247,7 @@ export function dressAt(x: number, z: number): any {
  * not the noise. Cached on the same grid as {@link dressAt}.
  */
 const _moistCache = new Map();
-export function zoneMoist(x, z) {
+export function zoneMoist(x: any, z: any) {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let m = _moistCache.get(k);
   if (m !== undefined) return m;
@@ -258,7 +258,7 @@ export function zoneMoist(x, z) {
 }
 
 /** The zone id at a world position, or `'_default'` on the frontier. */
-export function zoneIdAt(x, z) {
+export function zoneIdAt(x: any, z: any) {
   const zn = worldMap.zoneAt(x, z);
   return zn ? zn.id : '_default';
 }

@@ -22,6 +22,26 @@ const A2 = 110, A3 = 220, A4 = 440;
  * horizon of the whole session.
  */
 export class Score {
+  _at!: any;
+  _queue!: any[];
+  _timer!: any;
+  ctx!: any;
+  cycle!: number;
+  filter!: any;
+  graph!: any;
+  inst!: any;
+  layer!: any;
+  lookahead!: number;
+  nextBarTime!: number;
+  notesScheduled!: number;
+  oneShotBarsLeft!: number;
+  pending!: any;
+  phrase!: number;
+  phraseBar!: number;
+  returnTo!: string;
+  rng!: any;
+  running!: boolean;
+  stateName!: string;
   constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
     this.inst = inst;
@@ -102,7 +122,7 @@ export class Score {
   }
 
   /** Queue a command onto the musical timeline (used by the offline render). */
-  at(time, fn) { this._queue.push({ time, fn }); this._queue.sort((a, b) => a.time - b.time); }
+  at(time: any, fn: any) { this._queue.push({ time, fn }); this._queue.sort((a, b) => a.time - b.time); }
 
   /**
    * Change state. The chart swaps at the next bar line and the layers
@@ -117,9 +137,9 @@ export class Score {
   }
 
   /** The state we will fall back to when a one-shot (victory) finishes. */
-  setReturnState(name) { if (STATES[name]) this.returnTo = name; }
+  setReturnState(name: any) { if (STATES[name]) this.returnTo = name; }
 
-  _applyState(name, fade = 2.4) {
+  _applyState(name: any, fade = 2.4) {
     const prev = this.stateName;
     const st = STATES[name];
     this.stateName = name;
@@ -134,7 +154,7 @@ export class Score {
     this.graph.setMusicReverb(st.reverb ?? 0.8, Math.max(0.5, fade * 0.5), this.clock);
   }
 
-  _fadeLayers(fade) {
+  _fadeLayers(fade: any) {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
@@ -147,7 +167,7 @@ export class Score {
   }
 
   /** Intensity reshapes the arrangement inside a state without changing it. */
-  _layerTarget(name, base) {
+  _layerTarget(name: any, base: any) {
     if (base <= 0) return 0;
     const i = this.intensity;
     if (this.stateName === 'combat' || this.stateName === 'boss') {
@@ -167,7 +187,7 @@ export class Score {
    * How hot the fight is, 0..1. Called from the game each frame; only a real
    * change is pushed at the graph, so this is free to call every tick.
    */
-  setIntensity(v) {
+  setIntensity(v: any) {
     const n = clamp(v, 0, 1);
     if (Math.abs(n - this.intensity) < 0.08) return;
     this.intensity = n;
@@ -204,7 +224,7 @@ export class Score {
    * Schedule every bar that begins before `horizon`. Safe to call with a
    * horizon far in the future: that is exactly what the offline render does.
    */
-  _scheduleUntil(horizon) {
+  _scheduleUntil(horizon: any) {
     let guard = 0;
     while (this.nextBarTime < horizon && guard++ < 4096) {
       const t = this.nextBarTime;
@@ -236,7 +256,7 @@ export class Score {
   }
 
   /** Arrange and schedule one bar starting at `t`. */
-  _bar(t) {
+  _bar(t: any) {
     const st = this.state;
     const beat = this.beatDur;
     const meter = st.meter;
@@ -258,7 +278,7 @@ export class Score {
 
   /* ------------------------------------------------------------- layers */
 
-  _bass(t, barLen, beat, chord, tonic, meter) {
+  _bass(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
     if ((this.state.layers.bass ?? 0) <= 0) return;
     const dest = this.layer.bass;
     const root = ftom(A2, tonic + chord.r);
@@ -296,7 +316,7 @@ export class Score {
     }
   }
 
-  _pad(t, barLen, chord, tonic) {
+  _pad(t: any, barLen: any, chord: any, tonic: any) {
     if ((this.state.layers.pad ?? 0) <= 0) return;
     const dest = this.layer.pad;
     // Three voices maximum: a fourth costs a voice and adds nothing you can
@@ -310,7 +330,7 @@ export class Score {
     }
   }
 
-  _strings(t, barLen, beat, chord, tonic, meter) {
+  _strings(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
     if ((this.state.layers.strings ?? 0) <= 0) return;
     const dest = this.layer.strings;
     const notes = voiceChord(chord, 12);
@@ -338,7 +358,7 @@ export class Score {
     }
   }
 
-  _harp(t, barLen, beat, chord, tonic, meter) {
+  _harp(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
     if ((this.state.layers.harp ?? 0) <= 0) return;
     const dest = this.layer.harp;
     const notes = voiceChord(chord, 12);
@@ -356,7 +376,7 @@ export class Score {
     }
   }
 
-  _choir(t, barLen, chord, tonic, first) {
+  _choir(t: any, barLen: any, chord: any, tonic: any, first: any) {
     if ((this.state.layers.choir ?? 0) <= 0) return;
     const dest = this.layer.choir;
     // The choir is expensive (three formant filters a voice) — two notes only.
@@ -371,7 +391,7 @@ export class Score {
     }
   }
 
-  _brass(t, barLen, beat, chord, next, tonic, meter) {
+  _brass(t: any, barLen: any, beat: any, chord: any, next: any, tonic: any, meter: any) {
     if ((this.state.layers.brass ?? 0) <= 0) return;
     const dest = this.layer.brass;
     const notes = voiceChord(chord, 0);
@@ -402,7 +422,7 @@ export class Score {
     }
   }
 
-  _perc(t, beat, meter, first) {
+  _perc(t: any, beat: any, meter: any, first: any) {
     if ((this.state.layers.perc ?? 0) <= 0) return;
     const dest = this.layer.perc;
     const s = this.stateName;
@@ -447,7 +467,7 @@ export class Score {
    * The tune. Which instrument carries it is the state's whole personality:
    * strings on the field, brass in combat, choir at a boss, flute at camp.
    */
-  _melody(t, beat, meter, tonic) {
+  _melody(t: any, beat: any, meter: any, tonic: any) {
     const weight = this.state.layers.melody ?? 0;
     if (weight <= 0) return;
     const mel = this.state.melody;

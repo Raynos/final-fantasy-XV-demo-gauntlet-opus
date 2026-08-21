@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const SKIN = 0xbdb6a4;
 const SKIN_DARK = 0x8b8474;
@@ -56,7 +56,7 @@ export const ARACHNE = {
       unblockable: true, tracking: 1.0 },
   ],
   buildPrototype,
-  make(opts) { return new ArachneEnemy(opts); },
+  make(opts: any) { return new ArachneEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -243,23 +243,27 @@ function buildPrototype() {
 }
 
 /** Bone-name suffix for leg `i` on side `s`. */
-function legName(i, s) { return `${i}${s < 0 ? 'L' : 'R'}`; }
+function legName(i: any, s: any) { return `${i}${s < 0 ? 'L' : 'R'}`; }
 
 class ArachneEnemy extends Enemy {
-  constructor(opts) { super(ARACHNE, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(ARACHNE, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     /** Run `fn(name, i, s, group)` over all eight legs. */
-    const legs = (fn) => {
+    const legs = (fn: any) => {
       for (let i = 0; i < 4; i++) {
         for (const s of [-1, 1]) fn(legName(i, s), i, s, (i + (s < 0 ? 0 : 1)) % 2);
       }
     };
     // the two alternating tetrapods: 0L 1R 2L 3R against 0R 1L 2R 3L
-    const stance = (k = 1) => legs((n, i, s) => {
+    const stance = (k = 1) => legs((n: any, i: any, s: any) => {
       S(`cx${n}`, 0, 0, 0);
       S(`kn${n}`, -0.10 * k, 0, 0);
       S(`ft${n}`, 0.12 * k, 0, 0);
@@ -269,7 +273,7 @@ class ArachneEnemy extends Enemy {
       case 'run':
       case 'approach': {
         const ph = t * 7.0;
-        legs((n, i, s, grp) => {
+        legs((n: any, i: any, s: any, grp: any) => {
           const a = Math.sin(ph + grp * Math.PI);
           const lift = Math.max(0, Math.sin(ph + grp * Math.PI + 0.5));
           S(`cx${n}`, 0, a * 0.34 * s, 0);
@@ -302,7 +306,7 @@ class ArachneEnemy extends Enemy {
           const k = Math.min(1, this.stateTime / 0.45);
           const e = k * k * (3 - 2 * k);
           stance(1);
-          legs((n, i, s) => { S(`kn${n}`, -0.10 - 0.20 * e, 0, 0); S(`ft${n}`, 0.12 + 0.25 * e, 0, 0); });
+          legs((n: any, i: any, s: any) => { S(`kn${n}`, -0.10 - 0.20 * e, 0, 0); S(`ft${n}`, 0.12 + 0.25 * e, 0, 0); });
           S('body', -0.30 * e, 0, 0);
           S('abdo', -0.95 * e, 0, 0);
           S('abdo2', -0.55 * e, 0, 0);
@@ -321,7 +325,7 @@ class ArachneEnemy extends Enemy {
           // legs cock straight up over the target
           const k = Math.min(1, this.stateTime / 0.55);
           const e = k * k * (3 - 2 * k);
-          legs((n, i, s) => {
+          legs((n: any, i: any, s: any) => {
             if (i === 0) { S(`cx${n}`, -1.45 * e, 0.25 * s * e, 0); S(`kn${n}`, 1.30 * e, 0, 0); S(`ft${n}`, -0.55 * e, 0, 0); }
             else if (i === 1) { S(`cx${n}`, -0.75 * e, 0.15 * s * e, 0); S(`kn${n}`, 0.55 * e, 0, 0); S(`ft${n}`, -0.10 * e, 0, 0); }
             else { S(`cx${n}`, 0.30 * e, 0, 0); S(`kn${n}`, -0.55 * e, 0, 0); S(`ft${n}`, 0.55 * e, 0, 0); }
@@ -344,7 +348,7 @@ class ArachneEnemy extends Enemy {
           const k = Math.min(1, this.stateTime / 0.32);
           const e = k * k * (3 - 2 * k);
           stance(1);
-          legs((n, i, s) => { S(`kn${n}`, -0.10 - 0.18 * e, 0, 0); S(`ft${n}`, 0.12 + 0.22 * e, 0, 0); });
+          legs((n: any, i: any, s: any) => { S(`kn${n}`, -0.10 - 0.18 * e, 0, 0); S(`ft${n}`, 0.12 + 0.22 * e, 0, 0); });
           S('body', 0.12 * e, 0, 0);
           S('spine', -0.28 * e, -0.10 * e, 0);
           S('chest', -0.20 * e, -0.14 * e, 0);
@@ -386,7 +390,7 @@ class ArachneEnemy extends Enemy {
           // the two front legs come down like pile drivers
           const k = Math.min(1, this.stateTime / 0.18);
           const e = 1 - Math.pow(1 - k, 4);
-          legs((n, i, s) => {
+          legs((n: any, i: any, s: any) => {
             if (i === 0) { S(`cx${n}`, -1.45 + 2.55 * e, 0.25 * s * (1 - e), 0); S(`kn${n}`, 1.30 - 1.85 * e, 0, 0); S(`ft${n}`, -0.55 + 0.9 * e, 0, 0); }
             else if (i === 1) { S(`cx${n}`, -0.75 + 1.05 * e, 0, 0); S(`kn${n}`, 0.55 - 0.85 * e, 0, 0); S(`ft${n}`, -0.10 + 0.4 * e, 0, 0); }
             else { S(`cx${n}`, 0.30 - 0.30 * e, 0, 0); S(`kn${n}`, -0.55 + 0.45 * e, 0, 0); S(`ft${n}`, 0.55 - 0.43 * e, 0, 0); }
@@ -429,7 +433,7 @@ class ArachneEnemy extends Enemy {
         const k = Math.exp(-this.stateTime * 8) * (1 - Math.min(1, this.stateTime / 0.35));
         const sh = Math.sin(this.stateTime * 45) * k;
         stance(1);
-        legs((n, i, s) => { S(`kn${n}`, -0.10 - 0.25 * k, sh * 0.1, 0); S(`ft${n}`, 0.12 + 0.3 * k, 0, 0); });
+        legs((n: any, i: any, s: any) => { S(`kn${n}`, -0.10 - 0.25 * k, sh * 0.1, 0); S(`ft${n}`, 0.12 + 0.3 * k, 0, 0); });
         S('spine', 0.30 * k, sh * 0.35, 0);
         S('chest', 0.22 * k, sh * 0.25, 0);
         S('neck', -0.35 * k, sh * 0.4, 0);
@@ -444,7 +448,7 @@ class ArachneEnemy extends Enemy {
       case 'stagger': {
         const k = Math.min(1, this.stateTime / 0.22) * Math.max(0, 1 - this.stateTime / 2.4);
         // the legs buckle outward and the torso folds forward off the body
-        legs((n, i, s) => {
+        legs((n: any, i: any, s: any) => {
           S(`cx${n}`, 0.40 * k, 0.35 * s * k, 0);
           S(`kn${n}`, -1.05 * k, 0, 0);
           S(`ft${n}`, 0.95 * k, 0, 0);
@@ -468,7 +472,7 @@ class ArachneEnemy extends Enemy {
         const k = Math.min(1, this.stateTime / 0.9);
         const e = 1 - Math.pow(1 - k, 3);
         // legs curl in over the body the way a dead spider's do
-        legs((n, i, s) => {
+        legs((n: any, i: any, s: any) => {
           S(`cx${n}`, -0.55 * e, -0.45 * s * e, 0);
           S(`kn${n}`, 1.75 * e, 0, 0);
           S(`ft${n}`, -1.55 * e, 0, 0);
@@ -492,7 +496,7 @@ class ArachneEnemy extends Enemy {
         // idle: the legs tick and shift, the torso sways like something
         // balanced on top of a body it does not belong to
         const b = Math.sin(t * 1.5) * 0.04;
-        legs((n, i, s, grp) => {
+        legs((n: any, i: any, s: any, grp: any) => {
           const tick = Math.sin(t * 1.1 + i * 1.3 + grp * 2.0) * 0.06;
           S(`cx${n}`, 0, tick * s, 0);
           S(`kn${n}`, -0.10 + tick, 0, 0);

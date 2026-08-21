@@ -7,7 +7,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 /* Oxidised wrought iron, not battleship grey. The old palette was blue-grey
  * with a cool highlight, which is a Battletech mech; an Iron Giant is a suit
@@ -54,7 +54,7 @@ export const IRON_GIANT = {
       telegraph: 1.35, strike: 0.32, attack: 1.0, recover: 1.8, cooldown: 5, unblockable: true },
   ],
   buildPrototype,
-  make(opts) { return new IronGiantEnemy(opts); },
+  make(opts: any) { return new IronGiantEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -221,7 +221,14 @@ function buildPrototype() {
  * fight, and the animation has to hand the player the window honestly.
  */
 class IronGiantEnemy extends BipedEnemy {
-  constructor(opts) { super(IRON_GIANT, opts); }
+  anim!: any;
+  deathPush!: any;
+  deathSide!: any;
+  rig!: any;
+  stateTime!: any;
+  type!: any;
+  visual!: any;
+  constructor(opts: any) { super(IRON_GIANT, opts); }
 
   /** World-space sword tip — used by the arc VFX and the sweep hitbox. */
   swordTip(out = new THREE.Vector3()) {
@@ -231,7 +238,7 @@ class IronGiantEnemy extends BipedEnemy {
   }
 
   /** Sword carried point-down at the side. */
-  carry(S, k = 1) {
+  carry(S: any, k = 1) {
     S('shR', 0.35 * k, 0, -0.30 * k);
     S('elR', -0.55 * k, 0, 0);
     S('hdR', -0.35 * k, 0, 0);
@@ -245,14 +252,14 @@ class IronGiantEnemy extends BipedEnemy {
    * other. Cheap, and it does more for "this is a daemon" than any amount of
    * extra geometry.
    */
-  miasma(S, t) {
+  miasma(S: any, t: any) {
     const j = Math.sin(t * 1.7) * Math.sin(t * 0.43 + 1.1) * Math.sin(t * 0.19);
     this.add(S, 'chest', j * 0.020, j * 0.030, -0.035 + j * 0.014);
     this.add(S, 'neck', -j * 0.030, j * 0.055, 0.02);
     this.add(S, 'head', j * 0.050, -j * 0.085, -0.03);
   }
 
-  add(S, name, x, y, z) {
+  add(S: any, name: any, x: any, y: any, z: any) {
     const b = this.rig.byName.get(name);
     if (!b) return;
     _e.set(x, y, z, 'XYZ');
@@ -260,7 +267,7 @@ class IronGiantEnemy extends BipedEnemy {
     b.quaternion.multiply(_q);
   }
 
-  poseLocomotion(S, t) {
+  poseLocomotion(S: any, t: any) {
     super.poseLocomotion(S, t);
     // the sword hand does not swing; it hauls
     const sw = Math.sin(this.anim.gaitPhase * Math.PI * 2);
@@ -272,7 +279,7 @@ class IronGiantEnemy extends BipedEnemy {
 
   poseArms() { /* the carry pose owns the arms */ }
 
-  poseWindUp(S, t, k, env) {
+  poseWindUp(S: any, t: any, k: any, env: any) {
     // Rear back and haul the blade overhead. Two-thirds of the wind-up is
     // spent getting there; the last third is a held, trembling threat.
     const e = smooth(k);
@@ -293,7 +300,7 @@ class IronGiantEnemy extends BipedEnemy {
     });
   }
 
-  poseSwing(S, t, k, env) {
+  poseSwing(S: any, t: any, k: any, env: any) {
     // one continuous arc from the held wind-up through the ground
     const e = clamp01((k + 1) * 0.5);
     const f = env.phase === 'follow' ? env.f : 0;
@@ -315,7 +322,7 @@ class IronGiantEnemy extends BipedEnemy {
     });
   }
 
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     // Iron does not crumple; it falls in one piece and the daemon leaves it.
     const A = this.A;
     const T = this.stateTime;
@@ -344,18 +351,18 @@ class IronGiantEnemy extends BipedEnemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  poseIdle(S, t) {
+  poseIdle(S: any, t: any) {
     super.poseIdle(S, t);
     this.carry(S, 1);
     this.miasma(S, t);
   }
 
-  poseFlinch(S, t) {
+  poseFlinch(S: any, t: any) {
     super.poseFlinch(S, t);
     this.carry(S, 1);
   }
 
-  poseStagger(S, t) {
+  poseStagger(S: any, t: any) {
     super.poseStagger(S, t);
     const total = this.type.staggerDuration || 3.2;
     const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));
@@ -384,7 +391,7 @@ const _q = new THREE.Quaternion();
 
 const _ic = new THREE.Color(), _id = new THREE.Color();
 /** sRGB mix accepting a hex or an already-mixed Colour at either end. */
-function mix(a, b, t) {
+function mix(a: any, b: any, t: any) {
   if (typeof b === 'number') _id.setHex(b, THREE.SRGBColorSpace); else _id.copy(b);
   if (typeof a === 'number') _ic.setHex(a, THREE.SRGBColorSpace); else if (a !== _ic) _ic.copy(a);
   return _ic.lerp(_id, t < 0 ? 0 : t > 1 ? 1 : t);

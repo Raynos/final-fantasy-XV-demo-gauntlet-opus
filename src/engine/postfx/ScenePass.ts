@@ -9,7 +9,9 @@ import { fsMaterial, blit } from './Fx.ts';
  * anyway.
  */
 export class ScenePass extends Pass {
-  constructor(fx) {
+  fx!: any;
+  material!: any;
+  constructor(fx: any) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -33,7 +35,7 @@ export class ScenePass extends Pass {
     });
   }
 
-  render(renderer, writeBuffer) {
+  render(renderer: any, writeBuffer: any) {
     const fx = this.fx;
     const { scene, camera } = fx.rnd;
 

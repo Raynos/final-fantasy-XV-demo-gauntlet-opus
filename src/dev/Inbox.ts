@@ -19,6 +19,17 @@ const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 
  * download so a note is never simply lost.
  */
 export class Inbox {
+  area!: any;
+  game!: any;
+  img!: any;
+  meta!: any;
+  node!: any;
+  open!: boolean;
+  pending!: any;
+  reg!: any;
+  sev!: any;
+  status!: any;
+  text!: any;
   constructor(root: HTMLElement, game: any, reg: import('./Registry.ts').Registry) {
     this.game = game;
     this.reg = reg;
@@ -58,7 +69,7 @@ export class Inbox {
     // Same reason as the console: the engine's Input listens on window, so a
     // note typed here would otherwise also drive the camera.
     for (const ev of ['keydown', 'keyup', 'keypress']) {
-      this.node.addEventListener(ev, (e) => {
+      this.node.addEventListener(ev, (e: any) => {
         e.stopPropagation();
         if (ev === 'keydown' && e.key === 'Escape') this.close();
         if (ev === 'keydown' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) this.submit();
@@ -127,7 +138,7 @@ export class Inbox {
     }
   }
 
-  _download(note) {
+  _download(note: any) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));
     a.download = `review-note-${Date.now()}.json`;

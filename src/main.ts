@@ -8,7 +8,7 @@ const label = document.getElementById('boot-label');
 const game = new Game({
   container: document.getElementById('app'),
   uiRoot: document.getElementById('ui'),
-  onProgress: (t, text) => {
+  onProgress: (t: any, text: any) => {
     bar.style.right = `${Math.max(0, 100 - t * 100).toFixed(1)}%`;
     if (text) label.textContent = text;
   },

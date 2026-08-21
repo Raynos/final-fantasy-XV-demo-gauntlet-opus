@@ -8,7 +8,10 @@ import { CHUNK_HASH } from '../../shaders/post/common.ts';
  * an already-graded image, so it never amplifies HDR fireflies.
  */
 export class CasPass extends FilterPass {
-  constructor(fx) {
+  dither!: number;
+  material!: any;
+  sharpness!: number;
+  constructor(fx: any) {
     super(fx);
     this.sharpness = 0.42;
     this.dither = 1.0;
@@ -52,7 +55,7 @@ export class CasPass extends FilterPass {
     });
   }
 
-  setSize(w, h) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
   beforeRender() {
     this.material.uniforms.uSharpness.value = this.sharpness;

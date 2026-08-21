@@ -28,6 +28,15 @@
 import { Rng } from '../../util/Rng.ts';
 
 export class CombatBridge {
+  _off!: any[];
+  _onTech!: any;
+  _rng!: Rng;
+  _warpUntil!: number;
+  armiger!: number;
+  combat!: any;
+  game!: any;
+  lastRoll!: any;
+  rpg!: any;
   constructor(rpg: import('./RpgSystem.ts').RpgSystem) {
     this.rpg = rpg;
     this.combat = null;
@@ -54,19 +63,19 @@ export class CombatBridge {
     const combat = game?.get?.('Combat');
     if (!combat || typeof combat.on !== 'function') return false;
     this.combat = combat;
-    const on = (n, fn) => this._off.push(combat.on(n, fn));
+    const on = (n: any, fn: any) => this._off.push(combat.on(n, fn));
 
-    on('damage', (ev) => this._onDamage(ev));
-    on('death', (ev) => this._onDeath(ev));
-    on('warp', (ev) => this._onWarp(ev));
+    on('damage', (ev: any) => this._onDamage(ev));
+    on('death', (ev: any) => this._onDeath(ev));
+    on('warp', (ev: any) => this._onWarp(ev));
     on('parry', () => this.rpg.parry());
     on('stagger', () => this.rpg.stagger());
     on('link', () => this.rpg.linkStrike(2));
-    on('playerHit', (ev) => this._onPlayerHit(ev));
+    on('playerHit', (ev: any) => this._onPlayerHit(ev));
 
     // Techniques are fired by `PartyAI`, which announces on the window bus.
     // Give each one a cinematic beat: a banner and a sliver of slow motion.
-    this._onTech = (e) => this._techBeat(e.detail || {});
+    this._onTech = (e: any) => this._techBeat(e.detail || {});
     window.addEventListener('encounter:tech', this._onTech);
     this._off.push(() => window.removeEventListener('encounter:tech', this._onTech));
     return true;
@@ -76,7 +85,7 @@ export class CombatBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** Called from `RpgSystem.update`. */
-  update(dt, game) {
+  update(dt: any, game: any) {
     const combat = this.combat || game?.get?.('Combat');
     if (!combat) return;
     // The tech bar only charges in a fight. `EncounterDirector` overwrites this
@@ -100,7 +109,7 @@ export class CombatBridge {
 
   /* -- events ------------------------------------------------------------ */
 
-  _onWarp(ev) {
+  _onWarp(ev: any) {
     if (ev?.phase !== 'impact') return;
     // A window rather than a flag: the Director's frozen scenarios emit the
     // damage event after the warp impact rather than before it.
@@ -113,7 +122,7 @@ export class CombatBridge {
    * through `computeDamage` before it ever left the swing. All that is owed
    * here is the meters it feeds.
    */
-  _onDamage(ev) {
+  _onDamage(ev: any) {
     const dmg = ev?.damage;
     if (!dmg || dmg <= 0) return;
     const byPlayer = !ev.source;               // `PartyAI` stamps a member id
@@ -142,7 +151,7 @@ export class CombatBridge {
    * (a posed scenario, a bare harness world), so a kill is never paid twice
    * and never paid zero.
    */
-  _onDeath(ev) {
+  _onDeath(ev: any) {
     const e = ev?.enemy;
     if (!e || e._looted) return;
     const dir = this.game?.get?.('Encounters');
@@ -166,7 +175,7 @@ export class CombatBridge {
    * again here (which is what this used to do) meant every enemy blow landed
    * twice. All that is owed is the screen flash and the tech-bar charge.
    */
-  _onPlayerHit(ev) {
+  _onPlayerHit(ev: any) {
     const dmg = Math.max(0, Math.round(ev?.damage || 0));
     if (!dmg) return;
     const n = this.rpg.noctis;
@@ -176,14 +185,14 @@ export class CombatBridge {
   }
 
   /** Add to the shared tech bar, clamped to its segment count. */
-  _chargeTech(bars) {
+  _chargeTech(bars: any) {
     if (!(bars > 0)) return;
     const p = this.rpg.party;
     p.techCharge = Math.min(p.maxTechBars, p.techCharge + Math.min(0.5, bars));
   }
 
   /** A technique fired: banner it and drop a beat of slow motion under it. */
-  _techBeat(d) {
+  _techBeat(d: any) {
     const hud = this.game?.get?.('HUD');
     if (hud?.callOut) hud.callOut(d.name || 'Technique', `${d.member || ''}`.toUpperCase());
     if (this.combat) this.combat.slowmo = Math.max(this.combat.slowmo, 0.22);

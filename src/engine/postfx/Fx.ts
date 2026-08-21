@@ -7,7 +7,7 @@ import { FS_VERT } from '../../shaders/post/common.ts';
  */
 
 /** HDR render target with sane post-processing defaults. */
-export function makeRT(w, h, opts = {}) {
+export function makeRT(w: any, h: any, opts = {}) {
   const rt = new THREE.WebGLRenderTarget(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
@@ -26,7 +26,7 @@ export function makeRT(w, h, opts = {}) {
 }
 
 /** ShaderMaterial configured for fullscreen filtering (never touches depth). */
-export function fsMaterial({ uniforms, fragmentShader, defines = {}, blending = THREE.NoBlending }) {
+export function fsMaterial({ uniforms, fragmentShader, defines = {}, blending = THREE.NoBlending }: any) {
   return new THREE.ShaderMaterial({
     defines,
     uniforms,
@@ -76,7 +76,10 @@ export function blit(renderer: THREE.WebGLRenderer, material: THREE.Material, ta
  * `beforeRender()`.
  */
 export class FilterPass extends Pass {
-  constructor(fx) {
+  beforeRender!: any;
+  fx!: any;
+  material!: any;
+  constructor(fx: any) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -87,7 +90,7 @@ export class FilterPass extends Pass {
   /** Shorthand so `pass.uniforms.x.value` works like a three ShaderPass. */
   get uniforms() { return this.material.uniforms; }
 
-  render(renderer, writeBuffer, readBuffer) {
+  render(renderer: any, writeBuffer: any, readBuffer: any) {
     if (this.material.uniforms.tDiffuse) this.material.uniforms.tDiffuse.value = readBuffer.texture;
     if (this.beforeRender) this.beforeRender(renderer, readBuffer);
     blit(renderer, this.material, this.renderToScreen ? null : writeBuffer);

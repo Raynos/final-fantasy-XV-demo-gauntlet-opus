@@ -232,8 +232,8 @@ export const ROUTES = [
 const SAMPLE_STEP = 6;
 
 /** Catmull-Rom through a control list, resampled at ~`step` metres. */
-function resample(ctrl, step) {
-  if (ctrl.length < 2) return ctrl.map((p) => ({ x: p[0], z: p[1], y: 0, s: 0, tx: 0, tz: 1 }));
+function resample(ctrl: any, step: any) {
+  if (ctrl.length < 2) return ctrl.map((p: any) => ({ x: p[0], z: p[1], y: 0, s: 0, tx: 0, tz: 1 }));
   const raw = [];
   for (let i = 0; i < ctrl.length - 1; i++) {
     const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i];
@@ -281,6 +281,13 @@ function resample(ctrl, step) {
  * writes `y` back into every sample.
  */
 export class RoadGraph {
+  _cell!: number;
+  _grid!: Map<any, any>;
+  classes!: any;
+  edges!: any[];
+  nodes!: Map<any, any>;
+  routeById!: Map<any, any>;
+  totalLength!: any;
   /**
    * @param nodes id -> [x, z]
    * @param routes see {@link ROUTES}
@@ -344,8 +351,8 @@ export class RoadGraph {
       this.routes.push(routeRec);
     }
 
-    this.routeById = new Map(this.routes.map((r) => [r.id, r]));
-    this.totalLength = this.routes.reduce((a, r) => a + r.length, 0);
+    this.routeById = new Map(this.routes.map((r: any) => [r.id, r]));
+    this.totalLength = this.routes.reduce((a: any, r: any) => a + r.length, 0);
     this._buildAccel();
   }
 
@@ -422,7 +429,7 @@ export class RoadGraph {
   }
 
   /** Metres to the nearest road centreline (saturating at `maxR`). */
-  distance(x, z, maxR = 400) {
+  distance(x: any, z: any, maxR = 400) {
     const n = this.nearest(x, z, maxR);
     return n ? n.dist : maxR;
   }
@@ -433,7 +440,7 @@ export class RoadGraph {
    * Shortest drivable path between two world points, snapping each end to the
    * nearest road. Dijkstra over the node graph plus the two partial edges.
    */
-  route(ax, az, bx, bz): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
+  route(ax: any, az: any, bx: any, bz: any): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
     const A = this.nearest(ax, az, 1200), B = this.nearest(bx, bz, 1200);
     if (!A || !B) return null;
     if (A.edge === B.edge) {
@@ -501,7 +508,7 @@ export class RoadGraph {
     return { length, seconds: bestCost, pts };
   }
 
-  _slice(edge, s0, s1) {
+  _slice(edge: any, s0: any, s1: any) {
     const out = [];
     const fwd = s1 >= s0;
     const lo = Math.min(s0, s1), hi = Math.max(s0, s1);
@@ -516,7 +523,7 @@ export class RoadGraph {
    * Signed curvature radius at each sample of an edge, metres. `Infinity` on a
    * straight. Used by the drivability test and by the driving AI.
    */
-  radii(edge): number[] {
+  radii(edge: any): number[] {
     const p = edge.pts, out = new Array(p.length).fill(Infinity);
     for (let i = 1; i < p.length - 1; i++) {
       const a = p[i - 1], b = p[i], c = p[i + 1];

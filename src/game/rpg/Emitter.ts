@@ -7,6 +7,9 @@
  * so one broken HUD widget can never stall the simulation.
  */
 export class Emitter {
+  _handlers!: Map<any, any>;
+  log!: any[];
+  logLimit!: number;
   constructor() {
     /** @type {Map<string, Function[]>} */
     this._handlers = new Map();
@@ -28,13 +31,13 @@ export class Emitter {
   }
 
   /** Subscribe and auto-unsubscribe after the first emission. */
-  once(event, fn) {
+  once(event: any, fn: any) {
     const off = this.on(event, (payload, ev) => { off(); fn(payload, ev); });
     return off;
   }
 
   /** Remove a previously registered handler. */
-  off(event, fn) {
+  off(event: any, fn: any) {
     const list = this._handlers.get(event);
     if (!list) return;
     const i = list.indexOf(fn);

@@ -11,6 +11,17 @@ import { turbulence } from './VfxTextures.ts';
  * means an expanding ring animates without touching the geometry.
  */
 export class GroundPatch {
+  age!: number;
+  center!: any;
+  free!: boolean;
+  grid!: any;
+  life!: number;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  posAttr!: any;
+  positions!: Float32Array;
+  size!: any;
+  uniforms!: any;
   constructor({ grid = 14, additive = false, renderOrder = 6 } = {}) {
     this.grid = grid;
     const g = grid;
@@ -75,7 +86,7 @@ export class GroundPatch {
   }
 
   /** Snap the patch grid onto the terrain around `center` with side `size`. */
-  place(center, size, terrain, bias = 0.06) {
+  place(center: any, size: any, terrain: any, bias = 0.06) {
     const g = this.grid, p = this.positions;
     const half = size * 0.5;
     for (let j = 0; j <= g; j++) {
@@ -104,7 +115,9 @@ export class GroundPatch {
  * alpha-blended (scorch, frost, cracks). LRU reuse keeps draw calls bounded.
  */
 export class GroundFX {
-  constructor(parent, { rings = 6, decals = 12 } = {}) {
+  _decalNext!: number;
+  _ringNext!: number;
+  constructor(parent: any, { rings = 6, decals = 12 } = {}) {
     this.rings = [];
     this.decals = [];
     for (let i = 0; i < rings; i++) {
@@ -121,7 +134,7 @@ export class GroundFX {
     this._decalNext = 0;
   }
 
-  _take(pool, cursorKey) {
+  _take(pool: any, cursorKey: any) {
     for (const p of pool) if (p.free) return p;
     const p = pool[this[cursorKey]];
     this[cursorKey] = (this[cursorKey] + 1) % pool.length;
@@ -149,7 +162,7 @@ export class GroundFX {
 
   /** Persistent (slowly fading) textured decal: scorch, frost, cracks. */
   decal({ pos, terrain, size = 3, map, color = 0xffffff, opacity = 0.9,
-    life = 26, rotate = 0, intensity = 1, age = 0 }) {
+    life = 26, rotate = 0, intensity = 1, age = 0 }: any) {
     const p = this._take(this.decals, '_decalNext');
     p.place(pos, size, terrain, 0.045);
     p.uniforms.uRing.value = 0;
@@ -164,7 +177,7 @@ export class GroundFX {
   }
 
   /** Soft additive light pool — magic circles, warp landing glow. */
-  pool({ pos, terrain, size = 4, color = 0x66ccff, opacity = 1, life = 2.5, intensity = 2.4, age = 0 }) {
+  pool({ pos, terrain, size = 4, color = 0x66ccff, opacity = 1, life = 2.5, intensity = 2.4, age = 0 }: any) {
     const p = this._take(this.rings, '_ringNext');
     p.place(pos, size, terrain, 0.07);
     p.uniforms.uRing.value = 2;
@@ -176,7 +189,7 @@ export class GroundFX {
     return p;
   }
 
-  update(dt, clock) {
+  update(dt: any, clock: any) {
     for (const list of [this.rings, this.decals]) {
       for (const p of list) {
         if (p.free) continue;

@@ -35,6 +35,28 @@ const ENTRIES = [
 
 /** The FFXV-style pause menu: a vertical list over a blurred game frame. */
 export class MainScreen {
+  _cur!: any;
+  _pvAge!: number;
+  _q!: any;
+  _qs!: any;
+  cards!: any[];
+  i!: number;
+  list!: any;
+  mark!: any;
+  menus!: any;
+  partyWrap!: any;
+  preview!: any;
+  pvB!: any;
+  pvR!: any;
+  pvT!: any;
+  rows!: any;
+  statNodes!: any;
+  stats!: any;
+  sub!: string;
+  title!: string;
+  track!: any;
+  trackQ!: any;
+  trackS!: any;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Main Menu';
@@ -42,7 +64,7 @@ export class MainScreen {
     this.i = 0;
   }
 
-  build(root: HTMLElement, game) {
+  build(root: HTMLElement, game: any) {
     this.list = el('div.mlist');
     this.rows = ENTRIES.map((e2) => {
       const row = el('div.mrow', {}, [
@@ -90,7 +112,7 @@ export class MainScreen {
     this.cards = [];
   }
 
-  _buildCards(party) {
+  _buildCards(party: any) {
     for (const p of party) {
       const bar = new Bar({ cls: 'slim' });
       const hp = el('div.lv');
@@ -104,7 +126,7 @@ export class MainScreen {
     }
   }
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     if (dy) this.i = (this.i + dy + ENTRIES.length) % ENTRIES.length;
   }
 
@@ -117,7 +139,7 @@ export class MainScreen {
     if (!r) return entry.body;
     if (entry.key === 'quests') {
       const q = r.quests;
-      const hunts = q.active.filter((x) => x.type === 'hunt').length;
+      const hunts = q.active.filter((x: any) => x.type === 'hunt').length;
       return `${q.active.length} active, ${q.available.length} available, ${q.completed.length} finished — `
         + `${hunts} of them bount${hunts === 1 ? 'y' : 'ies'}. Chapter ${r.chapter}.`;
     }
@@ -134,7 +156,7 @@ export class MainScreen {
   }
 
   /** True when the menu stack actually carries the screen this row points at. */
-  _live(e2) { return !!(e2.to && this.menus.screens && this.menus.screens[e2.to]); }
+  _live(e2: any) { return !!(e2.to && this.menus.screens && this.menus.screens[e2.to]); }
 
   accept() {
     const e2 = ENTRIES[this.i];

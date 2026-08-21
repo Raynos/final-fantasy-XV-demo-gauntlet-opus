@@ -22,10 +22,10 @@ const storage = (() => {
   } catch { /* private mode, or no DOM */ }
   const mem = new Map();
   return {
-    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
-    setItem: (k, v) => mem.set(k, String(v)),
-    removeItem: (k) => mem.delete(k),
-    key: (i) => [...mem.keys()][i] ?? null,
+    getItem: (k: any) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k: any, v: any) => mem.set(k, String(v)),
+    removeItem: (k: any) => mem.delete(k),
+    key: (i: any) => [...mem.keys()][i] ?? null,
     get length() { return mem.size; },
     _memory: true,
   };

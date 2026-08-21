@@ -5,7 +5,7 @@ import {
   tube, blob, slab, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 /* Albedo, and it was charcoal: PLATE at 0x33383f is 3.9% linear reflectance
  * and JOINT at 0x14161a is 0.9% — darker than any real surface outside a
@@ -59,7 +59,7 @@ export const IMPERIAL_SNIPER = {
     },
   ],
   buildPrototype,
-  make(opts) { return new SniperEnemy(opts); },
+  make(opts: any) { return new SniperEnemy(opts); },
 };
 
 /**
@@ -243,7 +243,11 @@ function buildPrototype() {
 }
 
 class SniperEnemy extends Enemy {
-  constructor(opts) { super(IMPERIAL_SNIPER, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(IMPERIAL_SNIPER, opts); }
 
   /** World-space muzzle position — the combat system spawns the tracer here. */
   muzzle(out = new THREE.Vector3()) {
@@ -253,10 +257,10 @@ class SniperEnemy extends Enemy {
     return out.set(0.0, 0.03, 1.42).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     // rifle carried muzzle-down across the body
     const ready = (k = 1) => {
       S('shR', -0.95 * k, -0.30 * k, -0.30 * k);

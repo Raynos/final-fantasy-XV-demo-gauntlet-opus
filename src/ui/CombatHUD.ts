@@ -7,7 +7,7 @@ import { ENEMY_TEMPLATES, hudState, readArmiger, readTechniques, rollDamage } fr
 const _v = new THREE.Vector3();
 
 /** Project a world point to CSS pixels. Returns null when behind the camera. */
-function project(p, camera, w, h) {
+function project(p: any, camera: any, w: any, h: any) {
   _v.set(p.x, p.y, p.z).project(camera);
   if (_v.z > 1) return null;
   return { x: (_v.x * 0.5 + 0.5) * w, y: (-_v.y * 0.5 + 0.5) * h, depth: _v.z };
@@ -23,6 +23,30 @@ function project(p, camera, w, h) {
  * renderable for captures.
  */
 export class CombatHUD {
+  _armPct!: any;
+  _armigerDriven!: boolean;
+  _beat!: number;
+  _didCall!: boolean;
+  _lastTarget!: any;
+  _wasActive!: any;
+  armiger!: any;
+  armigerVal!: number;
+  calloutNode!: any;
+  calloutRule!: any;
+  calloutWord!: any;
+  corner!: any;
+  dmgLayer!: any;
+  lockAge!: number;
+  lockOn!: any;
+  mockEnemies!: any;
+  mockSeq!: number;
+  mockT!: number;
+  numbers!: any[];
+  plateLayer!: any;
+  plates!: any[];
+  reticle!: any;
+  root!: any;
+  techs!: any;
   /**
    * @param parent full-screen layer for world-anchored chrome
    * @param [corner] the bottom-left corner slot owned by
@@ -242,7 +266,7 @@ export class CombatHUD {
     // techniques — the tech bar is charged by PartyState while `inCombat`
     const hs = hudState(game);
     const bars = hs ? hs.techBars : null;
-    this.techs.rows.forEach((r, i) => {
+    this.techs.rows.forEach((r: any, i: any) => {
       const live = game.get?.('Combat')?.techniques?.[i];
       let ready = typeof live?.ready === 'number' ? live.ready : r.t.ready;
       if (bars != null && r.t.cost > 0) ready = clamp(game.get('Rpg').party.techCharge / r.t.cost, 0, 1);
@@ -257,7 +281,7 @@ export class CombatHUD {
 
   // ---- internals ------------------------------------------------------
   /** Live enemies if the Enemies/Combat systems provide them, else mocks. */
-  _enemies(game) {
+  _enemies(game: any) {
     const live = game.get?.('Enemies')?.list;
     if (Array.isArray(live) && live.length) {
       // Nearest five, not the first five in spawn order: the plates should
@@ -315,7 +339,7 @@ export class CombatHUD {
         };
       });
     }
-    return this.mockEnemies.filter((x) => x.alive);
+    return this.mockEnemies.filter((x: any) => x.alive);
   }
 
   /**
@@ -331,7 +355,7 @@ export class CombatHUD {
    * `Stats.computeDamage()` against the real target, so a posed frame prints the
    * same number the same swing would print in a real fight.
    */
-  _standIn(dt, game, enemies) {
+  _standIn(dt: any, game: any, enemies: any) {
     if (!enemies.length) return;
     const posed = !!game.get?.('Enemies')?.frozen;
     if (!enemies[0].mock && !posed) return;
@@ -373,7 +397,7 @@ export class CombatHUD {
     }
   }
 
-  _syncPlates(enemies, cam, w, h, dt, game, appear) {
+  _syncPlates(enemies: any, cam: any, w: any, h: any, dt: any, game: any, appear: any) {
     while (this.plates.length < enemies.length) {
       const bar = new Bar({ cls: 'slim cut' }).tint('hostile');
       const name = el('div.np-name');
@@ -419,12 +443,12 @@ export class CombatHUD {
     }
   }
 
-  _updateReticle(dt, game, cam, w, h, enemies, appear) {
+  _updateReticle(dt: any, game: any, cam: any, w: any, h: any, enemies: any, appear: any) {
     let target = this.lockOn;
     // `Combat.lockOn` is the *setter method*; the current target is
     // `lockTarget`. Reading the method here made the reticle follow a function.
     const live = game.get?.('Combat')?.lockTarget;
-    if (live) target = this._enemies(game).find((e) => e.ref === live) || target;
+    if (live) target = this._enemies(game).find((e: any) => e.ref === live) || target;
     if (!target && enemies.length) target = enemies[0];
     if (target !== this._lastTarget) { this.lockAge = 0; this._lastTarget = target; }
     this.lockAge += dt;
@@ -446,7 +470,7 @@ export class CombatHUD {
     this.reticle.node.style.opacity = (easeOut(t) * easeOut(clamp(appear / 0.5, 0, 1))).toFixed(3);
   }
 
-  _updateNumbers(dt, cam, w, h) {
+  _updateNumbers(dt: any, cam: any, w: any, h: any) {
     for (let i = this.numbers.length - 1; i >= 0; i--) {
       const n = this.numbers[i];
       n.clip.step(dt);
@@ -469,7 +493,7 @@ export class CombatHUD {
     }
   }
 
-  _retire(n) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
+  _retire(n: any) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
 
   /**
    * Drive the centre call-out. Every value is written from the clip's own

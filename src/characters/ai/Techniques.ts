@@ -17,7 +17,7 @@ const V = new THREE.Vector3();
 /* ------------------------------------------------------------ helpers */
 
 /** Everything alive within `r` of a point. */
-function around(ai, p, r) {
+function around(ai: any, p: any, r: any) {
   const out = [];
   const r2 = r * r;
   for (const e of ai.enemies.list) {
@@ -29,7 +29,7 @@ function around(ai, p, r) {
 }
 
 /** Ground point under an object. */
-function ground(ai, p) {
+function ground(ai: any, p: any) {
   V.set(p.x, ai.terrain ? ai.terrain.heightAt(p.x, p.z) : p.y, p.z);
   return V.clone();
 }
@@ -40,7 +40,7 @@ const GLADIO = [
   {
     id: 'tempest', name: 'Tempest', bars: 1, duration: 1.4, motion: 2.4,
     /** A full-body spin that catches everything within reach. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_slash');
       const at = target ? target.root.position : m.root.position;
       ai._station(m, at, 2.4);
@@ -58,7 +58,7 @@ const GLADIO = [
   {
     id: 'impulse', name: 'Impulse', bars: 2, duration: 1.5, motion: 3.6,
     /** A rising cleave that throws the target into the air. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_overhead');
       if (!target) return;
       ai._station(m, target.root.position, 2.4);
@@ -79,7 +79,7 @@ const GLADIO = [
   {
     id: 'dawnhammer', name: 'Dawnhammer', bars: 3, duration: 2.2, motion: 6.2,
     /** The greatsword comes down and the ground goes with it. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_overhead');
       const at = target ? target.root.position.clone() : m.root.position.clone();
       ai._station(m, at, 2.6);
@@ -101,7 +101,7 @@ const GLADIO = [
   {
     id: 'coverage', name: 'Coverage', bars: 1, duration: 1.0, motion: 0,
     /** Gladio takes the whole fight onto himself for fifteen seconds. */
-    run(ai, m) {
+    run(ai: any, m: any) {
       m.character?.play?.('guard');
       const hits = around(ai, m.root.position, 22);
       for (const e of hits) { e.target = m; e.awareness = 1; if (!e.inCombat) e.setState('chase'); }
@@ -120,7 +120,7 @@ const IGNIS = [
   {
     id: 'analyse', name: 'Analyse', bars: 1, duration: 1.0, motion: 0.4,
     /** Reads the target and tells the party where it is soft. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('cast');
       if (!target) return;
       const info = bestiaryEntry(target.type.key) || { name: target.name, weak: [] };
@@ -138,7 +138,7 @@ const IGNIS = [
   {
     id: 'enhancement', name: 'Enhancement', bars: 1, duration: 1.2, motion: 0,
     /** Ignis coats Noctis' blade — a real, timed attack buff. */
-    run(ai, m) {
+    run(ai: any, m: any) {
       m.character?.play?.('cast');
       const rpg = ai.rpg;
       const player = ai.player;
@@ -161,7 +161,7 @@ const IGNIS = [
   {
     id: 'regroup', name: 'Regroup', bars: 2, duration: 1.4, motion: 0,
     /** Heals the retinue and picks up anyone who is down. */
-    run(ai, m) {
+    run(ai: any, m: any) {
       m.character?.play?.('cast');
       const rpg = ai.rpg;
       if (rpg) {
@@ -184,7 +184,7 @@ const IGNIS = [
   {
     id: 'overwhelm', name: 'Overwhelm', bars: 3, duration: 2.0, motion: 4.8,
     /** Eight dagger hits on one target, fast enough to blur. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       if (!target) return;
       ai._station(m, target.root.position, 2.0);
       for (let i = 0; i < 8; i++) {
@@ -209,7 +209,7 @@ const PROMPTO = [
   {
     id: 'piercer', name: 'Piercer', bars: 1, duration: 1.1, motion: 2.0,
     /** One armour-piercing round, straight through the plate. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_thrust');
       if (!target) return;
       ai.schedule(0.4, () => {
@@ -222,7 +222,7 @@ const PROMPTO = [
           b.uniforms.uIntensity.value = 5.0;
           b.width = 0.09;
           b.setLine(from, target.centre());
-          ai.vfx.track(ai.vfx.clock, 0.18, (k) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+          ai.vfx.track(ai.vfx.clock, 0.18, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
         }
         ai.strike(m, target, { motion: 2.0, poise: 60, technique: true, scale: 1.4, ignoreArmour: true });
       });
@@ -231,7 +231,7 @@ const PROMPTO = [
   {
     id: 'recoil', name: 'Recoil', bars: 2, duration: 1.2, motion: 3.0,
     /** A shotgun blast at contact range that throws the target off him. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_thrust');
       if (!target) return;
       ai.schedule(0.35, () => {
@@ -249,7 +249,7 @@ const PROMPTO = [
   {
     id: 'starshell', name: 'Starshell', bars: 2, duration: 1.6, motion: 0.6,
     /** A magnesium flare. It lights the field, and daemons hate it. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('attack_thrust');
       const at = target ? target.centre() : m.root.position.clone();
       at.y += 12;
@@ -272,7 +272,7 @@ const PROMPTO = [
   {
     id: 'gravisphere', name: 'Gravisphere', bars: 3, duration: 2.6, motion: 1.2,
     /** Drops a singularity and drags the whole field into it. */
-    run(ai, m, target) {
+    run(ai: any, m: any, target: any) {
       m.character?.play?.('cast');
       const at = target ? ground(ai, target.root.position) : ground(ai, m.root.position);
       const caught = around(ai, at, 20);

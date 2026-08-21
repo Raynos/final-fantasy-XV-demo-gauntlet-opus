@@ -27,14 +27,29 @@ import { TitleScreen } from './TitleScreen.ts';
  * Register after `Cinematics` (it drives it) and before `Director`.
  */
 export class StorySystem {
-  async init(game) {
+  _banterAt!: number;
+  _lastTag!: any;
+  _seenPlace!: any;
+  _started!: boolean;
+  chapter!: any;
+  chapterN!: number;
+  cine!: any;
+  game!: any;
+  headless!: any;
+  queue!: any[];
+  rpg!: any;
+  seen!: Set<any>;
+  talk!: Conversation;
+  title!: TitleScreen;
+  triggers!: Triggers;
+  async init(game: any) {
     this.game = game;
     this.rpg = game.get('Rpg');
     this.cine = game.get('Cinematics');
     this.triggers = new Triggers(game);
     this.talk = new Conversation();
     this.title = new TitleScreen(game.uiRoot, game);
-    this.title.onChoose = (pick) => this._titleChoice(pick);
+    this.title.onChoose = (pick: any) => this._titleChoice(pick);
 
     /** Current chapter number. Mirrors `rpg.chapter` but leads it. */
     this.chapterN = 0;
@@ -177,13 +192,13 @@ export class StorySystem {
   }
 
   /** The chapter card + area card pair that opens a chapter's play. */
-  _announceChapter(ch, delay = 0) {
+  _announceChapter(ch: any, delay = 0) {
     const run = () => {
       window.dispatchEvent(new CustomEvent('ffxv-area', { detail: ch.area }));
       const rpg = this.rpg;
       const q = rpg && ch.quests[0] ? rpg.quests.view(ch.quests[0]) : null;
       if (q && this.cine && this.cine.box) {
-        const next = q.objectives.find((o) => !o.done);
+        const next = q.objectives.find((o: any) => !o.done);
         this.queue.push({ at: 2.6, fn: () => this.cine.box.objective(q.name, next ? next.desc : q.summary) });
       }
     };
@@ -196,11 +211,11 @@ export class StorySystem {
   _wireQuests() {
     const rpg = this.rpg;
     if (!rpg) return;
-    rpg.on('quest-updated', (p) => {
+    rpg.on('quest-updated', (p: any) => {
       const q = p.quest;
       if (!q) return;
       const payload = { id: q.id, quest: q.id, phase: p.phase, objective: p.objective && p.objective.id };
-      this.triggers.notify('quest', payload, (t, pl) => this._fire(t, pl));
+      this.triggers.notify('quest', payload, (t: any, pl: any) => this._fire(t, pl));
 
       if (p.phase === 'accepted') this.talk.react('quest-accepted');
       if (p.phase !== 'complete' || q.type !== 'main') return;
@@ -222,7 +237,7 @@ export class StorySystem {
     // Arriving anywhere named announces itself, once.
     T.add({
       kind: 'place', once: false, tag: 'world',
-      run: (ctx, pl) => {
+      run: (ctx: any, pl: any) => {
         if (!pl.place) return;
         if (this._seenPlace && this._seenPlace.has(pl.id)) return;
         (this._seenPlace = this._seenPlace || new Set()).add(pl.id);
@@ -235,7 +250,7 @@ export class StorySystem {
     // Crossing a region border.
     T.add({
       kind: 'region', once: false, tag: 'world',
-      run: (ctx, pl) => {
+      run: (ctx: any, pl: any) => {
         if (!pl.from || !pl.card) return;
         window.dispatchEvent(new CustomEvent('ffxv-area', { detail: pl.card }));
       },
@@ -268,11 +283,11 @@ export class StorySystem {
     });
   }
 
-  _fire(t, payload) {
+  _fire(t: any, payload: any) {
     try { if (t.run) t.run(this, payload); } catch (e) { console.warn('[Story] trigger', e); }
   }
 
-  _titleChoice(pick) {
+  _titleChoice(pick: any) {
     if (pick === 'continue') {
       const rpg = this.rpg;
       if (rpg && rpg.loadGame) rpg.loadGame('auto');
@@ -295,7 +310,7 @@ export class StorySystem {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     // Delayed one-shots. A story is mostly a list of things that should happen
     // slightly after the thing that caused them.
     if (this.queue.length) {
@@ -322,7 +337,7 @@ export class StorySystem {
    * The HUD's own fallback banter still runs when the story has nothing to say,
    * so the field frame is never silent.
    */
-  _ambient(dt, game) {
+  _ambient(dt: any, game: any) {
     if (this.talk.busy || this.talk.cooldown > 0) return;
     this._banterAt -= dt;
     if (this._banterAt > 0) return;
@@ -343,7 +358,7 @@ export class StorySystem {
     this.talk.play(tag);
   }
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     // The attract camera has to be the last word on the transform, same as a
     // cutscene: it runs after CameraRig, and after Cinematics has had its say.
     this.title.updateCamera(dt, game);

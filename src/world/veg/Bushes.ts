@@ -87,7 +87,7 @@ const _s = new THREE.Vector3();
  * Radial spray of arching fronds. `wide` flattens the spray and lengthens the
  * fronds, which turns a fern into a bracken mat.
  */
-function frondGeometry(seed, { fronds = 8, lean = [0.35, 0.75], len = [0.40, 0.68], wid = 0.44 } = {}) {
+function frondGeometry(seed: any, { fronds = 8, lean = [0.35, 0.75], len = [0.40, 0.68], wid = 0.44 } = {}) {
   const rng = new Rng(seed);
   const p = [], n = [], uv = [], col = [], idx = [], flex = [];
   for (let i = 0; i < fronds; i++) {
@@ -152,7 +152,7 @@ function stemCardGeometry(planes = 3, width = 0.5) {
 }
 
 /** A raft of flat pads lying on the water. */
-function padGeometry(seed) {
+function padGeometry(seed: any) {
   const rng = new Rng(seed);
   const pos = [], nor = [], uv = [], col = [], idx = [];
   let v = 0;
@@ -185,7 +185,23 @@ function padGeometry(seed) {
 }
 
 export class Bushes {
-  constructor(eco, scene, { quality = 1, range = 132 } = {}) {
+  _deadline!: number;
+  _last!: THREE.Vector3;
+  _pending!: boolean;
+  _primed!: boolean;
+  _stamp!: number;
+  _tick!: any;
+  budget!: any;
+  budgetMs!: number;
+  count!: any;
+  eco!: any;
+  group!: THREE.Group;
+  kinds!: Map<any, any>;
+  quality!: any;
+  range!: any;
+  scene!: any;
+  tileCacheMax!: number;
+  constructor(eco: any, scene: any, { quality = 1, range = 132 } = {}) {
     this.eco = eco;
     this.scene = scene;
     /** Named parent so the whole ground layer can be priced or hidden at once. */
@@ -255,7 +271,7 @@ export class Bushes {
       this.kinds.set(key, { variants, tint: spec.tint, scale: spec.scale });
     }
 
-    const cardMat = (map, opts) => patchVeg(new THREE.MeshStandardMaterial({
+    const cardMat = (map: any, opts: any) => patchVeg(new THREE.MeshStandardMaterial({
       map, color: 0xffffff, vertexColors: true,
       alphaTest: 0.38, transparent: false, side: THREE.DoubleSide,
       roughness: 0.92, metalness: 0,
@@ -318,11 +334,11 @@ export class Bushes {
   // ------------------------------------------------------------------ tiles
 
   /** Build one 32 m tile's worth of ground layer. */
-  _makeTile(tx, tz) {
+  _makeTile(tx: any, tz: any) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
     const rng = new Rng(hash3(tx, tz, 0x1b0b));
-    const out = [];
+    const out: any[] = [];
 
     const b0 = eco.veg(x0 + TILE * 0.5, z0 + TILE * 0.5);
     const dg = new Float32Array((DG + 1) * (DG + 1));
@@ -341,7 +357,7 @@ export class Bushes {
     const wantWater = (b0.reedD > 0 || b0.lilyD > 0) && wetAny > -2.0;
     if (any < 0.02 && !wantWater) return out;
 
-    const bil = (a, u, v) => {
+    const bil = (a: any, u: any, v: any) => {
       const fu = u * DG, fv = v * DG;
       const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;
@@ -401,7 +417,7 @@ export class Bushes {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(tx, tz): any[] | null {
+  _tile(tx: any, tz: any): any[] | null {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }

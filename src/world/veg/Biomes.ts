@@ -59,7 +59,7 @@ const BASE = {
   reedD: 0, lilyD: 0, mossy: 0,
 };
 
-const mk = (o) => ({ ...BASE, ...o });
+const mk = (o: any) => ({ ...BASE, ...o });
 
 export const VEG_BIOME: Object<string, any> = {
   // ----------------------------------------------------------------- LEIDE

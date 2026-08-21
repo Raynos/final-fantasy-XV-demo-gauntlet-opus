@@ -10,6 +10,19 @@ import * as THREE from 'three';
  * clock the particle systems use, so a scenario can freeze the swarm mid-flight.
  */
 export class CrystalShards {
+  _dirtyHi!: any;
+  _dirtyLo!: any;
+  aAxis!: any;
+  aColor!: any;
+  aParams!: any;
+  aParams2!: any;
+  aPos0!: any;
+  aVel!: any;
+  capacity!: any;
+  cursor!: number;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  uniforms!: any;
   constructor({ capacity = 320, renderOrder = 21 } = {}) {
     this.capacity = capacity;
     this.cursor = 0;
@@ -22,7 +35,7 @@ export class CrystalShards {
     geo.setAttribute('uv', base.getAttribute('uv'));
     geo.instanceCount = capacity;
 
-    const mk = (n) => {
+    const mk = (n: any) => {
       const a = new THREE.InstancedBufferAttribute(new Float32Array(capacity * n), n);
       a.setUsage(THREE.DynamicDrawUsage);
       return a;
@@ -70,7 +83,7 @@ export class CrystalShards {
   emit(s: any) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
-    const w = (attr, v, n) => {
+    const w = (attr: any, v: any, n: any) => {
       const a = attr.array;
       a[i * n] = v.x !== undefined ? v.x : v[0];
       a[i * n + 1] = v.y !== undefined ? v.y : v[1];
@@ -105,7 +118,7 @@ export class CrystalShards {
     this._dirtyLo = Infinity; this._dirtyHi = -Infinity;
   }
 
-  setClock(c) { this.uniforms.uTime.value = c; }
+  setClock(c: any) { this.uniforms.uTime.value = c; }
 
   clear() {
     const q = this.aParams.array;

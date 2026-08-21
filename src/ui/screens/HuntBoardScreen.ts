@@ -35,11 +35,47 @@ export const HUNTER_RANKS = [
 const RANK_GATE = { 1: 0, 2: 5, 3: 15, 4: 30, 5: 50, 6: 75, 8: 110, 10: 150 };
 
 /** Which ledger a hunt is pinned in. */
-function ledgerOf(hunt, tipsters) {
+function ledgerOf(hunt: any, tipsters: any) {
   return tipsters?.[hunt.tipster]?.tome || 'Bounty Ledger';
 }
 
 export class HuntBoardScreen {
+  _age!: number;
+  _cur!: any;
+  _msg!: any;
+  _msgAge!: number;
+  _sig!: any;
+  _tabSig!: any;
+  _tabs!: any;
+  cAct!: any;
+  cActLb!: any;
+  cD!: any;
+  cGrid!: any;
+  cK!: any;
+  cMark!: any;
+  cN!: any;
+  cObj!: any;
+  cObjList!: any;
+  cRule!: any;
+  cStars!: any;
+  cVals!: any;
+  card!: any;
+  cols!: any;
+  empty!: any;
+  game!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  msg!: any;
+  rankBox!: any;
+  rankFill!: any;
+  rankGauge!: any;
+  rowNodes!: any[];
+  sub!: string;
+  tab!: number;
+  tabNodes!: any;
+  tabsEl!: any;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -140,7 +176,7 @@ export class HuntBoardScreen {
     const rpg = this.rpg;
     const hunts = rpg?.tables?.hunts || [];
     const tips = rpg?.tables?.tipsters;
-    const seen = [];
+    const seen: any[] = [];
     for (const h of hunts) {
       const t = ledgerOf(h, tips);
       if (!seen.includes(t)) seen.push(t);
@@ -175,7 +211,7 @@ export class HuntBoardScreen {
         why: blockedByRank
           ? `Requires ${gate} hunter points`
           : blockedByChain
-            ? `Requires: ${(h.requires || []).map((r) => rpg.tables.quests?.[r]?.name || r).join(', ') || 'a prior contract'}`
+            ? `Requires: ${(h.requires || []).map((r: any) => rpg.tables.quests?.[r]?.name || r).join(', ') || 'a prior contract'}`
             : '',
       });
     }
@@ -185,7 +221,7 @@ export class HuntBoardScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) {
@@ -217,11 +253,11 @@ export class HuntBoardScreen {
     }
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows) {
+  _renderRows(rows: any) {
     clear(this.list);
     this.rowNodes = [];
     for (const r of rows) {
@@ -325,7 +361,7 @@ export class HuntBoardScreen {
     }
   }
 
-  _renderCard(row, rpg) {
+  _renderCard(row: any, rpg: any) {
     const h = row.h;
     const v = row.view;
     const tips = rpg?.tables?.tipsters || {};
@@ -337,7 +373,7 @@ export class HuntBoardScreen {
 
     const rewards = rpg?.quests?.rewardsFor?.(h.id) || h.rewards || {};
     const itemNames = (rewards.items || [])
-      .map((it) => `${rpg?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
+      .map((it: any) => `${rpg?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
       .join(', ');
     const cond = [];
     if (h.timeOfDay && h.timeOfDay !== 'any') cond.push(h.timeOfDay === 'night' ? 'After dark only' : 'Daylight only');

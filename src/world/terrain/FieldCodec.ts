@@ -44,7 +44,7 @@ const dec = new TextDecoder();
  * samples on a smooth field is nearly constant, so plane 3 compresses ~40:1 and
  * the whole grid still lands at about a quarter of its raw size.
  */
-export function encodeF32Planes(src) {
+export function encodeF32Planes(src: any) {
   const n = src.length;
   const u8 = new Uint8Array(src.buffer, src.byteOffset, n * 4);
   const out = new Uint8Array(n * 4);
@@ -55,7 +55,7 @@ export function encodeF32Planes(src) {
   return out;
 }
 
-export function decodeF32Planes(bytes, n): Float32Array {
+export function decodeF32Planes(bytes: any, n: any): Float32Array {
   const out = new Float32Array(n);
   const u8 = new Uint8Array(out.buffer);
   for (let c = 0; c < 4; c++) {
@@ -66,7 +66,7 @@ export function decodeF32Planes(bytes, n): Float32Array {
 }
 
 /** Quantise a float grid to 16 bits and delta-code along rows. */
-export function encodeQ16D(src, w, h) {
+export function encodeQ16D(src: any, w: any, h: any) {
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < src.length; i++) { const v = src[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
   const scale = (hi - lo) / 65535 || 1;
@@ -83,7 +83,7 @@ export function encodeQ16D(src, w, h) {
   return { bytes: new Uint8Array(out.buffer), min: lo, scale };
 }
 
-export function decodeQ16D(bytes, w, h, min, scale): Float32Array {
+export function decodeQ16D(bytes: any, w: any, h: any, min: any, scale: any): Float32Array {
   // A section can land on an odd byte offset inside the container, which a
   // Uint16Array view cannot address; copy only in that case.
   const src = bytes.byteOffset % 2 === 0 ? bytes : new Uint8Array(bytes);
@@ -106,7 +106,7 @@ export function decodeQ16D(bytes, w, h, min, scale): Float32Array {
  * their own neighbours, and gzip only sees a window of the recent past — so
  * de-interleaving is worth ~2x here for free.
  */
-export function encodePlanes8(src, w, h, ch) {
+export function encodePlanes8(src: any, w: any, h: any, ch: any) {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -117,7 +117,7 @@ export function encodePlanes8(src, w, h, ch) {
 }
 
 /** @returns interleaved RGBA8 */
-export function decodePlanes8(bytes, w, h, ch): Uint8Array {
+export function decodePlanes8(bytes: any, w: any, h: any, ch: any): Uint8Array {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -158,7 +158,7 @@ export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:strin
   return {
     meta,
     section(name) {
-      const s = meta.sections.find((x) => x.name === name);
+      const s = meta.sections.find((x: any) => x.name === name);
       if (!s) return null;
       return { ...s, bytes: buf.subarray(base + s.offset, base + s.offset + s.length) };
     },

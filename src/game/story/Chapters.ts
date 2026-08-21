@@ -75,7 +75,7 @@ export const CHAPTERS = [
 export const CHAPTER_BY_N = Object.fromEntries(CHAPTERS.map((c) => [c.n, c]));
 
 /** The chapter a main-line quest belongs to. */
-export function chapterOfQuest(questId) {
+export function chapterOfQuest(questId: any) {
   return CHAPTERS.find((c) => c.quests.includes(questId)) || null;
 }
 

@@ -7,28 +7,28 @@
  * Every curve here is C0 at 0 and 1 so a keyframe chain never pops.
  */
 
-const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+const clamp01 = (t: any) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 export const EASE = {
-  linear: (t) => clamp01(t),
-  in: (t) => { t = clamp01(t); return t * t; },
-  out: (t) => { t = clamp01(t); return 1 - (1 - t) * (1 - t); },
-  inOut: (t) => { t = clamp01(t); return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; },
-  inCubic: (t) => { t = clamp01(t); return t * t * t; },
-  outCubic: (t) => { t = clamp01(t); return 1 - Math.pow(1 - t, 3); },
-  inOutCubic: (t) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
-  outQuint: (t) => 1 - Math.pow(1 - clamp01(t), 5),
-  inOutSine: (t) => -(Math.cos(Math.PI * clamp01(t)) - 1) / 2,
-  outSine: (t) => Math.sin((clamp01(t) * Math.PI) / 2),
-  inSine: (t) => 1 - Math.cos((clamp01(t) * Math.PI) / 2),
+  linear: (t: any) => clamp01(t),
+  in: (t: any) => { t = clamp01(t); return t * t; },
+  out: (t: any) => { t = clamp01(t); return 1 - (1 - t) * (1 - t); },
+  inOut: (t: any) => { t = clamp01(t); return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; },
+  inCubic: (t: any) => { t = clamp01(t); return t * t * t; },
+  outCubic: (t: any) => { t = clamp01(t); return 1 - Math.pow(1 - t, 3); },
+  inOutCubic: (t: any) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  outQuint: (t: any) => 1 - Math.pow(1 - clamp01(t), 5),
+  inOutSine: (t: any) => -(Math.cos(Math.PI * clamp01(t)) - 1) / 2,
+  outSine: (t: any) => Math.sin((clamp01(t) * Math.PI) / 2),
+  inSine: (t: any) => 1 - Math.cos((clamp01(t) * Math.PI) / 2),
   /** Long slow settle — the workhorse for a held push-in. */
-  outExpo: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -9 * clamp01(t))),
+  outExpo: (t: any) => (t >= 1 ? 1 : 1 - Math.pow(2, -9 * clamp01(t))),
   /** Almost linear in the middle, kissed off at both ends. Crane moves. */
-  crane: (t) => { t = clamp01(t); return t * t * (3 - 2 * t); },
+  crane: (t: any) => { t = clamp01(t); return t * t * (3 - 2 * t); },
 };
 
 /** Resolve an ease by name (or pass a function straight through). */
-export function ease(nameOrFn) {
+export function ease(nameOrFn: any) {
   if (typeof nameOrFn === 'function') return nameOrFn;
   return EASE[nameOrFn] || EASE.inOutSine;
 }
@@ -36,13 +36,13 @@ export function ease(nameOrFn) {
 export { clamp01 };
 
 /** Scalar lerp. */
-export const lerp = (a, b, t) => a + (b - a) * t;
+export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 
 /**
  * Catmull-Rom through four scalars. Used for camera paths with three or more
  * keys so the dolly curves instead of hinging at every keyframe.
  */
-export function catmull(p0, p1, p2, p3, t) {
+export function catmull(p0: any, p1: any, p2: any, p3: any, t: any) {
   const t2 = t * t;
   const t3 = t2 * t;
   return 0.5 * ((2 * p1) + (-p0 + p2) * t

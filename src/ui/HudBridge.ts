@@ -26,6 +26,10 @@ const CALLOUTS = {
 };
 
 export class HudBridge {
+  _lastCall!: number;
+  _off!: any[];
+  game!: any;
+  hud!: any;
   constructor(hud: import('./HUD.ts').HUD) {
     this.hud = hud;
     this.game = null;
@@ -34,7 +38,7 @@ export class HudBridge {
   }
 
   /** Subscribe to everything. Safe when a publisher is missing. */
-  attach(game) {
+  attach(game: any) {
     this.game = game;
     this._wireCombat();
     this._wireRpg(game);
@@ -44,7 +48,7 @@ export class HudBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** A call-out banner, rate-limited so a flurry does not strobe. */
-  _call(key, sub) {
+  _call(key: any, sub: any) {
     const now = this.game?.time?.now ?? 0;
     if (now - this._lastCall < 1.1) return;
     this._lastCall = now;
@@ -55,13 +59,13 @@ export class HudBridge {
   /* -- combat ------------------------------------------------------------ */
 
   _wireCombat() {
-    const on = (name, fn) => {
-      const h = (e) => fn(e.detail || {});
+    const on = (name: any, fn: any) => {
+      const h = (e: any) => fn(e.detail || {});
       window.addEventListener(`combat:${name}`, h);
       this._off.push(() => window.removeEventListener(`combat:${name}`, h));
     };
 
-    on('damage', (d) => {
+    on('damage', (d: any) => {
       if (!d.position) return;
       this.hud.damage({
         world: d.position,
@@ -72,55 +76,55 @@ export class HudBridge {
       });
     });
 
-    on('hit', (d) => { if (d.blindside) this._call('blindside'); });
-    on('lockon', (d) => this.hud.setLockOn(d.enemy || null));
-    on('warp', (d) => { if (d.phase === 'impact' && d.enemy) this._call('warp'); });
+    on('hit', (d: any) => { if (d.blindside) this._call('blindside'); });
+    on('lockon', (d: any) => this.hud.setLockOn(d.enemy || null));
+    on('warp', (d: any) => { if (d.phase === 'impact' && d.enemy) this._call('warp'); });
     on('parry', () => this._call('parry'));
     on('link', () => this._call('link'));
     on('stagger', () => this._call('stagger'));
     on('armiger', () => this._call('armiger'));
-    on('playerHit', (d) => {
+    on('playerHit', (d: any) => {
       const max = this.game?.get?.('Player')?.stats?.maxHp || 1;
       this.hud.hit(Math.min(1, (d.damage || 0) / Math.max(1, max * 0.22)));
     });
-    on('spell', (d) => {
+    on('spell', (d: any) => {
       if (d.element) this._call('spell', `${d.element[0].toUpperCase()}${d.element.slice(1)} unleashed`);
     });
   }
 
   /* -- rpg --------------------------------------------------------------- */
 
-  _wireRpg(game) {
+  _wireRpg(game: any) {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
-    const on = (n, fn) => this._off.push(rpg.on(n, fn));
+    const on = (n: any, fn: any) => this._off.push(rpg.on(n, fn));
     const toast = (...a) => this.hud.toasts.push(...a);
 
-    on('level-up', (p) => {
+    on('level-up', (p: any) => {
       if (p.member === 'noctis') this.hud.levelUp(p.to);
       toast('Level Up', `${p.name || p.member}  ·  Level ${p.to}`, 'ascension', 'gold');
     });
 
-    on('item-gained', (p) => {
+    on('item-gained', (p: any) => {
       if (p.source === 'start' || p.source === 'seed' || p.source === 'unequip') return;
       toast('Obtained', `${p.name}${p.count > 1 ? `  ×${p.count}` : ''}`, 'items');
     });
 
-    on('ap-gained', (p) => {
+    on('ap-gained', (p: any) => {
       if (p.reason === 'seed') return;
       toast('Ability Points', `+${p.amount}  ·  ${p.reason.replace(/-/g, ' ')}`, 'ap', 'ice');
     });
 
-    on('node-unlocked', (p) => toast('Ascension', p.node.name, 'ascension', 'ice'));
+    on('node-unlocked', (p: any) => toast('Ascension', p.node.name, 'ascension', 'ice'));
 
-    on('gil-changed', (p) => {
+    on('gil-changed', (p: any) => {
       if (p.source === 'start' || p.source === 'seed' || !p.delta) return;
       toast('Gil', `${p.delta > 0 ? '+' : ''}${p.delta.toLocaleString()}`, 'ap', 'gold');
     });
 
-    on('buff-applied', (p) => toast('Buff', p.buff.name, 'regen', 'gold'));
+    on('buff-applied', (p: any) => toast('Buff', p.buff.name, 'regen', 'gold'));
 
-    on('quest-updated', (p) => {
+    on('quest-updated', (p: any) => {
       if (p.phase === 'complete') {
         this.hud.areaTitle('Quest Complete', p.quest.name, p.quest.type === 'hunt' ? 'Bounty' : p.quest.type === 'main' ? `Chapter ${p.quest.chapter}` : 'Side Quest');
       } else if (p.phase === 'objective') {
@@ -130,14 +134,14 @@ export class HudBridge {
       }
     });
 
-    on('time-of-day-changed', (p) => {
+    on('time-of-day-changed', (p: any) => {
       if (p.phase === 'dusk') this.hud.say('Ignis', 'The light is going. We should find a haven before dark.');
       else if (p.phase === 'dawn') this.hud.say('Prompto', 'Morning! See? Told you we\'d make it.');
     });
 
     on('daemons-rising', () => this.hud.say('Gladiolus', 'They\'re coming up. Stay sharp.'));
 
-    on('rested', (p) => {
+    on('rested', (p: any) => {
       if (!p.exp || !p.exp.total) return;
       this.hud.areaTitle(`Day ${p.day}`, `${p.exp.total.toLocaleString()} EXP redeemed`, `${p.lodging.name}  ·  ×${p.lodging.bonus.toFixed(1)}`);
     });

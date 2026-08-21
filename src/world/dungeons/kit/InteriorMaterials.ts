@@ -16,7 +16,7 @@ import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../..
  */
 
 const cache = new Map();
-function memo(k, f) {
+function memo(k: any, f: any) {
   if (!cache.has(k)) {
     const m = f();
     m.name = k;
@@ -29,13 +29,13 @@ const lerp = THREE.MathUtils.lerp;
 const ss = THREE.MathUtils.smoothstep;
 
 /** Shared boilerplate: albedo + normal + roughness from one height function. */
-function pbr(key, {
+function pbr(key: any, {
   tint, height, size = 512, normalStrength = 2.0, rough = [0.7, 0.3], metal = 0,
   metalMap = null, albedo = null, roughness = 0.9, sheen = 0, normalHeight = null,
-}) {
+}: any) {
   return memo(key, () => {
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(size, (u, v, c) => {
+    const map = makeTexture(size, (u: any, v: any, c: any) => {
       if (albedo) { albedo(u, v, c, base); return; }
       const k = 0.55 + height(u, v) * 0.8;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
@@ -46,7 +46,7 @@ function pbr(key, {
     // looking like polished marble.
     const normalMap = normalFromHeight(size, normalHeight || height, normalStrength);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(Math.min(size, 256), (u, v) => rough[0] + height(u, v) * rough[1]);
+    const roughnessMap = makeDataMap(Math.min(size, 256), (u: any, v: any) => rough[0] + height(u, v) * rough[1]);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     const opts = {
       color: 0xffffff, map, normalMap, roughnessMap,
@@ -71,7 +71,7 @@ function pbr(key, {
 /** Board-marked poured concrete — the trench walls and bunker shells. */
 export function trenchConcrete() {
   const n = new Noise(5501);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     // horizontal shuttering boards every ~0.6 m of a 3 m tile
     const board = Math.abs(((v * 5) % 1) - 0.5);
     const seam = 1 - ss(0.0, 0.055, board);
@@ -81,7 +81,7 @@ export function trenchConcrete() {
     return grain * 0.14 + blotch * 0.62 - pit * 0.20 - seam * 0.34;
   };
   // relief: the shuttering seams, tie-holes and a fine aggregate grain only
-  const hn = (u, v) => {
+  const hn = (u: any, v: any) => {
     const board = Math.abs(((v * 5) % 1) - 0.5);
     const seam = 1 - ss(0.0, 0.035, board);
     const tie = Math.max(0, 0.26 - n.worley2(u * 5 + 3, v * 5).f1) * 2.4;
@@ -91,7 +91,7 @@ export function trenchConcrete() {
   return pbr('trenchConcrete', {
     tint: 0x77797c, height: h, normalHeight: hn, size: 512, normalStrength: 1.5,
     rough: [0.74, 0.24], roughness: 0.95,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const k = 0.5 + h(u, v) * 0.85;
       // rust weep running down from the reinforcement, and soot at the base
       const weep = Math.max(0, n.fbm2(u * 20, v * 2.4 + 3, 3)) * ss(0.15, 0.85, v) * 0.75;
@@ -106,7 +106,7 @@ export function trenchConcrete() {
 /** Trench floor: cracked screed under grit, dust and spall. */
 export function trenchFloor() {
   const n = new Noise(7714);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const w = n.worley2(u * 3.2, v * 3.2);
     // hairline cracks, not crazy paving: only the thinnest part of the cell
     // boundary counts
@@ -114,7 +114,7 @@ export function trenchFloor() {
     const grit = n.fbm2(u * 70, v * 70, 3) * 0.5 + 0.5;
     return grit * 0.30 + (n.fbm2(u * 5, v * 5, 3) * 0.5 + 0.5) * 0.60 - crack * 0.13;
   };
-  const hn = (u, v) => {
+  const hn = (u: any, v: any) => {
     const w = n.worley2(u * 3.2, v * 3.2);
     const crack = Math.max(0, 1 - (w.f2 - w.f1) * 34);
     return 0.80 + (n.fbm2(u * 60, v * 60, 2) * 0.5 + 0.5) * 0.14 - crack * 0.24;
@@ -122,7 +122,7 @@ export function trenchFloor() {
   return pbr('trenchFloor', {
     tint: 0x66655f, height: h, normalHeight: hn, size: 512, normalStrength: 1.7,
     rough: [0.78, 0.22], roughness: 0.97,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const k = 0.5 + h(u, v) * 0.85;
       const dust = ss(0.35, 0.8, n.fbm2(u * 3.4 + 11, v * 3.4 - 7, 4) * 0.5 + 0.5);
       c[0] = lerp(base.r, 0.30, dust) * k;
@@ -135,12 +135,12 @@ export function trenchFloor() {
 /** Corroded structural steel: rebar, blast doors, gantries, MT crates. */
 export function corrodedSteel(tint = 0x4a4038) {
   const n = new Noise(2244);
-  const h = (u, v) => (n.fbm2(u * 22, v * 22, 4) * 0.5 + 0.5) * 0.55
+  const h = (u: any, v: any) => (n.fbm2(u * 22, v * 22, 4) * 0.5 + 0.5) * 0.55
     + n.worley2(u * 13, v * 13).f1 * 0.45;
   return pbr(`corrodedSteel${tint}`, {
     tint, height: h, size: 256, normalStrength: 1.8, rough: [0.42, 0.5],
     roughness: 0.72, metal: 0.85,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const r = n.fbm2(u * 5.5, v * 5.5, 4) * 0.5 + 0.5;
       const rust = ss(0.34, 0.78, r);
       const k = 0.5 + h(u, v) * 0.8;
@@ -148,14 +148,14 @@ export function corrodedSteel(tint = 0x4a4038) {
       c[1] = lerp(0.23, base.g * 1.35, rust) * k;
       c[2] = lerp(0.25, base.b * 0.95, rust) * k;
     },
-    metalMap: (u, v) => 1 - ss(0.30, 0.72, n.fbm2(u * 5.5, v * 5.5, 4) * 0.5 + 0.5) * 0.9,
+    metalMap: (u: any, v: any) => 1 - ss(0.30, 0.72, n.fbm2(u * 5.5, v * 5.5, 4) * 0.5 + 0.5) * 0.9,
   });
 }
 
 /** Niflheim magitek plate: cold blue-black iron, machined seams. */
 export function magitekPlate() {
   const n = new Noise(6021);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const panelU = Math.abs(((u * 4) % 1) - 0.5), panelV = Math.abs(((v * 3) % 1) - 0.5);
     const seam = Math.max(1 - ss(0, 0.04, panelU), 1 - ss(0, 0.045, panelV));
     const rivet = Math.max(0, 0.42 - n.worley2(u * 16, v * 12).f1) * 1.6;
@@ -174,7 +174,7 @@ export function magitekPlate() {
 /** Hewn mine rock, drill-scarred with a faint mineral glitter. */
 export function mineRock() {
   const n = new Noise(3390);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const w = n.worley2(u * 6.5, v * 6.5);
     const blast = Math.min(1, (w.f2 - w.f1) * 2.2);
     const strata = Math.sin(v * 26 + n.fbm2(u * 2.4, v * 2.4, 3) * 5) * 0.5 + 0.5;
@@ -184,7 +184,7 @@ export function mineRock() {
   return pbr('mineRock', {
     tint: 0x6b5844, height: h, size: 512, normalStrength: 2.1,
     rough: [0.72, 0.28], roughness: 0.96,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const k = 0.42 + h(u, v) * 0.9;
       // iron oxide in the strata, coal dust in the low spots
       const iron = Math.max(0, n.fbm2(u * 3.6 + 5, v * 3.6, 3)) * 0.85;
@@ -199,28 +199,28 @@ export function mineRock() {
 /** Ore seam: dark matrix threaded with metallic veins that catch a lamp. */
 export function oreSeam() {
   const n = new Noise(8812);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const vein = Math.abs(n.fbm2(u * 5, v * 12, 4));
     return 0.35 + (1 - ss(0.0, 0.18, vein)) * 0.65;
   };
   return pbr('oreSeam', {
     tint: 0x3a3630, height: h, size: 256, normalStrength: 1.2,
     rough: [0.50, 0.34], roughness: 0.78, metal: 0.38,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const vein = 1 - ss(0.0, 0.16, Math.abs(n.fbm2(u * 5, v * 12, 4)));
       const k = 0.34 + h(u, v) * 0.38;
       c[0] = lerp(base.r * k, 0.26, vein);
       c[1] = lerp(base.g * k, 0.22, vein);
       c[2] = lerp(base.b * k, 0.16, vein);
     },
-    metalMap: (u, v) => 0.15 + (1 - ss(0.0, 0.16, Math.abs(n.fbm2(u * 5, v * 12, 4)))) * 0.85,
+    metalMap: (u: any, v: any) => 0.15 + (1 - ss(0.0, 0.16, Math.abs(n.fbm2(u * 5, v * 12, 4)))) * 0.85,
   });
 }
 
 /** Pit-prop timber: rough-sawn, split, black with age and damp. */
 export function pitTimber() {
   const n = new Noise(1717);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const grain = Math.sin(v * 150 + n.fbm2(u * 2.5, v * 8, 3) * 11) * 0.5 + 0.5;
     const split = 1 - ss(0.0, 0.06, Math.abs(((u * 3.1) % 1) - 0.5));
     return grain * 0.5 + (n.fbm2(u * 9, v * 34, 3) * 0.5 + 0.5) * 0.42 - split * 0.35;
@@ -228,7 +228,7 @@ export function pitTimber() {
   return pbr('pitTimber', {
     tint: 0x4a3b2a, height: h, size: 256, normalStrength: 2.2,
     rough: [0.8, 0.2], roughness: 0.98,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const k = 0.48 + h(u, v) * 0.85;
       const rot = ss(0.4, 0.85, n.fbm2(u * 4, v * 4, 3) * 0.5 + 0.5) * 0.6;
       c[0] = lerp(base.r, 0.10, rot) * k;
@@ -241,11 +241,11 @@ export function pitTimber() {
 /** Polished-topped rail steel and cart ironwork. */
 export function railSteel() {
   const n = new Noise(4141);
-  const h = (u, v) => (n.fbm2(u * 30, v * 8, 3) * 0.5 + 0.5) * 0.6 + n.worley2(u * 20, v * 6).f1 * 0.4;
+  const h = (u: any, v: any) => (n.fbm2(u * 30, v * 8, 3) * 0.5 + 0.5) * 0.6 + n.worley2(u * 20, v * 6).f1 * 0.4;
   return pbr('railSteel', {
     tint: 0x5a4a3c, height: h, size: 256, normalStrength: 1.2,
     rough: [0.3, 0.42], roughness: 0.5, metal: 0.92,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       // the running surface is worn bright; the web and foot are scale-brown
       const worn = 1 - ss(0.30, 0.46, Math.abs(v - 0.5));
       const k = 0.5 + h(u, v) * 0.7;
@@ -263,7 +263,7 @@ export function railSteel() {
 /** Wet flowstone — the cave shell. Dark, banded and glossy where water runs. */
 export function wetLimestone() {
   const n = new Noise(9003);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const w = n.worley2(u * 4.5, v * 4.5);
     const cell = Math.min(1, (w.f2 - w.f1) * 1.9);
     const flow = Math.sin(v * 14 + n.fbm2(u * 2, v * 2, 4) * 7) * 0.5 + 0.5;
@@ -273,7 +273,7 @@ export function wetLimestone() {
   return pbr('wetLimestone', {
     tint: 0x5c6062, height: h, size: 512, normalStrength: 2.0,
     rough: [0.46, 0.32], roughness: 0.80, sheen: 0.6,
-    albedo: (u, v, c, base) => {
+    albedo: (u: any, v: any, c: any, base: any) => {
       const k = 0.36 + h(u, v) * 0.82;
       const wet = ss(0.35, 0.85, n.fbm2(u * 3, v * 5.5, 4) * 0.5 + 0.5);
       const algae = Math.max(0, n.fbm2(u * 7 + 21, v * 7 - 4, 3)) * 0.5;
@@ -287,7 +287,7 @@ export function wetLimestone() {
 /** Silt and gravel floor of a cave, damp and dark. */
 export function caveSilt() {
   const n = new Noise(5533);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const peb = Math.max(0, 0.36 - n.worley2(u * 9, v * 9).f1) * 2.2;
     const drift = n.fbm2(u * 2.6, v * 2.6, 4) * 0.5 + 0.5;
     return drift * 0.52 + (n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5) * 0.20 + peb * 0.28;
@@ -301,7 +301,7 @@ export function caveSilt() {
 /** Dripstone: stalactites, columns and rimstone. Paler, chalky, banded. */
 export function dripstone() {
   const n = new Noise(6677);
-  const h = (u, v) => {
+  const h = (u: any, v: any) => {
     const band = Math.sin(v * 40 + n.fbm2(u * 3, v * 3, 3) * 4) * 0.5 + 0.5;
     return band * 0.4 + (n.fbm2(u * 18, v * 18, 3) * 0.5 + 0.5) * 0.6;
   };
@@ -325,7 +325,7 @@ export function emissiveMaterial(color = 0xffb066, intensity = 3.0, base = 0x090
  * Additive, camera-facing glow card. One draw call covers every lamp halo in a
  * dungeon; this is what actually reads as "there is air in here".
  */
-export function glowCardMaterial(texture) {
+export function glowCardMaterial(texture: any) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: texture },
@@ -427,7 +427,7 @@ export function voidMaterial() {
 export function poolMaterial(tint = 0x0a1416) {
   return memo(`pool${tint}`, () => {
     const n = new Noise(4321);
-    const h = (u, v) => n.fbm2(u * 8, v * 8, 4) * 0.5 + 0.5;
+    const h = (u: any, v: any) => n.fbm2(u * 8, v * 8, 4) * 0.5 + 0.5;
     const normalMap = normalFromHeight(256, h, 0.35);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
@@ -440,7 +440,7 @@ export function poolMaterial(tint = 0x0a1416) {
 
 /** Painted hazard plate — imperial signage and stencilled bay numbers. */
 export function stencilTexture(text = '04', bg = '#20242a', fg = '#c8b23a') {
-  return memo(`stencil${text}`, () => canvasTexture(128, (ctx, s) => {
+  return memo(`stencil${text}`, () => canvasTexture(128, (ctx: any, s: any) => {
     ctx.fillStyle = bg; ctx.fillRect(0, 0, s, s);
     ctx.strokeStyle = fg; ctx.lineWidth = s * 0.03;
     ctx.strokeRect(s * 0.1, s * 0.1, s * 0.8, s * 0.8);

@@ -11,6 +11,12 @@ import { mergeCreature } from '../rig/Sculpt.ts';
  * while still animating limb by limb.
  */
 export class Rig {
+  _world!: Map<any, any>;
+  byName!: Map<any, any>;
+  group!: any;
+  mesh!: any;
+  parts!: any[];
+  rest!: Map<any, any>;
   constructor() {
     this.bones = [];
     this.byName = new Map();
@@ -40,10 +46,10 @@ export class Rig {
   }
 
   /** World-space bind position of a bone. */
-  at(name) { return this._world.get(name); }
+  at(name: any) { return this._world.get(name); }
 
   /** Bind an entire geometry rigidly to one bone. */
-  attach(geo, boneName) {
+  attach(geo: any, boneName: any) {
     const i = this.bones.indexOf(this.byName.get(boneName));
     if (i < 0) throw new Error(`unknown bone ${boneName}`);
     const n = geo.attributes.position.count;
@@ -62,7 +68,7 @@ export class Rig {
    * creases rather than collapsing.
    * @param soft 0..1 width of the blend band around the joint
    */
-  attachBlend(geo, aName, bName, soft: number = 1.0) {
+  attachBlend(geo: any, aName: any, bName: any, soft: number = 1.0) {
     const ia = this.bones.indexOf(this.byName.get(aName));
     const ib = this.bones.indexOf(this.byName.get(bName));
     const pa = this._world.get(aName), pb = this._world.get(bName);
@@ -246,7 +252,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
 /** Set a bone's local rotation as an offset from its bind pose. */
-export function poseBone(rig, name, x, y, z, order = 'XYZ') {
+export function poseBone(rig: any, name: any, x: any, y: any, z: any, order = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);
@@ -255,7 +261,7 @@ export function poseBone(rig, name, x, y, z, order = 'XYZ') {
 }
 
 /** Blend a bone toward a target rotation (used for flinch/death overrides). */
-export function poseBoneMix(rig, name, x, y, z, k, order = 'XYZ') {
+export function poseBoneMix(rig: any, name: any, x: any, y: any, z: any, k: any, order = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);

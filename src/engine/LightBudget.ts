@@ -24,6 +24,15 @@ import * as THREE from 'three';
  * `renderer.compile()` stay valid for the whole session.
  */
 export class LightBudget {
+  _camPos!: THREE.Vector3;
+  _forced!: any[];
+  _lp!: THREE.Vector3;
+  _real!: any;
+  _scanIn!: number;
+  ballast!: any;
+  budget!: any;
+  enabled!: boolean;
+  scene!: any;
   /**
    * @param [budget] visible lights of each type
    */
@@ -61,7 +70,7 @@ export class LightBudget {
     this.rescan();
   }
 
-  _makeBallast(kind, n) {
+  _makeBallast(kind: any, n: any) {
     const pool = this.ballast[kind];
     while (pool.length > n) {
       const l = pool.pop();
@@ -88,8 +97,8 @@ export class LightBudget {
 
   /** Re-collect the real lights in the scene. Cheap, but not free — run rarely. */
   rescan() {
-    const point = [], spot = [];
-    this.scene.traverse((o) => {
+    const point: any[] = [], spot: any[] = [];
+    this.scene.traverse((o: any) => {
       if (!o.isLight || o.userData.lightBallast) return;
       // Only unshadowed point/spot lights move around; the CSM cascades and the
       // hemisphere fills are permanent and never change the counts.
@@ -124,7 +133,7 @@ export class LightBudget {
     this._balanceKind('spot');
   }
 
-  _balanceKind(kind) {
+  _balanceKind(kind: any) {
     const entries = this._real[kind];
     const budget = this.budget[kind];
     const live = [];

@@ -22,7 +22,27 @@ import * as THREE from 'three';
  *    leaving the player looking at a live world with a dead mouse.
  */
 export class Input {
-  constructor(domElement) {
+  _gpPrev!: any[];
+  _onCtx!: any;
+  _onKeyUp!: any;
+  _onLock!: any;
+  _onMouseDown!: any;
+  _onMouseMove!: any;
+  _onMouseUp!: any;
+  _onWheel!: any;
+  dom!: any;
+  enabled!: boolean;
+  gamepad!: any;
+  invertY!: boolean;
+  lockLost!: boolean;
+  look!: THREE.Vector2;
+  lookScale!: number;
+  mouse!: any;
+  move!: THREE.Vector2;
+  pointerLocked!: boolean;
+  pressed!: Set<any>;
+  released!: Set<any>;
+  constructor(domElement: any) {
     this.dom = domElement;
     this.keys = new Set();
     this.pressed = new Set();   // edge: this frame
@@ -42,7 +62,7 @@ export class Input {
     /** Mouse look sensitivity multiplier, 0.25..3. */
     this.lookScale = 1;
 
-    this._onKeyDown = (e) => {
+    this._onKeyDown = (e: any) => {
       if (e.repeat) return;
       this.keys.add(e.code);
       this.pressed.add(e.code);
@@ -50,13 +70,13 @@ export class Input {
       // browser treats it as "navigate back" and the page unloads mid-game.
       if (['Space', 'Tab', 'Backspace', 'F1', 'F5'].includes(e.code)) e.preventDefault();
     };
-    this._onKeyUp = (e) => { this.keys.delete(e.code); this.released.add(e.code); };
-    this._onMouseMove = (e) => {
+    this._onKeyUp = (e: any) => { this.keys.delete(e.code); this.released.add(e.code); };
+    this._onMouseMove = (e: any) => {
       if (!this.pointerLocked) return;
       this.look.x += e.movementX * this.lookScale;
       this.look.y += e.movementY * this.lookScale * (this.invertY ? -1 : 1);
     };
-    this._onMouseDown = (e) => {
+    this._onMouseDown = (e: any) => {
       // A click that landed on a UI element is the UI's, not the world's: it
       // must neither swing a sword nor grab the pointer.
       if (!this.pointerLocked && e.target !== this.dom) return;
@@ -64,17 +84,17 @@ export class Input {
       if (e.button === 2) { this.mouse.right = true; this.mouse.rightEdge = true; }
       this.requestPointerLock();
     };
-    this._onMouseUp = (e) => {
+    this._onMouseUp = (e: any) => {
       if (e.button === 0) this.mouse.left = false;
       if (e.button === 2) this.mouse.right = false;
     };
-    this._onWheel = (e) => { this.mouse.wheel += Math.sign(e.deltaY); };
+    this._onWheel = (e: any) => { this.mouse.wheel += Math.sign(e.deltaY); };
     this._onLock = () => {
       const was = this.pointerLocked;
       this.pointerLocked = document.pointerLockElement === this.dom;
       if (was && !this.pointerLocked && this.pointerLockAllowed) this.lockLost = true;
     };
-    this._onCtx = (e) => e.preventDefault();
+    this._onCtx = (e: any) => e.preventDefault();
 
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
@@ -86,9 +106,9 @@ export class Input {
     this.dom.addEventListener('contextmenu', this._onCtx);
   }
 
-  key(code) { return this.keys.has(code); }
-  keyDown(code) { return this.pressed.has(code); }
-  keyUp(code) { return this.released.has(code); }
+  key(code: any) { return this.keys.has(code); }
+  keyDown(code: any) { return this.pressed.has(code); }
+  keyUp(code: any) { return this.released.has(code); }
 
   /**
    * True this frame for any of the universal "back / close" inputs. Escape is
@@ -147,7 +167,7 @@ export class Input {
     if (this.key('KeyW') || this.key('ArrowUp')) my += 1;
     if (this.key('KeyS') || this.key('ArrowDown')) my -= 1;
     if (gp) {
-      const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
+      const dz = (v: any) => (Math.abs(v) < 0.18 ? 0 : v);
       mx += dz(gp.axes[0]); my += -dz(gp.axes[1]);
       this.look.x += dz(gp.axes[2] || 0) * 18 * this.lookScale;
       this.look.y += dz(gp.axes[3] || 0) * 18 * this.lookScale * (this.invertY ? -1 : 1);
@@ -164,7 +184,7 @@ export class Input {
     if (this.enabled === false) { this.move.set(0, 0); this.look.set(0, 0); }
   }
 
-  gpButton(i) { return !!(this.gamepad && this.gamepad.buttons[i] && this.gamepad.buttons[i].pressed); }
+  gpButton(i: any) { return !!(this.gamepad && this.gamepad.buttons[i] && this.gamepad.buttons[i].pressed); }
 
   /**
    * Rising edge on a gamepad button, tracked internally so several callers can

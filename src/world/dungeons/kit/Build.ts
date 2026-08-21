@@ -19,6 +19,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * fixed real-world size no matter how big the surface is.
  */
 export class SurfaceBuilder {
+  _needsNormals!: boolean;
+  col!: any[];
+  idx!: any[];
+  nrm!: any[];
+  pos!: any[];
+  uv!: any[];
   constructor() {
     this.pos = [];
     this.nrm = [];
@@ -29,7 +35,7 @@ export class SurfaceBuilder {
 
   get empty() { return this.idx.length === 0; }
 
-  _push(p, n, u, c) {
+  _push(p: any, n: any, u: any, c: any) {
     this.pos.push(p[0], p[1], p[2]);
     this.nrm.push(n[0], n[1], n[2]);
     this.uv.push(u[0], u[1]);
@@ -42,7 +48,7 @@ export class SurfaceBuilder {
    *
    * @param {object} o
    * */
-  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x,y,z)=>number, ao?: (x,y,z)=>number, flip?: boolean, uvOffset?: number[] }) {
+  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x: any,y: any,z: any)=>number, ao?: (x: any,y: any,z: any)=>number, flip?: boolean, uvOffset?: number[] }) {
     const {
       origin, uAxis, vAxis, uLen, vLen,
       cell = 1.4, uvScale = 3.0, displace = null, ao = null, flip = false,
@@ -144,7 +150,7 @@ export class SurfaceBuilder {
     return this;
   }
 
-  _cap(ringStart, sides, centre, front, ao) {
+  _cap(ringStart: any, sides: any, centre: any, front: any, ao: any) {
     const c = this._push(centre, [0, 1, 0], [0.5, 0.5], ao ? ao(centre[0], centre[1], centre[2]) : 1);
     for (let j = 0; j < sides; j++) {
       const a = ringStart + j;
@@ -175,10 +181,11 @@ export class SurfaceBuilder {
  * attribute, and baked occlusion is the whole reason interiors read as rooms.
  */
 export class InteriorMerger {
+  byMat!: Map<any, any>;
   constructor() { this.byMat = new Map(); }
 
   /** @param mat @param geo */
-  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix) {
+  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix: any) {
     let g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
     const keep = ['position', 'normal', 'uv', 'color'];
     for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
@@ -203,7 +210,7 @@ export class InteriorMerger {
   }
 
   /** Place a primitive with position / euler / scale and an optional flat tint. */
-  place(mat, geo, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
+  place(mat: any, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(pos[0], pos[1], pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -242,18 +249,18 @@ export class InteriorMerger {
 
 /* ----------------------------------------------------------------- helpers */
 
-export function cross(a, b) {
+export function cross(a: any, b: any) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
-export function norm(a) {
+export function norm(a: any) {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 }
 
-export function smoothstep(a, b, x) {
+export function smoothstep(a: any, b: any, x: any) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-export function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+export function clamp(x: any, a: any, b: any) { return x < a ? a : x > b ? b : x; }

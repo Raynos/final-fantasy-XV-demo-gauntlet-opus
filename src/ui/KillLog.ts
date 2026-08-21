@@ -16,7 +16,7 @@ const tally: Map<string, {key:string, name:string, kills:number, lastLevel:numbe
 let attached = false;
 
 /** Fold one death into the tally. Exported so tests can drive it directly. */
-export function recordKill(enemy) {
+export function recordKill(enemy: any) {
   if (!enemy) return null;
   const key = enemy.speciesId || enemy.type?.key || enemy.name || 'unknown';
   const rec = tally.get(key) || { key, name: enemy.name || key, kills: 0, lastLevel: 0 };

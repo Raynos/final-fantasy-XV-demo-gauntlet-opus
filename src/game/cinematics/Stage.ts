@@ -27,6 +27,14 @@ import { setPose } from './Poses.ts';
  * ```
  */
 export class Stage {
+  _restore!: any[] | null;
+  _v!: THREE.Vector3;
+  _v2!: THREE.Vector3;
+  _weaponWas!: any;
+  game!: any;
+  held!: boolean;
+  party!: any;
+  player!: any;
   constructor(game: any) {
     this.game = game;
     this.held = false;
@@ -43,7 +51,7 @@ export class Stage {
     const game = this.game;
     const player = game.get('Player');
     const party = game.get('Party');
-    const add = (id, root, character, name) => {
+    const add = (id: any, root: any, character: any, name: any) => {
       if (!root || !character) return;
       this.actors.set(id, {
         id, name, root, character,
@@ -123,7 +131,7 @@ export class Stage {
     this._restore = null;
   }
 
-  _suspend(obj) {
+  _suspend(obj: any) {
     if (!obj) return;
     const had = Object.prototype.hasOwnProperty.call(obj, 'update');
     this._suspended.push({ obj, had, fn: had ? obj.update : null });
@@ -150,7 +158,7 @@ export class Stage {
   }
 
   /** Face an actor toward a world point. */
-  faceTo(id, target) {
+  faceTo(id: any, target: any) {
     const a = this.actor(id);
     if (!a) return;
     const t = Array.isArray(target) ? this._v.set(target[0], target[1], target[2]) : target;
@@ -190,7 +198,7 @@ export class Stage {
   }
 
   /** World point an actor's eyes are at — the thing other actors look at. */
-  eyeOf(id, out = new THREE.Vector3()) {
+  eyeOf(id: any, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     const dims = a.character.rig && a.character.rig.dims;
@@ -199,7 +207,7 @@ export class Stage {
   }
 
   /** Chest height — a better aim point for wide shots than the feet. */
-  chestOf(id, out = new THREE.Vector3()) {
+  chestOf(id: any, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     return out.set(a.pos.x, a.pos.y + 1.28, a.pos.z);
@@ -242,7 +250,7 @@ export class Stage {
 }
 
 /** Shortest signed angular difference from `a` to `b`. */
-function shortestAngle(a, b) {
+function shortestAngle(a: any, b: any) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

@@ -34,6 +34,20 @@ const UP = new THREE.Vector3(0, 1, 0);
  * ```
  */
 export class Shot {
+  _noise!: Noise;
+  _out!: any;
+  aim!: any;
+  aimU!: any;
+  breathe!: any;
+  dur!: any;
+  fStop!: any;
+  focus!: any;
+  handheld!: any;
+  keys!: any;
+  label!: any;
+  spline!: any;
+  t0!: any;
+  t1!: any;
   /**
    * @param {object} def
    * */
@@ -64,7 +78,7 @@ export class Shot {
   }
 
   /** True while scene time `t` belongs to this shot. */
-  covers(t) { return t >= this.t0 && t < this.t1; }
+  covers(t: any) { return t >= this.t0 && t < this.t1; }
 
   /**
    * Sample the move.
@@ -115,7 +129,7 @@ export class Shot {
   }
 
   /** Handheld + breathe, applied in world space around the sampled boom. */
-  _layers(out, local) {
+  _layers(out: any, local: any) {
     const n = this._noise;
     const hh = this.handheld;
     if (this.breathe > 0) {
@@ -147,6 +161,12 @@ export class Shot {
  * re-tuned every time another agent moves a landmark.
  */
 export class Frame {
+  _v!: THREE.Vector3;
+  floor!: any;
+  fwd!: any;
+  origin!: any;
+  right!: any;
+  up!: any;
   /**
    * @param forward world direction the scene faces
    */
@@ -197,7 +217,7 @@ export class Frame {
    * Same as {@link at} but snapped to the ground, plus `u` metres. "The ground"
    * is {@link setFloor}'s surface if one was set, else the terrain.
    */
-  ground(terrain, f, r, u = 0) {
+  ground(terrain: any, f: any, r: any, u = 0) {
     const v = this._v.copy(this.origin).addScaledVector(this.fwd, f).addScaledVector(this.right, r);
     if (this.floor != null) return [v.x, this.floor + u, v.z];
     const y = terrain && terrain.heightAt ? terrain.heightAt(v.x, v.z) : this.origin.y;
@@ -205,7 +225,7 @@ export class Frame {
   }
 
   /** Vector3 form of {@link at}. */
-  vec(f, r, u = 0) { return new THREE.Vector3().fromArray(this.at(f, r, u)); }
+  vec(f: any, r: any, u = 0) { return new THREE.Vector3().fromArray(this.at(f, r, u)); }
 
   /** Yaw (radians) that makes an actor's +Z axis face along the scene axis. */
   get yaw() { return Math.atan2(this.fwd.x, this.fwd.z); }

@@ -18,7 +18,23 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  * onto a sharp foreground.
  */
 export class DofPass extends Pass {
-  constructor(fx, w, h) {
+  blades!: number;
+  bokehScale!: number;
+  composite!: any;
+  fStop!: number;
+  farScale!: number;
+  focusDistance!: number;
+  fx!: any;
+  gather!: any;
+  height!: any;
+  maxCoc!: number;
+  nearScale!: number;
+  prefilter!: any;
+  rtBlur!: any;
+  rtPre!: any;
+  sensorHeight!: number;
+  width!: any;
+  constructor(fx: any, w: any, h: any) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -205,7 +221,7 @@ export class DofPass extends Pass {
     this.gather.needsUpdate = true;
   }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     this.width = w; this.height = h;
     const hw = Math.max(1, Math.floor(w / 2)), hh = Math.max(1, Math.floor(h / 2));
     if (this.rtPre) { this.rtPre.dispose(); this.rtBlur.dispose(); }
@@ -216,7 +232,7 @@ export class DofPass extends Pass {
     this.composite.uniforms.uTexel.value.set(1 / hw, 1 / hh);
   }
 
-  render(renderer, writeBuffer, readBuffer) {
+  render(renderer: any, writeBuffer: any, readBuffer: any) {
     const fx = this.fx;
     const cam = fx.rnd.camera;
     // vertical FOV -> focal length on a full-frame sensor

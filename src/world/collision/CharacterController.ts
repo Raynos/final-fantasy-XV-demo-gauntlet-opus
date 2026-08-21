@@ -27,6 +27,22 @@ const GRAVITY = 19.5;
  *    in range the character falls under gravity until something catches them.
  */
 export class CharacterController {
+  _from!: THREE.Vector3;
+  _g!: any;
+  _hold!: number;
+  climb!: any;
+  climbMax!: any;
+  grounded!: boolean;
+  height!: any;
+  normal!: THREE.Vector3;
+  onProp!: boolean;
+  progress!: number;
+  radius!: any;
+  riseRate!: any;
+  stepDown!: any;
+  stepUp!: any;
+  vy!: number;
+  world!: any;
   constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number} = {}) {
     this.world = world;
     this.radius = opts.radius != null ? opts.radius : 0.36;
@@ -168,7 +184,7 @@ export class CharacterController {
    * with the glazing above holding them there. With it, the allowance only
    * ever builds where there is somewhere to end up.
    */
-  _ledgeAhead(pos, vx, vz, speed): boolean {
+  _ledgeAhead(pos: any, vx: any, vz: any, speed: any): boolean {
     const w = this.world;
     if (!w.ready || !w.enabled || speed < 1e-3) return false;
     const ahead = this.radius + 0.30;

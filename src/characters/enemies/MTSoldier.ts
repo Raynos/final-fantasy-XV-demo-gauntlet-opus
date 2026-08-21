@@ -70,7 +70,7 @@ export const MT_SOLDIER = {
       telegraph: 0.4, strike: 0.14, attack: 0.42, recover: 0.7, cooldown: 1.2 },
   ],
   buildPrototype,
-  make(opts) { return new MTSoldierEnemy(opts); },
+  make(opts: any) { return new MTSoldierEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -92,8 +92,8 @@ function buildPrototype() {
   }
 
   const B = new CBuilder();
-  const P = [];
-  const emit = (bind, wear = 1) => { P.push({ geo: weather(B.build(), wear), bind }); reset(B); };
+  const P: any[] = [];
+  const emit = (bind: any, wear = 1) => { P.push({ geo: weather(B.build(), wear), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -151,7 +151,7 @@ function buildPrototype() {
   B.group(2);
   plate(B, {
     size: [0.30, 0.34, 0.17], center: [0, 1.40, -0.175], power: 6, segU: 16, segV: 12,
-    colorAt: (u, v, p) => col(p.y > 1.5 ? SHELL_LIT : SHELL_DARK),
+    colorAt: (u: any, v: any, p: any) => col(p.y > 1.5 ? SHELL_LIT : SHELL_DARK),
     matAt: () => M_ENAMEL,
   });
   // reactor stacks: two vertical cylinders venting hot
@@ -187,7 +187,7 @@ function buildPrototype() {
       plate(B, {
         size: [w, 0.20, 0.042], center: [0.115 * s, 0.845, zc], power: 7,
         rot: [rot, 0, -0.22 * s], segU: 8, segV: 7,
-        colorAt: (u, v, p) => col(SHELL, p.y > 0.85 ? 1 : 0.8), matAt: () => M_ENAMEL,
+        colorAt: (u: any, v: any, p: any) => col(SHELL, p.y > 0.85 ? 1 : 0.8), matAt: () => M_ENAMEL,
       });
     }
   }
@@ -210,10 +210,10 @@ function buildPrototype() {
     // Three values, not one: a light dome, the shell over the cheeks, and a
     // dark muzzle. A single colour over a smooth blob is exactly what made the
     // helm read as an egg with a light in it.
-    colorAt: (u, v, p) => (p.z > 0.075 && p.y < 1.775
+    colorAt: (u: any, v: any, p: any) => (p.z > 0.075 && p.y < 1.775
       ? col(SHELL_DARK)
       : col(p.y > 1.795 ? SHELL_LIT : SHELL, p.y > 1.795 ? 1 : 0.95)),
-    matAt: (u, v, p) => (p.z > 0.075 && p.y < 1.775 ? M_GUN : M_ENAMEL),
+    matAt: (u: any, v: any, p: any) => (p.z > 0.075 && p.y < 1.775 ? M_GUN : M_ENAMEL),
   });
   // the visor slit
   B.glow(MAGITEK, 4.6);
@@ -250,7 +250,7 @@ function buildPrototype() {
     plate(B, {
       size: [0.155, 0.135, 0.20], center: [0.235 * s, 1.555, -0.005], power: 4,
       rot: [0, 0, -0.30 * s], segU: 12, segV: 9,
-      colorAt: (u, v, p) => col(p.y > 1.57 ? SHELL_LIT : SHELL_DARK), matAt: () => M_ENAMEL,
+      colorAt: (u: any, v: any, p: any) => col(p.y > 1.57 ? SHELL_LIT : SHELL_DARK), matAt: () => M_ENAMEL,
     });
     emit(['bone', 'chest']);
 
@@ -320,7 +320,7 @@ function buildPrototype() {
   // receiver
   plate(B, {
     size: [0.052, 0.088, 0.34], center: [gx, gy + 0.03, gz + 0.10], power: 6, segU: 10, segV: 8,
-    colorAt: (u, v, p) => col(p.y > gy + 0.045 ? SHELL : SHELL_DARK), matAt: () => M_GUN,
+    colorAt: (u: any, v: any, p: any) => col(p.y > gy + 0.045 ? SHELL : SHELL_DARK), matAt: () => M_GUN,
   });
   // barrel shroud with cooling ribs
   sweep(B, {
@@ -392,8 +392,8 @@ function buildPrototype() {
     // foot: a splayed three-point pad, not a shoe
     plate(B, {
       size: [0.105, 0.075, 0.24], center: [0.138 * s, 0.055, 0.045], power: 5, segU: 10, segV: 7,
-      colorAt: (u, v, p) => col(p.y < 0.04 ? RUBBER : SHELL_DARK),
-      matAt: (u, v, p) => (p.y < 0.04 ? M_RUBBER : M_ENAMEL),
+      colorAt: (u: any, v: any, p: any) => col(p.y < 0.04 ? RUBBER : SHELL_DARK),
+      matAt: (u: any, v: any, p: any) => (p.y < 0.04 ? M_RUBBER : M_ENAMEL),
     });
     horn(B, {
       from: [0.138 * s, 0.05, -0.075], dir: [0, -0.1, -1], len: 0.075,
@@ -420,29 +420,37 @@ function buildPrototype() {
   return rig.build(mat, { radius: 2.2 });
 }
 
-function reset(B) {
+function reset(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
 }
 
 const _c = new THREE.Color();
-function col(hex, k = 1) {
+function col(hex: any, k = 1) {
   _c.setHex(hex, THREE.SRGBColorSpace);
   if (k !== 1) _c.multiplyScalar(k);
   return _c;
 }
 
 /** Field wear; see `EnemyBase.weatherPlate`. */
-function weather(geo, amount = 1) {
+function weather(geo: any, amount = 1) {
   return weatherPlate(geo, { scuff: SCUFF, amount });
 }
 
 class MTSoldierEnemy extends BipedEnemy {
-  constructor(opts) { super(MT_SOLDIER, opts); }
+  attackId!: any;
+  deathPush!: any;
+  deathSide!: any;
+  recoil!: any;
+  rig!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(MT_SOLDIER, opts); }
 
   /** Muzzle in world space — the beam origin for `volley`. */
-  muzzle(out) {
+  muzzle(out: any) {
     const b = this.rig && this.rig.byName.get('hdR');
     if (!b) return out.copy(this.centre());
     return out.set(0, 0.10, 0.69).applyMatrix4(b.matrixWorld);
@@ -454,7 +462,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * stiffness is the point: it is the one enemy in the game that is obviously
    * not alive, and the gait has to say so before the model does.
    */
-  poseArms(S, t, swing, norm) {
+  poseArms(S: any, t: any, swing: any, norm: any) {
     // Port arms. The weapon hangs off the right hand pointing along the hand's
     // local +Z, so the muzzle angle is just the *sum* of the shoulder and
     // elbow pitches — bending the elbow the same way as the shoulder points
@@ -468,7 +476,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * Rifle up to the visor. Shoulder and elbow pitches cancel so the barrel
    * comes out level however far into the pose we are; `kick` rocks it back.
    */
-  aim(S, k, kick = 0) {
+  aim(S: any, k: any, kick = 0) {
     const sh = -1.22 * k - 1.02 * (1 - k);
     const el = 1.18 * k + 0.40 * (1 - k);
     this.arm(S, 'R', [sh + kick * 0.14, -0.20 * k - 0.26 * (1 - k), -0.12 * k - 0.30 * (1 - k)],
@@ -477,7 +485,7 @@ class MTSoldierEnemy extends BipedEnemy {
       [1.02 * k + 0.30 * (1 - k) - kick * 0.16, 0, 0], [0, 0, 0]);
   }
 
-  poseWindUp(S, t, k, env) {
+  poseWindUp(S: any, t: any, k: any, env: any) {
     const bayonet = this.attackId === 'bayonet';
     if (bayonet) {
       // shoulder the weapon back and drop into a lunge stance
@@ -496,7 +504,7 @@ class MTSoldierEnemy extends BipedEnemy {
     this.aim(S, k);
   }
 
-  poseSwing(S, t, k, env) {
+  poseSwing(S: any, t: any, k: any, env: any) {
     const bayonet = this.attackId === 'bayonet';
     const kp = clamp01(k);
     if (bayonet) {
@@ -533,7 +541,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * limbs go slack in a different order from a living body, and the whole
    * thing goes over rigid, like dropped furniture.
    */
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     const A = this.A;
     const T = this.stateTime;
     const seize = Math.exp(-T * 9) * Math.sin(T * 60) * 0.10;      // the last spasm

@@ -24,7 +24,17 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  *   post.contact.enabled / .intensity / .length / .thickness
  */
 export class ContactShadowPass extends FilterPass {
-  constructor(fx) {
+  _lightDir!: THREE.Vector3;
+  _lightTgt!: THREE.Vector3;
+  bias!: number;
+  fx!: any;
+  intensity!: number;
+  length!: number;
+  material!: any;
+  maxDistance!: number;
+  thickness!: number;
+  tint!: THREE.Color;
+  constructor(fx: any) {
     super(fx);
     this.enabled = true;
     this.intensity = 0.85;      // 0..1 how black the contact goes
@@ -140,7 +150,7 @@ export class ContactShadowPass extends FilterPass {
     });
   }
 
-  setSize(w, h) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
   beforeRender() {
     const fx = this.fx, u = this.material.uniforms;

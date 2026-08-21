@@ -33,6 +33,34 @@ const MAX_ROWS = 16;
  * Controls: ↑↓ pick, ←→ change section. No CSS transitions.
  */
 export class ArchiveScreen {
+  _age!: number;
+  _cur!: any;
+  _sig!: any;
+  cols!: any;
+  dD!: any;
+  dDrops!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dRule!: any;
+  dSpecs!: any;
+  dWeak!: any;
+  detail!: any;
+  game!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  rowNodes!: any[];
+  scroll!: number;
+  specVals!: any;
+  sub!: string;
+  tab!: number;
+  tabNodes!: any;
+  tabsEl!: any;
+  tally!: any;
+  tallyD!: any;
+  tallyV!: any;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -103,7 +131,7 @@ export class ArchiveScreen {
     root.appendChild(this.tally);
   }
 
-  enter(game) { if (game) this.game = game; this._sig = null; }
+  enter(game: any) { if (game) this.game = game; this._sig = null; }
 
   /* -------------------------------------------------------------- data */
 
@@ -126,8 +154,8 @@ export class ArchiveScreen {
   /** The journey, in numbers that are all real. */
   _datalogRows() {
     const r = this.rpg;
-    const out = [];
-    const add = (name, value, desc) => out.push({ kind: 'log', key: name, name, value, desc });
+    const out: any[] = [];
+    const add = (name: any, value: any, desc: any) => out.push({ kind: 'log', key: name, name, value, desc });
     if (!r) {
       add('Journey', '—', 'No save is loaded.');
       return out;
@@ -140,7 +168,7 @@ export class ArchiveScreen {
     add('Quests Finished', String(r.quests.completed.length),
       `${r.quests.active.length} in hand, ${r.quests.available.length} waiting to be taken.`);
     add('Hunter Points', String(r.quests.hunterPoints || 0), 'Earned bounty by bounty at the boards of Lucis.');
-    add('Havens Found', `${havens.filter((h) => h.discovered).length} / ${havens.length}`,
+    add('Havens Found', `${havens.filter((h: any) => h.discovered).length} / ${havens.length}`,
       'Runic outcrops where daemons will not follow. Rest at one to bank the day\'s EXP.');
     add('Ascension', `${r.ascension.unlocked.size} / ${r.ascension.allNodes.length}`,
       `${commas(r.ascension.ap)} AP unspent across nine constellations.`);
@@ -153,7 +181,7 @@ export class ArchiveScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) { this.tab = (this.tab + dx + FACTION_TABS.length) % FACTION_TABS.length; this.i = 0; this.scroll = 0; }
@@ -164,7 +192,7 @@ export class ArchiveScreen {
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows) {
+  _renderRows(rows: any) {
     clear(this.list);
     this.rowNodes = [];
     for (const row of rows.slice(this.scroll, this.scroll + MAX_ROWS)) {
@@ -185,7 +213,7 @@ export class ArchiveScreen {
     }
   }
 
-  _renderDetail(row) {
+  _renderDetail(row: any) {
     clear(this.dWeak);
     clear(this.dDrops);
     if (row.kind === 'log') {

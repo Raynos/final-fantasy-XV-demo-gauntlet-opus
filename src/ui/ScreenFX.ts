@@ -6,6 +6,22 @@ import { clock } from './UIKit.ts';
  * damage-taken red flash, the FFXV area title card, and the level-up flourish.
  */
 export class ScreenFX {
+  card!: any;
+  cardMeta!: any;
+  cardName!: any;
+  cardRule!: any;
+  cardState!: any;
+  cardSub!: any;
+  cine!: any;
+  cineAmt!: any;
+  flash!: any;
+  flashAmt!: number;
+  low!: any;
+  lu!: any;
+  luN!: any;
+  luState!: Clip | null;
+  luT!: any;
+  root!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'screenfx' });
     parent.appendChild(this.root);
@@ -68,7 +84,7 @@ export class ScreenFX {
   }
 
   /** Cinematic edge darkening strength (0..1). */
-  setCinematic(v) { this.cineAmt = clamp(v, 0, 1); }
+  setCinematic(v: any) { this.cineAmt = clamp(v, 0, 1); }
 
   /**
    * @param dt seconds
@@ -93,7 +109,7 @@ export class ScreenFX {
     this._updateLevel(dt);
   }
 
-  _updateCard(dt) {
+  _updateCard(dt: any) {
     const s = this.cardState;
     if (!s) { this.card.style.opacity = '0'; return; }
     s.clip.step(dt);
@@ -116,7 +132,7 @@ export class ScreenFX {
     this.card.style.transform = `translateY(${(-out * 10).toFixed(1)}px)`;
   }
 
-  _updateLevel(dt) {
+  _updateLevel(dt: any) {
     const s = this.luState;
     if (!s) { this.lu.style.opacity = '0'; return; }
     s.step(dt);

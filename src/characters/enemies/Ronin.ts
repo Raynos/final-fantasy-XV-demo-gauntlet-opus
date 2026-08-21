@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.ts';
 import { tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const LACQUER = 0x342830;
 const LACQUER_RED = 0x6d1c22;
@@ -56,7 +56,7 @@ export const RONIN = {
       telegraph: 0.55, strike: 0.20, attack: 0.62, recover: 0.95, cooldown: 3.4 },
   ],
   buildPrototype,
-  make(opts) { return new RoninEnemy(opts); },
+  make(opts: any) { return new RoninEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -243,7 +243,11 @@ function buildPrototype() {
 }
 
 class RoninEnemy extends Enemy {
-  constructor(opts) { super(RONIN, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(RONIN, opts); }
 
   /** World-space blade tip, for the draw-cut sweep and trail. */
   bladeTip(out = new THREE.Vector3()) {
@@ -253,10 +257,10 @@ class RoninEnemy extends Enemy {
     return out.set(0.04, 0.315, 1.28).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     /** The resting iai stance: blade hand drawn back to the left hip. */
     const stance = (k = 1) => {
       S('shR', -0.30 * k, -0.55 * k, 0.85 * k);

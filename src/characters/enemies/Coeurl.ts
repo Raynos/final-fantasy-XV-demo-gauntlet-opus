@@ -81,7 +81,7 @@ export const COEURL = {
       ranged: true, element: 'lightning', tracking: 1.2, unblockable: true },
   ],
   buildPrototype,
-  make(opts) { return new CoeurlEnemy(opts); },
+  make(opts: any) { return new CoeurlEnemy(opts); },
 };
 
 /* Shoulder 0.98, whisker tips reach y ≈ 1.83 and z ≈ -1.0. */
@@ -116,7 +116,7 @@ function buildPrototype() {
 
   const B = new CBuilder();
   const P = [];
-  const emit = (bind) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -199,12 +199,12 @@ function buildPrototype() {
       { p: [0, 0.925, 1.13], r: [0.095, 0.06, 0.09], amt: 0.024, dir: [0, -0.7, 1] },    // whisker pad
       { p: [0, 0.885, 1.02], r: [0.10, 0.05, 0.11], amt: -0.018, dir: [0, 1, 0] },       // jaw undercut
     ],
-    colorAt: (u, v, p) => {
+    colorAt: (u: any, v: any, p: any) => {
       const pad = clamp01((p.z - 1.09) / 0.09) * clamp01((0.985 - p.y) / 0.07);
       const crown = clamp01((p.y - 0.99) / 0.06);
       return mix(mix(FUR, FUR_DARK, crown * 0.6), MUZZLE, pad * 0.8);
     },
-    matAt: (u, v, p) => (p.z > 1.19 && p.y < 0.95 ? M_WET : M_FUR),
+    matAt: (u: any, v: any, p: any) => (p.z > 1.19 && p.y < 0.95 ? M_WET : M_FUR),
   });
   // nose
   sculptBlob(B, {
@@ -284,7 +284,7 @@ function buildPrototype() {
       shape: (th, u) => 1 + Math.max(0, Math.sin(u * 46)) * 0.22,
       colorAt: (th, u) => mix(WHISK, WHISK_LIT, smooth((u - 0.35) / 0.6)),
       matAt: () => M_WHISK,
-      glowAt: (th, u) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
+      glowAt: (th: any, u: any) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
     });
     // charge beads sitting on each joint
     for (const i of [2, 4, 6, 8]) {
@@ -418,7 +418,7 @@ function buildPrototype() {
 }
 
 /** Broad cat paw: four toes, retractable claws left out. */
-function paw(B, x, y, z, dir) {
+function paw(B: any, x: any, y: any, z: any, dir: any) {
   const sgn = Math.sign(x) || 1;
   for (let i = -1; i <= 2; i++) {
     const ox = x + (i - 0.5) * 0.030 * sgn;
@@ -440,7 +440,7 @@ function paw(B, x, y, z, dir) {
   }
 }
 
-function reset(B) {
+function reset(B: any) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -452,7 +452,15 @@ const mix = mixc;
 const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
-  constructor(opts) { super(COEURL, opts); }
+  anim!: any;
+  attackId!: any;
+  moveSpeed!: any;
+  rig!: any;
+  speed!: any;
+  state!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(COEURL, opts); }
 
   telegraphScale() {
     if (this.attackId === 'pounce') return 1.25;
@@ -502,7 +510,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
    * the whiskers swing *forward* into a V pointing down the firing line while
    * the charge builds visibly along them. Nothing else it does looks like this.
    */
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     if (this.attackId !== 'blaster') {
       super.poseTelegraph(S, t);
       this.whiskers(S, -0.35, 0.2, 0.05, t);
@@ -525,7 +533,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.tail(t, 0.30 * k, 0.06, 3);
   }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'blaster') {
@@ -552,7 +560,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
       const T = this._timing('attack');
       const a = clamp01(this.stateTime / (T * 0.44));
       const b = clamp01((this.stateTime - T * 0.40) / (T * 0.46));
-      const sw = (x) => Math.sin(clamp01(x) * Math.PI);
+      const sw = (x: any) => Math.sin(clamp01(x) * Math.PI);
       const k1 = sw(a), k2 = sw(b);
       const rear = Math.max(k1, k2);
       this.stance(S, {
@@ -575,28 +583,28 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.whiskers(S, -0.8 * clamp01(-k) - 0.2, 0.35, 0.10, t);
   }
 
-  poseLocomotion(S, t) {
+  poseLocomotion(S: any, t: any) {
     super.poseLocomotion(S, t);
     const norm = clamp01((this.moveSpeed || 0) / this.speed);
     this.whiskers(S, -0.25 - norm * 0.45, 0.15, 0.08 + norm * 0.10, t);
   }
 
-  poseIdle(S, t) {
+  poseIdle(S: any, t: any) {
     super.poseIdle(S, t);
     this.whiskers(S, 0, 0.10, 0.09, t);
   }
 
-  poseFlinch(S, t) {
+  poseFlinch(S: any, t: any) {
     super.poseFlinch(S, t);
     this.whiskers(S, -0.2, 0.5, 0.30, t);
   }
 
-  poseStagger(S, t) {
+  poseStagger(S: any, t: any) {
     super.poseStagger(S, t);
     this.whiskers(S, -0.4, 0.7, 0.22, t);
   }
 
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     super.poseDeath(S, t);
     // the charge gutters out and the whiskers go limp
     const slack = smooth(clamp01(this.stateTime / 0.45));

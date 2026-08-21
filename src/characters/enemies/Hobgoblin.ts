@@ -5,7 +5,7 @@ import {
   tube, blob, spike, slab, place, tint, glow, rectCross, loft,
 } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const SKIN = 0x6a5060;
 const SKIN_DARK = 0x3a2c3c;
@@ -60,7 +60,7 @@ export const HOBGOBLIN = {
     },
   ],
   buildPrototype,
-  make(opts) { return new HobgoblinEnemy(opts); },
+  make(opts: any) { return new HobgoblinEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -268,12 +268,16 @@ function buildPrototype() {
 }
 
 class HobgoblinEnemy extends Enemy {
-  constructor(opts) { super(HOBGOBLIN, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(HOBGOBLIN, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
     const hunch = (k = 1) => {
       S('spine', 0.26 * k, 0, 0);
       S('chest', 0.18 * k, 0, 0);

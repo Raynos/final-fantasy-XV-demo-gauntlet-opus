@@ -15,6 +15,10 @@ import { HUNT_TARGETS, SET_PIECES } from './SpawnTables.ts';
  * and the tidy-up.
  */
 export class HuntRuntime {
+  _off!: any;
+  active!: Map<any, any>;
+  dir!: any;
+  rpg!: any;
   constructor(dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.dir = dir;
     this.rpg = dir.rpg;
@@ -25,7 +29,7 @@ export class HuntRuntime {
   /** Subscribe to the quest log. */
   init() {
     if (!this.rpg) return this;
-    this._off = this.rpg.on('quest-updated', (p) => this._onQuest(p));
+    this._off = this.rpg.on('quest-updated', (p: any) => this._onQuest(p));
     // anything already accepted before we booted still deserves a mark
     for (const q of this.rpg.quests.active) {
       if (q.type === 'hunt') this.arm(q.id);
@@ -33,7 +37,7 @@ export class HuntRuntime {
     return this;
   }
 
-  _onQuest(p) {
+  _onQuest(p: any) {
     if (!p || !p.quest || p.quest.type !== 'hunt') return;
     if (p.phase === 'accepted') this.arm(p.quest.id);
     else if (p.phase === 'complete') this.finish(p.quest.id, p.rewards);
@@ -67,7 +71,7 @@ export class HuntRuntime {
    * The board hears about it. The payout itself has already happened inside
    * `RpgSystem`'s `quest-updated` handler; this is the report back.
    */
-  finish(id: string, rewards) {
+  finish(id: string, rewards: any) {
     const rec = this.active.get(id);
     this.active.delete(id);
     this.dir.hunts?.delete(id);
@@ -84,7 +88,7 @@ export class HuntRuntime {
   }
 
   /** Despawn a hunt's remaining marks. */
-  clear(id) {
+  clear(id: any) {
     this.active.delete(id);
     const h = this.dir.hunts?.get(id);
     if (h) {

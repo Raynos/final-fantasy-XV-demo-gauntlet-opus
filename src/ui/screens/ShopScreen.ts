@@ -16,7 +16,7 @@ import { TOWN_SHOPS, stockFor } from '../../world/town/Shops.ts';
  */
 
 /** Which icon reads for a given item definition. */
-function iconFor(def) {
+function iconFor(def: any) {
   if (!def) return 'items';
   if (def.category === 'weapon') {
     return ({
@@ -33,7 +33,7 @@ function iconFor(def) {
 }
 
 /** One line of plain English about what an item does. */
-function effectOf(def) {
+function effectOf(def: any) {
   if (!def) return '—';
   if (def.use) {
     const u = def.use;
@@ -62,6 +62,46 @@ function effectOf(def) {
 const MAX_ROWS = 14;
 
 export class ShopScreen {
+  _age!: number;
+  _cur!: any;
+  _msg!: any;
+  _msgAge!: number;
+  _ownerFor!: any;
+  _sig!: any;
+  _tabSig!: any;
+  cols!: any;
+  dD!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dRule!: any;
+  dSpecs!: any;
+  detail!: any;
+  empty!: any;
+  game!: any;
+  gilBox!: any;
+  gilD!: any;
+  gilV!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  msg!: any;
+  owner!: any;
+  ownerN!: any;
+  ownerQ!: any;
+  qHint!: any;
+  qN!: any;
+  qRow!: any;
+  qTot!: any;
+  qty!: number;
+  rowNodes!: any[];
+  scroll!: number;
+  specVals!: any;
+  sub!: string;
+  tab!: number;
+  tabNodes!: any;
+  tabsEl!: any;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -77,7 +117,7 @@ export class ShopScreen {
   }
 
   /** Pick which counter this is. Call before `Menus.setScreen('shop')`. */
-  setShop(id) {
+  setShop(id: any) {
     if (!TOWN_SHOPS[id]) return;
     this.shopId = id;
     this.tab = 0;
@@ -178,7 +218,7 @@ export class ShopScreen {
     const items = rpg?.tables?.items;
     if (!inv || !items) return [];
     if (this.selling) {
-      return inv.sellable(this.shop.sellCategories).map((e) => ({
+      return inv.sellable(this.shop.sellCategories).map((e: any) => ({
         def: e.def, price: e.unitPrice, held: e.count, kind: 'sell',
       }));
     }
@@ -189,7 +229,7 @@ export class ShopScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) {
@@ -223,10 +263,10 @@ export class ShopScreen {
     }
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /** Extra keys this screen owns, polled rather than bound (Menus is shared). */
-  _extraInput(game) {
+  _extraInput(game: any) {
     const inp = game.input;
     if (!inp) return;
     const step = (inp.key?.('ShiftLeft') || inp.key?.('ShiftRight')) ? 10 : 1;
@@ -240,7 +280,7 @@ export class ShopScreen {
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows) {
+  _renderRows(rows: any) {
     clear(this.list);
     this.rowNodes = [];
     const view = rows.slice(this.scroll, this.scroll + MAX_ROWS);
@@ -280,7 +320,7 @@ export class ShopScreen {
     if (this._tabSig !== tabSig) {
       this._tabSig = tabSig;
       clear(this.tabsEl);
-      this.tabNodes = shop.tabs.map((t) => {
+      this.tabNodes = shop.tabs.map((t: any) => {
         const n = el('div.tab', { text: t });
         this.tabsEl.appendChild(n);
         return n;
@@ -295,7 +335,7 @@ export class ShopScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.shopId}|${this.tab}|${this.scroll}|${rows.length}|${rows.map((r) => r.def.id + ':' + r.held).join()}`;
+    const sig = `${this.shopId}|${this.tab}|${this.scroll}|${rows.length}|${rows.map((r: any) => r.def.id + ':' + r.held).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows); }
 
     const gil = rpg?.inventory?.gil ?? 0;

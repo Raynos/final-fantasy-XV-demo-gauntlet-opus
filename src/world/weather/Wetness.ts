@@ -15,7 +15,12 @@ import * as THREE from 'three';
  * ratchet a material darker.
  */
 export class Wetness {
-  constructor(game) {
+  _mats!: any[];
+  _scanIn!: number;
+  _ssrOn!: boolean;
+  game!: any;
+  value!: number;
+  constructor(game: any) {
     this.game = game;
     this.value = -1;
     this._scanIn = 0;
@@ -65,9 +70,9 @@ export class Wetness {
   }
 
   /** Cache the dry authored values of anything new in the scene. */
-  _collect(scene) {
+  _collect(scene: any) {
     this._mats.length = 0;
-    scene.traverse((o) => {
+    scene.traverse((o: any) => {
       if (!o.material || o.userData.noWet) return;
       const list = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of list) {

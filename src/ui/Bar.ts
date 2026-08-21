@@ -6,6 +6,17 @@ import { el, clamp, damp } from './UIKit.ts';
  * down to meet it. Used for party HP and enemy HP.
  */
 export class Bar {
+  _init!: boolean;
+  _lastC!: number;
+  _lastV!: number;
+  c!: number;
+  chaseEl!: any;
+  delay!: any;
+  fill!: any;
+  hold!: number;
+  node!: any;
+  speed!: any;
+  v!: number;
   /**
    * @param [opts] `{ cls, chase, delay, speed }`
    */
@@ -22,10 +33,10 @@ export class Bar {
   }
 
   /** Add extra classes to the fill element (e.g. `mp`, `hostile`, `armiger`). */
-  tint(name) { this.fill.classList.add(name); return this; }
+  tint(name: any) { this.fill.classList.add(name); return this; }
 
   /** Jump both bars to `v` (0..1) with no chase animation. */
-  reset(v) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }
+  reset(v: any) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }
 
   /**
    * @param v target 0..1

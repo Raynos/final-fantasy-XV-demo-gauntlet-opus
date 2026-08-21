@@ -16,13 +16,33 @@ const REGION_NAME = {
   insomnia: ['Insomnia', 'The Crown City'],
 };
 
-const wrap180 = (d) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; };
+const wrap180 = (d: any) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; };
 
 /**
  * Top-right compass strip with cardinal ticks and world-space quest markers,
  * plus the in-game clock, current region and the tracked objective.
  */
 export class CompassBar {
+  _area!: any;
+  _day!: any;
+  _dist!: any;
+  _qs!: any;
+  _qt!: any;
+  _sub!: any;
+  _time!: any;
+  box!: any;
+  dayEl!: any;
+  locEl!: any;
+  locSub!: any;
+  marks!: any[];
+  qDist!: any;
+  qName!: any;
+  qStep!: any;
+  root!: any;
+  strip!: any;
+  svg!: any;
+  ticks!: any[];
+  timeEl!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.tr');
     this.box = el('div.compass');
@@ -124,7 +144,7 @@ export class CompassBar {
     // world markers, sorted so the nearest few always get a slot
     const p = game.get?.('Player')?.position;
     const all = readMarkers(game);
-    let list = [];
+    let list: any[] = [];
     if (all && p) {
       list = all
         .map((m) => ({ ...m, dist: Math.hypot(m.x - p.x, m.z - p.z) }))

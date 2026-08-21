@@ -159,7 +159,7 @@ function groundBlade(cross: Array<[number,number]>, sections: Array<any>, edge: 
 }
 
 /** Faceted shading: every triangle keeps its own plane normal. */
-function faceted(geo) {
+function faceted(geo: any) {
   const g = geo.index ? geo.toNonIndexed() : geo;
   if (g !== geo) geo.dispose();
   g.computeVertexNormals();
@@ -173,7 +173,7 @@ function faceted(geo) {
  * ribbed rubber tube, and the ridges catch the rim light that tells you a hand
  * belongs there.
  */
-function wrappedGrip(y0, y1, r0, r1,
+function wrappedGrip(y0: any, y1: any, r0: any, r1: any,
   { flat = 0.76, turns = 2.6, lobes = 4, steps = 16, waist = 0.10 } = {}) {
   const secs = [];
   for (let i = 0; i <= steps; i++) {
@@ -240,7 +240,7 @@ export function swordGeometry() {
   // --- crossguard: a compact angular cross-piece, not a pair of gold wings
   const guard = place(slab(0.108, 0.030, 0.032, 0.006), { pos: [0, 0.090, 0] });
   parts.push(tint(guard, IRON));
-  const quillon = (side) => place(faceted(loft(chamferCross(0.36), [
+  const quillon = (side: any) => place(faceted(loft(chamferCross(0.36), [
     { y: 0.000, sx: 0.0130, sz: 0.0150 },
     { y: 0.020, sx: 0.0110, sz: 0.0125 },
     { y: 0.034, sx: 0.0042, sz: 0.0050 },
@@ -311,7 +311,7 @@ export function greatswordGeometry() {
   parts.push(tint(ricasso, 0x4c515a, 0.05));
 
   // --- crossbar: short, heavy, swept forward. Not a 400 mm slab.
-  const bar = (side) => place(faceted(loft(chamferCross(0.32), [
+  const bar = (side: any) => place(faceted(loft(chamferCross(0.32), [
     { y: 0.000, sx: 0.0230, sz: 0.0250 },
     { y: 0.048, sx: 0.0205, sz: 0.0215 },
     { y: 0.092, sx: 0.0175, sz: 0.0170 },
@@ -329,7 +329,7 @@ export function greatswordGeometry() {
   // --- the long two-hand grip: lead hand at y = 0, off hand near -0.30
   parts.push(surf(tint(wrappedGrip(-0.380, 0.076, 0.0225, 0.0215,
     { turns: 6.2, steps: 26, waist: 0.05 }), LEATHER, 0.05), 0.84, 0));
-  const band = (y) => faceted(loft(chamferCross(0.30), [
+  const band = (y: any) => faceted(loft(chamferCross(0.30), [
     { y: y - 0.008, sx: 0.0245, sz: 0.0198 },
     { y: y + 0.008, sx: 0.0245, sz: 0.0198 },
   ]));
@@ -356,7 +356,7 @@ export function polearmGeometry() {
   // wrapped section around the origin, where the lead hand closes
   parts.push(surf(tint(wrappedGrip(-0.120, 0.150, 0.0212, 0.0208,
     { flat: 1, turns: 3.0, waist: 0.03 }), LEATHER, 0.05), 0.84, 0));
-  const ring = (y) => loft(chamferCross(0.34), [
+  const ring = (y: any) => loft(chamferCross(0.34), [
     { y: y - 0.008, sx: 0.0222, sz: 0.0222 },
     { y: y + 0.008, sx: 0.0222, sz: 0.0222 },
   ]);
@@ -645,14 +645,14 @@ export const WEAPON_ANCHORS = {
  * five classes sharing one compiled program, so a weapon swap costs a
  * visibility flip rather than a half-second stall.
  */
-let STEEL_MAPS = null;
+let STEEL_MAPS: any = null;
 function steelMaps() {
   if (STEEL_MAPS) return STEEL_MAPS;
   const N = 256;
-  const frac = (x) => x - Math.floor(x);
+  const frac = (x: any) => x - Math.floor(x);
   // `p` is the tiling period in cells, so the streaks wrap cleanly in u
-  const h1 = (i, p) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
-  const vn = (x, p) => {
+  const h1 = (i: any, p: any) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
+  const vn = (x: any, p: any) => {
     const i = Math.floor(x), f = frac(x), s = f * f * (3 - 2 * f);
     return h1(i, p) * (1 - s) + h1(i + 1, p) * s;
   };
@@ -660,13 +660,13 @@ function steelMaps() {
   // The v terms must stay tiny — the loft's v runs the length of the blade,
   // so any real drift skews the streaks into visible corrugation instead of
   // a grind.
-  const height = (u, v) => (
+  const height = (u: any, v: any) => (
     0.58 * vn((u + v * 0.0016) * 17, 17) +
     0.30 * vn((u + v * 0.0026) * 43, 43) +
     0.12 * vn((u + v * 0.0040) * 97, 97)
   );
   STEEL_MAPS = {
-    rough: makeDataMap(N, (u, v) => 0.32 + 0.62 * height(u, v)),
+    rough: makeDataMap(N, (u: any, v: any) => 0.32 + 0.62 * height(u, v)),
     norm: normalFromHeight(N, height, 0.30),
   };
   return STEEL_MAPS;
@@ -730,6 +730,15 @@ export function makeWeaponMaterial() {
  * `root` is parented to the wielder's hand transform by the combat system.
  */
 export class Weapon {
+  baseLocal!: THREE.Vector3;
+  def!: any;
+  geometry!: any;
+  kind!: any;
+  material!: any;
+  mesh!: THREE.Mesh;
+  reveal!: number;
+  root!: THREE.Group;
+  tipLocal!: THREE.Vector3;
   constructor(kind: WeaponClass | string) {
     this.kind = kind;
     this.def = WEAPONS[kind] || WEAPONS.sword;
@@ -756,7 +765,7 @@ export class Weapon {
   }
 
   /** 0 = fully dematerialised, 1 = solid steel. */
-  setReveal(v) {
+  setReveal(v: any) {
     this.reveal = THREE.MathUtils.clamp(v, 0, 1);
     this.material.userData.uniforms.uReveal.value = this.reveal;
     this.root.visible = this.reveal > 0.001;
@@ -778,6 +787,19 @@ export class Weapon {
  * swarm costs a handful of draw calls no matter how many blades are up.
  */
 export class Armiger {
+  _e!: THREE.Euler;
+  _m!: THREE.Matrix4;
+  _p!: THREE.Vector3;
+  _q!: THREE.Quaternion;
+  _s!: THREE.Vector3;
+  active!: number;
+  count!: any;
+  group!: THREE.Group;
+  material!: any;
+  meshes!: any[];
+  phase!: number;
+  slots!: any[];
+  strikePhase!: number;
   constructor({ count = 13 } = {}) {
     this.count = count;
     this.group = new THREE.Group();
@@ -859,7 +881,7 @@ export class Armiger {
     this.material.uniforms.uStrength.value = this.active;
   }
 
-  setClock(c) { this.material.uniforms.uTime.value = c; }
+  setClock(c: any) { this.material.uniforms.uTime.value = c; }
   dispose() { for (const m of this.meshes) m.geometry.dispose(); this.material.dispose(); }
 }
 

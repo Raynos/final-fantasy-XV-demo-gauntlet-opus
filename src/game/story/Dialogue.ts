@@ -34,7 +34,7 @@ export const SPEAKERS = {
   radio: null,
 };
 
-const L = (who, line) => ({ who: SPEAKERS[who] ?? who, line });
+const L = (who: any, line: any) => ({ who: SPEAKERS[who] ?? who, line });
 
 /**
  * Ambient exchanges. Each entry is a short back-and-forth; the runner plays it
@@ -214,6 +214,13 @@ export const REACTIONS = {
  * already listening, and it hides itself during cutscenes and title cards.
  */
 export class Conversation {
+  _n!: number;
+  cooldown!: number;
+  gap!: number;
+  next!: number;
+  queue!: any[];
+  rest!: number;
+  used!: Set<any>;
   constructor() {
     this.queue = [];
     this.next = 0;
@@ -241,7 +248,7 @@ export class Conversation {
   }
 
   /** Queue a single reaction line for an event key. */
-  react(key) {
+  react(key: any) {
     const pool = REACTIONS[key];
     if (!pool || !pool.length) return false;
     if (this.queue.length) return false;

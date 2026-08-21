@@ -1,4 +1,14 @@
 export class Time {
+  _fpsAcc!: number;
+  _fpsFrames!: number;
+  _last!: number;
+  dt!: number;
+  fps!: number;
+  frame!: number;
+  now!: number;
+  raw!: number;
+  rawDt!: number;
+  scale!: number;
   constructor() {
     this.now = 0;          // seconds since start (scaled)
     this.raw = 0;          // unscaled seconds since start

@@ -19,7 +19,24 @@ import * as THREE from 'three';
  *   `encounter:retry`
  */
 export class Downed {
-  async init(game) {
+  _allyPotion!: Map<any, any>;
+  _checkTimer!: number;
+  _downPos!: THREE.Vector3;
+  bleedOut!: number;
+  bleedOutMax!: number;
+  checkpoint!: any;
+  combat!: any;
+  dangerAt!: number;
+  enemies!: any;
+  game!: any;
+  party!: any;
+  player!: any;
+  reviveProgress!: number;
+  reviveTime!: number;
+  rpg!: any;
+  state!: string;
+  vfx!: any;
+  async init(game: any) {
     this.game = game;
     this.player = game.get('Player');
     this.party = game.get('Party');
@@ -55,7 +72,7 @@ export class Downed {
   }
 
   /** Companion stat block by party-member key. */
-  memberStats(key) {
+  memberStats(key: any) {
     if (!this.rpg) return null;
     return this.rpg.party.stats[key];
   }
@@ -167,7 +184,7 @@ export class Downed {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     const p = this.player;
     if (!p) return;
     const n = this.noctis;
@@ -225,7 +242,7 @@ export class Downed {
     p.speed = 0;
   }
 
-  _tickDowned(dt) {
+  _tickDowned(dt: any) {
     this._holdPlayer();
     this.bleedOut -= dt;
 
@@ -271,7 +288,7 @@ export class Downed {
     if (this.bleedOut <= 0) this.gameOver('bleed-out');
   }
 
-  _tickAllies(dt) {
+  _tickAllies(dt: any) {
     if (!this.party || !this.rpg) return;
     for (const m of this.party.members) {
       const s = this.memberStats(m.key);
@@ -310,10 +327,10 @@ export class Downed {
 
   _liveAllies() {
     if (!this.party) return [];
-    return this.party.members.filter((m) => !m.downed);
+    return this.party.members.filter((m: any) => !m.downed);
   }
 
-  _nearest(list, p) {
+  _nearest(list: any, p: any) {
     let best = null, bd = Infinity;
     for (const m of list) {
       const d = m.root.position.distanceTo(p);

@@ -40,7 +40,7 @@ export const VegUniforms = {
 const alphaCards = new Set();
 
 /** Mark a mesh as alpha-silhouetted. @returns the mesh */
-export function registerAlphaCard(mesh): THREE.Mesh {
+export function registerAlphaCard(mesh: any): THREE.Mesh {
   alphaCards.add(mesh);
   const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   for (const m of list) if (m) m.allowOverride = false;
@@ -278,7 +278,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
  * Ensure a geometry carries the `aFlex` stiffness attribute the wind shader
  * needs. `fn(x,y,z,i)` returns 0..1; without it we ramp on local Y.
  */
-export function bakeFlex(geo, fn) {
+export function bakeFlex(geo: any, fn: any) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n);

@@ -6,7 +6,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const PLATE = 0x33383f;
 const PLATE_DARK = 0x191c21;
@@ -78,7 +78,7 @@ export const MAGITEK_ARMOUR = {
     },
   ],
   buildPrototype,
-  make(opts) { return new MagitekArmourEnemy(opts); },
+  make(opts: any) { return new MagitekArmourEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -328,10 +328,19 @@ function buildPrototype() {
 }
 
 class MagitekArmourEnemy extends Enemy {
-  constructor(opts) { super(MAGITEK_ARMOUR, opts); }
+  _dt!: any;
+  anim!: any;
+  attackId!: any;
+  moveSpeed!: any;
+  phaseIndex!: any;
+  rig!: any;
+  speed!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(MAGITEK_ARMOUR, opts); }
 
   /** Reverse-jointed legs, solved with IK so six tonnes plants its feet. */
-  setupAnim(anim) {
+  setupAnim(anim: any) {
     super.setupAnim(anim);
     anim.leg('fL', ['hpL', 'knL', 'anL', 'ftL']);
     anim.leg('fR', ['hpR', 'knR', 'anR', 'ftR']);
@@ -353,11 +362,11 @@ class MagitekArmourEnemy extends Enemy {
     return out.set(-0.04, -0.06, 0.62).applyMatrix4(b.matrixWorld);
   }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
-    const M = (n, x, y, z, k) => poseBoneMix(rig, n, x, y, z, k);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const M = (n: any, x: any, y: any, z: any, k: any) => poseBoneMix(rig, n, x, y, z, k);
     this.visual.rotation.z = 0;
     this.visual.position.x = 0;
 

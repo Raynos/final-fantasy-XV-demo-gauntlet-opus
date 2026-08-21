@@ -16,22 +16,22 @@
  */
 
 /** Small helpers so the scripts below read like dialogue, not like plumbing. */
-const rpgOf = (game) => game.get('RpgSystem') || game.get('Rpg') || null;
-const questStatus = (game, id) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
-const openShop = (game, id) => {
+const rpgOf = (game: any) => game.get('RpgSystem') || game.get('Rpg') || null;
+const questStatus = (game: any, id: any) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
+const openShop = (game: any, id: any) => {
   const ix = game.get('Interaction');
   const menus = game.get('Menus');
   if (menus?.screens?.shop?.setShop) menus.screens.shop.setShop(id);
   ix?.openScreen('shop');
 };
-const openHunts = (game) => game.get('Interaction')?.openScreen('hunts');
+const openHunts = (game: any) => game.get('Interaction')?.openScreen('hunts');
 
 /** Shared "anything else?" hub used by most of the named cast. */
-function hub(choices) { return { choices }; }
+function hub(choices: any) { return { choices }; }
 
 export const NPC_DIALOGUE = {
   /* ------------------------------------------------------------- Cindy -- */
-  cindy: (game) => ({
+  cindy: (game: any) => ({
     speaker: 'Cindy', role: 'Chief Mechanic · Hammerhead', hue: 46, tone: 0.62,
     start: 'hello',
     nodes: {
@@ -87,7 +87,7 @@ export const NPC_DIALOGUE = {
   }),
 
   /* --------------------------------------------------------------- Cid -- */
-  cid: (game) => {
+  cid: (game: any) => {
     const QID = 'side_engine_blade';
     const rpg = rpgOf(game);
     const status = questStatus(game, QID);
@@ -183,7 +183,7 @@ export const NPC_DIALOGUE = {
   },
 
   /* ------------------------------------------------------------- Takka -- */
-  takka: (game) => {
+  takka: (game: any) => {
     const rpg = rpgOf(game);
     return {
       speaker: 'Takka', role: "The Crow's Nest · Tipster", hue: 22, tone: 0.4,
@@ -206,7 +206,7 @@ export const NPC_DIALOGUE = {
         ]),
         work: {
           lines: () => {
-            const active = rpg?.quests?.active?.filter?.((q) => q.type === 'hunt') || [];
+            const active = rpg?.quests?.active?.filter?.((q: any) => q.type === 'hunt') || [];
             return active.length
               ? [`You\'re already carryin\' ${active.length === 1 ? 'a contract' : `${active.length} contracts`}. Finish one, I\'ll pay you for it.`,
                 'Board\'s outside if you want to look again.']
@@ -233,7 +233,7 @@ export const NPC_DIALOGUE = {
   },
 
   /* -------------------------------------------------------------- Dave -- */
-  dave: (game) => {
+  dave: (game: any) => {
     const QID = 'side_dog_tags';
     const rpg = rpgOf(game);
     const status = questStatus(game, QID);

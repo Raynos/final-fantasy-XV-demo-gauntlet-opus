@@ -12,6 +12,10 @@
  * call here degrades to a no-op if the audio system never booted.
  */
 export class DungeonAmbience {
+  _nextOneShot!: number;
+  audio!: any;
+  desc!: any;
+  nodes!: any;
   /** @param audio the game's AudioSystem (may be a stub) */
   constructor(audio: any) {
     this.audio = audio;
@@ -80,7 +84,7 @@ export class DungeonAmbience {
   }
 
   /** Sparse one-shots: water drips, settling rock, a relay clicking over. */
-  update(dt, now, listenerPos) {
+  update(dt: any, now: any, listenerPos: any) {
     if (!this.ready || !this.nodes || !this.desc) return;
     if (now < this._nextOneShot) return;
     const d = this.desc;
@@ -115,7 +119,7 @@ export class DungeonAmbience {
     this.nodes = null;
   }
 
-  _noise(ctx, seconds) {
+  _noise(ctx: any, seconds: any) {
     const len = Math.floor(ctx.sampleRate * seconds);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);

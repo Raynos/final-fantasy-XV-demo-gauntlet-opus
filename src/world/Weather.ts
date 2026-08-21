@@ -44,7 +44,7 @@ const PRESETS = {
 };
 
 /** Dawn adds a cold pool of mist to the low ground whatever the weather is. */
-function dawnFogBoost(hours) {
+function dawnFogBoost(hours: any) {
   const h = ((hours % 24) + 24) % 24;
   const dawn = Math.max(0, 1 - Math.abs(h - 6.6) / 2.4);
   const dusk = Math.max(0, 1 - Math.abs(h - 20.0) / 1.8);
@@ -61,6 +61,26 @@ function dawnFogBoost(hours) {
  *   rainIntensity                           0..1
  */
 export class Weather {
+  _camPos!: THREE.Vector3;
+  _dustCol!: THREE.Vector3;
+  _fogCol!: THREE.Vector3;
+  _fogSun!: THREE.Vector3;
+  _gust!: number;
+  _shotSeen!: any;
+  game!: any;
+  lightning!: Lightning;
+  name!: string;
+  p!: any;
+  rain!: Rain;
+  rainIntensity!: number;
+  target!: any;
+  terrain!: any;
+  volume!: VolumePass;
+  wet!: Wetness;
+  wetness!: number;
+  windDir!: number;
+  windStrength!: number;
+  windVector!: THREE.Vector2;
   constructor() {
     this.name = 'clear';
     this.p = Object.assign({}, PRESETS.clear);
@@ -151,7 +171,7 @@ export class Weather {
 
   // ----------------------------------------------------------------- update
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     // A named shot is a cut to a different world state, not a front rolling
     // in: snap so a capture never lands mid-transition. Sky does the same.
     if (game.currentShot !== this._shotSeen) {
@@ -204,7 +224,7 @@ export class Weather {
     this._snap = false;
   }
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (!game.post) return;
     if (!this.volume) {
       this.volume = new VolumePass(game.post);
@@ -223,7 +243,7 @@ export class Weather {
   }
 
   /** Feed the ray-march from the sky's current lighting state. */
-  _pushVolume(game) {
+  _pushVolume(game: any) {
     const sky = game.get('Sky');
     const u = this.volume.material.uniforms;
     const t = game.time.now;

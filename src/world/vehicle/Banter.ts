@@ -42,11 +42,24 @@ const PRIORITY = {
 };
 
 /** Reading time for a line, seconds. */
-function readTime(text) {
+function readTime(text: any) {
   return Math.max(2.4, Math.min(7.5, 1.5 + text.length * 0.046));
 }
 
 export class Banter {
+  _busyUntil!: number;
+  _catAt!: any;
+  _curPriority!: any;
+  _lastWho!: any;
+  _queue!: any[];
+  _recent!: any;
+  _state!: any;
+  enabled!: boolean;
+  gap!: number;
+  log!: any[];
+  muted!: boolean;
+  rng!: Rng;
+  t!: number;
   constructor(seed: number = 31337) {
     this.rng = new Rng(seed);
     this.enabled = true;
@@ -123,7 +136,7 @@ export class Banter {
   }
 
   /** Uniform pick that avoids anything in the recency ring. */
-  _pick(category, n) {
+  _pick(category: any, n: any) {
     let ring = this._recent[category];
     if (!ring) { ring = []; this._recent[category] = ring; }
     const keep = Math.min(n - 1, Math.max(1, Math.floor(n * 0.6)));
@@ -137,7 +150,7 @@ export class Banter {
     return idx;
   }
 
-  _emit(who, line) {
+  _emit(who: any, line: any) {
     this._lastWho = who;
     this.log.unshift({ t: +this.t.toFixed(2), who, line });
     if (this.log.length > 40) this.log.pop();

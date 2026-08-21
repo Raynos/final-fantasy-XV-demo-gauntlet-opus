@@ -25,6 +25,29 @@ import * as THREE from 'three';
  * to stop WASD also walking the player around while we fly.
  */
 export class Freecam {
+  _dx!: number;
+  _dy!: number;
+  _e!: THREE.Euler;
+  _fwd!: THREE.Vector3;
+  _look!: boolean;
+  _onDown!: any;
+  _onMove!: any;
+  _onUp!: any;
+  _onWheel!: any;
+  _q!: THREE.Quaternion;
+  _right!: THREE.Vector3;
+  _vel!: THREE.Vector3;
+  boost!: number;
+  crawl!: number;
+  damping!: number;
+  enabled!: boolean;
+  fov!: number;
+  pitch!: number;
+  pos!: THREE.Vector3;
+  roll!: number;
+  sensitivity!: number;
+  speed!: number;
+  yaw!: number;
   constructor() {
     this.enabled = false;
     this.pos = new THREE.Vector3();
@@ -49,7 +72,7 @@ export class Freecam {
     this._fwd = new THREE.Vector3();
     this._right = new THREE.Vector3();
 
-    this._onMove = (e) => {
+    this._onMove = (e: any) => {
       // Look while the pointer is locked, or while a button is held if it is
       // not. Requiring a drag is the only thing that works when a menu screen
       // has released the lock, and it costs nothing when the lock is active.
@@ -57,9 +80,9 @@ export class Freecam {
       this._dx += e.movementX || 0;
       this._dy += e.movementY || 0;
     };
-    this._onDown = (e) => { if (e.button === 0 || e.button === 2) this._look = true; };
-    this._onUp = (e) => { if (e.button === 0 || e.button === 2) this._look = false; };
-    this._onWheel = (e) => {
+    this._onDown = (e: any) => { if (e.button === 0 || e.button === 2) this._look = true; };
+    this._onUp = (e: any) => { if (e.button === 0 || e.button === 2) this._look = false; };
+    this._onWheel = (e: any) => {
       if (!this.enabled) return;
       // Wheel trims travel speed rather than dollying: on an 8 km world the
       // useful range spans three orders of magnitude and a fixed speed is
@@ -125,7 +148,7 @@ export class Freecam {
     // loses yaw entirely and the camera snaps to a random heading.
     this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI / 2 + 0.001, Math.PI / 2 - 0.001);
 
-    const k = (c) => (input.key(c) ? 1 : 0);
+    const k = (c: any) => (input.key(c) ? 1 : 0);
     const fwd = k('KeyW') - k('KeyS');
     const strafe = k('KeyD') - k('KeyA');
     const lift = k('KeyE') - k('KeyQ');
@@ -183,7 +206,7 @@ export class Freecam {
   }
 
   /** Aim at a world point from where we are. */
-  lookAt(x, y, z) {
+  lookAt(x: any, y: any, z: any) {
     const dx = x - this.pos.x, dy = y - this.pos.y, dz = z - this.pos.z;
     this.yaw = Math.atan2(-dx, -dz);
     this.pitch = Math.atan2(dy, Math.hypot(dx, dz));
@@ -194,7 +217,7 @@ export class Freecam {
     this._e.set(this.pitch, this.yaw, 0, 'YXZ');
     this._q.setFromEuler(this._e);
     const f = this._fwd.set(0, 0, -1).applyQuaternion(this._q);
-    const r = (n) => Number(n.toFixed(1));
+    const r = (n: any) => Number(n.toFixed(1));
     return {
       pos: [r(this.pos.x), r(this.pos.y), r(this.pos.z)],
       target: [r(this.pos.x + f.x * 30), r(this.pos.y + f.y * 30), r(this.pos.z + f.z * 30)],

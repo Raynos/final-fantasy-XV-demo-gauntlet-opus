@@ -90,6 +90,15 @@ const POSTURES = {
 };
 
 export class Npcs {
+  _camPos!: THREE.Vector3;
+  _handles!: any[];
+  eco!: any;
+  game!: any;
+  ground!: any;
+  list!: any[];
+  root!: THREE.Group;
+  stats!: any;
+  town!: any;
   constructor() {
     this.list = [];
     this.root = new THREE.Group();
@@ -112,12 +121,12 @@ export class Npcs {
     // under Hammerhead is up to three metres below the graded pad — feed it the
     // pad instead or every townsperson stands knee-deep in their own tarmac.
     this.ground = {
-      heightAt: (x, z) => this._groundAt(x, z),
-      normalAt: (x, z, out) => (out ? out.set(0, 1, 0) : new THREE.Vector3(0, 1, 0)),
+      heightAt: (x: any, z: any) => this._groundAt(x, z),
+      normalAt: (x: any, z: any, out: any) => (out ? out.set(0, 1, 0) : new THREE.Vector3(0, 1, 0)),
     };
 
     // Local (u, v) helper so placement below reads as a plan view of the town.
-    const L = (u, v, y = 0) => town.local(u, y, v, new THREE.Vector3());
+    const L = (u: any, v: any, y = 0) => town.local(u, y, v, new THREE.Vector3());
 
     /* -- the named four --------------------------------------------------- */
 
@@ -240,7 +249,7 @@ export class Npcs {
   }
 
   /** Terrain height, floored at the town pad so nobody sinks into the tarmac. */
-  _groundAt(x, z) {
+  _groundAt(x: any, z: any) {
     const t = this.town;
     const eco = this.eco;
     let y = eco ? eco.height(x, z) : 0;
@@ -252,7 +261,7 @@ export class Npcs {
   }
 
   /** The named cast answer to E. */
-  _registerTalk(game) {
+  _registerTalk(game: any) {
     const ix = game.get('Interaction');
     if (!ix) return;
     this._handles = [];
@@ -283,7 +292,7 @@ export class Npcs {
 
   /* --------------------------------------------------------------- tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.list.length) return;
     const player = game.get('Player');
     const p = player ? player.position : null;
@@ -351,7 +360,7 @@ export class Npcs {
   }
 
   /** Walk a route, pausing at each node. */
-  _walk(npc, dt) {
+  _walk(npc: any, dt: any) {
     const route = npc.route;
     const target = route[npc.leg];
     if (npc.wait > 0) {
@@ -381,7 +390,7 @@ export class Npcs {
    * Written straight onto bone rotations, which is safe because nothing else
    * touches them between here and the render.
    */
-  _applyPosture(npc, dt, t) {
+  _applyPosture(npc: any, dt: any, t: any) {
     const b = npc.body.rig.byName;
     const w = 1 - Math.min(1, npc.moveSpeed / 0.4);
     const pose = npc.posture;
@@ -414,7 +423,7 @@ export class Npcs {
     }
   }
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     // The rig's materials carry their own sun uniform; keep it fed even when
     // the player system is not the one that pushed it this frame.
     const sky = game.get('Sky');
@@ -422,7 +431,7 @@ export class Npcs {
   }
 }
 
-function dampAngle(a, b, lambda, dt) {
+function dampAngle(a: any, b: any, lambda: any, dt: any) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

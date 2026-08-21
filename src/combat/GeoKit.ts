@@ -93,7 +93,7 @@ export function rectCross(round = 0.22, n = 16) {
 }
 
 /** Generalised tube through a polyline with per-point radii. */
-export function tube(points, radii, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
+export function tube(points: any, radii: any, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
   const n = radialSeg, m = points.length;
   const pos = [], uv = [], idx = [];
   const up = new THREE.Vector3(0, 1, 0);
@@ -151,7 +151,7 @@ export function tube(points, radii, { radialSeg = 8, capStart = true, capEnd = t
 }
 
 /** Convenience: a straight tube between two points. */
-export function limb(a, b, r0, r1, seg = 6, radialSeg = 8) {
+export function limb(a: any, b: any, r0: any, r1: any, seg = 6, radialSeg = 8) {
   const pts = [], radii = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;
@@ -162,7 +162,7 @@ export function limb(a, b, r0, r1, seg = 6, radialSeg = 8) {
 }
 
 /** Bevelled slab — armour plates, blade guards, magitek panels. */
-export function slab(w, h, d, bevel = 0.02) {
+export function slab(w: any, h: any, d: any, bevel = 0.02) {
   const b = Math.min(bevel, Math.min(w, h, d) * 0.45);
   const shape = new THREE.Shape();
   const hw = w / 2 - b, hh = h / 2 - b;
@@ -185,21 +185,21 @@ export function slab(w, h, d, bevel = 0.02) {
 }
 
 /** Cone / spike along +Y. */
-export function spike(r, h, seg = 8) {
+export function spike(r: any, h: any, seg = 8) {
   const g = new THREE.ConeGeometry(r, h, seg, 1);
   g.translate(0, h / 2, 0);
   return g;
 }
 
 /** Ellipsoid. */
-export function blob(rx, ry, rz, wSeg = 12, hSeg = 8) {
+export function blob(rx: any, ry: any, rz: any, wSeg = 12, hSeg = 8) {
   const g = new THREE.SphereGeometry(1, wSeg, hSeg);
   g.scale(rx, ry, rz);
   return g;
 }
 
 /** Apply a TRS to a geometry in place. */
-export function place(geo, { pos, rot, quat, scale } = {}) {
+export function place(geo: any, { pos, rot, quat, scale } = {}) {
   const m = new THREE.Matrix4();
   const q = quat || new THREE.Quaternion();
   if (!quat && rot) q.setFromEuler(new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0, 'XYZ'));
@@ -211,7 +211,7 @@ export function place(geo, { pos, rot, quat, scale } = {}) {
 }
 
 /** Stamp a flat vertex colour (albedo tint) onto a geometry. */
-export function tint(geo, hex, jitter = 0) {
+export function tint(geo: any, hex: any, jitter = 0) {
   const c = new THREE.Color(hex);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -231,7 +231,7 @@ export function tint(geo, hex, jitter = 0) {
 }
 
 /** Stamp per-vertex emissive (glowing eyes, magitek seams, crystal fuller). */
-export function glow(geo, hex, strength = 1) {
+export function glow(geo: any, hex: any, strength = 1) {
   const c = new THREE.Color(hex).multiplyScalar(strength);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -261,11 +261,11 @@ export function surf(geo: THREE.BufferGeometry, rough: number, metal: number) {
 }
 
 /** Merge, filling in any missing color / aEmissive / aSurf attributes. */
-export function merge(geos) {
+export function merge(geos: any) {
   const list = geos.filter(Boolean);
   // only carry aSurf when somebody in the batch actually asked for it, so
   // every creature in the game does not grow an attribute its shader ignores
-  const wantSurf = list.some((g) => g.attributes.aSurf);
+  const wantSurf = list.some((g: any) => g.attributes.aSurf);
   for (const g of list) {
     if (!g.attributes.color) tint(g, 0xffffff);
     if (!g.attributes.aEmissive) glow(g, 0x000000);
@@ -296,8 +296,8 @@ export function merge(geos) {
  * attribute. Lets one material serve an entire creature — glowing eyes,
  * magitek seams and dull armour in a single draw call.
  */
-export function enableVertexEmissive(material) {
-  material.onBeforeCompile = (shader) => {
+export function enableVertexEmissive(material: any) {
+  material.onBeforeCompile = (shader: any) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 aEmissive;\nvarying vec3 vEmissive;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmissive = aEmissive;');

@@ -16,6 +16,30 @@ import { Noise } from '../../util/Noise.ts';
  * it loops forever with no seam and no state to reset.
  */
 export class TitleScreen {
+  _camPos!: THREE.Vector3;
+  _camTgt!: THREE.Vector3;
+  _gp!: any;
+  _hudWas!: any;
+  _noise!: Noise;
+  _onResize!: any;
+  a!: number;
+  crest!: any;
+  fade!: any;
+  fadeOut!: number;
+  ff!: any;
+  foot!: any;
+  game!: any;
+  index!: number;
+  items!: any;
+  mark!: any;
+  menu!: any;
+  root!: any;
+  rows!: any;
+  rule!: any;
+  t!: number;
+  tag!: any;
+  xv!: any;
+  xvChars!: any;
   constructor(parent: HTMLElement, game: any) {
     this.game = game;
     this.root = el('div', { id: 'title' });
@@ -48,7 +72,7 @@ export class TitleScreen {
       { id: 'extras', title: 'Extras', desc: 'Not in this build' },
     ];
     this.menu = el('div.ti-menu');
-    this.rows = this.items.map((it) => {
+    this.rows = this.items.map((it: any) => {
       const row = el('div.ti-row');
       const bg = el('div.tr-bg');
       const ml = el('div.tr-m.l');
@@ -134,12 +158,12 @@ export class TitleScreen {
 
   /* -------------------------------------------------------------- input -- */
 
-  _input(game) {
+  _input(game: any) {
     const inp = game.input;
     if (!inp || this.chosen) return;
-    const down = (k) => inp.keyDown && inp.keyDown(k);
-    const gp = (i) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
-    const edge = (k, v) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
+    const down = (k: any) => inp.keyDown && inp.keyDown(k);
+    const gp = (i: any) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
+    const edge = (k: any, v: any) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
 
     let d = 0;
     if (down('ArrowUp') || down('KeyW') || edge('u', gp(12))) d -= 1;
@@ -156,7 +180,7 @@ export class TitleScreen {
     if (down('Enter') || down('Space') || edge('a', gp(0))) this.choose();
   }
 
-  _enabled(i) {
+  _enabled(i: any) {
     const id = this.items[i].id;
     if (id === 'continue') return this.canContinue();
     if (id === 'extras') return false;
@@ -164,7 +188,7 @@ export class TitleScreen {
   }
 
   /** Commit the highlighted item. */
-  choose(id) {
+  choose(id: any) {
     const pick = id || this.items[this.index].id;
     if (!id && !this._enabled(this.index)) return;
     this.chosen = pick;
@@ -286,7 +310,7 @@ export class TitleScreen {
  */
 function crestSvg() {
   const S = svg('svg.ti-crest', { width: 168, height: 104, viewBox: '0 0 168 104', fill: 'none' });
-  const stroke = (d, w = 1.1, o = 1) => svg('path', {
+  const stroke = (d: any, w = 1.1, o = 1) => svg('path', {
     d, stroke: 'currentColor', 'stroke-width': w, 'stroke-opacity': o,
     'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none',
   });

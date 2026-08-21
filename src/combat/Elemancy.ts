@@ -18,7 +18,10 @@ export const ELEMENTS = {
 };
 
 export class Elemancy {
-  constructor(vfx, game) {
+  game!: any;
+  vfx!: any;
+  zones!: any[];
+  constructor(vfx: any, game: any) {
     this.vfx = vfx;
     this.game = game;
     this.zones = [];   // {element, pos, radius, until}
@@ -70,7 +73,7 @@ export class Elemancy {
   }
 
   /** Flask arcing in before the burst. */
-  _throw(element, from, to, t0, def) {
+  _throw(element: any, from: any, to: any, t0: any, def: any) {
     const vfx = this.vfx;
     const b = vfx.acquireBeam();
     b.uniforms.uHead.value.set(def.hot);
@@ -82,12 +85,12 @@ export class Elemancy {
     const mid = V.copy(from).lerp(to, 0.5).clone();
     mid.y += from.distanceTo(to) * 0.22;
     b.setPath([from.clone(), mid, to.clone()]);
-    vfx.track(t0, 0.42, (n) => { b.strength = n < 0 || n > 1 ? 0 : Math.min(1, n * 3) * (1 - n); });
+    vfx.track(t0, 0.42, (n: any) => { b.strength = n < 0 || n > 1 ? 0 : Math.min(1, n * 3) * (1 - n); });
   }
 
   /* ------------------------------------------------------------- fire */
 
-  _fire(pos, t0, power, def, terrain) {
+  _fire(pos: any, t0: any, power: any, def: any, terrain: any) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     // core detonation
@@ -153,7 +156,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------------- ice */
 
-  _ice(pos, t0, power, def, terrain) {
+  _ice(pos: any, t0: any, power: any, def: any, terrain: any) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     // a ring of crystal spikes erupting from the ground
@@ -205,7 +208,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------- lightning */
 
-  _lightning(pos, t0, power, def, terrain, from) {
+  _lightning(pos: any, t0: any, power: any, def: any, terrain: any, from: any) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     const sky = pos.clone(); sky.y += 16 * s;
@@ -249,7 +252,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------- reactions */
 
-  _reactionAt(pos, element) {
+  _reactionAt(pos: any, element: any) {
     const now = this.vfx.clock;
     this.zones = this.zones.filter((z) => z.until > now);
     for (const z of this.zones) {
@@ -263,7 +266,7 @@ export class Elemancy {
     return null;
   }
 
-  _reaction(kind, pos, t0, power, terrain) {
+  _reaction(kind: any, pos: any, t0: any, power: any, terrain: any) {
     const vfx = this.vfx;
     if (kind === 'steam') {
       vfx.smokePlume({

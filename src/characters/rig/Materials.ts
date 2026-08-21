@@ -35,7 +35,7 @@ export const SUN = {
 const _v = new THREE.Vector3();
 
 /** Push the current sun into the shared uniforms (call once per frame). */
-export function updateSun(sunLight, camera) {
+export function updateSun(sunLight: any, camera: any) {
   if (!sunLight || !camera) return;
   _v.copy(sunLight.position);
   if (sunLight.target) _v.sub(sunLight.target.position);
@@ -291,12 +291,12 @@ function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, transl
   return mat;
 }
 
-let _cache = null;
+let _cache: any = null;
 function cache() {
   if (_cache) return _cache;
   const n = new Noise(4242);
 
-  const pore = normalFromHeight(128, (u, v) => (
+  const pore = normalFromHeight(128, (u: any, v: any) => (
     0.5 * n.simplex2(u * 96, v * 96)
     + 0.3 * n.simplex2(u * 210, v * 210)
     + 0.22 * n.simplex2(u * 420, v * 420)
@@ -307,7 +307,7 @@ function cache() {
   poreFine.repeat.set(9, 13);
   poreFine.needsUpdate = true;
 
-  const weave = normalFromHeight(128, (u, v) => (
+  const weave = normalFromHeight(128, (u: any, v: any) => (
     0.5 * Math.sin(u * Math.PI * 2 * 34) * Math.sin(v * Math.PI * 2 * 34)
     + 0.35 * n.simplex2(u * 140, v * 140)
     + 0.2 * n.simplex2(u * 300, v * 300)
@@ -315,7 +315,7 @@ function cache() {
   weave.repeat.set(9, 14);
 
   // strand value break-up along the hair ribbon: dark gaps between filaments
-  const hairStripe = makeTexture(128, (u, v, c) => {
+  const hairStripe = makeTexture(128, (u: any, v: any, c: any) => {
     // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
     // crest), v along its length
     const across = Math.abs(u - 0.5) * 2;
@@ -370,7 +370,7 @@ export function skinMaterial() {
 }
 
 /** Per-character face material — carries the painted face map. */
-export function faceMaterial(map, sss = 0.16) {
+export function faceMaterial(map: any, sss = 0.16) {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     map,
@@ -430,7 +430,7 @@ export function hairMaterial() {
 }
 
 /** Eyeball material: painted iris + sclera, with an explicit cornea glint. */
-export function eyeMaterial(iris) {
+export function eyeMaterial(iris: any) {
   return patch(new THREE.MeshPhysicalMaterial({
     defines: { USE_UV: '' },
     vertexColors: true,
@@ -470,7 +470,7 @@ export function lensMaterial() {
 export function contactShadowMaterial() {
   // MultiplyBlending ignores alpha, so the falloff has to live in the RGB:
   // white at the rim leaves the ground untouched, dark at the centre bites.
-  const tex = makeTexture(64, (u, v, c) => {
+  const tex = makeTexture(64, (u: any, v: any, c: any) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     const k = Math.pow(Math.max(0, 1 - d), 1.8) * 0.66;
     c[0] = 1 - k;

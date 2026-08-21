@@ -110,9 +110,9 @@ export const GRADES: Object<string, GradePreset> = {
 
 const LUT_SIZE = 32;
 
-function srgbToLin(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
-function linToSrgb(c) { return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(Math.max(c, 0), 1 / 2.4) - 0.055; }
-function sat01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function srgbToLin(c: any) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function linToSrgb(c: any) { return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(Math.max(c, 0), 1 / 2.4) - 0.055; }
+function sat01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
 /**
  * Bake one preset's `look` into a 1024x32 RGBA strip texture.
@@ -200,7 +200,7 @@ export function bakeLut(preset: GradePreset): THREE.DataTexture {
 const _cache = new Map();
 
 /** Cached LUT for a preset name. */
-export function lutFor(name) {
+export function lutFor(name: any) {
   if (!_cache.has(name)) _cache.set(name, bakeLut(GRADES[name] || GRADES.day));
   return _cache.get(name);
 }

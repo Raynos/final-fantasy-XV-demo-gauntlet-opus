@@ -23,7 +23,7 @@ import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from '.
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -33,7 +33,7 @@ function mat4(pos, rot = [0, 0, 0], scale = [1, 1, 1]) {
 }
 
 /** Angular rock/crystal mass — meteor shards and ruin rubble at scale. */
-function shard(seed, r, stretch = [1, 1, 1], warp = 0.4) {
+function shard(seed: any, r: any, stretch = [1, 1, 1], warp = 0.4) {
   const g = new THREE.IcosahedronGeometry(r, 1);
   const n = new Noise(seed);
   const p = g.attributes.position;
@@ -50,6 +50,12 @@ function shard(seed, r, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 export class Megastructures {
+  eco!: any;
+  glows!: any[];
+  mats!: any;
+  movers!: any[];
+  root!: THREE.Group;
+  scene!: any;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
@@ -180,7 +186,7 @@ export class Megastructures {
     for (let i = 0; i < 3; i++) {
       const at = mat4([i * -128 + rng.gauss(0, 26), i * 22, i * -92 + rng.gauss(0, 26)],
         [0, rng.gauss(0, 0.06), 0], [1.6, 1.6, 1.6]);
-      const put = (mat, geo, p, r) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
+      const put = (mat: any, geo: any, p: any, r: any) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
       put(M.hull, hullGeo, [0, 0, 0]);
       for (const sz of [-1, 1]) {
         put(M.hullDark, new THREE.BoxGeometry(15, 1.6, 16), [-2, 3, sz * 10], [sz * 0.2, 0, 0]);
@@ -321,7 +327,7 @@ export class Megastructures {
     const rng = new Rng(5150);
     const a = { x: -1010, z: -740 }, b = { x: -790, z: 300 };
     const bays = 21;
-    const bayAt = (i) => ({
+    const bayAt = (i: any) => ({
       x: a.x + (b.x - a.x) * (i / bays),
       z: a.z + (b.z - a.z) * (i / bays),
     });
@@ -342,7 +348,7 @@ export class Megastructures {
     for (let i = 0; i <= bays; i++) deck[i] += 54;
 
     // the middle bays came down long ago
-    const gone = (i) => i >= 9 && i <= 12;
+    const gone = (i: any) => i >= 9 && i <= 12;
 
     for (let i = 0; i <= bays; i++) {
       const p = bayAt(i);

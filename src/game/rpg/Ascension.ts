@@ -287,6 +287,13 @@ export const EDGES = (() => {
  * bundle. Emits `node-unlocked` and `ap-gained` through the injected emitter.
  */
 export class Ascension {
+  _cooldowns!: any;
+  _distance!: any;
+  _effectsCache!: any;
+  ap!: number;
+  apLifetime!: number;
+  apSpent!: number;
+  emitter!: any;
   constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     this.ap = 0;
@@ -305,7 +312,7 @@ export class Ascension {
   get allNodes() { return Object.keys(NODES); }
 
   /** Look one node up. */
-  node(id) { return NODES[id] || null; }
+  node(id: any) { return NODES[id] || null; }
 
   /** Total AP required to fully clear the grid. */
   get totalApRequired() { return Object.values(NODES).reduce((a, n) => a + n.ap, 0); }
@@ -340,9 +347,9 @@ export class Ascension {
   }
 
   /** Grant raw AP outside the rule table (debug, story rewards). */
-  grantRaw(amount, reason = 'reward') { return this._grant(amount, reason); }
+  grantRaw(amount: any, reason = 'reward') { return this._grant(amount, reason); }
 
-  _grant(amount, reason) {
+  _grant(amount: any, reason: any) {
     const gained = Math.max(0, Math.round(amount * (1 + this.value('apGain'))));
     if (gained <= 0) return 0;
     this.ap += gained;
@@ -352,7 +359,7 @@ export class Ascension {
   }
 
   /** Tick AP cooldowns. Called from RpgSystem.update. */
-  update(dt) {
+  update(dt: any) {
     for (const k of Object.keys(this._cooldowns)) {
       if (this._cooldowns[k] > 0) this._cooldowns[k] = Math.max(0, this._cooldowns[k] - dt);
     }
@@ -361,7 +368,7 @@ export class Ascension {
   /* -- Unlocking --------------------------------------------------------- */
 
   /** Has this node been bought? */
-  isUnlocked(id) { return this.unlocked.has(id); }
+  isUnlocked(id: any) { return this.unlocked.has(id); }
 
   /**
    * Why a node can or can't be bought right now.
@@ -370,7 +377,7 @@ export class Ascension {
     const n = NODES[id];
     if (!n) return { ok: false, reason: 'unknown', missing: [], ap: 0 };
     if (this.unlocked.has(id)) return { ok: false, reason: 'already-unlocked', missing: [], ap: n.ap };
-    const missing = n.req.filter((r) => !this.unlocked.has(r));
+    const missing = n.req.filter((r: any) => !this.unlocked.has(r));
     if (missing.length) return { ok: false, reason: 'locked', missing, ap: n.ap };
     if (this.ap < n.ap) return { ok: false, reason: 'not-enough-ap', missing: [], ap: n.ap };
     return { ok: true, reason: 'ok', missing: [], ap: n.ap };
@@ -399,7 +406,7 @@ export class Ascension {
   /** Nodes whose prerequisites are met (affordable or not) — the "frontier". */
   frontier() {
     return this.allNodes
-      .filter((id) => !this.unlocked.has(id) && NODES[id].req.every((r) => this.unlocked.has(r)))
+      .filter((id) => !this.unlocked.has(id) && NODES[id].req.every((r: any) => this.unlocked.has(r)))
       .map((id) => NODES[id]);
   }
 
@@ -407,9 +414,9 @@ export class Ascension {
    * Cheapest prerequisite chain to reach a node, in purchase order.
    */
   pathTo(id: string): {path:string[], ap:number} {
-    const path = [];
+    const path: any[] = [];
     const seen = new Set();
-    const walk = (nid) => {
+    const walk = (nid: any) => {
       if (seen.has(nid) || this.unlocked.has(nid)) return;
       seen.add(nid);
       const n = NODES[nid];
@@ -446,9 +453,9 @@ export class Ascension {
   }
 
   /** Convenience: does the party have this ability flag? */
-  has(flag) { return this.activeEffects().flags.has(flag); }
+  has(flag: any) { return this.activeEffects().flags.has(flag); }
   /** Convenience: read a scalar tunable, defaulting to 0. */
-  value(key) { return this.activeEffects().values[key] || 0; }
+  value(key: any) { return this.activeEffects().values[key] || 0; }
 
   /* -- Serialisation ----------------------------------------------------- */
 
@@ -456,13 +463,13 @@ export class Ascension {
     return { ap: this.ap, apSpent: this.apSpent, apLifetime: this.apLifetime, unlocked: [...this.unlocked], distance: this._distance };
   }
 
-  static fromJSON(data, emitter = null) {
+  static fromJSON(data: any, emitter = null) {
     const a = new Ascension(emitter);
     if (!data) return a;
     a.ap = data.ap || 0;
     a.apSpent = data.apSpent || 0;
     a.apLifetime = data.apLifetime || 0;
-    a.unlocked = new Set((data.unlocked || []).filter((id) => NODES[id]));
+    a.unlocked = new Set((data.unlocked || []).filter((id: any) => NODES[id]));
     a._distance = data.distance || a._distance;
     return a;
   }

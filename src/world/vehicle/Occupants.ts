@@ -25,7 +25,7 @@ import { Rng } from '../../util/Rng.ts';
  */
 
 /** Ground a kilometre below the world: makes `footIK` do nothing at all. */
-const NO_GROUND = { heightAt: () => -1000, normalAt: (x, z, out) => (out || new THREE.Vector3()).set(0, 1, 0) };
+const NO_GROUND = { heightAt: () => -1000, normalAt: (x: any, z: any, out: any) => (out || new THREE.Vector3()).set(0, 1, 0) };
 
 const SCALE = 1.14;              // the Regalia body scale, from Regalia.js
 const WHEEL_R = 0.4765;
@@ -126,6 +126,16 @@ const _v = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
 export class Occupants {
+  _saved!: any;
+  _t!: number;
+  anchors!: any;
+  game!: any;
+  party!: any;
+  player!: any;
+  riders!: any[];
+  rng!: Rng;
+  seated!: boolean;
+  tilt!: any;
   /**
    * @param tilt the chassis node the seats hang off
    */
@@ -152,7 +162,7 @@ export class Occupants {
   }
 
   /** Wire up to Player and Party. Safe to call once at init. */
-  attach(game) {
+  attach(game: any) {
     this.game = game;
     this.player = game.get('Player');
     this.party = game.get('Party');
@@ -171,7 +181,7 @@ export class Occupants {
     const ignis = party.get('ignis');
     const prompto = party.get('prompto');
 
-    const push = (key, char, root, seat, pose) => {
+    const push = (key: any, char: any, root: any, seat: any, pose: any) => {
       if (!char || !root) return;
       // A character root is at the soles; the seat anchor is at the top of the
       // squab. The offset between them is that rig's own hip height — and it
@@ -199,7 +209,7 @@ export class Occupants {
       this._saved = {
         playerTerrain: p.terrain,
         partyTerrain: party.terrain,
-        speedMul: party.members.map((m) => m.speedMul),
+        speedMul: party.members.map((m: any) => m.speedMul),
       };
     }
     p.terrain = NO_GROUND;
@@ -211,12 +221,12 @@ export class Occupants {
   }
 
   /** Put everyone back on their feet beside the car. */
-  exit(worldPos, heading) {
+  exit(worldPos: any, heading: any) {
     const p = this.player, party = this.party;
     if (!p || !party || !this._saved) { this.seated = false; return; }
     p.terrain = this._saved.playerTerrain;
     party.terrain = this._saved.partyTerrain;
-    party.members.forEach((m, i) => { m.speedMul = this._saved.speedMul[i] ?? 1; });
+    party.members.forEach((m: any, i: any) => { m.speedMul = this._saved.speedMul[i] ?? 1; });
     this._saved = null;
 
     const terrain = p.terrain;
@@ -275,7 +285,7 @@ export class Occupants {
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */
-  _applyPose(r, i, leanX, leanZ, jog, ctx) {
+  _applyPose(r: any, i: any, leanX: any, leanZ: any, jog: any, ctx: any) {
     const bones = r.char.rig.byName;
     const pose = r.pose;
     const t = this._t + i * 1.7;
@@ -344,4 +354,4 @@ export class Occupants {
   }
 }
 
-function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }

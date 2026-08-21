@@ -17,6 +17,18 @@ import * as THREE from 'three';
  * of the centreline stays 1.6 m right of the centreline for the whole push.
  */
 export class RoadPath {
+  _t!: THREE.Vector3;
+  _v!: THREE.Vector3;
+  fwd!: any;
+  i0!: any;
+  lane!: number;
+  origin!: any;
+  pts!: any;
+  right!: THREE.Vector3;
+  s0!: any;
+  sign!: number;
+  terrain!: any;
+  up!: THREE.Vector3;
   /**
    * @param {object} opts
    * 
@@ -62,7 +74,7 @@ export class RoadPath {
   }
 
   /** Centreline point at arc length `s`, linearly interpolated. */
-  _atS(s, out = new THREE.Vector3()) {
+  _atS(s: any, out = new THREE.Vector3()) {
     const p = this.pts;
     if (!p.length) return out.copy(this.origin);
     if (s <= p[0].s) return out.set(p[0].x, 0, p[0].z);
@@ -73,7 +85,7 @@ export class RoadPath {
     return out.set(p[lo].x + (p[hi].x - p[lo].x) * k, 0, p[lo].z + (p[hi].z - p[lo].z) * k);
   }
 
-  _tangentAtS(s, out = new THREE.Vector3()) {
+  _tangentAtS(s: any, out = new THREE.Vector3()) {
     const p = this.pts;
     if (p.length < 2) return out.set(0, 0, 1);
     let lo = 0, hi = p.length - 1;
@@ -87,21 +99,21 @@ export class RoadPath {
   }
 
   /** Unit tangent `f` metres along the path, already signed toward the goal. */
-  tangent(f, out = this._t) {
+  tangent(f: any, out = this._t) {
     this._tangentAtS(this.s0 + f * this.sign, out);
     if (this.sign < 0) out.negate();
     return out;
   }
 
   /** Yaw that faces an actor's +Z axis down the path at `f`. */
-  yawAt(f) { const t = this.tangent(f, this._t); return Math.atan2(t.x, t.z); }
+  yawAt(f: any) { const t = this.tangent(f, this._t); return Math.atan2(t.x, t.z); }
 
   /**
    * A world point: `f` metres along the road, `l` metres to the screen-left of
    * it (lane offset included), `u` metres above the origin plane.
    * @returns `[x, y, z]`
    */
-  at(f, l = 0, u = 0): number[] {
+  at(f: any, l = 0, u = 0): number[] {
     const c = this._atS(this.s0 + f * this.sign, this._v);
     const t = this.tangent(f, this._t);
     const lx = t.z, lz = -t.x;
@@ -110,7 +122,7 @@ export class RoadPath {
   }
 
   /** Same as {@link at}, but `u` is measured from the terrain at that point. */
-  ground(terrain, f, l = 0, u = 0) {
+  ground(terrain: any, f: any, l = 0, u = 0) {
     const p = this.at(f, l, 0);
     const t = terrain || this.terrain;
     const y = t && t.heightAt ? t.heightAt(p[0], p[2]) : this.origin.y;
@@ -118,7 +130,7 @@ export class RoadPath {
   }
 
   /** Vector3 form of {@link at}. */
-  vec(f, l = 0, u = 0) { return new THREE.Vector3().fromArray(this.at(f, l, u)); }
+  vec(f: any, l = 0, u = 0) { return new THREE.Vector3().fromArray(this.at(f, l, u)); }
 
   /** Frame-compatible yaw at the anchor. */
   get yaw() { return this.yawAt(0); }

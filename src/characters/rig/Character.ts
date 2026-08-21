@@ -26,7 +26,7 @@ const _gq = new THREE.Quaternion();
  *   char.update(dt, state)    state: { speed, velocity, turnRate, terrain, wind }
  */
 
-let SHARED = null;
+let SHARED: any = null;
 function shared() {
   if (!SHARED) {
     SHARED = {
@@ -46,6 +46,25 @@ function shared() {
 }
 
 export class Character {
+  anim!: Animator;
+  attach!: any;
+  body!: any;
+  def!: any;
+  eyeMat!: any;
+  eyes!: any;
+  faceMat!: any;
+  grip!: any;
+  groundShadow!: any;
+  hair!: any;
+  head!: any;
+  height!: any;
+  look!: any;
+  meshes!: any[];
+  name!: any;
+  outfit!: any;
+  rig!: any;
+  root!: THREE.Group;
+  seedRnd!: Rng;
   /**
    * @param def character definition from Cast.js
    */
@@ -103,7 +122,7 @@ export class Character {
     }
 
     // weapon sockets
-    const socket = (name, boneName, pos, rot) => {
+    const socket = (name: any, boneName: any, pos: any, rot: any) => {
       const o = new THREE.Object3D();
       o.name = name;
       o.position.fromArray(pos);
@@ -216,7 +235,7 @@ export class Character {
     }
   }
 
-  _skinned(geo, mat, name) {
+  _skinned(geo: any, mat: any, name: any) {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `${this.name}_${name}`;
     mesh.castShadow = true;
@@ -228,7 +247,7 @@ export class Character {
     return mesh;
   }
 
-  _lensGeo(rig) {
+  _lensGeo(rig: any) {
     const s = rig.dims.headScale;
     const org = rig.dims.headOrigin;
     const shapes = [];
@@ -256,16 +275,16 @@ export class Character {
   }
 
   /** @param name see ACTIONS */
-  play(name: string, opts) { this.anim.play(name, opts); }
+  play(name: string, opts: any) { this.anim.play(name, opts); }
 
   /** Hit reaction: recoil pose plus an impulse into the cloth springs. */
-  hit(dirWorld, power = 1) {
+  hit(dirWorld: any, power = 1) {
     this.anim.play('hit', { speed: 1 / Math.max(0.4, Math.min(1.6, power)) });
     this.anim.coat.x.kick(-3 * power);
     this.anim.tail.x.kick(-2.5 * power);
   }
 
-  setLookTarget(v) { this.anim.setLookTarget(v); }
+  setLookTarget(v: any) { this.anim.setLookTarget(v); }
 
   /** @param dt @param state */
   update(dt: number, state: any) {
@@ -273,7 +292,7 @@ export class Character {
     if (this.grip && (this.grip.L > 0.001 || this.grip.R > 0.001)) this._applyGrip();
   }
 
-  setVisible(v) { for (const m of this.meshes) m.visible = v; }
+  setVisible(v: any) { for (const m of this.meshes) m.visible = v; }
 
   dispose() {
     for (const m of this.meshes) m.geometry.dispose();

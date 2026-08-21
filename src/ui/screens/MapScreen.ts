@@ -14,6 +14,7 @@ import { WorldMapScreen } from './WorldMapScreen.ts';
  * `Menus` can keep both registration names alive.
  */
 export class MapScreen extends WorldMapScreen {
+  sub!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     super(menus);
     this.sub = 'Lucis  ·  scale 1 : 240 000';

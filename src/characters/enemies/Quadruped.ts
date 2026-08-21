@@ -28,10 +28,27 @@ import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/Cr
  * ```
  */
 export class QuadrupedEnemy extends Enemy {
+  _bindPos!: Map<any, any>;
+  _chestPitch!: number;
+  _comp!: any;
+  _dt!: any;
+  _normV!: any;
+  _normW!: any;
+  anim!: any;
+  deathSide!: any;
+  hitPower!: any;
+  id!: any;
+  moveSpeed!: any;
+  rig!: any;
+  speed!: any;
+  state!: any;
+  stateTime!: any;
+  type!: any;
+  visual!: any;
   /** @returns tuning block; subclasses must define it. */
   get A(): any { return this.constructor.ANIM; }
 
-  setupAnim(anim) {
+  setupAnim(anim: any) {
     const A = this.A;
     anim.setTrunk(A.trunk);
     for (const id of ['fL', 'fR', 'bL', 'bR']) if (A.legs[id]) anim.leg(id, A.legs[id]);
@@ -49,7 +66,7 @@ export class QuadrupedEnemy extends Enemy {
     // gets no compensation, which is the old behaviour rather than a wrong one.
     this._comp = null;
     this._chestPitch = 0;
-    const S = (n, x, y, z) => poseBone(this.rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'approach': this.poseLocomotion(S, t); break;
@@ -104,7 +121,7 @@ export class QuadrupedEnemy extends Enemy {
    * just swung. Front legs parent to the chest and inherit the whole sum; back
    * legs parent to the hips and inherit only the first link.
    */
-  spine(S, pitch, yaw = 0, roll = 0, w = SPINE_W) {
+  spine(S: any, pitch: any, yaw = 0, roll = 0, w = SPINE_W) {
     const t = this.A.trunk;
     // The weights are *shares of one bend*, so they are normalised against the
     // run from hips to chest. Used raw they compound down the parent chain and
@@ -128,7 +145,7 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /** Sum of the spine weights from hips to chest, cached per weight array. */
-  _spineNorm(w) {
+  _spineNorm(w: any) {
     if (this._normW === w) return this._normV;
     const t = this.A.trunk;
     let sum = 0;
@@ -147,7 +164,7 @@ export class QuadrupedEnemy extends Enemy {
    * translation the leg solver has to cancel so the paw does not follow the
    * shoulder into the dirt.
    */
-  _rootShift(rootName, pitch, w, total) {
+  _rootShift(rootName: any, pitch: any, w: any, total: any) {
     const t = this.A.trunk;
     const p = this._bindAt(rootName || t[Math.max(0, t.length - 3)]);
     if (!p) return { pitch, dy: 0, dz: 0 };
@@ -170,7 +187,7 @@ export class QuadrupedEnemy extends Enemy {
    * and those offsets never change, however the creature is posed. That makes
    * this readable off a live, mid-animation skeleton.
    */
-  _bindAt(name) {
+  _bindAt(name: any) {
     if (!this.rig) return null;
     let cache = this._bindPos;
     if (!cache) { cache = this._bindPos = new Map(); }
@@ -209,7 +226,7 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /** Tail bones as a lagging travelling wave. */
-  tail(t, base, amp, freq, curl = 0) {
+  tail(t: any, base: any, amp: any, freq: any, curl = 0) {
     const names = this.A.tails;
     if (!names) return;
     for (let i = 0; i < names.length; i++) {
@@ -229,7 +246,7 @@ export class QuadrupedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S, t) {
+  poseLocomotion(S: any, t: any) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -264,7 +281,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, A.tailRun ?? -0.3, 0.2 + norm * 0.14, 4 + norm * 4);
   }
 
-  poseTelegraph(S, t) {
+  poseTelegraph(S: any, t: any) {
     const A = this.A;
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
@@ -290,7 +307,7 @@ export class QuadrupedEnemy extends Enemy {
   /** Species multiplier on how far the strike leaves the ground. */
   leapScale() { return 1; }
 
-  poseAttack(S, t) {
+  poseAttack(S: any, t: any) {
     const A = this.A;
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
@@ -313,7 +330,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.x += -(A.pitchThrough ?? 0.10) * k;
   }
 
-  poseFlinch(S, t) {
+  poseFlinch(S: any, t: any) {
     const A = this.A;
     const k = hitCurve(this.stateTime, 0.35, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
@@ -332,7 +349,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, 0.25 * k, 0.2, 6);
   }
 
-  poseStagger(S, t) {
+  poseStagger(S: any, t: any) {
     const A = this.A;
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.18) * clamp01(1 - (this.stateTime - total * 0.72) / (total * 0.28));
@@ -349,7 +366,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.z += wob * 0.08;
   }
 
-  poseDeath(S, t) {
+  poseDeath(S: any, t: any) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;
@@ -392,7 +409,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.position.x += A.bodyY * Math.sin(th) * 0.5;
   }
 
-  poseIdle(S, t) {
+  poseIdle(S: any, t: any) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.5)) * 0.03 + Math.sin(t * 0.61) * 0.012;
     this.spine(S, br, Math.sin(t * 0.31) * 0.06, Math.sin(t * 0.4) * 0.012);

@@ -17,6 +17,27 @@ import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
 const REFLECT_LAYER = 3;
 
 export class Water {
+  _box!: THREE.Box3;
+  _e!: THREE.Euler;
+  _frustum!: THREE.Frustum;
+  _q!: THREE.Quaternion;
+  _reflMatrix!: THREE.Matrix4;
+  _reflectRoots!: any;
+  _reflecting!: boolean;
+  _sinceReflect!: number;
+  _vp!: THREE.Matrix4;
+  bodies!: any[];
+  caustics!: any;
+  enabled!: boolean;
+  game!: any;
+  level!: number;
+  noise!: Noise;
+  normalA!: any;
+  normalB!: any;
+  reflectCam!: THREE.PerspectiveCamera;
+  reflectTarget!: THREE.WebGLRenderTarget;
+  reflectionRes!: number;
+  stride!: number;
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
@@ -31,7 +52,7 @@ export class Water {
     this._sinceReflect = 1e9;
   }
 
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     const terrain = game.get('Terrain');
     if (!terrain) return;
@@ -53,22 +74,22 @@ export class Water {
   _buildTextures() {
     const n = this.noise;
     // Two octave sets at different scales so the normals never visibly repeat.
-    const wave = (u, v, sx, sy) =>
+    const wave = (u: any, v: any, sx: any, sy: any) =>
       n.fbm2(u * sx, v * sy, 4, 2.1, 0.55) * 0.6 +
       n.fbm2(u * sx * 3.7 + 11, v * sy * 3.7 + 3, 3, 2.3, 0.5) * 0.4;
 
-    this.normalA = normalFromHeight(256, (u, v) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
-    this.normalB = normalFromHeight(256, (u, v) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
+    this.normalA = normalFromHeight(256, (u: any, v: any) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
+    this.normalB = normalFromHeight(256, (u: any, v: any) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
 
     // Subtle caustic-ish sub-surface texture for shallow water.
-    this.caustics = makeTexture(256, (u, v, c) => {
+    this.caustics = makeTexture(256, (u: any, v: any, c: any) => {
       const w = n.worley2(u * 7, v * 7);
       const g = Math.pow(1 - Math.min(1, w.f2 - w.f1), 6);
       c[0] = c[1] = c[2] = g;
     }, { colorSpace: THREE.NoColorSpace, repeat: 9 });
   }
 
-  _buildReflection(game) {
+  _buildReflection(game: any) {
     this.reflectTarget = new THREE.WebGLRenderTarget(this.reflectionRes * 2, this.reflectionRes, {
       type: THREE.HalfFloatType,
       colorSpace: THREE.LinearSRGBColorSpace,
@@ -91,22 +112,22 @@ export class Water {
    * Water's: it is the only thing that reads layer 3, and what belongs in a
    * mirrored view is a decision about the reflection, not about the sky.
    */
-  _collectReflectRoots(game) {
+  _collectReflectRoots(game: any) {
     const roots = [];
     const sky = game.get('Sky');
     if (sky && sky.dome) roots.push(sky.dome);
     const terrain = game.get('Terrain');
     if (terrain && terrain.clipmap && terrain.clipmap.group) roots.push(terrain.clipmap.group);
-    for (const r of roots) r.traverse((o) => o.layers.enable(REFLECT_LAYER));
+    for (const r of roots) r.traverse((o: any) => o.layers.enable(REFLECT_LAYER));
     this._reflectRoots = roots;
   }
 
   // ------------------------------------------------------------------ basins
 
-  _findBasins(terrain) {
+  _findBasins(terrain: any) {
     const step = 12, half = (terrain.size || 1400) * 0.5;
     const seen = new Set();
-    const key = (i, j) => `${i},${j}`;
+    const key = (i: any, j: any) => `${i},${j}`;
     const cells = new Map();
     const n = Math.floor((half * 2) / step);
 
@@ -143,7 +164,7 @@ export class Water {
     return bodies.slice(0, 4);
   }
 
-  _makeSurface(game, b) {
+  _makeSurface(game: any, b: any) {
     const geo = new THREE.PlaneGeometry(b.w, b.d, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mat = this._makeMaterial();
@@ -250,7 +271,7 @@ export class Water {
 
   // ------------------------------------------------------------------ update
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.enabled) return;
     const cam = game.camera;
     const sky = game.get('Sky');
@@ -291,7 +312,7 @@ export class Water {
    * water at all, and a menu or a cutscene is looking at a frozen or occluded
    * world where last frame's mirror is still exactly right.
    */
-  _shouldReflect(dt, game) {
+  _shouldReflect(dt: any, game: any) {
     if (!this.enabled) return false;
     const cam = game.camera;
     if (cam.position.y < this.level) return false;      // underwater
@@ -312,7 +333,7 @@ export class Water {
   }
 
   /** Render the mirrored view. Called from lateUpdate so transforms are final. */
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (!this._shouldReflect(dt, game)) return;
     const cam = game.camera;
 
@@ -354,7 +375,7 @@ export class Water {
   }
 
   /** Height of the water surface, or null if this point isn't over water. */
-  surfaceAt(x, z) {
+  surfaceAt(x: any, z: any) {
     for (const b of this.bodies) {
       if (Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5) return this.level;
     }

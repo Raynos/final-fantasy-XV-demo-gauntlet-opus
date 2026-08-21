@@ -16,7 +16,22 @@ import { CombatAnim } from './rig/CombatAnim.ts';
  * long session never allocates a second skeleton for the same creature.
  */
 export class Enemies {
-  async init(game) {
+  _ctx!: any;
+  _dir!: THREE.Vector3;
+  _tmp!: THREE.Vector3;
+  combatAnim!: CombatAnim;
+  corpseLinger!: number;
+  frozen!: boolean;
+  game!: any;
+  list!: any[];
+  night!: number;
+  onEnemyStrike!: any;
+  onStrike!: any;
+  pool!: Map<any, any>;
+  rng!: Rng;
+  root!: THREE.Group;
+  threats!: any;
+  async init(game: any) {
     this.game = game;
     this.list = [];
     this.rng = new Rng(60613);
@@ -56,7 +71,7 @@ export class Enemies {
    * with `variant()` carry a `protoKey`, so a boss shares its base species'
    * geometry rather than building a second copy of it.
    */
-  prototype(key) {
+  prototype(key: any) {
     const type = TYPES[key];
     if (!type) throw new Error(`unknown enemy ${key}`);
     const pk = type.protoKey || key;
@@ -136,7 +151,7 @@ export class Enemies {
    * straight back out as somebody else's spawn, so anything still holding the
    * old owner id must not be able to claim it again.
    */
-  despawn(e) {
+  despawn(e: any) {
     const i = this.list.indexOf(e);
     if (i >= 0) this.list.splice(i, 1);
     this.root.remove(e.root);
@@ -166,7 +181,7 @@ export class Enemies {
   }
 
   /** Count of live enemies within `r` of a point. */
-  countNear(p, r) {
+  countNear(p: any, r: any) {
     let n = 0;
     const r2 = r * r;
     for (const e of this.list) {
@@ -198,7 +213,7 @@ export class Enemies {
    * Swept-capsule query for a weapon arc: samples the segment from `a` to `b`.
    * Cheap, deterministic, and good enough for readable melee.
    */
-  sweepQuery(a, b, radius, out = []) {
+  sweepQuery(a: any, b: any, radius: any, out = []) {
     out.length = 0;
     const steps = 5;
     const p = this._tmp;
@@ -222,7 +237,7 @@ export class Enemies {
    * Best lock-on candidate: closest enemy inside `maxDist` weighted toward
    * whatever is nearest the camera's forward axis.
    */
-  pickTarget(from, forward, maxDist = 30, coneDot = 0.1) {
+  pickTarget(from: any, forward: any, maxDist = 30, coneDot = 0.1) {
     let best = null, bestScore = Infinity;
     for (const e of this.list) {
       if (e.dead) continue;
@@ -239,7 +254,7 @@ export class Enemies {
   }
 
   /** Nearest live enemy to a point, or null. */
-  nearest(p, maxDist = Infinity) {
+  nearest(p: any, maxDist = Infinity) {
     let best = null, bestD = maxDist;
     for (const e of this.list) {
       if (e.dead) continue;
@@ -249,7 +264,7 @@ export class Enemies {
     return best;
   }
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     const ctx = this._ctx;
     ctx.terrain = game.get('Terrain');
     ctx.player = game.get('Player');
@@ -283,7 +298,7 @@ export class Enemies {
    * it belongs on `CombatSystem` or `Player` once those owners can take a
    * one-line call, and nothing else in here depends on it.
    */
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (!this.combatAnim && game.get('Combat') && game.get('Player')) {
       this.combatAnim = new CombatAnim(game);
     }

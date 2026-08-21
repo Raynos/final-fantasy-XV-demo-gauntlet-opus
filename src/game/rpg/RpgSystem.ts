@@ -72,6 +72,24 @@ const STARTER_QUESTS = {
 };
 
 export class RpgSystem {
+  _autosaveTimer!: number;
+  _newGameGil!: any;
+  _newGameLevel!: any;
+  ascension!: Ascension;
+  autosaveInterval!: any;
+  chapter!: number;
+  combatBridge!: CombatBridge;
+  day!: DayCycle;
+  elemancy!: Elemancy;
+  emitter!: Emitter;
+  expBank!: ExpBank;
+  game!: any;
+  inCombat!: boolean;
+  inventory!: Inventory;
+  playTime!: number;
+  quests!: QuestLog;
+  rng!: Rng;
+  tables!: any;
   constructor(opts = {}) {
     this.emitter = new Emitter();
     this.party = new PartyState(this.emitter);
@@ -136,8 +154,8 @@ export class RpgSystem {
     for (const m of MEMBERS) {
       const eq = STARTING_EQUIPMENT[m.id];
       if (!eq) continue;
-      eq.weapon.forEach((id, i) => { if (id) this.inventory.equip(m.id, 'weapon', i, id); });
-      eq.accessory.forEach((id, i) => { if (id) this.inventory.equip(m.id, 'accessory', i, id); });
+      eq.weapon.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'weapon', i, id); });
+      eq.accessory.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'accessory', i, id); });
       if (this._newGameLevel > 1) this.party.stats[m.id].applyExp(this._expToReach(this._newGameLevel));
     }
     this.quests.refresh();
@@ -313,13 +331,13 @@ export class RpgSystem {
   /* -- Event API --------------------------------------------------------- */
 
   /** Subscribe. Returns an unsubscribe function. */
-  on(event, fn) { return this.emitter.on(event, fn); }
+  on(event: any, fn: any) { return this.emitter.on(event, fn); }
   /** Subscribe once. */
-  once(event, fn) { return this.emitter.once(event, fn); }
+  once(event: any, fn: any) { return this.emitter.once(event, fn); }
   /** Unsubscribe. */
-  off(event, fn) { return this.emitter.off(event, fn); }
+  off(event: any, fn: any) { return this.emitter.off(event, fn); }
   /** Fire an event (mostly for other systems to announce things). */
-  emit(event, payload) { return this.emitter.emit(event, payload); }
+  emit(event: any, payload: any) { return this.emitter.emit(event, payload); }
 
   /* -- Handy accessors --------------------------------------------------- */
 
@@ -350,10 +368,10 @@ export class RpgSystem {
       techBars: this.party.techBars, maxTechBars: this.party.maxTechBars,
       clock: this.day.clockString, day: this.day.day, phase: this.day.phase.name,
       isNight: this.day.isNight, nightDepth: this.day.nightDepth,
-      buffs: this.party.activeBuffs.map((b) => ({ name: b.name, effects: b.effects, hoursLeft: Math.max(0, b.expiresAt - this.day.absoluteHour) })),
+      buffs: this.party.activeBuffs.map((b: any) => ({ name: b.name, effects: b.effects, hoursLeft: Math.max(0, b.expiresAt - this.day.absoluteHour) })),
       tracked: this.quests.tracked ? this.quests.view(this.quests.tracked) : null,
       waypoints: this.quests.waypoints(),
-      spells: this.elemancy.equipped.map((uid) => (uid ? this.elemancy.spell(uid) : null)),
+      spells: this.elemancy.equipped.map((uid: any) => (uid ? this.elemancy.spell(uid) : null)),
       party: MEMBERS.map((m) => {
         const s = this.party.stats[m.id];
         return { id: m.id, name: m.name, hp: Math.round(s.hp), maxHp: s.maxHp, mp: Math.round(s.mp), maxMp: s.maxMp, ko: s.ko, level: s.level, bond: this.party.bond(m.id) };
@@ -403,8 +421,8 @@ export class RpgSystem {
   parry() { return this.ascension.awardAp('parry'); }
   linkStrike(members = 2) { return this.ascension.awardAp(members > 2 ? 'cross-chain' : 'link-strike'); }
   stagger() { return this.ascension.awardAp('stagger'); }
-  drove(metres) { return this.ascension.awardAp('regalia-distance', metres); }
-  rode(metres) { return this.ascension.awardAp('chocobo-distance', metres); }
+  drove(metres: any) { return this.ascension.awardAp('regalia-distance', metres); }
+  rode(metres: any) { return this.ascension.awardAp('chocobo-distance', metres); }
 
   /**
    * Roll a hit through the damage formula with all the current modifiers
@@ -425,10 +443,10 @@ export class RpgSystem {
   }
 
   /** Give the party an item and announce it. */
-  giveItem(id, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
+  giveItem(id: any, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
 
   /** Apply a quest/story reward bundle. */
-  grantRewards(rewards, source = 'reward') {
+  grantRewards(rewards: any, source = 'reward') {
     if (!rewards) return null;
     if (rewards.gil) this.inventory.addGil(rewards.gil, source);
     if (rewards.exp) this.gainExp(rewards.exp, source);
@@ -485,7 +503,7 @@ export class RpgSystem {
   }
 
   /** Sleep at a paid lodging (no haven check, costs gil). */
-  restAt(lodgingId, opts = {}) { return this.camp({ ...opts, lodging: lodgingId, force: true }); }
+  restAt(lodgingId: any, opts = {}) { return this.camp({ ...opts, lodging: lodgingId, force: true }); }
 
   /**
    * Draw elemental energy from the nearest deposit to a point.
@@ -515,10 +533,10 @@ export class RpgSystem {
   }
 
   /** Buy an Ascension node. */
-  unlockNode(id) { return this.ascension.unlock(id); }
+  unlockNode(id: any) { return this.ascension.unlock(id); }
 
   /** Fire a party technique. */
-  useTechnique(memberId, techId) { return this.party.useTechnique(memberId, techId); }
+  useTechnique(memberId: any, techId: any) { return this.party.useTechnique(memberId, techId); }
 
   /** Enemy stat scaling for right now, given the party's level. */
   enemyScaling(isDaemon = false) { return nightScaling(this.day.hour, isDaemon); }
@@ -561,7 +579,7 @@ export class RpgSystem {
   listSaves() { return SaveGame.listSaves(); }
 
   /** Total EXP needed to reach a level from scratch — used by newGame. */
-  _expToReach(level) { return totalExpFor(Math.min(level, MAX_LEVEL)); }
+  _expToReach(level: any) { return totalExpFor(Math.min(level, MAX_LEVEL)); }
 }
 
 export default RpgSystem;

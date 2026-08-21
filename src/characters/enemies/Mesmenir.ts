@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow, loft, bladeCross } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const HIDE = 0x2c2a36;
 const HIDE_DARK = 0x161520;
@@ -53,14 +53,14 @@ export const MESMENIR = {
       telegraph: 0.55, strike: 0.20, attack: 0.62, recover: 0.85, cooldown: 3.0 },
   ],
   buildPrototype,
-  make(opts) { return new MesmenirEnemy(opts); },
+  make(opts: any) { return new MesmenirEnemy(opts); },
 };
 
 /**
  * One flame streamer: a flat swept tapered blade built hanging along -Y so
  * `place` can aim it. No particles anywhere on this creature.
  */
-function flame(len, w, sweep, seg = 4) {
+function flame(len: any, w: any, sweep: any, seg = 4) {
   const secs = [];
   for (let i = 0; i < seg; i++) {
     const t = i / (seg - 1);
@@ -306,15 +306,19 @@ function buildPrototype() {
 const GALLOP = { bR: 0, bL: 0.63, fR: 2.51, fL: 3.14 };
 
 class MesmenirEnemy extends Enemy {
-  constructor(opts) { super(MESMENIR, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(MESMENIR, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
 
     /** Mane and tail fire: a travelling ripple down each chain. */
-    const fire = (lift, amp, freq, drag) => {
+    const fire = (lift: any, amp: any, freq: any, drag: any) => {
       S('mn1', lift + Math.sin(t * freq) * amp, Math.sin(t * freq * 0.7) * amp * 0.8, 0);
       S('mn2', lift * 0.8 + Math.sin(t * freq - 0.8) * amp * 1.3, Math.sin(t * freq * 0.7 - 0.6) * amp, 0);
       S('mn3', lift * 0.6 + Math.sin(t * freq - 1.6) * amp * 1.7, Math.sin(t * freq * 0.7 - 1.2) * amp * 1.2, 0);
@@ -324,7 +328,7 @@ class MesmenirEnemy extends Enemy {
     };
 
     /** A real four-beat gallop: four distinct footfalls, then suspension. */
-    const gallop = (ph, reach) => {
+    const gallop = (ph: any, reach: any) => {
       for (const s of [-1, 1]) {
         const n = s < 0 ? 'L' : 'R';
         const fo = GALLOP[`f${n}`], bo = GALLOP[`b${n}`];

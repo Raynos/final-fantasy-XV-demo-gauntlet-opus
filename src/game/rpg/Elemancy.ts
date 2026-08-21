@@ -72,7 +72,7 @@ export const DEPOSITS = [
 /* ------------------------------------------------------------------------ */
 
 /** Potency -> tier index (0..2). */
-export function tierFor(potency) {
+export function tierFor(potency: any) {
   if (potency >= 200) return 2;
   if (potency >= 100) return 1;
   return 0;
@@ -100,9 +100,9 @@ function catalystLevel(cat: any, count: number, bonus: number = 0) {
  * behaves very differently at 1 unit and at 40.
  *
  */
-function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }): Array<{name:string, level:number, desc:string, payload:any}> {
-  const effects = [];
-  const add = (name, level, desc, payload) => effects.push({ name, level, desc, payload });
+function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }: any): Array<{name:string, level:number, desc:string, payload:any}> {
+  const effects: any[] = [];
+  const add = (name: any, level: any, desc: any, payload: any) => effects.push({ name, level, desc, payload });
 
   if (cat && catLevel > 0) {
     const tags = cat.tags || [];
@@ -262,7 +262,7 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   };
 }
 
-function buildDescription({ name, dominant, tier, damage, radius, effects }) {
+function buildDescription({ name, dominant, tier, damage, radius, effects }: any) {
   const bits = [`${name} — a tier-${tier + 1} ${dominant} flask dealing about ${damage.toLocaleString()} damage in a ${radius.toFixed(0)}m blast.`];
   for (const e of effects) bits.push(`${e.name}: ${e.desc}`);
   return bits.join(' ');
@@ -278,6 +278,13 @@ function buildDescription({ name, dominant, tier, damage, radius, effects }) {
  * and `spell-cast`.
  */
 export class Elemancy {
+  bonuses!: any;
+  capBonus!: number;
+  deposits!: any;
+  emitter!: any;
+  energy!: any;
+  equipped!: any;
+  inventory!: any;
   /**
    * @param [inventory] used to consume catalysts on craft
    */
@@ -347,7 +354,7 @@ export class Elemancy {
   }
 
   /** Add energy directly (enemy drops, story grants, debug). */
-  addEnergy(element, units) {
+  addEnergy(element: any, units: any) {
     if (!MAGIC_ELEMENTS.includes(element)) return 0;
     const before = this.energy[element];
     this.energy[element] = Math.min(this.cap, before + Math.max(0, Math.floor(units)));
@@ -357,7 +364,7 @@ export class Elemancy {
   }
 
   /** Preview a craft without spending anything. */
-  preview(energy, catalyst = null, magic = 100) {
+  preview(energy: any, catalyst = null, magic = 100) {
     return craftSpell({
       energy, catalyst, magic,
       spellPower: this.bonuses.spellPower,
@@ -409,10 +416,10 @@ export class Elemancy {
   }
 
   /** Find a carried spell by its unique id. */
-  spell(uid) { return this.spells.find((s) => s.uid === uid) || null; }
+  spell(uid: any) { return this.spells.find((s: any) => s.uid === uid) || null; }
 
   /** Put a spell in a quick-cast slot. */
-  equip(slot, uid) {
+  equip(slot: any, uid: any) {
     if (slot < 0 || slot >= this.slots) return false;
     if (uid !== null && !this.spell(uid)) return false;
     this.equipped[slot] = uid;
@@ -437,7 +444,7 @@ export class Elemancy {
   }
 
   /** Pull Ascension tunables in. Called by RpgSystem whenever a node unlocks. */
-  applyAscension(ascension) {
+  applyAscension(ascension: any) {
     this.bonuses.drawYield = ascension.value('drawYield');
     this.bonuses.spellPower = ascension.value('spellPower');
     this.bonuses.catalystPower = ascension.value('catalystPower');
@@ -451,7 +458,7 @@ export class Elemancy {
     return { energy: { ...this.energy }, deposits: this.deposits, spells: this.spells, equipped: this.equipped };
   }
 
-  static fromJSON(data, emitter = null, inventory = null) {
+  static fromJSON(data: any, emitter = null, inventory = null) {
     const el = new Elemancy(emitter, inventory);
     if (!data) return el;
     Object.assign(el.energy, data.energy || {});

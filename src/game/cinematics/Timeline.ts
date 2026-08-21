@@ -22,6 +22,14 @@ import { Shot } from './CameraMove.ts';
  * ```
  */
 export class Timeline {
+  ctx!: any;
+  cues!: any;
+  def!: any;
+  done!: boolean;
+  duration!: any;
+  shotIndex!: number;
+  shots!: any;
+  t!: number;
   /**
    * @param def scene definition (see `story/scenes/*`)
    * @param ctx staging context handed to every cue
@@ -31,9 +39,9 @@ export class Timeline {
     this.ctx = ctx;
     this.t = 0;
     this.duration = def.duration ?? 0;
-    this.shots = (def.shots || []).map((s, i) => new Shot({ seed: 7717 + i * 977, ...s }));
-    this.cues = (def.cues || []).slice().sort((a, b) => a.t - b.t)
-      .map((c) => ({ ...c, fired: false }));
+    this.shots = (def.shots || []).map((s: any, i: any) => new Shot({ seed: 7717 + i * 977, ...s }));
+    this.cues = (def.cues || []).slice().sort((a: any, b: any) => a.t - b.t)
+      .map((c: any) => ({ ...c, fired: false }));
     if (!this.duration) {
       const lastShot = this.shots.length ? this.shots[this.shots.length - 1].t1 : 0;
       const lastCue = this.cues.length ? this.cues[this.cues.length - 1].t : 0;

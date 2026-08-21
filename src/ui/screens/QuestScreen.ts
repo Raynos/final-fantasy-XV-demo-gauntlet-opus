@@ -28,6 +28,40 @@ const MAX_ROWS = 16;
  * from `game.time`; no CSS transitions.
  */
 export class QuestScreen {
+  _age!: number;
+  _cur!: any;
+  _msg!: any;
+  _msgAge!: number;
+  _sig!: any;
+  act!: any;
+  actLb!: any;
+  cols!: any;
+  dD!: any;
+  dI!: any;
+  dK!: any;
+  dN!: any;
+  dObj!: any;
+  dObjList!: any;
+  dRule!: any;
+  dSpecs!: any;
+  detail!: any;
+  empty!: any;
+  game!: any;
+  i!: number;
+  list!: any;
+  menus!: any;
+  msg!: any;
+  rowNodes!: any[];
+  scroll!: number;
+  specVals!: any;
+  sub!: string;
+  tab!: number;
+  tabNodes!: any;
+  tabsEl!: any;
+  tally!: any;
+  tallyD!: any;
+  tallyV!: any;
+  title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
@@ -110,7 +144,7 @@ export class QuestScreen {
     root.appendChild(this.tally);
   }
 
-  enter(game) {
+  enter(game: any) {
     if (game) this.game = game;
     this._sig = null;
     this._msg = null;
@@ -125,13 +159,13 @@ export class QuestScreen {
     if (!r || !r.quests) return [];
     const list = r.quests.byStatus(TABS[this.tab].status) || [];
     const rank = { main: 0, story: 0, side: 1, hunt: 2 };
-    return list.slice().sort((a, b) =>
+    return list.slice().sort((a: any, b: any) =>
       (rank[a.type] ?? 9) - (rank[b.type] ?? 9) || (a.level || 0) - (b.level || 0));
   }
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx, dy) {
+  nav(dx: any, dy: any) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) { this.tab = (this.tab + dx + TABS.length) % TABS.length; this.i = 0; this.scroll = 0; }
@@ -157,17 +191,17 @@ export class QuestScreen {
     }
   }
 
-  _say(text, ok) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows, tracked) {
+  _renderRows(rows: any, tracked: any) {
     clear(this.list);
     this.rowNodes = [];
     const view = rows.slice(this.scroll, this.scroll + MAX_ROWS);
     for (const q of view) {
       const bg = el('div.mr-bg');
-      const done = (q.objectives || []).filter((o) => o.done).length;
+      const done = (q.objectives || []).filter((o: any) => o.done).length;
       const node = el('div.qrow', {}, [
         bg,
         icon(q.type === 'hunt' ? 'armiger' : 'quests', { size: 16, stroke: 1.15 }),
@@ -182,7 +216,7 @@ export class QuestScreen {
     }
   }
 
-  _renderDetail(q, r) {
+  _renderDetail(q: any, r: any) {
     this.dK.textContent = `${TYPE_LABEL[q.type] || 'Quest'}${q.rank ? `  ·  ${q.rank.name}` : ''}`;
     this.dN.textContent = q.name;
     this.dD.textContent = q.summary || '';
@@ -198,7 +232,7 @@ export class QuestScreen {
 
     const rewards = r?.quests?.rewardsFor?.(q.id) || q.rewards || {};
     const items = (rewards.items || [])
-      .map((it) => `${r?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
+      .map((it: any) => `${r?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
       .join(', ');
     this.specVals[0].textContent = REGION[q.region] || q.region || '—';
     this.specVals[1].textContent = q.level ? `Lv ${q.level}` : '—';
@@ -231,7 +265,7 @@ export class QuestScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q) => q.id + q.status + q.progress).join()}`;
+    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q: any) => q.id + q.status + q.progress).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows, tracked); this._cur = null; }
 
     this.empty.style.display = rows.length ? 'none' : '';

@@ -16,6 +16,13 @@ import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.
  * source's `onended`. Nothing here holds a reference after the note dies.
  */
 export class Instruments {
+  ctx!: any;
+  graph!: any;
+  noise!: any;
+  pinkNoise!: any;
+  rng!: any;
+  vibFast!: any;
+  vibSlow!: any;
   constructor(graph: import('./Graph.ts').AudioGraph) {
     this.graph = graph;
     const ctx = graph.ctx;
@@ -40,13 +47,13 @@ export class Instruments {
   }
 
   /** Where a note lands unless the caller says otherwise. */
-  _out(o) { return o.dest || this.graph.bus.music; }
+  _out(o: any) { return o.dest || this.graph.bus.music; }
 
   /**
    * Common tail of every voice: attach the chain to its destination (through a
    * panner when the sound has a place in the world) and schedule the teardown.
    */
-  _finish(node, o, src, nodes, extraGain, handle, end) {
+  _finish(node: any, o: any, src: any, nodes: any, extraGain: any, handle: any, end: any) {
     const g = this.ctx.createGain();
     g.gain.value = (o.gain ?? 1) * (extraGain ?? 1);
     node.connect(g);
@@ -149,7 +156,7 @@ export class Instruments {
    * Brass. The defining trick is that the spectrum tracks the envelope, so a
    * forte entry is bright and a soft pad is dark — same note, different animal.
    */
-  brass(f, t, dur, o = {}) {
+  brass(f: any, t: any, dur: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -198,7 +205,7 @@ export class Instruments {
   }
 
   /** Flute / clarinet, with the breath noise that sells a wind instrument. */
-  wood(f, t, dur, o = {}) {
+  wood(f: any, t: any, dur: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -247,7 +254,7 @@ export class Instruments {
    * vowel, not a pad with reverb on it.
    * @param {'ah'|'oo'|'mm'} [o.vowel]
    */
-  choir(f, t, dur, o = {}) {
+  choir(f: any, t: any, dur: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -305,7 +312,7 @@ export class Instruments {
   }
 
   /** Warm sustained bed. The cheapest sustained voice we have — 4 nodes. */
-  pad(f, t, dur, o = {}) {
+  pad(f: any, t: any, dur: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 0, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -391,7 +398,7 @@ export class Instruments {
   /**
    * Play a plucked/struck string.
    */
-  pluck(kind: 'harp' | 'pizz' | 'piano', f, t, o = {}) {
+  pluck(kind: 'harp' | 'pizz' | 'piano', f: any, t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -419,7 +426,7 @@ export class Instruments {
   }
 
   /** Harp glissando / arpeggio helper: one call, n notes. */
-  arp(freqs, t, step, o = {}) {
+  arp(freqs: any, t: any, step: any, o = {}) {
     for (let i = 0; i < freqs.length; i++) {
       this.pluck(o.kind || 'harp', freqs[i], t + i * step, {
         ...o, gain: (o.gain ?? 1) * (1 - i * 0.03),
@@ -430,7 +437,7 @@ export class Instruments {
   /* -------------------------------------------------------- percussion */
 
   /** Timpani: a pitched membrane — fundamental plus two inharmonic partials. */
-  timpani(f, t, o = {}) {
+  timpani(f: any, t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -468,7 +475,7 @@ export class Instruments {
   }
 
   /** Taiko / bass drum — the combat pulse. */
-  drum(t, o = {}) {
+  drum(t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -498,7 +505,7 @@ export class Instruments {
   }
 
   /** Snare / field drum, used for the military feel of the MT encounters. */
-  snare(t, o = {}) {
+  snare(t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -518,7 +525,7 @@ export class Instruments {
   }
 
   /** Cymbal swell or crash — noise through a resonant comb of bandpasses. */
-  cymbal(t, o = {}) {
+  cymbal(t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -547,7 +554,7 @@ export class Instruments {
   }
 
   /** Tubular bell / chime — 2-operator FM with a fast index decay. */
-  bell(f, t, o = {}) {
+  bell(f: any, t: any, o = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -571,7 +578,7 @@ export class Instruments {
   }
 
   /** Low gong / tam-tam for boss stingers. */
-  gong(f, t, o = {}) {
+  gong(f: any, t: any, o = {}) {
     return this.bell(f, t, { ratio: 1.93, index: 4.5, decay: o.decay ?? 4.5, ...o });
   }
 }

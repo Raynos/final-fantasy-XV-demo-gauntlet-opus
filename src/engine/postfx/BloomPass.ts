@@ -15,7 +15,31 @@ import { lensDirtTexture } from './LensTextures.ts';
  * UnrealBloomPass keeps working.
  */
 export class BloomPass extends Pass {
-  constructor(fx, w, h) {
+  anamorphic!: number;
+  anamorphicTint!: THREE.Color;
+  baseDivisor!: number;
+  compositeMat!: any;
+  dirt!: any;
+  dirtAmount!: number;
+  downMat!: any;
+  flareThreshold!: number;
+  floor!: number;
+  fx!: any;
+  ghostAmount!: number;
+  haloAmount!: number;
+  knee!: number;
+  levels!: number;
+  mipFalloff!: number;
+  mips!: any[];
+  prefilterMat!: any;
+  radius!: number;
+  streak!: any;
+  streakMat!: any;
+  strength!: number;
+  sunAmount!: number;
+  threshold!: number;
+  upMat!: any;
+  constructor(fx: any, w: any, h: any) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -304,7 +328,7 @@ export class BloomPass extends Pass {
     this.setSize(w, h);
   }
 
-  setSize(w, h) {
+  setSize(w: any, h: any) {
     if (this.mips) for (const rt of this.mips) rt.dispose();
     if (this.streak) for (const rt of this.streak) rt.dispose();
     this.mips = [];
@@ -322,7 +346,7 @@ export class BloomPass extends Pass {
     this.compositeMat.uniforms.uAspect.value = w / h;
   }
 
-  render(renderer, writeBuffer, readBuffer) {
+  render(renderer: any, writeBuffer: any, readBuffer: any) {
     const u = this.prefilterMat.uniforms;
     // the threshold is authored post-exposure; convert it into the scene-linear
     // units this buffer is actually in (see the field comment)

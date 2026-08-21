@@ -24,6 +24,25 @@ import './dev.css';
  * way `TitleScreen` owns `#title`.
  */
 class DevSuite {
+  _inputWas!: any;
+  _scale!: any;
+  _tainted!: any;
+  bookmarks!: any;
+  browser!: AssetBrowser;
+  cam!: Freecam;
+  console!: DevConsole;
+  game!: any;
+  hint!: any;
+  inbox!: Inbox;
+  reg!: Registry;
+  root!: any;
+  shotAt!: number;
+  shotNames!: any;
+  stage!: Stage;
+  stats!: StatsHud;
+  taint!: any;
+  tuning!: any;
+  views!: ViewModes;
   constructor() {
     this.reg = new Registry();
     this.bookmarks = load('dev.bookmarks', {});
@@ -33,7 +52,7 @@ class DevSuite {
     this._inputWas = null;
   }
 
-  init(game) {
+  init(game: any) {
     this.game = game;
 
     this.root = document.createElement('div');
@@ -66,21 +85,21 @@ class DevSuite {
 
   // ------------------------------------------------------------- registry
 
-  _register(game) {
+  _register(game: any) {
     const reg = this.reg;
     const post = () => game.post;
 
     reg.cvar({
       name: 'cam.speed', category: 'camera', help: 'freecam metres/sec (mouse wheel also)',
-      min: 0.25, max: 4000, get: () => this.cam.speed, set: (v) => { this.cam.speed = v; },
+      min: 0.25, max: 4000, get: () => this.cam.speed, set: (v: any) => { this.cam.speed = v; },
     });
     reg.cvar({
       name: 'cam.fov', category: 'camera', help: 'freecam vertical FOV',
-      min: 8, max: 120, get: () => this.cam.fov, set: (v) => { this.cam.fov = v; },
+      min: 8, max: 120, get: () => this.cam.fov, set: (v: any) => { this.cam.fov = v; },
     });
     reg.cvar({
       name: 'cam.roll', category: 'camera', help: 'dutch angle, radians',
-      min: -1.5, max: 1.5, get: () => this.cam.roll, set: (v) => { this.cam.roll = v; },
+      min: -1.5, max: 1.5, get: () => this.cam.roll, set: (v: any) => { this.cam.roll = v; },
     });
 
     reg.cvar({
@@ -90,35 +109,35 @@ class DevSuite {
       // Applied in lateUpdate, after every system's update() has run. That is
       // why this needs no change to CombatSystem, which damps time.scale back
       // to 1 during its own update and would otherwise fight us every frame.
-      set: (v) => { this._scale = v; },
+      set: (v: any) => { this._scale = v; },
     });
     reg.cvar({
       name: 'time.paused', category: 'time', help: 'freeze update(), keep lateUpdate()',
-      get: () => !!game.paused, set: (v) => { game.paused = !!v; },
+      get: () => !!game.paused, set: (v: any) => { game.paused = !!v; },
     });
 
     reg.cvar({
       name: 'sky.time', category: 'world', help: 'time of day, hours 0-24',
       min: 0, max: 24,
       get: () => { const s = game.get('Sky'); return s ? s.hours : 12; },
-      set: (v) => { const s = game.get('Sky'); if (s) s.setTimeOfDay(v); },
+      set: (v: any) => { const s = game.get('Sky'); if (s) s.setTimeOfDay(v); },
     });
     reg.cvar({
       name: 'sky.weather', category: 'world', help: 'clear | overcast | storm | fog',
       choices: ['clear', 'overcast', 'storm', 'fog'],
       get: () => { const w = game.get('Weather'); return w ? w.name : 'clear'; },
-      set: (v) => { const w = game.get('Weather'); if (w) w.set(String(v)); },
+      set: (v: any) => { const w = game.get('Weather'); if (w) w.set(String(v)); },
     });
 
     reg.cmd({
       name: 'post', category: 'render', args: '<flags|clear>',
       help: 'post-process kill switches, e.g. `post nodof,nobloom`',
-      exec: (a) => { post().debugToggle(a === 'clear' ? '' : a); return `post: ${a}`; },
+      exec: (a: any) => { post().debugToggle(a === 'clear' ? '' : a); return `post: ${a}`; },
     });
     reg.cmd({
       name: 'quality', category: 'render', args: '<low|medium|high|ultra>',
       help: 'renderer quality tier',
-      exec: (a) => { game.rnd.setQuality(a.trim()); return `quality: ${a}`; },
+      exec: (a: any) => { game.rnd.setQuality(a.trim()); return `quality: ${a}`; },
     });
 
     // -------- navigation
@@ -126,14 +145,14 @@ class DevSuite {
     reg.cmd({
       name: 'fly', category: 'camera', args: '[on|off]',
       help: 'toggle freecam, simulation keeps running',
-      exec: (a) => this._setFly(a ? a !== 'off' : !this.cam.enabled),
+      exec: (a: any) => this._setFly(a ? a !== 'off' : !this.cam.enabled),
     });
     reg.cmd({
       name: 'goto', category: 'camera', args: '<x> <z> [y]',
       help: 'fly to world coordinates',
-      exec: (a) => {
+      exec: (a: any) => {
         const n = a.split(/[\s,]+/).map(Number);
-        if (n.length < 2 || n.some((v) => !Number.isFinite(v))) throw new Error('goto <x> <z> [y]');
+        if (n.length < 2 || n.some((v: any) => !Number.isFinite(v))) throw new Error('goto <x> <z> [y]');
         const terr = game.get('Terrain');
         const y = n[2] != null ? n[2] : (terr ? terr.heightAt(n[0], n[1]) + 40 : 100);
         this._setFly(true);
@@ -144,7 +163,7 @@ class DevSuite {
     reg.cmd({
       name: 'warp', category: 'camera', args: '<poiId|zoneId>',
       help: 'fly to a named POI or zone centre',
-      exec: (a) => this._warp(a.trim()),
+      exec: (a: any) => this._warp(a.trim()),
     });
     reg.cmd({
       name: 'where', category: 'camera', help: 'print camera position, zone and nearest POI',
@@ -161,7 +180,7 @@ class DevSuite {
     reg.cmd({
       name: 'shot', category: 'shots', args: '<name|next|prev|list>',
       help: 'apply a corpus shot',
-      exec: (a) => this._shot(a.trim()),
+      exec: (a: any) => this._shot(a.trim()),
     });
     reg.cmd({
       name: 'eject', category: 'shots',
@@ -171,7 +190,7 @@ class DevSuite {
     reg.cmd({
       name: 'shot.save', category: 'shots', args: '[name]',
       help: 'record the live camera as this shot\'s framing into .review/tuning',
-      exec: (a) => this._saveFraming(a.trim()),
+      exec: (a: any) => this._saveFraming(a.trim()),
     });
 
     // -------- bookmarks
@@ -179,7 +198,7 @@ class DevSuite {
     reg.cmd({
       name: 'mark', category: 'camera', args: '<slot> [name]',
       help: 'store the camera in a bookmark slot',
-      exec: (a) => {
+      exec: (a: any) => {
         const [slot, ...rest] = a.split(/\s+/);
         if (!slot) throw new Error('mark <slot> [name]');
         this.bookmarks[slot] = { ...this.cam.asShot(), name: rest.join(' ') || slot };
@@ -190,7 +209,7 @@ class DevSuite {
     reg.cmd({
       name: 'jump', category: 'camera', args: '<slot>',
       help: 'fly to a bookmark',
-      exec: (a) => this._jump(a.trim()),
+      exec: (a: any) => this._jump(a.trim()),
     });
     reg.cmd({
       name: 'marks', category: 'camera', help: 'list bookmarks',
@@ -214,7 +233,7 @@ class DevSuite {
     reg.cmd({
       name: 'assets', category: 'assets', args: '[on|off]',
       help: 'isolation stage: step every enemy, hero, NPC and weapon',
-      exec: (a) => {
+      exec: (a: any) => {
         const on = a ? a !== 'off' : !this.browser.open;
         this.browser.setOpen(on);
         // The stage writes `cam.pos`, but only `Freecam.apply` puts it on the
@@ -226,10 +245,10 @@ class DevSuite {
     reg.cmd({
       name: 'asset', category: 'assets', args: '<family> <key>',
       help: 'stage one named asset, e.g. `asset enemies irongiant`',
-      exec: (a) => {
+      exec: (a: any) => {
         const [fam, key] = a.split(/\s+/);
-        const i = this.browser.families.findIndex((f) => f.id === fam);
-        if (i < 0) throw new Error(`family: ${this.browser.families.map((f) => f.id).join(' | ')}`);
+        const i = this.browser.families.findIndex((f: any) => f.id === fam);
+        if (i < 0) throw new Error(`family: ${this.browser.families.map((f: any) => f.id).join(' | ')}`);
         if (!this.browser.open) this.browser.setOpen(true);
         this.browser.familyAt = i;
         const keys = this.browser.list();
@@ -241,11 +260,11 @@ class DevSuite {
     });
     reg.cvar({
       name: 'stage.spin', category: 'assets', help: 'turntable auto-rotate',
-      get: () => this.stage.spin, set: (v) => { this.stage.spin = !!v; },
+      get: () => this.stage.spin, set: (v: any) => { this.stage.spin = !!v; },
     });
     reg.cvar({
       name: 'stage.rate', category: 'assets', help: 'turntable radians/sec',
-      min: 0, max: 3, get: () => this.stage.rate, set: (v) => { this.stage.rate = v; },
+      min: 0, max: 3, get: () => this.stage.rate, set: (v: any) => { this.stage.rate = v; },
     });
 
     // -------- render debug views
@@ -253,7 +272,7 @@ class DevSuite {
     reg.cmd({
       name: 'view', category: 'render', args: `<${ViewModes.names.join('|')}>`,
       help: 'whole-scene material override',
-      exec: (a) => `view: ${this.views.set(a.trim() || 'off', game.scene)}`,
+      exec: (a: any) => `view: ${this.views.set(a.trim() || 'off', game.scene)}`,
     });
   }
 
@@ -279,12 +298,12 @@ class DevSuite {
     return want ? 'flying' : 'grounded';
   }
 
-  _warp(id) {
+  _warp(id: any) {
     if (!id) throw new Error('warp <poiId|zoneId>');
     const poi = worldMap.poiById(id);
     const zone = worldMap.zoneById && worldMap.zoneById.get
       ? worldMap.zoneById.get(id)
-      : worldMap.zones.find((z) => z.id === id);
+      : worldMap.zones.find((z: any) => z.id === id);
     const x = poi ? poi.x : (zone ? zone.cx : null);
     const z = poi ? poi.z : (zone ? zone.cz : null);
     if (x == null) throw new Error(`no POI or zone '${id}'`);
@@ -300,7 +319,7 @@ class DevSuite {
     return `${poi ? 'poi' : 'zone'} ${id} @ ${x}, ${z}`;
   }
 
-  _jump(slot) {
+  _jump(slot: any) {
     const b = this.bookmarks[slot];
     if (!b) throw new Error(`no bookmark '${slot}'`);
     this._setFly(true);
@@ -310,7 +329,7 @@ class DevSuite {
     return `jumped ${slot}`;
   }
 
-  _shot(arg) {
+  _shot(arg: any) {
     if (arg === 'list') return this.shotNames.join(' ');
     let name = arg;
     if (arg === 'next' || arg === 'prev' || !arg) {
@@ -337,7 +356,7 @@ class DevSuite {
    * warm page on any `src/` edit — a suite that wrote into `src/` would
    * invalidate every running agent's page mid-capture.
    */
-  async _saveFraming(name) {
+  async _saveFraming(name: any) {
     const key = name || this.shotNames[this.shotAt];
     if (!key) throw new Error('shot.save <name> (or step to a shot first)');
     this.tuning[key] = this.cam.asShot();
@@ -356,14 +375,14 @@ class DevSuite {
     return `${key}: ${JSON.stringify(this.tuning[key])}`;
   }
 
-  _toast(text) {
+  _toast(text: any) {
     this.hint.textContent = text;
     clearTimeout(this._toastT);
     this._toastT = setTimeout(() => { this.hint.innerHTML = HINT; }, 4000);
   }
 
   /** Browser navigation. Only bound while the browser is open. */
-  _browserKeys(input) {
+  _browserKeys(input: any) {
     const b = this.browser;
     if (input.keyDown('ArrowRight')) b.step(1);
     if (input.keyDown('ArrowLeft')) b.step(-1);
@@ -379,7 +398,7 @@ class DevSuite {
 
   // ------------------------------------------------------------- per frame
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     const input = game.input;
     const typing = this.console.open || this.inbox.open;
 
@@ -423,10 +442,10 @@ class DevSuite {
 
 const HINT = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F4</b> assets · <b>F9</b> note · <b>F2</b> stats';
 
-const load = (k, fallback) => {
+const load = (k: any, fallback: any) => {
   try { return JSON.parse(localStorage.getItem(k)) || fallback; } catch { return fallback; }
 };
-const save = (k, v) => {
+const save = (k: any, v: any) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ }
 };
 

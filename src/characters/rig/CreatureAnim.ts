@@ -31,8 +31,12 @@ const _v = new THREE.Vector3();
 
 /** Critically-ish damped angular spring. */
 export class Spring {
+  c!: any;
+  k!: any;
+  v!: number;
+  x!: number;
   constructor(k = 90, c = 14) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target, dt) {
+  step(target: any, dt: any) {
     // sub-step so a long frame (or a hitstop leaving and re-entering) stays stable
     const n = dt > 0.033 ? Math.ceil(dt / 0.016) : 1;
     const h = dt / n;
@@ -43,7 +47,7 @@ export class Spring {
     if (!Number.isFinite(this.x)) { this.x = 0; this.v = 0; }
     return this.x;
   }
-  kick(v) { this.v += v; return this; }
+  kick(v: any) { this.v += v; return this; }
   reset() { this.x = 0; this.v = 0; return this; }
 }
 
@@ -73,7 +77,7 @@ const LEG_ORDER = ['fL', 'fR', 'bL', 'bR'];
  * @returns
  *  `reach` is +1 fully forward, -1 fully back; `load` is 0..1 weight carried.
  */
-export function legPhase(u, gait): {stance:boolean, f:number, reach:number, lift:number, load:number} {
+export function legPhase(u: any, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number} {
   let t = u % 1; if (t < 0) t += 1;
   const duty = gait.duty;
   if (t < duty) {
@@ -93,6 +97,14 @@ export function legPhase(u, gait): {stance:boolean, f:number, reach:number, lift
  * requested offset from its bind position.
  */
 export class LegChain {
+  L1!: any;
+  L2!: any;
+  footRel!: any;
+  hasHock!: boolean;
+  names!: any;
+  ok!: any;
+  reachLen!: any;
+  seg!: any[];
   /**
    * @param names hip → knee → (hock) → foot
    */
@@ -126,6 +138,32 @@ export class LegChain {
  * additive layer that survives whatever the species pose function did.
  */
 export class CreatureAnim {
+  airPos!: THREE.Vector3;
+  airVel!: THREE.Vector3;
+  airborne!: boolean;
+  bodyPitch!: number;
+  bodyRoll!: number;
+  bodyY!: number;
+  enemy!: any;
+  gaitBlend!: number;
+  gaitName!: string;
+  gaitPhase!: number;
+  hitAmount!: number;
+  hitPitch!: Spring;
+  hitRoll!: Spring;
+  hitYaw!: Spring;
+  load!: number[];
+  pushLocal!: any;
+  pushX!: Spring;
+  pushZ!: Spring;
+  responsiveness!: number;
+  rig!: any;
+  shake!: number;
+  smooth!: Map<any, any>;
+  speed!: number;
+  spin!: number;
+  spinVel!: number;
+  trunk!: any[];
   /** @param enemy owning Enemy */
   constructor(enemy: any) {
     this.enemy = enemy;
@@ -172,7 +210,7 @@ export class CreatureAnim {
   }
 
   /** Bones the additive impact layer leans. Root of the spine first. */
-  setTrunk(names) { this.trunk = names.filter((n) => this.rig.byName.has(n)); return this; }
+  setTrunk(names: any) { this.trunk = names.filter((n: any) => this.rig.byName.has(n)); return this; }
 
   /**
    * Advance the stride. `speed` is metres/second, `stride` the distance one
@@ -187,7 +225,7 @@ export class CreatureAnim {
   }
 
   /** Choose a gait by normalised speed (0 idle → 1 flat out). */
-  pickGait(norm, heavy = false) {
+  pickGait(norm: any, heavy = false) {
     if (heavy) return norm < 0.55 ? GAITS.lumber : GAITS.walk;
     if (norm < 0.30) return GAITS.walk;
     if (norm < 0.62) return GAITS.trot;
@@ -331,7 +369,7 @@ export class CreatureAnim {
   }
 
   /** Send the creature off the ground — launcher hits and big deaths. */
-  launch(dir, up, forward, heading) {
+  launch(dir: any, up: any, forward: any, heading: any) {
     const cs = Math.cos(-heading), sn = Math.sin(-heading);
     this.airVel.set(dir.x * forward, up, dir.z * forward);
     this.airPos.set(0, 0, 0);
@@ -343,7 +381,7 @@ export class CreatureAnim {
    * Advance every spring and write the additive impact layer over whatever the
    * species already posed. Called by `Enemy.update` after `pose()`.
    */
-  commit(dt, poseAdd) {
+  commit(dt: any, poseAdd: any) {
     if (dt <= 0) return;
     this.hitAmount = Math.max(0, this.hitAmount - dt * 1.9);
     this.shake = Math.max(0, this.shake - dt * 6.5);
@@ -371,21 +409,21 @@ export class CreatureAnim {
 
 /* ---------------------------------------------------------------- curves */
 
-export const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
-export const smooth = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
-export const lerp = (a, b, t) => a + (b - a) * t;
+export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
+export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
+export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 
 /** Slow start, hard finish — a limb accelerating into a blow. */
-export function accelerate(x, p = 2.6) { return Math.pow(clamp01(x), p); }
+export function accelerate(x: any, p = 2.6) { return Math.pow(clamp01(x), p); }
 /** Hard start, long settle — the follow-through after one lands. */
-export function decelerate(x, p = 3.2) { return 1 - Math.pow(1 - clamp01(x), p); }
+export function decelerate(x: any, p = 3.2) { return 1 - Math.pow(1 - clamp01(x), p); }
 /** Overshoot then settle. `s` is how far past the target it goes. */
-export function overshoot(x, s = 1.5) {
+export function overshoot(x: any, s = 1.5) {
   const t = clamp01(x);
   return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2);
 }
 /** Damped oscillation about 1 — a mass arriving and ringing down. */
-export function settle(x, freq = 3.2, damp = 5.5) {
+export function settle(x: any, freq = 3.2, damp = 5.5) {
   const t = clamp01(x);
   return 1 - Math.exp(-damp * t) * Math.cos(freq * Math.PI * t);
 }
@@ -436,7 +474,7 @@ export function attackEnvelope(state: string, t: number, timing: any) {
  * Hit-reaction shape. `level` 0 flinch → 3 launch. Returns the blend weight
  * of the reaction pose plus a recoil that decays with a bounce.
  */
-export function hitCurve(t, dur, level = 0) {
+export function hitCurve(t: any, dur: any, level = 0) {
   const f = clamp01(t / dur);
   const rise = clamp01(t / (0.04 + level * 0.02));
   const fall = 1 - smooth(clamp01((f - 0.35) / 0.65));

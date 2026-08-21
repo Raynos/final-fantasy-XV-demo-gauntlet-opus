@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x, y, z) => new THREE.Vector3(x, y, z);
+const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
 
 const FUR = 0x584e42;
 const FUR_DARK = 0x2f2b25;
@@ -50,7 +50,7 @@ export const BANDERSNATCH = {
       telegraph: 0.6, strike: 0.24, attack: 1.15, recover: 1.25, cooldown: 9.0 },
   ],
   buildPrototype,
-  make(opts) { return new BandersnatchEnemy(opts); },
+  make(opts: any) { return new BandersnatchEnemy(opts); },
 };
 
 function buildPrototype() {
@@ -211,19 +211,23 @@ function buildPrototype() {
 }
 
 class BandersnatchEnemy extends Enemy {
-  constructor(opts) { super(BANDERSNATCH, opts); }
+  attackId!: any;
+  rig!: any;
+  stateTime!: any;
+  visual!: any;
+  constructor(opts: any) { super(BANDERSNATCH, opts); }
 
-  pose(state, t) {
+  pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n, x, y, z) => poseBone(rig, n, x, y, z);
+    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
 
     /**
      * A bounding gallop: both forelegs swing nearly together, both hind legs
      * nearly together, and the spine folds and snaps open between them. The
      * small left/right offset keeps it from looking mechanical.
      */
-    const gallop = (ph) => {
+    const gallop = (ph: any) => {
       for (const s of [-1, 1]) {
         const n = s < 0 ? 'L' : 'R';
         const lead = s < 0 ? 0 : 0.42;

@@ -13,7 +13,8 @@ import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH } from '../../shaders
  * procedurally baked 32^3 print emulation applied in display space.
  */
 export class GradePass extends FilterPass {
-  constructor(fx) {
+  material!: any;
+  constructor(fx: any) {
     super(fx);
     this.material = fsMaterial({
       uniforms: {
@@ -113,5 +114,5 @@ export class GradePass extends FilterPass {
     });
   }
 
-  setSize(w, h) { this.material.uniforms.uResolution.value.set(w, h); }
+  setSize(w: any, h: any) { this.material.uniforms.uResolution.value.set(w, h); }
 }

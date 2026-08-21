@@ -57,7 +57,7 @@ const EXP_ANCHORS: Array<[number, number]> = [
 export const MAX_LEVEL = 99;
 
 /** EXP required to go from `level` to `level + 1`. 0 at the cap. */
-export function expToNext(level) {
+export function expToNext(level: any) {
   if (level >= MAX_LEVEL) return 0;
   if (level <= EXP_ANCHORS[0][0]) return EXP_ANCHORS[0][1];
   for (let i = 0; i < EXP_ANCHORS.length - 1; i++) {
@@ -76,7 +76,7 @@ export function expToNext(level) {
 }
 
 /** Cumulative EXP needed to reach `level` from level 1. */
-export function totalExpFor(level) {
+export function totalExpFor(level: any) {
   let sum = 0;
   for (let l = 1; l < Math.min(level, MAX_LEVEL); l++) sum += expToNext(l);
   return sum;
@@ -130,7 +130,7 @@ export const GROWTH = {
 };
 
 /** Interpolate a growth pair at a level, rounded to a whole number. */
-function growAt(pair, level, curve) {
+function growAt(pair: any, level: any, curve: any) {
   const t = Math.pow(Math.max(0, Math.min(1, (level - 1) / (MAX_LEVEL - 1))), curve);
   return Math.round(pair[0] + (pair[1] - pair[0]) * t);
 }
@@ -145,6 +145,18 @@ function growAt(pair, level, curve) {
  * ever permanently corrupts the base numbers.
  */
 export class Stats {
+  ascension!: any;
+  buff!: any;
+  exp!: number;
+  gear!: any;
+  hp!: any;
+  hpDrain!: number;
+  id!: any;
+  ko!: boolean;
+  level!: number;
+  mp!: number;
+  name!: any;
+  profile!: any;
   /**
    * @param id character key, e.g. 'noctis'
    * @param {object} [opts]
@@ -172,19 +184,19 @@ export class Stats {
   }
 
   /** Base (pre-gear) value of a core stat at the current level. */
-  base(stat) {
+  base(stat: any) {
     const p = this.profile;
     if (!p[stat]) return 0;
     return growAt(p[stat], this.level, p.curve);
   }
 
   /** Sum of gear + buff + ascension modifiers for a stat. */
-  bonus(stat) {
+  bonus(stat: any) {
     return (this.gear[stat] || 0) + (this.buff[stat] || 0) + (this.ascension[stat] || 0);
   }
 
   /** Final value of a stat including every modifier. Never below 1. */
-  get(stat) {
+  get(stat: any) {
     const flat = this.base(stat) + this.bonus(stat);
     const mult = 1 + ((this.gear.mult?.[stat] || 0) + (this.buff.mult?.[stat] || 0) + (this.ascension.mult?.[stat] || 0));
     return Math.max(stat === 'hp' || stat === 'mp' ? 1 : 0, Math.round(flat * mult));
@@ -211,7 +223,7 @@ export class Stats {
   get critDamage() { return 1.5 + (this.gear.critDamage || 0) + (this.buff.critDamage || 0) + (this.ascension.critDamage || 0); }
 
   /** Elemental resistance percent for one element (100 = neutral). */
-  resistance(element) {
+  resistance(element: any) {
     const g = this.gear.resist?.[element] ?? 0;
     const b = this.buff.resist?.[element] ?? 0;
     const a = this.ascension.resist?.[element] ?? 0;
@@ -221,7 +233,7 @@ export class Stats {
   /* -- HP / MP ----------------------------------------------------------- */
 
   /** Apply damage. Returns the amount actually lost. Sets `ko` at zero. */
-  applyDamage(amount) {
+  applyDamage(amount: any) {
     const before = this.hp;
     this.hp = Math.max(0, this.hp - Math.max(0, Math.round(amount)));
     if (this.hp === 0) this.ko = true;
@@ -229,7 +241,7 @@ export class Stats {
   }
 
   /** Heal, clamped to max HP. Returns the amount actually restored. */
-  heal(amount) {
+  heal(amount: any) {
     if (this.ko && amount > 0) this.ko = false;
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + Math.max(0, Math.round(amount)));
@@ -237,13 +249,13 @@ export class Stats {
   }
 
   /** Spend MP. Returns false (and spends nothing) if there isn't enough. */
-  spendMp(amount) {
+  spendMp(amount: any) {
     if (this.mp < amount) return false;
     this.mp -= amount;
     return true;
   }
 
-  restoreMp(amount) {
+  restoreMp(amount: any) {
     const before = this.mp;
     this.mp = Math.min(this.maxMp, this.mp + Math.max(0, amount));
     return this.mp - before;
@@ -293,7 +305,7 @@ export class Stats {
     return { id: this.id, level: this.level, exp: this.exp, hp: this.hp, mp: this.mp, ko: this.ko, hpDrain: this.hpDrain };
   }
 
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     const s = new Stats(data.id, { level: data.level, exp: data.exp });
     s.hpDrain = data.hpDrain || 0;
     s.hp = data.hp != null ? data.hp : s.maxHp;
@@ -315,7 +327,7 @@ export function emptyMods() {
 }
 
 /** Add `src` into `dst` in place (used to fold gear lists into one bucket). */
-export function addMods(dst, src) {
+export function addMods(dst: any, src: any) {
   if (!src) return dst;
   for (const k of Object.keys(src)) {
     if (k === 'resist') {
@@ -338,6 +350,10 @@ export function addMods(dst, src) {
  * night's sleep converts them, multiplied by the lodging bonus.
  */
 export class ExpBank {
+  banked!: number;
+  lifetime!: number;
+  multiplier!: number;
+  sources!: any;
   constructor() {
     this.banked = 0;
     /** Breakdown by source for the "Camp / Rest" results screen. */
@@ -378,7 +394,7 @@ export class ExpBank {
   }
 
   toJSON() { return { banked: this.banked, sources: this.sources, multiplier: this.multiplier, lifetime: this.lifetime }; }
-  static fromJSON(d) {
+  static fromJSON(d: any) {
     const b = new ExpBank();
     if (d) Object.assign(b, { banked: d.banked || 0, sources: d.sources || {}, multiplier: d.multiplier ?? 1, lifetime: d.lifetime || 0 });
     return b;
@@ -541,6 +557,6 @@ export function expForKill(enemy: any, hour: number = null) {
   return Math.round(base * m * night);
 }
 
-function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
 export default Stats;

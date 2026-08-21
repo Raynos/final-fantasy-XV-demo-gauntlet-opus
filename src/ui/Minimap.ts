@@ -33,6 +33,28 @@ const DPR_CAP = 2;
 const RANGE_STEPS = [140, 260, 480, 900];
 
 export class Minimap {
+  _a!: number;
+  _discAt!: any;
+  _flash!: any;
+  _heading!: number;
+  canvas!: any;
+  chart!: any;
+  cost!: number;
+  ctx!: any;
+  dpr!: any;
+  fog!: any;
+  frame!: any;
+  game!: any;
+  map!: any;
+  range!: number;
+  regionEl!: any;
+  root!: any;
+  rotate!: boolean;
+  scaleEl!: any;
+  terrain!: any;
+  visible!: boolean;
+  waypoint!: any;
+  zoneEl!: any;
   constructor() {
     /** Metres from the player edge-to-centre. */
     this.range = 480;
@@ -106,11 +128,11 @@ export class Minimap {
   toggleRotate() { this.rotate = !this.rotate; }
 
   /** 0..1 how surveyed the cell containing this point is. */
-  fogAt(x, z) { return fog.at(x, z); }
+  fogAt(x: any, z: any) { return fog.at(x, z); }
 
   // ------------------------------------------------------------------ frame
 
-  lateUpdate(dt, game) {
+  lateUpdate(dt: any, game: any) {
     if (!this.ctx || !this.chart) return;
     const player = game.get('Player');
     const px = player?.position?.x ?? game.camera.position.x;
@@ -154,7 +176,7 @@ export class Minimap {
     this._caption(px, pz);
   }
 
-  _caption(px, pz) {
+  _caption(px: any, pz: any) {
     const zone = this.map.zoneAt(px, pz);
     const region = zone ? this.map.regionById.get(zone.region) : null;
     this.zoneEl.textContent = (zone ? zone.name : 'The Frontier').toUpperCase();
@@ -162,15 +184,15 @@ export class Minimap {
     this.scaleEl.textContent = `${this.range} M`;
   }
 
-  _draw(game, px, pz) {
+  _draw(game: any, px: any, pz: any) {
     const c = this.ctx, dpr = this.dpr, S = SIZE * dpr;
     const t = game.time.now;
     const R = S / 2;
     const ppm = (S / 2) / this.range;           // canvas px per world metre
     const ca = Math.cos(-this._heading), sa = Math.sin(-this._heading);
     /** world -> disc-local px, with the chart rotation applied */
-    const lx = (x, z) => (x - px) * ca * ppm - (z - pz) * sa * ppm;
-    const ly = (x, z) => (x - px) * sa * ppm + (z - pz) * ca * ppm;
+    const lx = (x: any, z: any) => (x - px) * ca * ppm - (z - pz) * sa * ppm;
+    const ly = (x: any, z: any) => (x - px) * sa * ppm + (z - pz) * ca * ppm;
 
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, S, S);
@@ -263,7 +285,7 @@ export class Minimap {
     // ---- party and hostiles ----
     c.save();
     c.translate(R, R);
-    const blip = (wx, wz, col, rad, ring) => {
+    const blip = (wx: any, wz: any, col: any, rad: any, ring: any) => {
       const gx = lx(wx, wz), gy = ly(wx, wz);
       if (Math.hypot(gx, gy) > R - 5 * dpr) return;
       if (ring) {
@@ -336,7 +358,7 @@ export class Minimap {
   }
 
   /** The bezel: a graduated ring, cardinals, and four angular corner ticks. */
-  _compass(c, S, dpr) {
+  _compass(c: any, S: any, dpr: any) {
     const R = S / 2 - 2 * dpr;
     c.save();
     c.translate(S / 2, S / 2);

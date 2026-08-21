@@ -26,7 +26,23 @@ import { TECH_TABLE, runTechnique } from './Techniques.ts';
  * the AI spends bars on its own once the bar is full.
  */
 export class PartyAI {
-  async init(game) {
+  _offHit!: any;
+  _sched!: any[];
+  _techTimer!: number;
+  _tmp!: THREE.Vector3;
+  _tmp2!: THREE.Vector3;
+  combat!: any;
+  enabled!: boolean;
+  enemies!: any;
+  game!: any;
+  linkCooldown!: number;
+  party!: any;
+  player!: any;
+  rng!: Rng;
+  rpg!: any;
+  terrain!: any;
+  vfx!: any;
+  async init(game: any) {
     this.game = game;
     this.party = game.get('Party');
     this.player = game.get('Player');
@@ -67,7 +83,7 @@ export class PartyAI {
     // a link-strike offer whenever Noctis lands the end of a combo on
     // something an ally is already working on
     if (this.combat) {
-      this._offHit = this.combat.on('hit', (d) => this._onPlayerHit(d));
+      this._offHit = this.combat.on('hit', (d: any) => this._onPlayerHit(d));
     }
     return this;
   }
@@ -157,7 +173,7 @@ export class PartyAI {
     this._sched.push({ t: delay, fn });
   }
 
-  _drain(dt) {
+  _drain(dt: any) {
     const s = this._sched;
     for (let i = s.length - 1; i >= 0; i--) {
       s[i].t -= dt;
@@ -172,7 +188,7 @@ export class PartyAI {
   /* --------------------------------------------------------- targeting */
 
   /** The enemy this companion should be working on. */
-  _pickTarget(m) {
+  _pickTarget(m: any) {
     if (!this.enemies) return null;
     const list = this.enemies.list;
     const from = m.root.position;
@@ -245,7 +261,7 @@ export class PartyAI {
     return res;
   }
 
-  _emit(name, detail) {
+  _emit(name: any, detail: any) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }
@@ -253,10 +269,10 @@ export class PartyAI {
   /* ------------------------------------------------------ link strikes */
 
   /** Noctis hit something one of them is already fighting. */
-  _onPlayerHit(d) {
+  _onPlayerHit(d: any) {
     if (this.linkCooldown > 0 || !d || !d.enemy || d.enemy.dead) return;
     const allies = (this.party?.members || []).filter(
-      (m) => !m.downed && m.aiTarget === d.enemy && m.root.position.distanceTo(d.enemy.root.position) < 12
+      (m: any) => !m.downed && m.aiTarget === d.enemy && m.root.position.distanceTo(d.enemy.root.position) < 12
     );
     if (!allies.length) return;
     if (this.rng.next() > 0.34) return;
@@ -300,15 +316,15 @@ export class PartyAI {
    * @param [techId] defaults to the best affordable one
    */
   useTechnique(memberKey: string, techId: string = null) {
-    const m = this.party?.members.find((x) => x.key === memberKey);
+    const m = this.party?.members.find((x: any) => x.key === memberKey);
     if (!m || m.downed) return { ok: false, reason: 'unavailable' };
     const rpg = this.rpg;
     const list = TECH_TABLE[memberKey] || [];
-    let pick = techId ? list.find((t) => t.id === techId) : null;
+    let pick = techId ? list.find((t: any) => t.id === techId) : null;
     if (!pick) {
       const bars = rpg ? rpg.party.techBars : 3;
-      const known = rpg ? rpg.party.techniquesFor(memberKey).map((t) => t.id) : list.map((t) => t.id);
-      const usable = list.filter((t) => known.includes(t.id) && t.bars <= bars);
+      const known = rpg ? rpg.party.techniquesFor(memberKey).map((t: any) => t.id) : list.map((t: any) => t.id);
+      const usable = list.filter((t: any) => known.includes(t.id) && t.bars <= bars);
       if (!usable.length) return { ok: false, reason: 'not-enough-tech' };
       pick = usable[usable.length - 1];
     }
@@ -328,7 +344,7 @@ export class PartyAI {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt, game) {
+  update(dt: any, game: any) {
     if (!this.enabled || !this.party || !this.party.members) return;
     if (this.linkCooldown > 0) this.linkCooldown -= dt;
     this._drain(dt);
@@ -431,7 +447,7 @@ export class PartyAI {
    * opened a help overlay *and* spent a tech bar was the worst kind of clash,
    * because the overlay hid the thing it had just cost you.
    */
-  _input(game) {
+  _input(game: any) {
     const input = game.input;
     if (!input || input.enabled === false || !input.keyDown) return;
     if (input.keyDown('KeyG')) this.useTechnique('gladio');
@@ -445,16 +461,16 @@ export class PartyAI {
     const bars = rpg ? rpg.party.techBars : 3;
     if (bars < 1) return;
     const order = bars >= 3 ? ['gladio', 'ignis', 'prompto'] : ['gladio', 'prompto', 'ignis'];
-    const hurt = this.rpg && this.rpg.roster.some((s) => s.hp / s.maxHp < 0.45);
+    const hurt = this.rpg && this.rpg.roster.some((s: any) => s.hp / s.maxHp < 0.45);
     if (hurt && bars >= 2) { if (this.useTechnique('ignis', 'regroup').ok) return; }
     for (const k of order) {
-      const m = this.party.members.find((x) => x.key === k);
+      const m = this.party.members.find((x: any) => x.key === k);
       if (!m || m.downed || !m.aiTarget) continue;
       if (this.useTechnique(k).ok) return;
     }
   }
 
-  _beginSwing(m, e, d) {
+  _beginSwing(m: any, e: any, d: any) {
     if (m.aiTimer > 0) return;
     const r = m.role;
     m.aiState = 'attack';
@@ -470,7 +486,7 @@ export class PartyAI {
   }
 
   /** Prompto's shots: a visible tracer plus damage at range. */
-  _shoot(m, e, p) {
+  _shoot(m: any, e: any, p: any) {
     const from = this._tmp.copy(m.root.position);
     from.y += 1.35;
     const to = e.centre();
@@ -481,14 +497,14 @@ export class PartyAI {
       b.uniforms.uIntensity.value = 2.6;
       b.width = 0.035;
       b.setLine(from, to);
-      this.vfx.track(this.vfx.clock, 0.08, (k) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+      this.vfx.track(this.vfx.clock, 0.08, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
       this.vfx.flash({ pos: from.clone(), color: 0xffb060, intensity: 14, distance: 4, life: 0.06 });
     }
     this.strike(m, e, { ...p, scale: 0.7 });
   }
 
   /** Where a flanker sits on the ring around its target. */
-  _ringAngle(m) {
+  _ringAngle(m: any) {
     return m.key === 'ignis' ? 2.1 : m.key === 'prompto' ? -2.1 : 0;
   }
 
@@ -518,12 +534,12 @@ export class PartyAI {
   }
 
   /** Keep the current standoff without chasing while mid-swing. */
-  _holdStation(m, e, want) {
+  _holdStation(m: any, e: any, want: any) {
     this._station(m, e.root.position, want);
   }
 
   /** Override the facing `Party` picked, so they look at what they are hitting. */
-  _face(m, at, dt, k = 6) {
+  _face(m: any, at: any, dt: any, k = 6) {
     const want = Math.atan2(at.x - m.root.position.x, at.z - m.root.position.z);
     let d = want - m.root.rotation.y;
     while (d > Math.PI) d -= Math.PI * 2;
@@ -532,7 +548,7 @@ export class PartyAI {
   }
 
   /** A downed companion lies where they fell. */
-  _poseDown(m, dt) {
+  _poseDown(m: any, dt: any) {
     m.slot.copy(m.baseSlot);
     m.speedMul = 0.0001;
     m.aiTarget = null;

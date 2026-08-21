@@ -11,11 +11,11 @@ import { crScalar, weightsAt, clamp01, abump, bump, smoothIn } from './Geo.ts';
  */
 
 /** Torso sweep: pelvis -> shoulder line. */
-export function torsoNodes(rig) {
+export function torsoNodes(rig: any) {
   const { index: I, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
-  const y = (v) => v * s;
+  const y = (v: any) => v * s;
   const chestW = (0.163 + 0.030 * m) * s * rig.profile.shoulder;
   const chestD = (0.118 + 0.020 * m) * s;
   const waistW = (0.132 + 0.020 * m) * s;
@@ -40,13 +40,13 @@ export function torsoNodes(rig) {
 }
 
 /** Arm sweep: inside the ribcage -> wrist. */
-export function armNodes(rig, side) {
+export function armNodes(rig: any, side: any) {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
   const sh = P[`upperArm${side}`], el = P[`lowerArm${side}`], wr = P[`hand${side}`];
-  const at = (a, b, t) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
-  const R = (v) => v * s;
+  const at = (a: any, b: any, t: any) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
+  const R = (v: any) => v * s;
   // The proximal end runs *inboard along the clavicle*, not backwards along the
   // arm axis. In an A-pose that axis is nearly vertical, so extrapolating it
   // negatively put the first two nodes 9 cm ABOVE the shoulder line and outboard
@@ -70,13 +70,13 @@ export function armNodes(rig, side) {
 }
 
 /** Leg sweep: hip -> ankle. */
-export function legNodes(rig, side) {
+export function legNodes(rig: any, side: any) {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
   const hp = P[`thigh${side}`], kn = P[`shin${side}`], an = P[`foot${side}`];
-  const at = (a, b, t) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
-  const R = (v) => v * s;
+  const at = (a: any, b: any, t: any) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
+  const R = (v: any) => v * s;
   return [
     { p: at(hp, kn, -0.10), rx: R(0.088 + 0.026 * m), w: [[I.hips, 0.72], [I[`thigh${side}`], 0.28]] },
     { p: at(hp, kn, 0.08), rx: R(0.086 + 0.030 * m), w: [[I.hips, 0.26], [I[`thigh${side}`], 0.74]] },
@@ -97,7 +97,7 @@ export function legNodes(rig, side) {
  * @param m muscle 0..1
  */
 export function torsoShape(m: number) {
-  return (th, t) => {
+  return (th: any, t: any) => {
     let k = 1;
     k += (0.045 + 0.062 * m) * abump(th, 0.40, 0.62) * bump(t, 0.79, 0.18);
     k += (0.045 + 0.062 * m) * abump(th, -0.40, 0.62) * bump(t, 0.79, 0.18);
@@ -125,10 +125,10 @@ export function torsoShape(m: number) {
 }
 
 /** Deltoid / biceps / triceps / forearm shaping. */
-export function armShape(m, sg) {
+export function armShape(m: any, sg: any) {
   // t indices follow armNodes(): 0..0.22 clavicle, 0.22 acromion, 0.67 elbow,
   // 1.0 wrist.
-  return (th, t) => 1
+  return (th: any, t: any) => 1
     + (0.045 + 0.10 * m) * abump(th, sg * Math.PI * 0.5, 1.5) * bump(t, 0.30, 0.15)
     + (0.05 + 0.16 * m) * abump(th, 0, 1.2) * bump(t, 0.44, 0.15)
     + (0.04 + 0.12 * m) * abump(th, Math.PI, 1.2) * bump(t, 0.47, 0.17)
@@ -138,8 +138,8 @@ export function armShape(m, sg) {
 }
 
 /** Glute tie-in, quad sweep, calf. */
-export function legShape(m) {
-  return (th, t) => 1
+export function legShape(m: any) {
+  return (th: any, t: any) => 1
     + (0.05 + 0.09 * m) * abump(th, Math.PI, 1.1) * bump(t, 0.14, 0.2)
     + (0.03 + 0.07 * m) * abump(th, 0, 1.0) * bump(t, 0.26, 0.2)
     + (0.04 + 0.10 * m) * abump(th, Math.PI, 1.0) * bump(t, 0.62, 0.12)
@@ -156,7 +156,7 @@ export function legShape(m) {
  * @param count nodes to emit
  * @param pad radial padding in metres
  */
-export function drape(nodes: any[], u0: number, u1: number, count: number, pad: (u:number)=>number|number, padZ) {
+export function drape(nodes: any[], u0: number, u1: number, count: number, pad: (u:number)=>number|number, padZ: any) {
   const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   const rxs = nodes.map((n) => n.rx);
   const rzs = nodes.map((n) => n.rz ?? n.rx);
@@ -179,8 +179,8 @@ export function drape(nodes: any[], u0: number, u1: number, count: number, pad: 
 }
 
 /** Sweep parameter whose sampled point is closest to height `y`. */
-export function uAtY(nodes, y) {
-  const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
+export function uAtY(nodes: any, y: any) {
+  const curve = new THREE.CatmullRomCurve3(nodes.map((n: any) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   let best = 0, bd = Infinity;
   for (let i = 0; i <= 200; i++) {
     const u = i / 200;
