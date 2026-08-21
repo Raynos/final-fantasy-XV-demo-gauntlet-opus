@@ -113,12 +113,22 @@ vec2 tf_uv(vec2 p, vec4 P) { return ((p + P.x) / P.y + 0.5) / P.z; }
  * came back as the regular chevron hatch that wallpapered every conical peak in
  * the world.
  */
+float tf_gridH(vec2 p) {
+  if (max(abs(p.x), abs(p.y)) >= uField.w) return tf_grid(uFarHeightTex, p, uFarP);
+  return tf_grid(uHeightTex, p, uField);
+}
 float tf_heightLod(vec2 p, float cell) {
   float w = (cell - 4.0) * 1.1;
   if (w <= 0.25) return tf_height(p);
-  return tf_height(p) * 0.36
-    + (tf_height(p + vec2(w, 0.0)) + tf_height(p - vec2(w, 0.0))
-     + tf_height(p + vec2(0.0, w)) + tf_height(p - vec2(0.0, w))) * 0.16;
+  // The four extra taps read the *grid* only. tf_micro is a 4-11 m band and a
+  // lattice this coarse cannot carry it at all, so it is faded out with the
+  // cell rather than sampled five times — which both removes a decimetre of
+  // pure aliasing and makes the filter about half the cost it would otherwise
+  // be, the two simplex octaves being the expensive half of tf_height.
+  return tf_gridH(p) * 0.36
+    + (tf_gridH(p + vec2(w, 0.0)) + tf_gridH(p - vec2(w, 0.0))
+     + tf_gridH(p + vec2(0.0, w)) + tf_gridH(p - vec2(0.0, w))) * 0.16
+    + tf_micro(p) * (1.0 - smoothstep(4.0, 14.0, cell));
 }
 `;
 
