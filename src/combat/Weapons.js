@@ -102,9 +102,12 @@ export const WEAPONS = {
  * barrel run along +Z; its anchors say so.
  */
 
-const STEEL_HI = 0xbcc5cf;     // polished flats and bevels
-const STEEL = 0x8e97a1;        // general blade body
-const STEEL_LO = 0x5d646d;     // fuller floors, spines, shadowed grinds
+// Neutral-to-warm, deliberately. These are near-metals lit almost entirely by
+// a *blue* sky env map, so a cool base (the old 0x8e97a1 had b - r = +0x13)
+// reinforced the tint instead of cancelling it and every blade read navy.
+const STEEL_HI = 0xc8c7c1;     // polished flats and bevels
+const STEEL = 0x9e9b94;        // general blade body
+const STEEL_LO = 0x66635c;     // fuller floors, spines, shadowed grinds
 const IRON = 0x3a3e46;         // dark furniture
 const BLACKOX = 0x1b1d22;      // blued / oxidised parts
 const BRONZE = 0x8f6a34;
@@ -676,10 +679,17 @@ function steelMaps() {
  */
 export function makeWeaponMaterial() {
   const maps = steelMaps();
+  // At metalness 0.90 the diffuse term is ~0, so a blade took its colour
+  // *entirely* from `scene.environment` -- the blue sky PMREM -- and rendered
+  // as one uniform navy plane with no edge highlight, no bevel line and no
+  // fuller shading. The baked `groundBlade` gradient was invisible because it
+  // only tints F0. Backing metalness off leaves a real diffuse term for the
+  // warm sun to pick up, and the lower roughness lets it throw a specular line
+  // along the bevel rather than smearing it across the whole flat.
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, vertexColors: true, roughness: 0.70, metalness: 0.90,
+    color: 0xffffff, vertexColors: true, roughness: 0.42, metalness: 0.76,
     emissive: 0x000000, roughnessMap: maps.rough, normalMap: maps.norm,
-    envMapIntensity: 0.48,
+    envMapIntensity: 0.82,
   });
   mat.normalScale.set(0.16, 0.16);
   const uniforms = { uReveal: { value: 1 }, uEdge: { value: new THREE.Color(0x4fb6ff) } };

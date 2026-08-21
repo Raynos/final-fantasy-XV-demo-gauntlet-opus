@@ -29,7 +29,7 @@ export class CombatSystem {
 
     /* ---- weapon rig: an anchor the player's "hand" drives ------------ */
     this.hand = new THREE.Group();
-    this.hand.position.set(0.30, 1.12, 0.12);
+    this.hand.position.set(HAND_X, 1.12, 0.12);
     if (this.player && this.player.root) this.player.root.add(this.hand);
     else game.scene.add(this.hand);
 
@@ -39,6 +39,8 @@ export class CombatSystem {
     this._fwd = new THREE.Vector3();
     this._tmp = new THREE.Vector3();
     this._axis = new THREE.Vector3(0, 1, 0);
+    /** `_axis` mirrored into Noctis' sword hand; see `HAND_X`. */
+    this._mirAxis = new THREE.Vector3(0, 1, 0);
     this._q = new THREE.Quaternion();
     this._qt = new THREE.Quaternion();
     this._hits = [];
@@ -1166,17 +1168,23 @@ export class CombatSystem {
     if (phase === 'wind') lay = -0.35 - 0.30 * ease(k);
     else if (phase === 'active') lay = -0.65 - 0.80 * ease(Math.min(1, k * 3.5));
     else lay = -1.45 + 0.90 * ease(k);
-    this._q.setFromAxisAngle(this._axis, ang);
-    this._qt.setFromEuler(EULER.set(step.tilt || 0, 0, lay));
+    // Mirrored into the right hand (see `HAND_X`). Reflecting through x = 0
+    // maps a rotation about (nx, ny, nz) to one about (nx, -ny, -nz) at the
+    // same angle, and an XYZ euler (rx, ry, rz) to (rx, -ry, -rz) -- so the
+    // combo's authored `axis` data and `tilt` stay as they are and only the
+    // signs change here.
+    this._mirAxis.set(this._axis.x, -this._axis.y, -this._axis.z);
+    this._q.setFromAxisAngle(this._mirAxis, ang);
+    this._qt.setFromEuler(EULER.set(step.tilt || 0, 0, -lay));
     h.quaternion.copy(this._q).multiply(this._qt);
     const lean = phase === 'active' ? 0.24 * Math.sin(k * Math.PI) : 0;
     const reach = step.thrust ? (phase === 'active' ? 0.55 * Math.sin(k * Math.PI) : 0) : 0;
-    h.position.set(0.30, 1.12 - lean * 0.5, 0.12 + reach + lean);
+    h.position.set(HAND_X, 1.12 - lean * 0.5, 0.12 + reach + lean);
   }
 
   _restPose(dt) {
     const h = this.hand;
-    IDLE_Q.setFromEuler(EULER.set(-0.22, 0.3, -1.9));
+    IDLE_Q.setFromEuler(EULER.set(-0.22, -0.3, 1.9));
     h.quaternion.slerp(IDLE_Q, Math.min(1, dt * 9));
     h.position.lerp(REST_POS, Math.min(1, dt * 9));
   }
@@ -1362,9 +1370,23 @@ export class CombatSystem {
   }
 }
 
+/**
+ * Sideways offset of the weapon anchor on the player root.
+ *
+ * **Negative because the rig's right-hand side is -X** (`Skeleton.js`: "The
+ * character faces +Z. Its right-hand side is -X"). `CombatAnim.weaponIK` picks
+ * the driving arm with `local.x >= 0 ? 'L' : 'R'`, so the +0.30 this used to be
+ * put the Engine Blade in Noctis' *left* hand in every combat frame.
+ *
+ * Flipping the sign mirrors the whole weapon rig, so `_poseHand` and
+ * `_restPose` mirror their rotations to match. If this ever goes positive
+ * again, mirror those back with it.
+ */
+const HAND_X = -0.30;
+
 const EULER = new THREE.Euler();
 const IDLE_Q = new THREE.Quaternion();
-const REST_POS = new THREE.Vector3(0.30, 1.05, 0.02);
+const REST_POS = new THREE.Vector3(HAND_X, 1.05, 0.02);
 
 /* ---------------------------------------------------------- MP economy */
 /** Warping costs real MP; running the pool dry is what Stasis punishes. */

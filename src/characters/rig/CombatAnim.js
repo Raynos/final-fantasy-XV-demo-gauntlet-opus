@@ -113,7 +113,11 @@ export class CombatAnim {
 
     char.root.updateMatrixWorld(true);
     if (ikWeight > 0.01 && combat.weapon && combat.weapon.root.visible !== false) {
-      this.weaponIK(rig, combat, style, ikWeight);
+      const main = this.weaponIK(rig, combat, style, ikWeight);
+      // Close the fist on the grip. `Character.setGrip` existed and nothing on
+      // the player path ever called it, so Noctis held a correctly-placed blade
+      // in a flat open hand.
+      if (main && char.setGrip) char.setGrip(main, ikWeight);
     }
     char.root.updateMatrixWorld(true);
     this._prevState = st;
@@ -416,10 +420,12 @@ export class CombatAnim {
    * Put the hand on the weapon anchor. Whichever arm is on the anchor's side
    * of the body is the one that drives; a two-handed class pulls the off hand
    * onto a point further down the shaft.
+   *
+   * @returns {'L'|'R'|null} the driving side, so the caller can close that fist
    */
   weaponIK(rig, combat, style, weight) {
     const anchor = combat.hand;
-    if (!anchor) return;
+    if (!anchor) return null;
     anchor.updateWorldMatrix(true, false);
     // dedicated temporaries: the solver scribbles on the shared scratch
     // vectors, and aliasing the target against them silently aims the arm at
@@ -437,6 +443,7 @@ export class CombatAnim {
       _tgt2.set(0, 0, -style.twoHand * 0.9).applyQuaternion(_gripQ).add(_tgt);
       this.solveArm(rig, off, _tgt2, _gripQ, weight * 0.9);
     }
+    return main;
   }
 
   /**
