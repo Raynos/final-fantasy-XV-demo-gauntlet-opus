@@ -212,9 +212,20 @@ export class Dungeons {
     this.stats.insideCalls = d.stats.calls;
     this.stats.insideTris = d.stats.tris;
 
+    // Snapshot *before* hiding: `sky.dome` is a direct child of `game.scene`,
+    // so `_hideExterior()` clears its `visible` flag, and a snapshot taken
+    // afterwards records `domeVisible: false`. On leave, `_restoreWorldLighting()`
+    // then writes that false back over the correct value and the sky dome stays
+    // hidden for the rest of the session -- which is why every cutscene rendered
+    // correctly-lit golden-hour ground under an absolutely black sky.
+    //
+    // It only reproduces when a `dun_*` shot runs earlier in the same page
+    // (`shoot.mjs dun_keycatrich_hall cine_opening`). Re-shooting the `cine_*`
+    // shots on their own looks perfect, which is how it survived a whole
+    // corpus review. `--settle` makes no difference.
+    this._saveWorldLighting();
     this._hideExterior();
     this._patchTerrain();
-    this._saveWorldLighting();
 
     // put the party at the interior spawn
     const spawn = d.spawnPoint();

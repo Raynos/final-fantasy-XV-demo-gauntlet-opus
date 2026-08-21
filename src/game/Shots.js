@@ -357,9 +357,14 @@ export const SHOTS = {
     pos: [-1300, 88.8, -880], target: [-1600, 53.3, -1180], fov: 46,
   },
   zone_mencemoor: {
-    doc: 'Mencemoor: the Disc of Cauthess crater seen from a spur of its rim',
-    time: 17.0, weather: 'clear',
-    pos: [-1400, 126.9, -1560], target: [-1180, 117.1, -2160], fov: 44,
+    // Reframed after the meteor moved to its own zone centre (-1020, -2160).
+    // The old stand at (-1400, -1560) was 710 m out, well inside the 857 m
+    // shard field, so the camera ended up *inside* a mountain-sized rock.
+    // This one sits 1.7 km north-east on a rim spur, high enough to clear the
+    // ridge and read the glowing fissure against the mass.
+    doc: 'Mencemoor: the Disc of Cauthess seen from a spur of its rim',
+    time: 16.5, weather: 'clear',
+    pos: [400, 286.4, -1200], target: [-1020, 393, -2160], fov: 42,
   },
   zone_taelpar: {
     doc: 'Taelpar Crag: the 235 m gorge the highway crosses at its neck',
@@ -723,13 +728,11 @@ export const SHOTS = {
     time: 17.4, weather: 'clear', scenario: 'boss_imperial', follow: 'player',
     offset: [-4.0, 2.2, -7.0], lookOffset: [-7.5, 1.3, -12.0], fov: 40,
   },
-  // KNOWN BAD, and not fixable from here: the Iron Giant's *model* sits 8.4 m
-  // below its root while it is frozen in `telegraph` (measured: Box3.min.y −
-  // root.y = −8.41 against a 5.3 m tall body), so it is entirely under the
-  // ground whatever the camera does. The `combat` scenario is the only place
-  // one spawns. The aim below is correct — the enemy really is at player
-  // + (−14, ·, −10) — so this frame comes good the moment the pose is fixed.
-  // Owner: src/characters/enemies/** + src/characters/rig/CreatureAnim.js.
+  // Was KNOWN BAD: the Iron Giant's model rendered 8.4 m below its root while
+  // frozen in `telegraph`, so it sat entirely underground whatever the camera
+  // did. Fixed in `EnemyBase` — `_resetVisual()` was opt-in and the frozen-pose
+  // path never called it, so relative pose offsets integrated once per settle
+  // frame. `tools/creaturecheck.mjs` now gates it at 0 drifting poses of 207.
   bestiary_irongiant: {
     doc: 'Iron Giant winding up: rusted plate and one huge blade',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',
