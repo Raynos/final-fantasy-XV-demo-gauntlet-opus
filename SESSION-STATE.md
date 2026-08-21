@@ -1,7 +1,7 @@
 # Session state
 
 Live snapshot for resuming after an interruption (usage limit, crash, new session).
-Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-21 · `main` @ 128 commits.
+Session `07642602` (resumed from `51c0b82c`) · updated 2026-08-21 · `main` @ 131 commits.
 **7 agents running.**
 
 ---
@@ -41,17 +41,41 @@ Ranked by how many of the 139 shots each defect touches:
 6. **Enemies are unreadable blobs** — the sabertusk is a legless tan mass
    floating above the ground.
 
+## The in-game dev/review suite
+
+Plan: **`docs/dev-suite-plan.md`**. Phase 0 + the freecam and review inbox have
+landed (`src/dev/**`, `tools/vite-plugin-review.mjs`).
+
+```bash
+npm run dev      # then open http://127.0.0.1:5173/?debug=1
+```
+
+`` ` `` console · **F8** fly · **P** pause+fly · **F9** file a review note ·
+**F2** stats. `help` in the console lists everything. Notes land in
+`.review/inbox/` as JSON + PNG; the `/drain-inbox` skill turns them into
+dispatched agent work.
+
+The suite refuses to load when `?shoot` is present, so it can never appear in a
+capture. Verified: two cold captures diff at 1.555/255, the documented noise
+floor. Do not weaken that guard.
+
+Still to build: the asset browser (enemies/heroes/NPCs/trees/weapons on a
+turntable with animation scrubbing), the world navigator, and the render view
+modes. `lil-gui` was deliberately **not** added yet — a new npm dep triggers
+Vite re-optimisation, which reloads pages mid-capture and would corrupt running
+agents. Add it on a quiet tree if the hand-rolled panels prove limiting.
+
 ## Agents in flight (7)
 
 | branch | owns | doing |
 |---|---|---|
 | `agent/weapons` | `combat/Weapons.js`, `GeoKit.js`, `rig/Character.js`, `ai/PartyAI.js` | Floating-weapon bug + rebuild weapon geometry |
-| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `Party.js`, `Player.js`, `Cast.js` | Kill the A-pose lineup; weighted per-character idles + combat stance |
-| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/NpcRig.js`, `npc/NpcCast.js` | Faces, hands, hair, outfit detail |
+| `agent/idles` | `rig/Anim.js`, `CombatAnim.js`, `rig/Posture.js` (new), `Party.js`, `Player.js` | Kill the A-pose lineup; weighted per-character idles + combat stance |
+| `agent/heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/**`, `Cast.js` *appearance only* | Faces, hands, hair, outfit detail |
 | `agent/grass` | `world/veg/**`, `Vegetation.js` | Grass scale/colour/translucency, biome palettes |
 | `agent/splat` | `world/terrain/**`, `Terrain.js` | Regional ground colour + kill the macro tiling |
 | `agent/enemies` | `characters/enemies/**`, `rig/CreatureAnim.js`, `Enemies.js` | Root-offset bug (Iron Giant −8.41 m) + model quality |
-| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | 3 empty `cine_*` shots, `menu_map_wide`/`menu_world` duplicates, doubled HUD text |
+| `agent/cineui` | `game/cinematics/**`, `game/story/**`, `ui/**` | **Black cutscene sky (re-prioritised to first)**, `menu_map_wide` duplicate, doubled HUD text |
 
 **Ownership is disjoint by construction. Do not dispatch a second agent onto any
 directory in that table** — it happened once with `terrain/**` and an agent had
