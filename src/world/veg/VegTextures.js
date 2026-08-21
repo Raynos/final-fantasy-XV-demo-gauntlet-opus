@@ -304,11 +304,55 @@ export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4, albedo = 
   }, { alphaRef, tinyFade: 0.62, albedo }));
 }
 
-/** Leafy canopy card — a mass of small leaves, used on tree branch tips. */
+/**
+ * The one albedo every leaf card is matched against — the tree equivalent of
+ * {@link GRASS_CARD_ALBEDO}.
+ *
+ * Real broadleaf foliage sits at a broadband reflectance of about 0.10-0.15,
+ * and this card is only the first of three multiplications: `TreeBuilder`'s
+ * per-card vertex shade (mean 0.855) and the per-instance
+ * `shade * SPECIES_TINT * treeTint` (mean ~0.6 in green) both land on top of
+ * it. 0.135 puts a lit canopy leaf at a final ~0.07, which is where a canopy
+ * belongs, and — more importantly — it is now a *known* number instead of
+ * whatever fell out of the ink.
+ */
+export const LEAF_CARD_ALBEDO = 0.125;
+
+/**
+ * Leafy canopy card — a mass of small leaves, used on tree branch tips.
+ *
+ * **Luminance-only, like the grass clump card.** Every forest in the world came
+ * out candy lime (`tmp/shots/veg0/zone_malacchi.jpg`,
+ * `tmp/shots/veg0/poi_chocobo.jpg`) because three separate chromas were being
+ * *multiplied* into one albedo: this texture's ink, `Trees.SPECIES_TINT`, and
+ * the biome's `treeTint`. Measured for a Duscae tree that stack landed at
+ * linear r/g 0.56, b/g 0.26 — roughly twice the chroma of a real leaf, and
+ * saturation that deep survives any amount of darkening, which is why the old
+ * comment here about "never candy green" sat directly above ratios that made it
+ * so. A per-channel gain applied after the palette cannot be undone by editing
+ * the palette; the only fix is to stop stacking them.
+ *
+ * So the ink is now near-neutral and carries value, not hue: the instance tint
+ * owns the colour, and `Trees` composes its two tints so their chromas blend
+ * rather than multiply. What little chroma is left here is the difference
+ * between a spring leaf and a dead one, which is a property of the *leaf* and
+ * not of the zone it grows in.
+ */
 export function leafClusterTex(kind = 'broad') {
   return memo(`leaf${kind}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(kind === 'broad' ? 8811 : kind === 'conifer' ? 5150 : 3320);
     const n = kind === 'conifer' ? 190 : 120;
+    // The leaf's own hue, and only the leaf's: warm for last season's dry one,
+    // cool for a needle. Roughly half the chroma these ratios used to carry —
+    // a real leaf's albedo genuinely is a saturated green (linear b/g near
+    // 0.35), so neutralising this outright is as wrong as stacking it, and the
+    // first attempt at that turned every canopy in Duscae to dusty mint against
+    // a vivid grass mat (tmp/shots/veg2/poi_chocobo.jpg). What had to stop was
+    // the *stacking*; the leaf keeps its own colour.
+    const HUE = kind === 'dry' ? [1.06, 1, 0.80]
+      : kind === 'conifer' ? [0.87, 1, 0.90]
+        : [0.91, 1, 0.79];
+    const ink = (g) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = Math.pow(rng.next(), 0.62) * s * 0.47;
@@ -320,8 +364,7 @@ export function leafClusterTex(kind = 'broad') {
       ctx.rotate(rng.range(-Math.PI, Math.PI));
       if (kind === 'conifer') {
         const L = s * rng.range(0.05, 0.13);
-        const g = 60 + shade * 70;
-        ctx.strokeStyle = `rgba(${g * 0.5 | 0},${g | 0},${g * 0.52 | 0},1)`;
+        ctx.strokeStyle = ink(60 + shade * 70);
         ctx.lineWidth = s * 0.008;
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -L); ctx.stroke();
         for (let k = 1; k < 6; k++) {
@@ -333,16 +376,7 @@ export function leafClusterTex(kind = 'broad') {
       } else {
         const rx = s * rng.range(0.028, 0.062);
         const ry = rx * rng.range(1.5, 2.5);
-        // sun-bleached, slightly desaturated foliage — never candy green
-        // Sun-bleached and desaturated, never candy green. The old ratios
-        // (0.78, 1, 0.52) are a *chroma* the instance tint cannot undo — it can
-        // only scale each channel, so a saturated texel stays saturated however
-        // dark it is made, and every forest in the world came out lime.
-        const g = kind === 'dry' ? 116 + shade * 54 : 66 + shade * 62;
-        const col = kind === 'dry'
-          ? `rgba(${g * 1.06 | 0},${g | 0},${g * 0.66 | 0},1)`
-          : `rgba(${g * 0.87 | 0},${g | 0},${g * 0.70 | 0},1)`;
-        ctx.fillStyle = col;
+        ctx.fillStyle = ink(kind === 'dry' ? 116 + shade * 54 : 66 + shade * 62);
         ctx.beginPath();
         ctx.moveTo(0, -ry);
         ctx.quadraticCurveTo(rx, 0, 0, ry);
@@ -351,7 +385,11 @@ export function leafClusterTex(kind = 'broad') {
       }
       ctx.restore();
     }
-  }));
+    // `alphaRef` matches the leaf materials' own alphaTest so the mip chain
+    // preserves the coverage that will actually be tested. No `tinyFade`: a
+    // lone tree on a Leide ridge has to survive to the horizon, unlike a grass
+    // card with a thousand neighbours to cover for it.
+  }, { alphaRef: 0.42, albedo: LEAF_CARD_ALBEDO }));
 }
 
 /** Arching fern frond. */
@@ -624,22 +662,76 @@ export function reedTex() {
   }, { alphaRef: 0.38, tinyFade: 0.85 }));
 }
 
-/** Bark albedo + normal, shared by every woody thing. */
+/**
+ * Mean *linear* luminance the bark detail map is normalised to.
+ *
+ * The bark map is a **detail** map, not an albedo: every caller
+ * (`Trees.build`, `Bushes.build`) also sets the material's own `color` to the
+ * species' bark hex, and three multiplies the two. So whatever lives here is
+ * multiplied on top of an albedo that is already correct, and the only value
+ * that leaves the species colour where it was authored is 1.0. It cannot be
+ * 1.0 in an eight-bit map that also has to carry ridge contrast, so it is a
+ * little under, and the species hexes (linear luminance 0.073-0.193) land at a
+ * final 0.047-0.12 — which is where real bark sits.
+ */
+const BARK_DETAIL_MEAN = 0.64;
+
+/**
+ * Bark albedo + normal, shared by every woody thing.
+ *
+ * **This map used to render every trunk in the game pitch black**, by two
+ * compounding mistakes that are each easy to make and invisible in isolation:
+ *
+ * 1. `Color.setHex(hex, SRGBColorSpace)` returns the colour in the *working*
+ *    space, i.e. **linear**. `makeTexture` writes whatever it is handed
+ *    straight into bytes and tags the texture sRGB, so a linear 0.158 was
+ *    written as byte 40 and then decoded back as sRGB — arriving at linear
+ *    0.016, a tenth of what was authored.
+ * 2. The tint was then baked into the map *as well as* being applied a second
+ *    time through the material's `color`, squaring an already-dark albedo.
+ *
+ * Together those put the trunks at a measured albedo of ~0.003 against a real
+ * bark value of 0.10-0.15 — roughly fifty times too dark, which is why every
+ * tree in `tmp/shots/veg0/zone_longwythe.jpg` and `poi_chocobo.jpg` was a flat
+ * black stick figure with no bark shading at any time of day. This is the same
+ * class of defect as the grass LOD darkness bug: a property of the texture that
+ * no palette or lighting change can reach.
+ *
+ * So the map is now a detail map and nothing else: sRGB-encoded on the way out,
+ * normalised to {@link BARK_DETAIL_MEAN}, and near-neutral in hue because the
+ * material colour already carries the species' chroma. `tint` survives as a
+ * weak hue bias so bark ridges keep a little wood warmth of their own; it is
+ * deliberately pulled most of the way to grey, because two chromas multiplied
+ * together is exactly how the leaf cards came out lime.
+ */
 export function barkMaps(tint = 0x6b5642) {
   return memo(`bark${tint}`, () => {
     const n = new Noise(2024);
+    // Hue only: normalise the tint to unit luminance, then pull it most of the
+    // way back to neutral. Anything stronger multiplies the species chroma.
     const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const bl = Math.max(1e-4, 0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b);
+    const HUE = 0.3;
+    const hr = 1 + (base.r / bl - 1) * HUE;
+    const hg = 1 + (base.g / bl - 1) * HUE;
+    const hb = 1 + (base.b / bl - 1) * HUE;
     const h = (u, v) => {
       const rings = Math.sin(v * 90 + n.fbm2(u * 5, v * 30, 3) * 6) * 0.5 + 0.5;
       const streak = n.fbm2(u * 7, v * 44, 4) * 0.5 + 0.5;
       return rings * 0.35 + streak * 0.65;
     };
+    // `k` runs 0.55-1.30 about a mean of ~0.925. Normalised to mean one and
+    // compressed to 0.72x, the brightest ridge lands just under 1.0 at the
+    // target mean, so the ridge contrast survives without clipping to white.
+    const KMEAN = 0.925, KCONTRAST = 0.72;
+    const toSrgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
     const map = makeTexture(256, (u, v, c) => {
-      const k = 0.55 + h(u, v) * 0.75;
+      const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
+      const L = BARK_DETAIL_MEAN * k;
       const moss = Math.max(0, n.fbm2(u * 4 + 30, v * 4, 3)) * 0.35;
-      c[0] = base.r * k * (1 - moss * 0.6);
-      c[1] = base.g * k * (1 - moss * 0.1);
-      c[2] = base.b * k * (1 - moss * 0.7);
+      c[0] = toSrgb(L * hr * (1 - moss * 0.6));
+      c[1] = toSrgb(L * hg * (1 - moss * 0.1));
+      c[2] = toSrgb(L * hb * (1 - moss * 0.7));
     }, { repeat: 1 });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     const normalMap = normalFromHeight(256, h, 2.6);

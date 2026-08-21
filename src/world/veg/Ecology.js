@@ -479,11 +479,34 @@ export class Ecology {
    * random, so a species holds for a couple of hundred metres and the forest
    * reads as *stands* — a bank of thicket, then a rise of tall broadleaf —
    * instead of a uniform salad of every species the zone allows.
+   *
+   * **Two octaves, not one.** The grove band alone has a ~450 m wavelength and
+   * `Trees.geoRange` is 88 m, so wherever the band sat, *every* tree the near
+   * ring drew was one species — a pure monoculture with no possible exception,
+   * because the field is smooth and the ring is smaller than one lobe of it.
+   * Measured at the chocobo post (`alstor`, where `dead` carries a 10% weight
+   * and sits at the top of the cumulative table): 76% of the 88 m disc resolved
+   * to `dead`, and the geometry ring came back **116 dead trees, 0 swamp, 0
+   * duscae** against a table that asks for 58% swamp. The frame was a wetland
+   * full of bare grey sticks (`tmp/shots/veg-a1/poi_chocobo.jpg`).
+   *
+   * The second octave is ~40 m — a few trees across, so a stand still reads as
+   * a stand and is still *dominated* by its band's species, but a lone dead
+   * grovewood stands in the green rather than the whole grove being dead. It is
+   * deliberately not a per-tree hash: that gives an even salad of every species
+   * at every scale, which is the look the grove noise was added to kill.
+   *
+   * Amplitudes: the sum of two noises is more bell-shaped than one, which
+   * squeezes the ends of the cumulative table (i.e. under-draws the first and
+   * last species). The total is raised from 0.62 to 0.72 to put the measured
+   * world-wide share back within a couple of points of the authored weights.
    */
   treeSpecies(x, z) {
     const b = vegAt(x, z);
+    const grove = this.nGrove.simplex2(x * 0.0022 + 11, z * 0.0022 - 7);
+    const local = this.nGrove.simplex2(x * 0.026 - 41, z * 0.026 + 63);
     const r = THREE.MathUtils.clamp(
-      this.nGrove.simplex2(x * 0.0022 + 11, z * 0.0022 - 7) * 0.62 + 0.5, 0, 0.9999);
+      (grove * 0.74 + local * 0.30) * 0.72 + 0.5, 0, 0.9999);
     return pickFrom(b.treeTable, r) || 'broadleaf';
   }
 

@@ -55,6 +55,54 @@ const SPECIES_TINT = {
   swamp: [0.82, 0.88, 0.70],       // pale willow
 };
 
+/**
+ * Per-tree value multiplier, applied on top of the composed tint.
+ *
+ * It used to be `0.62 + rng * 0.40` — a 1.6:1 spread between neighbours, which
+ * on top of self-shadowing put near-black trees against near-white ones in the
+ * same grove (`tmp/shots/veg0/poi_chocobo.jpg`) and read as a random tint per
+ * tree rather than as a forest. Its top end was also 1.02, i.e. an albedo over
+ * one before either tint was applied, the same shape as the grass tint bug.
+ */
+const SHADE_MIN = 0.70, SHADE_SPAN = 0.30;
+
+/**
+ * Compose the species tint with the biome's `treeTint` **without squaring their
+ * chroma**.
+ *
+ * Both are green, and `t * bt` multiplies two saturations together: for a
+ * Duscae tree in a Duscae zone that took linear r/g to 0.76 and b/g to 0.54
+ * from two tints that are each only mildly green on their own. Stacked on the
+ * leaf card's own ink — before it was neutralised — the canopy arrived at r/g
+ * 0.56, b/g 0.26, which is the candy lime every forest shot showed.
+ *
+ * So each tint is split into a luminance and a unit-luminance chroma. The
+ * luminances multiply, which is what they mean: two independent statements
+ * about how dark this canopy is. The chromas *blend* — the species' hue is the
+ * subject and the biome's is a nudge at {@link BIOME_HUE} strength — because
+ * they are two statements about the same thing, and a product of two hues is
+ * not a hue.
+ */
+const BIOME_HUE = 0.5;
+const _lum = (c) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
+/** biome tint array -> species key -> composed [r,g,b]. Keyed by identity. */
+const _tintCache = new WeakMap();
+function composeTint(sp, t, bt) {
+  let bySpecies = _tintCache.get(bt);
+  if (!bySpecies) { bySpecies = new Map(); _tintCache.set(bt, bySpecies); }
+  let out = bySpecies.get(sp);
+  if (out) return out;
+  const lt = _lum(t), lb = _lum(bt);
+  const v = lt * lb;
+  out = [
+    v * (t[0] / lt) * Math.pow(bt[0] / lb, BIOME_HUE),
+    v * (t[1] / lt) * Math.pow(bt[1] / lb, BIOME_HUE),
+    v * (t[2] / lt) * Math.pow(bt[2] / lb, BIOME_HUE),
+  ];
+  bySpecies.set(sp, out);
+  return out;
+}
+
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -284,17 +332,16 @@ export class Trees {
         const variant = this.byKey.get(`${sp}_${vi}`);
         if (!variant) continue;
         const s = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
-        const t = SPECIES_TINT[sp] || [1, 1, 1];
-        const bt = b.treeTint;
-        const shade = 0.62 + rng.next() * 0.40;
+        const c = composeTint(sp, SPECIES_TINT[sp] || [1, 1, 1], b.treeTint);
+        const shade = SHADE_MIN + rng.next() * SHADE_SPAN;
         const hue = rng.gauss(0, 0.06);
         out.push({
           x, z, y: eco.height(x, z), sp, vi, s,
           yaw: rng.next() * Math.PI * 2,
           tilt: rng.gauss(0, 0.04),
-          r: shade * t[0] * bt[0] * (1 + hue),
-          g: shade * t[1] * bt[1],
-          b: shade * t[2] * bt[2] * (1 - hue * 0.8),
+          r: shade * c[0] * (1 + hue),
+          g: shade * c[1],
+          b: shade * c[2] * (1 - hue * 0.8),
           h: variant.height * s,
         });
       }
@@ -322,17 +369,18 @@ export class Trees {
         const c = this.canopies.get(sp);
         if (!c) continue;
         const b = eco.veg(x, z);
-        const t = SPECIES_TINT[sp] || [1, 1, 1];
-        const bt = b.treeTint;
+        const tc = composeTint(sp, SPECIES_TINT[sp] || [1, 1, 1], b.treeTint);
         // fill the cell in plan, keep the real tree height in elevation
         const sx = (cell * 1.28 / c.width) * rng.range(0.86, 1.16);
         const sy = ((b.treeS[0] + b.treeS[1]) * 0.5) * rng.range(0.9, 1.1)
           * (0.72 + 0.34 * d);
-        const shade = (0.62 + 0.3 * d) * rng.range(0.9, 1.1);
+        // capped at one: this is a shade, and an albedo multiplier over one is
+        // how the near ring used to blow its highlights out to white
+        const shade = Math.min(1, (0.62 + 0.3 * d) * rng.range(0.9, 1.1));
         out.push({
           x, z, y: eco.height(x, z), sp,
           sx, sy, yaw: rng.next() * Math.PI * 2,
-          r: shade * t[0] * bt[0], g: shade * t[1] * bt[1], b: shade * t[2] * bt[2],
+          r: shade * tc[0], g: shade * tc[1], b: shade * tc[2],
         });
       }
     }
@@ -393,7 +441,15 @@ export class Trees {
     // On foot the camera rides two or three metres up, below that floor, so
     // nothing ever blinks out while you walk through a wood; it only bites when
     // the camera is on a bank looking down into the canopy next to it.
-    const cullR2 = 12.0 * 12.0;
+    //
+    // The radius has to scale with the tree, and a flat 12 m did not. A Duscae
+    // canopy tree stands 19 m before its scale multiplier and carries a crown
+    // eight metres or more across, so one rooted 15 m away still wraps a camera
+    // sitting up in the canopy — outside the flat radius, and `zone_alstor`
+    // came back an almost entirely black frame with no instance of anything
+    // within 10 m of the lens. `0.55 * h + 3` is roughly the crown radius plus
+    // a margin: ~16 m for that Duscae tree, ~8 m for a Leide scrub tree, which
+    // is what the flat number was tuned on in the first place.
     const cullFloor = 3.5;
     const impR2 = this.impRange * this.impRange;
     const near = [];
@@ -414,7 +470,10 @@ export class Trees {
           const ddx = p.x - camPos.x, ddz = p.z - camPos.z;
           const d2 = ddx * ddx + ddz * ddz;
           if (d2 > impR2) continue;
-          if (d2 < cullR2 && camPos.y > p.y + cullFloor && camPos.y < p.y + p.h) continue;
+          if (camPos.y > p.y + cullFloor && camPos.y < p.y + p.h) {
+            const cr = 0.55 * p.h + 3;
+            if (d2 < cr * cr) continue;
+          }
           if (d2 < geoR2) near.push(d2, p);
           else if (far < this.impBudget && this._writeImpostor(p)) far++;
         }
