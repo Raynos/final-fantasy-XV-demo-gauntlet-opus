@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Frame } from '../../cinematics/CameraMove.js';
 import { RoadPath } from '../../cinematics/RoadPath.js';
+import { takeCar, releaseCar } from './SceneKit.js';
 
 /**
  * CHAPTER I — "Departure": the four push the broken-down Regalia up the Leide
@@ -113,12 +114,19 @@ export const OPENING = {
     }
 
     // ---- take the car ------------------------------------------------------
-    const car = props && props.regalia;
+    // Through `takeCar`, not by grabbing `props.regalia` directly. There are
+    // TWO Regalias: the static prop, which `RegaliaSystem` hides at init, and
+    // the sim's own drivable root, which it rewrites from `body.pos` every
+    // tick. Moving the prop by hand moved an *invisible* object, so the whole
+    // opening staged four men pushing empty air while the real car sat parked
+    // forty metres up the road. `takeCar` shows the prop and hides the sim root
+    // so there is never a duplicate in shot.
+    const car = takeCar(ctx);
     if (car) {
       ctx.data.car = car;
+      // `releaseCar` restores position, rotation and visibility but not the
+      // hull's inner child, which this scene spins as the wheels.
       ctx.data.carHome = {
-        pos: car.position.clone(),
-        rot: car.rotation.clone(),
         inner: car.children[0] ? car.children[0].rotation.clone() : null,
       };
     }
@@ -186,7 +194,8 @@ export const OPENING = {
     // Park the car exactly where the world had it, then leave the four of them
     // standing beside it facing Hammerhead. Whether the scene played out or was
     // skipped, this is the same hand-off.
-    restoreCar(ctx);
+    releaseCar(ctx);
+    restoreInner(ctx);
     const F = ctx.data.F;
     if (!F) return;
     const terrain = game.get('Terrain');
@@ -260,14 +269,12 @@ function height(terrain, F, f, l) {
   return terrain.heightAt(p[0], p[2]);
 }
 
-/** Put the Regalia back on its parking spot. */
-function restoreCar(ctx) {
+/** Unwind the wheel spin. `releaseCar` handles everything else. */
+function restoreInner(ctx) {
   const car = ctx.data.car;
   const home = ctx.data.carHome;
-  if (!car || !home) return;
-  car.position.copy(home.pos);
-  car.rotation.copy(home.rot);
-  if (home.inner && car.children[0]) car.children[0].rotation.copy(home.inner);
+  if (!car || !home || !home.inner || !car.children[0]) return;
+  car.children[0].rotation.copy(home.inner);
 }
 
 /* -------------------------------------------------------------------------- */
