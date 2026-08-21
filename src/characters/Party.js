@@ -5,6 +5,21 @@ import { CharacterController } from '../world/collision/CharacterController.js';
 import { Rng } from '../util/Rng.js';
 
 /**
+ * Formation specs, at module scope so `init()` and `snap()` read one table.
+ * `slot` is [sideways, back] in Noctis's frame; `lag` and `speedMul` are why
+ * Prompto (smallest lag, highest speedMul) oscillates longest and is the worst
+ * subject for a follow shot that has not settled.
+ */
+const SPECS = [
+  { key: 'gladio', slot: [-1.95, -0.95], speedMul: 0.97, lag: 0.16 },
+  { key: 'ignis', slot: [1.85, -1.45], speedMul: 1.0, lag: 0.22 },
+  { key: 'prompto', slot: [0.85, -2.75], speedMul: 1.05, lag: 0.10 },
+];
+
+/** Seed for every stochastic field on a member. `snap()` rewinds to it. */
+const PARTY_SEED = 9182;
+
+/**
  * Gladiolus, Ignis and Prompto following Noctis.
  *
  * Each companion steers toward a slot defined in the player's frame — offset
@@ -19,7 +34,7 @@ export class Party {
   async init(game) {
     this.game = game;
     this.members = [];
-    this.rnd = new Rng(9182);
+    this.rnd = new Rng(PARTY_SEED);
     const terrain = game.get('Terrain');
     this.terrain = terrain;
     const player = game.get('Player');
@@ -27,13 +42,7 @@ export class Party {
     /** Shared with the player: same soup, same broadphase, same step rules. */
     this.collision = game.get('Collision') || (player && player.collision) || null;
 
-    const specs = [
-      { key: 'gladio', slot: [-1.95, -0.95], speedMul: 0.97, lag: 0.16 },
-      { key: 'ignis', slot: [1.85, -1.45], speedMul: 1.0, lag: 0.22 },
-      { key: 'prompto', slot: [0.85, -2.75], speedMul: 1.05, lag: 0.10 },
-    ];
-
-    for (const spec of specs) {
+    for (const spec of SPECS) {
       const character = makeCharacter(spec.key);
       const root = new THREE.Group();
       root.add(character.root);
@@ -50,9 +59,9 @@ export class Party {
         velocity: new THREE.Vector3(),
         speed: 0,
         heading: player ? player.heading : 0,
-        wander: this.rnd.range(0, Math.PI * 2),
-        wanderRate: this.rnd.range(0.10, 0.22),
-        glanceTimer: this.rnd.range(1.5, 6),
+        wander: 0,
+        wanderRate: 0,
+        glanceTimer: 0,
         glancing: 0,
         _target: new THREE.Vector3(),
         _steer: new THREE.Vector3(),
@@ -76,6 +85,9 @@ export class Party {
       const p = player ? player.position : new THREE.Vector3();
       m.root.position.set(p.x + spec.slot[0], 0, p.z + spec.slot[1]);
       m.root.position.y = terrain.heightAt(m.root.position.x, m.root.position.z);
+      // Same helper `snap()` uses, drawing from the same stream in the same
+      // order, so a snapped formation is bit-identical to a booted one.
+      this._seed(m);
       m.root.rotation.y = m.heading;
       this.members.push(m);
     }
@@ -86,6 +98,105 @@ export class Party {
 
   /** @returns {Object|undefined} member by character name */
   get(name) { return this.members.find((m) => m.name === name || m.key === name); }
+
+  /**
+   * Draw the stochastic fields for one member off `this.rnd`.
+   *
+   * Called from `init()` in member order and again, in the same order off a
+   * rewound stream, from `snap()`. Keeping it in one place is what makes a
+   * snapped formation identical to a booted one rather than merely similar.
+   */
+  _seed(m) {
+    m.wander = this.rnd.range(0, Math.PI * 2);
+    m.wanderRate = this.rnd.range(0.10, 0.22);
+    m.glanceTimer = this.rnd.range(1.5, 6);
+    m.glancing = 0;
+  }
+
+  /**
+   * Where `m`'s formation slot currently sits in world space.
+   *
+   * The single definition of the slot, read by both `update()` (as the steering
+   * target) and `snap()` (as the place to put them). If these two ever disagree
+   * the formation drifts on the first frame after a snap.
+   */
+  _slotTarget(m, pp, cos, sin, out) {
+    const ox = m.slot.x + Math.sin(m.wander) * 0.42;
+    const oz = m.slot.y + Math.cos(m.wander * 0.73) * 0.34;
+    return out.set(pp.x + ox * cos + oz * sin, 0, pp.z - ox * sin + oz * cos);
+  }
+
+  /**
+   * Place the formation on its slots and erase every trace of history.
+   *
+   * **Why this exists.** Formation state integrates: `wander` accumulates,
+   * `speed`/`gait` damp toward a target, the glance timers count down off a
+   * shared RNG stream, and each companion's `Animator` carries a clock. None of
+   * it was ever reset between captures, so a `follow` shot's result depended on
+   * which shots ran before it — the same shot in a batch once put the camera
+   * *inside* another party member, and `prompto_closeup` read as out of focus
+   * purely because he was still steering when the shutter opened. That is a
+   * whole-frame TAA and motion-blur smear, not a depth-of-field bug, and it
+   * undermined determinism for all 47 follow shots.
+   *
+   * Called from `Game.applyShot` before the settle loop.
+   *
+   * Do **not** try to fix this from the capture harness instead. Two attempts
+   * were made and both reverted: a re-anchor convergence loop (the formation
+   * keeps drifting between iterations, so the camera lands inside whoever is in
+   * the way) and a long per-shot settle (240 extra frames x 47 shots, and it did
+   * not fix the ordering). The state that carries is here, so the reset is here.
+   */
+  snap() {
+    const player = this.player || (this.game && this.game.get('Player'));
+    if (!player || !this.members) return;
+    const pp = player.position;
+    const ph = player.root.rotation.y;
+    const cos = Math.cos(ph), sin = Math.sin(ph);
+    const at = new THREE.Vector3();
+
+    // Rewind the shared stream first, then re-draw in member order.
+    this.rnd = new Rng(PARTY_SEED);
+    for (const m of this.members) {
+      this._seed(m);
+
+      this._slotTarget(m, pp, cos, sin, at);
+      m.root.position.x = at.x;
+      m.root.position.z = at.z;
+      m.root.position.y = this.terrain ? this.terrain.heightAt(at.x, at.z) : 0;
+
+      // At rest `update()` turns them toward Noctis; land on that angle so the
+      // damp has nothing left to do on the first frame.
+      m.heading = Math.atan2(pp.x - m.root.position.x, pp.z - m.root.position.z);
+      m.root.rotation.y = m.heading;
+
+      m.velocity.set(0, 0, 0);
+      m.speed = 0;
+      m.gait = 0;
+      m.avoidX = 0;
+      m.avoidZ = 0;
+      m.avoidAge = 99;
+      m.aiTarget = null;
+      m._target.copy(at);
+      m._steer.set(0, 0, 0);
+
+      // The controller integrates its own vertical velocity and step-up climb.
+      if (m.body) {
+        m.body.vy = 0;
+        m.body.grounded = true;
+        m.body.onProp = false;
+        m.body.progress = 1;
+        m.body.climb = m.body.stepUp;
+        m.body.normal.set(0, 1, 0);
+        // One zero-velocity step reconciles terrain height with the real
+        // collision ground, which differs wherever they stand on a prop.
+        m.body.move(m.root.position, 0, 0, 1 / 60);
+      }
+
+      m.character.setLookTarget(null);
+      if (m.character.anim && m.character.anim.rest) m.character.anim.rest();
+    }
+  }
 
   update(dt, game) {
     const player = this.player || game.get('Player');
@@ -102,11 +213,8 @@ export class Party {
       m.wander += dt * m.wanderRate;
 
       // formation slot in the player's frame, breathing with a slow wander
-      const ox = m.slot.x + Math.sin(m.wander) * 0.42;
-      const oz = m.slot.y + Math.cos(m.wander * 0.73) * 0.34;
-      const tx = pp.x + ox * cos + oz * sin;
-      const tz = pp.z - ox * sin + oz * cos;
-      m._target.set(tx, 0, tz);
+      this._slotTarget(m, pp, cos, sin, m._target);
+      const tx = m._target.x, tz = m._target.z;
 
       const steer = m._steer.set(tx - m.root.position.x, 0, tz - m.root.position.z);
       let dist = steer.length();

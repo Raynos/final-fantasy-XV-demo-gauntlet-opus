@@ -203,6 +203,17 @@ export class Game {
     // it, which put the party panel and minimap over all 126 non-HUD shots.
     if (hud && hud.setVisible) hud.setVisible(!!shot.hud);
 
+    // Erase animation and formation history BEFORE the camera anchors, so a
+    // `follow` shot frames a settled subject rather than one still steering to
+    // its slot. Formation state used to carry across shots, which made every
+    // follow shot depend on what ran before it: `prompto_closeup` read as out of
+    // focus (a whole-frame TAA/motion-blur smear, not DOF), and one batch put the
+    // camera inside another party member. See `Party.snap`.
+    const party = this.get('Party');
+    if (party && party.snap) party.snap();
+    const player = this.get('Player');
+    if (player && player.character && player.character.anim) player.character.anim.rest();
+
     const rig = this.get('CameraRig');
     if (shot.follow) {
       const p = this.followAnchor(shot.follow);
