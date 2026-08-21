@@ -36,7 +36,7 @@ export function buildHair(rig, look) {
   const rootC = base.clone().multiplyScalar(0.84);
   // the value the gaps between locks should sit at: the root colour carried a
   // third of the way toward the tips, which is roughly the strand mid-tone
-  const shellC = rootC.clone().lerp(tip, 0.34);
+  const shellC = rootC.clone().lerp(tip, 0.52);
 
   // hairline elevation in canonical y for a given azimuth
   // A hairline is not a circle. It rides high across the forehead, plunges at
@@ -50,10 +50,10 @@ export function buildHair(rig, look) {
     // Ear notch. A hairline goes *around* the ear; this one ran straight across
     // it, so the scalp shell buried the top half of both ears and no `_profile`
     // frame in the game had a visible ear at all. `FACE.ear` sits at azimuth
-    // ~1.66 rad, and the notch is a local dip there rather than a global
-    // `temple` increase, which would open bald patches beside the eyes.
+    // ~1.66 rad and the hairline *rises* there — the opposite sign to `temple`,
+    // which drops at the sides so there is no bald patch beside the eyes.
     const ath = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
-    y -= (H.earNotch ?? 0.022) * Math.exp(-Math.pow((ath - 1.66) / 0.40, 2));
+    y += (H.earNotch ?? 0.034) * Math.exp(-Math.pow((ath - 1.66) / 0.36, 2));
     return y;
   };
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
@@ -206,8 +206,8 @@ export function buildHair(rig, look) {
         // black shape". Some clumps sit near the root value, some run almost to
         // the tip value at their base — that is what makes the mass legible
         // once every individual ribbon is thinner than a pixel.
-        color: tRoot.clone().lerp(tTip, 0.20 + 0.75 * Math.pow(rng.next(), 1.4)),
-        tipColor: tTip.clone().multiplyScalar(0.82 + 0.55 * rng.next()),
+        color: tRoot.clone().lerp(tTip, 0.18 + 0.58 * Math.pow(rng.next(), 1.3)),
+        tipColor: tTip.clone().multiplyScalar(0.78 + 0.34 * rng.next()),
         // Clump profile. Holding the width through the body of the strand and
         // dropping it at the end is an *arrowhead*: a broad blade converging to
         // a point in a straight line, which is precisely what read as a quill.

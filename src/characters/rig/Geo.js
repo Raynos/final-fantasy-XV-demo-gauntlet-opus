@@ -614,7 +614,7 @@ export function ribbon(B, o) {
     // clockwise in the (right, front) plane — matches the winding the old
     // four-point section had, so the outward face stays the outward face
     const a = -(k / sides) * Math.PI * 2;
-    const f = (k * 2) / sides;
+    const f = ((k * 2) / sides) % 2;
     cs.push([Math.cos(a), Math.sin(a), f <= 1 ? f : 2 - f]);
   }
   const rows = [];

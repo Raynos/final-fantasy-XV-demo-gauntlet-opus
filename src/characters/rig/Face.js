@@ -356,22 +356,68 @@ export function buildHead(rig, look) {
   }
 
   // ---- ears --------------------------------------------------------------
+  // Two nested blobs is a mitten for the side of the head. An ear reads at any
+  // distance because of exactly three ridges: the rolled outer rim (helix), the
+  // Y-shaped ridge inside it (antihelix), and the flap over the canal (tragus).
+  // Without them the profile has a bump where an ear should be, which is worse
+  // than nothing because the eye goes looking for the detail and finds a lump.
   for (const sg of [1, -1]) {
     const e = FACE.ear;
-    const c = put([e[0] * sg * hw * 0.97, e[1], e[2]]);
+    const ex = e[0] * sg * hw;
+    const c = put([ex * 0.97, e[1], e[2]]);
     B.group(2);
     B.mat(0.46, 0, 1);           // an ear is two sheets of skin and a wafer of cartilage
+    // the auricular plate — the sheet the ridges sit on
     blob(B, {
-      center: [c.x, c.y, c.z], scale: [0.0092 * scale, 0.0305 * scale, 0.0192 * scale],
+      center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0305 * scale, 0.0192 * scale],
       rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9,
     });
-    const c2 = put([e[0] * sg * hw * 0.92, e[1] - 0.004, e[2] + 0.003]);
-    B.color(0xbfbfbf);
+    // concha: the bowl in front of the canal, in shadow at almost every angle
+    const c2 = put([ex * 0.90, e[1] - 0.004, e[2] + 0.003]);
+    B.color(0xa8a8a8);
     blob(B, {
-      center: [c2.x, c2.y, c2.z], scale: [0.0050 * scale, 0.0182 * scale, 0.0105 * scale],
+      center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0170 * scale, 0.0098 * scale],
       rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7,
     });
     B.color(0xffffff);
+
+    // a ridge, authored in the ear's own (y, z) plane and swept as a ribbon
+    const ridge = (a0, a1, ry, rz, cy, cz, out, wid, n) => {
+      const pts = [];
+      for (let k = 0; k <= n; k++) {
+        const a = lerp(a0, a1, k / n);
+        // the rim stands proudest at the top of its arc and folds back in at
+        // both ends, which is what makes it read as *rolled*
+        const bulge = out * Math.sin(Math.PI * (0.18 + 0.82 * (k / n)));
+        pts.push(put([
+          ex * (0.985 + bulge),
+          e[1] + cy + Math.cos(a) * ry,
+          e[2] + cz + Math.sin(a) * rz,
+        ]).toArray());
+      }
+      ribbon(B, {
+        points: pts, steps: n, sides: 6,
+        width: wid * scale, thick: wid * 0.85 * scale,
+        up: [sg, 0, 0],
+        taper: (t) => 0.55 + 0.45 * Math.sin(Math.PI * Math.pow(t, 0.9)),
+      });
+    };
+    // helix — front-top, over the crown of the ear, down the back to the lobe
+    ridge(1.02, -2.55, 0.0288, 0.0180, 0.0000, -0.0010, 0.13, 0.0030, 9);
+    // antihelix — the inner Y, set back from the rim and shallower
+    ridge(0.72, -1.90, 0.0182, 0.0104, -0.0016, 0.0026, 0.055, 0.0024, 7);
+    // tragus — the flap over the canal, pointing back into the concha
+    const tg = put([ex * 0.955, e[1] - 0.0055, e[2] + 0.0135]);
+    blob(B, {
+      center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0062 * scale, 0.0032 * scale],
+      rot: [0, sg * 0.5, 0], segU: 8, segV: 6,
+    });
+    // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim
+    const lb = put([ex * 0.965, e[1] - 0.0296, e[2] + 0.0026]);
+    blob(B, {
+      center: [lb.x, lb.y, lb.z], scale: [0.0062 * scale, 0.0075 * scale, 0.0068 * scale],
+      rot: [0, sg * 0.25, 0], segU: 8, segV: 6,
+    });
     B.mat(0.5, 0, 0);
     B.group(0);
   }
@@ -536,13 +582,19 @@ function buildLid(B, o) {
     // ---- caruncle --------------------------------------------------------
     // The pink fleshy wedge in the inner canthus. Without it the two lids meet
     // at a geometric point and the inner corner reads as a seam in a mask.
-    const cf = 0.05;
+    // `EYE.arc[0]` is the nasal end — `eyePoint` takes `sin(a * sg)`, and at
+    // a = arc[0] that lands on the midline side of the globe for both signs, so
+    // fissure fraction 0.05 is the inner canthus on both eyes. What was wrong
+    // was the *size and standoff*: at 3.4 x 4.7 mm sitting a millimetre proud of
+    // the lid shell it rendered as a dark bead stuck to the front of the eye at
+    // 0.4 m. A caruncle is a 2 mm wedge tucked between the lid margins.
+    const cf = 0.055;
     const ca = lerp(arc[0], arc[1], cf);
-    const c0 = pt(ca, -0.02, R * (EYE.lidR - 0.02), 0.02);
+    const c0 = pt(ca, -0.012, R * 1.005, 0.03);
     const [cu, cv] = uv(c0[0], c0[1], c0[2]);
     B.group(4);
-    B.color(0xf0b8a6).mat(0.26, 0, 0.9).skin([[head, 1]]);
-    const cs = [R * 0.16, R * 0.22, R * 0.13];
+    B.color(0xe7b3a4).mat(0.30, 0, 0.55).skin([[head, 1]]);
+    const cs = [R * 0.105, R * 0.150, R * 0.085];
     const cr = [];
     for (let v = 0; v <= 5; v++) {
       const ph = (v / 5) * Math.PI;
