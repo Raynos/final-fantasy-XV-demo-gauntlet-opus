@@ -7,9 +7,12 @@ import { grassClumpTex } from './VegTextures.js';
 /**
  * Camera-following instanced grass with three LOD rings:
  *
- *   0  real tapered blade geometry, grown in tufts, 0-30 m
- *   1  crossed alpha-cut tuft cards, 25-95 m
- *   2  big sparse clump cards, 88-190 m
+ *   0  real tapered blade geometry, grown in tufts, 0-26 m
+ *   1  crossed alpha-cut tuft cards, 21-84 m
+ *   2  sparse multi-tuft clump cards, 78-155 m
+ *
+ * All three read their height from one place — {@link tuftHeight} — because
+ * they had drifted to a measured 1 : 2 : 3.5 when each computed its own.
  *
  * Placement is *position-hashed*, never sequence-dependent, so a tile
  * regenerates byte-identically no matter which order tiles stream in.
@@ -21,11 +24,14 @@ import { grassClumpTex } from './VegTextures.js';
 
 // Ring sizing, two rules:
 //
-// The blade ring is short because Leide grass is ankle-to-calf high. Past
-// thirty metres a whole tuft is a couple of pixels, and one textured card per
-// tuft is then both cheaper and *more* accurate than a hundred sub-pixel
-// triangles. `spacing` on that ring is therefore the tuft grid, not the blade
-// grid: every accepted cell spawns a whole clump.
+// The blade ring is short because Leide grass is an ankle tuft. Past twenty-odd
+// metres a whole tuft is a couple of pixels, and one textured card per tuft is
+// then both cheaper and *more* accurate than a hundred sub-pixel triangles.
+// `spacing` on that ring is therefore the tuft grid, not the blade grid: every
+// accepted cell spawns a whole clump. Every ring came in when the grass got
+// shorter (30/95/190 -> 26/84/155) for exactly that reason: a 0.16 m tuft goes
+// sub-pixel sooner than the 0.34 m one the old numbers were drawn around, and
+// the metres bought back pay for the tighter tuft grid.
 //
 // The outer ring used to reach 300 m. An alpha-cut card that small samples the
 // coarsest mips, where its silhouette no longer exists, so the whole quad
@@ -34,13 +40,55 @@ import { grassClumpTex } from './VegTextures.js';
 // and handing the rest to the terrain's own grass tint reads far better than
 // stamping geometry the alpha test cannot resolve.
 const LODS = [
-  { name: 'blade', tile: 12, far: 30, spacing: 0.36, max: 240000 },
-  { name: 'clump', tile: 24, near: 25, far: 95, spacing: 0.46, max: 105000 },
-  { name: 'far', tile: 48, near: 88, far: 190, spacing: 1.7, max: 44000 },
+  { name: 'blade', tile: 12, far: 26, spacing: 0.27, max: 240000, hMul: 1.0 },
+  { name: 'clump', tile: 24, near: 21, far: 84, spacing: 0.40, max: 105000, hMul: 1.05 },
+  { name: 'far', tile: 48, near: 78, far: 155, spacing: 1.35, max: 44000, hMul: 1.45 },
 ];
 
 /** Blades in the fattest tuft. Sizes the tile scratch buffer. */
 const MAX_PER_CLUMP = 22;
+
+/**
+ * How much of the dirt's colour bleeds into the grass growing out of it.
+ *
+ * Some is right — it ties the field to the ground and stops the vegetation
+ * reading as a decal laid on top. 0.32 was not some: it meant a third of every
+ * blade's hue came from the terrain's macro tint rather than from the
+ * vegetation palette, and while that macro tint is a hard-coded Leide ochre
+ * (the terrain never reads the world map) it was quietly dragging Duscae's
+ * grass toward the desert too.
+ */
+const GROUND_BLEED = 0.22;
+
+/**
+ * The one height law for the whole field: the apparent height in metres of a
+ * single tuft — the number the blade ring's tallest stems reach, and the number
+ * a clump card that replaces that tuft is built to.
+ *
+ * It exists because the three rings were each computing their own height from
+ * the same inputs and had drifted badly apart. Measured in the field at
+ * Hammerhead before this change: blade ring mean 0.171 m / max 0.407 m, LOD1
+ * cards 0.340 / 0.668, LOD2 cards 0.604 / 1.068 — a ratio of **1 : 2 : 3.5**
+ * across a boundary the eye is supposed to be unable to find. Half of why the
+ * grass read as knee-high straw is simply that a metre-tall card was standing
+ * where a 0.2 m tussock belongs. Leide grass is an ankle tuft; at d = 0.68 this
+ * gives 0.10-0.25 m with a mean of 0.157, and the zone `grassH` multiplier
+ * still takes Alstor Slough and the Vesperpool to waist-high reed.
+ *
+ * Every ring multiplies this by its own `LODS[i].hMul` and nothing else. A card
+ * ring is allowed to be slightly taller than one tuft because it stands in for
+ * several at once and inherits the tallest — but "slightly" is 1.05 and 1.45,
+ * not 2 and 3.5.
+ *
+ * @param {number} d    local grass density 0..1
+ * @param {number} wet  local wetness 0..1
+ * @param {number} hMul the zone's `grassH`
+ * @param {number} jitter per-tuft 0..1 draw
+ * @returns {number} metres
+ */
+function tuftHeight(d, wet, hMul, jitter) {
+  return (0.100 + 0.090 * d + 0.130 * wet * wet) * hMul * (0.62 + jitter * 0.88);
+}
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -71,32 +119,51 @@ const _cGround = new THREE.Color();
  * The tip is a single vertex, so the blade tapers to a real point and we spend
  * one triangle there instead of a degenerate quad.
  */
-function bladeGeometry(segs = 4) {
+function bladeGeometry(segs = 5) {
   const pos = [], nor = [], uv = [], col = [], flex = [], idx = [];
-  const HALF_W = 0.043;   // half width at the root, as a fraction of height
+  const HALF_W = 0.046;   // half width at the root, as a fraction of height
   const CURVE = 0.34;     // tip offset along +Z, as a fraction of height
+  const SWAY = 0.085;     // lateral S, as a fraction of height
   const FAN = 0.95;       // lateral normal spread -> rounded cross-section
+  // Width profile: a real blade is near enough parallel-sided for its lower
+  // half and then draws to a point over the last quarter. `pow(1 - t, 0.6)`
+  // did the opposite — it took a sixth of the width off in the first eighth of
+  // the length, which is a spear, and a field of spears is the "spiky star"
+  // read the tufts had.
+  const widthAt = (t) => HALF_W * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2.2)));
+  // A slight lateral S on top of the forward droop, so a blade is not a plane
+  // curve. Instance yaw is already random, so this reads as blades twisting out
+  // of the tuft rather than as a field all bending one way.
+  const swayAt = (t) => SWAY * t * t * (1.35 - t);
   const shadeAt = (t) => 0.40 + Math.pow(t, 0.75) * 0.62;
+  // The root-to-tip ramp carries *hue* as well as value. A real blade loses
+  // chroma into the shaded litter it grows out of and bleaches warm at the tip,
+  // so the base is darker and greyer and the tip is lighter and strawier. The
+  // old constant (0.99, 1, 0.83) gave every blade the same warm cast from root
+  // to point, which is one more reason the field averaged to a single colour.
+  const warmAt = (t) => 0.92 + t * 0.16;
+  const coolAt = (t) => 0.94 - t * 0.20;
   for (let i = 0; i < segs; i++) {
     const t = i / segs;
-    const w = HALF_W * Math.pow(1 - t, 0.6);
+    const w = widthAt(t);
     const z = CURVE * t * t;
+    const sx = swayAt(t);
     for (let s = -1; s <= 1; s += 2) {
-      pos.push(s * w, t, z);
+      pos.push(sx + s * w, t, z);
       // the blade leans further off vertical as it droops, so the face normal
       // tips forward with it
       nor.push(s * FAN, 0.9, 0.42 + t * 0.72);
       uv.push(s * 0.5 + 0.5, t);
       const shade = shadeAt(t);
-      col.push(shade * 0.99, shade, shade * 0.83);
+      col.push(shade * warmAt(t), shade, shade * coolAt(t));
       flex.push(t);
     }
   }
-  pos.push(0, 1, CURVE);
+  pos.push(swayAt(1), 1, CURVE);
   nor.push(0, 0.9, 1.14);
   uv.push(0.5, 1);
   const st = shadeAt(1);
-  col.push(st * 0.99, st, st * 0.83);
+  col.push(st * warmAt(1), st, st * coolAt(1));
   flex.push(1);
 
   for (let i = 0; i < segs - 1; i++) {
@@ -117,7 +184,18 @@ function bladeGeometry(segs = 4) {
   return g;
 }
 
-/** N crossed quads, unit height, used for clump cards. */
+/**
+ * N crossed quads, unit height, used for clump cards.
+ *
+ * The vertical vertex ramp is deliberately shallow (0.86 at the root to 1.06 at
+ * the tip, coverage-weighted mean 0.931). It used to run 0.50 to 0.98, which
+ * *double-counted* the root-to-tip gradient the clump texture already paints
+ * into every blade it draws, and then `aoBoost` darkened the base a third time.
+ * Three stacked occlusion ramps on a card that is one tuft seen from thirty
+ * metres is most of why the card rings rendered as black gravel. The texture
+ * owns that gradient now; this ramp only keeps the mass from reading as a flat
+ * decal.
+ */
 function crossCardGeometry(planes = 3, width = 1.0) {
   const pos = [], nor = [], uv = [], col = [], idx = [];
   let v = 0;
@@ -133,7 +211,7 @@ function crossCardGeometry(planes = 3, width = 1.0) {
       pos.push(x, y, z);
       nor.push(nx * 0.35, 0.9, nz * 0.35);
       uv.push(u, vv);
-      const shade = 0.5 + vv * 0.48;
+      const shade = 0.86 + vv * 0.20;
       col.push(shade, shade, shade);
     }
     idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
@@ -187,7 +265,11 @@ export class GrassField {
   }
 
   build() {
-    const bladeGeo = bladeGeometry(4);
+    // Five segments, not four. The blade now has a real S in it and a tip that
+    // draws to a point over the last quarter, and four segments cannot describe
+    // either — the curve came out as two straight facets with a visible kink.
+    // Two extra triangles per blade is the cheapest silhouette in the file.
+    const bladeGeo = bladeGeometry(5);
     const clumpGeo = crossCardGeometry(3, 1.0);
     const farGeo = crossCardGeometry(2, 1.0);
 
@@ -199,6 +281,12 @@ export class GrassField {
     // roughness low enough that the rounded cross-section actually catches a
     // specular streak down the midrib; translucency so backlit blades glow
     // at dawn/dusk instead of going to silhouette.
+    // Backlit glow is not a near-field luxury: the blade ring had
+    // `translucency 1.05` and both card rings had none, so a field lit from
+    // behind at dawn or dusk *dropped to silhouette exactly at the LOD ring* —
+    // a hard dark arc drawn across the grass at twenty-odd metres. The cards
+    // carry it too now, scaled down because a whole tuft transmits less than a
+    // single blade does.
     const m0 = grassMat({
       mat: { roughness: 0.62 },
       veg: {
@@ -223,14 +311,14 @@ export class GrassField {
       mat: { map: clumpTexA, alphaTest: 0.42, transparent: false, roughness: 0.94 },
       veg: {
         bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.7, flexPow: 2.0,
-        twoSidedNormals: true, aoBoost: 0.3, specular: 0,
+        twoSidedNormals: true, aoBoost: 0.3, specular: 0, translucency: 0.62,
       },
     });
     const m2 = grassMat({
       mat: { map: clumpTexB, alphaTest: 0.42, transparent: false, roughness: 0.96 },
       veg: {
         bend: 0.24, flutter: 0.1, gustFreq: 0.045, flexPow: 2.0,
-        twoSidedNormals: true, aoBoost: 0.2, specular: 0,
+        twoSidedNormals: true, aoBoost: 0.2, specular: 0, translucency: 0.34,
       },
     });
 
@@ -348,6 +436,10 @@ export class GrassField {
     const sg = new Float32Array((CG + 1) * (CG + 1));
     const kg = new Float32Array((CG + 1) * (CG + 1));
     const cg = new Float32Array((CG + 1) * (CG + 1) * 3);
+    // The same grid sampled at the *dry* end of the zone's ramp. A bleached
+    // tuft is interpolated toward this instead of being pushed there by a
+    // per-channel gain, so no clump can leave the authored palette.
+    const cd = new Float32Array((CG + 1) * (CG + 1) * 3);
     for (let j = 0; j <= CG; j++) {
       for (let i = 0; i <= CG; i++) {
         const x = x0 + (i / CG) * T, z = z0 + (j / CG) * T;
@@ -356,10 +448,14 @@ export class GrassField {
         wg[k] = eco.wetness(x, z);
         sg[k] = eco.grassScale(x, z);
         kg[k] = eco.grassDead(x, z);
-        eco.grassColor(x, z, _cGrass);
         eco.groundColor(x, z, _cGround);
-        _cGrass.lerp(_cGround, 0.32);
+        // Grass picks up the colour of the dirt it grows out of, but only a
+        // little: at the old 0.32 a fifth of Leide's hue was coming from the
+        // terrain's macro tint rather than from the vegetation palette.
+        eco.grassColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
         cg[k * 3] = _cGrass.r; cg[k * 3 + 1] = _cGrass.g; cg[k * 3 + 2] = _cGrass.b;
+        eco.grassDryColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
+        cd[k * 3] = _cGrass.r; cd[k * 3 + 1] = _cGrass.g; cd[k * 3 + 2] = _cGrass.b;
       }
     }
     const hg = new Float32Array((HG + 1) * (HG + 1));
@@ -393,13 +489,35 @@ export class GrassField {
     // Per-clump colour: a tuft is one plant, so it is one colour. Spreading
     // the dry/green spread across individual blades instead just averages back
     // out to a uniform field at any distance.
-    const tint = (u, v, wet, dry, k) => {
-      const r = bil(cg, CG, u, v, 3, 0), g = bil(cg, CG, u, v, 3, 1), b = bil(cg, CG, u, v, 3, 2);
-      // dry tufts bleach toward straw: red up, blue down, value up
-      const lift = k * (1 + dry * 0.10);
-      cArr[count * 3] = r * lift * (1 + dry * 0.44);
-      cArr[count * 3 + 1] = g * lift * (1 + dry * 0.13);
-      cArr[count * 3 + 2] = b * lift * (1 - dry * 0.40) * (0.9 + wet * 0.28);
+    //
+    // What this replaced: `r * (1 + dry*0.44)`, `b * (1 - dry*0.40)` and a
+    // value-only jitter. That pair is ~1.8x on red and ~0.6x on blue at the dry
+    // end, and it does not care what the palette says — measured in Leide it
+    // put the field at r/g 1.76 and b/g 0.21 from a ramp whose own dry end is
+    // 1.33 and 0.33. No amount of palette editing can undo a channel gain
+    // applied after the palette, which is why the grass stayed highlighter
+    // yellow through several rounds of recolouring.
+    //
+    // Now: walk the zone's *own* ramp toward its *own* dry end, jitter the hue
+    // a little at constant luminance so neighbouring tufts differ in more than
+    // brightness, pull everything back toward its own luminance so no clump can
+    // be more saturated than the palette allows, and only then apply a value
+    // jitter that is symmetric about the base instead of a one-way lift.
+    const tint = (u, v, dry, k, hue, sat) => {
+      const lr = bil(cg, CG, u, v, 3, 0), lg = bil(cg, CG, u, v, 3, 1), lb = bil(cg, CG, u, v, 3, 2);
+      const dr = bil(cd, CG, u, v, 3, 0), dgc = bil(cd, CG, u, v, 3, 1), db = bil(cd, CG, u, v, 3, 2);
+      let r = lr + (dr - lr) * dry;
+      let g = lg + (dgc - lg) * dry;
+      let b = lb + (db - lb) * dry;
+      const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      // hue push: +1 straw, -1 green, renormalised so it costs no value
+      r *= 1 + hue * 0.22; g *= 1 + hue * 0.02; b *= 1 - hue * 0.34;
+      const L2 = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const n = L2 > 1e-5 ? L / L2 : 1;
+      r *= n; g *= n; b *= n;
+      cArr[count * 3] = (L + (r - L) * sat) * k;
+      cArr[count * 3 + 1] = (L + (g - L) * sat) * k;
+      cArr[count * 3 + 2] = (L + (b - L) * sat) * k;
     };
 
     for (let j = 0; j < n; j++) {
@@ -410,6 +528,7 @@ export class GrassField {
         const clumpRnd = rng.next();
         const colRnd = rng.next();
         const deadRnd = rng.next();
+        const hueRnd = rng.next();
         if (d < 0.02 || roll > d * 1.3) continue;
         const x = x0 + u * T, z = z0 + v * T;
         const y = bil(hg, HG, u, v);
@@ -423,36 +542,67 @@ export class GrassField {
         const dead = deadRnd < deadFrac * (1 - wet * 0.4);
         const dry = dead ? 1
           : Math.pow(colRnd, 0.42) * THREE.MathUtils.clamp(1.5 - wet * 1.45, 0, 1);
+        // Per-clump hue: -1 leans green, +1 leans straw, applied at constant
+        // luminance. This is the variation the field never had — every previous
+        // jitter was value-only, and a field whose only variation is brightness
+        // averages back to one flat colour at any distance past a few metres.
+        //
+        // `dry` has to push the hue as well as walk the ramp, because in Leide
+        // the local colour is *already* the ramp's dry end: with nothing further
+        // along it to interpolate toward, the bleach term did nothing at all and
+        // the whole flats came out one sage green. A luminance-preserving push
+        // toward straw still cannot leave the palette — `sat` below bounds it.
+        const hue = (hueRnd - 0.5) * 1.8 + dry * 0.55 + (dead ? 0.4 : 0);
+        // Bleaching is a *loss* of chroma, not a gain: last season's tussock is
+        // pale grey-straw, and a sun-dried live one is halfway there.
+        const sat = dead ? 0.54 : 0.88 - dry * 0.22;
 
         if (isBlade) {
           // one tuft: a ring of blades leaning out of a shared root, tallest
           // in the middle. Radius and population both vary, so the field is
           // tufts-and-dirt rather than an even scatter.
           // heavy-tailed tuft size: mostly small sprigs, the odd fat tussock
-          const vig = 0.55 + Math.pow(clumpRnd, 1.7) * 1.35;
-          const rad = (0.05 + clumpRnd * 0.13 + rng.next() * 0.07) * vig;
+          const hTuft = tuftHeight(d, wet, hMul, Math.pow(clumpRnd, 1.7)) * lod.hMul;
+          // Radius follows height. It used to be an absolute range that worked
+          // out at ~0.83x the tuft's own height, which is not a tussock, it is
+          // a pancake — and a pancake of blades is exactly the shape that reads
+          // as an unbroken mat rather than as separate plants.
+          const rad = hTuft * (0.26 + rng.next() * 0.30);
           // whole-tuft lean: a real tussock is combed over by the prevailing
           // wind, so it is never the radially symmetric pom-pom that a pure
           // outward splay produces
           const tuftA = rng.next() * Math.PI * 2;
           const tuftL = rng.next() * 0.30;
+          // Fewer blades per tuft than before, over a tighter tuft grid: same
+          // instance budget spent on more, smaller plants, which is what puts
+          // open dirt back between them.
           const nb = Math.min(MAX_PER_CLUMP,
-            Math.max(3, Math.round((4 + d * 14) * (0.55 + rng.next() * 0.95))));
-          const hBase = (0.10 + 0.10 * d + 0.13 * wet * wet) * (0.68 + vig * 0.38) * hMul;
-          const k = (dead ? 0.92 : 0.62) + colRnd * 0.62;
+            Math.max(3, Math.round((2 + d * 6.5) * (0.55 + rng.next() * 0.95))));
+          // Value jitter symmetric about the base rather than a one-way lift:
+          // the old `0.62 + colRnd*0.62`, times another 0.9-1.2 per blade,
+          // could only ever make a clump brighter than the palette.
+          const k = ((dead ? 1.02 : 0.78) + colRnd * (dead ? 0.34 : 0.44))
+            * (1 + dry * 0.12);
           for (let bI = 0; bI < nb; bI++) {
             if (count >= cap) break;
             const a = rng.next() * Math.PI * 2;
             const rr = Math.sqrt(rng.next()) * rad;
             // blades at the edge of a tuft are shorter and lean out further
             const edge = rr / Math.max(rad, 1e-4);
-            // long tail on the height so a few stems overtop the tuft
-            const h = hBase * (0.45 + Math.pow(rng.next(), 0.7) * 1.15) * (1 - edge * 0.28);
-            const lean = (0.10 + edge * 0.42) * (0.6 + rng.next() * 0.9);
+            // Long tail on the height so a few stems overtop the tuft, scaled
+            // so that the tallest of them lands on `hTuft` and not past it —
+            // that is the contract the card rings are matched against.
+            const h = hTuft * (0.30 + Math.pow(rng.next(), 0.7) * 0.72) * (1 - edge * 0.28);
+            // Lean and droop both scale with the blade's own share of the
+            // tuft's height. A tall stem lies over under its own weight while
+            // its short neighbour stands up, which is what stops a tuft reading
+            // as one shape scaled N times.
+            const hRel = h / Math.max(hTuft, 1e-4);
+            const lean = (0.08 + edge * 0.40) * (0.55 + rng.next() * 0.85)
+              * (0.62 + hRel * 0.85);
             const yaw = a + rng.gauss(0, 0.5);
-            // droop grows faster than height: a half-metre stem lies over
-            // under its own weight, an ankle-high one stands up
-            const zj = (0.55 + h * 2.4) * (0.7 + rng.next() * 0.7);
+            const zj = (0.42 + h * 3.4) * (0.55 + rng.next() * 1.05)
+              * (0.70 + hRel * 0.55);
             _e.set(Math.sin(a) * lean + Math.sin(tuftA) * tuftL,
               yaw, -Math.cos(a) * lean - Math.cos(tuftA) * tuftL);
             _q.setFromEuler(_e);
@@ -460,32 +610,32 @@ export class GrassField {
             _scl.set(h * (0.82 + rng.next() * 0.4), h, h * zj);
             _m.compose(_pos, _q, _scl);
             _m.toArray(mArr, count * 16);
-            tint(u, v, wet, dry, k * (0.9 + rng.next() * 0.2));
+            tint(u, v, dry, k * (0.94 + rng.next() * 0.12), hue, sat);
             count++;
           }
           continue;
         }
 
+        // One card is one tuft (LOD1) or a small stand of them (LOD2), and both
+        // get their height from the same law the blade ring does — that is the
+        // whole point of `tuftHeight`. The cards are proportionally *wider*
+        // than they used to be so that halving their height does not quarter
+        // the coverage: a tuft seen at fifty metres is a low sprawling shape,
+        // not a tall narrow one.
         const jitter = rng.next();
-        let h, w;
-        if (li === 1) {
-          // one card == one tuft, matched to the blade ring it takes over from
-          h = (0.16 + 0.22 * d + 0.2 * wet * wet) * (0.75 + jitter * 0.85) * hMul;
-          w = h * (1.5 + rng.next() * 1.1);
-        } else {
-          // bigger cards on the outer ring: a few large clumps resolve, a
-          // scatter of tiny ones only aliases
-          h = (0.3 + 0.4 * d) * (0.8 + jitter * 0.8) * hMul;
-          w = h * (1.8 + rng.next() * 1.2);
-        }
+        const h = tuftHeight(d, wet, hMul, jitter) * lod.hMul;
+        const w = h * (li === 1 ? 2.2 + rng.next() * 1.5 : 2.6 + rng.next() * 1.8);
         const yaw = rng.next() * Math.PI * 2;
         _e.set(rng.gauss(0, 0.07), yaw, rng.gauss(0, 0.06));
         _q.setFromEuler(_e);
-        _pos.set(x, y - 0.03, z);
+        // sink proportionally, not absolutely: 3 cm hid the root of a 0.6 m
+        // card and buries a fifth of a 0.16 m one
+        _pos.set(x, y - h * 0.07, z);
         _scl.set(w, h, w);
         _m.compose(_pos, _q, _scl);
         _m.toArray(mArr, count * 16);
-        tint(u, v, wet, dry, (dead ? 0.85 : 0.58) + jitter * 0.46);
+        tint(u, v, dry, ((dead ? 1.00 : 0.76) + jitter * (dead ? 0.34 : 0.44))
+          * (1 + dry * 0.12), hue, sat);
         count++;
       }
     }

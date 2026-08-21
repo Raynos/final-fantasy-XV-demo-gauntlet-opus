@@ -517,14 +517,36 @@ export class Ecology {
   grassColor(x, z, out = new THREE.Color()) {
     const b = vegAt(x, z);
     const m = this.wetness(x, z) + b.wetBias;
+    return this._grassRamp(b, x, z, THREE.MathUtils.smoothstep(m, 0.22, 0.86), out);
+  }
+
+  /**
+   * The *dry* end of this spot's ramp — where a bleached or last-season tuft
+   * goes, in the zone's own authored straw rather than a synthesised one.
+   *
+   * `GrassField` lerps each clump between {@link grassColor} and this by how
+   * dry the clump is. Doing it that way instead of applying a red gain and a
+   * blue cut is the whole difference between "this tuft is further along its
+   * own palette" and "this tuft is orange": a per-channel gain can leave the
+   * palette entirely, and did — it put Leide's grass at 1.76x red over green,
+   * which is highlighter yellow, from a ramp whose own dry end is 1.33x.
+   */
+  grassDryColor(x, z, out = new THREE.Color()) {
+    return this._grassRamp(vegAt(x, z), x, z, 0, out);
+  }
+
+  /**
+   * A point on a biome's grass ramp, with the shared large-scale value noise.
+   * Leide keeps its authored straw/olive ramp; a forest zone brings its own
+   * pair of ends, so the Nebulawood's dry end is already darker and greener
+   * than Leide's lush end.
+   * @private
+   */
+  _grassRamp(b, x, z, t, out) {
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
-    // Leide keeps its authored straw/olive ramp; a forest zone brings its own
-    // pair of ends, so the Nebulawood's dry end is already darker and greener
-    // than Leide's lush end.
-    out.copy(b.dryC).lerp(b.lushC, THREE.MathUtils.smoothstep(m, 0.22, 0.86));
+    out.copy(b.dryC).lerp(b.lushC, t);
     const k = 0.86 + v * 0.3;
-    out.setRGB(out.r * k, out.g * (k * 0.98 + 0.02), out.b * k);
-    return out;
+    return out.setRGB(out.r * k, out.g * (k * 0.98 + 0.02), out.b * k);
   }
 
   /** Height multiplier for the grass field: ankle tuft .. waist-high reed. */

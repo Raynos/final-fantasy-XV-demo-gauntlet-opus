@@ -53,7 +53,7 @@ const SCRUB_ASH = { thorn: 0.72, sage: 0.28 };
 
 const BASE = {
   grassD: 1, grassH: 1, grassDead: 0.20,
-  dry: 0xa89358, lush: 0x596b31, wetBias: 0.0,
+  dry: 0x91855a, lush: 0x566733, wetBias: 0.0,
   treeD: 1, canopy: 0, trees: MIX_LEIDE, treeS: [0.8, 1.25], treeTint: [1, 1, 1],
   scrubD: 1, scrub: SCRUB_LEIDE,
   reedD: 0, lilyD: 0, mossy: 0,
@@ -68,35 +68,35 @@ export const VEG_BIOME = {
   // dirt, dry thorn scrub, the odd dead tree. Do not "improve" this.
   longwythe: mk({
     grassD: 1.0, grassH: 1.0, grassDead: 0.22,
-    dry: 0xa89358, lush: 0x596b31, wetBias: -0.04,
+    dry: 0x91855a, lush: 0x566733, wetBias: -0.04,
     treeD: 0.24, canopy: 0, trees: { dead: 0.7, savanna: 0.3 }, treeS: [0.75, 1.15],
     treeTint: [1.02, 0.94, 0.66],
     scrubD: 0.85, scrub: SCRUB_LEIDE,
   }),
   three_valleys: mk({
     grassD: 0.78, grassH: 0.92, grassDead: 0.28,
-    dry: 0xa89056, lush: 0x6a6c38, wetBias: -0.08,
+    dry: 0x8f8257, lush: 0x62663a, wetBias: -0.08,
     treeD: 0.20, trees: { dead: 0.8, savanna: 0.2 }, treeS: [0.7, 1.0],
     treeTint: [1.0, 0.9, 0.62],
     scrubD: 1.1, scrub: { sage: 0.38, thorn: 0.52, shrub: 0.10 },
   }),
   crown_verge: mk({
     grassD: 0.6, grassH: 0.85, grassDead: 0.34,
-    dry: 0x9c8c58, lush: 0x67693a, wetBias: -0.10,
+    dry: 0x897d55, lush: 0x5f6339, wetBias: -0.10,
     treeD: 0.12, trees: { dead: 0.9, savanna: 0.1 }, treeS: [0.7, 1.0],
     treeTint: [0.94, 0.9, 0.74],
     scrubD: 0.8, scrub: { thorn: 0.7, sage: 0.3 },
   }),
   kelbass: mk({
     grassD: 1.15, grassH: 1.05, grassDead: 0.20,
-    dry: 0xab9a5e, lush: 0x63713a, wetBias: 0.04,
+    dry: 0x92875c, lush: 0x5d6a3a, wetBias: 0.04,
     treeD: 0.34, trees: { savanna: 0.68, dead: 0.32 }, treeS: [0.85, 1.3],
     treeTint: [1.0, 0.95, 0.62],
     scrubD: 0.85, scrub: { sage: 0.56, thorn: 0.26, shrub: 0.18 },
   }),
   galdin: mk({
     grassD: 0.8, grassH: 1.15, grassDead: 0.16,
-    dry: 0xa8a066, lush: 0x6f7f45, wetBias: 0.16,
+    dry: 0x8d8a60, lush: 0x647644, wetBias: 0.16,
     treeD: 0.5, canopy: 0.1, trees: { savanna: 0.5, broadleaf: 0.4, swamp: 0.1 },
     treeS: [0.8, 1.2], treeTint: [0.94, 0.98, 0.70],
     scrubD: 0.7, scrub: { sage: 0.3, shrub: 0.44, reed: 0.26 },
@@ -104,14 +104,14 @@ export const VEG_BIOME = {
   }),
   keycatrich: mk({
     grassD: 0.62, grassH: 0.88, grassDead: 0.34,
-    dry: 0x9d8b52, lush: 0x66683a, wetBias: -0.10,
+    dry: 0x897c52, lush: 0x5e6239, wetBias: -0.10,
     treeD: 0.16, trees: { dead: 0.86, savanna: 0.14 }, treeS: [0.7, 1.0],
     treeTint: [0.96, 0.9, 0.7],
     scrubD: 0.9, scrub: { thorn: 0.62, sage: 0.38 },
   }),
   balouve: mk({
     grassD: 0.6, grassH: 0.85, grassDead: 0.32,
-    dry: 0x9a8b56, lush: 0x646939, wetBias: -0.10,
+    dry: 0x877b52, lush: 0x5d6138, wetBias: -0.10,
     treeD: 0.2, trees: { dead: 0.88, savanna: 0.12 }, treeS: [0.7, 1.0],
     treeTint: [0.95, 0.9, 0.7],
     scrubD: 0.95, scrub: { thorn: 0.66, sage: 0.34 },
@@ -150,7 +150,7 @@ export const VEG_BIOME = {
   cauthess: mk({
     grassD: 0.42, grassH: 0.85, grassDead: 0.42,
     // ejecta field: scorched stone and almost nothing that grows
-    dry: 0x8a7b52, lush: 0x5e6440, wetBias: -0.06,
+    dry: 0x7a7050, lush: 0x57603e, wetBias: -0.06,
     treeD: 0.14, trees: { dead: 0.94, savanna: 0.06 }, treeS: [0.6, 0.95],
     treeTint: [0.78, 0.72, 0.62],
     scrubD: 0.55, scrub: SCRUB_ASH,
@@ -203,7 +203,7 @@ export const VEG_BIOME = {
   ravatogh: mk({
     grassD: 0.12, grassH: 0.7, grassDead: 0.62,
     // ash slopes: burnt stubble, nothing green
-    dry: 0x6d6152, lush: 0x5a5c42, wetBias: -0.22,
+    dry: 0x635b4e, lush: 0x545640, wetBias: -0.22,
     treeD: 0.10, trees: { dead: 1.0 }, treeS: [0.5, 0.85],
     treeTint: [0.52, 0.48, 0.46],
     scrubD: 0.3, scrub: SCRUB_ASH,
@@ -228,7 +228,7 @@ export const VEG_BIOME = {
   // the frontier: generic Lucian highland
   _default: mk({
     grassD: 0.7, grassH: 1.0, grassDead: 0.22,
-    dry: 0x9d9358, lush: 0x5d6b38, wetBias: -0.02,
+    dry: 0x8b8358, lush: 0x586537, wetBias: -0.02,
     treeD: 0.4, canopy: 0.05, trees: { savanna: 0.42, conifer: 0.3, dead: 0.28 },
     treeS: [0.75, 1.2], treeTint: [0.9, 0.92, 0.7],
     scrubD: 0.8, scrub: { sage: 0.4, thorn: 0.34, shrub: 0.26 },
