@@ -259,34 +259,44 @@ Shots: `tmp/shots/ui6p/menu_main.jpg`, `ui6p/combat_wide.jpg`,
 
 ---
 
+## 7b. The corner is finished, and the atlas's type sits on top · `5b14954`, `6d1002f`
+
+- **Banter joins the column.** The bubbles were the last thing in the bottom-left
+  still pinned to a hand-measured `bottom: 268px`, which is 33 px above the party
+  stack — exactly where the toast column grows. Measured at 1600×900 with three
+  toasts and one banter line: before, **banter × toasts OVERLAP**; after, every
+  pair in the corner clear. `PartyPanel` hands out a `banterSlot`; `Subtitles`
+  takes it as an optional third argument and falls back to the stylesheet's
+  absolute placement without it. Shot: `tmp/shots/ui9p/leftcol.png` at 2×.
+  Also: the party panel's `/ max` HP figure went `--ink-3` → `--ink-2`.
+- **Atlas region names paint over the glyphs.** The type pass runs before the
+  glyph pass, so a settlement symbol landed in the middle of the word LEIDE. The
+  names cannot simply move later — the zone and route labels need their boxes
+  reserved *first*. `_regionLabels` is now a measure pass and a paint pass; the
+  atlas reserves early and paints after `_pois`, the ordinary chart still does
+  both in one call and is byte-identical. Shot: `tmp/shots/uimap7/regions.png`.
+
+---
+
 ## 8. What is left
 
 Ordered by value.
 
 1. **Apply §1a and §1b.** Both are verified, both are one line, both are outside
    `src/ui`. §1a is poisoning every full-corpus run today.
-2. **The atlas's POI glyphs sit on the region names.** `_pois` draws after the
-   label placer has run and does not consult it. On a real survey sheet symbols
-   do overprint type, so this reads acceptably, but it is the most obvious
-   remaining flaw in `menu_map_wide`. The fix is to run the POI glyph pass
-   *before* `_regionLabels` and let the region names dodge, which the vertical
-   nudge added in `7f7b268` already supports.
-3. **`.banter` is still absolutely positioned at `bottom: 268px`** (`ui.css`,
-   the combat block) and is the one thing in the bottom-left that is not in the
-   corner column. With one or two toasts alive the two overlap. This is
-   pre-existing and unchanged by `9b75ded`; the fix is to give `PartyPanel` a
-   third slot and move `Subtitles.banter` into it. It only bites in field mode
-   with a toast and a banter line at once, which no shot currently captures.
-4. **`MapScreen` (`menu_map`) is 22 lines** and was not looked at in this pass.
+2. **`MapScreen` (`menu_map`) is 22 lines** and was not looked at in this pass.
    `menu_map` and `menu_map_wide` now point at very different-quality screens.
-5. **The remaining `menu_*` screens** got the type pass by inheritance (the two
+3. **The remaining `menu_*` screens** got the type pass by inheritance (the two
    shadow tokens) but no layout attention: `menu_gear`, `menu_quests`,
    `menu_archives`, `menu_ascension`, `menu_shop`, `menu_hunts`. `menu_inventory`
    was spot-checked and reads correctly.
-6. **`--ink-3` / `--ink-4` are probably still too faint** at 8–9 px in the HUD —
-   the `/ 4,825` max values in the party panel and the `L1+□` key column in the
-   technique rail are legible but only just. Worth measuring against a bright
-   frame rather than guessing.
+4. **`--ink-4` is probably still too faint** at 8–9 px in the HUD — the `L1+□`
+   key column in the technique rail is legible but only just. Worth measuring
+   against a bright frame rather than guessing.
+5. **A couple of point glyphs still overprint the atlas's region names.** They
+   are under semi-transparent headline type now rather than over it, so it reads
+   as a survey sheet rather than as a bug; reserving the glyph footprints before
+   the type pass would finish it.
 
 ## 9. Files touched
 
@@ -299,7 +309,7 @@ src/ui/PartyPanel.js         owns the bottom-left corner
 src/ui/Subtitles.js          shot stamping + clear()
 src/ui/Toasts.js             lives in the corner's notice slot
 src/ui/screens/MainScreen.js one hint shortened
-src/ui/screens/WorldMapScreen.js  fit-all zoom + the atlas variant
+src/ui/screens/WorldMapScreen.js  fit-all zoom, the atlas variant, label ordering
 src/ui/ui.css                shadow tokens, corner column, callout, menu_main, scrim
 src/tools/combatloop.mjs     keymap (OUT OF SCOPE — isolated commit e7f0ad7)
 ```
@@ -312,8 +322,8 @@ src/tools/combatloop.mjs     keymap (OUT OF SCOPE — isolated commit e7f0ad7)
 |---|---|
 | `ui0/`, `ui0p/` | baseline before any change (`ui0p/callout.png` = the doubling, 3×) |
 | `ui2p/` | callout after the fix, 3× |
-| `ui3p/`, `ui5p/`, `ui6p/`, `ui8p/` | corner rework, type pass, menu pass |
-| `uimap/` … `uimap5/` | the atlas, first attempt through final |
+| `ui3p/`, `ui5p/`, `ui6p/`, `ui8p/`, `ui9p/` | corner rework, type pass, menu pass, banter in flow |
+| `uimap/` … `uimap7/` | the atlas, first attempt through final (`uimap7/regions.png` = the label ordering) |
 | `uisub2/`, `uisub4/` | the subtitle burn-in, reproduced |
 | `uisub5/`, `uisub7/` | the same two pairs with §1a applied — clean |
 | `uisub6/` | the coordinator's `cine_astral` → `zone_malmalam` repro |
