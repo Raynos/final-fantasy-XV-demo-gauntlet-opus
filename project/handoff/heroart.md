@@ -54,6 +54,12 @@ combed flow rather than scattered chips. Prompto's quiff was a picket fence of e
 spikes standing straight up off a thin ring; it now sweeps up **and back** off a much
 wider root band.
 
+One trap that came out of the lower hairline: **Noctis is the only character with a
+long fringe**, so dropping the roots 11 mm put his locks straight over both eyes and
+undid the eye rebuild from two sessions ago. He carries `hairline: 0.013` to get most
+of it back. If you change the global hairline term again, re-check `noctis_front`
+specifically — nobody else in the cast shows this.
+
 **The scalp shell** was a 52x11 ellipsoid, and an ellipsoid under a directional key is a
 moulded plastic cap however its albedo is textured — that is what showed through every
 gap and read as a bald crown on Prompto and a black slab on Noctis. It is now 96x20
@@ -335,7 +341,7 @@ The frames that matter, in order: `noctis_eyes` (is the eye an eye?),
 `prompto_front` (blond hair, freckles).
 
 Baselines on disk for **this** session: `tmp/shots/ha9/` (the inherited state, before
-any change of mine) and `tmp/shots/ha22/` + `tmp/shots/ha23/` (now). `ha10` through
+any change of mine) and `tmp/shots/ha22/`, `ha23/` and `ha24/` (now; `ha24` is the final state). `ha10` through
 `ha21` are the intermediate rounds if you want to attribute a particular change.
 Older: `tmp/shots/ha0c/` (before the eye rebuild), `tmp/shots/ha6/` (after it). `tmp/shots/diag/` and `tmp/shots/diag2/` hold the
 head-hidden / winding-mode diagnostics behind §5.1 — worth a look before you touch
