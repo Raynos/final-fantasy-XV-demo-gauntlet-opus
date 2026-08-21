@@ -1,11 +1,16 @@
-# Handoff — `agent/grass`
+# Handoff — vegetation (`agent/grass`, then `agent/veg`)
 
-Branch `agent/grass`, four commits ahead of `main` @ `76e19ae`.
-Owned files, and the only files touched: `src/world/veg/{GrassField,VegTextures,VegMaterial,Ecology,Biomes}.js`.
-Nothing under `src/world/terrain/**` was edited.
+Owned: `src/world/veg/**`, `src/world/Vegetation.js`, this file.
+Nothing under `src/world/terrain/**` has ever been edited from here.
 
-Capture rounds live in `tmp/shots/gr0` (baseline) through `tmp/shots/gr7`. Every PNG in
-every round was looked at.
+Capture rounds: `tmp/shots/gr0`-`gr7` (the grass pass), `tmp/shots/veg0`-`veg2`
+(the lost tree-albedo agent), `tmp/shots/veg-a1` (this session's inherited-state
+baseline) through `veg-a2`, `veg-b22`/`veg-b34` (the `GROUND_BLEED` A/B),
+`veg-c1`, `veg-final` (12 shots), `veg-zones` (12 more, with `_sheet-1.jpg`),
+`veg-wind-choco`/`veg-wind-haven` (motion strips). Every image was looked at.
+
+Sections 2-4 are the grass pass and are still accurate. Section 5.5 is this
+session. Section 8 is the list that will cost you a round each if you skip it.
 
 ---
 
@@ -13,16 +18,23 @@ every round was looked at.
 
 | Item | State |
 |---|---|
-| LOD value mismatch (the darkness bug) | **Done, verified by eye** |
-| Shared height contract across the three rings | **Done, verified by eye and by instrumented measurement** |
+| LOD value mismatch (the grass darkness bug) | **Done, verified by eye** |
+| Shared height contract across the three grass rings | **Done, verified by eye and by measurement** |
 | Grass scale — Leide back to an ankle tuft | **Done, verified by eye** |
-| Tint maths rewrite — the acid yellow | **Done, verified by eye and by measurement** |
+| Grass tint maths rewrite — the acid yellow | **Done, verified by eye and by measurement** |
 | Leide palette re-authored toward dusty khaki | **Done, verified by eye** |
-| Duscae / Cleigne read as green | **Verified, no change needed** (`tmp/shots/gr7/poi_chocobo.png`) |
 | Blade silhouette, per-blade bend | **Done, verified by eye** |
 | Backlit translucency on the card rings | Done, **partially verified** — see §6 |
-| Per-clump wind (no more single plane wave) | Done, **not verified** — stills cannot show it |
-| Trees / bushes (plan item F) | **Not started** — see §7 |
+| Per-clump wind (no longer a plane wave) | **Done, verified in motion** — see §5.5 |
+| Bark albedo (every trunk was rendering at ~0.003) | **Fixed, now verified by eye** |
+| Leaf-card vertex shade over 1 in `TreeBuilder` | **Fixed, now verified by eye** |
+| Leaf-card albedo pinned (`LEAF_CARD_ALBEDO`) | **Done, verified — the hook does run** |
+| Canopy chroma no longer stacked three deep | **Fixed, now verified by eye** |
+| Tree species grove band → monoculture near ring | **Fixed and measured** — see §5.5 |
+| `GROUND_BLEED` re-judged against the new terrain | **Done, 0.22 → 0.34** — see §5.5 |
+| "Camera inside the crown" cull | **Fixed** — `zone_alstor` was a black frame |
+| Bushes / ferns / reeds | **Never touched by anyone** |
+| Perf re-baselined on a quiet tree | **Still not done** — see §6 |
 
 ---
 
@@ -176,6 +188,124 @@ grass off above 120 m — it is on their side of the boundary. It is visible in
 
 ---
 
+## 5.5 This session (`agent/veg`) — trees, and the ground under them
+
+Four commits were inherited from a lost agent (`worktree-agent-ae5fcae26e8ee3516`,
+merged as `5076c3e`) and **none of them had ever been looked at**. They are all
+good and they are all now verified by eye against `tmp/shots/veg-a1/`:
+
+- **Bark albedo.** `barkMaps` was writing a *linear* colour into an sRGB-tagged
+  byte texture *and* baking the species tint into a map that the material's own
+  `color` applies a second time. Measured result ~0.003 against a real bark
+  value of 0.10-0.15 — every trunk in the game was a flat black stick. It is now
+  a detail map: sRGB-encoded, normalised to `BARK_DETAIL_MEAN = 0.64`, near
+  neutral in hue. **Verified**: `veg-a1/poi_chocobo.jpg`, `zone_longwythe.jpg`
+  — trunks read as wood at every time of day.
+- **Leaf-card vertex shade over 1.** `TreeBuilder` multiplied three factors each
+  allowed slightly over one, reaching 1.42. `Math.min(1, …)`. **Verified**: the
+  blown near-white canopy highlight in `zone_malacchi` is gone.
+- **Leaf-card albedo pinned.** `leafClusterTex` now goes through `alphaTex`'s
+  `albedo` option at `LEAF_CARD_ALBEDO = 0.125`. I checked the hook actually
+  fires — `alphaTex:224` calls `normalizeAlbedo` before `withAlphaMips`, so every
+  mip inherits it, and the impostor and stand-card bakes read the pinned texture
+  because they bake from `leafMat.map` after `build()`. This was the one thing
+  §7 said to check *before* touching ratios; it was checked and it is done.
+- **Canopy chroma stacking.** `Trees.composeTint` splits each tint into luminance
+  and unit-luminance chroma so the luminances multiply and the chromas *blend*.
+  The candy lime is gone.
+
+Then four fixes of my own.
+
+### The tree-species grove band — the big one
+
+`Ecology.treeSpecies` picked from **one** simplex field at frequency 0.0022, a
+~450 m wavelength, while `Trees.geoRange` is **88 m**. The near ring is smaller
+than one lobe of a smooth field, so wherever the band sat, every tree the
+geometry ring drew was the same species, with no possible exception.
+
+Measured at the chocobo post, biome `alstor` (swamp 0.58, duscae 0.18, broadleaf
+0.14, dead 0.10): **76%** of the 88 m disc resolved to `dead`, and the near ring
+came back **116 dead, 0 swamp, 0 duscae** — the whole 130-tree geometry budget
+spent on bare grey sticks, in a wetland. `veg-a1/poi_chocobo.jpg` is a field of
+leafless trees where the table asks for closed green wood.
+
+Fixed with a second ~40 m octave (`grove * 0.74 + local * 0.30`, total amplitude
+0.62 → 0.72 because summing two noises narrows the distribution and squeezes the
+ends of the cumulative table). **Not** a per-tree hash — that is an even salad of
+every species at every scale, which is the look the grove noise exists to kill.
+
+World-wide share against the authored weights afterwards, sampled on a 53 m grid
+over the whole map: dead 0.427/0.419, savanna 0.137/0.161, broadleaf 0.183/0.170,
+duscae 0.106/0.091, swamp 0.061/0.071, conifer 0.065/0.068, thicket 0.020/0.020.
+Near ring at the same spot: 63 dead / 56 broadleaf / 11 duscae.
+
+**Verified**: `veg-a2/poi_chocobo.jpg`, and `veg-zones/_sheet-1.jpg` confirms no
+zone lost its character.
+
+### `GROUND_BLEED` 0.22 → 0.34
+
+The cut to 0.22 existed only because the terrain's macro tint was a hard-coded
+Leide ochre that never read the world map. It is regional now, so the reason is
+gone. Judged on a matched A/B, `tmp/shots/veg-b22/` against `veg-b34/`:
+
+- `poi_chocobo` — `grassColor` there returns linear **r/g 0.44, b/g 0.22** (the
+  `alstor` lush end, more saturated than any real sward) against a ground of
+  r/g 1.23, b/g 0.42. At 0.22 the near field is flat emerald lawn; at 0.34 it is
+  olive with dirt reading between the tufts.
+- `hero_face` — the bigger win. Leide goes from a uniform yellow-green mat to
+  warm khaki tussocks over open ochre dirt.
+
+Grass instance counts are unchanged by this; it is colour only.
+
+### The "camera inside the crown" cull
+
+The rule used a flat 12 m radius. A `duscae` tree is 19 m before its scale
+multiplier with a crown eight metres or more across, so one rooted fifteen metres
+away still wraps a camera at canopy height. `zone_alstor` was an **almost
+entirely black frame** and the probe found *no instance of anything* within 10 m
+of the lens — the occluder was outside the flat radius.
+
+Now `0.55 * h + 3` (~16 m for that Duscae tree, ~8 m for a Leide scrub tree,
+which is what the flat number was tuned on). The `cullFloor` guard is untouched,
+so it still only bites when the eye is properly up in the crown.
+
+`veg-c1/zone_alstor.jpg` is now a hazed wetland vista — layered mist over the
+slough, treelines fading to blue, the rock spire on the sky. `poi_chocobo` keeps
+its near ring; Nebulawood and Malmalam are unchanged in character.
+
+### Wind, verified in motion
+
+Stills cannot show a gust, so: `tmp/veg-a489/windstrip.mjs` boots one page,
+applies a shot, and screenshots every N `GAME.settle()` steps;
+`tmp/veg-a489/motionmap.mjs` writes the amplified per-pixel difference of two
+frames as a PNG. A plane wave shows up as a moving band; a per-clump field shows
+up as scattered patches.
+
+`tmp/veg-a489/wind-choco-02.png` (poi_chocobo, 22 sim steps apart): trunks are
+almost black (rigid, as `flexPow` intends), leaf tips are bright, and **different
+trees in the same frame are at visibly different amplitudes** — not a band. The
+grass shows the same patchiness. Amplitude is a believable breeze, checked
+directly on the raw frames (`tmp/veg-a489/w0.png` / `w2.png`): the crown shifts,
+the outer tips move more than the interior, the trunk is fixed.
+
+### Instance and draw counts, before → after (this session)
+
+Probed on the same three shots with `tmp/veg-a489/probe7.mjs`, before = the merge
+commit `5076c3e` restored into the tree:
+
+| shot | tree geo | tree impostor | canopy cards | grass | draws |
+|---|---|---|---|---|---|
+| `poi_chocobo` | 278 → **331** | 1573 → 1573 | 468 → **229** | 382,002 → 382,002 | 530 → **537** |
+| `hero_face` | 190 → 190 | 95 → 95 | 291 → 291 | 260,699 → 260,699 | 478 → 478 |
+| `zone_fallgrove` | 230 → **244** | 1190 → **1169** | 215 → 213 | 381,028 → 381,028 | 454 → **462** |
+
+Draw calls across the final twelve-shot set (`tmp/shots/veg-final/manifest.json`)
+run **378-582**, worst `haven_dusk` at 582, against a budget of 800. Forest zones
+gained 7-8 calls because a mixed near ring fills more variant meshes than a
+monoculture did; Leide is unchanged.
+
+---
+
 ## 6. Performance
 
 **Every number below was taken with six or more sibling agents live. Treat them
@@ -205,31 +335,32 @@ was contended.
 
 ## 7. Exact next steps, in priority order
 
-1. **Re-judge grass against the new terrain** once `agent/splat` merges. See §5.
-   This is first because it may invalidate small colour calls cheaply.
-2. **Trees and bushes — plan item F, not started.** `tmp/shots/gr7/zone_malacchi.png`
-   is the evidence: the broadleaf canopy is candy green with blown, nearly white
-   highlights in the sun. Two specific leads, both already scouted:
-   - `VegTextures.leafClusterTex('broad')` draws at `g = 66 + shade*62` with
-     ratios `(0.87, 1, 0.70)`. The same `normalizeAlbedo` hook added for the
-     grass cards (`alphaTex`'s `albedo` option) is the right tool — the leaf
-     cards have never had their albedo pinned either, so the tree LODs may well
-     carry the same class of mismatch the grass did. **Check that before
-     touching the ratios.**
-   - `Trees.js:288` and `:326` compose `shade * SPECIES_TINT[sp] * b.treeTint`
-     with `shade = 0.62 + rng.next()*0.40` — up to 1.02 before either tint. Same
-     "albedo over 1" shape as the grass tint bug had.
-   - The Nebulawood and Malmalam interiors (`tmp/shots/gr5/zone_nebulawood.png`,
-     `zone_malmalam.png`) are dark, humid and heavily hazed — I judged them
-     **correct for the brief**, not too dark. Do not "fix" them.
-3. **Verify the wind by eye in motion.** Stills cannot show it. The gust is no
-   longer a plane wave; that needs a moving capture or a live look.
-4. **Baseline and re-measure `perf.mjs` and `gameplay.mjs`** on a quiet tree.
-5. Optional polish: the near field in `tmp/shots/gr6/hero_face.png` still leans a
+1. **Baseline and re-measure `perf.mjs` and `gameplay.mjs` on a quiet tree.**
+   Still the largest unknown in this directory. No vegetation number in this file
+   was ever taken with fewer than six sibling Chromiums live. The near ring gained
+   ~50 geometry trees at `poi_chocobo`; that is the only cost change worth a look.
+2. **Bushes, ferns and reeds have never been touched by anyone.** `Bushes.js` is
+   491 lines nobody has audited. They pick their species per instance
+   (`pickFrom(b.scrubTable, rng.next())`), so they do *not* have the grove bug,
+   but their albedo has never been pinned the way the grass and leaf cards now
+   are — that is the same class of defect twice found and twice worth money.
+3. **`zone_fallgrove`'s ground reads as dark green grass dots on a pale grey-green
+   mat.** Measured: `Terrain.groundColorAt` there returns linear lum 0.090, r/g
+   1.34 — a *warm brown* — while the rendered ground is pale and desaturated
+   green. Vegetation tints itself from `groundColorAt`, so the two disagree and
+   the grass ends up darker than the mat it stands in. Deciding which side is
+   wrong needs the terrain owner; see §9.
+4. **`zone_malacchi` is a wall of leaf card.** The cull fix rescued `zone_alstor`
+   but not this one — the camera sits inside a grove of small broadleaf whose
+   crowns are under the cull radius. The frame is not *broken* now, but it is a
+   green wall and it is the zone's only shot. The framing lives in `Shots.js`
+   (coordinator).
+5. **Leaf cards read as soft spray at mid distance.** Crisp and leaf-shaped in a
+   closeup (`veg-c1/zone_malacchi.jpg`), mushy at 20-40 m. Probably the mip chain
+   plus `flutter: 0.5` shear. Low priority, real.
+6. Optional polish carried over: the near field at `hero_face` still leans a
    touch uniformly green for Leide. The lever is the `dry * 0.55` hue push in
    `GrassField._makeTile`, not the palette.
-
----
 
 ## 8. Gotchas and dead ends
 
@@ -267,7 +398,23 @@ was contended.
   functions of world position instead (a cross-wind wave on the phase, a large
   drifting field on the amplitude).
 - **A shared scratchpad is shared.** Another agent overwrote my probe script
-  mid-session. Name scratch files with your agent id.
+  mid-session. Name scratch files with your agent id. This session's live in
+  `tmp/veg-a489/`: `probe2`-`probe7.mjs` (daemon `/eval` measurements),
+  `windstrip.mjs`, `motionmap.mjs`.
+- **A stale capture daemon from a dead worktree holds the port.** `shoot.mjs`
+  refuses to reuse it (correctly — it would capture the other checkout) and the
+  error names the running root. `lsof -ti :5431 -sTCP:LISTEN | xargs kill`.
+- **`import('three')` does not resolve inside a `/eval` body.** The page has no
+  import map for the bare specifier. Grab the constructor off a live object
+  instead: `g.scene.traverse(o => { if (o.isLight) CC = o.color.constructor; })`.
+  App modules *do* resolve, by their served path — `import('/world/veg/Biomes.js')`,
+  **not** `/src/world/...`, because `src/` is vite's root.
+- **`imgdiff.mjs` and `crop.mjs` decode PNG only.** Capture `--jpeg` for reading,
+  PNG for measuring; do not mix them up and then debug the decoder.
+- **`Trees.composeTint` caches on the identity of the biome's `treeTint` array.**
+  That is safe *only* because `VEG_BIOME` holds module-level literals that are
+  never mutated or blended per position. If anyone makes `vegAt` return a blended
+  recipe, this cache silently serves the first blend to the whole world.
 
 ---
 
@@ -280,8 +427,24 @@ was contended.
 - `src/world/terrain/**` `lowAlt` gate — reported by `agent/splat` as gating
   grass off above 120 m. **Not mine, not touched.** Visible in
   `tmp/shots/gr5/zone_three_valleys.png`.
-- `src/tools/orphans.mjs` reports one orphan, `src/world/map/MapRaster.js`. It is
-  pre-existing and belongs to the coordinator's `src/world/map/**`. Not mine.
+- `src/tools/orphans.mjs` now reports **no orphans** (272/272 reachable). The
+  `MapRaster.js` orphan noted here previously has been resolved by someone else.
+- **`Terrain.groundColorAt` disagrees with the rendered ground.** At
+  `zone_fallgrove` it returns linear lum 0.090 / r/g 1.34 — a warm brown — while
+  the ground rendered in that frame is a pale, desaturated grey-green. Every
+  vegetation tint bleeds `groundColorAt` at `GROUND_BLEED`, so the grass is being
+  matched to a colour the terrain does not actually draw, and the field ends up
+  reading as dark dots on a light mat. Owner: `src/world/terrain/**`. Either the
+  sampler or the splat is wrong; I cannot tell which from this side.
+- **The terrain paints a grass *mat* in its splat while `GrassField` places grass
+  *instances*.** Nobody has tuned the two against each other. Density looks
+  acceptable in `veg-final/poi_chocobo.jpg`; the mismatch that does show is one
+  of *value*, not density, and it is the item above.
+- The `lowAlt` gate in `src/world/terrain/**` still gates grass off above 120 m —
+  visible as the bare highland in `veg-final/zone_three_valleys.jpg`. Not mine.
+- `zone_ravatogh` frames a green forested valley rather than the volcano. The
+  biome table asks for ash and dead wood there; the *shot* is standing outside
+  the zone. `Shots.js:391`, coordinator-owned. See `veg-zones/_sheet-1.jpg`.
 
 ---
 
@@ -289,9 +452,10 @@ was contended.
 
 | gate | result |
 |---|---|
-| `npx vite build` | **PASS** (also enforced by the pre-commit hook on all four commits) |
+| `npx vite build` | **PASS** (also enforced by the pre-commit hook on every commit) |
 | `node src/tools/integration.mjs` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mjs` | **PASS for my files** — 260/261 reachable; the one orphan is the pre-existing `src/world/map/MapRaster.js` |
-| `node src/tools/shoot.mjs` page errors | **0** across the final twelve-shot set |
-| `node src/tools/perf.mjs` | **FAIL at `vista_dawn` 39.1 fps**, under heavy contention, with no before-baseline. See §6 |
+| `node src/tools/orphans.mjs` | **PASS** — 272 modules, 272 reachable, no orphans |
+| `node src/tools/shoot.mjs` page errors | **0** across 24 shots (`veg-final`, `veg-zones`) |
+| draw calls | 378-582 over the twelve-shot `veg-final` set, budget 800 |
+| `node src/tools/perf.mjs` | **not re-run this session.** Last figure is `vista_dawn` 39.1 fps under six-agent contention with no before-baseline. See §6 |
 | `node src/tools/gameplay.mjs` | **not run** |
