@@ -420,7 +420,7 @@ const results = await page.evaluate(async () => {
   });
 
   /* ============================================== 12. techniques ======== */
-  check('companion techniques fire on G / H / J', () => {
+  check('companion techniques fire on G / J / K', () => {
     clearField();
     combat.armigerTimer = 0;
     const fired = [];
@@ -431,9 +431,9 @@ const results = await page.evaluate(async () => {
     rpg.party.techCharge = rpg.party.maxTechBars;
     const bars0 = rpg.party.techCharge;
     tap('KeyG'); step(60);
-    tap('KeyH'); step(60);
-    rpg.party.techCharge = rpg.party.maxTechBars;
     tap('KeyJ'); step(60);
+    rpg.party.techCharge = rpg.party.maxTechBars;
+    tap('KeyK'); step(60);
     window.removeEventListener('encounter:tech', onTech);
     return fired.length >= 3 ? P(`${fired.join(', ')} (bar ${bars0.toFixed(1)} -> ${rpg.party.techCharge.toFixed(1)})`)
       : F(`only fired ${fired.length}: ${fired.join(', ')}`);
