@@ -99,7 +99,7 @@ export const CAST = {
           // Layered clumps that lie *along* the skull. Pushing strands out along
           // the surface normal (`out` near 1) is what turned this into a sea
           // urchin; a hairstyle is locks following a flow, not quills.
-          { n: 200, th: [-3.14, 3.14], phi: [0.0, 0.54], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.033, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.16, lenVar: 0.34 },
+          { n: 300, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.052, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.05, lenVar: 0.30, steps: 4, sides: 5 },
           // long asymmetric fringe sweeping across the brow — clearing the lids
           { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.46, 0.76], out: 0.71, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.033, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18, steps: 6 },
           { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.62, -0.44, 0.65], out: 0.68, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.040, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.05, dirJit: 0.06, lenVar: 0.20, steps: 6 },
@@ -161,7 +161,7 @@ export const CAST = {
         color: 0x261b11, tipColor: 0x55402a, rough: 0.42, shell: 0.0125, volume: 0.92,
         hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9, clump: 3,
         tufts: [
-          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.52], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.036, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.16, lenVar: 0.32 },
+          { n: 280, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.058, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.05, lenVar: 0.30, steps: 4, sides: 5 },
           { n: 52, th: [-1.1, 1.1], phi: [0.84, 1.0], dir: [0, -0.30, -0.95], out: 0.71, bend: 1.0, len: 0.080, thick: 0.34, width: 0.0022, spike: 0.6, dirJit: 0.07, lenVar: 0.18 },
           { n: 70, th: [1.0, 2.4], phi: [0.55, 1.0], dir: [0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
           { n: 70, th: [-2.4, -1.0], phi: [0.55, 1.0], dir: [-0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
@@ -227,7 +227,7 @@ export const CAST = {
         color: 0x9a8261, tipColor: 0xcab596, rough: 0.34, shell: 0.011, volume: 0.85,
         hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         tufts: [
-          { n: 170, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.030, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.13, lenVar: 0.28 },
+          { n: 260, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.048, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.04, lenVar: 0.26, steps: 4, sides: 5 },
           // slicked-up quiff: front hair lifts off the brow, then sweeps back
           { n: 74, th: [-0.86, 0.86], phi: [0.88, 1.0], dir: [0, 0.86, -0.51], out: 0.84, hug: 0.20, puff: 1.5, bend: 0.90, len: 0.058, width: 0.0020, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20, steps: 6 },
           { n: 52, th: [-0.60, 0.60], phi: [0.66, 0.90], dir: [0.02, 0.62, -0.78], out: 0.87, hug: 0.35, puff: 1.1, bend: 0.88, len: 0.050, width: 0.0019, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20 },
@@ -279,14 +279,14 @@ export const CAST = {
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
       brows: { color: 0xa8823f, len: 0.013, width: 0.0058 },
       hair: {
-        color: 0xd49f46, tipColor: 0xf3d78e, rough: 0.30, shell: 0.011, volume: 0.86,
+        color: 0xe0ae52, tipColor: 0xf8e3a6, rough: 0.30, shell: 0.011, volume: 0.86,
         hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         tufts: [
-          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.029, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.18, lenVar: 0.30 },
+          { n: 280, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.046, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.05, lenVar: 0.28, steps: 4, sides: 5 },
           // short up-swept front spikes — the whole read, but half the height
-          { n: 66, th: [-1.0, 1.0], phi: [0.86, 1.0], dir: [0, 0.88, 0.42], out: 0.79, hug: 0.15, puff: 1.6, bend: 0.88, len: 0.046, thick: 0.34, width: 0.0019, spike: 1.05, dirJit: 0.17, lenVar: 0.22, steps: 6 },
-          { n: 52, th: [-0.7, 0.7], phi: [0.58, 0.86], dir: [0.05, 0.94, 0.24], out: 0.84, hug: 0.20, puff: 1.5, bend: 0.84, len: 0.042, width: 0.0020, thick: 0.34, spike: 1.0, dirJit: 0.17, lenVar: 0.22 },
-          { n: 92, th: [-2.6, 2.6], phi: [0.26, 0.62], dir: [0, 0.60, -0.78], out: 0.90, hug: 0.45, puff: 1.0, bend: 0.82, len: 0.038, width: 0.0020, thick: 0.34, spike: 0.9, dirJit: 0.17, lenVar: 0.22 },
+          { n: 110, th: [-1.15, 1.15], phi: [0.62, 1.0], dir: [0, 0.78, -0.62], out: 0.72, hug: 0.42, puff: 1.0, bend: 0.88, len: 0.058, thick: 0.34, width: 0.0019, spike: 1.05, dirJit: 0.15, lenVar: 0.36, steps: 6 },
+          { n: 88, th: [-0.85, 0.85], phi: [0.42, 0.86], dir: [0.04, 0.72, -0.69], out: 0.80, hug: 0.45, puff: 0.95, bend: 0.84, len: 0.052, width: 0.0020, thick: 0.34, spike: 1.0, dirJit: 0.15, lenVar: 0.34 },
+          { n: 110, th: [-2.6, 2.6], phi: [0.26, 0.62], dir: [0, 0.48, -0.88], out: 0.80, hug: 0.55, puff: 0.9, bend: 0.82, len: 0.046, width: 0.0020, thick: 0.34, spike: 0.9, dirJit: 0.15, lenVar: 0.28 },
           { n: 66, th: [2.2, 4.1], phi: [0.70, 1.0], dir: [0, -0.12, -0.98], out: 0.82, bend: 0.90, len: 0.046, thick: 0.34, width: 0.0019, spike: 0.9, dirJit: 0.14, lenVar: 0.22, spring: 0.3 },
           { n: 16, th: [1.22, 1.88], phi: [0.92, 1.0], dir: [0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },
           { n: 16, th: [-1.88, -1.22], phi: [0.92, 1.0], dir: [-0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },

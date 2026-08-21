@@ -167,7 +167,17 @@ function patch(mat, o = {}) {
   // is far below a pixel at any range, so it aliased into the chrome speckle
   // that made every lock read as a faceted blade. It has to run along .y.
   float mask = 0.34 + 0.66 * abs( sin( vMapUv.y * 9.0 + jit * 7.0 ) );
-  vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
+  // The secondary band takes the hair's *hue*, not its value. This read
+  // \`vColor.rgb * 3.2\`, which is a brightness multiplier dressed up as a tint:
+  // near-black hair needed the 3.2 to show any colour at all, and blond hair —
+  // already at 0.8 albedo — was therefore multiplied to 2.7 and clipped to
+  // white on every lock facing the sun. That is what turned Prompto's and
+  // Ignis's hair into straw, and no amount of geometry work could fix it,
+  // because the strands were correct and simply over-exposed. Normalising by
+  // luminance gives every hair colour the same specular energy.
+  float luminance = dot( vColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
+  vec3 hueC = vColor.rgb / max( 0.10, luminance );
+  vec3 sheenC = mix( vec3( 1.0 ), hueC, ${tint.toFixed(2)} );
   // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
   // matte value floor or its broad highlight reads as a moulded plastic dome
   float strand = 0.30 + 0.70 * clamp( vMat.z, 0.0, 1.0 );
@@ -175,14 +185,18 @@ function patch(mat, o = {}) {
   // backlit hair glows at the silhouette — the cue that reads as fine strands
   float rim = pow( 1.0 - clamp( dot( hN, hV ), 0.0, 1.0 ), 2.6 )
             * pow( clamp( dot( hV, -hL ), 0.0, 1.0 ), 1.6 );
-  kk += uSunColor * rim * 0.44 * strand * ( vColor.rgb * 3.0 + 0.07 );
+  // same normalisation as the band: a rim that scales with albedo blows out on
+  // light hair and vanishes on dark, which is backwards — a backlit silhouette
+  // is the *transmission* term and it is strongest on fine pale hair, but not
+  // by a factor of forty.
+  kk += uSunColor * rim * 0.30 * strand * hueC * ( 0.20 + 0.55 * luminance );
   // Sky sheen. Near-black hair under a directional key has nothing at all in
   // shadow, which is why the whole cast read as wearing black helmets: the
   // silhouette went to a single flat value the moment it turned away from the
   // sun. A broad, weak dome term restores the value range a real head of hair
   // has on its shadow side without lifting it toward navy.
   float dome = clamp( dot( hN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * ( vColor.rgb * 1.8 + 0.05 );
+  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * hueC * ( 0.14 + 0.42 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }

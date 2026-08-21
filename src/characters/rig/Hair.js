@@ -37,7 +37,7 @@ export function buildHair(rig, look) {
   const rootC = base.clone().multiplyScalar(0.84);
   // the value the gaps between locks should sit at: the root colour carried a
   // third of the way toward the tips, which is roughly the strand mid-tone
-  const shellC = rootC.clone().lerp(tip, 0.52);
+  const shellC = rootC.clone().lerp(tip, 0.34);
 
   // hairline elevation in canonical y for a given azimuth
   // A hairline is not a circle. It rides high across the forehead, plunges at
@@ -45,7 +45,11 @@ export function buildHair(rig, look) {
   // the character has two bald patches beside the eyes from every angle.
   const hairline = (th) => {
     const c = Math.cos(th);
-    let y = -0.012 + 0.049 * c + (H.hairline || 0);
+    // The front term was 0.049, which put the hairline 40 mm above the brow on a
+    // 108 mm brow-to-crown skull. That is a 20-year-old with a receding
+    // hairline, and on Prompto — whose style sweeps *up* and away from it —
+    // it read as balding.
+    let y = -0.012 + 0.038 * c + (H.hairline || 0);
     y -= (H.temple ?? 0.030) * Math.pow(Math.abs(Math.sin(th)), 1.2);
     y += (H.peak || 0) * 0.012 * Math.max(0, Math.cos(th * 2));
     // Ear notch. A hairline goes *around* the ear; this one ran straight across
@@ -87,7 +91,7 @@ export function buildHair(rig, look) {
     const relief = (
       0.62 * shellN.simplex2(Math.cos(th) * 11, Math.sin(th) * 11 + t * 2.2)
       + 0.38 * shellN.simplex2(Math.cos(th) * 26, Math.sin(th) * 26 + t * 4.5)
-    ) * vol * 0.85 * smooth(clamp01((1 - t) * 2.4));
+    ) * vol * 1.7 * smooth(clamp01((1 - t) * 2.4));
     return { p: p.clone().addScaledVector(n, off + relief), n };
   };
   for (let r = 0; r <= rows; r++) {
@@ -113,7 +117,7 @@ export function buildHair(rig, look) {
       // same value range they do. At 0.74-1.36 of a 0.84 root colour it was a
       // long way below the strand mid-tone, and every gap read as a hole —
       // which is most of what made the scalp look like a moulded black cap.
-      B.color(shellC.clone().multiplyScalar(0.82 + 0.46 * crown * crown));
+      B.color(shellC.clone().multiplyScalar(0.70 + 0.42 * crown * crown));
       // The shell carries `hairStripe` too, and `u` on that map is the filament
       // axis. At 6 repeats around a 55 cm skull it laid 24 filaments over the
       // whole head — a spacing of 2 cm, which is not a strand, it is a smooth
@@ -121,7 +125,11 @@ export function buildHair(rig, look) {
       // a bald patch wherever the locks did not cover it. At 34 repeats the
       // filaments land at ~4 mm, which is a real lock, so the gaps between the
       // strands read as more hair instead of as scalp.
-      row.push(B.v(w.x, w.y, w.z, (c / cols) * 34, t * 3.2));
+      // Jitter the filament phase around the skull. At an exact 34 repeats the
+      // bands line up into corduroy, which is what the back of the head read as
+      // once the shell was textured at a lock scale at all.
+      const uj = 1.4 * shellN.simplex2(Math.cos(th) * 3.1, Math.sin(th) * 3.1);
+      row.push(B.v(w.x, w.y, w.z, (c / cols) * 34 + uj, t * 3.2));
     }
     shell.push(row);
   }
@@ -209,7 +217,7 @@ export function buildHair(rig, look) {
 
       const tBase = tuft.color != null ? new THREE.Color().setHex(tuft.color, THREE.SRGBColorSpace) : base;
       const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
-      const tRoot = tBase.clone().multiplyScalar(0.62);
+      const tRoot = tBase.clone().multiplyScalar(0.72);
       const spike = tuft.spike ?? 0.9;
       const wid = (tuft.width || 0.014) * 1.38 * (1 + rng.gauss(0, 0.18));
       const bw = tuft.spring || 0;
@@ -267,7 +275,7 @@ export function buildHair(rig, look) {
           // black shape". Some clumps sit near the root value, some run almost to
           // the tip value at their base — that is what makes the mass legible
           // once every individual ribbon is thinner than a pixel.
-          color: tRoot.clone().lerp(tTip, 0.14 + 0.50 * Math.pow(rng.next(), 1.3)),
+          color: tRoot.clone().lerp(tTip, 0.10 + 0.32 * Math.pow(rng.next(), 1.3)),
           // The tip value used to be lifted *above* the style's tip colour on
           // half the locks. The tip is the part that sits against the sky, so a
           // lifted tip is exactly the pixel that makes one strand read as a
