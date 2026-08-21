@@ -624,22 +624,76 @@ export function reedTex() {
   }, { alphaRef: 0.38, tinyFade: 0.85 }));
 }
 
-/** Bark albedo + normal, shared by every woody thing. */
+/**
+ * Mean *linear* luminance the bark detail map is normalised to.
+ *
+ * The bark map is a **detail** map, not an albedo: every caller
+ * (`Trees.build`, `Bushes.build`) also sets the material's own `color` to the
+ * species' bark hex, and three multiplies the two. So whatever lives here is
+ * multiplied on top of an albedo that is already correct, and the only value
+ * that leaves the species colour where it was authored is 1.0. It cannot be
+ * 1.0 in an eight-bit map that also has to carry ridge contrast, so it is a
+ * little under, and the species hexes (linear luminance 0.073-0.193) land at a
+ * final 0.057-0.15 — which is where real bark sits.
+ */
+const BARK_DETAIL_MEAN = 0.78;
+
+/**
+ * Bark albedo + normal, shared by every woody thing.
+ *
+ * **This map used to render every trunk in the game pitch black**, by two
+ * compounding mistakes that are each easy to make and invisible in isolation:
+ *
+ * 1. `Color.setHex(hex, SRGBColorSpace)` returns the colour in the *working*
+ *    space, i.e. **linear**. `makeTexture` writes whatever it is handed
+ *    straight into bytes and tags the texture sRGB, so a linear 0.158 was
+ *    written as byte 40 and then decoded back as sRGB — arriving at linear
+ *    0.016, a tenth of what was authored.
+ * 2. The tint was then baked into the map *as well as* being applied a second
+ *    time through the material's `color`, squaring an already-dark albedo.
+ *
+ * Together those put the trunks at a measured albedo of ~0.003 against a real
+ * bark value of 0.10-0.15 — roughly fifty times too dark, which is why every
+ * tree in `tmp/shots/veg0/zone_longwythe.jpg` and `poi_chocobo.jpg` was a flat
+ * black stick figure with no bark shading at any time of day. This is the same
+ * class of defect as the grass LOD darkness bug: a property of the texture that
+ * no palette or lighting change can reach.
+ *
+ * So the map is now a detail map and nothing else: sRGB-encoded on the way out,
+ * normalised to {@link BARK_DETAIL_MEAN}, and near-neutral in hue because the
+ * material colour already carries the species' chroma. `tint` survives as a
+ * weak hue bias so bark ridges keep a little wood warmth of their own; it is
+ * deliberately pulled most of the way to grey, because two chromas multiplied
+ * together is exactly how the leaf cards came out lime.
+ */
 export function barkMaps(tint = 0x6b5642) {
   return memo(`bark${tint}`, () => {
     const n = new Noise(2024);
+    // Hue only: normalise the tint to unit luminance, then pull it most of the
+    // way back to neutral. Anything stronger multiplies the species chroma.
     const base = new THREE.Color().setHex(tint, THREE.SRGBColorSpace);
+    const bl = Math.max(1e-4, 0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b);
+    const HUE = 0.3;
+    const hr = 1 + (base.r / bl - 1) * HUE;
+    const hg = 1 + (base.g / bl - 1) * HUE;
+    const hb = 1 + (base.b / bl - 1) * HUE;
     const h = (u, v) => {
       const rings = Math.sin(v * 90 + n.fbm2(u * 5, v * 30, 3) * 6) * 0.5 + 0.5;
       const streak = n.fbm2(u * 7, v * 44, 4) * 0.5 + 0.5;
       return rings * 0.35 + streak * 0.65;
     };
+    // `k` runs 0.55-1.30 about a mean of ~0.925. Normalised to mean one and
+    // compressed to 0.72x, the brightest ridge lands just under 1.0 at the
+    // target mean, so the ridge contrast survives without clipping to white.
+    const KMEAN = 0.925, KCONTRAST = 0.72;
+    const toSrgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
     const map = makeTexture(256, (u, v, c) => {
-      const k = 0.55 + h(u, v) * 0.75;
+      const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
+      const L = BARK_DETAIL_MEAN * k;
       const moss = Math.max(0, n.fbm2(u * 4 + 30, v * 4, 3)) * 0.35;
-      c[0] = base.r * k * (1 - moss * 0.6);
-      c[1] = base.g * k * (1 - moss * 0.1);
-      c[2] = base.b * k * (1 - moss * 0.7);
+      c[0] = toSrgb(L * hr * (1 - moss * 0.6));
+      c[1] = toSrgb(L * hg * (1 - moss * 0.1));
+      c[2] = toSrgb(L * hb * (1 - moss * 0.7));
     }, { repeat: 1 });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     const normalMap = normalFromHeight(256, h, 2.6);
