@@ -52,13 +52,26 @@ const MAX_PER_CLUMP = 22;
  * How much of the dirt's colour bleeds into the grass growing out of it.
  *
  * Some is right — it ties the field to the ground and stops the vegetation
- * reading as a decal laid on top. 0.32 was not some: it meant a third of every
- * blade's hue came from the terrain's macro tint rather than from the
- * vegetation palette, and while that macro tint is a hard-coded Leide ochre
- * (the terrain never reads the world map) it was quietly dragging Duscae's
- * grass toward the desert too.
+ * reading as a decal laid on top.
+ *
+ * It was cut 0.32 -> 0.22 while the terrain's macro tint was a **hard-coded
+ * Leide ochre** that never read the world map: a third of every blade's hue
+ * was then coming from a desert, including in Duscae. That is no longer true —
+ * the terrain carries a regional palette, so what bleeds in is the colour of
+ * the dirt this particular blade actually grows out of, and the reason to hold
+ * it down is gone.
+ *
+ * Back up, and slightly past where it started. Measured at the chocobo post,
+ * `grassColor` returns linear r/g 0.44, b/g 0.22 — the `alstor` lush end, a
+ * green far more saturated than any real sward — while `groundColor` there is
+ * r/g 1.23, b/g 0.42. At 0.22 the field rendered as flat emerald lawn; at 0.34
+ * it lands olive with the dirt reading between the tufts, which is the Duscae
+ * basin (`tmp/shots/veg-b22/poi_chocobo.jpg` against `veg-b34/`). Leide gains
+ * the same way and had the more visible improvement: the near field at
+ * `hero_face` goes from a uniform yellow-green mat to warm khaki tussocks with
+ * open dirt between them.
  */
-const GROUND_BLEED = 0.22;
+const GROUND_BLEED = 0.34;
 
 /**
  * The one height law for the whole field: the apparent height in metres of a
@@ -449,9 +462,9 @@ export class GrassField {
         sg[k] = eco.grassScale(x, z);
         kg[k] = eco.grassDead(x, z);
         eco.groundColor(x, z, _cGround);
-        // Grass picks up the colour of the dirt it grows out of, but only a
-        // little: at the old 0.32 a fifth of Leide's hue was coming from the
-        // terrain's macro tint rather than from the vegetation palette.
+        // Grass picks up the colour of the dirt it grows out of. Now that the
+        // terrain's tint is regional this is real information and not a leak
+        // of Leide ochre into Duscae — see GROUND_BLEED.
         eco.grassColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
         cg[k * 3] = _cGrass.r; cg[k * 3 + 1] = _cGrass.g; cg[k * 3 + 2] = _cGrass.b;
         eco.grassDryColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
