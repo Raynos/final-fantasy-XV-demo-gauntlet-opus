@@ -193,17 +193,31 @@ export class CombatAnim {
     return 1;
   }
 
-  /** Idle / moving with a weapon out: a low guard that breathes. */
+  /**
+   * Idle / moving with a weapon out.
+   *
+   * `Anim.evalStance` now owns the whole-body guard — bladed hips, wide base,
+   * dropped pelvis, guard rock — for all four characters, so this layer is
+   * only what the *weapon* does on top of it. Both layers are additive, so
+   * leaving the old spine twist here simply doubled the blading on Noctis and
+   * on nobody else.
+   */
   poseReady(B, s, combat, style) {
     const t = this.game.time.now;
-    const near = combat.inCombat ? 1 : 0.25;
-    const g = near * (0.5 + 0.5 * Math.sin(t * 0.9));
-    this.add(B, 'spine02', 0.02 * near, -0.10 * near, 0);
-    this.add(B, 'spine03', 0.03 * near, -0.16 * near, 0);
-    this.add(B, 'neck', -0.02 * near, 0.10 * near, 0);
-    this.add(B, 'head', -0.03 * near, 0.14 * near, 0);
-    this.add(B, 'clavicleL', 0, 0, -0.04 * near - g * 0.012);
-    this.add(B, 'clavicleR', 0, 0, 0.04 * near + g * 0.012);
+    const near = combat.inCombat ? 1 : 0.3;
+    // 0 for daggers, ~0.6 for the greatsword: how much mass is hanging off the
+    // carrying shoulder
+    const heavy = (style.twoHand + style.drop * 4) * near;
+    const sway = (0.5 + 0.5 * Math.sin(t * 0.9)) * near;
+    // the loaded shoulder is dragged down and forward, the other pulls back
+    this.add(B, 'clavicleR', 0.035 * heavy, 0, 0.055 * heavy);
+    this.add(B, 'clavicleL', -0.020 * heavy, 0, 0.030 * heavy);
+    this.add(B, 'spine03', 0.025 * heavy, 0, -0.035 * heavy);
+    this.add(B, 'spine02', 0.015 * heavy, 0, -0.020 * heavy);
+    // the blade carries: a slow roll through the shoulder line so it is never
+    // hanging dead in frame
+    this.add(B, 'clavicleL', 0, 0, -sway * 0.014);
+    this.add(B, 'clavicleR', 0, 0, sway * 0.014);
     return 1;
   }
 

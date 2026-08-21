@@ -93,6 +93,9 @@ export class Party {
     const pp = player.position;
     const ph = player.root.rotation.y;
     const cos = Math.cos(ph), sin = Math.sin(ph);
+    const combat = game.get('Combat');
+    const inCombat = !!(combat && combat.inCombat);
+    if (!this._gaze) this._gaze = new THREE.Vector3();
 
     for (let i = 0; i < this.members.length; i++) {
       const m = this.members[i];
@@ -171,19 +174,25 @@ export class Party {
       m.root.rotation.y = dampAngle(prev, want, m.speed > 0.35 ? 6.5 : 2.4, dt);
       const turnRate = angleDelta(prev, m.root.rotation.y) / Math.max(1e-4, dt);
 
-      // glances at Noctis
-      m.glanceTimer -= dt;
-      if (m.glanceTimer <= 0) {
-        m.glanceTimer = 3.5 + this.rnd.range(0, 6);
-        m.glancing = 1.2 + this.rnd.range(0, 1.4);
-      }
-      if (m.glancing > 0) {
-        m.glancing -= dt;
-        m.character.setLookTarget(
-          new THREE.Vector3(pp.x, pp.y + player.character.rig.dims.headOrigin.y * 0.98, pp.z)
-        );
+      // In a fight they watch what they are fighting; in the field they glance
+      // at Noctis on the timer, which is already phase-offset per member.
+      if (inCombat && m.aiTarget && !m.aiTarget.dead && m.aiTarget.root) {
+        const e = m.aiTarget;
+        m.character.setLookTarget(e.centre ? e.centre(this._gaze) : this._gaze.copy(e.root.position));
       } else {
-        m.character.setLookTarget(null);
+        m.glanceTimer -= dt;
+        if (m.glanceTimer <= 0) {
+          m.glanceTimer = 3.5 + this.rnd.range(0, 6);
+          m.glancing = 1.2 + this.rnd.range(0, 1.4);
+        }
+        if (m.glancing > 0) {
+          m.glancing -= dt;
+          m.character.setLookTarget(
+            this._gaze.set(pp.x, pp.y + player.character.rig.dims.headOrigin.y * 0.98, pp.z)
+          );
+        } else {
+          m.character.setLookTarget(null);
+        }
       }
 
       m.character.update(dt, {
@@ -192,6 +201,9 @@ export class Party {
         turnRate,
         terrain: this.terrain,
         wind: 0.3,
+        combat: inCombat ? 1 : 0,
+        // `PartyAI._equip` sockets every companion weapon into `attach.handR`
+        weaponHand: 'R',
       });
     }
   }
