@@ -551,14 +551,23 @@ export class Field {
 
   // -------------------------------------------------------------- landforms
 
-  /** Stamp every entry in `WorldMap.LANDFORMS`. */
+  /**
+   * Stamp every entry in `WorldMap.LANDFORMS`.
+   *
+   * Mesas, buttes and peaks are stamped through `_mass`, which records how much
+   * rock each one added. `_basin` reads that back so a sea can lower the ground
+   * a hero massif stands on without planing the massif itself off — see
+   * `_basin` for the Cape Caem case that made this necessary.
+   */
   _applyLandforms() {
     const rng = new Rng(9931);
+    this.massRaise = new Float32Array(N * N);
+    const mass = (x, z, r, fn) => this._mass(x, z, r, fn);
     for (const f of LANDFORMS) {
       switch (f.kind) {
         case 'mesa':
         case 'butte':
-          this._mesa(f.x, f.z, f.r, f.h, f.kind === 'butte' ? 0.48 : 0.30, f);
+          mass(f.x, f.z, f.r * 1.3, () => this._mesa(f.x, f.z, f.r, f.h, f.kind === 'butte' ? 0.48 : 0.30, f));
           break;
         case 'fin':
           this._fin(f.x0, f.z0, f.x1, f.z1, f.halfW, f.h, f);
@@ -566,13 +575,46 @@ export class Field {
         case 'spire':
           this._spireRidge(f.x, f.z, f.spanX, f.spanZ, f.count, rng);
           break;
-        case 'peak': this._peak(f.x, f.z, f.r, f.h); break;
+        case 'peak': mass(f.x, f.z, f.r, () => this._peak(f.x, f.z, f.r, f.h)); break;
         case 'crater': this._crater(f); break;
-        case 'volcano': this._volcano(f); break;
+        case 'volcano': mass(f.x, f.z, f.r, () => this._volcano(f)); break;
         case 'basin': this._basin(f); break;
         case 'terrace': this._terrace(f); break;
         case 'canyon': this._canyon(f); break;
         default: break;
+      }
+    }
+  }
+
+  /**
+   * Run one landform stamp and record the rock it added into `massRaise`.
+   *
+   * Deliberately bounded to the landform's *core* radius rather than its full
+   * stamped extent: the apron of a big mesa feathers out for a kilometre, and
+   * treating that skirt as protected mass is what stopped `nebulaFloor` from
+   * levelling the Nebulawood and drained half of Alstor Slough when this was
+   * first written as a blanket rule.
+   *
+   * @param {number} r core radius in metres
+   * @param {function(): void} fn the stamp
+   */
+  _mass(cx, cz, r, fn) {
+    const box = this._box(cx, cz, r);
+    const w = box.i1 - box.i0 + 1, hgt = box.j1 - box.j0 + 1;
+    const before = new Float32Array(w * hgt);
+    for (let j = box.j0; j <= box.j1; j++) {
+      for (let i = box.i0; i <= box.i1; i++) before[(j - box.j0) * w + (i - box.i0)] = this.h[j * N + i];
+    }
+    fn();
+    const mr = this.massRaise;
+    for (let j = box.j0; j <= box.j1; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = box.i0; i <= box.i1; i++) {
+        const x = -HALF + i * CELL;
+        if (Math.hypot(x - cx, z - cz) > r) continue;
+        const idx = j * N + i;
+        const d = this.h[idx] - before[(j - box.j0) * w + (i - box.i0)];
+        if (d > mr[idx]) mr[idx] = d;
       }
     }
   }
@@ -685,7 +727,7 @@ export class Field {
    * causeway instead of drowning.
    */
   _basin(f) {
-    const h = this.h, n = this.n2;
+    const h = this.h, n = this.n2, mr = this.massRaise;
     const { x: cx, z: cz, r } = f;
     const target = f.h;
     const wet = target < SEA + 6;
@@ -705,7 +747,26 @@ export class Field {
         if (k < 0.002) continue;
         const idx = j * N + i;
         const jitter = (wet ? 2.2 : 5.0) * n.fbm2(x * 0.0026 - 8, z * 0.0026 + 4, 3);
-        h[idx] += ((target + jitter) - h[idx]) * k;
+        // Water finds a level; it does not saw the top off a headland.
+        //
+        // `caemSea` is 1050 m across and centred 780 m from Cape Caem, so its
+        // falloff was still pulling at k = 0.41 directly over `caemHeadland` —
+        // and being listed *after* it in the map, it dragged a 140 m
+        // flat-topped headland 40% of the way down to -44 m. No cap, no rim, no
+        // cliff, and the ground the party stands on 7 m *below* the plain
+        // behind it. That is the "flat untextured slabs" every camera inside
+        // 700 m of Cape Caem was reporting.
+        //
+        // So lift the massif's own rock out of the way, lower the base surface
+        // under it, and set the rock back down on top. `massRaise` is only
+        // written by mesa / butte / peak / volcano stamps and only inside their
+        // core radius, so away from a hero massif it is 0 and this line is
+        // arithmetically identical to the plain interpolation it replaces.
+        // Wet only: a dry basin is a levelling pad — a garage apron, a chocobo
+        // prairie — and planing a hillside flat is the whole point of one.
+        const raised = wet ? Math.min(mr[idx], Math.max(0, h[idx] - target)) : 0;
+        const base = h[idx] - raised;
+        h[idx] = base + ((target + jitter) - base) * k + raised;
       }
     }
   }
