@@ -8,472 +8,120 @@
  *     travels across, instead of a mound filling the bottom third,
  *   - a hero landmark sits off-centre (mesa / buttes / scarp), never dead centre.
  *     `target` is the point the frame centres on, so putting a landform at a
- *     third means aiming *beside* it: `tools/corpus.mjs --frame` solves the aim
- *     point for a subject, a fov and a screen position,
+ *     third means aiming *beside* it,
  *   - the highway runs diagonally through frame as a leading line, and
  *   - a man-made prop (obelisk, haven, the Regalia, a headframe) sits in the
  *     midground to give the landscape scale and to make the world look inhabited.
  *
- * ### Deriving coordinates
- * Every number below was measured against the *live* world, not read out of a
- * source file, because both have moved under this file before:
- *   - `Ecology._layoutSites()` places props by arc length along the road, so
- *     the "z = 44" fuel stop actually stands at **x 576**; Hammerhead is built
- *     on that site and its pad is **(576, 16.2, 10)**, 600 m east of where the
- *     previous revision of this file aimed,
- *   - dungeon interiors sit at their def `origin` and a room's world position
- *     is `origin + (room.x, room.y, room.z)` — a camera one room-width out is
- *     outside the shell, looking at the back of it.
- * Derive, then look at the contact sheet: `node tools/corpus.mjs`.
+ * ### The two numbers that decide whether a frame works
+ * With a vertical fov `F` and a camera-to-target distance `d`, the horizon
+ * lands at `ndcY ≈ -pitch / (F/2)` where `pitch = asin((target.y - pos.y) / d)`.
+ * So **a third of sky wants a pitch of about −0.33·(F/2)**, i.e. roughly −7° at
+ * fov 44 — which is `target.y ≈ pos.y − 0.12·d` over level ground. Aim *up* and
+ * the frame fills with sky; that is exactly how `zone_longwythe` came to be 75 %
+ * sky (target y 519 against ground at 149) and `zone_ravatogh` to aim 190 m
+ * above a summit that is 594 m, not the 720 m the old note here claimed.
  *
- * ### Live world anchors (8192 m world, north = -Z)
- * Landforms (`src/world/map/WorldMap.js` LANDFORMS):
- *   blackrockMesa (-430,-560) h163   northMesa   (-980,-1240) h410
- *   eastButtes    ( 560,-420) h104   westScarp   ( -640,  430) h137
- *   longwythePeak ( 900,-1180) h445  discCrater  (-1020,-2160) rim 210
- *   crownScarp    (3320, -900) h320  keycatrichRim (300,-1740) h156
- *   taelparCanyon x≈-2300, depth 235 · lestallumTerrace (-3060,-680) h122
- *   ravatoghCone  (-3420,-3160) h720 · vesperBasin (-3020,-2360) −20
- *   galdinShelf sea −46 · caemHeadland (-2500,1980) h100
- * Built geometry — the whole list of man-made things that actually exist:
+ * The other number is **camera clearance**: `pos.y − Terrain.heightAt(pos.xz)`.
+ * Below ~2 m the camera is inside a boulder or the hill itself and the frame
+ * renders black. Eight shots in this file were doing that.
+ *
+ * ### Deriving coordinates
+ * Never write a camera by hand. `tools/framecam.mjs` boots the game once and
+ * applies a list of shot *recipes* — `camAt:[x,z]`, `eye` (metres above the
+ * ground there), `aimAt:[x,z]`, `aimUp` — resolving them against the live
+ * heightfield and printing the absolute `pos`/`target` to paste back here. A
+ * camera derived that way cannot be buried, and twenty candidate framings cost
+ * twenty frames instead of twenty boots. `--probe FILE` runs a snippet in the
+ * page first, which is how the anchors below were measured rather than guessed.
+ *
+ * Coordinates in this project have gone stale three times. Re-measure.
+ *
+ * ### Live world anchors (8192 m world, north = -Z) — measured, not copied
+ * Highest ground actually found near each landform (`peak` search, live):
+ *   blackrockMesa (-570,-400) h180   eastButtes  ( 520, -500) h108
+ *   westScarp     (-620, 570) h154   longwythePeak (900,-1180) h445
+ *   keycatrichRim (  40,-1720) h242  discRim     (-1720,-2540) h388
+ *   crownScarp    (3145,-1000) h505  callaeghBench (3060,1175) h180
+ *   ravatoghCone  (-3430,-3170) h594 lestallumTerrace (-3410,-355) h162
+ *   pallareth     (-1505,-3385) h324 caemHeadland (-2330,1830) h117
+ *   angelgard     (3025, 3050) h50   meteor ridge (-2290,1880) h123
+ * Lowest ground (basin floors):
+ *   taelparFloor (-2280,-1040) h3 · rim (-2620,-740) h123 — the gorge crosses
+ *     z at x ≈ -2200..-2250, and the neck the highway uses is at (-2286,-486)
+ *   alstorBasin (-1355,745) h-18 · vesperBasin (-2940,-2280) h-22
+ *   nebulaFloor (-1780,-1120) h26 · malmalamBowl (-2905,1910) h17
+ *   sea level -6.5, so anything below it floods.
+ * Built geometry — the man-made things that actually exist:
  *   Hammerhead pad (576,16.2,10): pylon (600.6,38.4) pump (578.8,32.4)
  *     huntBoard (586,13.2) diner (593.6,10) garageBay (568,14.5)
  *     caravan (550.8,27.2) regaliaBay (570.8,23.2) culless (603.4,22.5)
  *   haven camp (-99.6,7.1,-59.7) · obelisks (-104,-138) (168,-206) (-238,96)
  *   imperial blockade (1198.9,72) · layby + shelter (-769.7,-45.2)
- *   comms mast (-158,-325) · water tower (261.8,-239) · Solheim ruins (-500,330)
- *   windpumps (-252,78) (30,-91) · dead truck (-850,-67) · wrecks (483,48)
- *     (-1000,-113) · shack (1390,81) · crashed dropship (-60,-230)
+ *   comms mast (-158,-325) ground h59 · water tower (261.8,-239)
+ *   Solheim ruins (-500,330) h84 · windpumps (-252,78) (30,-91)
+ *   dead truck (-850.2,-66.7) · wrecks (483.3,48.5) (-1000,-113)
+ *   shack (1390.3,81.1) · crashed dropship (-60,-230)
  *   dungeon mouths: Keycatrich (-112.8,18.1,-229.1) Balouve (293.6,10.5,-232.2)
  *     Fociaugh (110.3,12.9,355.6)
  *   Megastructures: viaduct (-1010,-740)→(-790,300) · dreadnought (-1240,470,-1560)
  *     escort flight (-820,300,-980) · Insomnia (2560,150,-3180) · meteor (-2010,1890)
- *   Regalia parked (-19.2,12) · party spawn ≈ (1, 8.4, 1)
- * Party formation, in world deltas from Noctis at spawn:
- *   Gladiolus (-2.35,-0.29,-0.79) · Ignis (0.13,-0.49,-2.86)
- *   Prompto (-1.39,-0.95,-3.37)
+ *   Regalia parked (-19.3,8.6,14) · party spawn ≈ (0, 8.17, 0)
+ * The 124 map POIs are in `WorldMap.js` and every one of them has a *pad* but
+ * only havens, parking, the roadblock, the three dungeon mouths, the landmark
+ * props and Hammerhead have built geometry. Aim at the others and you get bare
+ * ground; the shots that do so say so in their `doc`.
  *
  * ### Shot fields (see `Game.applyShot`)
  *   pos / target / fov                    absolute camera
- *   follow:'player' + offset / lookOffset camera pinned to the party, world axes
+ *   follow:'player'|'gladio'|'ignis'|'prompto' + offset / lookOffset
+ *                                         camera pinned to that character,
+ *                                         world axes, resolved every frame by
+ *                                         `Game.followAnchor`
  *   time (hours) · weather 'clear'|'overcast'|'storm'|'fog'
  *   scenario 'field'|'combat'|'warp'|'boss_field'|'boss_imperial'|'boss_astral'
  *            |'daemons'          (src/game/Director.js)
  *   story 'title' | {scene, at}  · hud · menu · dungeon
  *
- * ### Order matters
- * The harness renders in file order on one page, so anything that displaces the
- * party is filed late: the cutscenes (`Cinematics.stage` leaves the cast where
- * the scene put them) and the dungeons (leaving puts the party at the mouth)
- * come after every `follow:` shot. Combat scenarios turn Noctis to face -Z and
- * nothing turns him back, so the character framings run before them.
+ * ### Order matters — and it is load-bearing twice over
+ * The harness renders in file order on one page.
+ *
+ * 1. **Character and UI shots come first.** After the camera has spent a few
+ *    dozen shots kilometres away, the terrain under the party renders roughly
+ *    1.5 m *above* what `Terrain.heightAt` reports, and the party sinks into
+ *    the ground: at shot 16 they are buried to the shoulders, by shot 30 only
+ *    their weapons show. The CPU positions never move (measured: player.y
+ *    8.17, heightAt 8.20, constant), so this is a terrain LOD/streaming settle
+ *    bug, not a framing one — but until it is fixed, filing the seven character
+ *    portraits and the twelve UI frames at the top of the file is what keeps
+ *    them showing characters.
+ * 2. **Cutscenes and dungeons come last.** `Cinematics.stage` leaves the cast
+ *    wherever the scene put it and leaving a dungeon puts the party at the
+ *    mouth, so both displace every `follow:` shot after them. Combat scenarios
+ *    turn Noctis to face -Z and nothing turns him back, so the character
+ *    framings run before those too.
  *
  * Add shots here — tools/shoot.mjs discovers them automatically, and
- * `tools/corpus.mjs` files them into per-category contact sheets by the
- * `// --- name ---` headers below.
+ * `tools/sheet.mjs` tiles a shot directory into one contact sheet to review.
  */
 export const SHOTS = {
-  // --- vista ------------------------------------------------------------
-  vista_dawn: {
-    doc: 'Dawn from the top of the West Scarp, the whole basin between here and the buttes',
-    time: 6.4, weather: 'clear',
-    pos: [-640, 143, 430], target: [743, 116, -162], fov: 44,
-  },
-  vista_noon: {
-    doc: 'Harsh midday over the badlands, Blackrock Mesa off to the left',
-    time: 12.5, weather: 'clear',
-    pos: [180, 40, -300], target: [-430, 120, -560], fov: 46,
-  },
-  vista_dusk: {
-    doc: 'Golden hour looking west into the sun across the West Scarp',
-    gait: 'walk',
-    time: 18.7, weather: 'clear',
-    pos: [430, 40, -60], target: [-640, 140, 430], fov: 42,
-  },
-  vista_night: {
-    doc: 'Night over the haven, campfire as the one warm accent under the moon',
-    time: 23.2, weather: 'clear',
-    pos: [70, 22, 60], target: [-104, 12, -138], fov: 46,
-  },
-  storm: {
-    doc: 'Storm front rolling over the basin — framed to show the cloud deck',
-    time: 15.0, weather: 'storm',
-    pos: [-460, 80, 420], target: [472, 109, -159], fov: 48,
-  },
-  vista_fog: {
-    doc: 'Valley fog drowning the Hammerhead pan, the mesa floating clear of it',
-    time: 7.1, weather: 'fog',
-    pos: [180, 40, -300], target: [-430, 120, -560], fov: 46,
-  },
-  vista_overcast: {
-    doc: 'Flat overcast light over the badlands — the same frame as vista_noon',
-    time: 13.0, weather: 'overcast',
-    pos: [180, 40, -300], target: [-430, 120, -560], fov: 46,
-  },
-
-  // --- daycycle ---------------------------------------------------------
-  // One composition, four times, so the day cycle is directly comparable: the
-  // East Buttes behind a water tower and a stand of savanna trees for scale.
-  daycycle_dawn: {
-    doc: 'The East Buttes at first light — comparison frame 1 of 4',
-    time: 5.9, weather: 'clear',
-    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
-  },
-  daycycle_noon: {
-    doc: 'The same East Buttes frame at midday — comparison frame 2 of 4',
-    time: 12.4, weather: 'clear',
-    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
-  },
-  daycycle_dusk: {
-    doc: 'The same East Buttes frame at golden hour — comparison frame 3 of 4',
-    time: 18.9, weather: 'clear',
-    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
-  },
-  daycycle_night: {
-    doc: 'The same East Buttes frame under the moon — comparison frame 4 of 4',
-    time: 0.6, weather: 'clear',
-    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
-  },
-
-  // --- zones : Leide ----------------------------------------------------
-  zone_longwythe: {
-    doc: 'Longwythe: the black horn on the right, the tutorial country under it',
-    time: 8.2, weather: 'clear',
-    pos: [330, 46, -640], target: [1006, 519, -1013], fov: 40,
-  },
-  zone_three_valleys: {
-    doc: 'The Three Valleys: hogback fins running away from the Insomnia skyline',
-    time: 16.6, weather: 'clear',
-    pos: [900, 72, 1640], target: [1181, 147, 911], fov: 44,
-  },
-  zone_ostium_gorge: {
-    doc: 'Ostium Gorge: the Wall of Insomnia under the 320 m crown scarp',
-    time: 9.4, weather: 'overcast',
-    pos: [3342, 452, -756], target: [3237, 94, 545], fov: 44,
-  },
-  zone_vannath: {
-    doc: 'Vannath Coast: the fast dry prairie the Galdin road crosses',
-    time: 17.2, weather: 'clear',
-    pos: [2796, 176, 1203], target: [2074, 65, 1461], fov: 46,
-  },
-  zone_galdin: {
-    doc: 'Galdin Coast: Angelgard standing sheer out of the turquoise shallows',
-    time: 17.8, weather: 'clear',
-    pos: [2420, 26, 2180], target: [2800, 173, 3246], fov: 40,
-  },
-  zone_keycatrich: {
-    doc: 'Keycatrich: the dust-choked rim the ruined spa town shelters under',
-    time: 15.2, weather: 'clear',
-    pos: [640, 104, -1320], target: [217, 237, -1664], fov: 42,
-  },
-  zone_callaegh: {
-    doc: 'The Callaegh Steps: mine spoil benches above the Balouve shaft heads',
-    time: 10.4, weather: 'clear',
-    pos: [3320, 88, 900], target: [3031, 194, 1379], fov: 44,
-  },
-
-  // --- zones : Duscae ---------------------------------------------------
-  zone_alstor: {
-    doc: 'Alstor Slough: standing water under the green haze, the road on its bank',
-    time: 8.8, weather: 'overcast',
-    pos: [-800, 152, 414], target: [-1396, -59, 705], fov: 44,
-  },
-  zone_malacchi: {
-    doc: 'The Malacchi Hills: open chocobo prairie broken by lone broadleaf stands',
-    time: 16.0, weather: 'clear',
-    pos: [-2380, 30, 560], target: [-1823, 52, 329], fov: 46,
-  },
-  zone_nebulawood: {
-    doc: 'The Nebulawood: wet forest floor with the Niflheim dreadnought over it',
-    time: 11.5, weather: 'overcast',
-    pos: [-1081, 256, -977], target: [-1364, 109, -1535], fov: 44,
-  },
-  zone_mencemoor: {
-    doc: 'Mencemoor: the Disc of Cauthess crater seen from a spur of its rim',
-    time: 17.0, weather: 'clear',
-    pos: [-895, 468, -1269], target: [-846, 288, -2193], fov: 42,
-  },
-  zone_taelpar: {
-    doc: 'Taelpar Crag: the 235 m gorge the highway crosses at its neck',
-    time: 15.4, weather: 'clear',
-    pos: [-2140, 90, -620], target: [-2253, -60, -827], fov: 46,
-  },
-  zone_fallgrove: {
-    doc: 'The Fallgrove: grazed downland running south-west to the meteor shards',
-    time: 17.4, weather: 'clear',
-    pos: [-591, 166, 544], target: [-2300, 275, 1584], fov: 44,
-  },
-
-  // --- zones : Cleigne --------------------------------------------------
-  zone_lestallum: {
-    doc: 'The Lestallum Shelf: a level basalt terrace 120 m above the plain',
-    time: 18.0, weather: 'clear',
-    pos: [-3601, 304, -330], target: [-3040, 107, -831], fov: 44,
-  },
-  zone_pallareth: {
-    doc: 'Pallareth Pass: the canyon floor between a 320 m and a 250 m wall',
-    time: 9.8, weather: 'clear',
-    pos: [-1700, 177, -3320], target: [-2159, 30, -3085], fov: 46,
-  },
-  zone_vesperpool: {
-    doc: 'The Vesperpool: black water below the causeway bench, mist on it',
-    time: 7.6, weather: 'fog',
-    pos: [-2660, 60, -2080], target: [-2963, -50, -2425], fov: 44,
-  },
-  zone_ravatogh: {
-    doc: 'The Rock of Ravatogh: 720 m of ash cone, the highest point in Lucis',
-    time: 17.2, weather: 'clear',
-    pos: [-2600, 122, -2700], target: [-3290, 662, -3317], fov: 42,
-  },
-  zone_malmalam: {
-    doc: 'Malmalam Thicket: the shallow bowl the canopy closes over',
-    time: 12.8, weather: 'overcast',
-    pos: [-3260, 34, 2100], target: [-3398, 59, 1568], fov: 46,
-  },
-  zone_cape_caem: {
-    doc: 'Cape Caem: the flat-topped headland and its cliffs into the sea',
-    time: 18.2, weather: 'clear',
-    pos: [-3525, 138, 2480], target: [-2396, 144, 2189], fov: 42,
-  },
-
-  // --- points of interest -----------------------------------------------
-  // Of the 124 map POIs, only these types have built geometry today: haven,
-  // parking (the lay-by), imperial (the roadblock and the crash site), the
-  // three dungeon mouths, the landmark props and Hammerhead. Royal tombs,
-  // menace lairs, chocobo posts and fishing stages are terrain pads and map
-  // entries only — the three shots below say so in their doc rather than
-  // pretending. The full type set is reviewable in `menu_map_wide`.
-  poi_haven: {
-    doc: 'A haven: the rune-marked camp rock and its fire on a raised flat',
-    time: 18.4, weather: 'clear',
-    pos: [-86, 9.9, -42], target: [-97, 9, -62], fov: 42,
-  },
-  poi_parking: {
-    doc: 'A parking spot: the gravel lay-by and its bus shelter off Route 1',
-    time: 16.4, weather: 'clear',
-    pos: [-736, 41, -12], target: [-763, 29, -51], fov: 46,
-  },
-  poi_reststop: {
-    doc: 'A rest stop: the Hammerhead caravan, where you cook and save',
-    time: 19.0, weather: 'clear',
-    pos: [563, 18.4, 37], target: [552, 18, 25], fov: 46,
-  },
-  poi_imperial: {
-    doc: 'An imperial base: the roadblock straddling Route 1 north of Longwythe',
-    time: 15.0, weather: 'overcast',
-    pos: [1176, 16.9, 36], target: [1193, 18, 76], fov: 44,
-  },
-  poi_imperial_wreck: {
-    doc: 'A crashed magitek dropship ploughed into the basin floor, still smoking',
-    time: 17.6, weather: 'clear',
-    pos: [-14, 12, -196], target: [-66, 19, -222], fov: 46,
-  },
-  poi_landmark: {
-    doc: 'A landmark: Blackrock Mesa, with the comms mast at its foot for scale',
-    time: 16.2, weather: 'clear',
-    pos: [-250, 37.5, -230], target: [-481, 182, -525], fov: 40,
-  },
-  poi_dungeon_mouth: {
-    doc: 'A dungeon entrance: the Keycatrich Trench blockhouse in the badlands',
-    time: 16.8, weather: 'clear',
-    pos: [-103, 16.5, -216], target: [-111, 21, -230], fov: 48,
-  },
-  poi_dungeon_mine: {
-    doc: 'A dungeon entrance: the Balouve Mines headframe over its adit',
-    time: 10.6, weather: 'clear',
-    pos: [279, 13, -240], target: [295, 16, -235], fov: 48,
-  },
-  poi_dungeon_cave: {
-    doc: 'A dungeon entrance: the Fociaugh Hollow cave mouth',
-    time: 14.2, weather: 'overcast',
-    pos: [119, 14.4, 342], target: [108, 15, 354], fov: 48,
-  },
-  poi_fishing: {
-    doc: 'A fishing spot: Galdin Shoals, Angelgard offshore — no stage built yet',
-    time: 7.4, weather: 'clear',
-    pos: [2200, 17.5, 2260], target: [2843, 155, 3272], fov: 42,
-  },
-  poi_tomb: {
-    doc: 'A royal tomb: the Tomb of the Wise site under the Keycatrich rim (pad only)',
-    time: 8.6, weather: 'clear',
-    pos: [640, 104, -1320], target: [95, 165, -1596], fov: 44,
-  },
-  poi_chocobo: {
-    doc: 'A chocobo post: the Wiz paddock prairie in the Malacchi Hills (pad only)',
-    time: 9.2, weather: 'clear',
-    pos: [-1900, 28, 700], target: [-2093, 35, 487], fov: 46,
-  },
-  poi_menace: {
-    doc: 'A menace lair: the Menace Beneath Keycatrich, under the rim (pad only)',
-    time: 21.4, weather: 'clear',
-    pos: [-40, 97, -1440], target: [163, 155, -1484], fov: 44,
-  },
-
-  // --- the world is inhabited -------------------------------------------
-  regalia_road: {
-    doc: 'The Regalia parked on the highway, telegraph poles receding',
-    time: 17.4, weather: 'clear',
-    pos: [16, 11.5, 48], target: [-19, 8.4, 14], fov: 40,
-  },
-  regalia_drive: {
-    doc: 'Chase camera behind the Regalia at speed',
-    time: 16.8, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
-  },
-  regalia_cruise: {
-    doc: 'Low cinematic three-quarter on the highway',
-    time: 18.4, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 42,
-  },
-  regalia_night: {
-    doc: 'Night drive, headlights carving the badlands',
-    time: 22.6, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
-  },
-  regalia_cockpit: {
-    doc: 'Over the bonnet at dusk',
-    time: 17.9, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 62,
-  },
-  haven_dusk: {
-    doc: 'The haven and its campfire at blue hour, the pan going cold behind it',
-    time: 20.1, weather: 'clear',
-    pos: [-66, 11, -24], target: [-104, 9, -57], fov: 44,
-  },
-  mesa_landmark: {
-    doc: 'Blackrock Mesa close enough to read its strata, obelisk for scale',
-    time: 16.0, weather: 'clear',
-    pos: [-40, 26, -300], target: [-471, 180, -489], fov: 40,
-  },
-  obelisk_dusk: {
-    doc: 'A ruined pylon against the last light — the shape you navigate by',
-    time: 19.4, weather: 'clear',
-    pos: [-70, 10.2, -104], target: [-98, 19, -143], fov: 44,
-  },
-  road_viaduct: {
-    doc: 'The Solheim viaduct marching north out of the basin, road beneath it',
-    time: 17.0, weather: 'clear',
-    pos: [-880, 80, 120], target: [-879, 56, -360], fov: 42,
-  },
-  windpump_flats: {
-    doc: 'Windpump and stock pens on the flats — the world is worked, not empty',
-    time: 7.8, weather: 'clear',
-    pos: [-208, 11.7, 124], target: [-244, 15, 70], fov: 46,
-  },
-  watertower_bench: {
-    doc: 'Water tower on the East Buttes bench, buttes stacked behind it',
-    time: 16.6, weather: 'clear',
-    pos: [300, 15.4, -198], target: [255, 18, -233], fov: 44,
-  },
-  solheim_ruins: {
-    doc: 'Solheim column ruins on the ridge under the Spire Ridge fangs',
-    time: 18.6, weather: 'clear',
-    pos: [-452, 45, 282], target: [-488, 95, 339], fov: 46,
-  },
-  roadside_wreck: {
-    doc: 'A burnt-out car on the shoulder, telegraph line running past it',
-    time: 15.6, weather: 'overcast',
-    pos: [524, 23.9, 90], target: [490, 14, 42], fov: 46,
-  },
-  broken_truck: {
-    doc: 'The broken-down haulier on the far shoulder, west of the Fallgrove turn',
-    time: 8.4, weather: 'clear',
-    pos: [-812, 31.7, -30], target: [-857, 28, -60], fov: 46,
-  },
-  abandoned_shack: {
-    doc: 'An abandoned roadside outpost out on the Longwythe flats',
-    time: 17.8, weather: 'clear',
-    pos: [1348, 14.2, 124], target: [1383, 17, 74], fov: 46,
-  },
-  landmark_insomnia: {
-    doc: 'The Crown City on the northern horizon, its spires still lit',
-    time: 19.8, weather: 'clear',
-    pos: [2900, 82, -2760], target: [2646, 352, -3237], fov: 44,
-  },
-  landmark_meteor: {
-    doc: 'The Meteor of the Disc, fissures still burning in the south-west',
-    time: 18.8, weather: 'clear',
-    pos: [-1760, 87, 2150], target: [-2055, 102, 1933], fov: 44,
-  },
-  landmark_dreadnought: {
-    doc: 'The Niflheim dreadnought hanging nose-down over the Nebulawood',
-    time: 13.4, weather: 'overcast',
-    pos: [-895, 468, -1269], target: [-1180, 470, -1520], fov: 40,
-  },
-
-  // --- Hammerhead -------------------------------------------------------
-  // The town is built on the Ecology `reststop` site, pad centre (576, 16.2, 10)
-  // and yaw ≈ π. Anchors and the eleven residents were read out of the running
-  // game; see the header. Terrain around the pad sits ~3 m lower, so a camera
-  // off the apron stands at y ≈ 17.5 to be eye-level with it.
-  town_approach: {
-    doc: 'Coming off the highway toward the Hammerhead pylon and its wrench sign',
-    time: 17.2, weather: 'clear',
-    pos: [644, 17.5, 66], target: [606, 28, 31], fov: 46,
-  },
-  town_wide: {
-    doc: 'The whole truck stop read against the badlands from the east',
-    time: 18.2, weather: 'clear',
-    pos: [672, 42, -38], target: [586, 17, 30], fov: 40,
-  },
-  town_forecourt: {
-    doc: 'Standing on the forecourt between the pumps and the garage',
-    time: 16.0, weather: 'clear',
-    pos: [592, 18.6, 32], target: [570, 18, 20], fov: 50,
-  },
-  town_garage: {
-    doc: "Cid's garage, roller bay open with a car on the lift",
-    time: 15.4, weather: 'clear',
-    pos: [580, 18.4, 24], target: [566, 18, 9], fov: 46,
-  },
-  town_board: {
-    doc: 'The hunt board with Dave beside it',
-    time: 16.8, weather: 'clear',
-    pos: [579, 17.9, 19.5], target: [585, 17, 13], fov: 40,
-  },
-  town_diner: {
-    doc: "Takka's diner: the counter, the sign and the cook behind it",
-    time: 18.4, weather: 'clear',
-    pos: [598, 18.8, 22], target: [592, 18, 12], fov: 48,
-  },
-  town_shops: {
-    doc: 'The pump island and shop row, awnings and price boards',
-    time: 15.0, weather: 'clear',
-    pos: [596, 18.6, 26], target: [578, 18, 30], fov: 50,
-  },
-  town_npcs: {
-    doc: 'People at work on the apron — Cindy at the bay, two garage hands behind her',
-    time: 16.4, weather: 'clear',
-    pos: [574, 18.2, 20], target: [567, 17, 15], fov: 40,
-  },
-  town_caravan: {
-    doc: 'The caravan and its awning at the west end of the lot',
-    time: 16.2, weather: 'clear',
-    pos: [563, 18.4, 37], target: [552, 18, 25], fov: 46,
-  },
-  town_regalia_bay: {
-    doc: 'The Regalia bay, where the car goes when Cindy has it',
-    time: 17.6, weather: 'clear',
-    pos: [584, 18.8, 34], target: [573, 18, 21], fov: 48,
-  },
-  town_pylon: {
-    doc: 'The Hammerhead pylon and its wrench sign, lit from the west',
-    time: 19.2, weather: 'overcast',
-    pos: [589, 19.4, 46], target: [601, 29, 40], fov: 44,
-  },
-  town_night: {
-    doc: 'Hammerhead after dark under the floodlights, the one lit thing in Leide',
-    time: 21.6, weather: 'clear',
-    pos: [640, 29, 60], target: [578, 19, 31], fov: 46,
-  },
-
   // --- character --------------------------------------------------------
-  // `follow` offsets are world-axis deltas from Noctis, so these are composed
-  // against the party's *measured* formation, not the slot vectors in Party.js,
-  // which live in the player's frame. Measured at this point in the run order
-  // (heading -1.58, so the four of them face -X):
-  //   Gladiolus (0.82, 0.15, -1.89) · Ignis (1.16, 0.30, 1.89)
-  //   Prompto (2.53, 0.34, 0.91)
-  // That is fragile by construction: insert a shot that turns Noctis before
-  // these and the three companion portraits swap round. The durable fix is a
-  // two-line change in `Game.applyShot` letting `follow` name a party member
-  // instead of only 'player' — see the corpus report.
+  // These run FIRST in the file on purpose — see "Order matters" above. Left
+  // where they were, the party is buried to the shoulders in terrain that has
+  // drifted upward under them and the portraits show four floating weapons.
+  //
+  // `follow: 'gladio' | 'ignis' | 'prompto'` resolves the real party member
+  // every frame through `Game.followAnchor`, so a companion portrait no longer
+  // depends on a formation offset that drifts the moment anything moves. The
+  // three portraits are placed on the character's *own* facing vector:
+  //
+  //     offset = [sin(h + swing) * d, eye, cos(h + swing) * d]
+  //
+  // with the party's measured heading **h = 0.471 rad** and a swing of about
+  // −0.5 rad for a three-quarter. Guessing the sign of that swing is what put
+  // Gladiolus behind his own greatsword; d ≈ 3 m and eye ≈ 2 m is what lifts
+  // the lens clear of the foreground grass, which swallows anything framed
+  // from 1.7 m.
   //
   // Every framing below also obeys one hard rule: **a character's root (their
   // feet) must stay inside the frame**. A SkinnedMesh is frustum-culled against
@@ -501,22 +149,22 @@ export const SHOTS = {
   gladio_closeup: {
     doc: 'Gladiolus, the shield: the build, the scar and the greatsword',
     time: 16.2, weather: 'clear', follow: 'gladio',
-    offset: [1.35, 1.72, 2.15], lookOffset: [0, 1.52, 0], fov: 34,
+    offset: [-0.24, 2.05, 2.99], lookOffset: [0, 1.4, 0], fov: 34,
   },
   ignis_closeup: {
     doc: 'Ignis, the strategist: glasses, gloves and the daggers',
     time: 16.2, weather: 'clear', follow: 'ignis',
-    offset: [1.28, 1.70, 2.05], lookOffset: [0, 1.50, 0], fov: 34,
+    offset: [-0.08, 2.0, 2.9], lookOffset: [0, 1.38, 0], fov: 34,
   },
   prompto_closeup: {
     doc: 'Prompto, the gunner: the wristbands, the camera and the grin',
     time: 16.2, weather: 'clear', follow: 'prompto',
-    offset: [1.22, 1.64, 1.95], lookOffset: [0, 1.44, 0], fov: 34,
+    offset: [-0.08, 1.95, 2.8], lookOffset: [0, 1.32, 0], fov: 34,
   },
   party_formation: {
-    doc: 'The retinue read head-on: four faces, four builds, four weapons',
+    doc: 'The retinue read from the flank: four builds, four weapons, one road',
     time: 15.4, weather: 'clear', follow: 'player',
-    offset: [-6.5, 2.15, 0.6], lookOffset: [0.9, 1.35, 0.2], fov: 38,
+    offset: [5.02, 3.6, 5.16], lookOffset: [-0.5, 1.4, -1.0], fov: 42,
   },
   party_walk: {
     doc: 'The four-man party walking the road together',
@@ -526,8 +174,8 @@ export const SHOTS = {
   },
   party_dawn: {
     doc: 'The party on the move at first light, long shadows off the four of them',
-    time: 6.6, weather: 'clear', follow: 'player',
-    offset: [6.2, 2.4, 4.4], lookOffset: [-0.7, 1.2, -1.4], fov: 40,
+    time: 6.9, weather: 'clear', follow: 'player',
+    offset: [-3.73, 3.2, 6.39], lookOffset: [-0.4, 1.3, -1.2], fov: 40,
   },
 
   // --- UI ---------------------------------------------------------------
@@ -593,6 +241,401 @@ export const SHOTS = {
     offset: [2.6, 2.6, 5.8], lookOffset: [0, 1.35, 0], fov: 46,
   },
 
+  // --- vista ------------------------------------------------------------
+  vista_dawn: {
+    doc: 'Dawn from the top of the West Scarp, the whole basin between here and the buttes',
+    time: 6.4, weather: 'clear',
+    pos: [-640, 143, 430], target: [743, 116, -162], fov: 44,
+  },
+  vista_noon: {
+    doc: 'Harsh midday under the strata of Blackrock Mesa, the pan running out east',
+    time: 12.5, weather: 'clear',
+    pos: [-100, 43.4, -260], target: [-420, 200.3, -420], fov: 44,
+  },
+  vista_dusk: {
+    doc: 'Golden hour looking west into the sun across the West Scarp',
+    gait: 'walk',
+    time: 18.7, weather: 'clear',
+    pos: [430, 40, -60], target: [-640, 140, 430], fov: 42,
+  },
+  vista_night: {
+    doc: 'Night over the haven, campfire as the one warm accent under the moon',
+    time: 23.2, weather: 'clear',
+    pos: [70, 22, 60], target: [-104, 12, -138], fov: 46,
+  },
+  storm: {
+    doc: 'A downpour over Hammerhead — the lit forecourt is the one readable thing in it',
+    time: 15.0, weather: 'storm',
+    pos: [640, 21.6, 60], target: [586, 21.7, 26], fov: 46,
+  },
+  vista_fog: {
+    doc: 'Valley fog drowning the pan, Blackrock Mesa floating clear of it',
+    time: 7.1, weather: 'fog',
+    pos: [-100, 43.4, -260], target: [-420, 200.3, -420], fov: 44,
+  },
+  vista_overcast: {
+    doc: 'Flat overcast light over the badlands — the same frame as vista_noon',
+    time: 13.0, weather: 'overcast',
+    pos: [-100, 43.4, -260], target: [-420, 200.3, -420], fov: 44,
+  },
+
+  // --- daycycle ---------------------------------------------------------
+  // One composition, four times, so the day cycle is directly comparable: the
+  // East Buttes behind a water tower and a stand of savanna trees for scale.
+  daycycle_dawn: {
+    doc: 'The East Buttes at first light — comparison frame 1 of 4',
+    time: 5.9, weather: 'clear',
+    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
+  },
+  daycycle_noon: {
+    doc: 'The same East Buttes frame at midday — comparison frame 2 of 4',
+    time: 12.4, weather: 'clear',
+    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
+  },
+  daycycle_dusk: {
+    doc: 'The same East Buttes frame at golden hour — comparison frame 3 of 4',
+    time: 18.9, weather: 'clear',
+    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
+  },
+  daycycle_night: {
+    doc: 'The same East Buttes frame under the moon — comparison frame 4 of 4',
+    time: 0.6, weather: 'clear',
+    pos: [120, 34, -180], target: [560, 96, -420], fov: 40,
+  },
+
+  // --- zones : Leide ----------------------------------------------------
+  zone_longwythe: {
+    doc: 'Longwythe: the 445 m horn off to the right, the tutorial pan running under it',
+    time: 8.2, weather: 'clear',
+    pos: [1250, 46.9, 240], target: [1080, 19.3, -140], fov: 44,
+  },
+  zone_three_valleys: {
+    doc: 'The Three Valleys: hogback fins running away from the Insomnia skyline',
+    time: 16.6, weather: 'clear',
+    pos: [1180, 79.2, 1420], target: [1400, 54.9, 1020], fov: 44,
+  },
+  zone_ostium_gorge: {
+    doc: 'Ostium Gorge: the Wall of Insomnia under the 320 m crown scarp',
+    time: 9.4, weather: 'overcast',
+    pos: [3480, 61.4, 340], target: [3300, 104.3, -160], fov: 46,
+  },
+  zone_vannath: {
+    doc: 'Vannath Coast: the fast dry prairie the Galdin road crosses',
+    time: 17.2, weather: 'clear',
+    pos: [2400, 49.2, 1560], target: [2180, 30, 1300], fov: 46,
+  },
+  zone_galdin: {
+    doc: 'Galdin Coast: Angelgard out of the shallows, the pier hotel on the right',
+    time: 17.8, weather: 'clear',
+    pos: [2380, 24.4, 2440], target: [2600, -38.2, 2680], fov: 42,
+  },
+  zone_keycatrich: {
+    doc: 'Keycatrich: the dust-choked rim the ruined spa town shelters under',
+    time: 15.2, weather: 'clear',
+    pos: [520, 92.6, -1180], target: [240, 113.6, -1420], fov: 44,
+  },
+  zone_callaegh: {
+    doc: 'The Callaegh Steps: mine spoil benches above the Balouve shaft heads',
+    time: 10.4, weather: 'clear',
+    pos: [3080, 190.4, 1320], target: [2860, 169.7, 1180], fov: 44,
+  },
+
+  // --- zones : Duscae ---------------------------------------------------
+  zone_alstor: {
+    doc: 'Alstor Slough: standing water under the green haze, the road on its bank',
+    time: 8.8, weather: 'overcast',
+    pos: [-940, 31.7, 480], target: [-1300, -11.3, 760], fov: 46,
+  },
+  zone_malacchi: {
+    doc: 'The Malacchi Hills: open chocobo prairie broken by lone broadleaf stands',
+    time: 16.0, weather: 'clear',
+    pos: [-1750, 44.1, 620], target: [-2010, 30.9, 470], fov: 46,
+  },
+  zone_nebulawood: {
+    doc: 'The Nebulawood: wet forest floor with the Niflheim dreadnought over it',
+    time: 11.5, weather: 'overcast',
+    pos: [-1300, 88.8, -880], target: [-1600, 53.3, -1180], fov: 46,
+  },
+  zone_mencemoor: {
+    doc: 'Mencemoor: the Disc of Cauthess crater seen from a spur of its rim',
+    time: 17.0, weather: 'clear',
+    pos: [-1400, 126.9, -1560], target: [-1180, 117.1, -2160], fov: 44,
+  },
+  zone_taelpar: {
+    doc: 'Taelpar Crag: the 235 m gorge the highway crosses at its neck',
+    time: 15.4, weather: 'clear',
+    pos: [-2250, 127, -560], target: [-2300, 24, -1100], fov: 44,
+  },
+  zone_fallgrove: {
+    doc: 'The Fallgrove: grazed downland running south-west to the meteor shards',
+    time: 17.4, weather: 'clear',
+    pos: [-500, 52.1, 1300], target: [-900, 38.4, 1620], fov: 44,
+  },
+
+  // --- zones : Cleigne --------------------------------------------------
+  zone_lestallum: {
+    doc: 'The Lestallum Shelf: a level basalt terrace 120 m above the plain',
+    time: 18.0, weather: 'clear',
+    pos: [-3320, 159.2, -980], target: [-3040, 141.5, -760], fov: 44,
+  },
+  zone_pallareth: {
+    doc: 'Pallareth Pass: the canyon floor between a 320 m and a 250 m wall',
+    time: 9.8, weather: 'clear',
+    pos: [-1900, 104.1, -3000], target: [-1620, 152.7, -3260], fov: 46,
+  },
+  zone_vesperpool: {
+    doc: 'The Vesperpool: black water under the causeway bench, the drowned wall behind it',
+    time: 8.4, weather: 'overcast',
+    pos: [-2700, 41.4, -2180], target: [-2980, 9.1, -2320], fov: 46,
+  },
+  zone_ravatogh: {
+    doc: 'The Rock of Ravatogh: 594 m of ash cone, the highest point in Lucis',
+    time: 17.2, weather: 'clear',
+    pos: [-2450, 70.6, -2150], target: [-2700, 23.1, -2420], fov: 50,
+  },
+  zone_malmalam: {
+    doc: 'Malmalam Thicket: the shallow bowl the canopy closes over',
+    time: 12.8, weather: 'overcast',
+    pos: [-2760, 75.9, 1240], target: [-3080, 56.7, 1420], fov: 44,
+  },
+  // Framed from as far off as the coast allows, because closer in the headland
+  // resolves into flat untextured slabs that read as floating rock rather than
+  // cliffs — eleven camera positions were tried on eight bearings and every one
+  // inside ~700 m shows the same faceting. This is the landform, not the props:
+  // owner is src/world/terrain/** (the `caemHeadland` landform stamp).
+  zone_cape_caem: {
+    doc: 'Cape Caem: the headland standing out of the sea, the road behind it',
+    time: 18.2, weather: 'clear',
+    pos: [-3525, 138, 2480], target: [-2396, 144, 2189], fov: 42,
+  },
+
+  // --- points of interest -----------------------------------------------
+  // Of the 124 map POIs, only these types have built geometry today: haven,
+  // parking (the lay-by), imperial (the roadblock and the crash site), the
+  // three dungeon mouths, the landmark props and Hammerhead. Royal tombs,
+  // menace lairs, chocobo posts and fishing stages are terrain pads and map
+  // entries only — the three shots below say so in their doc rather than
+  // pretending. The full type set is reviewable in `menu_map_wide`.
+  poi_haven: {
+    doc: 'A haven: the rune-marked camp rock and its fire on a raised flat',
+    time: 18.4, weather: 'clear',
+    pos: [-60, 16.2, -30], target: [-99.6, 9.6, -59.7], fov: 40,
+  },
+  poi_parking: {
+    doc: 'A parking spot: the gravel lay-by and its bus shelter off Route 1',
+    time: 16.4, weather: 'clear',
+    pos: [-744, 27.3, -84], target: [-769.7, 32, -45.2], fov: 44,
+  },
+  poi_reststop: {
+    doc: 'A rest stop: the Hammerhead caravan, where you cook and save',
+    time: 19.0, weather: 'clear',
+    pos: [572, 18.3, 44], target: [550.8, 18.6, 27.2], fov: 46,
+  },
+  poi_imperial: {
+    doc: 'An imperial base: the roadblock straddling Route 1 north of Longwythe',
+    time: 15.0, weather: 'overcast',
+    pos: [1168, 20.5, 32], target: [1198.9, 21, 72], fov: 42,
+  },
+  poi_imperial_wreck: {
+    doc: 'A crashed magitek dropship ploughed into the basin floor, still smoking',
+    time: 17.6, weather: 'clear',
+    pos: [-8, 15.9, -186], target: [-60, 19.6, -230], fov: 46,
+  },
+  poi_landmark: {
+    doc: 'A landmark: the comms mast on its ridge, the badlands stacked behind it',
+    time: 16.2, weather: 'clear',
+    pos: [-70, 34.8, -300], target: [-158, 70.7, -325.3], fov: 42,
+  },
+  poi_dungeon_mouth: {
+    doc: 'A dungeon entrance: the Keycatrich Trench blockhouse in the badlands',
+    time: 16.8, weather: 'clear',
+    pos: [-133, 30.7, -246], target: [-112.8, 21, -229.1], fov: 44,
+  },
+  poi_dungeon_mine: {
+    doc: 'A dungeon entrance: the Balouve Mines headframe over its adit',
+    time: 10.6, weather: 'clear',
+    pos: [314, 20.4, -216], target: [293.6, 13.6, -232.2], fov: 46,
+  },
+  poi_dungeon_cave: {
+    doc: 'A dungeon entrance: the Fociaugh Hollow cave mouth',
+    time: 14.2, weather: 'overcast',
+    pos: [92, 21.8, 372], target: [110.3, 15.9, 355.6], fov: 46,
+  },
+  poi_fishing: {
+    doc: 'A fishing spot: Galdin Shoals, Angelgard offshore — no stage built yet',
+    time: 7.4, weather: 'clear',
+    pos: [2300, 30.5, 2400], target: [2560, -42.5, 2660], fov: 42,
+  },
+  poi_tomb: {
+    doc: 'A royal tomb: the Tomb of the Wise site under the Keycatrich rim (pad only)',
+    time: 8.6, weather: 'clear',
+    pos: [330, 95.8, -1330], target: [90, 124.6, -1470], fov: 44,
+  },
+  poi_chocobo: {
+    doc: 'A chocobo post: the Wiz paddock prairie in the Malacchi Hills (pad only)',
+    time: 9.2, weather: 'clear',
+    pos: [-1780, 35.4, 700], target: [-2000, 31.8, 520], fov: 46,
+  },
+  poi_menace: {
+    doc: 'A menace lair: the Menace Beneath Keycatrich, under the rim (pad only)',
+    time: 21.4, weather: 'clear',
+    pos: [430, 109.7, -1400], target: [200, 164.3, -1490], fov: 44,
+  },
+
+  // --- the world is inhabited -------------------------------------------
+  regalia_road: {
+    doc: 'The Regalia parked on the highway, telegraph poles receding',
+    time: 17.4, weather: 'clear',
+    pos: [-34, 11.6, 28], target: [-19.3, 9.6, 14], fov: 42,
+  },
+  regalia_drive: {
+    doc: 'Chase camera behind the Regalia at speed',
+    time: 16.8, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
+  },
+  regalia_cruise: {
+    doc: 'Low cinematic three-quarter on the highway',
+    time: 18.4, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 42,
+  },
+  regalia_night: {
+    doc: 'Night drive, headlights carving the badlands',
+    time: 22.6, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 52,
+  },
+  regalia_cockpit: {
+    doc: 'Over the bonnet at dusk',
+    time: 17.9, weather: 'clear', pos: [66, 11, 42], target: [40, 7, 2], fov: 62,
+  },
+  haven_dusk: {
+    doc: 'The haven at last light: the rune lamps lit and the pan going cold behind it',
+    time: 18.9, weather: 'clear',
+    pos: [-124, 11.9, -72], target: [-99.6, 9.7, -59.7], fov: 44,
+  },
+  mesa_landmark: {
+    doc: 'The Blackrock scarp from the east, the mast on the skyline for scale',
+    time: 9.4, weather: 'clear',
+    pos: [-120, 42, -240], target: [-430, 210.5, -430], fov: 42,
+  },
+  obelisk_dusk: {
+    doc: 'A ruined pylon against the last light — the shape you navigate by',
+    time: 18.6, weather: 'clear',
+    pos: [-72, 12.2, -100], target: [-104, 20, -138], fov: 44,
+  },
+  road_viaduct: {
+    doc: 'The Solheim viaduct marching north out of the basin, road beneath it',
+    time: 17.0, weather: 'clear',
+    pos: [-700, 97.4, 180], target: [-880, 50.5, -120], fov: 44,
+  },
+  windpump_flats: {
+    doc: 'Windpump and stock pens on the flats — the world is worked, not empty',
+    time: 7.8, weather: 'clear',
+    pos: [-200, 13.8, 140], target: [-252, 16.2, 78], fov: 46,
+  },
+  watertower_bench: {
+    doc: 'Water tower on the East Buttes bench, buttes stacked behind it',
+    time: 16.6, weather: 'clear',
+    pos: [300, 15.4, -198], target: [255, 18, -233], fov: 44,
+  },
+  solheim_ruins: {
+    doc: 'Solheim column ruins on the ridge under the Spire Ridge fangs',
+    time: 18.6, weather: 'clear',
+    pos: [-467, 69.4, 363], target: [-505, 102, 332], fov: 44,
+  },
+  roadside_wreck: {
+    doc: 'A burnt-out car on the shoulder, telegraph line running past it',
+    time: 15.6, weather: 'overcast',
+    pos: [503, 16.8, 48], target: [483.3, 14.7, 48.5], fov: 40,
+  },
+  broken_truck: {
+    doc: 'The broken-down haulier on the far shoulder, west of the Fallgrove turn',
+    time: 8.4, weather: 'clear',
+    pos: [-862, 26.8, -58], target: [-850.2, 27.5, -66.7], fov: 42,
+  },
+  abandoned_shack: {
+    doc: 'An abandoned roadside outpost out on the Longwythe flats',
+    time: 17.8, weather: 'clear',
+    pos: [1412, 25, 62], target: [1390.3, 17.3, 81.1], fov: 42,
+  },
+  landmark_insomnia: {
+    doc: 'The Crown City on the northern horizon, its towers over the red badlands',
+    time: 18.4, weather: 'clear',
+    pos: [2900, 135.8, -1500], target: [2700, 77.7, -2300], fov: 36,
+  },
+  landmark_meteor: {
+    doc: 'The Meteor of the Disc backlit, its fissures still burning',
+    time: 17.6, weather: 'clear',
+    pos: [-900, 55.7, 1400], target: [-1400, 104.4, 1620], fov: 42,
+  },
+  landmark_dreadnought: {
+    doc: 'The Niflheim dreadnought hanging nose-down over the Nebulawood',
+    time: 13.4, weather: 'overcast',
+    pos: [-895, 468, -1269], target: [-1180, 470, -1520], fov: 40,
+  },
+
+  // --- Hammerhead -------------------------------------------------------
+  // The town is built on the Ecology `reststop` site, pad centre (576, 16.2, 10)
+  // and yaw ≈ π. Anchors and the eleven residents were read out of the running
+  // game; see the header. Terrain around the pad sits ~3 m lower, so a camera
+  // off the apron stands at y ≈ 17.5 to be eye-level with it.
+  town_approach: {
+    doc: 'Coming off the highway toward the Hammerhead pylon and its wrench sign',
+    time: 17.2, weather: 'clear',
+    pos: [644, 17.5, 66], target: [606, 28, 31], fov: 46,
+  },
+  town_wide: {
+    doc: 'The whole truck stop read against the badlands from the east',
+    time: 18.2, weather: 'clear',
+    pos: [668, 31.3, -30], target: [586, 19.7, 26], fov: 42,
+  },
+  town_forecourt: {
+    doc: 'Standing on the forecourt between the pumps and the garage',
+    time: 16.0, weather: 'clear',
+    pos: [592, 18.6, 32], target: [570, 18, 20], fov: 50,
+  },
+  town_garage: {
+    doc: "Cid's garage, roller bay open with a car on the lift",
+    time: 15.4, weather: 'clear',
+    pos: [580, 18.4, 24], target: [566, 18, 9], fov: 46,
+  },
+  town_board: {
+    doc: 'The hunt board with Dave beside it',
+    time: 16.8, weather: 'clear',
+    pos: [579, 17.9, 19.5], target: [585, 17, 13], fov: 40,
+  },
+  town_diner: {
+    doc: "Takka's diner: the counter, the sign and the cook behind it",
+    time: 18.4, weather: 'clear',
+    pos: [598, 18.8, 22], target: [592, 18, 12], fov: 48,
+  },
+  town_shops: {
+    doc: 'The pump island and shop row, awnings and price boards',
+    time: 15.0, weather: 'clear',
+    pos: [596, 18.6, 26], target: [578, 18, 30], fov: 50,
+  },
+  town_npcs: {
+    doc: 'People at work on the apron — Cindy at the bay, two garage hands behind her',
+    time: 16.4, weather: 'clear',
+    pos: [574, 18.2, 20], target: [567, 17, 15], fov: 40,
+  },
+  town_caravan: {
+    doc: 'The caravan and its awning at the west end of the lot',
+    time: 16.2, weather: 'clear',
+    pos: [563, 18.4, 37], target: [552, 18, 25], fov: 46,
+  },
+  town_regalia_bay: {
+    doc: 'The Regalia bay, where the car goes when Cindy has it',
+    time: 17.6, weather: 'clear',
+    pos: [584, 18.8, 34], target: [573, 18, 21], fov: 48,
+  },
+  town_pylon: {
+    doc: 'The Hammerhead pylon and its wrench sign over the forecourt',
+    time: 17.4, weather: 'clear',
+    pos: [628, 18.8, 72], target: [600.6, 25, 38.4], fov: 44,
+  },
+  town_night: {
+    doc: 'Hammerhead after dark under the floodlights, the one lit thing in Leide',
+    time: 21.6, weather: 'clear',
+    pos: [640, 29, 60], target: [578, 19, 31], fov: 46,
+  },
+
   // --- combat -----------------------------------------------------------
   combat_wide: {
     doc: 'Mid-fight wide shot with enemies, VFX and party',
@@ -607,7 +650,7 @@ export const SHOTS = {
   combat_stagger: {
     doc: 'A goblin taken off its feet — the stagger pose and its damage number',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',
-    offset: [6.4, 2.4, 2.6], lookOffset: [2.9, 1.05, -2.3], fov: 38,
+    offset: [5.6, 2.0, 1.4], lookOffset: [2.9, 0.9, -2.3], fov: 40,
   },
   combat_armiger: {
     doc: 'Armiger up: the phantom royal arms orbiting Noctis mid-swing',
@@ -615,9 +658,9 @@ export const SHOTS = {
     offset: [3.4, 2.35, 4.6], lookOffset: [0, 1.55, -0.6], fov: 42,
   },
   combat_magic_fire: {
-    doc: 'Fire flask landing on an MT trooper at the back of the fight',
+    doc: 'Elemancy in the middle of the fight — the blizzard bloom and a sabertusk in it',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',
-    offset: [6.0, 3.6, 2.2], lookOffset: [-2.0, 1.6, -12.0], fov: 40,
+    offset: [3.0, 2.6, -1.0], lookOffset: [-2.0, 1.0, -6.0], fov: 44,
   },
   combat_magic_ice: {
     doc: 'Blizzard bloom on the left flank, frost spreading over the dirt',
@@ -637,7 +680,7 @@ export const SHOTS = {
   boss_field: {
     doc: 'Bloodhorn mid-charge',
     time: 16.2, weather: 'clear', scenario: 'boss_field', follow: 'player',
-    offset: [-7.2, 3.6, 9.0], lookOffset: [0, 1.8, -6], fov: 46,
+    offset: [-6.0, 3.2, 2.0], lookOffset: [-1.5, 2.2, -10.0], fov: 46,
   },
   boss_imperial: {
     doc: 'MA-X Cuirass venting',
@@ -656,8 +699,8 @@ export const SHOTS = {
   },
   daemon_storm: {
     doc: 'The same pack in a downpour — daemons are what the rain brings out',
-    time: 1.4, weather: 'storm', scenario: 'daemons', follow: 'player',
-    offset: [6.0, 3.4, 6.0], lookOffset: [-1.0, 1.5, -7.0], fov: 50,
+    time: 18.4, weather: 'storm', scenario: 'daemons', follow: 'player',
+    offset: [5.0, 2.8, -3.5], lookOffset: [-2.0, 1.4, -9.0], fov: 46,
   },
 
   // --- bestiary ---------------------------------------------------------
@@ -676,10 +719,17 @@ export const SHOTS = {
     offset: [5.9, 2.0, 1.2], lookOffset: [2.9, 0.9, -2.3], fov: 36,
   },
   bestiary_mt: {
-    doc: 'Magitek trooper mid-attack — the imperial rank and file',
-    time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',
-    offset: [2.4, 2.6, -4.5], lookOffset: [-2.0, 1.4, -12.0], fov: 40,
+    doc: 'Magitek trooper closing on the party — the imperial rank and file',
+    time: 17.4, weather: 'clear', scenario: 'boss_imperial', follow: 'player',
+    offset: [-4.0, 2.2, -7.0], lookOffset: [-7.5, 1.3, -12.0], fov: 40,
   },
+  // KNOWN BAD, and not fixable from here: the Iron Giant's *model* sits 8.4 m
+  // below its root while it is frozen in `telegraph` (measured: Box3.min.y −
+  // root.y = −8.41 against a 5.3 m tall body), so it is entirely under the
+  // ground whatever the camera does. The `combat` scenario is the only place
+  // one spawns. The aim below is correct — the enemy really is at player
+  // + (−14, ·, −10) — so this frame comes good the moment the pose is fixed.
+  // Owner: src/characters/enemies/** + src/characters/rig/CreatureAnim.js.
   bestiary_irongiant: {
     doc: 'Iron Giant winding up: rusted plate and one huge blade',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',
@@ -688,12 +738,12 @@ export const SHOTS = {
   bestiary_dualhorn: {
     doc: 'Dualhorn on the flank of the Bloodhorn fight',
     time: 16.2, weather: 'clear', scenario: 'boss_field', follow: 'player',
-    offset: [-14.0, 3.0, -3.6], lookOffset: [-8.5, 1.7, -9.0], fov: 40,
+    offset: [12.5, 2.4, -4.0], lookOffset: [7.5, 1.6, -10.0], fov: 40,
   },
   bestiary_bloodhorn: {
     doc: 'Bloodhorn, the field mark: scarred hide and a broken horn',
     time: 16.2, weather: 'clear', scenario: 'boss_field', follow: 'player',
-    offset: [4.5, 3.4, -6.0], lookOffset: [-1.5, 2.2, -13.0], fov: 42,
+    offset: [-6.5, 1.4, -16.0], lookOffset: [-1.5, 1.0, -13.0], fov: 44,
   },
   bestiary_magitek_armour: {
     doc: 'MA-X Cuirass at close range, vents open',
@@ -703,7 +753,7 @@ export const SHOTS = {
   bestiary_axeman: {
     doc: 'Imperial axeman: the heavy variant of the magitek line',
     time: 17.4, weather: 'clear', scenario: 'boss_imperial', follow: 'player',
-    offset: [15.5, 2.8, -14.5], lookOffset: [10.5, 1.5, -20.0], fov: 38,
+    offset: [13.5, 2.6, -15.5], lookOffset: [10.5, 1.6, -20.0], fov: 40,
   },
   bestiary_titan: {
     doc: 'Titan: the Archaean, filling frame from fifty metres away',
@@ -713,7 +763,7 @@ export const SHOTS = {
   bestiary_hobgoblin: {
     doc: 'Hobgoblin: the daemon that grows out of a goblin',
     time: 23.0, weather: 'clear', scenario: 'daemons', follow: 'player',
-    offset: [0.4, 2.5, -1.4], lookOffset: [-6.4, 1.7, -8.0], fov: 38,
+    offset: [-2.5, 2.0, -4.0], lookOffset: [-6.4, 1.2, -8.0], fov: 40,
   },
   bestiary_bussemand: {
     doc: 'Bussemand mid-telegraph, night mist coming off it',
@@ -723,7 +773,7 @@ export const SHOTS = {
   bestiary_necromancer: {
     doc: 'Necromancer casting at the back of a daemon pack',
     time: 23.0, weather: 'clear', scenario: 'daemons', follow: 'player',
-    offset: [-5.6, 2.9, -8.6], lookOffset: [-10.5, 1.8, -14.0], fov: 40,
+    offset: [-7.0, 2.4, -8.5], lookOffset: [-10.5, 1.6, -14.0], fov: 40,
   },
   bestiary_arachne: {
     doc: 'Arachne stalking in from the flank',
