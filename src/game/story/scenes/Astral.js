@@ -1,4 +1,5 @@
-import { frameAt, arrange, wide, attend } from './SceneKit.js';
+import * as THREE from 'three';
+import { frameAt, arrange, wide, attend, poiPoint } from './SceneKit.js';
 
 /**
  * CHAPTER V — "Dark Clouds": the Archaean wakes.
@@ -26,13 +27,26 @@ export const ASTRAL = {
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(13.4);
     const weather = game.get('Weather');
-    if (weather && weather.set) weather.set('overcast');
+    // `storm`, matching what `Shots.js` asks for. The scene used to set
+    // `overcast` and the scene wins, so the two disagreed and the shot never
+    // got the weather it was authored against.
+    if (weather && weather.set) weather.set('storm');
 
-    // On the highway at the lay-by, where the basin opens out to the west and
-    // the horizon runs uninterrupted. Staged on the carriageway: off the
-    // tarmac the rendered terrain and `Terrain.heightAt` diverge enough to
-    // sink a standing actor to the waist.
-    const F = frameAt(ctx, 'layby', { fallback: [0, -60], offset: [0, -15] });
+    // On the crater floor of the Disc of Cauthess, 420 m out from the centre on
+    // the `disc_overlook` bearing.
+    //
+    // This used to sit at the `layby` Ecology site, which a later biomes pass
+    // turned into dark closed-canopy forest -- so the Archaean waking was
+    // staged in a wood, with a clipped trunk blacking out the left fifth of
+    // frame. The crater is the right place and it was measured: the floor runs
+    // flat at 3-4 m from 300-500 m out, while the meteor mass rises to 253 m at
+    // the centre and the rim wall to 269 m at 850 m. From here the Disc
+    // subtends ~31 degrees of elevation and the rim rings the horizon.
+    const disc = poiPoint(ctx, 'disc_cauthess');
+    const F = frameAt(ctx, null, {
+      origin: new THREE.Vector3(-1122, 0, -1752),
+      facing: disc || [-1020, -2160],
+    });
     ctx.data.F = F;
     arrange(ctx, F, {
       at: -4.0, lift: 0.95,
