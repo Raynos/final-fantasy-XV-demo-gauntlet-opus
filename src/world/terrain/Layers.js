@@ -165,16 +165,26 @@ const RECIPES = [
   },
   // 3 — sedimentary rock: irregular beds + vertical jointing (triplanar; v = world Y)
   (u, v) => {
-    const warp = (fbm(u, v, 4, 2, 101, 4) - 0.5) * 0.10;
+    // The warp is what stops the beds being ruled lines. It used to be +/-0.05
+    // of a tile — about 0.6 m — which on a 12 m tile is nothing, so every bed
+    // ran dead level right across a hillside and the whole face read as printed
+    // wood grain. Two octaves now, and six times the throw, so a bed wanders by
+    // most of its own thickness across a face the way a real one does.
+    const warp = (fbm(u, v, 4, 2, 101, 4) - 0.5) * 0.30
+      + (fbm(u, v, 9, 5, 103, 3) - 0.5) * 0.12;
     const band = v + warp;
     const b1 = Math.sin(band * Math.PI * 2 * 6.0);
     const b2 = Math.sin(band * Math.PI * 2 * 2.0 + 1.1);
     const b3 = Math.sin(band * Math.PI * 2 * 15.0 + 2.4);
-    const bed = clamp01(0.5 + 0.30 * b1 + 0.24 * b2 + 0.10 * b3);
+    // Weighted toward the *fine* laminations rather than the 6 m package. The
+    // 6 m one is the band you can pick out from 300 m away, and one visible
+    // pitch repeated up a face is the whole corduroy problem.
+    const bed = clamp01(0.5 + 0.34 * b1 + 0.15 * b2 + 0.14 * b3);
     // The *texture* only hints at bedding — the strong, irregular banding is
     // driven in the shader from world Y, so this must stay subtle or the two
-    // stack up into corduroy.
-    const bedStep = sstep(0.30, 0.66, bed);
+    // stack up into corduroy. The step is deliberately soft: a hard one drew a
+    // ruled edge at the top and bottom of every bed.
+    const bedStep = sstep(0.22, 0.78, bed);
     // vertical joints — tall thin cells, still tileable because the lattice is
     // 12 x 4 and both axes wrap on their own count
     const frac = worley(u + warp, v, 12, 4, 19);
@@ -187,16 +197,29 @@ const RECIPES = [
     // banding comes from the shader's analytic beds instead; this tile only
     // supplies grain, jointing and chip.
     const height = clamp01(bedStep * 0.075 + fracture * 0.28 + grit * 0.27 + chip * 0.38);
-    const hueSel = clamp01(0.5 + 0.5 * b2);
     const blotch = fbm(u, v, 5, 3, 59, 3);
     const stain = fbm(u, v, 3, 9, 67, 4);
-    const r = mix(0.382, 0.432, bedStep) * mix(0.90, 1.10, hueSel) * mix(0.88, 1.12, grit) * mix(0.84, 1.16, blotch) * mix(0.90, 1.10, stain);
-    const g = mix(0.312, 0.354, bedStep) * mix(0.96, 1.02, hueSel) * mix(0.90, 1.09, grit) * mix(0.88, 1.12, blotch) * mix(0.92, 1.08, stain);
-    const b = mix(0.268, 0.300, bedStep) * mix(1.05, 0.90, hueSel) * mix(0.90, 1.09, grit) * mix(0.90, 1.08, blotch) * mix(0.94, 1.06, stain);
+    // Iron / ash balance per bed. **This was the wood grain.** It used to be
+    // `0.5 + 0.5 * b2` — a pure sinusoid of world Y at two cycles per 12 m tile
+    // — driving a 20 % swing on red against a 14 % swing the other way on blue.
+    // A triplanar tile whose v axis *is* world Y then painted that as perfectly
+    // level warm-tan / blue-grey stripes on every slope in the world, and since
+    // it lives in the tile rather than in the shader it survived the regional
+    // `bedRegion` suppression that was supposed to keep bedding out of green
+    // country. Two agents in a row diagnosed it as the shader's strata and
+    // proved themselves wrong: zeroing every strata term leaves it untouched.
+    // Now the bed only *biases* the balance and a 2D blotch field carries most
+    // of it, so the hue changes along a face as well as up it.
+    const hueSel = clamp01(0.5 + 0.28 * b2 + 0.9 * (blotch - 0.5));
+    const r = mix(0.392, 0.424, bedStep) * mix(0.95, 1.06, hueSel) * mix(0.88, 1.12, grit) * mix(0.84, 1.16, blotch) * mix(0.90, 1.10, stain);
+    const g = mix(0.320, 0.348, bedStep) * mix(0.98, 1.01, hueSel) * mix(0.90, 1.09, grit) * mix(0.88, 1.12, blotch) * mix(0.92, 1.08, stain);
+    const b = mix(0.274, 0.296, bedStep) * mix(1.03, 0.95, hueSel) * mix(0.90, 1.09, grit) * mix(0.90, 1.08, blotch) * mix(0.94, 1.06, stain);
     const dark = mix(0.70, 1.0, fracture);
     return {
       height, color: [r * dark, g * dark, b * dark],
-      rough: mix(0.86, 0.74, bedStep), ao: mix(0.52, 1.0, fracture) * mix(0.90, 1.0, bedStep),
+      // The AO band followed the beds too, and an AO stripe survives every
+      // regional tint the palette applies — it is a shadow, not a colour.
+      rough: mix(0.84, 0.77, bedStep), ao: mix(0.52, 1.0, fracture) * mix(0.96, 1.0, bedStep),
     };
   },
   // 4 — bleached dry grass / scrub mat with bare dirt showing through

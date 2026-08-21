@@ -5,7 +5,7 @@ import {
 import { Clipmap } from './terrain/Clipmap.js';
 import { loadBaked } from './terrain/FieldBake.js';
 import { bootPhase } from '../engine/BootProfile.js';
-import { buildLayerTextures, LAYER_NAMES } from './terrain/Layers.js';
+import { buildLayerTextures, LAYER_NAMES, LAYER_AVG } from './terrain/Layers.js';
 import { buildBiomeLut, surfaceAt } from './terrain/Biome.js';
 import {
   createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
@@ -316,7 +316,88 @@ export class Terrain {
       rocky: c.rocky,
       road: c.road,
       roadDist: this.roadDistance(x, z),
+      // The two macro noise fields and the blended palette entry, handed back
+      // rather than recomputed: `groundColorAt` needs exactly these and
+      // `surfaceAt` is a nineteen-zone Gaussian blend, not a free call.
+      // `bio` is the shared scratch object — read it before the next call.
+      m1,
+      m2,
+      bio,
     };
+  }
+
+  /**
+   * Linear albedo of the ground as the terrain shader actually draws it.
+   *
+   * **This function is why every plant in the world was the wrong colour.**
+   * `veg/Ecology.js` `groundColor()` calls `Terrain.groundColorAt` if it
+   * exists and `Terrain.colorAt` if that does not — and neither existed, so
+   * for the whole life of the project every blade, bush and tree tinted itself
+   * from Ecology's own fallback ramp: a hard-coded `C_SOIL_RED` → `C_SOIL_DRY`
+   * → `C_SOIL_WET` lerp driven by moisture. That ramp is a warm brown
+   * everywhere. Measured at the Fallgrove it returns linear luminance 0.090 at
+   * r/g 1.34 while the ground under it renders a pale desaturated grey-green,
+   * so grass read as dark dots scattered on a light mat. It is the same class
+   * of bug `agent/splat` found in the shader — a second source of truth that
+   * had never heard of the cartography — one level further out.
+   *
+   * The recipe below is the shader's own far-LOD path (`tf_shade`'s `farCol`
+   * plus the macro tint block), evaluated from the weights `sampleMaterial`
+   * has already blended, so the two cannot drift by construction. What it
+   * deliberately leaves out is everything that only exists inside 420 m: the
+   * layer textures themselves, the strata, the grit and the wet response.
+   * Vegetation wants the *average* colour of the ground it stands on, not the
+   * pebble under one blade.
+   *
+   * @param {number} x
+   * @param {number} z
+   * @param {THREE.Color} [out]
+   * @returns {THREE.Color} linear-space albedo
+   */
+  groundColorAt(x, z, out = new THREE.Color()) {
+    const m = this.sampleMaterial(x, z);
+    const w = m.weights, bio = m.bio;
+    const green = bio.green, damp = bio.damp;
+    const cool = Math.min(1, green * 0.90 + damp * 0.40);
+
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < LAYER_NAMES.length; i++) {
+      const a = LAYER_AVG[i], k = w[LAYER_NAMES[i]];
+      r += a[0] * k; g += a[1] * k; b += a[2] * k;
+    }
+    // On a steep face the soft layers are a veneer and the rock reads through,
+    // so the region's rock tint takes over from its ground tint.
+    const rockShare = Math.min(1, w.rock * 1.25 + w.gravel * 0.35);
+    // chlorophyll only where the grass layer is actually winning
+    const chl = green * Math.min(1, w.grass * 1.6);
+    const gt = bio.ground, rt = bio.rock;
+    r *= mix(gt[0] * mix(1, 0.80, chl), 1, rockShare) * mix(1, rt[0], rockShare);
+    g *= mix(gt[1] * mix(1, 1.12, chl), 1, rockShare) * mix(1, rt[1], rockShare);
+    b *= mix(gt[2] * mix(1, 0.60, chl), 1, rockShare) * mix(1, rt[2], rockShare);
+
+    // the three overlapping colour fields, 600 m / 140 m / 40 m
+    const m3 = gnoise2(x * 0.027 + 7, z * 0.027 + 7);
+    const t1 = Math.max(0, Math.min(1, 0.5 + 0.72 * m.m1 + 0.30 * m.m2));
+    const t2 = Math.max(0, Math.min(1, 0.5 + 0.9 * m.m2 - 0.4 * m.m1)) * 0.45;
+    const k3 = 0.76 + 0.48 * (0.5 + 0.5 * m3);
+    r *= mix(mix(0.84, 0.86, cool), mix(1.20, 1.02, cool), t1) * mix(1, mix(1.02, 0.90, green), t2) * k3;
+    g *= mix(mix(0.90, 0.95, cool), mix(0.96, 1.06, cool), t1) * mix(1, mix(1.03, 1.07, green), t2) * k3;
+    b *= mix(mix(1.00, 1.02, cool), mix(0.74, 0.88, cool), t1) * mix(1, 0.80, t2) * k3;
+
+    const wetK = mix(1, 0.78, m.flow * 0.75);
+    const alt = mix(1, 1.12, ss(90, 210, m.height)) * mix(1, 0.94, ss(0.35, 0.75, m.slope));
+    r *= wetK * alt; g *= wetK * alt; b *= wetK * alt;
+    // sun-bleached naturalism, not candy
+    const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    r = lum + (r - lum) * 0.86; g = lum + (g - lum) * 0.86; b = lum + (b - lum) * 0.86;
+    // standing humidity: only the flats hold it, water runs off a face
+    const wetGround = Math.min(1, damp * (1 - ss(0.16, 0.44, m.slope)));
+    const dk = mix(1, 0.66, wetGround);
+    r *= dk * mix(1, 0.90, wetGround * 0.85);
+    g *= dk * mix(1, 0.97, wetGround * 0.85);
+    b *= dk * mix(1, 1.05, wetGround * 0.85);
+
+    return out.setRGB(Math.max(0, r), Math.max(0, g), Math.max(0, b));
   }
 
   // ------------------------------------------------------------------ update
@@ -337,3 +418,5 @@ function ss(a, b, x) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
+
+function mix(a, b, t) { return a + (b - a) * t; }
