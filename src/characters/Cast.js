@@ -107,14 +107,14 @@ export const CAST = {
           // crown layers, swept back
           { n: 140, th: [-2.75, 2.75], phi: [0.20, 0.78], dir: [0, -0.10, -0.99], out: 0.60, puff: 0.55, bend: 0.94, len: 0.046, width: 0.0024, thick: 0.36, spike: 0.72, dirJit: 0.14, lenVar: 0.32 },
           // crown spikes: the one thing that makes Noctis readable in silhouette
-          { n: 84, th: [-2.5, 2.5], phi: [0.10, 0.62], dir: [0.02, 0.38, -0.93], out: 0.34, hug: 0.10, puff: 1.6, bend: 0.60, len: 0.068, width: 0.0021, thick: 0.42, spike: 1.15, dirJit: 0.26, lenVar: 0.34, steps: 5 },
+          { n: 62, th: [-2.5, 2.5], phi: [0.10, 0.62], dir: [0.02, 0.38, -0.93], out: 0.34, hug: 0.16, puff: 1.15, bend: 0.60, len: 0.050, width: 0.0022, thick: 0.42, spike: 1.15, clump: 2, dirJit: 0.24, lenVar: 0.40, steps: 5 },
           // back layers, dynamic
           { n: 108, th: [1.95, 4.35], phi: [0.56, 1.0], dir: [0, -0.60, -0.80], out: 0.76, puff: 0.55, bend: 0.94, len: 0.058, width: 0.0028, thick: 0.36, spike: 0.62, dirJit: 0.08, lenVar: 0.20, spring: 0.35 },
           // side tufts over the ears — kept short so the ear reads
           { n: 34, th: [1.24, 2.10], phi: [0.90, 1.0], dir: [0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
           { n: 34, th: [-2.10, -1.24], phi: [0.90, 1.0], dir: [-0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
           // a handful of flyaways to break the outline — no longer 9 cm quills
-          { n: 30, th: [-2.6, 2.6], phi: [0.36, 0.95], dir: [0.05, 0.30, -0.95], out: 0.87, hug: 0.25, puff: 1.4, bend: 0.86, len: 0.060, width: 0.0017, thick: 0.4, spike: 1.05, dirJit: 0.26, lenVar: 0.34 },
+          { n: 22, th: [-2.6, 2.6], phi: [0.36, 0.95], dir: [0.05, 0.30, -0.95], out: 0.87, hug: 0.30, puff: 1.1, bend: 0.86, len: 0.046, width: 0.0017, thick: 0.4, spike: 1.05, clump: 2, dirJit: 0.26, lenVar: 0.36 },
         ],
       },
       outfit: [

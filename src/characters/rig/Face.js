@@ -370,15 +370,24 @@ export function buildHead(rig, look) {
     // wore the lips and the nostrils and read as a mottled red lump.
     const eUV = uvOf(ex, e[1], e[2]);
     B.group(2);
-    B.mat(0.46, 0, 1);           // an ear is two sheets of skin and a wafer of cartilage
+    // An ear is two sheets of skin and a wafer of cartilage — but a *thickness*
+    // of 1 is the maximum the subsurface term takes, and the whole ear pins to
+    // one texel, so it had no internal value break at all and rendered as a
+    // uniform back-lit pink smear with the helix and antihelix invisible on it.
+    // Half the thickness, and the plate carries its own darker tone so the rims
+    // have something to stand out from.
+    B.mat(0.46, 0, 0.5);
+    B.color(0xcdb4a6);
     // the auricular plate — the sheet the ridges sit on
     blob(B, {
       center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0305 * scale, 0.0192 * scale],
       rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9, uv: eUV,
     });
+    B.color(0xffffff);
     // concha: the bowl in front of the canal, in shadow at almost every angle
-    const c2 = put([ex * 0.90, e[1] - 0.004, e[2] + 0.003]);
-    B.color(0xa8a8a8);
+    const c2 = put([ex * 1.02, e[1] - 0.004, e[2] + 0.003]);
+    // the concha is a bowl and it is in shadow from every angle a head is seen at
+    B.color(0x8e8078);
     blob(B, {
       center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0170 * scale, 0.0098 * scale],
       rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7, uv: eUV,
@@ -406,18 +415,23 @@ export function buildHead(rig, look) {
         taper: (t) => 0.42 + 0.58 * Math.sin(Math.PI * Math.pow(t, 0.9)),
       });
     };
-    // helix — front-top, over the crown of the ear, down the back to the lobe
-    ridge(1.02, -2.55, 0.0282, 0.0176, 0.0000, -0.0010, 0.055, 0.0021, 9);
+    // Helix — front-top, over the crown of the ear, down the back to the lobe.
+    // `out` is a fraction of `ex`, and the plate is 8 mm half-thick on a 72 mm
+    // `ex`, i.e. 0.11 of it: at out=0.055 the rolled rim was *inside* the plate
+    // it is supposed to roll over, so the ear rendered as a smooth almond with
+    // no rim, no Y and no canal at any distance. Both ridges now clear the
+    // plate.
+    ridge(1.02, -2.55, 0.0282, 0.0176, 0.0000, -0.0010, 0.150, 0.0023, 11);
     // antihelix — the inner Y, set back from the rim and shallower
-    ridge(0.72, -1.90, 0.0178, 0.0102, -0.0016, 0.0026, 0.022, 0.0016, 7);
+    ridge(0.72, -1.90, 0.0178, 0.0102, -0.0016, 0.0026, 0.118, 0.0018, 9);
     // tragus — the flap over the canal, pointing back into the concha
-    const tg = put([ex * 0.955, e[1] - 0.0055, e[2] + 0.0135]);
+    const tg = put([ex * 1.045, e[1] - 0.0055, e[2] + 0.0135]);
     blob(B, {
       center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0062 * scale, 0.0032 * scale],
       rot: [0, sg * 0.5, 0], segU: 8, segV: 6, uv: eUV,
     });
     // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim
-    const lb = put([ex * 0.965, e[1] - 0.0296, e[2] + 0.0026]);
+    const lb = put([ex * 1.035, e[1] - 0.0296, e[2] + 0.0026]);
     blob(B, {
       center: [lb.x, lb.y, lb.z], scale: [0.0062 * scale, 0.0075 * scale, 0.0068 * scale],
       rot: [0, sg * 0.25, 0], segU: 8, segV: 6, uv: eUV,
@@ -954,9 +968,16 @@ function paintFace(look, uv) {
     soft([0.050, -0.024, 0.058], 0.036, 0.026, blush, 0.68);
     soft([-0.050, -0.024, 0.058], 0.036, 0.026, blush, 0.68);
     soft([0, -0.044, 0.099], 0.018, 0.014, blush, 0.80);
-    // ears and nostril wings are two sheets of skin over nothing: always redder
-    soft([0.070, -0.026, -0.004], 0.024, 0.028, 'rgba(200,104,84,0.40)', 1.0);
-    soft([-0.070, -0.026, -0.004], 0.024, 0.028, 'rgba(200,104,84,0.40)', 1.0);
+    // Ears and nostril wings are two sheets of skin over nothing: always redder.
+    // The ear meshes pin every one of their vertices to the single texel at
+    // their own centre, so this blob only needs to *be* that texel — at
+    // 24x28 mm it also painted a red bruise across the temple and the top of
+    // the cheek on the skull itself, which is the blotch in every profile frame.
+    // (No ear blob. The ear meshes pin *every* vertex to the single texel at
+    // their own centre, so anything painted there floods the whole ear with one
+    // flat colour — a 24 mm red blob painted a bruise across the temple *and*
+    // turned the ear into a salmon lump. The ear carries its own warmth in
+    // vertex colour instead, where it can vary across the helix and the concha.)
 
     // ---- occlusion --------------------------------------------------------
     // Every one of the occlusions below is a real value on a real face, and

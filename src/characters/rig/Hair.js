@@ -58,7 +58,12 @@ export function buildHair(rig, look) {
     // ~1.66 rad and the hairline *rises* there — the opposite sign to `temple`,
     // which drops at the sides so there is no bald patch beside the eyes.
     const ath = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
-    y += (H.earNotch ?? 0.034) * Math.exp(-Math.pow((ath - 1.66) / 0.36, 2));
+    // 0.034 still left the hairline 11 mm below the top of the helix, so the
+    // shell buried the upper third of the ear and the side tufts covered the
+    // rest; no profile frame in the game has ever shown an ear. At 0.056 the
+    // hairline clears the helix by about a centimetre, which is where a real
+    // one sits.
+    y += (H.earNotch ?? 0.056) * Math.exp(-Math.pow((ath - 1.66) / 0.34, 2));
     return y;
   };
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
