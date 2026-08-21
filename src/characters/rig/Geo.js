@@ -574,7 +574,10 @@ export function blob(B, o) {
       );
       if (q) p.applyQuaternion(q);
       p.add(new THREE.Vector3().fromArray(c));
-      row.push(B.vv(p, u / segU, v / segV));
+      // `uv` pins every vertex to one texel. A blob that spans the whole 0..1
+      // texture samples the *entire* face map, so a 2 cm ear picks up the lips
+      // and the nostrils and renders as a mottled red lump.
+      row.push(o.uv ? B.vv(p, o.uv[0], o.uv[1]) : B.vv(p, u / segU, v / segV));
     }
     rows.push(row);
   }
@@ -636,7 +639,8 @@ export function ribbon(B, o) {
     B.tang(tan.x, tan.y, tan.z);
     const row = [];
     for (const [c, s2, u] of cs) {
-      row.push(B.vv(_t.copy(p).addScaledVector(_r, c * w).addScaledVector(_f, s2 * h), u, t));
+      const vp = _t.copy(p).addScaledVector(_r, c * w).addScaledVector(_f, s2 * h);
+      row.push(o.uv ? B.vv(vp, o.uv[0], o.uv[1]) : B.vv(vp, u, t));
     }
     rows.push(row);
   }
@@ -651,7 +655,7 @@ export function ribbon(B, o) {
   const last = rows[steps];
   const e = curve.getPoint(1);
   B.tang(0, 1, 0);
-  const cap = B.vv(_t.copy(e), 0.5, 1);
+  const cap = o.uv ? B.vv(_t.copy(e), o.uv[0], o.uv[1]) : B.vv(_t.copy(e), 0.5, 1);
   for (let k = 0; k < sides; k++) B.tri(last[(k + 1) % sides], last[k], cap);
   return rows;
 }

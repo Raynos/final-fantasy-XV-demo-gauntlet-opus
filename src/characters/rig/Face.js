@@ -365,19 +365,23 @@ export function buildHead(rig, look) {
     const e = FACE.ear;
     const ex = e[0] * sg * hw;
     const c = put([ex * 0.97, e[1], e[2]]);
+    // Every piece of the ear pins to one texel of the face map — the ear's own.
+    // A blob whose UV spans 0..1 samples the whole painted face, so the old ear
+    // wore the lips and the nostrils and read as a mottled red lump.
+    const eUV = uvOf(ex, e[1], e[2]);
     B.group(2);
     B.mat(0.46, 0, 1);           // an ear is two sheets of skin and a wafer of cartilage
     // the auricular plate — the sheet the ridges sit on
     blob(B, {
       center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0305 * scale, 0.0192 * scale],
-      rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9,
+      rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9, uv: eUV,
     });
     // concha: the bowl in front of the canal, in shadow at almost every angle
     const c2 = put([ex * 0.90, e[1] - 0.004, e[2] + 0.003]);
     B.color(0xa8a8a8);
     blob(B, {
       center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0170 * scale, 0.0098 * scale],
-      rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7,
+      rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7, uv: eUV,
     });
     B.color(0xffffff);
 
@@ -396,27 +400,27 @@ export function buildHead(rig, look) {
         ]).toArray());
       }
       ribbon(B, {
-        points: pts, steps: n, sides: 6,
+        points: pts, steps: n, sides: 6, uv: eUV,
         width: wid * scale, thick: wid * 0.85 * scale,
         up: [sg, 0, 0],
-        taper: (t) => 0.55 + 0.45 * Math.sin(Math.PI * Math.pow(t, 0.9)),
+        taper: (t) => 0.42 + 0.58 * Math.sin(Math.PI * Math.pow(t, 0.9)),
       });
     };
     // helix — front-top, over the crown of the ear, down the back to the lobe
-    ridge(1.02, -2.55, 0.0288, 0.0180, 0.0000, -0.0010, 0.13, 0.0030, 9);
+    ridge(1.02, -2.55, 0.0282, 0.0176, 0.0000, -0.0010, 0.055, 0.0021, 9);
     // antihelix — the inner Y, set back from the rim and shallower
-    ridge(0.72, -1.90, 0.0182, 0.0104, -0.0016, 0.0026, 0.055, 0.0024, 7);
+    ridge(0.72, -1.90, 0.0178, 0.0102, -0.0016, 0.0026, 0.022, 0.0016, 7);
     // tragus — the flap over the canal, pointing back into the concha
     const tg = put([ex * 0.955, e[1] - 0.0055, e[2] + 0.0135]);
     blob(B, {
       center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0062 * scale, 0.0032 * scale],
-      rot: [0, sg * 0.5, 0], segU: 8, segV: 6,
+      rot: [0, sg * 0.5, 0], segU: 8, segV: 6, uv: eUV,
     });
     // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim
     const lb = put([ex * 0.965, e[1] - 0.0296, e[2] + 0.0026]);
     blob(B, {
       center: [lb.x, lb.y, lb.z], scale: [0.0062 * scale, 0.0075 * scale, 0.0068 * scale],
-      rot: [0, sg * 0.25, 0], segU: 8, segV: 6,
+      rot: [0, sg * 0.25, 0], segU: 8, segV: 6, uv: eUV,
     });
     B.mat(0.5, 0, 0);
     B.group(0);
