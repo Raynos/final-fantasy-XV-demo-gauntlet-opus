@@ -113,9 +113,8 @@ export class MotionBlurPass extends FilterPass {
    * skips a pass whose `enabled` is false. A locked-off camera, a paused
    * frame, and every screenshot the harness takes get that time back.
    *
-   * @param {boolean} moving
    */
-  setMoving(moving) { this._enabled = this._wanted && moving; }
+  setMoving(moving: boolean) { this._enabled = this._wanted && moving; }
 
   setSize(w, h) {
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);

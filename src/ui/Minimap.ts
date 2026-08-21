@@ -45,8 +45,7 @@ export class Minimap {
     this._a = 0;
   }
 
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     this.map = worldMap;
     this.terrain = game.get('Terrain');
@@ -95,8 +94,7 @@ export class Minimap {
     this.canvas.style.height = `${SIZE}px`;
   }
 
-  /** @param {boolean} v */
-  setVisible(v) { this.visible = !!v; }
+  setVisible(v: boolean) { this.visible = !!v; }
 
   /** Cycle 140 m -> 260 m -> 480 m -> 900 m and back. */
   cycleRange() {

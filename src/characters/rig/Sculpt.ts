@@ -157,18 +157,10 @@ export function smoothNormals(geo, groups) {
  * muscle bulge on the front of a thigh — all one sweep, no extra parts, no
  * visible seams between primitives.
  *
- * @param {CBuilder} B
  * @param {Object} o
- * @param {Array} o.nodes [{p:[x,y,z], rx, rz?}]
- * @param {number} [o.steps] rings along the sweep
- * @param {number} [o.seg] radial segments
- * @param {(theta:number,u:number)=>number} [o.shape]
- * @param {(theta:number,u:number,out:THREE.Vector3)=>void} [o.offset] ring-space displacement
- * @param {(theta:number,u:number)=>number|THREE.Color} [o.colorAt]
- * @param {(theta:number,u:number)=>number[]} [o.matAt] [roughness, metalness]
- * @returns {number[][]} the ring index grid, so callers can stitch to it
+ * @returns the ring index grid, so callers can stitch to it
  */
-export function sweep(B, o) {
+export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[] }): number[][] {
   const nodes = o.nodes;
   const steps = o.steps || 14;
   const seg = o.seg || 12;
@@ -288,9 +280,8 @@ function capRing(B, ring, p, tan, sign, height) {
  * eye socket, a cheekbone and a muzzle without any modelling data.
  *
  * brush: {p:[x,y,z], r:[rx,ry,rz], amt, dir:[x,y,z]|'normal', mirror?, pow?}
- * @param {CBuilder} B
  */
-export function sculptBlob(B, o) {
+export function sculptBlob(B: CBuilder, o) {
   const segU = o.segU || 16, segV = o.segV || 12;
   const scale = new THREE.Vector3().fromArray(o.scale);
   const center = new THREE.Vector3().fromArray(o.center || [0, 0, 0]);
@@ -365,10 +356,9 @@ export function plate(B, o) {
 /**
  * A tapered horn / tusk / claw / spine swept along an arc, with an optional
  * twist and an elliptical section — the single most-reused creature detail.
- * @param {CBuilder} B
- * @param {Object} o {from:[x,y,z], dir:[x,y,z], len, r0, r1, curve:[x,y,z], seg, steps, flat}
+ * @param o {from:[x,y,z], dir:[x,y,z], len, r0, r1, curve:[x,y,z], seg, steps, flat}
  */
-export function horn(B, o) {
+export function horn(B: CBuilder, o: any) {
   const from = new THREE.Vector3().fromArray(o.from);
   const dir = new THREE.Vector3().fromArray(o.dir).normalize();
   const curve = o.curve ? new THREE.Vector3().fromArray(o.curve) : new THREE.Vector3();
@@ -401,10 +391,9 @@ export function horn(B, o) {
  * in whatever a part left unset. Unlike the GeoKit merge this keeps `aMat`,
  * which is the whole point — per-vertex roughness is what stops a creature
  * reading as one plastic colour.
- * @param {THREE.BufferGeometry[]} list
- * @param {number[]} defMat default [roughness, metalness]
+ * @param defMat default [roughness, metalness]
  */
-export function mergeCreature(list, defMat = [0.8, 0]) {
+export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [0.8, 0]) {
   const geos = list.filter((g) => g && g.attributes.position.count);
   let vc = 0, ic = 0;
   for (const g of geos) {

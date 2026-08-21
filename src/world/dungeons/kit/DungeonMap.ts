@@ -8,20 +8,12 @@
  * or a HUD inset can call straight onto a 2D context.
  */
 export class DungeonMap {
-  /**
-   * @param {import('./Layout.ts').Layout} layout
-   * @param {import('./Dungeon.ts').Dungeon} dungeon
-   */
-  constructor(layout, dungeon) {
+  constructor(layout: import('./Layout.ts').Layout, dungeon: import('./Dungeon.ts').Dungeon) {
     this.L = layout;
     this.dungeon = dungeon;
   }
 
-  /**
-   * @returns {{id:string, name:string, bounds:object, rooms:object[],
-   *            runs:object[], markers:object[], party:object|null}}
-   */
-  data(partyLocal = null) {
+  data(partyLocal = null): any {
     const L = this.L;
     const seen = this.dungeon.discovered;
     const rooms = [];
@@ -56,12 +48,8 @@ export class DungeonMap {
 
   /**
    * Reference renderer.
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} w
-   * @param {number} h
-   * @param {{party?:object, revealAll?:boolean, pad?:number}} [opts]
    */
-  draw(ctx, w, h, opts = {}) {
+  draw(ctx: CanvasRenderingContext2D, w: number, h: number, opts: {party?:any, revealAll?:boolean, pad?:number} = {}) {
     const d = this.data(opts.party || null);
     const b = d.bounds;
     const pad = opts.pad != null ? opts.pad : 18;

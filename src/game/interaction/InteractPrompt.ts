@@ -16,8 +16,8 @@ import { ensureInteractCss } from './interact.css.ts';
 const _v = new THREE.Vector3();
 
 export class InteractPrompt {
-  /** @param {HTMLElement} parent usually `game.uiRoot` */
-  constructor(parent) {
+  /** @param parent usually `game.uiRoot` */
+  constructor(parent: HTMLElement) {
     ensureInteractCss();
     this.root = el('div', { id: 'interact' });
     parent.appendChild(this.root);
@@ -73,12 +73,10 @@ export class InteractPrompt {
   }
 
   /**
-   * @param {number} dt
-   * @param {object} game
-   * @param {object|null} item the selected interactable
-   * @param {number} appear 0..1
+   * @param item the selected interactable
+   * @param appear 0..1
    */
-  update(dt, game, item, appear) {
+  update(dt: number, game: any, item: any | null, appear: number) {
     if (appear <= 0.002 || !item) { this.root.style.display = 'none'; return; }
     this.root.style.display = '';
     this._render(item);

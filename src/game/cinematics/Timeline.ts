@@ -23,10 +23,10 @@ import { Shot } from './CameraMove.ts';
  */
 export class Timeline {
   /**
-   * @param {object} def scene definition (see `story/scenes/*`)
-   * @param {object} ctx staging context handed to every cue
+   * @param def scene definition (see `story/scenes/*`)
+   * @param ctx staging context handed to every cue
    */
-  constructor(def, ctx) {
+  constructor(def: any, ctx: any) {
     this.def = def;
     this.ctx = ctx;
     this.t = 0;
@@ -51,11 +51,11 @@ export class Timeline {
 
   /**
    * Advance the play-head and fire every cue it crossed.
-   * @param {number} dt seconds
-   * @param {(cue:object) => void} run cue executor
-   * @returns {boolean} true if the camera cut this frame
+   * @param dt seconds
+   * @param run cue executor
+   * @returns true if the camera cut this frame
    */
-  step(dt, run) {
+  step(dt: number, run: (cue:any) => void): boolean {
     this.t += dt;
     for (const c of this.cues) {
       if (c.fired || c.t > this.t) continue;
@@ -74,9 +74,8 @@ export class Timeline {
    * Cues marked `skippable: false` are the ones that *change the world* — they
    * still run; cues that are purely presentational (`presentational: true`) are
    * dropped so a skip does not spray six subtitles at once.
-   * @param {(cue:object) => void} run
    */
-  fastForward(run) {
+  fastForward(run: (cue:any) => void) {
     this.t = this.duration;
     for (const c of this.cues) {
       if (c.fired) continue;

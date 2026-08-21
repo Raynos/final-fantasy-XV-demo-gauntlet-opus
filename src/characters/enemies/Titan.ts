@@ -386,9 +386,9 @@ class TitanEnemy extends Enemy {
   /**
    * World-space centre of one palm — the fight code uses it to place the
    * shockwave, the embedded-fist damage volume and the climbable marker.
-   * @param {number} side -1 left, +1 right
+   * @param side -1 left, +1 right
    */
-  handPoint(side, out = new THREE.Vector3()) {
+  handPoint(side: number, out = new THREE.Vector3()) {
     const b = this.rig && this.rig.byName.get(side < 0 ? 'handL' : 'handR');
     if (!b) return this.centre(out);
     b.updateWorldMatrix(true, false);

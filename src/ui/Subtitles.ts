@@ -20,13 +20,12 @@ import { el, clamp, easeOut, easeOutQuint, Clip } from './UIKit.ts';
  */
 export class Subtitles {
   /**
-   * @param {HTMLElement} parent full-screen layer for the lower third
-   * @param {object} [game]
-   * @param {HTMLElement} [banterParent] the bottom-left corner's banter slot,
+   * @param parent full-screen layer for the lower third
+   * @param [banterParent] the bottom-left corner's banter slot,
    *   owned by `PartyPanel`. Without it the bubbles fall back to this layer and
    *   the stylesheet's absolute placement, which is what they used to do.
    */
-  constructor(parent, game, banterParent) {
+  constructor(parent: HTMLElement, game?: any, banterParent?: HTMLElement) {
     this.game = game || null;
     this.root = el('div.subs-layer');
     parent.appendChild(this.root);
@@ -52,11 +51,11 @@ export class Subtitles {
 
   /**
    * Show a lower-third subtitle.
-   * @param {string} who speaker name
-   * @param {string} line dialogue
-   * @param {number} [dur] seconds on screen
+   * @param who speaker name
+   * @param line dialogue
+   * @param [dur] seconds on screen
    */
-  say(who, line, dur) {
+  say(who: string, line: string, dur?: number) {
     if (!line) return;
     this.spk.textContent = who || '';
     this.line.textContent = '';
@@ -73,8 +72,8 @@ export class Subtitles {
     this.cur.shot = this._shot();
   }
 
-  /** The shot this line belongs to — see the class note. @returns {string|null} */
-  _shot() { return this.game?.currentShot || null; }
+  /** The shot this line belongs to — see the class note. @returns */
+  _shot(): string | null { return this.game?.currentShot || null; }
 
   /** Drop the current line and every banter bubble immediately. */
   clear() {
@@ -84,8 +83,8 @@ export class Subtitles {
     this.bubbles.length = 0;
   }
 
-  /** Pop a party-banter bubble. @param {string} who @param {string} line */
-  bant(who, line) {
+  /** Pop a party-banter bubble. @param who @param line */
+  bant(who: string, line: string) {
     if (!line) return;
     const node = el('div.bb', {}, [
       el('div.bw', { text: who || '' }),
@@ -99,8 +98,8 @@ export class Subtitles {
     }
   }
 
-  /** @param {number} dt seconds */
-  update(dt) {
+  /** @param dt seconds */
+  update(dt: number) {
     // retire anything left over from a shot that is no longer on screen
     const shot = this._shot();
     if (this.cur && this.cur.shot !== shot) { this.cur = null; this.subs.style.opacity = '0'; }

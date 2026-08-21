@@ -17,9 +17,9 @@
  */
 export class Pack {
   /**
-   * @param {object} [o] `{ maxEngaged, rotate, id }`
+   * @param [o] `{ maxEngaged, rotate, id }`
    */
-  constructor(o = {}) {
+  constructor(o: any = {}) {
     this.id = o.id || 'pack';
     this.members = [];
     this.maxEngaged = o.maxEngaged ?? 2;
@@ -33,8 +33,7 @@ export class Pack {
     this.encounter = o.encounter || null;
   }
 
-  /** @param {object} e */
-  add(e) {
+  add(e: any) {
     if (!this.members.includes(e)) {
       this.members.push(e);
       this._reslot();
@@ -42,8 +41,7 @@ export class Pack {
     return e;
   }
 
-  /** @param {object} e */
-  remove(e) {
+  remove(e: any) {
     const i = this.members.indexOf(e);
     if (i >= 0) this.members.splice(i, 1);
     const j = this.engaged.indexOf(e);
@@ -69,10 +67,8 @@ export class Pack {
   /**
    * One member noticed something — bring the rest in. This is what makes a
    * pack feel like a pack: you are spotted by one and answered by five.
-   * @param {object} by
-   * @param {object} target
    */
-  alert(by, target) {
+  alert(by: any, target: any) {
     this.target = target;
     if (this.alerted) return;
     this.alerted = true;
@@ -96,9 +92,8 @@ export class Pack {
   /**
    * Hand `e` a role for the next second or so.
    * Sets `e.packRole` to `'engage'` or `'flank'`.
-   * @param {object} e
    */
-  assign(e) {
+  assign(e: any) {
     // prune the dead and the disengaged
     for (let i = this.engaged.length - 1; i >= 0; i--) {
       const m = this.engaged[i];

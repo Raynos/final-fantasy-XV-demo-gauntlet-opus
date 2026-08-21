@@ -24,13 +24,13 @@ function project(p, camera, w, h) {
  */
 export class CombatHUD {
   /**
-   * @param {HTMLElement} parent full-screen layer for world-anchored chrome
-   * @param {HTMLElement} [corner] the bottom-left corner slot owned by
+   * @param parent full-screen layer for world-anchored chrome
+   * @param [corner] the bottom-left corner slot owned by
    *   `PartyPanel`, which the Armiger gauge and technique rail flow into. They
    *   used to be absolutely positioned at hand-measured `bottom:` offsets and
    *   would collide with the party stack the moment a toast pushed it upward.
    */
-  constructor(parent, corner) {
+  constructor(parent: HTMLElement, corner?: HTMLElement) {
     this.root = el('div.combat-layer');
     parent.appendChild(this.root);
 
@@ -111,9 +111,8 @@ export class CombatHUD {
   /**
    * Build the technique rack from the real party roster: one signature move per
    * companion, with its real tech-bar cost.
-   * @param {object} game
    */
-  _buildTechs(game) {
+  _buildTechs(game: any) {
     const node = this.techs.node;
     const list = readTechniques(game);
     this.techs.rows = list.map((t, i) => {
@@ -135,10 +134,8 @@ export class CombatHUD {
   // ---- public API (called by the Combat system) -----------------------
   /**
    * Pop a floating damage number at a world position.
-   * @param {{world:{x:number,y:number,z:number}, amount:number, crit?:boolean,
-   *          kind?:'hit'|'crit'|'heal'|'taken', element?:string}} ev
    */
-  damage(ev) {
+  damage(ev: any) {
     if (!ev || !ev.world) return;
     const crit = !!ev.crit || ev.kind === 'crit';
     const amount = Math.round(ev.amount ?? 0);
@@ -165,22 +162,22 @@ export class CombatHUD {
     if (this.numbers.length > 22) this._retire(this.numbers.shift());
   }
 
-  /** Show a big centre call-out. @param {string} word @param {string} [sub] */
-  callOut(word, sub = '') {
+  /** Show a big centre call-out. @param word @param [sub] */
+  callOut(word: string, sub: string = '') {
     this.callout = { word, sub, warm: /LINK|CHAIN|CRIT/i.test(word), clip: new Clip(0.34, 1.5) };
     this.calloutWord.textContent = word;
     this.calloutSub.textContent = sub;
     this.calloutNode.classList.toggle('warm', this.callout.warm);
   }
 
-  /** @param {object|null} target object with `.position`, or null to clear */
-  setLockOn(target) {
+  /** @param target object with `.position`, or null to clear */
+  setLockOn(target: any | null) {
     if (target !== this.lockOn) this.lockAge = 0;
     this.lockOn = target;
   }
 
-  /** @param {number} v 0..1 */
-  setArmiger(v) { this.armigerVal = clamp(v, 0, 1); this._armigerDriven = true; }
+  /** @param v 0..1 */
+  setArmiger(v: number) { this.armigerVal = clamp(v, 0, 1); this._armigerDriven = true; }
 
   /** Rewind the stand-in encounter — used by the capture harness between shots. */
   resetDemo() {
@@ -193,11 +190,10 @@ export class CombatHUD {
 
   // ---- per-frame ------------------------------------------------------
   /**
-   * @param {number} dt seconds
-   * @param {object} game
-   * @param {number} appear 0..1 combat reveal
+   * @param dt seconds
+   * @param appear 0..1 combat reveal
    */
-  update(dt, game, appear) {
+  update(dt: number, game: any, appear: number) {
     const w = window.innerWidth, h = window.innerHeight;
     const cam = game.camera;
     const e = easeOut(appear);
@@ -486,10 +482,10 @@ export class CombatHUD {
    * 200-weight type read as two overlapping copies of itself over bright
    * desert. See the note above `.callout` in `ui.css`.
    *
-   * @param {number} dt seconds
-   * @param {number} h viewport height in css px
+   * @param dt seconds
+   * @param h viewport height in css px
    */
-  _updateCallout(dt, h) {
+  _updateCallout(dt: number, h: number) {
     const c = this.callout;
     if (!c) { this.calloutNode.style.opacity = '0'; return; }
     c.clip.step(dt);

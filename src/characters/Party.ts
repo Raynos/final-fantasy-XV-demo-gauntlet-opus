@@ -96,8 +96,8 @@ export class Party {
   /** The three companions' vitals, in formation order. Mirrored by `RpgSystem`. */
   get stats() { return this.members.map((m) => m.stats); }
 
-  /** @returns {Object|undefined} member by character name */
-  get(name) { return this.members.find((m) => m.name === name || m.key === name); }
+  /** @returns member by character name */
+  get(name): any | undefined { return this.members.find((m) => m.name === name || m.key === name); }
 
   /**
    * Draw the stochastic fields for one member off `this.rnd`.

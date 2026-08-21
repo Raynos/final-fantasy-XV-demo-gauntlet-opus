@@ -12,12 +12,7 @@ import { Rng } from '../../util/Rng.ts';
  * and being unable to run away is most of what makes it feel like an Astral.
  */
 export class TitanArena {
-  /**
-   * @param {object} game
-   * @param {THREE.Vector3} centre
-   * @param {number} radius
-   */
-  constructor(game, centre, radius = 60) {
+  constructor(game: any, centre: THREE.Vector3, radius: number = 60) {
     this.game = game;
     this.centre = centre.clone();
     this.radius = radius;
@@ -93,8 +88,8 @@ export class TitanArena {
     return this;
   }
 
-  /** Shake the world and throw dust off the ring. @param {number} power */
-  quake(power = 1) {
+  /** Shake the world and throw dust off the ring. @param power */
+  quake(power: number = 1) {
     this.shake = Math.max(this.shake, power);
     if (!this.vfx) return;
     for (let i = 0; i < 10; i++) {

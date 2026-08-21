@@ -246,9 +246,9 @@ export class PostFX {
 
   /**
    * `?post=nodof,nobloom` — turn individual stages off for A/B comparison.
-   * @param {string} list comma separated tokens
+   * @param list comma separated tokens
    */
-  debugToggle(list) {
+  debugToggle(list: string) {
     for (const raw of String(list).split(',')) {
       const t = raw.trim().toLowerCase();
       if (t === 'nodof') this.dof.enabled = false;
@@ -280,9 +280,8 @@ export class PostFX {
   /**
    * Attach the game so the grade can follow the sky's time of day. Called by
    * CameraRig on its first tick — PostFX is constructed before Game finishes.
-   * @param {object} game
    */
-  attach(game) { this.game = game; }
+  attach(game: any) { this.game = game; }
 
   /**
    * Own the `scene.overrideMaterial` contract for the whole engine.
@@ -299,9 +298,8 @@ export class PostFX {
    * contributes real occlusion instead of vanishing. Doing it here, once, also
    * means a new vegetation or VFX system gets it for free.
    *
-   * @param {THREE.Scene} scene
    */
-  guardOverrides(scene) {
+  guardOverrides(scene: THREE.Scene) {
     scene.traverse((o) => {
       const m = o.material;
       if (!m) return;
@@ -316,9 +314,8 @@ export class PostFX {
 
   /**
    * Quality tier. `low` drops the expensive gathers, `ultra` widens them.
-   * @param {'low'|'medium'|'high'|'ultra'} tier
    */
-  setQuality(tier) {
+  setQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
     this.quality = tier;
     const low = tier === 'low', med = tier === 'medium', ultra = tier === 'ultra';
     // The light budget is deliberately *not* re-set here. Changing it changes
@@ -348,10 +345,7 @@ export class PostFX {
     this.cas.sharpness = ultra ? 0.38 : 0.45;
   }
 
-  /**
-   * @param {'taa'|'smaa'|'none'} mode
-   */
-  setAA(mode) {
+  setAA(mode: 'taa' | 'smaa' | 'none') {
     this.aaMode = mode;
     this.taa.enabled = mode === 'taa';
     this.smaa.enabled = mode === 'smaa';
@@ -371,10 +365,9 @@ export class PostFX {
 
   /**
    * Select a grade preset, optionally as a partial blend over the current one.
-   * @param {'day'|'golden'|'night'|'storm'} name
-   * @param {number} [t] 1 = full switch, 0..1 = blend weight
+   * @param [t] 1 = full switch, 0..1 = blend weight
    */
-  setGrade(name, t = 1) {
+  setGrade(name: 'day' | 'golden' | 'night' | 'storm', t: number = 1) {
     if (!GRADES[name]) return;
     if (t >= 0.999) { this.gradeA = name; this.gradeB = name; this.gradeMix = 0; }
     else { this.gradeB = name; this.gradeMix = THREE.MathUtils.clamp(t, 0, 1); }
@@ -383,9 +376,9 @@ export class PostFX {
 
   /**
    * Explicit cross-fade between two presets (used by the day/night cycle).
-   * @param {string} a @param {string} b @param {number} t
+   * @param a @param b @param t
    */
-  setGradeBlend(a, b, t) {
+  setGradeBlend(a: string, b: string, t: number) {
     this.gradeA = a; this.gradeB = b;
     this.gradeMix = THREE.MathUtils.clamp(t, 0, 1);
     this._applyGrade();
@@ -399,9 +392,8 @@ export class PostFX {
 
   /**
    * Focus the lens on an object (or a fixed world point). Pass null to hold.
-   * @param {THREE.Object3D|THREE.Vector3|null} target
    */
-  setFocusTarget(target) { this.focusTarget = target || null; }
+  setFocusTarget(target: THREE.Object3D | THREE.Vector3 | null) { this.focusTarget = target || null; }
 
   /** Focus at an explicit distance in metres. */
   setFocusDistance(d) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
@@ -558,9 +550,8 @@ export class PostFX {
 
   /**
    * Per-frame CPU work: grade blending, focus pull, sun projection.
-   * @param {{now:number, dt:number}} time
    */
-  update(time) {
+  update(time: {now:number, dt:number}) {
     this.dt = Math.min(time.dt || 1 / 60, 0.1);
     this.grade.uniforms.uTime.value = time.now;
 
@@ -608,9 +599,9 @@ export class PostFX {
    * last thing before it reports ready, which is exactly the moment to do it:
    * every system has built its content, and nothing is on screen yet.
    *
-   * @returns {object|null} warm-up report, or null if it could not run
+   * @returns warm-up report, or null if it could not run
    */
-  precompile() {
+  precompile(): any | null {
     const game = this.game || (typeof window !== 'undefined' ? window.GAME : null);
     if (!game || !game.get || this._warmed) return null;
     this._warmed = true;
@@ -683,9 +674,8 @@ export class PostFX {
 
 /**
  * Grade preset pair + blend weight for a 0..24 clock.
- * @returns {[string, string, number]}
  */
-function todGrade(hours) {
+function todGrade(hours): [string, string, number] {
   const h = ((hours % 24) + 24) % 24;
   if (h < 4.6) return ['night', 'night', 0];
   if (h < 6.6) return ['night', 'golden', smooth((h - 4.6) / 2.0)];

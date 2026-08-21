@@ -12,11 +12,7 @@ import { noiseBuffer, makeRng, clamp, EPS, hit } from './Dsp.ts';
  * the same ambience the live game does.
  */
 export class Ambience {
-  /**
-   * @param {import('./Graph.ts').AudioGraph} graph
-   * @param {import('./Sfx.ts').Sfx} sfx
-   */
-  constructor(graph, sfx) {
+  constructor(graph: import('./Graph.ts').AudioGraph, sfx: import('./Sfx.ts').Sfx) {
     this.graph = graph;
     this.sfx = sfx;
     const ctx = graph.ctx;
@@ -123,10 +119,10 @@ export class Ambience {
   /* ---------------------------------------------------------- parameters */
 
   /**
-   * @param {number} strength Weather.windStrength (0.3 still .. 3.4 storm)
-   * @param {number} [at] explicit schedule time (offline render)
+   * @param strength Weather.windStrength (0.3 still .. 3.4 storm)
+   * @param [at] explicit schedule time (offline render)
    */
-  setWind(strength, at = null) {
+  setWind(strength: number, at: number = null) {
     const t = at ?? this.ctx.currentTime;
     this.wind = strength;
     // Map the vegetation contract onto a listening curve: still air is almost
@@ -144,8 +140,8 @@ export class Ambience {
     this.gustAG.gain.setTargetAtTime(120 + 320 * n, t, 2.0);
   }
 
-  /** @param {number} intensity Weather.rainIntensity 0..1 */
-  setRain(intensity, at = null) {
+  /** @param intensity Weather.rainIntensity 0..1 */
+  setRain(intensity: number, at = null) {
     const t = at ?? this.ctx.currentTime;
     this.rain = intensity;
     const i = clamp(intensity, 0, 1);
@@ -156,10 +152,10 @@ export class Ambience {
   }
 
   /**
-   * @param {number} hours 0..24
-   * @param {number} [nightDepth] 0..1 from DayCycle — deepens the daemon layer
+   * @param hours 0..24
+   * @param [nightDepth] 0..1 from DayCycle — deepens the daemon layer
    */
-  setTimeOfDay(hours, nightDepth = 0, at = null) {
+  setTimeOfDay(hours: number, nightDepth: number = 0, at = null) {
     const t = at ?? this.ctx.currentTime;
     this.hours = ((hours % 24) + 24) % 24;
     this.nightDepth = nightDepth;
@@ -183,10 +179,10 @@ export class Ambience {
 
   /**
    * Water at a place. Pass null when the player walks away from the shore.
-   * @param {{x:number,y:number,z:number}|null} pos nearest point on the water
-   * @param {number} distance metres
+   * @param pos nearest point on the water
+   * @param distance metres
    */
-  setWater(pos, distance) {
+  setWater(pos: {x:number,y:number,z:number} | null, distance: number) {
     if (!pos || distance > 90) {
       if (this.water) this.water.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 1.2);
       return;
@@ -224,10 +220,8 @@ export class Ambience {
   /**
    * The floodlights over a fuel stop: mains hum, its octave, and the ballast
    * buzz an octave and a fifth up, with a slow flicker.
-   * @param {{x:number,y:number,z:number}|null} pos
-   * @param {number} distance
    */
-  setFloodlights(pos, distance) {
+  setFloodlights(pos: {x:number,y:number,z:number} | null, distance: number) {
     const ctx = this.ctx;
     if (!pos || distance > 45) {
       if (this.hum) this.hum.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.9);
@@ -276,10 +270,10 @@ export class Ambience {
   /**
    * Fill the one-shot layers out to `horizon`. Called with a short lookahead in
    * the live game and once with the whole session in the offline render.
-   * @param {number} horizon absolute context time
-   * @param {{x:number,y:number,z:number}} [origin] listener position
+   * @param horizon absolute context time
+   * @param [origin] listener position
    */
-  scheduleUntil(horizon, origin = ORIGIN) {
+  scheduleUntil(horizon: number, origin: {x:number,y:number,z:number} = ORIGIN) {
     const start = Math.max(this.scheduledTo, horizon - 4);
     if (horizon <= start) return;
     const h = this.hours;

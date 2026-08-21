@@ -7,9 +7,9 @@ import { el, clamp, damp } from './UIKit.ts';
  */
 export class Bar {
   /**
-   * @param {object} [opts] `{ cls, chase, delay, speed }`
+   * @param [opts] `{ cls, chase, delay, speed }`
    */
-  constructor(opts = {}) {
+  constructor(opts: any = {}) {
     const { cls = '', chase = true, delay = 0.42, speed = 2.6 } = opts;
     this.delay = delay;
     this.speed = speed;
@@ -28,10 +28,10 @@ export class Bar {
   reset(v) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }
 
   /**
-   * @param {number} v target 0..1
-   * @param {number} dt seconds
+   * @param v target 0..1
+   * @param dt seconds
    */
-  set(v, dt) {
+  set(v: number, dt: number) {
     const nv = clamp(v, 0, 1);
     // the first real value snaps: a bar should not chase down from full on boot
     if (!this._init) { this._init = true; this.reset(nv); return; }

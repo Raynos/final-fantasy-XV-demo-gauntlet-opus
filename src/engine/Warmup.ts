@@ -26,8 +26,7 @@ import * as THREE from 'three';
  * never the boot.
  */
 export class Warmup {
-  /** @param {object} game */
-  constructor(game) {
+  constructor(game: any) {
     this.game = game;
     this.renderer = game.renderer;
     this.scene = game.scene;
@@ -39,9 +38,8 @@ export class Warmup {
   /**
    * Run the whole sweep. Blocking, and meant to be: it belongs on the loading
    * screen. Restores every piece of state it touches.
-   * @returns {{ms:number, programs:number, steps:Array}}
    */
-  run() {
+  run(): {ms:number, programs:number, steps:Array} {
     const t0 = performance.now();
     const rt = new THREE.WebGLRenderTarget(64, 64, { depthBuffer: true });
     const prevTarget = this.renderer.getRenderTarget();

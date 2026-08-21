@@ -213,9 +213,9 @@ export const GESTURES = {
 
 /**
  * Resolve a character's posture against the defaults.
- * @param {string} key `noctis` | `gladio` | `ignis` | `prompto`
- * @returns {Object} a complete posture descriptor
+ * @param key `noctis` | `gladio` | `ignis` | `prompto`
+ * @returns a complete posture descriptor
  */
-export function resolvePosture(key) {
+export function resolvePosture(key: string): any {
   return { ...POSTURE_DEFAULTS, ...(POSTURE[key] || {}) };
 }

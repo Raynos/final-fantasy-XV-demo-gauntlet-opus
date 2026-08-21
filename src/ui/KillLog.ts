@@ -11,8 +11,7 @@
  * that draws it, and the counts must survive a menu being closed and reopened.
  */
 
-/** @type {Map<string, {key:string, name:string, kills:number, lastLevel:number}>} */
-const tally = new Map();
+const tally: Map<string, {key:string, name:string, kills:number, lastLevel:number}> = new Map();
 
 let attached = false;
 
@@ -35,18 +34,18 @@ export function attachKillLog() {
   window.addEventListener('combat:death', (e) => recordKill(e.detail && e.detail.enemy));
 }
 
-/** @param {string} key species key @returns {number} */
-export function killsOf(key) { return tally.get(key)?.kills || 0; }
+/** @param key species key @returns */
+export function killsOf(key: string): number { return tally.get(key)?.kills || 0; }
 
-/** @returns {number} every kill recorded, all species */
-export function totalKills() {
+/** @returns every kill recorded, all species */
+export function totalKills(): number {
   let n = 0;
   for (const r of tally.values()) n += r.kills;
   return n;
 }
 
-/** @returns {number} how many distinct species have been recorded */
-export function speciesRecorded() { return tally.size; }
+/** @returns how many distinct species have been recorded */
+export function speciesRecorded(): number { return tally.size; }
 
 /** The whole tally, for a screen that wants to iterate it. */
 export function killRecords() { return [...tally.values()]; }

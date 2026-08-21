@@ -62,15 +62,9 @@ uniform float uSssAmt, uTrans;
  * extension (subsurface, hair anisotropy, cornea glint) into a standard or
  * physical material.
  *
- * @param {THREE.Material} mat
  * @param {Object} o
- * @param {number} [o.sss] subsurface strength, 0 disables the whole term
- * @param {number} [o.sssColor] the colour light picks up travelling through flesh
- * @param {number} [o.translucency] how much back-lit light comes through
- * @param {Object} [o.hair] `{spec, shift, exp, tint}` Kajiya-Kay parameters
- * @param {Object} [o.cornea] `{gloss, size}` explicit specular for eyeballs
- */
-function patch(mat, o = {}) {
+ * */
+function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, translucency?: number, hair?: any, cornea?: any } = {}) {
   const { sss = 0, sssColor = 0xff5b3a, translucency = 0.5, hair = null, cornea = null } = o;
   mat.defines = mat.defines || {};
   mat.userData.sss = sss;

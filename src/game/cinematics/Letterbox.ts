@@ -18,8 +18,7 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 
  * byte-identical.
  */
 export class Letterbox {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'cine' });
     parent.appendChild(this.root);
 
@@ -97,19 +96,19 @@ export class Letterbox {
 
   /* ------------------------------------------------------------- matte -- */
 
-  /** @param {number} v 0 = no matte, 1 = full 2.39:1 bars */
-  setBars(v) { this.barTarget = clamp(v, 0, 1); }
+  /** @param v 0 = no matte, 1 = full 2.39:1 bars */
+  setBars(v: number) { this.barTarget = clamp(v, 0, 1); }
 
   /** Snap the matte with no travel (used on a hard cut into a scene). */
   snapBars(v) { this.barTarget = this.bar = clamp(v, 0, 1); }
 
   /**
    * Fade to or from a flat colour.
-   * @param {number} to 0 = clear, 1 = opaque
-   * @param {number} [dur=1] seconds
-   * @param {'black'|'white'} [colour='black']
+   * @param to 0 = clear, 1 = opaque
+   * @param [dur=1] seconds
+   * @param [colour='black']
    */
-  setFade(to, dur = 1, colour = 'black') {
+  setFade(to: number, dur: number = 1, colour: 'black' | 'white' = 'black') {
     this.fade.classList.toggle('white', colour === 'white');
     this.fadeGoal = clamp(to, 0, 1);
     this.fadeRate = 1 / Math.max(0.016, dur);
@@ -125,11 +124,10 @@ export class Letterbox {
 
   /**
    * Show one cutscene line.
-   * @param {string|null} who speaker name; null renders as an aside
-   * @param {string} text
-   * @param {number} [dur] seconds on screen; defaults to reading speed
+   * @param who speaker name; null renders as an aside
+   * @param [dur] seconds on screen; defaults to reading speed
    */
-  say(who, text, dur) {
+  say(who: string | null, text: string, dur?: number) {
     if (!text) return;
     this.lineSp.textContent = who || '';
     this.lineSp.style.display = who ? '' : 'none';
@@ -155,12 +153,12 @@ export class Letterbox {
   /**
    * The chapter card. `kind` picks the wording: `open` for a chapter start,
    * `complete` for the closing flourish.
-   * @param {number} n chapter number
-   * @param {string} name chapter title
-   * @param {string} [sub] region / subtitle line
-   * @param {'open'|'complete'} [kind='open']
+   * @param n chapter number
+   * @param name chapter title
+   * @param [sub] region / subtitle line
+   * @param [kind='open']
    */
-  chapterCard(n, name, sub = '', kind = 'open') {
+  chapterCard(n: number, name: string, sub: string = '', kind: 'open' | 'complete' = 'open') {
     this.chapK.textContent = kind === 'complete'
       ? `Chapter ${ROMAN[n] || n} Complete`
       : `Chapter ${ROMAN[n] || n}`;
@@ -174,10 +172,10 @@ export class Letterbox {
 
   /**
    * The objective handoff that follows a chapter transition.
-   * @param {string} title quest name
-   * @param {string} sub current objective
+   * @param title quest name
+   * @param sub current objective
    */
-  objective(title, sub) {
+  objective(title: string, sub: string) {
     this.objK.textContent = 'Objective';
     this.objT.textContent = title;
     this.objS.textContent = sub || '';
@@ -188,10 +186,10 @@ export class Letterbox {
   /* -------------------------------------------------------------- tick -- */
 
   /**
-   * @param {number} dt seconds
-   * @param {boolean} playing true while a cutscene owns the screen
+   * @param dt seconds
+   * @param playing true while a cutscene owns the screen
    */
-  update(dt, playing) {
+  update(dt: number, playing: boolean) {
     const busy = playing || this.bar > 0.002 || this.fadeAmt > 0.002
       || this.lineState || this.chapState || this.objState;
     this.root.style.display = busy ? '' : 'none';

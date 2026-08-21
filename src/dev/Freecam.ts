@@ -72,9 +72,8 @@ export class Freecam {
    * Adopt a camera's current transform as the flying pose — this is "eject".
    * Framing continues from exactly where the shot left off rather than snapping
    * to some arbitrary default, which is the whole point of ejecting.
-   * @param {THREE.Camera} camera
    */
-  adopt(camera) {
+  adopt(camera: THREE.Camera) {
     this.pos.copy(camera.position);
     this._e.setFromQuaternion(camera.quaternion, 'YXZ');
     this.yaw = this._e.y;
@@ -87,8 +86,8 @@ export class Freecam {
     this._dx = this._dy = 0;
   }
 
-  /** @param {boolean} on @param {THREE.Camera} camera */
-  setEnabled(on, camera) {
+  /** @param on @param camera */
+  setEnabled(on: boolean, camera: THREE.Camera) {
     if (on === this.enabled) return;
     this.enabled = on;
     if (on) {
@@ -113,10 +112,10 @@ export class Freecam {
    * `DevSuite` sets `input.enabled = false` while flying so the same WASD press
    * does not also walk Noctis across the map — and that zeroes `input.move`.
    *
-   * @param {number} dt seconds
-   * @param {object} input the engine Input
+   * @param dt seconds
+   * @param input the engine Input
    */
-  update(dt, input) {
+  update(dt: number, input: any) {
     if (!this.enabled) return;
 
     this.yaw -= this._dx * this.sensitivity;
@@ -155,9 +154,8 @@ export class Freecam {
   /**
    * Write the flying pose onto the real camera. Called after `CameraRig` has
    * run, so it wins.
-   * @param {THREE.PerspectiveCamera} camera
    */
-  apply(camera) {
+  apply(camera: THREE.PerspectiveCamera) {
     if (!this.enabled) return;
     this._e.set(this.pitch, this.yaw, this.roll, 'YXZ');
     camera.position.copy(this.pos);
@@ -172,9 +170,9 @@ export class Freecam {
    * `post` must be cut as well as the transform: TAA history and the DOF focus
    * integrator both smear across a teleport otherwise. This is exactly what
    * `CameraRig._cut()` does for an authored shot change.
-   * @param {THREE.Vector3|number[]} to @param {object} [post]
+   * @param to @param [post]
    */
-  jump(to, post) {
+  jump(to: THREE.Vector3 | number[], post?: any) {
     if (Array.isArray(to)) this.pos.set(to[0], to[1], to[2]);
     else this.pos.copy(to);
     this._vel.set(0, 0, 0);

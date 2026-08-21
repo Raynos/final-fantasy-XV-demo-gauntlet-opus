@@ -6,11 +6,9 @@ import { Rng } from '../../util/Rng.ts';
  * the dirt/dust layer that modulates the bloom is splatted here at boot from a
  * seeded RNG — smudges, dust specks and a couple of hairline scratches.
  *
- * @param {number} size
- * @param {number} seed
- * @returns {THREE.DataTexture} single-channel (packed RGB) dirt mask
+ * @returns single-channel (packed RGB) dirt mask
  */
-export function lensDirtTexture(size = 256, seed = 90210) {
+export function lensDirtTexture(size: number = 256, seed: number = 90210): THREE.DataTexture {
   const rng = new Rng(seed);
   const buf = new Float32Array(size * size);
 

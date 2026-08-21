@@ -57,8 +57,7 @@ export class Hammerhead {
     this._handles = [];
   }
 
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     const props = game.get('Props');
     const veg = game.get('Vegetation');

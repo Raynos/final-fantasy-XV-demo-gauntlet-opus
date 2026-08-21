@@ -58,10 +58,9 @@ export class Vegetation {
    * standing in a place. The list is distance-sorted and capped so a crowded
    * fight still costs a fixed-size uniform block.
    *
-   * @param {object} game
-   * @param {THREE.Vector3} centre camera position — who matters is who is on screen
+   * @param centre camera position — who matters is who is on screen
    */
-  _gatherActors(game, centre) {
+  _gatherActors(game: any, centre: THREE.Vector3) {
     const out = this._actors;
     const pool = this._pool;
     out.length = 0;

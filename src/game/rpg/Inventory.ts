@@ -170,17 +170,12 @@ const KEY_ITEMS = [
 /* ------------------------------------------------------------------------ */
 
 /**
- * @param {string} id
- * @param {string} name
- * @param {string} cls one of WEAPON_CLASSES
- * @param {number} attack
- * @param {number} price
- * @param {object} mods extra stat modifiers
- * @param {string} special free-text special effect (combat reads `tags`)
- * @param {string[]} tags machine-readable effect tags
- * @param {string} desc
+ * @param cls one of WEAPON_CLASSES
+ * @param mods extra stat modifiers
+ * @param special free-text special effect (combat reads `tags`)
+ * @param tags machine-readable effect tags
  */
-const W = (id, name, cls, attack, price, mods, special, tags, desc, wielders = null) => ({
+const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders = null) => ({
   id, name, category: 'weapon', class: cls, attack, price, mods: mods || {},
   special, tags: tags || [], desc,
   // null = anyone whose class permission covers it; royal arms are Noctis-only.
@@ -273,8 +268,7 @@ const ACCESSORIES = [
 
 /** Every item definition in the game, keyed by id. */
 export const ITEMS = (() => {
-  /** @type {Record<string, object>} */
-  const map = {};
+  const map: Record<string, any> = {};
   const push = (list, category) => {
     for (const it of list) {
       const price = it.price ?? 0;
@@ -340,8 +334,7 @@ export const CLASS_PERMISSION = {
  * `item-lost`, `item-used`, `gil-changed` and `equipment-changed`.
  */
 export class Inventory {
-  /** @param {import('./Emitter.ts').Emitter} [emitter] */
-  constructor(emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** @type {Record<string, number>} id -> count */
     this.bag = {};
@@ -368,11 +361,10 @@ export class Inventory {
 
   /**
    * Add items. Respects stack limits; returns how many were actually taken.
-   * @param {string} id
-   * @param {number} [n=1]
-   * @param {string} [source] label for the toast ('drop', 'quest', 'shop', ...)
+   * @param [n=1]
+   * @param [source] label for the toast ('drop', 'quest', 'shop', ...)
    */
-  add(id, n = 1, source = 'pickup') {
+  add(id: string, n: number = 1, source: string = 'pickup') {
     const def = ITEMS[id];
     if (!def || n <= 0) return 0;
     const limit = def.stack ?? 99;
@@ -386,10 +378,9 @@ export class Inventory {
 
   /**
    * Remove items. Returns how many were actually removed.
-   * @param {string} id
-   * @param {number} [n=1]
+   * @param [n=1]
    */
-  remove(id, n = 1) {
+  remove(id: string, n: number = 1) {
     const have = this.count(id);
     const gone = Math.min(have, Math.max(0, n));
     if (gone === 0) return 0;
@@ -409,8 +400,7 @@ export class Inventory {
 
   /** Items grouped by category — the shape the item menu wants. */
   listByCategory() {
-    /** @type {Record<string, object[]>} */
-    const out = {};
+    const out: Record<string, any[]> = {};
     for (const e of this.list()) (out[e.def.category] ||= []).push(e);
     return out;
   }
@@ -435,12 +425,9 @@ export class Inventory {
    * Use a consumable. The caller supplies the targets (Stats instances) since
    * Inventory has no idea who is in range.
    *
-   * @param {string} id
-   * @param {import('./Stats.ts').Stats[]} targets
-   * @param {object} [opts] `{ curativePower }` from the Ascension grid
-   * @returns {{ok:boolean, reason?:string, results?:object[]}}
+   * @param [opts] `{ curativePower }` from the Ascension grid
    */
-  use(id, targets = [], opts = {}) {
+  use(id: string, targets: import('./Stats.ts').Stats[] = [], opts: any = {}): {ok:boolean, reason?:string, results?:any[]} {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (!def.use) return { ok: false, reason: 'not-usable' };
@@ -489,12 +476,9 @@ export class Inventory {
   /**
    * Equip a weapon or accessory. The item must be in the bag and the character
    * must be allowed to hold it.
-   * @param {string} charId
-   * @param {'weapon'|'accessory'} kind
-   * @param {number} slot
-   * @param {string|null} itemId pass null to unequip
+   * @param itemId pass null to unequip
    */
-  equip(charId, kind, slot, itemId) {
+  equip(charId: string, kind: 'weapon' | 'accessory', slot: number, itemId: string | null) {
     const rack = this.equipment[charId];
     if (!rack || !rack[kind] || slot < 0 || slot >= rack[kind].length) return { ok: false, reason: 'bad-slot' };
 
@@ -539,9 +523,8 @@ export class Inventory {
    * Fold a character's equipment into a `Stats.gear` modifier bucket.
    * Weapon attack uses the *strongest* equipped weapon (you swing one at a
    * time) while accessories all stack.
-   * @param {string} charId
    */
-  modsFor(charId) {
+  modsFor(charId: string) {
     const mods = emptyMods();
     const rack = this.equipment[charId];
     if (!rack) return mods;
@@ -577,9 +560,9 @@ export class Inventory {
   /**
    * Everything the party could sell right now. Empty array means the shop
    * clerk gets to say "you have nothing to sell".
-   * @param {string[]} [categories] restrict to certain categories
+   * @param [categories] restrict to certain categories
    */
-  sellable(categories = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative']) {
+  sellable(categories: string[] = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative']) {
     return this.list()
       .filter((e) => categories.includes(e.def.category) && e.def.sell > 0 && !e.def.tags.includes('royal'))
       .map((e) => ({ ...e, unitPrice: this.sellPrice(e.id), total: this.sellPrice(e.id) * e.count }));
@@ -597,9 +580,8 @@ export class Inventory {
 
   /**
    * Sell items.
-   * @returns {{ok:boolean, reason?:string, gil?:number}}
    */
-  sell(id, n = 1) {
+  sell(id, n = 1): {ok:boolean, reason?:string, gil?:number} {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.sell <= 0 || def.category === 'key') return { ok: false, reason: 'not-sellable' };
@@ -612,10 +594,9 @@ export class Inventory {
 
   /**
    * Buy items from a shop's stock list.
-   * @param {string} id
-   * @param {number} [n=1]
+   * @param [n=1]
    */
-  buy(id, n = 1) {
+  buy(id: string, n: number = 1) {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (!def.price) return { ok: false, reason: 'not-for-sale' };

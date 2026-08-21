@@ -71,8 +71,7 @@ const rest  = (id, desc, waypoint) => ({ id, type: 'rest', target: 'any', count:
  * @property {string[]} requires  quest ids that must be complete first
  */
 
-/** @type {Quest[]} */
-const QUEST_TABLE = [
+const QUEST_TABLE: Quest[] = [
   /* ----------------------------- main story ---------------------------- */
   {
     id: 'main_ch1_departure', type: 'main', chapter: 1, name: 'Departure',
@@ -387,8 +386,7 @@ export const HUNTS = QUEST_TABLE.filter((q) => q.type === 'hunt');
  * tick, with `{ quest, status, phase, objective? }`.
  */
 export class QuestLog {
-  /** @param {import('./Emitter.ts').Emitter} [emitter] */
-  constructor(emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** @type {Record<string, object>} runtime state per quest id */
     this.states = {};
@@ -473,9 +471,8 @@ export class QuestLog {
 
   /**
    * Accept a quest. Fails if it is not available.
-   * @param {string} id
    */
-  accept(id) {
+  accept(id: string) {
     const st = this.states[id];
     const q = QUESTS[id];
     if (!st || !q) return { ok: false, reason: 'unknown-quest' };
@@ -519,11 +516,10 @@ export class QuestLog {
    * The generic progression hook. Gameplay systems call this and the log works
    * out which active objectives care.
    *
-   * @param {'kill'|'fetch'|'reach'|'talk'|'escort'|'photo'|'craft'|'rest'|'draw'|'fish'|'quest'} type
-   * @param {object} payload `{ target, count }` — target matches the objective's target
-   * @returns {object[]} the quests that changed
+   * @param payload `{ target, count }` — target matches the objective's target
+   * @returns the quests that changed
    */
-  notify(type, payload = {}) {
+  notify(type: 'kill' | 'fetch' | 'reach' | 'talk' | 'escort' | 'photo' | 'craft' | 'rest' | 'draw' | 'fish' | 'quest', payload: any = {}): any[] {
     const target = payload.target ?? payload.enemy ?? payload.item ?? payload.id ?? 'any';
     const amount = payload.count ?? 1;
     const changed = [];
@@ -613,9 +609,8 @@ export class QuestLog {
   /**
    * Waypoint markers for the HUD: the next unfinished objective of every
    * active quest that has a position.
-   * @returns {Array<{questId:string, name:string, objective:string, pos:number[], tracked:boolean}>}
    */
-  waypoints() {
+  waypoints(): Array<{questId:string, name:string, objective:string, pos:number[], tracked:boolean}> {
     const out = [];
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
@@ -636,9 +631,8 @@ export class QuestLog {
   /**
    * Convenience for the world system: call every frame with the player's
    * position and any `reach` objective within range ticks over.
-   * @param {{x:number, y:number, z:number}} pos
    */
-  checkProximity(pos) {
+  checkProximity(pos: {x:number, y:number, z:number}) {
     for (const w of this.waypoints()) {
       const st = this.states[w.questId];
       const q = QUESTS[w.questId];

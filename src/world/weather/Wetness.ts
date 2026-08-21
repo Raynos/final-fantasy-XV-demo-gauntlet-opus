@@ -23,10 +23,9 @@ export class Wetness {
   }
 
   /**
-   * @param {number} w 0..1
-   * @param {object} game
+   * @param w 0..1
    */
-  apply(w, game) {
+  apply(w: number, game: any) {
     // terrain: its shader grows puddles in the flow map, so it gets the raw value
     const terrain = game.get('Terrain');
     if (terrain && terrain.setWetness) terrain.setWetness(w);

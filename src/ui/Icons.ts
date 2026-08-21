@@ -51,11 +51,10 @@ const ACCENT = {
 };
 
 /**
- * @param {string} name key from the icon table
- * @param {object} [opts] `{ size, stroke, cls, fill }`
- * @returns {SVGElement}
+ * @param name key from the icon table
+ * @param [opts] `{ size, stroke, cls, fill }`
  */
-export function icon(name, opts = {}) {
+export function icon(name: string, opts: any = {}): SVGElement {
   const { size = 20, stroke = 1.15, cls = '', fill = 'none' } = opts;
   const d = D[name] || D.items;
   const root = svg('svg', {
@@ -72,10 +71,10 @@ export function icon(name, opts = {}) {
 /**
  * A controller / key prompt glyph — a rounded square or circle carrying a
  * short label, matched in weight to `icon()`.
- * @param {string} label e.g. 'A', 'B', 'Y', 'X', 'LB', 'Esc'
- * @param {object} [opts] `{ size, shape: 'round'|'square', tone }`
+ * @param label e.g. 'A', 'B', 'Y', 'X', 'LB', 'Esc'
+ * @param [opts] `{ size, shape: 'round'|'square', tone }`
  */
-export function button(label, opts = {}) {
+export function button(label: string, opts: any = {}) {
   const { size = 18, shape = label.length > 1 ? 'square' : 'round', tone = '' } = opts;
   const root = svg('svg', {
     class: `btn-glyph ${tone}`.trim(), viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true',
@@ -115,10 +114,10 @@ let _pfId = 0;
  * Procedural bust portrait for a party plate — a lit silhouette on a tinted
  * gradient with a raking highlight. Stylised rather than literal, which reads
  * cleanly at 38px and still holds up at 110px in the menu.
- * @param {number} seedHue base hue for the character
- * @param {number} [tone] 0..1 backing lightness
+ * @param seedHue base hue for the character
+ * @param [tone] 0..1 backing lightness
  */
-export function portrait(seedHue, tone = 0.5) {
+export function portrait(seedHue: number, tone: number = 0.5) {
   const id = `pf${_pfId++}`;
   const root = svg('svg', {
     class: 'pf', viewBox: '0 0 48 56', preserveAspectRatio: 'xMidYMid slice', 'aria-hidden': 'true',

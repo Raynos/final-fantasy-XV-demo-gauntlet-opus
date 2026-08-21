@@ -31,10 +31,8 @@ const ORDER = ['trail', 'track', 'road', 'highway'];
  * record with the class *definition*, so anything reading it has to cope with
  * both — one letter of difference that silently drew every highway in Lucis as
  * a dirt track.
- * @param {{cls:string|{id:string}}} route
- * @returns {string}
  */
-export function routeClass(route) {
+export function routeClass(route: {cls:string|{id:string}}): string {
   return typeof route.cls === 'string' ? route.cls : (route.cls && route.cls.id) || 'track';
 }
 
@@ -64,13 +62,10 @@ function lods() {
  * Stroke the whole road network in screen space, casings first so junctions
  * between two roads of the same class merge into one clean joint.
  *
- * @param {CanvasRenderingContext2D} c
- * @param {function(number):number} sx world x -> canvas x
- * @param {function(number):number} sy world z -> canvas y
- * @param {{scale?:number, alpha?:number, lod?:number,
- *          bounds?:{x0:number,x1:number,z0:number,z1:number}}} [opt]
+ * @param sx world x -> canvas x
+ * @param sy world z -> canvas y
  */
-export function drawRoads(c, sx, sy, opt = {}) {
+export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => number), sy: ((a0: number) => number), opt: any = {}) {
   const scale = opt.scale || 1;
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   const b = opt.bounds;
@@ -148,9 +143,9 @@ let _borders = null;
  * the dual-grid edges gives a closed polyline per border, which two rounds of
  * Chaikin smoothing turn from a staircase into a hand-inked line.
  *
- * @returns {Array<Float32Array>} polylines as flat x,z pairs
+ * @returns polylines as flat x,z pairs
  */
-export function zoneBorders() {
+export function zoneBorders(): Array<Float32Array> {
   if (_borders) return _borders;
   const step = 48;
   const n = Math.ceil(WORLD.size / step);
@@ -284,13 +279,11 @@ export function drawZoneBorders(c, sx, sy, opt = {}) {
 /**
  * Draw letterspaced text — canvas has no tracking, so every glyph is placed by
  * hand. Returns the total advance so the caller can reserve the space.
- * @param {CanvasRenderingContext2D} c
- * @param {string} text @param {number} x @param {number} y
- * @param {number} spacing extra px between letters
- * @param {'center'|'left'} [align]
- * @returns {number} width of the run
+ * @param text @param x @param y
+ * @param spacing extra px between letters
+ * @returns width of the run
  */
-export function spacedText(c, text, x, y, spacing, align = 'center') {
+export function spacedText(c: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number, align: 'center' | 'left' = 'center'): number {
   let total = 0;
   for (const ch of text) total += c.measureText(ch).width + spacing;
   total -= spacing;
@@ -320,8 +313,8 @@ export function spacedWidth(c, text, spacing) {
 export class LabelPlacer {
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }
-  /** @returns {boolean} true if the box was free, in which case it is reserved */
-  place(x0, y0, x1, y1) {
+  /** @returns true if the box was free, in which case it is reserved */
+  place(x0, y0, x1, y1): boolean {
     const p = this.pad;
     for (const r of this.rects) {
       if (x0 - p < r[2] && x1 + p > r[0] && y0 - p < r[3] && y1 + p > r[1]) return false;

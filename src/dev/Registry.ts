@@ -36,9 +36,8 @@ export class Registry {
 
   /**
    * Register a tunable value.
-   * @param {Cvar} spec
    */
-  cvar(spec) {
+  cvar(spec: Cvar) {
     this.cvars.set(spec.name, spec);
     // Snapshot at registration, not at first read: a value read later may
     // already have been changed, and then `deltas()` would report nothing.
@@ -48,15 +47,14 @@ export class Registry {
 
   /**
    * Register an action.
-   * @param {Command} spec
    */
-  cmd(spec) {
+  cmd(spec: Command) {
     this.cmds.set(spec.name, spec);
     return this;
   }
 
-  /** @param {string} name @returns {any} */
-  get(name) {
+  /** @param name @returns */
+  get(name: string): any {
     const c = this.cvars.get(name);
     return c ? c.get() : undefined;
   }
@@ -65,9 +63,9 @@ export class Registry {
    * Set a cvar, coercing the string form the console hands us into the type the
    * current value implies. Without this, `post.bloom false` would store the
    * seven-character string `"false"`, which is truthy.
-   * @param {string} name @param {any} value
+   * @param name @param value
    */
-  set(name, value) {
+  set(name: string, value: any) {
     const c = this.cvars.get(name);
     if (!c) throw new Error(`unknown cvar: ${name}`);
     let v = value;
@@ -88,10 +86,9 @@ export class Registry {
   /**
    * Run one console line: `<name> [args...]`. A bare cvar name prints it; a
    * cvar with arguments assigns it; a command name always runs.
-   * @param {string} line
-   * @returns {string} human-readable result for the console log
+   * @returns human-readable result for the console log
    */
-  exec(line) {
+  exec(line: string): string {
     const src = String(line || '').trim();
     if (!src) return '';
     this.history.push(src);
@@ -119,9 +116,8 @@ export class Registry {
    *
    * Stamped into review notes so a reader can tell at a glance whether the
    * report was filed from a tampered state.
-   * @returns {Record<string, {is:any, was:any}>}
    */
-  deltas() {
+  deltas(): Record<string, {is:any, was:any}> {
     const out = {};
     for (const [name, c] of this.cvars) {
       const was = this.defaults.get(name);
@@ -142,9 +138,9 @@ export class Registry {
 
   /**
    * Names matching a prefix, for console autocomplete.
-   * @param {string} prefix @returns {string[]}
+   * @param prefix @returns 
    */
-  complete(prefix) {
+  complete(prefix: string): string[] {
     const p = String(prefix || '');
     const all = [...this.cmds.keys(), ...this.cvars.keys()];
     return all.filter((n) => n.startsWith(p)).sort();
@@ -152,8 +148,7 @@ export class Registry {
 
   /** Grouped listing for `help` and for building panels. */
   byCategory() {
-    /** @type {Map<string, {cvars:Cvar[], cmds:Command[]}>} */
-    const out = new Map();
+    const out: Map<string, {cvars:Cvar[], cmds:Command[]}> = new Map();
     const bucket = (k) => {
       if (!out.has(k)) out.set(k, { cvars: [], cmds: [] });
       return out.get(k);

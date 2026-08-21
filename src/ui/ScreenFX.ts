@@ -6,8 +6,7 @@ import { clock } from './UIKit.ts';
  * damage-taken red flash, the FFXV area title card, and the level-up flourish.
  */
 export class ScreenFX {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'screenfx' });
     parent.appendChild(this.root);
 
@@ -45,11 +44,11 @@ export class ScreenFX {
 
   /**
    * Show the area title card.
-   * @param {string} name large region name
-   * @param {string} [sub] small line above it
-   * @param {string} [meta] small line below the rule
+   * @param name large region name
+   * @param [sub] small line above it
+   * @param [meta] small line below the rule
    */
-  areaTitle(name, sub = '', meta = '') {
+  areaTitle(name: string, sub: string = '', meta: string = '') {
     if (!name) return;
     this.cardSub.textContent = sub;
     this.cardMeta.textContent = meta;
@@ -59,11 +58,11 @@ export class ScreenFX {
     this.cardState = { chars: l.chars, clip: new Clip(1.15, 2.6) };
   }
 
-  /** Red damage flash. @param {number} amount 0..1 */
-  hit(amount = 0.6) { this.flashAmt = Math.max(this.flashAmt, clamp(amount, 0, 1)); }
+  /** Red damage flash. @param amount 0..1 */
+  hit(amount: number = 0.6) { this.flashAmt = Math.max(this.flashAmt, clamp(amount, 0, 1)); }
 
-  /** Level-up flourish. @param {number} level */
-  levelUp(level) {
+  /** Level-up flourish. @param level */
+  levelUp(level: number) {
     this.luN.textContent = String(level);
     this.luState = new Clip(0.5, 2.0);
   }
@@ -72,10 +71,9 @@ export class ScreenFX {
   setCinematic(v) { this.cineAmt = clamp(v, 0, 1); }
 
   /**
-   * @param {number} dt seconds
-   * @param {object} game
+   * @param dt seconds
    */
-  update(dt, game) {
+  update(dt: number, game: any) {
     const t = game.time.now;
 
     // low-HP vignette

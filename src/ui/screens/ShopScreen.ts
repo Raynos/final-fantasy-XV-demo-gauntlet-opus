@@ -62,8 +62,7 @@ function effectOf(def) {
 const MAX_ROWS = 14;
 
 export class ShopScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Shop';
@@ -95,8 +94,8 @@ export class ShopScreen {
   get tabName() { return this.shop.tabs[this.tab] || this.shop.tabs[0]; }
   get selling() { return this.tabName === 'Sell'; }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.shop-cols');
 
@@ -263,8 +262,8 @@ export class ShopScreen {
     }
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     this._extraInput(game);
     const shop = this.shop;

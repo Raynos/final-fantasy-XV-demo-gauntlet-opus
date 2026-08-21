@@ -23,8 +23,7 @@ const wrap180 = (d) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; 
  * plus the in-game clock, current region and the tracked objective.
  */
 export class CompassBar {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.tr');
     this.box = el('div.compass');
 
@@ -100,11 +99,10 @@ export class CompassBar {
   }
 
   /**
-   * @param {number} dt seconds
-   * @param {object} game
-   * @param {number} appear 0..1 master reveal
+   * @param dt seconds
+   * @param appear 0..1 master reveal
    */
-  update(dt, game, appear) {
+  update(dt: number, game: any, appear: number) {
     const e = easeOut(clamp((appear - 0.04) / 0.7, 0, 1));
     this.root.style.opacity = e.toFixed(3);
     this.root.style.transform = `translateY(${((1 - e) * -18).toFixed(2)}px)`;

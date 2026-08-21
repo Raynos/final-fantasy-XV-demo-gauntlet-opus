@@ -316,10 +316,9 @@ void main() {
  */
 export class Clouds {
   /**
-   * @param {THREE.WebGLRenderer} renderer
-   * @param {Object} shared shared cloud uniform objects (see Sky.js)
+   * @param shared shared cloud uniform objects (see Sky.js)
    */
-  constructor(renderer, shared) {
+  constructor(renderer: THREE.WebGLRenderer, shared: any) {
     this.renderer = renderer;
     this.shared = shared;
 

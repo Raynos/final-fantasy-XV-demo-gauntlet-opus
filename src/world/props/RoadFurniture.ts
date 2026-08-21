@@ -58,11 +58,7 @@ function skidTexture() {
  * camera reaches them, two per frame, and released well behind it.
  */
 export class RoadFurniture {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   */
-  constructor(eco, scene) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
     this.root = new THREE.Group();

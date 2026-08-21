@@ -16,8 +16,7 @@ import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.
  * source's `onended`. Nothing here holds a reference after the note dies.
  */
 export class Instruments {
-  /** @param {import('./Graph.ts').AudioGraph} graph */
-  constructor(graph) {
+  constructor(graph: import('./Graph.ts').AudioGraph) {
     this.graph = graph;
     const ctx = graph.ctx;
     this.ctx = ctx;
@@ -67,12 +66,12 @@ export class Instruments {
 
   /**
    * Bowed strings. `unison` fattens it into a section.
-   * @param {number} f frequency
-   * @param {number} t start time
-   * @param {number} dur seconds of sustain
-   * @param {object} [o] {gain, dest, pos, unison, bright, vib, attack, priority}
+   * @param f frequency
+   * @param t start time
+   * @param dur seconds of sustain
+   * @param [o] {gain, dest, pos, unison, bright, vib, attack, priority}
    */
-  strings(f, t, dur, o = {}) {
+  strings(f: number, t: number, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -338,10 +337,9 @@ export class Instruments {
   /**
    * Karplus–Strong string rendered offline into an anchor buffer, then
    * repitched. Used for harp, pizzicato strings and the piano's string body.
-   * @param {'harp'|'pizz'|'piano'} kind
-   * @param {number} anchor MIDI note of the anchor
+   * @param anchor MIDI note of the anchor
    */
-  _pluckAnchor(kind, anchor) {
+  _pluckAnchor(kind: 'harp' | 'pizz' | 'piano', anchor: number) {
     const key = `${kind}:${anchor}`;
     const cached = this._plucks.get(key);
     if (cached) return cached;
@@ -392,9 +390,8 @@ export class Instruments {
 
   /**
    * Play a plucked/struck string.
-   * @param {'harp'|'pizz'|'piano'} kind
    */
-  pluck(kind, f, t, o = {}) {
+  pluck(kind: 'harp' | 'pizz' | 'piano', f, t, o = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;

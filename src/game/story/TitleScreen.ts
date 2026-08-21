@@ -16,11 +16,7 @@ import { Noise } from '../../util/Noise.ts';
  * it loops forever with no seam and no state to reset.
  */
 export class TitleScreen {
-  /**
-   * @param {HTMLElement} parent
-   * @param {object} game
-   */
-  constructor(parent, game) {
+  constructor(parent: HTMLElement, game: any) {
     this.game = game;
     this.root = el('div', { id: 'title' });
     parent.appendChild(this.root);
@@ -178,11 +174,7 @@ export class TitleScreen {
 
   /* --------------------------------------------------------------- tick -- */
 
-  /**
-   * @param {number} dt
-   * @param {object} game
-   */
-  update(dt, game) {
+  update(dt: number, game: any) {
     const busy = this.shown || this.a > 0.002;
     this.root.style.display = busy ? '' : 'none';
     if (!busy) return;
@@ -251,10 +243,8 @@ export class TitleScreen {
   /**
    * The attract camera. A single 96-second cosine ping-pong high over the
    * badlands: it never repeats a seam and it never needs resetting.
-   * @param {number} dt
-   * @param {object} game
    */
-  updateCamera(dt, game) {
+  updateCamera(dt: number, game: any) {
     if (!this.shown && this.a <= 0.002) return;
     const cam = game.camera;
     const k = 0.5 - 0.5 * Math.cos((this.t / 48) * Math.PI);      // 0..1..0

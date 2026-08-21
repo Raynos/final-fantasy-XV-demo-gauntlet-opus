@@ -176,9 +176,8 @@ export class CombatSystem {
    * share a single program (the material's `customProgramCacheKey` is
    * constant), so a swap costs one visibility flip.
    *
-   * @param {object} game
    */
-  _prebuildWeapons(game) {
+  _prebuildWeapons(game: any) {
     const patch = game.get('Sky') && game.get('Sky').patch;
     for (const kind of Object.keys(WEAPONS)) {
       const w = new Weapon(kind);
@@ -191,9 +190,8 @@ export class CombatSystem {
 
   /**
    * The `WEAPON_CLASSES` name of the drawn weapon, for weakness lookups.
-   * @returns {string}
    */
-  get weaponClass() {
+  get weaponClass(): string {
     const k = this.weapon ? this.weapon.kind : 'sword';
     return k === 'daggers' ? 'dagger' : k;
   }
@@ -209,9 +207,8 @@ export class CombatSystem {
   /**
    * Noctis' four equipped weapon slots, mapped onto the classes this system
    * can actually draw. A slot with no armament in it stays null.
-   * @returns {Array<{kind:string, item:object}|null>}
    */
-  weaponSlots() {
+  weaponSlots(): Array<{kind:string, item:any} | null> {
     const rpg = this.model;
     if (!rpg || !rpg.inventory) {
       return ['sword', 'greatsword', 'polearm', 'daggers'].map((kind) => ({ kind, item: null }));
@@ -225,9 +222,9 @@ export class CombatSystem {
 
   /**
    * Draw the weapon sitting in one of Noctis' four equipment slots.
-   * @param {number} slot 0..3
+   * @param slot 0..3
    */
-  drawSlot(slot) {
+  drawSlot(slot: number) {
     const slots = this.weaponSlots();
     const s = slots[slot];
     if (!s) return false;
@@ -238,8 +235,7 @@ export class CombatSystem {
     return true;
   }
 
-  /** @param {'sword'|'greatsword'|'polearm'|'daggers'|'firearm'} kind */
-  setWeapon(kind, { materialise = true } = {}) {
+  setWeapon(kind: 'sword' | 'greatsword' | 'polearm' | 'daggers' | 'firearm', { materialise = true } = {}) {
     if (this.weapon && this.weapon.kind === kind) return this.weapon;
     let w = this.weaponCache.get(kind);
     if (!w) {
@@ -303,9 +299,9 @@ export class CombatSystem {
   /**
    * Run `fn` in `delay` seconds of simulated time. Multicast beats and any
    * other choreography keep time here rather than owning a clock each.
-   * @param {number} delay @param {Function} fn @param {*} [arg]
+   * @param delay @param fn @param [arg]
    */
-  schedule(delay, fn, arg) { this._sched.push({ t: delay, fn, arg }); }
+  schedule(delay: number, fn: ((...args: any[]) => any), arg?: any) { this._sched.push({ t: delay, fn, arg }); }
 
   _drain(dt) {
     const s = this._sched;
@@ -409,9 +405,8 @@ export class CombatSystem {
    * written only to `Player.stats` is erased on the same frame, which is why MP
    * never used to come back. Write both ends.
    *
-   * @param {number} v
    */
-  setMp(v) {
+  setMp(v: number) {
     const max = this.maxMp;
     const mp = Math.max(0, Math.min(max, v));
     const r = this.model;
@@ -426,9 +421,8 @@ export class CombatSystem {
   /**
    * Try to pay an MP cost. Drops into Stasis (and pays nothing) if the pool is
    * too shallow — the FFXV rule that makes warping a budget rather than a toy.
-   * @param {number} cost
    */
-  spendMp(cost) {
+  spendMp(cost: number) {
     if (this.stasis) return false;
     if (this.mp < cost) { this._enterStasis(); return false; }
     this.setMp(this.mp - cost);
@@ -438,9 +432,9 @@ export class CombatSystem {
 
   /**
    * The signature move. Blink to a target, land the hit, spend MP.
-   * @param {object} [enemy] defaults to the lock-on / auto target
+   * @param [enemy] defaults to the lock-on / auto target
    */
-  warpStrike(enemy = this.lockTarget || this.autoTarget()) {
+  warpStrike(enemy: any = this.lockTarget || this.autoTarget()) {
     const p = this.player;
     if (!p || this.stasis || this.state === 'warp') return false;
     if (!this.spendMp(WARP_STRIKE_MP)) return false;
@@ -542,9 +536,8 @@ export class CombatSystem {
   /**
    * One phantom arm comes down on something while the Armiger is up. Called on
    * a fixed beat from `update`.
-   * @param {number} dt
    */
-  _tickArmigerStrikes(dt) {
+  _tickArmigerStrikes(dt: number) {
     this._armigerBeat -= dt;
     if (this._armigerBeat > 0) return;
     this._armigerBeat = 0.28;
@@ -568,11 +561,9 @@ export class CombatSystem {
   /**
    * Cast a raw element at a world point (or at the lock target). This is the
    * uncrafted fallback — see `castSpell` for a real flask.
-   * @param {'fire'|'ice'|'lightning'} element
-   * @param {THREE.Vector3} [at]
-   * @param {object} [o] `{power, motion, radius, poise}`
+   * @param [o] `{power, motion, radius, poise}`
    */
-  cast(element, at, o = {}) {
+  cast(element: 'fire' | 'ice' | 'lightning', at?: THREE.Vector3, o: any = {}) {
     const p = this.player;
     const pos = at || (this.lockTarget ? this.lockTarget.centre() : this.elemancy.defaultTarget());
     if (!pos || !p) return null;
@@ -598,11 +589,9 @@ export class CombatSystem {
    * into a spell whose potency, blast radius, cast count and side-effects were
    * *computed*, and this is where those numbers become damage in the world.
    *
-   * @param {number} slot 0..2
-   * @param {THREE.Vector3} [at]
-   * @returns {{ok:boolean, reason?:string, spell?:object, damage?:number}}
+   * @param slot 0..2
    */
-  castSpell(slot, at) {
+  castSpell(slot: number, at?: THREE.Vector3): {ok:boolean, reason?:string, spell?:any, damage?:number} {
     const rpg = this.model;
     if (!rpg || !rpg.elemancy) return { ok: false, reason: 'no-elemancy' };
     const uid = rpg.elemancy.equipped[slot];
@@ -639,9 +628,9 @@ export class CombatSystem {
 
   /**
    * The crafted side-effects that are not just "more damage in a bigger circle".
-   * @param {object} spell @param {THREE.Vector3} pos @param {object} rpg
+   * @param spell @param pos @param rpg
    */
-  _applySpellEffects(spell, pos, rpg) {
+  _applySpellEffects(spell: any, pos: THREE.Vector3, rpg: any) {
     for (const e of spell.effects || []) {
       const pay = e.payload || {};
       if (pay.healAllies) {
@@ -691,10 +680,9 @@ export class CombatSystem {
    * strongest one back out and the drawn one in, so pulling the daggers really
    * does hit for less than the greatsword.
    *
-   * @param {object} rpg
-   * @returns {object} an attacker for `computeDamage`
+   * @returns an attacker for `computeDamage`
    */
-  _attacker(rpg) {
+  _attacker(rpg: any): any {
     const n = rpg.noctis;
     let strongest = 0;
     let active = 0;
@@ -724,11 +712,9 @@ export class CombatSystem {
    * This is the *only* place a physical or magical number is produced. Nothing
    * downstream is allowed to re-roll it.
    *
-   * @param {object} enemy
-   * @param {object} [o] `{motion, element, weaponClass, blindside, warp, aerial}`
-   * @returns {{damage:number, crit:boolean, weakness:boolean, elementKind:string}}
+   * @param [o] `{motion, element, weaponClass, blindside, warp, aerial}`
    */
-  resolve(enemy, o = {}) {
+  resolve(enemy: any, o: any = {}): {damage:number, crit:boolean, weakness:boolean, elementKind:string} {
     const motion = o.motion ?? 1;
     const rpg = this.model;
     if (!rpg || !rpg.damage) {
@@ -762,11 +748,10 @@ export class CombatSystem {
   /**
    * Land a resolved hit on an enemy.
    *
-   * @param {object} enemy
-   * @param {THREE.Vector3} at where the blow came from (sets the knockback dir)
-   * @param {object} [opts] `{motion, poise, element, blindside, warp, weaponClass}`
+   * @param at where the blow came from (sets the knockback dir)
+   * @param [opts] `{motion, poise, element, blindside, warp, weaponClass}`
    */
-  _applyDamage(enemy, at, opts = {}) {
+  _applyDamage(enemy: any, at: THREE.Vector3, opts: any = {}) {
     if (!enemy || enemy.dead) return null;
     const dir = this._tmp.subVectors(enemy.centre(), at);
     if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
@@ -811,9 +796,8 @@ export class CombatSystem {
   /**
    * Poise broke. Make the window legible: a ring, a flash, a beat of slow
    * motion, and the `stagger` event the HUD banners off.
-   * @param {object} enemy
    */
-  _onStagger(enemy) {
+  _onStagger(enemy: any) {
     this.emit('stagger', { enemy });
     this.hitstop = Math.max(this.hitstop, 0.1);
     this.slowmo = Math.max(this.slowmo, 0.3);
@@ -1092,9 +1076,9 @@ export class CombatSystem {
   /**
    * Cast quick-slot `n`. Falls back to the raw element when nothing has been
    * crafted yet, so the three magic keys are never dead.
-   * @param {number} n 0..2
+   * @param n 0..2
    */
-  castSlot(n) {
+  castSlot(n: number) {
     const res = this.castSpell(n);
     if (res && res.ok) return res;
     if (res && (res.reason === 'no-mp')) return res;
@@ -1209,10 +1193,9 @@ export class CombatSystem {
    * Widening the window to `[foot - 1.3, head + 0.9]` is what makes melee land
    * where the animation says it lands.
    *
-   * @param {THREE.Vector3} a @param {THREE.Vector3} b @param {number} radius
-   * @returns {Array<object>}
+   * @param a @param b @param radius
    */
-  _sweep(a, b, radius) {
+  _sweep(a: THREE.Vector3, b: THREE.Vector3, radius: number): Array<any> {
     const out = this._hits;
     out.length = 0;
     const steps = 5;

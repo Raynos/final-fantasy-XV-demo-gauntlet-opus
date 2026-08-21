@@ -90,12 +90,11 @@ export const TOWN_SHOPS = {
 
 /**
  * Resolve a shop's stock for one tab into hydrated item definitions.
- * @param {object} shop entry from TOWN_SHOPS
- * @param {string} tab
- * @param {object} items `rpg.tables.items`
- * @returns {object[]} item definitions, cheapest first
+ * @param shop entry from TOWN_SHOPS
+ * @param items `rpg.tables.items`
+ * @returns item definitions, cheapest first
  */
-export function stockFor(shop, tab, items) {
+export function stockFor(shop: any, tab: string, items: any): any[] {
   if (!items) return [];
   let list;
   if (shop.filter && shop.filter[tab]) {

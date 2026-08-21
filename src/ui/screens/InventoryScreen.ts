@@ -14,8 +14,7 @@ const MAX_ROWS = 22;
  * the placeholder list never did.
  */
 export class InventoryScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Items';
@@ -27,8 +26,7 @@ export class InventoryScreen {
     this._msgAge = 9;
   }
 
-  /** @param {HTMLElement} root */
-  build(root, game) {
+  build(root: HTMLElement, game) {
     this.game = game;
     this.cols = el('div.cols');
     const l = el('div.col-l');
@@ -162,8 +160,8 @@ export class InventoryScreen {
 
   enter(game) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     // rebuild when the tab changes or the bag does
     const items = readItems(game, this.tab);
     const key = `${this.tab}|${items.map((x) => `${x.id}${x.qty}`).join()}`;

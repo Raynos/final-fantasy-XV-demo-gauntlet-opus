@@ -34,11 +34,11 @@ import { TITAN } from './Titan.ts';
 
 /**
  * Derive a re-statted variant of a species.
- * @param {object} base a species definition
- * @param {string} key the new registry key
- * @param {object} over `{ stats, ...anything else to override }`
+ * @param base a species definition
+ * @param key the new registry key
+ * @param over `{ stats, ...anything else to override }`
  */
-export function variant(base, key, over = {}) {
+export function variant(base: any, key: string, over: any = {}) {
   const def = {
     ...base,
     ...over,
@@ -127,19 +127,17 @@ export const TYPES = {
   deadeye: DEADEYE,
 };
 
-/** @returns {string[]} */
-export function speciesKeys() { return Object.keys(TYPES); }
+export function speciesKeys(): string[] { return Object.keys(TYPES); }
 
-/** Every species of a faction. @param {'beast'|'daemon'|'imperial'|'astral'} f */
-export function byFaction(f) {
+/** Every species of a faction. @param f */
+export function byFaction(f: 'beast' | 'daemon' | 'imperial' | 'astral') {
   return Object.values(TYPES).filter((t) => (t.faction || 'beast') === f);
 }
 
 /**
  * A player-facing bestiary entry, for the HUD / a future Libra scan.
- * @param {string} key
  */
-export function entry(key) {
+export function entry(key: string) {
   const t = TYPES[key];
   if (!t) return null;
   const weak = [], strong = [];

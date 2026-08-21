@@ -23,11 +23,9 @@ export const DEFAULT_PROFILE = {
 };
 
 /**
- * @param {Object} profile see DEFAULT_PROFILE
- * @returns {{bones:THREE.Bone[], index:Object, byName:Object, root:THREE.Bone,
- *            skeleton:THREE.Skeleton, P:Object, profile:Object}}
+ * @param profile see DEFAULT_PROFILE
  */
-export function buildSkeleton(profile = {}) {
+export function buildSkeleton(profile: any = {}): any {
   const p = { ...DEFAULT_PROFILE, ...profile };
   const s = p.height / 1.80;
   const sw = p.shoulder;

@@ -107,13 +107,11 @@ function frame(dir, u, v) {
 }
 
 /**
- * @param {string} name key of TREE_SPECIES
- * @param {number} seed deterministic seed
- * @param {object} over per-variant parameter overrides
- * @returns {{wood:THREE.BufferGeometry, leaves:THREE.BufferGeometry|null,
- *            height:number, radius:number, leafKind:string}}
+ * @param name key of TREE_SPECIES
+ * @param seed deterministic seed
+ * @param over per-variant parameter overrides
  */
-export function buildTree(name, seed, over = {}) {
+export function buildTree(name: string, seed: number, over: any = {}): any {
   const S = { ...TREE_SPECIES[name], ...over };
   const rng = new Rng((seed >>> 0) || 1);
   const wood = new MeshAccum();
@@ -201,8 +199,8 @@ export function buildTree(name, seed, over = {}) {
     leaf.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
 
-  /** @param {THREE.Vector3} p @param {THREE.Vector3} dir */
-  const grow = (p, dir, len, rad, depth, flexStart) => {
+  /** @param p @param dir */
+  const grow = (p: THREE.Vector3, dir: THREE.Vector3, len, rad, depth, flexStart) => {
     const sides = depth === 0 ? 8 : depth === 1 ? 5 : depth === 2 ? 4 : 3;
     const sub = depth === 0 ? 4 : depth === 1 ? 2 : 1;
     const flexEnd = Math.min(1, flexStart + len / S.height);

@@ -49,13 +49,8 @@ export class VehicleBody {
 
   /**
    * @param {object} opts
-   * @param {object} opts.terrain  Terrain system (heightAt)
-   * @param {import('./RoadPath.ts').RoadPath} opts.road
-   * @param {object} [opts.collision] static world collision, so the car rests
-   *   on graded pads and town slabs instead of sinking to the raw heightfield
-   *   underneath them while the party stands on top
-   */
-  constructor({ terrain, road, collision = null }) {
+   * */
+  constructor({ terrain, road, collision = null }: { terrain: any, road: import('./RoadPath.ts').RoadPath, collision?: any }) {
     this.terrain = terrain;
     this.road = road;
     this.collision = collision;
@@ -167,11 +162,11 @@ export class VehicleBody {
     this.pos.y = this.chassisY;
   }
 
-  /** Unit forward vector in world space. @returns {THREE.Vector3} */
-  forward() { return this._fwd.set(Math.sin(this.heading), 0, Math.cos(this.heading)); }
+  /** Unit forward vector in world space. @returns */
+  forward(): THREE.Vector3 { return this._fwd.set(Math.sin(this.heading), 0, Math.cos(this.heading)); }
 
-  /** Unit right vector in world space. @returns {THREE.Vector3} */
-  right() { return this._right.set(Math.cos(this.heading), 0, -Math.sin(this.heading)); }
+  /** Unit right vector in world space. @returns */
+  right(): THREE.Vector3 { return this._right.set(Math.cos(this.heading), 0, -Math.sin(this.heading)); }
 
   /** Local (forward, right) offset of a wheel from the CG. */
   _wheelOffset(w, out) {
@@ -233,10 +228,9 @@ export class VehicleBody {
 
   /**
    * Advance the vehicle.
-   * @param {number} dt seconds
-   * @param {{throttle:number, brake:number, steer:number, handbrake:boolean}} c
+   * @param dt seconds
    */
-  step(dt, c) {
+  step(dt: number, c: {throttle:number, brake:number, steer:number, handbrake:boolean}) {
     const d = Math.min(dt, 1 / 30);
     if (d <= 0) return;
     // never move more than ~0.8 m in one sub-step, so a 200 km/h car cannot

@@ -20,11 +20,8 @@ export class Rig {
 
   /**
    * Declare a bone at a world-space position in bind pose.
-   * @param {string} name
-   * @param {string|null} parent
-   * @param {number[]} worldPos
    */
-  bone(name, parent, worldPos) {
+  bone(name: string, parent: string | null, worldPos: number[]) {
     const b = new THREE.Bone();
     b.name = name;
     const wp = new THREE.Vector3().fromArray(worldPos);
@@ -63,9 +60,9 @@ export class Rig {
    * Bind a geometry across two bones, blending by projection onto the axis
    * from `a`'s bind position to `b`'s — the cheap way to get a joint that
    * creases rather than collapsing.
-   * @param {number} soft 0..1 width of the blend band around the joint
+   * @param soft 0..1 width of the blend band around the joint
    */
-  attachBlend(geo, aName, bName, soft = 1.0) {
+  attachBlend(geo, aName, bName, soft: number = 1.0) {
     const ia = this.bones.indexOf(this.byName.get(aName));
     const ib = this.bones.indexOf(this.byName.get(bName));
     const pa = this._world.get(aName), pb = this._world.get(bName);
@@ -101,11 +98,10 @@ export class Rig {
    * onto the polyline through the chain's bind positions and blended between
    * the two bones it falls between, so one continuous swept limb bends at
    * every joint at once.
-   * @param {THREE.BufferGeometry} geo
-   * @param {string[]} names bone chain, root first
-   * @param {number} soft 0..1 blend width around each joint
+   * @param names bone chain, root first
+   * @param soft 0..1 blend width around each joint
    */
-  attachChain(geo, names, soft = 1.0) {
+  attachChain(geo: THREE.BufferGeometry, names: string[], soft: number = 1.0) {
     const idxs = names.map((n) => this.bones.indexOf(this.byName.get(n)));
     const pts = names.map((n) => this._world.get(n));
     if (idxs.some((i) => i < 0)) throw new Error(`unknown bone in chain ${names.join(',')}`);
@@ -143,10 +139,8 @@ export class Rig {
 
   /**
    * Merge everything and produce the SkinnedMesh.
-   * @param {THREE.Material} material
-   * @returns {{group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>}}
    */
-  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null } = {}) {
+  build(material: THREE.Material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null } = {}): {group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>} {
     if (coat) for (const g of this.parts) weatherCoat(g, coat);
     if (uvTiles) for (const g of this.parts) detailUV(g, uvTiles);
     const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
@@ -208,10 +202,8 @@ export const DETAIL_TILES = 10;
  * closes a loop around a limb, and a fractional count puts a visible seam down
  * the side of every leg.
  *
- * @param {THREE.BufferGeometry} geo
- * @param {number} tilesPerMetre
  */
-export function detailUV(geo, tilesPerMetre) {
+export function detailUV(geo: THREE.BufferGeometry, tilesPerMetre: number) {
   const pos = geo.attributes.position, uv = geo.attributes.uv;
   if (!pos || !uv) return geo;
   const index = geo.index ? geo.index.array : null;
@@ -308,9 +300,8 @@ export function creatureMaterial({
  * one: it is a fixed radiance, so under the sun it is far below the diffuse
  * term and invisible, while at 23:00 it is the only thing separating a
  * near-black silhouette from the ground behind it. `{ color, power, strength }`.
- * @param {THREE.Material} material
  */
-export function enableVertexMaterial(material) {
+export function enableVertexMaterial(material: THREE.Material) {
   const rim = (material.userData && material.userData.rim) || null;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -354,9 +345,9 @@ const _du = new THREE.Color();
 
 /**
  * Write `v` into `out` whether it arrives as a hex literal or a `THREE.Color`.
- * @param {THREE.Color} out @param {number|THREE.Color} v
+ * @param out @param v
  */
-function asColor(out, v) {
+function asColor(out: THREE.Color, v: number | THREE.Color) {
   if (v && v.isColor) return out.copy(v);
   return out.setHex(v, THREE.SRGBColorSpace);
 }
@@ -378,22 +369,14 @@ function asColor(out, v) {
  * geometry is still in bind-pose world space — so `dustTop` can be given in
  * metres off the ground and mean it.
  *
- * @param {THREE.BufferGeometry} geo must carry a `color` attribute
+ * @param geo must carry a `color` attribute
  * @param {object} [o]
- * @param {number} [o.mottle] ± value swing of the body-scale mottle
- * @param {number} [o.tick] strength of the sun-bleached tipping on the topline
- * @param {number} [o.light] colour the tips lean toward; default is the vertex
- *   colour lifted, which keeps a species' own hue
- * @param {number} [o.shade] darkening on downward-facing surfaces
- * @param {number} [o.dark] colour the underside shades toward
- * @param {number} [o.dust] strength of ground dust carried up the legs
- * @param {number} [o.dustTop] metres above the ground the dust dies out at
- * @param {number} [o.dustColor]
+ * 
  */
-export function weatherCoat(geo, {
+export function weatherCoat(geo: THREE.BufferGeometry, {
   mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
   dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
-} = {}) {
+}: { mottle?: number, tick?: number, light?: number, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } = {}) {
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;
   // `Color.setHex` runs `Math.floor` on its argument, so handing it a

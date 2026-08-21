@@ -24,8 +24,7 @@ import * as THREE from 'three';
  * @property {Object} look           parameters baked into the LUT
  */
 
-/** @type {Object<string, GradePreset>} */
-export const GRADES = {
+export const GRADES: Object<string, GradePreset> = {
   // Flat, neutral daylight. Slightly cool shadows, sun-bleached highlights.
   day: {
     balance: [0.04, 0.0],
@@ -119,10 +118,8 @@ function sat01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
  * Bake one preset's `look` into a 1024x32 RGBA strip texture.
  * Deterministic and cheap (32k texels of pure arithmetic).
  *
- * @param {GradePreset} preset
- * @returns {THREE.DataTexture}
  */
-export function bakeLut(preset) {
+export function bakeLut(preset: GradePreset): THREE.DataTexture {
   const L = preset.look;
   const n = LUT_SIZE;
   const w = n * n, h = n;

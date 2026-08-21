@@ -11,12 +11,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
  * Create an HTML element.
- * @param {string} tag e.g. `div.party-row.is-lead`
- * @param {object} [attrs] attributes; `text` sets textContent, `style` a cssText string
- * @param {Array<Node|string>} [kids]
- * @returns {HTMLElement}
+ * @param tag e.g. `div.party-row.is-lead`
+ * @param [attrs] attributes; `text` sets textContent, `style` a cssText string
  */
-export function el(tag, attrs = {}, kids = []) {
+export function el(tag: string, attrs: any = {}, kids: Array<Node | string> = []): HTMLElement {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');
   if (classes.length) node.className = classes.join(' ');
@@ -27,12 +25,9 @@ export function el(tag, attrs = {}, kids = []) {
 
 /**
  * Create an SVG element in the SVG namespace.
- * @param {string} tag e.g. `path.glyph`
- * @param {object} [attrs]
- * @param {Array<Node|string>} [kids]
- * @returns {SVGElement}
+ * @param tag e.g. `path.glyph`
  */
-export function svg(tag, attrs = {}, kids = []) {
+export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = []): SVGElement {
   const [name, ...classes] = tag.split('.');
   const node = document.createElementNS(SVG_NS, name);
   if (classes.length) node.setAttribute('class', classes.join(' '));
@@ -111,9 +106,8 @@ export function clock(hours) {
 /**
  * Split a string into per-character spans so it can be revealed letter by
  * letter (used by the area title card and menu headings).
- * @returns {{node: HTMLElement, chars: HTMLElement[]}}
  */
-export function letters(text, tag = 'span.ltr') {
+export function letters(text, tag = 'span.ltr'): {node: HTMLElement, chars: HTMLElement[]} {
   const node = el('span.letters');
   const chars = [];
   for (const ch of text) {

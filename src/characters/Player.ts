@@ -80,8 +80,8 @@ export class Player {
 
   get position() { return this.root.position; }
 
-  /** Forward a combat action to the rig. @param {string} name */
-  play(name, opts) { this.character.play(name, opts); }
+  /** Forward a combat action to the rig. @param name */
+  play(name: string, opts) { this.character.play(name, opts); }
 
   /** Weapon sockets for the combat system. */
   get attach() { return this.character.attach; }

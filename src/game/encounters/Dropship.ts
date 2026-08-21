@@ -20,8 +20,7 @@ const RED = 0xff2a18;
  * draw call), built once and reused for every arrival.
  */
 export class Dropship {
-  /** @param {object} game */
-  init(game) {
+  init(game: any) {
     this.game = game;
     this.terrain = game.get('Terrain');
     this.vfx = game.get('VFX');
@@ -46,10 +45,10 @@ export class Dropship {
 
   /**
    * Fly in, hover over `at`, and deliver `payload` (already-spawned enemies).
-   * @param {THREE.Vector3} at ground point
-   * @param {object[]} payload enemies to drop
+   * @param at ground point
+   * @param payload enemies to drop
    */
-  arrive(at, payload) {
+  arrive(at: THREE.Vector3, payload: any[]) {
     this.at.copy(at);
     this.payload = payload || [];
     for (const e of this.payload) {

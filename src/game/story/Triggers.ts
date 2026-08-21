@@ -18,8 +18,7 @@ import { PLACES, REGION_CARDS } from './Chapters.ts';
  * predicate, so gating on chapter or story flags needs no extra machinery.
  */
 export class Triggers {
-  /** @param {object} game */
-  constructor(game) {
+  constructor(game: any) {
     this.game = game;
     this.list = [];
     this.place = null;             // id of the place the player is standing in
@@ -30,10 +29,10 @@ export class Triggers {
   }
 
   /**
-   * @param {object} def `{ kind, ...args, once?, require?, run(ctx) }`
-   * @returns {object} the trigger, so callers can disable it later
+   * @param def `{ kind, ...args, once?, require?, run(ctx) }`
+   * @returns the trigger, so callers can disable it later
    */
-  add(def) {
+  add(def: any): any {
     const t = { once: true, fired: false, ...def };
     this.list.push(t);
     return t;
@@ -78,10 +77,8 @@ export class Triggers {
 
   /**
    * Poll the world and fire whatever matched.
-   * @param {number} dt
-   * @param {(trigger:object, payload:object) => void} fire
    */
-  update(dt, fire) {
+  update(dt: number, fire: (trigger:any, payload:any) => void) {
     // 4 Hz is plenty for proximity and far cheaper than every frame; story
     // triggers are not a physics query.
     this._t += dt;

@@ -43,9 +43,8 @@ const _worldUp = new THREE.Vector3(0, 1, 0);
  * animal can be shaded (pale back, dark belly, bone-coloured horns) from a
  * single unlit-looking material.
  *
- * @param {Array<{geo:THREE.BufferGeometry, c:number[]}>} parts
  */
-function mergeTinted(parts) {
+function mergeTinted(parts: Array<{geo:THREE.BufferGeometry, c:number[]}>) {
   const geos = [];
   for (const { geo, c } of parts) {
     for (const k of Object.keys(geo.attributes)) {
@@ -134,12 +133,7 @@ function birdGeometry() {
 }
 
 export class Wildlife {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   * @param {{quality?:number}} opts
-   */
-  constructor(eco, scene, { quality = 1 } = {}) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
@@ -387,10 +381,9 @@ export class Wildlife {
   }
 
   /**
-   * @param {number} t seconds
-   * @param {THREE.Vector3} camPos
+   * @param t seconds
    */
-  _updateWaders(t, camPos) {
+  _updateWaders(t: number, camPos: THREE.Vector3) {
     const g = this.waders;
     if (camPos) g.stream.update(camPos);
     const anim = g.anim.array;
@@ -502,10 +495,9 @@ export class Wildlife {
    * seventy-two animated garula are still one draw call and about forty
    * microseconds of JavaScript.
    *
-   * @param {number} t seconds
-   * @param {THREE.Vector3} camPos
+   * @param t seconds
    */
-  _updateHerd(t, camPos) {
+  _updateHerd(t: number, camPos: THREE.Vector3) {
     const g = this.herd, eco = this.eco;
     if (camPos) g.stream.update(camPos);
     const anim = g.anim.array;
@@ -552,12 +544,10 @@ export class Wildlife {
   }
 
   /**
-   * @param {number} dt
-   * @param {number} t seconds
-   * @param {number} night 0 by day, 1 after dark
-   * @param {THREE.Vector3} camPos
+   * @param t seconds
+   * @param night 0 by day, 1 after dark
    */
-  update(dt, t, night, camPos) {
+  update(dt: number, t: number, night: number, camPos: THREE.Vector3) {
     this.timeRef.value = t;
     if (this.birds) {
       const g = this.birds;

@@ -21,10 +21,9 @@ import { DungeonMap } from './DungeonMap.ts';
  */
 export class Dungeon {
   /**
-   * @param {object} def dungeon definition
-   * @param {import('../../../game/Game.ts').Game} game
+   * @param def dungeon definition
    */
-  constructor(def, game) {
+  constructor(def: any, game: import('../../../game/Game.ts').Game) {
     this.def = def;
     this.game = game;
     this.id = def.id;

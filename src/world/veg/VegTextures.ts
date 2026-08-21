@@ -123,11 +123,11 @@ function buildAlphaMips(data, size, alphaRef = 0.42, tinyFade = 1.0) {
  * Run before the mip chain is built, so every level inherits the corrected
  * albedo.
  *
- * @param {Uint8Array} data RGBA bytes, sRGB-encoded
- * @param {number} target alpha-weighted mean linear luminance to land on
- * @returns {number} the gamma applied (1 == no change), for logging
+ * @param data RGBA bytes, sRGB-encoded
+ * @param target alpha-weighted mean linear luminance to land on
+ * @returns the gamma applied (1 == no change), for logging
  */
-function normalizeAlbedo(data, target) {
+function normalizeAlbedo(data: Uint8Array, target: number): number {
   const toLin = (b) => {
     const s = b / 255;
     return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -196,9 +196,8 @@ function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
  * rectangle. Reading the pixels back with getImageData (already
  * un-premultiplied) and uploading them as data sidesteps that entirely.
  *
- * @param {number} size square texture size
- * @param {(ctx:CanvasRenderingContext2D, size:number) => void} draw
- * @param {{alphaRef?:number, tinyFade?:number}} [opts]
+ * @param size square texture size
+ * @param [opts]
  *   `alphaRef` is the alpha test the mip chain preserves coverage for — set it
  *   to the material's own `alphaTest`. `tinyFade` (<1) dissolves the sub-8px
  *   mips instead of holding their coverage; use it for cards that are dense
@@ -207,7 +206,7 @@ function withAlphaMips(tex, data, size, alphaRef, tinyFade) {
  *   alpha-weighted mean *linear* luminance — see {@link normalizeAlbedo}; set
  *   it whenever this card is one LOD of something another ring also draws.
  */
-export function alphaTex(size, draw, opts = {}) {
+export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?:number, tinyFade?:number} = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -271,15 +270,14 @@ export const GRASS_CARD_ALBEDO = 0.58;
 /**
  * Dense clump of grass blades on a transparent card.
  *
- * @param {number} variant
- * @param {number} count blades per card
- * @param {number} [alphaRef] the material's alphaTest, so the mip chain
+ * @param count blades per card
+ * @param [alphaRef] the material's alphaTest, so the mip chain
  *   preserves the coverage that will actually be tested
- * @param {number} [albedo] mean linear luminance to normalise to — this is
+ * @param [albedo] mean linear luminance to normalise to — this is
  *   what keeps the card rings the same *value* as the blade ring they replace.
  *   {@link GRASS_CARD_ALBEDO} is the number the field is tuned against.
  */
-export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4, albedo = GRASS_CARD_ALBEDO) {
+export function grassClumpTex(variant: number = 0, count: number = 46, alphaRef: number = 0.4, albedo: number = GRASS_CARD_ALBEDO) {
   return memo(`clump${variant}${count}${alphaRef}${albedo}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(4242 + variant * 977);
     for (let i = 0; i < count; i++) {
@@ -431,14 +429,9 @@ export function fernTex() {
  * offscreen target. Hand-drawn billboards never match the geometry LOD; a bake
  * does, so the swap at the LOD boundary is invisible.
  *
- * @param {THREE.WebGLRenderer} renderer
- * @param {{wood:THREE.BufferGeometry, leaves:THREE.BufferGeometry|null,
- *          woodMap:THREE.Texture, woodColor:number, leafMap:THREE.Texture,
- *          height:number, radius:number}} src
- * @param {number} size texture resolution
- * @returns {THREE.DataTexture}
+ * @param size texture resolution
  */
-export function bakeTreeImpostor(renderer, src, size = 256) {
+export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: any, size: number = 256): THREE.DataTexture {
   const rt = new THREE.WebGLRenderTarget(size, size, {
     samples: 4, depthBuffer: true, stencilBuffer: false,
   });
@@ -515,14 +508,9 @@ export function bakeTreeImpostor(renderer, src, size = 256) {
  * far ring then draws one of those per ~50 m cell — a kilometre of forest for
  * a couple of thousand triangles.
  *
- * @param {THREE.WebGLRenderer} renderer
- * @param {{wood:THREE.BufferGeometry, leaves:THREE.BufferGeometry|null,
- *          woodMap:THREE.Texture, woodColor:number, leafMap:THREE.Texture,
- *          height:number, radius:number}} src one variant of the species
- * @param {{count?:number, spread?:number, size?:number, seed?:number}} opts
- * @returns {{tex:THREE.DataTexture, width:number, height:number}}
+ * @param src one variant of the species
  */
-export function bakeCanopyCard(renderer, src, opts = {}) {
+export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: any, opts: {count?:number, spread?:number, size?:number, seed?:number} = {}): {tex:THREE.DataTexture, width:number, height:number} {
   const { count = 5, spread = 2.1, size = 384, seed = 991 } = opts;
   const rng = new Rng(seed);
   const rt = new THREE.WebGLRenderTarget(size, size, {

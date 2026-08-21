@@ -55,8 +55,7 @@ export class InteractionSystem {
     this._firedAt = -10;
   }
 
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     this.prompt = new InteractPrompt(game.uiRoot);
     this.dialogue = new Dialogue(game.uiRoot);
@@ -69,20 +68,8 @@ export class InteractionSystem {
    * disabled without touching the registry directly.
    *
    * @param {object} def
-   * @param {string} [def.id]              unique key; generated when omitted
-   * @param {THREE.Vector3|number[]} def.pos  world anchor (live reference honoured)
-   * @param {number} [def.radius=2.8]      reach in metres
-   * @param {number} [def.cone=105]        full facing cone in degrees
-   * @param {string} [def.verb='Talk']     the action word — Talk / Shop / Hunts / Rest / Drive
-   * @param {string} [def.label='']        the subject — 'Takka', 'Hunt Board', ...
-   * @param {string} [def.hint='']         one line of small print under the label
-   * @param {number} [def.priority=0]      higher wins when several overlap
-   * @param {number} [def.yOffset=1.55]    where the prompt floats above `pos`
-   * @param {(game:object, item:object)=>void} def.handler
-   * @param {()=>boolean} [def.enabled]    predicate; false hides the prompt
-   * @returns {{id:string, item:object, set:(patch:object)=>void, dispose:()=>void}}
    */
-  register(def) {
+  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:any, item:any)=>void, enabled?: ()=>boolean }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
     const id = def.id || `ix${_nextId++}`;
     const item = {
       id,
@@ -107,8 +94,7 @@ export class InteractionSystem {
     };
   }
 
-  /** @param {string} id */
-  unregister(id) { this.items.delete(id); }
+  unregister(id: string) { this.items.delete(id); }
 
   /** Look an interactable up by id. */
   get(id) { return this.items.get(id) || null; }
@@ -116,9 +102,9 @@ export class InteractionSystem {
   /**
    * Start a conversation. While one is running the interaction verb is blocked
    * and the dialogue owns E / Enter / arrows.
-   * @param {object} script see Dialogue.start
+   * @param script see Dialogue.start
    */
-  say(script) { return this.dialogue.start(script, this.game); }
+  say(script: any) { return this.dialogue.start(script, this.game); }
 
   /** True while a conversation is on screen. */
   get talking() { return this.dialogue && this.dialogue.active; }
@@ -126,9 +112,8 @@ export class InteractionSystem {
   /**
    * Push a screen and suppress the prompt until it closes. Used by the shop and
    * the hunt board so E does not immediately re-trigger on the way out.
-   * @param {string} name
    */
-  openScreen(name) {
+  openScreen(name: string) {
     const menus = this.game?.get?.('Menus');
     if (!menus) return false;
     menus.stack.length = 0;

@@ -70,8 +70,7 @@ const FOOT = {
  * the latter toggle: press again (or Tab / Backspace / B) to close.
  */
 export class Menus {
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     this.root = el('div', { id: 'menus' });
     game.uiRoot.appendChild(this.root);
@@ -155,9 +154,8 @@ export class Menus {
   /**
    * Show a screen, or `null` to close. Transitions are animated; calling this
    * with the current name is a no-op.
-   * @param {string|null} name
    */
-  setScreen(name) {
+  setScreen(name: string | null) {
     if (name === this.name && !this.pending) return;
     if (!name) { this.pending = null; this.name = null; this.stack.length = 0; return; }
     const s = this.screens[name];
@@ -207,9 +205,8 @@ export class Menus {
    * True while anything other than plain gameplay owns the screen: a menu, a
    * conversation, a shop, the title card or a playing cutscene. This is what
    * decides whether the pointer may be locked.
-   * @param {object} game
    */
-  _uiBusy(game) {
+  _uiBusy(game: any) {
     if (this.name) return true;
     const ix = game.get?.('Interaction');
     if (ix && ix.talking) return true;
@@ -221,9 +218,8 @@ export class Menus {
   /**
    * Keep the browser's pointer lock in step with what is on screen, and turn an
    * unexpected exit into an opened pause menu.
-   * @param {object} game
    */
-  _pointerLock(game) {
+  _pointerLock(game: any) {
     const inp = game.input;
     if (!inp || !inp.setPointerLockAllowed) return;
     const busy = this._uiBusy(game);
@@ -243,8 +239,8 @@ export class Menus {
     else if (!this.name && this._inputWas) { inp.enabled = true; this._inputWas = false; }
   }
 
-  /** @param {number} dt @param {object} game */
-  update(dt, game) {
+  /** @param dt @param game */
+  update(dt: number, game: any) {
     this._input(game);
     this._pointerLock(game);
 
@@ -285,9 +281,8 @@ export class Menus {
   /**
    * Open a screen straight from a global hotkey: no stack, and pressing the
    * same key again closes it.
-   * @param {string} name
    */
-  toggleScreen(name) {
+  toggleScreen(name: string) {
     // Already here: go back the way we came, so H out of the controls card
     // returns you to the shop you were reading it from rather than the field.
     if (this.name === name) { this.back(); return; }

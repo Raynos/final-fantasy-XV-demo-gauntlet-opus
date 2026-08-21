@@ -53,10 +53,9 @@ const ARCH = new Map();
 
 /**
  * Build (or fetch) the shared geometry and materials for one look.
- * @param {string} key
- * @param {object} def `{ profile, look }`
+ * @param def `{ profile, look }`
  */
-export function archetype(key, def) {
+export function archetype(key: string, def: any) {
   if (ARCH.has(key)) return ARCH.get(key);
   const S = shared();
   const rig = buildSkeleton(def.profile);
@@ -94,11 +93,11 @@ export function archetype(key, def) {
  */
 export class NpcBody {
   /**
-   * @param {object} arch result of {@link archetype}
-   * @param {number} seed per-instance seed — drives blink timing, stance and
+   * @param arch result of {@link archetype}
+   * @param seed per-instance seed — drives blink timing, stance and
    *   idle phase so two copies of the same archetype never move in lockstep
    */
-  constructor(arch, seed = 1) {
+  constructor(arch: any, seed: number = 1) {
     const S = shared();
     this.arch = arch;
     this.name = arch.key;
@@ -150,18 +149,17 @@ export class NpcBody {
     return mesh;
   }
 
-  /** @param {THREE.Vector3|null} v */
-  setLookTarget(v) { this.anim.setLookTarget(v); }
+  setLookTarget(v: THREE.Vector3 | null) { this.anim.setLookTarget(v); }
 
-  /** @param {number} dt @param {object} state see Animator.update */
-  update(dt, state) { this.anim.update(dt, state); }
+  /** @param dt @param state see Animator.update */
+  update(dt: number, state: any) { this.anim.update(dt, state); }
 
   /**
    * Two-step LOD.
-   * @param {number} level 0 = full, 1 = no eyes / no contact shadow / no
+   * @param level 0 = full, 1 = no eyes / no contact shadow / no
    *   sun-shadow casting, 2 = hidden
    */
-  setLod(level) {
+  setLod(level: number) {
     if (this._lod === level) return;
     this._lod = level;
     const vis = level < 2;

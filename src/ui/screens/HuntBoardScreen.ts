@@ -40,8 +40,7 @@ function ledgerOf(hunt, tipsters) {
 }
 
 export class HuntBoardScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Bounty Board';
@@ -54,8 +53,8 @@ export class HuntBoardScreen {
 
   get rpg() { return this.game?.get?.('RpgSystem') || this.game?.get?.('Rpg') || null; }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.hunt-cols');
 
@@ -244,8 +243,8 @@ export class HuntBoardScreen {
     }
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     const rpg = this.rpg;
     const tabs = this._tabs = this.ledgers();

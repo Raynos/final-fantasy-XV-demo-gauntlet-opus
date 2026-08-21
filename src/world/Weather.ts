@@ -82,8 +82,7 @@ export class Weather {
     this._dustCol = new THREE.Vector3();
   }
 
-  /** @param {import('../game/Game.ts').Game} game */
-  async init(game) {
+  async init(game: import('../game/Game.ts').Game) {
     this.game = game;
     const terrain = game.get('Terrain');
     this.terrain = terrain;
@@ -128,9 +127,8 @@ export class Weather {
   /**
    * Move the weather toward a preset. The transition is continuous — call it
    * once and the front rolls in over a few seconds.
-   * @param {'clear'|'overcast'|'storm'|'fog'} name
    */
-  set(name) {
+  set(name: 'clear' | 'overcast' | 'storm' | 'fog') {
     const preset = PRESETS[name];
     if (!preset) return;
     this.name = name;

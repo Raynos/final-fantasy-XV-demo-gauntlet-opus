@@ -19,12 +19,7 @@ const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 
  * download so a note is never simply lost.
  */
 export class Inbox {
-  /**
-   * @param {HTMLElement} root
-   * @param {object} game
-   * @param {import('./Registry.ts').Registry} reg
-   */
-  constructor(root, game, reg) {
+  constructor(root: HTMLElement, game: any, reg: import('./Registry.ts').Registry) {
     this.game = game;
     this.reg = reg;
     this.open = false;

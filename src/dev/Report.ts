@@ -27,10 +27,9 @@ import { worldMap } from '../world/map/WorldMap.ts';
  * instead. Anyone reading a note with `hud.visible: true` and no HUD in the PNG
  * should know why.
  *
- * @param {object} game
- * @returns {string|null} `data:image/png;base64,...`
+ * @returns `data:image/png;base64,...`
  */
-export function capture(game) {
+export function capture(game: any): string | null {
   try {
     return game.renderer.domElement.toDataURL('image/png');
   } catch (err) {
@@ -44,11 +43,8 @@ const r3 = (n) => Number(Number(n).toFixed(3));
 
 /**
  * Assemble the metadata block.
- * @param {object} game
- * @param {import('./Registry.ts').Registry} reg
- * @param {object} [extra]
  */
-export function gather(game, reg, extra = {}) {
+export function gather(game: any, reg: import('./Registry.ts').Registry, extra: any = {}) {
   const cam = game.camera;
   const player = game.get('Player');
   const sky = game.get('Sky');

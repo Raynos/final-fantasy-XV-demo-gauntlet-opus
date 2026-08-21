@@ -49,8 +49,7 @@ const STYLE = {
 const DEFAULT_STYLE = STYLE.sword;
 
 export class CombatAnim {
-  /** @param {Object} game */
-  constructor(game) {
+  constructor(game: any) {
     this.game = game;
     this.combat = game.get('Combat');
     this.player = game.get('Player');
@@ -78,9 +77,8 @@ export class CombatAnim {
    * Runs in the lateUpdate pass, which is the only place the combat state for
    * *this* frame is already settled — driving the body from the update pass
    * would leave the arm one frame behind a blade moving at 20 rad/s.
-   * @param {number} dt
    */
-  lateUpdate(dt) {
+  lateUpdate(dt: number) {
     const combat = this.combat;
     const player = this.player;
     if (!combat || !player || !player.character || !player.character.rig) return;
@@ -145,9 +143,8 @@ export class CombatAnim {
   /**
    * The commitment curve of a swing, running −1 (fully wound up, coiled away
    * from the target) through 0 to +1 (followed all the way through).
-   * @returns {number}
    */
-  swingCurve(combat, style) {
+  swingCurve(combat, style): number {
     const step = combat.comboStep;
     if (!step) return 0;
     const n = clamp01(combat.comboTimer / Math.max(0.02, step[PHASE_KEY[combat.comboPhase]] || 0.2));
@@ -421,9 +418,9 @@ export class CombatAnim {
    * of the body is the one that drives; a two-handed class pulls the off hand
    * onto a point further down the shaft.
    *
-   * @returns {'L'|'R'|null} the driving side, so the caller can close that fist
+   * @returns the driving side, so the caller can close that fist
    */
-  weaponIK(rig, combat, style, weight) {
+  weaponIK(rig, combat, style, weight): 'L' | 'R' | null {
     const anchor = combat.hand;
     if (!anchor) return null;
     anchor.updateWorldMatrix(true, false);
@@ -449,12 +446,12 @@ export class CombatAnim {
   /**
    * Two-bone IK for an arm: analytic elbow placement with the pole pointing
    * away from the body, then the hand snapped to the weapon's orientation.
-   * @param {string} side 'L' | 'R'
-   * @param {THREE.Vector3} target world position for the hand
-   * @param {THREE.Quaternion} grip world orientation for the hand
-   * @param {number} w 0..1 blend
+   * @param side 'L' | 'R'
+   * @param target world position for the hand
+   * @param grip world orientation for the hand
+   * @param w 0..1 blend
    */
-  solveArm(rig, side, target, grip, w) {
+  solveArm(rig, side: string, target: THREE.Vector3, grip: THREE.Quaternion, w: number) {
     const B = rig.byName, P = rig.P;
     const up = B[`upperArm${side}`], lo = B[`lowerArm${side}`], hand = B[`hand${side}`];
     if (!up || !lo || !hand) return;

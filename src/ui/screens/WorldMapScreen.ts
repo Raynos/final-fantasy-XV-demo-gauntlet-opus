@@ -71,8 +71,7 @@ const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
 export class WorldMapScreen {
   /**
-   * @param {import('../Menus.ts').Menus} menus
-   * @param {{atlas?:boolean}} [opts] `atlas: true` registers the second,
+   * @param [opts] `atlas: true` registers the second,
    *   fully-surveyed variant: the whole continent at the fit-all scale with no
    *   unsurveyed haze and every point plotted. It reads the fog as fully
    *   revealed rather than calling `fog.revealAll()`, because the mask is
@@ -80,7 +79,7 @@ export class WorldMapScreen {
    *   make `menu_world` depend on whether `menu_map_wide` was captured first,
    *   which is exactly the order-dependence the capture harness forbids.
    */
-  constructor(menus, opts = {}) {
+  constructor(menus: import('../Menus.ts').Menus, opts: {atlas?:boolean} = {}) {
     this.menus = menus;
     this.atlas = !!opts.atlas;
     this.title = this.atlas ? 'Atlas' : 'Map';
@@ -99,8 +98,8 @@ export class WorldMapScreen {
     this._screenPos = new Map();
   }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.map = worldMap;
     // the styles key off `.wm`, not the screen slot, so the same screen can be
@@ -224,9 +223,9 @@ export class WorldMapScreen {
   /**
    * Has the player charted this point? On the atlas every point is charted by
    * definition — that is what "fully surveyed" means.
-   * @param {object} p @returns {boolean}
+   * @param p @returns 
    */
-  _known(p) { return this.atlas || this.map.discovered.has(p.id); }
+  _known(p: any): boolean { return this.atlas || this.map.discovered.has(p.id); }
 
   _rebuildList() {
     const f = FILTERS[this.filter];
@@ -284,9 +283,9 @@ export class WorldMapScreen {
   /**
    * Step the scale. Passing a world position keeps that point pinned under the
    * cursor while the chart grows or shrinks around it.
-   * @param {number} dir -1 out, +1 in
+   * @param dir -1 out, +1 in
    */
-  zoomBy(dir, ax, az) {
+  zoomBy(dir: number, ax, az) {
     const i = clamp(this.zoomI + dir, 0, ZOOMS.length - 1);
     if (i === this.zoomI) return;
     const k = this.zoom / ZOOMS[i];
@@ -369,8 +368,8 @@ export class WorldMapScreen {
 
   // ------------------------------------------------------------------ frame
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this._a = a;
     const t = game.time.now;
     const rev = easeOutQuint(clamp((a - 0.05) / 0.85, 0, 1));
@@ -590,9 +589,9 @@ export class WorldMapScreen {
    * still paint them *after* the 124 point glyphs. Drawn in one pass they came
    * out with a settlement symbol sitting in the middle of every name.
    *
-   * @param {boolean} paint false = measure and reserve only, true = draw
+   * @param paint false = measure and reserve only, true = draw
    */
-  _regionLabels(c, sx, sy, ppm, dpr, rev, place, paint = true) {
+  _regionLabels(c, sx, sy, ppm, dpr, rev, place, paint: boolean = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
     if (a <= 0.01) { this._regionPlaced = []; return; }
     if (paint && this._regionPlaced) {
@@ -646,8 +645,7 @@ export class WorldMapScreen {
     this._regionPlaced = paint ? null : placed;
   }
 
-  /** @param {{x:number,y:number,name:string,sub:string}} g */
-  _paintRegion(c, g, dpr, a) {
+  _paintRegion(c, g: {x:number,y:number,name:string,sub:string}, dpr, a) {
     // on the atlas the region names are the sheet's headline type, not a
     // watermark under a chart the player is navigating
     const rk = this.atlas ? 1.72 : 1;

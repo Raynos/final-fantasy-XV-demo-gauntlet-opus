@@ -24,14 +24,9 @@ import { glowCardMaterial, glowSprite } from './InteriorMaterials.ts';
 export class LightRig {
   /**
    * @param {object} o
-   * @param {number} [o.poolSize] number of real point lights
-   * @param {number} [o.ambientSky] hemisphere top colour
-   * @param {number} [o.ambientGround] hemisphere bottom colour
-   * @param {number} [o.ambientIntensity]
-   * @param {number} [o.moteColor]
-   * @param {number} [o.moteCount]
+   * 
    */
-  constructor(o = {}) {
+  constructor(o: { poolSize?: number, ambientSky?: number, ambientGround?: number, ambientIntensity?: number, moteColor?: number, moteCount?: number } = {}) {
     this.poolSize = o.poolSize || 12;
     /**
      * Emitters are authored in "how bright does this fixture feel" units, 1..12.
@@ -82,10 +77,8 @@ export class LightRig {
 
   /**
    * Declare a light source.
-   * @param {{pos:number[], color?:number, intensity?:number, range?:number,
-   *          flicker?:number, glow?:number, glowSize?:number}} e
    */
-  add(e) {
+  add(e: any) {
     const em = {
       pos: new THREE.Vector3(e.pos[0], e.pos[1], e.pos[2]),
       color: new THREE.Color(e.color != null ? e.color : 0xffb473),
@@ -226,11 +219,9 @@ export class LightRig {
 
   /**
    * Re-point the pool at whatever matters from here.
-   * @param {number} dt
-   * @param {THREE.Camera} camera
-   * @param {number} now seconds
+   * @param now seconds
    */
-  update(dt, camera, now) {
+  update(dt: number, camera: THREE.Camera, now: number) {
     this._time = now;
     const cp = camera.position;
 

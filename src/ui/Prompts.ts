@@ -35,8 +35,7 @@ const SETS = {
  * mode and cross-fades rather than snapping.
  */
 export class Prompts {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bc');
     this.row = el('div.prompts');
     this.root.appendChild(this.row);
@@ -58,10 +57,9 @@ export class Prompts {
   /**
    * The car outranks the Director's scenario: if you are in the Regalia, or
    * standing next to it, that is unambiguously what the prompt strip is for.
-   * @param {object} game
-   * @param {string} mode the Director's scenario
+   * @param mode the Director's scenario
    */
-  _resolve(game, mode) {
+  _resolve(game: any, mode: string) {
     const car = game.get?.('Regalia');
     if (car && car.enabled) {
       if (car.isDriving) return 'driving';
@@ -71,12 +69,11 @@ export class Prompts {
   }
 
   /**
-   * @param {number} dt seconds
-   * @param {object} game
-   * @param {string} mode `field` | `combat` | `warp`
-   * @param {number} appear 0..1
+   * @param dt seconds
+   * @param mode `field` | `combat` | `warp`
+   * @param appear 0..1
    */
-  update(dt, game, mode, appear) {
+  update(dt: number, game: any, mode: string, appear: number) {
     const set = this._resolve(game, mode);
     if (set !== this.mode) this._render(set);
     const e = easeOut(clamp((appear - 0.18) / 0.62, 0, 1));

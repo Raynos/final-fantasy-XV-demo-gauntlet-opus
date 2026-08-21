@@ -663,9 +663,9 @@ export class WorldMap {
   /**
    * Fill `this._wBuf` with normalised zone weights and return the leftover
    * "frontier" weight. The hot inner loop; no allocation.
-   * @returns {number} weight of the generic highland fallback
+   * @returns weight of the generic highland fallback
    */
-  _weigh(x, z) {
+  _weigh(x, z): number {
     const zc = this._zc, w = this._wBuf, nz = this._nz;
     let sum = 0;
     for (let i = 0; i < nz; i++) {
@@ -700,9 +700,8 @@ export class WorldMap {
   /**
    * Blended biome parameters as a packed `Float64Array` in {@link BIOME_KEYS}
    * order. Reuses one buffer — copy it if you need to keep it.
-   * @returns {Float64Array}
    */
-  biomeVec(x, z) {
+  biomeVec(x, z): Float64Array {
     const rest = this._weigh(x, z);
     const w = this._wBuf, zb = this._zb, out = this._bBuf, def = this._defB;
     for (let k = 0; k < NB; k++) out[k] = def[k] * rest;
@@ -717,9 +716,9 @@ export class WorldMap {
 
   /**
    * The zone whose influence is strongest here.
-   * @returns {object|null} the zone record, or null on the frontier
+   * @returns the zone record, or null on the frontier
    */
-  zoneAt(x, z) {
+  zoneAt(x, z): any | null {
     let best = null, bestW = 0.0001;
     for (let i = 0; i < ZONES.length; i++) {
       const zn = ZONES[i];
@@ -744,10 +743,10 @@ export class WorldMap {
   /**
    * Biome parameters blended across every zone touching this point. The
    * heightfield calls this once per macro cell.
-   * @param {object} [out] reused object
-   * @returns {object} same shape as `ZONES[i].biome`
+   * @param [out] reused object
+   * @returns same shape as `ZONES[i].biome`
    */
-  biomeAt(x, z, out = {}) {
+  biomeAt(x, z, out: any = {}): any {
     const v = this.biomeVec(x, z);
     for (let k = 0; k < NB; k++) out[BIOME_KEYS[k]] = v[k];
     return out;
@@ -755,22 +754,19 @@ export class WorldMap {
 
   // ------------------------------------------------------------------- POIs
 
-  /** @returns {object|undefined} */
-  poiById(id) { return this.byId.get(id); }
+  poiById(id): any | undefined { return this.byId.get(id); }
 
-  /** Every POI of a given type. @returns {object[]} */
-  poisOfType(type) { return POIS.filter((p) => p.type === type); }
+  /** Every POI of a given type. @returns */
+  poisOfType(type): any[] { return POIS.filter((p) => p.type === type); }
 
-  /** Every POI inside a zone. @returns {object[]} */
-  poisInZone(zoneId) { return POIS.filter((p) => p.zone === zoneId); }
+  /** Every POI inside a zone. @returns */
+  poisInZone(zoneId): any[] { return POIS.filter((p) => p.zone === zoneId); }
 
   /**
    * Nearest POI to a world position.
-   * @param {number} x @param {number} z
-   * @param {{types?:string[], maxDist?:number, discoveredOnly?:boolean}} [opt]
-   * @returns {{poi:object, dist:number}|null}
+   * @param x @param z
    */
-  nearestPOI(x, z, opt = {}) {
+  nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi:any, dist:number} | null {
     const { types = null, maxDist = Infinity, discoveredOnly = false } = opt;
     let best = null, bestD = maxDist;
     const ci = Math.floor(x / this._cell), cj = Math.floor(z / this._cell);
@@ -797,24 +793,21 @@ export class WorldMap {
   /**
    * Reveal a POI. Returns true the first time only, so callers can fire the
    * discovery title card exactly once.
-   * @param {string} id
-   * @returns {boolean}
    */
-  discover(id) {
+  discover(id: string): boolean {
     if (!this.byId.has(id) || this.discovered.has(id)) return false;
     this.discovered.add(id);
     return true;
   }
 
-  /** @returns {boolean} */
-  isDiscovered(id) { return this.discovered.has(id); }
+  isDiscovered(id): boolean { return this.discovered.has(id); }
 
   /**
    * Reveal everything whose discovery radius contains this point. Call it once
    * per second or so from whatever tracks the player.
-   * @returns {object[]} POIs newly discovered this call
+   * @returns POIs newly discovered this call
    */
-  discoverAround(x, z) {
+  discoverAround(x, z): any[] {
     const found = [];
     for (const p of POIS) {
       if (this.discovered.has(p.id)) continue;
@@ -830,11 +823,10 @@ export class WorldMap {
 
   /**
    * Estimated travel time between two world points.
-   * @param {'walk'|'sprint'|'chocobo'|'drive'} mode
-   * @returns {{dist:number, seconds:number, mode:string}} road distance for
+   * @returns road distance for
    *   `drive`/`chocobo`, straight line for the rest.
    */
-  travel(ax, az, bx, bz, mode = 'drive') {
+  travel(ax, az, bx, bz, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
     const SPEED = { walk: 2.4, sprint: 5.6, chocobo: 11.0, drive: 26.0 };
     const v = SPEED[mode] || SPEED.walk;
     let dist;

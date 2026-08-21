@@ -70,13 +70,10 @@ function path2d(key, d) {
  * `weight` is the stroke width in canvas px, held constant however the glyph
  * is scaled, which is what keeps the whole set at one visual density.
  *
- * @param {CanvasRenderingContext2D} c
- * @param {string} kind key of {@link GLYPH}
- * @param {number} x @param {number} y @param {number} r
- * @param {string} colour
- * @param {{alpha?:number, weight?:number, halo?:number}} [opt]
+ * @param kind key of {@link GLYPH}
+ * @param x @param y @param r
  */
-export function drawGlyph(c, kind, x, y, r, colour, opt = {}) {
+export function drawGlyph(c: CanvasRenderingContext2D, kind: string, x: number, y: number, r: number, colour: string, opt: {alpha?:number, weight?:number, halo?:number} = {}) {
   const g = GLYPH[kind] || GLYPH.dot;
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
@@ -111,10 +108,9 @@ export function drawGlyph(c, kind, x, y, r, colour, opt = {}) {
 
 /**
  * The same glyph as an inline SVG, for the filter rail and the legend.
- * @param {string} kind @param {{size?:number, stroke?:number}} [opt]
- * @returns {SVGElement}
+ * @param kind @param [opt]
  */
-export function glyphSvg(kind, opt = {}) {
+export function glyphSvg(kind: string, opt: {size?:number, stroke?:number} = {}): SVGElement {
   const g = GLYPH[kind] || GLYPH.dot;
   const { size = 16, stroke = 1.15 } = opt;
   const root = svgEl('svg', {

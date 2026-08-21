@@ -68,10 +68,9 @@ export class Game {
    * mangles class names, so every `game.get('Terrain')` would return
    * undefined in `vite build` output while working fine in dev.
    *
-   * @param {object} system
-   * @param {string} [name] registry key; defaults to the (dev-only) class name
+   * @param [name] registry key; defaults to the (dev-only) class name
    */
-  add(system, name) {
+  add(system: any, name?: string) {
     this.systems.push(system);
     const key = name || system.constructor.name;
     this._registry.set(key, system);
@@ -79,8 +78,8 @@ export class Game {
     return system;
   }
 
-  /** @param {string} name registry key or alias @returns {object|undefined} */
-  get(name) { return this._registry.get(name); }
+  /** @param name registry key or alias @returns */
+  get(name: string): any | undefined { return this._registry.get(name); }
 
   async init() {
     const p = this.onProgress;
@@ -249,10 +248,8 @@ export class Game {
    * player does not work — they steer to a wandering formation slot, so the
    * guess drifts and the shot ends up pointing at empty ground.
    *
-   * @param {string} who
-   * @returns {THREE.Vector3}
    */
-  followAnchor(who) {
+  followAnchor(who: string): THREE.Vector3 {
     const player = this.get('Player');
     if (!who || who === 'player') return player.position;
     const party = this.get('Party');

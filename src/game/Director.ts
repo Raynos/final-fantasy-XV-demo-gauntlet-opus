@@ -67,9 +67,8 @@ export class Director {
   /**
    * Turn the live encounter loop on or off. The screenshot scenarios author
    * the world by hand and must not have a wandering sabertusk walk into frame.
-   * @param {boolean} on
    */
-  setLive(on) {
+  setLive(on: boolean) {
     this.live = on;
     if (this.encounters) {
       this.encounters.enabled = on;
@@ -161,9 +160,8 @@ export class Director {
 
   /**
    * Put the world into a named, reproducible gameplay state.
-   * @param {'field'|'combat'|'warp'} name
    */
-  setScenario(name) {
+  setScenario(name: 'field' | 'combat' | 'warp') {
     // Deliberately NOT `if (name === this.scenario) return`.
     //
     // A scenario is a *reproducible world state*, so re-applying it has to
@@ -217,9 +215,8 @@ export class Director {
   /**
    * A posed boss encounter for the harness: the mark mid-telegraph, its adds
    * fanned out around it, the party braced, and the VFX clock pinned.
-   * @param {'bloodhorn'|'magitek_armour'|'titan'} key
    */
-  _bossScenario(key) {
+  _bossScenario(key: 'bloodhorn' | 'magitek_armour' | 'titan') {
     const { vfx, enemies, combat, player } = this;
     const T = this.pinTime;
     this.game.state = 'combat';

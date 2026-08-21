@@ -10,11 +10,10 @@ export class PartBuilder {
   constructor() { this.byMat = new Map(); }
 
   /**
-   * @param {THREE.Material} mat
-   * @param {THREE.BufferGeometry} geo consumed (cloned internally when transformed)
-   * @param {THREE.Matrix4|null} matrix optional transform
+   * @param geo consumed (cloned internally when transformed)
+   * @param matrix optional transform
    */
-  add(mat, geo, matrix) {
+  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix: THREE.Matrix4 | null) {
     const g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
     // normalise attributes so merges never fail on a stray extra buffer
     const keep = ['position', 'normal', 'uv'];
@@ -43,12 +42,7 @@ export class PartBuilder {
     return this.add(mat, geo, m);
   }
 
-  /**
-   * @param {THREE.Object3D} parent
-   * @param {{cast?:boolean, receive?:boolean, name?:string}} opts
-   * @returns {THREE.Object3D}
-   */
-  build(parent, { cast = true, receive = true, name = 'part' } = {}) {
+  build(parent: THREE.Object3D, { cast = true, receive = true, name = 'part' }: {cast?:boolean, receive?:boolean, name?:string} = {}): THREE.Object3D {
     for (const [mat, list] of this.byMat) {
       const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
       if (!merged) continue;
@@ -66,10 +60,9 @@ export class PartBuilder {
 
 /**
  * Loft a closed tube through a list of cross-sections.
- * @param {{x:number, pts:Array<[number,number]>}[]} sections rings of [y,z]
- * @param {{caps?:boolean, vScale?:number}} opts
+ * @param sections rings of [y,z]
  */
-export function loft(sections, { caps = true } = {}) {
+export function loft(sections: {x:number, pts:Array<[number,number]>}[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const pos = new Float32Array(S * N * 3);

@@ -65,9 +65,9 @@ export class CrystalShards {
   }
 
   /**
-   * @param {object} s {pos, vel, axis, color, t0, life, size, spin, drag, gravity, stretch, phase}
+   * @param s {pos, vel, axis, color, t0, life, size, spin, drag, gravity, stretch, phase}
    */
-  emit(s) {
+  emit(s: any) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
     const w = (attr, v, n) => {

@@ -23,8 +23,7 @@ const CLASS_OK = {
  * gear, buffs and Ascension folded in, and the technique list from `PartyState`.
  */
 export class GearScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Gear';
@@ -37,8 +36,7 @@ export class GearScreen {
     this._msgAge = 9;
   }
 
-  /** @param {HTMLElement} root */
-  build(root, game) {
+  build(root: HTMLElement, game) {
     this.game = game;
     this.grid = el('div.gear-grid');
     root.appendChild(this.grid);
@@ -218,8 +216,8 @@ export class GearScreen {
     this._msgAge = 9;
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     const party = readParty(game);
     if (!this.cards.length) this._build(game, party);
     const r = rpg(game);

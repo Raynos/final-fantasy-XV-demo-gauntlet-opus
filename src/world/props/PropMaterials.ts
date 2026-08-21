@@ -14,15 +14,15 @@ function memo(k, f) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k);
 /**
  * Cracked, weather-bitten stone.
  *
- * @param {number} tint base albedo
- * @param {number} rough roughness
- * @param {boolean} [instanceTint] whether the mesh supplies a per-vertex or
+ * @param tint base albedo
+ * @param rough roughness
+ * @param [instanceTint] whether the mesh supplies a per-vertex or
  *   per-instance colour. `Rocks` bakes AO-ish shading into vertex colours and
  *   needs this on; anything merged through `PartBuilder` must have it off —
  *   the builder strips every attribute but position/normal/uv, and a material
  *   asking for a colour attribute that is not there renders solid black.
  */
-export function rockMaterial(tint = 0x8a7461, rough = 0.94, instanceTint = true) {
+export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, instanceTint: boolean = true) {
   return memo(`rock${tint}${rough}${instanceTint}`, () => {
     const n = new Noise(6161);
     const h = (u, v) => {

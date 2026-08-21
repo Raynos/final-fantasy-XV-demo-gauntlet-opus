@@ -85,10 +85,10 @@ export class PartyAI {
    * Ignis gets two kukris, because one kukri and one empty fist is not the
    * silhouette.
    *
-   * @param {object} m party member
-   * @param {string} kind weapon class
+   * @param m party member
+   * @param kind weapon class
    */
-  _equip(m, kind) {
+  _equip(m: any, kind: string) {
     if (!m.character || !m.character.attach) return;
     const carry = CARRY[m.key] || CARRY.gladio;
     m.weaponList = [];
@@ -107,9 +107,9 @@ export class PartyAI {
 
   /**
    * Move a companion's weapons between their sheathed station and their hands.
-   * @param {object} m @param {boolean} drawn
+   * @param m @param drawn
    */
-  _reparent(m, drawn) {
+  _reparent(m: any, drawn: boolean) {
     const carry = CARRY[m.key] || CARRY.gladio;
     const set = drawn ? carry.hold : carry.stow;
     const attach = m.character.attach;
@@ -131,9 +131,9 @@ export class PartyAI {
   /**
    * Draw or sheathe, using the same blue-crystal dissolve Noctis' armiger
    * uses so the station swap is a materialisation rather than a pop.
-   * @param {object} m @param {boolean} want @param {number} dt
+   * @param m @param want @param dt
    */
-  _carry(m, want, dt) {
+  _carry(m: any, want: boolean, dt: number) {
     if (!m.weaponList) return;
     if (m.drawWant !== want) { m.drawWant = want; m.drawT = 0; }
     if (m.drawT >= 1) return;
@@ -151,9 +151,9 @@ export class PartyAI {
    * Run `fn` in `delay` seconds of game time. Techniques are choreographed —
    * a wind-up, a hit, a follow-through — and this is how they keep time
    * without any of them owning a clock.
-   * @param {number} delay @param {Function} fn
+   * @param delay @param fn
    */
-  schedule(delay, fn) {
+  schedule(delay: number, fn: ((...args: any[]) => any)) {
     this._sched.push({ t: delay, fn });
   }
 
@@ -197,11 +197,11 @@ export class PartyAI {
 
   /**
    * Land one companion attack.
-   * @param {object} m party member
-   * @param {object} e enemy
-   * @param {object} [o] `{motion, poise, element, technique}`
+   * @param m party member
+   * @param e enemy
+   * @param [o] `{motion, poise, element, technique}`
    */
-  strike(m, e, o = {}) {
+  strike(m: any, e: any, o: any = {}) {
     if (!e || e.dead) return null;
     const memberId = m.key;
     const stats = this.rpg ? this.rpg.party.stats[memberId] : null;
@@ -266,9 +266,9 @@ export class PartyAI {
 
   /**
    * A joint attack: the ally warps in beside Noctis and they hit together.
-   * @param {object} m @param {object} e
+   * @param m @param e
    */
-  linkStrike(m, e) {
+  linkStrike(m: any, e: any) {
     if (!e || e.dead) return false;
     this.linkCooldown = 7;
     const c = e.centre();
@@ -296,10 +296,10 @@ export class PartyAI {
 
   /**
    * Fire a companion technique through the RPG tech bar.
-   * @param {string} memberKey 'gladio' | 'ignis' | 'prompto'
-   * @param {string} [techId] defaults to the best affordable one
+   * @param memberKey 'gladio' | 'ignis' | 'prompto'
+   * @param [techId] defaults to the best affordable one
    */
-  useTechnique(memberKey, techId = null) {
+  useTechnique(memberKey: string, techId: string = null) {
     const m = this.party?.members.find((x) => x.key === memberKey);
     if (!m || m.downed) return { ok: false, reason: 'unavailable' };
     const rpg = this.rpg;
@@ -496,12 +496,11 @@ export class PartyAI {
    * Write the formation slot so `Party.update` walks this companion to a
    * world point. The slot is expressed in Noctis' frame, so invert his
    * rotation to get there.
-   * @param {object} m
-   * @param {THREE.Vector3} at world point to stand near
-   * @param {number} standoff metres to keep from it
-   * @param {number} [angle] radians offset around the target
+   * @param at world point to stand near
+   * @param standoff metres to keep from it
+   * @param [angle] radians offset around the target
    */
-  _station(m, at, standoff, angle = 0) {
+  _station(m: any, at: THREE.Vector3, standoff: number, angle: number = 0) {
     const p = this.player;
     if (!p) return;
     let gx = at.x, gz = at.z;

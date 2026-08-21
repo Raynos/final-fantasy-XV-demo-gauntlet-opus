@@ -85,9 +85,9 @@ function buildLandmarks() {
 /**
  * Analytic micro-relief, 6-25 m wavelength, +/-2 m. Must stay byte-for-byte
  * equivalent to `tf_micro` in `TerrainMaterial.js`.
- * @returns {number} metres to add to the grid height
+ * @returns metres to add to the grid height
  */
-export function microDetail(x, z) {
+export function microDetail(x, z): number {
   // Two octaves, not three. `heightAt()` is called tens of thousands of times a
   // frame by the grass streamer alone, so this is a hot path: the third octave
   // that used to modulate the amplitude cost 33% of the whole function and was
@@ -615,10 +615,10 @@ export class Field {
    * levelling the Nebulawood and drained half of Alstor Slough when this was
    * first written as a blanket rule.
    *
-   * @param {number} r core radius in metres
-   * @param {function(): void} fn the stamp
+   * @param r core radius in metres
+   * @param fn the stamp
    */
-  _mass(cx, cz, r, fn) {
+  _mass(cx, cz, r: number, fn: (() => void)) {
     const box = this._box(cx, cz, r);
     const w = box.i1 - box.i0 + 1, hgt = box.j1 - box.j0 + 1;
     const before = new Float32Array(w * hgt);
@@ -862,10 +862,10 @@ export class Field {
   }
 
   /**
-   * @param {number} ph rotation, radians — drawn by the caller, see `_outcrops`
-   * @param {number} ecc 0.6-1.0 cross-axis squash
+   * @param ph rotation, radians — drawn by the caller, see `_outcrops`
+   * @param ecc 0.6-1.0 cross-axis squash
    */
-  _outcrop(cx, cz, radius, height, ph, ecc) {
+  _outcrop(cx, cz, radius, height, ph: number, ecc: number) {
     const h = this.h, n = this.n3;
     const R = radius * 2.2;
     const box = this._box(cx, cz, R);
@@ -894,11 +894,9 @@ export class Field {
    * cliff off a hard rim, optional benches step down from it, and a concave
    * scree apron lays the foot back into the surrounding ground.
    *
-   * @param {number} wallFrac 0..1 — how much of the radius the cliff occupies
-   * @param {{benches?:number, tilt?:number, dipDir?:number, apron?:number,
-   *          cliff?:number}} [opt]
+   * @param wallFrac 0..1 — how much of the radius the cliff occupies
    */
-  _mesa(cx, cz, radius, height, wallFrac, opt = {}) {
+  _mesa(cx, cz, radius, height, wallFrac: number, opt: any = {}) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const benches = opt.benches === undefined ? 1 : opt.benches;
     const tiltAmt = opt.tilt === undefined ? 0.045 : opt.tilt;
@@ -1485,9 +1483,9 @@ function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
  * The exact JS twin of `tf_snoise` in TerrainMaterial.js (Ashima simplex).
  * `Terrain.sampleMaterial()` and `microDetail()` have to agree with the pixels
  * the shader draws, so the CPU cannot use a differently-seeded noise here.
- * @returns {number} roughly -1..1
+ * @returns roughly -1..1
  */
-export function gnoise2(xin, yin) {
+export function gnoise2(xin, yin): number {
   const C0 = 0.211324865405187, C1 = 0.366025403784439;
   const C2 = -0.577350269189626, C3 = 0.024390243902439;
   const s = (xin + yin) * C1;

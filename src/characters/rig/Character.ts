@@ -47,9 +47,9 @@ function shared() {
 
 export class Character {
   /**
-   * @param {Object} def character definition from Cast.js
+   * @param def character definition from Cast.js
    */
-  constructor(def) {
+  constructor(def: any) {
     this.name = def.name;
     this.def = def;
     this.look = def.look;
@@ -157,11 +157,8 @@ export class Character {
    * shouldered greatsword, a low ready — composes its own rotation on top;
    * that is what `PartyAI`'s hold transforms do.
    *
-   * @param {Object} rig
-   * @param {'L'|'R'} side
-   * @returns {THREE.Object3D}
    */
-  _palmSocket(rig, side) {
+  _palmSocket(rig: any, side: 'L' | 'R'): THREE.Object3D {
     const s = rig.dims.s;
     const wr = rig.P[`hand${side}`], kn = rig.P[`fingers${side}`];
     // the hand bone's bind rotation is identity, so its local frame is
@@ -192,10 +189,9 @@ export class Character {
    * curls the fingers toward `-front`, which is −Z at bind), so this is a
    * single additive layer written after the animator has posed the skeleton.
    *
-   * @param {'L'|'R'} side
-   * @param {number} amount 0 open .. 1 closed around a grip
+   * @param amount 0 open .. 1 closed around a grip
    */
-  setGrip(side, amount) {
+  setGrip(side: 'L' | 'R', amount: number) {
     if (this.grip) this.grip[side] = THREE.MathUtils.clamp(amount, 0, 1);
   }
 
@@ -259,8 +255,8 @@ export class Character {
     return merged;
   }
 
-  /** @param {string} name see ACTIONS */
-  play(name, opts) { this.anim.play(name, opts); }
+  /** @param name see ACTIONS */
+  play(name: string, opts) { this.anim.play(name, opts); }
 
   /** Hit reaction: recoil pose plus an impulse into the cloth springs. */
   hit(dirWorld, power = 1) {
@@ -271,8 +267,8 @@ export class Character {
 
   setLookTarget(v) { this.anim.setLookTarget(v); }
 
-  /** @param {number} dt @param {Object} state */
-  update(dt, state) {
+  /** @param dt @param state */
+  update(dt: number, state: any) {
     this.anim.update(dt, state);
     if (this.grip && (this.grip.L > 0.001 || this.grip.R > 0.001)) this._applyGrip();
   }

@@ -70,11 +70,7 @@ function lattice(B, mat, world, { height, baseW, topW, bays = 6, leg = 0.11 }) {
 }
 
 export class Outposts {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   */
-  constructor(eco, scene) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
     this.root = new THREE.Group();
@@ -590,12 +586,10 @@ export class Outposts {
   // ----------------------------------------------------------------- update
 
   /**
-   * @param {number} dt
-   * @param {number} t seconds
-   * @param {number} night 0 by day, 1 after dark
-   * @param {THREE.Vector3} [camPos]
+   * @param t seconds
+   * @param night 0 by day, 1 after dark
    */
-  update(dt, t, night, camPos) {
+  update(dt: number, t: number, night: number, camPos?: THREE.Vector3) {
     for (const s of this.spinners) s.obj.rotation.z += dt * s.rate;
     if (camPos) {
       // structures are only worth a shadow cascade while you can walk up to

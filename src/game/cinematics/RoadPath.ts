@@ -18,13 +18,10 @@ import * as THREE from 'three';
  */
 export class RoadPath {
   /**
-   * @param {Array<{x:number,z:number,s:number,tx:number,tz:number}>} samples
    * @param {object} opts
-   * @param {THREE.Vector3} opts.origin anchor; `forward = 0` here
-   * @param {THREE.Vector3} [opts.toward] a point the path should run toward
-   * @param {object} [opts.terrain]
+   * 
    */
-  constructor(samples, { origin, toward, terrain } = {}) {
+  constructor(samples: Array<{x:number,z:number,s:number,tx:number,tz:number}>, { origin, toward, terrain }: { origin: THREE.Vector3, toward?: THREE.Vector3, terrain?: any } = {}) {
     // arc-length order, de-duplicated
     this.pts = samples.slice().sort((a, b) => a.s - b.s);
     this.terrain = terrain || null;
@@ -102,9 +99,9 @@ export class RoadPath {
   /**
    * A world point: `f` metres along the road, `l` metres to the screen-left of
    * it (lane offset included), `u` metres above the origin plane.
-   * @returns {number[]} `[x, y, z]`
+   * @returns `[x, y, z]`
    */
-  at(f, l = 0, u = 0) {
+  at(f, l = 0, u = 0): number[] {
     const c = this._atS(this.s0 + f * this.sign, this._v);
     const t = this.tangent(f, this._t);
     const lx = t.z, lz = -t.x;

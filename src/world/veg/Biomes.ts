@@ -61,8 +61,7 @@ const BASE = {
 
 const mk = (o) => ({ ...BASE, ...o });
 
-/** @type {Object<string, object>} */
-export const VEG_BIOME = {
+export const VEG_BIOME: Object<string, any> = {
   // ----------------------------------------------------------------- LEIDE
   // What is already here and works: 0.15-0.35 m olive/straw tufts over open
   // dirt, dry thorn scrub, the odd dead tree. Do not "improve" this.
@@ -238,10 +237,8 @@ export const VEG_BIOME = {
 /**
  * Flatten a `{key: weight}` table into a cumulative array so a per-instance
  * pick is one walk over a small array instead of an object enumeration.
- * @param {Object<string,number>} table
- * @returns {Array<[string, number]>}
  */
-function cumulative(table) {
+function cumulative(table: Object<string, number>): Array<[string, number]> {
   let total = 0;
   for (const k in table) total += table[k];
   const out = [];
@@ -264,11 +261,8 @@ for (const id in VEG_BIOME) {
 
 /**
  * Pick a key from a cumulative table with a 0..1 random.
- * @param {Array<[string, number]>} table
- * @param {number} r
- * @returns {string|null}
  */
-export function pickFrom(table, r) {
+export function pickFrom(table: Array<[string, number]>, r: number): string | null {
   for (let i = 0; i < table.length; i++) if (r < table[i][1]) return table[i][0];
   return table.length ? table[table.length - 1][0] : null;
 }
@@ -288,10 +282,10 @@ const _moist = new Map();
  * neighbouring recipes interleave across a border over a couple of hundred
  * metres rather than switching on a line.
  *
- * @param {number} x @param {number} z
- * @returns {object} a {@link VEG_BIOME} record (never null)
+ * @param x @param z
+ * @returns a {@link VEG_BIOME} record (never null)
  */
-export function vegAt(x, z) {
+export function vegAt(x: number, z: number): any {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let b = _cache.get(k);
   if (b !== undefined) return b;
@@ -311,10 +305,10 @@ export function vegAt(x, z) {
  * far as it is concerned the Nebulawood is as dry as Leide, which is precisely
  * why the whole world grew one biome.
  *
- * @param {number} x @param {number} z
- * @returns {number} 0..1
+ * @param x @param z
+ * @returns 0..1
  */
-export function zoneMoist(x, z) {
+export function zoneMoist(x: number, z: number): number {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let m = _moist.get(k);
   if (m !== undefined) return m;

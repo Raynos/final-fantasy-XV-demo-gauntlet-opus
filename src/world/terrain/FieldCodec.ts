@@ -55,8 +55,7 @@ export function encodeF32Planes(src) {
   return out;
 }
 
-/** @returns {Float32Array} */
-export function decodeF32Planes(bytes, n) {
+export function decodeF32Planes(bytes, n): Float32Array {
   const out = new Float32Array(n);
   const u8 = new Uint8Array(out.buffer);
   for (let c = 0; c < 4; c++) {
@@ -84,8 +83,7 @@ export function encodeQ16D(src, w, h) {
   return { bytes: new Uint8Array(out.buffer), min: lo, scale };
 }
 
-/** @returns {Float32Array} */
-export function decodeQ16D(bytes, w, h, min, scale) {
+export function decodeQ16D(bytes, w, h, min, scale): Float32Array {
   // A section can land on an odd byte offset inside the container, which a
   // Uint16Array view cannot address; copy only in that case.
   const src = bytes.byteOffset % 2 === 0 ? bytes : new Uint8Array(bytes);
@@ -118,8 +116,8 @@ export function encodePlanes8(src, w, h, ch) {
   return out;
 }
 
-/** @returns {Uint8Array} interleaved RGBA8 */
-export function decodePlanes8(bytes, w, h, ch) {
+/** @returns interleaved RGBA8 */
+export function decodePlanes8(bytes, w, h, ch): Uint8Array {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -131,11 +129,9 @@ export function decodePlanes8(bytes, w, h, ch) {
 
 /**
  * Pack sections into the container.
- * @param {object} meta arbitrary JSON metadata (seed, grid sizes, hash)
- * @param {Array<{name:string, kind:string, bytes:Uint8Array, [k:string]:any}>} sections
- * @returns {Uint8Array}
+ * @param meta arbitrary JSON metadata (seed, grid sizes, hash)
  */
-export function packContainer(meta, sections) {
+export function packContainer(meta: any, sections: Array<{name:string, kind:string, bytes:Uint8Array, [k:string]:any}>): Uint8Array {
   let offset = 0;
   const index = sections.map((s) => {
     const { bytes, ...rest } = s;
@@ -153,11 +149,7 @@ export function packContainer(meta, sections) {
   return out;
 }
 
-/**
- * @param {Uint8Array} buf
- * @returns {{meta:object, section:(name:string)=>Uint8Array|null}}
- */
-export function unpackContainer(buf) {
+export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:string)=>Uint8Array|null} {
   if (dec.decode(buf.subarray(0, 8)) !== MAGIC) throw new Error('bad bake magic');
   const hlen = new DataView(buf.buffer, buf.byteOffset).getUint32(8, true);
   const meta = JSON.parse(dec.decode(buf.subarray(12, 12 + hlen)));

@@ -15,8 +15,7 @@ import { HUNT_TARGETS, SET_PIECES } from './SpawnTables.ts';
  * and the tidy-up.
  */
 export class HuntRuntime {
-  /** @param {import('./EncounterDirector.ts').EncounterDirector} dir */
-  constructor(dir) {
+  constructor(dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.dir = dir;
     this.rpg = dir.rpg;
     this.active = new Map();      // quest id -> {spawned:boolean, waypoint}
@@ -43,9 +42,9 @@ export class HuntRuntime {
 
   /**
    * Put a hunt's mark in the world.
-   * @param {string} id quest id
+   * @param id quest id
    */
-  arm(id) {
+  arm(id: string) {
     if (this.active.has(id)) return null;
     const t = HUNT_TARGETS[id];
     if (!t) return null;
@@ -67,9 +66,8 @@ export class HuntRuntime {
   /**
    * The board hears about it. The payout itself has already happened inside
    * `RpgSystem`'s `quest-updated` handler; this is the report back.
-   * @param {string} id
    */
-  finish(id, rewards) {
+  finish(id: string, rewards) {
     const rec = this.active.get(id);
     this.active.delete(id);
     this.dir.hunts?.delete(id);

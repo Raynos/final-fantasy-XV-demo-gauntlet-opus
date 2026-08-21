@@ -27,11 +27,7 @@ const GRAVITY = 19.5;
  *    in range the character falls under gravity until something catches them.
  */
 export class CharacterController {
-  /**
-   * @param {import('./CollisionWorld.ts').CollisionWorld} world
-   * @param {{radius?:number, height?:number, stepUp?:number, stepDown?:number}} [opts]
-   */
-  constructor(world, opts = {}) {
+  constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number} = {}) {
     this.world = world;
     this.radius = opts.radius != null ? opts.radius : 0.36;
     this.height = opts.height != null ? opts.height : 1.78;
@@ -65,13 +61,12 @@ export class CharacterController {
 
   /**
    * Advance one character.
-   * @param {THREE.Vector3} pos feet position, mutated in place
-   * @param {number} vx desired world velocity X
-   * @param {number} vz desired world velocity Z
-   * @param {number} dt
-   * @returns {THREE.Vector3} pos
+   * @param pos feet position, mutated in place
+   * @param vx desired world velocity X
+   * @param vz desired world velocity Z
+   * @returns pos
    */
-  move(pos, vx, vz, dt) {
+  move(pos: THREE.Vector3, vx: number, vz: number, dt: number): THREE.Vector3 {
     const world = this.world;
     if (dt <= 0) return pos;
     this._from.copy(pos);
@@ -172,9 +167,8 @@ export class CharacterController {
    * character leaning on the Crow's Nest ends up 0.1 m inside its stub wall
    * with the glazing above holding them there. With it, the allowance only
    * ever builds where there is somewhere to end up.
-   * @returns {boolean}
    */
-  _ledgeAhead(pos, vx, vz, speed) {
+  _ledgeAhead(pos, vx, vz, speed): boolean {
     const w = this.world;
     if (!w.ready || !w.enabled || speed < 1e-3) return false;
     const ahead = this.radius + 0.30;
@@ -190,13 +184,13 @@ export class CharacterController {
    * Companions use this: they steer to a formation slot in the player's frame,
    * and without it they walk that slot straight through the Crow's Nest.
    *
-   * @param {THREE.Vector3} pos feet position
-   * @param {number} dx unit direction X
-   * @param {number} dz unit direction Z
-   * @param {number} look metres to probe ahead
-   * @returns {number[]} [dx, dz] — the original direction when nothing is in the way
+   * @param pos feet position
+   * @param dx unit direction X
+   * @param dz unit direction Z
+   * @param look metres to probe ahead
+   * @returns [dx, dz] — the original direction when nothing is in the way
    */
-  avoid(pos, dx, dz, look = 1.8) {
+  avoid(pos: THREE.Vector3, dx: number, dz: number, look: number = 1.8): number[] {
     const w = this.world;
     if (!w.ready || !w.enabled) return [dx, dz];
     if (!w.blocked(pos.x + dx * look, pos.z + dz * look, pos.y, this.radius, this.height, this.stepUp)) {

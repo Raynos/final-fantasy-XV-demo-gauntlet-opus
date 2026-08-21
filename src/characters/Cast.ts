@@ -311,8 +311,8 @@ export const CAST = {
   },
 };
 
-/** Instantiate one of the cast. @param {string} key @returns {Character} */
-export function makeCharacter(key) {
+/** Instantiate one of the cast. @param key @returns */
+export function makeCharacter(key: string): Character {
   const def = CAST[key];
   if (!def) throw new Error(`unknown character ${key}`);
   return new Character(def).build();

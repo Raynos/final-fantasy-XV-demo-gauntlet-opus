@@ -124,11 +124,11 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  * featureless deck. Stretching the histogram is what gives coverage a usable
  * range and gives the cloud field its silhouette back.
  *
- * @param {Float32Array} v values, modified in place
- * @param {number} lo low percentile (0..1)
- * @param {number} hi high percentile (0..1)
+ * @param v values, modified in place
+ * @param lo low percentile (0..1)
+ * @param hi high percentile (0..1)
  */
-function stretch(v, lo, hi) {
+function stretch(v: Float32Array, lo: number, hi: number) {
   const s = Float32Array.from(v).sort();
   const a = s[Math.floor(lo * (s.length - 1))];
   const b = s[Math.floor(hi * (s.length - 1))];
@@ -139,10 +139,8 @@ function stretch(v, lo, hi) {
 
 /**
  * Build the cloud noise set.
- * @param {{baseSize?:number, detailSize?:number, weatherSize?:number, seed?:number}} opts
- * @returns {{base:THREE.Data3DTexture, detail:THREE.Data3DTexture, weather:THREE.DataTexture}}
  */
-export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize = 256, seed = 1337 } = {}) {
+export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize = 256, seed = 1337 }: {baseSize?:number, detailSize?:number, weatherSize?:number, seed?:number} = {}): {base:THREE.Data3DTexture, detail:THREE.Data3DTexture, weather:THREE.DataTexture} {
   // ---- base volume -------------------------------------------------------
   const g4 = makePointGrid(4, seed + 1);
   const g8 = makePointGrid(8, seed + 2);

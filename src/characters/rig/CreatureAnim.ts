@@ -70,10 +70,10 @@ const LEG_ORDER = ['fL', 'fR', 'bL', 'bR'];
 
 /**
  * Where one foot is in its cycle.
- * @returns {{stance:boolean, f:number, reach:number, lift:number, load:number}}
+ * @returns
  *  `reach` is +1 fully forward, -1 fully back; `load` is 0..1 weight carried.
  */
-export function legPhase(u, gait) {
+export function legPhase(u, gait): {stance:boolean, f:number, reach:number, lift:number, load:number} {
   let t = u % 1; if (t < 0) t += 1;
   const duty = gait.duty;
   if (t < duty) {
@@ -94,10 +94,9 @@ export function legPhase(u, gait) {
  */
 export class LegChain {
   /**
-   * @param {Map<string,THREE.Bone>} bones
-   * @param {string[]} names hip → knee → (hock) → foot
+   * @param names hip → knee → (hock) → foot
    */
-  constructor(bones, names) {
+  constructor(bones: Map<string, THREE.Bone>, names: string[]) {
     this.names = names;
     const b = names.map((n) => bones.get(n));
     this.ok = b.every(Boolean);
@@ -127,8 +126,8 @@ export class LegChain {
  * additive layer that survives whatever the species pose function did.
  */
 export class CreatureAnim {
-  /** @param {Object} enemy owning Enemy */
-  constructor(enemy) {
+  /** @param enemy owning Enemy */
+  constructor(enemy: any) {
     this.enemy = enemy;
     this.rig = enemy.rig;
     this.legs = new Map();
@@ -165,8 +164,8 @@ export class CreatureAnim {
     this.pushLocal = { x: 0, z: 0 };
   }
 
-  /** Register a leg. @param {string} id 'fL'|'fR'|'bL'|'bR' @param {string[]} chain */
-  leg(id, chain) {
+  /** Register a leg. @param id 'fL'|'fR'|'bL'|'bR' @param chain */
+  leg(id: string, chain: string[]) {
     const c = new LegChain(this.rig.byName, chain);
     if (c.ok) this.legs.set(id, c);
     return this;
@@ -179,9 +178,9 @@ export class CreatureAnim {
    * Advance the stride. `speed` is metres/second, `stride` the distance one
    * full cycle covers — deriving phase from distance travelled is what keeps a
    * gait locked to the ground at every speed instead of only at one.
-   * @param {number} dt @param {number} speed @param {number} strideLen
+   * @param dt @param speed @param strideLen
    */
-  stride(dt, speed, strideLen) {
+  stride(dt: number, speed: number, strideLen: number) {
     this.speed = speed;
     this.gaitPhase = (this.gaitPhase + (speed * dt) / Math.max(0.15, strideLen)) % 1;
     return this.gaitPhase;
@@ -200,11 +199,9 @@ export class CreatureAnim {
    * Solve one leg so its foot sits at (side, lift, reach) from its bind
    * position, and write the rotations into `out(name, x, y, z)`.
    *
-   * @param {string} id
-   * @param {number} reach metres fore(+)/aft(-)
-   * @param {number} lift metres above the bind foot height
-   * @param {Function} out
-   * @param {Object} [o] {splay, compress, footPitch, kneeSign, twist,
+   * @param reach metres fore(+)/aft(-)
+   * @param lift metres above the bind foot height
+   * @param [o] {splay, compress, footPitch, kneeSign, twist,
    *                      rootPitch, rootDY, rootDZ}
    *
    * `rootPitch`/`rootDY`/`rootDZ` describe how the *trunk above this leg* has
@@ -214,7 +211,7 @@ export class CreatureAnim {
    * through the floor. Cancelling the parent transform out of the target is
    * what makes a planted foot actually stay planted.
    */
-  solveLeg(id, reach, lift, out, o = {}) {
+  solveLeg(id: string, reach: number, lift: number, out: ((...args: any[]) => any), o: any = {}) {
     const c = this.legs.get(id);
     if (!c) return;
     const kneeSign = o.kneeSign ?? 1;      // +1 knee forward, -1 knee back (hock)
@@ -263,11 +260,11 @@ export class CreatureAnim {
 
   /**
    * Run a full quadruped gait, writing every leg.
-   * @param {Object} gait one of GAITS
-   * @param {Function} out pose writer
-   * @param {Object} o {stride, lift, splay, footPitch, kneeSign:{f,b}}
+   * @param gait one of GAITS
+   * @param out pose writer
+   * @param o {stride, lift, splay, footPitch, kneeSign:{f,b}}
    */
-  quadGait(gait, out, o = {}) {
+  quadGait(gait: any, out: ((...args: any[]) => any), o: any = {}) {
     const strideM = (o.stride || 0.3) * gait.stride;
     const liftM = (o.lift || 0.12) * gait.lift;
     const phases = [];
@@ -315,11 +312,11 @@ export class CreatureAnim {
    * Absorb a blow. Direction is world-space; it is resolved into the
    * creature's own frame so a hit from behind pitches it forward and a hit
    * from the side rolls it.
-   * @param {THREE.Vector3} dir world direction of the blow
-   * @param {number} power 0..1+ severity
-   * @param {number} heading creature heading
+   * @param dir world direction of the blow
+   * @param power 0..1+ severity
+   * @param heading creature heading
    */
-  impact(dir, power, heading) {
+  impact(dir: THREE.Vector3, power: number, heading: number) {
     const cs = Math.cos(-heading), sn = Math.sin(-heading);
     const lx = dir.x * cs - dir.z * sn;
     const lz = dir.x * sn + dir.z * cs;
@@ -404,11 +401,11 @@ export function settle(x, freq = 3.2, damp = 5.5) {
  * player reads. The strike is an acceleration curve, and the recovery is a
  * damped return that overshoots slightly back through neutral.
  *
- * @param {string} state 'telegraph'|'attack'|'recover'
- * @param {number} t seconds inside the state
- * @param {Object} timing {telegraph, strike, attack, recover}
+ * @param state 'telegraph'|'attack'|'recover'
+ * @param t seconds inside the state
+ * @param timing {telegraph, strike, attack, recover}
  */
-export function attackEnvelope(state, t, timing) {
+export function attackEnvelope(state: string, t: number, timing: any) {
   const tel = Math.max(0.05, timing.telegraph);
   const atk = Math.max(0.05, timing.attack);
   const strike = Math.min(atk * 0.9, Math.max(0.02, timing.strike));

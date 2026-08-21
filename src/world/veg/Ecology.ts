@@ -43,10 +43,10 @@ export function hash3(x, y, s) {
 
 export class Ecology {
   /**
-   * @param {object} game the Game instance (needs .get('Terrain'))
-   * @param {number} seed master seed
+   * @param game the Game instance (needs .get('Terrain'))
+   * @param seed master seed
    */
-  constructor(game, seed = 1337) {
+  constructor(game: any, seed: number = 1337) {
     this.game = game;
     this.terrain = game.get('Terrain');
     this.seed = seed;
@@ -156,8 +156,8 @@ export class Ecology {
     return THREE.MathUtils.clamp(m, 0, 1);
   }
 
-  /** The vegetation recipe for this point. @returns {object} */
-  veg(x, z) { return vegAt(x, z); }
+  /** The vegetation recipe for this point. @returns */
+  veg(x, z): any { return vegAt(x, z); }
 
   /**
    * Metres of water over this point, negative on dry land. Reeds want the
@@ -250,10 +250,8 @@ export class Ecology {
    * east-west near the spawn, so stepping in Z alone would drop one post every
    * six metres in one place and one every sixty in another.
    *
-   * @param {{step?:number, radius?:number, from?:number, to?:number}} opts
-   * @returns {Array<{x:number,z:number,y:number,roadY:number,tx:number,tz:number,s:number}>}
    */
-  roadSamples({ step = 8, radius = 950, from = -1e9, to = 1e9 } = {}) {
+  roadSamples({ step = 8, radius = 950, from = -1e9, to = 1e9 }: {step?:number, radius?:number, from?:number, to?:number} = {}): Array<{x:number,z:number,y:number,roadY:number,tx:number,tz:number,s:number}> {
     const out = [];
     const road = this.terrain && this.terrain.road;
     if (road && road.points && road.points.length > 1) {
@@ -515,9 +513,8 @@ export class Ecology {
   /**
    * Approximate ground albedo so vegetation roots can be tinted to match and
    * don't look pasted on. Prefers a real Terrain sampler if one exists.
-   * @returns {THREE.Color}
    */
-  groundColor(x, z, out = new THREE.Color()) {
+  groundColor(x, z, out = new THREE.Color()): THREE.Color {
     const t = this.terrain;
     if (t && typeof t.groundColorAt === 'function') return t.groundColorAt(x, z, out);
     if (t && typeof t.colorAt === 'function') return t.colorAt(x, z, out);

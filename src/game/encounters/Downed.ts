@@ -88,10 +88,10 @@ export class Downed {
 
   /**
    * Get Noctis back on his feet.
-   * @param {string} by member key, `'phoenix'`, or `'debug'`
-   * @param {number} fraction of max HP restored
+   * @param by member key, `'phoenix'`, or `'debug'`
+   * @param fraction of max HP restored
    */
-  revive(by = 'ally', fraction = 0.3) {
+  revive(by: string = 'ally', fraction: number = 0.3) {
     if (this.state !== 'downed') return false;
     this.state = 'ok';
     this.player.downed = false;

@@ -25,12 +25,7 @@ import { ACTIONS } from '../characters/rig/Anim.ts';
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
 export class AssetBrowser {
-  /**
-   * @param {HTMLElement} root
-   * @param {object} game
-   * @param {import('./Stage.ts').Stage} stage
-   */
-  constructor(root, game, stage) {
+  constructor(root: HTMLElement, game: any, stage: import('./Stage.ts').Stage) {
     this.game = game;
     this.stage = stage;
     this.open = false;
@@ -73,19 +68,18 @@ export class AssetBrowser {
     else { this.stage.exit(this.game); this._release(); }
   }
 
-  /** @param {number} d step within the current family */
-  step(d) { this.select(this.itemAt + d); }
+  /** @param d step within the current family */
+  step(d: number) { this.select(this.itemAt + d); }
 
-  /** @param {number} d step between families */
-  stepFamily(d) {
+  /** @param d step between families */
+  stepFamily(d: number) {
     this.familyAt = (this.familyAt + d + this.families.length) % this.families.length;
     this.itemAt = 0;
     this.poseAt = 0;
     this.select(0);
   }
 
-  /** @param {number} i */
-  select(i) {
+  select(i: number) {
     const keys = this.list();
     if (!keys.length) return;
     this.itemAt = (i + keys.length) % keys.length;
@@ -140,8 +134,8 @@ export class AssetBrowser {
     } catch (err) { console.warn('[dev] pose failed', pose, err); }
   }
 
-  /** Mark the current asset reviewed. @param {'ok'|'flag'|null} v */
-  mark(v) {
+  /** Mark the current asset reviewed. @param v */
+  mark(v: 'ok' | 'flag' | null) {
     const key = `${this.family.id}/${this.list()[this.itemAt]}`;
     if (v) this.status[key] = v; else delete this.status[key];
     save('dev.review', this.status);

@@ -60,8 +60,7 @@ export class CollisionWorld {
     this._n = new THREE.Vector3();
   }
 
-  /** @param {object} game */
-  init(game) {
+  init(game: any) {
     if (this.game) return this;
     this.game = game;
     this.terrain = game.get('Terrain');
@@ -72,10 +71,9 @@ export class CollisionWorld {
 
   /**
    * Do up to `budgetMs` of harvesting. Safe (and free) to call every frame.
-   * @param {number} budgetMs
-   * @returns {boolean} true once the world is queryable
+   * @returns true once the world is queryable
    */
-  ensure(budgetMs = 4) {
+  ensure(budgetMs: number = 4): boolean {
     if (this.ready || !this.game) return this.ready;
     const t = performance.now();
     if (!this._job) { this._job = this._startJob(); this._t0 = t; }
@@ -202,9 +200,8 @@ export class CollisionWorld {
 
   /**
    * Bucket a triangle array into a two-level sparse uniform grid.
-   * @returns {{grid:Map, coarse:Map}}
    */
-  * _grid(tri) {
+  * _grid(tri): {grid:Map, coarse:Map} {
     const SPAN = 16;
     const fine = new Map();
     const big = new Map();
@@ -255,14 +252,11 @@ export class CollisionWorld {
    * the haven platform, the town's graded pad or a boulder works; falls back to
    * the terrain heightfield (which `Dungeons` redirects to the dungeon floor).
    *
-   * @param {number} x
-   * @param {number} z
-   * @param {number} fromY current feet height
-   * @param {number} stepUp how far up a surface may be and still support
-   * @param {number} stepDown how far down to look before it counts as a drop
-   * @returns {{y:number, nx:number, ny:number, nz:number, onProp:boolean}}
+   * @param fromY current feet height
+   * @param stepUp how far up a surface may be and still support
+   * @param stepDown how far down to look before it counts as a drop
    */
-  groundAt(x, z, fromY, stepUp = 0.45, stepDown = 2.0) {
+  groundAt(x: number, z: number, fromY: number, stepUp: number = 0.45, stepDown: number = 2.0): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
     const g = this._ground;
     const t = this.terrain;
     g.y = t ? t.heightAt(x, z) : 0;
@@ -297,9 +291,8 @@ export class CollisionWorld {
    * support. Sampling a single point drops a character off a platform the
    * moment their centre crosses the lip; sampling the disc keeps them on it
    * until their feet genuinely leave.
-   * @returns {{y:number, nx:number, ny:number, nz:number, onProp:boolean}}
    */
-  groundDisc(x, z, fromY, radius, stepUp = 0.45, stepDown = 2.0, out = {}) {
+  groundDisc(x, z, fromY, radius, stepUp = 0.45, stepDown = 2.0, out = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
     const g = this.groundAt(x, z, fromY, stepUp, stepDown);
     out.y = g.y; out.nx = g.nx; out.ny = g.ny; out.nz = g.nz; out.onProp = g.onProp;
     if (!this.ready || !this.enabled) return out;
@@ -321,13 +314,10 @@ export class CollisionWorld {
    * is the step-up rule, and it is what turns a stair riser from an obstacle
    * into a floor the ground query then finds.
    *
-   * @param {THREE.Vector3} pos feet position, mutated in place
-   * @param {number} radius
-   * @param {number} height
-   * @param {number} stepUp
-   * @returns {number} total horizontal correction applied, metres
+   * @param pos feet position, mutated in place
+   * @returns total horizontal correction applied, metres
    */
-  resolve(pos, radius, height, stepUp) {
+  resolve(pos: THREE.Vector3, radius: number, height: number, stepUp: number): number {
     if (!this.ready || !this.enabled) return this._resolveDynamic(pos, radius, height, stepUp);
     let moved = 0;
     for (let pass = 0; pass < 3; pass++) {
@@ -395,9 +385,8 @@ export class CollisionWorld {
   /**
    * Would a capsule at (x, z) be inside a wall? Used by the companions' steering
    * to pick a way round rather than a way through.
-   * @returns {boolean}
    */
-  blocked(x, z, feetY, radius, height, stepUp) {
+  blocked(x, z, feetY, radius, height, stepUp): boolean {
     if (!this.ready || !this.enabled) return false;
     this._v.set(x, feetY, z);
     const before = this._v.x + this._v.z;

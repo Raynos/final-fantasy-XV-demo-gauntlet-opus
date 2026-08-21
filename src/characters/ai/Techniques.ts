@@ -312,12 +312,11 @@ export const TECHS = Object.fromEntries(
 
 /**
  * Perform a technique.
- * @param {object} ai the PartyAI
- * @param {object} m the party member performing it
- * @param {Tech} tech
- * @param {object} target the enemy it is aimed at (may be null)
+ * @param ai the PartyAI
+ * @param m the party member performing it
+ * @param target the enemy it is aimed at (may be null)
  */
-export function runTechnique(ai, m, tech, target) {
+export function runTechnique(ai: any, m: any, tech: Tech, target: any) {
   if (!tech || !tech.run) return false;
   tech.run(ai, m, target);
   return true;

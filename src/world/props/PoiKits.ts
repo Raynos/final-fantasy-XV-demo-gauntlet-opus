@@ -78,12 +78,7 @@ function roughBox(seed, w, h, d, amp = 0.05) {
 }
 
 export class PoiKits {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   * @param {{quality?:number}} opts
-   */
-  constructor(eco, scene, { quality = 1 } = {}) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
@@ -838,10 +833,10 @@ export class PoiKits {
   }
 
   /**
-   * @param {number} dt @param {number} t @param {number} night
-   * @param {THREE.Vector3} camPos @param {object} game
+   * @param dt @param t @param night
+   * @param camPos @param game
    */
-  update(dt, t, night, camPos, game) {
+  update(dt: number, t: number, night: number, camPos: THREE.Vector3, game: any) {
     // build at most one POI per frame, nearest first
     let best = null, bestD = BUILD_R * BUILD_R;
     for (const s of this.sites) {

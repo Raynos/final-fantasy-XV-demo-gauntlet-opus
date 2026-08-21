@@ -173,11 +173,8 @@ function instancedQuad(count, seedSize, rand) {
 export class Rain {
   /**
    * @param {object} opts
-   * @param {THREE.Scene} opts.scene
-   * @param {object} opts.terrainUniforms shared terrain heightfield uniform block
-   * @param {number} [opts.quality] 0..1 density multiplier
-   */
-  constructor({ scene, terrainUniforms, quality = 1 }) {
+   * */
+  constructor({ scene, terrainUniforms, quality = 1 }: { scene: THREE.Scene, terrainUniforms: any, quality?: number }) {
     this.scene = scene;
     this.terrainUniforms = terrainUniforms;
     this.quality = quality;
@@ -260,13 +257,12 @@ export class Rain {
   }
 
   /**
-   * @param {number} time seconds
-   * @param {THREE.Vector3} camPos
-   * @param {number} intensity 0..1
-   * @param {THREE.Vector2} wind horizontal wind velocity, m/s
-   * @param {number} pixelAngle view radians per screen pixel
+   * @param time seconds
+   * @param intensity 0..1
+   * @param wind horizontal wind velocity, m/s
+   * @param pixelAngle view radians per screen pixel
    */
-  update(time, camPos, intensity, wind, pixelAngle) {
+  update(time: number, camPos: THREE.Vector3, intensity: number, wind: THREE.Vector2, pixelAngle: number) {
     this.intensity = intensity;
     const on = intensity > 0.012;
     this.mesh.visible = on;

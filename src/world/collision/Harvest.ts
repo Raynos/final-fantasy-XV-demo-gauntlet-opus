@@ -41,10 +41,8 @@ const SOURCES = [
 
 /**
  * Collect the meshes that should contribute triangles.
- * @param {object} game
- * @returns {{mesh:THREE.Mesh, source:string}[]}
  */
-export function collectMeshes(game) {
+export function collectMeshes(game: any): {mesh:THREE.Mesh, source:string}[] {
   const out = [];
   const exclude = new Set();
   const mark = (o) => { if (o && o.isObject3D) exclude.add(o); };
@@ -90,11 +88,9 @@ const _box = new THREE.Box3();
  * shrunk to the inscribed core so a walker hugs the silhouette rather than a
  * circumscribed cube, and lowered by the burial depth.
  *
- * @param {object} game
- * @param {number} minSize smallest boulder radius worth colliding with
- * @returns {{cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[]}
+ * @param minSize smallest boulder radius worth colliding with
  */
-export function collectRockProxies(game, minSize = 0.55) {
+export function collectRockProxies(game: any, minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
   const props = game.get('Props');
   const rocks = props && props.rocks;
   if (!rocks || !rocks.groups) return [];
@@ -132,9 +128,8 @@ export function collectRockProxies(game, minSize = 0.55) {
 /**
  * An oriented box proxy for a whole object, from its world transform and the
  * union of its geometry bounds. Used for the two Regalias.
- * @returns {{obj:THREE.Object3D, cx:number,cy:number,cz:number,hx:number,hy:number,hz:number}|null}
  */
-export function objectBox(obj, shrink = 0.92) {
+export function objectBox(obj, shrink = 0.92): {obj:THREE.Object3D, cx:number,cy:number,cz:number,hx:number,hy:number,hz:number} | null {
   if (!obj) return null;
   obj.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
@@ -165,10 +160,10 @@ export function objectBox(obj, shrink = 0.92) {
 /**
  * Emit a yaw-rotated box as ten triangles: four walls and a two-triangle lid.
  * The underside is never needed — nothing walks beneath a boulder.
- * @param {object} b proxy record
- * @param {number[]} sink flat destination array, 9 numbers per triangle
+ * @param b proxy record
+ * @param sink flat destination array, 9 numbers per triangle
  */
-export function boxTriangles(b, sink) {
+export function boxTriangles(b: any, sink: number[]) {
   const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
   const px = (x, z) => b.cx + x * c + z * s;
   const pz = (x, z) => b.cz - x * s + z * c;

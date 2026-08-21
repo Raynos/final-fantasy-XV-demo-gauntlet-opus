@@ -479,9 +479,9 @@ class VoretoothEnemy extends QuadrupedEnemy {
    * The mandibles are the tell. They flare open through the wind-up and stay
    * open right through contact, so the head silhouette *doubles in width*
    * before the bite lands — readable at range, unlike a jaw angle.
-   * @param {number} k 0..1 open
+   * @param k 0..1 open
    */
-  maw(S, k, twitch = 0) {
+  maw(S, k: number, twitch = 0) {
     S('mnL', 0.10 * k, 0.95 * k + twitch, -0.55 * k);
     S('mnR', 0.10 * k, -0.95 * k - twitch, 0.55 * k);
   }

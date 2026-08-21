@@ -35,27 +35,11 @@ const _c = new THREE.Color();
  * Sweep an elliptical section along a spine.
  *
  * @param {object} o
- * @param {Array<{p:number[], r:number, rz?:number}>} o.nodes spine control
- *   points with a section radius (`r` across the reference axis, `rz` along
- *   it; `rz` defaults to `r`).
- * @param {number} [o.steps] cross-sections generated along the spine
- * @param {number} [o.seg] segments around the section
- * @param {number[]} [o.ref] up reference; the section's local +Y. Must not be
- *   parallel to the spine anywhere along it.
- * @param {(th:number,u:number)=>number} [o.shape] radius multiplier. `th` is
- *   the angle round the section with `cos(th) = +1` on the reference side
- *   (the back of an animal), `u` runs 0..1 along the spine.
- * @param {(th:number,u:number,p:THREE.Vector3)=>THREE.Color} o.colorAt
- * @param {number} [o.region] rig region id baked into every vertex
- * @param {(p:THREE.Vector3,u:number)=>number} [o.blendAt] rig weight 0..1
- * @param {number} [o.capStart] dome depth at u=0, as a fraction of the radius
- * @param {number} [o.capEnd] dome depth at u=1
- * @returns {THREE.BufferGeometry}
  */
 export function tube({
   nodes, steps = 14, seg = 10, ref = [0, 1, 0], shape = null,
   colorAt, region = 0, blendAt = null, capStart = 0, capEnd = 0,
-}) {
+}: { nodes: Array<{p:number[], r:number, rz?:number}>, steps?: number, seg?: number, ref?: number[], shape?: (th:number,u:number)=>number, colorAt: (th:number,u:number,p:THREE.Vector3)=>THREE.Color, region?: number, blendAt?: (p:THREE.Vector3,u:number)=>number, capStart?: number, capEnd?: number }): THREE.BufferGeometry {
   // Catmull-Rom needs three points to have a shape; a two-node segment gets a
   // midpoint so short parts (an eye, a lock of hair) do not degenerate.
   if (nodes.length < 3) {
@@ -74,8 +58,7 @@ export function tube({
   const up = new THREE.Vector3(ref[0], ref[1], ref[2]).normalize();
 
   const pos = [], col = [], rig = [], idx = [];
-  /** @type {Array<{c:THREE.Vector3,n:THREE.Vector3,b:THREE.Vector3,rx:number,ry:number,u:number}>} */
-  const secs = [];
+  const secs: Array<{c:THREE.Vector3,n:THREE.Vector3,b:THREE.Vector3,rx:number,ry:number,u:number}> = [];
 
   for (let i = 0; i <= steps; i++) {
     const u = i / steps;
@@ -167,10 +150,8 @@ export function tube({
 
 /**
  * Merge sculpted parts into one instanceable buffer.
- * @param {THREE.BufferGeometry[]} parts
- * @returns {THREE.BufferGeometry}
  */
-export function mergeParts(parts) {
+export function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const g = mergeGeometries(parts, false);
   g.computeBoundingSphere();
   for (const p of parts) p.dispose();
@@ -182,9 +163,9 @@ export function col(hex) { return _c.setHex(hex, THREE.SRGBColorSpace); }
 
 /**
  * Blend two sRGB hexes and return the scratch colour.
- * @param {number} a @param {number} b @param {number} k
+ * @param a @param b @param k
  */
-export function mix(a, b, k) {
+export function mix(a: number, b: number, k: number) {
   const t = THREE.MathUtils.clamp(k, 0, 1);
   const ar = ((a >> 16) & 255) / 255, ag = ((a >> 8) & 255) / 255, ab = (a & 255) / 255;
   const br = ((b >> 16) & 255) / 255, bg = ((b >> 8) & 255) / 255, bb = (b & 255) / 255;
@@ -210,14 +191,12 @@ export function mix(a, b, k) {
  * transform there and using it in `<begin_vertex>` links on the lit material
  * and silently fails to link on the shadow one.
  *
- * @param {THREE.Material} mat
- * @param {{value:number}} timeRef shared `uTime` uniform
- * @param {string} rigGlsl
- * @param {{tint?:boolean, key?:string}} [opts] `tint` scales `vColor` by the
+ * @param timeRef shared `uTime` uniform
+ * @param [opts] `tint` scales `vColor` by the
  *   per-instance `aanim.w`; `key` must be unique per rig so three does not
  *   share a compiled program between two different creatures.
  */
-export function rigMaterial(mat, timeRef, rigGlsl, { tint = false, key = 'rig' } = {}) {
+export function rigMaterial(mat: THREE.Material, timeRef: {value:number}, rigGlsl: string, { tint = false, key = 'rig' }: {tint?:boolean, key?:string} = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = timeRef;
     let v = shader.vertexShader

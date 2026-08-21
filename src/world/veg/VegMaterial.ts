@@ -39,8 +39,8 @@ export const VegUniforms = {
  */
 const alphaCards = new Set();
 
-/** Mark a mesh as alpha-silhouetted. @returns {THREE.Mesh} the mesh */
-export function registerAlphaCard(mesh) {
+/** Mark a mesh as alpha-silhouetted. @returns the mesh */
+export function registerAlphaCard(mesh): THREE.Mesh {
   alphaCards.add(mesh);
   const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   for (const m of list) if (m) m.allowOverride = false;
@@ -54,9 +54,8 @@ export function alphaCardMeshes() { return alphaCards; }
  * Retained for callers written before PostFX took ownership of the
  * override-material contract. It no longer touches `visible`: hiding foliage
  * for the AO pass punched holes in the occlusion instead of fixing it.
- * @param {THREE.Scene} scene
  */
-export function installAlphaCardGuard(scene) {
+export function installAlphaCardGuard(scene: THREE.Scene) {
   scene.userData._vegAlphaGuard = true;
   for (const mesh of alphaCards) registerAlphaCard(mesh);
 }
@@ -155,33 +154,13 @@ vec3 vegClearance(vec3 o, float f, float h, float strength) {
  * Patch a MeshStandardMaterial with instanced wind sway (+ optional trample and
  * backlit leaf translucency).
  *
- * @param {THREE.MeshStandardMaterial} mat
  * @param {object} opts
- * @param {number} opts.bend      lateral sway metres at full gust
- * @param {number} opts.flutter   high-frequency flutter scale
- * @param {number} opts.gustFreq  spatial frequency of the gust front
- * @param {number} opts.trample   clearance strength around actors (0 disables);
- *   1 lays a blade fully flat inside the core radius
- * @param {number} opts.translucency  backlit leaf glow (0 disables)
- * @param {number} opts.flexPow   how sharply stiffness ramps toward the tip
- * @param {number} opts.specular  multiplier on both specular lobes, 0..1.
- *
- *   `specular` is not a taste knob, it is a bug fix. An alpha card carries a
- *   deliberately wrong, near-vertical *up* normal so the foliage lights softly.
- *   Give that normal a dielectric specular lobe and, seen from a camera above
- *   the ground, its reflection vector lands squarely on the sky — so every card
- *   mirrors the sky colour at 4 % and a field of them comes out as blue-white
- *   flakes over brown ground. That is exactly the "blue-white speckle" two
- *   agents reported in Malmalam and the Nebulawood: proved by re-rendering the
- *   clump ring with a *black* albedo, which changed the flake count by 0.6 %.
- *   Real foliage at 30 m has no coherent specular to speak of, so the honest
- *   value for a card is ~0.
- */
-export function patchVeg(mat, {
+ * */
+export function patchVeg(mat: THREE.MeshStandardMaterial, {
   bend = 0.35, flutter = 0.25, gustFreq = 0.055, trample = 0,
   translucency = 0, flexPow = 1.7, aoBoost = 0, twoSidedNormals = false,
   specular = 1,
-} = {}) {
+}: { bend: number, flutter: number, gustFreq: number, trample: number, translucency: number, flexPow: number, specular: number } = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = VegUniforms.uTime;
     shader.uniforms.uWindDir = VegUniforms.uWindDir;

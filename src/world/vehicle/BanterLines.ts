@@ -19,8 +19,7 @@
 
 const N = 'Noctis', G = 'Gladiolus', I = 'Ignis', P = 'Prompto';
 
-/** @type {Record<string, Line[]>} */
-export const BANTER = {
+export const BANTER: Record<string, Line[]> = {
   // ---------------------------------------------------------------- setting off
   depart: [
     { who: I, line: 'Off we go. Try not to fall asleep before we clear the city limits.', reply: { who: N, line: 'No promises.', delay: 2.6 } },

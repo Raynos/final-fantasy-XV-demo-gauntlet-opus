@@ -200,10 +200,8 @@ export function rpg(game) {
  * `hudState()` rebuilds four party records, the buff list and the waypoint list
  * every call, and half a dozen widgets want it in the same frame. The cache is
  * keyed on the frame counter and cleared by `Game.resetClock()`.
- * @param {object} game
- * @returns {object|null}
  */
-export function hudState(game) {
+export function hudState(game: any): any | null {
   const r = rpg(game);
   if (!r) return null;
   const frame = game.time ? game.time.frame : -1;
@@ -217,10 +215,8 @@ export function hudState(game) {
 /**
  * The four-member roster the HUD, the pause menu and the gear screen all draw.
  * Live values come from `hudState().party`; hue/role are cosmetic overlays.
- * @param {object} game
- * @returns {Array<object>}
  */
-export function readParty(game) {
+export function readParty(game: any): Array<any> {
   const hs = hudState(game);
   if (!hs || !hs.party || !hs.party.length) return PARTY.map((p) => ({ ...p }));
   return hs.party.map((m, i) => {
@@ -262,9 +258,8 @@ function statusIcons(hs, m) {
 /**
  * Noctis' phantom arsenal, laid out on the weapon wheel's diamond.
  * Reads the four real equipment slots from `Inventory`.
- * @param {object} game
  */
-export function readWeapons(game) {
+export function readWeapons(game: any) {
   const r = rpg(game);
   const slots = ['up', 'right', 'down', 'left'];
   if (!r) return WEAPONS.map((w) => ({ ...w }));
@@ -286,11 +281,9 @@ export function readWeapons(game) {
 
 /**
  * The bag, in the shape the item screen draws.
- * @param {object} game
- * @param {number} [tab] index into `ITEM_TABS`; omit for everything
- * @returns {Array<object>}
+ * @param [tab] index into `ITEM_TABS`; omit for everything
  */
-export function readItems(game, tab = -1) {
+export function readItems(game: any, tab: number = -1): Array<any> {
   const r = rpg(game);
   if (!r) {
     if (tab < 0) return ITEMS.map((i) => ({ ...i }));
@@ -368,10 +361,9 @@ function modLine(mods) {
 
 /**
  * One member's equipment slots, in the order the gear card lays them out.
- * @param {object} game
- * @param {string} id roster id
+ * @param id roster id
  */
-export function readGear(game, id) {
+export function readGear(game: any, id: string) {
   const r = rpg(game);
   if (!r) return (GEAR[id] || GEAR.noctis).map((g) => ({ ...g }));
   const eq = r.inventory.equipped(id);
@@ -392,10 +384,8 @@ function slotView(slot, def) {
 /**
  * The tracked quest, its current objective and the real distance to its
  * waypoint. Everything the compass strip and the pause menu print.
- * @param {object} game
- * @returns {{title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null}}
  */
-export function readQuest(game) {
+export function readQuest(game: any): {title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null} {
   const hs = hudState(game);
   const t = hs && hs.tracked;
   if (!t) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };
@@ -421,10 +411,8 @@ export function readQuest(game) {
 /**
  * Every marker the world map and the compass strip should show: active quest
  * waypoints plus discovered havens.
- * @param {object} game
- * @returns {Array<{kind:string, name:string, x:number, z:number}>}
  */
-export function readMarkers(game) {
+export function readMarkers(game: any): Array<{kind:string, name:string, x:number, z:number}> {
   const r = rpg(game);
   const hs = hudState(game);
   if (!r || !hs) return null;
@@ -450,9 +438,8 @@ export function readMarkers(game) {
 /**
  * Party techniques for the combat HUD's tech rack — one signature technique
  * per companion, with real bar costs and the real charge state.
- * @param {object} game
  */
-export function readTechniques(game) {
+export function readTechniques(game: any) {
   const r = rpg(game);
   if (!r) return TECHNIQUES.map((t) => ({ ...t }));
   const charge = r.party.techCharge;
@@ -477,9 +464,8 @@ export function readTechniques(game) {
  *
  * The layout tables are pure data, so the star map draws correctly even without
  * a running `RpgSystem`; only the AP wallet and the unlocked set need one.
- * @param {object} game
  */
-export function readAscension(game) {
+export function readAscension(game: any) {
   const r = rpg(game);
   const asc = r ? r.ascension : null;
   return {
@@ -497,9 +483,8 @@ export function readAscension(game) {
 
 /**
  * The Armiger gauge, 0..1, earned from damage dealt. Null with no RPG system.
- * @param {object} game
  */
-export function readArmiger(game) {
+export function readArmiger(game: any) {
   const r = rpg(game);
   return r && r.combatBridge ? r.combatBridge.armiger : null;
 }
@@ -507,11 +492,9 @@ export function readArmiger(game) {
 /**
  * Resolve a hit on a scene-graph enemy through the real damage formula.
  * Returns null when there is no RPG system to ask.
- * @param {object} game
- * @param {object} enemy
- * @param {object} [opts] see `CombatBridge.roll`
+ * @param [opts] see `CombatBridge.roll`
  */
-export function rollDamage(game, enemy, opts) {
+export function rollDamage(game: any, enemy: any, opts?: any) {
   const r = rpg(game);
   if (!r || !r.combatBridge || !enemy) return null;
   return r.combatBridge.roll(enemy, opts);
@@ -520,9 +503,9 @@ export function rollDamage(game, enemy, opts) {
 /**
  * World XZ -> the MapScreen's 1600x900 chart. North is -Z and up-screen; the
  * transform is anisotropic to match the chart's elliptical landmass.
- * @param {number} x world x
- * @param {number} z world z
+ * @param x world x
+ * @param z world z
  */
-export function worldToChart(x, z) {
+export function worldToChart(x: number, z: number) {
   return { x: 760 + (x / 430) * 396, y: 440 + (z / 430) * 248 };
 }

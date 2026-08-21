@@ -244,8 +244,7 @@ const CONSTELLATIONS = [
 
 /** Every node, keyed by id, with absolute layout coordinates resolved. */
 export const NODES = (() => {
-  /** @type {Record<string, object>} */
-  const map = {};
+  const map: Record<string, any> = {};
   for (const c of CONSTELLATIONS) {
     for (const n of c.nodes) {
       map[n.id] = {
@@ -288,8 +287,7 @@ export const EDGES = (() => {
  * bundle. Emits `node-unlocked` and `ap-gained` through the injected emitter.
  */
 export class Ascension {
-  /** @param {import('./Emitter.ts').Emitter} [emitter] */
-  constructor(emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     this.ap = 0;
     this.apSpent = 0;
@@ -319,11 +317,11 @@ export class Ascension {
 
   /**
    * Award AP for a gameplay event.
-   * @param {string} reason key in AP_RULES
-   * @param {number} [times=1] number of occurrences (or metres for distance rules)
-   * @returns {number} AP actually granted
+   * @param reason key in AP_RULES
+   * @param [times=1] number of occurrences (or metres for distance rules)
+   * @returns AP actually granted
    */
-  awardAp(reason, times = 1) {
+  awardAp(reason: string, times: number = 1): number {
     const rule = AP_RULES[reason];
     if (!rule) return 0;
 
@@ -367,10 +365,8 @@ export class Ascension {
 
   /**
    * Why a node can or can't be bought right now.
-   * @param {string} id
-   * @returns {{ok:boolean, reason:string, missing:string[], ap:number}}
    */
-  canUnlock(id) {
+  canUnlock(id: string): {ok:boolean, reason:string, missing:string[], ap:number} {
     const n = NODES[id];
     if (!n) return { ok: false, reason: 'unknown', missing: [], ap: 0 };
     if (this.unlocked.has(id)) return { ok: false, reason: 'already-unlocked', missing: [], ap: n.ap };
@@ -382,10 +378,8 @@ export class Ascension {
 
   /**
    * Buy a node. No-op (returns false) if `canUnlock` says no.
-   * @param {string} id
-   * @returns {boolean}
    */
-  unlock(id) {
+  unlock(id: string): boolean {
     const check = this.canUnlock(id);
     if (!check.ok) return false;
     const n = NODES[id];
@@ -411,10 +405,8 @@ export class Ascension {
 
   /**
    * Cheapest prerequisite chain to reach a node, in purchase order.
-   * @param {string} id
-   * @returns {{path:string[], ap:number}}
    */
-  pathTo(id) {
+  pathTo(id: string): {path:string[], ap:number} {
     const path = [];
     const seen = new Set();
     const walk = (nid) => {
@@ -433,14 +425,12 @@ export class Ascension {
 
   /**
    * Fold every unlocked node into one payload.
-   * @returns {{mods:object, flags:Set<string>, values:Record<string,number>, nodes:string[]}}
    */
-  activeEffects() {
+  activeEffects(): {mods:any, flags:Set<string>, values:Record<string,number>, nodes:string[]} {
     if (this._effectsCache) return this._effectsCache;
     const mods = emptyMods();
     const flags = new Set();
-    /** @type {Record<string, number>} */
-    const values = {};
+    const values: Record<string, number> = {};
     for (const id of this.unlocked) {
       const e = NODES[id]?.effect;
       if (!e) continue;

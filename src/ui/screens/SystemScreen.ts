@@ -17,8 +17,7 @@ const QUALITY = ['low', 'medium', 'high', 'ultra'];
  * Everything animates from `game.time`; no CSS transitions.
  */
 export class SystemScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'System';
@@ -128,8 +127,8 @@ export class SystemScreen {
     ];
   }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -201,8 +200,8 @@ export class SystemScreen {
 
   /* ----------------------------------------------------------- render */
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     for (let i = 0; i < this.nodes.length; i++) {
       const n = this.nodes[i];

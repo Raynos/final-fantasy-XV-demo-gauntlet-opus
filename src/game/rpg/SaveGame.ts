@@ -38,9 +38,8 @@ const storage = (() => {
 /**
  * Each entry upgrades a save *from* that version to the next one. Add a new
  * function here whenever the shape changes; never edit an old one.
- * @type {Record<number, (data:object)=>object>}
  */
-export const MIGRATIONS = {
+export const MIGRATIONS: Record<number, (data:any)=>any> = {
   1: (data) => {
     // v1 kept a flat `exp` number instead of the EXP bank object.
     const out = { ...data, version: 2 };
@@ -63,10 +62,8 @@ export const MIGRATIONS = {
 
 /**
  * Bring a loaded blob up to the current version.
- * @param {object} data
- * @returns {{data:object, migrated:boolean, from:number}}
  */
-export function migrate(data) {
+export function migrate(data: any): {data:any, migrated:boolean, from:number} {
   let v = data.version || 1;
   const from = v;
   let out = data;
@@ -85,9 +82,8 @@ export function migrate(data) {
 
 /**
  * Serialise every RPG subsystem into one plain object.
- * @param {import('./RpgSystem.ts').RpgSystem} rpg
  */
-export function serialize(rpg) {
+export function serialize(rpg: import('./RpgSystem.ts').RpgSystem) {
   return {
     version: SAVE_VERSION,
     savedAt: new Date().toISOString(),
@@ -114,10 +110,9 @@ export function serialize(rpg) {
 
 /**
  * Write a save.
- * @param {import('./RpgSystem.ts').RpgSystem} rpg
- * @param {string} [slot='auto']
+ * @param [slot='auto']
  */
-export function save(rpg, slot = AUTOSAVE_SLOT) {
+export function save(rpg: import('./RpgSystem.ts').RpgSystem, slot: string = AUTOSAVE_SLOT) {
   const data = serialize(rpg);
   try {
     storage.setItem(SAVE_PREFIX + slot, JSON.stringify(data));
@@ -130,10 +125,9 @@ export function save(rpg, slot = AUTOSAVE_SLOT) {
 
 /**
  * Read a save without applying it.
- * @param {string} [slot='auto']
- * @returns {{ok:boolean, data?:object, migrated?:boolean, reason?:string}}
+ * @param [slot='auto']
  */
-export function load(slot = AUTOSAVE_SLOT) {
+export function load(slot: string = AUTOSAVE_SLOT): {ok:boolean, data?:any, migrated?:boolean, reason?:string} {
   const raw = storage.getItem(SAVE_PREFIX + slot);
   if (!raw) return { ok: false, reason: 'no-save' };
   let parsed;

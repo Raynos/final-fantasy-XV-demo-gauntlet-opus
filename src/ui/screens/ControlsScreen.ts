@@ -81,16 +81,14 @@ const GROUPS = [
  * is Tab / Backspace / B, like everywhere else.
  */
 export class ControlsScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Controls';
     this.sub = 'Keyboard & mouse  ·  Gamepad';
     this.i = 0;
   }
 
-  /** @param {HTMLElement} root */
-  build(root) {
+  build(root: HTMLElement) {
     this.grid = el('div.ctrl-grid');
     this.cols = GROUPS.map((g) => {
       const rows = g.rows.map(([keys, pad, label, note]) => {
@@ -141,8 +139,8 @@ export class ControlsScreen {
 
   enter() { this.i = 0; this.j = 0; }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     for (let c = 0; c < this.cols.length; c++) {
       const col = this.cols[c];
       const t = easeOut(clamp((a - 0.1 - c * 0.055) / 0.6, 0, 1));

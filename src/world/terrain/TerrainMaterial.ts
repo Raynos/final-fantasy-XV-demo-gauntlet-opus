@@ -1016,12 +1016,11 @@ reflectedLight.indirectSpecular *= mix(1.0, tfAO, 0.95);
 `;
 
 /**
- * @param {object} res shared textures + uniform values
- * @param {number} cell world size of this LOD level's cells
- * @param {number} level LOD index (0 = finest) — drives polygon offset
- * @returns {THREE.MeshStandardMaterial}
+ * @param res shared textures + uniform values
+ * @param cell world size of this LOD level's cells
+ * @param level LOD index (0 = finest) — drives polygon offset
  */
-export function createTerrainMaterial(res, cell, level) {
+export function createTerrainMaterial(res: any, cell: number, level: number): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1.0,
@@ -1074,10 +1073,9 @@ export function createTerrainDepthMaterial(res, cell) {
  * plane. Patch that one material so it displaces anything carrying the terrain
  * flag (`aClip.y`); every other object is untouched because an unbound
  * attribute reads back as zero.
- * @param {THREE.MeshNormalMaterial} normalMaterial
- * @param {object} res shared uniform block
+ * @param res shared uniform block
  */
-export function patchGBufferMaterial(normalMaterial, res) {
+export function patchGBufferMaterial(normalMaterial: THREE.MeshNormalMaterial, res: any) {
   if (!normalMaterial || normalMaterial.userData.terrainPatched) return;
   normalMaterial.userData.terrainPatched = true;
   normalMaterial.onBeforeCompile = (shader) => {
@@ -1104,11 +1102,11 @@ export function patchGBufferMaterial(normalMaterial, res) {
 
 /**
  * Uniform block shared by every LOD level.
- * @param {object} tex the shared texture set
- * @param {object} field heightfield grid constants
- * @param {object} [world] `WorldMap.WORLD` — sea level and world span
+ * @param tex the shared texture set
+ * @param field heightfield grid constants
+ * @param [world] `WorldMap.WORLD` — sea level and world span
  */
-export function makeTerrainUniforms(tex, field, world = { seaLevel: -6.5, size: 8192 }) {
+export function makeTerrainUniforms(tex: any, field: any, world: any = { seaLevel: -6.5, size: 8192 }) {
   return {
     uHeightTex: { value: tex.height },
     uFarHeightTex: { value: tex.farHeight },

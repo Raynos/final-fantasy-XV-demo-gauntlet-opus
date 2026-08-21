@@ -351,11 +351,10 @@ const _pc = new THREE.Color(), _pd = new THREE.Color();
  * counter-shading and blotching as a function of where the vertex actually is
  * on the body, which is the same thing the swept species get from `colorAt`.
  *
- * @param {THREE.BufferGeometry} geo
- * @param {(x:number,y:number,z:number)=>[number|THREE.Color, number]} fn
+ * @param fn
  *   returns `[colour, blotchAmount]` for a bind-pose position
  */
-function paint(geo, fn) {
+function paint(geo: THREE.BufferGeometry, fn: (x:number,y:number,z:number)=>[number|THREE.Color, number]) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n * 3);

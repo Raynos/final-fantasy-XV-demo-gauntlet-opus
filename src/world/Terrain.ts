@@ -155,15 +155,13 @@ export class Terrain {
 
   /**
    * Surface height at a world position — exactly what the GPU renders.
-   * @returns {number}
    */
-  heightAt(x, z) { return this.field.heightAt(x, z); }
+  heightAt(x, z): number { return this.field.heightAt(x, z); }
 
   /**
    * Surface normal at a world position.
-   * @returns {THREE.Vector3}
    */
-  normalAt(x, z, out = new THREE.Vector3()) {
+  normalAt(x, z, out = new THREE.Vector3()): THREE.Vector3 {
     const e = CELL;
     const f = this.field;
     const hL = f.heightAt(x - e, z), hR = f.heightAt(x + e, z);
@@ -175,9 +173,9 @@ export class Terrain {
    * How wet the ground is, 0..1. Damp ground darkens and smooths; above about
    * 0.15 standing water starts to gather in the erosion flow channels, the
    * sediment pans and the wheel ruts. Driven by `Weather`.
-   * @param {number} w 0..1
+   * @param w 0..1
    */
-  setWetness(w) {
+  setWetness(w: number) {
     if (!this.res) return;
     this.res.uniforms.uWet.value.x = Math.max(0, Math.min(1, w));
   }
@@ -190,17 +188,15 @@ export class Terrain {
 
   /**
    * Distance in metres from the road centreline. Cheap enough for scattering.
-   * @returns {number}
    */
-  roadDistance(x, z) {
+  roadDistance(x, z): number {
     return this.field && this.field.network ? this.field.network.distance(x, z) : 1e5;
   }
 
   /**
    * The zone record covering this point, or null on the frontier.
-   * @returns {object|null}
    */
-  zoneAt(x, z) { return this.map.zoneAt(x, z); }
+  zoneAt(x, z): any | null { return this.map.zoneAt(x, z); }
 
   /** Blended biome humidity, 0 = Leide badlands, 1 = the Vesperpool. */
   moistureAt(x, z) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
@@ -212,10 +208,8 @@ export class Terrain {
    * own approximate curve when it is missing — which would scatter grass and
    * roadside props along a line the terrain never carved. Exposing it keeps
    * every system agreeing on where the road actually is.
-   * @param {number} z
-   * @returns {number}
    */
-  roadCenterX(z) {
+  roadCenterX(z: number): number {
     const road = this.road;
     if (!road || !road.points || road.points.length < 2) return 0;
     const pts = road.points;
@@ -252,10 +246,8 @@ export class Terrain {
   /**
    * Rough surface classification, mirroring the splat weights the shader uses.
    * Vegetation should look at `weights.grass` and `sediment`.
-   * @returns {{id:number, name:string, weights:object, slope:number, height:number,
-   *            flow:number, sediment:number, rocky:number, road:number, roadDist:number}}
    */
-  sampleMaterial(x, z) {
+  sampleMaterial(x, z): any {
     const f = this.field;
     const c = f.ctrlAt(x, z, this._ctrl);
     const h = f.heightAt(x, z);
@@ -349,12 +341,9 @@ export class Terrain {
    * Vegetation wants the *average* colour of the ground it stands on, not the
    * pebble under one blade.
    *
-   * @param {number} x
-   * @param {number} z
-   * @param {THREE.Color} [out]
-   * @returns {THREE.Color} linear-space albedo
+   * @returns linear-space albedo
    */
-  groundColorAt(x, z, out = new THREE.Color()) {
+  groundColorAt(x: number, z: number, out: THREE.Color = new THREE.Color()): THREE.Color {
     const m = this.sampleMaterial(x, z);
     const w = m.weights, bio = m.bio;
     const green = bio.green, damp = bio.damp;

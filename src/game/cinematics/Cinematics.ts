@@ -56,11 +56,10 @@ export class Cinematics {
 
   /**
    * Play a scene.
-   * @param {object} def scene definition
-   * @param {object} [opts] `{ skippable }`
-   * @returns {Promise<{skipped:boolean, id:string}>}
+   * @param def scene definition
+   * @param [opts] `{ skippable }`
    */
-  play(def, opts = {}) {
+  play(def: any, opts: any = {}): Promise<{skipped:boolean, id:string}> {
     if (!def) return Promise.resolve({ skipped: false, id: null });
     if (this.playing) this.stop({ skipped: true });
 
@@ -132,9 +131,9 @@ export class Cinematics {
 
   /**
    * End the scene and give everything back.
-   * @param {object} [opts] `{ skipped }`
+   * @param [opts] `{ skipped }`
    */
-  stop(opts = {}) {
+  stop(opts: any = {}) {
     if (!this.playing) return;
     const def = this.scene;
     const ctx = this.ctx;
@@ -183,10 +182,10 @@ export class Cinematics {
   /**
    * Park a playing scene at an absolute time. Used by the capture harness to
    * grab a named beat without waiting for it in real time.
-   * @param {number} t seconds
-   * @param {number} [step=1/30] integration step used to walk the play-head
+   * @param t seconds
+   * @param [step=1/30] integration step used to walk the play-head
    */
-  seek(t, step = 1 / 30) {
+  seek(t: number, step: number = 1 / 30) {
     if (!this.playing) return;
     let guard = 0;
     while (this.tl.t < t && guard++ < 4000) {
@@ -285,10 +284,9 @@ export class Cinematics {
   /**
    * Resolve a shot's live aim into `out`. `aim` is one actor id, a list of them
    * (aim at their centroid), or `'crew'` for everyone on stage.
-   * @param {object} shot
-   * @param {THREE.Vector3} out sampled target; overwritten in place
+   * @param out sampled target; overwritten in place
    */
-  _aim(shot, out) {
+  _aim(shot: any, out: THREE.Vector3) {
     const ids = shot.aim === 'crew' ? this.stage.ids
       : Array.isArray(shot.aim) ? shot.aim : [shot.aim];
     let n = 0;

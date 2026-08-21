@@ -16,11 +16,10 @@ const _ink = new THREE.Color();
  */
 
 /**
- * @param {Object} rig result of buildSkeleton()
- * @param {Object} look { skin:THREE.Color, muscle:number }
- * @returns {THREE.BufferGeometry}
+ * @param rig result of buildSkeleton()
+ * @param look { skin:THREE.Color, muscle:number }
  */
-export function buildBody(rig, look) {
+export function buildBody(rig: any, look: any): THREE.BufferGeometry {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;

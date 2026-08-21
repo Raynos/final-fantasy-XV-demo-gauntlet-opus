@@ -28,9 +28,8 @@ export class Elemancy {
    * Where a spell lands when the caller did not say: a few metres in front of
    * the player, on the ground. `cast('fire')` is a legitimate call — a hotkey,
    * a script, an AI that only knows the element — and it used to throw.
-   * @returns {THREE.Vector3}
    */
-  defaultTarget() {
+  defaultTarget(): THREE.Vector3 {
     const out = new THREE.Vector3();
     const player = this.game && this.game.get && this.game.get('Player');
     const cam = this.game && this.game.camera;
@@ -47,11 +46,9 @@ export class Elemancy {
 
   /**
    * Cast a spell at a point.
-   * @param {'fire'|'ice'|'lightning'} element
-   * @param {object} [o] {pos, t0, power, terrain, from}
-   * @returns {{element:string, pos:THREE.Vector3, radius:number, damage:number, reaction:string|null}}
+   * @param [o] {pos, t0, power, terrain, from}
    */
-  cast(element, o = {}) {
+  cast(element: 'fire' | 'ice' | 'lightning', o: any = {}): {element:string, pos:THREE.Vector3, radius:number, damage:number, reaction:string|null} {
     const {
       t0 = this.vfx.clock, power = 1, terrain = null, from = null,
     } = o;

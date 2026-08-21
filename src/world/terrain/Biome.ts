@@ -45,8 +45,7 @@ import { worldMap, WORLD } from '../map/WorldMap.ts';
  * sampler tips it over.
  */
 
-/** @type {Object<string, {ground:number[], rock:number[], green:number, damp:number}>} */
-export const SURFACE = {
+export const SURFACE: Object<string, {ground:number[], rock:number[], green:number, damp:number}> = {
   // ------------------------------------------------------------------ LEIDE
   // Red-ochre badlands, rust rock, dry scrub. This is the one region that was
   // already right, so its entries sit close to 1.0 and only carry the warm
@@ -124,11 +123,10 @@ const BLEND_POW = 2.4;
  * heightfield uses — so the palette varies continuously and no boundary can
  * ever draw as a line. `out` is reused; copy it if you need to keep it.
  *
- * @param {number} x @param {number} z
- * @param {object} [out] reused result `{ground:[r,g,b], rock:[r,g,b], green, damp}`
- * @returns {object}
+ * @param x @param z
+ * @param [out] reused result `{ground:[r,g,b], rock:[r,g,b], green, damp}`
  */
-export function surfaceAt(x, z, out) {
+export function surfaceAt(x: number, z: number, out?: any): any {
   const o = out || { ground: [0, 0, 0], rock: [0, 0, 0], green: 0, damp: 0 };
   const g = o.ground, r = o.rock;
   g[0] = g[1] = g[2] = 0; r[0] = r[1] = r[2] = 0;
@@ -170,11 +168,11 @@ const TINT_SCALE = 255 / 2;
  * rather than on the layer recipes, so baking it would only add a second
  * staleness dependency for no measurable gain.
  *
- * @param {number} size texel resolution, matching the detail array
- * @param {number} [coarse] palette evaluation grid
- * @returns {Uint8Array} two RGBA layers, back to back
+ * @param size texel resolution, matching the detail array
+ * @param [coarse] palette evaluation grid
+ * @returns two RGBA layers, back to back
  */
-export function buildBiomeLut(size, coarse = 128) {
+export function buildBiomeLut(size: number, coarse: number = 128): Uint8Array {
   const half = WORLD.half;
   const span = WORLD.size;
 

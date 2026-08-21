@@ -47,8 +47,7 @@ function readTime(text) {
 }
 
 export class Banter {
-  /** @param {number} [seed] */
-  constructor(seed = 31337) {
+  constructor(seed: number = 31337) {
     this.rng = new Rng(seed);
     this.enabled = true;
     /** Seconds of silence required after a line finishes. */
@@ -81,11 +80,10 @@ export class Banter {
 
   /**
    * Say a line from `category`, if the rules allow it.
-   * @param {string} category key in BANTER
-   * @param {{force?:boolean}} [opts]
-   * @returns {boolean} true if something was said
+   * @param category key in BANTER
+   * @returns true if something was said
    */
-  trigger(category, opts = {}) {
+  trigger(category: string, opts: {force?:boolean} = {}): boolean {
     if (!this.enabled || this.muted) return false;
     const pool = BANTER[category];
     if (!pool || !pool.length) return false;
@@ -150,9 +148,8 @@ export class Banter {
 
   /**
    * Advance timers and flush any scheduled replies.
-   * @param {number} dt
    */
-  update(dt) {
+  update(dt: number) {
     this.t += dt;
     for (let i = this._queue.length - 1; i >= 0; i--) {
       if (this._queue[i].at <= this.t) {
@@ -167,20 +164,9 @@ export class Banter {
    * Watch the world and raise the categories it implies. Called once a frame
    * by the Regalia system; it only ever *proposes* — `trigger` decides.
    *
-   * @param {number} dt
    * @param {object} ctx
-   * @param {number} ctx.speed m/s
-   * @param {boolean} ctx.driving true while anyone is at the wheel
-   * @param {boolean} ctx.auto true when Ignis has it
-   * @param {number} ctx.roadDist metres off the centreline
-   * @param {boolean} ctx.offRoadMode Type-D fitted
-   * @param {number} ctx.slide 0..1
-   * @param {number} ctx.hour 0..24
-   * @param {string} ctx.weather
-   * @param {number} ctx.fuel 0..1
-   * @param {{name:string, dist:number}|null} ctx.landmark nearest hero feature
-   */
-  observe(dt, ctx) {
+   * */
+  observe(dt: number, ctx: { speed: number, driving: boolean, auto: boolean, roadDist: number, offRoadMode: boolean, slide: number, hour: number, weather: string, fuel: number, landmark: {name:string, dist:number} | null }) {
     if (!this.enabled || this.muted) return;
     const st = this._state;
 

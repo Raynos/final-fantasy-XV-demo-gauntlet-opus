@@ -127,9 +127,9 @@ const _up = new THREE.Vector3();
 
 export class Occupants {
   /**
-   * @param {THREE.Object3D} tilt the chassis node the seats hang off
+   * @param tilt the chassis node the seats hang off
    */
-  constructor(tilt) {
+  constructor(tilt: THREE.Object3D) {
     this.tilt = tilt;
     this.seated = false;
     this.anchors = {};
@@ -160,9 +160,9 @@ export class Occupants {
 
   /**
    * Put everyone in the car.
-   * @param {boolean} playerDrives true if Noctis has the wheel
+   * @param playerDrives true if Noctis has the wheel
    */
-  enter(playerDrives) {
+  enter(playerDrives: boolean) {
     const p = this.player, party = this.party;
     if (!p || !party) return;
     this.riders.length = 0;
@@ -243,10 +243,9 @@ export class Occupants {
    * Write the seat transforms and the seated poses. Runs in `lateUpdate`, so
    * it always has the last word over Player and Party.
    *
-   * @param {number} dt
-   * @param {object} ctx { speed, lateralG, longG, slide, rough, night, auto }
+   * @param ctx { speed, lateralG, longG, slide, rough, night, auto }
    */
-  update(dt, ctx) {
+  update(dt: number, ctx: any) {
     if (!this.seated) return;
     this._t += dt;
     this.tilt.updateMatrixWorld(true);
@@ -322,10 +321,10 @@ export class Occupants {
   /**
    * Give everyone something to look at: the road ahead, each other, or the
    * landmark going past. Cheap — it only sets a target the animator reads.
-   * @param {THREE.Vector3} ahead a point out in front of the car
-   * @param {THREE.Vector3|null} interest optional landmark
+   * @param ahead a point out in front of the car
+   * @param interest optional landmark
    */
-  gaze(ahead, interest) {
+  gaze(ahead: THREE.Vector3, interest: THREE.Vector3 | null) {
     if (!this.seated) return;
     for (let i = 0; i < this.riders.length; i++) {
       const r = this.riders[i];

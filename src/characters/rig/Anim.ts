@@ -55,17 +55,17 @@ const TAU = Math.PI * 2;
  * and crosses quickly. A person shifting their weight is on one foot or the
  * other; a raw sine would leave them permanently mid-transfer, which is the
  * one place a body never rests.
- * @param {number} x @returns {number} −1..1
+ * @param x @returns −1..1
  */
-function hold(x) { return Math.tanh(x * 2.4); }
+function hold(x: number): number { return Math.tanh(x * 2.4); }
 
 /**
  * A breath, 0 (fully exhaled) .. 1 (fully inhaled). Inhale occupies the first
  * 38% of the cycle and exhale the rest, because that asymmetry — not the
  * amplitude — is what makes a chest read as breathing rather than pulsing.
- * @param {number} t seconds @param {number} rate Hz @returns {number}
+ * @param t seconds @param rate Hz @returns 
  */
-function breathe(t, rate) {
+function breathe(t: number, rate: number): number {
   const u = (t * rate) % 1;
   return u < 0.38 ? smooth(u / 0.38) : 1 - smooth((u - 0.38) / 0.62);
 }
@@ -84,9 +84,9 @@ function bell(u, holdFrac) {
  * Which `POSTURE` entry a rig should use. The hero definitions carry display
  * names (`Gladiolus`) while NPC archetypes carry their own keys, and neither
  * stores the cast key it was built from.
- * @param {Object} character @returns {string}
+ * @param character @returns 
  */
-function postureKey(character) {
+function postureKey(character: any): string {
   const n = String(character.name || '').toLowerCase();
   if (POSTURE[n]) return n;
   if (n.startsWith('glad')) return 'gladio';
@@ -202,9 +202,9 @@ class Spring {
 
 export class Animator {
   /**
-   * @param {Object} character owning Character instance
+   * @param character owning Character instance
    */
-  constructor(character) {
+  constructor(character: any) {
     this.char = character;
     this.rig = character.rig;
     this.bones = this.rig.byName;
@@ -305,8 +305,8 @@ export class Animator {
       this.coat.x, this.coat.z, this.tail.x, this.tail.z]) { s.x = 0; s.v = 0; }
   }
 
-  /** Start a keyframed action. @param {string} name @param {Object} opts */
-  play(name, opts = {}) {
+  /** Start a keyframed action. @param name @param opts */
+  play(name: string, opts: any = {}) {
     const def = ACTIONS[name];
     if (!def) return;
     this.action = { def, name, t: 0, speed: opts.speed || 1, w: 0, hold: !!def.hold && opts.hold !== false };
@@ -332,11 +332,10 @@ export class Animator {
 
   /**
    * Advance and apply the whole animation stack.
-   * @param {number} dt
-   * @param {Object} st { speed, velocity, grounded, airTime, turnRate, terrain,
+   * @param st { speed, velocity, grounded, airTime, turnRate, terrain,
    *   wind, combat (0..1), weaponHand ('L'|'R') }
    */
-  update(dt, st) {
+  update(dt: number, st: any) {
     this.t += dt;
     const s = this.rig.dims.s;
     const speed = st.speed || 0;
@@ -437,11 +436,11 @@ export class Animator {
   /**
    * The standing body: contrapposto, breath, personality, arms and idle gaze.
    *
-   * @param {number} t seconds
-   * @param {number} moveW 0..1 locomotion blend
-   * @param {number} restW 0..1 how planted the feet are
+   * @param t seconds
+   * @param moveW 0..1 locomotion blend
+   * @param restW 0..1 how planted the feet are
    */
-  evalIdle(t, moveW, restW) {
+  evalIdle(t: number, moveW: number, restW: number) {
     const p = this.p;
     // Contrapposto cannot survive a walk — you cannot stand on one leg while
     // both feet are moving — but breathing and personality can.
@@ -610,9 +609,9 @@ export class Animator {
    * ever stops moving. Everything here is scaled by `restW` so breaking into a
    * run still runs.
    *
-   * @param {number} t @param {number} restW @param {Object} st
+   * @param t @param restW @param st
    */
-  evalStance(t, restW, st) {
+  evalStance(t: number, restW: number, st: any) {
     const w = this.combatW * restW;
     if (w <= 0.002) return;
     const p = this.p;
@@ -686,9 +685,9 @@ export class Animator {
    * the frame the gesture began. Always on the off hand: companion weapons are
    * socketed rigidly to `handR`, so a gesture on that arm swings a greatsword.
    *
-   * @param {number} dt @param {number} moveW @param {Object} st
+   * @param dt @param moveW @param st
    */
-  evalGesture(dt, moveW, st) {
+  evalGesture(dt: number, moveW: number, st: any) {
     const list = this.p.gestures;
     if (!list || !list.length) return;
     const busy = moveW > 0.12 || this.combatW > 0.15 || !!this.action;

@@ -13,11 +13,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 /**
  * Loft a closed 2D cross-section along a list of sections.
- * @param {Array<[number,number]>} cross unit cross-section, CCW, roughly radius 1
- * @param {Array<{y:number,sx:number,sz:number,dx?:number,dz?:number,rot?:number}>} sections
- * @param {object} opts {capStart, capEnd, uScale}
+ * @param cross unit cross-section, CCW, roughly radius 1
+ * @param opts {capStart, capEnd, uScale}
  */
-export function loft(cross, sections, { capStart = true, capEnd = true } = {}) {
+export function loft(cross: Array<[number,number]>, sections: Array<{y:number,sx:number,sz:number,dx?:number,dz?:number,rot?:number}>, { capStart = true, capEnd = true }: any = {}) {
   const n = cross.length, m = sections.length;
   const pos = [], uv = [], idx = [];
   for (let s = 0; s < m; s++) {
@@ -250,11 +249,10 @@ export function glow(geo, hex, strength = 1) {
  * dark mirror, not leather. A shader that reads this attribute (see
  * `makeWeaponMaterial`) gets real material variety out of the same program.
  *
- * @param {THREE.BufferGeometry} geo
- * @param {number} rough roughness to use where `metal` is 0
- * @param {number} metal 0 dielectric .. 1 metal
+ * @param rough roughness to use where `metal` is 0
+ * @param metal 0 dielectric .. 1 metal
  */
-export function surf(geo, rough, metal) {
+export function surf(geo: THREE.BufferGeometry, rough: number, metal: number) {
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 2);
   for (let i = 0; i < n; i++) { arr[i * 2] = rough; arr[i * 2 + 1] = metal; }
@@ -328,20 +326,12 @@ export function enableVertexEmissive(material) {
  * (half-thickness), so a 58 mm × 12 mm blade is `sx 0.029, sz 0.006`.
  *
  * @param {object} [o]
- * @param {number} [o.edge] half-thickness right at the cutting edge
- * @param {number} [o.bevel] width of the secondary bevel, fraction of half-width
- * @param {number} [o.bevelRise] thickness at the bevel shoulder
- * @param {number} [o.ridge] x of the thickest line (the grind ridge)
- * @param {number} [o.fuller] fuller depth; 0 leaves the face solid
- * @param {number} [o.fullerAt] x centre of the fuller channel
- * @param {number} [o.fullerW] half-width of the fuller channel
- * @param {number} [o.spine] >0 makes it single-edged with a flat back this thick
- * @returns {Array<[number,number]>} closed unit cross-section
+ * @returns closed unit cross-section
  */
 export function edgedCross({
   edge = 0.06, bevel = 0.10, bevelRise = 0.40, ridge = 0.34,
   fuller = 0, fullerAt = 0, fullerW = 0.20, spine = 0,
-} = {}) {
+}: { edge?: number, bevel?: number, bevelRise?: number, ridge?: number, fuller?: number, fullerAt?: number, fullerW?: number, spine?: number } = {}): Array<[number,number]> {
   const top = [[1, edge], [1 - bevel, bevelRise], [ridge, 1]];
   if (fuller > 0.001) {
     const a = fullerAt + fullerW, b = fullerAt - fullerW;
@@ -365,10 +355,9 @@ export function edgedCross({
  * Rectangle with real chamfered corners — receivers, engine blocks, langets,
  * anything machined. `rectCross`'s superellipse rounds every corner off and
  * cannot hold a hard 45° cut, which is the whole read of a milled part.
- * @param {number} [c] chamfer size as a fraction of the half-extent
- * @returns {Array<[number,number]>}
+ * @param [c] chamfer size as a fraction of the half-extent
  */
-export function chamferCross(c = 0.22) {
+export function chamferCross(c: number = 0.22): Array<[number,number]> {
   const k = 1 - Math.min(0.48, c);
   return [[1, -k], [1, k], [k, 1], [-k, 1], [-1, k], [-1, -k], [-k, -1], [k, -1]];
 }
@@ -378,12 +367,11 @@ export function chamferCross(c = 0.22) {
  * per-section `rot` that advances up the grip and the lobes screw into a
  * helical ridge — a real wrap for the price of one loft, and the ridges catch
  * the rim light that tells you a hand belongs there.
- * @param {number} [n] points around
- * @param {number} [lobes] ridges around the circumference
- * @param {number} [depth] groove depth as a fraction of the radius
- * @returns {Array<[number,number]>}
+ * @param [n] points around
+ * @param [lobes] ridges around the circumference
+ * @param [depth] groove depth as a fraction of the radius
  */
-export function wrapCross(n = 14, lobes = 4, depth = 0.13) {
+export function wrapCross(n: number = 14, lobes: number = 4, depth: number = 0.13): Array<[number,number]> {
   const c = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;

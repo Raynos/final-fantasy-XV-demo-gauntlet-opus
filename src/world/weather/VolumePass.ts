@@ -338,8 +338,7 @@ void main() {
 const MARCH_SCALE = 0.4;
 
 export class VolumePass extends FilterPass {
-  /** @param {import('../../engine/PostFX.ts').PostFX} fx */
-  constructor(fx) {
+  constructor(fx: import('../../engine/PostFX.ts').PostFX) {
     super(fx);
     this.material = fsMaterial({
       uniforms: {

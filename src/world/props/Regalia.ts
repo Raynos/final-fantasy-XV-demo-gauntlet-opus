@@ -126,12 +126,12 @@ function greenhouseSections() {
 
 /**
  * A narrow ribbon lying on the hull surface — a panel shut line.
- * @param {number} u position along the body, 0 = tail, 1 = nose
- * @param {number} j0 first ring column
- * @param {number} j1 last ring column
- * @param {number} w gap width in metres
+ * @param u position along the body, 0 = tail, 1 = nose
+ * @param j0 first ring column
+ * @param j1 last ring column
+ * @param w gap width in metres
  */
-function shutline(u, j0, j1, w = 0.016) {
+function shutline(u: number, j0: number, j1: number, w: number = 0.016) {
   const secs = [];
   const du = w / (2 * LEN * 2);
   for (const uu of [u - du, u + du]) {
@@ -177,16 +177,8 @@ function contactShadowTexture() {
 
 /**
  * @param {object} opts
- * @param {THREE.Texture|null} [opts.envMap]
- * @param {boolean} [opts.drivable] emit the four wheels as their own nodes so
- *   they can steer and spin, and skip the baked-in contact shadow (a moving
- *   car cannot carry a painted shadow around with it)
- * @returns {{group:THREE.Group, lights:THREE.Object3D[],
- *            lamp:THREE.Material, tail:THREE.Material,
- *            wheels?:Array<{steer:THREE.Group, spin:THREE.Group, front:boolean, side:number}>,
- *            shadow?:THREE.Mesh, scale:number, wheelY:number}}
  */
-export function buildRegalia({ envMap = null, drivable = false } = {}) {
+export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THREE.Texture | null, drivable?: boolean } = {}): any {
   const group = new THREE.Group();
   group.name = 'regalia';
   const car = new THREE.Group();

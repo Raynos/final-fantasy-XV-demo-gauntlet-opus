@@ -13,8 +13,7 @@ const FRAMES = ['3:2 Full', '16:9 Wide', '1:1 Square', 'Polaroid'];
  * Chrome-free: the shared menu heading and footer are suppressed.
  */
 export class PhotoScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Photo';
     this.chrome = false;
@@ -25,8 +24,7 @@ export class PhotoScreen {
     this.exposure = 0.0;
   }
 
-  /** @param {HTMLElement} root */
-  build(root) {
+  build(root: HTMLElement) {
     this.frameEl = el('div.photo-frame');
     this.bars = ['t', 'b'].map((k) => {
       const b = el('div.bar');
@@ -95,8 +93,8 @@ export class PhotoScreen {
 
   enter() { this.age = 0; }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     const e = easeOutQuint(clamp((a - 0.05) / 0.8, 0, 1));
     // letterbox to the chosen framing
     const inset = (1 - e) * 0 + 42;

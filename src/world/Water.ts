@@ -273,10 +273,8 @@ export class Water {
    * and it was running every frame of every shot, including the twelve of the
    * fifteen capture shots that contain no water at all.
    *
-   * @param {THREE.Camera} cam
-   * @returns {boolean}
    */
-  _visible(cam) {
+  _visible(cam: THREE.Camera): boolean {
     this._vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this._frustum.setFromProjectionMatrix(this._vp);
     for (const b of this.bodies) {

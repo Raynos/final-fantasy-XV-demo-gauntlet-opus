@@ -28,8 +28,7 @@ import { Noise } from '../../util/Noise.ts';
 const UP = new THREE.Vector3(0, 1, 0);
 
 export class DriveCamera {
-  /** @param {THREE.PerspectiveCamera} camera */
-  constructor(camera) {
+  constructor(camera: THREE.PerspectiveCamera) {
     this.cam = camera;
     this.mode = 'chase';
     this.modes = ['chase', 'cinematic', 'bonnet'];
@@ -74,11 +73,11 @@ export class DriveCamera {
     this.fov = this.baseFov;
   }
 
-  /** @param {string} m one of `modes` */
-  setMode(m) { if (this.modes.includes(m)) this.mode = m; }
+  /** @param m one of `modes` */
+  setMode(m: string) { if (this.modes.includes(m)) this.mode = m; }
 
-  /** Cycle to the next mode. @returns {string} */
-  cycleMode() {
+  /** Cycle to the next mode. @returns */
+  cycleMode(): string {
     this.mode = this.modes[(this.modes.indexOf(this.mode) + 1) % this.modes.length];
     return this.mode;
   }
@@ -87,11 +86,9 @@ export class DriveCamera {
   addTrauma(v) { this.trauma = Math.min(1, this.trauma + v); }
 
   /**
-   * @param {number} dt
-   * @param {import('./VehicleBody.ts').VehicleBody} body
-   * @param {{lookX?:number, lookY?:number}} [look] free-look delta this frame
+   * @param [look] free-look delta this frame
    */
-  update(dt, body, look) {
+  update(dt: number, body: import('./VehicleBody.ts').VehicleBody, look?: {lookX?:number, lookY?:number}) {
     this._t += dt;
     this.trauma = Math.max(0, this.trauma - dt * 1.4);
     const speed = body.speed;

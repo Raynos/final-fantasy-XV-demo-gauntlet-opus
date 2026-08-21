@@ -44,9 +44,8 @@ export const RESIST_NEUTRAL = 100;
  * between are log-interpolated, which reproduces the game's smooth
  * multiplicative ramp (roughly x1.14 per level in the mid game, flattening in
  * the eighties) without shipping a 99-entry hand table.
- * @type {Array<[number, number]>}
  */
-const EXP_ANCHORS = [
+const EXP_ANCHORS: Array<[number, number]> = [
   [1, 50], [2, 130], [3, 220], [4, 320], [5, 430],
   [6, 560], [8, 860], [10, 1200], [13, 2000], [16, 3100],
   [20, 4700], [25, 8000], [30, 12000], [35, 17500], [40, 25000],
@@ -147,11 +146,11 @@ function growAt(pair, level, curve) {
  */
 export class Stats {
   /**
-   * @param {string} id character key, e.g. 'noctis'
+   * @param id character key, e.g. 'noctis'
    * @param {object} [opts]
-   * @param {number} [opts.level=1]
+   * 
    */
-  constructor(id, opts = {}) {
+  constructor(id: string, opts: { level?: number } = {}) {
     this.id = id;
     this.profile = GROWTH[id] || GROWTH.noctis;
     this.name = this.profile.name;
@@ -262,10 +261,9 @@ export class Stats {
 
   /**
    * Immediately apply EXP (used by the banking step, not by field kills).
-   * @param {number} amount
-   * @returns {{levels:number[], from:number, to:number}} levels gained
+   * @returns levels gained
    */
-  applyExp(amount) {
+  applyExp(amount: number): {levels:number[], from:number, to:number} {
     const from = this.level;
     const levels = [];
     let pool = Math.max(0, Math.round(amount));
@@ -351,10 +349,9 @@ export class ExpBank {
 
   /**
    * Bank EXP earned in the field.
-   * @param {number} amount
-   * @param {string} [source] label shown on the rest summary
+   * @param [source] label shown on the rest summary
    */
-  add(amount, source = 'battle') {
+  add(amount: number, source: string = 'battle') {
     const gained = Math.max(0, Math.round(amount * this.multiplier));
     this.banked += gained;
     this.lifetime += gained;
@@ -364,11 +361,9 @@ export class ExpBank {
 
   /**
    * Convert the bank into levels for a party.
-   * @param {Stats[]} party
-   * @param {object} lodging one of LODGINGS
-   * @returns {{total:number, bonus:number, perMember:object[], sources:object}}
+   * @param lodging one of LODGINGS
    */
-  redeem(party, lodging = LODGINGS.haven) {
+  redeem(party: Stats[], lodging: any = LODGINGS.haven): {total:number, bonus:number, perMember:any[], sources:any} {
     const bonus = lodging?.bonus ?? 1;
     const total = Math.round(this.banked * bonus);
     const perMember = party.map((s) => {
@@ -399,11 +394,10 @@ export class ExpBank {
  * night, the higher the level of what crawls out of the ground. Daemons take a
  * further multiplier and become vulnerable to light.
  *
- * @param {number} hour 0..24
- * @param {boolean} [isDaemon=false]
- * @returns {{levelBonus:number, attack:number, defense:number, hp:number, dark:number, isNight:boolean, depth:number}}
+ * @param hour 0..24
+ * @param [isDaemon=false]
  */
-export function nightScaling(hour, isDaemon = false) {
+export function nightScaling(hour: number, isDaemon: boolean = false): {levelBonus:number, attack:number, defense:number, hp:number, dark:number, isNight:boolean, depth:number} {
   const h = ((hour % 24) + 24) % 24;
   // Night runs 19:00 -> 05:00. `depth` peaks at 0..1 in the small hours.
   let depth = 0;
@@ -431,10 +425,9 @@ const dmgRng = new Rng(0x5eed);
 
 /**
  * Resolve an elemental interaction.
- * @param {number} resistPercent target's resistance for the element
- * @returns {{mult:number, kind:'absorb'|'immune'|'resist'|'neutral'|'weak'}}
+ * @param resistPercent target's resistance for the element
  */
-export function resolveElement(resistPercent) {
+export function resolveElement(resistPercent: number): {mult:number, kind:'absorb'|'immune'|'resist'|'neutral'|'weak'} {
   const p = resistPercent;
   if (p < 0) return { mult: p / 100, kind: 'absorb' };
   if (p === 0) return { mult: 0, kind: 'immune' };
@@ -449,21 +442,8 @@ export function resolveElement(resistPercent) {
  * drives spells.
  *
  * @param {object} opts
- * @param {Stats|object} opts.attacker      needs attack/magicAttack/critRate/critDamage/level
- * @param {object}       opts.target        needs defense/magicDefense/resistance(el)/level, optional `weakTo`
- * @param {number}       [opts.motion=1]    move motion value (a 3-hit combo finisher ~1.8)
- * @param {'physical'|'magical'} [opts.kind='physical']
- * @param {string}       [opts.element='physical']
- * @param {string}       [opts.weaponClass] one of WEAPON_CLASSES — triggers weakness bonuses
- * @param {number}       [opts.staggerMult=1] 1 normal, 1.3 vulnerable, 2.0 fully staggered
- * @param {boolean}      [opts.isBackAttack=false]
- * @param {boolean}      [opts.isWarpStrike=false]
- * @param {number}       [opts.hour]        world hour, enables night scaling on the target
- * @param {boolean}      [opts.targetIsDaemon=false]
- * @param {Rng}          [opts.rng]         inject for determinism in tests
- * @returns {{damage:number, crit:boolean, kind:string, element:string, elementKind:string, absorbed:boolean, weakness:boolean, breakdown:object}}
  */
-export function computeDamage(opts) {
+export function computeDamage(opts: { attacker: Stats | any, target: any, motion?: number, kind?: 'physical' | 'magical', element?: string, weaponClass?: string, staggerMult?: number, isBackAttack?: boolean, isWarpStrike?: boolean, hour?: number, targetIsDaemon?: boolean, rng?: Rng }): {damage:number, crit:boolean, kind:string, element:string, elementKind:string, absorbed:boolean, weakness:boolean, breakdown:any} {
   const {
     attacker, target,
     motion = 1,
@@ -550,10 +530,9 @@ export function computeDamage(opts) {
  * EXP awarded for defeating an enemy. Scales with the enemy's level and a
  * per-archetype multiplier; night-boosted enemies pay out proportionally more.
  *
- * @param {object} enemy {level, expClass?: 'trash'|'normal'|'elite'|'boss'|'daemon'}
- * @param {number} [hour]
+ * @param enemy {level, expClass?: 'trash'|'normal'|'elite'|'boss'|'daemon'}
  */
-export function expForKill(enemy, hour = null) {
+export function expForKill(enemy: any, hour: number = null) {
   const CLASS_MULT = { trash: 0.5, normal: 1, elite: 2.2, boss: 6, daemon: 1.6 };
   const m = CLASS_MULT[enemy.expClass] ?? 1;
   const lv = enemy.level || 1;

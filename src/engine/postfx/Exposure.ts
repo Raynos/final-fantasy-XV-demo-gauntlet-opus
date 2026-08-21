@@ -111,10 +111,9 @@ export class Exposure {
    * exposure from lighting: eye adaptation then adapts within `lo`..`hi` of it
    * instead of fighting it.
    *
-   * @param {number} base scene exposure multiplier (>0)
-   * @param {{lo?:number, hi?:number, ceiling?:number}} [band]
+   * @param base scene exposure multiplier (>0)
    */
-  setSceneExposure(base, band = {}) {
+  setSceneExposure(base: number, band: {lo?:number, hi?:number, ceiling?:number} = {}) {
     this.base = Math.max(1e-4, base);
     if (band.lo != null) this.rangeLo = band.lo;
     if (band.hi != null) this.rangeHi = band.hi;
@@ -146,11 +145,10 @@ export class Exposure {
 
   /**
    * Reduce `srcTexture` and integrate the adapted exposure.
-   * @param {THREE.WebGLRenderer} renderer
-   * @param {THREE.Texture} srcTexture scene-linear HDR colour
-   * @param {number} dt seconds
+   * @param srcTexture scene-linear HDR colour
+   * @param dt seconds
    */
-  update(renderer, srcTexture, dt) {
+  update(renderer: THREE.WebGLRenderer, srcTexture: THREE.Texture, dt: number) {
     if (!this.enabled) return;
     const src = this.chain[0];
     this.logMat.uniforms.tDiffuse.value = srcTexture;

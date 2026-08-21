@@ -285,9 +285,8 @@ function restoreInner(ctx) {
  * The camera set-ups, built once staging has resolved the scene frame so every
  * keyframe can be written in scene-local metres: `G(f, l, u)` is "f metres up
  * the road, l metres to the shooting side, u metres above the ground there".
- * @param {object} ctx
  */
-function buildShots(ctx) {
+function buildShots(ctx: any) {
   const F = ctx.data.F;
   const S = ctx.data.side || 1;
   const terrain = ctx.game.get('Terrain');

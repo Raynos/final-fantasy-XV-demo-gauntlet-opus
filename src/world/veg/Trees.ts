@@ -174,8 +174,8 @@ export class Trees {
     this.tileCacheMax = 320;
   }
 
-  /** @param {THREE.WebGLRenderer} renderer needed to bake impostors */
-  build(renderer) {
+  /** @param renderer needed to bake impostors */
+  build(renderer: THREE.WebGLRenderer) {
     const speciesList = Object.keys(TREE_SPECIES);
     const bark = barkMaps(0x6f5a45);
     const perVariant = Math.max(6, Math.round(52 * this.quality));
@@ -387,8 +387,8 @@ export class Trees {
     return out;
   }
 
-  /** @returns {Array|null} null when this frame's generation budget is spent */
-  _tile(map, key, make) {
+  /** @returns null when this frame's generation budget is spent */
+  _tile(map, key, make): any[] | null {
     const e = map.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
     if (this._primed && performance.now() > this._deadline) return null;
@@ -408,7 +408,7 @@ export class Trees {
   // ----------------------------------------------------------------- update
 
   /**
-   * @param {THREE.Vector3} camPos
+   * @param camPos
    *
    * Two throttles, both load-bearing. The camera has to move a full stride
    * before anything is recomputed, because a rebuild rewrites and re-uploads
@@ -418,7 +418,7 @@ export class Trees {
    * the whole gather and upload sixty times a second, which is exactly how the
    * `menu-open` segment went CPU-bound.
    */
-  update(camPos) {
+  update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 144) {
       if (!this._pending) return;
@@ -575,8 +575,8 @@ export class Trees {
     this._primed = true;
   }
 
-  /** @returns {boolean} true if the placement found a slot */
-  _writeImpostor(p) {
+  /** @returns true if the placement found a slot */
+  _writeImpostor(p): boolean {
     const im = this.impostors.get(`${p.sp}_${p.vi}`);
     if (!im || im._w >= im.max) return false;
     const w = im._w++;

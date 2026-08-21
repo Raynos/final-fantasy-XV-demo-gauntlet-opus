@@ -50,11 +50,7 @@ function shard(seed, r, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 export class Megastructures {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   */
-  constructor(eco, scene) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
     this.root = new THREE.Group();
@@ -402,11 +398,10 @@ export class Megastructures {
 
   /**
    * Airborne hulls drift and breathe; the capital's windows come up at night.
-   * @param {number} dt
-   * @param {number} t seconds
-   * @param {number} night 0 by day, 1 after dark
+   * @param t seconds
+   * @param night 0 by day, 1 after dark
    */
-  update(dt, t, night) {
+  update(dt: number, t: number, night: number) {
     for (const m of this.movers) {
       m.obj.position.set(
         m.base.x + m.drift[0] * t * 0.35,

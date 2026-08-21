@@ -57,8 +57,7 @@ export class Dungeons {
     this.stats = { insideCalls: 0, insideTris: 0, outsideCalls: 0, outsideTris: 0 };
   }
 
-  /** @param {import('../../game/Game.ts').Game} game */
-  async init(game) {
+  async init(game: import('../../game/Game.ts').Game) {
     this.game = game;
     this.terrain = game.get('Terrain');
     this.sky = game.get('Sky');
@@ -101,16 +100,13 @@ export class Dungeons {
 
   // ------------------------------------------------------------------- API
 
-  /** @returns {boolean} */
-  get isInside() { return this.state === 'inside' || this.state === 'entering'; }
+  get isInside(): boolean { return this.state === 'inside' || this.state === 'entering'; }
 
   /**
    * Enter a dungeon. Builds the interior the first time; subsequent entries
    * reuse it, so a dungeon you have already explored costs nothing to re-enter.
-   * @param {string} id
-   * @param {{instant?:boolean}} [opts]
    */
-  enter(id, opts = {}) {
+  enter(id: string, opts: {instant?:boolean} = {}) {
     const def = this.defs.get(id);
     if (!def || this.isInside) return false;
     const run = () => this._doEnter(def);
@@ -133,19 +129,16 @@ export class Dungeons {
   /**
    * Everything the party can act on right now: the entrances when outside, the
    * doors / chests / exit when inside.
-   * @returns {object[]}
    */
-  listInteractables() {
+  listInteractables(): any[] {
     if (!this.isInside) return this.entrances;
     return this.current ? this.current.interactables : [];
   }
 
   /**
    * Nearest actionable thing to a world position, or null.
-   * @param {THREE.Vector3} pos
-   * @returns {object|null}
    */
-  nearest(pos) {
+  nearest(pos: THREE.Vector3): any | null {
     if (this.isInside && this.current) {
       const list = this.current.near(pos, 0);
       return list.length ? list[0] : null;
@@ -160,10 +153,8 @@ export class Dungeons {
 
   /**
    * Act on an interactable. Safe to call with the result of {@link nearest}.
-   * @param {object} target
-   * @returns {{ok:boolean, reason?:string, rewards?:object}}
    */
-  interact(target) {
+  interact(target: any): {ok:boolean, reason?:string, rewards?:any} {
     if (!target) return { ok: false, reason: 'nothing' };
     if (target.kind === 'entrance') { this.enter(target.id); return { ok: true }; }
     if (target.kind === 'exit') { this.leave(); return { ok: true }; }
@@ -172,8 +163,8 @@ export class Dungeons {
     return { ok: false, reason: 'unknown' };
   }
 
-  /** Map payload for the UI. @returns {object|null} */
-  mapData() {
+  /** Map payload for the UI. @returns */
+  mapData(): any | null {
     if (!this.current || !this.current.map) return null;
     const p = this.game.get('Player');
     const local = p ? this._tmp.copy(p.position).sub(this.current.origin) : null;
@@ -182,9 +173,8 @@ export class Dungeons {
 
   /**
    * Draw the current dungeon map onto a 2D context.
-   * @param {CanvasRenderingContext2D} ctx
    */
-  drawMap(ctx, w, h, opts) {
+  drawMap(ctx: CanvasRenderingContext2D, w, h, opts) {
     if (!this.current || !this.current.map) return false;
     const p = this.game.get('Player');
     const local = p ? this._tmp.copy(p.position).sub(this.current.origin) : null;

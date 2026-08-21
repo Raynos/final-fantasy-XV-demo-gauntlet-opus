@@ -464,14 +464,14 @@ class CoeurlEnemy extends QuadrupedEnemy {
 
   /**
    * Drive both whisker chains.
-   * @param {Function} S pose writer
-   * @param {number} sweepFwd −1 laid flat back, 0 rest, +1 swung forward and level
-   * @param {number} flare how far they splay apart
-   * @param {number} wave amplitude of the travelling ripple
-   * @param {number} t phase seconds
-   * @param {number} charge 0..1, swells the outer segment as the bolt builds
+   * @param S pose writer
+   * @param sweepFwd −1 laid flat back, 0 rest, +1 swung forward and level
+   * @param flare how far they splay apart
+   * @param wave amplitude of the travelling ripple
+   * @param t phase seconds
+   * @param charge 0..1, swells the outer segment as the bolt builds
    */
-  whiskers(S, sweepFwd, flare, wave, t, charge = 0) {
+  whiskers(S: ((...args: any[]) => any), sweepFwd: number, flare: number, wave: number, t: number, charge: number = 0) {
     for (const s of [-1, 1]) {
       const n = s < 0 ? 'L' : 'R';
       for (let i = 0; i < 3; i++) {

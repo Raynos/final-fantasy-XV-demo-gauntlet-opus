@@ -110,10 +110,10 @@ export class CameraRig {
   /**
    * Add screen shake. Trauma decays quadratically so small hits read as a
    * tick and big ones as a real impact.
-   * @param {number} amount 0..1
-   * @param {THREE.Vector3} [dir] world direction to bias the kick along
+   * @param amount 0..1
+   * @param [dir] world direction to bias the kick along
    */
-  addTrauma(amount, dir) {
+  addTrauma(amount: number, dir?: THREE.Vector3) {
     this.trauma = Math.min(this.traumaMax, this.trauma + amount);
     if (dir) this._traumaDir.copy(dir).normalize();
     else this._traumaDir.set(0, 0, 0);

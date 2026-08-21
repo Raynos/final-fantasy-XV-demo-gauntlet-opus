@@ -22,11 +22,7 @@ const A2 = 110, A3 = 220, A4 = 440;
  * horizon of the whole session.
  */
 export class Score {
-  /**
-   * @param {import('./Graph.ts').AudioGraph} graph
-   * @param {import('./Instruments.ts').Instruments} inst
-   */
-  constructor(graph, inst) {
+  constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
     this.inst = inst;
     const ctx = graph.ctx;
@@ -111,10 +107,9 @@ export class Score {
   /**
    * Change state. The chart swaps at the next bar line and the layers
    * cross-fade, so nothing ever cuts.
-   * @param {keyof STATES} name
-   * @param {object} [o] {immediate, fade}
+   * @param [o] {immediate, fade}
    */
-  setState(name, o = {}) {
+  setState(name: keyof STATES, o: any = {}) {
     if (!STATES[name]) return;
     if (name === this.stateName && !o.force) { this.pending = null; return; }
     if (o.immediate) this._applyState(name, o.fade ?? 0.6);
@@ -184,8 +179,8 @@ export class Score {
     }
   }
 
-  /** Muffle the score (menus, pause, underwater). @param {number} hz */
-  setFilter(hz, glide = 0.25) {
+  /** Muffle the score (menus, pause, underwater). @param hz */
+  setFilter(hz: number, glide = 0.25) {
     this.filter.frequency.setTargetAtTime(clamp(hz, 180, 20000), this.clock, glide);
   }
 
@@ -195,9 +190,9 @@ export class Score {
    * The state to return to is set *after* `setState`, because `_applyState`
    * derives a default from whatever was playing — and what was playing is the
    * combat cue we have just won, which is the one place we must not go back to.
-   * @param {string} [after] the cue to resolve into
+   * @param [after] the cue to resolve into
    */
-  victory(after = 'field') {
+  victory(after: string = 'field') {
     if (this.stateName === 'victory') return;
     this.setState('victory', { immediate: true, fade: 0.35 });
     this.returnTo = STATES[after] ? after : 'field';

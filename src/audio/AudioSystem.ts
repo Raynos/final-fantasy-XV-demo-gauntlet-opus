@@ -255,14 +255,14 @@ export class AudioSystem {
 
   /**
    * Play a sound.
-   * @param {string} name see `Sfx` — `swing:greatsword`, `impact:metal`,
+   * @param name see `Sfx` — `swing:greatsword`, `impact:metal`,
    *   `voc:sabertusk:aggro`, `step:gravel`, `spell:ice`, `ui:confirm`,
    *   `thunder`, plus the legacy short names `hit` / `swing` / `warp` / `step` /
    *   `magic` / `ui` / `parry`.
-   * @param {{x:number,y:number,z:number}} [pos] world position, omit for 2D
-   * @param {object} [opts] {volume, hrtf, scale, distance, at}
+   * @param [pos] world position, omit for 2D
+   * @param [opts] {volume, hrtf, scale, distance, at}
    */
-  play(name, pos, opts = {}) {
+  play(name: string, pos?: {x:number,y:number,z:number}, opts: any = {}) {
     if (!this.enabled || !this.sfx) return false;
     return this.sfx.play(name, pos, opts);
   }
@@ -270,9 +270,8 @@ export class AudioSystem {
   /**
    * Force the music state. The game normally picks this itself from combat and
    * the clock; call it for scripted moments.
-   * @param {'field'|'night'|'tension'|'combat'|'boss'|'camp'|'victory'|'silence'} s
    */
-  setState(s) {
+  setState(s: 'field' | 'night' | 'tension' | 'combat' | 'boss' | 'camp' | 'victory' | 'silence') {
     this.state = s;
     if (!this.enabled) return;
     this._musicState = s;
@@ -284,9 +283,8 @@ export class AudioSystem {
    * (wind strength, rain intensity, gusts) are read straight off the Weather
    * system in `_environment`, so this only needs to move the bed immediately
    * rather than waiting for the next probe.
-   * @param {'clear'|'overcast'|'storm'|'fog'|'rain'} w
    */
-  setWeather(w) {
+  setWeather(w: 'clear' | 'overcast' | 'storm' | 'fog' | 'rain') {
     if (!this.enabled) return;
     this.weatherName = w;
     this.amb.setRain(w === 'storm' ? 1 : w === 'rain' ? 0.55 : 0);
@@ -296,10 +294,9 @@ export class AudioSystem {
   /**
    * A character speaks. Ducks the score and ambience for the length of the
    * line so dialogue and party banter always sit on top.
-   * @param {number} seconds
-   * @param {number} [depth] 0..1, lower ducks harder
+   * @param [depth] 0..1, lower ducks harder
    */
-  say(seconds = 2.5, depth = 0.42) {
+  say(seconds: number = 2.5, depth: number = 0.42) {
     if (!this.enabled) return;
     this.graph.duck(depth, Math.max(0.2, seconds), 0.7);
   }
@@ -308,10 +305,9 @@ export class AudioSystem {
   banter(seconds = 2) { this.say(seconds, 0.62); }
 
   /**
-   * @param {'master'|'music'|'sfx'|'amb'|'ui'|'voice'} bus
-   * @param {number} v 0..1
+   * @param v 0..1
    */
-  setVolume(bus, v) {
+  setVolume(bus: 'master' | 'music' | 'sfx' | 'amb' | 'ui' | 'voice', v: number) {
     this._userVolume[bus] = clamp(v, 0, 1);
     if (this.graph) this.graph.setVolume(bus, this._userVolume[bus]);
   }
@@ -319,8 +315,7 @@ export class AudioSystem {
   /** Current user setting for a bus, 0..1. */
   volumeOf(bus) { return this._userVolume[bus] ?? 1; }
 
-  /** @param {boolean} [on] */
-  setMuted(on) { return this.graph ? this.graph.setMuted(on) : false; }
+  setMuted(on?: boolean) { return this.graph ? this.graph.setMuted(on) : false; }
 
   /** Master volume, 0..1. */
   get volume() { return this._volume ?? 1; }
@@ -331,8 +326,7 @@ export class AudioSystem {
     this.sfx.play('ui:move', null, {});
   }
 
-  /** @returns {string[]} */
-  get buses() { return BUSES.slice(); }
+  get buses(): string[] { return BUSES.slice(); }
 
   /**
    * The live AudioContext, or null before the first gesture unlocks it.
@@ -345,17 +339,14 @@ export class AudioSystem {
   /**
    * A bus to route an external source into, so it inherits the mix: ducking,
    * the glue compressor, the limiter and the user's volume sliders.
-   * @param {'music'|'sfx'|'amb'|'ui'|'voice'} name
-   * @returns {GainNode|null}
    */
-  busNode(name = 'music') { return this.graph ? this.graph.bus[name] || null : null; }
+  busNode(name: 'music' | 'sfx' | 'amb' | 'ui' | 'voice' = 'music'): GainNode | null { return this.graph ? this.graph.bus[name] || null : null; }
 
   /**
    * Hand the music over to something else (the car radio) and take it back.
    * The score keeps its clock, so returning mid-journey resumes in tempo.
-   * @param {boolean} on
    */
-  suspendScore(on) {
+  suspendScore(on: boolean) {
     if (!this.enabled) return;
     this._scoreSuspended = !!on;
     this.score.setState(on ? 'silence' : this._musicState, { fade: on ? 1.2 : 2.0 });
@@ -680,12 +671,8 @@ export class AudioSystem {
    * session in one pass instead of from a timer.
    *
    * @param {object} o
-   * @param {number} o.seconds
-   * @param {number} [o.sampleRate]
-   * @param {(api:object)=>void} o.script
-   * @returns {Promise<{buffer:AudioBuffer, stats:object}>}
    */
-  static async renderSession(o) {
+  static async renderSession(o: { seconds: number, sampleRate?: number, script: (api:any)=>void }): Promise<{buffer:AudioBuffer, stats:any}> {
     const seconds = o.seconds ?? 30;
     const sampleRate = o.sampleRate ?? 44100;
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;

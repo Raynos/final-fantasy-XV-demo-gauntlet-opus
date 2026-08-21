@@ -15,8 +15,7 @@ const W = 132;
 const H = 34;
 
 export class StatsHud {
-  /** @param {HTMLElement} root */
-  constructor(root) {
+  constructor(root: HTMLElement) {
     this.node = document.createElement('div');
     this.node.className = 'dev-stats';
     this.node.innerHTML = `
@@ -39,10 +38,9 @@ export class StatsHud {
   }
 
   /**
-   * @param {number} dt seconds of wall clock for the frame just rendered
-   * @param {object} game
+   * @param dt seconds of wall clock for the frame just rendered
    */
-  update(dt, game) {
+  update(dt: number, game: any) {
     if (!this.visible) return;
     const ms = dt * 1000;
     this.samples[this.head] = ms;

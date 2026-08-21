@@ -28,8 +28,8 @@ import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/Cr
  * ```
  */
 export class QuadrupedEnemy extends Enemy {
-  /** @returns {Object} tuning block; subclasses must define it. */
-  get A() { return this.constructor.ANIM; }
+  /** @returns tuning block; subclasses must define it. */
+  get A(): any { return this.constructor.ANIM; }
 
   setupAnim(anim) {
     const A = this.A;
@@ -38,10 +38,10 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /**
-   * @param {string} state legacy pose vocabulary
-   * @param {number} t phase seconds
+   * @param state legacy pose vocabulary
+   * @param t phase seconds
    */
-  pose(state, t) {
+  pose(state: string, t: number) {
     if (!this.rig) return;
     // The trunk compensation is only knowable once the trunk has been posed,
     // so it is per-frame state: cleared here, filled by `spine()`, consumed by
@@ -68,10 +68,10 @@ export class QuadrupedEnemy extends Enemy {
    * Place all four feet relative to bind. `drop` lowers the body while the
    * feet stay planted — which is what crouching is. Shortening the legs alone
    * lifts the paws and the animal appears to hover.
-   * @param {Function} S pose writer
-   * @param {Object} o {drop, front:{reach,lift,splay}, back:{...}}
+   * @param S pose writer
+   * @param o {drop, front:{reach,lift,splay}, back:{...}}
    */
-  stance(S, o) {
+  stance(S: ((...args: any[]) => any), o: any) {
     const a = this.anim, A = this.A;
     const drop = o.drop || 0;
     const f = o.front || {}, b = o.back || {};
@@ -195,12 +195,12 @@ export class QuadrupedEnemy extends Enemy {
    * control instead of the spine's, which is how a predator actually holds it:
    * the body does the moving, the head stays locked on.
    *
-   * @param {Function} S pose writer
-   * @param {Object} o {pitch, yaw, roll, stabilise} — pitch is relative to
+   * @param S pose writer
+   * @param o {pitch, yaw, roll, stabilise} — pitch is relative to
    *   level, positive = nose down; `stabilise` 0..1 how much trunk pitch to
    *   cancel (1 = perfectly level head, 0 = head rides the spine).
    */
-  aimHead(S, o = {}) {
+  aimHead(S: ((...args: any[]) => any), o: any = {}) {
     const t = this.A.trunk;
     const stab = this._chestPitch * (o.stabilise ?? (this.A.headStabilise ?? 0.85));
     const pitch = o.pitch || 0, yaw = o.yaw || 0, roll = o.roll || 0;

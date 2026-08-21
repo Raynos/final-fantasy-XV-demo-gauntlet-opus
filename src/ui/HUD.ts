@@ -39,8 +39,7 @@ import { BANTER } from './GameData.ts';
  * `ffxv-banter`, `ffxv-hit`.
  */
 export class HUD {
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     this.root = el('div', { id: 'hud' });
     game.uiRoot.appendChild(this.root);
@@ -80,8 +79,8 @@ export class HUD {
     this.bridge.attach(game);
   }
 
-  /** Push a line onto the notification column. @param {string} k @param {string} v */
-  toast(k, v, ico, tone) { this.toasts.push(k, v, ico, tone); }
+  /** Push a line onto the notification column. @param k @param v */
+  toast(k: string, v: string, ico, tone) { this.toasts.push(k, v, ico, tone); }
 
   /** UI is authored at 1600x900; scale it crisply for other viewport sizes. */
   _scale() {
@@ -92,31 +91,29 @@ export class HUD {
     this.uiScale = s;
   }
 
-  /** @param {boolean} v show/hide the field HUD */
-  setVisible(v) { this.visible = !!v; }
+  /** @param v show/hide the field HUD */
+  setVisible(v: boolean) { this.visible = !!v; }
 
-  /** Menus dim and suppress the HUD while open. @param {boolean} v */
-  setMenuOpen(v) { this.menuOpen = !!v; }
+  /** Menus dim and suppress the HUD while open. @param v */
+  setMenuOpen(v: boolean) { this.menuOpen = !!v; }
 
   // ---- forwarded API --------------------------------------------------
-  /** @param {object} ev see class docs */
-  damage(ev) { this.combat.damage(ev); }
-  /** @param {string} word @param {string} [sub] */
-  callOut(word, sub) { this.combat.callOut(word, sub); }
-  /** @param {object|null} t */
-  setLockOn(t) { this.combat.setLockOn(t); }
-  /** @param {number} v 0..1 */
-  setArmiger(v) { this.combat.setArmiger(v); }
-  /** @param {string} name @param {string} [sub] @param {string} [meta] */
-  areaTitle(name, sub, meta) { this.fx.areaTitle(name, sub, meta); }
-  /** @param {string} who @param {string} line @param {number} [dur] */
-  say(who, line, dur) { this.subtitles.say(who, line, dur); }
-  /** @param {string} who @param {string} line */
-  banter(who, line) { this.subtitles.bant(who, line); }
-  /** @param {number} n */
-  levelUp(n) { this.fx.levelUp(n); }
-  /** @param {number} amount 0..1 */
-  hit(amount) { this.fx.hit(amount); }
+  /** @param ev see class docs */
+  damage(ev: any) { this.combat.damage(ev); }
+  /** @param word @param [sub] */
+  callOut(word: string, sub?: string) { this.combat.callOut(word, sub); }
+  setLockOn(t: any | null) { this.combat.setLockOn(t); }
+  /** @param v 0..1 */
+  setArmiger(v: number) { this.combat.setArmiger(v); }
+  /** @param name @param [sub] @param [meta] */
+  areaTitle(name: string, sub?: string, meta?: string) { this.fx.areaTitle(name, sub, meta); }
+  /** @param who @param line @param [dur] */
+  say(who: string, line: string, dur?: number) { this.subtitles.say(who, line, dur); }
+  /** @param who @param line */
+  banter(who: string, line: string) { this.subtitles.bant(who, line); }
+  levelUp(n: number) { this.fx.levelUp(n); }
+  /** @param amount 0..1 */
+  hit(amount: number) { this.fx.hit(amount); }
 
   /** Rewind every demo/fallback animation. Used by the capture harness. */
   resetDemo() {
@@ -146,8 +143,8 @@ export class HUD {
     return shot?.scenario || 'field';
   }
 
-  /** @param {number} dt @param {object} game */
-  lateUpdate(dt, game) {
+  /** @param dt @param game */
+  lateUpdate(dt: number, game: any) {
     // First-run hints run outside the HUD's own visibility, because the one
     // about closing a menu has to show while the HUD itself is faded out.
     this.hints.muted = !!game.currentShot;

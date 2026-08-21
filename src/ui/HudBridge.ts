@@ -26,8 +26,7 @@ const CALLOUTS = {
 };
 
 export class HudBridge {
-  /** @param {import('./HUD.ts').HUD} hud */
-  constructor(hud) {
+  constructor(hud: import('./HUD.ts').HUD) {
     this.hud = hud;
     this.game = null;
     this._off = [];

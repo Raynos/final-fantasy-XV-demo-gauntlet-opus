@@ -45,11 +45,11 @@ export class Enemies {
     this.corpseLinger = 6;
   }
 
-  /** @returns {string[]} available species keys */
-  get species() { return speciesKeys(); }
+  /** @returns available species keys */
+  get species(): string[] { return speciesKeys(); }
 
-  /** Species definition by key. @param {string} key */
-  def(key) { return TYPES[key] || null; }
+  /** Species definition by key. @param key */
+  def(key: string) { return TYPES[key] || null; }
 
   /**
    * Build (or fetch) the shared prototype for a species. Named marks derived
@@ -70,11 +70,11 @@ export class Enemies {
 
   /**
    * Spawn one enemy.
-   * @param {string} key species key — see `Bestiary.js`
-   * @param {object} o {pos:[x,y,z]|Vector3, heading, scale, level, hp, damage,
+   * @param key species key — see `Bestiary.js`
+   * @param o {pos:[x,y,z]|Vector3, heading, scale, level, hp, damage,
    *                    home, patrol, pack, leash, name, expClass}
    */
-  spawn(key, o = {}) {
+  spawn(key: string, o: any = {}) {
     const type = TYPES[key];
     if (!type) throw new Error(`unknown enemy ${key}`);
 
@@ -179,9 +179,9 @@ export class Enemies {
 
   /**
    * Enemies whose capsule intersects a sphere — the melee hit query.
-   * @param {THREE.Vector3} centre @param {number} radius
+   * @param centre @param radius
    */
-  sphereQuery(centre, radius, out = []) {
+  sphereQuery(centre: THREE.Vector3, radius: number, out = []) {
     out.length = 0;
     for (const e of this.list) {
       if (e.dead) continue;

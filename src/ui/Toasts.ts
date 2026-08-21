@@ -12,8 +12,7 @@ import { icon } from './Icons.ts';
  * no CSS transitions, so a capture after N fixed steps is reproducible.
  */
 export class Toasts {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div.toasts');
     // `parent` is the bottom-left corner's notice slot, which sits above the
     // party stack and below the combat rail — see `PartyPanel`'s class note.
@@ -25,12 +24,12 @@ export class Toasts {
 
   /**
    * Push a line.
-   * @param {string} label small uppercase key ("Obtained", "Ability Points")
-   * @param {string} value the thing itself ("Potion  ×3")
-   * @param {string} [ico] icon key from `Icons.js`
-   * @param {string} [tone] '' | 'gold' | 'ice'
+   * @param label small uppercase key ("Obtained", "Ability Points")
+   * @param value the thing itself ("Potion  ×3")
+   * @param [ico] icon key from `Icons.js`
+   * @param [tone] '' | 'gold' | 'ice'
    */
-  push(label, value, ico = 'items', tone = '') {
+  push(label: string, value: string, ico: string = 'items', tone: string = '') {
     const node = el(`div.toast${tone ? `.${tone}` : ''}`, {}, [
       el('div.tz-ico', {}, [icon(ico, { size: 14, stroke: 1.2 })]),
       el('div.tz-body', {}, [
@@ -52,10 +51,10 @@ export class Toasts {
   }
 
   /**
-   * @param {number} dt seconds
-   * @param {number} appear 0..1 master HUD reveal
+   * @param dt seconds
+   * @param appear 0..1 master HUD reveal
    */
-  update(dt, appear) {
+  update(dt: number, appear: number) {
     if (!this.items.length) { this.root.style.display = 'none'; return; }
     this.root.style.display = '';
     for (let i = this.items.length - 1; i >= 0; i--) {

@@ -36,21 +36,8 @@ const UP = new THREE.Vector3(0, 1, 0);
 export class Shot {
   /**
    * @param {object} def
-   * @param {number} def.t0 scene time this shot cuts in
-   * @param {number} def.t1 scene time it cuts out
-   * @param {Array<object>} def.keys keyframes, `t` relative to `t0`
-   * @param {number} [def.fov] default vertical FOV for keys that omit one
-   * @param {number} [def.handheld] 0..1 operator noise
-   * @param {number} [def.breathe] 0..1 slow boom drift
-   * @param {number|'auto'|'subject'} [def.focus] DOF focus: metres, or a mode
-   * @param {number} [def.fStop] lens aperture for this shot
-   * @param {string|string[]} [def.aim] staged actor id(s) to track live; the
-   *   keyframed targets are then only a fallback
-   * @param {number} [def.aimU] metres above the actor's staged foot position to aim
-   *   at — roughly 1.5 for a head, 1.3 for a chest
-   * @param {number} [def.seed] noise seed so two shots never wobble in sync
-   */
-  constructor(def) {
+   * */
+  constructor(def: { t0: number, t1: number, keys: Array<any>, fov?: number, handheld?: number, breathe?: number, focus?: number | 'auto' | 'subject', fStop?: number, aim?: string | string[], aimU?: number, seed?: number }) {
     this.t0 = def.t0;
     this.t1 = def.t1;
     this.dur = Math.max(0.001, def.t1 - def.t0);
@@ -81,10 +68,9 @@ export class Shot {
 
   /**
    * Sample the move.
-   * @param {number} t scene time
-   * @returns {{pos:THREE.Vector3, target:THREE.Vector3, fov:number, roll:number}}
+   * @param t scene time
    */
-  sample(t) {
+  sample(t: number): {pos:THREE.Vector3, target:THREE.Vector3, fov:number, roll:number} {
     const local = t - this.t0;
     const keys = this.keys;
     const out = this._out;
@@ -162,10 +148,9 @@ export class Shot {
  */
 export class Frame {
   /**
-   * @param {THREE.Vector3} origin
-   * @param {THREE.Vector3} forward world direction the scene faces
+   * @param forward world direction the scene faces
    */
-  constructor(origin, forward) {
+  constructor(origin: THREE.Vector3, forward: THREE.Vector3) {
     this.origin = origin.clone();
     this.fwd = forward.clone().setY(0).normalize();
     if (this.fwd.lengthSq() < 1e-6) this.fwd.set(0, 0, 1);
@@ -188,19 +173,19 @@ export class Frame {
    * actors and the camera underneath the tarmac. Anything authored on a deck,
    * a pad or a bridge wants this.
    *
-   * @param {number|null} y world height of the surface
-   * @returns {Frame} this
+   * @param y world height of the surface
+   * @returns this
    */
-  setFloor(y) { this.floor = y ?? null; return this; }
+  setFloor(y: number | null): Frame { this.floor = y ?? null; return this; }
 
   /**
    * A world point from scene-local coordinates.
-   * @param {number} f metres forward along the scene axis
-   * @param {number} r metres to the left of it (screen-left when looking along +f)
-   * @param {number} u metres up
-   * @returns {number[]} `[x, y, z]`, ready for a keyframe
+   * @param f metres forward along the scene axis
+   * @param r metres to the left of it (screen-left when looking along +f)
+   * @param u metres up
+   * @returns `[x, y, z]`, ready for a keyframe
    */
-  at(f, r, u = 0) {
+  at(f: number, r: number, u: number = 0): number[] {
     const v = this._v.copy(this.origin)
       .addScaledVector(this.fwd, f)
       .addScaledVector(this.right, r)

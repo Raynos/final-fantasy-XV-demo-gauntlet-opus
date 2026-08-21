@@ -28,11 +28,11 @@ import { worldMap } from '../../../world/map/WorldMap.ts';
  * A named world-space anchor published by the town system — the garage bay, the
  * caravan, the pylon sign — ground truth for anything staged in Hammerhead.
  *
- * @param {object} ctx cinematic context
- * @param {string} [name] key in `Town.anchors`; omit for the town origin
- * @returns {THREE.Vector3|null} null when the town has not been built
+ * @param ctx cinematic context
+ * @param [name] key in `Town.anchors`; omit for the town origin
+ * @returns null when the town has not been built
  */
-export function townAnchor(ctx, name) {
+export function townAnchor(ctx: any, name?: string): THREE.Vector3 | null {
   const town = ctx.game.get('Town');
   if (!town) return null;
   const a = name && town.anchors ? town.anchors[name] : null;
@@ -46,11 +46,10 @@ export function townAnchor(ctx, name) {
  * POIs written as `at: 'n_hammerhead'` inherit their position from a road node,
  * so this is the only honest way to ask where one of them ended up.
  *
- * @param {object} ctx cinematic context
- * @param {string} id POI id, e.g. `'longwythe_peak'`
- * @returns {THREE.Vector3|null}
+ * @param ctx cinematic context
+ * @param id POI id, e.g. `'longwythe_peak'`
  */
-export function poiPoint(ctx, id) {
+export function poiPoint(ctx: any, id: string): THREE.Vector3 | null {
   const p = worldMap.byId ? worldMap.byId.get(id) : null;
   if (!p) return null;
   const terrain = ctx.terrain || ctx.game.get('Terrain');
@@ -73,10 +72,9 @@ export function poiPoint(ctx, id) {
  * shot, and returns the object the scene should position.
  * {@link releaseCar} puts both back.
  *
- * @param {object} ctx cinematic context
- * @returns {THREE.Object3D|null}
+ * @param ctx cinematic context
  */
-export function takeCar(ctx) {
+export function takeCar(ctx: any): THREE.Object3D | null {
   const props = ctx.game.get('Props');
   const car = props && props.regalia;
   if (!car) return null;
@@ -110,11 +108,9 @@ export function releaseCar(ctx) {
  * that drives it along the scene axis is a quarter turn off the "face along +Z"
  * convention the actors use.
  *
- * @param {THREE.Object3D} car
- * @param {Frame} F
- * @param {number} [turn] extra yaw, radians (a quarter turn parks it broadside)
+ * @param [turn] extra yaw, radians (a quarter turn parks it broadside)
  */
-export function aimCar(car, F, turn = 0) {
+export function aimCar(car: THREE.Object3D, F: Frame, turn: number = 0) {
   if (!car) return;
   const c = Math.cos(turn), s = Math.sin(turn);
   const fx = F.fwd.x * c - F.fwd.z * s;
@@ -131,12 +127,11 @@ export function aimCar(car, F, turn = 0) {
  * therefore degrades to something sane if the town has not been built or a POI
  * has been renamed, instead of staging itself at the world origin.
  *
- * @param {object} ctx cinematic context
- * @param {string|null} siteType Ecology site type, e.g. `'reststop'`
- * @param {object} [opts] `{ origin:Vector3, fallback:[x,z], facing:[x,z]|Vector3, offset:[f,l] }`
- * @returns {Frame}
+ * @param ctx cinematic context
+ * @param siteType Ecology site type, e.g. `'reststop'`
+ * @param [opts] `{ origin:Vector3, fallback:[x,z], facing:[x,z]|Vector3, offset:[f,l] }`
  */
-export function frameAt(ctx, siteType, opts = {}) {
+export function frameAt(ctx: any, siteType: string | null, opts: any = {}): Frame {
   const { game, terrain } = ctx;
   const props = game.get('Props');
   const eco = props && props.ecology;
@@ -177,11 +172,9 @@ export function frameAt(ctx, siteType, opts = {}) {
  * Slots are deliberately uneven — a symmetric line-up is the surest way to make
  * four characters read as a menu screen.
  *
- * @param {object} ctx
- * @param {Frame} F
- * @param {object} [opts] `{ spread, at, poses, look }`
+ * @param [opts] `{ spread, at, poses, look }`
  */
-export function arrange(ctx, F, opts = {}) {
+export function arrange(ctx: any, F: Frame, opts: any = {}) {
   const { stage, terrain } = ctx;
   const spread = opts.spread ?? 1.0;
   const at = opts.at ?? 0;
@@ -214,11 +207,9 @@ export function arrange(ctx, F, opts = {}) {
  * A held single: camera at eye height, slightly off the actor's axis, drifting
  * in by a few centimetres over the length of the take.
  *
- * @param {object} ctx
- * @param {Frame} F
- * @param {object} o `{ t0, t1, f, l, camF, camL, camU, fov, fStop, focus, targetU }`
+ * @param o `{ t0, t1, f, l, camF, camL, camU, fov, fStop, focus, targetU }`
  */
-export function single(ctx, F, o) {
+export function single(ctx: any, F: Frame, o: any) {
   const terrain = ctx.game.get('Terrain');
   const G = (f, l, u) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
@@ -298,11 +289,9 @@ export function twoShot(ctx, F, o) {
  * Both actors face up-frame — this is a line-up, not two people squared off —
  * so `near` is whoever is closest to the lens, not whoever is talking.
  *
- * @param {object} ctx
- * @param {Frame} F
- * @param {object} o `{ t0, t1, nearF, nearL, farF, farL, back, side, camU, fov }`
+ * @param o `{ t0, t1, nearF, nearL, farF, farL, back, side, camU, fov }`
  */
-export function ots(ctx, F, o) {
+export function ots(ctx: any, F: Frame, o: any) {
   const terrain = ctx.game.get('Terrain');
   const G = (f, l, u) => F.ground(terrain, f, l, u);
   const back = o.back ?? 1.45;     // metres up-frame of the near shoulder
@@ -334,11 +323,9 @@ export function ots(ctx, F, o) {
  * near knee height, target above eye line. The cheapest way to make four people
  * standing in a field read as a composition rather than an inventory.
  *
- * @param {object} ctx
- * @param {Frame} F
- * @param {object} o same keys as {@link wide}
+ * @param o same keys as {@link wide}
  */
-export function lowAngle(ctx, F, o) {
+export function lowAngle(ctx: any, F: Frame, o: any) {
   return wide(ctx, F, {
     camU: 0.52, targetU: 1.86, fov: 34, fStop: 5.0, handheld: 0.3,
     driftU: 0.16, ...o,

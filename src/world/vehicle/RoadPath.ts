@@ -18,8 +18,7 @@ const CELL = 48;
  *             x:number, y:number, z:number, tx:number, tz:number}} RoadHit */
 
 export class RoadPath {
-  /** @param {{points:Array, length:number, width:number, shoulder:number}} road */
-  constructor(road) {
+  constructor(road: {points:Array, length:number, width:number, shoulder:number}) {
     this.road = road;
     this.pts = road && road.points ? road.points : [];
     this.length = road ? road.length : 0;
@@ -33,8 +32,8 @@ export class RoadPath {
     this._lastI = 0;
   }
 
-  /** A reusable result record for `nearest`. @returns {RoadHit} */
-  makeHit() {
+  /** A reusable result record for `nearest`. @returns */
+  makeHit(): RoadHit {
     return { i: 0, s: 0, lat: 0, dist: 0, x: 0, y: 0, z: 0, tx: 0, tz: 1 };
   }
 
@@ -58,12 +57,8 @@ export class RoadPath {
    * key off. Starts from the previously returned index, so a car that moves a
    * metre a frame usually resolves in the first local scan.
    *
-   * @param {number} x
-   * @param {number} z
-   * @param {RoadHit} [out]
-   * @returns {RoadHit}
    */
-  nearest(x, z, out = this._hit) {
+  nearest(x: number, z: number, out: RoadHit = this._hit): RoadHit {
     const pts = this.pts;
     if (pts.length < 2) { out.dist = 1e5; out.lat = 1e5; return out; }
 
@@ -127,10 +122,9 @@ export class RoadPath {
 
   /**
    * Centreline point at arc-length `s`, clamped to the ends.
-   * @param {number} s metres
-   * @param {{x:number,y:number,z:number,tx:number,tz:number}} out
+   * @param s metres
    */
-  at(s, out) {
+  at(s: number, out: {x:number,y:number,z:number,tx:number,tz:number}) {
     const pts = this.pts;
     if (!pts.length) { out.x = 0; out.y = 0; out.z = 0; out.tx = 0; out.tz = 1; return out; }
     const t = Math.max(0, Math.min(this.length, s));
@@ -151,11 +145,10 @@ export class RoadPath {
   /**
    * Worst |curvature| (1/m) over the next `ahead` metres from `s`, sampled
    * every ~12 m. Used by the auto-driver to pick a corner entry speed.
-   * @param {number} s
-   * @param {number} ahead metres to look
-   * @returns {number} 1/radius, 0 on a straight
+   * @param ahead metres to look
+   * @returns 1/radius, 0 on a straight
    */
-  curvature(s, ahead = 90) {
+  curvature(s: number, ahead: number = 90): number {
     const pts = this.pts;
     if (pts.length < 5) return 0;
     let worst = 0;
@@ -181,9 +174,8 @@ export class RoadPath {
   /**
    * Signed heading of the centreline at arc-length `s`, in the same convention
    * the rest of the game uses (atan2(dx, dz)).
-   * @param {number} s
    */
-  headingAt(s) {
+  headingAt(s: number) {
     const p = this._h || (this._h = { x: 0, y: 0, z: 0, tx: 0, tz: 1 });
     this.at(s, p);
     return Math.atan2(p.tx, p.tz);

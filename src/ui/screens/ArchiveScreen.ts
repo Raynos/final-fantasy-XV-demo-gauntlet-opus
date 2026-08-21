@@ -33,8 +33,7 @@ const MAX_ROWS = 16;
  * Controls: ↑↓ pick, ←→ change section. No CSS transitions.
  */
 export class ArchiveScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Archives';
@@ -47,8 +46,8 @@ export class ArchiveScreen {
   get rpg() { return rpg(this.game); }
   get datalog() { return FACTION_TABS[this.tab].f === 'datalog'; }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     attachKillLog();
 
@@ -239,8 +238,8 @@ export class ArchiveScreen {
     }
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     const rows = this._rows = this.rows();
     if (this.i >= rows.length) this.i = Math.max(0, rows.length - 1);

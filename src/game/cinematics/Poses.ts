@@ -136,11 +136,11 @@ export const POSES = {
  * ACTIONS; cinematic poses live here instead, so they go in through the same
  * door the table would have used.
  *
- * @param {object} character a `Character` from `src/characters/rig/Character.js`
- * @param {string|null} name key in {@link POSES}, or null to release
- * @param {number} [speed=1]
+ * @param character a `Character` from `src/characters/rig/Character.js`
+ * @param name key in {@link POSES}, or null to release
+ * @param [speed=1]
  */
-export function setPose(character, name, speed = 1) {
+export function setPose(character: any, name: string | null, speed: number = 1) {
   const anim = character && character.anim;
   if (!anim) return;
   if (!name) {

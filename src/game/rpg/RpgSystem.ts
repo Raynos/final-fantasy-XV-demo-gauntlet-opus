@@ -113,9 +113,8 @@ export class RpgSystem {
   /**
    * Wire everything up. If `?rpgsave` is present in the URL and a save exists,
    * it is loaded; otherwise a fresh game is dealt out.
-   * @param {object} game
    */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     this._wire();
 
@@ -258,10 +257,9 @@ export class RpgSystem {
 
   /**
    * Per-frame tick.
-   * @param {number} dt seconds
-   * @param {object} game
+   * @param dt seconds
    */
-  update(dt, game) {
+  update(dt: number, game: any) {
     this.playTime += dt;
     this.combatBridge.update(dt, game);
     this.day.update(dt, game);
@@ -367,10 +365,8 @@ export class RpgSystem {
 
   /**
    * Award EXP into the bank (it does not level anyone until they sleep).
-   * @param {number} amount
-   * @param {string} [source]
    */
-  gainExp(amount, source = 'battle') {
+  gainExp(amount: number, source: string = 'battle') {
     const gained = this.expBank.add(amount, source);
     this.emitter.emit('exp-gained', { amount: gained, source, banked: this.expBank.banked });
     return gained;
@@ -379,10 +375,10 @@ export class RpgSystem {
   /**
    * Call when something dies. Banks EXP, awards AP, ticks kill objectives and
    * rolls drops.
-   * @param {object} enemy `{ id, level, expClass, drops? }`
-   * @param {object} [ctx] `{ byWarpStrike, byTechnique }`
+   * @param enemy `{ id, level, expClass, drops? }`
+   * @param [ctx] `{ byWarpStrike, byTechnique }`
    */
-  enemyKilled(enemy, ctx = {}) {
+  enemyKilled(enemy: any, ctx: any = {}) {
     const exp = expForKill(enemy, this.day.hour);
     this.gainExp(exp, 'battle');
     if (ctx.byWarpStrike) this.ascension.awardAp('warp-strike-kill');
@@ -413,9 +409,9 @@ export class RpgSystem {
   /**
    * Roll a hit through the damage formula with all the current modifiers
    * folded in — night scaling, ascension bonuses, weapon class weakness.
-   * @param {object} opts see `computeDamage`; `attacker` may be a member id
+   * @param opts see `computeDamage`; `attacker` may be a member id
    */
-  damage(opts) {
+  damage(opts: any) {
     const attacker = typeof opts.attacker === 'string' ? this.party.stats[opts.attacker] : opts.attacker;
     let motion = opts.motion ?? 1;
     if (opts.isWarpStrike) motion *= 1 + this.ascension.value('warpDamage');
@@ -445,9 +441,9 @@ export class RpgSystem {
 
   /**
    * Camp at a haven: cook (optionally) and sleep.
-   * @param {object} [opts] `{ pos, recipe, lodging, force }`
+   * @param [opts] `{ pos, recipe, lodging, force }`
    */
-  camp(opts = {}) {
+  camp(opts: any = {}) {
     const pos = opts.pos || this.game?.get?.('Player')?.position;
     const lodging = opts.lodging || 'haven';
     if (lodging === 'haven' && !opts.force) {
@@ -493,10 +489,9 @@ export class RpgSystem {
 
   /**
    * Draw elemental energy from the nearest deposit to a point.
-   * @param {{x:number, z:number}} pos
-   * @param {number} [radius=8]
+   * @param [radius=8]
    */
-  drawNearby(pos, radius = 8) {
+  drawNearby(pos: {x:number, z:number}, radius: number = 8) {
     let best = null, bestD = Infinity;
     for (const d of DEPOSITS) {
       const dist = Math.hypot(pos.x - d.pos[0], pos.z - d.pos[2]);
@@ -510,10 +505,10 @@ export class RpgSystem {
 
   /**
    * Craft a spell using Noctis' Magic stat.
-   * @param {object} energy `{ fire, ice, lightning }`
-   * @param {object} [catalyst] `{ id, count }`
+   * @param energy `{ fire, ice, lightning }`
+   * @param [catalyst] `{ id, count }`
    */
-  craftSpell(energy, catalyst = null) {
+  craftSpell(energy: any, catalyst: any = null) {
     const res = this.elemancy.craft(energy, catalyst, this.noctis.magic);
     if (res.ok) this.quests.notify('craft', { target: 'any' });
     return res;
@@ -542,9 +537,9 @@ export class RpgSystem {
 
   /**
    * Load a save slot in place, replacing every subsystem's state.
-   * @param {string} [slot='auto']
+   * @param [slot='auto']
    */
-  loadGame(slot = 'auto') {
+  loadGame(slot: string = 'auto') {
     const res = SaveGame.load(slot);
     if (!res.ok) return res;
     const d = res.data;

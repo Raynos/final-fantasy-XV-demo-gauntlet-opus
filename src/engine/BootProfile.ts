@@ -18,10 +18,10 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  * A no-op cost when nothing is listening, so it is safe to leave in shipping
  * code on the boot path.
  *
- * @param {string} name label, conventionally `System.phase`
- * @param {Function} fn work to time; its return value is passed through
+ * @param name label, conventionally `System.phase`
+ * @param fn work to time; its return value is passed through
  */
-export function bootPhase(name, fn) {
+export function bootPhase(name: string, fn: ((...args: any[]) => any)) {
   const t0 = now();
   const r = fn();
   const p = typeof window !== 'undefined' && window.BOOT_PROFILE;
@@ -33,10 +33,9 @@ export function bootPhase(name, fn) {
 
 /**
  * Install the profiler on a game instance before `init()` is called.
- * @param {object} game
- * @returns {object} the profile record, filled in as boot proceeds
+ * @returns the profile record, filled in as boot proceeds
  */
-export function installBootProfile(game) {
+export function installBootProfile(game: any): any {
   const profile = {
     nav: typeof performance !== 'undefined' && performance.timeOrigin ? performance.timeOrigin : 0,
     moduleEval: now(),

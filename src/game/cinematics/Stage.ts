@@ -27,8 +27,7 @@ import { setPose } from './Poses.ts';
  * ```
  */
 export class Stage {
-  /** @param {object} game */
-  constructor(game) {
+  constructor(game: any) {
     this.game = game;
     this.held = false;
     this.actors = new Map();
@@ -66,8 +65,8 @@ export class Stage {
     return this.actors;
   }
 
-  /** @param {string} id `noctis` | `gladio` | `ignis` | `prompto` */
-  actor(id) { this._bind(); return this.actors.get(id); }
+  /** @param id `noctis` | `gladio` | `ignis` | `prompto` */
+  actor(id: string) { this._bind(); return this.actors.get(id); }
 
   /** Every bound actor id, in staging order. */
   get ids() { this._bind(); return [...this.actors.keys()]; }
@@ -135,12 +134,10 @@ export class Stage {
 
   /**
    * Put an actor at a world position with a yaw.
-   * @param {string} id
-   * @param {number[]|THREE.Vector3} pos
-   * @param {number} [yaw] radians; omit to leave the facing alone
-   * @param {boolean} [snap=true] snap y to the terrain
+   * @param [yaw] radians; omit to leave the facing alone
+   * @param [snap=true] snap y to the terrain
    */
-  place(id, pos, yaw, snap = true) {
+  place(id: string, pos: number[] | THREE.Vector3, yaw?: number, snap: boolean = true) {
     const a = this.actor(id);
     if (!a) return;
     if (Array.isArray(pos)) a.pos.set(pos[0], pos[1], pos[2]);
@@ -162,11 +159,10 @@ export class Stage {
 
   /**
    * Drive the locomotion layer. Speed alone selects idle/walk/jog/sprint.
-   * @param {string} id
-   * @param {THREE.Vector3|number[]|null} dir travel direction (need not be unit)
-   * @param {number} speed metres/second
+   * @param dir travel direction (need not be unit)
+   * @param speed metres/second
    */
-  walk(id, dir, speed) {
+  walk(id: string, dir: THREE.Vector3 | number[] | null, speed: number) {
     const a = this.actor(id);
     if (!a) return;
     a.speed = speed;
@@ -176,8 +172,8 @@ export class Stage {
     if (a.vel.lengthSq() > 1e-8) a.vel.normalize().multiplyScalar(speed);
   }
 
-  /** @param {string} id @param {string|null} name see `Poses.js` */
-  pose(id, name) {
+  /** @param id @param name see `Poses.js` */
+  pose(id: string, name: string | null) {
     const a = this.actor(id);
     if (!a) return;
     a.pose = name;
@@ -186,10 +182,8 @@ export class Stage {
 
   /**
    * Head/eye tracking. Accepts another actor id, a world point, or null.
-   * @param {string} id
-   * @param {string|THREE.Vector3|number[]|null} target
    */
-  look(id, target) {
+  look(id: string, target: string | THREE.Vector3 | number[] | null) {
     const a = this.actor(id);
     if (!a) return;
     a.look = target ?? null;
@@ -215,9 +209,8 @@ export class Stage {
 
   /**
    * Commit every staged transform and advance the rigs.
-   * @param {number} dt
    */
-  tick(dt) {
+  tick(dt: number) {
     if (!this.held) return;
     const terrain = this.game.get('Terrain');
     for (const a of this.actors.values()) {

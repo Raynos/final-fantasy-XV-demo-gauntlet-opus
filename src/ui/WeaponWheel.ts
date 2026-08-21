@@ -11,8 +11,7 @@ const HINT = { up: '↑', right: '→', down: '↓', left: '←' };
  * called out above.
  */
 export class WeaponWheel {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.br');
     this.col = el('div.wpn-col');
     this.cap = el('div.wpn-cap');
@@ -65,15 +64,14 @@ export class WeaponWheel {
     this.built = true;
   }
 
-  /** @param {number} i index of the equipped slot to light up */
-  setActive(i) { this.active = i; }
+  /** @param i index of the equipped slot to light up */
+  setActive(i: number) { this.active = i; }
 
   /**
-   * @param {number} dt seconds
-   * @param {object} game
-   * @param {number} appear 0..1 master reveal
+   * @param dt seconds
+   * @param appear 0..1 master reveal
    */
-  update(dt, game, appear) {
+  update(dt: number, game: any, appear: number) {
     const weapons = readWeapons(game);
     if (!this.built) this._build(weapons);
 

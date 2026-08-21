@@ -466,11 +466,8 @@ const _c1 = new THREE.Color(), _c2 = new THREE.Color();
  * surface came out black with no error anywhere — which is what the sabertusk's
  * head has been doing.
  *
- * @param {number|THREE.Color} a
- * @param {number|THREE.Color} b
- * @param {number} t
  */
-function blend(a, b, t) {
+function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
   if (typeof b === 'number') _c2.setHex(b, THREE.SRGBColorSpace); else _c2.copy(b);
   if (typeof a === 'number') _c1.setHex(a, THREE.SRGBColorSpace); else if (a !== _c1) _c1.copy(a);
   return _c1.lerp(_c2, clamp01(t));

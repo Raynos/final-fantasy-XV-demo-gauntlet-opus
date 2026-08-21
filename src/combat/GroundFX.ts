@@ -130,10 +130,10 @@ export class GroundFX {
 
   /**
    * Expanding shockwave ring on the ground.
-   * @param {object} o {pos, terrain, radius, color, life, t0, thickness, intensity}
+   * @param o {pos, terrain, radius, color, life, t0, thickness, intensity}
    */
   ring({ pos, terrain, radius = 4, color = 0x9fd8ff, life = 0.75, thickness = 0.09,
-    intensity = 3.2, opacity = 1, age = 0 }) {
+    intensity = 3.2, opacity = 1, age = 0 }: any) {
     const p = this._take(this.rings, '_ringNext');
     p.place(pos, radius * 2.2, terrain, 0.08);
     p.uniforms.uRing.value = 1;

@@ -66,9 +66,8 @@ function mound(mg, mat, F, rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 
 /**
  * Keycatrich: an imperial blockhouse driven into a spoil berm, with a cut
  * trench approach, a blast door and a great deal of rusted steel.
- * @returns {{group:THREE.Object3D, stats:object, doorway:THREE.Vector3}}
  */
-export function buildBunkerEntrance(terrain, x, z, heading = 0, seed = 11) {
+export function buildBunkerEntrance(terrain, x, z, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3} {
   const g = new THREE.Group();
   g.name = 'keycatrich-entrance';
   const mg = new InteriorMerger();
@@ -266,9 +265,8 @@ export function buildCaveMouth(terrain, x, z, heading = 0, seed = 33) {
  * by. A flat emissive card plus a hard, cold light — the one place in a dungeon
  * that is allowed to be bright, and the reason the rest reads as dark.
  *
- * @returns {{group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh}}
  */
-export function buildExitVestibule(parent, rig, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }) {
+export function buildExitVestibule(parent, rig, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh} {
   const group = new THREE.Group();
   const card = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
@@ -308,8 +306,7 @@ export function buildExitVestibule(parent, rig, { x, y, z, facing = 0, w = 3.2, 
  * from the UI so a dungeon transition never depends on another system existing.
  */
 export class Fader {
-  /** @param {HTMLElement} root */
-  constructor(root) {
+  constructor(root: HTMLElement) {
     this.el = document.createElement('div');
     this.el.style.cssText = [
       'position:absolute', 'inset:0', 'background:#000', 'opacity:0',
@@ -322,8 +319,8 @@ export class Fader {
     this._onBlack = null;
   }
 
-  /** @param {()=>void} atBlack run once the screen is fully covered */
-  toBlack(atBlack) { this.target = 1; this._onBlack = atBlack || null; }
+  /** @param atBlack run once the screen is fully covered */
+  toBlack(atBlack: ()=>void) { this.target = 1; this._onBlack = atBlack || null; }
   toClear() { this.target = 0; }
 
   update(dt) {

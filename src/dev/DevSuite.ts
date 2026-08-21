@@ -259,8 +259,7 @@ class DevSuite {
 
   // ------------------------------------------------------------- actions
 
-  /** @param {boolean} on */
-  _setFly(on) {
+  _setFly(on: boolean) {
     const want = !!on;
     if (want === this.cam.enabled) return want ? 'flying' : 'grounded';
     this.cam.setEnabled(want, this.game.camera);
@@ -433,9 +432,8 @@ const save = (k, v) => {
 
 /**
  * Attach the suite to a booted game.
- * @param {object} game
  */
-export async function installDevSuite(game) {
+export async function installDevSuite(game: any) {
   const suite = new DevSuite();
   game.add(suite, 'Dev');
   suite.init(game);

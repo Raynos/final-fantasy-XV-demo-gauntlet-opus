@@ -17,8 +17,7 @@ import { readAscension, readArmiger, rpg } from '../GameData.ts';
  * Controls: ↑↓ pick an ability, Enter unlock. No CSS transitions.
  */
 export class ArmigerScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Armiger';
@@ -28,8 +27,8 @@ export class ArmigerScreen {
     this._msgAge = 9;
   }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -137,8 +136,8 @@ export class ArmigerScreen {
     });
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     const rows = this._rows = this._nodes();
     if (this.i >= rows.length) this.i = Math.max(0, rows.length - 1);

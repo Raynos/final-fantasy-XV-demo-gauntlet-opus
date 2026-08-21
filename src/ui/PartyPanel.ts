@@ -35,8 +35,7 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
  * a single toast printed straight through them.
  */
 export class PartyPanel {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bl');
     /** Armiger + technique rail live here — see the class note. */
     this.combatSlot = el('div.bl-combat');
@@ -86,11 +85,10 @@ export class PartyPanel {
   }
 
   /**
-   * @param {number} dt seconds
-   * @param {object} game
-   * @param {number} appear 0..1 master reveal
+   * @param dt seconds
+   * @param appear 0..1 master reveal
    */
-  update(dt, game, appear) {
+  update(dt: number, game: any, appear: number) {
     const party = readParty(game);
     if (!this.built) this._build(party);
 

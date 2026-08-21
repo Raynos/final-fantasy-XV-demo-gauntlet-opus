@@ -147,13 +147,13 @@ export class VFX {
 
   /**
    * Directional spark burst — the bread-and-butter melee impact.
-   * @param {object} o {pos, dir, count, speed, spread, color, life, t0, size}
+   * @param o {pos, dir, count, speed, spread, color, life, t0, size}
    */
   sparkBurst({
     pos, dir = V2.set(0, 1, 0), count = 26, speed = 9, spread = 0.85,
     color = 0xffd48a, life = 0.42, t0 = this.clock, size = 0.10, gravity = -14,
     intensity = 4.0, stretch = 0.05,
-  }) {
+  }: any) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -306,12 +306,12 @@ export class VFX {
   /**
    * Full melee impact: sparks along the hit normal, a hot flare, dust,
    * a distortion-ish ring and a real light contribution.
-   * @param {object} o {pos, dir, scale, color, t0, blood, ground, terrain}
+   * @param o {pos, dir, scale, color, t0, blood, ground, terrain}
    */
   impact({
     pos, dir = V2.set(0, 1, 0), scale = 1, color = 0xffcf8a, t0 = this.clock,
     blood = false, ring = true, terrain = null, sparkColor,
-  }) {
+  }: any) {
     const d = dir.clone().normalize();
     this.sparkBurst({
       pos, dir: d, count: Math.round(30 * scale), speed: 8 * scale,
@@ -403,14 +403,9 @@ export class VFX {
    * wake and chromatic dispersion, then the impact shockwave and debris.
    *
    * @param {object} o
-   * @param {THREE.Vector3} o.from   launch point
-   * @param {THREE.Vector3} o.to     impact point
-   * @param {number} o.t0            start of the dash on the effect clock
-   * @param {number} o.dash          dash duration
-   * @param {object} o.terrain
-   * @returns {number} the time of impact
+   * @returns the time of impact
    */
-  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }) {
+  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }: { from: THREE.Vector3, to: THREE.Vector3, t0: number, dash: number, terrain: any }): number {
     const rng = this.rng;
     const dir = new THREE.Vector3().subVectors(to, from);
     const dist = dir.length();

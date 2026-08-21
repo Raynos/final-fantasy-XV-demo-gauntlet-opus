@@ -12,8 +12,8 @@
  * call here degrades to a no-op if the audio system never booted.
  */
 export class DungeonAmbience {
-  /** @param {object} audio the game's AudioSystem (may be a stub) */
-  constructor(audio) {
+  /** @param audio the game's AudioSystem (may be a stub) */
+  constructor(audio: any) {
     this.audio = audio;
     this.nodes = null;
     this.desc = null;
@@ -25,11 +25,7 @@ export class DungeonAmbience {
     return !!(a && a.ctx && a.ambBus && a.enabled);
   }
 
-  /**
-   * @param {{bed?:string, tone?:number, air?:number, drip?:number,
-   *          hum?:number, reverb?:number, gain?:number}} desc
-   */
-  start(desc) {
+  start(desc: any) {
     this.desc = desc;
     this.stop();
     if (!this.ready) return;

@@ -42,10 +42,7 @@ const BASE = {
 
 const mk = (o) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
 
-/**
- * @type {Object<string, object>}
- */
-export const ZONE_DRESS = {
+export const ZONE_DRESS: Object<string, any> = {
   // ---------------------------------------------------------------- LEIDE
   // Rust-ochre badlands. Bedded sandstone that breaks into tabular slabs,
   // dry-wash bones, brittle dead brush, nothing green.
@@ -227,10 +224,10 @@ const CELL = 96;
  * interleave over a couple of hundred metres because the cluster cells
  * straddle the boundary.
  *
- * @param {number} x @param {number} z
- * @returns {object} a {@link ZONE_DRESS} record (never null)
+ * @param x @param z
+ * @returns a {@link ZONE_DRESS} record (never null)
  */
-export function dressAt(x, z) {
+export function dressAt(x: number, z: number): any {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let d = _cache.get(k);
   if (d !== undefined) return d;
@@ -268,11 +265,8 @@ export function zoneIdAt(x, z) {
 
 /**
  * Pick a key from a `{key: weight}` table with a 0..1 random.
- * @param {Object<string, number>} table
- * @param {number} r
- * @returns {string}
  */
-export function pickWeighted(table, r) {
+export function pickWeighted(table: Object<string, number>, r: number): string {
   let total = 0;
   for (const k in table) total += table[k];
   let t = r * total;

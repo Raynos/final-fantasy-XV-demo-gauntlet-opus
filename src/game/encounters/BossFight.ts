@@ -19,10 +19,9 @@ import { TitanArena } from './TitanArena.ts';
  */
 export class BossFight {
   /**
-   * @param {object} def a `SET_PIECES` entry
-   * @param {import('./EncounterDirector.ts').EncounterDirector} dir
+   * @param def a `SET_PIECES` entry
    */
-  constructor(def, dir) {
+  constructor(def: any, dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.def = def;
     this.dir = dir;
     this.game = dir.game;
@@ -46,9 +45,8 @@ export class BossFight {
 
   /**
    * Put the boss in the world.
-   * @param {THREE.Vector3} at
    */
-  begin(at) {
+  begin(at: THREE.Vector3) {
     const def = this.def;
     this.centre.copy(at);
     this.pack = new Pack({ id: `boss-${def.id}`, encounter: this.dir, maxEngaged: 3 });
@@ -128,10 +126,8 @@ export class BossFight {
   /**
    * The signature moment: a fist lands, the arena rings, and everything
    * inside the crater is thrown.
-   * @param {THREE.Vector3} p
-   * @param {object} a
    */
-  slamAt(p, a) {
+  slamAt(p: THREE.Vector3, a: any) {
     const dir = this.dir;
     const r = (a.hitRadius || 14);
     const ground = dir.ground(p.x, p.z).clone();
@@ -288,8 +284,7 @@ export class BossFight {
     if (this.game.time) this.game.time.scale = 0.25;
   }
 
-  /** @param {boolean} victory */
-  end(victory) {
+  end(victory: boolean) {
     window.dispatchEvent(new CustomEvent('encounter:boss-end', {
       detail: { boss: this.def.id, name: this.def.name, victory },
     }));

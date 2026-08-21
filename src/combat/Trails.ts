@@ -114,13 +114,8 @@ export class TrailRibbon {
    * Author a complete swing arc in one call — used by the screenshot
    * scenarios so a still frame shows a full, believable blade sweep.
    * @param {object} o
-   * @param {THREE.Vector3} o.pivot   shoulder / hand pivot
-   * @param {THREE.Vector3} o.axis    rotation axis (normalised)
-   * @param {THREE.Vector3} o.start   direction of the blade at the arc start
-   * @param {number} o.from @param {number} o.to  arc angles in radians
-   * @param {number} o.inner @param {number} o.outer  blade base/tip distance
-   */
-  setArc({ pivot, axis, start, from, to, inner = 0.25, outer = 1.7, ageSpread = 0.9 }) {
+   * */
+  setArc({ pivot, axis, start, from, to, inner = 0.25, outer = 1.7, ageSpread = 0.9 }: { pivot: THREE.Vector3, axis: THREE.Vector3, start: THREE.Vector3, from: number, to: number, inner: number, outer: number }) {
     const q = new THREE.Quaternion();
     const dir = new THREE.Vector3();
     const n = this.segments;

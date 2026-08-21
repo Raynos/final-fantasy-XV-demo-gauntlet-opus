@@ -248,9 +248,8 @@ function skullPoint(theta, phi, rr) {
 /**
  * Sample the sculpted skull surface. Hair uses this so the scalp shell and
  * strand roots sit exactly on the head, whatever the face shape.
- * @returns {(theta:number, phi:number)=>{p:THREE.Vector3, n:THREE.Vector3}}
  */
-export function skullSampler(look) {
+export function skullSampler(look): (theta:number, phi:number)=>{p:THREE.Vector3, n:THREE.Vector3} {
   const brs = brushes(look);
   const hw = look.headWidth ?? 1;
   const rr = [HR[0] * hw, HR[1], HR[2]];
@@ -276,9 +275,8 @@ function uvOf(x, y, z) {
 
 /**
  * Build the head mesh (skull + lids + ears) in character space.
- * @returns {{geometry:THREE.BufferGeometry, map:THREE.Texture, eyes:Object}}
  */
-export function buildHead(rig, look) {
+export function buildHead(rig, look): {geometry:THREE.BufferGeometry, map:THREE.Texture, eyes:any} {
   const { index: I, P, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;
@@ -468,11 +466,9 @@ export function buildHead(rig, look) {
  * to the sculpt opens a lip of skin-coloured shell floating in front of the
  * cheek. Snapping the outer row to the skull makes the join unconditional.
  *
- * @param {Object} look
- * @param {number} hw head-width multiplier
- * @returns {(p:number[]) => number[]}
+ * @param hw head-width multiplier
  */
-function skinSnap(look, hw) {
+function skinSnap(look: any, hw: number): (p:number[]) => number[] {
   const sample = skullSampler(look);
   const rr = [HR[0] * hw, HR[1], HR[2]];
   return (p) => {

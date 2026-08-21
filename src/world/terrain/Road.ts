@@ -19,8 +19,7 @@ import { Noise } from '../../util/Noise.ts';
  * driving system keep working unchanged.
  */
 export class RoadNetwork {
-  /** @param {import('../map/RoadGraph.ts').RoadGraph} graph */
-  constructor(graph) {
+  constructor(graph: import('../map/RoadGraph.ts').RoadGraph) {
     this.graph = graph;
     this._noise = new Noise(551133);
     /** Half-width of the widest running surface, metres (legacy field). */
@@ -149,9 +148,8 @@ export class RoadNetwork {
    * The fitted centreline elevations — the only part of `carve()` that cannot
    * be recomputed from a baked heightfield, because grade solving reads the
    * ground *before* the road flattened it.
-   * @returns {Float32Array}
    */
-  captureElevations() {
+  captureElevations(): Float32Array {
     let n = 0;
     for (const e of this.graph.edges) n += e.pts.length;
     const out = new Float32Array(n);
@@ -163,9 +161,8 @@ export class RoadNetwork {
   /**
    * Put a `captureElevations()` snapshot back and rebuild everything `carve()`
    * derives from it, without touching the heightfield (which is already baked).
-   * @param {Float32Array} ys
    */
-  restoreElevations(ys) {
+  restoreElevations(ys: Float32Array) {
     const g = this.graph;
     let k = 0;
     for (const e of g.edges) for (const p of e.pts) p.y = ys[k++];
@@ -186,11 +183,8 @@ export class RoadNetwork {
   /**
    * Fit every edge to the terrain and cut it in.
    * Must run after erosion so the surface stays flat.
-   * @param {{N:number, HALF:number, CELL:number, h:Float32Array,
-   *          road:Float32Array, roadLat:Float32Array,
-   *          rawHeightAt:function}} field
    */
-  carve(field) {
+  carve(field: any) {
     const g = this.graph;
     this._fitNodes(field);
     for (const e of g.edges) this._fitEdge(e, field);
@@ -336,10 +330,8 @@ export class RoadNetwork {
   /**
    * A single-spline facade over the main highway, matching the interface the
    * rest of the codebase has always used.
-   * @returns {{points:object[], length:number, width:number, shoulder:number,
-   *            pointAt:function, distance:function}}
    */
-  _makeSpine() {
+  _makeSpine(): any {
     const g = this.graph;
     const route = g.routeById.get('route1');
     const pts = route.pts;

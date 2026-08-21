@@ -227,9 +227,8 @@ function buildPrototype() {
  * geometry is still in bind-pose world space, so every threshold below is a
  * height in metres off the ground and means it. Gated on `z` so the neck and
  * skull — which live above the same heights as the saddle — are left alone.
- * @param {THREE.BufferGeometry[]} parts
  */
-function markings(parts) {
+function markings(parts: THREE.BufferGeometry[]) {
   const cl01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   const dark = new THREE.Color().setHex(0x584730, THREE.SRGBColorSpace);
   const saddle = new THREE.Color().setHex(0x8f7852, THREE.SRGBColorSpace);

@@ -18,8 +18,7 @@ const A_LAT = 5.6;                // comfortable lateral acceleration
 const A_BRAKE = 4.2;              // how hard he is willing to slow
 
 export class AutoDrive {
-  /** @param {import('./RoadPath.ts').RoadPath} road */
-  constructor(road) {
+  constructor(road: import('./RoadPath.ts').RoadPath) {
     this.road = road;
     this.enabled = false;
     /** Arc length of the destination along the highway. */
@@ -39,10 +38,9 @@ export class AutoDrive {
 
   /**
    * Set the destination by arc length along the highway.
-   * @param {number} s metres along the spline
-   * @param {string} [name]
+   * @param s metres along the spline
    */
-  setTargetS(s, name = null) {
+  setTargetS(s: number, name: string = null) {
     this.targetS = Math.max(0, Math.min(this.road.length, s));
     this.destination = name;
     this.arrived = false;
@@ -51,23 +49,20 @@ export class AutoDrive {
   /**
    * Set the destination from a world position — snapped to the nearest point
    * on the highway, because the Regalia does not go cross-country.
-   * @param {number} x @param {number} z @param {string} [name]
+   * @param x @param z @param [name]
    */
-  setTargetPos(x, z, name = null) {
+  setTargetPos(x: number, z: number, name: string = null) {
     const hit = this.road.nearest(x, z, this.road.makeHit());
     this.setTargetS(hit.s, name);
   }
 
-  /** Distance still to run, metres. @param {number} s current arc length */
-  remaining(s) { return Math.abs(this.targetS - s); }
+  /** Distance still to run, metres. @param s current arc length */
+  remaining(s: number) { return Math.abs(this.targetS - s); }
 
   /**
    * Produce a frame of driver input.
-   * @param {number} dt
-   * @param {import('./VehicleBody.ts').VehicleBody} body
-   * @returns {{throttle:number, brake:number, steer:number, handbrake:boolean, gear:number}}
    */
-  update(dt, body) {
+  update(dt: number, body: import('./VehicleBody.ts').VehicleBody): {throttle:number, brake:number, steer:number, handbrake:boolean, gear:number} {
     const c = this.controls;
     c.handbrake = false;
     c.gear = 1;
@@ -146,9 +141,9 @@ export class AutoDrive {
 
   /**
    * Which way the road turns over the look-ahead: +1 for a left-hander.
-   * @param {number} s @param {number} Ld
+   * @param s @param Ld
    */
-  _turnSign(s, Ld) {
+  _turnSign(s: number, Ld: number) {
     const h0 = this.road.headingAt(s);
     const h1 = this.road.headingAt(s + this.dir * (Ld + 20));
     let d = (h1 - h0) % (Math.PI * 2);

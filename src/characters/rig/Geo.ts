@@ -257,15 +257,9 @@ export function mergeParts(geos) {
  * radius and weights are interpolated along the sweep, which gives predictable,
  * artefact-free deformation at shoulders, elbows, hips and knees.
  *
- * @param {MeshBuilder} B
  * @param {Object} o
- * @param {Array} o.nodes  [{p:[x,y,z], rx, rz, w:[[bone,weight]..], roll?}]
- * @param {number} o.steps rings along the sweep
- * @param {number} o.seg   radial segments
- * @param {(theta:number,t:number)=>number} [o.shape] radius multiplier
- * @param {(theta:number,t:number,out:THREE.Vector3)=>void} [o.offset] extra displacement in ring space (x=side,y=along,z=front)
- */
-export function sweepTube(B, o) {
+ * */
+export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void }) {
   const nodes = o.nodes;
   const steps = o.steps || 16;
   const seg = o.seg || 16;

@@ -16,10 +16,9 @@
  */
 
 /**
- * @param {object} o
- * @returns {object} a territory definition
+ * @returns a territory definition
  */
-const T = (o) => ({
+const T = (o: any): any => ({
   respawn: 150, radius: 26, when: 'any', maxEngaged: 2, patrolRadius: 0, ...o,
 });
 
@@ -229,10 +228,10 @@ export const HUNT_TARGETS = {
 
 /**
  * Is a spawn window open right now?
- * @param {string} when 'day' | 'night' | 'any'
- * @param {object} pressure `rpg.daemonPressure()`
+ * @param when 'day' | 'night' | 'any'
+ * @param pressure `rpg.daemonPressure()`
  */
-export function windowOpen(when, pressure) {
+export function windowOpen(when: string, pressure: any) {
   if (when === 'any') return true;
   if (when === 'night') return !!pressure.spawn;
   return !pressure.spawn;

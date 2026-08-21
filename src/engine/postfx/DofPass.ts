@@ -197,9 +197,8 @@ export class DofPass extends Pass {
    * how smoothly a very bright highlight fills its bokeh disc. 24 holds the
    * hexagon cleanly; below about 16 a specular pinpoint starts to read as a
    * ring of dots rather than a blade-edged circle.
-   * @param {number} n
    */
-  setTaps(n) {
+  setTaps(n: number) {
     const taps = Math.max(8, Math.round(n));
     if (this.gather.defines.TAPS === taps) return;
     this.gather.defines.TAPS = taps;

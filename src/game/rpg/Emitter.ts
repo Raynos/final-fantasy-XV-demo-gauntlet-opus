@@ -17,11 +17,9 @@ export class Emitter {
 
   /**
    * Subscribe to an event.
-   * @param {string} event
-   * @param {(payload:any, event:string)=>void} fn
-   * @returns {() => void} unsubscribe function
+   * @returns unsubscribe function
    */
-  on(event, fn) {
+  on(event: string, fn: (payload:any, event:string)=>void): () => void {
     if (typeof fn !== 'function') throw new TypeError('on(event, fn): fn must be a function');
     let list = this._handlers.get(event);
     if (!list) { list = []; this._handlers.set(event, list); }
@@ -46,10 +44,8 @@ export class Emitter {
 
   /**
    * Fire an event. Returns the payload so call sites can `return this.emit(...)`.
-   * @param {string} event
-   * @param {any} [payload]
    */
-  emit(event, payload) {
+  emit(event: string, payload?: any) {
     this.log.push({ event, payload, t: Date.now() });
     if (this.log.length > this.logLimit) this.log.shift();
     const list = this._handlers.get(event);

@@ -25,10 +25,9 @@ import * as THREE from 'three';
  */
 export class LightBudget {
   /**
-   * @param {THREE.Scene} scene
-   * @param {{point?:number, spot?:number}} [budget] visible lights of each type
+   * @param [budget] visible lights of each type
    */
-  constructor(scene, { point = 12, spot = 2 } = {}) {
+  constructor(scene: THREE.Scene, { point = 12, spot = 2 }: {point?:number, spot?:number} = {}) {
     this.scene = scene;
     this.enabled = true;
     this.budget = { point, spot };
@@ -49,9 +48,8 @@ export class LightBudget {
   /**
    * Resize the budget. One recompile happens on the next render; only ever
    * call this from a quality change, never per frame.
-   * @param {{point?:number, spot?:number}} budget
    */
-  setBudget({ point, spot }) {
+  setBudget({ point, spot }: {point?:number, spot?:number}) {
     if (point != null && point !== this.budget.point) {
       this.budget.point = point;
       this._makeBallast('point', point);
@@ -110,9 +108,9 @@ export class LightBudget {
    * Bring the visible light count back to budget. Must run before *every*
    * `renderer.render()` — the water reflection and the VFX depth prepass are
    * separate renders and each one hits the program cache.
-   * @param {THREE.Camera} [camera] used to rank lights when over budget
+   * @param [camera] used to rank lights when over budget
    */
-  balance(camera) {
+  balance(camera?: THREE.Camera) {
     if (!this.enabled) return;
     if (this._scanIn-- <= 0) { this._scanIn = 60; this.rescan(); }
     if (camera) this._camPos.setFromMatrixPosition(camera.matrixWorld);

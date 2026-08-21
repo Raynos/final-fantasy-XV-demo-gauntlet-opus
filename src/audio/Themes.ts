@@ -123,8 +123,7 @@ export const BOSS_RIFF = [0, 0, 1, 0, 0, -2, 1, 0];
  * @property {number} reverb         music send depth 0..1
  */
 
-/** @type {Record<string, MusicState>} */
-export const STATES = {
+export const STATES: Record<string, MusicState> = {
   /** Leide by day: open, wistful, the theme sung by strings over a harp bed. */
   field: {
     tempo: 74, meter: 4, tonic: 0, reverb: 0.85,
@@ -204,10 +203,9 @@ export const LAYERS = ['bass', 'pad', 'strings', 'melody', 'harp', 'wood', 'perc
 /**
  * Voice a chord into semitone offsets: root in the bass, then the shape spread
  * across `octaves`, dropping the doubled root so the middle does not muddy.
- * @param {{r:number,q:string}} chord
- * @param {number} octave base octave offset in semitones
+ * @param octave base octave offset in semitones
  */
-export function voiceChord(chord, octave = 0, spread = 1) {
+export function voiceChord(chord: {r:number,q:string}, octave: number = 0, spread = 1) {
   const shape = CHORDS[chord.q] || CHORDS.min;
   const out = [];
   for (let i = 0; i < shape.length; i++) {

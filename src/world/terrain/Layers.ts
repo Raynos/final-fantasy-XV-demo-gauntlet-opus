@@ -268,10 +268,9 @@ const RECIPES = [
  * the build step can bake the bytes once (`src/tools/bake.mjs`) instead of every
  * page load spending a second evaluating 1.6 M per-texel recipes.
  *
- * @param {number} size texel resolution per layer
- * @returns {{size:number, detailSize:number, albedo:Uint8Array, surf:Uint8Array, detail:Uint8Array}}
+ * @param size texel resolution per layer
  */
-export function buildLayerData(size = 512) {
+export function buildLayerData(size: number = 512): {size:number, detailSize:number, albedo:Uint8Array, surf:Uint8Array, detail:Uint8Array} {
   const px = size * size;
   const albedo = new Uint8Array(px * 4 * LAYER_COUNT);
   const surf = new Uint8Array(px * 4 * LAYER_COUNT);
@@ -317,12 +316,11 @@ export function buildLayerData(size = 512) {
 
 /**
  * Wrap layer texels in the array textures the terrain shader samples.
- * @param {number} size texel resolution per layer
- * @param {object} [data] pre-baked texels from `buildLayerData`; synthesised when absent
- * @param {Uint8Array} [lut] the two biome palette layers from `Biome.buildBiomeLut`
- * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture}}
+ * @param size texel resolution per layer
+ * @param [data] pre-baked texels from `buildLayerData`; synthesised when absent
+ * @param [lut] the two biome palette layers from `Biome.buildBiomeLut`
  */
-export function buildLayerTextures(size = 512, data = null, lut = null) {
+export function buildLayerTextures(size: number = 512, data: any = null, lut: Uint8Array = null): {albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture} {
   const d = data && data.size === size ? data : buildLayerData(size);
   const { albedo, surf, detail, detailSize } = d;
 
@@ -367,8 +365,8 @@ export function buildLayerTextures(size = 512, data = null, lut = null) {
  * Layers 0-1 are tiled in world space and *must* stay `RepeatWrapping`; layers
  * 2-3 span the whole world exactly once, so the shader clamps their uv itself.
  */
-/** @returns {Uint8Array} the two detail layers packed back to back */
-function buildDetailData(size) {
+/** @returns the two detail layers packed back to back */
+function buildDetailData(size): Uint8Array {
   const px = size * size;
   const data = new Uint8Array(px * 4 * 2);
   data.set(buildDetail(size), 0);
@@ -476,9 +474,9 @@ function buildNearDetail(size) {
 /**
  * Close-range detail map: pebbles, hairline cracks and dirt tufts.
  * rgb = tangent normal, a = height (drives the parallax offset).
- * @returns {Uint8Array} RGBA texels, ready to pack into the detail array.
+ * @returns RGBA texels, ready to pack into the detail array.
  */
-function buildDetail(size) {
+function buildDetail(size): Uint8Array {
   const px = size * size;
   const h = new Float32Array(px);
   for (let y = 0; y < size; y++) {

@@ -89,16 +89,13 @@ export function bondFor(affinity) {
 /* ------------------------------------------------------------------------ */
 
 /**
- * @param {string} id
- * @param {string} name
- * @param {number} rank cooking level required (1..10)
- * @param {Array<[string, number]>} ing ingredient id / count pairs
- * @param {object} buffs Stats modifier bucket contributions
- * @param {string[]} effects human-readable buff lines for the HUD
- * @param {number} hours in-game hours the buff lasts
- * @param {string} desc
+ * @param rank cooking level required (1..10)
+ * @param ing ingredient id / count pairs
+ * @param buffs Stats modifier bucket contributions
+ * @param effects human-readable buff lines for the HUD
+ * @param hours in-game hours the buff lasts
  */
-const R = (id, name, rank, ing, buffs, effects, hours, desc) => ({
+const R = (id: string, name: string, rank: number, ing: Array<[string, number]>, buffs: any, effects: string[], hours: number, desc: string) => ({
   id, name, rank, hours, desc, effects,
   ingredients: ing.map(([i, c]) => ({ id: i, count: c })),
   buffs,
@@ -222,8 +219,7 @@ function recipeTags(recipe) {
  * `recipe-learned`, `meal-cooked`, `buff-applied` and `buff-expired`.
  */
 export class PartyState {
-  /** @param {import('./Emitter.ts').Emitter} [emitter] */
-  constructor(emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
 
     /** @type {Record<string, Stats>} */
@@ -271,9 +267,8 @@ export class PartyState {
   /**
    * The technique the HUD shows as this member's signature move: the best one
    * they have actually learned, in authored preference order.
-   * @param {string} id
    */
-  signatureTechnique(id) {
+  signatureTechnique(id: string) {
     const prefs = {
       gladio: ['dawnhammer', 'impulse', 'tempest', 'coverage'],
       ignis: ['regroup', 'overwhelm', 'enhancement', 'analyse'],
@@ -314,10 +309,8 @@ export class PartyState {
 
   /**
    * Fire a technique. Spends bars and awards affinity.
-   * @param {string} memberId
-   * @param {string} techId
    */
-  useTechnique(memberId, techId) {
+  useTechnique(memberId: string, techId: string) {
     const tech = (TECHNIQUES[memberId] || []).find((t) => t.id === techId);
     if (!tech) return { ok: false, reason: 'unknown-technique' };
     if (!this.members[memberId]?.techniques.includes(techId)) return { ok: false, reason: 'not-learned' };
@@ -388,11 +381,8 @@ export class PartyState {
 
   /**
    * Can this meal be cooked right now?
-   * @param {string} recipeId
-   * @param {import('./Inventory.ts').Inventory} inventory
-   * @returns {{ok:boolean, reason?:string, missing?:object[]}}
    */
-  canCook(recipeId, inventory) {
+  canCook(recipeId: string, inventory: import('./Inventory.ts').Inventory): {ok:boolean, reason?:string, missing?:any[]} {
     const r = RECIPE_TABLE[recipeId];
     if (!r) return { ok: false, reason: 'unknown-recipe' };
     if (!this.knownRecipes.has(recipeId)) return { ok: false, reason: 'not-learned' };
@@ -412,11 +402,9 @@ export class PartyState {
    * Cook a meal. Consumes ingredients, replaces the active meal buff (only one
    * meal at a time, as in the game) and pushes Ignis' cooking level.
    *
-   * @param {string} recipeId
-   * @param {import('./Inventory.ts').Inventory} inventory
-   * @param {number} hour current world hour (absolute, monotonically rising)
+   * @param hour current world hour (absolute, monotonically rising)
    */
-  cook(recipeId, inventory, hour = 0) {
+  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0) {
     const check = this.canCook(recipeId, inventory);
     if (!check.ok) return check;
     const r = RECIPE_TABLE[recipeId];
@@ -455,10 +443,9 @@ export class PartyState {
 
   /**
    * Add a non-meal timed buff (a spell effect, an item, Ignis' Enhancement).
-   * @param {object} spec `{ id, name, mods, hours, effects }`
-   * @param {number} hour
+   * @param spec `{ id, name, mods, hours, effects }`
    */
-  addBuff(spec, hour = 0) {
+  addBuff(spec: any, hour: number = 0) {
     const buff = {
       kind: spec.kind || 'effect',
       id: spec.id, name: spec.name,

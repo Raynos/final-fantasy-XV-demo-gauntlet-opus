@@ -83,11 +83,11 @@ const LEVEL_SUFFIX = ['', '', '+', '++', 'X', 'XX', 'Ω'];
 
 /**
  * Turn a catalyst's threshold table into a concrete level for a given count.
- * @param {object} cat catalyst payload from the item table
- * @param {number} count how many were thrown in
- * @param {number} bonus fractional bonus from the Ascension grid
+ * @param cat catalyst payload from the item table
+ * @param count how many were thrown in
+ * @param bonus fractional bonus from the Ascension grid
  */
-function catalystLevel(cat, count, bonus = 0) {
+function catalystLevel(cat: any, count: number, bonus: number = 0) {
   const effective = count * (1 + bonus);
   let level = 0;
   for (const [need, lv] of cat.thresholds) if (effective >= need) level = lv;
@@ -99,9 +99,8 @@ function catalystLevel(cat, count, bonus = 0) {
  * element mix and the tier. This is the heart of Elemancy: the same catalyst
  * behaves very differently at 1 unit and at 40.
  *
- * @returns {Array<{name:string, level:number, desc:string, payload:object}>}
  */
-function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }) {
+function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }): Array<{name:string, level:number, desc:string, payload:any}> {
   const effects = [];
   const add = (name, level, desc, payload) => effects.push({ name, level, desc, payload });
 
@@ -176,15 +175,9 @@ function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, p
  * before committing energy.
  *
  * @param {object} opts
- * @param {{fire?:number, ice?:number, lightning?:number}} opts.energy units of each element
- * @param {{id:string, count:number}} [opts.catalyst]
- * @param {number} [opts.spellPower=0]      Powercraft bonus (fraction)
- * @param {number} [opts.catalystPower=0]   Catalyst Insight bonus (fraction)
- * @param {boolean}[opts.triElemental=false] Tri-Elemental node removes the mixing penalty
- * @param {number} [opts.magic=100]         caster's Magic stat, scales damage
- * @returns {object} the crafted spell definition
+ * @returns the crafted spell definition
  */
-export function craftSpell(opts) {
+export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning?:number}, catalyst?: {id:string, count:number}, spellPower?: number, catalystPower?: number, triElemental?: boolean, magic?: number }): any {
   const energy = opts.energy || {};
   const mix = {
     fire: Math.max(0, Math.floor(energy.fire || 0)),
@@ -286,10 +279,9 @@ function buildDescription({ name, dominant, tier, damage, radius, effects }) {
  */
 export class Elemancy {
   /**
-   * @param {import('./Emitter.ts').Emitter} [emitter]
-   * @param {Inventory} [inventory] used to consume catalysts on craft
+   * @param [inventory] used to consume catalysts on craft
    */
-  constructor(emitter = null, inventory = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null, inventory: Inventory = null) {
     this.emitter = emitter;
     this.inventory = inventory;
     /** Stored energy per element. */
@@ -327,11 +319,9 @@ export class Elemancy {
 
   /**
    * Draw energy from a deposit.
-   * @param {string} depositId
-   * @param {object} [opts] `{ units, hour }` — units defaults to a full draw
-   * @returns {{ok:boolean, reason?:string, element?:string, gained?:number}}
+   * @param [opts] `{ units, hour }` — units defaults to a full draw
    */
-  draw(depositId, opts = {}) {
+  draw(depositId: string, opts: any = {}): {ok:boolean, reason?:string, element?:string, gained?:number} {
     const def = DEPOSITS.find((d) => d.id === depositId);
     if (!def) return { ok: false, reason: 'unknown-deposit' };
     const st = this.deposits[depositId];
@@ -380,11 +370,8 @@ export class Elemancy {
    * Craft a spell for real: spends energy and catalyst items and stores the
    * result in the spell list.
    *
-   * @param {{fire?:number, ice?:number, lightning?:number}} energy
-   * @param {{id:string, count:number}} [catalyst]
-   * @param {number} [magic]
    */
-  craft(energy, catalyst = null, magic = 100) {
+  craft(energy: {fire?:number, ice?:number, lightning?:number}, catalyst: {id:string, count:number} = null, magic: number = 100) {
     const want = {
       fire: Math.max(0, Math.floor(energy?.fire || 0)),
       ice: Math.max(0, Math.floor(energy?.ice || 0)),
@@ -434,10 +421,8 @@ export class Elemancy {
 
   /**
    * Consume one cast of a spell.
-   * @param {string} uid
-   * @returns {{ok:boolean, reason?:string, spell?:object, remaining?:number}}
    */
-  cast(uid) {
+  cast(uid: string): {ok:boolean, reason?:string, spell?:any, remaining?:number} {
     const s = this.spell(uid);
     if (!s) return { ok: false, reason: 'unknown-spell' };
     if (s.remaining <= 0) return { ok: false, reason: 'no-casts-left' };

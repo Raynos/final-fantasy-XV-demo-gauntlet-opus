@@ -400,8 +400,8 @@ export class Bushes {
     return out;
   }
 
-  /** @returns {Array|null} null when this frame's generation budget is spent */
-  _tile(tx, tz) {
+  /** @returns null when this frame's generation budget is spent */
+  _tile(tx, tz): any[] | null {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
@@ -419,8 +419,8 @@ export class Bushes {
     return list;
   }
 
-  /** @param {THREE.Vector3} camPos — see {@link Trees#update} for the throttles */
-  update(camPos) {
+  /** @param camPos — see {@link Trees#update} for the throttles */
+  update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 100) {
       if (!this._pending) return;

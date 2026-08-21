@@ -650,11 +650,10 @@ export class Landmarks {
   }
 
   /**
-   * @param {number} dt
-   * @param {number} time seconds
-   * @param {number} [night] 0 in daylight, 1 after dark
+   * @param time seconds
+   * @param [night] 0 in daylight, 1 after dark
    */
-  update(dt, time, night = 0) {
+  update(dt: number, time: number, night: number = 0) {
     const flicker = 0.78 + 0.34 * Math.sin(time * 11.3) * Math.sin(time * 4.1)
       + 0.1 * Math.sin(time * 23.7);
     for (const l of this.lights) {

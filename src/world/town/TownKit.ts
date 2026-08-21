@@ -46,13 +46,13 @@ export const wheel = (r, w, s = 14) => geo(`w${r}_${w}_${s}`, () => {
 
 /**
  * A run of chain-link fence: posts, top rail, mesh panel.
- * @param {Function} put place(mat, geo, pos, rot, scale)
- * @param {object} M material set
- * @param {number[]} a start [x, z]
- * @param {number[]} b end [x, z]
- * @param {object} [opts] `{ y, height, span }`
+ * @param put place(mat, geo, pos, rot, scale)
+ * @param M material set
+ * @param a start [x, z]
+ * @param b end [x, z]
+ * @param [opts] `{ y, height, span }`
  */
-export function fenceRun(put, M, a, b, { y = 0, height = 2.15, span = 3.0 } = {}) {
+export function fenceRun(put: ((...args: any[]) => any), M: any, a: number[], b: number[], { y = 0, height = 2.15, span = 3.0 }: any = {}) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   const len = Math.hypot(dx, dz);
   const yaw = Math.atan2(dx, dz);

@@ -111,10 +111,9 @@ let _chartFor = null;
 /**
  * The shared chart. Built on first call and reused for the lifetime of the
  * terrain — three separate map surfaces ask for it and only one gets baked.
- * @param {object} terrain the live `Terrain` system
- * @returns {Chart}
+ * @param terrain the live `Terrain` system
  */
-export function getChart(terrain, opt) {
+export function getChart(terrain: any, opt): Chart {
   if (_chart && _chartFor === terrain) return _chart;
   _chart = bakeChart(terrain, opt);
   _chartFor = terrain;
@@ -123,11 +122,9 @@ export function getChart(terrain, opt) {
 
 /**
  * Rasterise the world into one relief chart.
- * @param {object} terrain the live `Terrain` system
- * @param {{size?:number}} [opt]
- * @returns {Chart}
+ * @param terrain the live `Terrain` system
  */
-export function bakeChart(terrain, opt = {}) {
+export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const t0 = now();
   const field = terrain && terrain.field && terrain.field.h ? terrain.field : null;
@@ -411,8 +408,8 @@ export function bakeChart(terrain, opt = {}) {
 
 // ------------------------------------------------------------------ helpers
 
-/** Separable box blur with running sums. @returns {Float32Array} */
-function boxBlur2D(src, n, r) {
+/** Separable box blur with running sums. @returns */
+function boxBlur2D(src, n, r): Float32Array {
   const tmp = new Float32Array(n * n);
   const out = new Float32Array(n * n);
   const inv = 1 / (r * 2 + 1);

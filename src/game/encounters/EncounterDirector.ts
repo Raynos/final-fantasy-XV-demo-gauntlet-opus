@@ -111,9 +111,9 @@ export class EncounterDirector {
 
   /**
    * Bring a territory to life.
-   * @param {object} def a `TERRITORIES` entry
+   * @param def a `TERRITORIES` entry
    */
-  activate(def) {
+  activate(def: any) {
     if (this.active.has(def.id)) return this.active.get(def.id);
     const pack = new Pack({ id: def.id, maxEngaged: def.maxEngaged, encounter: this });
     const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon') : NEUTRAL;
@@ -213,9 +213,9 @@ export class EncounterDirector {
 
   /**
    * Spawn a roaming encounter around the player.
-   * @param {object} def a `ROAMERS` entry
+   * @param def a `ROAMERS` entry
    */
-  spawnRoamer(def) {
+  spawnRoamer(def: any) {
     const pp = this.player.position;
     let total = 0;
     for (const s of def.spawn) total += Array.isArray(s.count) ? s.count[1] : s.count;
@@ -264,10 +264,10 @@ export class EncounterDirector {
 
   /**
    * Start a named set-piece boss fight.
-   * @param {string} id one of `SET_PIECES`
-   * @param {object} [opts] `{ at:[x,z] }`
+   * @param id one of `SET_PIECES`
+   * @param [opts] `{ at:[x,z] }`
    */
-  startSetPiece(id, opts = {}) {
+  startSetPiece(id: string, opts: any = {}) {
     const def = SET_PIECES[id];
     if (!def) throw new Error(`unknown set piece ${id}`);
     if (this.boss) this.endBoss(false);
@@ -291,9 +291,8 @@ export class EncounterDirector {
   /**
    * Spawn a hunt's mark at its objective waypoint. Called when a hunt is
    * accepted, so accepting a job actually puts something in the world.
-   * @param {string} questId
    */
-  spawnHunt(questId) {
+  spawnHunt(questId: string) {
     const t = HUNT_TARGETS[questId];
     if (!t) return null;
     const quest = this.rpg?.quests?.def(questId);
@@ -345,10 +344,10 @@ export class EncounterDirector {
 
   /**
    * An enemy's attack reached its active frame. Work out who it caught.
-   * @param {object} e the attacker
-   * @param {object} atk the attack definition (may be null for legacy species)
+   * @param e the attacker
+   * @param atk the attack definition (may be null for legacy species)
    */
-  resolveStrike(e, atk) {
+  resolveStrike(e: any, atk: any) {
     const a = atk || { hitRadius: 1.8, mult: 1, arc: Math.PI / 2 };
     const reach = (a.hitRadius || 1.8) * e.scale;
     const arc = a.arc != null ? a.arc : Math.PI / 2;
@@ -406,11 +405,11 @@ export class EncounterDirector {
 
   /**
    * Apply one enemy hit to the player or to a companion.
-   * @param {object} t a threat (the Player, or a Party member)
-   * @param {object} e the attacker
-   * @param {object} a the attack
+   * @param t a threat (the Player, or a Party member)
+   * @param e the attacker
+   * @param a the attack
    */
-  damageThreat(t, e, a) {
+  damageThreat(t: any, e: any, a: any) {
     const isPlayer = t === this.player;
     if (isPlayer && this._playerAvoids(e, a)) return;
 
@@ -472,9 +471,9 @@ export class EncounterDirector {
 
   /**
    * A pack has just noticed the party. This is the "you have been seen" beat.
-   * @param {object} pack @param {object} target
+   * @param pack @param target
    */
-  onAlerted(pack, target) {
+  onAlerted(pack: any, target: any) {
     if (this.state === 'combat') return;
     const first = pack.members.find((m) => !m.dead);
     window.dispatchEvent(new CustomEvent('encounter:spotted', {
@@ -498,10 +497,9 @@ export class EncounterDirector {
 
   /**
    * Something died. Bank the EXP, roll the drops, tick the quest log.
-   * @param {object} e
-   * @param {string} by 'player' | 'ally'
+   * @param by 'player' | 'ally'
    */
-  onDeath(e, by = 'player') {
+  onDeath(e: any, by: string = 'player') {
     if (!e || e._looted) return;
     e._looted = true;
     this.stats.kills++;

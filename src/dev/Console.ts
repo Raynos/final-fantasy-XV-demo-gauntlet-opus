@@ -13,11 +13,7 @@
  * the bubble phase at the target keeps the event from ever reaching it.
  */
 export class DevConsole {
-  /**
-   * @param {HTMLElement} root
-   * @param {import('./Registry.ts').Registry} reg
-   */
-  constructor(root, reg) {
+  constructor(root: HTMLElement, reg: import('./Registry.ts').Registry) {
     this.reg = reg;
     this.open = false;
     this.hist = [];
@@ -51,8 +47,8 @@ export class DevConsole {
 
   toggle() { this.setOpen(!this.open); }
 
-  /** @param {string} text @param {string} [cls] */
-  print(text, cls) {
+  /** @param text @param [cls] */
+  print(text: string, cls?: string) {
     const line = document.createElement('div');
     if (cls) line.className = cls;
     line.textContent = text;

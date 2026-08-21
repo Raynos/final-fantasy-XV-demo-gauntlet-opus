@@ -35,16 +35,14 @@ const ENTRIES = [
 
 /** The FFXV-style pause menu: a vertical list over a blurred game frame. */
 export class MainScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Main Menu';
     this.sub = 'Lucis  ·  Leide  ·  Longwythe Region';
     this.i = 0;
   }
 
-  /** @param {HTMLElement} root */
-  build(root, game) {
+  build(root: HTMLElement, game) {
     this.list = el('div.mlist');
     this.rows = ENTRIES.map((e2) => {
       const row = el('div.mrow', {}, [
@@ -113,10 +111,8 @@ export class MainScreen {
   /**
    * The preview blurb. Three of the eight entries can report real state, so
    * they do rather than repeating an authored count that would drift.
-   * @param {object} entry
-   * @param {object} game
    */
-  _body(entry, game) {
+  _body(entry: any, game: any) {
     const r = game?.get?.('Rpg');
     if (!r) return entry.body;
     if (entry.key === 'quests') {
@@ -145,8 +141,8 @@ export class MainScreen {
     if (this._live(e2)) this.menus.push(e2.to);
   }
 
-  /** @param {number} dt @param {object} game @param {number} a 0..1 */
-  update(dt, game, a) {
+  /** @param dt @param game @param a 0..1 */
+  update(dt: number, game: any, a: number) {
     const party = readParty(game);
     if (!this.cards.length) this._buildCards(party);
 

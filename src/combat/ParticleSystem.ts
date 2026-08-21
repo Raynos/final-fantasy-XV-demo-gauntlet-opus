@@ -24,17 +24,11 @@ const _v3 = new THREE.Vector3();
 export class ParticleSystem {
   /**
    * @param {object} o
-   * @param {number} o.capacity      max simultaneous particles
-   * @param {THREE.Texture} o.map    sprite
-   * @param {number} o.blending      THREE blending constant
-   * @param {boolean} o.fog          apply scene fog (use for alpha-blended smoke)
-   * @param {number} o.softness      world-space depth-fade distance
-   * @param {number} o.renderOrder
-   */
+   * */
   constructor({
     capacity = 2048, map, blending = THREE.AdditiveBlending, fog = false,
     softness = 0.9, renderOrder = 20, name = 'particles', depthTest = true,
-  } = {}) {
+  }: { capacity: number, map: THREE.Texture, blending: number, fog: boolean, softness: number, renderOrder: number } = {}) {
     this.capacity = capacity;
     this.cursor = 0;
     this.live = 0;
@@ -108,21 +102,8 @@ export class ParticleSystem {
   /**
    * Emit a single particle.
    * @param {object} p
-   * @param {THREE.Vector3|number[]} p.pos
-   * @param {THREE.Vector3|number[]} p.vel
-   * @param {THREE.Color|number[]} p.color   linear RGB multiplier
-   * @param {number} p.t0        spawn time on the system clock
-   * @param {number} p.life
-   * @param {number} p.size0 @param {number} p.size1
-   * @param {number} p.drag      1/s velocity damping
-   * @param {number} p.gravity   m/s^2 (negative = falls)
-   * @param {number} p.spin @param {number} p.spinRate
-   * @param {number} p.stretch   >0 = velocity-aligned streak
-   * @param {number} p.turbulence
-   * @param {number} p.intensity emissive multiplier (drives bloom)
-   * @param {number} p.fade      alpha falloff exponent
-   */
-  emit(p) {
+   * */
+  emit(p: { pos: THREE.Vector3 | number[], vel: THREE.Vector3 | number[], color: THREE.Color | number[], t0: number, life: number, size0: number, size1: number, drag: number, gravity: number, spin: number, spinRate: number, stretch: number, turbulence: number, intensity: number, fade: number }) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
     const pos = p.pos, vel = p.vel || ZERO, col = p.color || WHITE;
@@ -171,8 +152,8 @@ export class ParticleSystem {
     this._dirtyLo = Infinity; this._dirtyHi = -Infinity;
   }
 
-  /** @param {number} clock system time in seconds */
-  setClock(clock) { this.uniforms.uTime.value = clock; }
+  /** @param clock system time in seconds */
+  setClock(clock: number) { this.uniforms.uTime.value = clock; }
 
   /** Wire the shared depth texture for soft-particle fading. */
   setDepth(texture, near, far) {

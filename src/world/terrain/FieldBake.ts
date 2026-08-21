@@ -19,11 +19,11 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
 
 /**
  * Serialise the expensive half of a built `Field`.
- * @param {Field} field a field that has already had `build()` called
- * @param {object} meta extra header fields (seed, source hash)
- * @returns {Uint8Array} the uncompressed container
+ * @param field a field that has already had `build()` called
+ * @param meta extra header fields (seed, source hash)
+ * @returns the uncompressed container
  */
-export function encodeField(field, meta = {}, layers = null) {
+export function encodeField(field: Field, meta: any = {}, layers = null): Uint8Array {
   const roadY = field.network.captureElevations();
   const sections = [
     { name: 'h', kind: 'f32planes', n: N * N, bytes: encodeF32Planes(field.h) },
@@ -48,10 +48,10 @@ export function encodeField(field, meta = {}, layers = null) {
 
 /**
  * Populate `field` from a container, replacing what `build()` would have done.
- * @param {Field} field a freshly constructed, unbuilt field
- * @param {Uint8Array} buf the uncompressed container
+ * @param field a freshly constructed, unbuilt field
+ * @param buf the uncompressed container
  */
-export function applyBakedField(field, buf) {
+export function applyBakedField(field: Field, buf: Uint8Array) {
   const c = unpackContainer(buf);
   const h = c.section('h'), far = c.section('far');
   const ctrl = c.section('ctrl'), farCtrl = c.section('farCtrl');
@@ -77,9 +77,9 @@ export function applyBakedField(field, buf) {
 
 /**
  * Decode the layer texels out of a container.
- * @returns {object|null} `buildLayerData`-shaped texels, or null if absent
+ * @returns `buildLayerData`-shaped texels, or null if absent
  */
-export function bakedLayers(buf) {
+export function bakedLayers(buf): any | null {
   const c = unpackContainer(buf);
   const meta = c.section('layerMeta');
   const a = c.section('layerAlbedo'), s = c.section('layerSurf'), d = c.section('layerDetail');
@@ -101,9 +101,8 @@ export function bakedLayers(buf) {
  * local cache read, not a network dependency, and every caller regenerates from
  * the generator when it misses.
  *
- * @returns {Promise<{applyTo:(f:object)=>void, layers:()=>object|null}|null>}
  */
-export async function loadBaked() {
+export async function loadBaked(): Promise<{applyTo:(f:any)=>void, layers:()=>any|null} | null> {
   if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return null;
   // `?nobake=1` forces the generator path, so the two can be A/B'd in one
   // session and a suspected bake bug can always be ruled out from the URL.

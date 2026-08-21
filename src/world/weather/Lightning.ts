@@ -11,8 +11,7 @@ import * as THREE from 'three';
  * volume, and a delayed thunder crack.
  */
 export class Lightning {
-  /** @param {number} seed */
-  constructor(seed) {
+  constructor(seed: number) {
     this.seed = seed >>> 0;
     /** Current flash strength, 0..~1.6. */
     this.flash = 0;
@@ -56,12 +55,10 @@ export class Lightning {
   }
 
   /**
-   * @param {number} dt
-   * @param {number} now seconds since the clock reset
-   * @param {number} period mean seconds between strikes, 0 = no lightning
-   * @param {object} game
+   * @param now seconds since the clock reset
+   * @param period mean seconds between strikes, 0 = no lightning
    */
-  update(dt, now, period, game) {
+  update(dt: number, now: number, period: number, game: any) {
     if (!this.light.parent && game && game.scene) game.scene.add(this.light);
     if (period <= 0.001) {
       this.flash += (0 - this.flash) * Math.min(1, dt * 6);

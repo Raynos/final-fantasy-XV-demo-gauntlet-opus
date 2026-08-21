@@ -212,8 +212,8 @@ export class RegaliaSystem {
     return Math.hypot(p.position.x - this.body.pos.x, p.position.z - this.body.pos.z);
   }
 
-  /** Get in and start the engine. @param {boolean} [autoDrive] */
-  enter(autoDrive = false) {
+  /** Get in and start the engine. @param [autoDrive] */
+  enter(autoDrive: boolean = false) {
     if (this.isDriving || !this.enabled) return false;
     this.isDriving = true;
     this.auto = !!autoDrive;
@@ -238,8 +238,8 @@ export class RegaliaSystem {
     return true;
   }
 
-  /** Hand the wheel to Ignis, or take it back. @param {boolean} v */
-  setAutoDrive(v) {
+  /** Hand the wheel to Ignis, or take it back. @param v */
+  setAutoDrive(v: boolean) {
     const want = !!v;
     if (want === this.auto) return;
     this.auto = want;
@@ -252,9 +252,9 @@ export class RegaliaSystem {
 
   /**
    * Send the car somewhere. Snaps to the nearest point on the highway.
-   * @param {number} x @param {number} z @param {string} [name]
+   * @param x @param z @param [name]
    */
-  driveTo(x, z, name) {
+  driveTo(x: number, z: number, name?: string) {
     this.autoDrive.setTargetPos(x, z, name || null);
     if (!this.auto) this.setAutoDrive(true);
     if (!this.isDriving) this.enter(true);
@@ -271,10 +271,10 @@ export class RegaliaSystem {
   /**
    * Fill the tank. Hammerhead's pumps call this — either directly, or by
    * dispatching a `ffxv-regalia-refuel` window event.
-   * @param {number} [amount] 0..1 fraction to add; omitted means fill it
-   * @returns {number} the new fuel level
+   * @param [amount] 0..1 fraction to add; omitted means fill it
+   * @returns the new fuel level
    */
-  refuel(amount) {
+  refuel(amount?: number): number {
     const before = this.fuel;
     this.fuel = Math.min(1, this.fuel + (amount == null ? 1 : amount));
     if (this.fuel > before + 0.05) this.banter.trigger('refuel');
@@ -283,15 +283,14 @@ export class RegaliaSystem {
 
   /**
    * Register a set of pumps. Stopping inside `r` metres refuels the car.
-   * @param {{x:number, z:number, r:number, name:string}} s
    */
-  addFuelStation(s) {
+  addFuelStation(s: {x:number, z:number, r:number, name:string}) {
     if (!this.fuelStations.some((f) => f.name === s.name)) this.fuelStations.push({ ...s });
     return this.fuelStations.length;
   }
 
-  /** Fit or remove the Type-D off-road package. @param {boolean} v */
-  setOffRoad(v) {
+  /** Fit or remove the Type-D off-road package. @param v */
+  setOffRoad(v: boolean) {
     this.body.offRoadMode = !!v;
     if (this.isDriving) this.banter.trigger(v ? 'typeD' : 'offroad');
   }
@@ -592,9 +591,9 @@ export class RegaliaSystem {
   /**
    * How hard the night is pushing on this stretch of road — the same model the
    * Enemies system reads. 0 in daylight, 1 in the deep hours.
-   * @returns {number} 0..1
+   * @returns 0..1
    */
-  nightDanger() {
+  nightDanger(): number {
     const rpg = this.game && this.game.get('Rpg');
     if (!rpg || !rpg.day || !rpg.day.daemonPressure) return 0;
     const p = rpg.day.daemonPressure(rpg.party ? 27 : 1);

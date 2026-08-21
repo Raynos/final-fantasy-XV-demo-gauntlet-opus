@@ -57,8 +57,7 @@ export const HAVEN_RADIUS = 14;
  * `daemons-receding`, `haven-discovered` and `rested`.
  */
 export class DayCycle {
-  /** @param {import('./Emitter.ts').Emitter} [emitter] */
-  constructor(emitter = null) {
+  constructor(emitter: import('./Emitter.ts').Emitter = null) {
     this.emitter = emitter;
     /** Current hour, 0..24. */
     this.hour = 9.0;
@@ -110,10 +109,10 @@ export class DayCycle {
 
   /**
    * Advance the clock.
-   * @param {number} dt real seconds
-   * @param {object} [game] optional Game handle for Sky sync
+   * @param dt real seconds
+   * @param [game] optional Game handle for Sky sync
    */
-  update(dt, game = null) {
+  update(dt: number, game: any = null) {
     // Prefer an authoritative Sky if it has one and we're set to follow.
     // `Sky` names the property `hours`; `timeOfDay` is accepted too so any
     // other implementation of the documented contract still drives us.
@@ -142,18 +141,17 @@ export class DayCycle {
   /**
    * Push the clock forward by a number of in-game hours, emitting every
    * transition it crosses.
-   * @param {number} hours
    */
-  advance(hours) {
+  advance(hours: number) {
     if (hours <= 0) return;
     this.setHour(this.hour + hours);
   }
 
   /**
    * Set the clock. Handles day rollover and fires phase/daemon events.
-   * @param {number} hour may exceed 24 — days roll over
+   * @param hour may exceed 24 — days roll over
    */
-  setHour(hour) {
+  setHour(hour: number) {
     const prevPhase = this._phase;
     const prevHourInt = this._lastHourInt;
     const prevDay = this.day;
@@ -195,9 +193,8 @@ export class DayCycle {
   /**
    * How hard the night is pushing right now — the Enemies system can read this
    * directly to decide spawn counts and levels.
-   * @returns {{spawn:boolean, density:number, levelBonus:number, depth:number}}
    */
-  daemonPressure(partyLevel = 1) {
+  daemonPressure(partyLevel = 1): {spawn:boolean, density:number, levelBonus:number, depth:number} {
     const s = nightScaling(this.hour, true);
     return {
       spawn: this.isNight,
@@ -229,10 +226,9 @@ export class DayCycle {
 
   /**
    * Nearest haven to a point.
-   * @param {{x:number, z:number}} pos
-   * @param {boolean} [discoveredOnly=false]
+   * @param [discoveredOnly=false]
    */
-  nearestHaven(pos, discoveredOnly = false) {
+  nearestHaven(pos: {x:number, z:number}, discoveredOnly: boolean = false) {
     let best = null, bestD = Infinity;
     for (const h of this.havens()) {
       if (discoveredOnly && !h.discovered) continue;
@@ -245,10 +241,8 @@ export class DayCycle {
   /**
    * Is the party standing at a haven? Also auto-discovers it, since walking
    * onto a haven is how you find one.
-   * @param {{x:number, z:number}} pos
-   * @returns {{ok:boolean, reason?:string, haven?:object}}
    */
-  canCamp(pos) {
+  canCamp(pos: {x:number, z:number}): {ok:boolean, reason?:string, haven?:any} {
     const near = this.nearestHaven(pos);
     if (!near) return { ok: false, reason: 'no-haven' };
     if (near.distance > HAVEN_RADIUS) return { ok: false, reason: 'not-at-haven', haven: near };
@@ -264,17 +258,9 @@ export class DayCycle {
    * during the night.
    *
    * @param {object} ctx
-   * @param {import('./Stats.ts').ExpBank} ctx.expBank
-   * @param {import('./PartyState.ts').PartyState} ctx.party
-   * @param {import('./Inventory.ts').Inventory} [ctx.inventory] to pay for hotels
-   * @param {string} [ctx.lodging='haven'] key in LODGINGS
-   * @param {number} [ctx.wakeHour=6.5]
-   * @param {number} [ctx.havenExpBonus=0] from the Regal Repose ascension node
-   * @param {boolean}[ctx.force=false] skip the "are you at a haven" check
-   * @param {{x:number,z:number}} [ctx.pos] party position, for the haven check
-   * @returns {object} the rest summary the results screen renders
+   * @returns the rest summary the results screen renders
    */
-  rest(ctx = {}) {
+  rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} } = {}): any {
     const lodgingId = ctx.lodging || 'haven';
     const lodging = LODGINGS[lodgingId];
     if (!lodging) return { ok: false, reason: 'unknown-lodging' };

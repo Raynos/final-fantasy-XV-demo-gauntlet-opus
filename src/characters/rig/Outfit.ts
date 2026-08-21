@@ -27,10 +27,9 @@ function aridge(th, c, w) {
  * edge and a stretched shoulder are not — and on this palette the roughness
  * break is the more legible half of the pair.
  *
- * @param {Object} o garment piece description
- * @returns {{color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[]}}
+ * @param o garment piece description
  */
-function clothShade(o) {
+function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[]} {
   const base = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const rough = o.rough ?? 0.78;
   const metal = o.metal ?? 0;
@@ -79,11 +78,9 @@ function under(fn, u0, u1, damp = 0.88) {
 const PIECES = {};
 
 /**
- * @param {Object} rig
- * @param {Object} look character description; `look.outfit` is the piece list
- * @returns {THREE.BufferGeometry}
+ * @param look character description; `look.outfit` is the piece list
  */
-export function buildOutfit(rig, look) {
+export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
   const B = new MeshBuilder('outfit');
   const ctx = {
     rig,

@@ -94,9 +94,9 @@ export function legNodes(rig, side) {
  * Cross-section shaping for the torso — pecs, lats, spinal groove, glutes.
  * Garments reuse it (damped) so cloth follows the body it covers instead of
  * sinking into a pectoral or floating off a shoulder blade.
- * @param {number} m muscle 0..1
+ * @param m muscle 0..1
  */
-export function torsoShape(m) {
+export function torsoShape(m: number) {
   return (th, t) => {
     let k = 1;
     k += (0.045 + 0.062 * m) * abump(th, 0.40, 0.62) * bump(t, 0.79, 0.18);
@@ -150,13 +150,13 @@ export function legShape(m) {
  * Resample a node list into a new one covering [u0,u1] with `count` nodes,
  * padded outward — this is how a garment is cut from the body it covers.
  *
- * @param {Array} nodes source sweep
- * @param {number} u0 start parameter
- * @param {number} u1 end parameter
- * @param {number} count nodes to emit
- * @param {(u:number)=>number|number} pad radial padding in metres
+ * @param nodes source sweep
+ * @param u0 start parameter
+ * @param u1 end parameter
+ * @param count nodes to emit
+ * @param pad radial padding in metres
  */
-export function drape(nodes, u0, u1, count, pad, padZ) {
+export function drape(nodes: any[], u0: number, u1: number, count: number, pad: (u:number)=>number|number, padZ) {
   const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   const rxs = nodes.map((n) => n.rx);
   const rzs = nodes.map((n) => n.rz ?? n.rx);

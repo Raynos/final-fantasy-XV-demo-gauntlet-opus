@@ -35,8 +35,7 @@ import { ensureInteractCss } from './interact.css.ts';
 const TYPE_RATE = 46;
 
 export class Dialogue {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  constructor(parent: HTMLElement) {
     ensureInteractCss();
     this.root = el('div', { id: 'dialogue' });
     parent.appendChild(this.root);
@@ -75,10 +74,9 @@ export class Dialogue {
 
   /**
    * Begin a conversation.
-   * @param {object} script `{ speaker, role, hue, start, nodes, onEnd }`
-   * @param {object} game
+   * @param script `{ speaker, role, hue, start, nodes, onEnd }`
    */
-  start(script, game) {
+  start(script: any, game: any) {
     if (!script || !script.nodes) return false;
     this.script = script;
     this.game = game;

@@ -34,8 +34,7 @@ const DORIAN = [0, 2, 3, 5, 7, 9, 10];
  *            voices:string[], drums:string, mood:number}} Station
  */
 
-/** @type {Station[]} */
-export const STATIONS = [
+export const STATIONS: Station[] = [
   {
     id: 'prelude',
     name: 'Prelude of the Crystal',
@@ -107,17 +106,16 @@ export class Radio {
     this._melodyRng = new Rng(4242);
   }
 
-  /** @returns {Station} */
-  get station() { return STATIONS[this.index]; }
+  get station(): Station { return STATIONS[this.index]; }
 
   /**
    * Attach to a live AudioSystem. Safe to call repeatedly; a no-op until that
    * system has actually booted its context (which only happens after a user
    * gesture, per browser policy).
-   * @param {object} audio the AudioSystem instance
-   * @returns {boolean} true once attached
+   * @param audio the AudioSystem instance
+   * @returns true once attached
    */
-  attach(audio) {
+  attach(audio: any): boolean {
     if (this.enabled || !audio || !audio.ctx) return this.enabled;
     const ctx = audio.ctx;
     this.ctx = ctx;
@@ -156,11 +154,11 @@ export class Radio {
     this._applyGain();
   }
 
-  /** Radio power. @param {boolean} v */
-  setOn(v) { this.on = !!v; this._applyGain(); }
+  /** Radio power. @param v */
+  setOn(v: boolean) { this.on = !!v; this._applyGain(); }
 
-  /** @param {number} i station index, wrapped */
-  setStation(i) {
+  /** @param i station index, wrapped */
+  setStation(i: number) {
     const n = STATIONS.length;
     this.index = ((i % n) + n) % n;
     this.bar = 0;
@@ -175,10 +173,10 @@ export class Radio {
 
   /**
    * Pull the music down under dialogue.
-   * @param {number} seconds how long to stay ducked
-   * @param {number} [amount] 0..1 residual level
+   * @param seconds how long to stay ducked
+   * @param [amount] 0..1 residual level
    */
-  duck(seconds, amount = 0.24) {
+  duck(seconds: number, amount: number = 0.24) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this._duckUntil = Math.max(this._duckUntil, t + seconds);
@@ -195,8 +193,7 @@ export class Radio {
     this.out.gain.setTargetAtTime(want, t, 0.35);
   }
 
-  /** @param {number} dt */
-  update(dt) {
+  update(dt: number) {
     void dt;
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

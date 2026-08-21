@@ -28,8 +28,7 @@ const MAX_ROWS = 16;
  * from `game.time`; no CSS transitions.
  */
 export class QuestScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
     this.menus = menus;
     this.title = 'Quests';
@@ -43,8 +42,8 @@ export class QuestScreen {
 
   get rpg() { return rpg(this.game); }
 
-  /** @param {HTMLElement} root @param {object} game */
-  build(root, game) {
+  /** @param root @param game */
+  build(root: HTMLElement, game: any) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -215,8 +214,8 @@ export class QuestScreen {
     } else { this.actLb.textContent = 'Enter — accept this quest'; this.actLb.className = 'lb go'; }
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     this.game = game;
     const r = this.rpg;
     const rows = this._rows = this.rows();

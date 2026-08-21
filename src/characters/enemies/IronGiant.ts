@@ -399,11 +399,10 @@ function mix(a, b, t) {
  * one flat colour plus hash jitter, and a five-metre wall of one flat colour
  * is why the giant read as a boxy grey mech rather than as armour.
  *
- * @param {THREE.BufferGeometry} geo
- * @param {number} base plate colour
- * @param {number} [amount] 0..1 how far gone this piece is
+ * @param base plate colour
+ * @param [amount] 0..1 how far gone this piece is
  */
-function aged(geo, base, amount = 1) {
+function aged(geo: THREE.BufferGeometry, base: number, amount: number = 1) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n * 3);

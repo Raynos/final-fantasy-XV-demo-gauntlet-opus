@@ -43,14 +43,9 @@ export class ViewModes {
     return this._mats;
   }
 
-  /** @returns {string[]} */
-  static get names() { return ['off', 'wireframe', 'unlit', 'normals', 'overdraw']; }
+  static get names(): string[] { return ['off', 'wireframe', 'unlit', 'normals', 'overdraw']; }
 
-  /**
-   * @param {string} name
-   * @param {THREE.Scene} scene
-   */
-  set(name, scene) {
+  set(name: string, scene: THREE.Scene) {
     const want = String(name || 'off');
     if (!ViewModes.names.includes(want)) throw new Error(`view: ${ViewModes.names.join(' | ')}`);
     this.mode = want;

@@ -39,14 +39,14 @@ const _rd = new THREE.Color();
 const _a = { r: 0, g: 0, b: 0 };
 const _b = { r: 0, g: 0, b: 0 };
 
-/** @returns {THREE.Color} the next scratch register. */
-function take() { _at = (_at + 1) % RING.length; return RING[_at]; }
+/** @returns the next scratch register. */
+function take(): THREE.Color { _at = (_at + 1) % RING.length; return RING[_at]; }
 
 /**
  * Read a hex literal or a `THREE.Color` into linear component scratch.
- * @param {number|THREE.Color} v @param {{r:number,g:number,b:number}} out
+ * @param v @param out
  */
-function read(v, out) {
+function read(v: number | THREE.Color, out: {r:number,g:number,b:number}) {
   if (v && v.isColor) { out.r = v.r; out.g = v.g; out.b = v.b; return out; }
   _rd.setHex(v, THREE.SRGBColorSpace);
   out.r = _rd.r; out.g = _rd.g; out.b = _rd.b;
@@ -56,12 +56,10 @@ function read(v, out) {
 /**
  * Blend two colours in linear space. Either end may be a hex literal or a
  * `THREE.Color`, and calls may be nested freely.
- * @param {number|THREE.Color} a
- * @param {number|THREE.Color} b
- * @param {number} t 0..1, clamped
- * @returns {THREE.Color} a scratch colour — copy it if you need to keep it
+ * @param t 0..1, clamped
+ * @returns a scratch colour — copy it if you need to keep it
  */
-export function mixc(a, b, t) {
+export function mixc(a: number | THREE.Color, b: number | THREE.Color, t: number): THREE.Color {
   read(a, _a); read(b, _b);
   const k = t < 0 ? 0 : t > 1 ? 1 : t;
   return take().setRGB(
@@ -73,10 +71,8 @@ export function mixc(a, b, t) {
 
 /**
  * A single colour in a scratch register, hex or `THREE.Color`.
- * @param {number|THREE.Color} v
- * @returns {THREE.Color}
  */
-export function colc(v) {
+export function colc(v: number | THREE.Color): THREE.Color {
   read(v, _a);
   return take().setRGB(_a.r, _a.g, _a.b);
 }

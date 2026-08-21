@@ -79,9 +79,8 @@ export class StorySystem {
   /**
    * Open a chapter: set its light, announce it, take its first quest, and play
    * whatever scene is bound to its start.
-   * @param {number} n
    */
-  startChapter(n) {
+  startChapter(n: number) {
     const ch = CHAPTER_BY_N[n];
     if (!ch) return null;
     this.chapterN = n;
@@ -108,9 +107,8 @@ export class StorySystem {
 
   /**
    * Close a chapter with the flourish and roll into the next one.
-   * @param {number} n
    */
-  completeChapter(n) {
+  completeChapter(n: number) {
     const ch = CHAPTER_BY_N[n];
     if (!ch) return;
     const box = this.cine && this.cine.box;
@@ -128,11 +126,9 @@ export class StorySystem {
   /**
    * Play a named cutscene. Refuses to double-play and refuses while another
    * scene owns the screen.
-   * @param {string} id
-   * @param {object} [opts] `{ replay }`
-   * @returns {Promise|null}
+   * @param [opts] `{ replay }`
    */
-  playScene(id, opts = {}) {
+  playScene(id: string, opts: any = {}): Promise | null {
     const def = SCENES[id];
     if (!def) { console.warn(`[Story] unknown scene: ${id}`); return null; }
     if (!opts.replay && this.seen.has(id)) return null;
@@ -157,9 +153,8 @@ export class StorySystem {
    * story: { scene: 'ch1_opening_push', at: 25 }    // a cutscene, parked at 25 s
    * ```
    *
-   * @param {string|object} spec
    */
-  applyShot(spec) {
+  applyShot(spec: string | any) {
     if (!spec) { this.title.hide(); if (this.cine) this.cine.stop(); return; }
     if (spec === 'title' || spec.title) {
       if (this.cine && this.cine.playing) this.cine.stop();

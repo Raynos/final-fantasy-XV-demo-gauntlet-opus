@@ -18,10 +18,9 @@ import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
  */
 export class MaterialPatch {
   /**
-   * @param {import('three/examples/jsm/csm/CSM.js').CSM} csm
-   * @param {Object} uniforms shared uniform objects (LUTs, fog, cloud shadow)
+   * @param uniforms shared uniform objects (LUTs, fog, cloud shadow)
    */
-  constructor(csm, uniforms) {
+  constructor(csm: import('three/examples/jsm/csm/CSM.js').CSM, uniforms: any) {
     this.csm = csm;
     this.uniforms = uniforms;
     this.count = 0;
@@ -36,8 +35,7 @@ export class MaterialPatch {
     });
   }
 
-  /** @param {THREE.Material} mat */
-  patch(mat) {
+  patch(mat: THREE.Material) {
     if (!mat || mat.userData.__atmo) return;
     const lit = mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial ||
                 mat.isMeshLambertMaterial || mat.isMeshPhongMaterial ||
@@ -63,8 +61,7 @@ export class MaterialPatch {
     this.count++;
   }
 
-  /** @param {{uniforms:Object, vertexShader:string, fragmentShader:string}} shader */
-  inject(shader) {
+  inject(shader: {uniforms:any, vertexShader:string, fragmentShader:string}) {
     for (const k of Object.keys(this.uniforms)) shader.uniforms[k] = this.uniforms[k];
 
     shader.vertexShader = 'varying vec3 vAtmWorld;\n' + shader.vertexShader.replace(

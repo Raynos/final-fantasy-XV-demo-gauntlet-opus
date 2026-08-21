@@ -22,16 +22,14 @@ const CAPSTONE_AP = 88;
  * is also what makes the constellations read as constellations.
  */
 export class AscensionScreen {
-  /** @param {import('../Menus.ts').Menus} menus */
-  constructor(menus) {
+  constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Ascension';
     this.sub = 'The Astral constellations of the Lucian line';
     this.ap = 0;
   }
 
-  /** @param {HTMLElement} root */
-  build(root, game) {
+  build(root: HTMLElement, game) {
     this.game = game;
     this.wrap = el('div.asc');
     this.svg = svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
@@ -350,8 +348,8 @@ export class AscensionScreen {
     }
   }
 
-  /** @param {number} dt @param {object} game @param {number} a */
-  update(dt, game, a) {
+  /** @param dt @param game @param a */
+  update(dt: number, game: any, a: number) {
     const t = game.time.now;
     const rev = easeOutQuint(clamp((a - 0.06) / 0.82, 0, 1));
     if (this._ap !== this.src.ap) { this._syncStates(); this._restyleAll(); }

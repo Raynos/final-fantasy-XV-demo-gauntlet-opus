@@ -94,18 +94,16 @@ export class Input {
    * True this frame for any of the universal "back / close" inputs. Escape is
    * included but never relied upon alone — the browser eats it whenever the
    * pointer is locked, which is exactly when a player most wants to back out.
-   * @returns {boolean}
    */
-  backPressed() {
+  backPressed(): boolean {
     return this.keyDown('Escape') || this.keyDown('Backspace') || this.keyDown('Tab');
   }
 
   /**
    * Gate pointer lock. Called with `false` by anything that puts a cursor-driven
    * or key-driven surface on screen (menus, shops, dialogue, cutscenes).
-   * @param {boolean} v
    */
-  setPointerLockAllowed(v) {
+  setPointerLockAllowed(v: boolean) {
     const want = !!v;
     if (want === this.pointerLockAllowed) return;
     this.pointerLockAllowed = want;
@@ -133,9 +131,8 @@ export class Input {
   /**
    * Read and clear the "the player pressed Escape out of pointer lock" flag.
    * The menu layer turns this into an open pause menu.
-   * @returns {boolean}
    */
-  consumeLockLost() {
+  consumeLockLost(): boolean {
     if (!this.lockLost) return false;
     this.lockLost = false;
     return true;
@@ -172,9 +169,9 @@ export class Input {
   /**
    * Rising edge on a gamepad button, tracked internally so several callers can
    * ask about the same button in one frame without stealing it from each other.
-   * @param {number} i button index
+   * @param i button index
    */
-  gpDown(i) {
+  gpDown(i: number) {
     // the previous-state table is refreshed once per frame in endFrame(), so
     // every caller in a frame sees the same edge
     return this.gpButton(i) && !(this._gpPrev || (this._gpPrev = []))[i];

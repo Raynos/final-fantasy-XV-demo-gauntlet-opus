@@ -21,8 +21,8 @@ import { readQuest } from './GameData.ts';
 const HOLD = 9;
 
 export class Hints {
-  /** @param {HTMLElement} parent usually `game.uiRoot` */
-  constructor(parent) {
+  /** @param parent usually `game.uiRoot` */
+  constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'hints' });
     this.card = el('div.hint.plate');
     this.icoW = el('div.hn-i');
@@ -53,13 +53,10 @@ export class Hints {
   /**
    * Queue a hint. The first call for a given `id` wins; later ones are ignored,
    * which is what makes these first-run rather than nagging.
-   * @param {string} id
-   * @param {string} title
-   * @param {string} text
-   * @param {Array<string>} [keys] key glyphs to print along the bottom
-   * @param {string} [ico] icon key
+   * @param [keys] key glyphs to print along the bottom
+   * @param [ico] icon key
    */
-  show(id, title, text, keys = [], ico = 'system') {
+  show(id: string, title: string, text: string, keys: Array<string> = [], ico: string = 'system') {
     if (this.muted || this.seen.has(id)) return false;
     this.seen.add(id);
     // One at a time. Two conditions can come true on the same frame (boot, and
@@ -90,9 +87,8 @@ export class Hints {
 
   /**
    * Work out which hint, if any, this frame has earned.
-   * @param {object} game
    */
-  _poll(game) {
+  _poll(game: any) {
     if (this.muted || game.currentShot) return;
     const story = game.get?.('Story');
     if (story && (story.title?.shown || story.cine?.playing)) return;
@@ -136,8 +132,8 @@ export class Hints {
     }
   }
 
-  /** @param {number} dt @param {object} game */
-  update(dt, game) {
+  /** @param dt @param game */
+  update(dt: number, game: any) {
     this._poll(game);
     if (!this.cur && this.queue.length && this.a <= 0.001) this._present(this.queue.shift());
     if (!this.cur && this.a <= 0.001) { this.root.style.display = 'none'; return; }

@@ -27,13 +27,9 @@ const torus = () => geo('torus', () => new THREE.TorusGeometry(0.5, 0.12, 6, 14)
 export class PropKit {
   /**
    * @param {object} o
-   * @param {import('./Build.ts').InteriorMerger} o.merger
-   * @param {import('./LightRig.ts').LightRig} o.rig
-   * @param {import('./Layout.ts').Layout} o.layout
-   * @param {THREE.Group} o.group loose (animated) objects go here
-   * @param {number} [o.seed]
+   * 
    */
-  constructor(o) {
+  constructor(o: { merger: import('./Build.ts').InteriorMerger, rig: import('./LightRig.ts').LightRig, layout: import('./Layout.ts').Layout, group: THREE.Group, seed?: number }) {
     this.m = o.merger;
     this.rig = o.rig;
     this.L = o.layout;
@@ -665,9 +661,9 @@ export class PropKit {
   /**
    * A treasure chest. The lid is a separate object so it can swing open when
    * the party takes what is inside.
-   * @returns {object} interactable descriptor
+   * @returns interactable descriptor
    */
-  chest(spec) {
+  chest(spec): any {
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
     const rot = spec.rot || 0;
@@ -714,9 +710,9 @@ export class PropKit {
   /**
    * A door across a passage. Locked doors need a dungeon key; the leaf slides
    * up into the header when it opens.
-   * @returns {object} interactable descriptor
+   * @returns interactable descriptor
    */
-  door(spec) {
+  door(spec): any {
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
     const w = spec.w, h = spec.h;

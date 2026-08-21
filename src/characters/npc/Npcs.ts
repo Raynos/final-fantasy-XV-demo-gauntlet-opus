@@ -97,8 +97,7 @@ export class Npcs {
     this._camPos = new THREE.Vector3();
   }
 
-  /** @param {object} game */
-  async init(game) {
+  async init(game: any) {
     this.game = game;
     const town = game.get('Town') || game.get('Hammerhead');
     if (!town || !town.anchors || !town.local) {
@@ -193,10 +192,10 @@ export class Npcs {
 
   /**
    * Place one townsperson.
-   * @param {string} castKey key in NPC_CAST
-   * @param {object} opts placement and behaviour
+   * @param castKey key in NPC_CAST
+   * @param opts placement and behaviour
    */
-  _spawn(castKey, opts = {}) {
+  _spawn(castKey: string, opts: any = {}) {
     const def = NPC_CAST[castKey];
     if (!def) return null;
     const key = opts.key || castKey;

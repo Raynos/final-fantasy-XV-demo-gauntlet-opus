@@ -56,9 +56,8 @@ export class Renderer {
   /**
    * Change the quality tier at runtime. PostFX has a matching `setQuality`
    * for the post chain; call both.
-   * @param {'low'|'medium'|'high'|'ultra'} tier
    */
-  setQuality(tier) {
+  setQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
     this.quality = tier;
     const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));

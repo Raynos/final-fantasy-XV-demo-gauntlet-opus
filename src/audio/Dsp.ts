@@ -24,13 +24,8 @@ const bi = (rng) => rng() * 2 - 1;
 
 /**
  * A looping noise bed.
- * @param {BaseAudioContext} ctx
- * @param {number} seconds
- * @param {'white'|'pink'|'brown'} color
- * @param {number} seed
- * @param {number} channels
  */
-export function noiseBuffer(ctx, seconds, color = 'pink', seed = 1, channels = 1) {
+export function noiseBuffer(ctx: BaseAudioContext, seconds: number, color: 'white' | 'pink' | 'brown' = 'pink', seed: number = 1, channels: number = 1) {
   const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buf = ctx.createBuffer(channels, len, ctx.sampleRate);
   for (let c = 0; c < channels; c++) {
@@ -90,17 +85,9 @@ export function noiseBuffer(ctx, seconds, color = 'pink', seed = 1, channels = 1
  * early reflections — the early pattern is what actually tells the ear whether
  * it is standing in a canyon or a tent.
  *
- * @param {BaseAudioContext} ctx
  * @param {object} o
- * @param {number} o.seconds  tail length
- * @param {number} o.decay    exponent — larger is a faster, drier tail
- * @param {number} o.predelay seconds before the tail begins
- * @param {number} o.damp     0..1 how much the tail loses its highs over time
- * @param {number[][]} o.early [timeSeconds, amplitude] discrete reflections
- * @param {number} o.width    0..1 stereo decorrelation
- * @param {number} o.seed
- */
-export function impulseResponse(ctx, o = {}) {
+ * */
+export function impulseResponse(ctx: BaseAudioContext, o: { seconds: number, decay: number, predelay: number, damp: number, early: number[][], width: number, seed: number } = {}) {
   const seconds = o.seconds ?? 2.4;
   const decay = o.decay ?? 2.4;
   const predelay = o.predelay ?? 0.012;
@@ -157,9 +144,9 @@ export function impulseResponse(ctx, o = {}) {
  * playing. That defeats the point of an adaptive score, and it is exactly what
  * the verification render measured before this was fixed.
  *
- * @param {number} k knee sharpness — higher clips harder near full scale
+ * @param k knee sharpness — higher clips harder near full scale
  */
-export function softClipCurve(k = 3, n = 1024) {
+export function softClipCurve(k: number = 3, n = 1024) {
   const c = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 2 - 1;
@@ -196,10 +183,8 @@ const SPECTRA = {
 
 /**
  * Cached PeriodicWave for a named timbre.
- * @param {BaseAudioContext} ctx
- * @param {keyof SPECTRA} name
  */
-export function wave(ctx, name) {
+export function wave(ctx: BaseAudioContext, name: keyof SPECTRA) {
   let map = WAVE_CACHE.get(ctx);
   if (!map) { map = new Map(); WAVE_CACHE.set(ctx, map); }
   let w = map.get(name);
@@ -221,12 +206,11 @@ export const EPS = 0.0001;
 
 /**
  * Standard ADSR onto a gain param.
- * @param {AudioParam} p
- * @param {number} t start time
- * @param {number} dur total note length (attack..release start)
- * @param {object} o {a, d, s, r, peak}
+ * @param t start time
+ * @param dur total note length (attack..release start)
+ * @param o {a, d, s, r, peak}
  */
-export function adsr(p, t, dur, o = {}) {
+export function adsr(p: AudioParam, t: number, dur: number, o: any = {}) {
   const a = o.a ?? 0.01;
   const d = o.d ?? 0.12;
   const s = o.s ?? 0.6;

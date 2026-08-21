@@ -41,19 +41,8 @@ export class SurfaceBuilder {
    * Tessellated planar patch.
    *
    * @param {object} o
-   * @param {number[]} o.origin corner of the patch
-   * @param {number[]} o.uAxis unit vector * nothing (direction only)
-   * @param {number[]} o.vAxis unit direction
-   * @param {number} o.uLen extent along uAxis, metres
-   * @param {number} o.vLen extent along vAxis, metres
-   * @param {number} [o.cell] target quad size, metres
-   * @param {number} [o.uvScale] metres per texture tile
-   * @param {(x,y,z)=>number} [o.displace] offset along the surface normal
-   * @param {(x,y,z)=>number} [o.ao] 0..1 vertex brightness
-   * @param {boolean} [o.flip] reverse winding / normal
-   * @param {number[]} [o.uvOffset] shifts the uv origin so adjacent patches line up
-   */
-  patch(o) {
+   * */
+  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x,y,z)=>number, ao?: (x,y,z)=>number, flip?: boolean, uvOffset?: number[] }) {
     const {
       origin, uAxis, vAxis, uLen, vLen,
       cell = 1.4, uvScale = 3.0, displace = null, ao = null, flip = false,
@@ -104,11 +93,9 @@ export class SurfaceBuilder {
    * Closed tube swept along a polyline — the backbone of every natural cave
    * passage. `radius(t, theta, x, y, z)` returns metres from the centreline.
    *
-   * @param {number[][]} path world-space points
-   * @param {(t:number, theta:number, x:number, y:number, z:number)=>number} radius
-   * @param {object} [opts]
+   * @param path world-space points
    */
-  tube(path, radius, { sides = 14, ao = null, uvScale = 3.0, capStart = false, capEnd = false, flatten = 0.0 } = {}) {
+  tube(path: number[][], radius: (t:number, theta:number, x:number, y:number, z:number)=>number, { sides = 14, ao = null, uvScale = 3.0, capStart = false, capEnd = false, flatten = 0.0 }: any = {}) {
     const base = this.pos.length / 3;
     const rings = path.length;
     // Cumulative arc length, so the texture advances with the metre and not
@@ -190,8 +177,8 @@ export class SurfaceBuilder {
 export class InteriorMerger {
   constructor() { this.byMat = new Map(); }
 
-  /** @param {THREE.Material} mat @param {THREE.BufferGeometry} geo */
-  add(mat, geo, matrix) {
+  /** @param mat @param geo */
+  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix) {
     let g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
     const keep = ['position', 'normal', 'uv', 'color'];
     for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
@@ -231,11 +218,7 @@ export class InteriorMerger {
     return this.add(mat, g, null);
   }
 
-  /**
-   * @param {THREE.Object3D} parent
-   * @returns {{tris:number, calls:number}}
-   */
-  build(parent, name = 'interior') {
+  build(parent: THREE.Object3D, name = 'interior'): {tris:number, calls:number} {
     let tris = 0, calls = 0;
     for (const [mat, list] of this.byMat) {
       const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);

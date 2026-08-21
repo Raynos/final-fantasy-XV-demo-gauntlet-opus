@@ -72,12 +72,11 @@ export const CYCLE_DISTANCE = 3.3;
  * instance matrix advances by `s`, so a garula's feet only move while the
  * garula does.
  *
- * @param {number} t seconds
- * @param {number} phase per-animal phase offset
- * @param {number} rate cycles per second
- * @returns {{u:number, s:number, gate:number}}
+ * @param t seconds
+ * @param phase per-animal phase offset
+ * @param rate cycles per second
  */
-export function walkCycle(t, phase, rate) {
+export function walkCycle(t: number, phase: number, rate: number): {u:number, s:number, gate:number} {
   const u = t * rate + phase;
   const s = smooth(0.70, 0.97, u - Math.floor(u));
   return { u, s, gate: 4 * s * (1 - s) };
@@ -99,9 +98,8 @@ function fur(th, u) {
 
 /**
  * Build the merged, rig-tagged garula body.
- * @returns {THREE.BufferGeometry}
  */
-export function garulaGeometry() {
+export function garulaGeometry(): THREE.BufferGeometry {
   const parts = [];
 
   /* ------------------------------------------------------------ torso -- */
@@ -366,10 +364,8 @@ void creatureRig(out mat3 R, out vec3 P, out mat3 RB, out vec3 PB, out vec3 OFF)
  * material, so the animal's *shadow* grazes too instead of standing in the
  * bind pose while the animal's head is in the grass.
  *
- * @param {{value:number}} timeRef
- * @returns {{material:THREE.Material, depth:THREE.Material}}
  */
-export function grazerMaterials(timeRef) {
+export function grazerMaterials(timeRef: {value:number}): {material:THREE.Material, depth:THREE.Material} {
   const material = rigMaterial(new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: 0.95, metalness: 0, vertexColors: true,
   }), timeRef, RIG_GLSL, { tint: true, key: 'grazer' });

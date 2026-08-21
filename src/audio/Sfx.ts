@@ -20,12 +20,9 @@ const BUS_FOR = { ui: 'ui', voice: 'voice', amb: 'amb' };
 
 class Shot {
   /**
-   * @param {Sfx} sfx
-   * @param {object} o play options
-   * @param {string} bus
-   * @param {number} priority
+   * @param o play options
    */
-  constructor(sfx, o, bus, priority) {
+  constructor(sfx: Sfx, o: any, bus: string, priority: number) {
     this.sfx = sfx;
     this.ctx = sfx.ctx;
     this.handle = sfx.graph.take(priority, o.at ?? sfx.now);
@@ -65,10 +62,9 @@ class Shot {
 
   /**
    * A filtered noise burst.
-   * @param {number} t
-   * @param {object} o {dur, type, f0, f1, Q, gain, attack, buffer, rate, to}
+   * @param o {dur, type, f0, f1, Q, gain, attack, buffer, rate, to}
    */
-  noise(t, o) {
+  noise(t: number, o: any) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
@@ -107,10 +103,9 @@ class Shot {
 
   /**
    * A pitched tone with an optional glide.
-   * @param {number} t
-   * @param {object} o {f0, f1, dur, gain, type, attack, decayShape, to}
+   * @param o {f0, f1, dur, gain, type, attack, decayShape, to}
    */
-  tone(t, o) {
+  tone(t: number, o: any) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
@@ -259,11 +254,7 @@ class Shot {
 /* ------------------------------------------------------------------------ */
 
 export class Sfx {
-  /**
-   * @param {import('./Graph.ts').AudioGraph} graph
-   * @param {import('./Instruments.ts').Instruments} inst
-   */
-  constructor(graph, inst) {
+  constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
     this.inst = inst;
     this.ctx = graph.ctx;
@@ -280,11 +271,11 @@ export class Sfx {
 
   /**
    * Play a sound.
-   * @param {string} name e.g. `swing:sword`, `impact:metal`, `voc:goblin:hurt`
-   * @param {{x:number,y:number,z:number}|null} [pos] world position, or null for 2D
-   * @param {object} [o] {volume, at, hrtf, send, ...per-sound options}
+   * @param name e.g. `swing:sword`, `impact:metal`, `voc:goblin:hurt`
+   * @param [pos] world position, or null for 2D
+   * @param [o] {volume, at, hrtf, send, ...per-sound options}
    */
-  play(name, pos, o = {}) {
+  play(name: string, pos?: {x:number,y:number,z:number} | null, o: any = {}) {
     const t = Math.max(0, o.at ?? this.now);
     const opt = pos ? { ...o, pos } : { ...o };
     // De-dupe: eight enemies hit in one frame must not be eight identical
@@ -550,9 +541,9 @@ export class Sfx {
   /**
    * Enemy vocalisations. Body size sets the pitch and the formants; the mood
    * sets the contour.
-   * @param {object} o {species, mood: 'aggro'|'hurt'|'death'|'idle'}
+   * @param o {species, mood: 'aggro'|'hurt'|'death'|'idle'}
    */
-  vocal(t, o = {}) {
+  vocal(t, o: any = {}) {
     const V = SPECIES[o.species] || SPECIES.goblin;
     const mood = o.mood || 'aggro';
     const M = V[mood] || V.aggro;
@@ -598,9 +589,9 @@ export class Sfx {
 
   /**
    * Footstep. Surface names match `Terrain.sampleMaterial().name`.
-   * @param {object} o {surface, run, weight}
+   * @param o {surface, run, weight}
    */
-  step(t, o = {}) {
+  step(t, o: any = {}) {
     const S = SURFACE[o.surface] || SURFACE.dirt;
     const run = !!o.run;
     const w = (o.weight ?? 1) * (run ? 1.25 : 0.85);
@@ -719,9 +710,9 @@ export class Sfx {
    * Thunder. Distance is the whole design: near strikes are a crack plus a
    * rumble, far strikes are only the rumble, and everything in between gets
    * darker and longer as it travels.
-   * @param {object} o {distance metres}
+   * @param o {distance metres}
    */
-  thunder(t, o = {}) {
+  thunder(t, o: any = {}) {
     const d = clamp(o.distance ?? 900, 60, 3400);
     const near = 1 - d / 3400;
     const s = new Shot(this, { send: 0.7, volume: (o.volume ?? 1) * (0.45 + 0.75 * near), ...o }, 'amb', 3);

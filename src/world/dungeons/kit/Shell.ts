@@ -27,11 +27,10 @@ const STYLE = {
 
 export class ShellBuilder {
   /**
-   * @param {import('./Layout.ts').Layout} layout
-   * @param {{seed?:number, wallMat:object, floorMat:object, ceilMat:object}} opts
+   * @param opts
    *        materials may be a single material or a `(region)=>material` picker
    */
-  constructor(layout, opts) {
+  constructor(layout: import('./Layout.ts').Layout, opts: {seed?:number, wallMat:any, floorMat:any, ceilMat:any}) {
     this.L = layout;
     this.opts = opts;
     this.n = new Noise(opts.seed || 4242);
@@ -444,9 +443,8 @@ export class ShellBuilder {
 /**
  * Register a doorway on every room wall a corridor touches. Called once by the
  * dungeon before geometry is built.
- * @param {import('./Layout.ts').Layout} layout
  */
-export function cutDoorways(layout) {
+export function cutDoorways(layout: import('./Layout.ts').Layout) {
   for (const c of layout.corridors) {
     cutEnd(layout, c, c.a, c.path[0], c.path[1]);
     cutEnd(layout, c, c.b, c.path[c.path.length - 1], c.path[c.path.length - 2]);

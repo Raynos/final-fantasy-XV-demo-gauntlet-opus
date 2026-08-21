@@ -39,11 +39,11 @@ const _s = new THREE.Vector3();
  * `angleDeg` of each other, and emits a non-indexed mesh so a vertex on a
  * crease can carry one normal per side.
  *
- * @param {THREE.BufferGeometry} geo indexed geometry
- * @param {number} angleDeg crease threshold in degrees
- * @returns {THREE.BufferGeometry} non-indexed geometry with split normals
+ * @param geo indexed geometry
+ * @param angleDeg crease threshold in degrees
+ * @returns non-indexed geometry with split normals
  */
-function splitNormals(geo, angleDeg) {
+function splitNormals(geo: THREE.BufferGeometry, angleDeg: number): THREE.BufferGeometry {
   const pos = geo.attributes.position;
   const idx = geo.index.array;
   const nTri = idx.length / 3;
@@ -124,26 +124,13 @@ function splitNormals(geo, angleDeg) {
 /**
  * Build one rock base mesh.
  *
- * @param {number} seed
  * @param {object} o
- * @param {number} [o.detail] icosphere subdivision
- * @param {number} [o.warp] noise amplitude before cutting
- * @param {number[]} [o.stretch] xyz scale applied to the blank
- * @param {number} [o.planes] number of fracture half-spaces to cut with
- * @param {number} [o.upright] 0 = isotropic cut normals, 1 = steep/vertical
- * @param {number} [o.bite] how deep each cut goes (fraction of the extent)
- * @param {number} [o.bedding] strata ledge amplitude
- * @param {number} [o.beds] number of bedding planes
- * @param {number} [o.chips] shallow corner chips
- * @param {number} [o.round] 0 = fully faceted, 1 = river-worn (blend back)
- * @param {number} [o.crease] normal smoothing angle in degrees
- * @param {number} [o.flat] flatten the underside (for slabs sitting in soil)
- */
-function rockGeometry(seed, {
+ * */
+function rockGeometry(seed: number, {
   detail = 2, warp = 0.26, stretch = [1, 1, 1], planes = 7, upright = 0.35,
   bite = 0.78, bedding = 0, beds = 5, chips = 3, round = 0.06, crease = 30,
   flat = 0,
-} = {}) {
+}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, chips?: number, round?: number, crease?: number, flat?: number } = {}) {
   // PolyhedronGeometry is non-indexed and its UV seam duplicates a whole
   // column of vertices; weld on position alone so the crease walk below sees
   // a real adjacency graph.
@@ -332,12 +319,7 @@ for (let i = 0; i < KINDS.length; i++) K[KINDS[i].key] = KINDS[i];
 const BIG = new Set(['granite', 'bedded', 'worn', 'slab', 'spire']);
 
 export class Rocks {
-  /**
-   * @param {import('../veg/Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   * @param {{quality?:number, radius?:number}} opts
-   */
-  constructor(eco, scene, { quality = 1, radius = 560 } = {}) {
+  constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1, radius = 560 }: {quality?:number, radius?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;

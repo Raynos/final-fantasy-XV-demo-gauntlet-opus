@@ -225,9 +225,9 @@ export class Enemy {
    * half a metre on a big machine, which is precisely the error it is being
    * used to correct.
    *
-   * @returns {number} metres; negative is underground
+   * @returns metres; negative is underground
    */
-  poseFloor() {
+  poseFloor(): number {
     if (!this.visual) return 0;
     this.root.updateMatrixWorld(true);
     const ry = this.root.matrixWorld.elements[13];
@@ -285,9 +285,9 @@ export class Enemy {
    * Cheap: a few hundred vertices × twelve samples × a handful of poses, once
    * per species, on the frame that species first spawns.
    *
-   * @param {string[]} poses pose names to calibrate
+   * @param poses pose names to calibrate
    */
-  calibrateGround(poses = GROUND_CAL_POSES) {
+  calibrateGround(poses: string[] = GROUND_CAL_POSES) {
     if (this.type._groundCal || !this.rig || !this.visual) return;
     // A creature whose model deliberately continues below the ground has no
     // "foot" to measure — see `TITAN.buriedBase`.
@@ -349,9 +349,9 @@ export class Enemy {
    * ground at the current `stateTime`. Zero until `calibrateGround()` has run,
    * and zero for any pose that never reached below it.
    *
-   * @param {string} pose pose name, as passed to `pose()`
+   * @param pose pose name, as passed to `pose()`
    */
-  groundLift(pose) {
+  groundLift(pose: string) {
     const cal = this.type._groundCal;
     if (!cal) return 0;
     const curve = (this.attackId && cal[`${pose}:${this.attackId}`]) || cal[pose];
@@ -372,9 +372,8 @@ export class Enemy {
   /**
    * Percent-of-damage-taken for an element. 100 = neutral, >100 weak,
    * <100 resistant, 0 immune. Feeds `Stats.computeDamage` unchanged.
-   * @param {string} element
    */
-  resistance(element) {
+  resistance(element: string) {
     const t = this.type;
     if (t.resistPct && t.resistPct[element] != null) return t.resistPct[element];
     if (t.weakness === element) return 160;
@@ -395,11 +394,10 @@ export class Enemy {
 
   /**
    * Apply damage. Returns a result the combat system turns into events.
-   * @param {number} amount
-   * @param {THREE.Vector3} dir world-space direction of the blow
-   * @param {object} o {poise, blindside, element, weaponClass, noFlinch}
+   * @param dir world-space direction of the blow
+   * @param o {poise, blindside, element, weaponClass, noFlinch}
    */
-  hit(amount, dir, o = {}) {
+  hit(amount: number, dir: THREE.Vector3, o: any = {}) {
     if (this.dead || this.invulnerable) return null;
     let dmg = amount;
     if (o.blindside) dmg *= 1.35;
@@ -496,10 +494,9 @@ export class Enemy {
    * Can this enemy perceive `t` right now? Sight is a cone, narrowed at
    * night for daylight animals and widened for daemons; hearing is a plain
    * radius scaled by how fast the target is moving.
-   * @param {object} t something with `.position` and optional `.speed`
-   * @param {object} ctx
+   * @param t something with `.position` and optional `.speed`
    */
-  perceives(t, ctx) {
+  perceives(t: any, ctx: any) {
     const p = t.position || t.root?.position;
     if (!p) return 0;
     const dx = p.x - this.root.position.x, dz = p.z - this.root.position.z;
@@ -597,10 +594,9 @@ export class Enemy {
   /* -------------------------------------------------------------- tick */
 
   /**
-   * @param {number} dt
-   * @param {object} ctx {terrain, player, allies, others, night, onStrike, rng}
+   * @param ctx {terrain, player, allies, others, night, onStrike, rng}
    */
-  update(dt, ctx) {
+  update(dt: number, ctx: any) {
     this.stateTime += dt;
     this.phase += dt;
     /** Frame delta, so `pose()` can advance stride phase and springs. */
@@ -1082,9 +1078,8 @@ const texNoise = new Noise(777);
  * hide inside one tile per body part is now a hard line repeating every 14 cm
  * down every limb. Four samples per texel, once, at bake time.
  *
- * @param {(u:number, v:number) => number} f
  */
-function tileable(f) {
+function tileable(f: (u:number, v:number) => number) {
   return (u, v) => {
     const a = f(u, v), b = f(u - 1, v), c = f(u, v - 1), d = f(u - 1, v - 1);
     const iu = 1 - u, iv = 1 - v;
@@ -1210,11 +1205,10 @@ export function metalRoughness() {
  * backpack. Three terms — wear on upward faces, a plate-scale streak toward
  * `scuff`, and a grime multiplier under everything facing down.
  *
- * @param {THREE.BufferGeometry} geo must already carry a `color` attribute
- * @param {{scuff?:number, amount?:number, grime?:number}} [opts]
- * @returns {THREE.BufferGeometry} the same geometry, modified in place
+ * @param geo must already carry a `color` attribute
+ * @returns the same geometry, modified in place
  */
-export function weatherPlate(geo, { scuff = 0x8a7f70, amount = 1, grime = 0.34 } = {}) {
+export function weatherPlate(geo: THREE.BufferGeometry, { scuff = 0x8a7f70, amount = 1, grime = 0.34 }: {scuff?:number, amount?:number, grime?:number} = {}): THREE.BufferGeometry {
   if (amount <= 0) return geo;
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;

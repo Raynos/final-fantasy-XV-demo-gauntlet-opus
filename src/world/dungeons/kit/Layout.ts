@@ -20,11 +20,7 @@ import { clamp, smoothstep } from './Build.ts';
  *   regionAt(x, z) -> Room|Corridor|null
  */
 export class Layout {
-  /**
-   * @param {string} id
-   * @param {{name?:string, style?:string, corridorWidth?:number, corridorHeight?:number}} opts
-   */
-  constructor(id, opts = {}) {
+  constructor(id: string, opts: {name?:string, style?:string, corridorWidth?:number, corridorHeight?:number} = {}) {
     this.id = id;
     this.name = opts.name || id;
     this.style = opts.style || 'bunker';
@@ -54,19 +50,9 @@ export class Layout {
   /**
    * Add a room.
    *
-   * @param {string} id
    * @param {object} s
-   * @param {number} s.x centre X
-   * @param {number} s.z centre Z
-   * @param {number} s.w full width  (X)
-   * @param {number} s.d full depth  (Z)
-   * @param {number} [s.y] floor height
-   * @param {number} [s.h] floor-to-ceiling height
-   * @param {'bunker'|'mine'|'cave'} [s.style]
-   * @param {'entry'|'hall'|'junction'|'treasure'|'boss'|'shaft'|'dead-end'} [s.kind]
-   * @param {string} [s.name] shown on the dungeon map
-   */
-  room(id, s) {
+   * */
+  room(id: string, s: { x: number, z: number, w: number, d: number, y?: number, h?: number, style?: 'bunker' | 'mine' | 'cave', kind?: 'entry' | 'hall' | 'junction' | 'treasure' | 'boss' | 'shaft' | 'dead-end', name?: string }) {
     const r = {
       id, kind: s.kind || 'hall', name: s.name || null,
       x: s.x, z: s.z, w: s.w, d: s.d,
@@ -84,8 +70,8 @@ export class Layout {
     return r;
   }
 
-  /** @param {string} id @returns {object} */
-  get(id) {
+  /** @param id @returns */
+  get(id: string): any {
     const r = this.rooms.get(id);
     if (!r) throw new Error(`[Layout ${this.id}] no room "${id}"`);
     return r;
@@ -95,12 +81,8 @@ export class Layout {
    * Join two rooms with an axis-aligned run. Diagonal legs are elbowed
    * automatically, so `via` only ever needs the corners that matter.
    *
-   * @param {string} aId
-   * @param {string} bId
-   * @param {{via?:number[][], width?:number, height?:number, style?:string,
-   *          kind?:'corridor'|'stair'|'crawl'|'rail', critical?:boolean}} [s]
    */
-  link(aId, bId, s = {}) {
+  link(aId: string, bId: string, s: any = {}) {
     const a = this.get(aId), b = this.get(bId);
     const raw = [[a.x, a.z], ...(s.via || []), [b.x, b.z]];
     const pts = elbow(raw, s.elbow || 'x');
@@ -133,10 +115,8 @@ export class Layout {
 
   /**
    * A treasure chest.
-   * @param {{at:number[], y?:number, items:string[], gil?:number, name?:string,
-   *          locked?:string, big?:boolean, rot?:number}} s
    */
-  chest(s) {
+  chest(s: any) {
     const c = {
       id: `chest${this.chests.length}`, at: s.at, y: s.y,
       items: s.items || [], gil: s.gil || 0,
@@ -150,10 +130,8 @@ export class Layout {
   /**
    * A door across a corridor. `key` names a dungeon-local key item; when it is
    * set the door will not open until the party is carrying it.
-   * @param {{at:number[], facing:'x'|'z', y?:number, w?:number, h?:number,
-   *          key?:string, name?:string, kind?:string, open?:boolean}} s
    */
-  door(s) {
+  door(s: any) {
     const d = {
       id: `door${this.doors.length}`, at: s.at, facing: s.facing || 'z',
       y: s.y, w: s.w || 3.4, h: s.h || 3.0,
@@ -166,11 +144,8 @@ export class Layout {
 
   /**
    * A light source. `kind` selects the fixture geometry and the falloff.
-   * @param {{at:number[], y?:number, color?:number, intensity?:number,
-   *          range?:number, kind?:string, flicker?:number, rot?:number,
-   *          shaft?:object}} s
    */
-  lamp(s) {
+  lamp(s: any) {
     const l = {
       id: `lamp${this.lamps.length}`, at: s.at, y: s.y,
       color: s.color != null ? s.color : 0xffb473,
@@ -189,9 +164,8 @@ export class Layout {
   /**
    * Environmental hazard. Purely declarative — `Dungeons` reads these to apply
    * damage and to place the VFX.
-   * @param {{at:number[], r:number, kind:string, dps?:number, y?:number, name?:string}} s
    */
-  hazard(s) {
+  hazard(s: {at:number[], r:number, kind:string, dps?:number, y?:number, name?:string}) {
     const h = { id: `hz${this.hazards.length}`, dps: 40, y: null, ...s };
     this.hazards.push(h);
     return h;
@@ -226,17 +200,15 @@ export class Layout {
 
   /**
    * Walkable floor height, or null outside the dungeon.
-   * @returns {number|null}
    */
-  floorAt(x, z) {
+  floorAt(x, z): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     if (r.isRoom) return roomFloor(r, x, z);
     return corridorFloor(r, x, z);
   }
 
-  /** @returns {number|null} */
-  ceilingAt(x, z) {
+  ceilingAt(x, z): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     return r.isRoom ? r.y + r.h : corridorFloor(r, x, z) + r.height;
@@ -246,9 +218,9 @@ export class Layout {
    * Push a point back inside the walkable volume. Used as the player's wall
    * collision — cheap, exact for axis-aligned shells, and forgiving in the
    * doorways where two regions overlap.
-   * @returns {number[]} [x, z]
+   * @returns [x, z]
    */
-  clampInside(x, z, margin = 0.55) {
+  clampInside(x, z, margin = 0.55): number[] {
     if (this.regionAt(x, z)) {
       // already inside: only nudge if a wall is closer than the margin *and*
       // no neighbouring region covers the overlap (i.e. it is not a doorway)
@@ -288,9 +260,8 @@ export class Layout {
   /**
    * Vertex occlusion at a point: 1 fully open, ~0.25 in a corner. The shell
    * builder bakes this into the colour attribute.
-   * @returns {number}
    */
-  occlusion(x, y, z) {
+  occlusion(x, y, z): number {
     const r = this.regionAt(x, z);
     if (!r) return 0.55;
     let wall;

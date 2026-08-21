@@ -28,8 +28,7 @@
 import { Rng } from '../../util/Rng.ts';
 
 export class CombatBridge {
-  /** @param {import('./RpgSystem.ts').RpgSystem} rpg */
-  constructor(rpg) {
+  constructor(rpg: import('./RpgSystem.ts').RpgSystem) {
     this.rpg = rpg;
     this.combat = null;
     this.game = null;
@@ -49,9 +48,8 @@ export class CombatBridge {
 
   /**
    * Subscribe to the combat system. Safe to call when there isn't one.
-   * @param {object} game
    */
-  attach(game) {
+  attach(game: any) {
     this.game = game;
     const combat = game?.get?.('Combat');
     if (!combat || typeof combat.on !== 'function') return false;
@@ -202,12 +200,12 @@ export class CombatBridge {
    * `defense`, `magicDefense`, `resistance()`, `weakTo` and `resistsWeapon`
    * already, so there is no per-species table to drift out of date.
    *
-   * @param {object} enemy an `Enemy` from `src/characters/enemies/**`
-   * @param {object} [o] `{ motion, element, weaponClass, isWarpStrike,
+   * @param enemy an `Enemy` from `src/characters/enemies/**`
+   * @param [o] `{ motion, element, weaponClass, isWarpStrike,
    *                        isBackAttack, staggerMult, seed }`
-   * @returns {object} the `computeDamage` result
+   * @returns the `computeDamage` result
    */
-  roll(enemy, o = {}) {
+  roll(enemy: any, o: any = {}): any {
     // Seeded from sim state so identical frames give identical numbers, no
     // matter what order the shots were captured in.
     this._rng.s = (Math.imul((enemy.id ?? 0) + 1, 0x9e3779b1)

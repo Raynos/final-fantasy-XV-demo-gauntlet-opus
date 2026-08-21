@@ -30,9 +30,8 @@ const NECK_PIVOT = [0, 0.72, 0.10];
 
 /**
  * Build the merged, rig-tagged wader.
- * @returns {THREE.BufferGeometry}
  */
-export function waderGeometry() {
+export function waderGeometry(): THREE.BufferGeometry {
   const parts = [];
 
   // body: a deep teardrop carried level, tail tapering behind
@@ -149,11 +148,7 @@ void creatureRig(out mat3 R, out vec3 P, out mat3 RB, out vec3 PB, out vec3 OFF)
 }
 `;
 
-/**
- * @param {{value:number}} timeRef
- * @returns {THREE.Material}
- */
-export function waderMaterial(timeRef) {
+export function waderMaterial(timeRef: {value:number}): THREE.Material {
   const m = rigMaterial(new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: 0.72, metalness: 0, vertexColors: true,
   }), timeRef, RIG_GLSL, { tint: true, key: 'wader' });

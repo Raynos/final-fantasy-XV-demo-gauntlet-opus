@@ -65,9 +65,9 @@ export class FogOfWar {
    * this once at boot is also what stops the map opening as a blank sheet —
    * the player gets the skeleton of the continent and fills in the wilderness
    * between the roads by walking it, which is the shape the reveal should have.
-   * @param {number} [r] corridor half-width, metres
+   * @param [r] corridor half-width, metres
    */
-  revealRoads(r = 260) {
+  revealRoads(r: number = 260) {
     for (const route of worldMap.roadGraph.routes) {
       if (routeClass(route) === 'trail') continue;
       const pts = route.pts;
@@ -90,9 +90,8 @@ export class FogOfWar {
 
   /**
    * The haze sheet, rebuilt only when the mask has changed.
-   * @returns {{canvas:HTMLCanvasElement, ppm:number, toPx:function, toPz:function}}
    */
-  sheet() {
+  sheet(): {canvas:HTMLCanvasElement, ppm:number, toPx:function, toPz:function} {
     if (!this._sheet) this._build();
     if (this._dirty) this._paint();
     return this._sheet;
@@ -156,9 +155,9 @@ export class FogOfWar {
  * colour gone out of them — while the surveyed corridors keep their warmth and
  * carry the labels. A pale wash was tried first and read as a washed-out map
  * rather than a deliberate one.
- * @returns {HTMLCanvasElement} a 128 px seamless tile
+ * @returns a 128 px seamless tile
  */
-function parchmentTile() {
+function parchmentTile(): HTMLCanvasElement {
   const S = 128;
   const cv = document.createElement('canvas');
   cv.width = S; cv.height = S;

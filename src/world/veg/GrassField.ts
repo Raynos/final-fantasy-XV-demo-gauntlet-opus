@@ -93,13 +93,13 @@ const GROUND_BLEED = 0.34;
  * several at once and inherits the tallest — but "slightly" is 1.05 and 1.45,
  * not 2 and 3.5.
  *
- * @param {number} d    local grass density 0..1
- * @param {number} wet  local wetness 0..1
- * @param {number} hMul the zone's `grassH`
- * @param {number} jitter per-tuft 0..1 draw
- * @returns {number} metres
+ * @param d    local grass density 0..1
+ * @param wet  local wetness 0..1
+ * @param hMul the zone's `grassH`
+ * @param jitter per-tuft 0..1 draw
+ * @returns metres
  */
-function tuftHeight(d, wet, hMul, jitter) {
+function tuftHeight(d: number, wet: number, hMul: number, jitter: number): number {
   return (0.100 + 0.090 * d + 0.130 * wet * wet) * hMul * (0.62 + jitter * 0.88);
 }
 
@@ -243,11 +243,7 @@ function crossCardGeometry(planes = 3, width = 1.0) {
 
 export class GrassField {
   /** Debug switch for bisecting the pack-skip optimisation against a capture. */
-  /**
-   * @param {import('./Ecology.ts').Ecology} eco
-   * @param {THREE.Scene} scene
-   */
-  constructor(eco, scene, { quality = 1 } = {}) {
+  constructor(eco: import('./Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 } = {}) {
     this.eco = eco;
     this.scene = scene;
     this.quality = quality;
@@ -380,10 +376,10 @@ export class GrassField {
    * `frustumCulled = false`, so every blade behind the camera was still shaded.
    * A tile has real bounds.
    *
-   * @returns {{mesh:THREE.InstancedMesh|null, n:number, stamp:number}|null}
+   * @returns
    *   null when the frame's generation budget is spent.
    */
-  _tileFor(ring, li, tx, tz) {
+  _tileFor(ring, li, tx, tz): {mesh:THREE.InstancedMesh|null, n:number, stamp:number} | null {
     const key = (tx & 2047) * 4096 + (tz & 2047);
     const e = ring.pool.get(key);
     if (e) return e;
@@ -656,8 +652,7 @@ export class GrassField {
     return { m: mArr.slice(0, count * 16), c: cArr.slice(0, count * 3), n: count, y0, y1 };
   }
 
-  /** @param {THREE.Vector3} camPos */
-  update(camPos) {
+  update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 25 && !this._pending) return;
     this._deadline = performance.now() + this.budgetMs;

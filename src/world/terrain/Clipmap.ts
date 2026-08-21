@@ -13,12 +13,8 @@ import * as THREE from 'three';
 export class Clipmap {
   /**
    * @param {object} opts
-   * @param {number} opts.levels number of LOD rings
-   * @param {number} opts.n quarter-extent in cells (ring is 4n cells across)
-   * @param {number} opts.cell0 finest cell size in metres
-   * @param {function(number, number): {surface: THREE.Material, depth: THREE.Material}} opts.makeMaterial
-   */
-  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }) {
+   * */
+  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }: { levels: number, n: number, cell0: number, makeMaterial: ((a0: number, a1: number) => {surface: THREE.Material, depth: THREE.Material}) }) {
     this.castShadow = castShadow;
     this.levels = levels;
     this.n = n;

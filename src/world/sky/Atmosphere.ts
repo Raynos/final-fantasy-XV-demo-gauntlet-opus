@@ -102,11 +102,11 @@ export class Atmosphere {
 
   /**
    * Re-integrate the sky-view LUT for the current sun elevation.
-   * @param {number} sunY sin(sun elevation)
-   * @param {number} camAlt camera altitude in metres
-   * @param {number} msBoost multiple-scattering strength
+   * @param sunY sin(sun elevation)
+   * @param camAlt camera altitude in metres
+   * @param msBoost multiple-scattering strength
    */
-  bakeSkyView(sunY, camAlt, msBoost) {
+  bakeSkyView(sunY: number, camAlt: number, msBoost: number) {
     const u = this._skyQuad.material.uniforms;
     u.uSunY.value = sunY;
     u.uCamAlt.value = camAlt;

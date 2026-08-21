@@ -45,11 +45,9 @@ const BUS_TRIM = { music: 0.13, sfx: 0.32, amb: 0.20, ui: 0.24, voice: 0.55 };
 
 export class AudioGraph {
   /**
-   * @param {BaseAudioContext} ctx
    * @param {object} [o]
-   * @param {boolean} [o.offline] skip anything that assumes a live clock
-   */
-  constructor(ctx, o = {}) {
+   * */
+  constructor(ctx: BaseAudioContext, o: { offline?: boolean } = {}) {
     this.ctx = ctx;
     this.offline = !!o.offline;
 
@@ -191,11 +189,9 @@ export class AudioGraph {
 
   /**
    * Set a bus (or master) volume, 0..1.
-   * @param {'master'|'music'|'sfx'|'amb'|'ui'|'voice'} name
-   * @param {number} v
-   * @param {number} [glide] seconds
+   * @param [glide] seconds
    */
-  setVolume(name, v, glide = 0.08) {
+  setVolume(name: 'master' | 'music' | 'sfx' | 'amb' | 'ui' | 'voice', v: number, glide: number = 0.08) {
     const t = this.now;
     const val = clamp(v, 0, 1);
     if (name === 'master') {
@@ -209,8 +205,8 @@ export class AudioGraph {
     bus.gain.setTargetAtTime(BUS_TRIM[name] * val, t, glide);
   }
 
-  /** @param {boolean} [on] toggles when omitted */
-  setMuted(on) {
+  /** @param [on] toggles when omitted */
+  setMuted(on?: boolean) {
     this.muted = on === undefined ? !this.muted : !!on;
     this.master.gain.setTargetAtTime(this.muted ? EPS : this._preMuteVolume, this.now, 0.02);
     return this.muted;
@@ -220,11 +216,11 @@ export class AudioGraph {
    * Pull music + ambience down. Dialogue does this for its whole line; a big
    * impact does it for a fifth of a second, which is what makes a warp-strike
    * land instead of merely being loud.
-   * @param {number} depth 0..1 — 1 is no duck, 0.35 is a hard duck
-   * @param {number} hold seconds at depth
-   * @param {number} release seconds back to unity
+   * @param depth 0..1 — 1 is no duck, 0.35 is a hard duck
+   * @param hold seconds at depth
+   * @param release seconds back to unity
    */
-  duck(depth, hold = 0.2, release = 0.45, at = null) {
+  duck(depth: number, hold: number = 0.2, release: number = 0.45, at = null) {
     const t = at ?? this.now;
     const end = t + hold + release;
     // A deeper duck already running wins; never let a footstep undo a line.
@@ -243,9 +239,8 @@ export class AudioGraph {
 
   /**
    * Cross-fade the short reverb to a different room.
-   * @param {'outdoor'|'canyon'|'interior'|'cave'} name
    */
-  setSpace(name) {
+  setSpace(name: 'outdoor' | 'canyon' | 'interior' | 'cave') {
     if (!SPACES[name] || name === this.space) return;
     this.space = name;
     const ctx = this.ctx;
@@ -294,11 +289,11 @@ export class AudioGraph {
    * OfflineAudioContext, where nothing ends until the whole render is done —
    * which is exactly the bug the verification harness caught.
    *
-   * @param {number} [priority] 0..3, higher survives contention
-   * @param {number} [at] when the sound starts; defaults to now
-   * @returns {{end:number}|null} handle, or null when the budget is spent
+   * @param [priority] 0..3, higher survives contention
+   * @param [at] when the sound starts; defaults to now
+   * @returns handle, or null when the budget is spent
    */
-  take(priority = 1, at = null) {
+  take(priority: number = 1, at: number = null): {end:number} | null {
     const t = at ?? this.now;
     const live = this._compact(t);
     const headroom = this.maxVoices - live;
@@ -334,12 +329,12 @@ export class AudioGraph {
   /**
    * Wire a one-shot's teardown to its last source. Everything synthesised in
    * this project goes through here — that is the leak check.
-   * @param {AudioScheduledSourceNode} src the node whose `onended` fires last
-   * @param {AudioNode[]} nodes everything to disconnect
-   * @param {number} [end] scheduled end time, for the voice budget
-   * @param {{end:number}} [handle] the slot returned by `take`
+   * @param src the node whose `onended` fires last
+   * @param nodes everything to disconnect
+   * @param [end] scheduled end time, for the voice budget
+   * @param [handle] the slot returned by `take`
    */
-  reap(src, nodes, end, handle) {
+  reap(src: AudioScheduledSourceNode, nodes: AudioNode[], end?: number, handle?: {end:number}) {
     if (handle && end != null && end > 0) handle.end = end;
     const entry = { end: end ?? (this.now + 3), nodes, handle, done: false };
     this._pendingReap.push(entry);
@@ -362,9 +357,8 @@ export class AudioGraph {
    * this sweep the node graph grows for as long as any of those is true, which
    * is precisely the leak the verification harness caught.
    *
-   * @param {number} [now]
    */
-  sweep(now = this.now) {
+  sweep(now: number = this.now) {
     const p = this._pendingReap;
     let k = 0;
     for (let i = 0; i < p.length; i++) {
@@ -381,10 +375,9 @@ export class AudioGraph {
 
   /**
    * A positional node for a world-space source.
-   * @param {{x:number,y:number,z:number}} pos
-   * @param {object} [o] {hrtf, refDistance, maxDistance, rolloff}
+   * @param [o] {hrtf, refDistance, maxDistance, rolloff}
    */
-  panner(pos, o = {}) {
+  panner(pos: {x:number,y:number,z:number}, o: any = {}) {
     const ctx = this.ctx;
     const p = ctx.createPanner();
     // HRTF is a per-source convolution. It is worth it for the handful of

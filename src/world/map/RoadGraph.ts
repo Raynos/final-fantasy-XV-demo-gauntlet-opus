@@ -282,11 +282,11 @@ function resample(ctrl, step) {
  */
 export class RoadGraph {
   /**
-   * @param {object} nodes id -> [x, z]
-   * @param {object[]} routes see {@link ROUTES}
-   * @param {object} classes see {@link ROAD_CLASS}
+   * @param nodes id -> [x, z]
+   * @param routes see {@link ROUTES}
+   * @param classes see {@link ROAD_CLASS}
    */
-  constructor(nodes, routes, classes) {
+  constructor(nodes: any, routes: any[], classes: any) {
     this.classes = classes;
     /** @type {Map<string, {id:string,x:number,z:number,edges:number[]}>} */
     this.nodes = new Map();
@@ -368,12 +368,10 @@ export class RoadGraph {
 
   /**
    * Closest point on any road centreline.
-   * @param {number} x @param {number} z
-   * @param {number} [maxR] give up beyond this many metres
-   * @returns {{dist:number, edge:object, i:number, x:number, z:number, s:number,
-   *            tx:number, tz:number, side:number}|null}
+   * @param x @param z
+   * @param [maxR] give up beyond this many metres
    */
-  nearest(x, z, maxR = 400) {
+  nearest(x: number, z: number, maxR: number = 400): any | null {
     const cell = this._cell;
     const ci = Math.floor(x / cell), cj = Math.floor(z / cell);
     const rings = Math.ceil(maxR / cell);
@@ -434,9 +432,8 @@ export class RoadGraph {
   /**
    * Shortest drivable path between two world points, snapping each end to the
    * nearest road. Dijkstra over the node graph plus the two partial edges.
-   * @returns {{length:number, seconds:number, pts:Array<{x:number,z:number}>}|null}
    */
-  route(ax, az, bx, bz) {
+  route(ax, az, bx, bz): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
     const A = this.nearest(ax, az, 1200), B = this.nearest(bx, bz, 1200);
     if (!A || !B) return null;
     if (A.edge === B.edge) {
@@ -518,9 +515,8 @@ export class RoadGraph {
   /**
    * Signed curvature radius at each sample of an edge, metres. `Infinity` on a
    * straight. Used by the drivability test and by the driving AI.
-   * @returns {number[]}
    */
-  radii(edge) {
+  radii(edge): number[] {
     const p = edge.pts, out = new Array(p.length).fill(Infinity);
     for (let i = 1; i < p.length - 1; i++) {
       const a = p[i - 1], b = p[i], c = p[i + 1];
@@ -533,8 +529,8 @@ export class RoadGraph {
     return out;
   }
 
-  /** Every sample of every edge, flattened. @returns {object[]} */
-  allSamples() {
+  /** Every sample of every edge, flattened. @returns */
+  allSamples(): any[] {
     const out = [];
     for (const e of this.edges) for (const p of e.pts) out.push({ ...p, edge: e });
     return out;

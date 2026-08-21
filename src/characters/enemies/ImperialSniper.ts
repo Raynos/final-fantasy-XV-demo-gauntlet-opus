@@ -64,10 +64,10 @@ export const IMPERIAL_SNIPER = {
 
 /**
  * `tint` plus the shared field-wear pass, so a plate is not one flat number.
- * @param {THREE.BufferGeometry} geo @param {number} hex
- * @param {number} [jitter] @param {number} [amount] 0 leaves the part alone
+ * @param geo @param hex
+ * @param [jitter] @param [amount] 0 leaves the part alone
  */
-function wtint(geo, hex, jitter = 0, amount = 1) {
+function wtint(geo: THREE.BufferGeometry, hex: number, jitter: number = 0, amount: number = 1) {
   return weatherPlate(tint(geo, hex, jitter), { scuff: SCUFF, amount });
 }
 

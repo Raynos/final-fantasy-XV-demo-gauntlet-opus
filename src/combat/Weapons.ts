@@ -134,13 +134,13 @@ const LUCII = 0x3d94dd;        // the royal blue every Lucian arm carries
  * exactly which point of the profile a vertex came from; the trailing cap
  * centres fall through to the body colour.
  *
- * @param {Array<[number,number]>} cross section, cutting edge on +X
- * @param {Array<object>} sections loft sections
- * @param {number} edge colour at the cutting edge
- * @param {number} body colour across the primary face
- * @param {number} [spine] colour at the −X side (defaults to `body`)
+ * @param cross section, cutting edge on +X
+ * @param sections loft sections
+ * @param edge colour at the cutting edge
+ * @param body colour across the primary face
+ * @param [spine] colour at the −X side (defaults to `body`)
  */
-function groundBlade(cross, sections, edge, body, spine = body) {
+function groundBlade(cross: Array<[number,number]>, sections: Array<any>, edge: number, body: number, spine: number = body) {
   const geo = loft(cross, sections);
   const n = cross.length;
   const p = geo.attributes.position;
@@ -730,8 +730,7 @@ export function makeWeaponMaterial() {
  * `root` is parented to the wielder's hand transform by the combat system.
  */
 export class Weapon {
-  /** @param {WeaponClass|string} kind */
-  constructor(kind) {
+  constructor(kind: WeaponClass | string) {
     this.kind = kind;
     this.def = WEAPONS[kind] || WEAPONS.sword;
     this.geometry = (WEAPON_GEOMETRY[kind] || swordGeometry)();
@@ -827,10 +826,9 @@ export class Armiger {
    * pinned by the point a hand would hold — so the ring reads as a crown of
    * arms waiting to be grasped rather than as blades skewered on a circle.
    *
-   * @param {THREE.Vector3} center
-   * @param {number} t phase in seconds (deterministic when pinned)
+   * @param t phase in seconds (deterministic when pinned)
    */
-  layout(center, t, { radius = 2.0, height = 2.35, tilt = 0.32 } = {}) {
+  layout(center: THREE.Vector3, t: number, { radius = 2.0, height = 2.35, tilt = 0.32 } = {}) {
     const n = this.slots.length;
     for (let k = 0; k < n; k++) {
       const s = this.slots[k];

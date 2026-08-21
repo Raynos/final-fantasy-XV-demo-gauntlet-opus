@@ -23,14 +23,8 @@
 export class TileStream {
   /**
    * @param {object} o
-   * @param {number} o.cell cell size in metres
-   * @param {number} o.radius stream-in radius in metres
-   * @param {(cx:number, cz:number, out:Array) => void} o.gen fills `out` with
-   *   the items for integer cell (cx, cz). Must be deterministic.
-   * @param {number} [o.budget] max cells generated per update call
-   * @param {number} [o.keep] eviction radius as a multiple of `radius`
-   */
-  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }) {
+   * */
+  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx:number, cz:number, out:Array) => void, budget?: number, keep?: number }) {
     this.cell = cell;
     this.radius = radius;
     this.gen = gen;
@@ -48,10 +42,9 @@ export class TileStream {
   /**
    * Bring the window to `camPos`. Cheap when the camera has not crossed a
    * cell boundary and there is no backlog.
-   * @param {{x:number, z:number}} camPos
-   * @returns {boolean} true if `items` changed this call
+   * @returns true if `items` changed this call
    */
-  update(camPos) {
+  update(camPos: {x:number, z:number}): boolean {
     const c = this.cell;
     const cx = Math.floor(camPos.x / c), cz = Math.floor(camPos.z / c);
     let changed = false;

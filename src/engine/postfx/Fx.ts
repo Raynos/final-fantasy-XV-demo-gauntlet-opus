@@ -55,12 +55,9 @@ export const quad = new FullScreenQuad(null);
  * with it, the load is skipped. At two dozen fullscreen passes a frame that is
  * most of the post chain's fixed overhead.
  *
- * @param {THREE.WebGLRenderer} renderer
- * @param {THREE.Material} material
- * @param {THREE.WebGLRenderTarget|null} target
- * @param {{clear?:boolean}} [opts] force the clear on or off
+ * @param [opts] force the clear on or off
  */
-export function blit(renderer, material, target, opts) {
+export function blit(renderer: THREE.WebGLRenderer, material: THREE.Material, target: THREE.WebGLRenderTarget | null, opts?: {clear?:boolean}) {
   const clear = opts && opts.clear !== undefined
     ? opts.clear
     : material.blending === THREE.NoBlending;

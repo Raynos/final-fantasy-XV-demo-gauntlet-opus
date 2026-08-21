@@ -228,10 +228,9 @@ export class Conversation {
    * Queue an exchange chosen from `tag`. Deterministic round-robin — a seeded
    * shuffle would still be deterministic, but round-robin also guarantees the
    * player hears everything written before hearing anything twice.
-   * @param {string} tag
-   * @param {boolean} [force] ignore the rest timer
+   * @param [force] ignore the rest timer
    */
-  play(tag, force = false) {
+  play(tag: string, force: boolean = false) {
     if (!force && this.queue.length) return false;
     const pool = BANTER.filter((b) => b.tag === tag);
     if (!pool.length) return false;
@@ -254,8 +253,8 @@ export class Conversation {
   /** Anything still to say? */
   get busy() { return this.queue.length > 0; }
 
-  /** @param {number} dt seconds */
-  update(dt) {
+  /** @param dt seconds */
+  update(dt: number) {
     if (this.cooldown > 0) this.cooldown -= dt;
     if (!this.queue.length) return;
     this.next -= dt;

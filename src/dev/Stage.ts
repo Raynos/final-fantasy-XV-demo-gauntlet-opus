@@ -47,8 +47,7 @@ export class Stage {
     this.faceOffset = 0.7;
   }
 
-  /** @param {object} game */
-  enter(game) {
+  enter(game: any) {
     if (this.active) return;
     this.active = true;
     game.scene.add(this.group);
@@ -90,8 +89,7 @@ export class Stage {
     }
   }
 
-  /** @param {object} game */
-  exit(game) {
+  exit(game: any) {
     if (!this.active) return;
     this.active = false;
     this.clear();
@@ -113,9 +111,8 @@ export class Stage {
    * debris and wildlife are added to the scene by `TileStream` as the camera
    * moves, so anything spawned after a one-shot pass would pop back into an
    * otherwise empty stage — which is exactly what happened the first time.
-   * @param {object} game
    */
-  _hide(game) {
+  _hide(game: any) {
     for (const child of game.scene.children) {
       if (child.isLight || this._keep.has(child)) continue;
       if (!child.visible) continue;
@@ -132,10 +129,9 @@ export class Stage {
 
   /**
    * Put an object on the stage and frame it.
-   * @param {THREE.Object3D} obj
-   * @param {THREE.Vector3} at world position to stage at
+   * @param at world position to stage at
    */
-  show(obj, at) {
+  show(obj: THREE.Object3D, at: THREE.Vector3) {
     this.clear();
     this._current = obj;
     if (obj.parent !== this.group) this.group.add(obj);
@@ -182,9 +178,8 @@ export class Stage {
    *
    * Read from the real sun rather than assumed, because `sky.time` is a live
    * cvar — move the sun and the next asset should still be lit, not silhouetted.
-   * @param {object} game
    */
-  keyToSun(game) {
+  keyToSun(game: any) {
     let sun = null;
     const sky = game.get('Sky');
     for (const k of ['sun', 'light', 'dirLight', 'sunLight']) {
@@ -230,9 +225,9 @@ export class Stage {
   /**
    * Drive the review camera around the pivot. Called before the freecam writes
    * the camera, so manual flight still wins when the turntable is off.
-   * @param {number} dt @param {import('./Freecam.ts').Freecam} cam
+   * @param dt @param cam
    */
-  update(dt, cam, game) {
+  update(dt: number, cam: import('./Freecam.ts').Freecam, game) {
     if (!this.active) return;
     if (game) this._hide(game);
     if (!this.spin && !this._needFrame) return;

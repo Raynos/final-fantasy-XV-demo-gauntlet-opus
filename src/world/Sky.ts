@@ -139,8 +139,7 @@ export class Sky {
     this._scanCountdown = 0;
   }
 
-  /** @param {import('../game/Game.ts').Game} game */
-  async init(game) {
+  async init(game: import('../game/Game.ts').Game) {
     this.game = game;
     const scene = game.scene;
     const renderer = game.renderer;
@@ -328,17 +327,14 @@ export class Sky {
 
   /**
    * Drive the whole lighting rig from a clock hour.
-   * @param {number} hours 0..24
+   * @param hours 0..24
    */
-  setTimeOfDay(hours) {
+  setTimeOfDay(hours: number) {
     this.hours = ((hours % 24) + 24) % 24;
     this._applyTimeOfDay(true);
   }
 
-  /**
-   * @param {'clear'|'storm'|'fog'|'overcast'} name
-   */
-  setWeather(name) {
+  setWeather(name: 'clear' | 'storm' | 'fog' | 'overcast') {
     const preset = WEATHER[name];
     if (!preset) return;
     this.weather = name;
@@ -757,9 +753,8 @@ export class Sky {
    * cascade *count* is deliberately not one of them, because changing it
    * rewrites the CSM defines and recompiles every lit material in the scene.
    *
-   * @param {'low'|'medium'|'high'|'ultra'} tier
    */
-  setShadowQuality(tier) {
+  setShadowQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
     if (!this.csm) return;
     const res = SHADOW_RES[tier] || SHADOW_RES.high;
     this.cascadeRes = [res, res / 2, res / 2];
@@ -783,9 +778,8 @@ export class Sky {
    * cheapest correct answer is to let CSM do its pass and then put the skipped
    * cascades' lights back exactly where they were.
    *
-   * @param {number} frame
    */
-  _updateCascades(frame) {
+  _updateCascades(frame: number) {
     const lights = this.csm.lights;
     const stride = this.cascadeStride;
 
