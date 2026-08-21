@@ -59,11 +59,22 @@ The suite refuses to load when `?shoot` is present, so it can never appear in a
 capture. Verified: two cold captures diff at 1.555/255, the documented noise
 floor. Do not weaken that guard.
 
-Still to build: the asset browser (enemies/heroes/NPCs/trees/weapons on a
-turntable with animation scrubbing), the world navigator, and the render view
-modes. `lil-gui` was deliberately **not** added yet — a new npm dep triggers
-Vite re-optimisation, which reloads pages mid-capture and would corrupt running
-agents. Add it on a quiet tree if the hand-rolled panels prove limiting.
+**F4** opens the asset browser: 23 enemies, 4 heroes, 8 NPCs and 5 weapons on a
+sun-keyed turntable, with pose scrubbing (`,` `.` `Space`) and a persisted
+`ok`/`flag` review status (`O` / `K`, `U` filters to unreviewed). `view
+wireframe|unlit|normals|overdraw` overrides the scene material.
+
+Still to build: trees, props and the Regalia in the browser (props need a
+registry introduced — the kind tables exist but are module-private), the
+world/zone navigator panel, frozen-frustum culling inspection, and
+`review.restore <id>`. `lil-gui` was deliberately **not** added — a new npm dep
+triggers Vite re-optimisation, which reloads pages mid-capture and would
+corrupt running agents. Add it on a quiet tree if hand-rolled panels chafe.
+
+Defects the browser surfaced on its first pass, none of which were visible at
+corpus framing: the coeurl's whiskers are segmented glowing polylines, the
+sabertusk has no eye read and a featureless coat, and both blades are flat
+slabs (which independently confirms the weapons agent's diagnosis).
 
 ## Agents in flight (7)
 
