@@ -304,11 +304,50 @@ export function grassClumpTex(variant = 0, count = 46, alphaRef = 0.4, albedo = 
   }, { alphaRef, tinyFade: 0.62, albedo }));
 }
 
-/** Leafy canopy card — a mass of small leaves, used on tree branch tips. */
+/**
+ * The one albedo every leaf card is matched against — the tree equivalent of
+ * {@link GRASS_CARD_ALBEDO}.
+ *
+ * Real broadleaf foliage sits at a broadband reflectance of about 0.10-0.15,
+ * and this card is only the first of three multiplications: `TreeBuilder`'s
+ * per-card vertex shade (mean 0.855) and the per-instance
+ * `shade * SPECIES_TINT * treeTint` (mean ~0.6 in green) both land on top of
+ * it. 0.135 puts a lit canopy leaf at a final ~0.07, which is where a canopy
+ * belongs, and — more importantly — it is now a *known* number instead of
+ * whatever fell out of the ink.
+ */
+export const LEAF_CARD_ALBEDO = 0.135;
+
+/**
+ * Leafy canopy card — a mass of small leaves, used on tree branch tips.
+ *
+ * **Luminance-only, like the grass clump card.** Every forest in the world came
+ * out candy lime (`tmp/shots/veg0/zone_malacchi.jpg`,
+ * `tmp/shots/veg0/poi_chocobo.jpg`) because three separate chromas were being
+ * *multiplied* into one albedo: this texture's ink, `Trees.SPECIES_TINT`, and
+ * the biome's `treeTint`. Measured for a Duscae tree that stack landed at
+ * linear r/g 0.56, b/g 0.26 — roughly twice the chroma of a real leaf, and
+ * saturation that deep survives any amount of darkening, which is why the old
+ * comment here about "never candy green" sat directly above ratios that made it
+ * so. A per-channel gain applied after the palette cannot be undone by editing
+ * the palette; the only fix is to stop stacking them.
+ *
+ * So the ink is now near-neutral and carries value, not hue: the instance tint
+ * owns the colour, and `Trees` composes its two tints so their chromas blend
+ * rather than multiply. What little chroma is left here is the difference
+ * between a spring leaf and a dead one, which is a property of the *leaf* and
+ * not of the zone it grows in.
+ */
 export function leafClusterTex(kind = 'broad') {
   return memo(`leaf${kind}`, () => alphaTex(256, (ctx, s) => {
     const rng = new Rng(kind === 'broad' ? 8811 : kind === 'conifer' ? 5150 : 3320);
     const n = kind === 'conifer' ? 190 : 120;
+    // Residual hue, and *only* the residual: warm for last season's dry leaf,
+    // a hair cool for a needle, all but neutral for a broadleaf.
+    const HUE = kind === 'dry' ? [1.07, 1, 0.88]
+      : kind === 'conifer' ? [0.95, 1, 0.99]
+        : [0.97, 1, 0.95];
+    const ink = (g) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = Math.pow(rng.next(), 0.62) * s * 0.47;
@@ -320,8 +359,7 @@ export function leafClusterTex(kind = 'broad') {
       ctx.rotate(rng.range(-Math.PI, Math.PI));
       if (kind === 'conifer') {
         const L = s * rng.range(0.05, 0.13);
-        const g = 60 + shade * 70;
-        ctx.strokeStyle = `rgba(${g * 0.5 | 0},${g | 0},${g * 0.52 | 0},1)`;
+        ctx.strokeStyle = ink(60 + shade * 70);
         ctx.lineWidth = s * 0.008;
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -L); ctx.stroke();
         for (let k = 1; k < 6; k++) {
@@ -333,16 +371,7 @@ export function leafClusterTex(kind = 'broad') {
       } else {
         const rx = s * rng.range(0.028, 0.062);
         const ry = rx * rng.range(1.5, 2.5);
-        // sun-bleached, slightly desaturated foliage — never candy green
-        // Sun-bleached and desaturated, never candy green. The old ratios
-        // (0.78, 1, 0.52) are a *chroma* the instance tint cannot undo — it can
-        // only scale each channel, so a saturated texel stays saturated however
-        // dark it is made, and every forest in the world came out lime.
-        const g = kind === 'dry' ? 116 + shade * 54 : 66 + shade * 62;
-        const col = kind === 'dry'
-          ? `rgba(${g * 1.06 | 0},${g | 0},${g * 0.66 | 0},1)`
-          : `rgba(${g * 0.87 | 0},${g | 0},${g * 0.70 | 0},1)`;
-        ctx.fillStyle = col;
+        ctx.fillStyle = ink(kind === 'dry' ? 116 + shade * 54 : 66 + shade * 62);
         ctx.beginPath();
         ctx.moveTo(0, -ry);
         ctx.quadraticCurveTo(rx, 0, 0, ry);
@@ -351,7 +380,11 @@ export function leafClusterTex(kind = 'broad') {
       }
       ctx.restore();
     }
-  }));
+    // `alphaRef` matches the leaf materials' own alphaTest so the mip chain
+    // preserves the coverage that will actually be tested. No `tinyFade`: a
+    // lone tree on a Leide ridge has to survive to the horizon, unlike a grass
+    // card with a thousand neighbours to cover for it.
+  }, { alphaRef: 0.42, albedo: LEAF_CARD_ALBEDO }));
 }
 
 /** Arching fern frond. */
