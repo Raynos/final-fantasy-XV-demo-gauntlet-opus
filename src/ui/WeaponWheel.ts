@@ -49,7 +49,7 @@ export class WeaponWheel {
 
   _build(weapons: any) {
     for (const w of weapons) {
-      const [x, y] = POS[w.slot] || POS.up;
+      const [x, y] = POS[w.slot as keyof typeof POS] || POS.up;
       this.spokes.appendChild(svg('line', {
         x1: 84, y1: 84, x2: x, y2: y,
         stroke: 'rgba(196,220,250,.16)', 'stroke-width': 1,
@@ -65,7 +65,7 @@ export class WeaponWheel {
     this.hubPad = this.hub.firstChild;
 
     weapons.forEach((w: any, i: any) => {
-      const [x, y] = POS[w.slot] || POS.up;
+      const [x, y] = POS[w.slot as keyof typeof POS] || POS.up;
       const node = el('div.wslot', { style: `left:${x}px;top:${y}px` }, [
         el('div.ring'),
         icon(w.key, { size: 21, stroke: 1.2 }),

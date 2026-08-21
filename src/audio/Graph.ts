@@ -158,7 +158,7 @@ export class AudioGraph {
     for (const name of BUSES) {
       const g = ctx.createGain();
       this.volume[name] = 1;
-      g.gain.value = BUS_TRIM[name];
+      g.gain.value = BUS_TRIM[name as keyof typeof BUS_TRIM];
       g.connect(name === 'music' || name === 'amb' ? this.duckGain : glue);
       this.bus[name] = g;
     }

@@ -88,7 +88,7 @@ export class Dungeons {
     let calls = 0, tris = 0;
     for (const def of this.defs.values()) {
       const e = def.entrance;
-      const make = builders[e.kind] || buildBunkerEntrance;
+      const make = builders[e.kind as keyof typeof builders] || buildBunkerEntrance;
       const built = make(this.terrain, e.x, e.z, e.heading, def.seed || 7);
       game.scene.add(built.group);
       calls += built.stats.calls;
@@ -137,7 +137,7 @@ export class Dungeons {
   }
 
   /** Return to the world at the entrance you came in by. */
-  leave(opts = {}) {
+  leave(opts: any = {}) {
     if (!this.isInside) return false;
     const run = () => this._doLeave();
     this.state = 'leaving';
@@ -450,7 +450,7 @@ export class Dungeons {
     // the capture harness selects a dungeon through the shot definition
     if (game.currentShot !== this._shotSeen) {
       this._shotSeen = game.currentShot;
-      const want = (SHOTS[game.currentShot] || {}).dungeon || null;
+      const want = (SHOTS[game.currentShot as keyof typeof SHOTS] || {}).dungeon || null;
       if (want && (!this.current || this.current.id !== want)) {
         if (this.isInside) { this.leave({ instant: true }); }
         this.enter(want, { instant: true });

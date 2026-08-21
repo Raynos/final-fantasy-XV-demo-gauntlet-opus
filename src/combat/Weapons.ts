@@ -743,15 +743,15 @@ export class Weapon {
   tipLocal!: THREE.Vector3;
   constructor(kind: WeaponClass | string) {
     this.kind = kind;
-    this.def = WEAPONS[kind] || WEAPONS.sword;
-    this.geometry = (WEAPON_GEOMETRY[kind] || swordGeometry)();
+    this.def = WEAPONS[kind as keyof typeof WEAPONS] || WEAPONS.sword;
+    this.geometry = (WEAPON_GEOMETRY[kind as keyof typeof WEAPON_GEOMETRY] || swordGeometry)();
     this.material = makeWeaponMaterial();
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.castShadow = true;
     this.root = new THREE.Group();
     this.root.add(this.mesh);
     this.reveal = 1;
-    const a = WEAPON_ANCHORS[kind];
+    const a = WEAPON_ANCHORS[kind as keyof typeof WEAPON_ANCHORS];
     if (a) {
       this.baseLocal = new THREE.Vector3().fromArray(a.base);
       this.tipLocal = new THREE.Vector3().fromArray(a.tip);
@@ -822,7 +822,7 @@ export class Armiger {
     this.material = material;
     let i = 0;
     for (const [kind, n] of perKind) {
-      const geo = WEAPON_GEOMETRY[kind]();
+      const geo = WEAPON_GEOMETRY[kind as keyof typeof WEAPON_GEOMETRY]();
       const im = new THREE.InstancedMesh(geo, material, n);
       im.frustumCulled = false;
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

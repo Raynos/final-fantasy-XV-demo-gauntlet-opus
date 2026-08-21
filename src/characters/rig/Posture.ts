@@ -217,5 +217,5 @@ export const GESTURES = {
  * @returns a complete posture descriptor
  */
 export function resolvePosture(key: string): any {
-  return { ...POSTURE_DEFAULTS, ...(POSTURE[key] || {}) };
+  return { ...POSTURE_DEFAULTS, ...(POSTURE[key as keyof typeof POSTURE] || {}) };
 }

@@ -311,7 +311,7 @@ export class CollisionWorld {
    * moment their centre crosses the lip; sampling the disc keeps them on it
    * until their feet genuinely leave.
    */
-  groundDisc(x: any, z: any, fromY: any, radius: any, stepUp = 0.45, stepDown = 2.0, out = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
+  groundDisc(x: any, z: any, fromY: any, radius: any, stepUp = 0.45, stepDown = 2.0, out: any = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
     const g = this.groundAt(x, z, fromY, stepUp, stepDown);
     out.y = g.y; out.nx = g.nx; out.ny = g.ny; out.nz = g.nz; out.onProp = g.onProp;
     if (!this.ready || !this.enabled) return out;

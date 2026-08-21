@@ -52,7 +52,7 @@ export class HudBridge {
     const now = this.game?.time?.now ?? 0;
     if (now - this._lastCall < 1.1) return;
     this._lastCall = now;
-    const [word, line] = CALLOUTS[key] || [key, sub || ''];
+    const [word, line] = CALLOUTS[key as keyof typeof CALLOUTS] || [key, sub || ''];
     this.hud.callOut(word, sub || line);
   }
 

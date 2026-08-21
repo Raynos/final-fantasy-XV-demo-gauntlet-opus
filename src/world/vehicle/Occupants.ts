@@ -189,7 +189,7 @@ export class Occupants {
       // differs by 14 cm between Gladio and Prompto, so it has to be per
       // rider or the tall one ends up sitting on the boot lid.
       this.riders.push({
-        key, char, root, seat, pose: POSES[pose],
+        key, char, root, seat, pose: POSES[pose as keyof typeof POSES],
         hipY: char.rig && char.rig.P && char.rig.P.hips ? char.rig.P.hips.y : 0.98,
       });
     };

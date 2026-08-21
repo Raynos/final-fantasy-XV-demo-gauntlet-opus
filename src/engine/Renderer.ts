@@ -14,7 +14,7 @@ export class Renderer {
   quality!: any;
   renderer!: THREE.WebGLRenderer;
   scene!: THREE.Scene;
-  constructor(container: any, opts = {}) {
+  constructor(container: any, opts: any = {}) {
     this.container = container;
 
     const params = new URLSearchParams(location.search);

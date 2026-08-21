@@ -95,7 +95,7 @@ export class Ecology {
     const cell = 256;
     const grid = new Map();
     for (const p of worldMap.pois) {
-      const f = FRAC[p.type];
+      const f = FRAC[p.type as keyof typeof FRAC];
       if (!f) continue;
       const r = p.r * f;
       const i0 = Math.floor((p.x - r) / cell), i1 = Math.floor((p.x + r) / cell);

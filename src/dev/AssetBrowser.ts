@@ -126,7 +126,7 @@ export class AssetBrowser {
       if (made.kind === 'enemy') made.enemy.heading = this.stage.subjectYaw();
       else made.object.rotation.y = this.stage.subjectYaw();
       this.applyPose();
-    } catch (err) {
+    } catch (err: any) {
       this.error = `${this.family.id}/${key}: ${(err && err.message) || err}`;
       console.warn('[dev]', this.error, err);
     }
@@ -180,7 +180,7 @@ export class AssetBrowser {
   }
 
   _npc(key: any, at: any) {
-    const arch = archetype(key, NPC_CAST[key]);
+    const arch = archetype(key, NPC_CAST[key as keyof typeof NPC_CAST]);
     const body = new NpcBody(arch, 7);
     body.root.position.copy(at);
     this._npcBody = body;

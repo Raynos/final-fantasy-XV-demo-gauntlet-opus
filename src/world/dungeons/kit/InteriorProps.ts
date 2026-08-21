@@ -16,7 +16,7 @@ import * as M from './InteriorMaterials.ts';
  */
 
 const G = {};
-function geo(key: any, make: any) { if (!G[key]) G[key] = make(); return G[key]; }
+function geo(key: any, make: any) { if (!G[key as keyof typeof G]) G[key as keyof typeof G] = make(); return G[key as keyof typeof G]; }
 const box = () => geo('box', () => new THREE.BoxGeometry(1, 1, 1));
 const cyl = (seg = 10) => geo(`cyl${seg}`, () => new THREE.CylinderGeometry(0.5, 0.5, 1, seg));
 const cone = (seg = 9) => geo(`cone${seg}`, () => new THREE.ConeGeometry(0.5, 1, seg));
@@ -54,7 +54,7 @@ export class PropKit {
 
   /** Data-driven placement: `layout.prop('minecart', [x,z], {...})`. */
   place(kind: any, spec: any) {
-    const fn = this[kind];
+    const fn = (this as any)[kind];
     if (typeof fn !== 'function') return;
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
@@ -68,7 +68,7 @@ export class PropKit {
    * a long, hard, cold source that rakes the concrete and gives every corridor
    * a direction.
    */
-  emergencyStrip(x: any, y: any, z: any, s = {}) {
+  emergencyStrip(x: any, y: any, z: any, s: any = {}) {
     const rot = s.rot || 0;
     const len = s.len || 1.9;
     const col = s.color != null ? s.color : 0xffb267;
@@ -93,7 +93,7 @@ export class PropKit {
   }
 
   /** A dead strip: same fixture, no light. Contrast is what sells the live ones. */
-  deadStrip(x: any, y: any, z: any, s = {}) {
+  deadStrip(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x3c3a36);
     const t = this.ao(x, y, z) * 0.8;
     this.m.place(steel, box(), [x, y, z], [0, s.rot || 0, 0], [(s.len || 1.9) + 0.22, 0.30, 0.16], t);
@@ -101,7 +101,7 @@ export class PropKit {
   }
 
   /** Stacked Niflheim supply crates with a live seam of blue running light. */
-  magitekCrate(x: any, y: any, z: any, s = {}) {
+  magitekCrate(x: any, y: any, z: any, s: any = {}) {
     const plate = M.magitekPlate();
     const glow = M.emissiveMaterial(0x63d0ff, 1.2);
     const n = s.stack || 1;
@@ -124,7 +124,7 @@ export class PropKit {
   }
 
   /** Bent reinforcement bar bursting out of spalled concrete. */
-  rebar(x: any, y: any, z: any, s = {}) {
+  rebar(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x6a4a30);
     const n = s.count || 5;
     const rot = s.rot || 0;
@@ -141,7 +141,7 @@ export class PropKit {
   }
 
   /** Concrete spall and broken block. */
-  rubble(x: any, y: any, z: any, s = {}) {
+  rubble(x: any, y: any, z: any, s: any = {}) {
     const mat = s.mat || M.trenchFloor();
     const n = s.count || 9;
     const r = s.radius || 1.8;
@@ -157,7 +157,7 @@ export class PropKit {
   }
 
   /** A collapsed tunnel: a wall of rubble and bent steel plugging a passage. */
-  collapse(x: any, y: any, z: any, s = {}) {
+  collapse(x: any, y: any, z: any, s: any = {}) {
     const rot = s.rot || 0;
     const w = s.width || 3.4;
     this.rubble(x, y, z, { count: 26, radius: w * 0.55, scale: 1.5, mat: s.mat || M.trenchFloor() });
@@ -174,7 +174,7 @@ export class PropKit {
   }
 
   /** Ceiling service run: pipe bundle on brackets. Reads as "someone built this". */
-  pipeRun(x: any, y: any, z: any, s = {}) {
+  pipeRun(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x554438);
     const len = s.len || 8;
     const rot = s.rot || 0;
@@ -193,7 +193,7 @@ export class PropKit {
   }
 
   /** Slack cabling stapled along a wall — pure silhouette detail. */
-  cableRun(x: any, y: any, z: any, s = {}) {
+  cableRun(x: any, y: any, z: any, s: any = {}) {
     const mat = M.corrodedSteel(0x1e1c1a);
     const len = s.len || 6;
     const rot = s.rot || 0;
@@ -214,7 +214,7 @@ export class PropKit {
   }
 
   /** Sandbag revetment. */
-  sandbags(x: any, y: any, z: any, s = {}) {
+  sandbags(x: any, y: any, z: any, s: any = {}) {
     const mat = M.trenchFloor();
     const rot = s.rot || 0;
     const rows = s.rows || 3, per = s.per || 5;
@@ -231,7 +231,7 @@ export class PropKit {
   }
 
   /** The generator: the heart of the imperial power room. */
-  generator(x: any, y: any, z: any, s = {}) {
+  generator(x: any, y: any, z: any, s: any = {}) {
     const rot = s.rot || 0;
     const plate = M.magitekPlate();
     const steel = M.corrodedSteel(0x4b4238);
@@ -268,7 +268,7 @@ export class PropKit {
    * live coolant seam running up it. Four of these turn a big empty concrete
    * box into a room the Empire built, and give a boss arena its vertical beats.
    */
-  magitekPylon(x: any, y: any, z: any, s = {}) {
+  magitekPylon(x: any, y: any, z: any, s: any = {}) {
     const plate = M.magitekPlate();
     const steel = M.corrodedSteel(0x3e3a34);
     const glow = M.emissiveMaterial(s.color || 0x63d0ff, 1.4);
@@ -295,7 +295,7 @@ export class PropKit {
   }
 
   /** A burning oil drum. Warm, unstable, and the only friendly light in a boss room. */
-  brazier(x: any, y: any, z: any, s = {}) {
+  brazier(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x6b4a2e);
     const fire = M.emissiveMaterial(0xff6a20, 0.85);
     const t = this.ao(x, y + 0.5, z);
@@ -316,7 +316,7 @@ export class PropKit {
   }
 
   /** Tripod work light aimed along a corridor. */
-  floodLight(x: any, y: any, z: any, s = {}) {
+  floodLight(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x585048);
     const rot = s.rot || 0;
     const t = this.ao(x, y + 1, z);
@@ -338,7 +338,7 @@ export class PropKit {
   /* ----------------------------------------------------------------- Balouve */
 
   /** A pit-prop frame: two posts, a cap and lagging boards over the roof. */
-  timberFrame(x: any, y: any, z: any, s = {}) {
+  timberFrame(x: any, y: any, z: any, s: any = {}) {
     const w = M.pitTimber();
     const rot = s.rot || 0;
     const width = s.width || 3.4;
@@ -360,7 +360,7 @@ export class PropKit {
   }
 
   /** Rail: sleepers and two running rails laid along a polyline. */
-  railTrack(path: any, s = {}) {
+  railTrack(path: any, s: any = {}) {
     const steel = M.railSteel();
     const wood = M.pitTimber();
     const gauge = s.gauge || 0.86;
@@ -390,7 +390,7 @@ export class PropKit {
   }
 
   /** A minecart, upright or tipped on its side. */
-  minecart(x: any, y: any, z: any, s = {}) {
+  minecart(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x6b4a30);
     const wood = M.pitTimber();
     const rot = s.rot || 0;
@@ -427,7 +427,7 @@ export class PropKit {
   }
 
   /** Spoil heap of broken ore. */
-  oreHeap(x: any, y: any, z: any, s = {}) {
+  oreHeap(x: any, y: any, z: any, s: any = {}) {
     const mat = s.mat || M.oreSeam();
     const n = s.count || 14;
     const r = s.radius || 1.4;
@@ -444,7 +444,7 @@ export class PropKit {
   }
 
   /** An exposed seam of ore in a wall, faceted so a lamp glints off it. */
-  oreVein(x: any, y: any, z: any, s = {}) {
+  oreVein(x: any, y: any, z: any, s: any = {}) {
     const mat = M.oreSeam();
     const rot = s.rot || 0;
     const n = s.count || 10;
@@ -460,7 +460,7 @@ export class PropKit {
   }
 
   /** Hanging oil lantern — the mine's warm, swinging key light. */
-  lantern(x: any, y: any, z: any, s = {}) {
+  lantern(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x4a3c2e);
     const flame = M.emissiveMaterial(0xffa246, 2.2);
     const drop = s.drop || 0.9;
@@ -477,7 +477,7 @@ export class PropKit {
   }
 
   /** Timber ladder against a face. */
-  ladder(x: any, y: any, z: any, s = {}) {
+  ladder(x: any, y: any, z: any, s: any = {}) {
     const w = M.pitTimber();
     const h = s.height || 4;
     const rot = s.rot || 0;
@@ -493,7 +493,7 @@ export class PropKit {
   }
 
   /** The lift cage and its headgear at the top of a shaft. */
-  liftCage(x: any, y: any, z: any, s = {}) {
+  liftCage(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x554438);
     const wood = M.pitTimber();
     const w = s.w || 3.2, d = s.d || 3.2, h = s.h || 2.8;
@@ -522,7 +522,7 @@ export class PropKit {
   }
 
   /** Steel catwalk with a handrail, spanning a drop. */
-  catwalk(x: any, y: any, z: any, s = {}) {
+  catwalk(x: any, y: any, z: any, s: any = {}) {
     const steel = M.corrodedSteel(0x4f4238);
     const rot = s.rot || 0, len = s.len || 8, w = s.w || 1.5;
     const t = this.ao(x, y, z);
@@ -542,7 +542,7 @@ export class PropKit {
   /* ---------------------------------------------------------------- Fociaugh */
 
   /** A stalactite hanging from the roof (or a stalagmite, flipped). */
-  dripSpike(x: any, y: any, z: any, s = {}) {
+  dripSpike(x: any, y: any, z: any, s: any = {}) {
     const mat = M.dripstone();
     const len = s.len || 1.6;
     const r = s.r || 0.24;
@@ -569,7 +569,7 @@ export class PropKit {
   }
 
   /** A field of spikes across a ceiling or floor patch. */
-  dripField(x: any, y: any, z: any, s = {}) {
+  dripField(x: any, y: any, z: any, s: any = {}) {
     const n = s.count || 14;
     const r = s.radius || 4;
     for (let i = 0; i < n; i++) {
@@ -584,7 +584,7 @@ export class PropKit {
   }
 
   /** A flowstone column joining floor to roof. */
-  column(x: any, y: any, z: any, s = {}) {
+  column(x: any, y: any, z: any, s: any = {}) {
     const mat = M.dripstone();
     const h = s.h || 6;
     const r = s.r || 0.55;
@@ -609,7 +609,7 @@ export class PropKit {
    * Bioluminescent fungus. The cave's only real light: cold, blue-green, and
    * clustered where water runs.
    */
-  fungus(x: any, y: any, z: any, s = {}) {
+  fungus(x: any, y: any, z: any, s: any = {}) {
     const cap = M.emissiveMaterial(s.color || 0x63ffd0, s.emissive || 1.05);
     const stem = M.emissiveMaterial(0x1b3a34, 0.5);
     const n = s.count || 7;
@@ -635,7 +635,7 @@ export class PropKit {
   }
 
   /** Still water: a dark mirror that doubles every light above it. */
-  pool(x: any, y: any, z: any, s = {}) {
+  pool(x: any, y: any, z: any, s: any = {}) {
     const g = new THREE.Mesh(plane(), M.poolMaterial(s.tint || 0x08151a));
     g.rotation.x = -Math.PI / 2;
     g.scale.set(s.w || 6, s.d || 6, 1);
@@ -650,7 +650,7 @@ export class PropKit {
   }
 
   /** A rounded boulder or breakdown block. */
-  boulder(x: any, y: any, z: any, s = {}) {
+  boulder(x: any, y: any, z: any, s: any = {}) {
     const mat = s.mat || M.wetLimestone();
     const r = s.r || 1.0;
     this.m.place(mat, sph(9), [x, y + r * 0.55, z],

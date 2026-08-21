@@ -215,12 +215,12 @@ export class Sky {
     // rather than every frame, and the maps are no longer rebuilt for
     // secondary render passes.
     const tier = (game.rnd && game.rnd.quality) || 'high';
-    const res = SHADOW_RES[tier] || SHADOW_RES.high;
+    const res = SHADOW_RES[tier as keyof typeof SHADOW_RES] || SHADOW_RES.high;
     this.cascadeRes = [res, res / 2, res / 2];
     // frames between refreshes: near cascade every frame, mid every other,
     // far every fourth. At sprint speed the far cascade drifts 0.7 m across
     // four frames inside a 200 m box — invisible.
-    this.cascadeStride = (SHADOW_STRIDE[tier] || SHADOW_STRIDE.high).slice();
+    this.cascadeStride = (SHADOW_STRIDE[tier as keyof typeof SHADOW_STRIDE] || SHADOW_STRIDE.high).slice();
 
     this.csm = new CSM({
       camera: game.camera,
@@ -696,8 +696,8 @@ export class Sky {
     // fall back to the shot's declared weather until a Weather system drives us
     if (!this._weatherExternal && this.game && this.game.currentShot !== this._shotSeen) {
       this._shotSeen = this.game.currentShot;
-      const w = SHOTS[this._shotSeen] && SHOTS[this._shotSeen].weather;
-      if (w && WEATHER[w]) { this.weather = w; this.target = Object.assign({}, WEATHER[w]); }
+      const w = SHOTS[this._shotSeen as keyof typeof SHOTS] && SHOTS[this._shotSeen as keyof typeof SHOTS].weather;
+      if (w && WEATHER[w as keyof typeof WEATHER]) { this.weather = w; this.target = Object.assign({}, WEATHER[w as keyof typeof WEATHER]); }
     }
 
     const k = 1 - Math.exp(-dt * 6);

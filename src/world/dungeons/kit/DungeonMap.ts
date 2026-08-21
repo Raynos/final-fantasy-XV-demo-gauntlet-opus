@@ -108,12 +108,12 @@ export class DungeonMap {
 
     for (const m of d.markers) {
       const x = X(m.x), z = Z(m.z);
-      const col = {
+      const col = ({
         chest: '#e8c463', 'chest-open': 'rgba(150,140,110,0.55)',
         locked: '#e06a52', door: 'rgba(170,205,228,0.8)',
         hazard: '#d9702f', boss: '#e0503c', enemy: 'rgba(220,120,100,0.7)',
         exit: '#8fe0ff',
-      }[m.kind] || '#9fd';
+      } as any)[m.kind] || '#9fd';
       ctx.fillStyle = col;
       ctx.beginPath();
       if (m.kind === 'boss') {

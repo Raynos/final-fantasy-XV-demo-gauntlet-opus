@@ -118,7 +118,7 @@ function frame(dir: any, u: any, v: any) {
  * @param over per-variant parameter overrides
  */
 export function buildTree(name: string, seed: number, over: any = {}): any {
-  const S = { ...TREE_SPECIES[name], ...over };
+  const S = { ...TREE_SPECIES[name as keyof typeof TREE_SPECIES], ...over };
   const rng = new Rng((seed >>> 0) || 1);
   const wood = new MeshAccum();
   const leaf = new MeshAccum();

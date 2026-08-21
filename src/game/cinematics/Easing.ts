@@ -30,7 +30,7 @@ export const EASE = {
 /** Resolve an ease by name (or pass a function straight through). */
 export function ease(nameOrFn: any) {
   if (typeof nameOrFn === 'function') return nameOrFn;
-  return EASE[nameOrFn] || EASE.inOutSine;
+  return EASE[nameOrFn as keyof typeof EASE] || EASE.inOutSine;
 }
 
 export { clamp01 };

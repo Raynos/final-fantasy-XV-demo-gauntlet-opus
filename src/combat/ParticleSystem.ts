@@ -124,15 +124,15 @@ export class ParticleSystem {
     const pos = p.pos, vel = p.vel || ZERO, col = p.color || WHITE;
 
     const a = this.aPos0.array, b = this.aVel.array, c = this.aColor.array;
-    a[i * 3] = pos.x !== undefined ? pos.x : pos[0];
-    a[i * 3 + 1] = pos.y !== undefined ? pos.y : pos[1];
-    a[i * 3 + 2] = pos.z !== undefined ? pos.z : pos[2];
-    b[i * 3] = vel.x !== undefined ? vel.x : vel[0];
-    b[i * 3 + 1] = vel.y !== undefined ? vel.y : vel[1];
-    b[i * 3 + 2] = vel.z !== undefined ? vel.z : vel[2];
-    c[i * 3] = col.r !== undefined ? col.r : col[0];
-    c[i * 3 + 1] = col.g !== undefined ? col.g : col[1];
-    c[i * 3 + 2] = col.b !== undefined ? col.b : col[2];
+    a[i * 3] = pos.x !== undefined ? pos.x : pos[0 as keyof typeof pos];
+    a[i * 3 + 1] = pos.y !== undefined ? pos.y : pos[1 as keyof typeof pos];
+    a[i * 3 + 2] = pos.z !== undefined ? pos.z : pos[2 as keyof typeof pos];
+    b[i * 3] = vel.x !== undefined ? vel.x : vel[0 as keyof typeof vel];
+    b[i * 3 + 1] = vel.y !== undefined ? vel.y : vel[1 as keyof typeof vel];
+    b[i * 3 + 2] = vel.z !== undefined ? vel.z : vel[2 as keyof typeof vel];
+    c[i * 3] = col.r !== undefined ? col.r : col[0 as keyof typeof col];
+    c[i * 3 + 1] = col.g !== undefined ? col.g : col[1 as keyof typeof col];
+    c[i * 3 + 2] = col.b !== undefined ? col.b : col[2 as keyof typeof col];
 
     const q = this.aParams.array;
     q[i * 4] = p.t0; q[i * 4 + 1] = p.life;

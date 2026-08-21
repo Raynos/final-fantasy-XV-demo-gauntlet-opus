@@ -82,7 +82,7 @@ export class GearScreen {
       const hpVal = el('div.gv');
       const slots = list.map((s: any) => {
         const n = el('div.gslot', {}, [
-          el('div.gs-k', {}, [icon(SLOT_ICON[s.slot] || 'sword', { size: 11, stroke: 1.3 }), el('span', { text: ` ${s.slot}` })]),
+          el('div.gs-k', {}, [icon(SLOT_ICON[s.slot as keyof typeof SLOT_ICON] || 'sword', { size: 11, stroke: 1.3 }), el('span', { text: ` ${s.slot}` })]),
           el('div.gs-n', { text: s.name }),
           el('div.gs-s', { text: s.stat }),
         ]);
@@ -164,7 +164,7 @@ export class GearScreen {
   _candidates(r: any, charId: any, kind: any, slot: any) {
     const rows = [];
     if (!slot.empty) rows.push({ id: null, name: '— Remove —', stat: 'Back into the bag', count: 0 });
-    const allowed = CLASS_OK[charId] || CLASS_OK.noctis;
+    const allowed = CLASS_OK[charId as keyof typeof CLASS_OK] || CLASS_OK.noctis;
     for (const e of r.inventory.list(kind)) {
       const def = e.def;
       if (kind === 'weapon') {
@@ -211,12 +211,12 @@ export class GearScreen {
       this._say(row.id ? `Equipped ${row.name}.` : 'Slot cleared.', true);
       if (r.refreshGear) r.refreshGear();
     } else {
-      this._say(({
+      this._say((({
         'class-not-allowed': 'They cannot wield that.',
         'not-your-weapon': 'That blade answers to someone else.',
         'already-equipped': 'Already worn in another slot.',
         'not-owned': 'None left in the bag.',
-      })[res.reason] || `Cannot equip that. (${res.reason})`, false);
+      }) as any)[res.reason] || `Cannot equip that. (${res.reason})`, false);
     }
     this.back();
   }

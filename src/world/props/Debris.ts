@@ -461,7 +461,7 @@ export class Debris {
         roughness: 0.9, metalness: 0,
       }), { bend: 0.02, flutter: 0.05, gustFreq: 0.06, flexPow: 1.0 }),
     };
-    for (const k of Object.keys(M)) if (!M[k].name) M[k].name = `debris_${k}`;
+    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `debris_${k}`;
     this.mats = M;
 
     const plankGeo = mergeGeometries([
@@ -470,11 +470,11 @@ export class Debris {
     ], false);
 
     for (const key of LITTER_KINDS) {
-      const def = LITTER[key];
+      const def = LITTER[key as keyof typeof LITTER];
       if (!def) continue;
       const geo = key === 'planks' ? plankGeo : def.geo(def.seed);
-      const max = Math.max(8, Math.round(CAPS[key] * this.quality));
-      const mesh = new THREE.InstancedMesh(geo, M[def.mat], max);
+      const max = Math.max(8, Math.round(CAPS[key as keyof typeof CAPS] * this.quality));
+      const mesh = new THREE.InstancedMesh(geo, M[def.mat as keyof typeof M], max);
       mesh.castShadow = def.cast !== false;
       mesh.receiveShadow = true;
       mesh.count = 0; mesh.frustumCulled = false;
@@ -566,7 +566,7 @@ export class Debris {
     for (const key of LITTER_KINDS) {
       const want = dress.litter[key];
       if (!want) continue;
-      const def = LITTER[key];
+      const def = LITTER[key as keyof typeof LITTER];
       const n = Math.round(def.per * want * rng.range(0.35, 1.7));
       for (let i = 0; i < n; i++) {
         const x = bx + rng.next() * c, z = bz + rng.next() * c;

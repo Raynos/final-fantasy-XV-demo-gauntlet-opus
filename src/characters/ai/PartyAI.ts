@@ -64,7 +64,7 @@ export class PartyAI {
 
     if (this.party && this.party.members) {
       for (const m of this.party.members) {
-        const spec = ROLES[m.key] || ROLES.gladio;
+        const spec = ROLES[m.key as keyof typeof ROLES] || ROLES.gladio;
         m.role = spec;
         m.baseSlot = m.slot.clone();
         m.baseSpeedMul = m.speedMul;
@@ -106,7 +106,7 @@ export class PartyAI {
    */
   _equip(m: any, kind: string) {
     if (!m.character || !m.character.attach) return;
-    const carry = CARRY[m.key] || CARRY.gladio;
+    const carry = CARRY[m.key as keyof typeof CARRY] || CARRY.gladio;
     m.weaponList = [];
     for (let i = 0; i < carry.stow.length; i++) {
       const w = new Weapon(kind);
@@ -126,7 +126,7 @@ export class PartyAI {
    * @param m @param drawn
    */
   _reparent(m: any, drawn: boolean) {
-    const carry = CARRY[m.key] || CARRY.gladio;
+    const carry = CARRY[m.key as keyof typeof CARRY] || CARRY.gladio;
     const set = drawn ? carry.hold : carry.stow;
     const attach = m.character.attach;
     for (let i = 0; i < m.weaponList.length; i++) {
@@ -319,7 +319,7 @@ export class PartyAI {
     const m = this.party?.members.find((x: any) => x.key === memberKey);
     if (!m || m.downed) return { ok: false, reason: 'unavailable' };
     const rpg = this.rpg;
-    const list = TECH_TABLE[memberKey] || [];
+    const list = TECH_TABLE[memberKey as keyof typeof TECH_TABLE] || [];
     let pick = techId ? list.find((t: any) => t.id === techId) : null;
     if (!pick) {
       const bars = rpg ? rpg.party.techBars : 3;

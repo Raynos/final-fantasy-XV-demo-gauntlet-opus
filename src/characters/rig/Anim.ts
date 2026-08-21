@@ -88,7 +88,7 @@ function bell(u: any, holdFrac: any) {
  */
 function postureKey(character: any): string {
   const n = String(character.name || '').toLowerCase();
-  if (POSTURE[n]) return n;
+  if (POSTURE[n as keyof typeof POSTURE]) return n;
   if (n.startsWith('glad')) return 'gladio';
   return n;
 }
@@ -287,7 +287,7 @@ export class Animator {
      */
     const key = postureKey(character);
     this.p = resolvePosture(key);
-    if (!POSTURE[key]) {
+    if (!POSTURE[key as keyof typeof POSTURE]) {
       this.p.weight = THREE.MathUtils.clamp(this.stanceBias, -0.8, 0.8);
       this.p.biasW = 1;
     }
@@ -356,7 +356,7 @@ export class Animator {
 
   /** Start a keyframed action. @param name @param opts */
   play(name: string, opts: any = {}) {
-    const def = ACTIONS[name];
+    const def = ACTIONS[name as keyof typeof ACTIONS];
     if (!def) return;
     this.action = { def, name, t: 0, speed: opts.speed || 1, w: 0, hold: !!def.hold && opts.hold !== false };
   }
@@ -746,7 +746,7 @@ export class Animator {
       this.gestureTimer -= dt;
       if (this.gestureTimer > 0) return;
       this._gestureSeq++;
-      const def = GESTURES[list[this._gestureSeq % list.length]];
+      const def = GESTURES[list[this._gestureSeq % list.length] as keyof typeof GESTURES];
       if (!def) return;
       this.gesture = { def, t: 0 };
       // deterministic spacing — two runs of the capture harness must match

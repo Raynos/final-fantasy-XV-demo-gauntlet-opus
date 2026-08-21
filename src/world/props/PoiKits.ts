@@ -139,7 +139,7 @@ export class PoiKits {
         map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
       }),
     };
-    for (const k of Object.keys(M)) if (!M[k].name) M[k].name = `poi_${k}`;
+    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `poi_${k}`;
 
     const kits = {
       haven: this._haven, parking: this._parking, reststop: this._restStop,
@@ -149,7 +149,7 @@ export class PoiKits {
     };
     for (const p of worldMap.pois) {
       if (SKIP_IDS.has(p.id)) continue;
-      const fn = kits[p.type];
+      const fn = kits[p.type as keyof typeof kits];
       if (!fn) continue;
       this.sites.push({ poi: p, fn, pos: new THREE.Vector3(p.x, 0, p.z), group: null });
     }
@@ -834,7 +834,7 @@ export class PoiKits {
     // tint the whole kit toward the local stone so it belongs to its zone
     site.canCast = res.cast !== false;
     site.radius = res.r || 20;
-    site.draw = DRAW_BY_TYPE[p.type] || DRAW_R;
+    site.draw = DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R;
     this.root.add(g);
     site.group = g;
     this.built.push(site);

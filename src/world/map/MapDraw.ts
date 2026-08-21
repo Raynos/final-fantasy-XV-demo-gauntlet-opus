@@ -51,7 +51,7 @@ function lods() {
       for (let i = 0; i < src.length; i += stride) { out[n++] = src[i].x; out[n++] = src[i].z; }
       const last = src[src.length - 1];
       if (out[n - 2] !== last.x || out[n - 1] !== last.z) { out[n++] = last.x; out[n++] = last.z; }
-      (byCls[routeClass(r)] || byCls.track).push({ pts: out, n, route: r });
+      (byCls[routeClass(r) as keyof typeof byCls] || byCls.track).push({ pts: out, n, route: r });
     }
     _lods.push(byCls);
   }
@@ -76,7 +76,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
 
   for (let pass = 0; pass < 2; pass++) {
     for (const cls of ORDER) {
-      const st = ROAD_STYLE[cls];
+      const st = ROAD_STYLE[cls as keyof typeof ROAD_STYLE];
       if (pass === 0 && !st.casing) continue;
       const w = Math.min(st.max, Math.max(st.min, st.w * scale));
       // One path per class per pass: overlapping strokes then composite once,
@@ -249,7 +249,7 @@ function chaikin(p: any) {
  * Stroke the zone borders as a fine broken hairline, the way an atlas draws an
  * administrative boundary.
  */
-export function drawZoneBorders(c: any, sx: any, sy: any, opt = {}) {
+export function drawZoneBorders(c: any, sx: any, sy: any, opt: any = {}) {
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
   const scale = opt.scale || 1;

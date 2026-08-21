@@ -220,7 +220,7 @@ export function readParty(game: any): Array<any> {
   const hs = hudState(game);
   if (!hs || !hs.party || !hs.party.length) return PARTY.map((p) => ({ ...p }));
   return hs.party.map((m: any, i: any) => {
-    const ui = MEMBER_UI[m.id] || MEMBER_UI.noctis;
+    const ui = MEMBER_UI[m.id as keyof typeof MEMBER_UI] || MEMBER_UI.noctis;
     return {
       id: m.id,
       name: ui.short,
@@ -270,9 +270,9 @@ export function readWeapons(game: any) {
     const el = (def.tags || []).find((t: any) => t.startsWith('element:'));
     return {
       slot, id: def.id,
-      key: CLASS_ICON[def.class] || 'sword',
+      key: CLASS_ICON[def.class as keyof typeof CLASS_ICON] || 'sword',
       name: def.name,
-      kind: CLASS_LABEL[def.class] || 'Arm',
+      kind: CLASS_LABEL[def.class as keyof typeof CLASS_LABEL] || 'Arm',
       atk: def.attack || 0,
       element: el ? el.slice(8) : null,
     };
@@ -289,7 +289,7 @@ export function readItems(game: any, tab: number = -1): Array<any> {
     if (tab < 0) return ITEMS.map((i) => ({ ...i }));
     const want = ITEM_TABS[tab]?.name;
     const map = { Consumables: ['Consumable', 'Remedy'], Materials: ['Treasure', 'Catalyst'], Provisions: [], Equipment: [], 'Key Items': ['Key Item', 'Magic'] };
-    const tags = map[want] || [];
+    const tags = map[want as keyof typeof map] || [];
     const out = ITEMS.filter((i) => tags.includes(i.tag)).map((i) => ({ ...i }));
     return out.length ? out : ITEMS.map((i) => ({ ...i }));
   }
@@ -319,7 +319,7 @@ function itemView(def: any, count: any, r: any) {
     name: def.name,
     qty: count,
     icon: itemIcon(def),
-    tag: CATEGORY_TAG[def.category] || 'Item',
+    tag: CATEGORY_TAG[def.category as keyof typeof CATEGORY_TAG] || 'Item',
     effect,
     target: use ? (use.target === 'party' ? 'All allies' : use.target === 'downed' ? 'Downed ally' : 'One ally') : '—',
     field: !!use,
@@ -337,7 +337,7 @@ function itemIcon(def: any) {
     if (u.type === 'cure') return u.status?.includes('poison') ? 'poison' : 'shieldUp';
     return 'potion';
   }
-  if (def.category === 'weapon') return CLASS_ICON[def.class] || 'sword';
+  if (def.category === 'weapon') return CLASS_ICON[def.class as keyof typeof CLASS_ICON] || 'sword';
   if (def.catalyst) {
     const t = def.catalyst.tags || [];
     if (t.includes('lightning')) return 'lightning';
@@ -345,7 +345,7 @@ function itemIcon(def: any) {
     if (t.includes('poison')) return 'poison';
     return 'ap';
   }
-  return CATEGORY_ICON[def.category] || 'items';
+  return CATEGORY_ICON[def.category as keyof typeof CATEGORY_ICON] || 'items';
 }
 
 /** "STR +40  ·  HP +300" from a modifier bucket. */
@@ -353,7 +353,7 @@ function modLine(mods: any) {
   if (!mods) return '';
   const K = { hp: 'HP', mp: 'MP', strength: 'STR', vitality: 'VIT', magic: 'MAG', spirit: 'SPR', attack: 'ATK', defense: 'DEF', magicAttack: 'M.ATK', magicDefense: 'M.DEF' };
   const bits = [];
-  for (const k of Object.keys(K)) if (mods[k]) bits.push(`${K[k]} ${mods[k] > 0 ? '+' : ''}${mods[k]}`);
+  for (const k of Object.keys(K)) if (mods[k]) bits.push(`${K[k as keyof typeof K]} ${mods[k] > 0 ? '+' : ''}${mods[k]}`);
   if (mods.critRate) bits.push(`Crit +${Math.round(mods.critRate * 100)}%`);
   for (const e of Object.keys(mods.resist || {})) if (mods.resist[e]) bits.push(`${e} res +${mods.resist[e]}%`);
   return bits.slice(0, 3).join('  ·  ');
@@ -365,7 +365,7 @@ function modLine(mods: any) {
  */
 export function readGear(game: any, id: string) {
   const r = rpg(game);
-  if (!r) return (GEAR[id] || GEAR.noctis).map((g: any) => ({ ...g }));
+  if (!r) return (GEAR[id as keyof typeof GEAR] || GEAR.noctis).map((g: any) => ({ ...g }));
   const eq = r.inventory.equipped(id);
   const out: any[] = [];
   eq.weapon.forEach((def: any) => out.push(slotView('Weapon', def)));
@@ -449,9 +449,9 @@ export function readTechniques(game: any) {
     if (!t) continue;
     out.push({
       name: t.name,
-      owner: MEMBER_UI[id].short,
+      owner: MEMBER_UI[id as keyof typeof MEMBER_UI].short,
       cost: t.bars,
-      icon: CLASS_ICON[r.party.members[id].weapon] || 'sword',
+      icon: CLASS_ICON[r.party.members[id].weapon as keyof typeof CLASS_ICON] || 'sword',
       ready: t.bars > 0 ? Math.min(1, charge / t.bars) : 1,
     });
   }

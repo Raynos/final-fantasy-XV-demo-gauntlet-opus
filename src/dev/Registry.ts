@@ -127,7 +127,7 @@ export class Registry {
       const was = this.defaults.get(name);
       let is;
       try { is = c.get(); } catch { continue; }
-      if (JSON.stringify(is) !== JSON.stringify(was)) out[name] = { is, was };
+      if (JSON.stringify(is) !== JSON.stringify(was)) out[name as keyof typeof out] = { is, was };
     }
     return out;
   }

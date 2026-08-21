@@ -232,7 +232,7 @@ export class ArchiveScreen {
     }
     this.dSpecs.style.display = '';
     const e = row.e;
-    this.dK.textContent = `${FACTION[e.faction] || 'Beast'}${e.expClass === 'boss' ? '  ·  Mark' : ''}`;
+    this.dK.textContent = `${FACTION[e.faction as keyof typeof FACTION] || 'Beast'}${e.expClass === 'boss' ? '  ·  Mark' : ''}`;
     this.dN.textContent = row.known ? e.name : 'Unrecorded';
     this.dD.textContent = row.known
       ? `Felled ${row.kills === 1 ? 'once' : `${commas(row.kills)} times`} by the retinue. `
@@ -248,10 +248,10 @@ export class ArchiveScreen {
 
     if (row.known) {
       for (const el2 of e.weak) {
-        this.dWeak.appendChild(el('div.aw', {}, [icon(ELEMENT_ICON[el2] || 'fire', { size: 14, stroke: 1.2 }), el('span', { text: el2 })]));
+        this.dWeak.appendChild(el('div.aw', {}, [icon(ELEMENT_ICON[el2 as keyof typeof ELEMENT_ICON] || 'fire', { size: 14, stroke: 1.2 }), el('span', { text: el2 })]));
       }
       for (const el2 of e.strong) {
-        const n = el('div.aw.res', {}, [icon(ELEMENT_ICON[el2] || 'shield', { size: 14, stroke: 1.2 }), el('span', { text: el2 })]);
+        const n = el('div.aw.res', {}, [icon(ELEMENT_ICON[el2 as keyof typeof ELEMENT_ICON] || 'shield', { size: 14, stroke: 1.2 }), el('span', { text: el2 })]);
         this.dWeak.appendChild(n);
       }
       if (e.drops.length) {

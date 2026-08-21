@@ -260,8 +260,8 @@ export class Minimap {
       const r = Math.hypot(gx, gy);
       const edge = r > lim;
       const kk = edge ? lim / r : 1;
-      drawGlyph(c, POI_GLYPH[p.type] || 'dot', gx * kk, gy * kk, 6.2 * dpr,
-        POI_TYPES[p.type].colour, { alpha: edge ? 0.42 : 0.96, weight: 1.2 * dpr });
+      drawGlyph(c, POI_GLYPH[p.type as keyof typeof POI_GLYPH] || 'dot', gx * kk, gy * kk, 6.2 * dpr,
+        POI_TYPES[p.type as keyof typeof POI_TYPES].colour, { alpha: edge ? 0.42 : 0.96, weight: 1.2 * dpr });
     }
     c.restore();
 

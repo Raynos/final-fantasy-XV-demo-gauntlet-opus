@@ -188,7 +188,7 @@ export class Layout {
   }
 
   /** Set dressing: `kind` is resolved by the dungeon's prop kit. */
-  prop(kind: any, at: any, s = {}) {
+  prop(kind: any, at: any, s: any = {}) {
     const p = { kind, at, y: s.y, rot: s.rot || 0, scale: s.scale || 1, ...s };
     this.props.push(p);
     return p;

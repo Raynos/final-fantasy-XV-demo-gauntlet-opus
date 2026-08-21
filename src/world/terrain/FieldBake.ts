@@ -120,7 +120,7 @@ export async function loadBaked(): Promise<{applyTo:(f:any)=>void, layers:()=>an
     const buf = new Uint8Array(await new Response(body).arrayBuffer());
     unpackContainer(buf);            // validates magic and format version
     return { applyTo: (f) => applyBakedField(f, buf), layers: () => bakedLayers(buf) };
-  } catch (e) {
+  } catch (e: any) {
     // A missing or stale artifact must never be fatal: the generator is still
     // the source of truth and is only slower, never different.
     if (typeof console !== 'undefined') console.info('[terrain] no baked world, generating:', e && e.message);

@@ -344,7 +344,7 @@ class DevSuite {
     }
     this._setFly(false);
     this.game.applyShot(name);
-    const doc = SHOTS[name].doc || '';
+    const doc = SHOTS[name as keyof typeof SHOTS].doc || '';
     this._toast(`${name} — ${doc}`);
     return `${name}: ${doc}`;
   }

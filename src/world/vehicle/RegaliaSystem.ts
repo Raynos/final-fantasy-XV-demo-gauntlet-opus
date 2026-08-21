@@ -112,7 +112,7 @@ export class RegaliaSystem {
   terrain!: any;
   tilt!: THREE.Group;
   wheels!: any;
-  constructor(opts = {}) {
+  constructor(opts: any = {}) {
     this.enabled = true;
     /** true while anyone is in the car with the engine running. */
     this.isDriving = false;
@@ -667,7 +667,7 @@ export class RegaliaSystem {
     this._stagedShot = false;
     if (!name) return;
 
-    const stage = SHOT_STAGES[name];
+    const stage = SHOT_STAGES[name as keyof typeof SHOT_STAGES];
     if (!stage) {
       // any other shot: park it where Props used to put it and stay out of it
       if (this.isDriving) this.exit();

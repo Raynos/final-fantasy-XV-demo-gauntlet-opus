@@ -34,7 +34,7 @@ export const SPEAKERS = {
   radio: null,
 };
 
-const L = (who: any, line: any) => ({ who: SPEAKERS[who] ?? who, line });
+const L = (who: any, line: any) => ({ who: SPEAKERS[who as keyof typeof SPEAKERS] ?? who, line });
 
 /**
  * Ambient exchanges. Each entry is a short back-and-forth; the runner plays it
@@ -249,7 +249,7 @@ export class Conversation {
 
   /** Queue a single reaction line for an event key. */
   react(key: any) {
-    const pool = REACTIONS[key];
+    const pool = REACTIONS[key as keyof typeof REACTIONS];
     if (!pool || !pool.length) return false;
     if (this.queue.length) return false;
     this.queue = [pool[(this._n++) % pool.length]];

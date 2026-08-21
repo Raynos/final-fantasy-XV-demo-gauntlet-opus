@@ -203,7 +203,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
   const moistG = new Float32Array(MN * MN);
   const greenG = new Float32Array(MN * MN);
   const coolG = new Float32Array(MN * MN);
-  const bio = {};
+  const bio: any = {};
   const wts = {};
   for (let j = 0; j < MN; j++) {
     const z = -WORLD.half + j * 16 * mPerPx;
@@ -216,8 +216,8 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
       for (const id in wts) {
         const zn = worldMap.zoneById.get(id);
         if (!zn) continue;
-        if (zn.region === 'duscae') gr += wts[id];
-        else if (zn.region === 'cleigne') co += wts[id];
+        if (zn.region === 'duscae') gr += wts[id as keyof typeof wts];
+        else if (zn.region === 'cleigne') co += wts[id as keyof typeof wts];
       }
       greenG[j * MN + i] = gr;
       coolG[j * MN + i] = co;

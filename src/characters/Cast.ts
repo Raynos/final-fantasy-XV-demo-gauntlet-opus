@@ -313,7 +313,7 @@ export const CAST = {
 
 /** Instantiate one of the cast. @param key @returns */
 export function makeCharacter(key: string): Character {
-  const def = CAST[key];
+  const def = CAST[key as keyof typeof CAST];
   if (!def) throw new Error(`unknown character ${key}`);
   return new Character(def).build();
 }

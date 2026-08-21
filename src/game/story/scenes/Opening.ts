@@ -202,7 +202,7 @@ export const OPENING = {
     const yaw = F.yaw;
     const spots = { noctis: [-4.6, 0.6], gladio: [-5.4, -1.5], ignis: [-4.4, 2.1], prompto: [-6.0, -2.6] };
     for (const id of Object.keys(spots)) {
-      const [f, l] = spots[id];
+      const [f, l] = spots[id as keyof typeof spots];
       stage.place(id, F.ground(terrain, f, l, 0), yaw);
       const a = stage.actor(id);
       if (a) { a.root.position.copy(a.pos); a.root.rotation.y = yaw; }
@@ -253,7 +253,7 @@ function placeCrew(ctx: any, t: any) {
   const dir = new THREE.Vector3();
   let i = 0;
   for (const id of Object.keys(SLOTS)) {
-    const [df, dl] = SLOTS[id];
+    const [df, dl] = SLOTS[id as keyof typeof SLOTS];
     const bob = 0.06 * Math.sin(t * 1.35 + i * 0.9);
     const yaw = yawAt(f + df);
     dir.set(Math.sin(yaw), 0, Math.cos(yaw));
@@ -302,7 +302,7 @@ function buildShots(ctx: any) {
   /** The centre of the pushing line at scene time `t`. */
   const crew = (t: any, u: any) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */
-  const man = (t: any, id: any, u: any) => G(carF(t) + SLOTS[id][0], SLOTS[id][1] / S, u);
+  const man = (t: any, id: any, u: any) => G(carF(t) + SLOTS[id as keyof typeof SLOTS][0], SLOTS[id as keyof typeof SLOTS][1] / S, u);
   const stopF = ctx.data.stopF ?? 40;
   const stopL = (ctx.data.stopL ?? 0) / (S || 1);
 

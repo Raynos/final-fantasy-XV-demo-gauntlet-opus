@@ -56,10 +56,10 @@ export const LANDMARKS = buildLandmarks();
 
 function buildLandmarks() {
   const byId = new Map(LANDFORMS.map((l) => [l.id, l]));
-  const L = {};
+  const L: any = {};
   const put = (key: any, id: any, kind?: any) => {
     const f = byId.get(id);
-    if (f) L[key] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
+    if (f) L[key as keyof typeof L] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
   };
   put('blackrockMesa', 'blackrockMesa');
   put('northMesa', 'northMesa');
@@ -77,7 +77,7 @@ function buildLandmarks() {
   L.basin = { x: 60, z: 40, r: 460, h: 9, kind: 'basin', id: 'hammerheadPan' };
   for (const id of ['hammerhead', 'galdin_quay', 'lestallum', 'wiz_chocobo', 'meldacio_hq']) {
     const p = worldMap.poiById(id);
-    if (p) L[id.replace(/_(\w)/g, (m, c) => c.toUpperCase())] = { x: p.x, z: p.z, r: p.r, h: 0, kind: 'settlement', id };
+    if (p) L[id.replace(/_(\w)/g, (m, c) => c.toUpperCase()) as keyof typeof L] = { x: p.x, z: p.z, r: p.r, h: 0, kind: 'settlement', id };
   }
   return L;
 }
@@ -1011,7 +1011,7 @@ export class Field {
    * long dip slope on the other, notched along its crest and tapered at both
    * ends.
    */
-  _fin(x0: any, z0: any, x1: any, z1: any, halfW: any, height: any, opt = {}) {
+  _fin(x0: any, z0: any, x1: any, z1: any, halfW: any, height: any, opt: any = {}) {
     const h = this.h, n = this.n2, n3 = this.n3;
     const flip = opt.flip ? -1 : 1;
     const dipRun = opt.dip === undefined ? 3.2 : opt.dip;
@@ -1183,7 +1183,7 @@ export class Field {
       imperial: 110, parking: 42, haven: 26,
     };
     for (const p of this.map.pois) {
-      const rad = PAD[p.type];
+      const rad = PAD[p.type as keyof typeof PAD];
       if (!rad) continue;
       // median-ish target: average the ground over a ring so a pad on a slope
       // cuts as much as it fills
@@ -1484,7 +1484,7 @@ export class Field {
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
-  ctrlAt(x: any, z: any, out = {}) {
+  ctrlAt(x: any, z: any, out: any = {}) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const arr = q >= BLEND_OUT ? this.farCtrl : this.ctrl;
     const n = q >= BLEND_OUT ? FAR_N : N;

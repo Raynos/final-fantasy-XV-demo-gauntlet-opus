@@ -201,7 +201,7 @@ export const RECIPE_TABLE = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 
 /** Extra effect tags parsed out of the human-readable effect lines. */
 function recipeTags(recipe: any) {
-  const tags = {};
+  const tags: any = {};
   for (const line of recipe.effects) {
     const exp = /EXP earned \+(\d+)%/.exec(line);
     if (exp) tags.expMultiplier = 1 + Number(exp[1]) / 100;
@@ -240,7 +240,7 @@ export class PartyState {
     this.members = {};
     for (const m of MEMBERS) {
       this.stats[m.id] = new Stats(m.id, { level: 1 });
-      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id].filter((t: any) => !t.advanced && !t.requiresFlag).map((t: any) => t.id) };
+      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id as keyof typeof TECHNIQUES].filter((t: any) => !t.advanced && !t.requiresFlag).map((t: any) => t.id) };
     }
 
     /** Tech bar, 0..maxTechBars in continuous units. */
@@ -298,7 +298,7 @@ export class PartyState {
   /** Techniques a member currently has, hydrated. */
   techniquesFor(id: any) {
     const known = this.members[id]?.techniques || [];
-    return (TECHNIQUES[id] || []).filter((t: any) => known.includes(t.id));
+    return (TECHNIQUES[id as keyof typeof TECHNIQUES] || []).filter((t: any) => known.includes(t.id));
   }
 
   /** Every technique the party could fire right now, with affordability. */
@@ -323,7 +323,7 @@ export class PartyState {
    * Fire a technique. Spends bars and awards affinity.
    */
   useTechnique(memberId: string, techId: string) {
-    const tech = (TECHNIQUES[memberId] || []).find((t: any) => t.id === techId);
+    const tech = (TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).find((t: any) => t.id === techId);
     if (!tech) return { ok: false, reason: 'unknown-technique' };
     if (!this.members[memberId]?.techniques.includes(techId)) return { ok: false, reason: 'not-learned' };
     if (this.techCharge < tech.bars) return { ok: false, reason: 'not-enough-tech' };
@@ -338,7 +338,7 @@ export class PartyState {
   learnTechnique(memberId: any, techId: any) {
     const list = this.members[memberId]?.techniques;
     if (!list || list.includes(techId)) return false;
-    if (!(TECHNIQUES[memberId] || []).some((t: any) => t.id === techId)) return false;
+    if (!(TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).some((t: any) => t.id === techId)) return false;
     list.push(techId);
     return true;
   }
@@ -369,7 +369,7 @@ export class PartyState {
       if (m.id === 'noctis') continue;
       const b = this.bond(m.id);
       for (const level of BOND_LEVELS) {
-        if (level.level <= b.level && level.effect?.[key]) sum += level.effect[key];
+        if (level.level <= b.level && level.effect?.[key as keyof typeof level.effect]) sum += level.effect[key as keyof typeof level.effect];
       }
     }
     return sum;

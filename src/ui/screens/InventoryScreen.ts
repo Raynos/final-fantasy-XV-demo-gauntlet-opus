@@ -179,11 +179,11 @@ export class InventoryScreen {
           : `${it.name} used.`, true);
       this._key = null;
     } else {
-      this._say(({
+      this._say((({
         'not-usable': 'Nothing to use it on.',
         'none-left': 'None left.',
         'no-target': 'Nobody needs it.',
-      })[res.reason] || 'Nothing doing.', false);
+      }) as any)[res.reason] || 'Nothing doing.', false);
     }
   }
 

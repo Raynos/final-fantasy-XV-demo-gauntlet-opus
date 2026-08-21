@@ -65,7 +65,7 @@ export class Enemies {
   get species(): string[] { return speciesKeys(); }
 
   /** Species definition by key. @param key */
-  def(key: string) { return TYPES[key] || null; }
+  def(key: string) { return TYPES[key as keyof typeof TYPES] || null; }
 
   /**
    * Build (or fetch) the shared prototype for a species. Named marks derived
@@ -73,7 +73,7 @@ export class Enemies {
    * geometry rather than building a second copy of it.
    */
   prototype(key: any) {
-    const type = TYPES[key];
+    const type = TYPES[key as keyof typeof TYPES];
     if (!type) throw new Error(`unknown enemy ${key}`);
     const pk = type.protoKey || key;
     let p = this.prototypes.get(pk);
@@ -91,7 +91,7 @@ export class Enemies {
    *                    home, patrol, pack, leash, name, expClass}
    */
   spawn(key: string, o: any = {}) {
-    const type = TYPES[key];
+    const type = TYPES[key as keyof typeof TYPES];
     if (!type) throw new Error(`unknown enemy ${key}`);
 
     const pooled = this.pool.get(key);

@@ -274,7 +274,7 @@ export const ITEMS = (() => {
       const price = it.price ?? 0;
       map[it.id] = {
         sell: Math.max(1, Math.round(price * 0.5)),
-        stack: STACK_LIMITS[it.category || category],
+        stack: STACK_LIMITS[it.category || category as keyof typeof STACK_LIMITS],
         tags: [],
         ...it,
         category: it.category || category,
@@ -348,8 +348,8 @@ export class Inventory {
     this.equipment = {};
     for (const id of Object.keys(SLOT_LAYOUT)) {
       this.equipment[id] = {
-        weapon: new Array(SLOT_LAYOUT[id].weapon).fill(null),
-        accessory: new Array(SLOT_LAYOUT[id].accessory).fill(null),
+        weapon: new Array(SLOT_LAYOUT[id as keyof typeof SLOT_LAYOUT].weapon).fill(null),
+        accessory: new Array(SLOT_LAYOUT[id as keyof typeof SLOT_LAYOUT].accessory).fill(null),
       };
     }
     /** Multiplier applied to sell prices (Bargain Hunter ascension node). */
@@ -500,7 +500,7 @@ export class Inventory {
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.category !== kind) return { ok: false, reason: 'wrong-category' };
     if (kind === 'weapon') {
-      const allowed = CLASS_PERMISSION[charId] || [];
+      const allowed = CLASS_PERMISSION[charId as keyof typeof CLASS_PERMISSION] || [];
       if (!allowed.includes(def.class)) return { ok: false, reason: 'class-not-allowed' };
       if (def.wielders && !def.wielders.includes(charId)) return { ok: false, reason: 'not-your-weapon' };
     }

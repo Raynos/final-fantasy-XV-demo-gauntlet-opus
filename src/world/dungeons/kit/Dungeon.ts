@@ -128,10 +128,10 @@ export class Dungeon {
     const [x, z] = l.at;
     const floor = this.layout.floorAt(x, z);
     const y = l.y != null ? l.y : (floor != null ? floor + 2.6 : 2.6);
-    const fn = {
+    const fn = ({
       emergency: 'emergencyStrip', dead: 'deadStrip', flood: 'floodLight',
       lantern: 'lantern', fungus: 'fungus',
-    }[l.kind];
+    } as any)[l.kind];
     if (fn && kit[fn]) kit[fn](x, y, z, l);
     else rigOnly(kit.rig, x, y, z, l);
   }

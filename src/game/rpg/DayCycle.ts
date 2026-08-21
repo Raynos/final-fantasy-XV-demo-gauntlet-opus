@@ -274,7 +274,7 @@ export class DayCycle {
    */
   rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} } = {}): any {
     const lodgingId = ctx.lodging || 'haven';
-    const lodging = LODGINGS[lodgingId];
+    const lodging = LODGINGS[lodgingId as keyof typeof LODGINGS];
     if (!lodging) return { ok: false, reason: 'unknown-lodging' };
 
     if (lodgingId === 'haven' && !ctx.force) {
@@ -316,7 +316,7 @@ export class DayCycle {
   }
 
   /** Skip time without sleeping (waiting out the night at a haven). */
-  wait(hours: any, ctx = {}) {
+  wait(hours: any, ctx: any = {}) {
     this.advance(hours);
     if (ctx.party) ctx.party.expireBuffs(this.absoluteHour);
     return { ok: true, hour: this.hour, clock: this.clockString, day: this.day };

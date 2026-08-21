@@ -449,8 +449,8 @@ export class QuestLog {
     return {
       ...q,
       status: st.status,
-      rank: q.rank ? { ...HUNT_RANKS[q.rank], rank: q.rank } : null,
-      tipster: q.tipster ? TIPSTERS[q.tipster] : null,
+      rank: q.rank ? { ...HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS], rank: q.rank } : null,
+      tipster: q.tipster ? TIPSTERS[q.tipster as keyof typeof TIPSTERS] : null,
       objectives: q.objectives.map((o: any, i: any) => ({
         ...o,
         progress: st.objectives[i].progress,
@@ -584,7 +584,7 @@ export class QuestLog {
     st.objectives.forEach((o: any, i: any) => { o.done = true; o.progress = q.objectives[i].count; });
 
     const rewards = this.rewardsFor(id);
-    if (q.type === 'hunt' && q.rank) this.hunterPoints += HUNT_RANKS[q.rank].hunterPoints;
+    if (q.type === 'hunt' && q.rank) this.hunterPoints += HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].hunterPoints;
     if (this.tracked === id) this.tracked = this.active[0]?.id || null;
 
     this.emitter?.emit('quest-updated', { quest: q, status: 'complete', phase: 'complete', rewards });
@@ -599,7 +599,7 @@ export class QuestLog {
     const q = QUESTS[id];
     if (!q) return null;
     const r = q.rewards || {};
-    const mult = q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank].gilMult : 1;
+    const mult = q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].gilMult : 1;
     return {
       gil: Math.round((r.gil || 0) * (q.type === 'hunt' ? 1 : 1)),
       exp: r.exp || 0,
@@ -607,7 +607,7 @@ export class QuestLog {
       items: (r.items || []).slice(),
       recipes: (r.recipes || []).slice(),
       unlocks: (r.unlocks || []).slice(),
-      hunterPoints: q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank].hunterPoints : 0,
+      hunterPoints: q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].hunterPoints : 0,
     };
   }
 

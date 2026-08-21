@@ -138,8 +138,8 @@ export class GroundFX {
 
   _take(pool: any, cursorKey: any) {
     for (const p of pool) if (p.free) return p;
-    const p = pool[this[cursorKey]];
-    this[cursorKey] = (this[cursorKey] + 1) % pool.length;
+    const p = pool[(this as any)[cursorKey]];
+    (this as any)[cursorKey] = ((this as any)[cursorKey] + 1) % pool.length;
     return p;
   }
 

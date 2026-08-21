@@ -272,7 +272,7 @@ export class CombatSystem {
     }
     return rpg.inventory.equipped('noctis').weapon.map((def: any) => {
       if (!def) return null;
-      const kind = ITEM_CLASS_TO_KIND[def.class] || 'sword';
+      const kind = ITEM_CLASS_TO_KIND[def.class as keyof typeof ITEM_CLASS_TO_KIND] || 'sword';
       return { kind, item: def };
     });
   }

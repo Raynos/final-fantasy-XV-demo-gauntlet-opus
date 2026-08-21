@@ -111,7 +111,7 @@ function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, p
     if (tags.includes('multi')) {
       const casts = Math.min(5, 1 + catLevel);
       const MULTI = { 2: 'Dualcast', 3: 'Tricast', 4: 'Quadcast', 5: 'Quintcast' };
-      add(MULTI[casts] || 'Dualcast', catLevel, `The spell detonates ${casts} times in succession.`, { multicast: casts });
+      add(MULTI[casts as keyof typeof MULTI] || 'Dualcast', catLevel, `The spell detonates ${casts} times in succession.`, { multicast: casts });
     }
     if (tags.includes('exp')) {
       const mult = 1 + catLevel * 0.5;
@@ -158,7 +158,7 @@ function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, p
   const present = MAGIC_ELEMENTS.filter((e) => mix[e] > 0 && mix[e] / Math.max(1, total) >= 0.2);
   if (present.length > 1) {
     const key = present.sort().join('+');
-    const hybrid = HYBRIDS[key] || HYBRIDS[MAGIC_ELEMENTS.slice().sort().join('+')];
+    const hybrid = HYBRIDS[key as keyof typeof HYBRIDS] || HYBRIDS[MAGIC_ELEMENTS.slice().sort().join('+') as keyof typeof HYBRIDS];
     if (hybrid) add(hybrid.name, present.length, hybrid.desc, hybrid.payload);
   }
 
@@ -193,8 +193,8 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
 
   // Dominant element decides the spell family. Ties resolve fire > ice > lightning.
   let dominant = 'fire';
-  for (const e of MAGIC_ELEMENTS) if (mix[e] > mix[dominant]) dominant = e;
-  const purity = mix[dominant] / total;
+  for (const e of MAGIC_ELEMENTS) if (mix[e as keyof typeof mix] > mix[dominant as keyof typeof mix]) dominant = e;
+  const purity = mix[dominant as keyof typeof mix] / total;
 
   // Mixing dilutes potency slightly unless Tri-Elemental is unlocked.
   const mixPenalty = opts.triElemental ? 1 : 0.85 + 0.15 * purity;
@@ -233,7 +233,7 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   const damage = Math.min(damageCap, Math.round(basePower * (0.6 + magic / 160) * damageMult));
 
   // Name: [primary effect] [tier name]. Multicast wins the prefix if present.
-  const family = SPELL_NAMES[dominant][tier];
+  const family = SPELL_NAMES[dominant as keyof typeof SPELL_NAMES][tier];
   const prefixEffect = effects.find((e) => e.payload.multicast)
     || effects.find((e) => e.payload.healAllies)
     || effects.find((e) => e.payload.expMultiplier)
@@ -386,7 +386,7 @@ export class Elemancy {
       lightning: Math.max(0, Math.floor(energy?.lightning || 0)),
     };
     for (const e of MAGIC_ELEMENTS) {
-      if (want[e] > this.energy[e]) return { ok: false, reason: 'not-enough-energy', element: e };
+      if (want[e as keyof typeof want] > this.energy[e]) return { ok: false, reason: 'not-enough-energy', element: e };
     }
     if (want.fire + want.ice + want.lightning <= 0) return { ok: false, reason: 'no-energy' };
 
@@ -401,7 +401,7 @@ export class Elemancy {
     const spell = this.preview(want, catalyst, magic);
     if (!spell.ok) return spell;
 
-    for (const e of MAGIC_ELEMENTS) this.energy[e] -= want[e];
+    for (const e of MAGIC_ELEMENTS) this.energy[e] -= want[e as keyof typeof want];
     if (catalyst?.id && this.inventory) this.inventory.remove(catalyst.id, catalyst.count || 1);
 
     spell.uid = `${spell.id}_${this.spells.length}_${Date.now().toString(36)}`;

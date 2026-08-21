@@ -75,7 +75,7 @@ export class Warmup {
   _step(name: any, fn: any) {
     const t = performance.now();
     const p0 = this.renderer.info.programs.length;
-    try { fn(); } catch (e) {
+    try { fn(); } catch (e: any) {
       this.log.push({ name, error: String((e && e.message) || e) });
       return;
     }

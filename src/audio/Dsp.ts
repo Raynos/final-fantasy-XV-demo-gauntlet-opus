@@ -189,7 +189,7 @@ export function wave(ctx: BaseAudioContext, name: keyof SPECTRA) {
   if (!map) { map = new Map(); WAVE_CACHE.set(ctx, map); }
   let w = map.get(name);
   if (w) return w;
-  const fn = SPECTRA[name] || SPECTRA.pad;
+  const fn = SPECTRA[name as keyof typeof SPECTRA] || SPECTRA.pad;
   const N = 32;
   const real = new Float32Array(N);
   const imag = new Float32Array(N);

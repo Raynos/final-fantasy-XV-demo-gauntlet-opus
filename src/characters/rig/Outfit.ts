@@ -92,7 +92,7 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
   };
   let g = 10;
   for (const piece of look.outfit) {
-    const fn = PIECES[piece.type];
+    const fn = PIECES[piece.type as keyof typeof PIECES];
     if (!fn) continue;
     B.group(g++);
     B.color(piece.color ?? 0x2a2a30).mat(piece.rough ?? 0.78, piece.metal ?? 0);
@@ -102,7 +102,7 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
 }
 
 /** Register a garment type. */
-function piece(name: any, fn: any) { PIECES[name] = fn; }
+function piece(name: any, fn: any) { PIECES[name as keyof typeof PIECES] = fn; }
 
 // ---------------------------------------------------------------------------
 // torso layers

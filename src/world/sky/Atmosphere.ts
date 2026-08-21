@@ -154,8 +154,8 @@ export class Atmosphere {
     this.mesh = mesh;
 
     // second material for the environment bake: analytic clouds, no screen buffer
-    const envUniforms = {};
-    for (const k of Object.keys(uniforms)) envUniforms[k] = uniforms[k];
+    const envUniforms: any = {};
+    for (const k of Object.keys(uniforms)) envUniforms[k as keyof typeof envUniforms] = uniforms[k];
     envUniforms.uCloudMode = { value: 0 };
     this.envMaterial = mat.clone();
     this.envMaterial.uniforms = envUniforms;

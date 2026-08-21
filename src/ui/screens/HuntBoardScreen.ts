@@ -203,7 +203,7 @@ export class HuntBoardScreen {
       const status = log.status(h.id);
       if (tab === 'Accepted') { if (status !== 'active') continue; }
       else if (ledgerOf(h, tips) !== tab) continue;
-      const gate = RANK_GATE[h.rank] ?? 0;
+      const gate = RANK_GATE[h.rank as keyof typeof RANK_GATE] ?? 0;
       const view = log.view(h.id) || { ...h, status };
       const blockedByRank = pts < gate;
       const blockedByChain = status === 'locked';
@@ -389,7 +389,7 @@ export class HuntBoardScreen {
       ? `${tips[h.tipster].name} · ${tips[h.tipster].place}` : '—';
     this.cVals[3].textContent = `${commas(rewards.gil || 0)} gil${itemNames ? `, ${itemNames}` : ''}`;
     this.cVals[3].className = 'v gold';
-    this.cVals[4].textContent = regions[h.region] || h.region || '—';
+    this.cVals[4].textContent = regions[h.region as keyof typeof regions] || h.region || '—';
     this.cVals[5].textContent = cond.join(' · ') || 'None';
 
     clear(this.cObjList);

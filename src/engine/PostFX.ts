@@ -171,7 +171,7 @@ export class PostFX {
 
     // Must exist before Game's boot-time `renderer.compile()` so the programs
     // it warms are the ones the budgeted light count will actually ask for.
-    this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality] || LIGHT_BUDGET.high);
+    this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality as keyof typeof LIGHT_BUDGET] || LIGHT_BUDGET.high);
     const prevBefore = scene.onBeforeRender;
     scene.onBeforeRender = (r: any, sc: any, cam: any, rt: any) => {
       // Every render — beauty pass, water reflection, VFX depth prepass — goes

@@ -19,10 +19,10 @@ import { TOWN_SHOPS, stockFor } from '../../world/town/Shops.ts';
 function iconFor(def: any) {
   if (!def) return 'items';
   if (def.category === 'weapon') {
-    return ({
+    return (({
       sword: 'sword', greatsword: 'greatsword', polearm: 'lance', dagger: 'daggers',
       firearm: 'firearm', shield: 'shield', machinery: 'machinery',
-    })[def.class] || 'sword';
+    }) as any)[def.class] || 'sword';
   }
   if (def.category === 'accessory') return 'gear';
   if (def.category === 'catalyst') return 'fire';
@@ -120,19 +120,19 @@ export class ShopScreen {
 
   /** Pick which counter this is. Call before `Menus.setScreen('shop')`. */
   setShop(id: any) {
-    if (!TOWN_SHOPS[id]) return;
+    if (!TOWN_SHOPS[id as keyof typeof TOWN_SHOPS]) return;
     this.shopId = id;
     this.tab = 0;
     this.i = 0;
     this.qty = 1;
     this.scroll = 0;
     this._msg = null;
-    const s = TOWN_SHOPS[id];
+    const s = TOWN_SHOPS[id as keyof typeof TOWN_SHOPS];
     this.title = s.name;
     this.sub = s.sub;
   }
 
-  get shop() { return TOWN_SHOPS[this.shopId] || TOWN_SHOPS.crowsnest; }
+  get shop() { return TOWN_SHOPS[this.shopId as keyof typeof TOWN_SHOPS] || TOWN_SHOPS.crowsnest; }
   get tabName() { return this.shop.tabs[this.tab] || this.shop.tabs[0]; }
   get selling() { return this.tabName === 'Sell'; }
 
@@ -255,13 +255,13 @@ export class ShopScreen {
         : `Sold ${row.def.name}${n > 1 ? ` ×${n}` : ''} — +${commas(res.gil)} gil`, true);
       this.qty = 1;
     } else {
-      this._say(({
+      this._say((({
         'not-enough-gil': this.shop.brokeLine,
         'no-room': 'You are carrying as many as you can.',
         'not-enough': 'You do not have that many.',
         'not-sellable': 'Nobody will give you gil for that.',
         'not-for-sale': 'Not for sale.',
-      })[res.reason] || 'Nothing doing.', false);
+      }) as any)[res.reason] || 'Nothing doing.', false);
     }
   }
 

@@ -164,7 +164,7 @@ export class Stats {
    */
   constructor(id: string, opts: { level?: number } = {}) {
     this.id = id;
-    this.profile = GROWTH[id] || GROWTH.noctis;
+    this.profile = GROWTH[id as keyof typeof GROWTH] || GROWTH.noctis;
     this.name = this.profile.name;
     this.level = Math.max(1, Math.min(MAX_LEVEL, opts.level || 1));
     /** EXP already applied toward the current level. */
@@ -550,7 +550,7 @@ export function computeDamage(opts: { attacker: Stats | any, target: any, motion
  */
 export function expForKill(enemy: any, hour: number = null) {
   const CLASS_MULT = { trash: 0.5, normal: 1, elite: 2.2, boss: 6, daemon: 1.6 };
-  const m = CLASS_MULT[enemy.expClass] ?? 1;
+  const m = CLASS_MULT[enemy.expClass as keyof typeof CLASS_MULT] ?? 1;
   const lv = enemy.level || 1;
   const base = 12 + Math.pow(lv, 1.85) * 1.6;
   const night = hour == null ? 1 : (1 + nightScaling(hour, enemy.expClass === 'daemon').depth * 0.6);

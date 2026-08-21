@@ -300,7 +300,7 @@ export class EncounterDirector {
    * @param [opts] `{ at:[x,z] }`
    */
   startSetPiece(id: string, opts: any = {}) {
-    const def = SET_PIECES[id];
+    const def = SET_PIECES[id as keyof typeof SET_PIECES];
     if (!def) throw new Error(`unknown set piece ${id}`);
     if (this.boss) this.endBoss(false);
     const at = opts.at || def.at;
@@ -325,7 +325,7 @@ export class EncounterDirector {
    * accepted, so accepting a job actually puts something in the world.
    */
   spawnHunt(questId: string) {
-    const t = HUNT_TARGETS[questId];
+    const t = HUNT_TARGETS[questId as keyof typeof HUNT_TARGETS];
     if (!t) return null;
     const quest = this.rpg?.quests?.def(questId);
     const obj = quest?.objectives?.find((o: any) => o.type === 'kill') || quest?.objectives?.[0];
@@ -449,7 +449,7 @@ export class EncounterDirector {
     let dmg = Math.round(raw);
     const rpg = this.rpg;
     if (rpg) {
-      const memberId = isPlayer ? 'noctis' : MEMBER_BY_KEY[t.key] || 'gladio';
+      const memberId = isPlayer ? 'noctis' : MEMBER_BY_KEY[t.key as keyof typeof MEMBER_BY_KEY] || 'gladio';
       const target = rpg.party.stats[memberId];
       const res = rpg.damage({
         attacker: { attack: e.damage * 0.9, level: e.level, critRate: 0.06, critDamage: 1.5 },

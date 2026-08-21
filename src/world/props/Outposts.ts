@@ -111,7 +111,7 @@ export class Outposts {
         map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
       }),
     };
-    for (const k of Object.keys(M)) if (!M[k].name) M[k].name = `out_${k}`;
+    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `out_${k}`;
 
     // One builder *per site*, not one for the whole world. A single merged
     // mesh spanning a kilometre has a kilometre-wide bounding sphere and is
@@ -126,7 +126,7 @@ export class Outposts {
     };
     const casters = new Set(['reststop', 'blockade', 'layby', 'wreck']);
     for (const s of this.eco.sites) {
-      const fn = builders[s.type];
+      const fn = builders[s.type as keyof typeof builders];
       if (!fn) continue;
       const B = new PartBuilder();
       fn.call(this, B, s);

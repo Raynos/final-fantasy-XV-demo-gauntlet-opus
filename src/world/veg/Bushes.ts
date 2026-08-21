@@ -230,7 +230,7 @@ export class Bushes {
     const per = Math.max(48, Math.round(420 * this.quality));
 
     for (const key of Object.keys(WOODY)) {
-      const spec = WOODY[key];
+      const spec = WOODY[key as keyof typeof WOODY];
       const woodMat = patchVeg(new THREE.MeshStandardMaterial({
         color: spec.params.bark, roughness: spec.params.barkRough, metalness: 0,
         map: bark.map, normalMap: bark.normalMap,
@@ -290,12 +290,12 @@ export class Bushes {
     const cardTex = { fern: fernTex(), bracken: fernTex(), reed: reedTex() };
 
     for (const key of Object.keys(CARDS)) {
-      const spec = CARDS[key];
-      const mat = cardMat(cardTex[key], key === 'reed'
+      const spec = CARDS[key as keyof typeof CARDS];
+      const mat = cardMat(cardTex[key as keyof typeof cardTex], key === 'reed'
         ? { bend: 0.62, flutter: 0.45, translucency: 1.1 } : {});
       // A one-metre frond contributes nothing legible to a 2 km cascade and
       // there are two thousand of them; the shadow pass is not the place.
-      const mesh = new THREE.InstancedMesh(cardGeo[key], mat, per);
+      const mesh = new THREE.InstancedMesh(cardGeo[key as keyof typeof cardGeo], mat, per);
       mesh.castShadow = false; mesh.receiveShadow = true;
       mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
       mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);

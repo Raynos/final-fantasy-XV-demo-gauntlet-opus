@@ -147,7 +147,7 @@ export function setPose(character: any, name: string | null, speed: number = 1) 
     if (anim.action && anim.action.cinematic) anim.stopAction();
     return;
   }
-  const def = POSES[name];
+  const def = POSES[name as keyof typeof POSES];
   if (!def) return;
   if (anim.action && anim.action.name === name) return;      // already held
   anim.action = { def, name, t: 0, speed, w: 0, hold: true, cinematic: true };

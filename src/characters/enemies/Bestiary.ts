@@ -48,7 +48,7 @@ export function variant(base: any, key: string, over: any = {}) {
   };
   // `base.make` builds the base class, so re-point the instance at the
   // variant's data afterwards — one geometry, two creatures.
-  def.make = (opts = {}) => {
+  def.make = (opts: any = {}) => {
     const e = base.make(opts);
     e.type = def;
     e.name = def.stats.name;
@@ -138,7 +138,7 @@ export function byFaction(f: 'beast' | 'daemon' | 'imperial' | 'astral') {
  * A player-facing bestiary entry, for the HUD / a future Libra scan.
  */
 export function entry(key: string) {
-  const t = TYPES[key];
+  const t = TYPES[key as keyof typeof TYPES];
   if (!t) return null;
   const weak = [], strong = [];
   for (const el of ['fire', 'ice', 'lightning', 'dark', 'light']) {

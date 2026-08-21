@@ -312,8 +312,8 @@ const KINDS = [
   },
 ];
 
-const K = {};
-for (let i = 0; i < KINDS.length; i++) K[KINDS[i].key] = KINDS[i];
+const K: any = {};
+for (let i = 0; i < KINDS.length; i++) K[KINDS[i].key as keyof typeof K] = KINDS[i];
 
 /** Kinds big enough to be worth a distant LOD and a long draw range. */
 const BIG = new Set(['granite', 'bedded', 'worn', 'slab', 'spire']);
@@ -387,7 +387,7 @@ export class Rocks {
       const x = seedX + Math.cos(a) * r, z = seedZ + Math.sin(a) * r;
       const d = this._density(x, z);
       if (d <= 0.004 || rng.next() > d) continue;
-      const anchor = K[pickWeighted(dress.kinds, rng.next())] || K.cobble;
+      const anchor = K[pickWeighted(dress.kinds, rng.next()) as keyof typeof K] || K.cobble;
       out.push(this._item(anchor, x, z, rng, d, dress));
       const frags = 2 + Math.floor(rng.next() * 5);
       for (let j = 0; j < frags; j++) {
@@ -395,7 +395,7 @@ export class Rocks {
         const fd = Math.abs(rng.gauss(0, 1)) * (2.2 + anchor.size[1] * 0.9);
         const fx = x + Math.cos(fa) * fd, fz = z + Math.sin(fa) * fd;
         if (eco.roadDist(fx, fz) < 4.6) continue;
-        const kind = K[pickWeighted(dress.frag, rng.next())] || K.pebble;
+        const kind = K[pickWeighted(dress.frag, rng.next()) as keyof typeof K] || K.pebble;
         out.push(this._item(kind, fx, fz, rng, d * 0.7, dress));
       }
     }
@@ -491,7 +491,7 @@ export class Rocks {
       talus: [420, 0], cobble: [520, 0], pebble: [700, 0],
     };
     for (const k of KINDS) {
-      const [nearCap, farCap] = CAP[k.key];
+      const [nearCap, farCap] = CAP[k.key as keyof typeof CAP];
       const g = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),

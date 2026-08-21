@@ -108,7 +108,7 @@ export class DevConsole {
     try {
       const out = this.reg.exec(line);
       if (out) this.print(out);
-    } catch (err) {
+    } catch (err: any) {
       this.print(String((err && err.message) || err), 'err');
     }
   }

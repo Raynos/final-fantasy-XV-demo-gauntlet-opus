@@ -167,7 +167,7 @@ export class Menus {
     if (this._foot === kind) return;
     this._foot = kind;
     while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild);
-    for (const [key, label] of FOOT[kind] || FOOT.default) {
+    for (const [key, label] of FOOT[kind as keyof typeof FOOT] || FOOT.default) {
       this.foot.appendChild(el('div.prompt.key', {}, [
         button(key, { size: key.length > 2 ? 24 : 20 }), el('div.lb', { text: label }),
       ]));
@@ -219,7 +219,7 @@ export class Menus {
     if (s.enter) s.enter(this.game);
     this.headT.textContent = s.title || name;
     this.headS.textContent = s.sub || '';
-    this._renderFoot(FOOT[name] ? name : 'default');
+    this._renderFoot(FOOT[name as keyof typeof FOOT] ? name : 'default');
     this.head.style.display = s.chrome === false ? 'none' : '';
     this.foot.style.display = s.chrome === false ? 'none' : '';
   }

@@ -100,7 +100,7 @@ export class Enemy {
   type!: any;
   velocity!: THREE.Vector3;
   visual!: any;
-  constructor(type: any, opts = {}) {
+  constructor(type: any, opts: any = {}) {
     this.type = type;
     this.id = opts.id ?? 0;
     this.root = new THREE.Group();
@@ -217,7 +217,7 @@ export class Enemy {
   }
 
   /** Reset a pooled instance back to a spawnable state. */
-  reset(opts = {}) {
+  reset(opts: any = {}) {
     this.maxHp = opts.maxHp ?? this.baseMaxHp;
     this.hp = this.maxHp;
     this.poise = this.maxPoise;
@@ -404,7 +404,7 @@ export class Enemy {
           curve[i] = lift;
           if (lift > 1e-4) any = true;
         }
-        if (any) cal[key] = curve;
+        if (any) cal[key as keyof typeof cal] = curve;
       }
     }
     this.attack = saveAtk;
@@ -663,7 +663,7 @@ export class Enemy {
   _timing(field: any) {
     const t = this.type.timing || DEFAULT_TIMING;
     if (this.attack && this.attack[field] != null) return this.attack[field];
-    return t[field] != null ? t[field] : DEFAULT_TIMING[field];
+    return t[field] != null ? t[field] : DEFAULT_TIMING[field as keyof typeof DEFAULT_TIMING];
   }
 
   /* -------------------------------------------------------------- tick */
@@ -739,7 +739,7 @@ export class Enemy {
       this.root.position.y = this.airborne ? Math.max(gy, this.root.position.y) : gy;
     }
     this.root.rotation.y = this.heading;
-    const pose = POSE_MAP[this.state] || 'idle';
+    const pose = POSE_MAP[this.state as keyof typeof POSE_MAP] || 'idle';
     this._resetVisual();
     this.pose(pose, this.phase, ctx);
     this.visual.position.y += this.groundLift(pose);

@@ -106,16 +106,16 @@ export class Banter {
       if (this.t < this._busyUntil) {
         // only a clearly more important beat may cut in
         const cur = this._curPriority || 0;
-        if ((PRIORITY[category] || 0) <= cur + 2) return false;
+        if ((PRIORITY[category as keyof typeof PRIORITY] || 0) <= cur + 2) return false;
       }
       const last = this._catAt[category];
-      if (last != null && this.t - last < (COOLDOWN[category] || 60)) return false;
+      if (last != null && this.t - last < (COOLDOWN[category as keyof typeof COOLDOWN] || 60)) return false;
     }
 
     const idx = this._pick(category, pool.length);
     const entry = pool[idx];
     this._catAt[category] = this.t;
-    this._curPriority = PRIORITY[category] || 0;
+    this._curPriority = PRIORITY[category as keyof typeof PRIORITY] || 0;
 
     this._queue.length = 0;                  // a new beat cancels a stale reply
     let at = 0;

@@ -206,7 +206,7 @@ export const LAYERS = ['bass', 'pad', 'strings', 'melody', 'harp', 'wood', 'perc
  * @param octave base octave offset in semitones
  */
 export function voiceChord(chord: {r:number,q:string}, octave: number = 0, spread = 1) {
-  const shape = CHORDS[chord.q] || CHORDS.min;
+  const shape = CHORDS[chord.q as keyof typeof CHORDS] || CHORDS.min;
   const out = [];
   for (let i = 0; i < shape.length; i++) {
     out.push(chord.r + shape[i] + octave + (spread > 1 && i > 1 ? 12 : 0));

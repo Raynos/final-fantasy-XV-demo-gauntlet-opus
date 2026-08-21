@@ -50,9 +50,9 @@ export class HuntRuntime {
    */
   arm(id: string) {
     if (this.active.has(id)) return null;
-    const t = HUNT_TARGETS[id];
+    const t = HUNT_TARGETS[id as keyof typeof HUNT_TARGETS];
     if (!t) return null;
-    const set = SET_PIECES[t.setPiece];
+    const set = SET_PIECES[t.setPiece as keyof typeof SET_PIECES];
     let spawned;
     if (set) spawned = this.dir.startSetPiece(set.id);
     else spawned = this.dir.spawnHunt(id);

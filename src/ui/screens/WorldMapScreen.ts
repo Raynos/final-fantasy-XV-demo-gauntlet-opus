@@ -441,12 +441,12 @@ export class WorldMapScreen {
     const px = player?.position?.x ?? 0, pz = player?.position?.z ?? 0;
     const zone = this.map.zoneById.get(p.zone);
     const region = zone ? this.map.regionById.get(zone.region) : null;
-    const def = POI_TYPES[p.type];
+    const def = POI_TYPES[p.type as keyof typeof POI_TYPES];
 
     if (this._cardKey !== `${p.id}|${known}`) {
       this._cardKey = `${p.id}|${known}`;
       while (this.cardGlyph.firstChild) this.cardGlyph.removeChild(this.cardGlyph.firstChild);
-      this.cardGlyph.appendChild(glyphSvg(known ? POI_GLYPH[p.type] : 'unknown', { size: 26 }));
+      this.cardGlyph.appendChild(glyphSvg(known ? POI_GLYPH[p.type as keyof typeof POI_GLYPH] : 'unknown', { size: 26 }));
       this.cardGlyph.style.color = known ? def.colour : 'rgba(198,214,240,.42)';
       this.cardName.textContent = (known ? p.name : 'Unsurveyed Site').toUpperCase();
       this.cardType.textContent = `${known ? def.label : 'Unknown'}  ·  ${zone ? zone.name : 'The Frontier'}`
@@ -787,7 +787,7 @@ export class WorldMapScreen {
     rows.sort((a, b) => (a.off ? 0 : 1) - (b.off ? 0 : 1) || (a.sel ? 1 : 0) - (b.sel ? 1 : 0));
 
     for (const r of rows) {
-      const def = POI_TYPES[r.p.type];
+      const def = POI_TYPES[r.p.type as keyof typeof POI_TYPES];
       const big = r.sel || r.hover;
       const zk = clamp(0.78 + this.zoom * 0.9, 0.78, 1.12);
       const rad = (!r.known ? 4.6 : r.sel ? 10 : r.hover ? 9 : SETTLED.includes(r.p.type) ? 8.4 : 7.4)
@@ -795,7 +795,7 @@ export class WorldMapScreen {
       r.rad = rad;
       const alpha = (r.off ? 0.14 : r.known ? (big ? 1 : 0.9) : 0.3) * rev;
       const colour = r.known ? def.colour : 'rgba(206,222,246,0.9)';
-      drawGlyph(c, r.known ? (POI_GLYPH[r.p.type] || 'dot') : 'unknown', r.x, r.y, rad, colour,
+      drawGlyph(c, r.known ? (POI_GLYPH[r.p.type as keyof typeof POI_GLYPH] || 'dot') : 'unknown', r.x, r.y, rad, colour,
         { alpha, weight: 1.3 * dpr });
       place.reserve(r.x - rad, r.y - rad, r.x + rad, r.y + rad);
     }

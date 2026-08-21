@@ -330,7 +330,7 @@ export class Ascension {
    * @returns AP actually granted
    */
   awardAp(reason: string, times: number = 1): number {
-    const rule = AP_RULES[reason];
+    const rule = AP_RULES[reason as keyof typeof AP_RULES];
     if (!rule) return 0;
 
     // Distance rules accumulate metres and pay out per completed unit.
@@ -442,12 +442,12 @@ export class Ascension {
     for (const id of this.unlocked) {
       const e = NODES[id]?.effect;
       if (!e) continue;
-      if (e.stat) mods[e.stat] = (mods[e.stat] || 0) + e.value;
-      if (e.mult) mods.mult[e.mult] = (mods.mult[e.mult] || 0) + e.value;
-      if (e.multAll) for (const s of ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit']) mods.mult[s] = (mods.mult[s] || 0) + e.multAll;
+      if (e.stat) mods[e.stat as keyof typeof mods] = (mods[e.stat as keyof typeof mods] || 0) + e.value;
+      if (e.mult) mods.mult[e.mult as keyof typeof mods.mult] = (mods.mult[e.mult as keyof typeof mods.mult] || 0) + e.value;
+      if (e.multAll) for (const s of ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit']) mods.mult[s as keyof typeof mods.mult] = (mods.mult[s as keyof typeof mods.mult] || 0) + e.multAll;
       if (e.flag) flags.add(e.flag);
       if (e.value) values[e.value] = (values[e.value] || 0) + e.amount;
-      if (e.resist) for (const el of Object.keys(e.resist)) mods.resist[el] = (mods.resist[el] || 0) + e.resist[el];
+      if (e.resist) for (const el of Object.keys(e.resist)) mods.resist[el as keyof typeof mods.resist] = (mods.resist[el as keyof typeof mods.resist] || 0) + e.resist[el];
     }
     this._effectsCache = { mods, flags, values, nodes: [...this.unlocked] };
     return this._effectsCache;

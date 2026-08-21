@@ -95,7 +95,7 @@ export class Game {
     this.systems.push(system);
     const key = name || system.constructor.name;
     this._registry.set(key, system);
-    for (const alias of SYSTEM_ALIASES[key] || []) this._registry.set(alias, system);
+    for (const alias of SYSTEM_ALIASES[key as keyof typeof SYSTEM_ALIASES] || []) this._registry.set(alias, system);
     return system;
   }
 
@@ -192,7 +192,7 @@ export class Game {
    * camera. Used by src/tools/shoot.mjs and by photo mode.
    */
   applyShot(name: any) {
-    const shot = SHOTS[name];
+    const shot = SHOTS[name as keyof typeof SHOTS];
     if (!shot) throw new Error(`unknown shot: ${name}`);
     this.currentShot = name;
 

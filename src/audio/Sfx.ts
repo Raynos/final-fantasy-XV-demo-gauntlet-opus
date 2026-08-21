@@ -44,7 +44,7 @@ class Shot {
     this.out = g;
     this.nodes.push(g);
     const graph = sfx.graph;
-    const dest = o.dest || graph.bus[BUS_FOR[bus] || bus] || graph.bus.sfx;
+    const dest = o.dest || graph.bus[BUS_FOR[bus as keyof typeof BUS_FOR] || bus] || graph.bus.sfx;
     if (o.pos) {
       const p = graph.panner(o.pos, o);
       g.connect(p);
@@ -349,8 +349,8 @@ export class Sfx {
   /* ------------------------------------------------------------ weapons */
 
   /** Per-class weapon swings. Mass is mostly in the length and the low end. */
-  swing(t: any, o = {}) {
-    const K = SWING[o.kind] || SWING.sword;
+  swing(t: any, o: any = {}) {
+    const K = SWING[o.kind as keyof typeof SWING] || SWING.sword;
     const s = new Shot(this, { send: 0.14, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     for (let i = 0; i < K.strokes; i++) {
@@ -372,8 +372,8 @@ export class Sfx {
   }
 
   /** Impact, coloured by what was struck. */
-  impact(t: any, o = {}) {
-    const M = MATERIAL[o.material] || MATERIAL.flesh;
+  impact(t: any, o: any = {}) {
+    const M = MATERIAL[o.material as keyof typeof MATERIAL] || MATERIAL.flesh;
     const scale = o.scale ?? 1;
     const s = new Shot(this, { send: M.send, ...o }, 'sfx', 3);
     if (!s.ok) return false;
@@ -513,7 +513,7 @@ export class Sfx {
   /* -------------------------------------------------------------- magic */
 
   /** Elemancy. Each element is a different physical process, not a preset. */
-  spell(t: any, o = {}) {
+  spell(t: any, o: any = {}) {
     const s = new Shot(this, { send: 0.4, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     const el = o.element || 'fire';
@@ -561,7 +561,7 @@ export class Sfx {
    * @param o {species, mood: 'aggro'|'hurt'|'death'|'idle'}
    */
   vocal(t: any, o: any = {}) {
-    const V = SPECIES[o.species] || SPECIES.goblin;
+    const V = SPECIES[o.species as keyof typeof SPECIES] || SPECIES.goblin;
     const mood = o.mood || 'aggro';
     const M = V[mood] || V.aggro;
     const s = new Shot(this, { send: 0.3, hrtf: true, ...o }, 'sfx', 2);
@@ -609,7 +609,7 @@ export class Sfx {
    * @param o {surface, run, weight}
    */
   step(t: any, o: any = {}) {
-    const S = SURFACE[o.surface] || SURFACE.dirt;
+    const S = SURFACE[o.surface as keyof typeof SURFACE] || SURFACE.dirt;
     const run = !!o.run;
     const w = (o.weight ?? 1) * (run ? 1.25 : 0.85);
     const s = new Shot(this, { send: 0.12, volume: (o.volume ?? 1) * w, ...o }, 'sfx', 1);
@@ -636,7 +636,7 @@ export class Sfx {
   }
 
   /** Cloth and gear movement — quiet, but its absence is loud. */
-  cloth(t: any, o = {}) {
+  cloth(t: any, o: any = {}) {
     const s = new Shot(this, { volume: (o.volume ?? 1) * 0.5, ...o }, 'sfx', 0);
     if (!s.ok) return false;
     s.noise(t, {
@@ -713,7 +713,7 @@ export class Sfx {
   }
 
   /** A rising pitch per combo step — the ladder that makes a combo feel long. */
-  comboTick(t: any, o = {}) {
+  comboTick(t: any, o: any = {}) {
     const s = new Shot(this, { volume: 0.4, ...o }, 'ui', 0);
     if (!s.ok) return false;
     const step = clamp(o.index ?? 0, 0, 5);
@@ -772,7 +772,7 @@ export class Sfx {
   /* ----------------------------------------------------------------- UI */
 
   /** Menu and HUD sounds. Restrained and glassy, to match the UI. */
-  ui(t: any, o = {}) {
+  ui(t: any, o: any = {}) {
     const kind = o.kind || 'move';
     const s = new Shot(this, { volume: o.volume ?? 1, ...o }, 'ui', 1);
     if (!s.ok) return false;

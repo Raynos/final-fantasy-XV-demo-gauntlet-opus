@@ -266,7 +266,7 @@ export class Terrain {
    */
   sampleMaterial(x: any, z: any): any {
     const f = this.field;
-    const c = f.ctrlAt(x, z, this._ctrl);
+    const c: any = f.ctrlAt(x, z, this._ctrl);
     const h = f.heightAt(x, z);
     const slope = this.slopeAt(x, z);
     // identical fields to the ones the splat shader evaluates
@@ -309,10 +309,10 @@ export class Terrain {
     w.gravel += 0.70 * scree;
     w.rock -= 0.26 * scree;
     let sum = 0;
-    for (const k in w) { w[k] = Math.pow(Math.max(w[k], 0), 1.7); sum += w[k]; }
+    for (const k in w) { w[k as keyof typeof w] = Math.pow(Math.max(w[k as keyof typeof w], 0), 1.7); sum += w[k as keyof typeof w]; }
     sum = Math.max(sum, 1e-4);
     let best = 'dirt', bestV = -1;
-    for (const k in w) { w[k] /= sum; if (w[k] > bestV) { bestV = w[k]; best = k; } }
+    for (const k in w) { w[k as keyof typeof w] /= sum; if (w[k as keyof typeof w] > bestV) { bestV = w[k as keyof typeof w]; best = k; } }
 
     return {
       id: LAYER_NAMES.indexOf(best),

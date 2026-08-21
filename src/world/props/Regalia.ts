@@ -361,7 +361,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
       WB.place(chrome, hubGeo, [0, 0, 0.10 * s], [0, 0, 0], [0.7, 0.7, 0.45]);
       const g = new THREE.Group();
       WB.build(g, { cast: true, receive: false, name: 'regalia_wheel' });
-      templates[s] = g;
+      templates[s as keyof typeof templates] = g;
     }
 
     wheels = [];
@@ -369,7 +369,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
       const steer = new THREE.Group();
       steer.position.set(ax, WY, 0.79 * side);
       const spin = new THREE.Group();
-      for (const m of templates[side].children) {
+      for (const m of templates[side as keyof typeof templates].children) {
         // share the geometry and the material; only the node is new
         const inst = new THREE.Mesh(m.geometry, m.material);
         inst.castShadow = true;

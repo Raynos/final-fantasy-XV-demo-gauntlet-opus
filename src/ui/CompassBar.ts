@@ -85,7 +85,7 @@ export class CompassBar {
   _buildTicks() {
     this.ticks = [];
     for (let deg = 0; deg < 360; deg += 15) {
-      const card = CARDINAL[deg];
+      const card = CARDINAL[deg as keyof typeof CARDINAL];
       const g = svg('g');
       const isMajor = deg % 45 === 0;
       g.appendChild(svg('line', {
@@ -156,7 +156,7 @@ export class CompassBar {
       const m = list[i];
       if (!m) { if (mk._on !== false) { mk.g.setAttribute('opacity', 0); mk._on = false; } continue; }
       mk._on = true;
-      const col = MARK_COL[m.kind] || '#b6d6f8';
+      const col = MARK_COL[m.kind as keyof typeof MARK_COL] || '#b6d6f8';
       if (mk.col !== col) { mk.head.setAttribute('fill', col); mk.col = col; }
       const bearing = Math.atan2(m.x - p.x, m.z - p.z) * 180 / Math.PI;
       const d = wrap180(bearing - yaw);
@@ -178,7 +178,7 @@ export class CompassBar {
 
     const dir = game.get?.('Director');
     const q = readQuest(game);
-    const region = REGION_NAME[q.region] || REGION_NAME.leide;
+    const region = REGION_NAME[q.region as keyof typeof REGION_NAME] || REGION_NAME.leide;
     const area = dir?.areaName || dir?.region || region[0];
     const sub = dir?.areaSub || region[1];
     if (area !== this._area) { this.locEl.textContent = area; this._area = area; }

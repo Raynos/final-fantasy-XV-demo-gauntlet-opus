@@ -97,7 +97,7 @@ export class RoadFurniture {
         map: markerTexture(1), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
       }),
     };
-    for (const k of Object.keys(M)) if (!M[k].name) M[k].name = `road_${k}`;
+    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `road_${k}`;
 
     // Shared geometry — every chunk clones these through PartBuilder rather
     // than rebuilding a box per post.

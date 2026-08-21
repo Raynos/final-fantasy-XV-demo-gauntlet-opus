@@ -103,7 +103,7 @@ export function buildSkeleton(profile: any = {}): any {
     );
   }
 
-  const byName = {};
+  const byName: any = {};
   const bones = [];
   const index = {};
   const P = {};      // bind-pose world positions, for geometry authoring
@@ -112,8 +112,8 @@ export function buildSkeleton(profile: any = {}): any {
     b.name = name;
     P[name] = new THREE.Vector3().fromArray(wpos);
     if (parent) {
-      byName[parent].add(b);
-      b.position.copy(P[name]).sub(P[parent]);
+      byName[parent as keyof typeof byName].add(b);
+      b.position.copy(P[name]).sub(P[parent as keyof typeof P]);
     } else {
       b.position.copy(P[name]);
     }

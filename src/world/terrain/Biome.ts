@@ -133,10 +133,10 @@ export function surfaceAt(x: number, z: number, out?: any): any {
   o.green = 0; o.damp = 0;
   const w = worldMap.zoneWeights(x, z, _w);
   let sum = 0;
-  for (const id in w) { w[id] = Math.pow(w[id], BLEND_POW); sum += w[id]; }
+  for (const id in w) { w[id as keyof typeof w] = Math.pow(w[id as keyof typeof w], BLEND_POW); sum += w[id as keyof typeof w]; }
   const inv = 1 / Math.max(sum, 1e-9);
   for (const id in w) {
-    const q = w[id] * inv;
+    const q = w[id as keyof typeof w] * inv;
     if (q <= 0) continue;
     const s = SURFACE[id] || DEF;
     g[0] += s.ground[0] * q; g[1] += s.ground[1] * q; g[2] += s.ground[2] * q;

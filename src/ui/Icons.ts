@@ -56,7 +56,7 @@ const ACCENT = {
  */
 export function icon(name: string, opts: any = {}): SVGElement {
   const { size = 20, stroke = 1.15, cls = '', fill = 'none' } = opts;
-  const d = D[name] || D.items;
+  const d = D[name as keyof typeof D] || D.items;
   const root = svg('svg', {
     class: `ico ${cls}`.trim(),
     viewBox: '0 0 24 24', width: size, height: size,
@@ -64,7 +64,7 @@ export function icon(name: string, opts: any = {}): SVGElement {
     'stroke-width': stroke, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
     'vector-effect': 'non-scaling-stroke', 'aria-hidden': 'true',
   }, [svg('path', { d, fill })]);
-  if (ACCENT[name]) root.appendChild(svg('path', { d: ACCENT[name], fill: 'currentColor', opacity: 0.35, stroke: 'none' }));
+  if (ACCENT[name as keyof typeof ACCENT]) root.appendChild(svg('path', { d: ACCENT[name as keyof typeof ACCENT], fill: 'currentColor', opacity: 0.35, stroke: 'none' }));
   return root;
 }
 

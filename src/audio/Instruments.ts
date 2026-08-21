@@ -157,7 +157,7 @@ export class Instruments {
    * Brass. The defining trick is that the spectrum tracks the envelope, so a
    * forte entry is bright and a soft pad is dark — same note, different animal.
    */
-  brass(f: any, t: any, dur: any, o = {}) {
+  brass(f: any, t: any, dur: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -206,7 +206,7 @@ export class Instruments {
   }
 
   /** Flute / clarinet, with the breath noise that sells a wind instrument. */
-  wood(f: any, t: any, dur: any, o = {}) {
+  wood(f: any, t: any, dur: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -255,12 +255,12 @@ export class Instruments {
    * vowel, not a pad with reverb on it.
    * @param {'ah'|'oo'|'mm'} [o.vowel]
    */
-  choir(f: any, t: any, dur: any, o = {}) {
+  choir(f: any, t: any, dur: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
     const nodes = [];
-    const V = FORMANTS[o.vowel || 'ah'];
+    const V = FORMANTS[o.vowel || 'ah' as keyof typeof FORMANTS];
     const env = ctx.createGain();
     nodes.push(env);
 
@@ -313,7 +313,7 @@ export class Instruments {
   }
 
   /** Warm sustained bed. The cheapest sustained voice we have — 4 nodes. */
-  pad(f: any, t: any, dur: any, o = {}) {
+  pad(f: any, t: any, dur: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 0, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -399,7 +399,7 @@ export class Instruments {
   /**
    * Play a plucked/struck string.
    */
-  pluck(kind: 'harp' | 'pizz' | 'piano', f: any, t: any, o = {}) {
+  pluck(kind: 'harp' | 'pizz' | 'piano', f: any, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -427,7 +427,7 @@ export class Instruments {
   }
 
   /** Harp glissando / arpeggio helper: one call, n notes. */
-  arp(freqs: any, t: any, step: any, o = {}) {
+  arp(freqs: any, t: any, step: any, o: any = {}) {
     for (let i = 0; i < freqs.length; i++) {
       this.pluck(o.kind || 'harp', freqs[i], t + i * step, {
         ...o, gain: (o.gain ?? 1) * (1 - i * 0.03),
@@ -438,7 +438,7 @@ export class Instruments {
   /* -------------------------------------------------------- percussion */
 
   /** Timpani: a pitched membrane — fundamental plus two inharmonic partials. */
-  timpani(f: any, t: any, o = {}) {
+  timpani(f: any, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -476,7 +476,7 @@ export class Instruments {
   }
 
   /** Taiko / bass drum — the combat pulse. */
-  drum(t: any, o = {}) {
+  drum(t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -506,7 +506,7 @@ export class Instruments {
   }
 
   /** Snare / field drum, used for the military feel of the MT encounters. */
-  snare(t: any, o = {}) {
+  snare(t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -526,7 +526,7 @@ export class Instruments {
   }
 
   /** Cymbal swell or crash — noise through a resonant comb of bandpasses. */
-  cymbal(t: any, o = {}) {
+  cymbal(t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -555,7 +555,7 @@ export class Instruments {
   }
 
   /** Tubular bell / chime — 2-operator FM with a fast index decay. */
-  bell(f: any, t: any, o = {}) {
+  bell(f: any, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -579,7 +579,7 @@ export class Instruments {
   }
 
   /** Low gong / tam-tam for boss stingers. */
-  gong(f: any, t: any, o = {}) {
+  gong(f: any, t: any, o: any = {}) {
     return this.bell(f, t, { ratio: 1.93, index: 4.5, decay: o.decay ?? 4.5, ...o });
   }
 }

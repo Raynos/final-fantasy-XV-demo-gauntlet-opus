@@ -650,10 +650,10 @@ export class WorldMap {
       this._zc[o + 2] = Math.cos(zn.rot); this._zc[o + 3] = Math.sin(zn.rot);
       this._zc[o + 4] = 1 / zn.rx; this._zc[o + 5] = 1 / zn.rz;
       this._zc[o + 6] = zn.priority;
-      for (let k = 0; k < NB; k++) this._zb[i * NB + k] = zn.biome[BIOME_KEYS[k]];
+      for (let k = 0; k < NB; k++) this._zb[i * NB + k] = zn.biome[BIOME_KEYS[k] as keyof typeof zn.biome];
     }
     this._defB = new Float64Array(NB);
-    for (let k = 0; k < NB; k++) this._defB[k] = DEFAULT_BIOME[BIOME_KEYS[k]];
+    for (let k = 0; k < NB; k++) this._defB[k] = DEFAULT_BIOME[BIOME_KEYS[k] as keyof typeof DEFAULT_BIOME];
     this._wBuf = new Float64Array(nz);
     this._bBuf = new Float64Array(NB);
 
@@ -707,11 +707,11 @@ export class WorldMap {
     return rest * inv;
   }
 
-  zoneWeights(x: any, z: any, out = {}) {
-    for (const k in out) delete out[k];
+  zoneWeights(x: any, z: any, out: any = {}) {
+    for (const k in out) delete out[k as keyof typeof out];
     const rest = this._weigh(x, z);
     const w = this._wBuf;
-    for (let i = 0; i < this._nz; i++) if (w[i] > 0) out[ZONES[i].id] = w[i];
+    for (let i = 0; i < this._nz; i++) if (w[i] > 0) out[ZONES[i].id as keyof typeof out] = w[i];
     if (rest > 0) out._default = rest;
     return out;
   }

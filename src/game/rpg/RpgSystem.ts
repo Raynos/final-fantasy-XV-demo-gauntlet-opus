@@ -92,7 +92,7 @@ export class RpgSystem {
   quests!: QuestLog;
   rng!: Rng;
   tables!: any;
-  constructor(opts = {}) {
+  constructor(opts: any = {}) {
     this.emitter = new Emitter();
     this.party = new PartyState(this.emitter);
     this.expBank = new ExpBank();
@@ -154,7 +154,7 @@ export class RpgSystem {
     for (const [id, n] of STARTING_ITEMS) this.inventory.add(id, n, 'start');
     this.inventory.addGil(500, 'start');
     for (const m of MEMBERS) {
-      const eq = STARTING_EQUIPMENT[m.id];
+      const eq = STARTING_EQUIPMENT[m.id as keyof typeof STARTING_EQUIPMENT];
       if (!eq) continue;
       eq.weapon.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'weapon', i, id); });
       eq.accessory.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'accessory', i, id); });

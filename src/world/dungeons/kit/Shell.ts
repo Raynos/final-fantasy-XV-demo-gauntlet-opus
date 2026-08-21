@@ -85,7 +85,7 @@ export class ShellBuilder {
 
   /** A concrete or hewn box: floor, ceiling, four walls with doorways cut. */
   boxRoom(r: any) {
-    const s = STYLE[r.style] || STYLE.bunker;
+    const s = STYLE[r.style as keyof typeof STYLE] || STYLE.bunker;
     const wallMat = this.pick('wallMat', r);
     const floorMat = this.pick('floorMat', r);
     const ceilMat = this.pick('ceilMat', r);
@@ -210,7 +210,7 @@ export class ShellBuilder {
 
   /** A square-section run with elbow patches at every corner. */
   boxCorridor(c: any) {
-    const s = STYLE[c.style] || STYLE.bunker;
+    const s = STYLE[c.style as keyof typeof STYLE] || STYLE.bunker;
     const wallMat = this.pick('wallMat', c);
     const floorMat = this.pick('floorMat', c);
     const ceilMat = this.pick('ceilMat', c);
@@ -439,9 +439,9 @@ export class ShellBuilder {
     sbF._needsNormals = true;
 
     for (const p of r.platforms) {
-      this.slab(floorMat, mat, p, r, STYLE[r.style] || STYLE.cave);
+      this.slab(floorMat, mat, p, r, STYLE[r.style as keyof typeof STYLE] || STYLE.cave);
     }
-    for (const m of r.ramps) this.ramp(floorMat, m, r, STYLE[r.style] || STYLE.cave);
+    for (const m of r.ramps) this.ramp(floorMat, m, r, STYLE[r.style as keyof typeof STYLE] || STYLE.cave);
   }
 }
 

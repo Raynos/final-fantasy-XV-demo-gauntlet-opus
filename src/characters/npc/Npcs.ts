@@ -205,7 +205,7 @@ export class Npcs {
    * @param opts placement and behaviour
    */
   _spawn(castKey: string, opts: any = {}) {
-    const def = NPC_CAST[castKey];
+    const def = NPC_CAST[castKey as keyof typeof NPC_CAST];
     if (!def) return null;
     const key = opts.key || castKey;
     const arch = archetype(castKey, def);
@@ -220,7 +220,7 @@ export class Npcs {
       hue: def.hue,
       body,
       rng: new Rng(1000 + this.list.length * 31),
-      posture: POSTURES[opts.posture] || null,
+      posture: POSTURES[opts.posture as keyof typeof POSTURES] || null,
       postureName: opts.posture || null,
       task: opts.task || null,
       route: opts.route || null,
@@ -267,7 +267,7 @@ export class Npcs {
     this._handles = [];
     for (const npc of this.list) {
       if (!npc.talkRadius) continue;
-      const make = NPC_DIALOGUE[npc.castKey];
+      const make = NPC_DIALOGUE[npc.castKey as keyof typeof NPC_DIALOGUE];
       if (!make) continue;
       const anchor = new THREE.Vector3();
       this._handles.push(ix.register({

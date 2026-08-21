@@ -211,7 +211,7 @@ export class Trees {
     const perCanopy = Math.max(48, Math.round(400 * this.quality));
 
     for (const sp of speciesList) {
-      const S = TREE_SPECIES[sp];
+      const S = TREE_SPECIES[sp as keyof typeof TREE_SPECIES];
       const woodMat = patchVeg(new THREE.MeshStandardMaterial({
         color: S.bark, roughness: S.barkRough, metalness: 0,
         map: bark.map, normalMap: bark.normalMap,
@@ -355,12 +355,12 @@ export class Trees {
         if (Math.hypot(x, z) > eco.worldRadius) continue;
         const b = eco.veg(x, z);
         const sp = eco.treeSpecies(x, z);
-        if (!TREE_SPECIES[sp]) continue;
+        if (!TREE_SPECIES[sp as keyof typeof TREE_SPECIES]) continue;
         const vi = (rng.next() * VARIANTS) | 0;
         const variant = this.byKey.get(`${sp}_${vi}`);
         if (!variant) continue;
         const s = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
-        const c = composeTint(sp, SPECIES_TINT[sp] || [1, 1, 1], b.treeTint);
+        const c = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
         const shade = SHADE_MIN + rng.next() * SHADE_SPAN;
         const hue = rng.gauss(0, 0.06);
         out.push({
@@ -397,7 +397,7 @@ export class Trees {
         const c = this.canopies.get(sp);
         if (!c) continue;
         const b = eco.veg(x, z);
-        const tc = composeTint(sp, SPECIES_TINT[sp] || [1, 1, 1], b.treeTint);
+        const tc = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
         // fill the cell in plan, keep the real tree height in elevation
         const sx = (cell * 1.28 / c.width) * rng.range(0.86, 1.16);
         const sy = ((b.treeS[0] + b.treeS[1]) * 0.5) * rng.range(0.9, 1.1)

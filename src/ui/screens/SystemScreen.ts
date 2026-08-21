@@ -242,7 +242,7 @@ export class SystemScreen {
     if (this._cur !== key) {
       this._cur = key;
       this._age = 0;
-      this.dK.textContent = ({ slider: 'Setting', toggle: 'Setting', choice: 'Setting', action: 'Action' })[cur.row.kind];
+      this.dK.textContent = (({ slider: 'Setting', toggle: 'Setting', choice: 'Setting', action: 'Action' }) as any)[cur.row.kind];
       this.dN.textContent = cur.row.name;
       this.dD.textContent = cur.row.enabled() ? cur.row.desc : `${cur.row.desc}\n\nUnavailable: ${cur.row.why}`;
       this.dI.textContent = '';

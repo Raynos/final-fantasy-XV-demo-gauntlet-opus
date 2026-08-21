@@ -161,7 +161,7 @@ export class QuestScreen {
     const list = r.quests.byStatus(TABS[this.tab].status) || [];
     const rank = { main: 0, story: 0, side: 1, hunt: 2 };
     return list.slice().sort((a: any, b: any) =>
-      (rank[a.type] ?? 9) - (rank[b.type] ?? 9) || (a.level || 0) - (b.level || 0));
+      (rank[a.type as keyof typeof rank] ?? 9) - (rank[b.type as keyof typeof rank] ?? 9) || (a.level || 0) - (b.level || 0));
   }
 
   /* ------------------------------------------------------------ input */
@@ -218,7 +218,7 @@ export class QuestScreen {
   }
 
   _renderDetail(q: any, r: any) {
-    this.dK.textContent = `${TYPE_LABEL[q.type] || 'Quest'}${q.rank ? `  ·  ${q.rank.name}` : ''}`;
+    this.dK.textContent = `${TYPE_LABEL[q.type as keyof typeof TYPE_LABEL] || 'Quest'}${q.rank ? `  ·  ${q.rank.name}` : ''}`;
     this.dN.textContent = q.name;
     this.dD.textContent = q.summary || '';
     clear(this.dI);
@@ -235,7 +235,7 @@ export class QuestScreen {
     const items = (rewards.items || [])
       .map((it: any) => `${r?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
       .join(', ');
-    this.specVals[0].textContent = REGION[q.region] || q.region || '—';
+    this.specVals[0].textContent = REGION[q.region as keyof typeof REGION] || q.region || '—';
     this.specVals[1].textContent = q.level ? `Lv ${q.level}` : '—';
     this.specVals[2].textContent = `${commas(rewards.gil || 0)} gil${items ? `, ${items}` : ''}`;
     this.specVals[3].textContent = q.status === 'complete' ? 'Complete'

@@ -273,7 +273,7 @@ export class Hammerhead {
       signRB: signMaterial('rb', rentABirdTexture()),
       signCM: signMaterial('cm', cullessTexture()),
     };
-    for (const k of Object.keys(M)) if (!M[k].name) M[k].name = `hh_${k}`;
+    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `hh_${k}`;
 
     const rng = this.rng = new Rng(90210);
 

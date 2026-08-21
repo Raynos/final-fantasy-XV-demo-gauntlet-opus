@@ -74,7 +74,7 @@ function path2d(key: any, d: any) {
  * @param x @param y @param r
  */
 export function drawGlyph(c: CanvasRenderingContext2D, kind: string, x: number, y: number, r: number, colour: string, opt: {alpha?:number, weight?:number, halo?:number} = {}) {
-  const g = GLYPH[kind] || GLYPH.dot;
+  const g = GLYPH[kind as keyof typeof GLYPH] || GLYPH.dot;
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
   const weight = opt.weight || 1.25;
@@ -111,7 +111,7 @@ export function drawGlyph(c: CanvasRenderingContext2D, kind: string, x: number, 
  * @param kind @param [opt]
  */
 export function glyphSvg(kind: string, opt: {size?:number, stroke?:number} = {}): SVGElement {
-  const g = GLYPH[kind] || GLYPH.dot;
+  const g = GLYPH[kind as keyof typeof GLYPH] || GLYPH.dot;
   const { size = 16, stroke = 1.15 } = opt;
   const root = svgEl('svg', {
     class: 'mapglyph', viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true',

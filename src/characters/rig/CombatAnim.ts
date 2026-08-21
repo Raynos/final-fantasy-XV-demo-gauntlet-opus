@@ -102,7 +102,7 @@ export class CombatAnim {
     char.root.position.set(0, 0, 0);
     char.root.rotation.set(0, 0, 0);
 
-    const style = STYLE[combat.weapon ? combat.weapon.kind : 'sword'] || DEFAULT_STYLE;
+    const style = STYLE[combat.weapon ? combat.weapon.kind : 'sword' as keyof typeof STYLE] || DEFAULT_STYLE;
     const st = combat.state;
     let ikWeight = 1;
 
@@ -155,7 +155,7 @@ export class CombatAnim {
   swingCurve(combat: any, style: any): number {
     const step = combat.comboStep;
     if (!step) return 0;
-    const n = clamp01(combat.comboTimer / Math.max(0.02, step[PHASE_KEY[combat.comboPhase]] || 0.2));
+    const n = clamp01(combat.comboTimer / Math.max(0.02, step[PHASE_KEY[combat.comboPhase as keyof typeof PHASE_KEY]] || 0.2));
     if (combat.comboPhase === 'wind') {
       // ease out into the coil and hold there — the hold is the telegraph
       return -style.wind * (n < 0.6 ? 1 - Math.pow(1 - n / 0.6, 2.4) : 1);

@@ -113,7 +113,7 @@ export class BipedEnemy extends Enemy {
    * lean and twist the body makes, so a soldier bracing to fire ends up
    * looking at his own boots.
    */
-  aimHead(S: any, o = {}) {
+  aimHead(S: any, o: any = {}) {
     const t = this.A.trunk;
     const stab = (this._chestPitch || 0) * (o.stabilise ?? 0.9);
     const sy = (this._chestYaw || 0) * (o.stabilise ?? 0.9);

@@ -48,7 +48,7 @@ export class Prompts {
 
   _render(mode: any) {
     this.row.textContent = '';
-    for (const [key, label] of SETS[mode] || SETS.field) {
+    for (const [key, label] of SETS[mode as keyof typeof SETS] || SETS.field) {
       this.row.appendChild(el('div.prompt.key', {}, [
         button(key, { size: key.length > 2 ? 23 : key.length > 1 ? 22 : 19 }),
         el('div.lb', { text: label }),
@@ -68,7 +68,7 @@ export class Prompts {
       if (car.isDriving) return 'driving';
       if (mode !== 'combat' && car.distanceToPlayer && car.distanceToPlayer() < 7.5) return 'car';
     }
-    return SETS[mode] ? mode : 'field';
+    return SETS[mode as keyof typeof SETS] ? mode : 'field';
   }
 
   /**
