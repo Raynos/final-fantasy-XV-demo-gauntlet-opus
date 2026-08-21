@@ -44,6 +44,38 @@ export const TREE_SPECIES = {
     leafDepth: 3, leafCount: 17, leafSize: 1.02, leafKind: 'broad',
     bark: 0x87715a, barkRough: 0.9,
   },
+  // The Duscae canopy tree: a long clear bole and a wide flat crown that
+  // starts above head height, so a stand of them closes overhead and you walk
+  // *under* the forest rather than through a hedge. This is the silhouette the
+  // green basin is built on and it did not exist.
+  duscae: {
+    height: 19.0, trunkR: 0.60, depth: 4, kids: [2, 3], spread: [0.55, 1.05],
+    lenFall: 0.74, radFall: 0.66, curl: 0.32, droop: 0.03, upBias: 0.22,
+    trunkFrac: 0.46, flatten: 0.30,
+    leafDepth: 3, leafCount: 30, leafSize: 1.35, leafKind: 'broad',
+    bark: 0x6b5a48, barkRough: 0.92,
+  },
+  // Malmalam: branches from the ankle up, high curl, leaves from depth 2 — a
+  // tangle rather than a tree, and dark enough to swallow the road.
+  // Depth is 3, not 4, on purpose: a fourth order at kids 3-4 is ~60 extra
+  // branches and 2 700 leaf cards, which made one thicket tree 7 500 triangles
+  // — three times a Duscae canopy tree, for a plant a third the height.
+  thicket: {
+    height: 7.8, trunkR: 0.30, depth: 3, kids: [3, 4], spread: [0.85, 1.55],
+    lenFall: 0.74, radFall: 0.60, curl: 0.95, droop: 0.06, upBias: 0.30,
+    trunkFrac: 0.26,
+    leafDepth: 2, leafCount: 14, leafSize: 1.0, leafKind: 'broad',
+    bark: 0x584a3b, barkRough: 0.95,
+  },
+  // Wetland willow: negative upBias and a strong droop, so the crown weeps
+  // toward the water instead of reaching for the sun.
+  swamp: {
+    height: 9.2, trunkR: 0.40, depth: 4, kids: [2, 3], spread: [0.7, 1.35],
+    lenFall: 0.78, radFall: 0.62, curl: 0.55, droop: -0.24, upBias: 0.10,
+    trunkFrac: 0.30,
+    leafDepth: 3, leafCount: 18, leafSize: 1.18, leafKind: 'broad',
+    bark: 0x6d6152, barkRough: 0.93,
+  },
 };
 
 const _u = new THREE.Vector3(), _v = new THREE.Vector3();

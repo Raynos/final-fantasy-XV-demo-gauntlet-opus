@@ -211,13 +211,27 @@ export class GrassField {
     // near ones and the field grows a hard edge at the LOD ring
     const clumpTexA = grassClumpTex(0, 46, 0.42);
     const clumpTexB = grassClumpTex(1, 30, 0.42);
+    // `specular: 0` on both card rings is the fix for the blue-white speckle
+    // two agents reported in Malmalam and the Nebulawood. A tuft card carries a
+    // deliberately up-facing normal; from any camera above the ground that
+    // normal reflects the sky straight into the lens, so the card's 4 %
+    // dielectric lobe painted every quad with sky colour. Rendering the ring
+    // with a *black* albedo changed the flake count by 0.6 %, which is the
+    // proof it was never the texture or the tint. A blade of grass at 40 m has
+    // no coherent highlight to lose.
     const m1 = grassMat({
-      mat: { map: clumpTexA, alphaTest: 0.42, transparent: false },
-      veg: { bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.7, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.3 },
+      mat: { map: clumpTexA, alphaTest: 0.42, transparent: false, roughness: 0.94 },
+      veg: {
+        bend: 0.3, flutter: 0.2, gustFreq: 0.05, trample: 0.7, flexPow: 2.0,
+        twoSidedNormals: true, aoBoost: 0.3, specular: 0,
+      },
     });
     const m2 = grassMat({
-      mat: { map: clumpTexB, alphaTest: 0.42, transparent: false },
-      veg: { bend: 0.24, flutter: 0.1, gustFreq: 0.045, flexPow: 2.0, twoSidedNormals: true, aoBoost: 0.2 },
+      mat: { map: clumpTexB, alphaTest: 0.42, transparent: false, roughness: 0.96 },
+      veg: {
+        bend: 0.24, flutter: 0.1, gustFreq: 0.045, flexPow: 2.0,
+        twoSidedNormals: true, aoBoost: 0.2, specular: 0,
+      },
     });
 
     const geos = [bladeGeo, clumpGeo, farGeo];
@@ -327,6 +341,12 @@ export class GrassField {
     const HG = li === 0 ? 24 : 12;     // height grid
     const dg = new Float32Array((CG + 1) * (CG + 1));
     const wg = new Float32Array((CG + 1) * (CG + 1));
+    // Per-zone height and bleach fraction. Leide is a 0.15-0.35 m ankle tuft;
+    // Alstor Slough and the Vesperpool are waist-high marsh grass; a closed
+    // forest floor is long and sparse. One global height made every zone the
+    // same field.
+    const sg = new Float32Array((CG + 1) * (CG + 1));
+    const kg = new Float32Array((CG + 1) * (CG + 1));
     const cg = new Float32Array((CG + 1) * (CG + 1) * 3);
     for (let j = 0; j <= CG; j++) {
       for (let i = 0; i <= CG; i++) {
@@ -334,6 +354,8 @@ export class GrassField {
         const k = j * (CG + 1) + i;
         dg[k] = eco.grassDensity(x, z);
         wg[k] = eco.wetness(x, z);
+        sg[k] = eco.grassScale(x, z);
+        kg[k] = eco.grassDead(x, z);
         eco.grassColor(x, z, _cGrass);
         eco.groundColor(x, z, _cGround);
         _cGrass.lerp(_cGround, 0.32);
@@ -392,11 +414,13 @@ export class GrassField {
         const x = x0 + u * T, z = z0 + v * T;
         const y = bil(hg, HG, u, v);
         const wet = bil(wg, CG, u, v);
+        const hMul = bil(sg, CG, u, v);
+        const deadFrac = bil(kg, CG, u, v);
         // Green only where the water collects; everything else goes to straw.
         // A fifth of the tufts are last season's, dead and bleached whatever
         // the ground is doing — that speckle of pale tussocks among the olive
         // is the single most recognisable thing about the Leide flats.
-        const dead = deadRnd < 0.2 - wet * 0.12;
+        const dead = deadRnd < deadFrac * (1 - wet * 0.4);
         const dry = dead ? 1
           : Math.pow(colRnd, 0.42) * THREE.MathUtils.clamp(1.5 - wet * 1.45, 0, 1);
 
@@ -414,7 +438,7 @@ export class GrassField {
           const tuftL = rng.next() * 0.30;
           const nb = Math.min(MAX_PER_CLUMP,
             Math.max(3, Math.round((4 + d * 14) * (0.55 + rng.next() * 0.95))));
-          const hBase = (0.10 + 0.10 * d + 0.13 * wet * wet) * (0.68 + vig * 0.38);
+          const hBase = (0.10 + 0.10 * d + 0.13 * wet * wet) * (0.68 + vig * 0.38) * hMul;
           const k = (dead ? 0.92 : 0.62) + colRnd * 0.62;
           for (let bI = 0; bI < nb; bI++) {
             if (count >= cap) break;
@@ -446,12 +470,12 @@ export class GrassField {
         let h, w;
         if (li === 1) {
           // one card == one tuft, matched to the blade ring it takes over from
-          h = (0.16 + 0.22 * d + 0.2 * wet * wet) * (0.75 + jitter * 0.85);
+          h = (0.16 + 0.22 * d + 0.2 * wet * wet) * (0.75 + jitter * 0.85) * hMul;
           w = h * (1.5 + rng.next() * 1.1);
         } else {
           // bigger cards on the outer ring: a few large clumps resolve, a
           // scatter of tiny ones only aliases
-          h = (0.3 + 0.4 * d) * (0.8 + jitter * 0.8);
+          h = (0.3 + 0.4 * d) * (0.8 + jitter * 0.8) * hMul;
           w = h * (1.8 + rng.next() * 1.2);
         }
         const yaw = rng.next() * Math.PI * 2;
