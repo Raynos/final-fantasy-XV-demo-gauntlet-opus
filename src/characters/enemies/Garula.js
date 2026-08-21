@@ -149,32 +149,53 @@ function buildPrototype() {
   reset(B);
 
   /* ---------------------------------------------------- mane over withers */
-  // Coarse locks hanging *down* off the shoulder, not arcing off it. Aiming
-  // them backward and up read as a pair of scythes growing out of the withers
-  // — hair falls, so they start on the flank at the top of the shoulder and
-  // drop, splaying slightly outward as they go.
+  // A crest along the topline, not locks pinned to the flank.
+  //
+  // The locks used to be seeded on a ring around the barrel and aimed
+  // downward, which put every one of them across the *side* of the shoulder —
+  // 7 cm cones painted brighter than the hide behind them, so the animal wore
+  // two dozen hard ochre bars that read as claw marks. Sinking them into the
+  // barrel only traded that for three stray chips poking through.
+  //
+  // A mane is legible for the same reason the sabertusk's ruff is: it breaks
+  // the *silhouette* against the sky. So they now sit on the spine ridge at
+  // the top of the barrel — centre y 2.12, half-height ~0.5, and the mane
+  // term in `shape` swells that to ~0.63, so the ridge sits at 2.74 — and
+  // sweep back and out. Dark at the root, lifted only at the tips, which is
+  // how hair actually reads — never a bright bar over a dark base.
+  //
+  // The root height is *measured*, not guessed. `rz` in the torso sweep is the
+  // vertical radius, so the barrel's topline is `p.y + rz` per node — and the
+  // mane bulge in `shape` swells that by up to 26 % over the withers, which is
+  // exactly the 3.45 m `creaturecheck` reports as this species' `top`. Two
+  // rounds were lost seeding the crest at 2.56 and then 2.74 and finding it
+  // buried both times; the table below is the sweep's own node list.
+  const RIDGE = [[-1.86, 2.34], [-1.42, 2.68], [-0.82, 2.88], [-0.16, 3.06],
+    [0.42, 3.18], [0.86, 3.02], [1.10, 2.72]];
+  const ridgeY = (z) => {
+    for (let k = 1; k < RIDGE.length; k++) {
+      if (z <= RIDGE[k][0] || k === RIDGE.length - 1) {
+        const [z0, y0] = RIDGE[k - 1], [z1, y1] = RIDGE[k];
+        const f = clamp01((z - z0) / (z1 - z0));
+        return y0 + (y1 - y0) * f;
+      }
+    }
+    return RIDGE[0][1];
+  };
   B.group(2);
   for (let i = 0; i < 26; i++) {
-    const a = (i / 26) * Math.PI * 2;
-    const side = Math.sin(a) >= 0 ? 1 : -1;
-    const zc = 0.42 + Math.cos(a) * 0.62;
-    const x = side * (0.72 + (i % 3) * 0.05) * (0.55 + 0.45 * Math.abs(Math.sin(a)));
-    const y = 2.56 - Math.abs(Math.cos(a)) * 0.26;
-    // Fatter at the root and darker than the hide they hang against.
-    //
-    // The first version was 7 cm cones painted SHAG_LIT (0x87703f) at the
-    // root and shaded to dark at the tip — brighter than everything around
-    // them, thin enough not to touch each other, and so the mane rendered as
-    // two dozen hard ochre bars lying across the shoulder like claw marks. It
-    // was the single loudest defect on the animal. Hair reads the other way
-    // round: a dark mass, lifted only where the sun catches the ends. Root
-    // radius up to 10 cm so adjacent locks overlap into that mass instead of
-    // floating apart, and the taper is gentler for the same reason.
+    const side = i % 2 === 0 ? 1 : -1;
+    const t = Math.floor(i / 2) / 12;                 // 0..1 along the withers
+    const zc = 0.98 - t * 1.62;
+    const x = side * (0.07 + (i % 3) * 0.055);
+    // and add the mane bulge back on, otherwise the locks over the withers —
+    // where the crest most needs to read — are the only ones still buried
+    const y = ridgeY(zc) - 0.10 + 0.34 * Math.exp(-Math.pow((zc - 0.33) / 0.62, 2));
     horn(B, {
-      from: [x * 0.84, y + 0.10, zc], dir: [side * 0.20, -0.95, -0.14], len: 0.34 + (i % 4) * 0.08,
-      curve: [side * 0.16, -0.16, -0.10], r0: 0.125, r1: 0.034, flat: 0.26, seg: 5, steps: 4,
+      from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
+      curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
       colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
-        SHAG_LIT, clamp01((u - 0.55) / 0.45) * 0.24),
+        SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
   }
