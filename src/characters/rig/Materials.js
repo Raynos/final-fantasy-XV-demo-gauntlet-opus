@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeTexture, normalFromHeight, srgb } from '../../util/TextureGen.js';
 import { Noise } from '../../util/Noise.js';
+import { EYE } from './Face.js';
 
 /**
  * Character materials.
@@ -197,18 +198,20 @@ function patch(mat, o = {}) {
 {
   vec3 oN = normalize( vObjN );
   float ePhi = acos( clamp( oN.z, -1.0, 1.0 ) );      // angle from the gaze axis
-  float eT = ePhi / 0.395;                            // 0..1 across the iris
+  // Matched to the geometric limbus in Face.js — when these two disagree the
+  // limbal ring lands on flat sclera and the iris looks pasted on.
+  float eT = ePhi / ${EYE.iris.toFixed(3)};           // 0..1 across the iris
   float eL = max( 1e-5, length( oN.xy ) );
   float eUp = oN.y / eL;                              // +1 straight up
   float eAng = atan( oN.y, oN.x );
   float lidShade = 1.0 - 0.40 * pow( clamp( eUp, 0.0, 1.0 ), 2.0 );
   vec3 eyeC;
-  if ( eT < 0.34 ) {
+  if ( eT < 0.42 ) {
     // never pure black: a real pupil scatters a little, and true black
     // crushes to a hole under bloom
-    eyeC = vec3( 0.014 + 0.022 * pow( eT / 0.34, 3.0 ) );
+    eyeC = vec3( 0.013 + 0.020 * pow( eT / 0.42, 3.0 ) );
   } else if ( eT < 1.0 ) {
-    float q = ( eT - 0.34 ) / 0.66;
+    float q = ( eT - 0.42 ) / 0.58;
     float fib = 0.70 + 0.38 * abs( sin( eAng * 38.0 + sin( eAng * 7.0 ) * 2.2 ) );
     float radial = 0.18 + 0.82 * pow( q, 1.45 );
     float ruff = 1.0 + 0.28 * exp( -pow( ( q - 0.30 ) / 0.10, 2.0 ) );
@@ -216,17 +219,27 @@ function patch(mat, o = {}) {
     float cres = 1.0 + 0.65 * clamp( -eUp, 0.0, 1.0 ) * pow( q, 0.7 );
     float k = radial * fib * ruff * cres;
     k *= 0.88 + 0.22 * sin( eAng * 21.0 + q * 9.0 );
-    k *= mix( 1.0, 0.05, smoothstep( 0.80, 0.97, q ) );   // limbal ring
+    k *= mix( 1.0, 0.04, smoothstep( 0.78, 0.96, q ) );   // limbal ring
     eyeC = vec3( ${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)} ) * min( 1.15, k ) * lidShade;
-    eyeC = mix( eyeC, vec3( 0.42, 0.41, 0.41 ) * lidShade, smoothstep( 0.975, 1.0, q ) );
+    // the limbus is a graded blue-grey band, not a hard black line
+    eyeC = mix( eyeC, vec3( 0.30, 0.30, 0.33 ) * lidShade, smoothstep( 0.955, 1.0, q ) );
   } else {
     // Sclera. It used to sit at 0.27 albedo, i.e. the same value as the socket
     // it lives in, so the only white on the eye was the specular dot and every
     // character read as squinting. A sclera has to be *light* — that value
     // break against the iris is the entire "this head is alive" cue at 30 px.
-    float sh = ( 0.52 + 0.22 * min( 1.0, ( eT - 1.0 ) * 1.4 ) ) * mix( 1.0, lidShade, 0.62 );
-    float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 2.0, 0.0, 1.0 );
-    eyeC = sh * vec3( 0.99, 0.930 - corner * 0.10, 0.900 - corner * 0.16 );
+    // It must not be *paper*, though: at 0.74 with a 0.72 sky lift on top it
+    // blew to pure white at grazing angles and the far eye of any three-quarter
+    // frame rendered as a blank bead.
+    float sh = ( 0.44 + 0.17 * min( 1.0, ( eT - 1.0 ) * 1.2 ) ) * mix( 1.0, lidShade, 0.62 );
+    // the sclera is a curved, self-shadowed ball: it darkens toward the canthi
+    // and toward the top where the lid and the brow shade it
+    float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 1.6, 0.0, 1.0 );
+    sh *= 1.0 - 0.30 * smoothstep( 1.05, 1.65, eT );
+    eyeC = sh * vec3( 0.99, 0.925 - corner * 0.11, 0.885 - corner * 0.18 );
+    // vessels: faint warm threads running in from the corners
+    float vein = smoothstep( 1.18, 1.75, eT ) * ( 0.5 + 0.5 * sin( eAng * 5.0 ) );
+    eyeC = mix( eyeC, eyeC * vec3( 1.03, 0.86, 0.84 ), vein * 0.55 );
   }
   // re-light: the ball was shaded with a flat white albedo, so scale the
   // result by the iris/sclera value we just computed
@@ -246,8 +259,13 @@ function patch(mat, o = {}) {
   // is dark, and a dark eye is an eye the viewer cannot find. Every shipped
   // game cheats this: the globe gets a sky term shadowing does not touch.
   float skyE = clamp( dot( eN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  gl_FragColor.rgb += eyeC * uSunColor * 0.72 * pow( skyE, 1.2 );
-  gl_FragColor.rgb += ( g1 * 4.0 + g2 * 1.5 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)};
+  // ...but it has to be *cut at grazing angles*. Off-axis the sclera turns edge
+  // on, the lift stacked on an already-light albedo, and the far eye of every
+  // three-quarter frame rendered as a featureless white bead. Fading it with
+  // N.V keeps the near eye alive and lets the far one keep its shading.
+  float face = clamp( dot( eN, eV ), 0.0, 1.0 );
+  gl_FragColor.rgb += eyeC * uSunColor * 0.46 * pow( skyE, 1.2 ) * ( 0.30 + 0.70 * face );
+  gl_FragColor.rgb += ( g1 * 4.0 + g2 * 1.5 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)} * ( 0.25 + 0.75 * face );
 }`);
     }
 
