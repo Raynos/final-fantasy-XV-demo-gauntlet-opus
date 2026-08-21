@@ -59,22 +59,22 @@ order-dependence — roughly 5% of pixels over 8/255, most likely vegetation til
 streaming. It is a 19× improvement and the framing is now stable, but it is
 **not** yet at the floor. Do not record this as closed.
 
-## Agents in flight (4, in worktrees)
+## Agents — all five merged, all worktrees pruned
 
-| agent | owns | doing |
-|---|---|---|
-| `enemies-art` | `characters/enemies/**`, `rig/CreatureAnim.js`, `Enemies.js`, `tools/creaturecheck.mjs` | The 17 species that got only the systemic pass (B12) |
-| `ui` | `src/ui/**` | `combatloop` 21/30, BLINDSIDE doubling, `map_wide`, type pass (B5, B10) |
-| `veg` | `world/veg/**`, `world/Vegetation.js` | Trees/bushes leaf-albedo bug, grass re-judged against the new terrain (B13, B7) |
-| `heroart` | `rig/{Face,Hair,Outfit,Materials,Sculpt,Body,Geo,Anatomy,Skeleton}.js`, `npc/**`, `Cast.js` | Profile head collapse, hair, skin, hands (B11) |
+`enemies-art`, `ui`, `veg`, `heroart` and `terrain` all landed and were verified
+by eye by the coordinator before merging. No `agent/*` branches remain, worktrees
+are pruned (2.3 GB reclaimed), no orphaned vite/chromium.
 
-Coordinator (this session) holds `Party.js`, `Player.js`, `rig/Anim.js`,
-`rig/CombatAnim.js`, `rig/Posture.js`, `src/combat/**`, `src/game/**`,
-`src/world/props/**`, `src/world/map/**`.
+**Four inherited diagnoses turned out to be wrong**, each caught only by measuring
+rather than trusting the handoff. This is the single most useful thing to carry
+forward:
 
-**Cap concurrency at ~4.** Six or more headless Chromiums saturate the machine,
-make every measurement worthless and stall agents outright — that is what killed
-three agents in the previous round.
+| recorded as | actually |
+|---|---|
+| `combatloop` 21/30 = a game regression | **a stale test** — `combatloop.mjs` still pressed `KeyH` after the keymap moved to G/J/K, which opened the controls card and disabled input |
+| the chevron hatch = heightfield normals | **GTAO** reconstructing normals from depth and drawing distant triangle facets |
+| `Terrain.groundColorAt` disagrees with the shader | **it never existed** — every plant in the world tinted from a hard-coded brown ramp |
+| dualhorn/bloodhorn "deep rebuild, verified by eye" | **rendering flat black** from a `Color.setHex` NaN |
 
 ## Verification state
 
@@ -89,7 +89,7 @@ three agents in the previous round.
 | `src/tools/heightcheck.mjs` | 0.000 m GPU vs CPU |
 | `src/tools/perf.mjs` / `gameplay.mjs` | **not re-measured.** Four agents are live — any number taken now is meaningless. B6. |
 
-## Next, in order
+## Next, in order (rescue is closed; see `project/RESCUE.md` for the open tail)
 
 1. Finish the `RESCUE.md` B-track — the four agents above, plus the serial items
    still open: the residual 2.068 determinism gap, the six unviewed zones (B7),
