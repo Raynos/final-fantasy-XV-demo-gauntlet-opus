@@ -105,7 +105,22 @@ export async function call(route, body, { timeout = 600_000 } = {}) {
  * @returns {Promise<boolean>} true if this call started it
  */
 export async function ensureDaemon() {
-  if (await portOpen(DAEMON_PORT)) return false;
+  if (await portOpen(DAEMON_PORT)) {
+    // A daemon on the port may belong to a *different* checkout — every agent
+    // worktree runs the same tools on the same default ports. Silently reusing
+    // it captures the other repo's build, which has already produced at least
+    // one false result that took a round to unpick. Refuse rather than lie.
+    let root = null;
+    try { root = (await call('/root')).root; } catch { /* daemon predates the route */ }
+    if (root && path.resolve(root) !== path.resolve(ROOT)) {
+      throw new Error(
+        `a capture daemon on port ${DAEMON_PORT} is serving a different checkout:\n`
+        + `  running: ${root}\n  wanted:  ${ROOT}\n`
+        + 'Set PORT (and DAEMON_PORT) to values unique to this worktree, '
+        + 'or stop that daemon.');
+    }
+    return false;
+  }
   const child = spawn(process.execPath, [path.join(ROOT, 'tools/daemon.mjs')], {
     cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, PORT: String(APP_PORT) },
   });
@@ -303,6 +318,9 @@ async function serve() {
             idleSec: Math.round((Date.now() - harness.lastUsed) / 1000),
           });
         }
+        // Which checkout this daemon serves. Clients compare it against their
+        // own ROOT so a worktree can never silently capture another repo.
+        if (url === '/root') return send(200, { root: ROOT });
         if (url === '/stop') { send(200, { ok: true }); setTimeout(stop, 50); return; }
         if (url === '/shots') return send(200, await queue(() => routeShots(body)));
         if (url === '/eval') return send(200, await queue(() => routeEval(body)));
