@@ -17,11 +17,11 @@ import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.js';
  * and the belly of a hairless animal is *sandy*, not bleached. The spread
  * between `SKIN` and `SKIN_DARK` is also widened, because the dorsal blotching
  * is the only large-scale pattern this species has. */
-const SKIN = 0x8f8172;
-const SKIN_MID = 0x6f6252;
+const SKIN = 0x7d705f;
+const SKIN_MID = 0x5f5344;
 const SKIN_DARK = 0x413729;
-const BELLY = 0xa89a7d;
-const CREST = 0x6b5646;
+const BELLY = 0x968a70;
+const CREST = 0x4a3a2c;
 const BONE = 0xe4dcc6;
 const BONE_DARK = 0xa89e86;
 const CLAW = 0x2c2634;
@@ -154,9 +154,17 @@ function buildPrototype() {
     colorAt: (th, u) => {
       const b = Math.cos(th);
       if (b < -0.30) return mix(BELLY, SKIN_MID, clamp01((b + 1) / 0.7) * 0.8);
-      // blotched dorsal mottling
-      const mott = 0.5 + 0.5 * Math.sin(u * 23 + th * 5) * Math.sin(u * 11 - th * 3);
-      return mix(mix(SKIN, SKIN_DARK, mott * 0.42), CREST, clamp01(b - 0.5) * 0.5);
+      // A dark saddle reaching well down the flank, cut by cross bars.
+      //
+      // The previous version mottled *inside* one flat mid-tone and reached
+      // for the crest colour only above `b > 0.5`, i.e. on the spine alone.
+      // The result at six metres was a uniform wax model with no pattern at
+      // all — and on a hairless animal the pattern is the only thing between
+      // the silhouette and a balloon. Both frequencies here stay above six
+      // samples per cycle on a 26-step sweep so the bars survive the mesh.
+      const saddle = clamp01((b + 0.35) / 0.70);
+      const bar = Math.pow(clamp01(Math.sin(u * 27 + b * 1.4) * 0.5 + 0.5), 2.6);
+      return mix(mix(SKIN, SKIN_DARK, saddle * 0.85), CREST, bar * (1 - saddle * 0.35) * 0.78);
     },
     matAt: (th) => (Math.cos(th) < -0.45 ? M_BELLY : M_HIDE),
   });
@@ -202,7 +210,12 @@ function buildPrototype() {
     colorAt: (u, v, p) => {
       const snout = clamp01((p.z - 1.14) / 0.20);
       const under = clamp01((1.022 - p.y) / 0.065);
-      return mix(mix(SKIN, SKIN_DARK, snout * 0.6), BELLY, under * 0.45);
+      // A dark mask over the brow and down the bridge, so the head is not a
+      // featureless pale cone at the end of a pale neck — the head is this
+      // species' entire read and it was the least legible thing on it.
+      const brow = clamp01((p.y - 1.075) / 0.045) * clamp01((1.20 - p.z) / 0.14);
+      const base = mix(mix(SKIN, SKIN_DARK, snout * 0.85), BELLY, under * 0.45);
+      return mix(base, CREST, brow * 0.72);
     },
     matAt: (u, v, p) => (p.z > 1.35 ? M_WET : M_HIDE),
   });

@@ -130,7 +130,10 @@ function buildPrototype() {
       { p: [0, 0.925, 0.54], rx: 0.235, rz: 0.280 },
       { p: [0, 0.935, 0.66], rx: 0.170, rz: 0.195 },
     ],
-    steps: 26, seg: 18, ref: [0, 1, 0], capStart: 0.7, capEnd: 0.2,
+    // 34 rather than 26 steps along the body: the flank carries five tan bars
+    // and a bar pattern needs about seven samples per cycle before the sweep
+    // starts eating it. The extra 288 triangles are cheap next to a smear.
+    steps: 34, seg: 18, ref: [0, 1, 0], capStart: 0.7, capEnd: 0.2,
     shape: (th, u) => {
       const b = Math.cos(th);
       const side = Math.abs(Math.sin(th));
@@ -147,11 +150,18 @@ function buildPrototype() {
     colorAt: (th, u) => {
       const b = Math.cos(th);
       const side = Math.abs(Math.sin(th));
-      // tan flank flashes: two soft bands where the light would break anyway
-      const flash = Math.exp(-Math.pow((u - 0.33) / 0.15, 2)) + Math.exp(-Math.pow((u - 0.62) / 0.13, 2));
-      const t = clamp01(flash * side * clamp01(-b + 0.85) * 1.25);
       if (b < -0.45) return mix(FUR_LIGHT, MUZZLE, clamp01((-b - 0.45) / 0.55) * 0.55);
-      return mix(mix(FUR, FUR_DARK, clamp01(b) * 0.55), mix(TAN, TAN_DARK, 0.30), t * 0.95);
+      const base = mix(FUR, FUR_DARK, clamp01(b) * 0.62);
+      // Five broken tan bars down the flank, wavering as they climb the ribs.
+      //
+      // The first version was two 0.15-wide gaussians, which merged into one
+      // amber blot across the entire ribcage: at six metres the animal looked
+      // like it had a lens flare stuck to its side rather than markings. Bars
+      // are also what a coeurl *is* — the read has to survive being a black
+      // cat, and a broken vertical rhythm survives where a soft patch does not.
+      const bar = Math.pow(clamp01(Math.sin(u * 31.4 + Math.cos(th * 2.0) * 0.55) * 0.5 + 0.5), 3.5);
+      const t = bar * side * clamp01(-b + 0.72) * 0.66;
+      return mix(base, mix(TAN, TAN_DARK, 0.55), t);
     },
     matAt: (th, u) => (Math.abs(Math.sin(th)) > 0.6 ? M_FUR_SLEEK : M_FUR),
   });

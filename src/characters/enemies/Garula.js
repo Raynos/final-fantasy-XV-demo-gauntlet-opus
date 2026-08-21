@@ -113,14 +113,19 @@ function buildPrototype() {
       { p: [0, 2.14, 0.86], rx: 0.72, rz: 0.88 },
       { p: [0, 2.10, 1.10], rx: 0.50, rz: 0.62 },
     ],
-    steps: 28, seg: 20, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
+    // 26 segments round, not 20. Everything below clumps the mane around the
+    // barrel, and a 20-segment ring cannot carry a 13-cycle clump: it aliases
+    // into a handful of broad hard-edged bands with arbitrary phase, which is
+    // what put the coarse ochre streaking across the shoulder. Every angular
+    // frequency here is now under six cycles, i.e. four-plus samples each.
+    steps: 28, seg: 26, ref: [0, 1, 0], capStart: 0.6, capEnd: 0.25,
     shape: (th, u) => {
       const b = Math.cos(th);                       // +1 spine, -1 belly
       const side = Math.abs(Math.sin(th));
       let m = 1;
       // the shoulder mane rides as a raised, clumped mass over the withers
       const mane = Math.max(0, b) * Math.exp(-Math.pow((u - 0.74) / 0.22, 2));
-      m += mane * (0.26 + Math.sin(th * 7 + u * 16) * 0.06 + Math.sin(th * 15) * 0.03);
+      m += mane * (0.26 + Math.sin(th * 5 + u * 11) * 0.06 + Math.sin(th * 3) * 0.03);
       // flattish spine, heavy sagging gut
       m += b > 0 ? -0.06 * b * b * (1 - smooth((u - 0.6) / 0.2)) : 0.11 * b * b;
       // shoulder and haunch bosses
@@ -128,7 +133,7 @@ function buildPrototype() {
       m += side * 0.09 * Math.exp(-Math.pow((u - 0.20) / 0.16, 2));
       // shag hanging off the flank in coarse vertical clumps
       m += Math.max(0, -b + 0.5) * side * 0.045
-        * Math.max(0, Math.sin(th * 13 + u * 5)) * smooth((u - 0.3) / 0.4);
+        * Math.max(0, Math.sin(th * 6 + u * 5)) * smooth((u - 0.3) / 0.4);
       return m;
     },
     colorAt: (th, u) => {
@@ -136,7 +141,7 @@ function buildPrototype() {
       const shaggy = clamp01((b + 0.15) / 0.9) * smooth((u - 0.30) / 0.40);
       if (b < -0.55) return mix(BELLY, HIDE_DARK, clamp01((b + 1) / 0.45) * 0.85);
       const base = mix(HIDE, HIDE_DARK, 0.35 + 0.2 * Math.sin(u * 19 + th * 4));
-      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 13 + u * 5) * 0.5 + 0.5)), shaggy);
+      return base.lerp(hex(mix2(SHAG, SHAG_LIT, Math.sin(th * 6 + u * 5) * 0.5 + 0.5)), shaggy);
     },
     matAt: (th, u) => (Math.cos(th) > -0.1 && u > 0.30 ? M_SHAG : M_HIDE),
   });
@@ -155,10 +160,21 @@ function buildPrototype() {
     const zc = 0.42 + Math.cos(a) * 0.62;
     const x = side * (0.72 + (i % 3) * 0.05) * (0.55 + 0.45 * Math.abs(Math.sin(a)));
     const y = 2.56 - Math.abs(Math.cos(a)) * 0.26;
+    // Fatter at the root and darker than the hide they hang against.
+    //
+    // The first version was 7 cm cones painted SHAG_LIT (0x87703f) at the
+    // root and shaded to dark at the tip — brighter than everything around
+    // them, thin enough not to touch each other, and so the mane rendered as
+    // two dozen hard ochre bars lying across the shoulder like claw marks. It
+    // was the single loudest defect on the animal. Hair reads the other way
+    // round: a dark mass, lifted only where the sun catches the ends. Root
+    // radius up to 10 cm so adjacent locks overlap into that mass instead of
+    // floating apart, and the taper is gentler for the same reason.
     horn(B, {
-      from: [x, y, zc], dir: [side * 0.42, -0.88, -0.22], len: 0.40 + (i % 4) * 0.11,
-      curve: [side * 0.10, -0.10, -0.06], r0: 0.070, r1: 0.006, flat: 0.26, seg: 5, steps: 4,
-      colorAt: (th, u) => mix(mix2(SHAG_LIT, SHAG, (i % 5) / 5), SHAG_DARK, u * 0.45),
+      from: [x * 0.84, y + 0.10, zc], dir: [side * 0.20, -0.95, -0.14], len: 0.34 + (i % 4) * 0.08,
+      curve: [side * 0.16, -0.16, -0.10], r0: 0.125, r1: 0.034, flat: 0.26, seg: 5, steps: 4,
+      colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+        SHAG_LIT, clamp01((u - 0.55) / 0.45) * 0.24),
       matAt: () => M_SHAG,
     });
   }
