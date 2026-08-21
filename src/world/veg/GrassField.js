@@ -49,6 +49,18 @@ const LODS = [
 const MAX_PER_CLUMP = 22;
 
 /**
+ * How much of the dirt's colour bleeds into the grass growing out of it.
+ *
+ * Some is right — it ties the field to the ground and stops the vegetation
+ * reading as a decal laid on top. 0.32 was not some: it meant a third of every
+ * blade's hue came from the terrain's macro tint rather than from the
+ * vegetation palette, and while that macro tint is a hard-coded Leide ochre
+ * (the terrain never reads the world map) it was quietly dragging Duscae's
+ * grass toward the desert too.
+ */
+const GROUND_BLEED = 0.22;
+
+/**
  * The one height law for the whole field: the apparent height in metres of a
  * single tuft — the number the blade ring's tallest stems reach, and the number
  * a clump card that replaces that tuft is built to.
@@ -113,6 +125,13 @@ function bladeGeometry(segs = 4) {
   const CURVE = 0.34;     // tip offset along +Z, as a fraction of height
   const FAN = 0.95;       // lateral normal spread -> rounded cross-section
   const shadeAt = (t) => 0.40 + Math.pow(t, 0.75) * 0.62;
+  // The root-to-tip ramp carries *hue* as well as value. A real blade loses
+  // chroma into the shaded litter it grows out of and bleaches warm at the tip,
+  // so the base is darker and greyer and the tip is lighter and strawier. The
+  // old constant (0.99, 1, 0.83) gave every blade the same warm cast from root
+  // to point, which is one more reason the field averaged to a single colour.
+  const warmAt = (t) => 0.92 + t * 0.16;
+  const coolAt = (t) => 0.94 - t * 0.20;
   for (let i = 0; i < segs; i++) {
     const t = i / segs;
     const w = HALF_W * Math.pow(1 - t, 0.6);
@@ -124,7 +143,7 @@ function bladeGeometry(segs = 4) {
       nor.push(s * FAN, 0.9, 0.42 + t * 0.72);
       uv.push(s * 0.5 + 0.5, t);
       const shade = shadeAt(t);
-      col.push(shade * 0.99, shade, shade * 0.83);
+      col.push(shade * warmAt(t), shade, shade * coolAt(t));
       flex.push(t);
     }
   }
@@ -132,7 +151,7 @@ function bladeGeometry(segs = 4) {
   nor.push(0, 0.9, 1.14);
   uv.push(0.5, 1);
   const st = shadeAt(1);
-  col.push(st * 0.99, st, st * 0.83);
+  col.push(st * warmAt(1), st, st * coolAt(1));
   flex.push(1);
 
   for (let i = 0; i < segs - 1; i++) {
@@ -395,6 +414,10 @@ export class GrassField {
     const sg = new Float32Array((CG + 1) * (CG + 1));
     const kg = new Float32Array((CG + 1) * (CG + 1));
     const cg = new Float32Array((CG + 1) * (CG + 1) * 3);
+    // The same grid sampled at the *dry* end of the zone's ramp. A bleached
+    // tuft is interpolated toward this instead of being pushed there by a
+    // per-channel gain, so no clump can leave the authored palette.
+    const cd = new Float32Array((CG + 1) * (CG + 1) * 3);
     for (let j = 0; j <= CG; j++) {
       for (let i = 0; i <= CG; i++) {
         const x = x0 + (i / CG) * T, z = z0 + (j / CG) * T;
@@ -403,10 +426,14 @@ export class GrassField {
         wg[k] = eco.wetness(x, z);
         sg[k] = eco.grassScale(x, z);
         kg[k] = eco.grassDead(x, z);
-        eco.grassColor(x, z, _cGrass);
         eco.groundColor(x, z, _cGround);
-        _cGrass.lerp(_cGround, 0.32);
+        // Grass picks up the colour of the dirt it grows out of, but only a
+        // little: at the old 0.32 a fifth of Leide's hue was coming from the
+        // terrain's macro tint rather than from the vegetation palette.
+        eco.grassColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
         cg[k * 3] = _cGrass.r; cg[k * 3 + 1] = _cGrass.g; cg[k * 3 + 2] = _cGrass.b;
+        eco.grassDryColor(x, z, _cGrass).lerp(_cGround, GROUND_BLEED);
+        cd[k * 3] = _cGrass.r; cd[k * 3 + 1] = _cGrass.g; cd[k * 3 + 2] = _cGrass.b;
       }
     }
     const hg = new Float32Array((HG + 1) * (HG + 1));
@@ -440,13 +467,35 @@ export class GrassField {
     // Per-clump colour: a tuft is one plant, so it is one colour. Spreading
     // the dry/green spread across individual blades instead just averages back
     // out to a uniform field at any distance.
-    const tint = (u, v, wet, dry, k) => {
-      const r = bil(cg, CG, u, v, 3, 0), g = bil(cg, CG, u, v, 3, 1), b = bil(cg, CG, u, v, 3, 2);
-      // dry tufts bleach toward straw: red up, blue down, value up
-      const lift = k * (1 + dry * 0.10);
-      cArr[count * 3] = r * lift * (1 + dry * 0.44);
-      cArr[count * 3 + 1] = g * lift * (1 + dry * 0.13);
-      cArr[count * 3 + 2] = b * lift * (1 - dry * 0.40) * (0.9 + wet * 0.28);
+    //
+    // What this replaced: `r * (1 + dry*0.44)`, `b * (1 - dry*0.40)` and a
+    // value-only jitter. That pair is ~1.8x on red and ~0.6x on blue at the dry
+    // end, and it does not care what the palette says — measured in Leide it
+    // put the field at r/g 1.76 and b/g 0.21 from a ramp whose own dry end is
+    // 1.33 and 0.33. No amount of palette editing can undo a channel gain
+    // applied after the palette, which is why the grass stayed highlighter
+    // yellow through several rounds of recolouring.
+    //
+    // Now: walk the zone's *own* ramp toward its *own* dry end, jitter the hue
+    // a little at constant luminance so neighbouring tufts differ in more than
+    // brightness, pull everything back toward its own luminance so no clump can
+    // be more saturated than the palette allows, and only then apply a value
+    // jitter that is symmetric about the base instead of a one-way lift.
+    const tint = (u, v, dry, k, hue, sat) => {
+      const lr = bil(cg, CG, u, v, 3, 0), lg = bil(cg, CG, u, v, 3, 1), lb = bil(cg, CG, u, v, 3, 2);
+      const dr = bil(cd, CG, u, v, 3, 0), dgc = bil(cd, CG, u, v, 3, 1), db = bil(cd, CG, u, v, 3, 2);
+      let r = lr + (dr - lr) * dry;
+      let g = lg + (dgc - lg) * dry;
+      let b = lb + (db - lb) * dry;
+      const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      // hue push: +1 straw, -1 green, renormalised so it costs no value
+      r *= 1 + hue * 0.22; g *= 1 + hue * 0.02; b *= 1 - hue * 0.34;
+      const L2 = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const n = L2 > 1e-5 ? L / L2 : 1;
+      r *= n; g *= n; b *= n;
+      cArr[count * 3] = (L + (r - L) * sat) * k;
+      cArr[count * 3 + 1] = (L + (g - L) * sat) * k;
+      cArr[count * 3 + 2] = (L + (b - L) * sat) * k;
     };
 
     for (let j = 0; j < n; j++) {
@@ -457,6 +506,7 @@ export class GrassField {
         const clumpRnd = rng.next();
         const colRnd = rng.next();
         const deadRnd = rng.next();
+        const hueRnd = rng.next();
         if (d < 0.02 || roll > d * 1.3) continue;
         const x = x0 + u * T, z = z0 + v * T;
         const y = bil(hg, HG, u, v);
@@ -470,6 +520,20 @@ export class GrassField {
         const dead = deadRnd < deadFrac * (1 - wet * 0.4);
         const dry = dead ? 1
           : Math.pow(colRnd, 0.42) * THREE.MathUtils.clamp(1.5 - wet * 1.45, 0, 1);
+        // Per-clump hue: -1 leans green, +1 leans straw, applied at constant
+        // luminance. This is the variation the field never had — every previous
+        // jitter was value-only, and a field whose only variation is brightness
+        // averages back to one flat colour at any distance past a few metres.
+        //
+        // `dry` has to push the hue as well as walk the ramp, because in Leide
+        // the local colour is *already* the ramp's dry end: with nothing further
+        // along it to interpolate toward, the bleach term did nothing at all and
+        // the whole flats came out one sage green. A luminance-preserving push
+        // toward straw still cannot leave the palette — `sat` below bounds it.
+        const hue = (hueRnd - 0.5) * 1.8 + dry * 0.55 + (dead ? 0.4 : 0);
+        // Bleaching is a *loss* of chroma, not a gain: last season's tussock is
+        // pale grey-straw, and a sun-dried live one is halfway there.
+        const sat = dead ? 0.54 : 0.88 - dry * 0.22;
 
         if (isBlade) {
           // one tuft: a ring of blades leaning out of a shared root, tallest
@@ -492,7 +556,11 @@ export class GrassField {
           // open dirt back between them.
           const nb = Math.min(MAX_PER_CLUMP,
             Math.max(3, Math.round((2 + d * 6.5) * (0.55 + rng.next() * 0.95))));
-          const k = (dead ? 0.92 : 0.62) + colRnd * 0.62;
+          // Value jitter symmetric about the base rather than a one-way lift:
+          // the old `0.62 + colRnd*0.62`, times another 0.9-1.2 per blade,
+          // could only ever make a clump brighter than the palette.
+          const k = ((dead ? 1.02 : 0.78) + colRnd * (dead ? 0.34 : 0.44))
+            * (1 + dry * 0.12);
           for (let bI = 0; bI < nb; bI++) {
             if (count >= cap) break;
             const a = rng.next() * Math.PI * 2;
@@ -515,7 +583,7 @@ export class GrassField {
             _scl.set(h * (0.82 + rng.next() * 0.4), h, h * zj);
             _m.compose(_pos, _q, _scl);
             _m.toArray(mArr, count * 16);
-            tint(u, v, wet, dry, k * (0.9 + rng.next() * 0.2));
+            tint(u, v, dry, k * (0.94 + rng.next() * 0.12), hue, sat);
             count++;
           }
           continue;
@@ -539,7 +607,8 @@ export class GrassField {
         _scl.set(w, h, w);
         _m.compose(_pos, _q, _scl);
         _m.toArray(mArr, count * 16);
-        tint(u, v, wet, dry, (dead ? 0.85 : 0.58) + jitter * 0.46);
+        tint(u, v, dry, ((dead ? 1.00 : 0.76) + jitter * (dead ? 0.34 : 0.44))
+          * (1 + dry * 0.12), hue, sat);
         count++;
       }
     }
