@@ -201,7 +201,7 @@ function frame(jobs, aspect = 1600 / 900) {
  * + how much relief sits behind it, which is what makes a vista read.
  */
 async function scout(jobs) {
-  const { Field } = await import('../src/world/terrain/Field.js');
+  const { Field } = await import('../world/terrain/Field.js');
   const t0 = Date.now();
   const field = new Field(1337);
   field.build();

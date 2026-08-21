@@ -13,8 +13,8 @@
  *
  * Exits non-zero on any hard failure.
  */
-import { Field } from '../src/world/terrain/Field.js';
-import { worldMap, WORLD, POI_TYPES } from '../src/world/map/WorldMap.js';
+import { Field } from '../world/terrain/Field.js';
+import { worldMap, WORLD, POI_TYPES } from '../world/map/WorldMap.js';
 
 const pad = (s, n) => String(s).padEnd(n);
 let fails = 0, warns = 0;
