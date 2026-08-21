@@ -169,6 +169,9 @@ agree on mean tint to within 2% — 0.305 / 0.304 / 0.300, against
 
 ## 5. Ground colour — what I assumed (read this alongside `agent/splat`)
 
+> **Superseded by §5.5.** `agent/splat` has landed, the ground is regionally
+> coloured, and `GROUND_BLEED` is back up at 0.34. Kept for the reasoning.
+
 `GrassField` blends every clump's colour toward `Ecology.groundColor`, which
 delegates to the terrain. I pulled that blend from **0.32 to 0.22**
 (`GROUND_BLEED` in `GrassField.js`) because a third of every blade's hue was
