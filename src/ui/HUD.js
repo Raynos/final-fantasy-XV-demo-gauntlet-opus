@@ -53,7 +53,7 @@ export class HUD {
     this.compass = new CompassBar(this.root);
     this.combat = new CombatHUD(this.root, this.party.combatSlot);
     this.prompts = new Prompts(this.root);
-    this.subtitles = new Subtitles(this.root);
+    this.subtitles = new Subtitles(this.root, game);
     this.toasts = new Toasts(this.party.noticeSlot);
     this.fx = new ScreenFX(game.uiRoot);
     // Hints sit in their own layer above the menus, so the "how do I get out
@@ -124,9 +124,7 @@ export class HUD {
     this.fx.cardState = null;
     this.fx.luState = null;
     this.fx.flashAmt = 0;
-    this.subtitles.cur = null;
-    for (const b of this.subtitles.bubbles) b.node.remove();
-    this.subtitles.bubbles.length = 0;
+    this.subtitles.clear();
     this.toasts.clear();
     this.hints.reset();
     if (this.bridge) this.bridge._lastCall = -99;

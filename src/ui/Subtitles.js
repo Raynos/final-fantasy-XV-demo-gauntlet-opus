@@ -3,10 +3,25 @@ import { el, clamp, easeOut, easeOutQuint, Clip } from './UIKit.js';
 /**
  * Lower-third dialogue subtitles with a speaker name, plus the party-banter
  * bubble stack that pops in the lower-left during exploration.
+ *
+ * ### Lines belong to the shot that spoke them
+ *
+ * A capture applies a shot, which tears down whatever scene was talking — but
+ * the half-finished line it left on screen has no owner left to retire it, so
+ * it burns into the next frame. `menu_title` captured after `cine_opening` came
+ * back with "For the record, nobody was listening." across the title card.
+ *
+ * So every line and bubble is stamped with `game.currentShot` at the moment it
+ * is spoken, and anything whose stamp no longer matches is dropped. Stamping at
+ * *say* time rather than clearing on the transition is what makes cutscenes keep
+ * working: `Game.applyShot` sets `currentShot` and then seeks the timeline, so a
+ * beat that fires during the seek is already stamped with the new shot and
+ * survives. In ordinary play `currentShot` is always `null` and this is inert.
  */
 export class Subtitles {
-  /** @param {HTMLElement} parent */
-  constructor(parent) {
+  /** @param {HTMLElement} parent @param {object} [game] */
+  constructor(parent, game) {
+    this.game = game || null;
     this.root = el('div.subs-layer');
     parent.appendChild(this.root);
 
@@ -48,6 +63,18 @@ export class Subtitles {
     }
     const secs = dur ?? clamp(1.4 + line.length * 0.045, 2.2, 7);
     this.cur = new Clip(0.34, secs);
+    this.cur.shot = this._shot();
+  }
+
+  /** The shot this line belongs to — see the class note. @returns {string|null} */
+  _shot() { return this.game?.currentShot || null; }
+
+  /** Drop the current line and every banter bubble immediately. */
+  clear() {
+    this.cur = null;
+    this.subs.style.opacity = '0';
+    for (const b of this.bubbles) if (b.node.parentNode) b.node.parentNode.removeChild(b.node);
+    this.bubbles.length = 0;
   }
 
   /** Pop a party-banter bubble. @param {string} who @param {string} line */
@@ -58,7 +85,7 @@ export class Subtitles {
       el('div.bl', { text: line }),
     ]);
     this.banter.appendChild(node);
-    this.bubbles.push({ node, clip: new Clip(0.4, 4.2) });
+    this.bubbles.push({ node, clip: new Clip(0.4, 4.2), shot: this._shot() });
     while (this.bubbles.length > 3) {
       const old = this.bubbles.shift();
       if (old.node.parentNode) old.node.parentNode.removeChild(old.node);
@@ -67,6 +94,15 @@ export class Subtitles {
 
   /** @param {number} dt seconds */
   update(dt) {
+    // retire anything left over from a shot that is no longer on screen
+    const shot = this._shot();
+    if (this.cur && this.cur.shot !== shot) { this.cur = null; this.subs.style.opacity = '0'; }
+    for (let i = this.bubbles.length - 1; i >= 0; i--) {
+      if (this.bubbles[i].shot === shot) continue;
+      const b = this.bubbles.splice(i, 1)[0];
+      if (b.node.parentNode) b.node.parentNode.removeChild(b.node);
+    }
+
     const c = this.cur;
     if (!c) this.subs.style.opacity = '0';
     else {
