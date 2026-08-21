@@ -22,11 +22,6 @@ import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase }
  * ```
  */
 export class BipedEnemy extends Enemy {
-  constructor(type, opts) {
-    super(type, opts);
-    this.autoResetVisual = true;
-  }
-
   get A() { return this.constructor.ANIM; }
 
   setupAnim(anim) {

@@ -28,11 +28,6 @@ import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/Cr
  * ```
  */
 export class QuadrupedEnemy extends Enemy {
-  constructor(type, opts) {
-    super(type, opts);
-    this.autoResetVisual = true;
-  }
-
   /** @returns {Object} tuning block; subclasses must define it. */
   get A() { return this.constructor.ANIM; }
 

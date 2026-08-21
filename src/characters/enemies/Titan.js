@@ -31,6 +31,14 @@ export const TITAN = {
   expClass: 'boss',
   boss: true,
   superArmour: true,
+  /**
+   * Modelled from the pelvis up, so the bottom of the mesh is *meant* to be
+   * tens of metres below the ground the player stands on. Opts him out of the
+   * ground calibration in `EnemyBase`, which would otherwise measure the cut
+   * edge of his hips as a sunk foot and hoist the whole mountain out of the
+   * arena; `tools/creaturecheck.mjs` exempts him for the same reason.
+   */
+  buriedBase: true,
   stats: {
     name: 'Titan, the Archaean', hp: 180000, poise: 900, speed: 0.6, attackRange: 26,
     aggroRange: 200, radius: 9, height: 40, damage: 900, level: 45,

@@ -146,7 +146,8 @@ export class Rig {
    * @param {THREE.Material} material
    * @returns {{group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>}}
    */
-  build(material, { castShadow = true, radius = 4 } = {}) {
+  build(material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES } = {}) {
+    if (uvTiles) for (const g of this.parts) detailUV(g, uvTiles);
     const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
     const group = new THREE.Group();
     const rootBone = this.bones[0];
@@ -172,6 +173,75 @@ export class Rig {
   }
 }
 
+/**
+ * Detail-map tiles per metre of surface. One tile of the shared hide/plate
+ * normal covers ~14 cm of creature at this density, which is the scale a coat
+ * or a rivet line reads at from five metres.
+ */
+export const DETAIL_TILES = 7;
+
+/**
+ * Rescale a part's UVs so its detail map tiles at a fixed density *in metres*,
+ * rather than once across the whole part.
+ *
+ * This is the single largest thing wrong with the bestiary's surfaces. Every
+ * primitive `Sculpt` emits — every sweep, every lofted blob, every slab —
+ * lays UV 0..1 across the entire part, and no species passes a scale. So one
+ * tile of hide covered a whole Bloodhorn flank while the same tile covered a
+ * 0.4 m hoof: the torso read as cottage cheese and the legs came out
+ * dead-smooth, in the same animal, from the same map. Texel density has to be
+ * a property of the surface, not of how the modeller happened to split it up.
+ *
+ * The metres-per-UV-unit is read off the geometry itself, per axis, the same
+ * way a tangent basis is derived — accumulate `dP/du` and `dP/dv` over the
+ * triangles, area-weighted — so it is correct for a swept limb whose u runs
+ * around the girth and v along the length, without anyone declaring which is
+ * which. The result is rounded to a whole number of tiles because u usually
+ * closes a loop around a limb, and a fractional count puts a visible seam down
+ * the side of every leg.
+ *
+ * @param {THREE.BufferGeometry} geo
+ * @param {number} tilesPerMetre
+ */
+export function detailUV(geo, tilesPerMetre) {
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  if (!pos || !uv) return geo;
+  const index = geo.index ? geo.index.array : null;
+  const tri = index ? index.length / 3 : pos.count / 3;
+  const p0 = _v0, p1 = _v1, p2 = _v2;
+  let mU = 0, mV = 0, wsum = 0;
+  for (let t = 0; t < tri; t++) {
+    const a = index ? index[t * 3] : t * 3;
+    const b = index ? index[t * 3 + 1] : t * 3 + 1;
+    const c = index ? index[t * 3 + 2] : t * 3 + 2;
+    p0.fromBufferAttribute(pos, a);
+    p1.fromBufferAttribute(pos, b).sub(p0);
+    p2.fromBufferAttribute(pos, c).sub(p0);
+    const u1 = uv.getX(b) - uv.getX(a), v1 = uv.getY(b) - uv.getY(a);
+    const u2 = uv.getX(c) - uv.getX(a), v2 = uv.getY(c) - uv.getY(a);
+    const det = u1 * v2 - u2 * v1;
+    if (!det || !isFinite(det)) continue;
+    const r = 1 / det;
+    // dP/du and dP/dv for this triangle, in metres per UV unit
+    const tx = (p1.x * v2 - p2.x * v1) * r, ty = (p1.y * v2 - p2.y * v1) * r, tz = (p1.z * v2 - p2.z * v1) * r;
+    const bx = (p2.x * u1 - p1.x * u2) * r, by = (p2.y * u1 - p1.y * u2) * r, bz = (p2.z * u1 - p1.z * u2) * r;
+    const w = Math.abs(det);
+    mU += Math.hypot(tx, ty, tz) * w;
+    mV += Math.hypot(bx, by, bz) * w;
+    wsum += w;
+  }
+  if (!wsum) return geo;
+  const su = Math.max(1, Math.round((mU / wsum) * tilesPerMetre));
+  const sv = Math.max(1, Math.round((mV / wsum) * tilesPerMetre));
+  const arr = uv.array;
+  for (let i = 0; i < arr.length; i += 2) { arr[i] *= su; arr[i + 1] *= sv; }
+  uv.needsUpdate = true;
+  return geo;
+}
+
+const _v0 = new THREE.Vector3();
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 

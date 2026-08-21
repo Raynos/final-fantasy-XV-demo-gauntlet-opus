@@ -91,6 +91,10 @@ export class Enemies {
         scale: o.scale ?? 1, level: o.level,
       });
       e.attachVisual(this.prototype(key));
+      // Once per species, on the frame it first appears: measure how far its
+      // settle poses reach below the ground so they can be corrected from the
+      // model instead of from a hand-picked constant. See `calibrateGround`.
+      e.calibrateGround();
       if (o.hp) { e.maxHp = o.hp; e.hp = o.hp; }
       if (o.damage) e.damage = o.damage;
     }
@@ -246,10 +250,6 @@ export class Enemies {
   }
 
   update(dt, game) {
-    if (this.frozen) {
-      for (const e of this.list) if (e.frozenPose) e.pose(e.frozenPose.state, e.frozenPose.phase, null);
-      return;
-    }
     const ctx = this._ctx;
     ctx.terrain = game.get('Terrain');
     ctx.player = game.get('Player');
@@ -257,6 +257,14 @@ export class Enemies {
     ctx.night = this.night;
     ctx.onStrike = this.onStrike;
     ctx.onEnemyStrike = this.onEnemyStrike;
+
+    if (this.frozen) {
+      // `repose`, not `pose`: a held pose has to clear the body transform
+      // before re-authoring it, or every relative write in the pose function
+      // integrates once per settle frame. See `Enemy.repose`.
+      for (const e of this.list) e.repose(dt, ctx);
+      return;
+    }
 
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i];
