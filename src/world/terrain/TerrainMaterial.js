@@ -153,8 +153,9 @@ uniform sampler2D uNormalTex;
 uniform sampler2D uFarNormalTex;
 uniform sampler2D uCtrlTex;
 uniform sampler2D uFarCtrlTex;
-uniform highp sampler2DArray uDetailArr;   // 0 = sub-metre grit, 1 = 2-4 m surface
+uniform highp sampler2DArray uDetailArr;   // 0 = grit, 1 = 2-4 m surface, 2-3 = biome LUT
 uniform float uNearScale;
+uniform vec4 uEnv;      // seaLevel, 1 / worldSize, -, -
 uniform vec4 uWet;      // wetness, puddleGain, -, -
 uniform highp sampler2DArray uAlbedoArr;
 uniform highp sampler2DArray uSurfArr;
@@ -221,6 +222,91 @@ vec2 tf_rot(vec2 p, float a) {
   return vec2(p.x * c - p.y * s, p.x * s + p.y * c);
 }
 
+// ---- stochastic tile sampling ----------------------------------------------
+// A repeating texture is a lattice, and domain-warping a lattice does not
+// remove it: the same polygon pattern still reappears on the same pitch, only
+// bent. The previous defence was to draw every layer twice, at uLayerScale
+// and at a third of it, cross-faded with distance — and *that* is what the
+// r4 critique read as "cracks two metres wide": the coarse tap of the dirt
+// layer was a 27 m tile whose worley cells are 4.5 m across, weighted to 0.82
+// over most of a plain.
+//
+// This is the Heitz & Neyret triangle-grid sampler instead. Each layer is
+// drawn three times, at three independently hashed offsets *and* rotations
+// picked per vertex of a simplex lattice, and the three are blended by the
+// barycentric weights. There is no lattice left to find, at any scale.
+//
+// Two details that matter:
+//   * the blend is height-aware — each tap is weighted by exp2(height), so two
+//     plates meet along a crack instead of ghosting through each other, which
+//     is what a plain barycentric average looks like;
+//   * the rotation is applied about *that tap's own cell centre*, so the
+//     coordinate stays near the origin instead of running to 1500 tile units,
+//     where fp32 no longer resolves a texel.
+const mat2 TF_SKEW = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+const mat2 TF_UNSKEW = mat2(1.0, 0.0, 0.5, 0.86602540);
+/** Lattice cells per tile. 0.65 puts a cell at ~1.5 tiles. */
+const float TF_LAT = 0.65;
+/** Extra chlorophyll pushed into the grass layer where the region is green. */
+const vec3 TF_CHLORO = vec3(0.80, 1.12, 0.60);
+
+vec2 tf_hash2(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.xx + q.yz) * q.zy);
+}
+
+/**
+ * One stochastic tap: rotate + offset by this cell's hash, sample both arrays
+ * with explicit gradients (the offsets are discontinuous, so an implicit mip
+ * would break at every cell edge), and un-rotate the tangent normal so the
+ * per-cell rotation cannot shear the lighting.
+ */
+void tf_tap(vec2 uv, vec2 cell, float layer, vec2 ddx, vec2 ddy,
+            out vec4 alb, out vec4 srf) {
+  vec2 o = tf_hash2(cell);
+  float a = (o.x + o.y * 3.0) * 6.2831853;
+  vec2 c = (TF_UNSKEW * cell) / TF_LAT;
+  vec2 u = tf_rot(uv - c, a) + o;
+  vec2 dx = tf_rot(ddx, a), dy = tf_rot(ddy, a);
+  alb = textureGrad(uAlbedoArr, vec3(u, layer), dx, dy);
+  vec4 q = textureGrad(uSurfArr, vec3(u, layer), dx, dy);
+  srf = vec4(tf_rot(q.rg * 2.0 - 1.0, -a) * 0.5 + 0.5, q.ba);
+}
+
+void tf_stoch(vec2 uv, float layer, vec2 ddx, vec2 ddy,
+              out vec4 albOut, out vec4 srfOut) {
+  vec2 sk = TF_SKEW * (uv * TF_LAT);
+  vec2 base = floor(sk);
+  vec2 f = sk - base;
+  vec3 bw;
+  vec2 g1, g2, g3;
+  if (f.x + f.y < 1.0) {
+    bw = vec3(1.0 - f.x - f.y, f.y, f.x);
+    g1 = base; g2 = base + vec2(0.0, 1.0); g3 = base + vec2(1.0, 0.0);
+  } else {
+    bw = vec3(f.x + f.y - 1.0, 1.0 - f.y, 1.0 - f.x);
+    g1 = base + vec2(1.0, 1.0); g2 = base + vec2(1.0, 0.0); g3 = base + vec2(0.0, 1.0);
+  }
+
+  vec4 a1, a2, a3, s1, s2, s3;
+  tf_tap(uv, g1, layer, ddx, ddy, a1, s1);
+  tf_tap(uv, g2, layer, ddx, ddy, a2, s2);
+  tf_tap(uv, g3, layer, ddx, ddy, a3, s3);
+
+  // Height-aware weighting, multiplied into the barycentric weight rather than
+  // added to it: a tap whose triangle weight has reached zero must contribute
+  // nothing however tall it is, or the cell edges themselves become visible.
+  vec3 hw = bw * exp2(vec3(a1.a, a2.a, a3.a) * 5.0);
+  hw /= max(hw.x + hw.y + hw.z, 1e-5);
+  albOut = a1 * hw.x + a2 * hw.y + a3 * hw.z;
+  srfOut = s1 * hw.x + s2 * hw.y + s3 * hw.z;
+  // Blending three taps flattens the layer's own contrast; push it back around
+  // the tap mean so a stochastic surface is not visibly softer than a tiled one.
+  vec3 mean = (a1.rgb + a2.rgb + a3.rgb) * (1.0 / 3.0);
+  albOut.rgb = max(mean + (albOut.rgb - mean) * 1.55, vec3(0.0));
+}
+
 void tf_shade() {
   vec3 P = vTW;
   vec3 N = tf_surfNormal(P.xz);
@@ -233,6 +319,24 @@ void tf_shade() {
   float slope = clamp(1.0 - N.y, 0.0, 1.0);
   float alt = P.y;
 
+  // ---- the regional palette ------------------------------------------------
+  // Everything below this line used to derive its colour from slope, altitude,
+  // flow and noise — all global fields that have never heard of the map — which
+  // is why the whole 8 km world drew as one Leide badland. terrain/Biome.js
+  // bakes an authored per-zone palette, blended by the map's own Gaussian zone
+  // weights, into layers 2 and 3 of the detail array; two fetches read it.
+  // Explicit LOD 0 because the array is RepeatWrapping for the tiled detail
+  // maps' sake and these two layers span the world exactly once.
+  vec2 bioUv = clamp(P.xz * uEnv.y + 0.5, 0.0015, 0.9985);
+  vec4 bioG = textureLod(uDetailArr, vec3(bioUv, 2.0), 0.0);
+  vec4 bioR = textureLod(uDetailArr, vec3(bioUv, 3.0), 0.0);
+  vec3 bioGround = bioG.rgb * 2.0;    // tint on sand / dirt / gravel / grass / road
+  vec3 bioRock = bioR.rgb * 2.0;      // tint on the rock layer and the strata
+  float bioGreen = bioG.a;            // how vegetated the ground itself is
+  float bioDamp = bioR.a;             // standing humidity, independent of weather
+  // how far off the Leide iron-oxide axis this region sits
+  float bioCool = clamp(bioGreen * 0.90 + bioDamp * 0.40, 0.0, 1.0);
+
   // macro variation across hundreds of metres so nothing ever reads as tiled
   float m1 = tf_snoise(P.xz * 0.0017);
   float m2 = tf_snoise(P.xz * 0.0072 + 21.0);
@@ -243,16 +347,22 @@ void tf_shade() {
   float p1 = tf_snoise(P.xz * 0.0125 + 3.3);     // ~80 m
   float p2 = tf_snoise(P.xz * 0.043 - 9.1);      // ~23 m
   float patchN = 0.62 * p1 + 0.38 * p2;
-  float dryness = clamp(0.5 + 0.45 * m1 + 0.55 * patchN, 0.0, 1.0);
+  float dryness = clamp(0.5 + 0.45 * m1 + 0.55 * patchN - 0.40 * bioGreen, 0.0, 1.0);
   float flatAmt = 1.0 - smoothstep(0.06, 0.28, slope);
-  float lowAlt = 1.0 - smoothstep(48.0, 120.0, alt);
+  // The altitude gate on grass and sand is *regional*. A fixed 48-120 m band
+  // switched the grass off above 120 m — and Duscae's basins are authored at
+  // base 66-120 m and Cleigne's shelf at 100 m, so the gate was cutting the
+  // grass out of precisely the zones that are defined as green.
+  float lowAlt = 1.0 - smoothstep(48.0 + 190.0 * bioGreen, 120.0 + 320.0 * bioGreen, alt);
 
   float w[6];
-  w[0] = flatAmt * lowAlt * (0.14 + 1.05 * sedi + 1.70 * smoothstep(0.60, 0.95, dryness));
+  // no desert pans in a humid basin
+  w[0] = flatAmt * lowAlt * (0.14 + 1.05 * sedi + 1.70 * smoothstep(0.60, 0.95, dryness))
+       * (1.0 - 0.80 * bioGreen);
   w[1] = 0.72 + 0.55 * (0.5 + 0.5 * p2) - 1.35 * smoothstep(0.10, 0.44, slope);
   w[2] = smoothstep(0.14, 0.42, slope) * (0.5 + 0.8 * (0.5 + 0.5 * m2))
        + 1.20 * flow + 0.40 * rocky
-       + 0.62 * smoothstep(0.34, 0.04, dryness) * flatAmt;
+       + 0.62 * smoothstep(0.34, 0.04, dryness) * flatAmt * (1.0 - 0.70 * bioGreen);
   w[3] = smoothstep(0.20, 0.48, slope) * 1.80 + 1.10 * rocky
        + 0.65 * smoothstep(80.0, 175.0, alt);
   // Talus / scree: the mid-slope band directly under a cliff face, where the
@@ -261,10 +371,15 @@ void tf_shade() {
   float scree = smoothstep(0.15, 0.31, slope) * (1.0 - smoothstep(0.33, 0.52, slope))
               * smoothstep(0.30, 0.70, rocky)
               * (0.55 + 0.45 * (0.5 + 0.5 * tf_snoise(vTW.xz * 0.021 - 3.0)));
-  w[2] += 0.55 * scree;
-  w[3] -= 0.22 * scree;
-  w[4] = flatAmt * lowAlt * 1.30
-       * smoothstep(0.12, 0.66, 0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * sedi);
+  w[2] += 0.70 * scree;
+  w[3] -= 0.26 * scree;
+  // Tinting the ground green is not enough on its own — a green basin is green
+  // because there is a *mat* on it. Both the gain and the threshold move with
+  // the region, so Duscae's flats are grassland with dirt showing through in
+  // patches rather than dirt with the odd tuft.
+  w[4] = flatAmt * lowAlt * (1.30 + 3.20 * bioGreen)
+       * smoothstep(0.12 - 0.26 * bioGreen, 0.66 - 0.44 * bioGreen,
+           0.42 * flow + 0.36 * patchN + 0.22 * m1 + 0.17 + 0.14 * sedi);
   // a road can never read as a pale scar up a cliff face, whatever the mask says
   w[5] = road * 5.5 * (1.0 - smoothstep(0.30, 0.55, slope));
 
@@ -365,7 +480,11 @@ void tf_shade() {
   // than a few hundred metres from the origin — the reason mid-range faces
   // came out as smooth dunes. Bounded, it does what it should: bends the beds
   // round a nose and splays them in a re-entrant.
-  float form = 3.6 * (1.0 - N.y) + 2.0 * N.x - 1.4 * N.z;
+  // Bounded, and *softer* than it was: at full strength the term swings by most
+  // of a bed thickness as the normal sweeps round a cone, which draws a
+  // perfectly regular chevron on every conical peak instead of bending the beds
+  // round a nose. Half the swing bends; the full swing wallpapers.
+  float form = 1.9 * (1.0 - N.y) + 1.1 * N.x - 0.8 * N.z;
   float sy1 = (P.y + dot(P.xz, dip) + form * (0.6 + 0.8 * mr2)) * freq
             + warp * 0.20 + mr3 * 7.0;
   // Analytic band filtering. Once a bed projects to less than a pixel the
@@ -414,6 +533,9 @@ void tf_shade() {
   bedCol = mix(mix(strataCool, strataWarm, bedTint), strataPale, bedR2 * 0.55);
   // each range carries its own iron / ash balance
   bedCol *= mix(vec3(0.94, 0.97, 1.06), vec3(1.10, 0.98, 0.86), mr3);
+  // Leide's bands run rust; a Cleigne limestone shelf's do not. Pull the
+  // stack toward neutral wherever the region has moved off the ochre axis.
+  bedCol = mix(bedCol, vec3(dot(bedCol, vec3(0.2126, 0.7152, 0.0722))), bioCool * 0.65);
   // With the beds analytically filtered they no longer have to be faded out at
   // 600 m to avoid moire: they run to the horizon and dissolve when a bed drops
   // below a pixel. That dissolve *is* the distance cue.
@@ -426,14 +548,30 @@ void tf_shade() {
   // same swing at 900 m, behind that much scattering, does not — and a range
   // whose bedding has been washed flat is exactly the one that reads as a big
   // near lump rather than a distant mountain.
+  // Sedimentary banding is a *badland* signature. Where the region is green the
+  // same face is under soil and root mat, and drawing rust strata through it is
+  // what made every Duscae and Cleigne hillside read as printed wood grain.
+  //
+  // This has to be a *threshold*, not a lerp. A plain mix() left a mid-green
+  // region like Taelpar at 0.63 of full bedding strength, and since the same
+  // expression then multiplies the contrast back up by 2.1x with distance, a
+  // 300-900 m hillside came out more strongly banded than a near one: the
+  // Taelpar valley walls read as varnished plywood. Bedding is either the
+  // exposed rock of a badland or it is buried, so the curve should switch, and
+  // it should be all the way off by the time a region is properly vegetated.
+  float bedRegion = mix(1.0, 0.08, smoothstep(0.12, 0.50, bioGreen));
   cliffAmt = clamp(smoothstep(0.34, 0.78, structSlope) * bandFade
-    * (0.45 + 0.80 * mr1) * bedStr
+    * (0.45 + 0.80 * mr1) * bedStr * bedRegion
     * (1.0 + 1.10 * smoothstep(250.0, 1200.0, vTDist)), 0.0, 1.0);
 
-  bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope), 0.0, 1.0);
+  bedThrough = clamp(0.72 * smoothstep(0.34, 0.80, structSlope) * bedRegion, 0.0, 1.0);
   // the runnels darken independently of the bedding, at every distance, so even
-  // a range past the band fade still has vertical structure
-  runnelAmt = smoothstep(0.30, 0.72, structSlope) * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
+  // a range past the band fade still has vertical structure. These survive a
+  // green region far better than the beds do — a wooded valley wall still has
+  // gullies raked down it — so they are only damped, never switched off.
+  runnelAmt = smoothstep(0.30, 0.72, structSlope)
+            * mix(1.0, 0.45, smoothstep(0.12, 0.50, bioGreen))
+            * (1.0 - smoothstep(1500.0, 3400.0, vTDist));
   }
 
   // Large-scale value and hue drift across each landform. Three octaves from
@@ -448,10 +586,16 @@ void tf_shade() {
   vec3 rockTint = mix(vec3(1.0), bedCol, cliffAmt)
     * mix(1.0, 0.83 + 0.31 * bedA, cliffAmt)
     * (0.84 + 0.34 * faceV)
-    // face-to-face hue drift stays on the ochre/ash axis, warm-biased
-    * mix(vec3(0.95, 0.96, 1.02), vec3(1.18, 1.00, 0.80), clamp(0.5 + 0.75 * vv2, 0.0, 1.0))
+    // Face-to-face hue drift. In Leide it stays on the ochre/ash axis and is
+    // warm-biased; in a cool region both endpoints close toward neutral, or
+    // every Cleigne cliff comes out rusty however the palette tints it.
+    * mix(mix(vec3(0.95, 0.96, 1.02), vec3(0.99, 1.00, 1.03), bioCool),
+          mix(vec3(1.18, 1.00, 0.80), vec3(1.08, 1.04, 0.97), bioCool),
+          clamp(0.5 + 0.75 * vv2, 0.0, 1.0))
     * mix(1.0, 0.74 + 0.36 * runnel, runnelAmt)
-    * vec3(1.05, 1.00, 0.93);
+    // the regional rock colour: rust in Leide, pale limestone in Cleigne,
+    // black basalt on Ravatogh
+    * bioRock;
 
   // ---- cheap far shading -------------------------------------------------
   vec3 farCol = vec3(0.0);
@@ -464,8 +608,11 @@ void tf_shade() {
   // smooth dune.
   // the far LOD is a flat average of the layers; without the rock tint every
   // distant massif is the same untextured lump of one colour
-  farCol *= mix(vec3(1.0), rockTint,
-    clamp(w[3] * 1.25 + w[2] * 0.35 + bedThrough, 0.0, 1.0));
+  float rockShare = clamp(w[3] * 1.25 + w[2] * 0.35 + bedThrough, 0.0, 1.0);
+  // the soft layers take the region's ground colour, the rock its own
+  farCol *= mix(bioGround * mix(vec3(1.0), TF_CHLORO, bioGreen * clamp(w[4] * 1.6, 0.0, 1.0)),
+                vec3(1.0), rockShare);
+  farCol *= mix(vec3(1.0), rockTint, rockShare);
 
   float detailAmt = 1.0 - smoothstep(420.0, 1100.0, vTDist);
   vec3 col = farCol;
@@ -508,19 +655,26 @@ void tf_shade() {
     // so a layer sitting at a few percent of the dominant weight cannot reach
     // the final colour at all — and it was costing four array fetches to prove
     // it. Skipping those is where most of the splat's bandwidth was going.
+    // Screen-space derivatives of the *shared* jittered coordinate, taken here
+    // in uniform control flow. Each layer's own gradient is this one rotated
+    // and scaled, so no dFdx is ever evaluated inside the divergent loop below
+    // — which would be undefined, and is the exact class of bug that made the
+    // mip level unpredictable when this shader last grew a branch.
+    vec2 jdx = dFdx(wj), jdy = dFdy(wj);
+
     float maxW = 0.0;
     for (int i = 0; i < 6; i++) maxW = max(maxW, w[i]);
     float wCut = maxW * 0.06;
     vec4 alb[6];
     vec4 srf[6];
     for (int i = 0; i < 6; i++) {
-      if (w[i] < wCut) { alb[i] = vec4(0.0); srf[i] = vec4(0.5, 0.5, uLayerRough[i], 1.0); continue; }
-      vec2 uvA = tf_rot(wj, uLayerRot[i]) * uLayerScale[i];
-      vec2 uvB = tf_rot(wj, uLayerRot[i] + 1.87) * (uLayerScale[i] * 0.34) + 11.3;
-      alb[i] = mix(texture(uAlbedoArr, vec3(uvA, float(i))),
-                   texture(uAlbedoArr, vec3(uvB, float(i))), macroMix);
-      srf[i] = mix(texture(uSurfArr, vec3(uvA, float(i))),
-                   texture(uSurfArr, vec3(uvB, float(i))), macroMix * 0.6);
+      // layer 3 is triplanar and is resolved on its own below
+      if (i == 3 || w[i] < wCut) {
+        alb[i] = vec4(0.0); srf[i] = vec4(0.5, 0.5, uLayerRough[i], 1.0); continue;
+      }
+      float sc = uLayerScale[i], rt = uLayerRot[i];
+      tf_stoch(tf_rot(wj, rt) * sc, float(i),
+               tf_rot(jdx, rt) * sc, tf_rot(jdy, rt) * sc, alb[i], srf[i]);
     }
 
     // ---- rock is triplanar so cliffs never smear, and carries the strata ---
@@ -588,6 +742,18 @@ void tf_shade() {
     vec3 through = mix(vec3(1.0), rockTint, bedThrough);
     alb[1].rgb *= through;
     alb[2].rgb *= through;
+
+    // Regional ground colour. The six layer tiles are authored as Leide
+    // red-ochre and there is only one set of them; the palette is a multiplier
+    // on top, which is what lets a humid basin read as real Duscae green and a
+    // volcano as basalt without a second set of textures — or a seventh
+    // sampler to hold them.
+    alb[0].rgb *= bioGround;
+    // bare soil in a humid basin is dark forest loam, not pale dust
+    alb[1].rgb *= bioGround * mix(vec3(1.0), vec3(0.84, 0.86, 0.76), bioGreen);
+    alb[2].rgb *= mix(bioGround, bioRock, 0.5);   // gravel is broken local rock
+    alb[4].rgb *= bioGround * mix(vec3(1.0), TF_CHLORO, bioGreen);
+    alb[5].rgb *= mix(vec3(1.0), bioGround, 0.45);  // the road stays pale dust
 
     // ---- height blend ------------------------------------------------------
     float b[6];
@@ -709,12 +875,16 @@ void tf_shade() {
   // three overlapping colour fields at 600 m / 140 m / 40 m: the thing that
   // makes a procedural surface stop reading as one material.
   float t1 = clamp(0.5 + 0.72 * m1 + 0.30 * m2, 0.0, 1.0);
-  vec3 ochre = vec3(1.20, 0.96, 0.74);
-  vec3 ash   = vec3(0.84, 0.90, 1.00);
-  vec3 olive = vec3(1.02, 1.03, 0.80);
+  // The three endpoints are regional: in Leide they are the original ochre /
+  // ash / olive, and they close toward a cool green as the region does.
+  vec3 ochre = mix(vec3(1.20, 0.96, 0.74), vec3(1.02, 1.06, 0.88), bioCool);
+  vec3 ash   = mix(vec3(0.84, 0.90, 1.00), vec3(0.86, 0.95, 1.02), bioCool);
+  vec3 olive = mix(vec3(1.02, 1.03, 0.80), vec3(0.90, 1.07, 0.80), bioGreen);
   col *= mix(ash, ochre, t1);
   col *= mix(vec3(1.0), olive, clamp(0.5 + 0.9 * m2 - 0.4 * m1, 0.0, 1.0) * 0.45);
-  col *= 0.80 + 0.40 * (0.5 + 0.5 * m3);
+  // widened: hectare-scale value drift is what stops a region reading as one
+  // flat wash of its own palette
+  col *= 0.76 + 0.48 * (0.5 + 0.5 * m3);
   // damp channels read darker and slicker
   col *= mix(1.0, 0.78, flow * 0.75);
   rgh = mix(rgh, rgh * 0.84, flow * 0.7);
@@ -736,6 +906,18 @@ void tf_shade() {
   col *= mix(1.0, 0.94, smoothstep(0.35, 0.75, slope));
   // sun-bleached naturalism, not candy: pull a little saturation back out
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 0.86);
+
+  // ---- standing humidity and the shore line --------------------------------
+  // Weather-independent wetness: a slough is wet in high summer, and the metre
+  // or two of ground above any water line is dark everywhere in the world.
+  // Only the flats hold it — water runs off a face.
+  float damp = bioDamp * (1.0 - smoothstep(0.16, 0.44, slope));
+  float shore = (1.0 - smoothstep(0.0, 9.0, alt - uEnv.x))
+              * (1.0 - smoothstep(0.05, 0.30, slope));
+  damp = clamp(max(damp, shore * 0.88), 0.0, 1.0);
+  col *= mix(1.0, 0.66, damp);
+  col = mix(col, col * vec3(0.90, 0.97, 1.05), damp * 0.85);
+  rgh = mix(rgh, rgh * 0.55, damp);
 
   // ---- wet response --------------------------------------------------------
   // A water film fills the surface micro-relief, so roughness collapses, and it
@@ -769,7 +951,7 @@ void tf_shade() {
   }
 
   tfAlbedo = col;
-  tfRough = clamp(rgh, mix(0.35, 0.045, wet), 1.0);
+  tfRough = clamp(rgh, mix(mix(0.35, 0.12, damp), 0.045, wet), 1.0);
   tfNormalW = Nw;
   tfAO = clamp(ao, 0.0, 1.0);
 }
@@ -882,8 +1064,13 @@ export function patchGBufferMaterial(normalMaterial, res) {
   normalMaterial.needsUpdate = true;
 }
 
-/** Uniform block shared by every LOD level. */
-export function makeTerrainUniforms(tex, field) {
+/**
+ * Uniform block shared by every LOD level.
+ * @param {object} tex the shared texture set
+ * @param {object} field heightfield grid constants
+ * @param {object} [world] `WorldMap.WORLD` — sea level and world span
+ */
+export function makeTerrainUniforms(tex, field, world = { seaLevel: -6.5, size: 8192 }) {
   return {
     uHeightTex: { value: tex.height },
     uFarHeightTex: { value: tex.farHeight },
@@ -905,6 +1092,11 @@ export function makeTerrainUniforms(tex, field) {
     // and the pebble detail map (0.65 m)
     uNearScale: { value: 0.34 },
     uMicro: { value: 1.0 },
+    // sea level lets the ground darken as it runs into the water, and the
+    // reciprocal world span maps a world position onto the biome LUT. Both are
+    // uniforms rather than a texture on purpose: the fragment shader has no
+    // spare texture unit.
+    uEnv: { value: new THREE.Vector4(world.seaLevel, 1 / world.size, 0, 0) },
     uWet: { value: new THREE.Vector4(0, 1, 0, 0) },
   };
 }

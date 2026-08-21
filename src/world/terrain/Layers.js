@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildBiomeLut } from './Biome.js';
 
 /**
  * Procedurally synthesised, seamlessly tileable PBR material layers packed into
@@ -12,6 +13,8 @@ import * as THREE from 'three';
  */
 export const LAYER_NAMES = ['sand', 'dirt', 'gravel', 'rock', 'grass', 'road'];
 export const LAYER_COUNT = 6;
+/** Detail array depth: 2 tiled detail maps + the 2 world-space palette layers. */
+export const DETAIL_LAYERS = 4;
 
 /** Average albedo per layer (linear-ish sRGB bytes /255) used for the far LOD. */
 export const LAYER_AVG = [
@@ -23,8 +26,19 @@ export const LAYER_AVG = [
   [0.51, 0.475, 0.415],  // road   – pale compacted dirt
 ];
 export const LAYER_ROUGH = [0.95, 0.92, 0.88, 0.82, 0.94, 0.86];
-/** World-space tiles per metre. */
-export const LAYER_SCALE = [0.165, 0.108, 0.235, 0.082, 0.31, 0.205];
+/**
+ * World-space tiles per metre.
+ *
+ * These are ~1.6x tighter than they used to be. The old values were chosen
+ * while every layer was drawn twice — once at `LAYER_SCALE`, once at a third of
+ * it — so the coarse tap's features had to stay believable at 3x the size. That
+ * coarse tap is gone (it was the source of the 27 m mega-plates the critics
+ * read as "cracks two metres wide"), and with the stochastic tile sampler
+ * breaking the lattice instead, the base tile can be as small as the material
+ * really is: dirt now repeats every 5.3 m rather than 9.3 m, which puts the mud
+ * plates at ~0.9 m instead of ~1.5 m.
+ */
+export const LAYER_SCALE = [0.26, 0.19, 0.34, 0.082, 0.42, 0.28];
 
 // --------------------------------------------------------------- tiling noise
 // Every helper takes uv in [0,1) plus an explicit integer lattice count per
@@ -282,9 +296,10 @@ export function buildLayerData(size = 512) {
  * Wrap layer texels in the array textures the terrain shader samples.
  * @param {number} size texel resolution per layer
  * @param {object} [data] pre-baked texels from `buildLayerData`; synthesised when absent
+ * @param {Uint8Array} [lut] the two biome palette layers from `Biome.buildBiomeLut`
  * @returns {{albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture}}
  */
-export function buildLayerTextures(size = 512, data = null) {
+export function buildLayerTextures(size = 512, data = null, lut = null) {
   const d = data && data.size === size ? data : buildLayerData(size);
   const { albedo, surf, detail, detailSize } = d;
 
@@ -308,18 +323,26 @@ export function buildLayerTextures(size = 512, data = null) {
   surfArray.anisotropy = 16;
   surfArray.needsUpdate = true;
 
-  return { albedoArray, surfArray, detailArray: buildDetailArray(detailSize, detail) };
+  return { albedoArray, surfArray, detailArray: buildDetailArray(detailSize, detail, lut) };
 }
 
 /**
- * The two close-range detail maps, packed as one 2-layer array.
+ * The close-range detail maps and the regional palette, packed as one array.
  *
  *   layer 0 — pebble / grit scale, tiled sub-metre (parallax + micro normal)
  *   layer 1 — near-field surface at 2-4 m (gravel, cracking, scour)
+ *   layer 2 — biome LUT: rgb = ground tint / 2, a = groundcover  (world-space)
+ *   layer 3 — biome LUT: rgb = rock tint / 2,   a = damp         (world-space)
  *
  * They share a sampler on purpose: the terrain fragment shader already sits on
  * the 16-texture-unit limit once the atmosphere patch and the shadow cascades
- * are injected into it, and a seventh standalone sampler tips it over.
+ * are injected into it, and a seventh standalone sampler tips it over. The two
+ * palette layers (`terrain/Biome.js`) are appended here for exactly that
+ * reason — they are read once per pixel and would otherwise have cost an
+ * eighth binding of their own.
+ *
+ * Layers 0-1 are tiled in world space and *must* stay `RepeatWrapping`; layers
+ * 2-3 span the whole world exactly once, so the shader clamps their uv itself.
  */
 /** @returns {Uint8Array} the two detail layers packed back to back */
 function buildDetailData(size) {
@@ -330,8 +353,13 @@ function buildDetailData(size) {
   return data;
 }
 
-function buildDetailArray(size, data = buildDetailData(size)) {
-  const tex = new THREE.DataArrayTexture(data, size, size, 2);
+function buildDetailArray(size, data = buildDetailData(size), lut = null) {
+  const palette = lut || buildBiomeLut(size);
+  const px = size * size;
+  const all = new Uint8Array(px * 4 * DETAIL_LAYERS);
+  all.set(data, 0);
+  all.set(palette, px * 4 * 2);
+  const tex = new THREE.DataArrayTexture(all, size, size, DETAIL_LAYERS);
   tex.format = THREE.RGBAFormat;
   tex.colorSpace = THREE.NoColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
