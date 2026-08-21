@@ -161,10 +161,23 @@ function patch(mat, o = {}) {
   float s1 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d1 * d1 ) ) ), ${exp1.toFixed(1)} );
   float s2 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d2 * d2 ) ) ), ${exp2.toFixed(1)} );
   float vis = clamp( dot( hN, hL ) * 0.7 + 0.3, 0.0, 1.0 );
-  // break the band along the strand so it reads as filaments catching light
-  // rather than a chrome stripe painted down a tube
-  float mask = 0.28 + 0.72 * abs( sin( vMapUv.x * 34.0 + jit * 7.0 ) );
-  vec3 sheenC = mix( vec3( 1.0 ), vColor.rgb * 3.2 + 0.10, ${tint.toFixed(2)} );
+  // Break the band along the strand so it reads as filaments catching light
+  // rather than a chrome stripe painted down a tube. This ran on vMapUv.x,
+  // which is the coordinate *across* the ribbon: 34 cycles across a 3 mm strand
+  // is far below a pixel at any range, so it aliased into the chrome speckle
+  // that made every lock read as a faceted blade. It has to run along .y.
+  float mask = 0.34 + 0.66 * abs( sin( vMapUv.y * 9.0 + jit * 7.0 ) );
+  // The secondary band takes the hair's *hue*, not its value. This read
+  // \`vColor.rgb * 3.2\`, which is a brightness multiplier dressed up as a tint:
+  // near-black hair needed the 3.2 to show any colour at all, and blond hair —
+  // already at 0.8 albedo — was therefore multiplied to 2.7 and clipped to
+  // white on every lock facing the sun. That is what turned Prompto's and
+  // Ignis's hair into straw, and no amount of geometry work could fix it,
+  // because the strands were correct and simply over-exposed. Normalising by
+  // luminance gives every hair colour the same specular energy.
+  float luminance = dot( vColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
+  vec3 hueC = vColor.rgb / max( 0.10, luminance );
+  vec3 sheenC = mix( vec3( 1.0 ), hueC, ${tint.toFixed(2)} );
   // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
   // matte value floor or its broad highlight reads as a moulded plastic dome
   float strand = 0.30 + 0.70 * clamp( vMat.z, 0.0, 1.0 );
@@ -172,14 +185,18 @@ function patch(mat, o = {}) {
   // backlit hair glows at the silhouette — the cue that reads as fine strands
   float rim = pow( 1.0 - clamp( dot( hN, hV ), 0.0, 1.0 ), 2.6 )
             * pow( clamp( dot( hV, -hL ), 0.0, 1.0 ), 1.6 );
-  kk += uSunColor * rim * 0.44 * strand * ( vColor.rgb * 3.0 + 0.07 );
+  // same normalisation as the band: a rim that scales with albedo blows out on
+  // light hair and vanishes on dark, which is backwards — a backlit silhouette
+  // is the *transmission* term and it is strongest on fine pale hair, but not
+  // by a factor of forty.
+  kk += uSunColor * rim * 0.30 * strand * hueC * ( 0.20 + 0.55 * luminance );
   // Sky sheen. Near-black hair under a directional key has nothing at all in
   // shadow, which is why the whole cast read as wearing black helmets: the
   // silhouette went to a single flat value the moment it turned away from the
   // sun. A broad, weak dome term restores the value range a real head of hair
   // has on its shadow side without lifting it toward navy.
   float dome = clamp( dot( hN, uSkyDirView ) * 0.5 + 0.5, 0.0, 1.0 );
-  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * ( vColor.rgb * 1.8 + 0.05 );
+  kk += uSunColor * pow( dome, 1.6 ) * 0.11 * strand * hueC * ( 0.14 + 0.42 * luminance );
   gl_FragColor.rgb += kk;
 }`);
     }
@@ -290,7 +307,7 @@ function cache() {
     + 0.3 * n.simplex2(u * 210, v * 210)
     + 0.22 * n.simplex2(u * 420, v * 420)
   ), 0.85);
-  pore.repeat.set(22, 34);
+  pore.repeat.set(15, 23);
 
   const poreFine = pore.clone();
   poreFine.repeat.set(9, 13);
@@ -308,8 +325,11 @@ function cache() {
     // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
     // crest), v along its length
     const across = Math.abs(u - 0.5) * 2;
-    const fil = 0.62 + 0.38 * Math.abs(Math.sin(u * Math.PI * 11.0 + n.simplex2(u * 14, v * 2) * 3.4));
-    const along = 0.86 + 0.14 * n.simplex2(u * 8, v * 26);
+    // Four filaments across the ribbon, not eleven: a lock is 2-3 mm wide, so
+    // eleven bands across it are sub-pixel at every range the head is ever
+    // seen at and alias into sparkle instead of resolving as strands.
+    const fil = 0.66 + 0.34 * Math.abs(Math.sin(u * Math.PI * 4.0 + n.simplex2(u * 6, v * 2) * 2.2));
+    const along = 0.80 + 0.20 * n.simplex2(u * 8, v * 26);
     // edges of a clump are always darker than its crest
     const edge = 0.70 + 0.30 * (1.0 - across * across);
     c[0] = c[1] = c[2] = fil * along * edge;
@@ -320,27 +340,43 @@ function cache() {
 }
 
 /** Shared skin material for bodies (heads use `faceMaterial`). */
+/**
+ * Subsurface tint, shared by the face and the body.
+ *
+ * They were 0xe02c12 and 0xd8321a — near-pure red at full saturation, and two
+ * *different* near-pure reds, so the head and the neck reddened by different
+ * amounts as they turned away from the sun. That is the second half of the jaw
+ * seam (the first is the base value, which `SKIN_BASE` already unifies), and at
+ * closeup the term is most of why the cast reads as sunburnt orange rather than
+ * as skin. Real subsurface in skin is haemoglobin through dermis: a dull brick,
+ * not a signal red.
+ */
+const SSS_RED = 0xb8503a;
+
 export function skinMaterial() {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     vertexColors: true,
-    roughness: 0.52,
+    roughness: 0.48,
     metalness: 0,
     normalMap: c.pore,
-    normalScale: new THREE.Vector2(0.42, 0.42),
+    // 0.42 on a 128px map tiled 22x34 aliased into a visible woven weave on the
+    // neck, right beside the face's 0.34 at a third of the tiling — the two
+    // together are most of what read as a seam along the jaw
+    normalScale: new THREE.Vector2(0.30, 0.30),
     // a whisper of oily sheen. Clearcoat here is what made skin read as a
     // vacuum-formed plastic shell, so there is none.
-    sheen: 0.22,
-    sheenColor: srgb(0xffc9a8),
-    sheenRoughness: 0.72,
-    specularIntensity: 0.42,
+    sheen: 0.18,
+    sheenColor: srgb(0xffc0a0),
+    sheenRoughness: 0.64,
+    specularIntensity: 0.36,
     specularColor: srgb(0xfff0e4),
-  }), { sss: 0.17, sssColor: 0xd8321a, translucency: 0.9 });
+  }), { sss: 0.155, sssColor: SSS_RED, translucency: 0.95 });
 }
 
 /** Per-character face material — carries the painted face map. */
-export function faceMaterial(map, sss = 0.19) {
+export function faceMaterial(map, sss = 0.16) {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     map,
@@ -354,7 +390,7 @@ export function faceMaterial(map, sss = 0.19) {
     sheenRoughness: 0.62,
     specularIntensity: 0.35,
     specularColor: srgb(0xfff2e8),
-  }), { sss, sssColor: 0xe02c12, translucency: 1.0 });
+  }), { sss, sssColor: SSS_RED, translucency: 1.0 });
 }
 
 /** Shared garment material — colour and finish come from vertex attributes. */
@@ -395,7 +431,7 @@ export function hairMaterial() {
   });
   return patch(m, {
     sss: 0,
-    hair: { spec: 0.55, shift: 0.055, exp1: 150.0, exp2: 20.0, tint: 0.85 },
+    hair: { spec: 0.40, shift: 0.055, exp1: 90.0, exp2: 16.0, tint: 0.85 },
   });
 }
 

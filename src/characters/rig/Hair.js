@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MeshBuilder, ribbon, clamp01, smooth, lerp } from './Geo.js';
 import { skullSampler, HEAD_R } from './Face.js';
 import { Rng } from '../../util/Rng.js';
+import { Noise } from '../../util/Noise.js';
 
 /**
  * Hair.
@@ -34,6 +35,9 @@ export function buildHair(rig, look) {
   const base = new THREE.Color().setHex(H.color, THREE.SRGBColorSpace);
   const tip = new THREE.Color().setHex(H.tipColor ?? H.color, THREE.SRGBColorSpace);
   const rootC = base.clone().multiplyScalar(0.84);
+  // the value the gaps between locks should sit at: the root colour carried a
+  // third of the way toward the tips, which is roughly the strand mid-tone
+  const shellC = rootC.clone().lerp(tip, 0.34);
 
   // hairline elevation in canonical y for a given azimuth
   // A hairline is not a circle. It rides high across the forehead, plunges at
@@ -41,16 +45,37 @@ export function buildHair(rig, look) {
   // the character has two bald patches beside the eyes from every angle.
   const hairline = (th) => {
     const c = Math.cos(th);
-    let y = -0.012 + 0.049 * c + (H.hairline || 0);
+    // The front term was 0.049, which put the hairline 40 mm above the brow on a
+    // 108 mm brow-to-crown skull. That is a 20-year-old with a receding
+    // hairline, and on Prompto — whose style sweeps *up* and away from it —
+    // it read as balding.
+    let y = -0.012 + 0.038 * c + (H.hairline || 0);
     y -= (H.temple ?? 0.030) * Math.pow(Math.abs(Math.sin(th)), 1.2);
     y += (H.peak || 0) * 0.012 * Math.max(0, Math.cos(th * 2));
+    // Ear notch. A hairline goes *around* the ear; this one ran straight across
+    // it, so the scalp shell buried the top half of both ears and no `_profile`
+    // frame in the game had a visible ear at all. `FACE.ear` sits at azimuth
+    // ~1.66 rad and the hairline *rises* there — the opposite sign to `temple`,
+    // which drops at the sides so there is no bald patch beside the eyes.
+    const ath = Math.abs(Math.atan2(Math.sin(th), Math.cos(th)));
+    // 0.034 still left the hairline 11 mm below the top of the helix, so the
+    // shell buried the upper third of the ear and the side tufts covered the
+    // rest; no profile frame in the game has ever shown an ear. At 0.056 the
+    // hairline clears the helix by about a centimetre, which is where a real
+    // one sits.
+    y += (H.earNotch ?? 0.056) * Math.exp(-Math.pow((ath - 1.66) / 0.34, 2));
     return y;
   };
   const phiOf = (th) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
 
   // ---- scalp shell -------------------------------------------------------
-  const cols = 52, rows = 11;
+  // A denser shell, because the thing it has to stop being is *smooth*: at
+  // 52x11 it was an ellipsoid, and an ellipsoid under a directional key is a
+  // moulded plastic cap however its albedo is textured. The lock-scale
+  // displacement below needs enough vertices to resolve.
+  const cols = 96, rows = 20;
   const shell = [];
+  const shellN = new Noise((look.seed || 7) * 3 + 17);
   B.color(base).mat((H.rough ?? 0.36) + 0.22, 0, 0).skin([[I.head, 1]]);
   const shellPoint = (th, t) => {
     const pm = phiOf(th);
@@ -61,7 +86,18 @@ export function buildHair(rig, look) {
     let off = vol * (0.22 + 0.9 * smooth(1 - t));
     if (t >= 0.999) off = 0.0012;
     if (H.shellShape) off *= H.shellShape(th, 1 - t);
-    return { p: p.clone().addScaledVector(n, off), n };
+    // Lock-scale relief. Hair in mass is not a surface, it is a bundle of
+    // ridges a centimetre or so apart running crown-to-hairline; the shell has
+    // to carry that in geometry, not only in a normal map, or every gap the
+    // strands leave shows a glossy dome underneath. The noise is stretched
+    // along the flow (low frequency in `t`, high in `th`) so it reads as
+    // partings rather than as lumps. It fades out at the hairline lip so the
+    // shell still meets the forehead cleanly.
+    const relief = (
+      0.62 * shellN.simplex2(Math.cos(th) * 11, Math.sin(th) * 11 + t * 2.2)
+      + 0.38 * shellN.simplex2(Math.cos(th) * 26, Math.sin(th) * 26 + t * 4.5)
+    ) * vol * 1.7 * smooth(clamp01((1 - t) * 2.4));
+    return { p: p.clone().addScaledVector(n, off + relief), n };
   };
   for (let r = 0; r <= rows; r++) {
     const row = [];
@@ -82,14 +118,58 @@ export function buildHair(rig, look) {
       // 6 m. It now carries a real crown-to-nape ramp so the mass has a lit
       // side even before a single strand catches the sun.
       const crown = smooth(1 - t * 1.15);
-      B.color(rootC.clone().multiplyScalar(0.74 + 0.62 * crown * crown));
-      row.push(B.v(w.x, w.y, w.z, (c / cols) * 6, t * 1.5));
+      // The shell is what shows *between* the locks, so it has to sit in the
+      // same value range they do. At 0.74-1.36 of a 0.84 root colour it was a
+      // long way below the strand mid-tone, and every gap read as a hole —
+      // which is most of what made the scalp look like a moulded black cap.
+      B.color(shellC.clone().multiplyScalar(0.70 + 0.42 * crown * crown));
+      // The shell carries `hairStripe` too, and `u` on that map is the filament
+      // axis. At 6 repeats around a 55 cm skull it laid 24 filaments over the
+      // whole head — a spacing of 2 cm, which is not a strand, it is a smooth
+      // moulded dome with faint bands on it. That dome is exactly what read as
+      // a bald patch wherever the locks did not cover it. At 34 repeats the
+      // filaments land at ~4 mm, which is a real lock, so the gaps between the
+      // strands read as more hair instead of as scalp.
+      // Jitter the filament phase around the skull. At an exact 34 repeats the
+      // bands line up into corduroy, which is what the back of the head read as
+      // once the shell was textured at a lock scale at all.
+      const uj = 1.4 * shellN.simplex2(Math.cos(th) * 3.1, Math.sin(th) * 3.1);
+      row.push(B.v(w.x, w.y, w.z, (c / cols) * 34 + uj, t * 3.2));
     }
     shell.push(row);
   }
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) B.quad(shell[r][c], shell[r][c + 1], shell[r + 1][c + 1], shell[r + 1][c]);
   }
+
+  // ---- lie the hair on the head ------------------------------------------
+  // The sea-urchin read is not the direction field and it is not the ribbon —
+  // it is that a strand leaving a curved scalp in a straight line *keeps
+  // leaving it*. With ~35% of the root direction along the surface normal, a
+  // 5 cm lock ends a centimetre and a half proud of the skull and every one of
+  // them points somewhere different: a porcupine. Real hair is laid *on* the
+  // head and only lifts where the style says so.
+  //
+  // So each strand point is clamped to a standoff corridor measured against the
+  // sculpted skull: never inside it, never further out than `puff * len * t`.
+  // `hug: 0` opts a tuft out entirely — that is what a spike is.
+  const rrH = [HEAD_R[0] * (look.headWidth ?? 1), HEAD_R[1], HEAD_R[2]];
+  const _q = new THREE.Vector3();
+  const hugSkull = (v, maxOff, k) => {
+    // fade the clamp out below the jaw and above the crown, where the skull's
+    // spherical parameterisation stops meaning anything and a mane hanging past
+    // the shoulders would otherwise be shoved back into the neck
+    const yn = Math.abs(v.y) / rrH[1];
+    const fade = 1 - clamp01((yn - 0.88) / 0.24);
+    if (fade <= 0) return;
+    const th = Math.atan2(v.x / rrH[0], v.z / rrH[2]);
+    const ph = Math.acos(clamp01((v.y / rrH[1] + 1) / 2) * 2 - 1);
+    const { p: q, n } = sample(th, ph);
+    const off = _q.copy(v).sub(q).dot(n);
+    const lo = maxOff * 0.12;
+    const target = off > maxOff ? maxOff : (off < lo ? lo : off);
+    if (target !== off) v.addScaledVector(n, (target - off) * k * fade);
+  };
 
   // ---- tufts -------------------------------------------------------------
   for (const tuft of H.tufts) {
@@ -113,7 +193,17 @@ export function buildHair(rig, look) {
         d1.normalize();
       }
       const d0 = nrm.clone().lerp(d1, tuft.out ?? 0.15).normalize();
-      const segs = tuft.segs || 3;
+      // A lock bows. Straight is the single loudest tell that a strand is a
+      // generated primitive, so every one gets its own sideways arc, peaking
+      // mid-length and returning at the tip.
+      const bowAxis = new THREE.Vector3().crossVectors(d1, nrm);
+      if (bowAxis.lengthSq() < 1e-8) bowAxis.set(1, 0, 0);
+      bowAxis.normalize();
+      const bow = rng.gauss(0, tuft.bow ?? 0.11) * len;
+      const hug = tuft.hug ?? 0.85;
+      const puff = tuft.puff ?? 0.30;
+      const segs = tuft.segs || (tuft.steps && tuft.steps > 6 ? 5 : 4);
+      const baseOff = (H.shell ?? 0.011) * (H.volume ?? 1) * 0.8 + (tuft.lift ?? 0);
       const pts = [root.clone()];
       let cur = root.clone();
       for (let k = 1; k <= segs; k++) {
@@ -125,34 +215,91 @@ export function buildHair(rig, look) {
           cur.x += Math.sin(t * 4 + i) * tuft.curl * len * 0.2;
           cur.z += Math.cos(t * 4 + i) * tuft.curl * len * 0.2;
         }
+        cur.addScaledVector(bowAxis, bow * Math.sin(Math.PI * t));
+        if (hug > 0) hugSkull(cur, baseOff + puff * len * t, hug);
         pts.push(cur.clone());
       }
 
       const tBase = tuft.color != null ? new THREE.Color().setHex(tuft.color, THREE.SRGBColorSpace) : base;
       const tTip = tuft.tipColor != null ? new THREE.Color().setHex(tuft.tipColor, THREE.SRGBColorSpace) : tip;
-      const tRoot = tBase.clone().multiplyScalar(0.62);
+      const tRoot = tBase.clone().multiplyScalar(0.72);
       const spike = tuft.spike ?? 0.9;
-      const wid = (tuft.width || 0.014) * (1 + rng.gauss(0, 0.18));
-      const bone = tuft.spring ? I.tail : I.head;
+      const wid = (tuft.width || 0.014) * 1.38 * (1 + rng.gauss(0, 0.18));
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
       B.mat(tuft.rough ?? H.rough ?? 0.36, 0, 1);
-      ribbon(B, {
-        points: pts.map((q) => put(q).toArray()),
-        steps: tuft.steps || 6,
-        width: wid * scale,
-        thick: wid * scale * (tuft.thick ?? 0.5),
-        up: nrm.toArray(),
-        // A wide per-lock value spread is the difference between "hair" and "a
-        // black shape". Some clumps sit near the root value, some run almost to
-        // the tip value at their base — that is what makes the mass legible
-        // once every individual ribbon is thinner than a pixel.
-        color: tRoot.clone().lerp(tTip, 0.20 + 0.75 * Math.pow(rng.next(), 1.4)),
-        tipColor: tTip.clone().multiplyScalar(0.82 + 0.55 * rng.next()),
-        // clump profile: hold width through the body of the strand and only
-        // taper near the tip, so hair reads as locks rather than quills
-        taper: (t) => Math.pow(clamp01(1 - Math.pow(t, 1.5 + spike)), 0.62),
-      });
+
+      // ---- clumping -------------------------------------------------------
+      // One ribbon per root is what read as straw. At any strand width fine
+      // enough not to be a blade, a single lock cannot fill the space between
+      // itself and its neighbour, so sky shows between every strand and each one
+      // reads as a separate object. Real hair separates into *clumps*: several
+      // locks sharing a root and a direction, splaying apart toward the tips.
+      // Emitting `clump` locks per root multiplies the density inside the
+      // silhouette at a fraction of the width each, which is the difference
+      // between a mass of hair and a handful of quills.
+      const clumpN = Math.max(1, Math.round(tuft.clump ?? H.clump ?? 1));
+      // lateral basis for the splay: two axes perpendicular to the mean flow
+      const ax = bowAxis.clone();
+      const ay = new THREE.Vector3().crossVectors(d1, ax);
+      if (ay.lengthSq() < 1e-8) ay.set(0, 1, 0);
+      ay.normalize();
+      const splay = (tuft.splay ?? 0.14) * len;
+      // Total cross-section is held roughly constant, so a clumped tuft is not
+      // a fatter tuft: it is the same mass resolved into finer filaments.
+      const cwid = clumpN > 1 ? wid * (0.42 + 0.34 / clumpN) : wid;
+      // A clumped lock is three ribbons where there used to be one, so each can
+      // be cheaper: at 5 sides and 5 steps a 4 cm lock is visually identical to
+      // the 6x6 it replaced, and three of them together read as far more hair
+      // than one 6x6 did. That takes 30% back off the tripling.
+      const steps = tuft.steps || (clumpN > 1 ? 5 : 6);
+      const sides = tuft.sides ?? (clumpN > 1 ? 5 : 6);
+
+      for (let c2 = 0; c2 < clumpN; c2++) {
+        let cpts = pts;
+        if (clumpN > 1) {
+          const ang = (c2 / clumpN) * Math.PI * 2 + rng.range(-0.5, 0.5);
+          const rad = c2 === 0 ? rng.range(0, 0.25) : rng.range(0.45, 1.0);
+          const ox = Math.cos(ang) * rad, oy = Math.sin(ang) * rad;
+          cpts = pts.map((q, k) => {
+            const t = k / segs;
+            // the locks are together at the root and apart at the tip
+            const s = splay * (0.10 + 0.90 * t * t);
+            const v = q.clone().addScaledVector(ax, ox * s).addScaledVector(ay, oy * s);
+            if (hug > 0) hugSkull(v, baseOff + puff * len * t + splay * 0.6, hug * 0.8);
+            return v;
+          });
+        }
+        const w2 = cwid * (0.78 + 0.44 * rng.next());
+        ribbon(B, {
+          points: cpts.map((q) => put(q).toArray()),
+          steps,
+          // never four-sided: a flat diamond is what made every strand a blade
+          sides,
+          width: w2 * scale,
+          // a lock is a rolled bundle, not a ribbon: floor the depth-to-width
+          // ratio so the six-sided section is actually round
+          thick: w2 * scale * Math.max(0.62, tuft.thick ?? 0.5),
+          up: nrm.toArray(),
+          // A wide per-lock value spread is the difference between "hair" and "a
+          // black shape". Some clumps sit near the root value, some run almost to
+          // the tip value at their base — that is what makes the mass legible
+          // once every individual ribbon is thinner than a pixel.
+          color: tRoot.clone().lerp(tTip, 0.10 + 0.32 * Math.pow(rng.next(), 1.3)),
+          // The tip value used to be lifted *above* the style's tip colour on
+          // half the locks. The tip is the part that sits against the sky, so a
+          // lifted tip is exactly the pixel that makes one strand read as a
+          // separate straw. Tips now sit at or below the style value.
+          tipColor: tTip.clone().multiplyScalar(0.66 + 0.30 * rng.next()),
+          // Clump profile. Holding the width through the body of the strand and
+          // dropping it at the end is an *arrowhead*: a broad blade converging to
+          // a point in a straight line, which is precisely what read as a quill.
+          // A lock narrows continuously from a wide root to a hair-fine tip, so
+          // the width is a plain power curve and the root is correspondingly
+          // wider to keep the same mass in the silhouette.
+          taper: (t) => Math.pow(clamp01(1 - t), 0.42 + 0.30 * spike),
+        });
+      }
     }
   }
 

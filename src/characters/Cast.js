@@ -76,12 +76,12 @@ export const CAST = {
         lowerArmL: [-0.16, 0, 0], lowerArmR: [-0.10, 0, 0],
         thighR: [-0.04, 0, 0], shinR: [0.07, 0, 0], footR: [-0.04, 0, 0],
       },
-      skin: srgb(0xc4855c),
+      skin: srgb(0xb58c70),
       iris: 0x2b5f96,
       headWidth: 0.97,
       jaw: -0.25, cheek: 0.35, nose: -0.1, brow: 0.15,
       eyeOpen: 0.95,
-      blush: 'rgba(190,92,80,0.30)',
+      blush: 'rgba(176,104,92,0.20)',
       lip: 'rgba(162,84,82,0.58)',
       browShadow: 'rgba(34,28,34,0.55)',
       lashColor: 0x0b0910,
@@ -94,27 +94,30 @@ export const CAST = {
       // narrow enough to leave gaps between them.
       hair: {
         color: 0x18191f, tipColor: 0x40414a, rough: 0.36, shell: 0.0125, volume: 0.92,
-        hairline: 0.002, peak: 0.35, wisps: 46, wispLen: 0.85,
+        // Noctis carries a long fringe, so he is the one character the lower global
+        // hairline actually hurt: it dropped the fringe roots 11 mm and the locks
+        // ended up over both eyes. He gets most of it back per-character.
+        hairline: 0.013, peak: 0.35, wisps: 46, wispLen: 0.85, clump: 3,
         tufts: [
           // Layered clumps that lie *along* the skull. Pushing strands out along
           // the surface normal (`out` near 1) is what turned this into a sea
           // urchin; a hairstyle is locks following a flow, not quills.
-          { n: 200, th: [-3.14, 3.14], phi: [0.0, 0.54], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.033, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.16, lenVar: 0.34 },
+          { n: 300, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.02, -0.99], out: 0.66, bend: 0.92, len: 0.052, width: 0.0018, thick: 0.36, spike: 0.80, dirJit: 0.05, lenVar: 0.30, steps: 4, sides: 5 },
           // long asymmetric fringe sweeping across the brow — clearing the lids
-          { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.46, 0.76], out: 0.71, bend: 1.0, len: 0.033, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18, steps: 6 },
-          { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.62, -0.44, 0.65], out: 0.68, bend: 1.0, len: 0.040, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.05, dirJit: 0.06, lenVar: 0.20, steps: 6 },
-          { n: 48, th: [0.20, 1.04], phi: [0.88, 1.0], dir: [0.38, -0.40, 0.83], out: 0.72, bend: 0.98, len: 0.035, width: 0.0030, thick: 0.34, spike: 0.62, sag: 0.03, dirJit: 0.07, lenVar: 0.18 },
+          { n: 78, th: [-1.14, 0.62], phi: [0.88, 1.0], dir: [-0.46, -0.46, 0.76], out: 0.71, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.029, width: 0.0031, thick: 0.34, spike: 0.62, sag: 0.01, dirJit: 0.07, lenVar: 0.18, steps: 6 },
+          { n: 46, th: [-0.94, -0.04], phi: [0.90, 1.0], dir: [-0.62, -0.44, 0.65], out: 0.68, hug: 0.55, puff: 0.85, bend: 1.0, len: 0.034, width: 0.0033, thick: 0.34, spike: 0.58, sag: 0.02, dirJit: 0.06, lenVar: 0.20, steps: 6 },
+          { n: 48, th: [0.20, 1.04], phi: [0.88, 1.0], dir: [0.38, -0.40, 0.83], out: 0.72, hug: 0.55, puff: 0.85, bend: 0.98, len: 0.031, width: 0.0030, thick: 0.34, spike: 0.62, sag: 0.01, dirJit: 0.07, lenVar: 0.18 },
           // crown layers, swept back
-          { n: 140, th: [-2.75, 2.75], phi: [0.20, 0.78], dir: [0, -0.10, -0.99], out: 0.60, bend: 0.94, len: 0.046, width: 0.0024, thick: 0.36, spike: 0.72, dirJit: 0.14, lenVar: 0.32 },
+          { n: 140, th: [-2.75, 2.75], phi: [0.20, 0.78], dir: [0, -0.10, -0.99], out: 0.60, puff: 0.55, bend: 0.94, len: 0.046, width: 0.0024, thick: 0.36, spike: 0.72, dirJit: 0.14, lenVar: 0.32 },
           // crown spikes: the one thing that makes Noctis readable in silhouette
-          { n: 84, th: [-2.5, 2.5], phi: [0.10, 0.62], dir: [0.02, 0.38, -0.93], out: 0.34, bend: 0.60, len: 0.068, width: 0.0021, thick: 0.42, spike: 1.15, dirJit: 0.26, lenVar: 0.34, steps: 5 },
+          { n: 62, th: [-2.5, 2.5], phi: [0.10, 0.62], dir: [0.02, 0.38, -0.93], out: 0.34, hug: 0.16, puff: 1.15, bend: 0.60, len: 0.050, width: 0.0022, thick: 0.42, spike: 1.15, clump: 2, dirJit: 0.24, lenVar: 0.40, steps: 5 },
           // back layers, dynamic
-          { n: 108, th: [1.95, 4.35], phi: [0.56, 1.0], dir: [0, -0.60, -0.80], out: 0.76, bend: 0.94, len: 0.058, width: 0.0028, thick: 0.36, spike: 0.62, dirJit: 0.08, lenVar: 0.20, spring: 0.35 },
+          { n: 108, th: [1.95, 4.35], phi: [0.56, 1.0], dir: [0, -0.60, -0.80], out: 0.76, puff: 0.55, bend: 0.94, len: 0.058, width: 0.0028, thick: 0.36, spike: 0.62, dirJit: 0.08, lenVar: 0.20, spring: 0.35 },
           // side tufts over the ears — kept short so the ear reads
           { n: 34, th: [1.24, 2.10], phi: [0.90, 1.0], dir: [0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
           { n: 34, th: [-2.10, -1.24], phi: [0.90, 1.0], dir: [-0.30, -0.82, -0.49], out: 0.71, bend: 0.96, len: 0.044, width: 0.0024, thick: 0.34, spike: 0.62, dirJit: 0.07, lenVar: 0.18 },
           // a handful of flyaways to break the outline — no longer 9 cm quills
-          { n: 30, th: [-2.6, 2.6], phi: [0.36, 0.95], dir: [0.05, 0.30, -0.95], out: 0.87, bend: 0.86, len: 0.060, width: 0.0017, thick: 0.4, spike: 1.05, dirJit: 0.26, lenVar: 0.34 },
+          { n: 22, th: [-2.6, 2.6], phi: [0.36, 0.95], dir: [0.05, 0.30, -0.95], out: 0.87, hug: 0.30, puff: 1.1, bend: 0.86, len: 0.046, width: 0.0017, thick: 0.4, spike: 1.05, clump: 2, dirJit: 0.26, lenVar: 0.36 },
         ],
       },
       outfit: [
@@ -143,25 +146,25 @@ export const CAST = {
         head: [0.02, -0.05, 0], hips: [-0.02, -0.02, 0],
         thighL: [0.03, 0, 0.05], thighR: [0.03, 0, -0.05],
       },
-      skin: srgb(0xb2723f),
+      skin: srgb(0xa37653),
       iris: 0x7a5326,
       headWidth: 1.04,
       jaw: 1.35, cheek: -0.20, nose: 0.55, brow: 1.05,
       eyeOpen: 0.90,
-      blush: 'rgba(170,80,58,0.26)',
+      blush: 'rgba(162,92,74,0.18)',
       lip: 'rgba(140,80,68,0.48)',
       browShadow: 'rgba(34,25,20,0.62)',
       lashColor: 0x0c0908,
       fringeShadow: 0.50,
-      stubble: 0.55, stubbleColor: '#3b2f24',
+      stubble: 0.88, stubbleColor: '#3b2f24',
       scar: { from: [0.054, 0.036, 0.050], to: [0.028, -0.032, 0.080], color: 'rgba(168,116,100,0.9)', width: 6 },
       brows: { color: 0x3a2f22, len: 0.016, width: 0.0072, lift: -0.001 },
       tattoo: eagleInk,
       hair: {
         color: 0x261b11, tipColor: 0x55402a, rough: 0.42, shell: 0.0125, volume: 0.92,
-        hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9,
+        hairline: 0.008, peak: 0.35, wisps: 40, wispLen: 0.9, clump: 3,
         tufts: [
-          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.52], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.036, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.16, lenVar: 0.32 },
+          { n: 280, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.0, -0.99], out: 0.62, bend: 0.92, len: 0.058, width: 0.0018, thick: 0.36, spike: 0.78, dirJit: 0.05, lenVar: 0.30, steps: 4, sides: 5 },
           { n: 52, th: [-1.1, 1.1], phi: [0.84, 1.0], dir: [0, -0.30, -0.95], out: 0.71, bend: 1.0, len: 0.080, thick: 0.34, width: 0.0022, spike: 0.6, dirJit: 0.07, lenVar: 0.18 },
           { n: 70, th: [1.0, 2.4], phi: [0.55, 1.0], dir: [0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
           { n: 70, th: [-2.4, -1.0], phi: [0.55, 1.0], dir: [-0.18, -0.40, -0.90], out: 0.74, bend: 0.95, len: 0.115, thick: 0.34, width: 0.0024, spike: 0.6, dirJit: 0.08, lenVar: 0.20, steps: 7 },
@@ -170,15 +173,15 @@ export const CAST = {
           { n: 62, th: [2.70, 3.60], phi: [0.80, 1.0], dir: [0, -0.94, -0.34], out: 0.63, bend: 1.0, len: 0.250, thick: 0.34, width: 0.0031, spike: 0.5, sag: 0.20, dirJit: 0.05, lenVar: 0.18, spring: 0.88, steps: 9 },
           { n: 20, th: [1.12, 1.62], phi: [0.92, 1.0], dir: [0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
           { n: 20, th: [-1.62, -1.12], phi: [0.92, 1.0], dir: [-0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.115, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
-          { n: 44, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.16, -0.98], out: 0.62, bend: 0.86, len: 0.084, width: 0.0016, thick: 0.4, spike: 1.0, dirJit: 0.28, lenVar: 0.34 },
+          { n: 44, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.16, -0.98], out: 0.62, hug: 0.30, puff: 1.2, bend: 0.86, len: 0.084, width: 0.0016, thick: 0.4, spike: 1.0, dirJit: 0.28, lenVar: 0.34 },
           // ---- full beard: rooted below the equator, so `absPhi` ------------
-          { n: 150, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0155, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.22, lenVar: 0.34, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 90, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0195, width: 0.0012, thick: 0.45, spike: 0.8, dirJit: 0.20, lenVar: 0.32, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 260, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0058, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.55, steps: 3, dirJit: 0.22, lenVar: 0.34, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 160, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0076, width: 0.0010, thick: 0.45, spike: 0.8, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.32, color: 0x40301d, tipColor: 0x6a5232 },
           // moustache
-          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0125, width: 0.0011, thick: 0.45, spike: 0.9, dirJit: 0.20, lenVar: 0.30, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0054, width: 0.0009, thick: 0.45, spike: 0.9, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.30, color: 0x40301d, tipColor: 0x6a5232 },
           // sideburns tying the beard into the hairline
-          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
-          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0165, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.16, lenVar: 0.28, color: 0x2a1f14, tipColor: 0x553f26 },
+          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
         ],
       },
       outfit: [
@@ -209,12 +212,12 @@ export const CAST = {
         lowerArmL: [-0.42, 0.20, 0.05], lowerArmR: [-0.42, -0.20, -0.05],
         handL: [0.1, 0, 0.15], handR: [0.1, 0, -0.15],
       },
-      skin: srgb(0xbd8355),
+      skin: srgb(0xae8869),
       iris: 0x4d7d58,
       headWidth: 0.96,
       jaw: 0.25, cheek: 0.5, nose: 0.2, brow: 0.35,
       eyeOpen: 0.86,
-      blush: 'rgba(178,86,66,0.26)',
+      blush: 'rgba(168,98,80,0.18)',
       lip: 'rgba(152,88,80,0.5)',
       browShadow: 'rgba(56,40,28,0.52)',
       lashColor: 0x120c09,
@@ -224,18 +227,18 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x1b1b21), rough: 0.62 },
       hair: {
-        color: 0x836b44, tipColor: 0xb99d6a, rough: 0.34, shell: 0.011, volume: 0.85,
-        hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75,
+        color: 0x9a8261, tipColor: 0xcab596, rough: 0.34, shell: 0.011, volume: 0.85,
+        hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         tufts: [
-          { n: 170, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.030, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.13, lenVar: 0.28 },
+          { n: 260, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.14, -0.98], out: 0.66, bend: 0.92, len: 0.048, width: 0.0016, thick: 0.36, spike: 0.78, dirJit: 0.04, lenVar: 0.26, steps: 4, sides: 5 },
           // slicked-up quiff: front hair lifts off the brow, then sweeps back
-          { n: 74, th: [-0.86, 0.86], phi: [0.88, 1.0], dir: [0, 0.86, -0.51], out: 0.84, bend: 0.90, len: 0.058, width: 0.0020, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20, steps: 6 },
-          { n: 52, th: [-0.60, 0.60], phi: [0.66, 0.90], dir: [0.02, 0.62, -0.78], out: 0.87, bend: 0.88, len: 0.050, width: 0.0019, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20 },
+          { n: 74, th: [-0.86, 0.86], phi: [0.88, 1.0], dir: [0, 0.86, -0.51], out: 0.84, hug: 0.20, puff: 1.5, bend: 0.90, len: 0.058, width: 0.0020, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20, steps: 6 },
+          { n: 52, th: [-0.60, 0.60], phi: [0.66, 0.90], dir: [0.02, 0.62, -0.78], out: 0.87, hug: 0.35, puff: 1.1, bend: 0.88, len: 0.050, width: 0.0019, thick: 0.34, spike: 0.85, dirJit: 0.12, lenVar: 0.20 },
           // sides swept tight and flat — the contrast with the quiff is the read
           { n: 76, th: [1.05, 2.65], phi: [0.42, 1.0], dir: [0.12, -0.10, -0.98], out: 0.66, bend: 0.98, len: 0.044, width: 0.0017, thick: 0.34, spike: 0.6, dirJit: 0.05, lenVar: 0.16 },
           { n: 76, th: [-2.65, -1.05], phi: [0.42, 1.0], dir: [-0.12, -0.10, -0.98], out: 0.66, bend: 0.98, len: 0.044, width: 0.0017, thick: 0.34, spike: 0.6, dirJit: 0.05, lenVar: 0.16 },
           { n: 58, th: [2.5, 3.8], phi: [0.62, 1.0], dir: [0, -0.52, -0.86], out: 0.74, bend: 0.96, len: 0.044, width: 0.0018, thick: 0.34, spike: 0.7, dirJit: 0.07, lenVar: 0.18, spring: 0.22 },
-          { n: 24, th: [-2.0, 2.0], phi: [0.42, 0.95], dir: [0.02, 0.52, -0.85], out: 0.62, bend: 0.88, len: 0.046, width: 0.0011, thick: 0.4, spike: 1.1, dirJit: 0.18, lenVar: 0.28 },
+          { n: 24, th: [-2.0, 2.0], phi: [0.42, 0.95], dir: [0.02, 0.52, -0.85], out: 0.62, hug: 0.25, puff: 1.3, bend: 0.88, len: 0.046, width: 0.0011, thick: 0.4, spike: 1.1, dirJit: 0.18, lenVar: 0.28 },
         ],
       },
       outfit: [
@@ -266,31 +269,31 @@ export const CAST = {
         upperArmL: [0.02, 0, 0.05], lowerArmL: [-0.18, 0, 0],
         thighL: [0.05, 0, 0.05], shinL: [0.12, 0, 0], thighR: [-0.02, 0, -0.02],
       },
-      skin: srgb(0xd09a68),
+      skin: srgb(0xc19e7d),
       iris: 0x4d8ec0,
       headWidth: 0.98,
       jaw: -0.35, cheek: 0.25, nose: -0.25, brow: -0.15,
       eyeOpen: 1.02,
-      blush: 'rgba(208,104,84,0.40)',
+      blush: 'rgba(192,116,98,0.26)',
       lip: 'rgba(176,96,90,0.56)',
       browShadow: 'rgba(112,78,40,0.42)',
       lashColor: 0x2a1c14,
       fringeShadow: 0.28,
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
-      brows: { color: 0xa07a40, len: 0.012, width: 0.0052 },
+      brows: { color: 0xa8823f, len: 0.013, width: 0.0058 },
       hair: {
-        color: 0xcaa451, tipColor: 0xeed896, rough: 0.30, shell: 0.011, volume: 0.86,
-        hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8,
+        color: 0xe0ae52, tipColor: 0xf8e3a6, rough: 0.30, shell: 0.011, volume: 0.86,
+        hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         tufts: [
-          { n: 180, th: [-3.14, 3.14], phi: [0.0, 0.50], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.029, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.18, lenVar: 0.30 },
+          { n: 280, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.34, -0.92], out: 0.64, bend: 0.90, len: 0.046, width: 0.0016, thick: 0.36, spike: 0.85, dirJit: 0.05, lenVar: 0.28, steps: 4, sides: 5 },
           // short up-swept front spikes — the whole read, but half the height
-          { n: 66, th: [-1.0, 1.0], phi: [0.86, 1.0], dir: [0, 0.88, 0.42], out: 0.79, bend: 0.88, len: 0.046, thick: 0.34, width: 0.0019, spike: 1.05, dirJit: 0.17, lenVar: 0.22, steps: 6 },
-          { n: 52, th: [-0.7, 0.7], phi: [0.58, 0.86], dir: [0.05, 0.94, 0.24], out: 0.84, bend: 0.84, len: 0.042, width: 0.0020, thick: 0.34, spike: 1.0, dirJit: 0.17, lenVar: 0.22 },
-          { n: 92, th: [-2.6, 2.6], phi: [0.26, 0.62], dir: [0, 0.60, -0.78], out: 0.90, bend: 0.82, len: 0.038, width: 0.0020, thick: 0.34, spike: 0.9, dirJit: 0.17, lenVar: 0.22 },
+          { n: 110, th: [-1.15, 1.15], phi: [0.62, 1.0], dir: [0, 0.78, -0.62], out: 0.72, hug: 0.42, puff: 1.0, bend: 0.88, len: 0.058, thick: 0.34, width: 0.0019, spike: 1.05, dirJit: 0.15, lenVar: 0.36, steps: 6 },
+          { n: 88, th: [-0.85, 0.85], phi: [0.42, 0.86], dir: [0.04, 0.72, -0.69], out: 0.80, hug: 0.45, puff: 0.95, bend: 0.84, len: 0.052, width: 0.0020, thick: 0.34, spike: 1.0, dirJit: 0.15, lenVar: 0.34 },
+          { n: 110, th: [-2.6, 2.6], phi: [0.26, 0.62], dir: [0, 0.48, -0.88], out: 0.80, hug: 0.55, puff: 0.9, bend: 0.82, len: 0.046, width: 0.0020, thick: 0.34, spike: 0.9, dirJit: 0.15, lenVar: 0.28 },
           { n: 66, th: [2.2, 4.1], phi: [0.70, 1.0], dir: [0, -0.12, -0.98], out: 0.82, bend: 0.90, len: 0.046, thick: 0.34, width: 0.0019, spike: 0.9, dirJit: 0.14, lenVar: 0.22, spring: 0.3 },
           { n: 16, th: [1.22, 1.88], phi: [0.92, 1.0], dir: [0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },
           { n: 16, th: [-1.88, -1.22], phi: [0.92, 1.0], dir: [-0.44, -0.62, -0.65], out: 0.76, bend: 0.92, len: 0.038, width: 0.0020, spike: 0.9, dirJit: 0.12, lenVar: 0.24 },
-          { n: 30, th: [-2.4, 2.4], phi: [0.32, 0.95], dir: [0.02, 0.84, -0.52], out: 0.62, bend: 0.82, len: 0.054, width: 0.0012, thick: 0.4, spike: 1.2, dirJit: 0.24, lenVar: 0.30 },
+          { n: 30, th: [-2.4, 2.4], phi: [0.32, 0.95], dir: [0.02, 0.84, -0.52], out: 0.62, hug: 0.25, puff: 1.4, bend: 0.82, len: 0.054, width: 0.0012, thick: 0.4, spike: 1.2, dirJit: 0.24, lenVar: 0.30 },
         ],
       },
       outfit: [
