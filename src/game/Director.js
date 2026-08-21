@@ -31,6 +31,9 @@ export class Director {
     this.terrain = game.get('Terrain');
     this.player = game.get('Player');
     this.home = this.player ? this.player.position.clone() : new THREE.Vector3();
+    /** Boot heading, restored by `setScenario` so a posed shot never inherits
+     *  the facing a previous scenario left behind. */
+    this.homeHeading = this.player ? this.player.root.rotation.y : 0;
     this._frozenPlayer = null;
     this._ambient = 0;
     this._tmp = new THREE.Vector3();
@@ -161,7 +164,16 @@ export class Director {
    * @param {'field'|'combat'|'warp'} name
    */
   setScenario(name) {
-    if (name === this.scenario) return;
+    // Deliberately NOT `if (name === this.scenario) return`.
+    //
+    // A scenario is a *reproducible world state*, so re-applying it has to
+    // actually re-apply. The early-out that used to be here made consecutive
+    // shots of the same scenario skip the reset entirely: in a corpus run the
+    // fifth and sixth `field` shots inherited wherever the previous shot's
+    // settle frames had drifted the player, so a `follow` shot's framing
+    // depended on what ran before it. `prompto_closeup` came back with the
+    // camera behind his head, and one batch put it inside another party member.
+    // Re-running costs a few ms of respawn per shot and buys determinism.
     this.scenario = name;
     // a posed scenario owns the whole field; the live loop stands down
     this.setLive(false);
@@ -183,6 +195,13 @@ export class Director {
     if (player) {
       player.root.position.copy(this.home);
       player.velocity.set(0, 0, 0);
+      // Heading carries too: without this a field shot after a boss scenario
+      // keeps the boss facing, and the party formation - which is defined in
+      // the player's frame - rotates with it.
+      player.heading = this.homeHeading;
+      player.root.rotation.y = this.homeHeading;
+      player.speed = 0;
+      if (player.character && player.character.anim) player.character.anim.rest();
     }
     this.rng = new Rng(88123);
 
