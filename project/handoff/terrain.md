@@ -8,6 +8,9 @@ Port 5460 throughout (daemon 5461).
 | `965df83` | filter the clipmap height by the LOD cell — the chevron hatch |
 | `702fb10` | `Terrain.groundColorAt` — the sampler all vegetation tints from |
 | `9de5ced` | the horizontal "wood grain" — rock tile bedding + humid terracing |
+| `c8ff7ab` | this handoff |
+| `b0d676f` | halve the LOD filter's cost after measuring it |
+| `b89d8b2` | decouple the `_outcrops` RNG from the heightfield |
 
 Files touched, and the only files touched: `src/world/terrain/TerrainMaterial.js`,
 `src/world/terrain/Field.js`, `src/world/terrain/Layers.js`, `src/world/Terrain.js`,
@@ -116,6 +119,18 @@ laminations, and the AO stripe cut (an AO band survives every regional tint,
 because it is a shadow, not a colour). `tmp/shots/tr0/zone_taelpar.jpg` →
 `tmp/shots/tr6/zone_taelpar.jpg`.
 
+## 4. `_outcrops` no longer re-phases on every height change
+
+`_outcrops` drew two, three or eight numbers per candidate depending on the local
+slope and on whether the boulder came out big, so a height change anywhere
+reshuffled every boulder downstream of it — which is what makes a one-line height
+experiment indistinguishable from a scatter regression in an A/B. It bit this
+session's own bisection. Every candidate now draws the same nine numbers in the
+same order and the slope test only *decides*. The boulder field reshuffles once, on
+purpose, and never again for a reason that is not local.
+
+## 5. The terracing change
+
 `Field.js` separately stops benching humid ground: `lastTerrace` is now damped by
 `1 - 0.88 * smoothstep(0.28, 0.60, moist)`. Taelpar's `terrace: 0.68` was pulling
 the ground 56 % onto a 22 m staircase and the splat read tread-as-dirt /
@@ -133,31 +148,69 @@ was the problem, as the brief allowed for.
 | `node src/tools/roadcheck.mjs` | **pass** — 0 failures, 0 warnings, 30.26 km / 50 edges / 50 nodes, worst grade 13.0 % (limit 13) — identical to baseline |
 | `node src/tools/heightcheck.mjs` | **pass — 0.000 m at every probe**, micro and grid separately |
 | `node src/tools/driftcheck.mjs` | **pass** — drift 0.000 m, gpu-vs-`heightAt` worst 0.373 m (tol 0.45); coarse-LOD spread worst **1.281 m, was 1.330 m** — the LOD filter did not widen it |
-| `node src/tools/perf.mjs` | **NOT RUN — the one unmeasured risk. See below.** |
+| `node src/tools/perf.mjs` | **pre-existing FAIL, and measured A/B'd.** Full corpus: mean **73.7 fps**, worst **41.5 fps at `vista_dawn`** — against `agent/grass`'s last recorded run of mean 73.6 / worst 39.1, i.e. unchanged. See the A/B below. |
+
+### The one perf number that is mine
+
+Same machine, same session, four terrain-dominant shots, median frame ms:
+
+| shot | filter off | 5-tap on `tf_height` | 5-tap on the grid only (shipped) |
+|---|---|---|---|
+| `vista_dawn` | 23.1 | 25.2 | 24.1 |
+| `vista_noon` | 12.4 | 12.6 | 13.3 |
+| `zone_longwythe` | 14.3 | 14.3 | 13.3 |
+| `zone_three_valleys` | 12.5 | 14.0 | 12.8 |
+
+The first version cost up to **+2.1 ms**, which is real money on a chain already
+missing 60 fps at `vista_dawn`. Two simplex octaves are the expensive half of
+`tf_height` and the four extra taps had no business paying for them — `tf_micro` is
+a 4–11 m band that a 24 m lattice cannot represent at any phase, so averaging five
+aliased samples of it was worse than not sampling it. The shipped version reads the
+grid alone through `tf_gridH` and adds the micro term once, faded out with the cell.
+That lands inside the run-to-run spread on three shots of four.
+
+**`vista_dawn` is worth someone's attention on its own terms** — 7.47 M triangles
+against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
+45 fps. It is not terrain: the draw count is 576, in line with its neighbours.
 
 ## Not done / next steps, in priority order
 
-1. **Run `src/tools/perf.mjs`.** `tf_heightLod` costs 5 `tf_height` evaluations per
-   vertex instead of 1 on clipmap levels 2–6, and up to 5× again on the morph band.
-   Every ring carries the same vertex count, so that is roughly +1 M height
-   evaluations per frame. It is vertex work on an M-series GPU and the shots stayed
-   at 379–590 draw calls, but **the cost is unmeasured**. If it does not pay, the
-   fallback is a real height mip pyramid: build the mip chain for `uHeightTex` on
-   the CPU in `Terrain._uploadFieldTextures` and make `tf_heightLod` a single
-   `textureLod` at `log2(cell / P.y)`. That is *cheaper than today* (one filtered
-   tap against four `texelFetch`) and properly box-filtered; I did not do it only
-   because manual mipmaps on an R32F `DataTexture` needed verifying and the 5-tap
-   proved the point first.
-2. **Task 4, the `lowAlt` grass gate — not addressed.** `zone_three_valleys` is
-   still bald (`tmp/shots/tr1/zone_three_valleys.jpg`). Note what the measurement
-   says before touching it: `three_valleys` has `green 0.095` and `moist 0.24` in
-   the blended table, so the gate is not what is keeping grass off it — the zone is
-   *authored* as bare Leide badland. The bald high aerial is the table, not the
-   gate. Judge that from `SURFACE`/`WorldMap`, not from the gate expression.
-3. **Task 5, decoupling the `_outcrops` RNG — not started.** `_outcrops` consumes
-   its stream conditionally on `slope0`, so any height change reshuffles every later
-   boulder. Draw `r`, `hh`, `big` and the `_outcrop` phase *before* the slope test
-   so the stream advances at a fixed rate per candidate.
+1. **Task 4, the `lowAlt` grass gate — measured, and it is correct as it stands.**
+   `node tmp/tr/gate.mjs` walks a 64 m grid over the whole playable field and
+   buckets the gate by the region's own `green`:
+
+   ```
+   green bucket   samples   gate<0.5    mean gate
+   0.00-0.20         3689     22.2%     0.773
+   0.20-0.40         7535      4.2%     0.954
+   0.40-0.60         2269      6.5%     0.933
+   0.60-0.80         2129      0.0%     1.000
+   0.80-1.00          762      0.0%     1.000
+   ```
+
+   The gate is fully open across green country and the only ground it closes is
+   bare Leide badland above ~145 m, which is what it is for. Every gated sample
+   above `green 0.45` is a 210–240 m ridge crest in the north Cleigne uplands.
+   **`zone_three_valleys` is bald because it is authored bald** — `green 0.095`,
+   `moist 0.24` — and its ground sits at 33 m where the gate reads exactly 1.0. The
+   regional gate the previous round installed did its job; if that aerial should
+   have scrub on it, the lever is its `SURFACE` entry and its `moist`, not the gate.
+   I did not change either: retuning a Leide badland zone toward green on the
+   strength of one high aerial is precisely the move the *shoot the baseline* rule
+   exists to stop.
+2. **A real height mip pyramid, if `vista_dawn` ever needs the millisecond back.**
+   Build the mip chain for `uHeightTex` / `uFarHeightTex` on the CPU in
+   `Terrain._uploadFieldTextures` and make `tf_heightLod` a single `textureLod` at
+   `log2(cell / P.y)`. That is *cheaper than the code was before any of this work*
+   — one filtered tap against four `texelFetch` — and it is a proper box filter at
+   every level rather than a five-point comb. I did not do it because manual
+   mipmaps on an R32F `DataTexture` need verifying against three's uploader and the
+   5-tap proved the visual point first.
+3. **Pallareth's and Taelpar's slopes are now clean but bland.** Taking the corduroy
+   off left large areas of unbroken grey-blue rock
+   (`tmp/shots/tr9/zone_pallareth.jpg`). That is strictly better than printed
+   plywood, but a Duscae cliff in FFXV has lichen, wash streaks and soil pockets.
+   The lever is the splat's near path, not the tile bedding I just suppressed.
 4. `zone_malacchi` is a **forest canopy** shot, not the "wide prairie vista" the
    brief describes — the reframing is not in this tree. Nothing about the terrain
    can be judged from it.
@@ -195,4 +248,21 @@ was the problem, as the brief allowed for.
   told either of them it was not.
 - `tmp/tr/bio.mjs` prints the *blended* `surfaceAt` entry at every zone centre, which
   is what the landmine about small-zone dilution asks you to measure. Use it before
-  authoring any table entry.
+  authoring any table entry. `tmp/tr/gc.mjs` does the same for `groundColorAt` and
+  `tmp/tr/gate.mjs` for the `lowAlt` gate.
+- **The dev server is not on 5460 as often as you think.** `src/tools/shoot.mjs`
+  spawns and then kills its own vite when the port is free, so a `heightcheck` run
+  straight after a `shoot` finds nothing listening and hangs for its full timeout.
+  Start `npx vite --port 5460 --strictPort` yourself and check it is still up.
+
+## Shots
+
+`tmp/shots/tr0` is the **pre-change baseline** — shoot against it before believing
+any regression. `tr1` after the LOD height filter, `tr2` after `groundColorAt`,
+`tr3`–`tr6` through the wood-grain work, `tr7` after the perf rework, `tr8` after
+the RNG decoupling, `tr9` the final review set (`zone_pallareth`,
+`zone_vesperpool`, `zone_nebulawood`, `hero_full`, `vista_dusk`).
+
+The two A/Bs that carry the argument: `tmp/shots/tr0/zone_longwythe.jpg` against
+`tmp/shots/tr7/zone_longwythe.jpg` (chevron), and `tmp/shots/tr1/zone_pallareth.jpg`
+against `tmp/shots/tr9/zone_pallareth.jpg` (wood grain).
