@@ -82,6 +82,12 @@ await browser.close();
 
 console.log(`${cells.length} shots -> ${written.length} page(s) in ${path.relative(process.cwd(), dir)}`);
 for (const w of written) console.log(`  ${path.basename(w)}`);
+// A leftover single-image sheet from before pagination is stale the moment these
+// pages are written, and it is the one an agent is most likely to reach for.
+const stale = (await readdir(dir)).filter((f) => /^_sheet(-[a-z_0-9]+)?\.png$/.test(f));
+if (stale.length) {
+  console.log(`  stale from the old single-image sheet, safe to delete: ${stale.join(', ')}`);
+}
 // Anything over 1568 px on its long edge is downscaled before a model sees it.
 if (Math.max(tallest, width) > 1568) {
   console.log(`  note: pages are up to ${Math.max(tallest, width)} px; lower --rows or --w to stay under 1568`);
