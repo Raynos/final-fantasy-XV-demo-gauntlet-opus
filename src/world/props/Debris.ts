@@ -330,7 +330,7 @@ function cairnGeometry(seed: any) {
 /** An oil drum, standing or fallen. */
 function barrelGeometry(seed: any) {
   const rng = new Rng(seed);
-  const parts = [new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12, 1)];
+  const parts: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12, 1)];
   for (const y of [-0.22, 0.22]) {
     const rib = new THREE.TorusGeometry(0.305, 0.025, 5, 12);
     rib.rotateX(Math.PI / 2);
@@ -408,7 +408,35 @@ function stripAttrs(g: any) {
  * and leaf mould, the Leide washes are bone and dry brush, Ravatogh has almost
  * nothing on it, and none of it has to be authored per region.
  */
-const LITTER = {
+/** One kind of ground litter: what it looks like, and how it is scattered. */
+interface LitterKind {
+  /** RNG seed, so the same branch is the same branch every run. */
+  seed: number;
+  /** null for `planks`, whose geometry is merged inline at build time. */
+  geo: ((seed: number) => THREE.BufferGeometry) | null;
+  /** Key into the shared material set. */
+  mat: string;
+  /** Instances per hectare, before the zone recipe multiplies it. */
+  per: number;
+  /** Draw distance, metres. */
+  range: number;
+  /** Uniform scale range. */
+  scale: number[];
+  /** How far to sink it into the ground, metres. */
+  sink?: number;
+  /** Lay it flat on the terrain normal rather than standing it up. */
+  flat?: boolean;
+  /** Lie along its own long axis -- for logs and driftwood. */
+  lie?: boolean;
+  /** Random tilt, radians. */
+  tilt?: number;
+  /** An alpha card, so it registers with the sorting pass. */
+  card?: boolean;
+  /** Shadow casting, on unless it is explicitly off. */
+  cast?: boolean;
+}
+
+const LITTER: Record<string, LitterKind> = {
   branch: { seed: 11, geo: branchGeometry, mat: 'wood', per: 6, range: 105, scale: [0.7, 1.7], sink: 0.02, flat: false },
   log: { seed: 61, geo: logGeometry, mat: 'wood', per: 2.2, range: 200, scale: [0.8, 1.5], sink: 0.06, lie: true },
   stump: { seed: 62, geo: stumpGeometry, mat: 'wood', per: 1.6, range: 150, scale: [0.8, 1.6], sink: 0.05 },

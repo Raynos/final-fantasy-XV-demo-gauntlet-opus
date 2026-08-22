@@ -239,13 +239,13 @@ export class RegaliaSystem {
 
   /** Named stops along the highway, ordered by arc length. */
   _layoutDestinations() {
-    const list = [
-      { name: 'Hammerhead', x: 8, z: -102 },
-      { name: 'Coernix Station', x: 0, z: 25 },
-      { name: 'Longwythe Rest Area', x: 128, z: 84 },
-      { name: 'Keycatrich Trench', x: -154, z: -132 },
-      { name: 'Galdin Quay', x: 198, z: 244 },
-      { name: 'Prairie Outpost', x: -92, z: 60 },
+    const list: { name: string, x: number, z: number, s: number }[] = [
+      { name: 'Hammerhead', x: 8, z: -102, s: 0 },
+      { name: 'Coernix Station', x: 0, z: 25, s: 0 },
+      { name: 'Longwythe Rest Area', x: 128, z: 84, s: 0 },
+      { name: 'Keycatrich Trench', x: -154, z: -132, s: 0 },
+      { name: 'Galdin Quay', x: 198, z: 244, s: 0 },
+      { name: 'Prairie Outpost', x: -92, z: 60, s: 0 },
     ];
     const hit = this.path.makeHit();
     for (const d of list) {
@@ -445,7 +445,7 @@ export class RegaliaSystem {
   /* -------------------------------------------------------------- internals */
 
   /** Push the simulation state onto the scene graph. */
-  _sync() {
+  _sync(_dt?: number) {
     const b = this.body;
     this.root.position.copy(b.pos);
     this.root.rotation.y = b.heading;
@@ -711,7 +711,23 @@ export class RegaliaSystem {
  * also means the suspension, the camera spring and the driver have all settled
  * by the time the shutter opens.
  */
-export const SHOT_STAGES = {
+/** One staged capture: where on the road, how fast, and how it is filmed. */
+export interface ShotStage {
+  /** Metres along the highway from the parking spot. */
+  ds: number;
+  /** Lateral offset from the centre line. */
+  lat: number;
+  speed: number;
+  driving: boolean;
+  /** Hand the wheel to the auto-driver. */
+  auto?: boolean;
+  camera?: string;
+  lights?: string;
+  yaw?: number;
+  steer?: number;
+}
+
+export const SHOT_STAGES: Record<string, ShotStage> = {
   regalia_road: { ds: 0, lat: 2.1, speed: 0, driving: false },
   regalia_drive: { ds: -46, lat: 1.9, speed: 27, driving: true, auto: true, camera: 'chase' },
   regalia_cruise: { ds: -36, lat: 2.0, speed: 21, driving: true, auto: true, camera: 'cinematic' },

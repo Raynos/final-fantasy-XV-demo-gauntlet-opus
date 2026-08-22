@@ -16,8 +16,20 @@
  *     uniform value.
  */
 
-/** 24×24 stroke paths, one per POI type plus the map's own markers. */
-export const GLYPH = {
+/** One glyph: a stroke path, its weight, and optionally a dash and a fill. */
+export interface Glyph {
+  /** SVG path data, in a 24x24 box. */
+  d: string;
+  /** Stroke weight, before the per-zoom division. */
+  w: number;
+  /** Dash pattern, in the same units. */
+  dash?: number[];
+  /** A second path drawn filled, under the stroke. */
+  fill?: string;
+}
+
+/** 24x24 stroke paths, one per POI type plus the map's own markers. */
+export const GLYPH: Record<string, Glyph> = {
   // a skyline: two blocks and a doorway
   town: { d: 'M3.4 20.2h17.2M6.2 20.2V10.6l4.2-3.3 4.2 3.3v9.6M14.6 20.2v-6.5l3.3-2.5 3.3 2.5v6.5M9.2 20.2v-3.5h2.4v3.5', w: 1.15 },
   // a single hut under a pitched roof

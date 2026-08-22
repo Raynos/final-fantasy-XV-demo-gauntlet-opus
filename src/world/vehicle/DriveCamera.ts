@@ -114,7 +114,7 @@ export class DriveCamera {
   /**
    * @param [look] free-look delta this frame
    */
-  update(dt: number, body: import('./VehicleBody.ts').VehicleBody, look?: {lookX?:number, lookY?:number}) {
+  update(dt: number, body: import('./VehicleBody.ts').VehicleBody, look?: {lookX?:number, lookY?:number} | null) {
     this._t += dt;
     this.trauma = Math.max(0, this.trauma - dt * 1.4);
     const speed = body.speed;

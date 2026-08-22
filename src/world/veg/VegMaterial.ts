@@ -160,7 +160,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
   bend = 0.35, flutter = 0.25, gustFreq = 0.055, trample = 0,
   translucency = 0, flexPow = 1.7, aoBoost = 0, twoSidedNormals = false,
   specular = 1,
-}: { bend: number, flutter: number, gustFreq: number, trample: number, translucency: number, flexPow: number, specular: number, twoSidedNormals?: boolean } = {}) {
+}: { bend?: number, flutter?: number, gustFreq?: number, trample?: number, translucency?: number, flexPow?: number, aoBoost?: number, specular?: number, twoSidedNormals?: boolean } = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = VegUniforms.uTime;
     shader.uniforms.uWindDir = VegUniforms.uWindDir;
