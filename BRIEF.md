@@ -111,29 +111,23 @@ Read tool and actually look at them.** Iterate: shoot → look → fix → shoot
 
 ## For any visual defect, ablate before re-tinting
 
-Looking at a frame tells you *that* something is wrong. It is remarkably bad at
-telling you *what* — the chevron hatch on every peak was read as heightfield
-normals and was GTAO; the character shadow detachment was read as the shadow
-bias and was grass casting nothing; the green cardboard grass was read as the
-albedo and was three.js dividing instance normals by a non-uniform scale. In
-the sibling repos this rule was earned three separate times and overturned
-eight confident diagnoses. So:
+Looking at a frame says *that* something is wrong and is remarkably bad at
+saying *what*: the chevron hatch was GTAO, not heightfield normals; the shadow
+detachment was grass casting nothing, not the bias. So measure first.
 
 ```bash
 node src/tools/shoot.mts hero_full --out tmp/a --raw
 node src/tools/shoot.mts hero_full --out tmp/b --raw --hide grass
-node src/tools/imgdiff.mts tmp/a tmp/b --heat tmp/heat --gain 8   # then LOOK at the heat map
+node src/tools/imgdiff.mts tmp/a tmp/b --heat tmp/heat --gain 8   # then LOOK at it
 ```
 
-- **`--hide <names>`** removes scene objects by name; **`--ablate <tokens>`**
-  turns post stages off (`nobloom`, `nogtao`, `nocontact`, `nomb`, `plain`, …).
-- **`--raw` on both sides, always, for a mesh ablation.** With the post chain
-  on, hiding one object moves auto-exposure, bloom and the grade, so tens of
-  thousands of pixels change that have nothing to do with it.
-- **`--heat` and then read the image.** A 1.8/255 mean with a max of 149 is
-  either a whole frame nudged or one band rewritten; only the map says which.
-- A `--hide` that matches nothing is reported as an error. Do not read a null
-  result as innocence until you have checked it ablated something.
+`--hide <names>` removes scene objects by name; `--ablate <tokens>` turns post
+stages off (`nobloom`, `nogtao`, `nocontact`, `plain`, …). **`--raw` goes on
+both sides of a mesh ablation** — with post on, hiding one object moves
+exposure, bloom and the grade, so tens of thousands of unrelated pixels change.
+Read the heat map, not just the mean: 1.8/255 with a max of 149 is either a
+nudged frame or one rewritten band. A `--hide` matching nothing is an error, so
+never read a null ablation as innocence.
 
 ## Definition of done for your task
 
