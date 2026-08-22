@@ -179,6 +179,17 @@ export interface OutfitPiece {
   /** chest print mask in sweep space, 0..1. */
   print?: (theta: number, t: number) => number;
   printColor?: number;
+  /**
+   * The print is drawn as its own re-swept decal patch rather than as vertex
+   * colour on the garment, because at the garment's own vertex density a chest
+   * logo is about nine vertices across and renders as a blur no falloff tuning
+   * can rescue. These size that patch.
+   */
+  printWindow?: number[];
+  /** Lift of the patch off the garment, metres. Tapers to zero at the border. */
+  printLift?: number;
+  printSteps?: number;
+  printSeg?: number;
   hemBand?: boolean;
 
   // ---- jacket / collar ------------------------------------------------

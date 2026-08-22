@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, blob, abump, bump, clamp01 } from './Geo.ts';
+import type { SweepNode, SkinWeights } from './Geo.ts';
 import { SIDES } from './Skeleton.ts';
 import type { Rig, Side } from './Skeleton.ts';
 import type { Look } from './Look.ts';
@@ -255,7 +256,7 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
     { a: 0.0245, l: 0.0600, d: 0.0012, r: 0.0070, len: [0.0280, 0.0180, 0.0150], flex: [0.21, 0.42, 0.24], splay: 0.120 },
   ];
   const IF = I[`fingers${side}`], IH = I[`hand${side}`], IT = I[`fingerTip${side}`];
-  const wF = [
+  const wF: SkinWeights[] = [
     [[IF, 0.50], [IH, 0.50]], [[IF, 0.92], [IH, 0.08]], [[IF, 1]],
     [[IF, 0.72], [IT, 0.28]], [[IF, 0.38], [IT, 0.62]], [[IT, 1]], [[IT, 1]],
   ];
@@ -267,8 +268,8 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
     // a rotation about +X always tips the finger toward -front (the palm),
     // because `front` is itself defined from +X — so the sign is side-agnostic
     const flexAxis = new THREE.Vector3().crossVectors(front, d).normalize();
-    const nodes: any[] = [];
-    const push = (rMul: number, w: any) => nodes.push({
+    const nodes: SweepNode[] = [];
+    const push = (rMul: number, w: SkinWeights) => nodes.push({
       p: p.toArray(), rx: R(f.r * rMul), rz: R(f.r * rMul * 0.88), w,
     });
     push(1.07, wF[0]);                                   // metacarpal head

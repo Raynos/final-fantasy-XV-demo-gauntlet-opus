@@ -72,18 +72,44 @@ function parse(argv: string[]) {
   return o;
 }
 
-/** Vite on `port`, resolved once it is actually serving. */
+/**
+ * Vite on `port`, resolved once it is **actually accepting connections**.
+ *
+ * This used to resolve on a log line, with a 15-second timer that resolved
+ * *successfully* if the line never came. That is a guess dressed as a check, and
+ * it is wrong exactly when it matters: a cold `src/public/baked/` makes the bake
+ * plugin regenerate the terrain field and the texture caches before vite listens
+ * at all, which took **41 s** on the run that exposed this. The two gates that
+ * do not start their own server then connected to nothing, died with a Node
+ * stack, and appeared in the summary table as a terrain regression — twice
+ * tonight, costing two lanes an investigation each.
+ *
+ * So: poll the socket. The only honest signal that a server is up is a
+ * connection to it.
+ */
 function serve(port: number): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
     const p = spawn('npx', ['vite', '--port', String(port), '--strictPort'], {
       cwd: path.join(HERE, '..', '..'), env: { ...process.env, PORT: String(port) },
     });
-    let out = '';
-    const done = (ok: boolean) => { if (ok) resolve(p); else reject(new Error(out.slice(-400))); };
-    p.stdout.on('data', (d) => { out += d; if (/Local:|ready in/.test(String(d))) done(true); });
+    let out = '', settled = false;
+    const fail = (why: string) => { if (!settled) { settled = true; reject(new Error(`${why}\n${out.slice(-400)}`)); } };
+    p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
-    p.on('close', () => done(false));
-    setTimeout(() => done(true), 15000);
+    p.on('close', () => fail('vite exited before it served'));
+    p.on('error', (e) => fail(String(e.message)));
+
+    // Generous, because a cold bake legitimately takes most of a minute. A
+    // deadline that is too short here reintroduces the bug it replaced.
+    const deadline = Date.now() + 240000;
+    const poll = async () => {
+      while (!settled && Date.now() < deadline) {
+        if (await portOpen(port)) { settled = true; resolve(p); return; }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      fail(`nothing listening on ${port} after 240 s`);
+    };
+    poll();
   });
 }
 
@@ -160,13 +186,27 @@ function portOpen(port: number): Promise<boolean> {
 
 const auxPort = await freePort(basePort + 50);
 let aux: ChildProcess | null = null;
+/** Why the aux server failed, if it did. Reported, never swallowed. */
+let auxError: string | null = null;
 
 const results = [];
 for (const g of todo) {
   process.stdout.write(`  ${g.name.padEnd(14)}`);
   let env = process.env;
   if (g.needsServer) {
-    if (!aux) { try { aux = await serve(auxPort); } catch { /* reported by the gate */ } }
+    // Do NOT swallow this. The comment that used to sit here said the gate
+    // would report it; the gate cannot -- it does not start a server, so all it
+    // can do is fail to connect and die with a Node stack, which reads in this
+    // table as a terrain regression. Two separate lanes went and investigated
+    // heightcheck tonight before noticing it passes standalone.
+    if (!aux && !auxError) {
+      try { aux = await serve(auxPort); } catch (e) { auxError = String((e as Error).message || e); }
+    }
+    if (auxError) {
+      results.push({ gate: g, code: 1, ms: 0, tail: `aux server on ${auxPort} never came up: ${auxError}` });
+      process.stdout.write(`FAIL  0.000s  aux server on ${auxPort} never came up: ${auxError}\n`);
+      continue;
+    }
     env = { ...process.env, PORT: String(auxPort) };
   }
   const r = await run(g, env);

@@ -208,9 +208,14 @@ piece('shirt', (B, ctx, o) => {
  * patch border is invisible.
  */
 function printPatch(
-  B: any, ctx: any, o: any, nodes: any[], shapeFn: any,
-  shade: any, printC: THREE.Color, u0: number, u1: number,
+  B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece, nodes: SweepNode[],
+  shapeFn: (theta: number, t: number) => number,
+  shade: ClothShade, printC: THREE.Color, u0: number, u1: number,
 ) {
+  // Only ever called behind `if (o.print)`; bind it so the closures below do
+  // not each have to re-prove that.
+  const print = o.print;
+  if (!print) return;
   const win = o.printWindow ?? [-0.62, 0.62, 0.46, 0.94];
   const [th0, th1, ta, tb] = win;
   const pad = o.pad ?? 0.010;
@@ -231,13 +236,13 @@ function printPatch(
     steps: o.printSteps ?? 56, seg: o.printSeg ?? 64,
     theta0: th0, theta1: th1,
     shape: (th, t) => shapeFn(th, tt(t)) * (1 + lift * taper(th, t)),
-    colorAt: (th: any, t: any) => c.copy(shade.color(th, tt(t)))
+    colorAt: (th: number, t: number) => c.copy(shade.color(th, tt(t)))
       .multiplyScalar(1 + 0.40 * ridge(tt(t), 0.965, 0.030) + 0.30 * ridge(tt(t), 0.030, 0.026))
-      .lerp(printC, o.print(th, tt(t))),
+      .lerp(printC, print(th, tt(t))),
     // print ink sits flatter and matter than the jersey it is screened onto
-    matAt: (th: any, t: any) => {
+    matAt: (th: number, t: number) => {
       const m = shade.mat(th, tt(t));
-      return [clamp01(m[0] + 0.14 * o.print(th, tt(t))), m[1], 0];
+      return [clamp01(m[0] + 0.14 * print(th, tt(t))), m[1], 0];
     },
     uvScale: [0.6, 0.9],
   });
