@@ -1,11 +1,48 @@
 # Goal: strictly and statically typed, with no `any` — implicit or explicit
 
-**Status:** in progress. **5,253 `any` left**, from 7,861 at the start — 33%
-gone. Both typechecks clean, all 9 gates green, `vite build` passes, the pixel
-diff against the pre-port build is inside each shot's own noise.
+**Status: done. 0 `any`, from 7,861.** Both typechecks clean, `vite build`
+passes, and `npm run check` is **10/10** — `anycheck` is now the second gate in
+`src/tools/check.mts`, straight after `build`, with `ANY_BUDGET.json` at `0`.
 
-The port itself is finished and documented separately in
-`project/handoff/typescript.md`. This document is only about getting to zero.
+    build PASS · anycheck PASS · orphans PASS · integration 18/18 ·
+    uxcheck 89/89 · creaturecheck 207 poses 0 failures · combatloop 30/30 ·
+    roadcheck 0 failures · heightcheck 0.000 m · driftcheck within tolerance
+
+There is no `as any`, no `as unknown as`, no `@ts-ignore` and no
+`@ts-expect-error` anywhere in `src/`. The port itself is documented separately
+in `project/handoff/typescript.md`; this document is only about getting to zero,
+and the sections below are the running record of how each area fell.
+
+## The last two, and how they closed
+
+**`src/tools/browser.d.ts` — closed.** The `declare module '/*'` wildcard is
+gone. Per-module ambient declarations genuinely cannot work (TypeScript reads an
+ambient module name beginning with `/` as a rooted path and refuses to match
+it); the fix is the `paths` mapping the previous note guessed at:
+
+```jsonc
+// tsconfig.tools.json
+"baseUrl": ".",
+"paths": { "/*": ["./src/*"] }
+```
+
+Every `page.evaluate(() => import('/world/map/Chart.ts'))` now resolves to the
+real module. Two contract bugs fell out the moment it did — `SHOTS.__probe`
+(now the declared `PROBE_SHOT` slot in `game/Shots.ts`) and `WorldMapScreen`'s
+constructor, which asked for a whole `Menus` and uses one method of it (now
+`ScreenHost`).
+
+**`src/globals.d.ts` — closed.** `window.GAME` is `Game` and `window.DEV` is
+`DevSuite`. `GAME` is declared **non-optional**: `src/main.ts` assigns it at
+module scope, before `init()` is even called. That single change produced 471
+errors across 19 harness files — all fixed, and it is where most of the findings
+below came from. `'ffxv-damage'` is `CustomEvent<DamageEvent>` and `ffxv-area`'s
+`meta` is a `string`.
+
+## Wiring, so it stays at zero
+
+`anycheck.mts` is now a gate. The ceiling only moves down; raising it means
+editing `ANY_BUDGET.json`, which is a reviewable line in a diff.
 
 ---
 
@@ -19,12 +56,12 @@ The port itself is finished and documented separately in
 but an edit to that file. It strips comments and string literals before
 counting, so the word `any` in prose does not register.
 
-**It is not wired into `npm run check` or the pre-commit hook yet.** That is a
-deliberate gap — wiring it in while the number is still five figures would make
-every unrelated commit carry the argument. Wire it into `check.mts` once the
-number is small enough that a regression is worth blocking on.
+It is wired into `npm run check` as the second gate (after `build`). It is
+deliberately **not** in the pre-commit hook: the hook already runs `vite build`
+and both typechecks, and a `--noEmit` pass catches an `any` the moment it makes
+something else untyped anyway.
 
-## Where the remaining 5,253 are
+## Where they were (historical, at 5,253 left)
 
 | kind | count | notes |
 |---|---|---|
@@ -34,7 +71,7 @@ number is small enough that a regression is worth blocking on.
 | `Record<string, any>` and other type arguments | 111 | authored data tables |
 | `as any` | 27 | each one a deliberate assertion, mostly three.js internals |
 
-Worst files, which is where the next hour should go:
+Worst files at that point:
 
 ```
 124  src/world/dungeons/kit/InteriorProps.ts
@@ -143,13 +180,10 @@ more from this work:
 
 ## Known debt beyond the count
 
-- `src/tools/typemods/**` is excluded from the tools typecheck and from the
-  count. It drives the compiler API, which is `any`-heavy by nature. Type it
-  last, or delete it when the job is done.
-- `src/tools/browser.d.ts` declares the harness's in-page URL imports as `any`.
-  Typing them properly means teaching the tools config about the game's module
-  graph — worth doing near the end.
-- `anycheck` is not in `npm run check` yet. See above.
+- `src/tools/typemods/**` is still excluded from the tools typecheck and from
+  the count. It drives the compiler API, which is `any`-heavy by nature. It is
+  the migration scaffolding and the migration is over: **delete it, or type
+  it.** That is the one remaining `any` reservoir in the repo.
 
 ## `src/characters/` outside `enemies/` and `rig/` — done, 163 → 0
 
@@ -425,3 +459,49 @@ now. (It still compiles as written, so it is a cleanup, not a break.)
   not over a typed event map. A `RpgEvents` map in the shape of
   `combat/CombatEvents.ts` is the right next step and would type `HudBridge`,
   `AudioSystem` and `StorySystem`'s handlers from one place.
+
+## The last pass — 147 to 0, and what it found
+
+Twenty-one files of game code, then `globals.d.ts`, then the whole harness.
+
+### Vocabulary added
+
+| type | where | what it is |
+|---|---|---|
+| `TexelFn`, `ScalarFn`, `HeightFn`, `CanvasDrawFn` | `util/TextureGen.ts` | the four per-texel callbacks the procedural bakers take. `TexelFn` writes into `c` rather than returning, so a 512² bake allocates nothing. |
+| `GradeLook` | `shaders/post/grades.ts` | the non-linear half of a grade, baked into the LUT. Every field required: `bakeLut` reads all of them with no default, and a missing one prints NaN. Replaced a `[extra: string]: any` index signature. |
+| `DialogueScript`, `DialogueNode`, `DialogueChoice` | `game/interaction/Dialogue.ts` | the authored conversation. `DialogueChoice` moved here from `characters/npc/NpcDialogue.ts`, which is where the previous handoff said it belonged. `lines` is `string \| string[] \| (game, dlg) => …` because a node may read live gil at the moment it is shown. |
+| `SaveData`, `SaveMeta`, `SaveSlot`, `LoadResult` | `game/rpg/SaveGame.ts` | the save blob as it comes off disk — every field optional, because an old build's file is missing whatever it did not have and `migrate` is what fills it in. `SaveStorage` is deliberately narrower than `Storage`, whose `[name: string]: any` index signature would hand every read back as `any`. |
+| `AscensionEffect` (5 arms), `AscensionNode`, `AscensionEdge`, `ConstellationInfo`, `AscensionEffects`, `AscensionSave`, `AuthoredNode`/`AuthoredConstellation` | `game/rpg/Ascension.ts` | the node graph, authored vs resolved. The four UI-facing ones **moved** here from `ui/GameData.ts` (which re-exports them) so they sit beside the data. |
+| `GrowthProfile`, `CoreStat`, `StatKey` | `game/rpg/Stats.ts` | `StatMods` lost its `[extra: string]: any`; `StatKey` is `Exclude<keyof StatMods, 'resist' \| 'mult'>`, so `stats.get('atack')` is now a compile error. |
+| `CraftResult` | `game/rpg/Elemancy.ts` | annotated rather than inferred: a bare `return { ok: false }` widens `ok` to `boolean`, which stopped `if (!res.ok)` narrowing at every call site. |
+| `RollOpts` | `game/rpg/CombatBridge.ts` | moved down from `ui/GameData.ts` (which re-exports it) — `roll()` lives here. `element`/`weaponClass` are the real unions now, not `string`. |
+| `CameraShot` | `game/CameraRig.ts` | a framing the rig is locked to. `pos`/`target` are mutable `number[]`, not `Shots.Vec3`, and that is the point — see the finding below. |
+| `GameOpts`, `ApplicableShot`, `PROBE_SHOT`, `isFollowShot`, `isShotName`, `isApplicableShot` | `game/Game.ts`, `game/Shots.ts` | `isFollowShot` exists because a plain `if (shot.follow)` does not narrow the union: `FixedShot.follow` is `never \| undefined` and TypeScript cannot rule out an empty-string `follow` on the other arm. |
+| `DownedState`, `DropshipState`, `TitleChoice`, `TitleItem`, `TitleRow`, `ChapterCardState`, `ArmedHunt`, `ChoiceRow`, `ScreenHost` | the encounter, story and UI files | the closed sets and row records the `x!: any` fields were standing in for. `TitleChoice` moved from `StorySystem` to `TitleScreen`, which authors the menu. |
+| `PoseName` | `game/cinematics/Poses.ts` | moved here from `Scene.ts` (which re-exports it) — the poses are authored here. `setPose` takes a `Character` and a `PoseName`. |
+| `ActionState.cinematic` | `characters/rig/Anim.ts` | `ActionState` is exported now, with the flag `Poses.setPose` writes so a scene can tell its own pose from a combat action it must not release. |
+| `Enemy.vulnerable`, `Enemy._fall` | `characters/enemies/EnemyBase.ts` | two more encounter-layer-owned fields. `vulnerable` came off `CombatTarget`, which the combat workstream had flagged as "belongs on `Enemy`"; `CombatTarget` is now `Enemy` with nothing added. `_fall` is `Dropship`'s drop clock. |
+| `classOf` | `tools/driftcheck.mts`, `tools/heightcheck.mts` | the class a live page object came from, as a constructor. A bare `three` specifier does not resolve inside `page.evaluate` and the probe rig must use the *page's* three anyway; `Object.constructor` is typed `Function`. Two documented sites, and the type argument keeps them checked. |
+| `Menus.screenNames` | `ui/Menus.ts` | one getter that says `Object.keys(this.screens)` is `ScreenName[]`, instead of each caller asserting it. |
+
+### Bugs found
+
+Everything in the LANDMINES §"Names nothing ever verified" second table, plus:
+
+- **`Game.applyShot` mutated the authored shot table.** `rig.setShot({ pos: shot.pos })` passed the `SHOTS` array by reference, and `CameraRig.lateUpdate`'s ground clamp then wrote the raised height back into it. `Vec3` is a `readonly` tuple, so typing `CameraShot.pos` as the mutable `number[]` it has to be forced the copy. Same y in practice — the clamp is idempotent at a fixed x/z — but the table is authored data and is no longer written to.
+- **`BossFight.resolveStrike` / `slamAt` / `_handPos` are unreachable.** Nothing calls them. Titan's forty-metre fist has never landed where the hand is. Typed and documented, **not** deleted: the right fix is to *call* it from `EncounterDirector.resolveStrike`, which is a design change.
+- **`CameraRig.setLockOn` is called by nothing**, so `lockOn` has only ever been `null` and the combat-framing block in `lateUpdate` has never run. Same treatment.
+- **`Ascension.activeEffects` wrote NaN into `values`.** Five independent `if`s over one payload meant `{ stat: 'hp', value: 500 }` also took the `value` arm, writing `values['500'] = 0 + undefined`. Inert (`value()` returns `NaN || 0`, and no tunable is named `'500'`), but the arms are exclusive now and the union has all five shapes.
+- **`Character.play(name, opts)` required an argument it already defaulted.** The body was `this.anim.play(name, opts ?? {})`, and two callers passed one argument. `opts?: PlayOpts` now.
+- **`PartyMember.reviveTarget` was typed `THREE.Object3D`** and `Downed` writes the `Player`, which is not one — `PartyAI._station` reads `.position`, which `Player` publishes as a getter onto `root.position`. Typed `Player | null`.
+- **`EncounterDirector.resolveStrike` declared `EnemyAttack | null`** and immediately widened it to `StrikeSpec`; `combatloop` passes a `StrikeSpec`. The signature says `StrikeSpec | null` now.
+- **`AudioSystem`'s static side was unreachable from an instance.** `verify.mts` and `profile.mts` pull the class out of the page through `game.get('Audio').constructor`, which is typed `Function`. The class declares `['constructor']` now, the same trick `BipedEnemy` uses.
+
+### Behaviour that changed, deliberately
+
+Three, all of them a dead thing becoming a live one, all reported above:
+
+1. `integration`'s rest probe calls `rpg.restAt('caravan')` instead of `day.rest('caravan')`. It passes.
+2. `gameplay`'s `magic` perf scenario now actually fires an effect. **This will move that scenario's number** — it has been measuring an idle field. Run `npm run check:perf` on a quiet tree and re-baseline it.
+3. `Game.applyShot` copies the authored `pos`/`target` instead of aliasing them.
