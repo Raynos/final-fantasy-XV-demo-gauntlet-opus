@@ -12,15 +12,31 @@
  *   node src/tools/gameplay.mts --q high
  *   node src/tools/gameplay.mts --scale 2        # longer segments
  *   node src/tools/gameplay.mts --out perf.json
+ *   node src/tools/gameplay.mts --baseline perf.json   # compare, honestly
  *
  * A hitch is a single frame over 33 ms (a dropped frame at 30 fps). Those are
  * what players actually feel; a good median with 100 ms spikes is a bad game.
  * Exits non-zero if the p99 is over budget or any segment medians below target.
+ *
+ * TWO NUMBERS PER SEGMENT, as in `perf.mts`. `thru` is the median of pipelined
+ * blocks and is what the gate reads, because that is how the game runs a frame.
+ * `lat` and the whole tail (`p95`, `p99`, `max`, `hitches`) come from per-frame
+ * `gl.finish()` sampling, which is the only way a single bad frame stays
+ * visible instead of being averaged into a block.
+ *
+ * AND THE RUN VALIDATES ITSELF. The noise floor is measured — walking, the
+ * same paired procedure with the same configuration on both sides — before the
+ * first segment and after the last, and the worse of the two is what every
+ * number is judged against. If it is not small relative to the frame the run is
+ * stamped `RULER_VALID: false` and exits 3 without certifying anything. See
+ * `ruler.mts` for why, and for where it was ported from.
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
+import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } from './ruler.mts';
+import type { Floor } from './ruler.mts';
 import { spawn } from 'node:child_process';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +45,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv: string[]) {
-  const o = { w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33, out: null as string | null, nobake: false };
+  const o = {
+    w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33,
+    out: null as string | null, baseline: null as string | null, pairs: 24, nobake: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--nobake') o.nobake = true;
@@ -40,6 +59,8 @@ function parseArgs(argv: string[]) {
     else if (a === '--target') o.target = Number(argv[++i]);
     else if (a === '--hitch') o.hitchMs = Number(argv[++i]);
     else if (a === '--out') o.out = argv[++i];
+    else if (a === '--baseline') o.baseline = argv[++i];
+    else if (a === '--pairs') o.pairs = Number(argv[++i]);
     else throw new Error(`unknown flag ${a}`);
   }
   return o;
@@ -69,6 +90,11 @@ async function main() {
   const o = parseArgs(process.argv.slice(2));
   const server = await ensureServer();
 
+  // BEFORE measuring. Everything below is only as good as the machine it ran
+  // on, and this is the cheapest thing that says what that machine was.
+  const load = printContention();
+  console.log('');
+
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
   const errors: string[] = [];
@@ -80,6 +106,7 @@ async function main() {
     await page.goto(`http://127.0.0.1:${PORT}/?q=${o.q}&shoot=1${o.nobake ? '&nobake=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
     await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
+    await page.evaluate(RULER_PAGE_SRC);
 
     const gpu = await page.evaluate(() => {
       const gl = window.GAME.renderer.getContext();
@@ -89,7 +116,7 @@ async function main() {
     console.log(`GPU: ${gpu}`);
     console.log(`${o.w}x${o.h}  quality=${o.q}  hitch>${o.hitchMs}ms  target ${o.target} fps\n`);
 
-    out = await page.evaluate(async ([scale, hitchMs]) => {
+    out = await page.evaluate(async ([scale, hitchMs, pairs]) => {
       const g = window.GAME;
       const gl = g.renderer.getContext();
       const dt = 1 / 60;
@@ -216,6 +243,20 @@ async function main() {
         },
       ];
 
+      /**
+       * The noise floor for this session: the paired procedure with the SAME
+       * configuration on both sides, walking. Measured, never asserted — its
+       * IQR is the smallest per-segment difference this machine can resolve
+       * right now, and it is what `--baseline` comparisons are judged against.
+       */
+      const measureFloor = () => {
+        hold('KeyW');
+        look(0, 0);
+        for (let i = 0; i < 20; i++) g.frame(dt);
+        return window.__RULER.noiseFloor(() => g.frame(dt), { pairs });
+      };
+      const floorStart = measureFloor();
+
       const results = [];
       const allHitches = [];
       for (const seg of segments) {
@@ -230,6 +271,18 @@ async function main() {
         // dominate: 6 warm frames, then measure
         for (let i = 0; i < 6; i++) { act(i); g.frame(dt); }
         gl.finish();
+
+        // Headline: pipelined blocks, which is how the game submits frames.
+        // The segment's own `each` keeps driving, so a block is the same
+        // workload as the samples below, only without a stall per frame.
+        // `throughput` restarts its index at 0 for every block, and a segment's
+        // `each` is phased off that index (`i % 12`, `Math.sin(i * 0.06)`), so
+        // it gets a counter of its own that only ever goes forward.
+        let k = 0;
+        const thru = window.__RULER.throughput(() => { act(k++); g.frame(dt); }, { blocks: 3, warm: 4, n: 16 });
+
+        // Tail: per-frame `gl.finish()`. This is what makes a single 180 ms
+        // streaming frame visible instead of averaged away inside a block.
         const samples = [];
         for (let i = 0; i < seg.frames; i++) {
           act(i);
@@ -244,6 +297,8 @@ async function main() {
         results.push({
           name: seg.name,
           frames: seg.frames,
+          thru: thru.ms,
+          spread: thru.spreadMs,
           median: s[Math.floor(s.length * 0.5)],
           p95: s[Math.floor(s.length * 0.95)],
           p99: s[Math.floor(s.length * 0.99)],
@@ -254,29 +309,53 @@ async function main() {
         });
       }
 
+      const floorEnd = measureFloor();
       if (start && player) player.root.position.copy(start);
-      return { results, hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25) };
-    }, [o.scale, o.hitchMs]);
+      return { results, floorStart, floorEnd, hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25) };
+    }, [o.scale, o.hitchMs, o.pairs]);
   } finally {
     await browser.close();
     if (server) server.kill();
   }
 
-  console.log('segment              med ms    fps    p95    p99    max   >16ms  hitches');
-  console.log('-'.repeat(76));
+  // The worse of the two floors: a session that started quiet and ended
+  // contended is a contended session.
+  const floorStart: Floor = out.floorStart;
+  const floorEnd: Floor = out.floorEnd;
+  const floor: Floor = floorEnd.iqrMs > floorStart.iqrMs ? floorEnd : floorStart;
+  const medianFrame = quantiles(out.results.map((r) => r.thru)).median;
+  const validity = validate(floor, medianFrame);
+  const targetMs = 1000 / o.target;
+
+  console.log(
+    `noise floor (walking, ${floor.pairs} ABBA frame pairs): start IQR ${floorStart.iqrMs.toFixed(2)} ms / ` +
+    `end IQR ${floorEnd.iqrMs.toFixed(2)} ms, bias ${floor.biasMs >= 0 ? '+' : ''}${floor.biasMs.toFixed(2)} ms\n`,
+  );
+  console.log('segment              thru ms    fps  spread     lat    p95    p99    max   >16ms  hitches');
+  console.log('-'.repeat(90));
   for (const r of out.results) {
-    const fps = 1000 / r.median;
-    const flag = fps < o.target ? '  <<' : '';
+    const fps = 1000 / r.thru;
+    // `~~` means the verdict is not resolvable: the segment sits closer to the
+    // target than this segment's own block spread. Saying "49.8 fps, fails" of
+    // a number with a 4 ms spread is the lie this instrument exists to stop.
+    const unresolved = Math.abs(r.thru - targetMs) <= r.spread;
+    const flag = unresolved ? '  ~~' : (fps < o.target ? '  <<' : '');
     console.log(
-      `${r.name.padEnd(20)} ${r.median.toFixed(1).padStart(6)} ${fps.toFixed(1).padStart(6)} ` +
-      `${r.p95.toFixed(1).padStart(6)} ${r.p99.toFixed(1).padStart(6)} ${r.max.toFixed(1).padStart(6)} ` +
+      `${r.name.padEnd(20)} ${r.thru.toFixed(1).padStart(6)} ${fps.toFixed(1).padStart(6)} ` +
+      `${r.spread.toFixed(1).padStart(7)} ${r.median.toFixed(1).padStart(7)} ${r.p95.toFixed(1).padStart(6)} ` +
+      `${r.p99.toFixed(1).padStart(6)} ${r.max.toFixed(1).padStart(6)} ` +
       `${(r.over16 * 100).toFixed(0).padStart(6)}% ${String(r.hitches).padStart(8)}${flag}`
     );
   }
-  const worst = out.results.reduce((a, b) => (a.median > b.median ? a : b));
+  const worst = out.results.reduce((a, b) => (a.thru > b.thru ? a : b));
   const totalHitches = out.results.reduce((s, r) => s + r.hitches, 0);
-  console.log('-'.repeat(76));
-  console.log(`worst segment: ${worst.name} at ${(1000 / worst.median).toFixed(1)} fps   total hitches: ${totalHitches}`);
+  console.log('-'.repeat(90));
+  console.log(`worst segment: ${worst.name} at ${(1000 / worst.thru).toFixed(1)} fps   total hitches: ${totalHitches}`);
+  console.log(
+    `noise floor ${floor.iqrMs.toFixed(2)} ms = ${((floor.iqrMs / medianFrame) * 100).toFixed(0)}% ` +
+    `of the median ${medianFrame.toFixed(1)} ms segment`,
+  );
+  console.log(`RULER_VALID: ${validity.valid}`);
 
   if (out.hitches.length) {
     console.log('\nworst individual frames:');
@@ -285,21 +364,58 @@ async function main() {
     }
   }
 
+  // Against a previous run, with the rule applied: a median that moves less
+  // than the floor has not moved.
+  if (o.baseline) {
+    const prev = JSON.parse(await readFile(path.resolve(ROOT, o.baseline), 'utf8')) as { results: typeof out.results };
+    const by = new Map(prev.results.map((r) => [r.name, r]));
+    console.log(`\nagainst ${o.baseline}:`);
+    let changed = 0;
+    for (const r of out.results) {
+      const b = by.get(r.name);
+      if (!b || b.thru == null) continue;
+      const v = deltaVerdict(b.thru, r.thru, floor.iqrMs);
+      if (!v.startsWith('unchanged')) {
+        changed++;
+        console.log(`  ${r.name.padEnd(20)} ${b.thru.toFixed(1)} -> ${r.thru.toFixed(1)} ms   ${v}`);
+      }
+    }
+    console.log(`  ${changed} of ${out.results.length} segments moved by more than the ${floor.iqrMs.toFixed(2)} ms floor`);
+  }
+
   if (o.out) {
     await mkdir(path.dirname(path.resolve(ROOT, o.out)), { recursive: true });
-    await writeFile(path.resolve(ROOT, o.out), JSON.stringify(out, null, 2));
+    await writeFile(path.resolve(ROOT, o.out), JSON.stringify({
+      RULER_VALID: validity.valid,
+      rulerWarning: validity.warning,
+      contention: load,
+      ruler: {
+        floorStart, floorEnd, medianFrameMs: medianFrame,
+        headline: 'thru = median of 3 pipelined 16-frame blocks; lat/p95/p99/max = per-frame gl.finish()',
+        rule: 'a median that moves less than the floor IQR has not moved',
+      },
+      ...out,
+    }, null, 2));
   }
   if (errors.length) {
     console.error(`\n${errors.length} page error(s):`);
     for (const e of [...new Set(errors)].slice(0, 10)) console.error('  ' + e.split('\n')[0]);
     process.exit(1);
   }
-  const worstFps = 1000 / worst.median;
+  // Void beats both PASS and FAIL: a run this instrument cannot stand behind
+  // must not be quoted in either direction.
+  if (!validity.valid) {
+    console.error(`\n${validity.warning}`);
+    if (load.busy) console.error(`The contention verdict above already said so: ${load.verdict}`);
+    console.error('VOID: no segment is certified pass or fail by this run.');
+    process.exit(3);
+  }
+  const worstFps = 1000 / worst.thru;
   if (worstFps < o.target) {
     console.error(`\nFAIL: ${worst.name} at ${worstFps.toFixed(1)} fps is below the ${o.target} fps target`);
     process.exit(2);
   }
-  console.log(`\nPASS: every segment >= ${o.target} fps`);
+  console.log(`\nPASS: every segment >= ${o.target} fps, on a ruler that validated itself`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
