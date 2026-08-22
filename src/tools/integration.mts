@@ -70,7 +70,10 @@ const results = await page.evaluate(async () => {
   const probe = (area: string, name: string, fn: () => { status: Row['status'], evidence: unknown } | null | undefined) => {
     try {
       const r = fn();
-      if (!r) return add(area, name, 'FAIL', 'probe returned nothing');
+      // `add` forwards `out.push`'s return, so `return add(...)` here made one
+      // arm hand back a number and the other `undefined`. It reports; it does
+      // not compute anything.
+      if (!r) { add(area, name, 'FAIL', 'probe returned nothing'); return; }
       add(area, name, r.status, r.evidence);
     } catch (e: unknown) { add(area, name, 'FAIL', 'threw: ' + (e instanceof Error ? e.message : String(e))); }
   };

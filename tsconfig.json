@@ -7,6 +7,11 @@
     "strict": true,
     "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
+    // Free at the time they went on: each reported zero errors against the
+    // tree, so they cost nothing today and catch the next one.
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "useUnknownInCatchVariables": true,
     "noUnusedLocals": true,
     "noUnusedParameters": false,
     "exactOptionalPropertyTypes": false,
