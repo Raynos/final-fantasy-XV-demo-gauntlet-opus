@@ -42,7 +42,7 @@ const BASE = {
 
 const mk = (o: any) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
 
-export const ZONE_DRESS: Object<string, any> = {
+export const ZONE_DRESS: Record<string, any> = {
   // ---------------------------------------------------------------- LEIDE
   // Rust-ochre badlands. Bedded sandstone that breaks into tabular slabs,
   // dry-wash bones, brittle dead brush, nothing green.
@@ -266,7 +266,7 @@ export function zoneIdAt(x: any, z: any) {
 /**
  * Pick a key from a `{key: weight}` table with a 0..1 random.
  */
-export function pickWeighted(table: Object<string, number>, r: number): string {
+export function pickWeighted(table: Record<string, number>, r: number): string {
   let total = 0;
   for (const k in table) total += table[k];
   let t = r * total;

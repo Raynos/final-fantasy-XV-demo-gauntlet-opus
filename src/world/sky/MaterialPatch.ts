@@ -1,4 +1,5 @@
 import { ShaderChunk } from 'three';
+import type * as THREE from 'three';
 import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
 
 /**

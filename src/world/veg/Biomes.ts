@@ -61,7 +61,7 @@ const BASE = {
 
 const mk = (o: any) => ({ ...BASE, ...o });
 
-export const VEG_BIOME: Object<string, any> = {
+export const VEG_BIOME: Record<string, any> = {
   // ----------------------------------------------------------------- LEIDE
   // What is already here and works: 0.15-0.35 m olive/straw tufts over open
   // dirt, dry thorn scrub, the odd dead tree. Do not "improve" this.
@@ -238,14 +238,14 @@ export const VEG_BIOME: Object<string, any> = {
  * Flatten a `{key: weight}` table into a cumulative array so a per-instance
  * pick is one walk over a small array instead of an object enumeration.
  */
-function cumulative(table: Object<string, number>): Array<[string, number]> {
+function cumulative(table: Record<string, number>): [string, number][] {
   let total = 0;
   for (const k in table) total += table[k];
   const out = [];
   let acc = 0;
   for (const k in table) { acc += table[k] / total; out.push([k, acc]); }
   if (out.length) out[out.length - 1][1] = 1.0001;
-  return out;
+  return out as [string, number][];
 }
 
 // Pre-resolve the colour ramps to linear once, and the species mixes to

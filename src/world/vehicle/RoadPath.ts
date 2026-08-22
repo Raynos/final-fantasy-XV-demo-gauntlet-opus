@@ -44,7 +44,7 @@ export class RoadPath {
   road!: any;
   shoulder!: any;
   width!: any;
-  constructor(road: {points:Array, length:number, width:number, shoulder:number}) {
+  constructor(road: {points: any[], length: number, width: number, shoulder: number}) {
     this.road = road;
     this.pts = road && road.points ? road.points : [];
     this.length = road ? road.length : 0;

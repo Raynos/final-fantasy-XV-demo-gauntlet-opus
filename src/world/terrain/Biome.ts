@@ -45,7 +45,7 @@ import { worldMap, WORLD } from '../map/WorldMap.ts';
  * sampler tips it over.
  */
 
-export const SURFACE: Object<string, {ground:number[], rock:number[], green:number, damp:number}> = {
+export const SURFACE: Record<string, {ground:number[], rock:number[], green:number, damp:number}> = {
   // ------------------------------------------------------------------ LEIDE
   // Red-ochre badlands, rust rock, dry scrub. This is the one region that was
   // already right, so its entries sit close to 1.0 and only carry the warm

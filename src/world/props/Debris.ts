@@ -500,7 +500,7 @@ export class Debris {
     for (const key of LITTER_KINDS) {
       const def = LITTER[key as keyof typeof LITTER];
       if (!def) continue;
-      const geo = key === 'planks' ? plankGeo : def.geo(def.seed);
+      const geo = key === 'planks' ? plankGeo : def.geo!(def.seed);
       const max = Math.max(8, Math.round(CAPS[key as keyof typeof CAPS] * this.quality));
       const mesh = new THREE.InstancedMesh(geo, M[def.mat as keyof typeof M], max);
       mesh.castShadow = def.cast !== false;

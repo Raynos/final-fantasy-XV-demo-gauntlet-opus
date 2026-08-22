@@ -369,7 +369,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
       const steer = new THREE.Group();
       steer.position.set(ax, WY, 0.79 * side);
       const spin = new THREE.Group();
-      for (const m of templates[side as keyof typeof templates].children) {
+      for (const m of templates[String(side)].children as THREE.Mesh[]) {
         // share the geometry and the material; only the node is new
         const inst = new THREE.Mesh(m.geometry, m.material);
         inst.castShadow = true;

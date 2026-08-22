@@ -35,7 +35,7 @@ export class TileStream {
   /**
    * @param {object} o
    * */
-  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx:number, cz:number, out:Array) => void, budget?: number, keep?: number }) {
+  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx: number, cz: number, out: any[]) => void, budget?: number, keep?: number }) {
     this.cell = cell;
     this.radius = radius;
     this.gen = gen;

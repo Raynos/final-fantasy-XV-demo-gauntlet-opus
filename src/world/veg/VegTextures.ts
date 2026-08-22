@@ -211,7 +211,7 @@ export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx!.clearRect(0, 0, size, size);
-  draw(ctx, size);
+  draw(ctx!, size);
   const src = ctx!.getImageData(0, 0, size, size).data;
   // DataTexture ignores flipY, so flip rows here to keep the usual
   // "v=0 is the bottom of the canvas" convention every card geometry assumes.

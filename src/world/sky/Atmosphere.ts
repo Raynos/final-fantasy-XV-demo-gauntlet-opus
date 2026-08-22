@@ -117,7 +117,7 @@ export class Atmosphere {
    * @param msBoost multiple-scattering strength
    */
   bakeSkyView(sunY: number, camAlt: number, msBoost: number) {
-    const u = this._skyQuad.material.uniforms;
+    const u = (this._skyQuad.material as THREE.ShaderMaterial).uniforms;
     u.uSunY.value = sunY;
     u.uCamAlt.value = camAlt;
     u.uMsBoost.value = msBoost;
