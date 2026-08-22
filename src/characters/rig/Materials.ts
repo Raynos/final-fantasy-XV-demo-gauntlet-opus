@@ -431,8 +431,7 @@ export function hairMaterial() {
 
 /** Eyeball material: painted iris + sclera, with an explicit cornea glint. */
 export function eyeMaterial(iris: any) {
-  return patch(new THREE.MeshPhysicalMaterial({
-    defines: { USE_UV: '' },
+  const m = new THREE.MeshPhysicalMaterial({
     vertexColors: true,
     roughness: 0.30,
     metalness: 0,
@@ -443,7 +442,11 @@ export function eyeMaterial(iris: any) {
     clearcoat: 0.35,
     clearcoatRoughness: 0.12,
     envMapIntensity: 0.20,
-  }), { sss: 0, cornea: { gloss: 1.0, iris } });
+  });
+  // `defines` is not a constructor parameter on three's materials; the eye
+  // shader needs UVs, so the define is set on the instance.
+  m.defines = { ...(m.defines || {}), USE_UV: '' };
+  return patch(m, { sss: 0, cornea: { gloss: 1.0, iris } });
 }
 
 /** Thin glass for spectacle lenses. */

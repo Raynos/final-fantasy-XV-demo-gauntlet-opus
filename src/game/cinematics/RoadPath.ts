@@ -33,7 +33,7 @@ export class RoadPath {
    * @param {object} opts
    * 
    */
-  constructor(samples: Array<{x:number,z:number,s:number,tx:number,tz:number}>, { origin, toward, terrain }: { origin: THREE.Vector3, toward?: THREE.Vector3, terrain?: any } = {}) {
+  constructor(samples: Array<{x:number,z:number,s:number,tx:number,tz:number}>, { origin, toward, terrain }: { origin?: THREE.Vector3, toward?: THREE.Vector3, terrain?: any } = {}) {
     // arc-length order, de-duplicated
     this.pts = samples.slice().sort((a, b) => a.s - b.s);
     this.terrain = terrain || null;

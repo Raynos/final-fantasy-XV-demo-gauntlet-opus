@@ -927,9 +927,14 @@ const SURFACE: Record<string, SurfaceVoice> = {
  */
 /** One creature voice. See the note above for what each part does. */
 interface SpeciesVoice {
-  /** `[hz, gain, q]` per resonance. */
-  formants: number[][];
-  growl: number; rasp: number; sub: number;
+  /** `[hz, gain, q]` per resonance. Absent on the machine voices, which are
+   *  swept tones rather than a throat. */
+  formants?: number[][];
+  growl?: number;
+  rasp?: number;
+  sub?: number;
+  /** A machine: no vocal folds, no formants. */
+  machine?: boolean;
   [call: string]: any;
 }
 

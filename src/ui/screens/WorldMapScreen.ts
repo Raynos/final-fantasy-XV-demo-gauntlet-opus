@@ -169,7 +169,7 @@ export class WorldMapScreen {
       ]);
       n.addEventListener('pointerdown', () => this._setFilter(i));
       if (i === 0) n.classList.add('on');
-      n._count = count;
+      (n as any)._count = count;
       return n;
     });
     this.rail = el('div.wm-rail.plate', {}, [
@@ -774,14 +774,14 @@ export class WorldMapScreen {
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
     // draw order: dimmed first, then normal, then the selection on top
-    const rows = [];
+    const rows: { p: any, x: number, y: number, known: boolean, off: boolean, sel: boolean, hover: boolean, rad?: number }[] = [];
     for (const p of this.map.pois) {
       const known = this._known(p);
       if (!known && fog.at(p.x, p.z) < 0.5) continue;
       const x = sx(p.x), y = sy(p.z);
       if (x < -60 || x > W + 60 || y < -60 || y > H + 60) continue;
       this._screenPos.set(p, [x / dpr, y / dpr]);
-      const off = f.types && !f.types.includes(p.type);
+      const off = !!(f.types && !f.types.includes(p.type));
       rows.push({ p, x, y, known, off, sel: p === selected, hover: p === this.hover });
     }
     rows.sort((a, b) => (a.off ? 0 : 1) - (b.off ? 0 : 1) || (a.sel ? 1 : 0) - (b.sel ? 1 : 0));

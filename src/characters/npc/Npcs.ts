@@ -212,7 +212,8 @@ export class Npcs {
     const body = new NpcBody(arch, (def.look.seed || 1) + (opts.seed || 0) * 977);
     this.root.add(body.root);
 
-    const npc = {
+    /** `groundY` is filled in below, once the terrain under the NPC is sampled. */
+    const npc: Record<string, any> = {
       id: key,
       castKey,
       name: def.name,

@@ -34,7 +34,19 @@ const DG = 4;
  * use, just at a different scale, which keeps their twig structure consistent
  * with the canopies above them.
  */
-const WOODY = {
+/** One woody species: which builder, how many variants, and its parameters. */
+interface WoodySpec {
+  base: string;
+  variants: number;
+  params: Record<string, any>;
+  /** Per-instance colour jitter. */
+  tint?: any;
+  /** Scale range. */
+  scale?: any;
+  [extra: string]: any;
+}
+
+const WOODY: Record<string, WoodySpec> = {
   sage: {
     base: 'broadleaf', variants: 2,
     params: {

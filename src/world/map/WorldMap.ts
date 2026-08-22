@@ -924,7 +924,7 @@ export class WorldMap {
     const found = [];
     for (const p of POIS) {
       if (this.discovered.has(p.id)) continue;
-      if (Math.hypot(p.x - x, p.z - z) <= p.r) {
+      if (Math.hypot(p.x! - x, p.z! - z) <= p.r) {
         this.discovered.add(p.id);
         found.push(p);
       }

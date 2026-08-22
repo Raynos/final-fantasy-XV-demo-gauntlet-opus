@@ -93,8 +93,17 @@ function postureKey(character: any): string {
   return n;
 }
 
+/** One keyframed action. `hold` freezes on the last key until released. */
+export interface Action {
+  dur: number;
+  /** Which bone mask the action drives. */
+  mask: string;
+  keys: any[];
+  hold?: boolean;
+}
+
 /** Keyframed action poses for combat. Values are XYZ Euler radians. */
-export const ACTIONS = {
+export const ACTIONS: Record<string, Action> = {
   attack_slash: {
     dur: 0.85, mask: 'upper',
     keys: [
@@ -351,7 +360,7 @@ export class Animator {
 
   /** Start a keyframed action. @param name @param opts */
   play(name: string, opts: any = {}) {
-    const def = ACTIONS[name as keyof typeof ACTIONS];
+    const def = ACTIONS[name];
     if (!def) return;
     this.action = { def, name, t: 0, speed: opts.speed || 1, w: 0, hold: !!def.hold && opts.hold !== false };
   }

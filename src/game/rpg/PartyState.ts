@@ -427,7 +427,7 @@ export class PartyState {
    *
    * @param hour current world hour (absolute, monotonically rising)
    */
-  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0): { ok: boolean, reason?: string, missing?: any[], buff?: any, cookingLevel?: number } {
+  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0): { ok: boolean, reason?: string, missing?: any[], buff?: any, cookingLevel?: number, levelled?: boolean } {
     const check = this.canCook(recipeId, inventory);
     if (!check.ok) return check;
     const r = RECIPE_TABLE[recipeId];

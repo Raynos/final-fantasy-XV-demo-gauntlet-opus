@@ -48,7 +48,7 @@ function pbr(key: any, {
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     const roughnessMap = makeDataMap(Math.min(size, 256), (u: any, v: any) => rough[0] + height(u, v) * rough[1]);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
-    const opts = {
+    const opts: THREE.MeshStandardMaterialParameters = {
       color: 0xffffff, map, normalMap, roughnessMap,
       roughness: roughness, metalness: metal, vertexColors: true,
       normalScale: new THREE.Vector2(1.15, 1.15),

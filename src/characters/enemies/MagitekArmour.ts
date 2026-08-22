@@ -411,7 +411,8 @@ class MagitekArmourEnemy extends Enemy {
         // dropped, the feet ride down with it and six tonnes of walker paddles
         // along 0.73 m inside the ground.
         const chassis = (support / 1.4 - 1) * 0.16;
-        for (const [id, p] of [['fL', pL], ['fR', pR]]) {
+        const legs: [string, ReturnType<typeof legPhase>][] = [['fL', pL], ['fR', pR]];
+        for (const [id, p] of legs) {
           // `footPitch` is the *world* pitch the solver levels the pastern to.
           // On this reverse-jointed leg the metatarsus is raked ~40 deg in
           // bind pose, so asking for "near horizontal" swings the foot down
