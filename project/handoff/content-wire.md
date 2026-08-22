@@ -162,27 +162,84 @@ archives, system, controls, photo, shop, hunts` — no cook screen, no camp scre
 
 ---
 
-## 4. State, and the exact next step
+## 4. State — committed and verified on this branch
 
-Committed on this branch:
+| commit | what |
+|---|---|
+| `Add DOM.Iterable to the tools config` | `npm run typecheck:tools` was **red on a clean `main`**, blocking the pre-commit hook for every agent |
+| `Give E back to the interaction verb` | §2 — the headline fix |
+| `The re-audit probe…` | `src/tools/probes/reaudit.mts`, `epress.mts` |
+| `Make integration press the key…` | `integration.mts` 18 → 19 probes; the E verb and resting are now actually tested |
+| `Derive the haven table from WorldMap…` | §3.1 for havens; `huntloop.mts`, `huntboard.mts` |
+| `Register a Camp prompt at every haven` | §3.2 — `src/game/rpg/HavenCamp.ts` |
 
-1. `Add DOM.Iterable to the tools config` — unblocks the pre-commit hook.
-2. `Give E back to the interaction verb` — §2.
+Measured, after the fixes, by driving the real page:
 
-Next, in order:
+```
+PASS  roamers spawn while walking the field   max 18 live creatures, states {field,combat}
+PASS  aggro pulls the world into combat       state=combat 6 m from a Sabertusk
+PASS  companions damage enemies hands-off     780/780 hp in 15 s with no player input
+PASS  E at the caravan actually rests         day 1->2, gil -30, banked 61340->0, level 27->33
+PASS  E at the diner buys an item             Antidote, gil -50, held 3->4
+PASS  an NPC can be talked to                 "Cindy Aurum" -> dialogue open
+PASS  the hunt loop pays                      12 credited kills -> complete, +1100 gil, rank 1->2
+PASS  camping at a haven                      camp on longwythe_haven -> ok; 400 m away -> not-at-haven
+```
 
-1. Re-run `src/tools/probes/reaudit.mts` and confirm the four interaction rows
-   (caravan rest, shop purchase, hunt accept, NPC talk) now pass end to end.
-2. Extend `integration.mts` so the E verb cannot regress: stand at an anchor,
-   **press the key**, assert the screen opened or gil moved. Fix its
-   `day.rest('caravan')` call while there.
-3. Derive `DayCycle.HAVENS` and `Elemancy.DEPOSITS` from `WorldMap` (§3.1).
-4. Register a haven camp interactable from `RpgSystem` — it is already
-   constructed and ticked, and can reach `game.get('Interaction')` lazily on its
-   first tick, so this needs no change to `Game.ts` (§3.2).
+`integration.mts` 19/19, `combatloop.mts` 30/30.
 
-Files touched so far: `src/combat/CombatSystem.ts`, `tsconfig.tools.json`,
-`src/tools/probes/reaudit.mts` (new), `src/tools/probes/epress.mts` (new,
-diagnostic).
+**What a player can do now that they could not this morning:** press E. That is
+not a joke — it is the whole of it. Every shop, the hunt board, the caravan, the
+fuel pump, the Regalia and every NPC were unreachable, and the two gates each
+proved one half of the join and never the join. On top of that, havens exist as
+places you can now walk onto and camp at, which closes the reward loop outside
+Hammerhead.
 
-Reported, not edited (outside my paths): nothing yet.
+## 5. Traps this cost real time to find, for whoever is next
+
+- **A teleported player drifts out of an interactable's reach within one frame.**
+  The collision body settles him, `_pick()` drops the prompt, and the key press
+  lands on nothing. Any probe that stands somewhere must pin the position *every
+  frame*, not once. The first run of `reaudit.mts` was ambiguous for exactly this
+  reason.
+- **`e.hit(99999)` credits nothing.** The encounter director hangs EXP, gil,
+  drops and quest progress off the combat `damage` event, so a probe that kills
+  by calling `hit()` directly sees a hunt stuck at 0/12 and a bank that never
+  moves. I nearly filed that as a bug. Kill through combat, or call
+  `rpg.enemyKilled()` directly.
+- **The seeded mid-game save has no takeable hunts.** Two are already active, one
+  is complete, and every other bounty is gated behind hunter points the player
+  does not have. A probe that expects the board to accept something will fail
+  against a correct game.
+- **`docs/SCOPE.md` is as stale as the audit.** It still lists a quest log screen
+  and shops-against-the-real-economy as not started; both exist.
+
+## 6. What is left
+
+1. **`Elemancy.DEPOSITS` is still fiction** — the same pre-8 km coordinates the
+   havens had, `dep_hammerhead` at `[42, 0, -118]` against a Hammerhead at
+   `(576, 10)`. `combatloop`'s draw check passes only because it teleports the
+   player onto `deposits[0].pos` first. Anchor each deposit to a real POI id the
+   way `HAVENS` now derives, and the compass pins stop floating.
+2. **Cooking outside a camp has no screen.** The camp dialogue offers Ignis'
+   currently-cookable recipes, which is enough for the slice, but there is no
+   standalone cook UI and `docs/SCOPE.md:336` still wants one.
+3. **The HUD quest tracker resolves a name but no objective text and no metre
+   distance** — `hudState().tracked` returns the quest, and the objective line
+   and waypoint distance come back empty. `src/ui/` is mine; not yet looked at.
+4. **`integration.mts`'s remaining presence-only probes**: `party companions
+   fight` checks a field exists rather than watching HP fall, and `player death
+   -> downed -> game over` checks a system is registered. Both are behaviours
+   `reaudit.mts` covers and the gate does not.
+5. **`inventory + gil economy` prints `(undefined curative)`** — the probe calls
+   `listByCategory('curative')`; that method takes no argument and returns a
+   grouped map. A gate cosmetic, not a game bug.
+
+Files touched: `src/combat/CombatSystem.ts`, `src/game/rpg/DayCycle.ts`,
+`src/game/rpg/HavenCamp.ts` (new), `src/game/rpg/RpgSystem.ts`,
+`src/tools/integration.mts`, `tsconfig.tools.json`, and four probes under
+`src/tools/probes/`.
+
+Reported, not edited (outside my paths): nothing required so far. The E fix
+lives in `src/combat/`, which is mine; it needed no change to `Game.ts`, and
+`HavenCamp` is installed from `RpgSystem`'s own tick for the same reason.
