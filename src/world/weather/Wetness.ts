@@ -19,7 +19,7 @@ export class Wetness {
   _mats!: any[];
   _scanIn!: number;
   _ssrOn!: boolean;
-  game!: any;
+  game!: Game;
   value!: number;
   constructor(game: Game) {
     this.game = game;

@@ -26,15 +26,15 @@ export class DofPass extends Pass {
   focusDistance!: number;
   fx!: any;
   gather!: THREE.ShaderMaterial;
-  height!: any;
+  height!: number;
   maxCoc!: number;
   nearScale!: number;
   prefilter!: THREE.ShaderMaterial;
   rtBlur!: any;
   rtPre!: any;
   sensorHeight!: number;
-  width!: any;
-  constructor(fx: any, w: any, h: any) {
+  width!: number;
+  constructor(fx: any, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -221,7 +221,7 @@ export class DofPass extends Pass {
     this.gather.needsUpdate = true;
   }
 
-  override setSize(w: any, h: any) {
+  override setSize(w: number, h: number) {
     this.width = w; this.height = h;
     const hw = Math.max(1, Math.floor(w / 2)), hh = Math.max(1, Math.floor(h / 2));
     if (this.rtPre) { this.rtPre.dispose(); this.rtBlur.dispose(); }

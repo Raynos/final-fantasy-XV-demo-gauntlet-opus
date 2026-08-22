@@ -7,7 +7,7 @@ import { FS_VERT } from '../../shaders/post/common.ts';
  */
 
 /** HDR render target with sane post-processing defaults. */
-export function makeRT(w: any, h: any, opts = {}) {
+export function makeRT(w: number, h: number, opts = {}) {
   const rt = new THREE.WebGLRenderTarget(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,

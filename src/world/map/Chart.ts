@@ -37,7 +37,7 @@ import { worldMap, WORLD } from './WorldMap.ts';
  */
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const mix = (a: any, b: any, t: any) => a + (b - a) * t;
+const mix = (a: any, b: any, t: number) => a + (b - a) * t;
 const ss = (e0: number, e1: number, x: any) => {
   const t = clamp01((x - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
@@ -72,9 +72,9 @@ const LIGHT = [252, 240, 214];
 export class Chart {
   height!: any;
   water!: any;
-  canvas!: any;
-  ms!: any;
-  ppm!: any;
+  canvas!: HTMLCanvasElement;
+  ms!: number;
+  ppm!: number;
   size!: any;
   constructor(canvas: HTMLCanvasElement, ppm: number, size: any, height: any, water: Uint8Array, ms: number) {
     /** @type {HTMLCanvasElement} */
@@ -227,7 +227,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
-  const c = canvas.getContext('2d');
+  const c = canvas.getContext('2d')!;
   const img = c!.createImageData(size, size);
   const d = img.data;
   const water = new Uint8Array(size * size);
@@ -439,7 +439,7 @@ function boxBlur2D(src: Float32Array, n: number, r: number): Float32Array {
   return out;
 }
 
-const clampI = (v: any, n: any) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
+const clampI = (v: number, n: number) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
 
 function sampleBilinear(a: any, n: number, x: number, y: number) {
   let i = x | 0, j = y | 0;

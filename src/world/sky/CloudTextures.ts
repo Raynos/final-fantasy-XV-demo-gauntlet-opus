@@ -13,7 +13,7 @@ import * as THREE from 'three';
  */
 
 /** Deterministic 32-bit hash -> [0,1). */
-function hash3i(x: any, y: any, z: any, seed: any) {
+function hash3i(x: number, y: number, z: number, seed: number) {
   let h = (x * 374761393 + y * 668265263 + z * 2147483647 + seed * 1274126177) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
@@ -64,7 +64,7 @@ function worley3(pts: Float32Array, cells: number, px: number, py: number, pz: n
 function fade(t: number) { return t * t * t * (t * (t * 6 - 15) + 10); }
 
 /** Tileable 3D value noise with integer period. */
-function value3(px: number, py: number, pz: number, period: number, seed: any) {
+function value3(px: number, py: number, pz: number, period: number, seed: number) {
   const xi = Math.floor(px), yi = Math.floor(py), zi = Math.floor(pz);
   const fx = fade(px - xi), fy = fade(py - yi), fz = fade(pz - zi);
   const x0 = ((xi % period) + period) % period, x1 = (x0 + 1) % period;
@@ -90,7 +90,7 @@ function valueFbm3(x: number, y: number, z: number, period: number, octaves: num
 }
 
 /** Tileable 2D value fbm, period in cells. */
-function value2(px: number, py: number, period: number, seed: any) {
+function value2(px: number, py: number, period: number, seed: number) {
   const xi = Math.floor(px), yi = Math.floor(py);
   const fx = fade(px - xi), fy = fade(py - yi);
   const x0 = ((xi % period) + period) % period, x1 = (x0 + 1) % period;
@@ -111,7 +111,7 @@ function valueFbm2(x: number, y: number, period: number, octaves: number, seed: 
 }
 
 const remap = (v: number, a: number, b: number, c: number, d: number) => c + ((v - a) / (b - a)) * (d - c);
-const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
  * Stretch a channel onto [0,1] between two percentiles.

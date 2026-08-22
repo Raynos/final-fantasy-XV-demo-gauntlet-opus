@@ -39,7 +39,7 @@ export class BloomPass extends Pass {
   sunAmount!: number;
   threshold!: number;
   upMat!: THREE.ShaderMaterial;
-  constructor(fx: any, w: any, h: any) {
+  constructor(fx: any, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -328,7 +328,7 @@ export class BloomPass extends Pass {
     this.setSize(w, h);
   }
 
-  override setSize(w: any, h: any) {
+  override setSize(w: number, h: number) {
     if (this.mips) for (const rt of this.mips) rt.dispose();
     if (this.streak) for (const rt of this.streak) rt.dispose();
     this.mips = [];

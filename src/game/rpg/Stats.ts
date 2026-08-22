@@ -184,14 +184,14 @@ export class Stats {
   }
 
   /** Base (pre-gear) value of a core stat at the current level. */
-  base(stat: any) {
+  base(stat: string) {
     const p = this.profile;
     if (!p[stat]) return 0;
     return growAt(p[stat], this.level, p.curve);
   }
 
   /** Sum of gear + buff + ascension modifiers for a stat. */
-  bonus(stat: any) {
+  bonus(stat: string) {
     return (this.gear[stat] || 0) + (this.buff[stat] || 0) + (this.ascension[stat] || 0);
   }
 

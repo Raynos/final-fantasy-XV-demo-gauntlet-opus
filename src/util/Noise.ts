@@ -42,7 +42,7 @@ export class Noise {
   }
 
   /** 2D simplex noise, range roughly [-1, 1]. */
-  simplex2(xin: number, yin: any) {
+  simplex2(xin: number, yin: number) {
     const perm = this.perm, permMod12 = this.permMod12;
     let n0 = 0, n1 = 0, n2 = 0;
     const s = (xin + yin) * F2;
@@ -120,7 +120,7 @@ export class Noise {
   }
 
   /** Fractal brownian motion. */
-  fbm2(x: any, y: any, octaves = 5, lacunarity = 2.0, gain = 0.5) {
+  fbm2(x: number, y: number, octaves = 5, lacunarity = 2.0, gain = 0.5) {
     let a = 1, f = 1, sum = 0, norm = 0;
     for (let o = 0; o < octaves; o++) {
       sum += a * this.simplex2(x * f, y * f);

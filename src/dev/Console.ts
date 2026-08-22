@@ -16,7 +16,7 @@ import type { Registry } from './Registry.ts';
 export class DevConsole {
   hist!: any[];
   histAt!: number;
-  input!: any;
+  input!: HTMLInputElement | null;
   log!: any;
   node!: HTMLDivElement;
   open!: boolean;
@@ -38,10 +38,10 @@ export class DevConsole {
     this.input = this.node.querySelector('input');
     this.node.style.display = 'none';
 
-    this.input.addEventListener('keydown', (e: any) => this._onKey(e));
+    this.input!.addEventListener('keydown', (e: any) => this._onKey(e));
     // Any key typed into the console belongs to the console, full stop.
-    this.input.addEventListener('keyup', (e: any) => e.stopPropagation());
-    this.input.addEventListener('keypress', (e: any) => e.stopPropagation());
+    this.input!.addEventListener('keyup', (e: any) => e.stopPropagation());
+    this.input!.addEventListener('keypress', (e: any) => e.stopPropagation());
 
     this.print('dev console — `help` lists everything, Tab completes.', 'dim');
   }
@@ -49,8 +49,8 @@ export class DevConsole {
   setOpen(v: boolean) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
-    if (this.open) { this.input.focus(); this.input.select(); }
-    else this.input.blur();
+    if (this.open) { this.input!.focus(); this.input!.select(); }
+    else this.input!.blur();
   }
 
   toggle() { this.setOpen(!this.open); }
@@ -72,18 +72,18 @@ export class DevConsole {
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      const v = this.input.value;
+      const v = this.input!.value;
       // Complete the command name only — arguments are values, not names, and
       // completing them would fight the user.
       if (v.includes(' ')) return;
       const hits = this.reg.complete(v);
       if (!hits.length) return;
-      if (hits.length === 1) { this.input.value = `${hits[0]} `; return; }
+      if (hits.length === 1) { this.input!.value = `${hits[0]} `; return; }
       // Extend to the longest shared prefix, then show the candidates. This is
       // what a shell does and what everyone's fingers already expect.
       let pre = hits[0];
       for (const h of hits) { while (!h.startsWith(pre)) pre = pre.slice(0, -1); }
-      if (pre.length > v.length) this.input.value = pre;
+      if (pre.length > v.length) this.input!.value = pre;
       this.print(hits.join('  '), 'dim');
       return;
     }
@@ -94,14 +94,14 @@ export class DevConsole {
       if (this.histAt < 0) this.histAt = this.hist.length;
       this.histAt += e.key === 'ArrowUp' ? -1 : 1;
       this.histAt = Math.max(0, Math.min(this.hist.length, this.histAt));
-      this.input.value = this.hist[this.histAt] || '';
+      this.input!.value = this.hist[this.histAt] || '';
       return;
     }
 
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const line = this.input.value.trim();
-    this.input.value = '';
+    const line = this.input!.value.trim();
+    this.input!.value = '';
     this.histAt = -1;
     if (!line) return;
     this.hist.push(line);

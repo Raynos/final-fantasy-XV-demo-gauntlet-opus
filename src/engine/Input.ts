@@ -33,7 +33,7 @@ export class Input {
   _onMouseMove!: any;
   _onMouseUp!: any;
   _onWheel!: any;
-  dom!: any;
+  dom!: HTMLCanvasElement;
   enabled!: boolean;
   gamepad!: Gamepad | null;
   invertY!: boolean;

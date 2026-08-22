@@ -71,7 +71,7 @@ const FOOT = {
  */
 export class Menus {
   _inputWas!: boolean;
-  _foot!: any;
+  _foot!: string;
   _gpPrev!: any;
   _lockHeld!: boolean | null;
   _onResize!: any;
@@ -84,13 +84,13 @@ export class Menus {
   headR!: HTMLElement;
   headS!: HTMLElement;
   headT!: HTMLElement;
-  name!: any;
+  name!: string | null;
   open!: boolean;
   pending!: string | null;
   root!: HTMLElement;
   screens!: any;
   scrim!: HTMLElement;
-  shown!: any;
+  shown!: string | null;
   stack!: any[];
   wrap!: HTMLElement;
   async init(game: any) {
@@ -163,7 +163,7 @@ export class Menus {
     this.wrap.style.zoom = s.toFixed(4);
   }
 
-  _renderFoot(kind: any) {
+  _renderFoot(kind: string) {
     if (this._foot === kind) return;
     this._foot = kind;
     while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild!);
@@ -195,14 +195,14 @@ export class Menus {
    * (an equip picker, say), then up the stack, then out of the menu entirely.
    */
   back() {
-    const s = this.screens[this.name];
+    const s = this.name ? this.screens[this.name] : null;
     if (s && s.back && s.back()) return;
-    this.setScreen(this.stack.length ? this.stack.pop() : null);
+    this.setScreen(this.stack.length ? this.stack.pop() ?? null : null);
   }
 
   /** Take the currently displayed screen off-screen. */
   _hideShown() {
-    const s = this.screens[this.shown];
+    const s = this.shown ? this.screens[this.shown] : null;
     if (!s) return;
     s.node.style.display = 'none';
     if (s.exit) s.exit();
@@ -283,7 +283,7 @@ export class Menus {
 
     const e = easeOutQuint(this.a);
     // photo mode is a camera — it must not blur or dim the frame it is framing
-    const clean = this.screens[this.name]?.scrim === false;
+    const clean = (this.name ? this.screens[this.name] : null)?.scrim === false;
     this.scrim.style.opacity = (e * (clean ? 0.30 : 1)).toFixed(3);
     this.scrim.style.backdropFilter = clean ? 'none'
       : `blur(${(e * 26).toFixed(1)}px) saturate(${(1 - e * 0.42).toFixed(3)}) brightness(${(1 - e * 0.46).toFixed(3)})`;
@@ -298,7 +298,7 @@ export class Menus {
     this.foot.style.opacity = easeOut(clamp((this.a - 0.3) / 0.6, 0, 1)).toFixed(3);
     this.foot.style.transform = `translateY(${((1 - e) * 12).toFixed(2)}px)`;
 
-    const s = this.screens[this.name];
+    const s = this.name ? this.screens[this.name] : null;
     if (s) s.update(dt, game, this.a);
   }
 
@@ -351,7 +351,7 @@ export class Menus {
     if (down('ArrowDown') || down('KeyS') || b.down) dy += 1;
     if (down('ArrowLeft') || down('KeyA') || b.left) dx -= 1;
     if (down('ArrowRight') || down('KeyD') || b.right) dx += 1;
-    const s = this.screens[this.name];
+    const s = this.name ? this.screens[this.name] : null;
     if ((dx || dy) && s?.nav) s.nav(dx, dy);
     if ((down('Enter') || down('Space') || b.a) && s?.accept) s.accept();
   }

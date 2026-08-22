@@ -37,7 +37,7 @@ function memo(key: string, make: any) {
  */
 const MIN_COVERAGE_SIZE = 16;
 
-function buildAlphaMips(data: any, size: any, alphaRef = 0.42, tinyFade = 1.0) {
+function buildAlphaMips(data: any, size: number, alphaRef = 0.42, tinyFade = 1.0) {
   const coverageOf = (buf: any, scale: number) => {
     let n = 0;
     for (let i = 3; i < buf.length; i += 4) if ((buf[i] / 255) * scale >= alphaRef) n++;
@@ -209,7 +209,7 @@ function withAlphaMips(tex: THREE.DataTexture, data: Uint8Array, size: number, a
 export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?:number, tinyFade?:number, albedo?: any } = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
-  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const ctx = cv.getContext('2d', { willReadFrequently: true })!;
   ctx!.clearRect(0, 0, size, size);
   draw(ctx!, size);
   const src = ctx!.getImageData(0, 0, size, size).data;

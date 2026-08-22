@@ -106,7 +106,7 @@ class MeshAccum {
 }
 
 /** Perpendicular basis for a direction, stable enough for tube rings. */
-function frame(dir: any, u: THREE.Vector3, v: THREE.Vector3) {
+function frame(dir: THREE.Vector3, u: THREE.Vector3, v: THREE.Vector3) {
   const ref = Math.abs(dir.y) > 0.92 ? _ref.set(1, 0, 0) : _ref.set(0, 1, 0);
   u.crossVectors(dir, ref).normalize();
   v.crossVectors(dir, u).normalize();
@@ -125,7 +125,7 @@ export function buildTree(name: string, seed: number, over: any = {}): any {
   let maxY = 0, maxR = 0;
   const canopyY = S.height * 0.6;
 
-  const tube = (p0: THREE.Vector3, p1: THREE.Vector3, r0: number, r1: number, sides: number, f0: any, f1: any, vOff: number) => {
+  const tube = (p0: THREE.Vector3, p1: THREE.Vector3, r0: number, r1: number, sides: number, f0: number, f1: number, vOff: number) => {
     _r.copy(p1).sub(p0);
     const len = _r.length();
     if (len < 1e-4) return len;

@@ -150,7 +150,7 @@ export class MeshBuilder {
     return this.pos.length / 3 - 1;
   }
 
-  vv(p: any, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
+  vv(p: THREE.Vector3, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
   tri(a: number, b: number, c: number) { this.idx.push(a, b, c); return this; }
   quad(a: number, b: number, c: number, d: number) { this.idx.push(a, b, c, a, c, d); return this; }
@@ -492,7 +492,7 @@ export function expandMirrors(list: any) {
  * cheeks) push a midline vertex differently from left to right and leave the
  * face subtly asymmetric.
  */
-export function applyBrushes(p: any, nrm: THREE.Vector3, brushes: any) {
+export function applyBrushes(p: THREE.Vector3, nrm: THREE.Vector3, brushes: any) {
   const d = new THREE.Vector3();
   const acc = _a.set(0, 0, 0);
   const px = p.x, py = p.y, pz = p.z;
@@ -608,7 +608,7 @@ export function blob(B: any, o: any) {
  * The default stays at four for the callers that want a flat card (eyebrows,
  * hairline wisps) where the extra triangles buy nothing.
  */
-export function ribbon(B: any, o: any) {
+export function ribbon(B: MeshBuilder, o: any) {
   const pts = o.points.map((p: any) => new THREE.Vector3().fromArray(p));
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
   const steps = o.steps || 8;

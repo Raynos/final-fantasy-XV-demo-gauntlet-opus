@@ -46,14 +46,14 @@ export const LAYER_SCALE = [0.26, 0.19, 0.34, 0.082, 0.42, 0.28];
 // makes these exactly seamless — a mismatch there shows up in-game as a visible
 // grid line every tile.
 
-function hash2(x: number, y: number, seed: any) {
+function hash2(x: number, y: number, seed: number) {
   let h = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 /** Quintic-smoothed value noise on a px * py wrapped lattice. */
-function vnoise(u: any, v: any, px: number, py: number, seed: any) {
+function vnoise(u: any, v: any, px: number, py: number, seed: number) {
   const x = u * px, y = v * py;
   const xi = Math.floor(x), yi = Math.floor(y);
   const xf = x - xi, yf = y - yi;
@@ -95,7 +95,7 @@ function worley(u: any, v: any, px: number, py: number, seed: number) {
 }
 
 const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const mix = (a: number, b: any, t: any) => a + (b - a) * t;
+const mix = (a: number, b: number, t: any) => a + (b - a) * t;
 function sstep(a: number, b: number, x: any) { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
 
 // ------------------------------------------------------------- layer recipes

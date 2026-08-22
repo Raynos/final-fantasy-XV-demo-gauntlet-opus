@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { PostFX } from '../engine/PostFX.ts';
 
 /**
  * A detached fly camera for reviewing the world.
@@ -196,7 +197,7 @@ export class Freecam {
    * `CameraRig._cut()` does for an authored shot change.
    * @param to @param [post]
    */
-  jump(to: THREE.Vector3 | number[], post?: any) {
+  jump(to: THREE.Vector3 | number[], post?: PostFX) {
     if (Array.isArray(to)) this.pos.set(to[0], to[1], to[2]);
     else this.pos.copy(to);
     this._vel.set(0, 0, 0);

@@ -437,7 +437,7 @@ export class GrassField {
   }
 
   /** Build (and cache) one tile's instance data. */
-  _makeTile(li: any, tx: any, tz: any) {
+  _makeTile(li: number, tx: number, tz: number) {
     const lod = LODS[li];
     const eco = this.eco;
     const T = lod.tile;
@@ -489,7 +489,7 @@ export class GrassField {
         if (h > y1) y1 = h;
       }
     }
-    const bil = (arr: Float32Array, g: number, u: any, v: any, stride = 1, c = 0) => {
+    const bil = (arr: Float32Array, g: number, u: number, v: number, stride = 1, c = 0) => {
       const fu = u * g, fv = v * g;
       const iu = Math.min(g - 1, fu | 0), iv = Math.min(g - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;

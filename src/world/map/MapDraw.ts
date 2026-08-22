@@ -135,7 +135,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
  * Junction pips — a small tick where two named routes meet, which is what
  * makes a road network read as a network rather than as crossing lines.
  */
-export function drawJunctions(c: any, sx: any, sy: any, scale: number, alpha: number) {
+export function drawJunctions(c: CanvasRenderingContext2D, sx: any, sy: any, scale: number, alpha: number) {
   const g = worldMap.roadGraph;
   c.save();
   c.globalAlpha = alpha;
@@ -267,7 +267,7 @@ function chaikin(p: any) {
  * Stroke the zone borders as a fine broken hairline, the way an atlas draws an
  * administrative boundary.
  */
-export function drawZoneBorders(c: any, sx: any, sy: any, opt: any = {}) {
+export function drawZoneBorders(c: CanvasRenderingContext2D, sx: any, sy: any, opt: any = {}) {
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
   const scale = opt.scale || 1;
@@ -317,7 +317,7 @@ export function spacedText(c: CanvasRenderingContext2D, text: string, x: number,
 }
 
 /** Width a `spacedText` run would take. */
-export function spacedWidth(c: any, text: any, spacing: number) {
+export function spacedWidth(c: CanvasRenderingContext2D, text: any, spacing: number) {
   let total = 0;
   for (const ch of text) total += c.measureText(ch).width + spacing;
   return total - spacing;
@@ -334,7 +334,7 @@ export class LabelPlacer {
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }
   /** @returns true if the box was free, in which case it is reserved */
-  place(x0: any, y0: any, x1: any, y1: any): boolean {
+  place(x0: number, y0: number, x1: any, y1: any): boolean {
     const p = this.pad;
     for (const r of this.rects) {
       if (x0 - p < r[2] && x1 + p > r[0] && y0 - p < r[3] && y1 + p > r[1]) return false;

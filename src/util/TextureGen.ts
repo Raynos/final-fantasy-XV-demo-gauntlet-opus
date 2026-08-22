@@ -107,7 +107,7 @@ export function aoFromHeight(size: any, heightFn: any, radius = 4, opts = {}) {
 export function canvasTexture(size: number, draw: any, { colorSpace = THREE.SRGBColorSpace, repeat = 1 } = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
-  const ctx = cv.getContext('2d');
+  const ctx = cv.getContext('2d')!;
   draw(ctx, size);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = colorSpace;

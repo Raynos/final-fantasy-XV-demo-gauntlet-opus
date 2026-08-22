@@ -278,11 +278,11 @@ export class Radio {
     if (st.drums !== 'none') this._drums(st, t0, beat);
   }
 
-  _f(st: any, semis: any, octave = 0) { return st.root * Math.pow(2, semis / 12 + octave); }
+  _f(st: Station, semis: number, octave = 0) { return st.root * Math.pow(2, semis / 12 + octave); }
 
   /* --------------------------------------------------------------- voices */
 
-  _voicePad(st: any, chord: any, t: any, dur: number) {
+  _voicePad(st: Station, chord: number[], t: number, dur: number) {
     for (let i = 0; i < chord.length; i++) {
       this._osc({
         freq: this._f(st, chord[i], 2), t: t + i * 0.012, dur: dur * 1.02,
@@ -292,7 +292,7 @@ export class Radio {
     }
   }
 
-  _voiceBass(st: any, chord: any, t: any, beat: any) {
+  _voiceBass(st: Station, chord: number[], t: number, beat: number) {
     const n = st.beats;
     for (let b = 0; b < n; b++) {
       const semi = b % 2 === 0 ? chord[0] : chord[Math.min(1, chord.length - 1)];
@@ -303,7 +303,7 @@ export class Radio {
     }
   }
 
-  _voiceArp(st: any, chord: any, t: any, beat: any) {
+  _voiceArp(st: Station, chord: number[], t: number, beat: number) {
     const steps = st.beats * 2;
     for (let s = 0; s < steps; s++) {
       const up = Math.floor(s / chord.length) % 2 === 0;
@@ -315,7 +315,7 @@ export class Radio {
     }
   }
 
-  _voiceRiff(st: any, chord: any, t: any, beat: any) {
+  _voiceRiff(st: Station, chord: number[], t: number, beat: number) {
     // driving eighths on the chord root and fifth — the rock stations' engine
     const steps = st.beats * 2;
     for (let s = 0; s < steps; s++) {
@@ -327,7 +327,7 @@ export class Radio {
     }
   }
 
-  _voiceLead(st: any, chord: any, t: any, beat: any, rng: Rng) {
+  _voiceLead(st: Station, chord: number[], t: number, beat: number, rng: Rng) {
     // A phrase per bar: chord tones on the strong beats, scale steps between,
     // with a contour that rises then falls. Deterministic per station.
     const n = st.beats * 2;
@@ -351,7 +351,7 @@ export class Radio {
     }
   }
 
-  _nearestScale(st: any, semi: any) {
+  _nearestScale(st: Station, semi: number) {
     const oct = Math.floor(semi / 12);
     const pc = ((semi % 12) + 12) % 12;
     let best = st.scale[0], bd = 99;
@@ -361,7 +361,7 @@ export class Radio {
 
   /* ---------------------------------------------------------------- drums */
 
-  _drums(st: any, t: any, beat: any) {
+  _drums(st: Station, t: number, beat: number) {
     const kit = st.drums;
     const n = st.beats;
     for (let b = 0; b < n; b++) {
@@ -381,7 +381,7 @@ export class Radio {
     }
   }
 
-  _kick(t: any, amp: number) {
+  _kick(t: number, amp: number) {
     const ctx = this.ctx;
     const o = ctx.createOscillator();
     o.type = 'sine';
@@ -394,7 +394,7 @@ export class Radio {
     o.start(t); o.stop(t + 0.26);
   }
 
-  _snare(t: any, amp: number, dur: number) {
+  _snare(t: number, amp: number, dur: number) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();
@@ -407,7 +407,7 @@ export class Radio {
     src.start(t); src.stop(t + dur + 0.12);
   }
 
-  _hat(t: any, amp: number) {
+  _hat(t: number, amp: number) {
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();

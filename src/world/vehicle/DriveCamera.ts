@@ -43,7 +43,7 @@ export class DriveCamera {
   baseFov!: number;
   cam!: THREE.PerspectiveCamera;
   cinOffset!: number;
-  fov!: any;
+  fov!: number;
   fovGain!: number;
   fovMax!: number;
   freePitch!: number;
@@ -251,8 +251,8 @@ export class DriveCamera {
 
 function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
-function damp(a: any, b: number, lambda: number, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }
-function angleLerp(a: number, b: any, t: number) {
+function damp(a: number, b: number, lambda: number, dt: number) { return b + (a - b) * Math.exp(-lambda * dt); }
+function angleLerp(a: number, b: number, t: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

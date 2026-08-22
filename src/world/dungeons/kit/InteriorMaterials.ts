@@ -16,7 +16,7 @@ import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../..
  */
 
 const cache = new Map();
-function memo(k: any, f: any) {
+function memo(k: string, f: any) {
   if (!cache.has(k)) {
     const m = f();
     m.name = k;

@@ -138,12 +138,12 @@ export interface CachedNode extends HTMLElement {
  */
 export class Clip {
   age!: number;
-  dur!: any;
+  dur!: number;
   hold!: number;
   /** The shot this clip was raised in; a shot change clears it. `Subtitles`. */
   shot?: any;
   constructor(dur: number, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
-  step(dt: any) { this.age += dt; return this; }
+  step(dt: number) { this.age += dt; return this; }
   get t() { return clamp(this.age / this.dur, 0, 1); }
   get alive() { return this.age < this.dur + this.hold; }
 }

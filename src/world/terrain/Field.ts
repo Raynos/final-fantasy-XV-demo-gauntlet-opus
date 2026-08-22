@@ -92,7 +92,7 @@ function buildLandmarks() {
  * equivalent to `tf_micro` in `TerrainMaterial.js`.
  * @returns metres to add to the grid height
  */
-export function microDetail(x: any, z: any): number {
+export function microDetail(x: number, z: number): number {
   // Two octaves, not three. `heightAt()` is called tens of thousands of times a
   // frame by the grass streamer alone, so this is a hot path: the third octave
   // that used to modulate the amplitude cost 33% of the whole function and was
@@ -273,7 +273,7 @@ export class Field {
   }
 
   /** Bilinear distance to the nearest authored landform, metres. */
-  clearAt(x: any, z: any) {
+  clearAt(x: number, z: number) {
     const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -285,7 +285,7 @@ export class Field {
   }
 
   /** Bilinear corridor distance, metres. */
-  corridorAt(x: any, z: any) {
+  corridorAt(x: number, z: number) {
     const fx = (x + HALF) / COARSE_CELL, fz = (z + HALF) / COARSE_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -653,7 +653,7 @@ export class Field {
    * @param r core radius in metres
    * @param fn the stamp
    */
-  _mass(cx: any, cz: any, r: number, fn: (() => void)) {
+  _mass(cx: number, cz: number, r: number, fn: (() => void)) {
     const box = this._box(cx, cz, r);
     const w = box.i1 - box.i0 + 1, hgt = box.j1 - box.j0 + 1;
     const before = new Float32Array(w * hgt);
@@ -1165,7 +1165,7 @@ export class Field {
     }
   }
 
-  _box(cx: any, cz: any, R: any) {
+  _box(cx: any, cz: any, R: number) {
     return {
       i0: Math.max(0, Math.floor((cx - R + HALF) / CELL)),
       i1: Math.min(N - 1, Math.ceil((cx + R + HALF) / CELL)),
@@ -1470,7 +1470,7 @@ export class Field {
     return (a0 + (a1 - a0) * tx) * (1 - tz) + (a2 + (a3 - a2) * tx) * tz;
   }
 
-  sampleFar(x: any, z: any) {
+  sampleFar(x: number, z: number) {
     const fx = (x + FAR_HALF) / FAR_CELL, fz = (z + FAR_HALF) / FAR_CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;
@@ -1482,14 +1482,14 @@ export class Field {
   }
 
   /** Exactly what the GPU draws: grid + analytic micro-relief. */
-  heightAt(x: any, z: any) {
+  heightAt(x: number, z: number) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const base = q >= BLEND_OUT ? this.sampleFar(x, z) : this.rawHeightAt(x, z);
     return base + microDetail(x, z);
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
-  ctrlAt(x: any, z: any, out: any = {}) {
+  ctrlAt(x: number, z: number, out: any = {}) {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const arr = q >= BLEND_OUT ? this.farCtrl : this.ctrl;
     const n = q >= BLEND_OUT ? FAR_N : N;
@@ -1507,7 +1507,7 @@ export class Field {
   }
 }
 
-function smoothstep(a: number, b: any, x: any) {
+function smoothstep(a: number, b: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }

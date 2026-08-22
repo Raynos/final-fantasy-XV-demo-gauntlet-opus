@@ -650,9 +650,9 @@ let STEEL_MAPS: any = null;
 function steelMaps() {
   if (STEEL_MAPS) return STEEL_MAPS;
   const N = 256;
-  const frac = (x: any) => x - Math.floor(x);
+  const frac = (x: number) => x - Math.floor(x);
   // `p` is the tiling period in cells, so the streaks wrap cleanly in u
-  const h1 = (i: number, p: any) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
+  const h1 = (i: number, p: number) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
   const vn = (x: number, p: number) => {
     const i = Math.floor(x), f = frac(x), s = f * f * (3 - 2 * f);
     return h1(i, p) * (1 - s) + h1(i + 1, p) * s;

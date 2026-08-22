@@ -31,7 +31,7 @@ export class CharacterController {
   _from!: THREE.Vector3;
   _g!: any;
   _hold!: number;
-  climb!: any;
+  climb!: number;
   climbMax!: any;
   grounded!: boolean;
   height!: number;

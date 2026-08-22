@@ -69,8 +69,8 @@ export class AudioGraph {
   peakVoices!: number;
   revLong!: ConvolverNode;
   revLongGain!: GainNode;
-  revShort!: any;
-  revShortGain!: any;
+  revShort!: ConvolverNode;
+  revShortGain!: GainNode;
   saturator!: WaveShaperNode;
   sendLong!: GainNode;
   sendShort!: GainNode;
@@ -307,7 +307,7 @@ export class AudioGraph {
   }
 
   /** Reverb depth for music (0..1). Camp and interiors want a drier score. */
-  setMusicReverb(v: number, glide = 1.2, at: any = null) {
+  setMusicReverb(v: number, glide = 1.2, at: number | null = null) {
     this.sendLong.gain.setTargetAtTime(clamp(v, 0, 1) * 0.5, at ?? this.now, glide);
   }
 

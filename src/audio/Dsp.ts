@@ -228,14 +228,14 @@ export function adsr(p: AudioParam, t: number, dur: number, o: any = {}) {
 }
 
 /** Percussive envelope: instant attack, exponential fall. */
-export function hit(p: any, t: any, peak: any, decay: any) {
+export function hit(p: AudioParam, t: any, peak: any, decay: any) {
   p.setValueAtTime(Math.max(EPS, peak), t);
   p.exponentialRampToValueAtTime(EPS, t + decay);
   return t + decay;
 }
 
 /** Safe exponential ramp that tolerates a zero target. */
-export function expTo(p: any, v: number, t: any) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
+export function expTo(p: AudioParam, v: number, t: any) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
 
 /** Equal-tempered frequency from a semitone offset above a reference. */
 export function ftom(ref: number, semis: any) { return ref * Math.pow(2, semis / 12); }

@@ -402,14 +402,14 @@ export class Clouds {
   get texture() { return this.rt.texture; }
   get shadowTexture() { return this.shadowRT.texture; }
 
-  setSize(w: any, h: any) {
+  setSize(w: number, h: number) {
     const sw = Math.max(2, Math.floor(w * MARCH_SCALE));
     const sh = Math.max(2, Math.floor(h * MARCH_SCALE));
     if (sw !== this.rt.width || sh !== this.rt.height) this.rt.setSize(sw, sh);
   }
 
   /** Raymarch the layer for the current camera. */
-  render(camera: any, frame: number) {
+  render(camera: THREE.PerspectiveCamera, frame: number) {
     const u = this.marchUniforms;
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
     u.uInvViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();

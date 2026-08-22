@@ -17,7 +17,7 @@ import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../..
  */
 
 const cache = new Map();
-function memo(k: any, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
+function memo(k: string, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
 
 /** A textured PBR set built from one height function. */
 function pbr(key: string, {
@@ -278,7 +278,7 @@ function fit(ctx: any, text: string, s: any, maxFrac: number, px0: number, y: nu
   let px = Math.round(s * px0);
   const set = () => { ctx.font = `${weight} ${px}px ${family}`; };
   set();
-  const width = (t: any) => ctx.measureText(t).width + track * px * (t.length - 1);
+  const width = (t: string) => ctx.measureText(t).width + track * px * (t.length - 1);
   while (px > 6 && width(text) > s * maxFrac) { px -= 1; set(); }
   if (!track) { ctx.fillText(text, s * 0.5, y); return px; }
   // manual letter-spacing so the wide FFXV signage tracking survives

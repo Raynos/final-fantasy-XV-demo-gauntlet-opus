@@ -7,6 +7,7 @@ import { WEAPONS, Weapon } from '../combat/Weapons.ts';
 import { ACTIONS } from '../characters/rig/Anim.ts';
 import type { Character } from '../characters/rig/Character.ts';
 import type { Stage } from './Stage.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Step through every asset in the game, one at a time, on the isolation stage.
@@ -35,7 +36,7 @@ export class AssetBrowser {
   _spawned!: any;
   error!: string | null;
   families!: any;
-  game!: any;
+  game!: Game;
   info!: any;
   itemAt!: number;
   node!: HTMLDivElement;
@@ -46,7 +47,7 @@ export class AssetBrowser {
   stage!: Stage;
   status!: any;
   unreviewedOnly!: boolean;
-  constructor(root: HTMLElement, game: any, stage: import('./Stage.ts').Stage) {
+  constructor(root: HTMLElement, game: Game, stage: import('./Stage.ts').Stage) {
     this.game = game;
     this.stage = stage;
     this.open = false;
@@ -167,8 +168,8 @@ export class AssetBrowser {
 
   _enemy(key: any, at: any) {
     const enemies = this.game.get('Enemies');
-    const e = enemies.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
-    enemies.frozen = true;
+    const e = enemies!.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
+    enemies!.frozen = true;
     this._spawned = { enemies, e };
     const pivotY = (e.stats && e.stats.height ? e.stats.height : 2) * 0.55;
     return { kind: 'enemy', enemy: e, object: e.root, pivot: e.root.position.clone().setY(e.root.position.y + pivotY) };

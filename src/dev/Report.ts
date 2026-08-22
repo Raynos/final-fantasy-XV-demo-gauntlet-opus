@@ -14,6 +14,7 @@
  */
 
 import { worldMap } from '../world/map/WorldMap.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Grab the rendered frame as a PNG data URI.
@@ -29,7 +30,7 @@ import { worldMap } from '../world/map/WorldMap.ts';
  *
  * @returns `data:image/png;base64,...`
  */
-export function capture(game: any): string | null {
+export function capture(game: Game): string | null {
   try {
     return game.renderer.domElement.toDataURL('image/png');
   } catch (err) {
@@ -38,13 +39,13 @@ export function capture(game: any): string | null {
   }
 }
 
-const r1 = (n: any) => Number(Number(n).toFixed(1));
-const r3 = (n: any) => Number(Number(n).toFixed(3));
+const r1 = (n: number) => Number(Number(n).toFixed(1));
+const r3 = (n: number) => Number(Number(n).toFixed(3));
 
 /**
  * Assemble the metadata block.
  */
-export function gather(game: any, reg: import('./Registry.ts').Registry, extra: any = {}) {
+export function gather(game: Game, reg: import('./Registry.ts').Registry, extra: any = {}) {
   const cam = game.camera;
   const player = game.get('Player');
   const sky = game.get('Sky');
@@ -120,7 +121,7 @@ export function gather(game: any, reg: import('./Registry.ts').Registry, extra: 
 }
 
 /** Unmasked GPU string — worth having when a report is about a visual artefact. */
-function gpuString(game: any) {
+function gpuString(game: Game) {
   try {
     const gl = game.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');

@@ -1,5 +1,6 @@
 import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.ts';
 import type { AudioGraph } from './Graph.ts';
+import { canDetune, canStop } from './nodes.ts';
 
 /**
  * The orchestra.
@@ -18,13 +19,13 @@ import type { AudioGraph } from './Graph.ts';
  */
 export class Instruments {
   _plucks!: Map<any, any>;
-  ctx!: any;
+  ctx!: BaseAudioContext;
   graph!: AudioGraph;
   noise!: AudioBuffer;
   pinkNoise!: AudioBuffer;
   rng!: any;
-  vibFast!: any;
-  vibSlow!: any;
+  vibFast!: OscillatorNode;
+  vibSlow!: OscillatorNode;
   constructor(graph: import('./Graph.ts').AudioGraph) {
     this.graph = graph;
     const ctx = graph.ctx;
@@ -55,7 +56,7 @@ export class Instruments {
    * Common tail of every voice: attach the chain to its destination (through a
    * panner when the sound has a place in the world) and schedule the teardown.
    */
-  _finish(node: any, o: any, src: any, nodes: any, extraGain: number, handle: any, end: any) {
+  _finish(node: GainNode, o: any, src: any, nodes: any, extraGain: number, handle: any, end: any) {
     const g = this.ctx.createGain();
     g.gain.value = (o.gain ?? 1) * (extraGain ?? 1);
     node.connect(g);
@@ -84,7 +85,7 @@ export class Instruments {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const unison = o.unison ?? 2;
     const w = wave(ctx, 'string');
     const filt = ctx.createBiquadFilter();
@@ -125,7 +126,7 @@ export class Instruments {
       vg.gain.setValueAtTime(EPS, t + Math.min(0.45, dur * 0.4));
       vg.gain.linearRampToValueAtTime((o.vib ?? 1) * 7, t + Math.min(0.95, dur * 0.8));
       this.vibFast.connect(vg);
-      for (const n of nodes) if (n.detune) vg.connect(n.detune);
+      for (const n of nodes) if (canDetune(n)) vg.connect(n.detune);
       nodes.push(vg);
     }
 
@@ -149,7 +150,7 @@ export class Instruments {
 
     const a = o.attack ?? clamp(0.11 - dur * 0.01, 0.045, 0.16);
     const end = adsr(env.gain, t, dur, { a, d: 0.22, s: 0.86, r: o.release ?? 0.42, peak: 0.30 });
-    for (const n of nodes) if (n.stop && n !== bow) n.stop(end + 0.05);
+    for (const n of nodes) if (canStop(n) && n !== bow) n.stop(end + 0.05);
     this._finish(env, o, last, nodes, 1, slot, end);
     return true;
   }
@@ -158,11 +159,11 @@ export class Instruments {
    * Brass. The defining trick is that the spectrum tracks the envelope, so a
    * forte entry is bright and a soft pad is dark — same note, different animal.
    */
-  brass(f: number, t: any, dur: number, o: any = {}) {
+  brass(f: number, t: number, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const w = wave(ctx, 'brass');
     const filt = ctx.createBiquadFilter();
     filt.type = 'lowpass';
@@ -195,23 +196,23 @@ export class Instruments {
       vg.gain.setValueAtTime(EPS, t + 0.35);
       vg.gain.linearRampToValueAtTime(5, t + 0.9);
       this.vibSlow.connect(vg);
-      for (const n of nodes) if (n.detune) vg.connect(n.detune);
+      for (const n of nodes) if (canDetune(n)) vg.connect(n.detune);
       nodes.push(vg);
     }
     const end = adsr(env.gain, t, dur, {
       a: o.attack ?? 0.035, d: 0.10, s: 0.82, r: o.release ?? 0.30, peak: 0.30 * power,
     });
-    for (const n of nodes) if (n.stop) n.stop(end + 0.05);
+    for (const n of nodes) if (canStop(n)) n.stop(end + 0.05);
     this._finish(env, o, last, nodes, 1, slot, end);
     return true;
   }
 
   /** Flute / clarinet, with the breath noise that sells a wind instrument. */
-  wood(f: number, t: any, dur: number, o: any = {}) {
+  wood(f: number, t: number, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const osc = ctx.createOscillator();
     osc.setPeriodicWave(wave(ctx, o.reed ? 'reed' : 'flute'));
     osc.frequency.value = f;
@@ -256,11 +257,11 @@ export class Instruments {
    * vowel, not a pad with reverb on it.
    * @param {'ah'|'oo'|'mm'} [o.vowel]
    */
-  choir(f: number, t: any, dur: number, o: any = {}) {
+  choir(f: number, t: number, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const V = FORMANTS[(o.vowel || 'ah') as keyof typeof FORMANTS];
     const env = ctx.createGain();
     nodes.push(env);
@@ -302,23 +303,23 @@ export class Instruments {
     vg.gain.setValueAtTime(EPS, t + 0.5);
     vg.gain.linearRampToValueAtTime(8, t + 1.3);
     this.vibSlow.connect(vg);
-    for (const n of nodes) if (n.detune) vg.connect(n.detune);
+    for (const n of nodes) if (canDetune(n)) vg.connect(n.detune);
     nodes.push(vg);
 
     const end = adsr(env.gain, t, dur, {
       a: o.attack ?? 0.30, d: 0.4, s: 0.9, r: o.release ?? 0.85, peak: 0.55,
     });
-    for (const n of nodes) if (n.stop) n.stop(end + 0.05);
+    for (const n of nodes) if (canStop(n)) n.stop(end + 0.05);
     this._finish(env, o, last, nodes, 1, slot, end);
     return true;
   }
 
   /** Warm sustained bed. The cheapest sustained voice we have — 4 nodes. */
-  pad(f: number, t: any, dur: number, o: any = {}) {
+  pad(f: number, t: number, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 0, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const osc = ctx.createOscillator();
     osc.setPeriodicWave(wave(ctx, 'pad'));
     osc.frequency.value = f;
@@ -439,11 +440,11 @@ export class Instruments {
   /* -------------------------------------------------------- percussion */
 
   /** Timpani: a pitched membrane — fundamental plus two inharmonic partials. */
-  timpani(f: number, t: any, o: any = {}) {
+  timpani(f: number, t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const env = ctx.createGain();
     env.gain.value = 1;
     nodes.push(env);
@@ -477,11 +478,11 @@ export class Instruments {
   }
 
   /** Taiko / bass drum — the combat pulse. */
-  drum(t: any, o: any = {}) {
+  drum(t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const env = ctx.createGain();
     const f = o.freq ?? 62;
     const decay = o.decay ?? 0.42;
@@ -507,7 +508,7 @@ export class Instruments {
   }
 
   /** Snare / field drum, used for the military feel of the MT encounters. */
-  snare(t: any, o: any = {}) {
+  snare(t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -527,11 +528,11 @@ export class Instruments {
   }
 
   /** Cymbal swell or crash — noise through a resonant comb of bandpasses. */
-  cymbal(t: any, o: any = {}) {
+  cymbal(t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const n = ctx.createBufferSource();
     n.buffer = this.noise;
     n.loop = true;
@@ -556,7 +557,7 @@ export class Instruments {
   }
 
   /** Tubular bell / chime — 2-operator FM with a fast index decay. */
-  bell(f: any, t: any, o: any = {}) {
+  bell(f: number, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -580,7 +581,7 @@ export class Instruments {
   }
 
   /** Low gong / tam-tam for boss stingers. */
-  gong(f: number, t: any, o: any = {}) {
+  gong(f: number, t: number, o: any = {}) {
     return this.bell(f, t, { ratio: 1.93, index: 4.5, decay: o.decay ?? 4.5, ...o });
   }
 }

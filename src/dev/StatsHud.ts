@@ -16,8 +16,8 @@ const H = 34;
 
 export class StatsHud {
   _acc!: number;
-  canvas!: any;
-  ctx!: any;
+  canvas!: HTMLCanvasElement | null;
+  ctx!: CanvasRenderingContext2D;
   head!: number;
   node!: HTMLDivElement;
   rows!: any;
@@ -32,7 +32,7 @@ export class StatsHud {
     root.appendChild(this.node);
 
     this.canvas = this.node.querySelector('canvas');
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas!.getContext('2d')!;
     this.rows = this.node.querySelector('.dev-stat-rows');
     this.samples = new Array(W).fill(0);
     this.head = 0;

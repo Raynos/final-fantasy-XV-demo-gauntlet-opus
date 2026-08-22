@@ -315,7 +315,7 @@ class MesmenirEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: string, x: any, y: number, z: number) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
 
     /** Mane and tail fire: a travelling ripple down each chain. */
     const fire = (lift: number, amp: number, freq: number, drag: number) => {

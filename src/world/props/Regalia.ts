@@ -66,7 +66,7 @@ const smooth = (a: number, b: number, x: any) => THREE.MathUtils.smoothstep(x, a
  * Circular arch cutout profile at a given hull x — 0 outside the opening,
  * 1 directly over the axle.
  */
-function archK(x: any) {
+function archK(x: number) {
   let k = 0;
   for (const ax of [AXLE_F, AXLE_R]) {
     const d = (x - ax) / ARCH_HALF;
@@ -83,7 +83,7 @@ function archK(x: any) {
  * rectangle. The tuck then pulls everything under the tyre axis inboard, which
  * is what puts the tyre *inside* the body rather than beside it.
  */
-function carveArch(pts: number[][], x: number, yLow: any) {
+function carveArch(pts: number[][], x: number, yLow: number) {
   const k = archK(x);
   if (k <= 0) return pts;
   const liftTo = yLow + (ARCH_TOP - yLow) * k;
@@ -147,7 +147,7 @@ function contactShadowTexture() {
   const s = 256;
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
-  const ctx = cv.getContext('2d');
+  const ctx = cv.getContext('2d')!;
   ctx!.clearRect(0, 0, s, s);
   // body pool: a long soft ellipse
   const g = ctx!.createRadialGradient(s * 0.5, s * 0.5, 0, s * 0.5, s * 0.5, s * 0.5);

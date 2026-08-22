@@ -62,6 +62,9 @@ function dawnFogBoost(hours: number) {
  *   wetness                                 0..1, builds and dries slowly
  *   rainIntensity                           0..1
  */
+/** The four weather states, as `Shots.ts` and the `weather` cvar spell them. */
+export type WeatherName = 'clear' | 'overcast' | 'storm' | 'fog';
+
 export class Weather {
   _snap!: boolean;
   _camPos!: THREE.Vector3;
@@ -151,7 +154,7 @@ export class Weather {
    * Move the weather toward a preset. The transition is continuous — call it
    * once and the front rolls in over a few seconds.
    */
-  set(name: 'clear' | 'overcast' | 'storm' | 'fog') {
+  set(name: WeatherName) {
     const preset = PRESETS[name];
     if (!preset) return;
     this.name = name;

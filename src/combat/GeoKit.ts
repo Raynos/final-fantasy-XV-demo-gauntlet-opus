@@ -162,7 +162,7 @@ export function limb(a: any, b: any, r0: any, r1: any, seg = 6, radialSeg = 8) {
 }
 
 /** Bevelled slab — armour plates, blade guards, magitek panels. */
-export function slab(w: any, h: any, d: any, bevel = 0.02) {
+export function slab(w: number, h: number, d: number, bevel = 0.02) {
   const b = Math.min(bevel, Math.min(w, h, d) * 0.45);
   const shape = new THREE.Shape();
   const hw = w / 2 - b, hh = h / 2 - b;
@@ -185,7 +185,7 @@ export function slab(w: any, h: any, d: any, bevel = 0.02) {
 }
 
 /** Cone / spike along +Y. */
-export function spike(r: any, h: any, seg = 8) {
+export function spike(r: number, h: number, seg = 8) {
   const g = new THREE.ConeGeometry(r, h, seg, 1);
   g.translate(0, h / 2, 0);
   return g;

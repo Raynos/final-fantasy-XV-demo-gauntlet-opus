@@ -75,7 +75,7 @@ export class CBuilder {
   /** Per-vertex roughness / metalness. This is what separates hide from steel. */
   mat(rough: any, metal = 0) { this._m = [rough, metal]; return this; }
 
-  v(x: any, y: any, z: any, u = 0, w = 0) {
+  v(x: number, y: number, z: number, u = 0, w = 0) {
     this.pos.push(x, y, z);
     this.uv.push(u, w);
     this.col.push(this._c[0], this._c[1], this._c[2]);
@@ -87,7 +87,7 @@ export class CBuilder {
 
   vv(p: THREE.Vector3, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
-  tri(a: any, b: any, c: any) { this.idx.push(a, b, c); return this; }
+  tri(a: number, b: number, c: number) { this.idx.push(a, b, c); return this; }
   quad(a: number, b: number, c: number, d: number) { this.idx.push(a, b, c, a, c, d); return this; }
 
   get count() { return this.pos.length / 3; }

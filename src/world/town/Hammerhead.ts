@@ -208,7 +208,7 @@ export class Hammerhead {
   }
 
   /** Local (u, y, v) -> world Vector3. */
-  local(u: any, y: any, v: any, out = new THREE.Vector3()) {
+  local(u: number, y: number, v: number, out = new THREE.Vector3()) {
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     return out.set(
       this.origin.x + u * c + v * s,

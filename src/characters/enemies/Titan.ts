@@ -412,7 +412,7 @@ class TitanEnemy extends Enemy {
       if (b) b.scale.setScalar(k);
     };
     /** Close a hand into a fist (k=1) or lay it flat open (k=0). */
-    const grip = (n: any, k: number) => {
+    const grip = (n: string, k: number) => {
       S(`hand${n}`, 0.12 * k, 0, 0);
       S(`fing${n}`, 1.35 * k, 0, 0);
       S(`thumb${n}`, 0.95 * k, -0.4 * k, 0);

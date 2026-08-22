@@ -9,7 +9,7 @@ const _cloth = new Noise(9137);
 const ridge = (x: any, c: any, w: number) => Math.exp(-((x - c) / w) * ((x - c) / w));
 
 /** Same, on an angle, wrapping at 2π. */
-function aridge(th: any, c: any, w: any) {
+function aridge(th: number, c: any, w: any) {
   let d = Math.abs(th - c) % (Math.PI * 2);
   if (d > Math.PI) d = Math.PI * 2 - d;
   return Math.exp(-(d / w) * (d / w));

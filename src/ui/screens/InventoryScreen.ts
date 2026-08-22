@@ -19,7 +19,7 @@ export class InventoryScreen {
   _age!: number;
   _cur!: any;
   _gil!: string;
-  _key!: any;
+  _key!: string | null;
   _msg!: any;
   _msgAge!: number;
   act!: HTMLElement;
@@ -34,7 +34,7 @@ export class InventoryScreen {
   detail!: HTMLElement;
   game!: any;
   gil!: HTMLElement;
-  gilVal!: any;
+  gilVal!: ChildNode | null;
   i!: number;
   items!: any[];
   list!: HTMLElement;
@@ -202,7 +202,7 @@ export class InventoryScreen {
 
     const hs = hudState(game);
     const gil = commas(hs ? hs.gil : 0);
-    if (this._gil !== gil) { this.gilVal.textContent = gil; this._gil = gil; }
+    if (this._gil !== gil) { this.gilVal!.textContent = gil; this._gil = gil; }
 
     for (let i = 0; i < this.tabNodes.length; i++) {
       const on = i === this.tab;

@@ -7,7 +7,7 @@ import { ENEMY_TEMPLATES, hudState, readArmiger, readTechniques, rollDamage } fr
 const _v = new THREE.Vector3();
 
 /** Project a world point to CSS pixels. Returns null when behind the camera. */
-function project(p: any, camera: any, w: any, h: any) {
+function project(p: any, camera: any, w: number, h: number) {
   _v.set(p.x, p.y, p.z).project(camera);
   if (_v.z > 1) return null;
   return { x: (_v.x * 0.5 + 0.5) * w, y: (-_v.y * 0.5 + 0.5) * h, depth: _v.z };
@@ -36,7 +36,7 @@ export class CombatHUD {
   calloutNode!: HTMLElement;
   calloutRule!: HTMLElement;
   calloutWord!: HTMLElement;
-  corner!: any;
+  corner!: HTMLElement;
   dmgLayer!: HTMLElement;
   lockAge!: number;
   lockOn!: any;

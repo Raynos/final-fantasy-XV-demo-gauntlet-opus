@@ -198,7 +198,7 @@ class Spring {
   v!: number;
   x!: number;
   constructor(k = 90, c = 13) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target: number, dt: any) {
+  step(target: number, dt: number) {
     const a = this.k * (target - this.x) - this.c * this.v;
     this.v += a * dt;
     this.x += this.v * dt;
@@ -1046,7 +1046,7 @@ function aimBone(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, p
   bone.quaternion.copy(parentQ).invert().multiply(world);
 }
 
-function basis(m: THREE.Matrix4, z: any, up: any) {
+function basis(m: THREE.Matrix4, z: any, up: THREE.Vector3) {
   _v.copy(z).normalize();
   _v2.copy(up).addScaledVector(_v, -up.dot(_v));
   if (_v2.lengthSq() < 1e-8) _v2.set(_v.y, -_v.x, 0);

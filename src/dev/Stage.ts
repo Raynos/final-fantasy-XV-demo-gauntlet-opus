@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { Game } from '../game/Game.ts';
+import { isDirectionalLight, isObject3D } from '../util/three-guards.ts';
 
 /**
  * How far off the sun's azimuth the turntable parks. Straight down the sun
@@ -32,7 +34,7 @@ export class Stage {
   _current!: THREE.Object3D | null;
   _keep!: Set<any>;
   _needFrame!: boolean;
-  _timeWas!: any;
+  _timeWas!: number | null;
   _uiWas!: any[] | null;
   active!: boolean;
   dist!: number;
@@ -62,7 +64,7 @@ export class Stage {
     this.faceOffset = 0.7;
   }
 
-  enter(game: any) {
+  enter(game: Game) {
     if (this.active) return;
     this.active = true;
     game.scene.add(this.group);
@@ -73,8 +75,10 @@ export class Stage {
     const sky = game.get('Sky');
     // Sky exposes its root under one of several names depending on vintage;
     // keeping whichever exists is cheaper than caring which.
+    const bag = sky as unknown as Record<string, unknown> | null;
     for (const k of ['root', 'group', 'dome', 'mesh', 'sky']) {
-      if (sky && sky[k] && sky[k].isObject3D) keep.add(sky[k]);
+      const o = bag?.[k];
+      if (isObject3D(o)) keep.add(o);
     }
 
     this._hidden = [];
@@ -104,7 +108,7 @@ export class Stage {
     }
   }
 
-  exit(game: any) {
+  exit(game: Game) {
     if (!this.active) return;
     this.active = false;
     this.clear();
@@ -194,11 +198,12 @@ export class Stage {
    * Read from the real sun rather than assumed, because `sky.time` is a live
    * cvar — move the sun and the next asset should still be lit, not silhouetted.
    */
-  keyToSun(game: any) {
-    let sun: any = null;
-    const sky = game.get('Sky');
+  keyToSun(game: Game) {
+    let sun: THREE.DirectionalLight | null = null;
+    const bag = game.get('Sky') as unknown as Record<string, unknown> | undefined;
     for (const k of ['sun', 'light', 'dirLight', 'sunLight']) {
-      if (sky && sky[k] && sky[k].isDirectionalLight) { sun = sky[k]; break; }
+      const o = bag?.[k];
+      if (isDirectionalLight(o)) { sun = o; break; }
     }
     if (!sun) {
       game.scene.traverse((o: any) => { if (!sun && o.isDirectionalLight) sun = o; });

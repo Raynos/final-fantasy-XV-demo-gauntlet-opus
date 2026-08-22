@@ -35,7 +35,7 @@ const SETS = {
  * mode and cross-fades rather than snapping.
  */
 export class Prompts {
-  mode!: any;
+  mode!: string | null;
   root!: HTMLElement;
   row!: HTMLElement;
   constructor(parent: HTMLElement) {

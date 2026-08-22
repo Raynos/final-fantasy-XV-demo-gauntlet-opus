@@ -222,7 +222,7 @@ function profileW(yn: number) {
 }
 
 /** Un-sculpted skull surface point for a spherical coordinate. */
-function shellPoint(theta: any, phi: any, rr: any, out: THREE.Vector3) {
+function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3) {
   const yn = Math.cos(phi);
   const w = profileW(yn);
   return out.set(w * Math.sin(theta) * rr[0], yn * rr[1], w * Math.cos(theta) * rr[2]);
@@ -266,7 +266,7 @@ export { skullPoint };
 export const HEAD_R = HR;
 
 /** Canonical-space UV, shared by the mesh and the texture painter. */
-function uvOf(x: any, y: any, z: any) {
+function uvOf(x: number, y: number, z: number) {
   return [
     0.5 + Math.atan2(x, z) / (Math.PI * 2),
     clamp01((y - FACE.yMin) / (FACE.yMax - FACE.yMin)),
@@ -311,7 +311,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
   // How thin the flesh is at a given canonical-space point — drives the
   // back-scatter term, so ear rims and nose wings glow red against the sun and
   // a forehead does not.
-  const thicknessAt = (p: any) => {
+  const thicknessAt = (p: THREE.Vector3) => {
     const ear = Math.exp(-(Math.pow((Math.abs(p.x) - FACE.ear[0] * hw) / 0.026, 2)
       + Math.pow((p.y - FACE.ear[1]) / 0.034, 2)
       + Math.pow((p.z - FACE.ear[2]) / 0.030, 2)));
@@ -488,7 +488,7 @@ function skinSnap(look: any, hw: number): (p:number[]) => number[] {
  * physically cannot lie on the globe and a pure spherical lid always reads too
  * round and too small.
  */
-function eyePoint(ec: any, sg: any, a: any, e: any, rad: any, f: any) {
+function eyePoint(ec: any, sg: any, a: any, e: any, rad: number, f: any) {
   const spread = f === undefined ? 1
     : 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
   const x = Math.sin(a * sg) * Math.cos(e) * rad * spread;
@@ -763,7 +763,7 @@ function contrastMips(canvas: HTMLCanvasElement) {
     const sd = src.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, sw, sh).data;
     const dst = document.createElement('canvas');
     dst.width = w; dst.height = h;
-    const dctx = dst.getContext('2d', { willReadFrequently: true });
+    const dctx = dst.getContext('2d', { willReadFrequently: true })!;
     const out = dctx!.createImageData(w, h);
     const od = out.data;
     // deviation is pushed harder the further down the chain we go: at mip 5 a
@@ -815,7 +815,7 @@ function contrastMips(canvas: HTMLCanvasElement) {
 function faceTexture(size: number, draw: any) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
-  draw(cv.getContext('2d', { willReadFrequently: true }), size);
+  draw(cv.getContext('2d', { willReadFrequently: true })!, size);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -880,7 +880,7 @@ function paintFace(look: any, uv: any) {
     ctx.putImageData(img, 0, 0);
 
     /** Soft radial blob. `rx`/`ry` are half-widths in canonical metres. */
-    const soft = (p: any, rx: any, ry: any, color: any, alpha = 1, mode = 'source-over') => {
+    const soft = (p: number[], rx: number, ry: number, color: any, alpha = 1, mode = 'source-over') => {
       const [cx, cy] = px(p);
       const a = rx * PX, b = ry * PY;
       const r = Math.max(a, b);
@@ -1147,7 +1147,7 @@ function paintFace(look: any, uv: any) {
         ];
       };
       /** Lid-margin point, pushed `d` radians further from the aperture. */
-      const em = (f: any, upper: any, d = 0, rk = EYE.lidR) =>
+      const em = (f: any, upper: boolean, d = 0, rk = EYE.lidR) =>
         eq(f, lidMargin(f, upper, (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]))
           + (upper ? d : -d), rk);
       const ep = (p: number[]) => px([sg * p[0], p[1], 0.0795 - Math.abs(p[0] - 0.033) * 0.42]);

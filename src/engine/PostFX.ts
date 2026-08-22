@@ -65,7 +65,7 @@ export class PostFX {
   autoFocusHead!: boolean;
   autoGrade!: boolean;
   bloom!: BloomPass;
-  camera!: any;
+  camera!: THREE.PerspectiveCamera;
   cas!: CasPass;
   composer!: EffectComposer;
   contact!: ContactShadowPass;
@@ -81,7 +81,7 @@ export class PostFX {
   gradeMix!: number;
   gtao!: GTAOPass;
   headFocusWindow!: number;
-  height!: any;
+  height!: number;
   invViewProj!: THREE.Matrix4;
   jitter!: boolean;
   jitterUv!: THREE.Vector2;
@@ -90,10 +90,10 @@ export class PostFX {
   oneTexture!: THREE.DataTexture;
   prevViewProj!: THREE.Matrix4;
   quality!: string;
-  rnd!: any;
+  rnd!: Renderer;
   rtScene!: THREE.WebGLRenderTarget;
   rtVel!: THREE.WebGLRenderTarget;
-  scene!: any;
+  scene!: THREE.Scene;
   scenePass!: ScenePass;
   smaa!: SMAAPass;
   ssr!: SsrPass;
@@ -104,7 +104,7 @@ export class PostFX {
   velocity!: VelocityPass;
   viewProj!: THREE.Matrix4;
   warmupReport!: any;
-  width!: any;
+  width!: number;
   constructor(rnd: Renderer) {
     this.rnd = rnd;
     const { renderer, scene, camera } = rnd;

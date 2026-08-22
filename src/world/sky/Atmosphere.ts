@@ -61,10 +61,10 @@ export class Atmosphere {
   _skyQuad!: FullScreenQuad;
   _transQuad!: FullScreenQuad;
   envMaterial!: THREE.ShaderMaterial;
-  envMesh!: any;
+  envMesh!: THREE.Mesh;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  renderer!: any;
+  renderer!: THREE.WebGLRenderer;
   skyViewRT!: THREE.WebGLRenderTarget;
   transmittanceRT!: THREE.WebGLRenderTarget;
   uniforms!: any;

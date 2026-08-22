@@ -441,7 +441,7 @@ export class RoadGraph {
    * Shortest drivable path between two world points, snapping each end to the
    * nearest road. Dijkstra over the node graph plus the two partial edges.
    */
-  route(ax: any, az: any, bx: any, bz: any): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
+  route(ax: any, az: any, bx: number, bz: number): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
     const A = this.nearest(ax, az, 1200), B = this.nearest(bx, bz, 1200);
     if (!A || !B) return null;
     if (A.edge === B.edge) {

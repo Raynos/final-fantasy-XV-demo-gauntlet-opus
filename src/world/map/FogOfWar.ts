@@ -28,9 +28,9 @@ export class FogOfWar {
   _ctx!: CanvasRenderingContext2D | null;
   _dirty!: boolean;
   _maskCanvas!: HTMLCanvasElement;
-  _maskCtx!: any;
-  _maskImg!: any;
-  _parchment!: any;
+  _maskCtx!: CanvasRenderingContext2D;
+  _maskImg!: ImageData;
+  _parchment!: CanvasPattern;
   cell!: number;
   mask!: Uint8Array;
   n!: number;
@@ -112,13 +112,13 @@ export class FogOfWar {
     this._maskCanvas = document.createElement('canvas');
     this._maskCanvas.width = n;
     this._maskCanvas.height = n;
-    this._maskCtx = this._maskCanvas.getContext('2d');
+    this._maskCtx = this._maskCanvas.getContext('2d')!;
     this._maskImg = this._maskCtx.createImageData(n, n);
 
     const canvas = document.createElement('canvas');
     canvas.width = SHEET;
     canvas.height = SHEET;
-    this._ctx = canvas.getContext('2d');
+    this._ctx = canvas.getContext('2d')!;
     const ppm = SHEET / WORLD.size;
     this._sheet = {
       canvas,
@@ -126,7 +126,7 @@ export class FogOfWar {
       toPx: (x: any) => (x + WORLD.half) * ppm,
       toPz: (z: any) => (z + WORLD.half) * ppm,
     };
-    this._parchment = this._ctx!.createPattern(parchmentTile(), 'repeat');
+    this._parchment = this._ctx!.createPattern(parchmentTile(), 'repeat')!;
   }
 
   _paint() {
@@ -171,7 +171,7 @@ function parchmentTile(): HTMLCanvasElement {
   const S = 128;
   const cv = document.createElement('canvas');
   cv.width = S; cv.height = S;
-  const c = cv.getContext('2d');
+  const c = cv.getContext('2d')!;
   const img = c!.createImageData(S, S);
   const d = img.data;
   for (let j = 0; j < S; j++) {

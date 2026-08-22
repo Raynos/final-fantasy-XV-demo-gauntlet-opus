@@ -117,7 +117,7 @@ export class TitanArena {
   }
 
   /** Each new phase splits the floor a little further open. */
-  riseSpires(phase: any) {
+  riseSpires(phase: number) {
     this.risen = phase;
     this.quake(1.2);
     if (!this.vfx) return;

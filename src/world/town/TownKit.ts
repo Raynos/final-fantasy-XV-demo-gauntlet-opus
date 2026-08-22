@@ -131,7 +131,7 @@ export function carShell(put: any, M: any, [x, z]: number[], {
 } = {}) {
   const b = body || M.panelRed;
   const c = Math.cos(yaw), s = Math.sin(yaw);
-  const at = (ax: any, az: any) => [x + ax * c + az * s, 0, z - ax * s + az * c];
+  const at = (ax: number, az: number) => [x + ax * c + az * s, 0, z - ax * s + az * c];
   const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0], sc?: any) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[2]], [rot[0], yaw + rot[1], rot[2]], sc);
@@ -173,7 +173,7 @@ export function carShell(put: any, M: any, [x, z]: number[], {
 /** Outdoor diner seating: a table with a parasol and two benches. */
 export function patioSet(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, parasol = true } = {}) {
   const c = Math.cos(yaw), s = Math.sin(yaw);
-  const at = (ax: any, az: any) => [x + ax * c + az * s, z - ax * s + az * c];
+  const at = (ax: number, az: number) => [x + ax * c + az * s, z - ax * s + az * c];
   const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0]) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[1]], [rot[0], yaw + rot[1], rot[2]]);

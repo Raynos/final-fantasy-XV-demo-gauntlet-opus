@@ -44,7 +44,7 @@ export class Minimap {
   canvas!: HTMLCanvasElement;
   chart!: Chart;
   cost!: number;
-  ctx!: any;
+  ctx!: CanvasRenderingContext2D;
   dpr!: number;
   fog!: FogOfWar;
   frame!: HTMLElement;
@@ -96,7 +96,7 @@ export class Minimap {
 
     game.uiRoot.appendChild(this.root);
 
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d')!;
     this._resize();
     this._onResize = () => this._resize();
     window.addEventListener('resize', this._onResize);
@@ -362,7 +362,7 @@ export class Minimap {
   }
 
   /** The bezel: a graduated ring, cardinals, and four angular corner ticks. */
-  _compass(c: any, S: number, dpr: number) {
+  _compass(c: CanvasRenderingContext2D, S: number, dpr: number) {
     const R = S / 2 - 2 * dpr;
     c.save();
     c.translate(S / 2, S / 2);

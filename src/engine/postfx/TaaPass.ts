@@ -23,7 +23,7 @@ export class TaaPass extends Pass {
   history!: any;
   material!: THREE.ShaderMaterial;
   ping!: number;
-  constructor(fx: any, w: any, h: any) {
+  constructor(fx: any, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;

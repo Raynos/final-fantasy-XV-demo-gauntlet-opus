@@ -18,7 +18,7 @@ export class WeaponWheel {
   capName!: HTMLElement;
   col!: HTMLElement;
   hub!: HTMLElement;
-  hubPad!: any;
+  hubPad!: ChildNode | null;
   root!: HTMLElement;
   slots!: any[];
   spokes!: SVGElement;
@@ -96,8 +96,8 @@ export class WeaponWheel {
       this.capKind.textContent = `${act.kind}   ·   ATK ${act.atk}`;
       this._capKey = act.name;
       const dir = act.slot || 'up';
-      this.hub.replaceChild(dpad(dir, 26), this.hubPad);
-      this.hubPad = this.hub.firstChild;
+      this.hub.replaceChild(dpad(dir, 26), this.hubPad!);
+      this.hubPad = this.hub.firstChild as HTMLElement;
     }
 
     const e = easeOut(clamp((appear - 0.10) / 0.7, 0, 1));

@@ -195,7 +195,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Species strike. Default: a committed downward swing with follow-through. */
-  poseSwing(S: any, t: any, k: any, env: any) {
+  poseSwing(S: any, t: any, k: number, env: any) {
     const A = this.A;
     const kp = clamp01(k);
     this.stance(S, {

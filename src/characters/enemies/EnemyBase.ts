@@ -596,7 +596,7 @@ export class Enemy {
   /* ------------------------------------------------------------ combat */
 
   /** Pick the next attack whose range covers `dist`, weighted. */
-  _chooseAttack(dist: any, rng: any) {
+  _chooseAttack(dist: number, rng: any) {
     const list = this.attacks;
     if (!list || !list.length) return null;
     let total = 0;
@@ -883,7 +883,7 @@ export class Enemy {
     this.setState('return');
   }
 
-  _tickIdle(dt: any, ctx: any) {
+  _tickIdle(dt: number, ctx: any) {
     if (this.patrol) { this.setState('patrol'); return; }
     this._wanderTimer -= dt;
     if (this._wanderTimer <= 0) {
@@ -1013,7 +1013,7 @@ export class Enemy {
   }
 
   /** Ask the pack whether we hold the engage token. */
-  _role(dt: any) {
+  _role(dt: number) {
     this._roleTimer -= dt;
     if (this._roleTimer > 0) return;
     this._roleTimer = 0.55;
@@ -1021,7 +1021,7 @@ export class Enemy {
     else this.packRole = 'engage';
   }
 
-  _face(p: any, dt: any, k = 6) {
+  _face(p: any, dt: number, k = 6) {
     if (!p) return;
     const want = Math.atan2(p.x - this.root.position.x, p.z - this.root.position.z);
     let d = want - this.heading;
@@ -1031,7 +1031,7 @@ export class Enemy {
   }
 
   /** Move along a unit direction with pack separation. */
-  _move(dt: any, nx: number, nz: number, sp: any, ctx: any, skipSeparation = false) {
+  _move(dt: number, nx: number, nz: number, sp: any, ctx: any, skipSeparation = false) {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);

@@ -88,7 +88,7 @@ const BIOME_HUE = 0.5;
 const _lum = (c: any) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
 /** biome tint array -> species key -> composed [r,g,b]. Keyed by identity. */
 const _tintCache = new WeakMap();
-function composeTint(sp: any, t: number[], bt: any) {
+function composeTint(sp: string, t: number[], bt: any) {
   let bySpecies = _tintCache.get(bt);
   if (!bySpecies) { bySpecies = new Map(); _tintCache.set(bt, bySpecies); }
   let out = bySpecies.get(sp);
@@ -150,7 +150,7 @@ export class Trees {
   canopyNear!: number;
   canopyRange!: number;
   ctiles!: Map<any, any>;
-  eco!: any;
+  eco!: Ecology;
   geoBudget!: number;
   geoCount!: number;
   geoRange!: number;

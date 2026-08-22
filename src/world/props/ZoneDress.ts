@@ -247,7 +247,7 @@ export function dressAt(x: number, z: number): any {
  * not the noise. Cached on the same grid as {@link dressAt}.
  */
 const _moistCache = new Map();
-export function zoneMoist(x: any, z: any) {
+export function zoneMoist(x: number, z: number) {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let m = _moistCache.get(k);
   if (m !== undefined) return m;

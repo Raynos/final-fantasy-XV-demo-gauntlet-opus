@@ -269,7 +269,7 @@ export function poseBone(rig: any, name: any, x: any, y: any, z: any, order: THR
 }
 
 /** Blend a bone toward a target rotation (used for flinch/death overrides). */
-export function poseBoneMix(rig: any, name: any, x: any, y: any, z: any, k: any, order: THREE.EulerOrder = 'XYZ') {
+export function poseBoneMix(rig: any, name: string, x: number, y: number, z: number, k: number, order: THREE.EulerOrder = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);

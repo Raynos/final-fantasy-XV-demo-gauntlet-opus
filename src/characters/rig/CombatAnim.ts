@@ -540,7 +540,7 @@ const _want = new THREE.Vector3();
 const _worldP = new THREE.Vector3();
 const _qc = new THREE.Quaternion();
 
-function basis(mat: THREE.Matrix4, z: THREE.Vector3, up: any) {
+function basis(mat: THREE.Matrix4, z: THREE.Vector3, up: THREE.Vector3) {
   _bz.copy(z).normalize();
   _by.copy(up).addScaledVector(_bz, -up.dot(_bz));
   if (_by.lengthSq() < 1e-8) _by.set(_bz.y, -_bz.x, 0);

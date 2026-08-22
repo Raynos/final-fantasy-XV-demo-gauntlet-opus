@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { RoadPath } from './RoadPath.ts';
+import type { RoadHit } from './RoadPath.ts';
 
 /**
  * The Regalia's chassis: an arcade-sim vehicle model.
@@ -49,7 +50,7 @@ export class VehicleBody {
   _gyL!: number;
   _gyR!: number;
   _gyRt!: number;
-  _hit!: any;
+  _hit!: RoadHit | null;
   _n!: THREE.Vector3;
   _noiseT!: number;
   a!: number;
@@ -564,7 +565,7 @@ export class VehicleBody {
   get kmh() { return this.speed * 3.6; }
 }
 
-function clamp(v: any, a: number, b: any) { return v < a ? a : v > b ? b : v; }
+function clamp(v: any, a: number, b: number) { return v < a ? a : v > b ? b : v; }
 function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 function lerp(a: number, b: number, t: any) { return a + (b - a) * t; }
-function damp(a: any, b: any, lambda: number, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }
+function damp(a: any, b: any, lambda: number, dt: number) { return b + (a - b) * Math.exp(-lambda * dt); }

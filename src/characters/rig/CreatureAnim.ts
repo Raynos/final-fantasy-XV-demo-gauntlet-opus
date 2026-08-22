@@ -33,7 +33,7 @@ export class Spring {
   v!: number;
   x!: number;
   constructor(k = 90, c = 14) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target: number, dt: any) {
+  step(target: number, dt: number) {
     // sub-step so a long frame (or a hitstop leaving and re-entering) stays stable
     const n = dt > 0.033 ? Math.ceil(dt / 0.016) : 1;
     const h = dt / n;
@@ -379,7 +379,7 @@ export class CreatureAnim {
    * Advance every spring and write the additive impact layer over whatever the
    * species already posed. Called by `Enemy.update` after `pose()`.
    */
-  commit(dt: any, poseAdd: any) {
+  commit(dt: number, poseAdd: any) {
     if (dt <= 0) return;
     this.hitAmount = Math.max(0, this.hitAmount - dt * 1.9);
     this.shake = Math.max(0, this.shake - dt * 6.5);

@@ -297,7 +297,7 @@ function buildShots(ctx: any) {
    * the move — the sort of error that reads as "the framing is a bit off" and
    * is actually a coordinate bug.
    */
-  const G = (f: number, l: number, u: any) => F.ground(terrain, f, l * S, u);
+  const G = (f: number, l: number, u: number) => F.ground(terrain, f, l * S, u);
   /** The centre of the pushing line at scene time `t`. */
   const crew = (t: number, u: number) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */

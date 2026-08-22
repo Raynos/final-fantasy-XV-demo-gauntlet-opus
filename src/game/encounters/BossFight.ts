@@ -206,7 +206,7 @@ export class BossFight {
     }));
   }
 
-  _imperialPhase(n: any) {
+  _imperialPhase(n: number) {
     const dir = this.dir;
     if (n === 1) {
       // the missile arm goes; the garrison sends more bodies
@@ -227,7 +227,7 @@ export class BossFight {
     }
   }
 
-  _fieldPhase(n: any) {
+  _fieldPhase(n: number) {
     const b = this.boss;
     if (!b) return;
     // it gets faster and angrier, and stops queueing behind its own adds

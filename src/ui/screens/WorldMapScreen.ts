@@ -10,6 +10,7 @@ import { fog } from '../../world/map/FogOfWar.ts';
 import type { Chart } from '../../world/map/Chart.ts';
 import type { WorldMap } from '../../world/map/WorldMap.ts';
 import type { Menus } from '../Menus.ts';
+import type { Poi } from '../../world/map/WorldMap.ts';
 
 /**
  * THE CHART OF LUCIS — the full-screen atlas.
@@ -95,14 +96,14 @@ export class WorldMapScreen {
   cardRows!: HTMLElement;
   cardType!: HTMLElement;
   chart!: Chart;
-  ctx!: any;
+  ctx!: CanvasRenderingContext2D;
   dpr!: number;
   filter!: number;
   filterEls!: CachedNode[];
   game!: any;
   h!: number;
   hover!: any;
-  list!: any;
+  list!: Poi[];
   map!: WorldMap;
   menus!: Menus;
   rail!: HTMLElement;
@@ -161,7 +162,7 @@ export class WorldMapScreen {
     this.canvas.className = 'wm-canvas';
     this.wrap.appendChild(this.canvas);
     root.appendChild(this.wrap);
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d')!;
 
     // ---- filter rail -----------------------------------------------------
     this.filterEls = FILTERS.map((f, i) => {
@@ -639,7 +640,7 @@ export class WorldMapScreen {
    *
    * @param paint false = measure and reserve only, true = draw
    */
-  _regionLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer, paint: boolean = true) {
+  _regionLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, paint: boolean = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
     if (a <= 0.01) { this._regionPlaced = []; return; }
     if (paint && this._regionPlaced) {
@@ -693,7 +694,7 @@ export class WorldMapScreen {
     this._regionPlaced = paint ? null : placed;
   }
 
-  _paintRegion(c: any, g: {x:number,y:number,name:string,sub:string}, dpr: any, a: number) {
+  _paintRegion(c: CanvasRenderingContext2D, g: {x:number,y:number,name:string,sub:string}, dpr: number, a: number) {
     // on the atlas the region names are the sheet's headline type, not a
     // watermark under a chart the player is navigating
     const rk = this.atlas ? 1.72 : 1;
@@ -709,7 +710,7 @@ export class WorldMapScreen {
     c.shadowBlur = 0;
   }
 
-  _zoneLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer, fade: any) {
+  _zoneLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, fade: any) {
     const a = fade * rev;
     if (a <= 0.01) return;
     // biggest zones first, so a small zone yields its label to a large one
@@ -739,7 +740,7 @@ export class WorldMapScreen {
     }
   }
 
-  _routeLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer) {
+  _routeLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer) {
     const a = clamp((ppm / dpr - 0.3) / 0.14, 0, 1) * rev;
     if (a <= 0.01) return;
     c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
@@ -773,7 +774,7 @@ export class WorldMapScreen {
     }
   }
 
-  _pois(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, t: any, place: LabelPlacer, W: number, H: number) {
+  _pois(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, t: any, place: LabelPlacer, W: number, H: number) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
@@ -862,7 +863,7 @@ export class WorldMapScreen {
     }
   }
 
-  _player(c: any, sx: any, sy: any, ppm: number, dpr: number, t: any) {
+  _player(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, t: any) {
     const player = this.game?.get('Player');
     if (!player?.position) return;
     const px = sx(player.position.x), py = sy(player.position.z);
@@ -928,7 +929,7 @@ export class WorldMapScreen {
     c.restore();
   }
 
-  _compass(c: any, W: number, H: number, dpr: number, rev: any) {
+  _compass(c: CanvasRenderingContext2D, W: number, H: number, dpr: number, rev: number) {
     const R = 30 * dpr;
     const x = W - R - 30 * dpr, y = R + 30 * dpr;
     c.save();

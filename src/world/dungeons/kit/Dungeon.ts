@@ -190,7 +190,7 @@ export class Dungeon {
   }
 }
 
-function rigOnly(rig: any, x: any, y: any, z: any, l: any) {
+function rigOnly(rig: LightRig, x: any, y: any, z: any, l: any) {
   rig.add({
     pos: [x, y, z], color: l.color, intensity: l.intensity,
     range: l.range, flicker: l.flicker, glow: l.glow,

@@ -965,7 +965,7 @@ export class WorldMap {
    * @returns road distance for
    *   `drive`/`chocobo`, straight line for the rest.
    */
-  travel(ax: any, az: any, bx: any, bz: any, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
+  travel(ax: any, az: any, bx: number, bz: number, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
     const SPEED = { walk: 2.4, sprint: 5.6, chocobo: 11.0, drive: 26.0 };
     const v = SPEED[mode] || SPEED.walk;
     let dist;

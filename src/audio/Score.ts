@@ -32,9 +32,9 @@ export class Score {
   _queue!: any[];
   /** See `Radio._timer`: the handle type differs between DOM and node. */
   _timer!: ReturnType<typeof setInterval> | null;
-  ctx!: any;
+  ctx!: BaseAudioContext;
   cycle!: number;
-  filter!: any;
+  filter!: BiquadFilterNode;
   graph!: AudioGraph;
   inst!: Instruments;
   layer!: any;
@@ -231,7 +231,7 @@ export class Score {
    * Schedule every bar that begins before `horizon`. Safe to call with a
    * horizon far in the future: that is exactly what the offline render does.
    */
-  _scheduleUntil(horizon: any) {
+  _scheduleUntil(horizon: number) {
     let guard = 0;
     while (this.nextBarTime < horizon && guard++ < 4096) {
       const t = this.nextBarTime;
@@ -285,7 +285,7 @@ export class Score {
 
   /* ------------------------------------------------------------- layers */
 
-  _bass(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
+  _bass(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.bass ?? 0) <= 0) return;
     const dest = this.layer.bass;
     const root = ftom(A2, tonic + chord.r);
@@ -323,7 +323,7 @@ export class Score {
     }
   }
 
-  _pad(t: any, barLen: number, chord: any, tonic: number) {
+  _pad(t: number, barLen: number, chord: any, tonic: number) {
     if ((this.state.layers!.pad ?? 0) <= 0) return;
     const dest = this.layer.pad;
     // Three voices maximum: a fourth costs a voice and adds nothing you can
@@ -337,7 +337,7 @@ export class Score {
     }
   }
 
-  _strings(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
+  _strings(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.strings ?? 0) <= 0) return;
     const dest = this.layer.strings;
     const notes = voiceChord(chord, 12);
@@ -365,7 +365,7 @@ export class Score {
     }
   }
 
-  _harp(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
+  _harp(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.harp ?? 0) <= 0) return;
     const dest = this.layer.harp;
     const notes = voiceChord(chord, 12);
@@ -383,7 +383,7 @@ export class Score {
     }
   }
 
-  _choir(t: any, barLen: number, chord: any, tonic: number, first: boolean) {
+  _choir(t: number, barLen: number, chord: any, tonic: number, first: boolean) {
     if ((this.state.layers!.choir ?? 0) <= 0) return;
     const dest = this.layer.choir;
     // The choir is expensive (three formant filters a voice) — two notes only.
@@ -398,7 +398,7 @@ export class Score {
     }
   }
 
-  _brass(t: any, barLen: number, beat: number, chord: any, next: any, tonic: number, meter: number) {
+  _brass(t: number, barLen: number, beat: number, chord: any, next: any, tonic: number, meter: number) {
     if ((this.state.layers!.brass ?? 0) <= 0) return;
     const dest = this.layer.brass;
     const notes = voiceChord(chord, 0);
@@ -429,7 +429,7 @@ export class Score {
     }
   }
 
-  _perc(t: any, beat: number, meter: number, first: boolean) {
+  _perc(t: number, beat: number, meter: number, first: boolean) {
     if ((this.state.layers!.perc ?? 0) <= 0) return;
     const dest = this.layer.perc;
     const s = this.stateName;
@@ -474,7 +474,7 @@ export class Score {
    * The tune. Which instrument carries it is the state's whole personality:
    * strings on the field, brass in combat, choir at a boss, flute at camp.
    */
-  _melody(t: any, beat: number, meter: number, tonic: number) {
+  _melody(t: number, beat: number, meter: number, tonic: number) {
     const weight = this.state.layers!.melody ?? 0;
     if (weight <= 0) return;
     const mel = this.state.melody;

@@ -33,7 +33,7 @@ export class QuadrupedEnemy extends Enemy {
   _comp!: any;
   override _dt!: any;
   _normV!: number;
-  _normW!: any;
+  _normW!: number[];
   override anim!: any;
   override deathSide!: any;
   override hitPower!: any;

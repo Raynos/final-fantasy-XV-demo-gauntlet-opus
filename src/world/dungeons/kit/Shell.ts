@@ -505,7 +505,7 @@ function dirOf(a: any, b: any) {
 }
 
 /** Which face of an elbow square a leg enters or leaves through. */
-function faceKey(d: any, incoming: boolean) {
+function faceKey(d: number[], incoming: boolean) {
   const s = incoming ? -1 : 1;
   if (d[0] !== 0) return d[0] * s > 0 ? 'x+' : 'x-';
   return d[1] * s > 0 ? 'z+' : 'z-';

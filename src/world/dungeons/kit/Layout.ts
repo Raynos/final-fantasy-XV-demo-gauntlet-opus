@@ -261,7 +261,7 @@ export class Layout {
     return best ? bestP : [x, z];
   }
 
-  _coveredElsewhere(self: any, x: any, z: any) {
+  _coveredElsewhere(self: any, x: number, z: number) {
     for (const r of this.rooms.values()) {
       if (r === self) continue;
       if (Math.abs(x - r.x) <= r.w * 0.5 + 1.2 && Math.abs(z - r.z) <= r.d * 0.5 + 1.2) return true;
@@ -423,17 +423,17 @@ function roomFloor(r: any, x: any, z: any) {
   return r.y;
 }
 
-function pushIn(r: any, x: any, z: any, margin: number) {
+function pushIn(r: any, x: number, z: number, margin: number) {
   if (r.isRoom) return nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
   return nearestOnCorridor(r, x, z, margin);
 }
 
-function nearestInRect(cx: any, cz: any, w: any, d: any, x: any, z: any, margin: any) {
+function nearestInRect(cx: any, cz: any, w: any, d: any, x: number, z: number, margin: number) {
   const hx = Math.max(0.2, w * 0.5 - margin), hz = Math.max(0.2, d * 0.5 - margin);
   return [clamp(x, cx - hx, cx + hx), clamp(z, cz - hz, cz + hz)];
 }
 
-function nearestOnCorridor(c: any, x: any, z: any, margin: any) {
+function nearestOnCorridor(c: any, x: number, z: number, margin: number) {
   let best: any = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);

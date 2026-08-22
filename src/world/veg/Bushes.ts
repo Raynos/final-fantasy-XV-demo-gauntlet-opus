@@ -208,7 +208,7 @@ export class Bushes {
   budget!: number;
   budgetMs!: number;
   count!: number;
-  eco!: any;
+  eco!: Ecology;
   group!: THREE.Group;
   kinds!: Map<any, any>;
   quality!: number;
@@ -348,7 +348,7 @@ export class Bushes {
   // ------------------------------------------------------------------ tiles
 
   /** Build one 32 m tile's worth of ground layer. */
-  _makeTile(tx: any, tz: any) {
+  _makeTile(tx: number, tz: number) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
     const rng = new Rng(hash3(tx, tz, 0x1b0b));

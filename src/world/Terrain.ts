@@ -209,7 +209,7 @@ export class Terrain {
   }
 
   /** Steepness in 0..1 (0 = flat, 1 = vertical). */
-  slopeAt(x: any, z: any) {
+  slopeAt(x: number, z: number) {
     const n = this.normalAt(x, z, this._v);
     return 1 - n.y;
   }
@@ -217,7 +217,7 @@ export class Terrain {
   /**
    * Distance in metres from the road centreline. Cheap enough for scattering.
    */
-  roadDistance(x: any, z: any): number {
+  roadDistance(x: number, z: number): number {
     return this.field && this.field.network ? this.field.network.distance(x, z) : 1e5;
   }
 
@@ -255,7 +255,7 @@ export class Terrain {
     return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
   }
 
-  _bracketsZ(pts: any, i: any, z: any) {
+  _bracketsZ(pts: any, i: any, z: number) {
     const a = pts[i].z, b = pts[i + 1].z;
     return z >= Math.min(a, b) && z <= Math.max(a, b);
   }

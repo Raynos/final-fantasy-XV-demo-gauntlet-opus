@@ -21,27 +21,27 @@ export class Ambience {
   _nextHowl!: number;
   brown!: AudioBuffer;
   cicada!: any;
-  cicadaLfo!: any;
-  cicadaSrc!: any;
-  ctx!: any;
+  cicadaLfo!: OscillatorNode;
+  cicadaSrc!: AudioBufferSourceNode;
+  ctx!: BaseAudioContext;
   graph!: AudioGraph;
-  gustA!: any;
-  gustAG!: any;
-  gustB!: any;
-  gustBG!: any;
+  gustA!: OscillatorNode;
+  gustAG!: GainNode;
+  gustB!: OscillatorNode;
+  gustBG!: GainNode;
   hours!: number;
   hum!: any;
   indoors!: number;
   nightBed!: any;
   nightDepth!: number;
-  nightSrc!: any;
-  out!: any;
+  nightSrc!: AudioBufferSourceNode;
+  out!: GainNode;
   pink!: AudioBuffer;
   rain!: number;
   rainHiss!: any;
   rainPatter!: any;
   rainRoar!: any;
-  rainSrc!: any;
+  rainSrc!: AudioBufferSourceNode;
   rng!: any;
   scheduledTo!: number;
   sfx!: Sfx;
@@ -49,7 +49,7 @@ export class Ambience {
   white!: AudioBuffer;
   wind!: number;
   windBands!: any[];
-  windSrc!: any;
+  windSrc!: AudioBufferSourceNode;
   constructor(graph: import('./Graph.ts').AudioGraph, sfx: import('./Sfx.ts').Sfx) {
     this.graph = graph;
     this.sfx = sfx;
@@ -144,7 +144,7 @@ export class Ambience {
     this.scheduledTo = 0;
   }
 
-  _band(src: any, type: string, freq: number, q: number, dest: any = null) {
+  _band(src: AudioBufferSourceNode, type: BiquadFilterType, freq: number, q: number, dest: AudioNode | null = null) {
     const ctx = this.ctx;
     const f = ctx.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;

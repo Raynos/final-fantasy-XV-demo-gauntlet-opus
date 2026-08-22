@@ -21,13 +21,13 @@ import type { Instruments } from './Instruments.ts';
 const BUS_FOR = { ui: 'ui', voice: 'voice', amb: 'amb' };
 
 class Shot {
-  ctx!: any;
+  ctx!: BaseAudioContext;
   handle!: any;
   last!: any;
   lastEnd!: number;
-  nodes!: any[];
+  nodes!: AudioNode[];
   ok!: boolean;
-  out!: any;
+  out!: GainNode;
   sfx!: Sfx;
   /**
    * @param o play options
@@ -82,7 +82,7 @@ class Shot {
     src.playbackRate.value = o.rate ?? (0.85 + this.sfx.rng() * 0.3);
     if (o.loop) src.loop = true;
     const dur = o.dur ?? 0.15;
-    let node = src;
+    let node: AudioNode = src;
     if (o.type !== 'none') {
       const f = ctx.createBiquadFilter();
       f.type = o.type || 'bandpass';
@@ -132,7 +132,7 @@ class Shot {
     } else {
       hit(g.gain, t, o.gain ?? 0.4, dur);
     }
-    let node = osc;
+    let node: AudioNode = osc;
     if (o.filter) {
       const f = ctx.createBiquadFilter();
       f.type = o.filter;
@@ -192,7 +192,7 @@ class Shot {
       src.frequency.exponentialRampToValueAtTime(Math.max(20, v), t + dur * k);
     }
     // Growl: amplitude-modulate the source at a sub-audio rate.
-    let node = src;
+    let node: AudioNode = src;
     const sum = ctx.createGain();
     sum.gain.value = 1;
     this.nodes.push(sum);
@@ -267,7 +267,7 @@ export class Sfx {
   played!: number;
   _recent!: Map<any, any>;
   brown!: AudioBuffer;
-  ctx!: any;
+  ctx!: BaseAudioContext;
   graph!: AudioGraph;
   inst!: Instruments;
   pink!: AudioBuffer;

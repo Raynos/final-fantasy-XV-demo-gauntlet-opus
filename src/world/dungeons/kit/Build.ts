@@ -35,7 +35,7 @@ export class SurfaceBuilder {
 
   get empty() { return this.idx.length === 0; }
 
-  _push(p: any, n: number[], u: number[], c: any) {
+  _push(p: number[], n: number[], u: number[], c: any) {
     this.pos.push(p[0], p[1], p[2]);
     this.nrm.push(n[0], n[1], n[2]);
     this.uv.push(u[0], u[1]);

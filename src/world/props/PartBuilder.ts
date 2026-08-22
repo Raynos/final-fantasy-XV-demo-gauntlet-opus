@@ -123,7 +123,7 @@ export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {c
 }
 
 /** A superelliptic ring in the YZ plane, used for lofted car bodies. */
-export function ring(n: number, halfWidth: number, yLow: any, yHigh: any, power = 3.6, shear = 0) {
+export function ring(n: number, halfWidth: number, yLow: number, yHigh: number, power = 3.6, shear = 0) {
   const pts = [];
   const cy = (yLow + yHigh) * 0.5, hh = (yHigh - yLow) * 0.5;
   const e = 2 / power;

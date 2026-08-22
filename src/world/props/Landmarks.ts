@@ -434,7 +434,7 @@ export class Landmarks {
     }
     const yaw = -0.35;
     const W = 5.4, D = 4.2, H = 2.9;
-    const T = (p: any, r = [0, 0, 0], s: any) => {
+    const T = (p: number[], r = [0, 0, 0], s: any) => {
       const m = mat4([0, 0, 0], [0, yaw, 0]);
       return m.multiply(mat4(p, r, s));
     };

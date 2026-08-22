@@ -347,7 +347,7 @@ export class CollisionWorld {
     return moved + this._resolveDynamic(pos, radius, height, stepUp);
   }
 
-  _resolvePass(pos: THREE.Vector3, radius: any, height: any, stepUp: any) {
+  _resolvePass(pos: THREE.Vector3, radius: number, height: number, stepUp: number) {
     const tri = this.wall, meta = this.wallN, grid = this.wallGrid;
     const ax = pos.x, az = pos.z;
     const ay0 = pos.y + Math.min(0.18, stepUp * 0.4);
@@ -405,7 +405,7 @@ export class CollisionWorld {
    * Would a capsule at (x, z) be inside a wall? Used by the companions' steering
    * to pick a way round rather than a way through.
    */
-  blocked(x: any, z: any, feetY: number, radius: number, height: number, stepUp: number): boolean {
+  blocked(x: number, z: number, feetY: number, radius: number, height: number, stepUp: number): boolean {
     if (!this.ready || !this.enabled) return false;
     this._v.set(x, feetY, z);
     const before = this._v.x + this._v.z;
@@ -436,7 +436,7 @@ const _bp = new THREE.Vector3(), _cp = new THREE.Vector3(), _bc = new THREE.Vect
  * Push a vertical capsule segment [y0, y1] at (pos.x, pos.z) out of one
  * triangle, horizontally. Returns the distance moved.
  */
-function pushOut(pos: any, radius: any, y0: any, y1: any, tri: any, o: number, nx: number, ny: number, nz: number) {
+function pushOut(pos: THREE.Vector3, radius: number, y0: number, y1: number, tri: any, o: number, nx: number, ny: number, nz: number) {
   _va.set(tri[o], tri[o + 1], tri[o + 2]);
   _vb.set(tri[o + 3], tri[o + 4], tri[o + 5]);
   _vc.set(tri[o + 6], tri[o + 7], tri[o + 8]);

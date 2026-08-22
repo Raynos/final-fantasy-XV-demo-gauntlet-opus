@@ -10,6 +10,7 @@ import { SHOTS } from '../game/Shots.ts';
 import { worldMap } from '../world/map/WorldMap.ts';
 import './dev.css';
 import type { Game } from '../game/Game.ts';
+import type { WeatherName } from '../world/Weather.ts';
 
 /**
  * In-game developer / review suite. Loaded only under `?debug`.
@@ -26,14 +27,14 @@ import type { Game } from '../game/Game.ts';
  */
 export class DevSuite {
   _toastT?: ReturnType<typeof setTimeout>;
-  _inputWas!: any;
+  _inputWas!: boolean | null;
   _scale!: any;
   _tainted!: boolean;
   bookmarks!: any;
   browser!: AssetBrowser;
   cam!: Freecam;
   console!: DevConsole;
-  game!: any;
+  game!: Game;
   hint!: HTMLDivElement;
   inbox!: Inbox;
   reg!: Registry;
@@ -54,7 +55,7 @@ export class DevSuite {
     this._inputWas = null;
   }
 
-  init(game: any) {
+  init(game: Game) {
     this.game = game;
 
     this.root = document.createElement('div');
@@ -87,7 +88,7 @@ export class DevSuite {
 
   // ------------------------------------------------------------- registry
 
-  _register(game: any) {
+  _register(game: Game) {
     const reg = this.reg;
     const post = () => game.post;
 
@@ -128,7 +129,7 @@ export class DevSuite {
       name: 'sky.weather', category: 'world', help: 'clear | overcast | storm | fog',
       choices: ['clear', 'overcast', 'storm', 'fog'],
       get: () => { const w = game.get('Weather'); return w ? w.name : 'clear'; },
-      set: (v: any) => { const w = game.get('Weather'); if (w) w.set(String(v)); },
+      set: (v: unknown) => { const w = game.get('Weather'); if (w) w.set(String(v) as WeatherName); },
     });
 
     reg.cmd({

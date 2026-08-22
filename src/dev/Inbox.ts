@@ -1,5 +1,6 @@
 import { capture, gather } from './Report.ts';
 import type { Registry } from './Registry.ts';
+import type { Game } from '../game/Game.ts';
 
 const SEVERITY = ['blocker', 'major', 'minor', 'polish'];
 const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 'camera', 'audio', 'perf', 'world', 'other'];
@@ -21,7 +22,7 @@ const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 
  */
 export class Inbox {
   area!: any;
-  game!: any;
+  game!: Game;
   img!: any;
   meta!: any;
   node!: HTMLDivElement;
@@ -30,8 +31,8 @@ export class Inbox {
   reg!: Registry;
   sev!: any;
   status!: any;
-  text!: any;
-  constructor(root: HTMLElement, game: any, reg: import('./Registry.ts').Registry) {
+  text!: HTMLTextAreaElement | null;
+  constructor(root: HTMLElement, game: Game, reg: import('./Registry.ts').Registry) {
     this.game = game;
     this.reg = reg;
     this.open = false;
@@ -100,10 +101,10 @@ export class Inbox {
     ].filter(Boolean).join('  ·  ');
 
     this.status.textContent = '';
-    this.text.value = '';
+    this.text!.value = '';
     this.open = true;
     this.node.style.display = '';
-    this.text.focus();
+    this.text!.focus();
   }
 
   close() {
@@ -115,7 +116,7 @@ export class Inbox {
   async submit() {
     if (!this.pending) return;
     const note = this.pending;
-    note.note = this.text.value.trim();
+    note.note = this.text!.value.trim();
     note.severity = this.sev.value;
     note.area = this.area.value;
     if (!note.note) { this.status.textContent = 'say something first'; return; }
