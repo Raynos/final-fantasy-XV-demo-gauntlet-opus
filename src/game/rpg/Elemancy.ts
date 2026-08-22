@@ -17,6 +17,7 @@
  */
 
 import { ITEMS } from './Inventory.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Inventory, CatalystDef } from './Inventory.ts';
 import type { Ascension } from './Ascension.ts';
@@ -53,9 +54,19 @@ export const BASE_ENERGY_CAP = 99;
 /* ------------------------------------------------------------------------ */
 
 /**
- * Elemental deposits scattered around the map, in world coordinates. `yield`
- * is the base number of units a full draw gives; deposits deplete and refill
- * over in-game hours.
+ * Elemental deposits scattered around the map.
+ *
+ * The *content* is authored — which element, how much it holds, how fast it
+ * comes back — but the **position is derived from `WorldMap`**, by naming the
+ * POI each deposit sits beside. The coordinates used to be typed out by hand in
+ * the 3 km world (`dep_hammerhead` at `[42, 0, -118]` against a Hammerhead the
+ * map puts at `(576, 10)`) and had drifted kilometres off everything. Nothing
+ * caught it: `combatloop`'s draw check teleports the player onto
+ * `deposits[0].pos` before pressing T, so it measures the mechanic and never
+ * the place, while `GameData.readMarkers()` drew compass pins over open desert.
+ *
+ * Same rule as `DayCycle.HAVENS`, and the same reason — see `project/HANDOFF.md`
+ * on coordinates going stale.
  */
 /** A place in the world energy can be drawn from. */
 export interface Deposit {
@@ -70,18 +81,43 @@ export interface Deposit {
   refill: number;
 }
 
-export const DEPOSITS: Deposit[] = [
-  { id: 'dep_hammerhead',  name: 'Hammerhead Verge',    element: 'fire',      pos: [42, 0, -118], capacity: 40, refill: 6 },
-  { id: 'dep_prairie',     name: 'Prairie Outpost Vent', element: 'lightning', pos: [-96, 0, 64],  capacity: 32, refill: 6 },
-  { id: 'dep_longwythe',   name: 'Longwythe Scarp',     element: 'ice',       pos: [130, 0, 88],  capacity: 36, refill: 8 },
-  { id: 'dep_keycatrich',  name: 'Keycatrich Ruin',     element: 'fire',      pos: [-160, 0, -140], capacity: 55, refill: 10 },
-  { id: 'dep_galdin',      name: 'Galdin Tidepool',     element: 'ice',       pos: [210, 0, 260], capacity: 60, refill: 8 },
-  { id: 'dep_disc',        name: 'Disc of Cauthess',    element: 'fire',      pos: [-320, 0, 180], capacity: 99, refill: 12 },
-  { id: 'dep_vesperpool',  name: 'Vesperpool Shallows', element: 'lightning', pos: [-40, 0, 320], capacity: 80, refill: 10 },
-  { id: 'dep_ravatogh',    name: 'Rock of Ravatogh',    element: 'fire',      pos: [380, 0, -260], capacity: 99, refill: 14 },
-  { id: 'dep_glacial',     name: 'Greyshire Glacial Grotto', element: 'ice',  pos: [-260, 0, 340], capacity: 90, refill: 12 },
-  { id: 'dep_fociaugh',    name: 'Fociaugh Hollow',     element: 'lightning', pos: [96, 0, 410],  capacity: 70, refill: 10 },
+/**
+ * A deposit as authored: everything except where it is.
+ *
+ * The position is looked up from `WorldMap` by `at`, because the hand-typed
+ * coordinates this replaces were written against a 3 km world and pointed at
+ * open ground — `checkProximity` measured against places that do not exist.
+ */
+interface DepositSite {
+  id: string;
+  name: string;
+  /** POI id in `WorldMap` this deposit sits on. */
+  at: string;
+  element: MagicElement;
+  capacity: number;
+  refill: number;
+}
+
+const DEPOSIT_SITES: DepositSite[] = [
+  { id: 'dep_hammerhead', name: 'Hammerhead Verge',         at: 'hammerhead_layby', element: 'fire',      capacity: 40, refill: 6 },
+  { id: 'dep_longwythe',  name: 'Longwythe Scarp',          at: 'longwythe_peak',   element: 'ice',       capacity: 36, refill: 8 },
+  { id: 'dep_valleys',    name: 'Three Valleys Fissure',    at: 'three_valleys',    element: 'lightning', capacity: 32, refill: 6 },
+  { id: 'dep_keycatrich', name: 'Keycatrich Ruin',          at: 'keycatrich_ruins', element: 'fire',      capacity: 55, refill: 10 },
+  { id: 'dep_galdin',     name: 'Galdin Tidepool',          at: 'galdin_pier',      element: 'ice',       capacity: 60, refill: 8 },
+  { id: 'dep_alstor',     name: 'Alstor Slough Vent',       at: 'alstor_slough',    element: 'lightning', capacity: 48, refill: 8 },
+  { id: 'dep_disc',       name: 'Disc of Cauthess',         at: 'disc_cauthess',    element: 'fire',      capacity: 99, refill: 12 },
+  { id: 'dep_vesperpool', name: 'Vesperpool Shallows',      at: 'vesperpool_dock',  element: 'lightning', capacity: 80, refill: 10 },
+  { id: 'dep_ravatogh',   name: 'Rock of Ravatogh',         at: 'rock_ravatogh',    element: 'fire',      capacity: 99, refill: 14 },
+  { id: 'dep_glacial',    name: 'Greyshire Glacial Grotto', at: 'greyshire',        element: 'ice',       capacity: 90, refill: 12 },
+  { id: 'dep_fociaugh',   name: 'Fociaugh Hollow',          at: 'fociaugh',         element: 'lightning', capacity: 70, refill: 10 },
+  { id: 'dep_taelpar',    name: 'Taelpar Crag Updraught',   at: 'taelpar_crag',     element: 'ice',       capacity: 70, refill: 10 },
 ];
+
+export const DEPOSITS: Deposit[] = DEPOSIT_SITES.map((d) => {
+  const poi = worldMap.poiById(d.at);
+  if (!poi) throw new Error(`Elemancy: deposit ${d.id} anchored to unknown POI ${d.at}`);
+  return { id: d.id, name: d.name, element: d.element, pos: [poi.x, 0, poi.z], capacity: d.capacity, refill: d.refill };
+});
 
 /* ------------------------------------------------------------------------ */
 /* Crafting maths                                                            */

@@ -21,6 +21,7 @@
 import { Rng } from '../../util/Rng.ts';
 import { Emitter } from './Emitter.ts';
 import { CombatBridge } from './CombatBridge.ts';
+import { HavenCamp } from './HavenCamp.ts';
 import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor, MAX_LEVEL, EXP_TABLE } from './Stats.ts';
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.ts';
 import { Inventory, ITEMS, SHOPS } from './Inventory.ts';
@@ -150,6 +151,7 @@ export class RpgSystem {
   autosaveInterval!: number;
   chapter!: number;
   combatBridge!: CombatBridge;
+  havenCamp!: HavenCamp;
   day!: DayCycle;
   elemancy!: Elemancy;
   emitter!: Emitter;
@@ -202,6 +204,8 @@ export class RpgSystem {
     this.rng = new Rng(opts.seed ?? 0x9e3779b1);
     /** Subscribes to CombatSystem and routes hits through the damage formula. */
     this.combatBridge = new CombatBridge(this);
+    /** The "Camp" prompt at every haven. Installed on the first tick — see below. */
+    this.havenCamp = new HavenCamp(this);
   }
 
   /* -- Lifecycle --------------------------------------------------------- */
@@ -357,6 +361,9 @@ export class RpgSystem {
    */
   update(dt: number, game: Game) {
     this.playTime += dt;
+    // `Interaction` boots six systems after this one, so the camp prompts
+    // cannot be registered in `init()`. This is a no-op after the first tick.
+    this.havenCamp.install(game);
     this.combatBridge.update(dt, game);
     this.day.update(dt, game);
     this.ascension.update(dt);

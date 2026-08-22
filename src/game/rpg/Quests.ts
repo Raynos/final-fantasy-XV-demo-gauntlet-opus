@@ -1,4 +1,5 @@
 import type { Emitter } from './Emitter.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
 /**
  * Quest engine: main-story chapters, side quests and bounty hunts.
  *
@@ -82,6 +83,27 @@ export type HuntRank = keyof typeof HUNT_RANKS;
 /* ------------------------------------------------------------------------ */
 /* Objective helpers                                                         */
 /* ------------------------------------------------------------------------ */
+
+/**
+ * A waypoint, named rather than typed.
+ *
+ * Every objective's marker used to be a literal triple written against the
+ * 3 km world — `[8, 0, -102]` for "push the Regalia to Hammerhead", against a
+ * Hammerhead the map puts at `(576, 10)`. The world grew to 8 km and the quest
+ * log did not, so the compass pointed into empty desert, the distance the HUD
+ * printed was fiction, and no `reach` objective could ever tick over because
+ * `checkProximity` measured against a place that is not there.
+ *
+ * Naming the POI instead means the marker follows the world. If the road moves,
+ * the quest moves with it. An unknown id throws at load rather than silently
+ * pointing at the origin — a wrong waypoint is exactly the kind of thing that
+ * survives for months otherwise.
+ */
+const at = (poiId: string): number[] => {
+  const p = worldMap.poiById(poiId);
+  if (!p) throw new Error(`Quests: waypoint anchored to unknown POI "${poiId}"`);
+  return [p.x, 0, p.z];
+};
 
 const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'kill', target, count, desc, waypoint });
 const fetch_= (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'fetch', target, count, desc, waypoint });
@@ -196,8 +218,8 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 1, giver: 'Regis', requires: [], autoAvailable: true,
     summary: 'The Regalia has broken down on the highway out of Insomnia. Push it to Hammerhead.',
     objectives: [
-      reach('push', 'hammerhead', 'Push the Regalia to Hammerhead', [8, 0, -102], 20),
-      talk('cindy', 'cindy', 'Speak to Cindy about repairs', [12, 0, -108]),
+      reach('push', 'hammerhead', 'Push the Regalia to Hammerhead', at('hammerhead'), 20),
+      talk('cindy', 'cindy', 'Speak to Cindy about repairs', at('hammerhead')),
     ],
     rewards: { gil: 0, exp: 300, ap: 5, items: [{ id: 'potion', count: 3 }] },
   },
@@ -206,7 +228,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 2, giver: 'Cid', requires: ['main_ch1_departure'],
     summary: 'Repairs cost gil the prince does not have. Take a bounty and earn it.',
     objectives: [
-      talk('tipster', 'takka', 'Ask Takka about hunting work', [16, 0, -110]),
+      talk('tipster', 'takka', 'Ask Takka about hunting work', at('hammerhead')),
       { id: 'bounty', type: 'quest', target: 'hunt_killer_wasps', count: 1, desc: 'Complete any bounty' },
       fetch_('gil', 'gil:1500', 1, 'Earn 1,500 gil for the repairs'),
     ],
@@ -217,9 +239,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 4, giver: 'Ignis', requires: ['main_ch1_pauper'],
     summary: 'Drive south to Galdin Quay and take the ferry to Altissia. Nothing goes to plan.',
     objectives: [
-      reach('galdin', 'galdin_quay', 'Drive to Galdin Quay', [210, 0, 262], 25),
-      talk('dino', 'dino', 'Speak to Dino at the pier', [214, 0, 268]),
-      rest('sleep', 'Stay the night at the Quay', [212, 0, 266]),
+      reach('galdin', 'galdin_quay', 'Drive to Galdin Quay', at('galdin_quay'), 25),
+      talk('dino', 'dino', 'Speak to Dino at the pier', at('galdin_pier')),
+      rest('sleep', 'Stay the night at the Quay', at('galdin_quay')),
     ],
     rewards: { gil: 500, exp: 1400, ap: 12, items: [{ id: 'debased_coin', count: 5 }] },
   },
@@ -228,9 +250,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 8, giver: 'Cor', requires: ['main_ch2_galdin'],
     summary: 'Insomnia has fallen. Cor Leonis leads you to the tomb of the Wise.',
     objectives: [
-      reach('trench', 'keycatrich_trench', 'Meet Cor at Keycatrich Trench', [-158, 0, -138], 20),
-      kill('mts', 'magitek_trooper', 8, 'Clear the imperial patrol', [-160, 0, -142]),
-      fetch_('sword', 'sword_wise', 1, 'Claim the Sword of the Wise', [-166, 0, -150]),
+      reach('trench', 'keycatrich_trench', 'Meet Cor at Keycatrich Trench', at('keycatrich_trench'), 20),
+      kill('mts', 'magitek_trooper', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
+      fetch_('sword', 'sword_wise', 1, 'Claim the Sword of the Wise', at('tomb_wise')),
     ],
     rewards: { gil: 1200, exp: 4000, ap: 25, items: [{ id: 'sword_wise', count: 1 }], unlocks: ['armiger'] },
   },
@@ -239,9 +261,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 14, giver: 'Dave', requires: ['main_ch3_openworld'],
     summary: 'Deadeye has been killing hunters in Duscae for years. Finish it.',
     objectives: [
-      talk('dave', 'dave', 'Take the job from Dave', [-88, 0, 58]),
-      reach('trail', 'deadeye_trail', 'Follow the trail into the Nebulawood', [-120, 0, 96], 18),
-      kill('deadeye', 'deadeye', 1, 'Slay Deadeye', [-134, 0, 112]),
+      talk('dave', 'dave', 'Take the job from Dave', at('longwythe_rest')),
+      reach('trail', 'deadeye_trail', 'Follow the trail into the Nebulawood', at('nebulawood'), 18),
+      kill('deadeye', 'deadeye', 1, 'Slay Deadeye', at('nebulawood')),
     ],
     rewards: { gil: 4000, exp: 9000, ap: 40, items: [{ id: 'behemoth_horn', count: 2 }, { id: 'hi_elixir', count: 1 }], unlocks: ['chocobo_rental'] },
   },
@@ -250,9 +272,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 18, giver: 'Iris', requires: ['main_ch3_deadeye'],
     summary: 'Reach Lestallum, see the Meteor of the Six, and find Iris Amicitia.',
     objectives: [
-      reach('lestallum', 'lestallum', 'Drive to Lestallum', [-40, 0, 200], 30),
-      talk('iris', 'iris', 'Find Iris at the Leville', [-44, 0, 206]),
-      photo('meteor', 'meteor', 1, 'Let Prompto photograph the Meteor', [-52, 0, 214]),
+      reach('lestallum', 'lestallum', 'Drive to Lestallum', at('lestallum'), 30),
+      talk('iris', 'iris', 'Find Iris at the Leville', at('lestallum')),
+      photo('meteor', 'meteor', 1, 'Let Prompto photograph the Meteor', at('lestallum_lookout')),
     ],
     rewards: { gil: 2000, exp: 7000, ap: 30, items: [{ id: 'circlet', count: 1 }] },
   },
@@ -261,8 +283,8 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 25, giver: 'Ignis', requires: ['main_ch4_lestallum'],
     summary: 'The Archaean stirs beneath the Disc of Cauthess. Answer the summons.',
     objectives: [
-      reach('disc', 'disc_of_cauthess', 'Descend into the Disc of Cauthess', [-320, 0, 180], 30),
-      kill('titan', 'titan', 1, 'Endure the Archaean\'s trial', [-326, 0, 188]),
+      reach('disc', 'disc_of_cauthess', 'Descend into the Disc of Cauthess', at('disc_cauthess'), 30),
+      kill('titan', 'titan', 1, 'Endure the Archaean\'s trial', at('disc_cauthess')),
     ],
     rewards: { gil: 8000, exp: 26000, ap: 80, items: [{ id: 'meteorshard', count: 1 }, { id: 'megalixir', count: 1 }], unlocks: ['titan'] },
   },
@@ -273,7 +295,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 3, rank: 1, tipster: 'takka', requires: [], autoAvailable: true,
     target: 'Killer Wasps', timeOfDay: 'day',
     summary: 'A nest has gone up beside the Longwythe road and the truckers are complaining.',
-    objectives: [kill('wasps', 'killer_wasp', 8, 'Exterminate the Killer Wasps', [58, 0, -60])],
+    objectives: [kill('wasps', 'killer_wasp', 8, 'Exterminate the Killer Wasps', at('fossil_wood'))],
     rewards: { gil: 800, exp: 900, ap: 15, items: [{ id: 'potion', count: 3 }, { id: 'venom_fang', count: 2 }] },
   },
   {
@@ -281,7 +303,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 5, rank: 1, tipster: 'longwythe', requires: [], autoAvailable: true,
     target: 'Sabertusk Pack', timeOfDay: 'any',
     summary: 'A pack has taken to running down anything on two legs between the outposts.',
-    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', [96, 0, 22])],
+    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', at('three_valleys'))],
     rewards: { gil: 1100, exp: 1400, ap: 15, items: [{ id: 'sabertusk_fang', count: 3 }, { id: 'hi_potion', count: 2 }] },
   },
   {
@@ -289,7 +311,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 8, rank: 2, tipster: 'takka', requires: ['hunt_killer_wasps'],
     target: 'Dualhorns', timeOfDay: 'day',
     summary: 'Dualhorns have wandered onto the grazing land and will not be moved politely.',
-    objectives: [kill('dualhorns', 'dualhorn', 4, 'Drive off the Dualhorns', [-30, 0, -40])],
+    objectives: [kill('dualhorns', 'dualhorn', 4, 'Drive off the Dualhorns', at('saxham'))],
     rewards: { gil: 2200, exp: 3200, ap: 15, items: [{ id: 'dualhorn_steak', count: 2 }, { id: 'silver_bangle', count: 1 }] },
   },
   {
@@ -297,7 +319,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 11, rank: 2, tipster: 'prairie', requires: [],
     target: 'Voretooth Pack', timeOfDay: 'any',
     summary: 'Something is taking the Prairie Outpost\'s goats. It is not subtle about it.',
-    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', [-104, 0, 74])],
+    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', at('alstor_slough'))],
     rewards: { gil: 2800, exp: 4200, ap: 15, items: [{ id: 'voretooth_tail', count: 3 }, { id: 'debased_silver', count: 4 }] },
   },
   {
@@ -306,8 +328,8 @@ const QUEST_TABLE: Quest[] = [
     target: 'Garulessa', timeOfDay: 'day',
     summary: 'A matriarch garula has flattened two fences and one hunter.',
     objectives: [
-      reach('field', 'garula_field', 'Reach the grazing grounds', [-140, 0, 130], 18),
-      kill('garulessa', 'garulessa', 1, 'Bring down the Garulessa', [-146, 0, 136]),
+      reach('field', 'garula_field', 'Reach the grazing grounds', at('weaverwilds'), 18),
+      kill('garulessa', 'garulessa', 1, 'Bring down the Garulessa', at('weaverwilds')),
     ],
     rewards: { gil: 5200, exp: 8000, ap: 15, items: [{ id: 'garula_fur', count: 3 }, { id: 'garula_tenderloin', count: 2 }] },
   },
@@ -316,7 +338,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 22, rank: 4, tipster: 'lestallum', requires: ['hunt_garulessa'],
     target: 'Coeurl', timeOfDay: 'any',
     summary: 'It kills with its whiskers. Do not let it look at you for too long.',
-    objectives: [kill('coeurl', 'coeurl', 2, 'Slay the coeurls', [-190, 0, 240])],
+    objectives: [kill('coeurl', 'coeurl', 2, 'Slay the coeurls', at('nebulawood'))],
     rewards: { gil: 9000, exp: 15000, ap: 15, items: [{ id: 'coeurl_whiskers', count: 3 }, { id: 'topaz_bracelet', count: 1 }] },
   },
   {
@@ -324,7 +346,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'cleigne', level: 26, rank: 4, tipster: 'meldacio', requires: [],
     target: 'Mesmenir', timeOfDay: 'night',
     summary: 'A spectral steed runs the moors after dark. Riders have not come back.',
-    objectives: [kill('mesmenir', 'mesmenir', 3, 'Destroy the Mesmenir herd', [-240, 0, 300])],
+    objectives: [kill('mesmenir', 'mesmenir', 3, 'Destroy the Mesmenir herd', at('taelpar_crag'))],
     rewards: { gil: 12000, exp: 19000, ap: 15, items: [{ id: 'mesmenir_mane', count: 2 }, { id: 'sages_stone', count: 1 }] },
   },
   {
@@ -333,8 +355,8 @@ const QUEST_TABLE: Quest[] = [
     target: 'Zu', timeOfDay: 'day',
     summary: 'It carries off chocobos. Whole ones.',
     objectives: [
-      reach('cliff', 'zu_cliff', 'Climb to the nesting cliff', [-300, 0, 360], 20),
-      kill('zu', 'zu', 1, 'Bring the Zu down', [-306, 0, 368]),
+      reach('cliff', 'zu_cliff', 'Climb to the nesting cliff', at('rock_ravatogh'), 20),
+      kill('zu', 'zu', 1, 'Bring the Zu down', at('rock_ravatogh')),
     ],
     rewards: { gil: 22000, exp: 34000, ap: 15, items: [{ id: 'zu_beak', count: 2 }, { id: 'griffon_feather', count: 2 }] },
   },
@@ -343,7 +365,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'cleigne', level: 38, rank: 5, tipster: 'meldacio', requires: ['hunt_mesmenir'],
     target: 'Naga', timeOfDay: 'night', daemon: true,
     summary: 'She was somebody\'s mother once. She only comes out after dark.',
-    objectives: [kill('naga', 'naga', 1, 'Put the Naga to rest', [-280, 0, 420])],
+    objectives: [kill('naga', 'naga', 1, 'Put the Naga to rest', at('malmalam_thicket'))],
     rewards: { gil: 30000, exp: 46000, ap: 15, items: [{ id: 'naga_nail', count: 2 }, { id: 'obsidian_torque', count: 1 }] },
   },
   {
@@ -351,7 +373,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'cleigne', level: 45, rank: 6, tipster: 'meldacio', requires: ['hunt_naga'],
     target: 'Iron Giant', timeOfDay: 'night', daemon: true,
     summary: 'Three of them, and they only rise when the sun is gone.',
-    objectives: [kill('giants', 'iron_giant', 3, 'Destroy the Iron Giants', [-330, 0, 460])],
+    objectives: [kill('giants', 'iron_giant', 3, 'Destroy the Iron Giants', at('costlemark'))],
     rewards: { gil: 48000, exp: 78000, ap: 15, items: [{ id: 'rotten_splinterbone', count: 5 }, { id: 'platinum_bangle', count: 1 }] },
   },
   {
@@ -359,7 +381,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'cleigne', level: 52, rank: 6, tipster: 'meldacio', requires: ['hunt_zu'],
     target: 'Bandersnatch', timeOfDay: 'any',
     summary: 'Faster than a chocobo, meaner than a coeurl.',
-    objectives: [kill('bander', 'bandersnatch', 1, 'Run down the Bandersnatch', [-360, 0, 500])],
+    objectives: [kill('bander', 'bandersnatch', 1, 'Run down the Bandersnatch', at('myrlwood'))],
     rewards: { gil: 60000, exp: 96000, ap: 15, items: [{ id: 'bandersnatch_fur', count: 2 }, { id: 'champions_anklet', count: 1 }] },
   },
   {
@@ -368,7 +390,7 @@ const QUEST_TABLE: Quest[] = [
     target: 'Adamantoise', timeOfDay: 'any',
     summary: 'The tremors under Longwythe Peak are not an earthquake. They are a footstep.',
     objectives: [
-      reach('peak', 'longwythe_peak', 'Climb Longwythe Peak', [136, 0, 92], 30),
+      reach('peak', 'longwythe_peak', 'Climb Longwythe Peak', at('longwythe_peak'), 30),
       kill('toise', 'adamantoise', 1, 'Defeat the Adamantoise'),
     ],
     rewards: { gil: 500000, exp: 900000, ap: 15, items: [{ id: 'adamantite', count: 3 }, { id: 'ribbon', count: 1 }] },
@@ -381,7 +403,7 @@ const QUEST_TABLE: Quest[] = [
     summary: 'Cid can improve the Engine Blade if you bring him something worth melting down.',
     objectives: [
       fetch_('scrap', 'rusted_bit', 3, 'Collect Rusted Bits from the wastes'),
-      talk('cid', 'cid', 'Bring them to Cid at Hammerhead', [14, 0, -106]),
+      talk('cid', 'cid', 'Bring them to Cid at Hammerhead', at('hammerhead')),
     ],
     rewards: { gil: 0, exp: 800, ap: 10, items: [{ id: 'rune_saber', count: 1 }] },
   },
@@ -390,9 +412,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 6, giver: 'Takka', requires: ['main_ch1_pauper'],
     summary: 'Takka wants a cut of dualhorn for the diner\'s special.',
     objectives: [
-      kill('hunt', 'dualhorn', 2, 'Hunt a pair of Dualhorns', [-28, 0, -44]),
+      kill('hunt', 'dualhorn', 2, 'Hunt a pair of Dualhorns', at('saxham')),
       fetch_('steak', 'dualhorn_steak', 2, 'Recover the steaks'),
-      talk('takka', 'takka', 'Deliver them to Takka', [16, 0, -110]),
+      talk('takka', 'takka', 'Deliver them to Takka', at('hammerhead')),
     ],
     rewards: { gil: 1500, exp: 1200, ap: 10, items: [{ id: 'hi_potion', count: 3 }], recipes: ['bulette_steak'] },
   },
@@ -401,9 +423,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 7, giver: 'Dave', requires: ['main_ch2_galdin'],
     summary: 'Dave has lost another friend out past the Prairie. He wants the dog tag back.',
     objectives: [
-      reach('site', 'crash_site', 'Search the ravine east of Longwythe', [124, 0, 60], 15),
+      reach('site', 'crash_site', 'Search the ravine east of Longwythe', at('fossil_wood'), 15),
       fetch_('tag', 'rusted_bit', 1, 'Recover the hunter\'s dog tag'),
-      talk('dave', 'dave', 'Return the tag to Dave', [-88, 0, 58]),
+      talk('dave', 'dave', 'Return the tag to Dave', at('longwythe_rest')),
     ],
     rewards: { gil: 900, exp: 1600, ap: 10, items: [{ id: 'debased_banknote', count: 2 }] },
   },
@@ -412,7 +434,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 10, giver: 'Prompto', requires: ['main_ch3_openworld'],
     summary: 'Prompto wants three photographs he can actually be proud of.',
     objectives: [
-      photo('vista', 'vista', 1, 'Photograph a Duscae vista at golden hour', [-100, 0, 140]),
+      photo('vista', 'vista', 1, 'Photograph a Duscae vista at golden hour', at('nebulawood')),
       photo('beast', 'beast', 1, 'Photograph a beast mid-battle'),
       photo('party', 'party', 1, 'Photograph all four of you at camp'),
     ],
@@ -430,7 +452,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 5, giver: 'Ignis', requires: ['main_ch1_pauper'],
     summary: 'Ignis walks you through drawing energy and folding a catalyst into a flask.',
     objectives: [
-      { id: 'draw', type: 'draw', target: 'fire', count: 20, desc: 'Draw 20 units of fire energy', waypoint: [42, 0, -118] },
+      { id: 'draw', type: 'draw', target: 'fire', count: 20, desc: 'Draw 20 units of fire energy', waypoint: at('hammerhead_layby') },
       craft('craft', 'any', 1, 'Craft your first spell'),
     ],
     rewards: { gil: 0, exp: 900, ap: 12, items: [{ id: 'magitek_booster', count: 4 }] },
@@ -440,8 +462,8 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 15, giver: 'Wiz', requires: ['main_ch3_deadeye'],
     summary: 'With Deadeye dead the chocobos will come back — if you walk one home first.',
     objectives: [
-      talk('wiz', 'wiz', 'Speak to Wiz at the chocobo post', [-70, 0, 120]),
-      escort('escort', 'chocobo', 'Escort the chocobo back to the post', [-92, 0, 148]),
+      talk('wiz', 'wiz', 'Speak to Wiz at the chocobo post', at('wiz_chocobo')),
+      escort('escort', 'chocobo', 'Escort the chocobo back to the post', at('wiz_paddocks')),
     ],
     rewards: { gil: 1800, exp: 3400, ap: 20, items: [{ id: 'chocobo_whistle', count: 1 }, { id: 'sylkis_greens', count: 3 }] },
   },
@@ -450,8 +472,8 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 20, giver: 'Holly', requires: ['main_ch4_lestallum'],
     summary: 'The Exineris plant is losing pressure and Holly suspects sabotage.',
     objectives: [
-      talk('holly', 'holly', 'Meet Holly at the power plant', [-46, 0, 210]),
-      kill('mts', 'magitek_trooper', 12, 'Clear the intruders from the substation', [-58, 0, 226]),
+      talk('holly', 'holly', 'Meet Holly at the power plant', at('exineris')),
+      kill('mts', 'magitek_trooper', 12, 'Clear the intruders from the substation', at('exineris')),
       fetch_('relay', 'imperial_relay', 1, 'Recover the imperial relay unit'),
     ],
     rewards: { gil: 6000, exp: 9000, ap: 20, items: [{ id: 'magitek_suit', count: 1 }] },
@@ -461,7 +483,7 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 18, giver: 'Navyth', requires: ['main_ch4_lestallum'],
     summary: 'Navyth has been after the Alstor trout for eleven years. He is not proud.',
     objectives: [
-      reach('pier', 'alstor_pier', 'Find Navyth at the Alstor Slough pier', [-20, 0, 300], 12),
+      reach('pier', 'alstor_pier', 'Find Navyth at the Alstor Slough pier', at('alstor_dock'), 12),
       { id: 'catch', type: 'fish', target: 'alstor_trout', count: 1, desc: 'Land the Alstor Slough trout' },
     ],
     rewards: { gil: 2400, exp: 5200, ap: 20, items: [{ id: 'alstor_trout', count: 2 }], recipes: ['sea_bass_meuniere'] },
@@ -472,7 +494,7 @@ const QUEST_TABLE: Quest[] = [
     summary: 'A Lestallum smith needs a sky gemstone and will not go and get one himself.',
     objectives: [
       fetch_('gem', 'sky_gemstone', 2, 'Recover two sky gemstones'),
-      talk('smith', 'randolph', 'Deliver them to Randolph', [-42, 0, 204]),
+      talk('smith', 'randolph', 'Deliver them to Randolph', at('lestallum')),
     ],
     rewards: { gil: 5000, exp: 6800, ap: 20, items: [{ id: 'ulrics_kukris', count: 1 }] },
   },

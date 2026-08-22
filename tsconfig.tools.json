@@ -3,6 +3,11 @@
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    // `DOM.Iterable` is not optional: the in-page checks spread `querySelectorAll`
+    // results (`[...document.querySelectorAll('.nameplate')]`), and without it a
+    // `NodeListOf<T>` has no iterator and `querySelectorAll<T>` resolves untyped.
+    // Eight errors in `combatloop.mts` and `sheet.mts` were failing this config
+    // on `main` and blocking the pre-commit hook for every agent.
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     // `vite/client` for the CSS side-effect imports the game files use, and the
     // same class-field semantics as `tsconfig.json`: the tools config reaches

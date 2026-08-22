@@ -1383,7 +1383,13 @@ export class CombatSystem {
     // R armiger, E point-warp, V lock-on: Tab is the pause menu and C is photo
     // mode, both owned by `Menus`, so the older bindings opened a screen
     // instead of locking on or casting.
-    if (input.keyDown('KeyE')) this.warpToPoint();
+    // E is shared with the interaction verb, and the interaction verb wins.
+    // Standing at a shop counter with "[E] Shop" on screen and warping twelve
+    // metres up the road instead is not a control scheme; it is why nothing in
+    // this game was pressable. Same during a conversation, where E advances the
+    // line: `Menus` drops `input.enabled` behind a screen but `Dialogue` does
+    // not, so without this Noctis warped away mid-sentence.
+    if (input.keyDown('KeyE') && !this._interactClaimsE()) this.warpToPoint();
     if (input.keyDown('KeyV')) this.setLockOn(this.lockTarget ? null : this.autoTarget());
     if (input.keyDown('KeyR')) this.tryArmiger();
     for (let i = 0; i < 4; i++) if (input.keyDown(`Digit${i + 1}`)) this.drawSlot(i);
@@ -1392,6 +1398,16 @@ export class CombatSystem {
     if (input.keyDown('KeyX')) this.castSlot(1);
     if (input.keyDown('KeyB')) this.castSlot(2);
     if (input.keyDown('KeyT')) this.drawEnergy();
+  }
+
+  /**
+   * True while the interaction layer owns E — a prompt is being offered, or a
+   * conversation is on screen. `Interactables` runs *after* combat in the boot
+   * order, so it cannot defend its own key; combat has to yield it.
+   */
+  _interactClaimsE() {
+    const ix = this.game && this.game.get ? this.game.get('Interaction') : null;
+    return !!(ix && (ix.current || ix.talking));
   }
 
   /**

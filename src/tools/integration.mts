@@ -163,14 +163,39 @@ const results = await page.evaluate(async () => {
       : F('enemy would not die');
   });
 
+  /**
+   * This used to check that `m.ai || m.combat` was truthy — a field, not a
+   * behaviour, and exactly the "existence is not integration" mistake this file
+   * was written to catch. Watch an enemy's HP instead, with the player's hands
+   * off the controls, so the only thing that can be doing the damage is the
+   * party.
+   */
   probe('combat', 'party companions fight', () => {
-    const ai = g.get('Party')!;
-    const m = (ai.members || [])[0];
-    if (!m) return F('no party members');
-    // `m.ai` and `m.combat` have never existed on a `PartyMember` -- the AI
-    // lives in `PartyAI`, keyed by member. The live arm is the character rig.
-    const hasAi = !!m.character?.play;
-    return hasAi ? P(`${ai.members.length} companions with combat hooks`) : F('no combat hook');
+    const party = g.get('Party')!; const enemies = g.get('Enemies')!;
+    const player = g.get('Player')!; const enc = g.get('Encounters');
+    if (!party?.members?.length) return F('no party members');
+    if (enc) {
+      enc.suppressRoamers = true; enc.budget = 0;
+      for (const id of [...enc.active.keys()]) enc.deactivate(id);
+      enc.packs.length = 0;
+    }
+    enemies.clear(); step(2);
+    // `THREE` is not in scope in a probe body, so the vector class comes off an
+    // object that already has one. The cast is the price of that trick.
+    const V = g.camera.position.constructor as new (x: number, y: number, z: number) => typeof g.camera.position;
+    const e = enemies.spawn('sabertusk', { pos: player.position.clone().add(new V(7, 0, 0)) });
+    e.target = player; e.awareness = 1; e.setState('chase');
+    for (const m of party.members) m.root.position.copy(player.position).add(new V(1.5, 0, 1.5));
+    // Up to 15 s of simulation, but stop the moment the HP moves: waiting the
+    // full fifteen puts this probe at several minutes on a loaded machine, and
+    // one landed hit is the whole claim.
+    const hp0 = e.hp;
+    let f = 0;
+    for (; f < 900 && e.hp >= hp0; f++) step(1);
+    const dealt = hp0 - e.hp;
+    return dealt > 0
+      ? P(`${party.members.length} companions took ${dealt} hp of ${hp0} off a sabertusk in ${(f / 60).toFixed(1)} s, hands off`)
+      : F(`enemy still on ${e.hp}/${hp0} after 15 s with three companions on it`);
   });
 
   probe('combat', 'player death -> downed -> game over', () => {
@@ -202,6 +227,46 @@ const results = await page.evaluate(async () => {
     const cur = ix.current;
     return cur ? P(`${n} registered; standing at the board selects "${cur.label || cur.verb}"`)
       : W(`${n} registered but none selected at the anchor`);
+  });
+
+  /**
+   * The probe above proves a prompt is *offered*. This one proves it can be
+   * *taken*, which is a different claim and the one that was false: `KeyE` was
+   * bound to both the interaction verb and `CombatSystem.warpToPoint`, and
+   * combat runs ten systems earlier, so every press warped Noctis out of range
+   * before `Interactables.update` read the key. Every shop, the hunt board, the
+   * caravan and every NPC advertised a prompt none of them could honour.
+   *
+   * The player is pinned in place for the press: a teleported player drifts out
+   * of reach within a frame as the collision body settles him, which drops the
+   * prompt before the key is read and makes the result meaningless either way.
+   */
+  probe('world', 'the interaction verb fires on E', () => {
+    const ix = g.get('Interaction'); const town = g.get('Town');
+    const player = g.get('Player')!; const menus = g.get('Menus')!;
+    const a = town && town.anchors && town.anchors.dinerCounter;
+    if (!ix || !a) return F('no interaction system or diner anchor');
+    const y = g.get('Terrain')!.heightAt(a.x - 1.3, a.z);
+    const h = Math.atan2(1, 0);
+    const hold = () => {
+      player.root.position.set(a.x - 1.3, y, a.z);
+      player.heading = h; player.root.rotation.y = h;
+      if (player.velocity) player.velocity.set(0, 0, 0);
+    };
+    const held = (n: number) => { for (let i = 0; i < n; i++) { hold(); g.frame(1 / 60); hold(); } };
+    menus.setScreen(null);
+    held(12);
+    const cur = ix.current;
+    if (!cur) return F('no prompt at the diner counter');
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }));
+    held(1);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', bubbles: true }));
+    held(8);
+    const opened = menus.name;
+    menus.setScreen(null); step(4);
+    return opened === 'shop'
+      ? P(`"[E] ${cur.verb} ${cur.label}" opened the ${opened} screen`)
+      : F(`"[E] ${cur.verb} ${cur.label}" pressed, menu is "${opened}" — is combat eating KeyE again?`);
   });
 
   probe('world', 'shop + hunt board screens open with real data', () => {
@@ -294,18 +359,54 @@ const results = await page.evaluate(async () => {
   });
 
   /* ------------------------------------------------------- rest/camp ---- */
+  /**
+   * This used to call `day.rest('caravan')` — a string where the signature
+   * wants a context object — which returns `{ok:false, reason:'no-position'}`,
+   * and then passed on `res !== undefined`. Its own evidence line read
+   * `level 27->27` for months. It had never once tested resting.
+   *
+   * `RpgSystem.restAt` is the real entry point: it spends the lodging's gil,
+   * rolls the clock to morning, redeems the EXP bank against the party and
+   * restores everyone. Assert all three moved.
+   */
   probe('gameplay', 'rest banks EXP at a lodging', () => {
     const rpg = g.get('Rpg')!;
-    const lv0 = rpg.noctis.level;
-    rpg.gainExp(4000);
-    // `DayCycle.rest` takes a *context* (`{ expBank, party, lodging, ... }`),
-    // not a lodging id. The old `day.rest('caravan')` handed it a string, so
-    // `ctx.expBank` was undefined, the redemption was skipped and the probe
-    // asserted only that a value came back. `restAt` is the game's own entry
-    // point and the one Hammerhead's caravan uses.
-    const res = rpg.restAt('caravan');
-    return res.ok ? P(`restAt('caravan') ran, level ${lv0}->${rpg.noctis.level}`)
-      : W(`rest refused: ${res.reason}`);
+    if (!rpg.restAt) return F('no RpgSystem.restAt()');
+    const lv0 = rpg.noctis.level; const day0 = rpg.day.day; const gil0 = rpg.inventory.gil;
+    rpg.gainExp(60000);
+    const bank0 = rpg.expBank.banked;
+    if (!(bank0 > 0)) return F('gainExp banked nothing');
+    const res = rpg.restAt('caravan', { wakeHour: 6.5 });
+    const banked = rpg.expBank.banked;
+    if (!res || res.ok === false) return F(`restAt refused: ${res && res.reason}`);
+    if (banked >= bank0) return F(`slept but the bank did not redeem: ${Math.round(bank0)} -> ${Math.round(banked)}`);
+    return rpg.noctis.level > lv0
+      ? P(`day ${day0}->${rpg.day.day}, gil ${gil0}->${rpg.inventory.gil}, banked ${Math.round(bank0)}->${Math.round(banked)}, level ${lv0}->${rpg.noctis.level}`)
+      : W(`redeemed ${Math.round(bank0)} EXP but level stayed ${lv0}`);
+  });
+
+  /**
+   * Camping is FFXV's signature loop and until tonight it had no entrance: all
+   * twelve registered interactables were inside Hammerhead, and `canCamp()`
+   * measured against a haven table still written in the pre-8 km world, so
+   * `rpg.camp()` answered `no-haven` wherever the player stood. Assert both
+   * halves — that a `Camp` prompt exists at a real haven, and that sleeping on
+   * one actually rolls the clock.
+   */
+  probe('gameplay', 'camp at a haven', () => {
+    const rpg = g.get('Rpg')!; const ix = g.get('Interaction')!;
+    const havens = rpg.day.havens();
+    if (!havens.length) return F('no havens');
+    const h = havens[0];
+    const prompts = [...ix.items.keys()].filter((k) => String(k).startsWith('haven_'));
+    if (!prompts.length) return F(`${ix.items.size} interactables, none of them a haven`);
+    const day0 = rpg.day.day;
+    const on = rpg.camp({ lodging: 'haven', pos: { x: h.pos[0], z: h.pos[2] } });
+    const off = rpg.camp({ lodging: 'haven', pos: { x: h.pos[0] + 400, z: h.pos[2] } });
+    if (!on || on.ok === false) return F(`standing on ${h.id} (${Math.round(h.pos[0])},${Math.round(h.pos[2])}): ${on && on.reason}`);
+    return off && off.ok === false
+      ? P(`${prompts.length} camps; slept at "${h.name}", day ${day0}->${rpg.day.day}; refused 400 m away`)
+      : W(`slept at ${h.id}, but camping 400 m away was also allowed`);
   });
 
   return out;

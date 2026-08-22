@@ -13,6 +13,7 @@
 
 import { LODGINGS, nightScaling } from './Stats.ts';
 import type { ExpRedemption, Lodging } from './Stats.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Game } from '../Game.ts';
 
@@ -33,8 +34,20 @@ export const DAEMON_START = 19;
 export const DAEMON_END = 5;
 
 /**
- * Havens — the rune-marked campsites you can actually sleep at. Positions are
- * world coordinates so the map and the "camp" prompt agree.
+ * Havens — the rune-marked campsites you can actually sleep at.
+ *
+ * **Derived from `WorldMap`, never re-typed.** This table used to be ten
+ * hand-written coordinates in the pre-8 km world: `haven_longwythe` at
+ * `[128, 0, 84]` while the map put Cotisse Haven at `(962, -712)` and
+ * Hammerhead at `(576, 10)`. Nothing noticed, because nothing ever camped —
+ * `canCamp()` measured against these numbers and returned `no-haven` wherever
+ * you stood, and `GameData.readMarkers()` drew the pins hundreds of metres off
+ * the geometry. `project/HANDOFF.md` §5 says it plainly: coordinates go stale,
+ * derive them live from `WorldMap`/`Terrain` rather than hard-coding and hoping.
+ *
+ * The lowest-level haven starts discovered so the compass and the world map
+ * have somewhere to point on a fresh save; the rest are found by walking near
+ * them, which is what `discoverHaven` is for.
  */
 /** A rune-marked campsite. */
 export interface Haven {
@@ -43,6 +56,11 @@ export interface Haven {
   /** World coordinates, `[x, y, z]`. */
   pos: number[];
   region: string;
+  /**
+   * Suggested party level, from the POI. Havens are ordered by it so the
+   * starting one is the gentlest rather than whichever was typed first.
+   */
+  level: number;
   /** Whether it starts on the map. Live state lives in `DayCycle.havenState`. */
   discovered: boolean;
 }
@@ -65,18 +83,17 @@ export interface DayCycleSave {
   havens?: Record<string, boolean>;
 }
 
-export const HAVENS: Haven[] = [
-  { id: 'haven_prairie',    name: 'Prairie Outpost Haven',   pos: [-92, 0, 60],    region: 'leide',   discovered: true },
-  { id: 'haven_longwythe',  name: 'Longwythe Peak Haven',    pos: [128, 0, 84],    region: 'leide',   discovered: true },
-  { id: 'haven_keycatrich', name: 'Keycatrich Ruins Haven',  pos: [-154, 0, -132], region: 'leide',   discovered: false },
-  { id: 'haven_galdin',     name: 'Galdin Quay Overlook',    pos: [198, 0, 244],   region: 'leide',   discovered: false },
-  { id: 'haven_nebulawood', name: 'Nebulawood Haven',        pos: [-126, 0, 104],  region: 'duscae',  discovered: false },
-  { id: 'haven_wiz',        name: 'Wiz Chocobo Post Haven',  pos: [-66, 0, 126],   region: 'duscae',  discovered: false },
-  { id: 'haven_cauthess',   name: 'Disc Overlook Haven',     pos: [-300, 0, 168],  region: 'duscae',  discovered: false },
-  { id: 'haven_vesperpool', name: 'Vesperpool Haven',        pos: [-36, 0, 312],   region: 'cleigne', discovered: false },
-  { id: 'haven_meldacio',   name: 'Meldacio Ridge Haven',    pos: [-246, 0, 396],  region: 'cleigne', discovered: false },
-  { id: 'haven_ravatogh',   name: 'Rock of Ravatogh Haven',  pos: [372, 0, -248],  region: 'cleigne', discovered: false },
-];
+export const HAVENS: Haven[] = worldMap.poisOfType('haven')
+  .map((p) => ({
+    id: p.id,
+    name: p.name,
+    pos: [p.x, 0, p.z],
+    region: worldMap.zoneById.get(p.zone)?.region || 'leide',
+    level: p.lv ?? 1,
+    discovered: false,
+  }))
+  .sort((a, b) => a.level - b.level);
+if (HAVENS[0]) HAVENS[0].discovered = true;
 
 /** How close you must be to a haven to camp there. */
 export const HAVEN_RADIUS = 14;
