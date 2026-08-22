@@ -254,6 +254,48 @@ const results = await page.evaluate(async () => {
       : W(`${n} registered but none selected at the anchor`);
   });
 
+  // The probe above asks whether *something* is selected, which is how it went
+  // on passing while standing at the hunt board selected Cindy Aurum. This one
+  // asks whether the thing you walked up to is the thing you get: `_pick` scored
+  // priority at ten times the weight of distance and facing combined, so Dave —
+  // 1.8 m from the board and one priority step above it — took every press
+  // aimed at the bounty board from any angle but dead-on.
+  probe('world', 'walking up to a thing selects that thing', () => {
+    const ix = g.get('Interaction')!; const player = g.get('Player')!;
+    const terrain = g.get('Terrain')!;
+    const items = [...ix.items.values()];
+    if (!items.length) return F('nothing registered');
+    const missed: string[] = [];
+    for (const it of items) {
+      // 2.2 m out on the diagonal, facing the anchor: a normal walk-up, not a
+      // laboratory approach down one axis.
+      const ax = it.pos.x + 1.55, az = it.pos.z + 1.55;
+      const ay = terrain.heightAt(ax, az);
+      player.root.position.set(ax, ay, az);
+      player.heading = Math.atan2(it.pos.x - ax, it.pos.z - az);
+      player.root.rotation.y = player.heading;
+      // The camera has to come too. `Npcs.update` LODs out past 85 m and stops
+      // writing the talk anchors, so with the camera left behind every NPC
+      // anchor stays wherever it was last written and three of them collapse
+      // onto one another. That is a harness artefact -- in play the camera is
+      // always on the player -- but it reads exactly like a picker bug.
+      g.camera.position.set(ax + 4, ay + 3, az + 4);
+      g.camera.lookAt(it.pos.x, ay + 1.2, it.pos.z);
+      ix.current = null;
+      for (let i = 0; i < 8; i++) {
+        player.root.position.set(ax, ay, az);
+        step(1);
+      }
+      // `ix.current = null` above narrows the field to `null`, so read it back
+      // through the registry rather than fighting the narrowing.
+      const gotId = ix.current ? (ix.current as { id: string }).id : null;
+      if (gotId !== it.id) missed.push(`${it.id}->${gotId ?? 'nothing'}`);
+    }
+    return missed.length === 0
+      ? P(`all ${items.length} selectable from a 2.2 m diagonal walk-up`)
+      : F(`${missed.length}/${items.length} unreachable: ${missed.slice(0, 6).join(', ')}`);
+  });
+
   /**
    * The probe above proves a prompt is *offered*. This one proves it can be
    * *taken*, which is a different claim and the one that was false: `KeyE` was
