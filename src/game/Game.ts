@@ -203,7 +203,7 @@ export class Game {
       // capture shots show a party with real progression, not a level 1 save:
       // a level-27 retinue with a walked Ascension path, a live quest log, a
       // stocked bag and AP left to spend. Every number the UI draws comes from
-      // here (see src/ui/GameData.js).
+      // here (see src/ui/GameData.ts).
       ['Rpg', () => new RpgSystem({ startLevel: 27, startGil: 42180, startAp: 148 })],
       ['HUD', () => new HUD()],
       ['Minimap', () => new Minimap()],
@@ -256,7 +256,7 @@ export class Game {
   stop() { this._running = false; cancelAnimationFrame(this._raf); }
 
   /**
-   * Put the world into a named, reproducible state (see Shots.js) and lock the
+   * Put the world into a named, reproducible state (see Shots.ts) and lock the
    * camera. Used by src/tools/shoot.mts and by photo mode.
    */
   applyShot(name: any) {

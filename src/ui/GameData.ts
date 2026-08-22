@@ -28,7 +28,7 @@ export const MEMBER_UI = {
   prompto: { hue: 44,  role: 'marksman',  short: 'Prompto' },
 };
 
-/** RPG weapon class -> the icon key `Icons.js` draws. */
+/** RPG weapon class -> the icon key `Icons.ts` draws. */
 export const CLASS_ICON = {
   sword: 'sword', greatsword: 'greatsword', polearm: 'lance', dagger: 'daggers',
   firearm: 'firearm', shield: 'shield', machinery: 'machinery',

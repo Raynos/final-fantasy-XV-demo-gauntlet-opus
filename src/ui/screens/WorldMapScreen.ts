@@ -16,7 +16,7 @@ import type { Game } from '../../game/Game.ts';
 /**
  * THE CHART OF LUCIS — the full-screen atlas.
  *
- * The relief is the real heightfield, baked once by `world/map/Chart.js`; the
+ * The relief is the real heightfield, baked once by `world/map/Chart.ts`; the
  * roads are the real road graph; the nineteen regions are the real zone
  * fields, bordered where their influence changes hands. Everything else is
  * atlas convention: type that fades in by zoom the way sheet labels do, a

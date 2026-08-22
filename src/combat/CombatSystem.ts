@@ -1421,7 +1421,7 @@ export class CombatSystem {
 /**
  * Sideways offset of the weapon anchor on the player root.
  *
- * **Negative because the rig's right-hand side is -X** (`Skeleton.js`: "The
+ * **Negative because the rig's right-hand side is -X** (`Skeleton.ts`: "The
  * character faces +Z. Its right-hand side is -X"). `CombatAnim.weaponIK` picks
  * the driving arm with `local.x >= 0 ? 'L' : 'R'`, so the +0.30 this used to be
  * put the Engine Blade in Noctis' *left* hand in every combat frame.

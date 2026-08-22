@@ -14,7 +14,7 @@ const CAPSTONE_AP = 88;
  * The Ascension grid — the real one.
  *
  * Every node, edge, cost, prerequisite and constellation on this screen comes
- * from `src/game/rpg/Ascension.js`: 106 authored nodes across nine
+ * from `src/game/rpg/Ascension.ts`: 106 authored nodes across nine
  * constellations, laid out from the normalised `pos` the data already carries.
  * Confirming a node calls `RpgSystem.unlockNode()`, which spends real AP and
  * applies the node's effect to every party member's stat block.

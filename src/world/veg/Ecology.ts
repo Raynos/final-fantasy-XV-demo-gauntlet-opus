@@ -20,7 +20,7 @@ import type { Game } from '../../game/Game.ts';
  *
  * **The climate comes from the cartography, not from noise.** Every "is it wet
  * here" question is answered by `WorldMap`'s blended `moist` biome parameter
- * (via `veg/Biomes.js`), with fbm only as local variation on top. It used to be
+ * (via `veg/Biomes.ts`), with fbm only as local variation on top. It used to be
  * pure fbm, which is why an 8 km world with nineteen authored zones grew one
  * biome — dry Leide scrub — from the Vesperpool to Malmalam Thicket.
  */

@@ -19,7 +19,7 @@ const KEY_OFFSET = 0.6;
  * whether it reads at all. The stage hides the world and leaves the asset alone
  * against the sky, then orbits it.
  *
- * **It adds no lights.** That is not laziness — `engine/LightBudget.js` pins the
+ * **It adds no lights.** That is not laziness — `engine/LightBudget.ts` pins the
  * light counts because changing them changes every material's program key, and
  * one such toggle was measured recompiling 43 programs in a 9.5 s freeze. So the
  * stage reuses the scene's existing rig and instead controls the *sun* through

@@ -183,7 +183,7 @@ export class Stage {
     if (a.vel.lengthSq() > 1e-8) a.vel.normalize().multiplyScalar(speed);
   }
 
-  /** @param id @param name see `Poses.js` */
+  /** @param id @param name see `Poses.ts` */
   pose(id: string, name: string | null) {
     const a = this.actor(id);
     if (!a) return;

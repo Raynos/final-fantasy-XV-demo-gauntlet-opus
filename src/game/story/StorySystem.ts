@@ -161,7 +161,7 @@ export class StorySystem {
   }
 
   /**
-   * Capture-harness entry point, so `Shots.js` can name a story state the same
+   * Capture-harness entry point, so `Shots.ts` can name a story state the same
    * way it names a weather or a scenario.
    *
    * ```js

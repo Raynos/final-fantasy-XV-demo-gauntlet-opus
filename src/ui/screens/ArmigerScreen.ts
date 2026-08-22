@@ -11,7 +11,7 @@ import type { Game } from '../../game/Game.ts';
  *
  * Real state, all of it: the gauge is `CombatBridge.armiger`, the ability list
  * is the nine authored nodes of the Armiger constellation in
- * `src/game/rpg/Ascension.js` with their live unlock state and AP cost, and
+ * `src/game/rpg/Ascension.ts` with their live unlock state and AP cost, and
  * Enter spends real AP on the selected one through `RpgSystem.unlockNode`.
  * Whether the Armiger can be called at all is the `armiger` flag that
  * `arm_awaken` grants, so this screen is honest about being locked before it.

@@ -24,7 +24,7 @@ import type { Game } from '../game/Game.ts';
  *
  * Cross-system reads are all optional-chained: `Combat`, `Enemies`, `Party` and
  * `Director` are being built in parallel, so the HUD falls back to plausible
- * data from `GameData.js` and still renders.
+ * data from `GameData.ts` and still renders.
  *
  * ### API other systems can call
  * - `hud.damage({ world, amount, crit, kind })` — floating damage number

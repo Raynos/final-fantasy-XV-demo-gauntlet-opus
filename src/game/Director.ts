@@ -356,7 +356,7 @@ export class Director {
    * Hand the world to the live encounter loop: roaming packs, patrols,
    * day/night spawn windows, party combat AI, death and revive.
    *
-   * This is what `main.js` (or a test harness) calls to actually play.
+   * This is what `main.ts` (or a test harness) calls to actually play.
    */
   play() {
     this.scenario = 'live';

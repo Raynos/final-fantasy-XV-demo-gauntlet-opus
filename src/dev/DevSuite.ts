@@ -20,7 +20,7 @@ import { WEATHER_NAMES, isWeatherName } from '../world/Weather.ts';
  * sees the final camera after `CameraRig` has written it and can overwrite it.
  * It also means `game.paused` — which skips `update()` but not `lateUpdate()` —
  * freezes the world while this suite keeps running. Neither behaviour needed a
- * change to `Game.js`, which BRIEF rule 4 forbids editing.
+ * change to `Game.ts`, which BRIEF rule 4 forbids editing.
  *
  * The suite never touches `src/ui/**`: it mounts its own `#dev` root, the same
  * way `TitleScreen` owns `#title`.
@@ -354,8 +354,8 @@ export class DevSuite {
   /**
    * Write the live camera back as a shot framing.
    *
-   * Goes to `.review/tuning/`, never to `src/game/Shots.js`. Two reasons: BRIEF
-   * rule 4 makes `Shots.js` a shared file, and the capture daemon reboots its
+   * Goes to `.review/tuning/`, never to `src/game/Shots.ts`. Two reasons: BRIEF
+   * rule 4 makes `Shots.ts` a shared file, and the capture daemon reboots its
    * warm page on any `src/` edit — a suite that wrote into `src/` would
    * invalidate every running agent's page mid-capture.
    */

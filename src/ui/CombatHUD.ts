@@ -247,7 +247,7 @@ export class CombatHUD {
     this._updateNumbers(dt, cam, w, h);
     this._updateCallout(dt, h);
 
-    // armiger — earned from damage dealt (see rpg/CombatBridge.js)
+    // armiger — earned from damage dealt (see rpg/CombatBridge.ts)
     if (!this._armigerDriven) {
       const gauge = readArmiger(game);
       const live = game.get?.('Combat')?.armiger;

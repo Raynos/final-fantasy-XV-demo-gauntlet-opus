@@ -19,9 +19,9 @@ import type { Game } from '../game/Game.ts';
  * with a camera-centred geometry clipmap and a six-layer height-blended,
  * triplanar splat shader.
  *
- * The shape of the world is **not** authored here. `world/map/WorldMap.js` owns
+ * The shape of the world is **not** authored here. `world/map/WorldMap.ts` owns
  * the zones, the points of interest, the required landforms and the road graph;
- * `terrain/Field.js` realises them. Change the map and the ground follows.
+ * `terrain/Field.ts` realises them. Change the map and the ground follows.
  *
  * Cross-system contract:
  *   heightAt(x, z)      -> number      exact surface height, bilinear cached
@@ -86,7 +86,7 @@ export class Terrain {
     const quality = game.rnd ? game.rnd.quality : 'high';
     const layerSize = quality === 'low' ? 256 : 512;
     // The regional palette rides in two extra layers of the detail array rather
-    // than a sampler of its own — see `terrain/Biome.js`. It is not baked: it
+    // than a sampler of its own — see `terrain/Biome.ts`. It is not baked: it
     // costs a few milliseconds and depends on the cartography, not on the layer
     // recipes, so baking it would only add a second staleness dependency.
     const detailSize = Math.min(512, layerSize);
@@ -233,7 +233,7 @@ export class Terrain {
   /**
    * X of the road centreline at a given Z.
    *
-   * Vegetation/Props (`veg/Ecology.js`) probe for this and fall back to their
+   * Vegetation/Props (`veg/Ecology.ts`) probe for this and fall back to their
    * own approximate curve when it is missing — which would scatter grass and
    * roadside props along a line the terrain never carved. Exposing it keeps
    * every system agreeing on where the road actually is.
@@ -351,7 +351,7 @@ export class Terrain {
    * Linear albedo of the ground as the terrain shader actually draws it.
    *
    * **This function is why every plant in the world was the wrong colour.**
-   * `veg/Ecology.js` `groundColor()` calls `Terrain.groundColorAt` if it
+   * `veg/Ecology.ts` `groundColor()` calls `Terrain.groundColorAt` if it
    * exists and `Terrain.colorAt` if that does not — and neither existed, so
    * for the whole life of the project every blade, bush and tree tinted itself
    * from Ecology's own fallback ramp: a hard-coded `C_SOIL_RED` → `C_SOIL_DRY`

@@ -766,6 +766,6 @@ function radical(index: number, base: number) {
 }
 
 // The grade used to be an inline ShaderPass exported from this module; it now
-// lives in postfx/GradePass.js. Re-exported so old imports keep resolving.
+// lives in postfx/GradePass.ts. Re-exported so old imports keep resolving.
 export { GradePass } from './postfx/GradePass.ts';
 export { GRADES } from '../shaders/post/grades.ts';

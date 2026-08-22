@@ -23,7 +23,7 @@ const MAX_ROWS = 16;
 /**
  * Archives — the bestiary and the datalog.
  *
- * The species list is the real spawn registry (`characters/enemies/Bestiary.js`)
+ * The species list is the real spawn registry (`characters/enemies/Bestiary.ts`)
  * and the kill counts are the real ones: `KillLog` counts `combat:death`, so an
  * entry only opens up once the party has actually killed one of the things. An
  * unrecorded species is drawn locked, with its silhouette and nothing else,

@@ -13,7 +13,7 @@ import type { Game } from '../game/Game.ts';
  * The field minimap.
  *
  * A real chart, not a radar. The relief of the whole continent is baked once
- * into an off-screen image by `world/map/Chart.js` — the same image the
+ * into an off-screen image by `world/map/Chart.ts` — the same image the
  * world-map screen shows, which is why the two never disagree about where a
  * ridge is — and every frame blits the piece of it under the player, rotated
  * to heading. The unsurveyed haze is a second baked sheet blitted the same
@@ -28,7 +28,7 @@ import type { Game } from '../game/Game.ts';
  * transitions or keyframes** — every animated value is written per frame from
  * `game.time.now` so captures are deterministic.
  *
- * Registration (Game.js system order, after HUD):
+ * Registration (Game.ts system order, after HUD):
  *   ['Minimap', () => new Minimap()],
  */
 

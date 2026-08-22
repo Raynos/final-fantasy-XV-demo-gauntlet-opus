@@ -1,5 +1,5 @@
 /**
- * RpgSystem — the single system Game.js registers. It owns every RPG
+ * RpgSystem — the single system Game.ts registers. It owns every RPG
  * subsystem, wires them to each other, and republishes their events through
  * one emitter so the HUD, menus and combat code only need one subscription
  * point.

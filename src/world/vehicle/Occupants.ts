@@ -28,7 +28,7 @@ import type { Game } from '../../game/Game.ts';
 /** Ground a kilometre below the world: makes `footIK` do nothing at all. */
 const NO_GROUND = { heightAt: () => -1000, normalAt: (x: any, z: any, out: any) => (out || new THREE.Vector3()).set(0, 1, 0) };
 
-const SCALE = 1.14;              // the Regalia body scale, from Regalia.js
+const SCALE = 1.14;              // the Regalia body scale, from Regalia.ts
 const WHEEL_R = 0.4765;
 
 /**

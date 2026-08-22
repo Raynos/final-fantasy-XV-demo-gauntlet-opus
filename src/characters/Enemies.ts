@@ -87,7 +87,7 @@ export class Enemies {
 
   /**
    * Spawn one enemy.
-   * @param key species key — see `Bestiary.js`
+   * @param key species key — see `Bestiary.ts`
    * @param o {pos:[x,y,z]|Vector3, heading, scale, level, hp, damage,
    *                    home, patrol, pack, leash, name, expClass}
    */
@@ -291,7 +291,7 @@ export class Enemies {
   }
 
   /**
-   * Drive the player's combat body (`rig/CombatAnim.js`).
+   * Drive the player's combat body (`rig/CombatAnim.ts`).
    *
    * It has to run in the **lateUpdate** pass: `CombatSystem` updates after
    * `Player`, so a layer driven from the update pass would read last frame's

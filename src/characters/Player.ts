@@ -9,7 +9,7 @@ import type { Game } from '../game/Game.ts';
 /**
  * Noctis — the playable character.
  *
- * Locomotion drives a procedural animator (see rig/Anim.js): speed selects the
+ * Locomotion drives a procedural animator (see rig/Anim.ts): speed selects the
  * gait, the terrain plants the feet with IK, and the camera-relative input sets
  * the heading. The public contract other systems rely on is unchanged:
  *
