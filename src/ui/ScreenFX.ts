@@ -54,7 +54,7 @@ export class ScreenFX {
     this.luState = null;
 
     this.flashAmt = 0;
-    window.addEventListener('ffxv-area', (e) => this.areaTitle(e.detail?.name, e.detail?.sub, e.detail?.meta));
+    window.addEventListener('ffxv-area', (e) => this.areaTitle(e.detail?.name ?? '', e.detail?.sub, e.detail?.meta));
     window.addEventListener('ffxv-hit', (e) => this.hit(e.detail?.amount ?? 0.6));
   }
 

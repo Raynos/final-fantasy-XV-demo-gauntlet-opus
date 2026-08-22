@@ -101,7 +101,7 @@ export class FogOfWar {
   /**
    * The haze sheet, rebuilt only when the mask has changed.
    */
-  sheet(): {canvas:HTMLCanvasElement, ppm:number, toPx:function, toPz:function} {
+  sheet(): {canvas: HTMLCanvasElement, ppm: number, toPx: (x: number) => number, toPz: (z: number) => number} {
     if (!this._sheet) this._build();
     if (this._dirty) this._paint();
     return this._sheet;

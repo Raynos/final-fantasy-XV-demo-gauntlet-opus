@@ -179,7 +179,7 @@ export class Dungeon {
 
   dispose() {
     this.group.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
+      if ((o as THREE.Mesh).geometry) (o as THREE.Mesh).geometry.dispose();
     });
     this.rig.dispose();
     if (this.group.parent) this.group.parent.remove(this.group);

@@ -55,8 +55,8 @@ export class Subtitles {
     else this.root.appendChild(this.banter);
     this.bubbles = [];
 
-    window.addEventListener('ffxv-say', (e) => this.say(e.detail?.who, e.detail?.line, e.detail?.dur));
-    window.addEventListener('ffxv-banter', (e) => this.bant(e.detail?.who, e.detail?.line));
+    window.addEventListener('ffxv-say', (e) => this.say(e.detail?.who ?? '', e.detail?.line ?? '', e.detail?.dur));
+    window.addEventListener('ffxv-banter', (e) => this.bant(e.detail?.who ?? '', e.detail?.line ?? ''));
   }
 
   /**

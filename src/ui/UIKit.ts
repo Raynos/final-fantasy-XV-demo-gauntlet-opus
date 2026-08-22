@@ -14,7 +14,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * @param tag e.g. `div.party-row.is-lead`
  * @param [attrs] attributes; `text` sets textContent, `style` a cssText string
  */
-export function el(tag: string, attrs: any = {}, kids: Array<Node | string> = []): HTMLElement {
+export function el(tag: string, attrs: any = {}, kids: Array<Node | string | null | false> = []): HTMLElement {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');
   if (classes.length) node.className = classes.join(' ');
