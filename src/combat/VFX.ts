@@ -432,7 +432,7 @@ export class VFX {
    * @param {object} o
    * @returns the time of impact
    */
-  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }: { from: THREE.Vector3, to: THREE.Vector3, t0: number, dash: number, terrain: any }): number {
+  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }: { from: THREE.Vector3, to: THREE.Vector3, t0?: number, dash?: number, terrain?: any, color?: number, scale?: number }): number {
     const rng = this.rng;
     const dir = new THREE.Vector3().subVectors(to, from);
     const dist = dir.length();
@@ -722,7 +722,7 @@ export class VFX {
     this._postPatched = true;
     const root = this.root;
     const original = gtao.render.bind(gtao);
-    gtao.render = (...args) => {
+    gtao.render = (...args: any[]) => {
       const was = root.visible;
       root.visible = false;
       try { original(...args); } finally { root.visible = was; }

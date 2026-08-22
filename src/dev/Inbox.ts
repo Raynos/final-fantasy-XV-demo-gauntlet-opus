@@ -134,7 +134,7 @@ export class Inbox {
       // No dev server (static build): hand the note to the browser instead of
       // dropping it. Better a file in ~/Downloads than a lost observation.
       this._download(note);
-      this.status.textContent = `no review server (${err.message}) — downloaded instead`;
+      this.status.textContent = `no review server (${(err as Error).message}) — downloaded instead`;
     }
   }
 

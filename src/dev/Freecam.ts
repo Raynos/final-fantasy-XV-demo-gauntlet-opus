@@ -104,7 +104,8 @@ export class Freecam {
     this.roll = 0;
     // Round on adopt: a raw perspective fov carries 14 decimals and every
     // console listing and exported framing would inherit them.
-    if (camera.fov) this.fov = Math.round(camera.fov * 10) / 10;
+    const persp = camera as THREE.PerspectiveCamera;
+    if (persp.fov) this.fov = Math.round(persp.fov * 10) / 10;
     this._vel.set(0, 0, 0);
     this._dx = this._dy = 0;
   }

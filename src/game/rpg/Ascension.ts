@@ -26,7 +26,18 @@ import { emptyMods } from './Stats.ts';
  * How the party earns Ability Points. Values are per-event unless noted.
  * Keys are the `reason` strings passed to `Ascension.awardAp()`.
  */
-export const AP_RULES = {
+/** One way to earn AP. */
+export interface ApRule {
+  ap: number;
+  name: string;
+  /** Seconds before the same reason can pay out again. 0 is uncapped. */
+  cooldown: number;
+  desc: string;
+  /** For distance rules: metres per award, accumulated in `_distance`. */
+  perUnit?: number;
+}
+
+export const AP_RULES: Record<string, ApRule> = {
   'warp-strike':        { ap: 1,  name: 'Warp-strike',              cooldown: 4,  desc: 'Land a warp-strike on an enemy.' },
   'warp-strike-kill':   { ap: 3,  name: 'Warp-strike takedown',     cooldown: 0,  desc: 'Finish an enemy with a warp-strike.' },
   'point-warp':         { ap: 1,  name: 'Point warp',               cooldown: 12, desc: 'Warp to a hanging point and recover MP.' },

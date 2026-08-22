@@ -130,7 +130,7 @@ export class TrailRibbon {
    * scenarios so a still frame shows a full, believable blade sweep.
    * @param {object} o
    * */
-  setArc({ pivot, axis, start, from, to, inner = 0.25, outer = 1.7, ageSpread = 0.9 }: { pivot: THREE.Vector3, axis: THREE.Vector3, start: THREE.Vector3, from: number, to: number, inner: number, outer: number }) {
+  setArc({ pivot, axis, start, from, to, inner = 0.25, outer = 1.7, ageSpread = 0.9 }: { pivot: THREE.Vector3, axis: THREE.Vector3, start: THREE.Vector3, from: number, to: number, inner?: number, outer?: number, ageSpread?: number }) {
     const q = new THREE.Quaternion();
     const dir = new THREE.Vector3();
     const n = this.segments;

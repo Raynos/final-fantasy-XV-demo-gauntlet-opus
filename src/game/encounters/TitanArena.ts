@@ -158,7 +158,7 @@ export class TitanArena {
   dispose() {
     if (this.mesh) {
       this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
+      (this.mesh.material as THREE.Material).dispose();
     }
     this.root.removeFromParent();
   }

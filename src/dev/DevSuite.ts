@@ -215,7 +215,7 @@ class DevSuite {
     reg.cmd({
       name: 'marks', category: 'camera', help: 'list bookmarks',
       exec: () => Object.entries(this.bookmarks)
-        .map(([k, v]) => `${k}  ${v.name}  ${v.pos.join(', ')}`).join('\n') || 'none',
+        .map(([k, v]: [string, any]) => `${k}  ${v.name}  ${v.pos.join(', ')}`).join('\n') || 'none',
     });
 
     // -------- misc
@@ -444,7 +444,7 @@ class DevSuite {
 const HINT = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F4</b> assets · <b>F9</b> note · <b>F2</b> stats';
 
 const load = (k: any, fallback: any) => {
-  try { return JSON.parse(localStorage.getItem(k)) || fallback; } catch { return fallback; }
+  try { return JSON.parse(localStorage.getItem(k) ?? 'null') || fallback; } catch { return fallback; }
 };
 const save = (k: any, v: any) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ }

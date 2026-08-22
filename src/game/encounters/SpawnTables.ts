@@ -211,7 +211,25 @@ export const SET_PIECES = {
  * Everything else in `Quests.js`'s hunt table spawns an ordinary pack of its
  * target species at the objective's waypoint.
  */
-export const HUNT_TARGETS = {
+/** What a hunt spawns. */
+export interface HuntTarget {
+  /** Bestiary key. */
+  key: string;
+  count: number;
+  level: number;
+  /** Cap on how many are alive at once, for the long packs. */
+  maxAlive?: number;
+  /** Size multiplier, for the named beasts. */
+  scale?: number;
+  /** A proper name, shown instead of the species. */
+  name?: string;
+  /** Boss health and exp class. */
+  boss?: boolean;
+  /** A set piece from `SET_PIECES` rather than an ordinary pack. */
+  setPiece?: string;
+}
+
+export const HUNT_TARGETS: Record<string, HuntTarget> = {
   hunt_killer_wasps: { key: 'voretooth', count: 8, level: 4 },
   hunt_sabertusks: { key: 'sabertusk', count: 12, level: 6, maxAlive: 6 },
   hunt_dualhorn: { key: 'dualhorn', count: 4, level: 10 },
