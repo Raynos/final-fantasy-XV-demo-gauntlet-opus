@@ -5,6 +5,8 @@ import {
 import { Clipmap } from './terrain/Clipmap.ts';
 import type { ClipmapRing } from './terrain/Clipmap.ts';
 import { loadBaked } from './terrain/FieldBake.ts';
+import { bakeHorizon } from './terrain/Horizon.ts';
+import type { HorizonMap } from './terrain/Horizon.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
 import { buildLayerTextures, LAYER_NAMES, LAYER_AVG } from './terrain/Layers.ts';
 import { buildBiomeLut, surfaceAt } from './terrain/Biome.ts';
@@ -127,6 +129,8 @@ export class Terrain implements Ground {
   clipmap!: Clipmap;
   field!: Field;
   game!: Game;
+  /** Baked skyline elevations — see `terrain/Horizon.ts`. */
+  horizon!: HorizonMap;
   landmarks!: Record<string, Landmark>;
   layerNames!: string[];
   map!: WorldMap;
@@ -170,7 +174,20 @@ export class Terrain implements Ground {
     const lut = bootPhase('Terrain.biome', () => buildBiomeLut(detailSize));
     const layers = bootPhase('Terrain.layers',
       () => buildLayerTextures(layerSize, baked && baked.layers(), lut));
-    this.textures = { ...layers, ...bootPhase('Terrain.upload', () => this._uploadFieldTextures()) };
+    // Kilometre-scale terrain self-shadowing. Swept from the FAR grid, which is
+    // the only one that contains the ridge line two kilometres out -- see
+    // `terrain/Horizon.ts` for why this cannot be a cascade.
+    this.horizon = bootPhase('Terrain.horizon', () => bakeHorizon({
+      n: FAR_N, step: FAR_CELL, x0: -FAR_HALF, z0: -FAR_HALF, data: this.field.far,
+    }));
+    const horizonArr = bootPhase('Terrain.horizonTex', () => this.horizon.texture());
+
+    this.textures = {
+      ...layers,
+      ...bootPhase('Terrain.upload', () => this._uploadFieldTextures()),
+      horizonArr,
+      horizonXf: this.horizon.transform(),
+    };
 
     this.res = {
       uniforms: makeTerrainUniforms(this.textures, {
