@@ -99,7 +99,7 @@ export class GodRaysPass extends Pass {
 
   override setSize(w: number, h: number) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
 
-  override render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
     if (this.compositeMaterial.uniforms.uIntensity.value <= 0.0005) {
       // pass through untouched
       this.compositeMaterial.uniforms.tDiffuse.value = readBuffer.texture;

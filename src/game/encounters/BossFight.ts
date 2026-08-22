@@ -238,7 +238,7 @@ export class BossFight {
 
   /* --------------------------------------------------------------- tick */
 
-  update(dt: any) {
+  update(dt: number) {
     const b = this.boss;
     this.time += dt;
     if (this.arena) this.arena.update(dt);

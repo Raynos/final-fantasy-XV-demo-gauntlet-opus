@@ -464,7 +464,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * stiffness is the point: it is the one enemy in the game that is obviously
    * not alive, and the gait has to say so before the model does.
    */
-  override poseArms(S: any, t: any, swing: any, norm: any) {
+  override poseArms(S: any, t: any, swing: number, norm: any) {
     // Port arms. The weapon hangs off the right hand pointing along the hand's
     // local +Z, so the muzzle angle is just the *sum* of the shoulder and
     // elbow pitches — bending the elbow the same way as the shoulder points
@@ -478,7 +478,7 @@ class MTSoldierEnemy extends BipedEnemy {
    * Rifle up to the visor. Shoulder and elbow pitches cancel so the barrel
    * comes out level however far into the pose we are; `kick` rocks it back.
    */
-  aim(S: any, k: any, kick = 0) {
+  aim(S: any, k: number, kick = 0) {
     const sh = -1.22 * k - 1.02 * (1 - k);
     const el = 1.18 * k + 0.40 * (1 - k);
     this.arm(S, 'R', [sh + kick * 0.14, -0.20 * k - 0.26 * (1 - k), -0.12 * k - 0.30 * (1 - k)],
@@ -487,7 +487,7 @@ class MTSoldierEnemy extends BipedEnemy {
       [1.02 * k + 0.30 * (1 - k) - kick * 0.16, 0, 0], [0, 0, 0]);
   }
 
-  override poseWindUp(S: any, t: any, k: any, env: any) {
+  override poseWindUp(S: any, t: any, k: number, env: any) {
     const bayonet = this.attackId === 'bayonet';
     if (bayonet) {
       // shoulder the weapon back and drop into a lunge stance
@@ -506,7 +506,7 @@ class MTSoldierEnemy extends BipedEnemy {
     this.aim(S, k);
   }
 
-  override poseSwing(S: any, t: any, k: any, env: any) {
+  override poseSwing(S: any, t: any, k: number, env: any) {
     const bayonet = this.attackId === 'bayonet';
     const kp = clamp01(k);
     if (bayonet) {

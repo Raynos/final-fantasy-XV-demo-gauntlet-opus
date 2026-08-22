@@ -78,7 +78,7 @@ export class Shot {
   }
 
   /** True while scene time `t` belongs to this shot. */
-  covers(t: any) { return t >= this.t0 && t < this.t1; }
+  covers(t: number) { return t >= this.t0 && t < this.t1; }
 
   /**
    * Sample the move.
@@ -217,7 +217,7 @@ export class Frame {
    * Same as {@link at} but snapped to the ground, plus `u` metres. "The ground"
    * is {@link setFloor}'s surface if one was set, else the terrain.
    */
-  ground(terrain: any, f: any, r: any, u = 0) {
+  ground(terrain: any, f: number, r: number, u = 0) {
     const v = this._v.copy(this.origin).addScaledVector(this.fwd, f).addScaledVector(this.right, r);
     if (this.floor != null) return [v.x, this.floor + u, v.z];
     const y = terrain && terrain.heightAt ? terrain.heightAt(v.x, v.z) : this.origin.y;
@@ -225,7 +225,7 @@ export class Frame {
   }
 
   /** Vector3 form of {@link at}. */
-  vec(f: any, r: any, u = 0) { return new THREE.Vector3().fromArray(this.at(f, r, u)); }
+  vec(f: number, r: number, u = 0) { return new THREE.Vector3().fromArray(this.at(f, r, u)); }
 
   /** Yaw (radians) that makes an actor's +Z axis face along the scene axis. */
   get yaw() { return Math.atan2(this.fwd.x, this.fwd.z); }

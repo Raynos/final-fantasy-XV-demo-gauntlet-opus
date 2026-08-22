@@ -22,19 +22,19 @@ const _t = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _r = new THREE.Vector3();
 
-export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
+export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
-export const smoothIn = (a: number, b: number, x: any) => smooth((x - a) / (b - a));
-export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
+export const smoothIn = (a: number, b: number, x: number) => smooth((x - a) / (b - a));
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Cosine bump centred on `c` with half-width `w`, in units of the input. */
-export function bump(x: any, c: number, w: number, amp = 1) {
+export function bump(x: number, c: number, w: number, amp = 1) {
   const d = Math.abs(x - c) / w;
   return d >= 1 ? 0 : amp * 0.5 * (1 + Math.cos(d * Math.PI));
 }
 
 /** Angular cosine bump — handles wrap-around at 2π. */
-export function abump(theta: any, c: number, w: number, amp = 1) {
+export function abump(theta: number, c: number, w: number, amp = 1) {
   let d = Math.abs(theta - c) % (Math.PI * 2);
   if (d > Math.PI) d = Math.PI * 2 - d;
   d /= w;
@@ -102,7 +102,7 @@ export class MeshBuilder {
     return this;
   }
 
-  tint(mul: any) { this._c = [this._c[0] * mul, this._c[1] * mul, this._c[2] * mul]; return this; }
+  tint(mul: number) { this._c = [this._c[0] * mul, this._c[1] * mul, this._c[2] * mul]; return this; }
 
   /**
    * Per-vertex roughness / metalness / translucent thickness.
@@ -396,7 +396,7 @@ export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg:
  * Sweep an open shell with thickness (a garment panel): outer surface, inner
  * surface and a rim joining them, so an open jacket shows real cloth edges.
  */
-export function sweepShell(B: any, o: any) {
+export function sweepShell(B: MeshBuilder, o: any) {
   const thick = o.thickness ?? 0.014;
   const rxs = o.nodes.map((n: any) => n.rx);
   const outer = sweepTube(B, o);
@@ -513,7 +513,7 @@ export function applyBrushes(p: THREE.Vector3, nrm: THREE.Vector3, brushes: any)
 }
 
 /** Cylindrical head/face UV — shared by mesh generation and texture painting. */
-export function faceUV(x: any, y: any, z: any, o: any) {
+export function faceUV(x: number, y: number, z: number, o: any) {
   const u = 0.5 + Math.atan2(x, z) / (Math.PI * 2);
   const v = clamp01((y - o.y0) / (o.y1 - o.y0));
   return [u, v];
@@ -615,7 +615,7 @@ export function ribbon(B: MeshBuilder, o: any) {
   const sides = o.sides || 4;
   const width = o.width || 0.02;
   const thick = o.thick ?? width * 0.45;
-  const taper = o.taper || ((t: any) => 1 - t * t);
+  const taper = o.taper || ((t: number) => 1 - t * t);
   const up = new THREE.Vector3().fromArray(o.up || [0, 0, 1]);
   const tipColor = o.tipColor;
   const baseColor = o.color;

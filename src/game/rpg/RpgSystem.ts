@@ -156,8 +156,8 @@ export class RpgSystem {
     for (const m of MEMBERS) {
       const eq = STARTING_EQUIPMENT[m.id as keyof typeof STARTING_EQUIPMENT];
       if (!eq) continue;
-      eq.weapon.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'weapon', i, id); });
-      eq.accessory.forEach((id: any, i: any) => { if (id) this.inventory.equip(m.id, 'accessory', i, id); });
+      eq.weapon.forEach((id: string | null, i: number) => { if (id) this.inventory.equip(m.id, 'weapon', i, id); });
+      eq.accessory.forEach((id: string | null, i: number) => { if (id) this.inventory.equip(m.id, 'accessory', i, id); });
       if (this._newGameLevel > 1) this.party.stats[m.id].applyExp(this._expToReach(this._newGameLevel));
     }
     this.quests.refresh();
@@ -333,13 +333,13 @@ export class RpgSystem {
   /* -- Event API --------------------------------------------------------- */
 
   /** Subscribe. Returns an unsubscribe function. */
-  on(event: any, fn: any) { return this.emitter.on(event, fn); }
+  on(event: string, fn: any) { return this.emitter.on(event, fn); }
   /** Subscribe once. */
   once(event: any, fn: any) { return this.emitter.once(event, fn); }
   /** Unsubscribe. */
   off(event: any, fn: any) { return this.emitter.off(event, fn); }
   /** Fire an event (mostly for other systems to announce things). */
-  emit(event: any, payload: any) { return this.emitter.emit(event, payload); }
+  emit(event: string, payload: any) { return this.emitter.emit(event, payload); }
 
   /* -- Handy accessors --------------------------------------------------- */
 
@@ -423,8 +423,8 @@ export class RpgSystem {
   parry() { return this.ascension.awardAp('parry'); }
   linkStrike(members = 2) { return this.ascension.awardAp(members > 2 ? 'cross-chain' : 'link-strike'); }
   stagger() { return this.ascension.awardAp('stagger'); }
-  drove(metres: any) { return this.ascension.awardAp('regalia-distance', metres); }
-  rode(metres: any) { return this.ascension.awardAp('chocobo-distance', metres); }
+  drove(metres: number) { return this.ascension.awardAp('regalia-distance', metres); }
+  rode(metres: number) { return this.ascension.awardAp('chocobo-distance', metres); }
 
   /**
    * Roll a hit through the damage formula with all the current modifiers
@@ -445,7 +445,7 @@ export class RpgSystem {
   }
 
   /** Give the party an item and announce it. */
-  giveItem(id: any, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
+  giveItem(id: string, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
 
   /** Apply a quest/story reward bundle. */
   grantRewards(rewards: any, source = 'reward') {
@@ -535,10 +535,10 @@ export class RpgSystem {
   }
 
   /** Buy an Ascension node. */
-  unlockNode(id: any) { return this.ascension.unlock(id); }
+  unlockNode(id: string) { return this.ascension.unlock(id); }
 
   /** Fire a party technique. */
-  useTechnique(memberId: any, techId: any) { return this.party.useTechnique(memberId, techId); }
+  useTechnique(memberId: string, techId: string) { return this.party.useTechnique(memberId, techId); }
 
   /** Enemy stat scaling for right now, given the party's level. */
   enemyScaling(isDaemon = false) { return nightScaling(this.day.hour, isDaemon); }
@@ -581,7 +581,7 @@ export class RpgSystem {
   listSaves() { return SaveGame.listSaves(); }
 
   /** Total EXP needed to reach a level from scratch — used by newGame. */
-  _expToReach(level: any) { return totalExpFor(Math.min(level, MAX_LEVEL)); }
+  _expToReach(level: number) { return totalExpFor(Math.min(level, MAX_LEVEL)); }
 }
 
 export default RpgSystem;

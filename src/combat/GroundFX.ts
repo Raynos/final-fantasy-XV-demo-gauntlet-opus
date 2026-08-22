@@ -86,7 +86,7 @@ export class GroundPatch {
   }
 
   /** Snap the patch grid onto the terrain around `center` with side `size`. */
-  place(center: any, size: any, terrain: any, bias = 0.06) {
+  place(center: any, size: number, terrain: any, bias = 0.06) {
     const g = this.grid, p = this.positions;
     const half = size * 0.5;
     for (let j = 0; j <= g; j++) {

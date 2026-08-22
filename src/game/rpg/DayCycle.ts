@@ -317,7 +317,7 @@ export class DayCycle {
   }
 
   /** Skip time without sleeping (waiting out the night at a haven). */
-  wait(hours: any, ctx: any = {}) {
+  wait(hours: number, ctx: any = {}) {
     this.advance(hours);
     if (ctx.party) ctx.party.expireBuffs(this.absoluteHour);
     return { ok: true, hour: this.hour, clock: this.clockString, day: this.day };

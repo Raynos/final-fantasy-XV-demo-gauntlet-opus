@@ -107,7 +107,7 @@ export class EncounterDirector {
   /* ------------------------------------------------------------ helpers */
 
   /** Ground the point `x,z` and return a scratch vector. */
-  ground(x: any, z: any, out = this._tmp) {
+  ground(x: number, z: number, out = this._tmp) {
     out.set(x, this.terrain ? this.terrain.heightAt(x, z) : 0, z);
     return out;
   }
@@ -207,7 +207,7 @@ export class EncounterDirector {
     return p.spawn && def.when === 'day';
   }
 
-  _count(c: any) {
+  _count(c: number) {
     if (!Array.isArray(c)) return c | 0;
     return c[0] + Math.floor(this.rng.next() * (c[1] - c[0] + 1));
   }
@@ -431,7 +431,7 @@ export class EncounterDirector {
     b.uniforms.uIntensity.value = 3.0;
     b.width = 0.05;
     b.setLine(from, this._tmp);
-    this.vfx.track(this.vfx.clock, 0.11, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+    this.vfx.track(this.vfx.clock, 0.11, (k: number) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
     this.vfx.flash({ pos: from, color: hot, intensity: 16, distance: 5, life: 0.08 });
   }
 
@@ -637,7 +637,7 @@ export class EncounterDirector {
 
   /* ------------------------------------------------------------ tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.enabled || this.enemies.frozen) return;
     const p = this.player;
     if (!p) return;

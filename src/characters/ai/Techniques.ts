@@ -231,7 +231,7 @@ const PROMPTO = [
           b.uniforms.uIntensity.value = 5.0;
           b.width = 0.09;
           b.setLine(from, target.centre());
-          ai.vfx.track(ai.vfx.clock, 0.18, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+          ai.vfx.track(ai.vfx.clock, 0.18, (k: number) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
         }
         ai.strike(m, target, { motion: 2.0, poise: 60, technique: true, scale: 1.4, ignoreArmour: true });
       });

@@ -234,7 +234,7 @@ mat3 hrZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0., -s,c,0., 0.
 `;
 
 /** Smoothstep, matching the GLSL one so CPU and shader agree. */
-export function smooth(e0: number, e1: number, x: any) {
+export function smooth(e0: number, e1: number, x: number) {
   const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
   return t * t * (3 - 2 * t);
 }

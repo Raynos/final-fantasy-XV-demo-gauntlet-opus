@@ -323,7 +323,7 @@ export class CombatSystem {
     if (!w) return;
     w.setReveal(0);
     if (!this.vfx) { w.setReveal(1); return; }
-    this.vfx.track(t0, 0.34, (n: any) => {
+    this.vfx.track(t0, 0.34, (n: number) => {
       // A second swap during the draw must not resurrect the blade we put away
       if (this.weapon !== w) return;
       w.setReveal(n < 0 ? 0 : n > 1 ? 1 : n);
@@ -365,7 +365,7 @@ export class CombatSystem {
    */
   schedule(delay: number, fn: ((...args: any[]) => any), arg?: number) { this._sched.push({ t: delay, fn, arg }); }
 
-  _drain(dt: any) {
+  _drain(dt: number) {
     const s = this._sched;
     for (let i = s.length - 1; i >= 0; i--) {
       s[i].t -= dt;
@@ -966,7 +966,7 @@ export class CombatSystem {
 
   /* ----------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const raw = game.time.rawDt;
     const input = game.input;
     const p = this.player;
@@ -1149,7 +1149,7 @@ export class CombatSystem {
 
   /* -------------------------------------------------------- swings */
 
-  _tickSwing(dt: any) {
+  _tickSwing(dt: number) {
     const step = this.comboStep;
     this.comboTimer += dt;
     let n = 0;
@@ -1228,7 +1228,7 @@ export class CombatSystem {
     h.position.set(HAND_X, 1.12 - lean * 0.5, 0.12 + reach + lean);
   }
 
-  _restPose(dt: any) {
+  _restPose(dt: number) {
     const h = this.hand;
     IDLE_Q.setFromEuler(EULER.set(-0.22, -0.3, 1.9));
     h.quaternion.slerp(IDLE_Q, Math.min(1, dt * 9));
@@ -1334,7 +1334,7 @@ export class CombatSystem {
       b.uniforms.uIntensity.value = 3.0;
       b.width = 0.045;
       b.setLine(muzzle, to);
-      this.vfx.track(this.vfx.clock, 0.09, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+      this.vfx.track(this.vfx.clock, 0.09, (k: number) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
       this.vfx.sparkBurst({
         pos: muzzle, dir: this._tmp.subVectors(to, muzzle).normalize(), count: 12,
         speed: 10, spread: 0.45, color: 0xffc070, size: 0.07, life: 0.2, intensity: 7,
@@ -1352,7 +1352,7 @@ export class CombatSystem {
 
   /* --------------------------------------------------------- dodge */
 
-  _tickDodge(dt: any) {
+  _tickDodge(dt: number) {
     const p = this.player;
     const T = 0.46;
     const n = Math.min(1, this.stateTime / T);
@@ -1398,7 +1398,7 @@ export class CombatSystem {
 
   /* --------------------------------------------------------- phase */
 
-  _tickPhase(dt: any) {
+  _tickPhase(dt: number) {
     // a faint crystal shimmer around the player while phasing
     if (this.vfx && this.player && this.rng.next() < dt * 40) {
       const a = this.rng.next() * Math.PI * 2;

@@ -206,7 +206,7 @@ export function buildTree(name: string, seed: number, over: any = {}): any {
   };
 
   /** @param p @param dir */
-  const grow = (p: THREE.Vector3, dir: THREE.Vector3, len: number, rad: any, depth: any, flexStart: number) => {
+  const grow = (p: THREE.Vector3, dir: THREE.Vector3, len: number, rad: number, depth: number, flexStart: number) => {
     const sides = depth === 0 ? 8 : depth === 1 ? 5 : depth === 2 ? 4 : 3;
     const sub = depth === 0 ? 4 : depth === 1 ? 2 : 1;
     const flexEnd = Math.min(1, flexStart + len / S.height);

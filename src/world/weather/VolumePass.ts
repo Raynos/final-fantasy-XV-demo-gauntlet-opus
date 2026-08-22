@@ -386,7 +386,7 @@ export class VolumePass extends FilterPass {
     this.enabled = true;
   }
 
-  override setSize(w: any, h: any) {
+  override setSize(w: number, h: number) {
     const mw = Math.max(1, Math.round(w * MARCH_SCALE));
     const mh = Math.max(1, Math.round(h * MARCH_SCALE));
     this.rtVol.setSize(mw, mh);
@@ -407,7 +407,7 @@ export class VolumePass extends FilterPass {
     }
   }
 
-  override render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
     this.beforeRender();
     this.material.uniforms.tDiffuse.value = readBuffer.texture;
     blit(renderer, this.material, this.rtVol);

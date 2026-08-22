@@ -44,7 +44,7 @@ export class FogOfWar {
   }
 
   /** Reveal every cell whose centre is within `r` metres of (x, z). */
-  reveal(x: any, z: any, r: number) {
+  reveal(x: number, z: number, r: number) {
     const c = this.cell, n = this.n;
     const i0 = Math.max(0, Math.floor((x - r + WORLD.half) / c));
     const i1 = Math.min(n - 1, Math.ceil((x + r + WORLD.half) / c));
@@ -89,7 +89,7 @@ export class FogOfWar {
   }
 
   /** 0..1 how surveyed the cell containing this point is. */
-  at(x: any, z: any) {
+  at(x: number, z: number) {
     const n = this.n;
     let i = Math.floor((x + WORLD.half) / this.cell);
     let j = Math.floor((z + WORLD.half) / this.cell);
@@ -123,8 +123,8 @@ export class FogOfWar {
     this._sheet = {
       canvas,
       ppm,
-      toPx: (x: any) => (x + WORLD.half) * ppm,
-      toPz: (z: any) => (z + WORLD.half) * ppm,
+      toPx: (x: number) => (x + WORLD.half) * ppm,
+      toPz: (z: number) => (z + WORLD.half) * ppm,
     };
     this._parchment = this._ctx!.createPattern(parchmentTile(), 'repeat')!;
   }

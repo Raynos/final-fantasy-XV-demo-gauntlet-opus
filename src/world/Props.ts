@@ -142,7 +142,7 @@ export class Props {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const t = game.time.now;
     const night = this._night(game);
     if (this.landmarks) this.landmarks.update(dt, t, night);

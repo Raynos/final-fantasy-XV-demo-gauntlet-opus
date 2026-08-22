@@ -254,7 +254,7 @@ class IronGiantEnemy extends BipedEnemy {
    * other. Cheap, and it does more for "this is a daemon" than any amount of
    * extra geometry.
    */
-  miasma(S: any, t: any) {
+  miasma(S: any, t: number) {
     const j = Math.sin(t * 1.7) * Math.sin(t * 0.43 + 1.1) * Math.sin(t * 0.19);
     this.add(S, 'chest', j * 0.020, j * 0.030, -0.035 + j * 0.014);
     this.add(S, 'neck', -j * 0.030, j * 0.055, 0.02);
@@ -302,7 +302,7 @@ class IronGiantEnemy extends BipedEnemy {
     });
   }
 
-  override poseSwing(S: any, t: any, k: any, env: any) {
+  override poseSwing(S: any, t: any, k: number, env: any) {
     // one continuous arc from the held wind-up through the ground
     const e = clamp01((k + 1) * 0.5);
     const f = env.phase === 'follow' ? env.f : 0;

@@ -168,16 +168,16 @@ const SPECTRA = {
   // Bowed string: strong odd/even mix, gentle rolloff, slight 2nd-formant bump.
   string: (n: number) => (1 / Math.pow(n, 1.08)) * Math.exp(-n / 15) * (n === 3 ? 1.35 : 1),
   // Brass: bright, slow rolloff, formant plateau around the 4th–7th partial.
-  brass: (n: any) => (1 / Math.pow(n, 0.72)) * Math.exp(-n / 22) * (n >= 3 && n <= 8 ? 1.5 : 1),
+  brass: (n: number) => (1 / Math.pow(n, 0.72)) * Math.exp(-n / 22) * (n >= 3 && n <= 8 ? 1.5 : 1),
   // Clarinet-ish reed: odd harmonics dominate.
-  reed: (n: any) => (n % 2 === 1 ? 1 / Math.pow(n, 1.35) : 0.14 / Math.pow(n, 1.6)) * Math.exp(-n / 18),
+  reed: (n: number) => (n % 2 === 1 ? 1 / Math.pow(n, 1.35) : 0.14 / Math.pow(n, 1.6)) * Math.exp(-n / 18),
   // Flute: nearly a sine with a whisper of 2nd and 3rd.
-  flute: (n: any) => (n === 1 ? 1 : n === 2 ? 0.18 : n === 3 ? 0.07 : 0.02 / n) * Math.exp(-n / 6),
+  flute: (n: number) => (n === 1 ? 1 : n === 2 ? 0.18 : n === 3 ? 0.07 : 0.02 / n) * Math.exp(-n / 6),
   // Choir "ah": fundamental plus a formant cluster.
-  choir: (n: any) => (1 / Math.pow(n, 1.25)) * Math.exp(-n / 11)
+  choir: (n: number) => (1 / Math.pow(n, 1.25)) * Math.exp(-n / 11)
     * (n >= 2 && n <= 4 ? 1.6 : n >= 7 && n <= 9 ? 1.25 : 1),
   // Soft pad — a filtered saw without the fizz.
-  pad: (n: any) => (1 / Math.pow(n, 1.35)) * Math.exp(-n / 9),
+  pad: (n: number) => (1 / Math.pow(n, 1.35)) * Math.exp(-n / 9),
   organ: (n: any) => ([0, 1, 0.5, 0.32, 0.24, 0.05, 0.12, 0.03, 0.09][n] ?? 0),
 };
 
@@ -228,23 +228,23 @@ export function adsr(p: AudioParam, t: number, dur: number, o: any = {}) {
 }
 
 /** Percussive envelope: instant attack, exponential fall. */
-export function hit(p: AudioParam, t: any, peak: any, decay: any) {
+export function hit(p: AudioParam, t: number, peak: number, decay: any) {
   p.setValueAtTime(Math.max(EPS, peak), t);
   p.exponentialRampToValueAtTime(EPS, t + decay);
   return t + decay;
 }
 
 /** Safe exponential ramp that tolerates a zero target. */
-export function expTo(p: AudioParam, v: number, t: any) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
+export function expTo(p: AudioParam, v: number, t: number) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
 
 /** Equal-tempered frequency from a semitone offset above a reference. */
-export function ftom(ref: number, semis: any) { return ref * Math.pow(2, semis / 12); }
+export function ftom(ref: number, semis: number) { return ref * Math.pow(2, semis / 12); }
 
 /** Random within a range from a supplied rng. */
-export function rr(rng: any, a: any, b: any) { return a + (b - a) * rng(); }
+export function rr(rng: any, a: number, b: number) { return a + (b - a) * rng(); }
 
 /** Clamp. */
-export function clamp(v: any, a: number, b: any) { return v < a ? a : v > b ? b : v; }
+export function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }
 
 /** Linear interpolation. */
-export function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
+export function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }

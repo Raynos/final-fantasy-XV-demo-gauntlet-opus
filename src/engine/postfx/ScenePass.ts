@@ -36,7 +36,7 @@ export class ScenePass extends Pass {
     });
   }
 
-  override render(renderer: any, writeBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any) {
     const fx = this.fx;
     const { scene, camera } = fx.rnd;
 

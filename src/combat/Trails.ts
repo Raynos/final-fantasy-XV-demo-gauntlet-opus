@@ -155,7 +155,7 @@ export class TrailRibbon {
   /** Stop emitting; the ribbon dissolves over `life`. */
   release() { this.active = false; }
 
-  update(dt: any, clock: any) {
+  update(dt: number, clock: any) {
     this.uniforms.uTime.value = clock;
     if (!this.mesh.visible) return;
     let alive = false;

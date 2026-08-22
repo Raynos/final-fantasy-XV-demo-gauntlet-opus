@@ -182,7 +182,7 @@ export class Enemies {
   }
 
   /** Count of live enemies within `r` of a point. */
-  countNear(p: any, r: any) {
+  countNear(p: any, r: number) {
     let n = 0;
     const r2 = r * r;
     for (const e of this.list) {
@@ -214,7 +214,7 @@ export class Enemies {
    * Swept-capsule query for a weapon arc: samples the segment from `a` to `b`.
    * Cheap, deterministic, and good enough for readable melee.
    */
-  sweepQuery(a: any, b: any, radius: any, out: any[] = []) {
+  sweepQuery(a: any, b: any, radius: number, out: any[] = []) {
     out.length = 0;
     const steps = 5;
     const p = this._tmp;
@@ -299,7 +299,7 @@ export class Enemies {
    * it belongs on `CombatSystem` or `Player` once those owners can take a
    * one-line call, and nothing else in here depends on it.
    */
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     if (!this.combatAnim && game.get('Combat') && game.get('Player')) {
       this.combatAnim = new CombatAnim(game);
     }

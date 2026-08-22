@@ -130,7 +130,7 @@ export const GROWTH = {
 };
 
 /** Interpolate a growth pair at a level, rounded to a whole number. */
-function growAt(pair: any, level: number, curve: any) {
+function growAt(pair: any, level: number, curve: number) {
   const t = Math.pow(Math.max(0, Math.min(1, (level - 1) / (MAX_LEVEL - 1))), curve);
   return Math.round(pair[0] + (pair[1] - pair[0]) * t);
 }
@@ -233,7 +233,7 @@ export class Stats {
   /* -- HP / MP ----------------------------------------------------------- */
 
   /** Apply damage. Returns the amount actually lost. Sets `ko` at zero. */
-  applyDamage(amount: any) {
+  applyDamage(amount: number) {
     const before = this.hp;
     this.hp = Math.max(0, this.hp - Math.max(0, Math.round(amount)));
     if (this.hp === 0) this.ko = true;
@@ -249,13 +249,13 @@ export class Stats {
   }
 
   /** Spend MP. Returns false (and spends nothing) if there isn't enough. */
-  spendMp(amount: any) {
+  spendMp(amount: number) {
     if (this.mp < amount) return false;
     this.mp -= amount;
     return true;
   }
 
-  restoreMp(amount: any) {
+  restoreMp(amount: number) {
     const before = this.mp;
     this.mp = Math.min(this.maxMp, this.mp + Math.max(0, amount));
     return this.mp - before;
@@ -570,6 +570,6 @@ export function expForKill(enemy: any, hour: number | null = null) {
   return Math.round(base * m * night);
 }
 
-function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function clamp01(v: number) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
 export default Stats;

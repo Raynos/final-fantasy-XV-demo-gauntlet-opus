@@ -661,7 +661,7 @@ function steelMaps() {
   // The v terms must stay tiny — the loft's v runs the length of the blade,
   // so any real drift skews the streaks into visible corrugation instead of
   // a grind.
-  const height = (u: any, v: any) => (
+  const height = (u: number, v: number) => (
     0.58 * vn((u + v * 0.0016) * 17, 17) +
     0.30 * vn((u + v * 0.0026) * 43, 43) +
     0.12 * vn((u + v * 0.0040) * 97, 97)

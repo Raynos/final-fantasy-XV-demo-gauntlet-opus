@@ -206,7 +206,7 @@ export class Stage {
       if (isDirectionalLight(o)) { sun = o; break; }
     }
     if (!sun) {
-      game.scene.traverse((o: any) => { if (!sun && o.isDirectionalLight) sun = o; });
+      game.scene.traverse((o: THREE.Object3D) => { if (!sun && isDirectionalLight(o)) sun = o; });
     }
     if (!sun) return;
     // A directional light's position points *towards* where the light comes

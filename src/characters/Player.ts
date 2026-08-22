@@ -110,7 +110,7 @@ export class Player {
   /** Weapon sockets for the combat system. */
   get attach() { return this.character.attach; }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const input = game.input;
     const cam = game.camera;
     const mv = input.move;
@@ -190,7 +190,7 @@ export class Player {
    * is fighting; in the field he glances at one of the retinue and then looks
    * away again, on a deterministic timer so two capture runs match.
    */
-  _gaze(dt: any, game: any, combat: any) {
+  _gaze(dt: number, game: any, combat: any) {
     if (combat && combat.inCombat) {
       const lock = combat.lockTarget && !combat.lockTarget.dead ? combat.lockTarget : null;
       const e = lock || (combat.autoTarget ? combat.autoTarget(28) : null);
@@ -220,11 +220,11 @@ export class Player {
 }
 
 /** Shortest-arc damped angle. */
-export function dampAngle(a: any, b: number, lambda: number, dt: any) {
+export function dampAngle(a: number, b: number, lambda: number, dt: number) {
   return a + angleDelta(a, b) * (1 - Math.exp(-lambda * dt));
 }
 
-export function angleDelta(a: any, b: any) {
+export function angleDelta(a: number, b: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

@@ -66,7 +66,7 @@ export function decodeF32Planes(bytes: Uint8Array, n: number): Float32Array {
 }
 
 /** Quantise a float grid to 16 bits and delta-code along rows. */
-export function encodeQ16D(src: any, w: any, h: any) {
+export function encodeQ16D(src: any, w: number, h: number) {
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < src.length; i++) { const v = src[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
   const scale = (hi - lo) / 65535 || 1;
@@ -83,7 +83,7 @@ export function encodeQ16D(src: any, w: any, h: any) {
   return { bytes: new Uint8Array(out.buffer), min: lo, scale };
 }
 
-export function decodeQ16D(bytes: any, w: any, h: any, min: any, scale: any): Float32Array {
+export function decodeQ16D(bytes: any, w: number, h: number, min: number, scale: number): Float32Array {
   // A section can land on an odd byte offset inside the container, which a
   // Uint16Array view cannot address; copy only in that case.
   const src = bytes.byteOffset % 2 === 0 ? bytes : new Uint8Array(bytes);
@@ -106,7 +106,7 @@ export function decodeQ16D(bytes: any, w: any, h: any, min: any, scale: any): Fl
  * their own neighbours, and gzip only sees a window of the recent past — so
  * de-interleaving is worth ~2x here for free.
  */
-export function encodePlanes8(src: any, w: any, h: number, ch: number) {
+export function encodePlanes8(src: any, w: number, h: number, ch: number) {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {

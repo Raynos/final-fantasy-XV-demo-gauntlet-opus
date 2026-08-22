@@ -296,7 +296,7 @@ function cache() {
   if (_cache) return _cache;
   const n = new Noise(4242);
 
-  const pore = normalFromHeight(128, (u: any, v: any) => (
+  const pore = normalFromHeight(128, (u: number, v: number) => (
     0.5 * n.simplex2(u * 96, v * 96)
     + 0.3 * n.simplex2(u * 210, v * 210)
     + 0.22 * n.simplex2(u * 420, v * 420)
@@ -307,7 +307,7 @@ function cache() {
   poreFine.repeat.set(9, 13);
   poreFine.needsUpdate = true;
 
-  const weave = normalFromHeight(128, (u: any, v: any) => (
+  const weave = normalFromHeight(128, (u: number, v: number) => (
     0.5 * Math.sin(u * Math.PI * 2 * 34) * Math.sin(v * Math.PI * 2 * 34)
     + 0.35 * n.simplex2(u * 140, v * 140)
     + 0.2 * n.simplex2(u * 300, v * 300)
@@ -315,7 +315,7 @@ function cache() {
   weave.repeat.set(9, 14);
 
   // strand value break-up along the hair ribbon: dark gaps between filaments
-  const hairStripe = makeTexture(128, (u: any, v: any, c: any) => {
+  const hairStripe = makeTexture(128, (u: number, v: number, c: any) => {
     // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
     // crest), v along its length
     const across = Math.abs(u - 0.5) * 2;
@@ -473,7 +473,7 @@ export function lensMaterial() {
 export function contactShadowMaterial() {
   // MultiplyBlending ignores alpha, so the falloff has to live in the RGB:
   // white at the rim leaves the ground untouched, dark at the centre bites.
-  const tex = makeTexture(64, (u: any, v: any, c: any) => {
+  const tex = makeTexture(64, (u: number, v: number, c: any) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     const k = Math.pow(Math.max(0, 1 - d), 1.8) * 0.66;
     c[0] = 1 - k;

@@ -362,7 +362,7 @@ export class Ascension {
   /** Grant raw AP outside the rule table (debug, story rewards). */
   grantRaw(amount: any, reason = 'reward') { return this._grant(amount, reason); }
 
-  _grant(amount: any, reason: string) {
+  _grant(amount: number, reason: string) {
     const gained = Math.max(0, Math.round(amount * (1 + this.value('apGain'))));
     if (gained <= 0) return 0;
     this.ap += gained;

@@ -128,7 +128,7 @@ export class MainScreen {
     }
   }
 
-  nav(dx: any, dy: any) {
+  nav(dx: any, dy: number) {
     if (dy) this.i = (this.i + dy + ENTRIES.length) % ENTRIES.length;
   }
 

@@ -151,7 +151,7 @@ export function tube(points: THREE.Vector3[], radii: any, { radialSeg = 8, capSt
 }
 
 /** Convenience: a straight tube between two points. */
-export function limb(a: any, b: any, r0: any, r1: any, seg = 6, radialSeg = 8) {
+export function limb(a: any, b: any, r0: number, r1: number, seg = 6, radialSeg = 8) {
   const pts = [], radii = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;

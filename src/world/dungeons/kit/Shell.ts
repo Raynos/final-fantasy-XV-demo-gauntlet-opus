@@ -57,10 +57,10 @@ export class ShellBuilder {
   }
 
   /** Displacement field for a style, in metres along the surface normal. */
-  disp(style: any, amount: any, freq = 0.35) {
+  disp(style: any, amount: number, freq = 0.35) {
     const n = this.n;
     if (amount <= 0.001) return null;
-    return (x: any, y: any, z: any) => {
+    return (x: number, y: number, z: number) => {
       const a = n.fbm2(x * freq + z * 0.07, y * freq * 1.35 + z * freq, 4) * amount;
       const b = n.fbm2(x * freq * 3.1 - 11, z * freq * 3.1 + y * 0.9, 3) * amount * 0.42;
       return a + b;
@@ -132,11 +132,11 @@ export class ShellBuilder {
   }
 
   /** A wall panel with rectangular doorways subtracted. */
-  wall(mat: any, side: any, height: any, openings: any, s: any, style: any) {
+  wall(mat: any, side: any, height: number, openings: any, s: any, style: any) {
     const sb = this.sb(mat);
     const ao = this._ao;
     const disp = this.disp(style, s.wall, 0.4);
-    const emit = (u0: any, u1: any, v0: any, v1: any) => {
+    const emit = (u0: number, u1: number, v0: number, v1: number) => {
       if (u1 - u0 < 0.05 || v1 - v0 < 0.05) return;
       sb.patch({
         origin: [
@@ -323,7 +323,7 @@ export class ShellBuilder {
     // resample the polyline so the sweep bends instead of kinking
     const dense = resample(c.path, 1.4);
     const path = dense.map((p) => [p[0], p[2] + axisY, p[1]]);
-    this.sb(mat).tube(path, (t: any, th: any, x: any, y: any, z: any) => {
+    this.sb(mat).tube(path, (t: number, th: number, x: number, y: number, z: number) => {
       const bulge = 1 + 0.26 * n.fbm2(x * 0.14 + z * 0.10, y * 0.22 + th * 0.40, 3);
       const squeeze = 1 - 0.20 * Math.sin(t * Math.PI * 3.1 + 1.2);
       return r0 * bulge * squeeze * (1 + 0.07 * Math.sin(th * 3 + t * 9));
@@ -343,7 +343,7 @@ export class ShellBuilder {
         origin: [a[0] - right[0] * w * 0.5, a[2] - 0.02, a[1] - right[2] * w * 0.5],
         uAxis: [dir[0] / dl, dir[1] / dl, dir[2] / dl], vAxis: right,
         uLen: len * dl, vLen: w, cell: 1.1, uvScale: s.uv,
-        displace: (x: any, y: any, z: any) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
+        displace: (x: number, y: any, z: number) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
         uvOffset: [a[0], a[1]],
       });
     }
@@ -386,7 +386,7 @@ export class ShellBuilder {
       }
     }
     const holes = r.holes || [];
-    const inHole = (th: number, yLo: any, yHi: any) => {
+    const inHole = (th: number, yLo: number, yHi: number) => {
       for (const h of holes) {
         let d = th - h.theta;
         while (d > Math.PI) d -= Math.PI * 2;

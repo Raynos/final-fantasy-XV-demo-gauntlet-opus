@@ -33,10 +33,10 @@ export function geo(key: string, make: () => THREE.BufferGeometry): THREE.Buffer
   return G[key];
 }
 
-export const box = (w: any, h: any, d: any) => geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
-export const cyl = (rt: number, rb: number, h: any, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
+export const box = (w: number, h: number, d: number) => geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
+export const cyl = (rt: number, rb: number, h: number, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
 export const plane = (w: number, h: number) => geo(`p${w}_${h}`, () => new THREE.PlaneGeometry(w, h));
-export const torus = (r: any, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => new THREE.TorusGeometry(r, t, a, b));
+export const torus = (r: number, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => new THREE.TorusGeometry(r, t, a, b));
 
 /** A cylinder lying on its side along X, i.e. a wheel/tyre. */
 export const wheel = (r: number, w: number, s = 14) => geo(`w${r}_${w}_${s}`, () => {

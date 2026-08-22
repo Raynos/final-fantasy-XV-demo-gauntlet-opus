@@ -185,7 +185,7 @@ export class Downed {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const p = this.player;
     if (!p) return;
     const n = this.noctis;
@@ -243,7 +243,7 @@ export class Downed {
     p.speed = 0;
   }
 
-  _tickDowned(dt: any) {
+  _tickDowned(dt: number) {
     this._holdPlayer();
     this.bleedOut -= dt;
 
@@ -289,7 +289,7 @@ export class Downed {
     if (this.bleedOut <= 0) this.gameOver('bleed-out');
   }
 
-  _tickAllies(dt: any) {
+  _tickAllies(dt: number) {
     if (!this.party || !this.rpg) return;
     for (const m of this.party.members) {
       const s = this.memberStats(m.key);

@@ -24,8 +24,12 @@
  * "types a reader can use" bar `infer` holds: primitives, named classes and
  * interfaces, arrays and `| null` of those, never an anonymous shape.
  *
- * A parameter whose constraint disagrees with a caller is exactly the bug this
- * work is for. Run `tsc` after; the errors are the point.
+ * The callers are then consulted, not to decide the type but to check it. A
+ * caller passing `null` widens the annotation to `T | null` -- `B.glow(MAGITEK,
+ * 2.6)` and `B.glow(null)` mean the parameter is nullable however numerically
+ * the body uses it. A caller passing something the type would reject means the
+ * body and the call sites genuinely disagree; the parameter is left alone,
+ * because that is a design question and not an inference.
  */
 import ts from 'typescript-api';
 import fs from 'node:fs';
@@ -95,7 +99,11 @@ function printType(t, depth = 0) {
   const o = origin(sym);
   if (!o) return null;
   if (o.kind === 'global') return { text: name, need: [] };
-  if (o.kind === 'three') return { text: `THREE.${name}`, need: [{ kind: 'three' }] };
+  // three's `Vector3Like` / `ColorLike` are the structural supertypes its own
+  // signatures accept. Writing one onto a parameter throws away every method
+  // the body two frames down wanted to call, so refuse them and let the caller
+  // pass decide instead.
+  if (o.kind === 'three') return /Like$/.test(name) ? null : { text: `THREE.${name}`, need: [{ kind: 'three' }] };
   return { text: name, need: [{ kind: 'local', file: o.file, name }] };
 }
 
@@ -114,6 +122,21 @@ const NUMERIC_BINARY = new Set([
 ]);
 
 const NUMBER = { text: 'number', need: [] };
+
+/**
+ * The type without the `undefined` an *optional* parameter carries. Three's
+ * `BoxGeometry(width?: number, ...)` hands back `number | undefined`, and
+ * printing that as `number | null` would spread a nullability the callee never
+ * meant -- optionality is about arity, not about the value. A declared `| null`
+ * is a real claim and survives.
+ */
+function stripUndefined(t) {
+  if (!t?.isUnion?.()) return t;
+  const parts = t.types.filter((x) => !(x.flags & ts.TypeFlags.Undefined));
+  if (parts.length === t.types.length) return t;
+  if (parts.length === 1) return parts[0];
+  return checker.getUnionType ? checker.getUnionType(parts) : t;
+}
 
 /** The enclosing function of a node, or null. */
 function enclosingFunction(n) {
@@ -151,7 +174,7 @@ function constraintAt(id) {
       // literal type would pin `1` where the author meant `number`.
       if (!target.type) return null;
       if (target.type.kind === ts.SyntaxKind.AnyKeyword) return null;
-      return printType(checker.getBaseTypeOfLiteralType(t));
+      return printType(checker.getBaseTypeOfLiteralType(stripUndefined(t)));
     }
   }
 
@@ -169,7 +192,7 @@ function constraintAt(id) {
     // `field = p` / `local = p` -- the left side's declared type.
     if (op === ts.SyntaxKind.EqualsToken && p.right === id) {
       const lt = checker.getTypeAtLocation(p.left);
-      return printType(checker.getBaseTypeOfLiteralType(lt));
+      return printType(checker.getBaseTypeOfLiteralType(stripUndefined(lt)));
     }
     return null;
   }
@@ -190,12 +213,57 @@ function constraintAt(id) {
   return null;
 }
 
+/**
+ * Every `p: any` parameter declaration, mapped to the types its call sites
+ * actually pass. `null` in the list means the argument was omitted there.
+ */
+const argsFor = new Map();
+for (const sf of program.getSourceFiles()) {
+  if (sf.isDeclarationFile || !sf.fileName.startsWith(prefix)) continue;
+  const visit = (n) => {
+    if (ts.isCallExpression(n) || ts.isNewExpression(n)) {
+      const decl = checker.getResolvedSignature(n)?.declaration;
+      if (decl?.parameters && decl.getSourceFile().fileName.startsWith(prefix)) {
+        const args = n.arguments ?? [];
+        decl.parameters.forEach((p, i) => {
+          if (p.type?.kind !== ts.SyntaxKind.AnyKeyword || p.dotDotDotToken) return;
+          const a = args[i];
+          const list = argsFor.get(p) ?? (argsFor.set(p, []), argsFor.get(p));
+          list.push(a ? checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(a)) : null);
+        });
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+}
+
+/**
+ * What the callers say about a type the body proposed: keep it, widen it to
+ * `| null`, or drop the parameter entirely because a caller contradicts it.
+ */
+function reconcile(param, text) {
+  const seen = argsFor.get(param);
+  if (!seen?.length) return { verdict: 'ok', text };
+  const F = ts.TypeFlags;
+  let nullable = text.includes('null');
+  for (const t of seen) {
+    if (t === null) continue;                       // omitted; arity, not type
+    if (t.flags & (F.Null | F.Undefined)) { nullable = true; continue; }
+    if (t.flags & (F.Any | F.Unknown)) continue;    // says nothing either way
+    const p = printType(t);
+    if (!p) continue;                               // unprintable, not a conflict
+    if (p.text !== text && p.text !== text.replace(' | null', '')) return { verdict: 'skip' };
+  }
+  return { verdict: 'ok', text: nullable && !text.includes('null') ? `${text} | null` : text };
+}
+
 const edits = new Map();
 const imports = new Map();
 const push = (file, e) => { const l = edits.get(file) ?? (edits.set(file, []), edits.get(file)); l.push(e); };
 const wantImport = (file, key) => { const s = imports.get(file) ?? (imports.set(file, new Set()), imports.get(file)); s.add(key); };
 
-let nParams = 0;
+let nParams = 0, nSkipped = 0;
 const hist = new Map();
 const REPORT = [];
 
@@ -236,8 +304,11 @@ for (const sf of program.getSourceFiles()) {
     if (!sawUse || !constraints.length) continue;
     const texts = new Set(constraints.map((c) => c.text));
     if (texts.size !== 1) continue;
-    const text = [...texts][0];
+    let text = [...texts][0];
     if (text.includes('any')) continue;
+    const verdict = reconcile(param, text);
+    if (verdict.verdict === 'skip') { nSkipped++; continue; }
+    text = verdict.text;
     // A parameter with a default already narrows itself; only widen, never
     // contradict -- `(n = 0)` annotated `string` is a bug, not an inference.
     if (param.initializer) {
@@ -292,5 +363,5 @@ if (!dry) {
   }
 }
 if (dry && REPORT.length) console.log(REPORT.slice(0, 60).join('\n'));
-console.log(`usage: ${nParams} params across ${files || edits.size} files`);
+console.log(`usage: ${nParams} params across ${files || edits.size} files, ${nSkipped} left alone (callers disagree)`);
 console.log([...hist].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `  ${String(v).padStart(4)}  ${k}`).join('\n'));

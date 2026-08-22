@@ -87,7 +87,7 @@ export const BLOCKADE = {
     ];
   },
 
-  tick(t: any, dt: any, ctx: any) {
+  tick(t: number, dt: any, ctx: any) {
     const s = ctx.stage;
     if (t > 8.0 && t < 15.0) attend(ctx, 'ignis');
     else if (t >= 15.0 && t < 23.0) attend(ctx, 'gladio');

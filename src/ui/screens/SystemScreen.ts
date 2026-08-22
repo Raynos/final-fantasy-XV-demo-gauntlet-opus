@@ -63,7 +63,7 @@ export class SystemScreen {
     const rnd = () => this.game?.rnd;
     const rpg = () => this.game?.get?.('Rpg');
     const story = () => this.game?.get?.('Story');
-    const pct = (v: any) => `${Math.round(v * 100)}%`;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
     void game;
 
     const bus = (id: string, name: string, desc: string) => ({
@@ -107,7 +107,7 @@ export class SystemScreen {
         key: 'sens', name: 'Look Sensitivity', kind: 'slider',
         desc: 'How far the camera swings for a given flick of the mouse or stick.',
         get: () => clamp(((input()?.lookScale ?? 1) - 0.25) / 2.75, 0, 1),
-        set: (v: any) => { if (input()) input().lookScale = 0.25 + v * 2.75; },
+        set: (v: number) => { if (input()) input().lookScale = 0.25 + v * 2.75; },
         value: () => `${(input()?.lookScale ?? 1).toFixed(2)}×`,
         enabled: () => !!input(),
         why: 'No input device bound.',
@@ -198,7 +198,7 @@ export class SystemScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     const n = this.nodes.length;
     if (dy) this.i = (this.i + dy + n) % n;
     if (!dx) return;

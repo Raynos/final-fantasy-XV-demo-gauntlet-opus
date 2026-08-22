@@ -65,7 +65,7 @@ class Shot {
     }
   }
 
-  _track(src: any, end: any) {
+  _track(src: any, end: number) {
     this.nodes.push(src);
     if (end > this.lastEnd) { this.lastEnd = end; this.last = src; }
   }
@@ -151,7 +151,7 @@ class Shot {
   }
 
   /** Two-operator FM — bells, clanks, magic, anything metallic or crystalline. */
-  fm(t: any, o: any) {
+  fm(t: number, o: any) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const dur = o.dur ?? 0.5;
@@ -180,7 +180,7 @@ class Shot {
    * A formant-filtered buzz — the basis of every creature vocalisation. A
    * larynx is a buzzing source and a resonant tube; so is this.
    */
-  vox(t: any, o: any) {
+  vox(t: number, o: any) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const dur = o.dur ?? 0.4;
@@ -351,7 +351,7 @@ export class Sfx {
   /* ------------------------------------------------------------ weapons */
 
   /** Per-class weapon swings. Mass is mostly in the length and the low end. */
-  swing(t: any, o: any = {}) {
+  swing(t: number, o: any = {}) {
     const K = SWING[o.kind as keyof typeof SWING] || SWING.sword;
     const s = new Shot(this, { send: 0.14, ...o }, 'sfx', 2);
     if (!s.ok) return false;
@@ -374,7 +374,7 @@ export class Sfx {
   }
 
   /** Impact, coloured by what was struck. */
-  impact(t: any, o: any = {}) {
+  impact(t: number, o: any = {}) {
     const M = MATERIAL[o.material as keyof typeof MATERIAL] || MATERIAL.flesh;
     const scale = o.scale ?? 1;
     const s = new Shot(this, { send: M.send, ...o }, 'sfx', 3);
@@ -407,7 +407,7 @@ export class Sfx {
   }
 
   /** Firearm: a crack, a body thump and a tail that the space answers. */
-  gunshot(t: any, o = {}) {
+  gunshot(t: number, o = {}) {
     const s = new Shot(this, { send: 0.5, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.035, type: 'highpass', f0: 2600, gain: 1.0, Q: 0.5 });
@@ -421,7 +421,7 @@ export class Sfx {
   /* --------------------------------------------------------------- warp */
 
   /** The wind-up: a sub drop and a rising crystal shimmer. */
-  warpStart(t: any, o = {}) {
+  warpStart(t: number, o = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.30, type: 'bandpass', Q: 1.6, f0: 280, f1: 5200, gain: 0.55, attack: 0.06 });
@@ -436,7 +436,7 @@ export class Sfx {
   }
 
   /** The landing: a hard impact plus shattering crystal. */
-  warpImpact(t: any, o = {}) {
+  warpImpact(t: number, o = {}) {
     const s = new Shot(this, { send: 0.42, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.tone(t, { f0: 210, f1: 38, dur: 0.45, gain: 1.0, type: 'sine', glide: 0.14 });
@@ -453,7 +453,7 @@ export class Sfx {
   }
 
   /** The blade assembling out of blue light. */
-  materialise(t: any, o = {}) {
+  materialise(t: number, o = {}) {
     const s = new Shot(this, { send: 0.32, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     for (let i = 0; i < 4; i++) {
@@ -466,7 +466,7 @@ export class Sfx {
   }
 
   /** Perfect parry: a bright ring, a shimmer and a hole punched in the mix. */
-  parry(t: any, o = {}) {
+  parry(t: number, o = {}) {
     const s = new Shot(this, { send: 0.55, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.05, type: 'highpass', f0: 4200, gain: 0.9 });
@@ -484,7 +484,7 @@ export class Sfx {
   }
 
   /** Armiger: thirteen phantom weapons deciding to exist at once. */
-  armiger(t: any, o = {}) {
+  armiger(t: number, o = {}) {
     const s = new Shot(this, { send: 0.6, volume: 1.1, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     // A rising swell into a crystalline chord.
@@ -503,7 +503,7 @@ export class Sfx {
   }
 
   /** One phantom weapon striking home during the Armiger burst. */
-  armigerHit(t: any, o = {}) {
+  armigerHit(t: number, o = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 1);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.11, type: 'bandpass', f0: 2600, f1: 700, Q: 1.6, gain: 0.5 });
@@ -515,7 +515,7 @@ export class Sfx {
   /* -------------------------------------------------------------- magic */
 
   /** Elemancy. Each element is a different physical process, not a preset. */
-  spell(t: any, o: any = {}) {
+  spell(t: number, o: any = {}) {
     const s = new Shot(this, { send: 0.4, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     const el = o.element || 'fire';
@@ -562,7 +562,7 @@ export class Sfx {
    * sets the contour.
    * @param o {species, mood: 'aggro'|'hurt'|'death'|'idle'}
    */
-  vocal(t: any, o: any = {}) {
+  vocal(t: number, o: any = {}) {
     const V = SPECIES[o.species as keyof typeof SPECIES] || SPECIES.goblin;
     const mood = o.mood || 'aggro';
     const M = V[mood] || V.aggro;
@@ -590,7 +590,7 @@ export class Sfx {
   }
 
   /** The howl that tells you it is past nineteen hundred and you are outside. */
-  daemonHowl(t: any, o = {}) {
+  daemonHowl(t: number, o = {}) {
     const s = new Shot(this, { send: 0.85, volume: 0.55, ...o }, 'amb', 1);
     if (!s.ok) return false;
     const f = 62 + this.rng() * 26;
@@ -610,7 +610,7 @@ export class Sfx {
    * Footstep. Surface names match `Terrain.sampleMaterial().name`.
    * @param o {surface, run, weight}
    */
-  step(t: any, o: any = {}) {
+  step(t: number, o: any = {}) {
     const S = SURFACE[o.surface as keyof typeof SURFACE] || SURFACE.dirt;
     const run = !!o.run;
     const w = (o.weight ?? 1) * (run ? 1.25 : 0.85);
@@ -638,7 +638,7 @@ export class Sfx {
   }
 
   /** Cloth and gear movement — quiet, but its absence is loud. */
-  cloth(t: any, o: any = {}) {
+  cloth(t: number, o: any = {}) {
     const s = new Shot(this, { volume: (o.volume ?? 1) * 0.5, ...o }, 'sfx', 0);
     if (!s.ok) return false;
     s.noise(t, {
@@ -678,7 +678,7 @@ export class Sfx {
   }
 
   /** Enemy poise broken — the sound of something losing its footing. */
-  stagger(t: any, o = {}) {
+  stagger(t: number, o = {}) {
     const s = new Shot(this, { send: 0.35, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.tone(t, { f0: 320, f1: 84, dur: 0.55, gain: 0.55, type: 'triangle', filter: 'lowpass', filterF: 1400 });
@@ -687,7 +687,7 @@ export class Sfx {
   }
 
   /** Party link-strike: an ally arriving. */
-  link(t: any, o = {}) {
+  link(t: number, o = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.22, type: 'bandpass', Q: 1.4, f0: 500, f1: 3400, gain: 0.42, attack: 0.05 });
@@ -696,7 +696,7 @@ export class Sfx {
     return s.done();
   }
 
-  lockon(t: any, o = {}) {
+  lockon(t: number, o = {}) {
     const s = new Shot(this, { volume: 0.7, ...o }, 'ui', 1);
     if (!s.ok) return false;
     s.tone(t, { f0: 1760, dur: 0.06, gain: 0.28, type: 'sine' });
@@ -705,7 +705,7 @@ export class Sfx {
   }
 
   /** Out of MP — the world going quiet and cold for a second. */
-  stasis(t: any, o = {}) {
+  stasis(t: number, o = {}) {
     const s = new Shot(this, { send: 0.4, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.tone(t, { f0: 420, f1: 90, dur: 1.1, gain: 0.35, type: 'triangle', filter: 'lowpass', filterF: 900 });
@@ -715,7 +715,7 @@ export class Sfx {
   }
 
   /** A rising pitch per combo step — the ladder that makes a combo feel long. */
-  comboTick(t: any, o: any = {}) {
+  comboTick(t: number, o: any = {}) {
     const s = new Shot(this, { volume: 0.4, ...o }, 'ui', 0);
     if (!s.ok) return false;
     const step = clamp(o.index ?? 0, 0, 5);
@@ -731,7 +731,7 @@ export class Sfx {
    * darker and longer as it travels.
    * @param o {distance metres}
    */
-  thunder(t: any, o: any = {}) {
+  thunder(t: number, o: any = {}) {
     const d = clamp(o.distance ?? 900, 60, 3400);
     const near = 1 - d / 3400;
     const s = new Shot(this, { send: 0.7, volume: (o.volume ?? 1) * (0.45 + 0.75 * near), ...o }, 'amb', 3);
@@ -758,7 +758,7 @@ export class Sfx {
   }
 
   /** Something entering water. */
-  splash(t: any, o = {}) {
+  splash(t: number, o = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 1);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.25, type: 'bandpass', Q: 0.8, f0: 900, f1: 4200, gain: 0.55, attack: 0.02 });
@@ -774,7 +774,7 @@ export class Sfx {
   /* ----------------------------------------------------------------- UI */
 
   /** Menu and HUD sounds. Restrained and glassy, to match the UI. */
-  ui(t: any, o: any = {}) {
+  ui(t: number, o: any = {}) {
     const kind = o.kind || 'move';
     const s = new Shot(this, { volume: o.volume ?? 1, ...o }, 'ui', 1);
     if (!s.ok) return false;
@@ -808,7 +808,7 @@ export class Sfx {
   }
 
   /** Item pickup: a small ascending glassy triad. */
-  itemPickup(t: any, o = {}) {
+  itemPickup(t: number, o = {}) {
     const s = new Shot(this, { volume: 0.9, ...o }, 'ui', 1);
     if (!s.ok) return false;
     const base = 1046;
@@ -822,7 +822,7 @@ export class Sfx {
    * Level-up. A real flourish: a harp run under a held string chord and a bell,
    * played on the music bus so it sits inside the score rather than on top.
    */
-  levelUp(t: any, o = {}) {
+  levelUp(t: number, o = {}) {
     const inst = this.inst;
     const dest = this.graph.bus.ui;
     const root = 261.6;
@@ -839,7 +839,7 @@ export class Sfx {
   }
 
   /** Quest updated / objective complete — two notes and a shimmer. */
-  questSting(t: any, o = {}) {
+  questSting(t: number, o = {}) {
     const inst = this.inst;
     const dest = this.graph.bus.ui;
     inst.bell(880, t, { dest, gain: 0.34, decay: 1.6, priority: 2 });

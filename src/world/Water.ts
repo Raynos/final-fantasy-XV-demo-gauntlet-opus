@@ -74,15 +74,15 @@ export class Water {
   _buildTextures() {
     const n = this.noise;
     // Two octave sets at different scales so the normals never visibly repeat.
-    const wave = (u: any, v: any, sx: number, sy: number) =>
+    const wave = (u: number, v: number, sx: number, sy: number) =>
       n.fbm2(u * sx, v * sy, 4, 2.1, 0.55) * 0.6 +
       n.fbm2(u * sx * 3.7 + 11, v * sy * 3.7 + 3, 3, 2.3, 0.5) * 0.4;
 
     this.normalA = normalFromHeight(256, (u: any, v: any) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
-    this.normalB = normalFromHeight(256, (u: any, v: any) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
+    this.normalB = normalFromHeight(256, (u: number, v: number) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
 
     // Subtle caustic-ish sub-surface texture for shallow water.
-    this.caustics = makeTexture(256, (u: any, v: any, c: any) => {
+    this.caustics = makeTexture(256, (u: number, v: number, c: any) => {
       const w = n.worley2(u * 7, v * 7);
       const g = Math.pow(1 - Math.min(1, w.f2 - w.f1), 6);
       c[0] = c[1] = c[2] = g;
@@ -375,7 +375,7 @@ export class Water {
   }
 
   /** Height of the water surface, or null if this point isn't over water. */
-  surfaceAt(x: any, z: any) {
+  surfaceAt(x: number, z: number) {
     for (const b of this.bodies) {
       if (Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5) return this.level;
     }

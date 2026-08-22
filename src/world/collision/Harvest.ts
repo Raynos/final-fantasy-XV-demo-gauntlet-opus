@@ -165,8 +165,8 @@ export function objectBox(obj: any, shrink = 0.92): {obj:THREE.Object3D, cx:numb
  */
 export function boxTriangles(b: any, sink: number[]) {
   const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
-  const px = (x: any, z: any) => b.cx + x * c + z * s;
-  const pz = (x: any, z: any) => b.cz - x * s + z * c;
+  const px = (x: number, z: number) => b.cx + x * c + z * s;
+  const pz = (x: number, z: number) => b.cz - x * s + z * c;
   const y0 = b.cy - b.hy, y1 = b.cy + b.hy;
   const corners = [[-b.hx, -b.hz], [b.hx, -b.hz], [b.hx, b.hz], [-b.hx, b.hz]];
   const w = corners.map(([x, z]) => [px(x, z), pz(x, z)]);

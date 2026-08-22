@@ -18,7 +18,7 @@ export interface TextureOpts {
 }
 
 /** Build an RGBA DataTexture from a per-texel callback returning [r,g,b] in 0..1. */
-export function makeTexture(size: any, fn: any, {
+export function makeTexture(size: number, fn: any, {
   colorSpace = THREE.SRGBColorSpace,
   repeat = 1,
   anisotropy = 16,
@@ -60,13 +60,13 @@ export function makeDataMap(size: any, fn: any, opts = {}) {
  * Derive a tangent-space normal map from a height callback using Sobel.
  * `strength` scales the slope; 1 is subtle, 4 is pronounced.
  */
-export function normalFromHeight(size: any, heightFn: any, strength = 2.0, opts = {}) {
+export function normalFromHeight(size: number, heightFn: any, strength = 2.0, opts = {}) {
   const h = new Float32Array(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
   const at = (x: any, y: any) => h[((y + size) % size) * size + ((x + size) % size)];
-  return makeTexture(size, (u: any, v: any, c: any, x: any, y: any) => {
+  return makeTexture(size, (u: any, v: any, c: any, x: number, y: number) => {
     const dx =
       (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) -
       (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
@@ -82,13 +82,13 @@ export function normalFromHeight(size: any, heightFn: any, strength = 2.0, opts 
 }
 
 /** Cheap ambient-occlusion approximation from a height field (cavity map). */
-export function aoFromHeight(size: any, heightFn: any, radius = 4, opts = {}) {
+export function aoFromHeight(size: number, heightFn: any, radius = 4, opts = {}) {
   const h = new Float32Array(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
   const at = (x: any, y: any) => h[((y + size) % size) * size + ((x + size) % size)];
-  return makeDataMap(size, (u: any, v: any, x: any, y: any) => {
+  return makeDataMap(size, (u: any, v: any, x: number, y: number) => {
     const c = at(x, y);
     let occ = 0, n = 0;
     for (let a = 0; a < 8; a++) {
@@ -158,4 +158,4 @@ export function blueNoise(size = 64, seed = 7) {
 function clamp255(v: number) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
 
 /** sRGB hex -> linear THREE.Color, so authored palettes stay perceptual. */
-export function srgb(hex: any) { return new THREE.Color().setHex(hex, THREE.SRGBColorSpace); }
+export function srgb(hex: number) { return new THREE.Color().setHex(hex, THREE.SRGBColorSpace); }

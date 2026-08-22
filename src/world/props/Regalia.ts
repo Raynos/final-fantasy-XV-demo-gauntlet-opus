@@ -60,7 +60,7 @@ const GH0 = 0.175, GH1 = 0.652;    // greenhouse span in u
 const GHW = [[0, 0.50], [0.16, 0.80], [0.35, 0.855], [0.62, 0.855], [0.82, 0.79], [1, 0.52]];
 const GRF = [[0, 1.00], [0.12, 1.36], [0.24, 1.50], [0.56, 1.51], [0.76, 1.41], [0.9, 1.27], [1, 1.12]];
 
-const smooth = (a: number, b: number, x: any) => THREE.MathUtils.smoothstep(x, a, b);
+const smooth = (a: number, b: number, x: number) => THREE.MathUtils.smoothstep(x, a, b);
 
 /**
  * Circular arch cutout profile at a given hull x — 0 outside the opening,

@@ -125,7 +125,7 @@ export function torsoShape(m: number) {
 }
 
 /** Deltoid / biceps / triceps / forearm shaping. */
-export function armShape(m: any, sg: number) {
+export function armShape(m: number, sg: number) {
   // t indices follow armNodes(): 0..0.22 clavicle, 0.22 acromion, 0.67 elbow,
   // 1.0 wrist.
   return (th: any, t: any) => 1
@@ -138,7 +138,7 @@ export function armShape(m: any, sg: number) {
 }
 
 /** Glute tie-in, quad sweep, calf. */
-export function legShape(m: any) {
+export function legShape(m: number) {
   return (th: any, t: any) => 1
     + (0.05 + 0.09 * m) * abump(th, Math.PI, 1.1) * bump(t, 0.14, 0.2)
     + (0.03 + 0.07 * m) * abump(th, 0, 1.0) * bump(t, 0.26, 0.2)
@@ -183,7 +183,7 @@ export function drape(
 }
 
 /** Sweep parameter whose sampled point is closest to height `y`. */
-export function uAtY(nodes: any, y: any) {
+export function uAtY(nodes: any, y: number) {
   const curve = new THREE.CatmullRomCurve3(nodes.map((n: any) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   let best = 0, bd = Infinity;
   for (let i = 0; i <= 200; i++) {

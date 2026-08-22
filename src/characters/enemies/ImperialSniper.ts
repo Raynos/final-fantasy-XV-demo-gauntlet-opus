@@ -257,7 +257,7 @@ class SniperEnemy extends Enemy {
     return out.set(0.0, 0.03, 1.42).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: any) {
+  override pose(state: any, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

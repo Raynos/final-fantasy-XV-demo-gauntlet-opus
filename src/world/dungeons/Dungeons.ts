@@ -380,11 +380,11 @@ export class Dungeons {
     const origH = t!.heightAt.bind(t);
     const origN = t!.normalAt.bind(t);
     const self = this;
-    t!.heightAt = function (x: any, z: any) {
+    t!.heightAt = function (x: number, z: number) {
       const h = self.floorAt(x, z);
       return h != null ? h : origH(x, z);
     };
-    t!.normalAt = function (x: any, z: any, out: any) {
+    t!.normalAt = function (x: number, z: number, out: THREE.Vector3) {
       const h = self.floorAt(x, z);
       if (h != null) return (out || new THREE.Vector3()).set(0, 1, 0);
       return origN(x, z, out);
@@ -517,7 +517,7 @@ export class Dungeons {
     }
   }
 
-  _hazards(dt: any, player: any) {
+  _hazards(dt: number, player: any) {
     const L = this.current.layout;
     const o = this.current.origin;
     const lx = player.position.x - o.x, lz = player.position.z - o.z;

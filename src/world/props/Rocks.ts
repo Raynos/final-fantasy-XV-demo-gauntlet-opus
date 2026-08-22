@@ -164,7 +164,7 @@ function rockGeometry(seed: number, {
   // Vertices past the plane are projected *onto* it, so the cut leaves a
   // genuinely flat facet rather than a dent, and the ring where it meets the
   // old surface becomes a hard arris.
-  const cut = (nx: number, ny: number, nz: number, frac: any) => {
+  const cut = (nx: number, ny: number, nz: number, frac: number) => {
     let hi = -Infinity, lo = Infinity;
     for (let i = 0; i < count; i++) {
       const d = P[i * 3] * nx + P[i * 3 + 1] * ny + P[i * 3 + 2] * nz;

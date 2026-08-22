@@ -158,14 +158,14 @@ export class TaaPass extends Pass {
 
   reset() { this._reset = true; }
 
-  override setSize(w: any, h: any) {
+  override setSize(w: number, h: number) {
     for (const rt of this.history) rt.setSize(w, h);
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.material.uniforms.uResolution.value.set(w, h);
     this._reset = true;
   }
 
-  override render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
     const fx = this.fx;
     const u = this.material.uniforms;
     const dst = 1 - this.ping;

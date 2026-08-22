@@ -204,7 +204,7 @@ export class Field {
     const c = new Float32Array(COARSE * COARSE).fill(1e6);
     const g = this.map.roadGraph;
 
-    const stamp = (x: any, z: any, extra: number) => {
+    const stamp = (x: number, z: number, extra: number) => {
       const R = 520 + extra;
       const i0 = Math.max(0, Math.floor((x - R + HALF) / COARSE_CELL));
       const i1 = Math.min(COARSE - 1, Math.ceil((x + R + HALF) / COARSE_CELL));
@@ -900,7 +900,7 @@ export class Field {
    * @param ph rotation, radians — drawn by the caller, see `_outcrops`
    * @param ecc 0.6-1.0 cross-axis squash
    */
-  _outcrop(cx: any, cz: any, radius: number, height: number, ph: number, ecc: number) {
+  _outcrop(cx: number, cz: number, radius: number, height: number, ph: number, ecc: number) {
     const h = this.h, n = this.n3;
     const R = radius * 2.2;
     const box = this._box(cx, cz, R);
@@ -1061,7 +1061,7 @@ export class Field {
     }
   }
 
-  _spire(cx: any, cz: any, radius: any, height: any) {
+  _spire(cx: number, cz: number, radius: number, height: number) {
     const h = this.h, n = this.n3;
     const R = radius * 3.2;
     const box = this._box(cx, cz, R);
@@ -1165,7 +1165,7 @@ export class Field {
     }
   }
 
-  _box(cx: any, cz: any, R: number) {
+  _box(cx: number, cz: number, R: number) {
     return {
       i0: Math.max(0, Math.floor((cx - R + HALF) / CELL)),
       i1: Math.min(N - 1, Math.ceil((cx + R + HALF) / CELL)),
@@ -1459,7 +1459,7 @@ export class Field {
   // -------------------------------------------------------------- public API
 
   /** Bilinear sample of the near grid (no far-field switch, no micro relief). */
-  rawHeightAt(x: any, z: any) {
+  rawHeightAt(x: number, z: number) {
     const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
     let i0 = Math.floor(fx), j0 = Math.floor(fz);
     const tx = fx - i0, tz = fz - j0;

@@ -255,7 +255,7 @@ export class Terrain {
     return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
   }
 
-  _bracketsZ(pts: any, i: any, z: number) {
+  _bracketsZ(pts: any, i: number, z: number) {
     const a = pts[i].z, b = pts[i + 1].z;
     return z >= Math.min(a, b) && z <= Math.max(a, b);
   }
@@ -431,9 +431,9 @@ export class Terrain {
   update() {}
 }
 
-function ss(a: number, b: number, x: any) {
+function ss(a: number, b: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-function mix(a: any, b: any, t: any) { return a + (b - a) * t; }
+function mix(a: number, b: number, t: number) { return a + (b - a) * t; }

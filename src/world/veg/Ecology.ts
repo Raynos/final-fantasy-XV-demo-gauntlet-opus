@@ -34,7 +34,7 @@ const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
 
 /** Cheap integer hash so tile content is position-derived, not sequence-derived. */
-export function hash3(x: number, y: number, s: any) {
+export function hash3(x: number, y: number, s: number) {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041);
   h = (h ^ (h >>> 13)) >>> 0;
   h = Math.imul(h, 1274126177) >>> 0;
@@ -132,7 +132,7 @@ export class Ecology {
   height(x: any, z: any) { return this.terrain.heightAt(x, z); }
 
   /** Ground normal, computed locally so we never depend on Terrain's out-param. */
-  normal(x: any, z: any, out = _v) {
+  normal(x: number, z: number, out = _v) {
     const e = 0.7, t = this.terrain;
     const hL = t.heightAt(x - e, z), hR = t.heightAt(x + e, z);
     const hD = t.heightAt(x, z - e), hU = t.heightAt(x, z + e);

@@ -137,7 +137,7 @@ export class TitanArena {
    * Keep the party inside the ring, and bleed the quake off. Called from the
    * fight's tick, so no other system has to know the arena exists.
    */
-  update(dt: any) {
+  update(dt: number) {
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 0.9);
     const player = this.game.get('Player');
     if (player) this._contain(player.root.position);

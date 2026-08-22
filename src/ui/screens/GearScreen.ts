@@ -120,7 +120,7 @@ export class GearScreen {
     });
   }
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     if (this.picker) {
       const n = this.picker.rows.length || 1;
       if (dy) this.picker.i = (this.picker.i + dy + n) % n;

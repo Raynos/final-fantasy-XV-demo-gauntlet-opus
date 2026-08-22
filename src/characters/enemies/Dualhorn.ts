@@ -226,7 +226,7 @@ function buildPrototype() {
       from: [0.20 * s, 1.96, 1.34], dir: [0.66 * s, 0.26, 0.70], len: 0.86,
       curve: [-0.22 * s, 0.54, 0.10], r0: 0.115, r1: 0.012, taper: 0.72,
       seg: 9, steps: 9, flat: 0.88,
-      colorAt: (th: any, u: any) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
+      colorAt: (th: any, u: number) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
       matAt: () => M_HORN,
     });
     // ridged sheath at the horn base

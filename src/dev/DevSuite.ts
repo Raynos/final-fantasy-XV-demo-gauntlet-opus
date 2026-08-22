@@ -94,15 +94,15 @@ export class DevSuite {
 
     reg.cvar({
       name: 'cam.speed', category: 'camera', help: 'freecam metres/sec (mouse wheel also)',
-      min: 0.25, max: 4000, get: () => this.cam.speed, set: (v: any) => { this.cam.speed = v; },
+      min: 0.25, max: 4000, get: () => this.cam.speed, set: (v: number) => { this.cam.speed = v; },
     });
     reg.cvar({
       name: 'cam.fov', category: 'camera', help: 'freecam vertical FOV',
-      min: 8, max: 120, get: () => this.cam.fov, set: (v: any) => { this.cam.fov = v; },
+      min: 8, max: 120, get: () => this.cam.fov, set: (v: number) => { this.cam.fov = v; },
     });
     reg.cvar({
       name: 'cam.roll', category: 'camera', help: 'dutch angle, radians',
-      min: -1.5, max: 1.5, get: () => this.cam.roll, set: (v: any) => { this.cam.roll = v; },
+      min: -1.5, max: 1.5, get: () => this.cam.roll, set: (v: number) => { this.cam.roll = v; },
     });
 
     reg.cvar({
@@ -123,7 +123,7 @@ export class DevSuite {
       name: 'sky.time', category: 'world', help: 'time of day, hours 0-24',
       min: 0, max: 24,
       get: () => { const s = game.get('Sky'); return s ? s.hours : 12; },
-      set: (v: any) => { const s = game.get('Sky'); if (s) s.setTimeOfDay(v); },
+      set: (v: number) => { const s = game.get('Sky'); if (s) s.setTimeOfDay(v); },
     });
     reg.cvar({
       name: 'sky.weather', category: 'world', help: 'clear | overcast | storm | fog',
@@ -267,7 +267,7 @@ export class DevSuite {
     });
     reg.cvar({
       name: 'stage.rate', category: 'assets', help: 'turntable radians/sec',
-      min: 0, max: 3, get: () => this.stage.rate, set: (v: any) => { this.stage.rate = v; },
+      min: 0, max: 3, get: () => this.stage.rate, set: (v: number) => { this.stage.rate = v; },
     });
 
     // -------- render debug views
@@ -401,7 +401,7 @@ export class DevSuite {
 
   // ------------------------------------------------------------- per frame
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     const input = game.input;
     const typing = this.console.open || this.inbox.open;
 

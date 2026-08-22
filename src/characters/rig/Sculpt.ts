@@ -55,17 +55,17 @@ export class CBuilder {
   group(g: number) { this._g = g; return this; }
 
   /** Base colour for subsequent vertices. */
-  color(c: any) {
+  color(c: number | THREE.Color) {
     const col = c instanceof THREE.Color ? c : _col.setHex(c, THREE.SRGBColorSpace);
     this._c = [col.r, col.g, col.b];
     return this;
   }
 
   /** Multiply the current colour — cheap value variation within one part. */
-  tint(k: any) { this._c = [this._c[0] * k, this._c[1] * k, this._c[2] * k]; return this; }
+  tint(k: number) { this._c = [this._c[0] * k, this._c[1] * k, this._c[2] * k]; return this; }
 
   /** Emissive radiance added on top of the lit result (eyes, magitek seams). */
-  glow(c: any, strength = 1) {
+  glow(c: number | THREE.Color | null, strength = 1) {
     if (!c) { this._e = [0, 0, 0]; return this; }
     const col = c instanceof THREE.Color ? c : _col.setHex(c, THREE.SRGBColorSpace);
     this._e = [col.r * strength, col.g * strength, col.b * strength];
@@ -93,7 +93,7 @@ export class CBuilder {
   get count() { return this.pos.length / 3; }
 
   /** Darken vertex colours near a point — baked contact occlusion in creases. */
-  occlude(px: any, py: any, pz: any, radius: any, amount: any) {
+  occlude(px: number, py: number, pz: number, radius: number, amount: number) {
     const n = this.count;
     for (let i = 0; i < n; i++) {
       const dx = this.pos[i * 3] - px, dy = this.pos[i * 3 + 1] - py, dz = this.pos[i * 3 + 2] - pz;

@@ -110,7 +110,7 @@ export class Clipmap {
   }
 
   /** Re-centre every ring on the camera. Cheap: only matrices change. */
-  update(camX: any, camZ: any) {
+  update(camX: number, camZ: number) {
     for (const ring of this.rings) {
       const x = Math.round(camX / ring.snap) * ring.snap;
       const z = Math.round(camZ / ring.snap) * ring.snap;

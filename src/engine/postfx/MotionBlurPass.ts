@@ -127,7 +127,7 @@ export class MotionBlurPass extends FilterPass {
    */
   setMoving(moving: boolean) { this._enabled = this._wanted && moving; }
 
-  override setSize(w: any, h: any) {
+  override setSize(w: number, h: number) {
     this.material.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.material.uniforms.uResolution.value.set(w, h);
   }

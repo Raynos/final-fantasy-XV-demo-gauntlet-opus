@@ -332,7 +332,7 @@ function buildPrototype() {
         from: [0, 1.02 + Math.sin(g * Math.PI) * 0.045, z], dir: [0, 0.72, -0.69],
         len: h, curve: [0, -0.015, -0.02], r0: 0.030, r1: 0.003, flat: 0.32,
         seg: 5, steps: 3,
-        colorAt: (th: any, u: any) => mix(CREST, BONE_DARK, u * 0.55), matAt: () => M_SCUTE,
+        colorAt: (th: any, u: number) => mix(CREST, BONE_DARK, u * 0.55), matAt: () => M_SCUTE,
       });
     }
     P.push({ geo: B.build(), bind: ['bone', bone] });
@@ -499,7 +499,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     S('mnR', 0.10 * k, -0.95 * k - twitch, 0.55 * k);
   }
 
-  override poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: number) {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     if (this.attackId === 'tailwhip') {

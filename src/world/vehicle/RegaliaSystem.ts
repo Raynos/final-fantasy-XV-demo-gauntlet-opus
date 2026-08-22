@@ -363,7 +363,7 @@ export class RegaliaSystem {
 
   /* --------------------------------------------------------------- update */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.enabled) return;
     if (this._enterCooldown > 0) this._enterCooldown -= dt;
 
@@ -418,7 +418,7 @@ export class RegaliaSystem {
     this.radio.update(dt);
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     if (!this.enabled) return;
     this._sync(dt);
     if (this.isDriving) {
@@ -545,7 +545,7 @@ export class RegaliaSystem {
   }
 
   /** The chase camera writes the camera last, and only while we are driving. */
-  _driveCameraTick(dt: any, game: any) {
+  _driveCameraTick(dt: number, game: any) {
     const rig = game.get('CameraRig');
     if (rig && rig.shot && !this._stagedShot) return;      // a capture owns the lens
     this.driveCam.update(dt, this.body, game.input ? { lookX: game.input.look.x, lookY: game.input.look.y } : null);

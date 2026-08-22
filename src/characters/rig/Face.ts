@@ -55,7 +55,7 @@ export const EYE = {
  * a real almond: the upper lid peaks slightly nasal of centre, the lower lid
  * troughs slightly temporal of it.
  */
-export function lidMargin(f: any, upper: any, openU: number) {
+export function lidMargin(f: number, upper: any, openU: number) {
   const peak = upper ? 0.44 : 0.60;
   // a cosine lobe skewed toward `peak`, zero at both canthi
   const g = f < peak ? f / peak : (1 - f) / (1 - peak);
@@ -410,7 +410,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
         points: pts, steps: n, sides: 6, uv: eUV,
         width: wid * scale, thick: wid * 0.85 * scale,
         up: [sg, 0, 0],
-        taper: (t: any) => 0.42 + 0.58 * Math.sin(Math.PI * Math.pow(t, 0.9)),
+        taper: (t: number) => 0.42 + 0.58 * Math.sin(Math.PI * Math.pow(t, 0.9)),
       });
     };
     // Helix — front-top, over the crown of the ear, down the back to the lobe.
@@ -488,7 +488,7 @@ function skinSnap(look: any, hw: number): (p:number[]) => number[] {
  * physically cannot lie on the globe and a pure spherical lid always reads too
  * round and too small.
  */
-function eyePoint(ec: any, sg: any, a: any, e: any, rad: number, f: any) {
+function eyePoint(ec: any, sg: number, a: number, e: number, rad: number, f: number) {
   const spread = f === undefined ? 1
     : 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
   const x = Math.sin(a * sg) * Math.cos(e) * rad * spread;
@@ -701,7 +701,7 @@ function buildLashes(B: MeshBuilder, o: any) {
   const col = new THREE.Color().setHex(look.lashColor ?? 0x0d0a0c, THREE.SRGBColorSpace);
   const arc = EYE.arc;
 
-  const pt = (a: any, e: number, rad: number) => new THREE.Vector3(
+  const pt = (a: number, e: number, rad: number) => new THREE.Vector3(
     ec[0] + Math.sin(a * sg) * Math.cos(e) * rad,
     ec[1] + Math.sin(e) * rad * 1.02,
     ec[2] + Math.cos(a) * Math.cos(e) * rad * 0.92
@@ -733,7 +733,7 @@ function buildLashes(B: MeshBuilder, o: any) {
       width: w * scale,
       thick: w * scale * 0.30,
       up: [0, 0, 1],
-      taper: (t: any) => Math.pow(1 - t, 0.55),
+      taper: (t: number) => Math.pow(1 - t, 0.55),
     });
   }
   B.group(0).color(0xffffff).mat(0.5, 0, 0);
@@ -859,7 +859,7 @@ function paintFace(look: any, uv: any) {
     return [u * S, (1 - v) * S];
   };
   // canonical point -> texel, for points authored on the face plane
-  const fx = (x: any, y: any) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
+  const fx = (x: number, y: any) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
   return faceTexture(S, (ctx: any) => {
     ctx.fillStyle = hexOf(skin.clone().multiplyScalar(SKIN_BASE));
@@ -1138,7 +1138,7 @@ function paintFace(look: any, uv: any) {
        * Canonical (x,y) of a point on the eye sphere at fissure fraction `f`,
        * elevation `e`, radius `eR * rk`.
        */
-      const eq = (f: any, e: number, rk = EYE.lidR) => {
+      const eq = (f: number, e: number, rk = EYE.lidR) => {
         const a = lerp(EYE.arc[0], EYE.arc[1], f);
         const spread = 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
         return [

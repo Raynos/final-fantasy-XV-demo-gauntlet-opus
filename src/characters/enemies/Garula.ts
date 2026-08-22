@@ -199,7 +199,7 @@ function buildPrototype() {
     horn(B, {
       from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
       curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
-      colorAt: (th: any, u: any) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+      colorAt: (th: any, u: number) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
         SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
@@ -324,7 +324,7 @@ function buildPrototype() {
       from: [0.30 * s, 1.58, 1.88], dir: [0.52 * s, 0.02, 0.85], len: 1.15,
       curve: [0.10 * s, 1.05, -0.30], r0: 0.115, r1: 0.012, taper: 0.70,
       seg: 8, steps: 9, flat: 0.90,
-      colorAt: (th: any, u: any) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
+      colorAt: (th: any, u: number) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
       matAt: () => M_TUSK,
     });
     // second, smaller tusk inboard of it

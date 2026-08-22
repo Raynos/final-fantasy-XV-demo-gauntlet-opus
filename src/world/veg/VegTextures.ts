@@ -703,7 +703,7 @@ export function barkMaps(tint = 0x6b5642) {
     const hr = 1 + (base.r / bl - 1) * HUE;
     const hg = 1 + (base.g / bl - 1) * HUE;
     const hb = 1 + (base.b / bl - 1) * HUE;
-    const h = (u: any, v: any) => {
+    const h = (u: number, v: number) => {
       const rings = Math.sin(v * 90 + n.fbm2(u * 5, v * 30, 3) * 6) * 0.5 + 0.5;
       const streak = n.fbm2(u * 7, v * 44, 4) * 0.5 + 0.5;
       return rings * 0.35 + streak * 0.65;
@@ -713,7 +713,7 @@ export function barkMaps(tint = 0x6b5642) {
     // target mean, so the ridge contrast survives without clipping to white.
     const KMEAN = 0.925, KCONTRAST = 0.72;
     const toSrgb = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
-    const map = makeTexture(256, (u: any, v: any, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: any) => {
       const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
       const L = BARK_DETAIL_MEAN * k;
       const moss = Math.max(0, n.fbm2(u * 4 + 30, v * 4, 3)) * 0.35;

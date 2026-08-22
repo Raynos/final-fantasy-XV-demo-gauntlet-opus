@@ -452,7 +452,7 @@ export class PostFX {
   setFocusTarget(target: THREE.Object3D | THREE.Vector3 | null) { this.focusTarget = target || null; }
 
   /** Focus at an explicit distance in metres. */
-  setFocusDistance(d: any) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
+  setFocusDistance(d: number) { this.focusTarget = null; this._focusGoal = Math.max(0.2, d); }
 
   /** Snap the focus instead of pulling to it (camera cuts). */
   snapFocus() {
@@ -587,7 +587,7 @@ export class PostFX {
 
   // ----------------------------------------------------------- lifecycle
 
-  setSize(w: any, h: any) {
+  setSize(w: number, h: number) {
     const dpr = this.rnd.renderer.getPixelRatio();
     const dw = Math.max(1, Math.round(w * dpr));
     const dh = Math.max(1, Math.round(h * dpr));
@@ -731,7 +731,7 @@ export class PostFX {
 /**
  * Grade preset pair + blend weight for a 0..24 clock.
  */
-function todGrade(hours: any): [string, string, number] {
+function todGrade(hours: number): [string, string, number] {
   const h = ((hours % 24) + 24) % 24;
   if (h < 4.6) return ['night', 'night', 0];
   if (h < 6.6) return ['night', 'golden', smooth((h - 4.6) / 2.0)];

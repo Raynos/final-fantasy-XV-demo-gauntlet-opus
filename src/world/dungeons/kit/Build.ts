@@ -150,7 +150,7 @@ export class SurfaceBuilder {
     return this;
   }
 
-  _cap(ringStart: number, sides: any, centre: number[], front: boolean, ao: any) {
+  _cap(ringStart: number, sides: number, centre: number[], front: boolean, ao: any) {
     const c = this._push(centre, [0, 1, 0], [0.5, 0.5], ao ? ao(centre[0], centre[1], centre[2]) : 1);
     for (let j = 0; j < sides; j++) {
       const a = ringStart + j;
@@ -210,7 +210,7 @@ export class InteriorMerger {
   }
 
   /** Place a primitive with position / euler / scale and an optional flat tint. */
-  place(mat: any, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
+  place(mat: THREE.Material, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(pos[0], pos[1], pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -263,4 +263,4 @@ export function smoothstep(a: number, b: number, x: number) {
   return t * t * (3 - 2 * t);
 }
 
-export function clamp(x: any, a: number, b: any) { return x < a ? a : x > b ? b : x; }
+export function clamp(x: number, a: number, b: number) { return x < a ? a : x > b ? b : x; }

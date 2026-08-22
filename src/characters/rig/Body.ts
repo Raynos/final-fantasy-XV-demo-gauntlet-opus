@@ -46,7 +46,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
       steps: 30, seg: 46,
       theta0: Math.PI - 1.6, theta1: Math.PI + 1.6,
       shape: (th, t) => tShape(th, u0 + (u1 - u0) * t),
-      colorAt: (th: any, t: any) => _ink.copy(base).multiplyScalar(1 - 0.86 * clamp01(look.tattoo(th, u0 + (u1 - u0) * t))),
+      colorAt: (th: any, t: number) => _ink.copy(base).multiplyScalar(1 - 0.86 * clamp01(look.tattoo(th, u0 + (u1 - u0) * t))),
       uvScale: [1, 1],
     });
     B.color(base);

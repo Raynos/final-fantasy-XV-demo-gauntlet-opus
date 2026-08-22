@@ -173,7 +173,7 @@ export class PartyAI {
     this._sched.push({ t: delay, fn });
   }
 
-  _drain(dt: any) {
+  _drain(dt: number) {
     const s = this._sched;
     for (let i = s.length - 1; i >= 0; i--) {
       s[i].t -= dt;
@@ -344,7 +344,7 @@ export class PartyAI {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.enabled || !this.party || !this.party.members) return;
     if (this.linkCooldown > 0) this.linkCooldown -= dt;
     this._drain(dt);
@@ -497,7 +497,7 @@ export class PartyAI {
       b.uniforms.uIntensity.value = 2.6;
       b.width = 0.035;
       b.setLine(from, to);
-      this.vfx.track(this.vfx.clock, 0.08, (k: any) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
+      this.vfx.track(this.vfx.clock, 0.08, (k: number) => { b.strength = k < 0 || k > 1 ? 0 : (1 - k); });
       this.vfx.flash({ pos: from.clone(), color: 0xffb060, intensity: 14, distance: 4, life: 0.06 });
     }
     this.strike(m, e, { ...p, scale: 0.7 });
@@ -534,12 +534,12 @@ export class PartyAI {
   }
 
   /** Keep the current standoff without chasing while mid-swing. */
-  _holdStation(m: any, e: any, want: any) {
+  _holdStation(m: any, e: any, want: number) {
     this._station(m, e.root.position, want);
   }
 
   /** Override the facing `Party` picked, so they look at what they are hitting. */
-  _face(m: any, at: any, dt: any, k = 6) {
+  _face(m: any, at: any, dt: number, k = 6) {
     const want = Math.atan2(at.x - m.root.position.x, at.z - m.root.position.z);
     let d = want - m.root.rotation.y;
     while (d > Math.PI) d -= Math.PI * 2;

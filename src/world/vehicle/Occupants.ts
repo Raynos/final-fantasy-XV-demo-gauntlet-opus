@@ -286,7 +286,7 @@ export class Occupants {
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */
-  _applyPose(r: any, i: number, leanX: any, leanZ: any, jog: number, ctx: any) {
+  _applyPose(r: any, i: number, leanX: number, leanZ: number, jog: number, ctx: any) {
     const bones = r.char.rig.byName;
     const pose = r.pose;
     const t = this._t + i * 1.7;
@@ -355,4 +355,4 @@ export class Occupants {
   }
 }
 
-function clamp(v: any, a: number, b: number) { return v < a ? a : v > b ? b : v; }
+function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }

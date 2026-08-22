@@ -41,7 +41,7 @@ function corrugated(w: number, h: number, pitch = 0.16, amp = 0.028) {
 }
 
 /** Lumpy stone block, used for rubble, camp rocks and pylon debris. */
-function block(seed: number, w: number, h: any, d: any, rough = 0.16) {
+function block(seed: number, w: number, h: number, d: number, rough = 0.16) {
   const g = new THREE.BoxGeometry(w, h, d, 3, 3, 3);
   const n = new Noise(seed);
   const p = g.attributes.position;
@@ -298,7 +298,7 @@ export class Landmarks {
     B.add(M.wood, new THREE.BoxGeometry(0.64, 0.46, 0.54), mat4([kx - 1.4, top + 0.74, kz - 0.25], [0, 0.35, 0]));
 
     // ------------------------------------------------------------ lanterns
-    const lanternAt = (lx: any, lz: any, poleH: number) => {
+    const lanternAt = (lx: number, lz: number, poleH: number) => {
       if (poleH > 0) {
         B.add(M.steel, new THREE.CylinderGeometry(0.03, 0.04, poleH, 6), mat4([lx, top + poleH / 2, lz]));
         B.add(M.steel, new THREE.BoxGeometry(0.34, 0.03, 0.03), mat4([lx + 0.15, top + poleH, lz]));
@@ -439,7 +439,7 @@ export class Landmarks {
       return m.multiply(mat4(p, r, s));
     };
     const world = mat4([cx, base, cz]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
+    const put = (mat: THREE.Material, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
 
     // stumpy foundation piers
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -496,7 +496,7 @@ export class Landmarks {
     const M = this.mats, eco = this.eco;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, site.yaw || 0, 0.03]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // chassis + flatbed
     put(M.rust, new THREE.BoxGeometry(5.4, 0.22, 2.0), [0, 0.72, 0]);
@@ -537,7 +537,7 @@ export class Landmarks {
     const t = eco.roadTangent(z);
     const yaw = Math.atan2(t.x, t.y) + (side > 0 ? Math.PI : 0);
     const world = mat4([p.x, p.y, p.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pp: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
+    const put = (mat: THREE.Material, geo: any, pp: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
     const kind = z > 0 ? M.signA : M.signB;
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [-0.9, 1.75, 0]);
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [0.9, 1.75, 0]);

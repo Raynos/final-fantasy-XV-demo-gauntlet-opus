@@ -358,7 +358,7 @@ export class Elemancy {
   }
 
   /** Add energy directly (enemy drops, story grants, debug). */
-  addEnergy(element: any, units: any) {
+  addEnergy(element: any, units: number) {
     if (!MAGIC_ELEMENTS.includes(element)) return 0;
     const before = this.energy[element];
     this.energy[element] = Math.min(this.cap, before + Math.max(0, Math.floor(units)));
@@ -423,7 +423,7 @@ export class Elemancy {
   spell(uid: any) { return this.spells.find((s: any) => s.uid === uid) || null; }
 
   /** Put a spell in a quick-cast slot. */
-  equip(slot: any, uid: any) {
+  equip(slot: number, uid: any) {
     if (slot < 0 || slot >= this.slots) return false;
     if (uid !== null && !this.spell(uid)) return false;
     this.equipped[slot] = uid;

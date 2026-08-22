@@ -84,7 +84,7 @@ export const ASTRAL = {
     ];
   },
 
-  tick(t: any, dt: any, ctx: any) {
+  tick(t: number, dt: any, ctx: any) {
     const s = ctx.stage;
     const F = ctx.data.F;
     const far = F.at(150, 18, 30);

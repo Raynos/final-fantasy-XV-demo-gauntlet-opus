@@ -62,11 +62,11 @@ export function clear(node: HTMLElement) { while (node.firstChild) node.removeCh
 /** Toggle a class without touching the rest of the class list. */
 export function cls(node: any, name: any, on: any) { node.classList.toggle(name, !!on); }
 
-export const clamp = (v: any, a: number, b: any) => (v < a ? a : v > b ? b : v);
-export const lerp = (a: any, b: any, t: number) => a + (b - a) * t;
+export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** Frame-rate independent exponential approach. */
-export const damp = (a: any, b: any, lambda: any, dt: any) => lerp(a, b, 1 - Math.exp(-lambda * dt));
-export const smooth = (t: any) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+export const damp = (a: any, b: any, lambda: number, dt: number) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+export const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 export const easeOut = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 export const easeOutQuint = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
 export const easeIn = (t: any) => Math.pow(clamp(t, 0, 1), 3);
@@ -90,13 +90,13 @@ export function rng(seed: number) {
 }
 
 /** 1234567 -> "1,234,567" */
-export function commas(n: any) {
+export function commas(n: number) {
   const v = Math.max(0, Math.round(n));
   return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /** Fractional hours -> "17:42" */
-export function clock(hours: any) {
+export function clock(hours: number) {
   const h = ((hours % 24) + 24) % 24;
   const hh = Math.floor(h);
   const mm = Math.floor((h - hh) * 60);

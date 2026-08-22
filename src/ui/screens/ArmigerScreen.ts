@@ -127,7 +127,7 @@ export class ArmigerScreen {
     }).sort((a: any, b: any) => a.def.ap - b.def.ap);
   }
 
-  nav(dx: any, dy: any) {
+  nav(dx: any, dy: number) {
     const n = (this._rows || []).length || 1;
     if (dy) this.i = (this.i + dy + n) % n;
   }

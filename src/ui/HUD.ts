@@ -101,7 +101,7 @@ export class HUD {
   }
 
   /** Push a line onto the notification column. @param k @param v */
-  toast(k: string, v: string, ico: any, tone: any) { this.toasts.push(k, v, ico, tone); }
+  toast(k: string, v: string, ico: string, tone: string) { this.toasts.push(k, v, ico, tone); }
 
   /** UI is authored at 1600x900; scale it crisply for other viewport sizes. */
   _scale() {

@@ -23,7 +23,7 @@ const ARRIVE = 66;           // scene time at which the car reaches its home spo
 const DUR = 72;
 
 /** Forward distance of the car, in scene-frame metres (negative = further back). */
-const carF = (t: any) => (Math.min(t, ARRIVE) - ARRIVE) * SPEED;
+const carF = (t: number) => (Math.min(t, ARRIVE) - ARRIVE) * SPEED;
 
 /**
  * Where each of the four stands, as [forward-of-car, left-of-centre].
@@ -216,7 +216,7 @@ export const OPENING = {
 /* -------------------------------------------------------------------------- */
 
 /** Drive the car and the four pushers to their positions at scene time `t`. */
-function placeCrew(ctx: any, t: any) {
+function placeCrew(ctx: any, t: number) {
   const { stage, terrain } = ctx;
   const F = ctx.data.F;
   if (!F) return;

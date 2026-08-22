@@ -250,7 +250,7 @@ export class Npcs {
   }
 
   /** Terrain height, floored at the town pad so nobody sinks into the tarmac. */
-  _groundAt(x: any, z: any) {
+  _groundAt(x: number, z: number) {
     const t = this.town;
     const eco = this.eco;
     let y = eco ? eco.height(x, z) : 0;
@@ -293,7 +293,7 @@ export class Npcs {
 
   /* --------------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.list.length) return;
     const player = game.get('Player');
     const p = player ? player.position : null;
@@ -361,7 +361,7 @@ export class Npcs {
   }
 
   /** Walk a route, pausing at each node. */
-  _walk(npc: any, dt: any) {
+  _walk(npc: any, dt: number) {
     const route = npc.route;
     const target = route[npc.leg];
     if (npc.wait > 0) {
@@ -391,7 +391,7 @@ export class Npcs {
    * Written straight onto bone rotations, which is safe because nothing else
    * touches them between here and the render.
    */
-  _applyPosture(npc: any, dt: any, t: any) {
+  _applyPosture(npc: any, dt: any, t: number) {
     const b = npc.body.rig.byName;
     const w = 1 - Math.min(1, npc.moveSpeed / 0.4);
     const pose = npc.posture;
@@ -432,7 +432,7 @@ export class Npcs {
   }
 }
 
-function dampAngle(a: any, b: number, lambda: number, dt: any) {
+function dampAngle(a: number, b: number, lambda: number, dt: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

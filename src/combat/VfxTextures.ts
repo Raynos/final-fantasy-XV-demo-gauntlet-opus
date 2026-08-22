@@ -49,7 +49,7 @@ function tex(name: string, make: any) {
 
 /** Soft round glow — embers, motes, magic light, bloom kernels. */
 export function glowSprite() {
-  return tex('glow', () => rgba(128, (u: any, v: any, o: any) => {
+  return tex('glow', () => rgba(128, (u: number, v: number, o: any) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     const core = Math.pow(Math.max(0, 1 - d), 3.2);
     const halo = Math.pow(Math.max(0, 1 - d), 1.15) * 0.45;
@@ -62,7 +62,7 @@ export function glowSprite() {
 
 /** Hot-cored streak used for velocity-stretched sparks. */
 export function sparkSprite() {
-  return tex('spark', () => rgba(64, (u: any, v: any, o: any) => {
+  return tex('spark', () => rgba(64, (u: number, v: number, o: any) => {
     const x = (u - 0.5) * 2;         // across
     const y = (v - 0.5) * 2;         // along
     const across = Math.pow(Math.max(0, 1 - Math.abs(x)), 2.6);
@@ -78,7 +78,7 @@ export function sparkSprite() {
 
 /** Billowing smoke / dust puff with fbm-broken edges. */
 export function smokeSprite() {
-  return tex('smoke', () => rgba(128, (u: any, v: any, o: any) => {
+  return tex('smoke', () => rgba(128, (u: number, v: number, o: any) => {
     const dx = u - 0.5, dy = v - 0.5;
     const d = Math.hypot(dx, dy) * 2;
     const ang = Math.atan2(dy, dx);
@@ -98,7 +98,7 @@ export function smokeSprite() {
 
 /** Fine grain dust — softer, dimmer, no hard core. */
 export function dustSprite() {
-  return tex('dust', () => rgba(64, (u: any, v: any, o: any) => {
+  return tex('dust', () => rgba(64, (u: number, v: number, o: any) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     const n = vfxNoise.fbm2(u * 7 + 21, v * 7 + 4, 4) * 0.5 + 0.5;
     let a = smoothstep(1.0, 0.05, d) * (0.4 + 0.6 * n);
@@ -109,7 +109,7 @@ export function dustSprite() {
 
 /** Faceted crystal shard silhouette — the warp-strike signature. */
 export function shardSprite() {
-  return tex('shard', () => rgba(64, (u: any, v: any, o: any) => {
+  return tex('shard', () => rgba(64, (u: number, v: number, o: any) => {
     const x = (u - 0.5) * 2, y = (v - 0.5) * 2;
     // elongated diamond
     const d = Math.abs(x) / 0.42 + Math.abs(y) / 1.0;
@@ -124,7 +124,7 @@ export function shardSprite() {
 
 /** Anisotropic lens/impact star — 4 long spikes + 4 short. */
 export function flareSprite() {
-  return tex('flare', () => rgba(256, (u: any, v: any, o: any) => {
+  return tex('flare', () => rgba(256, (u: number, v: number, o: any) => {
     const x = (u - 0.5) * 2, y = (v - 0.5) * 2;
     const d = Math.hypot(x, y);
     const core = Math.pow(Math.max(0, 1 - d), 7.0);
@@ -143,7 +143,7 @@ export function flareSprite() {
 
 /** Expanding shockwave ring gradient (radius along V). */
 export function ringSprite() {
-  return tex('ring', () => rgba(256, (u: any, v: any, o: any) => {
+  return tex('ring', () => rgba(256, (u: number, v: number, o: any) => {
     const dx = u - 0.5, dy = v - 0.5;
     const d = Math.hypot(dx, dy) * 2;
     const ang = Math.atan2(dy, dx);
@@ -170,7 +170,7 @@ export function ringSprite() {
 export function turbulence() {
   return tex('turb', () => {
     const size = 128;
-    return rgba(size, (u: any, v: any, o: any) => {
+    return rgba(size, (u: number, v: number, o: any) => {
       // tileable fbm via 4D-ish trick: sample on a torus
       let sum = 0, amp = 1, norm = 0, f = 1;
       for (let i = 0; i < 5; i++) {
@@ -188,7 +188,7 @@ export function turbulence() {
 
 /** Ground scorch decal — charred centre, ashy rim, irregular edge. */
 export function scorchDecal() {
-  return tex('scorch', () => rgba(256, (u: any, v: any, o: any) => {
+  return tex('scorch', () => rgba(256, (u: number, v: number, o: any) => {
     const dx = u - 0.5, dy = v - 0.5;
     const d = Math.hypot(dx, dy) * 2;
     const ang = Math.atan2(dy, dx);
@@ -235,7 +235,7 @@ export function crackDecal() {
         }
       }
     }
-    return rgba(size, (u: any, v: any, o: any, x: any, y: any) => {
+    return rgba(size, (u: number, v: number, o: any, x: number, y: number) => {
       const d = Math.hypot(u - 0.5, v - 0.5) * 2;
       const c = Math.min(1, w[y * size + x]) * smoothstep(1.05, 0.25, d);
       o[0] = 0.05; o[1] = 0.045; o[2] = 0.05;
@@ -257,7 +257,7 @@ function stamp(buf: Float32Array, size: number, x: number, y: number, r: number,
 
 /** Frosted ice patch decal. */
 export function frostDecal() {
-  return tex('frost', () => rgba(256, (u: any, v: any, o: any) => {
+  return tex('frost', () => rgba(256, (u: number, v: number, o: any) => {
     const dx = u - 0.5, dy = v - 0.5;
     const d = Math.hypot(dx, dy) * 2;
     const ang = Math.atan2(dy, dx);
@@ -273,7 +273,7 @@ export function frostDecal() {
 
 /** Soft elliptical blob used for contact shadows / blood pools. */
 export function blobDecal() {
-  return tex('blob', () => rgba(64, (u: any, v: any, o: any) => {
+  return tex('blob', () => rgba(64, (u: number, v: number, o: any) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     o[0] = o[1] = o[2] = 0.0;
     o[3] = Math.pow(Math.max(0, 1 - d), 2.0);

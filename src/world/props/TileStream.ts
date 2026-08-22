@@ -49,7 +49,7 @@ export class TileStream {
     this._pendCx = 0; this._pendCz = 0;
   }
 
-  static key(cx: any, cz: any) { return ((cx & 0x3fff) << 15) | (cz & 0x3fff) | 0x40000000; }
+  static key(cx: number, cz: number) { return ((cx & 0x3fff) << 15) | (cz & 0x3fff) | 0x40000000; }
 
   /**
    * Bring the window to `camPos`. Cheap when the camera has not crossed a

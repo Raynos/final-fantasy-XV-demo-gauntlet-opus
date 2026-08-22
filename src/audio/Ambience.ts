@@ -209,7 +209,7 @@ export class Ambience {
   }
 
   /** 0 = outdoors, 1 = fully enclosed. Muffles wind and rain. */
-  setIndoors(v: any, at: any = null) {
+  setIndoors(v: any, at: number | null = null) {
     this.indoors = clamp(v, 0, 1);
     this.setWind(this.wind, at);
     this.setRain(this.rain, at);

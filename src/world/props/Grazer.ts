@@ -92,7 +92,7 @@ export function walkCycle(t: number, phase: number, rate: number): {u:number, s:
  * every few vertices and actually shows; a world-space noise lands between
  * vertices and averages back out to a flat wash.
  */
-function fur(th: any, u: any) {
+function fur(th: number, u: number) {
   return 0.5 + 0.5 * Math.sin(th * 5.0 + u * 9.0) * Math.sin(th * 11.0 - u * 27.0);
 }
 
@@ -244,7 +244,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
     return mix(mix(HIDE, HIDE_DARK, smooth(0.30, 0.95, u) * 0.75).getHex(THREE.SRGBColorSpace),
       SHAG_DARK, feather * 0.45 * (0.6 + fur(th, u) * 0.4));
   };
-  const legShape = (th: any, u: any) => {
+  const legShape = (th: number, u: number) => {
     const back = -Math.cos(th);
     return 1 + Math.max(0, back) * 0.26 * Math.exp(-Math.pow((u - 0.14) / 0.20, 2))
       + Math.max(0, back) * 0.10 * Math.exp(-Math.pow((u - 0.46) / 0.12, 2));

@@ -166,7 +166,7 @@ export class AssetBrowser {
 
   // ------------------------------------------------------------- factories
 
-  _enemy(key: any, at: any) {
+  _enemy(key: string, at: any) {
     const enemies = this.game.get('Enemies');
     const e = enemies!.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
     enemies!.frozen = true;
@@ -175,14 +175,14 @@ export class AssetBrowser {
     return { kind: 'enemy', enemy: e, object: e.root, pivot: e.root.position.clone().setY(e.root.position.y + pivotY) };
   }
 
-  _hero(key: any, at: any) {
+  _hero(key: string, at: any) {
     const c = makeCharacter(key);
     c.root.position.copy(at);
     this._char = c;
     return { kind: 'hero', character: c, object: c.root, pivot: at.clone().setY(at.y + c.height * 0.55) };
   }
 
-  _npc(key: any, at: any) {
+  _npc(key: string, at: any) {
     const arch = archetype(key, NPC_CAST[key as keyof typeof NPC_CAST]);
     const body = new NpcBody(arch, 7);
     body.root.position.copy(at);
@@ -190,7 +190,7 @@ export class AssetBrowser {
     return { kind: 'npc', body, object: body.root, pivot: at.clone().setY(at.y + (body.height || 1.75) * 0.55) };
   }
 
-  _weapon(key: any, at: any) {
+  _weapon(key: string, at: any) {
     const w = new Weapon(key);
     w.setReveal(1);
     w.root.position.copy(at).setY(at.y + 1.1);
@@ -213,7 +213,7 @@ export class AssetBrowser {
 
   // ------------------------------------------------------------- per frame
 
-  update(dt: any) {
+  update(dt: number) {
     if (!this.open) return;
     const m = this._made;
     if (!m) return;

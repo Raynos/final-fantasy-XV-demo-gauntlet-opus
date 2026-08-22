@@ -226,7 +226,7 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /** Tail bones as a lagging travelling wave. */
-  tail(t: any, base: any, amp: number, freq: number, curl = 0) {
+  tail(t: number, base: number, amp: number, freq: number, curl = 0) {
     const names = this.A.tails;
     if (!names) return;
     for (let i = 0; i < names.length; i++) {
@@ -409,7 +409,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.position.x += A.bodyY * Math.sin(th) * 0.5;
   }
 
-  poseIdle(S: any, t: any) {
+  poseIdle(S: any, t: number) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.5)) * 0.03 + Math.sin(t * 0.61) * 0.012;
     this.spine(S, br, Math.sin(t * 0.31) * 0.06, Math.sin(t * 0.4) * 0.012);

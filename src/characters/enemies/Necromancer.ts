@@ -269,7 +269,7 @@ class NecromancerEnemy extends Enemy {
    * Drift the hem tatters. `sweep` leans them all one way (drag as it moves),
    * `life` is how much they writhe on their own.
    */
-  _trail(t: any, sweep: number, life: number) {
+  _trail(t: number, sweep: number, life: number) {
     const rig = this.rig;
     for (let i = 0; i < SHREDS; i++) {
       const ph = t * 1.35 + i * 0.83;
@@ -280,7 +280,7 @@ class NecromancerEnemy extends Enemy {
     }
   }
 
-  override pose(state: any, t: any) {
+  override pose(state: any, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

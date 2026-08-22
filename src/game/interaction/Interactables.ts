@@ -132,7 +132,7 @@ export class InteractionSystem {
     return true;
   }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const player = game.get('Player');
     const menus = game.get('Menus');
     const menuOpen = !!(menus && menus.name);

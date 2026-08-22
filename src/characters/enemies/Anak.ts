@@ -263,7 +263,7 @@ class AnakEnemy extends Enemy {
   override visual!: any;
   constructor(opts: any) { super(ANAK, opts); }
 
-  override pose(state: any, t: any) {
+  override pose(state: any, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

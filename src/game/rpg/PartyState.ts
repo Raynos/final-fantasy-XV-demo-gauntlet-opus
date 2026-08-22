@@ -13,6 +13,7 @@
 import { Stats, emptyMods, addMods } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Ascension } from './Ascension.ts';
+import type { Inventory } from './Inventory.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Roster                                                                    */
@@ -90,7 +91,7 @@ export const BOND_LEVELS: BondLevel[] = [
 ];
 
 /** Bond level object for a raw affinity value. */
-export function bondFor(affinity: any) {
+export function bondFor(affinity: number) {
   let out = BOND_LEVELS[0];
   for (const b of BOND_LEVELS) if (affinity >= b.at) out = b;
   return out;
@@ -419,7 +420,7 @@ export class PartyState {
   }
 
   /** Every recipe Ignis could cook right now with the bag as it stands. */
-  cookableNow(inventory: any) {
+  cookableNow(inventory: Inventory) {
     return this.cookbook.filter((r) => this.canCook(r.id, inventory).ok);
   }
 

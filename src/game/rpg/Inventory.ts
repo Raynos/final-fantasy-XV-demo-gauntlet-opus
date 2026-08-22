@@ -413,7 +413,7 @@ export class Inventory {
 
   /* -- Gil --------------------------------------------------------------- */
 
-  addGil(n: any, source = 'reward') {
+  addGil(n: number, source = 'reward') {
     this.gil = Math.max(0, this.gil + Math.round(n));
     this.emitter?.emit('gil-changed', { gil: this.gil, delta: Math.round(n), source });
     return this.gil;
@@ -587,7 +587,7 @@ export class Inventory {
   /**
    * Sell items.
    */
-  sell(id: any, n = 1): {ok:boolean, reason?:string, gil?:number} {
+  sell(id: string, n = 1): {ok:boolean, reason?:string, gil?:number} {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.sell <= 0 || def.category === 'key') return { ok: false, reason: 'not-sellable' };

@@ -346,7 +346,7 @@ export class BloomPass extends Pass {
     this.compositeMat.uniforms.uAspect.value = w / h;
   }
 
-  override render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
     const u = this.prefilterMat.uniforms;
     // the threshold is authored post-exposure; convert it into the scene-linear
     // units this buffer is actually in (see the field comment)

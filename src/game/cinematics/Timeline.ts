@@ -39,7 +39,7 @@ export class Timeline {
     this.ctx = ctx;
     this.t = 0;
     this.duration = def.duration ?? 0;
-    this.shots = (def.shots || []).map((s: any, i: any) => new Shot({ seed: 7717 + i * 977, ...s }));
+    this.shots = (def.shots || []).map((s: any, i: number) => new Shot({ seed: 7717 + i * 977, ...s }));
     this.cues = (def.cues || []).slice().sort((a: any, b: any) => a.t - b.t)
       .map((c: any) => ({ ...c, fired: false }));
     if (!this.duration) {

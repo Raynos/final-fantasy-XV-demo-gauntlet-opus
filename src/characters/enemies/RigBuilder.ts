@@ -260,7 +260,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
 /** Set a bone's local rotation as an offset from its bind pose. */
-export function poseBone(rig: any, name: any, x: any, y: any, z: any, order: THREE.EulerOrder = 'XYZ') {
+export function poseBone(rig: any, name: any, x: number, y: number, z: number, order: THREE.EulerOrder = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);

@@ -430,7 +430,7 @@ export class RoadGraph {
   }
 
   /** Metres to the nearest road centreline (saturating at `maxR`). */
-  distance(x: any, z: any, maxR = 400) {
+  distance(x: number, z: number, maxR = 400) {
     const n = this.nearest(x, z, maxR);
     return n ? n.dist : maxR;
   }
@@ -441,7 +441,7 @@ export class RoadGraph {
    * Shortest drivable path between two world points, snapping each end to the
    * nearest road. Dijkstra over the node graph plus the two partial edges.
    */
-  route(ax: any, az: any, bx: number, bz: number): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
+  route(ax: number, az: number, bx: number, bz: number): {length:number, seconds:number, pts:Array<{x:number,z:number}>} | null {
     const A = this.nearest(ax, az, 1200), B = this.nearest(bx, bz, 1200);
     if (!A || !B) return null;
     if (A.edge === B.edge) {
@@ -509,7 +509,7 @@ export class RoadGraph {
     return { length, seconds: bestCost, pts };
   }
 
-  _slice(edge: any, s0: any, s1: any) {
+  _slice(edge: any, s0: number, s1: number) {
     const out = [];
     const fwd = s1 >= s0;
     const lo = Math.min(s0, s1), hi = Math.max(s0, s1);

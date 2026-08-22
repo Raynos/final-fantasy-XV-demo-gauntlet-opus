@@ -123,7 +123,7 @@ export const HAMMERHEAD = {
     ];
   },
 
-  tick(t: any, dt: any, ctx: any) {
+  tick(t: number, dt: any, ctx: any) {
     // Heads turn to whoever is speaking. Nothing sells a conversation like
     // three people looking at the fourth a beat before he talks.
     const s = ctx.stage;

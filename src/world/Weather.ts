@@ -177,7 +177,7 @@ export class Weather {
 
   // ----------------------------------------------------------------- update
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     // A named shot is a cut to a different world state, not a front rolling
     // in: snap so a capture never lands mid-transition. Sky does the same.
     if (game.currentShot !== this._shotSeen) {

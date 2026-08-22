@@ -102,7 +102,7 @@ export const LONGWYTHE = {
     ];
   },
 
-  tick(t: any, dt: any, ctx: any) {
+  tick(t: number, dt: any, ctx: any) {
     const s = ctx.stage;
     const peak = ctx.data.peak;
     if (t < 7.0) {

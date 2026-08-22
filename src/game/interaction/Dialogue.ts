@@ -211,7 +211,7 @@ export class Dialogue {
     this.end();
   }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const target = this.active ? 1 : 0;
     const rate = dt / 0.22;
     this.a = clamp(this.a + (target > this.a ? rate : -rate * 1.6), 0, 1);

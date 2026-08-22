@@ -74,7 +74,7 @@ export class RoadPath {
   }
 
   /** Centreline point at arc length `s`, linearly interpolated. */
-  _atS(s: any, out = new THREE.Vector3()) {
+  _atS(s: number, out = new THREE.Vector3()) {
     const p = this.pts;
     if (!p.length) return out.copy(this.origin);
     if (s <= p[0].s) return out.set(p[0].x, 0, p[0].z);
@@ -85,7 +85,7 @@ export class RoadPath {
     return out.set(p[lo].x + (p[hi].x - p[lo].x) * k, 0, p[lo].z + (p[hi].z - p[lo].z) * k);
   }
 
-  _tangentAtS(s: any, out = new THREE.Vector3()) {
+  _tangentAtS(s: number, out = new THREE.Vector3()) {
     const p = this.pts;
     if (p.length < 2) return out.set(0, 0, 1);
     let lo = 0, hi = p.length - 1;
@@ -99,7 +99,7 @@ export class RoadPath {
   }
 
   /** Unit tangent `f` metres along the path, already signed toward the goal. */
-  tangent(f: any, out = this._t) {
+  tangent(f: number, out = this._t) {
     this._tangentAtS(this.s0 + f * this.sign, out);
     if (this.sign < 0) out.negate();
     return out;
@@ -113,7 +113,7 @@ export class RoadPath {
    * it (lane offset included), `u` metres above the origin plane.
    * @returns `[x, y, z]`
    */
-  at(f: any, l = 0, u = 0): number[] {
+  at(f: number, l = 0, u = 0): number[] {
     const c = this._atS(this.s0 + f * this.sign, this._v);
     const t = this.tangent(f, this._t);
     const lx = t.z, lz = -t.x;

@@ -204,7 +204,7 @@ export class Layout {
   // ------------------------------------------------------------------ query
 
   /** Room or corridor containing a point, or null. Rooms win over corridors. */
-  regionAt(x: any, z: any) {
+  regionAt(x: number, z: number) {
     for (const r of this.rooms.values()) {
       if (Math.abs(x - r.x) <= r.w * 0.5 && Math.abs(z - r.z) <= r.d * 0.5) return r;
     }
@@ -277,7 +277,7 @@ export class Layout {
    * Vertex occlusion at a point: 1 fully open, ~0.25 in a corner. The shell
    * builder bakes this into the colour attribute.
    */
-  occlusion(x: any, y: any, z: any): number {
+  occlusion(x: number, y: number, z: number): number {
     const r = this.regionAt(x, z);
     if (!r) return 0.55;
     let wall;
@@ -387,7 +387,7 @@ export function distToPath(path: any, x: any, z: any) {
   return best;
 }
 
-function distToSeg(a: any, b: any, x: any, z: any) {
+function distToSeg(a: any, b: any, x: number, z: number) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   const len2 = dx * dx + dz * dz || 1e-6;
   let t = ((x - a[0]) * dx + (z - a[1]) * dz) / len2;
@@ -408,7 +408,7 @@ function corridorFloor(c: any, x: any, z: any) {
   return best != null ? best : c.path[0][2];
 }
 
-function roomFloor(r: any, x: any, z: any) {
+function roomFloor(r: any, x: number, z: number) {
   for (const p of r.platforms) {
     if (Math.abs(x - p.x) <= p.w * 0.5 && Math.abs(z - p.z) <= p.d * 0.5) return p.y;
   }
@@ -428,7 +428,7 @@ function pushIn(r: any, x: number, z: number, margin: number) {
   return nearestOnCorridor(r, x, z, margin);
 }
 
-function nearestInRect(cx: any, cz: any, w: any, d: any, x: number, z: number, margin: number) {
+function nearestInRect(cx: number, cz: number, w: number, d: number, x: number, z: number, margin: number) {
   const hx = Math.max(0.2, w * 0.5 - margin), hz = Math.max(0.2, d * 0.5 - margin);
   return [clamp(x, cx - hx, cx + hx), clamp(z, cz - hz, cz + hz)];
 }

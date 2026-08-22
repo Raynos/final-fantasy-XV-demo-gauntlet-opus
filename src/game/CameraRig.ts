@@ -177,7 +177,7 @@ export class CameraRig {
   setLockOn(target: any) { this.lockOn = target || null; }
 
   /** Nudge the orbit directly (used by cutscenes / auto-follow). */
-  setOrbit(yaw: any, pitch: any) {
+  setOrbit(yaw: number, pitch: number) {
     this.yawTarget = yaw;
     this.pitchTarget = THREE.MathUtils.clamp(pitch, this.pitchMin, this.pitchMax);
   }
@@ -260,7 +260,7 @@ export class CameraRig {
 
   // ------------------------------------------------------------- main tick
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     this._t += dt;
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
 

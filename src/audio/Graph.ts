@@ -44,6 +44,9 @@ export const BUSES = ['music', 'sfx', 'amb', 'ui', 'voice'];
  */
 const BUS_TRIM = { music: 0.13, sfx: 0.32, amb: 0.20, ui: 0.24, voice: 0.55 };
 
+/** The four acoustic spaces the short reverb is tuned for. */
+export type AcousticSpace = 'outdoor' | 'canyon' | 'interior' | 'cave';
+
 export class AudioGraph {
   _duckDepth!: number;
   _duckUntil!: number;
@@ -273,7 +276,7 @@ export class AudioGraph {
   /**
    * Cross-fade the short reverb to a different room.
    */
-  setSpace(name: 'outdoor' | 'canyon' | 'interior' | 'cave') {
+  setSpace(name: AcousticSpace) {
     if (!SPACES[name] || name === this.space) return;
     this.space = name;
     const ctx = this.ctx;

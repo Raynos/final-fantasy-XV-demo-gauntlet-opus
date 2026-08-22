@@ -349,7 +349,7 @@ export class RoadNetwork {
       width: g.classes.highway.half,
       shoulder: g.classes.highway.shoulder,
       /** Point on the highway centreline at arc-length `s` metres. */
-      pointAt(s: any) {
+      pointAt(s: number) {
         if (!pts.length) return { x: 0, y: 0, z: 0, tx: 0, tz: 1 };
         const t = Math.max(0, Math.min(this.length, s));
         let lo = 0, hi = pts.length - 1;
@@ -370,7 +370,7 @@ export class RoadNetwork {
   }
 }
 
-function smoothstep(a: any, b: any, x: number) {
+function smoothstep(a: number, b: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }

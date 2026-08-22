@@ -141,7 +141,7 @@ export class Outposts {
   }
 
   /** Lowest ground under a footprint, so slabs never float on one corner. */
-  _base(x: any, z: any, r: number) {
+  _base(x: number, z: number, r: number) {
     let base = this.eco.height(x, z);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;

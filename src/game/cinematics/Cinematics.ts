@@ -216,7 +216,7 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.playing) { this.box.update(dt, false); return; }
     // `hud.setVisible(false)` only stands the *field* HUD down; the combat
     // layer follows combat state on its own, so a scene that spawns enemies as
@@ -231,7 +231,7 @@ export class Cinematics {
   }
 
   /** One timeline step. `sceneDt` drives cues, `worldDt` drives the actors. */
-  _advance(sceneDt: any, worldDt: any) {
+  _advance(sceneDt: number, worldDt: number) {
     const def = this.scene;
     const ctx = this.ctx;
 
@@ -325,7 +325,7 @@ export class Cinematics {
   }
 
   /** `focus: 'noctis'` etc. — pull focus onto a staged actor's eyes. */
-  _resolveFocus(name: any) {
+  _resolveFocus(name: string) {
     const a = this.stage.actor(name);
     if (a) return this.stage.eyeOf(name, this._v);
     return this._cam.target;

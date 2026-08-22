@@ -218,7 +218,7 @@ export class VehicleBody {
   }
 
   /** Place the car, at rest, facing `heading`. */
-  reset(x: any, z: any, heading: number) {
+  reset(x: number, z: number, heading: number) {
     this.pos.set(x, 0, z);
     this.heading = heading;
     this.yawRate = 0;
@@ -565,7 +565,7 @@ export class VehicleBody {
   get kmh() { return this.speed * 3.6; }
 }
 
-function clamp(v: any, a: number, b: number) { return v < a ? a : v > b ? b : v; }
-function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
-function lerp(a: number, b: number, t: any) { return a + (b - a) * t; }
-function damp(a: any, b: any, lambda: number, dt: number) { return b + (a - b) * Math.exp(-lambda * dt); }
+function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }
+function clamp01(v: number) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+function damp(a: number, b: number, lambda: number, dt: number) { return b + (a - b) * Math.exp(-lambda * dt); }

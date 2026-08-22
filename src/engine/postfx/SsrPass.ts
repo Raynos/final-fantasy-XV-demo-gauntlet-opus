@@ -113,7 +113,7 @@ export class SsrPass extends FilterPass {
     });
   }
 
-  override setSize(w: any, h: any) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
+  override setSize(w: number, h: number) { this.material.uniforms.uTexel.value.set(1 / w, 1 / h); }
 
   override beforeRender() {
     const fx = this.fx, u = this.material.uniforms;

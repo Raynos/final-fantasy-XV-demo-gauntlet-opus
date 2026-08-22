@@ -121,7 +121,7 @@ export class ShopScreen {
   }
 
   /** Pick which counter this is. Call before `Menus.setScreen('shop')`. */
-  setShop(id: any) {
+  setShop(id: string) {
     if (!TOWN_SHOPS[id as keyof typeof TOWN_SHOPS]) return;
     this.shopId = id;
     this.tab = 0;
@@ -233,7 +233,7 @@ export class ShopScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) {

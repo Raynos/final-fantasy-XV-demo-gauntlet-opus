@@ -111,7 +111,7 @@ export class PhotoScreen {
     root.appendChild(this.dials);
   }
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     if (dy) this.filter = (this.filter + dy + FILTERS.length) % FILTERS.length;
     if (dx) this.aperture = clamp(Math.round((this.aperture + dx * 0.4) * 10) / 10, 1.2, 16);
   }

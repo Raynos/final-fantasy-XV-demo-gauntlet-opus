@@ -56,7 +56,7 @@ export class Instruments {
    * Common tail of every voice: attach the chain to its destination (through a
    * panner when the sound has a place in the world) and schedule the teardown.
    */
-  _finish(node: GainNode, o: any, src: any, nodes: any, extraGain: number, handle: any, end: any) {
+  _finish(node: GainNode, o: any, src: any, nodes: any, extraGain: number, handle: any, end: number) {
     const g = this.ctx.createGain();
     g.gain.value = (o.gain ?? 1) * (extraGain ?? 1);
     node.connect(g);
@@ -401,7 +401,7 @@ export class Instruments {
   /**
    * Play a plucked/struck string.
    */
-  pluck(kind: 'harp' | 'pizz' | 'piano', f: any, t: any, o: any = {}) {
+  pluck(kind: 'harp' | 'pizz' | 'piano', f: number, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -429,7 +429,7 @@ export class Instruments {
   }
 
   /** Harp glissando / arpeggio helper: one call, n notes. */
-  arp(freqs: any, t: any, step: any, o: any = {}) {
+  arp(freqs: any, t: number, step: number, o: any = {}) {
     for (let i = 0; i < freqs.length; i++) {
       this.pluck(o.kind || 'harp', freqs[i], t + i * step, {
         ...o, gain: (o.gain ?? 1) * (1 - i * 0.03),

@@ -136,7 +136,7 @@ export class Minimap {
 
   // ------------------------------------------------------------------ frame
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     if (!this.ctx || !this.chart) return;
     const player = game.get('Player');
     const px = player?.position?.x ?? game.camera.position.x;
@@ -188,15 +188,15 @@ export class Minimap {
     this.scaleEl.textContent = `${this.range} M`;
   }
 
-  _draw(game: any, px: any, pz: any) {
+  _draw(game: any, px: number, pz: number) {
     const c = this.ctx, dpr = this.dpr, S = SIZE * dpr;
     const t = game.time.now;
     const R = S / 2;
     const ppm = (S / 2) / this.range;           // canvas px per world metre
     const ca = Math.cos(-this._heading), sa = Math.sin(-this._heading);
     /** world -> disc-local px, with the chart rotation applied */
-    const lx = (x: any, z: any) => (x - px) * ca * ppm - (z - pz) * sa * ppm;
-    const ly = (x: any, z: any) => (x - px) * sa * ppm + (z - pz) * ca * ppm;
+    const lx = (x: number, z: number) => (x - px) * ca * ppm - (z - pz) * sa * ppm;
+    const ly = (x: number, z: number) => (x - px) * sa * ppm + (z - pz) * ca * ppm;
 
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, S, S);

@@ -232,7 +232,7 @@ export class DofPass extends Pass {
     this.composite.uniforms.uTexel.value.set(1 / hw, 1 / hh);
   }
 
-  override render(renderer: any, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
     const fx = this.fx;
     const cam = fx.rnd.camera;
     // vertical FOV -> focal length on a full-frame sensor

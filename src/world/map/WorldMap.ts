@@ -804,7 +804,7 @@ export class WorldMap {
    * "frontier" weight. The hot inner loop; no allocation.
    * @returns weight of the generic highland fallback
    */
-  _weigh(x: any, z: any): number {
+  _weigh(x: number, z: number): number {
     const zc = this._zc, w = this._wBuf, nz = this._nz;
     let sum = 0;
     for (let i = 0; i < nz; i++) {
@@ -857,7 +857,7 @@ export class WorldMap {
    * The zone whose influence is strongest here.
    * @returns the zone record, or null on the frontier
    */
-  zoneAt(x: any, z: any): any | null {
+  zoneAt(x: number, z: number): any | null {
     let best: any = null, bestW = 0.0001;
     for (let i = 0; i < ZONES.length; i++) {
       const zn = ZONES[i];
@@ -946,7 +946,7 @@ export class WorldMap {
    * per second or so from whatever tracks the player.
    * @returns POIs newly discovered this call
    */
-  discoverAround(x: any, z: any): any[] {
+  discoverAround(x: number, z: number): any[] {
     const found = [];
     for (const p of POIS) {
       if (this.discovered.has(p.id)) continue;
@@ -965,7 +965,7 @@ export class WorldMap {
    * @returns road distance for
    *   `drive`/`chocobo`, straight line for the rest.
    */
-  travel(ax: any, az: any, bx: number, bz: number, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
+  travel(ax: number, az: number, bx: number, bz: number, mode: 'walk' | 'sprint' | 'chocobo' | 'drive' = 'drive'): {dist:number, seconds:number, mode:string} {
     const SPEED = { walk: 2.4, sprint: 5.6, chocobo: 11.0, drive: 26.0 };
     const v = SPEED[mode] || SPEED.walk;
     let dist;

@@ -140,7 +140,7 @@ export class InventoryScreen {
     if (this.menus.name === 'inventory') this.menus.headS.textContent = sub;
   }
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     if (dy && this.rows.length) this.i = (this.i + dy + this.rows.length) % this.rows.length;
     if (dx) { this.tab = (this.tab + dx + ITEM_TABS.length) % ITEM_TABS.length; this.i = 0; this._key = null; }
   }

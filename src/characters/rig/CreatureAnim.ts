@@ -74,7 +74,7 @@ const LEG_ORDER = ['fL', 'fR', 'bL', 'bR'];
  * @returns
  *  `reach` is +1 fully forward, -1 fully back; `load` is 0..1 weight carried.
  */
-export function legPhase(u: any, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number } {
+export function legPhase(u: number, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number } {
   let t = u % 1; if (t < 0) t += 1;
   const duty = gait.duty;
   if (t < duty) {
@@ -223,7 +223,7 @@ export class CreatureAnim {
   }
 
   /** Choose a gait by normalised speed (0 idle → 1 flat out). */
-  pickGait(norm: any, heavy = false) {
+  pickGait(norm: number, heavy = false) {
     if (heavy) return norm < 0.55 ? GAITS.lumber : GAITS.walk;
     if (norm < 0.30) return GAITS.walk;
     if (norm < 0.62) return GAITS.trot;
@@ -367,7 +367,7 @@ export class CreatureAnim {
   }
 
   /** Send the creature off the ground — launcher hits and big deaths. */
-  launch(dir: any, up: any, forward: any, heading: any) {
+  launch(dir: any, up: number, forward: number, heading: number) {
     const cs = Math.cos(-heading), sn = Math.sin(-heading);
     this.airVel.set(dir.x * forward, up, dir.z * forward);
     this.airPos.set(0, 0, 0);
@@ -407,7 +407,7 @@ export class CreatureAnim {
 
 /* ---------------------------------------------------------------- curves */
 
-export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
+export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -472,7 +472,7 @@ export function attackEnvelope(state: string, t: number, timing: any) {
  * Hit-reaction shape. `level` 0 flinch → 3 launch. Returns the blend weight
  * of the reaction pose plus a recoil that decays with a bounce.
  */
-export function hitCurve(t: any, dur: number, level = 0) {
+export function hitCurve(t: number, dur: number, level = 0) {
   const f = clamp01(t / dur);
   const rise = clamp01(t / (0.04 + level * 0.02));
   const fall = 1 - smooth(clamp01((f - 0.35) / 0.65));

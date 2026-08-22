@@ -81,7 +81,7 @@ export class Dropship {
     return this;
   }
 
-  update(dt: any) {
+  update(dt: number) {
     if (this.state === 'idle') return;
     this.t += dt;
     const target = this._tmp.set(this.at.x, this.at.y + HOVER, this.at.z);
@@ -171,7 +171,7 @@ export class Dropship {
   }
 
   /** Thruster wash — a downdraught of dust and hot exhaust. */
-  _thrusters(dt: any, power: number) {
+  _thrusters(dt: number, power: number) {
     const vfx = this.vfx;
     if (!vfx) return;
     this._acc = (this._acc || 0) + dt * power * 22;

@@ -692,7 +692,7 @@ export class Sky {
   }
 
   /** Cloud/weather lerp + wind advection. */
-  update(dt: any) {
+  update(dt: number) {
     // fall back to the shot's declared weather until a Weather system drives us
     if (!this._weatherExternal && this.game && this.game.currentShot !== this._shotSeen) {
       this._shotSeen = this.game.currentShot;

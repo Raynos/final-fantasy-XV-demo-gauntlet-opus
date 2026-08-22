@@ -305,7 +305,7 @@ export class WorldMapScreen {
    * D-pad: up/down steps the filter rail, left/right steps the selection and
    * pans the chart to it.
    */
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     if (dy) this._setFilter(this.filter + (dy > 0 ? 1 : -1));
     if (dx && this.list.length) {
       this.sel = (this.sel + (dx > 0 ? 1 : -1) + this.list.length) % this.list.length;
@@ -334,12 +334,12 @@ export class WorldMapScreen {
    * cursor while the chart grows or shrinks around it.
    * @param dir -1 out, +1 in
    */
-  zoomBy(dir: number, ax?: any, az?: any) {
+  zoomBy(dir: number, ax?: number, az?: number) {
     const i = clamp(this.zoomI + dir, 0, ZOOMS.length - 1);
     if (i === this.zoomI) return;
     const k = this.zoom / ZOOMS[i];
     this.zoomI = i;
-    if (ax != null) {
+    if (ax != null && az != null) {
       this.camT.x = clamp(ax - (ax - this.camT.x) * k, -WORLD.half, WORLD.half);
       this.camT.z = clamp(az - (az - this.camT.z) * k, -WORLD.half, WORLD.half);
     }
@@ -506,8 +506,8 @@ export class WorldMapScreen {
     c.fillStyle = bg;
     c.fillRect(0, 0, W, H);
 
-    const sx = (wx: any) => W / 2 + (wx - this.cam.x) * ppm;
-    const sy = (wz: any) => H / 2 + (wz - this.cam.z) * ppm;
+    const sx = (wx: number) => W / 2 + (wx - this.cam.x) * ppm;
+    const sy = (wz: number) => H / 2 + (wz - this.cam.z) * ppm;
     const bounds = {
       x0: this.cam.x - W / 2 / ppm - 200, x1: this.cam.x + W / 2 / ppm + 200,
       z0: this.cam.z - H / 2 / ppm - 200, z1: this.cam.z + H / 2 / ppm + 200,
@@ -710,7 +710,7 @@ export class WorldMapScreen {
     c.shadowBlur = 0;
   }
 
-  _zoneLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, fade: any) {
+  _zoneLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, fade: number) {
     const a = fade * rev;
     if (a <= 0.01) return;
     // biggest zones first, so a small zone yields its label to a large one
@@ -774,7 +774,7 @@ export class WorldMapScreen {
     }
   }
 
-  _pois(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, t: any, place: LabelPlacer, W: number, H: number) {
+  _pois(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, t: number, place: LabelPlacer, W: number, H: number) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
@@ -863,7 +863,7 @@ export class WorldMapScreen {
     }
   }
 
-  _player(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, t: any) {
+  _player(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, t: number) {
     const player = this.game?.get('Player');
     if (!player?.position) return;
     const px = sx(player.position.x), py = sy(player.position.z);

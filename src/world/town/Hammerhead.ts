@@ -201,7 +201,7 @@ export class Hammerhead {
   }
 
   /** Local (u, v) around an arbitrary origin -> world [x, z]. */
-  _toWorldFlat(ox: any, oz: any, u: number, v: number) {
+  _toWorldFlat(ox: number, oz: number, u: number, v: number) {
     // rotationY(yaw): (1,0,0) -> (cos, 0, -sin); (0,0,1) -> (sin, 0, cos)
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     return [ox + u * c + v * s, oz - u * s + v * c];
@@ -279,8 +279,8 @@ export class Hammerhead {
     // Two builders: the shell (always drawn) and the clutter (culled far away).
     const S = new PartBuilder();
     const C = new PartBuilder();
-    const putS = (m: any, g: any, p: any, r: any, sc: any) => S.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
-    const putC = (m: any, g: any, p: any, r: any, sc: any) => C.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
+    const putS = (m: THREE.Material, g: any, p: any, r: any, sc: any) => S.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
+    const putC = (m: THREE.Material, g: any, p: any, r: any, sc: any) => C.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
 
     this._ground(putS, M);
     this._canopy(putS, putC, M, rng);

@@ -142,13 +142,13 @@ export class Dungeon {
   // --------------------------------------------------------------- runtime
 
   /** World-space walkable height, or null when the point is outside. */
-  floorAt(wx: any, wz: any) {
+  floorAt(wx: number, wz: number) {
     const h = this.layout.floorAt(wx - this.origin.x, wz - this.origin.z);
     return h == null ? null : h + this.origin.y;
   }
 
   /** Push a world-space point back inside the shell. */
-  clamp(wx: any, wz: any, margin = 0.6) {
+  clamp(wx: number, wz: number, margin = 0.6) {
     const p = this.layout.clampInside(wx - this.origin.x, wz - this.origin.z, margin);
     return [p[0] + this.origin.x, p[1] + this.origin.z];
   }
@@ -172,7 +172,7 @@ export class Dungeon {
     return out.map((o) => o.it);
   }
 
-  update(dt: any, now: any, cameraLocal: any) {
+  update(dt: number, now: number, cameraLocal: THREE.Camera) {
     this.kit.update(dt, now);
     this.rig.update(dt, cameraLocal, now);
     // reveal the map as the party moves through

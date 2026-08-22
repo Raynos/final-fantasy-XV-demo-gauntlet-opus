@@ -62,8 +62,8 @@ export class DungeonMap {
     const s = Math.min(sx, sz);
     const ox = pad + ((w - pad * 2) - (b.x1 - b.x0) * s) * 0.5;
     const oz = pad + ((h - pad * 2) - (b.z1 - b.z0) * s) * 0.5;
-    const X = (x: any) => ox + (x - b.x0) * s;
-    const Z = (z: any) => oz + (z - b.z0) * s;
+    const X = (x: number) => ox + (x - b.x0) * s;
+    const Z = (z: number) => oz + (z - b.z0) * s;
 
     ctx.clearRect(0, 0, w, h);
     ctx.lineJoin = 'miter';

@@ -160,7 +160,7 @@ export class Stage {
   }
 
   /** Face an actor toward a world point. */
-  faceTo(id: any, target: any) {
+  faceTo(id: string, target: any) {
     const a = this.actor(id);
     if (!a) return;
     const t = Array.isArray(target) ? this._v.set(target[0], target[1], target[2]) : target;
@@ -200,7 +200,7 @@ export class Stage {
   }
 
   /** World point an actor's eyes are at — the thing other actors look at. */
-  eyeOf(id: any, out = new THREE.Vector3()) {
+  eyeOf(id: string, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     const dims = a.character.rig && a.character.rig.dims;
@@ -209,7 +209,7 @@ export class Stage {
   }
 
   /** Chest height — a better aim point for wide shots than the feet. */
-  chestOf(id: any, out = new THREE.Vector3()) {
+  chestOf(id: string, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     return out.set(a.pos.x, a.pos.y + 1.28, a.pos.z);
@@ -252,7 +252,7 @@ export class Stage {
 }
 
 /** Shortest signed angular difference from `a` to `b`. */
-function shortestAngle(a: any, b: any) {
+function shortestAngle(a: number, b: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

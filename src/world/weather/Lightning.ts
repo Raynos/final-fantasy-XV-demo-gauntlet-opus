@@ -106,7 +106,7 @@ export class Lightning {
  * Real lightning is a stroke plus two or three return strokes, which is why it
  * flickers rather than fading smoothly.
  */
-function envelope(age: number, bias: any) {
+function envelope(age: number, bias: number) {
   const pulse = (t0: number, amp: number, decay: number) => {
     const a = age - t0;
     return a < 0 ? 0 : amp * Math.exp(-a * decay);

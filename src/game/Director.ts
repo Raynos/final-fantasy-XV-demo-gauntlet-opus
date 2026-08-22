@@ -649,7 +649,7 @@ export class Director {
 
   /* ------------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     // hold the authored player transform against Player.update
     if (this._frozenPlayer && this.player) {
       this.player.root.position.copy(this._frozenPlayer.pos);

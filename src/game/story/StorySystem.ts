@@ -310,7 +310,7 @@ export class StorySystem {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     // Delayed one-shots. A story is mostly a list of things that should happen
     // slightly after the thing that caused them.
     if (this.queue.length) {
@@ -337,7 +337,7 @@ export class StorySystem {
    * The HUD's own fallback banter still runs when the story has nothing to say,
    * so the field frame is never silent.
    */
-  _ambient(dt: any, game: any) {
+  _ambient(dt: number, game: any) {
     if (this.talk.busy || this.talk.cooldown > 0) return;
     this._banterAt -= dt;
     if (this._banterAt > 0) return;
@@ -358,7 +358,7 @@ export class StorySystem {
     this.talk.play(tag);
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: number, game: any) {
     // The attract camera has to be the last word on the transform, same as a
     // cutscene: it runs after CameraRig, and after Cinematics has had its say.
     this.title.updateCamera(dt, game);

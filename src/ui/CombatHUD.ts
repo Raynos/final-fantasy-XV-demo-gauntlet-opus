@@ -7,7 +7,7 @@ import { ENEMY_TEMPLATES, hudState, readArmiger, readTechniques, rollDamage } fr
 const _v = new THREE.Vector3();
 
 /** Project a world point to CSS pixels. Returns null when behind the camera. */
-function project(p: any, camera: any, w: number, h: number) {
+function project(p: any, camera: THREE.Camera, w: number, h: number) {
   _v.set(p.x, p.y, p.z).project(camera);
   if (_v.z > 1) return null;
   return { x: (_v.x * 0.5 + 0.5) * w, y: (-_v.y * 0.5 + 0.5) * h, depth: _v.z };
@@ -268,7 +268,7 @@ export class CombatHUD {
     // techniques — the tech bar is charged by PartyState while `inCombat`
     const hs = hudState(game);
     const bars = hs ? hs.techBars : null;
-    this.techs.rows.forEach((r: any, i: any) => {
+    this.techs.rows.forEach((r: any, i: number) => {
       const live = game.get?.('Combat')?.techniques?.[i];
       let ready = typeof live?.ready === 'number' ? live.ready : r.t.ready;
       if (bars != null && r.t.cost > 0) ready = clamp(game.get('Rpg').party.techCharge / r.t.cost, 0, 1);

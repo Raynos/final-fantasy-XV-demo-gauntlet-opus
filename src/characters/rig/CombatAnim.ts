@@ -172,7 +172,7 @@ export class CombatAnim {
    * The swing itself: hips and shoulders counter-rotate into the arc, the
    * front foot steps into it, and the whole mass drops slightly on contact.
    */
-  poseSwing(B: any, s: any, combat: any, style: any, dt: number) {
+  poseSwing(B: any, s: number, combat: any, style: any, dt: number) {
     const k = this.swingCurve(combat, style);
     const step = combat.comboStep;
     // the arc's sign says whether this link of the combo goes left or right;
@@ -236,7 +236,7 @@ export class CombatAnim {
    * added to, because the locomotion gait and the foot IK have no idea the
    * character has left the ground.
    */
-  poseDodge(B: any, char: any, s: any, combat: any) {
+  poseDodge(B: any, char: any, s: number, combat: any) {
     const n = clamp01(combat.stateTime / 0.46);
     const d = combat.dodgeDir || _v.set(0, 0, -1);
     // resolve the dodge into the character's own frame
@@ -294,7 +294,7 @@ export class CombatAnim {
    * anticipation is folded into the first 25% of the dash because the combat
    * system teleports the position immediately and there is no earlier window.
    */
-  poseWarp(B: any, char: any, s: any, combat: any) {
+  poseWarp(B: any, char: any, s: number, combat: any) {
     const w = combat.warp;
     const vfx = this.game.get('VFX');
     const k = w && vfx ? clamp01((vfx.clock - w.t0) / Math.max(0.02, w.dash)) : 1;
@@ -332,7 +332,7 @@ export class CombatAnim {
   }
 
   /** Phase: the MP-draining parry stance. Weight back, blade low and across. */
-  posePhase(B: any, s: any, combat: any) {
+  posePhase(B: any, s: number, combat: any) {
     const t = this.game.time.now;
     const charge = clamp01(combat.phaseCharge);
     const sway = Math.sin(t * 7) * 0.012 * charge;
@@ -351,7 +351,7 @@ export class CombatAnim {
   }
 
   /** Out of MP. Doubled over, gasping — the punishment has to read. */
-  poseStasis(B: any, s: any, combat: any) {
+  poseStasis(B: any, s: number, combat: any) {
     const t = this.game.time.now;
     const gasp = Math.sin(t * 4.2) * 0.5 + 0.5;
     const k = clamp01(combat.stateTime / 0.4);
@@ -386,7 +386,7 @@ export class CombatAnim {
   }
 
   /** The moment a warp-strike arrives: a compression the legs have to eat. */
-  poseLanding(B: any, char: any, s: any) {
+  poseLanding(B: any, char: any, s: number) {
     const k = this.land * this.land;
     this.add(B, 'hips', 0.24 * k, 0, 0);
     this.add(B, 'spine01', 0.14 * k, 0, 0);

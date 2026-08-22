@@ -102,7 +102,7 @@ export class ControlsScreen {
     this.cols = GROUPS.map((g) => {
       const rows = (g.rows as [string[], string, string, string?][]).map(([keys, pad, label, note]) => {
         // '-' between two keys means "this range", not a key of its own
-        const glyphs = el('div.cr-k', {}, keys.map((k: any) => (k === '-'
+        const glyphs = el('div.cr-k', {}, keys.map((k: string) => (k === '-'
           ? el('span.cr-dash', { text: '–' })
           : button(k, { size: k.length > 2 ? 25 : 21 }))));
         const node = el('div.crow', {}, [
@@ -134,7 +134,7 @@ export class ControlsScreen {
   }
 
   /** Left/right walks the columns, up/down the rows inside one. */
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     const n = this.cols.length;
     if (dx) { this.i = clamp(this.i + dx, 0, n - 1); this.j = 0; }
     if (dy) {

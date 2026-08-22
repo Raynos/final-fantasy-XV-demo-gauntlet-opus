@@ -112,7 +112,7 @@ export class LightRig {
   }
 
   /** A visible light shaft or lamp cone; its material's clock is ticked here. */
-  addShaft(mesh: any) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
+  addShaft(mesh: THREE.Object3D) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
 
   /**
    * Build the single-draw-call glow layer and the mote volume. Call once, after

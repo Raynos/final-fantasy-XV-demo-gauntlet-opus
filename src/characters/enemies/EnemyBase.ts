@@ -787,7 +787,7 @@ export class Enemy {
   _postPose(dt: number) {
     const a = this.anim;
     if (!a || !this.rig) return;
-    a.commit(dt, (name: any, x: any, y: any, z: any) => {
+    a.commit(dt, (name: any, x: number, y: number, z: number) => {
       const b = this.rig.byName.get(name);
       if (!b) return;
       _addEuler.set(x, y, z, 'XYZ');
@@ -1031,7 +1031,7 @@ export class Enemy {
   }
 
   /** Move along a unit direction with pack separation. */
-  _move(dt: number, nx: number, nz: number, sp: any, ctx: any, skipSeparation = false) {
+  _move(dt: number, nx: number, nz: number, sp: number, ctx: any, skipSeparation = false) {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);
@@ -1063,7 +1063,7 @@ export class Enemy {
   pose(_state?: any, _phase?: any, _ctx?: any): void {}
 
   /** Force a specific pose/phase and stop the AI (screenshot scenarios). */
-  freeze(state: any, phase: any, ctx: any) {
+  freeze(state: string, phase: number, ctx: any) {
     this.frozenPose = { state, phase };
     this.state = state;
     this.phase = phase;
@@ -1159,7 +1159,7 @@ const texNoise = new Noise(777);
  *
  */
 function tileable(f: (u:number, v:number) => number) {
-  return (u: any, v: any) => {
+  return (u: number, v: number) => {
     const a = f(u, v), b = f(u - 1, v), c = f(u, v - 1), d = f(u - 1, v - 1);
     const iu = 1 - u, iv = 1 - v;
     return a * iu * iv + b * u * iv + c * iu * v + d * u * v;
@@ -1182,7 +1182,7 @@ export function organicNormal() {
     const pore = tileable((u, v) => 1 - texNoise.worley2(u * 22 + 3, v * 22 + 7).f1);
     const clump = tileable((u, v) => texNoise.fbm2(u * 5 + 21, v * 2.5 + 2, 3));
     const flow = tileable((u, v) => texNoise.fbm2(u * 9 + 31, v * 9 + 13, 2));
-    _organic = normalFromHeight(256, (u: any, v: any) => {
+    _organic = normalFromHeight(256, (u: number, v: number) => {
       // strands: a rectified sine across u, drifted so they gather into locks
       const strand = Math.sin((u + clump(u, v) * 0.06) * Math.PI * 2 * 44);
       // ...and broken along their length so they read as hair, not corduroy
@@ -1230,7 +1230,7 @@ export function metalNormal() {
   if (!_metal) {
     const dish = tileable((u, v) => texNoise.fbm2(u * 6 + 2, v * 6 + 19, 3));
     const grime = tileable((u, v) => texNoise.fbm2(u * 24 + 37, v * 24 + 3, 2));
-    _metal = normalFromHeight(256, (u: any, v: any) => {
+    _metal = normalFromHeight(256, (u: number, v: number) => {
       // brushed grain: high frequency along u only
       const brush = Math.sin(u * Math.PI * 2 * 96 + grime(u, v) * 3) * 0.05;
       // rivets: a domed head every quarter tile, on the seam lines

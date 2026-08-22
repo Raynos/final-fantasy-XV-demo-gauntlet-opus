@@ -208,7 +208,7 @@ export class Freecam {
   }
 
   /** Aim at a world point from where we are. */
-  lookAt(x: any, y: any, z: any) {
+  lookAt(x: number, y: number, z: number) {
     const dx = x - this.pos.x, dy = y - this.pos.y, dz = z - this.pos.z;
     this.yaw = Math.atan2(-dx, -dz);
     this.pitch = Math.atan2(dy, Math.hypot(dx, dz));

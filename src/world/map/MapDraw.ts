@@ -122,7 +122,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
       } else {
         c.strokeStyle = `rgba(${st.col[0]},${st.col[1]},${st.col[2]},${(st.a * alpha).toFixed(3)})`;
         c.lineWidth = w;
-        c.setLineDash(st.dash ? st.dash.map((v: any) => v * Math.min(2.2, Math.max(0.6, scale))) : []);
+        c.setLineDash(st.dash ? st.dash.map((v: number) => v * Math.min(2.2, Math.max(0.6, scale))) : []);
       }
       c.stroke();
     }
@@ -202,7 +202,7 @@ export function zoneBorders(): Array<Float32Array> {
 
   // dual-grid segments between differing cells
   const segs: any[] = [];
-  const key = (a: any, b: any) => a * 4096 + b;
+  const key = (a: number, b: number) => a * 4096 + b;
   const at = new Map();
   const push = (ax: number, ay: number, bx: number, by: number) => {
     const idx = segs.length;
@@ -223,7 +223,7 @@ export function zoneBorders(): Array<Float32Array> {
 
   // walk chains of segments into polylines
   const out = [];
-  const toWorld = (a: any) => -WORLD.half + a * step;
+  const toWorld = (a: number) => -WORLD.half + a * step;
   for (let s = 0; s < segs.length; s++) {
     if (segs[s][4]) continue;
     const chain = [[segs[s][0], segs[s][1]], [segs[s][2], segs[s][3]]];
@@ -334,7 +334,7 @@ export class LabelPlacer {
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }
   /** @returns true if the box was free, in which case it is reserved */
-  place(x0: number, y0: number, x1: any, y1: any): boolean {
+  place(x0: number, y0: number, x1: number, y1: number): boolean {
     const p = this.pad;
     for (const r of this.rects) {
       if (x0 - p < r[2] && x1 + p > r[0] && y0 - p < r[3] && y1 + p > r[1]) return false;

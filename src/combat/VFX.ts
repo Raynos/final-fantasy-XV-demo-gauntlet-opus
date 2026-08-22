@@ -153,7 +153,7 @@ export class VFX {
   /* ------------------------------------------------------------ clock */
 
   /** Freeze the effect clock at `t` (screenshot scenarios). */
-  pin(t: any) { this.pinned = t; this.clock = t; this._sync(); }
+  pin(t: number) { this.pinned = t; this.clock = t; this._sync(); }
   /** Resume real-time playback. */
   unpin() { this.pinned = null; }
 
@@ -318,7 +318,7 @@ export class VFX {
     l.visible = true;
     l.intensity = 0;
     slot.priority = priority;
-    this.track(t0, life, (n: any) => {
+    this.track(t0, life, (n: number) => {
       if (n < 0 || n > 1) { l.visible = false; l.intensity = 0; slot.priority = 0; return; }
       l.visible = true;
       // sharp attack, exponential decay — reads as a real muzzle/impact flash
@@ -478,7 +478,7 @@ export class VFX {
       V.copy(origin).setY(origin.y - 0.2),
       V2.copy(origin).setY(origin.y + 2.6 * scale)
     );
-    this.track(t0 - 0.22, 0.5, (n: any) => {
+    this.track(t0 - 0.22, 0.5, (n: number) => {
       column.strength = n < 0 || n > 1 ? 0 : Math.min(1, n / 0.2) * Math.pow(1 - n, 1.6) * 1.4;
       column.uniforms.uWidth.value = 0.22 * scale * (1 - n * 0.75);
     });
@@ -497,7 +497,7 @@ export class VFX {
     streak.uniforms.uScroll.value = 2.4;
     streak.width = 1.25 * scale;
     streak.setLine(origin, target);
-    this.track(t0, dash + 0.44, (n: any) => {
+    this.track(t0, dash + 0.44, (n: number) => {
       if (n < 0 || n > 1) { streak.strength = 0; return; }
       const grow = Math.min(1, n / (dash / (dash + 0.44)));   // reaches full length at impact
       const fade = n <= grow ? 1 : Math.pow(1 - (n - 0.28) / 0.72, 1.8);
@@ -520,7 +520,7 @@ export class VFX {
     halo.uniforms.uScroll.value = 1.1;
     halo.width = 1.05 * scale;
     halo.setLine(origin, target);
-    this.track(t0, dash + 0.5, (n: any) => {
+    this.track(t0, dash + 0.5, (n: number) => {
       halo.strength = n < 0 || n > 1 ? 0 : Math.min(1, n / 0.15) * Math.pow(1 - n, 1.5) * 0.6;
       halo.uniforms.uWidth.value = 1.05 * scale * (0.5 + 1.1 * n);
     });
@@ -635,7 +635,7 @@ export class VFX {
     b.uniforms.uIntensity.value = 2.4;
     b.width = 0.16;
     b.setLine(from, to);
-    this.track(t0, 0.32, (n: any) => { b.strength = n < 0 || n > 1 ? 0 : Math.pow(1 - n, 1.4); });
+    this.track(t0, 0.32, (n: number) => { b.strength = n < 0 || n > 1 ? 0 : Math.pow(1 - n, 1.4); });
     this.crystalBurst({ pos: to, count: 22, speed: 5, t0: t0 + 0.12, life: 0.6, size: 0.22 });
     this.flash({ pos: to, color: 0x59b8ff, intensity: 30, distance: 9, life: 0.28, t0: t0 + 0.12 });
     if (terrain) this.ground.ring({ pos: to, terrain, radius: 2.0, color: 0x8ed4ff, life: 0.5, age: this.clock - t0 - 0.12 });
@@ -669,7 +669,7 @@ export class VFX {
     main.uniforms.uWobble.value = 0;
     main.width = width;
     main.setPath(lightningPath(from, to, this.rng, { jitter: 1.0, points: 16 }));
-    this.track(t0, life, (n: any) => {
+    this.track(t0, life, (n: number) => {
       if (n < 0 || n > 1) { main.strength = 0; return; }
       // strobe: three sharp flickers over the life
       main.strength = (0.35 + 0.65 * Math.abs(Math.sin(n * 11.0))) * (1 - n * 0.4);
@@ -688,7 +688,7 @@ export class VFX {
         this.rng.gauss(0, 1.6), this.rng.gauss(0, 1.0), this.rng.gauss(0, 1.6)
       ));
       b.setPath(lightningPath(mid, end, this.rng, { jitter: 1.4, points: 8 }));
-      this.track(t0, life * 0.7, (n: any) => {
+      this.track(t0, life * 0.7, (n: number) => {
         b.strength = n < 0 || n > 1 ? 0 : (0.3 + 0.7 * Math.abs(Math.sin(n * 14))) * (1 - n);
       });
     }
@@ -784,7 +784,7 @@ export class VFX {
 
   /* ----------------------------------------------------------- frame */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (this.pinned === null) this.clock += dt;
     else this.clock = this.pinned;
     const c = this.clock;
@@ -822,7 +822,7 @@ export class VFX {
 const V2D = new THREE.Vector2();
 
 /** Uniformly sample a direction inside a cone of half-angle `spread` about `dir`. */
-function randomCone(rng: Rng, dir: THREE.Vector3, spread: any, out: THREE.Vector3) {
+function randomCone(rng: Rng, dir: THREE.Vector3, spread: number, out: THREE.Vector3) {
   const cosMax = Math.cos(Math.min(Math.PI, spread));
   const z = rng.range(cosMax, 1);
   const s = Math.sqrt(Math.max(0, 1 - z * z));

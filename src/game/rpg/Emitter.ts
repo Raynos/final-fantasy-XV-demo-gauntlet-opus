@@ -31,7 +31,7 @@ export class Emitter {
   }
 
   /** Subscribe and auto-unsubscribe after the first emission. */
-  once(event: any, fn: any) {
+  once(event: string, fn: any) {
     const off = this.on(event, (payload, ev) => { off(); fn(payload, ev); });
     return off;
   }

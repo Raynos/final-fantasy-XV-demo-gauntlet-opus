@@ -53,14 +53,14 @@ function pbr(key: string, {
  */
 export function asphaltMaterial() {
   const n = new Noise(2211);
-  const h = (u: any, v: any) => {
+  const h = (u: number, v: number) => {
     const grit = n.worley2(u * 120, v * 120).f1;
     const coarse = n.fbm2(u * 34, v * 34, 3) * 0.5 + 0.5;
     return grit * 0.5 + coarse * 0.5;
   };
   return pbr('town_asphalt', {
     tint: 0x191612, rough: 0.96, size: 512, normalScale: 0.35, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const k = 0.86 + h(u, v) * 0.22;
       // Leide's red dust drifts over everything and collects in the low spots
       const dust = THREE.MathUtils.smoothstep(n.fbm2(u * 3.2 + 9, v * 3.2 - 4, 4) * 0.5 + 0.5, 0.34, 0.88);
@@ -77,7 +77,7 @@ export function asphaltMaterial() {
 /** Poured, oil-stained workshop floor and forecourt slabs. */
 export function slabMaterial() {
   const n = new Noise(5512);
-  const h = (u: any, v: any) => {
+  const h = (u: number, v: number) => {
     const pit = Math.max(0, n.worley2(u * 44, v * 44).f1 - 0.36) * 1.2;
     const grain = n.fbm2(u * 62, v * 62, 3) * 0.5 + 0.5;
     // expansion joints on a 1/4 grid
@@ -86,7 +86,7 @@ export function slabMaterial() {
   };
   return pbr('town_slab', {
     tint: 0x625b4e, rough: 0.94, size: 512, normalScale: 0.42, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const k = 0.80 + h(u, v) * 0.40;
       const oil = Math.pow(Math.max(0, n.fbm2(u * 4.5 + 31, v * 4.5 - 12, 4)), 1.6) * 1.6;
       const dust = Math.max(0, n.fbm2(u * 6 - 5, v * 6 + 17, 3)) * 0.5;
@@ -98,7 +98,7 @@ export function slabMaterial() {
   });
 }
 
-function sawEdge(x: any, period: number) {
+function sawEdge(x: number, period: number) {
   const t = Math.abs((x % period) / period - 0.5) * 2;
   return 1 - THREE.MathUtils.smoothstep(t, 0.86, 1.0);
 }
@@ -106,13 +106,13 @@ function sawEdge(x: any, period: number) {
 /** Gravel and compacted dirt for the parts yard. */
 export function gravelMaterial() {
   const n = new Noise(7742);
-  const h = (u: any, v: any) => {
+  const h = (u: number, v: number) => {
     const w = n.worley2(u * 42, v * 42);
     return (1 - Math.min(1, w.f1 * 3.4)) * 0.7 + (n.fbm2(u * 18, v * 18, 3) * 0.5 + 0.5) * 0.3;
   };
   return pbr('town_gravel', {
     tint: 0x5c4a35, rough: 0.97, size: 512, normalScale: 0.7, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const k = 0.72 + h(u, v) * 0.5;
       const red = Math.max(0, n.fbm2(u * 5, v * 5, 3)) * 0.4;
       c[0] = base.r * k * (1 + red * 0.40);
@@ -126,14 +126,14 @@ export function gravelMaterial() {
 /** Corrugated wall/roof sheet — the garage, the fuel canopy fascia. */
 export function corrugatedMaterial(tint = 0xb9b09a, rough = 0.62, metal = 0.35) {
   const n = new Noise(3391);
-  const h = (u: any, v: any) => {
+  const h = (u: number, v: number) => {
     const rib = Math.sin(u * Math.PI * 2 * 16) * 0.5 + 0.5;
     const dent = n.fbm2(u * 12, v * 12, 3) * 0.5 + 0.5;
     return rib * 0.72 + dent * 0.28;
   };
   return pbr(`town_corr${tint}${rough}${metal}`, {
     tint, rough, metal, size: 256, normalScale: 1.3, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       // shade the ribs rather than rely on the normal alone; a corrugated wall
       // reads by its stripes long after the normal has mipped away
       const k = 0.80 + h(u, v) * 0.26;
@@ -151,10 +151,10 @@ export function corrugatedMaterial(tint = 0xb9b09a, rough = 0.62, metal = 0.35) 
 /** Painted panel steel: the canopy, the caravan shell, vehicle bodies. */
 export function panelMaterial(tint = 0xd8cfb4, rough = 0.44, metal = 0.55) {
   const n = new Noise(6613);
-  const h = (u: any, v: any) => n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5;
+  const h = (u: number, v: number) => n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5;
   return pbr(`town_panel${tint}${rough}${metal}`, {
     tint, rough, metal, size: 256, normalScale: 0.55, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       // Chipping has to be *sparse*: a paint chip is a few square millimetres,
       // and a threshold low enough to show up everywhere reads as black mould.
       const chip = THREE.MathUtils.smoothstep(n.fbm2(u * 19 + 2, v * 19 - 6, 4) * 0.5 + 0.5, 0.80, 0.94) * 0.7;
@@ -170,10 +170,10 @@ export function panelMaterial(tint = 0xd8cfb4, rough = 0.44, metal = 0.55) {
 /** Galvanised structural steel: posts, gantries, fence rails, tool racks. */
 export function galvMaterial() {
   const n = new Noise(8842);
-  const h = (u: any, v: any) => n.fbm2(u * 40, v * 40, 3) * 0.5 + 0.5;
+  const h = (u: number, v: number) => n.fbm2(u * 40, v * 40, 3) * 0.5 + 0.5;
   return pbr('town_galv', {
     tint: 0x9aa0a4, rough: 0.5, metal: 0.85, size: 256, normalScale: 0.6, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const spangle = THREE.MathUtils.smoothstep(n.worley2(u * 16, v * 16).f1, 0.05, 0.5);
       const k = 0.74 + h(u, v) * 0.3 + spangle * 0.18;
       const rust = Math.pow(Math.max(0, n.fbm2(u * 7 + 11, v * 7, 3)), 2.2) * 1.4;
@@ -188,10 +188,10 @@ export function galvMaterial() {
 /** Heavily oxidised iron for drums, scrap and the parts yard. */
 export function scrapMaterial(tint = 0x8a5432) {
   const n = new Noise(1177);
-  const h = (u: any, v: any) => (n.fbm2(u * 20, v * 20, 4) * 0.5 + 0.5) * 0.6 + n.worley2(u * 11, v * 11).f1 * 0.4;
+  const h = (u: number, v: number) => (n.fbm2(u * 20, v * 20, 4) * 0.5 + 0.5) * 0.6 + n.worley2(u * 11, v * 11).f1 * 0.4;
   return pbr(`town_scrap${tint}`, {
     tint, rough: 0.86, metal: 0.42, size: 256, normalScale: 1.6, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const r = n.fbm2(u * 6, v * 6, 4) * 0.5 + 0.5;
       const k = 0.5 + h(u, v) * 0.8;
       const rust = THREE.MathUtils.smoothstep(r, 0.3, 0.72);
@@ -206,13 +206,13 @@ export function scrapMaterial(tint = 0x8a5432) {
 /** Tyre rubber — stacks, wheels, the mat outside the diner. */
 export function rubberMaterial() {
   const n = new Noise(9021);
-  const h = (u: any, v: any) => {
+  const h = (u: number, v: number) => {
     const tread = Math.abs(Math.sin(v * Math.PI * 2 * 14 + Math.sin(u * 9) * 0.9));
     return tread * 0.5 + (n.fbm2(u * 30, v * 30, 3) * 0.5 + 0.5) * 0.5;
   };
   return pbr('town_rubber', {
     tint: 0x191a1c, rough: 0.95, size: 256, normalScale: 1.4, height: h,
-    albedo: (u: any, v: any, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       const k = 0.7 + h(u, v) * 0.6;
       const dust = Math.max(0, n.fbm2(u * 8, v * 8, 3)) * 0.4;
       c[0] = base.r * k + dust * 0.10;
@@ -274,7 +274,7 @@ export function lampMaterial(color = 0xffe6b4, base = 0x14120e) {
  * Draw text scaled down until it fits. Fixed sizes overrun and the sign ends
  * up reading "MMERHE" — the same trap the highway signs already fell into.
  */
-function fit(ctx: any, text: string, s: any, maxFrac: number, px0: number, y: number, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
+function fit(ctx: any, text: string, s: number, maxFrac: number, px0: number, y: number, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
   let px = Math.round(s * px0);
   const set = () => { ctx.font = `${weight} ${px}px ${family}`; };
   set();
@@ -295,7 +295,7 @@ function fit(ctx: any, text: string, s: any, maxFrac: number, px0: number, y: nu
 }
 
 /** Speckled grime pass, so no sign face is ever flat. */
-function grime(ctx: any, s: any, seed = 4, strength = 0.16) {
+function grime(ctx: any, s: number, seed = 4, strength = 0.16) {
   const n = new Noise(seed);
   const img = ctx.getImageData(0, 0, s, s);
   for (let y = 0; y < s; y++) {
@@ -315,7 +315,7 @@ function grime(ctx: any, s: any, seed = 4, strength = 0.16) {
  * visible from a kilometre in either direction.
  */
 export function hammerheadSignTexture() {
-  return memo('sign_hammerhead', () => canvasTexture(512, (ctx: any, s: any) => {
+  return memo('sign_hammerhead', () => canvasTexture(512, (ctx: any, s: number) => {
     ctx.fillStyle = '#e6dcc2'; ctx.fillRect(0, 0, s, s);
     // red header band
     ctx.fillStyle = '#a8291d'; ctx.fillRect(0, 0, s, s * 0.30);
@@ -347,7 +347,7 @@ export function hammerheadSignTexture() {
 
 /** The Crow's Nest diner fascia — FFXV's roadside diner chain. */
 export function crowsNestSignTexture() {
-  return memo('sign_crowsnest', () => canvasTexture(512, (ctx: any, s: any) => {
+  return memo('sign_crowsnest', () => canvasTexture(512, (ctx: any, s: number) => {
     ctx.fillStyle = '#1d2228'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#e8dcbe';
     ctx.fillRect(s * 0.03, s * 0.06, s * 0.94, s * 0.88);
@@ -372,7 +372,7 @@ export function crowsNestSignTexture() {
 
 /** Garage fascia lettering. */
 export function garageSignTexture() {
-  return memo('sign_garage', () => canvasTexture(512, (ctx: any, s: any) => {
+  return memo('sign_garage', () => canvasTexture(512, (ctx: any, s: number) => {
     ctx.fillStyle = '#2a2c30'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#c8bda0';
     ctx.textAlign = 'center';
@@ -389,7 +389,7 @@ export function garageSignTexture() {
 
 /** The hunt board: cork, pinned bounty sheets, a hunter-rank ladder. */
 export function huntBoardTexture() {
-  return memo('sign_hunts', () => canvasTexture(512, (ctx: any, s: any) => {
+  return memo('sign_hunts', () => canvasTexture(512, (ctx: any, s: number) => {
     // cork
     const n = new Noise(5150);
     const img = ctx.createImageData(s, s);
@@ -452,7 +452,7 @@ export function huntBoardTexture() {
 
 /** Diner menu board hung behind the counter. */
 export function menuBoardTexture() {
-  return memo('sign_menu', () => canvasTexture(512, (ctx: any, s: any) => {
+  return memo('sign_menu', () => canvasTexture(512, (ctx: any, s: number) => {
     ctx.fillStyle = '#161a1d'; ctx.fillRect(0, 0, s, s);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e6dcc0';
@@ -483,7 +483,7 @@ export function menuBoardTexture() {
 
 /** Rent-a-Bird chocobo stand — named, never built, exactly the point. */
 export function rentABirdTexture() {
-  return memo('sign_bird', () => canvasTexture(256, (ctx: any, s: any) => {
+  return memo('sign_bird', () => canvasTexture(256, (ctx: any, s: number) => {
     ctx.fillStyle = '#f2c93a'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#2a2418';
     ctx.beginPath(); ctx.arc(s * 0.5, s * 0.36, s * 0.20, 0, Math.PI * 2); ctx.fill();
@@ -500,7 +500,7 @@ export function rentABirdTexture() {
 
 /** Culless Munitions van livery. */
 export function cullessTexture() {
-  return memo('sign_culless', () => canvasTexture(256, (ctx: any, s: any) => {
+  return memo('sign_culless', () => canvasTexture(256, (ctx: any, s: number) => {
     ctx.fillStyle = '#3b4148'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#c3462c'; ctx.fillRect(0, s * 0.36, s, s * 0.30);
     ctx.textAlign = 'center'; ctx.fillStyle = '#f0e8d6';
@@ -514,7 +514,7 @@ export function cullessTexture() {
 /** Chain-link mesh, drawn as an alpha-tested diamond weave. */
 export function chainlinkMaterial() {
   return memo('town_chainlink', () => {
-    const tex = canvasTexture(256, (ctx: any, s: any) => {
+    const tex = canvasTexture(256, (ctx: any, s: number) => {
       ctx.clearRect(0, 0, s, s);
       ctx.strokeStyle = '#7c8085';
       ctx.lineWidth = s * 0.030;

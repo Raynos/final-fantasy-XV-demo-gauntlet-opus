@@ -92,7 +92,7 @@ export class BipedEnemy extends Enemy {
    * run from hips to chest — written raw they compound down the parent chain
    * and a 0.3 rad lean arrives at the shoulders as 1.1 rad.
    */
-  spine(S: any, pitch: any, yaw = 0, roll = 0) {
+  spine(S: any, pitch: number, yaw = 0, roll = 0) {
     const t = this.A.trunk, w = this.A.spineW || SPINE_W;
     let sum = 0;
     for (let i = 0; i <= t.length - 3; i++) sum += w[Math.min(w.length - 1, i)];
@@ -268,7 +268,7 @@ export class BipedEnemy extends Enemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  poseIdle(S: any, t: any) {
+  poseIdle(S: any, t: number) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.4)) * 0.02;
     const load = Math.sin(t * 0.33 + this.id) * (A.marchStiff ? 0.15 : 0.6);

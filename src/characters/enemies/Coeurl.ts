@@ -288,7 +288,7 @@ function buildPrototype() {
       shape: (th, u) => 1 + Math.max(0, Math.sin(u * 46)) * 0.22,
       colorAt: (th, u) => mix(WHISK, WHISK_LIT, smooth((u - 0.35) / 0.6)),
       matAt: () => M_WHISK,
-      glowAt: (th: any, u: any) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
+      glowAt: (th: any, u: number) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
     });
     // charge beads sitting on each joint
     for (const i of [2, 4, 6, 8]) {
@@ -517,7 +517,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
    * the whiskers swing *forward* into a V pointing down the firing line while
    * the charge builds visibly along them. Nothing else it does looks like this.
    */
-  override poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: number) {
     if (this.attackId !== 'blaster') {
       super.poseTelegraph(S, t);
       this.whiskers(S, -0.35, 0.2, 0.05, t);
@@ -540,7 +540,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.tail(t, 0.30 * k, 0.06, 3);
   }
 
-  override poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: number) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'blaster') {
@@ -590,28 +590,28 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.whiskers(S, -0.8 * clamp01(-k) - 0.2, 0.35, 0.10, t);
   }
 
-  override poseLocomotion(S: any, t: any) {
+  override poseLocomotion(S: any, t: number) {
     super.poseLocomotion(S, t);
     const norm = clamp01((this.moveSpeed || 0) / this.speed);
     this.whiskers(S, -0.25 - norm * 0.45, 0.15, 0.08 + norm * 0.10, t);
   }
 
-  override poseIdle(S: any, t: any) {
+  override poseIdle(S: any, t: number) {
     super.poseIdle(S, t);
     this.whiskers(S, 0, 0.10, 0.09, t);
   }
 
-  override poseFlinch(S: any, t: any) {
+  override poseFlinch(S: any, t: number) {
     super.poseFlinch(S, t);
     this.whiskers(S, -0.2, 0.5, 0.30, t);
   }
 
-  override poseStagger(S: any, t: any) {
+  override poseStagger(S: any, t: number) {
     super.poseStagger(S, t);
     this.whiskers(S, -0.4, 0.7, 0.22, t);
   }
 
-  override poseDeath(S: any, t: any) {
+  override poseDeath(S: any, t: number) {
     super.poseDeath(S, t);
     // the charge gutters out and the whiskers go limp
     const slack = smooth(clamp01(this.stateTime / 0.45));

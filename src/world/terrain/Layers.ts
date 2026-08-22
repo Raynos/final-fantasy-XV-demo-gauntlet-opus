@@ -53,7 +53,7 @@ function hash2(x: number, y: number, seed: number) {
 }
 
 /** Quintic-smoothed value noise on a px * py wrapped lattice. */
-function vnoise(u: any, v: any, px: number, py: number, seed: number) {
+function vnoise(u: number, v: number, px: number, py: number, seed: number) {
   const x = u * px, y = v * py;
   const xi = Math.floor(x), yi = Math.floor(y);
   const xf = x - xi, yf = y - yi;
@@ -76,7 +76,7 @@ function fbm(u: any, v: any, px: number, py: number, seed: number, oct = 4, gain
 }
 
 /** Wrapped Worley. `f1`/`f2` are in cell units; `id` is a per-cell random. */
-function worley(u: any, v: any, px: number, py: number, seed: number) {
+function worley(u: number, v: number, px: number, py: number, seed: number) {
   const x = u * px, y = v * py;
   const xi = Math.floor(x), yi = Math.floor(y);
   let f1 = 9, f2 = 9, id = 0;
@@ -94,9 +94,9 @@ function worley(u: any, v: any, px: number, py: number, seed: number) {
   return { f1, f2, id };
 }
 
-const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const mix = (a: number, b: number, t: any) => a + (b - a) * t;
-function sstep(a: number, b: number, x: any) { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+function sstep(a: number, b: number, x: number) { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
 
 // ------------------------------------------------------------- layer recipes
 
@@ -106,7 +106,7 @@ function sstep(a: number, b: number, x: any) { const t = clamp01((x - a) / (b - 
  */
 const RECIPES = [
   // 0 — red-ochre wind-blown sand: ripples, drift lines, scattered coarse grit
-  (u: any, v: any) => {
+  (u: any, v: number) => {
     const warpA = fbm(u, v, 6, 6, 11, 3) - 0.5;
     const drift = fbm(u, v, 3, 5, 41, 4);
     const ripple = 0.5 + 0.5 * Math.sin((v * 11 + warpA * 9.0) * Math.PI * 2);
@@ -123,7 +123,7 @@ const RECIPES = [
     return { height, color: [r, g, b], rough: 0.95 - 0.10 * stone, ao: mix(0.78, 1.0, height) };
   },
   // 1 — dry cracked dirt: polygonal plates split by shallow curled cracks
-  (u: any, v: any) => {
+  (u: number, v: number) => {
     const wx = (fbm(u, v, 10, 10, 71, 3) - 0.5) * 0.11;
     const wy = (fbm(u, v, 10, 10, 83, 3) - 0.5) * 0.11;
     const w = worley(u + wx, v + wy, 6, 6, 5);
@@ -148,7 +148,7 @@ const RECIPES = [
     };
   },
   // 2 — gravel / scree: packed pebbles of strongly varied colour
-  (u: any, v: any) => {
+  (u: number, v: number) => {
     const wx = (fbm(u, v, 24, 24, 91, 2) - 0.5) * 0.02;
     const w = worley(u + wx, v - wx, 12, 12, 13);
     const dome = clamp01(1 - w.f1 * 1.9);
@@ -164,7 +164,7 @@ const RECIPES = [
     return { height, color: [r, g, b], rough: mix(0.94, 0.68, tint), ao: mix(0.40, 1.0, Math.pow(dome, 0.55)) };
   },
   // 3 — sedimentary rock: irregular beds + vertical jointing (triplanar; v = world Y)
-  (u: any, v: any) => {
+  (u: number, v: number) => {
     // The warp is what stops the beds being ruled lines. It used to be +/-0.05
     // of a tile — about 0.6 m — which on a 12 m tile is nothing, so every bed
     // ran dead level right across a hillside and the whole face read as printed
@@ -366,7 +366,7 @@ export function buildLayerTextures(size: number = 512, data: any = null, lut: Ui
  * 2-3 span the whole world exactly once, so the shader clamps their uv itself.
  */
 /** @returns the two detail layers packed back to back */
-function buildDetailData(size: any): Uint8Array {
+function buildDetailData(size: number): Uint8Array {
   const px = size * size;
   const data = new Uint8Array(px * 4 * 2);
   data.set(buildDetail(size), 0);
@@ -374,7 +374,7 @@ function buildDetailData(size: any): Uint8Array {
   return data;
 }
 
-function buildDetailArray(size: any, data = buildDetailData(size), lut: any = null) {
+function buildDetailArray(size: number, data = buildDetailData(size), lut: any = null) {
   const palette = lut || buildBiomeLut(size);
   const px = size * size;
   const all = new Uint8Array(px * 4 * DETAIL_LAYERS);
@@ -402,7 +402,7 @@ function buildDetailArray(size: any, data = buildDetailData(size), lut: any = nu
  * channels and a fine grit floor — packed as rgb = tangent normal, a = a
  * signed-ish detail height used to modulate albedo.
  */
-function buildNearDetail(size: any) {
+function buildNearDetail(size: number) {
   const px = size * size;
   const h = new Float32Array(px);
   const alb = new Float32Array(px);
@@ -476,7 +476,7 @@ function buildNearDetail(size: any) {
  * rgb = tangent normal, a = height (drives the parallax offset).
  * @returns RGBA texels, ready to pack into the detail array.
  */
-function buildDetail(size: any): Uint8Array {
+function buildDetail(size: number): Uint8Array {
   const px = size * size;
   const h = new Float32Array(px);
   for (let y = 0; y < size; y++) {

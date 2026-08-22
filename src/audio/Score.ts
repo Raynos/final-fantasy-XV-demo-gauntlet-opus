@@ -144,9 +144,9 @@ export class Score {
   }
 
   /** The state we will fall back to when a one-shot (victory) finishes. */
-  setReturnState(name: any) { if (STATES[name]) this.returnTo = name; }
+  setReturnState(name: string) { if (STATES[name]) this.returnTo = name; }
 
-  _applyState(name: any, fade = 2.4) {
+  _applyState(name: string, fade = 2.4) {
     const prev = this.stateName;
     const st = STATES[name];
     this.stateName = name;

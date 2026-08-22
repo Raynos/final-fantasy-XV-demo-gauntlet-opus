@@ -54,7 +54,7 @@ export class Vegetation {
   }
 
   /** Wind strength, 0.4 = still air, 2.5 = storm. Weather can drive this. */
-  setWind(strength: any, dirRadians: any) {
+  setWind(strength: number, dirRadians: number) {
     VegUniforms.uWindStrength.value = strength;
     if (dirRadians != null) VegUniforms.uWindDir.value.set(Math.cos(dirRadians), Math.sin(dirRadians));
   }
@@ -110,7 +110,7 @@ export class Vegetation {
     VegUniforms.uActorCount.value = n;
   }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     VegUniforms.uTime.value = game.time.now;
 
     const player = game.get('Player');

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AudioGraph, BUSES } from './Graph.ts';
+import type { AcousticSpace } from './Graph.ts';
 import { Instruments } from './Instruments.ts';
 import { Score } from './Score.ts';
 import { Sfx } from './Sfx.ts';
@@ -379,7 +380,7 @@ export class AudioSystem {
   }
 
   /** Acoustic space for the short reverb. */
-  setSpace(name: any) { if (this.graph) this.graph.setSpace(name); }
+  setSpace(name: AcousticSpace) { if (this.graph) this.graph.setSpace(name); }
 
   /** Everything the verification harness and the debug overlay want. */
   stats() {
@@ -397,7 +398,7 @@ export class AudioSystem {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     if (!this.enabled) return;
     const t0 = performance.now();
 
@@ -528,7 +529,7 @@ export class AudioSystem {
 
   /* --------------------------------------------------------- footsteps */
 
-  _footsteps(dt: any, game: any) {
+  _footsteps(dt: number, game: any) {
     const p = game.get('Player');
     if (!p || !p.position) return;
     const speed = p.speed || 0;
@@ -549,7 +550,7 @@ export class AudioSystem {
   }
 
   /** Terrain material, cached on a 3 m grid — `sampleMaterial` is not free. */
-  _surfaceAt(x: any, z: any) {
+  _surfaceAt(x: number, z: number) {
     const terrain = this.game.get('Terrain');
     if (!terrain || !terrain.sampleMaterial) return 'dirt';
     const water = this.game.get('Water');
@@ -569,7 +570,7 @@ export class AudioSystem {
 
   /* ----------------------------------------------------------- enemies */
 
-  _enemies(dt: any, game: any) {
+  _enemies(dt: number, game: any) {
     const enemies = game.get('Enemies');
     const player = game.get('Player');
     if (!enemies || !player) return;

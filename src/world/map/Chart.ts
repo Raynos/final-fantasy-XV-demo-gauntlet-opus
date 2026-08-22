@@ -37,8 +37,8 @@ import { worldMap, WORLD } from './WorldMap.ts';
  */
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const mix = (a: any, b: any, t: number) => a + (b - a) * t;
-const ss = (e0: number, e1: number, x: any) => {
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+const ss = (e0: number, e1: number, x: number) => {
   const t = clamp01((x - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
 };
@@ -92,9 +92,9 @@ export class Chart {
   }
 
   /** World x -> chart px. */
-  toPx(x: any) { return (x + WORLD.half) * this.ppm; }
+  toPx(x: number) { return (x + WORLD.half) * this.ppm; }
   /** World z -> chart px. */
-  toPz(z: any) { return (z + WORLD.half) * this.ppm; }
+  toPz(z: number) { return (z + WORLD.half) * this.ppm; }
 
   /** Elevation at a world position, straight off the baked grid. */
   heightAt(x: any, z: any) {

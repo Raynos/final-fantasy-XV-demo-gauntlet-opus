@@ -205,7 +205,7 @@ export class Party {
     }
   }
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const player = this.player || game.get('Player');
     if (!player) return;
     const pp = player.position;
@@ -228,7 +228,7 @@ export class Party {
 
       // separation from Noctis and from each other
       const push = new THREE.Vector3();
-      const addPush = (ox2: any, oz2: any, minD: number, weight: number) => {
+      const addPush = (ox2: number, oz2: number, minD: number, weight: number) => {
         const dx = m.root.position.x - ox2, dz = m.root.position.z - oz2;
         const d = Math.hypot(dx, dz);
         if (d < minD && d > 1e-4) push.add(new THREE.Vector3(dx / d, 0, dz / d).multiplyScalar((minD - d) * weight));

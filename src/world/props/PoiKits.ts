@@ -65,7 +65,7 @@ function plain(hex: number, rough = 0.85, metal = 0) {
 }
 
 /** A slab with a slightly irregular top — reads as cut stone, not a cube. */
-function roughBox(seed: number, w: any, h: any, d: any, amp = 0.05) {
+function roughBox(seed: number, w: number, h: number, d: number, amp = 0.05) {
   const g = new THREE.BoxGeometry(w, h, d, 2, 1, 2);
   const rng = new Rng(seed);
   const p = g.attributes.position;
@@ -170,7 +170,7 @@ export class PoiKits {
    * below the point the map actually names, and the skirt in {@link _apron}
    * covers whatever gap is left on the downhill side.
    */
-  _base(x: any, z: any, r: number, drop = 2.2) {
+  _base(x: number, z: number, r: number, drop = 2.2) {
     const h0 = this.eco.height(x, z);
     let sum = 0, lo = h0;
     for (let i = 0; i < 10; i++) {

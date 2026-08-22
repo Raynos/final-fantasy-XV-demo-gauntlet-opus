@@ -43,7 +43,7 @@ const SPRINT_G = {
   bob: 0.055, pelvisYaw: 0.16, chestYaw: 0.28, roll: 0.055, foot: 0.70, lift: 0.16,
 };
 
-function blendG(a: any, b: any, t: any, out: any) {
+function blendG(a: any, b: any, t: number, out: any) {
   for (const k in a) out[k] = a[k] + (b[k] - a[k]) * t;
   return out;
 }
@@ -71,7 +71,7 @@ function breathe(t: number, rate: number): number {
 }
 
 /** Bell envelope for a one-shot gesture: ease in, hold, ease out. */
-function bell(u: number, holdFrac: any) {
+function bell(u: number, holdFrac: number) {
   const inT = (1 - holdFrac) * 0.37;
   const outT = (1 - holdFrac) * 0.63;
   if (u <= 0 || u >= 1) return 0;
@@ -205,7 +205,7 @@ class Spring {
     if (!Number.isFinite(this.x)) { this.x = 0; this.v = 0; }
     return this.x;
   }
-  kick(v: any) { this.v += v; }
+  kick(v: number) { this.v += v; }
 }
 
 export class Animator {
@@ -377,7 +377,7 @@ export class Animator {
     e[0] = x; e[1] = y; e[2] = z;
   }
 
-  add(name: string, x: any, y: any, z: any, w = 1) {
+  add(name: string, x: number, y: number, z: number, w = 1) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] += x * w; e[1] += y * w; e[2] += z * w;
@@ -437,7 +437,7 @@ export class Animator {
   }
 
   /** The parametric locomotion cycle. */
-  evalGait(p: number, g: any, w: any, st: any) {
+  evalGait(p: number, g: any, w: number, st: any) {
     if (w <= 0.001) return;
     const legs = ['L', 'R'];
     for (let i = 0; i < 2; i++) {
@@ -549,7 +549,7 @@ export class Animator {
     // vertical. Solve in the root's frame and take the roll back out.
     const roll = (this.pose.get('hips') || [0, 0, 0])[2];
     const cr = Math.cos(roll), sr = Math.sin(roll);
-    const solveZ = (sgn: number, free: any) => {
+    const solveZ = (sgn: number, free: number) => {
       const bind = sgn * hipX;
       const joint = this.hipShift + bind * cr - hipDy * sr;
       const want = lerp(bind, sgn * (0.055 + free * 0.120) * stW * this.rig.dims.s, fw);

@@ -34,10 +34,10 @@ const CONE = new THREE.ConeGeometry(0.5, 1, 8);
  * scatter wants — spoil, sandbags and boulders laid out in door space float
  * off a slope, and a Leide slope moves twenty metres in thirty.
  */
-function frame(terrain: any, x: any, z: any, heading: number) {
+function frame(terrain: any, x: number, z: number, heading: number) {
   const y = terrain.heightAt(x, z);
   const c = Math.cos(heading), s = Math.sin(heading);
-  const w = (r: any, f: any) => [x + c * r + s * f, z - s * r + c * f];
+  const w = (r: number, f: number) => [x + c * r + s * f, z - s * r + c * f];
   return {
     y,
     P: (r: any, f: number, u: number) => { const p = w(r, f); return [p[0], y + u, p[1]]; },
@@ -330,7 +330,7 @@ export class Fader {
   toBlack(atBlack: ()=>void) { this.target = 1; this._onBlack = atBlack || null; }
   toClear() { this.target = 0; }
 
-  update(dt: any) {
+  update(dt: number) {
     const d = this.target - this.value;
     if (Math.abs(d) < 0.001) {
       if (this.value >= 0.999 && this._onBlack) {

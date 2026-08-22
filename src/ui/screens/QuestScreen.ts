@@ -168,7 +168,7 @@ export class QuestScreen {
 
   /* ------------------------------------------------------------ input */
 
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     const rows = this._rows || [];
     if (dy && rows.length) this.i = (this.i + dy + rows.length) % rows.length;
     if (dx) { this.tab = (this.tab + dx + TABS.length) % TABS.length; this.i = 0; this.scroll = 0; }

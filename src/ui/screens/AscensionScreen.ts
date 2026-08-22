@@ -226,7 +226,7 @@ export class AscensionScreen {
     // energy flowing along the edges the party has actually bought
     this.flowG = svg('g');
     this.svg.appendChild(this.flowG);
-    this.flows = this.edges.map((e2: any, i: any) => {
+    this.flows = this.edges.map((e2: any, i: number) => {
       const a = this.nodes[e2.a], b = this.nodes[e2.b];
       const p = svg('path', {
         d: `M${a.x.toFixed(1)} ${a.y.toFixed(1)} Q${e2.cx.toFixed(1)} ${e2.cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`,
@@ -325,7 +325,7 @@ export class AscensionScreen {
   }
 
   /** Move the selection to the nearest node in a screen direction. */
-  nav(dx: any, dy: any) {
+  nav(dx: number, dy: number) {
     const cur = this.nodes[this.sel];
     if (!cur) return;
     let best = -1, bestScore = Infinity;
