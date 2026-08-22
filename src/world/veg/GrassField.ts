@@ -243,9 +243,68 @@ function crossCardGeometry(planes = 3, width = 1.0) {
   return g;
 }
 
+/**
+ * The shadow proxy for one tuft: two crossed quads, origin at the root.
+ *
+ * Grass casts nothing. A blade is ~6 mm across and a shadow cascade texel is
+ * roughly ten times that, so blades *cannot* resolve into a shadow — but the
+ * consequence is that the ground between tufts is fully lit, and a field of
+ * plants sitting on undarkened dirt is the "everything floats" tell that cost
+ * the sibling repos every blind test they ran. The fix all three converged on
+ * is to cast from something coarse enough to resolve, and to draw nothing in
+ * the colour pass.
+ *
+ * Four triangles. The quads are unit-sized and the instance matrix scales them
+ * to the tuft's own radius and height, so a fat tussock lays down a fat shadow
+ * and a sprig lays down almost none.
+ */
+function swardProxyGeo(): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  // two quads at right angles, spanning -0.5..0.5 in x/z and 0..1 in y
+  const pos: number[] = [], idx: number[] = [];
+  for (let q = 0; q < 2; q++) {
+    const c = q === 0 ? 1 : 0, sN = q === 0 ? 0 : 1;
+    const b = q * 4;
+    pos.push(-0.5 * c, 0, -0.5 * sN, 0.5 * c, 0, 0.5 * sN, 0.5 * c, 1, 0.5 * sN, -0.5 * c, 1, -0.5 * sN);
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
+/**
+ * A material that renders nothing in the colour pass but casts a normal shadow.
+ *
+ * The vertex shader pushes every vertex behind the far plane, so the colour
+ * pass clips all four triangles and rasterises no fragments at all. The shadow
+ * pass never sees this program: three builds its own depth material from the
+ * material's *properties* (map, alphaTest, side), and `onBeforeCompile` patches
+ * are not carried over. So the same mesh is invisible to the camera and solid
+ * to the light, which is exactly the contract wanted.
+ *
+ * `material.visible` and `layers` cannot do this — three tests shadow-caster
+ * visibility against the view camera, so hiding the mesh hides its shadow too.
+ */
+function swardProxyMat(): THREE.MeshBasicMaterial {
+  const m = new THREE.MeshBasicMaterial();
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <project_vertex>',
+      // behind the far plane, and degenerate: nothing to clip, nothing to shade
+      'gl_Position = vec4(0.0, 0.0, 2.0, 1.0);'
+    );
+  };
+  m.customProgramCacheKey = () => 'swardProxy';
+  return m;
+}
+
 /** One built tile of one ring: its mesh (null when the tile came out empty). */
 interface GrassTile {
   mesh: THREE.InstancedMesh | null;
+  /** Shadow-only proxy for this tile, blade ring only. */
+  sward: THREE.InstancedMesh | null;
   /** Instances in it. */
   n: number;
   /** The frame it was last drawn on, for eviction. */
@@ -257,6 +316,9 @@ interface GrassRing {
   lod: typeof LODS[number];
   geo: THREE.BufferGeometry;
   mat: THREE.MeshStandardMaterial;
+  /** Shadow-caster proxy, on the blade ring only; null on the card rings. */
+  swardGeo: THREE.BufferGeometry | null;
+  swardMat: THREE.MeshBasicMaterial | null;
   group: THREE.Group;
   /** Instance cap for this ring. */
   max: number;
@@ -408,6 +470,11 @@ export class GrassField {
       this.group.add(group);
       this.rings.push({
         lod, geo: geos[i], mat: mats[i], group,
+        // Only the blade ring casts. Past its 26 m the tuft is a card whose own
+        // shadow would be a floating rectangle, and past ~60 m a tuft shadow is
+        // smaller than a cascade texel and can only shimmer.
+        swardGeo: i === 0 ? swardProxyGeo() : null,
+        swardMat: i === 0 ? swardProxyMat() : null,
         max: Math.max(64, Math.floor(lod.max * this.quality)),
         /** key -> { mesh, n, stamp }. Also the tile cache: a built tile is a mesh. */
         pool: new Map(),
@@ -467,7 +534,29 @@ export class GrassField {
       );
       ring.group.add(mesh);
     }
-    const entry = { mesh, n: t.n, stamp: 0 };
+
+    // The shadow-only proxy rides alongside, sharing the tile's visibility.
+    let sward: THREE.InstancedMesh | null = null;
+    if (t.sn > 0 && ring.swardGeo && ring.swardMat) {
+      sward = new THREE.InstancedMesh(ring.swardGeo, ring.swardMat, 0);
+      sward.instanceMatrix = new THREE.InstancedBufferAttribute(t.s, 16);
+      sward.count = t.sn;
+      sward.castShadow = true;
+      sward.receiveShadow = false;
+      sward.matrixAutoUpdate = false;
+      sward.visible = false;
+      // Same footprint as the tile it shadows. It must not be frustum-culled
+      // against the *view* camera when the tuft is off screen but its shadow is
+      // not, so the bound is generous rather than tight.
+      const Ts = LODS[li].tile;
+      sward.boundingSphere = new THREE.Sphere(
+        new THREE.Vector3((tx + 0.5) * Ts, (t.y0 + t.y1) * 0.5, (tz + 0.5) * Ts),
+        Math.hypot(Ts * 0.71, (t.y1 - t.y0) * 0.5 + 3) + 1
+      );
+      ring.group.add(sward);
+    }
+
+    const entry = { mesh, sward, n: t.n, stamp: 0 };
     ring.pool.set(key, entry);
     if (ring.pool.size > ring.cacheMax) this._evict(ring);
     return entry;
@@ -480,6 +569,7 @@ export class GrassField {
       if (ring.pool.size <= target) break;
       if (e.stamp === this._stamp) continue;      // in this frame's ring
       if (e.mesh) { ring.group.remove(e.mesh); e.mesh.dispose(); }
+      if (e.sward) { ring.group.remove(e.sward); e.sward.dispose(); }
       ring.pool.delete(k);
     }
   }
@@ -553,6 +643,11 @@ export class GrassField {
     const cap = n * n * (isBlade ? MAX_PER_CLUMP : 1);
     const mArr = new Float32Array(cap * 16);
     const cArr = new Float32Array(cap * 3);
+    // One shadow proxy per *tuft*, blade ring only, and at most one per grid
+    // cell — a tuft is what casts a readable shadow, a blade is not.
+    const sCap = isBlade ? n * n : 0;
+    const sArr = new Float32Array(sCap * 16);
+    let sCount = 0;
     let count = 0;
 
     // Per-clump colour: a tuft is one plant, so it is one colour. Spreading
@@ -642,6 +737,23 @@ export class GrassField {
           // outward splay produces
           const tuftA = rng.next() * Math.PI * 2;
           const tuftL = rng.next() * 0.30;
+          // Shadow proxy for this tuft — the biggest half only.
+          //
+          // A sprig's shadow is a few centimetres and costs four triangles to
+          // say nothing; the fat tussocks are what actually darken the ground
+          // between plants. Taking the top half by height halves the caster
+          // count for almost all of the effect, and the threshold is on the
+          // tuft's own height so it scales with the zone rather than being an
+          // absolute metre value tuned in one biome.
+          if (sCount < sCap && hTuft > 0.16 * lod.hMul) {
+            const w = rad * 2.1;
+            const o = sCount * 16;
+            // scale (w, hTuft*0.85, w), no rotation: crossed quads are already
+            // symmetric enough that a per-tuft yaw buys nothing at this size
+            sArr[o] = w; sArr[o + 5] = hTuft * 0.85; sArr[o + 10] = w; sArr[o + 15] = 1;
+            sArr[o + 12] = x; sArr[o + 13] = y; sArr[o + 14] = z;
+            sCount++;
+          }
           // Fewer blades per tuft than before, over a tighter tuft grid: same
           // instance budget spent on more, smaller plants, which is what puts
           // open dirt back between them.
@@ -709,7 +821,10 @@ export class GrassField {
       }
     }
     // slice (not subarray) so the oversized candidate buffer can be collected
-    return { m: mArr.slice(0, count * 16), c: cArr.slice(0, count * 3), n: count, y0, y1 };
+    return {
+      m: mArr.slice(0, count * 16), c: cArr.slice(0, count * 3), n: count,
+      s: sArr.slice(0, sCount * 16), sn: sCount, y0, y1,
+    };
   }
 
   update(camPos: THREE.Vector3) {
@@ -758,9 +873,9 @@ export class GrassField {
       if (sig === ring.packSig && !tilePending) continue;
       const stamp = this._stamp;
       for (const e of ring.pool.values()) {
-        if (!e.mesh) continue;
         const vis = e.stamp === stamp;
-        if (e.mesh.visible !== vis) e.mesh.visible = vis;
+        if (e.mesh && e.mesh.visible !== vis) e.mesh.visible = vis;
+        if (e.sward && e.sward.visible !== vis) e.sward.visible = vis;
       }
       ring.packSig = sig;
     }
