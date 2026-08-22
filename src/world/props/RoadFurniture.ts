@@ -99,7 +99,7 @@ interface RoadChunk {
  * The material set and the shared primitives, built once. Functions rather
  * than literals inside the class so the two types below *are* the sets.
  */
-function roadMaterials() {
+export function roadMaterials() {
   return {
     concrete: concreteMaterial(0x9d9689, 0.93),
     grit: concreteMaterial(0x8a8071, 0.96),

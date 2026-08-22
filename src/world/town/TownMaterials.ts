@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
-import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../../util/TextureGen.ts';
+import { canvasTexture } from '../../util/TextureGen.ts';
+import { bakedTexture, bakedDataMap, bakedNormal } from '../../engine/TexBake.ts';
 import { woodMaterial, type Texel } from '../props/PropMaterials.ts';
 
 /**
@@ -66,11 +67,11 @@ function pbr(key: string, {
 }: PbrSpec) {
   return memoMat(key, () => {
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(size, (u: number, v: number, c: Texel) => albedo(u, v, c, base), { repeat });
+    const map = bakedTexture(`town/${key}/map`, size, (u: number, v: number, c: Texel) => albedo(u, v, c, base), { repeat });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(size, height, normalScale);
+    const normalMap = bakedNormal(`town/${key}/normal`, size, height, normalScale);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = roughAt ? makeDataMap(size, roughAt) : null;
+    const roughnessMap = roughAt ? bakedDataMap(`town/${key}/rough`, size, roughAt) : null;
     if (roughnessMap) roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     const m = new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughnessMap, roughness: rough, metalness: metal,

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../../util/Noise.ts';
-import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../../../util/TextureGen.ts';
+import { canvasTexture } from '../../../util/TextureGen.ts';
+import { bakedTexture, bakedDataMap, bakedNormal } from '../../../engine/TexBake.ts';
 
 /**
  * Procedural PBR sets for interiors. Everything here is generated at first use
@@ -82,7 +83,7 @@ function pbr(key: string, {
 }: PbrRecipe): THREE.Material {
   return memoMaterial(key, () => {
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(size, (u: number, v: number, c: number[]) => {
+    const map = bakedTexture(`dgn/${key}/map`, size, (u: number, v: number, c: number[]) => {
       if (albedo) { albedo(u, v, c, base); return; }
       const k = 0.55 + height(u, v) * 0.8;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
@@ -91,9 +92,9 @@ function pbr(key: string, {
     // The relief and the staining are different fields: a big soft blotch
     // belongs in the albedo and nowhere near the normal, or concrete comes out
     // looking like polished marble.
-    const normalMap = normalFromHeight(size, normalHeight || height, normalStrength);
+    const normalMap = bakedNormal(`dgn/${key}/normal`, size, normalHeight || height, normalStrength);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(Math.min(size, 256), (u: number, v: number) => rough[0] + height(u, v) * rough[1]);
+    const roughnessMap = bakedDataMap(`dgn/${key}/rough`, Math.min(size, 256), (u: number, v: number) => rough[0] + height(u, v) * rough[1]);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     const opts: THREE.MeshStandardMaterialParameters = {
       color: 0xffffff, map, normalMap, roughnessMap,
@@ -101,7 +102,7 @@ function pbr(key: string, {
       normalScale: new THREE.Vector2(1.15, 1.15),
     };
     if (metalMap) {
-      const mm = makeDataMap(256, metalMap);
+      const mm = bakedDataMap(`dgn/${key}/metal`, 256, metalMap);
       mm.wrapS = mm.wrapT = THREE.RepeatWrapping;
       opts.metalnessMap = mm;
     }
@@ -475,7 +476,7 @@ export function poolMaterial(tint = 0x0a1416): THREE.Material {
   return memoMaterial(`pool${tint}`, () => {
     const n = new Noise(4321);
     const h = (u: number, v: number) => n.fbm2(u * 8, v * 8, 4) * 0.5 + 0.5;
-    const normalMap = normalFromHeight(256, h, 0.35);
+    const normalMap = bakedNormal(`dgn/pool${tint}/normal`, 256, h, 0.35);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: tint, normalMap, roughness: 0.06, metalness: 0.1,

@@ -14,6 +14,8 @@ import type { Terrain } from '../Terrain.ts';
 import type { Player } from '../../characters/Player.ts';
 import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
 import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
+import { bootPhase } from '../../engine/BootProfile.ts';
+import { loadTexBake } from '../../engine/TexBake.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
@@ -175,12 +177,17 @@ export class Dungeons {
     this.fader = new Fader(game.uiRoot);
     this.ambience = new DungeonAmbience(game.get('Audio') ?? null);
 
+    // The entrance kit draws from `InteriorMaterials`, whose texels are baked.
+    // Already settled by now in practice; awaited so the guarantee is not an
+    // accident of the boot order.
+    await bootPhase('Dungeons.texbake', () => loadTexBake());
+
     const builders = { bunker: buildBunkerEntrance, mine: buildMineHead, cave: buildCaveMouth };
     let calls = 0, tris = 0;
     for (const def of this.defs.values()) {
       const e = def.entrance;
       const make = builders[e.kind];
-      const built = make(this.terrain, e.x, e.z, e.heading, def.seed || 7);
+      const built = bootPhase(`Dungeons.entrance.${e.kind}`, () => make(this.terrain, e.x, e.z, e.heading, def.seed || 7));
       game.scene.add(built.group);
       calls += built.stats.calls;
       tris += built.stats.tris;

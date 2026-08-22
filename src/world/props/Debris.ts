@@ -404,7 +404,7 @@ function stripAttrs(g: THREE.BufferGeometry) {
  * than a literal inside `build` so {@link DebrisMats} is the set itself and a
  * `mat:` key in {@link LITTER} below is checked against what exists.
  */
-function debrisMaterials() {
+export function debrisMaterials() {
   const wood = woodMaterial(0x6d5a44);
   return {
     wood,

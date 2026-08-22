@@ -165,7 +165,7 @@ export interface BuiltSite extends PoiSite {
  * {@link PoiMats} is the set itself, and a kit that wants a new colour cannot
  * drift from a hand-maintained parallel interface.
  */
-function poiMaterials() {
+export function poiMaterials() {
   return {
     // Anything bigger than a couple of metres gets a *plain* material.
     // PropMaterials' concrete and enamel maps are authored for a 1 m part

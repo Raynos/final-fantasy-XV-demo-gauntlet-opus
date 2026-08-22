@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
-import { makeTexture, makeDataMap, normalFromHeight, canvasTexture, srgb } from '../../util/TextureGen.ts';
+import { canvasTexture, srgb } from '../../util/TextureGen.ts';
+import { bakedTexture, bakedDataMap, bakedNormal } from '../../engine/TexBake.ts';
 import { alphaTex } from '../veg/VegTextures.ts';
 
 /**
@@ -16,9 +17,9 @@ import { alphaTex } from '../veg/VegTextures.ts';
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
 const texCache = new Map<string, THREE.Texture>();
 
-function memoMat(k: string, f: () => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+function memoMat(k: string, f: (key: string) => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   let m = matCache.get(k);
-  if (!m) { m = f(); matCache.set(k, m); }
+  if (!m) { m = f(k); matCache.set(k, m); }
   return m;
 }
 
@@ -47,7 +48,7 @@ export type Texel = number[];
  *   asking for a colour attribute that is not there renders solid black.
  */
 export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, instanceTint: boolean = true) {
-  return memoMat(`rock${tint}${rough}${instanceTint}`, () => {
+  return memoMat(`rock${tint}${rough}${instanceTint}`, (mk) => {
     const n = new Noise(6161);
     const h = (u: number, v: number) => {
       const w = n.worley2(u * 7, v * 7);
@@ -57,7 +58,7 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
       return crack * 0.42 + grain * 0.25 + big * 0.33;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(512, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 512, (u: number, v: number, c: Texel) => {
       // Keep the contrast but pull the mean down: sunlit stone at 0.5+ albedo
       // burns out to white paper under the tone map, which is what made the
       // scree runs read as popcorn instead of rock.
@@ -68,9 +69,9 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
       c[2] = base.b * k * (1 - iron * 0.25);
     }, { repeat: 1 });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(512, h, 3.2);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 512, h, 3.2);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(256, (u: number, v: number) => 0.72 + h(u, v) * 0.28);
+    const roughnessMap = bakedDataMap(`props/${mk}/rough`, 256, (u: number, v: number) => 0.72 + h(u, v) * 0.28);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughnessMap, roughness: rough, metalness: 0,
@@ -81,19 +82,19 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
 
 /** Sun-bleached, splintered timber. */
 export function woodMaterial(tint = 0x7a6449) {
-  return memoMat(`wood${tint}`, () => {
+  return memoMat(`wood${tint}`, (mk) => {
     const n = new Noise(3131);
     const h = (u: number, v: number) => {
       const grain = Math.sin(v * 130 + n.fbm2(u * 3, v * 9, 3) * 9) * 0.5 + 0.5;
       return grain * 0.55 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.45;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const k = 0.62 + h(u, v) * 0.62;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 1.6);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.6);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: 0.93, metalness: 0,
@@ -103,12 +104,12 @@ export function woodMaterial(tint = 0x7a6449) {
 
 /** Rusted, dented corrugated steel. */
 export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
-  return memoMat(`rust${tint}${metal}`, () => {
+  return memoMat(`rust${tint}${metal}`, (mk) => {
     const n = new Noise(9090);
     const h = (u: number, v: number) => (n.fbm2(u * 16, v * 16, 4) * 0.5 + 0.5) * 0.6
       + (n.worley2(u * 9, v * 9).f1) * 0.4;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
       const k = 0.55 + h(u, v) * 0.7;
       const rust = THREE.MathUtils.smoothstep(r, 0.35, 0.75);
@@ -117,14 +118,14 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
       c[2] = THREE.MathUtils.lerp(0.32, base.b * 0.8, rust) * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 1.5);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.5);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(256, (u: number, v: number) => {
+    const roughnessMap = bakedDataMap(`props/${mk}/rough`, 256, (u: number, v: number) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
       return 0.45 + THREE.MathUtils.smoothstep(r, 0.35, 0.75) * 0.5;
     });
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
-    const metalnessMap = makeDataMap(256, (u: number, v: number) => {
+    const metalnessMap = bakedDataMap(`props/${mk}/metal`, 256, (u: number, v: number) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
       return 1 - THREE.MathUtils.smoothstep(r, 0.3, 0.7) * 0.85;
     });
@@ -138,17 +139,17 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
 
 /** Weathered canvas for the haven tent. */
 export function canvasClothMaterial(tint = 0x2f3a44) {
-  return memoMat(`cloth${tint}`, () => {
+  return memoMat(`cloth${tint}`, (mk) => {
     const n = new Noise(1212);
     const h = (u: number, v: number) => (Math.sin(u * 420) * 0.5 + 0.5) * 0.35 + (Math.sin(v * 420) * 0.5 + 0.5) * 0.35
       + (n.fbm2(u * 8, v * 8, 3) * 0.5 + 0.5) * 0.3;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const k = 0.72 + h(u, v) * 0.5;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 0.9);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 0.9);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: 0.86, metalness: 0,
@@ -234,7 +235,7 @@ export function signTexture(kind = 0) {
 
 /** Poured concrete: barriers, culverts, plinths, imperial blockades. */
 export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
-  return memoMat(`conc${tint}${rough}`, () => {
+  return memoMat(`conc${tint}${rough}`, (mk) => {
     const n = new Noise(4747);
     const h = (u: number, v: number) => {
       const pit = Math.max(0, n.worley2(u * 26, v * 26).f1 - 0.32) * 1.4;
@@ -243,7 +244,7 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
       return grain * 0.34 + stain * 0.5 - pit * 0.3;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const k = 0.66 + h(u, v) * 0.7;
       // rust weep and grime running down from the top
       const weep = Math.max(0, n.fbm2(u * 14, v * 2.2, 3)) * (1 - v) * 0.5;
@@ -252,7 +253,7 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
       c[2] = base.b * k * (1 - weep * 0.35);
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 1.1);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.1);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: rough, metalness: 0,
@@ -262,11 +263,11 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
 
 /** Chipped enamel over steel — guardrail, signage backs, imperial plate. */
 export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
-  return memoMat(`paint${tint}${rough}${metal}`, () => {
+  return memoMat(`paint${tint}${rough}${metal}`, (mk) => {
     const n = new Noise(8123);
     const h = (u: number, v: number) => n.fbm2(u * 30, v * 30, 3) * 0.5 + 0.5;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const chip = THREE.MathUtils.smoothstep(n.fbm2(u * 11 + 5, v * 11 - 3, 4) * 0.5 + 0.5, 0.62, 0.86);
       const k = 0.82 + h(u, v) * 0.24;
       c[0] = THREE.MathUtils.lerp(base.r, 0.20, chip) * k;
@@ -274,7 +275,7 @@ export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
       c[2] = THREE.MathUtils.lerp(base.b, 0.10, chip) * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 0.5);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 0.5);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: rough, metalness: metal,
@@ -284,14 +285,14 @@ export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
 
 /** Niflheim magitek plate: cold blue-black iron with hot seams. */
 export function magitekMaterial(tint = 0x2b2f36) {
-  return memoMat(`magitek${tint}`, () => {
+  return memoMat(`magitek${tint}`, (mk) => {
     const n = new Noise(3355);
     const h = (u: number, v: number) => {
       const panel = Math.min(1, Math.abs(Math.sin(u * 34)) * 0.5 + Math.abs(Math.sin(v * 21)) * 0.5);
       return panel * 0.55 + (n.fbm2(u * 20, v * 20, 3) * 0.5 + 0.5) * 0.45;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
+    const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const k = 0.7 + h(u, v) * 0.5;
       const grime = n.fbm2(u * 6, v * 6, 3) * 0.5 + 0.5;
       c[0] = base.r * k * (0.86 + grime * 0.4);
@@ -299,7 +300,7 @@ export function magitekMaterial(tint = 0x2b2f36) {
       c[2] = base.b * k * (0.94 + grime * 0.2);
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    const normalMap = normalFromHeight(256, h, 1.3);
+    const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.3);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughness: 0.44, metalness: 0.8,

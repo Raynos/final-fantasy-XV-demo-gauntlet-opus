@@ -1,4 +1,5 @@
 import { bake } from './bake.mts';
+import { texBake, TEX_SOURCES } from './texbake.mts';
 
 /**
  * Make sure the baked world artifacts exist before anything is served or built.
@@ -14,11 +15,38 @@ export function bakePlugin(): import('vite').Plugin {
   return {
     name: 'eos-bake',
     async configResolved() {
-      if (!done) done = bake({}).then(() => undefined).catch((e) => {
-        // Never block a server start on the cache: the game regenerates.
-        console.warn('[bake] failed, the browser will generate at runtime:', e && e.message);
-      });
+      if (!done) done = Promise.all([
+        // The terrain field, and the world dressing's procedural textures.
+        // Both are content-hashed against their own generator sources, so both
+        // are a no-op on every start after the first.
+        bake({}).catch((e) => {
+          // Never block a server start on the cache: the game regenerates.
+          console.warn('[bake] failed, the browser will generate at runtime:', e && e.message);
+        }),
+        texBake({}).catch((e) => {
+          console.warn('[texbake] failed, the browser will generate at runtime:', e && e.message);
+        }),
+      ]).then(() => undefined);
       await done;
+    },
+    /**
+     * Re-bake the texel cache when a generator is edited.
+     *
+     * `configResolved` only runs at server start, and the runtime deliberately
+     * does not re-check the source hash — so without this, editing
+     * `TownMaterials.ts` and letting HMR reload the page would serve the *old*
+     * texels under the right keys. That is the one failure this cache can have
+     * that does not announce itself: not a miss, which costs generation time
+     * and nothing else, but a silent wrong answer.
+     *
+     * `texBake` hashes its own sources, so an edit to anything else is one
+     * `stat` and seven reads.
+     */
+    async handleHotUpdate(ctx) {
+      if (!TEX_SOURCES.some((rel) => ctx.file.endsWith(rel.replace(/^src\//, '')))) return;
+      await texBake({}).catch((e) => {
+        console.warn('[texbake] re-bake failed, the browser will generate at runtime:', e && e.message);
+      });
     },
   };
 }
