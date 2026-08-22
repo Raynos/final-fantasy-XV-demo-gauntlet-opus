@@ -244,7 +244,33 @@ export const POI_TYPES = {
  * `does`    what the player actually does here
  * `gate`    what unlocks it (`null` = open from the start)
  * `travel`  true if it is a fast-travel destination
- */export const POIS = [
+ */
+
+/**
+ * One named place. `x`/`z` are optional in the *table* -- a POI written with
+ * `at: 'n_hammerhead'` inherits its position from that road node at load, so a
+ * settlement can never drift off the road that serves it -- and are filled in
+ * before anything reads them.
+ */
+export interface Poi {
+  id: string;
+  name: string;
+  type: string;
+  zone: string;
+  /** Discovery radius, metres. */
+  r: number;
+  x?: number;
+  z?: number;
+  /** Road node to inherit `x`/`z` from. */
+  at?: string;
+  /** What unlocks it; null is open from the start. */
+  gate?: string | null;
+  /** A fast-travel destination. */
+  travel?: boolean;
+  [extra: string]: any;
+}
+
+export const POIS: Poi[] = [
   // ============================== LEIDE ==============================
   { id: 'hammerhead', name: 'Hammerhead', type: 'town', zone: 'longwythe', at: 'n_hammerhead', r: 210, travel: true, lv: 1,
     does: 'Garage, diner, fuel, weapon shop, hunt board. Cid, Cindy, Takka, Dave.', gate: null },
@@ -514,32 +540,72 @@ export const POI_TYPES = {
  * lake never swallows a highway and a gorge always leaves a bridge abutment.
  */
 /**
- * One landform. The fields a kind uses differ -- a `fin` is a line
- * (`x0,z0,x1,z1,halfW`), a `mesa` is a disc (`x,z,r`) -- so everything past
- * `id`/`kind`/`why` is optional and `Field.ts` reads what its branch needs.
+ * One landform, discriminated on `kind` -- because the fields each kind uses
+ * genuinely differ, and reading `f.x0` off a mesa is the kind of mistake this
+ * table's consumer (`terrain/Field.ts`) can actually make: it branches on
+ * `kind` and then reaches for whichever geometry that branch needs.
+ *
+ * Everything past the shared three plus the per-kind geometry is tuning, and
+ * stays open -- `benches`, `cliff`, `apron`, `dip`, `rot`, `core`, and the
+ * `why`-adjacent design notes.
  */
-export interface Landform {
+interface LandformBase {
   id: string;
-  kind: 'mesa' | 'butte' | 'fin' | 'spire' | 'peak' | 'crater' | 'canyon' | 'basin' | 'terrace' | 'volcano';
   /** Why this landform exists, in design terms. Read by nothing; the point is the reader. */
   why: string;
-  /** Centre, for the disc kinds. */
-  x?: number;
-  z?: number;
-  /** Radius and height, for the disc kinds. */
-  r?: number;
-  h?: number;
-  /** Endpoints and half-width, for `fin`. */
-  x0?: number;
-  z0?: number;
-  x1?: number;
-  z1?: number;
-  halfW?: number;
-  /** Elliptical radii, for `terrace`. */
-  rx?: number;
-  rz?: number;
   [tuning: string]: any;
 }
+
+/** A landform placed as a disc: centre, radius, height. */
+export interface DiscLandform extends LandformBase {
+  kind: 'mesa' | 'butte' | 'basin' | 'peak' | 'crater' | 'volcano';
+  x: number;
+  z: number;
+  r: number;
+  h?: number;
+}
+
+/** A hogback: a line with a half-width. */
+export interface FinLandform extends LandformBase {
+  kind: 'fin';
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  halfW: number;
+  h: number;
+}
+
+/** A gorge: a polyline with a half-width and a depth. */
+export interface CanyonLandform extends LandformBase {
+  kind: 'canyon';
+  pts: number[][];
+  halfW: number;
+  depth: number;
+}
+
+/** An elliptical bench, rotated. */
+export interface TerraceLandform extends LandformBase {
+  kind: 'terrace';
+  x: number;
+  z: number;
+  rx: number;
+  rz: number;
+  rot: number;
+  h: number;
+}
+
+/** A field of needles scattered over a span. */
+export interface SpireLandform extends LandformBase {
+  kind: 'spire';
+  x: number;
+  z: number;
+  spanX: number;
+  spanZ: number;
+  count: number;
+}
+
+export type Landform = DiscLandform | FinLandform | CanyonLandform | TerraceLandform | SpireLandform;
 
 export const LANDFORMS: Landform[] = [
   // --- Leide: the badland stage set around Hammerhead ---------------------
