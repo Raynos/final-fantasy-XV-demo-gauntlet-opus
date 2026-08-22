@@ -7,9 +7,9 @@
 > this reason — `PROGRESS.md` was allowed to accrete instead and drifted five
 > months out of date while still reading as current.
 
-**`main` @ 341 commits · 337 source files · ~108,200 lines · 139 shots · 25
-registered systems.** Zero `any`, ratcheted. Last full `npm run check` on a
-quiet tree: **10/10 green**.
+**`main` @ 370 commits.** Zero `any`, ratcheted. `npm run check` **10/10** after
+merging the boot, instruments and content lanes. `integration` is 18 -> **20/20**
+and now actually presses keys.
 
 ## The session goal
 
@@ -30,84 +30,92 @@ session:
 
 | who | lane | owns | port |
 |---|---|---|---|
-| boot-memory | Phase 3: 13.55 s cold boot, nothing cached between loads | `engine/Warmup.ts`, `engine/LightBudget.ts`, `world/props/`, `world/town/`, `world/dungeons/`, `tools/bootprof.mts` | 5320 |
-| instruments | sibling-ports Wave 1 §2.3–§2.6 | `tools/perf.mts`, `tools/gameplay.mts`, `tools/shoot.mts`, `tools/imgdiff.mts`, `world/Terrain.ts`, `postfx/ContactShadowPass.ts` | 5330 |
-| content-wire | Phase 4: re-audit, then WS-1 "the wire" | `game/rpg/`, `ui/`, `combat/`, enemy *behaviour* | 5340 |
-| heroart | hands, outfits, hair — the AAA push | `characters/` rig, meshes, materials, enemy *meshes* | 5350 |
+| boot-memory | Npcs 2197 ms, warmup ~1900 ms, Party, Minimap — extend the texture bake to them | `engine/Warmup.ts`, `engine/PostFX` precompile, `world/props/`, `world/town/`, `world/dungeons/` | 5320 |
+| heroart | hands, outfits, hair — the AAA character push | `characters/` rig, meshes, materials, enemy *meshes* | 5350 |
+| graphics-ceiling | sibling-ports **Wave 2**: art-direction corpus, grade-vs-reference + blind A/B, horizon-angle bake | `engine/postfx/`, `world/Terrain.ts`, `world/terrain/`, `world/Sky.ts`, `world/sky/` | 5360 |
+| content-wire | WS-4 quests/hunts, WS-5 camp/cook/rest — the 30-minute slice | `game/rpg/`, `ui/`, `combat/`, enemy *behaviour* | 5370 |
 
-Each keeps its own `project/handoff/<lane>.md`. **`src/game/Game.ts` and
-`src/game/Shots.ts` are the coordinator's** — agents report changes there rather
-than making them. **Do not take a perf number while these are live.**
+The coordinator holds `game/Game.ts`, `game/Shots.ts`, `world/veg/`,
+`world/Water.ts` and the docs. **Do not take a perf number while these are live.**
 
-## Determinism — CLOSED tonight, at the noise floor
+## Merged tonight
 
-The top open defect in `RESCUE-2026-08-21.md` §B1. Measured on
-`prompto_closeup`, 1600×900 PNG:
+**Boot: 13.66 s -> 9.17 s cold** (measured quiet by that lane). `src/engine/TexBake.ts`
+caches every keyed `DataTexture` into `src/public/baked/tex.bin.gz` the way the
+terrain field already was — 143 textures, 27.4 MB gz, source-hashed, byte-verified
+against `?nobake=1` at the run-to-run floor. Props 1963 -> 178 ms, Town 1465 -> 267,
+Dungeons 1443 -> 176. Two of the plan's premises were wrong: `Dungeons` was always
+lazy, and `Props.landmarks` was `PropMaterials` memoisation landing on the first
+caller. **Run `node src/tools/texbake.mts --force` after merging anything.**
 
-| | mean/255 | px over 8/255 |
-|---|---|---|
-| floor — two cold captures, alone | 0.302 | 0.020% |
-| alone vs sixth in a batch, **before** | 1.836 | 4.00% |
-| alone vs sixth in a batch, **after** | **0.340** | **0.022%** |
+**Wave 1 instruments — all four closed.** A self-validating ruler
+(`src/tools/ruler.mts`) that measures its own noise floor and **voids the run**
+rather than printing a number it cannot stand behind; it promptly voided `perf`
+at a floor IQR of 27% of a frame, which is the instrument working. `seatHeightAt` /
+`drawnEnvelope` on `Terrain` with **0.000 m residual from 60 m to 3.4 km**
+(`seatcheck.mts`). Ablation dials: `shoot --ablate/--hide/--raw`, `imgdiff --heat`,
+and the rule *ablate before re-tinting* written into `BRIEF.md`. Contact shadows
+verified present and reaching — max 149 over 4.5% of pixels at the party's boots.
 
-**Both handoff hypotheses about the cause were wrong.** `STATUS.md` said
-"likely vegetation tile streaming"; pinning that moved the number by 0.009.
-The carrier was the **wind**: `Weather.resetClock` only set `_snap`, which skips
-the lerp toward the target preset, while the gust envelope `_gust` is integrated
-forever and drives `windStrength` through three sines, and `windDir` drifts
-permanently — neither is part of `target`, so no preset change and no clock
-reset touched them. Probed directly: `windStrength` 0.840 on a page's first
-shot, 0.944 after one other shot. Grass, scrub, twigs and hair all sway off that
-value, which is why the diff sat on thin silhouettes and read as noise.
+**Nothing in the game was pressable.** `CombatSystem` bound `KeyE` to
+`warpToPoint()` and Combat is system 11 while Interaction is 21, so every press
+warped Noctis twelve metres before `Interactables.update` ran. Every shop, board,
+caravan, pump, Regalia and NPC advertised a prompt none could honour. Fixed, and
+all three RPG coordinate tables now derive from `WorldMap` — camping answered
+`no-haven` everywhere and **no `reach` objective could ever complete**, because
+`checkProximity` measured against places that do not exist.
 
-Vegetation streaming *was* a real second cause and is also fixed: grass, scrub
-and trees each generated tiles against a **wall-clock** `performance.now() +
-budgetMs` deadline, so residency depended on machine speed and on what the
-previous camera had cached. They now take `converge(camPos)`, called from
-`Game.settle` after the first frame — after, because at `applyShot` time the
-camera is still where the previous shot left it.
+## Determinism — CLOSED, at the noise floor
 
-Consequence, and it is the reason this was worth doing first: **`imgdiff` at
-1.5/255 means something for the first time, and A/B diffs are falsifiable.**
-Every shot moved ~1.06 mean against its old PNG because the wind now sits at
-gust phase zero. That is expected; re-baseline the corpus, do not chase it.
+The top item in `RESCUE-2026-08-21.md` §B1. A shot alone versus sixth in a batch:
+**1.836 -> 0.340 mean/255**, against a measured floor of 0.302. The cause was the
+**wind**, not the vegetation streaming every handoff had guessed —
+`Weather.resetClock` set only a lerp-skip flag while the integrated gust phase
+drove `windStrength` 0.840 vs 0.944 between a page's first shot and its sixth.
+Streaming was a real second cause and is also fixed (`converge()` from
+`Game.settle`), but on its own it was worth 0.009.
 
-Commit `417ca86` has the full account and the method.
+**`imgdiff` at 1.5/255 now means something and A/B diffs are falsifiable.** Every
+shot moved ~1.06 against its old PNG because the wind sits at gust phase zero —
+re-baseline the corpus, do not chase it. Full account in commit `417ca86`; the
+wrong-diagnosis entry is in `LANDMINES.md`.
 
 ## Where the truth is
 
 - `BRIEF.md` — the contract. Art direction, engine contracts, definition of done.
 - `project/HANDOFF.md` — the method, the tooling, the architecture.
-- `project/LANDMINES.md` — what will bite you, and the seven diagnoses that were
-  confidently wrong. Read the last section twice. **Add tonight's two to it:
-  "vegetation streaming" and every earlier guess at the determinism cause.**
+- `project/LANDMINES.md` — what will bite you, and the diagnoses that were
+  confidently wrong. Read the last section twice.
 - `docs/SCOPE.md` — the atomic inventory. **Stale: last verified against `main`
   @ 98 commits (2026-08-17), 243 commits ago.** Re-verifying it is open work.
 - `project/README.md` — which document is which genre.
 
-## Gates — 10/10 on a quiet tree, 2026-08-22
+## Gates — 10/10, 2026-08-23
 
-`vite build` + both typechecks (enforced per-commit) · `anycheck` 0/0 ·
-`orphans` 280/280 · `integration` 18 pass · `uxcheck` 89/89 ·
-`creaturecheck` 207 poses · `combatloop` **30/30** · `roadcheck` 0 fail,
-30.26 km · `heightcheck` 0.000 m GPU vs CPU · `driftcheck` worst −1.177 m
-(reported, not failed).
+`vite build` + both typechecks (per-commit) · `anycheck` 0/0 · `orphans` 281/281 ·
+`integration` **20/20** · `uxcheck` 89/89 · `creaturecheck` 207 poses ·
+`combatloop` 30/30 · `roadcheck` 0 fail · `heightcheck` 0.000 m · `driftcheck`
+worst −1.177 m (reported, not failed).
 
 **Run `npm run check` at every merge, not just the cheap gates.** `combatloop`
 slid 30/30 → 21/30 unnoticed for weeks because the expensive ones were skipped.
 
-## The two failures nobody owns yet
+## The two perf failures — now formally *unknown*
 
-| gate | result |
-|---|---|
-| `perf.mts` | mean ~70 fps, **worst 37.9 fps on `vista_dawn` — FAIL** |
-| `gameplay.mts` | **worst segment `walk` at 49.8 fps — FAIL** |
+`vista_dawn` 37.9 fps and `walk` 49.8 fps are the last numbers on record, but they
+predate the ruler and used a different headline (serialised latency, not pipelined
+throughput). **Treat them as unmeasured until re-run on a quiet tree**, both
+printing `RULER_VALID: true`:
 
-Known contributors: 180–600 ms streaming and weather-rebuild hitches, `storm` at
-~21 ms. The gate is every segment ≥60 fps median with no frame over 33 ms.
-**The instruments lane is building the self-validating ruler first** — MGS5's
-version voids a run under machine contention rather than printing a number that
-looks fine. Do not re-baseline until it lands and the tree is quiet.
+```
+node src/tools/perf.mts     --out project/baseline-perf.json
+node src/tools/gameplay.mts --out project/baseline-gameplay.json
+node src/tools/seatcheck.mts
+```
+
+Exit 3 means throw the run away, not discount it; `check.mts` shows it as **VOID**.
+One finding survives: on `vista_dawn` throughput is no cheaper than latency, so
+that shot is single-bottleneck and almost certainly GPU.
 
 ## Quality — the scores are stale and you are flying on them
 
@@ -124,7 +132,13 @@ quills (heroart). Still unowned: `Bushes.ts` (491 lines) has never been audited,
 `MapScreen` is a 22-line stub, `zone_weaverwilds` has no shot to capture it with,
 and `anak` needs a sculpt rather than paint.
 
-## Still missing entirely
+## Next, in order
 
-Chocobos, fishing, photo-mode capture, camping at havens (only the Hammerhead
-caravan works), fast travel, the remaining towns.
+1. **Re-measure perf** the moment the tree is quiet (commands above).
+2. **A fresh harsh-critic pass graded against shipped FFXV** — the 4.5/10 predates
+   essentially everything now in the game. The graphics lane is building the
+   instrument.
+3. **Re-verify `docs/SCOPE.md`** — stale since `main` @ 98 commits, and the content
+   lane reports it stale in the *understates the game* direction.
+4. Still missing entirely: chocobos, fishing, photo-mode capture, fast travel, the
+   remaining towns.
