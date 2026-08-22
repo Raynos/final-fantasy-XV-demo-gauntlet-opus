@@ -19,6 +19,7 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,7 +56,7 @@ const GATES: Gate[] = [
   { name: 'roadcheck', script: 'roadcheck.mts', expect: '0 failures' },
   // These two do NOT spawn a server; they assume one is already up. Everything
   // else starts its own, and `strictPort` means a pre-started vite on the same
-  // port would break those -- so they get a dedicated one on `PORT + 50`.
+  // port would break those -- so they get a dedicated one, scanned for below.
   { name: 'heightcheck', script: 'heightcheck.mts', expect: '0.000 m GPU vs CPU', needsServer: true },
   { name: 'driftcheck', script: 'driftcheck.mts', expect: 'within tolerance', needsServer: true },
   { name: 'perf', script: 'perf.mts', expect: '60 fps', perf: true },
@@ -129,7 +130,35 @@ if (!opts.perf && !opts.only) {
 }
 
 const basePort = Number(process.env.PORT || 5173);
-const auxPort = basePort + 50;
+/**
+ * A free port for the aux server, found rather than assumed.
+ *
+ * This used to be `basePort + 50`, which is fine alone and wrong the moment a
+ * second worktree exists: agents here are allocated ports ten or fifty apart,
+ * so `PORT + 50` lands squarely on a co-agent's dev server. `strictPort` then
+ * refuses, the failure is swallowed by the bare `catch` below, and both gates
+ * that need a server crash a second later with a Node stack -- which reads in
+ * the summary table as a terrain regression. It cost two separate lanes an
+ * investigation tonight before anyone noticed the two gates were not failing,
+ * they were never running.
+ */
+async function freePort(from: number): Promise<number> {
+  for (let p = from; p < from + 400; p += 2) if (!(await portOpen(p))) return p;
+  throw new Error(`check: no free port in ${from}..${from + 400}`);
+}
+
+/** Is something already listening on `port`? */
+function portOpen(port: number): Promise<boolean> {
+  return new Promise((res) => {
+    const sock = net.connect(port, '127.0.0.1');
+    const done = (v: boolean) => { sock.destroy(); res(v); };
+    sock.on('connect', () => done(true));
+    sock.on('error', () => res(false));
+    setTimeout(() => done(false), 600);
+  });
+}
+
+const auxPort = await freePort(basePort + 50);
 let aux: ChildProcess | null = null;
 
 const results = [];
