@@ -804,27 +804,45 @@ export class Inventory {
 /* Shop stock lists                                                          */
 /* ------------------------------------------------------------------------ */
 
-/** Named shops with their stock, used by outposts and the UI's shop screen. */
+/**
+ * Named shops with their stock, used by outposts and the UI's shop screen.
+ *
+ * **A shop line is a supply line.** `RECIPE_TABLE` calls for 28 distinct
+ * ingredients and fourteen of them had no source anywhere in the game — not a
+ * drop, not a shelf — so **24 of the 30 recipes could never be cooked**,
+ * including Cup Noodles, which is both the game's most famous meal and one the
+ * player is dealt an ingredient for exactly once. Camping is the loop the whole
+ * day cycle hangs off; it cannot be a loop if the kitchen cannot be restocked.
+ *
+ * The additions are placed by region so the shelf still reads as a place:
+ * Takka's is a Leide diner (eggs, luncheon meat, the noodles), Longwythe is a
+ * roadside larder, Lestallum is a produce market, Galdin is coastal, Meldacio
+ * is deep-country forage. `src/tools/probes/ingredients.mts` reports the
+ * remaining holes, and `integration.mts` fails if a recipe loses its supply.
+ *
+ * Still deliberately unbuyable: `adamantite`, the only ingredient of the rank-10
+ * "A New Recipeh", which drops from the Adamantoise and should stay earned.
+ */
 export const SHOPS = {
   hammerhead: {
     name: 'Hammerhead — Takka\'s Pit Stop',
-    stock: ['potion', 'hi_potion', 'antidote', 'gold_needle', 'phoenix_down', 'iron_sword', 'bronze_spear', 'handgun', 'buckler', 'bronze_bangle', 'lucian_tomato', 'leiden_pepper', 'leiden_potato'],
+    stock: ['potion', 'hi_potion', 'antidote', 'gold_needle', 'phoenix_down', 'iron_sword', 'bronze_spear', 'handgun', 'buckler', 'bronze_bangle', 'lucian_tomato', 'leiden_pepper', 'leiden_potato', 'cup_noodles', 'birdbeast_egg', 'luncheon_meat'],
   },
   longwythe: {
     name: 'Longwythe Rest Area',
-    stock: ['potion', 'hi_potion', 'remedy', 'phoenix_down', 'hardedge', 'plunderers', 'silver_bangle', 'power_wristband', 'anak_meat', 'wild_onion'],
+    stock: ['potion', 'hi_potion', 'remedy', 'phoenix_down', 'hardedge', 'plunderers', 'silver_bangle', 'power_wristband', 'anak_meat', 'wild_onion', 'daggerquill_breast', 'schier_turmeric'],
   },
   lestallum: {
     name: 'Lestallum Marketplace',
-    stock: ['hi_potion', 'mega_potion', 'elixir', 'remedy', 'ether', 'rune_saber', 'partisan', 'orichalcum_dirk', 'quicksilver', 'kite_shield', 'gold_bangle', 'circlet', 'ruby_bracelet', 'sapphire_bracelet', 'topaz_bracelet', 'garula_tenderloin', 'saxham_rice', 'cleigne_wheat', 'kettier_ginger'],
+    stock: ['hi_potion', 'mega_potion', 'elixir', 'remedy', 'ether', 'rune_saber', 'partisan', 'orichalcum_dirk', 'quicksilver', 'kite_shield', 'gold_bangle', 'circlet', 'ruby_bracelet', 'sapphire_bracelet', 'topaz_bracelet', 'garula_tenderloin', 'saxham_rice', 'cleigne_wheat', 'kettier_ginger', 'fine_cleigne_wheat', 'duscaen_olives', 'sylkis_greens', 'curiel_greens'],
   },
   galdin: {
     name: 'Galdin Quay — Coernix Station',
-    stock: ['hi_potion', 'mega_potion', 'hi_elixir', 'blazefire', 'drain_sword', 'iron_duke', 'dragoon_lance', 'valiant', 'black_hood', 'talisman', 'alstor_trout', 'cleigne_darkshell', 'aegir_root'],
+    stock: ['hi_potion', 'mega_potion', 'hi_elixir', 'blazefire', 'drain_sword', 'iron_duke', 'dragoon_lance', 'valiant', 'black_hood', 'talisman', 'alstor_trout', 'cleigne_darkshell', 'aegir_root', 'allural_shallot'],
   },
   meldacio: {
     name: 'Meldacio Hunter HQ',
-    stock: ['mega_potion', 'megalixir', 'remedy', 'mega_ether', 'apocalypse', 'balmung', 'zwill_crossblades', 'death_penalty', 'flesh_harvester', 'circular_saw', 'platinum_bangle', 'sages_stone', 'obsidian_torque', 'champions_anklet', 'basilisk_ribs', 'ulwaat_berries'],
+    stock: ['mega_potion', 'megalixir', 'remedy', 'mega_ether', 'apocalypse', 'balmung', 'zwill_crossblades', 'death_penalty', 'flesh_harvester', 'circular_saw', 'platinum_bangle', 'sages_stone', 'obsidian_torque', 'champions_anklet', 'basilisk_ribs', 'ulwaat_berries', 'vesproom', 'malmashroom', 'chickatrice_breast'],
   },
 };
 

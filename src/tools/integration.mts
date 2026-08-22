@@ -65,6 +65,7 @@ const results = await page.evaluate(async () => {
   // Hoisted so the probes below can stay synchronous: `probe` calls its fn
   // without awaiting, so a probe that returned a promise would silently pass.
   const worldMap = (await import('/world/map/WorldMap.ts')).worldMap;
+  const bestiary = (await import('/characters/enemies/Bestiary.ts')).BESTIARY;
   /** One probe's verdict. `WIRED` is "the system is there but idle". */
   interface Row { area: string; name: string; status: 'PASS' | 'WIRED' | 'FAIL'; evidence: string }
   const out: Row[] = [];
@@ -135,6 +136,27 @@ const results = await page.evaluate(async () => {
     return all.length
       ? P(`${all.length} stacks carried (${cur.length} curative), gil ${gil}`)
       : F('bag is empty');
+  });
+
+  // Camping is the loop the day cycle hangs off, and a loop needs a supply
+  // line. Fourteen of the 28 ingredients `RECIPE_TABLE` calls for had no source
+  // anywhere in the game — no drop, no shelf — so 24 of the 30 recipes could
+  // never be cooked, Cup Noodles among them. This fails if that comes back.
+  probe('rpg', 'every recipe can be restocked', () => {
+    const rpg = g.get('Rpg')!;
+    const source = new Set<string>();
+    for (const s of Object.values(rpg.tables.shops)) for (const id of s.stock) source.add(id);
+    for (const def of Object.values(bestiary)) for (const d of def.drops ?? []) source.add(d.id);
+    // Deliberately earned rather than bought: the rank-10 recipe's one
+    // ingredient is the Adamantoise's drop.
+    const EARNED = new Set(['adamantite']);
+    const recipes = Object.values(rpg.tables.recipes);
+    const blocked = recipes.filter((r) => r.ingredients.some((i) => !source.has(i.id) && !EARNED.has(i.id)));
+    const orphans = new Set<string>();
+    for (const r of blocked) for (const i of r.ingredients) if (!source.has(i.id) && !EARNED.has(i.id)) orphans.add(i.id);
+    return blocked.length === 0
+      ? P(`${recipes.length} recipes, every ingredient buyable or dropped`)
+      : F(`${blocked.length}/${recipes.length} recipes unreachable; no source for ${[...orphans].join(', ')}`);
   });
 
   probe('rpg', 'save + load round-trips', () => {

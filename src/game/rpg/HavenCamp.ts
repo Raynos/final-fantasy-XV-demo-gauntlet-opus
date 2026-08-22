@@ -174,11 +174,23 @@ export class HavenCamp {
           speaker: 'Ignis',
           role: 'Tactician',
           hue: 268,
-          lines: () => `Cooking level ${rpg.party.cookingLevel}. "I've come up with a few things."`,
+          lines: () => {
+            // Say what is already running, because `cook` replaces the active
+            // meal outright: the seeded save wakes up on a Lucian Tomato Stew
+            // (+600 HP, +25 Vitality) and Cup Noodles is a *downgrade* from it.
+            // A menu that prints only a rank cannot tell you that.
+            const cur = rpg.party.activeBuffs.find((b) => b.kind === 'meal');
+            const head = `Cooking level ${rpg.party.cookingLevel}. "I've come up with a few things."`;
+            return cur
+              ? [head, `Currently running: ${cur.name} — ${(cur.recipe?.effects || []).join(', ') || 'no effect'}. A new meal replaces it.`]
+              : [head];
+          },
           choices: [
             ...recipes.map((r: Recipe) => ({
               label: r.name,
-              note: `rank ${r.rank}`,
+              // What the meal is worth, not what rank it is. This is the whole
+              // decision the camp asks the player to make.
+              note: r.effects.join(', ') || `rank ${r.rank}`,
               action: () => sleep(r.id),
             })),
             { label: 'On second thought', next: 'menu' },
