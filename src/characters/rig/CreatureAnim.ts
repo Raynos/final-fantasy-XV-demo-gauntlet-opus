@@ -74,7 +74,7 @@ const LEG_ORDER = ['fL', 'fR', 'bL', 'bR'];
  * @returns
  *  `reach` is +1 fully forward, -1 fully back; `load` is 0..1 weight carried.
  */
-export function legPhase(u: any, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number} {
+export function legPhase(u: any, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number } {
   let t = u % 1; if (t < 0) t += 1;
   const duty = gait.duty;
   if (t < duty) {

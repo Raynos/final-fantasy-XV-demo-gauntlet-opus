@@ -394,7 +394,7 @@ export class PartyState {
   /**
    * Can this meal be cooked right now?
    */
-  canCook(recipeId: string, inventory: import('./Inventory.ts').Inventory): {ok:boolean, reason?:string, missing?:any[]} {
+  canCook(recipeId: string, inventory: import('./Inventory.ts').Inventory): {ok:boolean, reason?:string, missing?:any[], buff?: any } {
     const r = RECIPE_TABLE[recipeId];
     if (!r) return { ok: false, reason: 'unknown-recipe' };
     if (!this.knownRecipes.has(recipeId)) return { ok: false, reason: 'not-learned' };
