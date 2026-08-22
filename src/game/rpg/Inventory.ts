@@ -239,7 +239,7 @@ const WEAPONS = [
 /* Accessories                                                               */
 /* ------------------------------------------------------------------------ */
 
-const A = (id: any, name: any, price: any, mods: any, desc: any, tags = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
+const A = (id: any, name: any, price: any, mods: any, desc: any, tags: any[] = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
 
 const ACCESSORIES = [
   A('bronze_bangle',   'Bronze Bangle',     400,   { hp: 300 },                                'A plain band. Adds a little padding.'),

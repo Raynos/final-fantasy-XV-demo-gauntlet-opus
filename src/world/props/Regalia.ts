@@ -349,7 +349,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
     // one template per side, so the dish of the rim faces outward on both
     // without mirroring a group (which would invert the winding and the
     // direction the wheel appears to turn)
-    const templates = {};
+    const templates: Record<string, THREE.Group> = {};
     for (const s of [1, -1]) {
       const WB = new PartBuilder();
       WB.add(rubber, tyreGeo.clone());
@@ -361,7 +361,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
       WB.place(chrome, hubGeo, [0, 0, 0.10 * s], [0, 0, 0], [0.7, 0.7, 0.45]);
       const g = new THREE.Group();
       WB.build(g, { cast: true, receive: false, name: 'regalia_wheel' });
-      templates[s as keyof typeof templates] = g;
+      templates[s] = g;
     }
 
     wheels = [];

@@ -333,7 +333,7 @@ export function lowAngle(ctx: any, F: Frame, o: any) {
 }
 
 /** Point every actor's gaze at one of them (or at a world point). */
-export function attend(ctx: any, target: any, except = []) {
+export function attend(ctx: any, target: any, except: any[] = []) {
   for (const id of ctx.stage.ids) {
     if (except.includes(id) || id === target) continue;
     ctx.stage.look(id, target);

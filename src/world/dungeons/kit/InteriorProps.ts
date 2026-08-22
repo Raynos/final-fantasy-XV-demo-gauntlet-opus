@@ -15,8 +15,11 @@ import * as M from './InteriorMaterials.ts';
  * from a room with clutter in it.
  */
 
-const G = {};
-function geo(key: any, make: any) { if (!G[key as keyof typeof G]) G[key as keyof typeof G] = make(); return G[key as keyof typeof G]; }
+const G: Record<string, THREE.BufferGeometry> = {};
+function geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  if (!G[key]) G[key] = make();
+  return G[key];
+}
 const box = () => geo('box', () => new THREE.BoxGeometry(1, 1, 1));
 const cyl = (seg = 10) => geo(`cyl${seg}`, () => new THREE.CylinderGeometry(0.5, 0.5, 1, seg));
 const cone = (seg = 9) => geo(`cone${seg}`, () => new THREE.ConeGeometry(0.5, 1, seg));

@@ -43,7 +43,7 @@ function lods() {
   if (_lods) return _lods;
   _lods = [];
   for (const stride of [1, 3, 8]) {
-    const byCls = { highway: [], road: [], track: [], trail: [] };
+    const byCls: Record<string, { pts: Float32Array, n: number, route: any }[]> = { highway: [], road: [], track: [], trail: [] };
     for (const r of worldMap.roadGraph.routes) {
       const src = r.pts;
       const out = new Float32Array(Math.ceil(src.length / stride) * 2 + 2);
@@ -51,7 +51,7 @@ function lods() {
       for (let i = 0; i < src.length; i += stride) { out[n++] = src[i].x; out[n++] = src[i].z; }
       const last = src[src.length - 1];
       if (out[n - 2] !== last.x || out[n - 1] !== last.z) { out[n++] = last.x; out[n++] = last.z; }
-      (byCls[routeClass(r) as keyof typeof byCls] || byCls.track).push({ pts: out, n, route: r });
+      (byCls[routeClass(r)] || byCls.track).push({ pts: out, n, route: r });
     }
     _lods.push(byCls);
   }

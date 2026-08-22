@@ -367,7 +367,7 @@ export class Enemy {
     // A creature whose model deliberately continues below the ground has no
     // "foot" to measure — see `TITAN.buriedBase`.
     if (this.type.buriedBase) { this.type._groundCal = {}; return; }
-    const cal = {};
+    const cal: Record<string, Float64Array> = {};
     // Published before posing, so `groundLift()` reads zero for the pose it is
     // currently measuring and the measurement stays a measurement.
     this.type._groundCal = cal;
@@ -404,7 +404,7 @@ export class Enemy {
           curve[i] = lift;
           if (lift > 1e-4) any = true;
         }
-        if (any) cal[key as keyof typeof cal] = curve;
+        if (any) cal[key] = curve;
       }
     }
     this.attack = saveAtk;

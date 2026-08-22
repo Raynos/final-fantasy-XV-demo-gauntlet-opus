@@ -497,7 +497,8 @@ export class Rocks {
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
         farRange: BIG.has(k.key) ? 430 : 0,
         outRange: BIG.has(k.key) ? 1150 : 0,
-        near: null, far: null, nearMax: 0, farMax: 0, nw: 0, fw: 0,
+        near: null as THREE.InstancedMesh | null, far: null as THREE.InstancedMesh | null,
+        nearMax: 0, farMax: 0, nw: 0, fw: 0,
       };
       g.nearMax = Math.max(8, Math.round(nearCap * q));
       g.near = this._mesh(rockGeometry(k.seed, k.opts), mat, g.nearMax, `rock_${k.key}`);

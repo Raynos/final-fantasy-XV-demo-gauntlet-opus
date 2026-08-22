@@ -289,7 +289,7 @@ export function readItems(game: any, tab: number = -1): Array<any> {
     if (tab < 0) return ITEMS.map((i) => ({ ...i }));
     const want = ITEM_TABS[tab]?.name;
     const map = { Consumables: ['Consumable', 'Remedy'], Materials: ['Treasure', 'Catalyst'], Provisions: [], Equipment: [], 'Key Items': ['Key Item', 'Magic'] };
-    const tags = map[want as keyof typeof map] || [];
+    const tags: string[] = map[want as keyof typeof map] || [];
     const out = ITEMS.filter((i) => tags.includes(i.tag)).map((i) => ({ ...i }));
     return out.length ? out : ITEMS.map((i) => ({ ...i }));
   }

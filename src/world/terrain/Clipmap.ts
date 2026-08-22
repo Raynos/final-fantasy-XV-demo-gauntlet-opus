@@ -34,7 +34,8 @@ export class Clipmap {
     for (let L = 0; L < levels; L++) {
       const cell = cell0 * Math.pow(2, L);
       const mats = makeMaterial(cell, L);
-      const ring = { cell, level: L, meshes: [], snap: cell * 2, x: NaN, z: NaN };
+      const ring: { cell: number, level: number, meshes: THREE.Mesh[], snap: number, x: number, z: number } =
+        { cell, level: L, meshes: [], snap: cell * 2, x: NaN, z: NaN };
       for (let qz = 0; qz < 2; qz++) {
         for (let qx = 0; qx < 2; qx++) {
           const geo = this._quadrant(L, cell, qx ? 1 : -1, qz ? 1 : -1);

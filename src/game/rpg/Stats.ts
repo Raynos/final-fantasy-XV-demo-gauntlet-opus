@@ -316,7 +316,20 @@ export class Stats {
 }
 
 /** A blank modifier bucket. */
-export function emptyMods() {
+/**
+ * A zeroed stat-modifier block. `mult` is per-stat multipliers keyed by stat
+ * name -- gear and Ascension nodes both write into it, so it stays open.
+ */
+export interface StatMods {
+  hp: number; mp: number; strength: number; vitality: number; magic: number; spirit: number;
+  attack: number; magicAttack: number; defense: number; magicDefense: number;
+  critRate: number; critDamage: number;
+  resist: Record<string, number>;
+  mult: Record<string, number>;
+  [extra: string]: any;
+}
+
+export function emptyMods(): StatMods {
   return {
     hp: 0, mp: 0, strength: 0, vitality: 0, magic: 0, spirit: 0,
     attack: 0, magicAttack: 0, defense: 0, magicDefense: 0,
