@@ -1,24 +1,53 @@
 import * as THREE from 'three';
 
 /**
+ * The four render quality tiers, worst to best.
+ *
+ * Ordered, because `SystemScreen` steps through them with an index and
+ * `PostFX` compares them. Exported so the tier is one closed set: it arrives
+ * from `?q=`, from the dev console and from the settings screen, and every one
+ * of those is a string until something checks it.
+ */
+export const QUALITY_TIERS = ['low', 'medium', 'high', 'ultra'] as const;
+
+/** One render quality tier. */
+export type QualityTier = typeof QUALITY_TIERS[number];
+
+/** Narrow an untrusted string (`?q=`, a console argument) to a tier. */
+export function isQualityTier(v: unknown): v is QualityTier {
+  return typeof v === 'string' && (QUALITY_TIERS as readonly string[]).includes(v);
+}
+
+/** What `new Renderer()` accepts. */
+export interface RendererOpts {
+  /** Overrides `?q=`; anything unrecognised falls back to `'high'`. */
+  quality?: string;
+}
+
+/**
  * Owns the WebGL context, the main camera and global render settings.
  * Quality tiers let the screenshot harness force max settings while the
  * interactive session adapts to the machine.
  */
 export class Renderer {
-  _onResize!: any;
-  onResize!: any;
-  camera!: THREE.PerspectiveCamera;
-  container!: any;
-  isWebGL2!: boolean;
-  quality!: any;
-  renderer!: THREE.WebGLRenderer;
-  scene!: THREE.Scene;
-  constructor(container: any, opts: any = {}) {
+  _onResize: () => void;
+  /** Set by `Game`; called with the new backbuffer size on every resize. */
+  onResize: ((w: number, h: number) => void) | null = null;
+  camera: THREE.PerspectiveCamera;
+  container: HTMLElement;
+  isWebGL2: boolean;
+  quality: QualityTier;
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  constructor(container: HTMLElement, opts: RendererOpts = {}) {
     this.container = container;
 
     const params = new URLSearchParams(location.search);
-    this.quality = opts.quality || params.get('q') || 'high';
+    // `?q=` and `opts.quality` are both untrusted strings, so an unrecognised
+    // tier lands on `'high'` rather than being carried around as a tier name
+    // that every `=== 'low'` test silently misses.
+    const want = opts.quality || params.get('q') || 'high';
+    this.quality = isQualityTier(want) ? want : 'high';
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: false,               // we resolve AA in post (SMAA/TAA)
@@ -65,7 +94,7 @@ export class Renderer {
    * Change the quality tier at runtime. PostFX has a matching `setQuality`
    * for the post chain; call both.
    */
-  setQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
+  setQuality(tier: QualityTier) {
     this.quality = tier;
     const cap = tier === 'ultra' ? 2 : tier === 'low' ? 1 : 1.5;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));

@@ -5,9 +5,11 @@ import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
+import type { QuestStatus, QuestView } from '../../game/rpg/Quests.ts';
+import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
 
 /** Tabs, and the quest-log status each one gathers. */
-const TABS = [
+const TABS: Array<{ name: string, status: QuestStatus }> = [
   { name: 'Active', status: 'active' },
   { name: 'Available', status: 'available' },
   { name: 'Completed', status: 'complete' },
@@ -31,10 +33,15 @@ const MAX_ROWS = 16;
  * from `game.time`; no CSS transitions.
  */
 export class QuestScreen {
-  _rows!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  /** The rows the last `_renderRows` drew, in tab order. */
+  _rows!: QuestView[];
   _age!: number;
   _cur!: string | null;
-  _msg!: any;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
   _sig!: string | null;
   act!: HTMLElement;
@@ -55,7 +62,7 @@ export class QuestScreen {
   list!: HTMLElement;
   menus!: Menus;
   msg!: HTMLElement;
-  rowNodes!: any[];
+  rowNodes!: Array<{ node: HTMLElement, bg: HTMLElement, q: QuestView, _on?: boolean }>;
   scroll!: number;
   specVals!: HTMLElement[];
   sub!: string;
@@ -163,7 +170,7 @@ export class QuestScreen {
     if (!r || !r.quests) return [];
     const list = r.quests.byStatus(TABS[this.tab].status) || [];
     const rank = { main: 0, story: 0, side: 1, hunt: 2 };
-    return list.slice().sort((a: any, b: any) =>
+    return list.slice().sort((a, b) =>
       (rank[a.type as keyof typeof rank] ?? 9) - (rank[b.type as keyof typeof rank] ?? 9) || (a.level || 0) - (b.level || 0));
   }
 
@@ -199,13 +206,13 @@ export class QuestScreen {
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows: any, tracked: any) {
+  _renderRows(rows: QuestView[], tracked: string | null) {
     clear(this.list);
     this.rowNodes = [];
     const view = rows.slice(this.scroll, this.scroll + MAX_ROWS);
     for (const q of view) {
       const bg = el('div.mr-bg');
-      const done = (q.objectives || []).filter((o: any) => o.done).length;
+      const done = (q.objectives || []).filter((o) => o.done).length;
       const node = el('div.qrow', {}, [
         bg,
         icon(q.type === 'hunt' ? 'armiger' : 'quests', { size: 16, stroke: 1.15 }),
@@ -220,7 +227,7 @@ export class QuestScreen {
     }
   }
 
-  _renderDetail(q: any, r: any) {
+  _renderDetail(q: QuestView, r: RpgSystem | null) {
     this.dK.textContent = `${TYPE_LABEL[q.type as keyof typeof TYPE_LABEL] || 'Quest'}${q.rank ? `  ·  ${q.rank.name}` : ''}`;
     this.dN.textContent = q.name;
     this.dD.textContent = q.summary || '';
@@ -236,7 +243,7 @@ export class QuestScreen {
 
     const rewards = r?.quests?.rewardsFor?.(q.id) || q.rewards || {};
     const items = (rewards.items || [])
-      .map((it: any) => `${r?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
+      .map((it: { id: string, count: number }) => `${r?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
       .join(', ');
     this.specVals[0].textContent = REGION[q.region as keyof typeof REGION] || q.region || '—';
     this.specVals[1].textContent = q.level ? `Lv ${q.level}` : '—';
@@ -269,15 +276,18 @@ export class QuestScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q: any) => q.id + q.status + q.progress).join()}`;
+    const sig = `${this.tab}|${this.scroll}|${tracked}|${rows.map((q) => q.id + q.status + q.progress).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows, tracked); this._cur = null; }
 
     this.empty.style.display = rows.length ? 'none' : '';
-    this.empty.textContent = ({
+    // Only the three tab statuses can appear here; `locked` and `failed` are
+    // never a tab, so the record is deliberately partial.
+    const EMPTY: Partial<Record<QuestStatus, string>> = {
       active: 'Nothing in hand. Take a contract from a bounty board.',
       available: 'No new leads. Talk to the people of Lucis.',
       complete: 'Nothing finished yet.',
-    })[TABS[this.tab].status] ?? null;
+    };
+    this.empty.textContent = EMPTY[TABS[this.tab].status] ?? null;
 
     for (let i = 0; i < (this.rowNodes || []).length; i++) {
       const rn = this.rowNodes[i];

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { frameAt, arrange, wide, attend, poiPoint } from './SceneKit.ts';
+import type { SceneCtx, SceneDef, ShotDef } from '../../cinematics/Scene.ts';
 
 /**
  * CHAPTER V — "Dark Clouds": the Archaean wakes.
@@ -16,13 +17,15 @@ import { frameAt, arrange, wide, attend, poiPoint } from './SceneKit.ts';
 
 const DUR = 40;
 
-export const ASTRAL = {
+type Ctx = SceneCtx;
+
+export const ASTRAL: SceneDef = {
   id: 'ch5_astral_awakening',
   chapter: 5,
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(13.4);
@@ -60,8 +63,9 @@ export const ASTRAL = {
     });
   },
 
-  buildShots(ctx: any) {
+  buildShots(ctx: Ctx): ShotDef[] {
     const F = ctx.data.F;
+    if (!F) return [];
     const T = ctx.terrain;
     return [
       // a horizon that is about to stop being a horizon
@@ -84,9 +88,10 @@ export const ASTRAL = {
     ];
   },
 
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     const s = ctx.stage;
     const F = ctx.data.F;
+    if (!F) return;
     const far = F.at(150, 18, 30);
     if (t < 8.0) { for (const id of s.ids) s.look(id, far); }
     else if (t < 16.5) {
@@ -118,19 +123,19 @@ export const ASTRAL = {
     { t: 23.2, presentational: true, say: ['Noctis', '...You heard that.'], dur: 2.4 },
     {
       t: 25.4, shake: 0.95, slowmo: { scale: 0.35, dur: 2.2 }, sfx: 'hit',
-      fn: (ctx: any) => {
+      fn: (ctx) => {
         const vfx = ctx.vfx;
         const F = ctx.data.F;
-        if (!vfx) return;
+        if (!vfx || !F) return;
         const p = F.at(70, 8, 1.0);
         if (vfx.dustPuff) {
           vfx.dustPuff({
-            pos: { x: p[0], y: p[1], z: p[2] }, count: 44, radius: 26.0, speed: 16.0,
+            pos: new THREE.Vector3(p[0], p[1], p[2]), count: 44, radius: 26.0, speed: 16.0,
             life: 4.5, t0: vfx.clock, size: 5.0, grow: 4.0, up: 1.2, intensity: 0.55,
           });
         }
         if (vfx.flash) {
-          vfx.flash({ pos: { x: p[0], y: p[1] + 20, z: p[2] }, color: 0xffb060, intensity: 90, distance: 260, life: 1.6, t0: vfx.clock, priority: 8 });
+          vfx.flash({ pos: new THREE.Vector3(p[0], p[1] + 20, p[2]), color: 0xffb060, intensity: 90, distance: 260, life: 1.6, t0: vfx.clock, priority: 8 });
         }
       },
     },
@@ -139,7 +144,7 @@ export const ASTRAL = {
     { t: 36.0, chapter: { n: 5, name: 'Dark Clouds', sub: 'Duscae — the Disc of Cauthess' } },
   ],
 
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     const weather = ctx.game.get('Weather');
     if (weather && weather.set) weather.set('clear');
     const rpg = ctx.game.get('Rpg');

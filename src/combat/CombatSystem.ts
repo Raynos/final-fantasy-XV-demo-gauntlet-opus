@@ -3,11 +3,232 @@ import { Rng } from '../util/Rng.ts';
 import { WEAPONS, Weapon, Armiger } from './Weapons.ts';
 import { Elemancy } from './Elemancy.ts';
 import type { CombatEvents, CombatEventName } from './CombatEvents.ts';
-import type { WeaponClass } from './Weapons.ts';
+import type { ArmigerLayout, ComboStep, WeaponClass } from './Weapons.ts';
 import type { Game } from '../game/Game.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
+import type { Enemies } from '../characters/Enemies.ts';
+import type { Player } from '../characters/Player.ts';
+import type { Terrain } from '../world/Terrain.ts';
+import type { RpgSystem } from '../game/rpg/RpgSystem.ts';
+import type { Input } from '../engine/Input.ts';
+import type { VFX } from './VFX.ts';
+import type { TrailRibbon } from './Trails.ts';
 
 /** The three castable elements. */
 export type ElementKind = 'fire' | 'ice' | 'lightning';
+
+/**
+ * Every state the combat machine can be in.
+ *
+ * Six, not seven: the comment on `this.state` used to list a `hurt` state as
+ * well, and nothing in the tree has ever assigned it — being hit is a hitstop
+ * and a flinch on the *enemy* side, never a state of Noctis'.
+ */
+export type CombatState = 'idle' | 'attack' | 'dodge' | 'phase' | 'warp' | 'stasis';
+
+/**
+ * The phase one link of a combo is in. `none` is between swings.
+ *
+ * `CombatAnim.PHASE_KEY` maps each of these onto the `ComboStep` field that
+ * holds its duration, and it can lose its `Record<string, ...>` fallback now
+ * that the set is closed.
+ */
+export type ComboPhase = 'none' | 'wind' | 'active' | 'rec';
+
+/** A subscriber to one combat event. */
+export type CombatListener<K extends CombatEventName> = (detail: CombatEvents[K]) => void;
+
+/**
+ * A listener as the subscriber *table* holds it.
+ *
+ * Written in method syntax on purpose: method parameters are bivariant, and
+ * that is what lets one `Set` hold the handlers for a single event without the
+ * table having to be a map of correlated types. `emit` only ever calls these
+ * with that event's own payload, so the bivariance is not load-bearing for
+ * soundness — `on()` is the typed door everything comes through.
+ */
+type StoredListener = { call(detail: CombatEvents[CombatEventName]): void }['call'];
+
+/**
+ * `lockOn` is a verb *and* a view of the current target — see
+ * `_installLockOnShim` for why, and for what has to happen before it can go.
+ */
+export interface LockOnShim {
+  (enemy: Enemy | null): void;
+  readonly target: Enemy | null;
+  readonly position: THREE.Vector3 | undefined;
+  /** Always `undefined`. Present because a reader may probe `pos` first. */
+  readonly pos: undefined;
+  readonly root: THREE.Group | undefined;
+  readonly height: number;
+  readonly name: string;
+}
+
+/**
+ * Has `_installLockOnShim` finished hanging the view accessors on `fn`?
+ *
+ * `Object.defineProperties` answers the object it was given, which types away
+ * everything it just installed. Asking the value is what a cast would have
+ * hidden, and it is the only thing that would notice the shim breaking.
+ */
+function isLockOnShim(fn: (enemy: Enemy | null) => void): fn is LockOnShim {
+  return 'target' in fn && 'position' in fn && 'root' in fn && 'height' in fn && 'name' in fn;
+}
+
+/** The in-flight warp-strike: the blink, and whether the blow has landed yet. */
+export interface WarpState {
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  /** `VFX.clock` when the blink began. */
+  t0: number;
+  /** `VFX.clock` at which the blade arrives, as `VFX.warpStrike` reports it. */
+  impactT: number;
+  enemy: Enemy | null;
+  struck: boolean;
+  /** Length of the dash, seconds. */
+  dash: number;
+}
+
+/** A deferred beat queued by `schedule` and drained in `update`. */
+interface CombatBeat {
+  /** Seconds of simulated time left before `fn` runs. */
+  t: number;
+  fn: (arg: number) => void;
+  arg: number;
+}
+
+/**
+ * How `computeDamage` arrived at its number. Every field is optional because
+ * the no-RPG fallback roll in `resolve()` produces a damage figure without one.
+ */
+export interface DamageBreakdown {
+  offence?: number;
+  defence?: number;
+  motion?: number;
+  levelMod?: number;
+  mitigation?: number;
+  elementMult?: number;
+  staggerMult?: number;
+}
+
+/** One resolved hit, as `resolve()` answers it and `lastRoll` remembers it. */
+export interface DamageRoll {
+  damage: number;
+  crit: boolean;
+  weakness: boolean;
+  /** `'weak' | 'resist' | 'immune' | 'absorb' | 'neutral'` from `Stats`. */
+  elementKind: string;
+  element: string;
+  breakdown?: DamageBreakdown;
+}
+
+/**
+ * What a caller may say about a blow before `resolve()` rolls it.
+ * Everything here is a *modifier*: the weapon, the level and the target are
+ * read off the system and the enemy, never passed in.
+ */
+export interface HitOpts {
+  /** Motion value: what this particular swing is worth. Defaults to 1. */
+  motion?: number;
+  /** Poise damage. Defaults to 10 in `_applyDamage`. */
+  poise?: number;
+  /** Set for a spell; a spell rolls as magical and claims no weapon class. */
+  element?: ElementKind | null;
+  /** Overrides the drawn weapon's class in the weakness lookup. */
+  weaponClass?: string | null;
+  /** Behind the target. `_applyDamage` works it out when it is not given. */
+  blindside?: boolean;
+  warp?: boolean;
+  aerial?: boolean;
+  technique?: boolean;
+  /** Suppress the flinch animation on the target. */
+  noFlinch?: boolean;
+}
+
+/** The knobs `cast()` takes when something other than the table decides them. */
+export interface CastOpts {
+  /** Scales the burst: radius, particle counts and light. Defaults to 1. */
+  power?: number;
+  motion?: number;
+  radius?: number;
+  poise?: number;
+}
+
+/** One derived side-effect of a crafted flask, as combat applies it. */
+export interface SpellEffect {
+  name: string;
+  desc: string;
+  payload: {
+    /** Fraction of max HP restored to every party member. */
+    healAllies?: number;
+    /** Chance, 0..1, that a non-boss caught in the blast simply dies. */
+    instantDeath?: number;
+    /** Ailment written onto everything in the blast. */
+    status?: string;
+    /** How long that ailment lasts, seconds. Defaults to 10. */
+    duration?: number;
+  };
+}
+
+/**
+ * A crafted flask, as `castSpell` reads it. `rpg/Elemancy.craftSpell` is what
+ * builds one; this is the slice of it that turns into damage in the world.
+ */
+export interface CraftedSpell {
+  element: ElementKind;
+  /** 1..5. Scales the poise damage. */
+  tier: number;
+  damage: number;
+  radius: number;
+  mpCost: number;
+  /** Dualcast / Tricast: how many times the flask detonates. */
+  multicast: number;
+  effects?: SpellEffect[];
+}
+
+/** What `castSpell` and `castSlot` answer. `reason` is set only when `!ok`. */
+export interface CastResult {
+  ok: boolean;
+  reason?: string;
+  spell?: CraftedSpell;
+  damage?: number;
+  /** Casts left on the flask. */
+  remaining?: number;
+  motion?: number;
+}
+
+/**
+ * The armament sitting in one of Noctis' four weapon slots.
+ *
+ * `Inventory` owns the real item definition and is still untyped; this is the
+ * part combat reads — the class it maps onto and the attack rating that
+ * replaces the strongest-equipped one in `_attacker`.
+ */
+export interface WeaponItem {
+  id?: string;
+  name?: string;
+  /** `Inventory`'s class name, mapped through `ITEM_CLASS_TO_KIND`. */
+  class?: string;
+  attack?: number;
+}
+
+/** One of Noctis' four weapon slots, resolved onto a class this system draws. */
+export interface WeaponSlot {
+  kind: string;
+  item: WeaponItem | null;
+}
+
+/**
+ * An enemy as combat sees it.
+ *
+ * `vulnerable` is written straight onto the boss by
+ * `BossFight._tickBoss` and `EnemyBase` does not declare it, so it is optional
+ * here rather than invented there. It belongs on `Enemy`.
+ */
+export interface CombatTarget extends Enemy {
+  /** Set for the length of a boss' recovery window; worth x1.5 damage. */
+  vulnerable?: boolean;
+}
 
 /**
  * Real-time action combat.
@@ -25,70 +246,84 @@ export class CombatSystem {
   _sweepTmp!: THREE.Vector3;
   weaponSlot!: number;
   _armigerBeat!: number;
-  _armigerCentre!: any;
-  _armigerOpts!: any;
+  /** Set by `Director` for a scenario shot; absent in normal play. */
+  _armigerCentre?: THREE.Vector3;
+  _armigerOpts?: ArmigerLayout;
   _axis!: THREE.Vector3;
   _base!: THREE.Vector3;
   _fwd!: THREE.Vector3;
-  _hits!: any[];
-  _listeners!: Map<any, any>;
+  /** Scratch list every sphere/sweep query writes into. Never escapes. */
+  _hits!: Enemy[];
+  _listeners!: Map<CombatEventName, Set<StoredListener>>;
   _mirAxis!: THREE.Vector3;
   _prevTip!: THREE.Vector3;
   _q!: THREE.Quaternion;
   _qt!: THREE.Quaternion;
-  _sched!: any[];
+  _sched!: CombatBeat[];
   _shotFired!: boolean;
   _tip!: THREE.Vector3;
   _tmp!: THREE.Vector3;
   armiger!: Armiger;
   armigerTimer!: number;
   comboIndex!: number;
-  comboPhase!: string;
+  comboPhase!: ComboPhase;
   comboQueued!: boolean;
-  comboStep!: any;
+  comboStep!: ComboStep | null;
   comboTimer!: number;
   counterWindow!: number;
   dodgeDir!: THREE.Vector3;
-  elemancy!: Elemancy;
-  enemies!: any;
+  /**
+   * Raw elemental bursts. Null in a world booted without `VFX`, because every
+   * spell it authors is written against the VFX effect clock — there is
+   * nothing for it to draw on and nothing for `pin` to freeze.
+   */
+  elemancy!: Elemancy | null;
+  enemies!: Enemies | null;
   game!: Game;
   hand!: THREE.Group;
   heavySwing!: boolean;
-  hitThisSwing!: Set<any>;
+  hitThisSwing!: Set<Enemy>;
   hitstop!: number;
   inCombat!: boolean;
-  lastRoll!: any;
+  lastRoll!: DamageRoll | null;
   linkCooldown!: number;
-  lockOn!: any;
-  lockTarget!: any;
+  lockOn!: LockOnShim;
+  lockTarget!: Enemy | null;
   mpRegenDelay!: number;
   perch!: number;
   phaseCharge!: number;
-  player!: any;
+  player!: Player | null;
   rng!: Rng;
-  rpg!: any;
-  scenarioLock!: any;
+  rpg!: RpgSystem | null;
+  /** `Director` freezes the sim for an authored shot. Absent until it does. */
+  scenarioLock?: boolean;
   slowmo!: number;
   stasis!: boolean;
-  state!: string;
+  state!: CombatState;
   stateTime!: number;
-  terrain!: any;
-  trail!: any;
-  vfx!: any;
-  warp!: any;
-  weapon!: any;
-  weaponCache!: Map<any, any>;
-  weaponItem!: any;
+  terrain!: Terrain | null;
+  trail!: TrailRibbon | null;
+  vfx!: VFX | null;
+  warp!: WarpState | null;
+  /**
+   * The drawn weapon. `init` puts the Engine Blade in his hand before anything
+   * can read this, and `setWeapon` never clears it, so it is never null after
+   * boot — the one caller that runs before then is `setWeapon` itself, which
+   * checks.
+   */
+  weapon!: Weapon;
+  weaponCache!: Map<string, Weapon>;
+  weaponItem!: WeaponItem | null;
   async init(game: Game) {
     this.game = game;
     this.rng = new Rng(51221);
     this.inCombat = false;
 
-    this.vfx = game.get('VFX');
-    this.enemies = game.get('Enemies');
-    this.player = game.get('Player');
-    this.terrain = game.get('Terrain');
-    this.elemancy = new Elemancy(this.vfx, game);
+    this.vfx = game.get('VFX') ?? null;
+    this.enemies = game.get('Enemies') ?? null;
+    this.player = game.get('Player') ?? null;
+    this.terrain = game.get('Terrain') ?? null;
+    this.elemancy = this.vfx ? new Elemancy(this.vfx, game) : null;
 
     /* ---- weapon rig: an anchor the player's "hand" drives ------------ */
     this.hand = new THREE.Group();
@@ -110,7 +345,6 @@ export class CombatSystem {
     this._sweepTmp = new THREE.Vector3();
 
     this.weaponCache = new Map();
-    this.weapon = null;
     this._prebuildWeapons(game);
     this.setWeapon('sword', { materialise: false });
 
@@ -119,7 +353,7 @@ export class CombatSystem {
     (this.vfx ? this.vfx.root : game.scene).add(this.armiger.group);
 
     /* ---- state ------------------------------------------------------- */
-    this.state = 'idle';        // idle | attack | dodge | phase | warp | stasis | hurt
+    this.state = 'idle';
     this.stateTime = 0;
     this.comboIndex = -1;
     this.comboStep = null;
@@ -156,7 +390,7 @@ export class CombatSystem {
 
     this._installLockOnShim();
 
-    if (this.enemies) this.enemies.onEnemyStrike = (e: any) => this._enemyStrike(e);
+    if (this.enemies) this.enemies.onEnemyStrike = (e: Enemy) => this._enemyStrike(e);
   }
 
   /**
@@ -172,7 +406,7 @@ export class CombatSystem {
    */
   _installLockOnShim() {
     const self = this;
-    const fn = (enemy: any) => self.setLockOn(enemy);
+    const fn = (enemy: Enemy | null) => self.setLockOn(enemy);
     Object.defineProperties(fn, {
       target: { get: () => self.lockTarget },
       position: { get: () => (self.lockTarget ? self.lockTarget.root.position : undefined) },
@@ -181,6 +415,11 @@ export class CombatSystem {
       height: { get: () => (self.lockTarget ? self.lockTarget.height * self.lockTarget.scale : 1.7) },
       name: { get: () => (self.lockTarget ? self.lockTarget.name : '') },
     });
+    // `defineProperties` answers the plain function it was handed, so the
+    // accessors it just installed are invisible to the type. Ask the value
+    // itself rather than asserting: the throw is unreachable, and it is the
+    // one thing that would tell us if this shim ever stopped installing.
+    if (!isLockOnShim(fn)) throw new Error('CombatSystem: lock-on shim failed to install');
     this.lockOn = fn;
   }
 
@@ -202,13 +441,15 @@ export class CombatSystem {
    *         `mp` {mp,maxMp,stasis}  `combo` {index,weapon}
    *         `parry` {enemy,position}  `link` {enemy,ally}
    */
-  on<K extends CombatEventName>(name: K, fn: (detail: CombatEvents[K]) => void): () => void {
-    if (!this._listeners.has(name)) this._listeners.set(name, new Set());
-    this._listeners.get(name).add(fn);
+  on<K extends CombatEventName>(name: K, fn: CombatListener<K>): () => void {
+    let set = this._listeners.get(name);
+    // the line above is the only place this map is filled, so the set exists
+    if (!set) { set = new Set(); this._listeners.set(name, set); }
+    set.add(fn);
     return () => this.off(name, fn);
   }
 
-  off<K extends CombatEventName>(name: K, fn: (detail: CombatEvents[K]) => void) { this._listeners.get(name)?.delete(fn); }
+  off<K extends CombatEventName>(name: K, fn: CombatListener<K>) { this._listeners.get(name)?.delete(fn); }
 
   /** Emit locally and mirror onto `window` as `combat:<name>` for HUD/audio. */
   emit<K extends CombatEventName>(name: K, detail: CombatEvents[K]) {
@@ -272,12 +513,12 @@ export class CombatSystem {
    * Noctis' four equipped weapon slots, mapped onto the classes this system
    * can actually draw. A slot with no armament in it stays null.
    */
-  weaponSlots(): Array<{kind:string, item:any} | null> {
+  weaponSlots(): Array<WeaponSlot | null> {
     const rpg = this.model;
     if (!rpg || !rpg.inventory) {
       return ['sword', 'greatsword', 'polearm', 'daggers'].map((kind) => ({ kind, item: null }));
     }
-    return rpg.inventory.equipped('noctis').weapon.map((def: any) => {
+    return rpg.inventory.equipped('noctis').weapon.map((def: WeaponItem | null) => {
       if (!def) return null;
       const kind = ITEM_CLASS_TO_KIND[def.class as keyof typeof ITEM_CLASS_TO_KIND] || 'sword';
       return { kind, item: def };
@@ -342,17 +583,19 @@ export class CombatSystem {
   /* ------------------------------------------------------ targeting */
 
   /** Set (or clear) the lock-on target and emit `lockon`. */
-  setLockOn(enemy: any) {
+  setLockOn(enemy: Enemy | null) {
     if (this.lockTarget === enemy) return;
     this.lockTarget = enemy || null;
     if (this.enemies) for (const e of this.enemies.list) e.locked = (e === this.lockTarget);
     this.emit('lockon', { enemy: this.lockTarget });
-    const hud = this.game && this.game.get('HUD');
-    if (hud && hud.setLockOn) hud.setLockOn(this.lockTarget);
+    // `HUD` always declares `setLockOn`; the old `&& hud.setLockOn` guard was
+    // a name nothing verified.
+    const hud = this.game.get('HUD');
+    if (hud) hud.setLockOn(this.lockTarget);
   }
 
   /** Nearest valid enemy in front of the camera. */
-  autoTarget(maxDist = 30) {
+  autoTarget(maxDist = 30): Enemy | null {
     if (!this.enemies || !this.player) return null;
     this.game.camera.getWorldDirection(this._fwd);
     this._fwd.y = 0; this._fwd.normalize();
@@ -364,9 +607,11 @@ export class CombatSystem {
   /**
    * Run `fn` in `delay` seconds of simulated time. Multicast beats and any
    * other choreography keep time here rather than owning a clock each.
-   * @param delay @param fn @param [arg]
+   *
+   * `arg` is the beat index the one caller (`castSpell`'s multicast) needs; it
+   * is passed straight back to `fn` when the beat comes due.
    */
-  schedule(delay: number, fn: ((...args: any[]) => any), arg?: number) { this._sched.push({ t: delay, fn, arg }); }
+  schedule(delay: number, fn: (arg: number) => void, arg: number) { this._sched.push({ t: delay, fn, arg }); }
 
   _drain(dt: number) {
     const s = this._sched;
@@ -499,9 +744,10 @@ export class CombatSystem {
    * The signature move. Blink to a target, land the hit, spend MP.
    * @param [enemy] defaults to the lock-on / auto target
    */
-  warpStrike(enemy: any = this.lockTarget || this.autoTarget()) {
+  warpStrike(enemy: Enemy | null = this.lockTarget || this.autoTarget()) {
     const p = this.player;
-    if (!p || this.stasis || this.state === 'warp') return false;
+    const vfx = this.vfx;
+    if (!p || !vfx || this.stasis || this.state === 'warp') return false;
     if (!this.spendMp(WARP_STRIKE_MP)) return false;
     const target = enemy;
     const from = p.position.clone(); from.y += 1.1;
@@ -514,8 +760,8 @@ export class CombatSystem {
       to.addScaledVector(back, target.radius * target.scale + 0.7);
     }
 
-    const t0 = this.vfx.clock;
-    const impactT = this.vfx.warpStrike({ from, to, t0, dash: 0.16, terrain: this.terrain });
+    const t0 = vfx.clock;
+    const impactT = vfx.warpStrike({ from, to, t0, dash: 0.16, terrain: this.terrain });
     this.emit('warp', { phase: 'start', from, to, enemy: target });
 
     this.state = 'warp';
@@ -531,12 +777,13 @@ export class CombatSystem {
    * Perching is how you get MP back in FFXV: land on a vantage point and the
    * pool refills fast for a few seconds. `perch` is that window.
    */
-  warpTo(point: any) {
+  warpTo(point: THREE.Vector3) {
     const p = this.player;
-    if (!p || this.stasis) return false;
+    const vfx = this.vfx;
+    if (!p || !vfx || this.stasis) return false;
     if (!this.spendMp(WARP_POINT_MP)) return false;
     const from = p.position.clone(); from.y += 1.1;
-    this.vfx.warpTo({ from, to: point, t0: this.vfx.clock, terrain: this.terrain });
+    vfx.warpTo({ from, to: point, t0: vfx.clock, terrain: this.terrain });
     p.root.position.copy(point);
     this.perch = PERCH_SECONDS;
     this.mpRegenDelay = 0;
@@ -602,13 +849,13 @@ export class CombatSystem {
    * One phantom arm comes down on something while the Armiger is up. Called on
    * a fixed beat from `update`.
    */
-  _tickArmigerStrikes(dt: number) {
+  _tickArmigerStrikes(dt: number, p: Player) {
     this._armigerBeat -= dt;
     if (this._armigerBeat > 0) return;
     this._armigerBeat = 0.28;
-    const target = this.lockTarget && !this.lockTarget.dead
+    const target: Enemy | null = this.lockTarget && !this.lockTarget.dead
       ? this.lockTarget
-      : (this.enemies ? this.enemies.nearest(this.player.position, 14) : null);
+      : (this.enemies ? this.enemies.nearest(p.position, 14) : null);
     if (!target) return;
     const c = target.centre();
     const from = c.clone();
@@ -619,6 +866,15 @@ export class CombatSystem {
       this.vfx.warpStrike({ from, to: c, t0: this.vfx.clock, dash: 0.10, terrain: this.terrain, color: 0x8ed4ff, scale: 0.7 });
     }
     this._applyDamage(target, from, { motion: ARMIGER_MOTION, poise: 26, blindside: false });
+    // `AudioSystem` has always listened for `armigerHit` and nothing has ever
+    // sent it, so `Sfx.armigerHit` has only been heard in the offline render.
+    // The event is a real part of `CombatEvents` now and this is where the
+    // emitter goes -- but it is deliberately not emitting yet. On the strike's
+    // own 0.28 s beat that is ~28 plays across an eight-second Armiger, and
+    // nobody has listened to what that sounds like. Uncomment, listen, keep or
+    // thin the beat. Same hold as `DungeonAmbience.ENABLED` and the Regalia
+    // radio's routing.
+    // this.emit('armigerHit', { position: c });
   }
 
   /* ------------------------------------------------------------ elemancy */
@@ -628,13 +884,16 @@ export class CombatSystem {
    * uncrafted fallback — see `castSpell` for a real flask.
    * @param [o] `{power, motion, radius, poise}`
    */
-  cast(element: ElementKind, at?: THREE.Vector3, o: any = {}) {
+  cast(element: ElementKind, at?: THREE.Vector3, o: CastOpts = {}) {
     const p = this.player;
-    const pos = at || (this.lockTarget ? this.lockTarget.centre() : this.elemancy.defaultTarget());
-    if (!pos || !p) return null;
+    const vfx = this.vfx;
+    const elemancy = this.elemancy;
+    if (!p || !vfx || !elemancy) return null;
+    const pos = at || (this.lockTarget ? this.lockTarget.centre() : elemancy.defaultTarget());
+    if (!pos) return null;
     const from = p.position.clone(); from.y += 1.3;
     const power = o.power ?? 1;
-    const res = this.elemancy.cast(element, { pos, t0: this.vfx.clock, power, terrain: this.terrain, from });
+    const res = elemancy.cast(element, { pos, t0: vfx.clock, power, terrain: this.terrain, from });
     const radius = o.radius ?? res.radius;
     if (this.enemies) {
       for (const e of this.enemies.sphereQuery(pos, radius, this._hits)) {
@@ -656,12 +915,12 @@ export class CombatSystem {
    *
    * @param slot 0..2
    */
-  castSpell(slot: number, at?: THREE.Vector3): {ok:boolean, reason?:string, spell?:any, damage?:number, remaining?: any, motion?: any } {
+  castSpell(slot: number, at?: THREE.Vector3): CastResult {
     const rpg = this.model;
     if (!rpg || !rpg.elemancy) return { ok: false, reason: 'no-elemancy' };
     const uid = rpg.elemancy.equipped[slot];
     if (!uid) return { ok: false, reason: 'empty-slot' };
-    const spell = rpg.elemancy.spell(uid);
+    const spell: CraftedSpell | null = rpg.elemancy.spell(uid);
     if (!spell) return { ok: false, reason: 'empty-slot' };
     if (this.mp < spell.mpCost) { this._enterStasis(); return { ok: false, reason: 'no-mp' }; }
 
@@ -670,7 +929,8 @@ export class CombatSystem {
     this.setMp(this.mp - spell.mpCost);
     this.emit('mp', { mp: this.mp, maxMp: this.maxMp, stasis: false });
 
-    const pos = at || (this.lockTarget ? this.lockTarget.centre() : this.elemancy.defaultTarget());
+    const pos = at || (this.lockTarget ? this.lockTarget.centre() : this.elemancy?.defaultTarget());
+    if (!pos) return { ok: false, reason: 'no-target' };
     // Potency is a motion value: the crafted damage divided by what one point
     // of Noctis' magic attack is worth, so the flask scales with him too.
     const motion = Math.max(0.5, spell.damage / Math.max(1, rpg.noctis.magicAttack));
@@ -695,12 +955,13 @@ export class CombatSystem {
    * The crafted side-effects that are not just "more damage in a bigger circle".
    * @param spell @param pos @param rpg
    */
-  _applySpellEffects(spell: any, pos: THREE.Vector3, rpg: any) {
+  _applySpellEffects(spell: CraftedSpell, pos: THREE.Vector3, rpg: RpgSystem) {
     for (const e of spell.effects || []) {
       const pay = e.payload || {};
       if (pay.healAllies) {
         for (const s of rpg.roster) s.heal(s.maxHp * pay.healAllies);
-        if (this.vfx) this.vfx.airRing({ pos: this.player.position.clone().setY(pos.y + 0.4), color: 0x90ffb0, from: 0.5, to: 7, life: 0.7, intensity: 3 });
+        const p = this.player;
+        if (this.vfx && p) this.vfx.airRing({ pos: p.position.clone().setY(pos.y + 0.4), color: 0x90ffb0, from: 0.5, to: 7, life: 0.7, intensity: 3 });
       }
       if (pay.instantDeath && this.enemies) {
         for (const en of this.enemies.sphereQuery(pos, spell.radius, this._hits)) {
@@ -723,11 +984,15 @@ export class CombatSystem {
    */
   drawEnergy() {
     const rpg = this.model;
-    if (!rpg || !rpg.drawNearby || !this.player) return { ok: false, reason: 'no-elemancy' };
-    const res = rpg.drawNearby(this.player.position, 12);
+    const player = this.player;
+    if (!rpg || !player) return { ok: false, reason: 'no-elemancy' };
+    const res = rpg.drawNearby(player.position, 12);
     if (res.ok && this.vfx) {
-      const p = this.player.position.clone(); p.y += 1.0;
-      const colour = res.element === 'fire' ? 0xff7a1e : res.element === 'ice' ? 0x7fd6ff : 0xa8c8ff;
+      const p = player.position.clone(); p.y += 1.0;
+      // `drawNearby` answers one of two shapes and only the success arm names
+      // an element; ask the value rather than trusting `ok` to imply it.
+      const element = 'element' in res ? res.element : null;
+      const colour = element === 'fire' ? 0xff7a1e : element === 'ice' ? 0x7fd6ff : 0xa8c8ff;
       this.vfx.moteBurst({ pos: p, count: 30, speed: 2.4, color: colour, life: 1.2, size: 0.22, gravity: -1.4, intensity: 5 });
       this.vfx.flare({ pos: p, color: colour, size: 1.6, life: 0.45, intensity: 5 });
     }
@@ -747,12 +1012,12 @@ export class CombatSystem {
    *
    * @returns an attacker for `computeDamage`
    */
-  _attacker(rpg: any): any {
+  _attacker(rpg: RpgSystem) {
     const n = rpg.noctis;
     let strongest = 0;
     let active = 0;
     if (rpg.inventory) {
-      for (const w of rpg.inventory.equipped('noctis').weapon) {
+      for (const w of rpg.inventory.equipped('noctis').weapon as Array<WeaponItem | null>) {
         if (w && (w.attack || 0) > strongest) strongest = w.attack || 0;
       }
       active = this.weaponItem ? (this.weaponItem.attack || 0) : strongest;
@@ -779,10 +1044,10 @@ export class CombatSystem {
    *
    * @param [o] `{motion, element, weaponClass, blindside, warp, aerial}`
    */
-  resolve(enemy: any, o: any = {}): {damage:number, crit:boolean, weakness:boolean, elementKind:string} {
+  resolve(enemy: CombatTarget, o: HitOpts = {}): DamageRoll {
     const motion = o.motion ?? 1;
     const rpg = this.model;
-    if (!rpg || !rpg.damage) {
+    if (!rpg) {
       // No RPG model (a bare harness world): fall back to the weapon table so
       // combat still has weight rather than silently doing nothing.
       const base = (this.weapon ? this.weapon.def.damage : 100) * motion;
@@ -816,7 +1081,7 @@ export class CombatSystem {
    * @param at where the blow came from (sets the knockback dir)
    * @param [opts] `{motion, poise, element, blindside, warp, weaponClass}`
    */
-  _applyDamage(enemy: any, at: THREE.Vector3, opts: any = {}) {
+  _applyDamage(enemy: CombatTarget, at: THREE.Vector3, opts: HitOpts = {}) {
     if (!enemy || enemy.dead) return null;
     const dir = this._tmp.subVectors(enemy.centre(), at);
     if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
@@ -832,7 +1097,10 @@ export class CombatSystem {
       poise: opts.poise ?? 10,
       noFlinch: opts.noFlinch,
       source: this.player,           // being hit is what pulls an idle pack onto you
-      killer: 'noctis',
+      // Was the string `'noctis'`, which `Enemy.killer` (a `Threat`) is not.
+      // Nothing in the tree reads `killer`, so this names the same thing the
+      // string meant without changing anything that can be observed.
+      killer: this.player,
     });
     if (!res) return null;
     res.damage = roll.damage;
@@ -862,7 +1130,7 @@ export class CombatSystem {
    * Poise broke. Make the window legible: a ring, a flash, a beat of slow
    * motion, and the `stagger` event the HUD banners off.
    */
-  _onStagger(enemy: any) {
+  _onStagger(enemy: Enemy) {
     this.emit('stagger', { enemy });
     this.hitstop = Math.max(this.hitstop, 0.1);
     this.slowmo = Math.max(this.slowmo, 0.3);
@@ -876,7 +1144,7 @@ export class CombatSystem {
   }
 
   /** True when the player is behind the enemy's facing — blindside bonus. */
-  _isBlindside(enemy: any) {
+  _isBlindside(enemy: Enemy) {
     if (!this.player) return false;
     const ef = this._tmp.set(Math.sin(enemy.heading), 0, Math.cos(enemy.heading));
     const toPlayer = this._fwd.subVectors(this.player.position, enemy.root.position).setY(0);
@@ -884,12 +1152,13 @@ export class CombatSystem {
     return ef.dot(toPlayer.normalize()) < -0.35;
   }
 
-  _enemyStrike(enemy: any) {
-    if (!this.player) return;
-    const d = enemy.root.position.distanceTo(this.player.position);
+  _enemyStrike(enemy: Enemy) {
+    const p = this.player;
+    if (!p) return;
+    const d = enemy.root.position.distanceTo(p.position);
     if (d > enemy.attackRange + 1.2) return;
     if (this.state === 'phase' && this.phaseCharge > 0.05) {
-      this._perfectParry(enemy);
+      this._perfectParry(enemy, p);
       return;
     }
     if (this.state === 'dodge' && this.stateTime < 0.32) return;   // i-frames
@@ -902,12 +1171,12 @@ export class CombatSystem {
       });
       dmg = Math.max(1, Math.round(res.damage * 0.55));
       rpg.noctis.applyDamage(dmg);
-      this.player.stats.hp = Math.round(rpg.noctis.hp);
+      p.stats.hp = Math.round(rpg.noctis.hp);
     } else {
       dmg = Math.round(enemy.damage * (0.85 + this.rng.next() * 0.3));
-      this.player.stats.hp = Math.max(0, this.player.stats.hp - dmg);
+      p.stats.hp = Math.max(0, p.stats.hp - dmg);
     }
-    const at = this.player.position.clone(); at.y += 1.1;
+    const at = p.position.clone(); at.y += 1.1;
     if (this.vfx) {
       this.vfx.impact({
         pos: at, dir: this._tmp.subVectors(at, enemy.centre()).normalize(),
@@ -915,11 +1184,11 @@ export class CombatSystem {
       });
     }
     this.hitstop = 0.06;
-    this.emit('playerHit', { enemy, damage: dmg, hp: this.player.stats.hp, position: at });
+    this.emit('playerHit', { enemy, damage: dmg, hp: p.stats.hp, position: at });
   }
 
-  _perfectParry(enemy: any) {
-    const at = this.player.position.clone(); at.y += 1.2;
+  _perfectParry(enemy: Enemy, p: Player) {
+    const at = p.position.clone(); at.y += 1.2;
     if (this.vfx) {
       this.vfx.flare({ pos: at, color: 0xdff4ff, size: 4.0, life: 0.35, intensity: 10 });
       this.vfx.crystalBurst({ pos: at, count: 22, speed: 6.5, life: 0.7, size: 0.22 });
@@ -928,7 +1197,7 @@ export class CombatSystem {
         count: 40, speed: 13, color: 0xcfeaff, size: 0.11, intensity: 8,
       });
       this.vfx.flash({ pos: at, color: 0x8fd8ff, intensity: 90, distance: 16, life: 0.45, priority: 7 });
-      if (this.terrain) this.vfx.ground.ring({ pos: this.player.position, terrain: this.terrain, radius: 3.2, color: 0xbfe8ff, life: 0.6 });
+      if (this.terrain) this.vfx.ground.ring({ pos: p.position, terrain: this.terrain, radius: 3.2, color: 0xbfe8ff, life: 0.6 });
     }
     this.slowmo = 0.55;
     this.counterWindow = 0.9;
@@ -936,22 +1205,23 @@ export class CombatSystem {
   }
 
   /** Counter-attack: a free, heavy, guaranteed-blindside riposte. */
-  counter(enemy = this.lockTarget || this.autoTarget()) {
-    if (this.counterWindow <= 0 || !enemy) return false;
+  counter(enemy: Enemy | null = this.lockTarget || this.autoTarget()) {
+    const p = this.player;
+    if (this.counterWindow <= 0 || !enemy || !p) return false;
     this.counterWindow = 0;
-    this._applyDamage(enemy, this.player.position, {
+    this._applyDamage(enemy, p.position, {
       motion: this.weaponMotion * 2.4, poise: 60, blindside: true,
     });
     if (this.vfx) {
       const c = enemy.centre();
-      this.vfx.impact({ pos: c, dir: this._tmp.subVectors(c, this.player.position).normalize(), scale: 1.8, color: 0xbfe8ff, terrain: this.terrain, blood: true });
+      this.vfx.impact({ pos: c, dir: this._tmp.subVectors(c, p.position).normalize(), scale: 1.8, color: 0xbfe8ff, terrain: this.terrain, blood: true });
     }
     this.hitstop = 0.11;
     return true;
   }
 
   /** A party member joins the attack for bonus damage. */
-  _tryLinkStrike(enemy: any) {
+  _tryLinkStrike(enemy: Enemy) {
     if (this.linkCooldown > 0 || !enemy) return;
     if (this.rng.next() > 0.22) return;
     this.linkCooldown = 8;
@@ -990,12 +1260,12 @@ export class CombatSystem {
 
     if (!p) return;
     this.inCombat = !!(this.enemies && this.enemies.alive().some(
-      (e: any) => e.root.position.distanceTo(p.position) < 34
+      (e: Enemy) => e.root.position.distanceTo(p.position) < 34
     ));
 
     // scenario shots author the pose directly; keep the sim from unwinding it
     if (this.scenarioLock) {
-      if (this.armiger.active > 0.001) {
+      if (this.vfx && this.armiger.active > 0.001) {
         this.armiger.setClock(this.vfx.clock);
         this.armiger.layout(this._armigerCentre || p.position, this.vfx.clock, this._armigerOpts);
       }
@@ -1037,8 +1307,8 @@ export class CombatSystem {
     this.stateTime += dt;
     switch (this.state) {
       case 'attack': this._tickSwing(dt); break;
-      case 'dodge': this._tickDodge(dt); break;
-      case 'warp': this._tickWarp(dt); break;
+      case 'dodge': this._tickDodge(dt, p); break;
+      case 'warp': this._tickWarp(dt, p); break;
       case 'phase': this._tickPhase(dt); break;
       case 'stasis': if (!this.stasis) this.state = 'idle'; break;
       default: this._restPose(dt); break;
@@ -1048,18 +1318,18 @@ export class CombatSystem {
     if (this.armigerTimer > 0) {
       this.armigerTimer -= dt;
       this.armiger.active = THREE.MathUtils.damp(this.armiger.active, 1, 6, dt);
-      this._tickArmigerStrikes(dt);
+      this._tickArmigerStrikes(dt, p);
     } else if (this.armiger.active > 0.001) {
       this.armiger.active = THREE.MathUtils.damp(this.armiger.active, 0, 6, dt);
     }
-    if (this.armiger.active > 0.001) {
+    if (this.vfx && this.armiger.active > 0.001) {
       this.armiger.setClock(this.vfx.clock);
       this.armiger.layout(p.position, this.vfx.clock);
     } else {
       this.armiger.group.visible = false;
     }
 
-    this.elemancy.update();
+    this.elemancy?.update();
   }
 
   /**
@@ -1081,14 +1351,16 @@ export class CombatSystem {
    * | `T` | draw elemental energy from a nearby deposit |
    * | `G` `J` `K` | Gladiolus / Ignis / Prompto technique (see `PartyAI`) |
    */
-  _readInput(input: any, dt: number) {
+  _readInput(input: Input, dt: number) {
     const m = input.mouse;
     // Gamepad face buttons mirror the keyboard verbs one for one, so the
     // controls card can print both columns without either being a promise the
-    // game does not keep. `gpDown` is a real rising edge tracked by Input.
-    const pad = input.gpDown ? input : null;
-    const gpHeld = (i: number) => !!(pad && input.gpButton(i));
-    const gpEdge = (i: number) => !!(pad && input.gpDown(i));
+    // game does not keep. `gpDown` is a real rising edge tracked by Input, and
+    // both of these already answer false when no pad is connected -- the old
+    // `const pad = input.gpDown ? input : null` guarded on a method that is
+    // always defined, so it was never anything but `input`.
+    const gpHeld = (i: number) => input.gpButton(i);
+    const gpEdge = (i: number) => input.gpDown(i);
 
     // Circle taps to dodge and holds to phase, exactly as FFXV does it. A/Cross
     // stays free for the interact verb, which owns it everywhere else.
@@ -1128,12 +1400,13 @@ export class CombatSystem {
    * empty), which is also how MP comes back.
    */
   warpToPoint() {
-    if (!this.player) return false;
+    const p = this.player;
+    if (!p) return false;
     const t = this.autoTarget(40);
     const to = t
       ? t.root.position.clone().add(this._tmp.set(0, 0, 3))
-      : this.player.position.clone().addScaledVector(
-        this._tmp.set(Math.sin(this.player.heading), 0, Math.cos(this.player.heading)), 12);
+      : p.position.clone().addScaledVector(
+        this._tmp.set(Math.sin(p.heading), 0, Math.cos(p.heading)), 12);
     if (this.terrain) to.y = this.terrain.heightAt(to.x, to.z);
     return this.warpTo(to);
   }
@@ -1154,6 +1427,7 @@ export class CombatSystem {
 
   _tickSwing(dt: number) {
     const step = this.comboStep;
+    if (!step) { this._endSwing(); this.state = 'idle'; return; }
     this.comboTimer += dt;
     let n = 0;
     if (this.comboPhase === 'wind') {
@@ -1209,7 +1483,7 @@ export class CombatSystem {
    * arc is, which is both how a sword is actually swung and what makes the
    * trail ribbon read as a sweep rather than a flick.
    */
-  _poseHand(ang: number, step: any, phase: string, n: number) {
+  _poseHand(ang: number, step: ComboStep, phase: ComboPhase, n: number) {
     const h = this.hand;
     const k = THREE.MathUtils.clamp(n, 0, 1);
     // near-vertical at rest, laid right over through the active window
@@ -1260,9 +1534,10 @@ export class CombatSystem {
    *
    * @param a @param b @param radius
    */
-  _sweep(a: THREE.Vector3, b: THREE.Vector3, radius: number): Array<any> {
+  _sweep(a: THREE.Vector3, b: THREE.Vector3, radius: number): Enemy[] {
     const out = this._hits;
     out.length = 0;
+    if (!this.enemies) return out;
     const steps = 5;
     const p = this._sweepTmp;
     for (const e of this.enemies.list) {
@@ -1295,7 +1570,7 @@ export class CombatSystem {
       const blindside = this._isBlindside(e);
       this._applyDamage(e, this._base, {
         blindside,
-        motion: this.weaponMotion * (this.comboStep.dmg || 1) * (heavy ? 1.35 : 1),
+        motion: this.weaponMotion * (this.comboStep ? this.comboStep.dmg : 1) * (heavy ? 1.35 : 1),
         poise: this.weapon.def.poise * (heavy ? 2.2 : 1),
       });
       const at = this._closestOn(e, this._tip);
@@ -1313,20 +1588,22 @@ export class CombatSystem {
     }
   }
 
-  _closestOn(enemy: any, p: THREE.Vector3) {
+  _closestOn(enemy: Enemy, p: THREE.Vector3) {
     const c = enemy.centre();
     return c.lerp(p, 0.55);
   }
 
   _fireShot(n: number) {
     if (this._shotFired) return;
+    const p = this.player;
+    if (!p) return;
     this._shotFired = true;
     const target = this.lockTarget || this.autoTarget(30);
     this.hand.updateWorldMatrix(true, true);
     const muzzle = this.weapon.tip();
     this.emit('shot', { position: muzzle });
     const to = target ? target.centre() : muzzle.clone().addScaledVector(
-      this._tmp.set(Math.sin(this.player.heading), 0, Math.cos(this.player.heading)), 26
+      this._tmp.set(Math.sin(p.heading), 0, Math.cos(p.heading)), 26
     );
     if (this.vfx) {
       const b = this.vfx.acquireBeam();
@@ -1346,7 +1623,7 @@ export class CombatSystem {
     }
     if (target) {
       this._applyDamage(target, muzzle, {
-        motion: this.weaponMotion * (this.comboStep.dmg || 1), poise: 6,
+        motion: this.weaponMotion * (this.comboStep ? this.comboStep.dmg : 1), poise: 6,
       });
       if (this.vfx) this.vfx.impact({ pos: target.centre(), dir: this._tmp.subVectors(target.centre(), muzzle).normalize(), scale: 0.7, color: 0xffcf8a, blood: true });
     }
@@ -1355,8 +1632,7 @@ export class CombatSystem {
 
   /* --------------------------------------------------------- dodge */
 
-  _tickDodge(dt: number) {
-    const p = this.player;
+  _tickDodge(dt: number, p: Player) {
     const T = 0.46;
     const n = Math.min(1, this.stateTime / T);
     const speed = 11 * Math.pow(1 - n, 1.6);
@@ -1367,11 +1643,11 @@ export class CombatSystem {
 
   /* ---------------------------------------------------------- warp */
 
-  _tickWarp(dt: number) {
+  _tickWarp(dt: number, p: Player) {
     const w = this.warp;
-    const p = this.player;
-    if (!w) { this.state = 'idle'; return; }
-    const t = this.vfx.clock - w.t0;
+    const vfx = this.vfx;
+    if (!w || !vfx) { this.state = 'idle'; return; }
+    const t = vfx.clock - w.t0;
     const k = THREE.MathUtils.clamp(t / w.dash, 0, 1);
     // ease-in so the blink reads as an accelerating streak
     const e = k * k;

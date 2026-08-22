@@ -37,8 +37,8 @@ const exec = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const argv = process.argv.slice(2);
-const flag = (n: any) => argv.includes(n);
-const val = (n: any, d: any) => (argv.indexOf(n) === -1 ? d : argv[argv.indexOf(n) + 1]);
+const flag = (n: string) => argv.includes(n);
+const val = (n: string, d: string | number) => (argv.indexOf(n) === -1 ? d : argv[argv.indexOf(n) + 1]);
 const positional = argv.filter((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--'));
 
 const root = path.resolve(ROOT, positional[0] || 'shots');
@@ -49,15 +49,24 @@ const apply = flag('--apply');
 const force = flag('--force');
 const useChromium = flag('--chromium');
 
-const MB = (b: any) => (b / 1e6).toFixed(1);
-const isSheet = (f: any) => /^_sheet/.test(f);
+const MB = (b: number) => (b / 1e6).toFixed(1);
+const isSheet = (f: string) => /^_sheet/.test(f);
+
+/**
+ * Encode one PNG to JPEG. `close` is present only on the browser-backed
+ * encoder, which owns a chromium instance that has to be shut down.
+ */
+interface Encoder {
+  (src: string, out: string): Promise<void>;
+  close?: () => Promise<void>;
+}
 
 /** sips is a system binary, not a dependency; fall back when it is not there. */
-async function pickEncoder(): Promise<{ (src: any, out: any): Promise<void>, close?: () => Promise<void> }> {
+async function pickEncoder(): Promise<Encoder> {
   if (!useChromium) {
     try {
       await exec('sips', ['--version']);
-      return async (src: any, out: any) => {
+      return async (src: string, out: string) => {
         await exec('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', String(quality), src, '--out', out]);
       };
     } catch { /* fall through */ }
@@ -66,7 +75,7 @@ async function pickEncoder(): Promise<{ (src: any, out: any): Promise<void>, clo
   const { CHROMIUM_ARGS } = await import('./chromium.mts');
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage();
-  const encode: { (src: any, out: any): Promise<void>, close?: () => Promise<void> } = async (src: any, out: any) => {
+  const encode: Encoder = async (src: string, out: string) => {
     const data = `data:image/png;base64,${(await readFile(src)).toString('base64')}`;
     const b64 = await page.evaluate(async ([uri, q]: [string, number]) => {
       const img = await createImageBitmap(await (await fetch(uri)).blob());
@@ -161,9 +170,10 @@ async function main() {
         await unlink(src);
         before += size;
         after += got;
-      } catch (e: any) {
+      } catch (e: unknown) {
         failed++;
-        console.error(`  ! ${path.relative(root, src)}: ${e.message.split('\n')[0]}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`  ! ${path.relative(root, src)}: ${msg.split('\n')[0]}`);
       }
     }
     process.stdout.write(`  ${p.name} done\r`);

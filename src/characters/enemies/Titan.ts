@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { tube, spike, slab, place, tint, glow, rectCross, loft } from '../../combat/GeoKit.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -80,8 +81,8 @@ export const TITAN = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new TitanEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new TitanEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -381,13 +382,7 @@ function buildPrototype() {
 }
 
 class TitanEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override staggerTime!: any;
-  override state!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(TITAN, opts); }
+  constructor(opts: SpawnOpts) { super(TITAN, opts); }
 
   /**
    * World-space centre of one palm — the fight code uses it to place the
@@ -401,7 +396,7 @@ class TitanEnemy extends Enemy {
     return out.set(0, 0, 3.0).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

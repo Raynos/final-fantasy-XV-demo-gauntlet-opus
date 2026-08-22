@@ -46,6 +46,21 @@ export type Vec3Like = THREE.Vector3 | number[] | { x: number, y: number, z: num
 /** A colour, likewise. */
 export type ColorLike = THREE.Color | number[] | { r: number, g: number, b: number };
 
+/** An instance buffer, as far as writing three floats into it is concerned. */
+type NumBuf = { [index: number]: number };
+
+/** Write a point into `buf` at `o`, from whichever shape the caller holds. */
+function writeVec3(buf: NumBuf, o: number, v: Vec3Like) {
+  if (Array.isArray(v)) { buf[o] = v[0]; buf[o + 1] = v[1]; buf[o + 2] = v[2]; }
+  else { buf[o] = v.x; buf[o + 1] = v.y; buf[o + 2] = v.z; }
+}
+
+/** The same for a colour. `THREE.Color` and a plain `{r,g,b}` read alike. */
+function writeColor(buf: NumBuf, o: number, c: ColorLike) {
+  if (Array.isArray(c)) { buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; }
+  else { buf[o] = c.r; buf[o + 1] = c.g; buf[o + 2] = c.b; }
+}
+
 export interface ParticleSpec {
   pos: Vec3Like;
   vel?: Vec3Like;
@@ -68,6 +83,25 @@ export interface ParticleSpec {
   fade?: number;
 }
 
+/**
+ * The particle shader's uniform block. The index signature is what
+ * `ShaderMaterial` takes; every uniform the shader has is named below it.
+ */
+export interface ParticleUniforms {
+  [uniform: string]: THREE.IUniform;
+  uTime: THREE.IUniform<number>;
+  uMap: THREE.IUniform<THREE.Texture | null | undefined>;
+  /** The half-res scene depth that makes smoke fade into geometry. */
+  uDepth: THREE.IUniform<THREE.Texture | null>;
+  uSoft: THREE.IUniform<number>;
+  uSoftDist: THREE.IUniform<number>;
+  /** Camera near and far, so the depth texture can be linearised. */
+  uCamNF: THREE.IUniform<THREE.Vector2>;
+  uFogColor: THREE.IUniform<THREE.Color>;
+  uFogDensity: THREE.IUniform<number>;
+  uGlobal: THREE.IUniform<number>;
+}
+
 export class ParticleSystem {
   _dirtyHi!: number;
   _dirtyLo!: number;
@@ -82,7 +116,7 @@ export class ParticleSystem {
   live!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  uniforms!: any;
+  uniforms!: ParticleUniforms;
   useFog!: boolean;
   constructor({
     capacity = 2048, map, blending = THREE.AdditiveBlending, fog = false,
@@ -162,21 +196,12 @@ export class ParticleSystem {
   emit(p: ParticleSpec) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
-    // Read either shape without narrowing: callers pass a Vector3 or a plain
-    // triple, and the `.x ?? [0]` form is the check. Typed as the union, every
-    // one of these six accesses is an error on one arm or the other.
-    const pos = p.pos as any, vel = (p.vel || ZERO) as any, col = (p.color || WHITE) as any;
-
-    const a = this.aPos0.array, b = this.aVel.array, c = this.aColor.array;
-    a[i * 3] = pos.x !== undefined ? pos.x : pos[0];
-    a[i * 3 + 1] = pos.y !== undefined ? pos.y : pos[1];
-    a[i * 3 + 2] = pos.z !== undefined ? pos.z : pos[2];
-    b[i * 3] = vel.x !== undefined ? vel.x : vel[0];
-    b[i * 3 + 1] = vel.y !== undefined ? vel.y : vel[1];
-    b[i * 3 + 2] = vel.z !== undefined ? vel.z : vel[2];
-    c[i * 3] = col.r !== undefined ? col.r : col[0];
-    c[i * 3 + 1] = col.g !== undefined ? col.g : col[1];
-    c[i * 3 + 2] = col.b !== undefined ? col.b : col[2];
+    // Callers pass a Vector3, a plain `{x,y,z}` or a triple. `Array.isArray`
+    // is the same runtime discriminant the old `.x !== undefined ? .x : [0]`
+    // form used, and it narrows, so nothing here has to be asserted away.
+    writeVec3(this.aPos0.array, i * 3, p.pos);
+    writeVec3(this.aVel.array, i * 3, p.vel || ZERO);
+    writeColor(this.aColor.array, i * 3, p.color || WHITE);
 
     const q = this.aParams.array;
     q[i * 4] = p.t0; q[i * 4 + 1] = p.life;
@@ -216,21 +241,24 @@ export class ParticleSystem {
   setClock(clock: number) { this.uniforms.uTime.value = clock; }
 
   /** Wire the shared depth texture for soft-particle fading. */
-  setDepth(texture: any, near: any, far: any) {
+  setDepth(texture: THREE.Texture | null, near: number, far: number) {
     this.uniforms.uDepth.value = texture;
     this.uniforms.uSoft.value = texture ? 1 : 0;
     this.uniforms.uCamNF.value.set(near, far);
   }
 
   /** Read fog from the scene so smoke matches the world's aerial perspective. */
-  syncFog(scene: any) {
+  syncFog(scene: THREE.Scene) {
     if (!this.useFog) return;
     const f = scene.fog;
     if (!f) { this.uniforms.uFogDensity.value = 0; return; }
     this.uniforms.uFogColor.value.copy(f.color);
-    this.uniforms.uFogDensity.value = f.density !== undefined
-      ? f.density
-      : 1.0 / Math.max(1, f.far);
+    // `FogBase` declares neither `density` nor `far`; the two concrete fogs
+    // are the discriminant, exactly as the old `f.density !== undefined` test
+    // was picking between them.
+    if (f instanceof THREE.FogExp2) this.uniforms.uFogDensity.value = f.density;
+    else if (f instanceof THREE.Fog) this.uniforms.uFogDensity.value = 1.0 / Math.max(1, f.far);
+    else this.uniforms.uFogDensity.value = 0;
   }
 
   /** Retire every live particle (scenario reset). */

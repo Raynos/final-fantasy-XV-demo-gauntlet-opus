@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Screen-space contact shadows — the last few centimetres a shadow map cannot
@@ -27,14 +28,14 @@ export class ContactShadowPass extends FilterPass {
   _lightDir!: THREE.Vector3;
   _lightTgt!: THREE.Vector3;
   bias!: number;
-  override fx!: any;
+  override fx!: PostFX;
   intensity!: number;
   length!: number;
   override material!: THREE.ShaderMaterial;
   maxDistance!: number;
   thickness!: number;
   tint!: THREE.Color;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super(fx);
     this.enabled = true;
     this.intensity = 0.85;      // 0..1 how black the contact goes

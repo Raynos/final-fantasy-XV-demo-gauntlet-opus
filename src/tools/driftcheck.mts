@@ -33,7 +33,7 @@ import { CHROMIUM_ARGS } from './chromium.mts';
 
 const PORT = Number(process.env.PORT || 5173);
 
-function parseArgs(argv: any) {
+function parseArgs(argv: string[]) {
   const o = {
     // `tol` is the real gate and it is strict: the rendered ground must not
     // move at all. `tolCpu` cannot be: the finest clipmap cell is 1.5 m, so the
@@ -42,7 +42,7 @@ function parseArgs(argv: any) {
     // `heightAt()`. 0.45 leaves headroom over the tessellation floor without
     // admitting a real offset.
     home: 'hero_full', span: 200, res: 160, tol: 0.05, tolCpu: 0.45,
-    settle: 60, tourSettle: 40, tour: null,
+    settle: 60, tourSettle: 40, tour: null as string[] | null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -77,7 +77,7 @@ const tour = opts.tour || DEFAULT_TOUR;
 
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-const errors: any[] = [];
+const errors: string[] = [];
 page.on('pageerror', (e) => { errors.push(String(e).split('\n')[0]); });
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
 await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
@@ -93,12 +93,38 @@ const out = await page.evaluate(async (cfg) => {
   // `three` specifier does not resolve inside `page.evaluate`, because the
   // browser is doing the import, not vite. Same trick as src/tools/heightcheck.mts.
   const surf0 = t.clipmap.rings[0].meshes[0].material;
+  /**
+   * The bits of a three orthographic camera the probe rig drives. Written down
+   * rather than imported because the constructor is lifted off a live object.
+   */
+  /** A scene node as the sun search reads it. */
+  interface SceneNode {
+    isLight?: boolean;
+    shadow?: { camera?: { isOrthographicCamera?: boolean, constructor: OrthoCtor } };
+  }
+
+  /** One mesh of a clipmap ring, with the material the probe swaps out. */
+  interface ClipmapMesh { material: unknown }
+
+  /** One LOD ring of the terrain clipmap. */
+  interface ClipmapRing { cell: number; level: number; meshes: ClipmapMesh[] }
+
+  interface OrthoCam {
+    up: { set(x: number, y: number, z: number): void };
+    position: { set(x: number, y: number, z: number): void };
+    lookAt(x: number, y: number, z: number): void;
+    updateMatrixWorld(force?: boolean): void;
+  }
+  type OrthoCtor = new (l: number, r: number, t: number, b: number, n: number, f: number) => OrthoCam;
+
   const Scene = g.scene.constructor;
   const ShaderMaterial = g.post.taa.material.constructor;
   const RenderTarget = g.post.rtScene.constructor;
   const Color = surf0.color.constructor;
-  let OrthographicCamera: any = null;
-  g.scene.traverse((o: any) => {
+  // Constructors are pulled off live objects rather than imported: this file
+  // runs in the page and must use the *page's* three, not a second copy.
+  let OrthographicCamera: OrthoCtor | null = null;
+  g.scene.traverse((o: SceneNode) => {
     if (!OrthographicCamera && o.isLight && o.shadow && o.shadow.camera
         && o.shadow.camera.isOrthographicCamera) OrthographicCamera = o.shadow.camera.constructor;
   });
@@ -108,7 +134,7 @@ const out = await page.evaluate(async (cfg) => {
   // ---- probe rig ---------------------------------------------------------
   // One material per LOD level: the morph band in VERT_BEGIN is a function of
   // uCell, so a single material would mis-morph six of the seven rings.
-  const probeMats = t.clipmap.rings.map((ring: any) => {
+  const probeMats = t.clipmap.rings.map((ring: ClipmapRing) => {
     const m = new ShaderMaterial({
       uniforms: Object.assign({}, t.res.uniforms, { uCell: { value: ring.cell } }),
       vertexShader: `
@@ -139,8 +165,8 @@ const out = await page.evaluate(async (cfg) => {
    * Read back the world-space Y of the rendered terrain over a fixed world
    * rect, straight down. Returns Float32 grids of y / x / z.
    */
-  const probe = (cx: any, cz: any, span: any) => {
-    const cam = new OrthographicCamera(-span / 2, span / 2, span / 2, -span / 2, 1, 4000);
+  const probe = (cx: number, cz: number, span: number) => {
+    const cam = new OrthographicCamera!(-span / 2, span / 2, span / 2, -span / 2, 1, 4000);
     cam.up.set(0, 0, -1);
     cam.position.set(cx, 2000, cz);
     cam.lookAt(cx, 0, cz);
@@ -148,8 +174,8 @@ const out = await page.evaluate(async (cfg) => {
 
     const parent = t.clipmap.group.parent;
     probeScene.add(t.clipmap.group);
-    const saved: any[] = [];
-    t.clipmap.rings.forEach((ring: any, L: any) => {
+    const saved: Array<[ClipmapMesh, unknown]> = [];
+    t.clipmap.rings.forEach((ring: ClipmapRing, L: number) => {
       for (const m of ring.meshes) { saved.push([m, m.material]); m.material = probeMats[L]; }
     });
 
@@ -276,7 +302,7 @@ const out = await page.evaluate(async (cfg) => {
 
 await browser.close();
 
-const f = (v: any, d = 3) => (v == null ? 'n/a' : Number(v).toFixed(d));
+const f = (v: number | null | undefined, d = 3) => (v == null ? 'n/a' : Number(v).toFixed(d));
 console.log(`home shot        ${out.home}`);
 console.log(`probe rect       ${f(out.rect.span, 0)} m square at (${f(out.rect.cx, 1)}, ${f(out.rect.cz, 1)}), coverage ${f(out.coverage[0] * 100, 1)}% / ${f(out.coverage[1] * 100, 1)}%`);
 console.log(`travelled        ${f(out.travelled, 0)} m over ${out.visited} stops`);

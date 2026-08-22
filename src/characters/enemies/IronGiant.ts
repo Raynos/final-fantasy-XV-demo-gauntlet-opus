@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
+import type { BoneWriter } from './RigBuilder.ts';
 import { metalNormal, metalRoughness } from './EnemyBase.ts';
+import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { BipedEnemy } from './Biped.ts';
+import type { AttackEnvelope, BipedAnim } from './Biped.ts';
 import { clamp01, smooth, decelerate } from '../rig/CreatureAnim.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
@@ -54,8 +57,8 @@ export const IRON_GIANT = {
       telegraph: 1.35, strike: 0.32, attack: 1.0, recover: 1.8, cooldown: 5, unblockable: true },
   ],
   buildPrototype,
-  make(opts: any) { return new IronGiantEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new IronGiantEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -222,15 +225,8 @@ function buildPrototype() {
  */
 class IronGiantEnemy extends BipedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
-  static ANIM: any;
-  override anim!: any;
-  override deathPush!: any;
-  override deathSide!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override type!: any;
-  override visual!: any;
-  constructor(opts: any) { super(IRON_GIANT, opts); }
+  static override ANIM: BipedAnim;
+  constructor(opts: SpawnOpts) { super(IRON_GIANT, opts); }
 
   /** World-space sword tip — used by the arc VFX and the sweep hitbox. */
   swordTip(out = new THREE.Vector3()) {
@@ -240,7 +236,7 @@ class IronGiantEnemy extends BipedEnemy {
   }
 
   /** Sword carried point-down at the side. */
-  carry(S: any, k = 1) {
+  carry(S: BoneWriter, k = 1) {
     S('shR', 0.35 * k, 0, -0.30 * k);
     S('elR', -0.55 * k, 0, 0);
     S('hdR', -0.35 * k, 0, 0);
@@ -254,14 +250,14 @@ class IronGiantEnemy extends BipedEnemy {
    * other. Cheap, and it does more for "this is a daemon" than any amount of
    * extra geometry.
    */
-  miasma(S: any, t: number) {
+  miasma(S: BoneWriter, t: number) {
     const j = Math.sin(t * 1.7) * Math.sin(t * 0.43 + 1.1) * Math.sin(t * 0.19);
     this.add(S, 'chest', j * 0.020, j * 0.030, -0.035 + j * 0.014);
     this.add(S, 'neck', -j * 0.030, j * 0.055, 0.02);
     this.add(S, 'head', j * 0.050, -j * 0.085, -0.03);
   }
 
-  add(S: any, name: string, x: number, y: number, z: number) {
+  add(S: BoneWriter, name: string, x: number, y: number, z: number) {
     const b = this.rig.byName.get(name);
     if (!b) return;
     _e.set(x, y, z, 'XYZ');
@@ -269,7 +265,7 @@ class IronGiantEnemy extends BipedEnemy {
     b.quaternion.multiply(_q);
   }
 
-  override poseLocomotion(S: any, t: number) {
+  override poseLocomotion(S: BoneWriter, t: number) {
     super.poseLocomotion(S, t);
     // the sword hand does not swing; it hauls
     const sw = Math.sin(this.anim.gaitPhase * Math.PI * 2);
@@ -281,7 +277,7 @@ class IronGiantEnemy extends BipedEnemy {
 
   override poseArms() { /* the carry pose owns the arms */ }
 
-  override poseWindUp(S: any, t: any, k: number, env: any) {
+  override poseWindUp(S: BoneWriter, t: number, k: number, env: AttackEnvelope) {
     // Rear back and haul the blade overhead. Two-thirds of the wind-up is
     // spent getting there; the last third is a held, trembling threat.
     const e = smooth(k);
@@ -302,7 +298,7 @@ class IronGiantEnemy extends BipedEnemy {
     });
   }
 
-  override poseSwing(S: any, t: any, k: number, env: any) {
+  override poseSwing(S: BoneWriter, t: number, k: number, env: AttackEnvelope) {
     // one continuous arc from the held wind-up through the ground
     const e = clamp01((k + 1) * 0.5);
     const f = env.phase === 'follow' ? env.f : 0;
@@ -324,7 +320,7 @@ class IronGiantEnemy extends BipedEnemy {
     });
   }
 
-  override poseDeath(S: any, t: any) {
+  override poseDeath(S: BoneWriter, t: number) {
     // Iron does not crumple; it falls in one piece and the daemon leaves it.
     const A = this.A;
     const T = this.stateTime;
@@ -353,18 +349,18 @@ class IronGiantEnemy extends BipedEnemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  override poseIdle(S: any, t: number) {
+  override poseIdle(S: BoneWriter, t: number) {
     super.poseIdle(S, t);
     this.carry(S, 1);
     this.miasma(S, t);
   }
 
-  override poseFlinch(S: any, t: any) {
+  override poseFlinch(S: BoneWriter, t: number) {
     super.poseFlinch(S, t);
     this.carry(S, 1);
   }
 
-  override poseStagger(S: any, t: any) {
+  override poseStagger(S: BoneWriter, t: number) {
     super.poseStagger(S, t);
     const total = this.type.staggerDuration || 3.2;
     const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));

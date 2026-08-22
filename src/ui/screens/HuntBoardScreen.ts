@@ -4,6 +4,8 @@ import { icon, button } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
+import type { Objective, ObjectiveView, Quest, QuestStatus, QuestView, Tipster } from '../../game/rpg/Quests.ts';
+import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
 
 /**
  * The bounty board on the wall of the Crow's Nest.
@@ -38,21 +40,46 @@ export const HUNTER_RANKS = [
 const RANK_GATE = { 1: 0, 2: 5, 3: 15, 4: 30, 5: 50, 6: 75, 8: 110, 10: 150 };
 
 /** Which ledger a hunt is pinned in. */
-function ledgerOf(hunt: any, tipsters: any) {
-  return tipsters?.[hunt.tipster]?.tome || 'Bounty Ledger';
+function ledgerOf(hunt: Quest, tipsters: Partial<Record<string, Tipster>> | undefined) {
+  return (hunt.tipster ? tipsters?.[hunt.tipster]?.tome : null) || 'Bounty Ledger';
+}
+
+/**
+ * One bounty as the board draws it: the authored hunt, its live view, and why
+ * it is (or is not) takeable right now.
+ */
+interface HuntRow {
+  h: Quest;
+  /**
+   * The hydrated quest. Null only if the log has no state for this hunt, which
+   * cannot happen for a row read out of `tables.hunts` -- the card degrades to
+   * the authored `h` in that case rather than assuming.
+   */
+  view: QuestView | null;
+  status: QuestStatus | 'unknown';
+  /** Hunter points the rank gate demands. */
+  gate: number;
+  locked: boolean;
+  /** Printed under a locked row. Empty when it is takeable. */
+  why: string;
 }
 
 export class HuntBoardScreen {
-  _rows!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  _rows!: HuntRow[];
   rankP!: HTMLElement;
   rankV!: HTMLElement;
   _age!: number;
   _cur!: string;
-  _msg!: any;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
   _sig!: string | null;
   _tabSig!: string;
-  _tabs!: any;
+  /** Ledger tab names, derived from the hunts that exist. */
+  _tabs!: string[];
   cAct!: HTMLElement;
   cActLb!: HTMLElement;
   cD!: HTMLElement;
@@ -76,7 +103,7 @@ export class HuntBoardScreen {
   rankBox!: HTMLElement;
   rankFill!: HTMLElement;
   rankGauge!: HTMLElement;
-  rowNodes!: any[];
+  rowNodes!: Array<{ node: HTMLElement, bg: HTMLElement, r: HuntRow, _on?: boolean }>;
   sub!: string;
   tab!: number;
   tabNodes!: CachedNode[];
@@ -182,7 +209,7 @@ export class HuntBoardScreen {
     const rpg = this.rpg;
     const hunts = rpg?.tables?.hunts || [];
     const tips = rpg?.tables?.tipsters;
-    const seen: any[] = [];
+    const seen: string[] = [];
     for (const h of hunts) {
       const t = ledgerOf(h, tips);
       if (!seen.includes(t)) seen.push(t);
@@ -201,13 +228,13 @@ export class HuntBoardScreen {
     const tab = tabs[this.tab] || tabs[0];
     const pts = this.hunterPoints;
 
-    const out = [];
+    const out: HuntRow[] = [];
     for (const h of hunts) {
       const status = log.status(h.id);
       if (tab === 'Accepted') { if (status !== 'active') continue; }
       else if (ledgerOf(h, tips) !== tab) continue;
       const gate = RANK_GATE[h.rank as keyof typeof RANK_GATE] ?? 0;
-      const view = log.view(h.id) || { ...h, status };
+      const view = log.view(h.id);
       const blockedByRank = pts < gate;
       const blockedByChain = status === 'locked';
       out.push({
@@ -217,11 +244,11 @@ export class HuntBoardScreen {
         why: blockedByRank
           ? `Requires ${gate} hunter points`
           : blockedByChain
-            ? `Requires: ${(h.requires || []).map((r: any) => rpg.tables.quests?.[r]?.name || r).join(', ') || 'a prior contract'}`
+            ? `Requires: ${(h.requires || []).map((r: string) => rpg.tables.quests?.[r]?.name || r).join(', ') || 'a prior contract'}`
             : '',
       });
     }
-    out.sort((a, b) => (a.h.rank - b.h.rank) || (a.h.level - b.h.level));
+    out.sort((a, b) => ((a.h.rank ?? 0) - (b.h.rank ?? 0)) || (a.h.level - b.h.level));
     return out;
   }
 
@@ -259,16 +286,16 @@ export class HuntBoardScreen {
     }
   }
 
-  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows: any) {
+  _renderRows(rows: HuntRow[]) {
     clear(this.list);
     this.rowNodes = [];
     for (const r of rows) {
       const bg = el('div.mr-bg');
-      const stars = r.view.rank?.stars || '★'.repeat(Math.min(6, r.h.rank || 1));
+      const stars = r.view?.rank?.stars || '★'.repeat(Math.min(6, r.h.rank || 1));
       const flag = r.status === 'active' ? 'Taken' : r.status === 'complete' ? 'Claimed' : r.locked ? 'Locked' : '';
       const node = el('div.hrow', {}, [
         bg,
@@ -367,19 +394,19 @@ export class HuntBoardScreen {
     }
   }
 
-  _renderCard(row: any, rpg: any) {
+  _renderCard(row: HuntRow, rpg: RpgSystem | null) {
     const h = row.h;
     const v = row.view;
-    const tips = rpg?.tables?.tipsters || {};
+    const tips: Partial<Record<string, Tipster>> = rpg?.tables?.tipsters || {};
     const regions = { leide: 'Leide', duscae: 'Duscae', cleigne: 'Cleigne', insomnia: 'Insomnia' };
-    this.cK.textContent = `${ledgerOf(h, tips)} · ${v.rank?.name || `Rank ${h.rank}`}`;
+    this.cK.textContent = `${ledgerOf(h, tips)} · ${v?.rank?.name || `Rank ${h.rank}`}`;
     this.cN.textContent = h.name;
-    this.cStars.textContent = v.rank?.stars || '★'.repeat(Math.min(6, h.rank || 1));
+    this.cStars.textContent = v?.rank?.stars || '★'.repeat(Math.min(6, h.rank || 1));
     this.cD.textContent = h.summary || '';
 
     const rewards = rpg?.quests?.rewardsFor?.(h.id) || h.rewards || {};
     const itemNames = (rewards.items || [])
-      .map((it: any) => `${rpg?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
+      .map((it: { id: string, count: number }) => `${rpg?.tables?.items?.[it.id]?.name || it.id}${it.count > 1 ? ` ×${it.count}` : ''}`)
       .join(', ');
     const cond = [];
     if (h.timeOfDay && h.timeOfDay !== 'any') cond.push(h.timeOfDay === 'night' ? 'After dark only' : 'Daylight only');
@@ -388,17 +415,20 @@ export class HuntBoardScreen {
 
     this.cVals[0].textContent = h.target || '—';
     this.cVals[1].textContent = `Lv ${h.level}`;
-    this.cVals[2].textContent = tips[h.tipster]
-      ? `${tips[h.tipster].name} · ${tips[h.tipster].place}` : '—';
+    const tipster = h.tipster ? tips[h.tipster] : null;
+    this.cVals[2].textContent = tipster ? `${tipster.name} · ${tipster.place}` : '—';
     this.cVals[3].textContent = `${commas(rewards.gil || 0)} gil${itemNames ? `, ${itemNames}` : ''}`;
     this.cVals[3].className = 'v gold';
     this.cVals[4].textContent = regions[h.region as keyof typeof regions] || h.region || '—';
     this.cVals[5].textContent = cond.join(' · ') || 'None';
 
     clear(this.cObjList);
-    for (const o of (v.objectives || h.objectives || [])) {
-      const node = el('div.hc-ob', {}, [el('div.d'), el('div', { text: o.label || o.desc })]);
-      if (o.done) node.classList.add('done');
+    // Without a live view the authored objectives are all there is: they carry
+    // `desc` but neither `label` nor `done`, which is exactly the degraded card.
+    const objectives: Array<Objective | ObjectiveView> = v?.objectives ?? h.objectives ?? [];
+    for (const o of objectives) {
+      const node = el('div.hc-ob', {}, [el('div.d'), el('div', { text: 'label' in o ? o.label : o.desc })]);
+      if ('done' in o && o.done) node.classList.add('done');
       this.cObjList.appendChild(node);
     }
 

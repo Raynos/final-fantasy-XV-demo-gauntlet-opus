@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isLight, isPointLight, isSpotLight } from '../util/three-guards.ts';
 
 /**
  * Pins the number of *visible* dynamic lights so three never has to rebuild
@@ -23,14 +24,30 @@ import * as THREE from 'three';
  * Because the count never changes, the programs compiled during the boot-time
  * `renderer.compile()` stay valid for the whole session.
  */
+/** The two light kinds that move around and therefore need budgeting. */
+type LightKind = 'point' | 'spot';
+
+/** One real scene light, with the ancestors whose visibility also gates it. */
+interface LightEntry {
+  light: THREE.Light;
+  /** Every parent between the light and the scene root. */
+  chain: THREE.Object3D[];
+  /** Importance for this frame; only set while over budget. */
+  score?: number;
+}
+
 export class LightBudget {
   _camPos!: THREE.Vector3;
-  _forced!: any[];
+  /** Lights this system switched off, restored at the top of `balance`. */
+  _forced!: THREE.Light[];
   _lp!: THREE.Vector3;
-  _real!: any;
+  /** The real lights in the scene, by kind. Refreshed by `rescan`. */
+  _real!: Record<LightKind, LightEntry[]>;
   _scanIn!: number;
-  ballast!: any;
-  budget!: any;
+  /** Zero-intensity lights that hold the slot count steady. */
+  ballast!: Record<LightKind, THREE.Light[]>;
+  /** Visible lights allowed of each kind. */
+  budget!: Record<LightKind, number>;
   enabled!: boolean;
   scene!: THREE.Scene;
   /**
@@ -70,10 +87,11 @@ export class LightBudget {
     this.rescan();
   }
 
-  _makeBallast(kind: string, n: number) {
+  _makeBallast(kind: LightKind, n: number) {
     const pool = this.ballast[kind];
     while (pool.length > n) {
       const l = pool.pop();
+      if (!l) break;
       this.scene.remove(l);
       l.dispose?.();
     }
@@ -98,17 +116,17 @@ export class LightBudget {
 
   /** Re-collect the real lights in the scene. Cheap, but not free — run rarely. */
   rescan() {
-    const point: any[] = [], spot: any[] = [];
-    this.scene.traverse((o: any) => {
-      if (!o.isLight || o.userData.lightBallast) return;
+    const point: LightEntry[] = [], spot: LightEntry[] = [];
+    this.scene.traverse((o) => {
+      if (!isLight(o) || o.userData.lightBallast) return;
       // Only unshadowed point/spot lights move around; the CSM cascades and the
       // hemisphere fills are permanent and never change the counts.
       if (o.castShadow) return;
-      const chain = [];
+      const chain: THREE.Object3D[] = [];
       for (let p = o.parent; p && p !== this.scene; p = p.parent) chain.push(p);
-      const entry = { light: o, chain };
-      if (o.isPointLight) point.push(entry);
-      else if (o.isSpotLight) spot.push(entry);
+      const entry: LightEntry = { light: o, chain };
+      if (isPointLight(o)) point.push(entry);
+      else if (isSpotLight(o)) spot.push(entry);
     });
     this._real.point = point;
     this._real.spot = spot;
@@ -134,10 +152,10 @@ export class LightBudget {
     this._balanceKind('spot');
   }
 
-  _balanceKind(kind: string) {
+  _balanceKind(kind: LightKind) {
     const entries = this._real[kind];
     const budget = this.budget[kind];
-    const live = [];
+    const live: LightEntry[] = [];
     for (const e of entries) {
       if (!e.light.visible) continue;
       let hidden = false;
@@ -156,7 +174,7 @@ export class LightBudget {
         lp.setFromMatrixPosition(e.light.matrixWorld);
         e.score = (e.light.intensity || 0) / (1 + lp.distanceToSquared(p) * 0.02);
       }
-      live.sort((a, b) => b.score - a.score);
+      live.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       for (let i = budget; i < live.length; i++) {
         live[i].light.visible = false;
         live[i].light.userData.__lbForced = true;
@@ -171,10 +189,11 @@ export class LightBudget {
   }
 
   dispose() {
-    for (const kind of ['point', 'spot']) {
+    for (const kind of ['point', 'spot'] as LightKind[]) {
       for (const l of this.ballast[kind]) {
         this.scene.remove(l);
-        if (l.target) this.scene.remove(l.target);
+        // Only a spot light has a target object, and `_makeBallast` added it.
+        if (isSpotLight(l)) this.scene.remove(l.target);
       }
       this.ballast[kind].length = 0;
     }

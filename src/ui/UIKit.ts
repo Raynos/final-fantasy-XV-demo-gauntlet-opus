@@ -10,11 +10,31 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
+ * Attributes `el()` and `svg()` accept.
+ *
+ * Four keys are handled specially; everything else goes through
+ * `setAttribute`, which is why the index signature is what a DOM attribute
+ * value can be rather than `any`. `null`/`false` skips the attribute, which is
+ * how a conditional attribute is written inline.
+ */
+export interface ElAttrs {
+  /** Sets `textContent`. */
+  text?: string | number | null | false;
+  /** Sets `innerHTML`. */
+  html?: string | null | false;
+  /** A `cssText` string. Ignored on SVG nodes, which have no `style` string. */
+  style?: string | null | false;
+  /** Appended to the classes already parsed out of the tag. */
+  class?: string | null | false;
+  [attr: string]: string | number | boolean | null | undefined;
+}
+
+/**
  * Create an HTML element.
  * @param tag e.g. `div.party-row.is-lead`
  * @param [attrs] attributes; `text` sets textContent, `style` a cssText string
  */
-export function el(tag: string, attrs: any = {}, kids: Array<Node | string | null | false> = []): HTMLElement {
+export function el(tag: string, attrs: ElAttrs = {}, kids: Array<Node | string | null | false> = []): HTMLElement {
   const [name, ...classes] = tag.split('.');
   const node = document.createElement(name || 'div');
   if (classes.length) node.className = classes.join(' ');
@@ -27,7 +47,7 @@ export function el(tag: string, attrs: any = {}, kids: Array<Node | string | nul
  * Create an SVG element in the SVG namespace.
  * @param tag e.g. `path.glyph`
  */
-export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = []): SVGElement {
+export function svg(tag: string, attrs: ElAttrs = {}, kids: Array<Node | string> = []): SVGElement {
   const [name, ...classes] = tag.split('.');
   const node = document.createElementNS(SVG_NS, name);
   if (classes.length) node.setAttribute('class', classes.join(' '));
@@ -36,19 +56,19 @@ export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = [
   return node;
 }
 
-function applyAttrs(node: any, attrs: any, isSvg?: boolean) {
+function applyAttrs(node: HTMLElement | SVGElement, attrs: ElAttrs, isSvg?: boolean) {
   for (const k of Object.keys(attrs)) {
     const v = attrs[k];
     if (v == null || v === false) continue;
-    if (k === 'text') node.textContent = v;
-    else if (k === 'html') node.innerHTML = v;
-    else if (k === 'style' && !isSvg) node.style.cssText = v;
+    if (k === 'text') node.textContent = String(v);
+    else if (k === 'html') node.innerHTML = String(v);
+    else if (k === 'style' && !isSvg) (node as HTMLElement).style.cssText = String(v);
     else if (k === 'class') node.setAttribute('class', [node.getAttribute('class'), v].filter(Boolean).join(' '));
-    else node.setAttribute(k, v);
+    else node.setAttribute(k, String(v));
   }
 }
 
-function append(node: any, kids: any) {
+function append(node: Element, kids: Array<Node | string | null | false> | Node | string) {
   const list = Array.isArray(kids) ? kids : [kids];
   for (const k of list) {
     if (k == null || k === false) continue;
@@ -60,7 +80,7 @@ function append(node: any, kids: any) {
 export function clear(node: HTMLElement) { while (node.firstChild) node.removeChild(node.firstChild); }
 
 /** Toggle a class without touching the rest of the class list. */
-export function cls(node: any, name: any, on: any) { node.classList.toggle(name, !!on); }
+export function cls(node: Element, name: string, on: unknown) { node.classList.toggle(name, !!on); }
 
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -141,7 +161,7 @@ export class Clip {
   dur!: number;
   hold!: number;
   /** The shot this clip was raised in; a shot change clears it. `Subtitles`. */
-  shot?: any;
+  shot?: string | null;
   constructor(dur: number, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
   step(dt: number) { this.age += dt; return this; }
   get t() { return clamp(this.age / this.dur, 0, 1); }

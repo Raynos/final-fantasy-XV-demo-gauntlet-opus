@@ -10,18 +10,43 @@ import * as THREE from 'three';
  * band of a fine level morph exactly onto the coarse level's edge and stay
  * crack-free.
  */
+/** One level of the clipmap: four quadrant meshes and where it last snapped. */
+export interface ClipmapRing {
+  /** Cell size at this level, metres. */
+  cell: number;
+  level: number;
+  meshes: THREE.Mesh[];
+  /** Snap grid, so a level only ever moves in whole cells. */
+  snap: number;
+  /** Where the ring currently sits; NaN until the first `update`. */
+  x: number;
+  z: number;
+}
+
+/** How the clipmap is built, and what it draws each level with. */
+export interface ClipmapOpts {
+  levels: number;
+  /** Grid resolution of one quadrant. */
+  n: number;
+  /** Cell size of the finest level, metres. */
+  cell0: number;
+  /** Built once per level: the surface material and its shadow-depth twin. */
+  makeMaterial: (cell: number, level: number) => { surface: THREE.Material, depth: THREE.Material | null };
+  castShadow?: boolean;
+}
+
 export class Clipmap {
   castShadow!: boolean;
   cell0!: number;
   group!: THREE.Group;
   levels!: number;
   n!: number;
-  rings!: any[];
+  rings!: ClipmapRing[];
   triangles!: number;
   /**
    * @param {object} opts
    * */
-  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }: { levels: number, n: number, cell0: number, makeMaterial: ((a0: number, a1: number) => {surface: THREE.Material, depth: any}), castShadow?: boolean }) {
+  constructor({ levels = 7, n = 48, cell0 = 1.5, makeMaterial, castShadow = false }: ClipmapOpts) {
     this.castShadow = castShadow;
     this.levels = levels;
     this.n = n;
@@ -34,8 +59,7 @@ export class Clipmap {
     for (let L = 0; L < levels; L++) {
       const cell = cell0 * Math.pow(2, L);
       const mats = makeMaterial(cell, L);
-      const ring: { cell: number, level: number, meshes: THREE.Mesh[], snap: number, x: number, z: number } =
-        { cell, level: L, meshes: [], snap: cell * 2, x: NaN, z: NaN };
+      const ring: ClipmapRing = { cell, level: L, meshes: [], snap: cell * 2, x: NaN, z: NaN };
       for (let qz = 0; qz < 2; qz++) {
         for (let qx = 0; qx < 2; qx++) {
           const geo = this._quadrant(L, cell, qx ? 1 : -1, qz ? 1 : -1);

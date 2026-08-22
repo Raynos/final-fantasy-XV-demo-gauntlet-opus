@@ -22,7 +22,7 @@ import { CHROMIUM_ARGS } from './chromium.mts';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5178);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -41,16 +41,16 @@ async function ensureServer() {
   throw new Error('vite failed to start');
 }
 
-const results: any[] = [];
-const ok = (name: any, pass: any, note = '') => {
-  results.push({ name, pass, note });
+const results: Array<{ name: string, pass: boolean, note: string }> = [];
+const ok = (name: string, pass: unknown, note = '') => {
+  results.push({ name, pass: !!pass, note });
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${note ? `  — ${note}` : ''}`);
 };
 
 const server = await ensureServer();
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-const pageErrors: any[] = [];
+const pageErrors: string[] = [];
 page.on('pageerror', (e) => pageErrors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 200)); });
 
@@ -65,9 +65,9 @@ await page.evaluate(() => {
   const g = window.GAME;
   g.get('Story')?.title?.hide?.();
   window.step = (n = 30) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
-  window.key = (code: any, type = 'keydown') => window.dispatchEvent(
+  window.key = (code: string, type = 'keydown') => window.dispatchEvent(
     new KeyboardEvent(type, { code, bubbles: true }));
-  window.press = (code: any, frames = 3) => { window.key(code); window.step(1); window.key(code, 'keyup'); window.step(frames); };
+  window.press = (code: string, frames = 3) => { window.key(code); window.step(1); window.key(code, 'keyup'); window.step(frames); };
 });
 
 /* ------------------------------------------------------------------ 1 */
@@ -139,11 +139,11 @@ for (const c of closeAudit) {
 /* ------------------------------------------------------------------ 3 */
 /* pointer lock behaviour                                                */
 
-const lock: any = await page.evaluate(async () => {
+const lock = await page.evaluate(async () => {
   const g = window.GAME;
   const menus = g.get('Menus');
   const inp = g.input;
-  const out: any = {};
+  const out: Record<string, unknown> = {};
 
   // gameplay: the lock is allowed
   menus.setScreen(null);
@@ -199,7 +199,7 @@ const drive = await page.evaluate(async () => {
   const car = g.get('Regalia');
   const ix = g.get('Interaction');
   const player = g.get('Player');
-  const out: Record<string, any> = { enabled: !!car?.enabled };
+  const out: Record<string, unknown> = { enabled: !!car?.enabled };
   if (!car || !car.enabled) return out;
 
   const item = ix.get('hh_regalia_bay');
@@ -236,9 +236,9 @@ ok('walking up does not hand the wheel to Ignis', drive.autoDrive === false);
 /* ------------------------------------------------------------------ 5 */
 /* the global hotkeys                                                    */
 
-const hotkeys: any = await page.evaluate(async () => {
+const hotkeys = await page.evaluate(async () => {
   const menus = window.GAME.get('Menus');
-  const out: any = {};
+  const out: Record<string, unknown> = {};
   menus.setScreen(null); window.step(20);
   window.press('KeyH', 30); out.hOpens = menus.name;
   window.press('KeyH', 30); out.hCloses = menus.name;
@@ -262,11 +262,11 @@ ok('closing the card returns to the screen underneath', hotkeys.hBackToScreen ==
 /* ------------------------------------------------------------------ 6 */
 /* the screens that used to be dead now do something                     */
 
-const live: any = await page.evaluate(async () => {
+const live = await page.evaluate(async () => {
   const g = window.GAME;
   const menus = g.get('Menus');
   const rpg = g.get('Rpg');
-  const out: any = {};
+  const out: Record<string, unknown> = {};
 
   // quests: Enter tracks
   menus.setScreen('quests'); window.step(40);
@@ -294,7 +294,7 @@ const live: any = await page.evaluate(async () => {
   gear.i = 0; gear.j = 0; window.step(6);
   gear.accept(); window.step(6);
   out.gearPicker = !!gear.picker && gear.picker.rows.length > 0;
-  const wanted = gear.picker.rows.find((r: any) => r.id);
+  const wanted = gear.picker.rows.find((r: { id: string | null }) => r.id);
   if (wanted) {
     gear.picker.i = gear.picker.rows.indexOf(wanted);
     gear.accept(); window.step(6);
@@ -305,14 +305,14 @@ const live: any = await page.evaluate(async () => {
   // system: sliders and toggles move real engine state
   menus.setScreen('system'); window.step(40);
   const sys = menus.screens.system;
-  const iy = sys.nodes.findIndex((n: any) => n.row.key === 'invertY');
+  const iy = sys.nodes.findIndex((n: { row: { key: string } }) => n.row.key === 'invertY');
   sys.i = iy; sys.accept(); window.step(4);
   out.invertY = g.input.invertY === true;
   sys.accept(); window.step(4);
-  const q = sys.nodes.findIndex((n: any) => n.row.key === 'quality');
+  const q = sys.nodes.findIndex((n: { row: { key: string } }) => n.row.key === 'quality');
   sys.i = q; const q0 = g.rnd.quality; sys.nav(1, 0); window.step(4);
   out.qualityChanged = g.rnd.quality !== q0;
-  const v = sys.nodes.findIndex((n: any) => n.row.key === 'master');
+  const v = sys.nodes.findIndex((n: { row: { key: string } }) => n.row.key === 'master');
   sys.i = v; const v0 = g.get('Audio')?.volumeOf('master'); sys.nav(-1, 0); window.step(4);
   out.volumeChanged = g.get('Audio') ? g.get('Audio').volumeOf('master') !== v0 : 'no-audio';
 
@@ -336,18 +336,18 @@ ok('Gear: the picker closes after equipping', live.gearPickerClosed === true);
 ok('System: invert-Y writes to Input', live.invertY === true);
 ok('System: quality tier writes to Renderer', live.qualityChanged === true);
 ok('System: volume writes to AudioSystem', live.volumeChanged === true, String(live.volumeChanged));
-ok('Armiger: lists the real constellation', live.armigerRows > 0, `${live.armigerRows} nodes`);
-ok('Archives: lists the real bestiary', live.archiveRows > 0, `${live.archiveRows} species`);
+ok('Armiger: lists the real constellation', Number(live.armigerRows) > 0, `${live.armigerRows} nodes`);
+ok('Archives: lists the real bestiary', Number(live.archiveRows) > 0, `${live.archiveRows} species`);
 
 /* ------------------------------------------------------------------ 7 */
 /* first-run hints                                                       */
 
-const hints: any = await page.evaluate(async () => {
+const hints = await page.evaluate(async () => {
   const g = window.GAME;
   const hud = g.get('HUD');
   const menus = g.get('Menus');
   const h = hud.hints;
-  const out: any = {};
+  const out: Record<string, unknown> = {};
   g.currentShot = null;
   h.reset(); h.muted = false;
   menus.setScreen(null);
@@ -368,7 +368,7 @@ const hints: any = await page.evaluate(async () => {
   return out;
 });
 
-ok('a hint greets the player on the first field frame', hints.boot === 'boot', hints.bootText);
+ok('a hint greets the player on the first field frame', hints.boot === 'boot', String(hints.bootText ?? ''));
 ok('a hint explains how to leave the first menu', hints.menu === 'menu');
 ok('hints fire once only', hints.repeats === false);
 ok('hints are suppressed during a capture', hints.mutedShows === false);

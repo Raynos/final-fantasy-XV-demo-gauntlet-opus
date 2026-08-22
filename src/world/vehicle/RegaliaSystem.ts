@@ -8,6 +8,13 @@ import { Occupants } from './Occupants.ts';
 import { Banter } from './Banter.ts';
 import { Radio } from '../../audio/Radio.ts';
 import type { Game } from '../../game/Game.ts';
+import type { RegaliaBuild, RegaliaWheel } from '../props/Regalia.ts';
+import type { RoadPoint } from './RoadPath.ts';
+import type { DriveControls } from './VehicleBody.ts';
+import type { BanterCtx, NearLandmark } from './Banter.ts';
+import type { Terrain } from '../Terrain.ts';
+import type { Landmark } from '../terrain/Field.ts';
+import type { EcoSite } from '../props/EcoSites.ts';
 
 /**
  * The road trip.
@@ -60,37 +67,68 @@ const KEY = {
 /** Metres of range on a full tank at a steady cruise. */
 const RANGE = 14000;
 
+/** A pump the car can refuel at. */
+export interface FuelStation {
+  x: number;
+  z: number;
+  /** Trigger radius, metres. */
+  r: number;
+  name: string;
+}
+
+/** Somewhere Ignis can be sent, and how far along the highway it is. */
+export interface Destination {
+  name: string;
+  x: number;
+  z: number;
+  /** Arc length along the spine, metres. Filled in at layout. */
+  s: number;
+}
+
+/** The interact prompt this system publishes for the HUD to draw. */
+export interface DrivePrompt {
+  key: string;
+  label: string;
+  /** Secondary bindings, as `[key, label]`. */
+  extra: string[][];
+}
+
 export class RegaliaSystem {
   autoDrive!: AutoDrive;
-  fuelStations!: any[];
+  fuelStations!: FuelStation[];
   _ahead!: THREE.Vector3;
-  _beam!: any;
+  /** Headlamp intensity at full beam, captured the first time they come on. */
+  _beam!: number | null;
   _brake!: number;
-  _ctx!: any;
+  _ctx!: BanterCtx | null;
   _distanceAp!: number;
   _ducked!: boolean;
   _enterCooldown!: number;
   _gaze!: THREE.Vector3[];
   _interest!: THREE.Vector3;
-  _lastControls!: any;
+  _lastControls!: DriveControls | null;
   _lightLevel!: number;
-  _lm!: any;
-  _onRefuelEvent!: any;
-  _parked!: any;
-  _parkedProxy!: any;
-  _pc!: any;
+  /** Reused landmark record; `_nearestLandmark` fills it in. */
+  _lm!: NearLandmark | null;
+  _onRefuelEvent!: (e: Event) => void;
+  _parked!: DriveControls | null;
+  /** The static Regalia `Props` scattered, hidden while this one is drivable. */
+  _parkedProxy!: THREE.Object3D | null;
+  _pc!: DriveControls | null;
   _prompt!: boolean;
-  _shotApplied!: any;
-  _sp!: any;
+  /** `game.currentShot` the staging was last applied for. */
+  _shotApplied!: string | null;
+  /** Reused centreline point for shot staging. */
+  _sp!: RoadPoint | null;
   _stagedShot!: boolean;
   _tmp!: THREE.Vector3;
   _wasNear!: boolean;
   auto!: boolean;
   banter!: Banter;
   body!: VehicleBody;
-  built!: any;
+  built!: RegaliaBuild;
   cabinLight!: THREE.PointLight;
-  destinations!: any;
+  destinations!: Destination[];
   driveCam!: DriveCamera;
   enabled!: boolean;
   fuel!: number;
@@ -98,22 +136,22 @@ export class RegaliaSystem {
   headlights!: string;
   homeS!: number;
   isDriving!: boolean;
-  lampMat!: any;
-  lights!: any;
+  lampMat!: THREE.MeshStandardMaterial;
+  lights!: THREE.SpotLight[];
   occupants!: Occupants;
   path!: RoadPath;
   pivot!: THREE.Group;
-  prompt!: any;
+  prompt!: DrivePrompt | null;
   radio!: Radio;
   root!: THREE.Group;
-  shadow!: any;
+  shadow!: THREE.Mesh;
   shadowRoot!: THREE.Group;
   startParked!: boolean;
-  tailMat!: any;
-  terrain!: any;
+  tailMat!: THREE.MeshStandardMaterial;
+  terrain!: Terrain | null;
   tilt!: THREE.Group;
-  wheels!: any;
-  constructor(opts: any = {}) {
+  wheels!: RegaliaWheel[];
+  constructor(opts: { startParked?: boolean } = {}) {
     this.enabled = true;
     /** true while anyone is in the car with the engine running. */
     this.isDriving = false;
@@ -139,7 +177,7 @@ export class RegaliaSystem {
 
   async init(game: Game) {
     this.game = game;
-    const terrain = game.get('Terrain');
+    const terrain = game.get('Terrain') ?? null;
     this.terrain = terrain;
     if (!terrain || !terrain.road) { this.enabled = false; return; }
 
@@ -199,7 +237,7 @@ export class RegaliaSystem {
     // hide theirs, so the world still reads the same but the car can be driven.
     let px = 47, pz = 14;
     if (props && props.ecology && props.ecology.sites) {
-      const site = props.ecology.sites.find((s: any) => s.type === 'regalia');
+      const site = props.ecology.sites.find((s: EcoSite) => s.type === 'regalia');
       if (site) { px = site.x; pz = site.z; }
     }
     if (props && props.regalia) {
@@ -228,14 +266,14 @@ export class RegaliaSystem {
 
     // ---- destinations you can send Ignis to ---------------------------------
     this.destinations = this._layoutDestinations();
-    const first = this.destinations.find((d: any) => d.s > this.homeS + 60) || this.destinations[this.destinations.length - 1];
+    const first = this.destinations.find((d) => d.s > this.homeS + 60) || this.destinations[this.destinations.length - 1];
     this.autoDrive.setTargetS(first.s, first.name);
 
-    window.addEventListener('ffxv-regalia-refuel', this._onRefuelEvent = (e: any) => {
-      this.refuel(e.detail && e.detail.amount);
+    window.addEventListener('ffxv-regalia-refuel', this._onRefuelEvent = (e: Event) => {
+      this.refuel(e instanceof CustomEvent ? e.detail?.amount : undefined);
     });
 
-    if (game.debug) console.log('[Regalia] ready', this.destinations.map((d: any) => d.name).join(', '));
+    if (game.debug) console.log('[Regalia] ready', this.destinations.map((d) => d.name).join(', '));
   }
 
   /** Named stops along the highway, ordered by arc length. */
@@ -316,7 +354,7 @@ export class RegaliaSystem {
   /** Cycle to the next named destination up the road. */
   nextDestination() {
     const s = this.body.roadS;
-    const d = this.destinations.find((x: any) => x.s > s + 40) || this.destinations[0];
+    const d = this.destinations.find((x) => x.s > s + 40) || this.destinations[0];
     this.driveTo(d.x, d.z, d.name);
     return d;
   }
@@ -338,7 +376,7 @@ export class RegaliaSystem {
    * Register a set of pumps. Stopping inside `r` metres refuels the car.
    */
   addFuelStation(s: {x:number, z:number, r:number, name:string}) {
-    if (!this.fuelStations.some((f: any) => f.name === s.name)) this.fuelStations.push({ ...s });
+    if (!this.fuelStations.some((f) => f.name === s.name)) this.fuelStations.push({ ...s });
     return this.fuelStations.length;
   }
 
@@ -427,7 +465,7 @@ export class RegaliaSystem {
       const f = b.forward();
       this._ahead.copy(b.pos).addScaledVector(f, 26); this._ahead.y += 1.2;
       const lm = this._nearestLandmark();
-      let interest: any = null;
+      let interest: THREE.Vector3 | null = null;
       if (lm && lm.dist < 260) { this._interest.set(lm.x, lm.y + 30, lm.z); interest = this._interest; }
       this.occupants.gaze(this._ahead, interest);
       this.occupants.update(dt, {
@@ -468,7 +506,10 @@ export class RegaliaSystem {
     sh.rotation.y = b.heading - Math.PI / 2;
     // it fades as the body lifts off its springs, so a crest reads as air
     const lift = Math.min(1, Math.max(0, (b.chassisY - (b._groundAvg || 0) - b.wheelR) / 0.14));
-    this.shadow.material.opacity = 0.85 * (1 - lift * 0.5);
+    // the contact pool is one mesh with one material; `Mesh.material` is
+    // declared as either, so ask before writing
+    const shadowMat = this.shadow.material;
+    if (!Array.isArray(shadowMat)) shadowMat.opacity = 0.85 * (1 - lift * 0.5);
   }
 
   /** Keyboard + gamepad -> vehicle controls. */
@@ -606,7 +647,10 @@ export class RegaliaSystem {
   }
 
   _banterCtx(game: Game) {
-    const ctx = this._ctx || (this._ctx = {});
+    const ctx = this._ctx || (this._ctx = {
+      speed: 0, driving: false, auto: false, roadDist: 0, offRoadMode: false,
+      slide: 0, hour: 12, weather: 'clear', fuel: 1, landmark: null,
+    });
     const rpg = game.get('Rpg');
     const weather = game.get('Weather');
     ctx.speed = this.body.speed;
@@ -627,7 +671,7 @@ export class RegaliaSystem {
     const t = this.terrain;
     if (!t || !t.landmarks) return null;
     const out = this._lm || (this._lm = { name: '', x: 0, y: 0, z: 0, dist: 0, kind: '' });
-    let best = Infinity, bn: any = null;
+    let best = Infinity, bn: { k: string, l: Landmark } | null = null;
     for (const k in t.landmarks) {
       const l = t.landmarks[k];
       if (l.kind === 'basin') continue;

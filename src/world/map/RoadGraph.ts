@@ -19,7 +19,31 @@
  * Road classes. `half` is the half-width of the running surface, `shoulder`
  * the half-width of the disturbed verge beyond it.
  */
-export const ROAD_CLASS = {
+/** One road class: how wide it is, how steep and tight it may get, how fast. */
+export interface RoadClass {
+  id: string;
+  label: string;
+  /** Half-width of the running surface, metres. */
+  half: number;
+  /** Half-width of the disturbed verge beyond the surface, metres. */
+  shoulder: number;
+  /** Steepest sustained grade allowed, as a slope. */
+  maxGrade: number;
+  /** Tightest corner allowed, metres. */
+  minRadius: number;
+  /** Travel speed, m/s. Zero means no car goes here. */
+  speed: number;
+  sealed: boolean;
+  /** How close a drivable POI has to be to this class, metres. */
+  reach: number;
+  /** Line weight on the map screen. */
+  draw: number;
+}
+
+/** Every road class there is. `RouteSpec.cls` names one. */
+export type RoadClassName = 'highway' | 'road' | 'track' | 'trail';
+
+export const ROAD_CLASS: Record<RoadClassName, RoadClass> = {
   highway: {
     id: 'highway', label: 'Highway', half: 5.2, shoulder: 10.5,
     maxGrade: 0.070, minRadius: 70, speed: 30, sealed: true, reach: 60, draw: 3.2,
@@ -42,7 +66,13 @@ export const ROAD_CLASS = {
  * Junctions and terminals. Ids beginning `j_` are pure junctions; the rest
  * correspond to a POI of the same stem.
  */
-export const NODES = {
+/**
+ * A junction or terminal as authored: `[x, z]` in world metres.
+ * `RoadGraph` turns each into a {@link RoadNode}.
+ */
+export type NodeTable = Record<string, number[]>;
+
+export const NODES: NodeTable = {
   // --- Route 1, the spine. Its Z decreases monotonically from the Insomnia
   //     gate in the south-east to Lestallum in the north-west: several systems
   //     locate the highway by bracketing on Z, and a spine that doubled back
@@ -110,7 +140,20 @@ export const NODES = {
  * shaping point. Consecutive node ids define graph edges; shaping points only
  * bend the geometry between them.
  */
-export const ROUTES = [
+/**
+ * One authored route. `path` alternates node ids with bare `[x, z]` shaping
+ * points: a string opens (and closes) an edge, a pair bends the one in hand.
+ */
+export interface RouteSpec {
+  id: string;
+  name: string;
+  cls: RoadClassName;
+  /** What the road is *for*, in design terms. */
+  doc: string;
+  path: Array<string | number[]>;
+}
+
+export const ROUTES: RouteSpec[] = [
   {
     id: 'route1', name: 'Route 1 — The Crown City Highway', cls: 'highway',
     doc: 'The spine. Runs the whole width of Lucis, from the Insomnia gate in '
@@ -231,10 +274,77 @@ export const ROUTES = [
 
 const SAMPLE_STEP = 6;
 
+/**
+ * One resampled point on a centreline. `y` is written back by the terrain
+ * carve; everything else is fixed when the graph is built.
+ */
+export interface RoadSample {
+  x: number;
+  z: number;
+  /** Ground height, filled in by the terrain carve. 0 until then. */
+  y: number;
+  /** Arc length from the start of the edge, metres. */
+  s: number;
+  /** Unit tangent in the XZ plane. */
+  tx: number;
+  tz: number;
+}
+
+/** A junction or terminal, and the indices of the edges meeting there. */
+export interface RoadNode {
+  id: string;
+  x: number;
+  z: number;
+  /** Indices into `RoadGraph.edges`. */
+  edges: number[];
+}
+
+/** One stretch of road between two nodes. */
+export interface RoadEdge {
+  /** `"<route>:<a>-><b>"`. */
+  id: string;
+  /** `RouteSpec.id` this edge belongs to. */
+  route: string;
+  cls: RoadClassName;
+  clsDef: RoadClass;
+  /** Node ids at each end. */
+  a: string;
+  b: string;
+  pts: RoadSample[];
+  /** Arc length, metres. */
+  length: number;
+}
+
+/** A whole route: its spec, its edges, and one continuous polyline to draw. */
+export interface Route extends Omit<RouteSpec, 'cls'> {
+  cls: RoadClass;
+  /** Indices into `RoadGraph.edges`, in order. */
+  edges: number[];
+  pts: RoadSample[];
+  length: number;
+}
+
+/** Where a point on the network is, and how far off it the query was. */
+export interface RoadHit {
+  /** Metres from the query point to the centreline. */
+  dist: number;
+  edge: RoadEdge;
+  /** Index of the sample the hit sits on or just after. */
+  i: number;
+  x: number;
+  z: number;
+  s: number;
+  y: number;
+  tx: number;
+  tz: number;
+  /** Which side of the road the query point is on: +1 or -1. */
+  side: number;
+}
+
 /** Catmull-Rom through a control list, resampled at ~`step` metres. */
-function resample(ctrl: any, step: number) {
-  if (ctrl.length < 2) return ctrl.map((p: any) => ({ x: p[0], z: p[1], y: 0, s: 0, tx: 0, tz: 1 }));
-  const raw = [];
+function resample(ctrl: number[][], step: number): RoadSample[] {
+  if (ctrl.length < 2) return ctrl.map((p) => ({ x: p[0], z: p[1], y: 0, s: 0, tx: 0, tz: 1 }));
+  const raw: RoadSample[] = [];
   for (let i = 0; i < ctrl.length - 1; i++) {
     const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i];
     const p2 = ctrl[i + 1], p3 = ctrl[Math.min(ctrl.length - 1, i + 2)];
@@ -281,22 +391,23 @@ function resample(ctrl: any, step: number) {
  * writes `y` back into every sample.
  */
 export class RoadGraph {
-  routes!: any[];
+  routes!: Route[];
   _cell!: number;
-  _grid!: Map<any, any>;
-  classes!: any;
-  edges!: any[];
-  nodes!: Map<any, any>;
-  routeById!: Map<any, any>;
-  totalLength!: any;
+  /** `"i,j"` cell -> packed `(edgeIndex << 16) | sampleIndex`. */
+  _grid!: Map<string, number[]>;
+  classes!: Record<RoadClassName, RoadClass>;
+  edges!: RoadEdge[];
+  nodes!: Map<string, RoadNode>;
+  routeById!: Map<string, Route>;
+  /** Metres of road in the whole network. */
+  totalLength!: number;
   /**
    * @param nodes id -> [x, z]
    * @param routes see {@link ROUTES}
    * @param classes see {@link ROAD_CLASS}
    */
-  constructor(nodes: any, routes: any[], classes: any) {
+  constructor(nodes: NodeTable, routes: RouteSpec[], classes: Record<RoadClassName, RoadClass>) {
     this.classes = classes;
-    /** @type {Map<string, {id:string,x:number,z:number,edges:number[]}>} */
     this.nodes = new Map();
     for (const id of Object.keys(nodes)) {
       this.nodes.set(id, { id, x: nodes[id][0], z: nodes[id][1], edges: [] });
@@ -309,33 +420,34 @@ export class RoadGraph {
     for (const r of routes) {
       const cls = classes[r.cls];
       // Split the path at node ids into per-edge control lists.
-      const chunks = [];
-      let cur: any = null;
+      const chunks: Array<{ a: string, b: string, ctrl: number[][] }> = [];
+      let cur: { a: string, b: string, ctrl: number[][] } | null = null;
       for (const step of r.path) {
         if (typeof step === 'string') {
           const nd = this.nodes.get(step);
           if (!nd) throw new Error(`RoadGraph: unknown node ${step} in ${r.id}`);
           if (cur) { cur.ctrl.push([nd.x, nd.z]); cur.b = step; chunks.push(cur); }
-          cur = { a: step, b: null, ctrl: [[nd.x, nd.z]] };
+          cur = { a: step, b: '', ctrl: [[nd.x, nd.z]] };
         } else if (cur) {
           cur.ctrl.push([step[0], step[1]]);
         }
       }
 
-      const routeRec = { ...r, cls, edges: [], pts: [] };
+      const routeRec: Route = { ...r, cls, edges: [], pts: [], length: 0 };
       for (const c of chunks) {
         // Give the spline one control point of lead-in/lead-out from the
         // neighbouring chunk so junction tangents stay continuous.
         const pts = resample(c.ctrl, SAMPLE_STEP);
-        const e = {
+        const e: RoadEdge = {
           id: `${r.id}:${c.a}->${c.b}`,
           route: r.id, cls: r.cls, clsDef: cls,
           a: c.a, b: c.b, pts, length: pts[pts.length - 1].s,
         };
         const ei = this.edges.length;
         this.edges.push(e);
-        this.nodes.get(c.a).edges.push(ei);
-        this.nodes.get(c.b).edges.push(ei);
+        // both ends were resolved out of `this.nodes` above, or we threw
+        this.nodes.get(c.a)!.edges.push(ei);
+        this.nodes.get(c.b)!.edges.push(ei);
         routeRec.edges.push(ei);
       }
       // one continuous polyline per route, for drawing
@@ -352,8 +464,8 @@ export class RoadGraph {
       this.routes.push(routeRec);
     }
 
-    this.routeById = new Map(this.routes.map((r: any) => [r.id, r]));
-    this.totalLength = this.routes.reduce((a: any, r: any) => a + r.length, 0);
+    this.routeById = new Map(this.routes.map((r) => [r.id, r]));
+    this.totalLength = this.routes.reduce((a, r) => a + r.length, 0);
     this._buildAccel();
   }
 
@@ -379,7 +491,7 @@ export class RoadGraph {
    * @param x @param z
    * @param [maxR] give up beyond this many metres
    */
-  nearest(x: number, z: number, maxR: number = 400): any | null {
+  nearest(x: number, z: number, maxR: number = 400): RoadHit | null {
     const cell = this._cell;
     const ci = Math.floor(x / cell), cj = Math.floor(z / cell);
     const rings = Math.ceil(maxR / cell);
@@ -404,7 +516,7 @@ export class RoadGraph {
 
     // refine against the two adjacent segments
     const e = this.edges[bestEi];
-    let best: any = null, bestD = Math.sqrt(bestD2);
+    let best: RoadHit | null = null, bestD = Math.sqrt(bestD2);
     const pts = e.pts;
     for (let k = -1; k <= 0; k++) {
       const ia = Math.max(0, Math.min(pts.length - 2, bestI + k));
@@ -459,7 +571,7 @@ export class RoadGraph {
       [B.edge.b, (B.edge.length - B.s) / B.edge.clsDef.speed],
     ]);
 
-    const dist = new Map<string, number>(), prev = new Map<string, { from: string, edge: any }>();
+    const dist = new Map<string, number>(), prev = new Map<string, { from: string, edge: number }>();
     const open: string[] = [];
     for (const s of start) { dist.set(s.node, s.cost); open.push(s.node); }
     while (open.length) {
@@ -480,7 +592,7 @@ export class RoadGraph {
       }
     }
 
-    let bestNode: any = null, bestCost = Infinity;
+    let bestNode: string | null = null, bestCost = Infinity;
     for (const [n, tail] of goal) {
       const d = dist.has(n) ? dist.get(n)! + tail : Infinity;
       if (d < bestCost) { bestCost = d; bestNode = n; }
@@ -488,7 +600,7 @@ export class RoadGraph {
     if (!bestNode) return null;
 
     // walk back
-    const chain = [];
+    const chain: number[] = [];
     let n = bestNode;
     while (prev.has(n)) { const p = prev.get(n)!; chain.unshift(p.edge); n = p.from; }
 
@@ -509,7 +621,7 @@ export class RoadGraph {
     return { length, seconds: bestCost, pts };
   }
 
-  _slice(edge: any, s0: number, s1: number) {
+  _slice(edge: RoadEdge, s0: number, s1: number) {
     const out = [];
     const fwd = s1 >= s0;
     const lo = Math.min(s0, s1), hi = Math.max(s0, s1);
@@ -524,7 +636,7 @@ export class RoadGraph {
    * Signed curvature radius at each sample of an edge, metres. `Infinity` on a
    * straight. Used by the drivability test and by the driving AI.
    */
-  radii(edge: any): number[] {
+  radii(edge: RoadEdge): number[] {
     const p = edge.pts, out = new Array(p.length).fill(Infinity);
     for (let i = 1; i < p.length - 1; i++) {
       const a = p[i - 1], b = p[i], c = p[i + 1];
@@ -537,16 +649,16 @@ export class RoadGraph {
     return out;
   }
 
-  /** Every sample of every edge, flattened. @returns */
-  allSamples(): any[] {
-    const out = [];
+  /** Every sample of every edge, flattened, each tagged with its edge. */
+  allSamples(): Array<RoadSample & { edge: RoadEdge }> {
+    const out: Array<RoadSample & { edge: RoadEdge }> = [];
     for (const e of this.edges) for (const p of e.pts) out.push({ ...p, edge: e });
     return out;
   }
 
   /** Node ids with exactly one edge — every one needs a turning circle. */
-  deadEnds() {
-    const out = [];
+  deadEnds(): string[] {
+    const out: string[] = [];
     for (const [id, n] of this.nodes) if (n.edges.length === 1) out.push(id);
     return out;
   }

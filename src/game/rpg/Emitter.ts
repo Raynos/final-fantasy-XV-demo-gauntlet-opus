@@ -6,12 +6,27 @@
  * cheapest and most debuggable thing we can do. Listener exceptions are caught
  * so one broken HUD widget can never stall the simulation.
  */
+/**
+ * A listener. The payload type is whatever the handler says it is -- the
+ * emitter itself carries no schema, so the annotation on the callback is the
+ * contract, and it is checked against what the emitting site actually sends
+ * only where both sides are typed.
+ */
+export type EmitterHandler<P = unknown> = (payload: P, event: string) => void;
+
+/** One line of the ring buffer the debug overlay reads. */
+export interface EmitterLogEntry {
+  event: string;
+  payload: unknown;
+  /** `Date.now()`. */
+  t: number;
+}
+
 export class Emitter {
-  _handlers!: Map<any, any>;
-  log!: any[];
+  _handlers!: Map<string, EmitterHandler<never>[]>;
+  log!: EmitterLogEntry[];
   logLimit!: number;
   constructor() {
-    /** @type {Map<string, Function[]>} */
     this._handlers = new Map();
     /** Ring buffer of the last emissions — handy for the debug overlay. */
     this.log = [];
@@ -22,22 +37,22 @@ export class Emitter {
    * Subscribe to an event.
    * @returns unsubscribe function
    */
-  on(event: string, fn: (payload:any, event:string)=>void): () => void {
+  on<P = unknown>(event: string, fn: EmitterHandler<P>): () => void {
     if (typeof fn !== 'function') throw new TypeError('on(event, fn): fn must be a function');
     let list = this._handlers.get(event);
     if (!list) { list = []; this._handlers.set(event, list); }
-    list.push(fn);
-    return () => this.off(event, fn);
+    list.push(fn as EmitterHandler<never>);
+    return () => this.off(event, fn as EmitterHandler<never>);
   }
 
   /** Subscribe and auto-unsubscribe after the first emission. */
-  once(event: string, fn: any) {
-    const off = this.on(event, (payload, ev) => { off(); fn(payload, ev); });
+  once<P = unknown>(event: string, fn: EmitterHandler<P>) {
+    const off = this.on<P>(event, (payload, ev) => { off(); fn(payload, ev); });
     return off;
   }
 
   /** Remove a previously registered handler. */
-  off(event: any, fn: any) {
+  off(event: string, fn: EmitterHandler<never>) {
     const list = this._handlers.get(event);
     if (!list) return;
     const i = list.indexOf(fn);
@@ -48,19 +63,22 @@ export class Emitter {
   /**
    * Fire an event. Returns the payload so call sites can `return this.emit(...)`.
    */
-  emit(event: string, payload?: any) {
+  emit<P>(event: string, payload?: P): P | undefined {
     this.log.push({ event, payload, t: Date.now() });
     if (this.log.length > this.logLimit) this.log.shift();
+    const call = (fn: EmitterHandler<never>) => (fn as EmitterHandler<P | undefined>)(payload, event);
     const list = this._handlers.get(event);
     if (list) {
       // copy: handlers are allowed to unsubscribe during dispatch
       for (const fn of list.slice()) {
-        try { fn(payload, event); } catch (err) { console.error(`[rpg] handler for "${event}" threw`, err); }
+        try { call(fn); } catch (err) { console.error(`[rpg] handler for "${event}" threw`, err); }
       }
     }
-    const any = this._handlers.get('*');
-    if (any) for (const fn of any.slice()) {
-      try { fn(payload, event); } catch (err) { console.error('[rpg] wildcard handler threw', err); }
+    // The `'*'` wildcard the class doc says does not exist. It does, and the
+    // debug overlay is the only thing that has ever subscribed to it.
+    const every = this._handlers.get('*');
+    if (every) for (const fn of every.slice()) {
+      try { call(fn); } catch (err) { console.error('[rpg] wildcard handler threw', err); }
     }
     return payload;
   }

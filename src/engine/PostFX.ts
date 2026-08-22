@@ -16,12 +16,33 @@ import { CasPass } from './postfx/CasPass.ts';
 import { Exposure } from './postfx/Exposure.ts';
 import { LightBudget } from './LightBudget.ts';
 import { Warmup } from './Warmup.ts';
+import type { WarmupStep } from './Warmup.ts';
+import { isDirectionalLight, isMesh, isVector3 } from '../util/three-guards.ts';
+import type { Character } from '../characters/rig/Character.ts';
+
+/**
+ * A three material as the override guard reads one.
+ *
+ * `alphaMap` is three's, but it lives on the concrete materials rather than on
+ * the `Material` base, and this guard walks a whole scene of mixed materials.
+ * (`allowOverride` is already on `Material`.)
+ */
+interface OverridableMaterial extends THREE.Material {
+  alphaMap?: THREE.Texture | null;
+}
+
+/** What `Warmup.run()` reports back, kept here because `precompile` returns it. */
+export interface WarmupReport {
+  ms: number;
+  programs: number;
+  steps: WarmupStep[];
+}
 import { GRADES, lutFor } from '../shaders/post/grades.ts';
-import type { Renderer } from './Renderer.ts';
+import type { Renderer, QualityTier } from './Renderer.ts';
 import type { Game } from '../game/Game.ts';
 
 /** Visible point/spot lights held resident per quality tier. See LightBudget. */
-const LIGHT_BUDGET = {
+const LIGHT_BUDGET: Record<QualityTier, { point: number, spot: number }> = {
   low: { point: 6, spot: 2 },
   medium: { point: 8, spot: 2 },
   high: { point: 10, spot: 2 },
@@ -52,11 +73,14 @@ const LIGHT_BUDGET = {
  */
 export class PostFX {
   focusDistance!: number;
-  focusTarget!: any;
+  /** What the depth of field is pulling to; null lets `focusDistance` win. */
+  focusTarget!: THREE.Object3D | THREE.Vector3 | null;
   _focusGoal!: number;
   _halton!: number[][];
-  _head!: any;
-  _headWho!: any;
+  /** The cached head node of the shot's subject. */
+  _head!: THREE.Object3D | null;
+  /** Who `_head` belongs to; a shot change invalidates the cache. */
+  _headWho!: string | null;
   _prevCamPos!: THREE.Vector3;
   _v!: THREE.Vector3;
   _v2!: THREE.Vector3;
@@ -98,13 +122,14 @@ export class PostFX {
   scenePass!: ScenePass;
   smaa!: SMAAPass;
   ssr!: SsrPass;
-  sun!: any;
+  sun!: THREE.DirectionalLight | null;
   sunColor!: THREE.Vector3;
   sunScreen!: THREE.Vector4;
   taa!: TaaPass;
   velocity!: VelocityPass;
   viewProj!: THREE.Matrix4;
-  warmupReport!: any;
+  /** The last boot warm-up report, for the dev overlay. */
+  warmupReport!: WarmupReport | null;
   width!: number;
   constructor(rnd: Renderer) {
     this.rnd = rnd;
@@ -173,7 +198,7 @@ export class PostFX {
 
     // Must exist before Game's boot-time `renderer.compile()` so the programs
     // it warms are the ones the budgeted light count will actually ask for.
-    this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality as keyof typeof LIGHT_BUDGET] || LIGHT_BUDGET.high);
+    this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality] || LIGHT_BUDGET.high);
     const prevBefore = scene.onBeforeRender;
     scene.onBeforeRender = (r, sc, cam, geo, mat, group) => {
       // Every render — beauty pass, water reflection, VFX depth prepass — goes
@@ -357,10 +382,11 @@ export class PostFX {
    *
    */
   guardOverrides(scene: THREE.Scene) {
-    scene.traverse((o: any) => {
+    scene.traverse((o) => {
+      if (!isMesh(o)) return;
       const m = o.material;
       if (!m) return;
-      const list = Array.isArray(m) ? m : [m];
+      const list: OverridableMaterial[] = Array.isArray(m) ? m : [m];
       for (const mat of list) {
         if (mat.userData.__overrideGuarded) continue;
         mat.userData.__overrideGuarded = true;
@@ -372,7 +398,7 @@ export class PostFX {
   /**
    * Quality tier. `low` drops the expensive gathers, `ultra` widens them.
    */
-  setQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
+  setQuality(tier: QualityTier) {
     this.quality = tier;
     const low = tier === 'low', med = tier === 'medium', ultra = tier === 'ultra';
     // The light budget is deliberately *not* re-set here. Changing it changes
@@ -495,23 +521,23 @@ export class PostFX {
     this._head = null;
     this._headWho = who;
 
-    let char: any = null;
+    let char: Character | null = null;
     if (who !== 'player') {
       const party = game.get('Party');
       const m = party && party.get && party.get(who);
-      char = m && m.character;
+      char = (m && m.character) || null;
     }
     if (!char) {
       const player = game.get('Player');
-      char = player && player.character;
+      char = (player && player.character) || null;
     }
     if (!char) return null;
 
-    const rigBones = char.rig && char.rig.byName;
-    this._head = char.eyes
-      || (char.attach && char.attach.head)
-      || (rigBones && (rigBones.head || rigBones.Head || rigBones.neck))
-      || null;
+    // `Character.eyes` is built by `buildEyes` for every character, so the
+    // three fallbacks this used to carry -- `attach.head`, `rig.byName.head`
+    // and `rig.byName.Head` -- could never run. `Head` was never a bone name
+    // in the first place: `Skeleton.ts` writes them all lower-case.
+    this._head = char.eyes || null;
     return this._head;
   }
 
@@ -551,9 +577,9 @@ export class PostFX {
 
   _findSun() {
     if (this.sun && this.sun.parent) return this.sun;
-    let found: any = null;
-    this.scene.traverse((o: any) => {
-      if (!found && o.isDirectionalLight) found = o;
+    let found: THREE.DirectionalLight | null = null;
+    this.scene.traverse((o) => {
+      if (!found && isDirectionalLight(o)) found = o;
     });
     this.sun = found;
     return found;
@@ -634,7 +660,7 @@ export class PostFX {
 
     // focus pull
     if (this.focusTarget) {
-      const p = this.focusTarget.isVector3
+      const p = isVector3(this.focusTarget)
         ? this.focusTarget
         : this._v.setFromMatrixPosition(this.focusTarget.matrixWorld);
       this._focusGoal = this.camera.position.distanceTo(p);
@@ -658,7 +684,7 @@ export class PostFX {
    *
    * @returns warm-up report, or null if it could not run
    */
-  precompile(): any | null {
+  precompile(): WarmupReport | null {
     const game = this.game || (typeof window !== 'undefined' ? window.GAME : null);
     if (!game || !game.get || this._warmed) return null;
     this._warmed = true;

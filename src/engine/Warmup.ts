@@ -1,8 +1,31 @@
 import * as THREE from 'three';
 import type { Game } from '../game/Game.ts';
 import { WEATHER_NAMES } from '../world/Weather.ts';
+import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
+import { isLight } from '../util/three-guards.ts';
+import { WEAPONS } from '../combat/Weapons.ts';
+import type { WeaponClass } from '../combat/Weapons.ts';
 
-/** Every preset `Weather.set()` accepts, in the order the warm-up walks them. */
+/**
+ * One entry in the warm-up log: how long a step took and what it cost, or why
+ * it failed. Every step is wrapped, so a step that threw still has a row.
+ */
+export interface WarmupStep {
+  name: string;
+  ms?: number;
+  /** Programs compiled by this step. */
+  programs?: number;
+  error?: string;
+}
+
+/**
+ * `CombatSystem.weaponCache` is keyed by class but declared `Map<string, …>`,
+ * so the restore at the end of `_warmWeapons` has to re-narrow. `WEAPONS` is
+ * the class table itself, which makes this the definition rather than a guess.
+ */
+function isWeaponClass(k: string): k is WeaponClass {
+  return Object.hasOwn(WEAPONS, k);
+}
 
 
 /**
@@ -31,12 +54,19 @@ import { WEATHER_NAMES } from '../world/Weather.ts';
  * never the boot.
  */
 export class Warmup {
-  renderer!: any;
-  camera!: any;
+  renderer!: THREE.WebGLRenderer;
+  camera!: THREE.Camera;
   game!: Game;
-  log!: any[];
+  log!: WarmupStep[];
   ms!: number;
-  scene!: any;
+  scene!: THREE.Scene;
+  /**
+   * Programs three has compiled so far. `info.programs` is nullable in three's
+   * own types (it is only populated once the renderer has an info block), so
+   * the null lands here once instead of at each of the four call sites.
+   */
+  get programCount(): number { return this.renderer.info.programs?.length ?? 0; }
+
   constructor(game: Game) {
     this.game = game;
     this.renderer = game.renderer;
@@ -50,11 +80,11 @@ export class Warmup {
    * Run the whole sweep. Blocking, and meant to be: it belongs on the loading
    * screen. Restores every piece of state it touches.
    */
-  run(): {ms:number, programs:number, steps:any[]} {
+  run(): { ms: number, programs: number, steps: WarmupStep[] } {
     const t0 = performance.now();
     const rt = new THREE.WebGLRenderTarget(64, 64, { depthBuffer: true });
     const prevTarget = this.renderer.getRenderTarget();
-    const before = this.renderer.info.programs.length;
+    const before = this.programCount;
 
     try {
       this._step('scene', () => this._compileScene(rt));
@@ -72,22 +102,22 @@ export class Warmup {
     this.ms = performance.now() - t0;
     return {
       ms: this.ms,
-      programs: this.renderer.info.programs.length - before,
+      programs: this.programCount - before,
       steps: this.log,
     };
   }
 
-  _step(name: string, fn: any) {
+  _step(name: string, fn: () => void) {
     const t = performance.now();
-    const p0 = this.renderer.info.programs.length;
-    try { fn(); } catch (e: any) {
-      this.log.push({ name, error: String((e && e.message) || e) });
+    const p0 = this.programCount;
+    try { fn(); } catch (e: unknown) {
+      this.log.push({ name, error: e instanceof Error ? e.message : String(e) });
       return;
     }
     this.log.push({
       name,
       ms: +(performance.now() - t).toFixed(1),
-      programs: this.renderer.info.programs.length - p0,
+      programs: this.programCount - p0,
     });
   }
 
@@ -106,7 +136,7 @@ export class Warmup {
   }
 
   /** One render of the whole scene into a tiny target, shadows included. */
-  _render(rt: any, { shadows = false } = {}) {
+  _render(rt: THREE.WebGLRenderTarget, { shadows = false } = {}) {
     this._patchAll();
     const r = this.renderer;
     const sky = this.game.get('Sky');
@@ -116,7 +146,7 @@ export class Warmup {
     r.setRenderTarget(null);
   }
 
-  _compileScene(rt: any) {
+  _compileScene(rt: THREE.WebGLRenderTarget) {
     this._patchAll();
     this.renderer.compile(this.scene, this.camera);
     this._render(rt);
@@ -126,12 +156,12 @@ export class Warmup {
    * Draw every mesh in the scene once, visible, with the cascades forced to
    * refresh — that is the only way three builds the depth variants.
    */
-  _warmShadows(rt: any) {
-    const hidden: any[] = [];
-    this.scene.traverse((o: any) => {
+  _warmShadows(rt: THREE.WebGLRenderTarget) {
+    const hidden: THREE.Object3D[] = [];
+    this.scene.traverse((o: THREE.Object3D) => {
       // Lights are deliberately left alone: their visibility is the light
       // budget's business, and showing them all would push the count past it.
-      if (o.isLight) return;
+      if (isLight(o)) return;
       if (o.visible === false) { hidden.push(o); o.visible = true; }
     });
     try {
@@ -142,10 +172,11 @@ export class Warmup {
   }
 
   /** Every weapon class and the Armiger swarm, drawn once. */
-  _warmWeapons(rt: any) {
+  _warmWeapons(rt: THREE.WebGLRenderTarget) {
     const combat = this.game.get('Combat');
     if (!combat) return;
-    const current = combat.weapon && combat.weapon.kind;
+    const kind = combat.weapon && combat.weapon.kind;
+    const current = kind && isWeaponClass(kind) ? kind : null;
     const armiger = combat.armiger;
     const armWas = armiger && armiger.group.visible;
     const armActive = armiger && armiger.active;
@@ -180,11 +211,11 @@ export class Warmup {
    * compile the first time something is actually on screen. Drawing them once
    * with everything visible is enough — the geometry can stay empty.
    */
-  _warmVfx(rt: any) {
+  _warmVfx(rt: THREE.WebGLRenderTarget) {
     const vfx = this.game.get('VFX');
     if (!vfx || !vfx.root) return;
-    const hidden: any[] = [];
-    vfx.root.traverse((o: any) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    const hidden: THREE.Object3D[] = [];
+    vfx.root.traverse((o: THREE.Object3D) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
     const wasRoot = vfx.root.visible;
     vfx.root.visible = true;
     try {
@@ -196,7 +227,7 @@ export class Warmup {
   }
 
   /** Every weather preset, including the wet-surface variants. */
-  _warmWeather(rt: any) {
+  _warmWeather(rt: THREE.WebGLRenderTarget) {
     const wx = this.game.get('Weather');
     if (!wx || !wx.set) return;
     // `Weather.name` is declared `string`, so narrow it rather than trusting it.
@@ -236,7 +267,7 @@ export class Warmup {
   _warmPostPasses() {
     const post = this.game.post;
     if (!post || !post.composer) return;
-    const forced = [];
+    const forced: Pass[] = [];
     for (const pass of post.composer.passes) {
       if (pass.enabled === false) { pass.enabled = true; forced.push(pass); }
     }
@@ -254,7 +285,7 @@ export class Warmup {
    * Night swaps the key light from sun to moon and turns the world's emissive
    * and lamp materials on, which is a different shader state from noon.
    */
-  _warmTimeOfDay(rt: any) {
+  _warmTimeOfDay(rt: THREE.WebGLRenderTarget) {
     const sky = this.game.get('Sky');
     if (!sky || !sky.setTimeOfDay) return;
     const back = sky.hours ?? 12;

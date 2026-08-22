@@ -1,4 +1,6 @@
 import { ShaderChunk } from 'three';
+import { isLitMaterial, isMesh } from '../../util/three-guards.ts';
+import type { AtmosphereUniforms } from '../Sky.ts';
 import type * as THREE from 'three';
 import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
 
@@ -20,11 +22,11 @@ import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
 export class MaterialPatch {
   count!: number;
   csm!: import('three/examples/jsm/csm/CSM.js').CSM;
-  uniforms!: any;
+  uniforms!: AtmosphereUniforms;
   /**
    * @param uniforms shared uniform objects (LUTs, fog, cloud shadow)
    */
-  constructor(csm: import('three/examples/jsm/csm/CSM.js').CSM, uniforms: any) {
+  constructor(csm: import('three/examples/jsm/csm/CSM.js').CSM, uniforms: AtmosphereUniforms) {
     this.csm = csm;
     this.uniforms = uniforms;
     this.count = 0;
@@ -32,7 +34,8 @@ export class MaterialPatch {
 
   /** Walk the scene and patch anything new. Cheap enough to run every frame. */
   scan(scene: THREE.Scene) {
-    scene.traverse((o: any) => {
+    scene.traverse((o) => {
+      if (!isMesh(o)) return;
       const m = o.material;
       if (!m) return;
       if (Array.isArray(m)) { for (const mm of m) this.patch(mm); } else this.patch(m);
@@ -42,11 +45,7 @@ export class MaterialPatch {
   patch(mat: THREE.Material) {
     if (!mat || mat.userData.__atmo) return;
     // three's per-class runtime flags; `Material` itself declares none of them
-    const m = mat as any;
-    const lit = m.isMeshStandardMaterial || m.isMeshPhysicalMaterial ||
-                m.isMeshLambertMaterial || m.isMeshPhongMaterial ||
-                m.isMeshToonMaterial;
-    if (!lit) return;
+    if (!isLitMaterial(mat)) return;
     mat.userData.__atmo = true;
 
     const prev = mat.onBeforeCompile;
@@ -54,7 +53,7 @@ export class MaterialPatch {
     const csmHook = mat.onBeforeCompile;
     const self = this;
 
-    mat.onBeforeCompile = function (shader: any, renderer: any) {
+    mat.onBeforeCompile = function (shader, renderer) {
       if (prev) prev.call(this, shader, renderer);
       if (csmHook) csmHook.call(this, shader, renderer);
       self.inject(shader);
@@ -67,7 +66,7 @@ export class MaterialPatch {
     this.count++;
   }
 
-  inject(shader: {uniforms:any, vertexShader:string, fragmentShader:string}) {
+  inject(shader: { uniforms: Record<string, THREE.IUniform>, vertexShader: string, fragmentShader: string }) {
     for (const k of Object.keys(this.uniforms)) shader.uniforms[k] = this.uniforms[k];
 
     shader.vertexShader = 'varying vec3 vAtmWorld;\n' + shader.vertexShader.replace(

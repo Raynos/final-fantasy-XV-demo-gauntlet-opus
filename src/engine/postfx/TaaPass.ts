@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { makeRT, fsMaterial, blit } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_BICUBIC } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Temporal anti-aliasing.
@@ -19,11 +20,12 @@ export class TaaPass extends Pass {
   copy!: THREE.ShaderMaterial;
   feedbackMax!: number;
   feedbackMin!: number;
-  fx!: any;
-  history!: any;
+  fx!: PostFX;
+  /** Ping-pong colour history. */
+  history!: THREE.WebGLRenderTarget[];
   material!: THREE.ShaderMaterial;
   ping!: number;
-  constructor(fx: any, w: number, h: number) {
+  constructor(fx: PostFX, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -165,7 +167,7 @@ export class TaaPass extends Pass {
     this._reset = true;
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     const fx = this.fx;
     const u = this.material.uniforms;
     const dst = 1 - this.ping;

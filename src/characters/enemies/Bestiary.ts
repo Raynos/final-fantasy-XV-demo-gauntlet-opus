@@ -19,6 +19,8 @@ import { HOBGOBLIN } from './Hobgoblin.ts';
 import { NECROMANCER } from './Necromancer.ts';
 import { RED_GIANT } from './RedGiant.ts';
 import { TITAN } from './Titan.ts';
+import type { EnemyStats, Faction, SpawnOpts, SpeciesDef } from './EnemyBase.ts';
+import type { Element } from '../../game/rpg/Stats.ts';
 
 /**
  * The bestiary registry.
@@ -33,41 +35,56 @@ import { TITAN } from './Titan.ts';
  */
 
 /**
+ * What a mark may say about itself: everything on a species except the two
+ * factories and the measured cache, and its stats only in part — `variant()`
+ * merges them over the base's, so `Bloodhorn` may restate `hp` without
+ * restating `attackRange`.
+ */
+export type SpeciesOverride =
+  Partial<Omit<SpeciesDef, 'stats' | 'make' | 'buildPrototype' | '_groundCal'>>
+  & { stats?: Partial<EnemyStats> };
+
+/**
  * Derive a re-statted variant of a species.
  * @param base a species definition
  * @param key the new registry key
  * @param over `{ stats, ...anything else to override }`
  */
-export function variant(base: any, key: string, over: any = {}) {
-  const def = {
+export function variant(base: SpeciesDef, key: string, over: SpeciesOverride = {}): SpeciesDef {
+  const def: SpeciesDef = {
     ...base,
     ...over,
     key,
     protoKey: base.protoKey || base.key,
-    stats: { ...base.stats, ...(over.stats || {}) },
-  };
-  // `base.make` builds the base class, so re-point the instance at the
-  // variant's data afterwards — one geometry, two creatures.
-  def.make = (opts: any = {}) => {
-    const e = base.make(opts);
-    e.type = def;
-    e.name = def.stats.name;
-    e.speciesId = def.questId || key;
-    e.expClass = def.expClass || e.expClass;
-    e.boss = !!def.boss;
-    e.superArmour = !!def.superArmour;
-    e.attacks = def.attacks || e.attacks;
-    const s = def.stats;
-    e.baseMaxHp = s.hp;
-    e.maxHp = opts && opts.maxHp ? opts.maxHp : s.hp;
-    e.hp = e.maxHp;
-    e.maxPoise = s.poise; e.poise = s.poise;
-    e.speed = s.speed; e.damage = s.damage;
-    e.attackRange = s.attackRange; e.aggroRange = s.aggroRange;
-    e.radius = s.radius; e.height = s.height;
-    e.level = (opts && opts.level) || s.level;
-    e.faction = def.faction || e.faction;
-    return e;
+    stats: { ...base.stats, ...over.stats },
+    // A derived type is a *fresh* definition, so it must not inherit the base's
+    // measured ground curves: it is re-statted, not re-modelled, but it is
+    // scaled and posed on its own instance and `calibrateGround` fills this in
+    // the first time one spawns.
+    _groundCal: undefined,
+    make: (opts: SpawnOpts = {}) => {
+      // `base.make` builds the base class, so re-point the instance at the
+      // variant's data afterwards — one geometry, two creatures.
+      const e = base.make(opts);
+      e.type = def;
+      e.name = def.stats.name;
+      e.speciesId = def.questId || key;
+      e.expClass = def.expClass;
+      e.boss = !!def.boss;
+      e.superArmour = !!def.superArmour;
+      e.attacks = def.attacks;
+      const s = def.stats;
+      e.baseMaxHp = s.hp;
+      e.maxHp = opts.maxHp ?? s.hp;
+      e.hp = e.maxHp;
+      e.maxPoise = s.poise; e.poise = s.poise;
+      e.speed = s.speed; e.damage = s.damage;
+      e.attackRange = s.attackRange; e.aggroRange = s.aggroRange;
+      e.radius = s.radius; e.height = s.height;
+      e.level = opts.level ?? s.level;
+      e.faction = def.faction;
+      return e;
+    },
   };
   return def;
 }
@@ -100,8 +117,7 @@ export const DEADEYE = variant(BANDERSNATCH, 'deadeye', {
 
 /* ------------------------------------------------------------ registry */
 
-/** Every spawnable species, keyed by its registry key. */
-export const TYPES = {
+const REGISTRY = {
   sabertusk: SABERTUSK,
   goblin: GOBLIN,
   mt: MT_SOLDIER,
@@ -127,29 +143,48 @@ export const TYPES = {
   deadeye: DEADEYE,
 };
 
-export function speciesKeys(): string[] { return Object.keys(TYPES); }
+/** Every registry key in `TYPES`. */
+export type SpeciesKey = keyof typeof REGISTRY;
+
+/**
+ * Every spawnable species, keyed by its registry key.
+ *
+ * Declared as a `Record` over the key union rather than left as the literal:
+ * the keys stay exact, so a typo in `spawn('sabertsuk')` is still catchable,
+ * while a *lookup* is one `SpeciesDef` instead of a 23-arm union that nothing
+ * can read a field off.
+ */
+export const TYPES: Record<SpeciesKey, SpeciesDef> = REGISTRY;
+
+/** Species by key, for the string-keyed callers that cross a boundary. */
+const BY_KEY: ReadonlyMap<string, SpeciesDef> = new Map(Object.entries(TYPES));
+
+export function speciesKeys(): string[] { return Object.keys(REGISTRY); }
 
 /** Every species of a faction. @param f */
-export function byFaction(f: 'beast' | 'daemon' | 'imperial' | 'astral') {
-  return Object.values(TYPES).filter((t) => (t.faction || 'beast') === f);
+export function byFaction(f: Faction): SpeciesDef[] {
+  return Object.values(TYPES).filter((t) => t.faction === f);
 }
+
+/** The elements a bestiary entry reports on; `physical` is not one of them. */
+const SCANNED: readonly Element[] = ['fire', 'ice', 'lightning', 'dark', 'light'];
 
 /**
  * A player-facing bestiary entry, for the HUD / a future Libra scan.
  */
 export function entry(key: string) {
-  const t = TYPES[key as keyof typeof TYPES];
+  const t = BY_KEY.get(key);
   if (!t) return null;
-  const weak = [], strong = [];
-  for (const el of ['fire', 'ice', 'lightning', 'dark', 'light']) {
+  const weak: Element[] = [], strong: Element[] = [];
+  for (const el of SCANNED) {
     const pct = t.resistPct?.[el] ?? (t.weakness === el ? 160 : t.resist === el ? 50 : 100);
     if (pct > 110) weak.push(el);
     else if (pct < 90) strong.push(el);
   }
   return {
-    key, name: t.stats.name, faction: t.faction || 'beast',
-    level: t.stats.level, hp: t.stats.hp, expClass: t.expClass || 'normal',
-    weak, strong, weakToWeapons: t.weakTo || [], drops: t.drops || [],
+    key, name: t.stats.name, faction: t.faction,
+    level: t.stats.level, hp: t.stats.hp, expClass: t.expClass,
+    weak, strong, weakToWeapons: t.weakTo ?? [], drops: t.drops,
   };
 }
 

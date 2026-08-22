@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Velocity-buffer motion blur.
@@ -14,12 +15,12 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
 export class MotionBlurPass extends FilterPass {
   _enabled!: boolean;
   _wanted!: boolean;
-  override fx!: any;
+  override fx!: PostFX;
   override material!: THREE.ShaderMaterial;
   maxRadius!: number;
   samples!: number;
   shutter!: number;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super(fx);
     this._wanted = true;
     this._enabled = true;

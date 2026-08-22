@@ -3,6 +3,7 @@ import { el, clamp, easeOut, easeOutQuint } from '../../ui/UIKit.ts';
 import { button } from '../../ui/Icons.ts';
 import { ensureInteractCss } from './interact.css.ts';
 import type { Game } from '../Game.ts';
+import type { Interactable } from './Interactables.ts';
 
 /**
  * The contextual prompt that floats over whatever the player is standing in
@@ -18,7 +19,8 @@ const _v = new THREE.Vector3();
 
 export class InteractPrompt {
   _age!: number;
-  _key!: any;
+  /** Key cap currently rendered, so a re-render only rebuilds when it changes. */
+  _key!: string | null;
   _sig!: string | null;
   body!: HTMLElement;
   dot!: HTMLElement;
@@ -71,7 +73,7 @@ export class InteractPrompt {
     this.uiScale = s;
   }
 
-  _render(item: any) {
+  _render(item: Interactable) {
     const sig = `${item.key}|${item.verb}|${item.label}|${item.hint}`;
     if (sig === this._sig) return;
     this._sig = sig;
@@ -92,7 +94,7 @@ export class InteractPrompt {
    * @param item the selected interactable
    * @param appear 0..1
    */
-  update(dt: number, game: Game, item: any | null, appear: number) {
+  update(dt: number, game: Game, item: Interactable | null, appear: number) {
     if (appear <= 0.002 || !item) { this.root.style.display = 'none'; return; }
     this.root.style.display = '';
     this._render(item);

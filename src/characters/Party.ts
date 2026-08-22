@@ -1,9 +1,114 @@
 import * as THREE from 'three';
 import { makeCharacter } from './Cast.ts';
 import { dampAngle, angleDelta } from './Player.ts';
+import { ROLES } from './ai/PartyAI.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
 import { Rng } from '../util/Rng.ts';
+import type { Character } from './rig/Character.ts';
+import type { Enemy } from './enemies/EnemyBase.ts';
+import type { Weapon } from '../combat/Weapons.ts';
+import type { CompanionRole, PendingHit } from './ai/PartyAI.ts';
+import type { Player, Vitals } from './Player.ts';
+import type { CollisionWorld } from '../world/collision/CollisionWorld.ts';
+import type { Ground } from '../world/Terrain.ts';
 import type { Game } from '../game/Game.ts';
+
+/** The three companions. Noctis is the `Player`, not a member of this list. */
+export type CompanionKey = 'gladio' | 'ignis' | 'prompto';
+
+/**
+ * What a companion is doing this frame. `follow` is the field state; the rest
+ * are combat states driven by `PartyAI.update`.
+ */
+export type CompanionState = 'follow' | 'engage' | 'attack' | 'recover' | 'tech' | 'down';
+
+/**
+ * One companion.
+ *
+ * Two systems write this record and neither owns all of it, which is why the
+ * fields are grouped by owner below. `Party` builds it and steers it —
+ * formation slot, separation, arrival damping, gait. `PartyAI` decides what it
+ * is fighting and writes the slot to get it there. Everything `PartyAI` owns is
+ * initialised here anyway, so a member is a complete `PartyMember` from the
+ * moment it exists rather than from whenever `PartyAI.init` gets to it.
+ *
+ * Structurally a `Threat`: an enemy can perceive and attack one of these.
+ */
+export interface PartyMember {
+  /* -------------------------------------------------- owned by `Party` */
+  /** display name, from the cast entry — `Gladiolus`. */
+  name: string;
+  key: CompanionKey;
+  character: Character;
+  /** the scene-graph node; a companion has no `position` of its own. */
+  root: THREE.Group;
+  /**
+   * Formation slot as [sideways, back] in Noctis' frame. `PartyAI` overwrites
+   * this every combat frame to walk them somewhere; `baseSlot` is the peace
+   * time value to restore.
+   */
+  slot: THREE.Vector2;
+  speedMul: number;
+  lag: number;
+  velocity: THREE.Vector3;
+  speed: number;
+  heading: number;
+  /** slow per-character drift so the formation breathes. */
+  wander: number;
+  wanderRate: number;
+  glanceTimer: number;
+  glancing: number;
+  _target: THREE.Vector3;
+  _steer: THREE.Vector3;
+  /**
+   * Vitals for this companion. **Owned by `RpgSystem`**, which mirrors the
+   * matching `Stats` block (keyed on `key`) onto it every frame.
+   */
+  stats: Vitals;
+  /** Own controller: their own feet, their own ground, their own walls. */
+  body: CharacterController | null;
+  /** damped gait speed, which is what drives the legs. */
+  gait: number;
+  avoidX: number;
+  avoidZ: number;
+  /** seconds since the last obstacle probe. */
+  avoidAge: number;
+
+  /* ------------------------------------------------ owned by `PartyAI` */
+  role: CompanionRole;
+  /** the peacetime formation slot, restored when the fight ends. */
+  baseSlot: THREE.Vector2;
+  baseSpeedMul: number;
+  aiState: CompanionState;
+  /** seconds left in the current `aiState`. */
+  aiTimer: number;
+  /** what this companion is working on. Cleared by `Party.snap`. */
+  aiTarget: Enemy | null;
+  /** cycles through `role.actions`. */
+  swingIndex: number;
+  downed: boolean;
+  downTimer: number;
+  /** Noctis, while he is on the floor and this companion is reviving him. */
+  reviveTarget: THREE.Object3D | null;
+  /** the blow this swing will land, and when. */
+  _pending: PendingHit | null;
+  /** one entry per carried weapon: Ignis has two kukris, the others one. */
+  weaponList: Weapon[];
+  /** the primary weapon — `weaponList[0]`. */
+  weapon: Weapon | null;
+  weaponKind: string;
+  /** in hand rather than sheathed. */
+  drawn: boolean;
+  drawWant: boolean;
+  /** 0..1 draw/sheathe dissolve. */
+  drawT: number;
+
+  /* -------------------- owned by the encounter layer (see `Threat`) --- */
+  /** seconds left on Gladio's Coverage taunt. Set by `ai/Techniques`. */
+  taunting: number;
+  /** pull on enemy aggro. Set by `EncounterDirector._refreshThreats`. */
+  threatWeight?: number;
+}
 
 /**
  * Formation specs, at module scope so `init()` and `snap()` read one table.
@@ -11,7 +116,7 @@ import type { Game } from '../game/Game.ts';
  * Prompto (smallest lag, highest speedMul) oscillates longest and is the worst
  * subject for a follow shot that has not settled.
  */
-const SPECS = [
+const SPECS: { key: CompanionKey, slot: [number, number], speedMul: number, lag: number }[] = [
   { key: 'gladio', slot: [-1.95, -0.95], speedMul: 0.97, lag: 0.16 },
   { key: 'ignis', slot: [1.85, -1.45], speedMul: 1.0, lag: 0.22 },
   { key: 'prompto', slot: [0.85, -2.75], speedMul: 1.05, lag: 0.10 },
@@ -33,12 +138,17 @@ const PARTY_SEED = 9182;
  */
 export class Party {
   _gaze!: THREE.Vector3;
-  collision!: any;
+  collision!: CollisionWorld | null;
   game!: Game;
-  members!: any[];
-  player!: any;
+  members!: PartyMember[];
+  player!: Player | undefined;
   rnd!: Rng;
-  terrain!: any;
+  /**
+   * The ground under this walker. `Ground`, not `Terrain`: `Occupants` swaps
+   * in a stub whose surface is a kilometre down while everyone is in the car,
+   * so the foot IK has nothing to plant on at 100 km/h.
+   */
+  terrain!: Ground | undefined;
   async init(game: Game) {
     this.game = game;
     this.members = [];
@@ -56,12 +166,13 @@ export class Party {
       root.add(character.root);
       game.scene.add(root);
 
-      const m = {
+      const slot = new THREE.Vector2(spec.slot[0], spec.slot[1]);
+      const m: PartyMember = {
         name: character.name,
         key: spec.key,
         character,
         root,
-        slot: new THREE.Vector2(spec.slot[0], spec.slot[1]),
+        slot,
         speedMul: spec.speedMul,
         lag: spec.lag,
         velocity: new THREE.Vector3(),
@@ -88,6 +199,33 @@ export class Party {
         avoidX: 0,
         avoidZ: 0,
         avoidAge: 99,
+        /**
+         * Everything below is **owned by `PartyAI`**, which re-arms all of it
+         * in its own `init` with exactly these values (and builds the weapons,
+         * which need a `Weapon` each). They are seeded here so that a member is
+         * never half a member: `Party.update`, `Party.snap`, `Director` and the
+         * encounter layer all read `aiTarget`, `downed` and `taunting`, and
+         * `PartyAI` is registered late enough that they would otherwise be
+         * undefined for the first frames of the world.
+         */
+        role: ROLES[spec.key],
+        baseSlot: slot.clone(),
+        baseSpeedMul: spec.speedMul,
+        aiState: 'follow',
+        aiTimer: 0,
+        aiTarget: null,
+        swingIndex: 0,
+        downed: false,
+        downTimer: 0,
+        reviveTarget: null,
+        _pending: null,
+        weaponList: [],
+        weapon: null,
+        weaponKind: '',
+        drawn: false,
+        drawWant: false,
+        drawT: 1,
+        taunting: 0,
       };
       // spread them out at spawn so the first frame is never a pile
       const p = player ? player.position : new THREE.Vector3();
@@ -105,7 +243,7 @@ export class Party {
   get stats() { return this.members.map((m) => m.stats); }
 
   /** @returns member by character name */
-  get(name: string): any | undefined { return this.members.find((m) => m.name === name || m.key === name); }
+  get(name: string): PartyMember | undefined { return this.members.find((m) => m.name === name || m.key === name); }
 
   /**
    * Draw the stochastic fields for one member off `this.rnd`.
@@ -114,7 +252,7 @@ export class Party {
    * rewound stream, from `snap()`. Keeping it in one place is what makes a
    * snapped formation identical to a booted one rather than merely similar.
    */
-  _seed(m: any) {
+  _seed(m: PartyMember) {
     m.wander = this.rnd.range(0, Math.PI * 2);
     m.wanderRate = this.rnd.range(0.10, 0.22);
     m.glanceTimer = this.rnd.range(1.5, 6);
@@ -128,7 +266,7 @@ export class Party {
    * target) and `snap()` (as the place to put them). If these two ever disagree
    * the formation drifts on the first frame after a snap.
    */
-  _slotTarget(m: any, pp: any, cos: number, sin: number, out: any) {
+  _slotTarget(m: PartyMember, pp: THREE.Vector3, cos: number, sin: number, out: THREE.Vector3): THREE.Vector3 {
     const ox = m.slot.x + Math.sin(m.wander) * 0.42;
     const oz = m.slot.y + Math.cos(m.wander * 0.73) * 0.34;
     return out.set(pp.x + ox * cos + oz * sin, 0, pp.z - ox * sin + oz * cos);
@@ -278,7 +416,9 @@ export class Party {
         m.gait = THREE.MathUtils.damp(m.gait, m.speed * m.body.progress, 10, dt);
       } else {
         m.root.position.addScaledVector(m.velocity, dt);
-        m.root.position.y = this.terrain.heightAt(m.root.position.x, m.root.position.z);
+        // `: 0` matches the two other terrain reads in this file. This was the
+        // one that dereferenced it unguarded — see `project/handoff/no-any.md`.
+        m.root.position.y = this.terrain ? this.terrain.heightAt(m.root.position.x, m.root.position.z) : 0;
         m.gait = m.speed;
       }
 

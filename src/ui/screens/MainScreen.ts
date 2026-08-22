@@ -3,7 +3,8 @@ import type { CachedNode } from '../UIKit.ts';
 import { icon, portrait } from '../Icons.ts';
 import { Bar } from '../Bar.ts';
 import { readParty, readQuest, hudState } from '../GameData.ts';
-import type { Menus } from '../Menus.ts';
+import type { PartyView } from '../GameData.ts';
+import type { Menus, ScreenName } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
 
 /**
@@ -15,7 +16,19 @@ import type { Game } from '../../game/Game.ts';
  * now resolves to a real screen; anything that ever cannot (a screen a build
  * did not register) is drawn disabled with the reason printed, never live.
  */
-const ENTRIES = [
+interface MenuEntry {
+  key: string;
+  label: string;
+  /** Icon key for `Icons.ts`. */
+  icon: string;
+  hint: string;
+  /** The screen this row opens. Never optional -- see above. */
+  to: ScreenName;
+  /** The preview blurb, unless `_body` can report real state instead. */
+  body: string;
+}
+
+const ENTRIES: MenuEntry[] = [
   { key: 'items', label: 'Items', icon: 'items', hint: 'Consumables & treasures', to: 'inventory',
     body: 'Potions, elixirs and the odd hunt trophy. Ignis keeps the inventory in order — mostly.' },
   { key: 'ascension', label: 'Ascension', icon: 'ascension', hint: 'Spend AP on the grid', to: 'ascension',
@@ -38,11 +51,15 @@ const ENTRIES = [
 
 /** The FFXV-style pause menu: a vertical list over a blurred game frame. */
 export class MainScreen {
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
   _cur!: string;
   _pvAge!: number;
   _q!: string;
   _qs!: string;
-  cards!: any[];
+  cards!: Array<{ card: HTMLElement, bar: Bar, hp: HTMLElement, p: PartyView, _t?: string }>;
   i!: number;
   list!: HTMLElement;
   mark!: HTMLElement;
@@ -52,7 +69,7 @@ export class MainScreen {
   pvB!: HTMLElement;
   pvR!: HTMLElement;
   pvT!: HTMLElement;
-  rows!: any;
+  rows!: Array<{ e: MenuEntry, row: HTMLElement, bg: HTMLElement, bar: HTMLElement, _on?: boolean, _live?: boolean }>;
   statNodes!: CachedNode[];
   stats!: HTMLElement;
   sub!: string;
@@ -70,14 +87,16 @@ export class MainScreen {
   build(root: HTMLElement, game: Game) {
     this.list = el('div.mlist');
     this.rows = ENTRIES.map((e2) => {
+      const bg = el('div.mr-bg');
+      const bar = el('div.mr-bar');
       const row = el('div.mrow', {}, [
-        el('div.mr-bg'), el('div.mr-bar'),
+        bg, bar,
         icon(e2.icon, { size: 18, stroke: 1.15 }),
         el('div', {}, [el('div.mr-t', { text: e2.label }), el('div.mr-d', { text: e2.hint })]),
         el('div.mr-x', { text: 'Unavailable' }),
       ]);
       this.list.appendChild(row);
-      return { row, e: e2, bg: row.firstChild, bar: row.childNodes[1] };
+      return { row, e: e2, bg, bar };
     });
     root.appendChild(this.list);
 
@@ -115,7 +134,7 @@ export class MainScreen {
     this.cards = [];
   }
 
-  _buildCards(party: any) {
+  _buildCards(party: PartyView[]) {
     for (const p of party) {
       const bar = new Bar({ cls: 'slim' });
       const hp = el('div.lv');
@@ -129,7 +148,7 @@ export class MainScreen {
     }
   }
 
-  nav(dx: any, dy: number) {
+  nav(dx: number, dy: number) {
     if (dy) this.i = (this.i + dy + ENTRIES.length) % ENTRIES.length;
   }
 
@@ -137,12 +156,12 @@ export class MainScreen {
    * The preview blurb. Three of the eight entries can report real state, so
    * they do rather than repeating an authored count that would drift.
    */
-  _body(entry: any, game: Game) {
+  _body(entry: MenuEntry, game: Game): string {
     const r = game?.get?.('Rpg');
     if (!r) return entry.body;
     if (entry.key === 'quests') {
       const q = r.quests;
-      const hunts = q.active.filter((x: any) => x.type === 'hunt').length;
+      const hunts = q.active.filter((x) => x.type === 'hunt').length;
       return `${q.active.length} active, ${q.available.length} available, ${q.completed.length} finished — `
         + `${hunts} of them bount${hunts === 1 ? 'y' : 'ies'}. Chapter ${r.chapter}.`;
     }
@@ -159,7 +178,7 @@ export class MainScreen {
   }
 
   /** True when the menu stack actually carries the screen this row points at. */
-  _live(e2: any) { return !!(e2.to && this.menus.screens && this.menus.screens[e2.to]); }
+  _live(e2: MenuEntry) { return !!(e2.to && this.menus.screens && this.menus.screens[e2.to]); }
 
   accept() {
     const e2 = ENTRIES[this.i];

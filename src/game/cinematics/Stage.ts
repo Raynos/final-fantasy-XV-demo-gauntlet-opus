@@ -1,6 +1,46 @@
 import * as THREE from 'three';
 import { setPose } from './Poses.ts';
 import type { Game } from '../Game.ts';
+import type { Character } from '../../characters/rig/Character.ts';
+import type { System } from '../../engine/System.ts';
+import type { ActorId, PoseName } from './Scene.ts';
+
+/** Where an actor's gaze is pointed: another actor, a world point, or nowhere. */
+export type LookTarget = ActorId | THREE.Vector3 | number[] | null;
+
+/** One of the four, as the stage steers him. */
+export interface StagedActor {
+  id: ActorId;
+  /** Display name, for subtitles and debug. */
+  name: string;
+  root: THREE.Object3D;
+  character: Character;
+  /** Authored world position; committed onto `root` in `tick`. */
+  pos: THREE.Vector3;
+  /** Authored facing, radians. Damped onto `root` rather than snapped. */
+  yaw: number;
+  /** Metres per second fed to the locomotion layer. */
+  speed: number;
+  vel: THREE.Vector3;
+  pose: PoseName | null;
+  look: LookTarget;
+  _prevYaw: number;
+}
+
+/** A system the stage has taken `update` away from, and how to give it back. */
+interface Suspended {
+  obj: System;
+  had: boolean;
+  /** The system's own `update`, when it had one of its own to give back. */
+  fn: System['update'];
+}
+
+/** Where an actor stood before the scene took over. */
+interface Restore {
+  a: StagedActor;
+  pos: THREE.Vector3;
+  yaw: number;
+}
 
 /**
  * Actor staging for cutscenes.
@@ -28,16 +68,16 @@ import type { Game } from '../Game.ts';
  * ```
  */
 export class Stage {
-  _suspended!: any[];
-  actors!: Map<any, any>;
-  _restore!: any[] | null;
+  _suspended!: Suspended[];
+  actors!: Map<ActorId, StagedActor>;
+  _restore!: Restore[] | null;
   _v!: THREE.Vector3;
   _v2!: THREE.Vector3;
-  _weaponWas!: any;
+  _weaponWas!: number | undefined;
   game!: Game;
   held!: boolean;
-  party!: any;
-  player!: any;
+  party!: import('../../characters/Party.ts').Party | undefined;
+  player!: import('../../characters/Player.ts').Player | undefined;
   constructor(game: Game) {
     this.game = game;
     this.held = false;
@@ -54,7 +94,7 @@ export class Stage {
     const game = this.game;
     const player = game.get('Player');
     const party = game.get('Party');
-    const add = (id: any, root: any, character: any, name: any) => {
+    const add = (id: ActorId, root: THREE.Object3D | null, character: Character | null, name: string) => {
       if (!root || !character) return;
       this.actors.set(id, {
         id, name, root, character,
@@ -77,10 +117,10 @@ export class Stage {
   }
 
   /** @param id `noctis` | `gladio` | `ignis` | `prompto` */
-  actor(id: string) { this._bind(); return this.actors.get(id); }
+  actor(id: ActorId): StagedActor | undefined { this._bind(); return this.actors.get(id); }
 
   /** Every bound actor id, in staging order. */
-  get ids() { this._bind(); return [...this.actors.keys()]; }
+  get ids(): ActorId[] { this._bind(); return [...this.actors.keys()]; }
 
   /* ----------------------------------------------------------- control -- */
 
@@ -134,10 +174,10 @@ export class Stage {
     this._restore = null;
   }
 
-  _suspend(obj: any) {
+  _suspend(obj: System | undefined) {
     if (!obj) return;
     const had = Object.prototype.hasOwnProperty.call(obj, 'update');
-    this._suspended.push({ obj, had, fn: had ? obj.update : null });
+    this._suspended.push({ obj, had, fn: had ? obj.update : undefined });
     obj.update = () => {};
   }
 
@@ -148,7 +188,7 @@ export class Stage {
    * @param [yaw] radians; omit to leave the facing alone
    * @param [snap=true] snap y to the terrain
    */
-  place(id: string, pos: number[] | THREE.Vector3, yaw?: number, snap: boolean = true) {
+  place(id: ActorId, pos: number[] | THREE.Vector3, yaw?: number, snap: boolean = true) {
     const a = this.actor(id);
     if (!a) return;
     if (Array.isArray(pos)) a.pos.set(pos[0], pos[1], pos[2]);
@@ -161,7 +201,7 @@ export class Stage {
   }
 
   /** Face an actor toward a world point. */
-  faceTo(id: string, target: any) {
+  faceTo(id: ActorId, target: number[] | THREE.Vector3) {
     const a = this.actor(id);
     if (!a) return;
     const t = Array.isArray(target) ? this._v.set(target[0], target[1], target[2]) : target;
@@ -173,7 +213,7 @@ export class Stage {
    * @param dir travel direction (need not be unit)
    * @param speed metres/second
    */
-  walk(id: string, dir: THREE.Vector3 | number[] | null, speed: number) {
+  walk(id: ActorId, dir: THREE.Vector3 | number[] | null, speed: number) {
     const a = this.actor(id);
     if (!a) return;
     a.speed = speed;
@@ -184,7 +224,7 @@ export class Stage {
   }
 
   /** @param id @param name see `Poses.ts` */
-  pose(id: string, name: string | null) {
+  pose(id: ActorId, name: PoseName | null) {
     const a = this.actor(id);
     if (!a) return;
     a.pose = name;
@@ -194,14 +234,14 @@ export class Stage {
   /**
    * Head/eye tracking. Accepts another actor id, a world point, or null.
    */
-  look(id: string, target: string | THREE.Vector3 | number[] | null) {
+  look(id: ActorId, target: LookTarget) {
     const a = this.actor(id);
     if (!a) return;
     a.look = target ?? null;
   }
 
   /** World point an actor's eyes are at — the thing other actors look at. */
-  eyeOf(id: string, out = new THREE.Vector3()) {
+  eyeOf(id: ActorId, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     const dims = a.character.rig && a.character.rig.dims;
@@ -210,7 +250,7 @@ export class Stage {
   }
 
   /** Chest height — a better aim point for wide shots than the feet. */
-  chestOf(id: string, out = new THREE.Vector3()) {
+  chestOf(id: ActorId, out = new THREE.Vector3()) {
     const a = this.actor(id);
     if (!a) return out.set(0, 0, 0);
     return out.set(a.pos.x, a.pos.y + 1.28, a.pos.z);

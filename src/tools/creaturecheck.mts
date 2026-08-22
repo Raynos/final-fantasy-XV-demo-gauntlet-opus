@@ -47,8 +47,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-function parseArgs(argv: any) {
-  const o: { hold: number, tol: number, driftTol: number, species: string | null, json: string | null, quiet: boolean } =
+function parseArgs(argv: string[]) {
+  const o: { hold: number, tol: number, driftTol: number, species: string[] | null, json: string | null, quiet: boolean } =
     { hold: 240, tol: 0.25, driftTol: 0.002, species: null, json: null, quiet: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -65,7 +65,7 @@ function parseArgs(argv: any) {
 
 const opts = parseArgs(process.argv.slice(2));
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -85,7 +85,7 @@ async function ensureServer() {
 const server = await ensureServer();
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 800, height: 450 } });
-const errors: any[] = [];
+const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
 
@@ -135,7 +135,7 @@ try {
       // approach and run are airborne for most of the cycle on purpose.
       hobgoblin: ['approach', 'run'],
     };
-    const exempt = (key: any, pose: any) => {
+    const exempt = (key: string, pose: string) => {
       const e = INTENTIONAL[key as keyof typeof INTENTIONAL];
       return e === '*' || (Array.isArray(e) && e.includes(pose));
     };
@@ -145,12 +145,31 @@ try {
      * transformed by the live skeleton; static children (weapons, shells) come
      * through their own world matrices.
      */
-    const drawnBox = (e: any) => {
+    /**
+     * The parts of the page's three objects this sweep touches. Written down
+     * structurally because the classes come from the page's own module graph,
+     * not from a module this file could import.
+     */
+    interface DrawNode {
+      geometry?: { attributes?: { position?: { count: number } } };
+      isSkinnedMesh?: boolean;
+      skeleton?: { update(): void };
+      applyBoneTransform(i: number, v: Vec3Like): void;
+      matrixWorld: unknown;
+      traverse(fn: (o: DrawNode) => void): void;
+    }
+    interface Vec3Like {
+      x: number; y: number; z: number;
+      fromBufferAttribute(attr: unknown, i: number): void;
+      applyMatrix4(m: unknown): void;
+    }
+
+    const drawnBox = (e: { root: { updateMatrixWorld(f: boolean): void }, visual: DrawNode }) => {
       e.root.updateMatrixWorld(true);
-      const v = new V3();
+      const v: Vec3Like = new V3();
       let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
       let minZ = Infinity, maxZ = -Infinity, n = 0;
-      e.visual.traverse((o: any) => {
+      e.visual.traverse((o) => {
         const geo = o.geometry;
         if (!geo || !geo.attributes || !geo.attributes.position) return;
         const pos = geo.attributes.position;
@@ -254,8 +273,8 @@ for (const r of rows) {
 }
 
 if (!opts.quiet) {
-  const pad = (s: any, n: any) => String(s).padEnd(n);
-  const num = (v: any, n = 8) => String(v.toFixed(3)).padStart(n);
+  const pad = (s: string | number, n: number) => String(s).padEnd(n);
+  const num = (v: number, n = 8) => String(v.toFixed(3)).padStart(n);
   console.log(`${pad('species', 16)}${pad('pose', 11)}${'foot'.padStart(8)}${'bodyY'.padStart(8)}${'headrm'.padStart(8)}${'roll'.padStart(7)}${'top'.padStart(8)}${'height'.padStart(8)}${'drift'.padStart(9)}`);
   for (const [key, list] of byKey) {
     for (const r of list) {

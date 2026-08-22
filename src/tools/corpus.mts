@@ -48,13 +48,14 @@ import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDaemon, APP_PORT, DAEMON_PORT } from './daemon.mts';
+import type { ShotsResponse } from './daemon.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-function parseArgs(argv: any) {
+function parseArgs(argv: string[]) {
   const o: {
     out: string, cols: number, w: number, chunk: number, sheetOnly: boolean, list: boolean,
-    only: string[] | null, settle: number, warm: boolean, frame: string | null, scout: string | null,
+    only: string[] | null, settle: number, warm: boolean, frame: FrameJob[] | null, scout: ScoutJob[] | null,
   } = {
     out: 'tmp/shots/corpus', cols: 3, w: 1536, chunk: 0, sheetOnly: false, list: false,
     only: null, settle: 60, warm: false, frame: null, scout: null,
@@ -66,7 +67,7 @@ function parseArgs(argv: any) {
     else if (a === '--scout') o.scout = JSON.parse(argv[++i]);
     else if (a === '--warm') o.warm = true;
     else if (a === '--list') o.list = true;
-    else if (a === '--only') o.only = argv[++i].split(',').map((s: any) => s.trim());
+    else if (a === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
     else if (a === '--out') o.out = argv[++i];
     else if (a === '--cols') o.cols = Number(argv[++i]);
     else if (a === '--w') o.w = Number(argv[++i]);
@@ -118,7 +119,7 @@ async function index(): Promise<{order: string[], groups: Map<string, string[]>,
  * another agent's job blows that budget while rendering perfectly well. This
  * has no header deadline, only a generous socket-idle one.
  */
-const callDaemon = (route: any, body: any): Promise<any> => new Promise((resolve, reject) => {
+const callDaemon = <T,>(route: string, body: unknown): Promise<T> => new Promise<T>((resolve, reject) => {
   const payload = Buffer.from(JSON.stringify(body));
   const req = http.request({
     host: '127.0.0.1', port: DAEMON_PORT, path: route, method: 'POST',
@@ -138,8 +139,18 @@ const callDaemon = (route: any, body: any): Promise<any> => new Promise((resolve
   req.end(payload);
 });
 
+/** How one contact sheet is laid out. */
+interface SheetOpts {
+  cols: number;
+  /** Page width, px. */
+  w: number;
+  title: string;
+  /** Output path for the rendered jpeg. */
+  out: string;
+}
+
 /** Tile a list of PNGs into one sheet, captioned with each shot's `doc`. */
-async function sheet(dir: any, names: any, docs: any, { cols, w, title, out }: any) {
+async function sheet(dir: string, names: string[], docs: Map<string, string>, { cols, w, title, out }: SheetOpts) {
   const { chromium } = await import('playwright');
   const cells = [];
   for (const n of names) {
@@ -149,7 +160,8 @@ async function sheet(dir: any, names: any, docs: any, { cols, w, title, out }: a
     } catch { /* not captured */ }
   }
   if (!cells.length) return 0;
-  const esc = (s: any) => s.replace(/[&<>]/g, (c: any) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]));
+  const ENT: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+  const esc = (s: string) => s.replace(/[&<>]/g, (c) => ENT[c] ?? c);
   const html = `<!doctype html><meta charset=utf8><style>
     body{margin:0;background:#0a0b0e;font:12px/1.45 ui-monospace,Menlo,monospace;color:#8d97a8}
     h1{font:600 20px/1 ui-monospace,Menlo,monospace;color:#e6ecf5;letter-spacing:.18em;
@@ -175,11 +187,39 @@ async function sheet(dir: any, names: any, docs: any, { cols, w, title, out }: a
   return cells.length;
 }
 
+/** One framing to solve, as `--frame` accepts it on the command line. */
+interface FrameJob {
+  name?: string;
+  /** Camera position, `[x, y, z]`. */
+  cam: number[];
+  /** What to frame, `[x, y, z]`. */
+  sub: number[];
+  /** Vertical fov, degrees. */
+  fov?: number;
+  /** Where in frame the subject should land, -1..1. */
+  u?: number;
+  v?: number;
+}
+
+/** One camera stand to sweep for, as `--scout` accepts it. */
+interface ScoutJob {
+  name?: string;
+  /** Subject position in world metres. */
+  sx: number;
+  sz: number;
+  /** Eye height above the subject's ground, metres. */
+  eye?: number;
+  /** Camera distances to try, `[min, max]`. */
+  dist?: [number, number];
+  /** Bearings to sweep, degrees, `[from, to]`. */
+  bear?: [number, number];
+}
+
 /**
  * Solve the `target` that puts `sub` at screen position (u, v) for a camera at
  * `cam` with vertical fov `fov`. u is right, v is up, both in -1..1.
  */
-function frame(jobs: any, aspect = 1600 / 900) {
+function frame(jobs: FrameJob[], aspect = 1600 / 900) {
   for (const j of jobs) {
     const [cx, cy, cz] = j.cam;
     const [sx, sy, sz] = j.sub;
@@ -193,7 +233,7 @@ function frame(jobs: any, aspect = 1600 / 900) {
     const tanV = Math.tan((fov / 2) * Math.PI / 180);
     const du = -u * tanV * aspect * len, dv = -v * tanV * len;
     const t = [sx + r[0] * du + up[0] * dv, sy + up[1] * dv, sz + r[2] * du + up[2] * dv];
-    console.log(`${(j.name || '').padEnd(20)} pos: [${j.cam.map((n: any) => +n.toFixed(1)).join(', ')}], `
+    console.log(`${(j.name || '').padEnd(20)} pos: [${j.cam.map((n) => +n.toFixed(1)).join(', ')}], `
       + `target: [${t.map((n) => +n.toFixed(0)).join(', ')}], fov: ${fov},   // ${len.toFixed(0)} m out`);
   }
 }
@@ -203,13 +243,13 @@ function frame(jobs: any, aspect = 1600 / 900) {
  * Score = sight-line clearance + how far the camera stands above the subject
  * + how much relief sits behind it, which is what makes a vista read.
  */
-async function scout(jobs: any) {
+async function scout(jobs: ScoutJob[]) {
   const { Field } = await import('../world/terrain/Field.ts');
   const t0 = Date.now();
   const field = new Field(1337);
   field.build();
   console.error(`[scout] field built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  const h = (x: any, z: any) => field.heightAt(x, z);
+  const h = (x: number, z: number) => field.heightAt(x, z);
   for (const j of jobs) {
     const sy = h(j.sx, j.sz);
     const eye = j.eye ?? 2.4;
@@ -269,7 +309,7 @@ async function main() {
       // another invocation comes back with a stale sky: the same shot renders
       // a lit cloud deck on a fresh page and a black zenith on a reused one,
       // so a corpus that is going to be compared against itself must boot.
-      const r = await callDaemon('/shots', {
+      const r = await callDaemon<ShotsResponse>('/shots', {
         shots: batch, out: outDir, settle: o.settle, w: 1600, h: 900, cold: i === 0 && !o.warm,
       });
       for (const s of r.results) {
@@ -289,7 +329,7 @@ async function main() {
 
   let total = 0;
   for (const c of cats) {
-    const n = await sheet(outDir, groups.get(c), docs, {
+    const n = await sheet(outDir, groups.get(c) ?? [], docs, {
       cols: o.cols, w: o.w, title: c.replace(/_/g, ' '), out: path.join(outDir, `_sheet-${c}.jpg`),
     });
     if (n) console.log(`  _sheet-${c}.jpg  ${n}`);

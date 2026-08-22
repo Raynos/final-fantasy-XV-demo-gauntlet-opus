@@ -21,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const SRC = path.join(ROOT, 'src');
 const WANT_EXPORTS = process.argv.includes('--exports');
 
-async function walk(dir: any, out = []) {
+async function walk(dir: string, out: string[] = []) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     // `src/tools/` is the harness, not the game: it never appears in the import
     // graph from `main.ts`, so walking it would report every tool as an orphan.
@@ -40,7 +40,7 @@ const source = new Map();
 for (const f of all) source.set(f, await readFile(f, 'utf8'));
 
 /** Resolve a specifier to an absolute file inside src/, or null if external. */
-function resolve(from: any, spec: any) {
+function resolve(from: string, spec: string) {
   if (!spec.startsWith('.')) return null;
   let p = path.resolve(path.dirname(from), spec);
   if (source.has(p)) return p;
@@ -71,7 +71,7 @@ while (stack.length) {
 }
 
 const orphans = all.filter((f) => !seen.has(f)).sort();
-const rel = (f: any) => path.relative(ROOT, f);
+const rel = (f: string) => path.relative(ROOT, f);
 
 console.log(`${all.length} modules under src/, ${seen.size} reachable from main.ts\n`);
 if (!orphans.length) console.log('no orphaned modules — every file is reachable');

@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import { worldMap } from '../map/WorldMap.ts';
 import { srgb } from '../../util/TextureGen.ts';
 
@@ -51,7 +52,59 @@ const SCRUB_FOREST = { fern: 0.42, bracken: 0.34, shrub: 0.22, thorn: 0.02 };
 const SCRUB_MARSH = { reed: 0.54, fern: 0.20, bracken: 0.16, shrub: 0.10 };
 const SCRUB_ASH = { thorn: 0.72, sage: 0.28 };
 
-const BASE = {
+/**
+ * What one zone's plant life looks like. Every zone's record is `BASE` with a
+ * few fields overridden, so the whole table is one shape.
+ */
+export interface VegBiomeSpec {
+  /** 0..1 grass density multiplier. */
+  grassD: number;
+  /** Grass height multiplier. */
+  grassH: number;
+  /** 0..1 fraction of the tufts that are dead straw. */
+  grassDead: number;
+  /** Dry and lush ends of the grass ramp, hex. */
+  dry: number;
+  lush: number;
+  /** Shifts where on that ramp this zone sits. */
+  wetBias: number;
+  /** Tree density multiplier. */
+  treeD: number;
+  /** 0..1 how closed the canopy gets. */
+  canopy: number;
+  /** Species mix, weights summing to ~1. */
+  trees: Record<string, number>;
+  /** `[min, max]` trunk scale. */
+  treeS: number[];
+  /** Linear RGB multiplier on the foliage. */
+  treeTint: number[];
+  /** Undergrowth density multiplier. */
+  scrubD: number;
+  scrub: Record<string, number>;
+  /** Reed and lily-pad densities; only the wetlands have them. */
+  reedD: number;
+  lilyD: number;
+  /** 0..1 moss on the rocks and trunks. */
+  mossy: number;
+}
+
+/**
+ * A biome record with the hot-path fields resolved: the colour ramps in linear
+ * space and the species mixes as cumulative tables. Both are read once per
+ * scattered plant, which is why they are precomputed rather than derived.
+ */
+export interface VegBiome extends VegBiomeSpec {
+  /** The `VEG_BIOME` key, filled in below. */
+  id: string;
+  /** `dry` and `lush` in linear space. */
+  dryC: THREE.Color;
+  lushC: THREE.Color;
+  /** `[key, cumulativeWeight]`, ending at 1.0001. */
+  treeTable: Array<[string, number]>;
+  scrubTable: Array<[string, number]>;
+}
+
+const BASE: VegBiomeSpec = {
   grassD: 1, grassH: 1, grassDead: 0.20,
   dry: 0x91855a, lush: 0x566733, wetBias: 0.0,
   treeD: 1, canopy: 0, trees: MIX_LEIDE, treeS: [0.8, 1.25], treeTint: [1, 1, 1],
@@ -59,9 +112,21 @@ const BASE = {
   reedD: 0, lilyD: 0, mossy: 0,
 };
 
-const mk = (o: any) => ({ ...BASE, ...o });
+const mk = (o: Partial<VegBiomeSpec>): VegBiome => {
+  const b: VegBiomeSpec = { ...BASE, ...o };
+  // resolved here rather than in a second pass, so the record is never
+  // half-built and `VEG_BIOME` can be the resolved type throughout
+  return {
+    ...b,
+    id: '',
+    dryC: srgb(b.dry),
+    lushC: srgb(b.lush),
+    treeTable: cumulative(b.trees),
+    scrubTable: cumulative(b.scrub),
+  };
+};
 
-export const VEG_BIOME: Record<string, any> = {
+export const VEG_BIOME: Record<string, VegBiome> = {
   // ----------------------------------------------------------------- LEIDE
   // What is already here and works: 0.15-0.35 m olive/straw tufts over open
   // dirt, dry thorn scrub, the odd dead tree. Do not "improve" this.
@@ -248,16 +313,8 @@ function cumulative(table: Record<string, number>): [string, number][] {
   return out;
 }
 
-// Pre-resolve the colour ramps to linear once, and the species mixes to
-// cumulative tables. Both are read on the scatter hot path.
-for (const id in VEG_BIOME) {
-  const b = VEG_BIOME[id];
-  b.id = id;
-  b.dryC = srgb(b.dry);
-  b.lushC = srgb(b.lush);
-  b.treeTable = cumulative(b.trees);
-  b.scrubTable = cumulative(b.scrub);
-}
+// `mk` resolved the ramps and the tables; only the key is known out here.
+for (const id in VEG_BIOME) VEG_BIOME[id].id = id;
 
 /**
  * Pick a key from a cumulative table with a 0..1 random.
@@ -285,9 +342,9 @@ const _moist = new Map();
  * @param x @param z
  * @returns a {@link VEG_BIOME} record (never null)
  */
-export function vegAt(x: number, z: number): any {
+export function vegAt(x: number, z: number): VegBiome {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
-  let b = _cache.get(k);
+  let b: VegBiome | undefined = _cache.get(k);
   if (b !== undefined) return b;
   const zn = worldMap.zoneAt(x, z);
   b = (zn && VEG_BIOME[zn.id]) || VEG_BIOME._default;

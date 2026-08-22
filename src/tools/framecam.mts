@@ -34,7 +34,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -79,7 +79,7 @@ async function main() {
   const page = await browser.newPage({
     viewport: { width: opts.w, height: opts.h }, deviceScaleFactor: 1,
   });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
@@ -96,13 +96,17 @@ async function main() {
 
     if (opts.probe) {
       const src = await readFile(path.resolve(opts.probe), 'utf8');
-      const value: any = await page.evaluate(
-        new Function(`return (async () => { ${src} })()`) as () => any
+      // The probe file is read as text and evaluated as a *function body* in
+      // the page, so what it resolves to is only known at runtime.
+      const value: unknown = await page.evaluate(
+        new Function(`return (async () => { ${src} })()`) as () => unknown
       );
       console.log(JSON.stringify(value, null, 1));
       // A probe that has measured the world may hand back the framings it
       // derived; shooting them in the same boot closes the derive→look loop.
-      if (value && Array.isArray(value.specs)) specs.push(...value.specs);
+      if (value && typeof value === 'object' && 'specs' in value && Array.isArray(value.specs)) {
+        specs.push(...value.specs);
+      }
     }
 
     const resolved = [];

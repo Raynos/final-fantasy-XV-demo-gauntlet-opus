@@ -32,7 +32,7 @@ import * as THREE from 'three';
  * blends have been taken, which is far longer than a `colorAt` callback lives.
  */
 
-const RING: any[] = [];
+const RING: THREE.Color[] = [];
 for (let i = 0; i < 8; i++) RING.push(new THREE.Color());
 let _at = 0;
 const _rd = new THREE.Color();

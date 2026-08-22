@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
@@ -62,8 +63,8 @@ export const RED_GIANT = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new RedGiantEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new RedGiantEnemy(opts); },
+} satisfies SpeciesDef;
 
 /** A thin inset strip of molten light, for the cracks between the plates. */
 function seam(w: number, h: number, d: number, pos: number[], rot: number[] | null, heat = 2.6) {
@@ -270,11 +271,7 @@ function buildPrototype() {
 }
 
 class RedGiantEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(RED_GIANT, opts); }
+  constructor(opts: SpawnOpts) { super(RED_GIANT, opts); }
 
   /** World-space sword tip, for sweep hit tests and the fire trail. */
   swordTip(out = new THREE.Vector3()) {
@@ -284,7 +281,7 @@ class RedGiantEnemy extends Enemy {
     return out.set(0.0, 4.62, 0.0).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

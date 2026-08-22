@@ -1,3 +1,6 @@
+import type { Enemy, EnemyPack, Threat } from '../../characters/enemies/EnemyBase.ts';
+import type { EncounterDirector } from './EncounterDirector.ts';
+
 /**
  * A pack: the coordination layer that makes a group of enemies read as a
  * hunting party rather than a queue.
@@ -15,20 +18,32 @@
  * The pack also propagates aggro — one member noticing you wakes the rest,
  * which is what turns a "there is an enemy over there" into an encounter.
  */
-export class Pack {
+/** How a pack is set up. */
+export interface PackOpts {
+  id?: string;
+  /** How many members may hold the engage token at once. */
+  maxEngaged?: number;
+  /** Seconds a member holds the token before it may rotate away. */
+  rotate?: number;
+  /** The director that owns this pack, and gets the callbacks. */
+  encounter?: EncounterDirector | null;
+}
+
+export class Pack implements EnemyPack {
   alerted!: boolean;
   _t!: number;
-  encounter!: any;
-  engaged!: any[];
-  id!: any;
-  maxEngaged!: any;
-  members!: any[];
-  rotate!: any;
-  target!: any;
+  encounter!: EncounterDirector | null;
+  /** Members currently holding the engage token, oldest first. */
+  engaged!: Enemy[];
+  id!: string;
+  maxEngaged!: number;
+  members!: Enemy[];
+  rotate!: number;
+  target!: Threat | null;
   /**
    * @param [o] `{ maxEngaged, rotate, id }`
    */
-  constructor(o: any = {}) {
+  constructor(o: PackOpts = {}) {
     this.id = o.id || 'pack';
     this.members = [];
     this.maxEngaged = o.maxEngaged ?? 2;
@@ -42,7 +57,7 @@ export class Pack {
     this.encounter = o.encounter || null;
   }
 
-  add(e: any) {
+  add(e: Enemy) {
     if (!this.members.includes(e)) {
       this.members.push(e);
       this._reslot();
@@ -50,7 +65,7 @@ export class Pack {
     return e;
   }
 
-  remove(e: any) {
+  remove(e: Enemy) {
     const i = this.members.indexOf(e);
     if (i >= 0) this.members.splice(i, 1);
     const j = this.engaged.indexOf(e);
@@ -77,7 +92,7 @@ export class Pack {
    * One member noticed something — bring the rest in. This is what makes a
    * pack feel like a pack: you are spotted by one and answered by five.
    */
-  alert(by: any, target: any) {
+  alert(by: Enemy, target: Threat) {
     this.target = target;
     if (this.alerted) return;
     this.alerted = true;
@@ -91,7 +106,7 @@ export class Pack {
   }
 
   /** A member died: free its token and re-spread the survivors. */
-  onDeath(e: any) {
+  onDeath(e: Enemy) {
     const j = this.engaged.indexOf(e);
     if (j >= 0) this.engaged.splice(j, 1);
     this._reslot();
@@ -102,7 +117,7 @@ export class Pack {
    * Hand `e` a role for the next second or so.
    * Sets `e.packRole` to `'engage'` or `'flank'`.
    */
-  assign(e: any) {
+  assign(e: Enemy) {
     // prune the dead and the disengaged
     for (let i = this.engaged.length - 1; i >= 0; i--) {
       const m = this.engaged[i];

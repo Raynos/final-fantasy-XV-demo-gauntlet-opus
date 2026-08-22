@@ -34,7 +34,13 @@ export const SPEAKERS = {
   radio: null,
 };
 
-const L = (who: string, line: string) => ({ who: SPEAKERS[who as keyof typeof SPEAKERS] ?? who, line });
+/** One spoken line. A null speaker is narration. */
+export interface BanterLine {
+  who: string | null;
+  line: string;
+}
+
+const L = (who: string, line: string): BanterLine => ({ who: SPEAKERS[who as keyof typeof SPEAKERS] ?? who, line });
 
 /**
  * Ambient exchanges. Each entry is a short back-and-forth; the runner plays it
@@ -218,9 +224,10 @@ export class Conversation {
   cooldown!: number;
   gap!: number;
   next!: number;
-  queue!: any[];
+  /** Lines still to be spoken from the current exchange. */
+  queue!: BanterLine[];
   rest!: number;
-  used!: Set<any>;
+  used!: Set<string>;
   constructor() {
     this.queue = [];
     this.next = 0;
@@ -267,6 +274,8 @@ export class Conversation {
     this.next -= dt;
     if (this.next > 0) return;
     const l = this.queue.shift();
+    // `queue.length` was checked three lines up, so there is a line here.
+    if (!l) return;
     window.dispatchEvent(new CustomEvent('ffxv-banter', { detail: { who: l.who, line: l.line } }));
     this.next = this.gap;
     if (!this.queue.length) this.cooldown = this.rest;

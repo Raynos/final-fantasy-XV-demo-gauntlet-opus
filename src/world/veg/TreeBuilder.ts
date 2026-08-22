@@ -11,7 +11,58 @@ import { Rng } from '../../util/Rng.ts';
  * the tips whip.
  */
 
-export const TREE_SPECIES = {
+/** Every tree species the builder knows. */
+export type TreeSpecies =
+  | 'dead' | 'savanna' | 'conifer' | 'broadleaf' | 'duscae' | 'thicket' | 'swamp';
+
+/** The recursive-branching parameters one species is grown from. */
+export interface TreeSpec {
+  /** Overall height, metres. */
+  height: number;
+  /** Trunk radius at the base, metres. */
+  trunkR: number;
+  /** How many times the branching recurses. */
+  depth: number;
+  /** `[min, max]` children per branch. */
+  kids: number[];
+  /** `[min, max]` splay angle of a child, radians. */
+  spread: number[];
+  /** Length and radius decay per level. */
+  lenFall: number;
+  radFall: number;
+  /** How much a branch curves along its length. */
+  curl: number;
+  /** Downward bias on a branch tip. */
+  droop: number;
+  /** Upward bias, the opposite of `droop`. */
+  upBias: number;
+  /** Fraction of the height that is bare trunk. */
+  trunkFrac: number;
+  /** Depth at which leaves start; 99 means never. */
+  leafDepth: number;
+  leafCount: number;
+  leafSize: number;
+  /** Which leaf card atlas to use. */
+  leafKind: string;
+  bark: number;
+  barkRough: number;
+  /** Conifer only: whorls of short laterals straight off the trunk. */
+  whorl?: boolean;
+  /** Flattens the canopy; the savanna's parasol. */
+  flatten?: number;
+}
+
+/** A grown tree: two geometries and the bounds the scatter needs. */
+export interface BuiltTree {
+  wood: THREE.BufferGeometry;
+  /** Null for a species with no foliage at all. */
+  leaves: THREE.BufferGeometry | null;
+  height: number;
+  radius: number;
+  leafKind: string;
+}
+
+export const TREE_SPECIES: Record<TreeSpecies, TreeSpec> = {
   // Gnarled dead desert tree — the Leide silhouette.
   dead: {
     height: 6.6, trunkR: 0.35, depth: 4, kids: [2, 3], spread: [0.6, 1.35],
@@ -81,13 +132,16 @@ export const TREE_SPECIES = {
 const _u = new THREE.Vector3(), _v = new THREE.Vector3();
 const _r = new THREE.Vector3(), _n = new THREE.Vector3(), _ref = new THREE.Vector3();
 
+/** A geometry under construction: flat attribute arrays, one push at a time. */
 class MeshAccum {
-  c!: any[];
-  f!: any[];
-  i!: any[];
-  n!: any[];
-  p!: any[];
-  uv!: any[];
+  /** Vertex colours, RGB triples. */
+  c!: number[];
+  /** `aFlex` wind stiffness, one per vertex. */
+  f!: number[];
+  i!: number[];
+  n!: number[];
+  p!: number[];
+  uv!: number[];
   constructor() { this.p = []; this.n = []; this.uv = []; this.f = []; this.i = []; this.c = []; }
   get verts() { return this.p.length / 3; }
   geometry() {
@@ -117,8 +171,8 @@ function frame(dir: THREE.Vector3, u: THREE.Vector3, v: THREE.Vector3) {
  * @param seed deterministic seed
  * @param over per-variant parameter overrides
  */
-export function buildTree(name: string, seed: number, over: any = {}): any {
-  const S = { ...TREE_SPECIES[name as keyof typeof TREE_SPECIES], ...over };
+export function buildTree(name: string, seed: number, over: Partial<TreeSpec> = {}): BuiltTree {
+  const S: TreeSpec = { ...TREE_SPECIES[name as TreeSpecies], ...over };
   const rng = new Rng((seed >>> 0) || 1);
   const wood = new MeshAccum();
   const leaf = new MeshAccum();

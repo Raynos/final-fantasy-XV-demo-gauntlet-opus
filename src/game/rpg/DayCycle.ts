@@ -12,6 +12,7 @@
  */
 
 import { LODGINGS, nightScaling } from './Stats.ts';
+import type { ExpRedemption, Lodging } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Game } from '../Game.ts';
 
@@ -35,7 +36,36 @@ export const DAEMON_END = 5;
  * Havens — the rune-marked campsites you can actually sleep at. Positions are
  * world coordinates so the map and the "camp" prompt agree.
  */
-export const HAVENS = [
+/** A rune-marked campsite. */
+export interface Haven {
+  id: string;
+  name: string;
+  /** World coordinates, `[x, y, z]`. */
+  pos: number[];
+  region: string;
+  /** Whether it starts on the map. Live state lives in `DayCycle.havenState`. */
+  discovered: boolean;
+}
+
+/** A haven with the live discovery state merged in. */
+export interface HavenState extends Haven {}
+
+/** The nearest haven, and how far away it is. */
+export interface NearHaven extends HavenState {
+  /** Metres from the point that was asked about. */
+  distance: number;
+}
+
+/** The serialised clock. */
+export interface DayCycleSave {
+  day?: number;
+  hour?: number;
+  absoluteHour?: number;
+  /** Haven id -> whether it has been found. */
+  havens?: Record<string, boolean>;
+}
+
+export const HAVENS: Haven[] = [
   { id: 'haven_prairie',    name: 'Prairie Outpost Haven',   pos: [-92, 0, 60],    region: 'leide',   discovered: true },
   { id: 'haven_longwythe',  name: 'Longwythe Peak Haven',    pos: [128, 0, 84],    region: 'leide',   discovered: true },
   { id: 'haven_keycatrich', name: 'Keycatrich Ruins Haven',  pos: [-154, 0, -132], region: 'leide',   discovered: false },
@@ -58,6 +88,39 @@ export const HAVEN_RADIUS = 14;
  * `time-of-day-changed`, `hour-changed`, `day-changed`, `daemons-rising`,
  * `daemons-receding`, `haven-discovered` and `rested`.
  */
+/** A night that happened. */
+export interface RestSummary {
+  ok: true;
+  /** The lodging, with the haven EXP bonus already folded into `bonus`. */
+  lodging: Lodging;
+  hoursSlept: number;
+  day: number;
+  /** Clock string the party woke at. */
+  wokeAt: string;
+  /** Null when there was no EXP bank to redeem. */
+  exp: ExpRedemption | null;
+  /** Names of the meal buffs that timed out overnight. */
+  expiredBuffs: string[];
+}
+
+/** Why a night did not happen. */
+export interface RestRefused {
+  ok: false;
+  reason: string;
+  /** `'not-at-haven'` only: the nearest one, and how far away it is. */
+  haven?: NearHaven | null;
+  /** `'not-enough-gil'` only. */
+  cost?: number;
+}
+
+/** Whether the party may camp where it is standing. */
+export type CampCheck =
+  | { ok: true; haven: NearHaven }
+  | { ok: false; reason: 'no-haven' | 'not-at-haven'; haven?: NearHaven };
+
+/** @see DayCycle.rest */
+export type RestResult = RestSummary | RestRefused;
+
 export class DayCycle {
   _phase!: string;
   _daemonsUp!: boolean;
@@ -66,7 +129,8 @@ export class DayCycle {
   day!: number;
   driveSky!: boolean;
   emitter!: Emitter | null;
-  havenState!: any;
+  /** Haven id -> whether it is on the map yet. */
+  havenState!: Record<string, { discovered: boolean }>;
   hour!: number;
   minutesPerSecond!: number;
   running!: boolean;
@@ -223,10 +287,10 @@ export class DayCycle {
   /* -- Havens ------------------------------------------------------------ */
 
   /** Havens with their discovery state merged in. */
-  havens() { return HAVENS.map((h) => ({ ...h, discovered: this.havenState[h.id].discovered })); }
+  havens(): HavenState[] { return HAVENS.map((h) => ({ ...h, discovered: this.havenState[h.id].discovered })); }
 
   /** Mark a haven as found. */
-  discoverHaven(id: any) {
+  discoverHaven(id: string) {
     const st = this.havenState[id];
     if (!st || st.discovered) return false;
     st.discovered = true;
@@ -239,8 +303,8 @@ export class DayCycle {
    * Nearest haven to a point.
    * @param [discoveredOnly=false]
    */
-  nearestHaven(pos: {x:number, z:number}, discoveredOnly: boolean = false) {
-    let best: any = null, bestD = Infinity;
+  nearestHaven(pos: {x:number, z:number}, discoveredOnly: boolean = false): NearHaven | null {
+    let best: HavenState | null = null, bestD = Infinity;
     for (const h of this.havens()) {
       if (discoveredOnly && !h.discovered) continue;
       const d = Math.hypot(pos.x - h.pos[0], pos.z - h.pos[2]);
@@ -253,7 +317,7 @@ export class DayCycle {
    * Is the party standing at a haven? Also auto-discovers it, since walking
    * onto a haven is how you find one.
    */
-  canCamp(pos: {x:number, z:number}): {ok:boolean, reason?:string, haven?:any} {
+  canCamp(pos: {x:number, z:number}): CampCheck {
     const near = this.nearestHaven(pos);
     if (!near) return { ok: false, reason: 'no-haven' };
     if (near.distance > HAVEN_RADIUS) return { ok: false, reason: 'not-at-haven', haven: near };
@@ -271,7 +335,7 @@ export class DayCycle {
    * @param {object} ctx
    * @returns the rest summary the results screen renders
    */
-  rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} }): any {
+  rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} }): RestResult {
     const lodgingId = ctx.lodging || 'haven';
     const lodging = LODGINGS[lodgingId as keyof typeof LODGINGS];
     if (!lodging) return { ok: false, reason: 'unknown-lodging' };
@@ -295,13 +359,13 @@ export class DayCycle {
     const result = ctx.expBank ? ctx.expBank.redeem(ctx.party ? ctx.party.roster : [], bonusLodging) : null;
 
     // Restore, then expire anything whose meal timer ran out overnight.
-    let expired = [];
+    let expired: Array<{ name: string }> = [];
     if (ctx.party) {
       ctx.party.restoreAll();
       expired = ctx.party.expireBuffs(this.absoluteHour);
     }
 
-    const summary = {
+    const summary: RestSummary = {
       ok: true,
       lodging: bonusLodging,
       hoursSlept: +hoursSlept.toFixed(2),
@@ -315,20 +379,20 @@ export class DayCycle {
   }
 
   /** Skip time without sleeping (waiting out the night at a haven). */
-  wait(hours: number, ctx: any = {}) {
+  wait(hours: number, ctx: { party?: import('./PartyState.ts').PartyState } = {}) {
     this.advance(hours);
     if (ctx.party) ctx.party.expireBuffs(this.absoluteHour);
     return { ok: true, hour: this.hour, clock: this.clockString, day: this.day };
   }
 
-  toJSON() {
+  toJSON(): DayCycleSave {
     return {
       hour: this.hour, day: this.day, absoluteHour: this.absoluteHour,
       havens: Object.fromEntries(Object.keys(this.havenState).map((k) => [k, this.havenState[k].discovered])),
     };
   }
 
-  static fromJSON(data: any, emitter: Emitter | null = null) {
+  static fromJSON(data: DayCycleSave | null | undefined, emitter: Emitter | null = null) {
     const d = new DayCycle(emitter);
     if (!data) return d;
     d.day = data.day || 1;

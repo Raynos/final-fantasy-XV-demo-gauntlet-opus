@@ -1,5 +1,62 @@
 import { PLACES, REGION_CARDS } from './Chapters.ts';
 import type { Game } from '../Game.ts';
+import type { AreaCard, Place } from './Chapters.ts';
+import type { EcoSite } from '../../world/props/EcoSites.ts';
+import type { StorySystem } from './StorySystem.ts';
+
+/** A {@link Place} once the world has told us where its site ended up. */
+export interface LivePlace extends Place {
+  x: number;
+  z: number;
+}
+
+/** What a fired trigger is handed. Which fields are set depends on `kind`. */
+export interface TriggerPayload {
+  /** Place id, region id or quest id, depending on the kind. */
+  id?: string | null;
+  /** The previous value of the same thing, for a crossing. */
+  from?: string | null;
+  /** `place` only. */
+  place?: LivePlace | null;
+  /** `region` only. */
+  card?: AreaCard;
+  /** `hour` only. */
+  hour?: number;
+  /** `quest` only. */
+  quest?: string;
+  phase?: string;
+  objective?: string;
+}
+
+/** A trigger **as authored**: `once` and `fired` are the runtime's business. */
+export interface TriggerSpec {
+  kind: 'place' | 'region' | 'hour' | 'quest' | 'combat';
+  /** Fire at most once. Default true. */
+  once?: boolean;
+  /** Group label, so `clear(tag)` can retire a chapter's triggers together. */
+  tag?: string;
+  /** Extra gate, evaluated with the game. */
+  require?(game: Game): boolean;
+  run?(story: StorySystem, payload: TriggerPayload): void;
+  /** Match on the payload's `id`. */
+  id?: string;
+  /** `quest` only. */
+  quest?: string;
+  phase?: string;
+  objective?: string;
+  /** `hour` only: the boundary, and which way it must be crossed. */
+  hour?: number;
+  rising?: boolean;
+}
+
+/** A trigger **as registered**: the runtime's guard is now on it. */
+export interface Trigger extends TriggerSpec {
+  once: boolean;
+  fired: boolean;
+}
+
+/** How a matched trigger is run. `StorySystem._fire` is the only implementation. */
+export type FireTrigger = (trigger: Trigger, payload: TriggerPayload) => void;
 
 /**
  * World triggers: the layer that notices something has happened and tells the
@@ -19,13 +76,16 @@ import type { Game } from '../Game.ts';
  * predicate, so gating on chapter or story flags needs no extra machinery.
  */
 export class Triggers {
-  _places!: any;
-  place!: any;
+  /** The place table, resolved once against the live site list. */
+  _places!: LivePlace[] | null;
+  /** Id of the place the player is standing in. */
+  place!: string | null;
   region!: string | null;
-  _hour!: any;
+  /** Hour last seen, for the crossing test. */
+  _hour!: number | null;
   _t!: number;
   game!: Game;
-  list!: any[];
+  list!: Trigger[];
   constructor(game: Game) {
     this.game = game;
     this.list = [];
@@ -40,32 +100,32 @@ export class Triggers {
    * @param def `{ kind, ...args, once?, require?, run(ctx) }`
    * @returns the trigger, so callers can disable it later
    */
-  add(def: any): any {
-    const t = { once: true, fired: false, ...def };
+  add(def: TriggerSpec): Trigger {
+    const t: Trigger = { once: true, fired: false, ...def };
     this.list.push(t);
     return t;
   }
 
   /** Remove every trigger added with a given tag. */
-  clear(tag: any) {
+  clear(tag: string | null) {
     if (!tag) { this.list.length = 0; return; }
     this.list = this.list.filter((t) => t.tag !== tag);
   }
 
   /** Resolve the named-place table against the world's actual site list. */
-  places() {
+  places(): LivePlace[] {
     if (this._places) return this._places;
     const props = this.game.get('Props');
     const eco = props && props.ecology;
     this._places = PLACES.map((p) => {
-      const site = eco && eco.sites.find((s: any) => s.type === p.site);
+      const site: EcoSite | undefined = eco && eco.sites.find((s: EcoSite) => s.type === p.site);
       return site ? { ...p, x: site.x, z: site.z } : null;
-    }).filter(Boolean);
+    }).filter((p): p is LivePlace => p != null);
     return this._places;
   }
 
-  /** The place id containing a world position, or null. */
-  placeAt(pos: any) {
+  /** The place containing a world position, or null. */
+  placeAt(pos: { x: number, z: number }): LivePlace | null {
     for (const p of this.places()) {
       if (Math.hypot(pos.x - p.x, pos.z - p.z) <= p.radius) return p;
     }
@@ -77,7 +137,7 @@ export class Triggers {
    * exist so the plumbing is real rather than a stub, and so a later agent
    * adding Duscae terrain gets region cards for free.
    */
-  regionAt(pos: any) {
+  regionAt(pos: { x: number, z: number }) {
     if (pos.z > 520 || pos.x < -700) return 'duscae';
     if (pos.z < -640) return 'cleigne';
     return 'leide';
@@ -86,7 +146,7 @@ export class Triggers {
   /**
    * Poll the world and fire whatever matched.
    */
-  update(dt: number, fire: (trigger:any, payload:any) => void) {
+  update(dt: number, fire: FireTrigger) {
     // 4 Hz is plenty for proximity and far cheaper than every frame; story
     // triggers are not a physics query.
     this._t += dt;
@@ -123,6 +183,7 @@ export class Triggers {
       if (this._hour != null && Math.abs(h - this._hour) < 12) {
         for (const t of this.list) {
           if (t.kind !== 'hour' || (t.once && t.fired)) continue;
+          if (t.hour == null) continue;
           const crossed = t.rising !== false
             ? (this._hour < t.hour && h >= t.hour)
             : (this._hour > t.hour && h <= t.hour);
@@ -135,9 +196,9 @@ export class Triggers {
   }
 
   /** Push an external event (quest / combat) through the same matcher. */
-  notify(kind: string, payload: any, fire: any) { this._match(kind, payload, fire); }
+  notify(kind: TriggerSpec['kind'], payload: TriggerPayload, fire: FireTrigger) { this._match(kind, payload, fire); }
 
-  _match(kind: string, payload: any, fire: any) {
+  _match(kind: TriggerSpec['kind'], payload: TriggerPayload, fire: FireTrigger) {
     for (const t of this.list) {
       if (t.kind !== kind || (t.once && t.fired)) continue;
       if (t.id != null && t.id !== payload.id) continue;
@@ -150,7 +211,7 @@ export class Triggers {
     }
   }
 
-  _allow(t: any) {
+  _allow(t: Trigger) {
     if (!t.require) return true;
     try { return !!t.require(this.game); } catch { return false; }
   }

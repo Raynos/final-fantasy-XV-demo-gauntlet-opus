@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { Frame } from '../../cinematics/CameraMove.ts';
 import { worldMap } from '../../../world/map/WorldMap.ts';
+import type {
+  ActorId, PoseName, SceneCtx, ShotDef, StageFrame,
+} from '../../cinematics/Scene.ts';
+import type { LookTarget } from '../../cinematics/Stage.ts';
+import type { EcoSite, SiteType } from '../../../world/props/EcoSites.ts';
 
 /**
  * Shared staging vocabulary for the dialogue scenes.
@@ -24,6 +29,107 @@ import { worldMap } from '../../../world/map/WorldMap.ts';
  * in this project go stale every time the terrain or the world size changes.
  */
 
+/* ------------------------------------------------------------------------ */
+/* Option bags                                                               */
+/* ------------------------------------------------------------------------ */
+
+/** Where {@link frameAt} anchors a scene, and which way it faces. */
+export interface FrameOpts {
+  /** An explicit anchor, from {@link townAnchor} or {@link poiPoint}. */
+  origin?: THREE.Vector3;
+  /** `[x, z]` used when neither the origin nor the named site resolves. */
+  fallback?: number[];
+  /** A world point to face, as `[x, z]` or a `Vector3`. */
+  facing?: THREE.Vector3 | number[];
+  /** `[forward, left]` metres to shift the finished frame by. */
+  offset?: number[];
+  /** Pin to a built surface (a graded pad, a deck) instead of the terrain. */
+  floor?: number | null;
+}
+
+/** How {@link arrange} lays the four of them out. */
+export interface ArrangeOpts {
+  /** Multiplier on every slot offset. */
+  spread?: number;
+  /** Metres up-frame the whole arc sits. */
+  at?: number;
+  /** Per-actor `[forward, left]`, scene-local metres. */
+  slots?: Partial<Record<ActorId, number[]>>;
+  poses?: Partial<Record<ActorId, PoseName | null>>;
+  /** Point everyone's gaze at one thing. */
+  look?: LookTarget;
+  /**
+   * Metres to lift everyone off `Terrain.heightAt`, for the spots where the
+   * sampler and the rendered surface disagree. Measured per scene.
+   */
+  lift?: number;
+}
+
+/** What every set-up builder takes: when it runs, and how it is shot. */
+interface BaseShotOpts {
+  t0: number;
+  t1: number;
+  fov?: number;
+  handheld?: number;
+  fStop?: number;
+  focus?: number | 'auto' | ActorId;
+  aim?: ActorId | ActorId[] | 'crew' | null;
+  aimU?: number;
+  /** Metres above the ground the look-at sits. */
+  targetU?: number;
+  /** Camera position, scene-local metres: up-frame, screen-left, above ground. */
+  camF: number;
+  camL: number;
+  camU?: number;
+}
+
+/** @see single */
+export interface SingleOpts extends BaseShotOpts {
+  /** The subject, scene-local metres. */
+  f: number;
+  l: number;
+  /** How far the lens creeps in over the take, as a fraction. */
+  push?: number;
+}
+
+/** @see wide */
+export interface WideOpts extends BaseShotOpts {
+  /** The look-at, scene-local metres. Both default to the frame origin. */
+  f?: number;
+  l?: number;
+  breathe?: number;
+  /** Metres the camera drifts over the take. */
+  driftF?: number;
+  driftL?: number;
+  driftU?: number;
+  /** Metres the look-at drifts up-frame over the take. */
+  targetDriftF?: number;
+}
+
+/** @see twoShot */
+export interface TwoShotOpts extends BaseShotOpts {
+  f: number;
+  l: number;
+  driftF?: number;
+  driftL?: number;
+}
+
+/** @see ots */
+export interface OtsOpts extends Omit<BaseShotOpts, 'camF' | 'camL'> {
+  /** The near shoulder, scene-local metres. */
+  nearF: number;
+  nearL: number;
+  /** The subject held clean, scene-local metres. */
+  farF: number;
+  farL: number;
+  /** Metres up-frame of the near shoulder the camera sits. */
+  back?: number;
+  /** Metres past him, away from the subject. */
+  side?: number;
+  driftF?: number;
+  driftL?: number;
+}
+
 /**
  * A named world-space anchor published by the town system — the garage bay, the
  * caravan, the pylon sign — ground truth for anything staged in Hammerhead.
@@ -32,7 +138,7 @@ import { worldMap } from '../../../world/map/WorldMap.ts';
  * @param [name] key in `Town.anchors`; omit for the town origin
  * @returns null when the town has not been built
  */
-export function townAnchor(ctx: any, name?: string): THREE.Vector3 | null {
+export function townAnchor(ctx: SceneCtx, name?: string): THREE.Vector3 | null {
   const town = ctx.game.get('Town');
   if (!town) return null;
   const a = name && town.anchors ? town.anchors[name] : null;
@@ -49,7 +155,7 @@ export function townAnchor(ctx: any, name?: string): THREE.Vector3 | null {
  * @param ctx cinematic context
  * @param id POI id, e.g. `'longwythe_peak'`
  */
-export function poiPoint(ctx: any, id: string): THREE.Vector3 | null {
+export function poiPoint(ctx: SceneCtx, id: string): THREE.Vector3 | null {
   const p = worldMap.byId ? worldMap.byId.get(id) : null;
   if (!p) return null;
   const terrain = ctx.terrain || ctx.game.get('Terrain');
@@ -74,26 +180,24 @@ export function poiPoint(ctx: any, id: string): THREE.Vector3 | null {
  *
  * @param ctx cinematic context
  */
-export function takeCar(ctx: any): THREE.Object3D | null {
+export function takeCar(ctx: SceneCtx): THREE.Object3D | null {
   const props = ctx.game.get('Props');
   const car = props && props.regalia;
   if (!car) return null;
   const sim = ctx.game.get('Regalia');
-  ctx.data._car = {
-    car,
-    pos: car.position.clone(),
-    rot: car.rotation.clone(),
-    visible: car.visible,
-    sim: sim && sim.root ? sim.root : null,
-    simVisible: sim && sim.root ? sim.root.visible : null,
-  };
+  const simRoot = sim && sim.root ? sim.root : null;
+  const held = { car, pos: car.position.clone(), rot: car.rotation.clone(), visible: car.visible };
+  // `simVisible` exists exactly when `sim` does -- see `CarHold`.
+  ctx.data._car = simRoot
+    ? { ...held, sim: simRoot, simVisible: simRoot.visible }
+    : { ...held, sim: null, simVisible: null };
   car.visible = true;
-  if (sim && sim.root) sim.root.visible = false;
+  if (simRoot) simRoot.visible = false;
   return car;
 }
 
 /** Undo {@link takeCar}. Safe to call when it was never called. */
-export function releaseCar(ctx: any) {
+export function releaseCar(ctx: SceneCtx) {
   const s = ctx.data && ctx.data._car;
   if (!s) return;
   s.car.position.copy(s.pos);
@@ -110,7 +214,7 @@ export function releaseCar(ctx: any) {
  *
  * @param [turn] extra yaw, radians (a quarter turn parks it broadside)
  */
-export function aimCar(car: THREE.Object3D, F: Frame, turn: number = 0) {
+export function aimCar(car: THREE.Object3D | null, F: StageFrame, turn: number = 0) {
   if (!car) return;
   const c = Math.cos(turn), s = Math.sin(turn);
   const fx = F.fwd.x * c - F.fwd.z * s;
@@ -131,11 +235,13 @@ export function aimCar(car: THREE.Object3D, F: Frame, turn: number = 0) {
  * @param siteType Ecology site type, e.g. `'reststop'`
  * @param [opts] `{ origin:Vector3, fallback:[x,z], facing:[x,z]|Vector3, offset:[f,l] }`
  */
-export function frameAt(ctx: any, siteType: string | null, opts: any = {}): Frame {
+export function frameAt(ctx: SceneCtx, siteType: SiteType | null, opts: FrameOpts = {}): Frame {
   const { game, terrain } = ctx;
   const props = game.get('Props');
   const eco = props && props.ecology;
-  const site = siteType && eco ? eco.sites.find((s: any) => s.type === siteType) : null;
+  const site: EcoSite | null = siteType && eco
+    ? eco.sites.find((s: EcoSite) => s.type === siteType) || null
+    : null;
   const fb = opts.fallback || [0, 0];
   const o = opts.origin
     ? new THREE.Vector3(opts.origin.x, 0, opts.origin.z)
@@ -147,8 +253,9 @@ export function frameAt(ctx: any, siteType: string | null, opts: any = {}): Fram
 
   let fwd;
   if (opts.facing) {
-    const fx = opts.facing.x ?? opts.facing[0];
-    const fz = opts.facing.z ?? opts.facing[1];
+    const [fx, fz] = Array.isArray(opts.facing)
+      ? [opts.facing[0], opts.facing[1]]
+      : [opts.facing.x, opts.facing.z];
     fwd = new THREE.Vector3(fx - o.x, 0, fz - o.z);
   } else if (eco && eco.roadTangent) {
     const t = eco.roadTangent(o.z, new THREE.Vector2());
@@ -174,7 +281,7 @@ export function frameAt(ctx: any, siteType: string | null, opts: any = {}): Fram
  *
  * @param [opts] `{ spread, at, poses, look }`
  */
-export function arrange(ctx: any, F: Frame, opts: any = {}) {
+export function arrange(ctx: SceneCtx, F: StageFrame, opts: ArrangeOpts = {}) {
   const { stage, terrain } = ctx;
   const spread = opts.spread ?? 1.0;
   const at = opts.at ?? 0;
@@ -194,8 +301,10 @@ export function arrange(ctx: any, F: Frame, opts: any = {}) {
   // A frame pinned to a built surface has already answered "how high is the
   // ground here"; re-snapping to the terrain would drop the actor through it.
   const snap = lift === 0 && F.floor == null;
-  for (const id of Object.keys(slots)) {
-    const [df, dl] = slots[id];
+  for (const id of Object.keys(slots) as ActorId[]) {
+    const slot = slots[id];
+    if (!slot) continue;
+    const [df, dl] = slot;
     stage.place(id, F.ground(terrain, at + df * spread, dl * spread, lift), F.yaw, snap);
     stage.walk(id, null, 0);
     stage.pose(id, poses[id] ?? null);
@@ -209,12 +318,12 @@ export function arrange(ctx: any, F: Frame, opts: any = {}) {
  *
  * @param o `{ t0, t1, f, l, camF, camL, camU, fov, fStop, focus, targetU }`
  */
-export function single(ctx: any, F: Frame, o: any) {
+export function single(ctx: SceneCtx, F: StageFrame, o: SingleOpts): ShotDef {
   const terrain = ctx.game.get('Terrain');
-  const G = (f: number, l: number, u: any) => F.ground(terrain, f, l, u);
+  const G = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f: number, l: number, u: any) => F.ground(terrain, f, l, u);
+  const A = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   const push = o.push ?? 0.35;
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 40, handheld: o.handheld ?? 0.5, breathe: 0.6,
@@ -234,12 +343,12 @@ export function single(ctx: any, F: Frame, o: any) {
  * A wide establishing set-up with a slow lateral drift, the shot that tells the
  * player where they are before anybody opens their mouth.
  */
-export function wide(ctx: any, F: any, o: any) {
+export function wide(ctx: SceneCtx, F: StageFrame, o: WideOpts): ShotDef {
   const terrain = ctx.game.get('Terrain');
-  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
+  const G = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
+  const A = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 46, handheld: o.handheld ?? 0.22, breathe: 1.0,
     fStop: o.fStop ?? 6.0, focus: o.focus ?? 'auto', aim: o.aim || null, aimU: o.aimU ?? 1.30,
@@ -255,12 +364,12 @@ export function wide(ctx: any, F: any, o: any) {
 }
 
 /** A two-shot: both actors in frame, camera outside the arc looking in. */
-export function twoShot(ctx: any, F: any, o: any) {
+export function twoShot(ctx: SceneCtx, F: StageFrame, o: TwoShotOpts): ShotDef {
   const terrain = ctx.game.get('Terrain');
-  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
+  const G = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   // Targets, like positions, resolve against the terrain: a look-at held above
   // the frame's flat origin plane drifts off the actors as the ground moves.
-  const A = (f: any, l: any, u: any) => F.ground(terrain, f, l, u);
+  const A = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   return {
     t0: o.t0, t1: o.t1, fov: o.fov ?? 44, handheld: o.handheld ?? 0.55, breathe: 0.7,
     fStop: o.fStop ?? 2.8, focus: o.focus ?? 'auto', aim: o.aim || null, aimU: o.aimU ?? 1.46,
@@ -291,9 +400,9 @@ export function twoShot(ctx: any, F: any, o: any) {
  *
  * @param o `{ t0, t1, nearF, nearL, farF, farL, back, side, camU, fov }`
  */
-export function ots(ctx: any, F: Frame, o: any) {
+export function ots(ctx: SceneCtx, F: StageFrame, o: OtsOpts): ShotDef {
   const terrain = ctx.game.get('Terrain');
-  const G = (f: number, l: number, u: any) => F.ground(terrain, f, l, u);
+  const G = (f: number, l: number, u: number) => F.ground(terrain, f, l, u);
   const back = o.back ?? 1.45;     // metres up-frame of the near shoulder
   const side = o.side ?? 0.95;     // metres past him, away from the subject
   const away = Math.sign(o.nearL - o.farL) || 1;
@@ -325,7 +434,7 @@ export function ots(ctx: any, F: Frame, o: any) {
  *
  * @param o same keys as {@link wide}
  */
-export function lowAngle(ctx: any, F: Frame, o: any) {
+export function lowAngle(ctx: SceneCtx, F: StageFrame, o: WideOpts): ShotDef {
   return wide(ctx, F, {
     camU: 0.52, targetU: 1.86, fov: 34, fStop: 5.0, handheld: 0.3,
     driftU: 0.16, ...o,
@@ -333,7 +442,7 @@ export function lowAngle(ctx: any, F: Frame, o: any) {
 }
 
 /** Point every actor's gaze at one of them (or at a world point). */
-export function attend(ctx: any, target: string, except: any[] = []) {
+export function attend(ctx: SceneCtx, target: ActorId, except: ActorId[] = []) {
   for (const id of ctx.stage.ids) {
     if (except.includes(id) || id === target) continue;
     ctx.stage.look(id, target);

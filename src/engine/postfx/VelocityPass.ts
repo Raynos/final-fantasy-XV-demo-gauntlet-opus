@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
+import { isInstancedMesh, isMesh, isSkinnedMesh } from '../../util/three-guards.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Per-object motion vectors.
@@ -50,27 +52,45 @@ const VEL_FRAG = /* glsl */`
   }
 `;
 
+/**
+ * One mesh the pass is following, and the proxy it draws for it.
+ *
+ * `proxy` is built lazily -- the first frame a mesh is seen there is no
+ * previous matrix to difference against, so most tracked meshes never need one.
+ */
+interface TrackedMesh {
+  src: THREE.Mesh;
+  /** `src.matrixWorld` as of the previous frame. */
+  prev: THREE.Matrix4;
+  proxy: THREE.Mesh | null;
+  /** The proxy's velocity material, held here so nothing has to re-narrow
+   *  `Mesh.material`, which three declares as `Material | Material[]`. */
+  mat: THREE.ShaderMaterial | null;
+  /** Frame counter when it was last seen; prunes meshes that left the scene. */
+  seen: number;
+}
+
 export class VelocityPass extends Pass {
   _black!: THREE.Color;
   _frame!: number;
-  fx!: any;
+  fx!: PostFX;
   moverCount!: number;
   proxyScene!: THREE.Scene;
-  tracked!: Map<any, any>;
-  constructor(fx: any) {
+  /** Keyed by `Object3D.uuid`. */
+  tracked!: Map<string, TrackedMesh>;
+  constructor(fx: PostFX) {
     super();
     this.fx = fx;
     this.needsSwap = false;
     this.enabled = true;
     this.proxyScene = new THREE.Scene();
     this.proxyScene.matrixWorldAutoUpdate = false;
-    /** @type {Map<string, {src:THREE.Object3D, prev:THREE.Matrix4, proxy:THREE.Object3D, seen:number}>} */
     this.tracked = new Map();
     this._frame = 0;
     this._black = new THREE.Color(0, 0, 0);
   }
 
-  _makeMaterial(src: any) {
+  _makeMaterial(src: THREE.Mesh): THREE.ShaderMaterial {
     return new THREE.ShaderMaterial({
       uniforms: {
         uPrevModel: { value: new THREE.Matrix4() },
@@ -79,7 +99,7 @@ export class VelocityPass extends Pass {
       },
       vertexShader: VEL_VERT,
       fragmentShader: VEL_FRAG,
-      side: src.material && src.material.side !== undefined ? src.material.side : THREE.FrontSide,
+      side: Array.isArray(src.material) ? THREE.FrontSide : (src.material?.side ?? THREE.FrontSide),
       depthTest: true,
       depthWrite: false,
       depthFunc: THREE.LessEqualDepth,
@@ -88,18 +108,20 @@ export class VelocityPass extends Pass {
     });
   }
 
-  _proxyFor(src: any, entry: any) {
-    if (entry.proxy) return entry.proxy;
+  _proxyFor(src: THREE.Mesh, entry: TrackedMesh): { proxy: THREE.Mesh, mat: THREE.ShaderMaterial } {
+    if (entry.proxy && entry.mat) return { proxy: entry.proxy, mat: entry.mat };
     const mat = this._makeMaterial(src);
-    let proxy;
-    if (src.isSkinnedMesh) {
-      proxy = new THREE.SkinnedMesh(src.geometry, mat);
-      proxy.bindMode = src.bindMode;
-      proxy.bind(src.skeleton, src.bindMatrix);
-    } else if (src.isInstancedMesh) {
-      proxy = new THREE.InstancedMesh(src.geometry, mat, src.count);
-      proxy.instanceMatrix = src.instanceMatrix;
-      proxy.count = src.count;
+    let proxy: THREE.Mesh;
+    if (isSkinnedMesh(src)) {
+      const skinned = new THREE.SkinnedMesh(src.geometry, mat);
+      skinned.bindMode = src.bindMode;
+      skinned.bind(src.skeleton, src.bindMatrix);
+      proxy = skinned;
+    } else if (isInstancedMesh(src)) {
+      const inst = new THREE.InstancedMesh(src.geometry, mat, src.count);
+      inst.instanceMatrix = src.instanceMatrix;
+      inst.count = src.count;
+      proxy = inst;
     } else {
       proxy = new THREE.Mesh(src.geometry, mat);
     }
@@ -107,29 +129,31 @@ export class VelocityPass extends Pass {
     proxy.matrixAutoUpdate = false;
     proxy.matrixWorldAutoUpdate = false;
     entry.proxy = proxy;
+    entry.mat = mat;
     this.proxyScene.add(proxy);
-    return proxy;
+    return { proxy, mat };
   }
 
-  override render(renderer: any) {
+  override render(renderer: THREE.WebGLRenderer) {
     const fx = this.fx;
     const rt = fx.rtVel;
     if (!rt) return;
     this._frame++;
 
-    const movers: any[] = [];
-    fx.rnd.scene.traverse((o: any) => {
-      if (!o.visible || !o.isMesh) return;
+    const movers: TrackedMesh[] = [];
+    fx.rnd.scene.traverse((o) => {
+      if (!o.visible || !isMesh(o)) return;
       if (o.userData && o.userData.noVelocity) return;
-      if (!o.geometry || !o.material || o.material.transparent) return;
+      if (!o.geometry || !o.material) return;
+      if (!Array.isArray(o.material) && o.material.transparent) return;
       let e = this.tracked.get(o.uuid);
       if (!e) {
-        e = { src: o, prev: o.matrixWorld.clone(), proxy: null, seen: this._frame };
+        e = { src: o, prev: o.matrixWorld.clone(), proxy: null, mat: null, seen: this._frame };
         this.tracked.set(o.uuid, e);
         return; // first sight: no motion yet
       }
       e.seen = this._frame;
-      const moved = o.isSkinnedMesh || !matrixNearlyEqual(e.prev, o.matrixWorld);
+      const moved = isSkinnedMesh(o) || !matrixNearlyEqual(e.prev, o.matrixWorld);
       if (moved) movers.push(e);
     });
     /** How much of the frame is actually in motion — motion blur reads this. */
@@ -145,11 +169,11 @@ export class VelocityPass extends Pass {
 
     if (movers.length) {
       for (const e of movers) {
-        const proxy = this._proxyFor(e.src, e);
+        const { proxy, mat } = this._proxyFor(e.src, e);
         proxy.visible = true;
         proxy.matrixWorld.copy(e.src.matrixWorld);
-        if (proxy.isSkinnedMesh) proxy.skeleton = e.src.skeleton;
-        const u = proxy.material.uniforms;
+        if (isSkinnedMesh(proxy) && isSkinnedMesh(e.src)) proxy.skeleton = e.src.skeleton;
+        const u = mat.uniforms;
         u.uPrevModel.value.copy(e.prev);
         u.uCurrViewProj.value.copy(fx.viewProj);
         u.uPrevViewProj.value.copy(fx.prevViewProj);
@@ -168,14 +192,14 @@ export class VelocityPass extends Pass {
       if (e.seen === this._frame) {
         e.prev.copy(e.src.matrixWorld);
       } else if (this._frame - e.seen > 120) {
-        if (e.proxy) { e.proxy.material.dispose(); this.proxyScene.remove(e.proxy); }
+        if (e.proxy) { e.mat?.dispose(); this.proxyScene.remove(e.proxy); }
         this.tracked.delete(key);
       }
     }
   }
 }
 
-function matrixNearlyEqual(a: any, b: any) {
+function matrixNearlyEqual(a: THREE.Matrix4, b: THREE.Matrix4) {
   const ae = a.elements, be = b.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(ae[i] - be[i]) > 1e-6) return false;
   return true;

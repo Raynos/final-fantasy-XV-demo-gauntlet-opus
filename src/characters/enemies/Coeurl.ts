@@ -1,10 +1,12 @@
 import { Rig, creatureMaterial } from './RigBuilder.ts';
+import type { BoneWriter, Part } from './RigBuilder.ts';
 import { mixc, colc } from './Palette.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
+import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
-import type * as THREE from 'three';
 
 /* A black animal is the hardest thing to light. Pure black is a hole in the
  * frame, so the "black" here is a lifted blue-grey and every plane that could
@@ -80,8 +82,8 @@ export const COEURL = {
       ranged: true, element: 'lightning', tracking: 1.2, unblockable: true },
   ],
   buildPrototype,
-  make(opts: any) { return new CoeurlEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new CoeurlEnemy(opts); },
+} satisfies SpeciesDef;
 
 /* Shoulder 0.98, whisker tips reach y ≈ 1.83 and z ≈ -1.0. */
 function buildPrototype() {
@@ -119,7 +121,7 @@ function buildPrototype() {
    * A tuple union rather than two fields, because the pair below reads it with
    * `bind[0] === 'chain'`.
    */
-  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
+  const P: Part[] = [];
   const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -203,12 +205,12 @@ function buildPrototype() {
       { p: [0, 0.925, 1.13], r: [0.095, 0.06, 0.09], amt: 0.024, dir: [0, -0.7, 1] },    // whisker pad
       { p: [0, 0.885, 1.02], r: [0.10, 0.05, 0.11], amt: -0.018, dir: [0, 1, 0] },       // jaw undercut
     ],
-    colorAt: (u: any, v: any, p: any) => {
+    colorAt: (u, v, p) => {
       const pad = clamp01((p.z - 1.09) / 0.09) * clamp01((0.985 - p.y) / 0.07);
       const crown = clamp01((p.y - 0.99) / 0.06);
       return mix(mix(FUR, FUR_DARK, crown * 0.6), MUZZLE, pad * 0.8);
     },
-    matAt: (u: any, v: any, p: any) => (p.z > 1.19 && p.y < 0.95 ? M_WET : M_FUR),
+    matAt: (u, v, p) => (p.z > 1.19 && p.y < 0.95 ? M_WET : M_FUR),
   });
   // nose
   sculptBlob(B, {
@@ -288,7 +290,7 @@ function buildPrototype() {
       shape: (th, u) => 1 + Math.max(0, Math.sin(u * 46)) * 0.22,
       colorAt: (th, u) => mix(WHISK, WHISK_LIT, smooth((u - 0.35) / 0.6)),
       matAt: () => M_WHISK,
-      glowAt: (th: any, u: number) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
+      glowAt: (th, u) => (u > 0.42 ? [ARC, (u - 0.42) * 2.6] : null),
     });
     // charge beads sitting on each joint
     for (const i of [2, 4, 6, 8]) {
@@ -458,16 +460,8 @@ const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
-  static ANIM: any;
-  override anim!: any;
-  override attackId!: any;
-  override moveSpeed!: any;
-  override rig!: any;
-  override speed!: any;
-  override state!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(COEURL, opts); }
+  static override ANIM: QuadAnim;
+  constructor(opts: SpawnOpts) { super(COEURL, opts); }
 
   override telegraphScale() {
     if (this.attackId === 'pounce') return 1.25;
@@ -486,7 +480,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
    * @param t phase seconds
    * @param charge 0..1, swells the outer segment as the bolt builds
    */
-  whiskers(S: ((...args: any[]) => any), sweepFwd: number, flare: number, wave: number, t: number, charge: number = 0) {
+  whiskers(S: BoneWriter, sweepFwd: number, flare: number, wave: number, t: number, charge: number = 0) {
     for (const s of [-1, 1]) {
       const n = s < 0 ? 'L' : 'R';
       for (let i = 0; i < 3; i++) {
@@ -517,7 +511,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
    * the whiskers swing *forward* into a V pointing down the firing line while
    * the charge builds visibly along them. Nothing else it does looks like this.
    */
-  override poseTelegraph(S: any, t: number) {
+  override poseTelegraph(S: BoneWriter, t: number) {
     if (this.attackId !== 'blaster') {
       super.poseTelegraph(S, t);
       this.whiskers(S, -0.35, 0.2, 0.05, t);
@@ -540,7 +534,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.tail(t, 0.30 * k, 0.06, 3);
   }
 
-  override poseAttack(S: any, t: number) {
+  override poseAttack(S: BoneWriter, t: number) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'blaster') {
@@ -590,28 +584,28 @@ class CoeurlEnemy extends QuadrupedEnemy {
     this.whiskers(S, -0.8 * clamp01(-k) - 0.2, 0.35, 0.10, t);
   }
 
-  override poseLocomotion(S: any, t: number) {
+  override poseLocomotion(S: BoneWriter, t: number) {
     super.poseLocomotion(S, t);
     const norm = clamp01((this.moveSpeed || 0) / this.speed);
     this.whiskers(S, -0.25 - norm * 0.45, 0.15, 0.08 + norm * 0.10, t);
   }
 
-  override poseIdle(S: any, t: number) {
+  override poseIdle(S: BoneWriter, t: number) {
     super.poseIdle(S, t);
     this.whiskers(S, 0, 0.10, 0.09, t);
   }
 
-  override poseFlinch(S: any, t: number) {
+  override poseFlinch(S: BoneWriter, t: number) {
     super.poseFlinch(S, t);
     this.whiskers(S, -0.2, 0.5, 0.30, t);
   }
 
-  override poseStagger(S: any, t: number) {
+  override poseStagger(S: BoneWriter, t: number) {
     super.poseStagger(S, t);
     this.whiskers(S, -0.4, 0.7, 0.22, t);
   }
 
-  override poseDeath(S: any, t: number) {
+  override poseDeath(S: BoneWriter, t: number) {
     super.poseDeath(S, t);
     // the charge gutters out and the whiskers go limp
     const slack = smooth(clamp01(this.stateTime / 0.45));

@@ -2,6 +2,7 @@ import { el, clamp, commas, easeOut } from './UIKit.ts';
 import { icon, portrait } from './Icons.ts';
 import { Bar } from './Bar.ts';
 import { readParty } from './GameData.ts';
+import type { PartyView } from './GameData.ts';
 import type { Game } from '../game/Game.ts';
 
 const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
@@ -35,6 +36,26 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
  * hand-measured `bottom:` — at `268px` they sat 33 px above the party stack and
  * a single toast printed straight through them.
  */
+/** One roster row, its widgets, and the values it was last drawn with. */
+interface PartyRow {
+  /** Index into what `readParty` returns; 0 is the lead. */
+  idx: number;
+  lead: boolean;
+  row: HTMLElement;
+  hpBar: Bar;
+  hpVal: HTMLElement;
+  /** Lead only. */
+  mpBar: Bar | null;
+  mpVal: HTMLElement | null;
+  sts: HTMLElement;
+  stsKey: string;
+  flash: number;
+  lastHp: number;
+  _hpTxt?: string;
+  _mpTxt?: string;
+  _crit?: boolean;
+}
+
 export class PartyPanel {
   banterSlot!: HTMLElement;
   built!: boolean;
@@ -42,7 +63,7 @@ export class PartyPanel {
   list!: HTMLElement;
   noticeSlot!: HTMLElement;
   root!: HTMLElement;
-  rows!: any[];
+  rows!: PartyRow[];
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bl');
     /** Armiger + technique rail live here — see the class note. */
@@ -61,7 +82,7 @@ export class PartyPanel {
     this.built = false;
   }
 
-  _build(party: any) {
+  _build(party: PartyView[]) {
     // companions first (stacked above), lead last so it sits at the bottom
     const order = [1, 2, 3, 0];
     for (const idx of order) {
@@ -78,7 +99,7 @@ export class PartyPanel {
       const hpLine = el('div.hp-line', {}, [hpBar.node, hpVal]);
 
       const body = el('div.party-body', {}, [head, hpLine]);
-      let mpBar: any = null; let mpVal: any = null;
+      let mpBar: Bar | null = null; let mpVal: HTMLElement | null = null;
       if (lead) {
         mpBar = new Bar({ cls: 'slim', chase: false }).tint('mp');
         mpVal = el('div.val');
@@ -102,7 +123,7 @@ export class PartyPanel {
 
     for (let i = 0; i < this.rows.length; i++) {
       const r = this.rows[i];
-      const p = party[r.idx] || {};
+      const p: Partial<PartyView> = party[r.idx] || {};
       const maxHp = p.maxHp || 1;
       const hp = clamp(p.hp ?? maxHp, 0, maxHp);
 
@@ -128,7 +149,7 @@ export class PartyPanel {
       } else if (r._crit) r.hpVal.style.color = '';
       r._crit = crit;
 
-      if (r.mpBar) {
+      if (r.mpBar && r.mpVal) {
         const maxMp = p.maxMp || 1;
         const mp = clamp(p.mp ?? maxMp, 0, maxMp);
         r.mpBar.set(mp / maxMp, dt);

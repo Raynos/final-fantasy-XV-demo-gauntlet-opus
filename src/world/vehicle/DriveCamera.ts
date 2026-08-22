@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Ground } from '../Terrain.ts';
 import { Noise } from '../../util/Noise.ts';
 import type { VehicleBody } from './VehicleBody.ts';
 
@@ -36,7 +37,7 @@ export class DriveCamera {
   _pos!: THREE.Vector3;
   _smooth!: THREE.Vector3;
   _t!: number;
-  _terrain!: any;
+  _terrain!: Ground | null;
   _tmp!: THREE.Vector3;
   armFar!: number;
   armNear!: number;

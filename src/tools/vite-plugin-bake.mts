@@ -10,11 +10,11 @@ import { bake } from './bake.mts';
  *
  */
 export function bakePlugin(): import('vite').Plugin {
-  let done: any = null;
+  let done: Promise<void> | null = null;
   return {
     name: 'eos-bake',
     async configResolved() {
-      if (!done) done = bake({}).catch((e) => {
+      if (!done) done = bake({}).then(() => undefined).catch((e) => {
         // Never block a server start on the cache: the game regenerates.
         console.warn('[bake] failed, the browser will generate at runtime:', e && e.message);
       });

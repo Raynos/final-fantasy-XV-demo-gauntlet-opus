@@ -23,8 +23,17 @@ const CELLS = 128;                 // 64 m per cell over the 8192 m field
 const SHEET = 512;                 // 16 m per sheet pixel
 const BLUR = 1.3;                  // sheet px — a 21 m edge, crisp on purpose
 
+/** The painted haze sheet and how to put a world position on it. */
+export interface FogSheet {
+  canvas: HTMLCanvasElement;
+  /** Sheet pixels per world metre. */
+  ppm: number;
+  toPx: (x: number) => number;
+  toPz: (z: number) => number;
+}
+
 export class FogOfWar {
-  _sheet!: any;
+  _sheet!: FogSheet | null;
   _ctx!: CanvasRenderingContext2D | null;
   _dirty!: boolean;
   _maskCanvas!: HTMLCanvasElement;
@@ -101,10 +110,11 @@ export class FogOfWar {
   /**
    * The haze sheet, rebuilt only when the mask has changed.
    */
-  sheet(): {canvas: HTMLCanvasElement, ppm: number, toPx: (x: number) => number, toPz: (z: number) => number} {
+  sheet(): FogSheet {
     if (!this._sheet) this._build();
     if (this._dirty) this._paint();
-    return this._sheet;
+    // `_build` is the only thing that clears the null above
+    return this._sheet!;
   }
 
   _build() {

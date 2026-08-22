@@ -21,8 +21,10 @@ export class StatsHud {
   ctx!: CanvasRenderingContext2D;
   head!: number;
   node!: HTMLDivElement;
-  rows!: any;
-  samples!: any;
+  /** The key/value block above the graph. */
+  rows!: HTMLElement;
+  /** Ring buffer of frame times, ms. */
+  samples!: number[];
   visible!: boolean;
   constructor(root: HTMLElement) {
     this.node = document.createElement('div');
@@ -34,7 +36,7 @@ export class StatsHud {
 
     this.canvas = this.node.querySelector('canvas');
     this.ctx = this.canvas!.getContext('2d')!;
-    this.rows = this.node.querySelector('.dev-stat-rows');
+    this.rows = this.node.querySelector('.dev-stat-rows')!;
     this.samples = new Array(W).fill(0);
     this.head = 0;
     this._acc = 0;
@@ -67,7 +69,7 @@ export class StatsHud {
     let worst = 0;
     for (const s of this.samples) if (s > worst) worst = s;
 
-    const row = (k: string, v: any) => `<div><span>${k}</span><b>${v}</b></div>`;
+    const row = (k: string, v: string | number) => `<div><span>${k}</span><b>${v}</b></div>`;
     this.rows.innerHTML = [
       row('fps', (game.time.fps || 0).toFixed(1)),
       row('frame', `${ms.toFixed(1)} ms`),

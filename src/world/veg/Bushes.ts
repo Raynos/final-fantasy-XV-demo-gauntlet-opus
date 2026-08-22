@@ -3,6 +3,7 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from './Ecology.ts';
 import { pickFrom } from './Biomes.ts';
 import { WORLD } from '../map/WorldMap.ts';
+import type { TreeSpec } from './TreeBuilder.ts';
 import { buildTree } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { leafClusterTex, fernTex, reedTex, padTex, barkMaps } from './VegTextures.ts';
@@ -37,14 +38,15 @@ const DG = 4;
  */
 /** One woody species: which builder, how many variants, and its parameters. */
 interface WoodySpec {
+  /** `TREE_SPECIES` key the builder starts from. */
   base: string;
   variants: number;
-  params: Record<string, any>;
-  /** Per-instance colour jitter. */
-  tint?: any;
-  /** Scale range. */
-  scale?: any;
-  [extra: string]: any;
+  /** Overrides on that species' branching parameters. */
+  params: Partial<TreeSpec>;
+  /** Per-instance colour multiplier, linear RGB. */
+  tint: number[];
+  /** `[min, max]` scale. */
+  scale: number[];
 }
 
 const WOODY: Record<string, WoodySpec> = {
@@ -197,8 +199,48 @@ function padGeometry(seed: number) {
   return g;
 }
 
+/** One placed shrub, frond or lily pad. */
+interface ScrubPlacement {
+  x: number;
+  y: number;
+  z: number;
+  /** `WOODY` / `CARDS` key, or `'lily'`. */
+  kind: string;
+  /** Which of that kind's variants. */
+  vi: number;
+  s: number;
+  yaw: number;
+  tilt: number;
+  /** Per-instance tint, linear RGB. */
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** One built variant: the branch mesh, its foliage, and their colour buffers. */
+interface ScrubVariant {
+  wood: THREE.InstancedMesh;
+  /** Set for a card kind, whose single mesh carries the tint itself. */
+  woodTint: THREE.InstancedBufferAttribute | null;
+  leaves: THREE.InstancedMesh | null;
+  leafTint: THREE.InstancedBufferAttribute | null;
+  max: number;
+  /** Slots written so far this frame; reset at the top of every update. */
+  _w: number;
+}
+
+/** Everything drawn for one scrub kind. */
+interface ScrubKind {
+  variants: ScrubVariant[];
+  /** Per-instance tint, linear RGB. Every kind's table entry carries one. */
+  tint: number[];
+  /** `[min, max]` scale. */
+  scale: number[];
+}
+
 export class Bushes {
-  tiles!: Map<any, any>;
+  /** Scatter tiles, keyed on the packed tile coordinate. */
+  tiles!: Map<number, { list: ScrubPlacement[], stamp: number }>;
   _deadline!: number;
   _last!: THREE.Vector3;
   _pending!: boolean;
@@ -210,12 +252,12 @@ export class Bushes {
   count!: number;
   eco!: Ecology;
   group!: THREE.Group;
-  kinds!: Map<any, any>;
+  kinds!: Map<string, ScrubKind>;
   quality!: number;
   range!: number;
-  scene!: any;
+  scene!: THREE.Scene;
   tileCacheMax!: number;
-  constructor(eco: Ecology, scene: any, { quality = 1, range = 132 } = {}) {
+  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1, range = 132 } = {}) {
     this.eco = eco;
     this.scene = scene;
     /** Named parent so the whole ground layer can be priced or hidden at once. */
@@ -250,8 +292,8 @@ export class Bushes {
         normalScale: new THREE.Vector2(0.6, 0.6),
       }), { bend: 0.28, flutter: 0.22, gustFreq: 0.05, flexPow: 1.9 });
 
-      let leafMat: any = null;
-      if (spec.params.leafCount > 0) {
+      let leafMat: THREE.MeshStandardMaterial | null = null;
+      if ((spec.params.leafCount ?? 0) > 0) {
         leafMat = patchVeg(new THREE.MeshStandardMaterial({
           map: leafClusterTex(spec.params.leafKind), color: 0xffffff,
           vertexColors: true, alphaTest: 0.4, transparent: false,
@@ -262,7 +304,7 @@ export class Bushes {
         });
       }
 
-      const variants = [];
+      const variants: ScrubVariant[] = [];
       for (let v = 0; v < spec.variants; v++) {
         const t = buildTree(spec.base, 4242 + v * 613 + key.length * 71, spec.params);
         const wood = new THREE.InstancedMesh(t.wood, woodMat, per);
@@ -270,22 +312,24 @@ export class Bushes {
         wood.count = 0; wood.visible = false; wood.frustumCulled = false;
         wood.name = `bush_${key}_${v}`;
         this.group.add(wood);
-        let leaves: any = null;
+        let leaves: THREE.InstancedMesh | null = null;
+        let leafTint: THREE.InstancedBufferAttribute | null = null;
         if (t.leaves && leafMat) {
           leaves = new THREE.InstancedMesh(t.leaves, leafMat, per);
           leaves.castShadow = true; leaves.receiveShadow = true;
           leaves.count = 0; leaves.visible = false; leaves.frustumCulled = false;
-          leaves.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+          leafTint = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+          leaves.instanceColor = leafTint;
           leaves.name = `bush_${key}_${v}_leaf`;
           registerAlphaCard(leaves);
           this.group.add(leaves);
         }
-        variants.push({ wood, leaves, max: per });
+        variants.push({ wood, woodTint: null, leaves, leafTint, max: per, _w: 0 });
       }
       this.kinds.set(key, { variants, tint: spec.tint, scale: spec.scale });
     }
 
-    const cardMat = (map: any, opts: any) => patchVeg(new THREE.MeshStandardMaterial({
+    const cardMat = (map: THREE.Texture, opts: Parameters<typeof patchVeg>[1]) => patchVeg(new THREE.MeshStandardMaterial({
       map, color: 0xffffff, vertexColors: true,
       alphaTest: 0.38, transparent: false, side: THREE.DoubleSide,
       roughness: 0.92, metalness: 0,
@@ -311,12 +355,13 @@ export class Bushes {
       const mesh = new THREE.InstancedMesh(cardGeo[key as keyof typeof cardGeo], mat, per);
       mesh.castShadow = false; mesh.receiveShadow = true;
       mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
-      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+      const cardTint = new THREE.InstancedBufferAttribute(new Float32Array(per * 3), 3);
+      mesh.instanceColor = cardTint;
       mesh.name = `scrub_${key}`;
       registerAlphaCard(mesh);
       this.group.add(mesh);
       this.kinds.set(key, {
-        variants: [{ wood: mesh, leaves: null, max: per }],
+        variants: [{ wood: mesh, woodTint: cardTint, leaves: null, leafTint: null, max: per, _w: 0 }],
         tint: spec.tint, scale: spec.scale,
       });
     }
@@ -335,12 +380,13 @@ export class Bushes {
     const lily = new THREE.InstancedMesh(padGeometry(4210), lilyMat, lilyMax);
     lily.castShadow = false; lily.receiveShadow = true;
     lily.count = 0; lily.visible = false; lily.frustumCulled = false;
-    lily.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(lilyMax * 3), 3);
+    const lilyTint = new THREE.InstancedBufferAttribute(new Float32Array(lilyMax * 3), 3);
+    lily.instanceColor = lilyTint;
     lily.name = 'scrub_lily';
     registerAlphaCard(lily);
     this.group.add(lily);
     this.kinds.set('lily', {
-      variants: [{ wood: lily, leaves: null, max: lilyMax }],
+      variants: [{ wood: lily, woodTint: lilyTint, leaves: null, leafTint: null, max: lilyMax, _w: 0 }],
       tint: [0.8, 0.95, 0.66], scale: [1.0, 2.2],
     });
   }
@@ -352,24 +398,24 @@ export class Bushes {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
     const rng = new Rng(hash3(tx, tz, 0x1b0b));
-    const out: any[] = [];
+    const out: ScrubPlacement[] = [];
 
     const b0 = eco.veg(x0 + TILE * 0.5, z0 + TILE * 0.5);
     const dg = new Float32Array((DG + 1) * (DG + 1));
     const wg = new Float32Array((DG + 1) * (DG + 1));
-    let any = 0, wetAny = -1e9;
+    let peakDensity = 0, wetAny = -1e9;
     for (let j = 0; j <= DG; j++) {
       for (let i = 0; i <= DG; i++) {
         const x = x0 + (i / DG) * TILE, z = z0 + (j / DG) * TILE;
         const k = j * (DG + 1) + i;
         dg[k] = eco.scrubDensity(x, z);
         wg[k] = eco.waterDepth(x, z);
-        if (dg[k] > any) any = dg[k];
+        if (dg[k] > peakDensity) peakDensity = dg[k];
         if (wg[k] > wetAny) wetAny = wg[k];
       }
     }
     const wantWater = (b0.reedD > 0 || b0.lilyD > 0) && wetAny > -2.0;
-    if (any < 0.02 && !wantWater) return out;
+    if (peakDensity < 0.02 && !wantWater) return out;
 
     const bil = (a: Float32Array, u: number, v: number) => {
       const fu = u * DG, fv = v * DG;
@@ -388,7 +434,7 @@ export class Bushes {
         const b = eco.veg(x, z);
         const depth = bil(wg, u, v);
         const roll = rng.next();
-        let kind: any = null, y = 0;
+        let kind: string | null = null, y = 0;
 
         if (depth > 0.45 && b.lilyD > 0) {
           // open water: lily pads, floating on the plane itself
@@ -431,7 +477,7 @@ export class Bushes {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(tx: number, tz: number): any[] | null {
+  _tile(tx: number, tz: number): ScrubPlacement[] | null {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
@@ -489,11 +535,11 @@ export class Bushes {
           _s.set(p.s, p.s * 0.94, p.s);
           _m.compose(_p, _q, _s);
           _m.toArray(v.wood.instanceMatrix.array, w * 16);
-          const c = v.wood.instanceColor;
+          const c = v.woodTint;
           if (c) { c.array[w * 3] = p.r; c.array[w * 3 + 1] = p.g; c.array[w * 3 + 2] = p.b; }
-          if (v.leaves) {
+          if (v.leaves && v.leafTint) {
             _m.toArray(v.leaves.instanceMatrix.array, w * 16);
-            const lc = v.leaves.instanceColor.array;
+            const lc = v.leafTint.array;
             lc[w * 3] = p.r; lc[w * 3 + 1] = p.g; lc[w * 3 + 2] = p.b;
           }
         }
@@ -505,12 +551,12 @@ export class Bushes {
         v.wood.count = v._w;
         v.wood.visible = v._w > 0;
         v.wood.instanceMatrix.needsUpdate = true;
-        if (v.wood.instanceColor) v.wood.instanceColor.needsUpdate = true;
+        if (v.woodTint) v.woodTint.needsUpdate = true;
         if (v.leaves) {
           v.leaves.count = v._w;
           v.leaves.visible = v._w > 0;
           v.leaves.instanceMatrix.needsUpdate = true;
-          v.leaves.instanceColor.needsUpdate = true;
+          if (v.leafTint) v.leafTint.needsUpdate = true;
         }
       }
     }

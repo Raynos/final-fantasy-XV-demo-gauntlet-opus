@@ -4,6 +4,7 @@ import { PartyPanel } from './PartyPanel.ts';
 import { WeaponWheel } from './WeaponWheel.ts';
 import { CompassBar } from './CompassBar.ts';
 import { CombatHUD } from './CombatHUD.ts';
+import type { DamageEvent } from './CombatHUD.ts';
 import { Prompts } from './Prompts.ts';
 import { ScreenFX } from './ScreenFX.ts';
 import { Subtitles } from './Subtitles.ts';
@@ -13,6 +14,7 @@ import { HudBridge } from './HudBridge.ts';
 import { SHOTS } from '../game/Shots.ts';
 import { BANTER } from './GameData.ts';
 import type { Game } from '../game/Game.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
 
 /**
  * The heads-up display.
@@ -41,10 +43,11 @@ import type { Game } from '../game/Game.ts';
  */
 export class HUD {
   _banterAt!: number;
-  _banterN!: any;
+  /** How many banter lines have been shown; walks the table. */
+  _banterN!: number;
   hints!: Hints;
   toasts!: Toasts;
-  _onResize!: any;
+  _onResize!: () => void;
   bridge!: HudBridge;
   combat!: CombatHUD;
   combatA!: number;
@@ -121,10 +124,10 @@ export class HUD {
 
   // ---- forwarded API --------------------------------------------------
   /** @param ev see class docs */
-  damage(ev: any) { this.combat.damage(ev); }
+  damage(ev: DamageEvent) { this.combat.damage(ev); }
   /** @param word @param [sub] */
   callOut(word: string, sub?: string) { this.combat.callOut(word, sub); }
-  setLockOn(t: any | null) { this.combat.setLockOn(t); }
+  setLockOn(t: Enemy | null) { this.combat.setLockOn(t); }
   /** @param v 0..1 */
   setArmiger(v: number) { this.combat.setArmiger(v); }
   /** @param name @param [sub] @param [meta] */

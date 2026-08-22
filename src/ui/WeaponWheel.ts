@@ -1,6 +1,7 @@
 import { el, svg, clamp, easeOut } from './UIKit.ts';
 import { icon, dpad } from './Icons.ts';
 import { readWeapons } from './GameData.ts';
+import type { WeaponView } from './GameData.ts';
 import type { Game } from '../game/Game.ts';
 
 const POS = { up: [84, 26], right: [142, 84], down: [84, 142], left: [26, 84] };
@@ -11,7 +12,8 @@ const POS = { up: [84, 26], right: [142, 84], down: [84, 142], left: [26, 84] };
  * called out above.
  */
 export class WeaponWheel {
-  _capKey!: any;
+  /** The weapon name the caption was last written for. */
+  _capKey!: string | null;
   active!: number;
   built!: boolean;
   cap!: HTMLElement;
@@ -21,7 +23,7 @@ export class WeaponWheel {
   hub!: HTMLElement;
   hubPad!: ChildNode | null;
   root!: HTMLElement;
-  slots!: any[];
+  slots!: Array<{ node: HTMLElement, w: WeaponView, i: number, _on?: boolean, _hadGlow?: boolean }>;
   spokes!: SVGElement;
   wheel!: HTMLElement;
   constructor(parent: HTMLElement) {
@@ -47,7 +49,7 @@ export class WeaponWheel {
     this.built = false;
   }
 
-  _build(weapons: any) {
+  _build(weapons: WeaponView[]) {
     for (const w of weapons) {
       const [x, y] = POS[w.slot as keyof typeof POS] || POS.up;
       this.spokes.appendChild(svg('line', {
@@ -64,7 +66,7 @@ export class WeaponWheel {
     this.hub.appendChild(dpad('up', 26));
     this.hubPad = this.hub.firstChild;
 
-    weapons.forEach((w: any, i: any) => {
+    weapons.forEach((w, i) => {
       const [x, y] = POS[w.slot as keyof typeof POS] || POS.up;
       const node = el('div.wslot', { style: `left:${x}px;top:${y}px` }, [
         el('div.ring'),

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Cheap screen-space reflections for wet ground, water and car paint.
@@ -14,13 +15,13 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
  *   game.post.ssr.maxHeight = 2.0;   // world Y below which surfaces reflect
  */
 export class SsrPass extends FilterPass {
-  override fx!: any;
+  override fx!: PostFX;
   intensity!: number;
   override material!: THREE.ShaderMaterial;
   maxDistance!: number;
   maxHeight!: number;
   roughness!: number;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super(fx);
     this.enabled = false;
     this.intensity = 0.55;

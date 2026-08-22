@@ -15,25 +15,103 @@
  */
 
 import { emptyMods, addMods } from './Stats.ts';
+import type { StatMods, WeaponClass } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Categories                                                                */
 /* ------------------------------------------------------------------------ */
 
-export const CATEGORIES = ['curative', 'catalyst', 'treasure', 'ingredient', 'key', 'weapon', 'accessory', 'spell'];
+export const CATEGORIES = ['curative', 'catalyst', 'treasure', 'ingredient', 'key', 'weapon', 'accessory', 'spell'] as const;
+
+/** One of {@link CATEGORIES}. The closed set every item belongs to. */
+export type ItemCategory = typeof CATEGORIES[number];
 
 /** Default stack limits per category. Key items never stack past one. */
-export const STACK_LIMITS = {
+export const STACK_LIMITS: Record<ItemCategory, number> = {
   curative: 99, catalyst: 99, treasure: 99, ingredient: 99,
   key: 1, weapon: 20, accessory: 20, spell: 9,
 };
 
 /* ------------------------------------------------------------------------ */
+/* Item shapes                                                               */
+/* ------------------------------------------------------------------------ */
+
+/** Who a consumable can be pointed at. */
+export type UseTarget = 'ally' | 'party' | 'downed';
+
+/**
+ * What a curative does, as a discriminated union on `type` -- `amount` means
+ * HP for a heal and MP for an ether, and only a `cure` carries a status list,
+ * so a single optional-field bag would let `Inventory.use` read a field its
+ * own switch arm can never have.
+ */
+export type ItemUse =
+  | { type: 'heal'; amount: number; target: UseTarget; buff?: { strength: number; seconds: number } }
+  | { type: 'mp'; amount: number; target: UseTarget; clearStasis?: boolean }
+  | { type: 'full'; target: UseTarget; revive?: boolean }
+  | { type: 'revive'; percent: number; target: UseTarget }
+  | { type: 'cure'; status: string[]; target: UseTarget };
+
+/** The Elemancy payload a catalyst item carries. */
+export interface CatalystDef {
+  /** Added to spell potency per unit thrown in. */
+  potency: number;
+  /** Display name of the derived side-effect ('Expericast', 'Multicast', ...). */
+  effect: string;
+  /** Machine-readable effect tags Elemancy branches on. */
+  tags: string[];
+  /** `[count, strength]` pairs: how many units buy which tier of the effect. */
+  thresholds: number[][];
+}
+
+/**
+ * An item **as authored** in one of the tables below: category-specific fields
+ * only exist on the table that declares them, and the derived economy fields
+ * (`sell`, `stack`) are not written by hand at all.
+ */
+export interface AuthoredItem {
+  id: string;
+  name: string;
+  desc: string;
+  price?: number;
+  tags?: string[];
+  /** Set only where a table mixes categories; otherwise `push()` supplies it. */
+  category?: ItemCategory;
+  use?: ItemUse;
+  catalyst?: CatalystDef;
+  class?: WeaponClass;
+  attack?: number;
+  mods?: Partial<StatMods>;
+  special?: string;
+  /** null = anyone whose class permission covers it. */
+  wielders?: string[] | null;
+}
+
+/**
+ * An item **as resolved** into {@link ITEMS}: category, price, sell value,
+ * stack limit and tags are all present, because `push()` fills them in.
+ *
+ * The category-specific fields stay optional deliberately. A lookup is by id,
+ * so at the point of the lookup the category is not yet known -- that is what
+ * `def.category === 'weapon'` tests for, and the optionality is the honest
+ * record of it rather than a hole in the type.
+ */
+export interface ItemDef extends AuthoredItem {
+  category: ItemCategory;
+  price: number;
+  /** Gil paid for one unit before the Bargain Hunter bonus. */
+  sell: number;
+  /** Stack limit for this item. */
+  stack: number;
+  tags: string[];
+}
+
+/* ------------------------------------------------------------------------ */
 /* Curatives                                                                 */
 /* ------------------------------------------------------------------------ */
 
-const CURATIVES = [
+const CURATIVES: AuthoredItem[] = [
   { id: 'potion',        name: 'Potion',         price: 100,   desc: 'Restores 1000 HP to one ally.',                 use: { type: 'heal', amount: 1000, target: 'ally' } },
   { id: 'hi_potion',     name: 'Hi-Potion',      price: 400,   desc: 'Restores 3000 HP to one ally.',                 use: { type: 'heal', amount: 3000, target: 'ally' } },
   { id: 'mega_potion',   name: 'Mega-Potion',    price: 1000,  desc: 'Restores 3000 HP to the whole party.',          use: { type: 'heal', amount: 3000, target: 'party' } },
@@ -59,7 +137,7 @@ const CURATIVES = [
  * `effect` names the derived side-effect, and `thresholds` map "how many did
  * you throw in" to the strength of that effect.
  */
-const CATALYSTS = [
+const CATALYSTS: AuthoredItem[] = [
   { id: 'debased_coin',      name: 'Debased Coin',       price: 20,   desc: 'A worn coin from a fallen kingdom. Smells faintly of EXP.',
     catalyst: { potency: 2,  effect: 'Expericast', tags: ['exp'],      thresholds: [[1, 1], [9, 2], [33, 3]] } },
   { id: 'debased_silver',    name: 'Debased Silverpiece',price: 60,   desc: 'Tarnished silver. Elemancers pay well for it.',
@@ -96,7 +174,7 @@ const CATALYSTS = [
     catalyst: { potency: 18, effect: 'Expericast', tags: ['exp', 'multi'], thresholds: [[1, 4], [4, 5], [12, 6]] } },
 ];
 
-const TREASURES = [
+const TREASURES: AuthoredItem[] = [
   { id: 'rusted_bit',      name: 'Rusted Bit',        price: 30,   desc: 'Scrap metal. Sells for a pittance.' },
   { id: 'beautiful_bottle',name: 'Beautiful Bottle',  price: 120,  desc: 'Sea-worn glass from the Cygillan coast.' },
   { id: 'old_book',        name: 'Old Book',          price: 200,  desc: 'A pre-Fall novel. Collectors in Lestallum pay well.' },
@@ -115,9 +193,9 @@ const TREASURES = [
 /* Ingredients                                                               */
 /* ------------------------------------------------------------------------ */
 
-const ING = (id: string, name: string, price: number, desc: string, tags: string[]) => ({ id, name, price, desc, tags });
+const ING = (id: string, name: string, price: number, desc: string, tags: string[]): AuthoredItem => ({ id, name, price, desc, tags });
 
-const INGREDIENTS = [
+const INGREDIENTS: AuthoredItem[] = [
   ING('lucian_tomato',   'Lucian Tomato',        60,   'Sun-fat and sweet. Grows wild along the Leide roadside.', ['vegetable']),
   ING('leiden_pepper',   'Leiden Pepper',        80,   'Fierce heat, red as the badlands.',                        ['vegetable', 'spice']),
   ING('leiden_potato',   'Leiden Potato',        50,   'Dusty-skinned, keeps for months.',                         ['vegetable']),
@@ -154,7 +232,7 @@ const INGREDIENTS = [
 /* Key items                                                                 */
 /* ------------------------------------------------------------------------ */
 
-const KEY_ITEMS = [
+const KEY_ITEMS: AuthoredItem[] = [
   { id: 'regalia_key',    name: 'Regalia Key',        desc: 'The key to King Regis\' car. Do not scratch it.' },
   { id: 'ring_of_lucii',  name: 'Ring of the Lucii',  desc: 'The soul of every Lucian king. It will take a toll.' },
   { id: 'sword_wise_hint',name: 'Royal Tomb Map',     desc: 'Marks the resting places of the old kings.' },
@@ -176,14 +254,14 @@ const KEY_ITEMS = [
  * @param special free-text special effect (combat reads `tags`)
  * @param tags machine-readable effect tags
  */
-const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders: string[] | null = null) => ({
+const W = (id: string, name: string, cls: WeaponClass, attack: number, price: number, mods: Partial<StatMods>, special: string, tags: string[], desc: string, wielders: string[] | null = null): AuthoredItem => ({
   id, name, category: 'weapon', class: cls, attack, price, mods: mods || {},
   special, tags: tags || [], desc,
   // null = anyone whose class permission covers it; royal arms are Noctis-only.
   wielders: wielders || ((tags || []).includes('royal') ? ['noctis'] : null),
 });
 
-const WEAPONS = [
+const WEAPONS: AuthoredItem[] = [
   // --- swords ---------------------------------------------------------
   W('engine_blade',   'Engine Blade',        'sword', 62,  0,     {},                                'Noctis\' first blade. Balanced, quick, sentimental.', [],                 'Forged from a Regalia piston. It has never once let him down.'),
   W('iron_sword',     'Iron Sword',          'sword', 48,  600,   {},                                'Cheap, heavy, dependable.',                            [],                 'Outpost stock. Every hunter starts with one.'),
@@ -240,9 +318,9 @@ const WEAPONS = [
 /* Accessories                                                               */
 /* ------------------------------------------------------------------------ */
 
-const A = (id: string, name: string, price: number, mods: any, desc: string, tags: any[] = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
+const A = (id: string, name: string, price: number, mods: Partial<StatMods>, desc: string, tags: string[] = []): AuthoredItem => ({ id, name, category: 'accessory', price, mods, desc, tags });
 
-const ACCESSORIES = [
+const ACCESSORIES: AuthoredItem[] = [
   A('bronze_bangle',   'Bronze Bangle',     400,   { hp: 300 },                                'A plain band. Adds a little padding.'),
   A('silver_bangle',   'Silver Bangle',     1200,  { hp: 800 },                                'Better metal, better cushion.'),
   A('gold_bangle',     'Gold Bangle',       4000,  { hp: 2000 },                               'Ostentatious and effective.'),
@@ -268,18 +346,19 @@ const ACCESSORIES = [
 /* ------------------------------------------------------------------------ */
 
 /** Every item definition in the game, keyed by id. */
-export const ITEMS = (() => {
-  const map: Record<string, any> = {};
-  const push = (list: any, category: string) => {
+export const ITEMS: Record<string, ItemDef> = (() => {
+  const map: Record<string, ItemDef> = {};
+  const push = (list: AuthoredItem[], category: ItemCategory) => {
     for (const it of list) {
       const price = it.price ?? 0;
+      const cat = it.category || category;
       map[it.id] = {
-        sell: Math.max(1, Math.round(price * 0.5)),
-        stack: STACK_LIMITS[(it.category || category) as keyof typeof STACK_LIMITS],
-        tags: [],
         ...it,
-        category: it.category || category,
+        category: cat,
         price,
+        sell: Math.max(1, Math.round(price * 0.5)),
+        stack: STACK_LIMITS[cat],
+        tags: it.tags || [],
       };
     }
   };
@@ -299,10 +378,10 @@ export const ITEMS = (() => {
 export const ITEM_COUNT = Object.keys(ITEMS).length;
 
 /** Look an item definition up. Returns null for unknown ids. */
-export function itemDef(id: any) { return ITEMS[id] || null; }
+export function itemDef(id: string): ItemDef | null { return ITEMS[id] || null; }
 
 /** All items in a category. */
-export function itemsInCategory(category: any) {
+export function itemsInCategory(category: ItemCategory): ItemDef[] {
   return Object.values(ITEMS).filter((i) => i.category === category);
 }
 
@@ -310,8 +389,20 @@ export function itemsInCategory(category: any) {
 /* Equipment layout                                                          */
 /* ------------------------------------------------------------------------ */
 
+/** Everyone who has an equipment rack. */
+export type CharId = 'noctis' | 'gladio' | 'ignis' | 'prompto';
+
+/** One character's equipped item ids; `null` is an empty slot. */
+export interface EquipRack {
+  weapon: (string | null)[];
+  accessory: (string | null)[];
+}
+
+/** The two racks an id can name. */
+export type EquipKind = keyof EquipRack;
+
 /** How many slots each character has. Noctis carries the phantom arsenal. */
-export const SLOT_LAYOUT = {
+export const SLOT_LAYOUT: Record<CharId, { weapon: number, accessory: number }> = {
   noctis:  { weapon: 4, accessory: 3 },
   gladio:  { weapon: 2, accessory: 3 },
   ignis:   { weapon: 2, accessory: 3 },
@@ -319,7 +410,7 @@ export const SLOT_LAYOUT = {
 };
 
 /** Which weapon classes each character is allowed to hold. */
-export const CLASS_PERMISSION = {
+export const CLASS_PERMISSION: Record<CharId, WeaponClass[]> = {
   noctis:  ['sword', 'greatsword', 'polearm', 'dagger', 'firearm', 'shield'],
   gladio:  ['greatsword', 'shield'],
   ignis:   ['dagger', 'polearm'],
@@ -330,27 +421,95 @@ export const CLASS_PERMISSION = {
 /* Inventory                                                                 */
 /* ------------------------------------------------------------------------ */
 
+/** One stack in the bag, hydrated with the definition it names. */
+export interface ItemStack {
+  id: string;
+  count: number;
+  def: ItemDef;
+}
+
+/** A stack priced for the shop's sell tab. */
+export interface SellableStack extends ItemStack {
+  unitPrice: number;
+  total: number;
+}
+
+/** What one consumable did to one target. */
+export interface UseEffect {
+  id: string;
+  healed: number;
+  mp: number;
+  revived: boolean;
+  cured: string[];
+}
+
+/**
+ * The four shop/bag calls all answer the same question -- did it happen, and
+ * what did it cost -- so they all return a union discriminated on `ok`.
+ *
+ * They used to return `{ ok: boolean, reason?, cost? }`, which cannot narrow:
+ * `if (res.ok)` left `cost` optional, so every caller reached for a field the
+ * type could not promise and the shop screen had to feel for it with
+ * `'cost' in res ? res.cost ?? 0 : 0`.
+ */
+export type UseResult =
+  | { ok: true; results: UseEffect[] }
+  | { ok: false; reason: 'unknown-item' | 'not-usable' | 'none-left' | 'no-target' };
+
+/** @see UseResult */
+export type EquipResult =
+  | { ok: true; previous: string | null }
+  | {
+    ok: false;
+    reason: 'bad-slot' | 'unknown-item' | 'wrong-category' | 'class-not-allowed'
+      | 'not-your-weapon' | 'already-equipped' | 'not-owned';
+  };
+
+/** @see UseResult */
+export type SellResult =
+  | { ok: true; gil: number }
+  | { ok: false; reason: 'unknown-item' | 'not-sellable' | 'not-enough' };
+
+/**
+ * @see UseResult
+ *
+ * `not-enough-gil` is the one failure that still carries `cost`, so the clerk
+ * can say how short you are; the other three have nothing to report.
+ */
+export type BuyResult =
+  | { ok: true; cost: number }
+  | { ok: false; reason: 'not-enough-gil'; cost: number }
+  | { ok: false; reason: 'unknown-item' | 'not-for-sale' | 'no-room' };
+
+/** The serialised form written into a save slot. */
+export interface InventorySave {
+  bag?: Record<string, number>;
+  gil?: number;
+  sellBonus?: number;
+  equipment?: Record<string, EquipRack>;
+}
+
 /**
  * The party's shared bag plus everyone's equipment. Emits `item-gained`,
  * `item-lost`, `item-used`, `gil-changed` and `equipment-changed`.
  */
 export class Inventory {
-  bag!: any;
+  /** item id -> count carried. */
+  bag!: Record<string, number>;
   emitter!: Emitter | null;
-  equipment!: any;
+  /** character id -> what they have on. */
+  equipment!: Record<string, EquipRack>;
   gil!: number;
   sellBonus!: number;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
-    /** @type {Record<string, number>} id -> count */
     this.bag = {};
     this.gil = 0;
-    /** @type {Record<string, {weapon:(string|null)[], accessory:(string|null)[]}>} */
     this.equipment = {};
-    for (const id of Object.keys(SLOT_LAYOUT)) {
+    for (const id of Object.keys(SLOT_LAYOUT) as CharId[]) {
       this.equipment[id] = {
-        weapon: new Array(SLOT_LAYOUT[id as keyof typeof SLOT_LAYOUT].weapon).fill(null),
-        accessory: new Array(SLOT_LAYOUT[id as keyof typeof SLOT_LAYOUT].accessory).fill(null),
+        weapon: new Array<string | null>(SLOT_LAYOUT[id].weapon).fill(null),
+        accessory: new Array<string | null>(SLOT_LAYOUT[id].accessory).fill(null),
       };
     }
     /** Multiplier applied to sell prices (Bargain Hunter ascension node). */
@@ -397,16 +556,16 @@ export class Inventory {
   }
 
   /** Every stack, hydrated with its definition, optionally filtered. */
-  list(category: any = null) {
+  list(category: ItemCategory | null = null): ItemStack[] {
     return Object.keys(this.bag)
-      .map((id) => ({ id, count: this.bag[id], def: ITEMS[id] }))
-      .filter((e) => e.def && (!category || e.def.category === category))
+      .map((id) => ({ id, count: this.bag[id], def: itemDef(id) }))
+      .filter((e): e is ItemStack => !!e.def && (!category || e.def.category === category))
       .sort((a, b) => a.def.name.localeCompare(b.def.name));
   }
 
   /** Items grouped by category — the shape the item menu wants. */
-  listByCategory() {
-    const out: Record<string, any[]> = {};
+  listByCategory(): Record<string, ItemStack[]> {
+    const out: Record<string, ItemStack[]> = {};
     for (const e of this.list()) (out[e.def.category] ||= []).push(e);
     return out;
   }
@@ -433,28 +592,29 @@ export class Inventory {
    *
    * @param [opts] `{ curativePower }` from the Ascension grid
    */
-  use(id: string, targets: import('./Stats.ts').Stats[] = [], opts: any = {}): {ok:boolean, reason?:string, results?:any[]} {
+  use(id: string, targets: import('./Stats.ts').Stats[] = [], opts: { curativePower?: number } = {}): UseResult {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
-    if (!def.use) return { ok: false, reason: 'not-usable' };
+    const spec = def.use;
+    if (!spec) return { ok: false, reason: 'not-usable' };
     if (!this.has(id)) return { ok: false, reason: 'none-left' };
     const power = 1 + (opts.curativePower || 0);
-    const list = def.use.target === 'party' ? targets : targets.slice(0, 1);
+    const list = spec.target === 'party' ? targets : targets.slice(0, 1);
     if (!list.length) return { ok: false, reason: 'no-target' };
 
-    const results = [];
+    const results: UseEffect[] = [];
     for (const t of list) {
-      const r = { id: t.id, healed: 0, mp: 0, revived: false, cured: [] };
-      switch (def.use.type) {
+      const r: UseEffect = { id: t.id, healed: 0, mp: 0, revived: false, cured: [] };
+      switch (spec.type) {
         case 'heal':
           if (t.ko) break;
-          r.healed = t.heal(def.use.amount * power);
+          r.healed = t.heal(spec.amount * power);
           break;
         case 'mp':
-          r.mp = t.restoreMp(def.use.amount);
+          r.mp = t.restoreMp(spec.amount);
           break;
         case 'full':
-          if (t.ko && !def.use.revive) break;
+          if (t.ko && !spec.revive) break;
           if (t.ko) { t.ko = false; r.revived = true; }
           r.healed = t.heal(t.maxHp);
           r.mp = t.restoreMp(t.maxMp);
@@ -463,10 +623,10 @@ export class Inventory {
           if (!t.ko) break;
           t.ko = false;
           r.revived = true;
-          r.healed = t.heal(t.maxHp * (def.use.percent || 0.5));
+          r.healed = t.heal(t.maxHp * (spec.percent || 0.5));
           break;
         case 'cure':
-          r.cured = def.use.status.slice();
+          r.cured = spec.status.slice();
           break;
         default: break;
       }
@@ -484,7 +644,7 @@ export class Inventory {
    * must be allowed to hold it.
    * @param itemId pass null to unequip
    */
-  equip(charId: string, kind: 'weapon' | 'accessory', slot: number, itemId: string | null) {
+  equip(charId: string, kind: EquipKind, slot: number, itemId: string | null): EquipResult {
     const rack = this.equipment[charId];
     if (!rack || !rack[kind] || slot < 0 || slot >= rack[kind].length) return { ok: false, reason: 'bad-slot' };
 
@@ -501,8 +661,8 @@ export class Inventory {
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.category !== kind) return { ok: false, reason: 'wrong-category' };
     if (kind === 'weapon') {
-      const allowed = CLASS_PERMISSION[charId as keyof typeof CLASS_PERMISSION] || [];
-      if (!allowed.includes(def.class)) return { ok: false, reason: 'class-not-allowed' };
+      const allowed: WeaponClass[] = CLASS_PERMISSION[charId as CharId] || [];
+      if (!def.class || !allowed.includes(def.class)) return { ok: false, reason: 'class-not-allowed' };
       if (def.wielders && !def.wielders.includes(charId)) return { ok: false, reason: 'not-your-weapon' };
     }
     if (rack[kind].includes(itemId) && kind === 'accessory') return { ok: false, reason: 'already-equipped' };
@@ -516,12 +676,12 @@ export class Inventory {
   }
 
   /** Equipped item definitions for a character. */
-  equipped(charId: any) {
+  equipped(charId: string): { weapon: (ItemDef | null)[], accessory: (ItemDef | null)[] } {
     const rack = this.equipment[charId];
     if (!rack) return { weapon: [], accessory: [] };
     return {
-      weapon: rack.weapon.map((id: any) => (id ? ITEMS[id] : null)),
-      accessory: rack.accessory.map((id: any) => (id ? ITEMS[id] : null)),
+      weapon: rack.weapon.map((id) => (id ? ITEMS[id] : null)),
+      accessory: rack.accessory.map((id) => (id ? ITEMS[id] : null)),
     };
   }
 
@@ -552,7 +712,7 @@ export class Inventory {
 
   /** Tags contributed by everything a character has on (e.g. 'status-immune'). */
   tagsFor(charId: string) {
-    const tags = new Set();
+    const tags = new Set<string>();
     const rack = this.equipment[charId];
     if (!rack) return tags;
     for (const list of [rack.weapon, rack.accessory]) {
@@ -568,7 +728,7 @@ export class Inventory {
    * clerk gets to say "you have nothing to sell".
    * @param [categories] restrict to certain categories
    */
-  sellable(categories: string[] = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative']) {
+  sellable(categories: string[] = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative']): SellableStack[] {
     return this.list()
       .filter((e) => categories.includes(e.def.category) && e.def.sell > 0 && !e.def.tags.includes('royal'))
       .map((e) => ({ ...e, unitPrice: this.sellPrice(e.id), total: this.sellPrice(e.id) * e.count }));
@@ -587,7 +747,7 @@ export class Inventory {
   /**
    * Sell items.
    */
-  sell(id: string, n = 1): {ok:boolean, reason?:string, gil?:number} {
+  sell(id: string, n = 1): SellResult {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (def.sell <= 0 || def.category === 'key') return { ok: false, reason: 'not-sellable' };
@@ -602,7 +762,7 @@ export class Inventory {
    * Buy items from a shop's stock list.
    * @param [n=1]
    */
-  buy(id: string, n: number = 1) {
+  buy(id: string, n: number = 1): BuyResult {
     const def = ITEMS[id];
     if (!def) return { ok: false, reason: 'unknown-item' };
     if (!def.price) return { ok: false, reason: 'not-for-sale' };
@@ -616,21 +776,23 @@ export class Inventory {
 
   /* -- Serialisation ----------------------------------------------------- */
 
-  toJSON() { return { bag: { ...this.bag }, gil: this.gil, equipment: this.equipment, sellBonus: this.sellBonus }; }
+  toJSON(): InventorySave { return { bag: { ...this.bag }, gil: this.gil, equipment: this.equipment, sellBonus: this.sellBonus }; }
 
-  static fromJSON(data: any, emitter: Emitter | null = null) {
+  static fromJSON(data: InventorySave | null | undefined, emitter: Emitter | null = null) {
     const inv = new Inventory(emitter);
     if (!data) return inv;
-    for (const id of Object.keys(data.bag || {})) if (ITEMS[id]) inv.bag[id] = data.bag[id];
+    const bag = data.bag || {};
+    for (const id of Object.keys(bag)) if (ITEMS[id]) inv.bag[id] = bag[id];
     inv.gil = data.gil || 0;
     inv.sellBonus = data.sellBonus || 0;
     for (const c of Object.keys(inv.equipment)) {
       const src = data.equipment?.[c];
       if (!src) continue;
-      for (const kind of ['weapon', 'accessory']) {
+      for (const kind of ['weapon', 'accessory'] as EquipKind[]) {
         const arr = src[kind] || [];
         for (let i = 0; i < inv.equipment[c][kind].length; i++) {
-          inv.equipment[c][kind][i] = ITEMS[arr[i]] ? arr[i] : null;
+          const want = arr[i];
+          inv.equipment[c][kind][i] = want && ITEMS[want] ? want : null;
         }
       }
     }

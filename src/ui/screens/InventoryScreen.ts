@@ -3,6 +3,7 @@ import type { CachedNode } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { ITEM_TABS, readItems, hudState, rpg } from '../GameData.ts';
+import type { ItemView } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
 
@@ -17,11 +18,16 @@ const MAX_ROWS = 22;
  * the placeholder list never did.
  */
 export class InventoryScreen {
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
   _age!: number;
-  _cur!: any;
+  /** The item the detail column was last drawn for. */
+  _cur!: string | null;
   _gil!: string;
   _key!: string | null;
-  _msg!: any;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
   act!: HTMLElement;
   actLb!: HTMLElement;
@@ -37,11 +43,12 @@ export class InventoryScreen {
   gil!: HTMLElement;
   gilVal!: ChildNode | null;
   i!: number;
-  items!: any[];
+  /** The current tab's stacks, in draw order. */
+  items!: ItemView[];
   list!: HTMLElement;
   menus!: Menus;
   msg!: HTMLElement;
-  rows!: any[];
+  rows!: Array<{ row: HTMLElement, it: ItemView, bg: HTMLElement, _on?: boolean }>;
   specVals!: HTMLElement[];
   sub!: string;
   tab!: number;
@@ -114,19 +121,22 @@ export class InventoryScreen {
   }
 
   /** Rebuild the row list for the current tab. */
-  _rebuild(items: any, key: string, game: Game) {
+  _rebuild(items: ItemView[], key: string, game: Game) {
     this.items = items;
     this.list.textContent = '';
     this.rows = this.items.slice(0, MAX_ROWS).map((it) => {
+      // Held rather than re-found through `firstChild`: the highlight is
+      // repainted every frame off this reference.
+      const bg = el('div.mr-bg');
       const row = el('div.irow', {}, [
-        el('div.mr-bg'),
+        bg,
         icon(it.icon, { size: 17, stroke: 1.15 }),
         el('div.in', { text: it.name }),
         el('div.iq', {}, [el('span', { text: '×' }), el('b', { text: String(it.qty) })]),
       ]);
       this.list.appendChild(row);
       this.list.appendChild(el('div.rule', { style: 'opacity:.4' }));
-      return { row, it, bg: row.firstChild };
+      return { row, it, bg };
     });
     if (!this.rows.length) {
       this.list.appendChild(el('div.irow', {}, [el('div.in', { text: '— nothing of this kind —' })]));
@@ -164,20 +174,20 @@ export class InventoryScreen {
     if (!def || !def.use) { this._say(`${it.name} is not something you can use.`, false); return; }
 
     const roster = r.party.roster;
-    const alive = roster.filter((s: any) => !s.ko);
+    const alive = roster.filter((s) => !s.ko);
     let targets;
     if (def.use.target === 'party') targets = roster;
-    else if (def.use.type === 'revive') targets = roster.filter((s: any) => s.ko).slice(0, 1);
+    else if (def.use.type === 'revive') targets = roster.filter((s) => s.ko).slice(0, 1);
     else {
       const pool = alive.length ? alive : roster;
-      targets = [pool.slice().sort((a: any, b: any) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]];
+      targets = [pool.slice().sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0]];
     }
 
     const res = r.inventory.use(it.id, targets.filter(Boolean), { curativePower: r.ascension.value('curativePower') || 0 });
     if (res.ok) {
       const results = res.results || [];
-      const healed = results.reduce((s: any, x: any) => s + (x.healed || 0), 0);
-      const revived = results.some((x: any) => x.revived);
+      const healed = results.reduce((sum: number, x) => sum + (x.healed || 0), 0);
+      const revived = results.some((x) => x.revived);
       this._say(revived ? `${it.name} — back on their feet.`
         : healed ? `${it.name} — ${commas(healed)} HP restored.`
           : `${it.name} used.`, true);
@@ -192,7 +202,7 @@ export class InventoryScreen {
     }
   }
 
-  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   enter(game: Game) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 

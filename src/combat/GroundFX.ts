@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { turbulence } from './VfxTextures.ts';
+import type { Terrain } from '../world/Terrain.ts';
 
 /**
  * Terrain-conforming ground effects: shockwave rings, scorch marks, ice
@@ -10,9 +11,32 @@ import { turbulence } from './VfxTextures.ts';
  * drawn procedurally in the fragment shader from the patch's local UV, which
  * means an expanding ring animates without touching the geometry.
  */
+/** Which of the three looks a patch is currently wearing. */
+export type PatchKind = 'ring' | 'decal' | 'pool';
+
+/**
+ * The patch shader's uniform block; the index signature is `ShaderMaterial`'s
+ * requirement, and every uniform `PATCH_FRAG` reads is named below it.
+ */
+export interface PatchUniforms {
+  [uniform: string]: THREE.IUniform;
+  uMap: THREE.IUniform<THREE.Texture | null>;
+  uNoise: THREE.IUniform<THREE.Texture>;
+  uColor: THREE.IUniform<THREE.Color>;
+  uOpacity: THREE.IUniform<number>;
+  /** 0 decal, 1 expanding ring, 2 soft pool. */
+  uRing: THREE.IUniform<number>;
+  uRadius: THREE.IUniform<number>;
+  uThickness: THREE.IUniform<number>;
+  uNoiseAmt: THREE.IUniform<number>;
+  uIntensity: THREE.IUniform<number>;
+  uTime: THREE.IUniform<number>;
+  uRotate: THREE.IUniform<number>;
+}
+
 export class GroundPatch {
   age!: number;
-  center!: any;
+  center!: THREE.Vector3;
   free!: boolean;
   grid!: number;
   life!: number;
@@ -21,7 +45,13 @@ export class GroundPatch {
   posAttr!: THREE.BufferAttribute;
   positions!: Float32Array;
   size!: number;
-  uniforms!: any;
+  uniforms!: PatchUniforms;
+  /**
+   * Opacity the patch was handed, which `update` fades *from*. Written by
+   * `GroundFX.ring` / `.decal` / `.pool` when the patch is taken.
+   */
+  baseOpacity!: number;
+  kind!: PatchKind;
   constructor({ grid = 14, additive = false, renderOrder = 6 } = {}) {
     this.grid = grid;
     const g = grid;
@@ -86,7 +116,7 @@ export class GroundPatch {
   }
 
   /** Snap the patch grid onto the terrain around `center` with side `size`. */
-  place(center: any, size: number, terrain: any, bias = 0.06) {
+  place(center: THREE.Vector3, size: number, terrain: Terrain | null | undefined, bias = 0.06) {
     const g = this.grid, p = this.positions;
     const half = size * 0.5;
     for (let j = 0; j <= g; j++) {
@@ -94,7 +124,9 @@ export class GroundPatch {
         const k = j * (g + 1) + i;
         const x = center.x - half + (i / g) * size;
         const z = center.z - half + (j / g) * size;
-        const y = terrain && terrain.heightAt ? terrain.heightAt(x, z) : center.y;
+        // `heightAt` is a method on `Terrain`; the old `&& terrain.heightAt`
+        // arm guarded on a name that cannot be missing.
+        const y = terrain ? terrain.heightAt(x, z) : center.y;
         p[k * 3] = x; p[k * 3 + 1] = y + bias; p[k * 3 + 2] = z;
       }
     }
@@ -114,9 +146,45 @@ export class GroundPatch {
  * Pool of ground patches. Two sub-pools: additive (rings, light pools) and
  * alpha-blended (scorch, frost, cracks). LRU reuse keeps draw calls bounded.
  */
+/** Where a ground effect goes, and on what. Shared by all three verbs. */
+interface PatchPlacement {
+  pos: THREE.Vector3;
+  terrain?: Terrain | null;
+  /** Seconds the patch lives. */
+  life?: number;
+  /** Emissive multiplier. */
+  intensity?: number;
+  opacity?: number;
+  /** Seconds already elapsed, so a pinned scenario can show it mid-life. */
+  age?: number;
+}
+
+/** An expanding shockwave ring. */
+export interface RingOpts extends PatchPlacement {
+  radius?: number;
+  color?: THREE.ColorRepresentation;
+  /** Ring width in patch-local UV. */
+  thickness?: number;
+}
+
+/** A textured mark that holds and then fades: scorch, frost, cracks. */
+export interface DecalOpts extends PatchPlacement {
+  size?: number;
+  map?: THREE.Texture | null;
+  color?: THREE.ColorRepresentation;
+  /** Radians, so repeats of the same map do not tile visibly. */
+  rotate?: number;
+}
+
+/** A soft additive light pool. */
+export interface PoolOpts extends PatchPlacement {
+  size?: number;
+  color?: THREE.ColorRepresentation;
+}
+
 export class GroundFX {
-  decals!: any[];
-  rings!: any[];
+  decals!: GroundPatch[];
+  rings!: GroundPatch[];
   _decalNext!: number;
   _ringNext!: number;
   constructor(parent: THREE.Group, { rings = 6, decals = 12 } = {}) {
@@ -136,10 +204,17 @@ export class GroundFX {
     this._decalNext = 0;
   }
 
-  _take(pool: any, cursorKey: string) {
+  /**
+   * Least-recently-used pick from one sub-pool. Naming the sub-pool rather
+   * than passing the array and a cursor *name* is what lets this be checked:
+   * the cursor field and the array it walks can no longer drift apart.
+   */
+  _take(which: 'rings' | 'decals'): GroundPatch {
+    const pool = this[which];
     for (const p of pool) if (p.free) return p;
-    const p = pool[(this as any)[cursorKey]];
-    (this as any)[cursorKey] = ((this as any)[cursorKey] + 1) % pool.length;
+    const cursor = which === 'rings' ? '_ringNext' : '_decalNext';
+    const p = pool[this[cursor]];
+    this[cursor] = (this[cursor] + 1) % pool.length;
     return p;
   }
 
@@ -148,8 +223,8 @@ export class GroundFX {
    * @param o {pos, terrain, radius, color, life, t0, thickness, intensity}
    */
   ring({ pos, terrain, radius = 4, color = 0x9fd8ff, life = 0.75, thickness = 0.09,
-    intensity = 3.2, opacity = 1, age = 0 }: any) {
-    const p = this._take(this.rings, '_ringNext');
+    intensity = 3.2, opacity = 1, age = 0 }: RingOpts) {
+    const p = this._take('rings');
     p.place(pos, radius * 2.2, terrain, 0.08);
     p.uniforms.uRing.value = 1;
     p.uniforms.uColor.value.set(color);
@@ -163,9 +238,9 @@ export class GroundFX {
   }
 
   /** Persistent (slowly fading) textured decal: scorch, frost, cracks. */
-  decal({ pos, terrain, size = 3, map, color = 0xffffff, opacity = 0.9,
-    life = 26, rotate = 0, intensity = 1, age = 0 }: any) {
-    const p = this._take(this.decals, '_decalNext');
+  decal({ pos, terrain, size = 3, map = null, color = 0xffffff, opacity = 0.9,
+    life = 26, rotate = 0, intensity = 1, age = 0 }: DecalOpts) {
+    const p = this._take('decals');
     p.place(pos, size, terrain, 0.045);
     p.uniforms.uRing.value = 0;
     p.uniforms.uMap.value = map;
@@ -179,8 +254,8 @@ export class GroundFX {
   }
 
   /** Soft additive light pool — magic circles, warp landing glow. */
-  pool({ pos, terrain, size = 4, color = 0x66ccff, opacity = 1, life = 2.5, intensity = 2.4, age = 0 }: any) {
-    const p = this._take(this.rings, '_ringNext');
+  pool({ pos, terrain, size = 4, color = 0x66ccff, opacity = 1, life = 2.5, intensity = 2.4, age = 0 }: PoolOpts) {
+    const p = this._take('rings');
     p.place(pos, size, terrain, 0.07);
     p.uniforms.uRing.value = 2;
     p.uniforms.uColor.value.set(color);

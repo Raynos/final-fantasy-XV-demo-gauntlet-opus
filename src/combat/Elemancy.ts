@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import type { Game } from '../game/Game.ts';
+import type { ElementKind } from './CombatSystem.ts';
+import type { Terrain } from '../world/Terrain.ts';
+import type { VFX } from './VFX.ts';
 
 /**
  * Elemancy — fire, ice and lightning spellcraft.
@@ -12,17 +15,65 @@ import type { Game } from '../game/Game.ts';
 
 const V = new THREE.Vector3();
 
-export const ELEMENTS = {
+/** How one element looks and how hard it hits before anything scales it. */
+export interface ElementDef {
+  /** The wash colour: motes, decals, the outer flame. */
+  color: number;
+  /** The white-hot core, for flares and the leading edge of a burst. */
+  hot: number;
+  /** Colour of the PointLight the detonation throws. */
+  light: number;
+  /** Base damage, used only by a world with no RPG model behind it. */
+  damage: number;
+  /** Blast radius in metres at power 1. */
+  radius: number;
+}
+
+export const ELEMENTS: Record<ElementKind, ElementDef> = {
   fire: { color: 0xff7a1e, hot: 0xffd9a0, light: 0xff8a30, damage: 210, radius: 3.4 },
   ice: { color: 0x7fd6ff, hot: 0xeaffff, light: 0x8fd8ff, damage: 190, radius: 3.0 },
   lightning: { color: 0xa8c8ff, hot: 0xffffff, light: 0xbfd8ff, damage: 240, radius: 2.6 },
 };
 
+/** What two overlapping elemental zones of different kinds produce. */
+export type SpellReaction = 'steam' | 'conduction' | 'firestorm';
+
+/** A detonation's lingering claim on a patch of ground, for reactions. */
+export interface ElementZone {
+  element: ElementKind;
+  pos: THREE.Vector3;
+  radius: number;
+  /** `VFX.clock` at which the zone stops counting. */
+  until: number;
+}
+
+/** What `cast()` reports back: where it went off, how big, and what it set off. */
+export interface CastReport {
+  element: ElementKind;
+  pos: THREE.Vector3;
+  radius: number;
+  damage: number;
+  reaction: SpellReaction | null;
+}
+
+/** Everything a caller may say about one detonation. */
+export interface ElemancyCastOpts {
+  /** Where it goes off. `defaultTarget()` when absent. */
+  pos?: THREE.Vector3;
+  /** Spawn time on the VFX effect clock. */
+  t0?: number;
+  /** Scales radius, particle counts, light and shake. Defaults to 1. */
+  power?: number;
+  terrain?: Terrain | null;
+  /** Where the flask was thrown from; omit and nothing arcs in. */
+  from?: THREE.Vector3 | null;
+}
+
 export class Elemancy {
   game!: Game;
-  vfx!: any;
-  zones!: any[];
-  constructor(vfx: any, game: Game) {
+  vfx!: VFX;
+  zones!: ElementZone[];
+  constructor(vfx: VFX, game: Game) {
     this.vfx = vfx;
     this.game = game;
     this.zones = [];   // {element, pos, radius, until}
@@ -35,16 +86,19 @@ export class Elemancy {
    */
   defaultTarget(): THREE.Vector3 {
     const out = new THREE.Vector3();
-    const player = this.game && this.game.get && this.game.get('Player');
-    const cam = this.game && this.game.camera;
-    if (player && player.position) out.copy(player.position);
+    // `Game.get` and `Terrain.heightAt` are methods, always defined: the old
+    // `this.game.get && ...` / `terrain.heightAt && ...` arms guarded on names
+    // that cannot be missing. What can be missing is the *system*.
+    const player = this.game.get('Player');
+    const cam = this.game.camera;
+    if (player) out.copy(player.position);
     else if (cam) out.setFromMatrixPosition(cam.matrixWorld);
     const fwd = new THREE.Vector3(0, 0, -1);
     if (cam) { cam.getWorldDirection(fwd); fwd.y = 0; }
     if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
     out.addScaledVector(fwd.normalize(), 6);
-    const terrain = this.game && this.game.get && this.game.get('Terrain');
-    if (terrain && terrain.heightAt) out.y = terrain.heightAt(out.x, out.z);
+    const terrain = this.game.get('Terrain');
+    if (terrain) out.y = terrain.heightAt(out.x, out.z);
     return out;
   }
 
@@ -52,12 +106,12 @@ export class Elemancy {
    * Cast a spell at a point.
    * @param [o] {pos, t0, power, terrain, from}
    */
-  cast(element: 'fire' | 'ice' | 'lightning', o: any = {}): {element:string, pos:THREE.Vector3, radius:number, damage:number, reaction:string|null} {
+  cast(element: ElementKind, o: ElemancyCastOpts = {}): CastReport {
     const {
       t0 = this.vfx.clock, power = 1, terrain = null, from = null,
     } = o;
     const pos = o.pos || this.defaultTarget();
-    const def = ELEMENTS[element] || ELEMENTS.fire;
+    const def = ELEMENTS[element];
     const radius = def.radius * power;
     const reaction = this._reactionAt(pos, element);
 
@@ -74,7 +128,7 @@ export class Elemancy {
   }
 
   /** Flask arcing in before the burst. */
-  _throw(element: string, from: any, to: any, t0: number, def: any) {
+  _throw(element: ElementKind, from: THREE.Vector3, to: THREE.Vector3, t0: number, def: ElementDef) {
     const vfx = this.vfx;
     const b = vfx.acquireBeam();
     b.uniforms.uHead.value.set(def.hot);
@@ -91,7 +145,7 @@ export class Elemancy {
 
   /* ------------------------------------------------------------- fire */
 
-  _fire(pos: any, t0: number, power: any, def: any, terrain: any) {
+  _fire(pos: THREE.Vector3, t0: number, power: number, def: ElementDef, terrain: Terrain | null) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     // core detonation
@@ -157,7 +211,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------------- ice */
 
-  _ice(pos: any, t0: number, power: any, def: any, terrain: any) {
+  _ice(pos: THREE.Vector3, t0: number, power: number, def: ElementDef, terrain: Terrain | null) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     // a ring of crystal spikes erupting from the ground
@@ -209,7 +263,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------- lightning */
 
-  _lightning(pos: any, t0: number, power: any, def: any, terrain: any, from: any) {
+  _lightning(pos: THREE.Vector3, t0: number, power: number, def: ElementDef, terrain: Terrain | null, from: THREE.Vector3 | null) {
     const vfx = this.vfx, rng = vfx.rng;
     const s = power;
     const sky = pos.clone(); sky.y += 16 * s;
@@ -253,7 +307,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------- reactions */
 
-  _reactionAt(pos: any, element: string) {
+  _reactionAt(pos: THREE.Vector3, element: ElementKind): SpellReaction | null {
     const now = this.vfx.clock;
     this.zones = this.zones.filter((z) => z.until > now);
     for (const z of this.zones) {
@@ -267,7 +321,7 @@ export class Elemancy {
     return null;
   }
 
-  _reaction(kind: string, pos: any, t0: number, power: number, terrain: any) {
+  _reaction(kind: SpellReaction, pos: THREE.Vector3, t0: number, power: number, terrain: Terrain | null) {
     const vfx = this.vfx;
     if (kind === 'steam') {
       vfx.smokePlume({

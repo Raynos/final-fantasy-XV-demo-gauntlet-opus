@@ -43,6 +43,16 @@ declare global {
     'combat:parry': CustomEvent<CombatEvents['parry']>;
     'combat:link': CustomEvent<CombatEvents['link']>;
     'combat:playerHit': CustomEvent<CombatEvents['playerHit']>;
+    'combat:armigerHit': CustomEvent<CombatEvents['armigerHit']>;
+    'combat:armiger': CustomEvent<CombatEvents['armiger']>;
+    'combat:spell': CustomEvent<CombatEvents['spell']>;
+    /**
+     * Encounter-layer events. `PartyAI` fires `encounter:tech` when a
+     * companion uses a technique; `EncounterDirector` fires `encounter:kill`
+     * when one dies. `CombatBridge` and `combatloop.mts` both listen.
+     */
+    'encounter:tech': CustomEvent<{ member: string, tech: string, name: string }>;
+    'encounter:kill': CustomEvent<{ name: string, level: number, exp: number, drops: string[], boss: boolean }>;
     /** UI-side events, dispatched by the game rather than by combat. */
     'ffxv-damage': CustomEvent<any>;
     'ffxv-callout': CustomEvent<{ word?: string, sub?: string }>;

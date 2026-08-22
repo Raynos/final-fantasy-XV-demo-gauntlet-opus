@@ -1,5 +1,6 @@
 import { Noise } from '../../util/Noise.ts';
-import type { RoadGraph } from '../map/RoadGraph.ts';
+import type { RoadEdge, RoadGraph } from '../map/RoadGraph.ts';
+import type { RoadPoint, RoadSpine } from '../vehicle/RoadPath.ts';
 
 /**
  * Carves the whole road network of Lucis into the heightfield.
@@ -19,14 +20,50 @@ import type { RoadGraph } from '../map/RoadGraph.ts';
  * (`points` / `pointAt` / `distance` / `width`) so vegetation, props and the
  * driving system keep working unchanged.
  */
+/**
+ * The slice of the heightfield the carve writes into. `Field` hands one of
+ * these over rather than itself, so the carve can only touch the four grids it
+ * is allowed to.
+ */
+export interface CarveTarget {
+  N: number;
+  HALF: number;
+  CELL: number;
+  h: Float32Array;
+  /** Road coverage mask, 0..1 per cell. */
+  road: Float32Array;
+  /** Signed lateral position across the carriageway, 0..1 on a +/-16 m scale. */
+  roadLat: Float32Array | null;
+  /** The surface before any road was cut into it. */
+  rawHeightAt(x: number, z: number): number;
+  /** Analytic micro-relief, pre-subtracted from the carved cells. */
+  micro?: (x: number, z: number) => number;
+}
+
+/**
+ * The single-spline facade over `route1`.
+ *
+ * `pointAt` and `distance` are the "interface the rest of the codebase has
+ * always used" this comment claims — and **nothing calls either of them**.
+ * `RoadPath` re-implements the same arc-length walk over `points` itself, and
+ * road distance goes through `RoadGraph.distance`. Declared rather than
+ * deleted because removing them is a separate change.
+ */
+export interface HighwaySpine extends RoadSpine {
+  pointAt(s: number): RoadPoint;
+  distance(x: number, z: number): number;
+}
+
 export class RoadNetwork {
   _noise!: Noise;
   graph!: RoadGraph;
-  nodeY!: any;
+  /** Fitted elevation per junction id. Filled in by `_fitNodes`. */
+  nodeY!: Map<string, number>;
   shoulder!: number;
-  spine!: any;
+  /** The single-spline facade over `route1`; null until `carve` builds it. */
+  spine!: HighwaySpine | null;
   width!: number;
-  constructor(graph: import('../map/RoadGraph.ts').RoadGraph) {
+  constructor(graph: RoadGraph) {
     this.graph = graph;
     this._noise = new Noise(551133);
     /** Half-width of the widest running surface, metres (legacy field). */
@@ -42,7 +79,7 @@ export class RoadNetwork {
    * steeper than its class allows. Without this a junction sitting on a slope
    * makes both roads that meet there jump.
    */
-  _fitNodes(field: any) {
+  _fitNodes(field: CarveTarget) {
     const g = this.graph;
     const y = new Map();
     const ground = new Map();
@@ -87,14 +124,16 @@ export class RoadNetwork {
    * Smoothed, grade-limited centreline elevation for one edge, with the two
    * junction elevations pinned.
    */
-  _fitEdge(edge: any, field: any) {
+  _fitEdge(edge: RoadEdge, field: CarveTarget) {
     const p = edge.pts;
     const ground = new Float32Array(p.length);
     for (let i = 0; i < p.length; i++) {
       ground[i] = field.rawHeightAt(p[i].x, p[i].z);
       p[i].y = ground[i];
     }
+    // `_fitNodes` ran first and gave every node in the graph an elevation
     const ya = this.nodeY.get(edge.a), yb = this.nodeY.get(edge.b);
+    if (ya === undefined || yb === undefined) return;
     const maxGrade = edge.clsDef.maxGrade;
     const maxCut = edge.clsDef.sealed ? 9.0 : 6.5;
     const tmp = new Float32Array(p.length);
@@ -191,7 +230,7 @@ export class RoadNetwork {
    * Fit every edge to the terrain and cut it in.
    * Must run after erosion so the surface stays flat.
    */
-  carve(field: any) {
+  carve(field: CarveTarget) {
     const g = this.graph;
     this._fitNodes(field);
     for (const e of g.edges) this._fitEdge(e, field);
@@ -217,7 +256,7 @@ export class RoadNetwork {
     this.spine = this._makeSpine();
   }
 
-  _carveEdge(edge: any, field: any) {
+  _carveEdge(edge: RoadEdge, field: CarveTarget) {
     const { N, HALF, CELL, h, road, roadLat } = field;
     const n = this._noise;
     const cls = edge.clsDef;
@@ -277,7 +316,7 @@ export class RoadNetwork {
             road[idx] = m;
             // signed lateral position on a fixed +/-16 m scale, which is what
             // the fragment shader decodes to place the ruts
-            roadLat[idx] = Math.max(0, Math.min(1, 0.5 + (side * raw) / 32));
+            if (roadLat) roadLat[idx] = Math.max(0, Math.min(1, 0.5 + (side * raw) / 32));
           }
         }
       }
@@ -288,13 +327,15 @@ export class RoadNetwork {
    * Level aprons at parking spots, turning circles and station forecourts, so
    * a car can stop, turn and be parked without hanging off a slope.
    */
-  _carveBays(field: any) {
+  _carveBays(field: CarveTarget) {
     const { N, HALF, CELL, h, road } = field;
     const g = this.graph;
     for (const [id, node] of g.nodes) {
       if (node.edges.length > 1) continue;      // only dead ends need one
       const e = g.edges[node.edges[0]];
+      // `_fitNodes` ran first and put an elevation on every node in the graph
       const y = this.nodeY.get(id);
+      if (y === undefined) continue;
       const R = Math.max(16, e.clsDef.half * 3.4);
       const i0 = Math.max(0, Math.floor((node.x - R * 1.6 + HALF) / CELL));
       const i1 = Math.min(N - 1, Math.ceil((node.x + R * 1.6 + HALF) / CELL));
@@ -321,7 +362,7 @@ export class RoadNetwork {
    * road alike. Pre-subtracting it from the carved cells is what keeps a
    * highway smooth without the vertex shader having to sample a road mask.
    */
-  _compensateMicro(field: any) {
+  _compensateMicro(field: CarveTarget) {
     const { N, HALF, CELL, h, road, micro } = field;
     if (!micro) return;
     for (let j = 0; j < N; j++) {
@@ -338,9 +379,12 @@ export class RoadNetwork {
    * A single-spline facade over the main highway, matching the interface the
    * rest of the codebase has always used.
    */
-  _makeSpine(): any {
+  _makeSpine(): HighwaySpine {
     const g = this.graph;
     const route = g.routeById.get('route1');
+    // `route1` is the spine every downstream system locates the highway by;
+    // `ROUTES` authoring it is the contract, so its absence is a data bug.
+    if (!route) throw new Error('Road: ROUTES has no `route1` to build the spine from');
     const pts = route.pts;
     const self = this;
     return {

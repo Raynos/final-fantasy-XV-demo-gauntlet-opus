@@ -1,6 +1,17 @@
 import { Enemy } from './EnemyBase.ts';
+import type { PoseName } from './EnemyBase.ts';
 import { poseBone } from './RigBuilder.ts';
+import type { BoneWriter } from './RigBuilder.ts';
 import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase } from '../rig/CreatureAnim.ts';
+import type { AttackTiming, CreatureAnim } from '../rig/CreatureAnim.ts';
+import type { Side } from '../rig/Skeleton.ts';
+
+/**
+ * What `attackEnvelope` reports about the attack in progress: `k` from −1
+ * (fully coiled) through 0 to +1 (fully committed), plus the sub-phase.
+ * Derived from the function so the two cannot drift apart.
+ */
+export type AttackEnvelope = ReturnType<typeof attackEnvelope>;
 
 /**
  * Shared two-legged animation — magitek troopers, imperial infantry, giants.
@@ -21,34 +32,129 @@ import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase }
  * }
  * ```
  */
+/** Where one foot sits relative to its bind pose, in metres. */
+export interface BipedFoot {
+  /** forward of bind. */
+  reach?: number;
+  /** off the ground. */
+  lift?: number;
+  /** abduction away from the centreline, radians. */
+  splay?: number;
+  /** world pitch the sole is levelled to, radians. */
+  footPitch?: number;
+}
+
+/**
+ * Both feet, plus a drop of the body over them.
+ *
+ * It extends `BipedFoot` because `stance()` reads `o.L || o`: a pose that wants
+ * the same placement on both feet writes the fields at the top level and skips
+ * the two sides entirely.
+ */
+export interface BipedStance extends BipedFoot {
+  /** metres the body sinks while the feet stay planted — a crouch. */
+  drop?: number;
+  L?: BipedFoot;
+  R?: BipedFoot;
+}
+
+/** What `aimHead()` is asked for, all radians. */
+export interface HeadAim {
+  pitch?: number;
+  yaw?: number;
+  roll?: number;
+  /** 0..1 how much accumulated trunk pitch to cancel. 1 = perfectly level. */
+  stabilise?: number;
+}
+
+/**
+ * The numbers that make a biped *that* machine or soldier.
+ *
+ * Required means "read with no default": leave one out and the pose is wrong,
+ * not merely generic. Everything optional has a default in the pose code, and
+ * a species states it only where it differs from a drilled infantry march.
+ */
+export interface BipedAnim {
+  /** bone chains hip → knee → foot. A side may be absent on a one-legged rig. */
+  legs: { L?: string[], R?: string[] };
+  /** shoulder → elbow → hand. */
+  arms: { L?: string[], R?: string[] };
+  /** pelvis → … → head, root first. The last two are neck and head. */
+  trunk: string[];
+  /** metres one full stride covers on the ground. */
+  strideLen: number;
+  /** metres a foot reaches fore and aft, before the speed ramp. */
+  stride: number;
+  /** metres a foot lifts. */
+  lift: number;
+  /** pelvis bind height, metres. `poseDeath` folds the body from here. */
+  hipY: number;
+  /** torso half-depth, metres: how far the mass drops as the knees give. */
+  bodyR: number;
+  /** radians the shoulders counter-swing against the stride. */
+  armSwing: number;
+  /** fraction of the cycle a foot is on the ground. 0.62 if absent. */
+  duty?: number;
+  /** +1 knee forward, −1 a hock. 1 if absent. */
+  kneeSign?: number;
+  /** default sole pitch, radians. */
+  footPitch?: number;
+  /** metres the pelvis rides over the carrying foot. 0.035 if absent. */
+  hipSway?: number;
+  /** metres of vertical bounce per stride. 0.035 if absent. */
+  bob?: number;
+  /** radians the torso leans into a run. 0.06 if absent. */
+  lean?: number;
+  /** radians the torso counter-rotates against the arms. 0.10 if absent. */
+  torsoTwist?: number;
+  /** radians the upper arms are held away from the body. 0.10 if absent. */
+  armOut?: number;
+  /** resting elbow bend, radians. 0.4 if absent. */
+  elbow?: number;
+  /** metres the body sinks into a wind-up. 0.06 if absent. */
+  crouch?: number;
+  /** metres the feet step apart to brace a swing. 0.12 if absent. */
+  step?: number;
+  /** radians the shoulders wind up against the hips. 0.35 if absent. */
+  windTwist?: number;
+  /** shares of one spine bend, root first. `SPINE_W` if absent. */
+  spineW?: number[];
+  /** multiplier on how long the collapse takes. 1 if absent. */
+  deathSlow?: number;
+  /** radians the body pitches over as it falls. 1.45 if absent. */
+  deathPitch?: number;
+  /** breathing frequency while idle, rad/s. 1.4 if absent. */
+  breath?: number;
+  /** radians of permanent forward lean while idle. */
+  idleLean?: number;
+  /** 0 = a loose animal that shifts its weight, 1 = a drilled machine. */
+  marchStiff?: number;
+}
+
 export class BipedEnemy extends Enemy {
+  /** Accumulated world pitch/yaw of the chest, filled by `spine()`. */
   _chestPitch!: number;
   _chestYaw!: number;
-  override _dt!: any;
-  override anim!: any;
-  override deathPush!: any;
-  override deathSide!: any;
-  override hitPower!: any;
-  override id!: any;
-  override moveSpeed!: any;
-  override rig!: any;
-  override speed!: any;
-  override state!: any;
-  override stateTime!: any;
-  override type!: any;
-  override visual!: any;
-  get A() { return (this.constructor as any).ANIM; }
+  /**
+   * Every species subclass declares its own `static ANIM`, assigned below its
+   * class body because the tuning block reads module constants.
+   */
+  static ANIM: BipedAnim;
+  /** Types `this.constructor` so `A` can reach the subclass's own static. */
+  declare ['constructor']: typeof BipedEnemy;
+  /** This species' tuning block. */
+  get A(): BipedAnim { return this.constructor.ANIM; }
 
-  override setupAnim(anim: any) {
+  override setupAnim(anim: CreatureAnim) {
     const A = this.A;
     anim.setTrunk(A.trunk);
     if (A.legs.L) anim.leg('fL', A.legs.L);
     if (A.legs.R) anim.leg('fR', A.legs.R);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     if (!this.rig) return;
-    const S = (n: any, x: number, y: number, z: number) => poseBone(this.rig, n, x, y, z);
+    const S: BoneWriter = (n, x, y, z) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'walk':
@@ -65,7 +171,7 @@ export class BipedEnemy extends Enemy {
   /* ------------------------------------------------------------ helpers */
 
   /** Both feet at an offset from bind; `drop` lowers the body, not the legs. */
-  stance(S: any, o: any) {
+  stance(S: BoneWriter, o: BipedStance) {
     const a = this.anim, A = this.A;
     const drop = o.drop || 0;
     const l = o.L || o, r = o.R || o;
@@ -79,7 +185,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Arm pose as three joint angles per side. */
-  arm(S: any, side: string, sh: any, el: number[], hd: number[] | null) {
+  arm(S: BoneWriter, side: Side, sh: number[], el: number[], hd: number[] | null) {
     const c = this.A.arms[side];
     if (!c) return;
     S(c[0], sh[0], sh[1], sh[2]);
@@ -92,7 +198,7 @@ export class BipedEnemy extends Enemy {
    * run from hips to chest — written raw they compound down the parent chain
    * and a 0.3 rad lean arrives at the shoulders as 1.1 rad.
    */
-  spine(S: any, pitch: number, yaw = 0, roll = 0) {
+  spine(S: BoneWriter, pitch: number, yaw = 0, roll = 0) {
     const t = this.A.trunk, w = this.A.spineW || SPINE_W;
     let sum = 0;
     for (let i = 0; i <= t.length - 3; i++) sum += w[Math.min(w.length - 1, i)];
@@ -113,7 +219,7 @@ export class BipedEnemy extends Enemy {
    * lean and twist the body makes, so a soldier bracing to fire ends up
    * looking at his own boots.
    */
-  aimHead(S: any, o: any = {}) {
+  aimHead(S: BoneWriter, o: HeadAim = {}) {
     const t = this.A.trunk;
     const stab = (this._chestPitch || 0) * (o.stabilise ?? 0.9);
     const sy = (this._chestYaw || 0) * (o.stabilise ?? 0.9);
@@ -122,7 +228,7 @@ export class BipedEnemy extends Enemy {
     S(t[t.length - 1], -stab * 0.45 + pitch * 0.6, -sy * 0.45 + yaw * 0.55, roll * 0.6);
   }
 
-  _timingAll() {
+  _timingAll(): AttackTiming {
     return {
       telegraph: this._timing('telegraph'), strike: this._timing('strike'),
       attack: this._timing('attack'), recover: this._timing('recover'),
@@ -131,7 +237,7 @@ export class BipedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S: any, t: number) {
+  poseLocomotion(S: BoneWriter, t: number) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -164,20 +270,20 @@ export class BipedEnemy extends Enemy {
    * Arms during locomotion. Default is a counter-swing; a species carrying a
    * weapon overrides this to keep the weapon on target instead.
    */
-  poseArms(S: any, t: number, swing: number, norm: number) {
+  poseArms(S: BoneWriter, t: number, swing: number, norm: number) {
     const A = this.A;
     this.arm(S, 'L', [swing, 0, A.armOut ?? 0.10], [-(A.elbow ?? 0.4) - Math.max(0, swing) * 0.5, 0, 0], null);
     this.arm(S, 'R', [-swing, 0, -(A.armOut ?? 0.10)], [-(A.elbow ?? 0.4) - Math.max(0, -swing) * 0.5, 0, 0], null);
   }
 
-  poseTelegraph(S: any, t: number) {
+  poseTelegraph(S: BoneWriter, t: number) {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     this.poseWindUp(S, t, k, env);
   }
 
   /** Species wind-up. Default: shoulders load back, weight onto the rear foot. */
-  poseWindUp(S: any, t: number, k: number, env: any) {
+  poseWindUp(S: BoneWriter, t: number, k: number, env: AttackEnvelope) {
     const A = this.A;
     this.stance(S, {
       drop: (A.crouch ?? 0.06) * k,
@@ -189,13 +295,13 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'L', [-0.3 * k, 0.35 * k, 0.4 * k], [-1.0 * k, 0, 0], null);
   }
 
-  poseAttack(S: any, t: number) {
+  poseAttack(S: BoneWriter, t: number) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     this.poseSwing(S, t, env.k, env);
   }
 
   /** Species strike. Default: a committed downward swing with follow-through. */
-  poseSwing(S: any, t: number, k: number, env: any) {
+  poseSwing(S: BoneWriter, t: number, k: number, env: AttackEnvelope) {
     const A = this.A;
     const kp = clamp01(k);
     this.stance(S, {
@@ -208,7 +314,7 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'L', [-0.3 + 0.4 * k, -0.2 * k, -0.3 * k], [-0.8, 0, 0], null);
   }
 
-  poseFlinch(S: any, t: any) {
+  poseFlinch(S: BoneWriter, t: number) {
     const k = hitCurve(this.stateTime, 0.34, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
     const yaw = Math.sign(this.anim.hitYaw.x || 1);
@@ -222,7 +328,7 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'R', [0.5 * k * p, -0.3 * k, -0.6 * k * p], [-1.3 * k * p, 0, 0], null);
   }
 
-  poseStagger(S: any, t: any) {
+  poseStagger(S: BoneWriter, t: number) {
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.16) * clamp01(1 - (this.stateTime - total * 0.7) / (total * 0.3));
     const wob = Math.sin(this.stateTime * 5.2) * k;
@@ -239,7 +345,7 @@ export class BipedEnemy extends Enemy {
     this.visual.rotation.x += 0.10 * k;
   }
 
-  poseDeath(S: any, t: number) {
+  poseDeath(S: BoneWriter, t: number) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;
@@ -268,7 +374,7 @@ export class BipedEnemy extends Enemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  poseIdle(S: any, t: number) {
+  poseIdle(S: BoneWriter, t: number) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.4)) * 0.02;
     const load = Math.sin(t * 0.33 + this.id) * (A.marchStiff ? 0.15 : 0.6);

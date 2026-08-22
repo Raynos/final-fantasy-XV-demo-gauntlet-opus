@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { PostFX } from '../../engine/PostFX.ts';
 import { FilterPass, fsMaterial, makeRT, blit } from '../../engine/postfx/Fx.ts';
 import { CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.ts';
 
@@ -339,10 +340,11 @@ const MARCH_SCALE = 0.4;
 
 export class VolumePass extends FilterPass {
   composite!: THREE.ShaderMaterial;
-  override fx!: any;
+  override fx!: PostFX;
   override material!: THREE.ShaderMaterial;
-  rtVol!: any;
-  constructor(fx: import('../../engine/PostFX.ts').PostFX) {
+  /** The half-scale target the volumetric march runs into. */
+  rtVol!: THREE.WebGLRenderTarget;
+  constructor(fx: PostFX) {
     super(fx);
     this.material = fsMaterial({
       uniforms: {
@@ -407,7 +409,7 @@ export class VolumePass extends FilterPass {
     }
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     this.beforeRender();
     this.material.uniforms.tDiffuse.value = readBuffer.texture;
     blit(renderer, this.material, this.rtVol);

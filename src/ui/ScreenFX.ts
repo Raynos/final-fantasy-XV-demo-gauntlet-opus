@@ -11,7 +11,8 @@ export class ScreenFX {
   cardMeta!: HTMLElement;
   cardName!: HTMLElement;
   cardRule!: HTMLElement;
-  cardState!: any;
+  /** The area title currently on screen, per-letter, or null. */
+  cardState!: { chars: HTMLElement[], clip: Clip } | null;
   cardSub!: HTMLElement;
   cine!: HTMLElement;
   cineAmt!: number;

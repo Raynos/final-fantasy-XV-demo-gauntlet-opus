@@ -10,6 +10,8 @@ import { SHOTS } from '../game/Shots.ts';
 import { worldMap } from '../world/map/WorldMap.ts';
 import './dev.css';
 import type { Game } from '../game/Game.ts';
+import type { Input } from '../engine/Input.ts';
+import { QUALITY_TIERS, isQualityTier } from '../engine/Renderer.ts';
 import { WEATHER_NAMES, isWeatherName } from '../world/Weather.ts';
 
 /**
@@ -25,12 +27,29 @@ import { WEATHER_NAMES, isWeatherName } from '../world/Weather.ts';
  * The suite never touches `src/ui/**`: it mounts its own `#dev` root, the same
  * way `TitleScreen` owns `#title`.
  */
+/**
+ * A stored camera framing: `Freecam.asShot()` plus a label.
+ *
+ * The same shape the bookmark slots hold and the shot-tuning patch writes, so
+ * `mark`, `jump` and `shot.save` all speak one type.
+ */
+export interface CameraBookmark {
+  /** World-space `[x, y, z]`. */
+  pos: number[];
+  /** Where it is looking, 30 m down the forward axis. */
+  target?: number[];
+  fov?: number;
+  name?: string;
+}
+
 export class DevSuite {
   _toastT?: ReturnType<typeof setTimeout>;
   _inputWas!: boolean | null;
-  _scale!: any;
+  /** `time.scale` override, or null while the sim runs at its own rate. */
+  _scale!: number | null;
   _tainted!: boolean;
-  bookmarks!: any;
+  /** Camera bookmarks by slot name, persisted in `localStorage`. */
+  bookmarks!: Record<string, CameraBookmark>;
   browser!: AssetBrowser;
   cam!: Freecam;
   console!: DevConsole;
@@ -44,7 +63,8 @@ export class DevSuite {
   stage!: Stage;
   stats!: StatsHud;
   taint!: HTMLDivElement;
-  tuning!: any;
+  /** Shot framings the reviewer has overridden, by shot name. */
+  tuning!: Record<string, CameraBookmark>;
   views!: ViewModes;
   constructor() {
     this.reg = new Registry();
@@ -112,11 +132,11 @@ export class DevSuite {
       // Applied in lateUpdate, after every system's update() has run. That is
       // why this needs no change to CombatSystem, which damps time.scale back
       // to 1 during its own update and would otherwise fight us every frame.
-      set: (v: any) => { this._scale = v; },
+      set: (v: number) => { this._scale = v; },
     });
     reg.cvar({
       name: 'time.paused', category: 'time', help: 'freeze update(), keep lateUpdate()',
-      get: () => !!game.paused, set: (v: any) => { game.paused = !!v; },
+      get: () => !!game.paused, set: (v: boolean) => { game.paused = v; },
     });
 
     reg.cvar({
@@ -135,12 +155,20 @@ export class DevSuite {
     reg.cmd({
       name: 'post', category: 'render', args: '<flags|clear>',
       help: 'post-process kill switches, e.g. `post nodof,nobloom`',
-      exec: (a: any) => { post().debugToggle(a === 'clear' ? '' : a); return `post: ${a}`; },
+      exec: (a: string) => { post().debugToggle(a === 'clear' ? '' : a); return `post: ${a}`; },
     });
     reg.cmd({
       name: 'quality', category: 'render', args: '<low|medium|high|ultra>',
       help: 'renderer quality tier',
-      exec: (a: any) => { game.rnd.setQuality(a.trim()); return `quality: ${a}`; },
+      exec: (a: string) => {
+        const tier = a.trim();
+        // A console argument is a string until something checks it; an
+        // unrecognised tier used to be handed straight to the renderer.
+        if (!isQualityTier(tier)) throw new Error(`quality: ${QUALITY_TIERS.join(' | ')}`);
+        game.rnd.setQuality(tier);
+        game.post?.setQuality(tier);
+        return `quality: ${tier}`;
+      },
     });
 
     // -------- navigation
@@ -148,14 +176,14 @@ export class DevSuite {
     reg.cmd({
       name: 'fly', category: 'camera', args: '[on|off]',
       help: 'toggle freecam, simulation keeps running',
-      exec: (a: any) => this._setFly(a ? a !== 'off' : !this.cam.enabled),
+      exec: (a: string) => this._setFly(a ? a !== 'off' : !this.cam.enabled),
     });
     reg.cmd({
       name: 'goto', category: 'camera', args: '<x> <z> [y]',
       help: 'fly to world coordinates',
-      exec: (a: any) => {
+      exec: (a: string) => {
         const n = a.split(/[\s,]+/).map(Number);
-        if (n.length < 2 || n.some((v: any) => !Number.isFinite(v))) throw new Error('goto <x> <z> [y]');
+        if (n.length < 2 || n.some((v) => !Number.isFinite(v))) throw new Error('goto <x> <z> [y]');
         const terr = game.get('Terrain');
         const y = n[2] != null ? n[2] : (terr ? terr.heightAt(n[0], n[1]) + 40 : 100);
         this._setFly(true);
@@ -166,7 +194,7 @@ export class DevSuite {
     reg.cmd({
       name: 'warp', category: 'camera', args: '<poiId|zoneId>',
       help: 'fly to a named POI or zone centre',
-      exec: (a: any) => this._warp(a.trim()),
+      exec: (a: string) => this._warp(a.trim()),
     });
     reg.cmd({
       name: 'where', category: 'camera', help: 'print camera position, zone and nearest POI',
@@ -174,7 +202,7 @@ export class DevSuite {
         const p = game.camera.position;
         const z = worldMap.zoneAt(p.x, p.z);
         const poi = worldMap.nearestPOI(p.x, p.z, { maxDist: 2000 });
-        return `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  zone=${z ? z.id : '-'}  near=${poi ? (poi.id || poi.poi?.id) : '-'}`;
+        return `${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}  zone=${z ? z.id : '-'}  near=${poi ? poi.poi.id : '-'}`;
       },
     });
 
@@ -183,7 +211,7 @@ export class DevSuite {
     reg.cmd({
       name: 'shot', category: 'shots', args: '<name|next|prev|list>',
       help: 'apply a corpus shot',
-      exec: (a: any) => this._shot(a.trim()),
+      exec: (a: string) => this._shot(a.trim()),
     });
     reg.cmd({
       name: 'eject', category: 'shots',
@@ -193,7 +221,7 @@ export class DevSuite {
     reg.cmd({
       name: 'shot.save', category: 'shots', args: '[name]',
       help: 'record the live camera as this shot\'s framing into .review/tuning',
-      exec: (a: any) => this._saveFraming(a.trim()),
+      exec: (a: string) => this._saveFraming(a.trim()),
     });
 
     // -------- bookmarks
@@ -201,7 +229,7 @@ export class DevSuite {
     reg.cmd({
       name: 'mark', category: 'camera', args: '<slot> [name]',
       help: 'store the camera in a bookmark slot',
-      exec: (a: any) => {
+      exec: (a: string) => {
         const [slot, ...rest] = a.split(/\s+/);
         if (!slot) throw new Error('mark <slot> [name]');
         this.bookmarks[slot] = { ...this.cam.asShot(), name: rest.join(' ') || slot };
@@ -212,12 +240,12 @@ export class DevSuite {
     reg.cmd({
       name: 'jump', category: 'camera', args: '<slot>',
       help: 'fly to a bookmark',
-      exec: (a: any) => this._jump(a.trim()),
+      exec: (a: string) => this._jump(a.trim()),
     });
     reg.cmd({
       name: 'marks', category: 'camera', help: 'list bookmarks',
       exec: () => Object.entries(this.bookmarks)
-        .map(([k, v]: [string, any]) => `${k}  ${v.name}  ${v.pos.join(', ')}`).join('\n') || 'none',
+        .map(([k, v]) => `${k}  ${v.name}  ${v.pos.join(', ')}`).join('\n') || 'none',
     });
 
     // -------- misc
@@ -236,7 +264,7 @@ export class DevSuite {
     reg.cmd({
       name: 'assets', category: 'assets', args: '[on|off]',
       help: 'isolation stage: step every enemy, hero, NPC and weapon',
-      exec: (a: any) => {
+      exec: (a: string) => {
         const on = a ? a !== 'off' : !this.browser.open;
         this.browser.setOpen(on);
         // The stage writes `cam.pos`, but only `Freecam.apply` puts it on the
@@ -248,10 +276,10 @@ export class DevSuite {
     reg.cmd({
       name: 'asset', category: 'assets', args: '<family> <key>',
       help: 'stage one named asset, e.g. `asset enemies irongiant`',
-      exec: (a: any) => {
+      exec: (a: string) => {
         const [fam, key] = a.split(/\s+/);
-        const i = this.browser.families.findIndex((f: any) => f.id === fam);
-        if (i < 0) throw new Error(`family: ${this.browser.families.map((f: any) => f.id).join(' | ')}`);
+        const i = this.browser.families.findIndex((f) => f.id === fam);
+        if (i < 0) throw new Error(`family: ${this.browser.families.map((f) => f.id).join(' | ')}`);
         if (!this.browser.open) this.browser.setOpen(true);
         this.browser.familyAt = i;
         const keys = this.browser.list();
@@ -263,7 +291,7 @@ export class DevSuite {
     });
     reg.cvar({
       name: 'stage.spin', category: 'assets', help: 'turntable auto-rotate',
-      get: () => this.stage.spin, set: (v: any) => { this.stage.spin = !!v; },
+      get: () => this.stage.spin, set: (v: boolean) => { this.stage.spin = v; },
     });
     reg.cvar({
       name: 'stage.rate', category: 'assets', help: 'turntable radians/sec',
@@ -275,7 +303,7 @@ export class DevSuite {
     reg.cmd({
       name: 'view', category: 'render', args: `<${ViewModes.names.join('|')}>`,
       help: 'whole-scene material override',
-      exec: (a: any) => `view: ${this.views.set(a.trim() || 'off', game.scene)}`,
+      exec: (a: string) => `view: ${this.views.set(a.trim() || 'off', game.scene)}`,
     });
   }
 
@@ -301,15 +329,15 @@ export class DevSuite {
     return want ? 'flying' : 'grounded';
   }
 
-  _warp(id: any) {
+  _warp(id: string) {
     if (!id) throw new Error('warp <poiId|zoneId>');
     const poi = worldMap.poiById(id);
     const zone = worldMap.zoneById && worldMap.zoneById.get
       ? worldMap.zoneById.get(id)
-      : worldMap.zones.find((z: any) => z.id === id);
+      : worldMap.zones.find((z: { id: string }) => z.id === id);
     const x = poi ? poi.x : (zone ? zone.cx : null);
     const z = poi ? poi.z : (zone ? zone.cz : null);
-    if (x == null) throw new Error(`no POI or zone '${id}'`);
+    if (x == null || z == null) throw new Error(`no POI or zone '${id}'`);
     const terr = this.game.get('Terrain');
     // Stand off and above rather than landing on the exact point: a zone centre
     // is frequently *inside* whatever landmark defines it. Dropping the camera
@@ -322,7 +350,7 @@ export class DevSuite {
     return `${poi ? 'poi' : 'zone'} ${id} @ ${x}, ${z}`;
   }
 
-  _jump(slot: any) {
+  _jump(slot: string) {
     const b = this.bookmarks[slot];
     if (!b) throw new Error(`no bookmark '${slot}'`);
     this._setFly(true);
@@ -332,7 +360,7 @@ export class DevSuite {
     return `jumped ${slot}`;
   }
 
-  _shot(arg: any) {
+  _shot(arg: string) {
     if (arg === 'list') return this.shotNames.join(' ');
     let name = arg;
     if (arg === 'next' || arg === 'prev' || !arg) {
@@ -359,7 +387,7 @@ export class DevSuite {
    * warm page on any `src/` edit — a suite that wrote into `src/` would
    * invalidate every running agent's page mid-capture.
    */
-  async _saveFraming(name: any) {
+  async _saveFraming(name: string) {
     const key = name || this.shotNames[this.shotAt];
     if (!key) throw new Error('shot.save <name> (or step to a shot first)');
     this.tuning[key] = this.cam.asShot();
@@ -385,7 +413,7 @@ export class DevSuite {
   }
 
   /** Browser navigation. Only bound while the browser is open. */
-  _browserKeys(input: any) {
+  _browserKeys(input: Input) {
     const b = this.browser;
     if (input.keyDown('ArrowRight')) b.step(1);
     if (input.keyDown('ArrowLeft')) b.step(-1);
@@ -445,10 +473,11 @@ export class DevSuite {
 
 const HINT = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F4</b> assets · <b>F9</b> note · <b>F2</b> stats';
 
-const load = (k: string, fallback: any) => {
+/** Read a persisted dev-suite blob, falling back when it is absent or corrupt. */
+const load = <T>(k: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(k) ?? 'null') || fallback; } catch { return fallback; }
 };
-const save = (k: string, v: any) => {
+const save = (k: string, v: unknown) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ }
 };
 

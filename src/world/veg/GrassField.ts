@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { hash3 } from './Ecology.ts';
+import type { VegWindOpts } from './VegMaterial.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { grassClumpTex } from './VegTextures.ts';
 import type { Ecology } from './Ecology.ts';
@@ -242,6 +243,31 @@ function crossCardGeometry(planes = 3, width = 1.0) {
   return g;
 }
 
+/** One built tile of one ring: its mesh (null when the tile came out empty). */
+interface GrassTile {
+  mesh: THREE.InstancedMesh | null;
+  /** Instances in it. */
+  n: number;
+  /** The frame it was last drawn on, for eviction. */
+  stamp: number;
+}
+
+/** One LOD ring: its geometry, its material, and its pool of built tiles. */
+interface GrassRing {
+  lod: typeof LODS[number];
+  geo: THREE.BufferGeometry;
+  mat: THREE.MeshStandardMaterial;
+  group: THREE.Group;
+  /** Instance cap for this ring. */
+  max: number;
+  /** Packed tile key -> the built tile. */
+  pool: Map<number, GrassTile>;
+  cacheMax: number;
+  /** Hash of the visible tile list, and whether that list was left incomplete. */
+  packSig: number;
+  packPending: boolean;
+}
+
 export class GrassField {
   _deadline!: number;
   _last!: THREE.Vector3;
@@ -252,7 +278,7 @@ export class GrassField {
   eco!: Ecology;
   group!: THREE.Group;
   quality!: number;
-  rings!: any[];
+  rings!: GrassRing[];
   scene!: THREE.Scene;
   /** Debug switch for bisecting the pack-skip optimisation against a capture. */
   constructor(eco: import('./Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 } = {}) {
@@ -294,7 +320,7 @@ export class GrassField {
     const clumpGeo = crossCardGeometry(3, 1.0);
     const farGeo = crossCardGeometry(2, 1.0);
 
-    const grassMat = (opts: any) => patchVeg(new THREE.MeshStandardMaterial({
+    const grassMat = (opts: { mat: THREE.MeshStandardMaterialParameters, veg: VegWindOpts }) => patchVeg(new THREE.MeshStandardMaterial({
       color: 0xffffff, vertexColors: true, roughness: 0.86, metalness: 0,
       side: THREE.DoubleSide, ...opts.mat,
     }), opts.veg);
@@ -391,14 +417,14 @@ export class GrassField {
    * @returns
    *   null when the frame's generation budget is spent.
    */
-  _tileFor(ring: any, li: number, tx: number, tz: number): {mesh:THREE.InstancedMesh|null, n:number, stamp:number} | null {
+  _tileFor(ring: GrassRing, li: number, tx: number, tz: number): GrassTile | null {
     const key = (tx & 2047) * 4096 + (tz & 2047);
     const e = ring.pool.get(key);
     if (e) return e;
     if (this._primed && performance.now() > this._deadline) return null;
 
     const t = this._makeTile(li, tx, tz);
-    let mesh: any = null;
+    let mesh: THREE.InstancedMesh | null = null;
     if (t.n > 0) {
       mesh = new THREE.InstancedMesh(ring.geo, ring.mat, 0);
       mesh.instanceMatrix = new THREE.InstancedBufferAttribute(t.m, 16);
@@ -426,7 +452,7 @@ export class GrassField {
   }
 
   /** Drop the oldest tiles that are not currently on screen. */
-  _evict(ring: any) {
+  _evict(ring: GrassRing) {
     const target = Math.round(ring.cacheMax * 0.8);
     for (const [k, e] of ring.pool) {
       if (ring.pool.size <= target) break;

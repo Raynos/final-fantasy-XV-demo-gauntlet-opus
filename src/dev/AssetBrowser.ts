@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { speciesKeys, entry as bestiaryEntry } from '../characters/enemies/Bestiary.ts';
+import { isPoseName } from '../characters/enemies/EnemyBase.ts';
 import { CAST, makeCharacter } from '../characters/Cast.ts';
 import { NPC_CAST } from '../characters/npc/NpcCast.ts';
 import { archetype, NpcBody } from '../characters/npc/NpcRig.ts';
@@ -7,6 +8,8 @@ import { WEAPONS, Weapon } from '../combat/Weapons.ts';
 import { ACTIONS } from '../characters/rig/Anim.ts';
 import type { Character } from '../characters/rig/Character.ts';
 import type { Stage } from './Stage.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
+import type { Enemies } from '../characters/Enemies.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -27,17 +30,46 @@ import type { Game } from '../game/Game.ts';
 
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
+/**
+ * Whatever the current selection built, discriminated by `kind`.
+ *
+ * The four families produce genuinely different things -- a pooled `Enemy`, a
+ * `Character`, an `NpcBody`, a `Weapon` -- and `applyPose`, `update` and
+ * `_release` each branch on which. The union is what makes those branches
+ * checked instead of hopeful.
+ */
+export type StagedAsset =
+  | { kind: 'enemy', enemy: Enemy, object: THREE.Object3D, pivot: THREE.Vector3 }
+  | { kind: 'hero', character: Character, object: THREE.Object3D, pivot: THREE.Vector3 }
+  | { kind: 'npc', body: NpcBody, object: THREE.Object3D, pivot: THREE.Vector3 }
+  | { kind: 'weapon', weapon: Weapon, object: THREE.Object3D, pivot: THREE.Vector3 };
+
+/** One content family the browser can step through. */
+export interface AssetFamily {
+  id: string;
+  /** Every key in the family's own registry. */
+  keys(): string[];
+  make(key: string, at: THREE.Vector3): StagedAsset;
+  /** Animation states this family can be scrubbed through; empty for props. */
+  poses(): string[];
+}
+
+/** Review verdict for one asset. Absent means unreviewed. */
+export type ReviewMark = 'ok' | 'flag';
+
 export class AssetBrowser {
   _weaponObj!: Weapon | null;
   familyAt!: number;
   _char!: Character | null;
-  _made!: any;
+  _made!: StagedAsset | null;
   _npcBody!: NpcBody | null;
-  _spawned!: any;
+  /** The pooled enemy currently on the stage, so `_release` can despawn it. */
+  _spawned!: { enemies: Enemies, e: Enemy } | null;
   error!: string | null;
-  families!: any;
+  families!: AssetFamily[];
   game!: Game;
-  info!: any;
+  /** What `Stage.show` measured for the current subject. */
+  info!: ReturnType<Stage['show']> | null;
   itemAt!: number;
   node!: HTMLDivElement;
   open!: boolean;
@@ -45,7 +77,8 @@ export class AssetBrowser {
   playing!: boolean;
   poseAt!: number;
   stage!: Stage;
-  status!: any;
+  /** Review verdicts by `family/key`, persisted in `localStorage`. */
+  status!: Record<string, ReviewMark | undefined>;
   unreviewedOnly!: boolean;
   constructor(root: HTMLElement, game: Game, stage: import('./Stage.ts').Stage) {
     this.game = game;
@@ -60,10 +93,10 @@ export class AssetBrowser {
     this.unreviewedOnly = false;
 
     this.families = [
-      { id: 'enemies', keys: () => speciesKeys(), make: (k: string, at: any) => this._enemy(k, at), poses: () => ENEMY_POSES },
-      { id: 'heroes', keys: () => Object.keys(CAST), make: (k: string, at: any) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
-      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k: string, at: any) => this._npc(k, at), poses: () => [] },
-      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k: string, at: any) => this._weapon(k, at), poses: () => [] },
+      { id: 'enemies', keys: () => speciesKeys(), make: (k, at) => this._enemy(k, at), poses: () => ENEMY_POSES },
+      { id: 'heroes', keys: () => Object.keys(CAST), make: (k, at) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
+      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k, at) => this._npc(k, at), poses: () => [] },
+      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k, at) => this._weapon(k, at), poses: () => [] },
     ];
 
     this.node = document.createElement('div');
@@ -79,7 +112,7 @@ export class AssetBrowser {
     const all = this.family.keys();
     if (!this.unreviewedOnly) return all;
     const f = this.family.id;
-    const some = all.filter((k: any) => !this.status[`${f}/${k}`]);
+    const some = all.filter((k) => !this.status[`${f}/${k}`]);
     return some.length ? some : all;
   }
 
@@ -129,8 +162,8 @@ export class AssetBrowser {
       if (made.kind === 'enemy') made.enemy.heading = this.stage.subjectYaw();
       else made.object.rotation.y = this.stage.subjectYaw();
       this.applyPose();
-    } catch (err: any) {
-      this.error = `${this.family.id}/${key}: ${(err && err.message) || err}`;
+    } catch (err: unknown) {
+      this.error = `${this.family.id}/${key}: ${err instanceof Error ? err.message : String(err)}`;
       console.warn('[dev]', this.error, err);
     }
     this.render();
@@ -151,7 +184,7 @@ export class AssetBrowser {
     const poses = this.family.poses();
     const pose = poses[this.poseAt];
     try {
-      if (m.kind === 'enemy' && pose) m.enemy.freeze(pose, this.phase, null);
+      if (m.kind === 'enemy' && isPoseName(pose)) m.enemy.freeze(pose, this.phase, null);
       else if (m.kind === 'hero' && pose) { m.character.play(pose, { hold: true }); }
     } catch (err) { console.warn('[dev] pose failed', pose, err); }
   }
@@ -166,23 +199,27 @@ export class AssetBrowser {
 
   // ------------------------------------------------------------- factories
 
-  _enemy(key: string, at: any) {
+  _enemy(key: string, at: THREE.Vector3): StagedAsset {
     const enemies = this.game.get('Enemies');
-    const e = enemies!.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
-    enemies!.frozen = true;
+    if (!enemies) throw new Error('no Enemies system in this session');
+    const e = enemies.spawn(key, { pos: [at.x, at.y, at.z], heading: 0 });
+    enemies.frozen = true;
     this._spawned = { enemies, e };
-    const pivotY = (e.stats && e.stats.height ? e.stats.height : 2) * 0.55;
+    // `e.stats` has never existed on an `Enemy` — the species stats live on
+    // `e.type.stats`, and the instance copy of the height is `e.height`. Every
+    // creature therefore pivoted around a hard-coded 1.1 m until this was typed.
+    const pivotY = (e.height || 2) * 0.55;
     return { kind: 'enemy', enemy: e, object: e.root, pivot: e.root.position.clone().setY(e.root.position.y + pivotY) };
   }
 
-  _hero(key: string, at: any) {
+  _hero(key: string, at: THREE.Vector3): StagedAsset {
     const c = makeCharacter(key);
     c.root.position.copy(at);
     this._char = c;
     return { kind: 'hero', character: c, object: c.root, pivot: at.clone().setY(at.y + c.height * 0.55) };
   }
 
-  _npc(key: string, at: any) {
+  _npc(key: string, at: THREE.Vector3): StagedAsset {
     const arch = archetype(key, NPC_CAST[key as keyof typeof NPC_CAST]);
     const body = new NpcBody(arch, 7);
     body.root.position.copy(at);
@@ -190,7 +227,7 @@ export class AssetBrowser {
     return { kind: 'npc', body, object: body.root, pivot: at.clone().setY(at.y + (body.height || 1.75) * 0.55) };
   }
 
-  _weapon(key: string, at: any) {
+  _weapon(key: string, at: THREE.Vector3): StagedAsset {
     const w = new Weapon(key);
     w.setReveal(1);
     w.root.position.copy(at).setY(at.y + 1.1);
@@ -259,5 +296,5 @@ export class AssetBrowser {
   }
 }
 
-const load = (k: string, f: any) => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') || f; } catch { return f; } };
-const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+const load = <T>(k: string, f: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') || f; } catch { return f; } };
+const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };

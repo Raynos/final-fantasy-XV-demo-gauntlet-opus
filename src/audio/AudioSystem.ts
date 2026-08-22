@@ -682,7 +682,7 @@ export class AudioSystem {
   }
 
   /** What a hit on this enemy should sound like. */
-  _enemyMaterial(enemy: Enemy) {
+  _enemyMaterial(enemy: Enemy | null | undefined) {
     const key = this._speciesOf(enemy);
     if (key === 'mt') return 'metal';
     if (key === 'irongiant') return 'armour';

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross } from '../../combat/GeoKit.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -56,8 +57,8 @@ export const RONIN = {
       telegraph: 0.55, strike: 0.20, attack: 0.62, recover: 0.95, cooldown: 3.4 },
   ],
   buildPrototype,
-  make(opts: any) { return new RoninEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new RoninEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -243,11 +244,7 @@ function buildPrototype() {
 }
 
 class RoninEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(RONIN, opts); }
+  constructor(opts: SpawnOpts) { super(RONIN, opts); }
 
   /** World-space blade tip, for the draw-cut sweep and trail. */
   bladeTip(out = new THREE.Vector3()) {
@@ -257,7 +254,7 @@ class RoninEnemy extends Enemy {
     return out.set(0.04, 0.315, 1.28).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

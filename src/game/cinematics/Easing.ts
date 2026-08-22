@@ -27,10 +27,13 @@ export const EASE = {
   crane: (t: number) => { t = clamp01(t); return t * t * (3 - 2 * t); },
 };
 
+/** A normalised 0..1 curve. */
+export type EaseFn = (t: number) => number;
+
 /** Resolve an ease by name (or pass a function straight through). */
-export function ease(nameOrFn: any) {
+export function ease(nameOrFn: keyof typeof EASE | EaseFn | undefined | null): EaseFn {
   if (typeof nameOrFn === 'function') return nameOrFn;
-  return EASE[nameOrFn as keyof typeof EASE] || EASE.inOutSine;
+  return (nameOrFn ? EASE[nameOrFn] : undefined) || EASE.inOutSine;
 }
 
 export { clamp01 };

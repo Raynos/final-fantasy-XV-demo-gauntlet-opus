@@ -16,20 +16,15 @@
 const ALL_SELLABLE = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative'];
 
 /**
- * The part of an `rpg.tables.items` entry a shelf reads.
+ * A shelf lists real items.
  *
- * The RPG layer's item table is still untyped, so this is the *read* side
- * written down rather than a second copy of the table: a shelf never needs
- * more than an id, a name, a category, a price and the tags that keep the
- * royal arms off the rack.
+ * This used to be a five-field local copy of the read side, written while the
+ * RPG layer was untyped. `Inventory.ItemDef` is the real thing now, so the
+ * copy is gone: a shelf and the bag it trades with are one type, and the shop
+ * screen no longer has to reconcile two `ItemDef`s that were never the same.
  */
-export interface ItemDef {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  tags: string[];
-}
+import type { ItemDef } from '../../game/rpg/Inventory.ts';
+export type { ItemDef };
 
 /**
  * One counter.

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import {
   tube, blob, spike, slab, place, tint, glow, rectCross, loft,
 } from '../../combat/GeoKit.ts';
@@ -60,8 +61,8 @@ export const HOBGOBLIN = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new HobgoblinEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new HobgoblinEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -268,13 +269,9 @@ function buildPrototype() {
 }
 
 class HobgoblinEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(HOBGOBLIN, opts); }
+  constructor(opts: SpawnOpts) { super(HOBGOBLIN, opts); }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

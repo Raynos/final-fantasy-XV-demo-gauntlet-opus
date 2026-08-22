@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-function parseArgs(argv: any) {
+function parseArgs(argv: string[]) {
   const o: { w: number, h: number, frames: number, warmup: number, q: string, shots: string[], target: number, breakdown: boolean, out: string | null } =
     { w: 1600, h: 900, frames: 120, warmup: 40, q: 'ultra', shots: [], target: 60, breakdown: false, out: null };
   for (let i = 0; i < argv.length; i++) {
@@ -46,7 +46,7 @@ function parseArgs(argv: any) {
   return o;
 }
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -78,7 +78,7 @@ async function main() {
 
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 

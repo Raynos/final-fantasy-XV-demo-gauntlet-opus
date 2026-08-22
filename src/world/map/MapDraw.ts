@@ -1,4 +1,5 @@
 import { worldMap, WORLD, ZONES } from './WorldMap.ts';
+import type { Route } from './RoadGraph.ts';
 
 /**
  * VECTOR FURNITURE — everything on the chart that is *not* the baked relief.
@@ -54,14 +55,46 @@ export function routeClass(route: {cls:string|{id:string}}): string {
   return typeof route.cls === 'string' ? route.cls : (route.cls && route.cls.id) || 'track';
 }
 
+/** World x (or z) -> canvas x (or y). */
+export type Project = (v: number) => number;
+
+/** One route decimated for one level of detail: packed `x,z` pairs. */
+interface RouteLod {
+  pts: Float32Array;
+  /** How many numbers of `pts` are live. */
+  n: number;
+  route: Route;
+}
+
+/** The four road classes, each with its decimated routes, for one LOD. */
+type ClassLods = Record<string, RouteLod[]>;
+
+/** The world rectangle a draw is clipped to. */
+export interface DrawBounds {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+/** Shared options for the map draws. */
+export interface DrawOpts {
+  /** Device-pixel scale, so a line is the same thickness on any display. */
+  scale?: number;
+  alpha?: number;
+  bounds?: DrawBounds | null;
+  /** 0 full, 1 decimated 3x, 2 decimated 8x. */
+  lod?: number;
+}
+
 /** Cached decimated route geometry, one entry per level of detail. */
-let _lods: any = null;
+let _lods: ClassLods[] | null = null;
 
 function lods() {
   if (_lods) return _lods;
   _lods = [];
   for (const stride of [1, 3, 8]) {
-    const byCls: Record<string, { pts: Float32Array, n: number, route: any }[]> = { highway: [], road: [], track: [], trail: [] };
+    const byCls: ClassLods = { highway: [], road: [], track: [], trail: [] };
     for (const r of worldMap.roadGraph.routes) {
       const src = r.pts;
       const out = new Float32Array(Math.ceil(src.length / stride) * 2 + 2);
@@ -83,7 +116,7 @@ function lods() {
  * @param sx world x -> canvas x
  * @param sy world z -> canvas y
  */
-export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => number), sy: ((a0: number) => number), opt: any = {}) {
+export function drawRoads(c: CanvasRenderingContext2D, sx: Project, sy: Project, opt: DrawOpts = {}) {
   const scale = opt.scale || 1;
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   const b = opt.bounds;
@@ -100,7 +133,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
       // One path per class per pass: overlapping strokes then composite once,
       // so a translucent highway has no bright seam where two edges meet.
       c.beginPath();
-      let any = false;
+      let drew = false;
       for (const r of set[cls]) {
         const p = r.pts;
         let pen = false;
@@ -111,10 +144,10 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
             if (pen) { c.lineTo(sx(x), sy(z)); pen = false; }
             continue;
           }
-          if (!pen) { c.moveTo(sx(x), sy(z)); pen = true; any = true; } else c.lineTo(sx(x), sy(z));
+          if (!pen) { c.moveTo(sx(x), sy(z)); pen = true; drew = true; } else c.lineTo(sx(x), sy(z));
         }
       }
-      if (!any) continue;
+      if (!drew) continue;
       if (pass === 0) {
         c.strokeStyle = `rgba(6,11,19,${(st.casingA * alpha).toFixed(3)})`;
         c.lineWidth = w + st.casing * Math.min(1.6, Math.max(0.7, scale));
@@ -135,7 +168,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
  * Junction pips — a small tick where two named routes meet, which is what
  * makes a road network read as a network rather than as crossing lines.
  */
-export function drawJunctions(c: CanvasRenderingContext2D, sx: any, sy: any, scale: number, alpha: number) {
+export function drawJunctions(c: CanvasRenderingContext2D, sx: Project, sy: Project, scale: number, alpha: number) {
   const g = worldMap.roadGraph;
   c.save();
   c.globalAlpha = alpha;
@@ -151,7 +184,7 @@ export function drawJunctions(c: CanvasRenderingContext2D, sx: any, sy: any, sca
 
 // ------------------------------------------------------------ zone borders
 
-let _borders: any = null;
+let _borders: Float32Array[] | null = null;
 
 /**
  * Trace the boundary between zones of influence.
@@ -201,7 +234,8 @@ export function zoneBorders(): Array<Float32Array> {
   }
 
   // dual-grid segments between differing cells
-  const segs: any[] = [];
+  // `[ax, ay, bx, by, used]` on the dual grid
+  const segs: Array<[number, number, number, number, boolean]> = [];
   const key = (a: number, b: number) => a * 4096 + b;
   const at = new Map();
   const push = (ax: number, ay: number, bx: number, by: number) => {
@@ -252,7 +286,7 @@ export function zoneBorders(): Array<Float32Array> {
   return out;
 }
 
-function chaikin(p: any) {
+function chaikin(p: number[][]): number[][] {
   const out = [p[0]];
   for (let i = 0; i < p.length - 1; i++) {
     const a = p[i], b = p[i + 1];
@@ -267,7 +301,7 @@ function chaikin(p: any) {
  * Stroke the zone borders as a fine broken hairline, the way an atlas draws an
  * administrative boundary.
  */
-export function drawZoneBorders(c: CanvasRenderingContext2D, sx: any, sy: any, opt: any = {}) {
+export function drawZoneBorders(c: CanvasRenderingContext2D, sx: Project, sy: Project, opt: DrawOpts = {}) {
   const alpha = opt.alpha == null ? 1 : opt.alpha;
   if (alpha <= 0.004) return;
   const scale = opt.scale || 1;
@@ -317,7 +351,7 @@ export function spacedText(c: CanvasRenderingContext2D, text: string, x: number,
 }
 
 /** Width a `spacedText` run would take. */
-export function spacedWidth(c: CanvasRenderingContext2D, text: any, spacing: number) {
+export function spacedWidth(c: CanvasRenderingContext2D, text: string, spacing: number) {
   let total = 0;
   for (const ch of text) total += c.measureText(ch).width + spacing;
   return total - spacing;
@@ -330,7 +364,8 @@ export function spacedWidth(c: CanvasRenderingContext2D, text: any, spacing: num
  */
 export class LabelPlacer {
   pad!: number;
-  rects!: any[];
+  /** Reserved boxes as `[x0, y0, x1, y1]`, in canvas pixels. */
+  rects!: number[][];
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }
   /** @returns true if the box was free, in which case it is reserved */

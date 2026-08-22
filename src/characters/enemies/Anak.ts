@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -54,8 +55,8 @@ export const ANAK = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new AnakEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new AnakEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -257,13 +258,9 @@ function markings(parts: THREE.BufferGeometry[]) {
 }
 
 class AnakEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(ANAK, opts); }
+  constructor(opts: SpawnOpts) { super(ANAK, opts); }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

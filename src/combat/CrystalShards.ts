@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ColorLike, Vec3Like } from './ParticleSystem.ts';
 
 /**
  * Instanced 3D crystal shards — the physical half of the warp-strike look.
@@ -9,6 +10,37 @@ import * as THREE from 'three';
  * the whole swarm; motion is integrated in the vertex shader from the same
  * clock the particle systems use, so a scenario can freeze the swarm mid-flight.
  */
+/** The shard shader's uniform block; the index signature is `ShaderMaterial`'s. */
+export interface ShardUniforms {
+  [uniform: string]: THREE.IUniform;
+  uTime: THREE.IUniform<number>;
+  uIntensity: THREE.IUniform<number>;
+  /** Rim colour picked up along a facet edge. */
+  uRim: THREE.IUniform<THREE.Color>;
+  uLightDir: THREE.IUniform<THREE.Vector3>;
+}
+
+/** One shard: where it starts, how it tumbles, and how long it lives. */
+export interface ShardSpec {
+  pos: Vec3Like;
+  vel?: Vec3Like;
+  /** Spin axis. Defaults to +Y. */
+  axis?: Vec3Like;
+  color?: ColorLike;
+  /** Birth time on the effect clock, seconds. */
+  t0: number;
+  life: number;
+  size: number;
+  /** Radians per second about `axis`. */
+  spin?: number;
+  drag?: number;
+  gravity?: number;
+  /** Velocity-aligned stretch. */
+  stretch?: number;
+  /** Phase offset so a ring of shards does not pulse in lock-step. */
+  phase?: number;
+}
+
 export class CrystalShards {
   _dirtyHi!: number;
   _dirtyLo!: number;
@@ -22,7 +54,7 @@ export class CrystalShards {
   cursor!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  uniforms!: any;
+  uniforms!: ShardUniforms;
   constructor({ capacity = 320, renderOrder = 21 } = {}) {
     this.capacity = capacity;
     this.cursor = 0;
@@ -80,23 +112,23 @@ export class CrystalShards {
   /**
    * @param s {pos, vel, axis, color, t0, life, size, spin, drag, gravity, stretch, phase}
    */
-  emit(s: any) {
+  emit(s: ShardSpec) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
-    const w = (attr: THREE.InstancedBufferAttribute, v: any, n: number) => {
+    // `Array.isArray` is the discriminant the old `.x !== undefined` test was
+    // really making; `ParticleSystem` reads the same three shapes the same way.
+    const w = (attr: THREE.InstancedBufferAttribute, v: Vec3Like, n: number) => {
       const a = attr.array;
-      a[i * n] = v.x !== undefined ? v.x : v[0];
-      a[i * n + 1] = v.y !== undefined ? v.y : v[1];
-      a[i * n + 2] = v.z !== undefined ? v.z : v[2];
+      if (Array.isArray(v)) { a[i * n] = v[0]; a[i * n + 1] = v[1]; a[i * n + 2] = v[2]; }
+      else { a[i * n] = v.x; a[i * n + 1] = v.y; a[i * n + 2] = v.z; }
     };
     w(this.aPos0, s.pos, 3);
     w(this.aVel, s.vel || { x: 0, y: 0, z: 0 }, 3);
     w(this.aAxis, s.axis || { x: 0, y: 1, z: 0 }, 3);
-    const c = s.color || { r: 0.35, g: 0.75, b: 1 };
+    const c: ColorLike = s.color || { r: 0.35, g: 0.75, b: 1 };
     const ca = this.aColor.array;
-    ca[i * 3] = c.r !== undefined ? c.r : c[0];
-    ca[i * 3 + 1] = c.g !== undefined ? c.g : c[1];
-    ca[i * 3 + 2] = c.b !== undefined ? c.b : c[2];
+    if (Array.isArray(c)) { ca[i * 3] = c[0]; ca[i * 3 + 1] = c[1]; ca[i * 3 + 2] = c[2]; }
+    else { ca[i * 3] = c.r; ca[i * 3 + 1] = c.g; ca[i * 3 + 2] = c.b; }
     const q = this.aParams.array;
     q[i * 4] = s.t0; q[i * 4 + 1] = s.life; q[i * 4 + 2] = s.size; q[i * 4 + 3] = s.spin || 0;
     const r = this.aParams2.array;

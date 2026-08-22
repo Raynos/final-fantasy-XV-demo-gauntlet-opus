@@ -11,8 +11,14 @@ import { icon } from './Icons.ts';
  * Like everything in `src/ui`, it animates per frame off `game.time` and uses
  * no CSS transitions, so a capture after N fixed steps is reproducible.
  */
+/** One line in the column, with the clip that fades it. */
+interface Toast {
+  node: HTMLElement;
+  clip: Clip;
+}
+
 export class Toasts {
-  items!: any[];
+  items!: Toast[];
   max!: number;
   root!: HTMLElement;
   constructor(parent: HTMLElement) {
@@ -20,7 +26,6 @@ export class Toasts {
     // `parent` is the bottom-left corner's notice slot, which sits above the
     // party stack and below the combat rail — see `PartyPanel`'s class note.
     parent.appendChild(this.root);
-    /** @type {Array<{node:HTMLElement, clip:Clip}>} */
     this.items = [];
     this.max = 5;
   }
@@ -42,10 +47,10 @@ export class Toasts {
     ]);
     this.root.appendChild(node);
     this.items.push({ node, clip: new Clip(0.26, 3.4) });
-    while (this.items.length > this.max) this._retire(this.items.shift());
+    while (this.items.length > this.max) this._retire(this.items.shift() ?? null);
   }
 
-  _retire(t: any) { if (t && t.node.parentNode) t.node.parentNode.removeChild(t.node); }
+  _retire(t: Toast | null) { if (t && t.node.parentNode) t.node.parentNode.removeChild(t.node); }
 
   /** Drop everything immediately — used by the capture harness between shots. */
   clear() {

@@ -46,17 +46,87 @@ function readTime(text: string) {
   return Math.max(2.4, Math.min(7.5, 1.5 + text.length * 0.046));
 }
 
+/** Who said what, and when. */
+export interface BanterLine {
+  /** `Banter.t` at the moment it was said, seconds. */
+  t: number;
+  /** Companion key: `gladio` / `ignis` / `prompto` / `noctis`. */
+  who: string;
+  line: string;
+}
+
+/** A reply waiting on the clock. */
+interface QueuedLine {
+  /** `Banter.t` at which it goes out. */
+  at: number;
+  who: string;
+  line: string;
+}
+
+/** Everything the world tells the banter each frame. */
+export interface BanterCtx {
+  /** m/s. */
+  speed: number;
+  driving: boolean;
+  /** Ignis has the wheel. */
+  auto: boolean;
+  /** Metres from the road centreline. */
+  roadDist: number;
+  offRoadMode: boolean;
+  /** 0..1 how far the car is sideways. */
+  slide: number;
+  /** In-game hour, 0..24. */
+  hour: number;
+  /** `WeatherName`. */
+  weather: string;
+  /** 0..1 */
+  fuel: number;
+  landmark: NearLandmark | null;
+}
+
+/** The hero feature the car is passing, as the banter and the gaze read it. */
+export interface NearLandmark {
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  /** Metres to the edge of it, clamped at zero. */
+  dist: number;
+  /** `Landform.kind`. */
+  kind: string;
+}
+
+/** What the banter remembers about the drive between frames. */
+interface BanterState {
+  /** `'dawn' | 'dusk' | 'night' | 'day'`, or null before the first frame. */
+  phase: string | null;
+  weather: string | null;
+  moving: boolean;
+  /** `Banter.t` at which the car last went fast. */
+  fastAt: number;
+  /** Seconds held straight and quick. */
+  straightFor: number;
+  /** Seconds off the shoulder. */
+  offroadFor: number;
+  lastLandmark: string | null;
+  /** Seconds of silence. */
+  lull: number;
+  combat: boolean;
+}
+
 export class Banter {
   _busyUntil!: number;
-  _catAt!: any;
+  /** Category -> `Banter.t` when it last fired, for the per-category cooldown. */
+  _catAt!: Record<string, number>;
   _curPriority!: number;
-  _lastWho!: any;
-  _queue!: any[];
-  _recent!: any;
-  _state!: any;
+  _lastWho!: string | null;
+  _queue!: QueuedLine[];
+  /** Category -> a ring of recently used line indices, so nothing repeats. */
+  _recent!: Record<string, number[]>;
+  _state!: BanterState;
   enabled!: boolean;
   gap!: number;
-  log!: any[];
+  log!: BanterLine[];
   muted!: boolean;
   rng!: Rng;
   t!: number;
@@ -150,7 +220,7 @@ export class Banter {
     return idx;
   }
 
-  _emit(who: any, line: any) {
+  _emit(who: string, line: string) {
     this._lastWho = who;
     this.log.unshift({ t: +this.t.toFixed(2), who, line });
     if (this.log.length > 40) this.log.pop();
@@ -179,7 +249,7 @@ export class Banter {
    *
    * @param {object} ctx
    * */
-  observe(dt: number, ctx: { speed: number, driving: boolean, auto: boolean, roadDist: number, offRoadMode: boolean, slide: number, hour: number, weather: string, fuel: number, landmark: {name:string, dist:number, kind?: any } | null }) {
+  observe(dt: number, ctx: BanterCtx) {
     if (!this.enabled || this.muted) return;
     const st = this._state;
 

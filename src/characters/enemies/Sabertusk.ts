@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
+import type { Part } from './RigBuilder.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
+import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
 
@@ -73,8 +76,8 @@ export const SABERTUSK = {
       telegraph: 0.52, strike: 0.18, attack: 0.55, recover: 0.9, cooldown: 3.2, lunge: 13, tracking: 1.0 },
   ],
   buildPrototype,
-  make(opts: any) { return new SabertuskEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new SabertuskEnemy(opts); },
+} satisfies SpeciesDef;
 
 /* Shoulder height 0.86; nose at z ≈ 1.28; rump at z ≈ -0.78. */
 function buildPrototype() {
@@ -108,7 +111,7 @@ function buildPrototype() {
    * A tuple union rather than two fields, because the pair below reads it with
    * `bind[0] === 'chain'`.
    */
-  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
+  const P: Part[] = [];
 
   /* ---------------------------------------------------------- torso ---- */
   // theta 0 = +Z side of the ring; because the sweep runs along +Z the ring
@@ -207,7 +210,7 @@ function buildPrototype() {
       { p: [0, 0.86, 1.06], r: [0.045, 0.05, 0.11], amt: 0.012, dir: [0, 1, 0] },       // nasal bone
       { p: [0.05, 0.79, 1.10], r: [0.05, 0.05, 0.10], amt: 0.014, dir: [1, 0, 0], mirror: true }, // flews
     ],
-    colorAt: (u: any, v: any, p: any) => {
+    colorAt: (u, v, p) => {
       // A bandit mask: black from the brow through the eye and down the bridge
       // of the nose, cream on the cheek and under the jaw. This is the single
       // change that makes the head read as a head instead of a knuckle on the
@@ -219,7 +222,7 @@ function buildPrototype() {
       const base = blend(FUR, BELLY, Math.max(cheek * 0.65, under * 0.8));
       return blend(base, FUR_DARK, clamp01(Math.max(mask, bridge)) * 0.9);
     },
-    matAt: (u: any, v: any, p: any) => (p.z > 1.19 ? M_WET : M_FUR),
+    matAt: (u, v, p) => (p.z > 1.19 ? M_WET : M_FUR),
   });
   // nose leather
   sculptBlob(B, {
@@ -481,9 +484,8 @@ function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
 
 class SabertuskEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
-  static ANIM: any;
-  override attackId!: any;
-  constructor(opts: any) { super(SABERTUSK, opts); }
+  static override ANIM: QuadAnim;
+  constructor(opts: SpawnOpts) { super(SABERTUSK, opts); }
 
   /** A pounce coils harder and leaves the ground; a bite barely does either. */
   override telegraphScale() { return this.attackId === 'pounce' ? 1.15 : 0.8; }

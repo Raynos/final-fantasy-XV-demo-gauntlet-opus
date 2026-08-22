@@ -1,4 +1,5 @@
-import type { RoadPath } from './RoadPath.ts';
+import type { RoadPath, RoadPoint } from './RoadPath.ts';
+import type { DriveControls } from './VehicleBody.ts';
 /**
  * Ignis at the wheel.
  *
@@ -19,18 +20,19 @@ const A_LAT = 5.6;                // comfortable lateral acceleration
 const A_BRAKE = 4.2;              // how hard he is willing to slow
 
 export class AutoDrive {
-  _p!: any;
+  /** Scratch centreline point, reused by every look-ahead sample. */
+  _p!: RoadPoint;
   _steerSmooth!: number;
   _targetSpeed!: number;
   arrived!: boolean;
-  controls!: any;
+  controls!: DriveControls;
   cruise!: number;
   destination!: string | null;
   dir!: number;
   enabled!: boolean;
   road!: RoadPath;
   targetS!: number;
-  constructor(road: import('./RoadPath.ts').RoadPath) {
+  constructor(road: RoadPath) {
     this.road = road;
     this.enabled = false;
     /** Arc length of the destination along the highway. */

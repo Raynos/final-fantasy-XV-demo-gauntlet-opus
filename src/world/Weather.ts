@@ -26,7 +26,38 @@ const clamp = THREE.MathUtils.clamp;
  *   strike    s     mean seconds between lightning strikes (0 = none)
  *   wet       0..1  how wet the world gets once it has been raining a while
  */
-const PRESETS = {
+/**
+ * One weather preset: what the rain, wind, fog and lightning systems each get
+ * from the current conditions. All four presets carry the whole set, so a
+ * cross-fade between any two is a straight per-field lerp.
+ */
+export interface WeatherPreset {
+  /** Every field is a number, which is what lets `update` lerp the lot. */
+  [field: string]: number;
+  /** 0..1 rain intensity. */
+  rain: number;
+  /** Base wind speed, m/s. */
+  wind: number;
+  /** 0..1 how gusty on top of that. */
+  gust: number;
+  /** Ground fog density. */
+  fog: number;
+  /** Height the fog fades out by, metres. */
+  fogTop: number;
+  /** 0..1 airborne dust. */
+  dust: number;
+  haze: number;
+  /** 0..1 squall lines driving the rain sideways. */
+  squall: number;
+  /** 0..1 low scud racing under the deck. */
+  scud: number;
+  /** Lightning strikes per minute. */
+  strike: number;
+  /** 0..1 how wet the world gets. */
+  wet: number;
+}
+
+const PRESETS: Record<WeatherName, WeatherPreset> = {
   clear: {
     rain: 0, wind: 2.4, gust: 0.30, fog: 0.05, fogTop: 16, dust: 0.05,
     haze: 0, squall: 0, scud: 0, strike: 0, wet: 0,
@@ -79,14 +110,16 @@ export class Weather {
   _fogCol!: THREE.Vector3;
   _fogSun!: THREE.Vector3;
   _gust!: number;
-  _shotSeen!: any;
+  /** `game.currentShot` the weather was last staged for. */
+  _shotSeen!: string | null;
   game!: Game;
   lightning!: Lightning;
   name!: WeatherName;
-  p!: any;
+  /** The conditions in force right now, cross-fading toward `target`. */
+  p!: WeatherPreset;
   rain!: Rain;
   rainIntensity!: number;
-  target!: any;
+  target!: WeatherPreset;
   terrain!: Terrain | null;
   volume!: VolumePass;
   wet!: Wetness;
@@ -237,7 +270,7 @@ export class Weather {
     this._snap = false;
   }
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     if (!game.post) return;
     if (!this.volume) {
       this.volume = new VolumePass(game.post);

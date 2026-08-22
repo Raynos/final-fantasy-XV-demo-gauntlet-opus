@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isMesh, isMeshStandardMaterial } from '../../util/three-guards.ts';
 import type { Game } from '../../game/Game.ts';
 
 /**
@@ -16,7 +17,8 @@ import type { Game } from '../../game/Game.ts';
  * ratchet a material darker.
  */
 export class Wetness {
-  _mats!: any[];
+  /** Every lit material the scan found, with its dry values cached. */
+  _mats!: THREE.MeshStandardMaterial[];
   _scanIn!: number;
   _ssrOn!: boolean;
   game!: Game;
@@ -71,14 +73,15 @@ export class Wetness {
   }
 
   /** Cache the dry authored values of anything new in the scene. */
-  _collect(scene: any) {
+  _collect(scene: THREE.Scene) {
     this._mats.length = 0;
-    scene.traverse((o: any) => {
-      if (!o.material || o.userData.noWet) return;
+    scene.traverse((o) => {
+      if (!isMesh(o) || !o.material || o.userData.noWet) return;
       const list = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of list) {
         if (!m || m.userData.noWet) continue;
-        if (!(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) continue;
+        // only the two materials that carry roughness and an env intensity
+        if (!isMeshStandardMaterial(m)) continue;
         // the terrain drives its own wetness inside its shader
         if (m.userData.terrainSurface) continue;
         if (!m.userData.__dry) {

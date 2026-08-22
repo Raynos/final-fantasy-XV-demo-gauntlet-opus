@@ -1016,11 +1016,79 @@ reflectedLight.indirectSpecular *= mix(1.0, tfAO, 0.95);
 `;
 
 /**
+ * Every texture the terrain shaders sample: the heightfield and its normals at
+ * two scales, the control channels, and the three layer arrays.
+ */
+export interface TerrainTextures {
+  height: THREE.DataTexture;
+  farHeight: THREE.DataTexture;
+  normal: THREE.DataTexture;
+  farNormal: THREE.DataTexture;
+  /** RGBA: flow, sediment, road mask, rocky. */
+  ctrl: THREE.DataTexture;
+  farCtrl: THREE.DataTexture;
+  albedoArray: THREE.DataArrayTexture;
+  surfArray: THREE.DataArrayTexture;
+  detailArray: THREE.DataArrayTexture;
+}
+
+/** The heightfield grid constants the shader needs to address the textures. */
+export interface FieldConstants {
+  HALF: number;
+  CELL: number;
+  N: number;
+  /** Metres at which the near grid hands over to the far one. */
+  BLEND_OUT: number;
+  FAR_HALF: number;
+  FAR_CELL: number;
+  FAR_N: number;
+}
+
+/**
+ * The terrain's uniform block. Shared by the surface, depth and G-buffer
+ * materials, so a wetness or exposure change reaches all three at once.
+ */
+export interface TerrainUniforms {
+  [uniform: string]: THREE.IUniform;
+  uHeightTex: THREE.IUniform<THREE.Texture>;
+  uFarHeightTex: THREE.IUniform<THREE.Texture>;
+  uNormalTex: THREE.IUniform<THREE.Texture>;
+  uFarNormalTex: THREE.IUniform<THREE.Texture>;
+  uCtrlTex: THREE.IUniform<THREE.Texture>;
+  uFarCtrlTex: THREE.IUniform<THREE.Texture>;
+  uDetailArr: THREE.IUniform<THREE.DataArrayTexture>;
+  uAlbedoArr: THREE.IUniform<THREE.DataArrayTexture>;
+  uSurfArr: THREE.IUniform<THREE.DataArrayTexture>;
+  /** `(HALF, CELL, N, BLEND_OUT)`. */
+  uField: THREE.IUniform<THREE.Vector4>;
+  /** `(FAR_HALF, FAR_CELL, FAR_N, 0)`. */
+  uFarP: THREE.IUniform<THREE.Vector4>;
+  uLayerAvg: THREE.IUniform<THREE.Vector3[]>;
+  uLayerRough: THREE.IUniform<number[]>;
+  uLayerScale: THREE.IUniform<number[]>;
+  uLayerRot: THREE.IUniform<number[]>;
+  uDetailScale: THREE.IUniform<number>;
+  uNearScale: THREE.IUniform<number>;
+  uMicro: THREE.IUniform<number>;
+  /** `(seaLevel, 1 / worldSize, 0, 0)`. */
+  uEnv: THREE.IUniform<THREE.Vector4>;
+  /** `(wetness, dryness, 0, 0)`. */
+  uWet: THREE.IUniform<THREE.Vector4>;
+}
+
+/** What every terrain material is built from. `Terrain` owns the one instance. */
+export interface TerrainResources {
+  uniforms: TerrainUniforms;
+  /** Cell size of the finest clipmap level, metres. */
+  finestCell: number;
+}
+
+/**
  * @param res shared textures + uniform values
  * @param cell world size of this LOD level's cells
  * @param level LOD index (0 = finest) — drives polygon offset
  */
-export function createTerrainMaterial(res: any, cell: number, level: number): THREE.MeshStandardMaterial {
+export function createTerrainMaterial(res: TerrainResources, cell: number, level: number): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1.0,
@@ -1055,7 +1123,7 @@ export function createTerrainMaterial(res: any, cell: number, level: number): TH
 }
 
 /** Depth material for shadow casting — must displace identically. */
-export function createTerrainDepthMaterial(res: any, cell: number) {
+export function createTerrainDepthMaterial(res: TerrainResources, cell: number) {
   const mat = new THREE.MeshDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, res.uniforms, { uCell: { value: cell } });
@@ -1075,7 +1143,7 @@ export function createTerrainDepthMaterial(res: any, cell: number) {
  * attribute reads back as zero.
  * @param res shared uniform block
  */
-export function patchGBufferMaterial(normalMaterial: THREE.MeshNormalMaterial, res: any) {
+export function patchGBufferMaterial(normalMaterial: THREE.MeshNormalMaterial, res: TerrainResources) {
   if (!normalMaterial || normalMaterial.userData.terrainPatched) return;
   normalMaterial.userData.terrainPatched = true;
   normalMaterial.onBeforeCompile = (shader) => {
@@ -1106,7 +1174,7 @@ export function patchGBufferMaterial(normalMaterial: THREE.MeshNormalMaterial, r
  * @param field heightfield grid constants
  * @param [world] `WorldMap.WORLD` — sea level and world span
  */
-export function makeTerrainUniforms(tex: any, field: any, world: any = { seaLevel: -6.5, size: 8192 }) {
+export function makeTerrainUniforms(tex: TerrainTextures, field: FieldConstants, world: { seaLevel: number, size: number } = { seaLevel: -6.5, size: 8192 }): TerrainUniforms {
   return {
     uHeightTex: { value: tex.height },
     uFarHeightTex: { value: tex.farHeight },

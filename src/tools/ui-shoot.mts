@@ -57,7 +57,7 @@ const SCENES: Record<string, Scene> = {
   },
 };
 
-const portOpen = (port: any) => new Promise((res) => {
+const portOpen = (port: number) => new Promise<boolean>((res) => {
   const s = net.connect(port, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -98,7 +98,7 @@ async function main() {
       '--ignore-gpu-blocklist', '--force-color-profile=srgb', '--hide-scrollbars', '--mute-audio'],
   });
   const page = await browser.newPage({ viewport: { width: opts.w, height: opts.h }, deviceScaleFactor: 1 });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());

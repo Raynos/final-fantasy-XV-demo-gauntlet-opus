@@ -11,6 +11,7 @@
  */
 
 import { Stats, emptyMods, addMods } from './Stats.ts';
+import type { StatMods, StatsSave } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Ascension } from './Ascension.ts';
 import type { Inventory } from './Inventory.ts';
@@ -20,7 +21,25 @@ import type { Inventory } from './Inventory.ts';
 /* ------------------------------------------------------------------------ */
 
 /** The four of them, and what each one is for. */
-export const MEMBERS = [
+/** One of the four, as authored. */
+export interface Member {
+  id: string;
+  name: string;
+  role: string;
+  /** Weapon class they favour. */
+  weapon: string;
+  desc: string;
+}
+
+/** A member as played: the roster row plus what they have earned. */
+export interface MemberState extends Member {
+  /** 0..100+; drives the bond level. */
+  affinity: number;
+  /** Technique ids they have unlocked. */
+  techniques: string[];
+}
+
+export const MEMBERS: Member[] = [
   { id: 'noctis',  name: 'Noctis Lucis Caelum', role: 'Prince',    weapon: 'sword',      desc: 'Warps, wields the phantom arsenal, and is genuinely bad at mornings.' },
   { id: 'gladio',  name: 'Gladiolus Amicitia',  role: 'Shield',    weapon: 'greatsword', desc: 'The King\'s Shield. Hits things until they stop being a problem.' },
   { id: 'ignis',   name: 'Ignis Scientia',      role: 'Strategist',weapon: 'dagger',     desc: 'Advisor, driver, cook. Has come up with a new recipeh.' },
@@ -36,7 +55,24 @@ export const MEMBERS = [
  * four with the Tech Reserve node). `motion` feeds straight into
  * `computeDamage`. `advanced` techniques need an Ascension node.
  */
-export const TECHNIQUES = {
+/** One party technique. */
+export interface Technique {
+  id: string;
+  name: string;
+  /** Tech bars it costs. */
+  bars: number;
+  /** Damage multiplier; 0 for a utility technique. */
+  motion: number;
+  element: string;
+  desc: string;
+  tags: string[];
+  /** Locked until the Ascension grid says otherwise. */
+  advanced?: boolean;
+  /** Locked behind a party flag from the grid. */
+  requiresFlag?: string;
+}
+
+export const TECHNIQUES: Record<string, Technique[]> = {
   gladio: [
     { id: 'tempest',    name: 'Tempest',       bars: 1, motion: 2.4, element: 'physical', desc: 'A spinning sweep that hits everything nearby.', tags: ['aoe'] },
     { id: 'impulse',    name: 'Impulse',       bars: 2, motion: 3.6, element: 'physical', desc: 'A rising cleave that launches the target.', tags: ['launch'], advanced: true },
@@ -108,7 +144,92 @@ export function bondFor(affinity: number) {
  * @param effects human-readable buff lines for the HUD
  * @param hours in-game hours the buff lasts
  */
-const R = (id: string, name: string, rank: number, ing: Array<[string, number]>, buffs: any, effects: string[], hours: number, desc: string) => ({
+/** One of Ignis' recipes. */
+export interface Recipe {
+  id: string;
+  name: string;
+  /** Cooking level required, 1..10. */
+  rank: number;
+  /** In-game hours the buff lasts. */
+  hours: number;
+  desc: string;
+  /** Human-readable buff lines for the HUD. `recipeTags` parses these. */
+  effects: string[];
+  ingredients: Array<{ id: string, count: number }>;
+  /** Stat modifier contributions. */
+  buffs: Partial<StatMods>;
+}
+
+/** Extra effects parsed out of a recipe's effect lines. */
+export interface BuffTags {
+  /** EXP multiplier, e.g. 2 for "+100%". */
+  expMultiplier?: number;
+  /** MP cost multiplier. */
+  mpCostMult?: number;
+}
+
+/**
+ * A timed effect on the whole party: a meal, a spell, Ignis' Enhancement.
+ * `kind: 'meal'` is special-cased -- only one meal is ever active.
+ */
+export interface Buff {
+  kind: string;
+  id: string;
+  name: string;
+  mods: Partial<StatMods>;
+  tags: BuffTags;
+  effects: string[];
+  /** Absolute world hour applied, and the hour it lapses. */
+  appliedAt: number;
+  expiresAt: number;
+  hours: number;
+  /** Meals only: the recipe it came from. */
+  recipe?: Recipe | null;
+}
+
+/** What `addBuff` is handed: everything else it fills in. */
+export interface BuffSpec {
+  id: string;
+  name: string;
+  kind?: string;
+  mods?: Partial<StatMods>;
+  tags?: BuffTags;
+  effects?: string[];
+  /** In-game hours it lasts. Defaults to one. */
+  hours?: number;
+}
+
+/** The serialised party. */
+export interface PartySave {
+  stats?: Record<string, StatsSave>;
+  affinity?: Record<string, number>;
+  techniques?: Record<string, string[]>;
+  cookingLevel?: number;
+  mealsCooked?: number;
+  knownRecipes?: string[];
+  activeBuffs?: Buff[];
+  techCharge?: number;
+}
+
+/** A recipe's shopping list against the bag as it stands. */
+export interface MissingIngredient {
+  id: string;
+  count: number;
+  have: number;
+}
+
+/** @see PartyState.canCook */
+export type CookCheck =
+  | { ok: true }
+  | { ok: false, reason: 'unknown-recipe' | 'not-learned' | 'cooking-level-too-low' }
+  | { ok: false, reason: 'missing-ingredients', missing: MissingIngredient[] };
+
+/** @see PartyState.cook */
+export type CookResult =
+  | { ok: true, buff: Buff, cookingLevel: number, levelled: boolean }
+  | { ok: false, reason: string, missing?: MissingIngredient[] };
+
+const R = (id: string, name: string, rank: number, ing: Array<[string, number]>, buffs: Partial<StatMods>, effects: string[], hours: number, desc: string): Recipe => ({
   id, name, rank, hours, desc, effects,
   ingredients: ing.map(([i, c]) => ({ id: i, count: c })),
   buffs,
@@ -210,11 +331,11 @@ export const RECIPES = [
 ];
 
 /** Recipes keyed by id. */
-export const RECIPE_TABLE = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
+export const RECIPE_TABLE: Record<string, Recipe> = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 
 /** Extra effect tags parsed out of the human-readable effect lines. */
-function recipeTags(recipe: any) {
-  const tags: any = {};
+function recipeTags(recipe: Recipe): BuffTags {
+  const tags: BuffTags = {};
   for (const line of recipe.effects) {
     const exp = /EXP earned \+(\d+)%/.exec(line);
     if (exp) tags.expMultiplier = 1 + Number(exp[1]) / 100;
@@ -233,34 +354,32 @@ function recipeTags(recipe: any) {
  */
 export class PartyState {
   techBarBonus!: number;
-  activeBuffs!: any[];
-  bonuses!: any;
+  activeBuffs!: Buff[];
+  /** Ascension tunables, refreshed by `RpgSystem`. */
+  bonuses!: { techCharge: number, techDamage: number, affinityGain: number, mealDuration: number };
   cookingLevel!: number;
   emitter!: Emitter | null;
-  flags!: Set<any>;
-  knownRecipes!: Set<any>;
+  flags!: Set<string>;
+  knownRecipes!: Set<string>;
   mealsCooked!: number;
-  members!: any;
-  stats!: any;
+  members!: Record<string, MemberState>;
+  stats!: Record<string, Stats>;
   techCharge!: number;
   techChargeRate!: number;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
 
-    /** @type {Record<string, Stats>} */
     this.stats = {};
-    /** @type {Record<string, {affinity:number, techniques:string[]}>} */
     this.members = {};
     for (const m of MEMBERS) {
       this.stats[m.id] = new Stats(m.id, { level: 1 });
-      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id as keyof typeof TECHNIQUES].filter((t: any) => !t.advanced && !t.requiresFlag).map((t: any) => t.id) };
+      this.members[m.id] = { ...m, affinity: 0, techniques: TECHNIQUES[m.id as keyof typeof TECHNIQUES].filter((t) => !t.advanced && !t.requiresFlag).map((t) => t.id) };
     }
 
     /** Tech bar, 0..maxTechBars in continuous units. */
     this.techCharge = 0;
     this.techBarBonus = 0;
     this.techChargeRate = 0.09;   // bars per second in combat
-    /** Ascension tunables, refreshed by RpgSystem. */
     this.bonuses = { techCharge: 0, techDamage: 0, affinityGain: 0, mealDuration: 0 };
     /** Ability flags from the grid. */
     this.flags = new Set();
@@ -302,7 +421,7 @@ export class PartyState {
     }[id] || [];
     const known = this.techniquesFor(id);
     for (const p of prefs) {
-      const t = known.find((k: any) => k.id === p);
+      const t = known.find((k) => k.id === p);
       if (t) return t;
     }
     return known[0] || null;
@@ -311,7 +430,7 @@ export class PartyState {
   /** Techniques a member currently has, hydrated. */
   techniquesFor(id: string) {
     const known = this.members[id]?.techniques || [];
-    return (TECHNIQUES[id as keyof typeof TECHNIQUES] || []).filter((t: any) => known.includes(t.id));
+    return (TECHNIQUES[id as keyof typeof TECHNIQUES] || []).filter((t) => known.includes(t.id));
   }
 
   /** Every technique the party could fire right now, with affordability. */
@@ -336,7 +455,7 @@ export class PartyState {
    * Fire a technique. Spends bars and awards affinity.
    */
   useTechnique(memberId: string, techId: string) {
-    const tech = (TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).find((t: any) => t.id === techId);
+    const tech = (TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).find((t) => t.id === techId);
     if (!tech) return { ok: false, reason: 'unknown-technique' };
     if (!this.members[memberId]?.techniques.includes(techId)) return { ok: false, reason: 'not-learned' };
     if (this.techCharge < tech.bars) return { ok: false, reason: 'not-enough-tech' };
@@ -351,7 +470,7 @@ export class PartyState {
   learnTechnique(memberId: string, techId: string) {
     const list = this.members[memberId]?.techniques;
     if (!list || list.includes(techId)) return false;
-    if (!(TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).some((t: any) => t.id === techId)) return false;
+    if (!(TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).some((t) => t.id === techId)) return false;
     list.push(techId);
     return true;
   }
@@ -398,7 +517,7 @@ export class PartyState {
   }
 
   /** Teach Ignis a recipe. */
-  learnRecipe(id: any) {
+  learnRecipe(id: string) {
     if (!RECIPE_TABLE[id] || this.knownRecipes.has(id)) return false;
     this.knownRecipes.add(id);
     this.emitter?.emit('recipe-learned', { recipe: RECIPE_TABLE[id] });
@@ -408,7 +527,7 @@ export class PartyState {
   /**
    * Can this meal be cooked right now?
    */
-  canCook(recipeId: string, inventory: import('./Inventory.ts').Inventory): {ok:boolean, reason?:string, missing?:any[], buff?: any } {
+  canCook(recipeId: string, inventory: import('./Inventory.ts').Inventory): CookCheck {
     const r = RECIPE_TABLE[recipeId];
     if (!r) return { ok: false, reason: 'unknown-recipe' };
     if (!this.knownRecipes.has(recipeId)) return { ok: false, reason: 'not-learned' };
@@ -430,7 +549,7 @@ export class PartyState {
    *
    * @param hour current world hour (absolute, monotonically rising)
    */
-  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0): { ok: boolean, reason?: string, missing?: any[], buff?: any, cookingLevel?: number, levelled?: boolean } {
+  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0): CookResult {
     const check = this.canCook(recipeId, inventory);
     if (!check.ok) return check;
     const r = RECIPE_TABLE[recipeId];
@@ -439,7 +558,7 @@ export class PartyState {
     // One meal buff at a time.
     this.activeBuffs = this.activeBuffs.filter((b) => b.kind !== 'meal');
     const duration = r.hours + this.bonuses.mealDuration;
-    const buff = {
+    const buff: Buff = {
       kind: 'meal',
       id: r.id,
       name: r.name,
@@ -471,8 +590,8 @@ export class PartyState {
    * Add a non-meal timed buff (a spell effect, an item, Ignis' Enhancement).
    * @param spec `{ id, name, mods, hours, effects }`
    */
-  addBuff(spec: any, hour: number = 0) {
-    const buff = {
+  addBuff(spec: BuffSpec, hour: number = 0): Buff {
+    const buff: Buff = {
       kind: spec.kind || 'effect',
       id: spec.id, name: spec.name,
       mods: spec.mods || {}, tags: spec.tags || {}, effects: spec.effects || [],
@@ -552,7 +671,7 @@ export class PartyState {
     };
   }
 
-  static fromJSON(data: any, emitter: Emitter | null = null) {
+  static fromJSON(data: PartySave | null | undefined, emitter: Emitter | null = null) {
     const p = new PartyState(emitter);
     if (!data) return p;
     for (const m of MEMBERS) {
@@ -563,7 +682,7 @@ export class PartyState {
     p.cookingLevel = data.cookingLevel || 1;
     p.mealsCooked = data.mealsCooked || 0;
     p.knownRecipes = new Set(data.knownRecipes || [...p.knownRecipes]);
-    p.activeBuffs = (data.activeBuffs || []).map((b: any) => ({ ...b, recipe: RECIPE_TABLE[b.id] || null }));
+    p.activeBuffs = (data.activeBuffs || []).map((b) => ({ ...b, recipe: RECIPE_TABLE[b.id] || null }));
     p.techCharge = data.techCharge || 0;
     p.applyBuffs();
     return p;

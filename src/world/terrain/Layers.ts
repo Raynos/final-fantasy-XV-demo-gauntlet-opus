@@ -264,13 +264,28 @@ const RECIPES = [
 // -------------------------------------------------------------------- build
 
 /**
+ * Every synthesised layer texel, before it becomes a texture. This is what the
+ * bake stores, so a load can skip about a second of per-texel synthesis.
+ */
+export interface LayerData {
+  size: number;
+  detailSize: number;
+  /** RGBA, `size` x `size * LAYER_COUNT`. */
+  albedo: Uint8Array;
+  /** RGBA, same layout: roughness, metalness, height, AO. */
+  surf: Uint8Array;
+  /** RGBA, `detailSize` x `detailSize * 2`: the far and near detail maps. */
+  detail: Uint8Array;
+}
+
+/**
  * Synthesise every layer's texels. Split out from the texture construction so
  * the build step can bake the bytes once (`src/tools/bake.mts`) instead of every
  * page load spending a second evaluating 1.6 M per-texel recipes.
  *
  * @param size texel resolution per layer
  */
-export function buildLayerData(size: number = 512): {size:number, detailSize:number, albedo:Uint8Array, surf:Uint8Array, detail:Uint8Array} {
+export function buildLayerData(size: number = 512): LayerData {
   const px = size * size;
   const albedo = new Uint8Array(px * 4 * LAYER_COUNT);
   const surf = new Uint8Array(px * 4 * LAYER_COUNT);
@@ -320,7 +335,7 @@ export function buildLayerData(size: number = 512): {size:number, detailSize:num
  * @param [data] pre-baked texels from `buildLayerData`; synthesised when absent
  * @param [lut] the two biome palette layers from `Biome.buildBiomeLut`
  */
-export function buildLayerTextures(size: number = 512, data: any = null, lut: Uint8Array | null = null): {albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture} {
+export function buildLayerTextures(size: number = 512, data: LayerData | null = null, lut: Uint8Array | null = null): {albedoArray: THREE.DataArrayTexture, surfArray: THREE.DataArrayTexture, detailArray: THREE.DataArrayTexture} {
   const d = data && data.size === size ? data : buildLayerData(size);
   const { albedo, surf, detail, detailSize } = d;
 
@@ -374,7 +389,7 @@ function buildDetailData(size: number): Uint8Array {
   return data;
 }
 
-function buildDetailArray(size: number, data = buildDetailData(size), lut: any = null) {
+function buildDetailArray(size: number, data = buildDetailData(size), lut: Uint8Array | null = null) {
   const palette = lut || buildBiomeLut(size);
   const px = size * size;
   const all = new Uint8Array(px * 4 * DETAIL_LAYERS);

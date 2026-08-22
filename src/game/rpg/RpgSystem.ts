@@ -30,6 +30,74 @@ import { PartyState, MEMBERS, RECIPE_TABLE } from './PartyState.ts';
 import { DayCycle, HAVENS } from './DayCycle.ts';
 import * as SaveGame from './SaveGame.ts';
 import type { Game } from '../Game.ts';
+import type { DamageOpts, DamageResult } from './Stats.ts';
+import type { QuestUpdate } from './Quests.ts';
+import type { RestSummary } from './DayCycle.ts';
+import type { EmitterHandler } from './Emitter.ts';
+
+/** How a fresh `RpgSystem` is dealt out. */
+export interface RpgOpts {
+  /** Level every member starts at. */
+  startLevel?: number;
+  startGil?: number;
+  startAp?: number;
+  /** Seconds between autosaves; 0 disables. */
+  autosaveInterval?: number;
+  /** Seed for drop rolls, so a capture is reproducible. */
+  seed?: number;
+}
+
+/**
+ * One roll through the damage formula as gameplay asks for it: the attacker
+ * may be named rather than passed, and the four positional bonuses are folded
+ * in here rather than by `computeDamage`.
+ */
+export interface DamageRequest extends Omit<DamageOpts, 'attacker'> {
+  /** A member id, or an attacker block for something with no `Stats`. */
+  attacker: string | DamageOpts['attacker'];
+  isAerial?: boolean;
+  isLink?: boolean;
+  isTechnique?: boolean;
+}
+
+/**
+ * Anything that pays out -- a quest, a chest, a story beat.
+ *
+ * Every field is optional because this is the *authored* shape: a chest gives
+ * gil and items and nothing else. `QuestLog.rewardsFor` produces the resolved
+ * `GrantedRewards`, which is one of these with every field filled in.
+ */
+export interface RewardBundle {
+  gil?: number;
+  exp?: number;
+  ap?: number;
+  items?: ReadonlyArray<{ id: string, count?: number }>;
+  recipes?: readonly string[];
+  /** Story flags set on payout. */
+  unlocks?: readonly string[];
+}
+
+/** Enough of a corpse to pay out for it. */
+export interface KilledEnemy {
+  /** Species id, matched against `kill` objectives. */
+  id: string;
+  /** Display name, for the kill toast. */
+  name?: string;
+  level?: number;
+  expClass?: 'trash' | 'normal' | 'elite' | 'boss' | 'daemon';
+  drops?: Array<{ id: string, count?: number, chance?: number }>;
+}
+
+/** How the kill happened, for the AP rules. */
+export interface KillContext {
+  byWarpStrike?: boolean;
+  byTechnique?: boolean;
+}
+
+/** What a camp attempt did. */
+export type CampResult =
+  | (RestSummary & { meal: import('./PartyState.ts').Buff | null })
+  | { ok: false, reason: string, haven?: unknown, missing?: import('./PartyState.ts').MissingIngredient[] };
 
 /** Starting kit — what the four of them drive out of Insomnia with. */
 const STARTING_ITEMS: [string, number][] = [
@@ -73,13 +141,13 @@ const STARTER_QUESTS = {
 };
 
 export class RpgSystem {
-  _newGameAp!: any;
+  _newGameAp!: number;
   party!: PartyState;
   _autosaveTimer!: number;
-  _newGameGil!: any;
-  _newGameLevel!: any;
+  _newGameGil!: number;
+  _newGameLevel!: number;
   ascension!: Ascension;
-  autosaveInterval!: any;
+  autosaveInterval!: number;
   chapter!: number;
   combatBridge!: CombatBridge;
   day!: DayCycle;
@@ -92,8 +160,16 @@ export class RpgSystem {
   playTime!: number;
   quests!: QuestLog;
   rng!: Rng;
-  tables!: any;
-  constructor(opts: any = {}) {
+  /** Static tables re-exported so the UI never imports six modules. */
+  tables!: {
+    items: typeof ITEMS, shops: typeof SHOPS, nodes: typeof NODES,
+    constellations: typeof CONSTELLATION_INFO, edges: typeof EDGES,
+    quests: typeof QUESTS, hunts: typeof HUNTS, tipsters: typeof TIPSTERS,
+    recipes: typeof RECIPE_TABLE, havens: typeof HAVENS, deposits: typeof DEPOSITS,
+    members: typeof MEMBERS, lodgings: typeof LODGINGS, apRules: typeof AP_RULES,
+    expTable: typeof EXP_TABLE,
+  };
+  constructor(opts: RpgOpts = {}) {
     this.emitter = new Emitter();
     this.party = new PartyState(this.emitter);
     this.expBank = new ExpBank();
@@ -103,7 +179,6 @@ export class RpgSystem {
     this.quests = new QuestLog(this.emitter);
     this.day = new DayCycle(this.emitter);
 
-    /** Static tables re-exported so the UI never imports six modules. */
     this.tables = {
       items: ITEMS, shops: SHOPS, nodes: NODES, constellations: CONSTELLATION_INFO,
       edges: EDGES, quests: QUESTS, hunts: HUNTS, tipsters: TIPSTERS,
@@ -233,7 +308,7 @@ export class RpgSystem {
     this.emitter.on('equipment-changed', () => this.refreshGear());
 
     // Quest completion pays out.
-    this.emitter.on('quest-updated', (p) => {
+    this.emitter.on('quest-updated', (p: QuestUpdate) => {
       if (p.phase !== 'complete') return;
       this.grantRewards(p.rewards, `quest:${p.quest.id}`);
       if (p.quest.type === 'hunt') this.ascension.awardAp('hunt-complete');
@@ -244,7 +319,7 @@ export class RpgSystem {
     });
 
     // A rest is the only thing that turns banked EXP into levels.
-    this.emitter.on('rested', (summary) => {
+    this.emitter.on('rested', (summary: RestSummary) => {
       if (!summary.exp) return;
       for (const m of summary.exp.perMember) {
         for (const lv of m.levels) {
@@ -334,13 +409,13 @@ export class RpgSystem {
   /* -- Event API --------------------------------------------------------- */
 
   /** Subscribe. Returns an unsubscribe function. */
-  on(event: string, fn: any) { return this.emitter.on(event, fn); }
+  on<P = unknown>(event: string, fn: EmitterHandler<P>) { return this.emitter.on<P>(event, fn); }
   /** Subscribe once. */
-  once(event: string, fn: any) { return this.emitter.once(event, fn); }
+  once<P = unknown>(event: string, fn: EmitterHandler<P>) { return this.emitter.once<P>(event, fn); }
   /** Unsubscribe. */
-  off(event: any, fn: any) { return this.emitter.off(event, fn); }
+  off(event: string, fn: EmitterHandler<never>) { return this.emitter.off(event, fn); }
   /** Fire an event (mostly for other systems to announce things). */
-  emit(event: string, payload: any) { return this.emitter.emit(event, payload); }
+  emit<P>(event: string, payload: P) { return this.emitter.emit<P>(event, payload); }
 
   /* -- Handy accessors --------------------------------------------------- */
 
@@ -371,10 +446,10 @@ export class RpgSystem {
       techBars: this.party.techBars, maxTechBars: this.party.maxTechBars,
       clock: this.day.clockString, day: this.day.day, phase: this.day.phase.name,
       isNight: this.day.isNight, nightDepth: this.day.nightDepth,
-      buffs: this.party.activeBuffs.map((b: any) => ({ name: b.name, effects: b.effects, hoursLeft: Math.max(0, b.expiresAt - this.day.absoluteHour) })),
+      buffs: this.party.activeBuffs.map((b) => ({ name: b.name, effects: b.effects, hoursLeft: Math.max(0, b.expiresAt - this.day.absoluteHour) })),
       tracked: this.quests.tracked ? this.quests.view(this.quests.tracked) : null,
       waypoints: this.quests.waypoints(),
-      spells: this.elemancy.equipped.map((uid: any) => (uid ? this.elemancy.spell(uid) : null)),
+      spells: this.elemancy.equipped.map((uid: string | null) => (uid ? this.elemancy.spell(uid) : null)),
       party: MEMBERS.map((m) => {
         const s = this.party.stats[m.id];
         return { id: m.id, name: m.name, hp: Math.round(s.hp), maxHp: s.maxHp, mp: Math.round(s.mp), maxMp: s.maxMp, ko: s.ko, level: s.level, bond: this.party.bond(m.id) };
@@ -396,10 +471,8 @@ export class RpgSystem {
   /**
    * Call when something dies. Banks EXP, awards AP, ticks kill objectives and
    * rolls drops.
-   * @param enemy `{ id, level, expClass, drops? }`
-   * @param [ctx] `{ byWarpStrike, byTechnique }`
    */
-  enemyKilled(enemy: any, ctx: any = {}) {
+  enemyKilled(enemy: KilledEnemy, ctx: KillContext = {}) {
     const exp = expForKill(enemy, this.day.hour);
     this.gainExp(exp, 'battle');
     if (ctx.byWarpStrike) this.ascension.awardAp('warp-strike-kill');
@@ -432,7 +505,7 @@ export class RpgSystem {
    * folded in — night scaling, ascension bonuses, weapon class weakness.
    * @param opts see `computeDamage`; `attacker` may be a member id
    */
-  damage(opts: any) {
+  damage(opts: DamageRequest): DamageResult {
     const attacker = typeof opts.attacker === 'string' ? this.party.stats[opts.attacker] : opts.attacker;
     let motion = opts.motion ?? 1;
     if (opts.isWarpStrike) motion *= 1 + this.ascension.value('warpDamage');
@@ -449,7 +522,7 @@ export class RpgSystem {
   giveItem(id: string, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
 
   /** Apply a quest/story reward bundle. */
-  grantRewards(rewards: any, source = 'reward') {
+  grantRewards(rewards: RewardBundle | null | undefined, source = 'reward') {
     if (!rewards) return null;
     if (rewards.gil) this.inventory.addGil(rewards.gil, source);
     if (rewards.exp) this.gainExp(rewards.exp, source);
@@ -464,7 +537,7 @@ export class RpgSystem {
    * Camp at a haven: cook (optionally) and sleep.
    * @param [opts] `{ pos, recipe, lodging, force }`
    */
-  camp(opts: any = {}) {
+  camp(opts: { pos?: { x: number, z: number }, recipe?: string, lodging?: string, force?: boolean, wakeHour?: number } = {}): CampResult {
     const pos = opts.pos || this.game?.get?.('Player')?.position;
     const lodging = opts.lodging || 'haven';
     if (lodging === 'haven' && !opts.force) {
@@ -472,7 +545,7 @@ export class RpgSystem {
       if (!check.ok) return { ok: false, reason: check.reason, haven: check.haven };
     }
 
-    let meal: any = null;
+    let meal: import('./PartyState.ts').Buff | null = null;
     if (opts.recipe) {
       const cooked = this.party.cook(opts.recipe, this.inventory, this.day.absoluteHour);
       if (!cooked.ok) return { ok: false, reason: cooked.reason, missing: cooked.missing };
@@ -506,14 +579,14 @@ export class RpgSystem {
   }
 
   /** Sleep at a paid lodging (no haven check, costs gil). */
-  restAt(lodgingId: any, opts = {}) { return this.camp({ ...opts, lodging: lodgingId, force: true }); }
+  restAt(lodgingId: string, opts: { wakeHour?: number, recipe?: string } = {}) { return this.camp({ ...opts, lodging: lodgingId, force: true }); }
 
   /**
    * Draw elemental energy from the nearest deposit to a point.
    * @param [radius=8]
    */
   drawNearby(pos: {x:number, z:number}, radius: number = 8) {
-    let best: any = null, bestD = Infinity;
+    let best: typeof DEPOSITS[number] | null = null, bestD = Infinity;
     for (const d of DEPOSITS) {
       const dist = Math.hypot(pos.x - d.pos[0], pos.z - d.pos[2]);
       if (dist < bestD) { bestD = dist; best = d; }
@@ -529,7 +602,7 @@ export class RpgSystem {
    * @param energy `{ fire, ice, lightning }`
    * @param [catalyst] `{ id, count }`
    */
-  craftSpell(energy: any, catalyst: any = null) {
+  craftSpell(energy: { fire?: number, ice?: number, lightning?: number }, catalyst: { id: string, count: number } | null = null) {
     const res = this.elemancy.craft(energy, catalyst, this.noctis.magic);
     if (res.ok) this.quests.notify('craft', { target: 'any' });
     return res;

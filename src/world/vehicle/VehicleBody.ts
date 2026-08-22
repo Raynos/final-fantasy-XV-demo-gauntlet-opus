@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { RoadPath } from './RoadPath.ts';
 import type { RoadHit } from './RoadPath.ts';
+import type { Terrain } from '../Terrain.ts';
+import type { CollisionWorld } from '../collision/CollisionWorld.ts';
 
 /**
  * The Regalia's chassis: an arcade-sim vehicle model.
@@ -39,6 +41,38 @@ function engineCurve(v: number, maxForce: number, vMax: number) {
   return maxForce * (1 - t * t * t) * (0.55 + 0.45 * (1 - t * 0.5));
 }
 
+/**
+ * What the driver — human or Ignis — is asking of the car this frame.
+ * `AutoDrive` fills one of these in, and so does `RegaliaSystem._playerControls`.
+ */
+export interface DriveControls {
+  /** 0..1 */
+  throttle: number;
+  /** 0..1 */
+  brake: number;
+  /** -1..1, left negative. */
+  steer: number;
+  handbrake: boolean;
+  /** +1 forward, -1 reverse. */
+  gear: number;
+}
+
+/** One of the four contact patches, as the chassis model tracks it. */
+export interface WheelState {
+  front: boolean;
+  /** +1 left, -1 right. */
+  side: number;
+  /** Ground height under this patch, world Y. */
+  contactY: number;
+  /** Suspension travel, metres. */
+  travel: number;
+  /** Rolling angle, radians. */
+  spinAngle: number;
+  /** Vertical load, newtons. */
+  load: number;
+  grounded: boolean;
+}
+
 export class VehicleBody {
   _groundAvg!: number;
   _groundMax!: number;
@@ -59,7 +93,7 @@ export class VehicleBody {
   bound!: number;
   brakeForce!: number;
   chassisY!: number;
-  collision!: any;
+  collision!: CollisionWorld | null;
   cornerF!: number;
   cornerR!: number;
   dragK!: number;
@@ -96,7 +130,7 @@ export class VehicleBody {
   steerMaxLow!: number;
   steerRate!: number;
   steerReturn!: number;
-  terrain!: any;
+  terrain!: Terrain | null;
   travel!: number;
   vLat!: number;
   vLong!: number;
@@ -105,11 +139,11 @@ export class VehicleBody {
   vel!: THREE.Vector3;
   wetness!: number;
   wheelR!: number;
-  wheels!: any[];
+  wheels!: WheelState[];
   yawDamp!: number;
   yawRate!: number;
   /** Highest support under a wheel: town slabs and pads before raw terrain. */
-  _groundAt(t: any, x: number, z: number, fromY: number) {
+  _groundAt(t: Terrain | null, x: number, z: number, fromY: number) {
     if (this.collision && this.collision.ready) {
       const g = this.collision.groundAt(x, z, fromY, 1.2, 4);
       if (g) return g.y;
@@ -120,7 +154,7 @@ export class VehicleBody {
   /**
    * @param {object} opts
    * */
-  constructor({ terrain, road, collision = null }: { terrain: any, road: import('./RoadPath.ts').RoadPath, collision?: any }) {
+  constructor({ terrain, road, collision = null }: { terrain: Terrain | null, road: RoadPath, collision?: CollisionWorld | null }) {
     this.terrain = terrain;
     this.road = road;
     this.collision = collision;
@@ -239,7 +273,7 @@ export class VehicleBody {
   right(): THREE.Vector3 { return this._right.set(Math.cos(this.heading), 0, -Math.sin(this.heading)); }
 
   /** Local (forward, right) offset of a wheel from the CG. */
-  _wheelOffset(w: any, out: any) {
+  _wheelOffset(w: WheelState, out: THREE.Vector3) {
     out.x = w.front ? this.a : -this.b;              // forward
     out.y = -w.side * this.halfTrack;                // right (+side is left)
     return out;
@@ -300,7 +334,7 @@ export class VehicleBody {
    * Advance the vehicle.
    * @param dt seconds
    */
-  step(dt: number, c: {throttle:number, brake:number, steer:number, handbrake:boolean}) {
+  step(dt: number, c: DriveControls) {
     const d = Math.min(dt, 1 / 30);
     if (d <= 0) return;
     // never move more than ~0.8 m in one sub-step, so a 200 km/h car cannot
@@ -310,7 +344,7 @@ export class VehicleBody {
     for (let i = 0; i < n; i++) this._substep(sub, c);
   }
 
-  _substep(dt: number, c: any) {
+  _substep(dt: number, c: DriveControls) {
     const throttle = clamp01(c.throttle || 0);
     const brake = clamp01(c.brake || 0);
     const hand = c.handbrake ? 1 : 0;

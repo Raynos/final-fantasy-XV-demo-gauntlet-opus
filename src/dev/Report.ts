@@ -15,6 +15,7 @@
 
 import { worldMap } from '../world/map/WorldMap.ts';
 import type { Game } from '../game/Game.ts';
+import type { CvarDelta } from './Registry.ts';
 
 /**
  * Grab the rendered frame as a PNG data URI.
@@ -43,9 +44,49 @@ const r1 = (n: number) => Number(Number(n).toFixed(1));
 const r3 = (n: number) => Number(Number(n).toFixed(3));
 
 /**
+ * The metadata block that rides along with every review note.
+ *
+ * The five optional fields are the ones that need a system to be present:
+ * a note filed from a partial world still has coordinates, a camera and the
+ * cvar deltas, which is what makes it routable.
+ */
+export interface ReviewNote {
+  at: string;
+  seed: number;
+  shot: string | null;
+  state: string;
+  paused: boolean;
+  camera: { pos: number[], quat: number[], fov: number };
+  /** Every cvar that differs from its boot value. */
+  cvars: Record<string, CvarDelta>;
+  /** The last sixteen console lines typed. */
+  commands: string[];
+  perf: {
+    fps: number,
+    frame: number,
+    calls: number | null,
+    triangles: number | null,
+    geometries: number | null,
+    textures: number | null,
+    programs: number | null,
+  };
+  ui: { hud: boolean | null, menu: string | null };
+  client: { ua: string, dpr: number, canvas: number[], gpu: string | null };
+  /** World position, when a `Player` exists. */
+  player?: number[];
+  /** Hours, 0..24. */
+  time?: number;
+  weather?: string | null;
+  zone?: string | null;
+  region?: string | null;
+  poi?: string | null;
+  [extra: string]: unknown;
+}
+
+/**
  * Assemble the metadata block.
  */
-export function gather(game: Game, reg: import('./Registry.ts').Registry, extra: any = {}) {
+export function gather(game: Game, reg: import('./Registry.ts').Registry, extra: Record<string, unknown> = {}): ReviewNote {
   const cam = game.camera;
   const player = game.get('Player');
   const sky = game.get('Sky');
@@ -54,7 +95,7 @@ export function gather(game: Game, reg: import('./Registry.ts').Registry, extra:
   const menus = game.get('Menus');
   const info = game.renderer && game.renderer.info;
 
-  const note = {
+  const note: ReviewNote = {
     at: new Date().toISOString(),
     seed: game.seed,
     shot: game.currentShot || null,
@@ -112,9 +153,13 @@ export function gather(game: Game, reg: import('./Registry.ts').Registry, extra:
     const zone = worldMap.zoneAt(p[0], p[2]);
     const region = worldMap.regionAt(p[0], p[2]);
     const poi = worldMap.nearestPOI(p[0], p[2], { maxDist: 400 });
-    note.zone = zone ? (zone.id || zone.name) : null;
-    note.region = region ? (region.id || region.name) : null;
-    note.poi = poi ? (poi.id || (poi.poi && poi.poi.id) || null) : null;
+    // `id` is always present on both, so the `|| .name` arms these carried
+    // could never run.
+    note.zone = zone ? zone.id : null;
+    note.region = region ? region.id : null;
+    // `nearestPOI` returns `{ poi, dist }`; the `poi.id` arm this used to try
+    // first has never existed on that wrapper.
+    note.poi = poi ? poi.poi.id : null;
   } catch { /* cartography unavailable; the coordinates still are */ }
 
   return note;

@@ -21,7 +21,7 @@ import { CHROMIUM_ARGS } from './chromium.mts';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5199);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -43,7 +43,7 @@ async function ensureServer() {
 const server = await ensureServer();
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-const pageErrors: any[] = [];
+const pageErrors: string[] = [];
 page.on('pageerror', (e) => pageErrors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 200)); });
 
@@ -53,28 +53,32 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 
 const results = await page.evaluate(async () => {
   const g = window.GAME;
-  const out: any[] = [];
-  const add = (name: any, ok: any, evidence: any) => out.push({ name, ok: !!ok, evidence: String(evidence) });
-  const check = (name: any, fn: any) => {
+  /** One assertion's verdict, with the number or state that proved it. */
+  interface Row { name: string; ok: boolean; evidence: string }
+  /** What a check returns: whether it passed and what it measured. */
+  interface Verdict { ok: boolean; evidence: unknown }
+  const out: Row[] = [];
+  const add = (name: string, ok: unknown, evidence: unknown) => out.push({ name, ok: !!ok, evidence: String(evidence) });
+  const check = (name: string, fn: () => Verdict | null | undefined) => {
     try {
       const r = fn();
       add(name, r && r.ok, r ? r.evidence : 'no result');
-    } catch (e: any) { add(name, false, 'threw: ' + (e && e.message)); }
+    } catch (e: unknown) { add(name, false, 'threw: ' + (e instanceof Error ? e.message : String(e))); }
   };
-  const P = (evidence: any) => ({ ok: true, evidence });
-  const F = (evidence: any) => ({ ok: false, evidence });
+  const P = (evidence: unknown) => ({ ok: true, evidence });
+  const F = (evidence: unknown) => ({ ok: false, evidence });
 
   const step = (n = 1) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
 
   /* ---- real input ------------------------------------------------------ */
   const input = g.input;
   input.pointerLocked = true;               // stop requestPointerLock noise
-  const keyDown = (code: any) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
-  const keyUp = (code: any) => window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
-  const tap = (code: any, frames = 1) => { keyDown(code); step(frames); keyUp(code); step(1); };
-  const mouseDown = (button: any) => window.dispatchEvent(new MouseEvent('mousedown', { button, bubbles: true }));
-  const mouseUp = (button: any) => window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
-  const holdMouse = (button: any, frames: any) => { mouseDown(button); step(frames); mouseUp(button); step(1); };
+  const keyDown = (code: string) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+  const keyUp = (code: string) => window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+  const tap = (code: string, frames = 1) => { keyDown(code); step(frames); keyUp(code); step(1); };
+  const mouseDown = (button: number) => window.dispatchEvent(new MouseEvent('mousedown', { button, bubbles: true }));
+  const mouseUp = (button: number) => window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
+  const holdMouse = (button: number, frames: number) => { mouseDown(button); step(frames); mouseUp(button); step(1); };
 
   const combat = g.get('Combat');
   const enemies = g.get('Enemies');
@@ -114,7 +118,7 @@ const results = await page.evaluate(async () => {
   };
 
   /** Put an enemy `d` metres in front of Noctis and point him at it. */
-  const spawnAhead = (key: any, d = 1.6, opts = {}) => {
+  const spawnAhead = (key: string, d = 1.6, opts = {}) => {
     const f = g.camera.getWorldDirection(new V3());
     f.y = 0; f.normalize();
     const p = player.position.clone().addScaledVector(f, d);
@@ -124,11 +128,11 @@ const results = await page.evaluate(async () => {
     return e;
   };
   /** Hold a target still so a melee test measures the swing, not the chase. */
-  const pin = (e: any) => { e.frozenPose = { state: 'idle', phase: 0 }; return e; };
+  const pin = <T extends { frozenPose: unknown }>(e: T) => { e.frozenPose = { state: 'idle', phase: 0 }; return e; };
 
   /** Make the pack notice you, so the encounter state — and the combat HUD
    *  layer that hangs off it — is actually up. */
-  const engage = (e: any) => { e.target = player; e.awareness = 1; e.setState('chase'); return e; };
+  const engage = <T extends { target: unknown, awareness: number, setState(s: string): void }>(e: T) => { e.target = player; e.awareness = 1; e.setState('chase'); return e; };
 
   const mpFull = () => { combat.setMp(combat.maxMp); combat.stasis = false; combat.state = 'idle'; };
 
@@ -279,18 +283,25 @@ const results = await page.evaluate(async () => {
     clearField();
     combat.drawSlot(0); step(2);
     pin(spawnAhead('sabertusk'));
-    let seen: any = null; let roll = null;
-    const off = combat.on('damage', (d: any) => {
+    /** The `damage` payload this check reads back off the event. */
+    interface DamageSeen { damage: number; rolled?: boolean; source?: string }
+    let seen: DamageSeen | null = null; let roll = null;
+    // Read back through a function: the assignment happens inside the listener
+    // below, which control-flow analysis does not follow, so reading `seen`
+    // directly past the guard narrows it to `never`.
+    const takeSeen = () => seen;
+    const off = combat.on('damage', (d: DamageSeen) => {
       if (seen || d.source) return;              // ignore companion hits
       seen = d; roll = combat.lastRoll;
     });
     holdMouse(0, 60);
     off();
-    if (!seen) return F('no damage event');
+    const got = takeSeen();
+    if (!got) return F('no damage event');
     const b = roll!.breakdown || {};
-    return seen.damage === roll!.damage && seen.rolled
-      ? P(`${seen.damage} = off ${b.offence} x motion ${b.motion} x lvl ${b.levelMod} x mit ${b.mitigation}${roll!.weakness ? ' (class weakness)' : ''}${roll!.crit ? ' CRIT' : ''}`)
-      : F(`event ${seen.damage} vs roll ${roll!.damage}`);
+    return got.damage === roll!.damage && got.rolled
+      ? P(`${got.damage} = off ${b.offence} x motion ${b.motion} x lvl ${b.levelMod} x mit ${b.mitigation}${roll!.weakness ? ' (class weakness)' : ''}${roll!.crit ? ' CRIT' : ''}`)
+      : F(`event ${got.damage} vs roll ${roll!.damage}`);
   });
 
   check('weapon class weakness changes the number', () => {
@@ -422,8 +433,8 @@ const results = await page.evaluate(async () => {
   check('companion techniques fire on G / J / K', () => {
     clearField();
     combat.armigerTimer = 0;
-    const fired: any[] = [];
-    const onTech = (ev: any) => fired.push(ev.detail.member + ':' + ev.detail.tech);
+    const fired: string[] = [];
+    const onTech = (ev: WindowEventMap['encounter:tech']) => fired.push(`${ev.detail.member}:${ev.detail.tech}`);
     window.addEventListener('encounter:tech', onTech);
     for (let i = 0; i < 3; i++) spawnAhead('sabertusk', 5 + i * 2);
     step(30);
@@ -520,7 +531,7 @@ const results = await page.evaluate(async () => {
     const plates = [...document.querySelectorAll<HTMLElement>('.nameplate')].filter((n) => n.style.display !== 'none');
     if (!plates.length) return F('no nameplate in the DOM');
     const shown = plates.map((n) => `${n.querySelector<HTMLElement>('.np-name')!.textContent}@${n.querySelector<HTMLElement>('.gauge i.fill')!.style.width}`);
-    const live = enemies.list.map((x: any) => `${x.name}:${(x.hp / x.maxHp * 100).toFixed(0)}%${x.dead ? '(dead)' : ''}`);
+    const live = enemies.list.map((x: { name: string, hp: number, maxHp: number, dead: boolean }) => `${x.name}:${(x.hp / x.maxHp * 100).toFixed(0)}%${x.dead ? '(dead)' : ''}`);
     const p0 = plates[0];
     const name = p0.querySelector<HTMLElement>('.np-name')!.textContent;
     const lv = p0.querySelector<HTMLElement>('.np-lv')!.textContent;
@@ -537,7 +548,7 @@ const results = await page.evaluate(async () => {
     pin(spawnAhead('sabertusk'));
     document.querySelectorAll<HTMLElement>('.dmg').forEach((n) => n.remove());
     let last = 0;
-    const off = combat.on('damage', (d: any) => { if (!d.source) last = d.damage; });
+    const off = combat.on('damage', (d: { source?: string, damage: number }) => { if (!d.source) last = d.damage; });
     holdMouse(0, 90);
     step(2);
     off();
@@ -566,8 +577,8 @@ const results = await page.evaluate(async () => {
     clearField();
     combat.drawSlot(1); step(2);
     const exp0 = rpg.bankedExp; const gil0 = rpg.inventory.gil;
-    const kills: any[] = [];
-    const onKill = (ev: any) => kills.push(ev.detail);
+    const kills: Array<WindowEventMap['encounter:kill']['detail']> = [];
+    const onKill = (ev: WindowEventMap['encounter:kill']) => kills.push(ev.detail);
     window.addEventListener('encounter:kill', onKill);
     const e = pin(spawnAhead('goblin'));
     for (let i = 0; i < 900 && !e.dead; i++) {

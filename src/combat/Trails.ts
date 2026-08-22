@@ -12,8 +12,49 @@ import { turbulence } from './VfxTextures.ts';
 
 const MAX_SEG = 34;
 
+/** One (base, tip) pair sampled off the blade, and how long ago it was taken. */
+interface TrailSample {
+  b: THREE.Vector3;
+  t: THREE.Vector3;
+  /** Seconds since this sample was pushed; `1e3` means "unused". */
+  age: number;
+}
+
+/**
+ * The ribbon shader's uniform block, shared with `TRAIL_VERT`/`TRAIL_FRAG`.
+ *
+ * The index signature is `ShaderMaterial`'s own requirement — it takes a
+ * `{ [name: string]: IUniform }` — but every uniform this shader actually has
+ * is named below, so a typo in `uniforms.uStrength` is still a compile error.
+ */
+export interface TrailUniforms {
+  [uniform: string]: THREE.IUniform;
+  uHead: THREE.IUniform<THREE.Color>;
+  uTail: THREE.IUniform<THREE.Color>;
+  uCore: THREE.IUniform<THREE.Color>;
+  uLife: THREE.IUniform<number>;
+  uStrength: THREE.IUniform<number>;
+  uIntensity: THREE.IUniform<number>;
+  uHeadBias: THREE.IUniform<number>;
+  uNoise: THREE.IUniform<THREE.Texture>;
+  uTime: THREE.IUniform<number>;
+  uGlobal: THREE.IUniform<number>;
+}
+
+/** How a ribbon is built. Every field has a default; the pool passes one. */
+export interface TrailOpts {
+  segments?: number;
+  head?: THREE.ColorRepresentation;
+  tail?: THREE.ColorRepresentation;
+  core?: THREE.ColorRepresentation;
+  life?: number;
+  intensity?: number;
+  headBias?: number;
+  renderOrder?: number;
+}
+
 export class TrailRibbon {
-  _samples!: any[];
+  _samples!: TrailSample[];
   active!: boolean;
   ageAttr!: THREE.BufferAttribute;
   ages!: Float32Array;
@@ -25,13 +66,13 @@ export class TrailRibbon {
   positions!: Float32Array;
   segments!: number;
   strength!: number;
-  uniforms!: any;
+  uniforms!: TrailUniforms;
   uvAttr!: THREE.BufferAttribute;
   uvs!: Float32Array;
   constructor({
     segments = MAX_SEG, head = 0x9fd8ff, tail = 0x1a4c9c, core = 0xffffff,
     life = 0.34, intensity = 2.6, headBias = 0.55, renderOrder = 22,
-  } = {}) {
+  }: TrailOpts = {}) {
     this.segments = segments;
     this.life = life;
     this.count = 0;          // live samples
@@ -95,7 +136,7 @@ export class TrailRibbon {
     }
   }
 
-  setColors(head: any, tail: any, core: any) {
+  setColors(head: THREE.ColorRepresentation, tail: THREE.ColorRepresentation, core?: THREE.ColorRepresentation) {
     this.uniforms.uHead.value.set(head);
     this.uniforms.uTail.value.set(tail);
     if (core !== undefined) this.uniforms.uCore.value.set(core);
@@ -111,7 +152,7 @@ export class TrailRibbon {
   }
 
   /** Append one blade sample. Call once per frame while swinging. */
-  push(base: any, tip: any) {
+  push(base: THREE.Vector3, tip: THREE.Vector3) {
     // shift (small N, cheap)
     const s = this._samples;
     const last = s[s.length - 1];
@@ -155,7 +196,7 @@ export class TrailRibbon {
   /** Stop emitting; the ribbon dissolves over `life`. */
   release() { this.active = false; }
 
-  update(dt: number, clock: any) {
+  update(dt: number, clock: number) {
     this.uniforms.uTime.value = clock;
     if (!this.mesh.visible) return;
     let alive = false;
@@ -204,8 +245,8 @@ export class TrailRibbon {
 /** Small recycling pool so the combat system never allocates mid-fight. */
 export class TrailPool {
   _next!: number;
-  items!: any[];
-  constructor(parent: THREE.Group, size = 8, opts = {}) {
+  items!: TrailRibbon[];
+  constructor(parent: THREE.Group, size = 8, opts: TrailOpts = {}) {
     this.items = [];
     for (let i = 0; i < size; i++) {
       const t = new TrailRibbon(opts);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WALKABLE_Y } from './CollisionWorld.ts';
-import type { CollisionWorld } from './CollisionWorld.ts';
+import type { CollisionWorld, GroundHit } from './CollisionWorld.ts';
 
 /** Below this the surface no longer holds a character at all. */
 const SLIDE_Y = Math.cos(58 * Math.PI / 180);
@@ -29,22 +29,24 @@ const GRAVITY = 19.5;
  */
 export class CharacterController {
   _from!: THREE.Vector3;
-  _g!: any;
+  _g!: GroundHit;
   _hold!: number;
   climb!: number;
-  climbMax!: any;
+  /** Steepest slope the character will walk up, as `normal.y`. */
+  climbMax!: number;
   grounded!: boolean;
   height!: number;
   normal!: THREE.Vector3;
   onProp!: boolean;
   progress!: number;
   radius!: number;
-  riseRate!: any;
+  /** How fast the feet are allowed to be lifted onto a step, m/s. */
+  riseRate!: number;
   stepDown!: number;
   stepUp!: number;
   vy!: number;
   world!: CollisionWorld;
-  constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number, climbMax?: any, riseRate?: any } = {}) {
+  constructor(world: CollisionWorld, opts: {radius?: number, height?: number, stepUp?: number, stepDown?: number, climbMax?: number, riseRate?: number} = {}) {
     this.world = world;
     this.radius = opts.radius != null ? opts.radius : 0.36;
     this.height = opts.height != null ? opts.height : 1.78;

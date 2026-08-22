@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness, weatherPlate } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import {
   tube, blob, slab, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
@@ -59,8 +60,8 @@ export const IMPERIAL_SNIPER = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new SniperEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new SniperEnemy(opts); },
+} satisfies SpeciesDef;
 
 /**
  * `tint` plus the shared field-wear pass, so a plate is not one flat number.
@@ -243,11 +244,7 @@ function buildPrototype() {
 }
 
 class SniperEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(IMPERIAL_SNIPER, opts); }
+  constructor(opts: SpawnOpts) { super(IMPERIAL_SNIPER, opts); }
 
   /** World-space muzzle position — the combat system spawns the tracer here. */
   muzzle(out = new THREE.Vector3()) {
@@ -257,7 +254,7 @@ class SniperEnemy extends Enemy {
     return out.set(0.0, 0.03, 1.42).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { AtmosphereUniforms } from '../Sky.ts';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
 import { CLOUD_COMMON } from '../../shaders/clouds.glsl.ts';
@@ -318,18 +319,19 @@ export class Clouds {
   /** The original `render`, while `Dungeons` has the sky stubbed out. */
   __dungeonStub?: Clouds['render'] | null;
   renderer!: THREE.WebGLRenderer;
-  textures!: any;
+  textures!: Record<string, THREE.Data3DTexture | THREE.DataTexture>;
   _marchQuad!: FullScreenQuad;
   _shadowQuad!: FullScreenQuad;
-  marchUniforms!: any;
+  marchUniforms!: Record<string, THREE.IUniform>;
   rt!: THREE.WebGLRenderTarget;
   shadowRT!: THREE.WebGLRenderTarget;
-  shadowUniforms!: any;
-  shared!: any;
+  shadowUniforms!: Record<string, THREE.IUniform>;
+  /** The atmosphere's block, so the march and the sky agree on the weather. */
+  shared!: AtmosphereUniforms;
   /**
    * @param shared shared cloud uniform objects (see Sky.ts)
    */
-  constructor(renderer: THREE.WebGLRenderer, shared: any) {
+  constructor(renderer: THREE.WebGLRenderer, shared: AtmosphereUniforms) {
     this.renderer = renderer;
     this.shared = shared;
 

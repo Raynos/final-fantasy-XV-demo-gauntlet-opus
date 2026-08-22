@@ -3,12 +3,90 @@ import { el, svg, clamp, commas, easeOut, easeOutQuint, easeBack, rng, Clip } fr
 import { icon } from './Icons.ts';
 import { Bar } from './Bar.ts';
 import { ENEMY_TEMPLATES, hudState, readArmiger, readTechniques, rollDamage } from './GameData.ts';
+import type { TechniqueView } from './GameData.ts';
 import type { Game } from '../game/Game.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
 
 const _v = new THREE.Vector3();
 
+/** Anything with world coordinates: a `Vector3` or a bare `{x, y, z}`. */
+interface Xyz { x: number; y: number; z: number }
+
+/**
+ * One enemy as the nameplate layer draws it.
+ *
+ * Live enemies and the capture stand-ins are drawn by the same code, so this
+ * is the one shape both `_enemies` branches produce. `ref` is what tells them
+ * apart: a stand-in has no enemy behind it.
+ */
+interface PlateEnemy {
+  /** The real enemy, when there is one. */
+  ref?: Enemy;
+  name: string;
+  level: number;
+  hp: number;
+  maxHp: number;
+  /** Icon key of the elemental weakness, or null. */
+  weak: string | null;
+  height: number;
+  pos: Xyz;
+  alive: boolean;
+  /** True for a stand-in, which `_standIn` is allowed to drive. */
+  mock?: boolean;
+  /** Stand-ins only: phase offset for the idle drift. */
+  phase?: number;
+}
+
+/** A floating damage number, as `CombatHUD.damage()` is asked for one. */
+export interface DamageEvent {
+  /** Where the hit landed. */
+  world: Xyz;
+  amount?: number;
+  crit?: boolean;
+  /** `hit` | `crit` | `heal` | `taken`. */
+  kind?: string;
+  element?: string | null;
+}
+
+/** One live damage number on screen. */
+interface FloatingNumber {
+  node: HTMLElement;
+  crit: boolean;
+  world: THREE.Vector3;
+  /** Screen-space drift, px. */
+  dx: number;
+  dy: number;
+  /** World-space drift, metres per unit of clip time. */
+  jx: number;
+  jy: number;
+  jz: number;
+  size: number;
+  clip: Clip;
+}
+
+/** One enemy nameplate, and the values it was last drawn with. */
+interface Nameplate {
+  node: HTMLElement;
+  bar: Bar;
+  name: HTMLElement;
+  lv: HTMLElement;
+  weak: HTMLElement;
+  key: string;
+  _vis?: boolean;
+  _focus?: boolean;
+}
+
+/** The centre call-out banner while it is on screen. */
+interface Callout {
+  word: string;
+  sub: string;
+  /** Warm tint for the link/chain/crit family. */
+  warm: boolean;
+  clip: Clip;
+}
+
 /** Project a world point to CSS pixels. Returns null when behind the camera. */
-function project(p: any, camera: THREE.Camera, w: number, h: number) {
+function project(p: Xyz, camera: THREE.Camera, w: number, h: number) {
   _v.set(p.x, p.y, p.z).project(camera);
   if (_v.z > 1) return null;
   return { x: (_v.x * 0.5 + 0.5) * w, y: (-_v.y * 0.5 + 0.5) * h, depth: _v.z };
@@ -24,15 +102,15 @@ function project(p: any, camera: THREE.Camera, w: number, h: number) {
  * renderable for captures.
  */
 export class CombatHUD {
-  callout!: any;
+  callout!: Callout | null;
   calloutSub!: HTMLElement;
   _armPct!: string;
   _armigerDriven!: boolean;
   _beat!: number;
   _didCall!: boolean;
-  _lastTarget!: any;
+  _lastTarget!: PlateEnemy | Enemy | null;
   _wasActive!: boolean;
-  armiger!: any;
+  armiger!: { node: HTMLElement, bar: Bar, pct: HTMLElement };
   armigerVal!: number;
   calloutNode!: HTMLElement;
   calloutRule!: HTMLElement;
@@ -40,16 +118,18 @@ export class CombatHUD {
   corner!: HTMLElement;
   dmgLayer!: HTMLElement;
   lockAge!: number;
-  lockOn!: any;
-  mockEnemies!: any;
+  /** The enemy `CombatSystem` says is locked on, or null. */
+  lockOn!: Enemy | null;
+  /** The stand-in encounter, built lazily; null until a capture needs it. */
+  mockEnemies!: PlateEnemy[] | null;
   mockSeq!: number;
   mockT!: number;
-  numbers!: any[];
+  numbers!: FloatingNumber[];
   plateLayer!: HTMLElement;
-  plates!: any[];
-  reticle!: any;
+  plates!: Nameplate[];
+  reticle!: { node: HTMLElement, svg: SVGElement, spin: SVGElement, ring2: SVGElement, dot: SVGElement };
   root!: HTMLElement;
-  techs!: any;
+  techs!: { node: HTMLElement, rows: Array<{ row: HTMLElement, bar: Bar, t: TechniqueView, _on?: boolean }> };
   /**
    * @param parent full-screen layer for world-anchored chrome
    * @param [corner] the bottom-left corner slot owned by
@@ -162,7 +242,7 @@ export class CombatHUD {
   /**
    * Pop a floating damage number at a world position.
    */
-  damage(ev: any) {
+  damage(ev: DamageEvent) {
     if (!ev || !ev.world) return;
     const crit = !!ev.crit || ev.kind === 'crit';
     const amount = Math.round(ev.amount ?? 0);
@@ -186,7 +266,7 @@ export class CombatHUD {
       size,
       clip: new Clip(crit ? 1.35 : 1.05),
     });
-    if (this.numbers.length > 22) this._retire(this.numbers.shift());
+    if (this.numbers.length > 22) this._retire(this.numbers.shift() ?? null);
   }
 
   /** Show a big centre call-out. @param word @param [sub] */
@@ -198,7 +278,7 @@ export class CombatHUD {
   }
 
   /** @param target object with `.position`, or null to clear */
-  setLockOn(target: any | null) {
+  setLockOn(target: Enemy | null) {
     if (target !== this.lockOn) this.lockAge = 0;
     this.lockOn = target;
   }
@@ -272,7 +352,7 @@ export class CombatHUD {
     // `CombatSystem` carries no per-technique readiness — the party's tech-bar
     // charge below is the only live source there has ever been.
     const rpgSys = game.get('Rpg');
-    this.techs.rows.forEach((r: any, i: number) => {
+    this.techs.rows.forEach((r, i) => {
       let ready = r.t.ready;
       if (bars != null && rpgSys && r.t.cost > 0) ready = clamp(rpgSys.party.techCharge / r.t.cost, 0, 1);
       r.bar.set(ready, dt);
@@ -300,7 +380,7 @@ export class CombatHUD {
           return cam.position.distanceToSquared(pa) - cam.position.distanceToSquared(pb);
         });
       }
-      return near.slice(0, 5).map((e2, i) => {
+      return near.slice(0, 5).map((e2, i): PlateEnemy => {
         const pos = e2.position || e2.root?.position || { x: 0, y: 0, z: 0 };
         const tpl = ENEMY_TEMPLATES[i % ENEMY_TEMPLATES.length];
         return {
@@ -310,7 +390,7 @@ export class CombatHUD {
           hp: e2.hp ?? tpl.hp, maxHp: e2.maxHp ?? tpl.maxHp,
           // the species carries its own elemental weakness; the template is
           // only a stand-in for enemies that have not declared one
-          weak: e2.type?.weakness || e2.weak || tpl.weak,
+          weak: e2.type?.weakness || tpl.weak,
           height: (e2.height ?? 2.0) * (e2.scale ?? 1),
           pos,
           alive: e2.hp == null || e2.hp > 0,
@@ -332,7 +412,7 @@ export class CombatHUD {
       const rx = -fz, rz = fx;
       // [distance ahead of the player, lateral offset, template]
       const layout = [[3.6, -1.5, 0], [5.4, 1.9, 1], [7.8, -3.2, 2]];
-      this.mockEnemies = layout.map(([fwd, lat, ti], i) => {
+      this.mockEnemies = layout.map(([fwd, lat, ti], i): PlateEnemy => {
         const x = base.x + fx * fwd + rx * lat;
         const z = base.z + fz * fwd + rz * lat;
         const y = terrain?.heightAt ? terrain.heightAt(x, z) : 0;
@@ -344,7 +424,7 @@ export class CombatHUD {
         };
       });
     }
-    return this.mockEnemies.filter((x: any) => x.alive);
+    return this.mockEnemies.filter((x) => x.alive);
   }
 
   /**
@@ -360,7 +440,7 @@ export class CombatHUD {
    * `Stats.computeDamage()` against the real target, so a posed frame prints the
    * same number the same swing would print in a real fight.
    */
-  _standIn(dt: number, game: Game, enemies: any) {
+  _standIn(dt: number, game: Game, enemies: PlateEnemy[]) {
     if (!enemies.length) return;
     const posed = !!game.get?.('Enemies')?.frozen;
     if (!enemies[0].mock && !posed) return;
@@ -369,8 +449,8 @@ export class CombatHUD {
     // mock enemies drift slightly so nameplates visibly track world space
     if (enemies[0].mock) {
       for (const e2 of enemies) {
-        e2.pos.x += Math.sin(this.mockT * 0.9 + e2.phase) * dt * 0.42;
-        e2.pos.z += Math.cos(this.mockT * 0.7 + e2.phase) * dt * 0.34;
+        e2.pos.x += Math.sin(this.mockT * 0.9 + (e2.phase ?? 0)) * dt * 0.42;
+        e2.pos.z += Math.cos(this.mockT * 0.7 + (e2.phase ?? 0)) * dt * 0.34;
       }
     }
 
@@ -402,7 +482,7 @@ export class CombatHUD {
     }
   }
 
-  _syncPlates(enemies: any, cam: THREE.Camera, w: number, h: number, dt: number, game: Game, appear: number) {
+  _syncPlates(enemies: PlateEnemy[], cam: THREE.Camera, w: number, h: number, dt: number, game: Game, appear: number) {
     while (this.plates.length < enemies.length) {
       const bar = new Bar({ cls: 'slim cut' }).tint('hostile');
       const name = el('div.np-name');
@@ -439,8 +519,12 @@ export class CombatHUD {
       const fade = clamp(1.35 - d * 0.026, 0.32, 1) * easeOut(clamp((appear - 0.2) / 0.6, 0, 1));
       // Plates wrap the enemy, so compare identity against the wrapped ref —
       // `this.lockOn` is the raw enemy and never equals its wrapper.
-      const focus = !!(this.lockOn && (this.lockOn === e2 || this.lockOn === e2.ref
-        || this.lockOn.ref === e2.ref));
+      //
+      // A third arm, `this.lockOn.ref === e2.ref`, used to sit here. `Enemy`
+      // has no `ref`, so it read `undefined === e2.ref` — true for every
+      // stand-in plate at once, which lit the whole rank as the lock-on
+      // target whenever a capture ran with a lock set.
+      const focus = !!(this.lockOn && this.lockOn === e2.ref);
       if (pl._focus !== focus) { pl.node.classList.toggle('focus', focus); pl._focus = focus; }
       const cx = clamp(sp.x, 92, w - 92);
       pl.node.style.transform = `translate(${cx.toFixed(1)}px, ${sp.y.toFixed(1)}px) scale(${scale.toFixed(3)})`;
@@ -448,19 +532,19 @@ export class CombatHUD {
     }
   }
 
-  _updateReticle(dt: number, game: Game, cam: THREE.Camera, w: number, h: number, enemies: any, appear: number) {
-    let target = this.lockOn;
+  _updateReticle(dt: number, game: Game, cam: THREE.Camera, w: number, h: number, enemies: PlateEnemy[], appear: number) {
+    let target: PlateEnemy | Enemy | null = this.lockOn;
     // `Combat.lockOn` is the *setter method*; the current target is
     // `lockTarget`. Reading the method here made the reticle follow a function.
     const live = game.get?.('Combat')?.lockTarget;
-    if (live) target = this._enemies(game).find((e: any) => e.ref === live) || target;
+    if (live) target = this._enemies(game).find((e) => e.ref === live) || target;
     if (!target && enemies.length) target = enemies[0];
     if (target !== this._lastTarget) { this.lockAge = 0; this._lastTarget = target; }
     this.lockAge += dt;
 
-    const pos = target && (target.pos || target.position || target.root?.position);
+    const pos: Xyz | null = target ? ('pos' in target ? target.pos : target.position) : null;
     if (!pos || !cam) { this.reticle.node.style.display = 'none'; return; }
-    const height = target.height ?? 1.7;
+    const height = target?.height ?? 1.7;
     const sp = project({ x: pos.x, y: pos.y + height * 0.55, z: pos.z }, cam, w, h);
     if (!sp) { this.reticle.node.style.display = 'none'; return; }
     this.reticle.node.style.display = '';
@@ -498,7 +582,7 @@ export class CombatHUD {
     }
   }
 
-  _retire(n: any) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
+  _retire(n: FloatingNumber | null) { if (n && n.node.parentNode) n.node.parentNode.removeChild(n.node); }
 
   /**
    * Drive the centre call-out. Every value is written from the clip's own

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { InteractPrompt } from './InteractPrompt.ts';
 import { Dialogue } from './Dialogue.ts';
 import type { Game } from '../Game.ts';
+import type { ScreenName } from '../../ui/Menus.ts';
 
 /**
  * The interaction verb.
@@ -41,6 +42,55 @@ const _to = new THREE.Vector3();
 
 let _nextId = 0;
 
+/**
+ * A thing in the world the player can press E on, **as registered**: every
+ * default is filled in, which is what `_pick` scores against.
+ */
+export interface Interactable {
+  id: string;
+  pos: THREE.Vector3;
+  /** Metres the prompt appears within. */
+  radius: number;
+  /** Degrees off the player's facing that still count as looking at it. */
+  cone: number;
+  /** The word on the prompt -- 'Talk', 'Open', 'Rest'. */
+  verb: string;
+  label: string;
+  hint: string;
+  /** Higher wins a tie; distance and facing break the rest. */
+  priority: number;
+  /** Metres above `pos` the prompt floats. */
+  yOffset: number;
+  handler: (game: Game, item: Interactable) => void;
+  enabled: () => boolean;
+  /** Key cap drawn on the prompt. */
+  key: string;
+}
+
+/** The same thing **as authored**: everything but `pos` and `handler` optional. */
+export interface InteractableSpec {
+  id?: string;
+  pos: THREE.Vector3 | number[];
+  radius?: number;
+  cone?: number;
+  verb?: string;
+  label?: string;
+  hint?: string;
+  priority?: number;
+  yOffset?: number;
+  handler: (game: Game, item: Interactable) => void;
+  enabled?: () => boolean;
+  key?: string;
+}
+
+/** What `register` hands back, so a caller never touches the registry. */
+export interface InteractableHandle {
+  id: string;
+  item: Interactable;
+  set: (patch: Partial<Interactable>) => void;
+  dispose: () => void;
+}
+
 export class InteractionSystem {
   _firedAt!: number;
   _gpPrev!: boolean;
@@ -48,15 +98,15 @@ export class InteractionSystem {
   _playerPos!: THREE.Vector3;
   appear!: number;
   blocked!: boolean;
-  current!: any;
+  /** The interactable the prompt is currently offering, or null. */
+  current!: Interactable | null;
   dialogue!: Dialogue;
   game!: Game;
-  items!: Map<any, any>;
+  /** Live interactables keyed by id. */
+  items!: Map<string, Interactable>;
   prompt!: InteractPrompt;
   constructor() {
-    /** @type {Map<string, object>} live interactables keyed by id */
     this.items = new Map();
-    /** The interactable the prompt is currently offering, or null. */
     this.current = null;
     /** Raised while a screen, dialogue or cutscene owns the E key. */
     this.blocked = false;
@@ -80,9 +130,9 @@ export class InteractionSystem {
    *
    * @param {object} def
    */
-  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:Game, item:any)=>void, enabled?: ()=>boolean, key?: any }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
+  register(def: InteractableSpec): InteractableHandle {
     const id = def.id || `ix${_nextId++}`;
-    const item = {
+    const item: Interactable = {
       id,
       pos: def.pos instanceof THREE.Vector3 ? def.pos : new THREE.Vector3().fromArray(def.pos || [0, 0, 0]),
       radius: def.radius ?? 2.8,
@@ -108,7 +158,7 @@ export class InteractionSystem {
   unregister(id: string) { this.items.delete(id); }
 
   /** Look an interactable up by id. */
-  get(id: any) { return this.items.get(id) || null; }
+  get(id: string): Interactable | null { return this.items.get(id) || null; }
 
   /**
    * Start a conversation. While one is running the interaction verb is blocked
@@ -124,7 +174,7 @@ export class InteractionSystem {
    * Push a screen and suppress the prompt until it closes. Used by the shop and
    * the hunt board so E does not immediately re-trigger on the way out.
    */
-  openScreen(name: string) {
+  openScreen(name: ScreenName) {
     const menus = this.game?.get?.('Menus');
     if (!menus) return false;
     menus.stack.length = 0;
@@ -180,7 +230,7 @@ export class InteractionSystem {
   }
 
   /** Nearest valid interactable, with hysteresis for the incumbent. */
-  _pick(player: any) {
+  _pick(player: import('../../characters/Player.ts').Player): Interactable | null {
     const p = this._playerPos.copy(player.position);
     // Face the way the player's body is pointing, not the camera: FFXV's prompt
     // follows the character, which is what makes walking past a pump feel like
@@ -188,7 +238,7 @@ export class InteractionSystem {
     const h = player.heading ?? 0;
     _fwd.set(Math.sin(h), 0, Math.cos(h));
 
-    let best: any = null;
+    let best: Interactable | null = null;
     let bestScore = Infinity;
     for (const item of this.items.values()) {
       if (!item.enabled()) continue;

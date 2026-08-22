@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from '../game/Game.ts';
-import { isDirectionalLight, isLight, isObject3D } from '../util/three-guards.ts';
+import { isDirectionalLight, isLight, isMesh, isObject3D, isSkinnedMesh } from '../util/three-guards.ts';
 
 /**
  * How far off the sun's azimuth the turntable parks. Straight down the sun
@@ -30,12 +30,15 @@ const KEY_OFFSET = 0.6;
  * get added and renamed; "is it a light" does not.
  */
 export class Stage {
-  _hidden!: any[];
+  /** Scene children hidden on the way in, restored on the way out. */
+  _hidden!: THREE.Object3D[];
   _current!: THREE.Object3D | null;
-  _keep!: Set<any>;
+  /** Objects the stage must not hide: the lights and the sky. */
+  _keep!: Set<THREE.Object3D>;
   _needFrame!: boolean;
   _timeWas!: number | null;
-  _uiWas!: any[] | null;
+  /** UI roots hidden on the way in, with the `display` each one had. */
+  _uiWas!: Array<[HTMLElement, string]> | null;
   active!: boolean;
   dist!: number;
   faceOffset!: number;
@@ -227,13 +230,13 @@ export class Stage {
 
   /** Stats worth showing beside a staged asset. */
   stats() {
-    let tris = 0, meshes = 0, mats = new Set(), bones = 0;
+    let tris = 0, meshes = 0, mats = new Set<string>(), bones = 0;
     if (this._current) {
-      this._current.traverse((o: any) => {
-        if (o.isSkinnedMesh && o.skeleton) bones = Math.max(bones, o.skeleton.bones.length);
-        if (o.isMesh && o.geometry) {
+      this._current.traverse((o) => {
+        if (isSkinnedMesh(o) && o.skeleton) bones = Math.max(bones, o.skeleton.bones.length);
+        if (isMesh(o) && o.geometry) {
           meshes++;
-          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: any) => mats.add(m.uuid));
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m.uuid));
           const g = o.geometry;
           tris += g.index ? g.index.count / 3 : (g.attributes.position ? g.attributes.position.count / 3 : 0);
         }

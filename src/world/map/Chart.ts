@@ -1,4 +1,6 @@
 import { worldMap, WORLD } from './WorldMap.ts';
+import type { Biome, ZoneWeights } from './WorldMap.ts';
+import type { Terrain } from '../Terrain.ts';
 
 /**
  * THE CHART OF LUCIS — a baked relief map of the whole continent.
@@ -65,19 +67,24 @@ const P = {
 const SHADOW = [26, 38, 56];
 const LIGHT = [252, 240, 214];
 
+/** How big to bake the chart. Omit and it matches the heightfield grid. */
+export interface ChartOpts {
+  /** Side of the square image, px. */
+  size?: number;
+}
+
 /**
  * A baked chart. `canvas` is the image; the rest is the projection and the
  * source data other map layers reuse.
  */
 export class Chart {
-  height!: any;
-  water!: any;
+  height!: Float32Array;
+  water!: Uint8Array;
   canvas!: HTMLCanvasElement;
   ms!: number;
   ppm!: number;
-  size!: any;
-  constructor(canvas: HTMLCanvasElement, ppm: number, size: any, height: any, water: Uint8Array, ms: number) {
-    /** @type {HTMLCanvasElement} */
+  size!: number;
+  constructor(canvas: HTMLCanvasElement, ppm: number, size: number, height: Float32Array, water: Uint8Array, ms: number) {
     this.canvas = canvas;
     /** Canvas pixels per world metre. */
     this.ppm = ppm;
@@ -111,15 +118,15 @@ export class Chart {
   }
 }
 
-let _chart: any = null;
-let _chartFor: any = null;
+let _chart: Chart | null = null;
+let _chartFor: Terrain | null | undefined = null;
 
 /**
  * The shared chart. Built on first call and reused for the lifetime of the
  * terrain — three separate map surfaces ask for it and only one gets baked.
  * @param terrain the live `Terrain` system
  */
-export function getChart(terrain: any, opt?: any): Chart {
+export function getChart(terrain: Terrain | null | undefined, opt?: ChartOpts): Chart {
   if (_chart && _chartFor === terrain) return _chart;
   _chart = bakeChart(terrain, opt);
   _chartFor = terrain;
@@ -130,7 +137,7 @@ export function getChart(terrain: any, opt?: any): Chart {
  * Rasterise the world into one relief chart.
  * @param terrain the live `Terrain` system
  */
-export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
+export function bakeChart(terrain: Terrain | null | undefined, opt: ChartOpts = {}): Chart {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const t0 = now();
   const field = terrain && terrain.field && terrain.field.h ? terrain.field : null;
@@ -203,14 +210,13 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
   const moistG = new Float32Array(MN * MN);
   const greenG = new Float32Array(MN * MN);
   const coolG = new Float32Array(MN * MN);
-  const bio: any = {};
-  const wts = {};
+  const bio: Partial<Biome> = {};
+  const wts: ZoneWeights = {};
   for (let j = 0; j < MN; j++) {
     const z = -WORLD.half + j * 16 * mPerPx;
     for (let i = 0; i < MN; i++) {
       const x = -WORLD.half + i * 16 * mPerPx;
-      worldMap.biomeAt(x, z, bio);
-      moistG[j * MN + i] = bio.moist;
+      moistG[j * MN + i] = worldMap.biomeAt(x, z, bio).moist;
       worldMap.zoneWeights(x, z, wts);
       let gr = 0, co = 0;
       for (const id in wts) {
@@ -441,7 +447,7 @@ function boxBlur2D(src: Float32Array, n: number, r: number): Float32Array {
 
 const clampI = (v: number, n: number) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
 
-function sampleBilinear(a: any, n: number, x: number, y: number) {
+function sampleBilinear(a: ArrayLike<number>, n: number, x: number, y: number) {
   let i = x | 0, j = y | 0;
   if (i < 0) i = 0; else if (i > n - 2) i = n - 2;
   if (j < 0) j = 0; else if (j > n - 2) j = n - 2;

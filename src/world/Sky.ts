@@ -6,6 +6,8 @@ import { MaterialPatch } from './sky/MaterialPatch.ts';
 import { GodRaysPass } from './sky/GodRays.ts';
 import { SHOTS } from '../game/Shots.ts';
 import type { Game } from '../game/Game.ts';
+import { isWeatherName } from './Weather.ts';
+import type { WeatherName } from './Weather.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
@@ -54,7 +56,134 @@ const SHADOW_STRIDE = { low: [2, 6, 12], medium: [1, 3, 6], high: [1, 2, 4], ult
  * cumulus profile is reserved for the strong parts of the field. It is what
  * makes a storm read as towers standing out of a low ragged base.
  */
-const WEATHER = {
+/**
+ * The atmosphere's shared uniform block.
+ *
+ * One object drives the sky dome, the cloud march, the god rays and every
+ * world material `MaterialPatch` has touched — which is why aerial perspective
+ * on a rock agrees with the sky behind it. The index signature is what
+ * `ShaderMaterial` takes; every uniform the shaders read is named below it.
+ */
+export interface AtmosphereUniforms {
+  [uniform: string]: THREE.IUniform;
+  uSkyLut: THREE.IUniform<THREE.Texture | null>;
+  uTransLut: THREE.IUniform<THREE.Texture | null>;
+  uCloudTex: THREE.IUniform<THREE.Texture | null>;
+  uCloudShadowMap: THREE.IUniform<THREE.Texture | null>;
+  uCloudBase: THREE.IUniform<THREE.Texture | null>;
+  uCloudDetail: THREE.IUniform<THREE.Texture | null>;
+  uCloudWeather: THREE.IUniform<THREE.Texture | null>;
+  uResolution: THREE.IUniform<THREE.Vector2>;
+  uCloudMode: THREE.IUniform<number>;
+  uPixelAngle: THREE.IUniform<number>;
+  uTime: THREE.IUniform<number>;
+  uCamAlt: THREE.IUniform<number>;
+  uSunDir: THREE.IUniform<THREE.Vector3>;
+  uMoonDir: THREE.IUniform<THREE.Vector3>;
+  uSunTint: THREE.IUniform<THREE.Vector3>;
+  uSunIntensity: THREE.IUniform<number>;
+  uSunAngRadius: THREE.IUniform<number>;
+  uSunDiscBrightness: THREE.IUniform<number>;
+  uMoonAngRadius: THREE.IUniform<number>;
+  uMoonPhase: THREE.IUniform<number>;
+  uMoonBright: THREE.IUniform<number>;
+  uMoonTint: THREE.IUniform<THREE.Vector3>;
+  uMoonLight: THREE.IUniform<number>;
+  uNight: THREE.IUniform<number>;
+  uStarBright: THREE.IUniform<number>;
+  uMilkyWay: THREE.IUniform<number>;
+  uSkyDim: THREE.IUniform<number>;
+  uOvercast: THREE.IUniform<number>;
+  uStarRot: THREE.IUniform<THREE.Matrix3>;
+  uNightTint: THREE.IUniform<THREE.Vector3>;
+  uCirrus: THREE.IUniform<number>;
+  uCirrusHeight: THREE.IUniform<number>;
+  uWindOffset: THREE.IUniform<THREE.Vector2>;
+  uCloudBottom: THREE.IUniform<number>;
+  uCloudTop: THREE.IUniform<number>;
+  uCloudCoverage: THREE.IUniform<number>;
+  uCloudDensity: THREE.IUniform<number>;
+  uCloudDetailAmt: THREE.IUniform<number>;
+  uCloudType: THREE.IUniform<number>;
+  uCloudBaseTile: THREE.IUniform<number>;
+  uCloudVertTile: THREE.IUniform<number>;
+  uCloudDetailTile: THREE.IUniform<number>;
+  uWeatherTile: THREE.IUniform<number>;
+  uCloudWind: THREE.IUniform<THREE.Vector2>;
+  uAnvil: THREE.IUniform<number>;
+  uEnvCloudGain: THREE.IUniform<number>;
+  uCloudHaze: THREE.IUniform<number>;
+  uCovRange: THREE.IUniform<THREE.Vector2>;
+  uTowerAmt: THREE.IUniform<number>;
+  uBaseLift: THREE.IUniform<number>;
+  uBaseSag: THREE.IUniform<number>;
+  uVirga: THREE.IUniform<number>;
+  uVirgaFloor: THREE.IUniform<number>;
+  uShadowTile: THREE.IUniform<number>;
+  uShadowFieldScale: THREE.IUniform<number>;
+  uCloudShadowStrength: THREE.IUniform<number>;
+  uShadowStrength: THREE.IUniform<number>;
+  uFogDensity: THREE.IUniform<number>;
+  uFogHeight: THREE.IUniform<number>;
+  uFogBase: THREE.IUniform<number>;
+  uHazeBase: THREE.IUniform<number>;
+  uAerialTint: THREE.IUniform<THREE.Vector3>;
+  uAerialStrength: THREE.IUniform<number>;
+  uSpecIBL: THREE.IUniform<number>;
+}
+
+/**
+ * One weather preset: everything the sky, the cloud march and the grade read
+ * off the current conditions. All four presets carry the whole set, so a
+ * cross-fade between any two is a straight per-field lerp.
+ */
+export interface SkyPreset {
+  /**
+   * Every field is a number, which is what lets `update` cross-fade the whole
+   * preset with one loop; each one the shaders read is named below.
+   */
+  [field: string]: number;
+  /** 0..1 how much of the sky the cloud field closes over. */
+  coverage: number;
+  density: number;
+  /** 0..1 stratus (0) .. cumulus (1). */
+  type: number;
+  detail: number;
+  anvil: number;
+  /** Coverage remap window. */
+  covLo: number;
+  covHi: number;
+  tower: number;
+  baseLift: number;
+  baseSag: number;
+  cloudHaze: number;
+  /** Rain streaks hanging under the base. */
+  virga: number;
+  /** Silver lining on a backlit edge. */
+  silver: number;
+  baseShade: number;
+  /** Cloud slab, metres. */
+  bottom: number;
+  top: number;
+  cirrus: number;
+  cloudShadow: number;
+  fogDensity: number;
+  fogHeight: number;
+  haze: number;
+  sunMul: number;
+  ambient: number;
+  /** 0..1 how far the whole sky is dimmed. */
+  skyDim: number;
+  /** 0..1 the overcast grade weight. */
+  overcast: number;
+  exposureMul: number;
+  godRays: number;
+  shadowScale: number;
+/** Wind speed the cloud field scrolls at. */
+  wind: number;
+}
+
+const WEATHER: Record<WeatherName, SkyPreset> = {
   clear: {
     // "Clear" has to mean *blue with cumulus in it*. At 0.80 the field closed
     // over into a continuous deck and the sky at midday was a lid — the thing a
@@ -138,7 +267,8 @@ export class Sky {
   _raysInserted!: boolean;
   _scanCountdown!: number;
   _shadowDirty!: boolean;
-  _shotSeen!: any;
+  /** `game.currentShot` the sky was last staged for. */
+  _shotSeen!: string | null;
   _weatherExternal!: boolean;
   _windOffset!: THREE.Vector2;
   ambient!: THREE.HemisphereLight;
@@ -148,7 +278,7 @@ export class Sky {
   clouds!: Clouds;
   csm!: CSM;
   dome!: THREE.Mesh;
-  envRT!: any;
+  envRT!: THREE.WebGLRenderTarget | null;
   envScene!: THREE.Scene;
   exposure!: number;
   exposureCeiling!: number;
@@ -157,14 +287,16 @@ export class Sky {
   hours!: number;
   moon!: THREE.DirectionalLight;
   moonDir!: THREE.Vector3;
-  params!: any;
+  /** The conditions in force right now, cross-fading toward `target`. */
+  params!: SkyPreset;
   patch!: MaterialPatch;
   pmrem!: THREE.PMREMGenerator;
   sun!: THREE.DirectionalLight;
   sunDir!: THREE.Vector3;
-  target!: any;
-  u!: any;
-  weather!: string;
+  target!: SkyPreset;
+  /** The atmosphere's uniform block, shared with every patched material. */
+  u!: AtmosphereUniforms;
+  weather!: WeatherName;
   constructor() {
     this.hours = 12;
     this.weather = 'clear';
@@ -285,7 +417,7 @@ export class Sky {
     this.patch.scan(scene);
   }
 
-  _makeUniforms() {
+  _makeUniforms(): AtmosphereUniforms {
     return {
       uSkyLut: { value: null },
       uTransLut: { value: null },
@@ -675,7 +807,8 @@ export class Sky {
     else if (h < 20.4) { a = 'golden'; b = 'night'; t = smoothstep(0, 1, (h - 18.6) / 1.8); }
     else { a = b = 'night'; t = 0; }
 
-    const heavy = { storm: 0.92, overcast: 0.75, fog: 0.45 }[this.weather];
+    const heavy: number | undefined =
+      ({ storm: 0.92, overcast: 0.75, fog: 0.45 } as Partial<Record<WeatherName, number>>)[this.weather];
     if (heavy) post.setGradeBlend(t > 0.5 ? b : a, 'storm', heavy);
     else post.setGradeBlend(a, b, t);
   }
@@ -696,8 +829,9 @@ export class Sky {
     // fall back to the shot's declared weather until a Weather system drives us
     if (!this._weatherExternal && this.game && this.game.currentShot !== this._shotSeen) {
       this._shotSeen = this.game.currentShot;
-      const w = SHOTS[this._shotSeen as keyof typeof SHOTS] && SHOTS[this._shotSeen as keyof typeof SHOTS].weather;
-      if (w && WEATHER[w as keyof typeof WEATHER]) { this.weather = w; this.target = Object.assign({}, WEATHER[w as keyof typeof WEATHER]); }
+      const w = SHOTS[this._shotSeen as keyof typeof SHOTS]?.weather;
+      // a shot's `weather` is authored as a plain string; ask before trusting it
+      if (isWeatherName(w)) { this.weather = w; this.target = Object.assign({}, WEATHER[w]); }
     }
 
     const k = 1 - Math.exp(-dt * 6);

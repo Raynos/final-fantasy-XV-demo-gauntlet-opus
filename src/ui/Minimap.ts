@@ -6,7 +6,8 @@ import { drawGlyph, POI_GLYPH } from '../world/map/MapGlyphs.ts';
 import { fog } from '../world/map/FogOfWar.ts';
 import type { Chart } from '../world/map/Chart.ts';
 import type { FogOfWar } from '../world/map/FogOfWar.ts';
-import type { WorldMap } from '../world/map/WorldMap.ts';
+import type { WorldMap, Poi } from '../world/map/WorldMap.ts';
+import type { Terrain } from '../world/Terrain.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -37,10 +38,18 @@ const DPR_CAP = 2;
 const RANGE_STEPS = [140, 260, 480, 900];
 
 export class Minimap {
-  _onResize!: any;
+  _onResize!: () => void;
   _a!: number;
-  _discAt!: any;
-  _flash!: any;
+  /** `game.time.now` of the last discovery sweep; they run at 2.5 Hz. */
+  _discAt!: number | null;
+  /**
+   * The most recently discovered point, for a "location discovered" flourish.
+   *
+   * **Nothing reads this.** It is written on every discovery and never drawn,
+   * so the flourish it was added for has never appeared. Left in place rather
+   * than deleted because the fix is to draw it, not to forget it.
+   */
+  _flash!: { at: number, poi: Poi } | null;
   _heading!: number;
   canvas!: HTMLCanvasElement;
   chart!: Chart;
@@ -56,9 +65,16 @@ export class Minimap {
   root!: HTMLElement;
   rotate!: boolean;
   scaleEl!: HTMLElement;
-  terrain!: any;
+  terrain!: Terrain | undefined;
   visible!: boolean;
-  waypoint!: any;
+  /**
+   * The tracked quest's world position, drawn as a pulsing ring on the rim.
+   *
+   * **Nothing in the repo assigns this.** `GameData.readQuest().waypoint` and
+   * `readMarkers()` both publish exactly what it wants and neither is wired to
+   * it, so the quest ring has never been drawn on the minimap.
+   */
+  waypoint!: { x: number, z: number } | null;
   zoneEl!: HTMLElement;
   constructor() {
     /** Metres from the player edge-to-centre. */
@@ -70,6 +86,9 @@ export class Minimap {
     this.cost = 0;
     this._heading = 0;
     this._a = 0;
+    this._discAt = null;
+    this._flash = null;
+    this.waypoint = null;
   }
 
   async init(game: Game) {
@@ -310,7 +329,7 @@ export class Minimap {
     };
     const party = game.get('Party');
     for (const m of (party?.members || [])) {
-      const p = m.position || m.root?.position;
+      const p = m.root?.position;
       if (p) blip(p.x, p.z, 'rgba(182,214,248,0.95)', 2.5);
     }
     const enemies = game.get('Enemies');

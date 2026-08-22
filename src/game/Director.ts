@@ -6,6 +6,31 @@ import { HuntRuntime } from './encounters/HuntRuntime.ts';
 import { PartyAI } from '../characters/ai/PartyAI.ts';
 import type { ScenarioName } from './Shots.ts';
 import type { Game } from './Game.ts';
+import type { Enemies } from '../characters/Enemies.ts';
+import type { PoseName as EnemyPoseName } from '../characters/enemies/EnemyBase.ts';
+import type { Player } from '../characters/Player.ts';
+import type { CombatSystem } from '../combat/CombatSystem.ts';
+import type { VFX } from '../combat/VFX.ts';
+import type { TrailRibbon } from '../combat/Trails.ts';
+import type { Terrain } from '../world/Terrain.ts';
+
+/** Where the player was parked by a scenario, so every frame can re-assert it. */
+interface FrozenPlayer {
+  pos: THREE.Vector3;
+  heading: number;
+}
+
+/**
+ * The armiger swing a combat tableau leaves hanging in the air. Rebuilt every
+ * frame against the live camera, which is why the pivot and the reach vector
+ * have to survive the frame that authored them.
+ */
+interface FrozenSwing {
+  trail: TrailRibbon;
+  pivot: THREE.Vector3;
+  /** Pivot -> target, in world space. */
+  toTarget: THREE.Vector3;
+}
 
 /**
  * Scenario director, and the host for the live gameplay systems.
@@ -23,29 +48,30 @@ import type { Game } from './Game.ts';
  */
 export class Director {
   _ambient!: number;
-  _frozenPlayer!: any;
-  _swing!: any;
+  _frozenPlayer!: FrozenPlayer | null;
+  _swing!: FrozenSwing | null;
   _tmp!: THREE.Vector3;
-  combat!: any;
-  downed!: any;
-  encounters!: any;
-  enemies!: any;
+  combat!: CombatSystem | undefined;
+  downed!: Downed;
+  encounters!: EncounterDirector;
+  enemies!: Enemies | undefined;
   game!: Game;
-  home!: any;
-  homeHeading!: any;
+  /** The scenario anchor: where the player stood at boot. */
+  home!: THREE.Vector3;
+  homeHeading!: number;
   hunts!: HuntRuntime;
   live!: boolean;
   /** What kind of moment the HUD should dress for. Written by
    *  `EncounterDirector._publishMode()` and read by `HUD._resolveMode()`;
    *  `null` (or absent) means "no live opinion", and the scenario wins. */
   mode!: string | null;
-  partyAI!: any;
+  partyAI!: PartyAI;
   pinTime!: number;
-  player!: any;
+  player!: Player | undefined;
   rng!: Rng;
-  scenario!: string | null;
-  terrain!: any;
-  vfx!: any;
+  scenario!: ScenarioName | 'live' | null;
+  terrain!: Terrain | undefined;
+  vfx!: VFX | undefined;
   async init(game: Game) {
     this.game = game;
     this.rng = new Rng(88123);
@@ -79,8 +105,11 @@ export class Director {
     this.downed = game.add(new Downed(), 'Downed');
     await this.downed.init(game);
 
+    // `HuntRuntime` drives itself off the RPG's `quest-updated` events and
+    // holds its own reference to the encounter director. The back-pointer that
+    // used to be written here (`encounters.huntRuntime`) was never declared and
+    // never read by anything.
     this.hunts = new HuntRuntime(this.encounters).init();
-    this.encounters.huntRuntime = this.hunts;
 
     // The capture harness boots straight into a posed shot and must not have
     // a wandering pack walk into frame; a real session starts playing.
@@ -127,14 +156,14 @@ export class Director {
   /* --------------------------------------------------------- helpers */
 
   /** World position relative to the scenario anchor, snapped to the terrain. */
-  at(dx: any, dz: any, dy = 0) {
+  at(dx: number, dz: number, dy = 0) {
     const p = new THREE.Vector3(this.home.x + dx, 0, this.home.z + dz);
     p.y = (this.terrain ? this.terrain.heightAt(p.x, p.z) : 0) + dy;
     return p;
   }
 
   /** Face `e` toward a world point. */
-  face(e: any, p: any) {
+  face<T extends { heading: number, root: THREE.Object3D }>(e: T, p: THREE.Vector3): T {
     e.heading = Math.atan2(p.x - e.root.position.x, p.z - e.root.position.z);
     e.root.rotation.y = e.heading;
     return e;
@@ -145,8 +174,9 @@ export class Director {
    * the past, so a *frozen* frame still shows a fully populated, mid-life
    * particle field instead of a single burst.
    */
-  seedAmbient(centre: any, radius: number, t0: number, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
+  seedAmbient(centre: THREE.Vector3, radius: number, t0: number, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
     const vfx = this.vfx, rng = this.rng;
+    if (!vfx) return;
     const c = new THREE.Color(color);
     for (let i = 0; i < motes; i++) {
       const a = rng.next() * Math.PI * 2, r = Math.sqrt(rng.next()) * radius;
@@ -263,7 +293,7 @@ export class Director {
     boss.stateTime = 0.7;
     boss.phaseIndex = key === 'titan' ? 1 : 2;
     boss.attackId = key === 'titan' ? 'slam_r' : key === 'magitek_armour' ? 'overload' : 'charge';
-    boss.attack = (boss.attacks || []).find((a: any) => a.id === boss.attackId) || null;
+    boss.attack = (boss.attacks || []).find((a) => a.id === boss.attackId) || null;
     boss.freeze('telegraph', key === 'titan' ? 6.2 : 4.4);
 
     if (key === 'magitek_armour') {
@@ -325,7 +355,7 @@ export class Director {
       player.root.rotation.y = Math.PI;
       this._frozenPlayer = { pos: A.clone(), heading: Math.PI };
     }
-    const cast = [
+    const cast: Array<[string, number, number, EnemyPoseName, number]> = [
       ['goblin', -3.2, -5.0, 'attack', 1.6],
       ['goblin', 2.6, -6.2, 'approach', 2.4],
       ['hobgoblin', -6.4, -8.0, 'telegraph', 3.1],
@@ -468,10 +498,12 @@ export class Director {
     });
 
     /* ---- elemancy in the background --------------------------------- */
-    const firePos = mt.centre(); firePos.y = this.at(-2.0, -12.0).y + 0.25;
-    combat.elemancy.cast('fire', { pos: firePos, t0: T - 1.15, power: 1.3, terrain });
-    const icePos = this.at(-7.2, -6.4, 0.15);
-    combat.elemancy.cast('ice', { pos: icePos, t0: T - 0.95, power: 1.0, terrain });
+    if (combat && combat.elemancy) {
+      const firePos = mt.centre(); firePos.y = this.at(-2.0, -12.0).y + 0.25;
+      combat.elemancy.cast('fire', { pos: firePos, t0: T - 1.15, power: 1.3, terrain });
+      const icePos = this.at(-7.2, -6.4, 0.15);
+      combat.elemancy.cast('ice', { pos: icePos, t0: T - 0.95, power: 1.0, terrain });
+    }
 
     /* ---- running dust from the flanker ------------------------------- */
     vfx.dustPuff({
@@ -687,7 +719,7 @@ export class Director {
    * VFX depth prepass runs (soft particles need scene depth from this frame's
    * viewpoint).
    */
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     if (this.vfx && this.vfx.renderDepthPrepass) this.vfx.renderDepthPrepass(game);
   }
 }

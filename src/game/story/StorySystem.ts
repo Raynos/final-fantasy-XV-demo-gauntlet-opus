@@ -4,6 +4,27 @@ import { Triggers } from './Triggers.ts';
 import { Conversation } from './Dialogue.ts';
 import { TitleScreen } from './TitleScreen.ts';
 import type { Game } from '../Game.ts';
+import type { Chapter } from './Chapters.ts';
+import type { Trigger, TriggerPayload } from './Triggers.ts';
+import type { Cinematics } from '../cinematics/Cinematics.ts';
+import type { SceneResult } from '../cinematics/Scene.ts';
+import type { RpgSystem } from '../rpg/RpgSystem.ts';
+import type { QuestUpdate } from '../rpg/Quests.ts';
+
+/** What the title screen's menu can answer with. */
+export type TitleChoice = 'new' | 'continue' | 'extras';
+
+/** A callback the story parks for `at` seconds of world time. */
+interface QueuedBeat {
+  at: number;
+  fn: () => void;
+}
+
+/**
+ * How `Shots.ts` names a story state: the title screen, or a scene parked at
+ * `at` seconds.
+ */
+export type StoryShotSpec = string | { title?: boolean, scene?: string, at?: number } | null;
 
 /**
  * The narrative spine.
@@ -30,16 +51,18 @@ import type { Game } from '../Game.ts';
 export class StorySystem {
   _banterAt!: number;
   _lastTag!: string | null;
-  _seenPlace!: any;
+  /** Place ids already announced, so the area card shows once each. */
+  _seenPlace!: Set<string> | null;
   _started!: boolean;
-  chapter!: any;
+  chapter!: Chapter | null;
   chapterN!: number;
-  cine!: any;
+  cine!: Cinematics | undefined;
   game!: Game;
   headless!: boolean;
-  queue!: any[];
-  rpg!: any;
-  seen!: Set<any>;
+  queue!: QueuedBeat[];
+  rpg!: RpgSystem | undefined;
+  /** Scene ids already played, so nothing repeats after a reload. */
+  seen!: Set<string>;
   talk!: Conversation;
   title!: TitleScreen;
   triggers!: Triggers;
@@ -50,7 +73,7 @@ export class StorySystem {
     this.triggers = new Triggers(game);
     this.talk = new Conversation();
     this.title = new TitleScreen(game.uiRoot, game);
-    this.title.onChoose = (pick: any) => this._titleChoice(pick);
+    this.title.onChoose = (pick: TitleChoice) => this._titleChoice(pick);
 
     /** Current chapter number. Mirrors `rpg.chapter` but leads it. */
     this.chapterN = 0;
@@ -144,7 +167,7 @@ export class StorySystem {
    * scene owns the screen.
    * @param [opts] `{ replay }`
    */
-  playScene(id: string, opts: any = {}): Promise<any> | null {
+  playScene(id: string, opts: { replay?: boolean } = {}): Promise<SceneResult> | null {
     const def = SCENES[id];
     if (!def) { console.warn(`[Story] unknown scene: ${id}`); return null; }
     if (!opts.replay && this.seen.has(id)) return null;
@@ -153,7 +176,7 @@ export class StorySystem {
     const p = this.cine ? this.cine.play(def) : null;
     if (p) {
       p.then(() => {
-        const ch = CHAPTER_BY_N[def.chapter];
+        const ch = def.chapter != null ? CHAPTER_BY_N[def.chapter] : null;
         if (ch && def.id === (ch.scenes && ch.scenes.start)) this._announceChapter(ch, 1.0);
       });
     }
@@ -170,37 +193,41 @@ export class StorySystem {
    * ```
    *
    */
-  applyShot(spec: string | any) {
+  applyShot(spec: StoryShotSpec) {
     if (!spec) { this.title.hide(); if (this.cine) this.cine.stop(); return; }
-    if (spec === 'title' || spec.title) {
+    // Narrow once, at the top. `spec` may be the bare string `'title'`, and
+    // reading `.at` off a string finds String.prototype.at — a function, not
+    // undefined — so `??` never fires and `t` becomes a function. `t += dt`
+    // then string-concatenates and the attract camera resolves to NaN, which
+    // renders a black screen. With the object arm pulled out into its own
+    // binding, no field can be read off the string form at all.
+    const o = typeof spec === 'object' ? spec : null;
+    if (spec === 'title' || o?.title) {
       if (this.cine && this.cine.playing) this.cine.stop();
       this.title.show();
-      // `spec` may be the bare string 'title'. Reading `.at` off a string finds
-      // String.prototype.at — a function, not undefined — so `??` never fires
-      // and `t` becomes a function. `t += dt` then string-concatenates and the
-      // attract camera resolves to NaN, which renders a black screen.
-      const at = typeof spec === 'object' ? spec.at : undefined;
+      const at = o ? o.at : undefined;
       this.title.t = typeof at === 'number' ? at : 6;
       return;
     }
     this.title.hide();
-    if (!spec.scene || !this.cine) return;
+    if (!o || !o.scene || !this.cine) return;
     if (this.cine.playing) this.cine.stop();
-    const def = SCENES[spec.scene];
-    if (!def) { console.warn(`[Story] unknown scene: ${spec.scene}`); return; }
+    const def = SCENES[o.scene];
+    if (!def) { console.warn(`[Story] unknown scene: ${o.scene}`); return; }
     this.cine.play(def, { skippable: false });
-    if (spec.at) this.cine.seek(spec.at);
+    if (o.at) this.cine.seek(o.at);
   }
 
   /** The chapter card + area card pair that opens a chapter's play. */
-  _announceChapter(ch: any, delay = 0) {
+  _announceChapter(ch: Chapter, delay = 0) {
     const run = () => {
       window.dispatchEvent(new CustomEvent('ffxv-area', { detail: ch.area }));
       const rpg = this.rpg;
       const q = rpg && ch.quests[0] ? rpg.quests.view(ch.quests[0]) : null;
       if (q && this.cine && this.cine.box) {
-        const next = q.objectives.find((o: any) => !o.done);
-        this.queue.push({ at: 2.6, fn: () => this.cine.box.objective(q.name, next ? next.desc : q.summary) });
+        const next = q.objectives.find((o) => !o.done);
+        const box = this.cine.box;
+        this.queue.push({ at: 2.6, fn: () => box.objective(q.name, next ? next.desc : q.summary) });
       }
     };
     if (delay > 0) this.queue.push({ at: delay, fn: run });
@@ -212,11 +239,11 @@ export class StorySystem {
   _wireQuests() {
     const rpg = this.rpg;
     if (!rpg) return;
-    rpg.on('quest-updated', (p: any) => {
+    rpg.on('quest-updated', (p: QuestUpdate) => {
       const q = p.quest;
       if (!q) return;
       const payload = { id: q.id, quest: q.id, phase: p.phase, objective: p.objective && p.objective.id };
-      this.triggers.notify('quest', payload, (t: any, pl: any) => this._fire(t, pl));
+      this.triggers.notify('quest', payload, (t, pl) => this._fire(t, pl));
 
       if (p.phase === 'accepted') this.talk.react('quest-accepted');
       if (p.phase !== 'complete' || q.type !== 'main') return;
@@ -238,10 +265,10 @@ export class StorySystem {
     // Arriving anywhere named announces itself, once.
     T.add({
       kind: 'place', once: false, tag: 'world',
-      run: (ctx: any, pl: any) => {
+      run: (ctx, pl) => {
         if (!pl.place) return;
-        if (this._seenPlace && this._seenPlace.has(pl.id)) return;
-        (this._seenPlace = this._seenPlace || new Set()).add(pl.id);
+        if (this._seenPlace && this._seenPlace.has(pl.place.id)) return;
+        (this._seenPlace = this._seenPlace || new Set()).add(pl.place.id);
         window.dispatchEvent(new CustomEvent('ffxv-area', {
           detail: { name: pl.place.name, sub: pl.place.sub, meta: 'Leide' },
         }));
@@ -251,7 +278,7 @@ export class StorySystem {
     // Crossing a region border.
     T.add({
       kind: 'region', once: false, tag: 'world',
-      run: (ctx: any, pl: any) => {
+      run: (ctx, pl) => {
         if (!pl.from || !pl.card) return;
         window.dispatchEvent(new CustomEvent('ffxv-area', { detail: pl.card }));
       },
@@ -284,11 +311,11 @@ export class StorySystem {
     });
   }
 
-  _fire(t: any, payload: any) {
+  _fire(t: Trigger, payload: TriggerPayload) {
     try { if (t.run) t.run(this, payload); } catch (e) { console.warn('[Story] trigger', e); }
   }
 
-  _titleChoice(pick: any) {
+  _titleChoice(pick: TitleChoice) {
     if (pick === 'continue') {
       const rpg = this.rpg;
       if (rpg && rpg.loadGame) rpg.loadGame('auto');

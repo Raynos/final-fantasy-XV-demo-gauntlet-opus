@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { frameAt, arrange, wide, attend } from './SceneKit.ts';
+import type { SceneCtx, SceneData, SceneDef, ShotDef } from '../../cinematics/Scene.ts';
+import type { Enemy, PoseName as EnemyPoseName } from '../../../characters/enemies/EnemyBase.ts';
 
 /**
  * CHAPTER II — the imperial blockade.
@@ -15,13 +17,20 @@ import { frameAt, arrange, wide, attend } from './SceneKit.ts';
 
 const DUR = 38;
 
-export const BLOCKADE = {
+/** The troopers this scene put on the barrier, so `onEnd` can clear them. */
+interface BlockadeData extends SceneData {
+  spawned?: Enemy[];
+}
+
+type Ctx = SceneCtx<BlockadeData>;
+
+export const BLOCKADE: SceneDef<BlockadeData> = {
   id: 'ch2_blockade',
   chapter: 2,
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(18.9);
@@ -45,9 +54,10 @@ export const BLOCKADE = {
     // troopers on the line. Frozen, so they read as a *posted guard* rather
     // than as an encounter that has already noticed you.
     const enemies = game.get('Enemies');
-    ctx.data.spawned = [];
+    const spawned: Enemy[] = [];
+    ctx.data.spawned = spawned;
     if (enemies && enemies.spawn) {
-      const put = (f: number, l: number, state: string, at: number) => {
+      const put = (f: number, l: number, state: EnemyPoseName, at: number) => {
         const p = F.ground(ctx.terrain, f, l, 0.95);
         const e = enemies.spawn('mt', { pos: new THREE.Vector3(p[0], p[1], p[2]) });
         if (!e) return;
@@ -55,7 +65,7 @@ export const BLOCKADE = {
         e.root.rotation.y = e.heading;
         e.stateTime = at;
         if (e.freeze) e.freeze(state, at);
-        ctx.data.spawned.push(e);
+        spawned.push(e);
       };
       put(1.5, 3.2, 'idle', 0.6);
       put(0.4, -3.6, 'idle', 1.9);
@@ -64,8 +74,9 @@ export const BLOCKADE = {
     }
   },
 
-  buildShots(ctx: any) {
+  buildShots(ctx: Ctx): ShotDef[] {
     const F = ctx.data.F;
+    if (!F) return [];
     return [
       // the checkpoint, lit, straddling a road that is supposed to be ours
       wide(ctx, F, { t0: 0, t1: 8.4, camF: -38.0, camL: -7.0, camU: 3.0, f: 1.0, l: 0.0, targetU: 3.0, fov: 34, driftF: 2.8, driftL: 2.0, driftU: 0.4, fStop: 8.0 }),
@@ -87,13 +98,14 @@ export const BLOCKADE = {
     ];
   },
 
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     const s = ctx.stage;
     if (t > 8.0 && t < 15.0) attend(ctx, 'ignis');
     else if (t >= 15.0 && t < 23.0) attend(ctx, 'gladio');
     else if (t >= 23.0 && t < 30.0) {
       // everyone looks up at the dropship
       const F = ctx.data.F;
+      if (!F) return;
       const up = F.at(20, -6, 30);
       for (const id of s.ids) s.look(id, up);
       if (t > 23.4 && t < 25.4) { s.pose('prompto', 'brace'); s.pose('noctis', 'awe'); }
@@ -114,14 +126,14 @@ export const BLOCKADE = {
     { t: 21.8, presentational: true, say: ['Ignis', 'Around.'], dur: 1.6 },
     {
       t: 23.6, shake: 0.55, slowmo: { scale: 0.42, dur: 1.6 }, sfx: 'warp',
-      fn: (ctx: any) => {
+      fn: (ctx) => {
         // a low pass: dust off the shoulder, a hard downwash
         const F = ctx.data.F;
         const vfx = ctx.vfx;
-        if (!vfx || !vfx.dustPuff) return;
+        if (!F || !vfx || !vfx.dustPuff) return;
         const p = F.at(-8, -3, 0.2);
         vfx.dustPuff({
-          pos: { x: p[0], y: p[1], z: p[2] }, count: 34, radius: 6.0, speed: 7.5,
+          pos: new THREE.Vector3(p[0], p[1], p[2]), count: 34, radius: 6.0, speed: 7.5,
           life: 2.6, t0: vfx.clock, size: 1.6, grow: 3.4, up: 1.4, intensity: 0.5,
         });
       },
@@ -132,7 +144,7 @@ export const BLOCKADE = {
     { t: 35.0, objective: { title: 'No Turning Back', sub: 'Drive to Galdin Quay' } },
   ],
 
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     const enemies = ctx.game.get('Enemies');
     if (enemies && enemies.clear) { enemies.clear(); enemies.frozen = false; }
     const rpg = ctx.game.get('Rpg');

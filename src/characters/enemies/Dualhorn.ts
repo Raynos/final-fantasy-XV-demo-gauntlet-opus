@@ -1,10 +1,12 @@
 import { Rig, creatureMaterial } from './RigBuilder.ts';
+import type { BoneWriter, Part } from './RigBuilder.ts';
 import { mixc, colc } from './Palette.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
+import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.ts';
-import type * as THREE from 'three';
 
 const HIDE = 0x6e5b41;
 const HIDE_DARK = 0x3c3123;
@@ -60,8 +62,8 @@ export const DUALHORN = {
       telegraph: 0.85, strike: 0.30, attack: 0.9, recover: 1.2, cooldown: 3.2, aoe: true },
   ],
   buildPrototype,
-  make(opts: any) { return new DualhornEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new DualhornEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -92,7 +94,7 @@ function buildPrototype() {
    * A tuple union rather than two fields, because the pair below reads it with
    * `bind[0] === 'chain'`.
    */
-  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
+  const P: Part[] = [];
   const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -196,13 +198,13 @@ function buildPrototype() {
       { p: [0, 1.60, 1.82], r: [0.20, 0.14, 0.16], amt: 0.048, dir: [0, -0.4, 1] },     // squared nose pad
       { p: [0, 1.78, 1.64], r: [0.10, 0.10, 0.20], amt: 0.020, dir: [0, 1, 0] },        // nasal bone
     ],
-    colorAt: (u: any, v: any, p: any) => {
+    colorAt: (u, v, p) => {
       const nose = clamp01((p.z - 1.80) / 0.10);
       const under = clamp01((1.66 - p.y) / 0.12);
       return mix(mix(mix(HIDE, HIDE_DARK, clamp01((p.z - 1.5) / 0.3) * 0.6), NOSE, nose * 0.9),
         BELLY, under * 0.3);
     },
-    matAt: (u: any, v: any, p: any) => (p.z > 1.82 ? M_WET : M_HIDE),
+    matAt: (u, v, p) => (p.z > 1.82 ? M_WET : M_HIDE),
   });
   for (const s of [-1, 1]) {
     B.glow(EYE, 2.4);
@@ -226,7 +228,7 @@ function buildPrototype() {
       from: [0.20 * s, 1.96, 1.34], dir: [0.66 * s, 0.26, 0.70], len: 0.86,
       curve: [-0.22 * s, 0.54, 0.10], r0: 0.115, r1: 0.012, taper: 0.72,
       seg: 9, steps: 9, flat: 0.88,
-      colorAt: (th: any, u: number) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
+      colorAt: (th, u) => mix(HORN_DARK, HORN, smooth((u - 0.1) / 0.5)),
       matAt: () => M_HORN,
     });
     // ridged sheath at the horn base
@@ -408,13 +410,8 @@ const col = colc;
 
 class DualhornEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
-  static ANIM: any;
-  override anim!: any;
-  override attackId!: any;
-  override state!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(DUALHORN, opts); }
+  static override ANIM: QuadAnim;
+  constructor(opts: SpawnOpts) { super(DUALHORN, opts); }
 
   override telegraphScale() {
     // a charge paws the ground and coils low; a stomp rears instead
@@ -431,7 +428,7 @@ class DualhornEnemy extends QuadrupedEnemy {
    * `telegraphScale` already inverts the body drop; this adds the forelegs
    * leaving the ground and the head going back, which is the readable part.
    */
-  override poseTelegraph(S: any, t: number) {
+  override poseTelegraph(S: BoneWriter, t: number) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'stomp') {
       if (this.attackId === 'charge') {
@@ -457,7 +454,7 @@ class DualhornEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.10 * rear;
   }
 
-  override poseAttack(S: any, t: number) {
+  override poseAttack(S: BoneWriter, t: number) {
     if (this.attackId !== 'stomp') { super.poseAttack(S, t); return; }
     // the drop: both forefeet come down together and the ground takes it
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());

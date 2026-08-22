@@ -14,10 +14,12 @@ import type { Registry } from './Registry.ts';
  * the bubble phase at the target keeps the event from ever reaching it.
  */
 export class DevConsole {
-  hist!: any[];
+  /** Every line typed this session, oldest first. */
+  hist!: string[];
+  /** Index into `hist` while walking it with the arrows; -1 is "not walking". */
   histAt!: number;
-  input!: HTMLInputElement | null;
-  log!: any;
+  input!: HTMLInputElement;
+  log!: HTMLElement;
   node!: HTMLDivElement;
   open!: boolean;
   reg!: Registry;
@@ -34,14 +36,16 @@ export class DevConsole {
       <div class="dev-input-row"><span>&gt;</span><input type="text" spellcheck="false" autocomplete="off"></div>`;
     root.appendChild(this.node);
 
-    this.log = this.node.querySelector('.dev-log');
-    this.input = this.node.querySelector('input');
+    // Both are in the `innerHTML` two statements above, so the assertion's
+    // reasoning lives here rather than at each of the fourteen uses below.
+    this.log = this.node.querySelector('.dev-log')!;
+    this.input = this.node.querySelector('input')!;
     this.node.style.display = 'none';
 
-    this.input!.addEventListener('keydown', (e: any) => this._onKey(e));
+    this.input.addEventListener('keydown', (e: KeyboardEvent) => this._onKey(e));
     // Any key typed into the console belongs to the console, full stop.
-    this.input!.addEventListener('keyup', (e: any) => e.stopPropagation());
-    this.input!.addEventListener('keypress', (e: any) => e.stopPropagation());
+    this.input.addEventListener('keyup', (e: KeyboardEvent) => e.stopPropagation());
+    this.input.addEventListener('keypress', (e: KeyboardEvent) => e.stopPropagation());
 
     this.print('dev console — `help` lists everything, Tab completes.', 'dim');
   }
@@ -49,8 +53,8 @@ export class DevConsole {
   setOpen(v: boolean) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
-    if (this.open) { this.input!.focus(); this.input!.select(); }
-    else this.input!.blur();
+    if (this.open) { this.input.focus(); this.input.select(); }
+    else this.input.blur();
   }
 
   toggle() { this.setOpen(!this.open); }
@@ -61,29 +65,29 @@ export class DevConsole {
     if (cls) line.className = cls;
     line.textContent = text;
     this.log.appendChild(line);
-    while (this.log.childElementCount > 200) this.log.removeChild(this.log.firstChild);
+    while (this.log.childElementCount > 200 && this.log.firstChild) this.log.removeChild(this.log.firstChild);
     this.log.scrollTop = this.log.scrollHeight;
   }
 
-  _onKey(e: any) {
+  _onKey(e: KeyboardEvent) {
     e.stopPropagation();
 
     if (e.key === 'Escape' || e.key === '`') { e.preventDefault(); this.setOpen(false); return; }
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      const v = this.input!.value;
+      const v = this.input.value;
       // Complete the command name only — arguments are values, not names, and
       // completing them would fight the user.
       if (v.includes(' ')) return;
       const hits = this.reg.complete(v);
       if (!hits.length) return;
-      if (hits.length === 1) { this.input!.value = `${hits[0]} `; return; }
+      if (hits.length === 1) { this.input.value = `${hits[0]} `; return; }
       // Extend to the longest shared prefix, then show the candidates. This is
       // what a shell does and what everyone's fingers already expect.
       let pre = hits[0];
       for (const h of hits) { while (!h.startsWith(pre)) pre = pre.slice(0, -1); }
-      if (pre.length > v.length) this.input!.value = pre;
+      if (pre.length > v.length) this.input.value = pre;
       this.print(hits.join('  '), 'dim');
       return;
     }
@@ -94,14 +98,14 @@ export class DevConsole {
       if (this.histAt < 0) this.histAt = this.hist.length;
       this.histAt += e.key === 'ArrowUp' ? -1 : 1;
       this.histAt = Math.max(0, Math.min(this.hist.length, this.histAt));
-      this.input!.value = this.hist[this.histAt] || '';
+      this.input.value = this.hist[this.histAt] || '';
       return;
     }
 
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const line = this.input!.value.trim();
-    this.input!.value = '';
+    const line = this.input.value.trim();
+    this.input.value = '';
     this.histAt = -1;
     if (!line) return;
     this.hist.push(line);
@@ -109,8 +113,8 @@ export class DevConsole {
     try {
       const out = this.reg.exec(line);
       if (out) this.print(out);
-    } catch (err: any) {
-      this.print(String((err && err.message) || err), 'err');
+    } catch (err: unknown) {
+      this.print(err instanceof Error ? err.message : String(err), 'err');
     }
   }
 
@@ -122,7 +126,7 @@ export class DevConsole {
       category: 'console',
       args: '[prefix]',
       help: 'list commands and cvars',
-      exec: (arg: any) => {
+      exec: (arg: string) => {
         const cats = reg.byCategory();
         const want = String(arg || '').trim();
         for (const [cat, { cvars, cmds }] of [...cats].sort()) {

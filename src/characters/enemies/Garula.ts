@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { Rig, creatureMaterial } from './RigBuilder.ts';
+import type { BoneWriter, Part } from './RigBuilder.ts';
 import { organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
+import type { QuadAnim } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.ts';
 
@@ -68,8 +71,8 @@ export const GARULA = {
       telegraph: 1.00, strike: 0.32, attack: 1.05, recover: 1.55, cooldown: 4.2 },
   ],
   buildPrototype,
-  make(opts: any) { return new GarulaEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new GarulaEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -100,7 +103,7 @@ function buildPrototype() {
    * A tuple union rather than two fields, because the pair below reads it with
    * `bind[0] === 'chain'`.
    */
-  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
+  const P: Part[] = [];
   const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -199,7 +202,7 @@ function buildPrototype() {
     horn(B, {
       from: [x, y, zc], dir: [side * 0.44, 0.30, -0.84], len: 0.36 + (i % 4) * 0.10,
       curve: [side * 0.06, -0.30, -0.14], r0: 0.145, r1: 0.042, flat: 0.30, seg: 5, steps: 4,
-      colorAt: (th: any, u: number) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
+      colorAt: (th, u) => mix(mix2(SHAG_DARK, SHAG, (i % 5) / 5),
         SHAG_LIT, clamp01((u - 0.45) / 0.55) * 0.34),
       matAt: () => M_SHAG,
     });
@@ -247,14 +250,14 @@ function buildPrototype() {
       { p: [0, 1.54, 2.10], r: [0.22, 0.16, 0.16], amt: 0.040, dir: [0, -0.6, 1] },        // nose pad
       { p: [0, 2.02, 1.72], r: [0.16, 0.14, 0.24], amt: 0.026, dir: [0, 1, 0] },           // nasal ridge
     ],
-    colorAt: (u: any, v: any, p: any) => {
+    colorAt: (u, v, p) => {
       const nose = clamp01((p.z - 2.06) / 0.12);
       const face = clamp01((p.z - 1.90) / 0.16) * clamp01((p.y - 1.70) / 0.14);
       const top = clamp01((p.y - 2.02) / 0.14);
       return mix(mix2(HIDE, PLATE, face * 0.85), NOSE, nose * 0.9)
         .lerp(hex(SHAG_DARK), top * 0.55);
     },
-    matAt: (u: any, v: any, p: any) => {
+    matAt: (u, v, p) => {
       if (p.z > 2.08) return M_WET;
       const face = clamp01((p.z - 1.92) / 0.14) * clamp01((p.y - 1.70) / 0.14);
       return face > 0.5 ? M_PLATE : M_HIDE;
@@ -324,7 +327,7 @@ function buildPrototype() {
       from: [0.30 * s, 1.58, 1.88], dir: [0.52 * s, 0.02, 0.85], len: 1.15,
       curve: [0.10 * s, 1.05, -0.30], r0: 0.115, r1: 0.012, taper: 0.70,
       seg: 8, steps: 9, flat: 0.90,
-      colorAt: (th: any, u: number) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
+      colorAt: (th, u) => mix(TUSK_DARK, TUSK, smooth((u - 0.05) / 0.45)),
       matAt: () => M_TUSK,
     });
     // second, smaller tusk inboard of it
@@ -491,13 +494,8 @@ function col(h: number) { return _c1.setHex(h, THREE.SRGBColorSpace); }
 
 class GarulaEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */
-  static ANIM: any;
-  override anim!: any;
-  override attackId!: any;
-  override state!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(GARULA, opts); }
+  static override ANIM: QuadAnim;
+  constructor(opts: SpawnOpts) { super(GARULA, opts); }
 
   override telegraphScale() {
     // the barrel charge coils low and long; the quake rears instead
@@ -514,7 +512,7 @@ class GarulaEnemy extends QuadrupedEnemy {
    * there for a beat before it comes down. The negative `telegraphScale`
    * already inverts the body drop; this adds the rear itself.
    */
-  override poseTelegraph(S: any, t: number) {
+  override poseTelegraph(S: BoneWriter, t: number) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'quake') {
       if (this.attackId === 'barrel') {
@@ -546,7 +544,7 @@ class GarulaEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.14 * rear;
   }
 
-  override poseAttack(S: any, t: number) {
+  override poseAttack(S: BoneWriter, t: number) {
     if (this.attackId !== 'quake') { super.poseAttack(S, t); return; }
     // and down: both forefeet together, the body driving through the ground
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack',

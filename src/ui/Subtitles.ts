@@ -21,8 +21,10 @@ import type { Game } from '../game/Game.ts';
  */
 export class Subtitles {
   banter!: HTMLElement;
-  bubbles!: any[];
-  chars!: any[];
+  /** Party banter bubbles, oldest first. */
+  bubbles!: Array<{ node: HTMLElement, clip: Clip, shot: string | null }>;
+  /** One span per character of the current line, for the type-on. */
+  chars!: HTMLElement[];
   cur!: Clip | null;
   game!: Game | null;
   line!: HTMLElement;
@@ -105,7 +107,7 @@ export class Subtitles {
     this.bubbles.push({ node, clip: new Clip(0.4, 4.2), shot: this._shot() });
     while (this.bubbles.length > 3) {
       const old = this.bubbles.shift();
-      if (old.node.parentNode) old.node.parentNode.removeChild(old.node);
+      if (old?.node.parentNode) old.node.parentNode.removeChild(old.node);
     }
   }
 

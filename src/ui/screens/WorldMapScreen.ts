@@ -1,6 +1,6 @@
 import { el, clamp, easeOut, easeOutQuint, damp } from '../UIKit.ts';
 import type { CachedNode } from '../UIKit.ts';
-import { worldMap, WORLD, POI_TYPES, REGIONS } from '../../world/map/WorldMap.ts';
+import { worldMap, WORLD, POI_TYPES, REGIONS, ZONES } from '../../world/map/WorldMap.ts';
 import { getChart } from '../../world/map/Chart.ts';
 import {
   drawRoads, drawJunctions, drawZoneBorders, spacedText, spacedWidth, LabelPlacer, routeClass,
@@ -75,20 +75,60 @@ const ATLAS_BOX = { x: Math.round((1600 - BOX.h) / 2), y: BOX.y, w: BOX.h, h: BO
 
 const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 
+/** One elliptical zone field, as `WorldMap.zones` publishes them. */
+type Zone = typeof ZONES[number];
+
+/** World metres -> device pixels on the chart canvas, one axis. */
+type Project = (w: number) => number;
+
+/** A world position plus where on the sheet it landed, from a pointer event. */
+interface ChartPoint {
+  /** World metres. */
+  x: number;
+  z: number;
+  /** Css px inside the chart box. */
+  px: number;
+  py: number;
+}
+
+/** A pan in progress: where it started, in world metres and in camera terms. */
+interface ChartDrag {
+  x: number;
+  z: number;
+  cx: number;
+  cz: number;
+  /** Total world-metre travel, so a click can be told from a drag. */
+  moved: number;
+}
+
+/** A region name reserved by the measure pass, ready for the paint pass. */
+interface RegionLabel {
+  x: number;
+  y: number;
+  name: string;
+  sub: string;
+}
+
 export class WorldMapScreen {
-  _drag!: any;
-  _onResize!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  _drag!: ChartDrag | null;
+  _onResize!: () => void;
   card!: HTMLElement;
   _a!: number;
   _cardKey!: string;
-  _cursor!: any;
-  _keys!: any;
-  _regionPlaced!: any[] | null;
+  _cursor!: ChartPoint | null;
+  _keys!: ((e: KeyboardEvent) => void) | null;
+  _regionPlaced!: RegionLabel[] | null;
   _rowEls!: HTMLElement[][];
-  _screenPos!: Map<any, any>;
+  _screenPos!: Map<Poi, [number, number]>;
   atlas!: boolean;
-  cam!: any;
-  camT!: any;
+  /** Chart centre in world metres, chased toward `camT`. */
+  cam!: { x: number, z: number };
+  /** Where the chart centre is heading. */
+  camT!: { x: number, z: number };
   canvas!: HTMLCanvasElement;
   cardDoes!: HTMLElement;
   cardFt!: HTMLElement;
@@ -103,7 +143,7 @@ export class WorldMapScreen {
   filterEls!: CachedNode[];
   game!: Game;
   h!: number;
-  hover!: any;
+  hover!: Poi | null;
   list!: Poi[];
   map!: WorldMap;
   menus!: Menus;
@@ -166,16 +206,16 @@ export class WorldMapScreen {
     this.ctx = this.canvas.getContext('2d')!;
 
     // ---- filter rail -----------------------------------------------------
-    this.filterEls = FILTERS.map((f, i) => {
+    this.filterEls = FILTERS.map((f, i): CachedNode => {
       const count = el('div.wm-fcount', { text: '' });
-      const n = el('div.wm-filter', {}, [
+      const n: CachedNode = el('div.wm-filter', {}, [
         el('div.wm-fmark', {}, [glyphSvg(f.glyph, { size: 15 })]),
         el('div.wm-flabel', { text: f.label.toUpperCase() }),
         count,
       ]);
       n.addEventListener('pointerdown', () => this._setFilter(i));
       if (i === 0) n.classList.add('on');
-      (n as any)._count = count;
+      n._count = count;
       return n;
     });
     this.rail = el('div.wm-rail.plate', {}, [
@@ -259,7 +299,7 @@ export class WorldMapScreen {
       const sp = this.list[this.sel];
       if (sp) { this.camT.x = sp.x; this.camT.z = sp.z; }
     }
-    this._keys = (e: any) => this._onKey(e);
+    this._keys = (e: KeyboardEvent) => this._onKey(e);
     window.addEventListener('keydown', this._keys);
   }
 
@@ -275,17 +315,17 @@ export class WorldMapScreen {
    * definition — that is what "fully surveyed" means.
    * @param p @returns 
    */
-  _known(p: any): boolean { return this.atlas || this.map.discovered.has(p.id); }
+  _known(p: Poi): boolean { return this.atlas || this.map.discovered.has(p.id); }
 
   _rebuildList() {
     const f = FILTERS[this.filter];
-    const seen = (p: any) => this._known(p) || fog.at(p.x, p.z) > 0.5;
-    this.list = this.map.pois.filter((p: any) => seen(p) && (!f.types || f.types.includes(p.type)));
+    const seen = (p: Poi) => this._known(p) || fog.at(p.x, p.z) > 0.5;
+    this.list = this.map.pois.filter((p: Poi) => seen(p) && (!f.types || f.types.includes(p.type)));
     if (!this.list.length) this.list = this.map.pois.filter(seen);
     this.sel = clamp(this.sel, 0, Math.max(0, this.list.length - 1));
     for (let i = 0; i < FILTERS.length; i++) {
       const ff = FILTERS[i];
-      const n = this.map.pois.filter((p: any) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
+      const n = this.map.pois.filter((p: Poi) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
       this.filterEls[i]._count!.textContent = String(n);
     }
   }
@@ -346,7 +386,7 @@ export class WorldMapScreen {
     }
   }
 
-  _onKey(e: any) {
+  _onKey(e: KeyboardEvent) {
     if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'KeyE') this.zoomBy(1);
     else if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'KeyQ') this.zoomBy(-1);
     else return;
@@ -355,7 +395,7 @@ export class WorldMapScreen {
 
   _bindPointer() {
     const cv = this.canvas;
-    const world = (ev: any) => {
+    const world = (ev: PointerEvent | WheelEvent): ChartPoint => {
       const r = cv.getBoundingClientRect();
       const px = (ev.clientX - r.left) / r.width * this.w;
       const py = (ev.clientY - r.top) / r.height * this.h;
@@ -365,12 +405,12 @@ export class WorldMapScreen {
         px, py,
       };
     };
-    cv.addEventListener('pointerdown', (ev: any) => {
+    cv.addEventListener('pointerdown', (ev: PointerEvent) => {
       const w = world(ev);
       this._drag = { x: w.x, z: w.z, cx: this.camT.x, cz: this.camT.z, moved: 0 };
       cv.setPointerCapture?.(ev.pointerId);
     });
-    cv.addEventListener('pointermove', (ev: any) => {
+    cv.addEventListener('pointermove', (ev: PointerEvent) => {
       const w = world(ev);
       this._cursor = w;
       if (this._drag) {
@@ -385,7 +425,7 @@ export class WorldMapScreen {
         this.hover = this._pick(w.px, w.py);
       }
     });
-    cv.addEventListener('pointerup', (ev: any) => {
+    cv.addEventListener('pointerup', (ev: PointerEvent) => {
       const w = world(ev);
       if (this._drag && this._drag.moved < 12) {
         const hit = this._pick(w.px, w.py);
@@ -398,7 +438,7 @@ export class WorldMapScreen {
       cv.releasePointerCapture?.(ev.pointerId);
     });
     cv.addEventListener('pointerleave', () => { this.hover = null; this._drag = null; });
-    cv.addEventListener('wheel', (ev: any) => {
+    cv.addEventListener('wheel', (ev: WheelEvent) => {
       const w = world(ev);
       this.zoomBy(ev.deltaY < 0 ? 1 : -1, w.x, w.z);
       ev.preventDefault();
@@ -406,8 +446,8 @@ export class WorldMapScreen {
   }
 
   /** Nearest drawn point within 16 css px of a chart position. */
-  _pick(px: number, py: number) {
-    let best: any = null, bd = 16 * 16;
+  _pick(px: number, py: number): Poi | null {
+    let best: Poi | null = null, bd = 16 * 16;
     for (const [p, s] of this._screenPos) {
       const dx = s[0] - px, dy = s[1] - py;
       const d = dx * dx + dy * dy;
@@ -641,7 +681,7 @@ export class WorldMapScreen {
    *
    * @param paint false = measure and reserve only, true = draw
    */
-  _regionLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, paint: boolean = true) {
+  _regionLabels(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, rev: number, place: LabelPlacer, paint: boolean = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
     if (a <= 0.01) { this._regionPlaced = []; return; }
     if (paint && this._regionPlaced) {
@@ -649,9 +689,9 @@ export class WorldMapScreen {
       this._regionPlaced = null;
       return;
     }
-    const placed = [];
+    const placed: RegionLabel[] = [];
     for (const r of REGIONS) {
-      const zs = this.map.zones.filter((z: any) => z.region === r.id);
+      const zs: Zone[] = this.map.zones.filter((z: Zone) => z.region === r.id);
       if (!zs.length) continue;
       // area-weighted, so a region's name lands over its own bulk rather than
       // at the arithmetic mean of its zone centres — at the fit-all scale the
@@ -711,11 +751,11 @@ export class WorldMapScreen {
     c.shadowBlur = 0;
   }
 
-  _zoneLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer, fade: number) {
+  _zoneLabels(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, rev: number, place: LabelPlacer, fade: number) {
     const a = fade * rev;
     if (a <= 0.01) return;
     // biggest zones first, so a small zone yields its label to a large one
-    const zs = this.map.zones.slice().sort((p: any, q: any) => q.rx * q.rz - p.rx * p.rz);
+    const zs: Zone[] = this.map.zones.slice().sort((p: Zone, q: Zone) => q.rx * q.rz - p.rx * p.rz);
     for (const z of zs) {
       if (!this.atlas && fog.at(z.cx, z.cz) < 0.4) continue;
       const x = sx(z.cx), y = sy(z.cz);
@@ -741,7 +781,7 @@ export class WorldMapScreen {
     }
   }
 
-  _routeLabels(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, place: LabelPlacer) {
+  _routeLabels(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, rev: number, place: LabelPlacer) {
     const a = clamp((ppm / dpr - 0.3) / 0.14, 0, 1) * rev;
     if (a <= 0.01) return;
     c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
@@ -775,12 +815,12 @@ export class WorldMapScreen {
     }
   }
 
-  _pois(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, rev: number, t: number, place: LabelPlacer, W: number, H: number) {
+  _pois(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, rev: number, t: number, place: LabelPlacer, W: number, H: number) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
     // draw order: dimmed first, then normal, then the selection on top
-    const rows: { p: any, x: number, y: number, known: boolean, off: boolean, sel: boolean, hover: boolean, rad?: number }[] = [];
+    const rows: { p: Poi, x: number, y: number, known: boolean, off: boolean, sel: boolean, hover: boolean, rad?: number }[] = [];
     for (const p of this.map.pois) {
       const known = this._known(p);
       if (!known && fog.at(p.x, p.z) < 0.5) continue;
@@ -824,7 +864,7 @@ export class WorldMapScreen {
         [r.x + gap, r.y], [r.x - gap - w, r.y],
         [r.x - w / 2, r.y - gap - 4 * dpr], [r.x - w / 2, r.y + gap + 4 * dpr],
       ];
-      let put: any = null;
+      let put: number[] | null = null;
       for (const s of slots) {
         // a name the sheet edge slices in half is worse than no name
         if (s[0] < 6 * dpr || s[0] + w > W - 6 * dpr) continue;
@@ -864,7 +904,7 @@ export class WorldMapScreen {
     }
   }
 
-  _player(c: CanvasRenderingContext2D, sx: any, sy: any, ppm: number, dpr: number, t: number) {
+  _player(c: CanvasRenderingContext2D, sx: Project, sy: Project, ppm: number, dpr: number, t: number) {
     const player = this.game?.get('Player');
     if (!player?.position) return;
     const px = sx(player.position.x), py = sy(player.position.z);

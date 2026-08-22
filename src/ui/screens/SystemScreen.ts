@@ -5,8 +5,66 @@ import { Bar } from '../Bar.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
 import type { BusName } from '../../audio/Graph.ts';
+import { QUALITY_TIERS } from '../../engine/Renderer.ts';
 
-const QUALITY = ['low', 'medium', 'high', 'ultra'] as const;
+/**
+ * One row of the settings table, discriminated by `kind`.
+ *
+ * Every row reads and writes live engine state through its own closures, so
+ * the four kinds genuinely carry different verbs — a slider has `get`/`set`
+ * over 0..1, a choice has `options`/`index`/`pick`, an action has `run`. The
+ * union is what makes `nav()`'s `kind` tests narrow instead of guess.
+ */
+interface SettingRowBase {
+  key: string;
+  name: string;
+  desc: string;
+  /** The right-hand value column. */
+  value: () => string;
+  /** False greys the row out and blocks input. */
+  enabled: () => boolean;
+  /** Printed when a disabled row is accepted. */
+  why?: string;
+}
+interface SliderRow extends SettingRowBase {
+  kind: 'slider';
+  /** 0..1. */
+  get: () => number;
+  set: (v: number) => void;
+}
+interface ToggleRow extends SettingRowBase {
+  kind: 'toggle';
+  get: () => boolean;
+  set: (v: boolean) => void;
+}
+interface ChoiceRow extends SettingRowBase {
+  kind: 'choice';
+  options: readonly string[];
+  index: () => number;
+  pick: (n: number) => void;
+}
+interface ActionRow extends SettingRowBase {
+  kind: 'action';
+  run: () => void;
+}
+type SettingRow = SliderRow | ToggleRow | ChoiceRow | ActionRow;
+
+/** One built row: its DOM, its definition and the last values drawn into it. */
+interface SettingNode {
+  node: HTMLElement;
+  row: SettingRow;
+  val: HTMLElement;
+  bar: Bar | null;
+  bg: HTMLElement;
+  _on?: boolean;
+  _ok?: boolean;
+  _v?: string;
+}
+
+/** The label printed above the setting name in the detail column. */
+const KIND_LABEL: Record<SettingRow['kind'], string> = {
+  slider: 'Setting', toggle: 'Setting', choice: 'Setting', action: 'Action',
+};
 
 /**
  * System settings.
@@ -20,9 +78,13 @@ const QUALITY = ['low', 'medium', 'high', 'ultra'] as const;
  * Everything animates from `game.time`; no CSS transitions.
  */
 export class SystemScreen {
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
   _age!: number;
   _cur!: string | null;
-  _msg!: any;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
   cols!: HTMLElement;
   dD!: HTMLElement;
@@ -36,7 +98,7 @@ export class SystemScreen {
   list!: HTMLElement;
   menus!: Menus;
   msg!: HTMLElement;
-  nodes!: any;
+  nodes!: SettingNode[];
   sub!: string;
   title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
@@ -55,7 +117,7 @@ export class SystemScreen {
    * The setting table. Each row reads and writes live engine state; nothing is
    * mirrored into a settings object that could drift out of sync with it.
    */
-  _rows(game: Game) {
+  _rows(game: Game): SettingRow[] {
     // Resolved on every read, never captured: this screen is built during
     // `Menus.init`, and `Story` (among others) is constructed *after* Menus in
     // the boot order — capturing it here left Return to Title permanently and
@@ -68,10 +130,10 @@ export class SystemScreen {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     void game;
 
-    const bus = (id: BusName, name: string, desc: string) => ({
+    const bus = (id: BusName, name: string, desc: string): SliderRow => ({
       key: id, name, kind: 'slider', desc,
       get: () => { const a = audio(); return a ? a.volumeOf(id) : 0; },
-      set: (v: any) => { const a = audio(); if (a) a.setVolume(id, v); },
+      set: (v: number) => { const a = audio(); if (a) a.setVolume(id, v); },
       value: () => { const a = audio(); return a ? pct(a.volumeOf(id)) : '—'; },
       enabled: () => !!audio(),
       why: 'The audio system is not running in this session.',
@@ -85,10 +147,10 @@ export class SystemScreen {
         key: 'quality', name: 'Graphics Quality', kind: 'choice',
         desc: 'Shadow cascades, ambient occlusion, screen-space reflections and '
           + 'render scale, all in one tier. Drop it if the frame rate is fighting you.',
-        options: QUALITY,
-        index: () => Math.max(0, QUALITY.indexOf(rnd() ? rnd().quality : 'high')),
+        options: QUALITY_TIERS,
+        index: () => Math.max(0, QUALITY_TIERS.indexOf(rnd() ? rnd().quality : 'high')),
         pick: (n: number) => {
-          const tier = QUALITY[n];
+          const tier = QUALITY_TIERS[n];
           if (!tier) return;
           if (rnd()?.setQuality) rnd().setQuality(tier);
           if (this.game?.post?.setQuality) this.game.post.setQuality(tier);
@@ -101,7 +163,7 @@ export class SystemScreen {
         key: 'invertY', name: 'Invert Camera (Y)', kind: 'toggle',
         desc: 'Push the stick or the mouse forward to look down instead of up.',
         get: () => !!input()?.invertY,
-        set: (v: any) => { if (input()) input().invertY = v; },
+        set: (v: boolean) => { if (input()) input().invertY = v; },
         value: () => (input()?.invertY ? 'ON' : 'OFF'),
         enabled: () => !!input(),
         why: 'No input device bound.',
@@ -179,11 +241,14 @@ export class SystemScreen {
     this.cols.appendChild(r);
     root.appendChild(this.cols);
 
-    this.nodes = this._rows(game).map((row) => {
+    this.nodes = this._rows(game).map((row): SettingNode => {
       const val = el('div.sy-v');
       const bar = row.kind === 'slider' ? new Bar({ cls: 'slim', chase: false }) : null;
+      // Held rather than re-found through `firstChild`: the highlight is
+      // repainted every frame and the lookup would have to be re-narrowed.
+      const bg = el('div.mr-bg');
       const node = el('div.syrow', {}, [
-        el('div.mr-bg'),
+        bg,
         icon(row.kind === 'action' ? 'system' : row.kind === 'toggle' ? 'shieldUp' : 'ap', { size: 15, stroke: 1.2 }),
         el('div.sy-n', { text: row.name }),
         val,
@@ -191,13 +256,13 @@ export class SystemScreen {
       ]);
       this.list.appendChild(node);
       this.list.appendChild(el('div.rule', { style: 'opacity:.34' }));
-      return { node, row, val, bar, bg: node.firstChild };
+      return { node, row, val, bar, bg };
     });
   }
 
   enter(game: Game) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
 
-  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ------------------------------------------------------------ input */
 
@@ -238,7 +303,7 @@ export class SystemScreen {
       n.bg.style.opacity = on ? (0.6 + 0.2 * (0.5 + 0.5 * Math.sin(game.time.now * 2.6))).toFixed(3) : '0';
       const v = ok ? n.row.value() : 'Unavailable';
       if (n._v !== v) { n.val.textContent = v; n._v = v; }
-      if (n.bar) n.bar.set(ok ? clamp(n.row.get(), 0, 1) : 0, dt);
+      if (n.bar && n.row.kind === 'slider') n.bar.set(ok ? clamp(n.row.get(), 0, 1) : 0, dt);
     }
 
     const cur = this.nodes[this.i];
@@ -246,7 +311,7 @@ export class SystemScreen {
     if (this._cur !== key) {
       this._cur = key;
       this._age = 0;
-      this.dK.textContent = (({ slider: 'Setting', toggle: 'Setting', choice: 'Setting', action: 'Action' }) as any)[cur.row.kind];
+      this.dK.textContent = KIND_LABEL[cur.row.kind];
       this.dN.textContent = cur.row.name;
       this.dD.textContent = cur.row.enabled() ? cur.row.desc : `${cur.row.desc}\n\nUnavailable: ${cur.row.why}`;
       this.dI.textContent = '';

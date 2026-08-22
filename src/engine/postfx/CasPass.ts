@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
 import { CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Final output: AMD-style contrast adaptive sharpening plus an ordered dither
@@ -11,7 +12,7 @@ export class CasPass extends FilterPass {
   dither!: number;
   override material!: THREE.ShaderMaterial;
   sharpness!: number;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super(fx);
     this.sharpness = 0.42;
     this.dither = 1.0;

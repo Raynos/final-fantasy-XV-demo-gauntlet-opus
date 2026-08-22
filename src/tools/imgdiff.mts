@@ -19,8 +19,18 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+/** One decoded image: raw samples plus the geometry needed to compare two. */
+export interface DecodedPng {
+  w: number;
+  h: number;
+  /** Row-major samples, `ch` per pixel. */
+  data: Uint8Array;
+  /** Channels per pixel: 4 RGBA, 3 RGB, 1 grey. */
+  ch: number;
+}
+
 /** @returns RGBA8 */
-export function decodePng(buf: any): {w:number, h:number, data:Uint8Array, ch?: any } {
+export function decodePng(buf: Buffer): DecodedPng {
   if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error('not a png');
   let p = 8, w = 0, h = 0, bitDepth = 0, colorType = 0, interlace = 0;
   const idat = [];
@@ -70,7 +80,7 @@ export function decodePng(buf: any): {w:number, h:number, data:Uint8Array, ch?: 
 }
 
 /** @returns per-channel deltas in 0..255 */
-export function compare(a: any, b: any): {mean:number, max:number, over:number, size?: boolean } {
+export function compare(a: DecodedPng, b: DecodedPng): {mean:number, max:number, over:number, size?: boolean } {
   if (a.w !== b.w || a.h !== b.h || a.ch !== b.ch) return { mean: NaN, max: 255, over: 1, size: false };
   let sum = 0, max = 0, over = 0;
   const n = a.data.length;
@@ -98,7 +108,7 @@ async function main() {
     const fb = name ? path.join(bPath, name) : bPath;
     let r;
     try { r = compare(decodePng(await readFile(fa)), decodePng(await readFile(fb))); }
-    catch (e: any) { console.log(`${(name || '').padEnd(20)} ERROR ${e.message}`); bad++; continue; }
+    catch (e: unknown) { console.log(`${(name || '').padEnd(20)} ERROR ${e instanceof Error ? e.message : String(e)}`); bad++; continue; }
     worst = Math.max(worst, r.mean);
     const flag = r.mean > limit ? '  <<' : '';
     if (r.mean > limit) bad++;

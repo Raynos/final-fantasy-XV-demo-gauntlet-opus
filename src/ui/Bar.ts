@@ -11,16 +11,18 @@ export class Bar {
   _lastV!: number;
   c!: number;
   chaseEl!: HTMLElement;
-  delay!: any;
+  /** Seconds the chase bar hangs before it starts sliding. */
+  delay!: number;
   fill!: HTMLElement;
   hold!: number;
   node!: HTMLElement;
-  speed!: any;
+  /** Chase slide rate, in fill fraction per second. */
+  speed!: number;
   v!: number;
   /**
    * @param [opts] `{ cls, chase, delay, speed }`
    */
-  constructor(opts: any = {}) {
+  constructor(opts: { cls?: string, chase?: boolean, delay?: number, speed?: number } = {}) {
     const { cls = '', chase = true, delay = 0.42, speed = 2.6 } = opts;
     this.delay = delay;
     this.speed = speed;

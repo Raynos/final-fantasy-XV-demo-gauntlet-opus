@@ -45,7 +45,7 @@ const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
  * project directory. A worktree's `.git` is a file pointing back at the real
  * repo, so follow it rather than reporting nothing when run from inside one.
  */
-function mainRepo(dir: any) {
+function mainRepo(dir: string) {
   const dotgit = path.join(dir, '.git');
   if (!existsSync(dotgit) || statSync(dotgit).isDirectory()) return dir;
   const m = /gitdir:\s*(.+)/.exec(readFileSync(dotgit, 'utf8'));
@@ -57,11 +57,11 @@ const ROOT = mainRepo(HERE);
 const PROJECTS = path.join(homedir(), '.claude', 'projects', ROOT.replace(/\//g, '-'));
 
 const args = process.argv.slice(2);
-const flag = (name: any) => args.includes(name);
-const val = (name: any) => (args.indexOf(name) === -1 ? null : args[args.indexOf(name) + 1]);
+const flag = (name: string) => args.includes(name);
+const val = (name: string) => (args.indexOf(name) === -1 ? null : args[args.indexOf(name) + 1]);
 
 const DURATION = { s: 1e3, m: 6e4, h: 36e5, d: 864e5 };
-const parseDur = (s: any) => {
+const parseDur = (s: string | null) => {
   const m = /^(\d+)([smhd])$/.exec(s || '');
   return m ? Number(m[1]) * DURATION[m[2] as keyof typeof DURATION] : null;
 };
@@ -118,7 +118,7 @@ const reImage = /"data":"[A-Za-z0-9+/=]{1000,}"/g;
  * single agent's transcript carries four different values. The worktree's HEAD
  * is the real answer, and the agent id names the worktree.
  */
-function branchOf(worktree: any) {
+function branchOf(worktree: string | null) {
   const head = worktree === null
     ? path.join(ROOT, '.git', 'HEAD')
     : path.join(ROOT, '.git', 'worktrees', worktree, 'HEAD');
@@ -128,7 +128,7 @@ function branchOf(worktree: any) {
 }
 
 /** One pass over one transcript. Nothing but the line currently in hand is held. */
-async function scan(file: any, since: any) {
+async function scan(file: string, since: number | null) {
   const st: {
     turns: number, first: number, last: number, ctx: number, imgBytes: number,
     waits: number[],
@@ -181,20 +181,20 @@ async function scan(file: any, since: any) {
   return st;
 }
 
-const fmtAge = (ms: any) => {
+const fmtAge = (ms: number) => {
   const m = Math.round(ms / 60000);
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`;
 };
-const pct = (v: any, p: any) => (v.length ? v.slice().sort((a: any, b: any) => a - b)[Math.min(v.length - 1, Math.floor(v.length * p))] : 0);
-const fmtSec = (s: any) => (s ? `${Math.round(s)}s` : '-');
-const fmtTok = (t: any) => (t >= 1000 ? `${Math.round(t / 1000)}k` : String(t));
+const pct = (v: number[], p: number) => (v.length ? v.slice().sort((a, b) => a - b)[Math.min(v.length - 1, Math.floor(v.length * p))] : 0);
+const fmtSec = (s: number) => (s ? `${Math.round(s)}s` : '-');
+const fmtTok = (t: number) => (t >= 1000 ? `${Math.round(t / 1000)}k` : String(t));
 
 async function main() {
   const session = await pickSession();
   const dir = path.join(PROJECTS, session, 'subagents');
   const since = parseDur(val('--since')) ? Date.now() - parseDur(val('--since'))! : null;
 
-  let files: any[] = [];
+  let files: string[] = [];
   try {
     files = (await readdir(dir)).filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'));
   } catch { /* a session with no subagents is a normal state, not an error */ }

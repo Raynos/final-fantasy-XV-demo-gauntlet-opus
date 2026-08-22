@@ -1,4 +1,6 @@
-import type { Game } from '../game/Game.ts';
+import type { Game, SystemKey, SystemRegistry } from '../game/Game.ts';
+import type { System } from './System.ts';
+import type { WarmupReport } from './PostFX.ts';
 /**
  * Boot-time profiler.
  *
@@ -22,12 +24,14 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  * @param name label, conventionally `System.phase`
  * @param fn work to time; its return value is passed through
  */
-export function bootPhase(name: string, fn: ((...args: any[]) => any)) {
+export function bootPhase<T>(name: string, fn: () => T): T {
   const t0 = now();
   const r = fn();
   const p = typeof window !== 'undefined' && window.BOOT_PROFILE;
   const done = () => { if (p) p.marks.push({ name: `  ${name}`, ms: +(now() - t0).toFixed(1) }); };
-  if (r && typeof r.then === 'function') return r.then((v: any) => { done(); return v; });
+  // A phase that returns a promise is timed to when it settles, not to when it
+  // was started -- which is the whole point on an async `init()`.
+  if (r instanceof Promise) return r.then((v) => { done(); return v; }) as T;
   done();
   return r;
 }
@@ -48,7 +52,7 @@ export interface BootProfile {
   /** Page time at which the game reported ready. */
   ready?: number;
   /** `Warmup`'s report, when the warm-up ran. */
-  warmup?: any;
+  warmup?: WarmupReport;
 }
 
 export function installBootProfile(game: Game): BootProfile {
@@ -61,13 +65,14 @@ export function installBootProfile(game: Game): BootProfile {
   if (typeof window !== 'undefined') window.BOOT_PROFILE = profile;
 
   const add = game.add.bind(game);
-  let last: any = null;
-  game.add = (system: any, name: any) => {
-    const key = name || 'anon';
+  /** Page time the last system's `init()` finished, for the tail mark. */
+  let last: number | null = null;
+  game.add = <K extends SystemKey>(system: SystemRegistry[K] & System, name?: K): SystemRegistry[K] => {
+    const key: string = name || 'anon';
     const sys = add(system, name);
     if (sys && sys.init) {
       const orig = sys.init.bind(sys);
-      sys.init = async (g: any) => {
+      sys.init = async (g: Game) => {
         const t0 = now();
         try {
           return await orig(g);

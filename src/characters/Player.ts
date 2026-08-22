@@ -4,6 +4,9 @@ import { updateSun } from './rig/Materials.ts';
 import { CollisionWorld } from '../world/collision/CollisionWorld.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
 import type { Character } from './rig/Character.ts';
+import type { PlayOpts } from './rig/Anim.ts';
+import type { Ground } from '../world/Terrain.ts';
+import type { CombatSystem } from '../combat/CombatSystem.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -22,28 +25,56 @@ import type { Game } from '../game/Game.ts';
 /** Shots whose framing implies the party is on the move. */
 const WALK_SHOTS = new Set(['party_walk', 'hud_field', 'vista_dusk']);
 
+/**
+ * One character's vitals as the scene graph carries them.
+ *
+ * **Owned by `RpgSystem`**, which mirrors the matching `Stats` block onto
+ * `Player.stats` and onto every `PartyMember.stats` each frame. Nothing here
+ * is the model — this is the copy the HUD, the minimap and the AI read so
+ * they do not have to reach into the RPG layer.
+ */
+export interface Vitals {
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  level: number;
+  /** knocked out. Only the companions carry it; Noctis has `Player.downed`. */
+  ko?: boolean;
+}
+
 export class Player {
   _gazeOn!: boolean;
   _gazeT!: number;
   _fwd!: THREE.Vector3;
   _gait!: number;
-  _gazeSeq!: any;
+  /** counts gaze flips; also seeds which companion he glances at. */
+  _gazeSeq!: number;
   _look!: THREE.Vector3;
   _prevHeading!: number;
   _right!: THREE.Vector3;
   _wish!: THREE.Vector3;
   body!: CharacterController;
   character!: Character;
-  collision!: any;
+  collision!: CollisionWorld;
+  /** Out of the fight. **Owned by `Downed`**; read by the encounter director. */
+  downed!: boolean;
   game!: Game;
   grounded!: boolean;
   heading!: number;
-  mesh!: any;
+  mesh!: THREE.SkinnedMesh;
   root!: THREE.Group;
   runSpeed!: number;
   speed!: number;
-  stats!: any;
-  terrain!: any;
+  stats!: Vitals;
+  /**
+   * The ground under this walker. `Ground`, not `Terrain`: `Occupants` swaps
+   * in a stub whose surface is a kilometre down while everyone is in the car,
+   * so the foot IK has nothing to plant on at 100 km/h.
+   */
+  terrain!: Ground | undefined;
+  /** pull on enemy aggro. **Owned by `EncounterDirector`** — see `Threat`. */
+  threatWeight?: number;
   velocity!: THREE.Vector3;
   walkSpeed!: number;
   async init(game: Game) {
@@ -53,6 +84,7 @@ export class Player {
     this.heading = 0;
     this.speed = 0;
     this.grounded = true;
+    this.downed = false;
     /**
      * Noctis' vitals. **Owned by `RpgSystem`** — it mirrors the real `Stats`
      * block onto this object every frame and folds anything combat subtracts
@@ -106,7 +138,7 @@ export class Player {
   get position() { return this.root.position; }
 
   /** Forward a combat action to the rig. @param name */
-  play(name: string, opts: any) { this.character.play(name, opts); }
+  play(name: string, opts?: PlayOpts) { this.character.play(name, opts ?? {}); }
 
   /** Weapon sockets for the combat system. */
   get attach() { return this.character.attach; }
@@ -191,7 +223,7 @@ export class Player {
    * is fighting; in the field he glances at one of the retinue and then looks
    * away again, on a deterministic timer so two capture runs match.
    */
-  _gaze(dt: number, game: Game, combat: any) {
+  _gaze(dt: number, game: Game, combat: CombatSystem | undefined) {
     if (combat && combat.inCombat) {
       const lock = combat.lockTarget && !combat.lockTarget.dead ? combat.lockTarget : null;
       const e = lock || (combat.autoTarget ? combat.autoTarget(28) : null);
@@ -214,7 +246,7 @@ export class Player {
     this.character.setLookTarget(this._look.set(m.root.position.x, m.root.position.y + h * 0.98, m.root.position.z));
   }
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     const sky = game.get('Sky');
     if (sky && sky.sun) updateSun(sky.sun, game.camera);
   }

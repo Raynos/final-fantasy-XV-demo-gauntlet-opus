@@ -23,10 +23,16 @@ import { Rng } from '../../util/Rng.ts';
 /* ------------------------------------------------------------------------ */
 
 /** Elemental affinities used by spells, enemies and accessories. */
-export const ELEMENTS = ['physical', 'fire', 'ice', 'lightning', 'dark', 'light'];
+export const ELEMENTS = ['physical', 'fire', 'ice', 'lightning', 'dark', 'light'] as const;
+
+/** One of {@link ELEMENTS}. */
+export type Element = typeof ELEMENTS[number];
 
 /** Noctis' five weapon classes plus the party-only classes. */
-export const WEAPON_CLASSES = ['sword', 'greatsword', 'polearm', 'dagger', 'firearm', 'shield', 'machinery'];
+export const WEAPON_CLASSES = ['sword', 'greatsword', 'polearm', 'dagger', 'firearm', 'shield', 'machinery'] as const;
+
+/** One of {@link WEAPON_CLASSES}. */
+export type WeaponClass = typeof WEAPON_CLASSES[number];
 
 /**
  * Resistance values are read as "percent of damage taken".
@@ -101,6 +107,19 @@ export const EXP_TABLE = (() => {
  * Places you can sleep, and the EXP multiplier they apply to the banked total.
  * Havens are free but give no bonus; the fancier the bed the fatter the payout.
  */
+/** Somewhere the party can sleep, and what a night there is worth. */
+export interface Lodging {
+  id: string;
+  name: string;
+  /** Cost per night. Havens are free. */
+  gil: number;
+  /** Multiplier on the banked EXP a night converts. */
+  bonus: number;
+  /** Ignis can cook here. */
+  cooking: boolean;
+  desc: string;
+}
+
 export const LODGINGS = {
   haven:            { id: 'haven',            name: 'Haven',                          gil: 0,     bonus: 1.0,  cooking: true,  desc: 'A rune-marked campsite. Safe from daemons; Ignis can cook.' },
   caravan:          { id: 'caravan',          name: 'Trailer',                        gil: 30,   bonus: 1.2,  cooking: false, desc: 'A cramped outpost trailer. Cheap and cheerful.' },
@@ -111,7 +130,10 @@ export const LODGINGS = {
   galdin_pearl:     { id: 'galdin_pearl',     name: 'Galdin Quay — Mother of Pearl',  gil: 10000, bonus: 3.0,  cooking: false, desc: 'The most expensive sleep on Eos, and worth it.' },
   altissia_suite:   { id: 'altissia_suite',   name: 'Maagho Suite, Altissia',         gil: 8000,  bonus: 2.5,  cooking: false, desc: 'Canal-side luxury in Accordo.' },
   regalia:          { id: 'regalia',          name: 'The Regalia',                    gil: 0,     bonus: 1.0,  cooking: false, desc: 'Ignis drives while you doze. Not really rest.' },
-};
+} satisfies Record<string, Lodging>;
+
+/** One of {@link LODGINGS}. */
+export type LodgingId = keyof typeof LODGINGS;
 
 /* ------------------------------------------------------------------------ */
 /* Growth profiles                                                           */
@@ -305,7 +327,7 @@ export class Stats {
     return { id: this.id, level: this.level, exp: this.exp, hp: this.hp, mp: this.mp, ko: this.ko, hpDrain: this.hpDrain };
   }
 
-  static fromJSON(data: any) {
+  static fromJSON(data: StatsSave) {
     const s = new Stats(data.id, { level: data.level, exp: data.exp });
     s.hpDrain = data.hpDrain || 0;
     s.hp = data.hp != null ? data.hp : s.maxHp;
@@ -313,6 +335,26 @@ export class Stats {
     s.ko = !!data.ko;
     return s;
   }
+}
+
+/** One member's serialised sheet. */
+export interface StatsSave {
+  id: string;
+  level?: number;
+  exp?: number;
+  hp?: number;
+  mp?: number;
+  ko?: boolean;
+  /** Royal-arms HP drain. */
+  hpDrain?: number;
+}
+
+/** The serialised EXP bank. */
+export interface ExpBankSave {
+  banked?: number;
+  sources?: Record<string, number>;
+  multiplier?: number;
+  lifetime?: number;
 }
 
 /** A blank modifier bucket. */
@@ -340,13 +382,15 @@ export function emptyMods(): StatMods {
 }
 
 /** Add `src` into `dst` in place (used to fold gear lists into one bucket). */
-export function addMods(dst: any, src: any) {
+export function addMods(dst: StatMods, src: Partial<StatMods> | null | undefined): StatMods {
   if (!src) return dst;
   for (const k of Object.keys(src)) {
     if (k === 'resist') {
-      for (const e of Object.keys(src.resist || {})) dst.resist[e] = (dst.resist[e] || 0) + src.resist[e];
+      const r = src.resist || {};
+      for (const e of Object.keys(r)) dst.resist[e] = (dst.resist[e] || 0) + r[e];
     } else if (k === 'mult') {
-      for (const e of Object.keys(src.mult || {})) dst.mult[e] = (dst.mult[e] || 0) + src.mult[e];
+      const m = src.mult || {};
+      for (const e of Object.keys(m)) dst.mult[e] = (dst.mult[e] || 0) + m[e];
     } else if (typeof src[k] === 'number') {
       dst[k] = (dst[k] || 0) + src[k];
     }
@@ -392,7 +436,7 @@ export class ExpBank {
    * Convert the bank into levels for a party.
    * @param lodging one of LODGINGS
    */
-  redeem(party: Stats[], lodging: any = LODGINGS.haven): {total:number, bonus:number, perMember:any[], sources:any, base?: number } {
+  redeem(party: Stats[], lodging: Lodging = LODGINGS.haven): ExpRedemption {
     const bonus = lodging?.bonus ?? 1;
     const total = Math.round(this.banked * bonus);
     const perMember = party.map((s) => {
@@ -407,7 +451,7 @@ export class ExpBank {
   }
 
   toJSON() { return { banked: this.banked, sources: this.sources, multiplier: this.multiplier, lifetime: this.lifetime }; }
-  static fromJSON(d: any) {
+  static fromJSON(d: ExpBankSave | null | undefined) {
     const b = new ExpBank();
     if (d) Object.assign(b, { banked: d.banked || 0, sources: d.sources || {}, multiplier: d.multiplier ?? 1, lifetime: d.lifetime || 0 });
     return b;
@@ -472,7 +516,88 @@ export function resolveElement(resistPercent: number): {mult:number, kind:'absor
  *
  * @param {object} opts
  */
-export function computeDamage(opts: { attacker: Stats | any, target: any, motion?: number, kind?: 'physical' | 'magical', element?: string, weaponClass?: string, staggerMult?: number, isBackAttack?: boolean, isWarpStrike?: boolean, hour?: number, targetIsDaemon?: boolean, rng?: Rng }): {damage:number, crit:boolean, kind:string, element:string, elementKind:string, absorbed:boolean, weakness:boolean, breakdown:any, healed?: number } {
+/**
+ * Enough of an attacker to roll a hit: a full `Stats`, or the bare block an
+ * enemy publishes (which has no `Stats` of its own).
+ */
+export interface Attacker {
+  attack?: number;
+  strength?: number;
+  magicAttack?: number;
+  magic?: number;
+  level?: number;
+  critRate?: number;
+  critDamage?: number;
+}
+
+/**
+ * Enough of a target to be hit.
+ *
+ * Both arms are live and this is the one place that knows it: a party member
+ * is a `Stats` and answers `resistance()`, while an enemy is a species block
+ * that publishes plain `resist` / `weakTo` tables and has no `Stats` at all.
+ */
+export interface Defender {
+  level?: number;
+  vitality?: number;
+  spirit?: number;
+  defense?: number;
+  magicDefense?: number;
+  /** `Stats` only. */
+  resistance?(element: string): number;
+  /** Species blocks only: percent of damage taken, per element. */
+  resist?: Record<string, number>;
+  /** Weapon classes this thing hates. */
+  weakTo?: readonly string[];
+  /** Weapon classes it shrugs off. */
+  resistsWeapon?: readonly string[];
+}
+
+/** One roll through the damage pipeline. */
+export interface DamageOpts {
+  attacker: Attacker;
+  target: Defender;
+  /** The move's damage multiplier. */
+  motion?: number;
+  kind?: 'physical' | 'magical';
+  element?: string;
+  /** Null where a spell must not also claim a weapon class. */
+  weaponClass?: string | null;
+  staggerMult?: number;
+  isBackAttack?: boolean;
+  isWarpStrike?: boolean;
+  /** Hour of day, for the night scaling. */
+  hour?: number;
+  targetIsDaemon?: boolean;
+  rng?: Rng;
+}
+
+/** How the pipeline arrived at the number, for the damage-breakdown overlay. */
+export interface DamageBreakdown {
+  offence: number;
+  defence: number;
+  motion: number;
+  levelMod: number;
+  mitigation: number;
+  elementMult: number;
+  staggerMult: number;
+}
+
+/** What one roll produced. */
+export interface DamageResult {
+  damage: number;
+  crit: boolean;
+  kind: string;
+  element: string;
+  elementKind: string;
+  absorbed: boolean;
+  weakness: boolean;
+  breakdown: DamageBreakdown;
+  /** Set when the element was absorbed and the hit healed instead. */
+  healed?: number;
+}
+
+export function computeDamage(opts: DamageOpts): DamageResult {
   const {
     attacker, target,
     motion = 1,
@@ -555,13 +680,42 @@ export function computeDamage(opts: { attacker: Stats | any, target: any, motion
   };
 }
 
+/** What one member got out of a night's sleep. */
+export interface MemberExp {
+  id: string;
+  name: string;
+  /** EXP handed to this member. */
+  gained: number;
+  /** Level before and after. */
+  from: number;
+  to: number;
+  /** Each level crossed, in order. */
+  levels: number[];
+}
+
+/** What redeeming the bank paid out. */
+export interface ExpRedemption {
+  total: number;
+  /** The lodging multiplier that was applied. */
+  bonus: number;
+  perMember: MemberExp[];
+  /** EXP banked per source label since the last redemption. */
+  sources: Record<string, number>;
+  /** The unmultiplied bank. */
+  base?: number;
+}
+
+/** Enough of an enemy to price its death. */
+export interface ExpSource {
+  level?: number;
+  expClass?: 'trash' | 'normal' | 'elite' | 'boss' | 'daemon';
+}
+
 /**
  * EXP awarded for defeating an enemy. Scales with the enemy's level and a
  * per-archetype multiplier; night-boosted enemies pay out proportionally more.
- *
- * @param enemy {level, expClass?: 'trash'|'normal'|'elite'|'boss'|'daemon'}
  */
-export function expForKill(enemy: any, hour: number | null = null) {
+export function expForKill(enemy: ExpSource, hour: number | null = null) {
   const CLASS_MULT = { trash: 0.5, normal: 1, elite: 2.2, boss: 6, daemon: 1.6 };
   const m = CLASS_MULT[enemy.expClass as keyof typeof CLASS_MULT] ?? 1;
   const lv = enemy.level || 1;

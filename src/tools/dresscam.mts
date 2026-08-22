@@ -34,7 +34,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
-const portOpen = (port: any) => new Promise((res) => {
+const portOpen = (port: number) => new Promise<boolean>((res) => {
   const s = net.connect(port, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -78,7 +78,7 @@ async function main() {
   const server = await ensureServer();
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 

@@ -24,13 +24,32 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const KILL = process.argv.includes('--kill');
 const ps = execSync('ps -Ao pid,ppid,etime,rss,args', { encoding: 'utf8' }).split('\n').slice(1);
 
-const rows = ps.map((l) => {
+/**
+ * A process this tool is reporting on: a `ps` row plus what the orphan test
+ * concluded about it. `certain` is undefined for a browser, which is orphaned
+ * by definition once its parent is gone.
+ */
+type Target = ProcRow & { certain?: boolean, tag?: string };
+
+/** One row of `ps -Ao pid,ppid,etime,rss,args`. */
+interface ProcRow {
+  pid: number;
+  ppid: number;
+  /** Elapsed time as `ps` prints it: `[[dd-]hh:]mm:ss`. */
+  etime: string;
+  /** Resident set size, KB. */
+  rss: number;
+  /** The full command line. */
+  args: string;
+}
+
+const rows: ProcRow[] = ps.map((l) => {
   const m = l.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(.*)$/);
   return m ? { pid: +m[1], ppid: +m[2], etime: m[3], rss: +m[4], args: m[5] } : null;
-}).filter(Boolean);
+}).filter((r): r is ProcRow => r !== null);
 
 const alive = new Set(rows.map((r) => r!.pid));
-const isOurs = (r: any) => /final-fantasy-XV-demo-gauntlet/.test(r.args) || /vite --port 52\d\d/.test(r.args);
+const isOurs = (r: ProcRow) => /final-fantasy-XV-demo-gauntlet/.test(r.args) || /vite --port 52\d\d/.test(r.args);
 
 /**
  * A vite server reparented to PID 1 is not automatically dead weight: agents
@@ -38,7 +57,7 @@ const isOurs = (r: any) => /final-fantasy-XV-demo-gauntlet/.test(r.args) || /vit
  * killed. So a server is only an orphan if nothing else alive belongs to the
  * same worktree — no `node src/tools/…` run, no child vite process of its own.
  */
-const worktreeOf = (args: any) => (args.match(/worktrees\/(agent-[a-z0-9]+)/) || [])[1] || 'main';
+const worktreeOf = (args: string) => (args.match(/worktrees\/(agent-[a-z0-9]+)/) || [])[1] || 'main';
 const liveWorktrees = new Set(
   rows.filter((r) => /node .*tools\/(shoot|perf|gameplay|attrib|sheet)\.mts/.test(r!.args))
     .map((r) => worktreeOf(r!.args))
@@ -46,11 +65,11 @@ const liveWorktrees = new Set(
 // a server whose own child node process is alive is mid-serve, not abandoned
 
 /** Worktree directory gone from disk => the agent that owned it is finished. */
-const worktreeGone = (tag: any) => tag !== 'main'
+const worktreeGone = (tag: string) => tag !== 'main'
   && !existsSync(path.join(ROOT, '.claude', 'worktrees', tag));
 
 const candidates = rows.filter((r) => r!.ppid === 1 && isOurs(r) && /npm exec vite/.test(r!.args));
-const orphanServers: any[] = [];
+const orphanServers: Target[] = [];
 for (const r of candidates) {
   // inherit the worktree tag from the child, which carries the resolved path
   const child = rows.find((c) => c!.ppid === r!.pid);
@@ -61,14 +80,12 @@ for (const r of candidates) {
   // server would break its next capture, so anything else is reported only.
   const hours = /(\d+):(\d\d):(\d\d)/.test(r!.etime) ? Number(r!.etime.split(':')[0]) : 0;
   if (busy) continue;
-  (r as any).certain = worktreeGone(tag) || hours >= 3;
-  (r as any).tag = tag;
-  orphanServers.push(r);
+  orphanServers.push({ ...r, certain: worktreeGone(tag) || hours >= 3, tag });
 }
 const orphanBrowsers = rows.filter((r) =>
   /chrome-headless-shell|chromium/i.test(r!.args) && !alive.has(r!.ppid) && r!.ppid !== 1);
 
-const targets = [...orphanServers, ...orphanBrowsers];
+const targets: Target[] = [...orphanServers, ...orphanBrowsers];
 
 if (!targets.length) {
   console.log('clean — no orphaned servers or browsers');

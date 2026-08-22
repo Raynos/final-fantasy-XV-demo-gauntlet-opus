@@ -83,7 +83,11 @@ const GROUPS = [
  * is Tab / Backspace / B, like everywhere else.
  */
 export class ControlsScreen {
-  cols!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  cols!: Array<{ col: HTMLElement, rows: Array<{ node: HTMLElement, bg: HTMLElement, _on?: boolean }> }>;
   grid!: HTMLElement;
   i!: number;
   j!: number;
@@ -106,8 +110,9 @@ export class ControlsScreen {
         const glyphs = el('div.cr-k', {}, keys.map((k: string) => (k === '-'
           ? el('span.cr-dash', { text: '–' })
           : button(k, { size: k.length > 2 ? 25 : 21 }))));
+        const bg = el('div.mr-bg');
         const node = el('div.crow', {}, [
-          el('div.mr-bg'),
+          bg,
           glyphs,
           el('div.cr-b', {}, [
             el('div.cr-t', { text: label }),
@@ -115,7 +120,7 @@ export class ControlsScreen {
           ]),
           el('div.cr-p', { text: pad }),
         ]);
-        return { node, bg: node.firstChild };
+        return { node, bg };
       });
       const col = el('div.ctrl-col.plate', {}, [
         el('div.cc-h', {}, [icon(g.icon, { size: 15, stroke: 1.2 }), el('div.cc-t', { text: g.name })]),

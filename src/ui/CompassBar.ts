@@ -1,6 +1,7 @@
 import { el, svg, clamp, easeOut, clock } from './UIKit.ts';
 import { icon } from './Icons.ts';
 import { QUEST, hudState, readQuest, readMarkers } from './GameData.ts';
+import type { MarkerView } from './GameData.ts';
 import type { Game } from '../game/Game.ts';
 
 const W = 330, H = 34, SPAN = 78;      // degrees of heading visible across the strip
@@ -23,26 +24,48 @@ const wrap180 = (d: number) => { let x = ((d + 180) % 360 + 360) % 360 - 180; re
  * Top-right compass strip with cardinal ticks and world-space quest markers,
  * plus the in-game clock, current region and the tracked objective.
  */
+/** One cardinal/inter-cardinal tick on the strip. */
+interface CompassTick {
+  /** Bearing in degrees. */
+  deg: number;
+  g: SVGElement;
+  _vis?: boolean;
+}
+
+/** One world marker slot on the strip. */
+interface CompassMark {
+  g: SVGElement;
+  head: SVGElement;
+  /** The colour the head was last painted; '' until first drawn. */
+  col: string;
+  _on?: boolean;
+}
+
+/** A `MarkerView` with the player-relative distance folded in. */
+type RankedMarker = MarkerView & { dist: number };
+
 export class CompassBar {
-  _area!: any;
+  /** The area name last written into the location block. */
+  _area!: string;
   _day!: string;
   _dist!: string;
   _qs!: string;
   _qt!: string;
-  _sub!: any;
-  _time!: any;
+  _sub!: string;
+  /** The clock string last written. */
+  _time!: string;
   box!: HTMLElement;
   dayEl!: HTMLElement;
   locEl!: HTMLElement;
   locSub!: HTMLElement;
-  marks!: any[];
+  marks!: CompassMark[];
   qDist!: HTMLElement;
   qName!: HTMLElement;
   qStep!: HTMLElement;
   root!: HTMLElement;
   strip!: HTMLElement;
   svg!: SVGElement;
-  ticks!: any[];
+  ticks!: CompassTick[];
   timeEl!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.tr');
@@ -145,7 +168,7 @@ export class CompassBar {
     // world markers, sorted so the nearest few always get a slot
     const p = game.get?.('Player')?.position;
     const all = readMarkers(game);
-    let list: any[] = [];
+    let list: RankedMarker[] = [];
     if (all && p) {
       list = all
         .map((m) => ({ ...m, dist: Math.hypot(m.x - p.x, m.z - p.z) }))
@@ -155,7 +178,7 @@ export class CompassBar {
     for (let i = 0; i < this.marks.length; i++) {
       const mk = this.marks[i];
       const m = list[i];
-      if (!m || !p) { if (mk._on !== false) { mk.g.setAttribute('opacity', 0); mk._on = false; } continue; }
+      if (!m || !p) { if (mk._on !== false) { mk.g.setAttribute('opacity', '0'); mk._on = false; } continue; }
       mk._on = true;
       const col = MARK_COL[m.kind as keyof typeof MARK_COL] || '#b6d6f8';
       if (mk.col !== col) { mk.head.setAttribute('fill', col); mk.col = col; }

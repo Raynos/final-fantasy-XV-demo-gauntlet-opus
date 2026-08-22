@@ -35,8 +35,38 @@ const MAX_ROWS = 16;
  *
  * Controls: ↑↓ pick, ←→ change section. No CSS transitions.
  */
+/** One datalog line: a real number about the journey so far. */
+interface LogRow {
+  kind: 'log';
+  key: string;
+  name: string;
+  /** Already formatted for the right-hand column. */
+  value: string;
+  desc: string;
+}
+
+/** One bestiary entry, and how much of it the party has actually seen. */
+interface BeastRow {
+  kind: 'beast';
+  /** Species key. */
+  key: string;
+  e: NonNullable<ReturnType<typeof bestiaryEntry>>;
+  kills: number;
+  /** False until the first kill; the row draws as unrecorded. */
+  known: boolean;
+}
+
+type ArchiveRow = LogRow | BeastRow;
+
+/** What a row's redraw is keyed on: the kill count, or the datalog value. */
+const rowStamp = (r: ArchiveRow): string => (r.kind === 'beast' ? String(r.kills) : r.value);
+
 export class ArchiveScreen {
-  _rows!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  _rows!: ArchiveRow[];
   _age!: number;
   _cur!: string | null;
   _sig!: string | null;
@@ -54,7 +84,7 @@ export class ArchiveScreen {
   i!: number;
   list!: HTMLElement;
   menus!: Menus;
-  rowNodes!: any[];
+  rowNodes!: Array<{ node: HTMLElement, bg: HTMLElement, row: ArchiveRow, _on?: boolean }>;
   scroll!: number;
   specVals!: HTMLElement[];
   sub!: string;
@@ -140,10 +170,10 @@ export class ArchiveScreen {
   /* -------------------------------------------------------------- data */
 
   /** Rows for the current section. */
-  rows() {
+  rows(): ArchiveRow[] {
     if (this.datalog) return this._datalogRows();
     const f = FACTION_TABS[this.tab].f;
-    const out = [];
+    const out: BeastRow[] = [];
     for (const key of Object.keys(TYPES)) {
       const e = bestiaryEntry(key);
       if (!e) continue;
@@ -156,10 +186,10 @@ export class ArchiveScreen {
   }
 
   /** The journey, in numbers that are all real. */
-  _datalogRows() {
+  _datalogRows(): LogRow[] {
     const r = this.rpg;
-    const out: any[] = [];
-    const add = (name: string, value: any, desc: string) => out.push({ kind: 'log', key: name, name, value, desc });
+    const out: LogRow[] = [];
+    const add = (name: string, value: string, desc: string) => out.push({ kind: 'log', key: name, name, value, desc });
     if (!r) {
       add('Journey', '—', 'No save is loaded.');
       return out;
@@ -172,7 +202,7 @@ export class ArchiveScreen {
     add('Quests Finished', String(r.quests.completed.length),
       `${r.quests.active.length} in hand, ${r.quests.available.length} waiting to be taken.`);
     add('Hunter Points', String(r.quests.hunterPoints || 0), 'Earned bounty by bounty at the boards of Lucis.');
-    add('Havens Found', `${havens.filter((h: any) => h.discovered).length} / ${havens.length}`,
+    add('Havens Found', `${havens.filter((h) => h.discovered).length} / ${havens.length}`,
       'Runic outcrops where daemons will not follow. Rest at one to bank the day\'s EXP.');
     add('Ascension', `${r.ascension.unlocked.size} / ${r.ascension.allNodes.length}`,
       `${commas(r.ascension.ap)} AP unspent across nine constellations.`);
@@ -196,7 +226,7 @@ export class ArchiveScreen {
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows: any) {
+  _renderRows(rows: ArchiveRow[]) {
     clear(this.list);
     this.rowNodes = [];
     for (const row of rows.slice(this.scroll, this.scroll + MAX_ROWS)) {
@@ -217,7 +247,7 @@ export class ArchiveScreen {
     }
   }
 
-  _renderDetail(row: any) {
+  _renderDetail(row: ArchiveRow) {
     clear(this.dWeak);
     clear(this.dDrops);
     if (row.kind === 'log') {
@@ -285,7 +315,7 @@ export class ArchiveScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.tab}|${this.scroll}|${rows.map((r) => `${r.key}${r.kills ?? r.value}`).join()}`;
+    const sig = `${this.tab}|${this.scroll}|${rows.map((r) => `${r.key}${rowStamp(r)}`).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows); this._cur = null; }
 
     for (let i = 0; i < (this.rowNodes || []).length; i++) {
@@ -300,7 +330,7 @@ export class ArchiveScreen {
     }
 
     const row = rows[this.i];
-    const key = row ? `${row.key}|${row.kills ?? row.value}` : 'none';
+    const key = row ? `${row.key}|${rowStamp(row)}` : 'none';
     if (this._cur !== key) { this._cur = key; this._age = 0; if (row) this._renderDetail(row); }
     this._age = (this._age || 0) + dt;
     const de = easeOut(clamp(this._age / 0.22, 0, 1)) * easeOut(clamp((a - 0.24) / 0.55, 0, 1)) * (row ? 1 : 0);

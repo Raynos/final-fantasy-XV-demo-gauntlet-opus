@@ -71,7 +71,7 @@ export async function isFresh(): Promise<boolean> {
  */
 export async function bake(opts: {force?:boolean, quiet?:boolean} = {}): Promise<boolean> {
   if (!opts.force && await isFresh()) return false;
-  const log = opts.quiet ? () => {} : (...a: any[]) => console.log('[bake]', ...a);
+  const log = opts.quiet ? () => {} : (...a: unknown[]) => console.log('[bake]', ...a);
   const t0 = Date.now();
 
   const { Field } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain/Field.ts')).href);

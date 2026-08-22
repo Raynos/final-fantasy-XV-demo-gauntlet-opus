@@ -3,6 +3,7 @@ import {
   loft, circleCross, chamferCross, edgedCross, wrapCross,
   tube, slab, place, tint, glow, surf, merge,
 } from './GeoKit.ts';
+import type { LoftSection } from './GeoKit.ts';
 import { makeDataMap, normalFromHeight } from '../util/TextureGen.ts';
 
 /**
@@ -22,7 +23,66 @@ import { makeDataMap, normalFromHeight } from '../util/TextureGen.ts';
 /** The five weapon classes a party member can equip. */
 export type WeaponClass = 'sword' | 'greatsword' | 'polearm' | 'daggers' | 'firearm';
 
-export const WEAPONS = {
+/**
+ * One link of a weapon's auto-combo.
+ *
+ * The three durations are the phases `CombatSystem._tickSwing` walks in order,
+ * and they are what `CombatAnim` reads to place the body on the same clock as
+ * the blade. `arc` is `[from, to]` in radians about `axis`; its *sign* is what
+ * tells the animation whether this link swings left or right.
+ */
+export interface ComboStep {
+  /** Wind-up, in seconds: the coil before the blade moves. */
+  wind: number;
+  /** The window in which the sweep actually connects, in seconds. */
+  active: number;
+  /** Recovery, in seconds. The combo may be queued through it. */
+  rec: number;
+  /** `[from, to]` swing angle in radians, about `axis`. */
+  arc: number[];
+  /** Rotation axis in the hand's frame; `_poseHand` mirrors it into +X. */
+  axis: number[];
+  /** Extra roll on the blade for this link, radians. */
+  tilt: number;
+  /** Damage multiplier on the class' motion value. */
+  dmg: number;
+  /** A lunge: the hand anchor drives forward through the active window. */
+  thrust?: number;
+  /** A firearm link: the active window fires a shot instead of sweeping. */
+  shoot?: number;
+}
+
+/** The ribbon a swing leaves behind. Colours are hex, `life` is seconds. */
+export interface WeaponTrailDef {
+  head: number;
+  tail: number;
+  life: number;
+  width: number;
+}
+
+/**
+ * Everything the combat system needs to know about a weapon class: how far it
+ * reaches, how hard it hits, how it chains, and what its trail looks like.
+ */
+export interface WeaponDef {
+  name: string;
+  /** Metres from the fist to the tip. Documentation for the anchors below. */
+  reach: number;
+  /** Fallback damage for a world booted with no RPG model behind it. */
+  damage: number;
+  /** Poise damage one swing does, before the per-step and heavy multipliers. */
+  poise: number;
+  /** The class' motion value: what one swing is worth to `computeDamage`. */
+  motion: number;
+  combo: ComboStep[];
+  trail: WeaponTrailDef;
+  /** Radius of the swept capsule the hit query uses. */
+  hitbox: number;
+  /** Firearm only: the class shoots rather than sweeps, and grows no trail. */
+  ranged?: boolean;
+}
+
+export const WEAPONS: Record<WeaponClass, WeaponDef> = {
   sword: {
     name: 'Engine Blade', reach: 2.05, damage: 118, poise: 22, motion: 1.05,
     // per-hit: windup, active, recovery (seconds) and the arc the blade sweeps
@@ -141,7 +201,7 @@ const LUCII = 0x3d94dd;        // the royal blue every Lucian arm carries
  * @param body colour across the primary face
  * @param [spine] colour at the −X side (defaults to `body`)
  */
-function groundBlade(cross: number[][], sections: Array<any>, edge: number, body: number, spine: number = body) {
+function groundBlade(cross: number[][], sections: LoftSection[], edge: number, body: number, spine: number = body) {
   const geo = loft(cross, sections);
   const n = cross.length;
   const p = geo.attributes.position;
@@ -160,7 +220,7 @@ function groundBlade(cross: number[][], sections: Array<any>, edge: number, body
 }
 
 /** Faceted shading: every triangle keeps its own plane normal. */
-function faceted(geo: any) {
+function faceted(geo: THREE.BufferGeometry) {
   const g = geo.index ? geo.toNonIndexed() : geo;
   if (g !== geo) geo.dispose();
   g.computeVertexNormals();
@@ -646,8 +706,14 @@ export const WEAPON_ANCHORS = {
  * five classes sharing one compiled program, so a weapon swap costs a
  * visibility flip rather than a half-second stall.
  */
-let STEEL_MAPS: any = null;
-function steelMaps() {
+/** The brushed-steel micro-surface every weapon material shares. */
+interface SteelMaps {
+  rough: THREE.DataTexture;
+  norm: THREE.DataTexture;
+}
+
+let STEEL_MAPS: SteelMaps | null = null;
+function steelMaps(): SteelMaps {
   if (STEEL_MAPS) return STEEL_MAPS;
   const N = 256;
   const frac = (x: number) => x - Math.floor(x);
@@ -734,8 +800,8 @@ export class Weapon {
   _base!: THREE.Vector3;
   _tip!: THREE.Vector3;
   baseLocal!: THREE.Vector3;
-  def!: any;
-  geometry!: any;
+  def!: WeaponDef;
+  geometry!: THREE.BufferGeometry;
   kind!: string;
   material!: THREE.MeshStandardMaterial;
   mesh!: THREE.Mesh;
@@ -759,7 +825,8 @@ export class Weapon {
     } else {
       // an unlisted kind (modded gear): measure the geometry rather than guess
       this.geometry.computeBoundingBox();
-      const bb = this.geometry.boundingBox;
+      // `computeBoundingBox` always leaves one behind, empty at worst.
+      const bb = this.geometry.boundingBox ?? new THREE.Box3();
       this.baseLocal = new THREE.Vector3(0, bb.max.y * 0.18, 0);
       this.tipLocal = new THREE.Vector3(0, bb.max.y, 0);
     }
@@ -789,6 +856,22 @@ export class Weapon {
  * ring, ready to strike. Each weapon type is one InstancedMesh, so the whole
  * swarm costs a handful of draw calls no matter how many blades are up.
  */
+/** One phantom arm: which instanced mesh draws it, and where in that mesh. */
+export interface ArmigerSlot {
+  mesh: THREE.InstancedMesh;
+  index: number;
+  /** Golden-ratio offset that de-syncs this arm's bob from its neighbours'. */
+  seed: number;
+  kind: string;
+}
+
+/** How wide, how high and how tilted the ring of phantom arms sits. */
+export interface ArmigerLayout {
+  radius?: number;
+  height?: number;
+  tilt?: number;
+}
+
 export class Armiger {
   _e!: THREE.Euler;
   _m!: THREE.Matrix4;
@@ -799,9 +882,9 @@ export class Armiger {
   count!: number;
   group!: THREE.Group;
   material!: THREE.ShaderMaterial;
-  meshes!: any[];
+  meshes!: THREE.InstancedMesh[];
   phase!: number;
-  slots!: any[];
+  slots!: ArmigerSlot[];
   strikePhase!: number;
   constructor({ count = 13 } = {}) {
     this.count = count;
@@ -814,7 +897,7 @@ export class Armiger {
     const kinds = ['sword', 'greatsword', 'polearm', 'axe', 'lance'];
     this.slots = [];
     this.meshes = [];
-    const perKind = new Map();
+    const perKind = new Map<string, number>();
     for (let i = 0; i < count; i++) {
       const k = kinds[i % kinds.length];
       perKind.set(k, (perKind.get(k) || 0) + 1);
@@ -853,7 +936,7 @@ export class Armiger {
    *
    * @param t phase in seconds (deterministic when pinned)
    */
-  layout(center: THREE.Vector3, t: number, { radius = 2.0, height = 2.35, tilt = 0.32 } = {}) {
+  layout(center: THREE.Vector3, t: number, { radius = 2.0, height = 2.35, tilt = 0.32 }: ArmigerLayout = {}) {
     const n = this.slots.length;
     for (let k = 0; k < n; k++) {
       const s = this.slots[k];
@@ -884,7 +967,7 @@ export class Armiger {
     this.material.uniforms.uStrength.value = this.active;
   }
 
-  setClock(c: any) { this.material.uniforms.uTime.value = c; }
+  setClock(c: number) { this.material.uniforms.uTime.value = c; }
   dispose() { for (const m of this.meshes) m.geometry.dispose(); this.material.dispose(); }
 }
 

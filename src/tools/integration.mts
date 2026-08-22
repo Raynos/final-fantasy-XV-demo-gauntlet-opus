@@ -27,7 +27,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PORT = Number(process.env.PORT || 5173);
 const JSON_OUT = process.argv.includes('--json');
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -49,7 +49,7 @@ async function ensureServer() {
 const server = await ensureServer();
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-const pageErrors: any[] = [];
+const pageErrors: string[] = [];
 page.on('pageerror', (e) => pageErrors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 160)); });
 
@@ -61,19 +61,21 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 
 const results = await page.evaluate(async () => {
   const g = window.GAME;
-  const out: any[] = [];
+  /** One probe's verdict. `WIRED` is "the system is there but idle". */
+  interface Row { area: string; name: string; status: 'PASS' | 'WIRED' | 'FAIL'; evidence: string }
+  const out: Row[] = [];
   const step = (n = 1) => { for (let i = 0; i < n; i++) g.frame(1 / 60); };
-  const add = (area: any, name: any, status: any, evidence: any) => out.push({ area, name, status, evidence });
-  const probe = (area: any, name: any, fn: any) => {
+  const add = (area: string, name: string, status: Row['status'], evidence: unknown) => out.push({ area, name, status, evidence: String(evidence) });
+  const probe = (area: string, name: string, fn: () => { status: Row['status'], evidence: unknown } | null | undefined) => {
     try {
       const r = fn();
       if (!r) return add(area, name, 'FAIL', 'probe returned nothing');
       add(area, name, r.status, r.evidence);
-    } catch (e: any) { add(area, name, 'FAIL', 'threw: ' + (e && e.message)); }
+    } catch (e: unknown) { add(area, name, 'FAIL', 'threw: ' + (e instanceof Error ? e.message : String(e))); }
   };
-  const P = (evidence: any) => ({ status: 'PASS', evidence });
-  const W = (evidence: any) => ({ status: 'WIRED', evidence });
-  const F = (evidence: any) => ({ status: 'FAIL', evidence });
+  const P = (evidence: unknown) => ({ status: 'PASS' as const, evidence });
+  const W = (evidence: unknown) => ({ status: 'WIRED' as const, evidence });
+  const F = (evidence: unknown) => ({ status: 'FAIL' as const, evidence });
 
   /* ---------------------------------------------------------- systems ---- */
   probe('engine', 'all systems registered', () => {
@@ -103,7 +105,7 @@ const results = await page.evaluate(async () => {
   probe('rpg', 'ascension spends real AP', () => {
     const a = g.get('Rpg').ascension;
     const ap = a.ap; const before = a.unlocked.size ?? a.unlocked.length;
-    const cand = (a.availableNodes ? a.availableNodes() : []).find((n: any) => (n.cost ?? 0) <= ap);
+    const cand = (a.availableNodes ? a.availableNodes() : []).find((n: { cost?: number }) => (n.cost ?? 0) <= ap);
     if (!cand) return W(`no affordable node (ap=${ap})`);
     a.unlock(cand.id);
     const after = a.unlocked.size ?? a.unlocked.length;
@@ -300,7 +302,7 @@ for (const r of results) {
   if (r.area !== area) { area = r.area; console.log(`\n[${area}]`); }
   console.log(`${mark[r.status as keyof typeof mark]}  ${r.name.padEnd(44)} ${r.evidence}`);
 }
-const n = (s: any) => results.filter((r) => r.status === s).length;
+const n = (s: string) => results.filter((r) => r.status === s).length;
 console.log(`\n${n('PASS')} pass · ${n('WIRED')} wired-but-unproven · ${n('FAIL')} not integrated`);
 if (pageErrors.length) {
   console.log(`\n${pageErrors.length} page error(s):`);

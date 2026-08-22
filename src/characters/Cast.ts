@@ -36,7 +36,7 @@ function eagleInk(th: number, t: number) {
 }
 
 /** Noctis's skull tee print. */
-function skullPrint(th: any, t: number) {
+function skullPrint(th: number, t: number) {
   let d = th;
   if (d > Math.PI) d -= Math.PI * 2;
   const cy = 0.70;

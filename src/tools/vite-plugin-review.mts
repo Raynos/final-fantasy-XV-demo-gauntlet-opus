@@ -22,12 +22,14 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const REVIEW = path.join(ROOT, '.review');
 const INBOX = path.join(REVIEW, 'inbox');
 const TUNING = path.join(REVIEW, 'tuning');
 const exec = promisify(execFile);
+
 
 /**
  * Cap on a single POST. A 1600x900 PNG data URI runs ~2-4 MB; 64 MB is far
@@ -36,7 +38,7 @@ const exec = promisify(execFile);
  */
 const MAX_BODY = 64 * 1024 * 1024;
 
-const send = (res: any, code: any, obj: any) => {
+const send = (res: ServerResponse, code: number, obj: unknown) => {
   const body = JSON.stringify(obj);
   res.statusCode = code;
   res.setHeader('content-type', 'application/json');
@@ -44,11 +46,29 @@ const send = (res: any, code: any, obj: any) => {
   res.end(body);
 };
 
-function readBody(req: any): Promise<any> {
+/**
+ * One posted note or tuning patch, as it arrives off the wire.
+ *
+ * Everything is optional because this is untrusted input: the handler is what
+ * decides which fields a route actually needs.
+ */
+interface ReviewBody {
+  /** ISO stamp the client recorded. */
+  at?: string;
+  /** The captured frame as a `data:image/png;base64,` URI. */
+  png?: string;
+  build?: unknown;
+  /** `/__review/tuning` only: the file to write and what to put in it. */
+  name?: string;
+  patch?: unknown;
+  [extra: string]: unknown;
+}
+
+function readBody(req: IncomingMessage): Promise<ReviewBody> {
   return new Promise((resolve, reject) => {
     let n = 0;
-    const chunks: any[] = [];
-    req.on('data', (c: any) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => {
       n += c.length;
       if (n > MAX_BODY) { reject(new Error(`body over ${MAX_BODY} bytes`)); req.destroy(); return; }
       chunks.push(c);
@@ -65,13 +85,13 @@ function readBody(req: any): Promise<any> {
  * A filesystem-safe, sortable stamp. Notes are named by time so `ls` is
  * chronological and a drain pass can process them in the order they were filed.
  */
-const stamp = (iso: any) => String(iso || new Date().toISOString()).replace(/[:.]/g, '-').replace(/Z$/, '');
+const stamp = (iso: string | undefined) => String(iso || new Date().toISOString()).replace(/[:.]/g, '-').replace(/Z$/, '');
 
 /** Short random id so two notes filed in the same second cannot collide. */
 const rid = () => Math.random().toString(36).slice(2, 8);
 
 /** Refuse anything that could escape `.review/` via `../` or an absolute path. */
-const safeName = (s: any, fallback: any) => {
+const safeName = (s: string | undefined, fallback: string) => {
   const base = path.basename(String(s || fallback));
   return /^[\w.-]+$/.test(base) ? base : fallback;
 };
@@ -91,7 +111,7 @@ async function buildId() {
   }
 }
 
-async function handle(req: any, res: any) {
+async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = (req.url || '').split('?')[0];
   if (!url.startsWith('/__review/')) return false;
 
@@ -123,7 +143,7 @@ async function handle(req: any, res: any) {
     }
 
     if (url === '/__review/inbox' && req.method === 'GET') {
-      let names: any[] = [];
+      let names: string[] = [];
       try { names = (await readdir(INBOX)).filter((f) => f.endsWith('.json')); } catch { /* none filed yet */ }
       const notes = await Promise.all(names.sort().map(async (f) => {
         try { return JSON.parse(await readFile(path.join(INBOX, f), 'utf8')); } catch { return null; }
@@ -143,13 +163,13 @@ async function handle(req: any, res: any) {
 
     send(res, 404, { error: `no route ${url}` });
     return true;
-  } catch (err: any) {
-    send(res, 500, { error: String((err && err.message) || err) });
+  } catch (err: unknown) {
+    send(res, 500, { error: err instanceof Error ? err.message : String(err) });
     return true;
   }
 }
 
-const middleware = (req: any, res: any, next: any) => {
+const middleware = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
   handle(req, res).then((taken) => { if (!taken) next(); }).catch(next);
 };
 

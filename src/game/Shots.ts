@@ -104,6 +104,8 @@
  * Add shots here — src/tools/shoot.mts discovers them automatically, and
  * `src/tools/sheet.mts` tiles a shot directory into one contact sheet to review.
  */
+import type { ScreenName } from '../ui/Menus.ts';
+
 /** A world-space triple. Shots are authored as arrays, not `Vector3`s. */
 export type Vec3 = readonly [number, number, number];
 
@@ -135,7 +137,7 @@ export interface ShotState {
   /** Enter this dungeon before framing. */
   dungeon?: string;
   /** Open this menu screen. */
-  menu?: string;
+  menu?: ScreenName;
   /** A story beat: either a screen name, or a scene seeked to `at` seconds. */
   story?: string | { scene: string, at?: number };
   /** Player gait for the shot, where standing still would read wrong. */

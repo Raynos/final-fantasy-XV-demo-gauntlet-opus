@@ -11,9 +11,31 @@ import type { Game } from '../../game/Game.ts';
  * geometry is genuinely re-lit from above, an in-scatter punch through the fog
  * volume, and a delayed thunder crack.
  */
+/** One scheduled strike on the storm's deterministic timeline. */
+interface Strike {
+  /** Seconds on the storm clock. */
+  t: number;
+  /** Metres away; drives both the flash strength and the thunder delay. */
+  dist: number;
+  /** 0..1.4 how bright this one is. */
+  bias: number;
+  /** Set the frame the strike goes off, so its thunder is queued once. */
+  fired?: boolean;
+}
+
+/** A thunder crack in flight, waiting on the speed of sound. */
+interface Thunder {
+  /** Storm-clock time it arrives. */
+  at: number;
+  /** 0..1 */
+  vol: number;
+  dist: number;
+}
+
 export class Lightning {
-  _schedule!: any;
-  _thunder!: any[];
+  /** The whole timeline, built once per storm period. */
+  _schedule!: Strike[] | null;
+  _thunder!: Thunder[];
   color!: THREE.Vector3;
   flash!: number;
   light!: THREE.HemisphereLight;
@@ -43,7 +65,7 @@ export class Lightning {
       s = (Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
       return ((s ^ (s >>> 16)) >>> 0) / 4294967296;
     };
-    const out = [];
+    const out: Strike[] = [];
     // The first strike lands early on purpose: a storm that has not flashed
     // yet inside the first second of a capture is a storm nobody believes.
     let t = 1.05;

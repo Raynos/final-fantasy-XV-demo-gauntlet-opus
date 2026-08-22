@@ -34,7 +34,7 @@ for (let y = 0; y < oh; y++) {
   }
 }
 
-const chunk = (type: any, body: any) => {
+const chunk = (type: string, body: Buffer) => {
   const len = Buffer.alloc(4);
   len.writeUInt32BE(body.length);
   const td = Buffer.concat([Buffer.from(type, 'ascii'), body]);
@@ -51,7 +51,7 @@ const T = (() => {
   }
   return t;
 })();
-function crc32(buf: any) {
+function crc32(buf: Buffer) {
   let c = 0xffffffff;
   for (let i = 0; i < buf.length; i++) c = T[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   return c ^ 0xffffffff;

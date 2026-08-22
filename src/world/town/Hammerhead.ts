@@ -12,7 +12,7 @@ import {
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
 import type { Game } from '../../game/Game.ts';
-import type { Menus } from '../../ui/Menus.ts';
+import type { Menus, ScreenMap } from '../../ui/Menus.ts';
 import { isMesh } from '../../util/three-guards.ts';
 
 /**
@@ -80,12 +80,11 @@ interface RestResult {
 /**
  * A menu screen as `Menus` actually installs one.
  *
- * `node` is not declared on `ShopScreen` or `HuntBoardScreen`: `Menus.build`
- * creates it on each of its own screens and this system does the same for the
- * two it adds, which is why {@link Hammerhead._registerScreens} attaches it
- * with `Object.assign` rather than pretending the classes already have it.
+ * The two town counters are registered here rather than in `Menus.init`
+ * because they only exist once Hammerhead is built -- but they satisfy the
+ * same {@link MenuScreen} contract as every other screen, `node` included.
  */
-type MenuScreenCtor = new (menus: Menus) => { build(root: HTMLElement, game: Game): void };
+type MenuScreenCtor<K extends 'shop' | 'hunts'> = new (menus: Menus) => NonNullable<ScreenMap[K]>;
 
 export class Hammerhead {
   lights!: TownLight[];
@@ -871,9 +870,10 @@ export class Hammerhead {
   _registerScreens(game: Game) {
     const menus = game.get('Menus');
     if (!menus || !menus.screens || !menus.wrap) return;
-    const add = (key: string, Screen: MenuScreenCtor) => {
+    const add = <K extends 'shop' | 'hunts'>(key: K, Screen: MenuScreenCtor<K>) => {
       if (menus.screens[key]) return;
-      const s = Object.assign(new Screen(menus), { node: document.createElement('div') });
+      const s = new Screen(menus);
+      s.node = document.createElement('div');
       s.node.className = `screen s-${key}`;
       s.node.style.display = 'none';
       menus.wrap.appendChild(s.node);

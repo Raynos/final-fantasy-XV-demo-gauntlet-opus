@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { makeRT, fsMaterial, blit } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Bokeh depth of field driven by a physical camera model.
@@ -24,17 +25,19 @@ export class DofPass extends Pass {
   fStop!: number;
   farScale!: number;
   focusDistance!: number;
-  fx!: any;
+  fx!: PostFX;
   gather!: THREE.ShaderMaterial;
   height!: number;
   maxCoc!: number;
   nearScale!: number;
   prefilter!: THREE.ShaderMaterial;
-  rtBlur!: any;
-  rtPre!: any;
+  /** Half-res gather result. */
+  rtBlur!: THREE.WebGLRenderTarget;
+  /** Half-res premultiplied CoC buffer the gather reads. */
+  rtPre!: THREE.WebGLRenderTarget;
   sensorHeight!: number;
   width!: number;
-  constructor(fx: any, w: number, h: number) {
+  constructor(fx: PostFX, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -232,7 +235,7 @@ export class DofPass extends Pass {
     this.composite.uniforms.uTexel.value.set(1 / hw, 1 / hh);
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     const fx = this.fx;
     const cam = fx.rnd.camera;
     // vertical FOV -> focal length on a full-frame sensor

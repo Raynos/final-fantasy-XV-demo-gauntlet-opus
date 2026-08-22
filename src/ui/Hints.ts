@@ -21,18 +21,32 @@ import type { Game } from '../game/Game.ts';
 /** How long a hint stays up once it has appeared, in seconds. */
 const HOLD = 9;
 
+/** One teaching card: what it says and which key prompts it draws. */
+export interface Hint {
+  id: string;
+  title: string;
+  text: string;
+  /** Key labels for `Icons.button`. */
+  keys: string[];
+  /** Icon key. */
+  ico: string;
+}
+
 export class Hints {
   a!: number;
   age!: number;
   body!: HTMLElement;
   card!: HTMLElement;
-  cur!: any;
+  /** The hint on screen, or null. */
+  cur!: Hint | null;
   icoW!: HTMLElement;
   keys!: HTMLElement;
   muted!: boolean;
-  queue!: any[];
+  /** Hints waiting behind `cur`. */
+  queue!: Hint[];
   root!: HTMLElement;
-  seen!: Set<any>;
+  /** Ids already shown once; a hint never repeats. */
+  seen!: Set<string>;
   ttl!: HTMLElement;
   txt!: HTMLElement;
   /** @param parent usually `game.uiRoot` */
@@ -82,7 +96,7 @@ export class Hints {
   }
 
   /** Put a hint on screen now. */
-  _present({ id, title, text, keys, ico }: any) {
+  _present({ id, title, text, keys, ico }: Hint) {
     this.cur = { id, title, text, keys, ico };
     this.age = 0;
     this.ttl.textContent = title;
@@ -149,7 +163,10 @@ export class Hints {
   /** @param dt @param game */
   update(dt: number, game: Game) {
     this._poll(game);
-    if (!this.cur && this.queue.length && this.a <= 0.001) this._present(this.queue.shift());
+    if (!this.cur && this.a <= 0.001) {
+      const next = this.queue.shift();
+      if (next) this._present(next);
+    }
     if (!this.cur && this.a <= 0.001) { this.root.style.display = 'none'; return; }
     this.age += dt;
     if (this.cur && this.age > HOLD) this.cur = null;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   frameAt, arrange, wide, twoShot, single, ots, lowAngle, attend, poiPoint,
 } from './SceneKit.ts';
+import type { SceneCtx, SceneData, SceneDef, ShotDef } from '../../cinematics/Scene.ts';
 
 /**
  * CHAPTER I — the Longwythe hunt. The last beat before the player is ever asked
@@ -27,13 +28,20 @@ import {
 
 const DUR = 34;
 
-export const LONGWYTHE = {
+/** Longwythe Peak, which every actor in the first beat is looking at. */
+interface LongwytheData extends SceneData {
+  peak?: THREE.Vector3 | null;
+}
+
+type Ctx = SceneCtx<LongwytheData>;
+
+export const LONGWYTHE: SceneDef<LongwytheData> = {
   id: 'ch1_longwythe_hunt',
   chapter: 1,
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game } = ctx;
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(17.6);
@@ -64,8 +72,9 @@ export const LONGWYTHE = {
     });
   },
 
-  buildShots(ctx: any) {
+  buildShots(ctx: Ctx): ShotDef[] {
     const F = ctx.data.F;
+    if (!F) return [];
     return [
       // 1 — THE PEAK. Long, low and far back so the mountain gets its full
       // height in frame and the four of them are four small shapes under it.
@@ -102,7 +111,7 @@ export const LONGWYTHE = {
     ];
   },
 
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     const s = ctx.stage;
     const peak = ctx.data.peak;
     if (t < 7.0) {
@@ -125,7 +134,7 @@ export const LONGWYTHE = {
     {
       t: 26.6, presentational: true, say: ['Noctis', 'Stay behind me.'], dur: 2.4,
       // the Engine Blade materialises out of blue crystal light
-      fn: (ctx: any) => {
+      fn: (ctx) => {
         const combat = ctx.game.get('Combat');
         if (combat && combat.setWeapon) combat.setWeapon('sword', { materialise: true });
         if (ctx.audio && ctx.audio.play) ctx.audio.play('warp');
@@ -135,7 +144,7 @@ export const LONGWYTHE = {
     { t: 31.4, objective: { title: 'Fangs of the Wasteland', sub: 'Cull the Sabertusk pack' } },
   ],
 
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     const rpg = ctx.game.get('Rpg');
     if (!rpg) return;
     if (rpg.quests.status('hunt_sabertusks') === 'available') rpg.quests.accept('hunt_sabertusks');

@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { srgb } from '../../util/TextureGen.ts';
+import type { VegBiome } from './Biomes.ts';
+import type { EcoSite, SiteType } from '../props/EcoSites.ts';
+import type { Terrain } from '../Terrain.ts';
 import { vegAt, zoneMoist, pickFrom } from './Biomes.ts';
 import { WORLD, worldMap } from '../map/WorldMap.ts';
 import type { Game } from '../../game/Game.ts';
@@ -42,17 +45,66 @@ export function hash3(x: number, y: number, s: number) {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
+/** One cleared disc around a settlement, and how far its clearing reaches. */
+interface Clearing {
+  x: number;
+  z: number;
+  /** Clearing radius, metres. */
+  r: number;
+}
+
+/** The clearings bucketed into a coarse grid, for a cheap point query. */
+interface ClearingGrid {
+  /** Cell size, metres. */
+  cell: number;
+  /** `i * 65536 + j` -> the clearings overlapping that cell. */
+  grid: Map<number, Clearing[]>;
+}
+
+/**
+ * A scatter candidate: where it goes, and the local density that produced it.
+ * `rng` is a fresh 0..1 draw for whatever variation the caller wants.
+ */
+export interface ScatterPoint {
+  x: number;
+  z: number;
+  y: number;
+  /** Local density at this point, 0..1. */
+  w: number;
+  rng: number;
+}
+
+/** How a clustered scatter is laid out over a disc. */
+export interface ScatterOpts {
+  radius: number;
+  /** Hole in the middle, metres. */
+  inner?: number;
+  /** Cluster seed grid, metres. */
+  cellSize?: number;
+  /** Candidates per cluster. */
+  perCell?: number;
+  /** Gaussian spread of a cluster's members, metres. */
+  spread?: number;
+  /** 0..1 acceptance probability at a point. */
+  density: (x: number, z: number) => number;
+  /** How far a lone candidate strays from its cell. */
+  jitterLone?: number;
+  maxCount?: number;
+  center?: { x: number, z: number };
+}
+
 export class Ecology {
   nPatch!: Noise;
-  _clearings!: any;
+  _clearings!: ClearingGrid;
   _terrainRoad!: boolean;
   game!: Game;
   nGrove!: Noise;
   nMoist!: Noise;
   nTint!: Noise;
   seed!: number;
-  sites!: any;
-  terrain!: any;
+  /** The authored landmark sites: haven, campsite, the Regalia's layby. */
+  sites!: EcoSite[];
+  terrain!: Terrain;
   worldRadius!: number;
   /**
    * @param game the Game instance (needs .get('Terrain'))
@@ -60,7 +112,9 @@ export class Ecology {
    */
   constructor(game: Game, seed: number = 1337) {
     this.game = game;
-    this.terrain = game.get('Terrain');
+    // `Ecology` is built by `Vegetation.init` and `Props.init`, both of which
+    // run after `Terrain` in `Game.init`'s one boot order.
+    this.terrain = game.get('Terrain')!;
     this.seed = seed;
 
     this.nMoist = new Noise(seed ^ 0x51ab3);
@@ -130,7 +184,7 @@ export class Ecology {
   // ---------------------------------------------------------------- terrain
 
   /** Ground height. */
-  height(x: any, z: any) { return this.terrain.heightAt(x, z); }
+  height(x: number, z: number) { return this.terrain.heightAt(x, z); }
 
   /** Ground normal, computed locally so we never depend on Terrain's out-param. */
   normal(x: number, z: number, out = _v) {
@@ -169,7 +223,7 @@ export class Ecology {
   }
 
   /** The vegetation recipe for this point. @returns */
-  veg(x: number, z: number): any { return vegAt(x, z); }
+  veg(x: number, z: number): VegBiome { return vegAt(x, z); }
 
   /**
    * Metres of water over this point, negative on dry land. Reeds want the
@@ -289,8 +343,8 @@ export class Ecology {
   // -------------------------------------------------------------- landmarks
 
   _layoutSites() {
-    const s: any[] = [];
-    const put = (type: string, x: number, z: number, r: number, extra = {}) => {
+    const s: EcoSite[] = [];
+    const put = (type: SiteType, x: number, z: number, r: number, extra: Partial<EcoSite> = {}) => {
       s.push({ type, x, z, r, y: this.height(x, z), ...extra });
     };
 
@@ -332,7 +386,9 @@ export class Ecology {
       const t = this.roadTangent(z, new THREE.Vector2());
       return Math.atan2(t.x, t.y);
     };
-    const beside = (type: string, z: number, side: number, off: number, r: number, extra = {}) => {
+    // `beside` always writes `roadZ` and `side`, which is what makes a site
+    // it places a `RoadsideSite` — the shape the sign and blockade builders need.
+    const beside = (type: SiteType, z: number, side: number, off: number, r: number, extra: Partial<EcoSite> = {}) => {
       const p = this.roadPoint(z, side, off, new THREE.Vector3());
       put(type, p.x, p.z, r, { roadZ: z, side, yaw: roadYaw(z), ...extra });
     };
@@ -528,8 +584,10 @@ export class Ecology {
    */
   groundColor(x: number, z: number, out = new THREE.Color()): THREE.Color {
     const t = this.terrain;
-    if (t && typeof t.groundColorAt === 'function') return t.groundColorAt(x, z, out);
-    if (t && typeof t.colorAt === 'function') return t.colorAt(x, z, out);
+    // `Terrain.groundColorAt` exists now; the `Terrain.colorAt` arm that sat
+    // under it named a method that has never existed on any Terrain, and it
+    // is what left this fallback ramp tinting every plant in the world.
+    if (t) return t.groundColorAt(x, z, out);
     const m = this.moisture(x, z);
     const slope = this.slope01(x, z);
     _tmpA.copy(C_SOIL_RED).lerp(C_SOIL_DRY, THREE.MathUtils.smoothstep(m, 0.1, 0.5));
@@ -574,7 +632,7 @@ export class Ecology {
    * than Leide's lush end.
    * @private
    */
-  _grassRamp(b: any, x: number, z: number, t: number, out: THREE.Color) {
+  _grassRamp(b: VegBiome, x: number, z: number, t: number, out: THREE.Color) {
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
     out.copy(b.dryC).lerp(b.lushC, t);
     const k = 0.86 + v * 0.3;
@@ -598,8 +656,8 @@ export class Ecology {
   scatterClustered(seed: number, {
     radius, inner = 0, cellSize = 46, perCell = 6, spread = 13,
     density, jitterLone = 0.22, maxCount = 100000, center = { x: 0, z: 0 },
-  }: any) {
-    const out = [];
+  }: ScatterOpts): ScatterPoint[] {
+    const out: ScatterPoint[] = [];
     const half = Math.ceil(radius / cellSize);
     const cx0 = Math.round(center.x / cellSize), cz0 = Math.round(center.z / cellSize);
     for (let gz = -half; gz <= half; gz++) {

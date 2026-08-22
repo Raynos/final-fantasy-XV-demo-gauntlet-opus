@@ -2,6 +2,7 @@ import {
   frameAt, arrange, wide, twoShot, ots, lowAngle, attend, townAnchor,
   takeCar, releaseCar, aimCar,
 } from './SceneKit.ts';
+import type { SceneCtx, SceneData, SceneDef, ShotDef } from '../../cinematics/Scene.ts';
 
 /**
  * CHAPTER I — "The Pauper Prince": Hammerhead, and the bill.
@@ -27,13 +28,20 @@ import {
 
 const DUR = 44;
 
-export const HAMMERHEAD = {
+/** Where on the frame the Regalia was towed, `[forward, left]`. */
+interface HammerheadData extends SceneData {
+  carAt?: [number, number];
+}
+
+type Ctx = SceneCtx<HammerheadData>;
+
+export const HAMMERHEAD: SceneDef<HammerheadData> = {
   id: 'ch1_hammerhead',
   chapter: 1,
   letterbox: 1,
   duration: DUR,
 
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game, stage } = ctx;
     const sky = game.get('Sky');
     // Late blue-gold: the canopy strip has to read as the brightest thing on
@@ -81,8 +89,9 @@ export const HAMMERHEAD = {
     for (const id of stage.ids) stage.look(id, F.at(2.2, -2.9, 0.6));
   },
 
-  buildShots(ctx: any) {
+  buildShots(ctx: Ctx): ShotDef[] {
     const F = ctx.data.F;
+    if (!F) return [];
     return [
       // 1 — THE PLACE. Three-quarter wide from out on the forecourt: canopy
       // overhead, the SERVICE shed and the mesa behind it, and four people
@@ -123,11 +132,12 @@ export const HAMMERHEAD = {
     ];
   },
 
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     // Heads turn to whoever is speaking. Nothing sells a conversation like
     // three people looking at the fourth a beat before he talks.
     const s = ctx.stage;
     const F = ctx.data.F;
+    if (!F) return;
     const [cf, cl] = ctx.data.carAt || [2.2, -2.9];
     const car = F.at(cf, cl, 0.6);
     if (t > 17.0 && t < 25.0) attend(ctx, 'ignis');
@@ -155,7 +165,7 @@ export const HAMMERHEAD = {
     },
   ],
 
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     // Put the Regalia back where the world had it, played or skipped.
     releaseCar(ctx);
 

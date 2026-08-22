@@ -9,6 +9,9 @@ import {
   skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, contactShadowMaterial,
 } from '../rig/Materials.ts';
 import { Rng } from '../../util/Rng.ts';
+import type { AnimState, AnimTarget } from '../rig/Anim.ts';
+import type { CharacterDef, Look } from '../rig/Look.ts';
+import type { Rig, RigDims } from '../rig/Skeleton.ts';
 
 /**
  * Townsfolk, built from the party's own character rig but pooled.
@@ -29,8 +32,22 @@ import { Rng } from '../../util/Rng.ts';
  * at distance and culled entirely past ~110 m.
  */
 
-let SHARED: any = null;
-function shared() {
+/**
+ * Materials and geometry every townsperson shares one copy of. The party's
+ * `Character` keeps its own private copy of this — the two crowds are lit the
+ * same way but are separate material instances, so an NPC-only tweak (the
+ * front-side skin below) cannot reach the heroes.
+ */
+interface SharedNpcAssets {
+  skin: THREE.Material;
+  garment: THREE.Material;
+  hair: THREE.Material;
+  shadow: THREE.Material;
+  shadowGeo: THREE.BufferGeometry;
+}
+
+let SHARED: SharedNpcAssets | null = null;
+function shared(): SharedNpcAssets {
   if (!SHARED) {
     SHARED = {
       skin: skinMaterial(),
@@ -49,19 +66,50 @@ function shared() {
   return SHARED;
 }
 
-const ARCH = new Map();
+/**
+ * One look, built once and handed out.
+ *
+ * Geometry and the face/eye materials are per *archetype*; the skin, garment,
+ * hair and shadow materials come from `shared()` and are per *scene*. An
+ * instance (`NpcBody`) adds only its own skeleton and animator on top.
+ */
+export interface NpcArchetype {
+  key: string;
+  def: CharacterDef;
+  profile: CharacterDef['profile'];
+  look: Look;
+  dims: RigDims;
+  geo: {
+    body: THREE.BufferGeometry;
+    head: THREE.BufferGeometry;
+    hair: THREE.BufferGeometry;
+    outfit: THREE.BufferGeometry;
+    eyes: THREE.BufferGeometry;
+  };
+  mat: {
+    skin: THREE.Material;
+    garment: THREE.Material;
+    hair: THREE.Material;
+    /** private to this archetype: it owns the baked face texture. */
+    face: THREE.Material;
+    eye: THREE.Material;
+  };
+}
+
+const ARCH = new Map<string, NpcArchetype>();
 
 /**
  * Build (or fetch) the shared geometry and materials for one look.
  * @param def `{ profile, look }`
  */
-export function archetype(key: string, def: any) {
-  if (ARCH.has(key)) return ARCH.get(key);
+export function archetype(key: string, def: CharacterDef): NpcArchetype {
+  const cached = ARCH.get(key);
+  if (cached) return cached;
   const S = shared();
   const rig = buildSkeleton(def.profile);
   const look = def.look;
   const head = buildHead(rig, look);
-  const a = {
+  const a: NpcArchetype = {
     key,
     def,
     profile: def.profile,
@@ -91,22 +139,24 @@ export function archetype(key: string, def: any) {
  * (`root`, `rig`, `look`, `eyes`, `seedRnd`) without dragging in the hero's
  * per-instance build cost.
  */
-export class NpcBody {
+export class NpcBody implements AnimTarget {
   _lod!: number;
   anim!: Animator;
-  arch!: any;
-  body!: any;
+  arch!: NpcArchetype;
+  body!: THREE.SkinnedMesh;
   eyeMesh!: THREE.Mesh;
   eyes!: THREE.Object3D;
-  groundShadow!: any;
-  hair!: any;
-  head!: any;
-  height!: any;
-  look!: any;
-  meshes!: any[];
-  name!: any;
-  outfit!: any;
-  rig!: any;
+  groundShadow!: THREE.Mesh;
+  hair!: THREE.SkinnedMesh;
+  head!: THREE.SkinnedMesh;
+  /** standing height in metres, from the rig — the prompt anchor rides on it. */
+  height!: number;
+  look!: Look;
+  meshes!: THREE.SkinnedMesh[];
+  /** the archetype key, which is what `Animator` resolves a posture from. */
+  name!: string;
+  outfit!: THREE.SkinnedMesh;
+  rig!: Rig;
   root!: THREE.Group;
   seedRnd!: Rng;
   /**
@@ -114,7 +164,7 @@ export class NpcBody {
    * @param seed per-instance seed — drives blink timing, stance and
    *   idle phase so two copies of the same archetype never move in lockstep
    */
-  constructor(arch: any, seed: number = 1) {
+  constructor(arch: NpcArchetype, seed: number = 1) {
     const S = shared();
     this.arch = arch;
     this.name = arch.key;
@@ -154,7 +204,7 @@ export class NpcBody {
     this.height = rig.dims.height;
   }
 
-  _skinned(geo: any, mat: any, name: string) {
+  _skinned(geo: THREE.BufferGeometry, mat: THREE.Material, name: string): THREE.SkinnedMesh {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `npc_${this.arch.key}_${name}`;
     mesh.castShadow = true;
@@ -169,7 +219,7 @@ export class NpcBody {
   setLookTarget(v: THREE.Vector3 | null) { this.anim.setLookTarget(v); }
 
   /** @param dt @param state see Animator.update */
-  update(dt: number, state: any) { this.anim.update(dt, state); }
+  update(dt: number, state: AnimState) { this.anim.update(dt, state); }
 
   /**
    * Two-step LOD.

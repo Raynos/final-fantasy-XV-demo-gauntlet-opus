@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { mergeCreature } from '../rig/Sculpt.ts';
 
 /**
+ * How one authored piece attaches to the skeleton: rigidly to a single bone,
+ * or blended smoothly along a chain of them. A tuple rather than an object
+ * because the species files write hundreds of these inline, one per sculpt.
+ */
+export type Bind = ['bone', string] | ['chain', string[]];
+
+/** One authored piece of a creature, waiting to be bound and merged. */
+export interface Part {
+  geo: THREE.BufferGeometry;
+  bind: Bind;
+}
+
+/**
  * Rigid-bind skinning helper.
  *
  * Creatures are authored as a pile of independent geometry pieces in bind
@@ -11,13 +24,16 @@ import { mergeCreature } from '../rig/Sculpt.ts';
  * while still animating limb by limb.
  */
 export class Rig {
-  bones!: any[];
-  _world!: Map<any, any>;
-  byName!: Map<any, any>;
+  bones!: THREE.Bone[];
+  /** Bind-pose world position of every bone, by name. */
+  _world!: Map<string, THREE.Vector3>;
+  byName!: Map<string, THREE.Bone>;
   group!: THREE.Group;
-  mesh!: any;
-  parts!: any[];
-  rest!: Map<any, any>;
+  mesh!: THREE.SkinnedMesh;
+  /** The unmerged pieces, in the order they were attached. */
+  parts!: THREE.BufferGeometry[];
+  /** Bind-pose local rotations, so pose code can work in offsets. */
+  rest!: Map<string, THREE.Quaternion>;
   constructor() {
     this.bones = [];
     this.byName = new Map();
@@ -28,14 +44,15 @@ export class Rig {
   /**
    * Declare a bone at a world-space position in bind pose.
    */
-  bone(name: string, parent: string | null, worldPos: number[]) {
+  bone(name: string, parent: string | null, worldPos: number[]): THREE.Bone {
     const b = new THREE.Bone();
     b.name = name;
     const wp = new THREE.Vector3().fromArray(worldPos);
     if (parent) {
       const p = this.byName.get(parent);
-      if (!p) throw new Error(`unknown parent bone ${parent}`);
-      b.position.copy(wp).sub(this._world.get(parent));
+      const pw = this._world.get(parent);
+      if (!p || !pw) throw new Error(`unknown parent bone ${parent}`);
+      b.position.copy(wp).sub(pw);
       p.add(b);
     } else {
       b.position.copy(wp);
@@ -46,12 +63,19 @@ export class Rig {
     return b;
   }
 
+  /** Index of a bone in the skeleton's flat array, or -1. */
+  _index(name: string): number {
+    const b = this.byName.get(name);
+    return b ? this.bones.indexOf(b) : -1;
+  }
+
   /** World-space bind position of a bone. */
-  at(name: any) { return this._world.get(name); }
+  at(name: string) { return this._world.get(name); }
 
   /** Bind an entire geometry rigidly to one bone. */
-  attach(geo: any, boneName: any) {
-    const i = this.bones.indexOf(this.byName.get(boneName));
+  attach(geo: THREE.BufferGeometry, boneName: string) {
+    const bone = this.byName.get(boneName);
+    const i = bone ? this.bones.indexOf(bone) : -1;
     if (i < 0) throw new Error(`unknown bone ${boneName}`);
     const n = geo.attributes.position.count;
     const idx = new Uint16Array(n * 4);
@@ -69,10 +93,10 @@ export class Rig {
    * creases rather than collapsing.
    * @param soft 0..1 width of the blend band around the joint
    */
-  attachBlend(geo: any, aName: string, bName: string, soft: number = 1.0) {
-    const ia = this.bones.indexOf(this.byName.get(aName));
-    const ib = this.bones.indexOf(this.byName.get(bName));
+  attachBlend(geo: THREE.BufferGeometry, aName: string, bName: string, soft: number = 1.0) {
+    const ia = this._index(aName), ib = this._index(bName);
     const pa = this._world.get(aName), pb = this._world.get(bName);
+    if (!pa || !pb) throw new Error(`unknown bone ${aName}/${bName}`);
     const axis = new THREE.Vector3().subVectors(pb, pa);
     const len = Math.max(1e-4, axis.length());
     axis.multiplyScalar(1 / len);
@@ -109,9 +133,13 @@ export class Rig {
    * @param soft 0..1 blend width around each joint
    */
   attachChain(geo: THREE.BufferGeometry, names: string[], soft: number = 1.0) {
-    const idxs = names.map((n) => this.bones.indexOf(this.byName.get(n)));
-    const pts = names.map((n) => this._world.get(n));
+    const idxs = names.map((n) => this._index(n));
     if (idxs.some((i) => i < 0)) throw new Error(`unknown bone in chain ${names.join(',')}`);
+    const pts = names.map((n) => {
+      const p = this._world.get(n);
+      if (!p) throw new Error(`unknown bone in chain ${names.join(',')}`);
+      return p;
+    });
     const pos = geo.attributes.position;
     const n = pos.count;
     const idx = new Uint16Array(n * 4);
@@ -151,7 +179,8 @@ export class Rig {
     castShadow?: boolean,
     /** Bounding-sphere radius for culling; the bind pose is smaller than the posed mesh. */
     radius?: number,
-    uvTiles?: any,
+    /** detail-map tiles per metre; `false` leaves the authored UVs alone. */
+    uvTiles?: number | false,
     /** Hide weathering, applied per part before the merge. See `weatherCoat`. */
     coat?: CoatOpts | null,
   } = {}): {group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>} {
@@ -259,21 +288,52 @@ const _v2 = new THREE.Vector3();
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-/** Set a bone's local rotation as an offset from its bind pose. */
-export function poseBone(rig: any, name: any, x: number, y: number, z: number, order: THREE.EulerOrder = 'XYZ') {
-  const b = rig.byName.get(name);
-  if (!b) return;
+/**
+ * What the pose helpers need: the bones, and the bind rotations their offsets
+ * are measured from. Both the builder-side `Rig` and the per-instance
+ * `EnemyRig` a clone carries satisfy it, which is the point — a pose function
+ * is written once and runs against either.
+ */
+export interface PosableRig {
+  byName: Map<string, THREE.Bone>;
+  rest: Map<string, THREE.Quaternion>;
+}
+
+/**
+ * Writes one bone's rotation as an offset from bind. `y` and `z` are optional
+ * because `poseBone` defaults them to zero — a pose that only opens a jaw
+ * writes `S('jaw', k)`. Assignable to `CreatureAnim`'s `PoseWriter`, which is
+ * what the leg solver takes.
+ */
+export type BoneWriter = (name: string, x: number, y?: number, z?: number) => void;
+
+/**
+ * Set a bone's local rotation as an offset from its bind pose.
+ *
+ * `y` and `z` default to zero, and that default is load-bearing rather than a
+ * convenience. Seventeen call sites across the five quadrupeds open the jaw
+ * with a single angle — `S('jaw', 0.5 * k)` — and until these defaults existed
+ * that arrived here as `undefined`. `Euler.set` stores it, `Quaternion
+ * .setFromEuler` runs `cos(undefined / 2)`, and the whole quaternion comes out
+ * `NaN`; a bone with a `NaN` matrix skins its vertices to `NaN` and the GPU
+ * discards every triangle bound to it. **Every quadruped's lower jaw was
+ * therefore invisible in every pose** — silently, because nothing else on the
+ * animal is bound to that bone. See `project/handoff/no-any.md`.
+ */
+export function poseBone(rig: PosableRig, name: string, x: number, y = 0, z = 0, order: THREE.EulerOrder = 'XYZ') {
+  const b = rig.byName.get(name), rest = rig.rest.get(name);
+  if (!b || !rest) return;
   _e.set(x, y, z, order);
   _q.setFromEuler(_e);
-  b.quaternion.copy(rig.rest.get(name)).multiply(_q);
+  b.quaternion.copy(rest).multiply(_q);
 }
 
 /** Blend a bone toward a target rotation (used for flinch/death overrides). */
-export function poseBoneMix(rig: any, name: string, x: number, y: number, z: number, k: number, order: THREE.EulerOrder = 'XYZ') {
-  const b = rig.byName.get(name);
-  if (!b) return;
+export function poseBoneMix(rig: PosableRig, name: string, x: number, y: number, z: number, k: number, order: THREE.EulerOrder = 'XYZ') {
+  const b = rig.byName.get(name), rest = rig.rest.get(name);
+  if (!b || !rest) return;
   _e.set(x, y, z, order);
-  _q.setFromEuler(_e).premultiply(rig.rest.get(name));
+  _q.setFromEuler(_e).premultiply(rest);
   b.quaternion.slerp(_q, k);
 }
 

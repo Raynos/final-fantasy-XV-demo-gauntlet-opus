@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -66,7 +66,7 @@ async function main() {
       const prof = await page.evaluate(() => window.BOOT_PROFILE);
       const label = run === 0 ? 'cold' : `warm ${run}`;
       console.log(`\n=== load ${label}: ${(wall / 1000).toFixed(2)} s wall, ${(prof!.total / 1000).toFixed(2)} s in Game.init()`);
-      const marks = prof!.marks.slice().sort((a: any, b: any) => b.ms - a.ms);
+      const marks = prof!.marks.slice().sort((a, b) => b.ms - a.ms);
       for (const m of marks) {
         if (m.ms < 5) continue;
         console.log(`  ${String(m.ms.toFixed(0)).padStart(7)} ms  ${m.name}`);

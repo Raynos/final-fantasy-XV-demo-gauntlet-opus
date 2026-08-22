@@ -22,7 +22,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
-const portOpen = (port: any) => new Promise((res) => {
+const portOpen = (port: number) => new Promise<boolean>((res) => {
   const s = net.connect(port, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -44,7 +44,7 @@ async function ensureServer() {
 async function main() {
   const argv = process.argv.slice(2);
   let out = 'tmp/shots/map', file = 'src/tools/mapshots.json', w = 1600, h = 900, settle = 60;
-  const only: any[] = [];
+  const only: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--out') out = argv[++i];
     else if (argv[i] === '--w') w = Number(argv[++i]);
@@ -54,7 +54,7 @@ async function main() {
     else file = argv[i];
   }
   let shots = JSON.parse(await readFile(path.join(ROOT, file), 'utf8'));
-  if (only.length) shots = shots.filter((s: any) => only.includes(s.name));
+  if (only.length) shots = shots.filter((s: { name: string }) => only.includes(s.name));
   const outDir = path.join(ROOT, out);
   await mkdir(outDir, { recursive: true });
 
@@ -65,7 +65,7 @@ async function main() {
       '--force-color-profile=srgb', '--hide-scrollbars', '--mute-audio'],
   });
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());

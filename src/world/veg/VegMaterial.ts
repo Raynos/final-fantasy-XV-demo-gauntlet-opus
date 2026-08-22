@@ -37,17 +37,27 @@ export const VegUniforms = {
  * immediately instead of waiting for PostFX's next scan, and keeps the
  * inventory available for debugging.
  */
-const alphaCards = new Set();
+/**
+ * What registering actually needs: the material (or materials) to flag. A
+ * `Mesh` satisfies it, and `GrassField` deliberately passes a bare
+ * `{ material }` — the guard is a *material* contract, and its ring owns
+ * hundreds of short-lived meshes that would grow this set forever.
+ */
+export interface AlphaCard {
+  material: THREE.Material | THREE.Material[];
+}
 
-/** Mark a mesh as alpha-silhouetted. @returns the mesh */
-export function registerAlphaCard(mesh: any): THREE.Mesh {
+const alphaCards = new Set<AlphaCard>();
+
+/** Mark a mesh as alpha-silhouetted. @returns what was handed in */
+export function registerAlphaCard<T extends AlphaCard>(mesh: T): T {
   alphaCards.add(mesh);
   const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   for (const m of list) if (m) m.allowOverride = false;
   return mesh;
 }
 
-/** Every mesh registered with {@link registerAlphaCard}. */
+/** Everything registered with {@link registerAlphaCard}. */
 export function alphaCardMeshes() { return alphaCards; }
 
 /**
@@ -150,6 +160,26 @@ vec3 vegClearance(vec3 o, float f, float h, float strength) {
 }
 `;
 
+/** How one plant material responds to wind, trampling and back-light. */
+export interface VegWindOpts {
+  /** How far the whole plant leans with the wind. */
+  bend?: number;
+  /** High-frequency leaf flutter on top of the bend. */
+  flutter?: number;
+  /** Gust frequency, Hz. */
+  gustFreq?: number;
+  /** How hard an actor walking through pushes it aside. */
+  trample?: number;
+  /** 0..1+ back-light through the leaf. */
+  translucency?: number;
+  /** Exponent on the `aFlex` stiffness ramp. */
+  flexPow?: number;
+  aoBoost?: number;
+  specular?: number;
+  /** Flip the normal toward the camera on a double-sided card. */
+  twoSidedNormals?: boolean;
+}
+
 /**
  * Patch a MeshStandardMaterial with instanced wind sway (+ optional trample and
  * backlit leaf translucency).
@@ -160,7 +190,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
   bend = 0.35, flutter = 0.25, gustFreq = 0.055, trample = 0,
   translucency = 0, flexPow = 1.7, aoBoost = 0, twoSidedNormals = false,
   specular = 1,
-}: { bend?: number, flutter?: number, gustFreq?: number, trample?: number, translucency?: number, flexPow?: number, aoBoost?: number, specular?: number, twoSidedNormals?: boolean } = {}) {
+}: VegWindOpts = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = VegUniforms.uTime;
     shader.uniforms.uWindDir = VegUniforms.uWindDir;
@@ -278,7 +308,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
  * Ensure a geometry carries the `aFlex` stiffness attribute the wind shader
  * needs. `fn(x,y,z,i)` returns 0..1; without it we ramp on local Y.
  */
-export function bakeFlex(geo: any, fn?: any) {
+export function bakeFlex(geo: THREE.BufferGeometry, fn?: (x: number, y: number, z: number, i: number) => number) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n);

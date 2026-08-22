@@ -4,6 +4,10 @@ import { NPC_CAST } from './NpcCast.ts';
 import { NPC_DIALOGUE } from './NpcDialogue.ts';
 import { Rng } from '../../util/Rng.ts';
 import { updateSun } from '../rig/Materials.ts';
+import type { GroundSampler } from '../rig/Anim.ts';
+import type { Hammerhead } from '../../world/town/Hammerhead.ts';
+import type { Ecology } from '../../world/veg/Ecology.ts';
+import type { InteractionSystem } from '../../game/interaction/Interactables.ts';
 import type { Game } from '../../game/Game.ts';
 
 /**
@@ -35,6 +39,12 @@ const POSE_BONES = [
   'clavicleL', 'clavicleR', 'upperArmL', 'upperArmR', 'lowerArmL', 'lowerArmR',
   'handL', 'handR', 'thighL', 'thighR', 'shinL', 'shinR',
 ];
+
+/**
+ * A standing pose as an additive bias per bone: bone name -> XYZ Euler radians,
+ * in the rig's anatomical frame. The same convention `Look.idle` uses.
+ */
+export type PostureBias = Record<string, number[]>;
 
 /**
  * Extra postures. These are additive Euler biases in the rig's anatomical
@@ -88,18 +98,93 @@ const POSTURES = {
     upperArmL: [-0.34, 0.16, 0.26], lowerArmL: [-0.85, 0.1, 0],
     upperArmR: [-0.34, -0.16, -0.26], lowerArmR: [-0.85, -0.1, 0],
   },
-};
+} satisfies Record<string, PostureBias>;
+
+/** The postures an author may name in `_spawn`. */
+export type PostureName = keyof typeof POSTURES;
+
+/** The repeating work motions `_applyPosture` knows how to layer on. */
+export type NpcTask = 'wrench' | 'chop' | 'inspect';
+
+/**
+ * A townsperson as **placed**: where they stand, what they do there, and the
+ * running state of it. Distinct from `NpcCastDef`, which is who they *are* —
+ * one cast entry can be placed several times (two mechanics, two travellers,
+ * two truckers), and each placement is one of these.
+ */
+export interface Npc {
+  /** unique per placement — `opts.key`, else the cast key. */
+  id: string;
+  /** which `NPC_CAST` entry they were built from; several may share one. */
+  castKey: keyof typeof NPC_CAST;
+  name: string;
+  role: string;
+  hue: number;
+  body: NpcBody;
+  rng: Rng;
+  /** the standing bias, or null for someone with no station pose. */
+  posture: PostureBias | null;
+  postureName: PostureName | null;
+  task: NpcTask | null;
+  /** patrol nodes in world space, or null for someone who stands still. */
+  route: THREE.Vector3[] | null;
+  /** seconds to wait at each route node, indexed alongside `route`. */
+  pause: number[] | null;
+  /** walk speed in m/s while on a route. */
+  speed: number;
+  sit: boolean;
+  /** metres at which `E` offers a conversation; 0 means they do not talk. */
+  talkRadius: number;
+  /** index of the route node currently being walked to. */
+  leg: number;
+  /** seconds left of the pause at the current node. */
+  wait: number;
+  heading: number;
+  moveSpeed: number;
+  pos: THREE.Vector3;
+  /** what they face at rest, or null to keep whatever heading they have. */
+  face: THREE.Vector3 | null;
+  /** 0..1 blend of the head/eye track onto the player. */
+  lookW: number;
+  /** per-person phase offset so two of the same archetype are not in step. */
+  phase: number;
+  /** ground height under `pos`, sampled at spawn. */
+  groundY: number;
+  /** the interact prompt's world anchor; only the talking cast have one. */
+  anchor?: THREE.Vector3;
+  /** `game.time.now` at which they were last spoken to. */
+  talkingUntil?: number;
+}
+
+/** Where and how one townsperson is placed. */
+export interface NpcPlacement {
+  /** unique id; defaults to the cast key. Needed when a cast entry is reused. */
+  key?: string;
+  /** extra seed offset, so two copies of one archetype differ. */
+  seed?: number;
+  pos?: THREE.Vector3;
+  face?: THREE.Vector3;
+  posture?: PostureName;
+  task?: NpcTask;
+  route?: THREE.Vector3[];
+  pause?: number[];
+  speed?: number;
+  sit?: boolean;
+  talkRadius?: number;
+}
 
 export class Npcs {
   _camPos!: THREE.Vector3;
-  _handles!: any[];
-  eco!: any;
+  /** `InteractionSystem.register` handles, kept so they could be revoked. */
+  _handles!: ReturnType<InteractionSystem['register']>[];
+  eco!: Ecology | undefined;
   game!: Game;
-  ground!: any;
-  list!: any[];
+  /** The pad-aware ground the rig's foot IK plants on. See `_groundAt`. */
+  ground!: GroundSampler;
+  list!: Npc[];
   root!: THREE.Group;
-  stats!: any;
-  town!: any;
+  stats!: { count: number, draws: number };
+  town!: Hammerhead;
   constructor() {
     this.list = [];
     this.root = new THREE.Group();
@@ -123,7 +208,8 @@ export class Npcs {
     // pad instead or every townsperson stands knee-deep in their own tarmac.
     this.ground = {
       heightAt: (x: number, z: number) => this._groundAt(x, z),
-      normalAt: (x: any, z: any, out: any) => (out ? out.set(0, 1, 0) : new THREE.Vector3(0, 1, 0)),
+      // The pad is flat, so the only honest normal is straight up.
+      normalAt: (_x: number, _z: number, out: THREE.Vector3) => out.set(0, 1, 0),
     };
 
     // Local (u, v) helper so placement below reads as a plan view of the town.
@@ -205,16 +291,16 @@ export class Npcs {
    * @param castKey key in NPC_CAST
    * @param opts placement and behaviour
    */
-  _spawn(castKey: string, opts: any = {}) {
-    const def = NPC_CAST[castKey as keyof typeof NPC_CAST];
+  _spawn(castKey: keyof typeof NPC_CAST, opts: NpcPlacement = {}): Npc | null {
+    const def = NPC_CAST[castKey];
     if (!def) return null;
     const key = opts.key || castKey;
     const arch = archetype(castKey, def);
     const body = new NpcBody(arch, (def.look.seed || 1) + (opts.seed || 0) * 977);
     this.root.add(body.root);
 
-    /** `groundY` is filled in below, once the terrain under the NPC is sampled. */
-    const npc: Record<string, any> = {
+    const pos = (opts.pos || (opts.route && opts.route[0]) || new THREE.Vector3()).clone();
+    const npc: Npc = {
       id: key,
       castKey,
       name: def.name,
@@ -222,7 +308,7 @@ export class Npcs {
       hue: def.hue,
       body,
       rng: new Rng(1000 + this.list.length * 31),
-      posture: POSTURES[opts.posture as keyof typeof POSTURES] || null,
+      posture: opts.posture ? POSTURES[opts.posture] : null,
       postureName: opts.posture || null,
       task: opts.task || null,
       route: opts.route || null,
@@ -231,16 +317,15 @@ export class Npcs {
       sit: !!opts.sit,
       talkRadius: opts.talkRadius || 0,
       leg: 0, wait: 0, heading: 0, moveSpeed: 0,
-      pos: (opts.pos || (opts.route && opts.route[0]) || new THREE.Vector3()).clone(),
+      pos,
       face: opts.face ? opts.face.clone() : null,
       lookW: 0,
       phase: this.list.length * 0.618,
+      // Stand on the terrain, or on the town pad where that is higher. A seated
+      // NPC drops by the difference between a standing hip and a bench seat, so
+      // the backside lands on the plank rather than hovering over it.
+      groundY: this._groundAt(pos.x, pos.z),
     };
-
-    // Stand on the terrain, or on the town pad where that is higher. A seated
-    // NPC drops by the difference between a standing hip and a bench seat, so
-    // the backside lands on the plank rather than hovering over it.
-    npc.groundY = this._groundAt(npc.pos.x, npc.pos.z);
     npc.pos.y = npc.groundY + (opts.sit ? -0.30 * (body.height / 1.7) : 0);
     body.root.position.copy(npc.pos);
     if (npc.face) npc.heading = Math.atan2(npc.face.x - npc.pos.x, npc.face.z - npc.pos.z);
@@ -315,7 +400,7 @@ export class Npcs {
 
       // Head/eye tracking. FFXV NPCs notice you well before you reach them,
       // which is most of why its outposts feel inhabited.
-      let look: any = null;
+      let look: THREE.Vector3 | null = null;
       if (p) {
         const dist = p.distanceTo(npc.pos);
         const want = dist < 9.5 && !npc.route ? 1 : dist < 5.0 ? 1 : 0;
@@ -362,8 +447,9 @@ export class Npcs {
   }
 
   /** Walk a route, pausing at each node. */
-  _walk(npc: any, dt: number) {
+  _walk(npc: Npc, dt: number) {
     const route = npc.route;
+    if (!route) return;
     const target = route[npc.leg];
     if (npc.wait > 0) {
       npc.wait -= dt;
@@ -392,10 +478,11 @@ export class Npcs {
    * Written straight onto bone rotations, which is safe because nothing else
    * touches them between here and the render.
    */
-  _applyPosture(npc: any, dt: number, t: number) {
+  _applyPosture(npc: Npc, dt: number, t: number) {
     const b = npc.body.rig.byName;
     const w = 1 - Math.min(1, npc.moveSpeed / 0.4);
     const pose = npc.posture;
+    if (!pose) return;
     for (const name of POSE_BONES) {
       const e = pose[name];
       if (!e || !b[name]) continue;
@@ -425,7 +512,7 @@ export class Npcs {
     }
   }
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     // The rig's materials carry their own sun uniform; keep it fed even when
     // the player system is not the one that pushed it this frame.
     const sky = game.get('Sky');

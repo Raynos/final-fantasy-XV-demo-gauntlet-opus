@@ -17,12 +17,30 @@ import type { Emitter } from './Emitter.ts';
 /* Regions & tipsters                                                        */
 /* ------------------------------------------------------------------------ */
 
+/** A region of Lucis. */
+export interface Region {
+  name: string;
+  desc: string;
+}
+
 export const REGIONS = {
   leide:    { name: 'Leide',    desc: 'Red-ochre badlands and long empty highway.' },
   duscae:   { name: 'Duscae',   desc: 'Humid green lowlands under the Meteor\'s glow.' },
   cleigne:  { name: 'Cleigne',  desc: 'Rolling farmland and the road to Altissia.' },
   insomnia: { name: 'Insomnia', desc: 'The Crown City, and what is left of it.' },
-};
+} satisfies Record<string, Region>;
+
+/** One of {@link REGIONS}. */
+export type RegionId = keyof typeof REGIONS;
+
+/** Someone who hands out bounties, and the tome they keep them in. */
+export interface Tipster {
+  id: string;
+  name: string;
+  place: string;
+  region: RegionId;
+  tome: string;
+}
 
 /** Tipsters who hand out hunts, and the tome each one keeps. */
 export const TIPSTERS = {
@@ -32,7 +50,19 @@ export const TIPSTERS = {
   lestallum:{ id: 'lestallum',name: 'Tony',       place: 'Surgate\'s Beanmine', region: 'duscae',tome: 'Duscae Bounty Ledger' },
   meldacio: { id: 'meldacio', name: 'Ezma',       place: 'Meldacio Hunter HQ',region: 'cleigne', tome: 'Meldacio Master Tome' },
   galdin:   { id: 'galdin',   name: 'Coctura',    place: 'Galdin Quay',       region: 'leide',   tome: 'Coastal Bounty Ledger' },
-};
+} satisfies Record<string, Tipster>;
+
+/** One of {@link TIPSTERS}. */
+export type TipsterId = keyof typeof TIPSTERS;
+
+/** What a hunt rank is worth. */
+export interface HuntRankInfo {
+  stars: string;
+  name: string;
+  /** Multiplier folded into the AP payout. */
+  gilMult: number;
+  hunterPoints: number;
+}
 
 /** Hunt rank -> display and payout scaling. FFXV goes to ten stars. */
 export const HUNT_RANKS = {
@@ -44,20 +74,23 @@ export const HUNT_RANKS = {
   6:  { stars: '★★★★★★',      name: 'Rank 6',  gilMult: 12.0, hunterPoints: 18 },
   8:  { stars: '★★★★★★★★',    name: 'Rank 8',  gilMult: 22.0, hunterPoints: 30 },
   10: { stars: '★★★★★★★★★★',  name: 'Rank 10', gilMult: 40.0, hunterPoints: 60 },
-};
+} satisfies Record<number, HuntRankInfo>;
+
+/** A rank the table actually has an entry for. Note the gaps: no 7 and no 9. */
+export type HuntRank = keyof typeof HUNT_RANKS;
 
 /* ------------------------------------------------------------------------ */
 /* Objective helpers                                                         */
 /* ------------------------------------------------------------------------ */
 
-const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'kill', target, count, desc, waypoint });
-const fetch_= (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'fetch', target, count, desc, waypoint });
-const reach = (id: string, target: string, desc: string, waypoint: number[], radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
-const talk  = (id: string, target: string, desc: string, waypoint: number[]) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
-const photo = (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'photo', target, count, desc, waypoint });
-const escort= (id: string, target: string, desc: string, waypoint: number[]) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
-const craft = (id: string, target: string, count: number, desc: string) => ({ id, type: 'craft', target, count, desc });
-const rest  = (id: string, desc: string, waypoint?: number[]) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
+const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'kill', target, count, desc, waypoint });
+const fetch_= (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'fetch', target, count, desc, waypoint });
+const reach = (id: string, target: string, desc: string, waypoint: number[], radius = 12): Objective => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
+const talk  = (id: string, target: string, desc: string, waypoint: number[]): Objective => ({ id, type: 'talk', target, count: 1, desc, waypoint });
+const photo = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'photo', target, count, desc, waypoint });
+const escort= (id: string, target: string, desc: string, waypoint: number[]): Objective => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
+const craft = (id: string, target: string, count: number, desc: string): Objective => ({ id, type: 'craft', target, count, desc });
+const rest  = (id: string, desc: string, waypoint?: number[]): Objective => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -78,16 +111,82 @@ export type ObjectiveKind =
   | 'kill' | 'fetch' | 'reach' | 'talk' | 'escort' | 'photo'
   | 'craft' | 'cook' | 'rest' | 'draw' | 'fish' | 'quest';
 
+/** One step of a quest, **as authored**. */
+export interface Objective {
+  id: string;
+  type: ObjectiveKind;
+  /**
+   * What counts: an enemy key, an item id, a place, a person, or `'any'` for
+   * "whatever satisfies the verb". `notify` also matches a `target:qualifier`
+   * prefix, which is how `gil:1500` works.
+   */
+  target: string;
+  /** How many of it are needed. */
+  count: number;
+  /** The line the quest log prints. */
+  desc: string;
+  /** `[x, y, z]` the compass and the minimap draw a marker at. */
+  waypoint?: number[];
+  /** `reach` only: how close counts, in metres. */
+  radius?: number;
+  /** Failing this fails the whole quest -- a dead escort. */
+  failable?: boolean;
+}
+
+/** What finishing a quest pays out, **as authored**. */
+export interface QuestRewards {
+  gil?: number;
+  exp?: number;
+  ap?: number;
+  items?: Array<{ id: string, count: number }>;
+  /** Recipe ids handed to the cooking system. */
+  recipes?: string[];
+  /** Story flags set on completion; see `QuestLog.setFlag`. */
+  unlocks?: string[];
+}
+
+/** Main story, a side quest, or a bounty. */
+export type QuestType = 'main' | 'side' | 'hunt';
+
 /** One quest as authored in the table below. */
 export interface Quest {
   id: string;
-  type: 'main' | 'side' | 'hunt';
+  type: QuestType;
   name: string;
+  /** One-line pitch, printed under the title on the quest card. */
+  summary: string;
+  /** Region id, keying `REGIONS`. */
+  region: RegionId;
   /** Recommended party level. */
   level: number;
   /** Quest ids that must be complete first. */
   requires: string[];
-  [extra: string]: any;
+  objectives: Objective[];
+  rewards?: QuestRewards;
+  /** Available from a fresh save, with no prerequisites. */
+  autoAvailable?: boolean;
+  /** Who hands it over, for the quest card. */
+  giver?: string;
+  /** `main` only: which chapter it belongs to. */
+  chapter?: number;
+  /** `hunt` only: star rank, keying `HUNT_RANKS`. */
+  rank?: HuntRank;
+  /** `hunt` only: the board it is posted on. */
+  tipster?: TipsterId;
+  /** `hunt` only: the mark, as the board words it. */
+  target?: string;
+  /** `hunt` only: when the mark is out. */
+  timeOfDay?: 'day' | 'night' | 'any';
+  /** `hunt` only: the mark is a daemon. The hunt board prints it as a caveat. */
+  daemon?: boolean;
+  /**
+   * Story flags that must be set before this becomes available.
+   *
+   * `refresh()` honours it, but **no quest in the table sets it** -- so the
+   * flags written by `setFlag` (the Astral scene, and every reward `unlocks`)
+   * currently gate nothing. The hook is real; nothing has used it yet.
+   */
+  requiresFlags?: string[];
 }
 
 const QUEST_TABLE: Quest[] = [
@@ -400,25 +499,140 @@ export const HUNTS = QUEST_TABLE.filter((q) => q.type === 'hunt');
 /* Quest log                                                                 */
 /* ------------------------------------------------------------------------ */
 
+/** Where a quest is in its life. */
+export type QuestStatus = 'locked' | 'available' | 'active' | 'complete' | 'failed';
+
+/** One objective **as played**: how far along it is, and whether it is done. */
+export interface ObjectiveState {
+  id: string;
+  progress: number;
+  done: boolean;
+}
+
+/** One quest **as played**. `QuestLog.states` holds exactly one per table row. */
+export interface QuestState {
+  id: string;
+  status: QuestStatus;
+  /** Parallel to the quest's authored `objectives`, index for index. */
+  objectives: ObjectiveState[];
+  /** `Date.now()` when it was accepted. */
+  startedAt?: number;
+  /** `Date.now()` when it was completed. */
+  completedAt?: number;
+}
+
+/** An objective merged with its state, which is what a screen draws. */
+export interface ObjectiveView extends Objective {
+  progress: number;
+  done: boolean;
+  /** `desc`, with `(2/8)` appended when the objective counts. */
+  label: string;
+}
+
+/**
+ * A quest merged with its state and its lookups resolved -- the authored `rank`
+ * and `tipster` ids are replaced by the rows they name, which is why this is
+ * not simply `Quest & QuestState`.
+ */
+export interface QuestView extends Omit<Quest, 'rank' | 'tipster' | 'objectives'> {
+  status: QuestStatus;
+  rank: (HuntRankInfo & { rank: HuntRank }) | null;
+  tipster: Tipster | null;
+  objectives: ObjectiveView[];
+  /** 0..1 objectives done. */
+  progress: number;
+}
+
+/** What `rewardsFor` hands `RpgSystem.grantRewards`: no optionals left. */
+export interface GrantedRewards {
+  gil: number;
+  exp: number;
+  ap: number;
+  items: Array<{ id: string, count: number }>;
+  recipes: string[];
+  unlocks: string[];
+  hunterPoints: number;
+}
+
+/** @see QuestLog.accept */
+export type AcceptResult =
+  | { ok: true; quest: QuestView | null }
+  | { ok: false; reason: string };
+
+/**
+ * What a gameplay system tells the log happened.
+ *
+ * The four name fields are alternatives, not a fallback chain over a shape
+ * nobody owns: each caller uses whichever word fits its own event, and
+ * `notify` takes the first one present.
+ */
+export interface NotifyPayload {
+  target?: string;
+  enemy?: string;
+  item?: string;
+  id?: string;
+  /** How many; defaults to one. */
+  count?: number;
+}
+
+/** A marker the compass and the minimap draw. */
+export interface Waypoint {
+  questId: string;
+  name: string;
+  /** The objective's `desc`. */
+  objective: string;
+  /** `[x, y, z]`. */
+  pos: number[];
+  tracked: boolean;
+  type: QuestType;
+  /** How close counts, in metres. */
+  radius?: number;
+}
+
+/**
+ * The `quest-updated` payload. Every transition and every objective tick
+ * carries one; `RpgSystem`, `StorySystem`, `HuntRuntime`, `HudBridge` and the
+ * audio system all branch on `phase`.
+ */
+export interface QuestUpdate {
+  quest: Quest;
+  status: QuestStatus;
+  phase: 'available' | 'accepted' | 'abandoned' | 'failed' | 'tracked' | 'objective' | 'complete';
+  /** `phase: 'objective'` only: the objective that just ticked, with its state. */
+  objective?: Objective & ObjectiveState;
+  /** `phase: 'complete'` only. */
+  rewards?: GrantedRewards | null;
+  /** `phase: 'failed'` only. */
+  reason?: string;
+}
+
+/** The serialised quest log. */
+export interface QuestSave {
+  states?: Record<string, QuestState>;
+  tracked?: string | null;
+  hunterPoints?: number;
+  flags?: string[];
+}
+
 /**
  * Live quest state. Emits `quest-updated` for every transition and objective
  * tick, with `{ quest, status, phase, objective? }`.
  */
 export class QuestLog {
-  states!: any;
-  tracked!: any;
+  /** Runtime state per quest id. One entry per row of `QUEST_TABLE`. */
+  states!: Record<string, QuestState>;
+  tracked!: string | null;
   emitter!: Emitter | null;
-  flags!: Set<any>;
+  flags!: Set<string>;
   hunterPoints!: number;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
-    /** @type {Record<string, object>} runtime state per quest id */
     this.states = {};
     for (const q of QUEST_TABLE) {
       this.states[q.id] = {
         id: q.id,
         status: q.autoAvailable ? 'available' : 'locked',
-        objectives: q.objectives.map((o: any) => ({ id: o.id, progress: 0, done: false })),
+        objectives: q.objectives.map((o) => ({ id: o.id, progress: 0, done: false })),
       };
     }
     /** The quest whose waypoint the compass points at. */
@@ -431,19 +645,19 @@ export class QuestLog {
   }
 
   /** Definition lookup. */
-  def(id: any) { return QUESTS[id] || null; }
+  def(id: string): Quest | null { return QUESTS[id] || null; }
   /** Runtime state lookup. */
-  state(id: any) { return this.states[id] || null; }
-  /** Status string for a quest. */
-  status(id: any) { return this.states[id]?.status || 'unknown'; }
+  state(id: string): QuestState | null { return this.states[id] || null; }
+  /** Status string for a quest, or `'unknown'` if there is no such quest. */
+  status(id: string): QuestStatus | 'unknown' { return this.states[id]?.status || 'unknown'; }
 
   /** Recompute which locked quests have become available. */
   refresh() {
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
       if (st.status !== 'locked') continue;
-      const ready = (q.requires || []).every((r: any) => this.states[r]?.status === 'complete');
-      const flagsOk = (q.requiresFlags || []).every((f: any) => this.flags.has(f));
+      const ready = (q.requires || []).every((r) => this.states[r]?.status === 'complete');
+      const flagsOk = (q.requiresFlags || []).every((f) => this.flags.has(f));
       if (ready && flagsOk) {
         st.status = 'available';
         this.emitter?.emit('quest-updated', { quest: q, status: 'available', phase: 'available' });
@@ -452,31 +666,37 @@ export class QuestLog {
   }
 
   /** Set a story flag and re-evaluate availability. */
-  setFlag(flag: any) { this.flags.add(flag); this.refresh(); }
+  setFlag(flag: string) { this.flags.add(flag); this.refresh(); }
 
-  /** Quests in a given status, hydrated with their definitions. */
-  byStatus(status: string) {
+  /**
+   * Quests in a given status, hydrated with their definitions.
+   *
+   * Every row it walks is a `QUEST_TABLE` row, so `view()` can never miss --
+   * the filter is there for the type, not for a case that happens.
+   */
+  byStatus(status: QuestStatus): QuestView[] {
     return QUEST_TABLE.filter((q) => this.states[q.id].status === status)
-      .map((q) => this.view(q.id));
+      .map((q) => this.view(q.id))
+      .filter((v): v is QuestView => v != null);
   }
 
   /** Everything the UI needs to draw one quest. */
-  view(id: any) {
+  view(id: string): QuestView | null {
     const q = QUESTS[id];
     const st = this.states[id];
     if (!q || !st) return null;
     return {
       ...q,
       status: st.status,
-      rank: q.rank ? { ...HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS], rank: q.rank } : null,
-      tipster: q.tipster ? TIPSTERS[q.tipster as keyof typeof TIPSTERS] : null,
-      objectives: q.objectives.map((o: any, i: any) => ({
+      rank: q.rank ? { ...HUNT_RANKS[q.rank], rank: q.rank } : null,
+      tipster: q.tipster ? TIPSTERS[q.tipster] : null,
+      objectives: q.objectives.map((o, i) => ({
         ...o,
         progress: st.objectives[i].progress,
         done: st.objectives[i].done,
         label: `${o.desc}${o.count > 1 ? ` (${st.objectives[i].progress}/${o.count})` : ''}`,
       })),
-      progress: st.objectives.filter((o: any) => o.done).length / Math.max(1, st.objectives.length),
+      progress: st.objectives.filter((o) => o.done).length / Math.max(1, st.objectives.length),
     };
   }
 
@@ -488,15 +708,16 @@ export class QuestLog {
   get completed() { return this.byStatus('complete'); }
 
   /** Hunts available at one tipster. */
-  huntsAt(tipsterId: any) {
+  huntsAt(tipsterId: TipsterId): QuestView[] {
     return HUNTS.filter((h) => h.tipster === tipsterId && ['available', 'active'].includes(this.states[h.id].status))
-      .map((h) => this.view(h.id));
+      .map((h) => this.view(h.id))
+      .filter((v): v is QuestView => v != null);
   }
 
   /**
    * Accept a quest. Fails if it is not available.
    */
-  accept(id: string) {
+  accept(id: string): AcceptResult {
     const st = this.states[id];
     const q = QUESTS[id];
     if (!st || !q) return { ok: false, reason: 'unknown-quest' };
@@ -509,18 +730,18 @@ export class QuestLog {
   }
 
   /** Drop an active quest back to available. */
-  abandon(id: any) {
+  abandon(id: string) {
     const st = this.states[id];
     if (!st || st.status !== 'active') return false;
     st.status = 'available';
-    st.objectives.forEach((o: any) => { o.progress = 0; o.done = false; });
+    st.objectives.forEach((o) => { o.progress = 0; o.done = false; });
     if (this.tracked === id) this.tracked = this.active[0]?.id || null;
     this.emitter?.emit('quest-updated', { quest: QUESTS[id], status: 'available', phase: 'abandoned' });
     return true;
   }
 
   /** Fail a quest (a dead escort, a blown timer). */
-  fail(id: any, reason = 'failed') {
+  fail(id: string, reason = 'failed') {
     const st = this.states[id];
     if (!st || st.status !== 'active') return false;
     st.status = 'failed';
@@ -543,10 +764,10 @@ export class QuestLog {
    * @param payload `{ target, count }` — target matches the objective's target
    * @returns the quests that changed
    */
-  notify(type: ObjectiveKind, payload: any = {}): any[] {
+  notify(type: ObjectiveKind, payload: NotifyPayload = {}): QuestView[] {
     const target = payload.target ?? payload.enemy ?? payload.item ?? payload.id ?? 'any';
     const amount = payload.count ?? 1;
-    const changed = [];
+    const changed: string[] = [];
 
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
@@ -558,7 +779,7 @@ export class QuestLog {
         const os = st.objectives[i];
         if (os.done || o.type !== type) continue;
         // Objectives complete in order: an earlier unfinished objective blocks.
-        if (st.objectives.slice(0, i).some((p: any) => !p.done)) continue;
+        if (st.objectives.slice(0, i).some((p) => !p.done)) continue;
         if (o.target !== 'any' && o.target !== target && !String(o.target).startsWith(`${target}:`)) continue;
 
         os.progress = Math.min(o.count, os.progress + amount);
@@ -571,22 +792,22 @@ export class QuestLog {
 
       if (touched) {
         changed.push(q.id);
-        if (st.objectives.every((o: any) => o.done)) this.complete(q.id);
+        if (st.objectives.every((o) => o.done)) this.complete(q.id);
       }
     }
-    return changed.map((id) => this.view(id));
+    return changed.map((id) => this.view(id)).filter((v): v is QuestView => v != null);
   }
 
   /** Force an objective complete (debug / cutscene shortcuts). */
-  forceObjective(questId: any, objectiveId: any) {
+  forceObjective(questId: string, objectiveId: string) {
     const q = QUESTS[questId];
     const st = this.states[questId];
     if (!q || !st || st.status !== 'active') return false;
-    const i = q.objectives.findIndex((o: any) => o.id === objectiveId);
+    const i = q.objectives.findIndex((o) => o.id === objectiveId);
     if (i < 0) return false;
     st.objectives[i].done = true;
     st.objectives[i].progress = q.objectives[i].count;
-    if (st.objectives.every((o: any) => o.done)) this.complete(questId);
+    if (st.objectives.every((o) => o.done)) this.complete(questId);
     return true;
   }
 
@@ -594,16 +815,16 @@ export class QuestLog {
    * Mark a quest complete and emit its rewards. RpgSystem listens for the
    * `complete` phase and actually grants them.
    */
-  complete(id: any) {
+  complete(id: string) {
     const st = this.states[id];
     const q = QUESTS[id];
     if (!st || !q || st.status === 'complete') return false;
     st.status = 'complete';
     st.completedAt = Date.now();
-    st.objectives.forEach((o: any, i: any) => { o.done = true; o.progress = q.objectives[i].count; });
+    st.objectives.forEach((o, i) => { o.done = true; o.progress = q.objectives[i].count; });
 
     const rewards = this.rewardsFor(id);
-    if (q.type === 'hunt' && q.rank) this.hunterPoints += HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].hunterPoints;
+    if (q.type === 'hunt' && q.rank) this.hunterPoints += HUNT_RANKS[q.rank].hunterPoints;
     if (this.tracked === id) this.tracked = this.active[0]?.id || null;
 
     this.emitter?.emit('quest-updated', { quest: q, status: 'complete', phase: 'complete', rewards });
@@ -614,11 +835,11 @@ export class QuestLog {
   }
 
   /** Final reward payload, with hunt rank scaling applied. */
-  rewardsFor(id: any) {
+  rewardsFor(id: string): GrantedRewards | null {
     const q = QUESTS[id];
     if (!q) return null;
     const r = q.rewards || {};
-    const mult = q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].gilMult : 1;
+    const mult = q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank].gilMult : 1;
     return {
       gil: Math.round((r.gil || 0) * (q.type === 'hunt' ? 1 : 1)),
       exp: r.exp || 0,
@@ -626,7 +847,7 @@ export class QuestLog {
       items: (r.items || []).slice(),
       recipes: (r.recipes || []).slice(),
       unlocks: (r.unlocks || []).slice(),
-      hunterPoints: q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank as keyof typeof HUNT_RANKS].hunterPoints : 0,
+      hunterPoints: q.type === 'hunt' && q.rank ? HUNT_RANKS[q.rank].hunterPoints : 0,
     };
   }
 
@@ -634,12 +855,12 @@ export class QuestLog {
    * Waypoint markers for the HUD: the next unfinished objective of every
    * active quest that has a position.
    */
-  waypoints(): Array<{questId:string, name:string, objective:string, pos:number[], tracked:boolean, radius?: any }> {
-    const out = [];
+  waypoints(): Waypoint[] {
+    const out: Waypoint[] = [];
     for (const q of QUEST_TABLE) {
       const st = this.states[q.id];
       if (st.status !== 'active') continue;
-      const i = st.objectives.findIndex((o: any) => !o.done);
+      const i = st.objectives.findIndex((o) => !o.done);
       if (i < 0) continue;
       const o = q.objectives[i];
       if (!o.waypoint) continue;
@@ -660,7 +881,7 @@ export class QuestLog {
     for (const w of this.waypoints()) {
       const st = this.states[w.questId];
       const q = QUESTS[w.questId];
-      const i = st.objectives.findIndex((o: any) => !o.done);
+      const i = st.objectives.findIndex((o) => !o.done);
       if (i < 0 || q.objectives[i].type !== 'reach') continue;
       const [x, , z] = w.pos;
       const d = Math.hypot(pos.x - x, pos.z - z);
@@ -668,11 +889,11 @@ export class QuestLog {
     }
   }
 
-  toJSON() {
+  toJSON(): QuestSave {
     return { states: this.states, tracked: this.tracked, hunterPoints: this.hunterPoints, flags: [...this.flags] };
   }
 
-  static fromJSON(data: any, emitter: Emitter | null = null) {
+  static fromJSON(data: QuestSave | null | undefined, emitter: Emitter | null = null) {
     const log = new QuestLog(emitter);
     if (!data) return log;
     for (const id of Object.keys(log.states)) {
@@ -680,7 +901,7 @@ export class QuestLog {
       if (!src) continue;
       log.states[id].status = src.status || log.states[id].status;
       const objs = src.objectives || [];
-      log.states[id].objectives.forEach((o: any, i: any) => {
+      log.states[id].objectives.forEach((o, i) => {
         if (objs[i]) { o.progress = objs[i].progress || 0; o.done = !!objs[i].done; }
       });
       log.states[id].startedAt = src.startedAt;

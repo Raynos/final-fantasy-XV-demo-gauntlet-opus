@@ -28,3 +28,14 @@ export const isVector3 = (o: unknown): o is THREE.Vector3 => has(o, 'isVector3')
 export const isColor = (o: unknown): o is THREE.Color => has(o, 'isColor');
 export const isMeshStandardMaterial = (o: unknown): o is THREE.MeshStandardMaterial =>
   has(o, 'isMeshStandardMaterial');
+
+/**
+ * A material the lighting rig can patch: the five three classes that have a
+ * lit fragment shader. `Material` declares none of the flags, and this is the
+ * set `MaterialPatch` and `Wetness` both walk the scene looking for.
+ */
+export const isLitMaterial = (o: unknown): boolean => (
+  has(o, 'isMeshStandardMaterial') || has(o, 'isMeshPhysicalMaterial')
+  || has(o, 'isMeshLambertMaterial') || has(o, 'isMeshPhongMaterial')
+  || has(o, 'isMeshToonMaterial')
+);

@@ -11,7 +11,33 @@
  * table duplicates quest data; it points at it.
  */
 
-export const CHAPTERS = [
+/** An area / chapter card, as `Letterbox` and the HUD draw it. */
+export interface AreaCard {
+  name: string;
+  sub: string;
+  meta: string;
+}
+
+/** One chapter of the main line. */
+export interface Chapter {
+  n: number;
+  name: string;
+  /** Region id, keying `Quests.REGIONS`. */
+  region: string;
+  area: AreaCard;
+  /** Quests, in the order the chapter expects them. */
+  quests: string[];
+  /** Hour the chapter opens on, so a chapter always starts in its own light. */
+  hour: number;
+  summary: string;
+  /**
+   * Scenes bound to story moments inside this chapter, keyed by moment:
+   * `'start'`, `'quest:<id>:<phase>'` or `'objective:<quest>:<objective>'`.
+   */
+  scenes: Record<string, string>;
+}
+
+export const CHAPTERS: Chapter[] = [
   {
     n: 1,
     name: 'Departure',
@@ -75,7 +101,7 @@ export const CHAPTERS = [
 export const CHAPTER_BY_N = Object.fromEntries(CHAPTERS.map((c) => [c.n, c]));
 
 /** The chapter a main-line quest belongs to. */
-export function chapterOfQuest(questId: any) {
+export function chapterOfQuest(questId: string): Chapter | null {
   return CHAPTERS.find((c) => c.quests.includes(questId)) || null;
 }
 
@@ -84,7 +110,7 @@ export function chapterOfQuest(questId: any) {
  * Bounds are generous circles in world XZ — Leide is the default everywhere
  * else, which is correct: this world *is* Leide.
  */
-export const REGION_CARDS = {
+export const REGION_CARDS: Record<string, AreaCard> = {
   leide: { name: 'Leide', sub: 'The Longwythe Region', meta: 'Kingdom of Lucis' },
   duscae: { name: 'Duscae', sub: 'The Nebulawood', meta: 'Kingdom of Lucis' },
   cleigne: { name: 'Cleigne', sub: 'The Vesperpool Road', meta: 'Kingdom of Lucis' },
@@ -95,7 +121,18 @@ export const REGION_CARDS = {
  * one exists so nothing here hard-codes a coordinate another agent owns.
  * `site` is an Ecology site type; `pos` is the fallback.
  */
-export const PLACES = [
+/** A named location, resolved against an Ecology site so nothing hard-codes a coordinate. */
+export interface Place {
+  id: string;
+  name: string;
+  sub: string;
+  /** Ecology site type this place sits on. */
+  site: string;
+  /** Metres from the site that count as "here". */
+  radius: number;
+}
+
+export const PLACES: Place[] = [
   { id: 'hammerhead', name: 'Hammerhead', sub: 'Cid Sophiar, Mechanic', site: 'reststop', radius: 42 },
   { id: 'longwythe', name: 'Longwythe Rest Area', sub: 'Leide', site: 'shack', radius: 34 },
   { id: 'haven', name: 'Haven', sub: 'Safe ground', site: 'haven', radius: 20 },

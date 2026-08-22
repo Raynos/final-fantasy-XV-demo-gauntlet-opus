@@ -1,5 +1,8 @@
 import type { HUD } from './HUD.ts';
 import type { Game } from '../game/Game.ts';
+import type { QuestUpdate } from '../game/rpg/Quests.ts';
+import type { RestSummary } from '../game/rpg/DayCycle.ts';
+import type { AscensionNode } from './GameData.ts';
 /**
  * Every event in the game, plugged into the HUD.
  *
@@ -18,6 +21,36 @@ import type { Game } from '../game/Game.ts';
  * re-resolved it through the real damage formula and rewritten `detail.damage`.
  */
 
+/**
+ * Every `RpgSystem` emitter event this file subscribes to, and its payload.
+ *
+ * A map rather than one all-optional bag: the payloads have nothing in common,
+ * and an optional field would let `p.quest.name` compile on an event that
+ * carries no quest. Keyed subscription makes each handler see exactly what its
+ * own event publishes.
+ */
+export interface RpgEvents {
+  'level-up': { member: string, name: string, to: number, from: number };
+  'item-gained': { id: string, name: string, count: number, total: number, source: string };
+  'ap-gained': { amount: number, reason: string, total: number };
+  'node-unlocked': { id: string, node: AscensionNode, apRemaining: number };
+  'gil-changed': { gil: number, delta: number, source: string };
+  'buff-applied': { buff: { name: string }, source: string };
+  'quest-updated': QuestUpdate;
+  'time-of-day-changed': {
+    /** Phase *id*, not its display name. */
+    phase: string,
+    name: string,
+    hour: number,
+    day: number,
+    isNight: boolean,
+    nightDepth: number,
+    clock: string,
+  };
+  'daemons-rising': { hour: number };
+  rested: RestSummary;
+}
+
 const CALLOUTS = {
   blindside: ['Blindside!', 'Attack from behind  ·  ×1.35 damage'],
   parry: ['Parry!', 'Perfect guard  ·  counter ready'],
@@ -29,7 +62,8 @@ const CALLOUTS = {
 
 export class HudBridge {
   _lastCall!: number;
-  _off!: any[];
+  /** Unsubscribe functions, one per wired event. */
+  _off!: Array<() => void>;
   game!: Game | null;
   hud!: HUD;
   constructor(hud: import('./HUD.ts').HUD) {
@@ -61,13 +95,18 @@ export class HudBridge {
   /* -- combat ------------------------------------------------------------ */
 
   _wireCombat() {
-    const on = (name: string, fn: any) => {
-      const h = (e: any) => fn(e.detail || {});
-      window.addEventListener(`combat:${name}`, h);
-      this._off.push(() => window.removeEventListener(`combat:${name}`, h));
+    // `CombatSystem.emit` mirrors every event onto `window` as `combat:<name>`,
+    // and the `WindowEventMap` augmentation in `src/globals.d.ts` maps those
+    // names onto `CombatEvents`. Each name is written out literally rather than
+    // built from a variable, because that is what lets the map resolve
+    // `e.detail` to *this* event's payload with nothing asserted.
+    const on = <T extends keyof WindowEventMap>(type: T, h: (e: WindowEventMap[T]) => void) => {
+      window.addEventListener(type, h);
+      this._off.push(() => window.removeEventListener(type, h));
     };
 
-    on('damage', (d: any) => {
+    on('combat:damage', (e) => {
+      const d = e.detail;
       if (!d.position) return;
       this.hud.damage({
         world: d.position,
@@ -78,19 +117,20 @@ export class HudBridge {
       });
     });
 
-    on('hit', (d: any) => { if (d.blindside) this._call('blindside'); });
-    on('lockon', (d: any) => this.hud.setLockOn(d.enemy || null));
-    on('warp', (d: any) => { if (d.phase === 'impact' && d.enemy) this._call('warp'); });
-    on('parry', () => this._call('parry'));
-    on('link', () => this._call('link'));
-    on('stagger', () => this._call('stagger'));
-    on('armiger', () => this._call('armiger'));
-    on('playerHit', (d: any) => {
+    on('combat:hit', (e) => { if (e.detail.blindside) this._call('blindside'); });
+    on('combat:lockon', (e) => this.hud.setLockOn(e.detail.enemy || null));
+    on('combat:warp', (e) => { if (e.detail.phase === 'impact' && e.detail.enemy) this._call('warp'); });
+    on('combat:parry', () => this._call('parry'));
+    on('combat:link', () => this._call('link'));
+    on('combat:stagger', () => this._call('stagger'));
+    on('combat:armiger', () => this._call('armiger'));
+    on('combat:playerHit', (e) => {
       const max = this.game?.get?.('Player')?.stats?.maxHp || 1;
-      this.hud.hit(Math.min(1, (d.damage || 0) / Math.max(1, max * 0.22)));
+      this.hud.hit(Math.min(1, (e.detail.damage || 0) / Math.max(1, max * 0.22)));
     });
-    on('spell', (d: any) => {
-      if (d.element) this._call('spell', `${d.element[0].toUpperCase()}${d.element.slice(1)} unleashed`);
+    on('combat:spell', (e) => {
+      const el = e.detail.element;
+      if (el) this._call('spell', `${el[0].toUpperCase()}${el.slice(1)} unleashed`);
     });
   }
 
@@ -99,52 +139,54 @@ export class HudBridge {
   _wireRpg(game: Game) {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
-    const on = (n: string, fn: any) => this._off.push(rpg.on(n, fn));
+    const on = <K extends keyof RpgEvents>(n: K, fn: (p: RpgEvents[K]) => void) => this._off.push(rpg.on(n, fn));
     const toast = (label: string, value: string, ico?: string, tone?: string) =>
       this.hud.toasts.push(label, value, ico, tone);
 
-    on('level-up', (p: any) => {
+    on('level-up', (p) => {
       if (p.member === 'noctis') this.hud.levelUp(p.to);
       toast('Level Up', `${p.name || p.member}  ·  Level ${p.to}`, 'ascension', 'gold');
     });
 
-    on('item-gained', (p: any) => {
+    on('item-gained', (p) => {
       if (p.source === 'start' || p.source === 'seed' || p.source === 'unequip') return;
       toast('Obtained', `${p.name}${p.count > 1 ? `  ×${p.count}` : ''}`, 'items');
     });
 
-    on('ap-gained', (p: any) => {
+    on('ap-gained', (p) => {
       if (p.reason === 'seed') return;
       toast('Ability Points', `+${p.amount}  ·  ${p.reason.replace(/-/g, ' ')}`, 'ap', 'ice');
     });
 
-    on('node-unlocked', (p: any) => toast('Ascension', p.node.name, 'ascension', 'ice'));
+    on('node-unlocked', (p) => toast('Ascension', p.node.name, 'ascension', 'ice'));
 
-    on('gil-changed', (p: any) => {
+    on('gil-changed', (p) => {
       if (p.source === 'start' || p.source === 'seed' || !p.delta) return;
       toast('Gil', `${p.delta > 0 ? '+' : ''}${p.delta.toLocaleString()}`, 'ap', 'gold');
     });
 
-    on('buff-applied', (p: any) => toast('Buff', p.buff.name, 'regen', 'gold'));
+    on('buff-applied', (p) => toast('Buff', p.buff.name, 'regen', 'gold'));
 
-    on('quest-updated', (p: any) => {
+    on('quest-updated', (p) => {
       if (p.phase === 'complete') {
         this.hud.areaTitle('Quest Complete', p.quest.name, p.quest.type === 'hunt' ? 'Bounty' : p.quest.type === 'main' ? `Chapter ${p.quest.chapter}` : 'Side Quest');
-      } else if (p.phase === 'objective') {
+      } else if (p.phase === 'objective' && p.objective) {
+        // `QuestUpdate.objective` is documented as "`phase: 'objective'` only"
+        // but declared optional, so the phase test alone does not narrow it.
         toast('Objective', p.objective.desc, 'quests', 'ice');
       } else if (p.phase === 'accepted') {
         toast('Quest Accepted', p.quest.name, 'quests');
       }
     });
 
-    on('time-of-day-changed', (p: any) => {
+    on('time-of-day-changed', (p) => {
       if (p.phase === 'dusk') this.hud.say('Ignis', 'The light is going. We should find a haven before dark.');
       else if (p.phase === 'dawn') this.hud.say('Prompto', 'Morning! See? Told you we\'d make it.');
     });
 
     on('daemons-rising', () => this.hud.say('Gladiolus', 'They\'re coming up. Stay sharp.'));
 
-    on('rested', (p: any) => {
+    on('rested', (p) => {
       if (!p.exp || !p.exp.total) return;
       this.hud.areaTitle(`Day ${p.day}`, `${p.exp.total.toLocaleString()} EXP redeemed`, `${p.lodging.name}  ·  ×${p.lodging.bonus.toFixed(1)}`);
     });

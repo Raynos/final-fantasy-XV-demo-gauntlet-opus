@@ -3,6 +3,8 @@ import {
   collectMeshes, collectRockProxies, objectBox, boxTriangles,
 } from './Harvest.ts';
 import type { Game } from '../../game/Game.ts';
+import type { Terrain } from '../Terrain.ts';
+import type { BoxProxy } from './Harvest.ts';
 
 /** Broadphase cell, metres. Small enough that a town cell holds tens of tris. */
 const CELL = 2.5;
@@ -49,25 +51,54 @@ const BURIED = 0.4;
  *   resolve(pos, radius, height, stepUp)    -> pushes pos out of walls
  *   blocked(x, z, feetY, radius, height, stepUp) -> boolean
  */
+/** What a ground query answers: the support height and its normal. */
+export interface GroundHit {
+  y: number;
+  nx: number;
+  ny: number;
+  nz: number;
+  /** True when the support came from a prop rather than the heightfield. */
+  onProp: boolean;
+}
+
+/** What the harvest built, for the dev overlay and `gameplay.mts`. */
+export interface CollisionStats {
+  floorTris: number;
+  wallTris: number;
+  rockProxies: number;
+  /** Wall-clock milliseconds the incremental harvest took in total. */
+  buildMs: number;
+  /** Floor and wall triangles contributed, per source name. */
+  sources: Record<string, { floor: number, wall: number }>;
+  cells?: number;
+  coarseCells?: number;
+}
+
+/** Cell key -> indices of the triangles overlapping it. */
+type TriGrid = Map<number, Int32Array>;
+
 export class CollisionWorld {
-  _dyn!: any[];
-  _ground!: any;
-  _job!: any;
+  /** Oriented-box proxies for the things that move. */
+  _dyn!: BoxProxy[];
+  /** Reused answer for `groundAt`, so a query per frame allocates nothing. */
+  _ground!: GroundHit;
+  /** The incremental harvest, or null when it is not running. */
+  _job!: Generator<void, void> | null;
   _n!: THREE.Vector3;
   _t0!: number;
   _v!: THREE.Vector3;
   enabled!: boolean;
   floor!: Float32Array;
-  floorCoarse!: any;
-  floorGrid!: any;
+  floorCoarse!: TriGrid;
+  floorGrid!: TriGrid;
   floorN!: Float32Array;
   game!: Game;
   ready!: boolean;
-  stats!: any;
-  terrain!: any;
+  stats!: CollisionStats;
+  terrain!: Terrain | null;
   wall!: Float32Array;
-  wallCoarse!: any;
-  wallGrid!: any;
+  wallCoarse!: TriGrid;
+  wallGrid!: TriGrid;
   wallN!: Float32Array;
   constructor() {
     this.ready = false;
@@ -83,7 +114,7 @@ export class CollisionWorld {
   init(game: Game) {
     if (this.game) return this;
     this.game = game;
-    this.terrain = game.get('Terrain');
+    this.terrain = game.get('Terrain') ?? null;
     this._job = null;
     this._t0 = 0;
     return this;
@@ -114,10 +145,10 @@ export class CollisionWorld {
   * _startJob() {
     const game = this.game;
     const terrain = this.terrain;
-    const floors: any[] = [];
-    const walls: any[] = [];
-    const wallMeta: any[] = [];                  // nx, ny, nz, yMax per wall triangle
-    const floorMeta: any[] = [];                 // nx, ny, nz, d  (plane) per floor tri
+    const floors: number[] = [];
+    const walls: number[] = [];
+    const wallMeta: number[] = [];               // nx, ny, nz, yMax per wall triangle
+    const floorMeta: number[] = [];              // nx, ny, nz, d  (plane) per floor tri
     const sources = this.stats.sources;
 
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
@@ -134,7 +165,8 @@ export class CollisionWorld {
       const yMin = Math.min(a.y, b.y, c.y);
       const yMax = Math.max(a.y, b.y, c.y);
       const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3;
-      const g = terrain.heightAt(cx, cz);
+      // no heightfield means nothing to bury a triangle against; keep it
+      const g = terrain ? terrain.heightAt(cx, cz) : -Infinity;
       if (yMax < g - BURIED) return;
       if (yMin > g + REACH) return;
       const rec = sources[source] || (sources[source] = { floor: 0, wall: 0 });
@@ -173,7 +205,7 @@ export class CollisionWorld {
     // ---- 2. instanced boulders as analytic boxes --------------------------
     const rocks = collectRockProxies(game);
     this.stats.rockProxies = rocks.length;
-    const tmp: any[] = [];
+    const tmp: number[] = [];
     for (const r of rocks) {
       tmp.length = 0;
       boxTriangles(r, tmp);
@@ -221,10 +253,10 @@ export class CollisionWorld {
   /**
    * Bucket a triangle array into a two-level sparse uniform grid.
    */
-  * _grid(tri: any): Generator<void, {grid: Map<any, any>, coarse: Map<any, any>}> {
+  * _grid(tri: Float32Array): Generator<void, {grid: TriGrid, coarse: TriGrid}> {
     const SPAN = 16;
-    const fine = new Map();
-    const big = new Map();
+    const fine = new Map<number, number[]>();
+    const big = new Map<number, number[]>();
     const n = tri.length / 9;
     let work = 0;
     for (let t = 0; t < n; t++) {
@@ -248,8 +280,8 @@ export class CollisionWorld {
       }
       if (work > 3000) { work = 0; yield; }
     }
-    const bake = function* (src: any) {
-      const out = new Map();
+    const bake = function* (src: Map<number, number[]>): Generator<void, TriGrid> {
+      const out: TriGrid = new Map();
       let i = 0;
       for (const [k, list] of src) {
         out.set(k, Int32Array.from(list));
@@ -312,7 +344,7 @@ export class CollisionWorld {
    * moment their centre crosses the lip; sampling the disc keeps them on it
    * until their feet genuinely leave.
    */
-  groundDisc(x: number, z: number, fromY: number, radius: number, stepUp = 0.45, stepDown = 2.0, out: any = {}): {y:number, nx:number, ny:number, nz:number, onProp:boolean} {
+  groundDisc(x: number, z: number, fromY: number, radius: number, stepUp = 0.45, stepDown = 2.0, out: GroundHit = { y: 0, nx: 0, ny: 1, nz: 0, onProp: false }): GroundHit {
     const g = this.groundAt(x, z, fromY, stepUp, stepDown);
     out.y = g.y; out.nx = g.nx; out.ny = g.ny; out.nz = g.nz; out.onProp = g.onProp;
     if (!this.ready || !this.enabled) return out;
@@ -357,7 +389,7 @@ export class CollisionWorld {
     const ix0 = Math.floor((ax - radius) * INV_CELL), ix1 = Math.floor((ax + radius) * INV_CELL);
     const iz0 = Math.floor((az - radius) * INV_CELL), iz1 = Math.floor((az + radius) * INV_CELL);
     let total = 0;
-    const sweep = (list: any) => {
+    const sweep = (list: ArrayLike<number>) => {
       for (let i = 0; i < list.length; i++) {
         const t3 = list[i], o = t3 * 9, m = t3 * 4;
         if (meta[m + 3] <= skipTop) continue;                 // steppable
@@ -381,7 +413,8 @@ export class CollisionWorld {
     let total = 0;
     for (const b of this._dyn) {
       const obj = b.obj;
-      if (!obj.visible || !obj.parent) continue;
+      // `_dyn` is only ever filled from `objectBox`, which carries the object
+      if (!obj || !obj.visible || !obj.parent) continue;
       obj.updateMatrixWorld();
       const mw = obj.matrixWorld.elements;
       // world -> local, assuming the object carries only rotation/translation
@@ -437,7 +470,7 @@ const _bp = new THREE.Vector3(), _cp = new THREE.Vector3(), _bc = new THREE.Vect
  * Push a vertical capsule segment [y0, y1] at (pos.x, pos.z) out of one
  * triangle, horizontally. Returns the distance moved.
  */
-function pushOut(pos: THREE.Vector3, radius: number, y0: number, y1: number, tri: any, o: number, nx: number, ny: number, nz: number) {
+function pushOut(pos: THREE.Vector3, radius: number, y0: number, y1: number, tri: Float32Array, o: number, nx: number, ny: number, nz: number) {
   _va.set(tri[o], tri[o + 1], tri[o + 2]);
   _vb.set(tri[o + 3], tri[o + 4], tri[o + 5]);
   _vc.set(tri[o + 6], tri[o + 7], tri[o + 8]);

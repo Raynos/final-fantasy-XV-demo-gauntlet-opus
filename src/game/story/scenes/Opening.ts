@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { Frame } from '../../cinematics/CameraMove.ts';
 import { RoadPath } from '../../cinematics/RoadPath.ts';
 import { takeCar, releaseCar } from './SceneKit.ts';
+import type {
+  ActorId, SceneCtx, SceneData, SceneDef, ShotDef, StageFrame,
+} from '../../cinematics/Scene.ts';
+import type { EcoSite } from '../../../world/props/EcoSites.ts';
+import type { Terrain } from '../../../world/Terrain.ts';
 
 /**
  * CHAPTER I — "Departure": the four push the broken-down Regalia up the Leide
@@ -38,16 +43,37 @@ const carF = (t: number) => (Math.min(t, ARRIVE) - ARRIVE) * SPEED;
  * for the beat it exists for, and a camera pointed at the inside of a four-man
  * line always has somebody's shoulder in the way.
  */
-const SLOTS = {
+const SLOTS: Record<ActorId, [number, number]> = {
   noctis: [-3.34, 1.12],
   ignis: [-3.40, 0.40],
   gladio: [-3.26, -0.36],
   prompto: [-3.62, -1.10],
 };
 
-/** Chest height used when aiming at the group rather than at one of them. */
+/**
+ * What this scene keeps between its hooks: the road path it staged against,
+ * where Hammerhead is in scene-frame metres, which side the sun is on, and the
+ * car it borrowed.
+ */
+interface OpeningData extends SceneData {
+  /** Hammerhead's fuel stop, world space. */
+  stop?: THREE.Vector3;
+  /** Which side of the road the camera shoots from, +1 or -1. */
+  side?: number;
+  /** The sun's bearing in frame coordinates, for reference. */
+  sunAhead?: number;
+  sunLat?: number;
+  /** The fuel stop in scene-frame metres: up-frame, screen-left. */
+  stopF?: number;
+  stopL?: number;
+  car?: THREE.Object3D;
+  /** What `releaseCar` does not restore: the hull's inner child. */
+  carHome?: { inner: THREE.Euler | null };
+}
 
-export const OPENING = {
+type Ctx = SceneCtx<OpeningData>;
+
+export const OPENING: SceneDef<OpeningData> = {
   id: 'ch1_opening_push',
   chapter: 1,
   letterbox: 1,
@@ -56,7 +82,7 @@ export const OPENING = {
   restorePositions: false,
 
   /* ------------------------------------------------------------- staging -- */
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game, stage, terrain } = ctx;
     const props = game.get('Props');
     const eco = props && props.ecology;
@@ -69,8 +95,8 @@ export const OPENING = {
     if (weather && weather.set) weather.set('clear');
 
     // ---- anchor on the parked Regalia and the fuel stop up the road --------
-    const site = eco && eco.sites.find((s: any) => s.type === 'regalia');
-    const stop = eco && eco.sites.find((s: any) => s.type === 'reststop');
+    const site: EcoSite | undefined = eco && eco.sites.find((s: EcoSite) => s.type === 'regalia');
+    const stop: EcoSite | undefined = eco && eco.sites.find((s: EcoSite) => s.type === 'reststop');
     const origin = new THREE.Vector3(
       site ? site.x : 0,
       0,
@@ -139,7 +165,7 @@ export const OPENING = {
   },
 
   /* ---------------------------------------------------------- per frame -- */
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     placeCrew(ctx, t);
   },
 
@@ -188,7 +214,7 @@ export const OPENING = {
   ],
 
   /* ---------------------------------------------------------------- end -- */
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     const { game, stage } = ctx;
     // Park the car exactly where the world had it, then leave the four of them
     // standing beside it facing Hammerhead. Whether the scene played out or was
@@ -199,9 +225,11 @@ export const OPENING = {
     if (!F) return;
     const terrain = game.get('Terrain');
     const yaw = F.yaw;
-    const spots = { noctis: [-4.6, 0.6], gladio: [-5.4, -1.5], ignis: [-4.4, 2.1], prompto: [-6.0, -2.6] };
-    for (const id of Object.keys(spots)) {
-      const [f, l] = spots[id as keyof typeof spots];
+    const spots: Record<ActorId, [number, number]> = {
+      noctis: [-4.6, 0.6], gladio: [-5.4, -1.5], ignis: [-4.4, 2.1], prompto: [-6.0, -2.6],
+    };
+    for (const id of Object.keys(spots) as ActorId[]) {
+      const [f, l] = spots[id];
       stage.place(id, F.ground(terrain, f, l, 0), yaw);
       const a = stage.actor(id);
       if (a) { a.root.position.copy(a.pos); a.root.rotation.y = yaw; }
@@ -216,7 +244,7 @@ export const OPENING = {
 /* -------------------------------------------------------------------------- */
 
 /** Drive the car and the four pushers to their positions at scene time `t`. */
-function placeCrew(ctx: any, t: number) {
+function placeCrew(ctx: Ctx, t: number) {
   const { stage, terrain } = ctx;
   const F = ctx.data.F;
   if (!F) return;
@@ -251,8 +279,8 @@ function placeCrew(ctx: any, t: number) {
   const heave = 1 + 0.12 * Math.sin(t * 1.35);
   const dir = new THREE.Vector3();
   let i = 0;
-  for (const id of Object.keys(SLOTS)) {
-    const [df, dl] = SLOTS[id as keyof typeof SLOTS];
+  for (const id of Object.keys(SLOTS) as ActorId[]) {
+    const [df, dl] = SLOTS[id];
     const bob = 0.06 * Math.sin(t * 1.35 + i * 0.9);
     const yaw = yawAt(f + df);
     dir.set(Math.sin(yaw), 0, Math.cos(yaw));
@@ -263,13 +291,13 @@ function placeCrew(ctx: any, t: number) {
 }
 
 /** Terrain height at a scene-frame offset. */
-function height(terrain: any, F: any, f: number, l: number) {
+function height(terrain: Terrain, F: StageFrame, f: number, l: number) {
   const p = F.at(f, l, 0);
   return terrain.heightAt(p[0], p[2]);
 }
 
 /** Unwind the wheel spin. `releaseCar` handles everything else. */
-function restoreInner(ctx: any) {
+function restoreInner(ctx: Ctx) {
   const car = ctx.data.car;
   const home = ctx.data.carHome;
   if (!car || !home || !home.inner || !car.children[0]) return;
@@ -285,8 +313,9 @@ function restoreInner(ctx: any) {
  * keyframe can be written in scene-local metres: `G(f, l, u)` is "f metres up
  * the road, l metres to the shooting side, u metres above the ground there".
  */
-function buildShots(ctx: any) {
+function buildShots(ctx: Ctx): ShotDef[] {
   const F = ctx.data.F;
+  if (!F) return [];
   const S = ctx.data.side || 1;
   const terrain = ctx.game.get('Terrain');
   /**
@@ -301,7 +330,7 @@ function buildShots(ctx: any) {
   /** The centre of the pushing line at scene time `t`. */
   const crew = (t: number, u: number) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */
-  const man = (t: number, id: string, u: number) => G(carF(t) + SLOTS[id as keyof typeof SLOTS][0], SLOTS[id as keyof typeof SLOTS][1] / S, u);
+  const man = (t: number, id: ActorId, u: number) => G(carF(t) + SLOTS[id][0], SLOTS[id][1] / S, u);
   const stopL = (ctx.data.stopL ?? 0) / (S || 1);
 
   return [

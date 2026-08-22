@@ -13,11 +13,24 @@ import type { Game } from '../game/Game.ts';
  * All wind/trample state lives in one shared uniform block so a single update
  * here drives every patched vegetation shader in the scene.
  */
+/** Something that displaces the vegetation, reduced to a disc. */
+interface VegActor {
+  x: number;
+  y: number;
+  z: number;
+  /** Push radius, metres. */
+  r: number;
+  /** Squared distance to the camera, for the nearest-first sort. */
+  d2: number;
+}
+
 export class Vegetation {
-  _actors!: any[];
+  /** Whatever is close enough to push the grass aside this frame. */
+  _actors!: VegActor[];
   _camPos!: THREE.Vector3;
   _gust!: number;
-  _pool!: any[];
+  /** Reused actor records; `_gatherActors` never allocates. */
+  _pool!: VegActor[];
   actorRange!: number;
   bushes!: Bushes;
   ecology!: Ecology;
@@ -75,7 +88,7 @@ export class Vegetation {
     const out = this._actors;
     const pool = this._pool;
     out.length = 0;
-    const add = (obj: any, radius: number) => {
+    const add = (obj: { position?: THREE.Vector3, root?: THREE.Object3D } | null | undefined, radius: number) => {
       const p = obj && (obj.position || (obj.root && obj.root.position));
       if (!p) return;
       const d2 = (p.x - centre.x) ** 2 + (p.z - centre.z) ** 2;

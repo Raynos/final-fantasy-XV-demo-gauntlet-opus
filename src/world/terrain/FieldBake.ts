@@ -2,6 +2,8 @@ import { N, FAR_N } from './Field.ts';
 import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
+import type { LayerData } from './Layers.ts';
+import type { BakeMeta } from './FieldCodec.ts';
 import {
   decodeF32Planes, decodePlanes8, sectionField, encodeF32Planes, encodePlanes8, packContainer, unpackContainer,
 } from './FieldCodec.ts';
@@ -24,7 +26,7 @@ export const BAKE_PATH = 'baked/terrain.bin.gz';
  * @param meta extra header fields (seed, source hash)
  * @returns the uncompressed container
  */
-export function encodeField(field: Field, meta: any = {}, layers: any = null): Uint8Array {
+export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData | null = null): Uint8Array {
   const roadY = field.network.captureElevations();
   const sections = [
     { name: 'h', kind: 'f32planes', n: N * N, bytes: encodeF32Planes(field.h) },
@@ -72,7 +74,9 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
   net.restoreElevations(new Float32Array(roadY.bytes.slice().buffer));
   field.network = net;
   field.roadSpline = net.spine;
-  field.road = net.spine;
+  // `field.road` used to be set here too. `Field` declared it, this was the
+  // only writer, and nothing in the tree ever read it -- `Terrain.road` comes
+  // from `field.roadSpline`. Removed with the declaration.
   field.stats = { ...(field.stats || {}), baked: true, buildMs: 0 };
 }
 
@@ -80,7 +84,7 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
  * Decode the layer texels out of a container.
  * @returns `buildLayerData`-shaped texels, or null if absent
  */
-export function bakedLayers(buf: Uint8Array): any | null {
+export function bakedLayers(buf: Uint8Array): LayerData | null {
   const c = unpackContainer(buf);
   const meta = c.section('layerMeta');
   const a = c.section('layerAlbedo'), s = c.section('layerSurf'), d = c.section('layerDetail');
@@ -103,7 +107,7 @@ export function bakedLayers(buf: Uint8Array): any | null {
  * the generator when it misses.
  *
  */
-export async function loadBaked(): Promise<{applyTo:(f:any)=>void, layers:()=>any|null} | null> {
+export async function loadBaked(): Promise<{applyTo: (f: Field) => void, layers: () => LayerData | null} | null> {
   if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return null;
   // `?nobake=1` forces the generator path, so the two can be A/B'd in one
   // session and a suspected bake bug can always be ruled out from the URL.
@@ -121,10 +125,10 @@ export async function loadBaked(): Promise<{applyTo:(f:any)=>void, layers:()=>an
     const buf = new Uint8Array(await new Response(body).arrayBuffer());
     unpackContainer(buf);            // validates magic and format version
     return { applyTo: (f) => applyBakedField(f, buf), layers: () => bakedLayers(buf) };
-  } catch (e: any) {
+  } catch (e: unknown) {
     // A missing or stale artifact must never be fatal: the generator is still
     // the source of truth and is only slower, never different.
-    if (typeof console !== 'undefined') console.info('[terrain] no baked world, generating:', e && e.message);
+    if (typeof console !== 'undefined') console.info('[terrain] no baked world, generating:', e instanceof Error ? e.message : e);
     return null;
   }
 }

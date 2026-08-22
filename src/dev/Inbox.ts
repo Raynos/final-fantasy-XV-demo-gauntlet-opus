@@ -1,4 +1,5 @@
 import { capture, gather } from './Report.ts';
+import type { ReviewNote } from './Report.ts';
 import type { Registry } from './Registry.ts';
 import type { Game } from '../game/Game.ts';
 
@@ -21,16 +22,22 @@ const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 
  * download so a note is never simply lost.
  */
 export class Inbox {
-  area!: any;
+  /** Which area of the game the note is about. */
+  area!: HTMLSelectElement;
   game!: Game;
-  img!: any;
-  meta!: any;
+  /** The captured frame. */
+  img!: HTMLImageElement;
+  /** The read-only metadata summary under the shot. */
+  meta!: HTMLElement;
   node!: HTMLDivElement;
   open!: boolean;
-  pending!: any;
+  /** The note being written: the metadata block plus what the human types. */
+  pending!: ReviewNote | null;
   reg!: Registry;
-  sev!: any;
-  status!: any;
+  /** Severity picker. */
+  sev!: HTMLSelectElement;
+  /** The one-line result readout at the bottom of the panel. */
+  status!: HTMLElement;
   text!: HTMLTextAreaElement | null;
   constructor(root: HTMLElement, game: Game, reg: import('./Registry.ts').Registry) {
     this.game = game;
@@ -59,22 +66,24 @@ export class Inbox {
     root.appendChild(this.node);
     this.node.style.display = 'none';
 
-    this.img = this.node.querySelector('.dev-shot');
+    // Every one is in the `innerHTML` this constructor just wrote.
+    this.img = this.node.querySelector('.dev-shot')!;
     this.text = this.node.querySelector('textarea');
-    this.sev = this.node.querySelector('.dev-sev');
-    this.area = this.node.querySelector('.dev-area');
-    this.meta = this.node.querySelector('.dev-meta');
-    this.status = this.node.querySelector('.dev-status');
+    this.sev = this.node.querySelector('.dev-sev')!;
+    this.area = this.node.querySelector('.dev-area')!;
+    this.meta = this.node.querySelector('.dev-meta')!;
+    this.status = this.node.querySelector('.dev-status')!;
 
     this.node.querySelector('.dev-submit')!.addEventListener('click', () => this.submit());
     this.node.querySelector('.dev-cancel')!.addEventListener('click', () => this.close());
     // Same reason as the console: the engine's Input listens on window, so a
     // note typed here would otherwise also drive the camera.
     for (const ev of ['keydown', 'keyup', 'keypress']) {
-      this.node.addEventListener(ev, (e: any) => {
+      this.node.addEventListener(ev, (e: Event) => {
         e.stopPropagation();
-        if (ev === 'keydown' && e.key === 'Escape') this.close();
-        if (ev === 'keydown' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) this.submit();
+        if (!(e instanceof KeyboardEvent) || ev !== 'keydown') return;
+        if (e.key === 'Escape') this.close();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) this.submit();
       });
     }
   }
@@ -140,7 +149,7 @@ export class Inbox {
     }
   }
 
-  _download(note: any) {
+  _download(note: ReviewNote) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));
     a.download = `review-note-${Date.now()}.json`;

@@ -1,6 +1,7 @@
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { fsMaterial, blit } from './Fx.ts';
 import type * as THREE from 'three';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Renders the scene into the pipeline's own HDR + depth target (so every later
@@ -10,9 +11,9 @@ import type * as THREE from 'three';
  * anyway.
  */
 export class ScenePass extends Pass {
-  fx!: any;
+  fx!: PostFX;
   material!: THREE.ShaderMaterial;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -36,7 +37,7 @@ export class ScenePass extends Pass {
     });
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget) {
     const fx = this.fx;
     const { scene, camera } = fx.rnd;
 

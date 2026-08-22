@@ -23,7 +23,7 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 const dir = path.resolve(args[0] || 'shots');
-const num = (flag: any, dflt: any) => {
+const num = (flag: string, dflt: number) => {
   const i = args.indexOf(flag);
   return i === -1 ? dflt : Number(args[i + 1]) || dflt;
 };
@@ -45,7 +45,7 @@ const perPage = cols * rows;
 const pages = [];
 for (let i = 0; i < cells.length; i += perPage) pages.push(cells.slice(i, i + perPage));
 
-const figure = (c: any) =>
+const figure = (c: { src: string, name: string }) =>
   `<figure><img src="${c.src}" loading="eager"><figcaption>${c.name}</figcaption></figure>`;
 
 const html = `<!doctype html><meta charset=utf8><style>

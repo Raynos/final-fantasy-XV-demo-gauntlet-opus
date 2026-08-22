@@ -31,7 +31,7 @@
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import { call, ensureDaemon } from './daemon.mts';
-import type { ShotsResponse } from './daemon.mts';
+import type { ShotResult, ShotsResponse } from './daemon.mts';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -42,11 +42,30 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PORT = Number(process.env.PORT || 5173);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
-function parseArgs(argv: any) {
-  const opts: {
-    w: number, h: number, settle: number, out: string, shots: string[], keep: boolean,
-    prod: boolean, timeout: number, nobake: boolean, daemon: boolean, cold: boolean, jpeg: number,
-  } = {
+/** Everything the command line can set. */
+interface ShootOpts {
+  w: number;
+  h: number;
+  /** Fixed sim steps before the frame is grabbed. */
+  settle: number;
+  out: string;
+  /** Shot names; empty means every shot in `Shots.ts`. */
+  shots: string[];
+  keep: boolean;
+  /** Build and serve the real bundle rather than the dev server. */
+  prod: boolean;
+  timeout: number;
+  nobake: boolean;
+  /** Render through the shared capture daemon. */
+  daemon: boolean;
+  /** Force a cold page even when the daemon has a warm one. */
+  cold: boolean;
+  /** JPEG quality, or 0 for PNG. */
+  jpeg: number;
+}
+
+function parseArgs(argv: string[]) {
+  const opts: ShootOpts = {
     w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false,
     timeout: 120000, nobake: false, daemon: true, cold: false, jpeg: 0,
   };
@@ -73,7 +92,7 @@ function parseArgs(argv: any) {
   return opts;
 }
 
-const portOpen = (port: any) => new Promise((res) => {
+const portOpen = (port: number) => new Promise<boolean>((res) => {
   const s = net.connect(port, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -85,7 +104,7 @@ const portOpen = (port: any) => new Promise((res) => {
  * Production is worth testing separately: the minifier mangles class names,
  * so anything keyed off `constructor.name` works in dev and breaks in a build.
  */
-async function ensureServer(prod: any) {
+async function ensureServer(prod: boolean) {
   if (await portOpen(PORT)) return null;
   if (prod) {
     await new Promise<void>((res, rej) => {
@@ -119,14 +138,15 @@ async function listShots() {
  * One JSON line per shot, so a manifest can be grepped or tailed instead of read
  * whole. Pretty-printing 139 results at indent 2 ran to 1500+ lines.
  */
-function manifest({ results, ...rest }: any) {
+function manifest(m: ShotsResponse | { results: ShotResult[], errors: string[] }) {
+  const { results, ...rest } = m;
   const head = JSON.stringify(rest);
-  return `{"results":[\n${results.map((r: any) => '  ' + JSON.stringify(r)).join(',\n')}\n],`
+  return `{"results":[\n${results.map((r) => '  ' + JSON.stringify(r)).join(',\n')}\n],`
     + `${head === '{}' ? '' : head.slice(1, -1) + ','}"count":${results.length}}\n`;
 }
 
 /** Report one shot the way this tool has always reported it. */
-function line(r: any) {
+function line(r: ShotResult) {
   console.log(
     `✓ ${r.name.padEnd(16)} ${String(r.triangles).padStart(9)} tris  ` +
     `${String(r.calls).padStart(4)} calls  ${String(r.ms).padStart(5)}ms  -> ${r.file}`
@@ -134,7 +154,7 @@ function line(r: any) {
 }
 
 /** Render through the shared daemon, which owns the server, browser and page. */
-async function viaDaemon(opts: any, shots: any, outDir: any): Promise<any> {
+async function viaDaemon(opts: ShootOpts, shots: string[], outDir: string): Promise<ShotsResponse> {
   const started = await ensureDaemon();
   if (started) console.log('[shoot] started capture daemon');
   const out = await call<ShotsResponse>('/shots', {
@@ -172,7 +192,7 @@ async function main() {
     deviceScaleFactor: 1,
   });
 
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
     const t = m.text();

@@ -19,11 +19,13 @@ import { CHUNK_COLOR } from '../../shaders/post/common.ts';
  */
 export class Exposure {
   _reset!: boolean;
-  adapt!: any;
+  /** Ping-pong 1x1 targets holding the adapted exposure. */
+  adapt!: THREE.WebGLRenderTarget[];
   adaptMat!: THREE.ShaderMaterial;
   base!: number;
   ceiling!: number;
-  chain!: any[];
+  /** The reduction pyramid, coarsest last. */
+  chain!: THREE.WebGLRenderTarget[];
   compensation!: number;
   downMat!: THREE.ShaderMaterial;
   enabled!: boolean;

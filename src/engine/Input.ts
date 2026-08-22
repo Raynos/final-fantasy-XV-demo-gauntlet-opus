@@ -21,18 +21,31 @@ import * as THREE from 'three';
  *    menu layer consumes and turns into "open the pause menu" rather than
  *    leaving the player looking at a live world with a dead mouse.
  */
+/** Mouse button state, with one-frame edges for the two buttons gameplay uses. */
+export interface MouseState {
+  left: boolean;
+  right: boolean;
+  /** True only on the frame the button went down. */
+  leftEdge: boolean;
+  rightEdge: boolean;
+  /** Accumulated wheel steps this frame, sign only. */
+  wheel: number;
+}
+
 export class Input {
-  _onKeyDown!: any;
-  keys!: Set<any>;
+  _onKeyDown!: (e: KeyboardEvent) => void;
+  /** `KeyboardEvent.code` of everything currently held. */
+  keys!: Set<string>;
   pointerLockAllowed!: boolean;
-  _gpPrev!: any[];
-  _onCtx!: any;
-  _onKeyUp!: any;
-  _onLock!: any;
-  _onMouseDown!: any;
-  _onMouseMove!: any;
-  _onMouseUp!: any;
-  _onWheel!: any;
+  /** Gamepad button state as of the end of the previous frame. */
+  _gpPrev!: boolean[];
+  _onCtx!: (e: Event) => void;
+  _onKeyUp!: (e: KeyboardEvent) => void;
+  _onLock!: () => void;
+  _onMouseDown!: (e: MouseEvent) => void;
+  _onMouseMove!: (e: MouseEvent) => void;
+  _onMouseUp!: (e: MouseEvent) => void;
+  _onWheel!: (e: WheelEvent) => void;
   dom!: HTMLCanvasElement;
   enabled!: boolean;
   gamepad!: Gamepad | null;
@@ -40,11 +53,13 @@ export class Input {
   lockLost!: boolean;
   look!: THREE.Vector2;
   lookScale!: number;
-  mouse!: any;
+  mouse!: MouseState;
   move!: THREE.Vector2;
   pointerLocked!: boolean;
-  pressed!: Set<any>;
-  released!: Set<any>;
+  /** Codes pressed this frame; cleared by `endFrame`. */
+  pressed!: Set<string>;
+  /** Codes released this frame; cleared by `endFrame`. */
+  released!: Set<string>;
   constructor(domElement: HTMLCanvasElement) {
     this.dom = domElement;
     this.keys = new Set();
@@ -65,7 +80,7 @@ export class Input {
     /** Mouse look sensitivity multiplier, 0.25..3. */
     this.lookScale = 1;
 
-    this._onKeyDown = (e: any) => {
+    this._onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
       this.keys.add(e.code);
       this.pressed.add(e.code);
@@ -73,13 +88,13 @@ export class Input {
       // browser treats it as "navigate back" and the page unloads mid-game.
       if (['Space', 'Tab', 'Backspace', 'F1', 'F5'].includes(e.code)) e.preventDefault();
     };
-    this._onKeyUp = (e: any) => { this.keys.delete(e.code); this.released.add(e.code); };
-    this._onMouseMove = (e: any) => {
+    this._onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.code); this.released.add(e.code); };
+    this._onMouseMove = (e: MouseEvent) => {
       if (!this.pointerLocked) return;
       this.look.x += e.movementX * this.lookScale;
       this.look.y += e.movementY * this.lookScale * (this.invertY ? -1 : 1);
     };
-    this._onMouseDown = (e: any) => {
+    this._onMouseDown = (e: MouseEvent) => {
       // A click that landed on a UI element is the UI's, not the world's: it
       // must neither swing a sword nor grab the pointer.
       if (!this.pointerLocked && e.target !== this.dom) return;
@@ -87,17 +102,17 @@ export class Input {
       if (e.button === 2) { this.mouse.right = true; this.mouse.rightEdge = true; }
       this.requestPointerLock();
     };
-    this._onMouseUp = (e: any) => {
+    this._onMouseUp = (e: MouseEvent) => {
       if (e.button === 0) this.mouse.left = false;
       if (e.button === 2) this.mouse.right = false;
     };
-    this._onWheel = (e: any) => { this.mouse.wheel += Math.sign(e.deltaY); };
+    this._onWheel = (e: WheelEvent) => { this.mouse.wheel += Math.sign(e.deltaY); };
     this._onLock = () => {
       const was = this.pointerLocked;
       this.pointerLocked = document.pointerLockElement === this.dom;
       if (was && !this.pointerLocked && this.pointerLockAllowed) this.lockLost = true;
     };
-    this._onCtx = (e: any) => e.preventDefault();
+    this._onCtx = (e: Event) => e.preventDefault();
 
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
@@ -111,7 +126,7 @@ export class Input {
 
   key(code: string) { return this.keys.has(code); }
   keyDown(code: string) { return this.pressed.has(code); }
-  keyUp(code: any) { return this.released.has(code); }
+  keyUp(code: string) { return this.released.has(code); }
 
   /**
    * True this frame for any of the universal "back / close" inputs. Escape is

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import type { Game } from '../../game/Game.ts';
+import type { Character } from '../../characters/rig/Character.ts';
+import type { Player } from '../../characters/Player.ts';
+import type { Party } from '../../characters/Party.ts';
+import type { Ground } from '../Terrain.ts';
 
 /**
  * Four men in a car.
@@ -26,7 +30,10 @@ import type { Game } from '../../game/Game.ts';
  */
 
 /** Ground a kilometre below the world: makes `footIK` do nothing at all. */
-const NO_GROUND = { heightAt: () => -1000, normalAt: (x: any, z: any, out: any) => (out || new THREE.Vector3()).set(0, 1, 0) };
+const NO_GROUND = {
+  heightAt: () => -1000,
+  normalAt: (_x: number, _z: number, out?: THREE.Vector3) => (out || new THREE.Vector3()).set(0, 1, 0),
+};
 
 const SCALE = 1.14;              // the Regalia body scale, from Regalia.ts
 const WHEEL_R = 0.4765;
@@ -126,15 +133,62 @@ const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 const _up = new THREE.Vector3();
 
+/**
+ * One authored seated pose: bone name -> `[x, y, z]` euler, YXZ. Everything
+ * above the collarbones is deliberately absent, so the animator keeps it.
+ */
+export type SeatPose = Record<string, number[]>;
+
+/** One person in the car, and where they are sitting. */
+export interface Rider {
+  key: string;
+  char: Character;
+  /** Their scene root, which this module writes the seat transform onto. */
+  root: THREE.Object3D;
+  /** `SEATS` id. */
+  seat: string;
+  pose: SeatPose;
+  /** This rig's own hip height, so a tall man does not sit on the boot lid. */
+  hipY: number;
+}
+
+/**
+ * What `Player` and `Party` were doing before everyone got in, so `exit` can
+ * hand them back untouched. `terrain` is whatever those systems were carrying.
+ */
+interface SavedWalkers {
+  playerTerrain: Ground | undefined;
+  partyTerrain: Ground | undefined;
+  speedMul: number[];
+}
+
+/** How the car is moving, as the seated poses read it. */
+export interface OccupantCtx {
+  /** m/s. */
+  speed: number;
+  /** Lateral acceleration, m/s^2. Everyone leans against it. */
+  lateralG: number;
+  /** Longitudinal acceleration, m/s^2. */
+  longG: number;
+  /** 0..1 how far the car is sideways. */
+  slide: number;
+  /** 0..1 surface roughness; shakes the whole cabin. */
+  rough: number;
+  /** -1..1 steering, so the driver's arms follow the wheel. */
+  steer?: number;
+  /** True when Ignis has it. */
+  auto: boolean;
+}
+
 export class Occupants {
   _gaze!: THREE.Vector3[];
-  _saved!: any;
+  _saved!: SavedWalkers | null;
   _t!: number;
-  anchors!: any;
+  anchors!: Record<string, THREE.Object3D>;
   game!: Game;
-  party!: any;
-  player!: any;
-  riders!: any[];
+  party!: Party | null;
+  player!: Player | null;
+  riders!: Rider[];
   rng!: Rng;
   seated!: boolean;
   tilt!: THREE.Object3D;
@@ -150,7 +204,6 @@ export class Occupants {
     // one gaze target per rider, reused — `setLookTarget` only stores the
     // reference, so a fresh Vector3 a frame would be pure garbage
     this._gaze = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-    /** @type {Array<{key:string, role:string, pose:object, char:object, root:THREE.Object3D}>} */
     this.riders = [];
 
     for (const s of SEATS) {
@@ -166,8 +219,8 @@ export class Occupants {
   /** Wire up to Player and Party. Safe to call once at init. */
   attach(game: Game) {
     this.game = game;
-    this.player = game.get('Player');
-    this.party = game.get('Party');
+    this.player = game.get('Player') ?? null;
+    this.party = game.get('Party') ?? null;
   }
 
   /**
@@ -183,14 +236,14 @@ export class Occupants {
     const ignis = party.get('ignis');
     const prompto = party.get('prompto');
 
-    const push = (key: string, char: any, root: any, seat: string, pose: string) => {
+    const push = (key: string, char: Character | null | undefined, root: THREE.Object3D | null | undefined, seat: string, pose: keyof typeof POSES) => {
       if (!char || !root) return;
       // A character root is at the soles; the seat anchor is at the top of the
       // squab. The offset between them is that rig's own hip height — and it
       // differs by 14 cm between Gladio and Prompto, so it has to be per
       // rider or the tall one ends up sitting on the boot lid.
       this.riders.push({
-        key, char, root, seat, pose: POSES[pose as keyof typeof POSES],
+        key, char, root, seat, pose: POSES[pose],
         hipY: char.rig && char.rig.P && char.rig.P.hips ? char.rig.P.hips.y : 0.98,
       });
     };
@@ -211,7 +264,7 @@ export class Occupants {
       this._saved = {
         playerTerrain: p.terrain,
         partyTerrain: party.terrain,
-        speedMul: party.members.map((m: any) => m.speedMul),
+        speedMul: party.members.map((m) => m.speedMul),
       };
     }
     p.terrain = NO_GROUND;
@@ -228,7 +281,8 @@ export class Occupants {
     if (!p || !party || !this._saved) { this.seated = false; return; }
     p.terrain = this._saved.playerTerrain;
     party.terrain = this._saved.partyTerrain;
-    party.members.forEach((m: any, i: any) => { m.speedMul = this._saved.speedMul[i] ?? 1; });
+    const saved = this._saved;
+    party.members.forEach((m, i) => { m.speedMul = saved.speedMul[i] ?? 1; });
     this._saved = null;
 
     const terrain = p.terrain;
@@ -257,7 +311,7 @@ export class Occupants {
    *
    * @param ctx { speed, lateralG, longG, slide, rough, night, auto }
    */
-  update(dt: number, ctx: any) {
+  update(dt: number, ctx: OccupantCtx) {
     if (!this.seated) return;
     this._t += dt;
     this.tilt.updateMatrixWorld(true);
@@ -287,7 +341,7 @@ export class Occupants {
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */
-  _applyPose(r: any, i: number, leanX: number, leanZ: number, jog: number, ctx: any) {
+  _applyPose(r: Rider, i: number, leanX: number, leanZ: number, jog: number, ctx: OccupantCtx) {
     const bones = r.char.rig.byName;
     const pose = r.pose;
     const t = this._t + i * 1.7;

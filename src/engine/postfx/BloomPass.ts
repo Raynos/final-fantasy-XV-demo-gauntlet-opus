@@ -3,6 +3,7 @@ import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { makeRT, fsMaterial, blit } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_HASH } from '../../shaders/post/common.ts';
 import { lensDirtTexture } from './LensTextures.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * Physically-plausible bloom on a progressive mip chain (Call of Duty style
@@ -24,22 +25,24 @@ export class BloomPass extends Pass {
   downMat!: THREE.ShaderMaterial;
   flareThreshold!: number;
   floor!: number;
-  fx!: any;
+  fx!: PostFX;
   ghostAmount!: number;
   haloAmount!: number;
   knee!: number;
   levels!: number;
   mipFalloff!: number;
-  mips!: any[];
+  /** The downsample pyramid, half-res at [0]. */
+  mips!: THREE.WebGLRenderTarget[];
   prefilterMat!: THREE.ShaderMaterial;
   radius!: number;
-  streak!: any;
+  /** Ping-pong pair for the anamorphic streak blur. */
+  streak!: THREE.WebGLRenderTarget[];
   streakMat!: THREE.ShaderMaterial;
   strength!: number;
   sunAmount!: number;
   threshold!: number;
   upMat!: THREE.ShaderMaterial;
-  constructor(fx: any, w: number, h: number) {
+  constructor(fx: PostFX, w: number, h: number) {
     super();
     this.fx = fx;
     this.needsSwap = true;
@@ -346,7 +349,7 @@ export class BloomPass extends Pass {
     this.compositeMat.uniforms.uAspect.value = w / h;
   }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     const u = this.prefilterMat.uniforms;
     // the threshold is authored post-exposure; convert it into the scene-linear
     // units this buffer is actually in (see the field comment)

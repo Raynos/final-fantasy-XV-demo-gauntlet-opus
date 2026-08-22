@@ -20,7 +20,8 @@ import * as THREE from 'three';
  *     Vegetation cards are the usual culprit.
  */
 export class ViewModes {
-  _mats!: any;
+  /** The override materials, built on first use. */
+  _mats!: Record<string, THREE.Material> | null;
   mode!: string;
   constructor() {
     this.mode = 'off';

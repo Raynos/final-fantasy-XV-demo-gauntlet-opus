@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { EcoSite } from './props/EcoSites.ts';
 import { Ecology } from './veg/Ecology.ts';
 import { Rocks } from './props/Rocks.ts';
 import { Landmarks } from './props/Landmarks.ts';
@@ -20,16 +21,17 @@ import type { Game } from '../game/Game.ts';
 export class Props {
   _camPos!: THREE.Vector3;
   debris!: Debris;
-  ecology!: any;
+  ecology!: Ecology;
   game!: Game;
   landmarks!: Landmarks;
   mega!: Megastructures;
   outposts!: Outposts;
   poiKits!: PoiKits;
   regalia!: THREE.Group;
-  regaliaLamp!: any;
-  regaliaLights!: any;
-  regaliaTail!: any;
+  /** Headlamp and tail-lamp materials of the *static* car, for the night ramp. */
+  regaliaLamp!: THREE.MeshStandardMaterial;
+  regaliaLights!: THREE.SpotLight[];
+  regaliaTail!: THREE.MeshStandardMaterial;
   roadKit!: RoadFurniture;
   rocks!: Rocks;
   wildlife!: Wildlife;
@@ -106,7 +108,7 @@ export class Props {
 
   _buildRegalia(game: Game) {
     const eco = this.ecology;
-    const site = eco.sites.find((s: any) => s.type === 'regalia');
+    const site = eco.sites.find((s: EcoSite) => s.type === 'regalia');
     if (!site) return;
     const env = this._fallbackEnv(game);
     const { group, lights, lamp, tail } = buildRegalia({ envMap: env });

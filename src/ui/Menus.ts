@@ -13,6 +13,8 @@ import { ArchiveScreen } from './screens/ArchiveScreen.ts';
 import { SystemScreen } from './screens/SystemScreen.ts';
 import { ControlsScreen } from './screens/ControlsScreen.ts';
 import { ArmigerScreen } from './screens/ArmigerScreen.ts';
+import type { ShopScreen } from './screens/ShopScreen.ts';
+import type { HuntBoardScreen } from './screens/HuntBoardScreen.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -23,6 +25,78 @@ import type { Game } from '../game/Game.ts';
  * promises "Esc — Back" is promising something the browser will eat. Tab and
  * Backspace are advertised instead, because those always arrive.
  */
+/**
+ * Every screen slot the menu stack answers to, and the class that fills it.
+ *
+ * A closed set, declared once: the names are also CSS class suffixes
+ * (`.s-inventory`), `FOOT` keys and the strings `MainScreen`'s rows point at,
+ * and a typo in any of those used to be silent.
+ *
+ * The two optional slots are the town counters. `Hammerhead._registerScreens`
+ * adds them once Hammerhead is built, so a session that never reaches the
+ * outpost genuinely has no `shop` — which is why `MainScreen._live` has to ask
+ * before drawing a row live, and why these two are optional rather than a lie.
+ *
+ * Keyed to the concrete classes rather than to {@link MenuScreen} because
+ * callers outside the stack reach for screen-specific verbs: `NpcDialogue`
+ * calls `screens.shop.setShop(id)` before opening it.
+ */
+export interface ScreenMap {
+  main: MainScreen;
+  inventory: InventoryScreen;
+  ascension: AscensionScreen;
+  armiger: ArmigerScreen;
+  map: MapScreen;
+  world: WorldMapScreen;
+  map_wide: WorldMapScreen;
+  gear: GearScreen;
+  quests: QuestScreen;
+  archives: ArchiveScreen;
+  system: SystemScreen;
+  controls: ControlsScreen;
+  photo: PhotoScreen;
+  /** Registered by `Hammerhead._registerScreens`. */
+  shop?: ShopScreen;
+  /** Registered by `Hammerhead._registerScreens`. */
+  hunts?: HuntBoardScreen;
+}
+
+/** One menu screen slot. */
+export type ScreenName = keyof ScreenMap;
+
+/**
+ * What `Menus` requires of a screen.
+ *
+ * `node` is the important one. `Menus.init` creates it and assigns it onto the
+ * screen, and `hide`/`show` then read `node.style.display` — so it is not
+ * optional, it is simply written by the owner rather than the constructor.
+ * Every screen class declares `node!: HTMLElement` to say so.
+ *
+ * The verbs are optional because `Menus` guards each one: a screen with no
+ * `nav` is a screen the arrow keys do nothing on, which is the correct
+ * behaviour for the controls card and the map.
+ */
+export interface MenuScreen {
+  /** The screen's root element. Assigned by whoever registers the screen. */
+  node: HTMLElement;
+  /** Printed in the menu header; falls back to the slot name. */
+  title?: string;
+  /** The subtitle under it. */
+  sub?: string;
+  /** `false` hides the menu header and footer (photo mode). */
+  chrome?: boolean;
+  /** `false` leaves the world un-blurred behind the screen (photo mode). */
+  scrim?: boolean;
+  build(root: HTMLElement, game: Game): void;
+  update(dt: number, game: Game, a: number): void;
+  enter?(game: Game): void;
+  exit?(): void;
+  nav?(dx: number, dy: number): void;
+  accept?(): void;
+  /** Return true to swallow the back press (a modal the screen owns). */
+  back?(): boolean | void;
+}
+
 const FOOT = {
   default: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['Bksp', 'Back'], ['Tab', 'Close']],
   main: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['H', 'Controls'], ['Tab', 'Close']],
@@ -73,9 +147,9 @@ const FOOT = {
 export class Menus {
   _inputWas!: boolean;
   _foot!: string;
-  _gpPrev!: any;
+  _gpPrev!: Record<string, boolean | undefined>;
   _lockHeld!: boolean | null;
-  _onResize!: any;
+  _onResize!: () => void;
   a!: number;
   foot!: HTMLElement;
   footRule!: HTMLElement;
@@ -85,14 +159,14 @@ export class Menus {
   headR!: HTMLElement;
   headS!: HTMLElement;
   headT!: HTMLElement;
-  name!: string | null;
+  name!: ScreenName | null;
   open!: boolean;
-  pending!: string | null;
+  pending!: ScreenName | null;
   root!: HTMLElement;
-  screens!: any;
+  screens!: ScreenMap;
   scrim!: HTMLElement;
-  shown!: string | null;
-  stack!: any[];
+  shown!: ScreenName | null;
+  stack!: ScreenName[];
   wrap!: HTMLElement;
   async init(game: Game) {
     this.game = game;
@@ -137,8 +211,9 @@ export class Menus {
       controls: new ControlsScreen(this),
       photo: new PhotoScreen(this),
     };
-    for (const k of Object.keys(this.screens)) {
-      const s = this.screens[k];
+    for (const k of Object.keys(this.screens) as ScreenName[]) {
+      const s: MenuScreen | undefined = this.screens[k];
+      if (!s) continue;
       s.node = el(`div.screen.s-${k}`);
       s.node.style.display = 'none';
       this.wrap.appendChild(s.node);
@@ -179,43 +254,47 @@ export class Menus {
    * Show a screen, or `null` to close. Transitions are animated; calling this
    * with the current name is a no-op.
    */
-  setScreen(name: string | null) {
+  setScreen(name: ScreenName | null) {
     if (name === this.name && !this.pending) return;
     if (!name) { this.pending = null; this.name = null; this.stack.length = 0; return; }
-    const s = this.screens[name];
+    const s: MenuScreen | undefined = this.screens[name];
     if (!s) { console.warn(`[Menus] unknown screen: ${name}`); return; }
     if (this.name && this.a > 0.02) { this.pending = name; }
     else { this._activate(name); }
   }
 
   /** Push a screen, remembering where to return to on back. */
-  push(name: string) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
+  push(name: ScreenName) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
 
   /**
    * Go back one level: first to whatever modal the current screen is holding
    * (an equip picker, say), then up the stack, then out of the menu entirely.
    */
   back() {
-    const s = this.name ? this.screens[this.name] : null;
+    const s: MenuScreen | null = this.name ? this.screens[this.name] ?? null : null;
     if (s && s.back && s.back()) return;
     this.setScreen(this.stack.length ? this.stack.pop() ?? null : null);
   }
 
   /** Take the currently displayed screen off-screen. */
   _hideShown() {
-    const s = this.shown ? this.screens[this.shown] : null;
+    const s: MenuScreen | null = this.shown ? this.screens[this.shown] ?? null : null;
     if (!s) return;
     s.node.style.display = 'none';
     if (s.exit) s.exit();
     this.shown = null;
   }
 
-  _activate(name: string) {
+  _activate(name: ScreenName) {
     this._hideShown();
     this.name = name;
     this.shown = name;
     this.pending = null;
-    const s = this.screens[name];
+    // Unreachable in practice -- `setScreen` refuses an unknown name before it
+    // ever gets here -- but it is what makes the slot's absence a return
+    // rather than a throw.
+    const s: MenuScreen | undefined = this.screens[name];
+    if (!s) return;
     s.node.style.display = '';
     if (s.enter) s.enter(this.game);
     this.headT.textContent = s.title || name;
@@ -284,7 +363,8 @@ export class Menus {
 
     const e = easeOutQuint(this.a);
     // photo mode is a camera — it must not blur or dim the frame it is framing
-    const clean = (this.name ? this.screens[this.name] : null)?.scrim === false;
+    const cur: MenuScreen | null = this.name ? this.screens[this.name] ?? null : null;
+    const clean = cur?.scrim === false;
     this.scrim.style.opacity = (e * (clean ? 0.30 : 1)).toFixed(3);
     this.scrim.style.backdropFilter = clean ? 'none'
       : `blur(${(e * 26).toFixed(1)}px) saturate(${(1 - e * 0.42).toFixed(3)}) brightness(${(1 - e * 0.46).toFixed(3)})`;
@@ -299,7 +379,7 @@ export class Menus {
     this.foot.style.opacity = easeOut(clamp((this.a - 0.3) / 0.6, 0, 1)).toFixed(3);
     this.foot.style.transform = `translateY(${((1 - e) * 12).toFixed(2)}px)`;
 
-    const s = this.name ? this.screens[this.name] : null;
+    const s: MenuScreen | null = this.name ? this.screens[this.name] ?? null : null;
     if (s) s.update(dt, game, this.a);
   }
 
@@ -307,7 +387,7 @@ export class Menus {
    * Open a screen straight from a global hotkey: no stack, and pressing the
    * same key again closes it.
    */
-  toggleScreen(name: string) {
+  toggleScreen(name: ScreenName) {
     // Already here: go back the way we came, so H out of the controls card
     // returns you to the shop you were reading it from rather than the field.
     if (this.name === name) { this.back(); return; }
@@ -321,7 +401,7 @@ export class Menus {
     if (!inp) return;
     const down = (c: string) => inp.keyDown?.(c);
     const gp = (i: number) => inp.gamepad?.buttons?.[i]?.pressed;
-    const edge = (k: string, v: any) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
+    const edge = (k: string, v: boolean | undefined) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return !!v && !p; };
     // read every pad edge every frame, or a button held across a frame where it
     // was not consulted reads as a fresh press the next time it is
     const b = {
@@ -352,7 +432,7 @@ export class Menus {
     if (down('ArrowDown') || down('KeyS') || b.down) dy += 1;
     if (down('ArrowLeft') || down('KeyA') || b.left) dx -= 1;
     if (down('ArrowRight') || down('KeyD') || b.right) dx += 1;
-    const s = this.name ? this.screens[this.name] : null;
+    const s: MenuScreen | null = this.name ? this.screens[this.name] ?? null : null;
     if ((dx || dy) && s?.nav) s.nav(dx, dy);
     if ((down('Enter') || down('Space') || b.a) && s?.accept) s.accept();
   }

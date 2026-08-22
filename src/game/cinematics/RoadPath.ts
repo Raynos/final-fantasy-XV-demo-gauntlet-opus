@@ -1,4 +1,17 @@
 import * as THREE from 'three';
+import type { StageFrame } from './Scene.ts';
+import type { Terrain } from '../../world/Terrain.ts';
+
+/** One arc-length station of the resampled centreline. */
+export interface RoadSample {
+  x: number;
+  z: number;
+  /** Arc length along the road. */
+  s: number;
+  /** Unit tangent at this station. */
+  tx: number;
+  tz: number;
+}
 
 /**
  * A staging frame that follows the highway instead of a straight line.
@@ -16,24 +29,21 @@ import * as THREE from 'three';
  * It also remembers the lane offset of the anchor, so a car parked 1.6 m right
  * of the centreline stays 1.6 m right of the centreline for the whole push.
  */
-export class RoadPath {
+export class RoadPath implements StageFrame {
   _t!: THREE.Vector3;
   _v!: THREE.Vector3;
   fwd!: THREE.Vector3;
   i0!: number;
   lane!: number;
   origin!: THREE.Vector3;
-  pts!: any;
+  pts!: RoadSample[];
   right!: THREE.Vector3;
-  s0!: any;
+  /** Arc length of the anchor station. */
+  s0!: number;
   sign!: number;
-  terrain!: any;
+  terrain!: Terrain | null;
   up!: THREE.Vector3;
-  /**
-   * @param {object} opts
-   * 
-   */
-  constructor(samples: Array<{x:number,z:number,s:number,tx:number,tz:number}>, { origin, toward, terrain }: { origin?: THREE.Vector3, toward?: THREE.Vector3, terrain?: any } = {}) {
+  constructor(samples: RoadSample[], { origin, toward, terrain }: { origin?: THREE.Vector3, toward?: THREE.Vector3, terrain?: Terrain | null } = {}) {
     // arc-length order, de-duplicated
     this.pts = samples.slice().sort((a, b) => a.s - b.s);
     this.terrain = terrain || null;
@@ -122,7 +132,7 @@ export class RoadPath {
   }
 
   /** Same as {@link at}, but `u` is measured from the terrain at that point. */
-  ground(terrain: any, f: number, l = 0, u = 0) {
+  ground(terrain: Terrain | null | undefined, f: number, l = 0, u = 0): number[] {
     const p = this.at(f, l, 0);
     const t = terrain || this.terrain;
     const y = t && t.heightAt ? t.heightAt(p[0], p[2]) : this.origin.y;

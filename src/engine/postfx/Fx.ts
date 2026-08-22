@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { FS_VERT } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
+
+/** What `fsMaterial()` needs to build a fullscreen filter material. */
+export interface FsMaterialSpec {
+  uniforms: Record<string, THREE.IUniform>;
+  fragmentShader: string;
+  defines?: Record<string, unknown>;
+  blending?: THREE.Blending;
+}
 
 /**
  * Small utilities shared by every pass in the cinematic chain.
@@ -26,7 +35,7 @@ export function makeRT(w: number, h: number, opts = {}) {
 }
 
 /** ShaderMaterial configured for fullscreen filtering (never touches depth). */
-export function fsMaterial({ uniforms, fragmentShader, defines = {}, blending = THREE.NoBlending }: any) {
+export function fsMaterial({ uniforms, fragmentShader, defines = {}, blending = THREE.NoBlending }: FsMaterialSpec) {
   return new THREE.ShaderMaterial({
     defines,
     uniforms,
@@ -76,23 +85,23 @@ export function blit(renderer: THREE.WebGLRenderer, material: THREE.Material, ta
  * `beforeRender()`.
  */
 export class FilterPass extends Pass {
-  fx!: any;
-  material!: any;
+  /** The chain that owns this pass; passes reach back for shared buffers. */
+  fx!: PostFX;
+  /** Built by the subclass constructor, so it is null for one statement. */
+  material!: THREE.ShaderMaterial;
 
   /** Subclass hook, run after `tDiffuse` is bound and before the blit. */
   beforeRender?(renderer: THREE.WebGLRenderer, readBuffer: THREE.WebGLRenderTarget): void;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super();
     this.fx = fx;
     this.needsSwap = true;
-    /** @type {THREE.ShaderMaterial} */
-    this.material = null;
   }
 
   /** Shorthand so `pass.uniforms.x.value` works like a three ShaderPass. */
   get uniforms() { return this.material.uniforms; }
 
-  override render(renderer: THREE.WebGLRenderer, writeBuffer: any, readBuffer: any) {
+  override render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
     if (this.material.uniforms.tDiffuse) this.material.uniforms.tDiffuse.value = readBuffer.texture;
     if (this.beforeRender) this.beforeRender(renderer, readBuffer);
     blit(renderer, this.material, this.renderToScreen ? null : writeBuffer);

@@ -37,7 +37,23 @@ export const WORLD = {
  * The three great regions of Lucis the player can reach on foot and by car.
  * A region is a *narrative* grouping; the terrain is driven by zones.
  */
-export const REGIONS = [
+/**
+ * One of the three great regions. A region is a *narrative* grouping; the
+ * terrain is driven by zones.
+ */
+export interface Region {
+  id: string;
+  name: string;
+  /** The region's subtitle on the map screen. */
+  sub: string;
+  /** `[min, max]` level band the region is tuned for. */
+  levels: number[];
+  /** Map tint, CSS hex. */
+  tint: string;
+  blurb: string;
+}
+
+export const REGIONS: Region[] = [
   {
     id: 'leide',
     name: 'Leide',
@@ -87,7 +103,59 @@ export const REGIONS = [
  *   rocky     0..1 bare-rock bias
  *   style     0..1 broad table/cuesta (0) .. spiky fang (1)
  */
-export const ZONES = [
+/**
+ * The ten biome parameters, all consumed by `terrain/Field.ts`. `BIOME_KEYS`
+ * below is the same list as a value, and fixes the packing order.
+ */
+export interface Biome {
+  /** Baseline ground elevation, metres. */
+  base: number;
+  /** Amplitude of the rolling mid-scale fbm, metres. */
+  relief: number;
+  /** Amplitude of the ridged badland/mountain belt, metres. */
+  ridge: number;
+  /** Metres from the zone centre at which the ridge belt switches on. */
+  ridgeIn: number;
+  /** 0..1 how hard the land benches into mesa steps. */
+  terrace: number;
+  /** 0..1 high-frequency surface roughness. */
+  rough: number;
+  /** Domain-warp distance, metres — kills the procedural grid feel. */
+  warp: number;
+  /** 0..1 dryness -> humidity; drives material splat and vegetation. */
+  moist: number;
+  /** 0..1 bare-rock bias. */
+  rocky: number;
+  /** 0..1 broad table/cuesta (0) .. spiky fang (1). */
+  style: number;
+}
+
+/**
+ * One elliptical zone of influence. Not a polygon: every point gets a
+ * normalised weight per zone and the terrain blends by it.
+ */
+export interface Zone {
+  id: string;
+  name: string;
+  /** `Region.id` this zone belongs to. */
+  region: string;
+  /** `[min, max]` level band. */
+  levels: number[];
+  /** Centre of the ellipse, world metres. */
+  cx: number;
+  cz: number;
+  /** Semi-axes, world metres. */
+  rx: number;
+  rz: number;
+  /** Rotation of the ellipse, radians. */
+  rot: number;
+  /** Weight multiplier where zones overlap; the strongest one names the place. */
+  priority: number;
+  character: string;
+  biome: Biome;
+}
+
+export const ZONES: Zone[] = [
   // ---- LEIDE ----------------------------------------------------------
   {
     id: 'longwythe', name: 'Longwythe', region: 'leide', levels: [1, 8],
@@ -221,7 +289,23 @@ export const DEFAULT_BIOME = {
  * Point-of-interest types. `drive` means a car must be able to reach it, which
  * the drivability test enforces against the road graph.
  */
-export const POI_TYPES = {
+/** Every POI type there is. `PoiSpec.type` is one of these. */
+export type PoiTypeName =
+  | 'town' | 'outpost' | 'reststop' | 'parking' | 'haven' | 'dungeon'
+  | 'menace' | 'tomb' | 'imperial' | 'chocobo' | 'fishing' | 'landmark';
+
+/** How one POI type draws, and whether a car has to be able to reach it. */
+export interface PoiType {
+  label: string;
+  /** A car must be able to reach it; `roadcheck.mts` enforces this. */
+  drive: boolean;
+  /** `MapGlyphs` key. */
+  icon: string;
+  /** CSS hex. */
+  colour: string;
+}
+
+export const POI_TYPES: Record<PoiTypeName, PoiType> = {
   town: { label: 'Settlement', drive: true, icon: 'town', colour: '#e8cf98' },
   outpost: { label: 'Outpost', drive: true, icon: 'outpost', colour: '#e8cf98' },
   reststop: { label: 'Rest Stop', drive: true, icon: 'reststop', colour: '#d9c48c' },
@@ -255,7 +339,8 @@ export const POI_TYPES = {
 export interface PoiSpec {
   id: string;
   name: string;
-  type: string;
+  type: PoiTypeName;
+  /** `Zone.id` this place sits in. */
   zone: string;
   /** Discovery radius, metres. */
   r: number;
@@ -268,7 +353,10 @@ export interface PoiSpec {
   gate?: string | null;
   /** A fast-travel destination. */
   travel?: boolean;
-  [extra: string]: any;
+  /** Suggested party level for the encounters around it. */
+  lv?: number;
+  /** What the player actually does here. Design copy; the map screen shows it. */
+  does?: string;
 }
 
 /**
@@ -564,7 +652,6 @@ interface LandformBase {
   id: string;
   /** Why this landform exists, in design terms. Read by nothing; the point is the reader. */
   why: string;
-  [tuning: string]: any;
 }
 
 /** A landform placed as a disc: centre, radius, height. */
@@ -575,6 +662,19 @@ export interface DiscLandform extends LandformBase {
   r: number;
   /** Height above the surrounding ground; negative sinks a basin. */
   h: number;
+  /* ---- mesa / butte tuning, all read by `Field._mesa` ---------------- */
+  /** How many steps the wall benches down in. 1 when absent. */
+  benches?: number;
+  /** Fraction of the radius the near-vertical cliff occupies. */
+  cliff?: number;
+  /** How far the scree apron lays the foot back, as a fraction of `r`. */
+  apron?: number;
+  /** Structural dip of the cap, 0..1. */
+  tilt?: number;
+  /** Which way the cap dips, radians. */
+  dipDir?: number;
+  /** Volcano only: crater radius as a fraction of `r`. */
+  crater?: number;
 }
 
 /** A ring and a hole rather than a height: the Disc of Cauthess. */
@@ -587,6 +687,8 @@ export interface CraterLandform extends LandformBase {
   rim: number;
   /** Floor depth below the surrounding ground. */
   depth: number;
+  /** Radius of the meteor mass sitting in the middle, metres. */
+  core?: number;
 }
 
 /** A hogback: a line with a half-width. */
@@ -598,6 +700,10 @@ export interface FinLandform extends LandformBase {
   z1: number;
   halfW: number;
   h: number;
+  /** Length of the dip slope as a multiple of `halfW`. 3.2 when absent. */
+  dip?: number;
+  /** Put the scarp on the other flank. */
+  flip?: boolean;
 }
 
 /** A gorge: a polyline with a half-width and a depth. */
@@ -693,7 +799,7 @@ export const LANDFORMS: Landform[] = [
 // -------------------------------------------------------------------- class
 
 /** Fixed field order for the packed biome vector the terrain reads. */
-export const BIOME_KEYS = [
+export const BIOME_KEYS: ReadonlyArray<keyof Biome> = [
   'base', 'relief', 'ridge', 'ridgeIn', 'terrace', 'rough', 'warp', 'moist', 'rocky', 'style',
 ];
 const NB = BIOME_KEYS.length;
@@ -702,26 +808,34 @@ const NB = BIOME_KEYS.length;
  * Query surface over the map tables. One instance is enough — `worldMap` below
  * is the shared singleton every system reads.
  */
+/**
+ * Normalised zone influence at a point, keyed by `Zone.id`. `_default` carries
+ * whatever weight no zone claimed — the frontier.
+ */
+export type ZoneWeights = Record<string, number>;
+
 export class WorldMap {
-  discovered!: Set<any>;
+  /** Ids of every POI revealed so far. */
+  discovered!: Set<string>;
   _bBuf!: Float64Array;
-  _buckets!: Map<any, any>;
+  /** POIs bucketed by `"i,j"` grid cell, for `nearestPOI`. */
+  _buckets!: Map<string, Poi[]>;
   _cell!: number;
   _defB!: Float64Array;
   _nz!: number;
   _wBuf!: Float64Array;
   _zb!: Float64Array;
   _zc!: Float64Array;
-  byId!: Map<any, any>;
-  landforms!: any;
-  poiTypes!: any;
+  byId!: Map<string, Poi>;
+  landforms!: Landform[];
+  poiTypes!: Record<PoiTypeName, PoiType>;
   pois!: Poi[];
-  regionById!: Map<any, any>;
-  regions!: any;
+  regionById!: Map<string, Region>;
+  regions!: Region[];
   roadGraph!: RoadGraph;
-  world!: any;
-  zoneById!: Map<any, any>;
-  zones!: any;
+  world!: typeof WORLD;
+  zoneById!: Map<string, Zone>;
+  zones!: Zone[];
   constructor() {
     this.world = WORLD;
     this.regions = REGIONS;
@@ -743,13 +857,10 @@ export class WorldMap {
       }
     }
 
-    /** @type {Map<string, object>} */
     this.byId = new Map();
-    for (const p of POIS) this.byId.set(p.id, p);
-    /** @type {Map<string, object>} */
+    for (const p of this.pois) this.byId.set(p.id, p);
     this.zoneById = new Map();
     for (const z of ZONES) this.zoneById.set(z.id, z);
-    /** @type {Map<string, object>} */
     this.regionById = new Map();
     for (const r of REGIONS) this.regionById.set(r.id, r);
 
@@ -827,7 +938,7 @@ export class WorldMap {
     return rest * inv;
   }
 
-  zoneWeights(x: number, z: number, out: any = {}) {
+  zoneWeights(x: number, z: number, out: ZoneWeights = {}): ZoneWeights {
     for (const k in out) delete out[k as keyof typeof out];
     const rest = this._weigh(x, z);
     const w = this._wBuf;
@@ -857,8 +968,8 @@ export class WorldMap {
    * The zone whose influence is strongest here.
    * @returns the zone record, or null on the frontier
    */
-  zoneAt(x: number, z: number): any | null {
-    let best: any = null, bestW = 0.0001;
+  zoneAt(x: number, z: number): Zone | null {
+    let best: Zone | null = null, bestW = 0.0001;
     for (let i = 0; i < ZONES.length; i++) {
       const zn = ZONES[i];
       const dx = x - zn.cx, dz = z - zn.cz;
@@ -885,29 +996,30 @@ export class WorldMap {
    * @param [out] reused object
    * @returns same shape as `ZONES[i].biome`
    */
-  biomeAt(x: number, z: number, out: any = {}): any {
+  biomeAt(x: number, z: number, out: Partial<Biome> = {}): Biome {
     const v = this.biomeVec(x, z);
     for (let k = 0; k < NB; k++) out[BIOME_KEYS[k]] = v[k];
-    return out;
+    // every key is written above, so the partial is complete by construction
+    return out as Biome;
   }
 
   // ------------------------------------------------------------------- POIs
 
-  poiById(id: any): any | undefined { return this.byId.get(id); }
+  poiById(id: string): Poi | undefined { return this.byId.get(id); }
 
-  /** Every POI of a given type. @returns */
-  poisOfType(type: any): any[] { return POIS.filter((p) => p.type === type); }
+  /** Every POI of a given type. */
+  poisOfType(type: PoiTypeName): Poi[] { return this.pois.filter((p) => p.type === type); }
 
-  /** Every POI inside a zone. @returns */
-  poisInZone(zoneId: any): any[] { return POIS.filter((p) => p.zone === zoneId); }
+  /** Every POI inside a zone. */
+  poisInZone(zoneId: string): Poi[] { return this.pois.filter((p) => p.zone === zoneId); }
 
   /**
    * Nearest POI to a world position.
    * @param x @param z
    */
-  nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi:any, dist:number, id?: any } | null {
+  nearestPOI(x: number, z: number, opt: {types?:string[], maxDist?:number, discoveredOnly?:boolean} = {}): {poi: Poi, dist: number} | null {
     const { types = null, maxDist = Infinity, discoveredOnly = false } = opt;
-    let best: any = null, bestD = maxDist;
+    let best: Poi | null = null, bestD = maxDist;
     const ci = Math.floor(x / this._cell), cj = Math.floor(z / this._cell);
     const ring = Math.min(9, Math.ceil(maxDist === Infinity ? 9 : maxDist / this._cell) + 1);
     for (let r = 0; r <= ring; r++) {
@@ -939,18 +1051,18 @@ export class WorldMap {
     return true;
   }
 
-  isDiscovered(id: any): boolean { return this.discovered.has(id); }
+  isDiscovered(id: string): boolean { return this.discovered.has(id); }
 
   /**
    * Reveal everything whose discovery radius contains this point. Call it once
    * per second or so from whatever tracks the player.
    * @returns POIs newly discovered this call
    */
-  discoverAround(x: number, z: number): any[] {
-    const found = [];
-    for (const p of POIS) {
+  discoverAround(x: number, z: number): Poi[] {
+    const found: Poi[] = [];
+    for (const p of this.pois) {
       if (this.discovered.has(p.id)) continue;
-      if (Math.hypot(p.x! - x, p.z! - z) <= p.r) {
+      if (Math.hypot(p.x - x, p.z - z) <= p.r) {
         this.discovered.add(p.id);
         found.push(p);
       }

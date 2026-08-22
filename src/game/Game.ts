@@ -30,6 +30,7 @@ import { StorySystem } from './story/StorySystem.ts';
 import { Dungeons } from '../world/dungeons/Dungeons.ts';
 import { SHOTS } from './Shots.ts';
 import type { System } from '../engine/System.ts';
+import type { HudCache } from '../ui/GameData.ts';
 
 /**
  * Every key the registry answers to, and what comes back for each.
@@ -113,7 +114,7 @@ const SYSTEM_ALIASES = {
  */
 export class Game {
   state!: string;
-  _hudCache!: any;
+  _hudCache: HudCache | null = null;
   _raf!: number;
   _registry!: Map<string, System>;
   _running!: boolean;
@@ -339,11 +340,17 @@ export class Game {
    *
    */
   followAnchor(who: string): THREE.Vector3 {
+    // `Player` is registered in the boot order, so by the time any shot is
+    // applied it is there -- but the assertion this used to carry was not
+    // true during a dev-server hot reload, and it surfaced as
+    // `Cannot read properties of undefined (reading 'position')` thrown out of
+    // `applyShot` with nothing naming the cause. Say what went wrong instead.
     const player = this.get('Player');
-    if (!who || who === 'player') return player!.position;
+    if (!player) throw new Error(`followAnchor('${who}'): no Player is registered yet`);
+    if (!who || who === 'player') return player.position;
     const party = this.get('Party');
     const m = party && party.get && party.get(who);
-    return (m && m.root && m.root.position) || player!.position;
+    return (m && m.root && m.root.position) || player.position;
   }
 
   /** Advance the simulation by `frames` fixed steps without presenting. */

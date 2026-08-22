@@ -15,6 +15,304 @@
 
 import { NODES, EDGES, CONSTELLATION_INFO } from '../game/rpg/Ascension.ts';
 import type { Game } from '../game/Game.ts';
+import type { QuestLog, Quest, QuestView, ObjectiveView } from '../game/rpg/Quests.ts';
+import type { ItemDef } from '../game/rpg/Inventory.ts';
+import type { StatMods, computeDamage } from '../game/rpg/Stats.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
+import type { RpgSystem } from '../game/rpg/RpgSystem.ts';
+
+/* ------------------------------------------------------------------------ */
+/* The HUD contract                                                          */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * One quest hydrated with its live state, and one objective row inside it.
+ *
+ * Re-exported from the quest log rather than restated: `src/ui` is not allowed
+ * to import `src/game/rpg/**` anywhere but here, and a second declaration of
+ * the same shape is a second thing to keep in step.
+ */
+export type { QuestView, ObjectiveView as QuestObjectiveView } from '../game/rpg/Quests.ts';
+
+/** One waypoint marker, as `QuestLog.waypoints()` publishes it. */
+export type QuestWaypoint = ReturnType<QuestLog['waypoints']>[number];
+
+/**
+ * The tracked-quest line the compass strip, the hint bar and the pause menu
+ * all print. The optional fields are the ones the offline `QUEST` fallback
+ * table cannot know.
+ */
+export interface QuestLine {
+  id?: string;
+  title: string;
+  /** The current objective's label, or the quest summary when all are done. */
+  step: string;
+  /** Metres to the waypoint; 0 when there is no waypoint or no player. */
+  dist: number;
+  progress?: number;
+  count?: number;
+  region: string;
+  type: Quest['type'];
+  waypoint: number[] | null;
+  /** False when this came from the fallback table rather than the quest log. */
+  live?: boolean;
+}
+
+/** One active meal/spell buff, flattened for the HUD. */
+export interface HudBuff {
+  name: string;
+  /** Human-readable effect lines — `statusIcons` pattern-matches these. */
+  effects: string[];
+  hoursLeft: number;
+}
+
+/** One roster member's live vitals. Cosmetics (hue, role) are not in here. */
+export interface HudMember {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  ko: boolean;
+  level: number;
+  bond: { level: number, name: string };
+}
+
+/**
+ * Everything a HUD widget may read for one frame — the whole of what
+ * `RpgSystem.hudState()` publishes, and the only shape `src/ui` sees of it.
+ *
+ * This is the UI's contract, not a restatement of the model: a field appears
+ * here because something in `src/ui` reads it. `RpgSystem.hudState()` must
+ * remain assignable to it, so a rename on either side is a compile error.
+ */
+export interface HudState {
+  level: number;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  /** 0..1 through the current level. */
+  expProgress: number;
+  /** Unredeemed EXP, banked until the party sleeps. */
+  banked: number;
+  gil: number;
+  ap: number;
+  techBars: number;
+  maxTechBars: number;
+  /** "07:42" — already formatted. */
+  clock: string;
+  day: number;
+  /** The *name* of the day phase ("Dawn"), not its id. */
+  phase: string;
+  isNight: boolean;
+  /** 0..1, how deep into the night it is. */
+  nightDepth: number;
+  buffs: HudBuff[];
+  /** The tracked quest, or null when nothing is tracked. */
+  tracked: QuestView | null;
+  waypoints: QuestWaypoint[];
+  /** Equipped elemancy, one entry per quick slot; null for an empty slot. */
+  spells: unknown[];
+  party: HudMember[];
+}
+
+/** `hudState()`'s per-frame memo. Lives on `Game` so `resetClock` can drop it. */
+export interface HudCache {
+  frame: number;
+  state: HudState;
+}
+
+/**
+ * One roster member as the party widgets draw them: live vitals plus the
+ * cosmetic overlay (`hue`, `role`, short name) the model has no opinion on.
+ *
+ * The optional fields are exactly the ones the offline `PARTY` fallback table
+ * omits — a partial world has no bond, no KO state and no MP for the three
+ * companions. Widgets already default them, so they stay optional rather than
+ * being invented here.
+ */
+export interface PartyView {
+  id: string;
+  /** Short name, as the HUD prints it. */
+  name: string;
+  /** Full roster name; live path only. */
+  fullName?: string;
+  role: string;
+  hue: number;
+  level: number;
+  hp: number;
+  maxHp: number;
+  mp?: number;
+  maxMp?: number;
+  ko?: boolean;
+  bond?: HudMember['bond'];
+  /** Icon keys for `Icons.ts`, at most three. */
+  status: string[];
+}
+
+/** One armiger slot on the weapon wheel's diamond. */
+export interface WeaponView {
+  /** Wheel direction. */
+  slot: string;
+  /** Icon key. */
+  key: string;
+  name: string;
+  /** Class label ("Greatsword"), or "No armament" for an empty slot. */
+  kind: string;
+  atk: number;
+  element: string | null;
+  /** Inventory id; null for an empty slot, absent in the fallback table. */
+  id?: string | null;
+}
+
+/** One item stack, in the shape the inventory screen draws. */
+export interface ItemView {
+  id: string;
+  name: string;
+  qty: number;
+  /** Icon key. */
+  icon: string;
+  /** Category tag line printed above the name. */
+  tag: string;
+  /** "Restore 1,000 HP". */
+  effect: string;
+  /** "One ally" / "All allies" / "—". */
+  target: string;
+  /** Usable outside battle. */
+  field: boolean;
+  desc: string;
+}
+
+/** One equipment slot on a gear card. */
+export interface GearSlotView {
+  /** "Weapon" or "Accessory". */
+  slot: string;
+  name: string;
+  /** The stat line under the name. */
+  stat: string;
+  empty?: boolean;
+  id?: string | null;
+}
+
+/** One companion technique on the combat HUD's rack. */
+export interface TechniqueView {
+  name: string;
+  owner: string;
+  /** Tech bars it costs. */
+  cost: number;
+  /** Icon key. */
+  icon: string;
+  /** 0..1 charge toward being affordable. */
+  ready: number;
+}
+
+/** What the damage formula hands back for one resolved hit. */
+export type DamageRoll = ReturnType<typeof computeDamage>;
+
+/** Everything `CombatBridge.roll` accepts about how a hit was landed. */
+export interface RollOpts {
+  /** Motion value of the swing; 1.0 is a neutral light attack. */
+  motion?: number;
+  /** Set for a spell; leaves `weaponClass` unused. */
+  element?: string;
+  weaponClass?: string;
+  isWarpStrike?: boolean;
+  isBackAttack?: boolean;
+  staggerMult?: number;
+  /** Folded into the seeded RNG so a replayed frame rolls the same number. */
+  seed?: number;
+}
+
+/**
+ * What one Ascension node does. The four arms are the payload shapes
+ * `Ascension.activeEffects()` sums, documented at the top of `Ascension.ts`.
+ */
+export type AscensionEffect =
+  | { stat: string, value: number }
+  | { mult: string, value: number }
+  | { flag: string }
+  | { value: string, amount: number };
+
+/** One node of the Ascension grid, with its layout resolved. */
+export interface AscensionNode {
+  id: string;
+  name: string;
+  /** AP it costs to unlock. */
+  ap: number;
+  /** Offset from the constellation origin, roughly -1..1. */
+  at: number[];
+  /** Prerequisite node ids. */
+  req: string[];
+  desc: string;
+  effect: AscensionEffect;
+  /** Owning constellation id, and its display name and colour. */
+  constellation: string;
+  constellationName: string;
+  color: string;
+  /** Absolute star-map position, `[x, y]`. */
+  pos: number[];
+}
+
+/** One prerequisite line between two nodes. */
+export interface AscensionEdge {
+  from: string;
+  to: string;
+  constellation: string;
+}
+
+/** One constellation, without its node payloads. */
+export interface ConstellationInfo {
+  id: string;
+  name: string;
+  color: string;
+  /** Centre in star-map space, `[x, y]`. */
+  origin: number[];
+  desc: string;
+  nodeIds: string[];
+  totalAp: number;
+}
+
+/** Why a node can or cannot be bought right now. */
+export interface UnlockCheck {
+  ok: boolean;
+  /** `ok` | `unknown` | `already-unlocked` | `locked` | `not-enough-ap`. */
+  reason: string;
+  /** Prerequisite ids still missing. */
+  missing: string[];
+  /** The node's AP cost. */
+  ap: number;
+}
+
+/**
+ * The star map plus whatever live state there is to overlay on it. The tables
+ * are pure data, so the grid draws with no `RpgSystem`; only the wallet and
+ * the unlocked set need one, which is why the three verbs are closures.
+ */
+export interface AscensionView {
+  nodes: Record<string, AscensionNode>;
+  edges: AscensionEdge[];
+  constellations: ConstellationInfo[];
+  /** AP on hand; 0 with no RPG system. */
+  ap: number;
+  /** AP to clear the whole grid. */
+  total: number;
+  unlockedCount: number;
+  isUnlocked(id: string): boolean;
+  canUnlock(id: string): UnlockCheck;
+  unlock(id: string): boolean;
+}
+
+/** One marker the world map and the compass strip both draw. */
+export interface MarkerView {
+  kind: string;
+  name: string;
+  x: number;
+  z: number;
+  tracked?: boolean;
+  questId?: string;
+}
 
 /* ------------------------------------------------------------------------ */
 /* Presentation metadata — colour and role, which the model has no opinion on */
@@ -202,13 +500,13 @@ export function rpg(game: Game) {
  * every call, and half a dozen widgets want it in the same frame. The cache is
  * keyed on the frame counter and cleared by `Game.resetClock()`.
  */
-export function hudState(game: Game): any | null {
+export function hudState(game: Game): HudState | null {
   const r = rpg(game);
   if (!r) return null;
   const frame = game.time ? game.time.frame : -1;
   const c = game._hudCache;
   if (c && c.frame === frame) return c.state;
-  const state = r.hudState();
+  const state: HudState = r.hudState();
   game._hudCache = { frame, state };
   return state;
 }
@@ -217,10 +515,10 @@ export function hudState(game: Game): any | null {
  * The four-member roster the HUD, the pause menu and the gear screen all draw.
  * Live values come from `hudState().party`; hue/role are cosmetic overlays.
  */
-export function readParty(game: Game): Array<any> {
+export function readParty(game: Game): PartyView[] {
   const hs = hudState(game);
   if (!hs || !hs.party || !hs.party.length) return PARTY.map((p) => ({ ...p }));
-  return hs.party.map((m: any, i: any) => {
+  return hs.party.map((m) => {
     const ui = MEMBER_UI[m.id as keyof typeof MEMBER_UI] || MEMBER_UI.noctis;
     return {
       id: m.id,
@@ -242,8 +540,8 @@ export function readParty(game: Game): Array<any> {
  * Status icons for one member. Real state only: a KO badge, a critical-HP
  * warning, and one icon per active meal/spell buff mapped onto the icon set.
  */
-function statusIcons(hs: any, m: any) {
-  const out = [];
+function statusIcons(hs: HudState, m: HudMember): string[] {
+  const out: string[] = [];
   if (m.ko) out.push('poison');
   for (const b of hs.buffs || []) {
     const e = (b.effects || []).join(' ');
@@ -260,7 +558,7 @@ function statusIcons(hs: any, m: any) {
  * Noctis' phantom arsenal, laid out on the weapon wheel's diamond.
  * Reads the four real equipment slots from `Inventory`.
  */
-export function readWeapons(game: Game) {
+export function readWeapons(game: Game): WeaponView[] {
   const r = rpg(game);
   const slots = ['up', 'right', 'down', 'left'];
   if (!r) return WEAPONS.map((w) => ({ ...w }));
@@ -268,7 +566,7 @@ export function readWeapons(game: Game) {
   return slots.map((slot, i) => {
     const def = rack[i];
     if (!def) return { slot, key: 'sword', name: 'Empty', kind: 'No armament', atk: 0, element: null, id: null };
-    const el = (def.tags || []).find((t: any) => t.startsWith('element:'));
+    const el = (def.tags || []).find((t) => t.startsWith('element:'));
     return {
       slot, id: def.id,
       key: CLASS_ICON[def.class as keyof typeof CLASS_ICON] || 'sword',
@@ -284,7 +582,7 @@ export function readWeapons(game: Game) {
  * The bag, in the shape the item screen draws.
  * @param [tab] index into `ITEM_TABS`; omit for everything
  */
-export function readItems(game: Game, tab: number = -1): Array<any> {
+export function readItems(game: Game, tab: number = -1): ItemView[] {
   const r = rpg(game);
   if (!r) {
     if (tab < 0) return ITEMS.map((i) => ({ ...i }));
@@ -296,12 +594,12 @@ export function readItems(game: Game, tab: number = -1): Array<any> {
   }
   const cats = tab < 0 ? null : (ITEM_TABS[tab]?.cats || null);
   return r.inventory.list()
-    .filter((e: any) => !cats || cats.includes(e.def.category))
-    .map((e: any) => itemView(e.def, e.count, r));
+    .filter((e) => !cats || cats.includes(e.def.category))
+    .map((e) => itemView(e.def, e.count, r));
 }
 
 /** One item stack, hydrated for the detail column. */
-function itemView(def: any, count: any, r: any) {
+function itemView(def: ItemDef, count: number, r: RpgSystem): ItemView {
   const use = def.use || null;
   let effect = '—';
   if (use) {
@@ -329,7 +627,7 @@ function itemView(def: any, count: any, r: any) {
 }
 
 /** Pick the icon that says the most about what an item actually does. */
-function itemIcon(def: any) {
+function itemIcon(def: ItemDef): string {
   const u = def.use;
   if (u) {
     if (u.type === 'revive') return 'regen';
@@ -350,13 +648,14 @@ function itemIcon(def: any) {
 }
 
 /** "STR +40  ·  HP +300" from a modifier bucket. */
-function modLine(mods: any) {
+function modLine(mods: Partial<StatMods> | undefined): string {
   if (!mods) return '';
   const K = { hp: 'HP', mp: 'MP', strength: 'STR', vitality: 'VIT', magic: 'MAG', spirit: 'SPR', attack: 'ATK', defense: 'DEF', magicAttack: 'M.ATK', magicDefense: 'M.DEF' };
-  const bits = [];
+  const bits: string[] = [];
   for (const k of Object.keys(K)) if (mods[k]) bits.push(`${K[k as keyof typeof K]} ${mods[k] > 0 ? '+' : ''}${mods[k]}`);
   if (mods.critRate) bits.push(`Crit +${Math.round(mods.critRate * 100)}%`);
-  for (const e of Object.keys(mods.resist || {})) if (mods.resist[e]) bits.push(`${e} res +${mods.resist[e]}%`);
+  const resist = mods.resist || {};
+  for (const e of Object.keys(resist)) if (resist[e]) bits.push(`${e} res +${resist[e]}%`);
   return bits.slice(0, 3).join('  ·  ');
 }
 
@@ -364,17 +663,17 @@ function modLine(mods: any) {
  * One member's equipment slots, in the order the gear card lays them out.
  * @param id roster id
  */
-export function readGear(game: Game, id: string) {
+export function readGear(game: Game, id: string): GearSlotView[] {
   const r = rpg(game);
-  if (!r) return (GEAR[id as keyof typeof GEAR] || GEAR.noctis).map((g: any) => ({ ...g }));
+  if (!r) return (GEAR[id as keyof typeof GEAR] || GEAR.noctis).map((g) => ({ ...g }));
   const eq = r.inventory.equipped(id);
-  const out: any[] = [];
-  eq.weapon.forEach((def: any) => out.push(slotView('Weapon', def)));
-  eq.accessory.forEach((def: any) => out.push(slotView('Accessory', def)));
+  const out: GearSlotView[] = [];
+  eq.weapon.forEach((def) => out.push(slotView('Weapon', def)));
+  eq.accessory.forEach((def) => out.push(slotView('Accessory', def)));
   return out;
 }
 
-function slotView(slot: string, def: any) {
+function slotView(slot: string, def: ItemDef | null): GearSlotView {
   if (!def) return { slot, name: '— Empty —', stat: '', empty: true, id: null };
   return {
     slot, id: def.id, name: def.name,
@@ -386,12 +685,13 @@ function slotView(slot: string, def: any) {
  * The tracked quest, its current objective and the real distance to its
  * waypoint. Everything the compass strip and the pause menu print.
  */
-export function readQuest(game: Game): {title:string, step:string, dist:number, region:string, type:string, waypoint:number[]|null, live?: boolean, id?: any, progress?: any, count?: any } {
+export function readQuest(game: Game): QuestLine {
   const hs = hudState(game);
-  const t = hs && hs.tracked;
-  if (!t) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };
-  const obj = (t.objectives || []).find((o: any) => !o.done) || t.objectives?.[t.objectives.length - 1];
-  const wp = (hs.waypoints || []).find((w: any) => w.questId === t.id) || null;
+  if (!hs || !hs.tracked) return { ...QUEST, region: 'Leide', type: 'side', waypoint: null, live: false };
+  const t = hs.tracked;
+  const objectives: ObjectiveView[] = t.objectives || [];
+  const obj = objectives.find((o) => !o.done) || objectives[objectives.length - 1];
+  const wp = (hs.waypoints || []).find((w) => w.questId === t.id) || null;
   const p = game?.get?.('Player')?.position;
   let dist = 0;
   if (wp && p) dist = Math.round(Math.hypot(p.x - wp.pos[0], p.z - wp.pos[2]));
@@ -413,11 +713,11 @@ export function readQuest(game: Game): {title:string, step:string, dist:number, 
  * Every marker the world map and the compass strip should show: active quest
  * waypoints plus discovered havens.
  */
-export function readMarkers(game: Game): Array<{kind: string, name: string, x: number, z: number, tracked?: boolean, questId?: string}> | null {
+export function readMarkers(game: Game): MarkerView[] | null {
   const r = rpg(game);
   const hs = hudState(game);
   if (!r || !hs) return null;
-  const out: Array<{kind: string, name: string, x: number, z: number, tracked?: boolean, questId?: string}> = [];
+  const out: MarkerView[] = [];
   for (const w of hs.waypoints || []) {
     // `questId` rides along so a map pin can be *selected* and made the tracked
     // objective, rather than being a decoration you can move a cursor over.
@@ -440,11 +740,11 @@ export function readMarkers(game: Game): Array<{kind: string, name: string, x: n
  * Party techniques for the combat HUD's tech rack — one signature technique
  * per companion, with real bar costs and the real charge state.
  */
-export function readTechniques(game: Game) {
+export function readTechniques(game: Game): TechniqueView[] {
   const r = rpg(game);
   if (!r) return TECHNIQUES.map((t) => ({ ...t }));
   const charge = r.party.techCharge;
-  const out = [];
+  const out: TechniqueView[] = [];
   for (const id of ['gladio', 'ignis', 'prompto']) {
     const t = r.party.signatureTechnique(id);
     if (!t) continue;
@@ -466,7 +766,7 @@ export function readTechniques(game: Game) {
  * The layout tables are pure data, so the star map draws correctly even without
  * a running `RpgSystem`; only the AP wallet and the unlocked set need one.
  */
-export function readAscension(game: Game) {
+export function readAscension(game: Game): AscensionView {
   const r = rpg(game);
   const asc = r ? r.ascension : null;
   return {
@@ -476,9 +776,9 @@ export function readAscension(game: Game) {
     ap: asc ? asc.ap : 0,
     total: asc ? asc.totalApRequired : Object.values(NODES).reduce((a, n) => a + n.ap, 0),
     unlockedCount: asc ? asc.unlocked.size : 0,
-    isUnlocked: (id: any) => !!asc && asc.isUnlocked(id),
-    canUnlock: (id: any) => (asc ? asc.canUnlock(id) : { ok: false, reason: 'locked', missing: [], ap: 0 }),
-    unlock: (id: any) => (r ? r.unlockNode(id) : false),
+    isUnlocked: (id: string) => !!asc && asc.isUnlocked(id),
+    canUnlock: (id: string) => (asc ? asc.canUnlock(id) : { ok: false, reason: 'locked', missing: [] as string[], ap: 0 }),
+    unlock: (id: string) => (r ? r.unlockNode(id) : false),
   };
 }
 
@@ -495,7 +795,7 @@ export function readArmiger(game: Game) {
  * Returns null when there is no RPG system to ask.
  * @param [opts] see `CombatBridge.roll`
  */
-export function rollDamage(game: Game, enemy: any, opts?: any) {
+export function rollDamage(game: Game, enemy: Enemy | null, opts?: RollOpts): DamageRoll | null {
   const r = rpg(game);
   if (!r || !r.combatBridge || !enemy) return null;
   return r.combatBridge.roll(enemy, opts);

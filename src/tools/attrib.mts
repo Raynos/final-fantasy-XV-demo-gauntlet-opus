@@ -13,7 +13,7 @@ const PORT = Number(process.env.PORT || 5299);
 const SHOT = process.argv[2] || 'vista_dusk';
 const N = Number(process.argv[3] || 40);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -44,13 +44,13 @@ const out = await page.evaluate(async ([shot, n]: [string, number]) => {
   g.resetClock(); g.applyShot(shot); g.settle(40); g.applyShot(shot); g.settle(8);
   const base = measure();
 
-  const results: any[] = [];
+  const results: Array<{ label: string, ms: number }> = [];
   /**
    * A/B/A: re-baseline immediately before each toggle. Measuring `base` once
    * up front makes every delta look enormous, because that first sample also
    * carries one-time costs (shader compiles, clipmap rebuild, probe bake).
    */
-  const test = (label: any, off: any, on: any) => {
+  const test = (label: string, off: () => void, on: () => void) => {
     const before = measure();
     off();
     const t = measure();
@@ -94,11 +94,11 @@ const out = await page.evaluate(async ([shot, n]: [string, number]) => {
   ]) {
     const s = g.get(sys);
     if (!s) continue;
-    let roots: any[] = [];
+    let roots: Array<{ visible: boolean, name?: string }> = [];
     if (sys === 'Vegetation') roots = [s.grass?.group, s.bushes?.group, s.trees?.group].filter(Boolean);
     else if (sys === 'Terrain') roots = [s.clipmap?.group].filter(Boolean);
-    else if (sys === 'Props') roots = g.scene.children.filter((c: any) => /rock|landmark|prop|regalia|road|outpost|mega|wild|debris/i.test(c.name || ''));
-    else if (sys === 'Party') roots = [g.get('Player')?.root, ...(s.members || []).map((m: any) => m.root)].filter(Boolean);
+    else if (sys === 'Props') roots = g.scene.children.filter((c: { name?: string }) => /rock|landmark|prop|regalia|road|outpost|mega|wild|debris/i.test(c.name || ''));
+    else if (sys === 'Party') roots = [g.get('Player')?.root, ...(s.members || []).map((m: { root: unknown }) => m.root)].filter(Boolean);
     if (!roots.length) continue;
     test(label, () => roots.forEach((r) => { r.visible = false; }),
       () => roots.forEach((r) => { r.visible = true; }));

@@ -1,4 +1,8 @@
 import { Shot } from './CameraMove.ts';
+import type { Cue, LiveCue, SceneCtx, SceneDef, ShotDef } from './Scene.ts';
+
+/** What the timeline needs off a scene: its length, its set-ups and its cues. */
+export type TimelineDef = Pick<SceneDef, 'duration' | 'cues'> & { shots: ShotDef[] };
 
 /**
  * A cutscene timeline: an ordered list of camera set-ups plus a list of cues
@@ -22,26 +26,27 @@ import { Shot } from './CameraMove.ts';
  * ```
  */
 export class Timeline {
-  ctx!: any;
-  cues!: any;
-  def!: any;
+  ctx!: SceneCtx;
+  cues!: LiveCue[];
+  def!: TimelineDef;
   done!: boolean;
-  duration!: any;
+  /** Scene length in seconds; derived from the last shot and cue when unset. */
+  duration!: number;
   shotIndex!: number;
-  shots!: any;
+  shots!: Shot[];
   t!: number;
   /**
    * @param def scene definition (see `story/scenes/*`)
    * @param ctx staging context handed to every cue
    */
-  constructor(def: any, ctx: any) {
+  constructor(def: TimelineDef, ctx: SceneCtx) {
     this.def = def;
     this.ctx = ctx;
     this.t = 0;
     this.duration = def.duration ?? 0;
-    this.shots = (def.shots || []).map((s: any, i: number) => new Shot({ seed: 7717 + i * 977, ...s }));
-    this.cues = (def.cues || []).slice().sort((a: any, b: any) => a.t - b.t)
-      .map((c: any) => ({ ...c, fired: false }));
+    this.shots = (def.shots || []).map((s, i) => new Shot({ seed: 7717 + i * 977, ...s }));
+    this.cues = (def.cues || []).slice().sort((a, b) => a.t - b.t)
+      .map((c) => ({ ...c, fired: false }));
     if (!this.duration) {
       const lastShot = this.shots.length ? this.shots[this.shots.length - 1].t1 : 0;
       const lastCue = this.cues.length ? this.cues[this.cues.length - 1].t : 0;
@@ -63,7 +68,7 @@ export class Timeline {
    * @param run cue executor
    * @returns true if the camera cut this frame
    */
-  step(dt: number, run: (cue:any) => void): boolean {
+  step(dt: number, run: (cue: Cue) => void): boolean {
     this.t += dt;
     for (const c of this.cues) {
       if (c.fired || c.t > this.t) continue;
@@ -83,7 +88,7 @@ export class Timeline {
    * still run; cues that are purely presentational (`presentational: true`) are
    * dropped so a skip does not spray six subtitles at once.
    */
-  fastForward(run: (cue:any) => void) {
+  fastForward(run: (cue: Cue) => void) {
     this.t = this.duration;
     for (const c of this.cues) {
       if (c.fired) continue;

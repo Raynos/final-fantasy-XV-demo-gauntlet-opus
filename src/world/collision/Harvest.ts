@@ -119,26 +119,44 @@ export function collectRockProxies(_game: Game, _minSize: number = 0.55): {cx:nu
 }
 
 /**
+ * A yaw-rotated box standing in for a whole object: centre, half-extents and
+ * (for a boulder proxy) the yaw it is turned by.
+ */
+export interface BoxProxy {
+  /** The object this stands for, when it came from one. */
+  obj?: THREE.Object3D;
+  cx: number;
+  cy: number;
+  cz: number;
+  hx: number;
+  hy: number;
+  hz: number;
+  /** Rotation about +Y, radians. Absent means axis-aligned. */
+  yaw?: number;
+}
+
+/**
  * An oriented box proxy for a whole object, from its world transform and the
  * union of its geometry bounds. Used for the two Regalias.
  */
-export function objectBox(obj: any, shrink = 0.92): {obj:THREE.Object3D, cx:number,cy:number,cz:number,hx:number,hy:number,hz:number} | null {
+export function objectBox(obj: THREE.Object3D | null | undefined, shrink = 0.92): BoxProxy | null {
   if (!obj) return null;
   obj.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
   const local = new THREE.Matrix4();
   _box.makeEmpty();
-  let any = false;
-  obj.traverse((o: any) => {
-    if (!o.isMesh || !o.geometry) return;
+  let found = false;
+  obj.traverse((o) => {
+    if (!isMesh(o) || !o.geometry) return;
     if (SKIP_MESH.test(o.name || '')) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-    const bb = o.geometry.boundingBox.clone();
+    // `computeBoundingBox` always leaves one behind, empty at worst
+    const bb = (o.geometry.boundingBox ?? new THREE.Box3()).clone();
     bb.applyMatrix4(local.multiplyMatrices(inv, o.matrixWorld));
     _box.union(bb);
-    any = true;
+    found = true;
   });
-  if (!any) return null;
+  if (!found) return null;
   return {
     obj,
     cx: (_box.min.x + _box.max.x) * 0.5,
@@ -156,7 +174,7 @@ export function objectBox(obj: any, shrink = 0.92): {obj:THREE.Object3D, cx:numb
  * @param b proxy record
  * @param sink flat destination array, 9 numbers per triangle
  */
-export function boxTriangles(b: any, sink: number[]) {
+export function boxTriangles(b: BoxProxy, sink: number[]) {
   const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
   const px = (x: number, z: number) => b.cx + x * c + z * s;
   const pz = (x: number, z: number) => b.cz - x * s + z * c;

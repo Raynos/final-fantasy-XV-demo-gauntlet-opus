@@ -16,9 +16,9 @@
 import { Field } from '../world/terrain/Field.ts';
 import { worldMap, WORLD, POI_TYPES } from '../world/map/WorldMap.ts';
 
-const pad = (s: any, n: any) => String(s).padEnd(n);
+const pad = (s: string | number, n: number) => String(s).padEnd(n);
 let fails = 0, warns = 0;
-const fail = (m: any) => { console.log(`  FAIL  ${m}`); fails++; };
+const fail = (m: string) => { console.log(`  FAIL  ${m}`); fails++; };
 
 console.log('building the field...');
 const t0 = Date.now();
@@ -41,7 +41,7 @@ for (const p of worldMap.pois) {
     unreachable++;
   }
 }
-console.log(`  ${worldMap.pois.filter((p: any) => POI_TYPES[p.type as keyof typeof POI_TYPES].drive).length} drivable POIs, ${unreachable} unreachable`);
+console.log(`  ${worldMap.pois.filter((p) => POI_TYPES[p.type as keyof typeof POI_TYPES].drive).length} drivable POIs, ${unreachable} unreachable`);
 
 // ---------------------------------------------------------------- 2. grades
 console.log('\n2. grades');
@@ -85,9 +85,10 @@ console.log(`  tightest sustained corner ${tightest.r === Infinity ? 'none' : ti
 // ------------------------------------------------------------ 4. dead ends
 console.log('\n4. turning circles at dead ends');
 for (const id of g.deadEnds()) {
-  const nd = g.nodes.get(id);
+  // `deadEnds()` reads the ids straight off `nodes`, so this one is there
+  const nd = g.nodes.get(id)!;
   const near = worldMap.pois.filter(
-    (p: any) => (p.type === 'parking' || p.type === 'town' || p.type === 'outpost')
+    (p) => (p.type === 'parking' || p.type === 'town' || p.type === 'outpost')
       && Math.hypot(p.x - nd.x, p.z - nd.z) < 90);
   if (!near.length) fail(`dead end ${id} has no turning circle`);
 }

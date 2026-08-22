@@ -9,11 +9,30 @@ import { Noise } from '../../util/Noise.ts';
  * All drawing is seeded, so two runs produce identical bytes.
  */
 
-const cache = new Map();
-function memo(key: string, make: any) {
-  if (!cache.has(key)) cache.set(key, make());
-  return cache.get(key);
+/** A bark set: the albedo and the normal map that goes with it. */
+export interface BarkMaps {
+  map: THREE.DataTexture;
+  normalMap: THREE.DataTexture;
 }
+
+/**
+ * Generated textures, built once and shared. Two caches rather than one keyed
+ * on `unknown`, because the makers genuinely produce two shapes: a single
+ * alpha card, and bark's albedo/normal pair.
+ */
+const cardCache = new Map<string, THREE.DataTexture>();
+const barkCache = new Map<string, BarkMaps>();
+
+function memoIn<T>(cache: Map<string, T>, key: string, make: () => T): T {
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit;
+  const built = make();
+  cache.set(key, built);
+  return built;
+}
+
+/** One alpha-cut card, built once. */
+const memo = (key: string, make: () => THREE.DataTexture) => memoIn(cardCache, key, make);
 
 /**
  * Hand-rolled mip chain for alpha-tested foliage.
@@ -37,8 +56,8 @@ function memo(key: string, make: any) {
  */
 const MIN_COVERAGE_SIZE = 16;
 
-function buildAlphaMips(data: any, size: number, alphaRef = 0.42, tinyFade = 1.0) {
-  const coverageOf = (buf: any, scale: number) => {
+function buildAlphaMips(data: Uint8Array, size: number, alphaRef = 0.42, tinyFade = 1.0) {
+  const coverageOf = (buf: ArrayLike<number>, scale: number) => {
     let n = 0;
     for (let i = 3; i < buf.length; i += 4) if ((buf[i] / 255) * scale >= alphaRef) n++;
     return n / (buf.length / 4);
@@ -206,7 +225,7 @@ function withAlphaMips(tex: THREE.DataTexture, data: Uint8Array, size: number, a
  *   alpha-weighted mean *linear* luminance — see {@link normalizeAlbedo}; set
  *   it whenever this card is one LOD of something another ring also draws.
  */
-export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?:number, tinyFade?:number, albedo?: any } = {}) {
+export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size:number) => void, opts: {alphaRef?: number, tinyFade?: number, albedo?: number | null} = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d', { willReadFrequently: true })!;
@@ -220,7 +239,7 @@ export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size
   for (let y = 0; y < size; y++) {
     data.set(src.subarray((size - 1 - y) * row, (size - y) * row), y * row);
   }
-  if (opts.albedo > 0) normalizeAlbedo(data, opts.albedo);
+  if (opts.albedo != null && opts.albedo > 0) normalizeAlbedo(data, opts.albedo);
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -425,13 +444,27 @@ export function fernTex() {
 }
 
 /**
+ * One built tree variant, reduced to what a card bake needs: the two
+ * geometries, the two maps, and the bounds the card is sized from.
+ */
+export interface TreeBakeSource {
+  wood: THREE.BufferGeometry;
+  leaves: THREE.BufferGeometry | null;
+  woodMap: THREE.Texture | null;
+  woodColor: number;
+  leafMap: THREE.Texture | null;
+  height: number;
+  radius: number;
+}
+
+/**
  * Bake a distance impostor by rendering the real tree geometry flat into an
  * offscreen target. Hand-drawn billboards never match the geometry LOD; a bake
  * does, so the swap at the LOD boundary is invisible.
  *
  * @param size texture resolution
  */
-export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: any, size: number = 256): THREE.DataTexture {
+export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: TreeBakeSource, size: number = 256): THREE.DataTexture {
   const rt = new THREE.WebGLRenderTarget(size, size, {
     samples: 4, depthBuffer: true, stencilBuffer: false,
   });
@@ -442,7 +475,7 @@ export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: any, size: 
     map: src.woodMap, color: src.woodColor,
   });
   scene.add(new THREE.Mesh(src.wood, woodMat));
-  let leafMat: any = null;
+  let leafMat: THREE.MeshBasicMaterial | null = null;
   if (src.leaves) {
     leafMat = new THREE.MeshBasicMaterial({
       map: src.leafMap, color: 0xffffff, vertexColors: true,
@@ -510,7 +543,7 @@ export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: any, size: 
  *
  * @param src one variant of the species
  */
-export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: any, opts: {count?:number, spread?:number, size?:number, seed?:number} = {}): {tex:THREE.DataTexture, width:number, height:number} {
+export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: TreeBakeSource, opts: {count?:number, spread?:number, size?:number, seed?:number} = {}): {tex:THREE.DataTexture, width:number, height:number} {
   const { count = 5, spread = 2.1, size = 384, seed = 991 } = opts;
   const rng = new Rng(seed);
   const rt = new THREE.WebGLRenderTarget(size, size, {
@@ -534,8 +567,8 @@ export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: any, opts: {c
     const x = (t - 0.5) * halfW * 1.72 + rng.gauss(0, src.radius * 0.28);
     const z = rng.range(-1, 1) * src.radius * 1.2;
     const s = rng.range(0.72, 1.18);
-    const add = (geo: any, mat: any) => {
-      if (!geo) return;
+    const add = (geo: THREE.BufferGeometry | null, mat: THREE.Material | null) => {
+      if (!geo || !mat) return;
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, 0, z);
       m.rotation.y = rng.next() * Math.PI * 2;
@@ -693,7 +726,7 @@ const BARK_DETAIL_MEAN = 0.64;
  * together is exactly how the leaf cards came out lime.
  */
 export function barkMaps(tint = 0x6b5642) {
-  return memo(`bark${tint}`, () => {
+  return memoIn(barkCache, `bark${tint}`, () => {
     const n = new Noise(2024);
     // Hue only: normalise the tint to unit luminance, then pull it most of the
     // way back to neutral. Anything stronger multiplies the species chroma.
@@ -713,7 +746,7 @@ export function barkMaps(tint = 0x6b5642) {
     // target mean, so the ridge contrast survives without clipping to white.
     const KMEAN = 0.925, KCONTRAST = 0.72;
     const toSrgb = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: number[]) => {
       const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
       const L = BARK_DETAIL_MEAN * k;
       const moss = Math.max(0, n.fbm2(u * 4 + 30, v * 4, 3)) * 0.35;

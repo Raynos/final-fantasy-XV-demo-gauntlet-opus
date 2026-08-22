@@ -28,8 +28,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-function parseArgs(argv: any) {
-  const o = { w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33, out: null, nobake: false };
+function parseArgs(argv: string[]) {
+  const o = { w: 1600, h: 900, q: 'ultra', scale: 1, target: 60, hitchMs: 33, out: null as string | null, nobake: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--nobake') o.nobake = true;
@@ -45,7 +45,7 @@ function parseArgs(argv: any) {
   return o;
 }
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -71,7 +71,7 @@ async function main() {
 
   const browser = await chromium.launch({ args: CHROMIUM_ARGS });
   const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
-  const errors: any[] = [];
+  const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
@@ -101,9 +101,9 @@ async function main() {
       const weather = g.get('Weather');
       const rig = g.get('CameraRig');
 
-      const hold = (...codes: any[]) => { inp.keys.clear(); for (const c of codes) inp.keys.add(c); };
-      const look = (x: any, y: any) => { inp.look.set(x, y); };
-      const n = (base: any) => Math.max(4, Math.round(base * scale));
+      const hold = (...codes: string[]) => { inp.keys.clear(); for (const c of codes) inp.keys.add(c); };
+      const look = (x: number, y: number) => { inp.look.set(x, y); };
+      const n = (base: number) => Math.max(4, Math.round(base * scale));
 
       // Leave capture/shot mode: we want the live gameplay camera.
       g.applyShot('hud_field');
@@ -111,7 +111,7 @@ async function main() {
       g.resetClock();
       const start = player ? player.position.clone() : null;
 
-      const segments: {name:string, setup?:((...args: any[]) => any), each?:((...args: any[]) => any), frames:number}[] = [
+      const segments: { name: string, setup?: () => void, each?: (i: number) => void, frames: number }[] = [
         { name: 'idle', frames: n(60), setup: () => hold() },
         { name: 'walk', frames: n(120), setup: () => hold('KeyW') },
         { name: 'sprint', frames: n(150), setup: () => hold('KeyW', 'ShiftLeft') },
@@ -213,12 +213,12 @@ async function main() {
       const allHitches = [];
       for (const seg of segments) {
         const failures = [];
-        const act = (i: any) => {
-          try { seg.each?.(i); } catch (e: any) {
-            if (failures.length < 3) failures.push(String(e && e.message || e));
+        const act = (i: number) => {
+          try { seg.each?.(i); } catch (e: unknown) {
+            if (failures.length < 3) failures.push(e instanceof Error ? e.message : String(e));
           }
         };
-        try { seg.setup?.(); } catch (e: any) { failures.push(String(e && e.message || e)); }
+        try { seg.setup?.(); } catch (e: unknown) { failures.push(e instanceof Error ? e.message : String(e)); }
         // warm the segment so its first-touch costs are attributed but do not
         // dominate: 6 warm frames, then measure
         for (let i = 0; i < 6; i++) { act(i); g.frame(dt); }

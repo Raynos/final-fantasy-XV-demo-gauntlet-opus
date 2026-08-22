@@ -117,6 +117,19 @@ const _w = {};
 const BLEND_POW = 2.4;
 
 /**
+ * The regional palette at a point: the CPU twin of the shader's two biome-LUT
+ * fetches. `ground` and `rock` are linear RGB triples.
+ */
+export interface BiomeSurface {
+  ground: number[];
+  rock: number[];
+  /** 0..1 how green the region is; the only field the splat weights read. */
+  green: number;
+  /** 0..1 standing humidity. */
+  damp: number;
+}
+
+/**
  * The blended surface palette at a world position.
  *
  * Blended by `WorldMap.zoneWeights()` — the same Gaussian falloff the
@@ -126,7 +139,7 @@ const BLEND_POW = 2.4;
  * @param x @param z
  * @param [out] reused result `{ground:[r,g,b], rock:[r,g,b], green, damp}`
  */
-export function surfaceAt(x: number, z: number, out?: any): any {
+export function surfaceAt(x: number, z: number, out?: BiomeSurface): BiomeSurface {
   const o = out || { ground: [0, 0, 0], rock: [0, 0, 0], green: 0, damp: 0 };
   const g = o.ground, r = o.rock;
   g[0] = g[1] = g[2] = 0; r[0] = r[1] = r[2] = 0;

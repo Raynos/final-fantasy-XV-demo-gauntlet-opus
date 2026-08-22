@@ -16,7 +16,30 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * @param cross unit cross-section, CCW, roughly radius 1
  * @param opts {capStart, capEnd, uScale}
  */
-export function loft(cross: number[][], sections: Array<{y:number,sx:number,sz?:number,dx?:number,dz?:number,rot?:number}>, { capStart = true, capEnd = true }: any = {}) {
+/**
+ * One station of a {@link loft}: a height, the scale of the cross-section
+ * there, and where it is nudged to.
+ */
+export interface LoftSection {
+  /** Height of this station along +Y. */
+  y: number;
+  /** Scale of the cross-section in x. */
+  sx: number;
+  /** Scale in z; defaults to `sx`, which makes the section circular. */
+  sz?: number;
+  dx?: number;
+  dz?: number;
+  /** Twist of this station about +Y, radians. */
+  rot?: number;
+}
+
+/** Whether a lofted or tubed solid is closed at each end. */
+export interface CapOpts {
+  capStart?: boolean;
+  capEnd?: boolean;
+}
+
+export function loft(cross: number[][], sections: LoftSection[], { capStart = true, capEnd = true }: CapOpts = {}) {
   const n = cross.length, m = sections.length;
   const pos = [], uv = [], idx = [];
   for (let s = 0; s < m; s++) {
@@ -93,12 +116,12 @@ export function rectCross(round = 0.22, n = 16) {
 }
 
 /** Generalised tube through a polyline with per-point radii. */
-export function tube(points: THREE.Vector3[], radii: any, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
+export function tube(points: THREE.Vector3[], radii: Array<number | number[]>, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
   const n = radialSeg, m = points.length;
   const pos = [], uv = [], idx = [];
   const up = new THREE.Vector3(0, 1, 0);
   const tan = new THREE.Vector3(), nrm = new THREE.Vector3(), bin = new THREE.Vector3();
-  let prevN: any = null;
+  let prevN: THREE.Vector3 | null = null;
   for (let s = 0; s < m; s++) {
     const p0 = points[Math.max(0, s - 1)], p1 = points[Math.min(m - 1, s + 1)];
     tan.subVectors(p1, p0);
@@ -151,7 +174,7 @@ export function tube(points: THREE.Vector3[], radii: any, { radialSeg = 8, capSt
 }
 
 /** Convenience: a straight tube between two points. */
-export function limb(a: any, b: any, r0: number, r1: number, seg = 6, radialSeg = 8) {
+export function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, seg = 6, radialSeg = 8) {
   const pts = [], radii = [];
   for (let i = 0; i <= seg; i++) {
     const t = i / seg;
@@ -199,7 +222,7 @@ export function blob(rx: number, ry: number, rz: number, wSeg = 12, hSeg = 8) {
 }
 
 /** Apply a TRS to a geometry in place. */
-export function place(geo: any, { pos, rot, quat, scale }: {
+export function place<G extends THREE.BufferGeometry>(geo: G, { pos, rot, quat, scale }: {
   pos?: number[] | null, rot?: number[] | null, quat?: THREE.Quaternion | null,
   scale?: number | number[] | null,
 } = {}) {
@@ -215,7 +238,7 @@ export function place(geo: any, { pos, rot, quat, scale }: {
 }
 
 /** Stamp a flat vertex colour (albedo tint) onto a geometry. */
-export function tint(geo: any, hex: number, jitter = 0) {
+export function tint<G extends THREE.BufferGeometry>(geo: G, hex: number, jitter = 0) {
   const c = new THREE.Color(hex);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -235,7 +258,7 @@ export function tint(geo: any, hex: number, jitter = 0) {
 }
 
 /** Stamp per-vertex emissive (glowing eyes, magitek seams, crystal fuller). */
-export function glow(geo: any, hex: number, strength = 1) {
+export function glow<G extends THREE.BufferGeometry>(geo: G, hex: number, strength = 1) {
   const c = new THREE.Color(hex).multiplyScalar(strength);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -265,11 +288,11 @@ export function surf(geo: THREE.BufferGeometry, rough: number, metal: number) {
 }
 
 /** Merge, filling in any missing color / aEmissive / aSurf attributes. */
-export function merge(geos: any) {
-  const list = geos.filter(Boolean);
+export function merge(geos: Array<THREE.BufferGeometry | null | undefined | false>) {
+  const list = geos.filter((g): g is THREE.BufferGeometry => !!g);
   // only carry aSurf when somebody in the batch actually asked for it, so
   // every creature in the game does not grow an attribute its shader ignores
-  const wantSurf = list.some((g: any) => g.attributes.aSurf);
+  const wantSurf = list.some((g) => g.attributes.aSurf);
   for (const g of list) {
     if (!g.attributes.color) tint(g, 0xffffff);
     if (!g.attributes.aEmissive) glow(g, 0x000000);
@@ -301,7 +324,7 @@ export function merge(geos: any) {
  * magitek seams and dull armour in a single draw call.
  */
 export function enableVertexEmissive(material: THREE.MeshStandardMaterial) {
-  material.onBeforeCompile = (shader: any) => {
+  material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 aEmissive;\nvarying vec3 vEmissive;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmissive = aEmissive;');

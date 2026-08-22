@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { Rng } from '../util/Rng.ts';
 import { BESTIARY, TYPES, speciesKeys } from './enemies/Bestiary.ts';
 import { CombatAnim } from './rig/CombatAnim.ts';
+import type {
+  Enemy, EnemyCtx, EnemyPack, EnemyPrototype, ExpClass, Threat,
+} from './enemies/EnemyBase.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -16,23 +19,64 @@ import type { Game } from '../game/Game.ts';
  * Dead enemies are recycled into a per-species pool rather than rebuilt, so a
  * long session never allocates a second skeleton for the same creature.
  */
+/**
+ * One placement of one species — where it stands, what it belongs to and who
+ * asked for it.
+ *
+ * Deliberately *not* `SpawnOpts`, which is what varies between two instances
+ * of a creature (`id`, `heading`, `scale`, `level`). This is what varies
+ * between two *placements*: the world position, the pack, the patrol route,
+ * and the encounter that owns it and will despawn it again.
+ */
+export interface SpawnPlacement {
+  /** world position; an array is read as `[x, y, z]`. */
+  pos?: THREE.Vector3 | number[];
+  heading?: number;
+  scale?: number;
+  level?: number;
+  /** overrides the species' `stats.hp`. */
+  hp?: number;
+  /** overrides the species' `stats.damage`. */
+  damage?: number;
+  /** the point it leashes back to; defaults to where it spawned. */
+  home?: THREE.Vector3;
+  /** patrol nodes; sets the enemy walking a route from the first frame. */
+  patrol?: THREE.Vector3[] | null;
+  /** seconds held at each patrol node. */
+  patrolWait?: number;
+  /** starts asleep — a night camp, or a daemon that has not risen yet. */
+  asleep?: boolean;
+  pack?: EnemyPack | null;
+  leash?: number;
+  /** display name, for a named mark. */
+  name?: string;
+  expClass?: ExpClass;
+  /**
+   * The encounter that owns this spawn. `EncounterDirector` and `BossFight`
+   * despawn by matching it, so it must survive nothing but `despawn()`.
+   */
+  owner?: string;
+}
+
 export class Enemies {
-  prototypes!: Map<any, any>;
-  _ctx!: any;
+  /** species geometry, keyed on `SpeciesDef.protoKey ?? key`. */
+  prototypes!: Map<string, EnemyPrototype>;
+  _ctx!: EnemyCtx;
   _dir!: THREE.Vector3;
   _tmp!: THREE.Vector3;
   combatAnim!: CombatAnim;
   corpseLinger!: number;
   frozen!: boolean;
   game!: Game;
-  list!: any[];
+  list!: Enemy[];
   night!: number;
-  onEnemyStrike!: any;
-  onStrike!: any;
-  pool!: Map<any, any>;
+  onEnemyStrike!: EnemyCtx['onEnemyStrike'];
+  onStrike!: EnemyCtx['onStrike'];
+  /** retired instances, keyed on species key, ready to be re-spawned. */
+  pool!: Map<string, Enemy[]>;
   rng!: Rng;
   root!: THREE.Group;
-  threats!: any;
+  threats!: Threat[] | null;
   async init(game: Game) {
     this.game = game;
     this.list = [];
@@ -91,14 +135,15 @@ export class Enemies {
    * @param o {pos:[x,y,z]|Vector3, heading, scale, level, hp, damage,
    *                    home, patrol, pack, leash, name, expClass}
    */
-  spawn(key: string, o: any = {}) {
+  spawn(key: string, o: SpawnPlacement = {}): Enemy {
     const type = TYPES[key as keyof typeof TYPES];
     if (!type) throw new Error(`unknown enemy ${key}`);
 
     const pooled = this.pool.get(key);
-    let e;
-    if (pooled && pooled.length) {
-      e = pooled.pop();
+    const recycled = pooled && pooled.length ? pooled.pop() : undefined;
+    let e: Enemy;
+    if (recycled) {
+      e = recycled;
       e.heading = o.heading ?? 0;
       e.scale = o.scale ?? 1;
       e.reset({ maxHp: o.hp, level: o.level, damage: o.damage });
@@ -117,7 +162,9 @@ export class Enemies {
     }
 
     const terrain = this.game.get('Terrain');
-    const p = o.pos ? (o.pos.isVector3 ? o.pos : this._tmp.fromArray(o.pos)) : this._tmp.set(0, 0, 0);
+    const p = o.pos
+      ? (Array.isArray(o.pos) ? this._tmp.fromArray(o.pos) : o.pos)
+      : this._tmp.set(0, 0, 0);
     e.root.position.copy(p);
     // Spawn on the highest support, not the raw heightfield: an enemy placed on
     // Hammerhead's graded pad or a dungeon floor would otherwise stand inside
@@ -153,7 +200,7 @@ export class Enemies {
    * straight back out as somebody else's spawn, so anything still holding the
    * old owner id must not be able to claim it again.
    */
-  despawn(e: any) {
+  despawn(e: Enemy): Enemy {
     const i = this.list.indexOf(e);
     if (i >= 0) this.list.splice(i, 1);
     this.root.remove(e.root);
@@ -175,7 +222,7 @@ export class Enemies {
   }
 
   /** Live (non-dead) enemies. */
-  alive(out: any = null) {
+  alive(out: Enemy[] | null = null): Enemy[] {
     const o = out || [];
     o.length = 0;
     for (const e of this.list) if (!e.dead) o.push(e);
@@ -183,7 +230,7 @@ export class Enemies {
   }
 
   /** Count of live enemies within `r` of a point. */
-  countNear(p: any, r: number) {
+  countNear(p: THREE.Vector3, r: number) {
     let n = 0;
     const r2 = r * r;
     for (const e of this.list) {
@@ -198,7 +245,7 @@ export class Enemies {
    * Enemies whose capsule intersects a sphere — the melee hit query.
    * @param centre @param radius
    */
-  sphereQuery(centre: THREE.Vector3, radius: number, out: any[] = []) {
+  sphereQuery(centre: THREE.Vector3, radius: number, out: Enemy[] = []): Enemy[] {
     out.length = 0;
     for (const e of this.list) {
       if (e.dead) continue;
@@ -215,7 +262,7 @@ export class Enemies {
    * Swept-capsule query for a weapon arc: samples the segment from `a` to `b`.
    * Cheap, deterministic, and good enough for readable melee.
    */
-  sweepQuery(a: any, b: any, radius: number, out: any[] = []) {
+  sweepQuery(a: THREE.Vector3, b: THREE.Vector3, radius: number, out: Enemy[] = []): Enemy[] {
     out.length = 0;
     const steps = 5;
     const p = this._tmp;
@@ -239,8 +286,8 @@ export class Enemies {
    * Best lock-on candidate: closest enemy inside `maxDist` weighted toward
    * whatever is nearest the camera's forward axis.
    */
-  pickTarget(from: any, forward: any, maxDist = 30, coneDot = 0.1) {
-    let best: any = null, bestScore = Infinity;
+  pickTarget(from: THREE.Vector3, forward: THREE.Vector3, maxDist = 30, coneDot = 0.1): Enemy | null {
+    let best: Enemy | null = null, bestScore = Infinity;
     for (const e of this.list) {
       if (e.dead) continue;
       this._dir.subVectors(e.root.position, from);
@@ -256,8 +303,8 @@ export class Enemies {
   }
 
   /** Nearest live enemy to a point, or null. */
-  nearest(p: any, maxDist = Infinity) {
-    let best: any = null, bestD = maxDist;
+  nearest(p: THREE.Vector3, maxDist = Infinity): Enemy | null {
+    let best: Enemy | null = null, bestD = maxDist;
     for (const e of this.list) {
       if (e.dead) continue;
       const d = e.root.position.distanceTo(p);
@@ -266,10 +313,10 @@ export class Enemies {
     return best;
   }
 
-  update(dt: any, game: Game) {
+  update(dt: number, game: Game) {
     const ctx = this._ctx;
-    ctx.terrain = game.get('Terrain');
-    ctx.player = game.get('Player');
+    ctx.terrain = game.get('Terrain') ?? null;
+    ctx.player = game.get('Player') ?? null;
     ctx.threats = this.threats;
     ctx.night = this.night;
     ctx.onStrike = this.onStrike;

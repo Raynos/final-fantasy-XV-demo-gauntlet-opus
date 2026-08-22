@@ -11,12 +11,25 @@
  * that draws it, and the counts must survive a menu being closed and reopened.
  */
 
+/**
+ * The parts of a dead thing the tally reads.
+ *
+ * Structural rather than `Enemy`, because the archive test drives this
+ * directly and `CombatSystem`'s `death` event carries the same four fields.
+ */
+export interface KillSubject {
+  speciesId?: string;
+  type?: { key?: string };
+  name?: string;
+  level?: number;
+}
+
 const tally: Map<string, {key:string, name:string, kills:number, lastLevel:number}> = new Map();
 
 let attached = false;
 
 /** Fold one death into the tally. Exported so tests can drive it directly. */
-export function recordKill(enemy: any) {
+export function recordKill(enemy: KillSubject | null | undefined) {
   if (!enemy) return null;
   const key = enemy.speciesId || enemy.type?.key || enemy.name || 'unknown';
   const rec = tally.get(key) || { key, name: enemy.name || key, kills: 0, lastLevel: 0 };

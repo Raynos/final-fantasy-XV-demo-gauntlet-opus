@@ -1,8 +1,29 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { ease, lerp, catmull, clamp01 } from './Easing.ts';
+import type { EaseFn } from './Easing.ts';
+import type { ActorId, ShotDef, StageFrame } from './Scene.ts';
+import type { Terrain } from '../../world/Terrain.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** A keyframe once the constructor has resolved its arrays and its ease. */
+interface ResolvedKey {
+  t: number;
+  pos: THREE.Vector3;
+  target: THREE.Vector3;
+  fov: number;
+  roll: number;
+  ease: EaseFn;
+}
+
+/** Where the camera is this frame. Reused in place; never retained. */
+export interface CameraSample {
+  pos: THREE.Vector3;
+  target: THREE.Vector3;
+  fov: number;
+  roll: number;
+}
 
 /**
  * A single cinematic set-up: one continuous camera move between two cuts.
@@ -35,23 +56,20 @@ const UP = new THREE.Vector3(0, 1, 0);
  */
 export class Shot {
   _noise!: Noise;
-  _out!: any;
-  aim!: any;
+  _out!: CameraSample;
+  aim!: ActorId | ActorId[] | 'crew' | null;
   aimU!: number;
   breathe!: number;
   dur!: number;
   fStop!: number | null;
-  focus!: any;
+  focus!: number | 'auto' | ActorId;
   handheld!: number;
-  keys!: any;
-  label!: any;
+  keys!: ResolvedKey[];
+  label!: string;
   spline!: boolean;
   t0!: number;
   t1!: number;
-  /**
-   * @param {object} def
-   * */
-  constructor(def: { t0: number, t1: number, keys: Array<any>, fov?: number, handheld?: number, breathe?: number, focus?: number | 'auto' | 'subject', fStop?: number, aim?: string | string[], aimU?: number, seed?: number, ease?: any, spline?: any, label?: any }) {
+  constructor(def: ShotDef) {
     this.t0 = def.t0;
     this.t1 = def.t1;
     this.dur = Math.max(0.001, def.t1 - def.t0);
@@ -84,7 +102,7 @@ export class Shot {
    * Sample the move.
    * @param t scene time
    */
-  sample(t: number): {pos:THREE.Vector3, target:THREE.Vector3, fov:number, roll:number} {
+  sample(t: number): CameraSample {
     const local = t - this.t0;
     const keys = this.keys;
     const out = this._out;
@@ -129,7 +147,7 @@ export class Shot {
   }
 
   /** Handheld + breathe, applied in world space around the sampled boom. */
-  _layers(out: any, local: number) {
+  _layers(out: CameraSample, local: number): CameraSample {
     const n = this._noise;
     const hh = this.handheld;
     if (this.breathe > 0) {
@@ -160,7 +178,7 @@ export class Shot {
  * This is the difference between a cutscene that works and one that has to be
  * re-tuned every time another agent moves a landmark.
  */
-export class Frame {
+export class Frame implements StageFrame {
   _v!: THREE.Vector3;
   floor!: number | null;
   fwd!: THREE.Vector3;
@@ -217,7 +235,7 @@ export class Frame {
    * Same as {@link at} but snapped to the ground, plus `u` metres. "The ground"
    * is {@link setFloor}'s surface if one was set, else the terrain.
    */
-  ground(terrain: any, f: number, r: number, u = 0) {
+  ground(terrain: Terrain | null | undefined, f: number, r: number, u = 0): number[] {
     const v = this._v.copy(this.origin).addScaledVector(this.fwd, f).addScaledVector(this.right, r);
     if (this.floor != null) return [v.x, this.floor + u, v.z];
     const y = terrain && terrain.heightAt ? terrain.heightAt(v.x, v.z) : this.origin.y;

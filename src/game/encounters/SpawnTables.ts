@@ -15,15 +15,78 @@
  * deep into the night it is (`nightScaling` in `rpg/Stats.ts`).
  */
 
+/** When a spawn is allowed to exist. */
+export type SpawnWindow = 'day' | 'night' | 'any';
+
+/** Who a spawn belongs to; `beast` is the default and is never written. */
+export type Faction = 'beast' | 'imperial' | 'daemon';
+
+/** One species line of a spawn list. `count` is fixed, or a `[min, max]` roll. */
+export interface SpawnLine {
+  /** Bestiary key. */
+  key: string;
+  count: number | [number, number];
+  /** Overrides the territory's base level for this line. */
+  level?: number;
+}
+
+/** What `daemonPressure()` publishes, and what a spawn window is judged against. */
+export interface Pressure {
+  /** Are daemons out? */
+  spawn: boolean;
+  /** 0..1 how many. */
+  density: number;
+  /** 0..1 how deep into the night it is. */
+  depth: number;
+  levelBonus: number;
+  level?: number;
+  attack?: number;
+  defense?: number;
+  hp?: number;
+}
+
+/**
+ * A persistent patch of the world, **as resolved**: `T()` fills in every
+ * default, so nothing downstream has to guess what a missing `respawn` means.
+ */
+export interface Territory {
+  id: string;
+  name: string;
+  /** World anchor `[x, z]`. */
+  at: [number, number];
+  radius: number;
+  when: SpawnWindow;
+  level: number;
+  /** 0..4 -- how dangerous this patch reads on the map. */
+  danger: number;
+  spawn: SpawnLine[];
+  /** Radius of the patrol loop; 0 means the pack stands its ground. */
+  patrolRadius: number;
+  /** Seconds before a cleared territory comes back. */
+  respawn: number;
+  /** How many members may close and attack at once. */
+  maxEngaged: number;
+  faction?: Faction;
+  /** A grazing herd: it is scenery until something provokes it. */
+  passive?: boolean;
+  /** Hold off until the night is at least this deep. */
+  nightDepth?: number;
+}
+
+/** A territory **as authored**: everything `T()` defaults may be left out. */
+export type TerritorySpec =
+  Omit<Territory, 'radius' | 'when' | 'patrolRadius' | 'respawn' | 'maxEngaged'>
+  & Partial<Pick<Territory, 'radius' | 'when' | 'patrolRadius' | 'respawn' | 'maxEngaged'>>;
+
 /**
  * @returns a territory definition
  */
-const T = (o: any): any => ({
+const T = (o: TerritorySpec): Territory => ({
   respawn: 150, radius: 26, when: 'any', maxEngaged: 2, patrolRadius: 0, ...o,
 });
 
 /** The Leide basin, as it is actually built. */
-export const TERRITORIES = [
+export const TERRITORIES: Territory[] = [
 
   /* ---- the road and the flats around the start ---------------------- */
   T({
@@ -164,7 +227,22 @@ export const TERRITORY_TABLE = Object.fromEntries(TERRITORIES.map((t) => [t.id, 
  * Wandering encounters — the ones that come to *you*. Rolled on a timer while
  * the player is in the open, weighted by time of day.
  */
-export const ROAMERS = [
+/** A wandering encounter: rolled on a timer and spawned around the player. */
+export interface Roamer {
+  id: string;
+  when: SpawnWindow;
+  /** Selection weight against the other roamers whose window is open. */
+  weight: number;
+  level: number;
+  faction: Faction;
+  spawn: SpawnLine[];
+  /** Arrives by dropship rather than simply being there. */
+  dropship?: boolean;
+  /** Hold off until the night is at least this deep. */
+  nightDepth?: number;
+}
+
+export const ROAMERS: Roamer[] = [
   { id: 'tusk_ambush', when: 'day', weight: 3, level: 6, faction: 'beast',
     spawn: [{ key: 'sabertusk', count: [3, 4] }] },
   { id: 'vore_ambush', when: 'day', weight: 2, level: 11, faction: 'beast',
@@ -184,7 +262,35 @@ export const ROAMERS = [
  * Named set-piece encounters. These are placed, not rolled, and each one has
  * a `BossFight` controller.
  */
-export const SET_PIECES = {
+/** A named, placed boss encounter with its own `BossFight` controller. */
+export interface SetPiece {
+  id: string;
+  name: string;
+  kind: 'field' | 'imperial' | 'astral';
+  /** World anchor `[x, z]`. */
+  at: [number, number];
+  radius: number;
+  level: number;
+  /** Bestiary key of the boss itself. */
+  boss: string;
+  /** The rank and file that come with it. */
+  adds?: Array<{ key: string, count: number, level: number }>;
+  /** The boss is delivered by dropship. */
+  dropship?: boolean;
+  /** Radius of the arena the fight is fenced into. */
+  arena?: number;
+  /**
+   * Music cue put on the `encounter:boss` event.
+   *
+   * Deliberately **not** a `MusicStateName`: none of these three names is in
+   * the score's state table, and nothing in the tree listens for
+   * `encounter:boss`, so the field is inert. Typed as authored rather than
+   * silently re-pointed at `'boss'`, which would be a behaviour change.
+   */
+  music: 'boss-field' | 'boss-imperial' | 'boss-astral';
+}
+
+export const SET_PIECES: Record<string, SetPiece> = {
   bloodhorn: {
     id: 'bloodhorn', name: 'Bloodhorn', kind: 'field',
     at: [-96, -132], radius: 40, level: 22, boss: 'bloodhorn',
@@ -249,7 +355,7 @@ export const HUNT_TARGETS: Record<string, HuntTarget> = {
  * @param when 'day' | 'night' | 'any'
  * @param pressure `rpg.daemonPressure()`
  */
-export function windowOpen(when: string, pressure: any) {
+export function windowOpen(when: SpawnWindow, pressure: Pressure) {
   if (when === 'any') return true;
   if (when === 'night') return !!pressure.spawn;
   return !pressure.spawn;

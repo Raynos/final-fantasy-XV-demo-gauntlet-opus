@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { Rig, poseBone, poseBoneMix, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { legPhase } from '../rig/CreatureAnim.ts';
+import type { CreatureAnim } from '../rig/CreatureAnim.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
@@ -78,8 +80,8 @@ export const MAGITEK_ARMOUR = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new MagitekArmourEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new MagitekArmourEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -328,19 +330,10 @@ function buildPrototype() {
 }
 
 class MagitekArmourEnemy extends Enemy {
-  override _dt!: any;
-  override anim!: any;
-  override attackId!: any;
-  override moveSpeed!: any;
-  override phaseIndex!: any;
-  override rig!: any;
-  override speed!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(MAGITEK_ARMOUR, opts); }
+  constructor(opts: SpawnOpts) { super(MAGITEK_ARMOUR, opts); }
 
   /** Reverse-jointed legs, solved with IK so six tonnes plants its feet. */
-  override setupAnim(anim: any) {
+  override setupAnim(anim: CreatureAnim) {
     super.setupAnim(anim);
     anim.leg('fL', ['hpL', 'knL', 'anL', 'ftL']);
     anim.leg('fR', ['hpR', 'knR', 'anR', 'ftR']);
@@ -362,7 +355,7 @@ class MagitekArmourEnemy extends Enemy {
     return out.set(-0.04, -0.06, 0.62).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

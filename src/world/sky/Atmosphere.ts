@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { AtmosphereUniforms } from '../Sky.ts';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { ATMO_COMMON, ATMO_SCATTER } from '../../shaders/atmosphere.glsl.ts';
 import { SKY_VERT, SKY_FRAG } from '../../shaders/sky.glsl.ts';
@@ -67,7 +68,7 @@ export class Atmosphere {
   renderer!: THREE.WebGLRenderer;
   skyViewRT!: THREE.WebGLRenderTarget;
   transmittanceRT!: THREE.WebGLRenderTarget;
-  uniforms!: any;
+  uniforms!: AtmosphereUniforms;
   constructor(renderer: THREE.WebGLRenderer) {
     this.renderer = renderer;
 
@@ -133,7 +134,7 @@ export class Atmosphere {
    * screen dome and the environment-probe dome always agree; only the cloud
    * source differs.
    */
-  createDome(uniforms: any) {
+  createDome(uniforms: AtmosphereUniforms) {
     this.uniforms = uniforms;
     const geo = new THREE.SphereGeometry(4000, 48, 32);
     const mat = new THREE.ShaderMaterial({
@@ -154,8 +155,9 @@ export class Atmosphere {
     this.mesh = mesh;
 
     // second material for the environment bake: analytic clouds, no screen buffer
-    const envUniforms: any = {};
-    for (const k of Object.keys(uniforms)) envUniforms[k as keyof typeof envUniforms] = uniforms[k];
+    // the uniform *objects* are shared, so both domes see the same values; only
+    // the cloud source differs
+    const envUniforms: Record<string, THREE.IUniform> = { ...uniforms };
     envUniforms.uCloudMode = { value: 0 };
     this.envMaterial = mat.clone();
     this.envMaterial.uniforms = envUniforms;

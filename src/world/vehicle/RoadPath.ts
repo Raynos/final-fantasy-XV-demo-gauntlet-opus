@@ -32,19 +32,49 @@ export interface RoadHit {
   tz: number;
 }
 
+/**
+ * A point on the centreline with its tangent: what `at()` fills in, and what
+ * every caller staging something against the road reads back.
+ */
+export interface RoadPoint {
+  x: number;
+  y: number;
+  z: number;
+  /** Unit tangent in the XZ plane. */
+  tx: number;
+  tz: number;
+}
+
+/** A centreline sample, which also carries its arc length from the start. */
+export interface SpinePoint extends RoadPoint {
+  /** Metres from the start of the spine. */
+  s: number;
+}
+
+/** The polyline `RoadPath` wraps — `Road._makeSpine()` is what supplies it. */
+export interface RoadSpine {
+  points: SpinePoint[];
+  length: number;
+  /** Half-width of the sealed surface. */
+  width: number;
+  /** Half-width of the disturbed shoulder beyond it. */
+  shoulder: number;
+}
+
 export class RoadPath {
-  _grid!: Map<any, any>;
-  _h!: any;
+  /** `"i,j"` cell -> indices into `pts`. */
+  _grid!: Map<number, number[]>;
+  _h!: RoadPoint;
   _hit!: RoadHit;
   _lastI!: number;
-  _t0!: any;
-  _t1!: any;
+  _t0!: RoadPoint;
+  _t1!: RoadPoint;
   length!: number;
-  pts!: any;
-  road!: any;
+  pts!: SpinePoint[];
+  road!: RoadSpine;
   shoulder!: number;
   width!: number;
-  constructor(road: {points: any[], length: number, width: number, shoulder: number}) {
+  constructor(road: RoadSpine) {
     this.road = road;
     this.pts = road && road.points ? road.points : [];
     this.length = road ? road.length : 0;
@@ -150,7 +180,7 @@ export class RoadPath {
    * Centreline point at arc-length `s`, clamped to the ends.
    * @param s metres
    */
-  at(s: number, out: {x:number,y:number,z:number,tx:number,tz:number}) {
+  at(s: number, out: RoadPoint): RoadPoint {
     const pts = this.pts;
     if (!pts.length) { out.x = 0; out.y = 0; out.z = 0; out.tx = 0; out.tz = 1; return out; }
     const t = Math.max(0, Math.min(this.length, s));

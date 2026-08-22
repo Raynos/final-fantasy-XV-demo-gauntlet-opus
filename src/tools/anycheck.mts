@@ -24,11 +24,28 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BUDGET = path.join(ROOT, 'ANY_BUDGET.json');
 
-/** Strip line and block comments and string/template literals, so only code is counted. */
+/**
+ * Characters after which a `/` opens a **regex literal** rather than a division.
+ *
+ * Without this the scanner treated `/^\s*doc:\s*['"](.*)['"],?\s*$/` as a
+ * division followed by a string, and the "string" then ran to the next quote
+ * anywhere in the file -- swallowing whole functions. `corpus.mts` collapsed
+ * from 14 988 characters to 2 221 and reported **0** `any` while carrying
+ * eight, so the ratchet was quietly undercounting every file that contains a
+ * regex with a quote in it.
+ */
+const REGEX_PRECEDER = /[(,=:[!&|?{};+\-*%^~<>]/;
+
+/**
+ * Strip comments, string/template literals and regex literals, so only code is
+ * counted.
+ */
 function code(src: string): string {
   let out = '';
   let i = 0;
   const n = src.length;
+  /** The last non-whitespace character emitted, for the regex/division test. */
+  let prev = '';
   while (i < n) {
     const c = src[i];
     const d = src[i + 1];
@@ -39,7 +56,28 @@ function code(src: string): string {
       while (i < n && src[i] !== q) { if (src[i] === '\\') i++; i++; }
       i++; continue;
     }
-    out += c; i++;
+    // A `/` in an operand position starts a regex. Character classes may hold
+    // an unescaped `/`, so the scan has to track `[...]` to find the real end.
+    if (c === '/' && (prev === '' || REGEX_PRECEDER.test(prev))) {
+      i++;
+      let inClass = false;
+      while (i < n) {
+        const r = src[i];
+        if (r === '\\') { i += 2; continue; }
+        if (r === '[') inClass = true;
+        else if (r === ']') inClass = false;
+        else if (r === '/' && !inClass) break;
+        else if (r === '\n') break;   // unterminated: not a regex after all
+        i++;
+      }
+      i++;
+      // flags
+      while (i < n && /[a-z]/.test(src[i])) i++;
+      continue;
+    }
+    out += c;
+    if (c.trim()) prev = c;
+    i++;
   }
   return out;
 }

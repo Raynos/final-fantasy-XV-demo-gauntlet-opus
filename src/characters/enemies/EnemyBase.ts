@@ -2,7 +2,377 @@ import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { normalFromHeight, makeDataMap } from '../../util/TextureGen.ts';
 import { Noise } from '../../util/Noise.ts';
+import { isBone, isMesh, isSkinnedMesh } from '../../util/three-guards.ts';
 import { CreatureAnim } from '../rig/CreatureAnim.ts';
+import type { AttackTiming } from '../rig/CreatureAnim.ts';
+import type { Element, WeaponClass } from '../../game/rpg/Stats.ts';
+
+/**
+ * Re-exported because they are part of the enemy contract: an attack's
+ * element, a species' `weakTo` and the `weaponClass` of a blow all live in
+ * these two closed sets, which the damage formula in `game/rpg/Stats.ts`
+ * owns. **`WeaponClass` here is the damage-formula class (`dagger`), not the
+ * equipped-weapon kind in `combat/Weapons.ts` (`daggers`)**; the two unions
+ * spell it differently and `CombatSystem.weaponClass` translates between them.
+ */
+export type { Element, WeaponClass };
+
+/* ------------------------------------------------------------ contracts
+ *
+ * Three shapes carry the whole bestiary, and they are deliberately separate:
+ *
+ *   `SpeciesDef`  what an author writes in `Sabertusk.ts` — data plus two
+ *                 factories. Immutable once the module has evaluated, except
+ *                 for the one measured cache noted on it.
+ *   `SpawnOpts`   what a *spawn* varies: which instance, how big, how strong.
+ *   `EnemyCtx`    what the world hands the AI every frame.
+ *
+ * Splitting them is what makes the defaults visible. `SpeciesDef.senses.sight`
+ * is optional because the species may leave it to `stats.aggroRange`; the
+ * resolved `Enemy.sight` is a plain `number`, because by then the default has
+ * been applied and there is nothing left to be undefined.
+ */
+
+/** Which roster a species belongs to. Drives spawn windows and light weakness. */
+export type Faction = 'beast' | 'daemon' | 'imperial' | 'astral';
+
+/** EXP bucket read by `Stats.expForKill`. */
+export type ExpClass = 'trash' | 'normal' | 'elite' | 'daemon' | 'boss';
+
+/** The states the AI switch in `update()` dispatches on. */
+export type AiState =
+  | 'sleep' | 'idle' | 'patrol' | 'alert' | 'return'
+  | 'chase' | 'approach' | 'strafe'
+  | 'telegraph' | 'attack' | 'recover'
+  | 'flinch' | 'stagger' | 'death';
+
+/**
+ * The pose vocabulary `pose()` is called with.
+ *
+ * `POSE_MAP` folds the richer AI vocabulary down onto this, so a species only
+ * ever has to answer these names. `run`, `walk` and `pounce` are not AI states
+ * at all — `freeze()` passes a scenario's pose name straight through, which is
+ * how `src/tools/creaturecheck.mts` and `game/Shots.ts` reach them.
+ */
+export type PoseName =
+  | 'idle' | 'approach' | 'run' | 'walk' | 'pounce'
+  | 'telegraph' | 'attack' | 'flinch' | 'stagger' | 'death';
+
+/** What `Enemy.state` may hold: an AI state, or a pose forced by `freeze()`. */
+export type EnemyState = AiState | PoseName;
+
+/** Every pose name, for the tools that offer them as a list. */
+export const POSE_NAMES: readonly PoseName[] = [
+  'idle', 'approach', 'run', 'walk', 'pounce',
+  'telegraph', 'attack', 'flinch', 'stagger', 'death',
+];
+
+/**
+ * Is `s` a pose a species will answer to? The dev browser and the capture
+ * scenarios name poses in strings that cross a boundary the compiler cannot
+ * follow, so this is where the string becomes a `PoseName`.
+ */
+export function isPoseName(s: string): s is PoseName {
+  return (POSE_NAMES as readonly string[]).includes(s);
+}
+
+/** Whether the pack is letting this member close, or holding it on the ring. */
+export type PackRole = 'engage' | 'flank';
+
+/** Percent-of-damage-taken per element. 100 is neutral, 0 immune. */
+export type ResistTable = Partial<Record<Element, number>>;
+
+/** The numbers that make a species that creature. Every species states all of them. */
+export interface EnemyStats {
+  name: string;
+  hp: number;
+  poise: number;
+  /** metres per second at a full run. */
+  speed: number;
+  /** metres; the fallback for an attack that does not state its own `range`. */
+  attackRange: number;
+  aggroRange: number;
+  /** metres; the capsule the melee queries use. */
+  radius: number;
+  height: number;
+  damage: number;
+  level: number;
+}
+
+/**
+ * Perception. Every field has a default in the constructor, so a species
+ * states only what makes it different from the average animal.
+ */
+export interface SpeciesSenses {
+  /** metres; defaults to `stats.aggroRange`. */
+  sight?: number;
+  /** half-angle of the sight cone, radians. 1.9 if absent. */
+  fov?: number;
+  /** metres, scaled by how fast the target is moving. 12 if absent. */
+  hearing?: number;
+  /** awake at night rather than by day. Defaults to `faction === 'daemon'`. */
+  nocturnal?: boolean;
+}
+
+/** One line of a species' drop table. */
+export interface EnemyDrop {
+  id: string;
+  /** 0..1. */
+  chance: number;
+  count: number;
+}
+
+/**
+ * One attack in a species' repertoire.
+ *
+ * The four timing fields are optional here and required on
+ * `SpeciesDef.timing`: an attack that states none inherits the species'
+ * default, which is what `_timing()` resolves.
+ */
+export interface EnemyAttack extends Partial<AttackTiming> {
+  id: string;
+  /** metres; the AI will not open this attack from further out. */
+  range: number;
+  /** metres; nor from closer in. */
+  minRange?: number;
+  /** selection weight against the other attacks currently in range. */
+  weight: number;
+  /** damage multiplier on the species' `stats.damage`. */
+  mult: number;
+  /** poise damage dealt to whatever it lands on. */
+  poise: number;
+  /** metres; the sphere the strike sweeps. Read by `EncounterDirector`. */
+  hitRadius: number;
+  /** seconds before this enemy may act again. */
+  cooldown: number;
+  /** radians; the horizontal wedge the strike covers. */
+  arc?: number;
+  /** how hard the enemy keeps turning onto its target during the wind-up. */
+  tracking?: number;
+  /** metres per second carried forward through the active window. */
+  lunge?: number;
+  /** boss phase this attack unlocks at; absent means from the start. */
+  phase?: number;
+  /** fires a projectile instead of sweeping an arc. */
+  ranged?: boolean;
+  /** hits everything inside `hitRadius`, not only what is inside `arc`. */
+  aoe?: boolean;
+  /** cannot be phase-blocked. */
+  unblockable?: boolean;
+  element?: Element;
+  /** the strike goes out behind the creature — the anak's panicked kick. */
+  backward?: boolean;
+}
+
+/**
+ * A species as its author writes it: `Sabertusk.ts` and its twenty siblings.
+ *
+ * `variant()` in `Bestiary.ts` derives a re-statted mark from one of these
+ * without duplicating a triangle, which is why `protoKey` is part of the
+ * contract rather than something the spawner infers.
+ */
+export interface SpeciesDef {
+  /** registry key in `TYPES`. */
+  key: string;
+  /** stable id the quest log matches kill objectives against; `key` if absent. */
+  questId?: string;
+  faction: Faction;
+  expClass: ExpClass;
+  stats: EnemyStats;
+  senses: SpeciesSenses;
+  /** the species' default attack timing, for attacks that state none. */
+  timing: AttackTiming;
+  attacks: EnemyAttack[];
+  drops: EnemyDrop[];
+  /** shorthand for a 160% entry in `resistPct`. */
+  weakness?: Element;
+  /** shorthand for a 50% entry in `resistPct`. */
+  resist?: Element;
+  /** the explicit table, which wins over `weakness`/`resist`. */
+  resistPct?: ResistTable;
+  /** weapon classes this creature is soft against. */
+  weakTo?: WeaponClass[];
+  /** weapon classes that bounce off it. */
+  resistsWeapon?: WeaponClass[];
+  /** seconds a stagger holds; 2.4 if absent. */
+  staggerDuration?: number;
+  /** flinches are suppressed, and poise only breaks below 35% HP. */
+  superArmour?: boolean;
+  /** drives the boss HP bar and `BossFight`'s phases. */
+  boss?: boolean;
+  /** geometry to share with another species — see `variant()`. */
+  protoKey?: string;
+  /**
+   * Modelled from the waist up, so the bottom of the mesh is *meant* to be
+   * below the ground. Opts the species out of `calibrateGround`.
+   */
+  buriedBase?: boolean;
+  /**
+   * Authored hints for the encounter code: never opens hostilities, and bolts.
+   * **Nothing reads either of them yet** — see `project/handoff/no-any.md`.
+   */
+  passive?: boolean;
+  skittish?: boolean;
+  /** Geometry, rig and material, built once and instanced by skeleton cloning. */
+  buildPrototype(): EnemyPrototype;
+  /** Construct one instance of this species' `Enemy` subclass. */
+  make(opts?: SpawnOpts): Enemy;
+  /**
+   * Ground-lift curves, measured off the model by `calibrateGround()` on the
+   * frame the species first spawns. The one mutable field on a definition:
+   * it is a per-species cache, and it lives here because it is per *species*.
+   */
+  _groundCal?: GroundCal;
+}
+
+/** Per-pose lift curves over `GROUND_CAL_T`, keyed `pose` or `pose:attackId`. */
+export type GroundCal = Record<string, Float64Array>;
+
+/** What `buildPrototype()` returns — exactly what `Rig.build()` produces. */
+export interface EnemyPrototype {
+  group: THREE.Group;
+  mesh: THREE.SkinnedMesh;
+  bones: Map<string, THREE.Bone>;
+}
+
+/**
+ * The cloned skeleton one instance owns, and the bind rotations `pose()`
+ * writes its offsets against. Satisfies `CreatureAnimTarget['rig']`.
+ */
+export interface EnemyRig {
+  byName: Map<string, THREE.Bone>;
+  rest: Map<string, THREE.Quaternion>;
+}
+
+/** What varies between two spawns of the same species. */
+export interface SpawnOpts {
+  /** per-instance id; de-phases gaits and idle timers between copies. */
+  id?: number;
+  heading?: number;
+  scale?: number;
+  level?: number;
+  maxHp?: number;
+  damage?: number;
+  name?: string;
+  expClass?: ExpClass;
+  /** seconds between attacks when the attack itself does not say. */
+  cooldown?: number;
+  /** metres from home before the enemy gives up and walks back. */
+  leash?: number;
+}
+
+/**
+ * Something an enemy may notice and attack.
+ *
+ * Both transform arms are live, which is why this is a union of two optional
+ * fields rather than one required one: the player publishes a `position`
+ * getter, while a companion is the plain formation record `Party.members`
+ * holds, whose transform is its `root`.
+ */
+export interface Threat {
+  position?: THREE.Vector3;
+  root?: THREE.Object3D;
+  /** ground speed in m/s — which is to say, how loud it is. */
+  speed?: number;
+  /** the player, once `Downed` has taken them out of the fight. */
+  downed?: boolean;
+  /** pull on aggro: 1 is Noctis, 0.45 a companion, 2.4 one that has taunted. */
+  threatWeight?: number;
+}
+
+/** A route an enemy walks when it has nothing better to do. */
+export interface PatrolRoute {
+  points: THREE.Vector3[];
+  index: number;
+  /** seconds held at each point. */
+  wait: number;
+  waitTimer: number;
+}
+
+/**
+ * What an enemy asks of the pack that owns it — see `game/encounters/Pack.ts`.
+ * Only the five calls `Enemy` makes; the pack's own bookkeeping is its business.
+ */
+export interface EnemyPack {
+  add(e: Enemy): unknown;
+  remove(e: Enemy): unknown;
+  /** hand `e` a role for the next second or so. */
+  assign(e: Enemy): unknown;
+  /** one member noticed something — bring the rest in. */
+  alert(by: Enemy, target: Threat): unknown;
+  onDeath(e: Enemy): unknown;
+}
+
+/** The heightfield an enemy stands on. */
+export interface GroundSampler {
+  heightAt(x: number, z: number): number;
+}
+
+/**
+ * Everything the world hands the AI each frame.
+ *
+ * The first three are `?` rather than required because they are filled from
+ * `Game.get()`, which returns `undefined` for a system that is not registered
+ * in the current scenario — a bestiary capture runs with no terrain at all.
+ */
+export interface EnemyCtx {
+  terrain?: GroundSampler | null;
+  player?: Threat | null;
+  /** everything attackable; `player` alone if the director has not set it. */
+  threats?: Threat[] | null;
+  /** the other enemies, for separation. */
+  others: Enemy[];
+  /** 0..1 night depth; widens a daemon's sight and narrows an animal's. */
+  night: number;
+  /** called as `onStrike(enemy, attack)` when an attack's active frame lands. */
+  onStrike: ((e: Enemy, a: EnemyAttack | null) => void) | null;
+  /** the legacy single-argument hook `CombatSystem` installs. */
+  onEnemyStrike: ((e: Enemy) => void) | null;
+  rng: () => number;
+}
+
+/** What a blow says about itself. */
+export interface HitOpts {
+  /** poise damage; 10 if absent. */
+  poise?: number;
+  /** struck from behind: 1.35x, and it counts as a crit. */
+  blindside?: boolean;
+  element?: Element | null;
+  weaponClass?: WeaponClass | null;
+  /** skip the flinch, so a combo does not re-flinch on every tick. */
+  noFlinch?: boolean;
+  /** who swung, so an unaware enemy turns on them. */
+  source?: Threat | null;
+  killer?: Threat | null;
+}
+
+/** What `hit()` returns, which the combat system turns into events. */
+export interface HitResult {
+  enemy: Enemy;
+  damage: number;
+  staggered: boolean;
+  killed: boolean;
+  crit: boolean;
+  element: Element | null;
+}
+
+/** The pose held by `freeze()` and re-applied every frame by `repose()`. */
+export interface FrozenPose {
+  state: PoseName;
+  phase: number;
+}
+
+/**
+ * Where a threat is standing.
+ *
+ * Both arms are live and this is the one place that knows it: the player
+ * publishes a `position` getter onto its root, while a companion is the plain
+ * formation record `Party.members` holds, which has no `position` of its own
+ * and keeps its transform on `root`.
+ */
+export function threatPos(t: Threat | null | undefined): THREE.Vector3 | null {
+  return t ? (t.position ?? t.root?.position ?? null) : null;
+}
 
 /**
  * Shared enemy behaviour.
@@ -25,10 +395,138 @@ import { CreatureAnim } from '../rig/CreatureAnim.ts';
  * `this.attackId` directly for extra variants.
  */
 export class Enemy {
+  /* ---- identity -------------------------------------------------- */
+  /** The species definition this instance was built from. */
+  type!: SpeciesDef;
+  /** Per-instance id. De-phases gaits, idle timers and sense ticks. */
+  id!: number;
+  /** Display name; the mark's name for a variant. */
+  name!: string;
+  /** Stable id the quest log matches kill objectives against. */
+  speciesId!: string;
+  faction!: Faction;
+  expClass!: ExpClass;
+  level!: number;
+  boss!: boolean;
+  superArmour!: boolean;
+
+  /* ---- body ------------------------------------------------------ */
+  root!: THREE.Group;
+  /** The cloned prototype group, parented to `root`. */
+  visual!: THREE.Object3D;
+  /** The one `SkinnedMesh` the whole creature is, or null before `attachVisual`. */
+  mesh!: THREE.SkinnedMesh | null;
+  rig!: EnemyRig;
+  anim!: CreatureAnim;
+  scale!: number;
+  radius!: number;
+  height!: number;
+  heading!: number;
+  velocity!: THREE.Vector3;
+
+  /* ---- vitals ---------------------------------------------------- */
+  hp!: number;
+  maxHp!: number;
+  /** `stats.hp`, so `reset()` can undo a spawn-time HP override. */
+  baseMaxHp!: number;
   poise!: number;
-  _atkCooldown!: number;
+  maxPoise!: number;
+  damage!: number;
+  dead!: boolean;
+  invulnerable!: boolean;
+  killer!: Threat | null;
+
+  /* ---- state ----------------------------------------------------- */
+  state!: EnemyState;
+  stateTime!: number;
+  /** Animation clock, seconds. Never resets; `stateTime` is the one that does. */
+  phase!: number;
+  /** Boss phase, driven by `BossFight`. */
+  phaseIndex!: number;
+  staggered!: boolean;
+  staggerTime!: number;
+  flinchTime!: number;
+  flinchDir!: THREE.Vector3;
+  /** 0..1.6 severity of the last blow; drives the impact layer. */
+  hitPower!: number;
+  lastHitAt!: number;
+  corpseTime!: number;
+  deathPush!: number;
+  deathSide!: number;
+  /** The player has lock-on. */
+  locked!: boolean;
+  /** Scenario override: hold this pose and stop the AI. */
+  frozenPose!: FrozenPose | null;
+  /** Off the ground — set by `Dropship` while a trooper is still falling. */
+  airborne!: boolean;
+
+  /* ---- perception / territory ------------------------------------ */
+  sight!: number;
+  /** Half-angle of the sight cone, radians. */
+  fov!: number;
+  hearing!: number;
+  nocturnal!: boolean;
+  aggroRange!: number;
+  /** Rises while the enemy is noticing something, falls when it is not. */
+  awareness!: number;
+  target!: Threat | null;
+  home!: THREE.Vector3;
+  leash!: number;
+  patrol!: PatrolRoute | null;
+  pack!: EnemyPack | null;
+  packRole!: PackRole;
+  /** Bearing on the pack's ring, radians. */
+  slotAngle!: number;
+
+  /* ---- combat ---------------------------------------------------- */
+  attacks!: EnemyAttack[];
+  /** The attack currently being performed. */
+  attack!: EnemyAttack | null;
+  attackId!: string | null;
+  attackRange!: number;
+  attackCooldown!: number;
+  speed!: number;
+  /** Ground speed this frame — the gait reads its stride off it. */
+  moveSpeed!: number;
+
+  /* ---- owned by the encounter layer ------------------------------ */
+  /**
+   * Set from outside, by whatever spawned this instance. Declared here
+   * because a pooled instance must have them cleared on despawn, which is
+   * `Enemies.despawn`'s job and impossible to get right if they are invisible.
+   */
+  spawnedBy!: string | null;
+  /** Territory id, set by `EncounterDirector`. */
+  territory!: string | null;
+  /** Hunt quest id, set by `EncounterDirector`; `HuntRuntime` matches on it. */
+  hunt!: string | null;
+  /** The drop table has already paid out. */
+  _looted!: boolean;
+  /** Corpse survives `corpseLinger` — a boss stays on the field. */
+  keepCorpse!: boolean;
+  /**
+   * Seconds left on Ignis' Analyse read; everything hits a read target 15%
+   * harder. Written by `characters/ai/Techniques.analyse`, decayed by
+   * `EncounterDirector`, read by `PartyAI.strike`. Declared here for the same
+   * reason as the fields above: it outlives a despawn, and `despawn()` does
+   * **not** clear it, so a pooled instance comes back still analysed.
+   */
+  analysed!: number;
+  /**
+   * The ailment a crafted flask inflicted, and when it lapses. Written by
+   * `CombatSystem._applySpellEffects` and **read by nothing** — see the fuller
+   * note on `CombatTarget.status`, which narrows this. Optional because the
+   * write is the field's only trace: an enemy that has never been hit by a
+   * status catalyst does not carry the key at all.
+   */
+  status?: { kind: string, until: number } | null;
+  /** Seconds this member has waited for an engage token. Owned by `Pack`. */
+  _waited!: number;
+
+  /* ---- internals ------------------------------------------------- */
   _dt!: number;
-  _kb!: any;
+  _kb!: THREE.Vector3 | null;
+  _atkCooldown!: number;
   _lostTimer!: number;
   _roleTimer!: number;
   _senseTimer!: number;
@@ -36,71 +534,8 @@ export class Enemy {
   _swung!: boolean;
   _wanderAngle!: number;
   _wanderTimer!: number;
-  aggroRange!: any;
-  airborne!: any;
-  anim!: CreatureAnim;
-  attack!: any;
-  attackCooldown!: any;
-  attackId!: any;
-  attackRange!: any;
-  attacks!: any;
-  awareness!: number;
-  baseMaxHp!: any;
-  boss!: boolean;
-  corpseTime!: number;
-  damage!: any;
-  dead!: boolean;
-  deathPush!: number;
-  deathSide!: number;
-  expClass!: any;
-  faction!: any;
-  flinchDir!: THREE.Vector3;
-  flinchTime!: number;
-  fov!: any;
-  frozenPose!: any;
-  heading!: number;
-  hearing!: any;
-  height!: any;
-  hitPower!: number;
-  home!: THREE.Vector3;
-  hp!: number;
-  id!: any;
-  invulnerable!: boolean;
-  killer!: any;
-  knockbackCap!: any;
-  lastHitAt!: number;
-  leash!: any;
-  level!: any;
-  locked!: boolean;
-  maxHp!: any;
-  maxPoise!: any;
-  mesh!: any;
-  moveSpeed!: number;
-  name!: any;
-  nocturnal!: boolean;
-  pack!: any;
-  packRole!: string;
-  patrol!: any;
-  phase!: number;
-  phaseIndex!: number;
-  radius!: any;
-  rig!: any;
-  root!: THREE.Group;
-  scale!: any;
-  sight!: any;
-  slotAngle!: number;
-  speciesId!: any;
-  speed!: any;
-  staggerTime!: number;
-  staggered!: boolean;
-  state!: string;
-  stateTime!: number;
-  superArmour!: boolean;
-  target!: any;
-  type!: any;
-  velocity!: THREE.Vector3;
-  visual!: THREE.Object3D;
-  constructor(type: any, opts: any = {}) {
+
+  constructor(type: SpeciesDef, opts: SpawnOpts = {}) {
     this.type = type;
     this.id = opts.id ?? 0;
     this.root = new THREE.Group();
@@ -120,13 +555,13 @@ export class Enemy {
     this.height = s.height;
     this.damage = s.damage;
     this.scale = opts.scale ?? 1;
-    this.level = opts.level ?? s.level ?? 12;
+    this.level = opts.level ?? s.level;
     this.name = opts.name || s.name;
 
     /** 'beast' | 'daemon' | 'imperial' — drives spawn windows and light weakness. */
-    this.faction = type.faction || 'beast';
+    this.faction = type.faction;
     /** EXP bucket read by `Stats.expForKill`. */
-    this.expClass = opts.expClass || type.expClass || 'normal';
+    this.expClass = opts.expClass || type.expClass;
     /** Stable id the quest log matches kill objectives against. */
     this.speciesId = type.questId || type.key;
 
@@ -144,11 +579,11 @@ export class Enemy {
     this.corpseTime = 0;
 
     /* ---- perception / territory ------------------------------------- */
-    const sense = type.senses || {};
+    const sense = type.senses;
     this.sight = sense.sight ?? s.aggroRange;
     this.fov = sense.fov ?? 1.9;               // half-angle, radians
     this.hearing = sense.hearing ?? 12;
-    this.nocturnal = !!(sense.nocturnal ?? (type.faction === 'daemon'));
+    this.nocturnal = sense.nocturnal ?? (type.faction === 'daemon');
     /** Rises while the enemy is noticing something, falls when it is not. */
     this.awareness = 0;
     this.home = new THREE.Vector3();
@@ -165,7 +600,7 @@ export class Enemy {
     this._wanderAngle = 0;
 
     /* ---- attacks ----------------------------------------------------- */
-    this.attacks = type.attacks || null;
+    this.attacks = type.attacks;
     this.attack = null;          // the attack currently being performed
     this.attackId = null;
     this._swung = false;
@@ -175,6 +610,26 @@ export class Enemy {
     this.phaseIndex = 0;         // boss phase, driven by BossFight
     this.invulnerable = false;
     this.superArmour = !!type.superArmour;
+
+    this.mesh = null;
+    this.killer = null;
+    this._kb = null;
+    this.airborne = false;
+    this.moveSpeed = 0;
+    this.hitPower = 0;
+    this.lastHitAt = 0;
+    this.flinchTime = 0;
+    this.flinchDir = new THREE.Vector3(0, 0, 1);
+    this.deathPush = 0;
+    this.deathSide = 1;
+    this._dt = 0;
+    this._waited = 0;
+    this.spawnedBy = null;
+    this.territory = null;
+    this.hunt = null;
+    this._looted = false;
+    this.keepCorpse = false;
+    this.analysed = 0;
   }
 
   get position() { return this.root.position; }
@@ -183,14 +638,15 @@ export class Enemy {
   get hpFraction() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
 
   /** Instantiate the shared prototype for this enemy. */
-  attachVisual(proto: any) {
+  attachVisual(proto: EnemyPrototype) {
     const group = cloneSkinned(proto.group);
-    const byName = new Map(), rest = new Map();
-    let mesh: any = null;
+    const byName = new Map<string, THREE.Bone>(), rest = new Map<string, THREE.Quaternion>();
+    const skinned: THREE.SkinnedMesh[] = [];
     group.traverse((o) => {
-      if ((o as THREE.Bone).isBone) { byName.set(o.name, o); rest.set(o.name, o.quaternion.clone()); }
-      if ((o as THREE.SkinnedMesh).isSkinnedMesh) mesh = o;
+      if (isBone(o)) { byName.set(o.name, o); rest.set(o.name, o.quaternion.clone()); }
+      if (isSkinnedMesh(o)) skinned.push(o);
     });
+    const mesh = skinned[0] ?? null;
     if (mesh) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false; }
     this.rig = { byName, rest };
     this.mesh = mesh;
@@ -210,18 +666,18 @@ export class Enemy {
   }
 
   /** Species hook: register leg chains and the trunk for the impact layer. */
-  setupAnim(anim: any) {
-    const has = (n: any) => this.rig.byName.has(n);
+  setupAnim(anim: CreatureAnim) {
+    const has = (n: string) => this.rig.byName.has(n);
     const trunk = ['hips', 'pelvis', 'spine', 'spineA', 'spineB', 'chest', 'core', 'pod', 'neck', 'head'];
     anim.setTrunk(trunk.filter(has));
   }
 
   /** Reset a pooled instance back to a spawnable state. */
-  reset(opts: any = {}) {
+  reset(opts: SpawnOpts = {}) {
     this.maxHp = opts.maxHp ?? this.baseMaxHp;
     this.hp = this.maxHp;
     this.poise = this.maxPoise;
-    this.level = opts.level ?? this.type.stats.level ?? 12;
+    this.level = opts.level ?? this.type.stats.level;
     this.damage = opts.damage ?? this.type.stats.damage;
     this.dead = false;
     this.staggered = false;
@@ -307,27 +763,29 @@ export class Enemy {
     this.root.updateMatrixWorld(true);
     const ry = this.root.matrixWorld.elements[13];
     const v = _calV;
-    let minY = Infinity, bestObj: any = null, bestIdx = 0, bestStep = 1;
-    this.visual.traverse((o: any) => {
-      const geo = o.geometry;
-      if (!geo || !geo.attributes || !geo.attributes.position) return;
-      const pos = geo.attributes.position;
-      if (o.isSkinnedMesh && o.skeleton) o.skeleton.update();
+    let minY = Infinity, bestIdx = 0, bestStep = 1;
+    const best: THREE.Mesh[] = [];
+    this.visual.traverse((o) => {
+      if (!isMesh(o)) return;
+      const pos = o.geometry.getAttribute('position');
+      if (!pos) return;
+      if (isSkinnedMesh(o) && o.skeleton) o.skeleton.update();
       const step = Math.max(1, Math.floor(pos.count / 900));
       for (let i = 0; i < pos.count; i += step) {
         v.fromBufferAttribute(pos, i);
-        if (o.isSkinnedMesh) o.applyBoneTransform(i, v);
+        if (isSkinnedMesh(o)) o.applyBoneTransform(i, v);
         v.applyMatrix4(o.matrixWorld);
-        if (v.y < minY) { minY = v.y; bestObj = o; bestIdx = i; bestStep = step; }
+        if (v.y < minY) { minY = v.y; best[0] = o; bestIdx = i; bestStep = step; }
       }
     });
+    const bestObj = best[0];
     if (bestObj && bestStep > 1) {
-      const pos = bestObj.geometry.attributes.position;
+      const pos = bestObj.geometry.getAttribute('position');
       const lo = Math.max(0, bestIdx - bestStep * 3);
       const hi = Math.min(pos.count, bestIdx + bestStep * 3);
       for (let i = lo; i < hi; i++) {
         v.fromBufferAttribute(pos, i);
-        if (bestObj.isSkinnedMesh) bestObj.applyBoneTransform(i, v);
+        if (isSkinnedMesh(bestObj)) bestObj.applyBoneTransform(i, v);
         v.applyMatrix4(bestObj.matrixWorld);
         if (v.y < minY) minY = v.y;
       }
@@ -362,7 +820,7 @@ export class Enemy {
    *
    * @param poses pose names to calibrate
    */
-  calibrateGround(poses: string[] = GROUND_CAL_POSES) {
+  calibrateGround(poses: readonly PoseName[] = GROUND_CAL_POSES) {
     if (this.type._groundCal || !this.rig || !this.visual) return;
     // A creature whose model deliberately continues below the ground has no
     // "foot" to measure — see `TITAN.buriedBase`.
@@ -385,13 +843,15 @@ export class Enemy {
       // A telegraph and a strike are a different shape for every attack the
       // species owns, so each gets its own curve; `groundLift` prefers the
       // specific one and falls back to the generic.
-      const variants = (POSE_PER_ATTACK.has(pose) && this.attacks)
-        ? this.attacks.map((a: any) => [`${pose}:${a.id}`, a]) : [];
-      for (const [key, atk] of [[pose, null], ...variants]) {
+      const cases: Array<{ key: string, atk: EnemyAttack | null }> = [{ key: pose, atk: null }];
+      if (POSE_PER_ATTACK.has(pose)) {
+        for (const a of this.attacks) cases.push({ key: `${pose}:${a.id}`, atk: a });
+      }
+      for (const { key, atk } of cases) {
         this.attack = atk;
         this.attackId = atk ? atk.id : null;
         const curve = new Float64Array(GROUND_CAL_T.length);
-        let any = false;
+        let reaches = false;
         for (let i = 0; i < GROUND_CAL_T.length; i++) {
           this.stateTime = GROUND_CAL_T[i];
           this.phase = GROUND_CAL_T[i];
@@ -402,9 +862,9 @@ export class Enemy {
           this.pose(pose, this.phase, null);
           const lift = Math.max(0, -this.poseFloor() - GROUND_SINK) / (this.scale || 1);
           curve[i] = lift;
-          if (lift > 1e-4) any = true;
+          if (lift > 1e-4) reaches = true;
         }
-        if (any) cal[key] = curve;
+        if (reaches) cal[key] = curve;
       }
     }
     this.attack = saveAtk;
@@ -426,7 +886,7 @@ export class Enemy {
    *
    * @param pose pose name, as passed to `pose()`
    */
-  groundLift(pose: string) {
+  groundLift(pose: PoseName) {
     const cal = this.type._groundCal;
     if (!cal) return 0;
     const curve = (this.attackId && cal[`${pose}:${this.attackId}`]) || cal[pose];
@@ -448,7 +908,7 @@ export class Enemy {
    * Percent-of-damage-taken for an element. 100 = neutral, >100 weak,
    * <100 resistant, 0 immune. Feeds `Stats.computeDamage` unchanged.
    */
-  resistance(element: string) {
+  resistance(element: Element) {
     const t = this.type;
     if (t.resistPct && t.resistPct[element] != null) return t.resistPct[element];
     if (t.weakness === element) return 160;
@@ -458,21 +918,29 @@ export class Enemy {
   }
 
   /** Weapon classes this creature is soft against (`computeDamage`). */
-  get weakTo() { return this.type.weakTo || EMPTY; }
+  get weakTo(): readonly WeaponClass[] { return this.type.weakTo ?? NO_WEAPONS; }
   /** Weapon classes that bounce off it. */
-  get resistsWeapon() { return this.type.resistsWeapon || EMPTY; }
+  get resistsWeapon(): readonly WeaponClass[] { return this.type.resistsWeapon ?? NO_WEAPONS; }
   /** Stagger multiplier the damage formula uses. */
   get staggerMult() { return this.staggered ? 2.0 : (this.state === 'telegraph' ? 1.25 : 1); }
-  /** Physical mitigation, so `computeDamage` has something to bite on. */
-  get defense() { return Math.round(8 + this.level * 3.1 + (this.type.defense || 0)); }
-  get magicDefense() { return Math.round(6 + this.level * 2.6 + (this.type.magicDefense || 0)); }
+  /**
+   * Physical mitigation, so `computeDamage` has something to bite on.
+   *
+   * Derived from level alone. These used to read `this.type.defense` and
+   * `this.type.magicDefense` on top — fields **no species has ever declared**,
+   * so the term was always zero. Removed rather than declared: a per-species
+   * mitigation knob nobody has used is a knob to add when it is wanted, not a
+   * `|| 0` that makes it look as though it already exists.
+   */
+  get defense() { return Math.round(8 + this.level * 3.1); }
+  get magicDefense() { return Math.round(6 + this.level * 2.6); }
 
   /**
    * Apply damage. Returns a result the combat system turns into events.
    * @param dir world-space direction of the blow
    * @param o {poise, blindside, element, weaponClass, noFlinch}
    */
-  hit(amount: number, dir: THREE.Vector3, o: any = {}) {
+  hit(amount: number, dir: THREE.Vector3, o: HitOpts = {}): HitResult | null {
     if (this.dead || this.invulnerable) return null;
     let dmg = amount;
     if (o.blindside) dmg *= 1.35;
@@ -516,7 +984,7 @@ export class Enemy {
     this.hitPower = power;
     if (this.anim) this.anim.impact(this.flinchDir, power, this.heading);
     // knockback: a slide the creature has to arrest, not a teleport
-    const kb = Math.min(this.knockbackCap ?? 3.6, power * (staggered ? 3.2 : 1.5)) / (1 + this.radius * 0.9);
+    const kb = Math.min(KNOCKBACK_CAP, power * (staggered ? 3.2 : 1.5)) / (1 + this.radius * 0.9);
     if (kb > 0.05) {
       this._kb = this._kb || new THREE.Vector3();
       this._kb.copy(this.flinchDir).setY(0).normalize().multiplyScalar(kb);
@@ -537,7 +1005,7 @@ export class Enemy {
     };
   }
 
-  die(killer: any = null) {
+  die(killer: Threat | null = null) {
     this.dead = true;
     this.killer = killer;
     this.invulnerable = true;
@@ -557,7 +1025,7 @@ export class Enemy {
     if (this.pack) this.pack.onDeath(this);
   }
 
-  setState(s: string) {
+  setState(s: AiState) {
     if (this.state === s) return;
     this.state = s;
     this.stateTime = 0;
@@ -571,8 +1039,8 @@ export class Enemy {
    * radius scaled by how fast the target is moving.
    * @param t something with `.position` and optional `.speed`
    */
-  perceives(t: any, ctx: any) {
-    const p = t.position || t.root?.position;
+  perceives(t: Threat, ctx: EnemyCtx | null) {
+    const p = threatPos(t);
     if (!p) return 0;
     const dx = p.x - this.root.position.x, dz = p.z - this.root.position.z;
     const d2 = dx * dx + dz * dz;
@@ -596,7 +1064,7 @@ export class Enemy {
   /* ------------------------------------------------------------ combat */
 
   /** Pick the next attack whose range covers `dist`, weighted. */
-  _chooseAttack(dist: number, rng: any) {
+  _chooseAttack(dist: number, rng: (() => number) | null) {
     const list = this.attacks;
     if (!list || !list.length) return null;
     let total = 0;
@@ -646,7 +1114,7 @@ export class Enemy {
     return m * this.scale;
   }
 
-  _beginAttack(a: any) {
+  _beginAttack(a: EnemyAttack | null) {
     this.attack = a;
     this.attackId = a ? a.id : null;
     this._swung = false;
@@ -660,10 +1128,11 @@ export class Enemy {
   }
 
   /** Timing for the current attack, falling back to the legacy table. */
-  _timing(field: string) {
-    const t = this.type.timing || DEFAULT_TIMING;
-    if (this.attack && this.attack[field] != null) return this.attack[field];
-    return t[field] != null ? t[field] : DEFAULT_TIMING[field as keyof typeof DEFAULT_TIMING];
+  _timing(field: keyof AttackTiming): number {
+    const own = this.attack ? this.attack[field] : undefined;
+    if (own != null) return own;
+    const t = this.type.timing;
+    return t[field] != null ? t[field] : DEFAULT_TIMING[field];
   }
 
   /* -------------------------------------------------------------- tick */
@@ -671,7 +1140,7 @@ export class Enemy {
   /**
    * @param ctx {terrain, player, allies, others, night, onStrike, rng}
    */
-  update(dt: number, ctx: any) {
+  update(dt: number, ctx: EnemyCtx) {
     this.stateTime += dt;
     this.phase += dt;
     /** Frame delta, so `pose()` can advance stride phase and springs. */
@@ -701,7 +1170,7 @@ export class Enemy {
     this._sense(dt, ctx);
 
     const target = this.target;
-    const tp = target ? (target.position || target.root?.position) : null;
+    const tp = threatPos(target);
     const dist = tp ? Math.hypot(tp.x - this.root.position.x, tp.z - this.root.position.z) : Infinity;
 
     switch (this.state) {
@@ -739,7 +1208,7 @@ export class Enemy {
       this.root.position.y = this.airborne ? Math.max(gy, this.root.position.y) : gy;
     }
     this.root.rotation.y = this.heading;
-    const pose = POSE_MAP[this.state as keyof typeof POSE_MAP] || 'idle';
+    const pose = POSE_MAP[this.state] ?? 'idle';
     this._resetVisual();
     this.pose(pose, this.phase, ctx);
     this.visual.position.y += this.groundLift(pose);
@@ -771,7 +1240,7 @@ export class Enemy {
    * Knockback decay. Being hit shoves a creature and it has to dig in and stop
    * — that friction is a large part of why a hit reads as having landed.
    */
-  _slide(dt: number, ctx: any) {
+  _slide(dt: number, ctx: EnemyCtx) {
     const kb = this._kb;
     if (!kb || kb.lengthSq() < 1e-5) return;
     this.root.position.x += kb.x * dt;
@@ -787,7 +1256,7 @@ export class Enemy {
   _postPose(dt: number) {
     const a = this.anim;
     if (!a || !this.rig) return;
-    a.commit(dt, (name: any, x: number, y: number, z: number) => {
+    a.commit(dt, (name: string, x: number, y: number, z: number) => {
       const b = this.rig.byName.get(name);
       if (!b) return;
       _addEuler.set(x, y, z, 'XYZ');
@@ -806,7 +1275,7 @@ export class Enemy {
   }
 
   /** Notice things, lose interest in things. */
-  _sense(dt: number, ctx: any) {
+  _sense(dt: number, ctx: EnemyCtx) {
     this._senseTimer -= dt;
     if (this._senseTimer > 0) return;
     this._senseTimer = 0.22;
@@ -816,22 +1285,25 @@ export class Enemy {
       // daemons sleep by day, beasts by night — until something walks into them
       const wake = this.nocturnal ? (ctx.night > 0.05) : (ctx.night < 0.4);
       if (wake) this.setState('patrol');
-      else if (ctx.player && this.root.position.distanceTo(ctx.player.position) < 6) this.setState('alert');
+      else {
+        const pp = threatPos(ctx.player);
+        if (pp && this.root.position.distanceTo(pp) < 6) this.setState('alert');
+      }
       return;
     }
 
-    let best: any = null, bestScore = 0;
-    const cands = ctx.threats || (ctx.player ? [ctx.player] : EMPTY);
+    let best: Threat | null = null, bestScore = 0;
+    const cands: readonly Threat[] = ctx.threats ?? (ctx.player ? [ctx.player] : NO_THREATS);
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
-      if (!c || c.downed || c.ko) continue;
+      if (!c || c.downed) continue;
       // Noctis is the fight. Companions only pull aggro when they are much
       // closer, or when Gladio has deliberately taken it with Coverage.
       const score = this.perceives(c, ctx) * (c.threatWeight != null ? c.threatWeight : 1);
       if (score > bestScore) { bestScore = score; best = c; }
     }
 
-    if (bestScore > 0) {
+    if (best) {
       this.awareness = Math.min(1, this.awareness + bestScore * step * 3.2);
       this.target = best;
       this._lostTimer = 0;
@@ -883,7 +1355,7 @@ export class Enemy {
     this.setState('return');
   }
 
-  _tickIdle(dt: number, ctx: any) {
+  _tickIdle(dt: number, _ctx: EnemyCtx) {
     if (this.patrol) { this.setState('patrol'); return; }
     this._wanderTimer -= dt;
     if (this._wanderTimer <= 0) {
@@ -893,7 +1365,7 @@ export class Enemy {
     this.heading += (this._wanderAngle - this.heading) * Math.min(1, dt * 0.8);
   }
 
-  _tickPatrol(dt: number, ctx: any) {
+  _tickPatrol(dt: number, ctx: EnemyCtx) {
     const p = this.patrol;
     if (!p || !p.points.length) { this.setState('idle'); return; }
     const wp = p.points[p.index % p.points.length];
@@ -909,13 +1381,13 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.32, ctx);
   }
 
-  _tickAlert(dt: number, ctx: any, tp: any) {
+  _tickAlert(dt: number, _ctx: EnemyCtx, tp: THREE.Vector3 | null) {
     // stand up, look toward whatever it was
     if (tp) this._face(tp, dt, 3.0);
     if (this.stateTime > 4.5 && this.awareness < 0.2) this.setState('patrol');
   }
 
-  _tickReturn(dt: number, ctx: any) {
+  _tickReturn(dt: number, ctx: EnemyCtx) {
     if (this.home.lengthSq() === 0) { this.setState('idle'); return; }
     const dx = this.home.x - this.root.position.x, dz = this.home.z - this.root.position.z;
     const d = Math.hypot(dx, dz);
@@ -924,7 +1396,7 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.55, ctx);
   }
 
-  _tickChase(dt: number, ctx: any, target: any, tp: any, dist: number) {
+  _tickChase(dt: number, ctx: EnemyCtx, target: Threat | null, tp: THREE.Vector3 | null, dist: number) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 5);
@@ -951,7 +1423,7 @@ export class Enemy {
   }
 
   /** Circle the target waiting for a turn. This is what stops the conga line. */
-  _tickStrafe(dt: number, ctx: any, target: any, tp: any, dist: number) {
+  _tickStrafe(dt: number, ctx: EnemyCtx, target: Threat | null, tp: THREE.Vector3 | null, dist: number) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 4.5);
@@ -978,18 +1450,17 @@ export class Enemy {
     if (this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
   }
 
-  _tickTelegraph(dt: number, ctx: any, tp: any, dist: number) {
+  _tickTelegraph(dt: number, ctx: EnemyCtx, tp: THREE.Vector3 | null, _dist: number) {
     const a = this.attack;
     this._face(tp, dt, a && a.tracking != null ? a.tracking : 2.4);
-    if (a && a.approachDuring && tp) {
-      const dx = tp.x - this.root.position.x, dz = tp.z - this.root.position.z;
-      const d = Math.hypot(dx, dz) || 1;
-      if (d > this.reach * 0.6) this._move(dt, dx / d, dz / d, this.speed * 0.4, ctx);
-    }
+    // There used to be an `a.approachDuring` branch here that closed the
+    // distance through the wind-up. **No attack in the bestiary declares that
+    // field**, so it has never run; it is gone rather than declared, because a
+    // telegraph that walks is a design decision to take deliberately.
     if (this.stateTime > this._timing('telegraph')) this.setState('attack');
   }
 
-  _tickAttack(dt: number, ctx: any, target: any, tp: any, dist: number) {
+  _tickAttack(dt: number, ctx: EnemyCtx, _target: Threat | null, _tp: THREE.Vector3 | null, _dist: number) {
     const a = this.attack;
     // a lunge carries all the way through the active window, decaying, so a
     // leap actually arrives instead of stopping short of its own target
@@ -1021,7 +1492,7 @@ export class Enemy {
     else this.packRole = 'engage';
   }
 
-  _face(p: any, dt: number, k = 6) {
+  _face(p: THREE.Vector3 | null, dt: number, k = 6) {
     if (!p) return;
     const want = Math.atan2(p.x - this.root.position.x, p.z - this.root.position.z);
     let d = want - this.heading;
@@ -1031,7 +1502,7 @@ export class Enemy {
   }
 
   /** Move along a unit direction with pack separation. */
-  _move(dt: number, nx: number, nz: number, sp: number, ctx: any, skipSeparation = false) {
+  _move(dt: number, nx: number, nz: number, sp: number, ctx: EnemyCtx, skipSeparation = false) {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);
@@ -1057,13 +1528,14 @@ export class Enemy {
 
   /**
    * Subclasses override. Called with the pose name, the stride/animation phase
-   * and a per-frame context; a species that needs none of them declares none,
-   * which is why every parameter is optional here.
+   * and a per-frame context. A species that needs fewer of them simply
+   * declares fewer parameters; the base does nothing at all, which is what an
+   * unrigged or still-being-built species wants.
    */
-  pose(_state?: any, _phase?: any, _ctx?: any): void {}
+  pose(_state: PoseName, _phase: number, _ctx: EnemyCtx | null): void {}
 
   /** Force a specific pose/phase and stop the AI (screenshot scenarios). */
-  freeze(state: string, phase: number, ctx: any) {
+  freeze(state: PoseName, phase: number, ctx: EnemyCtx | null = null) {
     this.frozenPose = { state, phase };
     this.state = state;
     this.phase = phase;
@@ -1084,7 +1556,7 @@ export class Enemy {
    * its 0.1 m drop once per settle frame and put the model 8.4 m underground
    * by capture time. Everything a held pose needs goes through here.
    */
-  repose(dt = 0, ctx: any = null) {
+  repose(dt = 0, ctx: EnemyCtx | null = null) {
     if (!this.frozenPose || !this.visual) return;
     this._resetVisual();
     this.pose(this.frozenPose.state, this.frozenPose.phase, ctx);
@@ -1095,8 +1567,17 @@ export class Enemy {
   unfreeze() { this.frozenPose = null; }
 }
 
-const EMPTY: any[] = [];
-const DEFAULT_TIMING = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
+const NO_WEAPONS: readonly WeaponClass[] = [];
+const NO_THREATS: readonly Threat[] = [];
+const DEFAULT_TIMING: AttackTiming = { telegraph: 0.5, strike: 0.18, attack: 0.5, recover: 0.7 };
+
+/**
+ * Metres per second a blow may shove a creature, before its own mass is
+ * divided out. Was `this.knockbackCap ?? 3.6` against a field **nothing has
+ * ever assigned** — so 3.6 is the only value it has ever had. A constant says
+ * that; the field said the opposite.
+ */
+const KNOCKBACK_CAP = 3.6;
 const _addEuler = new THREE.Euler();
 const _calV = new THREE.Vector3();
 
@@ -1115,13 +1596,13 @@ const GROUND_CAL_T = [0.04, 0.1, 0.18, 0.3, 0.45, 0.65, 0.9, 1.25, 1.7, 2.3, 3.0
  * would inject an arbitrary bob into the stride rather than remove a sink.
  * `pounce` is absent because being off the ground is the point of it.
  */
-const GROUND_CAL_POSES = ['idle', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
+const GROUND_CAL_POSES: readonly PoseName[] = ['idle', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
 /**
  * Poses whose shape depends on *which* attack is being performed, so the
  * correction has to be measured per attack rather than once.
  */
-const POSE_PER_ATTACK = new Set(['telegraph', 'attack']);
+const POSE_PER_ATTACK: ReadonlySet<PoseName> = new Set<PoseName>(['telegraph', 'attack']);
 
 /**
  * Ground penetration left uncorrected, metres. A foot pressing a few
@@ -1136,7 +1617,7 @@ const _addQ = new THREE.Quaternion();
  * Map the richer AI vocabulary onto the pose vocabulary the original four
  * species were written against, so no existing `pose()` has to change.
  */
-const POSE_MAP = {
+const POSE_MAP: Partial<Record<EnemyState, PoseName>> = {
   sleep: 'idle', idle: 'idle', patrol: 'approach', alert: 'idle',
   return: 'approach', chase: 'approach', approach: 'approach', strafe: 'approach',
   telegraph: 'telegraph', attack: 'attack', recover: 'attack',
@@ -1145,7 +1626,8 @@ const POSE_MAP = {
 
 /* ------------------------------------------------------------ textures */
 
-let _organic: any = null, _metal: any = null, _organicRough: any = null, _metalRough: any = null;
+let _organic: THREE.Texture | null = null, _metal: THREE.Texture | null = null;
+let _organicRough: THREE.Texture | null = null, _metalRough: THREE.Texture | null = null;
 const texNoise = new Noise(777);
 
 /**

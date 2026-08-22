@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow, loft, bladeCross } from '../../combat/GeoKit.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -53,8 +54,8 @@ export const MESMENIR = {
       telegraph: 0.55, strike: 0.20, attack: 0.62, recover: 0.85, cooldown: 3.0 },
   ],
   buildPrototype,
-  make(opts: any) { return new MesmenirEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new MesmenirEnemy(opts); },
+} satisfies SpeciesDef;
 
 /**
  * One flame streamer: a flat swept tapered blade built hanging along -Y so
@@ -306,13 +307,9 @@ function buildPrototype() {
 const GALLOP = { bR: 0, bL: 0.63, fR: 2.51, fL: 3.14 };
 
 class MesmenirEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(MESMENIR, opts); }
+  constructor(opts: SpawnOpts) { super(MESMENIR, opts); }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

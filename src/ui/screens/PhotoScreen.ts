@@ -16,12 +16,17 @@ const FRAMES = ['3:2 Full', '16:9 Wide', '1:1 Square', 'Polaroid'];
  * Chrome-free: the shared menu heading and footer are suppressed.
  */
 export class PhotoScreen {
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
   _ap!: string;
   age!: number;
   apBar!: HTMLElement;
   apV!: HTMLElement;
   aperture!: number;
-  bars!: any;
+  /** The two letterbox bars, top and bottom. */
+  bars!: Array<{ b: HTMLElement, k: string }>;
   chrome!: boolean;
   corners!: HTMLElement[];
   dials!: HTMLElement;
@@ -34,7 +39,8 @@ export class PhotoScreen {
   frame!: number;
   frameEl!: HTMLElement;
   grid!: HTMLElement;
-  gridLines!: any[];
+  /** Rule-of-thirds guides. */
+  gridLines!: HTMLElement[];
   menus!: Menus;
   rows!: CachedNode[];
   scrim!: boolean;

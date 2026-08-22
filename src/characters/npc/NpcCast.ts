@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CharacterDef, HairStyle, HairTuft } from '../rig/Look.ts';
 
 /**
  * The people of Hammerhead.
@@ -16,10 +17,28 @@ import * as THREE from 'three';
 
 const srgb = (hex: number) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
 
+/** What a caller may vary about {@link hairSet}. Everything else is the recipe. */
+interface HairSetOpts {
+  color: number;
+  /** colour at the strand tip; `undefined` leaves the shell colour alone. */
+  tip?: number;
+  /** crown strand length, canonical head metres. */
+  len?: number;
+  /** back-layer strand length. */
+  back?: number;
+  /** strands in the crown mat; the other two layers scale off it. */
+  n?: number;
+  /** sideways bias on the styled flow direction. */
+  sweep?: number;
+  /** spring weight on the back layer, so it swings. */
+  spring?: number;
+  rough?: number;
+}
+
 /** A compact hair set: crown mat, a sweep and a back layer. Three tufts, not ten. */
 function hairSet({
   color, tip, len = 0.036, back = 0.05, n = 130, sweep = 0.0, spring = 0.25, rough = 0.38,
-}: any) {
+}: HairSetOpts): HairStyle {
   return {
     color, tipColor: tip, rough, shell: 0.0125, volume: 0.9,
     hairline: 0.004, peak: 0.3, wisps: 18, wispLen: 0.7,
@@ -32,7 +51,7 @@ function hairSet({
 }
 
 /** A long ponytail dropping from the back of the crown. */
-function ponytail(color: number, tip: number, len = 0.20) {
+function ponytail(color: number, tip: number, len = 0.20): HairTuft {
   return {
     n: 84, th: [2.6, 3.7], phi: [0.55, 0.95], dir: [0, -0.94, -0.34], out: 0.58, bend: 1.0,
     len, width: 0.0030, thick: 0.34, spike: 0.5, sag: 0.16, dirJit: 0.05, lenVar: 0.16,
@@ -41,11 +60,23 @@ function ponytail(color: number, tip: number, len = 0.20) {
 }
 
 /** A short beard rooted below the equator. */
-function beard(color: number, tip: number, len = 0.016, n = 110) {
+function beard(color: number, tip: number, len = 0.016, n = 110): HairTuft[] {
   return [
     { n, th: [-1.45, 1.45], phi: [2.05, 2.75], absPhi: true, dir: [0, -0.9, 0.36], out: 0.86, bend: 0.94, len, width: 0.0011, thick: 0.45, spike: 0.85, dirJit: 0.22, lenVar: 0.34, color, tipColor: tip },
     { n: Math.round(n * 0.4), th: [-0.6, 0.6], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: len * 0.8, width: 0.0011, thick: 0.45, spike: 0.9, dirJit: 0.2, lenVar: 0.3, color, tipColor: tip },
   ];
+}
+
+/**
+ * One townsperson as authored: a `CharacterDef` plus the two things only a
+ * townsperson has — the job title the interact prompt shows under their name,
+ * and the portrait hue their dialogue card is tinted with.
+ */
+export interface NpcCastDef extends CharacterDef {
+  /** shown as the hint on the `Talk` prompt. */
+  role: string;
+  /** portrait/dialogue-card hue in degrees. */
+  hue: number;
 }
 
 export const NPC_CAST = {
@@ -336,6 +367,6 @@ export const NPC_CAST = {
       ],
     },
   },
-};
+} satisfies Record<string, NpcCastDef>;
 
 export default NPC_CAST;

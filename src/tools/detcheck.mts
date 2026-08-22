@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Diagnostic: isolate whether nondeterminism comes from boot or from stepping. */
 import { chromium } from 'playwright';
+import type { Page } from 'playwright';
 import { writeFile } from 'node:fs/promises';
 
 const PORT = process.env.PORT || 5299;
@@ -11,12 +12,12 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader', '--force-color-profile=srgb', '--hide-scrollbars'],
 });
 
-async function grab(page: any, n = 60) {
-  await page.evaluate(([s, f]: any) => {
+async function grab(page: Page, n = 60) {
+  await page.evaluate(([s, f]: [string, number]) => {
     const g = window.GAME;
     g.resetClock();
     g.applyShot(s); g.settle(f); g.applyShot(s); g.settle(8);
-  }, [SHOT, n]);
+  }, [SHOT, n] as [string, number]);
   return page.screenshot({ type: 'png' });
 }
 
@@ -34,7 +35,7 @@ const b = await grab(p1);           // same page, second capture
 const p2 = await session();
 const c = await grab(p2);           // fresh page
 
-const eq = (x: any, y: any) => Buffer.compare(x, y) === 0;
+const eq = (x: Buffer, y: Buffer) => Buffer.compare(x, y) === 0;
 console.log(`same page, repeated : ${eq(a, b) ? 'IDENTICAL' : 'DIFFERS'}`);
 console.log(`fresh page          : ${eq(a, c) ? 'IDENTICAL' : 'DIFFERS'}`);
 await writeFile('/tmp/det_a.png', a);

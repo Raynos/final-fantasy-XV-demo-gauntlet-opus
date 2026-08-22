@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FilterPass, fsMaterial } from './Fx.ts';
 import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH } from '../../shaders/post/common.ts';
+import type { PostFX } from '../PostFX.ts';
 
 /**
  * The grade: a real film pipeline rather than a pile of tweaks.
@@ -14,7 +15,7 @@ import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH } from '../../shaders
  */
 export class GradePass extends FilterPass {
   override material!: THREE.ShaderMaterial;
-  constructor(fx: any) {
+  constructor(fx: PostFX) {
     super(fx);
     this.material = fsMaterial({
       uniforms: {
@@ -114,5 +115,5 @@ export class GradePass extends FilterPass {
     });
   }
 
-  override setSize(w: any, h: any) { this.material.uniforms.uResolution.value.set(w, h); }
+  override setSize(w: number, h: number) { this.material.uniforms.uResolution.value.set(w, h); }
 }

@@ -18,13 +18,33 @@
  * `PORT` is honoured and forwarded; the capture daemon takes `PORT+1`.
  */
 import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * One gate: either a `.mts` under this directory or an explicit command.
+ *
+ * `expect` is printed when the gate fails, so the reader is told what a pass
+ * would have looked like rather than only that something went wrong.
+ */
+interface Gate {
+  name: string;
+  /** A tool in `src/tools/`; mutually exclusive with `cmd`/`args`. */
+  script?: string;
+  cmd?: string;
+  args?: string[];
+  expect: string;
+  /** Assumes a server is already up on `PORT`; `check` starts one for it. */
+  needsServer?: boolean;
+  /** Only run under `--perf`, and only on a quiet tree. */
+  perf?: boolean;
+}
+
 /** Ordered cheapest-first, so a broken tree fails fast. */
-const GATES = [
+const GATES: Gate[] = [
   { name: 'build', cmd: 'npx', args: ['vite', 'build'], expect: 'builds' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
   { name: 'integration', script: 'integration.mts', expect: '18 pass, 0 fail' },
@@ -41,23 +61,23 @@ const GATES = [
   { name: 'gameplay', script: 'gameplay.mts', expect: '60 fps under real input', perf: true },
 ];
 
-function parse(argv: any) {
+function parse(argv: string[]) {
   const o: { perf: boolean, only: string[] | null } = { perf: false, only: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--perf') o.perf = true;
-    else if (argv[i] === '--only') o.only = argv[++i].split(',').map((s: any) => s.trim());
+    else if (argv[i] === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
   }
   return o;
 }
 
 /** Vite on `port`, resolved once it is actually serving. */
-function serve(port: any) {
+function serve(port: number): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
     const p = spawn('npx', ['vite', '--port', String(port), '--strictPort'], {
       cwd: path.join(HERE, '..', '..'), env: { ...process.env, PORT: String(port) },
     });
     let out = '';
-    const done = (ok: any) => { if (ok) resolve(p); else reject(new Error(out.slice(-400))); };
+    const done = (ok: boolean) => { if (ok) resolve(p); else reject(new Error(out.slice(-400))); };
     p.stdout.on('data', (d) => { out += d; if (/Local:|ready in/.test(String(d))) done(true); });
     p.stderr.on('data', (d) => { out += d; });
     p.on('close', () => done(false));
@@ -65,10 +85,10 @@ function serve(port: any) {
   });
 }
 
-function run(gate: any, env: any): Promise<{gate: any, code: number | null, ms: number, tail: string}> {
+function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<{ gate: Gate, code: number | null, ms: number, tail: string }> {
   return new Promise((resolve) => {
     const cmd = gate.cmd || process.execPath;
-    const args = gate.args || [path.join(HERE, gate.script)];
+    const args = gate.args || (gate.script ? [path.join(HERE, gate.script)] : []);
     const t0 = Date.now();
     let out = '';
     const p = spawn(cmd, args, { env: env || process.env, cwd: path.join(HERE, '..', '..') });
@@ -92,7 +112,7 @@ if (!opts.perf && !opts.only) {
 
 const basePort = Number(process.env.PORT || 5173);
 const auxPort = basePort + 50;
-let aux: any = null;
+let aux: ChildProcess | null = null;
 
 const results = [];
 for (const g of todo) {

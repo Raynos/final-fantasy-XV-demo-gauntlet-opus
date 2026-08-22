@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness, weatherPlate } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
@@ -64,8 +65,8 @@ export const IMPERIAL_AXEMAN = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new AxemanEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new AxemanEnemy(opts); },
+} satisfies SpeciesDef;
 
 /**
  * `tint` plus the shared field-wear pass, so a plate is not one flat number.
@@ -250,11 +251,7 @@ function buildPrototype() {
 }
 
 class AxemanEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(IMPERIAL_AXEMAN, opts); }
+  constructor(opts: SpawnOpts) { super(IMPERIAL_AXEMAN, opts); }
 
   /** World-space axe tip — the sweep origin for the cleave trail. */
   axeTip(out = new THREE.Vector3()) {
@@ -264,7 +261,7 @@ class AxemanEnemy extends Enemy {
     return out.set(0.0, 1.32, 0.53).applyMatrix4(b.matrixWorld);
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PostFX } from '../engine/PostFX.ts';
+import type { Input } from '../engine/Input.ts';
 
 /**
  * A detached fly camera for reviewing the world.
@@ -31,10 +32,10 @@ export class Freecam {
   _e!: THREE.Euler;
   _fwd!: THREE.Vector3;
   _look!: boolean;
-  _onDown!: any;
-  _onMove!: any;
-  _onUp!: any;
-  _onWheel!: any;
+  _onDown!: (e: MouseEvent) => void;
+  _onMove!: (e: MouseEvent) => void;
+  _onUp!: (e: MouseEvent) => void;
+  _onWheel!: (e: WheelEvent) => void;
   _q!: THREE.Quaternion;
   _right!: THREE.Vector3;
   _vel!: THREE.Vector3;
@@ -73,7 +74,7 @@ export class Freecam {
     this._fwd = new THREE.Vector3();
     this._right = new THREE.Vector3();
 
-    this._onMove = (e: any) => {
+    this._onMove = (e: MouseEvent) => {
       // Look while the pointer is locked, or while a button is held if it is
       // not. Requiring a drag is the only thing that works when a menu screen
       // has released the lock, and it costs nothing when the lock is active.
@@ -81,9 +82,9 @@ export class Freecam {
       this._dx += e.movementX || 0;
       this._dy += e.movementY || 0;
     };
-    this._onDown = (e: any) => { if (e.button === 0 || e.button === 2) this._look = true; };
-    this._onUp = (e: any) => { if (e.button === 0 || e.button === 2) this._look = false; };
-    this._onWheel = (e: any) => {
+    this._onDown = (e: MouseEvent) => { if (e.button === 0 || e.button === 2) this._look = true; };
+    this._onUp = (e: MouseEvent) => { if (e.button === 0 || e.button === 2) this._look = false; };
+    this._onWheel = (e: WheelEvent) => {
       if (!this.enabled) return;
       // Wheel trims travel speed rather than dollying: on an 8 km world the
       // useful range spans three orders of magnitude and a fixed speed is
@@ -140,7 +141,7 @@ export class Freecam {
    * @param dt seconds
    * @param input the engine Input
    */
-  update(dt: number, input: any) {
+  update(dt: number, input: Input) {
     if (!this.enabled) return;
 
     this.yaw -= this._dx * this.sensitivity;

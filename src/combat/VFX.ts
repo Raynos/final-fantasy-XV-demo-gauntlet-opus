@@ -10,6 +10,7 @@ import {
   ringSprite, scorchDecal, crackDecal, frostDecal,
 } from './VfxTextures.ts';
 import type { Game } from '../game/Game.ts';
+import type { Terrain } from '../world/Terrain.ts';
 
 const V = new THREE.Vector3();
 const V2 = new THREE.Vector3();
@@ -30,21 +31,211 @@ const C = new THREE.Color();
  * shader, so smoke and dust fade out where they meet geometry instead of
  * slicing through it.
  */
+/**
+ * A callback driven by normalised time on the effect clock: `n` runs 0 -> 1
+ * across the effect's life and goes outside that range once it is over, which
+ * is how a track tells itself to shut down.
+ */
+export type TrackFn = (n: number, elapsed: number) => void;
+
+/** One scheduled effect callback. See `VFX.track`. */
+interface Track {
+  /** Spawn time on the effect clock. */
+  t0: number;
+  life: number;
+  fn: TrackFn;
+}
+
+/** One of the eight resident PointLights and what currently owns it. */
+interface LightSlot {
+  light: THREE.PointLight;
+  /** Effect-clock time the slot frees at. Written nowhere; see the handoff. */
+  until: number;
+  /** A bigger hit steals a smaller one's light. */
+  priority: number;
+}
+
+/** The three ground decal maps, generated once at boot. */
+interface DecalTextures {
+  scorch: THREE.DataTexture;
+  crack: THREE.DataTexture;
+  frost: THREE.DataTexture;
+}
+
+/** Where an effect goes off and when, on the effect clock. */
+interface EffectAt {
+  pos: THREE.Vector3;
+  /** Spawn time on the effect clock; `this.clock` when absent. */
+  t0?: number;
+}
+
+/** Directional spark burst — the bread-and-butter melee impact. */
+export interface SparkBurstOpts extends EffectAt {
+  dir?: THREE.Vector3;
+  count?: number;
+  speed?: number;
+  /** Half-angle of the emission cone, radians. */
+  spread?: number;
+  color?: THREE.ColorRepresentation;
+  life?: number;
+  size?: number;
+  gravity?: number;
+  intensity?: number;
+  stretch?: number;
+}
+
+/** Soft glowing motes — magic, crystal light, elemental drift. */
+export interface MoteBurstOpts extends EffectAt {
+  count?: number;
+  speed?: number;
+  spread?: number;
+  color?: THREE.ColorRepresentation;
+  life?: number;
+  size?: number;
+  gravity?: number;
+  dir?: THREE.Vector3;
+  intensity?: number;
+  turbulence?: number;
+  drag?: number;
+  /** Gaussian spread of the *spawn point*, metres. */
+  jitter?: number;
+}
+
+/** Ground dust kicked up by footfalls, landings and shockwaves. */
+export interface DustPuffOpts extends EffectAt {
+  count?: number;
+  radius?: number;
+  speed?: number;
+  life?: number;
+  color?: THREE.ColorRepresentation;
+  size?: number;
+  /** Multiplier from birth size to death size. */
+  grow?: number;
+  up?: number;
+  intensity?: number;
+}
+
+/** Billowing smoke — fire spells, magitek wreckage, daemon miasma. */
+export interface SmokePlumeOpts extends EffectAt {
+  count?: number;
+  speed?: number;
+  life?: number;
+  color?: THREE.ColorRepresentation;
+  size?: number;
+  grow?: number;
+  rise?: number;
+  intensity?: number;
+  radius?: number;
+  turbulence?: number;
+}
+
+/** Fine red mist on a flesh hit. */
+export interface BloodMistOpts extends EffectAt {
+  dir: THREE.Vector3;
+  count?: number;
+  speed?: number;
+  life?: number;
+}
+
+/** Camera-facing anisotropic star. */
+export interface FlareOpts extends EffectAt {
+  color?: THREE.ColorRepresentation;
+  size?: number;
+  life?: number;
+  intensity?: number;
+}
+
+/** Camera-facing expanding pressure ring. */
+export interface AirRingOpts extends EffectAt {
+  color?: THREE.ColorRepresentation;
+  /** Start and end radius, metres. */
+  from?: number;
+  to?: number;
+  life?: number;
+  intensity?: number;
+  spin?: number;
+}
+
+/** A pooled dynamic light. `priority` decides who gets one when all 8 are out. */
+export interface FlashOpts extends EffectAt {
+  color?: THREE.ColorRepresentation;
+  intensity?: number;
+  distance?: number;
+  life?: number;
+  priority?: number;
+}
+
+/** The full melee impact: sparks, flare, dust, air ring and a real light. */
+export interface ImpactOpts extends EffectAt {
+  dir?: THREE.Vector3;
+  scale?: number;
+  color?: THREE.ColorRepresentation;
+  blood?: boolean;
+  /** Lay a ground ring too. Needs `terrain`. */
+  ring?: boolean;
+  terrain?: Terrain | null;
+  /** Overrides `color` for the sparks alone. */
+  sparkColor?: THREE.ColorRepresentation;
+}
+
+/** Expanding ground shockwave + air ring + dust wall. */
+export interface ShockwaveOpts extends EffectAt {
+  terrain?: Terrain | null;
+  radius?: number;
+  color?: THREE.ColorRepresentation;
+  dust?: boolean;
+  intensity?: number;
+}
+
+/** Blue crystal shard burst — dematerialisation / rematerialisation. */
+export interface CrystalBurstOpts extends EffectAt {
+  count?: number;
+  speed?: number;
+  life?: number;
+  size?: number;
+  color?: THREE.ColorRepresentation;
+  gravity?: number;
+  spread?: number;
+  dir?: THREE.Vector3;
+  stretch?: number;
+  drag?: number;
+}
+
+/** Short repositioning warp (no strike). */
+export interface WarpToOpts {
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  t0?: number;
+  terrain?: Terrain | null;
+}
+
+/** Jagged branching arc between two points, with a flash light. */
+export interface LightningArcOpts {
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  t0?: number;
+  life?: number;
+  color?: THREE.ColorRepresentation;
+  width?: number;
+  /** How many forks come off the main bolt. */
+  branches?: number;
+}
+
 export class VFX {
-  _tracks!: any[];
+  _tracks!: Track[];
   airRings!: ParticleSystem;
   flares!: ParticleSystem;
   _beamNext!: number;
   _depthSize!: THREE.Vector2;
   _postPatched!: boolean;
-  beams!: any[];
+  beams!: PolyBeam[];
   clock!: number;
   depthRT!: THREE.WebGLRenderTarget | null;
   dust!: ParticleSystem;
   exposure!: number;
   game!: Game;
   ground!: GroundFX;
-  lights!: any[];
+  lights!: LightSlot[];
   motes!: ParticleSystem;
   pinned!: number | null;
   rng!: Rng;
@@ -55,7 +246,7 @@ export class VFX {
   softEnabled!: boolean;
   sparks!: ParticleSystem;
   systems!: ParticleSystem[];
-  tex!: any;
+  tex!: DecalTextures;
   trails!: TrailPool;
   usingGtaoDepth!: boolean;
   async init(game: Game) {
@@ -169,7 +360,7 @@ export class VFX {
    * Survives freezing, which is what lets a pinned frame show a beam at 70%
    * of its fade and a light at 40% of its falloff simultaneously.
    */
-  track(t0: any, life: any, fn: any) { this._tracks.push({ t0, life, fn }); }
+  track(t0: number, life: number, fn: TrackFn) { this._tracks.push({ t0, life, fn }); }
 
   /* ------------------------------------------------------- primitives */
 
@@ -181,7 +372,7 @@ export class VFX {
     pos, dir = V2.set(0, 1, 0), count = 26, speed = 9, spread = 0.85,
     color = 0xffd48a, life = 0.42, t0 = this.clock, size = 0.10, gravity = -14,
     intensity = 4.0, stretch = 0.05,
-  }: any) {
+  }: SparkBurstOpts) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -200,7 +391,7 @@ export class VFX {
     pos, count = 20, speed = 1.6, spread = Math.PI, color = 0x66ccff,
     life = 1.1, t0 = this.clock, size = 0.22, gravity = 0.8, dir = V2.set(0, 1, 0),
     intensity = 3.2, turbulence = 0.35, drag = 1.4, jitter = 0,
-  }: any) {
+  }: MoteBurstOpts) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -223,7 +414,7 @@ export class VFX {
   dustPuff({
     pos, count = 22, radius = 0.5, speed = 2.4, life = 1.5, t0 = this.clock,
     color = 0xbfae95, size = 0.9, grow = 3.2, up = 0.5, intensity = 0.85,
-  }: any) {
+  }: DustPuffOpts) {
     const rng = this.rng;
     C.set(color);
     for (let i = 0; i < count; i++) {
@@ -244,7 +435,7 @@ export class VFX {
     pos, count = 16, speed = 1.4, life = 3.0, t0 = this.clock,
     color = 0x2a2a30, size = 0.7, grow = 3.4, rise = 1.6, intensity = 0.6,
     radius = 0.4, turbulence = 0.45,
-  }: any) {
+  }: SmokePlumeOpts) {
     const rng = this.rng;
     C.set(color);
     for (let i = 0; i < count; i++) {
@@ -261,7 +452,7 @@ export class VFX {
   }
 
   /** Fine red mist on a flesh hit. */
-  bloodMist({ pos, dir, count = 14, t0 = this.clock, speed = 3.2, life = 0.8 }: any) {
+  bloodMist({ pos, dir, count = 14, t0 = this.clock, speed = 3.2, life = 0.8 }: BloodMistOpts) {
     const rng = this.rng;
     C.set(0x5a0d10);
     const d = V.copy(dir).normalize();
@@ -277,7 +468,7 @@ export class VFX {
   }
 
   /** Camera-facing anisotropic star — put one at every heavy impact. */
-  flare({ pos, color = 0xbfe8ff, size = 1.4, life = 0.30, t0 = this.clock, intensity = 3 }: any) {
+  flare({ pos, color = 0xbfe8ff, size = 1.4, life = 0.30, t0 = this.clock, intensity = 3 }: FlareOpts) {
     C.set(color);
     this.flares.emit({
       pos, vel: V.set(0, 0, 0), color: C, t0, life,
@@ -291,7 +482,7 @@ export class VFX {
    * impact as an *event in the air* rather than a bright dot — it reads at a
    * glance even when the core is blown out.
    */
-  airRing({ pos, color = 0xbfe8ff, from = 0.4, to = 6, life = 0.45, t0 = this.clock, intensity = 2.2, spin = 0 }: any) {
+  airRing({ pos, color = 0xbfe8ff, from = 0.4, to = 6, life = 0.45, t0 = this.clock, intensity = 2.2, spin = 0 }: AirRingOpts) {
     C.set(color);
     this.airRings.emit({
       pos, vel: V.set(0, 0, 0), color: C, t0, life,
@@ -306,7 +497,7 @@ export class VFX {
    * Fire a pooled dynamic PointLight. Hard budget of 8; the lowest-priority
    * light is stolen when the pool is full so a big hit always lights the world.
    */
-  flash({ pos, color = 0xffd08a, intensity = 40, distance = 12, life = 0.25, t0 = this.clock, priority = 1 }: any) {
+  flash({ pos, color = 0xffd08a, intensity = 40, distance = 12, life = 0.25, t0 = this.clock, priority = 1 }: FlashOpts) {
     let slot = this.lights.find((s) => !s.light.visible);
     if (!slot) {
       slot = this.lights.reduce((a, b) => (b.priority < a.priority ? b : a));
@@ -339,7 +530,7 @@ export class VFX {
   impact({
     pos, dir = V2.set(0, 1, 0), scale = 1, color = 0xffcf8a, t0 = this.clock,
     blood = false, ring = true, terrain = null, sparkColor,
-  }: any) {
+  }: ImpactOpts) {
     const d = dir.clone().normalize();
     this.sparkBurst({
       pos, dir: d, count: Math.round(30 * scale), speed: 8 * scale,
@@ -376,7 +567,7 @@ export class VFX {
   }
 
   /** Expanding ground shockwave + air ring + dust wall. */
-  shockwave({ pos, terrain, radius = 5, color = 0x9fd8ff, t0 = this.clock, dust = true, intensity = 3.4 }: any) {
+  shockwave({ pos, terrain, radius = 5, color = 0x9fd8ff, t0 = this.clock, dust = true, intensity = 3.4 }: ShockwaveOpts) {
     if (terrain) {
       const age = this.clock - t0;
       this.ground.ring({ pos, terrain, radius, color, life: 0.85, intensity, opacity: 1, age });
@@ -397,7 +588,7 @@ export class VFX {
     pos, count = 34, speed = 6.5, t0 = this.clock, life = 0.7, size = 0.30,
     color = 0x39a7ff, gravity = -6, spread = Math.PI, dir = V2.set(0, 1, 0),
     stretch = 0, drag = 2.2,
-  }: any) {
+  }: CrystalBurstOpts) {
     const rng = this.rng;
     C.set(color);
     const d = V.copy(dir).normalize();
@@ -433,7 +624,7 @@ export class VFX {
    * @param {object} o
    * @returns the time of impact
    */
-  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }: { from: THREE.Vector3, to: THREE.Vector3, t0?: number, dash?: number, terrain?: any, color?: number, scale?: number }): number {
+  warpStrike({ from, to, t0 = this.clock, dash = 0.17, terrain = null, color = 0x3aa9ff, scale = 1 }: { from: THREE.Vector3, to: THREE.Vector3, t0?: number, dash?: number, terrain?: Terrain | null, color?: number, scale?: number }): number {
     const rng = this.rng;
     const dir = new THREE.Vector3().subVectors(to, from);
     const dist = dir.length();
@@ -629,7 +820,7 @@ export class VFX {
   }
 
   /** Short repositioning warp (no strike). */
-  warpTo({ from, to, t0 = this.clock, terrain = null }: any) {
+  warpTo({ from, to, t0 = this.clock, terrain = null }: WarpToOpts) {
     this.crystalBurst({ pos: from, count: 18, speed: 4.5, t0, life: 0.5, size: 0.2 });
     const b = this.acquireBeam();
     b.uniforms.uTaper.value = 0.8;
@@ -644,22 +835,22 @@ export class VFX {
 
   /* ---------------------------------------------------------- decals */
 
-  scorch(pos: any, size = 3, terrain = this.game.get('Terrain')) {
+  scorch(pos: THREE.Vector3, size = 3, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.scorch, color: 0xffffff, opacity: 0.95, life: 40, rotate: this.rng.next() * 6.28 });
   }
 
-  crack(pos: any, size = 3.5, terrain = this.game.get('Terrain')) {
+  crack(pos: THREE.Vector3, size = 3.5, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.crack, color: 0x1b2026, opacity: 0.9, life: 40, rotate: this.rng.next() * 6.28 });
   }
 
-  frost(pos: any, size = 4, terrain = this.game.get('Terrain')) {
+  frost(pos: THREE.Vector3, size = 4, terrain = this.game.get('Terrain')) {
     return this.ground.decal({ pos, terrain, size, map: this.tex.frost, color: 0xbfe6ff, opacity: 0.85, life: 22, rotate: this.rng.next() * 6.28, intensity: 1.6 });
   }
 
   /* ------------------------------------------------------- lightning */
 
   /** Jagged branching arc between two points, with a flash light. */
-  lightningArc({ from, to, t0 = this.clock, life = 0.20, color = 0xc0d8ff, width = 0.10, branches = 2 }: any) {
+  lightningArc({ from, to, t0 = this.clock, life = 0.20, color = 0xc0d8ff, width = 0.10, branches = 2 }: LightningArcOpts) {
     const main = this.acquireBeam();
     main.uniforms.uHead.value.set(color);
     main.uniforms.uTail.value.set(color);
@@ -797,7 +988,7 @@ export class VFX {
     this.ground.update(this.pinned === null ? dt : 0, c);
 
     // evaluate timed tracks
-    const keep = [];
+    const keep: Track[] = [];
     for (const t of this._tracks) {
       const n = (c - t.t0) / t.life;
       t.fn(n, c - t.t0);

@@ -27,8 +27,32 @@ const openShop = (game: Game, id: string) => {
 };
 const openHunts = (game: Game) => game.get('Interaction')?.openScreen('hunts');
 
+/**
+ * One row of a `choices` node, as `Dialogue._renderChoices` and
+ * `Dialogue._pick` read it.
+ *
+ * Declared here because `Dialogue.start` still takes an untyped script; when
+ * that gains a real `DialogueScript` type this belongs beside it.
+ */
+export interface DialogueChoice {
+  label: string;
+  /** node id to jump to when this row is taken. */
+  next?: string;
+  /**
+   * Run on selection. Returning a node id redirects there; returning null
+   * falls through to `end` / `next`.
+   */
+  action?: (game: Game) => string | null;
+  /** close the conversation after `action`. */
+  end?: boolean;
+  /** small right-hand tag on the row — `Shop`, `Hunts`. */
+  note?: string;
+  /** shown only while this passes. */
+  when?: (game: Game) => boolean;
+}
+
 /** Shared "anything else?" hub used by most of the named cast. */
-function hub(choices: any) { return { choices }; }
+function hub(choices: DialogueChoice[]) { return { choices }; }
 
 export const NPC_DIALOGUE = {
   /* ------------------------------------------------------------- Cindy -- */
@@ -207,7 +231,7 @@ export const NPC_DIALOGUE = {
         ]),
         work: {
           lines: () => {
-            const active = rpg?.quests?.active?.filter?.((q: any) => q.type === 'hunt') || [];
+            const active = rpg?.quests?.active?.filter?.((q) => q?.type === 'hunt') || [];
             return active.length
               ? [`You\'re already carryin\' ${active.length === 1 ? 'a contract' : `${active.length} contracts`}. Finish one, I\'ll pay you for it.`,
                 'Board\'s outside if you want to look again.']

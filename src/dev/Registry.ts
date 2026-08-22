@@ -22,17 +22,35 @@
  * the overlay watermarks itself once anything does.
  */
 
-/** A console variable: a named getter/setter pair with a range the UI can draw. */
-export interface Cvar {
+/**
+ * What a cvar can hold.
+ *
+ * The console only ever hands over strings, so `Registry.set` coerces against
+ * the *boot* value's type -- which is why this is a closed union rather than
+ * `unknown`: the coercion has to be able to enumerate the cases.
+ */
+export type CvarValue = string | number | boolean;
+
+/**
+ * A console variable: a named getter/setter pair with a range the UI can draw.
+ *
+ * `get`/`set` are declared as **methods** rather than function properties on
+ * purpose. A `number` cvar is registered with `set: (v: number) => void` and
+ * has to live in one `Map` next to the boolean and string ones; method
+ * declarations are checked bivariantly, which is what lets that heterogeneous
+ * table exist without every registration widening its own setter to the union.
+ */
+export interface Cvar<T extends CvarValue = CvarValue> {
   name: string;
   category: string;
   help: string;
-  get: (...args: any[]) => any;
-  set: (...args: any[]) => any;
+  get(): T;
+  /** Takes whatever `get` returns, or the coerced form of a console string. */
+  set(v: T): void;
   min?: number;
   max?: number;
   step?: number;
-  choices?: string[];
+  choices?: readonly string[];
   /** Hidden unless cheats are on. */
   cheat?: boolean;
 }
@@ -43,18 +61,31 @@ export interface Command {
   help: string;
   /** Usage string shown in help. */
   args?: string;
-  exec: (...args: any[]) => any;
+  /**
+   * Run it. The whole argument tail arrives as one string; anything returned
+   * is printed, and a throw is caught and printed as the error. A command that
+   * has to await something prints its own result through `DevConsole` instead.
+   */
+  exec(args: string): string | void | Promise<string | void>;
+}
+
+/** One cvar that has moved off its boot value. */
+export interface CvarDelta {
+  is: CvarValue;
+  was: CvarValue | undefined;
 }
 
 export class Registry {
-  cmds!: Map<any, any>;
-  cvars!: Map<any, any>;
-  defaults!: Map<any, any>;
-  history!: any[];
+  cmds!: Map<string, Command>;
+  cvars!: Map<string, Cvar>;
+  /** Boot value per cvar name, snapshotted at registration. */
+  defaults!: Map<string, CvarValue>;
+  /** Ring buffer of executed command lines. */
+  history!: string[];
   constructor() {
-    /** @type {Map<string, Cvar>} */ this.cvars = new Map();
-    /** @type {Map<string, Command>} */ this.cmds = new Map();
-    /** @type {Map<string, any>} */ this.defaults = new Map();
+    this.cvars = new Map();
+    this.cmds = new Map();
+    this.defaults = new Map();
     /** Ring buffer of executed command lines; rides along in every review note. */
     this.history = [];
   }
@@ -62,7 +93,7 @@ export class Registry {
   /**
    * Register a tunable value.
    */
-  cvar(spec: Cvar) {
+  cvar<T extends CvarValue>(spec: Cvar<T>) {
     this.cvars.set(spec.name, spec);
     // Snapshot at registration, not at first read: a value read later may
     // already have been changed, and then `deltas()` would report nothing.
@@ -79,7 +110,7 @@ export class Registry {
   }
 
   /** @param name @returns */
-  get(name: string): any {
+  get(name: string): CvarValue | undefined {
     const c = this.cvars.get(name);
     return c ? c.get() : undefined;
   }
@@ -126,6 +157,10 @@ export class Registry {
     const cmd = this.cmds.get(name);
     if (cmd) {
       const out = cmd.exec(rest);
+      // An async command reports through `DevConsole.print` when it lands.
+      // Before this check the pending promise went through `String()` and the
+      // console printed the literal text `[object Promise]`.
+      if (out instanceof Promise) return `${name}: working…`;
       return out == null ? `${name}: ok` : String(out);
     }
     const cv = this.cvars.get(name);
@@ -142,11 +177,11 @@ export class Registry {
    * Stamped into review notes so a reader can tell at a glance whether the
    * report was filed from a tampered state.
    */
-  deltas(): Record<string, {is:any, was:any}> {
-    const out: Record<string, { is: any, was: any }> = {};
+  deltas(): Record<string, CvarDelta> {
+    const out: Record<string, CvarDelta> = {};
     for (const [name, c] of this.cvars) {
       const was = this.defaults.get(name);
-      let is;
+      let is: CvarValue;
       try { is = c.get(); } catch { continue; }
       if (JSON.stringify(is) !== JSON.stringify(was)) out[name] = { is, was };
     }
@@ -156,8 +191,9 @@ export class Registry {
   /** Restore every cvar to the value it had at boot. */
   reset() {
     for (const [name, c] of this.cvars) {
-      if (!this.defaults.has(name)) continue;
-      try { c.set(this.defaults.get(name)); } catch { /* transient system */ }
+      const boot = this.defaults.get(name);
+      if (boot === undefined) continue;
+      try { c.set(boot); } catch { /* transient system */ }
     }
   }
 
@@ -174,7 +210,7 @@ export class Registry {
   /** Grouped listing for `help` and for building panels. */
   byCategory() {
     const out: Map<string, {cvars:Cvar[], cmds:Command[]}> = new Map();
-    const bucket = (k: any) => {
+    const bucket = (k: string) => {
       if (!out.has(k)) out.set(k, { cvars: [], cmds: [] });
       return out.get(k);
     };

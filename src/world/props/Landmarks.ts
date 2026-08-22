@@ -137,7 +137,11 @@ export class Landmarks {
       else if (s.type === 'obelisk') this._obelisk(B, s);
       else if (s.type === 'shack') this._shack(B, s);
       else if (s.type === 'truck') this._truck(B, s);
-      else if (s.type === 'sign') this._sign(B, s);
+      // `sign` is placed by `Ecology`'s `beside()`, which always writes the
+      // road station and shoulder — but `EcoSite` cannot say so, so ask.
+      else if (s.type === 'sign' && s.roadZ !== undefined && s.side !== undefined) {
+        this._sign(B, { ...s, roadZ: s.roadZ, side: s.side });
+      }
     }
     this._telegraph(B);
     this._fences(B);

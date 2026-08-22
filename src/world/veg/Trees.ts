@@ -4,6 +4,7 @@ import { hash3 } from './Ecology.ts';
 import { buildTree, TREE_SPECIES } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { leafClusterTex, bakeTreeImpostor, bakeCanopyCard, barkMaps } from './VegTextures.ts';
+import type { TreeBakeSource } from './VegTextures.ts';
 import type { Ecology } from './Ecology.ts';
 
 /**
@@ -85,10 +86,10 @@ const SHADE_MIN = 0.70, SHADE_SPAN = 0.30;
  * not a hue.
  */
 const BIOME_HUE = 0.5;
-const _lum = (c: any) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
+const _lum = (c: number[]) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
 /** biome tint array -> species key -> composed [r,g,b]. Keyed by identity. */
-const _tintCache = new WeakMap();
-function composeTint(sp: string, t: number[], bt: any) {
+const _tintCache = new WeakMap<number[], Map<string, number[]>>();
+function composeTint(sp: string, t: number[], bt: number[]): number[] {
   let bySpecies = _tintCache.get(bt);
   if (!bySpecies) { bySpecies = new Map(); _tintCache.set(bt, bySpecies); }
   let out = bySpecies.get(sp);
@@ -134,8 +135,86 @@ function billboardGeo(width: number, height: number) {
   return g;
 }
 
+/** One placed tree, as a scatter tile records it. */
+interface TreePlacement {
+  x: number;
+  z: number;
+  y: number;
+  /** `TREE_SPECIES` key. */
+  sp: string;
+  /** Which of the built variants. */
+  vi: number;
+  /** Trunk scale. */
+  s: number;
+  yaw: number;
+  tilt: number;
+  /** Per-instance tint, linear RGB. */
+  r: number;
+  g: number;
+  b: number;
+  /** Grown height, metres — the impostor card is sized off it. */
+  h: number;
+}
+
+/** One far stand card, as a canopy tile records it. */
+interface CanopyPlacement {
+  x: number;
+  z: number;
+  y: number;
+  sp: string;
+  /** Card scale in plan and in elevation. */
+  sx: number;
+  sy: number;
+  yaw: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** One built variant of one species: its two instanced meshes and its bounds. */
+interface TreeVariant {
+  sp: string;
+  /** Variant index. */
+  v: number;
+  /** `"<sp>_<v>"`. */
+  key: string;
+  wood: THREE.InstancedMesh;
+  leaves: THREE.InstancedMesh | null;
+  /** The leaf mesh's per-instance colour buffer, held so it is never re-looked-up. */
+  leafTint: THREE.InstancedBufferAttribute | null;
+  height: number;
+  radius: number;
+  /** Instance capacity. */
+  max: number;
+  /** Slots written so far this frame; reset at the top of every update. */
+  _w: number;
+}
+
+/** An instanced billboard ring, and how many slots it has left this frame. */
+interface CardRing {
+  mesh: THREE.InstancedMesh;
+  /** The mesh's per-instance colour buffer. */
+  tint: THREE.InstancedBufferAttribute;
+  max: number;
+  /** Slots written so far this frame; reset at the top of every update. */
+  _w: number;
+}
+
+/** A stand card ring, which also carries the card's authored size. */
+interface CanopyRing extends CardRing {
+  width: number;
+  height: number;
+}
+
+/** One cached scatter tile, and the frame it was last touched on. */
+interface TileEntry<T> {
+  list: T[];
+  stamp: number;
+}
+
 export class Trees {
-  tiles!: Map<any, any>;
+  /** Tree scatter tiles, keyed on the packed tile coordinate. */
+  tiles!: Map<number, TileEntry<TreePlacement>>;
   _deadline!: number;
   _last!: THREE.Vector3;
   _pending!: boolean;
@@ -143,13 +222,14 @@ export class Trees {
   _stamp!: number;
   _tick!: number;
   budgetMs!: number;
-  byKey!: Map<any, any>;
+  byKey!: Map<string, TreeVariant>;
   canBudget!: number;
   canCount!: number;
-  canopies!: Map<any, any>;
+  canopies!: Map<string, CanopyRing>;
   canopyNear!: number;
   canopyRange!: number;
-  ctiles!: Map<any, any>;
+  /** Canopy scatter tiles, keyed on the packed tile coordinate. */
+  ctiles!: Map<number, TileEntry<CanopyPlacement>>;
   eco!: Ecology;
   geoBudget!: number;
   geoCount!: number;
@@ -158,12 +238,12 @@ export class Trees {
   impBudget!: number;
   impCount!: number;
   impRange!: number;
-  impostors!: Map<any, any>;
+  impostors!: Map<string, CardRing>;
   quality!: number;
-  scene!: any;
+  scene!: THREE.Scene;
   tileCacheMax!: number;
-  variants!: any[];
-  constructor(eco: Ecology, scene: any, {
+  variants!: TreeVariant[];
+  constructor(eco: Ecology, scene: THREE.Scene, {
     quality = 1, geoRange = 88, impRange = 330,
     canopyNear = 296, canopyRange = 1250,
   } = {}) {
@@ -219,7 +299,7 @@ export class Trees {
         normalScale: new THREE.Vector2(0.85, 0.85),
       }), { bend: 0.55, flutter: 0.1, gustFreq: 0.03, flexPow: 2.4 });
 
-      let leafMat: any = null;
+      let leafMat: THREE.MeshStandardMaterial | null = null;
       if (S.leafCount > 0) {
         leafMat = patchVeg(new THREE.MeshStandardMaterial({
           map: leafClusterTex(S.leafKind),
@@ -232,7 +312,7 @@ export class Trees {
         });
       }
 
-      let canopySrc: any = null;
+      let canopySrc: TreeBakeSource | null = null;
       for (let v = 0; v < VARIANTS; v++) {
         const t = buildTree(sp, 9001 + v * 733 + sp.length * 37);
         const wood = new THREE.InstancedMesh(t.wood, woodMat, perVariant);
@@ -241,18 +321,20 @@ export class Trees {
         wood.name = `tree_${sp}_${v}_wood`;
         this.group.add(wood);
 
-        let leaves: any = null;
+        let leaves: THREE.InstancedMesh | null = null;
+        let leafTint: THREE.InstancedBufferAttribute | null = null;
         if (t.leaves && leafMat) {
           leaves = new THREE.InstancedMesh(t.leaves, leafMat, perVariant);
           leaves.castShadow = true; leaves.receiveShadow = true;
           leaves.count = 0; leaves.visible = false; leaves.frustumCulled = false;
-          leaves.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(perVariant * 3), 3);
+          leafTint = new THREE.InstancedBufferAttribute(new Float32Array(perVariant * 3), 3);
+          leaves.instanceColor = leafTint;
           leaves.name = `tree_${sp}_${v}_leaf`;
           registerAlphaCard(leaves);
           this.group.add(leaves);
         }
         const key = `${sp}_${v}`;
-        this.variants.push({ sp, v, key, wood, leaves, height: t.height, radius: t.radius, max: perVariant });
+        this.variants.push({ sp, v, key, wood, leaves, leafTint, height: t.height, radius: t.radius, max: perVariant, _w: 0 });
 
         const src = {
           wood: t.wood, leaves: t.leaves,
@@ -276,14 +358,17 @@ export class Trees {
         const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
         imp.castShadow = false; imp.receiveShadow = true;
         imp.count = 0; imp.visible = false; imp.frustumCulled = false;
-        imp.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(perImpostor * 3), 3);
+        const impTint = new THREE.InstancedBufferAttribute(new Float32Array(perImpostor * 3), 3);
+        imp.instanceColor = impTint;
         imp.name = `tree_${key}_impostor`;
         registerAlphaCard(imp);
         this.group.add(imp);
-        this.impostors.set(key, { mesh: imp, max: perImpostor });
+        this.impostors.set(key, { mesh: imp, tint: impTint, max: perImpostor, _w: 0 });
       }
 
-      // one stand card per species — the far ring's primitive
+      // one stand card per species — the far ring's primitive.
+      // `VARIANTS` is at least one, so variant 0 always set this.
+      if (!canopySrc) continue;
       const stand = bakeCanopyCard(renderer, canopySrc, {
         count: 6, spread: CANOPY_W / (2 * 1.35 * canopySrc.radius),
         size: 384, seed: 7717 + sp.length * 131,
@@ -300,11 +385,12 @@ export class Trees {
         billboardGeo(stand.width, stand.height), canMat, perCanopy);
       can.castShadow = false; can.receiveShadow = false;
       can.count = 0; can.visible = false; can.frustumCulled = false;
-      can.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(perCanopy * 3), 3);
+      const canTint = new THREE.InstancedBufferAttribute(new Float32Array(perCanopy * 3), 3);
+      can.instanceColor = canTint;
       can.name = `canopy_${sp}`;
       registerAlphaCard(can);
       this.group.add(can);
-      this.canopies.set(sp, { mesh: can, max: perCanopy, width: stand.width, height: stand.height });
+      this.canopies.set(sp, { mesh: can, tint: canTint, max: perCanopy, width: stand.width, height: stand.height, _w: 0 });
     }
 
     this.byKey = new Map();
@@ -327,15 +413,15 @@ export class Trees {
     const rng = new Rng(hash3(tx, tz, 0x7ee5));
 
     const dg = new Float32Array((DG + 1) * (DG + 1));
-    let any = 0;
+    let peakDensity = 0;
     for (let j = 0; j <= DG; j++) {
       for (let i = 0; i <= DG; i++) {
         const d = eco.treeDensity(x0 + (i / DG) * TILE, z0 + (j / DG) * TILE);
         dg[j * (DG + 1) + i] = d;
-        if (d > any) any = d;
+        if (d > peakDensity) peakDensity = d;
       }
     }
-    if (any < 0.015) return [];
+    if (peakDensity < 0.015) return [];
 
     const bil = (u: number, v: number) => {
       const fu = u * DG, fv = v * DG;
@@ -417,7 +503,7 @@ export class Trees {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(map: any, key: number, make: any): any[] | null {
+  _tile<T>(map: Map<number, TileEntry<T>>, key: number, make: () => T[]): T[] | null {
     const e = map.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
     if (this._primed && performance.now() > this._deadline) return null;
@@ -481,7 +567,11 @@ export class Trees {
     // is what the flat number was tuned on in the first place.
     const cullFloor = 3.5;
     const impR2 = this.impRange * this.impRange;
-    const near: any[] = [];
+    // Two parallel arrays rather than one interleaved list: the sort walks an
+    // index array either way, and this keeps the distances and the placements
+    // separately typed without allocating a pair object per tree per frame.
+    const nearD2: number[] = [];
+    const nearP: TreePlacement[] = [];
     let far = 0;
 
     const rTiles = Math.ceil(this.impRange / TILE) + 1;
@@ -503,7 +593,7 @@ export class Trees {
             const cr = 0.55 * p.h + 3;
             if (d2 < cr * cr) continue;
           }
-          if (d2 < geoR2) near.push(d2, p);
+          if (d2 < geoR2) { nearD2.push(d2); nearP.push(p); }
           else if (far < this.impBudget && this._writeImpostor(p)) far++;
         }
       }
@@ -511,12 +601,12 @@ export class Trees {
 
     // near pass second but sorted, so the closest trees always win the
     // geometry budget and everything else falls back to its own impostor
-    const order = [];
-    for (let i = 0; i < near.length; i += 2) order.push(i);
-    order.sort((a, b) => near[a] - near[b]);
+    const order: number[] = [];
+    for (let i = 0; i < nearD2.length; i++) order.push(i);
+    order.sort((a, b) => nearD2[a] - nearD2[b]);
     let geo = 0;
     for (let i = 0; i < order.length; i++) {
-      const p = near[order[i] + 1];
+      const p = nearP[order[i]];
       const v = this.byKey.get(`${p.sp}_${p.vi}`);
       if (!v) continue;
       if (geo >= this.geoBudget || v._w >= v.max) {
@@ -531,9 +621,9 @@ export class Trees {
       _s.set(p.s, p.s, p.s);
       _m.compose(_p, _q, _s);
       _m.toArray(v.wood.instanceMatrix.array, w * 16);
-      if (v.leaves) {
+      if (v.leaves && v.leafTint) {
         _m.toArray(v.leaves.instanceMatrix.array, w * 16);
-        const c = v.leaves.instanceColor.array;
+        const c = v.leafTint.array;
         c[w * 3] = p.r; c[w * 3 + 1] = p.g; c[w * 3 + 2] = p.b;
       }
     }
@@ -569,7 +659,7 @@ export class Trees {
           _s.set(p.sx, p.sy, p.sx);
           _m.compose(_p, _q, _s);
           _m.toArray(c.mesh.instanceMatrix.array, w * 16);
-          const a = c.mesh.instanceColor.array;
+          const a = c.tint.array;
           a[w * 3] = p.r; a[w * 3 + 1] = p.g; a[w * 3 + 2] = p.b;
         }
       }
@@ -583,20 +673,20 @@ export class Trees {
         v.leaves.count = v._w;
         v.leaves.visible = v._w > 0;
         v.leaves.instanceMatrix.needsUpdate = true;
-        v.leaves.instanceColor.needsUpdate = true;
+        if (v.leafTint) v.leafTint.needsUpdate = true;
       }
     }
     for (const [, im] of this.impostors) {
       im.mesh.count = im._w;
       im.mesh.visible = im._w > 0;
       im.mesh.instanceMatrix.needsUpdate = true;
-      im.mesh.instanceColor.needsUpdate = true;
+      im.tint.needsUpdate = true;
     }
     for (const [, c] of this.canopies) {
       c.mesh.count = c._w;
       c.mesh.visible = c._w > 0;
       c.mesh.instanceMatrix.needsUpdate = true;
-      c.mesh.instanceColor.needsUpdate = true;
+      c.tint.needsUpdate = true;
     }
 
     this.geoCount = geo; this.impCount = far; this.canCount = cn;
@@ -605,7 +695,7 @@ export class Trees {
   }
 
   /** @returns true if the placement found a slot */
-  _writeImpostor(p: any): boolean {
+  _writeImpostor(p: TreePlacement): boolean {
     const im = this.impostors.get(`${p.sp}_${p.vi}`);
     if (!im || im._w >= im.max) return false;
     const w = im._w++;
@@ -615,7 +705,7 @@ export class Trees {
     _s.set(p.s, p.s, p.s);
     _m.compose(_p, _q, _s);
     _m.toArray(im.mesh.instanceMatrix.array, w * 16);
-    const c = im.mesh.instanceColor.array;
+    const c = im.tint.array;
     c[w * 3] = p.r; c[w * 3 + 1] = p.g; c[w * 3 + 2] = p.b;
     return true;
   }

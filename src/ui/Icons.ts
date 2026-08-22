@@ -50,11 +50,23 @@ const ACCENT = {
   fire: 'M12 21.2c1.7 0 2.9-1.2 2.9-2.8 0-1.9-1.9-2.9-1.7-4.9-1.4.7-2.1 1.7-2.1 2.9 0 1.4 1.1 1.9 1.1 3 0 .9-.6 1.5-1.4 1.5Z',
 };
 
+/** How `icon()` may be drawn. */
+export interface IconOpts {
+  /** Square edge, px. */
+  size?: number;
+  /** Stroke width in the 24x24 view box. */
+  stroke?: number;
+  /** Extra classes on the root `<svg>`. */
+  cls?: string;
+  /** Path fill; `none` is the default outline look. */
+  fill?: string;
+}
+
 /**
  * @param name key from the icon table
  * @param [opts] `{ size, stroke, cls, fill }`
  */
-export function icon(name: string, opts: any = {}): SVGElement {
+export function icon(name: string, opts: IconOpts = {}): SVGElement {
   const { size = 20, stroke = 1.15, cls = '', fill = 'none' } = opts;
   const d = D[name as keyof typeof D] || D.items;
   const root = svg('svg', {
@@ -68,13 +80,22 @@ export function icon(name: string, opts: any = {}): SVGElement {
   return root;
 }
 
+/** How `button()` may be drawn. */
+export interface ButtonOpts {
+  size?: number;
+  /** Round for a single character, square for a word. */
+  shape?: 'round' | 'square';
+  /** Extra class carrying the accent colour. */
+  tone?: string;
+}
+
 /**
  * A controller / key prompt glyph — a rounded square or circle carrying a
  * short label, matched in weight to `icon()`.
  * @param label e.g. 'A', 'B', 'Y', 'X', 'LB', 'Esc'
  * @param [opts] `{ size, shape: 'round'|'square', tone }`
  */
-export function button(label: string, opts: any = {}) {
+export function button(label: string, opts: ButtonOpts = {}) {
   const { size = 18, shape = label.length > 1 ? 'square' : 'round', tone = '' } = opts;
   const root = svg('svg', {
     class: `btn-glyph ${tone}`.trim(), viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true',

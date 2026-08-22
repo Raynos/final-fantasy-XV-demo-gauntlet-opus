@@ -1,6 +1,11 @@
 import { Enemy } from './EnemyBase.ts';
+import type { PoseName } from './EnemyBase.ts';
+import type * as THREE from 'three';
+import { isBone } from '../../util/three-guards.ts';
 import { poseBone } from './RigBuilder.ts';
+import type { BoneWriter } from './RigBuilder.ts';
 import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/CreatureAnim.ts';
+import type { AttackTiming, CreatureAnim, RootMotion } from '../rig/CreatureAnim.ts';
 
 /**
  * Shared four-legged animation.
@@ -27,38 +32,182 @@ import { attackEnvelope, hitCurve, clamp01, smooth, decelerate } from '../rig/Cr
  * }
  * ```
  */
+/** Which of the four feet. Also the keys of `QuadAnim.legs` and `anim.legs`. */
+export type LegId = 'fL' | 'fR' | 'bL' | 'bR';
+
+/** The four in solve order, front pair first. */
+const LEG_IDS: readonly LegId[] = ['fL', 'fR', 'bL', 'bR'];
+
+/** Where one foot sits relative to its bind pose, in metres. */
+export interface QuadFoot {
+  /** forward of bind. */
+  reach?: number;
+  /** off the ground. */
+  lift?: number;
+  /** abduction away from the centreline, radians. Mirrored per side. */
+  splay?: number;
+}
+
+/** All four feet as two pairs, plus a drop of the body over them. */
+export interface QuadStance {
+  /** metres the body sinks while the feet stay planted — a crouch. */
+  drop?: number;
+  front?: QuadFoot;
+  back?: QuadFoot;
+}
+
+/** What `aimHead()` is asked for, all radians. */
+export interface HeadAim {
+  /** positive is nose down, relative to level. */
+  pitch?: number;
+  yaw?: number;
+  roll?: number;
+  /** 0..1 how much trunk pitch to cancel. 1 = perfectly level head. */
+  stabilise?: number;
+}
+
+/**
+ * How far a leg root has been carried by the trunk links above it this frame,
+ * so the IK solver can take it back out of the foot target. `RootMotion` per
+ * pair — front legs hang off the chest, back legs off the hips.
+ */
+export interface TrunkComp {
+  f: RootMotion;
+  b: RootMotion;
+}
+
+/**
+ * The numbers that make a quadruped *that* animal.
+ *
+ * Required means "read with no default": a species that omits one is wrong,
+ * not merely generic. Everything optional has a default in the pose code
+ * below, and a species states it only where it differs from a mid-sized
+ * predator.
+ */
+export interface QuadAnim {
+  /** bone chains, root first: shoulder/hip → … → paw. */
+  legs: Record<LegId, string[]>;
+  /** hips → … → head, root first. The last two are neck and head. */
+  trunk: string[];
+  /** metres one full stride covers, before the gait's own multiplier. */
+  strideLen: number;
+  /** metres a foot reaches fore and aft. */
+  stride: number;
+  /** metres a foot lifts. */
+  lift: number;
+  /** metres the body sinks into the gather before a strike. */
+  crouch: number;
+  /** metres the front feet step back into the gather. */
+  crouchFront: number;
+  /** …and the back feet. Negative is rearward. */
+  crouchBack: number;
+  /** radians the trunk pitches nose-down into the gather. */
+  crouchPitch: number;
+  /** radians the head drops through the wind-up. */
+  headDown: number;
+  /** metres the body drives forward through the strike. */
+  lunge: number;
+  /** metres the front feet leave the ground on the strike. */
+  lungeLift: number;
+  /** radians the trunk pitches up as the strike goes through. */
+  strikePitch: number;
+  /** radians the head drives through the target ahead of the body. */
+  headThrust: number;
+  /** trunk bind height, metres. The corpse rotates about it. */
+  bodyY: number;
+  /** trunk half-depth, metres: how far the mass drops onto its flank. */
+  bodyR: number;
+  /** radians the corpse rolls, clamped to 1.45 so it lands on its side. */
+  deathRoll: number;
+  /** the animal never leaves the ground — it walks and it trots, nothing else. */
+  heavy?: boolean;
+  /** default abduction of every foot, radians. 0.02 if absent. */
+  splay?: number;
+  /** +1 knee forward on the front pair, −1 a hock. 1 if absent. */
+  kneeF?: number;
+  /** …and on the back pair. −1 if absent. */
+  kneeB?: number;
+  /** default sole pitch, front and back. −0.12 / +0.10 if absent. */
+  footPitchF?: number;
+  footPitchB?: number;
+  /** scale on the derived body bob, roll and pitch. 1 if absent. */
+  bodyScale?: number;
+  /** stride and lift scale for the front and back pairs. 1 if absent. */
+  frontScale?: number;
+  backScale?: number;
+  /** how much the spine flexes with the stride at a run. 1 if absent. */
+  flex?: number;
+  /** scale on the head's lateral sway at a run. 1 if absent. */
+  headSway?: number;
+  /** 0..1 how much trunk pitch `aimHead` cancels by default. 0.85 if absent. */
+  headStabilise?: number;
+  /** which trunk bone the front legs hang off; the chest if absent. */
+  frontRoot?: string;
+  /** radians the neck lowers at a full run. 0.14 if absent. */
+  runNeck?: number;
+  /** …and the head raises. 0.12 if absent. */
+  runHead?: number;
+  /** the jaw bone, if the species has one that opens. */
+  jawBone?: string;
+  /** radians the jaw opens at rest and through a wind-up. */
+  jaw?: number;
+  /** radians the jaw snaps through on a bite. 0.95 if absent. */
+  jawBite?: number;
+  /** tail chain, root first. */
+  tails?: string[];
+  /** tail base angle at a run / at rest / through a telegraph. */
+  tailRun?: number;
+  tailIdle?: number;
+  tailTel?: number;
+  /** metres the back feet leave the ground on the strike. */
+  lungeLiftBack?: number;
+  /** metres the whole body hops on the strike. */
+  hop?: number;
+  /** radians the body pitches through the strike. 0.10 if absent. */
+  pitchThrough?: number;
+  /** radians the feet splay in the gather. 0.09 if absent. */
+  crouchSplay?: number;
+  /** multiplier on how long the collapse takes. 1 if absent. */
+  deathSlow?: number;
+  /** breathing frequency while idle, rad/s. 1.5 if absent. */
+  breath?: number;
+  /** scale on how much the breath moves the body. 1 if absent. */
+  breathY?: number;
+  /** radians of permanent head tilt while idle. */
+  idleHead?: number;
+}
+
 export class QuadrupedEnemy extends Enemy {
-  _bindPos!: Map<any, any>;
+  /** Bind-pose (y, z) of a bone, cached per instance. See `_bindAt`. */
+  _bindPos!: Map<string, { y: number, z: number } | null>;
+  /** Accumulated world pitch of the chest, filled by `spine()`. */
   _chestPitch!: number;
-  _comp!: any;
-  override _dt!: any;
+  /** Trunk motion the legs must cancel this frame; null until `spine()` runs. */
+  _comp!: TrunkComp | null;
+  /** Last spine-weight array normalised, and its sum. See `_spineNorm`. */
   _normV!: number;
   _normW!: number[];
-  override anim!: any;
-  override deathSide!: any;
-  override hitPower!: any;
-  override id!: any;
-  override moveSpeed!: any;
-  override rig!: any;
-  override speed!: any;
-  override state!: any;
-  override stateTime!: any;
-  override type!: any;
-  override visual!: any;
+  /**
+   * Every species subclass declares its own `static ANIM`, assigned below its
+   * class body because the tuning block reads module constants.
+   */
+  static ANIM: QuadAnim;
+  /** Types `this.constructor` so `A` can reach the subclass's own static. */
+  declare ['constructor']: typeof QuadrupedEnemy;
   /** @returns tuning block; subclasses must define it. */
-  get A(): any { return (this.constructor as any).ANIM; }
+  get A(): QuadAnim { return this.constructor.ANIM; }
 
-  override setupAnim(anim: any) {
+  override setupAnim(anim: CreatureAnim) {
     const A = this.A;
     anim.setTrunk(A.trunk);
-    for (const id of ['fL', 'fR', 'bL', 'bR']) if (A.legs[id]) anim.leg(id, A.legs[id]);
+    for (const id of LEG_IDS) if (A.legs[id]) anim.leg(id, A.legs[id]);
   }
 
   /**
    * @param state legacy pose vocabulary
    * @param t phase seconds
    */
-  override pose(state: string, t: number) {
+  override pose(state: PoseName, t: number) {
     if (!this.rig) return;
     // The trunk compensation is only knowable once the trunk has been posed,
     // so it is per-frame state: cleared here, filled by `spine()`, consumed by
@@ -66,7 +215,7 @@ export class QuadrupedEnemy extends Enemy {
     // gets no compensation, which is the old behaviour rather than a wrong one.
     this._comp = null;
     this._chestPitch = 0;
-    const S = (n: any, x: number, y: number, z: number) => poseBone(this.rig, n, x, y, z);
+    const S: BoneWriter = (n, x, y, z) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'approach': this.poseLocomotion(S, t); break;
@@ -88,20 +237,20 @@ export class QuadrupedEnemy extends Enemy {
    * @param S pose writer
    * @param o {drop, front:{reach,lift,splay}, back:{...}}
    */
-  stance(S: ((...args: any[]) => any), o: any) {
+  stance(S: BoneWriter, o: QuadStance) {
     const a = this.anim, A = this.A;
     const drop = o.drop || 0;
     const f = o.front || {}, b = o.back || {};
     // whatever the trunk did this frame, cancelled out of the foot targets
     const c = this._comp || ZERO_COMP;
-    for (const id of ['fL', 'fR']) {
+    for (const id of FRONT) {
       a.solveLeg(id, f.reach || 0, (f.lift || 0) + drop, S, {
         kneeSign: A.kneeF ?? 1, footPitch: A.footPitchF ?? -0.12,
         splay: (f.splay || 0) * (id === 'fL' ? -1 : 1),
         rootPitch: c.f.pitch, rootDY: c.f.dy, rootDZ: c.f.dz,
       });
     }
-    for (const id of ['bL', 'bR']) {
+    for (const id of BACK) {
       a.solveLeg(id, b.reach || 0, (b.lift || 0) + drop, S, {
         kneeSign: A.kneeB ?? -1, footPitch: A.footPitchB ?? 0.10,
         splay: (b.splay || 0) * (id === 'bL' ? -1 : 1),
@@ -121,7 +270,7 @@ export class QuadrupedEnemy extends Enemy {
    * just swung. Front legs parent to the chest and inherit the whole sum; back
    * legs parent to the hips and inherit only the first link.
    */
-  spine(S: any, pitch: number, yaw = 0, roll = 0, w = SPINE_W) {
+  spine(S: BoneWriter, pitch: number, yaw = 0, roll = 0, w: number[] = SPINE_W) {
     const t = this.A.trunk;
     // The weights are *shares of one bend*, so they are normalised against the
     // run from hips to chest. Used raw they compound down the parent chain and
@@ -164,7 +313,7 @@ export class QuadrupedEnemy extends Enemy {
    * translation the leg solver has to cancel so the paw does not follow the
    * shoulder into the dirt.
    */
-  _rootShift(rootName: any, pitch: number, w: number[], total: number) {
+  _rootShift(rootName: string | undefined, pitch: number, w: number[], total: number): RootMotion {
     const t = this.A.trunk;
     const p = this._bindAt(rootName || t[Math.max(0, t.length - 3)]);
     if (!p) return { pitch, dy: 0, dz: 0 };
@@ -187,17 +336,17 @@ export class QuadrupedEnemy extends Enemy {
    * and those offsets never change, however the creature is posed. That makes
    * this readable off a live, mid-animation skeleton.
    */
-  _bindAt(name: any) {
+  _bindAt(name: string): { y: number, z: number } | null {
     if (!this.rig) return null;
     let cache = this._bindPos;
     if (!cache) { cache = this._bindPos = new Map(); }
-    let v = cache.get(name);
-    if (v !== undefined) return v;
-    let b = this.rig.byName.get(name);
+    const hit = cache.get(name);
+    if (hit !== undefined) return hit;
+    let b: THREE.Object3D | null = this.rig.byName.get(name) ?? null;
     if (!b) { cache.set(name, null); return null; }
     let y = 0, z = 0;
-    while (b && b.isBone) { y += b.position.y; z += b.position.z; b = b.parent; }
-    v = { y, z };
+    while (b && isBone(b)) { y += b.position.y; z += b.position.z; b = b.parent; }
+    const v = { y, z };
     cache.set(name, v);
     return v;
   }
@@ -217,7 +366,7 @@ export class QuadrupedEnemy extends Enemy {
    *   level, positive = nose down; `stabilise` 0..1 how much trunk pitch to
    *   cancel (1 = perfectly level head, 0 = head rides the spine).
    */
-  aimHead(S: ((...args: any[]) => any), o: any = {}) {
+  aimHead(S: BoneWriter, o: HeadAim = {}) {
     const t = this.A.trunk;
     const stab = this._chestPitch * (o.stabilise ?? (this.A.headStabilise ?? 0.85));
     const pitch = o.pitch || 0, yaw = o.yaw || 0, roll = o.roll || 0;
@@ -237,7 +386,7 @@ export class QuadrupedEnemy extends Enemy {
     }
   }
 
-  _timingAll() {
+  _timingAll(): AttackTiming {
     return {
       telegraph: this._timing('telegraph'), strike: this._timing('strike'),
       attack: this._timing('attack'), recover: this._timing('recover'),
@@ -246,7 +395,7 @@ export class QuadrupedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S: any, t: number) {
+  poseLocomotion(S: BoneWriter, t: number) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -281,7 +430,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, A.tailRun ?? -0.3, 0.2 + norm * 0.14, 4 + norm * 4);
   }
 
-  poseTelegraph(S: any, t: number) {
+  poseTelegraph(S: BoneWriter, t: number) {
     const A = this.A;
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
@@ -307,7 +456,7 @@ export class QuadrupedEnemy extends Enemy {
   /** Species multiplier on how far the strike leaves the ground. */
   leapScale() { return 1; }
 
-  poseAttack(S: any, t: number) {
+  poseAttack(S: BoneWriter, t: number) {
     const A = this.A;
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
@@ -330,7 +479,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.x += -(A.pitchThrough ?? 0.10) * k;
   }
 
-  poseFlinch(S: any, t: number) {
+  poseFlinch(S: BoneWriter, t: number) {
     const A = this.A;
     const k = hitCurve(this.stateTime, 0.35, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
@@ -349,7 +498,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, 0.25 * k, 0.2, 6);
   }
 
-  poseStagger(S: any, t: number) {
+  poseStagger(S: BoneWriter, t: number) {
     const A = this.A;
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.18) * clamp01(1 - (this.stateTime - total * 0.72) / (total * 0.28));
@@ -366,7 +515,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.z += wob * 0.08;
   }
 
-  poseDeath(S: any, t: number) {
+  poseDeath(S: BoneWriter, t: number) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;
@@ -409,7 +558,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.position.x += A.bodyY * Math.sin(th) * 0.5;
   }
 
-  poseIdle(S: any, t: number) {
+  poseIdle(S: BoneWriter, t: number) {
     const A = this.A;
     const br = Math.sin(t * (A.breath ?? 1.5)) * 0.03 + Math.sin(t * 0.61) * 0.012;
     this.spine(S, br, Math.sin(t * 0.31) * 0.06, Math.sin(t * 0.4) * 0.012);
@@ -431,5 +580,8 @@ export class QuadrupedEnemy extends Enemy {
 /** How much of a spine bend each link takes, root first. These compound. */
 const SPINE_W = [0.9, 1.0, 0.85, 0.7, 0.6];
 
+const FRONT: readonly LegId[] = ['fL', 'fR'];
+const BACK: readonly LegId[] = ['bL', 'bR'];
+
 /** No trunk motion to cancel — used before `spine()` has run this frame. */
-const ZERO_COMP = { f: { pitch: 0, dy: 0, dz: 0 }, b: { pitch: 0, dy: 0, dz: 0 } };
+const ZERO_COMP: TrunkComp = { f: { pitch: 0, dy: 0, dz: 0 }, b: { pitch: 0, dy: 0, dz: 0 } };

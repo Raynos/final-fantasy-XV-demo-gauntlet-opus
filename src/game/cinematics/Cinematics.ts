@@ -3,7 +3,9 @@ import { Letterbox } from './Letterbox.ts';
 import { Stage } from './Stage.ts';
 import { Timeline } from './Timeline.ts';
 import { Frame } from './CameraMove.ts';
+import type { Shot } from './CameraMove.ts';
 import type { Game } from '../Game.ts';
+import type { ActorId, Cue, SceneCtx, SceneDef, SceneResult } from './Scene.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -32,22 +34,24 @@ const UP = new THREE.Vector3(0, 1, 0);
  * `lateUpdate` runs the VFX depth prepass and needs the final camera).
  */
 export class Cinematics {
-  _cam!: any;
+  /** Scratch for the camera solve: where the lens is and what it is aimed at. */
+  _cam!: { pos: THREE.Vector3, target: THREE.Vector3, fov: number, roll: number };
   _cut!: boolean;
-  _dofWas!: any;
+  /** The aperture gameplay had, restored when the scene gives the lens back. */
+  _dofWas!: number | null;
   _prevHud!: boolean;
   _prevScale!: number;
   _prevState!: string;
-  _resolve!: any;
+  _resolve!: ((r: SceneResult) => void) | null;
   _skipHeld!: number;
-  _slow!: any;
+  /** A live slow-motion beat: `scale` held for `dur`, then eased back to 1. */
+  _slow!: { t: number, scale: number, dur: number } | null;
   _v!: THREE.Vector3;
   box!: Letterbox;
-  ctx!: any;
-  external!: any;
+  ctx!: SceneCtx | null;
   game!: Game;
   playing!: boolean;
-  scene!: any;
+  scene!: SceneDef | null;
   skippable!: boolean;
   stage!: Stage;
   tl!: Timeline | null;
@@ -68,8 +72,7 @@ export class Cinematics {
     this._cam = { pos: new THREE.Vector3(), target: new THREE.Vector3(), fov: 45, roll: 0 };
     this._v = new THREE.Vector3();
     this._skipHeld = 0;
-    /** Set true by the title screen so its attract camera can borrow the rig. */
-    this.external = null;
+    this._dofWas = null;
   }
 
   /* --------------------------------------------------------------- API -- */
@@ -79,7 +82,7 @@ export class Cinematics {
    * @param def scene definition
    * @param [opts] `{ skippable }`
    */
-  play(def: any, opts: any = {}): Promise<{skipped:boolean, id:string | null}> {
+  play(def: SceneDef | null | undefined, opts: { skippable?: boolean } = {}): Promise<SceneResult> {
     if (!def) return Promise.resolve({ skipped: false, id: null });
     if (this.playing) this.stop({ skipped: true });
 
@@ -87,7 +90,7 @@ export class Cinematics {
     this.scene = def;
     this.skippable = opts.skippable !== false && def.skippable !== false;
 
-    const ctx = {
+    const ctx: SceneCtx = {
       game,
       stage: this.stage,
       cine: this,
@@ -153,13 +156,13 @@ export class Cinematics {
    * End the scene and give everything back.
    * @param [opts] `{ skipped }`
    */
-  stop(opts: any = {}) {
+  stop(opts: { skipped?: boolean } = {}) {
     if (!this.playing) return;
     const def = this.scene;
     const ctx = this.ctx;
     this.playing = false;
 
-    try { if (def && def.onEnd) def.onEnd(ctx, !!opts.skipped); } catch (e) { console.warn('[Cinematics] onEnd', e); }
+    try { if (def && ctx && def.onEnd) def.onEnd(ctx, !!opts.skipped); } catch (e) { console.warn('[Cinematics] onEnd', e); }
 
     this.stage.release({ restorePositions: !!(def && def.restorePositions) });
 
@@ -233,8 +236,9 @@ export class Cinematics {
 
   /** One timeline step. `sceneDt` drives cues, `worldDt` drives the actors. */
   _advance(sceneDt: number, worldDt: number) {
-    const def = this.scene;
-    const ctx = this.ctx;
+    // See `_cue`: inside a tick the scene and its context are always live.
+    const def = this.scene!;
+    const ctx = this.ctx!;
 
     if (this._slow) {
       this._slow.t += sceneDt;
@@ -257,7 +261,7 @@ export class Cinematics {
     if (this.tl!.done) this.stop({ skipped: false });
   }
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     if (!this.playing || !this.tl) return;
     const i = this.tl.shotIndex >= 0 ? this.tl.shotIndex : 0;
     const shot = this.tl.shots[i];
@@ -306,9 +310,10 @@ export class Cinematics {
    * (aim at their centroid), or `'crew'` for everyone on stage.
    * @param out sampled target; overwritten in place
    */
-  _aim(shot: any, out: THREE.Vector3) {
-    const ids = shot.aim === 'crew' ? this.stage.ids
-      : Array.isArray(shot.aim) ? shot.aim : [shot.aim];
+  _aim(shot: Shot, out: THREE.Vector3) {
+    const aim = shot.aim;
+    const ids: ActorId[] = aim === 'crew' || aim == null ? this.stage.ids
+      : Array.isArray(aim) ? aim : [aim];
     let n = 0;
     let x = 0, y = 0, z = 0;
     for (const id of ids) {
@@ -326,7 +331,7 @@ export class Cinematics {
   }
 
   /** `focus: 'noctis'` etc. — pull focus onto a staged actor's eyes. */
-  _resolveFocus(name: string) {
+  _resolveFocus(name: ActorId) {
     const a = this.stage.actor(name);
     if (a) return this.stage.eyeOf(name, this._v);
     return this._cam.target;
@@ -334,8 +339,10 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- cues -- */
 
-  _cue(c: any, skipping: boolean) {
-    const ctx = this.ctx;
+  _cue(c: Cue, skipping: boolean) {
+    // `playing` is the invariant: `play()` writes `scene` and `ctx` together
+    // and `stop()` clears both, and a cue only ever fires from inside a tick.
+    const ctx = this.ctx!;
     try {
       if (c.fn) c.fn(ctx, skipping);
       if (skipping) return;

@@ -51,9 +51,9 @@ export class HuntRuntime {
    */
   arm(id: string) {
     if (this.active.has(id)) return null;
-    const t = HUNT_TARGETS[id as keyof typeof HUNT_TARGETS];
+    const t = HUNT_TARGETS[id];
     if (!t) return null;
-    const set = SET_PIECES[t.setPiece as keyof typeof SET_PIECES];
+    const set = t.setPiece ? SET_PIECES[t.setPiece] : null;
     let spawned;
     if (set) spawned = this.dir.startSetPiece(set.id);
     else spawned = this.dir.spawnHunt(id);
@@ -91,12 +91,13 @@ export class HuntRuntime {
   /** Despawn a hunt's remaining marks. */
   clear(id: any) {
     this.active.delete(id);
-    const h = this.dir.hunts?.get(id);
-    if (h) {
+    const hunts = this.dir.hunts;
+    const h = hunts && hunts.get(id);
+    if (hunts && h) {
       for (const e of h.pack.members.slice()) {
         if (e.hunt === id && this.dir.enemies.list.includes(e)) this.dir.enemies.despawn(e);
       }
-      this.dir.hunts.delete(id);
+      hunts.delete(id);
     }
     return true;
   }

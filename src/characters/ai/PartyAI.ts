@@ -2,7 +2,126 @@ import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Weapon } from '../../combat/Weapons.ts';
 import { TECH_TABLE, runTechnique } from './Techniques.ts';
+import type { Tech } from './Techniques.ts';
+import type { CompanionKey, PartyMember, Party } from '../Party.ts';
+import type { Player } from '../Player.ts';
+import type { Enemies } from '../Enemies.ts';
+import type { Enemy } from '../enemies/EnemyBase.ts';
+import type { AttachPoint } from '../rig/Character.ts';
+import type { CombatSystem } from '../../combat/CombatSystem.ts';
+import type { CombatEvents, CombatEventName } from '../../combat/CombatEvents.ts';
+import type { WeaponClass as WeaponKind } from '../../combat/Weapons.ts';
+import type { VFX } from '../../combat/VFX.ts';
+import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
+import type { Element, WeaponClass } from '../../game/rpg/Stats.ts';
+import type { Terrain } from '../../world/Terrain.ts';
 import type { Game } from '../../game/Game.ts';
+
+/** One companion's combat profile — see the `ROLES` table at the foot of the file. */
+export interface CompanionRole {
+  /**
+   * Which weapon model `_equip` builds — `Weapons.WeaponClass`.
+   *
+   * Deliberately not the same union as `weaponClass` below: the model classes
+   * call Ignis' pair `daggers` and the damage formula calls the class
+   * `dagger`, which is also the spelling every species' `weakTo` uses.
+   */
+  weapon: WeaponKind;
+  /** the class the damage formula resolves against — `Stats.WeaponClass`. */
+  weaponClass: WeaponClass;
+  /** standoff in metres, before the target's own radius. */
+  range: number;
+  /** how far from itself this companion will chase a target. */
+  leash: number;
+  /** seconds one swing takes. */
+  swing: number;
+  /** seconds from the *end* of the swing at which the blow lands. */
+  hitAt: number;
+  /** seconds of recovery after a swing. */
+  recover: number;
+  /** motion value — the damage formula's multiplier. */
+  motion: number;
+  /** poise damage per blow. */
+  poise: number;
+  /** impact VFX scale. */
+  impact: number;
+  colour: number;
+  /** stands off to the side of the target rather than in front of it. */
+  ring: boolean;
+  /** shoots rather than swings; `_shoot` draws the tracer. */
+  ranged: boolean;
+  /** action names, cycled by `swingIndex`. */
+  actions: string[];
+}
+
+/** How one weapon rides in a socket, sheathed or in hand. */
+export interface CarryTransform {
+  socket: AttachPoint;
+  /** local position in the socket, `[x, y, z]` metres. */
+  pos: number[];
+  /** local XYZ Euler rotation, radians. */
+  rot: [number, number, number];
+  /** uniform scale; 1 if absent. */
+  scale?: number;
+}
+
+/** Where one companion's weapons sit sheathed, and how they sit in the hand. */
+export interface CarrySpec {
+  stow: CarryTransform[];
+  hold: CarryTransform[];
+}
+
+/**
+ * What one companion blow says about itself.
+ *
+ * Every field is optional because `strike` falls back to the companion's
+ * `role` for anything the caller does not state; a technique states the ones
+ * that make it that technique.
+ */
+export interface StrikeOpts {
+  /** motion value; 1 if absent. */
+  motion?: number;
+  /** poise damage; `role.poise` if absent. */
+  poise?: number;
+  element?: Element | null;
+  weaponClass?: WeaponClass | null;
+  /** impact VFX scale; `role.impact` if absent. */
+  scale?: number;
+  /** impact VFX colour; `role.colour` if absent. */
+  color?: number;
+  /** spends a tech bar, and pays `tech-finish` AP on a kill. */
+  technique?: boolean;
+  /** a ranged blow: `_shoot` draws a tracer instead of swinging. */
+  ranged?: boolean;
+  /**
+   * Authored by Prompto's Piercer. **Nothing reads it** — `strike` never
+   * forwards it to `Enemy.hit`, and `HitOpts` has no such field.
+   */
+  ignoreArmour?: boolean;
+}
+
+/** The blow a swing has committed to, and the `aiTimer` value it lands at. */
+export interface PendingHit extends StrikeOpts {
+  /** fires once `aiTimer` has fallen to this. */
+  at: number;
+  motion: number;
+  poise: number;
+  ranged: boolean;
+  weaponClass: WeaponClass;
+}
+
+/** What `useTechnique` reports back to the caller that pressed the key. */
+export type TechniqueResult =
+  | { ok: true, tech: Tech }
+  /** `reason` is `PartyState.useTechnique`'s, which does not narrow on `ok`. */
+  | { ok: false, reason?: string };
+
+/** A technique beat waiting on the clock. See `PartyAI.schedule`. */
+interface ScheduledBeat {
+  /** seconds of game time left before `fn` runs. */
+  t: number;
+  fn: () => void;
+}
 
 /**
  * Gladiolus, Ignis and Prompto, actually fighting.
@@ -27,22 +146,23 @@ import type { Game } from '../../game/Game.ts';
  * the AI spends bars on its own once the bar is full.
  */
 export class PartyAI {
-  _offHit!: any;
-  _sched!: any[];
+  /** unsubscribes the `hit` listener that offers link strikes. */
+  _offHit!: (() => void) | null;
+  _sched!: ScheduledBeat[];
   _techTimer!: number;
   _tmp!: THREE.Vector3;
   _tmp2!: THREE.Vector3;
-  combat!: any;
+  combat!: CombatSystem | undefined;
   enabled!: boolean;
-  enemies!: any;
+  enemies!: Enemies | undefined;
   game!: Game;
   linkCooldown!: number;
-  party!: any;
-  player!: any;
+  party!: Party | undefined;
+  player!: Player | undefined;
   rng!: Rng;
-  rpg!: any;
-  terrain!: any;
-  vfx!: any;
+  rpg!: RpgSystem | undefined;
+  terrain!: Terrain | undefined;
+  vfx!: VFX | undefined;
   async init(game: Game) {
     this.game = game;
     this.party = game.get('Party');
@@ -62,10 +182,11 @@ export class PartyAI {
     this._techTimer = 6;
     /** Deferred technique beats: `{t, fn}`, drained in `update`. */
     this._sched = [];
+    this._offHit = null;
 
     if (this.party && this.party.members) {
       for (const m of this.party.members) {
-        const spec = ROLES[m.key as keyof typeof ROLES] || ROLES.gladio;
+        const spec = ROLES[m.key];
         m.role = spec;
         m.baseSlot = m.slot.clone();
         m.baseSpeedMul = m.speedMul;
@@ -84,7 +205,7 @@ export class PartyAI {
     // a link-strike offer whenever Noctis lands the end of a combo on
     // something an ally is already working on
     if (this.combat) {
-      this._offHit = this.combat.on('hit', (d: any) => this._onPlayerHit(d));
+      this._offHit = this.combat.on('hit', (d) => this._onPlayerHit(d));
     }
     return this;
   }
@@ -105,9 +226,8 @@ export class PartyAI {
    * @param m party member
    * @param kind weapon class
    */
-  _equip(m: any, kind: string) {
-    if (!m.character || !m.character.attach) return;
-    const carry = CARRY[m.key as keyof typeof CARRY] || CARRY.gladio;
+  _equip(m: PartyMember, kind: WeaponKind) {
+    const carry = CARRY[m.key];
     m.weaponList = [];
     for (let i = 0; i < carry.stow.length; i++) {
       const w = new Weapon(kind);
@@ -126,23 +246,22 @@ export class PartyAI {
    * Move a companion's weapons between their sheathed station and their hands.
    * @param m @param drawn
    */
-  _reparent(m: any, drawn: boolean) {
-    const carry = CARRY[m.key as keyof typeof CARRY] || CARRY.gladio;
+  _reparent(m: PartyMember, drawn: boolean) {
+    const carry = CARRY[m.key];
     const set = drawn ? carry.hold : carry.stow;
     const attach = m.character.attach;
     for (let i = 0; i < m.weaponList.length; i++) {
       const w = m.weaponList[i];
       const t = set[Math.min(i, set.length - 1)];
-      const parent = attach[t.socket] || attach.handR || m.character.root;
-      parent.add(w.root);
+      // Every socket a `CarryTransform` may name is declared on `attach`, so
+      // there is nothing to fall back to.
+      attach[t.socket].add(w.root);
       w.root.position.fromArray(t.pos);
       w.root.rotation.fromArray(t.rot);
-      w.root.scale.setScalar((t as { scale?: number }).scale || 1);
+      w.root.scale.setScalar(t.scale || 1);
     }
-    if (m.character.setGrip) {
-      m.character.setGrip('R', drawn ? 1 : 0);
-      m.character.setGrip('L', drawn && m.weaponList.length > 1 ? 1 : 0);
-    }
+    m.character.setGrip('R', drawn ? 1 : 0);
+    m.character.setGrip('L', drawn && m.weaponList.length > 1 ? 1 : 0);
   }
 
   /**
@@ -150,8 +269,7 @@ export class PartyAI {
    * uses so the station swap is a materialisation rather than a pop.
    * @param m @param want @param dt
    */
-  _carry(m: any, want: boolean, dt: number) {
-    if (!m.weaponList) return;
+  _carry(m: PartyMember, want: boolean, dt: number) {
     if (m.drawWant !== want) { m.drawWant = want; m.drawT = 0; }
     if (m.drawT >= 1) return;
     m.drawT = Math.min(1, m.drawT + dt * 3.6);
@@ -170,7 +288,7 @@ export class PartyAI {
    * without any of them owning a clock.
    * @param delay @param fn
    */
-  schedule(delay: number, fn: ((...args: any[]) => any)) {
+  schedule(delay: number, fn: () => void) {
     this._sched.push({ t: delay, fn });
   }
 
@@ -189,12 +307,12 @@ export class PartyAI {
   /* --------------------------------------------------------- targeting */
 
   /** The enemy this companion should be working on. */
-  _pickTarget(m: any) {
+  _pickTarget(m: PartyMember): Enemy | null {
     if (!this.enemies) return null;
     const list = this.enemies.list;
     const from = m.root.position;
     const lock = this.combat && this.combat.lockTarget;
-    let best: any = null, bestScore = Infinity;
+    let best: Enemy | null = null, bestScore = Infinity;
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (e.dead) continue;
@@ -218,7 +336,7 @@ export class PartyAI {
    * @param e enemy
    * @param [o] `{motion, poise, element, technique}`
    */
-  strike(m: any, e: any, o: any = {}) {
+  strike(m: PartyMember, e: Enemy | null, o: StrikeOpts = {}) {
     if (!e || e.dead) return null;
     const memberId = m.key;
     const stats = this.rpg ? this.rpg.party.stats[memberId] : null;
@@ -262,7 +380,7 @@ export class PartyAI {
     return res;
   }
 
-  _emit(name: string, detail: any) {
+  _emit<K extends CombatEventName>(name: K, detail: CombatEvents[K]) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }
@@ -270,10 +388,10 @@ export class PartyAI {
   /* ------------------------------------------------------ link strikes */
 
   /** Noctis hit something one of them is already fighting. */
-  _onPlayerHit(d: any) {
+  _onPlayerHit(d: CombatEvents['hit']) {
     if (this.linkCooldown > 0 || !d || !d.enemy || d.enemy.dead) return;
     const allies = (this.party?.members || []).filter(
-      (m: any) => !m.downed && m.aiTarget === d.enemy && m.root.position.distanceTo(d.enemy.root.position) < 12
+      (m) => !m.downed && m.aiTarget === d.enemy && m.root.position.distanceTo(d.enemy.root.position) < 12
     );
     if (!allies.length) return;
     if (this.rng.next() > 0.34) return;
@@ -285,7 +403,7 @@ export class PartyAI {
    * A joint attack: the ally warps in beside Noctis and they hit together.
    * @param m @param e
    */
-  linkStrike(m: any, e: any) {
+  linkStrike(m: PartyMember, e: Enemy | null) {
     if (!e || e.dead) return false;
     this.linkCooldown = 7;
     const c = e.centre();
@@ -301,7 +419,7 @@ export class PartyAI {
     }
     // put the ally where the strike lands so it reads as a joint attack
     m.root.position.set(c.x - (c.x - m.root.position.x) * 0.12, m.root.position.y, c.z - (c.z - m.root.position.z) * 0.12);
-    m.character?.play?.('attack_slash');
+    m.character.play('attack_slash', {});
     this.strike(m, e, { motion: 2.4, poise: m.role.poise * 2, scale: 1.6 });
     if (this.combat) this.combat.hitstop = Math.max(this.combat.hitstop, 0.09);
     this._emit('link', { enemy: e, ally: m, member: m.key });
@@ -316,24 +434,24 @@ export class PartyAI {
    * @param memberKey 'gladio' | 'ignis' | 'prompto'
    * @param [techId] defaults to the best affordable one
    */
-  useTechnique(memberKey: string, techId: string | null = null) {
-    const m = this.party?.members.find((x: any) => x.key === memberKey);
+  useTechnique(memberKey: CompanionKey, techId: string | null = null): TechniqueResult {
+    const m = this.party?.members.find((x) => x.key === memberKey);
     if (!m || m.downed) return { ok: false, reason: 'unavailable' };
     const rpg = this.rpg;
-    const list = TECH_TABLE[memberKey as keyof typeof TECH_TABLE] || [];
-    let pick = techId ? list.find((t: any) => t.id === techId) : null;
+    const list: Tech[] = TECH_TABLE[memberKey];
+    let pick = techId ? list.find((t) => t.id === techId) : null;
     if (!pick) {
       const bars = rpg ? rpg.party.techBars : 3;
-      const known = rpg ? rpg.party.techniquesFor(memberKey).map((t: any) => t.id) : list.map((t: any) => t.id);
-      const usable = list.filter((t: any) => known.includes(t.id) && t.bars <= bars);
+      const known: string[] = rpg ? rpg.party.techniquesFor(memberKey).map((t) => t.id) : list.map((t) => t.id);
+      const usable = list.filter((t) => known.includes(t.id) && t.bars <= bars);
       if (!usable.length) return { ok: false, reason: 'not-enough-tech' };
       pick = usable[usable.length - 1];
     }
     if (rpg) {
       const spent = rpg.useTechnique(memberKey, pick.id);
-      if (!spent.ok) return spent;
+      if (!spent.ok) return { ok: false, reason: spent.reason };
     }
-    const target = m.aiTarget || this._pickTarget(m) || (this.combat && this.combat.lockTarget);
+    const target = m.aiTarget || this._pickTarget(m) || this.combat?.lockTarget || null;
     m.aiState = 'tech';
     m.aiTimer = pick.duration;
     runTechnique(this, m, pick, target);
@@ -376,7 +494,7 @@ export class PartyAI {
         this._station(m, m.reviveTarget.position, 1.4);
         m.speedMul = m.baseSpeedMul * 3.6;
         this._face(m, m.reviveTarget.position, dt, 6);
-        if (m.root.position.distanceTo(m.reviveTarget.position) < 2.6) m.character?.play?.('cast');
+        if (m.root.position.distanceTo(m.reviveTarget.position) < 2.6) m.character.play('cast', {});
         continue;
       }
 
@@ -461,24 +579,24 @@ export class PartyAI {
     const rpg = this.rpg;
     const bars = rpg ? rpg.party.techBars : 3;
     if (bars < 1) return;
-    const order = bars >= 3 ? ['gladio', 'ignis', 'prompto'] : ['gladio', 'prompto', 'ignis'];
-    const hurt = this.rpg && this.rpg.roster.some((s: any) => s.hp / s.maxHp < 0.45);
+    const order: CompanionKey[] = bars >= 3 ? ['gladio', 'ignis', 'prompto'] : ['gladio', 'prompto', 'ignis'];
+    const hurt = this.rpg && this.rpg.roster.some((s) => s.hp / s.maxHp < 0.45);
     if (hurt && bars >= 2) { if (this.useTechnique('ignis', 'regroup').ok) return; }
     for (const k of order) {
-      const m = this.party.members.find((x: any) => x.key === k);
+      const m = this.party?.members.find((x) => x.key === k);
       if (!m || m.downed || !m.aiTarget) continue;
       if (this.useTechnique(k).ok) return;
     }
   }
 
-  _beginSwing(m: any, e: any, d: any) {
+  _beginSwing(m: PartyMember, e: Enemy, d: number) {
     if (m.aiTimer > 0) return;
     const r = m.role;
     m.aiState = 'attack';
     m.aiTimer = r.swing;
     m.swingIndex = (m.swingIndex + 1) % r.actions.length;
     const action = r.actions[m.swingIndex];
-    m.character?.play?.(action);
+    m.character.play(action, {});
     m._pending = {
       at: r.swing - r.hitAt, motion: r.motion, poise: r.poise,
       ranged: !!r.ranged, weaponClass: r.weaponClass,
@@ -487,7 +605,7 @@ export class PartyAI {
   }
 
   /** Prompto's shots: a visible tracer plus damage at range. */
-  _shoot(m: any, e: any, p: any) {
+  _shoot(m: PartyMember, e: Enemy, p: PendingHit) {
     const from = this._tmp.copy(m.root.position);
     from.y += 1.35;
     const to = e.centre();
@@ -505,7 +623,7 @@ export class PartyAI {
   }
 
   /** Where a flanker sits on the ring around its target. */
-  _ringAngle(m: any) {
+  _ringAngle(m: PartyMember) {
     return m.key === 'ignis' ? 2.1 : m.key === 'prompto' ? -2.1 : 0;
   }
 
@@ -517,7 +635,7 @@ export class PartyAI {
    * @param standoff metres to keep from it
    * @param [angle] radians offset around the target
    */
-  _station(m: any, at: THREE.Vector3, standoff: number, angle: number = 0) {
+  _station(m: PartyMember, at: THREE.Vector3, standoff: number, angle: number = 0) {
     const p = this.player;
     if (!p) return;
     let gx = at.x, gz = at.z;
@@ -535,12 +653,12 @@ export class PartyAI {
   }
 
   /** Keep the current standoff without chasing while mid-swing. */
-  _holdStation(m: any, e: any, want: number) {
+  _holdStation(m: PartyMember, e: Enemy, want: number) {
     this._station(m, e.root.position, want);
   }
 
   /** Override the facing `Party` picked, so they look at what they are hitting. */
-  _face(m: any, at: any, dt: number, k = 6) {
+  _face(m: PartyMember, at: THREE.Vector3, dt: number, k = 6) {
     const want = Math.atan2(at.x - m.root.position.x, at.z - m.root.position.z);
     let d = want - m.root.rotation.y;
     while (d > Math.PI) d -= Math.PI * 2;
@@ -549,7 +667,7 @@ export class PartyAI {
   }
 
   /** A downed companion lies where they fell. */
-  _poseDown(m: any, dt: number) {
+  _poseDown(m: PartyMember, dt: number) {
     m.slot.copy(m.baseSlot);
     m.speedMul = 0.0001;
     m.aiTarget = null;
@@ -558,7 +676,7 @@ export class PartyAI {
 }
 
 /** Per-companion combat profile. */
-const ROLES = {
+const ROLES: Record<CompanionKey, CompanionRole> = {
   gladio: {
     weapon: 'greatsword', weaponClass: 'greatsword', range: 2.8, leash: 40,
     swing: 1.15, hitAt: 0.55, recover: 0.55, motion: 1.7, poise: 34,
@@ -592,7 +710,7 @@ const ROLES = {
  * The stow transforms are absolute metres, not multiples of the rig scale:
  * a greatsword is 2.05 m of steel whoever is carrying it.
  */
-const CARRY = {
+const CARRY: Record<CompanionKey, CarrySpec> = {
   gladio: {
     // hilt above the right shoulder, blade near-vertical down the back with
     // the tip out past the left heel — 2.05 m of steel on a 2.00 m man has to

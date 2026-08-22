@@ -18,17 +18,17 @@
 
 import { ITEMS } from './Inventory.ts';
 import type { Emitter } from './Emitter.ts';
-import type { Inventory } from './Inventory.ts';
+import type { Inventory, CatalystDef } from './Inventory.ts';
 import type { Ascension } from './Ascension.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Elements                                                                  */
 /* ------------------------------------------------------------------------ */
 
-export const MAGIC_ELEMENTS = ['fire', 'ice', 'lightning'];
+export const MAGIC_ELEMENTS: MagicElement[] = ['fire', 'ice', 'lightning'];
 
 /** Tier names per element. Index 0 = tier 1. */
-export const SPELL_NAMES = {
+export const SPELL_NAMES: Record<MagicElement, string[]> = {
   fire:      ['Fire', 'Fira', 'Firaga'],
   ice:       ['Blizzard', 'Blizzara', 'Blizzaga'],
   lightning: ['Thunder', 'Thundara', 'Thundaga'],
@@ -57,7 +57,20 @@ export const BASE_ENERGY_CAP = 99;
  * is the base number of units a full draw gives; deposits deplete and refill
  * over in-game hours.
  */
-export const DEPOSITS = [
+/** A place in the world energy can be drawn from. */
+export interface Deposit {
+  id: string;
+  name: string;
+  element: MagicElement;
+  /** World position `[x, y, z]`. */
+  pos: number[];
+  /** Units available before it runs dry. */
+  capacity: number;
+  /** In-game hours it takes to refill. */
+  refill: number;
+}
+
+export const DEPOSITS: Deposit[] = [
   { id: 'dep_hammerhead',  name: 'Hammerhead Verge',    element: 'fire',      pos: [42, 0, -118], capacity: 40, refill: 6 },
   { id: 'dep_prairie',     name: 'Prairie Outpost Vent', element: 'lightning', pos: [-96, 0, 64],  capacity: 32, refill: 6 },
   { id: 'dep_longwythe',   name: 'Longwythe Scarp',     element: 'ice',       pos: [130, 0, 88],  capacity: 36, refill: 8 },
@@ -84,13 +97,120 @@ export function tierFor(potency: number) {
 /** Roman-ish suffix used when a derived effect stacks above level 3. */
 const LEVEL_SUFFIX = ['', '', '+', '++', 'X', 'XX', 'Ω'];
 
+/** The three elements a flask can hold. */
+export type MagicElement = 'fire' | 'ice' | 'lightning';
+
+/** How much of each element went into a flask. */
+export type EnergyMix = Record<MagicElement, number>;
+
+/** An energy request; missing elements are read as zero. */
+export type EnergyRequest = Partial<Record<MagicElement, number>>;
+
+/**
+ * What a derived effect actually does. Every field is optional because one
+ * effect sets one or two of them -- `craftSpell` folds the whole list down.
+ */
+export interface EffectPayload {
+  /** Times the spell detonates. */
+  multicast?: number;
+  /** EXP multiplier on kills. */
+  expMultiplier?: number;
+  /** Fraction of max HP allies in the blast are healed for. */
+  healAllies?: number;
+  status?: string;
+  duration?: number;
+  chance?: number;
+  instantDeath?: number;
+  dispel?: boolean;
+  armourPierce?: number;
+  /** Fractional change to the blast radius. */
+  radius?: number;
+  followUp?: string;
+  /** Fractional change to the damage multiplier. */
+  damage?: number;
+  damageCap?: number;
+  /** Maxicast: treat potency as at least this. */
+  potencyFloor?: number;
+  /** Hybrids. */
+  defenseBreak?: number;
+  chain?: number;
+  critBonus?: number;
+  randomElement?: boolean;
+}
+
+/** @see Elemancy.draw */
+export type DrawResult =
+  | { ok: true, element: MagicElement, gained: number, remaining: number }
+  | { ok: false, reason: 'unknown-deposit' }
+  | { ok: false, reason: 'depleted', refillAt: number };
+
+/** @see Elemancy.cast */
+export type CastResult =
+  | { ok: true, spell: CarriedSpell, remaining: number }
+  | { ok: false, reason: 'unknown-spell' | 'no-casts-left' };
+
+/** The serialised flask. */
+export interface ElemancySave {
+  energy?: Partial<EnergyMix>;
+  deposits?: Record<string, { drawn: number, refillAt: number }>;
+  spells?: CarriedSpell[];
+  equipped?: (string | null)[];
+}
+
+/** One derived side effect of a flask. */
+export interface SpellEffect {
+  name: string;
+  level: number;
+  desc: string;
+  payload: EffectPayload;
+}
+
+/** What `craftSpell` produced, when it produced something. */
+export interface SpellDef {
+  ok: true;
+  id: string;
+  name: string;
+  /** The tier name without the effect prefix -- 'Fira', 'Blizzaga'. */
+  family: string;
+  element: MagicElement;
+  /** 1..4, one higher than the internal tier index. */
+  tier: number;
+  potency: number;
+  purity: number;
+  damage: number;
+  damageCap: number;
+  radius: number;
+  casts: number;
+  multicast: number;
+  mpCost: number;
+  effects: SpellEffect[];
+  mix: EnergyMix;
+  catalyst: { id: string, name: string, count: number, level: number } | null;
+  description: string;
+}
+
+/** Why a craft produced nothing. */
+export interface SpellRefused {
+  ok: false;
+  reason: string;
+  element?: string;
+}
+
+/** A crafted spell once it is in the bag: it has an identity and a charge. */
+export interface CarriedSpell extends SpellDef {
+  /** Unique per instance, so two identical flasks are still two flasks. */
+  uid: string;
+  /** Casts left. */
+  remaining: number;
+}
+
 /**
  * Turn a catalyst's threshold table into a concrete level for a given count.
  * @param cat catalyst payload from the item table
  * @param count how many were thrown in
  * @param bonus fractional bonus from the Ascension grid
  */
-function catalystLevel(cat: any, count: number, bonus: number = 0) {
+function catalystLevel(cat: CatalystDef, count: number, bonus: number = 0) {
   const effective = count * (1 + bonus);
   let level = 0;
   for (const [need, lv] of cat.thresholds) if (effective >= need) level = lv;
@@ -103,9 +223,17 @@ function catalystLevel(cat: any, count: number, bonus: number = 0) {
  * behaves very differently at 1 unit and at 40.
  *
  */
-function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }: any): Array<{name:string, level:number, desc:string, payload:any}> {
-  const effects: any[] = [];
-  const add = (name: string, level: any, desc: string, payload: any) => effects.push({ name, level, desc, payload });
+function deriveEffects({ cat, catLevel, tier, mix, dominant, purity, total }: {
+  cat: CatalystDef | null,
+  catLevel: number,
+  tier: number,
+  mix: EnergyMix,
+  dominant: MagicElement,
+  purity: number,
+  total: number,
+}): SpellEffect[] {
+  const effects: SpellEffect[] = [];
+  const add = (name: string, level: number, desc: string, payload: EffectPayload) => effects.push({ name, level, desc, payload });
 
   if (cat && catLevel > 0) {
     const tags = cat.tags || [];
@@ -180,7 +308,7 @@ function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, p
  * @param {object} opts
  * @returns the crafted spell definition
  */
-export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning?:number}, catalyst?: {id:string, count:number}, spellPower?: number, catalystPower?: number, triElemental?: boolean, magic?: number }): any {
+export function craftSpell(opts: { energy: EnergyRequest, catalyst?: {id:string, count:number} | null, spellPower?: number, catalystPower?: number, triElemental?: boolean, magic?: number }): SpellDef | SpellRefused {
   const energy = opts.energy || {};
   const mix = {
     fire: Math.max(0, Math.floor(energy.fire || 0)),
@@ -195,9 +323,9 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   const magic = opts.magic ?? 100;
 
   // Dominant element decides the spell family. Ties resolve fire > ice > lightning.
-  let dominant = 'fire';
-  for (const e of MAGIC_ELEMENTS) if (mix[e as keyof typeof mix] > mix[dominant as keyof typeof mix]) dominant = e;
-  const purity = mix[dominant as keyof typeof mix] / total;
+  let dominant: MagicElement = 'fire';
+  for (const e of MAGIC_ELEMENTS) if (mix[e] > mix[dominant]) dominant = e;
+  const purity = mix[dominant] / total;
 
   // Mixing dilutes potency slightly unless Tri-Elemental is unlocked.
   const mixPenalty = opts.triElemental ? 1 : 0.85 + 0.15 * purity;
@@ -214,10 +342,10 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   // Effects can floor the potency (Maxicast) — derive once, apply, derive again
   // so names reflect the final tier.
   let tier = tierFor(potency);
-  let effects = deriveEffects({ cat, catLevel, catName: catDef?.name, tier, mix, dominant, potency, purity, total });
+  let effects = deriveEffects({ cat, catLevel, tier, mix, dominant, purity, total });
   const floor = effects.find((e) => e.payload.potencyFloor);
-  if (floor) { potency = Math.max(potency, floor.payload.potencyFloor); tier = tierFor(potency); }
-  effects = deriveEffects({ cat, catLevel, catName: catDef?.name, tier, mix, dominant, potency, purity, total });
+  if (floor && floor.payload.potencyFloor != null) { potency = Math.max(potency, floor.payload.potencyFloor); tier = tierFor(potency); }
+  effects = deriveEffects({ cat, catLevel, tier, mix, dominant, purity, total });
 
   // Damage: potency drives the curve, the caster's Magic scales it.
   let damageMult = 1;
@@ -236,7 +364,7 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   const damage = Math.min(damageCap, Math.round(basePower * (0.6 + magic / 160) * damageMult));
 
   // Name: [primary effect] [tier name]. Multicast wins the prefix if present.
-  const family = SPELL_NAMES[dominant as keyof typeof SPELL_NAMES][tier];
+  const family = SPELL_NAMES[dominant][tier];
   const prefixEffect = effects.find((e) => e.payload.multicast)
     || effects.find((e) => e.payload.healAllies)
     || effects.find((e) => e.payload.expMultiplier)
@@ -265,7 +393,9 @@ export function craftSpell(opts: { energy: {fire?:number, ice?:number, lightning
   };
 }
 
-function buildDescription({ name, dominant, tier, damage, radius, effects }: any) {
+function buildDescription({ name, dominant, tier, damage, radius, effects }: {
+  name: string, dominant: string, tier: number, damage: number, radius: number, effects: SpellEffect[],
+}) {
   const bits = [`${name} — a tier-${tier + 1} ${dominant} flask dealing about ${damage.toLocaleString()} damage in a ${radius.toFixed(0)}m blast.`];
   for (const e of effects) bits.push(`${e.name}: ${e.desc}`);
   return bits.join(' ');
@@ -281,13 +411,21 @@ function buildDescription({ name, dominant, tier, damage, radius, effects }: any
  * and `spell-cast`.
  */
 export class Elemancy {
-  spells!: any[];
-  bonuses!: any;
+  /** Crafted spells the party is carrying. */
+  spells!: CarriedSpell[];
+  /** Bonuses read from the Ascension grid, refreshed by `RpgSystem`. */
+  bonuses!: {
+    drawYield: number, spellPower: number, catalystPower: number,
+    triElemental: boolean, spellSlots: number,
+  };
   capBonus!: number;
-  deposits!: any;
+  /** Deposit id -> how much has been taken and when it refills. */
+  deposits!: Record<string, { drawn: number, refillAt: number }>;
   emitter!: Emitter | null;
-  energy!: any;
-  equipped!: any;
+  /** Stored energy per element. */
+  energy!: EnergyMix;
+  /** Spell uids in the quick-cast slots; null is an empty slot. */
+  equipped!: (string | null)[];
   inventory!: Inventory | null;
   /**
    * @param [inventory] used to consume catalysts on craft
@@ -295,18 +433,13 @@ export class Elemancy {
   constructor(emitter: import('./Emitter.ts').Emitter | null = null, inventory: import('./Inventory.ts').Inventory | null = null) {
     this.emitter = emitter;
     this.inventory = inventory;
-    /** Stored energy per element. */
     this.energy = { fire: 0, ice: 0, lightning: 0 };
     /** Extra cap from the Ascension grid. */
     this.capBonus = 0;
-    /** Bonuses read from the Ascension grid, refreshed by RpgSystem. */
     this.bonuses = { drawYield: 0, spellPower: 0, catalystPower: 0, triElemental: false, spellSlots: 0 };
-    /** Deposit runtime state: how much is left and when it refills. */
     this.deposits = {};
     for (const d of DEPOSITS) this.deposits[d.id] = { drawn: 0, refillAt: 0 };
-    /** Crafted spells the party is carrying. */
     this.spells = [];
-    /** Indices into `spells` that are equipped to the quick menu. */
     this.equipped = [null, null, null];
   }
 
@@ -332,7 +465,7 @@ export class Elemancy {
    * Draw energy from a deposit.
    * @param [opts] `{ units, hour }` — units defaults to a full draw
    */
-  draw(depositId: string, opts: any = {}): {ok:boolean, reason?:string, element?:string, gained?:number, refillAt?: any, remaining?: number } {
+  draw(depositId: string, opts: { units?: number, hour?: number } = {}): DrawResult {
     const def = DEPOSITS.find((d) => d.id === depositId);
     if (!def) return { ok: false, reason: 'unknown-deposit' };
     const st = this.deposits[depositId];
@@ -358,7 +491,7 @@ export class Elemancy {
   }
 
   /** Add energy directly (enemy drops, story grants, debug). */
-  addEnergy(element: any, units: number) {
+  addEnergy(element: MagicElement, units: number) {
     if (!MAGIC_ELEMENTS.includes(element)) return 0;
     const before = this.energy[element];
     this.energy[element] = Math.min(this.cap, before + Math.max(0, Math.floor(units)));
@@ -368,7 +501,7 @@ export class Elemancy {
   }
 
   /** Preview a craft without spending anything. */
-  preview(energy: any, catalyst: any = null, magic = 100) {
+  preview(energy: EnergyRequest, catalyst: { id: string, count: number } | null = null, magic = 100) {
     return craftSpell({
       energy, catalyst, magic,
       spellPower: this.bonuses.spellPower,
@@ -389,7 +522,7 @@ export class Elemancy {
       lightning: Math.max(0, Math.floor(energy?.lightning || 0)),
     };
     for (const e of MAGIC_ELEMENTS) {
-      if (want[e as keyof typeof want] > this.energy[e]) return { ok: false, reason: 'not-enough-energy', element: e };
+      if (want[e] > this.energy[e]) return { ok: false, reason: 'not-enough-energy', element: e };
     }
     if (want.fire + want.ice + want.lightning <= 0) return { ok: false, reason: 'no-energy' };
 
@@ -401,14 +534,17 @@ export class Elemancy {
       }
     }
 
-    const spell = this.preview(want, catalyst, magic);
-    if (!spell.ok) return spell;
+    const rolled = this.preview(want, catalyst, magic);
+    if (!rolled.ok) return rolled;
 
-    for (const e of MAGIC_ELEMENTS) this.energy[e] -= want[e as keyof typeof want];
+    for (const e of MAGIC_ELEMENTS) this.energy[e] -= want[e];
     if (catalyst?.id && this.inventory) this.inventory.remove(catalyst.id, catalyst.count || 1);
 
-    spell.uid = `${spell.id}_${this.spells.length}_${Date.now().toString(36)}`;
-    spell.remaining = spell.casts;
+    const spell: CarriedSpell = {
+      ...rolled,
+      uid: `${rolled.id}_${this.spells.length}_${Date.now().toString(36)}`,
+      remaining: rolled.casts,
+    };
     this.spells.push(spell);
 
     // Auto-equip into the first free slot so it is immediately usable.
@@ -420,10 +556,10 @@ export class Elemancy {
   }
 
   /** Find a carried spell by its unique id. */
-  spell(uid: any) { return this.spells.find((s: any) => s.uid === uid) || null; }
+  spell(uid: string): CarriedSpell | null { return this.spells.find((s) => s.uid === uid) || null; }
 
   /** Put a spell in a quick-cast slot. */
-  equip(slot: number, uid: any) {
+  equip(slot: number, uid: string | null) {
     if (slot < 0 || slot >= this.slots) return false;
     if (uid !== null && !this.spell(uid)) return false;
     this.equipped[slot] = uid;
@@ -433,7 +569,7 @@ export class Elemancy {
   /**
    * Consume one cast of a spell.
    */
-  cast(uid: string): {ok:boolean, reason?:string, spell?:any, remaining?:number} {
+  cast(uid: string): CastResult {
     const s = this.spell(uid);
     if (!s) return { ok: false, reason: 'unknown-spell' };
     if (s.remaining <= 0) return { ok: false, reason: 'no-casts-left' };
@@ -462,7 +598,7 @@ export class Elemancy {
     return { energy: { ...this.energy }, deposits: this.deposits, spells: this.spells, equipped: this.equipped };
   }
 
-  static fromJSON(data: any, emitter: Emitter | null = null, inventory: Inventory | null = null) {
+  static fromJSON(data: ElemancySave | null | undefined, emitter: Emitter | null = null, inventory: Inventory | null = null) {
     const el = new Elemancy(emitter, inventory);
     if (!data) return el;
     Object.assign(el.energy, data.energy || {});

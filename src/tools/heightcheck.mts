@@ -36,7 +36,8 @@ const out = await page.evaluate(async (shot) => {
   const res = t.res;
 
   const NP = 64;
-  const pts: any[] = [];
+  // `V2` is three's Vector2, resolved off the page's own module graph.
+  const pts: Array<{ set(x: number, y: number): void }> = [];
   for (let i = 0; i < NP; i++) pts.push(new V2(0, 0));
 
   const geo = new BufferGeometry();
@@ -67,7 +68,7 @@ const out = await page.evaluate(async (shot) => {
   scene.add(quad);
   const rt = new RT(NP, 1, { type: 1015, format: 1023, minFilter: 1003, magFilter: 1003, depthBuffer: false, stencilBuffer: false });
 
-  const sample = (list: any) => {
+  const sample = (list: number[][]) => {
     for (let i = 0; i < NP; i++) pts[i].set(list[i] ? list[i][0] : 0, list[i] ? list[i][1] : 0);
     mat.uniforms.uPts.value = pts;
     mat.uniformsNeedUpdate = true;

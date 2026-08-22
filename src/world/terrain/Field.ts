@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { RoadNetwork } from './Road.ts';
+import type { HighwaySpine } from './Road.ts';
 import { worldMap, LANDFORMS, WORLD } from '../map/WorldMap.ts';
 import type { WorldMap, CraterLandform } from '../map/WorldMap.ts';
 import type { DiscLandform } from '../map/WorldMap.ts';
@@ -57,14 +58,66 @@ const SEA = WORLD.seaLevel;
  * prop scatter have always used, now resolved out of the map instead of being
  * a second, independent set of coordinates.
  */
+/**
+ * A landform reduced to what a *framing* needs: a centre, a rough extent and
+ * a height. `Shots.ts` and the vista scenarios aim at these rather than
+ * carrying a second, independent set of coordinates.
+ */
+export interface Landmark {
+  x: number;
+  z: number;
+  /** Rough extent, metres. 200 when the landform states none. */
+  r: number;
+  h: number;
+  kind: string;
+  /** The `Landform.id` this was built from. */
+  id: string;
+}
+
+/**
+ * The four control channels the heightfield bakes per cell, as a CPU sample.
+ * The shader reads the same four out of `uCtrlTex`.
+ */
+export interface CtrlSample {
+  /** 0..1 water flow accumulation — gullies and washes. */
+  flow: number;
+  /** 0..1 deposited sediment — the sandy flats. */
+  sediment: number;
+  /** 0..1 road mask; doubles as the lateral offset where it is set. */
+  road: number;
+  /** 0..1 bare-rock bias. */
+  rocky: number;
+}
+
+/**
+ * How long each stage of the build took, plus what it produced. Every field is
+ * optional because a *baked* field never runs the stages that fill them in.
+ */
+export interface FieldStats {
+  buildMs?: number;
+  corridorMs?: number;
+  farMs?: number;
+  macroMs?: number;
+  landformMs?: number;
+  erodeMs?: number;
+  /** Kilometres of road in the network. */
+  roadKm?: number;
+  /** True when the field came out of the bake rather than the generator. */
+  baked?: boolean;
+}
+
 export const LANDMARKS = buildLandmarks();
 
 function buildLandmarks() {
   const byId = new Map(LANDFORMS.map((l) => [l.id, l]));
-  const L: any = {};
+  const L: Record<string, Landmark> = {};
   const put = (key: string, id: string, kind?: string) => {
     const f = byId.get(id);
-    if (f) L[key as keyof typeof L] = { x: f.x, z: f.z, r: f.r || f.rx || 200, h: f.h || 0, kind: kind || f.kind, id };
+    // A canyon is a polyline and a spire field is a span, so neither has the
+    // centre a landmark is: `'x' in f` is what says this one can be pinned.
+    if (!f || !('x' in f)) return;
+    const r = 'r' in f ? f.r : ('rx' in f ? f.rx : 200);
+    L[key] = { x: f.x, z: f.z, r: r || 200, h: 'h' in f ? f.h : 0, kind: kind || f.kind, id };
   };
   put('blackrockMesa', 'blackrockMesa');
   put('northMesa', 'northMesa');
@@ -106,7 +159,6 @@ export class Field {
   CELL!: number;
   HALF!: number;
   N!: number;
-  _b!: any;
   _coarse!: Float32Array | null;
   _farMs!: number;
   _terr!: Float32Array;
@@ -125,22 +177,20 @@ export class Field {
   n3!: Noise;
   network!: RoadNetwork;
   nrm!: Uint16Array;
-  road!: any;
   roadLat!: Float32Array | null;
   roadMask!: Float32Array | null;
-  roadSpline!: any;
+  /** The main highway as one spline. `Terrain.road` is this. */
+  roadSpline!: HighwaySpine | null;
   sed!: Float32Array | null;
   slope0!: Float32Array | null;
-  stats!: any;
+  stats!: FieldStats;
   constructor(seed = 1337) {
     this.N = N; this.HALF = HALF; this.CELL = CELL;
     this.n = new Noise(seed);
     this.n2 = new Noise(seed ^ 0x5f3a);
     this.n3 = new Noise(seed ^ 0x9e17);
     this.map = worldMap;
-    this.road = null;
     this.stats = {};
-    this._b = {};
   }
 
   /** Build every grid. Synchronous. */
@@ -617,7 +667,7 @@ export class Field {
   _applyLandforms() {
     const rng = new Rng(9931);
     this.massRaise = new Float32Array(N * N);
-    const mass = (x: number, z: number, r: number, fn: any) => this._mass(x, z, r, fn);
+    const mass = (x: number, z: number, r: number, fn: () => void) => this._mass(x, z, r, fn);
     for (const f of LANDFORMS) {
       switch (f.kind) {
         case 'mesa':
@@ -722,7 +772,10 @@ export class Field {
    */
   _crater(f: CraterLandform) {
     const h = this.h, n = this.n2;
-    const { x: cx, z: cz, r, rim, depth, core } = f;
+    // `core` is the meteor mass in the middle, and only the Disc has one.
+    // Absent it used to multiply into the height as `undefined`, which writes
+    // NaN across the whole crater floor.
+    const { x: cx, z: cz, r, rim, depth, core = 0 } = f;
     const box = this._box(cx, cz, r * 1.15);
     for (let j = box.j0; j <= box.j1; j++) {
       const z = -HALF + j * CELL;
@@ -1489,7 +1542,7 @@ export class Field {
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
-  ctrlAt(x: number, z: number, out: any = {}) {
+  ctrlAt(x: number, z: number, out: CtrlSample = { flow: 0, sediment: 0, road: 0, rocky: 0 }): CtrlSample {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const arr = q >= BLEND_OUT ? this.farCtrl : this.ctrl;
     const n = q >= BLEND_OUT ? FAR_N : N;

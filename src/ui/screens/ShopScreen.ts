@@ -5,6 +5,8 @@ import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { TOWN_SHOPS, stockFor } from '../../world/town/Shops.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
+import type { ItemDef } from '../../game/rpg/Inventory.ts';
+import type { WeaponClass } from '../../game/rpg/Stats.ts';
 
 /**
  * The shop counter.
@@ -18,14 +20,17 @@ import type { Game } from '../../game/Game.ts';
  * Enter to deal. Everything animates from `game.time`; no CSS transitions.
  */
 
+/** Weapon class -> icon key. */
+const WEAPON_ICON: Record<WeaponClass, string> = {
+  sword: 'sword', greatsword: 'greatsword', polearm: 'lance', dagger: 'daggers',
+  firearm: 'firearm', shield: 'shield', machinery: 'machinery',
+};
+
 /** Which icon reads for a given item definition. */
-function iconFor(def: any) {
+function iconFor(def: ItemDef | null): string {
   if (!def) return 'items';
   if (def.category === 'weapon') {
-    return (({
-      sword: 'sword', greatsword: 'greatsword', polearm: 'lance', dagger: 'daggers',
-      firearm: 'firearm', shield: 'shield', machinery: 'machinery',
-    }) as any)[def.class] || 'sword';
+    return (def.class && WEAPON_ICON[def.class]) || 'sword';
   }
   if (def.category === 'accessory') return 'gear';
   if (def.category === 'catalyst') return 'fire';
@@ -36,7 +41,7 @@ function iconFor(def: any) {
 }
 
 /** One line of plain English about what an item does. */
-function effectOf(def: any) {
+function effectOf(def: ItemDef | null): string {
   if (!def) return '—';
   if (def.use) {
     const u = def.use;
@@ -55,7 +60,8 @@ function effectOf(def: any) {
       if (m[k]) parts.push(`${k.toUpperCase()} +${m[k]}`);
     }
     if (m.critRate) parts.push(`CRIT +${Math.round(m.critRate * 100)}%`);
-    if (m.resist) parts.push(Object.keys(m.resist).map((r) => `${r} ${m.resist[r]}%`).join(' · '));
+    const resist = m.resist;
+    if (resist) parts.push(Object.keys(resist).map((r) => `${r} ${resist[r]}%`).join(' · '));
     return parts.join('  ') || '—';
   }
   if (def.tags && def.tags.length) return def.tags.join(' · ');
@@ -64,12 +70,26 @@ function effectOf(def: any) {
 
 const MAX_ROWS = 14;
 
+/** One line on a shelf: what it is, what it costs, and which way it trades. */
+interface ShopRow {
+  def: ItemDef;
+  /** Gil per unit -- the shelf price when buying, the payout when selling. */
+  price: number;
+  /** How many the party already has. */
+  held: number;
+  kind: 'buy' | 'sell';
+}
+
 export class ShopScreen {
-  _rows!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  _rows!: ShopRow[];
   shopId!: string;
   _age!: number;
   _cur!: string;
-  _msg!: any;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
   _ownerFor!: string;
   _sig!: string | null;
@@ -99,7 +119,7 @@ export class ShopScreen {
   qRow!: HTMLElement;
   qTot!: HTMLElement;
   qty!: number;
-  rowNodes!: any[];
+  rowNodes!: Array<{ node: HTMLElement, bg: HTMLElement, r: ShopRow, _on?: boolean, _poor?: boolean }>;
   scroll!: number;
   specVals!: HTMLElement[];
   sub!: string;
@@ -217,17 +237,17 @@ export class ShopScreen {
   get rpg() { return this.game?.get?.('RpgSystem') || this.game?.get?.('Rpg') || null; }
 
   /** Rows for the current tab: `{ def, price, held, kind }`. */
-  rows() {
+  rows(): ShopRow[] {
     const rpg = this.rpg;
     const inv = rpg?.inventory;
     const items = rpg?.tables?.items;
     if (!inv || !items) return [];
     if (this.selling) {
-      return inv.sellable(this.shop.sellCategories).map((e: any) => ({
+      return inv.sellable(this.shop.sellCategories).map((e): ShopRow => ({
         def: e.def, price: e.unitPrice, held: e.count, kind: 'sell',
       }));
     }
-    return stockFor(this.shop, this.tabName, items).map((def) => ({
+    return stockFor(this.shop, this.tabName, items).map((def): ShopRow => ({
       def, price: def.price, held: inv.count(def.id), kind: 'buy',
     }));
   }
@@ -255,8 +275,10 @@ export class ShopScreen {
     if (res.ok) {
       // `buy` reports what it took as `cost`, `sell` what it paid out as
       // `gil`; neither field is on the other call's result.
-      const paid = 'cost' in res ? res.cost ?? 0 : 0;
-      const earned = 'gil' in res ? res.gil ?? 0 : 0;
+      // `buy` reports `cost`, `sell` reports `gil`; both are now discriminated
+      // unions, so `in` narrows and neither needs a default.
+      const paid = 'cost' in res ? res.cost : 0;
+      const earned = 'gil' in res ? res.gil : 0;
       this._say(row.kind === 'buy'
         ? `Bought ${row.def.name}${n > 1 ? ` ×${n}` : ''} — ${commas(paid)} gil`
         : `Sold ${row.def.name}${n > 1 ? ` ×${n}` : ''} — +${commas(earned)} gil`, true);
@@ -273,7 +295,7 @@ export class ShopScreen {
     }
   }
 
-  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /** Extra keys this screen owns, polled rather than bound (Menus is shared). */
   _extraInput(game: Game) {
@@ -290,7 +312,7 @@ export class ShopScreen {
 
   /* ----------------------------------------------------------- render */
 
-  _renderRows(rows: any) {
+  _renderRows(rows: ShopRow[]) {
     clear(this.list);
     this.rowNodes = [];
     const view = rows.slice(this.scroll, this.scroll + MAX_ROWS);
@@ -330,7 +352,7 @@ export class ShopScreen {
     if (this._tabSig !== tabSig) {
       this._tabSig = tabSig;
       clear(this.tabsEl);
-      this.tabNodes = shop.tabs.map((t: any) => {
+      this.tabNodes = shop.tabs.map((t: string) => {
         const n = el('div.tab', { text: t });
         this.tabsEl.appendChild(n);
         return n;
@@ -345,7 +367,7 @@ export class ShopScreen {
     }
     this.tabsEl.style.opacity = easeOut(clamp((a - 0.1) / 0.5, 0, 1)).toFixed(3);
 
-    const sig = `${this.shopId}|${this.tab}|${this.scroll}|${rows.length}|${rows.map((r: any) => r.def.id + ':' + r.held).join()}`;
+    const sig = `${this.shopId}|${this.tab}|${this.scroll}|${rows.length}|${rows.map((r) => r.def.id + ':' + r.held).join()}`;
     if (sig !== this._sig) { this._sig = sig; this._renderRows(rows); }
 
     const gil = rpg?.inventory?.gil ?? 0;

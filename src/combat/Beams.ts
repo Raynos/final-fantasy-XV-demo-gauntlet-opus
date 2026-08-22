@@ -11,6 +11,45 @@ import type { Rng } from '../util/Rng.ts';
  * The fragment shader offsets its turbulence lookup per colour channel, which
  * gives the streak a genuine chromatic dispersion instead of a flat tint.
  */
+/**
+ * The beam shader's uniform block. The index signature is `ShaderMaterial`'s
+ * requirement; every uniform the shader actually has is named below it.
+ */
+export interface BeamUniforms {
+  [uniform: string]: THREE.IUniform;
+  uHead: THREE.IUniform<THREE.Color>;
+  uTail: THREE.IUniform<THREE.Color>;
+  uCore: THREE.IUniform<THREE.Color>;
+  uWidth: THREE.IUniform<number>;
+  uTaper: THREE.IUniform<number>;
+  uHeadBulge: THREE.IUniform<number>;
+  uFalloff: THREE.IUniform<number>;
+  uIntensity: THREE.IUniform<number>;
+  uStrength: THREE.IUniform<number>;
+  uTime: THREE.IUniform<number>;
+  uScroll: THREE.IUniform<number>;
+  uWobble: THREE.IUniform<number>;
+  uPhase: THREE.IUniform<number>;
+  uChroma: THREE.IUniform<number>;
+  uNoise: THREE.IUniform<THREE.Texture>;
+  uGlobal: THREE.IUniform<number>;
+}
+
+/** How a beam is built. Every field has a default. */
+export interface BeamOpts {
+  segments?: number;
+  head?: THREE.ColorRepresentation;
+  tail?: THREE.ColorRepresentation;
+  core?: THREE.ColorRepresentation;
+  width?: number;
+  taper?: number;
+  headBulge?: number;
+  falloff?: number;
+  intensity?: number;
+  renderOrder?: number;
+  scroll?: number;
+}
+
 export class PolyBeam {
   _tmpA!: THREE.Vector3;
   _tmpB!: THREE.Vector3;
@@ -21,12 +60,12 @@ export class PolyBeam {
   posAttr!: THREE.BufferAttribute;
   segments!: number;
   tanAttr!: THREE.BufferAttribute;
-  uniforms!: any;
+  uniforms!: BeamUniforms;
   constructor({
     segments = 56, head = 0xbfe8ff, tail = 0x1b3f8f, core = 0xffffff,
     width = 0.22, taper = 0.85, headBulge = 0.0, falloff = 0.7,
     intensity = 2.4, renderOrder = 24, scroll = 1.2,
-  } = {}) {
+  }: BeamOpts = {}) {
     this.segments = segments;
     const n = segments + 1;
 
@@ -95,7 +134,7 @@ export class PolyBeam {
   }
 
   /** Straight streak between two world points. */
-  setLine(from: any, to: any) {
+  setLine(from: THREE.Vector3, to: THREE.Vector3) {
     const n = this.segments + 1;
     const p = this.pathPos, t = this.pathTan;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
@@ -116,7 +155,7 @@ export class PolyBeam {
   }
 
   /** Arbitrary path (resampled linearly onto the ribbon's segment count). */
-  setPath(points: any) {
+  setPath(points: THREE.Vector3[]) {
     const n = this.segments + 1;
     const p = this.pathPos, t = this.pathTan;
     const m = points.length;
@@ -144,15 +183,15 @@ export class PolyBeam {
 
   set strength(v) { this.uniforms.uStrength.value = v; this.mesh.visible = v > 0.001; }
   get strength() { return this.uniforms.uStrength.value; }
-  set width(v: any) { this.uniforms.uWidth.value = v; }
+  set width(v: number) { this.uniforms.uWidth.value = v; }
 
-  setClock(c: any) { this.uniforms.uTime.value = c; }
+  setClock(c: number) { this.uniforms.uTime.value = c; }
   hide() { this.mesh.visible = false; }
   dispose() { this.mesh.geometry.dispose(); this.material.dispose(); }
 }
 
 /** Build a jagged branching lightning path between two points. */
-export function lightningPath(from: any, to: any, rng: Rng, { jitter = 0.5, points = 14 } = {}) {
+export function lightningPath(from: THREE.Vector3, to: THREE.Vector3, rng: Rng, { jitter = 0.5, points = 14 } = {}) {
   const pts = [];
   const dir = new THREE.Vector3().subVectors(to, from);
   const len = dir.length();

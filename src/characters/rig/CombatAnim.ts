@@ -213,6 +213,9 @@ export class CombatAnim {
   poseSwing(B: BoneMap, char: Character, s: number, combat: CombatSystem, style: WeaponStyle) {
     const k = this.swingCurve(combat, style);
     const step = combat.comboStep;
+    // `lateUpdate` only calls this while a step is live; 1 is the neutral IK
+    // weight the other pose methods return, so this is the same no-op.
+    if (!step) return 1;
     // the arc's sign says whether this link of the combo goes left or right;
     // a combo that always swings the same way reads as a loop
     const dir = Math.sign((step.arc[1] - step.arc[0]) || 1);

@@ -44,7 +44,7 @@ const dec = new TextDecoder();
  * samples on a smooth field is nearly constant, so plane 3 compresses ~40:1 and
  * the whole grid still lands at about a quarter of its raw size.
  */
-export function encodeF32Planes(src: any) {
+export function encodeF32Planes(src: Float32Array) {
   const n = src.length;
   const u8 = new Uint8Array(src.buffer, src.byteOffset, n * 4);
   const out = new Uint8Array(n * 4);
@@ -66,7 +66,7 @@ export function decodeF32Planes(bytes: Uint8Array, n: number): Float32Array {
 }
 
 /** Quantise a float grid to 16 bits and delta-code along rows. */
-export function encodeQ16D(src: any, w: number, h: number) {
+export function encodeQ16D(src: ArrayLike<number>, w: number, h: number) {
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < src.length; i++) { const v = src[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
   const scale = (hi - lo) / 65535 || 1;
@@ -83,7 +83,7 @@ export function encodeQ16D(src: any, w: number, h: number) {
   return { bytes: new Uint8Array(out.buffer), min: lo, scale };
 }
 
-export function decodeQ16D(bytes: any, w: number, h: number, min: number, scale: number): Float32Array {
+export function decodeQ16D(bytes: Uint8Array, w: number, h: number, min: number, scale: number): Float32Array {
   // A section can land on an odd byte offset inside the container, which a
   // Uint16Array view cannot address; copy only in that case.
   const src = bytes.byteOffset % 2 === 0 ? bytes : new Uint8Array(bytes);
@@ -106,7 +106,7 @@ export function decodeQ16D(bytes: any, w: number, h: number, min: number, scale:
  * their own neighbours, and gzip only sees a window of the recent past — so
  * de-interleaving is worth ~2x here for free.
  */
-export function encodePlanes8(src: any, w: number, h: number, ch: number) {
+export function encodePlanes8(src: Uint8Array, w: number, h: number, ch: number) {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -131,7 +131,7 @@ export function decodePlanes8(bytes: Uint8Array, w: number, h: number, ch: numbe
  * Pack sections into the container.
  * @param meta arbitrary JSON metadata (seed, grid sizes, hash)
  */
-export function packContainer(meta: any, sections: Array<{name:string, kind:string, bytes:Uint8Array, [k:string]:any}>): Uint8Array {
+export function packContainer(meta: BakeMeta, sections: Array<Omit<BakeSection, 'offset' | 'length'>>): Uint8Array {
   let offset = 0;
   const index = sections.map((s) => {
     const { bytes, ...rest } = s;
@@ -159,7 +159,7 @@ export function packContainer(meta: any, sections: Array<{name:string, kind:stri
  * and saying so here beats decoding `undefined` into a NaN heightfield.
  */
 export function sectionField(s: BakeSection, key: 'n' | 'w' | 'h' | 'ch'): number {
-  const v = s[key];
+  const v: number | undefined = s[key];
   if (typeof v !== 'number') throw new Error(`bake: section '${s.name}' has no ${key}`);
   return v;
 }
@@ -171,14 +171,27 @@ export interface BakeSection {
   bytes: Uint8Array;
   offset: number;
   length: number;
+  /** Plane count, for a de-interleaved float grid. */
   n?: number;
   w?: number;
   h?: number;
   ch?: number;
-  [k: string]: any;
+  /** Quantisation origin and step, for a `q16d` section. */
+  min?: number;
+  scale?: number;
 }
 
-export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:string)=>BakeSection|null} {
+/**
+ * The container header: whatever the baker chose to record, plus the section
+ * index and the format version this file writes.
+ */
+export interface BakeMeta {
+  version?: number;
+  sections?: BakeSection[];
+  [field: string]: unknown;
+}
+
+export function unpackContainer(buf: Uint8Array): {meta: BakeMeta, section: (name: string) => BakeSection | null} {
   if (dec.decode(buf.subarray(0, 8)) !== MAGIC) throw new Error('bad bake magic');
   const hlen = new DataView(buf.buffer, buf.byteOffset).getUint32(8, true);
   const meta = JSON.parse(dec.decode(buf.subarray(12, 12 + hlen)));
@@ -187,7 +200,7 @@ export function unpackContainer(buf: Uint8Array): {meta:any, section:(name:strin
   return {
     meta,
     section(name) {
-      const s = meta.sections.find((x: any) => x.name === name);
+      const s = (meta.sections ?? []).find((x: BakeSection) => x.name === name);
       if (!s) return null;
       return { ...s, bytes: buf.subarray(base + s.offset, base + s.offset + s.length) };
     },

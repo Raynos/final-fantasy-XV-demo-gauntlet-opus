@@ -3,6 +3,9 @@ import { icon, portrait } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import { readGear, readParty, rpg } from '../GameData.ts';
+import type { GearSlotView, PartyView } from '../GameData.ts';
+import type { EquipKind } from '../../game/rpg/Inventory.ts';
+import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
 
@@ -24,11 +27,59 @@ const CLASS_OK = {
  * `Inventory.equipped()`, the attributes from the member's `Stats` block with
  * gear, buffs and Ascension folded in, and the technique list from `PartyState`.
  */
+/** One candidate the equip picker offers. `id: null` is the "remove" row. */
+interface PickerRow {
+  id: string | null;
+  name: string;
+  /** The stat line under the name. */
+  stat: string;
+  /** How many are in the bag; 0 on the synthetic rows. */
+  count: number;
+  /** The "nothing fits here" row, which does nothing when accepted. */
+  dead?: boolean;
+}
+
+/** The equip picker while it is open. */
+interface Picker {
+  charId: string;
+  kind: EquipKind;
+  /** Which slot of that kind, 0-based. */
+  index: number;
+  rows: PickerRow[];
+  /** Highlighted row. */
+  i: number;
+  /** 'Weapon' or 'Accessory', for the header. */
+  slotName: string;
+  /** Filled by `_renderPicker`, which runs the moment the picker opens. */
+  nodes: Array<{ node: HTMLElement, bg: HTMLElement, row: PickerRow, _on?: boolean }>;
+}
+
+/** One member's card: its widgets and the values they were last drawn with. */
+interface GearCard {
+  card: HTMLElement;
+  bar: Bar;
+  hpVal: HTMLElement;
+  slots: Array<{
+    n: HTMLElement, s: GearSlotView, nm: ChildNode, st: ChildNode,
+    _n?: string, _s?: string, _on?: boolean,
+  }>;
+  statNodes: Array<{ node: HTMLElement, v: HTMLElement, _v?: string }>;
+  p: PartyView;
+  lvEl: ChildNode;
+  _t?: string;
+  _lv?: string;
+}
+
 export class GearScreen {
-  _key!: any;
-  _msg!: any;
+  /** The screen root. Created and assigned by whoever registers the screen
+   *  (`Menus.init`, or `Hammerhead._registerScreens` for the two town
+   *  counters), never by this constructor. */
+  node!: HTMLElement;
+  /** Signature of the last card render, so a static frame writes no DOM. */
+  _key!: string | null;
+  _msg!: { text: string, ok: boolean } | null;
   _msgAge!: number;
-  cards!: any[];
+  cards!: GearCard[];
   game!: Game;
   grid!: HTMLElement;
   i!: number;
@@ -38,7 +89,7 @@ export class GearScreen {
   pick!: HTMLElement;
   pickH!: HTMLElement;
   pickList!: HTMLElement;
-  picker!: any;
+  picker!: Picker | null;
   sub!: string;
   title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
@@ -76,13 +127,13 @@ export class GearScreen {
     root.appendChild(this.msg);
   }
 
-  _build(game: Game, party: any) {
+  _build(game: Game, party: PartyView[]) {
     const r = rpg(game);
-    party.forEach((p: any) => {
+    party.forEach((p) => {
       const list = readGear(game, p.id);
       const bar = new Bar({ cls: 'slim' });
       const hpVal = el('div.gv');
-      const slots = list.map((s: any) => {
+      const slots = list.map((s) => {
         const n = el('div.gslot', {}, [
           el('div.gs-k', {}, [icon(SLOT_ICON[s.slot as keyof typeof SLOT_ICON] || 'sword', { size: 11, stroke: 1.3 }), el('span', { text: ` ${s.slot}` })]),
           el('div.gs-n', { text: s.name }),
@@ -104,11 +155,11 @@ export class GearScreen {
         ]),
         el('div.rule', { style: 'margin-top:16px' }),
         el('div.gc-hp', {}, [el('span.k', { text: 'HP' }), bar.node, hpVal]),
-        el('div.gc-slots', {}, slots.map((s: any) => s.n)),
+        el('div.gc-slots', {}, slots.map((s) => s.n)),
         el('div.rule', { style: 'margin-top:26px' }),
         el('div.gc-abil', {}, [
           el('div.k', { text: 'Techniques' }),
-          ...(techs.length ? techs : [{ name: '—', bars: 0 }]).map((t: any) => el('div.ab', {}, [
+          ...(techs.length ? techs : [{ name: '—', bars: 0 }]).map((t: { name: string, bars: number }) => el('div.ab', {}, [
             icon('ascension', { size: 11, stroke: 1.3 }),
             el('span', { text: t.bars ? `${t.name}   ·   ${t.bars} bar${t.bars === 1 ? '' : 's'}` : t.name }),
           ])),
@@ -117,7 +168,7 @@ export class GearScreen {
         el('div.gc-stats', {}, statNodes.map((s) => s.node)),
       ]);
       this.grid.appendChild(card);
-      this.cards.push({ card, bar, hpVal, slots, statNodes, p, lvEl: card.firstChild!.lastChild!.lastChild });
+      this.cards.push({ card, bar, hpVal, slots, statNodes, p, lvEl: card.firstChild!.lastChild!.lastChild! });
     });
   }
 
@@ -148,9 +199,9 @@ export class GearScreen {
     const slot = layout[this.j];
     if (!slot) return;
     const kind = slot.slot === 'Weapon' ? 'weapon' : 'accessory';
-    const index = layout.slice(0, this.j).filter((s: any) => s.slot === slot.slot).length;
+    const index = layout.slice(0, this.j).filter((s) => s.slot === slot.slot).length;
     const options = this._candidates(r, card.p.id, kind, slot);
-    this.picker = { charId: card.p.id, kind, index, rows: options, i: 0, slotName: slot.slot };
+    this.picker = { charId: card.p.id, kind, index, rows: options, i: 0, slotName: slot.slot, nodes: [] };
     this._renderPicker();
   }
 
@@ -163,14 +214,14 @@ export class GearScreen {
   }
 
   /** Everything in the bag this member is allowed to put in this slot. */
-  _candidates(r: any, charId: any, kind: string, slot: any) {
-    const rows = [];
+  _candidates(r: RpgSystem, charId: string, kind: EquipKind, slot: GearSlotView): PickerRow[] {
+    const rows: PickerRow[] = [];
     if (!slot.empty) rows.push({ id: null, name: '— Remove —', stat: 'Back into the bag', count: 0 });
     const allowed = CLASS_OK[charId as keyof typeof CLASS_OK] || CLASS_OK.noctis;
     for (const e of r.inventory.list(kind)) {
       const def = e.def;
       if (kind === 'weapon') {
-        if (!allowed.includes(def.class)) continue;
+        if (!def.class || !allowed.includes(def.class)) continue;
         if (def.wielders && !def.wielders.includes(charId)) continue;
       }
       rows.push({
@@ -186,10 +237,11 @@ export class GearScreen {
 
   _renderPicker() {
     const p = this.picker;
+    if (!p) return;
     this.pick.style.display = '';
     this.pickH.textContent = `${p.charId.toUpperCase()}  ·  ${p.slotName} slot ${p.index + 1}`;
     clear(this.pickList);
-    p.nodes = p.rows.map((row: any) => {
+    p.nodes = p.rows.map((row) => {
       const bg = el('div.mr-bg');
       const node = el('div.eprow', {}, [
         bg,
@@ -204,6 +256,7 @@ export class GearScreen {
 
   _equipChosen() {
     const p = this.picker;
+    if (!p) return;
     const row = p.rows[p.i];
     const r = rpg(this.game);
     if (!r || !row) return;
@@ -224,7 +277,7 @@ export class GearScreen {
     this.back();
   }
 
-  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   enter(game: Game) {
     if (game) this.game = game;

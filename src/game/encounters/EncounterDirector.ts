@@ -5,6 +5,72 @@ import { TERRITORIES, ROAMERS, SET_PIECES, HUNT_TARGETS, windowOpen } from './Sp
 import { BossFight } from './BossFight.ts';
 import { Dropship } from './Dropship.ts';
 import type { Game } from '../Game.ts';
+import type { HuntTarget, Pressure, Roamer, Territory } from './SpawnTables.ts';
+import { threatPos } from '../../characters/enemies/EnemyBase.ts';
+import type { Enemy, EnemyAttack, Threat } from '../../characters/enemies/EnemyBase.ts';
+import type { Enemies } from '../../characters/Enemies.ts';
+import type { Player } from '../../characters/Player.ts';
+import type { Party, PartyMember, CompanionKey } from '../../characters/Party.ts';
+import type { CombatSystem } from '../../combat/CombatSystem.ts';
+import type { CombatEvents, CombatEventName } from '../../combat/CombatEvents.ts';
+import type { VFX } from '../../combat/VFX.ts';
+import type { Terrain } from '../../world/Terrain.ts';
+import type { Sky } from '../../world/Sky.ts';
+import type { RpgSystem } from '../rpg/RpgSystem.ts';
+
+/**
+ * A threat this director steers: Noctis, or one of the three following him.
+ * Narrower than `Threat` on purpose -- the damage path needs the companion
+ * key, which the enemy AI's view of a threat has no business knowing.
+ */
+export type EncounterThreat = Player | PartyMember;
+
+/**
+ * What the strike resolver reads off an attack.
+ *
+ * Species that predate the attack table strike with `null`, and the resolver
+ * substitutes a default swing for them -- so every field but the two the
+ * default supplies is optional here, and every branch below has to say what it
+ * does without one.
+ */
+export type StrikeSpec = Partial<EnemyAttack> & { hitRadius: number, mult: number };
+
+/** A territory that is currently streamed in. */
+export interface ActiveTerritory {
+  def: Territory;
+  pack: Pack;
+  enemies: Enemy[];
+}
+
+/** A hunt with marks on the field. */
+export interface HuntRecord {
+  def: HuntTarget;
+  pack: Pack;
+  /** How many are out right now. */
+  spawned: number;
+  /** How many the quest still wants after those. */
+  remaining: number;
+  /** `[x, y, z]` of the objective the marks were placed on. */
+  waypoint: number[];
+}
+
+/** The fight in progress, as the HUD and the music read it. */
+export interface EncounterInfo {
+  name: string;
+  level: number;
+  boss: boolean;
+  /** `game.time.now` when it started. */
+  startedAt: number;
+}
+
+/** What the fight has paid out so far. */
+export interface EncounterStats {
+  kills: number;
+  exp: number;
+  gil: number;
+  /** Item ids rolled off the corpses. */
+  drops: string[];
+}
 
 /**
  * The live encounter loop.
@@ -25,42 +91,48 @@ import type { Game } from '../Game.ts';
  *   `encounter:warn`    {text}  — the "something is coming" beat
  */
 export class EncounterDirector {
-  active!: Map<any, any>;
+  /** Territory id -> what is streamed in for it. */
+  active!: Map<string, ActiveTerritory>;
   _clearTimer!: number;
-  _hits!: any[];
-  _offDamage!: any;
-  _offDeath!: any;
+  _offDamage!: (() => void) | null;
+  _offDeath!: (() => void) | null;
   _roamTimer!: number;
   _streamTimer!: number;
   _tmp!: THREE.Vector3;
   _tmp2!: THREE.Vector3;
   boss!: BossFight | null;
   budget!: number;
-  combat!: any;
-  cooldowns!: Map<any, any>;
+  combat!: CombatSystem | undefined;
+  /** Territory id -> seconds until it may respawn. */
+  cooldowns!: Map<string, number>;
   dropship!: Dropship;
   enabled!: boolean;
-  encounter!: any;
-  enemies!: any;
+  encounter!: EncounterInfo | null;
+  enemies!: Enemies;
   game!: Game;
-  hunts!: any;
+  /** Quest id -> the marks it put on the field. Built lazily. */
+  hunts!: Map<string, HuntRecord> | undefined;
   night!: number;
-  packs!: any[];
-  party!: any;
-  player!: any;
+  packs!: Pack[];
+  party!: Party | undefined;
+  player!: Player | undefined;
   rng!: Rng;
-  rpg!: any;
-  sky!: any;
-  state!: string;
-  stats!: any;
+  rpg!: RpgSystem | undefined;
+  sky!: Sky | undefined;
+  state!: 'field' | 'combat';
+  stats!: EncounterStats;
   suppressRoamers!: boolean;
-  terrain!: any;
-  threats!: any[];
-  vfx!: any;
+  terrain!: Terrain | undefined;
+  threats!: EncounterThreat[];
+  vfx!: VFX | undefined;
   async init(game: Game) {
     this.game = game;
     this.rng = new Rng(20259);
-    this.enemies = game.get('Enemies');
+    // `Enemies` is in `Game.init`'s boot order and this director is registered
+    // by `Director` after the whole world is up, so it is always present --
+    // every other system here is guarded because a capture scenario can run
+    // without it.
+    this.enemies = game.get('Enemies')!;
     this.combat = game.get('Combat');
     this.player = game.get('Player');
     this.party = game.get('Party');
@@ -95,13 +167,12 @@ export class EncounterDirector {
     this._clearTimer = 0;
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
-    this._hits = [];
 
-    this.enemies.onStrike = (e: any, atk: any) => this.resolveStrike(e, atk);
+    this.enemies.onStrike = (e, atk) => this.resolveStrike(e, atk);
     this.enemies.threats = this.threats;
 
-    this._offDeath = this.combat ? this.combat.on('death', (d: any) => this.onDeath(d.enemy, 'player')) : null;
-    this._offDamage = this.combat ? this.combat.on('damage', (d: any) => this.onPlayerDamage(d)) : null;
+    this._offDeath = this.combat ? this.combat.on('death', (d) => this.onDeath(d.enemy, 'player')) : null;
+    this._offDamage = this.combat ? this.combat.on('damage', (d) => this.onPlayerDamage(d)) : null;
     return this;
   }
 
@@ -114,9 +185,12 @@ export class EncounterDirector {
   }
 
   /** Daemon pressure right now, with a safe fallback when the RPG is absent. */
-  pressure() {
+  pressure(): Pressure {
     if (this.rpg && this.rpg.daemonPressure) return this.rpg.daemonPressure();
-    const h = this.sky && this.sky.timeOfDay != null ? this.sky.timeOfDay : 12;
+    // `Sky.hours`, not `timeOfDay`: this read `sky.timeOfDay`, which has never
+    // existed, so the no-RPG fallback resolved to noon and this branch could
+    // never report a night.
+    const h = this.sky && this.sky.hours != null ? this.sky.hours : 12;
     const night = h >= 19 || h < 5;
     return { spawn: night, density: night ? 0.7 : 0, depth: night ? 0.7 : 0, levelBonus: night ? 10 : 0, level: 20, attack: 1, defense: 1, hp: 1 };
   }
@@ -146,12 +220,13 @@ export class EncounterDirector {
    * Bring a territory to life.
    * @param def a `TERRITORIES` entry
    */
-  activate(def: any) {
-    if (this.active.has(def.id)) return this.active.get(def.id);
+  activate(def: Territory): ActiveTerritory {
+    const already = this.active.get(def.id);
+    if (already) return already;
     const pack = new Pack({ id: def.id, maxEngaged: def.maxEngaged, encounter: this });
     const scaling = this.rpg ? this.rpg.enemyScaling(def.faction === 'daemon') : NEUTRAL;
     const level = Math.max(1, Math.round(def.level + (def.faction === 'daemon' ? scaling.levelBonus : scaling.levelBonus * 0.4)));
-    const list = [];
+    const list: Enemy[] = [];
     const patrol = def.patrolRadius > 0 ? this._patrolRoute(def) : null;
 
     for (const s of def.spawn) {
@@ -176,15 +251,15 @@ export class EncounterDirector {
         list.push(e);
       }
     }
-    const rec = { def, pack, enemies: list };
+    const rec: ActiveTerritory = { def, pack, enemies: list };
     this.active.set(def.id, rec);
     this.packs.push(pack);
     return rec;
   }
 
   /** A closed patrol loop around the territory anchor. */
-  _patrolRoute(def: any) {
-    const pts = [];
+  _patrolRoute(def: Territory) {
+    const pts: THREE.Vector3[] = [];
     const n = 3 + (this.rng.next() * 2 | 0);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + this.rng.next() * 0.6;
@@ -202,19 +277,19 @@ export class EncounterDirector {
     return out;
   }
 
-  _shouldSleep(def: any) {
+  _shouldSleep(def: Territory | Roamer) {
     const p = this.pressure();
     if (def.faction === 'daemon') return !p.spawn;
     return p.spawn && def.when === 'day';
   }
 
-  _count(c: number) {
+  _count(c: number | [number, number]) {
     if (!Array.isArray(c)) return c | 0;
     return c[0] + Math.floor(this.rng.next() * (c[1] - c[0] + 1));
   }
 
   /** Retire a territory and pool its enemies. */
-  deactivate(id: any) {
+  deactivate(id: string) {
     const rec = this.active.get(id);
     if (!rec) return;
     // only retire what this territory still owns — a pooled instance may have
@@ -248,8 +323,8 @@ export class EncounterDirector {
    * Spawn a roaming encounter around the player.
    * @param def a `ROAMERS` entry
    */
-  spawnRoamer(def: any) {
-    const pp = this.player.position;
+  spawnRoamer(def: Roamer) {
+    const pp = this.player!.position;
     let total = 0;
     for (const s of def.spawn) total += Array.isArray(s.count) ? s.count[1] : s.count;
     // two or three attackers at a time; the rest circle. Any more than that
@@ -264,7 +339,7 @@ export class EncounterDirector {
     const dist = def.dropship ? 26 : 30 + this.rng.next() * 12;
     const cx = pp.x + Math.sin(bearing) * dist;
     const cz = pp.z + Math.cos(bearing) * dist;
-    const list = [];
+    const list: Enemy[] = [];
     for (const s of def.spawn) {
       const n = this._count(s.count);
       for (let i = 0; i < n; i++) {
@@ -278,7 +353,6 @@ export class EncounterDirector {
           damage: type ? Math.round(type.stats.damage * scaling.attack) : undefined,
           owner: def.id,
         });
-        e.roamer = true;
         list.push(e);
       }
     }
@@ -286,7 +360,7 @@ export class EncounterDirector {
     if (def.dropship) this.dropship.arrive(this.ground(cx, cz).clone(), list);
     else {
       // they have already seen you — that is what makes an ambush an ambush
-      for (const e of list) { e.target = this.player; e.awareness = 1; e.setState('chase'); }
+      for (const e of list) { e.target = this.player ?? null; e.awareness = 1; e.setState('chase'); }
       pack.alerted = true;
     }
     this._warn(def.faction === 'daemon' ? 'Daemons.' : def.faction === 'imperial' ? 'Imperials incoming.' : 'Something has our scent.');
@@ -300,8 +374,8 @@ export class EncounterDirector {
    * @param id one of `SET_PIECES`
    * @param [opts] `{ at:[x,z] }`
    */
-  startSetPiece(id: string, opts: any = {}) {
-    const def = SET_PIECES[id as keyof typeof SET_PIECES];
+  startSetPiece(id: string, opts: { at?: number[] } = {}) {
+    const def = SET_PIECES[id];
     if (!def) throw new Error(`unknown set piece ${id}`);
     if (this.boss) this.endBoss(false);
     const at = opts.at || def.at;
@@ -326,14 +400,14 @@ export class EncounterDirector {
    * accepted, so accepting a job actually puts something in the world.
    */
   spawnHunt(questId: string) {
-    const t = HUNT_TARGETS[questId as keyof typeof HUNT_TARGETS];
+    const t = HUNT_TARGETS[questId];
     if (!t) return null;
     const quest = this.rpg?.quests?.def(questId);
-    const obj = quest?.objectives?.find((o: any) => o.type === 'kill') || quest?.objectives?.[0];
+    const obj = quest?.objectives?.find((o: { type?: string }) => o.type === 'kill') || quest?.objectives?.[0];
     const wp = obj?.waypoint || [0, 0, 0];
     const pack = new Pack({ id: `hunt-${questId}`, encounter: this, maxEngaged: 3 });
     const n = Math.min(t.count, t.maxAlive || t.count);
-    const list = [];
+    const list: Enemy[] = [];
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const r = t.count > 2 ? 10 : 4;
@@ -357,7 +431,7 @@ export class EncounterDirector {
   }
 
   /** Top a hunt up if it wants more marks than fit on the field at once. */
-  _topUpHunt(questId: any) {
+  _topUpHunt(questId: string) {
     const h = this.hunts && this.hunts.get(questId);
     if (!h || h.remaining <= 0) return;
     const alive = h.pack.alive;
@@ -380,8 +454,8 @@ export class EncounterDirector {
    * @param e the attacker
    * @param atk the attack definition (may be null for legacy species)
    */
-  resolveStrike(e: any, atk: any) {
-    const a = atk || { hitRadius: 1.8, mult: 1, arc: Math.PI / 2 };
+  resolveStrike(e: Enemy, atk: EnemyAttack | null) {
+    const a: StrikeSpec = atk || { hitRadius: 1.8, mult: 1, arc: Math.PI / 2 };
     const reach = (a.hitRadius || 1.8) * e.scale;
     const arc = a.arc != null ? a.arc : Math.PI / 2;
     const fx = Math.sin(e.heading), fz = Math.cos(e.heading);
@@ -390,7 +464,7 @@ export class EncounterDirector {
     if (a.ranged) this._tracer(e, a);
 
     for (const t of this.threats) {
-      const tp = t.position || t.root?.position;
+      const tp = threatPos(t);
       if (!tp) continue;
       const dx = tp.x - origin.x, dz = tp.z - origin.z;
       const d = Math.hypot(dx, dz);
@@ -417,12 +491,11 @@ export class EncounterDirector {
   }
 
   /** A visible line for ranged shots so the player can read where it came from. */
-  _tracer(e: any, a: any) {
+  _tracer(e: Enemy, a: StrikeSpec) {
     if (!this.vfx) return;
     const from = e.centre();
     from.y += e.height * 0.15 * e.scale;
-    const t = this.threats[0];
-    const tp = t ? (t.position || t.root?.position) : null;
+    const tp = threatPos(this.threats[0]);
     if (!tp) return;
     this._tmp.set(tp.x, tp.y + 1.1, tp.z);
     const b = this.vfx.acquireBeam();
@@ -442,15 +515,19 @@ export class EncounterDirector {
    * @param e the attacker
    * @param a the attack
    */
-  damageThreat(t: any, e: any, a: any) {
-    const isPlayer = t === this.player;
+  damageThreat(t: EncounterThreat, e: Enemy, a: StrikeSpec) {
+    // A companion carries a `key`; Noctis does not. That is the only thing
+    // that separates the two arms of `EncounterThreat`.
+    const member: PartyMember | null = 'key' in t ? t : null;
+    const isPlayer = !member;
     if (isPlayer && this._playerAvoids(e, a)) return;
 
     const raw = e.damage * (a.mult || 1);
     let dmg = Math.round(raw);
     const rpg = this.rpg;
+    const vitals = this.player?.stats;
     if (rpg) {
-      const memberId = isPlayer ? 'noctis' : MEMBER_BY_KEY[t.key as keyof typeof MEMBER_BY_KEY] || 'gladio';
+      const memberId = member ? MEMBER_BY_KEY[member.key] || 'gladio' : 'noctis';
       const target = rpg.party.stats[memberId];
       const res = rpg.damage({
         attacker: { attack: e.damage * 0.9, level: e.level, critRate: 0.06, critDamage: 1.5 },
@@ -459,12 +536,12 @@ export class EncounterDirector {
       });
       dmg = Math.max(1, Math.round(res.damage * 0.55));
       target.applyDamage(dmg);
-      if (isPlayer && this.player.stats) this.player.stats.hp = Math.round(target.hp);
-    } else if (isPlayer && this.player.stats) {
-      this.player.stats.hp = Math.max(0, this.player.stats.hp - dmg);
+      if (isPlayer && vitals) vitals.hp = Math.round(target.hp);
+    } else if (isPlayer && vitals) {
+      vitals.hp = Math.max(0, vitals.hp - dmg);
     }
 
-    const at = (t.position || t.root.position).clone();
+    const at = (threatPos(t) ?? this._tmp2).clone();
     at.y += 1.1;
     if (this.vfx) {
       this.vfx.impact({
@@ -474,28 +551,35 @@ export class EncounterDirector {
     }
     if (isPlayer) {
       if (this.combat) this.combat.hitstop = Math.max(this.combat.hitstop, 0.05);
-      this._emitCombat('playerHit', { enemy: e, damage: dmg, hp: this.player.stats?.hp ?? 0, position: at });
+      this._emitCombat('playerHit', { enemy: e, damage: dmg, hp: vitals?.hp ?? 0, position: at });
     } else {
-      t.character?.hitReact?.(0.8);
-      window.dispatchEvent(new CustomEvent('encounter:allyHit', { detail: { member: t.key, damage: dmg, position: at } }));
+      // `Character.hitReact` has never existed -- nothing in the tree declares
+      // or defines it, so the companion hit reaction that used to be called
+      // here behind `?.` was a no-op from the day it was written.
+      window.dispatchEvent(new CustomEvent('encounter:allyHit', { detail: { member: member.key, damage: dmg, position: at } }));
     }
   }
 
   /** Dodge i-frames, warp invulnerability and the phase parry. */
-  _playerAvoids(e: any, a: any) {
+  _playerAvoids(e: Enemy, a: StrikeSpec) {
     const c = this.combat;
     if (!c) return false;
     if (c.state === 'warp') return true;
     if (c.state === 'dodge' && c.stateTime < 0.32) return true;
     if (c.state === 'phase' && c.phaseCharge > 0.05 && !a.unblockable) {
-      if (c._perfectParry) c._perfectParry(e);
+      // `_perfectParry(enemy, player)` takes two arguments and dereferences the
+      // second on its first line. This called it with one, so every phase-parry
+      // that came through the encounter loop -- which owns `Enemies.onStrike`,
+      // and is therefore the live strike path -- threw a TypeError out of the
+      // frame. Passing the player is the only reading that is not a crash.
+      if (c._perfectParry && this.player) c._perfectParry(e, this.player);
       else this._emitCombat('parry', { enemy: e, position: e.centre() });
       return true;
     }
     return false;
   }
 
-  _emitCombat(name: string, detail: any) {
+  _emitCombat<K extends CombatEventName>(name: K, detail: CombatEvents[K]) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }
@@ -506,9 +590,9 @@ export class EncounterDirector {
    * A pack has just noticed the party. This is the "you have been seen" beat.
    * @param pack @param target
    */
-  onAlerted(pack: any, target: any) {
+  onAlerted(pack: Pack, target: Threat) {
     if (this.state === 'combat') return;
-    const first = pack.members.find((m: any) => !m.dead);
+    const first = pack.members.find((m) => !m.dead);
     window.dispatchEvent(new CustomEvent('encounter:spotted', {
       detail: { pack: pack.id, name: first ? first.name : '', count: pack.alive },
     }));
@@ -518,7 +602,7 @@ export class EncounterDirector {
    * A pack member died. If that was the last of them, the fight is over as
    * far as this pack is concerned.
    */
-  onMemberDied(pack: any, e: any) {
+  onMemberDied(pack: Pack, e: Enemy) {
     if (pack.alive > 0) return;
     pack.alerted = false;
     window.dispatchEvent(new CustomEvent('encounter:pack-cleared', {
@@ -532,12 +616,13 @@ export class EncounterDirector {
    * Something died. Bank the EXP, roll the drops, tick the quest log.
    * @param by 'player' | 'ally'
    */
-  onDeath(e: any, by: string = 'player') {
+  onDeath(e: Enemy, by: string = 'player') {
     if (!e || e._looted) return;
     e._looted = true;
     this.stats.kills++;
 
-    let exp = 0, drops = [];
+    let exp = 0;
+    const drops: string[] = [];
     const rpg = this.rpg;
     if (rpg) {
       const byWarpStrike = !!(this.combat && this.combat.state === 'warp');
@@ -581,7 +666,7 @@ export class EncounterDirector {
   }
 
   /** Warp-strike / technique / spell kills that come through the damage event. */
-  onPlayerDamage(d: any) {
+  onPlayerDamage(d: CombatEvents['damage']) {
     if (d && d.killed && d.enemy) this.onDeath(d.enemy, 'player');
   }
 
@@ -601,7 +686,7 @@ export class EncounterDirector {
     if (this.state === 'combat') return;
     this.state = 'combat';
     this.game.state = 'combat';
-    const live = [];
+    const live: string[] = [];
     let level = 1;
     for (const e of this.enemies.list) {
       if (e.dead || !e.inCombat) continue;
@@ -720,7 +805,7 @@ export class EncounterDirector {
   }
 
   /** Activate what is near, retire what is not. */
-  _stream(pressure: any, pp: any) {
+  _stream(pressure: Pressure, pp: THREE.Vector3) {
     // timed marks (Ignis' Analyse, Gladio's Coverage) tick on the slow clock
     for (const e of this.enemies.list) if (e.analysed > 0) e.analysed -= 0.5;
     if (this.party) for (const m of this.party.members) if (m.taunting > 0) m.taunting -= 0.5;
@@ -737,7 +822,7 @@ export class EncounterDirector {
           this.activate(def);
         }
       } else {
-        const rec = this.active.get(def.id);
+        const rec = this.active.get(def.id)!;   // `has` said so on the line above
         const fighting = rec.pack.alerted && rec.pack.alive > 0;
         if ((d > 180 && !fighting) || (!open && !fighting)) this.deactivate(def.id);
         else if (rec.pack.alive === 0) {
@@ -750,4 +835,4 @@ export class EncounterDirector {
 }
 
 const NEUTRAL = { levelBonus: 0, attack: 1, defense: 1, hp: 1, depth: 0, isNight: false };
-const MEMBER_BY_KEY = { gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };
+const MEMBER_BY_KEY: Record<CompanionKey, string> = { gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };

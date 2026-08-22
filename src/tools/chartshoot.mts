@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
 
-const portOpen = (port: any) => new Promise((res) => {
+const portOpen = (port: number) => new Promise<boolean>((res) => {
   const s = net.connect(port, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -81,7 +81,7 @@ try {
   }, [crops]);
   const dir = path.join(ROOT, out);
   await mkdir(dir, { recursive: true });
-  const save = (name: any, url: any) => writeFile(path.join(dir, name), Buffer.from(url.split(',')[1], 'base64'));
+  const save = (name: string, url: string) => writeFile(path.join(dir, name), Buffer.from(url.split(',')[1], 'base64'));
   await save('chart.png', res.full);
   for (let i = 0; i < res.cuts.length; i++) await save(`crop${i}.png`, res.cuts[i]);
   console.log(`chart ${res.size}² baked in ${res.ms.toFixed(0)} ms -> ${out}`);

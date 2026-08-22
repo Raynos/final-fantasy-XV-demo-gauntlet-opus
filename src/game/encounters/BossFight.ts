@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Pack } from './Pack.ts';
 import { TitanArena } from './TitanArena.ts';
+import { threatPos } from '../../characters/enemies/EnemyBase.ts';
 import type { EncounterDirector } from './EncounterDirector.ts';
 import type { Game } from '../Game.ts';
 
@@ -166,7 +167,7 @@ export class BossFight {
     if (this.arena) this.arena.quake(1);
 
     for (const t of dir.threats) {
-      const tp = t.position || t.root?.position;
+      const tp = threatPos(t);
       if (!tp) continue;
       if (Math.hypot(tp.x - ground.x, tp.z - ground.z) > r) continue;
       dir.damageThreat(t, this.boss, a);
@@ -316,7 +317,7 @@ export class BossFight {
         if (e && e.spawnedBy === owner && this.enemies.list.includes(e)) this.enemies.despawn(e);
       }
     }
-    const i = this.dir.packs.indexOf(this.pack);
+    const i = this.pack ? this.dir.packs.indexOf(this.pack) : -1;
     if (i >= 0) this.dir.packs.splice(i, 1);
   }
 }

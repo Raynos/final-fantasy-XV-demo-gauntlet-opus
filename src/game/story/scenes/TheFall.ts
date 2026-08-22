@@ -1,4 +1,5 @@
 import { frameAt, arrange, wide, attend } from './SceneKit.ts';
+import type { SceneCtx, SceneDef, ShotDef } from '../../cinematics/Scene.ts';
 
 /**
  * CHAPTER III — "The Open World": the morning the news comes through.
@@ -12,14 +13,16 @@ import { frameAt, arrange, wide, attend } from './SceneKit.ts';
 
 const DUR = 46;
 
-export const THE_FALL = {
+type Ctx = SceneCtx;
+
+export const THE_FALL: SceneDef = {
   id: 'ch3_the_fall',
   chapter: 3,
   letterbox: 1,
   openFromBlack: true,
   duration: DUR,
 
-  stage(ctx: any) {
+  stage(ctx: Ctx) {
     const { game } = ctx;
     const sky = game.get('Sky');
     // First light. Everything is grey and pink and far too calm.
@@ -44,8 +47,9 @@ export const THE_FALL = {
     });
   },
 
-  buildShots(ctx: any) {
+  buildShots(ctx: Ctx): ShotDef[] {
     const F = ctx.data.F;
+    if (!F) return [];
     return [
       // the horizon they are all looking at
       wide(ctx, F, { t0: 0, t1: 9.5, camF: -16.0, camL: -7.0, camU: 2.7, f: -4.0, l: 0.3, targetU: 1.7, fov: 38, driftF: 2.2, driftL: 1.5, driftU: 0.2, aim: 'crew', aimU: 1.36, fStop: 7.0 }),
@@ -60,9 +64,10 @@ export const THE_FALL = {
     ];
   },
 
-  tick(t: number, dt: any, ctx: any) {
+  tick(t: number, dt: number, ctx: Ctx) {
     const s = ctx.stage;
     const F = ctx.data.F;
+    if (!F) return;
     const far = F.at(140, -10, 22);
     if (t < 9.5) { for (const id of s.ids) s.look(id, far); }
     else if (t < 18.0) { attend(ctx, 'prompto'); s.look('prompto', null); }
@@ -94,7 +99,7 @@ export const THE_FALL = {
     },
   ],
 
-  onEnd(ctx: any) {
+  onEnd(ctx: Ctx) {
     const rpg = ctx.game.get('Rpg');
     const weather = ctx.game.get('Weather');
     if (weather && weather.set) weather.set('clear');

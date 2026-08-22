@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
+import type { PoseName, SpeciesDef, SpawnOpts } from './EnemyBase.ts';
 import {
   tube, blob, spike, slab, place, tint, glow, loft, circleCross,
 } from '../../combat/GeoKit.ts';
@@ -37,6 +38,9 @@ function robeCross(n: number, lobes: number, depth: number) {
  * and a scythe-staff of fused vertebrae. The hem does not end; it comes apart
  * into shreds that trail behind it as it drifts.
  */
+/** Metres the robe floats above the ground. Sculpt geometry, not species data. */
+const HOVER = 0.35;
+
 export const NECROMANCER = {
   key: 'necromancer',
   questId: 'necromancer',
@@ -50,7 +54,6 @@ export const NECROMANCER = {
   resistPct: { light: 200, dark: 0, fire: 60, ice: 60, lightning: 60 },
   senses: { sight: 40, fov: 2.6, hearing: 16, nocturnal: true },
   /** Metres it floats above the terrain — it never touches the ground. */
-  hover: 0.35,
   drops: [
     { id: 'dark_matter_shard', chance: 0.35, count: 1 },
   ],
@@ -75,8 +78,8 @@ export const NECROMANCER = {
     },
   ],
   buildPrototype,
-  make(opts: any) { return new NecromancerEnemy(opts); },
-};
+  make(opts: SpawnOpts) { return new NecromancerEnemy(opts); },
+} satisfies SpeciesDef;
 
 function buildPrototype() {
   const rig = new Rig();
@@ -256,14 +259,10 @@ function buildPrototype() {
 }
 
 class NecromancerEnemy extends Enemy {
-  override attackId!: any;
-  override rig!: any;
-  override stateTime!: any;
-  override visual!: any;
-  constructor(opts: any) { super(NECROMANCER, opts); }
+  constructor(opts: SpawnOpts) { super(NECROMANCER, opts); }
 
   /** Height it floats at right now — never zero, it has no feet. */
-  get hover() { return NECROMANCER.hover; }
+  get hover() { return HOVER; }
 
   /**
    * Drift the hem tatters. `sweep` leans them all one way (drag as it moves),
@@ -280,11 +279,11 @@ class NecromancerEnemy extends Enemy {
     }
   }
 
-  override pose(state: any, t: number) {
+  override pose(state: PoseName, t: number) {
     const rig = this.rig;
     if (!rig) return;
     const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
-    const H = NECROMANCER.hover;
+    const H = HOVER;
     // both hands up in front of the hood, fingers framing whatever it is about to do
     const frame = (k = 1) => {
       for (const s of [-1, 1]) {

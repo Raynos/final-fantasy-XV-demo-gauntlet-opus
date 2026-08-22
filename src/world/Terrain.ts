@@ -13,6 +13,11 @@ import {
 import { worldMap, WORLD } from './map/WorldMap.ts';
 import type { WorldMap } from './map/WorldMap.ts';
 import type { Game } from '../game/Game.ts';
+import type { Biome, Zone } from './map/WorldMap.ts';
+import type { BiomeSurface } from './terrain/Biome.ts';
+import type { CtrlSample, Landmark } from './terrain/Field.ts';
+import type { TerrainResources, TerrainTextures } from './terrain/TerrainMaterial.ts';
+import type { RoadSpine, SpinePoint } from './vehicle/RoadPath.ts';
 
 /**
  * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
@@ -31,7 +36,73 @@ import type { Game } from '../game/Game.ts';
  *   road                               spline: points / pointAt(s) / width
  *   landmarks                          named hero features for shot framing
  */
-export class Terrain {
+/**
+ * The part of `Terrain` a walker actually uses: a height and a normal.
+ *
+ * It is an interface rather than the class because `Occupants` swaps a stub in
+ * while everyone is in the car — ground a kilometre down, which turns the foot
+ * IK into a no-op — and `Player.terrain` / `Party.terrain` hold whichever of
+ * the two is current.
+ */
+export interface Ground {
+  heightAt(x: number, z: number): number;
+  normalAt(x: number, z: number, out?: THREE.Vector3): THREE.Vector3;
+}
+
+/** What the terrain built, for the dev overlay and the boot profile. */
+export interface TerrainStats {
+  triangles: number;
+  drawCalls: number;
+  /** Milliseconds the heightfield build took. */
+  buildMs: number;
+}
+
+/**
+ * The six splat layers, as weights that sum to 1. The index signature is what
+ * lets `groundColorAt` walk `LAYER_NAMES`; every layer the shader has is named.
+ */
+export interface LayerWeights {
+  [layer: string]: number;
+  sand: number;
+  dirt: number;
+  gravel: number;
+  rock: number;
+  grass: number;
+  road: number;
+}
+
+/**
+ * The surface at a point, mirroring the weights the splat shader evaluates.
+ * Vegetation reads `weights.grass` and `sediment`; audio reads `name`.
+ */
+export interface MaterialSample {
+  /** Index into `LAYER_NAMES`. */
+  id: number;
+  /** The dominant layer's name — `Sfx` keys footsteps off it. */
+  name: string;
+  weights: LayerWeights;
+  slope: number;
+  height: number;
+  /** 0..1 water flow accumulation. */
+  flow: number;
+  sediment: number;
+  rocky: number;
+  /** 0..1 road mask at this point. */
+  road: number;
+  /** Metres to the nearest road centreline. */
+  roadDist: number;
+  /**
+   * The two macro noise fields and the blended palette entry, handed back
+   * rather than recomputed: `groundColorAt` needs exactly these and
+   * `surfaceAt` is a nineteen-zone Gaussian blend, not a free call.
+   * `bio` is the shared scratch object — read it before the next call.
+   */
+  m1: number;
+  m2: number;
+  bio: BiomeSurface;
+}
+
+export class Terrain implements Ground {
   /**
    * The originals, while `Dungeons` has ground queries redirected to a dungeon
    * floor. Set by `Dungeons._patchTerrain` and cleared on the way out --
@@ -42,23 +113,28 @@ export class Terrain {
     origH: (x: number, z: number) => number,
     origN: (x: number, z: number, out?: THREE.Vector3) => THREE.Vector3,
   } | null;
-  _bio!: any;
-  _biome!: any;
-  _ctrl!: any;
+  /** Reused regional-palette sample. */
+  _bio!: BiomeSurface | null;
+  /** Reused biome-parameter sample. */
+  _biome!: Partial<Biome> | null;
+  /** Reused control-channel sample. */
+  _ctrl!: CtrlSample;
   _gbufferPatched!: boolean;
-  _roadIdx!: any;
+  /** Cached highway segment index; callers sweep Z coherently. */
+  _roadIdx!: number;
   _v!: THREE.Vector3;
-  clipmap!: any;
+  clipmap!: Clipmap;
   field!: Field;
   game!: Game;
-  landmarks!: any;
+  landmarks!: Record<string, Landmark>;
   layerNames!: string[];
   map!: WorldMap;
-  res!: any;
-  road!: any;
+  res!: TerrainResources;
+  /** The highway spine the carve fitted, or null before the field is built. */
+  road!: RoadSpine | null;
   size!: number;
-  stats!: any;
-  textures!: any;
+  stats!: TerrainStats;
+  textures!: TerrainTextures;
   constructor() {
     /** Full span of the detailed heightfield, metres. */
     this.size = HALF * 2;
@@ -68,7 +144,7 @@ export class Terrain {
     this.map = worldMap;
     this.layerNames = LAYER_NAMES;
     this._v = new THREE.Vector3();
-    this._ctrl = {};
+    this._ctrl = { flow: 0, sediment: 0, road: 0, rocky: 0 };
   }
 
   async init(game: Game) {
@@ -118,7 +194,7 @@ export class Terrain {
     this.stats = {
       triangles: this.clipmap.triangles,
       drawCalls: this.clipmap.group.children.length,
-      buildMs: this.field.stats.buildMs,
+      buildMs: this.field.stats.buildMs ?? 0,
     };
     if (game.debug) console.log('[Terrain]', JSON.stringify(this.stats));
   }
@@ -225,7 +301,7 @@ export class Terrain {
   /**
    * The zone record covering this point, or null on the frontier.
    */
-  zoneAt(x: number, z: number): any | null { return this.map.zoneAt(x, z); }
+  zoneAt(x: number, z: number): Zone | null { return this.map.zoneAt(x, z); }
 
   /** Blended biome humidity, 0 = Leide badlands, 1 = the Vesperpool. */
   moistureAt(x: number, z: number) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
@@ -256,13 +332,13 @@ export class Terrain {
     return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
   }
 
-  _bracketsZ(pts: any, i: number, z: number) {
+  _bracketsZ(pts: SpinePoint[], i: number, z: number) {
     const a = pts[i].z, b = pts[i + 1].z;
     return z >= Math.min(a, b) && z <= Math.max(a, b);
   }
 
   /** Nearest segment in Z; falls back to the closest endpoint off the ends. */
-  _findRoadSegment(pts: any, z: number) {
+  _findRoadSegment(pts: SpinePoint[], z: number) {
     let best = 0, bestD = Infinity;
     for (let i = 0; i < pts.length - 1; i++) {
       if (this._bracketsZ(pts, i, z)) return i;
@@ -276,9 +352,9 @@ export class Terrain {
    * Rough surface classification, mirroring the splat weights the shader uses.
    * Vegetation should look at `weights.grass` and `sediment`.
    */
-  sampleMaterial(x: number, z: number): any {
+  sampleMaterial(x: number, z: number): MaterialSample {
     const f = this.field;
-    const c: any = f.ctrlAt(x, z, this._ctrl);
+    const c = f.ctrlAt(x, z, this._ctrl);
     const h = f.heightAt(x, z);
     const slope = this.slopeAt(x, z);
     // identical fields to the ones the splat shader evaluates
@@ -420,7 +496,7 @@ export class Terrain {
 
   // ------------------------------------------------------------------ update
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     const p = game.camera.position;
     this.clipmap.update(p.x, p.z);
     if (!this._gbufferPatched && game.post && game.post.gtao) {

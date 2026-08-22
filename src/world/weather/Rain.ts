@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+
 import { TERRAIN_FIELD_GLSL } from '../terrain/TerrainMaterial.ts';
 
 /**
@@ -155,7 +156,7 @@ void main() {
 `;
 
 /** Build an instanced quad field with a per-instance seed attribute. */
-function instancedQuad(count: number, seedSize: number, rand: any) {
+function instancedQuad(count: number, seedSize: number, rand: () => number) {
   const base = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
   geo.index = base.index;
@@ -170,6 +171,19 @@ function instancedQuad(count: number, seedSize: number, rand: any) {
   return { geo, seeds };
 }
 
+/**
+ * The slice of the terrain's uniform block a rain splash needs to find the
+ * ground. `Weather` hands over these four; the rest of the terrain block is
+ * nothing to do with rain.
+ */
+export interface RainGroundUniforms {
+  [uniform: string]: THREE.IUniform;
+  uHeightTex: THREE.IUniform<THREE.Texture | null>;
+  uFarHeightTex: THREE.IUniform<THREE.Texture | null>;
+  uField: THREE.IUniform<THREE.Vector4>;
+  uFarP: THREE.IUniform<THREE.Vector4>;
+}
+
 export class Rain {
   intensity!: number;
   material!: THREE.ShaderMaterial;
@@ -178,19 +192,21 @@ export class Rain {
   scene!: THREE.Scene;
   splash!: THREE.Mesh;
   splashMaterial!: THREE.ShaderMaterial;
-  stats!: any;
-  terrainUniforms!: any;
+  /** What the build produced, for the dev overlay. */
+  stats!: { drops: number, splashes: number, draws: number };
+  /** The terrain's block, so a splash can read the ground height. */
+  terrainUniforms!: RainGroundUniforms;
   /**
    * @param {object} opts
    * */
-  constructor({ scene, terrainUniforms, quality = 1 }: { scene: THREE.Scene, terrainUniforms: any, quality?: number }) {
+  constructor({ scene, terrainUniforms, quality = 1 }: { scene: THREE.Scene, terrainUniforms: RainGroundUniforms, quality?: number }) {
     this.scene = scene;
     this.terrainUniforms = terrainUniforms;
     this.quality = quality;
     this.intensity = 0;
   }
 
-  build(rand: any) {
+  build(rand: () => number) {
     const q = this.quality;
     const dropCount = Math.round(92000 * q);
 
