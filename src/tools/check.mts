@@ -86,6 +86,23 @@ function serve(port: number): Promise<ChildProcess> {
   });
 }
 
+/**
+ * A gate that measured nothing, as distinct from one that measured a failure.
+ *
+ * `perf.mts` and `gameplay.mts` exit 3 when their noise floor is too wide to
+ * resolve the thing being asked — machine contention, usually. Rendering that as
+ * FAIL is worse than useless: it reads in this table as a regression, so the
+ * next person either chases a number that was never taken or, having seen it go
+ * green again later, concludes they fixed something. It is still non-zero
+ * overall, because a run that certified nothing must not report success.
+ */
+const VOID = 3;
+
+function verdict(code: number | null): string {
+  if (code === 0) return 'PASS';
+  return code === VOID ? 'VOID' : 'FAIL';
+}
+
 function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<{ gate: Gate, code: number | null, ms: number, tail: string }> {
   return new Promise((resolve) => {
     const cmd = gate.cmd || process.execPath;
@@ -125,13 +142,18 @@ for (const g of todo) {
   }
   const r = await run(g, env);
   results.push(r);
-  process.stdout.write(`${r.code === 0 ? 'PASS' : 'FAIL'}  ${String(r.ms / 1000).slice(0, 5)}s  ${r.tail}\n`);
+    process.stdout.write(`${verdict(r.code)}  ${String(r.ms / 1000).slice(0, 5)}s  ${r.tail}\n`);
 }
 if (aux) aux.kill();
 
-const failed = results.filter((r) => r.code !== 0);
-console.log(`\n${results.length - failed.length}/${results.length} gates passed`);
+const failed = results.filter((r) => r.code !== 0 && r.code !== VOID);
+const voided = results.filter((r) => r.code === VOID);
+console.log(`\n${results.length - failed.length - voided.length}/${results.length} gates passed`);
+if (voided.length) {
+  console.log(`VOID (measured nothing, not a regression): ${voided.map((v) => v.gate.name).join(', ')}`);
+  console.log('  the ruler refused to certify -- re-run on a quiet tree; do not read these as numbers.');
+}
 if (failed.length) {
   console.log(`failing: ${failed.map((f) => `${f.gate.name} (expected ${f.gate.expect})`).join(', ')}`);
-  process.exit(1);
 }
+if (failed.length || voided.length) process.exit(1);
