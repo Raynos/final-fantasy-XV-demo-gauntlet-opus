@@ -229,6 +229,45 @@ in this file.
 
 ---
 
+## Names nothing ever verified
+
+A guess about a name compiles. `a.b || a.c || a.d` reads like defensive coding
+and is really three guesses, of which at most one was ever true; a string handed
+to `spawn` or to `game.get()` crosses a boundary the compiler does not follow.
+Under `any` none of it is checked, so the guess that happens to be right carries
+the feature and the rest are silently dead.
+
+**The tell is that the dead arms are invisible precisely because the live one
+works.** Nothing errors, nothing logs, no gate fails. `WeaponWheel` lit its slot
+from `Combat.activeWeapon`, which has never existed — the real field is
+`weaponSlot` — and because the wheel still drew, the highlight sat on slot 0 from
+the day it was written until a type check asked. When *no* arm resolves the
+feature just stops, which looks exactly like a feature nobody got round to.
+
+Found by giving `game` its real type (`9f16322`), all confirmed by grepping the
+whole tree, not by reading the chain:
+
+| the guess | what was actually true |
+|---|---|
+| `PostFX`: `weather.mode ?? current ?? type ?? preset` | the field is `name`. **Heavy-weather grade flattening has never applied** — a storm graded like noon. |
+| `CameraRig`: `props.cameraColliders \|\| colliders \|\| collisionMeshes` | `Props` declares none of them and nothing assigns them. **The camera has never collided with a prop**: a `Raycaster` built at boot and never fired. |
+| `game.get('Vehicle')`, `game.get('Hammerhead')` — 4 sites | never registered. `Game.init`'s boot order plus Director's three additions are the *only* `add()` sites in the repo. |
+| `Harvest`: `s.root \|\| s.group \|\| s.container` over 7 systems | only `root` exists on any of them. |
+| `sky.timeOfDay ?? sky.hours ?? sky.hour` — 5 files | `hours`. One site carried a comment promising `timeOfDay` was "accepted too so any other implementation of the documented contract still drives us". No implementation ever had it. |
+| `Combat.activeWeapon`, `Combat.techniques`, `Director.areaName`/`region`/`areaSub`/`state`, `Party.companions`, `Enemies.active`/`enemies`, `game.questWaypoint`, `car.position` | none exist. Most sat behind a working first arm; the last two were the only arm, so those features never ran at all. |
+| `mapshoot`/`chartshoot`/`mapview`: `--config src/tools/vite.map.config.js` | renamed to `.mts` by the port. Vite died with "Cannot resolve entry module" — three tools broken on `main`. |
+| `Instruments.ts` cited `src/tools/profile.mts` for a measured claim | the tool is at `src/audio/tools/profile.mts`. **Right extension, wrong directory** — an extension-only sweep misses this; only resolving the path catches it. |
+
+What to do about it:
+
+- **Do not write a fallback chain over field names.** If you do not know which
+  name a system publishes, read the class. If two names are genuinely both
+  possible, that is a contract to fix, not to guard.
+- **A path or a registry key inside a string is unchecked.** `spawn`, `game.get`,
+  `import()` and cvar tables all take one. When you rename, grep the strings.
+- **Type the receiver and the dead arms fall out by themselves.** Every entry
+  above was found by making one `any` real, not by auditing.
+
 ## Diagnoses that were wrong
 
 Read this section twice. Every one of these stood for weeks or months, protected
