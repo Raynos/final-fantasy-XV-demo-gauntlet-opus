@@ -72,8 +72,8 @@ player path the gates skip. Results after the fix in §2:
 | E at the caravan actually rests | see §2 / §4 |
 | E at the diner buys an item for real gil | see §2 / §4 |
 | hunt board accepts a bounty | see §2 / §4 |
-| camping at a haven | **FAIL — genuinely missing**, §3 |
-| cooking a meal | **FAIL — genuinely missing**, §3 |
+| camping at a haven | **FAIL — genuinely missing**, §3.2, now fixed |
+| cooking a meal | **FAIL — genuinely missing**, §3.3, now fixed |
 | spending AP makes a warp-strike hit harder | wired: `RpgSystem.damage()` folds `ascension.value('warpDamage')` |
 
 **The audit's "photo booth" line is no longer true.** The encounter loop, the
@@ -116,49 +116,51 @@ typechecks as green.
 
 ---
 
-## 3. What is genuinely missing (the real WS-1 remainder)
+## 3. What was genuinely missing — all three now fixed
 
-### 3.1 The RPG layer's world coordinates are still fiction — the audit was right about this one
+### 3.1 Every world coordinate in `src/game/rpg/**` was pre-8 km fiction
 
-This is the audit's §1.2 last bullet and it was never fixed. Every position table
-in `src/game/rpg/**` is in the **pre-8 km coordinate space**:
+The audit's §1.2 last bullet, never fixed, and the world grew from 3 km to 8 km
+underneath it:
 
-| table | says | the world says |
+| table | said | the world says |
 |---|---|---|
-| `DayCycle.HAVENS` (10 entries) | `haven_longwythe` at `[128, 0, 84]` | `WorldMap.POIS` has **17** havens, `longwythe_haven` at `(962, -712)` |
-| `Elemancy.DEPOSITS` (10 entries) | `dep_hammerhead` at `[42, 0, -118]` | Hammerhead is at `(576, 10)` |
-| `Quests` waypoints | `[42, 0, -118]`, `[8, 0, -102]` … | same problem |
+| `DayCycle.HAVENS` (10) | `haven_longwythe` at `[128, 0, 84]` | `WorldMap` has **17** havens, `longwythe_haven` at `(962, -712)` |
+| `Elemancy.DEPOSITS` (10) | `dep_hammerhead` at `[42, 0, -118]` | Hammerhead's layby is at `(246, 52)` |
+| `Quests` waypoints (44) | `[8, 0, -102]` for "push the Regalia to Hammerhead" | the town is at `(576, 10)` |
 
-Consequences a player sees:
+What a player saw: `rpg.camp()` returned `no-haven` wherever you stood; the
+compass strip pointed into open desert and printed a fictional metre count; and
+because `checkProximity` measures `reach` objectives against those coordinates,
+**no reach objective in the game could ever tick over.**
 
-- `rpg.camp({lodging:'haven'})` returns **`{ok:false, reason:'no-haven'}`** wherever
-  you stand, because `canCamp` measures against the fiction table.
-- `GameData.readMarkers()` publishes haven and deposit pins to the world map and
-  the compass at coordinates hundreds of metres from the geometry.
-- `combatloop`'s deposit check passes only because it **teleports the player onto
-  `deposits[0].pos` first**. In play the deposits are not where the world is.
-- The HUD quest tracker resolves a real quest name (`A Better Engine Blade`) but
-  its objective text and metre distance come back empty.
+All three tables are now derived from `WorldMap`. Havens map straight from
+`poisOfType('haven')`. Deposits keep their authored element / capacity / refill
+and resolve position from a named POI. Quest objectives name the POI —
+`at('hammerhead')` — and `at()` throws at load on an unknown id, so a wrong
+waypoint cannot quietly resolve to the origin and survive for months.
 
-Per `project/HANDOFF.md`'s own lesson — *"coordinates go stale; derive them live
-from `WorldMap`/`Terrain`, never hard-code and hope"* — the fix is to **derive**
-these tables from `worldMap.poisOfType('haven')` and friends rather than re-typing
-numbers that will rot again.
+After: 16 map markers, **0 outside the 8 km field**; drawing energy standing on
+`Hammerhead Verge` works; the sabertusk hunt points at the Three Valleys where
+sabertusks actually are.
 
-### 3.2 Camping at a haven is not reachable
+### 3.2 Camping at a haven had no door
 
-Twelve interactables are registered and **none of them is a haven**:
+Twelve interactables were registered and every one was inside Hammerhead —
 `hh_huntboard, hh_diner, hh_garage_shop, hh_culless, hh_caravan, hh_pump,
-hh_regalia_bay, hh_rentabird, npc_cindy, npc_cid, …` — all Hammerhead.
-`docs/SCOPE.md:335` agrees: *"the caravan Rest at Hammerhead works; havens are
-not wired"*. The camp/cook/level-up loop is FFXV's signature and it is ~90 %
-coded in `DayCycle` + `PartyState.cook()` + `ExpBank.redeem()`.
+hh_regalia_bay, hh_rentabird, npc_cindy, npc_cid, …`. `docs/SCOPE.md:335` agreed:
+*"the caravan Rest at Hammerhead works; havens are not wired"*.
 
-### 3.3 Cooking has no UX
+`src/game/rpg/HavenCamp.ts` registers a `Camp` prompt at all seventeen and opens
+a cook/sleep/wait conversation. Installed from `RpgSystem`'s first tick, because
+`Interaction` boots six systems after `Rpg` — which also keeps it out of
+`Game.ts`.
 
-`PartyState.cook()` and 30 recipes exist. The registered screens are
-`main, inventory, ascension, armiger, map, world, map_wide, gear, quests,
-archives, system, controls, photo, shop, hunts` — no cook screen, no camp screen.
+### 3.3 Cooking had no way in
+
+`PartyState.cook()` and thirty recipes existed with no screen and no prompt. The
+camp dialogue now offers whatever Ignis can cook from the bag as it stands. There
+is still no *standalone* cook UI (§7).
 
 ---
 
@@ -170,10 +172,11 @@ archives, system, controls, photo, shop, hunts` — no cook screen, no camp scre
 | `Give E back to the interaction verb` | §2 — the headline fix |
 | `The re-audit probe…` | `src/tools/probes/reaudit.mts`, `epress.mts` |
 | `Make integration press the key…` | `integration.mts` 18 → 19 probes; the E verb and resting are now actually tested |
-| `Derive the haven table from WorldMap…` | §3.1 for havens; `huntloop.mts`, `huntboard.mts` |
-| `Register a Camp prompt at every haven` | §3.2 — `src/game/rpg/HavenCamp.ts` |
+| `Derive the haven table from WorldMap…` | §3.1 havens; `huntloop.mts`, `huntboard.mts` |
+| `Register a Camp prompt at every haven` | §3.2 — `src/game/rpg/HavenCamp.ts`, `camp.mts` |
+| `Name the places instead of typing them` | §3.1 quests and deposits; `waypoints.mts` |
 
-Measured, after the fixes, by driving the real page:
+Measured by driving the real page, after the fixes:
 
 ```
 PASS  roamers spawn while walking the field   max 18 live creatures, states {field,combat}
@@ -183,17 +186,32 @@ PASS  E at the caravan actually rests         day 1->2, gil -30, banked 61340->0
 PASS  E at the diner buys an item             Antidote, gil -50, held 3->4
 PASS  an NPC can be talked to                 "Cindy Aurum" -> dialogue open
 PASS  the hunt loop pays                      12 credited kills -> complete, +1100 gil, rank 1->2
-PASS  camping at a haven                      camp on longwythe_haven -> ok; 400 m away -> not-at-haven
+PASS  camp at Cotisse Haven                   "[E] Camp Cotisse Haven" -> Cup Noodles -> sleep
+                                              day 1->2, 91,200 EXP redeemed, party 27 -> 34
+PASS  markers land in the world               16 markers, 0 outside the field; draw at a deposit ok
 ```
 
-`integration.mts` 19/19, `combatloop.mts` 30/30.
+`integration.mts` 19/19, `combatloop.mts` 30/30, `orphans` 278/278,
+`roadcheck` 0 failures, `build` clean. Four gates in `npm run check` failed on
+`ERR_CONNECTION_REFUSED` rather than on an assertion — see §7.5.
 
-**What a player can do now that they could not this morning:** press E. That is
-not a joke — it is the whole of it. Every shop, the hunt board, the caravan, the
-fuel pump, the Regalia and every NPC were unreachable, and the two gates each
-proved one half of the join and never the join. On top of that, havens exist as
-places you can now walk onto and camp at, which closes the reward loop outside
-Hammerhead.
+**What a player can do now that they could not this morning:**
+
+1. **Press E.** That is not a joke, it is the whole of it. Every shop, the hunt
+   board, the caravan, the fuel pump, the Regalia and every NPC advertised a
+   prompt that combat's point-warp ate before the interaction layer ever read
+   the key.
+2. **Camp.** Walk onto any of seventeen havens, have Ignis cook, sleep, and wake
+   up several levels higher — the loop FFXV is built around, which had no
+   entrance at all.
+3. **Follow a waypoint to a place that exists**, and finish a `reach` objective
+   by standing on it.
+
+That closes the loop the plan asks for — fight → reward → spend → fight better —
+end to end: a credited kill banks EXP, a hunt pays gil and hunter points, the
+gil buys potions at Takka's counter, the banked EXP becomes levels at a haven,
+and AP bought on the Ascension grid raises the number `RpgSystem.damage()`
+computes for the next warp-strike.
 
 ## 5. Traps this cost real time to find, for whoever is next
 
@@ -214,32 +232,60 @@ Hammerhead.
 - **`docs/SCOPE.md` is as stale as the audit.** It still lists a quest log screen
   and shops-against-the-real-economy as not started; both exist.
 
-## 6. What is left
+## 6. Reported, not edited — the one that needs a decision
 
-1. **`Elemancy.DEPOSITS` is still fiction** — the same pre-8 km coordinates the
-   havens had, `dep_hammerhead` at `[42, 0, -118]` against a Hammerhead at
-   `(576, 10)`. `combatloop`'s draw check passes only because it teleports the
-   player onto `deposits[0].pos` first. Anchor each deposit to a real POI id the
-   way `HAVENS` now derives, and the compass pins stop floating.
-2. **Cooking outside a camp has no screen.** The camp dialogue offers Ignis'
+**Hammerhead the town and Hammerhead the map pin are 516 m apart.**
+
+`src/world/town/Hammerhead.ts` builds itself at `Ecology`'s `reststop` site —
+`integration.mts` prints `town at (576,10)`. `worldMap.poiById('hammerhead')`
+resolves through road node `n_hammerhead` to **(60,18)**. So the world map
+screen, the minimap, the compass and now every quest waypoint that names
+Hammerhead point half a kilometre from the diner they mean.
+
+`WorldMap`'s own header calls itself "the single source of truth for *where
+everything is*… so a coordinate only ever exists in one place". Two places
+currently disagree, and neither is obviously the wrong one — the town is built
+where the vegetation was cleared for it, and the map is what everything else
+reads. Somebody who owns `src/world/` has to pick:
+
+- move the `n_hammerhead` road node (and the `hammerhead` POI with it) onto the
+  Ecology site, or
+- build the town from `worldMap.poiById('hammerhead')` and let Ecology clear the
+  ground where the map says, not the other way round.
+
+I have not touched it: `src/world/town/` and `src/world/veg/Ecology.ts` are not
+mine. Until it is settled, the Hammerhead-anchored quest waypoints are 516 m out
+— which is still a large improvement on the 3 km-world literals they replaced,
+and it will fix itself the moment the two agree.
+
+## 7. What is left
+
+1. **Cooking outside a camp has no screen.** The camp dialogue offers Ignis'
    currently-cookable recipes, which is enough for the slice, but there is no
    standalone cook UI and `docs/SCOPE.md:336` still wants one.
-3. **The HUD quest tracker resolves a name but no objective text and no metre
-   distance** — `hudState().tracked` returns the quest, and the objective line
-   and waypoint distance come back empty. `src/ui/` is mine; not yet looked at.
-4. **`integration.mts`'s remaining presence-only probes**: `party companions
-   fight` checks a field exists rather than watching HP fall, and `player death
-   -> downed -> game over` checks a system is registered. Both are behaviours
-   `reaudit.mts` covers and the gate does not.
-5. **`inventory + gil economy` prints `(undefined curative)`** — the probe calls
-   `listByCategory('curative')`; that method takes no argument and returns a
+2. **`integration.mts`'s remaining presence-only probes.** `party companions
+   fight` checks a field exists rather than watching an enemy's HP fall, and
+   `player death -> downed -> game over` checks a system is registered. Both are
+   behaviours `reaudit.mts` covers and the gate does not. Fold them in.
+3. **`inventory + gil economy` prints `(undefined curative)`** — that probe calls
+   `listByCategory('curative')`; the method takes no argument and returns a
    grouped map. A gate cosmetic, not a game bug.
+4. **Hunter rank is the gate on all remaining hunt content, and nobody has
+   designed the curve.** Twelve of the fifteen bounties are locked behind hunter
+   points; the seeded save has one point and a rank-1 hunt pays one. At that rate
+   the Meldacio tome opens after roughly seventy-five rank-1 hunts. Worth an hour
+   of design before WS-4 authors anything new.
+5. **Four gates failed in `npm run check` for environmental reasons, not
+   assertions.** `uxcheck`, `creaturecheck`, `heightcheck` and `driftcheck` all
+   died on `ERR_CONNECTION_REFUSED`; `creaturecheck` printed
+   `207 poses probed · 0 failures` and *then* failed. I had a probe running on
+   the same `PORT` at the time, which is my mistake and worth not repeating —
+   `heightcheck` and `driftcheck` do not start their own server, they take the
+   aux one `check.mts` puts on `PORT + 50`. Re-run on a quiet tree before
+   believing anything about those four.
 
 Files touched: `src/combat/CombatSystem.ts`, `src/game/rpg/DayCycle.ts`,
-`src/game/rpg/HavenCamp.ts` (new), `src/game/rpg/RpgSystem.ts`,
-`src/tools/integration.mts`, `tsconfig.tools.json`, and four probes under
+`src/game/rpg/Elemancy.ts`, `src/game/rpg/HavenCamp.ts` (new),
+`src/game/rpg/Quests.ts`, `src/game/rpg/RpgSystem.ts`,
+`src/tools/integration.mts`, `tsconfig.tools.json`, and six probes under
 `src/tools/probes/`.
-
-Reported, not edited (outside my paths): nothing required so far. The E fix
-lives in `src/combat/`, which is mine; it needed no change to `Game.ts`, and
-`HavenCamp` is installed from `RpgSystem`'s own tick for the same reason.
