@@ -4,7 +4,9 @@ Port this project from JavaScript to TypeScript, matching the sibling attempts
 `../final-fantasy-XV-demo-opus` (172 `.ts`, zero `.js` in `src/`) and
 `../final-fantasy-XV-demo-ogl-opus` (100 `.ts`).
 
-**Status: superseded and done.** `docs/plans/2026-08-22-opus-phase2-typescript-port.md`
+Status: SUPERSEDED (2026-08-22, opus) — by `2026-08-22-opus-phase2-typescript-port.md`, which shipped.
+
+**Superseded and done.** `docs/plans/2026-08-22-opus-phase2-typescript-port.md`
 carried this out on 2026-08-22 -- read that one for the numbers and
 `project/handoff/typescript.md` for what the port found. This document is kept
 for its argument, in §1, which the port confirmed several times over.

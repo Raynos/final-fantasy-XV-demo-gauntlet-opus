@@ -5,7 +5,9 @@ whose numbers are badly stale: it says 235 modules / ~79,500 lines. Measured
 2026-08-22, it is **274 files / 96,518 lines**, and it grows roughly 5k lines a
 session. Read that document for *why*; read this one for *what and in what order*.
 
-**Status: done (2026-08-22).** Zero `.js`/`.mjs` under `src/`, both typechecks
+Status: DONE (2026-08-22, opus).
+
+**Done.** Zero `.js`/`.mjs` under `src/`, both typechecks
 clean, 9/9 gates green, imgdiff inside each shot's own noise floor, perf inside
 variance against a worktree at the pre-port commit. What was found, what is left,
 and the one regression it introduced: `project/handoff/typescript.md`.

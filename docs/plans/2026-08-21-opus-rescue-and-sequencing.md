@@ -1,5 +1,10 @@
 # Rescue and sequencing plan
 
+Status: IN-PROGRESS (2026-08-22, opus). The rescue itself is closed and its
+ledger archived at `project/archive/RESCUE-2026-08-21.md`. This file survives as
+the agreed *sequence*: phase 2 (TypeScript) is done, phases 3 and 4 are open and
+have their own plans.
+
 **Written 2026-08-21.** The order of work from here, agreed with the human, and
 the reasoning behind that order.
 
@@ -32,7 +37,7 @@ top of it. Half of it is not new work at all but *verification debt* — code th
 shipped to `main` unverified, most sharply `agent/idles`, whose posture system
 touched every character in every frame and had never been looked at.
 
-**2. TypeScript port** (`docs/plans/2026-08-17-opus-typescript-port.md`). Second
+**2. TypeScript port** (`project/archive/plans/2026-08-17-opus-typescript-port.md`). Second
 because **its cost scales with the size of the codebase, and step 4 grows the
 codebase substantially.** The port is a whole-repo lock — it cannot run as the
 parallel-agent wave that built everything else here — so it wants one dedicated

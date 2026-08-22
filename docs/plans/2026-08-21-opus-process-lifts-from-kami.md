@@ -1,6 +1,9 @@
 # Process lifts from kami-kakushi — the five no-brainers
 
-Status: 📋 PROPOSED (2026-08-21, opus). Nothing here changes game code.
+Status: IN-PROGRESS (2026-08-22, opus). Items 3 (doc line budgets) and 4 (the
+`Status:` vocabulary and archive-when-done) shipped 2026-08-22. Items 1
+(sweepguard), 2 (a `SessionStart` brief) and 5 (the queue norm, now in
+`project/README.md`) are open. Nothing here changes game code.
 
 Audit of `../../games/kami-kakushi` (1796 commits, 219 sessions) for process we
 should steal. It is a genuinely more mature agentic setup than ours in a few

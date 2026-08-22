@@ -1,6 +1,7 @@
 # FFXV — Content & Gameplay Plan
 
-Status: planning document. No game code is changed by this file.
+Status: PROPOSED (2026-08-17, opus). No game code is changed by this file.
+Runs as phase 4; re-audit first, per `2026-08-22-opus-phase4-content-and-gameplay.md`.
 Author: Game Design & Content Planning pass, against commit `b676732`.
 
 ---

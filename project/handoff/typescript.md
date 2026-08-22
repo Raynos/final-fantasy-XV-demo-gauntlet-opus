@@ -1,6 +1,6 @@
 # TypeScript port — done
 
-**Plan:** `docs/plans/2026-08-22-opus-phase2-typescript-port.md` (phase 2).
+**Plan:** `project/archive/plans/2026-08-22-opus-phase2-typescript-port.md` (phase 2).
 **Status:** complete. Every file under `src/` is TypeScript, both typechecks are
 clean, all 9 gates are green, and the pixel diff against the pre-port build is
 inside each shot's own run-to-run noise.

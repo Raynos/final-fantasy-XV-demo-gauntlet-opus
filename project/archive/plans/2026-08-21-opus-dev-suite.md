@@ -1,5 +1,9 @@
 # Dev suite plan
 
+Status: DONE (2026-08-22, opus). Shipped: `src/dev/` (DevSuite, Freecam,
+AssetBrowser, Console, Inbox, Registry) and `src/tools/vite-plugin-review.mts`,
+reachable at `?debug=1`. The `drain-inbox` skill consumes what it writes.
+
 ## Context
 
 The project is a 139-shot, 19-zone, 8192 m procedural ThreeJS action RPG with a

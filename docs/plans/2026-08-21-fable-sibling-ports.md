@@ -1,6 +1,6 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: planning document. No game code is changed by this file.
+Status: PROPOSED (2026-08-21, fable). No game code is changed by this file.
 Author: Fable 5 audit pass, against commit `a1df21d`.
 Sources: full audits of the sibling repos under
 `/Users/raynos/projects/game-demos/gauntlet-demos/` — `final-fantasy-XV-demo-opus`

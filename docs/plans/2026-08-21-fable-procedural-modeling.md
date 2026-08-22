@@ -1,6 +1,6 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: planning document. No game code is changed by this file.
+Status: PROPOSED (2026-08-21, fable). No game code is changed by this file.
 Author: Fable 5 audit pass, against commit `86303de`. Companion to
 `docs/plans/2026-08-21-fable-sibling-ports.md` (which covers rendering, perf,
 gameplay and tooling); this one covers **mesh and shape construction only** —

@@ -476,7 +476,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 ## 14. TypeScript port — ✅ done (2026-08-22)
 
 Full detail in **[`project/handoff/typescript.md`](../project/handoff/typescript.md)**
-and the plan it ran from, `docs/plans/2026-08-22-opus-phase2-typescript-port.md`.
+and the plan it ran from, `project/archive/plans/2026-08-22-opus-phase2-typescript-port.md`.
 Every file under `src/` is TypeScript, both typechecks are clean under `strict`,
 all 9 gates green, and the pixel diff against the pre-port build is inside each
 shot's own run-to-run noise. **Follow-on, in progress: zero `any`** — 7,861 →

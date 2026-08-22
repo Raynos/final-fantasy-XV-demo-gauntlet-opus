@@ -8,7 +8,8 @@ The two items the human wrote in `project/TODO.md` and nobody has ever worked on
 Both are now **measured** rather than impressions. One of the two premises turns
 out to be wrong, which changes where the work goes.
 
-**Status:** planned, not started. No dependency on phase 2 — but if the port is
+Status: LOCKED (2026-08-22, opus) — phase 3 of `2026-08-21-opus-rescue-and-sequencing.md`.
+Planned, not started. No dependency on phase 2 — but if the port is
 running, do not start this, because both touch every system's `init()`.
 
 ---
