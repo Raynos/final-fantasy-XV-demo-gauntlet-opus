@@ -47,8 +47,12 @@ function take(): THREE.Color { _at = (_at + 1) % RING.length; return RING[_at]; 
  * @param v @param out
  */
 function read(v: number | THREE.Color, out: {r:number,g:number,b:number}) {
-  if (v && v.isColor) { out.r = v.r; out.g = v.g; out.b = v.b; return out; }
-  _rd.setHex(v, THREE.SRGBColorSpace);
+  if (v && (v as THREE.Color).isColor) {
+    const c = v as THREE.Color;
+    out.r = c.r; out.g = c.g; out.b = c.b;
+    return out;
+  }
+  _rd.setHex(v as number, THREE.SRGBColorSpace);
   out.r = _rd.r; out.g = _rd.g; out.b = _rd.b;
   return out;
 }

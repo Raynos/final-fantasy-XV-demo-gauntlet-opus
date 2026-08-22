@@ -513,7 +513,35 @@ export const POI_TYPES = {
  * Basins and canyons are automatically held back from the road network, so a
  * lake never swallows a highway and a gorge always leaves a bridge abutment.
  */
-export const LANDFORMS = [
+/**
+ * One landform. The fields a kind uses differ -- a `fin` is a line
+ * (`x0,z0,x1,z1,halfW`), a `mesa` is a disc (`x,z,r`) -- so everything past
+ * `id`/`kind`/`why` is optional and `Field.ts` reads what its branch needs.
+ */
+export interface Landform {
+  id: string;
+  kind: 'mesa' | 'butte' | 'fin' | 'spire' | 'peak' | 'crater' | 'canyon' | 'basin' | 'terrace' | 'volcano';
+  /** Why this landform exists, in design terms. Read by nothing; the point is the reader. */
+  why: string;
+  /** Centre, for the disc kinds. */
+  x?: number;
+  z?: number;
+  /** Radius and height, for the disc kinds. */
+  r?: number;
+  h?: number;
+  /** Endpoints and half-width, for `fin`. */
+  x0?: number;
+  z0?: number;
+  x1?: number;
+  z1?: number;
+  halfW?: number;
+  /** Elliptical radii, for `terrace`. */
+  rx?: number;
+  rz?: number;
+  [tuning: string]: any;
+}
+
+export const LANDFORMS: Landform[] = [
   // --- Leide: the badland stage set around Hammerhead ---------------------
   { id: 'hammerheadPan', kind: 'basin', x: 60, z: 40, r: 460, h: 9, why: 'Hammerhead needs level ground for the garage apron and the highway.' },
   { id: 'blackrockMesa', kind: 'mesa', x: -430, z: -560, r: 250, h: 132, benches: 2, cliff: 0.11, apron: 1.05, tilt: 0.05, dipDir: -1.15, why: 'Hero table north-west of Hammerhead; the vista_noon sight line.' },

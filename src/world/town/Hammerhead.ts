@@ -698,7 +698,8 @@ export class Hammerhead {
     tyreStack(putC, M, [6.6, 14.6], { n: 7, rng });
     tyreStack(putC, M, [-19.5, -6.0], { n: 4, rng });
     tyreStack(putC, M, [20.0, -8.6], { n: 3, rng });
-    for (const [u, v, tip] of [[10.5, 13.2, false], [11.4, 14.4, false], [12.4, 13.0, true], [10.2, 15.2, false]]) {
+    const drums: [number, number, boolean][] = [[10.5, 13.2, false], [11.4, 14.4, false], [12.4, 13.0, true], [10.2, 15.2, false]];
+    for (const [u, v, tip] of drums) {
       drum(putC, M, [u, v], { tipped: tip, yaw: rng.next() * 3 });
     }
     drum(putC, M, [-9.4, -1.0], { mat: M.panelBlue });
@@ -810,7 +811,7 @@ export class Hammerhead {
   // ---- lighting ----------------------------------------------------------
 
   _lights(put: any, M: any) {
-    const masts = [
+    const masts: [number[], number][] = [
       [[-25.0, -12.0], 0.0], [[-25.5, 8.0], 0.2],
       [[2.0, -27.0], 0.0], [[26.0, -22.0], 0.4], [[27.0, 8.0], -0.3],
     ];

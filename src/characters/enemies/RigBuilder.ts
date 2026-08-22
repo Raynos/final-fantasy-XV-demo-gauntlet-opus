@@ -253,7 +253,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
 /** Set a bone's local rotation as an offset from its bind pose. */
-export function poseBone(rig: any, name: any, x: any, y: any, z: any, order = 'XYZ') {
+export function poseBone(rig: any, name: any, x: any, y: any, z: any, order: THREE.EulerOrder = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);
@@ -262,7 +262,7 @@ export function poseBone(rig: any, name: any, x: any, y: any, z: any, order = 'X
 }
 
 /** Blend a bone toward a target rotation (used for flinch/death overrides). */
-export function poseBoneMix(rig: any, name: any, x: any, y: any, z: any, k: any, order = 'XYZ') {
+export function poseBoneMix(rig: any, name: any, x: any, y: any, z: any, k: any, order: THREE.EulerOrder = 'XYZ') {
   const b = rig.byName.get(name);
   if (!b) return;
   _e.set(x, y, z, order);
@@ -355,8 +355,8 @@ const _du = new THREE.Color();
  * @param out @param v
  */
 function asColor(out: THREE.Color, v: number | THREE.Color) {
-  if (v && v.isColor) return out.copy(v);
-  return out.setHex(v, THREE.SRGBColorSpace);
+  if (v && (v as THREE.Color).isColor) return out.copy(v as THREE.Color);
+  return out.setHex(v as number, THREE.SRGBColorSpace);
 }
 
 /**
@@ -383,7 +383,7 @@ function asColor(out: THREE.Color, v: number | THREE.Color) {
 export function weatherCoat(geo: THREE.BufferGeometry, {
   mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
   dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
-}: { mottle?: number, tick?: number, light?: number, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } | null = {}) {
+}: { mottle?: number, tick?: number, light?: number | null, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } = {}) {
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;
   // `Color.setHex` runs `Math.floor` on its argument, so handing it a

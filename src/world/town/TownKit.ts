@@ -105,7 +105,9 @@ export function tyreStack(put: any, M: any, [x, z]: any, { y = 0, n = 5, r = 0.4
 }
 
 /** A 200-litre oil drum, upright or on its side. */
-export function drum(put: any, M: any, [x, z]: any, { y = 0, tipped = false, yaw = 0, mat } = {}) {
+export function drum(put: any, M: any, [x, z]: any, { y = 0, tipped = false, yaw = 0, mat }: {
+  y?: number, tipped?: boolean, yaw?: number, mat?: any,
+} = {}) {
   const m = mat || M.scrap;
   if (!tipped) {
     put(m, cyl(0.30, 0.30, 0.92, 14), [x, y + 0.46, z]);
@@ -124,6 +126,8 @@ export function drum(put: any, M: any, [x, z]: any, { y = 0, tipped = false, yaw
  */
 export function carShell(put: any, M: any, [x, z]: any, {
   y = 0, yaw = 0, body, len = 4.6, wid = 1.86, ride = 0.42, wreck = false,
+}: {
+  y?: number, yaw?: number, body?: any, len?: number, wid?: number, ride?: number, wreck?: boolean,
 } = {}) {
   const b = body || M.panelRed;
   const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -203,7 +207,9 @@ export function patioSet(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, paraso
 }
 
 /** A pallet with a few crates on it. */
-export function palletStack(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, n = 2, rng } = {}) {
+export function palletStack(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, n = 2, rng }: {
+  y?: number, yaw?: number, n?: number, rng?: any,
+} = {}) {
   put(M.wood, box(1.2, 0.14, 0.9), [x, y + 0.07, z], [0, yaw, 0]);
   for (let i = 0; i < n; i++) {
     const j = rng ? rng.gauss(0, 0.06) : 0;
