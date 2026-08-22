@@ -17,7 +17,7 @@ Read next, in this order: `BRIEF.md` (the contract every agent works against),
 `docs/SCOPE.md` (atomic checklist), `project/PROGRESS.md` (status + bug log), `docs/plans/2026-08-17-opus-content-gameplay.md`
 **`project/handoff/2026-08-22-coordinator.md`** (start here — latest
 session handoff), **`project/RESCUE.md`** (the open-work ledger), `docs/WORLDMAP.md` (cartography), `docs/plans/2026-08-21-opus-dev-suite.md`
-(in-game debug/review suite), `project/handoff/typescript.md` (the TypeScript port -- done; what it found and what is left).
+(in-game debug/review suite), `project/handoff/typescript.md` (the TypeScript port -- done), `project/handoff/no-any.md` (the follow-on: zero `any`, in progress).
 
 ---
 
@@ -176,6 +176,9 @@ Merge them, verify, then re-run the critic pass.
    fixed cameras.
 7. **The TypeScript port** — **done** (2026-08-22). All of `src/` is `.ts`/`.mts`,
    both typechecks clean, 9/9 gates green. `project/handoff/typescript.md`.
+   **Follow-on, in progress: no `any`, implicit or explicit.** 7,861 -> 5,253,
+   ratcheted by `src/tools/anycheck.mts`. Read `project/handoff/no-any.md`
+   before touching it -- it has the engine, the loop and the traps.
 7. **Content still missing:** chocobos, fishing, photo-mode capture, camping at
    havens (only the Hammerhead caravan works), fast travel, the remaining towns.
 
