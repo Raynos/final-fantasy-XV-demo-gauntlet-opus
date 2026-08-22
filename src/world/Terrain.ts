@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import {
-  Field, LANDMARKS, gnoise2, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
+  Field, LANDMARKS, gnoise2, microDetail, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
 } from './terrain/Field.ts';
 import { Clipmap } from './terrain/Clipmap.ts';
+import type { ClipmapRing } from './terrain/Clipmap.ts';
 import { loadBaked } from './terrain/FieldBake.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
 import { buildLayerTextures, LAYER_NAMES, LAYER_AVG } from './terrain/Layers.ts';
@@ -259,9 +260,220 @@ export class Terrain implements Ground {
   // ------------------------------------------------------------------- query
 
   /**
-   * Surface height at a world position — exactly what the GPU renders.
+   * Surface height at a world position — the continuous field.
+   *
+   * This is what the vertex shader evaluates *at a vertex*. It is NOT what the
+   * clipmap draws between vertices, and past a hundred metres those are not the
+   * same surface: see `drawnHeightAt`.
    */
   heightAt(x: number, z: number): number { return this.field.heightAt(x, z); }
+
+  /**
+   * Ring spacing, in metres, that the clipmap will actually draw this point at.
+   *
+   * The renderer's own level selection, read off the live rings rather than
+   * approximated: `Clipmap._quadrant` gives level L a square of `2n` cells from
+   * the ring centre with the inner `n-4` cells removed (level 0 has no hole), so
+   * the finest ring whose annulus contains a point is the one that rasterises
+   * it. Every ring snaps to a multiple of `2 * cell`, so its vertex lattice is
+   * always at world multiples of `cell` — there is no phase to guess.
+   *
+   * Anything that needs to know how coarsely the ground under it is tessellated
+   * — seating, decals, footprint blending — should ask here rather than infer it
+   * from an object's size. Size does not decide which ring draws the ground
+   * under a body; position does.
+   */
+  clipSpacingAt(x: number, z: number): number {
+    const cm = this.clipmap;
+    if (!cm) return this.res ? this.res.finestCell : 1.5;
+    const n = cm.n;
+    let coarsest = cm.cell0;
+    for (const ring of cm.rings) {
+      coarsest = ring.cell;
+      if (!Number.isFinite(ring.x)) continue;
+      const d = Math.max(Math.abs(x - ring.x), Math.abs(z - ring.z));
+      const hole = ring.level === 0 ? 0 : (n - 4) * ring.cell;
+      if (d >= hole - 1e-6 && d <= 2 * n * ring.cell) return ring.cell;
+    }
+    return coarsest;
+  }
+
+  /**
+   * The height a clipmap vertex is displaced to at cell size `cell`.
+   *
+   * The CPU twin of `tf_heightLod` in `terrain/TerrainMaterial.ts`, and it has
+   * to stay one: a coarse level does not point-sample the field, it low-passes
+   * it with a five-tap cross of width `(cell - 4) * 1.1` and fades the analytic
+   * micro-relief out over 4–14 m, because a lattice cannot carry detail finer
+   * than its own spacing and decimating it produces per-vertex jitter rather
+   * than a coarse mountain. Getting this wrong in the same direction the shader
+   * gets it right is worse than not modelling it at all.
+   */
+  _vertexHeight(x: number, z: number, cell: number): number {
+    const f = this.field;
+    const w = (cell - 4) * 1.1;
+    if (w <= 0.25) return f.heightAt(x, z);
+    const grid = (px: number, pz: number) => (
+      Math.max(Math.abs(px), Math.abs(pz)) >= BLEND_OUT ? f.sampleFar(px, pz) : f.rawHeightAt(px, pz)
+    );
+    const t = Math.max(0, Math.min(1, (cell - 4) / 10));
+    const microFade = 1 - t * t * (3 - 2 * t);            // smoothstep(4, 14, cell)
+    return grid(x, z) * 0.36
+      + (grid(x + w, z) + grid(x - w, z) + grid(x, z + w) + grid(x, z - w)) * 0.16
+      + microDetail(x, z) * microFade;
+  }
+
+  /** Bilinear interpolant of the displaced lattice of spacing `cell`. */
+  _latticeHeight(x: number, z: number, cell: number): number {
+    const ox = Math.floor(x / cell) * cell;
+    const oz = Math.floor(z / cell) * cell;
+    const fx = (x - ox) / cell;
+    const fz = (z - oz) / cell;
+    const h00 = this._vertexHeight(ox, oz, cell);
+    const h10 = this._vertexHeight(ox + cell, oz, cell);
+    const h01 = this._vertexHeight(ox, oz + cell, cell);
+    const h11 = this._vertexHeight(ox + cell, oz + cell, cell);
+    return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
+  }
+
+  /**
+   * Where one ring's vertex actually ends up, morph included.
+   *
+   * The outer band of every level blends onto the next level's surface —
+   * `aClip.x` in `Clipmap._quadrant` ramps over the outer 16 to 2 cells and
+   * `TERRAIN_VERT_BEGIN` mixes toward the `2 * cell` lattice by that alpha. That
+   * band is what makes the rings meet without a crack, and leaving it out of the
+   * model is worth metres: measured, ignoring it left an 8.67 m p99 residual
+   * against the rasterised surface, all of it inside the ramps.
+   */
+  _ringVertexHeight(x: number, z: number, cell: number, rx: number, rz: number): number {
+    const h = this._vertexHeight(x, z, cell);
+    const n = this.clipmap ? this.clipmap.n : 48;
+    const e = Math.max(Math.abs(x - rx), Math.abs(z - rz)) / cell;
+    const ramp0 = 2 * n - 16;
+    const ramp1 = 2 * n - 2;
+    const t = Math.max(0, Math.min(1, (e - ramp0) / (ramp1 - ramp0)));
+    if (t <= 0) return h;
+    const a = t * t * (3 - 2 * t);
+    return h + (this._latticeHeight(x, z, cell * 2) - h) * a;
+  }
+
+  /**
+   * The surface the clipmap will actually RASTERISE at this point.
+   *
+   * Vertices land on a lattice of `cell` metres and every point between them is
+   * the bilinear interpolant of four displaced vertices — a chord across the
+   * real relief, not the relief. Inside 144 m that chord is a 1.5 m triangle and
+   * sags a measured ~0.37 m in the roughest ground; at 1.2 km the ring is 12 m
+   * and the same measurement gives 16 m. Anything seated on `heightAt` beyond a
+   * couple of hundred metres is therefore floating over, or buried under, the
+   * mesh that is actually on screen.
+   *
+   * @param cell ring spacing to model; defaults to what is drawn there now.
+   */
+  drawnHeightAt(x: number, z: number, cell?: number): number {
+    const cm = this.clipmap;
+    if (cell == null && cm) {
+      // Every ring whose annulus contains the point is DRAWN there — levels
+      // overlap by four cells so the morph has somewhere to happen — and the
+      // depth test decides which one you see. Looking at ground from anywhere
+      // above it, that is the higher surface. Outside the overlap exactly one
+      // ring covers the point and this reduces to that ring.
+      const n = cm.n;
+      let hi = -Infinity;
+      for (const ring of cm.rings) {
+        if (!Number.isFinite(ring.x)) continue;
+        const d = Math.max(Math.abs(x - ring.x), Math.abs(z - ring.z));
+        const hole = ring.level === 0 ? 0 : (n - 4) * ring.cell;
+        if (d < hole - 1e-6 || d > 2 * n * ring.cell) continue;
+        const h = this._drawnAtRing(x, z, ring);
+        if (h > hi) hi = h;
+      }
+      if (hi > -Infinity) return hi;
+    }
+    const c = cell ?? this.clipSpacingAt(x, z);
+    const ring = cm && cm.rings.find((r) => r.cell === c);
+    if (!ring || !Number.isFinite(ring.x)) return this._latticeHeight(x, z, c);
+    return this._drawnAtRing(x, z, ring);
+  }
+
+  /** The rasterised height of one specific ring at this point. */
+  _drawnAtRing(x: number, z: number, ring: ClipmapRing): number {
+    const cell = ring.cell;
+    // A quad is TWO TRIANGLES, and a triangle pair is not the bilinear patch:
+    // they agree only along the shared edge. `Clipmap._quadrant` always splits
+    // on the b-c diagonal in QUADRANT-LOCAL indices, and the quadrants mirror,
+    // so the split direction flips across each axis through the ring centre —
+    // which is why this walks local indices rather than world ones.
+    const sx = x >= ring.x ? 1 : -1;
+    const sz = z >= ring.z ? 1 : -1;
+    const a = (sx * (x - ring.x)) / cell;
+    const b = (sz * (z - ring.z)) / cell;
+    const i = Math.floor(a);
+    const j = Math.floor(b);
+    const fa = a - i;
+    const fb = b - j;
+    const wx = (li: number) => ring.x + sx * li * cell;
+    const wz = (lj: number) => ring.z + sz * lj * cell;
+    const H = (li: number, lj: number) => this._ringVertexHeight(wx(li), wz(lj), cell, ring.x, ring.z);
+    if (fa + fb <= 1) {
+      const hA = H(i, j);
+      return hA + (H(i + 1, j) - hA) * fa + (H(i, j + 1) - hA) * fb;
+    }
+    const hD = H(i + 1, j + 1);
+    return hD + (H(i + 1, j) - hD) * (1 - fb) + (H(i, j + 1) - hD) * (1 - fa);
+  }
+
+  /**
+   * Ground height to SEAT a body of `size` metres on.
+   *
+   * Seats on the LOWEST surface any ring that could plausibly draw this ground
+   * would produce, because the two failure modes are not symmetric: a rock sunk
+   * a few centimetres reads as a rock that has been there a while, and a rock
+   * floating by the same amount reads as a bug. That is the whole trick.
+   *
+   * Which rings count is decided by POSITION first — `clipSpacingAt`, the
+   * renderer's own rule — with `size` only as a floor, because a tall body is
+   * still read through coarser rings once the camera backs off past its own
+   * footprint. Deriving the range from size alone is a known trap: a 1.5 m
+   * stone at 500 m is drawn on the same coarse ring as the 25 m butte beside
+   * it, and a size rule would only ever probe the fine lattice for it and leave
+   * it hanging.
+   *
+   * The sink is capped at a third of the body plus most of the ring spacing, so
+   * a small prop on very coarse ground is allowed to be a little proud rather
+   * than swallowed whole. The cap is measured from the surface that is actually
+   * DRAWN there, not from `heightAt`: the two differ by a measured 22 m at
+   * 2.4 km, and a cap taken from the field would have buried a prop that far out
+   * under twenty metres of the mesh it was supposed to be sitting on.
+   */
+  seatHeightAt(x: number, z: number, size = 0, viewCell = this.clipSpacingAt(x, z)): number {
+    const cell0 = this.clipmap ? this.clipmap.cell0 : 1.5;
+    const coarsest = Math.max(viewCell, size > 2.5 ? Math.min(24, size * 0.9) : 0);
+    let lo = this.field.heightAt(x, z);
+    for (let c = cell0; c <= coarsest + 1e-6; c *= 2) lo = Math.min(lo, this.drawnHeightAt(x, z, c));
+    const visible = this.drawnHeightAt(x, z, viewCell);
+    return Math.max(lo, visible - (size * 0.34 + viewCell * 0.55));
+  }
+
+  /**
+   * UPPER envelope of the ground the clipmap can rasterise here.
+   *
+   * The opposite bound to `seatHeightAt`, and it exists because the two jobs are
+   * opposite. A body that must not float asks for the lowest surface; a surface
+   * that must stay VISIBLE — an apron, a decal, a graded pad, anything built to
+   * be seen lying on the ground — asks for the highest, or the terrain swallows
+   * it. Building visible geometry on the lower bound is how the sibling repo
+   * ended up with 12,450 pixels of apron inside the frustum and not one of them
+   * passing the depth test.
+   */
+  drawnEnvelope(x: number, z: number, size = 0, viewCell = this.clipSpacingAt(x, z)): number {
+    const cell0 = this.clipmap ? this.clipmap.cell0 : 1.5;
+    const coarsest = Math.max(viewCell, size > 2.5 ? Math.min(24, size * 0.9) : 0);
+    let hi = this.field.heightAt(x, z);
+    for (let c = cell0; c <= coarsest + 1e-6; c *= 2) hi = Math.max(hi, this.drawnHeightAt(x, z, c));
+    return hi;
+  }
 
   /**
    * Surface normal at a world position.
