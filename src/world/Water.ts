@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import type { Terrain } from './Terrain.ts';
+import {
+  N as FIELD_N, HALF as FIELD_HALF, CELL as FIELD_CELL, BLEND_OUT as FIELD_BLEND_OUT,
+  FAR_N as FIELD_FAR_N, FAR_HALF as FIELD_FAR_HALF, FAR_CELL as FIELD_FAR_CELL,
+} from './terrain/Field.ts';
 import { Noise } from '../util/Noise.ts';
 import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
 import type { Game } from '../game/Game.ts';
@@ -7,10 +11,35 @@ import type { Game } from '../game/Game.ts';
 /**
  * Lakes and pools.
  *
- * Planar reflection (half-res, sky + terrain only) + depth-based refraction
- * tint + two scrolling procedural normal maps + shoreline foam + sun glint.
- * Water bodies are discovered from the terrain: any basin below `level` that is
- * large enough gets a surface.
+ * Planar reflection (half-res, sky + terrain only) + a Beer-Lambert depth model
+ * sampled against the real terrain bed + two scrolling procedural normal maps +
+ * depth-derived shore foam + sun glint. Water bodies are discovered from the
+ * terrain: any basin below `level` that is large enough gets a surface.
+ *
+ * ### Depth is metric, and that is the whole design
+ *
+ * The surface is a flat quad at `level`, so the fragment's own `y` carries no
+ * information at all — the previous body colour was
+ * `mix(uShallow, uDeep, clamp((uLevel - vWorld.y + 6.0) / 9.0))`, which on a
+ * plane where `vWorld.y == uLevel` is the constant 0.667. Every lake in the
+ * world was therefore one flat colour with no shore, no shallows and no bed,
+ * which is exactly how they read: a blue band pasted over the beach.
+ *
+ * So the shader samples the terrain heightfield itself, through the same
+ * `texelFetch` bilinear the terrain material uses, and gets **metres of water**
+ * under each fragment. Everything else keys off that number:
+ *
+ * - **Transmittance** is `exp(-sigma * pathLength)` per channel, with
+ *   `sigma.r >> sigma.b`, which is why real water goes green then blue-black
+ *   with depth instead of interpolating between two picked colours.
+ * - **Path length** follows the *refracted* view ray, not the vertical, so
+ *   grazing views through a shallow margin correctly see more water than a
+ *   plan view of the same spot. One Snell step; no scene copy.
+ * - **Alpha** is the complement of transmittance, so a centimetre of water at
+ *   the shoreline is genuinely transparent and the beach reads through it. The
+ *   silhouette of the waterline then comes from the bed, for free.
+ * - **Foam** is a function of depth broken up by the wave field, rather than a
+ *   contour stamped at a fixed offset.
  */
 /**
  * Layer the mirrored pass draws. Nothing is on it until `Water` opts the sky
@@ -58,6 +87,11 @@ export class Water {
   normalB!: THREE.DataTexture;
   reflectCam!: THREE.PerspectiveCamera;
   reflectTarget!: THREE.WebGLRenderTarget;
+  /** The terrain field textures and their grid params, for the bed sampler. */
+  _bed!: {
+    height: THREE.Texture, farHeight: THREE.Texture,
+    field: THREE.Vector4, farP: THREE.Vector4,
+  } | null;
   reflectionRes!: number;
   stride!: number;
   constructor() {
@@ -71,6 +105,7 @@ export class Water {
     this._box = new THREE.Box3();
     this._reflecting = false;
     this._reflectRoots = null;
+    this._bed = null;
     this._sinceReflect = 1e9;
   }
 
@@ -82,6 +117,7 @@ export class Water {
     this.noise = new Noise(4242);
     this._buildTextures();
     this._buildReflection(game);
+    this._bindBed(terrain);
 
     // Find basins on a coarse grid; group them into a few lake surfaces.
     const bodies = this._findBasins(terrain);
@@ -89,6 +125,26 @@ export class Water {
 
     this.enabled = this.bodies.length > 0;
     if (this.enabled) this._collectReflectRoots(game);
+  }
+
+  /**
+   * Point the depth model at the terrain's own height field.
+   *
+   * Read-only, and deliberately the *same* textures and grid parameters the
+   * terrain material samples (`uField` = half, cell, N, blendOut) rather than a
+   * copy — a water bed that disagreed with the drawn ground by even a metre
+   * would put the waterline in the wrong place, and the disagreement would only
+   * show up as art nobody could explain.
+   */
+  _bindBed(terrain: Terrain) {
+    const tex = terrain.textures;
+    if (!tex || !tex.height || !tex.farHeight) { this._bed = null; return; }
+    this._bed = {
+      height: tex.height,
+      farHeight: tex.farHeight,
+      field: new THREE.Vector4(FIELD_HALF, FIELD_CELL, FIELD_N, FIELD_BLEND_OUT),
+      farP: new THREE.Vector4(FIELD_FAR_HALF, FIELD_FAR_CELL, FIELD_FAR_N, 0),
+    };
   }
 
   // ---------------------------------------------------------------- textures
@@ -208,6 +264,7 @@ export class Water {
   }
 
   _makeMaterial() {
+    const bed = this._bed;
     const uniforms = {
       uTime: { value: 0 },
       uNormalA: { value: this.normalA },
@@ -215,14 +272,50 @@ export class Water {
       uCaustics: { value: this.caustics },
       uReflect: { value: this.reflectTarget.texture },
       uReflectMatrix: { value: new THREE.Matrix4() },
-      uShallow: { value: new THREE.Color(0x1e5f63) },
-      uDeep: { value: new THREE.Color(0x04171f) },
+      /**
+       * Per-metre extinction, one coefficient per channel.
+       *
+       * This is the number that makes water look like water. Red is absorbed an
+       * order of magnitude faster than blue — a metre of clear water has already
+       * taken a third of the red out and almost none of the blue — which is why
+       * a shallow margin reads warm and sandy and the same body reads green at
+       * three metres and blue-black at fifteen. Two picked colours interpolated
+       * by depth cannot produce that curve, and the interpolation is what makes
+       * a lake read as painted.
+       */
+      uSigma: { value: new THREE.Vector3(0.46, 0.10, 0.045) },
+      /**
+       * Single-scattering albedo of the body — the colour deep water keeps.
+       *
+       * Kept dark on purpose. The scattered term saturates as depth grows, so
+       * whatever this is, is exactly what an infinitely deep lake looks like;
+       * pick it bright and every lake in the world becomes a swimming pool.
+       */
+      uScatter: { value: new THREE.Color(0x12363c) },
+      /** Bed albedo where no terrain albedo is available: damp silt. */
+      uBed: { value: new THREE.Color(0x6b6047) },
+      /**
+       * Sky irradiance reaching the surface, from the hemisphere light.
+       *
+       * Without this the body colour is a constant, and a constant body colour
+       * is how a storm-lit lake came back reading as tropical shallows: the
+       * scene around it went grey and overcast and the water did not move at
+       * all. Absorption tells you what *fraction* of light returns; it cannot
+       * tell you how much light there was.
+       */
+      uAmbient: { value: new THREE.Color(0x9fc0ee).multiplyScalar(0.18) },
       uSunDir: { value: new THREE.Vector3(0.4, 0.6, 0.3) },
       uSunColor: { value: new THREE.Color(0xfff0d8) },
       uCameraPos: { value: new THREE.Vector3() },
       uLevel: { value: this.level },
       uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
       uRoughness: { value: 0.06 },
+      uHeightTex: { value: bed ? bed.height : null },
+      uFarHeightTex: { value: bed ? bed.farHeight : null },
+      uField: { value: bed ? bed.field : new THREE.Vector4(1, 1, 1, 1) },
+      uFarP: { value: bed ? bed.farP : new THREE.Vector4(1, 1, 1, 0) },
+      /** 0 disables the depth model, for the no-terrain fallback and ablation. */
+      uHasBed: { value: bed ? 1 : 0 },
     };
 
     return new THREE.ShaderMaterial({
@@ -242,15 +335,49 @@ export class Water {
       `,
       fragmentShader: /* glsl */`
         precision highp float;
-        uniform float uTime, uLevel, uRoughness;
+        uniform float uTime, uLevel, uRoughness, uHasBed;
         uniform sampler2D uNormalA, uNormalB, uCaustics, uReflect;
-        uniform vec3 uShallow, uDeep, uSunDir, uSunColor, uCameraPos;
+        uniform sampler2D uHeightTex, uFarHeightTex;
+        uniform vec4 uField;   // half, cell, N, blendOut
+        uniform vec4 uFarP;    // half, cell, N, -
+        uniform vec3 uSigma, uScatter, uBed, uAmbient, uSunDir, uSunColor, uCameraPos;
         uniform vec2 uWindDir;
         varying vec3 vWorld;
         varying vec4 vClip;
 
         vec3 sampleNormal(sampler2D t, vec2 uv){
           return normalize(texture2D(t, uv).xyz * 2.0 - 1.0);
+        }
+
+        // Bilinear fetch of the height grid. This is tf_grid() from
+        // TerrainMaterial.ts, verbatim: the bed the water measures against has
+        // to be the surface the terrain actually draws, or the waterline lands
+        // somewhere the ground is not.
+        float wf_grid(sampler2D tex, vec2 p, vec4 P){
+          vec2 f = (p + P.x) / P.y;
+          vec2 i0 = floor(f);
+          vec2 t = f - i0;
+          i0 = clamp(i0, vec2(0.0), vec2(P.z - 2.0));
+          ivec2 c = ivec2(i0);
+          float a = texelFetch(tex, c, 0).r;
+          float b = texelFetch(tex, c + ivec2(1, 0), 0).r;
+          float d = texelFetch(tex, c + ivec2(0, 1), 0).r;
+          float e = texelFetch(tex, c + ivec2(1, 1), 0).r;
+          return mix(mix(a, b, t.x), mix(d, e, t.x), t.y);
+        }
+
+        /**
+         * Bed height under a world xz.
+         *
+         * The macro grid only — deliberately *without* the terrain's tf_micro()
+         * relief term. That term is a 6-25 m analytic band, and adding it here
+         * would put decimetre noise into the depth, which the exponential turns
+         * into visible mottling across an otherwise calm lake. Under water,
+         * where nothing is sharp anyway, the grid is the right level of detail.
+         */
+        float wf_bed(vec2 p){
+          if (max(abs(p.x), abs(p.y)) >= uField.w) return wf_grid(uFarHeightTex, p, uFarP);
+          return wf_grid(uHeightTex, p, uField);
         }
 
         void main(){
@@ -272,21 +399,83 @@ export class Water {
           sUv += N.xz * 0.045;
           vec3 refl = texture2D(uReflect, clamp(sUv, 0.001, 0.999)).rgb;
 
-          // depth-tinted body colour (cheap: distance from the shoreline plane)
-          float depthFade = clamp((uLevel - vWorld.y + 6.0) / 9.0, 0.0, 1.0);
-          vec3 body = mix(uShallow, uDeep, depthFade);
+          // --- metric depth ------------------------------------------------
+          // Straight down first, to know how far the bed is at all.
+          float bedY = wf_bed(vWorld.xz);
+          float dropDown = max(uLevel - bedY, 0.0);
 
-          float caust = texture2D(uCaustics, vWorld.xz * 0.06 + w * 0.004).r;
-          body += caust * 0.06 * (1.0 - depthFade);
+          // Then follow the refracted ray. One Snell step, air into water:
+          // eta = 1.0 / 1.333. This is what makes a grazing view across a
+          // shallow margin correctly darker than a plan view of the same spot —
+          // it is travelling through more water to reach the same bed.
+          vec3 R = refract(-V, N, 0.7502);
+          float down = max(-R.y, 0.10);
+          vec2 hit = vWorld.xz + R.xz * (dropDown / down);
+          float path = max(uLevel - wf_bed(hit), 0.0) / down;
+
+          // No terrain bound (or ablated): fall back to a fixed mid depth so the
+          // surface still renders as water rather than as a black hole.
+          path = mix(3.0, path, uHasBed);
+          dropDown = mix(3.0, dropDown, uHasBed);
+
+          // --- Beer-Lambert -------------------------------------------------
+          vec3 T = exp(-uSigma * path);
+
+          // Caustics belong on the bed, and only where light still reaches it.
+          float caust = texture2D(uCaustics, hit * 0.06 + w * 0.004).r;
+          vec3 bed = uBed * (1.0 + caust * 0.55 * T.g);
+
+          // Downwelling light at the surface: direct sun weighted by its own
+          // elevation, plus sky. Both terms below are fractions of *this*, so a
+          // storm-grey scene gets storm-grey water without any special case.
+          vec3 downwelling = uSunColor * max(uSunDir.y, 0.0) * 0.42 + uAmbient * 1.9;
+
+          // What comes back out: light off the bed, attenuated by the water it
+          // crossed, plus light scattered by the body before it ever got there.
+          // The scattered term carries its own attenuation as well — photons
+          // have to travel down and back up again — which is what stops deep
+          // water converging on a bright flat tint.
+          vec3 scatterOut = uScatter * (1.0 - T) * mix(1.0, 0.42, clamp(path / 14.0, 0.0, 1.0));
+          vec3 body = (bed * T + scatterOut) * downwelling;
+
+          // --- foam ------------------------------------------------------------
+          // Depth-derived, then broken up by the wave field so it is a margin
+          // rather than a contour line. A clean band at a fixed offset is the
+          // single clearest tell that a shoreline was stamped, not simulated —
+          // so two noise scales beat on each other and the band is required to
+          // clear both. One scale alone still reads as a piped edge.
+          float edge = 1.0 - smoothstep(0.0, 1.35, dropDown);
+          float churn = texture2D(uNormalB, vWorld.xz * 0.085 + w * 0.03).x;
+          float churn2 = texture2D(uNormalA, vWorld.xz * 0.022 - w * 0.011).y;
+          float foam = smoothstep(0.34, 0.92, edge * (0.35 + 0.8 * churn + 0.5 * churn2));
+
+          // Fade the margin out with distance. A shore band narrower than a
+          // pixel cannot be drawn, only aliased, and an aliased white line along
+          // every far shore is exactly the confetti tell that costs a blind test.
+          float dist = length(uCameraPos - vWorld);
+          foam *= 1.0 - smoothstep(220.0, 620.0, dist);
 
           vec3 col = mix(body, refl, fres);
+          // Foam is scattering, so it is bright *for the light it is under* —
+          // pure white here made an overcast lake look sunlit along its edge.
+          col = mix(col, vec3(0.90, 0.93, 0.95) * (downwelling * 0.75 + 0.10), foam * 0.85);
 
           // sun glint — sharp specular on the wave normals
           vec3 H = normalize(uSunDir + V);
           float spec = pow(max(dot(N, H), 0.0), mix(2000.0, 60.0, uRoughness * 6.0));
-          col += uSunColor * spec * 2.4;
+          col += uSunColor * spec * 2.4 * (1.0 - foam * 0.6);
 
-          gl_FragColor = vec4(col, mix(0.86, 1.0, fres));
+          // --- alpha ------------------------------------------------------------
+          // The complement of transmittance, so a centimetre of water at the
+          // shoreline is genuinely see-through and the beach reads under it.
+          // The waterline silhouette then comes from the bed for nothing, which
+          // is the part a stamped contour can never get right. Fresnel keeps
+          // grazing angles reflective however shallow they are, and foam is
+          // opaque because it is scattering, not absorption.
+          float alpha = 1.0 - max(max(T.r, T.g), T.b);
+          alpha = clamp(max(max(alpha, fres * 0.92), foam * 0.9), 0.0, 1.0);
+
+          gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>
         }
       `,
@@ -306,6 +495,13 @@ export class Water {
       if (sky && sky.sun) {
         u.uSunDir.value.copy(sky.sun.position).normalize();
         u.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
+      }
+      // The hemisphere light is the scene's own answer to "how bright is the
+      // sky right now", and it is already weather- and time-driven. Reading it
+      // rather than re-deriving one keeps the water in step with the terrain
+      // beside it under every preset.
+      if (sky && sky.ambient) {
+        u.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
       }
     }
   }
