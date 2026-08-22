@@ -382,12 +382,34 @@ export class Water {
 
         void main(){
           vec2 w = uWindDir * uTime;
-          vec2 uvA = vWorld.xz * 0.021 + w * 0.012;
-          vec2 uvB = vWorld.xz * 0.052 - w * 0.021;
-          vec3 nA = sampleNormal(uNormalA, uvA);
-          vec3 nB = sampleNormal(uNormalB, uvB);
+          float dist = length(uCameraPos - vWorld);
+
+          // Three scales, because water is a spectrum and one normal map is a
+          // texture. There used to be two, both short — 0.021 and 0.052 in world
+          // units — which is why every lake read as a flat sheet of sandpaper:
+          // no swell to carry the surface at distance, and a finest octave that
+          // is sub-pixel past a hundred metres and can only alias.
+          //
+          // The swell is always present and does the distance read. The ripple
+          // fades out with range rather than being minified into noise; this is
+          // the same argument as dropping a grass LOD that has become smaller
+          // than a texel, and it costs one smoothstep.
+          float fine = 1.0 - smoothstep(70.0, 300.0, dist);
+          // The swell reads the *other* map, on a rotated axis. Scaling one
+          // texture three times looks exactly like what it is: the octaves
+          // correlate with themselves and the surface comes out as regular
+          // corduroy rather than as water. A different map at 31 deg breaks it.
+          // Named swellRot, not R: R is the refracted view ray further down in
+          // this same function, and redeclaring it is a GLSL compile error that
+          // arrives as "VALIDATE_STATUS false" and nothing else.
+          mat2 swellRot = mat2(0.857, -0.515, 0.515, 0.857);
+          vec3 nS = sampleNormal(uNormalB, (swellRot * vWorld.xz) * 0.0047 + w * 0.0031);
+          vec3 nA = sampleNormal(uNormalA, vWorld.xz * 0.021 + w * 0.012);
+          vec3 nB = sampleNormal(uNormalB, vWorld.xz * 0.052 - w * 0.021);
           // blend in tangent space, then lift into world (plane normal is +Y)
-          vec3 nt = normalize(vec3(nA.xy + nB.xy * 0.7, nA.z * nB.z));
+          vec3 nt = normalize(vec3(
+            nS.xy * 0.78 + nA.xy * (0.42 + 0.38 * fine) + nB.xy * (0.5 * fine),
+            nS.z * nA.z * nB.z));
           vec3 N = normalize(vec3(nt.x, nt.z * 2.2, nt.y));
 
           vec3 V = normalize(uCameraPos - vWorld);
@@ -452,7 +474,6 @@ export class Water {
           // Fade the margin out with distance. A shore band narrower than a
           // pixel cannot be drawn, only aliased, and an aliased white line along
           // every far shore is exactly the confetti tell that costs a blind test.
-          float dist = length(uCameraPos - vWorld);
           foam *= 1.0 - smoothstep(220.0, 620.0, dist);
 
           vec3 col = mix(body, refl, fres);
