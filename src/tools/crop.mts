@@ -2,7 +2,7 @@
 /**
  * Crop (and optionally magnify) a region out of a capture.
  *
- *   node src/tools/crop.mjs in.png out.png x y w h [zoom]
+ *   node src/tools/crop.mts in.png out.png x y w h [zoom]
  *
  * Exists because looking at a 1600x900 frame at page scale hides exactly the
  * class of defect that matters most here — pixel-scale aliasing in the sky and

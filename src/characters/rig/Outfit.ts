@@ -66,7 +66,7 @@ function under(fn: any, u0: number, u1: number, damp = 0.88) {
 /**
  * Clothing as real, layered geometry.
  *
- * Every piece is cut from the body sweeps it covers (see Anatomy.js), padded
+ * Every piece is cut from the body sweeps it covers (see Anatomy.ts), padded
  * outward and given its own skin weights, so a jacket sits *over* the tee that
  * sits over the torso, all three deform together, and an open jacket shows
  * genuine cloth thickness at the lapel.

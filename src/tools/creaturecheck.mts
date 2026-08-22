@@ -20,17 +20,17 @@
  *           something resets the transform first; if nothing does, holding the
  *           pose integrates it once per frame and the creature sinks. That is
  *           the shape of bug this tool exists to catch — the same one that once
- *           sank the party ~10 m through an idle layer in `rig/Anim.js`.
+ *           sank the party ~10 m through an idle layer in `rig/Anim.ts`.
  *
  * Poses are driven through the same path a screenshot scenario uses
  * (`Enemy.freeze` + `Enemies.update` with `frozen = true`) so the tool measures
  * the code that produces the bestiary shots rather than an idealised call.
  *
- *   node src/tools/creaturecheck.mjs                # whole roster, every pose
- *   node src/tools/creaturecheck.mjs --species sabertusk,irongiant
- *   node src/tools/creaturecheck.mjs --hold 240     # frames to hold each pose
- *   node src/tools/creaturecheck.mjs --tol 0.25     # fail above this |foot|, metres
- *   node src/tools/creaturecheck.mjs --json out.json
+ *   node src/tools/creaturecheck.mts                # whole roster, every pose
+ *   node src/tools/creaturecheck.mts --species sabertusk,irongiant
+ *   node src/tools/creaturecheck.mts --hold 240     # frames to hold each pose
+ *   node src/tools/creaturecheck.mts --tol 0.25     # fail above this |foot|, metres
+ *   node src/tools/creaturecheck.mts --json out.json
  *
  * Exits non-zero if any pose drifts, or if any pose leaves the model further
  * off the ground than `--tol` (airborne poses — a pounce, a leap — are exempt

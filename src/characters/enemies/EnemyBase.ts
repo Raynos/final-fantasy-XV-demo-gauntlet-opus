@@ -13,7 +13,7 @@ import { CreatureAnim } from '../rig/CreatureAnim.ts';
  *     ▲                    ▲                                      │
  *     └──────── return ◀───┴──────────────(lost target, leashed)◀─┘
  *
- * In combat the pack (see `game/encounters/Pack.js`) hands out roles so a
+ * In combat the pack (see `game/encounters/Pack.ts`) hands out roles so a
  * group flanks and takes turns instead of queueing: only a couple of members
  * hold the `engage` token at once, everyone else circles to a ring slot.
  *
@@ -1127,7 +1127,7 @@ const POSE_PER_ATTACK = new Set(['telegraph', 'attack']);
  * Ground penetration left uncorrected, metres. A foot pressing a few
  * centimetres into dirt is how contact reads as weight rather than as a model
  * balanced on a plane; correcting to exactly zero makes everything look like
- * it is hovering. Well inside the 0.25 m gate in `src/tools/creaturecheck.mjs`.
+ * it is hovering. Well inside the 0.25 m gate in `src/tools/creaturecheck.mts`.
  */
 const GROUND_SINK = 0.05;
 const _addQ = new THREE.Quaternion();

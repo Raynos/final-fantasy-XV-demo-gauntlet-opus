@@ -29,7 +29,7 @@ export class Toasts {
    * Push a line.
    * @param label small uppercase key ("Obtained", "Ability Points")
    * @param value the thing itself ("Potion  ×3")
-   * @param [ico] icon key from `Icons.js`
+   * @param [ico] icon key from `Icons.ts`
    * @param [tone] '' | 'gold' | 'ice'
    */
   push(label: string, value: string, ico: string = 'items', tone: string = '') {

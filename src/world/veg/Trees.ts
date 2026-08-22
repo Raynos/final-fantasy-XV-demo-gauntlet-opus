@@ -169,7 +169,7 @@ export class Trees {
   } = {}) {
     this.eco = eco;
     this.scene = scene;
-    // Everything this system draws hangs off one named group, so `attrib.mjs`
+    // Everything this system draws hangs off one named group, so `attrib.mts`
     // (and anything else that wants to price the forest) can hide it in one
     // call instead of walking the scene for meshes by name.
     this.group = new THREE.Group();

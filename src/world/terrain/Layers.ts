@@ -265,7 +265,7 @@ const RECIPES = [
 
 /**
  * Synthesise every layer's texels. Split out from the texture construction so
- * the build step can bake the bytes once (`src/tools/bake.mjs`) instead of every
+ * the build step can bake the bytes once (`src/tools/bake.mts`) instead of every
  * page load spending a second evaluating 1.6 M per-texel recipes.
  *
  * @param size texel resolution per layer
@@ -358,7 +358,7 @@ export function buildLayerTextures(size: number = 512, data: any = null, lut: Ui
  * They share a sampler on purpose: the terrain fragment shader already sits on
  * the 16-texture-unit limit once the atmosphere patch and the shadow cascades
  * are injected into it, and a seventh standalone sampler tips it over. The two
- * palette layers (`terrain/Biome.js`) are appended here for exactly that
+ * palette layers (`terrain/Biome.ts`) are appended here for exactly that
  * reason — they are read once per pixel and would otherwise have cost an
  * eighth binding of their own.
  *

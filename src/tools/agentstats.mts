@@ -2,11 +2,11 @@
 /**
  * What each subagent is costing, from the session transcripts on disk.
  *
- *   node src/tools/agentstats.mjs                  # agents active in the last 15 min
- *   node src/tools/agentstats.mjs --all            # every agent this session ever ran
- *   node src/tools/agentstats.mjs --session 51c0b82c
- *   node src/tools/agentstats.mjs --since 1h       # percentiles over recent turns only
- *   node src/tools/agentstats.mjs --json
+ *   node src/tools/agentstats.mts                  # agents active in the last 15 min
+ *   node src/tools/agentstats.mts --all            # every agent this session ever ran
+ *   node src/tools/agentstats.mts --session 51c0b82c
+ *   node src/tools/agentstats.mts --since 1h       # percentiles over recent turns only
+ *   node src/tools/agentstats.mts --json
  *
  * Dispatching agents is cheap and watching them is not: `ps` shows a node
  * process, the harness shows a spinner, and neither tells you whether an agent

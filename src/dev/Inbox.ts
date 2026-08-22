@@ -15,7 +15,7 @@ const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 
  * defect, which is the single most common way in-game bug reporters ship
  * useless screenshots.
  *
- * Writes through `POST /__review/note` (see `src/tools/vite-plugin-review.mjs`),
+ * Writes through `POST /__review/note` (see `src/tools/vite-plugin-review.mts`),
  * which is registered on both the dev and preview servers. If neither is there
  * — a static build opened off the filesystem — it falls back to a browser
  * download so a note is never simply lost.

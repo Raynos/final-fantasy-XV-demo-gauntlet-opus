@@ -327,7 +327,7 @@ export class Clouds {
   shadowUniforms!: any;
   shared!: any;
   /**
-   * @param shared shared cloud uniform objects (see Sky.js)
+   * @param shared shared cloud uniform objects (see Sky.ts)
    */
   constructor(renderer: THREE.WebGLRenderer, shared: any) {
     this.renderer = renderer;

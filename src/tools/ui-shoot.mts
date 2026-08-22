@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * UI capture harness (companion to src/tools/shoot.mjs, owned by the UI agent).
+ * UI capture harness (companion to src/tools/shoot.mts, owned by the UI agent).
  *
- * The shared Shots.js only has `hud_field` and `menu_main`, but the UI layer
+ * The shared Shots.ts only has `hud_field` and `menu_main`, but the UI layer
  * has many more states worth eyeballing. This drives them by calling the public
  * HUD / Menus API after applying a base shot.
  *
- *   PORT=5206 node src/tools/ui-shoot.mjs --out tmp/shots/ui-r1
- *   PORT=5206 node src/tools/ui-shoot.mjs menu_ascension photo_mode --out tmp/shots/x
+ *   PORT=5206 node src/tools/ui-shoot.mts --out tmp/shots/ui-r1
+ *   PORT=5206 node src/tools/ui-shoot.mts menu_ascension photo_mode --out tmp/shots/x
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';

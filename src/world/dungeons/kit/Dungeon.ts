@@ -11,7 +11,7 @@ import type { Game } from '../../../game/Game.ts';
 /**
  * One built dungeon interior.
  *
- * A *definition* (see `Keycatrich.js` and friends) is pure data plus two
+ * A *definition* (see `Keycatrich.ts` and friends) is pure data plus two
  * authoring hooks — `author(layout)` writes the room graph, `dress(kit, ...)`
  * hangs the props and the lights on it. This class runs the common pipeline
  * over that: cut the doorways, grow the shell, dress it, wire the chests and

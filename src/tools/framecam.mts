@@ -2,10 +2,10 @@
 /**
  * Candidate-framing probe for the shot-corpus repair pass.
  *
- *   node src/tools/framecam.mjs candidates.json --out tmp/shots/probe
- *   node src/tools/framecam.mjs candidates.json --out tmp/shots/probe --probe probe.mjs
+ *   node src/tools/framecam.mts candidates.json --out tmp/shots/probe
+ *   node src/tools/framecam.mts candidates.json --out tmp/shots/probe --probe probe.mts
  *
- * `src/tools/shoot.mjs` can only capture shots that already exist in
+ * `src/tools/shoot.mts` can only capture shots that already exist in
  * `src/game/Shots.ts`, and every edit to that file invalidates the capture
  * daemon's warm page — so iterating a framing costs a full boot per attempt.
  * This tool boots the game **once** and then applies an arbitrary list of shot

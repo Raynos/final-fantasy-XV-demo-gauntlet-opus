@@ -6,7 +6,7 @@
  * never shadowed), typed by a conservative read of every `this.X = ...` in the
  * class. Anything the heuristic cannot agree on becomes `any`.
  *
- *   node declfields.mjs <tsc-error-file> <repo-root>
+ *   node declfields.mts <tsc-error-file> <repo-root>
  */
 import ts from 'typescript-api';
 import fs from 'node:fs';

@@ -8,10 +8,10 @@
  * opening menus, crossing the map to force streaming, moving the sun, changing
  * the weather — and reports per-segment frame times plus every hitch.
  *
- *   node src/tools/gameplay.mjs                  # full session, ultra
- *   node src/tools/gameplay.mjs --q high
- *   node src/tools/gameplay.mjs --scale 2        # longer segments
- *   node src/tools/gameplay.mjs --out perf.json
+ *   node src/tools/gameplay.mts                  # full session, ultra
+ *   node src/tools/gameplay.mts --q high
+ *   node src/tools/gameplay.mts --scale 2        # longer segments
+ *   node src/tools/gameplay.mts --out perf.json
  *
  * A hitch is a single frame over 33 ms (a dropped frame at 30 fps). Those are
  * what players actually feel; a good median with 100 ms spikes is a bad game.

@@ -10,8 +10,8 @@
  * Walks the real import graph from `src/main.ts` and reports every module that
  * is never reached, plus every exported symbol nothing imports.
  *
- *   node src/tools/orphans.mjs
- *   node src/tools/orphans.mjs --exports    # also list unused named exports
+ *   node src/tools/orphans.mts
+ *   node src/tools/orphans.mts --exports    # also list unused named exports
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';

@@ -451,7 +451,7 @@ function reset(B: CBuilder) {
   B.glow(null);
 }
 
-// Blending lives in `Palette.js`: the two-register local version this file
+// Blending lives in `Palette.ts`: the two-register local version this file
 // used could not survive `mix(mix(...), ...)` — see the note there.
 const mix = mixc;
 const col = colc;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Ad-hoc in-page probe: `node src/tools/probe.mjs src/tools/probes/foo.js` runs the file's body in the page. */
+/** Ad-hoc in-page probe: `node src/tools/probe.mts src/tools/probes/foo.mts` runs the file's body in the page. */
 import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';

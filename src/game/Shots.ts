@@ -27,7 +27,7 @@
  * renders black. Eight shots in this file were doing that.
  *
  * ### Deriving coordinates
- * Never write a camera by hand. `src/tools/framecam.mjs` boots the game once and
+ * Never write a camera by hand. `src/tools/framecam.mts` boots the game once and
  * applies a list of shot *recipes* — `camAt:[x,z]`, `eye` (metres above the
  * ground there), `aimAt:[x,z]`, `aimUp` — resolving them against the live
  * heightfield and printing the absolute `pos`/`target` to paste back here. A
@@ -67,7 +67,7 @@
  *   Megastructures: viaduct (-1010,-740)→(-790,300) · dreadnought (-1240,470,-1560)
  *     escort flight (-820,300,-980) · Insomnia (2560,150,-3180) · meteor (-2010,1890)
  *   Regalia parked (-19.3,8.6,14) · party spawn ≈ (0, 8.17, 0)
- * The 124 map POIs are in `WorldMap.js` and every one of them has a *pad* but
+ * The 124 map POIs are in `WorldMap.ts` and every one of them has a *pad* but
  * only havens, parking, the roadblock, the three dungeon mouths, the landmark
  * props and Hammerhead have built geometry. Aim at the others and you get bare
  * ground; the shots that do so say so in their `doc`.
@@ -80,7 +80,7 @@
  *                                         `Game.followAnchor`
  *   time (hours) · weather 'clear'|'overcast'|'storm'|'fog'
  *   scenario 'field'|'combat'|'warp'|'boss_field'|'boss_imperial'|'boss_astral'
- *            |'daemons'          (src/game/Director.js)
+ *            |'daemons'          (src/game/Director.ts)
  *   story 'title' | {scene, at}  · hud · menu · dungeon
  *
  * ### Order matters — and it is load-bearing twice over
@@ -101,8 +101,8 @@
  *    turn Noctis to face -Z and nothing turns him back, so the character
  *    framings run before those too.
  *
- * Add shots here — src/tools/shoot.mjs discovers them automatically, and
- * `src/tools/sheet.mjs` tiles a shot directory into one contact sheet to review.
+ * Add shots here — src/tools/shoot.mts discovers them automatically, and
+ * `src/tools/sheet.mts` tiles a shot directory into one contact sheet to review.
  */
 /** A world-space triple. Shots are authored as arrays, not `Vector3`s. */
 export type Vec3 = readonly [number, number, number];
@@ -121,7 +121,7 @@ export type ScenarioName =
 
 /** Everything a shot may set that is not the framing. */
 export interface ShotState {
-  /** What the shot is for. Read by `corpus.mjs` when it indexes the sheets. */
+  /** What the shot is for. Read by `corpus.mts` when it indexes the sheets. */
   doc: string;
   /** Hour of day, 0..24. */
   time: number;
@@ -198,7 +198,7 @@ const SHOT_TABLE = {
   // instant the root leaves the frustum the whole character disappears even
   // though they plainly fill the shot. That is why there is no head-and-
   // shoulders portrait here: it is not framable until the meshes stop being
-  // culled (one line in `src/characters/rig/Character.js`, see the report).
+  // culled (one line in `src/characters/rig/Character.ts`, see the report).
   hero_closeup: {
     doc: 'Noctis in a medium three-quarter, the retinue behind his shoulder',
     time: 17.6, weather: 'clear', follow: 'player',
@@ -803,7 +803,7 @@ const SHOT_TABLE = {
   // frozen in `telegraph`, so it sat entirely underground whatever the camera
   // did. Fixed in `EnemyBase` — `_resetVisual()` was opt-in and the frozen-pose
   // path never called it, so relative pose offsets integrated once per settle
-  // frame. `src/tools/creaturecheck.mjs` now gates it at 0 drifting poses of 207.
+  // frame. `src/tools/creaturecheck.mts` now gates it at 0 drifting poses of 207.
   bestiary_irongiant: {
     doc: 'Iron Giant winding up: rusted plate and one huge blade',
     time: 15.5, weather: 'clear', scenario: 'combat', follow: 'player',

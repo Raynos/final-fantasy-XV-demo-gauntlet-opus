@@ -3,7 +3,7 @@
  *
  * The game is a browser page and browsers cannot write files, so the in-game
  * review suite (`src/dev/**`) needs a same-origin endpoint to POST to. Nothing
- * else in this project hooks the Vite server — `vite-plugin-bake.mjs` uses only
+ * else in this project hooks the Vite server — `vite-plugin-bake.mts` uses only
  * `configResolved` — so these routes are uncontested.
  *
  * Registered on **both** `configureServer` and `configurePreviewServer`:

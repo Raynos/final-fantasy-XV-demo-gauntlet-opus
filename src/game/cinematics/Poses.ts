@@ -2,7 +2,7 @@
  * Held poses for cinematic staging.
  *
  * These are authored in the same format the combat animator already uses
- * (`src/characters/rig/Anim.js` → `ACTIONS`): XYZ Euler radians per bone, two
+ * (`src/characters/rig/Anim.ts` → `ACTIONS`): XYZ Euler radians per bone, two
  * keys, `hold: true`. Feeding them through that machinery rather than writing
  * bone quaternions directly buys the blend envelope, the override semantics and
  * the interaction with the gait layer for free — a posed character still walks,
@@ -136,7 +136,7 @@ export const POSES = {
  * ACTIONS; cinematic poses live here instead, so they go in through the same
  * door the table would have used.
  *
- * @param character a `Character` from `src/characters/rig/Character.js`
+ * @param character a `Character` from `src/characters/rig/Character.ts`
  * @param name key in {@link POSES}, or null to release
  * @param [speed=1]
  */

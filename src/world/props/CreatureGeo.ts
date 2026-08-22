@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 /**
  * A tiny sculpting kit for *instanced* animals.
  *
- * The enemy bestiary builds its creatures out of `characters/rig/Sculpt.js`,
+ * The enemy bestiary builds its creatures out of `characters/rig/Sculpt.ts`,
  * which is a real rig: skinned, thousands of triangles, one draw call each.
  * Ambient wildlife cannot pay for that — a Leide herd is eighty animals in one
  * instanced call, and the whole herd has to fit in the triangle budget of a

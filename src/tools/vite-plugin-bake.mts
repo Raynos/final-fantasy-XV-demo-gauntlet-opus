@@ -5,7 +5,7 @@ import { bake } from './bake.mts';
  *
  * Runs in dev, preview and build alike. The bake is content-hashed against its
  * generator sources, so this is a no-op on every start after the first, and an
- * edit to `Field.js` re-bakes automatically instead of quietly serving stale
+ * edit to `Field.ts` re-bakes automatically instead of quietly serving stale
  * terrain.
  *
  */

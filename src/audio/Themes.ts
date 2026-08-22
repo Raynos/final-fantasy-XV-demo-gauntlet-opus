@@ -4,7 +4,7 @@
  * This file is the score, not the synth: chord charts, melodies and the
  * arrangement weights per game state. Everything is expressed in semitones
  * above the key's tonic and in beats from the start of a phrase, so the same
- * material can be transposed, augmented or re-orchestrated by `Score.js`.
+ * material can be transposed, augmented or re-orchestrated by `Score.ts`.
  *
  * One motif runs through the whole game — `SOMNUS`, a rising fifth that steps
  * back down through the minor sixth. You hear it whole and lyrical on the

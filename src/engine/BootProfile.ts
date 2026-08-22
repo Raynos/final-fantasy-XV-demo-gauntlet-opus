@@ -6,10 +6,10 @@ import type { Game } from '../game/Game.ts';
  * is a first-class performance metric and needs to be measured the same way a
  * frame is. This wraps `Game.add` — which the orchestrator calls immediately
  * before `await sys.init(game)` — so each system's `init()` is timed without
- * `Game.js` (shared, owned by another workstream) having to change.
+ * `Game.ts` (shared, owned by another workstream) having to change.
  *
  * Results land on `window.BOOT_PROFILE` as
- * `{ marks: [{name, ms}], total, nav }` and are printed by `src/tools/bootprof.mjs`.
+ * `{ marks: [{name, ms}], total, nav }` and are printed by `src/tools/bootprof.mts`.
  */
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

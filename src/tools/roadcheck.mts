@@ -1,7 +1,7 @@
 /**
  * Drivability audit for the road network of Lucis.
  *
- *   node src/tools/roadcheck.mjs
+ *   node src/tools/roadcheck.mts
  *
  * Builds the real heightfield, then asserts the design contract:
  *   1. every POI marked drivable is within its class `reach` of a road,

@@ -2,9 +2,9 @@
 /**
  * Boot / page-load profiler.
  *
- *   node src/tools/bootprof.mjs            # one cold + one warm load, per-system breakdown
- *   node src/tools/bootprof.mjs --n 3      # 3 loads, report each
- *   node src/tools/bootprof.mjs --prod     # against the production bundle
+ *   node src/tools/bootprof.mts            # one cold + one warm load, per-system breakdown
+ *   node src/tools/bootprof.mts --n 3      # 3 loads, report each
+ *   node src/tools/bootprof.mts --prod     # against the production bundle
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.

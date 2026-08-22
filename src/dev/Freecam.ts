@@ -214,7 +214,7 @@ export class Freecam {
     this.pitch = Math.atan2(dy, Math.hypot(dx, dz));
   }
 
-  /** `{pos, target, fov}` in the exact shape `Shots.js` stores. */
+  /** `{pos, target, fov}` in the exact shape `Shots.ts` stores. */
   asShot() {
     this._e.set(this.pitch, this.yaw, 0, 'YXZ');
     this._q.setFromEuler(this._e);

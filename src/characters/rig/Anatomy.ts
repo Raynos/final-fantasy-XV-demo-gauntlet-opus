@@ -4,7 +4,7 @@ import { crScalar, weightsAt, clamp01, abump, bump, smoothIn } from './Geo.ts';
 /**
  * The single source of truth for a character's body sweeps.
  *
- * Both the skin (Body.js) and every garment (Outfit.js) are generated from
+ * Both the skin (Body.ts) and every garment (Outfit.ts) are generated from
  * these node lists, so a jacket is guaranteed to sit *outside* the torso it
  * covers and to carry compatible skin weights — clothing deforms with the body
  * instead of shearing through it.

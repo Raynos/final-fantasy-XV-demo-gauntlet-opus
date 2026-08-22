@@ -4,7 +4,7 @@ import type { EncounterDirector } from './EncounterDirector.ts';
 /**
  * Hunts, made real.
  *
- * `Quests.js` already holds twelve hunts with ranks, marks, levels, waypoints
+ * `Quests.ts` already holds twelve hunts with ranks, marks, levels, waypoints
  * and payouts, and a `notify('kill', …)` hook that ticks their objectives.
  * What was missing was the middle of the loop: accepting a job never put
  * anything in the world, and killing something never told the board.

@@ -8,13 +8,13 @@
  *   node src/tools/daemon.mts --health
  *
  * Why this exists: booting the game is the dominant cost of every capture. A
- * cold `src/tools/shoot.mjs` pays chromium launch + vite start + module transform +
+ * cold `src/tools/shoot.mts` pays chromium launch + vite start + module transform +
  * world build + ~110 shader compiles before it can take its first picture, and
  * every tool paid it separately, every time. Holding the page open makes the
  * second and subsequent runs cost only their own frames — and it removes the
  * repeated boot from a machine that several agents are already saturating.
  *
- * Safety of reuse: `src/tools/shoot.mjs` has always rendered all of its shots on one
+ * Safety of reuse: `src/tools/shoot.mts` has always rendered all of its shots on one
  * page in sequence, so cross-shot reuse is the established contract; this only
  * extends it across invocations. `/reset` restores the same starting condition
  * the harness sets up after a fresh load (rAF stopped, clock zeroed, shot state

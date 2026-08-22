@@ -2,14 +2,14 @@
 /**
  * Combat-loop audit.
  *
- * `integration.mjs` asks whether a system is reachable at all. This asks
+ * `integration.mts` asks whether a system is reachable at all. This asks
  * whether the *fight* works: it drives the real page with real DOM keyboard and
  * mouse events and asserts that every binding fires, that the number the HUD
  * prints is the number `Stats.computeDamage` produced, that poise breaks, that
  * MP runs out and comes back, that a spell can be drawn, crafted and cast, and
  * that Noctis can be killed and picked back up.
  *
- *   node src/tools/combatloop.mjs
+ *   node src/tools/combatloop.mts
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';

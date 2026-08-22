@@ -58,7 +58,7 @@ export function buildSkeleton(profile: any = {}): any {
 
   // head placement — the face builder authors in a canonical skull space whose
   // origin is derived here so eye and lid bones land on the sculpted features
-  // (these offsets mirror FACE.eye / HR in Face.js — keep them in step)
+  // (these offsets mirror FACE.eye / HR in Face.ts — keep them in step)
   const hs = p.headScale;
   const headOrigin = [0, Y(1.578) + 0.0900 * s * hs, 0.004 * s * hs];
   const eyeY = headOrigin[1] - 0.006 * s * hs;

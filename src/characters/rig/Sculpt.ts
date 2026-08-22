@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { crScalar, clamp01, smooth, lerp, applyBrushes, expandMirrors } from './Geo.ts';
 
 /**
- * Creature sculpting toolkit — the bestiary's answer to `rig/Geo.js`.
+ * Creature sculpting toolkit — the bestiary's answer to `rig/Geo.ts`.
  *
  * The party characters get their quality from three things the enemies never
  * had: sweeps whose cross-section is *shaped* per-angle (so a thigh is not a
@@ -14,7 +14,7 @@ import { crScalar, clamp01, smooth, lerp, applyBrushes, expandMirrors } from './
  *
  *   position, normal, uv, color, aEmissive, aMat(roughness, metalness)
  *
- * Skin binding is stamped afterwards by `enemies/RigBuilder.js`, so a part can
+ * Skin binding is stamped afterwards by `enemies/RigBuilder.ts`, so a part can
  * be authored in world bind space and then bound rigidly, across two bones, or
  * smoothly along a whole limb chain.
  */

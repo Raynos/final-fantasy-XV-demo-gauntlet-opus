@@ -2,9 +2,9 @@
 /**
  * Build-step asset bake.
  *
- *   node src/tools/bake.mjs            # bake if stale
- *   node src/tools/bake.mjs --force    # always re-bake
- *   node src/tools/bake.mjs --check    # exit 0 if fresh, 1 if stale (no work)
+ *   node src/tools/bake.mts            # bake if stale
+ *   node src/tools/bake.mts --force    # always re-bake
+ *   node src/tools/bake.mts --check    # exit 0 if fresh, 1 if stale (no work)
  *
  * The project generates every texel and every vertex in code and keeps no
  * authored art. That rule is about *inputs*, not about recomputing the same
@@ -14,7 +14,7 @@
  * byte-identical answer, and falls back to generating in place if it is absent.
  *
  * Freshness is a content hash of the generator sources plus the format version:
- * touch `Field.js` and the next server start re-bakes.
+ * touch `Field.ts` and the next server start re-bakes.
  */
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';

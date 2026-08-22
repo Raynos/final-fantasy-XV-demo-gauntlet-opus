@@ -12,7 +12,7 @@
  *   `'any'`   always
  *
  * Levels are a *base*; the director scales them by region danger and by how
- * deep into the night it is (`nightScaling` in `rpg/Stats.js`).
+ * deep into the night it is (`nightScaling` in `rpg/Stats.ts`).
  */
 
 /**
@@ -208,7 +208,7 @@ export const SET_PIECES = {
 
 /**
  * Which set piece (if any) a hunt spawns, and where.
- * Everything else in `Quests.js`'s hunt table spawns an ordinary pack of its
+ * Everything else in `Quests.ts`'s hunt table spawns an ordinary pack of its
  * target species at the objective's waypoint.
  */
 /** What a hunt spawns. */

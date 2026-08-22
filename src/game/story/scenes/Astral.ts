@@ -27,7 +27,7 @@ export const ASTRAL = {
     const sky = game.get('Sky');
     if (sky && sky.setTimeOfDay) sky.setTimeOfDay(13.4);
     const weather = game.get('Weather');
-    // `storm`, matching what `Shots.js` asks for. The scene used to set
+    // `storm`, matching what `Shots.ts` asks for. The scene used to set
     // `overcast` and the scene wins, so the two disagreed and the shot never
     // got the weather it was authored against.
     if (weather && weather.set) weather.set('storm');

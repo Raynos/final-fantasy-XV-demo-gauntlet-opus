@@ -2,9 +2,9 @@
 /**
  * Ad-hoc framing harness for the world-map workstream.
  *
- *   node src/tools/mapshoot.mjs src/tools/mapshots.json --out tmp/shots/map-r1
+ *   node src/tools/mapshoot.mts src/tools/mapshots.json --out tmp/shots/map-r1
  *
- * `src/tools/shoot.mjs` can only render shots that already exist in `Shots.js`,
+ * `src/tools/shoot.mts` can only render shots that already exist in `Shots.ts`,
  * which is owned by another agent. This drives the camera rig directly from a
  * JSON list so new framings can be composed against the new world and handed
  * over as coordinates once they work.
@@ -31,7 +31,7 @@ const portOpen = (port: any) => new Promise((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.js', '--port', String(PORT), '--strictPort'],
+  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
   p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
   for (let i = 0; i < 120; i++) {
@@ -81,7 +81,7 @@ async function main() {
       document.getElementById('boot')?.remove();
     });
 
-    // Mount the world-map UI, which is not wired into Game.js yet: this
+    // Mount the world-map UI, which is not wired into Game.ts yet: this
     // harness is how it gets looked at before the registration lines are
     // handed over.
     await page.evaluate(async () => {

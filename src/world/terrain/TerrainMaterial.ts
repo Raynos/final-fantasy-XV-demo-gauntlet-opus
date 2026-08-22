@@ -47,7 +47,7 @@ uniform vec4 uFarP;     // half, cell, N, -
 
 // --- micro-relief -----------------------------------------------------------
 // The macro grid is 4 m; this puts the 6-25 m surface band back analytically.
-// It is the exact twin of microDetail() in Field.js -- a character standing on
+// It is the exact twin of microDetail() in Field.ts -- a character standing on
 // this ground is placed by the JS version, so the two must not drift.
 vec3 tf_mperm(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
 float tf_msnoise(vec2 v) {
@@ -180,7 +180,7 @@ vTDist = length(cameraPosition - vTW);
  * The vertex-side displacement chunks, exported so a regression tool can build
  * a probe material that displaces *bit-identically* to the rendered terrain —
  * including the clipmap LOD morph, which a fragment-only probe of `tf_height`
- * cannot see. `src/tools/driftcheck.mjs` is the consumer.
+ * cannot see. `src/tools/driftcheck.mts` is the consumer.
  */
 export const TERRAIN_VERT_PARS = VERT_PARS;
 export const TERRAIN_VERT_BEGIN = VERT_BEGIN;
@@ -360,7 +360,7 @@ void tf_shade() {
   // ---- the regional palette ------------------------------------------------
   // Everything below this line used to derive its colour from slope, altitude,
   // flow and noise — all global fields that have never heard of the map — which
-  // is why the whole 8 km world drew as one Leide badland. terrain/Biome.js
+  // is why the whole 8 km world drew as one Leide badland. terrain/Biome.ts
   // bakes an authored per-zone palette, blended by the map's own Gaussian zone
   // weights, into layers 2 and 3 of the detail array; two fetches read it.
   // Explicit LOD 0 because the array is RepeatWrapping for the tiled detail

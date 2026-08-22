@@ -2,7 +2,7 @@
 /**
  * Replace `any` with what the checker already knows.
  *
- *   node infer.mjs <root> [tsconfig] [srcPrefix] [--fields] [--params] [--dry]
+ *   node infer.mts <root> [tsconfig] [srcPrefix] [--fields] [--params] [--dry]
  *
  * Fields: a field declared `x!: any` takes the type of what is assigned to it,
  * when every assignment agrees on one clean named type.

@@ -75,7 +75,7 @@ export const REGIONS = [
  * by that weight (so borders are geology, not lines) while `zoneAt()` returns
  * the strongest one (so the UI can name where you are).
  *
- * Biome parameters — all consumed by `terrain/Field.js`:
+ * Biome parameters — all consumed by `terrain/Field.ts`:
  *   base      baseline ground elevation, metres
  *   relief    amplitude of the rolling mid-scale fbm, metres
  *   ridge     amplitude of the ridged badland/mountain belt, metres
@@ -543,7 +543,7 @@ export const POIS: PoiSpec[] = [
 
 /**
  * The landforms the heightfield **must** produce for the design to work. This
- * is the bridge from cartography to geology: `terrain/Field.js` stamps this
+ * is the bridge from cartography to geology: `terrain/Field.ts` stamps this
  * list, so moving a mesa here moves the mesa in the world.
  *
  * kind: mesa | butte | fin | spire | peak | crater | canyon | basin | terrace | volcano

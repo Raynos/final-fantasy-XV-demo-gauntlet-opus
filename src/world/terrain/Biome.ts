@@ -4,8 +4,8 @@ import { worldMap, WORLD } from '../map/WorldMap.ts';
  * The regional *surface* palette — what the ground is actually made of in each
  * of the nineteen zones of Lucis.
  *
- * This is the terrain twin of `veg/Biomes.js`. It exists for the same reason:
- * the splat in `TerrainMaterial.js` derived every colour it drew from slope,
+ * This is the terrain twin of `veg/Biomes.ts`. It exists for the same reason:
+ * the splat in `TerrainMaterial.ts` derived every colour it drew from slope,
  * altitude, flow, sediment and noise, and every one of those is a *global*
  * field that has never heard of the cartography. The consequence was that the
  * whole 8 km world was one red-ochre Leide badland — the Nebulawood, the
@@ -164,7 +164,7 @@ const TINT_SCALE = 255 / 2;
  * than anything the table can express. That keeps the whole bake in single-
  * digit milliseconds at boot instead of a quarter of a second.
  *
- * Not part of `src/tools/bake.mjs`: it is cheap, and it depends on `WorldMap`
+ * Not part of `src/tools/bake.mts`: it is cheap, and it depends on `WorldMap`
  * rather than on the layer recipes, so baking it would only add a second
  * staleness dependency for no measurable gain.
  *

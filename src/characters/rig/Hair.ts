@@ -18,7 +18,7 @@ import { Noise } from '../../util/Noise.ts';
  */
 
 /**
- * @param look must carry `hair` (see Cast.js) plus face shape params
+ * @param look must carry `hair` (see Cast.ts) plus face shape params
  */
 export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   const { index: I, dims } = rig;

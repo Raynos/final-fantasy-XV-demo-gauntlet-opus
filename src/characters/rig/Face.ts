@@ -25,7 +25,7 @@ export const LID_OPEN = [0.76, 0.62];
 
 /**
  * Eye geometry constants, shared by the lids, the lashes, the globe and the
- * cornea shader in `Materials.js`. They are one system: if the lid shell rides
+ * cornea shader in `Materials.ts`. They are one system: if the lid shell rides
  * inside the corneal dome the cornea pokes through the closed lid and renders
  * as a bright white slab above and below the iris, and if the shader's iris
  * angle disagrees with the geometric limbus the limbal ring lands on flat
@@ -71,7 +71,7 @@ export function lidMargin(f: number, upper: any, openU: number) {
  * These were 0.88 and 1.0 respectively, i.e. the face was 12% darker than the
  * neck it sits on — a hard tonal break running along the jaw in every frame,
  * which no amount of normal-map or roughness matching can hide. They are one
- * number now, and `Body.js` reads it from here.
+ * number now, and `Body.ts` reads it from here.
  */
 export const SKIN_BASE = 0.88;
 
@@ -849,7 +849,7 @@ function paintFace(look: any, uv: any) {
   const PX = S / (0.085 * Math.PI * 2);
   const PY = S / (FACE.yMax - FACE.yMin);
   const skin = new THREE.Color().setHex(look.skin.getHex(THREE.SRGBColorSpace), THREE.SRGBColorSpace);
-  // (the base tone itself is applied below via SKIN_BASE, shared with Body.js)
+  // (the base tone itself is applied below via SKIN_BASE, shared with Body.ts)
   const hexOf = (c: THREE.Color) => `#${c.getHexString(THREE.SRGBColorSpace)}`;
   const rng = new Rng(look.seed || 7);
   const n = new Noise((look.seed || 7) + 11);

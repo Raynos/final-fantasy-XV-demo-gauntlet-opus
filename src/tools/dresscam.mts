@@ -2,9 +2,9 @@
 /**
  * Free-camera diagnostic capture for the world-dressing pass.
  *
- *   node src/tools/dresscam.mjs longwythe alstor ravatogh --out tmp/shots/dress
- *   node src/tools/dresscam.mjs poi:tomb_just poi:wiz_chocobo --out tmp/shots/poi
- *   node src/tools/dresscam.mjs at:1200,-400 --out tmp/shots/spot
+ *   node src/tools/dresscam.mts longwythe alstor ravatogh --out tmp/shots/dress
+ *   node src/tools/dresscam.mts poi:tomb_just poi:wiz_chocobo --out tmp/shots/poi
+ *   node src/tools/dresscam.mts at:1200,-400 --out tmp/shots/spot
  *
  * `src/game/Shots.ts` is owned by the coordinator, so this tool exists to let
  * the dressing work be *judged* without editing it: it drives `CameraRig`

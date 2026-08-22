@@ -5,7 +5,7 @@ import { tube, mergeParts, col, mix, smooth, rigMaterial, RIG_PREAMBLE } from '.
  * The ambient garula — the grazing herds of the Leide flats and the Duscae
  * downs.
  *
- * This is the same animal as `characters/enemies/Garula.js`, drawn for a
+ * This is the same animal as `characters/enemies/Garula.ts`, drawn for a
  * different job. The enemy is a skinned rig you fight at four metres; this one
  * is eighty head in a single instanced draw call, read at forty to a hundred
  * and fifty metres. What survives that distance is exactly three things — the

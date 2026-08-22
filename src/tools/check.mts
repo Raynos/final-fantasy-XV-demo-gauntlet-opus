@@ -2,14 +2,14 @@
 /**
  * Run the whole gate suite and report one table.
  *
- * **Why this exists.** `combatloop.mjs` slid from 30/30 to 21/30 and nobody
+ * **Why this exists.** `combatloop.mts` slid from 30/30 to 21/30 and nobody
  * noticed for weeks, because the cheap gates were run at every merge and the
  * expensive ones were not. A regression that no one runs is a regression no one
  * finds. This runs all of them, always, and exits non-zero if any fail.
  *
- *   node src/tools/check.mjs              # everything except the perf gates
- *   node src/tools/check.mjs --perf       # include perf.mjs and gameplay.mjs
- *   node src/tools/check.mjs --only integration,uxcheck
+ *   node src/tools/check.mts              # everything except the perf gates
+ *   node src/tools/check.mts --perf       # include perf.mts and gameplay.mts
+ *   node src/tools/check.mts --only integration,uxcheck
  *
  * `--perf` is opt-out by default on purpose: **a perf number taken while agents
  * are running is meaningless.** Six or more headless Chromiums saturate the

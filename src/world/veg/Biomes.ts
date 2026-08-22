@@ -5,7 +5,7 @@ import { srgb } from '../../util/TextureGen.ts';
  * Per-zone vegetation recipes — what actually grows in each of the nineteen
  * zones of Lucis.
  *
- * This is the vegetation twin of `props/ZoneDress.js`, and it exists for the
+ * This is the vegetation twin of `props/ZoneDress.ts`, and it exists for the
  * same reason that file does: a single global scatter table makes every zone
  * the same shot with a different skybox. Before this module the whole 8 km
  * world grew one biome — dry Leide scrub — because `Ecology.moisture()` is a

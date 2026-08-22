@@ -299,7 +299,7 @@ export class Megastructures {
     }
 
     const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'meteor' });
-    // Centre of the `cauthess` zone in WorldMap.js -- "a meteor the size of a
+    // Centre of the `cauthess` zone in WorldMap.ts -- "a meteor the size of a
     // mountain range, still glowing where it struck", which is also where the
     // `discCrater` landform puts the impact bowl. It used to sit at
     // (-2010, 1890): 4 km away, in the wrong region, close enough to Cape Caem

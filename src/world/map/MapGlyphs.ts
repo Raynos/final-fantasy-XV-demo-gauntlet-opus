@@ -2,7 +2,7 @@
  * THE MAP LEGEND — one procedural glyph per point-of-interest type.
  *
  * Every glyph is a stroke drawing inside the same 24×24 box at the same
- * nominal weight as `ui/Icons.js`, so a haven on the chart, a haven in the
+ * nominal weight as `ui/Icons.ts`, so a haven on the chart, a haven in the
  * filter rail and a haven in the detail card are the *same mark*. They are
  * stored as SVG path data and rendered two ways: as `Path2D` on the chart
  * canvas (minimap and world map) and as inline `<svg>` in the DOM legend.

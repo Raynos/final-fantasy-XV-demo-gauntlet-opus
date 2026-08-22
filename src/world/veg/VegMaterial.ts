@@ -173,7 +173,7 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
     // vertex — instead of being post-multiplied onto `mvPosition`.
     //
     // This is not a tidy-up. Overriding `<project_vertex>` *consumes the
-    // include marker*, and `world/sky/MaterialPatch.js` gets its turn after us
+    // include marker*, and `world/sky/MaterialPatch.ts` gets its turn after us
     // and finds nothing to replace: the `vAtmWorld` varying its aerial
     // perspective and cloud shadows both read is then declared and never
     // written. An unwritten varying reads as zero, so every leaf and every

@@ -2,12 +2,12 @@
 /**
  * Frame-time benchmark.
  *
- *   node src/tools/perf.mjs                     # every shot, ultra
- *   node src/tools/perf.mjs vista_noon storm    # named shots
- *   node src/tools/perf.mjs --q high            # quality tier (low|medium|high|ultra)
- *   node src/tools/perf.mjs --frames 180        # samples per shot
- *   node src/tools/perf.mjs --w 1920 --h 1080
- *   node src/tools/perf.mjs --breakdown         # also time the scene pass alone
+ *   node src/tools/perf.mts                     # every shot, ultra
+ *   node src/tools/perf.mts vista_noon storm    # named shots
+ *   node src/tools/perf.mts --q high            # quality tier (low|medium|high|ultra)
+ *   node src/tools/perf.mts --frames 180        # samples per shot
+ *   node src/tools/perf.mts --w 1920 --h 1080
+ *   node src/tools/perf.mts --breakdown         # also time the scene pass alone
  *
  * Steps the simulation manually and brackets each batch with `gl.finish()` so
  * the number reported is real CPU+GPU wall time per frame, not just the cost of

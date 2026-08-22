@@ -20,8 +20,8 @@ import type { Ecology } from '../veg/Ecology.ts';
  * of time, so a capture of frame 60 is identical every run.
  *
  * The two ground populations are *articulated* as well as placed, and the
- * articulation is entirely in the vertex shader (see `Grazer.js` and
- * `Waders.js`). The CPU's whole job per animal is one matrix and four floats:
+ * articulation is entirely in the vertex shader (see `Grazer.ts` and
+ * `Waders.ts`). The CPU's whole job per animal is one matrix and four floats:
  * where it stands, which way it faces, and what phase of its cycle it is in.
  * Heads drop into the grass, tails flick, legs swing and necks stab without
  * the main thread knowing about any of it, which is the only way seventy-odd
@@ -229,7 +229,7 @@ export class Wildlife {
    * Thick on the Kelbass downs and the Weaverwilds, a working herd on the
    * Longwythe flats where most of the Leide frames are shot, a token few in
    * the deep woods and none at all on a volcano, in a ruin, or on the
-   * approach to a dungeon — see `life.herd` in `ZoneDress.js`.
+   * approach to a dungeon — see `life.herd` in `ZoneDress.ts`.
    *
    * The mesh carries a matching `customDepthMaterial`, so the animal's
    * *shadow* grazes with it rather than standing in the bind pose with its

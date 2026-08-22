@@ -2,18 +2,18 @@
 /**
  * Headless capture harness.
  *
- *   node src/tools/shoot.mjs                       # every shot in Shots.js
- *   node src/tools/shoot.mjs vista_dusk hero_full  # named shots only
- *   node src/tools/shoot.mjs --out tmp/shots/round3    # output directory
- *   node src/tools/shoot.mjs --w 1920 --h 1080     # resolution (default 1600x900)
- *   node src/tools/shoot.mjs --settle 90           # sim frames before capture
- *   node src/tools/shoot.mjs --prod                # build + serve the real bundle
- *   node src/tools/shoot.mjs --cold                # force a fresh boot, no page reuse
- *   node src/tools/shoot.mjs --no-daemon           # own the browser in-process (old path)
- *   node src/tools/shoot.mjs --jpeg               # write .jpg instead of .png (review captures)
- *   node src/tools/shoot.mjs --jpeg 70            # ...at a chosen quality (default 82)
+ *   node src/tools/shoot.mts                       # every shot in Shots.ts
+ *   node src/tools/shoot.mts vista_dusk hero_full  # named shots only
+ *   node src/tools/shoot.mts --out tmp/shots/round3    # output directory
+ *   node src/tools/shoot.mts --w 1920 --h 1080     # resolution (default 1600x900)
+ *   node src/tools/shoot.mts --settle 90           # sim frames before capture
+ *   node src/tools/shoot.mts --prod                # build + serve the real bundle
+ *   node src/tools/shoot.mts --cold                # force a fresh boot, no page reuse
+ *   node src/tools/shoot.mts --no-daemon           # own the browser in-process (old path)
+ *   node src/tools/shoot.mts --jpeg               # write .jpg instead of .png (review captures)
+ *   node src/tools/shoot.mts --jpeg 70            # ...at a chosen quality (default 82)
  *
- * By default this hands the work to `src/tools/daemon.mjs`, which keeps one vite
+ * By default this hands the work to `src/tools/daemon.mts`, which keeps one vite
  * server, one Chromium and one booted page alive between invocations — so the
  * second run of the day costs its frames and nothing else. The daemon is
  * autostarted and shuts itself down when idle. `--cold` forces a fresh page
@@ -23,7 +23,7 @@
  * and writes PNGs. Exits non-zero on any page error so agents can't mistake a
  * blank canvas for success.
  *
- * PNG is the default because `src/tools/imgdiff.mjs` compares pixels and its 1.5-1.9/255
+ * PNG is the default because `src/tools/imgdiff.mts` compares pixels and its 1.5-1.9/255
  * noise floor is measured on lossless frames. `--jpeg` is for the shoot -> look -> fix
  * loop: an agent reading a 1600x900 capture gets it downscaled to a 1568 px long edge
  * anyway, so the extra ~2.3 MB a PNG costs buys nothing it can see.

@@ -14,7 +14,7 @@ const B_BASE = 0, B_RELIEF = 1, B_RIDGE = 2, B_RIDGEIN = 3, B_TERRACE = 4, B_STY
 const B_MOIST = 7;
 
 /**
- * The CPU heightfield — **driven by `world/map/WorldMap.js`, not by taste.**
+ * The CPU heightfield — **driven by `world/map/WorldMap.ts`, not by taste.**
  *
  * The pipeline is:
  *   1. a *corridor field*: distance to the nearest road or settlement. Every
@@ -89,7 +89,7 @@ function buildLandmarks() {
 
 /**
  * Analytic micro-relief, 6-25 m wavelength, +/-2 m. Must stay byte-for-byte
- * equivalent to `tf_micro` in `TerrainMaterial.js`.
+ * equivalent to `tf_micro` in `TerrainMaterial.ts`.
  * @returns metres to add to the grid height
  */
 export function microDetail(x: number, z: number): number {
@@ -1515,7 +1515,7 @@ function smoothstep(a: number, b: number, x: number) {
 function clamp01(x: number) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 /**
- * The exact JS twin of `tf_snoise` in TerrainMaterial.js (Ashima simplex).
+ * The exact JS twin of `tf_snoise` in TerrainMaterial.ts (Ashima simplex).
  * `Terrain.sampleMaterial()` and `microDetail()` have to agree with the pixels
  * the shader draws, so the CPU cannot use a differently-seeded noise here.
  * @returns roughly -1..1

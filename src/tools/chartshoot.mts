@@ -2,7 +2,7 @@
 /**
  * Chart inspector for the cartography workstream.
  *
- *   node src/tools/chartshoot.mjs --out tmp/shots/chart
+ *   node src/tools/chartshoot.mts --out tmp/shots/chart
  *
  * Boots the game, bakes the world chart out of the live heightfield and writes
  * the raw raster to disk, plus a 1:1 crop, so palette and relief-shading work
@@ -28,7 +28,7 @@ const portOpen = (port: any) => new Promise((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.js', '--port', String(PORT), '--strictPort'],
+  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
   p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
   for (let i = 0; i < 160; i++) {

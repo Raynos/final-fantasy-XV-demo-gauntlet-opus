@@ -7,7 +7,7 @@
  * port did not type, greppable and narrowable later, which is more than
  * `noImplicitAny: false` would leave behind.
  *
- *   node annparams.mjs <tsc-error-file> <repo-root>
+ *   node annparams.mts <tsc-error-file> <repo-root>
  */
 import ts from 'typescript-api';
 import fs from 'node:fs';

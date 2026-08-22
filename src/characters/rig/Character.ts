@@ -66,7 +66,7 @@ export class Character {
   root!: THREE.Group;
   seedRnd!: Rng;
   /**
-   * @param def character definition from Cast.js
+   * @param def character definition from Cast.ts
    */
   constructor(def: any) {
     this.name = def.name;
@@ -165,7 +165,7 @@ export class Character {
    * The old socket sat on the wrist bone with a token offset, so a hilt
    * authored with its origin at the crossguard put the fist on the guard and
    * hung the whole grip and pommel in mid air below an open hand. Weapons are
-   * now authored grip-at-origin (see `Weapons.js`) and this puts that origin
+   * now authored grip-at-origin (see `Weapons.ts`) and this puts that origin
    * where a hand can actually close around it: down the metacarpals to the
    * middle of the palm, then in past the palm surface by about a grip radius.
    *

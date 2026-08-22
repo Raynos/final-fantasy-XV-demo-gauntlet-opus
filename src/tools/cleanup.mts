@@ -2,8 +2,8 @@
 /**
  * Kill orphaned dev servers and headless browsers left behind by this project.
  *
- *   node src/tools/cleanup.mjs          # list what it would kill
- *   node src/tools/cleanup.mjs --kill   # actually kill it
+ *   node src/tools/cleanup.mts          # list what it would kill
+ *   node src/tools/cleanup.mts --kill   # actually kill it
  *
  * The capture tools spawn a vite server and kill it on exit, so a healthy run
  * leaves nothing. Two things do leak:

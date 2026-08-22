@@ -7,7 +7,7 @@
  * than the `: any` the fallback pass would otherwise write, and it keeps the
  * intent the author recorded.
  *
- *   node jsdoc2ts.mjs <file...>
+ *   node jsdoc2ts.mts <file...>
  */
 import ts from 'typescript-api';
 import fs from 'node:fs';

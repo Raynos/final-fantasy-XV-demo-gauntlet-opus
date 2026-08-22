@@ -18,7 +18,7 @@ import type { Ecology } from './Ecology.ts';
  * park, which is most of why the Nebulawood and Malmalam had nothing at all.
  *
  * Which kinds appear is the zone's business, not this file's: every recipe in
- * `Biomes.js` carries a `scrub` mix, so Leide grows sage and thorn on its dry
+ * `Biomes.ts` carries a `scrub` mix, so Leide grows sage and thorn on its dry
  * slopes, Duscae grows fern and bracken under its canopy, the Vesperpool and
  * Alstor Slough grow reeds at the water line and lily pads on the water, and
  * Ravatogh grows almost nothing.

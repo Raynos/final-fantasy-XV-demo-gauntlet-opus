@@ -10,7 +10,7 @@
  *  - the Drive prompt appears within interaction range of the Regalia and its
  *    handler really calls `RegaliaSystem.enter()`.
  *
- *   node src/tools/uxcheck.mjs
+ *   node src/tools/uxcheck.mts
  */
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';

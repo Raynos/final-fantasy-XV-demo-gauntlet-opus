@@ -4,7 +4,7 @@ import type { RoadGraph } from '../map/RoadGraph.ts';
 /**
  * Carves the whole road network of Lucis into the heightfield.
  *
- * This is the geological half of `world/map/RoadGraph.js`. The graph owns the
+ * This is the geological half of `world/map/RoadGraph.ts`. The graph owns the
  * plan geometry; this owns the elevation and the cut:
  *
  *   1. every junction node gets **one** elevation, relaxed until no edge

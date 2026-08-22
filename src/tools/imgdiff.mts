@@ -2,8 +2,8 @@
 /**
  * Pixel diff between two shot directories (or two PNGs).
  *
- *   node src/tools/imgdiff.mjs tmp/shots/before tmp/shots/after
- *   node src/tools/imgdiff.mjs a.png b.png
+ *   node src/tools/imgdiff.mts tmp/shots/before tmp/shots/after
+ *   node src/tools/imgdiff.mts a.png b.png
  *
  * Prints mean and max per-channel delta and the fraction of pixels that differ
  * by more than a threshold, so "visually unchanged" can be a measurement rather

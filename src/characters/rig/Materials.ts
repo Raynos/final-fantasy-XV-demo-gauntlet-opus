@@ -209,7 +209,7 @@ function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, transl
 {
   vec3 oN = normalize( vObjN );
   float ePhi = acos( clamp( oN.z, -1.0, 1.0 ) );      // angle from the gaze axis
-  // Matched to the geometric limbus in Face.js — when these two disagree the
+  // Matched to the geometric limbus in Face.ts — when these two disagree the
   // limbal ring lands on flat sclera and the iris looks pasted on.
   float eT = ePhi / ${EYE.iris.toFixed(3)};           // 0..1 across the iris
   float eL = max( 1e-5, length( oN.xy ) );

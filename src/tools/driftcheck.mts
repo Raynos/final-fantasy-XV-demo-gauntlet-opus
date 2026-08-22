@@ -2,7 +2,7 @@
 /**
  * Does the *rendered* terrain surface stay put while the camera travels?
  *
- * `src/tools/heightcheck.mjs` answers a narrower question: it evaluates the shared
+ * `src/tools/heightcheck.mts` answers a narrower question: it evaluates the shared
  * `tf_height()` field in a fragment shader and compares it to
  * `Terrain.heightAt()`. That is a pure function of world position, so it is
  * blind to everything the clipmap does on top of it — the LOD morph band, the
@@ -19,10 +19,10 @@
  * `heightAt()` never moved, which buried the whole cast; a boot-time probe
  * could not see it. This is the regression test for that class of bug.
  *
- *   node src/tools/driftcheck.mjs                 # default home shot + full tour
- *   node src/tools/driftcheck.mjs --home hero_full
- *   node src/tools/driftcheck.mjs --span 320 --res 192
- *   node src/tools/driftcheck.mjs --tol 0.05      # fail above this drift, metres
+ *   node src/tools/driftcheck.mts                 # default home shot + full tour
+ *   node src/tools/driftcheck.mts --home hero_full
+ *   node src/tools/driftcheck.mts --span 320 --res 192
+ *   node src/tools/driftcheck.mts --tol 0.05      # fail above this drift, metres
  *
  * Exits non-zero if the surface moved by more than `--tol` metres between the
  * two probes, or if it disagrees with `Terrain.heightAt()` by more than
@@ -91,7 +91,7 @@ const out = await page.evaluate(async (cfg) => {
 
   // Constructors are harvested from live objects rather than imported: a bare
   // `three` specifier does not resolve inside `page.evaluate`, because the
-  // browser is doing the import, not vite. Same trick as src/tools/heightcheck.mjs.
+  // browser is doing the import, not vite. Same trick as src/tools/heightcheck.mts.
   const surf0 = t.clipmap.rings[0].meshes[0].material;
   const Scene = g.scene.constructor;
   const ShaderMaterial = g.post.taa.material.constructor;

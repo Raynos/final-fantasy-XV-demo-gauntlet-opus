@@ -1,14 +1,14 @@
 /**
  * How each of the four *stands*.
  *
- * This is animation data, deliberately kept out of `Cast.js` (which is
+ * This is animation data, deliberately kept out of `Cast.ts` (which is
  * appearance — face, hair, outfit). A posture descriptor does not list Euler
  * angles; it describes a body, and `Anim.evalIdle` / `Anim.evalStance` resolve
  * it into a pose. That indirection is the point: the four of them are supposed
  * to be distinguishable *by posture alone* in a silhouette, and you cannot tune
  * that by hand-editing thirty rotations per character.
  *
- * Sign conventions follow the skeleton (`Skeleton.js`): the character faces
+ * Sign conventions follow the skeleton (`Skeleton.ts`): the character faces
  * **+Z**, their **left** is **+X**, and every bind rotation is identity, so a
  * field like `weight` can be read as a plain signed quantity — positive means
  * the *left* leg carries.

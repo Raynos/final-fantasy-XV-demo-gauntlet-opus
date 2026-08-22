@@ -2,12 +2,12 @@
 /**
  * Map-screen framing harness for the cartography workstream.
  *
- *   node src/tools/mapview.mjs --out tmp/shots/mapview --state 0,0,1 --state 3,4,0
+ *   node src/tools/mapview.mts --out tmp/shots/mapview --state 0,0,1 --state 3,4,0
  *
  * `--state zoom,filter,revealAll` opens the real `map` menu screen through
  * `Menus`, sets the zoom step / filter row / survey state, settles the sim and
- * captures the frame. `src/tools/shoot.mjs` can only render the states baked into
- * `Shots.js`, which another agent owns; this drives the live screen instead so
+ * captures the frame. `src/tools/shoot.mts` can only render the states baked into
+ * `Shots.ts`, which another agent owns; this drives the live screen instead so
  * every zoom level can be looked at. Temporary tooling.
  */
 import { chromium } from 'playwright';
@@ -29,7 +29,7 @@ const portOpen = (port: any) => new Promise((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.js', '--port', String(PORT), '--strictPort'],
+  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
   p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
   for (let i = 0; i < 160; i++) {

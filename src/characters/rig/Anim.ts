@@ -284,7 +284,7 @@ export class Animator {
     this.stanceBias = (character.look && character.look.stance) ??
       (character.seedRnd ? character.seedRnd.next() * 1.4 - 0.7 : 0.4);
     /**
-     * Structured posture (see `Posture.js`). Anyone without a named entry —
+     * Structured posture (see `Posture.ts`). Anyone without a named entry —
      * every NPC archetype — keeps their hand-authored `look.idle` bag at full
      * strength and takes their weight bias from the deterministic draw above,
      * so the four heroes gain a body without the townspeople losing theirs.
