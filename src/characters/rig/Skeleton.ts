@@ -103,17 +103,18 @@ export function buildSkeleton(profile: any = {}): any {
     );
   }
 
-  const byName: any = {};
-  const bones = [];
-  const index = {};
-  const P = {};      // bind-pose world positions, for geometry authoring
-  for (const [name, parent, wpos] of defs) {
+  const byName: Record<string, THREE.Bone> = {};
+  const bones: THREE.Bone[] = [];
+  const index: Record<string, number> = {};
+  /** Bind-pose world positions, for geometry authoring. */
+  const P: Record<string, THREE.Vector3> = {};
+  for (const [name, parent, wpos] of defs as [string, string | null, number[]][]) {
     const b = new THREE.Bone();
     b.name = name;
     P[name] = new THREE.Vector3().fromArray(wpos);
     if (parent) {
-      byName[parent as keyof typeof byName].add(b);
-      b.position.copy(P[name]).sub(P[parent as keyof typeof P]);
+      byName[parent].add(b);
+      b.position.copy(P[name]).sub(P[parent]);
     } else {
       b.position.copy(P[name]);
     }
@@ -148,8 +149,8 @@ export function buildSkeleton(profile: any = {}): any {
 }
 
 /** Convenience: skin-weight pair list from bone names. */
-export function W(index: any, ...pairs) {
-  const out = [];
+export function W(index: any, ...pairs: any[]) {
+  const out: number[][] = [];
   for (let i = 0; i < pairs.length; i += 2) out.push([index[pairs[i]], pairs[i + 1]]);
   return out;
 }

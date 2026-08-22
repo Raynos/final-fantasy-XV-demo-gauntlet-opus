@@ -1,9 +1,12 @@
 import { Game } from './game/Game.ts';
 import { installBootProfile } from './engine/BootProfile.ts';
 
-const boot = document.getElementById('boot');
-const bar = document.getElementById('boot-bar');
-const label = document.getElementById('boot-label');
+// These three live in `src/index.html` and the loading screen cannot run
+// without them, so an assertion here is the honest reading -- a null would be
+// a broken page, not a case to handle.
+const boot = document.getElementById('boot')!;
+const bar = document.getElementById('boot-bar')!;
+const label = document.getElementById('boot-label')!;
 
 const game = new Game({
   container: document.getElementById('app'),

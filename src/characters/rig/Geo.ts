@@ -239,7 +239,7 @@ export function mergeParts(geos: any) {
   for (const g of list) { vc += g.attributes.position.count; ic += g.index.count; }
 
   const out = new THREE.BufferGeometry();
-  const specs = [
+  const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor][] = [
     ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
     ['color', 3, Float32Array], ['aMat', 3, Float32Array], ['aTan', 3, Float32Array],
     ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],
@@ -274,7 +274,7 @@ export function mergeParts(geos: any) {
  *
  * @param {Object} o
  * */
-export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, ref?: any, colorAt?: any, matAt?: any, capStart?: any, capHeight?: any }) {
+export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, theta1?: number, uvOffset?: number[], ref?: any, colorAt?: any, matAt?: any, capStart?: any, capHeight?: any }) {
   const nodes = o.nodes;
   const steps = o.steps || 16;
   const seg = o.seg || 16;

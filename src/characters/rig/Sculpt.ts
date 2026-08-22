@@ -419,7 +419,7 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
     ic += g.index!.count;
   }
   const out = new THREE.BufferGeometry();
-  const specs = [
+  const specs: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor][] = [
     ['position', 3, Float32Array], ['normal', 3, Float32Array], ['uv', 2, Float32Array],
     ['color', 3, Float32Array], ['aEmissive', 3, Float32Array], ['aMat', 2, Float32Array],
     ['skinIndex', 4, Uint16Array], ['skinWeight', 4, Float32Array],

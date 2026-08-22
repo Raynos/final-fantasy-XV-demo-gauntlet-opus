@@ -199,7 +199,9 @@ export function blob(rx: any, ry: any, rz: any, wSeg = 12, hSeg = 8) {
 }
 
 /** Apply a TRS to a geometry in place. */
-export function place(geo: any, { pos, rot, quat, scale } = {}) {
+export function place(geo: any, { pos, rot, quat, scale }: {
+  pos?: number[], rot?: number[], quat?: THREE.Quaternion, scale?: number | number[],
+} = {}) {
   const m = new THREE.Matrix4();
   const q = quat || new THREE.Quaternion();
   if (!quat && rot) q.setFromEuler(new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0, 'XYZ'));
@@ -331,7 +333,7 @@ export function enableVertexEmissive(material: any) {
 export function edgedCross({
   edge = 0.06, bevel = 0.10, bevelRise = 0.40, ridge = 0.34,
   fuller = 0, fullerAt = 0, fullerW = 0.20, spine = 0,
-}: { edge?: number, bevel?: number, bevelRise?: number, ridge?: number, fuller?: number, fullerAt?: number, fullerW?: number, spine?: number } = {}): Array<[number,number]> {
+}: { edge?: number, bevel?: number, bevelRise?: number, ridge?: number, fuller?: number, fullerAt?: number, fullerW?: number, spine?: number } = {}): number[][] {
   const top = [[1, edge], [1 - bevel, bevelRise], [ridge, 1]];
   if (fuller > 0.001) {
     const a = fullerAt + fullerW, b = fullerAt - fullerW;
@@ -357,7 +359,7 @@ export function edgedCross({
  * cannot hold a hard 45° cut, which is the whole read of a milled part.
  * @param [c] chamfer size as a fraction of the half-extent
  */
-export function chamferCross(c: number = 0.22): Array<[number,number]> {
+export function chamferCross(c: number = 0.22): number[][] {
   const k = 1 - Math.min(0.48, c);
   return [[1, -k], [1, k], [k, 1], [-k, 1], [-1, k], [-1, -k], [-k, -1], [k, -1]];
 }
@@ -371,7 +373,7 @@ export function chamferCross(c: number = 0.22): Array<[number,number]> {
  * @param [lobes] ridges around the circumference
  * @param [depth] groove depth as a fraction of the radius
  */
-export function wrapCross(n: number = 14, lobes: number = 4, depth: number = 0.13): Array<[number,number]> {
+export function wrapCross(n: number = 14, lobes: number = 4, depth: number = 0.13): number[][] {
   const c = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
