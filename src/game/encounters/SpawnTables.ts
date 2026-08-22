@@ -1,3 +1,5 @@
+import { worldMap } from '../../world/map/WorldMap.ts';
+
 /**
  * Where things live, and when.
  *
@@ -85,54 +87,96 @@ const T = (o: TerritorySpec): Territory => ({
   respawn: 150, radius: 26, when: 'any', maxEngaged: 2, patrolRadius: 0, ...o,
 });
 
-/** The Leide basin, as it is actually built. */
+/**
+ * A territory anchor, named rather than typed.
+ *
+ * Every anchor below used to be a literal pair written against the 3 km world,
+ * and none of them was further than 600 m from the origin: "The Three Valleys"
+ * sat at (186, -212) while the Three Valleys the map draws is at (1320, 1000),
+ * and "Norduscaen Blockade" was 80 m from the player's spawn instead of 1.6 km
+ * west. The world grew to 8 km and this table did not.
+ *
+ * That was invisible while nothing else knew where anything was. It stopped
+ * being invisible the moment quest waypoints started resolving through
+ * `WorldMap`: `hunt_sabertusks` now sends the player 1.66 km to the Three
+ * Valleys, and until this change the sabertusks were all back at the car.
+ *
+ * `near('three_valleys', 40, -60)` resolves through the same table the map, the
+ * compass and the quest log read, so a den cannot drift away from the place it
+ * is named after. An unknown id throws at load. The offsets keep a den off the
+ * exact pin, so the pack is *around* the landmark rather than standing on it.
+ *
+ * @param poiId the place this pack belongs to
+ * @param dx    metres east of the pin
+ * @param dz    metres south of the pin
+ */
+const near = (poiId: string, dx = 0, dz = 0): [number, number] => {
+  const p = worldMap.poiById(poiId);
+  if (!p) throw new Error(`SpawnTables: territory anchored to unknown POI "${poiId}"`);
+  return [p.x + dx, p.z + dz];
+};
+
+/**
+ * Lucis, as it is actually built.
+ *
+ * Read the anchors as the danger gradient: the first three are inside the
+ * opening walk from the breakdown to Hammerhead and are level 5-9; everything
+ * imperial or nocturnal is a drive away.
+ */
 export const TERRITORIES: Territory[] = [
 
   /* ---- the road and the flats around the start ---------------------- */
   T({
-    id: 'weaverwilds_tusks', name: 'The Weaverwilds', at: [46, -58], radius: 30,
+    id: 'weaverwilds_tusks', name: 'The Weaverwilds', at: near('the_weaverwilds', 60, 90), radius: 30,
     when: 'day', level: 6, danger: 1,
     spawn: [{ key: 'sabertusk', count: [3, 5] }],
     patrolRadius: 22, respawn: 140,
   }),
   T({
-    id: 'roadside_tusks', name: 'Longwythe Roadside', at: [-38, 74], radius: 26,
+    id: 'roadside_tusks', name: 'The Hammerhead Verge', at: near('hammerhead_layby', -40, 62), radius: 26,
     when: 'day', level: 5, danger: 1,
     spawn: [{ key: 'sabertusk', count: [2, 4] }],
     patrolRadius: 18,
   }),
   T({
-    id: 'graze_anak', name: 'Anak Grazing Ground', at: [118, 64], radius: 40,
+    id: 'graze_anak', name: 'Fossil Wood Grazing Ground', at: near('fossil_wood', -70, 130), radius: 40,
     when: 'day', level: 9, danger: 0, passive: true,
     spawn: [{ key: 'anak', count: [3, 5] }],
     patrolRadius: 34, respawn: 300,
   }),
   T({
-    id: 'dualhorn_pair', name: 'Kelbass Grasslands', at: [-96, -132], radius: 30,
+    id: 'dualhorn_pair', name: 'Saxham Grazing Land', at: near('saxham', 90, -70), radius: 30,
     when: 'day', level: 12, danger: 2,
     spawn: [{ key: 'dualhorn', count: [2, 3] }],
     patrolRadius: 20, respawn: 260,
   }),
   T({
-    id: 'vore_pack', name: 'The Three Valleys', at: [186, -212], radius: 32,
+    // `hunt_sabertusks` -- a rank-1 bounty, live in the seeded save -- sends the
+    // player 1.6 km to the Three Valleys, and until this line the nearest
+    // resident sabertusk was 1.4 km back the way they came. The hunt spawns its
+    // own marks, but the place should be what the board says it is.
+    id: 'vore_pack', name: 'The Three Valleys', at: near('three_valleys', -110, 220), radius: 32,
     when: 'any', level: 11, danger: 2,
-    spawn: [{ key: 'voretooth', count: [4, 6] }],
+    spawn: [{ key: 'voretooth', count: [3, 5] }, { key: 'sabertusk', count: [2, 3], level: 7 }],
     patrolRadius: 26, maxEngaged: 3,
   }),
   T({
-    id: 'garula_herd', name: 'Alstor Slough Edge', at: [-208, 148], radius: 36,
+    // Not the Alstor Slough pin: that is the middle of a lake sixteen metres
+    // below the water plane. The Malacchi Hills are the dry grazing land the
+    // `hunt_garulessa` marker already points at.
+    id: 'garula_herd', name: 'Malacchi Hills Grazing', at: near('weaverwilds', 140, -120), radius: 36,
     when: 'day', level: 16, danger: 2,
     spawn: [{ key: 'garula', count: [2, 3] }, { key: 'anak', count: [0, 2] }],
     patrolRadius: 28, respawn: 300,
   }),
   T({
-    id: 'coeurl_pair', name: 'Saulhend Pass', at: [-296, 262], radius: 34,
+    id: 'coeurl_pair', name: 'Saulhend Pass', at: near('galdin_junction', 120, 150), radius: 34,
     when: 'any', level: 22, danger: 3,
     spawn: [{ key: 'coeurl', count: [1, 2] }],
     patrolRadius: 30, respawn: 420,
   }),
   T({
-    id: 'bander_lair', name: 'Callnegh Steps', at: [-470, 318], radius: 30,
+    id: 'bander_lair', name: 'The Callaegh Steps', at: near('balouve_head', -90, 110), radius: 30,
     when: 'any', level: 34, danger: 4,
     spawn: [{ key: 'bandersnatch', count: [1, 1] }],
     respawn: 600,
@@ -140,7 +184,7 @@ export const TERRITORIES: Territory[] = [
 
   /* ---- imperial presence -------------------------------------------- */
   T({
-    id: 'blockade_patrol', name: 'Norduscaen Blockade', at: [34, 72], radius: 30,
+    id: 'blockade_patrol', name: 'Norduscaen Blockade', at: near('norduscaen', 70, 60), radius: 30,
     when: 'any', level: 16, danger: 2, faction: 'imperial',
     spawn: [
       { key: 'mt', count: [3, 4] },
@@ -150,7 +194,7 @@ export const TERRITORIES: Territory[] = [
     patrolRadius: 20, respawn: 240, maxEngaged: 3,
   }),
   T({
-    id: 'crashsite_mt', name: 'Keycatrich Ruins', at: [-60, -230], radius: 34,
+    id: 'crashsite_mt', name: 'Keycatrich Ruins', at: near('keycatrich_ruins', -80, 120), radius: 34,
     when: 'any', level: 20, danger: 3, faction: 'imperial',
     spawn: [
       { key: 'mt', count: [2, 4] },
@@ -159,7 +203,7 @@ export const TERRITORIES: Territory[] = [
     patrolRadius: 24, respawn: 300,
   }),
   T({
-    id: 'outpost_garrison', name: 'Formouth Garrison', at: [-150, -350], radius: 40,
+    id: 'outpost_garrison', name: 'Formouth Garrison', at: near('formouth', -110, 90), radius: 40,
     when: 'any', level: 24, danger: 3, faction: 'imperial',
     spawn: [
       { key: 'mt', count: [3, 5] },
@@ -171,19 +215,19 @@ export const TERRITORIES: Territory[] = [
 
   /* ---- what comes out after dark ------------------------------------ */
   T({
-    id: 'night_goblins_road', name: 'The Long Night — roadside', at: [12, 30], radius: 40,
+    id: 'night_goblins_road', name: 'The Long Night — roadside', at: near('hammerhead_layby', -150, 40), radius: 40,
     when: 'night', level: 12, danger: 2, faction: 'daemon',
     spawn: [{ key: 'goblin', count: [4, 6] }, { key: 'hobgoblin', count: [0, 1] }],
     respawn: 90, maxEngaged: 3,
   }),
   T({
-    id: 'night_goblins_flats', name: 'The Long Night — flats', at: [-120, 40], radius: 44,
+    id: 'night_goblins_flats', name: 'The Long Night — flats', at: near('the_weaverwilds', -140, 160), radius: 44,
     when: 'night', level: 14, danger: 2, faction: 'daemon',
     spawn: [{ key: 'goblin', count: [3, 6] }, { key: 'bussemand', count: [0, 1] }],
     respawn: 90, maxEngaged: 3,
   }),
   T({
-    id: 'night_ruins', name: 'Keycatrich after dark', at: [-72, -246], radius: 40,
+    id: 'night_ruins', name: 'Keycatrich after dark', at: near('keycatrich_ruins', 130, -90), radius: 40,
     when: 'night', level: 26, danger: 3, faction: 'daemon',
     spawn: [
       { key: 'hobgoblin', count: [2, 3] },
@@ -193,26 +237,26 @@ export const TERRITORIES: Territory[] = [
     respawn: 140, maxEngaged: 3,
   }),
   T({
-    id: 'night_moor', name: 'The moors', at: [-244, 302], radius: 44,
+    id: 'night_moor', name: 'The Taelpar moors', at: near('taelpar_crag', 180, 160), radius: 44,
     when: 'night', level: 28, danger: 3, faction: 'daemon',
     spawn: [{ key: 'mesmenir', count: [1, 3] }],
     respawn: 200,
   }),
   T({
-    id: 'night_ronin', name: 'Balouve approach', at: [-500, 330], radius: 34,
+    id: 'night_ronin', name: 'Balouve approach', at: near('balouve_head', 120, -80), radius: 34,
     when: 'night', level: 45, danger: 5, faction: 'daemon',
     spawn: [{ key: 'ronin', count: [1, 2] }],
     respawn: 300,
   }),
   T({
-    id: 'night_giant', name: 'The Pride of the King', at: [40, 96], radius: 30,
+    id: 'night_giant', name: 'The Pride of the King', at: near('costlemark', 150, 130), radius: 30,
     when: 'night', level: 46, danger: 5, faction: 'daemon',
     nightDepth: 0.55,                 // only in the small hours
     spawn: [{ key: 'irongiant', count: [1, 1] }],
     respawn: 600,
   }),
   T({
-    id: 'night_redgiant', name: 'The furnace', at: [-330, -300], radius: 34,
+    id: 'night_redgiant', name: 'The furnace', at: near('rock_ravatogh', 200, 180), radius: 34,
     when: 'night', level: 50, danger: 5, faction: 'daemon',
     nightDepth: 0.7,
     spawn: [{ key: 'redgiant', count: [1, 1] }],

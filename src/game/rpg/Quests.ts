@@ -98,11 +98,17 @@ export type HuntRank = keyof typeof HUNT_RANKS;
  * the quest moves with it. An unknown id throws at load rather than silently
  * pointing at the origin — a wrong waypoint is exactly the kind of thing that
  * survives for months otherwise.
+ *
+ * `dx`/`dz` nudge the marker off the pin, which matters more than it sounds: a
+ * landmark's pin is its *centre*, and several of them are centred on the thing
+ * that makes them a landmark. `three_valleys` sits on a hogback at a 0.48
+ * gradient and `alstor_slough` sits in sixteen metres of water. A fight has to
+ * happen somewhere a party can stand.
  */
-const at = (poiId: string): number[] => {
+const at = (poiId: string, dx = 0, dz = 0): number[] => {
   const p = worldMap.poiById(poiId);
   if (!p) throw new Error(`Quests: waypoint anchored to unknown POI "${poiId}"`);
-  return [p.x, 0, p.z];
+  return [p.x + dx, 0, p.z + dz];
 };
 
 const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'kill', target, count, desc, waypoint });
@@ -305,7 +311,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 5, rank: 1, tipster: 'longwythe', requires: [], autoAvailable: true,
     target: 'Sabertusk Pack', timeOfDay: 'any',
     summary: 'A pack has taken to running down anything on two legs between the outposts.',
-    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', at('three_valleys'))],
+    // 200 m south of the pin: the pin is on the hogback between the washes
+    // (gradient 0.48) and the wash floor behind it is flat.
+    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', at('three_valleys', 0, 200))],
     rewards: { gil: 1100, exp: 1400, ap: 15, items: [{ id: 'sabertusk_fang', count: 3 }, { id: 'hi_potion', count: 2 }] },
   },
   {
@@ -321,7 +329,10 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 11, rank: 2, tipster: 'prairie', requires: [],
     target: 'Voretooth Pack', timeOfDay: 'any',
     summary: 'Something is taking the Prairie Outpost\'s goats. It is not subtle about it.',
-    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', at('alstor_slough'))],
+    // Not `alstor_slough`: that pin is the middle of the lake, sixteen metres
+    // under the water plane, and `spawnHunt` would have grounded ten voretooth
+    // on the lake bed. The Coernix station on its shore is dry.
+    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', at('coernix_alstor'))],
     rewards: { gil: 2800, exp: 4200, ap: 15, items: [{ id: 'voretooth_tail', count: 3 }, { id: 'debased_silver', count: 4 }] },
   },
   {
