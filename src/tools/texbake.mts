@@ -36,7 +36,7 @@ const STAMP = path.join(BAKE_DIR, 'tex.json');
  * list errs wide: `Rng`/`Noise` are here because every height function calls
  * them.
  */
-const SOURCES = [
+export const TEX_SOURCES = [
   'src/engine/TexBake.ts',
   'src/util/TextureGen.ts',
   'src/util/Noise.ts',
@@ -49,7 +49,7 @@ const SOURCES = [
 /** @returns content hash of the generator sources */
 export async function texSourceHash(): Promise<string> {
   const hash = createHash('sha256');
-  for (const rel of SOURCES) {
+  for (const rel of TEX_SOURCES) {
     const p = path.join(ROOT, rel);
     if (!existsSync(p)) continue;
     hash.update(rel);
