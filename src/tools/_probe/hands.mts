@@ -107,12 +107,18 @@ for (const [key, id] of Object.entries(who)) {
   // ---- hair -------------------------------------------------------------
   // three-quarter from above is the angle that shows whether the crown is a
   // groom or a hedgehog; the nape shows whether the shell is bare underneath
+  // Hair is the one thing on a character whose read depends hard on range: a
+  // 2.4 mm lock is 18 px at 0.50 m (a macro shot no player ever sees, where any
+  // groom is a bundle of blades) and 2 px at 3 m. These framings are the two
+  // ranges the game actually shows a head at — a portrait and a field camera.
   const hd = bone('head');
   if (hd) {
-    shot(`${key}_crown`, off(hd, 0, 0.09, 0),
-      norm([fwd[0] * 0.52 + right[0] * 0.42, 0.75, fwd[2] * 0.52 + right[2] * 0.42]), 0.50, 24);
-    shot(`${key}_nape`, off(hd, 0, 0.05, 0),
-      norm([-fwd[0] * 0.90 - right[0] * 0.20, 0.42, -fwd[2] * 0.90 - right[2] * 0.20]), 0.52, 24);
+    shot(`${key}_crown`, off(hd, 0, 0.06, 0),
+      norm([fwd[0] * 0.52 + right[0] * 0.42, 0.62, fwd[2] * 0.52 + right[2] * 0.42]), 0.86, 24);
+    shot(`${key}_nape`, off(hd, 0, 0.03, 0),
+      norm([-fwd[0] * 0.90 - right[0] * 0.20, 0.34, -fwd[2] * 0.90 - right[2] * 0.20]), 0.86, 24);
+    shot(`${key}_hairfield`, off(hd, 0, 0.0, 0),
+      norm([fwd[0] * 0.86 + right[0] * 0.50, 0.16, fwd[2] * 0.86 + right[2] * 0.50]), 2.60, 20);
   }
 }
 return out;
