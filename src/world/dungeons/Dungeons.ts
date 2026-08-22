@@ -107,9 +107,14 @@ export class Dungeons {
 
     // hand the verbs to a town/interaction system if one has been registered
     const interaction = game.get('Interaction');
-    if (interaction && typeof interaction.add === 'function') {
+    // NOTE: `InteractionSystem` exposes `register`, not `add`, so this guard
+    // has always been false and dungeon entrances get no interaction prompt.
+    // Left as found -- fixing it changes what the world does, which a port
+    // verified by image diff must not.
+    const interactionAny = interaction as any;
+    if (interactionAny && typeof interactionAny.add === 'function') {
       for (const e of this.entrances) {
-        interaction.add({
+        interactionAny.add({
           position: e.pos, radius: e.radius, verb: e.verb, label: e.name,
           onUse: () => this.enter(e.id),
         });

@@ -459,20 +459,20 @@ export class RoadGraph {
       [B.edge.b, (B.edge.length - B.s) / B.edge.clsDef.speed],
     ]);
 
-    const dist = new Map(), prev = new Map();
-    const open = [];
+    const dist = new Map<string, number>(), prev = new Map<string, { from: string, edge: any }>();
+    const open: string[] = [];
     for (const s of start) { dist.set(s.node, s.cost); open.push(s.node); }
     while (open.length) {
       let bi = 0;
-      for (let i = 1; i < open.length; i++) if (dist.get(open[i]) < dist.get(open[bi])) bi = i;
+      for (let i = 1; i < open.length; i++) if (dist.get(open[i])! < dist.get(open[bi])!) bi = i;
       const cur = open.splice(bi, 1)[0];
-      const dc = dist.get(cur);
-      for (const ei of this.nodes.get(cur).edges) {
+      const dc = dist.get(cur)!;
+      for (const ei of this.nodes.get(cur)!.edges) {
         const e = this.edges[ei];
         if (e.clsDef.speed <= 0) continue;
         const other = e.a === cur ? e.b : e.a;
         const nd = dc + e.length / e.clsDef.speed;
-        if (nd < (dist.has(other) ? dist.get(other) : Infinity)) {
+        if (nd < (dist.has(other) ? dist.get(other)! : Infinity)) {
           dist.set(other, nd);
           prev.set(other, { from: cur, edge: ei });
           if (open.indexOf(other) < 0) open.push(other);
@@ -482,7 +482,7 @@ export class RoadGraph {
 
     let bestNode: any = null, bestCost = Infinity;
     for (const [n, tail] of goal) {
-      const d = dist.has(n) ? dist.get(n) + tail : Infinity;
+      const d = dist.has(n) ? dist.get(n)! + tail : Infinity;
       if (d < bestCost) { bestCost = d; bestNode = n; }
     }
     if (!bestNode) return null;
@@ -490,7 +490,7 @@ export class RoadGraph {
     // walk back
     const chain = [];
     let n = bestNode;
-    while (prev.has(n)) { const p = prev.get(n); chain.unshift(p.edge); n = p.from; }
+    while (prev.has(n)) { const p = prev.get(n)!; chain.unshift(p.edge); n = p.from; }
 
     const pts = [];
     let length = 0;

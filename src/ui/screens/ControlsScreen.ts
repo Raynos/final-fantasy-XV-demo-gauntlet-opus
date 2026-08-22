@@ -99,7 +99,7 @@ export class ControlsScreen {
   build(root: HTMLElement) {
     this.grid = el('div.ctrl-grid');
     this.cols = GROUPS.map((g) => {
-      const rows = g.rows.map(([keys, pad, label, note]) => {
+      const rows = (g.rows as [string[], string, string, string?][]).map(([keys, pad, label, note]) => {
         // '-' between two keys means "this range", not a key of its own
         const glyphs = el('div.cr-k', {}, keys.map((k: any) => (k === '-'
           ? el('span.cr-dash', { text: '–' })

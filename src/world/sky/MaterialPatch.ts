@@ -41,9 +41,11 @@ export class MaterialPatch {
 
   patch(mat: THREE.Material) {
     if (!mat || mat.userData.__atmo) return;
-    const lit = mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial ||
-                mat.isMeshLambertMaterial || mat.isMeshPhongMaterial ||
-                mat.isMeshToonMaterial;
+    // three's per-class runtime flags; `Material` itself declares none of them
+    const m = mat as any;
+    const lit = m.isMeshStandardMaterial || m.isMeshPhysicalMaterial ||
+                m.isMeshLambertMaterial || m.isMeshPhongMaterial ||
+                m.isMeshToonMaterial;
     if (!lit) return;
     mat.userData.__atmo = true;
 

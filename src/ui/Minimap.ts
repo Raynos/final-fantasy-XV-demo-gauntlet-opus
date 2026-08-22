@@ -387,7 +387,8 @@ export class Minimap {
     c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    for (const [label, d] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) {
+    const marks: [string, number][] = [['N', 0], ['E', 90], ['S', 180], ['W', 270]];
+    for (const [label, d] of marks) {
       const a = (d * Math.PI) / 180 - this._heading - Math.PI / 2;
       const r = R - 16 * dpr;
       c.fillStyle = label === 'N' ? 'rgba(238,246,255,0.95)' : 'rgba(206,224,250,0.50)';

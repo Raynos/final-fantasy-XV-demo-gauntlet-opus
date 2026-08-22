@@ -232,7 +232,7 @@ export function readParty(game: any): Array<any> {
       mp: m.mp, maxMp: m.maxMp,
       ko: m.ko,
       bond: m.bond,
-      status: statusIcons(hs, m, i),
+      status: statusIcons(hs, m),
     };
   });
 }
@@ -412,11 +412,11 @@ export function readQuest(game: any): {title:string, step:string, dist:number, r
  * Every marker the world map and the compass strip should show: active quest
  * waypoints plus discovered havens.
  */
-export function readMarkers(game: any): Array<{kind:string, name:string, x:number, z:number}> {
+export function readMarkers(game: any): Array<{kind: string, name: string, x: number, z: number, tracked?: boolean, questId?: string}> | null {
   const r = rpg(game);
   const hs = hudState(game);
   if (!r || !hs) return null;
-  const out = [];
+  const out: Array<{kind: string, name: string, x: number, z: number, tracked?: boolean, questId?: string}> = [];
   for (const w of hs.waypoints || []) {
     // `questId` rides along so a map pin can be *selected* and made the tracked
     // objective, rather than being a decoration you can move a cursor over.

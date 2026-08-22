@@ -136,7 +136,7 @@ export class PartyAI {
       parent.add(w.root);
       w.root.position.fromArray(t.pos);
       w.root.rotation.fromArray(t.rot);
-      w.root.scale.setScalar(t.scale || 1);
+      w.root.scale.setScalar((t as { scale?: number }).scale || 1);
     }
     if (m.character.setGrip) {
       m.character.setGrip('R', drawn ? 1 : 0);

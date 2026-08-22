@@ -126,6 +126,8 @@ export class Clip {
   age!: number;
   dur!: any;
   hold!: any;
+  /** The shot this clip was raised in; a shot change clears it. `Subtitles`. */
+  shot?: any;
   constructor(dur: any, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
   step(dt: any) { this.age += dt; return this; }
   get t() { return clamp(this.age / this.dur, 0, 1); }

@@ -17,7 +17,25 @@ import { worldMap, WORLD, ZONES } from './WorldMap.ts';
  * under-stroke that lifts the road off the terrain; both are multiplied by the
  * caller's scale and clamped so a track never out-weighs a highway.
  */
-export const ROAD_STYLE = {
+/** How one road class is drawn on the chart. */
+export interface RoadStyle {
+  /** Draw order; higher classes go on top. */
+  rank: number;
+  /** Base width, scaled by zoom and clamped to `min`/`max`. */
+  w: number;
+  min: number;
+  max: number;
+  /** Stroke colour, rgb 0..255. */
+  col: number[];
+  a: number;
+  /** Dark casing width under the stroke; 0 for none. */
+  casing: number;
+  casingA: number;
+  /** Dash pattern, for the unpaved classes. */
+  dash?: number[];
+}
+
+export const ROAD_STYLE: Record<string, RoadStyle> = {
   highway: { rank: 3, w: 2.5, min: 1.5, max: 7.0, col: [242, 248, 255], a: 0.92, casing: 2.6, casingA: 0.66 },
   road: { rank: 2, w: 1.7, min: 1.1, max: 4.6, col: [226, 240, 255], a: 0.76, casing: 2.2, casingA: 0.56 },
   track: { rank: 1, w: 1.15, min: 0.8, max: 2.8, col: [214, 230, 250], a: 0.56, casing: 1.7, casingA: 0.42, dash: [5, 4.5] },
@@ -76,7 +94,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
 
   for (let pass = 0; pass < 2; pass++) {
     for (const cls of ORDER) {
-      const st = ROAD_STYLE[cls as keyof typeof ROAD_STYLE];
+      const st = ROAD_STYLE[cls];
       if (pass === 0 && !st.casing) continue;
       const w = Math.min(st.max, Math.max(st.min, st.w * scale));
       // One path per class per pass: overlapping strokes then composite once,

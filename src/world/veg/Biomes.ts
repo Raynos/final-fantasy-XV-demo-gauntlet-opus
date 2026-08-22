@@ -241,11 +241,11 @@ export const VEG_BIOME: Record<string, any> = {
 function cumulative(table: Record<string, number>): [string, number][] {
   let total = 0;
   for (const k in table) total += table[k];
-  const out = [];
+  const out: [string, number][] = [];
   let acc = 0;
   for (const k in table) { acc += table[k] / total; out.push([k, acc]); }
   if (out.length) out[out.length - 1][1] = 1.0001;
-  return out as [string, number][];
+  return out;
 }
 
 // Pre-resolve the colour ramps to linear once, and the species mixes to
