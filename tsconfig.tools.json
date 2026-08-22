@@ -28,7 +28,6 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "checkJs": false,
-    "baseUrl": ".",
     "paths": { "/*": ["./src/*"] }
   },
   // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
