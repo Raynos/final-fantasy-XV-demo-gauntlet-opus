@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { SkinWeights } from './Geo.ts';
 
 /**
  * Humanoid skeleton generator.
@@ -11,7 +12,71 @@ import * as THREE from 'three';
  * The character faces +Z. Its right-hand side is -X.
  */
 
-export const DEFAULT_PROFILE = {
+/**
+ * A character's body proportions, as an author writes them in `Cast.ts` /
+ * `NpcCast.ts`. Every field has a default, so an author writes only what
+ * differs from the reference build.
+ */
+export interface BodyProfileSpec {
+  /** Standing height in metres. */
+  height?: number;
+  /** Biacromial (shoulder) width multiplier. */
+  shoulder?: number;
+  /** 0 lean .. 1 heavy — drives limb and torso girth. */
+  muscle?: number;
+  hip?: number;
+  neck?: number;
+  headScale?: number;
+  armScale?: number;
+  legScale?: number;
+}
+
+/** A `BodyProfileSpec` with every default filled in. */
+export type BodyProfile = Required<BodyProfileSpec>;
+
+/** The two sides of the rig. The character faces +Z, so its right is −X. */
+export type Side = 'L' | 'R';
+
+/** Both sides, for the many builders that mirror their work. */
+export const SIDES: readonly Side[] = ['L', 'R'];
+
+/**
+ * Derived dimensions the mesh builders author against. Everything here is in
+ * world bind space, already scaled by `height`.
+ */
+export interface RigDims {
+  /** height / 1.80 — the uniform scale every authored constant is in. */
+  s: number;
+  height: number;
+  shoulderY: number;
+  hipY: number;
+  kneeY: number;
+  ankleY: number;
+  headOrigin: THREE.Vector3;
+  headScale: number;
+  chinY: number;
+  headTopY: number;
+  eyeY: number;
+  eyeZ: number;
+  shoulderX: number;
+  armLen: number;
+}
+
+/** What `buildSkeleton` hands to every geometry and animation builder. */
+export interface Rig {
+  bones: THREE.Bone[];
+  /** bone name -> index into `bones`, i.e. into the skin-index attribute. */
+  index: Record<string, number>;
+  byName: Record<string, THREE.Bone>;
+  root: THREE.Bone;
+  skeleton: THREE.Skeleton;
+  /** Bind-pose world positions, for geometry authoring. */
+  P: Record<string, THREE.Vector3>;
+  profile: BodyProfile;
+  dims: RigDims;
+}
+
+export const DEFAULT_PROFILE: BodyProfile = {
   height: 1.80,
   shoulder: 1.0,     // biacromial width multiplier
   muscle: 0.35,      // 0 lean .. 1 heavy — drives limb/torso girth
@@ -25,7 +90,7 @@ export const DEFAULT_PROFILE = {
 /**
  * @param profile see DEFAULT_PROFILE
  */
-export function buildSkeleton(profile: any = {}): any {
+export function buildSkeleton(profile: BodyProfileSpec = {}): Rig {
   const p = { ...DEFAULT_PROFILE, ...profile };
   const s = p.height / 1.80;
   const sw = p.shoulder;
@@ -64,7 +129,7 @@ export function buildSkeleton(profile: any = {}): any {
   const eyeY = headOrigin[1] - 0.006 * s * hs;
   const eyeZ = headOrigin[2] + 0.0646 * s * hs;
 
-  const defs = [
+  const defs: [string, string | null, number[]][] = [
     ['hips', null, [0, Y(0.985), -0.005 * s]],
     ['spine01', 'hips', [0, Y(1.085), 0.008 * s]],
     ['spine02', 'spine01', [0, Y(1.19), 0.014 * s]],
@@ -108,7 +173,7 @@ export function buildSkeleton(profile: any = {}): any {
   const index: Record<string, number> = {};
   /** Bind-pose world positions, for geometry authoring. */
   const P: Record<string, THREE.Vector3> = {};
-  for (const [name, parent, wpos] of defs as [string, string | null, number[]][]) {
+  for (const [name, parent, wpos] of defs) {
     const b = new THREE.Bone();
     b.name = name;
     P[name] = new THREE.Vector3().fromArray(wpos);
@@ -148,9 +213,14 @@ export function buildSkeleton(profile: any = {}): any {
   return { bones, index, byName, root, skeleton, P, profile: p, dims };
 }
 
-/** Convenience: skin-weight pair list from bone names. */
-export function W(index: any, ...pairs: any[]) {
-  const out: number[][] = [];
-  for (let i = 0; i < pairs.length; i += 2) out.push([index[pairs[i]], pairs[i + 1]]);
+/**
+ * Convenience: skin-weight pair list from alternating bone name and weight —
+ * `W(rig.index, 'hips', 0.7, 'spine01', 0.3)`.
+ */
+export function W(index: Record<string, number>, ...pairs: Array<string | number>): SkinWeights {
+  const out: SkinWeights = [];
+  // property access coerces the key to a string at runtime anyway, so String()
+  // is exactly what the untyped version did — it is not a widening
+  for (let i = 0; i < pairs.length; i += 2) out.push([index[String(pairs[i])], Number(pairs[i + 1])]);
   return out;
 }

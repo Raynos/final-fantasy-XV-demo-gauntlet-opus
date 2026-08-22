@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { Rng } from '../../../util/Rng.ts';
 import { Noise } from '../../../util/Noise.ts';
 import * as M from './InteriorMaterials.ts';
-import type { Layout } from './Layout.ts';
+import type { Chest, Door, Layout, Point2 } from './Layout.ts';
 import type { InteriorMerger } from './Build.ts';
-import type { LightRig } from './LightRig.ts';
+import type { Emitter, LightRig } from './LightRig.ts';
 
 /**
  * The set-dressing kit. Everything a dungeon puts inside its shell — the
@@ -29,27 +29,349 @@ const cone = (seg = 9) => geo(`cone${seg}`, () => new THREE.ConeGeometry(0.5, 1,
 const sph = (seg = 10) => geo(`sph${seg}`, () => new THREE.SphereGeometry(0.5, seg, Math.max(4, seg >> 1)));
 const plane = () => geo('plane', () => new THREE.PlaneGeometry(1, 1));
 
+/* ---------------------------------------------------------- prop contracts */
+
+/**
+ * Every placer's options are optional: a prop with no options at all is the
+ * common case, and each knob below names a default in the placer that reads it.
+ * The interfaces are split per prop so `kit.brazier(x, y, z, { rows: 3 })` is a
+ * compile error rather than a silently ignored field.
+ */
+
+/** Shared by everything that can be turned to face down a corridor. */
+export interface RotOpts {
+  /** Heading, radians. */
+  rot?: number;
+}
+
+/** Shared by everything that declares a light on the rig. */
+export interface LightOpts {
+  color?: number;
+  intensity?: number;
+  range?: number;
+}
+
+/** {@link PropKit.emergencyStrip} — a caged strip light. */
+export interface StripOpts extends RotOpts, LightOpts {
+  /** Tube length, metres. */
+  len?: number;
+  flicker?: number;
+  glow?: number;
+}
+
+/** {@link PropKit.deadStrip} — the same fixture, unlit. */
+export interface DeadStripOpts extends RotOpts {
+  len?: number;
+}
+
+/** {@link PropKit.magitekCrate} — a stack of imperial supply crates. */
+export interface CrateOpts extends RotOpts {
+  /** Crates in the stack. Defaults to 1. */
+  stack?: number;
+}
+
+/** {@link PropKit.rebar} — bent bar out of spalled concrete. */
+export interface RebarOpts extends RotOpts {
+  count?: number;
+  /** Bursting up out of the floor rather than out of a wall. */
+  up?: boolean;
+}
+
+/** {@link PropKit.rubble} — scattered broken block. */
+export interface RubbleOpts {
+  /** Overrides the default trench-floor material. */
+  mat?: THREE.Material;
+  count?: number;
+  /** Scatter radius, metres. */
+  radius?: number;
+  /** Multiplies the block size. */
+  scale?: number;
+}
+
+/** {@link PropKit.collapse} — a passage plugged with rubble and bent steel. */
+export interface CollapseOpts extends RotOpts {
+  /** Span of the plugged passage, metres. */
+  width?: number;
+  mat?: THREE.Material;
+}
+
+/** {@link PropKit.pipeRun} and {@link PropKit.cableRun} — a service run. */
+export interface RunOpts extends RotOpts {
+  /** Run length, metres. */
+  len?: number;
+}
+
+/** {@link PropKit.sandbags} — a revetment. */
+export interface SandbagOpts extends RotOpts {
+  rows?: number;
+  /** Bags in the bottom row; each row above holds one fewer. */
+  per?: number;
+}
+
+/** {@link PropKit.generator} — the imperial power plant. */
+export type GeneratorOpts = RotOpts;
+
+/** {@link PropKit.magitekPylon} — a floor-to-ceiling column of machinery. */
+export interface PylonOpts extends RotOpts, LightOpts {
+  /** Height, metres. */
+  h?: number;
+  /** Half-width of the casing, metres. */
+  r?: number;
+}
+
+/** {@link PropKit.brazier} — a burning oil drum. */
+export type BrazierOpts = LightOpts;
+
+/** {@link PropKit.floodLight} — a tripod work light. */
+export type FloodOpts = RotOpts & LightOpts;
+
+/** {@link PropKit.timberFrame} — a pit-prop set. */
+export interface TimberOpts extends RotOpts {
+  width?: number;
+  height?: number;
+  /** Lagging boards over the roof. On unless explicitly `false`. */
+  lagging?: boolean;
+}
+
+/** {@link PropKit.railTrack} — sleepers and running rails. */
+export interface RailOpts {
+  /** Rail spacing, metres. */
+  gauge?: number;
+}
+
+/** {@link PropKit.minecart}. */
+export interface MinecartOpts extends RotOpts {
+  /** Lying on its side. */
+  tipped?: boolean;
+  /** Heaped with ore. */
+  ore?: boolean;
+}
+
+/** {@link PropKit.oreHeap} — a spoil heap. */
+export interface HeapOpts {
+  mat?: THREE.Material;
+  count?: number;
+  radius?: number;
+  scale?: number;
+}
+
+/** {@link PropKit.oreVein} — an exposed seam in a wall. */
+export interface VeinOpts extends RotOpts {
+  count?: number;
+  /** Seam length, metres. */
+  len?: number;
+}
+
+/** {@link PropKit.lantern} — a hanging oil lamp. */
+export interface LanternOpts extends LightOpts {
+  /** Length of the hanging chain, metres. */
+  drop?: number;
+}
+
+/** {@link PropKit.ladder}. */
+export interface LadderOpts extends RotOpts {
+  height?: number;
+}
+
+/** {@link PropKit.liftCage} — the cage and headgear at the top of a shaft. */
+export interface LiftOpts {
+  w?: number;
+  d?: number;
+  h?: number;
+  /** Top of the cage's travel. Equal to its rest height when omitted. */
+  y1?: number;
+  /** Radians per second of the cosine that drives the travel. `0` parks it. */
+  speed?: number;
+}
+
+/** {@link PropKit.catwalk} — a railed steel walkway. */
+export interface CatwalkOpts extends RotOpts {
+  /** Span, metres. */
+  len?: number;
+  /** Deck width, metres. */
+  w?: number;
+}
+
+/** {@link PropKit.dripSpike} — one stalactite, or a stalagmite when `up`. */
+export interface DripOpts {
+  /** Length, metres. */
+  len?: number;
+  /** Base radius, metres. */
+  r?: number;
+  /** Growing up off the floor rather than down off the roof. */
+  up?: boolean;
+  /** How far the taper leans off vertical. */
+  lean?: number;
+  /** Which way it leans, radians. Random when omitted. */
+  leanA?: number;
+}
+
+/** {@link PropKit.dripField} — a scatter of spikes over a patch. */
+export interface DripFieldOpts {
+  count?: number;
+  /** Scatter radius, metres. */
+  radius?: number;
+  len?: number;
+  r?: number;
+  up?: boolean;
+}
+
+/** {@link PropKit.column} — a flowstone column joining floor to roof. */
+export interface ColumnOpts {
+  /** Height, metres. */
+  h?: number;
+  /** Waist radius, metres. */
+  r?: number;
+}
+
+/** {@link PropKit.fungus} — a bioluminescent cluster. */
+export interface FungusOpts extends LightOpts {
+  /** Emissive strength of the caps, independent of the light it declares. */
+  emissive?: number;
+  count?: number;
+  /** Cluster radius, metres. */
+  spread?: number;
+  scale?: number;
+  /** Hanging from the roof rather than growing off the floor. */
+  up?: boolean;
+  glow?: number;
+}
+
+/** {@link PropKit.pool} — a still water plane. */
+export interface PoolOpts {
+  tint?: number;
+  w?: number;
+  d?: number;
+  /** Height of the surface above the floor, metres. */
+  depth?: number;
+}
+
+/** {@link PropKit.boulder} — a rounded breakdown block. */
+export interface BoulderOpts {
+  mat?: THREE.Material;
+  /** Radius, metres. */
+  r?: number;
+}
+
+/**
+ * Every option any placer takes, in one bag.
+ *
+ * This is what the data-driven `layout.prop(kind, at, opts)` path carries,
+ * because that path picks its placer by name at runtime and cannot know which
+ * of the interfaces above applies. Calling a placer directly gets the narrow
+ * one; no field name is shared between two placers with two meanings, so the
+ * union collapses cleanly.
+ */
+export interface PropOptions extends
+  StripOpts, DeadStripOpts, CrateOpts, RebarOpts, RubbleOpts, CollapseOpts,
+  RunOpts, SandbagOpts, PylonOpts, TimberOpts, RailOpts, MinecartOpts,
+  HeapOpts, VeinOpts, LanternOpts, LadderOpts, LiftOpts, CatwalkOpts,
+  DripOpts, DripFieldOpts, ColumnOpts, FungusOpts, PoolOpts, BoulderOpts {}
+
+/**
+ * The placers `layout.prop()` can name.
+ *
+ * `railTrack`, `chest` and `door` are deliberately absent: they take a path or
+ * a layout record rather than a point, so naming one here would call it with
+ * the wrong arguments.
+ */
+export type PropKind =
+  | 'emergencyStrip' | 'deadStrip' | 'magitekCrate' | 'rebar' | 'rubble'
+  | 'collapse' | 'pipeRun' | 'cableRun' | 'sandbags' | 'generator'
+  | 'magitekPylon' | 'brazier' | 'floodLight' | 'timberFrame' | 'minecart'
+  | 'oreHeap' | 'oreVein' | 'lantern' | 'ladder' | 'liftCage' | 'catwalk'
+  | 'dripSpike' | 'dripField' | 'column' | 'fungus' | 'pool' | 'boulder';
+
+/** The common shape of a placer: a point in the dungeon plus its option bag. */
+export type PropPlacer =
+  (this: PropKit, x: number, y: number, z: number, s: PropOptions) => unknown;
+
+/* ------------------------------------------------------------ interactables */
+
+/** What every interactable the party can walk up to has in common. */
+export interface InteractableBase {
+  id: string;
+  name: string;
+  /** Dungeon-local position of the prompt. */
+  pos: THREE.Vector3;
+  /** How close the party must be, metres. */
+  radius: number;
+  /** The verb the prompt shows. */
+  verb: string;
+}
+
+/** A chest the party can open. */
+export interface ChestInteractable extends InteractableBase {
+  kind: 'chest';
+  /** The swinging lid. */
+  lid: THREE.Group;
+  /** The layout record, so opening it is remembered across visits. */
+  spec: Chest;
+  opened: boolean;
+  /** Lid travel, 0..1. Driven by {@link PropKit.update}. */
+  t?: number;
+  glowEmitter: Emitter;
+}
+
+/** A door the party can open, if they are carrying its key. */
+export interface DoorInteractable extends InteractableBase {
+  kind: 'door';
+  /** The sliding leaf. */
+  leaf: THREE.Group;
+  spec: Door;
+  /** Rest height of the leaf. */
+  y0: number;
+  h: number;
+  open: boolean;
+  /** Leaf travel, 0..1. */
+  t: number;
+}
+
+/** The way back out to the world. */
+export interface ExitInteractable extends InteractableBase {
+  kind: 'exit';
+}
+
+export type Interactable = ChestInteractable | DoorInteractable | ExitInteractable;
+
+/** Something {@link PropKit.update} moves every frame. */
+export type Animated =
+  | { kind: 'chest', item: ChestInteractable }
+  | { kind: 'door', item: DoorInteractable }
+  | { kind: 'lift', obj: THREE.Group, y0: number, y1: number, speed: number }
+  /**
+   * The generator's mains hum. **Nothing consumes it** -- `update` has no
+   * `hum` branch and `DungeonAmbience` runs off the dungeon's own descriptor,
+   * so this is a position marker for an emitter that was never written.
+   */
+  | { kind: 'hum', pos: THREE.Vector3 };
+
+/** What `Dungeon.build()` hands the kit. */
+export interface PropKitOptions {
+  merger: InteriorMerger;
+  rig: LightRig;
+  layout: Layout;
+  /** Parent for the loose objects a merged mesh cannot carry: lids, leaves, pools. */
+  group: THREE.Group;
+  seed?: number;
+}
+
 export class PropKit {
   L!: Layout;
-  animated!: any[];
+  animated!: Animated[];
   group!: THREE.Group;
-  interactables!: any[];
+  interactables!: Interactable[];
   m!: InteriorMerger;
   n!: Noise;
   rig!: LightRig;
   rng!: Rng;
-  /**
-   * @param {object} o
-   * 
-   */
-  constructor(o: { merger: import('./Build.ts').InteriorMerger, rig: import('./LightRig.ts').LightRig, layout: import('./Layout.ts').Layout, group: THREE.Group, seed?: number }) {
+  constructor(o: PropKitOptions) {
     this.m = o.merger;
     this.rig = o.rig;
     this.L = o.layout;
     this.group = o.group;
     this.rng = new Rng(o.seed || 20016);
     this.n = new Noise((o.seed || 20016) ^ 0x51ab);
-    /** @type {object[]} interactable descriptors handed to the game */
     this.interactables = [];
     this.animated = [];
   }
@@ -57,10 +379,14 @@ export class PropKit {
   /** Baked occlusion at a point so props share the shell's shading. */
   ao(x: number, y: number, z: number) { return this.L.occlusion(x, y, z); }
 
-  /** Data-driven placement: `layout.prop('minecart', [x,z], {...})`. */
-  place(kind: any, spec: any) {
-    const fn = (this as any)[kind];
-    if (typeof fn !== 'function') return;
+  /**
+   * Data-driven placement: `layout.prop('minecart', [x,z], {...})`.
+   *
+   * Unexercised -- see `Layout.prop`. `PropKind` is exactly the set of placers
+   * that take a point, so the lookup below cannot miss.
+   */
+  place(kind: PropKind, spec: PropOptions & { at: Point2, y?: number }) {
+    const fn: PropPlacer = this[kind];
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
     fn.call(this, x, y, z, spec);
@@ -73,7 +399,7 @@ export class PropKit {
    * a long, hard, cold source that rakes the concrete and gives every corridor
    * a direction.
    */
-  emergencyStrip(x: number, y: number, z: number, s: any = {}) {
+  emergencyStrip(x: number, y: number, z: number, s: StripOpts = {}) {
     const rot = s.rot || 0;
     const len = s.len || 1.9;
     const col = s.color != null ? s.color : 0xffb267;
@@ -98,7 +424,7 @@ export class PropKit {
   }
 
   /** A dead strip: same fixture, no light. Contrast is what sells the live ones. */
-  deadStrip(x: number, y: number, z: number, s: any = {}) {
+  deadStrip(x: number, y: number, z: number, s: DeadStripOpts = {}) {
     const steel = M.corrodedSteel(0x3c3a36);
     const t = this.ao(x, y, z) * 0.8;
     this.m.place(steel, box(), [x, y, z], [0, s.rot || 0, 0], [(s.len || 1.9) + 0.22, 0.30, 0.16], t);
@@ -106,7 +432,7 @@ export class PropKit {
   }
 
   /** Stacked Niflheim supply crates with a live seam of blue running light. */
-  magitekCrate(x: number, y: number, z: number, s: any = {}) {
+  magitekCrate(x: number, y: number, z: number, s: CrateOpts = {}) {
     const plate = M.magitekPlate();
     const glow = M.emissiveMaterial(0x63d0ff, 1.2);
     const n = s.stack || 1;
@@ -129,7 +455,7 @@ export class PropKit {
   }
 
   /** Bent reinforcement bar bursting out of spalled concrete. */
-  rebar(x: number, y: number, z: number, s: any = {}) {
+  rebar(x: number, y: number, z: number, s: RebarOpts = {}) {
     const steel = M.corrodedSteel(0x6a4a30);
     const n = s.count || 5;
     const rot = s.rot || 0;
@@ -146,7 +472,7 @@ export class PropKit {
   }
 
   /** Concrete spall and broken block. */
-  rubble(x: number, y: number, z: number, s: any = {}) {
+  rubble(x: number, y: number, z: number, s: RubbleOpts = {}) {
     const mat = s.mat || M.trenchFloor();
     const n = s.count || 9;
     const r = s.radius || 1.8;
@@ -162,7 +488,7 @@ export class PropKit {
   }
 
   /** A collapsed tunnel: a wall of rubble and bent steel plugging a passage. */
-  collapse(x: number, y: number, z: number, s: any = {}) {
+  collapse(x: number, y: number, z: number, s: CollapseOpts = {}) {
     const rot = s.rot || 0;
     const w = s.width || 3.4;
     this.rubble(x, y, z, { count: 26, radius: w * 0.55, scale: 1.5, mat: s.mat || M.trenchFloor() });
@@ -179,7 +505,7 @@ export class PropKit {
   }
 
   /** Ceiling service run: pipe bundle on brackets. Reads as "someone built this". */
-  pipeRun(x: number, y: number, z: number, s: any = {}) {
+  pipeRun(x: number, y: number, z: number, s: RunOpts = {}) {
     const steel = M.corrodedSteel(0x554438);
     const len = s.len || 8;
     const rot = s.rot || 0;
@@ -198,7 +524,7 @@ export class PropKit {
   }
 
   /** Slack cabling stapled along a wall — pure silhouette detail. */
-  cableRun(x: number, y: number, z: number, s: any = {}) {
+  cableRun(x: number, y: number, z: number, s: RunOpts = {}) {
     const mat = M.corrodedSteel(0x1e1c1a);
     const len = s.len || 6;
     const rot = s.rot || 0;
@@ -219,7 +545,7 @@ export class PropKit {
   }
 
   /** Sandbag revetment. */
-  sandbags(x: number, y: number, z: number, s: any = {}) {
+  sandbags(x: number, y: number, z: number, s: SandbagOpts = {}) {
     const mat = M.trenchFloor();
     const rot = s.rot || 0;
     const rows = s.rows || 3, per = s.per || 5;
@@ -236,7 +562,7 @@ export class PropKit {
   }
 
   /** The generator: the heart of the imperial power room. */
-  generator(x: number, y: number, z: number, s: any = {}) {
+  generator(x: number, y: number, z: number, s: GeneratorOpts = {}) {
     const rot = s.rot || 0;
     const plate = M.magitekPlate();
     const steel = M.corrodedSteel(0x4b4238);
@@ -273,7 +599,7 @@ export class PropKit {
    * live coolant seam running up it. Four of these turn a big empty concrete
    * box into a room the Empire built, and give a boss arena its vertical beats.
    */
-  magitekPylon(x: number, y: number, z: number, s: any = {}) {
+  magitekPylon(x: number, y: number, z: number, s: PylonOpts = {}) {
     const plate = M.magitekPlate();
     const steel = M.corrodedSteel(0x3e3a34);
     const glow = M.emissiveMaterial(s.color || 0x63d0ff, 1.4);
@@ -300,7 +626,7 @@ export class PropKit {
   }
 
   /** A burning oil drum. Warm, unstable, and the only friendly light in a boss room. */
-  brazier(x: number, y: number, z: number, s: any = {}) {
+  brazier(x: number, y: number, z: number, s: BrazierOpts = {}) {
     const steel = M.corrodedSteel(0x6b4a2e);
     const fire = M.emissiveMaterial(0xff6a20, 0.85);
     const t = this.ao(x, y + 0.5, z);
@@ -321,7 +647,7 @@ export class PropKit {
   }
 
   /** Tripod work light aimed along a corridor. */
-  floodLight(x: number, y: number, z: number, s: any = {}) {
+  floodLight(x: number, y: number, z: number, s: FloodOpts = {}) {
     const steel = M.corrodedSteel(0x585048);
     const rot = s.rot || 0;
     const t = this.ao(x, y + 1, z);
@@ -343,7 +669,7 @@ export class PropKit {
   /* ----------------------------------------------------------------- Balouve */
 
   /** A pit-prop frame: two posts, a cap and lagging boards over the roof. */
-  timberFrame(x: number, y: number, z: number, s: any = {}) {
+  timberFrame(x: number, y: number, z: number, s: TimberOpts = {}) {
     const w = M.pitTimber();
     const rot = s.rot || 0;
     const width = s.width || 3.4;
@@ -365,7 +691,7 @@ export class PropKit {
   }
 
   /** Rail: sleepers and two running rails laid along a polyline. */
-  railTrack(path: any, s: any = {}) {
+  railTrack(path: number[][], s: RailOpts = {}) {
     const steel = M.railSteel();
     const wood = M.pitTimber();
     const gauge = s.gauge || 0.86;
@@ -395,7 +721,7 @@ export class PropKit {
   }
 
   /** A minecart, upright or tipped on its side. */
-  minecart(x: number, y: number, z: number, s: any = {}) {
+  minecart(x: number, y: number, z: number, s: MinecartOpts = {}) {
     const steel = M.corrodedSteel(0x6b4a30);
     const wood = M.pitTimber();
     const rot = s.rot || 0;
@@ -432,7 +758,7 @@ export class PropKit {
   }
 
   /** Spoil heap of broken ore. */
-  oreHeap(x: number, y: number, z: number, s: any = {}) {
+  oreHeap(x: number, y: number, z: number, s: HeapOpts = {}) {
     const mat = s.mat || M.oreSeam();
     const n = s.count || 14;
     const r = s.radius || 1.4;
@@ -449,7 +775,7 @@ export class PropKit {
   }
 
   /** An exposed seam of ore in a wall, faceted so a lamp glints off it. */
-  oreVein(x: number, y: number, z: number, s: any = {}) {
+  oreVein(x: number, y: number, z: number, s: VeinOpts = {}) {
     const mat = M.oreSeam();
     const rot = s.rot || 0;
     const n = s.count || 10;
@@ -465,7 +791,7 @@ export class PropKit {
   }
 
   /** Hanging oil lantern — the mine's warm, swinging key light. */
-  lantern(x: number, y: number, z: number, s: any = {}) {
+  lantern(x: number, y: number, z: number, s: LanternOpts = {}) {
     const steel = M.corrodedSteel(0x4a3c2e);
     const flame = M.emissiveMaterial(0xffa246, 2.2);
     const drop = s.drop || 0.9;
@@ -482,7 +808,7 @@ export class PropKit {
   }
 
   /** Timber ladder against a face. */
-  ladder(x: number, y: number, z: number, s: any = {}) {
+  ladder(x: number, y: number, z: number, s: LadderOpts = {}) {
     const w = M.pitTimber();
     const h = s.height || 4;
     const rot = s.rot || 0;
@@ -498,7 +824,7 @@ export class PropKit {
   }
 
   /** The lift cage and its headgear at the top of a shaft. */
-  liftCage(x: number, y: number, z: number, s: any = {}) {
+  liftCage(x: number, y: number, z: number, s: LiftOpts = {}) {
     const steel = M.corrodedSteel(0x554438);
     const wood = M.pitTimber();
     const w = s.w || 3.2, d = s.d || 3.2, h = s.h || 2.8;
@@ -527,7 +853,7 @@ export class PropKit {
   }
 
   /** Steel catwalk with a handrail, spanning a drop. */
-  catwalk(x: number, y: number, z: number, s: any = {}) {
+  catwalk(x: number, y: number, z: number, s: CatwalkOpts = {}) {
     const steel = M.corrodedSteel(0x4f4238);
     const rot = s.rot || 0, len = s.len || 8, w = s.w || 1.5;
     const t = this.ao(x, y, z);
@@ -547,7 +873,7 @@ export class PropKit {
   /* ---------------------------------------------------------------- Fociaugh */
 
   /** A stalactite hanging from the roof (or a stalagmite, flipped). */
-  dripSpike(x: number, y: any, z: number, s: any = {}) {
+  dripSpike(x: number, y: number, z: number, s: DripOpts = {}) {
     const mat = M.dripstone();
     const len = s.len || 1.6;
     const r = s.r || 0.24;
@@ -574,7 +900,7 @@ export class PropKit {
   }
 
   /** A field of spikes across a ceiling or floor patch. */
-  dripField(x: number, y: any, z: number, s: any = {}) {
+  dripField(x: number, y: number, z: number, s: DripFieldOpts = {}) {
     const n = s.count || 14;
     const r = s.radius || 4;
     for (let i = 0; i < n; i++) {
@@ -589,7 +915,7 @@ export class PropKit {
   }
 
   /** A flowstone column joining floor to roof. */
-  column(x: number, y: number, z: number, s: any = {}) {
+  column(x: number, y: number, z: number, s: ColumnOpts = {}) {
     const mat = M.dripstone();
     const h = s.h || 6;
     const r = s.r || 0.55;
@@ -614,7 +940,7 @@ export class PropKit {
    * Bioluminescent fungus. The cave's only real light: cold, blue-green, and
    * clustered where water runs.
    */
-  fungus(x: number, y: number, z: number, s: any = {}) {
+  fungus(x: number, y: number, z: number, s: FungusOpts = {}) {
     const cap = M.emissiveMaterial(s.color || 0x63ffd0, s.emissive || 1.05);
     const stem = M.emissiveMaterial(0x1b3a34, 0.5);
     const n = s.count || 7;
@@ -640,7 +966,7 @@ export class PropKit {
   }
 
   /** Still water: a dark mirror that doubles every light above it. */
-  pool(x: number, y: number, z: number, s: any = {}) {
+  pool(x: number, y: number, z: number, s: PoolOpts = {}) {
     const g = new THREE.Mesh(plane(), M.poolMaterial(s.tint || 0x08151a));
     g.rotation.x = -Math.PI / 2;
     g.scale.set(s.w || 6, s.d || 6, 1);
@@ -655,7 +981,7 @@ export class PropKit {
   }
 
   /** A rounded boulder or breakdown block. */
-  boulder(x: number, y: number, z: number, s: any = {}) {
+  boulder(x: number, y: number, z: number, s: BoulderOpts = {}) {
     const mat = s.mat || M.wetLimestone();
     const r = s.r || 1.0;
     this.m.place(mat, sph(9), [x, y + r * 0.55, z],
@@ -676,7 +1002,7 @@ export class PropKit {
    * the party takes what is inside.
    * @returns interactable descriptor
    */
-  chest(spec: any): any {
+  chest(spec: Chest): ChestInteractable {
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
     const rot = spec.rot || 0;
@@ -706,7 +1032,7 @@ export class PropKit {
     lid.rotation.y = rot;
     this.group.add(lid);
 
-    const item = {
+    const item: ChestInteractable = {
       kind: 'chest', id: spec.id, name: spec.name || 'Chest',
       pos: new THREE.Vector3(x, y + 0.5, z),
       radius: 2.4, verb: 'Open', lid, spec, opened: false,
@@ -725,7 +1051,7 @@ export class PropKit {
    * up into the header when it opens.
    * @returns interactable descriptor
    */
-  door(spec: any): any {
+  door(spec: Door): DoorInteractable {
     const [x, z] = spec.at;
     const y = spec.y != null ? spec.y : (this.L.floorAt(x, z) || 0);
     const w = spec.w, h = spec.h;
@@ -754,7 +1080,7 @@ export class PropKit {
 
     this.rig.add({ pos: [x, y + h * 0.78, z], color: lampColor, intensity: 1.6, range: 5, flicker: 0.05, glow: 0.6, glowSize: 0.6 });
 
-    const item = {
+    const item: DoorInteractable = {
       kind: 'door', id: spec.id, name: spec.name,
       pos: new THREE.Vector3(x, y + 1.2, z),
       radius: 3.0, verb: spec.key ? 'Unlock' : 'Open',

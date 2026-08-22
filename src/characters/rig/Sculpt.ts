@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { crScalar, clamp01, smooth, lerp, applyBrushes, expandMirrors } from './Geo.ts';
+import type { SculptBrush, SweepNode } from './Geo.ts';
 
 /**
  * Creature sculpting toolkit — the bestiary's answer to `rig/Geo.ts`.
@@ -30,13 +31,13 @@ export class CBuilder {
   _e!: number[];
   _g!: number;
   _m!: number[];
-  col!: any[];
-  emi!: any[];
-  grp!: any[];
-  idx!: any[];
-  mp!: any[];
-  pos!: any[];
-  uv!: any[];
+  col!: number[];
+  emi!: number[];
+  grp!: number[];
+  idx!: number[];
+  mp!: number[];
+  pos!: number[];
+  uv!: number[];
   constructor() {
     this.pos = [];
     this.uv = [];
@@ -73,7 +74,7 @@ export class CBuilder {
   }
 
   /** Per-vertex roughness / metalness. This is what separates hide from steel. */
-  mat(rough: any, metal = 0) { this._m = [rough, metal]; return this; }
+  mat(rough: number, metal = 0) { this._m = [rough, metal]; return this; }
 
   v(x: number, y: number, z: number, u = 0, w = 0) {
     this.pos.push(x, y, z);
@@ -122,8 +123,10 @@ export class CBuilder {
 const _col = new THREE.Color();
 
 /** Area-weighted normals, welded across coincident vertices in a group. */
-export function smoothNormals(geo: any, groups: any) {
+export function smoothNormals(geo: THREE.BufferGeometry, groups: number[] | null) {
   const pos = geo.attributes.position.array;
+  // the only caller sets the index immediately before calling
+  if (!geo.index) throw new Error('smoothNormals: geometry has no index');
   const idx = geo.index.array;
   const n = pos.length / 3;
   const nrm = new Float32Array(n * 3);
@@ -161,6 +164,35 @@ export function smoothNormals(geo: any, groups: any) {
 }
 
 /**
+ * Emissive radiance at a point: `[colour, strength]`, or null for none.
+ * `B.glow` takes exactly this pair.
+ */
+export type GlowPair = [number | THREE.Color, number];
+
+/** Options for `sweep`. */
+export interface SweepOpts {
+  nodes: SweepNode[];
+  steps?: number;
+  seg?: number;
+  /** radial multiplier at `(theta, u)` — this is where anatomy comes from. */
+  shape?: (theta: number, u: number) => number;
+  /** extra displacement in the ring frame; `out.y` runs along the centreline. */
+  offset?: (theta: number, u: number, out: THREE.Vector3) => void;
+  colorAt?: (theta: number, u: number) => number | THREE.Color;
+  /** `[roughness, metalness?]`. */
+  matAt?: (theta: number, u: number) => number[];
+  glowAt?: (theta: number, u: number) => GlowPair | null;
+  /** reference direction pinning the ring frame, so the sweep cannot roll. */
+  ref?: number[];
+  /** dome height as a fraction of the ring radius; `false` leaves it open. */
+  capStart?: number | false;
+  capEnd?: number | false;
+  theta0?: number;
+  theta1?: number;
+  uvScale?: number[];
+}
+
+/**
  * Sweep a tube along a Catmull-Rom centreline with elliptical, *shaped* rings.
  *
  * `shape(theta, u)` returns a radial multiplier, which is where anatomy comes
@@ -171,7 +203,7 @@ export function smoothNormals(geo: any, groups: any) {
  * @param {Object} o
  * @returns the ring index grid, so callers can stitch to it
  */
-export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: number, shape?: (theta:number,u:number)=>number, offset?: (theta:number,u:number,out:THREE.Vector3)=>void, colorAt?: (theta:number,u:number)=>number|THREE.Color, matAt?: (theta:number,u:number)=>number[], ref?: any, capStart?: any, capEnd?: any, glowAt?: any, theta0?: any, theta1?: any, uvScale?: any }): number[][] {
+export function sweep(B: CBuilder, o: SweepOpts): number[][] {
   const nodes = o.nodes;
   const steps = o.steps || 14;
   const seg = o.seg || 12;
@@ -189,7 +221,7 @@ export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: numb
   const rxs = nodes.map((n) => n.rx);
   const rzs = nodes.map((n) => (n.rz ?? n.rx));
 
-  const rings = [];
+  const rings: number[][] = [];
   const cols = closed ? seg : seg + 1;
   for (let i = 0; i <= steps; i++) {
     const u = i / steps;
@@ -202,7 +234,7 @@ export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: numb
     _r.crossVectors(_f, tan).normalize();
 
     const rx = crScalar(rxs, u), rz = crScalar(rzs, u);
-    const row = [];
+    const row: number[] = [];
     for (let j = 0; j < cols; j++) {
       const th = t0 + (t1 - t0) * (j / seg);
       if (o.colorAt) B.color(o.colorAt(th, u));
@@ -245,7 +277,7 @@ export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: numb
 }
 
 /** Dome a sweep end so it reads as an end of a limb, not an open pipe. */
-function capRing(B: CBuilder, ring: number[], p: THREE.Vector3, tan: THREE.Vector3, sign: number, height: any) {
+function capRing(B: CBuilder, ring: number[], p: THREE.Vector3, tan: THREE.Vector3, sign: number, height: number | false | undefined) {
   const n = ring.length;
   // measure the ring radius so the dome matches the tube it closes
   let rad = 0;
@@ -261,7 +293,7 @@ function capRing(B: CBuilder, ring: number[], p: THREE.Vector3, tan: THREE.Vecto
   for (let k = 1; k <= layers; k++) {
     const a = (k / (layers + 1)) * Math.PI * 0.5;
     const s = Math.cos(a), lift = Math.sin(a) * h * sign;
-    const row = [];
+    const row: number[] = [];
     for (let j = 0; j < n; j++) {
       const i = ring[j];
       row.push(B.v(
@@ -292,17 +324,37 @@ function capRing(B: CBuilder, ring: number[], p: THREE.Vector3, tan: THREE.Vecto
  *
  * brush: {p:[x,y,z], r:[rx,ry,rz], amt, dir:[x,y,z]|'normal', mirror?, pow?}
  */
-export function sculptBlob(B: CBuilder, o: any) {
+/** Per-vertex overrides sampled over a blob or plate's own UV sphere. */
+export interface SurfaceShading {
+  colorAt?: (u: number, v: number, p: THREE.Vector3) => number | THREE.Color;
+  /** `[roughness, metalness?]`. */
+  matAt?: (u: number, v: number, p: THREE.Vector3) => number[];
+  glowAt?: (u: number, v: number, p: THREE.Vector3) => GlowPair | null;
+}
+
+/** Options for `sculptBlob`. */
+export interface SculptBlobOpts extends SurfaceShading {
+  /** ellipsoid half-extents. */
+  scale: number[];
+  center?: number[];
+  brushes?: SculptBrush[];
+  /** XYZ Euler radians, applied before `center`. */
+  rot?: number[];
+  segU?: number;
+  segV?: number;
+}
+
+export function sculptBlob(B: CBuilder, o: SculptBlobOpts) {
   const segU = o.segU || 16, segV = o.segV || 12;
   const scale = new THREE.Vector3().fromArray(o.scale);
   const center = new THREE.Vector3().fromArray(o.center || [0, 0, 0]);
   const brushes = expandMirrors(o.brushes || []);
-  const rot = o.rot ? new THREE.Quaternion().setFromEuler(new THREE.Euler().fromArray(o.rot)) : null;
-  const rows = [];
+  const rot = o.rot ? new THREE.Quaternion().setFromEuler(euler(o.rot)) : null;
+  const rows: number[][] = [];
   const nrm = new THREE.Vector3();
   for (let v = 0; v <= segV; v++) {
     const phi = (v / segV) * Math.PI;
-    const row = [];
+    const row: number[] = [];
     for (let u = 0; u <= segU; u++) {
       const th = (u / segU) * Math.PI * 2;
       const nx = Math.sin(phi) * Math.sin(th);
@@ -325,20 +377,33 @@ export function sculptBlob(B: CBuilder, o: any) {
   return rows;
 }
 
+/** Options for `plate`. */
+export interface PlateOpts extends SurfaceShading {
+  /** full extents, not half-extents. */
+  size: number[];
+  center?: number[];
+  /** superellipsoid exponent: 2 is a pill, 8 a hard plate with a chamfer. */
+  power?: number;
+  /** XYZ Euler radians. */
+  rot?: number[];
+  segU?: number;
+  segV?: number;
+}
+
 /**
  * Bevelled box built as a superellipsoid — the magitek panel primitive.
  * `power` 2 is a pill, 8 is a hard-edged plate with a crisp chamfer.
  */
-export function plate(B: CBuilder, o: any) {
+export function plate(B: CBuilder, o: PlateOpts) {
   const s = o.size;
   const c = o.center || [0, 0, 0];
   const pw = o.power ?? 7;
   const segU = o.segU || 14, segV = o.segV || 10;
-  const rot = o.rot ? new THREE.Quaternion().setFromEuler(new THREE.Euler().fromArray(o.rot)) : null;
-  const rows = [];
+  const rot = o.rot ? new THREE.Quaternion().setFromEuler(euler(o.rot)) : null;
+  const rows: number[][] = [];
   for (let v = 0; v <= segV; v++) {
     const phi = (v / segV) * Math.PI;
-    const row = [];
+    const row: number[] = [];
     for (let u = 0; u <= segU; u++) {
       const th = (u / segU) * Math.PI * 2;
       const nx = Math.sin(phi) * Math.sin(th);
@@ -369,12 +434,34 @@ export function plate(B: CBuilder, o: any) {
  * twist and an elliptical section — the single most-reused creature detail.
  * @param o {from:[x,y,z], dir:[x,y,z], len, r0, r1, curve:[x,y,z], seg, steps, flat}
  */
-export function horn(B: CBuilder, o: any) {
+/** Options for `horn`. */
+export interface HornOpts {
+  from: number[];
+  /** unit direction at the base. */
+  dir: number[];
+  len: number;
+  /** base radius. */
+  r0: number;
+  /** tip radius; defaults to 2% of `len`. */
+  r1?: number;
+  /** quadratic bend, added as `curve * t²`. */
+  curve?: number[];
+  seg?: number;
+  steps?: number;
+  /** rz/rx ratio — 1 is round, <1 a blade. */
+  flat?: number;
+  /** taper exponent (default 0.85). */
+  taper?: number;
+  ref?: number[];
+  colorAt?: (theta: number, u: number) => number | THREE.Color;
+  matAt?: (theta: number, u: number) => number[];
+}
+export function horn(B: CBuilder, o: HornOpts) {
   const from = new THREE.Vector3().fromArray(o.from);
   const dir = new THREE.Vector3().fromArray(o.dir).normalize();
   const curve = o.curve ? new THREE.Vector3().fromArray(o.curve) : new THREE.Vector3();
   const steps = o.steps || 8;
-  const pts = [];
+  const pts: number[][] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     pts.push([
@@ -446,6 +533,9 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
   for (const g of geos) g.dispose();
   return out;
 }
+
+/** XYZ Euler from a plain triple, without `fromArray`'s tuple demand. */
+function euler(r: number[]) { return new THREE.Euler(r[0], r[1], r[2]); }
 
 function fill(n: number, size: number, vals: number[]) {
   const a = new Float32Array(n * size);

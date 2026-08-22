@@ -1,5 +1,6 @@
 import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.ts';
-import type { AudioGraph } from './Graph.ts';
+import type { RngFn } from './Dsp.ts';
+import type { AudioGraph, PanOpts, Vec3, VoiceSlot } from './Graph.ts';
 import { canDetune, canStop } from './nodes.ts';
 
 /**
@@ -17,13 +18,89 @@ import { canDetune, canStop } from './nodes.ts';
  * false if the budget is spent, and every method reaps its own nodes on the
  * source's `onended`. Nothing here holds a reference after the note dies.
  */
+
+/**
+ * What every instrument accepts. The arranger (`Score`) passes the same bag to
+ * all of them, so the options that place a note in the mix are shared and the
+ * per-instrument knobs are optional on top.
+ */
+export interface NoteOpts extends PanOpts {
+  /** Linear gain, multiplied into each instrument's own headroom. */
+  gain?: number;
+  /** Where the note lands; defaults to the music bus. */
+  dest?: AudioNode;
+  /** World position. A note with one gets a panner. */
+  pos?: Vec3;
+  /** Voice-budget priority, 0..3. Higher survives contention. */
+  priority?: number;
+  /** Attack, seconds, overriding the instrument's own. */
+  attack?: number;
+  /** Release, seconds. */
+  release?: number;
+
+  /* -- strings ------------------------------------------------------- */
+  /** Voices in the section. */
+  unison?: number;
+  /** Detune between unison voices, cents. */
+  spread?: number;
+  /** Filter-sweep multiplier: how hard the bow digs in (strings and brass). */
+  bright?: number;
+  /** 0 turns the late vibrato off. */
+  vib?: number;
+  /** `false` skips the bow-scrape transient on a short note. */
+  bow?: boolean;
+
+  /* -- brass --------------------------------------------------------- */
+  /** How loud the player is blowing; drives the spectrum, not just the gain. */
+  power?: number;
+
+  /* -- wind ---------------------------------------------------------- */
+  /** Reed timbre rather than flute. */
+  reed?: boolean;
+
+  /* -- choir --------------------------------------------------------- */
+  vowel?: Vowel;
+
+  /* -- pad ----------------------------------------------------------- */
+  /** Detune of the second pad oscillator, cents. */
+  detune?: number;
+
+  /* -- plucked ------------------------------------------------------- */
+  /** Note length; a pluck without one rings for the whole anchor buffer. */
+  dur?: number;
+  /** Which instrument `arp` plucks. */
+  kind?: PluckKind;
+
+  /* -- percussion and bells ------------------------------------------ */
+  decay?: number;
+  /** Drum fundamental, Hz. */
+  freq?: number;
+  /**
+   * Snare: a tighter, brighter ghost note. Spelled differently from `bright`
+   * on purpose -- that one is a multiplier the bowed and blown voices sweep
+   * their filter by, and this one is a switch.
+   */
+  crisp?: boolean;
+  /** Cymbal: swell into the hit rather than strike it. */
+  swell?: boolean;
+  /** Bell/gong: inharmonic partial ratio, and its FM index. */
+  ratio?: number;
+  index?: number;
+}
+
+/** The three vowels the formant bank is tuned for. */
+export type Vowel = 'ah' | 'oo' | 'mm';
+
+/** The plucked/struck instruments rendered through Karplus-Strong. */
+export type PluckKind = 'harp' | 'pizz' | 'piano';
 export class Instruments {
-  _plucks!: Map<any, any>;
+  /** Rendered pluck/strike anchors, keyed `<kind>:<midi>`. */
+  _plucks!: Map<string, AudioBuffer>;
   ctx!: BaseAudioContext;
   graph!: AudioGraph;
   noise!: AudioBuffer;
   pinkNoise!: AudioBuffer;
-  rng!: any;
+  rng!: RngFn;
   vibFast!: OscillatorNode;
   vibSlow!: OscillatorNode;
   constructor(graph: import('./Graph.ts').AudioGraph) {
@@ -45,18 +122,18 @@ export class Instruments {
     this.vibSlow.frequency.value = 4.1;
     this.vibSlow.start();
 
-    /** @type {Map<string, AudioBuffer>} rendered pluck/strike anchors */
     this._plucks = new Map();
   }
 
   /** Where a note lands unless the caller says otherwise. */
-  _out(o: any) { return o.dest || this.graph.bus.music; }
+  _out(o: NoteOpts): AudioNode { return o.dest ?? this.graph.bus.music; }
 
   /**
    * Common tail of every voice: attach the chain to its destination (through a
    * panner when the sound has a place in the world) and schedule the teardown.
    */
-  _finish(node: GainNode, o: any, src: any, nodes: any, extraGain: number, handle: any, end: number) {
+  _finish(node: GainNode, o: NoteOpts, src: AudioScheduledSourceNode | null, nodes: AudioNode[],
+    extraGain: number, handle: VoiceSlot, end: number) {
     const g = this.ctx.createGain();
     g.gain.value = (o.gain ?? 1) * (extraGain ?? 1);
     node.connect(g);
@@ -69,7 +146,10 @@ export class Instruments {
     } else {
       g.connect(this._out(o));
     }
-    this.graph.reap(src, nodes, end, handle);
+    // No source means nothing will ever fire `onended`, so the slot is
+    // released now -- the same contract `Sfx.Shot.done()` states.
+    if (src) this.graph.reap(src, nodes, end, handle);
+    else this.graph.release(nodes, handle);
   }
 
   /* --------------------------------------------------------- sustained */
@@ -79,9 +159,8 @@ export class Instruments {
    * @param f frequency
    * @param t start time
    * @param dur seconds of sustain
-   * @param [o] {gain, dest, pos, unison, bright, vib, attack, priority}
    */
-  strings(f: number, t: number, dur: number, o: any = {}) {
+  strings(f: number, t: number, dur: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -106,7 +185,7 @@ export class Instruments {
     nodes.push(env);
     filt.connect(env);
 
-    let last: any = null;
+    let last: OscillatorNode | null = null;
     const spread = o.spread ?? 9;
     for (let i = 0; i < unison; i++) {
       const osc = ctx.createOscillator();
@@ -159,7 +238,7 @@ export class Instruments {
    * Brass. The defining trick is that the spectrum tracks the envelope, so a
    * forte entry is bright and a soft pad is dark — same note, different animal.
    */
-  brass(f: number, t: number, dur: number, o: any = {}) {
+  brass(f: number, t: number, dur: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -178,7 +257,7 @@ export class Instruments {
     filt.connect(env);
     nodes.push(env);
 
-    let last: any = null;
+    let last: OscillatorNode | null = null;
     for (let i = 0; i < 2; i++) {
       const osc = ctx.createOscillator();
       osc.setPeriodicWave(w);
@@ -208,7 +287,7 @@ export class Instruments {
   }
 
   /** Flute / clarinet, with the breath noise that sells a wind instrument. */
-  wood(f: number, t: number, dur: number, o: any = {}) {
+  wood(f: number, t: number, dur: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -255,14 +334,13 @@ export class Instruments {
   /**
    * Choir. Two detuned voices through a three-formant bank — a synthesised
    * vowel, not a pad with reverb on it.
-   * @param {'ah'|'oo'|'mm'} [o.vowel]
    */
-  choir(f: number, t: number, dur: number, o: any = {}) {
+  choir(f: number, t: number, dur: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
     const nodes: AudioNode[] = [];
-    const V = FORMANTS[(o.vowel || 'ah') as keyof typeof FORMANTS];
+    const V = FORMANTS[o.vowel ?? 'ah'];
     const env = ctx.createGain();
     nodes.push(env);
 
@@ -287,7 +365,7 @@ export class Instruments {
     nodes.push(dry);
 
     const w = wave(ctx, 'choir');
-    let last: any = null;
+    let last: OscillatorNode | null = null;
     for (let i = 0; i < 2; i++) {
       const osc = ctx.createOscillator();
       osc.setPeriodicWave(w);
@@ -315,7 +393,7 @@ export class Instruments {
   }
 
   /** Warm sustained bed. The cheapest sustained voice we have — 4 nodes. */
-  pad(f: number, t: number, dur: number, o: any = {}) {
+  pad(f: number, t: number, dur: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 0, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -349,7 +427,7 @@ export class Instruments {
    * repitched. Used for harp, pizzicato strings and the piano's string body.
    * @param anchor MIDI note of the anchor
    */
-  _pluckAnchor(kind: 'harp' | 'pizz' | 'piano', anchor: number) {
+  _pluckAnchor(kind: PluckKind, anchor: number): AudioBuffer {
     const key = `${kind}:${anchor}`;
     const cached = this._plucks.get(key);
     if (cached) return cached;
@@ -401,7 +479,7 @@ export class Instruments {
   /**
    * Play a plucked/struck string.
    */
-  pluck(kind: 'harp' | 'pizz' | 'piano', f: number, t: number, o: any = {}) {
+  pluck(kind: PluckKind, f: number, t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -429,9 +507,9 @@ export class Instruments {
   }
 
   /** Harp glissando / arpeggio helper: one call, n notes. */
-  arp(freqs: any, t: number, step: number, o: any = {}) {
+  arp(freqs: number[], t: number, step: number, o: NoteOpts = {}) {
     for (let i = 0; i < freqs.length; i++) {
-      this.pluck(o.kind || 'harp', freqs[i], t + i * step, {
+      this.pluck(o.kind ?? 'harp', freqs[i], t + i * step, {
         ...o, gain: (o.gain ?? 1) * (1 - i * 0.03),
       });
     }
@@ -440,7 +518,7 @@ export class Instruments {
   /* -------------------------------------------------------- percussion */
 
   /** Timpani: a pitched membrane — fundamental plus two inharmonic partials. */
-  timpani(f: number, t: number, o: any = {}) {
+  timpani(f: number, t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -449,8 +527,9 @@ export class Instruments {
     env.gain.value = 1;
     nodes.push(env);
     const decay = o.decay ?? 1.5;
-    const parts = [[1, 1, decay], [1.504, 0.30, decay * 0.55], [1.742, 0.18, decay * 0.4]];
-    let last: any = null;
+    const parts: [number, number, number][] =
+      [[1, 1, decay], [1.504, 0.30, decay * 0.55], [1.742, 0.18, decay * 0.4]];
+    let last: OscillatorNode | null = null;
     for (const [mult, amp, dec] of parts) {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
@@ -478,7 +557,7 @@ export class Instruments {
   }
 
   /** Taiko / bass drum — the combat pulse. */
-  drum(t: number, o: any = {}) {
+  drum(t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -508,7 +587,7 @@ export class Instruments {
   }
 
   /** Snare / field drum, used for the military feel of the MT encounters. */
-  snare(t: number, o: any = {}) {
+  snare(t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -516,7 +595,7 @@ export class Instruments {
     n.buffer = this.noise;
     n.playbackRate.value = 1 + this.rng() * 0.3;
     const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = o.bright ? 2200 : 1300;
+    hp.type = 'highpass'; hp.frequency.value = o.crisp ? 2200 : 1300;
     const bp = ctx.createBiquadFilter();
     bp.type = 'peaking'; bp.frequency.value = 220; bp.gain.value = 8; bp.Q.value = 1.2;
     const g = ctx.createGain();
@@ -528,7 +607,7 @@ export class Instruments {
   }
 
   /** Cymbal swell or crash — noise through a resonant comb of bandpasses. */
-  cymbal(t: number, o: any = {}) {
+  cymbal(t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -557,7 +636,7 @@ export class Instruments {
   }
 
   /** Tubular bell / chime — 2-operator FM with a fast index decay. */
-  bell(f: number, t: number, o: any = {}) {
+  bell(f: number, t: number, o: NoteOpts = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -581,20 +660,22 @@ export class Instruments {
   }
 
   /** Low gong / tam-tam for boss stingers. */
-  gong(f: number, t: number, o: any = {}) {
+  gong(f: number, t: number, o: NoteOpts = {}) {
     return this.bell(f, t, { ratio: 1.93, index: 4.5, decay: o.decay ?? 4.5, ...o });
   }
 }
 
 /** [centreHz, gain, Q] triples — measured-ish vowel formants. */
-const FORMANTS = {
+const FORMANTS: Record<Vowel, [number, number, number][]> = {
   ah: [[730, 1.0, 7], [1090, 0.5, 9], [2440, 0.22, 11]],
   oo: [[300, 1.0, 8], [870, 0.36, 10], [2240, 0.12, 12]],
   mm: [[280, 1.0, 9], [900, 0.20, 12], [2100, 0.06, 14]],
 };
 
 /** Karplus–Strong parameters per plucked instrument. */
-const PLUCK = {
+const PLUCK: Record<PluckKind, {
+  seconds: number; decay: number; damp: number; exciteBright: number; body: number; seed: number;
+}> = {
   harp: { seconds: 2.2, decay: 1.7, damp: 0.55, exciteBright: 0.85, body: 0.12, seed: 5 },
   pizz: { seconds: 0.9, decay: 0.55, damp: 0.30, exciteBright: 0.65, body: 0.20, seed: 17 },
   piano: { seconds: 2.6, decay: 2.6, damp: 0.30, exciteBright: 0.40, body: 0.34, seed: 29 },

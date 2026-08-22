@@ -6,7 +6,112 @@ import { LightRig } from './LightRig.ts';
 import { PropKit } from './InteriorProps.ts';
 import { buildExitVestibule } from './Portal.ts';
 import { DungeonMap } from './DungeonMap.ts';
+import type { MergeStats } from './Build.ts';
+import type { DungeonStyle, Lamp, LampKind, Point2 } from './Layout.ts';
+import type { Interactable, PropPlacer } from './InteriorProps.ts';
+import type { LightRigOptions, LocalView } from './LightRig.ts';
+import type { MaterialPicker } from './Shell.ts';
+import type { Vestibule } from './Portal.ts';
+import type { AmbienceDesc } from './Ambience.ts';
 import type { Game } from '../../../game/Game.ts';
+
+/**
+ * The interior's own weather. `Dungeons._applyInteriorAtmosphere` drives the
+ * shared aerial-perspective uniforms from this, which is what makes an interior
+ * read as an interior rather than a room with the sun switched off.
+ */
+export interface DungeonAtmosphere {
+  /** Fog colour as linear RGB, 0..1. */
+  fog: [number, number, number];
+  density: number;
+  /** Fog scale height above the dungeon floor, metres. */
+  height: number;
+  haze: number;
+  exposure: number;
+  /**
+   * **Read by nothing.** `_applyInteriorAtmosphere` blends the `night` and
+   * `storm` grades by name, so this records the author's intent and does not
+   * reach the post chain.
+   */
+  grade?: string;
+  /** 0..1 toward the `night` grade. Defaults to 0.7. */
+  gradeMix?: number;
+}
+
+/** Where a dungeon's exterior architecture sits in the world. */
+export interface EntranceDef {
+  x: number;
+  z: number;
+  /** Which way the doorway faces, radians. */
+  heading: number;
+  /** Which piece of architecture `Dungeons.init` builds. */
+  kind: 'bunker' | 'mine' | 'cave';
+}
+
+/** The way back out, as the author places it inside the interior. */
+export interface ExitDef {
+  at: Point2;
+  facing?: number;
+  w?: number;
+  h?: number;
+  color?: number;
+  intensity?: number;
+}
+
+/**
+ * A dungeon definition: pure data plus the two authoring hooks.
+ *
+ * `author(layout)` writes the room graph; `dress(kit, ...)` hangs the props and
+ * the lights on it. Everything else is declarative, and `Dungeon.build()` runs
+ * the same pipeline over all of them.
+ */
+export interface DungeonDef {
+  id: string;
+  name: string;
+  /** The world region it is in. Shown by the map screen. */
+  region: string;
+  /** Default shell style; a room may override it. */
+  style: DungeonStyle;
+  seed?: number;
+  corridorWidth?: number;
+  corridorHeight?: number;
+  entrance: EntranceDef;
+  /** Local-to-world offset. Interiors are authored around their own origin. */
+  origin: [number, number, number];
+  /** Dungeon-local `[x, z]` the party arrives at. */
+  spawn: Point2;
+  exit?: ExitDef;
+  wallMat: MaterialPicker;
+  floorMat: MaterialPicker;
+  ceilMat: MaterialPicker;
+  atmosphere: DungeonAtmosphere;
+  lighting?: LightRigOptions;
+  ambience?: AmbienceDesc;
+  /** Write the room graph. */
+  author(L: Layout): void;
+  /** Hang props and lights on the built shell. */
+  dress?(kit: PropKit, L: Layout, rig: LightRig, dungeon: Dungeon): void;
+  /** Anything that has to be positioned against the finished geometry. */
+  extras?(dungeon: Dungeon): void;
+}
+
+/** What one built interior cost. */
+export interface DungeonStats extends MergeStats {
+  buildMs: number;
+  lights: number;
+}
+
+/** The placers a declared lamp can resolve to. */
+type LampFixture = 'emergencyStrip' | 'deadStrip' | 'floodLight' | 'lantern' | 'fungus';
+
+/** Which fixture geometry a declared lamp grows. Total over {@link LampKind}. */
+const LAMP_FIXTURE: Record<LampKind, LampFixture> = {
+  emergency: 'emergencyStrip',
+  dead: 'deadStrip',
+  flood: 'floodLight',
+  lantern: 'lantern',
+  fungus: 'fungus',
+};
 
 /**
  * One built dungeon interior.
@@ -22,25 +127,24 @@ import type { Game } from '../../../game/Game.ts';
  */
 export class Dungeon {
   built!: boolean;
-  def!: any;
-  discovered!: Set<any>;
+  def!: DungeonDef;
+  /** Ids of the rooms and corridors the party has walked through. */
+  discovered!: Set<string>;
   game!: Game;
   group!: THREE.Group;
-  id!: any;
-  interactables!: any;
-  keys!: Set<any>;
+  id!: string;
+  interactables!: Interactable[];
+  /** Dungeon-local key items the party is carrying. Unused: `Dungeons` owns the real set. */
+  keys!: Set<string>;
   kit!: PropKit;
   layout!: Layout;
   map!: DungeonMap;
-  name!: any;
+  name!: string;
   origin!: THREE.Vector3;
   rig!: LightRig;
-  stats!: any;
-  vestibule!: any;
-  /**
-   * @param def dungeon definition
-   */
-  constructor(def: any, game: import('../../../game/Game.ts').Game) {
+  stats!: DungeonStats;
+  vestibule!: Vestibule;
+  constructor(def: DungeonDef, game: Game) {
     this.def = def;
     this.game = game;
     this.id = def.id;
@@ -124,19 +228,21 @@ export class Dungeon {
     return this;
   }
 
-  /** Resolve a layout lamp declaration into fixture geometry plus an emitter. */
-  _lamp(kit: PropKit, l: any) {
+  /**
+   * Resolve a layout lamp declaration into fixture geometry plus an emitter.
+   *
+   * Unexercised: `Layout.lamp()` has no call sites, so `layout.lamps` is always
+   * empty. See `Layout.prop` for the same note.
+   *
+   * This used to fall back to a bare emitter when the fixture lookup missed.
+   * `LampKind` is exactly the five keys of `LAMP_FIXTURE`, so it never did.
+   */
+  _lamp(kit: PropKit, l: Lamp) {
     const [x, z] = l.at;
     const floor = this.layout.floorAt(x, z);
     const y = l.y != null ? l.y : (floor != null ? floor + 2.6 : 2.6);
-    const FN: Record<string, keyof PropKit> = {
-      emergency: 'emergencyStrip', dead: 'deadStrip', flood: 'floodLight',
-      lantern: 'lantern', fungus: 'fungus',
-    };
-    const fn = FN[l.kind];
-    const make = fn ? kit[fn] : undefined;
-    if (typeof make === 'function') make(x, y, z, l);
-    else rigOnly(kit.rig, x, y, z, l);
+    const make: PropPlacer = kit[LAMP_FIXTURE[l.kind]];
+    make.call(kit, x, y, z, l);
   }
 
   // --------------------------------------------------------------- runtime
@@ -161,7 +267,7 @@ export class Dungeon {
   }
 
   /** Interactables in world space, nearest first. */
-  near(worldPos: any, extra = 0) {
+  near(worldPos: THREE.Vector3, extra = 0): Interactable[] {
     const lx = worldPos.x - this.origin.x, ly = worldPos.y - this.origin.y, lz = worldPos.z - this.origin.z;
     const out = [];
     for (const it of this.interactables) {
@@ -172,7 +278,7 @@ export class Dungeon {
     return out.map((o) => o.it);
   }
 
-  update(dt: number, now: number, cameraLocal: THREE.Camera) {
+  update(dt: number, now: number, cameraLocal: LocalView) {
     this.kit.update(dt, now);
     this.rig.update(dt, cameraLocal, now);
     // reveal the map as the party moves through
@@ -190,9 +296,3 @@ export class Dungeon {
   }
 }
 
-function rigOnly(rig: LightRig, x: any, y: any, z: any, l: any) {
-  rig.add({
-    pos: [x, y, z], color: l.color, intensity: l.intensity,
-    range: l.range, flicker: l.flicker, glow: l.glow,
-  });
-}

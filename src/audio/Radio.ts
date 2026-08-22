@@ -1,4 +1,5 @@
 import { Rng } from '../util/Rng.ts';
+import type { AudioSystem } from './AudioSystem.ts';
 
 /**
  * The Regalia's radio.
@@ -7,8 +8,9 @@ import { Rng } from '../util/Rng.ts';
  * you drive; the car's stereo is a real part of the road trip. There are no
  * audio files in this project and there never will be (see BRIEF), so every
  * station here is *synthesised*, in the same lazily-booted WebAudio style as
- * `AudioSystem` — it borrows that system's context, master chain and reverb
- * when one exists rather than opening a second output.
+ * `AudioSystem` — it borrows that system's context rather than opening a second
+ * one. It does *not* currently borrow the mix: see the note in `attach`, which
+ * is where that was meant to happen and never has.
  *
  * Each station is a small arrangement spec: tempo, metre, a chord loop, a
  * scale, which voices play and what the drums do. A shared scheduler walks the
@@ -99,12 +101,31 @@ export const STATIONS: Station[] = [
   },
 ];
 
+/** One note on the radio's single synth voice. */
+interface OscVoice {
+  freq: number;
+  /** Absolute context time. */
+  t: number;
+  dur: number;
+  type?: OscillatorType;
+  gain?: number;
+  attack?: number;
+  release?: number;
+  /** Lowpass cutoff the filter opens to through the attack, Hz. */
+  cut?: number;
+  /** Ratio for a second, detuned oscillator. 0 for one voice. */
+  detune?: number;
+  /** Vibrato rate, Hz. 0 for none. */
+  vibrato?: number;
+}
+
 /* ------------------------------------------------------------------ radio */
 
 export class Radio {
   _duck!: number;
   _next!: number;
-  _noiseBuf!: any;
+  /** One 0.4 s bed shared by the whole kit, made on first use. */
+  _noiseBuf!: AudioBuffer | null;
   _duckUntil!: number;
   _melodyRng!: Rng;
   _rng!: Rng;
@@ -112,19 +133,20 @@ export class Radio {
    *  under `@types/node` too and the two platforms return different handles. */
   _timer!: ReturnType<typeof setInterval> | null;
   bar!: number;
-  ctx!: any;
-  duckGain!: any;
+  /** Borrowed from the AudioSystem by `attach`; null until it has booted. */
+  ctx!: BaseAudioContext | null;
+  /** Everything below is built by `attach` and read only once `ctx` is set. */
+  duckGain!: GainNode;
   enabled!: boolean;
   engaged!: boolean;
   index!: number;
   on!: boolean;
-  out!: any;
-  send!: any;
-  tone!: any;
+  out!: GainNode;
+  tone!: BiquadFilterNode;
   volume!: number;
   constructor() {
-    /** @type {AudioContext|null} */
     this.ctx = null;
+    this._noiseBuf = null;
     this.enabled = false;
     this.engaged = false;
     this.index = 0;
@@ -146,10 +168,9 @@ export class Radio {
    * Attach to a live AudioSystem. Safe to call repeatedly; a no-op until that
    * system has actually booted its context (which only happens after a user
    * gesture, per browser policy).
-   * @param audio the AudioSystem instance
    * @returns true once attached
    */
-  attach(audio: any): boolean {
+  attach(audio: AudioSystem): boolean {
     if (this.enabled || !audio || !audio.ctx) return this.enabled;
     const ctx = audio.ctx;
     this.ctx = ctx;
@@ -167,13 +188,21 @@ export class Radio {
 
     this.out.connect(this.duckGain);
     this.duckGain.connect(this.tone);
-    this.tone.connect(audio.musicBus || ctx.destination);
-    if (audio.reverbSend) {
-      this.send = ctx.createGain();
-      this.send.gain.value = 0.10;
-      this.tone.connect(this.send);
-      this.send.connect(audio.reverbSend);
-    }
+    // Straight to the device, *not* through the mix.
+    //
+    // This read `audio.musicBus || ctx.destination`, and `AudioSystem` has
+    // never had a `musicBus` -- nothing in the tree assigns one -- so the
+    // fallback has carried the radio since the day it was written and the
+    // module comment above ("borrows that system's ... master chain") has
+    // never been true. A second `audio.reverbSend` guess sat next to it and
+    // was likewise always undefined, so the radio has no reverb send at all.
+    //
+    // Left as it actually behaves rather than quietly re-routed: the real
+    // targets are `audio.busNode('music')` and `audio.graph.sendLong`, and
+    // switching to them puts the radio behind the duck, the glue compressor,
+    // the limiter and the music slider all at once. That is a mix change, and
+    // it wants someone to listen to it.
+    this.tone.connect(ctx.destination);
 
     this._next = ctx.currentTime + 0.15;
     this.bar = 0;
@@ -246,6 +275,9 @@ export class Radio {
   /* ------------------------------------------------------------ scheduling */
 
   _schedule() {
+    // The one entry point into the synth voices, and the only place `ctx` is
+    // checked. The leaf voices below re-narrow it rather than assert, because
+    // a field that is null before `attach` may not pretend otherwise.
     const ctx = this.ctx;
     if (!ctx || !this.engaged || !this.on) {
       // keep the clock rolling so the arrangement does not jump on return
@@ -383,6 +415,7 @@ export class Radio {
 
   _kick(t: number, amp: number) {
     const ctx = this.ctx;
+    if (!ctx) return;
     const o = ctx.createOscillator();
     o.type = 'sine';
     o.frequency.setValueAtTime(150, t);
@@ -396,6 +429,7 @@ export class Radio {
 
   _snare(t: number, amp: number, dur: number) {
     const ctx = this.ctx;
+    if (!ctx) return;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();
     const f = ctx.createBiquadFilter();
@@ -409,6 +443,7 @@ export class Radio {
 
   _hat(t: number, amp: number) {
     const ctx = this.ctx;
+    if (!ctx) return;
     const src = ctx.createBufferSource();
     src.buffer = this._noise();
     const f = ctx.createBiquadFilter();
@@ -421,9 +456,10 @@ export class Radio {
   }
 
   /** One shared 0.4 s noise buffer for the whole kit. */
-  _noise() {
+  _noise(): AudioBuffer | null {
     if (this._noiseBuf) return this._noiseBuf;
     const ctx = this.ctx;
+    if (!ctx) return null;
     const len = Math.floor(ctx.sampleRate * 0.4);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
@@ -440,8 +476,9 @@ export class Radio {
    * a vibrato LFO). Everything above is built out of this.
    */
   _osc({ freq, t, dur, type = 'sawtooth', gain = 0.06, attack = 0.01,
-    release = 0.2, cut = 2600, detune = 0, vibrato = 0 }: any) {
+    release = 0.2, cut = 2600, detune = 0, vibrato = 0 }: OscVoice) {
     const ctx = this.ctx;
+    if (!ctx) return;
     const end = t + dur;
     const o = ctx.createOscillator();
     o.type = type;
@@ -460,14 +497,15 @@ export class Radio {
     g.gain.exponentialRampToValueAtTime(0.0001, end + 0.02);
 
     o.connect(f);
-    let o2: any = null;
+    let o2: OscillatorNode | null = null;
     if (detune) {
       o2 = ctx.createOscillator();
       o2.type = type;
       o2.frequency.value = freq * detune;
       o2.connect(f);
     }
-    let lfo: any = null, lg: any = null;
+    let lfo: OscillatorNode | null = null;
+    let lg: GainNode | null = null;
     if (vibrato) {
       lfo = ctx.createOscillator();
       lfo.frequency.value = vibrato;

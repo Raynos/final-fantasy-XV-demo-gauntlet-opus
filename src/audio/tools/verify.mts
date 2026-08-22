@@ -13,11 +13,15 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AudioSystem } from '../AudioSystem.ts';
+import type { Score } from '../Score.ts';
+import type { MusicStateName } from '../Themes.ts';
+import type { Game } from '../../game/Game.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const PORT = Number(process.env.PORT || 5179);
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -40,20 +44,36 @@ async function ensureServer() {
 
 /* ---------------------------------------------------------------- page fns */
 
+/**
+ * Types for the in-page half.
+ *
+ * `window.GAME` is declared `any` in `src/globals.d.ts`, so the first thing
+ * every page function here does is give what it pulls off it a real type. That
+ * is an assignment, not an assertion: if `renderSession` or `Score.at` changes
+ * shape, this harness stops compiling instead of failing at 3 a.m. in a page.
+ */
+
+/** One point on the session timeline, and what the score was playing there. */
+interface Mark { t: number; label: string; state: MusicStateName }
+
+/** One second of the rendered mix. */
+interface Window1s { s: number; rms: number; db: number; peak: number }
+
 /** Renders the scripted session offline and analyses the result. */
-const OFFLINE = async (seconds: any) => {
-  const Audio = window.GAME.get('Audio').constructor;
-  const marks: any[] = [];
+const OFFLINE = async (seconds: number) => {
+  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const marks: Mark[] = [];
   const t0 = performance.now();
   const { buffer, stats } = await Audio.renderSession({
     seconds,
     sampleRate: 44100,
-    script: (api: any) => {
+    script: (api) => {
       const { score, sfx, amb } = api;
       const O = { x: 0, y: 1.6, z: 0 };
       const near = { x: 3, y: 1.2, z: -4 };
 
-      const mark = (t: any, label: any) => score.at(t, (s: any) => marks.push({ t, label, state: s.stateName }));
+      const mark = (t: number, label: string) =>
+        score.at(t, (s: Score) => marks.push({ t, label, state: s.stateName }));
 
       /* -- ambience timeline ------------------------------------------- */
       amb.setTimeOfDay(9.0, 0, 0);
@@ -68,17 +88,17 @@ const OFFLINE = async (seconds: any) => {
       /* -- music timeline ----------------------------------------------- */
       score.setState('field', { immediate: true });
       mark(2, 'field');
-      score.at(11, (s: any) => s.setState('tension', { fade: 2.0 }));
+      score.at(11, (s) => s.setState('tension', { fade: 2.0 }));
       mark(15, 'tension');
-      score.at(17, (s: any) => { s.setState('combat', { fade: 1.2 }); s.setIntensity(0.85); });
+      score.at(17, (s) => { s.setState('combat', { fade: 1.2 }); s.setIntensity(0.85); });
       mark(24, 'combat');
-      score.at(31, (s: any) => { s.setState('boss', { fade: 1.4 }); s.setIntensity(1); });
+      score.at(31, (s) => { s.setState('boss', { fade: 1.4 }); s.setIntensity(1); });
       mark(35, 'boss');
-      score.at(37, (s: any) => s.victory());
+      score.at(37, (s) => s.victory());
       mark(39, 'victory');
-      score.at(43, (s: any) => s.setState('night', { fade: 2.5 }));
+      score.at(43, (s) => s.setState('night', { fade: 2.5 }));
       mark(47, 'night');
-      score.at(50, (s: any) => s.setState('camp', { fade: 2.5 }));
+      score.at(50, (s) => s.setState('camp', { fade: 2.5 }));
       mark(55, 'camp');
 
       /* -- combat SFX stream -------------------------------------------- */
@@ -128,15 +148,13 @@ const OFFLINE = async (seconds: any) => {
   });
   const renderMs = performance.now() - t0;
   await new Promise((r) => setTimeout(r, 800));   // let onended drain
-  const after = window.GAME.get('Audio').constructor;
-  void after;
 
   /* -------- analysis ------------------------------------------------- */
   const L = buffer.getChannelData(0);
   const R = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : L;
   const sr = buffer.sampleRate;
   const win = sr;                                  // one second
-  const windows = [];
+  const windows: Window1s[] = [];
   let peak = 0, clipped = 0, sum2 = 0;
   let lp = 0, lowSum = 0, highSum = 0, dc = 0;
   for (let i = 0; i < L.length; i++) {
@@ -181,13 +199,13 @@ const OFFLINE = async (seconds: any) => {
 };
 
 /** Renders the score alone and reports the level of each cue. */
-const MUSIC_ONLY = async (args: any) => {
-  const [seconds, raw] = Array.isArray(args) ? args : [args, false];
-  const Audio = window.GAME.get('Audio').constructor;
-  const plan = [[0, 'field'], [12, 'tension'], [20, 'combat'], [32, 'boss'], [42, 'victory'], [50, 'night']];
+const MUSIC_ONLY = async ({ seconds, raw }: { seconds: number, raw: boolean }) => {
+  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const plan: [number, MusicStateName][] =
+    [[0, 'field'], [12, 'tension'], [20, 'combat'], [32, 'boss'], [42, 'victory'], [50, 'night']];
   const { buffer } = await Audio.renderSession({
     seconds, sampleRate: 44100,
-    script: (api: any) => {
+    script: (api) => {
       api.amb.out.gain.value = 0;
       if (raw) {
         // Bypass the master chain to see the score's own dynamics.
@@ -199,12 +217,12 @@ const MUSIC_ONLY = async (args: any) => {
       api.score.setIntensity(0.85);
       for (const [t, name] of plan) {
         if (t === 0) continue;
-        api.score.at(t, (s: any) => (name === 'victory' ? s.victory() : s.setState(name, { fade: 1.5 })));
+        api.score.at(t, (s) => (name === 'victory' ? s.victory() : s.setState(name, { fade: 1.5 })));
       }
     },
   });
   const L = buffer.getChannelData(0), R = buffer.getChannelData(1), sr = buffer.sampleRate;
-  const rms = (a: any, b: any) => {
+  const rms = (a: number, b: number) => {
     let s2 = 0, n = 0;
     for (let i = Math.floor(a * sr); i < Math.floor(b * sr) && i < L.length; i++) {
       const v = (L[i] + R[i]) * 0.5; s2 += v * v; n++;
@@ -219,12 +237,11 @@ const MUSIC_ONLY = async (args: any) => {
 };
 
 /** Renders one cue in isolation for 16 s and returns its level. */
-const CUE = async (args: any) => {
-  const [name, raw] = args;
-  const Audio = window.GAME.get('Audio').constructor;
+const CUE = async ({ name, raw }: { name: MusicStateName, raw: boolean }) => {
+  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
   const { buffer } = await Audio.renderSession({
     seconds: 16, sampleRate: 44100,
-    script: (api: any) => {
+    script: (api) => {
       api.amb.out.gain.value = 0;
       if (raw) {
         api.graph.glue.ratio.value = 1; api.graph.glue.knee.value = 0; api.graph.glue.threshold.value = 0;
@@ -253,9 +270,10 @@ const CUE = async (args: any) => {
  * scheduler) and running, so both conditions see the same thermal state, the
  * same GPU, the same heap.
  */
-const AB = async (blocks: any) => {
-  const g = window.GAME;
+const AB = async (blocks: number) => {
+  const g: Game = window.GAME;
   const audio = g.get('Audio');
+  if (!audio || !audio.ctx) throw new Error('AB needs a booted AudioContext (?audio=force)');
   const player = g.get('Player');
   const combat = g.get('Combat');
   const enemies = g.get('Enemies');
@@ -263,18 +281,18 @@ const AB = async (blocks: any) => {
   g.applyShot('hud_field');
   rig?.clearShot?.();
   g.resetClock();
-  if (enemies && enemies.spawn && enemies.list.length < 3) {
+  if (player && enemies && enemies.spawn && enemies.list.length < 3) {
     const p = player.position;
     for (let i = 0; i < 3; i++) {
       enemies.spawn(['sabertusk', 'goblin', 'mt'][i], { pos: [p.x + 6 + i * 3, 0, p.z + 8] });
     }
   }
   const inp = g.input;
-  const med = (a: any) => { const s = a.slice().sort((x: any, y: any) => x - y); return s[Math.floor(s.length / 2)]; };
-  const on: any[] = [], off: any[] = [];
+  const med = (a: number[]) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const on: number[] = [], off: number[] = [];
   let frame = 0;
-  const runBlock = async (n: any, sink: any) => {
-    const t = [];
+  const runBlock = async (n: number, sink: number[]) => {
+    const t: number[] = [];
     for (let i = 0; i < n; i++, frame++) {
       inp.keys.clear();
       inp.keys.add('KeyW');
@@ -292,9 +310,10 @@ const AB = async (blocks: any) => {
     sink.push(t[Math.floor(t.length * 0.5)]);
   };
 
-  const withAudio = async (want: any) => {
-    if (want) { await audio.ctx.resume(); await new Promise((r) => setTimeout(r, 260)); }
-    else { await audio.ctx.suspend(); await new Promise((r) => setTimeout(r, 140)); }
+  const ctx = audio.ctx;
+  const withAudio = async (want: boolean) => {
+    if (want) { await ctx.resume(); await new Promise((r) => setTimeout(r, 260)); }
+    else { await ctx.suspend(); await new Promise((r) => setTimeout(r, 140)); }
   };
   await runBlock(90, []);                        // warm-up, discarded
   // ABBA ordering: any thermal or GC drift through the run biases both
@@ -325,8 +344,8 @@ async function main() {
       '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--mute-audio',
       '--autoplay-policy=no-user-gesture-required'],
   });
-  const errors: any[] = [];
-  const open = async (query: any) => {
+  const errors: string[] = [];
+  const open = async (query: string) => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     page.on('pageerror', (e) => errors.push(`[${query}] ${e}\n${e.stack || ''}`));
     page.on('console', (m) => {
@@ -339,14 +358,21 @@ async function main() {
     return page;
   };
 
-  const out: any = {};
+  const out: {
+    offline: Awaited<ReturnType<typeof OFFLINE>>,
+    music: Awaited<ReturnType<typeof MUSIC_ONLY>>,
+    ab: Awaited<ReturnType<typeof AB>>,
+    settled: Awaited<ReturnType<AudioSystem['stats']>>,
+  } = Object.create(null);
   const only = process.argv.includes('--music');
   try {
     if (process.argv.includes('--probe')) {
       const pp = await open('shoot=1&q=low');
       const raw = process.argv.includes('--raw');
-      for (const name of ['silence', 'tension', 'night', 'camp', 'field', 'combat', 'boss', 'victory']) {
-        const r = await pp.evaluate(CUE, [name, raw]);
+      const cues: MusicStateName[] =
+        ['silence', 'tension', 'night', 'camp', 'field', 'combat', 'boss', 'victory'];
+      for (const name of cues) {
+        const r = await pp.evaluate(CUE, { name, raw });
         console.log(`${name.padEnd(9)} ${String(r.db).padStart(7)} dBFS   peak ${r.peak}`);
       }
       await pp.close();
@@ -356,7 +382,7 @@ async function main() {
     }
     if (only) {
       const pm0 = await open('shoot=1&q=low');
-      const r = await pm0.evaluate(MUSIC_ONLY, [60, process.argv.includes('--raw')]);
+      const r = await pm0.evaluate(MUSIC_ONLY, { seconds: 60, raw: process.argv.includes('--raw') });
       console.log(Object.entries(r).map(([k, v]) => `${k} ${v}`).join('   '));
       await pm0.close();
       await browser.close();
@@ -370,7 +396,7 @@ async function main() {
 
     console.log('== music-only render ==');
     const pm = await open('shoot=1&q=low');
-    out.music = await pm.evaluate(MUSIC_ONLY, [60, false]);
+    out.music = await pm.evaluate(MUSIC_ONLY, { seconds: 60, raw: false });
     await pm.close();
 
     console.log('== live A/B frame cost ==');
@@ -379,18 +405,20 @@ async function main() {
     // Settle: let every tail ring out and the teardown sweep run, then look for
     // anything still holding nodes.
     out.settled = await p2.evaluate(async () => {
-      const g = window.GAME;
+      const g: Game = window.GAME;
+      const audio = g.get('Audio');
+      if (!audio) throw new Error('no Audio system on the settle page');
       g.input.keys.clear();
       // Stop the score first: the leak question is "does anything outlive its
       // schedule", and a running orchestra always has notes in flight.
-      g.get('Audio').score.stop();
+      audio.score.stop();
       // Real time has to pass, not simulated time: a scheduled source only
       // ends when the audio clock reaches it.
       for (let i = 0; i < 70; i++) {
         g.frame(1 / 60);
         await new Promise((r) => setTimeout(r, 110));
       }
-      return g.get('Audio').stats();
+      return audio.stats();
     });
     await p2.close();
   } finally {
@@ -398,17 +426,23 @@ async function main() {
     if (server) server.kill();
   }
 
+  // `stats()` is a union on `enabled`: the A/B page runs with `?audio=force`,
+  // so it must be the booted arm, and saying so once here is what makes every
+  // graph number below real rather than possibly-undefined.
+  const settled = out.settled;
+  if (!settled.enabled) throw new Error('audio never booted in the A/B page');
+
   const o = out.offline;
   console.log('\n--- offline session ---------------------------------------');
   console.log(`render ${o.seconds}s in ${o.renderMs} ms (${(o.seconds * 1000 / o.renderMs).toFixed(1)}x realtime)`);
   console.log(`peak ${o.peak}  clipped ${o.clippedSamples}  rms ${o.rmsDb} dBFS  dc ${o.dcOffset}`);
   console.log(`low-band ${o.lowBandFraction}  stereo corr ${o.stereoCorrelation}`);
-  console.log('marks:', o.marks.map((m: any) => `${m.t}s=${m.state}`).join(' '));
+  console.log('marks:', o.marks.map((m) => `${m.t}s=${m.state}`).join(' '));
   console.log('graph:', JSON.stringify(o.stats.graph));
   console.log('score:', JSON.stringify(o.stats.score));
   console.log('sfx:', JSON.stringify(o.stats.sfx));
   console.log('per-second dBFS:');
-  console.log(o.windows.map((w: any) => `${String(w.s).padStart(2)}:${String(w.db).padStart(6)}`).join(' '));
+  console.log(o.windows.map((w) => `${String(w.s).padStart(2)}:${String(w.db).padStart(6)}`).join(' '));
 
   console.log('\n--- score dynamics (music bus alone, dBFS RMS) -------------');
   console.log(Object.entries(out.music).map(([k, v]) => `${k} ${v}`).join('   '));
@@ -420,29 +454,27 @@ async function main() {
   console.log(`delta            ${(ab.onMedian - ab.offMedian).toFixed(2)} ms/frame`);
   console.log(`AudioSystem.update  ${ab.updateMs} ms/frame (main thread)`);
   console.log('audio stats:', JSON.stringify(ab.audio, null, 1));
-  console.log('after settling:', JSON.stringify(out.settled.graph));
+  console.log('after settling:', JSON.stringify(settled.graph));
 
   /* ---------------------------------------------------------- assertions */
-  const fail: any[] = [];
-  const check = (cond: any, msg: any) => { if (!cond) fail.push(msg); else console.log(`  ok  ${msg}`); };
+  const fail: string[] = [];
+  const check = (cond: boolean, msg: string) => { if (!cond) fail.push(msg); else console.log(`  ok  ${msg}`); };
   console.log('\n--- assertions --------------------------------------------');
   check(o.clippedSamples === 0, 'nothing clips');
   check(o.peak > 0.10 && o.peak <= 1.0, `peak in range (${o.peak})`);
   check(o.rmsDb > -30 && o.rmsDb < -13, `programme level sane (${o.rmsDb} dBFS)`);
   check(Math.abs(o.dcOffset) < 0.002, `no DC offset (${o.dcOffset})`);
   check(o.stereoCorrelation < 0.999, `mix is stereo (corr ${o.stereoCorrelation})`);
-  check(o.windows.every((w: any) => w.rms > 0.0004), 'no silent second');
-  const at = (s: any) => o.windows[s] ? o.windows[s].rms : 0;
-  const avg = (a: any, b: any) => { let s = 0; for (let i = a; i < b; i++) s += at(i); return s / (b - a); };
+  check(o.windows.every((w) => w.rms > 0.0004), 'no silent second');
   const m = out.music;
   check(m.combat > m.field + 2, `combat cue is louder than field (${m.combat} vs ${m.field} dBFS)`);
   check(m.boss > m.combat - 0.5, `boss cue is at least as big as combat (${m.boss} vs ${m.combat})`);
   check(m.tension < m.field - 1.5, `tension cue is quieter than field (${m.tension} vs ${m.field})`);
   check(m.victory > m.night + 3, `victory is louder than the night cue (${m.victory} vs ${m.night})`);
   check(m.night < m.field, `night cue is more restrained than day (${m.night} vs ${m.field})`);
-  void avg;
-  const seen = new Set(o.marks.map((m: any) => m.state));
-  for (const s of ['field', 'tension', 'combat', 'boss', 'victory', 'night', 'camp']) {
+  const seen = new Set(o.marks.map((mk) => mk.state));
+  const wanted: MusicStateName[] = ['field', 'tension', 'combat', 'boss', 'victory', 'night', 'camp'];
+  for (const s of wanted) {
     check(seen.has(s), `score reached "${s}"`);
   }
   check(o.stats.score.notesScheduled > 500, `score wrote real music (${o.stats.score.notesScheduled} notes)`);
@@ -450,14 +482,15 @@ async function main() {
   check(o.stats.graph.dropped / Math.max(1, o.stats.graph.nodesMade) < 0.12,
     `voice budget rarely hit (${o.stats.graph.dropped} dropped of ${o.stats.graph.nodesMade})`);
   check(o.stats.graph.peakVoices <= 72, `peak voices within budget (${o.stats.graph.peakVoices})`);
-  const live = out.settled.graph;
+  const live = settled.graph;
   check(live.leaked <= live.voices + 6,
     `no voice leak after settling (made ${live.nodesMade}, freed ${live.nodesFreed}, `
     + `outstanding ${live.leaked}, still sounding ${live.voices})`);
   check(ab.updateMs < 0.5, `AudioSystem.update under 0.5 ms/frame (${ab.updateMs})`);
   check(ab.onMedian - ab.offMedian < 4.0,
     `audio frame cost inside measurement noise (${(ab.onMedian - ab.offMedian).toFixed(2)} ms, sigma ~3 ms on this box)`);
-  check(ab.audio.graph.peakVoices <= 72, `live peak voices ${ab.audio.graph.peakVoices}`);
+  check(ab.audio.enabled && ab.audio.graph.peakVoices <= 72,
+    `live peak voices ${ab.audio.enabled ? ab.audio.graph.peakVoices : 'n/a -- audio never booted'}`);
   check(errors.length === 0, `no console errors (${errors.length})`);
   if (errors.length) console.log(errors.slice(0, 12).join('\n'));
 

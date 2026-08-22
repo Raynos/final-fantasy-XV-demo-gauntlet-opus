@@ -4,7 +4,8 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from '../veg/Ecology.ts';
 import { woodMaterial, rustMaterial } from './PropMaterials.ts';
 import { TileStream } from './TileStream.ts';
-import { dressAt, zoneMoist, LITTER_KINDS } from './ZoneDress.ts';
+import type { Ecology } from '../veg/Ecology.ts';
+import { dressAt, zoneMoist, LITTER_KINDS, type LitterKind } from './ZoneDress.ts';
 import { WORLD } from '../map/WorldMap.ts';
 import { leafClusterTex } from '../veg/VegTextures.ts';
 import { patchVeg, registerAlphaCard } from '../veg/VegMaterial.ts';
@@ -26,7 +27,7 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 /** A few bent sticks lying together. */
-function branchGeometry(seed: any) {
+function branchGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const n = 2 + Math.floor(rng.next() * 3);
@@ -68,7 +69,7 @@ function branchGeometry(seed: any) {
 }
 
 /** Flat drift of dry leaves, lying on the ground. */
-function leafDriftGeometry(seed: any) {
+function leafDriftGeometry(seed: number) {
   const rng = new Rng(seed);
   const p = [], n = [], uv = [], idx = [], flex = [], col = [];
   const cards = 4;
@@ -105,7 +106,7 @@ function leafDriftGeometry(seed: any) {
 }
 
 /** Half-buried skull and ribs. */
-function bonesGeometry(seed: any) {
+function bonesGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const skull = new THREE.SphereGeometry(0.24, 12, 9);
@@ -145,7 +146,7 @@ function bonesGeometry(seed: any) {
 }
 
 /** A fallen trunk: tapered, bark-rough, one broken end and a couple of stubs. */
-function logGeometry(seed: any) {
+function logGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const len = rng.range(4.0, 7.5);
@@ -184,7 +185,7 @@ function logGeometry(seed: any) {
 }
 
 /** A broken stump with buttress roots spreading into the soil. */
-function stumpGeometry(seed: any) {
+function stumpGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const r = rng.range(0.3, 0.55);
@@ -221,7 +222,7 @@ function stumpGeometry(seed: any) {
  * hundred of these standing in black water is the drowned forest; without
  * them the Vesperpool is a lake with nothing in it.
  */
-function deadTrunkGeometry(seed: any) {
+function deadTrunkGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const h = rng.range(4.5, 9.0);
@@ -254,7 +255,7 @@ function deadTrunkGeometry(seed: any) {
 }
 
 /** Sun-bleached driftwood: a root ball with a few bare arms. */
-function driftwoodGeometry(seed: any) {
+function driftwoodGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const core = new THREE.DodecahedronGeometry(rng.range(0.3, 0.5), 0);
@@ -279,7 +280,7 @@ function driftwoodGeometry(seed: any) {
 }
 
 /** A chunk of broken carriageway: slab, aggregate face, bent rebar. */
-function rubbleGeometry(seed: any) {
+function rubbleGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const w = rng.range(0.8, 2.0), h = rng.range(0.18, 0.4), d = rng.range(0.6, 1.5);
@@ -306,7 +307,7 @@ function rubbleGeometry(seed: any) {
 }
 
 /** A hunter's waymark: five or six flat stones stacked and settled. */
-function cairnGeometry(seed: any) {
+function cairnGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   let y = 0;
@@ -328,7 +329,7 @@ function cairnGeometry(seed: any) {
 }
 
 /** An oil drum, standing or fallen. */
-function barrelGeometry(seed: any) {
+function barrelGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12, 1)];
   for (const y of [-0.22, 0.22]) {
@@ -359,7 +360,7 @@ function barrelGeometry(seed: any) {
  * a thin solid blade anyway. This is the band that turns Alstor Slough and the
  * Vesperpool from "a lake" into "a wetland".
  */
-function reedGeometry(seed: any) {
+function reedGeometry(seed: number) {
   const rng = new Rng(seed);
   const parts = [];
   const n = 8 + Math.floor(rng.next() * 4);
@@ -383,7 +384,7 @@ function reedGeometry(seed: any) {
   return out;
 }
 
-function stripAttrs(g: any) {
+function stripAttrs(g: THREE.BufferGeometry) {
   for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
   if (!g.attributes.normal) g.computeVertexNormals();
   if (!g.attributes.uv) {
@@ -399,6 +400,32 @@ function stripAttrs(g: any) {
 }
 
 /**
+ * The shared material set for the litter layer, built once. A function rather
+ * than a literal inside `build` so {@link DebrisMats} is the set itself and a
+ * `mat:` key in {@link LITTER} below is checked against what exists.
+ */
+function debrisMaterials() {
+  const wood = woodMaterial(0x6d5a44);
+  return {
+    wood,
+    bone: new THREE.MeshStandardMaterial({ color: 0xcfc6ae, roughness: 0.72, metalness: 0 }),
+    bleach: woodMaterial(0xa79c86),
+    stone: new THREE.MeshStandardMaterial({ color: 0x8e8778, roughness: 0.94, metalness: 0 }),
+    rust: rustMaterial(0x8a5a38, 0.5),
+    reed: new THREE.MeshStandardMaterial({ color: 0x5c6a38, roughness: 0.88, metalness: 0 }),
+    leaf: patchVeg(new THREE.MeshStandardMaterial({
+      map: leafClusterTex('dry'), color: 0xc9a566, vertexColors: true,
+      alphaTest: 0.36, transparent: false, side: THREE.DoubleSide,
+      roughness: 0.9, metalness: 0,
+    }), { bend: 0.02, flutter: 0.05, gustFreq: 0.06, flexPow: 1.0 }),
+  
+  };
+}
+
+export type DebrisMats = ReturnType<typeof debrisMaterials>;
+type DebrisMatKey = keyof DebrisMats;
+
+/**
  * The litter layer, streamed and zone-driven.
  *
  * Each kind carries its own *terrain* preference — leaf drift wants a canopy,
@@ -409,13 +436,13 @@ function stripAttrs(g: any) {
  * nothing on it, and none of it has to be authored per region.
  */
 /** One kind of ground litter: what it looks like, and how it is scattered. */
-interface LitterKind {
+interface LitterDef {
   /** RNG seed, so the same branch is the same branch every run. */
   seed: number;
   /** null for `planks`, whose geometry is merged inline at build time. */
   geo: ((seed: number) => THREE.BufferGeometry) | null;
-  /** Key into the shared material set. */
-  mat: string;
+  /** Which of the shared materials it is drawn with. */
+  mat: DebrisMatKey;
   /** Instances per hectare, before the zone recipe multiplies it. */
   per: number;
   /** Draw distance, metres. */
@@ -436,7 +463,7 @@ interface LitterKind {
   cast?: boolean;
 }
 
-const LITTER: Record<string, LitterKind> = {
+const LITTER: Record<LitterKind, LitterDef> = {
   branch: { seed: 11, geo: branchGeometry, mat: 'wood', per: 6, range: 105, scale: [0.7, 1.7], sink: 0.02, flat: false },
   log: { seed: 61, geo: logGeometry, mat: 'wood', per: 2.2, range: 200, scale: [0.8, 1.5], sink: 0.06, lie: true },
   stump: { seed: 62, geo: stumpGeometry, mat: 'wood', per: 1.6, range: 150, scale: [0.8, 1.6], sink: 0.05 },
@@ -451,22 +478,46 @@ const LITTER: Record<string, LitterKind> = {
   reeds: { seed: 91, geo: reedGeometry, mat: 'reed', per: 10, range: 145, scale: [0.8, 1.7], sink: 0.06, tilt: 0.05, cast: false },
 };
 
-const CAPS = {
+const CAPS: Record<LitterKind, number> = {
   branch: 620, log: 260, stump: 200, leaves: 900, bones: 90, planks: 150,
   rubble: 300, driftwood: 180, deadtrunk: 460, cairn: 70, barrel: 110, reeds: 620,
 };
 
+/** One kind's instanced mesh, and how many of its slots are written. */
+interface LitterGroup {
+  def: LitterDef;
+  mesh: THREE.InstancedMesh;
+  /** Instance capacity. */
+  max: number;
+  /** Slots written this frame. */
+  w: number;
+}
+
+/** One scattered piece of litter, as a streamed cell holds it. */
+interface LitterInstance {
+  k: LitterKind;
+  x: number;
+  z: number;
+  y: number;
+  /** Uniform scale. */
+  s: number;
+  yaw: number;
+  tilt: number;
+  roll: number;
+  sink: number;
+}
+
 export class Debris {
   _last!: THREE.Vector3;
   cell!: number;
-  eco!: any;
-  groups!: Map<any, any>;
-  mats!: any;
+  eco!: Ecology;
+  groups!: Map<LitterKind, LitterGroup>;
+  mats!: DebrisMats;
   quality!: number;
   radius!: number;
-  scene!: any;
-  stream!: TileStream;
-  constructor(eco: any, scene: any, { quality = 1 } = {}) {
+  scene!: THREE.Scene;
+  stream!: TileStream<LitterInstance>;
+  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1 } = {}) {
     this.eco = eco; this.scene = scene; this.quality = quality;
     this.groups = new Map();
     this.cell = 64;
@@ -475,22 +526,8 @@ export class Debris {
   }
 
   build() {
-    const wood = woodMaterial(0x6d5a44);
-    const M = {
-      wood,
-      bone: new THREE.MeshStandardMaterial({ color: 0xcfc6ae, roughness: 0.72, metalness: 0 }),
-      bleach: woodMaterial(0xa79c86),
-      stone: new THREE.MeshStandardMaterial({ color: 0x8e8778, roughness: 0.94, metalness: 0 }),
-      rust: rustMaterial(0x8a5a38, 0.5),
-      reed: new THREE.MeshStandardMaterial({ color: 0x5c6a38, roughness: 0.88, metalness: 0 }),
-      leaf: patchVeg(new THREE.MeshStandardMaterial({
-        map: leafClusterTex('dry'), color: 0xc9a566, vertexColors: true,
-        alphaTest: 0.36, transparent: false, side: THREE.DoubleSide,
-        roughness: 0.9, metalness: 0,
-      }), { bend: 0.02, flutter: 0.05, gustFreq: 0.06, flexPow: 1.0 }),
-    };
-    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `debris_${k}`;
-    this.mats = M;
+    const M = this.mats = debrisMaterials();
+    for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `debris_${k}`;
 
     const plankGeo = mergeGeometries([
       new THREE.BoxGeometry(1.5, 0.05, 0.2),
@@ -498,11 +535,12 @@ export class Debris {
     ], false);
 
     for (const key of LITTER_KINDS) {
-      const def = LITTER[key as keyof typeof LITTER];
-      if (!def) continue;
+      const def = LITTER[key];
+      // `planks` is the one kind whose geometry is merged inline above, and
+      // the only one whose `geo` is null. Every other key has a builder.
       const geo = key === 'planks' ? plankGeo : def.geo!(def.seed);
-      const max = Math.max(8, Math.round(CAPS[key as keyof typeof CAPS] * this.quality));
-      const mesh = new THREE.InstancedMesh(geo, M[def.mat as keyof typeof M], max);
+      const max = Math.max(8, Math.round(CAPS[key] * this.quality));
+      const mesh = new THREE.InstancedMesh(geo, M[def.mat], max);
       mesh.castShadow = def.cast !== false;
       mesh.receiveShadow = true;
       mesh.count = 0; mesh.frustumCulled = false;
@@ -586,7 +624,7 @@ export class Debris {
     }
   }
 
-  _genCell(cx: number, cz: number, out: any) {
+  _genCell(cx: number, cz: number, out: LitterInstance[]) {
     const c = this.cell;
     const rng = new Rng(hash3(cx, cz, 0x5d13));
     const bx = cx * c, bz = cz * c;
@@ -594,7 +632,7 @@ export class Debris {
     for (const key of LITTER_KINDS) {
       const want = dress.litter[key];
       if (!want) continue;
-      const def = LITTER[key as keyof typeof LITTER];
+      const def = LITTER[key];
       const n = Math.round(def.per * want * rng.range(0.35, 1.7));
       for (let i = 0; i < n; i++) {
         const x = bx + rng.next() * c, z = bz + rng.next() * c;

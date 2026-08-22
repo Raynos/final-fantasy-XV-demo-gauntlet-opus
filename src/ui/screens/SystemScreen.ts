@@ -4,11 +4,9 @@ import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
-import type { AudioSystem } from '../../audio/AudioSystem.ts';
+import type { BusName } from '../../audio/Graph.ts';
 
 const QUALITY = ['low', 'medium', 'high', 'ultra'] as const;
-/** The mixer buses this screen puts a slider on. */
-type BusId = Parameters<AudioSystem['setVolume']>[0];
 
 /**
  * System settings.
@@ -70,7 +68,7 @@ export class SystemScreen {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     void game;
 
-    const bus = (id: BusId, name: string, desc: string) => ({
+    const bus = (id: BusName, name: string, desc: string) => ({
       key: id, name, kind: 'slider', desc,
       get: () => { const a = audio(); return a ? a.volumeOf(id) : 0; },
       set: (v: any) => { const a = audio(); if (a) a.setVolume(id, v); },

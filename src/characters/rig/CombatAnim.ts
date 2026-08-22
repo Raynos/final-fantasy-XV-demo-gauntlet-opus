@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { clamp01, smooth, lerp } from './Geo.ts';
 import type { Game } from '../../game/Game.ts';
+import type { CombatSystem } from '../../combat/CombatSystem.ts';
+import type { CombatEvents } from '../../combat/CombatEvents.ts';
+import type { Player } from '../Player.ts';
+import type { Character } from './Character.ts';
+import { SIDES } from './Skeleton.ts';
+import type { Rig, Side } from './Skeleton.ts';
 
 /**
  * The player's combat body.
@@ -28,6 +34,9 @@ import type { Game } from '../../game/Game.ts';
  * of fighting it.
  */
 
+/** The rig's bones by name — this is what `B` is in every pose layer below. */
+type BoneMap = Record<string, THREE.Bone>;
+
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
@@ -38,8 +47,25 @@ const _tgt = new THREE.Vector3();
 const _tgt2 = new THREE.Vector3();
 const _gripQ = new THREE.Quaternion();
 
-/** Per-weapon body language. This is what makes a class feel different. */
-const STYLE = {
+/**
+ * Per-weapon body language. This is what makes a class feel different.
+ *
+ * `twist` is how far the torso counter-rotates into a swing, `step` how far
+ * the lead foot drives into it, `lean` the forward pitch, `drop` how much the
+ * stance compresses on contact, `settle` the recovery rate, `wind` the depth
+ * of the coil and `twoHand` how far down the haft the off hand grips.
+ */
+export interface WeaponStyle {
+  twist: number;
+  step: number;
+  lean: number;
+  drop: number;
+  settle: number;
+  wind: number;
+  twoHand: number;
+}
+
+const STYLE: Record<string, WeaponStyle> = {
   sword: { twist: 0.52, step: 0.11, lean: 0.10, drop: 0.030, settle: 1.0, wind: 0.85, twoHand: 0 },
   greatsword: { twist: 0.86, step: 0.24, lean: 0.24, drop: 0.075, settle: 1.7, wind: 1.15, twoHand: 0.30 },
   polearm: { twist: 0.44, step: 0.28, lean: 0.15, drop: 0.055, settle: 1.1, wind: 0.90, twoHand: 0.52 },
@@ -52,11 +78,17 @@ export class CombatAnim {
   _bound!: boolean;
   _prevState!: string;
   _warpK!: number;
-  combat!: any;
+  combat!: CombatSystem | undefined;
   game!: Game;
   land!: number;
   parry!: number;
-  player!: any;
+  player!: Player | undefined;
+  /**
+   * The player root, refreshed by `lateUpdate` before any pose layer runs.
+   * Every layer below is called from there and nowhere else, which is why it
+   * is established once, there, instead of re-guarded at each use.
+   */
+  _root!: THREE.Object3D;
   constructor(game: Game) {
     this.game = game;
     this.combat = game.get('Combat');
@@ -68,17 +100,18 @@ export class CombatAnim {
     this._bound = false;
     if (this.combat && this.combat.on) {
       this.combat.on('parry', () => { this.parry = 1; });
-      this.combat.on('warp', (d: any) => { if (d.phase === 'impact') this.land = 1; });
-      this.combat.on('playerHit', (d: any) => this._onHit(d));
+      this.combat.on('warp', (d) => { if (d.phase === 'impact') this.land = 1; });
+      this.combat.on('playerHit', (d) => this._onHit(d));
     }
   }
 
-  _onHit(d: any) {
+  _onHit(d: CombatEvents['playerHit']) {
     const c = this.player && this.player.character;
     if (!c || !c.hit) return;
-    // route the enemy's blow into the existing recoil + cloth impulse
-    _v.subVectors(this.player.position, d.enemy ? d.enemy.root.position : this.player.position).normalize();
-    c.hit(_v, THREE.MathUtils.clamp(d.damage / 400, 0.5, 1.6));
+    // Route the blow into the existing recoil + cloth impulse. The *direction*
+    // of the hit is deliberately not passed: `Character.hit` has never read
+    // one, so the recoil is the same whichever side the blow came from.
+    c.hit(THREE.MathUtils.clamp(d.damage / 400, 0.5, 1.6));
   }
 
   /**
@@ -94,6 +127,7 @@ export class CombatAnim {
     const rig = char.rig;
     const B = rig.byName;
     const s = rig.dims.s;
+    this._root = player.root;
 
     this.parry = Math.max(0, this.parry - dt * 1.6);
     this.land = Math.max(0, this.land - dt * 2.6);
@@ -102,18 +136,18 @@ export class CombatAnim {
     char.root.position.set(0, 0, 0);
     char.root.rotation.set(0, 0, 0);
 
-    const style = STYLE[(combat.weapon ? combat.weapon.kind : 'sword') as keyof typeof STYLE] || DEFAULT_STYLE;
+    const style = STYLE[combat.weapon ? combat.weapon.kind : 'sword'] || DEFAULT_STYLE;
     const st = combat.state;
     let ikWeight = 1;
 
-    if (st === 'attack' && combat.comboStep) ikWeight = this.poseSwing(B, s, combat, style, dt);
+    if (st === 'attack' && combat.comboStep) ikWeight = this.poseSwing(B, char, s, combat, style);
     else if (st === 'dodge') ikWeight = this.poseDodge(B, char, s, combat);
     else if (st === 'warp') ikWeight = this.poseWarp(B, char, s, combat);
-    else if (st === 'phase') ikWeight = this.posePhase(B, s, combat);
-    else if (st === 'stasis') ikWeight = this.poseStasis(B, s, combat);
+    else if (st === 'phase') ikWeight = this.posePhase(B, char, s, combat);
+    else if (st === 'stasis') ikWeight = this.poseStasis(B, char, s, combat);
     else ikWeight = this.poseReady(B, s, combat, style);
 
-    if (this.parry > 0.01) this.poseParry(B, s);
+    if (this.parry > 0.01) this.poseParry(B);
     if (this.land > 0.01) this.poseLanding(B, char, s);
     this.poseHitstop(B, combat);
 
@@ -131,8 +165,9 @@ export class CombatAnim {
 
   /* ------------------------------------------------------- pose layers */
 
+
   /** Additive Euler offset onto whatever the animator produced. */
-  add(B: any, name: string, x: number, y: number, z: number) {
+  add(B: BoneMap, name: string, x: number, y: number, z: number) {
     const b = B[name];
     if (!b) return;
     _e.set(x, y, z, 'YXZ');
@@ -141,7 +176,7 @@ export class CombatAnim {
   }
 
   /** Absolute override — used where the base layer must not show through. */
-  set(B: any, name: string, x: number, y: number, z: number) {
+  set(B: BoneMap, name: string, x: number, y: number, z: number) {
     const b = B[name];
     if (!b) return;
     _e.set(x, y, z, 'YXZ');
@@ -152,10 +187,12 @@ export class CombatAnim {
    * The commitment curve of a swing, running −1 (fully wound up, coiled away
    * from the target) through 0 to +1 (followed all the way through).
    */
-  swingCurve(combat: any, style: any): number {
+  swingCurve(combat: CombatSystem, style: WeaponStyle): number {
     const step = combat.comboStep;
     if (!step) return 0;
-    const n = clamp01(combat.comboTimer / Math.max(0.02, step[PHASE_KEY[combat.comboPhase as keyof typeof PHASE_KEY]] || 0.2));
+    // an unrecognised phase falls through to the 0.2 default, as it always has
+    const key = PHASE_KEY[combat.comboPhase];
+    const n = clamp01(combat.comboTimer / Math.max(0.02, (key ? step[key] : 0) || 0.2));
     if (combat.comboPhase === 'wind') {
       // ease out into the coil and hold there — the hold is the telegraph
       return -style.wind * (n < 0.6 ? 1 - Math.pow(1 - n / 0.6, 2.4) : 1);
@@ -173,7 +210,7 @@ export class CombatAnim {
    * The swing itself: hips and shoulders counter-rotate into the arc, the
    * front foot steps into it, and the whole mass drops slightly on contact.
    */
-  poseSwing(B: any, s: number, combat: any, style: any, dt: number) {
+  poseSwing(B: BoneMap, char: Character, s: number, combat: CombatSystem, style: WeaponStyle) {
     const k = this.swingCurve(combat, style);
     const step = combat.comboStep;
     // the arc's sign says whether this link of the combo goes left or right;
@@ -198,7 +235,7 @@ export class CombatAnim {
     this.add(B, 'shinL', stepK * 0.5, 0, 0);
     this.add(B, 'shinR', stepK * 0.5, 0, 0);
     // a heavy weapon compresses the stance on contact
-    this.player.character.root.position.y -= (style.drop * (0.35 + 0.65 * contact) * clamp01(k)) * s;
+    char.root.position.y -= (style.drop * (0.35 + 0.65 * contact) * clamp01(k)) * s;
     return 1;
   }
 
@@ -211,7 +248,7 @@ export class CombatAnim {
    * leaving the old spine twist here simply doubled the blading on Noctis and
    * on nobody else.
    */
-  poseReady(B: any, s: any, combat: any, style: any) {
+  poseReady(B: BoneMap, s: number, combat: CombatSystem, style: WeaponStyle) {
     const t = this.game.time.now;
     const near = combat.inCombat ? 1 : 0.3;
     // 0 for daggers, ~0.6 for the greatsword: how much mass is hanging off the
@@ -237,11 +274,11 @@ export class CombatAnim {
    * added to, because the locomotion gait and the foot IK have no idea the
    * character has left the ground.
    */
-  poseDodge(B: any, char: any, s: number, combat: any) {
+  poseDodge(B: BoneMap, char: Character, s: number, combat: CombatSystem) {
     const n = clamp01(combat.stateTime / 0.46);
     const d = combat.dodgeDir || _v.set(0, 0, -1);
     // resolve the dodge into the character's own frame
-    const h = this.player.root.rotation.y;
+    const h = this._root.rotation.y;
     const cs = Math.cos(-h), sn = Math.sin(-h);
     const lx = d.x * cs - d.z * sn;
     const lz = d.x * sn + d.z * cs;
@@ -275,7 +312,7 @@ export class CombatAnim {
     this.set(B, 'spine03', -0.26 * tuck, 0.16 * lx, 0);
     this.set(B, 'neck', -0.28 * tuck, 0, 0);
     this.set(B, 'head', -0.30 * tuck, 0.2 * lx, 0);
-    for (const side of ['L', 'R']) {
+    for (const side of SIDES) {
       const m = side === 'L' ? 1 : -1;
       this.set(B, `thigh${side}`, -1.55 * tuck - 0.15, 0, 0.14 * m * tuck);
       this.set(B, `shin${side}`, 1.85 * tuck, 0, 0);
@@ -295,7 +332,7 @@ export class CombatAnim {
    * anticipation is folded into the first 25% of the dash because the combat
    * system teleports the position immediately and there is no earlier window.
    */
-  poseWarp(B: any, char: any, s: number, combat: any) {
+  poseWarp(B: BoneMap, char: Character, s: number, combat: CombatSystem) {
     const w = combat.warp;
     const vfx = this.game.get('VFX');
     const k = w && vfx ? clamp01((vfx.clock - w.t0) / Math.max(0.02, w.dash)) : 1;
@@ -316,7 +353,7 @@ export class CombatAnim {
     this.set(B, 'neck', 0.20 * ext - 0.24 * landK, 0.16 * ext, 0);
     this.set(B, 'head', 0.28 * ext - 0.30 * landK, 0.24 * ext, 0);
     // legs stream behind during the dash, then catch the weight on landing
-    for (const side of ['L', 'R']) {
+    for (const side of SIDES) {
       const m = side === 'L' ? 1 : -1;
       const trail = side === 'L' ? 1 : 0.62;
       this.set(B, `thigh${side}`, (0.85 * ext) * trail - 1.05 * landK, 0, 0.10 * m * landK);
@@ -333,7 +370,7 @@ export class CombatAnim {
   }
 
   /** Phase: the MP-draining parry stance. Weight back, blade low and across. */
-  posePhase(B: any, s: number, combat: any) {
+  posePhase(B: BoneMap, char: Character, s: number, combat: CombatSystem) {
     const t = this.game.time.now;
     const charge = clamp01(combat.phaseCharge);
     const sway = Math.sin(t * 7) * 0.012 * charge;
@@ -347,12 +384,12 @@ export class CombatAnim {
     this.add(B, 'thighR', 0.16, 0.14, -0.06);
     this.add(B, 'shinL', 0.30, 0, 0);
     this.add(B, 'shinR', 0.18, 0, 0);
-    this.player.character.root.position.y -= 0.05 * s;
+    char.root.position.y -= 0.05 * s;
     return 1;
   }
 
   /** Out of MP. Doubled over, gasping — the punishment has to read. */
-  poseStasis(B: any, s: number, combat: any) {
+  poseStasis(B: BoneMap, char: Character, s: number, combat: CombatSystem) {
     const t = this.game.time.now;
     const gasp = Math.sin(t * 4.2) * 0.5 + 0.5;
     const k = clamp01(combat.stateTime / 0.4);
@@ -368,12 +405,12 @@ export class CombatAnim {
     this.add(B, 'thighR', -0.20 * k, 0, -0.08 * k);
     this.add(B, 'shinL', 0.32 * k, 0, 0);
     this.add(B, 'shinR', 0.28 * k, 0, 0);
-    this.player.character.root.position.y -= 0.07 * s * k;
+    char.root.position.y -= 0.07 * s * k;
     return 0.55;
   }
 
   /** Perfect-guard flourish: the whole torso whips through the counter. */
-  poseParry(B: any, s: any) {
+  poseParry(B: BoneMap) {
     const p = this.parry;
     const swirl = Math.sin(p * Math.PI) * p;
     this.add(B, 'hips', 0, -0.30 * swirl, 0);
@@ -387,7 +424,7 @@ export class CombatAnim {
   }
 
   /** The moment a warp-strike arrives: a compression the legs have to eat. */
-  poseLanding(B: any, char: any, s: number) {
+  poseLanding(B: BoneMap, char: Character, s: number) {
     const k = this.land * this.land;
     this.add(B, 'hips', 0.24 * k, 0, 0);
     this.add(B, 'spine01', 0.14 * k, 0, 0);
@@ -406,7 +443,7 @@ export class CombatAnim {
    * through the spine — phased off *raw* time so it keeps moving while the
    * simulation clock is stopped — turns the same freeze into a collision.
    */
-  poseHitstop(B: any, combat: any) {
+  poseHitstop(B: BoneMap, combat: CombatSystem) {
     const h = combat.hitstop;
     if (h <= 0) return;
     const k = clamp01(h / 0.12);
@@ -428,7 +465,7 @@ export class CombatAnim {
    *
    * @returns the driving side, so the caller can close that fist
    */
-  weaponIK(rig: any, combat: any, style: any, weight: number): 'L' | 'R' | null {
+  weaponIK(rig: Rig, combat: CombatSystem, style: WeaponStyle, weight: number): Side | null {
     const anchor = combat.hand;
     if (!anchor) return null;
     anchor.updateWorldMatrix(true, false);
@@ -436,7 +473,7 @@ export class CombatAnim {
     // vectors, and aliasing the target against them silently aims the arm at
     // its own shoulder
     _tgt.setFromMatrixPosition(anchor.matrixWorld);
-    const local = this.player.root.worldToLocal(_v3.copy(_tgt));
+    const local = this._root.worldToLocal(_v3.copy(_tgt));
     const main = local.x >= 0 ? 'L' : 'R';
     const off = main === 'L' ? 'R' : 'L';
 
@@ -459,7 +496,7 @@ export class CombatAnim {
    * @param grip world orientation for the hand
    * @param w 0..1 blend
    */
-  solveArm(rig: any, side: string, target: THREE.Vector3, grip: THREE.Quaternion, w: number) {
+  solveArm(rig: Rig, side: Side, target: THREE.Vector3, grip: THREE.Quaternion, w: number) {
     const B = rig.byName, P = rig.P;
     const up = B[`upperArm${side}`], lo = B[`lowerArm${side}`], hand = B[`hand${side}`];
     if (!up || !lo || !hand) return;
@@ -479,7 +516,7 @@ export class CombatAnim {
     // elbow pole: down and out from the shoulder, in the player's frame
     const m = side === 'L' ? 1 : -1;
     const pole = _pole.set(m * 0.55, -0.75, -0.35)
-      .applyQuaternion(this.player.root.getWorldQuaternion(_q))
+      .applyQuaternion(this._root.getWorldQuaternion(_q))
       .normalize();
     const axis = _axis.copy(toT).normalize();
     pole.addScaledVector(axis, -pole.dot(axis));
@@ -516,11 +553,17 @@ const _bz = new THREE.Vector3();
 /** The blade leaves the fist along the hand's local −Y, not its +Z. */
 const GRIP_FIX = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.5, 0, 0));
 
-const PHASE_KEY = { wind: 'wind', active: 'active', rec: 'rec', none: 'rec' };
+/** Combo phase -> the field of `comboStep` that holds that phase's duration. */
+const PHASE_KEY: Record<string, 'wind' | 'active' | 'rec'> = {
+  wind: 'wind', active: 'active', rec: 'rec', none: 'rec',
+};
 
 /** Rotate `bone` so its bind-space child direction points at `target`. */
-function aimTo(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, pole: THREE.Vector3, w: number) {
-  bone.parent.updateMatrixWorld();
+function aimTo(bone: THREE.Bone, bindFrom: THREE.Vector3, bindTo: THREE.Vector3, target: THREE.Vector3, pole: THREE.Vector3, w: number) {
+  // every bone this is called on is a child of another bone in the same rig
+  const parent = bone.parent;
+  if (!parent) return;
+  parent.updateMatrixWorld();
   _aim.copy(bindTo).sub(bindFrom).normalize();
   _worldP.setFromMatrixPosition(bone.matrixWorld);
   _want.copy(target).sub(_worldP);
@@ -530,7 +573,7 @@ function aimTo(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, pol
   basis(_m2, _want, pole);
   _qa.setFromRotationMatrix(_m1).invert();
   _qb.setFromRotationMatrix(_m2).multiply(_qa);      // bind -> world rotation
-  bone.parent.getWorldQuaternion(_qc).invert();
+  parent.getWorldQuaternion(_qc).invert();
   _qc.multiply(_qb);                                  // express it in parent space
   bone.quaternion.slerp(_qc, w);
 }

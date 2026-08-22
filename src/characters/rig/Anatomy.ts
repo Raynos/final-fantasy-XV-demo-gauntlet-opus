@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { crScalar, weightsAt, clamp01, abump, bump, smoothIn } from './Geo.ts';
+import type { SweepNode, SkinWeights } from './Geo.ts';
+import type { Rig, Side } from './Skeleton.ts';
 
 /**
  * The single source of truth for a character's body sweeps.
@@ -11,7 +13,7 @@ import { crScalar, weightsAt, clamp01, abump, bump, smoothIn } from './Geo.ts';
  */
 
 /** Torso sweep: pelvis -> shoulder line. */
-export function torsoNodes(rig: any) {
+export function torsoNodes(rig: Rig): SweepNode[] {
   const { index: I, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
@@ -40,12 +42,12 @@ export function torsoNodes(rig: any) {
 }
 
 /** Arm sweep: inside the ribcage -> wrist. */
-export function armNodes(rig: any, side: any) {
+export function armNodes(rig: Rig, side: Side): SweepNode[] {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
   const sh = P[`upperArm${side}`], el = P[`lowerArm${side}`], wr = P[`hand${side}`];
-  const at = (a: any, b: any, t: number) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
+  const at = (a: THREE.Vector3, b: THREE.Vector3, t: number) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
   const R = (v: number) => v * s;
   // The proximal end runs *inboard along the clavicle*, not backwards along the
   // arm axis. In an A-pose that axis is nearly vertical, so extrapolating it
@@ -70,12 +72,12 @@ export function armNodes(rig: any, side: any) {
 }
 
 /** Leg sweep: hip -> ankle. */
-export function legNodes(rig: any, side: any) {
+export function legNodes(rig: Rig, side: Side): SweepNode[] {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
   const hp = P[`thigh${side}`], kn = P[`shin${side}`], an = P[`foot${side}`];
-  const at = (a: any, b: any, t: number) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
+  const at = (a: THREE.Vector3, b: THREE.Vector3, t: number) => new THREE.Vector3().lerpVectors(a, b, t).toArray();
   const R = (v: number) => v * s;
   return [
     { p: at(hp, kn, -0.10), rx: R(0.088 + 0.026 * m), w: [[I.hips, 0.72], [I[`thigh${side}`], 0.28]] },
@@ -147,6 +149,18 @@ export function legShape(m: number) {
 }
 
 /**
+ * A node `drape` produced: unlike an authored `SweepNode` its skin weights and
+ * its source-sweep parameter are always resolved, so callers can read them
+ * without a guard.
+ */
+export interface DrapedNode extends SweepNode {
+  rz: number;
+  w: SkinWeights;
+  /** the parameter on the *source* sweep this node was sampled from. */
+  u: number;
+}
+
+/**
  * Resample a node list into a new one covering [u0,u1] with `count` nodes,
  * padded outward — this is how a garment is cut from the body it covers.
  *
@@ -157,14 +171,14 @@ export function legShape(m: number) {
  * @param pad radial padding in metres -- a constant, or a function of `(t, u)`
  */
 export function drape(
-  nodes: any[], u0: number, u1: number, count: number,
+  nodes: SweepNode[], u0: number, u1: number, count: number,
   pad: number | ((t: number, u: number) => number),
   padZ?: number | ((t: number, u: number) => number),
-) {
+): DrapedNode[] {
   const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   const rxs = nodes.map((n) => n.rx);
   const rzs = nodes.map((n) => n.rz ?? n.rx);
-  const out: any[] = [];
+  const out: DrapedNode[] = [];
   for (let i = 0; i < count; i++) {
     const t = count === 1 ? 0 : i / (count - 1);
     const u = u0 + (u1 - u0) * t;
@@ -183,8 +197,8 @@ export function drape(
 }
 
 /** Sweep parameter whose sampled point is closest to height `y`. */
-export function uAtY(nodes: any, y: number) {
-  const curve = new THREE.CatmullRomCurve3(nodes.map((n: any) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
+export function uAtY(nodes: SweepNode[], y: number) {
+  const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   let best = 0, bd = Infinity;
   for (let i = 0; i <= 200; i++) {
     const u = i / 200;

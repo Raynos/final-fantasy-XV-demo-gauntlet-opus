@@ -1,4 +1,321 @@
 import { clamp, smoothstep } from './Build.ts';
+import type { PropKind, PropOptions } from './InteriorProps.ts';
+
+/* ------------------------------------------------------------- vocabulary */
+
+/**
+ * The three shell styles. Not decoration: the style decides whether a region is
+ * built as a box or lofted as a cave, and `Shell.STYLE` is keyed on exactly
+ * these three.
+ */
+export type DungeonStyle = 'bunker' | 'mine' | 'cave';
+
+/** What a room is *for*. The map colours the boss room from this. */
+export type RoomKind =
+  | 'entry' | 'hall' | 'junction' | 'treasure' | 'boss' | 'shaft' | 'dead-end';
+
+/** What a run between two rooms is. `rail` is a mine drift with track in it. */
+export type CorridorKind = 'corridor' | 'rail';
+
+/** A horizontal axis. Ramps run along one; doors face across one. */
+export type Axis = 'x' | 'z';
+
+/** Which wall of an axis-aligned room. */
+export type WallSide = 'x-' | 'x+' | 'z-' | 'z+';
+
+/** `[x, z]` in dungeon-local metres. Interiors are authored around their origin. */
+export type Point2 = [number, number];
+
+/**
+ * A corridor waypoint an author writes: `[x, z]`, or `[x, z, y]` to pin the
+ * height at that corner. `link()` fills the height in for the plain form, which
+ * is why this is a plain array and not a fixed-length tuple.
+ */
+export type Waypoint = number[];
+
+/** A resolved corridor point, `[x, z, y]`. Every one has a height. */
+export type PathPoint = number[];
+
+/** A raised slab inside a room. Floor queries return its top. */
+export interface Platform {
+  x: number; z: number; w: number; d: number; y: number;
+}
+
+/** A sloped walkway between two floor heights, running along one axis. */
+export interface Ramp {
+  x: number; z: number; w: number; d: number;
+  /** Floor height at the low end and the high end. */
+  y0: number; y1: number;
+  axis: Axis;
+}
+
+/**
+ * A doorway subtracted from one room wall. `u` runs along the wall from its
+ * start corner, `v` up from the room floor. Written by `cutDoorways`.
+ */
+export interface Opening {
+  side: WallSide;
+  u0: number; u1: number; v0: number; v1: number;
+}
+
+/**
+ * The cave-chamber equivalent of an {@link Opening}: a lofted surface has no
+ * wall to cut a rectangle out of, so a passage mouth is an angular window and
+ * the loft skips the quads inside it.
+ */
+export interface CaveHole {
+  /** Bearing from the chamber centre, radians. */
+  theta: number;
+  /** Half-width of the window, radians. */
+  half: number;
+  y0: number; y1: number;
+}
+
+/** What a dungeon author writes for a room. */
+export interface RoomSpec {
+  x: number; z: number; w: number; d: number;
+  /** Floor height. Defaults to 0. */
+  y?: number;
+  /** Floor-to-ceiling height. Defaults to 4.2. */
+  h?: number;
+  style?: DungeonStyle;
+  kind?: RoomKind;
+  /** Shown on the map. Unnamed rooms are drawn but not labelled. */
+  name?: string;
+  platforms?: Platform[];
+  ramps?: Ramp[];
+}
+
+/** A room, once `Layout.room()` has applied the defaults. */
+export interface Room {
+  id: string;
+  kind: RoomKind;
+  name: string | null;
+  x: number; z: number; w: number; d: number; y: number; h: number;
+  style: DungeonStyle;
+  platforms: Platform[];
+  ramps: Ramp[];
+  /** Filled in by `cutDoorways` for box rooms. */
+  openings: Opening[];
+  /** Filled in by `cutDoorways` for `cave` rooms only. */
+  holes?: CaveHole[];
+  /** Discriminant against {@link Corridor}. See {@link isRoom}. */
+  isRoom: true;
+}
+
+/** What a dungeon author writes for a run between two rooms. */
+export interface LinkSpec {
+  /** Corners the run must pass through. Diagonal legs are elbowed automatically. */
+  via?: Waypoint[];
+  /** Which leg of an inserted elbow comes first. Defaults to `'x'`. */
+  elbow?: Axis;
+  width?: number;
+  height?: number;
+  style?: DungeonStyle;
+  kind?: CorridorKind;
+  /** On the critical path. Recorded in `Layout._critical`. */
+  critical?: boolean;
+}
+
+/** A corridor, once `Layout.link()` has resolved the path and the defaults. */
+export interface Corridor {
+  /** `"<a>><b>"`. The map reveals a run by this id. */
+  id: string;
+  a: string;
+  b: string;
+  path: PathPoint[];
+  width: number;
+  height: number;
+  style: DungeonStyle;
+  kind: CorridorKind;
+  critical: boolean;
+  /** Discriminant against {@link Room}. See {@link isRoom}. */
+  isCorridor: true;
+}
+
+/** Anywhere the party can stand: a room or a corridor. */
+export type Region = Room | Corridor;
+
+/** Narrow a {@link Region}. Rooms and corridors answer floor queries differently. */
+export function isRoom(r: Region): r is Room { return 'isRoom' in r; }
+
+/** What a dungeon author writes for a chest. */
+export interface ChestSpec {
+  at: Point2;
+  /** Floor height at `at` when omitted. */
+  y?: number;
+  /** Item ids. Ids the item table does not know are treated as dungeon keys. */
+  items?: string[];
+  gil?: number;
+  name?: string;
+  /** A bigger box. */
+  big?: boolean;
+  rot?: number;
+  /** Imperial plate and a cold glow rather than timber and amber. */
+  magitek?: boolean;
+}
+
+/** A chest, once `Layout.chest()` has applied the defaults. */
+export interface Chest {
+  id: string;
+  at: Point2;
+  y?: number;
+  items: string[];
+  gil: number;
+  name: string;
+  big: boolean;
+  rot: number;
+  /** Flipped by `Dungeons._openChest`, and read back on a later visit. */
+  opened: boolean;
+  /**
+   * **Never set.** `Layout.chest()` builds this record field by field and does
+   * not copy `magitek` off the spec, so the four Keycatrich chests authored
+   * `magitek: true` have always been built in pit timber with an amber glow.
+   * `PropKit.chest` still reads it, and the author intent is real: adding
+   * `magitek: !!s.magitek` below is the one-line fix, and it changes what those
+   * chests look like, which is why a typing pass has not made it.
+   */
+  magitek?: boolean;
+}
+
+/** What a dungeon author writes for a door. */
+export interface DoorSpec {
+  at: Point2;
+  /** The axis the leaf spans. Defaults to `'z'`. */
+  facing?: Axis;
+  y?: number;
+  w?: number;
+  h?: number;
+  /** A dungeon-local key item id. Without it in the party's keys the door stays shut. */
+  key?: string;
+  name?: string;
+  kind?: DoorKind;
+  /** Starts open. */
+  open?: boolean;
+}
+
+/**
+ * Which leaf and frame the prop kit builds.
+ *
+ * Only `magitek` is actually implemented: `PropKit.door` branches on it alone,
+ * so Fociaugh's `stone` flowstone curtain is built from the same corroded steel
+ * and red status lamp as Keycatrich's `blast` door. Authored, never drawn.
+ */
+export type DoorKind = 'blast' | 'magitek' | 'stone';
+
+/** A door, once `Layout.door()` has applied the defaults. */
+export interface Door {
+  id: string;
+  at: Point2;
+  facing: Axis;
+  y?: number;
+  w: number;
+  h: number;
+  key: string | null;
+  name: string;
+  kind: DoorKind;
+  /** Flipped by `Dungeons._openDoor`. */
+  open: boolean;
+  /** Leaf travel, 0..1. Driven by `PropKit.update`. */
+  t: number;
+}
+
+/** Which fixture geometry `Dungeon._lamp` grows around a declared light. */
+export type LampKind = 'emergency' | 'dead' | 'flood' | 'lantern' | 'fungus';
+
+/** What a dungeon author writes for a light. */
+export interface LampSpec {
+  at: Point2;
+  y?: number;
+  color?: number;
+  intensity?: number;
+  range?: number;
+  kind?: LampKind;
+  flicker?: number;
+  rot?: number;
+  glow?: number;
+}
+
+/** A light, once `Layout.lamp()` has applied the defaults. */
+export interface Lamp {
+  id: string;
+  at: Point2;
+  y?: number;
+  color: number;
+  intensity: number;
+  range: number;
+  kind: LampKind;
+  flicker: number;
+  rot: number;
+  glow: number;
+}
+
+/** What the hazard does to whoever stands in it. */
+export type HazardKind =
+  | 'electrified-water' | 'steam-vent' | 'deep-water' | 'spores' | 'fall' | 'firedamp';
+
+/** What a dungeon author writes for a hazard. */
+export interface HazardSpec {
+  at: Point2;
+  /** Radius, metres. */
+  r: number;
+  kind: HazardKind;
+  /** Damage per second. Defaults to 40; `0` is a marker with no damage. */
+  dps?: number;
+  y?: number;
+  name?: string;
+}
+
+/** A hazard, once `Layout.hazard()` has applied the defaults. */
+export interface Hazard extends Omit<HazardSpec, 'dps' | 'y'> {
+  id: string;
+  dps: number;
+  /** Unused by the runtime: `Dungeons._hazards` is a flat cylinder test. */
+  y: number | null;
+}
+
+/** What the encounter marker is asking for. */
+export type EncounterKind =
+  | 'mt-squad' | 'mt-commander' | 'sabertusk-pack' | 'mindflayer'
+  | 'goblin-pack' | 'iron-giant';
+
+/** What a dungeon author writes for an encounter marker. */
+export interface EncounterSpec {
+  at: Point2;
+  /** Trigger radius, metres. */
+  r: number;
+  kind: EncounterKind;
+  count?: number;
+  boss?: boolean;
+  name?: string;
+}
+
+/** An encounter marker, once `Layout.encounter()` has given it an id. */
+export interface Encounter extends EncounterSpec {
+  id: string;
+}
+
+/**
+ * A data-driven prop placement: `layout.prop('minecart', [x, z], {...})`.
+ * `kind` names a `PropKit` placer and the rest is that placer's option bag.
+ */
+export type PropPlacement = PropOptions & {
+  kind: PropKind;
+  at: Point2;
+  /** Floor height at `at` when omitted. */
+  y?: number;
+  rot: number;
+  scale: number;
+};
+
+
+/** What `Dungeon.build()` hands `new Layout()` off the definition. */
+export interface LayoutOptions {
+  name?: string;
+  style?: DungeonStyle;
+  corridorWidth?: number;
+  corridorHeight?: number;
+}
 
 /**
  * A hand-authored interior graph: rooms, the corridors that join them, and the
@@ -20,74 +337,60 @@ import { clamp, smoothstep } from './Build.ts';
  *   regionAt(x, z) -> Room|Corridor|null
  */
 export class Layout {
-  chests!: any[];
-  doors!: any[];
-  encounters!: any[];
-  hazards!: any[];
-  lamps!: any[];
-  props!: any[];
-  rooms!: Map<any, any>;
-  _critical!: any[];
+  chests!: Chest[];
+  doors!: Door[];
+  encounters!: Encounter[];
+  hazards!: Hazard[];
+  lamps!: Lamp[];
+  props!: PropPlacement[];
+  rooms!: Map<string, Room>;
+  /** Ids of the corridors an author marked `critical`. */
+  _critical!: string[];
   corridorHeight!: number;
   corridorWidth!: number;
-  corridors!: any[];
-  exitAt!: number[];
+  corridors!: Corridor[];
+  exitAt!: Point2;
   id!: string;
   name!: string;
-  spawn!: number[];
-  style!: string;
-  constructor(id: string, opts: {name?:string, style?:string, corridorWidth?:number, corridorHeight?:number} = {}) {
+  spawn!: Point2;
+  style!: DungeonStyle;
+  constructor(id: string, opts: LayoutOptions = {}) {
     this.id = id;
     this.name = opts.name || id;
     this.style = opts.style || 'bunker';
     this.corridorWidth = opts.corridorWidth || 3.2;
     this.corridorHeight = opts.corridorHeight || 3.4;
-    /** @type {Map<string, object>} */
     this.rooms = new Map();
-    /** @type {object[]} */
     this.corridors = [];
-    /** @type {object[]} */
     this.chests = [];
-    /** @type {object[]} */
     this.doors = [];
-    /** @type {object[]} */
     this.lamps = [];
-    /** @type {object[]} */
     this.hazards = [];
-    /** @type {object[]} */
     this.props = [];
-    /** @type {object[]} */
     this.encounters = [];
     this.spawn = [0, 0];
     this.exitAt = [0, 0];
     this._critical = [];
   }
 
-  /**
-   * Add a room.
-   *
-   * @param {object} s
-   * */
-  room(id: string, s: { x: number, z: number, w: number, d: number, y?: number, h?: number, style?: 'bunker' | 'mine' | 'cave', kind?: 'entry' | 'hall' | 'junction' | 'treasure' | 'boss' | 'shaft' | 'dead-end', name?: string, platforms?: any, ramps?: any, pillars?: any, rubble?: any, water?: any }) {
-    const r = {
+  /** Add a room. */
+  room(id: string, s: RoomSpec): Room {
+    const r: Room = {
       id, kind: s.kind || 'hall', name: s.name || null,
       x: s.x, z: s.z, w: s.w, d: s.d,
       y: s.y || 0, h: s.h || 4.2,
       style: s.style || this.style,
       platforms: s.platforms || [],
       ramps: s.ramps || [],
-      pillars: s.pillars || 0,
       openings: [],
       isRoom: true,
-      rubble: s.rubble != null ? s.rubble : 0.5,
-      water: s.water != null ? s.water : null,
     };
     this.rooms.set(id, r);
     return r;
   }
 
-  /** @param id @returns */
-  get(id: string): any {
+  /** A room by id, or a throw naming the dungeon and the id. */
+  get(id: string): Room {
     const r = this.rooms.get(id);
     if (!r) throw new Error(`[Layout ${this.id}] no room "${id}"`);
     return r;
@@ -98,9 +401,9 @@ export class Layout {
    * automatically, so `via` only ever needs the corners that matter.
    *
    */
-  link(aId: string, bId: string, s: any = {}) {
+  link(aId: string, bId: string, s: LinkSpec = {}): Corridor {
     const a = this.get(aId), b = this.get(bId);
-    const raw = [[a.x, a.z], ...(s.via || []), [b.x, b.z]];
+    const raw: Waypoint[] = [[a.x, a.z], ...(s.via || []), [b.x, b.z]];
     const pts = elbow(raw, s.elbow || 'x');
 
     // heights: linear in arc length from A's floor to B's floor unless the
@@ -113,7 +416,7 @@ export class Layout {
     const path = pts.map((p, i) => [p[0], p[1], p[2] != null ? p[2] : a.y + (b.y - a.y) * (lengths[i] / total)]);
 
     const width = s.width || this.corridorWidth;
-    const c = {
+    const c: Corridor = {
       id: `${aId}>${bId}`, a: aId, b: bId, path,
       width, height: s.height || this.corridorHeight,
       style: s.style || this.style,
@@ -132,8 +435,8 @@ export class Layout {
   /**
    * A treasure chest.
    */
-  chest(s: any) {
-    const c = {
+  chest(s: ChestSpec): Chest {
+    const c: Chest = {
       id: `chest${this.chests.length}`, at: s.at, y: s.y,
       items: s.items || [], gil: s.gil || 0,
       name: s.name || 'Chest', big: !!s.big, rot: s.rot || 0,
@@ -147,8 +450,8 @@ export class Layout {
    * A door across a corridor. `key` names a dungeon-local key item; when it is
    * set the door will not open until the party is carrying it.
    */
-  door(s: any) {
-    const d = {
+  door(s: DoorSpec): Door {
+    const d: Door = {
       id: `door${this.doors.length}`, at: s.at, facing: s.facing || 'z',
       y: s.y, w: s.w || 3.4, h: s.h || 3.0,
       key: s.key || null, name: s.name || 'Door', kind: s.kind || 'blast',
@@ -161,8 +464,8 @@ export class Layout {
   /**
    * A light source. `kind` selects the fixture geometry and the falloff.
    */
-  lamp(s: any) {
-    const l = {
+  lamp(s: LampSpec): Lamp {
+    const l: Lamp = {
       id: `lamp${this.lamps.length}`, at: s.at, y: s.y,
       color: s.color != null ? s.color : 0xffb473,
       intensity: s.intensity != null ? s.intensity : 6,
@@ -170,7 +473,6 @@ export class Layout {
       kind: s.kind || 'emergency',
       flicker: s.flicker != null ? s.flicker : 0.1,
       rot: s.rot || 0,
-      shaft: s.shaft || null,
       glow: s.glow != null ? s.glow : 1,
     };
     this.lamps.push(l);
@@ -181,22 +483,36 @@ export class Layout {
    * Environmental hazard. Purely declarative — `Dungeons` reads these to apply
    * damage and to place the VFX.
    */
-  hazard(s: {at:number[], r:number, kind:string, dps?:number, y?:number, name?:string}) {
-    const h = { id: `hz${this.hazards.length}`, dps: 40, y: null, ...s };
+  hazard(s: HazardSpec): Hazard {
+    const h: Hazard = { id: `hz${this.hazards.length}`, dps: 40, y: null, ...s };
     this.hazards.push(h);
     return h;
   }
 
-  /** Set dressing: `kind` is resolved by the dungeon's prop kit. */
-  prop(kind: any, at: any, s: any = {}) {
-    const p = { kind, at, y: s.y, rot: s.rot || 0, scale: s.scale || 1, ...s };
+  /**
+   * Set dressing: `kind` names a `PropKit` placer.
+   *
+   * **No dungeon uses this.** All three definitions dress themselves by calling
+   * the kit directly from `dress()`, so `this.props` has always been empty and
+   * `PropKit.place` has never run. Kept because it is the documented
+   * data-driven path and it now type-checks; delete it if it is still unused
+   * when a fourth dungeon lands.
+   */
+  prop(kind: PropKind, at: Point2, s: PropOptions & { y?: number, rot?: number, scale?: number } = {}): PropPlacement {
+    const p: PropPlacement = { kind, at, y: s.y, rot: s.rot || 0, scale: s.scale || 1, ...s };
     this.props.push(p);
     return p;
   }
 
-  /** A scripted encounter marker (the Enemies system may consume these). */
-  encounter(s: any) {
-    const e = { id: `enc${this.encounters.length}`, ...s };
+  /**
+   * A scripted encounter marker.
+   *
+   * Declarative only: nothing outside the map reads these. `EncounterDirector`
+   * runs on its own tables and has never been handed a dungeon's markers, so
+   * these draw an enemy pip on the map and spawn nothing.
+   */
+  encounter(s: EncounterSpec): Encounter {
+    const e: Encounter = { id: `enc${this.encounters.length}`, ...s };
     this.encounters.push(e);
     return e;
   }
@@ -204,7 +520,7 @@ export class Layout {
   // ------------------------------------------------------------------ query
 
   /** Room or corridor containing a point, or null. Rooms win over corridors. */
-  regionAt(x: number, z: number) {
+  regionAt(x: number, z: number): Region | null {
     for (const r of this.rooms.values()) {
       if (Math.abs(x - r.x) <= r.w * 0.5 && Math.abs(z - r.z) <= r.d * 0.5) return r;
     }
@@ -220,14 +536,14 @@ export class Layout {
   floorAt(x: number, z: number): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
-    if (r.isRoom) return roomFloor(r, x, z);
+    if (isRoom(r)) return roomFloor(r, x, z);
     return corridorFloor(r, x, z);
   }
 
   ceilingAt(x: number, z: number): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
-    return r.isRoom ? r.y + r.h : corridorFloor(r, x, z) + r.height;
+    return isRoom(r) ? r.y + r.h : corridorFloor(r, x, z) + r.height;
   }
 
   /**
@@ -236,18 +552,19 @@ export class Layout {
    * doorways where two regions overlap.
    * @returns [x, z]
    */
-  clampInside(x: number, z: number, margin = 0.55): number[] {
-    if (this.regionAt(x, z)) {
+  clampInside(x: number, z: number, margin = 0.55): Point2 {
+    const inside = this.regionAt(x, z);
+    if (inside) {
       // already inside: only nudge if a wall is closer than the margin *and*
       // no neighbouring region covers the overlap (i.e. it is not a doorway)
-      const r = this.regionAt(x, z);
+      const r = inside;
       const p = pushIn(r, x, z, margin);
       if (p[0] === x && p[1] === z) return [x, z];
       if (this.regionAt(p[0], p[1]) && !this._coveredElsewhere(r, x, z)) return p;
       return [x, z];
     }
     // outside: snap to the nearest region
-    let best: any = null, bestD = Infinity, bestP: any = null;
+    let best: Region | null = null, bestD = Infinity, bestP: Point2 | null = null;
     for (const r of this.rooms.values()) {
       const p = nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
       const d = (p[0] - x) ** 2 + (p[1] - z) ** 2;
@@ -258,10 +575,10 @@ export class Layout {
       const d = (p[0] - x) ** 2 + (p[1] - z) ** 2;
       if (d < bestD) { bestD = d; best = c; bestP = p; }
     }
-    return best ? bestP : [x, z];
+    return best && bestP ? bestP : [x, z];
   }
 
-  _coveredElsewhere(self: any, x: number, z: number) {
+  _coveredElsewhere(self: Region, x: number, z: number) {
     for (const r of this.rooms.values()) {
       if (r === self) continue;
       if (Math.abs(x - r.x) <= r.w * 0.5 + 1.2 && Math.abs(z - r.z) <= r.d * 0.5 + 1.2) return true;
@@ -282,7 +599,7 @@ export class Layout {
     if (!r) return 0.55;
     let wall;
     let floorY, ceilY;
-    if (r.isRoom) {
+    if (isRoom(r)) {
       wall = Math.min(
         r.w * 0.5 - Math.abs(x - r.x),
         r.d * 0.5 - Math.abs(z - r.z)
@@ -324,7 +641,7 @@ export class Layout {
 /* ---------------------------------------------------------------- internals */
 
 /** Insert elbows so every leg of a polyline is axis aligned. */
-function elbow(pts: any, order: any) {
+function elbow(pts: Waypoint[], order: Axis): Waypoint[] {
   const out = [pts[0]];
   for (let i = 1; i < pts.length; i++) {
     const p = out[out.length - 1], q = pts[i];
@@ -341,9 +658,9 @@ function elbow(pts: any, order: any) {
  * Trim a corridor path so it begins on the room's wall rather than at its
  * centre. Without this every corridor would tunnel through the room's floor.
  */
-function clipToRoom(path: any, room: any, width: any, fromEnd: boolean) {
+function clipToRoom(path: PathPoint[], room: Room, width: number, fromEnd: boolean) {
   const hx = room.w * 0.5, hz = room.d * 0.5;
-  const inside = (p: any) => Math.abs(p[0] - room.x) < hx - 0.01 && Math.abs(p[1] - room.z) < hz - 0.01;
+  const inside = (p: PathPoint) => Math.abs(p[0] - room.x) < hx - 0.01 && Math.abs(p[1] - room.z) < hz - 0.01;
   if (fromEnd) {
     while (path.length > 2 && inside(path[path.length - 2])) path.pop();
     const n = path.length - 1;
@@ -355,7 +672,7 @@ function clipToRoom(path: any, room: any, width: any, fromEnd: boolean) {
 }
 
 /** Where the segment from `outside` to `centre` crosses the room's wall. */
-function wallPoint(outside: any, centre: any, room: any) {
+function wallPoint(outside: PathPoint, centre: PathPoint, room: Room): PathPoint {
   const hx = room.w * 0.5, hz = room.d * 0.5;
   const dx = centre[0] - outside[0], dz = centre[1] - outside[1];
   let t = 1;
@@ -375,11 +692,11 @@ function wallPoint(outside: any, centre: any, room: any) {
   return [outside[0] + dx * t, outside[1] + dz * t, y0 + (y1 - y0) * t];
 }
 
-export function corridorContains(c: any, x: number, z: number, pad: number) {
+export function corridorContains(c: Corridor, x: number, z: number, pad: number) {
   return distToPath(c.path, x, z) <= c.width * 0.5 + pad;
 }
 
-export function distToPath(path: any, x: number, z: number) {
+export function distToPath(path: PathPoint[], x: number, z: number) {
   let best = Infinity;
   for (let i = 0; i < path.length - 1; i++) {
     best = Math.min(best, distToSeg(path[i], path[i + 1], x, z).d);
@@ -387,7 +704,7 @@ export function distToPath(path: any, x: number, z: number) {
   return best;
 }
 
-function distToSeg(a: any, b: any, x: number, z: number) {
+function distToSeg(a: PathPoint, b: PathPoint, x: number, z: number) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   const len2 = dx * dx + dz * dz || 1e-6;
   let t = ((x - a[0]) * dx + (z - a[1]) * dz) / len2;
@@ -396,8 +713,8 @@ function distToSeg(a: any, b: any, x: number, z: number) {
   return { d: Math.hypot(x - px, z - pz), t, px, pz };
 }
 
-function corridorFloor(c: any, x: number, z: number) {
-  let best: any = null, bestD = Infinity;
+function corridorFloor(c: Corridor, x: number, z: number) {
+  let best: number | null = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);
     if (s.d < bestD) {
@@ -408,7 +725,7 @@ function corridorFloor(c: any, x: number, z: number) {
   return best != null ? best : c.path[0][2];
 }
 
-function roomFloor(r: any, x: number, z: number) {
+function roomFloor(r: Room, x: number, z: number) {
   for (const p of r.platforms) {
     if (Math.abs(x - p.x) <= p.w * 0.5 && Math.abs(z - p.z) <= p.d * 0.5) return p.y;
   }
@@ -423,18 +740,18 @@ function roomFloor(r: any, x: number, z: number) {
   return r.y;
 }
 
-function pushIn(r: any, x: number, z: number, margin: number) {
-  if (r.isRoom) return nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
+function pushIn(r: Region, x: number, z: number, margin: number): Point2 {
+  if (isRoom(r)) return nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
   return nearestOnCorridor(r, x, z, margin);
 }
 
-function nearestInRect(cx: number, cz: number, w: number, d: number, x: number, z: number, margin: number) {
+function nearestInRect(cx: number, cz: number, w: number, d: number, x: number, z: number, margin: number): Point2 {
   const hx = Math.max(0.2, w * 0.5 - margin), hz = Math.max(0.2, d * 0.5 - margin);
   return [clamp(x, cx - hx, cx + hx), clamp(z, cz - hz, cz + hz)];
 }
 
-function nearestOnCorridor(c: any, x: number, z: number, margin: number) {
-  let best: any = null, bestD = Infinity;
+function nearestOnCorridor(c: Corridor, x: number, z: number, margin: number): Point2 {
+  let best: { d: number, t: number, px: number, pz: number } | null = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);
     if (s.d < bestD) { bestD = s.d; best = s; }

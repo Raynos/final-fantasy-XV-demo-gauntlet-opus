@@ -21,28 +21,32 @@ import type * as THREE from 'three';
  * which is why the radius is comfortably past the distance at which the
  * instances themselves fade out.
  */
-export class TileStream {
+/**
+ * @typeParam T what one scattered item is. The stream never looks inside one:
+ *   it only hands the generator an array to fill and keeps the arrays keyed by
+ *   cell, so the layer that owns the items keeps its own type all the way
+ *   through `live`.
+ */
+export class TileStream<T> {
   _first!: number;
   _pendCx!: number;
   _pendCz!: number;
-  _pending!: any[];
-  budget!: any;
+  /** Cells still queued to generate, nearest first, as `[cx, cz]`. */
+  _pending!: [number, number][];
+  budget!: number;
   cell!: number;
   dirty!: boolean;
-  gen!: any;
+  gen!: (cx: number, cz: number, out: T[]) => void;
   keep2!: number;
-  live!: Map<any, any>;
+  /** Live cells, keyed by {@link TileStream.key}. */
+  live!: Map<number, T[]>;
   radius!: number;
-  /**
-   * @param {object} o
-   * */
-  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx: number, cz: number, out: any[]) => void, budget?: number, keep?: number }) {
+  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx: number, cz: number, out: T[]) => void, budget?: number, keep?: number }) {
     this.cell = cell;
     this.radius = radius;
     this.gen = gen;
     this.budget = budget;
     this.keep2 = (radius * keep) * (radius * keep);
-    /** @type {Map<number, Array>} live cells, key packed from cell coords */
     this.live = new Map();
     this.dirty = false;
     this._pending = [];
@@ -67,7 +71,7 @@ export class TileStream {
       // rebuild the wanted list, nearest first so the hole in front of the
       // camera fills before the one behind it
       const n = Math.ceil(this.radius / c);
-      const want: any[] = [];
+      const want: number[] = [];
       for (let dz = -n; dz <= n; dz++) {
         for (let dx = -n; dx <= n; dx++) {
           const d2 = (dx * dx + dz * dz) * c * c;
@@ -81,7 +85,7 @@ export class TileStream {
       const tri = [];
       for (let i = 0; i < want.length; i += 3) tri.push(i);
       tri.sort((a, b) => want[a] - want[b]);
-      this._pending = tri.map((i) => [want[i + 1], want[i + 2]]);
+      this._pending = tri.map((i): [number, number] => [want[i + 1], want[i + 2]]);
 
       // evict what fell out of the keep radius
       const ox = camPos.x, oz = camPos.z;
@@ -96,11 +100,13 @@ export class TileStream {
     }
 
     let made = 0;
-    while (this._pending.length && made < this.budget) {
-      const [gx, gz] = this._pending.shift();
+    while (made < this.budget) {
+      const next = this._pending.shift();
+      if (!next) break;
+      const [gx, gz] = next;
       const k = TileStream.key(gx, gz);
       if (this.live.has(k)) continue;
-      const out: any[] = [];
+      const out: T[] = [];
       this.gen(gx, gz, out);
       this.live.set(k, out);
       made++; changed = true;

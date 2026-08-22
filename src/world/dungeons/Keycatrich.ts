@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import * as M from './kit/InteriorMaterials.ts';
+import type { Dungeon, DungeonDef } from './kit/Dungeon.ts';
+import type { Layout } from './kit/Layout.ts';
+import type { PropKit } from './kit/InteriorProps.ts';
 
 /**
  * **Keycatrich Trench** — an imperial-occupied trench network driven into the
@@ -16,7 +19,7 @@ import * as M from './kit/InteriorMaterials.ts';
  * door) -> command chamber. Branches: a collapsed sap, a locked store, a
  * flooded sump that holds the keycard, and a vault behind the boss.
  */
-export const KEYCATRICH = {
+export const KEYCATRICH: DungeonDef = {
   id: 'keycatrich',
   name: 'Keycatrich Trench',
   region: 'Leide',
@@ -52,7 +55,7 @@ export const KEYCATRICH = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L: any) {
+  author(L: Layout) {
     L.room('entry', { x: 0, z: 0, w: 11, d: 9, y: 0, h: 4.2, kind: 'entry', name: 'Trench Head' });
     L.room('guard', { x: 0, z: -24, w: 10, d: 10, y: -1.6, h: 4.0, kind: 'junction', name: 'Guard Post' });
     L.room('sap', { x: -14, z: -24, w: 8, d: 6.5, y: -1.6, h: 3.2, kind: 'dead-end', name: 'Collapsed Sap' });
@@ -105,7 +108,7 @@ export const KEYCATRICH = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit: any, L: any) {
+  dress(kit: PropKit, L: Layout) {
     const strip = (x: number, z: number, y: number, rot: number, live = true, o = {}) => {
       if (live) kit.emergencyStrip(x, y, z, { rot, ...o });
       else kit.deadStrip(x, y, z, { rot });
@@ -247,7 +250,7 @@ export const KEYCATRICH = {
    * The shaft of light the entrance throws down the first corridor. Built after
    * the shell so it can be positioned against the finished geometry.
    */
-  extras(dungeon: any) {
+  extras(dungeon: Dungeon) {
     const rig = dungeon.rig;
     const geo = new THREE.CylinderGeometry(0.9, 3.4, 9, 12, 1, true);
     const mesh = new THREE.Mesh(geo, M.shaftMaterial(0xdce8ff, 0.10));

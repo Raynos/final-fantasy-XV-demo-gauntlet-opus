@@ -1,4 +1,5 @@
 import { impulseResponse, softClipCurve, EPS, clamp } from './Dsp.ts';
+import type { SpaceSpec } from './Dsp.ts';
 import type * as THREE from 'three';
 
 /**
@@ -18,8 +19,14 @@ import type * as THREE from 'three';
  * swapped when the player moves between outdoors / interior / cave.
  */
 
+/**
+ * A world position handed to the panner. `THREE.Vector3` satisfies it, which
+ * is why nothing in the audio stack has to import three at runtime.
+ */
+export interface Vec3 { x: number; y: number; z: number }
+
 /** Reverb characters, all synthesised (see Dsp.impulseResponse). */
-const SPACES = {
+const SPACES: Record<SpaceName, SpaceSpec> = {
   outdoor: { seconds: 1.1, decay: 3.6, predelay: 0.020, damp: 0.62, seed: 11,
     early: [[0.031, 0.20], [0.058, 0.15], [0.091, 0.11], [0.140, 0.07]] },
   canyon: { seconds: 2.0, decay: 2.4, predelay: 0.045, damp: 0.40, seed: 23,
@@ -32,7 +39,20 @@ const SPACES = {
     early: [[0.015, 0.30], [0.027, 0.24], [0.043, 0.19], [0.066, 0.14], [0.098, 0.09]] },
 };
 
-export const BUSES = ['music', 'sfx', 'amb', 'ui', 'voice'];
+/**
+ * A bus that exists as a gain node in the graph. `master` is deliberately not
+ * one: it is the output stage after the limiter, not somewhere a sound lands.
+ */
+export type MixBus = 'music' | 'sfx' | 'amb' | 'ui' | 'voice';
+
+/**
+ * Anything the user's volume sliders address -- the five buses plus the master
+ * output. `AudioSystem.setVolume` and `volumeOf` speak this; `graph.bus` and
+ * `BUS_TRIM`, which are tables of real nodes, speak `MixBus`.
+ */
+export type BusName = MixBus | 'master';
+
+export const BUSES: readonly MixBus[] = ['music', 'sfx', 'amb', 'ui', 'voice'];
 
 /**
  * Default trim per bus, before the user's own volume sliders.
@@ -42,19 +62,49 @@ export const BUSES = ['music', 'sfx', 'amb', 'ui', 'voice'];
  * than a field cue. A hot mix that is always against the limiter has no
  * dynamics left to spend, which is the thing an adaptive score exists to do.
  */
-const BUS_TRIM = { music: 0.13, sfx: 0.32, amb: 0.20, ui: 0.24, voice: 0.55 };
+const BUS_TRIM: Record<MixBus, number> = { music: 0.13, sfx: 0.32, amb: 0.20, ui: 0.24, voice: 0.55 };
 
-/** The four acoustic spaces the short reverb is tuned for. */
-export type AcousticSpace = 'outdoor' | 'canyon' | 'interior' | 'cave';
+/** Every room `SPACES` holds an impulse response for. */
+export type SpaceName = 'outdoor' | 'canyon' | 'interior' | 'cave' | 'hall';
+
+/**
+ * The four acoustic spaces the *short* reverb is tuned for. `hall` is the long
+ * reverb's fixed room and is never swapped in, which is why it is not here.
+ */
+export type AcousticSpace = Exclude<SpaceName, 'hall'>;
+
+/**
+ * A voice slot. `take` hands one out, the caller writes the real scheduled end
+ * into it, and `_compact` drops it once that time has passed. The budget is
+ * time-based, so the slot is a mutable cell rather than a token.
+ */
+export interface VoiceSlot { end: number }
+
+/** A teardown waiting on `onended`, and swept as a backstop. */
+interface PendingReap {
+  end: number;
+  /** Nulled once released, so a double `onended` cannot disconnect twice. */
+  nodes: AudioNode[] | null;
+  handle?: VoiceSlot | null;
+  done: boolean;
+}
+
+/** How a positional source falls off with distance. */
+export interface PanOpts {
+  /** Spend a convolution on this one so the player can actually locate it. */
+  hrtf?: boolean;
+  refDistance?: number;
+  maxDistance?: number;
+  rolloff?: number;
+}
 
 export class AudioGraph {
   _duckDepth!: number;
   _duckUntil!: number;
-  _live!: any[];
-  _pendingReap!: any[];
+  _live!: VoiceSlot[];
+  _pendingReap!: PendingReap[];
   _preMuteVolume!: number;
-  _spaceSwap!: any;
-  bus!: any;
+  bus!: Record<MixBus, GainNode>;
   ctx!: BaseAudioContext;
   dcBlock!: BiquadFilterNode;
   dropped!: number;
@@ -64,7 +114,7 @@ export class AudioGraph {
   hrtfLive!: number;
   limiter!: DynamicsCompressorNode;
   master!: GainNode;
-  maxVoices!: any;
+  maxVoices!: number;
   muted!: boolean;
   nodesFreed!: number;
   nodesMade!: number;
@@ -77,19 +127,16 @@ export class AudioGraph {
   saturator!: WaveShaperNode;
   sendLong!: GainNode;
   sendShort!: GainNode;
-  space!: string;
+  space!: AcousticSpace;
   voices!: number;
-  volume!: any;
-  /**
-   * @param {object} [o]
-   * */
-  constructor(ctx: BaseAudioContext, o: { offline?: boolean, maxVoices?: any, masterVolume?: any } = {}) {
+  volume!: Record<MixBus, number>;
+  constructor(ctx: BaseAudioContext, o: { offline?: boolean, maxVoices?: number, masterVolume?: number } = {}) {
     this.ctx = ctx;
     this.offline = !!o.offline;
 
-    /** @type {{end:number}[]} slots held by voices that have not finished yet */
+    /** Slots held by voices that have not finished yet. */
     this._live = [];
-    /** @type {object[]} teardowns waiting on `onended`, swept as a backstop */
+    /** Teardowns waiting on `onended`, swept as a backstop. */
     this._pendingReap = [];
     /** Live voice count, refreshed on every `take`. */
     this.voices = 0;
@@ -155,17 +202,22 @@ export class AudioGraph {
     this.duckGain.gain.value = 1;
     this.duckGain.connect(glue);
 
-    /** @type {Record<string, GainNode>} */
-    this.bus = {};
-    /** @type {Record<string, number>} user-facing 0..1 volumes */
-    this.volume = {};
-    for (const name of BUSES) {
+    // Written out one bus at a time rather than looped into an empty object:
+    // the record is then *total* by construction, so `bus[name]` is a GainNode
+    // and not `GainNode | undefined` at every one of its readers.
+    const mkBus = (name: MixBus) => {
       const g = ctx.createGain();
-      this.volume[name] = 1;
-      g.gain.value = BUS_TRIM[name as keyof typeof BUS_TRIM];
+      g.gain.value = BUS_TRIM[name];
       g.connect(name === 'music' || name === 'amb' ? this.duckGain : glue);
-      this.bus[name] = g;
-    }
+      return g;
+    };
+    /** One gain per bus, ahead of the duck and the glue compressor. */
+    this.bus = {
+      music: mkBus('music'), sfx: mkBus('sfx'), amb: mkBus('amb'),
+      ui: mkBus('ui'), voice: mkBus('voice'),
+    };
+    /** User-facing 0..1 volumes, one per bus. */
+    this.volume = { music: 1, sfx: 1, amb: 1, ui: 1, voice: 1 };
 
     /* ------------------------------------------------------------ reverb */
 
@@ -199,7 +251,6 @@ export class AudioGraph {
     this.bus.voice.connect(this.sendShort);
 
     this.space = 'outdoor';
-    this._spaceSwap = null;
 
     this._duckUntil = 0;
     this._duckDepth = 1;
@@ -227,7 +278,7 @@ export class AudioGraph {
    * Set a bus (or master) volume, 0..1.
    * @param [glide] seconds
    */
-  setVolume(name: 'master' | 'music' | 'sfx' | 'amb' | 'ui' | 'voice', v: number, glide: number = 0.08) {
+  setVolume(name: BusName, v: number, glide: number = 0.08) {
     const t = this.now;
     const val = clamp(v, 0, 1);
     if (name === 'master') {
@@ -236,7 +287,6 @@ export class AudioGraph {
       return;
     }
     const bus = this.bus[name];
-    if (!bus) return;
     this.volume[name] = val;
     bus.gain.setTargetAtTime(BUS_TRIM[name] * val, t, glide);
   }
@@ -277,7 +327,7 @@ export class AudioGraph {
    * Cross-fade the short reverb to a different room.
    */
   setSpace(name: AcousticSpace) {
-    if (!SPACES[name] || name === this.space) return;
+    if (name === this.space) return;
     this.space = name;
     const ctx = this.ctx;
     const t = this.now;
@@ -329,7 +379,7 @@ export class AudioGraph {
    * @param [at] when the sound starts; defaults to now
    * @returns handle, or null when the budget is spent
    */
-  take(priority: number = 1, at: number | null = null): {end:number} | null {
+  take(priority: number = 1, at: number | null = null): VoiceSlot | null {
     const t = at ?? this.now;
     const live = this._compact(t);
     const headroom = this.maxVoices - live;
@@ -356,7 +406,7 @@ export class AudioGraph {
   }
 
   /** Release a voice slot and tear its nodes down. */
-  release(nodes: any, handle: any) {
+  release(nodes: AudioNode[] | null, handle: VoiceSlot | null) {
     if (handle) handle.end = -1;
     this.nodesFreed++;
     if (nodes) for (const n of nodes) { try { n.disconnect(); } catch { /* ok */ } }
@@ -370,17 +420,17 @@ export class AudioGraph {
    * @param [end] scheduled end time, for the voice budget
    * @param [handle] the slot returned by `take`
    */
-  reap(src: AudioScheduledSourceNode, nodes: AudioNode[], end?: number, handle?: {end:number}) {
+  reap(src: AudioScheduledSourceNode, nodes: AudioNode[], end?: number, handle?: VoiceSlot | null) {
     if (handle && end != null && end > 0) handle.end = end;
     const entry = { end: end ?? (this.now + 3), nodes, handle, done: false };
     this._pendingReap.push(entry);
     src.onended = () => this._finalise(entry);
   }
 
-  _finalise(entry: any) {
+  _finalise(entry: PendingReap) {
     if (entry.done) return;
     entry.done = true;
-    this.release(entry.nodes, entry.handle);
+    this.release(entry.nodes, entry.handle ?? null);
     entry.nodes = null;
   }
 
@@ -411,9 +461,8 @@ export class AudioGraph {
 
   /**
    * A positional node for a world-space source.
-   * @param [o] {hrtf, refDistance, maxDistance, rolloff}
    */
-  panner(pos: {x:number,y:number,z:number}, o: any = {}) {
+  panner(pos: Vec3, o: PanOpts = {}) {
     const ctx = this.ctx;
     const p = ctx.createPanner();
     // HRTF is a per-source convolution. It is worth it for the handful of

@@ -1,5 +1,6 @@
 import { noiseBuffer, hit, expTo, EPS, makeRng, clamp, ftom } from './Dsp.ts';
-import type { AudioGraph } from './Graph.ts';
+import type { RngFn } from './Dsp.ts';
+import type { AudioGraph, MixBus, PanOpts, Vec3, VoiceSlot } from './Graph.ts';
 import type { Instruments } from './Instruments.ts';
 
 /**
@@ -17,22 +18,174 @@ import type { Instruments } from './Instruments.ts';
  * `parry`) kept working because other systems already call them.
  */
 
-/** How a shot is grouped for the mixer and the voice budget. */
-const BUS_FOR = { ui: 'ui', voice: 'voice', amb: 'amb' };
+/* ------------------------------------------------------------ vocabulary */
+
+/** Weapon classes the swing bank is written for. */
+export type WeaponKind = 'sword' | 'greatsword' | 'polearm' | 'daggers' | 'firearm' | 'shield';
+/** What a blow landed on. */
+export type ImpactMaterial = 'flesh' | 'metal' | 'armour' | 'stone' | 'wood' | 'crystal' | 'ground';
+/** Ground types, matching `Terrain.sampleMaterial().name`. */
+export type SurfaceName = 'grass' | 'dirt' | 'sand' | 'gravel' | 'rock' | 'road' | 'water' | 'wood';
+/** Creatures with a voice in the bank. */
+export type SpeciesName = 'sabertusk' | 'goblin' | 'mt' | 'irongiant' | 'daemon';
+/**
+ * What a creature is saying. Spelled as a list rather than a union because
+ * `asMood` narrows a runtime name against it, and a union and a list that can
+ * disagree is exactly the drift this pass exists to remove. Same for the two
+ * sets below; the rest are the keys of their own tables.
+ */
+export const VOCAL_MOODS = ['aggro', 'hurt', 'death', 'idle'] as const;
+export type VocalMood = typeof VOCAL_MOODS[number];
+/** Elemancy. Each is a different physical process, not a preset. */
+export const SPELL_ELEMENTS = ['fire', 'ice', 'lightning'] as const;
+export type SpellElement = typeof SPELL_ELEMENTS[number];
+/** Menu and HUD cues. */
+export const UI_CUES = ['move', 'confirm', 'cancel', 'open', 'close', 'error'] as const;
+export type UiCue = typeof UI_CUES[number];
+
+/**
+ * Everything `Sfx.play` accepts.
+ *
+ * The first block places the shot in the mix and is understood by every
+ * synthesis program; the rest are the per-sound knobs, which the hierarchical
+ * name usually supplies instead (`impact:metal` sets `material`).
+ */
+export interface PlayOpts extends PanOpts {
+  /** Linear gain on the shot's own output, ahead of the bus. */
+  volume?: number;
+  /** Absolute context time. Defaults to now; the offline render sets it. */
+  at?: number;
+  /** Extra short-reverb send, 0..1, on top of the bus send. */
+  send?: number;
+  /** Drop a repeat of the same name within this many seconds. `Sfx.play`. */
+  minGap?: number;
+  /** World position. Omit for a 2D sound. */
+  pos?: Vec3;
+  /** Land somewhere other than this shot's usual bus. */
+  dest?: AudioNode;
+
+  /** Weapon class (`swing`) or menu cue (`ui`) -- see `SwingOpts`/`UiOpts`. */
+  kind?: WeaponKind | UiCue;
+  /** What was struck. `impact`. */
+  material?: ImpactMaterial;
+  /** What was stepped on. `step`. */
+  surface?: SurfaceName;
+  /** Whose voice, and what it is saying. `vocal`. */
+  species?: SpeciesName;
+  mood?: VocalMood;
+  /** `spell`. */
+  element?: SpellElement;
+
+  /** Size of the blow: scales body, transient and ring together. `impact`. */
+  scale?: number;
+  /** A blindside or a critical -- adds a sub and ducks the mix. `impact`. */
+  crit?: boolean;
+  /** Step in the combo ladder, 0..5. `combo`. */
+  index?: number;
+  /** Metres to the strike. `thunder`. */
+  distance?: number;
+  /** Running rather than walking. `step`. */
+  run?: boolean;
+  /** Body weight multiplier. `step`. */
+  weight?: number;
+}
+
+/** `swing`, whose `kind` is a weapon rather than a menu cue. */
+export type SwingOpts = PlayOpts & { kind?: WeaponKind };
+/** `ui`, whose `kind` is a menu cue rather than a weapon. */
+export type UiOpts = PlayOpts & { kind?: UiCue };
+
+/** A filtered noise burst. */
+interface NoiseOpts {
+  dur?: number;
+  type?: BiquadFilterType;
+  Q?: number;
+  /** Filter sweep, `f0` at the start to `f1` at the end. */
+  f0?: number;
+  f1?: number;
+  gain?: number;
+  /** Longer than ~4 ms gets a real attack ramp instead of an instant hit. */
+  attack?: number;
+  /** Which noise bed; the white one unless stated. */
+  buffer?: AudioBuffer;
+  rate?: number;
+  /** Offset into the bed, so repeats are not identical. */
+  offset?: number;
+  loop?: boolean;
+  /** Route somewhere other than the shot's own output. */
+  to?: AudioNode;
+}
+
+/** A pitched tone with an optional glide and filter. */
+interface ToneOpts {
+  f0: number;
+  f1?: number;
+  /** Seconds to reach `f1`; the whole note unless stated. */
+  glide?: number;
+  dur?: number;
+  gain?: number;
+  type?: OscillatorType;
+  attack?: number;
+  filter?: BiquadFilterType;
+  filterF?: number;
+  filterQ?: number;
+  to?: AudioNode;
+}
+
+/** Two-operator FM -- bells, clanks, anything metallic or crystalline. */
+interface FmOpts {
+  f0: number;
+  f1?: number;
+  dur?: number;
+  gain?: number;
+  /** Modulator frequency as a multiple of the carrier. Inharmonic = metallic. */
+  ratio?: number;
+  /** Modulation index, in units of the carrier frequency. */
+  index?: number;
+  /** How much of `dur` the index takes to fall away. */
+  indexDecay?: number;
+  modType?: OscillatorType;
+  to?: AudioNode;
+}
+
+/** One formant: `[centre Hz, gain, Q]`. */
+export type Formant = [number, number, number];
+/** One pitch breakpoint: `[fraction of the note, Hz]`. */
+export type PitchPoint = [number, number];
+
+/** A formant-filtered buzz: a larynx is a buzzing source and a resonant tube. */
+interface VoxOpts {
+  f0: number;
+  /** Where the pitch ends when there is no `pitch` contour. */
+  f1?: number;
+  dur?: number;
+  gain?: number;
+  type?: OscillatorType;
+  pitch?: PitchPoint[];
+  formants?: Formant[];
+  /** Sub-audio amplitude modulation, Hz. A big animal's folds beat slowly. */
+  growl?: number;
+  /** Breath under the voice, 0..1. */
+  rasp?: number;
+  attack?: number;
+  /** Fraction of the note held at full before the release. */
+  hold?: number;
+  /** Multiply every formant by this across the note. */
+  formantSweep?: number;
+  to?: AudioNode;
+}
 
 class Shot {
   ctx!: BaseAudioContext;
-  handle!: any;
-  last!: any;
+  handle!: VoiceSlot | null;
+  /** The source that ends last; its `onended` tears the shot down. */
+  last!: AudioScheduledSourceNode | null;
   lastEnd!: number;
   nodes!: AudioNode[];
   ok!: boolean;
   out!: GainNode;
   sfx!: Sfx;
-  /**
-   * @param o play options
-   */
-  constructor(sfx: Sfx, o: any, bus: string, priority: number) {
+  constructor(sfx: Sfx, o: PlayOpts, bus: MixBus, priority: number) {
     this.sfx = sfx;
     this.ctx = sfx.ctx;
     this.handle = sfx.graph.take(priority, o.at ?? sfx.now);
@@ -46,7 +199,7 @@ class Shot {
     this.out = g;
     this.nodes.push(g);
     const graph = sfx.graph;
-    const dest = o.dest || graph.bus[BUS_FOR[bus as keyof typeof BUS_FOR] || bus] || graph.bus.sfx;
+    const dest = o.dest ?? graph.bus[bus];
     if (o.pos) {
       const p = graph.panner(o.pos, o);
       g.connect(p);
@@ -65,34 +218,27 @@ class Shot {
     }
   }
 
-  _track(src: any, end: number) {
+  _track(src: AudioScheduledSourceNode, end: number) {
     this.nodes.push(src);
     if (end > this.lastEnd) { this.lastEnd = end; this.last = src; }
   }
 
-  /**
-   * A filtered noise burst.
-   * @param o {dur, type, f0, f1, Q, gain, attack, buffer, rate, to}
-   */
-  noise(t: number, o: any) {
+  /** A filtered noise burst. */
+  noise(t: number, o: NoiseOpts) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const src = ctx.createBufferSource();
-    src.buffer = o.buffer || this.sfx.white;
+    src.buffer = o.buffer ?? this.sfx.white;
     src.playbackRate.value = o.rate ?? (0.85 + this.sfx.rng() * 0.3);
     if (o.loop) src.loop = true;
     const dur = o.dur ?? 0.15;
-    let node: AudioNode = src;
-    if (o.type !== 'none') {
-      const f = ctx.createBiquadFilter();
-      f.type = o.type || 'bandpass';
-      f.Q.value = o.Q ?? 1.2;
-      f.frequency.setValueAtTime(Math.max(20, o.f0 ?? 1200), t);
-      if (o.f1 != null) f.frequency.exponentialRampToValueAtTime(Math.max(20, o.f1), t + dur);
-      node.connect(f);
-      node = f;
-      this.nodes.push(f);
-    }
+    const f = ctx.createBiquadFilter();
+    f.type = o.type ?? 'bandpass';
+    f.Q.value = o.Q ?? 1.2;
+    f.frequency.setValueAtTime(Math.max(20, o.f0 ?? 1200), t);
+    if (o.f1 != null) f.frequency.exponentialRampToValueAtTime(Math.max(20, o.f1), t + dur);
+    src.connect(f);
+    this.nodes.push(f);
     const g = ctx.createGain();
     const a = o.attack ?? 0.002;
     if (a > 0.004) {
@@ -102,8 +248,8 @@ class Shot {
     } else {
       hit(g.gain, t, o.gain ?? 0.5, dur);
     }
-    node.connect(g);
-    g.connect(o.to || this.out);
+    f.connect(g);
+    g.connect(o.to ?? this.out);
     this.nodes.push(g);
     src.start(t, o.offset ?? this.sfx.rng() * 1.5);
     src.stop(t + dur + 0.03);
@@ -111,15 +257,12 @@ class Shot {
     return this;
   }
 
-  /**
-   * A pitched tone with an optional glide.
-   * @param o {f0, f1, dur, gain, type, attack, decayShape, to}
-   */
-  tone(t: number, o: any) {
+  /** A pitched tone with an optional glide. */
+  tone(t: number, o: ToneOpts) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
-    osc.type = o.type || 'sine';
+    osc.type = o.type ?? 'sine';
     const dur = o.dur ?? 0.2;
     osc.frequency.setValueAtTime(Math.max(1, o.f0), t);
     if (o.f1 != null) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t + (o.glide ?? dur));
@@ -142,7 +285,7 @@ class Shot {
       this.nodes.push(f);
     }
     node.connect(g);
-    g.connect(o.to || this.out);
+    g.connect(o.to ?? this.out);
     this.nodes.push(g);
     osc.start(t);
     osc.stop(t + dur + 0.03);
@@ -151,7 +294,7 @@ class Shot {
   }
 
   /** Two-operator FM — bells, clanks, magic, anything metallic or crystalline. */
-  fm(t: number, o: any) {
+  fm(t: number, o: FmOpts) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const dur = o.dur ?? 0.5;
@@ -160,7 +303,7 @@ class Shot {
     car.frequency.setValueAtTime(o.f0, t);
     if (o.f1 != null) car.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t + dur);
     const mod = ctx.createOscillator();
-    mod.type = o.modType || 'sine';
+    mod.type = o.modType ?? 'sine';
     mod.frequency.setValueAtTime(o.f0 * (o.ratio ?? 1.41), t);
     if (o.f1 != null) mod.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1 * (o.ratio ?? 1.41)), t + dur);
     const mg = ctx.createGain();
@@ -168,7 +311,7 @@ class Shot {
     mod.connect(mg); mg.connect(car.frequency);
     const g = ctx.createGain();
     hit(g.gain, t, o.gain ?? 0.4, dur);
-    car.connect(g); g.connect(o.to || this.out);
+    car.connect(g); g.connect(o.to ?? this.out);
     car.start(t); mod.start(t);
     car.stop(t + dur + 0.03); mod.stop(t + dur + 0.03);
     this.nodes.push(mod, mg, g);
@@ -180,15 +323,15 @@ class Shot {
    * A formant-filtered buzz — the basis of every creature vocalisation. A
    * larynx is a buzzing source and a resonant tube; so is this.
    */
-  vox(t: number, o: any) {
+  vox(t: number, o: VoxOpts) {
     if (!this.ok) return this;
     const ctx = this.ctx;
     const dur = o.dur ?? 0.4;
     const src = ctx.createOscillator();
-    src.type = o.type || 'sawtooth';
+    src.type = o.type ?? 'sawtooth';
     const f = o.f0;
     src.frequency.setValueAtTime(f, t);
-    for (const [k, v] of (o.pitch || [[1, o.f1 ?? f]])) {
+    for (const [k, v] of (o.pitch ?? [[1, o.f1 ?? f]] as PitchPoint[])) {
       src.frequency.exponentialRampToValueAtTime(Math.max(20, v), t + dur * k);
     }
     // Growl: amplitude-modulate the source at a sub-audio rate.
@@ -213,7 +356,7 @@ class Shot {
     node = sum;
 
     const mix = ctx.createGain();
-    for (const [freq, amp, q] of (o.formants || [[520, 1, 6], [1180, 0.5, 8], [2600, 0.15, 9]])) {
+    for (const [freq, amp, q] of (o.formants ?? DEFAULT_FORMANTS)) {
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
       bp.frequency.setValueAtTime(freq, t);
@@ -230,7 +373,7 @@ class Shot {
       n.buffer = this.sfx.pink;
       const nf = ctx.createBiquadFilter();
       nf.type = 'bandpass';
-      nf.frequency.value = (o.formants ? o.formants[0][0] : 520) * 2.4;
+      nf.frequency.value = (o.formants ? o.formants[0][0] : DEFAULT_FORMANTS[0][0]) * 2.4;
       nf.Q.value = 0.8;
       const ng = ctx.createGain();
       ng.gain.value = o.rasp ?? 0.35;
@@ -245,7 +388,7 @@ class Shot {
     g.gain.exponentialRampToValueAtTime(Math.max(EPS, o.gain ?? 0.5), t + a);
     g.gain.setValueAtTime(Math.max(EPS, o.gain ?? 0.5), t + dur * (o.hold ?? 0.5));
     expTo(g.gain, EPS, t + dur);
-    mix.connect(g); g.connect(o.to || this.out);
+    mix.connect(g); g.connect(o.to ?? this.out);
     this.nodes.push(mix, g);
     src.start(t); src.stop(t + dur + 0.03);
     this._track(src, t + dur);
@@ -265,13 +408,14 @@ class Shot {
 
 export class Sfx {
   played!: number;
-  _recent!: Map<any, any>;
+  /** Cue name -> the time it last played, for the de-dupe in `play`. */
+  _recent!: Map<string, number>;
   brown!: AudioBuffer;
   ctx!: BaseAudioContext;
   graph!: AudioGraph;
   inst!: Instruments;
   pink!: AudioBuffer;
-  rng!: any;
+  rng!: RngFn;
   white!: AudioBuffer;
   constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
@@ -292,9 +436,8 @@ export class Sfx {
    * Play a sound.
    * @param name e.g. `swing:sword`, `impact:metal`, `voc:goblin:hurt`
    * @param [pos] world position, or null for 2D
-   * @param [o] {volume, at, hrtf, send, ...per-sound options}
    */
-  play(name: string, pos?: {x:number,y:number,z:number} | null, o: any = {}) {
+  play(name: string, pos?: Vec3 | null, o: PlayOpts = {}) {
     const t = Math.max(0, o.at ?? this.now);
     const opt = pos ? { ...o, pos } : { ...o };
     // De-dupe: eight enemies hit in one frame must not be eight identical
@@ -311,39 +454,49 @@ export class Sfx {
     return fn.call(this, t, opt);
   }
 
-  /** Resolve a (possibly legacy) name to a synthesis program. */
-  _route(name: string) {
+  /**
+   * Resolve a (possibly legacy) name to a synthesis program.
+   *
+   * The tail of the name is a *runtime* string -- `swing:${d.weapon}` is built
+   * from combat data -- so this is the one place it becomes one of the closed
+   * sets, through the `as*` guards at the bottom of the file. A name the bank
+   * does not know falls back to that set's default, exactly as the old
+   * `TABLE[name] || TABLE.default` lookups did inside each program.
+   */
+  _route(name: string): ((t: number, o: PlayOpts) => boolean) | null {
     const parts = name.split(':');
     const head = parts[0];
     switch (head) {
-      case 'swing': return (t: number, o: any) => this.swing(t, { kind: parts[1] || 'sword', ...o });
-      case 'impact': return (t: number, o: any) => this.impact(t, { material: parts[1] || 'flesh', ...o });
-      case 'hit': return (t: number, o: any) => this.impact(t, { material: 'flesh', ...o });
-      case 'step': return (t: number, o: any) => this.step(t, { surface: parts[1] || 'dirt', ...o });
-      case 'voc': return (t: number, o: any) => this.vocal(t, { species: parts[1] || 'goblin', mood: parts[2] || 'aggro', ...o });
+      case 'swing': return (t, o) => this.swing(t, { ...o, kind: asWeaponKind(o.kind ?? parts[1]) });
+      case 'impact': return (t, o) => this.impact(t, { ...o, material: asMaterial(o.material ?? parts[1]) });
+      case 'hit': return (t, o) => this.impact(t, { ...o, material: o.material ?? 'flesh' });
+      case 'step': return (t, o) => this.step(t, { ...o, surface: asSurface(o.surface ?? parts[1]) });
+      case 'voc': return (t, o) => this.vocal(t, {
+        ...o, species: asSpecies(o.species ?? parts[1]), mood: asMood(o.mood ?? parts[2]),
+      });
       case 'spell':
-      case 'magic': return (t: number, o: any) => this.spell(t, { element: parts[1] || 'fire', ...o });
-      case 'ui': return (t: number, o: any) => this.ui(t, { kind: parts[1] || 'move', ...o });
-      case 'warp': return (t: number, o: any) => (parts[1] === 'impact' ? this.warpImpact(t, o) : this.warpStart(t, o));
-      case 'parry': return (t: number, o: any) => this.parry(t, o);
-      case 'armiger': return (t: number, o: any) => this.armiger(t, o);
-      case 'armigerHit': return (t: number, o: any) => this.armigerHit(t, o);
-      case 'thunder': return (t: number, o: any) => this.thunder(t, o);
-      case 'gunshot': return (t: number, o: any) => this.gunshot(t, o);
-      case 'cloth': return (t: number, o: any) => this.cloth(t, o);
-      case 'grunt': return (t: number, o: any) => this.grunt(t, o);
-      case 'death': return (t: number, o: any) => this.playerDeath(t, o);
-      case 'stagger': return (t: number, o: any) => this.stagger(t, o);
-      case 'link': return (t: number, o: any) => this.link(t, o);
-      case 'lockon': return (t: number, o: any) => this.lockon(t, o);
-      case 'stasis': return (t: number, o: any) => this.stasis(t, o);
-      case 'combo': return (t: number, o: any) => this.comboTick(t, o);
-      case 'levelup': return (t: number, o: any) => this.levelUp(t, o);
-      case 'quest': return (t: number, o: any) => this.questSting(t, o);
-      case 'item': return (t: number, o: any) => this.itemPickup(t, o);
-      case 'materialise': return (t: number, o: any) => this.materialise(t, o);
-      case 'splash': return (t: number, o: any) => this.splash(t, o);
-      case 'howl': return (t: number, o: any) => this.daemonHowl(t, o);
+      case 'magic': return (t, o) => this.spell(t, { ...o, element: asElement(o.element ?? parts[1]) });
+      case 'ui': return (t, o) => this.ui(t, { ...o, kind: asUiCue(o.kind ?? parts[1]) });
+      case 'warp': return (t, o) => (parts[1] === 'impact' ? this.warpImpact(t, o) : this.warpStart(t, o));
+      case 'parry': return (t, o) => this.parry(t, o);
+      case 'armiger': return (t, o) => this.armiger(t, o);
+      case 'armigerHit': return (t, o) => this.armigerHit(t, o);
+      case 'thunder': return (t, o) => this.thunder(t, o);
+      case 'gunshot': return (t, o) => this.gunshot(t, o);
+      case 'cloth': return (t, o) => this.cloth(t, o);
+      case 'grunt': return (t, o) => this.grunt(t, o);
+      case 'death': return (t, o) => this.playerDeath(t, o);
+      case 'stagger': return (t, o) => this.stagger(t, o);
+      case 'link': return (t, o) => this.link(t, o);
+      case 'lockon': return (t, o) => this.lockon(t, o);
+      case 'stasis': return (t, o) => this.stasis(t, o);
+      case 'combo': return (t, o) => this.comboTick(t, o);
+      case 'levelup': return (t, o) => this.levelUp(t, o);
+      case 'quest': return (t, o) => this.questSting(t, o);
+      case 'item': return (t, o) => this.itemPickup(t, o);
+      case 'materialise': return (t, o) => this.materialise(t, o);
+      case 'splash': return (t, o) => this.splash(t, o);
+      case 'howl': return (t, o) => this.daemonHowl(t, o);
       default: return null;
     }
   }
@@ -351,8 +504,8 @@ export class Sfx {
   /* ------------------------------------------------------------ weapons */
 
   /** Per-class weapon swings. Mass is mostly in the length and the low end. */
-  swing(t: number, o: any = {}) {
-    const K = SWING[o.kind as keyof typeof SWING] || SWING.sword;
+  swing(t: number, o: SwingOpts = {}) {
+    const K = SWING[o.kind ?? 'sword'];
     const s = new Shot(this, { send: 0.14, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     for (let i = 0; i < K.strokes; i++) {
@@ -374,8 +527,8 @@ export class Sfx {
   }
 
   /** Impact, coloured by what was struck. */
-  impact(t: number, o: any = {}) {
-    const M = MATERIAL[o.material as keyof typeof MATERIAL] || MATERIAL.flesh;
+  impact(t: number, o: PlayOpts = {}) {
+    const M = MATERIAL[o.material ?? 'flesh'];
     const scale = o.scale ?? 1;
     const s = new Shot(this, { send: M.send, ...o }, 'sfx', 3);
     if (!s.ok) return false;
@@ -407,7 +560,7 @@ export class Sfx {
   }
 
   /** Firearm: a crack, a body thump and a tail that the space answers. */
-  gunshot(t: number, o = {}) {
+  gunshot(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.5, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.035, type: 'highpass', f0: 2600, gain: 1.0, Q: 0.5 });
@@ -421,7 +574,7 @@ export class Sfx {
   /* --------------------------------------------------------------- warp */
 
   /** The wind-up: a sub drop and a rising crystal shimmer. */
-  warpStart(t: number, o = {}) {
+  warpStart(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.30, type: 'bandpass', Q: 1.6, f0: 280, f1: 5200, gain: 0.55, attack: 0.06 });
@@ -436,7 +589,7 @@ export class Sfx {
   }
 
   /** The landing: a hard impact plus shattering crystal. */
-  warpImpact(t: number, o = {}) {
+  warpImpact(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.42, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.tone(t, { f0: 210, f1: 38, dur: 0.45, gain: 1.0, type: 'sine', glide: 0.14 });
@@ -453,7 +606,7 @@ export class Sfx {
   }
 
   /** The blade assembling out of blue light. */
-  materialise(t: number, o = {}) {
+  materialise(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.32, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     for (let i = 0; i < 4; i++) {
@@ -466,7 +619,7 @@ export class Sfx {
   }
 
   /** Perfect parry: a bright ring, a shimmer and a hole punched in the mix. */
-  parry(t: number, o = {}) {
+  parry(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.55, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.05, type: 'highpass', f0: 4200, gain: 0.9 });
@@ -484,7 +637,7 @@ export class Sfx {
   }
 
   /** Armiger: thirteen phantom weapons deciding to exist at once. */
-  armiger(t: number, o = {}) {
+  armiger(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.6, volume: 1.1, ...o }, 'sfx', 3);
     if (!s.ok) return false;
     // A rising swell into a crystalline chord.
@@ -503,7 +656,7 @@ export class Sfx {
   }
 
   /** One phantom weapon striking home during the Armiger burst. */
-  armigerHit(t: number, o = {}) {
+  armigerHit(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 1);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.11, type: 'bandpass', f0: 2600, f1: 700, Q: 1.6, gain: 0.5 });
@@ -515,10 +668,10 @@ export class Sfx {
   /* -------------------------------------------------------------- magic */
 
   /** Elemancy. Each element is a different physical process, not a preset. */
-  spell(t: number, o: any = {}) {
+  spell(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.4, ...o }, 'sfx', 3);
     if (!s.ok) return false;
-    const el = o.element || 'fire';
+    const el = o.element ?? 'fire';
     if (el === 'fire') {
       // Ignition whoosh, then combustion roar, then the boom.
       s.noise(t, { dur: 0.5, type: 'bandpass', Q: 0.7, f0: 420, f1: 2600, gain: 0.5, attack: 0.14 });
@@ -560,17 +713,19 @@ export class Sfx {
   /**
    * Enemy vocalisations. Body size sets the pitch and the formants; the mood
    * sets the contour.
-   * @param o {species, mood: 'aggro'|'hurt'|'death'|'idle'}
    */
-  vocal(t: number, o: any = {}) {
-    const V = SPECIES[o.species as keyof typeof SPECIES] || SPECIES.goblin;
-    const mood = o.mood || 'aggro';
-    const M = V[mood] || V.aggro;
+  vocal(t: number, o: PlayOpts = {}) {
+    const V = SPECIES[o.species ?? 'goblin'];
+    const mood = o.mood ?? 'aggro';
     const s = new Shot(this, { send: 0.3, hrtf: true, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     const jitter = 0.92 + this.rng() * 0.16;
+    // The call is read inside the branch, not before it: a machine's call is a
+    // swept tone and a throated one is a pitch contour, and they share no
+    // fields worth pretending are the same.
     if (V.machine) {
       // MT soldiers do not have a larynx: servo whine, ring-modulated buzz.
+      const M = V[mood];
       s.tone(t, { f0: M.f0 * jitter, f1: M.f1 * jitter, dur: M.dur, gain: 0.3, type: 'square', filter: 'bandpass', filterF: 1400, filterQ: 5 });
       s.noise(t, { dur: M.dur, type: 'bandpass', f0: 2400, f1: 900, Q: 3, gain: 0.28, attack: 0.02 });
       if (mood === 'death') {
@@ -578,10 +733,11 @@ export class Sfx {
         s.fm(t + M.dur * 0.6, { f0: 320, ratio: 1.63, index: 3.5, dur: 0.9, gain: 0.35 });
       }
     } else {
+      const M = V[mood];
       s.vox(t, {
-        f0: M.f0 * jitter, dur: M.dur, gain: M.gain ?? 0.55,
+        f0: M.f0 * jitter, dur: M.dur, gain: M.gain,
         pitch: M.pitch, formants: V.formants, growl: V.growl,
-        rasp: V.rasp, attack: M.attack ?? 0.03, hold: M.hold ?? 0.5,
+        rasp: V.rasp, attack: M.attack ?? 0.03, hold: M.hold,
         formantSweep: M.formantSweep,
       });
       if (V.sub) s.tone(t, { f0: V.sub * jitter, f1: V.sub * 0.7, dur: M.dur, gain: 0.5, type: 'sine', attack: 0.04 });
@@ -590,7 +746,7 @@ export class Sfx {
   }
 
   /** The howl that tells you it is past nineteen hundred and you are outside. */
-  daemonHowl(t: number, o = {}) {
+  daemonHowl(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.85, volume: 0.55, ...o }, 'amb', 1);
     if (!s.ok) return false;
     const f = 62 + this.rng() * 26;
@@ -610,8 +766,8 @@ export class Sfx {
    * Footstep. Surface names match `Terrain.sampleMaterial().name`.
    * @param o {surface, run, weight}
    */
-  step(t: number, o: any = {}) {
-    const S = SURFACE[o.surface as keyof typeof SURFACE] || SURFACE.dirt;
+  step(t: number, o: PlayOpts = {}) {
+    const S = SURFACE[o.surface ?? 'dirt'];
     const run = !!o.run;
     const w = (o.weight ?? 1) * (run ? 1.25 : 0.85);
     const s = new Shot(this, { send: 0.12, volume: (o.volume ?? 1) * w, ...o }, 'sfx', 1);
@@ -638,7 +794,7 @@ export class Sfx {
   }
 
   /** Cloth and gear movement — quiet, but its absence is loud. */
-  cloth(t: number, o: any = {}) {
+  cloth(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: (o.volume ?? 1) * 0.5, ...o }, 'sfx', 0);
     if (!s.ok) return false;
     s.noise(t, {
@@ -649,7 +805,7 @@ export class Sfx {
   }
 
   /** Player takes a hit. */
-  grunt(t: number, o = {}) {
+  grunt(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: 0.9, ...o }, 'voice', 3);
     if (!s.ok) return false;
     const f = 132 * (0.94 + this.rng() * 0.12);
@@ -663,7 +819,7 @@ export class Sfx {
     return s.done();
   }
 
-  playerDeath(t: number, o = {}) {
+  playerDeath(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: 1, ...o }, 'voice', 3);
     if (!s.ok) return false;
     const f = 122;
@@ -678,7 +834,7 @@ export class Sfx {
   }
 
   /** Enemy poise broken — the sound of something losing its footing. */
-  stagger(t: number, o = {}) {
+  stagger(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.35, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.tone(t, { f0: 320, f1: 84, dur: 0.55, gain: 0.55, type: 'triangle', filter: 'lowpass', filterF: 1400 });
@@ -687,7 +843,7 @@ export class Sfx {
   }
 
   /** Party link-strike: an ally arriving. */
-  link(t: number, o = {}) {
+  link(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.22, type: 'bandpass', Q: 1.4, f0: 500, f1: 3400, gain: 0.42, attack: 0.05 });
@@ -696,7 +852,7 @@ export class Sfx {
     return s.done();
   }
 
-  lockon(t: number, o = {}) {
+  lockon(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: 0.7, ...o }, 'ui', 1);
     if (!s.ok) return false;
     s.tone(t, { f0: 1760, dur: 0.06, gain: 0.28, type: 'sine' });
@@ -705,7 +861,7 @@ export class Sfx {
   }
 
   /** Out of MP — the world going quiet and cold for a second. */
-  stasis(t: number, o = {}) {
+  stasis(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.4, ...o }, 'sfx', 2);
     if (!s.ok) return false;
     s.tone(t, { f0: 420, f1: 90, dur: 1.1, gain: 0.35, type: 'triangle', filter: 'lowpass', filterF: 900 });
@@ -715,7 +871,7 @@ export class Sfx {
   }
 
   /** A rising pitch per combo step — the ladder that makes a combo feel long. */
-  comboTick(t: number, o: any = {}) {
+  comboTick(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: 0.4, ...o }, 'ui', 0);
     if (!s.ok) return false;
     const step = clamp(o.index ?? 0, 0, 5);
@@ -731,7 +887,7 @@ export class Sfx {
    * darker and longer as it travels.
    * @param o {distance metres}
    */
-  thunder(t: number, o: any = {}) {
+  thunder(t: number, o: PlayOpts = {}) {
     const d = clamp(o.distance ?? 900, 60, 3400);
     const near = 1 - d / 3400;
     const s = new Shot(this, { send: 0.7, volume: (o.volume ?? 1) * (0.45 + 0.75 * near), ...o }, 'amb', 3);
@@ -758,7 +914,7 @@ export class Sfx {
   }
 
   /** Something entering water. */
-  splash(t: number, o = {}) {
+  splash(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { send: 0.3, ...o }, 'sfx', 1);
     if (!s.ok) return false;
     s.noise(t, { dur: 0.25, type: 'bandpass', Q: 0.8, f0: 900, f1: 4200, gain: 0.55, attack: 0.02 });
@@ -774,8 +930,8 @@ export class Sfx {
   /* ----------------------------------------------------------------- UI */
 
   /** Menu and HUD sounds. Restrained and glassy, to match the UI. */
-  ui(t: number, o: any = {}) {
-    const kind = o.kind || 'move';
+  ui(t: number, o: UiOpts = {}) {
+    const kind = o.kind ?? 'move';
     const s = new Shot(this, { volume: o.volume ?? 1, ...o }, 'ui', 1);
     if (!s.ok) return false;
     switch (kind) {
@@ -808,7 +964,7 @@ export class Sfx {
   }
 
   /** Item pickup: a small ascending glassy triad. */
-  itemPickup(t: number, o = {}) {
+  itemPickup(t: number, o: PlayOpts = {}) {
     const s = new Shot(this, { volume: 0.9, ...o }, 'ui', 1);
     if (!s.ok) return false;
     const base = 1046;
@@ -822,7 +978,7 @@ export class Sfx {
    * Level-up. A real flourish: a harp run under a held string chord and a bell,
    * played on the music bus so it sits inside the score rather than on top.
    */
-  levelUp(t: number, o = {}) {
+  levelUp(t: number, o: PlayOpts = {}) {
     const inst = this.inst;
     const dest = this.graph.bus.ui;
     const root = 261.6;
@@ -839,7 +995,7 @@ export class Sfx {
   }
 
   /** Quest updated / objective complete — two notes and a shimmer. */
-  questSting(t: number, o = {}) {
+  questSting(t: number, o: PlayOpts = {}) {
     const inst = this.inst;
     const dest = this.graph.bus.ui;
     inst.bell(880, t, { dest, gain: 0.34, decay: 1.6, priority: 2 });
@@ -868,7 +1024,7 @@ interface SwingVoice {
   body: number;
 }
 
-const SWING: Record<string, SwingVoice> = {
+const SWING: Record<WeaponKind, SwingVoice> = {
   sword: { strokes: 1, gap: 0, dur: 0.20, f0: 1500, f1: 380, Q: 2.6, body: 210 },
   greatsword: { strokes: 1, gap: 0, dur: 0.38, f0: 760, f1: 150, Q: 1.6, body: 96 },
   polearm: { strokes: 2, gap: 0.11, dur: 0.24, f0: 1180, f1: 300, Q: 3.2, body: 150 },
@@ -881,7 +1037,7 @@ const SWING: Record<string, SwingVoice> = {
 /** What an impact sounds like against one material. */
 interface MaterialVoice {
   body: number; bodyDur: number; crack: number; crackDur: number;
-  filter: string; f0: number; f1?: number; Q: number;
+  filter: BiquadFilterType; f0: number; f1?: number; Q: number;
   /** Reverb send, 0..1. */
   send: number;
   pink?: boolean;
@@ -889,7 +1045,7 @@ interface MaterialVoice {
   ring?: number; ratio?: number; ringDur?: number;
 }
 
-const MATERIAL: Record<string, MaterialVoice> = {
+const MATERIAL: Record<ImpactMaterial, MaterialVoice> = {
   flesh: { body: 105, bodyDur: 0.20, crack: 0.55, crackDur: 0.13, filter: 'lowpass', f0: 1300, f1: 380, Q: 0.7, send: 0.16, pink: true },
   metal: { body: 130, bodyDur: 0.12, crack: 0.8, crackDur: 0.05, filter: 'highpass', f0: 3200, Q: 0.6, ring: 1750, ratio: 1.71, ringDur: 1.1, send: 0.38 },
   armour: { body: 118, bodyDur: 0.15, crack: 0.62, crackDur: 0.07, filter: 'bandpass', f0: 1900, f1: 700, Q: 1.4, ring: 900, ratio: 2.3, ringDur: 0.45, send: 0.3 },
@@ -908,10 +1064,10 @@ interface SurfaceVoice {
   /** Grain count for a loose surface. */
   grains?: number;
   /** Filter type for the noise burst; `bandpass` unless stated. */
-  filter?: string;
+  filter?: BiquadFilterType;
 }
 
-const SURFACE: Record<string, SurfaceVoice> = {
+const SURFACE: Record<SurfaceName, SurfaceVoice> = {
   grass: { dur: 0.10, f0: 2200, f1: 900, Q: 1.0, crack: 0.30, thud: 92, thudDur: 0.07, pink: true },
   dirt: { dur: 0.085, f0: 1000, f1: 400, Q: 1.1, crack: 0.34, thud: 84, thudDur: 0.08, pink: true },
   sand: { dur: 0.14, f0: 1700, f1: 800, Q: 0.7, crack: 0.30, thud: 62, thudDur: 0.06, pink: true, grains: 0 },
@@ -927,20 +1083,62 @@ const SURFACE: Record<string, SurfaceVoice> = {
  * amplitude-modulates the source (a big animal's vocal folds beat slowly), and
  * `sub` adds the chest tone you feel rather than hear.
  */
-/** One creature voice. See the note above for what each part does. */
-interface SpeciesVoice {
-  /** `[hz, gain, q]` per resonance. Absent on the machine voices, which are
-   *  swept tones rather than a throat. */
-  formants?: number[][];
-  growl?: number;
-  rasp?: number;
-  sub?: number;
-  /** A machine: no vocal folds, no formants. */
-  machine?: boolean;
-  [call: string]: any;
+/**
+ * One call from a creature with a throat: a pitch contour through the formant
+ * bank of its `ThroatVoice`.
+ */
+interface ThroatCall {
+  /** Starting pitch, Hz. */
+  f0: number;
+  dur: number;
+  gain: number;
+  /** `[fraction of the call, Hz]` breakpoints. */
+  pitch: PitchPoint[];
+  attack?: number;
+  /** Fraction of the call held at full before it falls away. */
+  hold: number;
+  /** Multiply the formants by this across the call. No species uses it yet. */
+  formantSweep?: number;
 }
 
-const SPECIES: Record<string, SpeciesVoice> = {
+/** One call from a machine: a swept tone, start to finish. */
+interface MachineCall {
+  f0: number;
+  f1: number;
+  dur: number;
+}
+
+/** A creature with a larynx. `formants` place the resonances of the throat. */
+interface ThroatVoice {
+  machine?: false;
+  formants: Formant[];
+  /** Sub-audio amplitude modulation: big animals beat slowly. */
+  growl: number;
+  rasp: number;
+  /** Chest tone you feel rather than hear, Hz. 0 for a small animal. */
+  sub: number;
+  aggro: ThroatCall;
+  hurt: ThroatCall;
+  death: ThroatCall;
+  idle: ThroatCall;
+}
+
+/** A machine: no vocal folds, so no formants and no growl either. */
+interface MachineVoice {
+  machine: true;
+  aggro: MachineCall;
+  hurt: MachineCall;
+  death: MachineCall;
+  idle: MachineCall;
+}
+
+/**
+ * One creature voice. The two arms share no fields worth unifying, which is
+ * why `vocal()` branches on `machine` before it reads the call.
+ */
+type SpeciesVoice = ThroatVoice | MachineVoice;
+
+const SPECIES: Record<SpeciesName, SpeciesVoice> = {
   sabertusk: {
     formants: [[380, 1, 6], [900, 0.55, 8], [2100, 0.2, 9]],
     growl: 38, rasp: 0.45, sub: 58,
@@ -981,5 +1179,39 @@ const SPECIES: Record<string, SpeciesVoice> = {
     idle: { f0: 70, dur: 1.4, gain: 0.24, pitch: [[1, 62]], hold: 0.6 },
   },
 };
+
+/** The formant bank `vox` falls back to when the caller gives none. */
+const DEFAULT_FORMANTS: Formant[] = [[520, 1, 6], [1180, 0.5, 8], [2600, 0.15, 9]];
+
+/* --------------------------------------------------------------- naming */
+
+/**
+ * Narrow the tail of a cue name to a key of the table that answers it.
+ *
+ * `swing:${d.weapon}` and `step:${terrain.sampleMaterial().name}` are built
+ * from live game data, so the tail is a runtime string wherever it reaches
+ * here. Each of these is a type guard over the table's own keys -- the same
+ * shape as `nodes.ts`'s `canStop` -- so an unknown tail lands on the default
+ * instead of being asserted into a union it is not in.
+ */
+function keyOf<T extends string>(table: Record<T, unknown>, fallback: T) {
+  const has = (k: string): k is T => k in table;
+  return (k: string | undefined): T => (k !== undefined && has(k) ? k : fallback);
+}
+
+/** The same guard where the set is a list rather than the keys of a table. */
+function oneOf<T extends string>(names: readonly T[], fallback: T) {
+  const set: ReadonlySet<string> = new Set(names);
+  const has = (k: string): k is T => set.has(k);
+  return (k: string | undefined): T => (k !== undefined && has(k) ? k : fallback);
+}
+
+const asWeaponKind = keyOf(SWING, 'sword');
+const asMaterial = keyOf(MATERIAL, 'flesh');
+const asSurface = keyOf(SURFACE, 'dirt');
+const asSpecies = keyOf(SPECIES, 'goblin');
+const asMood = oneOf(VOCAL_MOODS, 'aggro');
+const asElement = oneOf(SPELL_ELEMENTS, 'fire');
+const asUiCue = oneOf(UI_CUES, 'move');
 
 export { SURFACE, MATERIAL, SPECIES, SWING };

@@ -82,7 +82,7 @@ export function waderGeometry(): THREE.BufferGeometry {
   }
 
   // neck: the S every wader stands in, straightening as it stabs
-  const neckBlend = (p: any) => smooth(0.70, 0.92, p.y);
+  const neckBlend = (p: THREE.Vector3) => smooth(0.70, 0.92, p.y);
   parts.push(tube({
     nodes: [
       { p: [0, 0.72, 0.12], r: 0.055 },

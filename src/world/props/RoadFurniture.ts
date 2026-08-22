@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder } from './PartBuilder.ts';
+import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import {
   concreteMaterial, paintedMaterial, rustMaterial, woodMaterial,
   glowMaterial, markerTexture,
 } from './PropMaterials.ts';
 import { alphaTex } from '../veg/VegTextures.ts';
+import { isMesh } from '../../util/three-guards.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 
 /**
@@ -23,7 +24,7 @@ import type { Ecology } from '../veg/Ecology.ts';
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -57,13 +58,97 @@ function skidTexture() {
  * as an unmarked strip of tarmac. Chunks are now built **on demand** as the
  * camera reaches them, two per frame, and released well behind it.
  */
+/** The four road classes `RoadGraph` declares. No route is a `trail` today. */
+export type RoadClass = 'highway' | 'road' | 'track' | 'trail';
+
+/**
+ * One sample along a road edge, in arc length.
+ *
+ * `roadY` is the carriageway height the graph baked; `y` is the *terrain*
+ * height at the sample, filled in lazily by {@link RoadFurniture._buildChunk}
+ * because most chunks are never built.
+ */
+interface RoadSample {
+  x: number;
+  z: number;
+  roadY: number;
+  /** Unit tangent along the road, in the XZ plane. */
+  tx: number;
+  tz: number;
+  /** Arc length from the start of the route, metres. */
+  s: number;
+  y?: number;
+}
+
+/** ~150 m of one road edge: everything needed to build it, and what was built. */
+interface RoadChunk {
+  key: string;
+  cls: RoadClass;
+  samples: RoadSample[];
+  center: THREE.Vector3;
+  group: THREE.Group | null;
+  casting: boolean;
+  /**
+   * How many of the group's children came from the casting builder. The flat
+   * decals after them get `renderOrder = 1` and never a cascade.
+   */
+  castCount: number;
+}
+
+/**
+ * The material set and the shared primitives, built once. Functions rather
+ * than literals inside the class so the two types below *are* the sets.
+ */
+function roadMaterials() {
+  return {
+    concrete: concreteMaterial(0x9d9689, 0.93),
+    grit: concreteMaterial(0x8a8071, 0.96),
+    guard: paintedMaterial(0xa9aeb2, 0.46, 0.72),
+    post: paintedMaterial(0xd7d2c4, 0.62, 0.15),
+    rust: rustMaterial(0x8a5a38, 0.5),
+    wood: woodMaterial(0x6f5c44),
+    dark: new THREE.MeshStandardMaterial({ color: 0x25262a, roughness: 0.78, metalness: 0.25 }),
+    reflect: glowMaterial(0xffb54a, 0.6, 0x2a1a08),
+    skid: new THREE.MeshBasicMaterial({
+      map: skidTexture(), transparent: true, opacity: 0.55, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+      color: 0x1c1a18,
+    }),
+    plate: new THREE.MeshStandardMaterial({
+      map: markerTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
+    }),
+    chevron: new THREE.MeshStandardMaterial({
+      map: markerTexture(1), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
+    }),
+  
+  };
+}
+
+function roadGeometry() {
+  return {
+    shaft: new THREE.BoxGeometry(0.13, 1.25, 0.08),
+    head: new THREE.BoxGeometry(0.12, 0.2, 0.065),
+    gpost: new THREE.BoxGeometry(0.14, 1.05, 0.14),
+    drum: new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12),
+    tyre: new THREE.TorusGeometry(0.42, 0.16, 6, 12),
+    crate: new THREE.BoxGeometry(0.72, 0.5, 0.6),
+    grit: new THREE.IcosahedronGeometry(0.16, 0).scale(1.4, 0.6, 1.1),
+    plateBack: new THREE.BoxGeometry(0.26, 1.15, 0.18),
+  
+  };
+}
+
+export type RoadMats = ReturnType<typeof roadMaterials>;
+export type RoadGeo = ReturnType<typeof roadGeometry>;
+
 export class RoadFurniture {
   _lastCam!: THREE.Vector3;
-  _live!: any[];
-  chunks!: any[];
+  /** Chunks with geometry in the scene right now. */
+  _live!: RoadChunk[];
+  chunks!: RoadChunk[];
   eco!: Ecology;
-  geo!: any;
-  mats!: any;
+  geo!: RoadGeo;
+  mats!: RoadMats;
   root!: THREE.Group;
   scene!: THREE.Scene;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
@@ -76,41 +161,12 @@ export class RoadFurniture {
   }
 
   build() {
-    const M = this.mats = {
-      concrete: concreteMaterial(0x9d9689, 0.93),
-      grit: concreteMaterial(0x8a8071, 0.96),
-      guard: paintedMaterial(0xa9aeb2, 0.46, 0.72),
-      post: paintedMaterial(0xd7d2c4, 0.62, 0.15),
-      rust: rustMaterial(0x8a5a38, 0.5),
-      wood: woodMaterial(0x6f5c44),
-      dark: new THREE.MeshStandardMaterial({ color: 0x25262a, roughness: 0.78, metalness: 0.25 }),
-      reflect: glowMaterial(0xffb54a, 0.6, 0x2a1a08),
-      skid: new THREE.MeshBasicMaterial({
-        map: skidTexture(), transparent: true, opacity: 0.55, depthWrite: false,
-        polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-        color: 0x1c1a18,
-      }),
-      plate: new THREE.MeshStandardMaterial({
-        map: markerTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
-      }),
-      chevron: new THREE.MeshStandardMaterial({
-        map: markerTexture(1), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
-      }),
-    };
-    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `road_${k}`;
+    const M = this.mats = roadMaterials();
+    for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `road_${k}`;
 
     // Shared geometry — every chunk clones these through PartBuilder rather
     // than rebuilding a box per post.
-    this.geo = {
-      shaft: new THREE.BoxGeometry(0.13, 1.25, 0.08),
-      head: new THREE.BoxGeometry(0.12, 0.2, 0.065),
-      gpost: new THREE.BoxGeometry(0.14, 1.05, 0.14),
-      drum: new THREE.CylinderGeometry(0.3, 0.3, 0.88, 12),
-      tyre: new THREE.TorusGeometry(0.42, 0.16, 6, 12),
-      crate: new THREE.BoxGeometry(0.72, 0.5, 0.6),
-      grit: new THREE.IcosahedronGeometry(0.16, 0).scale(1.4, 0.6, 1.1),
-      plateBack: new THREE.BoxGeometry(0.26, 1.15, 0.18),
-    };
+    this.geo = roadGeometry();
 
     this._collect();
     this._lastCam = new THREE.Vector3(1e9, 0, 1e9);
@@ -141,25 +197,25 @@ export class RoadFurniture {
     }
   }
 
-  _pushRun(samples: any, cls: any, key: string) {
+  _pushRun(samples: RoadSample[], cls: RoadClass, key: string) {
     let cx = 0, cz = 0;
     for (const p of samples) { cx += p.x; cz += p.z; }
     cx /= samples.length; cz /= samples.length;
     this.chunks.push({
       key, cls, samples,
       center: new THREE.Vector3(cx, this.eco.height(cx, cz), cz),
-      group: null, casting: false,
+      group: null, casting: false, castCount: 0,
     });
   }
 
   /** Perpendicular offset from a road sample. */
-  _side(p: any, off: number) {
+  _side(p: RoadSample, off: number) {
     return { x: p.x + p.tz * off, z: p.z - p.tx * off };
   }
 
   // ------------------------------------------------------------ chunk build
 
-  _buildChunk(c: any) {
+  _buildChunk(c: RoadChunk) {
     const eco = this.eco;
     for (const p of c.samples) if (p.y === undefined) p.y = eco.height(p.x, p.z);
     const cast = new PartBuilder();
@@ -186,9 +242,9 @@ export class RoadFurniture {
     this._live.push(c);
   }
 
-  _release(c: any) {
+  _release(c: RoadChunk) {
     if (!c.group) return;
-    for (const m of c.group.children) m.geometry.dispose();
+    for (const m of c.group.children) if (isMesh(m)) m.geometry.dispose();
     this.root.remove(c.group);
     c.group = null;
     c.casting = false;
@@ -200,7 +256,7 @@ export class RoadFurniture {
    * White marker posts on both verges every 24 m. Nothing sells "highway"
    * faster than a line of identical objects converging to a vanishing point.
    */
-  _delineators(c: any, B: PartBuilder, G: PartBuilder) {
+  _delineators(c: RoadChunk, B: PartBuilder, G: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x8080);
     let acc = 1e9;
@@ -226,10 +282,10 @@ export class RoadFurniture {
    * W-beam barrier on the stretches where the ground falls away from the
    * shoulder — which is where a real highway authority would have paid for it.
    */
-  _guardrail(c: any, B: PartBuilder) {
+  _guardrail(c: RoadChunk, B: PartBuilder) {
     const M = this.mats, eco = this.eco, geo = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x2121);
-    let run: any[] = [];
+    let run: { x: number, z: number, y: number }[] = [];
     const flush = () => {
       if (run.length > 4) {
         for (let i = 0; i < run.length - 1; i++) {
@@ -251,7 +307,7 @@ export class RoadFurniture {
       run = [];
     };
     for (const p of c.samples) {
-      let best: any = null;
+      let best: { drop: number, q: { x: number, z: number } } | null = null;
       for (const side of [-1, 1]) {
         const near = this._side(p, side * 7.5);
         const far = this._side(p, side * 17);
@@ -270,7 +326,7 @@ export class RoadFurniture {
   // ---------------------------------------------------------------- markers
 
   /** Distance plates every 200 m and hazard chevrons on the sharpest bends. */
-  _markers(c: any, B: PartBuilder) {
+  _markers(c: RoadChunk, B: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     let acc = Math.abs(c.samples[0].s) % 200;
     for (let i = 2; i < c.samples.length - 2; i++) {
@@ -301,7 +357,7 @@ export class RoadFurniture {
   // --------------------------------------------------------------- culverts
 
   /** Concrete headwalls and a pipe mouth wherever the road crosses a wash. */
-  _culverts(c: any, B: PartBuilder) {
+  _culverts(c: RoadChunk, B: PartBuilder) {
     const M = this.mats, eco = this.eco;
     let acc = 1e9, placed = 0;
     for (const p of c.samples) {
@@ -335,7 +391,7 @@ export class RoadFurniture {
   // ----------------------------------------------------------------- litter
 
   /** Oil drums, a shredded tyre, crates: the things that fall off trucks. */
-  _litter(c: any, B: PartBuilder) {
+  _litter(c: RoadChunk, B: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x6161);
     let acc = 1e9;
@@ -366,7 +422,7 @@ export class RoadFurniture {
   // ----------------------------------------------------------- shoulder grit
 
   /** A band of loose stone either side of the carriageway. */
-  _gravel(c: any, B: PartBuilder) {
+  _gravel(c: RoadChunk, B: PartBuilder) {
     const eco = this.eco, g = this.geo, M = this.mats;
     const rng = new Rng(hash32(c.key) ^ 0x9393);
     for (const p of c.samples) {
@@ -386,7 +442,7 @@ export class RoadFurniture {
    * Rubber laid down where a corner catches drivers out. The ribbon samples
    * terrain height per vertex so it lies on the camber instead of hovering.
    */
-  _skid(c: any, B: PartBuilder) {
+  _skid(c: RoadChunk, B: PartBuilder) {
     const eco = this.eco, M = this.mats;
     const rng = new Rng(hash32(c.key) ^ 0x4242);
     if (rng.next() > 0.3) return;
@@ -432,7 +488,7 @@ export class RoadFurniture {
   update(camPos: THREE.Vector3) {
     const BUILD = 420, DRAW = 340, CAST = 110, FREE = 900;
     let made = 0;
-    let bestD = BUILD * BUILD, best: any = null;
+    let bestD = BUILD * BUILD, best: RoadChunk | null = null;
     for (const c of this.chunks) {
       const dx = c.center.x - camPos.x, dz = c.center.z - camPos.z;
       const d2 = dx * dx + dz * dz;
@@ -452,7 +508,7 @@ export class RoadFurniture {
     if (best) { this._buildChunk(best); made++; }
     if (made && this._live.length > 1) {
       // a second chunk per call, so a fast car never outruns the furniture
-      let b2: any = null, d2b = BUILD * BUILD;
+      let b2: RoadChunk | null = null, d2b = BUILD * BUILD;
       for (const c of this.chunks) {
         if (c.group) continue;
         const dx = c.center.x - camPos.x, dz = c.center.z - camPos.z;
@@ -466,7 +522,7 @@ export class RoadFurniture {
 }
 
 /** Stable 32-bit hash of a chunk key so its content never depends on order. */
-function hash32(str: any) {
+function hash32(str: string) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);

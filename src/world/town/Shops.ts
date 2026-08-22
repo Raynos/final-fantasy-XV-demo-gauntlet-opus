@@ -15,6 +15,52 @@
 /** Categories each counter is willing to take off your hands. */
 const ALL_SELLABLE = ['treasure', 'catalyst', 'ingredient', 'weapon', 'accessory', 'curative'];
 
+/**
+ * The part of an `rpg.tables.items` entry a shelf reads.
+ *
+ * The RPG layer's item table is still untyped, so this is the *read* side
+ * written down rather than a second copy of the table: a shelf never needs
+ * more than an id, a name, a category, a price and the tags that keep the
+ * royal arms off the rack.
+ */
+export interface ItemDef {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  tags: string[];
+}
+
+/**
+ * One counter.
+ *
+ * A shop lists its shelves *either* as hand-written id lists (`stock`) or as a
+ * filter over the whole item table (`filter`), never both: the diner's pantry
+ * is a chosen list, the armoury's rack is "everything for sale that is a
+ * weapon". {@link stockFor} takes whichever one the shop has.
+ */
+export interface ShopDef {
+  id: string;
+  name: string;
+  sub: string;
+  owner: string;
+  ownerRole: string;
+  /** Hue for the dialogue card, degrees. */
+  hue: number;
+  greeting: string;
+  buyLine: string;
+  brokeLine: string;
+  emptyLine: string;
+  /** Tab labels, in order. The last is always `Sell`. */
+  tabs: string[];
+  /** Per-tab item ids. */
+  stock?: Record<string, string[]>;
+  /** Per-tab predicate over the whole item table. */
+  filter?: Record<string, (def: ItemDef) => boolean>;
+  /** Item categories this counter buys back. */
+  sellCategories: string[];
+}
+
 export const TOWN_SHOPS = {
   crowsnest: {
     id: 'crowsnest',
@@ -81,8 +127,8 @@ export const TOWN_SHOPS = {
     // The van carries the whole catalogue that is actually for sale: royal arms
     // are never stock, and neither is anything with no price.
     filter: {
-      Weapons: (def: any) => def.category === 'weapon' && def.price > 0 && !def.tags.includes('royal'),
-      Accessories: (def: any) => def.category === 'accessory' && def.price > 0,
+      Weapons: (def: ItemDef) => def.category === 'weapon' && def.price > 0 && !def.tags.includes('royal'),
+      Accessories: (def: ItemDef) => def.category === 'accessory' && def.price > 0,
     },
     sellCategories: ['weapon', 'accessory', 'treasure', 'catalyst'],
   },
@@ -94,13 +140,11 @@ export const TOWN_SHOPS = {
  * @param items `rpg.tables.items`
  * @returns item definitions, cheapest first
  */
-export function stockFor(shop: any, tab: string, items: any): any[] {
+export function stockFor(shop: ShopDef, tab: string, items: Record<string, ItemDef> | null | undefined): ItemDef[] {
   if (!items) return [];
-  let list;
-  if (shop.filter && shop.filter[tab]) {
-    list = Object.values(items).filter(shop.filter[tab]);
-  } else {
-    list = (shop.stock?.[tab] || []).map((id: any) => items[id]).filter(Boolean);
-  }
-  return list.slice().sort((a: any, b: any) => (a.price - b.price) || a.name.localeCompare(b.name));
+  const pick = shop.filter?.[tab];
+  const list = pick
+    ? Object.values(items).filter(pick)
+    : (shop.stock?.[tab] ?? []).map((id) => items[id]).filter((d): d is ItemDef => !!d);
+  return list.slice().sort((a, b) => (a.price - b.price) || a.name.localeCompare(b.name));
 }

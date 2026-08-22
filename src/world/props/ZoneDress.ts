@@ -27,12 +27,69 @@ import { worldMap } from '../map/WorldMap.ts';
  *            grazing stock, and waders working the water's edge
  */
 
-/** Fragment mixes reused by several zones. */
-const FRAG_ANGULAR = { pebble: 0.34, cobble: 0.24, talus: 0.42 };
-const FRAG_ROUND = { pebble: 0.44, cobble: 0.38, talus: 0.18 };
-const FRAG_SCREE = { pebble: 0.24, cobble: 0.16, talus: 0.60 };
+/**
+ * The closed sets this module names.
+ *
+ * Every one of these is a key of a weight table that some other prop module
+ * indexes with a literal, so they are unions declared once rather than `string`
+ * asserted at each call site: `Debris` walks {@link LITTER_KINDS} and reads
+ * `dress.litter[key]`, `Rocks` feeds `kinds`/`frag` to `pickWeighted`.
+ */
+export type RockKind = 'granite' | 'bedded' | 'slab' | 'spire' | 'worn' | 'cobble';
+export type FragKind = 'pebble' | 'cobble' | 'talus';
+/**
+ * Every kind of stone the prop layer builds a mesh for. `Rocks` picks an
+ * anchor out of {@link RockMix} and its spall out of {@link FragMix}, and both
+ * index the same table of shapes -- so the table's key set is the union, not
+ * either half.
+ */
+export type StoneKind = RockKind | FragKind;
+export type LitterKind =
+  | 'branch' | 'log' | 'stump' | 'leaves' | 'bones' | 'planks'
+  | 'rubble' | 'driftwood' | 'deadtrunk' | 'cairn' | 'barrel' | 'reeds';
 
-const BASE = {
+/** A `{key: weight}` table. A missing key means weight zero, not "unset". */
+export type RockMix = Partial<Record<RockKind, number>>;
+export type FragMix = Record<FragKind, number>;
+export type LitterMix = Partial<Record<LitterKind, number>>;
+
+/** Wildlife density: raptors on thermals, grazing stock, waders on the shore. */
+export interface LifeMix { birds: number; herd: number; shore: number }
+
+/**
+ * A resolved dressing recipe — what {@link dressAt} hands out. Every field is
+ * present, which is the point: the scatter reads `dress.rockS` tens of
+ * thousands of times a stream-in and must never guard.
+ */
+export interface Dress {
+  /** Scatter density multiplier for boulders and outcrops. */
+  rockD: number;
+  /** Size multiplier. */
+  rockS: number;
+  /** `[r,g,b]` multiplier applied to the instance colour. */
+  tint: [number, number, number];
+  /** Overall lightness multiplier. */
+  bright: number;
+  kinds: RockMix;
+  frag: FragMix;
+  litter: LitterMix;
+  life: LifeMix;
+}
+
+/**
+ * What a zone *author* writes in {@link ZONE_DRESS}: anything left out falls
+ * back to {@link BASE}, and `life` merges field-by-field where `litter` and
+ * `kinds` replace wholesale — a zone that names its litter means *only* that
+ * litter. {@link mk} is the one place that resolution happens.
+ */
+export type DressSpec = Partial<Omit<Dress, 'life'>> & { life?: Partial<LifeMix> };
+
+/** Fragment mixes reused by several zones. */
+const FRAG_ANGULAR: FragMix = { pebble: 0.34, cobble: 0.24, talus: 0.42 };
+const FRAG_ROUND: FragMix = { pebble: 0.44, cobble: 0.38, talus: 0.18 };
+const FRAG_SCREE: FragMix = { pebble: 0.24, cobble: 0.16, talus: 0.60 };
+
+const BASE: Dress = {
   rockD: 1, rockS: 1, tint: [1.07, 1.0, 0.9], bright: 1,
   kinds: { granite: 0.15, bedded: 0.16, slab: 0.12, spire: 0.06, worn: 0.14, cobble: 0.37 },
   frag: FRAG_ANGULAR,
@@ -40,9 +97,21 @@ const BASE = {
   life: { birds: 1, herd: 0, shore: 0.25 },
 };
 
-const mk = (o: any) => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
+const mk = (o: DressSpec): Dress => ({ ...BASE, ...o, litter: { ...o.litter }, life: { ...BASE.life, ...o.life } });
 
-export const ZONE_DRESS: Record<string, any> = {
+/**
+ * The frontier recipe: generic upland, and the answer for any position that
+ * falls outside all nineteen zones. Named rather than reached for through
+ * `ZONE_DRESS._default` so {@link dressAt}'s return really is a `Dress` and
+ * not "a `Dress` if that key happens to be there".
+ */
+export const DEFAULT_DRESS: Dress = mk({
+  rockD: 0.9, rockS: 1.0, tint: [1.02, 0.98, 0.9], bright: 0.9,
+  litter: { branch: 0.3, bones: 0.2, log: 0.15 },
+  life: { birds: 0.9, herd: 0.15, shore: 0.3 },
+});
+
+export const ZONE_DRESS: Record<string, Dress> = {
   // ---------------------------------------------------------------- LEIDE
   // Rust-ochre badlands. Bedded sandstone that breaks into tabular slabs,
   // dry-wash bones, brittle dead brush, nothing green.
@@ -196,22 +265,18 @@ export const ZONE_DRESS: Record<string, any> = {
   }),
 
   // the frontier: generic upland
-  _default: mk({
-    rockD: 0.9, rockS: 1.0, tint: [1.02, 0.98, 0.9], bright: 0.9,
-    litter: { branch: 0.3, bones: 0.2, log: 0.15 },
-    life: { birds: 0.9, herd: 0.15, shore: 0.3 },
-  }),
+  _default: DEFAULT_DRESS,
 };
 
 /** Every litter kind any zone can ask for. */
-export const LITTER_KINDS = [
+export const LITTER_KINDS: readonly LitterKind[] = [
   'branch', 'log', 'stump', 'leaves', 'bones', 'planks',
   'rubble', 'driftwood', 'deadtrunk', 'cairn', 'barrel', 'reeds',
 ];
 
 // ------------------------------------------------------------------ lookup
 
-const _cache = new Map();
+const _cache = new Map<number, Dress>();
 const CELL = 96;
 
 /**
@@ -227,12 +292,12 @@ const CELL = 96;
  * @param x @param z
  * @returns a {@link ZONE_DRESS} record (never null)
  */
-export function dressAt(x: number, z: number): any {
+export function dressAt(x: number, z: number): Dress {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
-  let d = _cache.get(k);
-  if (d !== undefined) return d;
+  const hit = _cache.get(k);
+  if (hit !== undefined) return hit;
   const zn = worldMap.zoneAt(x, z);
-  d = (zn && ZONE_DRESS[zn.id]) || ZONE_DRESS._default;
+  const d = (zn ? ZONE_DRESS[zn.id] : undefined) ?? DEFAULT_DRESS;
   if (_cache.size > 20000) _cache.clear();
   _cache.set(k, d);
   return d;
@@ -246,7 +311,7 @@ export function dressAt(x: number, z: number): any {
  * the prop layer that wants to know "is this a wet place" has to ask the map,
  * not the noise. Cached on the same grid as {@link dressAt}.
  */
-const _moistCache = new Map();
+const _moistCache = new Map<number, number>();
 export function zoneMoist(x: number, z: number) {
   const k = (Math.floor(x / CELL) & 0xffff) * 65536 + (Math.floor(z / CELL) & 0xffff);
   let m = _moistCache.get(k);

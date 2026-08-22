@@ -4,6 +4,7 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from '../veg/Ecology.ts';
 import { TileStream } from './TileStream.ts';
 import { dressAt } from './ZoneDress.ts';
+import type { EcoSite } from './EcoSites.ts';
 import { puffTexture } from './PropMaterials.ts';
 import { garulaGeometry, grazerMaterials, walkCycle, CYCLE_DISTANCE } from './Grazer.ts';
 import { waderGeometry, waderMaterial } from './Waders.ts';
@@ -133,17 +134,109 @@ function birdGeometry() {
   return mergeTinted(parts);
 }
 
+/** The shared clock uniform every vertex-animated population reads. */
+interface TimeRef { value: number }
+
+/** One raptor turning on a thermal. `cx`/`cz` is the centre of its circle. */
+interface Kettle {
+  cx: number;
+  cz: number;
+  y: number;
+  /** Circle radius, metres. */
+  r: number;
+  phase: number;
+  /** Radians a second; the sign is which way it turns. */
+  rate: number;
+  /** Amplitude and rate of the slow rise and fall. */
+  climb: number;
+  climbRate: number;
+  scale: number;
+}
+
+/** One grazing animal, walking an arc it never leaves. */
+interface Beast {
+  /** Centre of the wander arc, placed so that at `t = 0` it stands on `ax,az`. */
+  cx: number;
+  cz: number;
+  radius: number;
+  theta0: number;
+  /** The anchor it was scattered at, which is what the range test measures. */
+  ax: number;
+  az: number;
+  /** Which way round the arc, ±1. */
+  dir: number;
+  phase: number;
+  rate: number;
+  scale: number;
+  /** >0 for the few head that stand watch instead of cropping. */
+  idle: number;
+  /** Coat brightness, 0..1. */
+  tint: number;
+}
+
+/** One wading bird, standing just under the lake surface. */
+interface Wader {
+  x: number;
+  z: number;
+  y: number;
+  yaw: number;
+  sway: number;
+  phase: number;
+  rate: number;
+  scale: number;
+  /** High is egret-pale, low is grey-brown heron. */
+  tint: number;
+}
+
+/** A streamed instanced population: one mesh, one window, one cap. */
+interface Field<T> {
+  mesh: THREE.InstancedMesh;
+  /** Instance capacity. */
+  cap: number;
+  stream: TileStream<T>;
+}
+
+/** A field whose animation is driven per instance through an `aanim` buffer. */
+interface AnimField<T> extends Field<T> {
+  /** Draw distance, metres. */
+  range: number;
+  anim: THREE.InstancedBufferAttribute;
+}
+
+/** The midge swarm that hangs off the eye. */
+interface Insects {
+  pts: THREE.Points;
+  /** Carries a bounding sphere from the moment it is built: the swarm follows
+   * the eye, so it is never culled and the sphere is moved by hand. */
+  geo: THREE.BufferGeometry & { boundingSphere: THREE.Sphere };
+  mat: THREE.PointsMaterial;
+  /** Three per midge: orbit seed, height above the eye, phase seed. */
+  seeds: Float32Array;
+  n: number;
+}
+
+/** The column still coming off the downed dropship. */
+interface Smoke {
+  pts: THREE.Points;
+  geo: THREE.BufferGeometry;
+  seeds: { t0: number, spin: number, wob: number, sz: number }[];
+  n: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
 export class Wildlife {
-  birds!: any;
-  insects!: any;
-  smoke!: any;
-  waders!: any;
+  birds!: Field<Kettle>;
+  insects!: Insects;
+  smoke?: Smoke;
+  waders!: AnimField<Wader>;
   eco!: Ecology;
-  herd!: any;
+  herd!: AnimField<Beast>;
   quality!: number;
   root!: THREE.Group;
   scene!: THREE.Scene;
-  timeRef!: any;
+  timeRef!: TimeRef;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
@@ -198,7 +291,7 @@ export class Wildlife {
     this.birds.stream.flush(new THREE.Vector3());
   }
 
-  _genKettle(cx: number, cz: number, out: any) {
+  _genKettle(cx: number, cz: number, out: Kettle[]) {
     const c = 340;
     const rng = new Rng(hash3(cx, cz, 0x8175));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -240,7 +333,8 @@ export class Wildlife {
     const CAP = Math.round(72 * this.quality);
     const geo = garulaGeometry();
     // per-instance animation: phase, cycle rate, alertness, coat brightness
-    geo.setAttribute('aanim', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4));
+    const anim = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4);
+    geo.setAttribute('aanim', anim);
     const mesh = new THREE.InstancedMesh(geo, material, CAP);
     mesh.customDepthMaterial = depth;
     mesh.castShadow = true;
@@ -250,7 +344,7 @@ export class Wildlife {
     mesh.name = 'wildlife_herd';
     this.root.add(mesh);
     this.herd = {
-      mesh, cap: CAP, range: 440, anim: geo.attributes.aanim,
+      mesh, cap: CAP, range: 440, anim,
       stream: new TileStream({
         cell: 260, radius: 620, budget: 4,
         gen: (cx, cz, out) => this._genHerd(cx, cz, out),
@@ -272,7 +366,7 @@ export class Wildlife {
    * few paces along the arc every cycle and crops with its head down in
    * between, so a herd slowly redistributes itself across the pasture.
    */
-  _genHerd(cx: number, cz: number, out: any) {
+  _genHerd(cx: number, cz: number, out: Beast[]) {
     const c = 260, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x2b91));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -336,7 +430,8 @@ export class Wildlife {
   _waders() {
     const CAP = Math.round(64 * this.quality);
     const geo = waderGeometry();
-    geo.setAttribute('aanim', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4));
+    const anim = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4);
+    geo.setAttribute('aanim', anim);
     const mesh = new THREE.InstancedMesh(geo, waderMaterial(this.timeRef), CAP);
     mesh.castShadow = false;
     mesh.receiveShadow = true;
@@ -345,7 +440,7 @@ export class Wildlife {
     mesh.name = 'wildlife_waders';
     this.root.add(mesh);
     this.waders = {
-      mesh, cap: CAP, range: 300, anim: geo.attributes.aanim,
+      mesh, cap: CAP, range: 300, anim,
       stream: new TileStream({
         cell: 180, radius: 420, budget: 3,
         gen: (cx, cz, out) => this._genWaders(cx, cz, out),
@@ -354,7 +449,7 @@ export class Wildlife {
     this.waders.stream.flush(new THREE.Vector3());
   }
 
-  _genWaders(cx: number, cz: number, out: any) {
+  _genWaders(cx: number, cz: number, out: Wader[]) {
     const c = 180, eco = this.eco, sea = WORLD.seaLevel;
     // one sample rejects every cell that is not lake country
     if (eco.height((cx + 0.5) * c, (cz + 0.5) * c) > sea + 60) return;
@@ -442,9 +537,10 @@ export class Wildlife {
       seeds[i * 3 + 1] = rng.range(0.4, 3.4);
       seeds[i * 3 + 2] = rng.next() * 100;
     }
-    const geo = new THREE.BufferGeometry();
+    const geo = Object.assign(new THREE.BufferGeometry(), {
+      boundingSphere: new THREE.Sphere(new THREE.Vector3(), 1e6),
+    });
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
     const mat = new THREE.PointsMaterial({
       size: 0.035, sizeAttenuation: true, map: puffTexture(),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -463,7 +559,7 @@ export class Wildlife {
 
   /** The column still coming off the downed dropship. One draw call. */
   _smoke() {
-    const site = this.eco.sites.find((s: any) => s.type === 'crashsite');
+    const site: EcoSite | undefined = this.eco.sites.find((v: EcoSite) => v.type === 'crashsite');
     if (!site) return;
     const rng = new Rng(9090);
     // Many faint puffs rather than few solid ones: a handful of half-opaque

@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, blob, abump, bump, clamp01 } from './Geo.ts';
+import { SIDES } from './Skeleton.ts';
+import type { Rig, Side } from './Skeleton.ts';
+import type { Look } from './Look.ts';
 import { torsoNodes, armNodes, legNodes, torsoShape, armShape, legShape, drape } from './Anatomy.ts';
 import { SKIN_BASE } from './Face.ts';
 
@@ -17,9 +20,8 @@ const _ink = new THREE.Color();
 
 /**
  * @param rig result of buildSkeleton()
- * @param look { skin:THREE.Color, muscle:number }
  */
-export function buildBody(rig: any, look: any): THREE.BufferGeometry {
+export function buildBody(rig: Rig, look: Look): THREE.BufferGeometry {
   const { index: I, P, dims } = rig;
   const s = dims.s;
   const m = rig.profile.muscle;
@@ -39,14 +41,15 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
 
   // ink sits on its own dense patch a couple of millimetres proud of the skin,
   // in the same mesh and material so it shades exactly like the body
-  if (look.tattoo) {
+  const tattoo = look.tattoo;
+  if (tattoo) {
     const u0 = 0.42, u1 = 1.0;
     sweepTube(B, {
       nodes: drape(torso, u0, u1, 8, 0.0022),
       steps: 30, seg: 46,
       theta0: Math.PI - 1.6, theta1: Math.PI + 1.6,
       shape: (th, t) => tShape(th, u0 + (u1 - u0) * t),
-      colorAt: (th: any, t: number) => _ink.copy(base).multiplyScalar(1 - 0.86 * clamp01(look.tattoo(th, u0 + (u1 - u0) * t))),
+      colorAt: (th: number, t: number) => _ink.copy(base).multiplyScalar(1 - 0.86 * clamp01(tattoo(th, u0 + (u1 - u0) * t))),
       uvScale: [1, 1],
     });
     B.color(base);
@@ -74,7 +77,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
   });
 
   // ---- arms --------------------------------------------------------------
-  for (const side of ['L', 'R']) {
+  for (const side of SIDES) {
     const sg = side === 'L' ? 1 : -1;
     const sh = P[`upperArm${side}`];
     const R = (v: number) => v * s;
@@ -100,7 +103,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
   }
 
   // ---- legs --------------------------------------------------------------
-  for (const side of ['L', 'R']) {
+  for (const side of SIDES) {
     sweepTube(B, { nodes: legNodes(rig, side), steps: 20, seg: 16, shape: legShape(m), uvScale: [1, 2.0] });
   }
 
@@ -124,7 +127,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
  * When the character wears gloves the same geometry is re-coloured and given a
  * cloth response, which is what a thin glove actually looks like.
  */
-function buildHand(B: MeshBuilder, rig: any, side: string, look: any) {
+function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   const { index: I, P, dims } = rig;
   const gl = look.gloves;
   if (gl) B.color(gl.color).mat(gl.rough ?? 0.72, 0);

@@ -8,8 +8,32 @@ import { alphaTex } from '../veg/VegTextures.ts';
  * boulder all agree on what stone, rust and painted metal look like.
  */
 
-const cache = new Map();
-function memo(k: string, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
+/**
+ * Two caches, not one map of `any`: every key below is prefixed with the name
+ * of the function that mints it, so splitting the table by what it holds is
+ * behaviour-identical and lets each getter keep its real return type.
+ */
+const matCache = new Map<string, THREE.MeshStandardMaterial>();
+const texCache = new Map<string, THREE.Texture>();
+
+function memoMat(k: string, f: () => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  let m = matCache.get(k);
+  if (!m) { m = f(); matCache.set(k, m); }
+  return m;
+}
+
+function memoTex(k: string, f: () => THREE.Texture): THREE.Texture {
+  let t = texCache.get(k);
+  if (!t) { t = f(); texCache.set(k, t); }
+  return t;
+}
+
+/**
+ * The RGB scratch triple `makeTexture` hands its callback for each texel. One
+ * array is reused for the whole image, so a callback writes into it and
+ * returns nothing.
+ */
+export type Texel = number[];
 
 /**
  * Cracked, weather-bitten stone.
@@ -23,7 +47,7 @@ function memo(k: string, f: any) { if (!cache.has(k)) cache.set(k, f()); return 
  *   asking for a colour attribute that is not there renders solid black.
  */
 export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, instanceTint: boolean = true) {
-  return memo(`rock${tint}${rough}${instanceTint}`, () => {
+  return memoMat(`rock${tint}${rough}${instanceTint}`, () => {
     const n = new Noise(6161);
     const h = (u: number, v: number) => {
       const w = n.worley2(u * 7, v * 7);
@@ -33,7 +57,7 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
       return crack * 0.42 + grain * 0.25 + big * 0.33;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(512, (u: number, v: number, c: any) => {
+    const map = makeTexture(512, (u: number, v: number, c: Texel) => {
       // Keep the contrast but pull the mean down: sunlit stone at 0.5+ albedo
       // burns out to white paper under the tone map, which is what made the
       // scree runs read as popcorn instead of rock.
@@ -57,14 +81,14 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
 
 /** Sun-bleached, splintered timber. */
 export function woodMaterial(tint = 0x7a6449) {
-  return memo(`wood${tint}`, () => {
+  return memoMat(`wood${tint}`, () => {
     const n = new Noise(3131);
     const h = (u: number, v: number) => {
       const grain = Math.sin(v * 130 + n.fbm2(u * 3, v * 9, 3) * 9) * 0.5 + 0.5;
       return grain * 0.55 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.45;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const k = 0.62 + h(u, v) * 0.62;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
@@ -79,12 +103,12 @@ export function woodMaterial(tint = 0x7a6449) {
 
 /** Rusted, dented corrugated steel. */
 export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
-  return memo(`rust${tint}${metal}`, () => {
+  return memoMat(`rust${tint}${metal}`, () => {
     const n = new Noise(9090);
     const h = (u: number, v: number) => (n.fbm2(u * 16, v * 16, 4) * 0.5 + 0.5) * 0.6
       + (n.worley2(u * 9, v * 9).f1) * 0.4;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
       const k = 0.55 + h(u, v) * 0.7;
       const rust = THREE.MathUtils.smoothstep(r, 0.35, 0.75);
@@ -114,12 +138,12 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
 
 /** Weathered canvas for the haven tent. */
 export function canvasClothMaterial(tint = 0x2f3a44) {
-  return memo(`cloth${tint}`, () => {
+  return memoMat(`cloth${tint}`, () => {
     const n = new Noise(1212);
     const h = (u: number, v: number) => (Math.sin(u * 420) * 0.5 + 0.5) * 0.35 + (Math.sin(v * 420) * 0.5 + 0.5) * 0.35
       + (n.fbm2(u * 8, v * 8, 3) * 0.5 + 0.5) * 0.3;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const k = 0.72 + h(u, v) * 0.5;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
@@ -135,12 +159,12 @@ export function canvasClothMaterial(tint = 0x2f3a44) {
 
 /** Glowing haven runes — additive blue sigils on the camp rock. */
 export function runeTexture() {
-  return memo('runes', () => alphaTex(512, (ctx, s) => {
+  return memoTex('runes', () => alphaTex(512, (ctx, s) => {
     ctx.strokeStyle = '#9fdcff';
     ctx.lineWidth = s * 0.008;
     ctx.globalAlpha = 0.95;
     const cx = s * 0.5, cy = s * 0.5;
-    const ring = (r: number, dash: any) => {
+    const ring = (r: number, dash: number[]) => {
       ctx.save();
       ctx.setLineDash(dash);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -178,7 +202,7 @@ export function runeTexture() {
 
 /** Highway sign face. */
 export function signTexture(kind = 0) {
-  return memo(`sign${kind}`, () => canvasTexture(256, (ctx: any, s: number) => {
+  return memoTex(`sign${kind}`, () => canvasTexture(256, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = kind === 0 ? '#25402c' : '#6d6a58';
     ctx.fillRect(0, 0, s, s);
     ctx.strokeStyle = '#d8dcd2';
@@ -210,7 +234,7 @@ export function signTexture(kind = 0) {
 
 /** Poured concrete: barriers, culverts, plinths, imperial blockades. */
 export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
-  return memo(`conc${tint}${rough}`, () => {
+  return memoMat(`conc${tint}${rough}`, () => {
     const n = new Noise(4747);
     const h = (u: number, v: number) => {
       const pit = Math.max(0, n.worley2(u * 26, v * 26).f1 - 0.32) * 1.4;
@@ -219,7 +243,7 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
       return grain * 0.34 + stain * 0.5 - pit * 0.3;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const k = 0.66 + h(u, v) * 0.7;
       // rust weep and grime running down from the top
       const weep = Math.max(0, n.fbm2(u * 14, v * 2.2, 3)) * (1 - v) * 0.5;
@@ -238,11 +262,11 @@ export function concreteMaterial(tint = 0x9a968c, rough = 0.92) {
 
 /** Chipped enamel over steel — guardrail, signage backs, imperial plate. */
 export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
-  return memo(`paint${tint}${rough}${metal}`, () => {
+  return memoMat(`paint${tint}${rough}${metal}`, () => {
     const n = new Noise(8123);
     const h = (u: number, v: number) => n.fbm2(u * 30, v * 30, 3) * 0.5 + 0.5;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const chip = THREE.MathUtils.smoothstep(n.fbm2(u * 11 + 5, v * 11 - 3, 4) * 0.5 + 0.5, 0.62, 0.86);
       const k = 0.82 + h(u, v) * 0.24;
       c[0] = THREE.MathUtils.lerp(base.r, 0.20, chip) * k;
@@ -260,14 +284,14 @@ export function paintedMaterial(tint = 0xb9bcbd, rough = 0.5, metal = 0.55) {
 
 /** Niflheim magitek plate: cold blue-black iron with hot seams. */
 export function magitekMaterial(tint = 0x2b2f36) {
-  return memo(`magitek${tint}`, () => {
+  return memoMat(`magitek${tint}`, () => {
     const n = new Noise(3355);
     const h = (u: number, v: number) => {
       const panel = Math.min(1, Math.abs(Math.sin(u * 34)) * 0.5 + Math.abs(Math.sin(v * 21)) * 0.5);
       return panel * 0.55 + (n.fbm2(u * 20, v * 20, 3) * 0.5 + 0.5) * 0.45;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: number, v: number, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: Texel) => {
       const k = 0.7 + h(u, v) * 0.5;
       const grime = n.fbm2(u * 6, v * 6, 3) * 0.5 + 0.5;
       c[0] = base.r * k * (0.86 + grime * 0.4);
@@ -303,8 +327,8 @@ export function glowMaterial(color = 0x9fdcff, intensity = 2.4, base = 0x0a0e12)
  * vanishes at the first mip.
  */
 export function puffTexture() {
-  return memo('puff', () => {
-    const t = canvasTexture(128, (ctx: any, s: number) => {
+  return memoTex('puff', () => {
+    const t = canvasTexture(128, (ctx: CanvasRenderingContext2D, s: number) => {
       const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
       g.addColorStop(0, 'rgba(255,255,255,0.98)');
       g.addColorStop(0.4, 'rgba(255,255,255,0.62)');
@@ -320,7 +344,7 @@ export function puffTexture() {
 
 /** Tapered flame tongue for the campfire billboards. */
 export function flameTexture() {
-  return memo('flame', () => canvasTexture(128, (ctx: any, s: number) => {
+  return memoTex('flame', () => canvasTexture(128, (ctx: CanvasRenderingContext2D, s: number) => {
     const img = ctx.createImageData(s, s);
     const n = new Noise(9931);
     for (let y = 0; y < s; y++) {
@@ -347,7 +371,7 @@ export function flameTexture() {
 
 /** A bird in flight, wings swept — one card, seen as a silhouette. */
 export function birdTexture() {
-  return memo('bird', () => alphaTex(64, (ctx, s) => {
+  return memoTex('bird', () => alphaTex(64, (ctx, s) => {
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.moveTo(s * 0.5, s * 0.46);
@@ -363,7 +387,7 @@ export function birdTexture() {
 
 /** Roadside marker faces: distance plates and hazard chevrons. */
 export function markerTexture(kind = 0) {
-  return memo(`marker${kind}`, () => canvasTexture(128, (ctx: any, s: number) => {
+  return memoTex(`marker${kind}`, () => canvasTexture(128, (ctx: CanvasRenderingContext2D, s: number) => {
     if (kind === 0) {
       ctx.fillStyle = '#d9d3c4'; ctx.fillRect(0, 0, s, s);
       ctx.fillStyle = '#20242a';
@@ -389,7 +413,7 @@ export function markerTexture(kind = 0) {
 
 /** Imperial banner / checkpoint plate. */
 export function imperialTexture() {
-  return memo('imperial', () => canvasTexture(256, (ctx: any, s: number) => {
+  return memoTex('imperial', () => canvasTexture(256, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#1b1f27'; ctx.fillRect(0, 0, s, s);
     ctx.strokeStyle = '#a5261f'; ctx.lineWidth = s * 0.03;
     ctx.strokeRect(s * 0.1, s * 0.1, s * 0.8, s * 0.8);

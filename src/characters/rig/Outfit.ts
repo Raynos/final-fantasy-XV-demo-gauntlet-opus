@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp, smooth, clamp01 } from './Geo.ts';
+import type { SweepNode, SkinWeights } from './Geo.ts';
 import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape } from './Anatomy.ts';
+import { SIDES } from './Skeleton.ts';
+import type { Rig, Side } from './Skeleton.ts';
+import type { Look, OutfitPiece } from './Look.ts';
 import { Noise } from '../../util/Noise.ts';
 
 const _cloth = new Noise(9137);
@@ -28,7 +32,18 @@ function aridge(th: number, c: number, w: number) {
  *
  * @param o garment piece description
  */
-function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:number,t:number)=>number[], seam?: any, wear?: any } {
+/** The four per-vertex functions a garment sweep drives itself from. */
+interface ClothShade {
+  /** seam mask, 0..1 — also drives the raised topstitch ridge in `shape`. */
+  seam: (theta: number, t: number) => number;
+  /** wear mask, 0..1 — hems and shoulders. */
+  wear: (theta: number, t: number) => number;
+  color: (theta: number, t: number) => THREE.Color;
+  /** `[roughness, metalness, thickness]`. */
+  mat: (theta: number, t: number) => number[];
+}
+
+function clothShade(o: OutfitPiece): ClothShade {
   const base = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const rough = o.rough ?? 0.78;
   const metal = o.metal ?? 0;
@@ -59,7 +74,7 @@ function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:n
 }
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
-function under(fn: any, u0: number, u1: number, damp = 0.88) {
+function under(fn: (theta: number, t: number) => number, u0: number, u1: number, damp = 0.88) {
   return (th: number, t: number) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
 }
 
@@ -74,24 +89,52 @@ function under(fn: any, u0: number, u1: number, damp = 0.88) {
  * An outfit is data: a list of pieces, dispatched here.
  */
 
-const PIECES: Record<string, (...args: any[]) => any> = {};
+/** What every garment builder is handed. */
+export interface OutfitCtx {
+  rig: Rig;
+  look: Look;
+  /** the torso sweep the whole wardrobe is cut from. */
+  torso: SweepNode[];
+  arm: (side: Side) => SweepNode[];
+  leg: (side: Side) => SweepNode[];
+  /** `rig.dims.s` — the uniform scale every authored constant is in. */
+  s: number;
+}
+
+/** A garment builder: emits one piece into `B`. */
+type PieceFn = (B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece) => void;
+
+const PIECES: Record<string, PieceFn> = {};
+
+/**
+ * The authored `sides` list, narrowed. Only 'L' and 'R' exist on the rig, and
+ * a third value would silently index the bone table with `undefined` and write
+ * NaN weights, so it throws rather than building a broken mesh.
+ */
+function sidesOf(o: OutfitPiece, dflt: readonly Side[] = SIDES): readonly Side[] {
+  if (!o.sides) return dflt;
+  return o.sides.map((v) => {
+    if (v !== 'L' && v !== 'R') throw new Error(`outfit piece '${o.type}': unknown side '${v}'`);
+    return v;
+  });
+}
 
 /**
  * @param look character description; `look.outfit` is the piece list
  */
-export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
+export function buildOutfit(rig: Rig, look: Look): THREE.BufferGeometry {
   const B = new MeshBuilder('outfit');
-  const ctx = {
+  const ctx: OutfitCtx = {
     rig,
     look,
     torso: torsoNodes(rig),
-    arm: (side: any) => armNodes(rig, side),
-    leg: (side: any) => legNodes(rig, side),
+    arm: (side) => armNodes(rig, side),
+    leg: (side) => legNodes(rig, side),
     s: rig.dims.s,
   };
   let g = 10;
   for (const piece of look.outfit) {
-    const fn = PIECES[piece.type as keyof typeof PIECES];
+    const fn = PIECES[piece.type];
     if (!fn) continue;
     B.group(g++);
     B.color(piece.color ?? 0x2a2a30).mat(piece.rough ?? 0.78, piece.metal ?? 0);
@@ -101,14 +144,14 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
 }
 
 /** Register a garment type. */
-function piece(name: string, fn: (...args: any[]) => any) { PIECES[name] = fn; }
+function piece(name: string, fn: PieceFn) { PIECES[name] = fn; }
 
 // ---------------------------------------------------------------------------
 // torso layers
 // ---------------------------------------------------------------------------
 
 /** Closed torso layer — tee, tank top, undershirt. */
-piece('shirt', (B: MeshBuilder, ctx: any, o: any) => {
+piece('shirt', (B, ctx, o) => {
   const u0 = o.u0 ?? 0.28, u1 = o.u1 ?? 0.96;
   const nodes = drape(ctx.torso, u0, u1, 10, o.pad ?? 0.010, o.padZ);
   const cut = o.neckCut ?? 0.55;
@@ -116,6 +159,7 @@ piece('shirt', (B: MeshBuilder, ctx: any, o: any) => {
   const printC = new THREE.Color().setHex(o.printColor ?? 0xcccccc, THREE.SRGBColorSpace);
   const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.52, Math.PI * 1.48], yoke: o.yoke ?? 0.86 });
   const tee = new THREE.Color();
+  const print = o.print;
   sweepTube(B, {
     nodes, steps: o.steps ?? 20, seg: o.seg ?? 32,
     shape: (th, t) => body(th, t)
@@ -129,23 +173,23 @@ piece('shirt', (B: MeshBuilder, ctx: any, o: any) => {
       + (o.seamRib ?? 0.011) * shade.seam(th, t)
       + (o.neckRib ?? 0.013) * ridge(t, 0.965, 0.030)
       + (o.hemRib ?? 0.011) * ridge(t, 0.030, 0.026),
-    colorAt: o.print
+    colorAt: print
       ? (th: number, t: number) => tee.copy(shade.color(th, t))
         .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026))
-        .lerp(printC, o.print(th, t))
+        .lerp(printC, print(th, t))
       : (th: number, t: number) => tee.copy(shade.color(th, t))
         .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026)),
-    matAt: o.print
-      ? (th: number, t: number) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * o.print(th, t)), m[1], 0]; }
+    matAt: print
+      ? (th: number, t: number) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * print(th, t)), m[1], 0]; }
       : shade.mat,
     uvScale: [1.4, 2.4],
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
-  if (o.hemBand) hemBand(B, ctx, nodes[0], o);
+  if (o.hemBand) hemBand(B, ctx, o);
 });
 
 /** Open-front jacket / coat body, with lapels, thickness and a flared hem. */
-piece('jacket', (B: MeshBuilder, ctx: any, o: any) => {
+piece('jacket', (B, ctx, o) => {
   const gap = o.gap ?? 0.42;
   const u0 = o.u0 ?? 0.30, u1 = o.u1 ?? 0.96;
   // the pad tucks in toward the yoke so the cut edge hides against the shoulder
@@ -181,7 +225,9 @@ piece('jacket', (B: MeshBuilder, ctx: any, o: any) => {
       k += (o.flare ?? 0.10) * smooth((0.18 - t) / 0.18);              // hem flare
       // a real waist. A jacket with no nip between ribcage and hip is a barrel,
       // and a barrel is the single loudest "this is a game model" tell there is.
-      k -= (o.waist ?? 0.055) * bump(t, 0.30, 0.26);
+      // `waist` means two things in the authored bag: a nip depth here, and
+      // `false` on `pants` to drop the waistband. `false * x` was 0, so keep it.
+      k -= (o.waist === false ? 0 : o.waist ?? 0.055) * bump(t, 0.30, 0.26);
       // hem break: cloth folds over on itself where it stops being supported
       k += (o.hemBreak ?? 0.030) * Math.pow(Math.max(0, 1 - t / 0.14), 1.6)
          * (0.6 + 0.4 * Math.sin(th * 5.0 + 1.1));
@@ -213,7 +259,7 @@ piece('jacket', (B: MeshBuilder, ctx: any, o: any) => {
     },
     // the top edge follows the trapezius down toward the acromion — a flat
     // horizontal ring here is what produces boxy pauldron corners
-    offset: (th: number, t: number, out: any) => {
+    offset: (th: number, t: number, out: THREE.Vector3) => {
       const drop = (o.shoulderDrop ?? 0.008) * ctx.s;
       out.y = -drop * smooth((t - 0.62) / 0.38) * Math.pow(Math.abs(Math.sin(th)), 1.6);
     },
@@ -228,7 +274,7 @@ piece('jacket', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Stand-up or fold-down collar wrapped around the neck. */
-function collar(B: MeshBuilder, ctx: any, o: any) {
+function collar(B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece) {
   const { rig } = ctx;
   const s = ctx.s;
   const y = (v: number) => v * s;
@@ -237,7 +283,7 @@ function collar(B: MeshBuilder, ctx: any, o: any) {
   const r0 = (o.collarR ?? 0.085) * s;
   const I = rig.index;
   const y0 = y(o.collarY ?? 1.418);
-  const nodes = [
+  const nodes: SweepNode[] = [
     { p: [0, y0, -0.012 * s], rx: r0 * 1.02, rz: r0 * 0.98, w: [[I.spine03, 0.95], [I.neck, 0.05]] },
     { p: [0, y0 + h * s * 0.5, -0.016 * s], rx: r0 * 0.90, rz: r0 * 0.90, w: [[I.spine03, 0.6], [I.neck, 0.4]] },
     { p: [0, y0 + h * s * 1.1, -0.018 * s], rx: r0 * (o.collarFlare ?? 1.0), rz: r0 * (o.collarFlare ?? 1.0), w: [[I.spine03, 0.28], [I.neck, 0.72]] },
@@ -255,14 +301,14 @@ function collar(B: MeshBuilder, ctx: any, o: any) {
     shape: (th: number, t: number) => 1 + 0.16 * t * Math.exp(-Math.min(Math.abs(th - gap), Math.abs(th - (Math.PI * 2 - gap))) * 3)
       + 0.020 * Math.sin(th * 6.0 + 1.4) * t,
     colorAt: (th: number, t: number) => out.copy(cCol).multiplyScalar(1 + 0.55 * Math.pow(t, 2.2) + 0.05 * Math.sin(th * 5.0)),
-    matAt: (th: any, t: number) => [clamp01(cRough - 0.22 * Math.pow(t, 2.2)), o.metal ?? 0, 0],
+    matAt: (th: number, t: number) => [clamp01(cRough - 0.22 * Math.pow(t, 2.2)), o.metal ?? 0, 0],
     uvScale: [1, 0.5],
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
 }
 
 /** Skirt / coat tails hanging from the waist, driven by the coat spring bones. */
-piece('skirt', (B: MeshBuilder, ctx: any, o: any) => {
+piece('skirt', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
@@ -270,7 +316,7 @@ piece('skirt', (B: MeshBuilder, ctx: any, o: any) => {
   const top = o.top ?? 1.02, bot = o.bottom ?? 0.72;
   const rTop = (o.rTop ?? 0.175) * s, rBot = (o.rBot ?? 0.20) * s;
   const steps = o.steps ?? 10;
-  const nodes = [];
+  const nodes: SweepNode[] = [];
   const n = 5;
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
@@ -292,14 +338,14 @@ piece('skirt', (B: MeshBuilder, ctx: any, o: any) => {
     shape: (th: number, t: number) => 1
       + (o.wave ?? 0.05) * Math.sin(th * 6) * t
       + (o.backLong ?? 0) * abump(th, Math.PI, 1.4) * t,
-    offset: (th: number, t: number, out: any) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
+    offset: (th: number, t: number, out: THREE.Vector3) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
     uvScale: [1.6, 1.2],
   });
 });
 
 /** Sleeve over the arm; `u1` sets short / three-quarter / full length. */
-piece('sleeve', (B: MeshBuilder, ctx: any, o: any) => {
-  for (const side of (o.sides || ['L', 'R'])) {
+piece('sleeve', (B, ctx, o) => {
+  for (const side of sidesOf(o)) {
     // The sleeve now starts at the *clavicle root*, i.e. buried inside the
     // torso shell, and simply emerges from under the jacket yoke. Cutting it at
     // the acromion and doming the cut (which is what this used to do) is what
@@ -338,8 +384,8 @@ piece('sleeve', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Trousers — one closed tube per leg plus a waistband. */
-piece('pants', (B: MeshBuilder, ctx: any, o: any) => {
-  for (const side of ['L', 'R']) {
+piece('pants', (B, ctx, o) => {
+  for (const side of SIDES) {
     const u0 = o.u0 ?? 0.02, u1 = o.u1 ?? 0.93;
     const nodes = drape(ctx.leg(side), u0, u1, 10,
       (t) => lerp(o.padHip ?? 0.014, o.padAnkle ?? 0.012, t));
@@ -372,16 +418,16 @@ piece('pants', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Boots: a foot shell swept heel-to-toe plus a shaft up the shin. */
-piece('boots', (B: MeshBuilder, ctx: any, o: any) => {
+piece('boots', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
-  for (const side of ['L', 'R']) {
+  for (const side of SIDES) {
     const an = rig.P[`foot${side}`];
     const w = (o.width ?? 0.048) * s, hgt = (o.height ?? 0.036) * s;
     const soleY = (o.sole ?? 0.004) * s;
-    const fw = [[I[`foot${side}`], 1]];
-    const tw = [[I[`toe${side}`], 0.75], [I[`foot${side}`], 0.25]];
+    const fw: SkinWeights = [[I[`foot${side}`], 1]];
+    const tw: SkinWeights = [[I[`toe${side}`], 0.75], [I[`foot${side}`], 0.25]];
     sweepTube(B, {
       nodes: [
         { p: [an.x, an.y + 0.030 * s, an.z - 0.070 * s], rx: w * 0.72, rz: hgt * 0.95, w: fw },
@@ -426,7 +472,7 @@ piece('boots', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Belt or waist strap. */
-piece('belt', (B: MeshBuilder, ctx: any, o: any) => {
+piece('belt', (B, ctx, o) => {
   const nodes = drape(ctx.torso, (o.u ?? 0.36) - 0.03, (o.u ?? 0.36) + 0.03, 3, o.pad ?? 0.020, (o.padZ ?? o.pad ?? 0.020));
   sweepTube(B, {
     nodes, steps: 3, seg: o.seg ?? 22,
@@ -446,14 +492,14 @@ piece('belt', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Shoulder-to-hip strap (camera strap, sword harness). */
-piece('strap', (B: MeshBuilder, ctx: any, o: any) => {
+piece('strap', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
   const sg = o.side === 'R' ? -1 : 1;
   const w = (o.width ?? 0.020) * s;
   const end = o.to ? o.to.map((v: number) => v * s) : [-sg * 0.070 * s, rig.dims.shoulderY - 0.30 * s, 0.090 * s];
-  const pts = [
+  const pts: { p: number[], w: SkinWeights }[] = [
     { p: [sg * 0.058 * s, rig.dims.shoulderY + 0.020 * s, -0.052 * s], w: [[I.spine03, 1]] },
     { p: [sg * 0.082 * s, rig.dims.shoulderY + 0.012 * s, 0.028 * s], w: [[I.spine03, 1]] },
     { p: [sg * 0.036 * s, rig.dims.shoulderY - 0.15 * s, 0.108 * s], w: [[I.spine02, 0.7], [I.spine03, 0.3]] },
@@ -466,8 +512,8 @@ piece('strap', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Wrist / arm band. */
-piece('band', (B: MeshBuilder, ctx: any, o: any) => {
-  for (const side of (o.sides || ['L', 'R'])) {
+piece('band', (B, ctx, o) => {
+  for (const side of sidesOf(o)) {
     const nodes = drape(ctx.arm(side), (o.u ?? 0.88) - 0.035, (o.u ?? 0.88) + 0.035, 4, o.pad ?? 0.008);
     sweepTube(B, {
       nodes, steps: 4, seg: o.seg ?? 14,
@@ -478,12 +524,12 @@ piece('band', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Shoulder guard / pauldron-ish pad. */
-piece('pad', (B: any, ctx: any, o: any) => {
+piece('pad', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
   const m = rig.profile.muscle;
-  for (const side of (o.sides || ['L', 'R'])) {
+  for (const side of sidesOf(o)) {
     const sh = rig.P[`upperArm${side}`];
     const sg = side === 'L' ? 1 : -1;
     B.skin([[I[`upperArm${side}`], 0.66], [I[`clavicle${side}`], 0.34]]);
@@ -497,12 +543,12 @@ piece('pad', (B: any, ctx: any, o: any) => {
 });
 
 /** A camera body with lens, hanging where a strap would carry it. */
-piece('camera', (B: MeshBuilder, ctx: any, o: any) => {
+piece('camera', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
-  const p = [(o.at ?? [-0.10, 1.06, 0.135]).map((v: number, i: any) => v * s)[0],
-    (o.at ?? [-0.10, 1.06, 0.135])[1] * s, (o.at ?? [-0.10, 1.06, 0.135])[2] * s];
+  const at = o.at ?? [-0.10, 1.06, 0.135];
+  const p = [at[0] * s, at[1] * s, at[2] * s];
   B.skin([[I.spine01, 0.65], [I.spine02, 0.35]]);
   B.color(o.color ?? 0x1c1d22).mat(0.45, 0.15);
   roundedBox(B, { size: [0.095 * s, 0.062 * s, 0.040 * s], center: p, bevel: 0.010 * s, rot: [0.15, 0, 0.1] });
@@ -519,7 +565,7 @@ piece('camera', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Rectangular spectacles: frame rims plus temple arms. */
-piece('glasses', (B: MeshBuilder, ctx: any, o: any) => {
+piece('glasses', (B, ctx, o) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = rig.dims.headScale;
@@ -532,7 +578,7 @@ piece('glasses', (B: MeshBuilder, ctx: any, o: any) => {
   for (const sg of [1, -1]) {
     const cx = sg * 0.0335;
     // rim: a thin rounded rectangle traced as a tube
-    const pts = [];
+    const pts: SweepNode[] = [];
     const N = 18;
     for (let i = 0; i <= N; i++) {
       const a = (i / N) * Math.PI * 2;
@@ -563,10 +609,10 @@ piece('glasses', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Small pouch / holster block on the thigh or belt. */
-piece('pouch', (B: any, ctx: any, o: any) => {
+piece('pouch', (B, ctx, o) => {
   const {  } = ctx;
   const s = ctx.s;
-  for (const side of (o.sides || ['R'])) {
+  for (const side of sidesOf(o, ['R'])) {
     const nodes = drape(ctx.leg(side), o.u ?? 0.22, o.u ?? 0.22, 1, 0);
     const n = nodes[0];
     const sg = side === 'L' ? 1 : -1;
@@ -581,7 +627,7 @@ piece('pouch', (B: any, ctx: any, o: any) => {
 });
 
 /** Decorative panel — a flat plate laid on the chest or back (armour, tattoo pad). */
-piece('plate', (B: MeshBuilder, ctx: any, o: any) => {
+piece('plate', (B, ctx, o) => {
   const nodes = drape(ctx.torso, o.u0 ?? 0.6, o.u1 ?? 0.95, 5, (o.pad ?? 0.004));
   sweepTube(B, {
     nodes, steps: 6, seg: 18,
@@ -590,7 +636,7 @@ piece('plate', (B: MeshBuilder, ctx: any, o: any) => {
   });
 });
 
-function hemBand(B: MeshBuilder, ctx: any, node: any, o: any) {
+function hemBand(B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece) {
   const nodes = drape(ctx.torso, o.u0 ?? 0.28, (o.u0 ?? 0.28) + 0.05, 3, (o.pad ?? 0.010) + 0.004);
   sweepTube(B, { nodes, steps: 3, seg: 20, uvScale: [1, 0.2] });
 }

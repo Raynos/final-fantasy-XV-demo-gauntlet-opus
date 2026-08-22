@@ -2,6 +2,50 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
+ * Baked vertex occlusion at a world-space point: 1 fully open, ~0.2 in a
+ * corner. `Layout.occlusion` is the one implementation; every emitter here
+ * takes it as a parameter so the shell and the props shade alike.
+ */
+export type AoFn = (x: number, y: number, z: number) => number;
+
+/** Displacement along the surface normal, in metres, at a world-space point. */
+export type DisplaceFn = (x: number, y: number, z: number) => number;
+
+/** Tube radius in metres, given arc parameter, angle round the ring and position. */
+export type RadiusFn = (t: number, theta: number, x: number, y: number, z: number) => number;
+
+/** A tessellated planar patch. Lengths are metres; `origin` and the axes are world-space. */
+export interface PatchSpec {
+  origin: number[];
+  uAxis: number[];
+  vAxis: number[];
+  uLen: number;
+  vLen: number;
+  /** Target edge length of one quad, in metres. */
+  cell?: number;
+  /** Metres of surface per texture tile. */
+  uvScale?: number;
+  displace?: DisplaceFn | null;
+  ao?: AoFn | null;
+  /** Reverse the winding, so the patch faces the other way. */
+  flip?: boolean;
+  /** Added to the UV numerator, so neighbouring patches share one tiling frame. */
+  uvOffset?: number[];
+}
+
+/** Options for {@link SurfaceBuilder.tube}. */
+export interface TubeSpec {
+  /** Vertices round one ring. */
+  sides?: number;
+  ao?: AoFn | null;
+  uvScale?: number;
+  capStart?: boolean;
+  capEnd?: boolean;
+  /** 0..1: squash the underside flat so the tube is walkable. */
+  flatten?: number;
+}
+
+/**
  * Low-level geometry emitters for interiors.
  *
  * Everything an interior is made of — a concrete wall, a hewn rock ceiling, a
@@ -20,11 +64,11 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  */
 export class SurfaceBuilder {
   _needsNormals!: boolean;
-  col!: any[];
-  idx!: any[];
-  nrm!: any[];
-  pos!: any[];
-  uv!: any[];
+  col!: number[];
+  idx!: number[];
+  nrm!: number[];
+  pos!: number[];
+  uv!: number[];
   constructor() {
     this.pos = [];
     this.nrm = [];
@@ -35,7 +79,7 @@ export class SurfaceBuilder {
 
   get empty() { return this.idx.length === 0; }
 
-  _push(p: number[], n: number[], u: number[], c: any) {
+  _push(p: number[], n: number[], u: number[], c: number) {
     this.pos.push(p[0], p[1], p[2]);
     this.nrm.push(n[0], n[1], n[2]);
     this.uv.push(u[0], u[1]);
@@ -43,12 +87,8 @@ export class SurfaceBuilder {
     return this.pos.length / 3 - 1;
   }
 
-  /**
-   * Tessellated planar patch.
-   *
-   * @param {object} o
-   * */
-  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x: number,y: number,z: number)=>number, ao?: (x: number,y: number,z: number)=>number, flip?: boolean, uvOffset?: number[] }) {
+  /** Tessellated planar patch. */
+  patch(o: PatchSpec) {
     const {
       origin, uAxis, vAxis, uLen, vLen,
       cell = 1.4, uvScale = 3.0, displace = null, ao = null, flip = false,
@@ -101,7 +141,7 @@ export class SurfaceBuilder {
    *
    * @param path world-space points
    */
-  tube(path: number[][], radius: (t:number, theta:number, x:number, y:number, z:number)=>number, { sides = 14, ao = null, uvScale = 3.0, capStart = false, capEnd = false, flatten = 0.0 }: any = {}) {
+  tube(path: number[][], radius: RadiusFn, { sides = 14, ao = null, uvScale = 3.0, capStart = false, capEnd = false, flatten = 0.0 }: TubeSpec = {}) {
     const base = this.pos.length / 3;
     const rings = path.length;
     // Cumulative arc length, so the texture advances with the metre and not
@@ -150,7 +190,7 @@ export class SurfaceBuilder {
     return this;
   }
 
-  _cap(ringStart: number, sides: number, centre: number[], front: boolean, ao: any) {
+  _cap(ringStart: number, sides: number, centre: number[], front: boolean, ao: AoFn | null) {
     const c = this._push(centre, [0, 1, 0], [0.5, 0.5], ao ? ao(centre[0], centre[1], centre[2]) : 1);
     for (let j = 0; j < sides; j++) {
       const a = ringStart + j;
@@ -181,7 +221,7 @@ export class SurfaceBuilder {
  * attribute, and baked occlusion is the whole reason interiors read as rooms.
  */
 export class InteriorMerger {
-  byMat!: Map<any, any>;
+  byMat!: Map<THREE.Material, THREE.BufferGeometry[]>;
   constructor() { this.byMat = new Map(); }
 
   /** @param mat @param geo */
@@ -204,13 +244,14 @@ export class InteriorMerger {
       for (let i = 0; i < n; i++) idx[i] = i;
       g.setIndex(new THREE.BufferAttribute(idx, 1));
     }
-    if (!this.byMat.has(mat)) this.byMat.set(mat, []);
-    this.byMat.get(mat).push(g);
+    let list = this.byMat.get(mat);
+    if (!list) { list = []; this.byMat.set(mat, list); }
+    list.push(g);
     return this;
   }
 
   /** Place a primitive with position / euler / scale and an optional flat tint. */
-  place(mat: THREE.Material, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
+  place(mat: THREE.Material, geo: THREE.BufferGeometry, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1], tint = 1) {
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(pos[0], pos[1], pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -225,7 +266,7 @@ export class InteriorMerger {
     return this.add(mat, g, null);
   }
 
-  build(parent: THREE.Object3D, name = 'interior'): {tris:number, calls:number} {
+  build(parent: THREE.Object3D, name = 'interior'): MergeStats {
     let tris = 0, calls = 0;
     for (const [mat, list] of this.byMat) {
       const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
@@ -245,6 +286,12 @@ export class InteriorMerger {
     this.byMat.clear();
     return { tris: Math.round(tris), calls };
   }
+}
+
+/** What one {@link InteriorMerger.build} added to the scene. */
+export interface MergeStats {
+  tris: number;
+  calls: number;
 }
 
 /* ----------------------------------------------------------------- helpers */

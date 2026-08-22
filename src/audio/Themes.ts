@@ -14,6 +14,26 @@
  * soundtrack feel like a soundtrack instead of a playlist.
  */
 
+/** Every chord quality the charts are written in. */
+export type ChordQuality = keyof typeof CHORDS;
+
+/** One bar of the chart: a root in semitones above the tonic, and a quality. */
+export interface Chord { r: number; q: ChordQuality }
+
+/**
+ * One melody note: `[semitone above the tonic, start beat within the phrase,
+ * length in beats, velocity 0..1]`.
+ */
+export type MelodyNote = [number, number, number, number];
+
+/** A written phrase: how many bars it spans, and the notes inside it. */
+export interface Phrase {
+  bars: number;
+  /** Total beats -- `bars * meter` of whatever state plays it. */
+  beats: number;
+  notes: MelodyNote[];
+}
+
 /** Chord shapes, semitones above the chord root. */
 export const CHORDS = {
   min: [0, 3, 7],
@@ -34,7 +54,7 @@ export const CHORDS = {
 };
 
 /** Shorthand: `c(0,'min')` is the tonic minor triad. */
-const c = (r: number, q: string) => ({ r, q });
+const c = (r: number, q: ChordQuality): Chord => ({ r, q });
 
 /* ------------------------------------------------------------------ motifs */
 
@@ -42,7 +62,7 @@ const c = (r: number, q: string) => ({ r, q });
  * The Somnus motif — 8 bars of 4/4, notes as [semitone, startBeat, lengthBeats, velocity].
  * Degrees are relative to the tonic with the melody sitting an octave up.
  */
-export const SOMNUS = {
+export const SOMNUS: Phrase = {
   bars: 8, beats: 32,
   notes: [
     [7, 0, 2.5, 0.85], [12, 2.5, 1.5, 0.95],
@@ -57,7 +77,7 @@ export const SOMNUS = {
 };
 
 /** A quieter answering phrase — same shape, resolved down to the tonic. */
-export const SOMNUS_ANSWER = {
+export const SOMNUS_ANSWER: Phrase = {
   bars: 8, beats: 32,
   notes: [
     [7, 0, 1.5, 0.7], [8, 1.5, 1, 0.72], [7, 2.5, 1.5, 0.75],
@@ -72,7 +92,7 @@ export const SOMNUS_ANSWER = {
 };
 
 /** The motif compressed into a brass call for combat — same pitches, half the time. */
-export const SOMNUS_CALL = {
+export const SOMNUS_CALL: Phrase = {
   bars: 4, beats: 16,
   notes: [
     [7, 0, 1, 0.95], [12, 1, 1, 1.0], [10, 2, 0.5, 0.85], [12, 2.5, 1.5, 0.95],
@@ -83,7 +103,7 @@ export const SOMNUS_CALL = {
 };
 
 /** The motif in augmentation, for the choir at a boss — one note per bar. */
-export const SOMNUS_AUG = {
+export const SOMNUS_AUG: Phrase = {
   bars: 8, beats: 32,
   notes: [
     [7, 0, 4, 0.9], [12, 4, 4, 1.0],
@@ -94,7 +114,7 @@ export const SOMNUS_AUG = {
 };
 
 /** Turned to the major and given a dotted fanfare rhythm. */
-export const VICTORY_FANFARE = {
+export const VICTORY_FANFARE: Phrase = {
   bars: 6, beats: 24,
   notes: [
     [0, 0, 0.33, 1], [0, 0.33, 0.33, 1], [0, 0.66, 0.34, 1], [4, 1, 1, 1],
@@ -108,13 +128,17 @@ export const VICTORY_FANFARE = {
 };
 
 /** The combat ostinato: eighth notes under everything, Phrygian-inflected. */
-export const COMBAT_RIFF = [0, 0, 3, 0, 5, 3, 0, -2];
-export const BOSS_RIFF = [0, 0, 1, 0, 0, -2, 1, 0];
+export const COMBAT_RIFF: number[] = [0, 0, 3, 0, 5, 3, 0, -2];
+export const BOSS_RIFF: number[] = [0, 0, 1, 0, 0, -2, 1, 0];
 
 /* ------------------------------------------------------------- states */
 
-/**
- */
+/** One line of the arrangement. `Score` owns a gain node per name. */
+export type LayerName = 'bass' | 'pad' | 'strings' | 'melody' | 'harp' | 'wood' | 'perc' | 'choir' | 'brass';
+
+/** Every cue the score knows how to play. */
+export type MusicStateName =
+  'field' | 'night' | 'tension' | 'combat' | 'boss' | 'camp' | 'victory' | 'silence';
 
 /** A named musical state the score can be asked to move to. */
 export interface MusicState {
@@ -125,15 +149,25 @@ export interface MusicState {
   /** Semitones above A -- the key. */
   tonic: number;
   /** Chord chart, one entry per bar. */
-  prog: { r: number, q: string }[];
-  /** Target gain per arrangement layer. */
-  layers?: Record<string, number>;
+  prog: Chord[];
+  /**
+   * Target gain per arrangement layer. Every state names every layer, most of
+   * them at zero -- which is what makes a state change a cross-fade rather
+   * than an instrument appearing from nowhere.
+   */
+  layers: Record<LayerName, number>;
   /** Music send depth, 0..1. */
   reverb: number;
-  [extra: string]: any;
+  /** Melodic material, cycled a phrase at a time. Empty means no tune. */
+  melody: Phrase[];
+  /** Ostinato in semitones above the chord root; drives the combat bass. */
+  riff?: number[];
+  /** Plays `bars` bars and then resolves back to `Score.returnTo`. */
+  oneShot?: boolean;
+  bars?: number;
 }
 
-export const STATES: Record<string, MusicState> = {
+export const STATES: Record<MusicStateName, MusicState> = {
   /** Leide by day: open, wistful, the theme sung by strings over a harp bed. */
   field: {
     tempo: 74, meter: 4, tonic: 0, reverb: 0.85,
@@ -196,7 +230,6 @@ export const STATES: Record<string, MusicState> = {
     prog: [c(0, 'maj'), c(5, 'maj'), c(0, 'maj'), c(7, 'dom7'), c(0, 'maj'), c(0, 'maj6')],
     layers: { bass: 0.40, pad: 0.14, strings: 0.31, melody: 0.43, harp: 0.18, wood: 0, perc: 0.45, choir: 0.16, brass: 0.45 },
     melody: [VICTORY_FANFARE],
-    major: true,
   },
 
   /** Nothing playing — used when the radio takes over, or on the title. */
@@ -208,16 +241,20 @@ export const STATES: Record<string, MusicState> = {
   },
 };
 
-export const LAYERS = ['bass', 'pad', 'strings', 'melody', 'harp', 'wood', 'perc', 'choir', 'brass'];
+export const LAYERS: readonly LayerName[] =
+  ['bass', 'pad', 'strings', 'melody', 'harp', 'wood', 'perc', 'choir', 'brass'];
+
+/** `setState` and friends take a string from a cutscene or a cvar table. */
+export const isMusicState = (s: string): s is MusicStateName => s in STATES;
 
 /**
  * Voice a chord into semitone offsets: root in the bass, then the shape spread
  * across `octaves`, dropping the doubled root so the middle does not muddy.
  * @param octave base octave offset in semitones
  */
-export function voiceChord(chord: {r:number,q:string}, octave: number = 0, spread = 1) {
-  const shape = CHORDS[chord.q as keyof typeof CHORDS] || CHORDS.min;
-  const out = [];
+export function voiceChord(chord: Chord, octave: number = 0, spread = 1): number[] {
+  const shape = CHORDS[chord.q];
+  const out: number[] = [];
   for (let i = 0; i < shape.length; i++) {
     out.push(chord.r + shape[i] + octave + (spread > 1 && i > 1 ? 12 : 0));
   }

@@ -21,29 +21,91 @@ import { glowCardMaterial, glowSprite } from './InteriorMaterials.ts';
  *   - **motes**: a slow drift of lit particles that follows the camera, so a
  *     still frame still reads as a volume rather than as a diorama.
  */
+/**
+ * A light source as a dungeon declares it. `pos` is dungeon-local `[x, y, z]`.
+ *
+ * Intensities are authored in "how bright does this fixture feel" units, 1..12,
+ * and multiplied by the rig's `gain` on the way to a real point light.
+ */
+export interface EmitterSpec {
+  pos: number[];
+  color?: number;
+  intensity?: number;
+  /** Metres the light carries. */
+  range?: number;
+  /** 0..1 depth of the flicker modulation. */
+  flicker?: number;
+  /** Brightness of the additive glow card. `0` draws none. */
+  glow?: number;
+  /** Size of the glow card, as a multiple of 1.35 m. */
+  glowSize?: number;
+}
+
+/** A declared light, once {@link LightRig.add} has applied the defaults. */
+export interface Emitter {
+  pos: THREE.Vector3;
+  color: THREE.Color;
+  intensity: number;
+  range: number;
+  flicker: number;
+  glow: number;
+  glowSize: number;
+  /** Fixed per-emitter offset that de-syncs the flicker. */
+  phase: number;
+  /** Distance to the camera, metres. Recomputed every frame. */
+  dist: number;
+  /** 0..1 fade over the emitter's tail, so nothing pops in. */
+  reach: number;
+  /** `reach * intensity`. What the pool is sorted on. */
+  score: number;
+}
+
+/** What a dungeon definition's `lighting` block may set. */
+export interface LightRigOptions {
+  /** Real point lights in the pool. Defaults to 12. */
+  poolSize?: number;
+  ambientSky?: number;
+  ambientGround?: number;
+  ambientIntensity?: number;
+  moteColor?: number;
+  moteCount?: number;
+  /** Edge of the cube the motes wrap around the camera in, metres. */
+  moteBox?: number;
+  /** Authored intensity to candela. The single knob for how lit an interior is. */
+  gain?: number;
+  lampColor?: number;
+  lampIntensity?: number;
+  lampRange?: number;
+}
+
+/**
+ * Anything the rig can be pointed at. `LightRig.update` only ever reads the
+ * position, and what `Dungeons` passes is a bare dungeon-local carrier, not a
+ * camera.
+ */
+export interface LocalView {
+  position: THREE.Vector3;
+}
+
 export class LightRig {
   _time!: number;
   _tmp!: THREE.Vector3;
   ambient!: THREE.HemisphereLight;
-  emitters!: any[];
-  gain!: any;
+  emitters!: Emitter[];
+  gain!: number;
   glow!: THREE.Mesh;
   glowMat!: THREE.ShaderMaterial;
   group!: THREE.Group;
   lamp!: THREE.PointLight;
-  moteBox!: any;
+  moteBox!: number;
   moteColor!: number;
   moteCount!: number;
   moteMat!: THREE.ShaderMaterial;
   motes!: THREE.Points;
-  pool!: any[];
+  pool!: THREE.PointLight[];
   poolSize!: number;
-  shafts!: any[];
-  /**
-   * @param {object} o
-   * 
-   */
-  constructor(o: { poolSize?: number, ambientSky?: number, ambientGround?: number, ambientIntensity?: number, moteColor?: number, moteCount?: number, gain?: any, lampColor?: any, lampIntensity?: any, lampRange?: any, moteBox?: any } = {}) {
+  shafts!: THREE.Mesh[];
+  constructor(o: LightRigOptions = {}) {
     this.poolSize = o.poolSize || 12;
     /**
      * Emitters are authored in "how bright does this fixture feel" units, 1..12.
@@ -95,8 +157,8 @@ export class LightRig {
   /**
    * Declare a light source.
    */
-  add(e: any) {
-    const em = {
+  add(e: EmitterSpec): Emitter {
+    const em: Emitter = {
       pos: new THREE.Vector3(e.pos[0], e.pos[1], e.pos[2]),
       color: new THREE.Color(e.color != null ? e.color : 0xffb473),
       intensity: e.intensity != null ? e.intensity : 6,
@@ -105,6 +167,10 @@ export class LightRig {
       glow: e.glow != null ? e.glow : 1,
       glowSize: e.glowSize || 1.0,
       phase: (this.emitters.length * 0.61803) % 1,
+      // Overwritten by the first `update()` before anything reads them; here so
+      // the record is complete from the moment it exists.
+      dist: 0,
+      reach: 0,
       score: 0,
     };
     this.emitters.push(em);
@@ -112,7 +178,7 @@ export class LightRig {
   }
 
   /** A visible light shaft or lamp cone; its material's clock is ticked here. */
-  addShaft(mesh: THREE.Object3D) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
+  addShaft(mesh: THREE.Mesh) { this.shafts.push(mesh); this.group.add(mesh); return mesh; }
 
   /**
    * Build the single-draw-call glow layer and the mote volume. Call once, after
@@ -238,7 +304,7 @@ export class LightRig {
    * Re-point the pool at whatever matters from here.
    * @param now seconds
    */
-  update(dt: number, camera: THREE.Camera, now: number) {
+  update(dt: number, camera: LocalView, now: number) {
     this._time = now;
     const cp = camera.position;
 
@@ -276,14 +342,15 @@ export class LightRig {
       this.moteMat.uniforms.uCam.value.copy(cp);
     }
     for (const s of this.shafts) {
-      if (s.material && s.material.uniforms && s.material.uniforms.uTime) {
-        s.material.uniforms.uTime.value = now;
+      const mat = s.material;
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uTime) {
+        mat.uniforms.uTime.value = now;
       }
     }
   }
 
   /** Cross-fade the whole rig, used by the portal transition. */
-  setFade(f: any) {
+  setFade(f: number) {
     if (this.glowMat) this.glowMat.uniforms.uFade.value = f;
     if (this.moteMat) this.moteMat.uniforms.uFade.value = f;
   }

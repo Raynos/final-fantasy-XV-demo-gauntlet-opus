@@ -3,6 +3,7 @@ import { Rng } from '../../../util/Rng.ts';
 import { InteriorMerger } from './Build.ts';
 import * as M from './InteriorMaterials.ts';
 import type { LightRig } from './LightRig.ts';
+import type { MergeStats } from './Build.ts';
 import type { Terrain } from '../../Terrain.ts';
 
 /**
@@ -34,7 +35,18 @@ const CONE = new THREE.ConeGeometry(0.5, 1, 8);
  * scatter wants — spoil, sandbags and boulders laid out in door space float
  * off a slope, and a Leide slope moves twenty metres in thirty.
  */
-function frame(terrain: any, x: number, z: number, heading: number) {
+interface EntranceFrame {
+  /** Terrain height at the doorway. */
+  y: number;
+  /** Door space: `(right, forward, up)` from the doorway sill. */
+  P: (r: number, f: number, u: number) => number[];
+  /** Ground space: `(right, forward, up)` from the terrain under the point. */
+  G: (r: number, f: number, u: number) => number[];
+  /** Terrain height at `(right, forward)`. */
+  ground: (r: number, f: number) => number;
+}
+
+function frame(terrain: Terrain, x: number, z: number, heading: number): EntranceFrame {
   const y = terrain.heightAt(x, z);
   const c = Math.cos(heading), s = Math.sin(heading);
   const w = (r: number, f: number) => [x + c * r + s * f, z - s * r + c * f];
@@ -51,7 +63,21 @@ function frame(terrain: any, x: number, z: number, heading: number) {
  * whose bases are pinned to the ground under each one. A single big box reads
  * as a crate dropped on the landscape from orbit; this reads as an outcrop.
  */
-function mound(mg: InteriorMerger, mat: THREE.Material, F: any, rng: Rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }) {
+/** A rock mass grown out of the terrain. Placement is in the frame's ground space. */
+interface MoundOpts {
+  /** Centre, right of the doorway. */
+  r?: number;
+  /** Centre, forward of the doorway. */
+  f?: number;
+  radius?: number;
+  height?: number;
+  /** How many overlapping displaced spheres. */
+  blobs?: number;
+  /** Flat vertex tint, 0..1. */
+  tint?: number;
+}
+
+function mound(mg: InteriorMerger, mat: THREE.Material, F: EntranceFrame, rng: Rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }: MoundOpts) {
   for (let i = 0; i < blobs; i++) {
     const a = rng.range(0, Math.PI * 2);
     const d = Math.pow(rng.next(), 0.6) * radius;
@@ -69,7 +95,15 @@ function mound(mg: InteriorMerger, mat: THREE.Material, F: any, rng: Rng, { r = 
  * Keycatrich: an imperial blockhouse driven into a spoil berm, with a cut
  * trench approach, a blast door and a great deal of rusted steel.
  */
-export function buildBunkerEntrance(terrain: Terrain | null, x: number, z: number, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3, lamp?: any } {
+/** One piece of exterior architecture, ready to add to the scene. */
+export interface EntranceBuild {
+  group: THREE.Group;
+  stats: MergeStats;
+  /** World position of the doorway, at terrain height. This is the interactable's anchor. */
+  doorway: THREE.Vector3;
+}
+
+export function buildBunkerEntrance(terrain: Terrain, x: number, z: number, heading = 0, seed = 11): EntranceBuild & { lamp: THREE.PointLight } {
   const g = new THREE.Group();
   g.name = 'keycatrich-entrance';
   const mg = new InteriorMerger();
@@ -145,7 +179,7 @@ export function buildBunkerEntrance(terrain: Terrain | null, x: number, z: numbe
  * Balouve: an adit driven into an outcrop under a timber-and-steel headframe,
  * with the rail running out of the portal to a spoil tip.
  */
-export function buildMineHead(terrain: any, x: number, z: number, heading = 0, seed = 22) {
+export function buildMineHead(terrain: Terrain, x: number, z: number, heading = 0, seed = 22): EntranceBuild {
   const g = new THREE.Group();
   g.name = 'balouve-entrance';
   const mg = new InteriorMerger();
@@ -221,7 +255,7 @@ export function buildMineHead(terrain: any, x: number, z: number, heading = 0, s
  * Fociaugh: a collapse-dolined cave mouth under a limestone overhang, ringed by
  * breakdown blocks. No architecture at all — the world just opens.
  */
-export function buildCaveMouth(terrain: any, x: number, z: number, heading = 0, seed = 33) {
+export function buildCaveMouth(terrain: Terrain, x: number, z: number, heading = 0, seed = 33): EntranceBuild {
   const g = new THREE.Group();
   g.name = 'fociaugh-entrance';
   const mg = new InteriorMerger();
@@ -268,7 +302,30 @@ export function buildCaveMouth(terrain: any, x: number, z: number, heading = 0, 
  * that is allowed to be bright, and the reason the rest reads as dark.
  *
  */
-export function buildExitVestibule(parent: THREE.Group, rig: LightRig, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }: any): {group:THREE.Group, light:THREE.PointLight, card:THREE.Mesh, halo?: any } {
+/** Where and how big the inside face of an entrance is. */
+export interface VestibuleSpec {
+  x: number;
+  y: number;
+  z: number;
+  /** Heading the opening faces, radians. */
+  facing?: number;
+  w?: number;
+  h?: number;
+  color?: number;
+  intensity?: number;
+}
+
+/** The pieces of one built vestibule, so a transition can fade them. */
+export interface Vestibule {
+  group: THREE.Group;
+  light: THREE.PointLight;
+  /** The flat emissive plane standing in for daylight. */
+  card: THREE.Mesh;
+  /** The additive bloom halo around the opening. */
+  halo: THREE.Mesh;
+}
+
+export function buildExitVestibule(parent: THREE.Group, rig: LightRig, { x, y, z, facing = 0, w = 3.2, h = 3.2, color = 0xbcd8ff, intensity = 260 }: VestibuleSpec): Vestibule {
   const group = new THREE.Group();
   const card = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
@@ -308,7 +365,7 @@ export function buildExitVestibule(parent: THREE.Group, rig: LightRig, { x, y, z
  * from the UI so a dungeon transition never depends on another system existing.
  */
 export class Fader {
-  _onBlack!: any;
+  _onBlack!: (() => void) | null;
   el!: HTMLDivElement;
   speed!: number;
   target!: number;

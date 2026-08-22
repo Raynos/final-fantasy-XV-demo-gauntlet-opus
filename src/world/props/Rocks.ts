@@ -5,7 +5,7 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from '../veg/Ecology.ts';
 import { rockMaterial } from './PropMaterials.ts';
 import { TileStream } from './TileStream.ts';
-import { dressAt, pickWeighted } from './ZoneDress.ts';
+import { dressAt, pickWeighted, type Dress, type StoneKind } from './ZoneDress.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 
 /**
@@ -245,7 +245,23 @@ function rockGeometry(seed: number, {
   return out;
 }
 
-const KINDS = [
+/** The shape parameters {@link rockGeometry} takes; see its own defaults. */
+type RockShape = Parameters<typeof rockGeometry>[1];
+
+/** One kind of stone: how it is shaped, how big, and how deep it sits. */
+interface RockKindDef {
+  key: StoneKind;
+  seed: number;
+  /** Min and max long axis, metres. */
+  size: [number, number];
+  /** Fraction of the stone that sits below ground. */
+  bury: number;
+  /** Scatter weight relative to the other kinds. */
+  w: number;
+  opts: RockShape;
+}
+
+const KINDS: RockKindDef[] = [
   // car-sized granite: few, huge, flat conchoidal faces and hard arrises
   {
     key: 'granite', seed: 101, size: [2.2, 6.0], bury: 0.26, w: 1.0,
@@ -313,23 +329,83 @@ const KINDS = [
   },
 ];
 
-const K: any = {};
-for (let i = 0; i < KINDS.length; i++) K[KINDS[i].key as keyof typeof K] = KINDS[i];
+/** {@link KINDS} indexed by key, for the weighted picks below. */
+const K = new Map<string, RockKindDef>();
+for (const k of KINDS) K.set(k.key, k);
+/** The two fallbacks the pickers use when a weight table names a kind we do
+ * not build. Named rather than reached for through the map so they are not
+ * `RockKindDef | undefined`. */
+const K_COBBLE = KINDS.find((k) => k.key === 'cobble')!;
+const K_PEBBLE = KINDS.find((k) => k.key === 'pebble')!;
 
 /** Kinds big enough to be worth a distant LOD and a long draw range. */
 const BIG = new Set(['granite', 'bedded', 'worn', 'slab', 'spire']);
 
+/** A kind that {@link KINDS} definitely declares. */
+function kindOf(key: StoneKind): RockKindDef {
+  const k = K.get(key);
+  if (!k) throw new Error(`Rocks: no kind '${key}'`);
+  return k;
+}
+
+/** An instanced mesh that definitely carries a per-instance colour buffer. */
+type TintedMesh = THREE.InstancedMesh & { instanceColor: THREE.InstancedBufferAttribute };
+
+/** One kind's two instanced tiers, and how many slots each has written. */
+interface RockGroup {
+  kind: RockKindDef;
+  key: StoneKind;
+  /** Ranges, metres: near tier, far tier, and far tier for outcrop stones. */
+  nearRange: number;
+  farRange: number;
+  outRange: number;
+  near: TintedMesh;
+  far: TintedMesh | null;
+  nearMax: number;
+  farMax: number;
+  /** Slots written this frame, near and far. */
+  nw: number;
+  fw: number;
+}
+
+/** One scattered stone, as a streamed cell holds it. */
+interface RockInstance {
+  k: StoneKind;
+  x: number;
+  z: number;
+  y: number;
+  /** Terrain normal at the stone, which is the direction it sinks along. */
+  nx: number;
+  ny: number;
+  nz: number;
+  /** Long axis, metres, and the per-axis jitter on top of it. */
+  s: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  yaw: number;
+  pitch: number;
+  roll: number;
+  bury: number;
+  /** Instance tint. */
+  cr: number;
+  cg: number;
+  cb: number;
+  /** Placed by the outcrop pass, so it draws out to `outRange`. */
+  far: boolean;
+}
+
 export class Rocks {
   _last!: THREE.Vector3;
-  byKey!: Map<any, any>;
+  byKey!: Map<StoneKind, RockGroup>;
   cell!: number;
   eco!: Ecology;
-  groups!: any[];
-  outcrops!: TileStream;
+  groups!: RockGroup[];
+  outcrops!: TileStream<RockInstance>;
   quality!: number;
   radius!: number;
   scene!: THREE.Scene;
-  stream!: TileStream;
+  stream!: TileStream<RockInstance>;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1, radius = 560 }: {quality?:number, radius?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
@@ -374,7 +450,7 @@ export class Rocks {
    * of anchor blocks around it, and spalled fragments at the foot of each.
    * Pure function of (cx, cz) — this is what lets the window move.
    */
-  _genCell(cx: number, cz: number, out: any) {
+  _genCell(cx: number, cz: number, out: RockInstance[]) {
     const c = this.cell, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x40c8));
     const seedX = (cx + rng.next()) * c, seedZ = (cz + rng.next()) * c;
@@ -388,7 +464,7 @@ export class Rocks {
       const x = seedX + Math.cos(a) * r, z = seedZ + Math.sin(a) * r;
       const d = this._density(x, z);
       if (d <= 0.004 || rng.next() > d) continue;
-      const anchor = K[pickWeighted(dress.kinds, rng.next()) as keyof typeof K] || K.cobble;
+      const anchor = K.get(pickWeighted(dress.kinds, rng.next())) ?? K_COBBLE;
       out.push(this._item(anchor, x, z, rng, d, dress));
       const frags = 2 + Math.floor(rng.next() * 5);
       for (let j = 0; j < frags; j++) {
@@ -396,7 +472,7 @@ export class Rocks {
         const fd = Math.abs(rng.gauss(0, 1)) * (2.2 + anchor.size[1] * 0.9);
         const fx = x + Math.cos(fa) * fd, fz = z + Math.sin(fa) * fd;
         if (eco.roadDist(fx, fz) < 4.6) continue;
-        const kind = K[pickWeighted(dress.frag, rng.next()) as keyof typeof K] || K.pebble;
+        const kind = K.get(pickWeighted(dress.frag, rng.next())) ?? K_PEBBLE;
         out.push(this._item(kind, fx, fz, rng, d * 0.7, dress));
       }
     }
@@ -408,7 +484,7 @@ export class Rocks {
    * metres an outcrop is a landform, not a pebble — it is what stops the
    * middle distance reading as an empty dust bowl.
    */
-  _genOutcrop(cx: number, cz: number, out: any) {
+  _genOutcrop(cx: number, cz: number, out: RockInstance[]) {
     const c = 176, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x0c1f));
     for (let m = 0; m < 2; m++) {
@@ -432,8 +508,8 @@ export class Rocks {
         const px = ox + Math.cos(axis) * t * spanX + rng.gauss(0, jit);
         const pz = oz + Math.sin(axis) * t * spanX + rng.gauss(0, jit);
         const r = rng.next();
-        const kind = r < 0.42 ? K.granite : r < 0.62 ? K.slab
-          : r < 0.82 ? K.bedded : K.spire;
+        const kind = kindOf(r < 0.42 ? 'granite' : r < 0.62 ? 'slab'
+          : r < 0.82 ? 'bedded' : 'spire');
         const it = this._item(kind, px, pz, rng, 1, dress);
         // hard ceiling: past about eleven metres a "boulder" is a landform,
         // and landforms belong to the heightfield, not to the prop layer
@@ -447,7 +523,7 @@ export class Rocks {
     }
   }
 
-  _item(kind: any, x: number, z: number, rng: Rng, w: number, dress: any) {
+  _item(kind: RockKindDef, x: number, z: number, rng: Rng, w: number, dress: Dress): RockInstance {
     const t = Math.pow(rng.next(), 1.65);
     const nrm = this.eco.normal(x, z);
     // A five metre block centred on a forty-degree face overhangs it by half
@@ -486,28 +562,28 @@ export class Rocks {
     // Instance budgets. A boulder at four hundred metres is four pixels, so
     // the far tier runs a detail-1 blank (80 triangles against 320) and takes
     // the great majority of the count.
-    const CAP = {
+    const CAP: Record<StoneKind, [number, number]> = {
       granite: [130, 760], bedded: [140, 800], worn: [130, 520],
       slab: [110, 620], spire: [90, 480],
       talus: [420, 0], cobble: [520, 0], pebble: [700, 0],
     };
     for (const k of KINDS) {
-      const [nearCap, farCap] = CAP[k.key as keyof typeof CAP];
-      const g = {
+      const [nearCap, farCap] = CAP[k.key];
+      const nearMax = Math.max(8, Math.round(nearCap * q));
+      const g: RockGroup = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
         farRange: BIG.has(k.key) ? 430 : 0,
         outRange: BIG.has(k.key) ? 1150 : 0,
-        near: null as THREE.InstancedMesh | null, far: null as THREE.InstancedMesh | null,
-        nearMax: 0, farMax: 0, nw: 0, fw: 0,
+        near: this._mesh(rockGeometry(k.seed, k.opts), mat, nearMax, `rock_${k.key}`),
+        far: null,
+        nearMax, farMax: 0, nw: 0, fw: 0,
       };
-      g.nearMax = Math.max(8, Math.round(nearCap * q));
-      g.near = this._mesh(rockGeometry(k.seed, k.opts), mat, g.nearMax, `rock_${k.key}`);
       if (farCap) {
         g.farMax = Math.max(8, Math.round(farCap * q));
         g.far = this._mesh(rockGeometry(k.seed, { ...k.opts, detail: 1, chips: 1 }),
           mat, g.farMax, `rock_${k.key}_far`);
-        g.far!.castShadow = false;
+        g.far.castShadow = false;
       }
       this.groups.push(g);
     }
@@ -532,14 +608,17 @@ export class Rocks {
     this.update(o);
   }
 
-  _mesh(geo: any, mat: any, max: number, name: string) {
+  _mesh(geo: THREE.BufferGeometry, mat: THREE.Material, max: number, name: string): TintedMesh {
     const mesh = new THREE.InstancedMesh(geo, mat, max);
     mesh.castShadow = true; mesh.receiveShadow = true;
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+    const instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
+    mesh.instanceColor = instanceColor;
     mesh.count = 0; mesh.frustumCulled = false;
     mesh.name = name;
     this.scene.add(mesh);
-    return mesh;
+    // `Object.assign` rather than an assertion: three declares `instanceColor`
+    // nullable and we have just made it not so, right here.
+    return Object.assign(mesh, { instanceColor });
   }
 
   // ---------------------------------------------------------------- update
@@ -554,14 +633,14 @@ export class Rocks {
     for (const g of this.groups) { g.nw = 0; g.fw = 0; }
     const cx = camPos.x, cz = camPos.z;
 
-    const emit = (arr: any) => {
+    const emit = (arr: RockInstance[]) => {
       for (let i = 0; i < arr.length; i++) {
         const it = arr[i];
         const g = this.byKey.get(it.k);
         if (!g) continue;
         const dx = it.x - cx, dz = it.z - cz;
         const d2 = dx * dx + dz * dz;
-        let mesh: any = null, slot = 0;
+        let mesh: TintedMesh | null = null, slot = 0;
         if (d2 < g.nearRange * g.nearRange && g.nw < g.nearMax) {
           mesh = g.near; slot = g.nw++;
         } else if (g.far) {

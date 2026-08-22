@@ -158,7 +158,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
   /* ------------------------------------------------------- neck and head */
   // Slung low and forward — this animal grazes, so its head hangs below the
   // line of its back even at rest.
-  const neckBlend = (p: any) => smooth(0.70, 1.16, p.z);
+  const neckBlend = (p: THREE.Vector3) => smooth(0.70, 1.16, p.z);
   parts.push(tube({
     nodes: [
       { p: [0, 2.12, 0.72], r: 0.56, rz: 0.58 },
@@ -238,7 +238,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
   }
 
   /* -------------------------------------------------------------- legs -- */
-  const legColor = (th: number, u: number, p: any) => {
+  const legColor = (th: number, u: number, p: THREE.Vector3) => {
     if (p.y < 0.28) return mix(HOOF, HIDE_DARK, smooth(0.28, 0.16, p.y) * 0.2);
     const feather = 1 - smooth(0.26, 0.52, u);
     return mix(mix(HIDE, HIDE_DARK, smooth(0.30, 0.95, u) * 0.75).getHex(THREE.SRGBColorSpace),

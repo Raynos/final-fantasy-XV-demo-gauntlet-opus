@@ -2,12 +2,22 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
+ * A position / rotation / scale triple, written as an array literal at every
+ * call site in the prop kits. Not a tuple: the kits index it and pass slices
+ * around, and a `[number, number, number]` would only make those sites cast.
+ */
+export type Vec3 = number[];
+
+/** One cross-section of a {@link loft}: a station at `x`, and its ring of `[y,z]`. */
+export interface LoftSection { x: number; pts: number[][] }
+
+/**
  * Accumulates transformed geometry per material and emits one merged mesh per
  * material. Keeping a whole structure (car, shack, campsite) to a handful of
  * draw calls is the whole point.
  */
 export class PartBuilder {
-  byMat!: Map<any, any>;
+  byMat!: Map<THREE.Material, THREE.BufferGeometry[]>;
   constructor() { this.byMat = new Map(); }
 
   /**
@@ -28,13 +38,14 @@ export class PartBuilder {
       for (let i = 0; i < n; i++) idx[i] = i;
       g.setIndex(new THREE.BufferAttribute(idx, 1));
     }
-    if (!this.byMat.has(mat)) this.byMat.set(mat, []);
-    this.byMat.get(mat).push(g);
+    let list = this.byMat.get(mat);
+    if (!list) { list = []; this.byMat.set(mat, list); }
+    list.push(g);
     return this;
   }
 
   /** Convenience: place a primitive with position / rotation / scale. */
-  place(mat: any, geo: any, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
+  place(mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3 = [0, 0, 0], rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(pos[0], pos[1], pos[2]),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -63,7 +74,7 @@ export class PartBuilder {
  * Loft a closed tube through a list of cross-sections.
  * @param sections rings of [y,z]
  */
-export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
+export function loft(sections: LoftSection[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const pos = new Float32Array(S * N * 3);
@@ -92,7 +103,7 @@ export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {c
 
   if (caps) {
     // fan-cap both ends by adding a centre vertex each
-    const extra: any[] = [];
+    const extra: { x: number, y: number, z: number, ring: number, flip: boolean }[] = [];
     const addCap = (i: number, flip: boolean) => {
       let cy = 0, cz = 0;
       for (let j = 0; j < N; j++) { cy += sections[i].pts[j][0]; cz += sections[i].pts[j][1]; }
@@ -138,7 +149,7 @@ export function ring(n: number, halfWidth: number, yLow: number, yHigh: number, 
 }
 
 /** Extract a contiguous band of a loft's rings as an open shell. */
-export function loftBand(sections: any, j0: number, j1: number, offsetOut = 0) {
+export function loftBand(sections: LoftSection[], j0: number, j1: number, offsetOut = 0) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const cols = [];

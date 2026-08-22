@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../../util/TextureGen.ts';
+import { woodMaterial, type Texel } from '../props/PropMaterials.ts';
 
 /**
  * Materials and signage for Hammerhead.
@@ -16,16 +17,56 @@ import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../..
  * share four or five merged meshes between them.
  */
 
-const cache = new Map();
-function memo(k: string, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
+/**
+ * Two caches, not one map of `any`: every key is prefixed by what it holds
+ * (`town_*`/`signmat_*` are materials, `sign_*` are the canvas faces), so
+ * splitting the table is behaviour-identical and each getter keeps its type.
+ */
+const matCache = new Map<string, THREE.MeshStandardMaterial>();
+const texCache = new Map<string, THREE.Texture>();
+
+function memoMat(k: string, f: () => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  let m = matCache.get(k);
+  if (!m) { m = f(); matCache.set(k, m); }
+  return m;
+}
+
+function memoTex(k: string, f: () => THREE.Texture): THREE.Texture {
+  let t = texCache.get(k);
+  if (!t) { t = f(); texCache.set(k, t); }
+  return t;
+}
+
+/**
+ * What {@link pbr} needs to build one surface.
+ *
+ * `height` is the single source of relief -- it drives the normal map and every
+ * `albedo` below reads it again for shading -- and `albedo` writes the texel in
+ * place rather than returning, because `makeTexture` reuses one scratch array.
+ */
+interface PbrSpec {
+  /** Base albedo, as a hex literal in *linear* space. */
+  tint: number;
+  rough?: number;
+  metal?: number;
+  /** Relief, 0..1, sampled per texel. */
+  height: (u: number, v: number) => number;
+  /** Writes the texel. `base` is `tint` as a colour, already decoded. */
+  albedo: (u: number, v: number, c: Texel, base: THREE.Color) => void;
+  /** Per-texel roughness; omitted leaves the flat `rough` value. */
+  roughAt?: (u: number, v: number) => number;
+  normalScale?: number;
+  size?: number;
+  repeat?: number;
+}
 
 /** A textured PBR set built from one height function. */
 function pbr(key: string, {
   tint, rough = 0.8, metal = 0, height, albedo, roughAt, normalScale = 1.0, size = 256, repeat = 1,
-}: any) {
-  return memo(key, () => {
+}: PbrSpec) {
+  return memoMat(key, () => {
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(size, (u: any, v: any, c: any) => albedo(u, v, c, base), { repeat });
+    const map = makeTexture(size, (u: number, v: number, c: Texel) => albedo(u, v, c, base), { repeat });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     const normalMap = normalFromHeight(size, height, normalScale);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
@@ -60,7 +101,7 @@ export function asphaltMaterial() {
   };
   return pbr('town_asphalt', {
     tint: 0x191612, rough: 0.96, size: 512, normalScale: 0.35, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const k = 0.86 + h(u, v) * 0.22;
       // Leide's red dust drifts over everything and collects in the low spots
       const dust = THREE.MathUtils.smoothstep(n.fbm2(u * 3.2 + 9, v * 3.2 - 4, 4) * 0.5 + 0.5, 0.34, 0.88);
@@ -86,7 +127,7 @@ export function slabMaterial() {
   };
   return pbr('town_slab', {
     tint: 0x625b4e, rough: 0.94, size: 512, normalScale: 0.42, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const k = 0.80 + h(u, v) * 0.40;
       const oil = Math.pow(Math.max(0, n.fbm2(u * 4.5 + 31, v * 4.5 - 12, 4)), 1.6) * 1.6;
       const dust = Math.max(0, n.fbm2(u * 6 - 5, v * 6 + 17, 3)) * 0.5;
@@ -112,7 +153,7 @@ export function gravelMaterial() {
   };
   return pbr('town_gravel', {
     tint: 0x5c4a35, rough: 0.97, size: 512, normalScale: 0.7, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const k = 0.72 + h(u, v) * 0.5;
       const red = Math.max(0, n.fbm2(u * 5, v * 5, 3)) * 0.4;
       c[0] = base.r * k * (1 + red * 0.40);
@@ -133,7 +174,7 @@ export function corrugatedMaterial(tint = 0xb9b09a, rough = 0.62, metal = 0.35) 
   };
   return pbr(`town_corr${tint}${rough}${metal}`, {
     tint, rough, metal, size: 256, normalScale: 1.3, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       // shade the ribs rather than rely on the normal alone; a corrugated wall
       // reads by its stripes long after the normal has mipped away
       const k = 0.80 + h(u, v) * 0.26;
@@ -154,7 +195,7 @@ export function panelMaterial(tint = 0xd8cfb4, rough = 0.44, metal = 0.55) {
   const h = (u: number, v: number) => n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5;
   return pbr(`town_panel${tint}${rough}${metal}`, {
     tint, rough, metal, size: 256, normalScale: 0.55, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       // Chipping has to be *sparse*: a paint chip is a few square millimetres,
       // and a threshold low enough to show up everywhere reads as black mould.
       const chip = THREE.MathUtils.smoothstep(n.fbm2(u * 19 + 2, v * 19 - 6, 4) * 0.5 + 0.5, 0.80, 0.94) * 0.7;
@@ -173,7 +214,7 @@ export function galvMaterial() {
   const h = (u: number, v: number) => n.fbm2(u * 40, v * 40, 3) * 0.5 + 0.5;
   return pbr('town_galv', {
     tint: 0x9aa0a4, rough: 0.5, metal: 0.85, size: 256, normalScale: 0.6, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const spangle = THREE.MathUtils.smoothstep(n.worley2(u * 16, v * 16).f1, 0.05, 0.5);
       const k = 0.74 + h(u, v) * 0.3 + spangle * 0.18;
       const rust = Math.pow(Math.max(0, n.fbm2(u * 7 + 11, v * 7, 3)), 2.2) * 1.4;
@@ -191,7 +232,7 @@ export function scrapMaterial(tint = 0x8a5432) {
   const h = (u: number, v: number) => (n.fbm2(u * 20, v * 20, 4) * 0.5 + 0.5) * 0.6 + n.worley2(u * 11, v * 11).f1 * 0.4;
   return pbr(`town_scrap${tint}`, {
     tint, rough: 0.86, metal: 0.42, size: 256, normalScale: 1.6, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const r = n.fbm2(u * 6, v * 6, 4) * 0.5 + 0.5;
       const k = 0.5 + h(u, v) * 0.8;
       const rust = THREE.MathUtils.smoothstep(r, 0.3, 0.72);
@@ -212,7 +253,7 @@ export function rubberMaterial() {
   };
   return pbr('town_rubber', {
     tint: 0x191a1c, rough: 0.95, size: 256, normalScale: 1.4, height: h,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       const k = 0.7 + h(u, v) * 0.6;
       const dust = Math.max(0, n.fbm2(u * 8, v * 8, 3)) * 0.4;
       c[0] = base.r * k + dust * 0.10;
@@ -230,7 +271,7 @@ export function rubberMaterial() {
  * through shows the tarmac on the far side of the car.
  */
 export function darkGlassMaterial() {
-  return memo('town_glass_dark', () => {
+  return memoMat('town_glass_dark', () => {
     const m = new THREE.MeshStandardMaterial({
       color: 0x0e1418, roughness: 0.07, metalness: 0.15, envMapIntensity: 1.8,
       emissive: 0x141a20, emissiveIntensity: 0.35,
@@ -242,7 +283,7 @@ export function darkGlassMaterial() {
 
 /** Diner glass and windscreens. */
 export function glassMaterial(tint = 0x141c22) {
-  return memo(`town_glass${tint}`, () => {
+  return memoMat(`town_glass${tint}`, () => {
     // Actually transparent. An opaque dark pane reads as a painted panel from
     // outside no matter how it is shaded — and the whole point of the Crow's
     // Nest frontage is that you can see Takka behind the counter through it.
@@ -259,7 +300,7 @@ export function glassMaterial(tint = 0x141c22) {
 
 /** Self-lit accent. Callers ramp `emissiveIntensity` with time of day. */
 export function lampMaterial(color = 0xffe6b4, base = 0x14120e) {
-  return memo(`town_lamp${color}${base}`, () => {
+  return memoMat(`town_lamp${color}${base}`, () => {
     const m = new THREE.MeshStandardMaterial({
       color: base, emissive: color, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0,
     });
@@ -274,7 +315,7 @@ export function lampMaterial(color = 0xffe6b4, base = 0x14120e) {
  * Draw text scaled down until it fits. Fixed sizes overrun and the sign ends
  * up reading "MMERHE" — the same trap the highway signs already fell into.
  */
-function fit(ctx: any, text: string, s: number, maxFrac: number, px0: number, y: number, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
+function fit(ctx: CanvasRenderingContext2D, text: string, s: number, maxFrac: number, px0: number, y: number, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
   let px = Math.round(s * px0);
   const set = () => { ctx.font = `${weight} ${px}px ${family}`; };
   set();
@@ -295,7 +336,7 @@ function fit(ctx: any, text: string, s: number, maxFrac: number, px0: number, y:
 }
 
 /** Speckled grime pass, so no sign face is ever flat. */
-function grime(ctx: any, s: number, seed = 4, strength = 0.16) {
+function grime(ctx: CanvasRenderingContext2D, s: number, seed = 4, strength = 0.16) {
   const n = new Noise(seed);
   const img = ctx.getImageData(0, 0, s, s);
   for (let y = 0; y < s; y++) {
@@ -315,7 +356,7 @@ function grime(ctx: any, s: number, seed = 4, strength = 0.16) {
  * visible from a kilometre in either direction.
  */
 export function hammerheadSignTexture() {
-  return memo('sign_hammerhead', () => canvasTexture(512, (ctx: any, s: number) => {
+  return memoTex('sign_hammerhead', () => canvasTexture(512, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#e6dcc2'; ctx.fillRect(0, 0, s, s);
     // red header band
     ctx.fillStyle = '#a8291d'; ctx.fillRect(0, 0, s, s * 0.30);
@@ -347,7 +388,7 @@ export function hammerheadSignTexture() {
 
 /** The Crow's Nest diner fascia — FFXV's roadside diner chain. */
 export function crowsNestSignTexture() {
-  return memo('sign_crowsnest', () => canvasTexture(512, (ctx: any, s: number) => {
+  return memoTex('sign_crowsnest', () => canvasTexture(512, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#1d2228'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#e8dcbe';
     ctx.fillRect(s * 0.03, s * 0.06, s * 0.94, s * 0.88);
@@ -372,7 +413,7 @@ export function crowsNestSignTexture() {
 
 /** Garage fascia lettering. */
 export function garageSignTexture() {
-  return memo('sign_garage', () => canvasTexture(512, (ctx: any, s: number) => {
+  return memoTex('sign_garage', () => canvasTexture(512, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#2a2c30'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#c8bda0';
     ctx.textAlign = 'center';
@@ -389,7 +430,7 @@ export function garageSignTexture() {
 
 /** The hunt board: cork, pinned bounty sheets, a hunter-rank ladder. */
 export function huntBoardTexture() {
-  return memo('sign_hunts', () => canvasTexture(512, (ctx: any, s: number) => {
+  return memoTex('sign_hunts', () => canvasTexture(512, (ctx: CanvasRenderingContext2D, s: number) => {
     // cork
     const n = new Noise(5150);
     const img = ctx.createImageData(s, s);
@@ -452,7 +493,7 @@ export function huntBoardTexture() {
 
 /** Diner menu board hung behind the counter. */
 export function menuBoardTexture() {
-  return memo('sign_menu', () => canvasTexture(512, (ctx: any, s: number) => {
+  return memoTex('sign_menu', () => canvasTexture(512, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#161a1d'; ctx.fillRect(0, 0, s, s);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e6dcc0';
@@ -483,7 +524,7 @@ export function menuBoardTexture() {
 
 /** Rent-a-Bird chocobo stand — named, never built, exactly the point. */
 export function rentABirdTexture() {
-  return memo('sign_bird', () => canvasTexture(256, (ctx: any, s: number) => {
+  return memoTex('sign_bird', () => canvasTexture(256, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#f2c93a'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#2a2418';
     ctx.beginPath(); ctx.arc(s * 0.5, s * 0.36, s * 0.20, 0, Math.PI * 2); ctx.fill();
@@ -500,7 +541,7 @@ export function rentABirdTexture() {
 
 /** Culless Munitions van livery. */
 export function cullessTexture() {
-  return memo('sign_culless', () => canvasTexture(256, (ctx: any, s: number) => {
+  return memoTex('sign_culless', () => canvasTexture(256, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = '#3b4148'; ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#c3462c'; ctx.fillRect(0, s * 0.36, s, s * 0.30);
     ctx.textAlign = 'center'; ctx.fillStyle = '#f0e8d6';
@@ -513,8 +554,8 @@ export function cullessTexture() {
 
 /** Chain-link mesh, drawn as an alpha-tested diamond weave. */
 export function chainlinkMaterial() {
-  return memo('town_chainlink', () => {
-    const tex = canvasTexture(256, (ctx: any, s: number) => {
+  return memoMat('town_chainlink', () => {
+    const tex = canvasTexture(256, (ctx: CanvasRenderingContext2D, s: number) => {
       ctx.clearRect(0, 0, s, s);
       ctx.strokeStyle = '#7c8085';
       ctx.lineWidth = s * 0.030;
@@ -536,8 +577,8 @@ export function chainlinkMaterial() {
 }
 
 /** Wrap a canvas texture into a flat sign material. */
-export function signMaterial(key: string, tex: any, { emissive = 0, rough = 0.62, metal = 0.06 } = {}) {
-  return memo(`signmat_${key}`, () => {
+export function signMaterial(key: string, tex: THREE.Texture, { emissive = 0, rough = 0.62, metal = 0.06 } = {}) {
+  return memoMat(`signmat_${key}`, () => {
     const m = new THREE.MeshStandardMaterial({
       map: tex, roughness: rough, metalness: metal, side: THREE.DoubleSide,
       emissive: emissive ? new THREE.Color(0xffffff) : new THREE.Color(0x000000),
@@ -548,3 +589,53 @@ export function signMaterial(key: string, tex: any, { emissive = 0, rough = 0.62
     return m;
   });
 }
+
+/* -------------------------------------------------------------- the palette */
+
+/**
+ * The whole of Hammerhead's material set, built once.
+ *
+ * It lives here rather than inside `Hammerhead._build` because two modules need
+ * it: the town assembles it, and every helper in `TownKit` is handed it. A
+ * function rather than an object literal so {@link TownMats} *is* the set —
+ * `TownKit.carShell` asking for `M.panelRed` is then checked against what this
+ * actually mints, not against a hand-written parallel interface.
+ */
+export function townMaterials() {
+  return {
+    asphalt: asphaltMaterial(),
+    slab: slabMaterial(),
+    gravel: gravelMaterial(),
+    corr: corrugatedMaterial(0xb6ad96, 0.62, 0.35),
+    corrRoof: corrugatedMaterial(0x8d8676, 0.68, 0.4),
+    panel: panelMaterial(0xe0d7bc, 0.42, 0.5),
+    panelRed: panelMaterial(0x9c3423, 0.40, 0.5),
+    panelBlue: panelMaterial(0x33506a, 0.46, 0.42),
+    panelCream: panelMaterial(0xcfc4a4, 0.46, 0.4),
+    galv: galvMaterial(),
+    scrap: scrapMaterial(0x8a5432),
+    rubber: rubberMaterial(),
+    wood: woodMaterial(0x7d6a4e),
+    dark: panelMaterial(0x24262a, 0.6, 0.3),
+    chrome: panelMaterial(0xc8ced6, 0.16, 0.95),
+    glass: glassMaterial(0x121a20),
+    glassDark: darkGlassMaterial(),
+    canvas: panelMaterial(0x9c4632, 0.88, 0.02),
+    paint: panelMaterial(0x6f6a5c, 0.96, 0.0),
+    lamp: lampMaterial(0xffe6b4, 0x15130f),
+    warm: lampMaterial(0xf0dcbc, 0x2a2620),
+    neon: lampMaterial(0xffd07a, 0x1a1208),
+    mesh: chainlinkMaterial(),
+    signHH: signMaterial('hh', hammerheadSignTexture(), { emissive: 1 }),
+    signCN: signMaterial('cn', crowsNestSignTexture(), { emissive: 1 }),
+    signGA: signMaterial('ga', garageSignTexture()),
+    signHB: signMaterial('hb', huntBoardTexture(), { rough: 0.9 }),
+    signMB: signMaterial('mb', menuBoardTexture(), { emissive: 1 }),
+    signRB: signMaterial('rb', rentABirdTexture()),
+    signCM: signMaterial('cm', cullessTexture()),
+  
+  };
+}
+
+/** Every material Hammerhead and its kit can ask for. */
+export type TownMats = ReturnType<typeof townMaterials>;

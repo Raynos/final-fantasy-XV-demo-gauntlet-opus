@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import * as M from './kit/InteriorMaterials.ts';
+import type { Dungeon, DungeonDef } from './kit/Dungeon.ts';
+import type { Layout } from './kit/Layout.ts';
+import type { FungusOpts, PropKit } from './kit/InteriorProps.ts';
 
 /**
  * **Fociaugh Hollow** — a limestone cave system with no architecture in it at
@@ -17,7 +20,7 @@ import * as M from './kit/InteriorMaterials.ts';
  * Branches: a still-water chamber, a sump shelf above the narrows, and a
  * spawning alcove off the boss chamber.
  */
-export const FOCIAUGH = {
+export const FOCIAUGH: DungeonDef = {
   id: 'fociaugh',
   name: 'Fociaugh Hollow',
   region: 'Duscae',
@@ -51,7 +54,7 @@ export const FOCIAUGH = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L: any) {
+  author(L: Layout) {
     L.room('mouth', { x: 0, z: 0, w: 13, d: 11, y: 0, h: 7.5, kind: 'entry', name: 'Cave Mouth' });
     L.room('gallery', {
       x: 0, z: -24, w: 20, d: 17, y: -5.0, h: 10.0, kind: 'hall', name: 'Dripstone Gallery',
@@ -107,8 +110,8 @@ export const FOCIAUGH = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit: any, L: any) {
-    const F = (x: number, y: number, z: number, o: any) => kit.fungus(x, y, z, o);
+  dress(kit: PropKit, L: Layout) {
+    const F = (x: number, y: number, z: number, o: FungusOpts) => kit.fungus(x, y, z, o);
 
     // ---- cave mouth: daylight dying about six metres in -------------------
     kit.dripField(0, 7.0, -1.5, { count: 14, radius: 5.0, len: 1.5, r: 0.24 });
@@ -206,7 +209,7 @@ export const FOCIAUGH = {
    * The one shaft of daylight, falling through the collapse at the mouth, and a
    * second, weaker one through a fissure over the Hollow.
    */
-  extras(dungeon: any) {
+  extras(dungeon: Dungeon) {
     const rig = dungeon.rig;
     const a = new THREE.Mesh(
       new THREE.CylinderGeometry(1.1, 3.8, 9.5, 12, 1, true),

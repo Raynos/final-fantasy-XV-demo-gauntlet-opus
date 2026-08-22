@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder } from './PartBuilder.ts';
-import { worldMap, WORLD } from '../map/WorldMap.ts';
-import { dressAt } from './ZoneDress.ts';
+import { PartBuilder, type Vec3 } from './PartBuilder.ts';
+import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
+import { dressAt, type Dress } from './ZoneDress.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
@@ -52,7 +52,7 @@ const SKIP_IDS = new Set(['hammerhead']);
 
 const _v = new THREE.Vector3();
 
-function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   return new THREE.Matrix4().compose(
     new THREE.Vector3(pos[0], pos[1], pos[2]),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1], rot[2])),
@@ -79,15 +79,147 @@ function roughBox(seed: number, w: number, h: number, d: number, amp = 0.05) {
   return g;
 }
 
+/**
+ * The three things every kit builder is handed, named.
+ *
+ * `B` accumulates the geometry, `site` is the place being built and `ctx` is
+ * everything about *where* it is being built that the kit did not work out for
+ * itself. Splitting `ctx` out of the site is what lets {@link PoiKits._make} do
+ * the seeded, terrain-reading work once for all twelve kits.
+ */
+export interface KitCtx {
+  /** Seeded off the POI id, so a kit varies between places but never between runs. */
+  rng: Rng;
+  /** The zone dressing recipe here — stone size, tint, litter. */
+  dress: Dress;
+  /** Facing, radians: down the nearest road if there is one, else seeded. */
+  yaw: number;
+  /** Deck height the group is placed at; kits that reach the sea need it. */
+  base: number;
+}
+
+/**
+ * What a kit reports back about what it built. Everything is optional because
+ * most kits want the defaults; {@link PoiKits._make} is where they resolve.
+ */
+export interface KitResult {
+  /** `false` to never cast shadows. Default `true`. */
+  cast?: boolean;
+  /** Footprint radius in metres. Default 20. */
+  r?: number;
+  /**
+   * The kit laid its own ground and wants no apron.
+   *
+   * **Nothing reads this.** Each kit calls {@link PoiKits._apron} for itself,
+   * so the flag only records which two kits (`_fishing`, and `_landmark` off
+   * the lighthouse branch) deliberately skip it. Left in place because it is
+   * true; do not add a consumer without checking those two still want it.
+   */
+  noApron?: boolean;
+}
+
+/** A kit builder. Invoked with `this` bound to the {@link PoiKits} instance. */
+export type KitFn = (this: PoiKits, B: PartBuilder, site: PoiSite, ctx: KitCtx) => KitResult;
+
+/**
+ * A POI the streamer knows about but has not built yet.
+ *
+ * `group` is the flag: `null` means "still queued", and it is set exactly once
+ * — to an empty group for a site another system already owns.
+ */
+export interface PoiSite {
+  poi: Poi;
+  fn: KitFn;
+  /**
+   * The POI's ground-plane position. Write-only today: `update` measures
+   * distance off `poi.x`/`poi.z` directly rather than through this.
+   */
+  pos: THREE.Vector3;
+  group: THREE.Group | null;
+}
+
+/**
+ * The same site once {@link PoiKits._make} has run it: its group is in the
+ * scene and the per-type draw and shadow budgets are resolved.
+ *
+ * This is the map's own `PoiSpec`/`Poi` split applied to the streamer's queue.
+ * `update` reads `draw` and `canCast` for every built site every frame and must
+ * never have to guard them, so they are required here and absent above rather
+ * than optional on one type that means both things.
+ */
+export interface BuiltSite extends PoiSite {
+  group: THREE.Group;
+  canCast: boolean;
+  /** Footprint radius the kit reported. Write-only today — nothing reads it. */
+  radius: number;
+  /** Beyond this range the group is hidden outright. */
+  draw: number;
+  /** Whether the group is currently casting; unset until the first test. */
+  casting?: boolean;
+}
+
+/**
+ * The shared material set, built once by {@link PoiKits.build}.
+ *
+ * A function rather than an object literal inside the class so that
+ * {@link PoiMats} is the set itself, and a kit that wants a new colour cannot
+ * drift from a hand-maintained parallel interface.
+ */
+function poiMaterials() {
+  return {
+    // Anything bigger than a couple of metres gets a *plain* material.
+    // PropMaterials' concrete and enamel maps are authored for a 1 m part
+    // and every primitive here carries 0..1 box UVs, so on a fourteen metre
+    // wall the paint-chip noise stretches into metre-wide grey blotches —
+    // which is what made the first pass of Lestallum look like granite
+    // chippings. Flat colour at that scale reads far better.
+    stone: plain(0x968a76, 0.93),
+    dark: plain(0x6b6357, 0.94),
+    concrete: plain(0x8d8779, 0.9),
+    ground: plain(0x796450, 0.96),
+    gravel: plain(0x796f5f, 0.95),
+    roof: plain(0x4b5058, 0.72, 0.3),
+    wall: plain(0xa2957e, 0.82),
+    wall2: plain(0x7b7160, 0.84),
+    wood: woodMaterial(0x7d674c),
+    plank: woodMaterial(0x5d4c39),
+    rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
+    steel: plain(0x8f959b, 0.48, 0.7),
+    cream: plain(0xc8bfa6, 0.7),
+    red: plain(0x8f3a2c, 0.68, 0.1),
+    magitek: plain(0x3a4048, 0.62, 0.45),
+    cloth: canvasClothMaterial(0x3d4148),
+    glass: new THREE.MeshStandardMaterial({ color: 0x121a20, roughness: 0.14, metalness: 0.4 }),
+    lamp: glowMaterial(0xffe6b4, 0.5, 0x141310),
+    rune: glowMaterial(0x8fd8ff, 1.4, 0x0b1620),
+    arcane: glowMaterial(0xa878ff, 1.2, 0x140b20),
+    hot: glowMaterial(0xff5a20, 1.4, 0x1a0703),
+    void: new THREE.MeshBasicMaterial({ color: 0x05070a }),
+    runeface: new THREE.MeshStandardMaterial({
+      map: runeTexture(), transparent: true, roughness: 0.7, metalness: 0,
+      emissive: 0x2a5f8a, emissiveIntensity: 0.6, side: THREE.DoubleSide,
+    }),
+    banner: new THREE.MeshStandardMaterial({
+      map: imperialTexture(), roughness: 0.8, metalness: 0, side: THREE.DoubleSide,
+    }),
+    sign: new THREE.MeshStandardMaterial({
+      map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
+    }),
+  };
+}
+
+/** Every material a POI kit can ask for. */
+export type PoiMats = ReturnType<typeof poiMaterials>;
+
 export class PoiKits {
-  built!: any[];
-  _exclusions!: any;
+  built!: BuiltSite[];
+  _exclusions!: THREE.Vector3[] | null;
   eco!: Ecology;
-  mats!: any;
+  mats!: PoiMats;
   quality!: number;
   root!: THREE.Group;
   scene!: THREE.Scene;
-  sites!: any[];
+  sites!: PoiSite[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;
     this.scene = scene;
@@ -101,49 +233,10 @@ export class PoiKits {
   }
 
   build() {
-    const M = this.mats = {
-      // Anything bigger than a couple of metres gets a *plain* material.
-      // PropMaterials' concrete and enamel maps are authored for a 1 m part
-      // and every primitive here carries 0..1 box UVs, so on a fourteen metre
-      // wall the paint-chip noise stretches into metre-wide grey blotches —
-      // which is what made the first pass of Lestallum look like granite
-      // chippings. Flat colour at that scale reads far better.
-      stone: plain(0x968a76, 0.93),
-      dark: plain(0x6b6357, 0.94),
-      concrete: plain(0x8d8779, 0.9),
-      ground: plain(0x796450, 0.96),
-      gravel: plain(0x796f5f, 0.95),
-      roof: plain(0x4b5058, 0.72, 0.3),
-      wall: plain(0xa2957e, 0.82),
-      wall2: plain(0x7b7160, 0.84),
-      wood: woodMaterial(0x7d674c),
-      plank: woodMaterial(0x5d4c39),
-      rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
-      steel: plain(0x8f959b, 0.48, 0.7),
-      cream: plain(0xc8bfa6, 0.7),
-      red: plain(0x8f3a2c, 0.68, 0.1),
-      magitek: plain(0x3a4048, 0.62, 0.45),
-      cloth: canvasClothMaterial(0x3d4148),
-      glass: new THREE.MeshStandardMaterial({ color: 0x121a20, roughness: 0.14, metalness: 0.4 }),
-      lamp: glowMaterial(0xffe6b4, 0.5, 0x141310),
-      rune: glowMaterial(0x8fd8ff, 1.4, 0x0b1620),
-      arcane: glowMaterial(0xa878ff, 1.2, 0x140b20),
-      hot: glowMaterial(0xff5a20, 1.4, 0x1a0703),
-      void: new THREE.MeshBasicMaterial({ color: 0x05070a }),
-      runeface: new THREE.MeshStandardMaterial({
-        map: runeTexture(), transparent: true, roughness: 0.7, metalness: 0,
-        emissive: 0x2a5f8a, emissiveIntensity: 0.6, side: THREE.DoubleSide,
-      }),
-      banner: new THREE.MeshStandardMaterial({
-        map: imperialTexture(), roughness: 0.8, metalness: 0, side: THREE.DoubleSide,
-      }),
-      sign: new THREE.MeshStandardMaterial({
-        map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
-      }),
-    };
-    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `poi_${k}`;
+    const M = this.mats = poiMaterials();
+    for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `poi_${k}`;
 
-    const kits = {
+    const kits: Record<string, KitFn> = {
       haven: this._haven, parking: this._parking, reststop: this._restStop,
       outpost: this._outpost, town: this._town, tomb: this._tomb,
       imperial: this._imperial, chocobo: this._chocobo, fishing: this._fishing,
@@ -151,7 +244,7 @@ export class PoiKits {
     };
     for (const p of worldMap.pois) {
       if (SKIP_IDS.has(p.id)) continue;
-      const fn = kits[p.type as keyof typeof kits];
+      const fn = kits[p.type];
       if (!fn) continue;
       this.sites.push({ poi: p, fn, pos: new THREE.Vector3(p.x, 0, p.z), group: null });
     }
@@ -188,7 +281,7 @@ export class PoiKits {
    * and a sloping hillside. Cheaper and far more robust than trying to level
    * the heightfield from here — the terrain belongs to another system.
    */
-  _apron(B: any, r: number, depth: number, seed: number, mat?: any) {
+  _apron(B: PartBuilder, r: number, depth: number, seed: number, mat?: THREE.Material) {
     const M = this.mats;
     const rng = new Rng(seed);
     // A tapering, faceted drum rather than a smooth cylinder: on a hillside
@@ -218,10 +311,10 @@ export class PoiKits {
   }
 
   /** Which way the structure faces: down the nearest road, else seeded. */
-  _yaw(p: any, rng: Rng) {
+  _yaw(p: Poi, rng: Rng) {
     const road = this.eco.terrain && this.eco.terrain.map && this.eco.terrain.map.roadGraph;
     if (road) {
-      let bestD = 90, bestA: any = null;
+      let bestD = 90, bestA: number | null = null;
       for (const e of road.edges) {
         for (let i = 0; i < e.pts.length; i += 4) {
           const q = e.pts[i];
@@ -240,7 +333,7 @@ export class PoiKits {
    * A haven: the rune-marked camp rock. Raised shelf, a ring of glyphs the
    * player can see from a distance at night, a fire ring and camp stones.
    */
-  _haven(B: any, s: any, ctx: any) {
+  _haven(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, dress } = ctx;
     const r = 9.6;
     // A haven is a *raised* shelf you climb onto, not a disc painted on the
@@ -302,11 +395,11 @@ export class PoiKits {
   }
 
   /** A gravel pull-in: apron, wheel stops, a barrier on the drop side, signs. */
-  _parking(B: any, s: any, ctx: any) {
+  _parking(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const w = 22, d = 13;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: number[], rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 13.5, 6.0, 91);
     put(M.gravel, new THREE.BoxGeometry(w, 0.26, d), [0, 0.13, 0]);
     // bay markings as thin raised strips: paint on a procedural world is a
@@ -334,10 +427,10 @@ export class PoiKits {
   }
 
   /** Fuel canopy, shop and a pylon sign — the lit thing on a night road. */
-  _restStop(B: any, s: any, ctx: any) {
+  _restStop(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 19, 8.0, 55);
     put(M.gravel, new THREE.BoxGeometry(30, 0.3, 22), [0, 0.14, 0]);
     // canopy
@@ -375,10 +468,10 @@ export class PoiKits {
   }
 
   /** A wayside outpost: prefab huts, a pump, containers and a comms mast. */
-  _outpost(B: any, s: any, ctx: any) {
+  _outpost(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: any, sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 14, 8.0, 71);
     put(M.gravel, new THREE.BoxGeometry(22, 0.3, 16), [0, 0.14, 0]);
     const huts = 2 + Math.floor(rng.next() * 2);
@@ -431,10 +524,10 @@ export class PoiKits {
    * heights, parapets to break the silhouette, and one vertical — a chimney
    * or a water tower — tall enough to name the place on the horizon.
    */
-  _town(B: any, s: any, ctx: any) {
+  _town(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 52, 18, 33);
     put(M.gravel, new THREE.CylinderGeometry(51, 52, 0.6, 26), [0, 0.2, 0]);
     // a street grid rather than a scatter: blocks share walls and align
@@ -507,11 +600,11 @@ export class PoiKits {
    * itself hanging over the sarcophagus. This is the kit that most has to read
    * from a kilometre away — a tomb is a landmark before it is a room.
    */
-  _tomb(B: any, s: any, ctx: any) {
+  _tomb(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     // 1.4x: a royal tomb has to hold its own against a 200 m mesa behind it
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.4, 1.4, 1.4]);
-    const put = (mat: any, geo: any, pos: any, rot?: any, sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 13, 11, 17);
     // three steps
     for (let i = 0; i < 3; i++) {
@@ -559,10 +652,10 @@ export class PoiKits {
   }
 
   /** A magitek base: wall, towers, landing pad, banners, floodlights. */
-  _imperial(B: any, s: any, ctx: any) {
+  _imperial(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 34, 13, 47);
     put(M.gravel, new THREE.BoxGeometry(64, 0.4, 52), [0, 0.18, 0]);
     // perimeter wall with a gate and a breach
@@ -625,10 +718,10 @@ export class PoiKits {
   }
 
   /** A chocobo post: paddock rails, barn, feed silo, trough, signboard. */
-  _chocobo(B: any, s: any, ctx: any) {
+  _chocobo(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 22, 9, 63);
     put(M.gravel, new THREE.CylinderGeometry(22, 23, 0.4, 20), [0, 0.16, 0]);
     // paddock: post and two rails, all the way round
@@ -665,10 +758,10 @@ export class PoiKits {
   }
 
   /** A fishing spot: a timber jetty on piles, a tackle shack and a boat. */
-  _fishing(B: any, s: any, ctx: any) {
+  _fishing(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: number[], rot?: any, sc?: number[]) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     // the deck has to clear the water, whatever the ground is doing
     const deck = Math.max(1.4, WORLD.seaLevel + 1.5 - ctx.base);
     const L = 22;
@@ -710,10 +803,10 @@ export class PoiKits {
   }
 
   /** A viewpoint: waymark stele, cairn, a bench. Lighthouses get a tower. */
-  _landmark(B: any, s: any, ctx: any) {
+  _landmark(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
-    const put = (mat: any, geo: any, pos: any, rot?: any, sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     if (/lighthouse/.test(s.poi.id)) {
       this._apron(B, 6, 9, 21);
       put(M.cream, new THREE.CylinderGeometry(2.0, 3.2, 20, 16), [0, 10, 0]);
@@ -751,10 +844,10 @@ export class PoiKits {
   }
 
   /** A menace lair: a sealed sigil in a ring of leaning stones. */
-  _menace(B: any, s: any, ctx: any) {
+  _menace(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.3, 1.3, 1.3]);
-    const put = (mat: any, geo: any, pos: number[], rot?: number[], sc?: any) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 12, 9, 83);
     put(M.dark, new THREE.CylinderGeometry(9.4, 10, 0.6, 22), [0, 0.24, 0]);
     for (let i = 0; i < 9; i++) {
@@ -775,10 +868,10 @@ export class PoiKits {
   }
 
   /** A dungeon mouth: dressed jambs and a lintel set into a rubble mound. */
-  _dungeon(B: any, s: any, ctx: any) {
+  _dungeon(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.35, 1.35, 1.35]);
-    const put = (mat: any, geo: any, pos: number[], rot?: any, sc?: number[]) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 11, 9, 29);
     // the mound the portal is cut into
     put(M.dark, new THREE.SphereGeometry(9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
@@ -806,18 +899,20 @@ export class PoiKits {
   // ---------------------------------------------------------------- stream
 
   /** Positions we must not build on: another system already owns them. */
-  _exclude(game: Game) {
+  _exclude(game: Game): THREE.Vector3[] {
     if (this._exclusions) return this._exclusions;
-    const out = [];
-    const d = game && game.get && game.get('Dungeons');
-    if (d && d.entrances) for (const e of d.entrances) if (e.pos) out.push(e.pos.clone());
-    const t = game && game.get && game.get('Town');
+    const out: THREE.Vector3[] = [];
+    const d = game.get('Dungeons');
+    if (d) for (const e of d.entrances) out.push(e.pos.clone());
+    // `origin` is declared but only assigned when the town builds, so this
+    // guard is about *when* we are asked, not about whether the field exists.
+    const t = game.get('Town');
     if (t && t.origin) out.push(t.origin.clone());
     this._exclusions = out;
     return out;
   }
 
-  _make(site: any, game: Game) {
+  _make(site: PoiSite, game: Game) {
     const p = site.poi;
     for (const e of this._exclude(game)) {
       if (Math.hypot(e.x - p.x, e.z - p.z) < 130) { site.group = new THREE.Group(); return; }
@@ -833,13 +928,15 @@ export class PoiKits {
     g.name = `poi_${p.type}_${p.id}`;
     g.position.set(p.x, base, p.z);
     B.build(g, { cast: false, receive: true, name: p.type });
-    // tint the whole kit toward the local stone so it belongs to its zone
-    site.canCast = res.cast !== false;
-    site.radius = res.r || 20;
-    site.draw = DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R;
     this.root.add(g);
     site.group = g;
-    this.built.push(site);
+    this.built.push({
+      ...site,
+      group: g,
+      canCast: res.cast !== false,
+      radius: res.r || 20,
+      draw: DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R,
+    });
   }
 
   /**
@@ -848,7 +945,7 @@ export class PoiKits {
    */
   update(dt: number, t: number, night: number, camPos: THREE.Vector3, game: Game) {
     // build at most one POI per frame, nearest first
-    let best: any = null, bestD = BUILD_R * BUILD_R;
+    let best: PoiSite | null = null, bestD = BUILD_R * BUILD_R;
     for (const s of this.sites) {
       if (s.group) continue;
       const dx = s.poi.x - camPos.x, dz = s.poi.z - camPos.z;
@@ -881,7 +978,7 @@ export class PoiKits {
 }
 
 /** Stable 32-bit hash of a POI id, so every kit varies but never drifts. */
-function hashId(str: any) {
+function hashId(str: string) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);

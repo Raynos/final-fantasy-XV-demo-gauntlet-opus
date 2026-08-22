@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import * as M from './kit/InteriorMaterials.ts';
+import type { Dungeon, DungeonDef } from './kit/Dungeon.ts';
+import type { Layout } from './kit/Layout.ts';
+import type { PropKit } from './kit/InteriorProps.ts';
 
 /**
  * **Balouve Mines** — a hewn, abandoned workings that keeps going down.
@@ -16,7 +19,7 @@ import * as M from './kit/InteriorMaterials.ts';
  * Branches: a worked stope, a fallen drift, and an ore gallery hanging half way
  * down the shaft wall.
  */
-export const BALOUVE = {
+export const BALOUVE: DungeonDef = {
   id: 'balouve',
   name: 'Balouve Mines',
   region: 'Leide',
@@ -50,7 +53,7 @@ export const BALOUVE = {
 
   // ------------------------------------------------------------------ layout
 
-  author(L: any) {
+  author(L: Layout) {
     L.room('adit', { x: 0, z: 0, w: 11, d: 9, y: 0, h: 4.4, kind: 'entry', name: 'The Adit' });
     L.room('landing', { x: 0, z: -28, w: 14, d: 13, y: -2.0, h: 4.8, kind: 'junction', name: 'Level One' });
     L.room('stope', {
@@ -117,7 +120,7 @@ export const BALOUVE = {
 
   // ----------------------------------------------------------------- dressing
 
-  dress(kit: any, L: any) {
+  dress(kit: PropKit, L: Layout) {
     // ---- adit ------------------------------------------------------------
     kit.timberFrame(0, 0, 1.6, { rot: 0, width: 4.6, height: 3.4 });
     kit.timberFrame(0, 0, -1.6, { rot: 0, width: 4.6, height: 3.4 });
@@ -246,7 +249,7 @@ export const BALOUVE = {
    * The column of daylight falling nineteen metres down the shaft from the
    * headgear. This is the shot the whole dungeon is built around.
    */
-  extras(dungeon: any) {
+  extras(dungeon: Dungeon) {
     const rig = dungeon.rig;
     const shaft = new THREE.Mesh(
       new THREE.CylinderGeometry(2.4, 5.2, 21, 16, 1, true),

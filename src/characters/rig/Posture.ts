@@ -14,8 +14,53 @@
  * the *left* leg carries.
  */
 
+/**
+ * A resolved body: `POSTURE_DEFAULTS` with one character's overrides applied.
+ * `Anim.evalIdle` / `Anim.evalStance` turn it into a pose.
+ */
+export interface Posture {
+  /** signed rest bias; >0 = the left leg carries. */
+  weight: number;
+  /** how far the weight crosses over from `weight`, and how often (Hz). */
+  shift: number;
+  shiftRate: number;
+  /** foot separation multiplier and toe splay in radians. */
+  stanceW: number;
+  toeOut: number;
+  /** thoracic flexion + shoulder protraction (rounded, closed). */
+  slouch: number;
+  /** lumbar extension + shoulders back (open, presented). */
+  chest: number;
+  /** extra abduction: how far the arms hang clear of the ribs. */
+  armOut: number;
+  /** resting elbow flexion. Straight arms are the mannequin tell. */
+  elbow: number;
+  /** external rotation of the humerus. */
+  armTwist: number;
+  /** how differently the two arms hang. 0 = a shop dummy. */
+  asym: number;
+  breathRate: number;
+  breathDepth: number;
+  headRate: number;
+  headAmp: number;
+  headDown: number;
+  headTilt: number;
+  /** involuntary postural sway. Nobody is ever actually still. */
+  fidget: number;
+  /** how much of the legacy `look.idle` Euler bag still gets mixed in. */
+  biasW: number;
+  /** +1 = the left foot leads the fighting stance. */
+  lead: number;
+  /** how wide and how low the guard sits. */
+  guard: number;
+  /** key list into `GESTURES`. */
+  gestures: string[];
+  /** seconds between idle gestures, `[min, max]`. */
+  gestureGap: number[];
+}
+
 /** Neutral body. Every character starts from this and overrides what differs. */
-export const POSTURE_DEFAULTS = {
+export const POSTURE_DEFAULTS: Posture = {
   // --- weight ------------------------------------------------------------
   /** signed rest bias; >0 = the left leg carries. */
   weight: 0,
@@ -77,7 +122,7 @@ export const POSTURE_DEFAULTS = {
  * Per-character posture. The brief for each is one sentence of body language;
  * everything below it is that sentence, in numbers.
  */
-export const POSTURE = {
+export const POSTURE: Record<string, Partial<Posture>> = {
   // Bored royalty: hip-parked, shoulders rolled forward, chin down and turned
   // away from whoever is talking to him.
   noctis: {
@@ -152,7 +197,29 @@ export const POSTURE = {
  *   `spine`/`neck`/`head` [x,y,z] on the body, y and z mirrored with the side
  *   `dur`    total length; `hold` is the fraction spent at full amplitude
  */
-export const GESTURES = {
+/**
+ * One idle gesture. Every limb field is optional: a gesture drives only the
+ * joints it is about, and `Anim.evalGesture` skips the rest.
+ */
+export interface Gesture {
+  /** total length in seconds. */
+  dur: number;
+  /** fraction of `dur` spent at full amplitude (default 0.35). */
+  hold?: number;
+  /** `[x, y, z]` on the off-hand side; y and z are mirrored with the side. */
+  clav?: number[];
+  arm?: number[];
+  /** flexion in radians, applied as −x on the forearm. */
+  elbow?: number;
+  wrist?: number[];
+  /** extra finger curl. */
+  fingers?: number;
+  spine?: number[];
+  neck?: number[];
+  head?: number[];
+}
+
+export const GESTURES: Record<string, Gesture> = {
   /** Hand into the trouser pocket and left there for a beat. */
   pocket: {
     dur: 3.4, hold: 0.55,
@@ -216,6 +283,6 @@ export const GESTURES = {
  * @param key `noctis` | `gladio` | `ignis` | `prompto`
  * @returns a complete posture descriptor
  */
-export function resolvePosture(key: string): any {
-  return { ...POSTURE_DEFAULTS, ...(POSTURE[key as keyof typeof POSTURE] || {}) };
+export function resolvePosture(key: string): Posture {
+  return { ...POSTURE_DEFAULTS, ...(POSTURE[key] || {}) };
 }

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
-import { PartBuilder } from './PartBuilder.ts';
+import type { Ecology } from '../veg/Ecology.ts';
+import type { EcoSite, RoadsideSite } from './EcoSites.ts';
+import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import {
   rockMaterial, woodMaterial, rustMaterial, canvasClothMaterial,
   runeTexture, signTexture, glowMaterial, flameTexture,
@@ -19,7 +21,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
-function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -54,17 +56,66 @@ function block(seed: number, w: number, h: number, d: number, rough = 0.16) {
   return g;
 }
 
+/**
+ * The shared material set, built once by {@link Landmarks.build}. A function
+ * rather than a literal inside the class so {@link LandmarkMats} is the set
+ * itself rather than a parallel interface that can drift.
+ */
+function landmarkMaterials() {
+  return {
+    rock: rockMaterial(0x8d7663, 0.93, false),
+    pale: rockMaterial(0x9c8d78, 0.9, false),
+    wood: woodMaterial(0x7d674c),
+    dark: woodMaterial(0x4a3d30),
+    rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
+    steel: new THREE.MeshStandardMaterial({ color: 0x6a6d72, roughness: 0.55, metalness: 0.85 }),
+    cloth: canvasClothMaterial(0x36414c),
+    ceramic: new THREE.MeshStandardMaterial({ color: 0xd8d4c6, roughness: 0.35, metalness: 0 }),
+    wire: new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.7, metalness: 0.4 }),
+    ember: new THREE.MeshStandardMaterial({
+      color: 0x2a1208, emissive: 0xff5a12, emissiveIntensity: 3.2, roughness: 0.85,
+    }),
+    rune: new THREE.MeshBasicMaterial({
+      map: runeTexture(), transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, opacity: 0.85, side: THREE.DoubleSide,
+    }),
+    glyph: glowMaterial(0x86cfff, 1.6, 0x243038),
+    lantern: glowMaterial(0xffbe72, 2.0, 0x271a0c),
+    flame: new THREE.MeshBasicMaterial({
+      map: flameTexture(), transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, side: THREE.DoubleSide, opacity: 0.95, toneMapped: true,
+    }),
+    signA: new THREE.MeshStandardMaterial({ map: signTexture(0), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
+    signB: new THREE.MeshStandardMaterial({ map: signTexture(1), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
+  
+  };
+}
+
+/** Every material a landmark builder can ask for. */
+export type LandmarkMats = ReturnType<typeof landmarkMaterials>;
+
+/**
+ * A light the day/night ramp drives. `kind` picks which ramp: the campfire is
+ * always lit and only *matters* after dark, a lantern is off in daylight.
+ */
+interface LandmarkLight {
+  light: THREE.PointLight;
+  kind: 'fire' | 'lantern';
+  /** Intensity at full strength, before the ramp and the flicker. */
+  base: number;
+}
+
 export class Landmarks {
   B!: PartBuilder;
-  eco!: any;
+  eco!: Ecology;
   flames!: THREE.Group;
   havenTop!: number;
-  lights!: any[];
-  mats!: any;
+  lights!: LandmarkLight[];
+  mats!: LandmarkMats;
   root!: THREE.Group;
-  runeMesh!: any;
-  scene!: any;
-  constructor(eco: any, scene: any) {
+  runeMesh!: THREE.Mesh;
+  scene!: THREE.Scene;
+  constructor(eco: Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
     this.root = new THREE.Group();
@@ -74,32 +125,7 @@ export class Landmarks {
 
   build() {
     const eco = this.eco;
-    this.mats = {
-      rock: rockMaterial(0x8d7663, 0.93, false),
-      pale: rockMaterial(0x9c8d78, 0.9, false),
-      wood: woodMaterial(0x7d674c),
-      dark: woodMaterial(0x4a3d30),
-      rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
-      steel: new THREE.MeshStandardMaterial({ color: 0x6a6d72, roughness: 0.55, metalness: 0.85 }),
-      cloth: canvasClothMaterial(0x36414c),
-      ceramic: new THREE.MeshStandardMaterial({ color: 0xd8d4c6, roughness: 0.35, metalness: 0 }),
-      wire: new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.7, metalness: 0.4 }),
-      ember: new THREE.MeshStandardMaterial({
-        color: 0x2a1208, emissive: 0xff5a12, emissiveIntensity: 3.2, roughness: 0.85,
-      }),
-      rune: new THREE.MeshBasicMaterial({
-        map: runeTexture(), transparent: true, blending: THREE.AdditiveBlending,
-        depthWrite: false, opacity: 0.85, side: THREE.DoubleSide,
-      }),
-      glyph: glowMaterial(0x86cfff, 1.6, 0x243038),
-      lantern: glowMaterial(0xffbe72, 2.0, 0x271a0c),
-      flame: new THREE.MeshBasicMaterial({
-        map: flameTexture(), transparent: true, blending: THREE.AdditiveBlending,
-        depthWrite: false, side: THREE.DoubleSide, opacity: 0.95, toneMapped: true,
-      }),
-      signA: new THREE.MeshStandardMaterial({ map: signTexture(0), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
-      signB: new THREE.MeshStandardMaterial({ map: signTexture(1), roughness: 0.62, metalness: 0.1, side: THREE.DoubleSide }),
-    };
+    this.mats = landmarkMaterials();
     this.mats.rock.name = 'rock';
     this.mats.wood.name = 'wood';
 
@@ -122,7 +148,7 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ haven
 
-  _haven(B: PartBuilder, site: any) {
+  _haven(B: PartBuilder, site: EcoSite) {
     const eco = this.eco, M = this.mats;
     const rng = new Rng(9182);
     const cx = site.x, cz = site.z;
@@ -388,7 +414,7 @@ export class Landmarks {
 
   // ---------------------------------------------------------------- obelisk
 
-  _obelisk(B: PartBuilder, site: any) {
+  _obelisk(B: PartBuilder, site: EcoSite) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(1300 + Math.round(site.x));
     const h = site.tall || 20;
@@ -423,7 +449,7 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ shack
 
-  _shack(B: PartBuilder, site: any) {
+  _shack(B: PartBuilder, site: EcoSite) {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(2077);
     const cx = site.x, cz = site.z;
@@ -434,12 +460,12 @@ export class Landmarks {
     }
     const yaw = -0.35;
     const W = 5.4, D = 4.2, H = 2.9;
-    const T = (p: number[], r = [0, 0, 0], s: any) => {
+    const T = (p: Vec3, r: Vec3 = [0, 0, 0], s?: Vec3) => {
       const m = mat4([0, 0, 0], [0, yaw, 0]);
       return m.multiply(mat4(p, r, s));
     };
     const world = mat4([cx, base, cz]);
-    const put = (mat: THREE.Material, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(T(p, r, s)));
 
     // stumpy foundation piers
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -492,11 +518,11 @@ export class Landmarks {
 
   // ------------------------------------------------------------------ truck
 
-  _truck(B: PartBuilder, site: any) {
+  _truck(B: PartBuilder, site: EcoSite) {
     const M = this.mats, eco = this.eco;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, site.yaw || 0, 0.03]);
-    const put = (mat: THREE.Material, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // chassis + flatbed
     put(M.rust, new THREE.BoxGeometry(5.4, 0.22, 2.0), [0, 0.72, 0]);
@@ -530,14 +556,14 @@ export class Landmarks {
 
   // ------------------------------------------------------------------- sign
 
-  _sign(B: PartBuilder, site: any) {
+  _sign(B: PartBuilder, site: RoadsideSite) {
     const M = this.mats, eco = this.eco;
     const z = site.roadZ, side = site.side;
     const p = eco.roadPoint(z, side, 6.2, _v.clone());
     const t = eco.roadTangent(z);
     const yaw = Math.atan2(t.x, t.y) + (side > 0 ? Math.PI : 0);
     const world = mat4([p.x, p.y, p.z], [0, yaw, 0]);
-    const put = (mat: THREE.Material, geo: any, pp: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pp: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pp, r, s)));
     const kind = z > 0 ? M.signA : M.signB;
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [-0.9, 1.75, 0]);
     put(M.steel, new THREE.CylinderGeometry(0.065, 0.075, 3.5, 8), [0.9, 1.75, 0]);
@@ -633,7 +659,7 @@ export class Landmarks {
     ];
     for (const run of runs) {
       const n = Math.round((run.z1 - run.z0) / 3.1);
-      let prev: any = null;
+      let prev: THREE.Vector3 | null = null;
       for (let i = 0; i <= n; i++) {
         const z = run.z0 + (run.z1 - run.z0) * (i / n);
         const p = eco.roadPoint(z, run.side, run.off, new THREE.Vector3());

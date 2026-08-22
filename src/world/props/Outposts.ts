@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder } from './PartBuilder.ts';
+import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import {
   rockMaterial, woodMaterial, rustMaterial, concreteMaterial, paintedMaterial,
   magitekMaterial, glowMaterial, canvasClothMaterial, imperialTexture, signTexture,
 } from './PropMaterials.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import type { EcoSite } from './EcoSites.ts';
 
 /**
  * The built world between the landmarks: a fuel stop, an imperial roadblock,
@@ -24,7 +25,7 @@ import type { Ecology } from '../veg/Ecology.ts';
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -33,9 +34,22 @@ function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
   );
 }
 
+/** The proportions of a lattice tower. `bays` and `leg` have sane defaults. */
+interface LatticeSpec {
+  /** Total height, metres. */
+  height: number;
+  /** Width across the legs at the foot, and at the top. */
+  baseW: number;
+  topW: number;
+  /** How many stacked bays the taper is divided into. */
+  bays?: number;
+  /** Leg section, metres square. */
+  leg?: number;
+}
+
 /** Four-leg lattice tower: legs, X-bracing, horizontal belts. */
-function lattice(B: any, mat: any, world: THREE.Matrix4, { height, baseW, topW, bays = 6, leg = 0.11 }: any) {
-  const put = (geo: THREE.BoxGeometry, p: number[], r?: number[]) => B.add(mat, geo, world.clone().multiply(mat4(p, r)));
+function lattice(B: PartBuilder, mat: THREE.Material, world: THREE.Matrix4, { height, baseW, topW, bays = 6, leg = 0.11 }: LatticeSpec) {
+  const put = (geo: THREE.BoxGeometry, p: Vec3, r?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r)));
   const wAt = (t: number) => baseW + (topW - baseW) * t;
   for (let i = 0; i < bays; i++) {
     const t0 = i / bays, t1 = (i + 1) / bays;
@@ -70,15 +84,78 @@ function lattice(B: any, mat: any, world: THREE.Matrix4, { height, baseW, topW, 
   }
 }
 
+/**
+ * The shared material set, built once by {@link Outposts.build}. A function
+ * rather than a literal inside the class so {@link OutpostMats} is the set
+ * itself and cannot drift from a parallel interface.
+ */
+function outpostMaterials() {
+  return {
+    rock: rockMaterial(0x8d7663, 0.93, false),
+    pale: rockMaterial(0xa2967e, 0.9, false),
+    wood: woodMaterial(0x7d674c),
+    dark: woodMaterial(0x4a3d30),
+    rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
+    steel: paintedMaterial(0x8b9095, 0.5, 0.8),
+    cream: paintedMaterial(0xcfc4a8, 0.6, 0.1),
+    red: paintedMaterial(0x8f2b22, 0.55, 0.3),
+    concrete: concreteMaterial(0x9d9689, 0.93),
+    magitek: magitekMaterial(0x2b2f36),
+    cloth: canvasClothMaterial(0x3d4148),
+    glass: new THREE.MeshStandardMaterial({ color: 0x1a2228, roughness: 0.12, metalness: 0.3 }),
+    lamp: glowMaterial(0xfff0c8, 0.4, 0x141310),
+    hot: glowMaterial(0xff3a18, 1.6, 0x180604),
+    banner: new THREE.MeshStandardMaterial({
+      map: imperialTexture(), roughness: 0.8, metalness: 0, side: THREE.DoubleSide,
+    }),
+    sign: new THREE.MeshStandardMaterial({
+      map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
+    }),
+  };
+}
+
+/** Every material an outpost builder can ask for. */
+export type OutpostMats = ReturnType<typeof outpostMaterials>;
+
+/** A point light the day/night ramp drives. */
+interface OutpostLight {
+  light: THREE.PointLight;
+  /** Intensity after dark. */
+  night: number;
+  /** Intensity by day; absent means off. */
+  day?: number;
+  /** Whether to add the campfire flicker on top. */
+  flicker?: boolean;
+}
+
+/** One site's merged group, and whether it is close enough to earn a cascade. */
+interface OutpostGroup {
+  group: THREE.Group;
+  pos: THREE.Vector3;
+  /** Whether this site type is ever allowed to cast. */
+  cast: boolean;
+  /** Whether it is casting right now; unset until the first distance test. */
+  casting?: boolean;
+}
+
+/** Something that turns forever: the wind pump wheel. */
+interface Spinner { obj: THREE.Object3D; rate: number }
+
 export class Outposts {
-  crash!: any;
+  /**
+   * Where the dropship went in, for anything that wants to smoke over it.
+   *
+   * **Nothing reads this.** `Wildlife` finds the crash by asking `eco.sites`
+   * for the `crashsite` again rather than through here.
+   */
+  crash?: { x: number, y: number, z: number };
   eco!: Ecology;
-  groups!: any[];
-  lights!: any[];
-  mats!: any;
+  groups!: OutpostGroup[];
+  lights!: OutpostLight[];
+  mats!: OutpostMats;
   root!: THREE.Group;
   scene!: THREE.Scene;
-  spinners!: any[];
+  spinners!: Spinner[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;
@@ -90,30 +167,8 @@ export class Outposts {
   }
 
   build() {
-    const M = this.mats = {
-      rock: rockMaterial(0x8d7663, 0.93, false),
-      pale: rockMaterial(0xa2967e, 0.9, false),
-      wood: woodMaterial(0x7d674c),
-      dark: woodMaterial(0x4a3d30),
-      rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
-      steel: paintedMaterial(0x8b9095, 0.5, 0.8),
-      cream: paintedMaterial(0xcfc4a8, 0.6, 0.1),
-      red: paintedMaterial(0x8f2b22, 0.55, 0.3),
-      concrete: concreteMaterial(0x9d9689, 0.93),
-      magitek: magitekMaterial(0x2b2f36),
-      cloth: canvasClothMaterial(0x3d4148),
-      glass: new THREE.MeshStandardMaterial({ color: 0x1a2228, roughness: 0.12, metalness: 0.3 }),
-      lamp: glowMaterial(0xfff0c8, 0.4, 0x141310),
-      hot: glowMaterial(0xff3a18, 1.6, 0x180604),
-      banner: new THREE.MeshStandardMaterial({
-        map: imperialTexture(), roughness: 0.8, metalness: 0, side: THREE.DoubleSide,
-      }),
-      sign: new THREE.MeshStandardMaterial({
-        map: signTexture(0), roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide,
-      }),
-    };
-    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `out_${k}`;
-
+    const M = this.mats = outpostMaterials();
+    for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `out_${k}`;
     // One builder *per site*, not one for the whole world. A single merged
     // mesh spanning a kilometre has a kilometre-wide bounding sphere and is
     // therefore drawn in every frame and every shadow cascade; per-site groups
@@ -153,13 +208,13 @@ export class Outposts {
   // -------------------------------------------------------------- rest stop
 
   /** Fuel canopy, shop, pylon sign — the one lit thing on this road at night. */
-  _restStop(B: any, site: any) {
+  _restStop(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(1701);
     const base = this._base(site.x, site.z, 12);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // forecourt slab
     put(M.concrete, new THREE.BoxGeometry(20, 0.3, 15), [0, 0.12, 0]);
@@ -228,13 +283,13 @@ export class Outposts {
   // --------------------------------------------------------------- blockade
 
   /** Niflheim roadblock: barriers, boom, floodlights and a standing walker. */
-  _blockade(B: any, site: any) {
+  _blockade(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(4499);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const base = this._base(site.x, site.z, 8);
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // staggered jersey barriers forcing a chicane
     const jersey = new THREE.BoxGeometry(3.0, 0.95, 0.62);
@@ -293,9 +348,9 @@ export class Outposts {
   }
 
   /** Bipedal magitek armour: reverse-jointed legs, slab torso, one red eye. */
-  _walker(B: any, world: THREE.Matrix4) {
+  _walker(this: Outposts, B: PartBuilder, world: THREE.Matrix4) {
     const M = this.mats;
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
     for (const s of [-1, 1]) {
       put(M.magitek, new THREE.BoxGeometry(0.42, 1.5, 0.5), [s * 0.55, 2.35, 0.15], [0.35, 0, 0]);
       put(M.magitek, new THREE.BoxGeometry(0.36, 1.6, 0.42), [s * 0.55, 1.28, -0.28], [-0.42, 0, 0]);
@@ -315,12 +370,12 @@ export class Outposts {
   // ------------------------------------------------------------------ layby
 
   /** Gravel pull-in with a bus shelter, a bin and a noticeboard. */
-  _layby(B: any, site: any) {
+  _layby(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const base = this._base(site.x, site.z, 6);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     put(M.concrete, new THREE.BoxGeometry(11, 0.22, 5), [0, 0.09, 0]);
     for (const sx of [-1, 1]) {
@@ -340,13 +395,13 @@ export class Outposts {
   // ------------------------------------------------------------------ wreck
 
   /** A burnt-out sedan (kind 0) or an overturned hauler (kind 1). */
-  _wreck(B: any, site: any) {
+  _wreck(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(920 + (site.kind || 0) * 37);
     const y = this.eco.height(site.x, site.z);
     const yaw = (site.yaw || 0) + (site.kind ? 1.1 : 0.35);
     const world = mat4([site.x, y, site.z], [0, yaw, site.kind ? 0.9 : 0.02]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     if (!site.kind) {
       put(M.rust, new THREE.BoxGeometry(4.2, 0.5, 1.75), [0, 0.55, 0]);
@@ -384,14 +439,14 @@ export class Outposts {
   // -------------------------------------------------------------- crash site
 
   /** Magitek dropship down in the basin, broken-backed in its own furrow. */
-  _crashSite(B: any, site: any) {
+  _crashSite(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const eco = this.eco;
     const rng = new Rng(7373);
     const yaw = site.yaw || 0;
     const y = eco.height(site.x, site.z);
     const world = mat4([site.x, y, site.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, p: number[], r: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // forward hull, nose buried and tail up
     put(M.magitek, new THREE.BoxGeometry(15, 5.2, 8.6), [0, 1.6, 0], [0, 0, -0.22]);
@@ -436,12 +491,12 @@ export class Outposts {
   // ------------------------------------------------------------ mesa outpost
 
   /** Comms mast, containers and a truck at the foot of Blackrock Mesa. */
-  _mesaOutpost(B: any, site: any) {
+  _mesaOutpost(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(3030);
     const base = this._base(site.x, site.z, 10);
     const world = mat4([site.x, base, site.z], [0, 0.7, 0]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     put(M.concrete, new THREE.BoxGeometry(6, 0.5, 6), [0, 0.2, 0]);
     lattice(B, M.steel, world.clone().multiply(mat4([0, 0.4, 0])),
@@ -481,11 +536,11 @@ export class Outposts {
   // ----------------------------------------------------------- water tower
 
   /** Riveted tank on lattice legs — pure vertical scale next to the buttes. */
-  _waterTower(B: any, site: any) {
+  _waterTower(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const base = this._base(site.x, site.z, 6);
     const world = mat4([site.x, base, site.z], [0, 0.4, 0]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     lattice(B, M.steel, world, { height: 16, baseW: 5.2, topW: 3.4, bays: 4, leg: 0.15 });
     put(M.rust, new THREE.CylinderGeometry(3.4, 3.4, 6.2, 14), [0, 19.4, 0]);
@@ -505,7 +560,7 @@ export class Outposts {
   // ------------------------------------------------------------------ ruins
 
   /** A Solheim colonnade, half standing, half fallen into the scrub. */
-  _ruins(B: any, site: any) {
+  _ruins(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(6060);
     const eco = this.eco;
@@ -556,12 +611,12 @@ export class Outposts {
   // -------------------------------------------------------------- wind pump
 
   /** Farm windmill and stock pens: the sign that somebody worked this land. */
-  _windPump(B: any, site: any) {
+  _windPump(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(1515);
     const base = this._base(site.x, site.z, 5);
     const world = mat4([site.x, base, site.z]);
-    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     lattice(B, M.steel, world, { height: 11, baseW: 2.6, topW: 0.9, bays: 4, leg: 0.09 });
     put(M.steel, new THREE.BoxGeometry(0.6, 0.5, 0.6), [0, 11.2, 0]);

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { Noise } from '../../../util/Noise.ts';
 import { SurfaceBuilder, clamp, smoothstep } from './Build.ts';
-import type { Layout } from './Layout.ts';
-import type { InteriorMerger } from './Build.ts';
+import type {
+  Corridor, DungeonStyle, Layout, Opening, PathPoint, Platform, Ramp, Region, Room, WallSide,
+} from './Layout.ts';
+import type { AoFn, DisplaceFn, InteriorMerger } from './Build.ts';
 
 /**
  * Turns a {@link Layout} into interior geometry.
@@ -21,43 +23,91 @@ import type { InteriorMerger } from './Build.ts';
  * dungeon collapses to a handful of draw calls.
  */
 
-const STYLE = {
+/** Tessellation and displacement amounts, per style. Metres. */
+interface StyleParams {
+  /** Target quad edge length. */
+  cell: number;
+  /** Displacement amplitude on walls, floors and ceilings. */
+  wall: number;
+  floor: number;
+  ceil: number;
+  /** Metres of surface per texture tile. */
+  uv: number;
+}
+
+const STYLE: Record<DungeonStyle, StyleParams> = {
   bunker: { cell: 2.4, wall: 0.030, floor: 0.020, ceil: 0.035, uv: 3.2 },
   mine: { cell: 1.35, wall: 0.30, floor: 0.10, ceil: 0.38, uv: 4.6 },
   cave: { cell: 0.95, wall: 0.55, floor: 0.16, ceil: 0.60, uv: 4.4 },
 };
 
+/**
+ * A surface material, or a picker that chooses one per region — which is how a
+ * dungeon gives its boss chamber different rock from its corridors.
+ */
+export type MaterialPicker = THREE.Material | ((region: Region) => THREE.Material);
+
+/** Which of the three surfaces a material is being picked for. */
+export type SurfaceSlot = 'wallMat' | 'floorMat' | 'ceilMat';
+
+/** What `Dungeon.build()` hands the shell builder off the definition. */
+export interface ShellOptions {
+  seed?: number;
+  wallMat: MaterialPicker;
+  floorMat: MaterialPicker;
+  ceilMat: MaterialPicker;
+}
+
+/** One side of a box room or elbow square, in the frame the wall emitter wants. */
+interface SideFrame {
+  /** Corner the wall starts from, world space. */
+  o: number[];
+  /** Unit direction along the wall. */
+  u: number[];
+  /** Length along `u`, metres. */
+  len: number;
+  flip: boolean;
+}
+
+/** An {@link Opening} rebased so `u` starts at the wall's own corner. */
+interface LocalOpening {
+  u0: number; u1: number; v0: number; v1: number;
+}
+
+/** The three materials one region is being built from. */
+interface RegionMaterials {
+  wallMat: THREE.Material;
+  floorMat: THREE.Material;
+  ceilMat: THREE.Material;
+}
+
 export class ShellBuilder {
   L!: Layout;
-  _ao!: any;
+  _ao!: AoFn;
   n!: Noise;
-  opts!: any;
-  surfaces!: Map<any, any>;
-  /**
-   * @param opts
-   *        materials may be a single material or a `(region)=>material` picker
-   */
-  constructor(layout: import('./Layout.ts').Layout, opts: {seed?:number, wallMat:any, floorMat:any, ceilMat:any}) {
+  opts!: ShellOptions;
+  surfaces!: Map<THREE.Material, SurfaceBuilder>;
+  constructor(layout: Layout, opts: ShellOptions) {
     this.L = layout;
     this.opts = opts;
     this.n = new Noise(opts.seed || 4242);
-    /** @type {Map<object, SurfaceBuilder>} */
     this.surfaces = new Map();
     this._ao = (x: number, y: number, z: number) => layout.occlusion(x, y, z);
   }
 
-  sb(mat: any) {
-    if (!this.surfaces.has(mat)) this.surfaces.set(mat, new SurfaceBuilder());
-    return this.surfaces.get(mat);
+  sb(mat: THREE.Material): SurfaceBuilder {
+    let b = this.surfaces.get(mat);
+    if (!b) { b = new SurfaceBuilder(); this.surfaces.set(mat, b); }
+    return b;
   }
 
-  pick(which: string, region: any) {
+  pick(which: SurfaceSlot, region: Region): THREE.Material {
     const m = this.opts[which];
     return typeof m === 'function' ? m(region) : m;
   }
 
   /** Displacement field for a style, in metres along the surface normal. */
-  disp(style: any, amount: number, freq = 0.35) {
+  disp(style: DungeonStyle, amount: number, freq = 0.35): DisplaceFn | null {
     const n = this.n;
     if (amount <= 0.001) return null;
     return (x: number, y: number, z: number) => {
@@ -86,8 +136,8 @@ export class ShellBuilder {
   // ------------------------------------------------------------------ rooms
 
   /** A concrete or hewn box: floor, ceiling, four walls with doorways cut. */
-  boxRoom(r: any) {
-    const s = STYLE[r.style as keyof typeof STYLE] || STYLE.bunker;
+  boxRoom(r: Room) {
+    const s = STYLE[r.style];
     const wallMat = this.pick('wallMat', r);
     const floorMat = this.pick('floorMat', r);
     const ceilMat = this.pick('ceilMat', r);
@@ -117,14 +167,14 @@ export class ShellBuilder {
     for (const m of r.ramps) this.ramp(floorMat, m, r, s);
 
     // --- walls -------------------------------------------------------------
-    const sides = [
+    const sides: (SideFrame & { key: WallSide, base: number })[] = [
       { key: 'x-', o: [r.x - hx, r.y, r.z - hz], u: [0, 0, 1], len: r.d, flip: false, base: r.z - hz },
       { key: 'x+', o: [r.x + hx, r.y, r.z - hz], u: [0, 0, 1], len: r.d, flip: true, base: r.z - hz },
       { key: 'z-', o: [r.x - hx, r.y, r.z - hz], u: [1, 0, 0], len: r.w, flip: true, base: r.x - hx },
       { key: 'z+', o: [r.x - hx, r.y, r.z + hz], u: [1, 0, 0], len: r.w, flip: false, base: r.x - hx },
     ];
     for (const side of sides) {
-      const openings = r.openings.filter((o: any) => o.side === side.key).map((o: any) => ({
+      const openings = r.openings.filter((o) => o.side === side.key).map((o) => ({
         u0: o.u0 - side.base, u1: o.u1 - side.base, v0: o.v0, v1: o.v1,
       }));
       this.wall(wallMat, side, r.h, openings, s, r.style);
@@ -132,7 +182,7 @@ export class ShellBuilder {
   }
 
   /** A wall panel with rectangular doorways subtracted. */
-  wall(mat: any, side: any, height: number, openings: any, s: any, style: any) {
+  wall(mat: THREE.Material, side: SideFrame, height: number, openings: LocalOpening[], s: StyleParams, style: DungeonStyle) {
     const sb = this.sb(mat);
     const ao = this._ao;
     const disp = this.disp(style, s.wall, 0.4);
@@ -149,7 +199,7 @@ export class ShellBuilder {
         uvOffset: [u0 + side.o[0] + side.o[2], v0],
       });
     };
-    const ops = openings.slice().sort((a: any, b: any) => a.u0 - b.u0);
+    const ops = openings.slice().sort((a, b) => a.u0 - b.u0);
     let cursor = 0;
     for (const o of ops) {
       const u0 = clamp(o.u0, 0, side.len), u1 = clamp(o.u1, 0, side.len);
@@ -163,7 +213,7 @@ export class ShellBuilder {
   }
 
   /** A raised platform inside a room: top face plus four skirts. */
-  slab(topMat: any, sideMat: any, p: any, r: any, s: any) {
+  slab(topMat: THREE.Material, sideMat: THREE.Material, p: Platform, r: Room, s: StyleParams) {
     const hx = p.w * 0.5, hz = p.d * 0.5;
     const ao = this._ao;
     this.sb(topMat).patch({
@@ -172,7 +222,7 @@ export class ShellBuilder {
     });
     const drop = p.y - r.y;
     if (drop <= 0.02) return;
-    const sides = [
+    const sides: SideFrame[] = [
       { o: [p.x - hx, r.y, p.z - hz], u: [0, 0, 1], len: p.d, flip: true },
       { o: [p.x + hx, r.y, p.z - hz], u: [0, 0, 1], len: p.d, flip: false },
       { o: [p.x - hx, r.y, p.z - hz], u: [1, 0, 0], len: p.w, flip: false },
@@ -187,7 +237,7 @@ export class ShellBuilder {
   }
 
   /** A sloped walkway between two floor heights. */
-  ramp(mat: any, m: any, r: any, s: any) {
+  ramp(mat: THREE.Material, m: Ramp, r: Room, s: StyleParams) {
     const hx = m.w * 0.5, hz = m.d * 0.5;
     const ao = this._ao;
     const sb = this.sb(mat);
@@ -211,8 +261,8 @@ export class ShellBuilder {
   // -------------------------------------------------------------- corridors
 
   /** A square-section run with elbow patches at every corner. */
-  boxCorridor(c: any) {
-    const s = STYLE[c.style as keyof typeof STYLE] || STYLE.bunker;
+  boxCorridor(c: Corridor) {
+    const s = STYLE[c.style];
     const wallMat = this.pick('wallMat', c);
     const floorMat = this.pick('floorMat', c);
     const ceilMat = this.pick('ceilMat', c);
@@ -277,7 +327,7 @@ export class ShellBuilder {
   }
 
   /** The square where two corridor legs meet: floor, ceiling and two walls. */
-  elbow(c: any, p: any, inDir: number[], outDir: number[], s: any, mats: any, hw: number) {
+  elbow(c: Corridor, p: PathPoint, inDir: number[], outDir: number[], s: StyleParams, mats: RegionMaterials, hw: number) {
     const ao = this._ao;
     const y = p[2];
     this.sb(mats.floorMat).patch({
@@ -311,7 +361,7 @@ export class ShellBuilder {
   // ------------------------------------------------------------- cave forms
 
   /** A natural passage: an irregular swept tube you can stand up inside. */
-  caveTunnel(c: any) {
+  caveTunnel(c: Corridor) {
     const s = STYLE.cave;
     const mat = this.pick('wallMat', c);
     const floorMat = this.pick('floorMat', c);
@@ -323,7 +373,7 @@ export class ShellBuilder {
     // resample the polyline so the sweep bends instead of kinking
     const dense = resample(c.path, 1.4);
     const path = dense.map((p) => [p[0], p[2] + axisY, p[1]]);
-    this.sb(mat).tube(path, (t: number, th: number, x: number, y: number, z: number) => {
+    this.sb(mat).tube(path, (t, th, x, y, z) => {
       const bulge = 1 + 0.26 * n.fbm2(x * 0.14 + z * 0.10, y * 0.22 + th * 0.40, 3);
       const squeeze = 1 - 0.20 * Math.sin(t * Math.PI * 3.1 + 1.2);
       return r0 * bulge * squeeze * (1 + 0.07 * Math.sin(th * 3 + t * 9));
@@ -343,7 +393,7 @@ export class ShellBuilder {
         origin: [a[0] - right[0] * w * 0.5, a[2] - 0.02, a[1] - right[2] * w * 0.5],
         uAxis: [dir[0] / dl, dir[1] / dl, dir[2] / dl], vAxis: right,
         uLen: len * dl, vLen: w, cell: 1.1, uvScale: s.uv,
-        displace: (x: number, y: any, z: number) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
+        displace: (x, _y, z) => n.fbm2(x * 0.5, z * 0.5, 3) * 0.09, ao,
         uvOffset: [a[0], a[1]],
       });
     }
@@ -354,7 +404,7 @@ export class ShellBuilder {
    * also what the mine's bottom cavern uses — a hewn shaft never reads as
    * "vast", but a chamber whose walls fall away from you does.
    */
-  caveChamber(r: any) {
+  caveChamber(r: Room) {
     const mat = this.pick('wallMat', r);
     const floorMat = this.pick('floorMat', r);
     const n = this.n;
@@ -440,10 +490,8 @@ export class ShellBuilder {
     }
     sbF._needsNormals = true;
 
-    for (const p of r.platforms) {
-      this.slab(floorMat, mat, p, r, STYLE[r.style as keyof typeof STYLE] || STYLE.cave);
-    }
-    for (const m of r.ramps) this.ramp(floorMat, m, r, STYLE[r.style as keyof typeof STYLE] || STYLE.cave);
+    for (const p of r.platforms) this.slab(floorMat, mat, p, r, STYLE[r.style]);
+    for (const m of r.ramps) this.ramp(floorMat, m, r, STYLE[r.style]);
   }
 }
 
@@ -451,14 +499,14 @@ export class ShellBuilder {
  * Register a doorway on every room wall a corridor touches. Called once by the
  * dungeon before geometry is built.
  */
-export function cutDoorways(layout: import('./Layout.ts').Layout) {
+export function cutDoorways(layout: Layout) {
   for (const c of layout.corridors) {
     cutEnd(layout, c, c.a, c.path[0], c.path[1]);
     cutEnd(layout, c, c.b, c.path[c.path.length - 1], c.path[c.path.length - 2]);
   }
 }
 
-function cutEnd(layout: Layout, c: any, roomId: any, end: any, inner: any) {
+function cutEnd(layout: Layout, c: Corridor, roomId: string, end: PathPoint | undefined, inner: PathPoint | undefined) {
   const r = layout.rooms.get(roomId);
   if (!r || !end || !inner) return;
 
@@ -499,7 +547,7 @@ function cutEnd(layout: Layout, c: any, roomId: any, end: any, inner: any) {
 
 /* ---------------------------------------------------------------- helpers */
 
-function dirOf(a: any, b: any) {
+function dirOf(a: PathPoint, b: PathPoint) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   return Math.abs(dx) > Math.abs(dz) ? [Math.sign(dx), 0] : [0, Math.sign(dz)];
 }
@@ -511,8 +559,8 @@ function faceKey(d: number[], incoming: boolean) {
   return d[1] * s > 0 ? 'z+' : 'z-';
 }
 
-function resample(path: any, step: number) {
-  const out = [];
+function resample(path: PathPoint[], step: number): PathPoint[] {
+  const out: PathPoint[] = [];
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i], b = path[i + 1];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);

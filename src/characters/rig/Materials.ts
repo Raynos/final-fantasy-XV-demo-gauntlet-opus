@@ -35,7 +35,7 @@ export const SUN = {
 const _v = new THREE.Vector3();
 
 /** Push the current sun into the shared uniforms (call once per frame). */
-export function updateSun(sunLight: any, camera: any) {
+export function updateSun(sunLight: THREE.DirectionalLight | null, camera: THREE.Camera | null) {
   if (!sunLight || !camera) return;
   _v.copy(sunLight.position);
   if (sunLight.target) _v.sub(sunLight.target.position);
@@ -64,7 +64,37 @@ uniform float uSssAmt, uTrans;
  *
  * @param {Object} o
  * */
-function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, translucency?: number, hair?: any, cornea?: any } = {}) {
+/** Kajiya-Kay anisotropic highlight pair, aligned to the strand tangent. */
+interface HairSpec {
+  /** specular strength of the primary band. */
+  spec?: number;
+  /** how far the secondary band is shifted along the strand. */
+  shift?: number;
+  /** primary / secondary band exponents. */
+  exp1?: number;
+  exp2?: number;
+  /** how much of the hair's own hue the secondary band takes. */
+  tint?: number;
+}
+
+/** The explicit cornea glint that stops an eyeball reading as a marble. */
+interface CorneaSpec {
+  gloss?: number;
+  /** iris colour as a hex number; the shader generates the iris from it. */
+  iris?: number;
+}
+
+interface PatchOpts {
+  /** subsurface amount, 0 for none. */
+  sss?: number;
+  sssColor?: number;
+  /** back-scatter strength through thin parts. */
+  translucency?: number;
+  hair?: HairSpec | null;
+  cornea?: CorneaSpec | null;
+}
+
+function patch(mat: THREE.Material, o: PatchOpts = {}) {
   const { sss = 0, sssColor = 0xff5b3a, translucency = 0.5, hair = null, cornea = null } = o;
   mat.defines = mat.defines || {};
   mat.userData.sss = sss;
@@ -196,10 +226,8 @@ function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, transl
     }
 
     if (cornea) {
-      const { gloss = 1.0, iris = '#3f6f9c' } = cornea;
-      const c = new THREE.Color().setHex(
-        typeof iris === 'number' ? iris : 0x3f6f9c, THREE.SRGBColorSpace
-      );
+      const { gloss = 1.0, iris = 0x3f6f9c } = cornea;
+      const c = new THREE.Color().setHex(iris, THREE.SRGBColorSpace);
       // The iris is generated in the shader from the eyeball's azimuthal UV
       // rather than sampled from a map. A polar-mapped eye texture is a trap:
       // the UV derivative is unbounded at the pole, which is precisely where
@@ -291,8 +319,16 @@ function patch(mat: THREE.Material, o: { sss?: number, sssColor?: number, transl
   return mat;
 }
 
-let _cache: any = null;
-function cache() {
+let _cache: MaterialTextures | null = null;
+/** The shared procedural maps every character material samples. */
+interface MaterialTextures {
+  pore: THREE.Texture;
+  poreFine: THREE.Texture;
+  weave: THREE.Texture;
+  hairStripe: THREE.Texture;
+}
+
+function cache(): MaterialTextures {
   if (_cache) return _cache;
   const n = new Noise(4242);
 
@@ -315,7 +351,7 @@ function cache() {
   weave.repeat.set(9, 14);
 
   // strand value break-up along the hair ribbon: dark gaps between filaments
-  const hairStripe = makeTexture(128, (u: number, v: number, c: any) => {
+  const hairStripe = makeTexture(128, (u: number, v: number, c: number[]) => {
     // u runs across the ribbon (0 and 1 are the two silhouette edges, 0.5 the
     // crest), v along its length
     const across = Math.abs(u - 0.5) * 2;
@@ -370,7 +406,7 @@ export function skinMaterial() {
 }
 
 /** Per-character face material — carries the painted face map. */
-export function faceMaterial(map: any, sss = 0.16) {
+export function faceMaterial(map: THREE.Texture, sss = 0.16) {
   const c = cache();
   return patch(new THREE.MeshPhysicalMaterial({
     map,
@@ -430,7 +466,7 @@ export function hairMaterial() {
 }
 
 /** Eyeball material: painted iris + sclera, with an explicit cornea glint. */
-export function eyeMaterial(iris: any) {
+export function eyeMaterial(iris: number) {
   const m = new THREE.MeshPhysicalMaterial({
     vertexColors: true,
     roughness: 0.30,
@@ -473,7 +509,7 @@ export function lensMaterial() {
 export function contactShadowMaterial() {
   // MultiplyBlending ignores alpha, so the falloff has to live in the RGB:
   // white at the rim leaves the ground untouched, dark at the centre bites.
-  const tex = makeTexture(64, (u: number, v: number, c: any) => {
+  const tex = makeTexture(64, (u: number, v: number, c: number[]) => {
     const d = Math.hypot(u - 0.5, v - 0.5) * 2;
     const k = Math.pow(Math.max(0, 1 - d), 1.8) * 0.66;
     c[0] = 1 - k;

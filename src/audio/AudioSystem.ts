@@ -1,13 +1,19 @@
 import * as THREE from 'three';
 import { AudioGraph, BUSES } from './Graph.ts';
-import type { AcousticSpace } from './Graph.ts';
+import type { AcousticSpace, BusName, MixBus, Vec3 } from './Graph.ts';
 import type { WeatherName } from '../world/Weather.ts';
 import { Instruments } from './Instruments.ts';
 import { Score } from './Score.ts';
 import { Sfx } from './Sfx.ts';
+import type { PlayOpts } from './Sfx.ts';
 import { Ambience } from './Ambience.ts';
 import { clamp } from './Dsp.ts';
+import type { MusicStateName } from './Themes.ts';
 import type { Game } from '../game/Game.ts';
+import type { CombatEventName, CombatEvents } from '../combat/CombatEvents.ts';
+import type { Enemy } from '../characters/enemies/EnemyBase.ts';
+import type { Enemies } from '../characters/Enemies.ts';
+import type { Player } from '../characters/Player.ts';
 
 /**
  * The weather beds the mix knows how to lay down.
@@ -17,6 +23,42 @@ import type { Game } from '../game/Game.ts';
  * it is a superset, `Weather.name` flows straight in.
  */
 export type AudioWeather = WeatherName | 'rain';
+
+/**
+ * What a scripted offline session is handed. The whole stack is built against
+ * the offline context, so the script drives the same objects the live game
+ * does -- there is no second, simplified rendering path to drift from.
+ */
+export interface OfflineSession {
+  ctx: OfflineAudioContext;
+  graph: AudioGraph;
+  inst: Instruments;
+  sfx: Sfx;
+  amb: Ambience;
+  score: Score;
+  /** Length of the session. */
+  seconds: number;
+}
+
+/**
+ * What `AudioSystem.stats()` reports.
+ *
+ * A union rather than a bag of optionals: before the first gesture there is no
+ * context, no graph and no numbers to report, and `enabled` is the discriminant
+ * that says so -- so a reader has to answer "did it boot?" before it can read a
+ * voice count that would otherwise be quietly undefined.
+ */
+export type AudioStats =
+  | { enabled: false }
+  | ({ enabled: true, cpuMs: number, musicState: MusicStateName } & SessionStats);
+
+/** Everything the verification harness measures a rendered session by. */
+export interface SessionStats {
+  graph: ReturnType<AudioGraph['stats']>;
+  score: ReturnType<Score['stats']>;
+  sfx: ReturnType<Sfx['stats']>;
+  ambience: ReturnType<Ambience['stats']>;
+}
 
 /**
  * Audio.
@@ -41,16 +83,20 @@ export type AudioWeather = WeatherName | 'rain';
  * which is what the offline verification harness uses.
  */
 export class AudioSystem {
-  _userVolume!: any;
+  /** User-facing 0..1 volume per bus, master included. */
+  _userVolume!: Record<BusName, number>;
   _volume!: number;
-  state!: string;
+  state!: MusicStateName;
   _camping!: boolean;
   _encounterKills!: number;
-  _enemyState!: Map<any, any>;
-  _enemyStride!: Map<any, any>;
-  _lastMenu!: any;
-  _matCache!: Map<any, any>;
-  _musicState!: string;
+  /** Last state we made a noise about, per enemy. */
+  _enemyState!: Map<Enemy, string>;
+  /** Stride phase, per enemy, so heavy things are heard walking. */
+  _enemyStride!: Map<Enemy, number>;
+  _lastMenu!: string | null;
+  /** Terrain material name on a 3 m grid, keyed `<cellX>,<cellZ>`. */
+  _matCache!: Map<string, string>;
+  _musicState!: MusicStateName;
   _probeTimer!: number;
   _scoreSuspended!: boolean;
   _stride!: number;
@@ -93,8 +139,10 @@ export class AudioSystem {
     this.cpuMs = 0;
     this._musicState = 'field';
     this._camping = false;
-    /** @type {Record<string, number>} user-facing volume per bus, 0..1 */
-    this._userVolume = { music: 1, sfx: 1, amb: 1, ui: 1, voice: 1 };
+    // `master` is listed here for the same reason the others are: `volumeOf`
+    // is total, so nothing downstream has to guess what a missing bus means.
+    this._userVolume = { master: 1, music: 1, sfx: 1, amb: 1, ui: 1, voice: 1 };
+    this._volume = 1;
 
     if (this.headless) return;
     if (forced) { this._boot(); return; }
@@ -153,11 +201,17 @@ export class AudioSystem {
    * needs a line of code added to make the game audible.
    */
   _wireEvents() {
-    const on = (name: string, fn: any) => window.addEventListener(`combat:${name}`, (e: any) => {
-      try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
-    });
+    // `CombatEvents` is the emitting side's contract, so subscribing through it
+    // is what makes `d.blindside` and `d.hp` real rather than a guess. The
+    // `instanceof` is a narrow, not an assertion: `emit` always dispatches a
+    // CustomEvent, and this is where that becomes a typed payload.
+    const on = <K extends CombatEventName>(name: K, fn: (d: CombatEvents[K]) => void) =>
+      window.addEventListener(`combat:${name}`, (e) => {
+        if (!(e instanceof CustomEvent)) return;
+        try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
+      });
 
-    on('combo', (d: any) => {
+    on('combo', (d) => {
       const kind = d.weapon || 'sword';
       if (kind === 'firearm') return;                 // the shot is the sound
       this.sfx.play(`swing:${kind}`, this._playerPos(), { volume: 0.85 });
@@ -165,14 +219,14 @@ export class AudioSystem {
       if (d.index > 0) this.sfx.play('combo', null, { index: d.index });
     });
 
-    on('hit', (d: any) => {
+    on('hit', (d) => {
       const mat = this._enemyMaterial(d.enemy);
       this.sfx.play(`impact:${mat}`, d.position, {
         hrtf: true, scale: d.blindside ? 1.45 : 1.0, crit: !!d.blindside, volume: 0.95,
       });
     });
 
-    on('damage', (d: any) => {
+    on('damage', (d) => {
       if (d.killed) return;                            // the death cue covers it
       const key = this._speciesOf(d.enemy);
       if (key && this.sfx.rng() < 0.55) {
@@ -181,7 +235,7 @@ export class AudioSystem {
       if (d.crit) this.graph.duck(0.78, 0.06, 0.28);
     });
 
-    on('death', (d: any) => {
+    on('death', (d) => {
       this._encounterKills++;
       const key = this._speciesOf(d.enemy);
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
@@ -190,23 +244,23 @@ export class AudioSystem {
       if (d.enemy) this._enemyState.delete(d.enemy);
     });
 
-    on('stagger', (d: any) => {
+    on('stagger', (d) => {
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
       this.sfx.play('stagger', at, { volume: 0.9 });
     });
 
-    on('parry', (d: any) => {
+    on('parry', (d) => {
       this.sfx.play('parry', d.position, { hrtf: true, volume: 1.0 });
       this.score.setFilter(1400, 0.08);
       setTimeout(() => this.score.setFilter(20000, 0.5), 620);
     });
 
-    on('warp', (d: any) => {
+    on('warp', (d) => {
       if (d.phase === 'impact') this.sfx.play('warp:impact', d.to, { hrtf: true });
       else this.sfx.play('warp:start', d.from, { hrtf: true });
     });
 
-    on('link', (d: any) => {
+    on('link', (d) => {
       const at = d.enemy && d.enemy.centre ? d.enemy.centre() : null;
       this.sfx.play('link', at, { volume: 0.95 });
     });
@@ -216,40 +270,48 @@ export class AudioSystem {
       this.score.setIntensity(1);
     });
 
-    on('spell', (d: any) => {
+    on('spell', (d) => {
       this.sfx.play(`spell:${d.element || 'fire'}`, d.position, { hrtf: true });
     });
 
-    on('playerHit', (d: any) => {
+    on('playerHit', (d) => {
       this.sfx.play('grunt', null, {});
       this.sfx.play('impact:flesh', d.position, { scale: 1.2, volume: 0.9 });
       if (d.hp <= 0) this.sfx.play('death', null, {});
     });
 
-    on('mp', (d: any) => { if (d.stasis) this.sfx.play('stasis', null, {}); });
-    on('lockon', (d: any) => { if (d.enemy) this.sfx.play('lockon', null, {}); });
+    on('mp', (d) => { if (d.stasis) this.sfx.play('stasis', null, {}); });
+    on('lockon', (d) => { if (d.enemy) this.sfx.play('lockon', null, {}); });
 
-    // Events the combat system does not emit yet. Each is a one-line `emit()`
-    // at the matching call site; until then these listeners simply never fire.
-    on('materialise', (d: any) => this.sfx.play('materialise', d.position || this._playerPos(), {}));
-    on('shot', (d: any) => this.sfx.play('gunshot', d.position, { hrtf: true }));
+    on('materialise', (d) => this.sfx.play('materialise', d.position || this._playerPos(), {}));
+    on('shot', (d) => this.sfx.play('gunshot', d.position, { hrtf: true }));
     on('dodge', () => {
       this.sfx.play('cloth', null, { volume: 1.1 });
       this.sfx.play('step:dirt', null, { run: true, volume: 0.7 });
     });
-    on('armigerHit', (d: any) => this.sfx.play('armigerHit', d.position, {}));
+    // `armigerHit` is the one cue nothing emits: it is not in `CombatEvents`
+    // and no `emit()` in the tree names it, so this listener has never fired
+    // and `Sfx.armigerHit` has only ever been heard through the offline render.
+    // Left wired, and subscribed to the raw event because the map does not know
+    // the name; the fix is one `emit('armigerHit', {position})` in the armiger
+    // burst plus an entry in `CombatEvents`.
+    window.addEventListener('combat:armigerHit', (e) => {
+      if (!(e instanceof CustomEvent)) return;
+      try { this.sfx.play('armigerHit', e.detail && e.detail.position, {}); }
+      catch (err) { console.error('[audio]', 'armigerHit', err); }
+    });
 
     /* ---- RPG: level ups, quests, loot -------------------------------- */
-    const rpg = this.game && this.game.get('Rpg');
-    if (rpg && rpg.on) {
+    const rpg = this.game.get('Rpg');
+    if (rpg) {
       rpg.on('level-up', () => this.sfx.play('levelup', null, {}));
-      rpg.on('quest-updated', (p: any) => {
+      rpg.on('quest-updated', (p?: { phase?: string }) => {
         if (p && (p.phase === 'complete' || p.phase === 'accepted' || p.phase === 'objective')) {
           this.sfx.play('quest', null, {});
         }
       });
       rpg.on('item-gained', () => this.sfx.play('item', null, {}));
-      rpg.on('gil-changed', (p: any) => { if (p && p.delta > 0) this.sfx.play('ui:move', null, {}); });
+      rpg.on('gil-changed', (p?: { delta: number }) => { if (p && p.delta > 0) this.sfx.play('ui:move', null, {}); });
       rpg.on('rested', () => { this._camping = false; this.sfx.play('quest', null, {}); });
       rpg.on('game-saved', () => this.sfx.play('ui:confirm', null, {}));
     }
@@ -277,7 +339,7 @@ export class AudioSystem {
     // the same keys and only speak when a screen is actually open.
     window.addEventListener('keydown', (e) => {
       if (!this.enabled) return;
-      const menus = this.game && this.game.get('Menus');
+      const menus = this.game.get('Menus');
       const open = !!(menus && menus.name);
       if (!open) return;
       if (e.code.startsWith('Arrow') || e.code === 'KeyW' || e.code === 'KeyA'
@@ -300,9 +362,8 @@ export class AudioSystem {
    *   `thunder`, plus the legacy short names `hit` / `swing` / `warp` / `step` /
    *   `magic` / `ui` / `parry`.
    * @param [pos] world position, omit for 2D
-   * @param [opts] {volume, hrtf, scale, distance, at}
    */
-  play(name: string, pos?: {x:number,y:number,z:number}, opts: any = {}) {
+  play(name: string, pos?: Vec3 | null, opts: PlayOpts = {}) {
     if (!this.enabled || !this.sfx) return false;
     return this.sfx.play(name, pos, opts);
   }
@@ -311,7 +372,7 @@ export class AudioSystem {
    * Force the music state. The game normally picks this itself from combat and
    * the clock; call it for scripted moments.
    */
-  setState(s: 'field' | 'night' | 'tension' | 'combat' | 'boss' | 'camp' | 'victory' | 'silence') {
+  setState(s: MusicStateName) {
     this.state = s;
     if (!this.enabled) return;
     this._musicState = s;
@@ -347,26 +408,26 @@ export class AudioSystem {
   /**
    * @param v 0..1
    */
-  setVolume(bus: 'master' | 'music' | 'sfx' | 'amb' | 'ui' | 'voice', v: number) {
+  setVolume(bus: BusName, v: number) {
     this._userVolume[bus] = clamp(v, 0, 1);
     if (this.graph) this.graph.setVolume(bus, this._userVolume[bus]);
   }
 
   /** Current user setting for a bus, 0..1. */
-  volumeOf(bus: string) { return this._userVolume[bus] ?? 1; }
+  volumeOf(bus: BusName) { return this._userVolume[bus]; }
 
   setMuted(on?: boolean) { return this.graph ? this.graph.setMuted(on) : false; }
 
   /** Master volume, 0..1. */
-  get volume() { return this._volume ?? 1; }
+  get volume() { return this._volume; }
 
   _nudgeVolume(d: number) {
-    this._volume = clamp((this._volume ?? 1) + d, 0, 1);
+    this._volume = clamp(this._volume + d, 0, 1);
     this.graph.setVolume('master', this._volume);
     this.sfx.play('ui:move', null, {});
   }
 
-  get buses(): string[] { return BUSES.slice(); }
+  get buses(): MixBus[] { return BUSES.slice(); }
 
   /**
    * The live AudioContext, or null before the first gesture unlocks it.
@@ -380,7 +441,7 @@ export class AudioSystem {
    * A bus to route an external source into, so it inherits the mix: ducking,
    * the glue compressor, the limiter and the user's volume sliders.
    */
-  busNode(name: 'music' | 'sfx' | 'amb' | 'ui' | 'voice' = 'music'): GainNode | null { return this.graph ? this.graph.bus[name] || null : null; }
+  busNode(name: MixBus = 'music'): GainNode | null { return this.graph ? this.graph.bus[name] : null; }
 
   /**
    * Hand the music over to something else (the car radio) and take it back.
@@ -396,7 +457,7 @@ export class AudioSystem {
   setSpace(name: AcousticSpace) { if (this.graph) this.graph.setSpace(name); }
 
   /** Everything the verification harness and the debug overlay want. */
-  stats() {
+  stats(): AudioStats {
     if (!this.enabled) return { enabled: false };
     return {
       enabled: true,
@@ -460,7 +521,7 @@ export class AudioSystem {
     const player = game.get('Player');
 
     // Menus muffle the score rather than replacing it.
-    const menu = menus && menus.name;
+    const menu = menus ? menus.name : null;
     if (menu !== this._lastMenu) {
       if (menu && !this._lastMenu) this.sfx.play('ui:open', null, {});
       else if (!menu && this._lastMenu) this.sfx.play('ui:close', null, {});
@@ -487,7 +548,7 @@ export class AudioSystem {
     }
     this._wasInCombat = inCombat;
 
-    let want;
+    let want: MusicStateName;
     if (this._camping) want = 'camp';
     else if (inCombat) want = this._bossPresent(enemies, player) ? 'boss' : 'combat';
     else if (this._threat(enemies, player) > 0) want = 'tension';
@@ -503,7 +564,8 @@ export class AudioSystem {
     // Intensity: how much of the encounter is still standing, and how close.
     if (inCombat && enemies && player) {
       let hp = 0, max = 0, near = 0;
-      for (const e of enemies.list) {
+      const list: Enemy[] = enemies.list;
+      for (const e of list) {
         if (e.dead) continue;
         const d = e.root.position.distanceTo(player.position);
         if (d > 40) continue;
@@ -519,9 +581,10 @@ export class AudioSystem {
   }
 
   /** Any enemy big enough to warrant the boss cue. */
-  _bossPresent(enemies: any, player: any) {
+  _bossPresent(enemies?: Enemies, player?: Player) {
     if (!enemies || !player) return false;
-    for (const e of enemies.list) {
+    const list: Enemy[] = enemies.list;
+    for (const e of list) {
       if (e.dead) continue;
       const key = this._speciesOf(e);
       if (key === 'irongiant' && e.root.position.distanceTo(player.position) < 45) return true;
@@ -530,10 +593,11 @@ export class AudioSystem {
   }
 
   /** Enemies aware of us but not yet engaged — the tension bed. */
-  _threat(enemies: any, player: any) {
+  _threat(enemies?: Enemies, player?: Player) {
     if (!enemies || !player) return 0;
     let n = 0;
-    for (const e of enemies.list) {
+    const list: Enemy[] = enemies.list;
+    for (const e of list) {
       if (e.dead) continue;
       if (e.root.position.distanceTo(player.position) < 70) n++;
     }
@@ -572,12 +636,11 @@ export class AudioSystem {
       if (s != null && terrain.heightAt(x, z) < s + 0.35) return 'water';
     }
     const key = `${Math.round(x / 3)},${Math.round(z / 3)}`;
-    let m = this._matCache.get(key);
-    if (m === undefined) {
-      m = terrain.sampleMaterial(x, z).name;
-      if (this._matCache.size > 512) this._matCache.clear();
-      this._matCache.set(key, m);
-    }
+    const cached = this._matCache.get(key);
+    if (cached !== undefined) return cached;
+    const m: string = terrain.sampleMaterial(x, z).name;
+    if (this._matCache.size > 512) this._matCache.clear();
+    this._matCache.set(key, m);
     return m;
   }
 
@@ -587,7 +650,8 @@ export class AudioSystem {
     const enemies = game.get('Enemies');
     const player = game.get('Player');
     if (!enemies || !player) return;
-    for (const e of enemies.list) {
+    const list: Enemy[] = enemies.list;
+    for (const e of list) {
       if (e.dead) { this._enemyState.delete(e); continue; }
       const d = e.root.position.distanceTo(player.position);
       if (d > 48) continue;
@@ -618,14 +682,14 @@ export class AudioSystem {
   }
 
   /** What a hit on this enemy should sound like. */
-  _enemyMaterial(enemy: any) {
+  _enemyMaterial(enemy: Enemy) {
     const key = this._speciesOf(enemy);
     if (key === 'mt') return 'metal';
     if (key === 'irongiant') return 'armour';
     return 'flesh';
   }
 
-  _speciesOf(enemy: any) {
+  _speciesOf(enemy: Enemy | null | undefined): string | null {
     if (!enemy) return null;
     return (enemy.type && enemy.type.key) || null;
   }
@@ -641,7 +705,7 @@ export class AudioSystem {
     }
     const sky = game.get('Sky');
     const rpg = game.get('Rpg');
-    const depth = rpg && rpg.day && rpg.day.nightDepth != null ? rpg.day.nightDepth : 0;
+    const depth = rpg ? rpg.day.nightDepth : 0;
     if (sky) this.amb.setTimeOfDay(sky.hours, depth);
 
     const p = this._playerPos();
@@ -651,7 +715,8 @@ export class AudioSystem {
     // shore in front of us rather than the centre of the basin.
     const water = game.get('Water');
     if (water && water.bodies && water.bodies.length) {
-      let best: any = null, bestD = Infinity;
+      let best: Vec3 | null = null;
+      let bestD = Infinity;
       for (const b of water.bodies) {
         const x = clamp(p.x, b.cx - b.w * 0.5, b.cx + b.w * 0.5);
         const z = clamp(p.z, b.cz - b.d * 0.5, b.cz + b.d * 0.5);
@@ -663,9 +728,10 @@ export class AudioSystem {
 
     // Floodlights: the nearest practical light at a fuel stop or outpost.
     const props = game.get('Props');
-    const lights = props && props.outposts && props.outposts.lights;
+    const lights = props && props.outposts.lights;
     if (lights && lights.length) {
-      let best: any = null, bestD = Infinity;
+      let best: Vec3 | null = null;
+      let bestD = Infinity;
       for (const l of lights) {
         const lp = l.light.position;
         const dd = Math.hypot(p.x - lp.x, p.z - lp.z);
@@ -678,7 +744,7 @@ export class AudioSystem {
     // Acoustic space: if the ground rises on every side we are in a cut, and a
     // cut answers you. This is cheap and it is real.
     const terrain = game.get('Terrain');
-    if (terrain && terrain.heightAt) {
+    if (terrain) {
       const h0 = terrain.heightAt(p.x, p.z);
       let walls = 0;
       for (const [dx, dz] of PROBE) {
@@ -689,7 +755,7 @@ export class AudioSystem {
 
     // Camping: standing on a haven at night is the camp cue.
     const day = rpg && rpg.day;
-    if (day && day.canCamp) {
+    if (day) {
       const camp = day.canCamp({ x: p.x, z: p.z });
       const shouldCamp = !!(camp.ok && day.isNight);
       if (shouldCamp !== this._camping) this._camping = shouldCamp;
@@ -710,9 +776,13 @@ export class AudioSystem {
    * explicit times, and the score and ambience are asked to fill the entire
    * session in one pass instead of from a timer.
    *
-   * @param {object} o
    */
-  static async renderSession(o: { seconds: number, sampleRate?: number, script: (api:any)=>void, maxVoices?: any }): Promise<{buffer:AudioBuffer, stats:any}> {
+  static async renderSession(o: {
+    seconds: number,
+    sampleRate?: number,
+    script: (api: OfflineSession) => void,
+    maxVoices?: number,
+  }): Promise<{ buffer: AudioBuffer, stats: SessionStats }> {
     const seconds = o.seconds ?? 30;
     const sampleRate = o.sampleRate ?? 44100;
     const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -725,7 +795,7 @@ export class AudioSystem {
     const score = new Score(graph, inst);
     score.nextBarTime = 0.05;
 
-    const api = { ctx, graph, inst, sfx, amb, score, seconds };
+    const api: OfflineSession = { ctx, graph, inst, sfx, amb, score, seconds };
     if (o.script) o.script(api);
 
     // One pass fills the whole timeline; the queue inside Score applies the
@@ -741,8 +811,8 @@ export class AudioSystem {
   }
 }
 
-const PROBE = [[14, 0], [-14, 0], [0, 14], [0, -14]];
-const ORIGIN = { x: 0, y: 0, z: 0 };
+const PROBE: [number, number][] = [[14, 0], [-14, 0], [0, 14], [0, -14]];
+const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };
 
 // Scratch vectors — the listener update runs every frame and must not allocate.
 const FWD = new THREE.Vector3(0, 0, -1);

@@ -1,18 +1,99 @@
 import * as THREE from 'three';
 import { SHOTS } from '../../game/Shots.ts';
+import type { Shot } from '../../game/Shots.ts';
 import { Dungeon } from './kit/Dungeon.ts';
+import type { DungeonDef } from './kit/Dungeon.ts';
 import { Fader, buildBunkerEntrance, buildMineHead, buildCaveMouth } from './kit/Portal.ts';
 import { DungeonAmbience } from './kit/Ambience.ts';
 import { KEYCATRICH } from './Keycatrich.ts';
 import { BALOUVE } from './Balouve.ts';
 import { FOCIAUGH } from './Fociaugh.ts';
-import type { InteractionSystem } from '../../game/interaction/Interactables.ts';
 import type { Game } from '../../game/Game.ts';
 import type { Sky } from '../Sky.ts';
 import type { Terrain } from '../Terrain.ts';
+import type { Player } from '../../characters/Player.ts';
+import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
+import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
-const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
+const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
+
+/** An entrance in the world, as the party can act on it. */
+export interface EntranceTarget {
+  kind: 'entrance';
+  /** The dungeon it leads to. */
+  id: string;
+  def: DungeonDef;
+  name: string;
+  verb: string;
+  /** World position of the doorway. */
+  pos: THREE.Vector3;
+  /** How close the party must be, metres. */
+  radius: number;
+  /** The exterior architecture, hidden when the party is far away. */
+  group: THREE.Object3D;
+}
+
+/** Anything `interact()` accepts: an entrance outside, an interior verb inside. */
+export type DungeonTarget = EntranceTarget | Interactable;
+
+/** What `interact()` answers with. */
+export interface InteractResult {
+  ok: boolean;
+  /** Why not, when `ok` is false: `nothing` | `unknown` | `locked` | `empty`. */
+  reason?: string;
+  /** The key item id the door wanted. */
+  key?: string;
+  message?: string;
+  rewards?: ChestRewards;
+}
+
+/** What opening a chest yielded. Handed to `Rpg.grantRewards`. */
+export interface ChestRewards {
+  gil: number;
+  items: { id: string, count: number }[];
+}
+
+/** The world lighting state, saved on entry and written back on the way out. */
+interface SavedWorldLighting {
+  ambient: number;
+  env: number;
+  /** One flag per cascade light. */
+  shadows: boolean[];
+  domeVisible: boolean;
+  autoGrade: boolean;
+}
+
+/** The prompt the HUD draws when the party is standing next to something. */
+export interface DungeonPrompt {
+  verb: string;
+  label: string;
+  target: DungeonTarget;
+}
+
+/** Where the transition is. */
+export type DungeonState = 'outside' | 'entering' | 'inside' | 'leaving';
+
+/** Draw-call and triangle counts, inside and out. */
+interface DungeonsStats {
+  insideCalls: number;
+  insideTris: number;
+  outsideCalls: number;
+  outsideTris: number;
+}
+
+/**
+ * Which dungeon a shot name asks for, or null.
+ *
+ * The capture harness selects a dungeon through the shot definition, and
+ * `game.currentShot` is whatever `applyShot` was last handed -- so this checks
+ * the name is one the table knows rather than trusting it.
+ */
+function shotDungeon(name: unknown): string | null {
+  if (typeof name !== 'string' || !(name in SHOTS)) return null;
+  const table: Record<string, Shot> = SHOTS;
+  return table[name].dungeon ?? null;
+}
 
 /**
  * Dungeons and interiors.
@@ -44,32 +125,33 @@ const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
  * data is available for any other system to poll.
  */
 export class Dungeons {
-  _interaction!: InteractionSystem | null;
-  _camLocal!: any;
-  _hidden!: any[];
+  /** A bare position carrier in dungeon-local space -- not a camera. */
+  _camLocal!: { position: THREE.Vector3 };
+  _hidden!: THREE.Object3D[];
   _returnTo!: THREE.Vector3;
-  _saved!: any;
-  _shotSeen!: any;
+  _saved!: SavedWorldLighting | null;
+  /** The last `game.currentShot` acted on, so a shot change fires once. */
+  _shotSeen!: unknown;
   _tmp!: THREE.Vector3;
   ambience!: DungeonAmbience;
-  built!: Map<any, any>;
-  current!: any;
-  defs!: Map<any, any>;
-  entrances!: any[];
+  /** Built interiors, by id. */
+  built!: Map<string, Dungeon>;
+  current!: Dungeon | null;
+  /** id -> definition. */
+  defs!: Map<string, DungeonDef>;
+  entrances!: EntranceTarget[];
   fader!: Fader;
   game!: Game;
-  keys!: Set<any>;
-  prompt!: any;
+  /** Dungeon-local key items the party has picked up, across every dungeon. */
+  keys!: Set<string>;
+  prompt!: DungeonPrompt | null;
   sky!: Sky | null;
-  state!: string;
-  stats!: any;
-  terrain!: Terrain | null;
+  state!: DungeonState;
+  stats!: DungeonsStats;
+  terrain!: Terrain;
   constructor() {
-    /** @type {Map<string, object>} id -> definition */
     this.defs = new Map(DEFS.map((d) => [d.id, d]));
-    /** @type {Map<string, Dungeon>} built interiors, by id */
     this.built = new Map();
-    /** @type {Dungeon|null} */
     this.current = null;
     this.state = 'outside';      // outside | entering | inside | leaving
     this.entrances = [];
@@ -82,9 +164,13 @@ export class Dungeons {
     this.stats = { insideCalls: 0, insideTris: 0, outsideCalls: 0, outsideTris: 0 };
   }
 
-  async init(game: import('../../game/Game.ts').Game) {
+  async init(game: Game) {
     this.game = game;
-    this.terrain = game.get('Terrain') ?? null;
+    const terrain = game.get('Terrain');
+    // Terrain is registered unconditionally and long before this system. Saying
+    // so here beats letting every entrance builder fail on its own `heightAt`.
+    if (!terrain) throw new Error('[Dungeons] init requires the Terrain system');
+    this.terrain = terrain;
     this.sky = game.get('Sky') ?? null;
     this.fader = new Fader(game.uiRoot);
     this.ambience = new DungeonAmbience(game.get('Audio') ?? null);
@@ -93,7 +179,7 @@ export class Dungeons {
     let calls = 0, tris = 0;
     for (const def of this.defs.values()) {
       const e = def.entrance;
-      const make = builders[e.kind as keyof typeof builders] || buildBunkerEntrance;
+      const make = builders[e.kind];
       const built = make(this.terrain, e.x, e.z, e.heading, def.seed || 7);
       game.scene.add(built.group);
       calls += built.stats.calls;
@@ -110,22 +196,26 @@ export class Dungeons {
     this.stats.outsideTris = tris;
     if (game.debug) console.log('[Dungeons] entrances', JSON.stringify(this.stats));
 
-    // hand the verbs to a town/interaction system if one has been registered
-    const interaction = game.get('Interaction');
-    // NOTE: `InteractionSystem` exposes `register`, not `add`, so this guard
-    // has always been false and dungeon entrances get no interaction prompt.
-    // Left as found -- fixing it changes what the world does, which a port
-    // verified by image diff must not.
-    const interactionAny = interaction as any;
-    if (interactionAny && typeof interactionAny.add === 'function') {
-      for (const e of this.entrances) {
-        interactionAny.add({
-          position: e.pos, radius: e.radius, verb: e.verb, label: e.name,
-          onUse: () => this.enter(e.id),
-        });
-      }
-      this._interaction = interaction ?? null;
-    }
+    // NOTE: dungeon entrances are handed to no interaction system.
+    //
+    // This used to read `const i = game.get('Interaction'); if (i && typeof
+    // i.add === 'function') { ... }` and `InteractionSystem` has never had an
+    // `add` -- the method is `register`, and its payload is `{ pos, radius,
+    // verb, label, handler }`, not `{ position, ..., onUse }`. Every field of
+    // the call was wrong, so the guard was always false and the block was
+    // never entered; `this._interaction` was never assigned either, and
+    // nothing has ever read it. Removed rather than left as dead weight, and
+    // recorded here because *wiring it up is a real change*: it would give
+    // every entrance an interaction prompt the world has never shown. The
+    // shape it would need is
+    //
+    //   for (const e of this.entrances) interaction.register({
+    //     pos: e.pos, radius: e.radius, verb: e.verb, label: e.name,
+    //     handler: () => this.enter(e.id),
+    //   });
+    //
+    // `listInteractables()` / `nearest()` / `interact()` are the working API
+    // in the meantime, and the HUD prompt below is driven from those.
   }
 
   // ------------------------------------------------------------------- API
@@ -147,7 +237,7 @@ export class Dungeons {
   }
 
   /** Return to the world at the entrance you came in by. */
-  leave(opts: any = {}) {
+  leave(opts: {instant?:boolean} = {}) {
     if (!this.isInside) return false;
     const run = () => this._doLeave();
     this.state = 'leaving';
@@ -160,7 +250,7 @@ export class Dungeons {
    * Everything the party can act on right now: the entrances when outside, the
    * doors / chests / exit when inside.
    */
-  listInteractables(): any[] {
+  listInteractables(): DungeonTarget[] {
     if (!this.isInside) return this.entrances;
     return this.current ? this.current.interactables : [];
   }
@@ -168,12 +258,12 @@ export class Dungeons {
   /**
    * Nearest actionable thing to a world position, or null.
    */
-  nearest(pos: THREE.Vector3): any | null {
+  nearest(pos: THREE.Vector3): DungeonTarget | null {
     if (this.isInside && this.current) {
       const list = this.current.near(pos, 0);
       return list.length ? list[0] : null;
     }
-    let best: any = null, bestD = Infinity;
+    let best: EntranceTarget | null = null, bestD = Infinity;
     for (const e of this.entrances) {
       const d = e.pos.distanceTo(pos);
       if (d <= e.radius && d < bestD) { bestD = d; best = e; }
@@ -184,7 +274,7 @@ export class Dungeons {
   /**
    * Act on an interactable. Safe to call with the result of {@link nearest}.
    */
-  interact(target: any): {ok:boolean, reason?:string, rewards?:any} {
+  interact(target: DungeonTarget | null): InteractResult {
     if (!target) return { ok: false, reason: 'nothing' };
     if (target.kind === 'entrance') { this.enter(target.id); return { ok: true }; }
     if (target.kind === 'exit') { this.leave(); return { ok: true }; }
@@ -193,8 +283,8 @@ export class Dungeons {
     return { ok: false, reason: 'unknown' };
   }
 
-  /** Map payload for the UI. @returns */
-  mapData(): any | null {
+  /** Map payload for the UI. */
+  mapData(): DungeonMapData | null {
     if (!this.current || !this.current.map) return null;
     const p = this.game.get('Player');
     const local = p ? this._tmp.copy(p.position).sub(this.current.origin) : null;
@@ -204,7 +294,7 @@ export class Dungeons {
   /**
    * Draw the current dungeon map onto a 2D context.
    */
-  drawMap(ctx: CanvasRenderingContext2D, w: any, h: any, opts: any) {
+  drawMap(ctx: CanvasRenderingContext2D, w: number, h: number, opts: MapDrawOpts) {
     if (!this.current || !this.current.map) return false;
     const p = this.game.get('Player');
     const local = p ? this._tmp.copy(p.position).sub(this.current.origin) : null;
@@ -217,7 +307,7 @@ export class Dungeons {
 
   // -------------------------------------------------------------- transition
 
-  _doEnter(def: any) {
+  _doEnter(def: DungeonDef) {
     const game = this.game;
     let d = this.built.get(def.id);
     if (!d) {
@@ -315,11 +405,11 @@ export class Dungeons {
   }
 
   /** Where the party is standing when they step back out. */
-  _exitPoint(def: any) {
+  _exitPoint(def: DungeonDef) {
     const e = def.entrance;
     const c = Math.cos(e.heading), s = Math.sin(e.heading);
     const x = e.x + s * -7.5, z = e.z + c * -7.5;
-    return new THREE.Vector3(x, this.terrain!.heightAt(x, z), z);
+    return new THREE.Vector3(x, this.terrain.heightAt(x, z), z);
   }
 
   /**
@@ -376,28 +466,28 @@ export class Dungeons {
    */
   _patchTerrain() {
     const t = this.terrain;
-    if (t!.__dungeonPatch) return;
-    const origH = t!.heightAt.bind(t);
-    const origN = t!.normalAt.bind(t);
+    if (t.__dungeonPatch) return;
+    const origH = t.heightAt.bind(t);
+    const origN = t.normalAt.bind(t);
     const self = this;
-    t!.heightAt = function (x: number, z: number) {
+    t.heightAt = function (x: number, z: number) {
       const h = self.floorAt(x, z);
       return h != null ? h : origH(x, z);
     };
-    t!.normalAt = function (x: number, z: number, out: THREE.Vector3) {
+    t.normalAt = function (x: number, z: number, out: THREE.Vector3) {
       const h = self.floorAt(x, z);
       if (h != null) return (out || new THREE.Vector3()).set(0, 1, 0);
       return origN(x, z, out);
     };
-    t!.__dungeonPatch = { origH, origN };
+    t.__dungeonPatch = { origH, origN };
   }
 
   _unpatchTerrain() {
     const t = this.terrain;
-    if (!t!.__dungeonPatch) return;
-    t!.heightAt = t!.__dungeonPatch.origH;
-    t!.normalAt = t!.__dungeonPatch.origN;
-    t!.__dungeonPatch = null;
+    if (!t.__dungeonPatch) return;
+    t.heightAt = t.__dungeonPatch.origH;
+    t.normalAt = t.__dungeonPatch.origN;
+    t.__dungeonPatch = null;
   }
 
   _saveWorldLighting() {
@@ -406,7 +496,7 @@ export class Dungeons {
     this._saved = {
       ambient: sky.ambient ? sky.ambient.intensity : 0,
       env: this.game.scene.environmentIntensity,
-      shadows: sky.csm ? sky.csm.lights.map((l: any) => l.castShadow) : [],
+      shadows: sky.csm ? sky.csm.lights.map((l) => l.castShadow) : [],
       domeVisible: sky.dome ? sky.dome.visible : true,
       autoGrade: this.game.post ? this.game.post.autoGrade : true,
     };
@@ -417,11 +507,12 @@ export class Dungeons {
   _restoreWorldLighting() {
     const sky = this.sky;
     if (!sky || !this._saved) return;
-    if (sky.csm) sky.csm.lights.forEach((l: any, i: any) => { l.castShadow = this._saved.shadows[i] !== false; });
-    if (sky.dome) sky.dome.visible = this._saved.domeVisible;
-    if (sky.ambient) sky.ambient.intensity = this._saved.ambient;
-    this.game.scene.environmentIntensity = this._saved.env;
-    if (this.game.post) this.game.post.autoGrade = this._saved.autoGrade;
+    const saved = this._saved;
+    if (sky.csm) sky.csm.lights.forEach((l, i) => { l.castShadow = saved.shadows[i] !== false; });
+    if (sky.dome) sky.dome.visible = saved.domeVisible;
+    if (sky.ambient) sky.ambient.intensity = saved.ambient;
+    this.game.scene.environmentIntensity = saved.env;
+    if (this.game.post) this.game.post.autoGrade = saved.autoGrade;
     // force a full recompute so the sun, exposure and grade come back exactly
     if (sky.setTimeOfDay) sky.setTimeOfDay(sky.hours);
     this._saved = null;
@@ -429,7 +520,7 @@ export class Dungeons {
 
   // ----------------------------------------------------------------- verbs
 
-  _openDoor(item: any) {
+  _openDoor(item: DoorInteractable): InteractResult {
     if (item.open) return { ok: true };
     const key = item.spec.key;
     if (key && !this.keys.has(key)) {
@@ -442,20 +533,20 @@ export class Dungeons {
     return { ok: true };
   }
 
-  _openChest(item: any) {
+  _openChest(item: ChestInteractable): InteractResult {
     if (item.opened) return { ok: false, reason: 'empty' };
     item.opened = true;
     if (item.spec) item.spec.opened = true;
     const rpg = this.game.get('Rpg');
     const spec = item.spec;
-    const items = [];
+    const items: ChestRewards['items'] = [];
     for (const id of spec.items || []) {
       // ids the item table does not know are dungeon-local key items; they are
       // tracked here so a dungeon can gate itself without owning the economy
       if (rpg && rpg.tables && rpg.tables.items && rpg.tables.items[id]) items.push({ id, count: 1 });
       else this.keys.add(id);
     }
-    const rewards = { gil: spec.gil || 0, items };
+    const rewards: ChestRewards = { gil: spec.gil || 0, items };
     if (rpg && rpg.grantRewards) rpg.grantRewards(rewards, 'treasure');
     const audio = this.game.get('Audio');
     if (audio && audio.play) audio.play('ui', item.pos, { volume: 0.6 });
@@ -470,7 +561,7 @@ export class Dungeons {
     // the capture harness selects a dungeon through the shot definition
     if (game.currentShot !== this._shotSeen) {
       this._shotSeen = game.currentShot;
-      const want = (SHOTS[game.currentShot as keyof typeof SHOTS] || {}).dungeon || null;
+      const want = shotDungeon(game.currentShot);
       if (want && (!this.current || this.current.id !== want)) {
         if (this.isInside) { this.leave({ instant: true }); }
         this.enter(want, { instant: true });
@@ -499,14 +590,15 @@ export class Dungeons {
     }
   }
 
-  _confine(pos: any, margin: number) {
-    const p = this.current.clamp(pos.x, pos.z, margin);
+  _confine(pos: THREE.Vector3, margin: number) {
+    const d = this.current;
+    if (!d) return;
+    const p = d.clamp(pos.x, pos.z, margin);
     pos.x = p[0];
     pos.z = p[1];
-    const doors = this.current.interactables;
-    for (const it of doors) {
+    for (const it of d.interactables) {
       if (it.kind !== 'door' || it.open) continue;
-      const wx = it.pos.x + this.current.origin.x, wz = it.pos.z + this.current.origin.z;
+      const wx = it.pos.x + d.origin.x, wz = it.pos.z + d.origin.z;
       const dx = pos.x - wx, dz = pos.z - wz;
       const along = it.spec.facing === 'x' ? dz : dx;
       const across = it.spec.facing === 'x' ? dx : dz;
@@ -517,9 +609,11 @@ export class Dungeons {
     }
   }
 
-  _hazards(dt: number, player: any) {
-    const L = this.current.layout;
-    const o = this.current.origin;
+  _hazards(dt: number, player: Player) {
+    const d = this.current;
+    if (!d) return;
+    const L = d.layout;
+    const o = d.origin;
     const lx = player.position.x - o.x, lz = player.position.z - o.z;
     for (const h of L.hazards) {
       if (!h.dps) continue;
@@ -530,7 +624,7 @@ export class Dungeons {
     }
   }
 
-  lateUpdate(dt: any, game: Game) {
+  lateUpdate(dt: number, game: Game) {
     // exterior entrances are only worth drawing when they are in reach
     if (!this.isInside) {
       const cp = game.camera.position;
@@ -558,8 +652,10 @@ export class Dungeons {
   _applyInteriorAtmosphere() {
     const sky = this.sky;
     const game = this.game;
-    const atm = this.current.def.atmosphere;
-    const floor = this.current.origin.y + (this.current.layout.bounds().y0 || 0);
+    const d = this.current;
+    if (!d) return;
+    const atm = d.def.atmosphere;
+    const floor = d.origin.y + (d.layout.bounds().y0 || 0);
     if (sky && sky.u) {
       const u = sky.u;
       u.uSkyDim.value = 0.0;

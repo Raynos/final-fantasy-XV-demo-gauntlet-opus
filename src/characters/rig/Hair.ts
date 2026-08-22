@@ -3,6 +3,8 @@ import { MeshBuilder, ribbon, clamp01, smooth, lerp } from './Geo.ts';
 import { skullSampler, HEAD_R } from './Face.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
+import type { Rig } from './Skeleton.ts';
+import type { Look } from './Look.ts';
 
 /**
  * Hair.
@@ -20,7 +22,7 @@ import { Noise } from '../../util/Noise.ts';
 /**
  * @param look must carry `hair` (see Cast.ts) plus face shape params
  */
-export function buildHair(rig: any, look: any): THREE.BufferGeometry {
+export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   const { index: I, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;

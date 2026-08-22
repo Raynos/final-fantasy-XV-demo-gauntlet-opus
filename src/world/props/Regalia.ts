@@ -87,7 +87,7 @@ function carveArch(pts: number[][], x: number, yLow: number) {
   const k = archK(x);
   if (k <= 0) return pts;
   const liftTo = yLow + (ARCH_TOP - yLow) * k;
-  return pts.map(([y, z]: any) => {
+  return pts.map(([y, z]) => {
     const az = Math.abs(z);
     const outer = smooth(0.34, 0.62, az);
     if (outer <= 0) return [y, z];
@@ -176,9 +176,48 @@ function contactShadowTexture() {
 }
 
 /**
- * @param {object} opts
+ * One corner of a drivable car: a steer pivot carrying a spin node.
+ *
+ * Two nodes rather than one because the knuckle yaws and the wheel rolls, and
+ * a single node cannot do both without the roll dragging the steer round.
  */
-export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THREE.Texture | null, drivable?: boolean } = {}): any {
+export interface RegaliaWheel {
+  steer: THREE.Group;
+  spin: THREE.Group;
+  front: boolean;
+  /** Which side of the car, ±1. */
+  side: number;
+  /** Hub height in the body's own frame, so the caller can drop it on a bump. */
+  restY: number;
+}
+
+/**
+ * Everything a caller needs from a built Regalia.
+ *
+ * `wheels` is the split: `Props` scatters a static car at the roadside and
+ * never asks for one, `RegaliaSystem` builds a `drivable` car and steers all
+ * four. Null rather than empty so "this car does not have steerable wheels" and
+ * "this car's wheels have not been built yet" cannot be confused.
+ */
+export interface RegaliaBuild {
+  /** The outermost node: the car, plus the contact shadow. */
+  group: THREE.Group;
+  /** The body alone, already scaled. */
+  car: THREE.Group;
+  /** The two headlight spots. */
+  lights: THREE.SpotLight[];
+  /** Headlamp and tail-lamp materials, for the caller to ramp after dark. */
+  lamp: THREE.MeshStandardMaterial;
+  tail: THREE.MeshStandardMaterial;
+  wheels: RegaliaWheel[] | null;
+  /** The painted contact pool. A moving car re-lays it every frame. */
+  shadow: THREE.Mesh;
+  scale: number;
+  /** Hub height in world units, i.e. already scaled. */
+  wheelY: number;
+}
+
+export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THREE.Texture | null, drivable?: boolean } = {}): RegaliaBuild {
   const group = new THREE.Group();
   group.name = 'regalia';
   const car = new THREE.Group();
@@ -344,7 +383,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   // One template built once, then shared four ways: a steer pivot for the yaw
   // of the knuckle, and a spin node inside it for the road speed. Two meshes
   // per corner (dark rubber, bright face), so all four cost eight draw calls.
-  let wheels: any = null;
+  let wheels: RegaliaWheel[] | null = null;
   if (drivable) {
     // one template per side, so the dish of the rim faces outward on both
     // without mirroring a group (which would invert the winding and the
@@ -468,7 +507,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   }
 
   // headlights: stacked twin round lamps sunk into chrome buckets
-  const lights = [];
+  const lights: THREE.SpotLight[] = [];
   for (const s of [-1, 1]) {
     for (const [dz, r] of [[0.50, 0.14], [0.775, 0.118]]) {
       // the bucket: an open cone running back into the wing, chrome inside

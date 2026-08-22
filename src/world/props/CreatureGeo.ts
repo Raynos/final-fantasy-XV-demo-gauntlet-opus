@@ -36,6 +36,25 @@ const _c = new THREE.Color();
  *
  * @param {object} o
  */
+
+/**
+ * One station of a swept limb: the frame the ring is drawn in, its two radii,
+ * and where along the sweep it sits. `t` is the tangent the caps push along --
+ * every section carries one, which is why it is not optional here.
+ */
+interface Section {
+  c: THREE.Vector3;
+  /** Frame: normal, binormal, tangent. */
+  n: THREE.Vector3;
+  b: THREE.Vector3;
+  t: THREE.Vector3;
+  /** Cross-section radii across the binormal and the normal. */
+  rx: number;
+  ry: number;
+  /** Position along the sweep, 0..1. */
+  u: number;
+}
+
 export function tube({
   nodes, steps = 14, seg = 10, ref = [0, 1, 0], shape = null,
   colorAt, region = 0, blendAt = null, capStart = 0, capEnd = 0,
@@ -57,8 +76,8 @@ export function tube({
     false, 'centripetal', 0.5);
   const up = new THREE.Vector3(ref[0], ref[1], ref[2]).normalize();
 
-  const pos: any[] = [], col: any[] = [], rig: any[] = [], idx = [];
-  const secs: Array<{c:THREE.Vector3,n:THREE.Vector3,b:THREE.Vector3,rx:number,ry:number,u:number, t?: any }> = [];
+  const pos: number[] = [], col: number[] = [], rig: number[] = [], idx = [];
+  const secs: Section[] = [];
 
   for (let i = 0; i <= steps; i++) {
     const u = i / steps;
@@ -120,7 +139,7 @@ export function tube({
   }
 
   // apexes
-  const apex = (s: any, dir: number, cap: number) => {
+  const apex = (s: Section, dir: number, cap: number) => {
     const c = s.c.clone().addScaledVector(s.t, dir * cap * s.rx);
     const base = pos.length / 3;
     pos.push(c.x, c.y, c.z);

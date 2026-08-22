@@ -1,20 +1,19 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder } from '../props/PartBuilder.ts';
-import { woodMaterial } from '../props/PropMaterials.ts';
-import {
-  asphaltMaterial, slabMaterial, gravelMaterial, corrugatedMaterial, panelMaterial,
-  galvMaterial, scrapMaterial, rubberMaterial, glassMaterial, darkGlassMaterial, lampMaterial,
-  chainlinkMaterial, signMaterial, hammerheadSignTexture, crowsNestSignTexture,
-  garageSignTexture, huntBoardTexture, menuBoardTexture, rentABirdTexture, cullessTexture,
-} from './TownMaterials.ts';
+import { PartBuilder, type Vec3 } from '../props/PartBuilder.ts';
+import type { EcoSite } from '../props/EcoSites.ts';
+import type { Ecology } from '../veg/Ecology.ts';
+import type { Props } from '../Props.ts';
+import { townMaterials, type TownMats } from './TownMaterials.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
-  carShell, patioSet, palletStack,
+  carShell, patioSet, palletStack, type PlaceFn,
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
 import type { Game } from '../../game/Game.ts';
+import type { Menus } from '../../ui/Menus.ts';
+import { isMesh } from '../../util/three-guards.ts';
 
 /**
  * HAMMERHEAD — Leide's one working truck stop, and the hub the whole quest
@@ -46,26 +45,78 @@ import type { Game } from '../../game/Game.ts';
 /** Where the layout stops; kept inside the ecology's cleared radius. */
 const PAD = { u0: -28, u1: 29, v0: -31, v1: 17 };
 
+/**
+ * A point light the day/night ramp drives. `day` absent means "off by day".
+ */
+interface TownLight {
+  light: THREE.PointLight;
+  night: number;
+  day?: number;
+}
+
+/** What `_build` reports for the debug line and `integration.mts`. */
+interface TownStats {
+  shellDraws: number;
+  clutterDraws: number;
+  triangles: number;
+}
+
+/**
+ * The part of `RpgSystem.restAt`'s result the caravan dialogue reads.
+ *
+ * The RPG layer is still untyped, so this is the *read* side written down: if
+ * one of these names is wrong the dialogue silently prints a default, which is
+ * exactly the failure this pass exists to stop. Every field is optional
+ * because a refused rest returns `{ ok: false, reason }` and nothing else.
+ */
+interface RestResult {
+  ok?: boolean;
+  reason?: string;
+  day?: number;
+  wokeAt?: string;
+  exp?: { total?: number, perMember?: { name: string, levels: number[] }[] } | null;
+}
+
+/**
+ * A menu screen as `Menus` actually installs one.
+ *
+ * `node` is not declared on `ShopScreen` or `HuntBoardScreen`: `Menus.build`
+ * creates it on each of its own screens and this system does the same for the
+ * two it adds, which is why {@link Hammerhead._registerScreens} attaches it
+ * with `Object.assign` rather than pretending the classes already have it.
+ */
+type MenuScreenCtor = new (menus: Menus) => { build(root: HTMLElement, game: Game): void };
+
 export class Hammerhead {
-  lights!: any[];
+  lights!: TownLight[];
   _camPos!: THREE.Vector3;
   _cast!: boolean;
   _casters!: THREE.Object3D[];
-  _handles!: any[];
-  _restFail!: any;
-  _restSummary!: any;
-  anchors!: any;
-  base!: any;
+  /** Interaction registrations, kept so they could be disposed. Never read. */
+  _handles!: { dispose(): void }[];
+  /** Why the last caravan rest was refused, for the `failed` dialogue node. */
+  _restFail?: string;
+  _restSummary?: RestResult;
+  /**
+   * Named world-space points other systems ask for by string: `Npcs` places
+   * eleven people against them and `SceneKit.townAnchor` looks them up from the
+   * cutscene tables. A `Record<string, …>` rather than a union of the twelve
+   * names below because those two callers index it with a runtime string.
+   */
+  anchors!: Record<string, THREE.Vector3>;
+  /** Height of the graded pad. Everything local is measured from it. */
+  base!: number;
   clutter!: THREE.Group;
-  eco!: any;
+  eco!: Ecology;
   game!: Game;
-  mats!: any;
+  mats!: TownMats;
   origin!: THREE.Vector3;
   rng!: Rng;
   root!: THREE.Group;
   shell!: THREE.Group;
-  site!: any;
-  stats!: any;
+  /** The `reststop` site this town was promoted from. */
+  site!: EcoSite;
+  stats!: TownStats;
   world!: THREE.Matrix4;
   yaw!: number;
   constructor() {
@@ -86,7 +137,7 @@ export class Hammerhead {
     if (!eco) { console.warn('[Hammerhead] no Ecology; town not built'); return this; }
     this.eco = eco;
 
-    const site = eco.sites.find((s: any) => s.type === 'reststop');
+    const site: EcoSite | undefined = eco.sites.find((v: EcoSite) => v.type === 'reststop');
     if (!site) { console.warn('[Hammerhead] no reststop site'); return this; }
     this.site = site;
     // Widen the clearing so scrub stops at the edge of the tarmac. Ecology is
@@ -158,7 +209,7 @@ export class Hammerhead {
    * ground happens to be, or the whole town reads as a slab dropped on top of
    * the landscape — which is precisely how it read before this existed.
    */
-  _berm(put: any, M: any) {
+  _berm(put: PlaceFn, M: TownMats) {
     const W = 13.0;                                 // how far the fill runs out
     const step = 3.0;
     const pos = [];
@@ -219,69 +270,34 @@ export class Hammerhead {
   }
 
   /** Hide the generic fuel stop `Outposts` built on this site. */
-  _removePlaceholder(props: any) {
+  _removePlaceholder(props: Props | undefined) {
     const out = props && props.outposts;
     if (!out || !out.root) return;
-    const dead = out.root.children.filter((c: any) => c.name === 'site_reststop');
+    const dead = out.root.children.filter((c) => c.name === 'site_reststop');
     for (const g of dead) out.root.remove(g);
-    if (out.groups) {
-      out.groups = out.groups.filter((g: any) => g.group.name !== 'site_reststop');
-    }
+    out.groups = out.groups.filter((g) => g.group.name !== 'site_reststop');
     // and its canopy point light, which sat at the old canopy's centre
-    if (out.lights) {
-      const d = this.site;
-      out.lights = out.lights.filter((l: any) => {
-        const near = Math.hypot(l.light.position.x - d.x, l.light.position.z - d.z) < 6;
-        if (near) out.root.remove(l.light);
-        return !near;
-      });
-    }
+    const d = this.site;
+    out.lights = out.lights.filter((l) => {
+      const near = Math.hypot(l.light.position.x - d.x, l.light.position.z - d.z) < 6;
+      if (near) out.root.remove(l.light);
+      return !near;
+    });
   }
 
   /* --------------------------------------------------------------- build */
 
   _build() {
-    const M = this.mats = {
-      asphalt: asphaltMaterial(),
-      slab: slabMaterial(),
-      gravel: gravelMaterial(),
-      corr: corrugatedMaterial(0xb6ad96, 0.62, 0.35),
-      corrRoof: corrugatedMaterial(0x8d8676, 0.68, 0.4),
-      panel: panelMaterial(0xe0d7bc, 0.42, 0.5),
-      panelRed: panelMaterial(0x9c3423, 0.40, 0.5),
-      panelBlue: panelMaterial(0x33506a, 0.46, 0.42),
-      panelCream: panelMaterial(0xcfc4a4, 0.46, 0.4),
-      galv: galvMaterial(),
-      scrap: scrapMaterial(0x8a5432),
-      rubber: rubberMaterial(),
-      wood: woodMaterial(0x7d6a4e),
-      dark: panelMaterial(0x24262a, 0.6, 0.3),
-      chrome: panelMaterial(0xc8ced6, 0.16, 0.95),
-      glass: glassMaterial(0x121a20),
-      glassDark: darkGlassMaterial(),
-      canvas: panelMaterial(0x9c4632, 0.88, 0.02),
-      paint: panelMaterial(0x6f6a5c, 0.96, 0.0),
-      lamp: lampMaterial(0xffe6b4, 0x15130f),
-      warm: lampMaterial(0xf0dcbc, 0x2a2620),
-      neon: lampMaterial(0xffd07a, 0x1a1208),
-      mesh: chainlinkMaterial(),
-      signHH: signMaterial('hh', hammerheadSignTexture(), { emissive: 1 }),
-      signCN: signMaterial('cn', crowsNestSignTexture(), { emissive: 1 }),
-      signGA: signMaterial('ga', garageSignTexture()),
-      signHB: signMaterial('hb', huntBoardTexture(), { rough: 0.9 }),
-      signMB: signMaterial('mb', menuBoardTexture(), { emissive: 1 }),
-      signRB: signMaterial('rb', rentABirdTexture()),
-      signCM: signMaterial('cm', cullessTexture()),
-    };
-    for (const k of Object.keys(M)) if (!M[k as keyof typeof M].name) M[k as keyof typeof M].name = `hh_${k}`;
+    const M = this.mats = townMaterials();
+    for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `hh_${k}`;
 
     const rng = this.rng = new Rng(90210);
 
     // Two builders: the shell (always drawn) and the clutter (culled far away).
     const S = new PartBuilder();
     const C = new PartBuilder();
-    const putS = (m: THREE.Material, g: any, p: any, r: any, sc: any) => S.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
-    const putC = (m: THREE.Material, g: any, p: any, r: any, sc: any) => C.add(m, g, this.world.clone().multiply(mat4(p, r, sc)));
+    const putS: PlaceFn = (m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
+    const putC: PlaceFn = (m, g, p, r, sc) => { C.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
 
     this._ground(putS, M);
     this._canopy(putS, putC, M, rng);
@@ -325,7 +341,7 @@ export class Hammerhead {
 
   // ---- the ground the whole place stands on -----------------------------
 
-  _ground(put: any, M: any) {
+  _ground(put: PlaceFn, M: TownMats) {
     const w = PAD.u1 - PAD.u0, d = PAD.v1 - PAD.v0;
     const cu = (PAD.u0 + PAD.u1) / 2, cv = (PAD.v0 + PAD.v1) / 2;
 
@@ -369,7 +385,7 @@ export class Hammerhead {
 
   // ---- fuel canopy and pumps --------------------------------------------
 
-  _canopy(put: any, putC: any, M: any, rng: Rng) {
+  _canopy(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     const cu = -6, cv = -19;
     const deck = 5.35;
     // four columns
@@ -433,7 +449,7 @@ export class Hammerhead {
 
   // ---- the pylon sign ----------------------------------------------------
 
-  _pylon(put: any, M: any) {
+  _pylon(put: PlaceFn, M: TownMats) {
     const u = -25.5, v = -27.5;
     put(M.galv, cyl(0.26, 0.36, 11.6, 10), [u, 5.8, v]);
     put(M.slab, box(1.7, 0.6, 1.7), [u, 0.4, v]);
@@ -454,7 +470,7 @@ export class Hammerhead {
 
   // ---- the Crow's Nest ---------------------------------------------------
 
-  _diner(put: any, putC: any, M: any, rng: Rng) {
+  _diner(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     const cu = -16, cv = 3.6;
     const W = 14.4, D = 9.6, H = 3.9;
 
@@ -541,7 +557,7 @@ export class Hammerhead {
 
   // ---- Cid's garage ------------------------------------------------------
 
-  _garage(put: any, putC: any, M: any, rng: Rng) {
+  _garage(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     const cu = 13, cv = 3.4;
     const W = 18.0, D = 12.0, H = 5.6;
 
@@ -625,12 +641,12 @@ export class Hammerhead {
 
   // ---- the caravan -------------------------------------------------------
 
-  _caravan(put: any, putC: any, M: any) {
+  _caravan(put: PlaceFn, putC: PlaceFn, M: TownMats) {
     const cu = 23.0, cv = -14.5, yaw = 0.30;
     const c = Math.cos(yaw), s = Math.sin(yaw);
-    const P = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => put(m, g,
+    const P = (m: THREE.Material, g: THREE.BufferGeometry, u: number, y: number, v: number, rot: Vec3 = [0, 0, 0]) => put(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
-    const PC = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => putC(m, g,
+    const PC = (m: THREE.Material, g: THREE.BufferGeometry, u: number, y: number, v: number, rot: Vec3 = [0, 0, 0]) => putC(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
 
     // Body. Squatter than the first pass — a caravan roof sits at about 2.9 m,
@@ -684,7 +700,7 @@ export class Hammerhead {
 
   // ---- the parts yard ----------------------------------------------------
 
-  _yard(put: any, putC: any, M: any, rng: Rng) {
+  _yard(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     const F = { u0: 3.5, u1: 28.5, v0: 10.0, v1: 16.5 };
     fenceRun(put, M, [F.u0, F.v1], [F.u1, F.v1]);
     fenceRun(put, M, [F.u1, F.v0], [F.u1, F.v1]);
@@ -726,7 +742,7 @@ export class Hammerhead {
 
   // ---- parked vehicles ---------------------------------------------------
 
-  _carPark(put: any, putC: any, M: any, rng: Rng) {
+  _carPark(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     // Nose-in to the bays, clear of the diner porch — a car parked across the
     // door is the fastest way to make a lot read as a render rather than a
     // place somebody actually uses.
@@ -750,7 +766,7 @@ export class Hammerhead {
     // Culless Munitions van, backed onto the lot edge with its shutter up
     const vu = -26.0, vv = -14.5, vyaw = -0.5;
     const c = Math.cos(vyaw), s = Math.sin(vyaw);
-    const V = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => put(m, g,
+    const V = (m: THREE.Material, g: THREE.BufferGeometry, u: number, y: number, v: number, rot: Vec3 = [0, 0, 0]) => put(m, g,
       [vu + u * c + v * s, y, vv - u * s + v * c], [rot[0], vyaw + rot[1], rot[2]]);
     V(M.panelBlue, box(2.4, 2.3, 5.4), 0, 1.75, 0);
     V(M.panelBlue, box(2.2, 1.2, 1.6), 0, 1.5, -3.2);
@@ -770,7 +786,7 @@ export class Hammerhead {
 
   // ---- everything else that makes it look lived in -----------------------
 
-  _streetFurniture(put: any, putC: any, M: any, rng: Rng) {
+  _streetFurniture(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     // telegraph pole feeding the site, with a stay wire
     put(M.wood, cyl(0.18, 0.24, 9.0, 8), [-27.5, 4.5, -20.0]);
     put(M.wood, box(0.14, 0.14, 2.4), [-27.5, 8.4, -20.0]);
@@ -811,7 +827,7 @@ export class Hammerhead {
 
   // ---- lighting ----------------------------------------------------------
 
-  _lights(put: any, M: any) {
+  _lights(put: PlaceFn, M: TownMats) {
     const masts: [number[], number][] = [
       [[-25.0, -12.0], 0.0], [[-25.5, 8.0], 0.2],
       [[2.0, -27.0], 0.0], [[26.0, -22.0], 0.4], [[27.0, 8.0], -0.3],
@@ -855,10 +871,9 @@ export class Hammerhead {
   _registerScreens(game: Game) {
     const menus = game.get('Menus');
     if (!menus || !menus.screens || !menus.wrap) return;
-    const add = (key: string, Screen: any) => {
+    const add = (key: string, Screen: MenuScreenCtor) => {
       if (menus.screens[key]) return;
-      const s = new Screen(menus);
-      s.node = document.createElement('div');
+      const s = Object.assign(new Screen(menus), { node: document.createElement('div') });
       s.node.className = `screen s-${key}`;
       s.node.style.display = 'none';
       menus.wrap.appendChild(s.node);
@@ -1000,7 +1015,7 @@ export class Hammerhead {
               when: () => (rpg.inventory?.gil ?? 0) >= cost,
               action: () => {
                 const r = rpg.restAt('caravan', { wakeHour: 6.5 });
-                if (!r || r.ok === false) { this._restFail = r?.reason || 'unknown'; return 'failed'; }
+                if (!r || r.ok === false) { this._restFail = r?.reason ?? 'unknown'; return 'failed'; }
                 this._restSummary = r;
                 const hud = game.get('HUD');
                 if (hud && hud.areaTitle) hud.areaTitle('HAMMERHEAD', 'Leide', 'Dawn · Day ' + r.day);
@@ -1018,12 +1033,12 @@ export class Hammerhead {
         slept: {
           lines: () => {
             const r = this._restSummary;
-            const lv = (r?.exp?.perMember || []).filter((m: any) => m.levels && m.levels.length);
+            const lv = (r?.exp?.perMember ?? []).filter((m) => m.levels && m.levels.length);
             const out = [`You sleep through to ${r?.wokeAt || '06:30'}. Somewhere outside, Cid is already swearing at something.`];
             if (lv.length) {
-              out.push(lv.map((m: any) => `${m.name} reached level ${m.levels[m.levels.length - 1]}`).join('. ') + '.');
+              out.push(lv.map((m) => `${m.name} reached level ${m.levels[m.levels.length - 1]}`).join('. ') + '.');
             } else if ((r?.exp?.total ?? 0) > 0) {
-              out.push(`${Math.round(r.exp.total).toLocaleString()} EXP cashed in. Nobody quite made the next level.`);
+              out.push(`${Math.round(r?.exp?.total ?? 0).toLocaleString()} EXP cashed in. Nobody quite made the next level.`);
             }
             return out;
           },
@@ -1082,7 +1097,7 @@ export class Hammerhead {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt: any, game: Game) {
+  update(dt: number, game: Game) {
     if (!this.shell) return;
     const night = this._night(game);
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
@@ -1115,7 +1130,7 @@ export class Hammerhead {
 }
 
 /** Scale a geometry's UVs so a tiling material keeps a constant texel size. */
-function uvScale(g: any, su: number, sv: number) {
+function uvScale(g: THREE.BufferGeometry, su: number, sv: number) {
   const uv = g.attributes.uv;
   if (!uv) return g;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
@@ -1125,7 +1140,7 @@ function uvScale(g: any, su: number, sv: number) {
 
 function countTris(group: THREE.Group) {
   let n = 0;
-  group.traverse((o: any) => { if (o.isMesh && o.geometry?.index) n += o.geometry.index.count / 3; });
+  group.traverse((o) => { if (isMesh(o) && o.geometry.index) n += o.geometry.index.count / 3; });
   return n;
 }
 

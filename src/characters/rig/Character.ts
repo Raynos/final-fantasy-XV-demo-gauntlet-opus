@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildSkeleton } from './Skeleton.ts';
+import { buildSkeleton, SIDES } from './Skeleton.ts';
 import { buildBody } from './Body.ts';
 import { buildHead, buildEyes } from './Face.ts';
 import { buildHair } from './Hair.ts';
@@ -7,6 +7,9 @@ import { buildOutfit } from './Outfit.ts';
 import { Animator } from './Anim.ts';
 import { skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, lensMaterial, contactShadowMaterial } from './Materials.ts';
 import { Rng } from '../../util/Rng.ts';
+import type { Rig, Side } from './Skeleton.ts';
+import type { CharacterDef, Look } from './Look.ts';
+import type { AnimState, PlayOpts } from './Anim.ts';
 
 /** Scratch for the per-frame grip layer — allocating there would churn the GC. */
 const _ge = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -21,13 +24,22 @@ const _gq = new THREE.Quaternion();
  *   char.attach.handR/.handL/.back/.hip   weapon sockets
  *   char.play(action, opts)   'attack_slash' | 'attack_thrust' | 'attack_overhead'
  *                             | 'guard' | 'cast' | 'warp' | 'hit'
- *   char.hit(dir, power)      staggered hit reaction
+ *   char.hit(power)           staggered hit reaction (not directional)
  *   char.setLookTarget(v3)    head / eye tracking, null to release
  *   char.update(dt, state)    state: { speed, velocity, turnRate, terrain, wind }
  */
 
-let SHARED: any = null;
-function shared() {
+/** Materials and geometry every character in the scene shares one copy of. */
+interface SharedAssets {
+  skin: THREE.Material;
+  garment: THREE.Material;
+  hair: THREE.Material;
+  shadow: THREE.Material;
+  shadowGeo: THREE.BufferGeometry;
+}
+
+let SHARED: SharedAssets | null = null;
+function shared(): SharedAssets {
   if (!SHARED) {
     SHARED = {
       skin: skinMaterial(),
@@ -45,30 +57,35 @@ function shared() {
   return SHARED;
 }
 
+/** The named sockets other systems hang weapons and props off. */
+export type AttachPoint = 'handR' | 'handL' | 'back' | 'hip' | 'head';
+
 export class Character {
   anim!: Animator;
-  attach!: any;
-  body!: any;
-  def!: any;
+  /** Weapon sockets, in the frame a fist imposes. See `_palmSocket`. */
+  attach!: Record<AttachPoint, THREE.Object3D>;
+  body!: THREE.SkinnedMesh;
+  def!: CharacterDef;
   eyeMat!: THREE.Material;
   eyes!: THREE.Object3D;
   faceMat!: THREE.Material;
-  grip!: any;
-  groundShadow!: any;
-  hair!: any;
-  head!: any;
-  height!: any;
-  look!: any;
-  meshes!: any[];
-  name!: any;
-  outfit!: any;
-  rig!: any;
+  /** How closed each fist is, 0 open .. 1 gripping. See `setGrip`. */
+  grip!: Record<Side, number>;
+  groundShadow!: THREE.Mesh;
+  hair!: THREE.SkinnedMesh;
+  head!: THREE.SkinnedMesh;
+  height!: number;
+  look!: Look;
+  meshes!: THREE.Mesh[];
+  name!: string;
+  outfit!: THREE.SkinnedMesh;
+  rig!: Rig;
   root!: THREE.Group;
   seedRnd!: Rng;
   /**
    * @param def character definition from Cast.ts
    */
-  constructor(def: any) {
+  constructor(def: CharacterDef) {
     this.name = def.name;
     this.def = def;
     this.look = def.look;
@@ -154,7 +171,6 @@ export class Character {
 
     this.anim = new Animator(this);
     this.height = rig.dims.height;
-    /** How closed each fist is, 0 open .. 1 gripping. See `setGrip`. */
     this.grip = { L: 0, R: 0 };
     return this;
   }
@@ -177,7 +193,7 @@ export class Character {
    * that is what `PartyAI`'s hold transforms do.
    *
    */
-  _palmSocket(rig: any, side: 'L' | 'R'): THREE.Object3D {
+  _palmSocket(rig: Rig, side: Side): THREE.Object3D {
     const s = rig.dims.s;
     const wr = rig.P[`hand${side}`], kn = rig.P[`fingers${side}`];
     // the hand bone's bind rotation is identity, so its local frame is
@@ -210,7 +226,7 @@ export class Character {
    *
    * @param amount 0 open .. 1 closed around a grip
    */
-  setGrip(side: 'L' | 'R', amount: number) {
+  setGrip(side: Side, amount: number) {
     if (this.grip) this.grip[side] = THREE.MathUtils.clamp(amount, 0, 1);
   }
 
@@ -221,7 +237,7 @@ export class Character {
    */
   _applyGrip() {
     const B = this.rig.byName;
-    for (const side of ['L', 'R']) {
+    for (const side of SIDES) {
       const g = this.grip[side];
       if (g <= 0.001) continue;
       const sg = side === 'L' ? 1 : -1;
@@ -235,7 +251,7 @@ export class Character {
     }
   }
 
-  _skinned(geo: any, mat: any, name: string) {
+  _skinned(geo: THREE.BufferGeometry, mat: THREE.Material, name: string) {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `${this.name}_${name}`;
     mesh.castShadow = true;
@@ -247,10 +263,10 @@ export class Character {
     return mesh;
   }
 
-  _lensGeo(rig: any) {
+  _lensGeo(rig: Rig) {
     const s = rig.dims.headScale;
     const org = rig.dims.headOrigin;
-    const geos = [];
+    const geos: THREE.SphereGeometry[] = [];
     for (const sg of [1, -1]) {
       const g = new THREE.SphereGeometry(0.0275 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.34);
       g.scale(1, 0.5, 0.28);
@@ -259,8 +275,8 @@ export class Character {
       geos.push(g);
     }
     const merged = new THREE.BufferGeometry();
-    const pos = [];
-    const idx = [];
+    const pos: number[] = [];
+    const idx: number[] = [];
     let off = 0;
     for (const g of geos) {
       pos.push(...g.attributes.position.array);
@@ -274,24 +290,24 @@ export class Character {
   }
 
   /** @param name see ACTIONS */
-  play(name: string, opts: any) { this.anim.play(name, opts); }
+  play(name: string, opts: PlayOpts) { this.anim.play(name, opts); }
 
   /** Hit reaction: recoil pose plus an impulse into the cloth springs. */
-  hit(dirWorld: any, power = 1) {
+  hit(power = 1) {
     this.anim.play('hit', { speed: 1 / Math.max(0.4, Math.min(1.6, power)) });
     this.anim.coat.x.kick(-3 * power);
     this.anim.tail.x.kick(-2.5 * power);
   }
 
-  setLookTarget(v: any) { this.anim.setLookTarget(v); }
+  setLookTarget(v: THREE.Vector3 | null) { this.anim.setLookTarget(v); }
 
   /** @param dt @param state */
-  update(dt: number, state: any) {
+  update(dt: number, state: AnimState) {
     this.anim.update(dt, state);
     if (this.grip && (this.grip.L > 0.001 || this.grip.R > 0.001)) this._applyGrip();
   }
 
-  setVisible(v: any) { for (const m of this.meshes) m.visible = v; }
+  setVisible(v: boolean) { for (const m of this.meshes) m.visible = v; }
 
   dispose() {
     for (const m of this.meshes) m.geometry.dispose();

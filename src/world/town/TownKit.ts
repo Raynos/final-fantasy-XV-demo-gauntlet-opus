@@ -1,4 +1,16 @@
 import * as THREE from 'three';
+import type { Vec3 } from '../props/PartBuilder.ts';
+import type { TownMats } from './TownMaterials.ts';
+import type { Rng } from '../../util/Rng.ts';
+
+/**
+ * How every helper here emits geometry.
+ *
+ * The caller closes over the town's world transform, so a helper writes plain
+ * metres in the local plan frame and never touches a matrix. `rot` and `scale`
+ * are optional because most placements want neither.
+ */
+export type PlaceFn = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, scale?: Vec3) => void;
 
 /**
  * Reusable pieces of Hammerhead: fence runs, floodlight masts, tyre stacks,
@@ -15,7 +27,7 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
 /** Compose a local transform. */
-export function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+export function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -55,7 +67,7 @@ export const wheel = (r: number, w: number, s = 14) => geo(`w${r}_${w}_${s}`, ()
  * @param b end [x, z]
  * @param [opts] `{ y, height, span }`
  */
-export function fenceRun(put: ((...args: any[]) => any), M: any, a: number[], b: number[], { y = 0, height = 2.15, span = 3.0 }: any = {}) {
+export function fenceRun(put: PlaceFn, M: TownMats, a: number[], b: number[], { y = 0, height = 2.15, span = 3.0 }: { y?: number, height?: number, span?: number } = {}) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
   const len = Math.hypot(dx, dz);
   const yaw = Math.atan2(dx, dz);
@@ -80,7 +92,7 @@ export function fenceRun(put: ((...args: any[]) => any), M: any, a: number[], b:
  * A floodlight mast. Returns the world-local head position so the caller can
  * hang a real light off it.
  */
-export function floodMast(put: any, M: any, [x, z]: number[], { y = 0, height = 8.4, heads = 2, yaw = 0 } = {}) {
+export function floodMast(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0, height = 8.4, heads = 2, yaw = 0 } = {}): Vec3 {
   put(M.galv, cyl(0.11, 0.16, height, 8), [x, y + height * 0.5, z]);
   put(M.galv, box(0.16, 0.16, 1.9), [x, y + height - 0.1, z], [0, yaw, 0]);
   for (let i = 0; i < heads; i++) {
@@ -95,7 +107,7 @@ export function floodMast(put: any, M: any, [x, z]: number[], { y = 0, height = 
 }
 
 /** A stack of tyres. */
-export function tyreStack(put: any, M: any, [x, z]: number[], { y = 0, n = 5, r = 0.42, rng }: any) {
+export function tyreStack(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0, n = 5, r = 0.42, rng }: { y?: number, n?: number, r?: number, rng?: Rng }) {
   for (let i = 0; i < n; i++) {
     const a = rng ? rng.next() * 3.1 : i * 0.7;
     const j = rng ? rng.gauss(0, 0.045) : 0;
@@ -105,8 +117,8 @@ export function tyreStack(put: any, M: any, [x, z]: number[], { y = 0, n = 5, r 
 }
 
 /** A 200-litre oil drum, upright or on its side. */
-export function drum(put: any, M: any, [x, z]: number[], { y = 0, tipped = false, yaw = 0, mat }: {
-  y?: number, tipped?: boolean, yaw?: number, mat?: any,
+export function drum(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0, tipped = false, yaw = 0, mat }: {
+  y?: number, tipped?: boolean, yaw?: number, mat?: THREE.Material,
 } = {}) {
   const m = mat || M.scrap;
   if (!tipped) {
@@ -124,15 +136,15 @@ export function drum(put: any, M: any, [x, z]: number[], { y = 0, tipped = false
  * A generic 1950s-Americana saloon shell — the cars that fill an FFXV car park.
  * Deliberately simple: they are silhouettes at 20 m and set dressing at 5 m.
  */
-export function carShell(put: any, M: any, [x, z]: number[], {
+export function carShell(put: PlaceFn, M: TownMats, [x, z]: number[], {
   y = 0, yaw = 0, body, len = 4.6, wid = 1.86, ride = 0.42, wreck = false,
 }: {
-  y?: number, yaw?: number, body?: any, len?: number, wid?: number, ride?: number, wreck?: boolean,
+  y?: number, yaw?: number, body?: THREE.Material, len?: number, wid?: number, ride?: number, wreck?: boolean,
 } = {}) {
   const b = body || M.panelRed;
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (ax: number, az: number) => [x + ax * c + az * s, 0, z - ax * s + az * c];
-  const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0], sc?: any) => {
+  const P = (mat: THREE.Material, g: THREE.BufferGeometry, ax: number, ay: number, az: number, rot: Vec3 = [0, 0, 0], sc?: Vec3) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[2]], [rot[0], yaw + rot[1], rot[2]], sc);
   };
@@ -171,10 +183,10 @@ export function carShell(put: any, M: any, [x, z]: number[], {
 }
 
 /** Outdoor diner seating: a table with a parasol and two benches. */
-export function patioSet(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, parasol = true } = {}) {
+export function patioSet(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0, yaw = 0, parasol = true } = {}) {
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (ax: number, az: number) => [x + ax * c + az * s, z - ax * s + az * c];
-  const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0]) => {
+  const P = (mat: THREE.Material, g: THREE.BufferGeometry, ax: number, ay: number, az: number, rot: Vec3 = [0, 0, 0]) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[1]], [rot[0], yaw + rot[1], rot[2]]);
   };
@@ -207,8 +219,8 @@ export function patioSet(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, p
 }
 
 /** A pallet with a few crates on it. */
-export function palletStack(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, n = 2, rng }: {
-  y?: number, yaw?: number, n?: number, rng?: any,
+export function palletStack(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0, yaw = 0, n = 2, rng }: {
+  y?: number, yaw?: number, n?: number, rng?: Rng,
 } = {}) {
   put(M.wood, box(1.2, 0.14, 0.9), [x, y + 0.07, z], [0, yaw, 0]);
   for (let i = 0; i < n; i++) {

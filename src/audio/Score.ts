@@ -1,6 +1,7 @@
-import { STATES, LAYERS, voiceChord } from './Themes.ts';
+import { STATES, LAYERS, voiceChord, isMusicState } from './Themes.ts';
 import { ftom, clamp, EPS, makeRng } from './Dsp.ts';
-import type { MusicState } from './Themes.ts';
+import type { Chord, LayerName, MusicState, MusicStateName } from './Themes.ts';
+import type { RngFn } from './Dsp.ts';
 import type { AudioGraph } from './Graph.ts';
 import type { Instruments } from './Instruments.ts';
 
@@ -24,12 +25,36 @@ const A2 = 110, A3 = 220, A4 = 440;
  * drives the offline verification render, where it is called once with a
  * horizon of the whole session.
  */
+/** A command parked on the musical timeline. See `Score.at`. */
+interface QueuedCommand {
+  /** Absolute context time; the bar line at or past it runs the command. */
+  time: number;
+  fn: (score: Score) => void;
+}
+
+/** What `setState` accepts beyond the name. */
+export interface SetStateOpts {
+  /** Swap the chart now rather than at the next bar line. */
+  immediate?: boolean;
+  /** Cross-fade seconds. */
+  fade?: number;
+  /** Re-apply the state even if it is already playing. */
+  force?: boolean;
+}
+
+/** A state change waiting for the next bar line. */
+interface PendingState {
+  name: MusicStateName;
+  /** Cross-fade seconds. */
+  fade: number;
+}
+
 export class Score {
   bar!: number;
   intensity!: number;
   state!: MusicState;
   _at!: number | null;
-  _queue!: any[];
+  _queue!: QueuedCommand[];
   /** See `Radio._timer`: the handle type differs between DOM and node. */
   _timer!: ReturnType<typeof setInterval> | null;
   ctx!: BaseAudioContext;
@@ -37,18 +62,18 @@ export class Score {
   filter!: BiquadFilterNode;
   graph!: AudioGraph;
   inst!: Instruments;
-  layer!: any;
+  layer!: Record<LayerName, GainNode>;
   lookahead!: number;
   nextBarTime!: number;
   notesScheduled!: number;
   oneShotBarsLeft!: number;
-  pending!: any;
+  pending!: PendingState | null;
   phrase!: number;
   phraseBar!: number;
-  returnTo!: string;
-  rng!: any;
+  returnTo!: MusicStateName;
+  rng!: RngFn;
   running!: boolean;
-  stateName!: string;
+  stateName!: MusicStateName;
   constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
     this.inst = inst;
@@ -63,14 +88,19 @@ export class Score {
     this.filter.Q.value = 0.5;
     this.filter.connect(graph.bus.music);
 
-    /** @type {Record<string, GainNode>} one gain per arrangement layer */
-    this.layer = {};
-    for (const name of LAYERS) {
+    // One gain per arrangement layer, written out whole rather than
+    // accumulated into an empty object: `layer[name]` is then a GainNode at
+    // every reader instead of a possibly-missing lookup.
+    const mkLayer = () => {
       const g = ctx.createGain();
       g.gain.value = 0;
       g.connect(this.filter);
-      this.layer[name] = g;
-    }
+      return g;
+    };
+    this.layer = {
+      bass: mkLayer(), pad: mkLayer(), strings: mkLayer(), melody: mkLayer(),
+      harp: mkLayer(), wood: mkLayer(), perc: mkLayer(), choir: mkLayer(), brass: mkLayer(),
+    };
 
     this.stateName = 'silence';
     this.state = STATES.silence;
@@ -108,7 +138,7 @@ export class Score {
   get clock() { return this._at != null ? this._at : this.ctx.currentTime; }
 
   /** Begin the realtime scheduler. */
-  start(state = 'field', at: any = null) {
+  start(state: MusicStateName = 'field', at: number | null = null) {
     if (this.running) return;
     this.running = true;
     this.nextBarTime = (at ?? this.ctx.currentTime) + 0.12;
@@ -129,24 +159,25 @@ export class Score {
   }
 
   /** Queue a command onto the musical timeline (used by the offline render). */
-  at(time: any, fn: any) { this._queue.push({ time, fn }); this._queue.sort((a, b) => a.time - b.time); }
+  at(time: number, fn: (score: Score) => void) {
+    this._queue.push({ time, fn });
+    this._queue.sort((a, b) => a.time - b.time);
+  }
 
   /**
    * Change state. The chart swaps at the next bar line and the layers
    * cross-fade, so nothing ever cuts.
-   * @param [o] {immediate, fade}
    */
-  setState(name: keyof typeof STATES, o: any = {}) {
-    if (!STATES[name]) return;
+  setState(name: MusicStateName, o: SetStateOpts = {}) {
     if (name === this.stateName && !o.force) { this.pending = null; return; }
     if (o.immediate) this._applyState(name, o.fade ?? 0.6);
     else this.pending = { name, fade: o.fade ?? 2.6 };
   }
 
   /** The state we will fall back to when a one-shot (victory) finishes. */
-  setReturnState(name: string) { if (STATES[name]) this.returnTo = name; }
+  setReturnState(name: string) { if (isMusicState(name)) this.returnTo = name; }
 
-  _applyState(name: string, fade = 2.4) {
+  _applyState(name: MusicStateName, fade = 2.4) {
     const prev = this.stateName;
     const st = STATES[name];
     this.stateName = name;
@@ -155,17 +186,17 @@ export class Score {
     this.phrase = 0;
     this.phraseBar = 0;
     this.cycle = 0;
-    this.oneShotBarsLeft = st.oneShot ? (st.bars || st.prog.length) : 0;
+    this.oneShotBarsLeft = st.oneShot ? (st.bars ?? st.prog.length) : 0;
     if (st.oneShot) this.returnTo = (prev === 'victory' ? 'field' : prev);
     this._fadeLayers(fade);
-    this.graph.setMusicReverb(st.reverb ?? 0.8, Math.max(0.5, fade * 0.5), this.clock);
+    this.graph.setMusicReverb(st.reverb, Math.max(0.5, fade * 0.5), this.clock);
   }
 
   _fadeLayers(fade: number) {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
-      const target = this._layerTarget(name, L![name] ?? 0);
+      const target = this._layerTarget(name, L[name]);
       const g = this.layer[name].gain;
       g.cancelScheduledValues(t);
       g.setValueAtTime(Math.max(EPS, g.value), t);
@@ -174,7 +205,7 @@ export class Score {
   }
 
   /** Intensity reshapes the arrangement inside a state without changing it. */
-  _layerTarget(name: string, base: number) {
+  _layerTarget(name: LayerName, base: number) {
     if (base <= 0) return 0;
     const i = this.intensity;
     if (this.stateName === 'combat' || this.stateName === 'boss') {
@@ -201,7 +232,7 @@ export class Score {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
-      const target = this._layerTarget(name, L![name] ?? 0);
+      const target = this._layerTarget(name, L[name]);
       this.layer[name].gain.setTargetAtTime(target, t, 1.2);
     }
   }
@@ -222,7 +253,7 @@ export class Score {
   victory(after: string = 'field') {
     if (this.stateName === 'victory') return;
     this.setState('victory', { immediate: true, fade: 0.35 });
-    this.returnTo = STATES[after] ? after : 'field';
+    this.returnTo = isMusicState(after) ? after : 'field';
   }
 
   /* ---------------------------------------------------------- scheduling */
@@ -236,7 +267,7 @@ export class Score {
     while (this.nextBarTime < horizon && guard++ < 4096) {
       const t = this.nextBarTime;
       this._at = t;
-      while (this._queue.length && this._queue[0].time <= t) this._queue.shift().fn(this);
+      while (this._queue.length && this._queue[0].time <= t) this._queue.shift()?.fn(this);
 
       if (this.pending) this._applyState(this.pending.name, this.pending.fade);
 
@@ -285,8 +316,8 @@ export class Score {
 
   /* ------------------------------------------------------------- layers */
 
-  _bass(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
-    if ((this.state.layers!.bass ?? 0) <= 0) return;
+  _bass(t: number, barLen: number, beat: number, chord: Chord, tonic: number, meter: number) {
+    if (this.state.layers.bass <= 0) return;
     const dest = this.layer.bass;
     const root = ftom(A2, tonic + chord.r);
     const riff = this.state.riff;
@@ -323,8 +354,8 @@ export class Score {
     }
   }
 
-  _pad(t: number, barLen: number, chord: any, tonic: number) {
-    if ((this.state.layers!.pad ?? 0) <= 0) return;
+  _pad(t: number, barLen: number, chord: Chord, tonic: number) {
+    if (this.state.layers.pad <= 0) return;
     const dest = this.layer.pad;
     // Three voices maximum: a fourth costs a voice and adds nothing you can
     // hear under the strings.
@@ -337,8 +368,8 @@ export class Score {
     }
   }
 
-  _strings(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
-    if ((this.state.layers!.strings ?? 0) <= 0) return;
+  _strings(t: number, barLen: number, beat: number, chord: Chord, tonic: number, meter: number) {
+    if (this.state.layers.strings <= 0) return;
     const dest = this.layer.strings;
     const notes = voiceChord(chord, 12);
     if (this.state.riff) {
@@ -365,8 +396,8 @@ export class Score {
     }
   }
 
-  _harp(t: number, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
-    if ((this.state.layers!.harp ?? 0) <= 0) return;
+  _harp(t: number, barLen: number, beat: number, chord: Chord, tonic: number, meter: number) {
+    if (this.state.layers.harp <= 0) return;
     const dest = this.layer.harp;
     const notes = voiceChord(chord, 12);
     const up = notes.concat(notes.map((n) => n + 12));
@@ -383,8 +414,8 @@ export class Score {
     }
   }
 
-  _choir(t: number, barLen: number, chord: any, tonic: number, first: boolean) {
-    if ((this.state.layers!.choir ?? 0) <= 0) return;
+  _choir(t: number, barLen: number, chord: Chord, tonic: number, first: boolean) {
+    if (this.state.layers.choir <= 0) return;
     const dest = this.layer.choir;
     // The choir is expensive (three formant filters a voice) — two notes only.
     const notes = voiceChord(chord, 0);
@@ -398,8 +429,8 @@ export class Score {
     }
   }
 
-  _brass(t: number, barLen: number, beat: number, chord: any, next: any, tonic: number, meter: number) {
-    if ((this.state.layers!.brass ?? 0) <= 0) return;
+  _brass(t: number, barLen: number, beat: number, chord: Chord, next: Chord, tonic: number, meter: number) {
+    if (this.state.layers.brass <= 0) return;
     const dest = this.layer.brass;
     const notes = voiceChord(chord, 0);
     if (this.stateName === 'boss') {
@@ -430,7 +461,7 @@ export class Score {
   }
 
   _perc(t: number, beat: number, meter: number, first: boolean) {
-    if ((this.state.layers!.perc ?? 0) <= 0) return;
+    if (this.state.layers.perc <= 0) return;
     const dest = this.layer.perc;
     const s = this.stateName;
     if (s === 'combat') {
@@ -439,7 +470,7 @@ export class Score {
         if (b === 1 || b === 3) this.inst.snare(t + b * beat, { dest, gain: 1.1, priority: 1 });
         // Sixteenth ghost notes ride under it at high intensity.
         if (this.intensity > 0.55) {
-          this.inst.snare(t + (b + 0.5) * beat, { dest, gain: 0.22, decay: 0.06, bright: true, priority: 0 });
+          this.inst.snare(t + (b + 0.5) * beat, { dest, gain: 0.22, decay: 0.06, crisp: true, priority: 0 });
         }
       }
       if (first) this.inst.cymbal(t, { dest, gain: 0.8, decay: 1.8, priority: 2 });
@@ -475,7 +506,7 @@ export class Score {
    * strings on the field, brass in combat, choir at a boss, flute at camp.
    */
   _melody(t: number, beat: number, meter: number, tonic: number) {
-    const weight = this.state.layers!.melody ?? 0;
+    const weight = this.state.layers.melody;
     if (weight <= 0) return;
     const mel = this.state.melody;
     if (!mel || !mel.length) return;
@@ -512,7 +543,7 @@ export class Score {
         this.inst.strings(f, at, dur * 0.94, {
           dest, gain: g * 1.25, unison: 2, spread: 7, attack: 0.075, release: 0.45, bright: 1.1, priority: 3,
         });
-        if ((this.state.layers!.wood ?? 0) > 0 && vel > 0.8) {
+        if (this.state.layers.wood > 0 && vel > 0.8) {
           this.inst.wood(f * 2, at, dur * 0.9, { dest: this.layer.wood, gain: g * 0.5, priority: 1 });
         }
       }

@@ -8,8 +8,15 @@
  * render in `tools`-land has to produce the same buffer twice.
  */
 
+/**
+ * A seeded uniform generator, 0..1. `makeRng` is the only thing that builds
+ * one; passing the function around rather than a class is what lets the
+ * offline render and the live game share a stream.
+ */
+export type RngFn = () => number;
+
 /** xorshift32 — cheap, deterministic, good enough for noise. */
-export function makeRng(seed = 1) {
+export function makeRng(seed = 1): RngFn {
   let s = (seed >>> 0) || 0x9e3779b9;
   return () => {
     s ^= s << 13; s >>>= 0;
@@ -20,7 +27,7 @@ export function makeRng(seed = 1) {
 }
 
 /** Bipolar white noise from a unit-range rng. */
-const bi = (rng: any) => rng() * 2 - 1;
+const bi = (rng: RngFn) => rng() * 2 - 1;
 
 /**
  * A looping noise bed.
@@ -80,14 +87,37 @@ export function noiseBuffer(ctx: BaseAudioContext, seconds: number, color: 'whit
 }
 
 /**
+ * One synthesised room, as the reverb tables author it. Every field has a
+ * default, so a partial spec is a legitimate room.
+ */
+export interface SpaceSpec {
+  /** Length of the impulse response. */
+  seconds?: number;
+  /** Exponent of the decay envelope -- higher is a faster tail. */
+  decay?: number;
+  predelay?: number;
+  /** High-frequency absorption, 0..1. */
+  damp?: number;
+  /** Discrete early reflections as `[seconds, amplitude]`. */
+  early?: EarlyReflection[];
+  /** Stereo jitter on the early pattern. */
+  width?: number;
+  seed?: number;
+}
+
+/** One early reflection: `[delay in seconds, amplitude]`. */
+export type EarlyReflection = [number, number];
+
+/**
  * A synthesised room. Exponentially decaying noise with progressive high-
  * frequency damping (air absorption), a pre-delay, and a handful of discrete
  * early reflections — the early pattern is what actually tells the ear whether
  * it is standing in a canyon or a tent.
  *
- * @param {object} o
- * */
-export function impulseResponse(ctx: BaseAudioContext, o: { seconds?: number, decay?: number, predelay?: number, damp?: number, early?: number[][], width?: number, seed?: number } = {}) {
+ * @param o the room, as `Graph.SPACES` authors it
+ *
+ */
+export function impulseResponse(ctx: BaseAudioContext, o: SpaceSpec = {}) {
   const seconds = o.seconds ?? 2.4;
   const decay = o.decay ?? 2.4;
   const predelay = o.predelay ?? 0.012;
@@ -157,7 +187,10 @@ export function softClipCurve(k: number = 3, n = 1024) {
 
 /* --------------------------------------------------------------- spectra */
 
-const WAVE_CACHE = new WeakMap();
+/** Named timbre, one entry per `SPECTRA` key. */
+export type WaveName = keyof typeof SPECTRA;
+
+const WAVE_CACHE = new WeakMap<BaseAudioContext, Map<WaveName, PeriodicWave>>();
 
 /**
  * Harmonic spectra for the orchestral toolkit. A PeriodicWave costs one
@@ -178,23 +211,23 @@ const SPECTRA = {
     * (n >= 2 && n <= 4 ? 1.6 : n >= 7 && n <= 9 ? 1.25 : 1),
   // Soft pad — a filtered saw without the fizz.
   pad: (n: number) => (1 / Math.pow(n, 1.35)) * Math.exp(-n / 9),
-  organ: (n: any) => ([0, 1, 0.5, 0.32, 0.24, 0.05, 0.12, 0.03, 0.09][n] ?? 0),
+  organ: (n: number) => ([0, 1, 0.5, 0.32, 0.24, 0.05, 0.12, 0.03, 0.09][n] ?? 0),
 };
 
 /**
  * Cached PeriodicWave for a named timbre.
  */
-export function wave(ctx: BaseAudioContext, name: keyof typeof SPECTRA) {
+export function wave(ctx: BaseAudioContext, name: WaveName): PeriodicWave {
   let map = WAVE_CACHE.get(ctx);
   if (!map) { map = new Map(); WAVE_CACHE.set(ctx, map); }
-  let w = map.get(name);
-  if (w) return w;
-  const fn = SPECTRA[name as keyof typeof SPECTRA] || SPECTRA.pad;
+  const cached = map.get(name);
+  if (cached) return cached;
+  const fn = SPECTRA[name];
   const N = 32;
   const real = new Float32Array(N);
   const imag = new Float32Array(N);
   for (let n = 1; n < N; n++) imag[n] = fn(n);
-  w = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+  const w = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
   map.set(name, w);
   return w;
 }
@@ -204,13 +237,26 @@ export function wave(ctx: BaseAudioContext, name: keyof typeof SPECTRA) {
 /** Exponential ramps hate zero; this is the floor everything ramps to. */
 export const EPS = 0.0001;
 
+/** Attack / decay / sustain / release, all in seconds but `s`, a 0..1 ratio. */
+export interface AdsrOpts {
+  /** Attack, seconds. */
+  a?: number;
+  /** Decay to the sustain level, seconds. */
+  d?: number;
+  /** Sustain level as a fraction of `peak`. */
+  s?: number;
+  /** Release, seconds, after `dur`. */
+  r?: number;
+  /** Peak gain at the top of the attack. */
+  peak?: number;
+}
+
 /**
  * Standard ADSR onto a gain param.
  * @param t start time
  * @param dur total note length (attack..release start)
- * @param o {a, d, s, r, peak}
  */
-export function adsr(p: AudioParam, t: number, dur: number, o: any = {}) {
+export function adsr(p: AudioParam, t: number, dur: number, o: AdsrOpts = {}) {
   const a = o.a ?? 0.01;
   const d = o.d ?? 0.12;
   const s = o.s ?? 0.6;
@@ -241,7 +287,7 @@ export function expTo(p: AudioParam, v: number, t: number) { p.exponentialRampTo
 export function ftom(ref: number, semis: number) { return ref * Math.pow(2, semis / 12); }
 
 /** Random within a range from a supplied rng. */
-export function rr(rng: any, a: number, b: number) { return a + (b - a) * rng(); }
+export function rr(rng: RngFn, a: number, b: number) { return a + (b - a) * rng(); }
 
 /** Clamp. */
 export function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { clamp01, smooth, lerp } from './Geo.ts';
 import { resolvePosture, POSTURE, GESTURES } from './Posture.ts';
+import type { Gesture, Posture } from './Posture.ts';
+import type { Rig } from './Skeleton.ts';
+import type { Look } from './Look.ts';
+import type { Rng } from '../../util/Rng.ts';
 
 /**
  * Procedural animation.
@@ -26,25 +30,46 @@ const _m2 = new THREE.Matrix4();
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
 /** Gait parameter sets, blended by speed. */
-const IDLE_G = {
+const IDLE_G: Gait = {
   stride: 0.05, kneeSwing: 0.20, stance: 0.68, lean: 0.0, arm: 0.06, elbow: 0.22,
   bob: 0.004, pelvisYaw: 0.02, chestYaw: 0.02, roll: 0.01, foot: 0.10, lift: 0.005,
 };
-const WALK_G = {
+const WALK_G: Gait = {
   stride: 0.40, kneeSwing: 0.95, stance: 0.62, lean: 0.045, arm: 0.30, elbow: 0.34,
   bob: 0.020, pelvisYaw: 0.10, chestYaw: 0.13, roll: 0.035, foot: 0.36, lift: 0.045,
 };
-const JOG_G = {
+const JOG_G: Gait = {
   stride: 0.60, kneeSwing: 1.35, stance: 0.44, lean: 0.13, arm: 0.62, elbow: 0.85,
   bob: 0.040, pelvisYaw: 0.13, chestYaw: 0.20, roll: 0.05, foot: 0.55, lift: 0.10,
 };
-const SPRINT_G = {
+const SPRINT_G: Gait = {
   stride: 0.80, kneeSwing: 1.75, stance: 0.34, lean: 0.26, arm: 0.92, elbow: 1.25,
   bob: 0.055, pelvisYaw: 0.16, chestYaw: 0.28, roll: 0.055, foot: 0.70, lift: 0.16,
 };
 
-function blendG(a: any, b: any, t: number, out: any) {
-  for (const k in a) out[k] = a[k] + (b[k] - a[k]) * t;
+/**
+ * One gait's parameter set. Locomotion blends these *parameters* by speed
+ * rather than cross-fading poses, which is what keeps walk/jog/sprint free of
+ * foot-skate and limb popping.
+ */
+export interface Gait {
+  stride: number;
+  kneeSwing: number;
+  /** fraction of the cycle a foot is on the ground. */
+  stance: number;
+  lean: number;
+  arm: number;
+  elbow: number;
+  bob: number;
+  pelvisYaw: number;
+  chestYaw: number;
+  roll: number;
+  foot: number;
+  lift: number;
+}
+
+function blendG(a: Gait, b: Gait, t: number, out: Gait): Gait {
+  for (const k of Object.keys(a) as (keyof Gait)[]) out[k] = a[k] + (b[k] - a[k]) * t;
   return out;
 }
 
@@ -86,11 +111,19 @@ function bell(u: number, holdFrac: number) {
  * stores the cast key it was built from.
  * @param character @returns 
  */
-function postureKey(character: any): string {
+function postureKey(character: AnimTarget): string {
   const n = String(character.name || '').toLowerCase();
-  if (POSTURE[n as keyof typeof POSTURE]) return n;
+  if (POSTURE[n]) return n;
   if (n.startsWith('glad')) return 'gladio';
   return n;
+}
+
+/** One keyframe of an action: a time and the bone Eulers it poses. */
+export interface ActionKey {
+  /** seconds from the start of the action. */
+  t: number;
+  /** bone name -> XYZ Euler radians. */
+  pose: Record<string, number[]>;
 }
 
 /** One keyframed action. `hold` freezes on the last key until released. */
@@ -98,8 +131,71 @@ export interface Action {
   dur: number;
   /** Which bone mask the action drives. */
   mask: string;
-  keys: any[];
+  keys: ActionKey[];
   hold?: boolean;
+}
+
+/** An action in flight. */
+interface ActionState {
+  def: Action;
+  name: string;
+  t: number;
+  speed: number;
+  w: number;
+  hold: boolean;
+}
+
+/** Options for `Animator.play`. */
+export interface PlayOpts {
+  /** playback rate multiplier (default 1). */
+  speed?: number;
+  /** pass `false` to release a `hold` action as soon as it ends. */
+  hold?: boolean;
+}
+
+/** The bit of `Terrain` the foot IK needs: ground height, and slope to stand on. */
+export interface GroundSampler {
+  heightAt(x: number, z: number): number;
+  normalAt?(x: number, z: number, out: THREE.Vector3): THREE.Vector3;
+}
+
+/** What the owning system tells the animator about this frame. */
+export interface AnimState {
+  /** ground speed in metres per second. */
+  speed?: number;
+  velocity?: THREE.Vector3 | null;
+  /** signed yaw rate, radians per second. */
+  turnRate?: number;
+  /** ground to plant the feet on; omit to skip foot IK entirely. */
+  terrain?: GroundSampler | null;
+  /** 0..1 wind strength driving the cloth springs. */
+  wind?: number;
+  /** 0..1 combat readiness — fades the fighting stance in. */
+  combat?: number;
+  /** which hand carries the weapon; anything but 'L' means the right. */
+  weaponHand?: string;
+}
+
+/** A pair of springs driving one bone in two axes. */
+interface SpringPair { x: Spring; z: Spring; }
+
+/**
+ * What the animator needs from whoever owns it.
+ *
+ * `Character` and `npc/NpcRig` are two independent implementations of this —
+ * the party and the townspeople are built the same way but held differently —
+ * so the contract lives here rather than being either concrete class.
+ */
+export interface AnimTarget {
+  /** picks the `POSTURE` entry; the heroes carry display names. */
+  name: string;
+  root: THREE.Object3D;
+  rig: Rig;
+  look: Look;
+  /** per-instance seed, so two copies never blink in lockstep. */
+  seedRnd?: Rng;
+  /** the gaze pivot the eyes ride on, if this owner built one. */
+  eyes?: THREE.Object3D | null;
 }
 
 /** Keyframed action poses for combat. Values are XYZ Euler radians. */
@@ -209,55 +305,63 @@ class Spring {
 }
 
 export class Animator {
-  lookTarget!: any;
+  /** Where the character is looking in world space, or null to release. */
+  lookTarget!: THREE.Vector3 | null;
   _gestureSeq!: number;
   _up!: THREE.Vector3;
   accel!: THREE.Vector3;
-  action!: any;
+  action!: ActionState | null;
   actionEnv!: number;
-  actionMask!: any;
+  actionMask!: string;
   blink!: number;
   blinkSeq!: number;
   blinkTimer!: number;
   blinkTimer0!: number;
   bobY!: number;
-  bones!: any;
-  char!: any;
-  coat!: any;
+  bones!: Record<string, THREE.Bone>;
+  char!: AnimTarget;
+  /** Coat-skirt spring bones. */
+  coat!: SpringPair;
   combatW!: number;
   eyePitch!: number;
   eyeYaw!: number;
   footYaw!: number[];
-  g!: any;
-  gesture!: any;
+  /** The gait parameters for this frame, blended in place. */
+  g!: Gait;
+  gesture!: { def: Gesture, t: number } | null;
   gestureTimer!: number;
   gestureTimer0!: number;
   hipShift!: number;
   lean!: number;
   leanSpring!: Spring;
   lidClose!: number;
-  look!: any;
+  /** Damped head-turn state, in radians. Not `Character.look`. */
+  look!: { yaw: number, pitch: number };
   lookW!: number;
-  p!: any;
+  /** The resolved posture — see `Posture.ts`. */
+  p!: Posture;
   pelvisIK!: number;
   phase!: number;
   phase0!: number;
   plant!: number[];
-  pose!: Map<any, any>;
+  /** bone name -> accumulated XYZ Euler radians for this frame. */
+  pose!: Map<string, number[]>;
   prevVel!: THREE.Vector3;
-  rig!: any;
+  rig!: Rig;
   speed!: number;
-  stanceBias!: any;
+  /** Which leg carries the weight at rest; deterministic, per character. */
+  stanceBias!: number;
   stanceDrop!: number;
-  sway!: any;
+  sway!: SpringPair;
   t!: number;
   t0!: number;
-  tail!: any;
+  /** Hair-tail spring bones. */
+  tail!: SpringPair;
   turnSpring!: Spring;
   /**
    * @param character owning Character instance
    */
-  constructor(character: any) {
+  constructor(character: AnimTarget) {
     this.char = character;
     this.rig = character.rig;
     this.bones = this.rig.byName;
@@ -291,7 +395,7 @@ export class Animator {
      */
     const key = postureKey(character);
     this.p = resolvePosture(key);
-    if (!POSTURE[key as keyof typeof POSTURE]) {
+    if (!POSTURE[key]) {
       this.p.weight = THREE.MathUtils.clamp(this.stanceBias, -0.8, 0.8);
       this.p.biasW = 1;
     }
@@ -359,7 +463,7 @@ export class Animator {
   }
 
   /** Start a keyframed action. @param name @param opts */
-  play(name: string, opts: any = {}) {
+  play(name: string, opts: PlayOpts = {}) {
     const def = ACTIONS[name];
     if (!def) return;
     this.action = { def, name, t: 0, speed: opts.speed || 1, w: 0, hold: !!def.hold && opts.hold !== false };
@@ -368,7 +472,7 @@ export class Animator {
   stopAction() { if (this.action) this.action.hold = false; }
 
   /** Where the character should be looking, or null to release. */
-  setLookTarget(v: any) { this.lookTarget = v; }
+  setLookTarget(v: THREE.Vector3 | null) { this.lookTarget = v; }
 
   // -- pose accumulation ---------------------------------------------------
   set(name: string, x: number, y: number, z: number) {
@@ -388,7 +492,7 @@ export class Animator {
    * @param st { speed, velocity, grounded, airTime, turnRate, terrain,
    *   wind, combat (0..1), weaponHand ('L'|'R') }
    */
-  update(dt: number, st: any) {
+  update(dt: number, st: AnimState) {
     this.t += dt;
     const s = this.rig.dims.s;
     const speed = st.speed || 0;
@@ -437,7 +541,7 @@ export class Animator {
   }
 
   /** The parametric locomotion cycle. */
-  evalGait(p: number, g: any, w: number, st: any) {
+  evalGait(p: number, g: Gait, w: number, st: AnimState) {
     if (w <= 0.001) return;
     const legs = ['L', 'R'];
     for (let i = 0; i < 2; i++) {
@@ -663,7 +767,7 @@ export class Animator {
    *
    * @param t @param restW @param st
    */
-  evalStance(t: number, restW: number, st: any) {
+  evalStance(t: number, restW: number, st: AnimState) {
     const w = this.combatW * restW;
     if (w <= 0.002) return;
     const p = this.p;
@@ -739,7 +843,7 @@ export class Animator {
    *
    * @param dt @param moveW @param st
    */
-  evalGesture(dt: number, moveW: number, st: any) {
+  evalGesture(dt: number, moveW: number, st: AnimState) {
     const list = this.p.gestures;
     if (!list || !list.length) return;
     const busy = moveW > 0.12 || this.combatW > 0.15 || !!this.action;
@@ -749,7 +853,7 @@ export class Animator {
       this.gestureTimer -= dt;
       if (this.gestureTimer > 0) return;
       this._gestureSeq++;
-      const def = GESTURES[list[this._gestureSeq % list.length] as keyof typeof GESTURES];
+      const def = GESTURES[list[this._gestureSeq % list.length]];
       if (!def) return;
       this.gesture = { def, t: 0 };
       // deterministic spacing — two runs of the capture harness must match
@@ -778,7 +882,7 @@ export class Animator {
   }
 
   /** Look-at, blink, lean and sway layers. */
-  evalAdditive(dt: number, st: any, moveW: number) {
+  evalAdditive(dt: number, st: AnimState, moveW: number) {
     // ---- look-at
     let yaw = 0, pitch = 0, want = 0;
     if (this.lookTarget) {
@@ -855,7 +959,7 @@ export class Animator {
   }
 
   /** Write the accumulated pose onto the skeleton. */
-  apply(st: any) {
+  apply(st: AnimState) {
     const bones = this.rig.byName;
     const P = this.rig.P;
     for (const name in bones) {
@@ -890,7 +994,7 @@ export class Animator {
   }
 
   /** Coat tails and long hair — angular springs driven by motion and wind. */
-  springs(dt: number, st: any) {
+  springs(dt: number, st: AnimState) {
     const vel = st.velocity || _v.set(0, 0, 0);
     const yawInv = -(this.char.root.rotation.y);
     const cos = Math.cos(yawInv), sin = Math.sin(yawInv);
@@ -922,8 +1026,10 @@ export class Animator {
    * to the slope and dips the pelvis when a foot needs to reach below the
    * animated pose.
    */
-  footIK(dt: number, st: any) {
+  footIK(dt: number, st: AnimState) {
+    // `update` only calls this when `st.terrain` is set
     const terrain = st.terrain;
+    if (!terrain) return;
     const rig = this.rig;
     const root = this.char.root;
     const s = rig.dims.s;
@@ -936,7 +1042,7 @@ export class Animator {
     const ankleH = rig.P.footL.y;
     const bones = rig.byName;
     const need = [0, 0];
-    const targets = [];
+    const targets: { side: string, world: THREE.Vector3, ty: number, plant: number, gy: number }[] = [];
 
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? 'L' : 'R';
@@ -1029,9 +1135,12 @@ export class Animator {
  * Rotate `bone` so the segment toward its child points at `target`, keeping the
  * given pole direction as the joint's forward reference.
  */
-function aimBone(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, pole: THREE.Vector3) {
-  bone.parent.updateMatrixWorld();
-  const parentQ = bone.parent.getWorldQuaternion(_q).clone();
+function aimBone(bone: THREE.Bone, bindFrom: THREE.Vector3, bindTo: THREE.Vector3, target: THREE.Vector3, pole: THREE.Vector3) {
+  // every bone this is called on is a child of another bone in the same rig
+  const parent = bone.parent;
+  if (!parent) return;
+  parent.updateMatrixWorld();
+  const parentQ = parent.getWorldQuaternion(_q).clone();
   const worldPos = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
   const bindDir = bindTo.clone().sub(bindFrom).normalize();
   const want = target.clone().sub(worldPos);
@@ -1046,7 +1155,7 @@ function aimBone(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, p
   bone.quaternion.copy(parentQ).invert().multiply(world);
 }
 
-function basis(m: THREE.Matrix4, z: any, up: THREE.Vector3) {
+function basis(m: THREE.Matrix4, z: THREE.Vector3, up: THREE.Vector3) {
   _v.copy(z).normalize();
   _v2.copy(up).addScaledVector(_v, -up.dot(_v));
   if (_v2.lengthSq() < 1e-8) _v2.set(_v.y, -_v.x, 0);

@@ -90,46 +90,32 @@ const _box = new THREE.Box3();
 /**
  * Analytic box proxies for the instanced boulder fields.
  *
- * `Rocks` normalises every base geometry to a unit max radius, so an item's
- * `s` is its world radius in metres — the proxy is that, jittered per axis,
- * shrunk to the inscribed core so a walker hugs the silhouette rather than a
- * circumscribed cube, and lowered by the burial depth.
+ * **This has never returned anything, and the player has never collided with a
+ * boulder.** It read `g.mesh` and `g.items` off each `Rocks` group; neither
+ * field has existed at any point in that file's history. A group holds `near`
+ * and `far` -- the two instanced LOD meshes -- and the instances live in the
+ * streamed window, `rocks.stream.live`, not on the group. So `if (!geo)
+ * continue` skipped all eight rock kinds and the function returned `[]` every
+ * time. `CollisionWorld.stats.rockProxies` has read 0 since it was written, and
+ * nothing looks at it.
+ *
+ * It stayed invisible for the usual reason: the line above it,
+ * `(g.kind && g.kind.key) || (g.mesh && g.mesh.name) || ''`, works off its
+ * first arm, so the dead second arm never announced itself.
+ *
+ * Wiring it up is `g.mesh` -> `g.near` and `g.items` -> iterating
+ * `rocks.stream.live.values()` and `rocks.outcrops.live.values()`. That is a
+ * behaviour change -- boulders would start colliding, and the proxy count is
+ * unbounded by anything but the streamed window -- so it wants its own commit
+ * and a perf measurement, not a typing pass. The arithmetic it used (unit-radius
+ * `s` as world metres, per-axis jitter, inscribed-core shrink of 0.74, burial
+ * sink along the terrain normal, and the 0.34 m knee-high cull) is in the git
+ * history at this path.
  *
  * @param minSize smallest boulder radius worth colliding with
  */
-export function collectRockProxies(game: Game, minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
-  const props = game.get('Props');
-  const rocks = props && props.rocks;
-  if (!rocks || !rocks.groups) return [];
-  const out = [];
-  for (const g of rocks.groups) {
-    const key = (g.kind && g.kind.key) || (g.mesh && g.mesh.name) || '';
-    if (/pebble/.test(key)) continue;
-    const geo = g.mesh && g.mesh.geometry;
-    if (!geo) continue;
-    if (!geo.boundingBox) geo.computeBoundingBox();
-    const bb = geo.boundingBox;
-    const halfY = Math.max(Math.abs(bb.min.y), Math.abs(bb.max.y));
-    for (const it of g.items) {
-      if (it.s < minSize) continue;
-      const sink = it.s * it.bury;
-      const cy = it.y - it.ny * sink;
-      // exposed height above the ground it sits on; knee-high stones are
-      // step-up fodder and only cost the solver time
-      const top = cy + it.s * it.sy * halfY;
-      if (top - it.y < 0.34) continue;
-      out.push({
-        cx: it.x - it.nx * sink,
-        cy,
-        cz: it.z - it.nz * sink,
-        hx: it.s * it.sx * 0.74,
-        hy: it.s * it.sy * halfY,
-        hz: it.s * it.sz * 0.74,
-        yaw: it.yaw,
-      });
-    }
-  }
-  return out;
+export function collectRockProxies(_game: Game, _minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
+  return [];
 }
 
 /**

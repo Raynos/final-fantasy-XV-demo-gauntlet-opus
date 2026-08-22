@@ -1,5 +1,6 @@
 import { noiseBuffer, makeRng, clamp, EPS, hit } from './Dsp.ts';
-import type { AudioGraph } from './Graph.ts';
+import type { RngFn } from './Dsp.ts';
+import type { AudioGraph, Vec3 } from './Graph.ts';
 import type { Sfx } from './Sfx.ts';
 
 /**
@@ -13,6 +14,41 @@ import type { Sfx } from './Sfx.ts';
  * exactly like the score, which means the offline verification render produces
  * the same ambience the live game does.
  */
+
+/** A filter and the gain behind it -- the shape every continuous bed takes. */
+interface Band {
+  filter: BiquadFilterNode;
+  gain: GainNode;
+}
+
+/**
+ * One of the three wind bands. `base` and `f` are what the band was authored
+ * at; `setWind` drives away from them rather than replacing them.
+ */
+interface WindBand extends Band {
+  /** Authored gain at full strength. */
+  base: number;
+  /** Authored centre frequency, Hz. */
+  f: number;
+}
+
+/** The lake bed: a filtered swell, panned to the nearest point on the shore. */
+interface WaterBed {
+  src: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+  panner: PannerNode;
+  /** The slow swell of the lake breathing against the shore. */
+  lfo: OscillatorNode;
+}
+
+/** A fuel stop's floodlights: mains hum, its partials, and tube hiss. */
+interface HumBed {
+  gain: GainNode;
+  panner: PannerNode;
+  oscs: OscillatorNode[];
+  noise: AudioBufferSourceNode;
+}
 export class Ambience {
   _nextCricket!: number;
   _nextBird!: number;
@@ -20,7 +56,7 @@ export class Ambience {
   _nextDrip!: number;
   _nextHowl!: number;
   brown!: AudioBuffer;
-  cicada!: any;
+  cicada!: Band;
   cicadaLfo!: OscillatorNode;
   cicadaSrc!: AudioBufferSourceNode;
   ctx!: BaseAudioContext;
@@ -30,25 +66,25 @@ export class Ambience {
   gustB!: OscillatorNode;
   gustBG!: GainNode;
   hours!: number;
-  hum!: any;
+  hum!: HumBed | null;
   indoors!: number;
-  nightBed!: any;
+  nightBed!: Band;
   nightDepth!: number;
   nightSrc!: AudioBufferSourceNode;
   out!: GainNode;
   pink!: AudioBuffer;
   rain!: number;
-  rainHiss!: any;
-  rainPatter!: any;
-  rainRoar!: any;
+  rainHiss!: Band;
+  rainPatter!: Band;
+  rainRoar!: Band;
   rainSrc!: AudioBufferSourceNode;
-  rng!: any;
+  rng!: RngFn;
   scheduledTo!: number;
   sfx!: Sfx;
-  water!: any;
+  water!: WaterBed | null;
   white!: AudioBuffer;
   wind!: number;
-  windBands!: any[];
+  windBands!: WindBand[];
   windSrc!: AudioBufferSourceNode;
   constructor(graph: import('./Graph.ts').AudioGraph, sfx: import('./Sfx.ts').Sfx) {
     this.graph = graph;
@@ -144,7 +180,8 @@ export class Ambience {
     this.scheduledTo = 0;
   }
 
-  _band(src: AudioBufferSourceNode, type: BiquadFilterType, freq: number, q: number, dest: AudioNode | null = null) {
+  _band(src: AudioBufferSourceNode, type: BiquadFilterType, freq: number, q: number,
+    dest: AudioNode | null = null): Band {
     const ctx = this.ctx;
     const f = ctx.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -193,7 +230,7 @@ export class Ambience {
    * @param hours 0..24
    * @param [nightDepth] 0..1 from DayCycle — deepens the daemon layer
    */
-  setTimeOfDay(hours: number, nightDepth: number = 0, at: any = null) {
+  setTimeOfDay(hours: number, nightDepth: number = 0, at: number | null = null) {
     const t = at ?? this.ctx.currentTime;
     this.hours = ((hours % 24) + 24) % 24;
     this.nightDepth = nightDepth;
@@ -220,7 +257,7 @@ export class Ambience {
    * @param pos nearest point on the water
    * @param distance metres
    */
-  setWater(pos: {x:number,y:number,z:number} | null, distance: number) {
+  setWater(pos: Vec3 | null, distance: number) {
     if (!pos || distance > 90) {
       if (this.water) this.water.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 1.2);
       return;
@@ -259,7 +296,7 @@ export class Ambience {
    * The floodlights over a fuel stop: mains hum, its octave, and the ballast
    * buzz an octave and a fifth up, with a slow flicker.
    */
-  setFloodlights(pos: {x:number,y:number,z:number} | null, distance: number) {
+  setFloodlights(pos: Vec3 | null, distance: number) {
     const ctx = this.ctx;
     if (!pos || distance > 45) {
       if (this.hum) this.hum.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.9);
@@ -270,8 +307,9 @@ export class Ambience {
       g.gain.value = 0;
       const p = this.graph.panner(pos, { refDistance: 6, maxDistance: 60, rolloff: 1.6 });
       g.connect(p); p.connect(this.out);
-      const oscs = [];
-      for (const [f, a] of [[50, 0.55], [100, 0.35], [150, 0.12], [300, 0.05]]) {
+      const oscs: OscillatorNode[] = [];
+      const partials: [number, number][] = [[50, 0.55], [100, 0.35], [150, 0.12], [300, 0.05]];
+      for (const [f, a] of partials) {
         const o = ctx.createOscillator();
         o.type = 'sawtooth';
         o.frequency.value = f;
@@ -311,7 +349,7 @@ export class Ambience {
    * @param horizon absolute context time
    * @param [origin] listener position
    */
-  scheduleUntil(horizon: number, origin: {x:number,y:number,z:number} = ORIGIN) {
+  scheduleUntil(horizon: number, origin: Vec3 = ORIGIN) {
     const start = Math.max(this.scheduledTo, horizon - 4);
     if (horizon <= start) return;
     const h = this.hours;
@@ -369,11 +407,11 @@ export class Ambience {
    * Birdsong: two to five syllables, each a fast frequency sweep. Real birds
    * chirp in units; a single sine blip sounds like a game menu.
    */
-  _bird(t: number, origin: any) {
+  _bird(t: number, origin: Vec3) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const out = ctx.createGain();
     out.gain.value = 0.16 + this.rng() * 0.12;
     const a = this.rng() * Math.PI * 2;
@@ -387,7 +425,8 @@ export class Ambience {
     const base = 2400 + this.rng() * 2600;
     const n = 2 + Math.floor(this.rng() * 4);
     const gap = 0.055 + this.rng() * 0.07;
-    let last: any = null, lastEnd = 0;
+    let last: OscillatorNode | null = null;
+    let lastEnd = 0;
     for (let i = 0; i < n; i++) {
       const st = t + i * gap;
       const dur = 0.035 + this.rng() * 0.05;
@@ -410,11 +449,11 @@ export class Ambience {
   }
 
   /** A cricket: a short burst of a resonant band, repeated in a trill. */
-  _cricket(t: number, origin: any) {
+  _cricket(t: number, origin: Vec3) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const out = ctx.createGain();
     out.gain.value = 0.09 + this.rng() * 0.07;
     const a = this.rng() * Math.PI * 2;
@@ -444,11 +483,11 @@ export class Ambience {
   }
 
   /** A drop off a rock or a leaf — what makes rain sound like a place. */
-  _drip(t: number, origin: any) {
+  _drip(t: number, origin: Vec3) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
-    const nodes = [];
+    const nodes: AudioNode[] = [];
     const a = this.rng() * Math.PI * 2;
     const d = 1.5 + this.rng() * 9;
     const out = ctx.createGain();
@@ -471,7 +510,7 @@ export class Ambience {
   }
 
   /** Realtime tick: keep the look-ahead window fed. */
-  update(origin: any) {
+  update(origin: Vec3) {
     this.scheduleUntil(this.ctx.currentTime + 1.2, origin);
   }
 
@@ -486,4 +525,4 @@ export class Ambience {
   }
 }
 
-const ORIGIN = { x: 0, y: 0, z: 0 };
+const ORIGIN: Vec3 = { x: 0, y: 0, z: 0 };

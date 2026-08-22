@@ -15,14 +15,61 @@ import { makeTexture, makeDataMap, normalFromHeight, canvasTexture } from '../..
  * so props, characters and VFX all sit in the same haze as the walls.
  */
 
-const cache = new Map();
-function memo(k: string, f: any) {
-  if (!cache.has(k)) {
-    const m = f();
-    m.name = k;
-    cache.set(k, m);
-  }
-  return cache.get(k);
+/**
+ * Height field for a procedural surface: `(u, v)` in 0..1 tile space to a
+ * relief value. The same function drives the albedo shading, the normal map and
+ * the roughness map unless a recipe overrides one of them.
+ */
+export type HeightFn = (u: number, v: number) => number;
+
+/**
+ * Albedo override. `c` is the RGB triple to write, in place; `base` is the
+ * recipe's tint, already un-gamma'd.
+ */
+export type AlbedoFn = (u: number, v: number, c: number[], base: THREE.Color) => void;
+
+/** Single-channel map generator, `(u, v)` to 0..1. */
+export type ChannelFn = (u: number, v: number) => number;
+
+// Two caches rather than one, so `memo` can promise back what it was handed:
+// a heterogeneous store can only return its own value type, and everything
+// downstream wants a Material or a Texture, not the union of the two.
+const materials = new Map<string, THREE.Material>();
+const textures = new Map<string, THREE.Texture>();
+
+function memoMaterial(k: string, f: () => THREE.Material): THREE.Material {
+  let m = materials.get(k);
+  if (!m) { m = f(); m.name = k; materials.set(k, m); }
+  return m;
+}
+
+function memoTexture(k: string, f: () => THREE.Texture): THREE.Texture {
+  let t = textures.get(k);
+  if (!t) { t = f(); t.name = k; textures.set(k, t); }
+  return t;
+}
+
+/** Everything `pbr()` needs to build one procedural material set. */
+export interface PbrRecipe {
+  /** Base colour, as a hex literal read in linear space. */
+  tint: number;
+  height: HeightFn;
+  size?: number;
+  normalStrength?: number;
+  /** `[base, range]`: roughness is `base + height * range`. */
+  rough?: [number, number];
+  metal?: number;
+  metalMap?: ChannelFn | null;
+  albedo?: AlbedoFn | null;
+  roughness?: number;
+  /** Environment-map intensity, for wet or polished surfaces. */
+  sheen?: number;
+  /**
+   * Relief field for the normal map, when it must differ from `height`. A big
+   * soft blotch belongs in the albedo and nowhere near the normal, or concrete
+   * comes out looking like polished marble.
+   */
+  normalHeight?: HeightFn | null;
 }
 
 const lerp = THREE.MathUtils.lerp;
@@ -32,10 +79,10 @@ const ss = THREE.MathUtils.smoothstep;
 function pbr(key: string, {
   tint, height, size = 512, normalStrength = 2.0, rough = [0.7, 0.3], metal = 0,
   metalMap = null, albedo = null, roughness = 0.9, sheen = 0, normalHeight = null,
-}: any) {
-  return memo(key, () => {
+}: PbrRecipe): THREE.Material {
+  return memoMaterial(key, () => {
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(size, (u: any, v: any, c: any) => {
+    const map = makeTexture(size, (u: number, v: number, c: number[]) => {
       if (albedo) { albedo(u, v, c, base); return; }
       const k = 0.55 + height(u, v) * 0.8;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
@@ -46,7 +93,7 @@ function pbr(key: string, {
     // looking like polished marble.
     const normalMap = normalFromHeight(size, normalHeight || height, normalStrength);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(Math.min(size, 256), (u: any, v: any) => rough[0] + height(u, v) * rough[1]);
+    const roughnessMap = makeDataMap(Math.min(size, 256), (u: number, v: number) => rough[0] + height(u, v) * rough[1]);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     const opts: THREE.MeshStandardMaterialParameters = {
       color: 0xffffff, map, normalMap, roughnessMap,
@@ -91,7 +138,7 @@ export function trenchConcrete() {
   return pbr('trenchConcrete', {
     tint: 0x77797c, height: h, normalHeight: hn, size: 512, normalStrength: 1.5,
     rough: [0.74, 0.24], roughness: 0.95,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const k = 0.5 + h(u, v) * 0.85;
       // rust weep running down from the reinforcement, and soot at the base
       const weep = Math.max(0, n.fbm2(u * 20, v * 2.4 + 3, 3)) * ss(0.15, 0.85, v) * 0.75;
@@ -122,7 +169,7 @@ export function trenchFloor() {
   return pbr('trenchFloor', {
     tint: 0x66655f, height: h, normalHeight: hn, size: 512, normalStrength: 1.7,
     rough: [0.78, 0.22], roughness: 0.97,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const k = 0.5 + h(u, v) * 0.85;
       const dust = ss(0.35, 0.8, n.fbm2(u * 3.4 + 11, v * 3.4 - 7, 4) * 0.5 + 0.5);
       c[0] = lerp(base.r, 0.30, dust) * k;
@@ -140,7 +187,7 @@ export function corrodedSteel(tint = 0x4a4038) {
   return pbr(`corrodedSteel${tint}`, {
     tint, height: h, size: 256, normalStrength: 1.8, rough: [0.42, 0.5],
     roughness: 0.72, metal: 0.85,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const r = n.fbm2(u * 5.5, v * 5.5, 4) * 0.5 + 0.5;
       const rust = ss(0.34, 0.78, r);
       const k = 0.5 + h(u, v) * 0.8;
@@ -184,7 +231,7 @@ export function mineRock() {
   return pbr('mineRock', {
     tint: 0x6b5844, height: h, size: 512, normalStrength: 2.1,
     rough: [0.72, 0.28], roughness: 0.96,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const k = 0.42 + h(u, v) * 0.9;
       // iron oxide in the strata, coal dust in the low spots
       const iron = Math.max(0, n.fbm2(u * 3.6 + 5, v * 3.6, 3)) * 0.85;
@@ -206,7 +253,7 @@ export function oreSeam() {
   return pbr('oreSeam', {
     tint: 0x3a3630, height: h, size: 256, normalStrength: 1.2,
     rough: [0.50, 0.34], roughness: 0.78, metal: 0.38,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const vein = 1 - ss(0.0, 0.16, Math.abs(n.fbm2(u * 5, v * 12, 4)));
       const k = 0.34 + h(u, v) * 0.38;
       c[0] = lerp(base.r * k, 0.26, vein);
@@ -228,7 +275,7 @@ export function pitTimber() {
   return pbr('pitTimber', {
     tint: 0x4a3b2a, height: h, size: 256, normalStrength: 2.2,
     rough: [0.8, 0.2], roughness: 0.98,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const k = 0.48 + h(u, v) * 0.85;
       const rot = ss(0.4, 0.85, n.fbm2(u * 4, v * 4, 3) * 0.5 + 0.5) * 0.6;
       c[0] = lerp(base.r, 0.10, rot) * k;
@@ -245,7 +292,7 @@ export function railSteel() {
   return pbr('railSteel', {
     tint: 0x5a4a3c, height: h, size: 256, normalStrength: 1.2,
     rough: [0.3, 0.42], roughness: 0.5, metal: 0.92,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       // the running surface is worn bright; the web and foot are scale-brown
       const worn = 1 - ss(0.30, 0.46, Math.abs(v - 0.5));
       const k = 0.5 + h(u, v) * 0.7;
@@ -273,7 +320,7 @@ export function wetLimestone() {
   return pbr('wetLimestone', {
     tint: 0x5c6062, height: h, size: 512, normalStrength: 2.0,
     rough: [0.46, 0.32], roughness: 0.80, sheen: 0.6,
-    albedo: (u: number, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: number[], base: THREE.Color) => {
       const k = 0.36 + h(u, v) * 0.82;
       const wet = ss(0.35, 0.85, n.fbm2(u * 3, v * 5.5, 4) * 0.5 + 0.5);
       const algae = Math.max(0, n.fbm2(u * 7 + 21, v * 7 - 4, 3)) * 0.5;
@@ -314,8 +361,8 @@ export function dripstone() {
 /* ------------------------------------------------------------------- shared */
 
 /** Self-lit accent. Emissive is left on so the light rig can ramp it. */
-export function emissiveMaterial(color = 0xffb066, intensity = 3.0, base = 0x090b0d) {
-  return memo(`emis${color}${intensity}`, () => new THREE.MeshStandardMaterial({
+export function emissiveMaterial(color = 0xffb066, intensity = 3.0, base = 0x090b0d): THREE.Material {
+  return memoMaterial(`emis${color}${intensity}`, () => new THREE.MeshStandardMaterial({
     color: base, emissive: color, emissiveIntensity: intensity,
     roughness: 0.45, metalness: 0, vertexColors: false,
   }));
@@ -325,7 +372,7 @@ export function emissiveMaterial(color = 0xffb066, intensity = 3.0, base = 0x090
  * Additive, camera-facing glow card. One draw call covers every lamp halo in a
  * dungeon; this is what actually reads as "there is air in here".
  */
-export function glowCardMaterial(texture: any) {
+export function glowCardMaterial(texture: THREE.Texture) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: texture },
@@ -419,13 +466,13 @@ export function shaftMaterial(color = 0xffc27a, strength = 0.5) {
  * mouth or an adit so the opening reads as a hole rather than as a dark wall,
  * and any amount of sun on it destroys that.
  */
-export function voidMaterial() {
-  return memo('void', () => new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+export function voidMaterial(): THREE.Material {
+  return memoMaterial('void', () => new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
 }
 
 /** Still, black interior water — mine sumps and cave pools. */
-export function poolMaterial(tint = 0x0a1416) {
-  return memo(`pool${tint}`, () => {
+export function poolMaterial(tint = 0x0a1416): THREE.Material {
+  return memoMaterial(`pool${tint}`, () => {
     const n = new Noise(4321);
     const h = (u: number, v: number) => n.fbm2(u * 8, v * 8, 4) * 0.5 + 0.5;
     const normalMap = normalFromHeight(256, h, 0.35);
@@ -439,8 +486,8 @@ export function poolMaterial(tint = 0x0a1416) {
 }
 
 /** Painted hazard plate — imperial signage and stencilled bay numbers. */
-export function stencilTexture(text = '04', bg = '#20242a', fg = '#c8b23a') {
-  return memo(`stencil${text}`, () => canvasTexture(128, (ctx: any, s: number) => {
+export function stencilTexture(text = '04', bg = '#20242a', fg = '#c8b23a'): THREE.Texture {
+  return memoTexture(`stencil${text}`, () => canvasTexture(128, (ctx: CanvasRenderingContext2D, s: number) => {
     ctx.fillStyle = bg; ctx.fillRect(0, 0, s, s);
     ctx.strokeStyle = fg; ctx.lineWidth = s * 0.03;
     ctx.strokeRect(s * 0.1, s * 0.1, s * 0.8, s * 0.8);
@@ -452,8 +499,8 @@ export function stencilTexture(text = '04', bg = '#20242a', fg = '#c8b23a') {
 }
 
 /** Soft round falloff used for glow cards, motes and haze. */
-export function glowSprite(size = 128, power = 2.2) {
-  return memo(`glowsprite${size}${power}`, () => {
+export function glowSprite(size = 128, power = 2.2): THREE.Texture {
+  return memoTexture(`glowsprite${size}${power}`, () => {
     const data = new Uint8Array(size * size * 4);
     const half = size / 2;
     for (let y = 0; y < size; y++) {
@@ -471,18 +518,24 @@ export function glowSprite(size = 128, power = 2.2) {
     t.magFilter = THREE.LinearFilter;
     t.generateMipmaps = true;
     t.needsUpdate = true;
-    // memo() stamps .name, which a texture also accepts
     return t;
   });
 }
 
-/** Free every generated texture. Only used when a dungeon is torn down. */
+/** Free every generated material and texture. Only used when a dungeon is torn down. */
 export function disposeInteriorMaterials() {
-  for (const m of cache.values()) {
-    if (m.dispose) m.dispose();
-    for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
-      if (m[k] && m[k].dispose) m[k].dispose();
+  for (const m of materials.values()) {
+    if (m instanceof THREE.MeshStandardMaterial) {
+      m.map?.dispose();
+      m.normalMap?.dispose();
+      m.roughnessMap?.dispose();
+      m.metalnessMap?.dispose();
+    } else if (m instanceof THREE.MeshBasicMaterial) {
+      m.map?.dispose();
     }
+    m.dispose();
   }
-  cache.clear();
+  for (const t of textures.values()) t.dispose();
+  materials.clear();
+  textures.clear();
 }

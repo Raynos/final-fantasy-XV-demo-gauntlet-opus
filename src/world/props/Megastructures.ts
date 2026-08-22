@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
-import { PartBuilder, loft, ring } from './PartBuilder.ts';
+import { PartBuilder, loft, ring, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 
@@ -24,7 +24,7 @@ import type { Ecology } from '../veg/Ecology.ts';
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 
-function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
+function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   _e.set(rot[0], rot[1], rot[2]);
   _q.setFromEuler(_e);
   return new THREE.Matrix4().compose(
@@ -50,12 +50,49 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
   return g;
 }
 
+/**
+ * The shared material set, built once by {@link Megastructures.build}. A
+ * function rather than a literal inside the class so {@link MegaMats} is the
+ * set itself.
+ */
+function megaMaterials() {
+  return {
+    hull: magitekMaterial(0x2a2f37),
+    hullDark: magitekMaterial(0x171a20),
+    stone: rockMaterial(0x8b7f6d, 0.95, false),
+    pale: concreteMaterial(0x8e8779, 0.94),
+    city: concreteMaterial(0x5d6470, 0.85),
+    lamp: glowMaterial(0xffb066, 2.0, 0x100a06),
+    beacon: glowMaterial(0xff3b21, 3.0, 0x140503),
+    thruster: glowMaterial(0x63c8ff, 3.4, 0x040a12),
+    meteorGlow: glowMaterial(0xff8a2e, 2.2, 0x1a0d05),
+    windows: glowMaterial(0xffd9a0, 0.0, 0x555c67),
+  
+  };
+}
+
+export type MegaMats = ReturnType<typeof megaMaterials>;
+
+/** Something that drifts forever: an airship on station. */
+interface Mover {
+  obj: THREE.Object3D;
+  /** Where it hangs when the clock is at zero. */
+  base: THREE.Vector3;
+  /** Metres per unit of the drift cycle, per axis. */
+  drift: Vec3;
+  /** Vertical bob amplitude, metres. */
+  bob: number;
+  /** Cycles a second. */
+  rate: number;
+}
+
 export class Megastructures {
   dreadnought!: THREE.Object3D;
   eco!: Ecology;
-  glows!: any[];
-  mats!: any;
-  movers!: any[];
+  /** Materials whose emissive is ramped with the light. */
+  glows!: THREE.MeshStandardMaterial[];
+  mats!: MegaMats;
+  movers!: Mover[];
   root!: THREE.Group;
   scene!: THREE.Scene;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
@@ -68,19 +105,8 @@ export class Megastructures {
   }
 
   build() {
-    this.mats = {
-      hull: magitekMaterial(0x2a2f37),
-      hullDark: magitekMaterial(0x171a20),
-      stone: rockMaterial(0x8b7f6d, 0.95, false),
-      pale: concreteMaterial(0x8e8779, 0.94),
-      city: concreteMaterial(0x5d6470, 0.85),
-      lamp: glowMaterial(0xffb066, 2.0, 0x100a06),
-      beacon: glowMaterial(0xff3b21, 3.0, 0x140503),
-      thruster: glowMaterial(0x63c8ff, 3.4, 0x040a12),
-      meteorGlow: glowMaterial(0xff8a2e, 2.2, 0x1a0d05),
-      windows: glowMaterial(0xffd9a0, 0.0, 0x555c67),
-    };
-    for (const k of Object.keys(this.mats)) this.mats[k].name = `mega_${k}`;
+    const M = this.mats = megaMaterials();
+    for (const [k, m] of Object.entries(M)) m.name = `mega_${k}`;
 
     this._dreadnought();
     this._escort();
@@ -188,7 +214,7 @@ export class Megastructures {
     for (let i = 0; i < 3; i++) {
       const at = mat4([i * -128 + rng.gauss(0, 26), i * 22, i * -92 + rng.gauss(0, 26)],
         [0, rng.gauss(0, 0.06), 0], [1.6, 1.6, 1.6]);
-      const put = (mat: THREE.Material, geo: any, p: number[], r?: number[]) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
+      const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
       put(M.hull, hullGeo, [0, 0, 0]);
       for (const sz of [-1, 1]) {
         put(M.hullDark, new THREE.BoxGeometry(15, 1.6, 16), [-2, 3, sz * 10], [sz * 0.2, 0, 0]);

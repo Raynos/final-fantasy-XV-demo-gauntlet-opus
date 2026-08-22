@@ -1,4 +1,5 @@
-import type { Layout } from './Layout.ts';
+import type * as THREE from 'three';
+import type { CorridorKind, Layout, RoomKind } from './Layout.ts';
 import type { Dungeon } from './Dungeon.ts';
 /**
  * The dungeon map.
@@ -9,18 +10,84 @@ import type { Dungeon } from './Dungeon.ts';
  * pale-blue strokes, low-opacity dark fills, angular corners) that a map screen
  * or a HUD inset can call straight onto a 2D context.
  */
+/** A room as the map carries it: the footprint plus whether it has been seen. */
+export interface MapRoom {
+  id: string;
+  name: string | null;
+  kind: RoomKind;
+  x: number; z: number; w: number; d: number; y: number;
+  seen: boolean;
+}
+
+/** A corridor as the map carries it: the centreline in plan, plus its width. */
+export interface MapRun {
+  id: string;
+  width: number;
+  kind: CorridorKind;
+  /** `[x, z]` pairs. */
+  path: number[][];
+  seen: boolean;
+}
+
+/** Everything the map draws as a pip. Also what picks the pip's colour. */
+export type MapMarkerKind =
+  | 'chest' | 'chest-open' | 'locked' | 'door' | 'hazard' | 'boss' | 'enemy' | 'exit';
+
+/** One pip on the map. */
+export interface MapMarker {
+  kind: MapMarkerKind;
+  x: number;
+  z: number;
+  /** Absent where the author gave an encounter marker no name. */
+  name?: string;
+}
+
+/** The whole map as plain JSON, so any UI can draw it however it likes. */
+export interface DungeonMapData {
+  id: string;
+  name: string;
+  bounds: { x0: number, x1: number, z0: number, z1: number, y0: number, y1: number };
+  rooms: MapRoom[];
+  runs: MapRun[];
+  markers: MapMarker[];
+  /** Dungeon-local party position, or null when it is not known. */
+  party: { x: number, y: number, z: number } | null;
+}
+
+/** What the reference renderer accepts. */
+export interface MapDrawOpts {
+  /** Dungeon-local party position. */
+  party?: THREE.Vector3 | null;
+  /** Draw unexplored rooms and runs at full strength. */
+  revealAll?: boolean;
+  /** Margin inside the canvas, pixels. */
+  pad?: number;
+}
+
+/** Pip colours, one per marker kind. */
+const MARKER_COLOR: Record<MapMarkerKind, string> = {
+  chest: '#e8c463',
+  'chest-open': 'rgba(150,140,110,0.55)',
+  locked: '#e06a52',
+  door: 'rgba(170,205,228,0.8)',
+  hazard: '#d9702f',
+  boss: '#e0503c',
+  enemy: 'rgba(220,120,100,0.7)',
+  exit: '#8fe0ff',
+};
+
 export class DungeonMap {
   L!: Layout;
   dungeon!: Dungeon;
-  constructor(layout: import('./Layout.ts').Layout, dungeon: import('./Dungeon.ts').Dungeon) {
+  constructor(layout: Layout, dungeon: Dungeon) {
     this.L = layout;
     this.dungeon = dungeon;
   }
 
-  data(partyLocal: any = null): any {
+  data(partyLocal: THREE.Vector3 | null = null): DungeonMapData {
     const L = this.L;
     const seen = this.dungeon.discovered;
-    const rooms = [];
+    const rooms: MapRoom[] = [];
     for (const r of L.rooms.values()) {
       rooms.push({
         id: r.id, name: r.name, kind: r.kind,
@@ -28,12 +95,12 @@ export class DungeonMap {
         seen: seen.has(r.id),
       });
     }
-    const runs = L.corridors.map((c: any) => ({
+    const runs: MapRun[] = L.corridors.map((c) => ({
       id: c.id, width: c.width, kind: c.kind,
-      path: c.path.map((p: any) => [p[0], p[1]]),
+      path: c.path.map((p) => [p[0], p[1]]),
       seen: seen.has(c.id),
     }));
-    const markers = [];
+    const markers: MapMarker[] = [];
     for (const c of L.chests) {
       markers.push({ kind: c.opened ? 'chest-open' : 'chest', x: c.at[0], z: c.at[1], name: c.name });
     }
@@ -53,7 +120,7 @@ export class DungeonMap {
   /**
    * Reference renderer.
    */
-  draw(ctx: CanvasRenderingContext2D, w: number, h: number, opts: {party?:any, revealAll?:boolean, pad?:number} = {}) {
+  draw(ctx: CanvasRenderingContext2D, w: number, h: number, opts: MapDrawOpts = {}) {
     const d = this.data(opts.party || null);
     const b = d.bounds;
     const pad = opts.pad != null ? opts.pad : 18;
@@ -74,7 +141,7 @@ export class DungeonMap {
       ctx.strokeStyle = on ? 'rgba(150,196,226,0.50)' : 'rgba(120,150,170,0.14)';
       ctx.lineWidth = Math.max(1.5, r.width * s * 0.8);
       ctx.beginPath();
-      r.path.forEach((p: any, i: any) => (i ? ctx.lineTo(X(p[0]), Z(p[1])) : ctx.moveTo(X(p[0]), Z(p[1]))));
+      r.path.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Z(p[1])) : ctx.moveTo(X(p[0]), Z(p[1]))));
       ctx.stroke();
     }
 
@@ -110,12 +177,7 @@ export class DungeonMap {
 
     for (const m of d.markers) {
       const x = X(m.x), z = Z(m.z);
-      const col = ({
-        chest: '#e8c463', 'chest-open': 'rgba(150,140,110,0.55)',
-        locked: '#e06a52', door: 'rgba(170,205,228,0.8)',
-        hazard: '#d9702f', boss: '#e0503c', enemy: 'rgba(220,120,100,0.7)',
-        exit: '#8fe0ff',
-      } as any)[m.kind] || '#9fd';
+      const col = MARKER_COLOR[m.kind];
       ctx.fillStyle = col;
       ctx.beginPath();
       if (m.kind === 'boss') {

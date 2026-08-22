@@ -5,10 +5,11 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AudioSystem } from '../AudioSystem.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const PORT = Number(process.env.PORT || 5179);
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
@@ -25,19 +26,19 @@ async function ensureServer() {
   throw new Error('vite failed');
 }
 
-const PROFILE = async (mode: any) => {
-  const wavePW = (ctx: any) => {
+const PROFILE = async (mode: string) => {
+  const wavePW = (ctx: BaseAudioContext) => {
     const N = 32, re = new Float32Array(N), im = new Float32Array(N);
     for (let n = 1; n < N; n++) im[n] = (1 / Math.pow(n, 1.08)) * Math.exp(-n / 15);
     return ctx.createPeriodicWave(re, im);
   };
-  const Audio = window.GAME.get('Audio').constructor;
+  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
   const seconds = 20;
   const t0 = performance.now();
   const { stats } = await Audio.renderSession({
     seconds,
     sampleRate: 44100,
-    script: (api: any) => {
+    script: (api) => {
       const { score, sfx, amb, graph } = api;
       const near = { x: 3, y: 1.2, z: -4 };
       // Micro-benchmarks: how much does one voice of each kind actually cost?
@@ -54,10 +55,13 @@ const PROFILE = async (mode: any) => {
           if (what === 'sine' || what === 'pw' || what === 'pwvib' || what === 'pwfilt') {
             const o1 = ctx.createOscillator();
             if (what === 'sine') o1.type = 'sawtooth';
-            else o1.setPeriodicWave(api.inst.constructor === Object ? null : wavePW(ctx));
+            // Was `api.inst.constructor === Object ? null : wavePW(ctx)`. `inst`
+            // is an `Instruments`, so that test was never true, and the arm it
+            // guarded (`setPeriodicWave(null)`) throws anyway.
+            else o1.setPeriodicWave(wavePW(ctx));
             o1.frequency.value = f;
             const g = ctx.createGain(); g.gain.value = 0.02;
-            let node = o1;
+            let node: AudioNode = o1;
             if (what === 'pwfilt') {
               const bq = ctx.createBiquadFilter();
               bq.type = 'lowpass'; bq.frequency.value = f * 5;

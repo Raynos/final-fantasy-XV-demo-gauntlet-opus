@@ -54,7 +54,7 @@ export class Spring {
  * plus `duty` — the fraction of the cycle the foot spends on the ground.
  * Below 0.5 the animal has airborne moments, which is what a gallop *is*.
  */
-export const GAITS = {
+export const GAITS: Record<string, CreatureGait> = {
   /** Lateral-sequence walk: BL, FL, BR, FR. Always two or three feet down. */
   walk: { touch: [0.25, 0.75, 0.0, 0.5], duty: 0.68, lift: 0.55, stride: 1.0, bob: 0.35, sway: 1.0 },
   /** Diagonal couplets. The signature two-beat of a dog or horse trotting. */
@@ -70,11 +70,31 @@ export const GAITS = {
 const LEG_ORDER = ['fL', 'fR', 'bL', 'bR'];
 
 /**
+ * A quadruped footfall sequence. `touch[i]` is the fraction of the stride at
+ * which leg `i` (in `LEG_ORDER`) plants; `duty` is how much of the cycle it
+ * then stays down.
+ */
+export interface CreatureGait {
+  touch: number[];
+  duty: number;
+  lift: number;
+  stride: number;
+  bob: number;
+  sway: number;
+}
+
+/**
+ * How a species writes a bone: additive XYZ Euler radians, by bone name.
+ * Every enemy's `pose()` supplies one and the solver calls it.
+ */
+export type PoseWriter = (name: string, x: number, y: number, z: number) => void;
+
+/**
  * Where one foot is in its cycle.
  * @returns
  *  `reach` is +1 fully forward, -1 fully back; `load` is 0..1 weight carried.
  */
-export function legPhase(u: number, gait: any): {stance:boolean, f:number, reach:number, lift:number, load:number } {
+export function legPhase(u: number, gait: { duty: number }): {stance:boolean, f:number, reach:number, lift:number, load:number } {
   let t = u % 1; if (t < 0) t += 1;
   const duty = gait.duty;
   if (t < duty) {
@@ -93,15 +113,26 @@ export function legPhase(u: number, gait: any): {stance:boolean, f:number, reach
  * A solved leg: rotations for a 3- or 4-bone chain that put the foot at a
  * requested offset from its bind position.
  */
+/** One measured bone of a leg chain, taken straight off the bind pose. */
+interface LegSegment {
+  len: number;
+  /** the segment's bind angle in the sagittal plane. */
+  phi: number;
+  y: number;
+  z: number;
+}
+
 export class LegChain {
-  L1!: any;
-  L2!: any;
+  /** upper segment length. */
+  L1!: number;
+  /** lower segment length; 0 on a one-bone stub. */
+  L2!: number;
   footRel!: THREE.Vector3;
   hasHock!: boolean;
   names!: string[];
   ok!: boolean;
-  reachLen!: any;
-  seg!: any[];
+  reachLen!: number;
+  seg!: LegSegment[];
   /**
    * @param names hip → knee → (hock) → foot
    */
@@ -131,18 +162,85 @@ export class LegChain {
 }
 
 /**
+ * How the trunk above a leg has moved this frame, so the solver can cancel it
+ * out of the foot target. Without it a "planted" paw travels with the chest.
+ */
+export interface RootMotion {
+  /** trunk pitch in radians. */
+  pitch: number;
+  dy: number;
+  dz: number;
+}
+
+/** Per-leg options for `solveLeg`. */
+export interface LegOpts {
+  /** lateral abduction of the hip, in radians. */
+  splay?: number;
+  /** how far the leg is compressed under load, in metres. */
+  compress?: number;
+  /** world-space pitch the pastern is levelled to. */
+  footPitch?: number;
+  /** +1 knee forward, −1 knee back (a hock). */
+  kneeSign?: number;
+  /** hip twist about its own axis. */
+  twist?: number;
+  /** scale on the hock's share of the remaining bend. */
+  hockK?: number;
+  pawPitch?: number;
+  rootPitch?: number;
+  rootDY?: number;
+  rootDZ?: number;
+}
+
+/** Options for `quadGait`, which fills in `LegOpts` per foot. */
+export interface QuadGaitOpts {
+  /** metres one full stride covers, before the gait's own multiplier. */
+  stride?: number;
+  /** metres a foot lifts, before the gait's own multiplier. */
+  lift?: number;
+  splay?: number;
+  footPitch?: number;
+  compress?: number;
+  hockK?: number;
+  pawPitch?: number;
+  /** +1 knee forward, −1 hock, front and back. */
+  kneeF?: number;
+  kneeB?: number;
+  /** stride/lift scale for the front and back pairs. */
+  frontScale?: number;
+  backScale?: number;
+  /** scale on the derived body bob, roll and pitch. */
+  bodyScale?: number;
+  /** how the chest / croup moved this frame — see `RootMotion`. */
+  compF?: RootMotion | null;
+  compB?: RootMotion | null;
+}
+
+/**
  * Per-creature animation state: gait phase, leg chains, impact springs and the
  * additive layer that survives whatever the species pose function did.
  */
+/**
+ * What the creature animator needs from the enemy that owns it. Every species
+ * under `characters/enemies/**` supplies this much.
+ */
+export interface CreatureAnimTarget {
+  rig: { byName: Map<string, THREE.Bone> };
+  /** per-instance id, so two copies of a species do not step in lockstep. */
+  id: number;
+  /** per-instance animation clock, in seconds. */
+  phase: number;
+}
+
 export class CreatureAnim {
-  legs!: Map<any, any>;
+  legs!: Map<string, LegChain>;
   airPos!: THREE.Vector3;
   airVel!: THREE.Vector3;
   airborne!: boolean;
   bodyPitch!: number;
   bodyRoll!: number;
   bodyY!: number;
-  enemy!: any;
+  enemy!: CreatureAnimTarget;
   gaitBlend!: number;
   gaitName!: string;
   gaitPhase!: number;
@@ -151,19 +249,21 @@ export class CreatureAnim {
   hitRoll!: Spring;
   hitYaw!: Spring;
   load!: number[];
-  pushLocal!: any;
+  /** Body offset from the knockback springs, in the creature's own frame. */
+  pushLocal!: { x: number, z: number };
   pushX!: Spring;
   pushZ!: Spring;
   responsiveness!: number;
-  rig!: any;
+  rig!: { byName: Map<string, THREE.Bone> };
   shake!: number;
-  smooth!: Map<any, any>;
+  /** Reserved for the applied-chases-authored smoothing; nothing reads it yet. */
+  smooth!: Map<string, number>;
   speed!: number;
   spin!: number;
   spinVel!: number;
-  trunk!: any[];
+  trunk!: string[];
   /** @param enemy owning Enemy */
-  constructor(enemy: any) {
+  constructor(enemy: CreatureAnimTarget) {
     this.enemy = enemy;
     this.rig = enemy.rig;
     this.legs = new Map();
@@ -208,7 +308,7 @@ export class CreatureAnim {
   }
 
   /** Bones the additive impact layer leans. Root of the spine first. */
-  setTrunk(names: any) { this.trunk = names.filter((n: any) => this.rig.byName.has(n)); return this; }
+  setTrunk(names: string[]) { this.trunk = names.filter((n) => this.rig.byName.has(n)); return this; }
 
   /**
    * Advance the stride. `speed` is metres/second, `stride` the distance one
@@ -247,7 +347,8 @@ export class CreatureAnim {
    * through the floor. Cancelling the parent transform out of the target is
    * what makes a planted foot actually stay planted.
    */
-  solveLeg(id: string, reach: number, lift: number, out: ((...args: any[]) => any), o: any = {}) {
+  // (see `LegOpts` for the option bag)
+  solveLeg(id: string, reach: number, lift: number, out: PoseWriter, o: LegOpts = {}) {
     const c = this.legs.get(id);
     if (!c) return;
     const kneeSign = o.kneeSign ?? 1;      // +1 knee forward, -1 knee back (hock)
@@ -300,10 +401,10 @@ export class CreatureAnim {
    * @param out pose writer
    * @param o {stride, lift, splay, footPitch, kneeSign:{f,b}}
    */
-  quadGait(gait: any, out: ((...args: any[]) => any), o: any = {}) {
+  quadGait(gait: CreatureGait, out: PoseWriter, o: QuadGaitOpts = {}) {
     const strideM = (o.stride || 0.3) * gait.stride;
     const liftM = (o.lift || 0.12) * gait.lift;
-    const phases = [];
+    const phases: ReturnType<typeof legPhase>[] = [];
     for (let i = 0; i < 4; i++) {
       const ph = legPhase(this.gaitPhase - gait.touch[i], gait);
       phases.push(ph);
@@ -367,7 +468,7 @@ export class CreatureAnim {
   }
 
   /** Send the creature off the ground — launcher hits and big deaths. */
-  launch(dir: any, up: number, forward: number, heading: number) {
+  launch(dir: THREE.Vector3, up: number, forward: number, heading: number) {
     const cs = Math.cos(-heading), sn = Math.sin(-heading);
     this.airVel.set(dir.x * forward, up, dir.z * forward);
     this.airPos.set(0, 0, 0);
@@ -379,7 +480,7 @@ export class CreatureAnim {
    * Advance every spring and write the additive impact layer over whatever the
    * species already posed. Called by `Enemy.update` after `pose()`.
    */
-  commit(dt: number, poseAdd: any) {
+  commit(dt: number, poseAdd: PoseWriter) {
     if (dt <= 0) return;
     this.hitAmount = Math.max(0, this.hitAmount - dt * 1.9);
     this.shake = Math.max(0, this.shake - dt * 6.5);
@@ -441,7 +542,16 @@ export function settle(x: number, freq = 3.2, damp = 5.5) {
  * @param t seconds inside the state
  * @param timing {telegraph, strike, attack, recover}
  */
-export function attackEnvelope(state: string, t: number, timing: any) {
+/** How long each phase of one attack lasts, in seconds. */
+export interface AttackTiming {
+  telegraph: number;
+  /** when inside `attack` the blow actually connects. */
+  strike: number;
+  attack: number;
+  recover: number;
+}
+
+export function attackEnvelope(state: string, t: number, timing: AttackTiming) {
   const tel = Math.max(0.05, timing.telegraph);
   const atk = Math.max(0.05, timing.attack);
   const strike = Math.min(atk * 0.9, Math.max(0.02, timing.strike));

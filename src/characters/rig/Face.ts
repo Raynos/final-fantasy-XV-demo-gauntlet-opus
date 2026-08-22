@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { MeshBuilder, applyBrushes, expandMirrors, blob, ribbon, clamp01, smooth, lerp } from './Geo.ts';
+import type { SculptBrush } from './Geo.ts';
+import { SIDES } from './Skeleton.ts';
+import type { Rig } from './Skeleton.ts';
+import type { Look } from './Look.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 
@@ -55,7 +59,7 @@ export const EYE = {
  * a real almond: the upper lid peaks slightly nasal of centre, the lower lid
  * troughs slightly temporal of it.
  */
-export function lidMargin(f: number, upper: any, openU: number) {
+export function lidMargin(f: number, upper: boolean, openU: number) {
   const peak = upper ? 0.44 : 0.60;
   // a cosine lobe skewed toward `peak`, zero at both canthi
   const g = f < peak ? f / peak : (1 - f) / (1 - peak);
@@ -96,13 +100,13 @@ export const FACE = {
   yMax: 0.116,
 };
 
-function brushes(look: any) {
+function brushes(look: Look): SculptBrush[] {
   const jaw = look.jaw ?? 0;          // -1 fine .. +1 square/heavy
   const cheek = look.cheek ?? 0;
   const nose = look.nose ?? 0;
   const brow = look.brow ?? 0;
-  const b: any[] = [];
-  const add = (o: any) => b.push(o);
+  const b: SculptBrush[] = [];
+  const add = (o: SculptBrush) => b.push(o);
 
   // cranium shaping
   add({ p: [0, 0.070, -0.075], r: [0.12, 0.10, 0.07], amt: -0.010, dir: [0, 0, 1] });
@@ -249,7 +253,7 @@ function skullPoint(theta: number, phi: number, rr: number[]) {
  * Sample the sculpted skull surface. Hair uses this so the scalp shell and
  * strand roots sit exactly on the head, whatever the face shape.
  */
-export function skullSampler(look: any): (theta:number, phi:number)=>{p:THREE.Vector3, n:THREE.Vector3} {
+export function skullSampler(look: Look): (theta:number, phi:number)=>{p:THREE.Vector3, n:THREE.Vector3} {
   const brs = brushes(look);
   const hw = look.headWidth ?? 1;
   const rr = [HR[0] * hw, HR[1], HR[2]];
@@ -265,6 +269,19 @@ export { skullPoint };
 /** Canonical head radii, exposed for hair layout. */
 export const HEAD_R = HR;
 
+/** A canonical head point -> `[u, v]` on the face map. */
+export type FaceUV = (x: number, y: number, z: number) => number[];
+
+/** What `buildHead` returns: the mesh, its map, and the frame it was built in. */
+export interface HeadBuild {
+  geometry: THREE.BufferGeometry;
+  map: THREE.Texture;
+  /** where canonical head space sits on the skeleton. */
+  origin: THREE.Vector3;
+  scale: number;
+  uvOf: FaceUV;
+}
+
 /** Canonical-space UV, shared by the mesh and the texture painter. */
 function uvOf(x: number, y: number, z: number) {
   return [
@@ -276,15 +293,14 @@ function uvOf(x: number, y: number, z: number) {
 /**
  * Build the head mesh (skull + lids + ears) in character space.
  */
-export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry, map: THREE.Texture, origin?: any, scale?: any, uvOf?: any } {
+export function buildHead(rig: Rig, look: Look): HeadBuild {
   const { index: I, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;
   // accepts either a Vector3 or an [x,y,z] triple
-  const put = (p: any) => new THREE.Vector3(
-    p.x !== undefined ? p.x : p[0],
-    p.y !== undefined ? p.y : p[1],
-    p.z !== undefined ? p.z : p[2]
+  const put = (p: THREE.Vector3 | number[]) => (Array.isArray(p)
+    ? new THREE.Vector3(p[0], p[1], p[2])
+    : new THREE.Vector3(p.x, p.y, p.z)
   ).multiplyScalar(scale).add(origin);
 
   const B = new MeshBuilder('head');
@@ -295,10 +311,10 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
   const hw = look.headWidth ?? 1;
   const rr = [HR[0] * hw, HR[1], HR[2]];
 
-  const grid = [];
+  const grid: THREE.Vector3[][] = [];
   for (let v = 0; v <= segV; v++) {
     const phi = (v / segV) * Math.PI;
-    const row = [];
+    const row: THREE.Vector3[] = [];
     for (let u = 0; u <= segU; u++) {
       const th = Math.PI + (u / segU) * Math.PI * 2;   // seam at the back of the skull
       const { p, n } = skullPoint(th, phi, rr);
@@ -324,9 +340,9 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
     return clamp01(ear * 1.0 + nose * 0.85 + lip * 0.7);
   };
 
-  const idx = [];
+  const idx: number[][] = [];
   for (let v = 0; v <= segV; v++) {
-    const row = [];
+    const row: number[] = [];
     for (let u = 0; u <= segU; u++) {
       const p = grid[v][u];
       const [tu, tv] = uvOf(p.x, p.y, p.z);
@@ -394,7 +410,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
 
     // a ridge, authored in the ear's own (y, z) plane and swept as a ribbon
     const ridge = (a0: number, a1: number, ry: number, rz: number, cy: number, cz: number, out: number, wid: number, n: number) => {
-      const pts = [];
+      const pts: number[][] = [];
       for (let k = 0; k <= n; k++) {
         const a = lerp(a0, a1, k / n);
         // the rim stands proudest at the top of its arc and folds back in at
@@ -439,7 +455,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
   }
 
   // ---- eyelids + lashes --------------------------------------------------
-  for (const side of ['L', 'R']) {
+  for (const side of SIDES) {
     const sg = side === 'L' ? 1 : -1;
     const ec = [FACE.eye[0] * sg * hw, FACE.eye[1], FACE.eye[2]];
     const onSkull = skinSnap(look, hw);
@@ -468,7 +484,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
  *
  * @param hw head-width multiplier
  */
-function skinSnap(look: any, hw: number): (p:number[]) => number[] {
+function skinSnap(look: Look, hw: number): (p:number[]) => number[] {
   const sample = skullSampler(look);
   const rr = [HR[0] * hw, HR[1], HR[2]];
   return (p) => {
@@ -483,12 +499,14 @@ function skinSnap(look: any, hw: number): (p:number[]) => number[] {
  * A point on the eye's local sphere.
  *
  * `a` is azimuth from the gaze axis, `e` elevation from the equator, `rad` the
- * radius. `f` is the fissure fraction, used to spread the canthi off the sphere
+ * radius. `f` is the fissure fraction — omitted on the rows behind the margin,
+ * where there is no canthus to spread. It is used to spread the canthi off the
+ * sphere
  * — a real palpebral fissure is ~30 mm across on a 24 mm globe, so its corners
  * physically cannot lie on the globe and a pure spherical lid always reads too
  * round and too small.
  */
-function eyePoint(ec: any, sg: number, a: number, e: number, rad: number, f: number) {
+function eyePoint(ec: number[], sg: number, a: number, e: number, rad: number, f?: number) {
   const spread = f === undefined ? 1
     : 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
   const x = Math.sin(a * sg) * Math.cos(e) * rad * spread;
@@ -497,19 +515,39 @@ function eyePoint(ec: any, sg: number, a: number, e: number, rad: number, f: num
   return [ec[0] + x, ec[1] + y * 1.02, ec[2] + z * 0.92];
 }
 
+/** Everything one eyelid band needs; `buildLid` runs twice per eye. */
+interface LidOpts {
+  /** canonical head point -> character space. */
+  put: (p: THREE.Vector3 | number[]) => THREE.Vector3;
+  scale: number;
+  /** eye centre in canonical head space. */
+  ec: number[];
+  /** +1 on the left eye, −1 on the right. */
+  sg: number;
+  /** the lid bone's skin index, and the head bone's. */
+  bone: number;
+  head: number;
+  look: Look;
+  /** project a canonical point onto the sculpted skull. */
+  onSkull: (p: number[]) => number[];
+  uv: FaceUV;
+  /** upper lid, or lower. */
+  upper: boolean;
+}
+
 /**
  * One eyelid: a band wrapped on a sphere slightly larger than the eyeball,
  * running from the inner canthus to the outer, with the margin dipping at both
  * corners so the opening reads as an almond rather than a circle.
  */
-function buildLid(B: MeshBuilder, o: any) {
+function buildLid(B: MeshBuilder, o: LidOpts) {
   const { put, ec, sg, upper, bone, head, look, onSkull, uv } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
   const cols = 20, rows = 5;
   const arc = EYE.arc;
 
-  const pt = (a: number, e: number, rad: number, f: any) => eyePoint(ec, sg, a, e, rad, f);
+  const pt = (a: number, e: number, rad: number, f?: number) => eyePoint(ec, sg, a, e, rad, f);
 
   const dark = new THREE.Color().setHex(upper ? 0x140f10 : 0x3a2620, THREE.SRGBColorSpace);
   const skinC = new THREE.Color(1, 1, 1);
@@ -636,7 +674,7 @@ function buildLid(B: MeshBuilder, o: any) {
  * Both eyeballs as one mesh, authored around the origin of a gaze pivot placed
  * between them. Poles face +Z so the polar UV puts the iris at the front.
  */
-export function buildEyes(rig: any, look: any) {
+export function buildEyes(rig: Rig, look: Look) {
   const { dims } = rig;
   const scale = dims.headScale;
   const hw = look.headWidth ?? 1;
@@ -687,13 +725,22 @@ export function buildEyes(rig: any, look: any) {
   return { geometry: B.build() };
 }
 
+/** What `buildLashes` needs — the same eye frame `buildLid` works in. */
+interface LashOpts {
+  put: (p: THREE.Vector3 | number[]) => THREE.Vector3;
+  scale: number;
+  ec: number[];
+  sg: number;
+  look: Look;
+}
+
 /**
  * Upper eyelashes as geometry: a fan of fine tapered ribbons rising from the
  * lid margin and flicking out at the outer canthus. A painted lash line alone
  * disappears the moment the head turns; these hold the eye's dark accent from
  * every angle and are the cheapest "this is a person" cue on the whole model.
  */
-function buildLashes(B: MeshBuilder, o: any) {
+function buildLashes(B: MeshBuilder, o: LashOpts) {
   const { put, scale, ec, sg, look } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * LID_OPEN[0];
@@ -812,7 +859,7 @@ function contrastMips(canvas: HTMLCanvasElement) {
 }
 
 /** Canvas texture whose mip chain keeps facial value structure (see above). */
-function faceTexture(size: number, draw: any) {
+function faceTexture(size: number, draw: (ctx: CanvasRenderingContext2D, size: number) => void) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   draw(cv.getContext('2d', { willReadFrequently: true })!, size);
@@ -826,6 +873,15 @@ function faceTexture(size: number, draw: any) {
   tex.generateMipmaps = false;
   tex.needsUpdate = true;
   return tex;
+}
+
+/** How one painted stroke or fill composites onto the face canvas. */
+interface PaintOpts {
+  mode?: GlobalCompositeOperation;
+  alpha?: number;
+  /** gaussian blur radius, in texels. */
+  blur?: number;
+  cap?: CanvasLineCap;
 }
 
 /**
@@ -843,7 +899,7 @@ function faceTexture(size: number, draw: any) {
  * structure of a face. Sockets, nostrils, the vermilion border, the shadow the
  * fringe throws on the forehead.
  */
-function paintFace(look: any, uv: any) {
+function paintFace(look: Look, uv: FaceUV) {
   const S = 1024;
   // texels per metre, measured at the front of the face where the features are
   const PX = S / (0.085 * Math.PI * 2);
@@ -854,14 +910,14 @@ function paintFace(look: any, uv: any) {
   const rng = new Rng(look.seed || 7);
   const n = new Noise((look.seed || 7) + 11);
 
-  const px = (p: any) => {
+  const px = (p: number[]) => {
     const [u, v] = uv(p[0], p[1], p[2]);
     return [u * S, (1 - v) * S];
   };
   // canonical point -> texel, for points authored on the face plane
-  const fx = (x: number, y: any) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
+  const fx = (x: number, y: number) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
-  return faceTexture(S, (ctx: any) => {
+  return faceTexture(S, (ctx) => {
     ctx.fillStyle = hexOf(skin.clone().multiplyScalar(SKIN_BASE));
     ctx.fillRect(0, 0, S, S);
 
@@ -880,7 +936,8 @@ function paintFace(look: any, uv: any) {
     ctx.putImageData(img, 0, 0);
 
     /** Soft radial blob. `rx`/`ry` are half-widths in canonical metres. */
-    const soft = (p: number[], rx: number, ry: number, color: any, alpha = 1, mode = 'source-over') => {
+    const soft = (p: number[], rx: number, ry: number, color: string, alpha = 1,
+      mode: GlobalCompositeOperation = 'source-over') => {
       const [cx, cy] = px(p);
       const a = rx * PX, b = ry * PY;
       const r = Math.max(a, b);
@@ -892,8 +949,8 @@ function paintFace(look: any, uv: any) {
       // covered in them looks bruised. A smoothstep-ish ramp dissolves.
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
       g.addColorStop(0, color);
-      g.addColorStop(0.35, color.replace(/([\d.]+)\)$/, (m: any, a: any) => `${(Number(a) * 0.82).toFixed(3)})`));
-      g.addColorStop(0.70, color.replace(/([\d.]+)\)$/, (m: any, a: any) => `${(Number(a) * 0.34).toFixed(3)})`));
+      g.addColorStop(0.35, color.replace(/([\d.]+)\)$/, (_m, a) => `${(Number(a) * 0.82).toFixed(3)})`));
+      g.addColorStop(0.70, color.replace(/([\d.]+)\)$/, (_m, a) => `${(Number(a) * 0.34).toFixed(3)})`));
       g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.globalAlpha = alpha;
       ctx.fillStyle = g;
@@ -903,8 +960,9 @@ function paintFace(look: any, uv: any) {
     };
 
     /** Filled closed path through face-plane (x,y) points, cubic-smoothed. */
-    const shape = (pts: number[][], style: any, { mode = 'source-over', alpha = 1, blur = 0 } = {}) => {
-      const q = pts.map(([x, y]: any) => fx(x, y));
+    const shape = (pts: number[][], style: string,
+      { mode = 'source-over', alpha = 1, blur = 0 }: PaintOpts = {}) => {
+      const q = pts.map(([x, y]) => fx(x, y));
       ctx.save();
       ctx.globalCompositeOperation = mode;
       ctx.globalAlpha = alpha;
@@ -923,8 +981,9 @@ function paintFace(look: any, uv: any) {
     };
 
     /** Stroked open curve through face-plane points. `w` in metres. */
-    const stroke = (pts: number[][], style: string, w: number, { mode = 'source-over', alpha = 1, blur = 0, cap = 'round' } = {}) => {
-      const q = pts.map(([x, y]: any) => fx(x, y));
+    const stroke = (pts: number[][], style: string, w: number,
+      { mode = 'source-over', alpha = 1, blur = 0, cap = 'round' }: PaintOpts = {}) => {
+      const q = pts.map(([x, y]) => fx(x, y));
       ctx.save();
       ctx.globalCompositeOperation = mode;
       ctx.globalAlpha = alpha;
