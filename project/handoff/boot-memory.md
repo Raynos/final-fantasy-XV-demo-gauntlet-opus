@@ -191,7 +191,15 @@ is not.** Two things the next agent should know before touching it:
   another worktree owns the cache is not yours.** After merging, run
   `node src/tools/texbake.mts --force` once.
 - The runtime does not re-check the source hash; freshness is the vite plugin's
-  job, exactly as it already is for `terrain.bin.gz`.
+  job, exactly as it already is for `terrain.bin.gz`. The plugin now re-bakes on
+  HMR as well as at server start, because a stale hit is the one failure this
+  cache can have that does not announce itself. **Editing one of
+  `texbake.mts`'s `TEX_SOURCES` therefore costs 7-20 s on the next HMR update.**
+  If you are iterating hard on a material, boot the page with `?nobake=1` and
+  the cache is out of the way entirely.
+- A generator file that feeds a keyed texture and is **missing from
+  `TEX_SOURCES`** is a stale-cache bug with no symptom but wrong texels. The
+  list errs wide on purpose. Add to it when you add a keyed generator.
 - `Town.materials` still costs 243 ms. That residual is the 35 sign faces, which
   are `canvasTexture` calls: they are drawn rather than computed and Node has no
   canvas, so they are deliberately not keyed. Baking them would need the bake to
