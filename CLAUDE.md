@@ -12,14 +12,18 @@ Four buckets, and the root holds nothing but config and the three docs below.
   `root`, so in-page dev-server URLs are `/world/...`, **not** `/src/world/...`),
   `src/public/` (the generated terrain cache, ignored) and `src/tools/` (the
   harness: capture, checks, probes for `src/tools/probe.mts`).
-- **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
-  `docs/WORLDMAP.md`, `docs/plans/<YYYY-MM-DD>-<model>-<topic>.md` — every plan is
-  named with the date it was written and the model that wrote it (`opus`, `fable`),
-  so the directory sorts chronologically, a stale plan is obvious at a glance, and
-  plans from parallel gauntlet runs stay attributable.
-- **`project/`** — working state: how the work is *going*. `project/HANDOFF.md`,
-  `project/handoff/<topic>.md`, `project/SESSION-STATE.md`, `project/PROGRESS.md`,
-  `project/journal/`, `project/TODO.md` (human-written).
+- **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md` (the only
+  inventory), `docs/WORLDMAP.md`, and `docs/plans/` for **live proposals only** —
+  named `<YYYY-MM-DD>-<model>-<topic>.md`, carrying a `Status:` line, and
+  graduating to `project/archive/` when `DONE` or `SUPERSEDED`. `docs/plans/README.md`
+  has the vocabulary.
+- **`project/`** — working state: how the work is *going*. `project/STATUS.md`
+  (the snapshot — **replaced in place, never appended to**), `project/HANDOFF.md`
+  (durable method and tooling), `project/LANDMINES.md` (what will bite you),
+  `project/handoff/<topic>.md` (one per *live* agent, graduating on merge),
+  `project/journal/`, `project/archive/`, and `project/TODO.md` (human-written —
+  agents never edit it). **`project/README.md` states which document is which
+  genre and why that matters**; read it before adding a file here.
 - **`tmp/`** — scratchpad. **Deleting it whole must cost nothing**: no build, no
   deploy and no dev-server run may read anything in it. `tmp/shots/` (the default
   `--out` for every capture tool) is what it is for.
