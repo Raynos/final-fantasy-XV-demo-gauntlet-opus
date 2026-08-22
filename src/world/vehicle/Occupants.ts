@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Four men in a car.
@@ -130,7 +131,7 @@ export class Occupants {
   _saved!: any;
   _t!: number;
   anchors!: any;
-  game!: any;
+  game!: Game;
   party!: any;
   player!: any;
   riders!: any[];
@@ -163,7 +164,7 @@ export class Occupants {
   }
 
   /** Wire up to Player and Party. Safe to call once at init. */
-  attach(game: any) {
+  attach(game: Game) {
     this.game = game;
     this.player = game.get('Player');
     this.party = game.get('Party');

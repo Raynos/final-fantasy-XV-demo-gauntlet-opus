@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { setPose } from './Poses.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * Actor staging for cutscenes.
@@ -33,11 +34,11 @@ export class Stage {
   _v!: THREE.Vector3;
   _v2!: THREE.Vector3;
   _weaponWas!: any;
-  game!: any;
+  game!: Game;
   held!: boolean;
   party!: any;
   player!: any;
-  constructor(game: any) {
+  constructor(game: Game) {
     this.game = game;
     this.held = false;
     this.actors = new Map();

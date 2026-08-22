@@ -14,6 +14,7 @@ import {
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * HAMMERHEAD — Leide's one working truck stop, and the hub the whole quest
@@ -57,7 +58,7 @@ export class Hammerhead {
   base!: any;
   clutter!: THREE.Group;
   eco!: any;
-  game!: any;
+  game!: Game;
   mats!: any;
   origin!: THREE.Vector3;
   rng!: Rng;
@@ -77,7 +78,7 @@ export class Hammerhead {
     this._handles = [];
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     const props = game.get('Props');
     const veg = game.get('Vegetation');
@@ -851,7 +852,7 @@ export class Hammerhead {
   /* --------------------------------------------------------- integration */
 
   /** Attach the two new screens to the existing menu stack. */
-  _registerScreens(game: any) {
+  _registerScreens(game: Game) {
     const menus = game.get('Menus');
     if (!menus || !menus.screens || !menus.wrap) return;
     const add = (key: string, Screen: any) => {
@@ -869,7 +870,7 @@ export class Hammerhead {
   }
 
   /** Everything at Hammerhead you can walk up to and press E at. */
-  _registerInteractables(game: any) {
+  _registerInteractables(game: Game) {
     const ix = game.get('Interaction');
     if (!ix) { console.warn('[Hammerhead] no InteractionSystem'); return; }
     const A = this.anchors;
@@ -932,8 +933,12 @@ export class Hammerhead {
     // The anchor is now the car's own root, which the vehicle sim writes every
     // frame, so the prompt follows the Regalia wherever it is parked.
     this.anchors.regaliaBay = this.local(4.9, 0, -13.4);
-    const car = game.get('Regalia') || game.get('Vehicle');
-    const carPos = car?.root?.position || car?.position || this.anchors.regaliaBay;
+    // `game.get('Vehicle')` used to sit here as a fallback. Nothing has ever
+    // registered a `Vehicle` system, so that arm was dead and so was the
+    // `car.position` fallback behind it -- the Regalia's position lives on its
+    // root. `game.get('Regalia')` is the whole truth, and it may be absent.
+    const car = game.get('Regalia');
+    const carPos = car?.root?.position ?? this.anchors.regaliaBay;
     this._handles.push(ix.register({
       id: 'hh_regalia_bay', pos: carPos, radius: 3.8, priority: 1,
       verb: 'Drive', label: 'Regalia', hint: 'F to drive  ·  I lets Ignis take the wheel',
@@ -941,7 +946,7 @@ export class Hammerhead {
       enabled: () => !!(car && car.enabled !== false && !car.isDriving),
       // `enter()` takes an autoDrive flag, not a game: passing `game` here made
       // every walk-up handover the wheel to Ignis.
-      handler: () => { if (car && car.enter) car.enter(false); },
+      handler: () => { car?.enter(false); },
     }));
 
     this._handles.push(ix.register({
@@ -966,10 +971,10 @@ export class Hammerhead {
   }
 
   /** Book a night in the caravan through the real day cycle. */
-  _rest(game: any) {
+  _rest(game: Game) {
     const ix = game.get('Interaction');
     const rpg = game.get('RpgSystem');
-    if (!rpg) return;
+    if (!ix || !rpg) return;
     const lodge = rpg.tables?.lodgings?.caravan || { gil: 30, bonus: 0.2 };
     const cost = lodge.gil ?? 30;
     const mult = (1 + (lodge.bonus ?? 0.2)).toFixed(1);
@@ -1031,10 +1036,12 @@ export class Hammerhead {
   }
 
   /** Fill the Regalia's tank. Real gil, real transaction. */
-  _refuel(game: any) {
+  _refuel(game: Game) {
     const ix = game.get('Interaction');
+    if (!ix) return;
     const rpg = game.get('RpgSystem');
-    const car = game.get('Regalia') || game.get('Vehicle');
+    // No `Vehicle` system is ever registered; the Regalia is the only car.
+    const car = game.get('Regalia');
     const cost = 10;
     ix.say({
       speaker: 'Fuel Pump', role: 'Hammerhead', hue: 200,
@@ -1051,8 +1058,7 @@ export class Hammerhead {
               when: () => (rpg?.inventory?.gil ?? 0) >= cost,
               action: () => {
                 if (!rpg?.inventory?.spendGil(cost)) return 'broke';
-                if (car && car.refuel) car.refuel();
-                else if (car) car.fuel = 1;
+                car?.refuel();
                 return 'done';
               },
             },
@@ -1068,7 +1074,7 @@ export class Hammerhead {
   /* -------------------------------------------------------------- update */
 
   /** 0 in full daylight, 1 once the sun is well below the horizon. */
-  _night(game: any) {
+  _night(game: Game) {
     const sky = game.get('Sky');
     if (!sky || !sky.sun || !sky.sun.position) return 0;
     const p = sky.sun.position;
@@ -1076,7 +1082,7 @@ export class Hammerhead {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt: any, game: any) {
+  update(dt: any, game: Game) {
     if (!this.shell) return;
     const night = this._night(game);
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);

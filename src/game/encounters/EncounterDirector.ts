@@ -4,6 +4,7 @@ import { Pack } from './Pack.ts';
 import { TERRITORIES, ROAMERS, SET_PIECES, HUNT_TARGETS, windowOpen } from './SpawnTables.ts';
 import { BossFight } from './BossFight.ts';
 import { Dropship } from './Dropship.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The live encounter loop.
@@ -41,7 +42,7 @@ export class EncounterDirector {
   enabled!: boolean;
   encounter!: any;
   enemies!: any;
-  game!: any;
+  game!: Game;
   hunts!: any;
   night!: number;
   packs!: any[];
@@ -56,7 +57,7 @@ export class EncounterDirector {
   terrain!: any;
   threats!: any[];
   vfx!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.rng = new Rng(20259);
     this.enemies = game.get('Enemies');
@@ -637,7 +638,7 @@ export class EncounterDirector {
 
   /* ------------------------------------------------------------ tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.enabled || this.enemies.frozen) return;
     const p = this.player;
     if (!p) return;

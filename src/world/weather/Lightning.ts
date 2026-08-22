@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Lightning: a deterministic strike schedule, a multi-pulse flash envelope and
@@ -64,7 +65,7 @@ export class Lightning {
    * @param now seconds since the clock reset
    * @param period mean seconds between strikes, 0 = no lightning
    */
-  update(dt: number, now: number, period: number, game: any) {
+  update(dt: number, now: number, period: number, game: Game) {
     if (!this.light.parent && game && game.scene) game.scene.add(this.light);
     if (period <= 0.001) {
       this.flash += (0 - this.flash) * Math.min(1, dt * 6);
@@ -93,7 +94,7 @@ export class Lightning {
         if (now >= this._thunder[i].at) {
           const vol = Math.max(0.15, this._thunder[i].vol);
           if (audio && audio.play) {
-            audio.play('thunder', null, { volume: vol * 1.4, distance: this._thunder[i].dist });
+            audio.play('thunder', undefined, { volume: vol * 1.4, distance: this._thunder[i].dist });
           }
           this._thunder.splice(i, 1);
         }

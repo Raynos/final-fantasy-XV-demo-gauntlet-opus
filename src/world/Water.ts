@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../util/Noise.ts';
 import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Lakes and pools.
@@ -29,7 +30,7 @@ export class Water {
   bodies!: any[];
   caustics!: THREE.DataTexture;
   enabled!: boolean;
-  game!: any;
+  game!: Game;
   level!: number;
   noise!: Noise;
   normalA!: THREE.DataTexture;
@@ -52,7 +53,7 @@ export class Water {
     this._sinceReflect = 1e9;
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     const terrain = game.get('Terrain');
     if (!terrain) return;
@@ -89,7 +90,7 @@ export class Water {
     }, { colorSpace: THREE.NoColorSpace, repeat: 9 });
   }
 
-  _buildReflection(game: any) {
+  _buildReflection(game: Game) {
     this.reflectTarget = new THREE.WebGLRenderTarget(this.reflectionRes * 2, this.reflectionRes, {
       type: THREE.HalfFloatType,
       colorSpace: THREE.LinearSRGBColorSpace,
@@ -112,7 +113,7 @@ export class Water {
    * Water's: it is the only thing that reads layer 3, and what belongs in a
    * mirrored view is a decision about the reflection, not about the sky.
    */
-  _collectReflectRoots(game: any) {
+  _collectReflectRoots(game: Game) {
     const roots = [];
     const sky = game.get('Sky');
     if (sky && sky.dome) roots.push(sky.dome);
@@ -164,7 +165,7 @@ export class Water {
     return bodies.slice(0, 4);
   }
 
-  _makeSurface(game: any, b: any) {
+  _makeSurface(game: Game, b: any) {
     const geo = new THREE.PlaneGeometry(b.w, b.d, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mat = this._makeMaterial();
@@ -271,7 +272,7 @@ export class Water {
 
   // ------------------------------------------------------------------ update
 
-  update(dt: any, game: any) {
+  update(dt: any, game: Game) {
     if (!this.enabled) return;
     const cam = game.camera;
     const sky = game.get('Sky');
@@ -312,7 +313,7 @@ export class Water {
    * water at all, and a menu or a cutscene is looking at a frozen or occluded
    * world where last frame's mirror is still exactly right.
    */
-  _shouldReflect(dt: any, game: any) {
+  _shouldReflect(dt: any, game: Game) {
     if (!this.enabled) return false;
     const cam = game.camera;
     if (cam.position.y < this.level) return false;      // underwater
@@ -333,7 +334,7 @@ export class Water {
   }
 
   /** Render the mirrored view. Called from lateUpdate so transforms are final. */
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     if (!this._shouldReflect(dt, game)) return;
     const cam = game.camera;
 

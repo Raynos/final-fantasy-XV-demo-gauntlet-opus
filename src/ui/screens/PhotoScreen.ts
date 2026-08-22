@@ -2,6 +2,7 @@ import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
 import type { Menus } from '../Menus.ts';
 import type { CachedNode } from '../UIKit.ts';
+import type { Game } from '../../game/Game.ts';
 
 const FILTERS = [
   'None', 'Vintage', 'Monochrome', 'Cross Process', 'Sepia Wash',
@@ -121,7 +122,7 @@ export class PhotoScreen {
   enter() { this.age = 0; }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     const e = easeOutQuint(clamp((a - 0.05) / 0.8, 0, 1));
     // letterbox to the chosen framing
     const inset = (1 - e) * 0 + 42;

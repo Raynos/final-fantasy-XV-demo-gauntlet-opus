@@ -1,6 +1,7 @@
 import { el, clamp, easeOut, easeOutQuint } from './UIKit.ts';
 import { button, icon } from './Icons.ts';
 import { readQuest } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * First-run hints.
@@ -101,7 +102,7 @@ export class Hints {
   /**
    * Work out which hint, if any, this frame has earned.
    */
-  _poll(game: any) {
+  _poll(game: Game) {
     if (this.muted || game.currentShot) return;
     const story = game.get?.('Story');
     if (story && (story.title?.shown || story.cine?.playing)) return;
@@ -146,7 +147,7 @@ export class Hints {
   }
 
   /** @param dt @param game */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     this._poll(game);
     if (!this.cur && this.queue.length && this.a <= 0.001) this._present(this.queue.shift());
     if (!this.cur && this.a <= 0.001) { this.root.style.display = 'none'; return; }

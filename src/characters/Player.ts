@@ -4,6 +4,7 @@ import { updateSun } from './rig/Materials.ts';
 import { CollisionWorld } from '../world/collision/CollisionWorld.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
 import type { Character } from './rig/Character.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Noctis — the playable character.
@@ -34,7 +35,7 @@ export class Player {
   body!: CharacterController;
   character!: Character;
   collision!: any;
-  game!: any;
+  game!: Game;
   grounded!: boolean;
   heading!: number;
   mesh!: any;
@@ -45,7 +46,7 @@ export class Player {
   terrain!: any;
   velocity!: THREE.Vector3;
   walkSpeed!: number;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.root = new THREE.Group();
     this.velocity = new THREE.Vector3();
@@ -66,7 +67,7 @@ export class Player {
 
     const terrain = game.get('Terrain');
     this.terrain = terrain;
-    this.root.position.set(0, terrain.heightAt(0, 0), 0);
+    this.root.position.set(0, terrain ? terrain.heightAt(0, 0) : 0, 0);
     this.root.rotation.y = Math.PI * 0.15;
     this.heading = this.root.rotation.y;
     game.scene.add(this.root);
@@ -110,7 +111,7 @@ export class Player {
   /** Weapon sockets for the combat system. */
   get attach() { return this.character.attach; }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const input = game.input;
     const cam = game.camera;
     const mv = input.move;
@@ -190,7 +191,7 @@ export class Player {
    * is fighting; in the field he glances at one of the retinue and then looks
    * away again, on a deterministic timer so two capture runs match.
    */
-  _gaze(dt: number, game: any, combat: any) {
+  _gaze(dt: number, game: Game, combat: any) {
     if (combat && combat.inCombat) {
       const lock = combat.lockTarget && !combat.lockTarget.dead ? combat.lockTarget : null;
       const e = lock || (combat.autoTarget ? combat.autoTarget(28) : null);
@@ -213,7 +214,7 @@ export class Player {
     this.character.setLookTarget(this._look.set(m.root.position.x, m.root.position.y + h * 0.98, m.root.position.z));
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     const sky = game.get('Sky');
     if (sky && sky.sun) updateSun(sky.sun, game.camera);
   }

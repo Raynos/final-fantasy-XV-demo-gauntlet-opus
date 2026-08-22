@@ -9,6 +9,7 @@ import {
   glowSprite, sparkSprite, smokeSprite, dustSprite, shardSprite, flareSprite,
   ringSprite, scorchDecal, crackDecal, frostDecal,
 } from './VfxTextures.ts';
+import type { Game } from '../game/Game.ts';
 
 const V = new THREE.Vector3();
 const V2 = new THREE.Vector3();
@@ -41,7 +42,7 @@ export class VFX {
   depthRT!: THREE.WebGLRenderTarget | null;
   dust!: ParticleSystem;
   exposure!: number;
-  game!: any;
+  game!: Game;
   ground!: GroundFX;
   lights!: any[];
   motes!: ParticleSystem;
@@ -57,7 +58,7 @@ export class VFX {
   tex!: any;
   trails!: TrailPool;
   usingGtaoDepth!: boolean;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.rng = new Rng(20114);
     this.clock = 0;
@@ -697,7 +698,7 @@ export class VFX {
 
   /* ----------------------------------------------------------- depth */
 
-  _initDepth(game: any) {
+  _initDepth(game: Game) {
     this.softEnabled = game.rnd.quality !== 'low';
     if (!this.softEnabled) return;
     const size = game.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -715,14 +716,14 @@ export class VFX {
    *     prepass — one frame of latency, invisible in motion and exact once a
    *     screenshot has settled.
    */
-  attachPost(game: any) {
+  attachPost(game: Game) {
     if (this._postPatched || !game.post) return;
     const gtao = game.post.gtao;
     if (!gtao) return;
     this._postPatched = true;
     const root = this.root;
     const original = gtao.render.bind(gtao);
-    gtao.render = (...args: any[]) => {
+    gtao.render = (...args: Parameters<typeof original>) => {
       const was = root.visible;
       root.visible = false;
       try { original(...args); } finally { root.visible = was; }
@@ -753,7 +754,7 @@ export class VFX {
    * Half-resolution depth prepass. Called from `Director.lateUpdate` — the
    * last lateUpdate in the frame — so the camera transform is already final.
    */
-  renderDepthPrepass(game: any) {
+  renderDepthPrepass(game: Game) {
     this.attachPost(game);
     if (this.usingGtaoDepth) {
       const cam = game.camera;
@@ -784,7 +785,7 @@ export class VFX {
 
   /* ----------------------------------------------------------- frame */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (this.pinned === null) this.clock += dt;
     else this.clock = this.pinned;
     const c = this.clock;

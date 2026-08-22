@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Weapon } from '../../combat/Weapons.ts';
 import { TECH_TABLE, runTechnique } from './Techniques.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Gladiolus, Ignis and Prompto, actually fighting.
@@ -34,7 +35,7 @@ export class PartyAI {
   combat!: any;
   enabled!: boolean;
   enemies!: any;
-  game!: any;
+  game!: Game;
   linkCooldown!: number;
   party!: any;
   player!: any;
@@ -42,7 +43,7 @@ export class PartyAI {
   rpg!: any;
   terrain!: any;
   vfx!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.party = game.get('Party');
     this.player = game.get('Player');
@@ -344,7 +345,7 @@ export class PartyAI {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.enabled || !this.party || !this.party.members) return;
     if (this.linkCooldown > 0) this.linkCooldown -= dt;
     this._drain(dt);
@@ -447,7 +448,7 @@ export class PartyAI {
    * opened a help overlay *and* spent a tech bar was the worst kind of clash,
    * because the overlay hid the thing it had just cost you.
    */
-  _input(game: any) {
+  _input(game: Game) {
     const input = game.input;
     if (!input || input.enabled === false || !input.keyDown) return;
     if (input.keyDown('KeyG')) this.useTechnique('gladio');

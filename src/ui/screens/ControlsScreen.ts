@@ -1,6 +1,7 @@
 import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { button, icon } from '../Icons.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Every binding the game answers to, in the four groups a player thinks in.
@@ -149,7 +150,7 @@ export class ControlsScreen {
   enter() { this.i = 0; this.j = 0; }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     for (let c = 0; c < this.cols.length; c++) {
       const col = this.cols[c];
       const t = easeOut(clamp((a - 0.1 - c * 0.055) / 0.6, 0, 1));

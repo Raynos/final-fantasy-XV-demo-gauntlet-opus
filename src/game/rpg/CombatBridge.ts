@@ -26,7 +26,9 @@
  */
 
 import { Rng } from '../../util/Rng.ts';
+import type { CombatEventName, CombatEvents } from '../../combat/CombatEvents.ts';
 import type { RpgSystem } from './RpgSystem.ts';
+import type { Game } from '../Game.ts';
 
 export class CombatBridge {
   _off!: any[];
@@ -35,7 +37,8 @@ export class CombatBridge {
   _warpUntil!: number;
   armiger!: number;
   combat!: any;
-  game!: any;
+  /** Null until `attach()` runs, and `attach()` is optional — every read guards. */
+  game!: Game | null;
   lastRoll!: any;
   rpg!: RpgSystem;
   constructor(rpg: import('./RpgSystem.ts').RpgSystem) {
@@ -59,20 +62,21 @@ export class CombatBridge {
   /**
    * Subscribe to the combat system. Safe to call when there isn't one.
    */
-  attach(game: any) {
+  attach(game: Game) {
     this.game = game;
     const combat = game?.get?.('Combat');
     if (!combat || typeof combat.on !== 'function') return false;
     this.combat = combat;
-    const on = (n: string, fn: any) => this._off.push(combat.on(n, fn));
+    const on = <K extends CombatEventName>(n: K, fn: (detail: CombatEvents[K]) => void) =>
+      this._off.push(combat.on(n, fn));
 
-    on('damage', (ev: any) => this._onDamage(ev));
-    on('death', (ev: any) => this._onDeath(ev));
-    on('warp', (ev: any) => this._onWarp(ev));
+    on('damage', (ev) => this._onDamage(ev));
+    on('death', (ev) => this._onDeath(ev));
+    on('warp', (ev) => this._onWarp(ev));
     on('parry', () => this.rpg.parry());
     on('stagger', () => this.rpg.stagger());
     on('link', () => this.rpg.linkStrike(2));
-    on('playerHit', (ev: any) => this._onPlayerHit(ev));
+    on('playerHit', (ev) => this._onPlayerHit(ev));
 
     // Techniques are fired by `PartyAI`, which announces on the window bus.
     // Give each one a cinematic beat: a banner and a sliver of slow motion.
@@ -86,7 +90,7 @@ export class CombatBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** Called from `RpgSystem.update`. */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const combat = this.combat || game?.get?.('Combat');
     if (!combat) return;
     // The tech bar only charges in a fight. `EncounterDirector` overwrites this

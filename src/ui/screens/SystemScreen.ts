@@ -3,8 +3,12 @@ import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
+import type { AudioSystem } from '../../audio/AudioSystem.ts';
 
-const QUALITY = ['low', 'medium', 'high', 'ultra'];
+const QUALITY = ['low', 'medium', 'high', 'ultra'] as const;
+/** The mixer buses this screen puts a slider on. */
+type BusId = Parameters<AudioSystem['setVolume']>[0];
 
 /**
  * System settings.
@@ -29,7 +33,7 @@ export class SystemScreen {
   dN!: HTMLElement;
   dRule!: HTMLElement;
   detail!: HTMLElement;
-  game!: any;
+  game!: Game;
   i!: number;
   list!: HTMLElement;
   menus!: Menus;
@@ -53,7 +57,7 @@ export class SystemScreen {
    * The setting table. Each row reads and writes live engine state; nothing is
    * mirrored into a settings object that could drift out of sync with it.
    */
-  _rows(game: any) {
+  _rows(game: Game) {
     // Resolved on every read, never captured: this screen is built during
     // `Menus.init`, and `Story` (among others) is constructed *after* Menus in
     // the boot order — capturing it here left Return to Title permanently and
@@ -66,11 +70,11 @@ export class SystemScreen {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     void game;
 
-    const bus = (id: string, name: string, desc: string) => ({
+    const bus = (id: BusId, name: string, desc: string) => ({
       key: id, name, kind: 'slider', desc,
-      get: () => (audio() ? audio().volumeOf(id === 'master' ? 'master' : id) : 0),
-      set: (v: any) => audio() && audio().setVolume(id, v),
-      value: () => (audio() ? pct(audio().volumeOf(id)) : '—'),
+      get: () => { const a = audio(); return a ? a.volumeOf(id) : 0; },
+      set: (v: any) => { const a = audio(); if (a) a.setVolume(id, v); },
+      value: () => { const a = audio(); return a ? pct(a.volumeOf(id)) : '—'; },
       enabled: () => !!audio(),
       why: 'The audio system is not running in this session.',
     });
@@ -85,8 +89,9 @@ export class SystemScreen {
           + 'render scale, all in one tier. Drop it if the frame rate is fighting you.',
         options: QUALITY,
         index: () => Math.max(0, QUALITY.indexOf(rnd() ? rnd().quality : 'high')),
-        pick: (n: any) => {
+        pick: (n: number) => {
           const tier = QUALITY[n];
+          if (!tier) return;
           if (rnd()?.setQuality) rnd().setQuality(tier);
           if (this.game?.post?.setQuality) this.game.post.setQuality(tier);
         },
@@ -125,7 +130,7 @@ export class SystemScreen {
         value: () => 'Enter',
         run: () => {
           let ok = false;
-          try { ok = !!(rpg()?.save && rpg().save('manual')); } catch { ok = false; }
+          try { const r = rpg(); ok = !!(r?.save && r.save('manual')); } catch { ok = false; }
           this._say(ok ? 'Journey saved.' : 'Could not write the save.', ok);
         },
         enabled: () => !!rpg()?.save,
@@ -148,7 +153,7 @@ export class SystemScreen {
   }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -192,7 +197,7 @@ export class SystemScreen {
     });
   }
 
-  enter(game: any) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
+  enter(game: Game) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
 
   _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
@@ -221,7 +226,7 @@ export class SystemScreen {
   /* ----------------------------------------------------------- render */
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     for (let i = 0; i < this.nodes.length; i++) {
       const n = this.nodes[i];

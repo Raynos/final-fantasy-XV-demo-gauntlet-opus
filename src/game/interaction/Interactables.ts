@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { InteractPrompt } from './InteractPrompt.ts';
 import { Dialogue } from './Dialogue.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The interaction verb.
@@ -49,7 +50,7 @@ export class InteractionSystem {
   blocked!: boolean;
   current!: any;
   dialogue!: Dialogue;
-  game!: any;
+  game!: Game;
   items!: Map<any, any>;
   prompt!: InteractPrompt;
   constructor() {
@@ -65,7 +66,7 @@ export class InteractionSystem {
     this._firedAt = -10;
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.prompt = new InteractPrompt(game.uiRoot);
     this.dialogue = new Dialogue(game.uiRoot);
@@ -79,7 +80,7 @@ export class InteractionSystem {
    *
    * @param {object} def
    */
-  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:any, item:any)=>void, enabled?: ()=>boolean, key?: any }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
+  register(def: { id?: string, pos: THREE.Vector3 | number[], radius?: number, cone?: number, verb?: string, label?: string, hint?: string, priority?: number, yOffset?: number, handler: (game:Game, item:any)=>void, enabled?: ()=>boolean, key?: any }): {id:string, item:any, set:(patch:any)=>void, dispose:()=>void} {
     const id = def.id || `ix${_nextId++}`;
     const item = {
       id,
@@ -132,7 +133,7 @@ export class InteractionSystem {
     return true;
   }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const player = game.get('Player');
     const menus = game.get('Menus');
     const menuOpen = !!(menus && menus.name);

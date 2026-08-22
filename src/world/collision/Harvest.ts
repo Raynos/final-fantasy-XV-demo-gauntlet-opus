@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { Game, SystemKey } from '../../game/Game.ts';
+import { isObject3D, isMesh, isInstancedMesh, isLight, isCamera } from '../../util/three-guards.ts';
 
 /**
  * Scene-graph → collision proxies.
@@ -42,22 +44,27 @@ const SOURCES = [
 /**
  * Collect the meshes that should contribute triangles.
  */
-export function collectMeshes(game: any): {mesh:THREE.Mesh, source:string}[] {
-  const out: any[] = [];
-  const exclude = new Set();
-  const mark = (o: any) => { if (o && o.isObject3D) exclude.add(o); };
-  for (const name of ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director', 'Npcs']) {
+export function collectMeshes(game: Game): {mesh:THREE.Mesh, source:string}[] {
+  const out: {mesh:THREE.Mesh, source:string}[] = [];
+  const exclude = new Set<THREE.Object3D>();
+  const mark = (o: unknown) => { if (isObject3D(o)) exclude.add(o); };
+  // The systems whose subtrees are people and effects, never collision. Only
+  // `root` and `Party.members` are real: the loop used to read `group` and
+  // `container` off each of these too, and no system here has ever declared
+  // either, so those reads were always undefined.
+  const ACTORS: SystemKey[] = ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director', 'Npcs'];
+  for (const name of ACTORS) {
     const s = game.get(name);
     if (!s) continue;
-    for (const k of ['root', 'group', 'container']) mark(s[k]);
-    if (s.members) for (const m of s.members) mark(m.root);
+    if ('root' in s) mark(s.root);
+    if ('members' in s) for (const m of s.members) mark(m.root);
   }
   const regalia = game.get('Regalia');
   if (regalia && regalia.root) mark(regalia.root);
 
   const wanted = new Set(SOURCES);
   for (const child of game.scene.children) {
-    if (exclude.has(child) || child.isLight || child.isCamera) continue;
+    if (exclude.has(child) || isLight(child) || isCamera(child)) continue;
     const name = child.name || '';
     if (!wanted.has(name)) {
       // unnamed roots are the sky dome, the water plane and other full-screen
@@ -66,8 +73,8 @@ export function collectMeshes(game: any): {mesh:THREE.Mesh, source:string}[] {
       continue;
     }
     child.updateMatrixWorld(true);
-    child.traverse((o: any) => {
-      if (!o.isMesh || o.isInstancedMesh || !o.geometry) return;
+    child.traverse((o) => {
+      if (!isMesh(o) || isInstancedMesh(o) || !o.geometry) return;
       if (SKIP_MESH.test(o.name || '')) return;
       const g = o.geometry;
       const count = g.index ? g.index.count : (g.attributes.position ? g.attributes.position.count : 0);
@@ -90,7 +97,7 @@ const _box = new THREE.Box3();
  *
  * @param minSize smallest boulder radius worth colliding with
  */
-export function collectRockProxies(game: any, minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
+export function collectRockProxies(game: Game, minSize: number = 0.55): {cx:number,cy:number,cz:number,hx:number,hy:number,hz:number,yaw:number}[] {
   const props = game.get('Props');
   const rocks = props && props.rocks;
   if (!rocks || !rocks.groups) return [];

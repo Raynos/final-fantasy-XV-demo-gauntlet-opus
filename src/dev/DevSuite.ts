@@ -10,7 +10,7 @@ import { SHOTS } from '../game/Shots.ts';
 import { worldMap } from '../world/map/WorldMap.ts';
 import './dev.css';
 import type { Game } from '../game/Game.ts';
-import type { WeatherName } from '../world/Weather.ts';
+import { WEATHER_NAMES, isWeatherName } from '../world/Weather.ts';
 
 /**
  * In-game developer / review suite. Loaded only under `?debug`.
@@ -127,9 +127,9 @@ export class DevSuite {
     });
     reg.cvar({
       name: 'sky.weather', category: 'world', help: 'clear | overcast | storm | fog',
-      choices: ['clear', 'overcast', 'storm', 'fog'],
+      choices: [...WEATHER_NAMES],
       get: () => { const w = game.get('Weather'); return w ? w.name : 'clear'; },
-      set: (v: unknown) => { const w = game.get('Weather'); if (w) w.set(String(v) as WeatherName); },
+      set: (v: unknown) => { const w = game.get('Weather'); if (w && isWeatherName(v)) w.set(v); },
     });
 
     reg.cmd({
@@ -401,7 +401,7 @@ export class DevSuite {
 
   // ------------------------------------------------------------- per frame
 
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     const input = game.input;
     const typing = this.console.open || this.inbox.open;
 

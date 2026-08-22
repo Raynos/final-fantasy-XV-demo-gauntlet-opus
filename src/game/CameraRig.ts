@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import { Noise } from '../util/Noise.ts';
+import type { Game } from './Game.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * Third-person game camera.
  *
- * A spring arm with real collision (a swept probe against the terrain and any
- * prop colliders, with a fast push-in and a slow recover), separate position
- * and rotation damping, velocity look-ahead, speed-reactive FOV, a handheld
- * noise layer, combat framing that keeps the player and the lock-on target in
- * the same frame, and a trauma-driven shake model.
+ * A spring arm with real collision (a swept probe against the terrain — see
+ * `_armDistance` for why props are not in it — with a fast push-in and a slow
+ * recover), separate position and rotation damping, velocity look-ahead,
+ * speed-reactive FOV, a handheld noise layer, combat framing that keeps the
+ * player and the lock-on target in the same frame, and a trauma-driven shake
+ * model.
  *
  * Harness contract (unchanged):
  *   rig.setShot({ pos:[x,y,z], target:[x,y,z], fov })   -> freeze camera
@@ -18,8 +20,6 @@ const UP = new THREE.Vector3(0, 1, 0);
  *   rig.followShot = shot                                -> track the player
  */
 export class CameraRig {
-  _collideAge!: number;
-  _colliders!: any;
   _desired!: THREE.Vector3;
   _dir!: THREE.Vector3;
   _first!: boolean;
@@ -27,7 +27,6 @@ export class CameraRig {
   _focusSmooth!: THREE.Vector3;
   _lookAt!: THREE.Vector3;
   _noise!: Noise;
-  _ray!: THREE.Raycaster;
   _smooth!: THREE.Vector3;
   _t!: number;
   _tmp!: THREE.Vector3;
@@ -41,7 +40,7 @@ export class CameraRig {
   fov!: number;
   fovMax!: number;
   fovSpeedGain!: number;
-  game!: any;
+  game!: Game;
   handheld!: number;
   height!: number;
   lockOn!: any;
@@ -72,7 +71,7 @@ export class CameraRig {
   traumaMax!: number;
   yaw!: number;
   yawTarget!: number;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.cam = game.camera;
 
@@ -138,11 +137,6 @@ export class CameraRig {
     this._tmp2 = new THREE.Vector3();
     this._lookAt = new THREE.Vector3();
     this._first = true;
-
-    this._ray = new THREE.Raycaster();
-    this._ray.far = 20;
-    this._colliders = null;
-    this._collideAge = -1;
   }
 
   // ------------------------------------------------------------------ API
@@ -189,23 +183,11 @@ export class CameraRig {
     if (post) { post.resetHistory(); if (post.snapFocus) post.snapFocus(); }
   }
 
-  /** Meshes the camera arm should not pass through. */
-  _collisionMeshes(game: any) {
-    if (this._collideAge === game.time.frame >> 5) return this._colliders;
-    this._collideAge = game.time.frame >> 5;
-    // opt-in only: raycasting a whole prop group (instanced foliage, etc.)
-    // every frame would cost more than the camera is worth
-    const props = game.get('Props');
-    const list = props && (props.cameraColliders || props.colliders || props.collisionMeshes);
-    this._colliders = Array.isArray(list) && list.length && list.length < 256 ? list : null;
-    return this._colliders;
-  }
-
   /**
    * Sweep the arm from the focus point outward and return the first distance
    * at which the camera would clip something.
    */
-  _armDistance(game: any, focus: THREE.Vector3, dir: THREE.Vector3, wanted: number) {
+  _armDistance(game: Game, focus: THREE.Vector3, dir: THREE.Vector3, wanted: number) {
     let d = wanted;
     const terrain = game.get('Terrain');
     if (terrain && terrain.heightAt) {
@@ -226,13 +208,13 @@ export class CameraRig {
       }
     }
 
-    const meshes = this._collisionMeshes(game);
-    if (meshes && meshes.length) {
-      this._ray.set(focus, dir);
-      this._ray.far = d;
-      const hits = this._ray.intersectObjects(meshes, true);
-      if (hits.length) d = Math.max(this.minDistance, hits[0].distance - this.probeRadius * 1.6);
-    }
+    // There is no prop-collision sweep here. There used to be a raycast against
+    // `Props.cameraColliders || .colliders || .collisionMeshes` — none of which
+    // `Props` has ever had, so the list was always empty and the ray never ran.
+    // To restore it, `Props` needs to publish a real, opt-in
+    // `cameraColliders: THREE.Object3D[]` (opt-in because raycasting a whole
+    // prop group — instanced foliage and the rest — every frame costs more than
+    // the camera is worth), and this is where it would be swept.
     return d;
   }
 
@@ -249,7 +231,7 @@ export class CameraRig {
     rot.set(n(41.2) * this.shakeRot * s, n(53.9) * this.shakeRot * s, n(67.5) * this.shakeRot * 1.6 * s);
   }
 
-  _drivePost(game: any, focusPoint: THREE.Vector3) {
+  _drivePost(game: Game, focusPoint: THREE.Vector3) {
     const post = game.post;
     if (!post) return;
     if (!post.game && post.attach) post.attach(game);
@@ -260,7 +242,7 @@ export class CameraRig {
 
   // ------------------------------------------------------------- main tick
 
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     this._t += dt;
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
 
@@ -268,7 +250,7 @@ export class CameraRig {
       const s = this.shot;
       if (this.followShot) {
         const f = this.followShot;
-        const p = game.followAnchor ? game.followAnchor(f.follow) : game.get('Player').position;
+        const p = game.followAnchor(f.follow);
         s.pos = [p.x + f.offset[0], p.y + f.offset[1], p.z + f.offset[2]];
         s.target = [
           p.x + (f.lookOffset?.[0] ?? 0),

@@ -2,6 +2,7 @@ import './title.css';
 import * as THREE from 'three';
 import { el, svg, letters, clamp, easeOut, easeOutQuint, lerp } from '../../ui/UIKit.ts';
 import { Noise } from '../../util/Noise.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The title screen: an attract camera over Leide, the logo lockup, and three
@@ -31,7 +32,7 @@ export class TitleScreen {
   fadeOut!: number;
   ff!: HTMLElement;
   foot!: HTMLElement;
-  game!: any;
+  game!: Game;
   index!: number;
   items!: any;
   mark!: HTMLElement;
@@ -43,7 +44,7 @@ export class TitleScreen {
   tag!: HTMLElement;
   xv!: HTMLElement;
   xvChars!: HTMLElement[];
-  constructor(parent: HTMLElement, game: any) {
+  constructor(parent: HTMLElement, game: Game) {
     this.game = game;
     this.root = el('div', { id: 'title' });
     parent.appendChild(this.root);
@@ -161,7 +162,7 @@ export class TitleScreen {
 
   /* -------------------------------------------------------------- input -- */
 
-  _input(game: any) {
+  _input(game: Game) {
     const inp = game.input;
     if (!inp || this.chosen) return;
     const down = (k: string) => inp.keyDown && inp.keyDown(k);
@@ -201,7 +202,7 @@ export class TitleScreen {
 
   /* --------------------------------------------------------------- tick -- */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const busy = this.shown || this.a > 0.002;
     this.root.style.display = busy ? '' : 'none';
     if (!busy) return;
@@ -271,7 +272,7 @@ export class TitleScreen {
    * The attract camera. A single 96-second cosine ping-pong high over the
    * badlands: it never repeats a seam and it never needs resetting.
    */
-  updateCamera(dt: number, game: any) {
+  updateCamera(dt: number, game: Game) {
     if (!this.shown && this.a <= 0.002) return;
     const cam = game.camera;
     const k = 0.5 - 0.5 * Math.cos((this.t / 48) * Math.PI);      // 0..1..0

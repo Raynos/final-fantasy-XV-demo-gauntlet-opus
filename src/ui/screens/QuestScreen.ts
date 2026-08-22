@@ -4,6 +4,7 @@ import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /** Tabs, and the quest-log status each one gathers. */
 const TABS = [
@@ -49,7 +50,7 @@ export class QuestScreen {
   dSpecs!: HTMLElement;
   detail!: HTMLElement;
   empty!: HTMLElement;
-  game!: any;
+  game!: Game;
   i!: number;
   list!: HTMLElement;
   menus!: Menus;
@@ -80,7 +81,7 @@ export class QuestScreen {
   get rpg() { return rpg(this.game); }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -147,7 +148,7 @@ export class QuestScreen {
     root.appendChild(this.tally);
   }
 
-  enter(game: any) {
+  enter(game: Game) {
     if (game) this.game = game;
     this._sig = null;
     this._msg = null;
@@ -252,7 +253,7 @@ export class QuestScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     const r = this.rpg;
     const rows = this._rows = this.rows();

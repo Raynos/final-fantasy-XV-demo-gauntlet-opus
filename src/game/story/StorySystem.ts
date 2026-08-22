@@ -3,6 +3,7 @@ import { SCENES } from './scenes/index.ts';
 import { Triggers } from './Triggers.ts';
 import { Conversation } from './Dialogue.ts';
 import { TitleScreen } from './TitleScreen.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The narrative spine.
@@ -34,7 +35,7 @@ export class StorySystem {
   chapter!: any;
   chapterN!: number;
   cine!: any;
-  game!: any;
+  game!: Game;
   headless!: boolean;
   queue!: any[];
   rpg!: any;
@@ -42,7 +43,7 @@ export class StorySystem {
   talk!: Conversation;
   title!: TitleScreen;
   triggers!: Triggers;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.rpg = game.get('Rpg');
     this.cine = game.get('Cinematics');
@@ -310,7 +311,7 @@ export class StorySystem {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     // Delayed one-shots. A story is mostly a list of things that should happen
     // slightly after the thing that caused them.
     if (this.queue.length) {
@@ -337,7 +338,7 @@ export class StorySystem {
    * The HUD's own fallback banter still runs when the story has nothing to say,
    * so the field frame is never silent.
    */
-  _ambient(dt: number, game: any) {
+  _ambient(dt: number, game: Game) {
     if (this.talk.busy || this.talk.cooldown > 0) return;
     this._banterAt -= dt;
     if (this._banterAt > 0) return;
@@ -358,7 +359,7 @@ export class StorySystem {
     this.talk.play(tag);
   }
 
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     // The attract camera has to be the last word on the transform, same as a
     // cutscene: it runs after CameraRig, and after Cinematics has had its say.
     this.title.updateCamera(dt, game);

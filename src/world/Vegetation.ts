@@ -4,6 +4,7 @@ import { GrassField } from './veg/GrassField.ts';
 import { Bushes } from './veg/Bushes.ts';
 import { Trees } from './veg/Trees.ts';
 import { VegUniforms, VEG_ACTOR_MAX, installAlphaCardGuard } from './veg/VegMaterial.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Everything that grows. Owns the shared Ecology sampler (Props borrows it),
@@ -20,10 +21,10 @@ export class Vegetation {
   actorRange!: number;
   bushes!: Bushes;
   ecology!: Ecology;
-  game!: any;
+  game!: Game;
   grass!: GrassField;
   trees!: Trees;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.45
       : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0;
@@ -70,7 +71,7 @@ export class Vegetation {
    *
    * @param centre camera position — who matters is who is on screen
    */
-  _gatherActors(game: any, centre: THREE.Vector3) {
+  _gatherActors(game: Game, centre: THREE.Vector3) {
     const out = this._actors;
     const pool = this._pool;
     out.length = 0;
@@ -110,7 +111,7 @@ export class Vegetation {
     VegUniforms.uActorCount.value = n;
   }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     VegUniforms.uTime.value = game.time.now;
 
     const player = game.get('Player');

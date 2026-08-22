@@ -3,6 +3,7 @@ import type { CachedNode } from '../UIKit.ts';
 import { icon, button } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The bounty board on the wall of the Crow's Nest.
@@ -67,7 +68,7 @@ export class HuntBoardScreen {
   card!: HTMLElement;
   cols!: HTMLElement;
   empty!: HTMLElement;
-  game!: any;
+  game!: Game;
   i!: number;
   list!: HTMLElement;
   menus!: Menus;
@@ -95,7 +96,7 @@ export class HuntBoardScreen {
   get rpg() { return this.game?.get?.('RpgSystem') || this.game?.get?.('Rpg') || null; }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.hunt-cols');
 
@@ -285,7 +286,7 @@ export class HuntBoardScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     const rpg = this.rpg;
     const tabs = this._tabs = this.ledgers();

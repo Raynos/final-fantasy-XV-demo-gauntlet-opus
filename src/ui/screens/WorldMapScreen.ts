@@ -11,6 +11,7 @@ import type { Chart } from '../../world/map/Chart.ts';
 import type { WorldMap } from '../../world/map/WorldMap.ts';
 import type { Menus } from '../Menus.ts';
 import type { Poi } from '../../world/map/WorldMap.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * THE CHART OF LUCIS — the full-screen atlas.
@@ -100,7 +101,7 @@ export class WorldMapScreen {
   dpr!: number;
   filter!: number;
   filterEls!: CachedNode[];
-  game!: any;
+  game!: Game;
   h!: number;
   hover!: any;
   list!: Poi[];
@@ -148,7 +149,7 @@ export class WorldMapScreen {
   }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.map = worldMap;
     // the styles key off `.wm`, not the screen slot, so the same screen can be
@@ -234,7 +235,7 @@ export class WorldMapScreen {
   // ------------------------------------------------------------- lifecycle
 
   /** Called by Menus when the screen becomes visible. */
-  enter(game: any) {
+  enter(game: Game) {
     this.game = game;
     const t = game.get('Terrain');
     if (!this.chart) this.chart = getChart(t);
@@ -418,7 +419,7 @@ export class WorldMapScreen {
   // ------------------------------------------------------------------ frame
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this._a = a;
     const t = game.time.now;
     const rev = easeOutQuint(clamp((a - 0.05) / 0.85, 0, 1));
@@ -438,7 +439,7 @@ export class WorldMapScreen {
     this._card(game);
   }
 
-  _card(game: any) {
+  _card(game: Game) {
     const p = this.list?.[this.sel];
     if (!p) { this.cardName.textContent = ''; return; }
     const known = this._known(p);
@@ -487,7 +488,7 @@ export class WorldMapScreen {
     this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
   }
 
-  _draw(game: any, t: number, rev: number) {
+  _draw(game: Game, t: number, rev: number) {
     const c = this.ctx, dpr = this.dpr;
     const W = this.w * dpr, H = this.h * dpr;
     const ppm = this.zoom * dpr;

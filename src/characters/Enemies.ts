@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Rng } from '../util/Rng.ts';
 import { BESTIARY, TYPES, speciesKeys } from './enemies/Bestiary.ts';
 import { CombatAnim } from './rig/CombatAnim.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Bestiary + spawner + AI tick.
@@ -23,7 +24,7 @@ export class Enemies {
   combatAnim!: CombatAnim;
   corpseLinger!: number;
   frozen!: boolean;
-  game!: any;
+  game!: Game;
   list!: any[];
   night!: number;
   onEnemyStrike!: any;
@@ -32,7 +33,7 @@ export class Enemies {
   rng!: Rng;
   root!: THREE.Group;
   threats!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.list = [];
     this.rng = new Rng(60613);
@@ -265,7 +266,7 @@ export class Enemies {
     return best;
   }
 
-  update(dt: any, game: any) {
+  update(dt: any, game: Game) {
     const ctx = this._ctx;
     ctx.terrain = game.get('Terrain');
     ctx.player = game.get('Player');
@@ -299,7 +300,7 @@ export class Enemies {
    * it belongs on `CombatSystem` or `Player` once those owners can take a
    * one-line call, and nothing else in here depends on it.
    */
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     if (!this.combatAnim && game.get('Combat') && game.get('Player')) {
       this.combatAnim = new CombatAnim(game);
     }

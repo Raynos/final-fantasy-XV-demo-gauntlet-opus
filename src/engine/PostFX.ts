@@ -18,6 +18,7 @@ import { LightBudget } from './LightBudget.ts';
 import { Warmup } from './Warmup.ts';
 import { GRADES, lutFor } from '../shaders/post/grades.ts';
 import type { Renderer } from './Renderer.ts';
+import type { Game } from '../game/Game.ts';
 
 /** Visible point/spot lights held resident per quality tier. See LightBudget. */
 const LIGHT_BUDGET = {
@@ -74,7 +75,7 @@ export class PostFX {
   exposure!: Exposure;
   focusSpeed!: number;
   frame!: number;
-  game!: any;
+  game!: Game;
   grade!: GradePass;
   gradeA!: string;
   gradeB!: string;
@@ -337,7 +338,7 @@ export class PostFX {
    * Attach the game so the grade can follow the sky's time of day. Called by
    * CameraRig on its first tick — PostFX is constructed before Game finishes.
    */
-  attach(game: any) { this.game = game; }
+  attach(game: Game) { this.game = game; }
 
   /**
    * Own the `scene.overrideMaterial` contract for the whole engine.
@@ -617,11 +618,11 @@ export class PostFX {
 
     if (this.autoGrade && this.game) {
       const sky = this.game.get('Sky');
-      const h = sky && (sky.timeOfDay ?? sky.hours ?? sky.hour);
+      const h = sky?.hours;
       if (typeof h === 'number') {
         const [a, b, t] = todGrade(h);
         const wx = this.game.get('Weather');
-        const w = wx && (wx.mode ?? wx.current ?? wx.type ?? wx.preset);
+        const w = wx?.name;
         if (w === 'storm' || w === 'overcast' || w === 'fog') {
           // heavy weather flattens the look whatever the clock says
           this.setGradeBlend(t > 0.5 ? b : a, 'storm', w === 'fog' ? 0.55 : 0.85);

@@ -12,6 +12,7 @@ import {
 } from './terrain/TerrainMaterial.ts';
 import { worldMap, WORLD } from './map/WorldMap.ts';
 import type { WorldMap } from './map/WorldMap.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
@@ -49,7 +50,7 @@ export class Terrain {
   _v!: THREE.Vector3;
   clipmap!: any;
   field!: Field;
-  game!: any;
+  game!: Game;
   landmarks!: any;
   layerNames!: string[];
   map!: WorldMap;
@@ -70,7 +71,7 @@ export class Terrain {
     this._ctrl = {};
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
 
     this.field = new Field(game.seed || 1337);
@@ -419,7 +420,7 @@ export class Terrain {
 
   // ------------------------------------------------------------------ update
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     const p = game.camera.position;
     this.clipmap.update(p.x, p.z);
     if (!this._gbufferPatched && game.post && game.post.gtao) {

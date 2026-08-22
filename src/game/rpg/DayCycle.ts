@@ -13,6 +13,7 @@
 
 import { LODGINGS, nightScaling } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
+import type { Game } from '../Game.ts';
 
 /** Named phases of the day, with the hour ranges that define them. */
 export const PHASES = [
@@ -125,13 +126,10 @@ export class DayCycle {
    * @param dt real seconds
    * @param [game] optional Game handle for Sky sync
    */
-  update(dt: number, game: any = null) {
+  update(dt: number, game: Game | null = null) {
     // Prefer an authoritative Sky if it has one and we're set to follow.
-    // `Sky` names the property `hours`; `timeOfDay` is accepted too so any
-    // other implementation of the documented contract still drives us.
     const sky = this.syncFromSky && game?.get ? game.get('Sky') : null;
-    const skyHour = typeof sky?.timeOfDay === 'number' ? sky.timeOfDay
-      : typeof sky?.hours === 'number' ? sky.hours : null;
+    const skyHour = typeof sky?.hours === 'number' ? sky.hours : null;
     if (skyHour != null) {
       // Follow the sky by *delta* so midnight wrap still advances the day and
       // absolute-hour buff timers never run backwards.

@@ -1,11 +1,22 @@
 import * as THREE from 'three';
 import { AudioGraph, BUSES } from './Graph.ts';
 import type { AcousticSpace } from './Graph.ts';
+import type { WeatherName } from '../world/Weather.ts';
 import { Instruments } from './Instruments.ts';
 import { Score } from './Score.ts';
 import { Sfx } from './Sfx.ts';
 import { Ambience } from './Ambience.ts';
 import { clamp } from './Dsp.ts';
+import type { Game } from '../game/Game.ts';
+
+/**
+ * The weather beds the mix knows how to lay down.
+ *
+ * A superset of `WeatherName`: `Weather` never sets 'rain' (its storm preset
+ * covers it) but a scripted cue may ask for the lighter bed directly. Because
+ * it is a superset, `Weather.name` flows straight in.
+ */
+export type AudioWeather = WeatherName | 'rain';
 
 /**
  * Audio.
@@ -49,14 +60,16 @@ export class AudioSystem {
   cpuMs!: number;
   ctx!: AudioContext | null;
   enabled!: boolean;
-  game!: any;
+  game!: Game;
   graph!: AudioGraph;
   headless!: boolean;
   inst!: Instruments;
   score!: Score;
   sfx!: Sfx;
-  weatherName!: string;
-  async init(game: any) {
+  /** Defaults to `Weather`'s own starting preset -- nothing sets it until the
+   * first `setWeather`, and `AudioWeather` may not quietly mean `undefined`. */
+  weatherName: AudioWeather = 'clear';
+  async init(game: Game) {
     this.game = game;
     this.enabled = false;
     this.ctx = null;
@@ -311,7 +324,7 @@ export class AudioSystem {
    * system in `_environment`, so this only needs to move the bed immediately
    * rather than waiting for the next probe.
    */
-  setWeather(w: 'clear' | 'overcast' | 'storm' | 'fog' | 'rain') {
+  setWeather(w: AudioWeather) {
     if (!this.enabled) return;
     this.weatherName = w;
     this.amb.setRain(w === 'storm' ? 1 : w === 'rain' ? 0.55 : 0);
@@ -398,7 +411,7 @@ export class AudioSystem {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.enabled) return;
     const t0 = performance.now();
 
@@ -429,7 +442,7 @@ export class AudioSystem {
     return p && p.position ? p.position : null;
   }
 
-  _listener(game: any) {
+  _listener(game: Game) {
     const cam = game.camera;
     cam.getWorldDirection(FWD);
     UP.set(0, 1, 0).applyQuaternion(cam.quaternion);
@@ -439,7 +452,7 @@ export class AudioSystem {
 
   /* ------------------------------------------------------------- music */
 
-  _music(dt: number, game: any) {
+  _music(dt: number, game: Game) {
     const combat = game.get('Combat');
     const enemies = game.get('Enemies');
     const sky = game.get('Sky');
@@ -529,7 +542,7 @@ export class AudioSystem {
 
   /* --------------------------------------------------------- footsteps */
 
-  _footsteps(dt: number, game: any) {
+  _footsteps(dt: number, game: Game) {
     const p = game.get('Player');
     if (!p || !p.position) return;
     const speed = p.speed || 0;
@@ -570,7 +583,7 @@ export class AudioSystem {
 
   /* ----------------------------------------------------------- enemies */
 
-  _enemies(dt: number, game: any) {
+  _enemies(dt: number, game: Game) {
     const enemies = game.get('Enemies');
     const player = game.get('Player');
     if (!enemies || !player) return;
@@ -620,7 +633,7 @@ export class AudioSystem {
   /* ------------------------------------------------------- environment */
 
   /** Weather, clock, nearby water, floodlights and the shape of the space. */
-  _environment(game: any) {
+  _environment(game: Game) {
     const weather = game.get('Weather');
     if (weather) {
       this.amb.setWind(weather.windStrength ?? 1);

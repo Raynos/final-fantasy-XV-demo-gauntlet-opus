@@ -13,6 +13,7 @@ import { ArchiveScreen } from './screens/ArchiveScreen.ts';
 import { SystemScreen } from './screens/SystemScreen.ts';
 import { ControlsScreen } from './screens/ControlsScreen.ts';
 import { ArmigerScreen } from './screens/ArmigerScreen.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Footer prompt sets.
@@ -78,7 +79,7 @@ export class Menus {
   a!: number;
   foot!: HTMLElement;
   footRule!: HTMLElement;
-  game!: any;
+  game!: Game;
   grain!: HTMLElement;
   head!: HTMLElement;
   headR!: HTMLElement;
@@ -93,7 +94,7 @@ export class Menus {
   shown!: string | null;
   stack!: any[];
   wrap!: HTMLElement;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.root = el('div', { id: 'menus' });
     game.uiRoot.appendChild(this.root);
@@ -229,7 +230,7 @@ export class Menus {
    * conversation, a shop, the title card or a playing cutscene. This is what
    * decides whether the pointer may be locked.
    */
-  _uiBusy(game: any) {
+  _uiBusy(game: Game) {
     if (this.name) return true;
     const ix = game.get?.('Interaction');
     if (ix && ix.talking) return true;
@@ -242,7 +243,7 @@ export class Menus {
    * Keep the browser's pointer lock in step with what is on screen, and turn an
    * unexpected exit into an opened pause menu.
    */
-  _pointerLock(game: any) {
+  _pointerLock(game: Game) {
     const inp = game.input;
     if (!inp || !inp.setPointerLockAllowed) return;
     const busy = this._uiBusy(game);
@@ -263,7 +264,7 @@ export class Menus {
   }
 
   /** @param dt @param game */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     this._input(game);
     this._pointerLock(game);
 
@@ -315,7 +316,7 @@ export class Menus {
     this.setScreen(name);
   }
 
-  _input(game: any) {
+  _input(game: Game) {
     const inp = game.input;
     if (!inp) return;
     const down = (c: string) => inp.keyDown?.(c);

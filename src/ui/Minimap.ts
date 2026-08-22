@@ -7,6 +7,7 @@ import { fog } from '../world/map/FogOfWar.ts';
 import type { Chart } from '../world/map/Chart.ts';
 import type { FogOfWar } from '../world/map/FogOfWar.ts';
 import type { WorldMap } from '../world/map/WorldMap.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * The field minimap.
@@ -48,7 +49,7 @@ export class Minimap {
   dpr!: number;
   fog!: FogOfWar;
   frame!: HTMLElement;
-  game!: any;
+  game!: Game;
   map!: WorldMap;
   range!: number;
   regionEl!: HTMLElement;
@@ -71,7 +72,7 @@ export class Minimap {
     this._a = 0;
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.map = worldMap;
     this.terrain = game.get('Terrain');
@@ -136,7 +137,7 @@ export class Minimap {
 
   // ------------------------------------------------------------------ frame
 
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     if (!this.ctx || !this.chart) return;
     const player = game.get('Player');
     const px = player?.position?.x ?? game.camera.position.x;
@@ -188,7 +189,7 @@ export class Minimap {
     this.scaleEl.textContent = `${this.range} M`;
   }
 
-  _draw(game: any, px: number, pz: number) {
+  _draw(game: Game, px: number, pz: number) {
     const c = this.ctx, dpr = this.dpr, S = SIZE * dpr;
     const t = game.time.now;
     const R = S / 2;
@@ -269,7 +270,7 @@ export class Minimap {
     c.restore();
 
     // ---- quest waypoint ----
-    const q = this.waypoint || (this.game.questWaypoint || null);
+    const q = this.waypoint || null;
     if (q) {
       c.save();
       c.translate(R, R);
@@ -308,13 +309,13 @@ export class Minimap {
       c.stroke();
     };
     const party = game.get('Party');
-    for (const m of (party?.members || party?.companions || [])) {
+    for (const m of (party?.members || [])) {
       const p = m.position || m.root?.position;
       if (p) blip(p.x, p.z, 'rgba(182,214,248,0.95)', 2.5);
     }
     const enemies = game.get('Enemies');
     const hostilePulse = 0.5 + 0.5 * Math.sin(t * 4.2);
-    for (const e of (enemies?.active || enemies?.list || enemies?.enemies || [])) {
+    for (const e of (enemies?.list || [])) {
       const p = e.position || e.root?.position;
       if (p && (e.hp === undefined || e.hp > 0)) {
         blip(p.x, p.z, 'rgba(224,100,74,0.96)', 2.7,

@@ -4,6 +4,7 @@ import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import { readGear, readParty, rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 const SLOT_ICON = { Weapon: 'sword', Accessory: 'ap' };
 
@@ -28,7 +29,7 @@ export class GearScreen {
   _msg!: any;
   _msgAge!: number;
   cards!: any[];
-  game!: any;
+  game!: Game;
   grid!: HTMLElement;
   i!: number;
   j!: number;
@@ -53,7 +54,7 @@ export class GearScreen {
     this._msgAge = 9;
   }
 
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.grid = el('div.gear-grid');
     root.appendChild(this.grid);
@@ -75,7 +76,7 @@ export class GearScreen {
     root.appendChild(this.msg);
   }
 
-  _build(game: any, party: any) {
+  _build(game: Game, party: any) {
     const r = rpg(game);
     party.forEach((p: any) => {
       const list = readGear(game, p.id);
@@ -212,19 +213,20 @@ export class GearScreen {
       this._say(row.id ? `Equipped ${row.name}.` : 'Slot cleared.', true);
       if (r.refreshGear) r.refreshGear();
     } else {
-      this._say((({
+      const why: Record<string, string> = {
         'class-not-allowed': 'They cannot wield that.',
         'not-your-weapon': 'That blade answers to someone else.',
         'already-equipped': 'Already worn in another slot.',
         'not-owned': 'None left in the bag.',
-      }) as any)[res.reason] || `Cannot equip that. (${res.reason})`, false);
+      };
+      this._say(why[res.reason ?? ''] || `Cannot equip that. (${res.reason})`, false);
     }
     this.back();
   }
 
   _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
-  enter(game: any) {
+  enter(game: Game) {
     if (game) this.game = game;
     this._key = null;
     this.picker = null;
@@ -234,7 +236,7 @@ export class GearScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     const party = readParty(game);
     if (!this.cards.length) this._build(game, party);
     const r = rpg(game);

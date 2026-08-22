@@ -2,6 +2,7 @@ import { el, clamp, commas, easeOut } from './UIKit.ts';
 import { icon, portrait } from './Icons.ts';
 import { Bar } from './Bar.ts';
 import { readParty } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
 
@@ -95,7 +96,7 @@ export class PartyPanel {
    * @param dt seconds
    * @param appear 0..1 master reveal
    */
-  update(dt: number, game: any, appear: number) {
+  update(dt: number, game: Game, appear: number) {
     const party = readParty(game);
     if (!this.built) this._build(party);
 

@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import type { Game } from '../game/Game.ts';
+import { WEATHER_NAMES } from '../world/Weather.ts';
+
+/** Every preset `Weather.set()` accepts, in the order the warm-up walks them. */
+
 
 /**
  * Boot-time shader pre-warm.
@@ -28,11 +33,11 @@ import * as THREE from 'three';
 export class Warmup {
   renderer!: any;
   camera!: any;
-  game!: any;
+  game!: Game;
   log!: any[];
   ms!: number;
   scene!: any;
-  constructor(game: any) {
+  constructor(game: Game) {
     this.game = game;
     this.renderer = game.renderer;
     this.scene = game.scene;
@@ -194,9 +199,10 @@ export class Warmup {
   _warmWeather(rt: any) {
     const wx = this.game.get('Weather');
     if (!wx || !wx.set) return;
+    // `Weather.name` is declared `string`, so narrow it rather than trusting it.
     const back = wx.name || 'clear';
     try {
-      for (const name of ['clear', 'overcast', 'storm', 'fog']) {
+      for (const name of WEATHER_NAMES) {
         wx.set(name);
         if (wx.snap) wx.snap();
         // Wetness ramps over a couple of seconds and only *then* switches
@@ -251,7 +257,7 @@ export class Warmup {
   _warmTimeOfDay(rt: any) {
     const sky = this.game.get('Sky');
     if (!sky || !sky.setTimeOfDay) return;
-    const back = sky.timeOfDay ?? sky.hours ?? sky.hour ?? 12;
+    const back = sky.hours ?? 12;
     try {
       for (const h of [1, 6.5, 12, 18.5, 22]) {
         sky.setTimeOfDay(h);

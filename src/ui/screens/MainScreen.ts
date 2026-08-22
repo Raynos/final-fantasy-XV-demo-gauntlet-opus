@@ -4,6 +4,7 @@ import { icon, portrait } from '../Icons.ts';
 import { Bar } from '../Bar.ts';
 import { readParty, readQuest, hudState } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Every row of the pause menu, and the screen it opens.
@@ -66,7 +67,7 @@ export class MainScreen {
     this.i = 0;
   }
 
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.list = el('div.mlist');
     this.rows = ENTRIES.map((e2) => {
       const row = el('div.mrow', {}, [
@@ -136,7 +137,7 @@ export class MainScreen {
    * The preview blurb. Three of the eight entries can report real state, so
    * they do rather than repeating an authored count that would drift.
    */
-  _body(entry: any, game: any) {
+  _body(entry: any, game: Game) {
     const r = game?.get?.('Rpg');
     if (!r) return entry.body;
     if (entry.key === 'quests') {
@@ -166,7 +167,7 @@ export class MainScreen {
   }
 
   /** @param dt @param game @param a 0..1 */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     const party = readParty(game);
     if (!this.cards.length) this._buildCards(party);
 
@@ -219,7 +220,10 @@ export class MainScreen {
     const hs = hudState(game);
     if (hs) {
       const avg = Math.round(party.reduce((s2, p) => s2 + p.level, 0) / Math.max(1, party.length));
-      const secs = Math.max(0, Math.floor(game.get('Rpg').playTime));
+      // `hudState` is non-null only when Rpg is registered, but the registry
+      // cannot say so; read it once and fall back to zero.
+      const rpgSys = game.get('Rpg');
+      const secs = Math.max(0, Math.floor(rpgSys ? rpgSys.playTime : 0));
       const play = `${String(Math.floor(secs / 3600)).padStart(2, '0')}:${String(Math.floor(secs / 60) % 60).padStart(2, '0')}`;
       const vals = [commas(hs.gil), play, String(avg), commas(hs.ap)];
       for (let i = 0; i < this.statNodes.length; i++) {

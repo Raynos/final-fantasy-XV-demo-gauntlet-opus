@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loft, rectCross, place, tint, glow, merge, enableVertexEmissive } from '../../combat/GeoKit.ts';
 import { Rng } from '../../util/Rng.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The Disc of Cauthess — the arena you fight Titan in.
@@ -14,7 +15,7 @@ import { Rng } from '../../util/Rng.ts';
 export class TitanArena {
   _tmp!: THREE.Vector3;
   centre!: THREE.Vector3;
-  game!: any;
+  game!: Game;
   mesh!: THREE.Mesh;
   radius!: number;
   risen!: number;
@@ -23,7 +24,7 @@ export class TitanArena {
   shake!: number;
   terrain!: any;
   vfx!: any;
-  constructor(game: any, centre: THREE.Vector3, radius: number = 60) {
+  constructor(game: Game, centre: THREE.Vector3, radius: number = 60) {
     this.game = game;
     this.centre = centre.clone();
     this.radius = radius;

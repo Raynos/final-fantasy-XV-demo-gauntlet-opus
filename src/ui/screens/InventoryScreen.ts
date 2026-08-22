@@ -4,6 +4,7 @@ import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { ITEM_TABS, readItems, hudState, rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /** Rows the column can hold before the list would need to scroll. */
 const MAX_ROWS = 22;
@@ -32,7 +33,7 @@ export class InventoryScreen {
   dRule!: HTMLElement;
   dSpecs!: HTMLElement;
   detail!: HTMLElement;
-  game!: any;
+  game!: Game;
   gil!: HTMLElement;
   gilVal!: ChildNode | null;
   i!: number;
@@ -59,7 +60,7 @@ export class InventoryScreen {
     this._msgAge = 9;
   }
 
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.cols');
     const l = el('div.col-l');
@@ -113,7 +114,7 @@ export class InventoryScreen {
   }
 
   /** Rebuild the row list for the current tab. */
-  _rebuild(items: any, key: string, game: any) {
+  _rebuild(items: any, key: string, game: Game) {
     this.items = items;
     this.list.textContent = '';
     this.rows = this.items.slice(0, MAX_ROWS).map((it) => {
@@ -174,27 +175,29 @@ export class InventoryScreen {
 
     const res = r.inventory.use(it.id, targets.filter(Boolean), { curativePower: r.ascension.value('curativePower') || 0 });
     if (res.ok) {
-      const healed = res.results.reduce((s: any, x: any) => s + (x.healed || 0), 0);
-      const revived = res.results.some((x: any) => x.revived);
+      const results = res.results || [];
+      const healed = results.reduce((s: any, x: any) => s + (x.healed || 0), 0);
+      const revived = results.some((x: any) => x.revived);
       this._say(revived ? `${it.name} — back on their feet.`
         : healed ? `${it.name} — ${commas(healed)} HP restored.`
           : `${it.name} used.`, true);
       this._key = null;
     } else {
-      this._say((({
+      const why: Record<string, string> = {
         'not-usable': 'Nothing to use it on.',
         'none-left': 'None left.',
         'no-target': 'Nobody needs it.',
-      }) as any)[res.reason] || 'Nothing doing.', false);
+      };
+      this._say(why[res.reason ?? ''] || 'Nothing doing.', false);
     }
   }
 
   _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
-  enter(game: any) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
+  enter(game: Game) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     // rebuild when the tab changes or the bag does
     const items = readItems(game, this.tab);
     const key = `${this.tab}|${items.map((x) => `${x.id}${x.qty}`).join()}`;

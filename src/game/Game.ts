@@ -68,6 +68,16 @@ export interface SystemRegistry {
   Director: Director;
   Dungeons: Dungeons;
   /**
+   * Registered by `Director` once the world is up, not by the boot order --
+   * they tick after Player, Party and Combat have moved everything for the
+   * frame, which is the whole reason they are added late.
+   */
+  Encounters: import('./encounters/EncounterDirector.ts').EncounterDirector;
+  PartyAI: import('../characters/ai/PartyAI.ts').PartyAI;
+  Downed: import('./encounters/Downed.ts').Downed;
+  /** Registered by `Player`, which builds the collision world it needs. */
+  Collision: import('../world/collision/CollisionWorld.ts').CollisionWorld;
+  /**
    * The `?debug` suite, registered by `installDevSuite` when the flag is on --
    * a type-only import, so the dev code stays out of a production bundle.
    */
@@ -247,7 +257,7 @@ export class Game {
 
   /**
    * Put the world into a named, reproducible state (see Shots.js) and lock the
-   * camera. Used by src/tools/shoot.mjs and by photo mode.
+   * camera. Used by src/tools/shoot.mts and by photo mode.
    */
   applyShot(name: any) {
     const shot = SHOTS[name as keyof typeof SHOTS];

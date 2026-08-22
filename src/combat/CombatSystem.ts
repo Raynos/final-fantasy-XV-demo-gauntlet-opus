@@ -4,6 +4,7 @@ import { WEAPONS, Weapon, Armiger } from './Weapons.ts';
 import { Elemancy } from './Elemancy.ts';
 import type { CombatEvents, CombatEventName } from './CombatEvents.ts';
 import type { WeaponClass } from './Weapons.ts';
+import type { Game } from '../game/Game.ts';
 
 /** The three castable elements. */
 export type ElementKind = 'fire' | 'ice' | 'lightning';
@@ -50,7 +51,7 @@ export class CombatSystem {
   dodgeDir!: THREE.Vector3;
   elemancy!: Elemancy;
   enemies!: any;
-  game!: any;
+  game!: Game;
   hand!: THREE.Group;
   heavySwing!: boolean;
   hitThisSwing!: Set<any>;
@@ -78,7 +79,7 @@ export class CombatSystem {
   weapon!: any;
   weaponCache!: Map<any, any>;
   weaponItem!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.rng = new Rng(51221);
     this.inCombat = false;
@@ -239,8 +240,9 @@ export class CombatSystem {
    * constant), so a swap costs one visibility flip.
    *
    */
-  _prebuildWeapons(game: any) {
-    const patch = game.get('Sky') && game.get('Sky').patch;
+  _prebuildWeapons(game: Game) {
+    const sky = game.get('Sky');
+    const patch = sky && sky.patch;
     for (const kind of Object.keys(WEAPONS)) {
       const w = new Weapon(kind);
       w.setReveal(0);
@@ -305,7 +307,8 @@ export class CombatSystem {
       // but it pays a one-frame compile the first time it is drawn.
       w = new Weapon(kind);
       this.hand.add(w.root);
-      const patch = this.game.get('Sky') && this.game.get('Sky').patch;
+      const sky = this.game.get('Sky');
+      const patch = sky && sky.patch;
       if (patch) patch.patch(w.material);
       this.weaponCache.set(kind, w);
     }
@@ -966,7 +969,7 @@ export class CombatSystem {
 
   /* ----------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const raw = game.time.rawDt;
     const input = game.input;
     const p = this.player;

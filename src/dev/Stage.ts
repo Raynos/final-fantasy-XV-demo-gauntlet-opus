@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from '../game/Game.ts';
-import { isDirectionalLight, isObject3D } from '../util/three-guards.ts';
+import { isDirectionalLight, isLight, isObject3D } from '../util/three-guards.ts';
 
 /**
  * How far off the sun's azimuth the turntable parks. Straight down the sun
@@ -131,9 +131,9 @@ export class Stage {
    * moves, so anything spawned after a one-shot pass would pop back into an
    * otherwise empty stage — which is exactly what happened the first time.
    */
-  _hide(game: any) {
+  _hide(game: Game) {
     for (const child of game.scene.children) {
-      if (child.isLight || this._keep.has(child)) continue;
+      if (isLight(child) || this._keep.has(child)) continue;
       if (!child.visible) continue;
       child.visible = false;
       if (!this._hidden.includes(child)) this._hidden.push(child);
@@ -247,7 +247,7 @@ export class Stage {
    * the camera, so manual flight still wins when the turntable is off.
    * @param dt @param cam
    */
-  update(dt: number, cam: import('./Freecam.ts').Freecam, game: any) {
+  update(dt: number, cam: import('./Freecam.ts').Freecam, game: Game) {
     if (!this.active) return;
     if (game) this._hide(game);
     if (!this.spin && !this._needFrame) return;

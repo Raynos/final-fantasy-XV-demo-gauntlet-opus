@@ -1,5 +1,6 @@
 import { el, clamp, easeOut } from './UIKit.ts';
 import { button } from './Icons.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Contextual button prompts, one set per situation.
@@ -62,7 +63,7 @@ export class Prompts {
    * standing next to it, that is unambiguously what the prompt strip is for.
    * @param mode the Director's scenario
    */
-  _resolve(game: any, mode: string) {
+  _resolve(game: Game, mode: string) {
     const car = game.get?.('Regalia');
     if (car && car.enabled) {
       if (car.isDriving) return 'driving';
@@ -76,7 +77,7 @@ export class Prompts {
    * @param mode `field` | `combat` | `warp`
    * @param appear 0..1
    */
-  update(dt: number, game: any, mode: string, appear: number) {
+  update(dt: number, game: Game, mode: string, appear: number) {
     const set = this._resolve(game, mode);
     if (set !== this.mode) this._render(set);
     const e = easeOut(clamp((appear - 0.18) / 0.62, 0, 1));

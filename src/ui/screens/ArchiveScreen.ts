@@ -6,6 +6,7 @@ import { TYPES, entry as bestiaryEntry } from '../../characters/enemies/Bestiary
 import { attachKillLog, killsOf, totalKills, speciesRecorded } from '../KillLog.ts';
 import { rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 const FACTION = { beast: 'Beast', daemon: 'Daemon', imperial: 'Imperial', astral: 'Astral' };
 const FACTION_TABS = [
@@ -49,7 +50,7 @@ export class ArchiveScreen {
   dSpecs!: HTMLElement;
   dWeak!: HTMLElement;
   detail!: HTMLElement;
-  game!: any;
+  game!: Game;
   i!: number;
   list!: HTMLElement;
   menus!: Menus;
@@ -78,7 +79,7 @@ export class ArchiveScreen {
   get datalog() { return FACTION_TABS[this.tab].f === 'datalog'; }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     attachKillLog();
 
@@ -134,7 +135,7 @@ export class ArchiveScreen {
     root.appendChild(this.tally);
   }
 
-  enter(game: any) { if (game) this.game = game; this._sig = null; }
+  enter(game: Game) { if (game) this.game = game; this._sig = null; }
 
   /* -------------------------------------------------------------- data */
 
@@ -270,7 +271,7 @@ export class ArchiveScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     const rows = this._rows = this.rows();
     if (this.i >= rows.length) this.i = Math.max(0, rows.length - 1);

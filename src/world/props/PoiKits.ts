@@ -8,6 +8,7 @@ import {
   signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Built form for the hundred and twenty-four points of interest of Lucis.
@@ -805,7 +806,7 @@ export class PoiKits {
   // ---------------------------------------------------------------- stream
 
   /** Positions we must not build on: another system already owns them. */
-  _exclude(game: any) {
+  _exclude(game: Game) {
     if (this._exclusions) return this._exclusions;
     const out = [];
     const d = game && game.get && game.get('Dungeons');
@@ -816,7 +817,7 @@ export class PoiKits {
     return out;
   }
 
-  _make(site: any, game: any) {
+  _make(site: any, game: Game) {
     const p = site.poi;
     for (const e of this._exclude(game)) {
       if (Math.hypot(e.x - p.x, e.z - p.z) < 130) { site.group = new THREE.Group(); return; }
@@ -845,7 +846,7 @@ export class PoiKits {
    * @param dt @param t @param night
    * @param camPos @param game
    */
-  update(dt: number, t: number, night: number, camPos: THREE.Vector3, game: any) {
+  update(dt: number, t: number, night: number, camPos: THREE.Vector3, game: Game) {
     // build at most one POI per frame, nearest first
     let best: any = null, bestD = BUILD_R * BUILD_R;
     for (const s of this.sites) {

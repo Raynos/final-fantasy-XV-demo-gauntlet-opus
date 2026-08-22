@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp01, smooth, lerp } from './Geo.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The player's combat body.
@@ -52,11 +53,11 @@ export class CombatAnim {
   _prevState!: string;
   _warpK!: number;
   combat!: any;
-  game!: any;
+  game!: Game;
   land!: number;
   parry!: number;
   player!: any;
-  constructor(game: any) {
+  constructor(game: Game) {
     this.game = game;
     this.combat = game.get('Combat');
     this.player = game.get('Player');

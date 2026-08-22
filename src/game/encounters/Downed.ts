@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Game } from '../Game.ts';
 
 /**
  * Danger, Down, revive and game over.
@@ -29,7 +30,7 @@ export class Downed {
   combat!: any;
   dangerAt!: number;
   enemies!: any;
-  game!: any;
+  game!: Game;
   party!: any;
   player!: any;
   reviveProgress!: number;
@@ -37,7 +38,7 @@ export class Downed {
   rpg!: any;
   state!: string;
   vfx!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.player = game.get('Player');
     this.party = game.get('Party');
@@ -185,7 +186,7 @@ export class Downed {
 
   /* -------------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const p = this.player;
     if (!p) return;
     const n = this.noctis;

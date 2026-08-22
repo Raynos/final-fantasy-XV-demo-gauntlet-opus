@@ -65,6 +65,13 @@ function dawnFogBoost(hours: number) {
 /** The four weather states, as `Shots.ts` and the `weather` cvar spell them. */
 export type WeatherName = 'clear' | 'overcast' | 'storm' | 'fog';
 
+/** The same four, as a value — for anything that has to iterate or validate them. */
+export const WEATHER_NAMES = ['clear', 'overcast', 'storm', 'fog'] as const satisfies readonly WeatherName[];
+
+/** For the places a name arrives as an untyped string: a cvar, a URL, a save. */
+export const isWeatherName = (v: unknown): v is WeatherName =>
+  typeof v === 'string' && (WEATHER_NAMES as readonly string[]).includes(v);
+
 export class Weather {
   _snap!: boolean;
   _camPos!: THREE.Vector3;
@@ -75,7 +82,7 @@ export class Weather {
   _shotSeen!: any;
   game!: Game;
   lightning!: Lightning;
-  name!: string;
+  name!: WeatherName;
   p!: any;
   rain!: Rain;
   rainIntensity!: number;
@@ -177,7 +184,7 @@ export class Weather {
 
   // ----------------------------------------------------------------- update
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     // A named shot is a cut to a different world state, not a front rolling
     // in: snap so a capture never lands mid-transition. Sky does the same.
     if (game.currentShot !== this._shotSeen) {
@@ -230,7 +237,7 @@ export class Weather {
     this._snap = false;
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     if (!game.post) return;
     if (!this.volume) {
       this.volume = new VolumePass(game.post);
@@ -249,7 +256,7 @@ export class Weather {
   }
 
   /** Feed the ray-march from the sky's current lighting state. */
-  _pushVolume(game: any) {
+  _pushVolume(game: Game) {
     const sky = game.get('Sky');
     const u = this.volume.material.uniforms;
     const t = game.time.now;

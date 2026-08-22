@@ -7,6 +7,7 @@ import { DriveCamera } from './DriveCamera.ts';
 import { Occupants } from './Occupants.ts';
 import { Banter } from './Banter.ts';
 import { Radio } from '../../audio/Radio.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The road trip.
@@ -93,7 +94,7 @@ export class RegaliaSystem {
   driveCam!: DriveCamera;
   enabled!: boolean;
   fuel!: number;
-  game!: any;
+  game!: Game;
   headlights!: string;
   homeS!: number;
   isDriving!: boolean;
@@ -136,7 +137,7 @@ export class RegaliaSystem {
 
   /* ------------------------------------------------------------------ init */
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     const terrain = game.get('Terrain');
     this.terrain = terrain;
@@ -363,7 +364,7 @@ export class RegaliaSystem {
 
   /* --------------------------------------------------------------- update */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.enabled) return;
     if (this._enterCooldown > 0) this._enterCooldown -= dt;
 
@@ -418,7 +419,7 @@ export class RegaliaSystem {
     this.radio.update(dt);
   }
 
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     if (!this.enabled) return;
     this._sync(dt);
     if (this.isDriving) {
@@ -471,7 +472,7 @@ export class RegaliaSystem {
   }
 
   /** Keyboard + gamepad -> vehicle controls. */
-  _playerControls(game: any) {
+  _playerControls(game: Game) {
     const inp = game.input;
     const c = this._pc || (this._pc = { throttle: 0, brake: 0, steer: 0, handbrake: false, gear: 1 });
     let th = 0, br = 0, st = 0;
@@ -507,7 +508,7 @@ export class RegaliaSystem {
   }
 
   /** Doors, camera modes, radio, off-road, auto-drive. */
-  _input(dt: number, game: any) {
+  _input(dt: number, game: Game) {
     const inp = game.input;
     // `enabled === false` means a menu, a shop or a conversation owns the
     // keyboard — without this, Backspace-ing out of the shop screen while
@@ -545,7 +546,7 @@ export class RegaliaSystem {
   }
 
   /** The chase camera writes the camera last, and only while we are driving. */
-  _driveCameraTick(dt: number, game: any) {
+  _driveCameraTick(dt: number, game: Game) {
     const rig = game.get('CameraRig');
     if (rig && rig.shot && !this._stagedShot) return;      // a capture owns the lens
     this.driveCam.update(dt, this.body, game.input ? { lookX: game.input.look.x, lookY: game.input.look.y } : null);
@@ -557,7 +558,7 @@ export class RegaliaSystem {
   }
 
   /** Headlights, tail lights and the emissive lenses. */
-  _lightsTick(game: any) {
+  _lightsTick(game: Game) {
     const sky = game.get('Sky');
     let night = 0;
     if (sky && sky.sun && sky.sun.position) {
@@ -583,7 +584,7 @@ export class RegaliaSystem {
     return n;
   }
 
-  _fuelEfficiency(game: any) {
+  _fuelEfficiency(game: Game) {
     const rpg = game.get('Rpg');
     const bonus = rpg && rpg.ascension && rpg.ascension.value
       ? (rpg.ascension.value('fuelEfficiency') || 0) : 0;
@@ -597,14 +598,14 @@ export class RegaliaSystem {
     }
   }
 
-  _awardDistance(game: any) {
+  _awardDistance(game: Game) {
     const rpg = game.get('Rpg');
     if (!rpg || !rpg.drove) return;
     this._distanceAp += this.body.speed * (game.time.dt || 0);
     if (this._distanceAp >= 100) { rpg.drove(this._distanceAp); this._distanceAp = 0; }
   }
 
-  _banterCtx(game: any) {
+  _banterCtx(game: Game) {
     const ctx = this._ctx || (this._ctx = {});
     const rpg = game.get('Rpg');
     const weather = game.get('Weather');
@@ -614,7 +615,7 @@ export class RegaliaSystem {
     ctx.roadDist = this.body.roadDist;
     ctx.offRoadMode = this.body.offRoadMode;
     ctx.slide = this.body.slide;
-    ctx.hour = rpg && rpg.day ? rpg.day.hour : (game.get('Sky') || {}).timeOfDay || 12;
+    ctx.hour = rpg && rpg.day ? rpg.day.hour : game.get('Sky')?.hours ?? 12;
     ctx.weather = weather && weather.name ? weather.name : 'clear';
     ctx.fuel = this.fuel;
     ctx.landmark = this._nearestLandmark();
@@ -660,7 +661,7 @@ export class RegaliaSystem {
    * explicit pose here — position along the highway, speed, who is driving —
    * so a capture is reproducible frame for frame.
    */
-  _shotStaging(game: any) {
+  _shotStaging(game: Game) {
     const name = game.currentShot;
     if (name === this._shotApplied) return;
     this._shotApplied = name;

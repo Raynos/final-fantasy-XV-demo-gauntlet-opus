@@ -3,6 +3,7 @@ import {
   loft, rectCross, tube, slab, spike, blob, place, tint, glow, merge, enableVertexEmissive,
 } from '../../combat/GeoKit.ts';
 import { metalNormal, metalRoughness } from '../../characters/enemies/EnemyBase.ts';
+import type { Game } from '../Game.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -26,7 +27,7 @@ export class Dropship {
   at!: THREE.Vector3;
   exit!: THREE.Vector3;
   from!: THREE.Vector3;
-  game!: any;
+  game!: Game;
   mesh!: any;
   payload!: any[];
   root!: THREE.Group;
@@ -34,7 +35,7 @@ export class Dropship {
   t!: number;
   terrain!: any;
   vfx!: any;
-  init(game: any) {
+  init(game: Game) {
     this.game = game;
     this.terrain = game.get('Terrain');
     this.vfx = game.get('VFX');

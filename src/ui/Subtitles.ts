@@ -1,4 +1,5 @@
 import { el, clamp, easeOut, easeOutQuint, Clip } from './UIKit.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Lower-third dialogue subtitles with a speaker name, plus the party-banter
@@ -23,7 +24,7 @@ export class Subtitles {
   bubbles!: any[];
   chars!: any[];
   cur!: Clip | null;
-  game!: any;
+  game!: Game | null;
   line!: HTMLElement;
   root!: HTMLElement;
   rule!: HTMLElement;
@@ -35,7 +36,7 @@ export class Subtitles {
    *   owned by `PartyPanel`. Without it the bubbles fall back to this layer and
    *   the stylesheet's absolute placement, which is what they used to do.
    */
-  constructor(parent: HTMLElement, game?: any, banterParent?: HTMLElement) {
+  constructor(parent: HTMLElement, game?: Game, banterParent?: HTMLElement) {
     this.game = game || null;
     this.root = el('div.subs-layer');
     parent.appendChild(this.root);

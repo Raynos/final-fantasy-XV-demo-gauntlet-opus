@@ -4,6 +4,7 @@ import { NPC_CAST } from './NpcCast.ts';
 import { NPC_DIALOGUE } from './NpcDialogue.ts';
 import { Rng } from '../../util/Rng.ts';
 import { updateSun } from '../rig/Materials.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The population of Hammerhead.
@@ -93,7 +94,7 @@ export class Npcs {
   _camPos!: THREE.Vector3;
   _handles!: any[];
   eco!: any;
-  game!: any;
+  game!: Game;
   ground!: any;
   list!: any[];
   root!: THREE.Group;
@@ -106,9 +107,9 @@ export class Npcs {
     this._camPos = new THREE.Vector3();
   }
 
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
-    const town = game.get('Town') || game.get('Hammerhead');
+    const town = game.get('Town');
     if (!town || !town.anchors || !town.local) {
       console.warn('[Npcs] no town to populate');
       return this;
@@ -262,7 +263,7 @@ export class Npcs {
   }
 
   /** The named cast answer to E. */
-  _registerTalk(game: any) {
+  _registerTalk(game: Game) {
     const ix = game.get('Interaction');
     if (!ix) return;
     this._handles = [];
@@ -293,7 +294,7 @@ export class Npcs {
 
   /* --------------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.list.length) return;
     const player = game.get('Player');
     const p = player ? player.position : null;
@@ -424,7 +425,7 @@ export class Npcs {
     }
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     // The rig's materials carry their own sun uniform; keep it fed even when
     // the player system is not the one that pushed it this frame.
     const sky = game.get('Sky');

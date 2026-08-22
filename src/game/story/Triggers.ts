@@ -1,4 +1,5 @@
 import { PLACES, REGION_CARDS } from './Chapters.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * World triggers: the layer that notices something has happened and tells the
@@ -23,9 +24,9 @@ export class Triggers {
   region!: string | null;
   _hour!: any;
   _t!: number;
-  game!: any;
+  game!: Game;
   list!: any[];
-  constructor(game: any) {
+  constructor(game: Game) {
     this.game = game;
     this.list = [];
     this.place = null;             // id of the place the player is standing in

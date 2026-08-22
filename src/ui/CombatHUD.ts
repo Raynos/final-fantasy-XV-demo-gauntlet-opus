@@ -3,6 +3,7 @@ import { el, svg, clamp, commas, easeOut, easeOutQuint, easeBack, rng, Clip } fr
 import { icon } from './Icons.ts';
 import { Bar } from './Bar.ts';
 import { ENEMY_TEMPLATES, hudState, readArmiger, readTechniques, rollDamage } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 const _v = new THREE.Vector3();
 
@@ -138,7 +139,7 @@ export class CombatHUD {
    * Build the technique rack from the real party roster: one signature move per
    * companion, with its real tech-bar cost.
    */
-  _buildTechs(game: any) {
+  _buildTechs(game: Game) {
     const node = this.techs.node;
     const list = readTechniques(game);
     this.techs.rows = list.map((t, i) => {
@@ -219,7 +220,7 @@ export class CombatHUD {
    * @param dt seconds
    * @param appear 0..1 combat reveal
    */
-  update(dt: number, game: any, appear: number) {
+  update(dt: number, game: Game, appear: number) {
     const w = window.innerWidth, h = window.innerHeight;
     const cam = game.camera;
     const e = easeOut(appear);
@@ -268,10 +269,12 @@ export class CombatHUD {
     // techniques — the tech bar is charged by PartyState while `inCombat`
     const hs = hudState(game);
     const bars = hs ? hs.techBars : null;
+    // `CombatSystem` carries no per-technique readiness — the party's tech-bar
+    // charge below is the only live source there has ever been.
+    const rpgSys = game.get('Rpg');
     this.techs.rows.forEach((r: any, i: number) => {
-      const live = game.get?.('Combat')?.techniques?.[i];
-      let ready = typeof live?.ready === 'number' ? live.ready : r.t.ready;
-      if (bars != null && r.t.cost > 0) ready = clamp(game.get('Rpg').party.techCharge / r.t.cost, 0, 1);
+      let ready = r.t.ready;
+      if (bars != null && rpgSys && r.t.cost > 0) ready = clamp(rpgSys.party.techCharge / r.t.cost, 0, 1);
       r.bar.set(ready, dt);
       const on = ready > 0.999;
       if (r._on !== on) { r.row.classList.toggle('ready', on); r._on = on; }
@@ -283,7 +286,7 @@ export class CombatHUD {
 
   // ---- internals ------------------------------------------------------
   /** Live enemies if the Enemies/Combat systems provide them, else mocks. */
-  _enemies(game: any) {
+  _enemies(game: Game) {
     const live = game.get?.('Enemies')?.list;
     if (Array.isArray(live) && live.length) {
       // Nearest five, not the first five in spawn order: the plates should
@@ -357,7 +360,7 @@ export class CombatHUD {
    * `Stats.computeDamage()` against the real target, so a posed frame prints the
    * same number the same swing would print in a real fight.
    */
-  _standIn(dt: number, game: any, enemies: any) {
+  _standIn(dt: number, game: Game, enemies: any) {
     if (!enemies.length) return;
     const posed = !!game.get?.('Enemies')?.frozen;
     if (!enemies[0].mock && !posed) return;
@@ -399,7 +402,7 @@ export class CombatHUD {
     }
   }
 
-  _syncPlates(enemies: any, cam: THREE.Camera, w: number, h: number, dt: number, game: any, appear: number) {
+  _syncPlates(enemies: any, cam: THREE.Camera, w: number, h: number, dt: number, game: Game, appear: number) {
     while (this.plates.length < enemies.length) {
       const bar = new Bar({ cls: 'slim cut' }).tint('hostile');
       const name = el('div.np-name');
@@ -445,7 +448,7 @@ export class CombatHUD {
     }
   }
 
-  _updateReticle(dt: number, game: any, cam: THREE.Camera, w: number, h: number, enemies: any, appear: number) {
+  _updateReticle(dt: number, game: Game, cam: THREE.Camera, w: number, h: number, enemies: any, appear: number) {
     let target = this.lockOn;
     // `Combat.lockOn` is the *setter method*; the current target is
     // `lockTarget`. Reading the method here made the reticle follow a function.

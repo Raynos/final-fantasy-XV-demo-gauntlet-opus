@@ -1,5 +1,6 @@
 import { el, letters, clamp, easeOut, easeOutQuint, Clip } from './UIKit.ts';
 import { clock } from './UIKit.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Full-screen framing effects that sit above the HUD: low-HP vignette pulse,
@@ -89,7 +90,7 @@ export class ScreenFX {
   /**
    * @param dt seconds
    */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const t = game.time.now;
 
     // low-HP vignette

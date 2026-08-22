@@ -4,6 +4,7 @@ import { Rng } from '../../util/Rng.ts';
 import { srgb } from '../../util/TextureGen.ts';
 import { vegAt, zoneMoist, pickFrom } from './Biomes.ts';
 import { WORLD, worldMap } from '../map/WorldMap.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Shared world-sampling layer used by both Vegetation and Props.
@@ -45,7 +46,7 @@ export class Ecology {
   nPatch!: Noise;
   _clearings!: any;
   _terrainRoad!: boolean;
-  game!: any;
+  game!: Game;
   nGrove!: Noise;
   nMoist!: Noise;
   nTint!: Noise;
@@ -57,7 +58,7 @@ export class Ecology {
    * @param game the Game instance (needs .get('Terrain'))
    * @param seed master seed
    */
-  constructor(game: any, seed: number = 1337) {
+  constructor(game: Game, seed: number = 1337) {
     this.game = game;
     this.terrain = game.get('Terrain');
     this.seed = seed;

@@ -1,3 +1,4 @@
+import type { Game } from '../game/Game.ts';
 /**
  * Frame-cost readout: the `stat unit` equivalent.
  *
@@ -9,7 +10,7 @@
  * The graph matters more than the number. A mean of 58 fps and a mean of 58 fps
  * with a 34 ms spike every two seconds read identically as text and completely
  * differently as a plot, and this project's actual perf failure is hitching
- * (`src/tools/gameplay.mjs` gates on "no frame over 33 ms"), not throughput.
+ * (`src/tools/gameplay.mts` gates on "no frame over 33 ms"), not throughput.
  */
 const W = 132;
 const H = 34;
@@ -48,7 +49,7 @@ export class StatsHud {
   /**
    * @param dt seconds of wall clock for the frame just rendered
    */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.visible) return;
     const ms = dt * 1000;
     this.samples[this.head] = ms;
@@ -82,7 +83,7 @@ export class StatsHud {
     const c = this.ctx;
     c.clearRect(0, 0, W, H);
     // 16.7 ms and 33.3 ms rules: the 60 fps target and the hitch threshold
-    // `src/tools/gameplay.mjs` fails on. Scale pins 33.3 ms to two-thirds height so
+    // `src/tools/gameplay.mts` fails on. Scale pins 33.3 ms to two-thirds height so
     // both lines stay on screen while a bad frame still visibly clips.
     const scale = H / 50;
     c.fillStyle = 'rgba(255,255,255,0.10)';

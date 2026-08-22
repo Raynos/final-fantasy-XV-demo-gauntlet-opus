@@ -4,6 +4,7 @@ import { icon, button } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { TOWN_SHOPS, stockFor } from '../../world/town/Shops.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The shop counter.
@@ -82,7 +83,7 @@ export class ShopScreen {
   dSpecs!: HTMLElement;
   detail!: HTMLElement;
   empty!: HTMLElement;
-  game!: any;
+  game!: Game;
   gilBox!: HTMLElement;
   gilD!: HTMLElement;
   gilV!: HTMLElement;
@@ -139,7 +140,7 @@ export class ShopScreen {
   get selling() { return this.tabName === 'Sell'; }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.shop-cols');
 
@@ -252,25 +253,30 @@ export class ShopScreen {
     const n = Math.max(1, this.qty);
     const res = row.kind === 'buy' ? rpg.inventory.buy(row.def.id, n) : rpg.inventory.sell(row.def.id, n);
     if (res.ok) {
+      // `buy` reports what it took as `cost`, `sell` what it paid out as
+      // `gil`; neither field is on the other call's result.
+      const paid = 'cost' in res ? res.cost ?? 0 : 0;
+      const earned = 'gil' in res ? res.gil ?? 0 : 0;
       this._say(row.kind === 'buy'
-        ? `Bought ${row.def.name}${n > 1 ? ` ×${n}` : ''} — ${commas(res.cost)} gil`
-        : `Sold ${row.def.name}${n > 1 ? ` ×${n}` : ''} — +${commas(res.gil)} gil`, true);
+        ? `Bought ${row.def.name}${n > 1 ? ` ×${n}` : ''} — ${commas(paid)} gil`
+        : `Sold ${row.def.name}${n > 1 ? ` ×${n}` : ''} — +${commas(earned)} gil`, true);
       this.qty = 1;
     } else {
-      this._say((({
+      const why: Record<string, string> = {
         'not-enough-gil': this.shop.brokeLine,
         'no-room': 'You are carrying as many as you can.',
         'not-enough': 'You do not have that many.',
         'not-sellable': 'Nobody will give you gil for that.',
         'not-for-sale': 'Not for sale.',
-      }) as any)[res.reason] || 'Nothing doing.', false);
+      };
+      this._say(why[res.reason ?? ''] || 'Nothing doing.', false);
     }
   }
 
   _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /** Extra keys this screen owns, polled rather than bound (Menus is shared). */
-  _extraInput(game: any) {
+  _extraInput(game: Game) {
     const inp = game.input;
     if (!inp) return;
     const step = (inp.key?.('ShiftLeft') || inp.key?.('ShiftRight')) ? 10 : 1;
@@ -307,7 +313,7 @@ export class ShopScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     this._extraInput(game);
     const shop = this.shop;

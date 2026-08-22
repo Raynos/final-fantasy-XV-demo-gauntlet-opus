@@ -1,4 +1,5 @@
 import type { HUD } from './HUD.ts';
+import type { Game } from '../game/Game.ts';
 /**
  * Every event in the game, plugged into the HUD.
  *
@@ -29,7 +30,7 @@ const CALLOUTS = {
 export class HudBridge {
   _lastCall!: number;
   _off!: any[];
-  game!: any;
+  game!: Game | null;
   hud!: HUD;
   constructor(hud: import('./HUD.ts').HUD) {
     this.hud = hud;
@@ -39,7 +40,7 @@ export class HudBridge {
   }
 
   /** Subscribe to everything. Safe when a publisher is missing. */
-  attach(game: any) {
+  attach(game: Game) {
     this.game = game;
     this._wireCombat();
     this._wireRpg(game);
@@ -95,7 +96,7 @@ export class HudBridge {
 
   /* -- rpg --------------------------------------------------------------- */
 
-  _wireRpg(game: any) {
+  _wireRpg(game: Game) {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
     const on = (n: string, fn: any) => this._off.push(rpg.on(n, fn));

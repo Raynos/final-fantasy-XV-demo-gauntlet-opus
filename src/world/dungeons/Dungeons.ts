@@ -240,7 +240,7 @@ export class Dungeons {
     // correctly-lit golden-hour ground under an absolutely black sky.
     //
     // It only reproduces when a `dun_*` shot runs earlier in the same page
-    // (`shoot.mjs dun_keycatrich_hall cine_opening`). Re-shooting the `cine_*`
+    // (`shoot.mts dun_keycatrich_hall cine_opening`). Re-shooting the `cine_*`
     // shots on their own looks perfect, which is how it survived a whole
     // corpus review. `--settle` makes no difference.
     this._saveWorldLighting();
@@ -464,7 +464,7 @@ export class Dungeons {
 
   // ---------------------------------------------------------------- ticking
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     this.fader.update(dt);
 
     // the capture harness selects a dungeon through the shot definition
@@ -530,7 +530,7 @@ export class Dungeons {
     }
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     // exterior entrances are only worth drawing when they are in reach
     if (!this.isInside) {
       const cp = game.camera.position;

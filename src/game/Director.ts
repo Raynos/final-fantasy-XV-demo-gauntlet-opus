@@ -5,6 +5,7 @@ import { Downed } from './encounters/Downed.ts';
 import { HuntRuntime } from './encounters/HuntRuntime.ts';
 import { PartyAI } from '../characters/ai/PartyAI.ts';
 import type { ScenarioName } from './Shots.ts';
+import type { Game } from './Game.ts';
 
 /**
  * Scenario director, and the host for the live gameplay systems.
@@ -29,11 +30,15 @@ export class Director {
   downed!: any;
   encounters!: any;
   enemies!: any;
-  game!: any;
+  game!: Game;
   home!: any;
   homeHeading!: any;
   hunts!: HuntRuntime;
   live!: boolean;
+  /** What kind of moment the HUD should dress for. Written by
+   *  `EncounterDirector._publishMode()` and read by `HUD._resolveMode()`;
+   *  `null` (or absent) means "no live opinion", and the scenario wins. */
+  mode!: string | null;
   partyAI!: any;
   pinTime!: number;
   player!: any;
@@ -41,7 +46,7 @@ export class Director {
   scenario!: string | null;
   terrain!: any;
   vfx!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.rng = new Rng(88123);
     this.scenario = null;
@@ -649,7 +654,7 @@ export class Director {
 
   /* ------------------------------------------------------------- tick */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     // hold the authored player transform against Player.update
     if (this._frozenPlayer && this.player) {
       this.player.root.position.copy(this._frozenPlayer.pos);
@@ -682,7 +687,7 @@ export class Director {
    * VFX depth prepass runs (soft particles need scene depth from this frame's
    * viewpoint).
    */
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     if (this.vfx && this.vfx.renderDepthPrepass) this.vfx.renderDepthPrepass(game);
   }
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { el, clamp, easeOut, easeOutQuint } from '../../ui/UIKit.ts';
 import { button } from '../../ui/Icons.ts';
 import { ensureInteractCss } from './interact.css.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * The contextual prompt that floats over whatever the player is standing in
@@ -91,7 +92,7 @@ export class InteractPrompt {
    * @param item the selected interactable
    * @param appear 0..1
    */
-  update(dt: number, game: any, item: any | null, appear: number) {
+  update(dt: number, game: Game, item: any | null, appear: number) {
     if (appear <= 0.002 || !item) { this.root.style.display = 'none'; return; }
     this.root.style.display = '';
     this._render(item);

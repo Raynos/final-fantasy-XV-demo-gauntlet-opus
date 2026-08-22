@@ -1,6 +1,7 @@
 import { el, svg, clamp, rng, easeOut, easeOutQuint } from '../UIKit.ts';
 import { readAscension } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 const W = 1600, H = 900;
 // keep every node and label inside this box so nothing collides with the chrome
@@ -45,7 +46,7 @@ export class AscensionScreen {
   edges!: any;
   flowG!: SVGElement;
   flows!: any;
-  game!: any;
+  game!: Game;
   labelG!: SVGElement;
   labels!: any;
   legend!: HTMLElement;
@@ -67,7 +68,7 @@ export class AscensionScreen {
     this.ap = 0;
   }
 
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.wrap = el('div.asc');
     this.svg = svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet' });
@@ -103,7 +104,7 @@ export class AscensionScreen {
   }
 
   /** Read the authored graph and fit its normalised layout to the safe box. */
-  _graph(game: any) {
+  _graph(game: Game) {
     const src = readAscension(game);
     this.src = src;
     this.ap = src.ap;
@@ -374,7 +375,7 @@ export class AscensionScreen {
     }
   }
 
-  enter(game: any) {
+  enter(game: Game) {
     this._selAge = 0;
     if (game) this.game = game;
     this._syncStates();
@@ -387,7 +388,7 @@ export class AscensionScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     const t = game.time.now;
     const rev = easeOutQuint(clamp((a - 0.06) / 0.82, 0, 1));
     if (this._ap !== this.src.ap) { this._syncStates(); this._restyleAll(); }

@@ -9,6 +9,7 @@ import { RoadFurniture } from './props/RoadFurniture.ts';
 import { Outposts } from './props/Outposts.ts';
 import { Wildlife } from './props/Wildlife.ts';
 import { PoiKits } from './props/PoiKits.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -20,7 +21,7 @@ export class Props {
   _camPos!: THREE.Vector3;
   debris!: Debris;
   ecology!: any;
-  game!: any;
+  game!: Game;
   landmarks!: Landmarks;
   mega!: Megastructures;
   outposts!: Outposts;
@@ -32,7 +33,7 @@ export class Props {
   roadKit!: RoadFurniture;
   rocks!: Rocks;
   wildlife!: Wildlife;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.5
       : game.rnd && game.rnd.quality === 'medium' ? 0.75 : 1.0;
@@ -74,7 +75,7 @@ export class Props {
    * A tiny PMREM sky so chrome and black lacquer have something to reflect
    * even before the Sky system publishes a real environment.
    */
-  _fallbackEnv(game: any) {
+  _fallbackEnv(game: Game) {
     if (game.scene.environment) return null;
     const W = 64, H = 32;
     const data = new Float32Array(W * H * 4);
@@ -103,7 +104,7 @@ export class Props {
     return env;
   }
 
-  _buildRegalia(game: any) {
+  _buildRegalia(game: Game) {
     const eco = this.ecology;
     const site = eco.sites.find((s: any) => s.type === 'regalia');
     if (!site) return;
@@ -134,7 +135,7 @@ export class Props {
   }
 
   /** 0 in full daylight, 1 once the sun is well below the horizon. */
-  _night(game: any) {
+  _night(game: Game) {
     const sky = game.get('Sky');
     if (!sky || !sky.sun || !sky.sun.position) return 0;
     const p = sky.sun.position;
@@ -142,7 +143,7 @@ export class Props {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const t = game.time.now;
     const night = this._night(game);
     if (this.landmarks) this.landmarks.update(dt, t, night);

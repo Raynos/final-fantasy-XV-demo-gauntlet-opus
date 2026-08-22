@@ -1,6 +1,7 @@
 import { el, clear, clamp, easeOut, easeOutQuint } from '../../ui/UIKit.ts';
 import { button, portrait } from '../../ui/Icons.ts';
 import { ensureInteractCss } from './interact.css.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * Conversations.
@@ -48,7 +49,7 @@ export class Dialogue {
   choices!: HTMLElement;
   foot!: HTMLElement;
   footLb!: HTMLElement;
-  game!: any;
+  game!: Game;
   head!: HTMLElement;
   line!: HTMLElement;
   nm!: HTMLElement;
@@ -101,7 +102,7 @@ export class Dialogue {
    * Begin a conversation.
    * @param script `{ speaker, role, hue, start, nodes, onEnd }`
    */
-  start(script: any, game: any) {
+  start(script: any, game: Game) {
     if (!script || !script.nodes) return false;
     this.script = script;
     this.game = game;
@@ -211,7 +212,7 @@ export class Dialogue {
     this.end();
   }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const target = this.active ? 1 : 0;
     const rate = dt / 0.22;
     this.a = clamp(this.a + (target > this.a ? rate : -rate * 1.6), 0, 1);
@@ -251,7 +252,7 @@ export class Dialogue {
     this.foot.style.opacity = easeOut(clamp((this.a - 0.3) / 0.5, 0, 1)).toFixed(3);
   }
 
-  _input(game: any) {
+  _input(game: Game) {
     const inp = game.input;
     if (!inp) return;
     const down = (c: string) => inp.keyDown?.(c);

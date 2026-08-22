@@ -1,3 +1,4 @@
+import type { Game } from '../../game/Game.ts';
 /**
  * What the people of Hammerhead have to say.
  *
@@ -16,22 +17,22 @@
  */
 
 /** Small helpers so the scripts below read like dialogue, not like plumbing. */
-const rpgOf = (game: any) => game.get('RpgSystem') || game.get('Rpg') || null;
-const questStatus = (game: any, id: string) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
-const openShop = (game: any, id: string) => {
+const rpgOf = (game: Game) => game.get('RpgSystem') || game.get('Rpg') || null;
+const questStatus = (game: Game, id: string) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
+const openShop = (game: Game, id: string) => {
   const ix = game.get('Interaction');
   const menus = game.get('Menus');
   if (menus?.screens?.shop?.setShop) menus.screens.shop.setShop(id);
   ix?.openScreen('shop');
 };
-const openHunts = (game: any) => game.get('Interaction')?.openScreen('hunts');
+const openHunts = (game: Game) => game.get('Interaction')?.openScreen('hunts');
 
 /** Shared "anything else?" hub used by most of the named cast. */
 function hub(choices: any) { return { choices }; }
 
 export const NPC_DIALOGUE = {
   /* ------------------------------------------------------------- Cindy -- */
-  cindy: (game: any) => ({
+  cindy: (game: Game) => ({
     speaker: 'Cindy', role: 'Chief Mechanic · Hammerhead', hue: 46, tone: 0.62,
     start: 'hello',
     nodes: {
@@ -55,7 +56,7 @@ export const NPC_DIALOGUE = {
       ]),
       car: {
         lines: () => {
-          const car = game.get('Regalia') || game.get('Vehicle');
+          const car = game.get('Regalia');
           const fuel = car && typeof car.fuel === 'number' ? car.fuel : null;
           const out = ['She is a beautiful piece of engineerin\', and y\'all have been drivin\' her like a rental.'];
           if (fuel != null && fuel < 0.3) out.push('And you are runnin\' on fumes. Pump\'s under the canopy — ten gil a fill.');
@@ -87,7 +88,7 @@ export const NPC_DIALOGUE = {
   }),
 
   /* --------------------------------------------------------------- Cid -- */
-  cid: (game: any) => {
+  cid: (game: Game) => {
     const QID = 'side_engine_blade';
     const rpg = rpgOf(game);
     const status = questStatus(game, QID);
@@ -121,7 +122,7 @@ export const NPC_DIALOGUE = {
             label: "I'll find the scrap", note: 'Accept',
             action: () => {
               const r = rpg?.quests?.accept?.(QID);
-              if (r?.ok) { rpg.quests.track(QID); return 'accepted'; }
+              if (r?.ok) { rpg?.quests?.track?.(QID); return 'accepted'; }
               return 'refused';
             },
           },
@@ -183,7 +184,7 @@ export const NPC_DIALOGUE = {
   },
 
   /* ------------------------------------------------------------- Takka -- */
-  takka: (game: any) => {
+  takka: (game: Game) => {
     const rpg = rpgOf(game);
     return {
       speaker: 'Takka', role: "The Crow's Nest · Tipster", hue: 22, tone: 0.4,
@@ -233,7 +234,7 @@ export const NPC_DIALOGUE = {
   },
 
   /* -------------------------------------------------------------- Dave -- */
-  dave: (game: any) => {
+  dave: (game: Game) => {
     const QID = 'side_dog_tags';
     const rpg = rpgOf(game);
     const status = questStatus(game, QID);
@@ -266,7 +267,7 @@ export const NPC_DIALOGUE = {
             label: 'I\'ll bring it back', note: 'Accept',
             action: () => {
               const r = rpg?.quests?.accept?.(QID);
-              if (r?.ok) { rpg.quests.track(QID); return 'tagaccept'; }
+              if (r?.ok) { rpg?.quests?.track?.(QID); return 'tagaccept'; }
               return 'tagno';
             },
           },

@@ -29,6 +29,7 @@ import { QuestLog, QUESTS, HUNTS, TIPSTERS } from './Quests.ts';
 import { PartyState, MEMBERS, RECIPE_TABLE } from './PartyState.ts';
 import { DayCycle, HAVENS } from './DayCycle.ts';
 import * as SaveGame from './SaveGame.ts';
+import type { Game } from '../Game.ts';
 
 /** Starting kit — what the four of them drive out of Insomnia with. */
 const STARTING_ITEMS: [string, number][] = [
@@ -85,7 +86,7 @@ export class RpgSystem {
   elemancy!: Elemancy;
   emitter!: Emitter;
   expBank!: ExpBank;
-  game!: any;
+  game!: Game;
   inCombat!: boolean;
   inventory!: Inventory;
   playTime!: number;
@@ -134,7 +135,7 @@ export class RpgSystem {
    * Wire everything up. If `?rpgsave` is present in the URL and a save exists,
    * it is loaded; otherwise a fresh game is dealt out.
    */
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this._wire();
 
@@ -279,7 +280,7 @@ export class RpgSystem {
    * Per-frame tick.
    * @param dt seconds
    */
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     this.playTime += dt;
     this.combatBridge.update(dt, game);
     this.day.update(dt, game);

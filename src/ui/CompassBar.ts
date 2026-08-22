@@ -1,6 +1,7 @@
 import { el, svg, clamp, easeOut, clock } from './UIKit.ts';
 import { icon } from './Icons.ts';
 import { QUEST, hudState, readQuest, readMarkers } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 const W = 330, H = 34, SPAN = 78;      // degrees of heading visible across the strip
 const CARDINAL = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
@@ -14,7 +15,7 @@ const REGION_NAME = {
   duscae: ['Duscae', 'Alstor Slough'],
   cleigne: ['Cleigne', 'Vesperpool'],
   insomnia: ['Insomnia', 'The Crown City'],
-};
+} as const;
 
 const wrap180 = (d: number) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; };
 
@@ -122,7 +123,7 @@ export class CompassBar {
    * @param dt seconds
    * @param appear 0..1 master reveal
    */
-  update(dt: number, game: any, appear: number) {
+  update(dt: number, game: Game, appear: number) {
     const e = easeOut(clamp((appear - 0.04) / 0.7, 0, 1));
     this.root.style.opacity = e.toFixed(3);
     this.root.style.transform = `translateY(${((1 - e) * -18).toFixed(2)}px)`;
@@ -154,7 +155,7 @@ export class CompassBar {
     for (let i = 0; i < this.marks.length; i++) {
       const mk = this.marks[i];
       const m = list[i];
-      if (!m) { if (mk._on !== false) { mk.g.setAttribute('opacity', 0); mk._on = false; } continue; }
+      if (!m || !p) { if (mk._on !== false) { mk.g.setAttribute('opacity', 0); mk._on = false; } continue; }
       mk._on = true;
       const col = MARK_COL[m.kind as keyof typeof MARK_COL] || '#b6d6f8';
       if (mk.col !== col) { mk.head.setAttribute('fill', col); mk.col = col; }
@@ -169,18 +170,18 @@ export class CompassBar {
     // clock: the RPG day cycle owns it and stays in step with the sky
     const hs = hudState(game);
     const sky = game.get?.('Sky');
-    const hours = typeof sky?.timeOfDay === 'number' ? sky.timeOfDay
-      : typeof sky?.hours === 'number' ? sky.hours : 14.0;
+    const hours = typeof sky?.hours === 'number' ? sky.hours : 14.0;
     const txt = hs ? hs.clock : clock(hours);
     if (txt !== this._time) { this.timeEl.textContent = txt; this._time = txt; }
     const day = hs ? `M.E. 756  ·  DAY ${hs.day}  ·  ${hs.phase.toUpperCase()}` : 'M.E. 756  ·  DAY 41';
     if (day !== this._day) { this.dayEl.textContent = day; this._day = day; }
 
-    const dir = game.get?.('Director');
     const q = readQuest(game);
+    // `Director` carries no area name of its own; the region table is the only
+    // source the location block has ever actually read.
     const region = REGION_NAME[q.region as keyof typeof REGION_NAME] || REGION_NAME.leide;
-    const area = dir?.areaName || dir?.region || region[0];
-    const sub = dir?.areaSub || region[1];
+    const area = region[0];
+    const sub = region[1];
     if (area !== this._area) { this.locEl.textContent = area; this._area = area; }
     if (sub !== this._sub) { this.locSub.textContent = sub; this._sub = sub; }
 

@@ -3,6 +3,7 @@ import { Letterbox } from './Letterbox.ts';
 import { Stage } from './Stage.ts';
 import { Timeline } from './Timeline.ts';
 import { Frame } from './CameraMove.ts';
+import type { Game } from '../Game.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -44,13 +45,13 @@ export class Cinematics {
   box!: Letterbox;
   ctx!: any;
   external!: any;
-  game!: any;
+  game!: Game;
   playing!: boolean;
   scene!: any;
   skippable!: boolean;
   stage!: Stage;
   tl!: Timeline | null;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.box = new Letterbox(game.uiRoot);
     this.stage = new Stage(game);
@@ -216,7 +217,7 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- tick -- */
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     if (!this.playing) { this.box.update(dt, false); return; }
     // `hud.setVisible(false)` only stands the *field* HUD down; the combat
     // layer follows combat state on its own, so a scene that spawns enemies as
@@ -256,7 +257,7 @@ export class Cinematics {
     if (this.tl!.done) this.stop({ skipped: false });
   }
 
-  lateUpdate(dt: any, game: any) {
+  lateUpdate(dt: any, game: Game) {
     if (!this.playing || !this.tl) return;
     const i = this.tl.shotIndex >= 0 ? this.tl.shotIndex : 0;
     const shot = this.tl.shots[i];
@@ -363,7 +364,7 @@ export class Cinematics {
     }
   }
 
-  _input(game: any) {
+  _input(game: Game) {
     const inp = game.input;
     if (!inp || !this.skippable) return;
     const down = (k: string) => inp.keyDown && inp.keyDown(k);

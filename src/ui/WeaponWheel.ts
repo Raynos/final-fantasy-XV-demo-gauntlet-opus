@@ -1,6 +1,7 @@
 import { el, svg, clamp, easeOut } from './UIKit.ts';
 import { icon, dpad } from './Icons.ts';
 import { readWeapons } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 const POS = { up: [84, 26], right: [142, 84], down: [84, 142], left: [26, 84] };
 
@@ -83,11 +84,11 @@ export class WeaponWheel {
    * @param dt seconds
    * @param appear 0..1 master reveal
    */
-  update(dt: number, game: any, appear: number) {
+  update(dt: number, game: Game, appear: number) {
     const weapons = readWeapons(game);
     if (!this.built) this._build(weapons);
 
-    const live = game?.get?.('Combat')?.activeWeapon;
+    const live = game?.get?.('Combat')?.weaponSlot;
     if (typeof live === 'number') this.active = live;
     const act = weapons[this.active] || weapons[0];
 

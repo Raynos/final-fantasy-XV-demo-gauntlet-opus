@@ -12,6 +12,7 @@ import { Hints } from './Hints.ts';
 import { HudBridge } from './HudBridge.ts';
 import { SHOTS } from '../game/Shots.ts';
 import { BANTER } from './GameData.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * The heads-up display.
@@ -50,7 +51,7 @@ export class HUD {
   compass!: CompassBar;
   fieldA!: number;
   fx!: ScreenFX;
-  game!: any;
+  game!: Game;
   menuOpen!: boolean;
   mode!: string;
   party!: PartyPanel;
@@ -60,7 +61,7 @@ export class HUD {
   uiScale!: number;
   visible!: boolean;
   wheel!: WeaponWheel;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.root = el('div', { id: 'hud' });
     game.uiRoot.appendChild(this.root);
@@ -154,7 +155,11 @@ export class HUD {
   _resolveMode() {
     const g = this.game;
     const dir = g.get?.('Director');
-    const s = dir?.scenario || dir?.mode || dir?.state;
+    // `Director.state` has never existed — Director writes `game.state`, not
+    // its own. Dropped rather than repointed: `game.state` also carries 'boot',
+    // 'menu' and 'cutscene', which are not modes this method knows, and the
+    // `Combat.inCombat` fallback below already covers the live case.
+    const s = dir?.scenario || dir?.mode;
     // `Director.play()` sets 'live' for a real, unscripted encounter. Without
     // this the combat HUD only ever appeared in the posed capture scenarios.
     if (s === 'live') return g.get?.('Combat')?.inCombat ? 'combat' : 'field';
@@ -165,7 +170,7 @@ export class HUD {
   }
 
   /** @param dt @param game */
-  lateUpdate(dt: number, game: any) {
+  lateUpdate(dt: number, game: Game) {
     // First-run hints run outside the HUD's own visibility, because the one
     // about closing a menu has to show while the HUD itself is faded out.
     this.hints.muted = !!game.currentShot;

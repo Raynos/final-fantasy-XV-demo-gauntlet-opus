@@ -4,6 +4,7 @@ import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import { readAscension, readArmiger, rpg } from '../GameData.ts';
 import type { Menus } from '../Menus.ts';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * The Armiger — the arsenal of the Lucian kings.
@@ -34,7 +35,7 @@ export class ArmigerScreen {
   dRule!: HTMLElement;
   dSpecs!: HTMLElement;
   detail!: HTMLElement;
-  game!: any;
+  game!: Game;
   gauge!: HTMLElement;
   gaugeBar!: Bar;
   gaugeD!: HTMLElement;
@@ -59,7 +60,7 @@ export class ArmigerScreen {
   }
 
   /** @param root @param game */
-  build(root: HTMLElement, game: any) {
+  build(root: HTMLElement, game: Game) {
     this.game = game;
     this.cols = el('div.cols');
 
@@ -110,7 +111,7 @@ export class ArmigerScreen {
     root.appendChild(this.gauge);
   }
 
-  enter(game: any) { if (game) this.game = game; this._sig = null; this._msg = null; this._msgAge = 9; }
+  enter(game: Game) { if (game) this.game = game; this._sig = null; this._msg = null; this._msgAge = 9; }
 
   /* -------------------------------------------------------------- data */
 
@@ -168,7 +169,7 @@ export class ArmigerScreen {
   }
 
   /** @param dt @param game @param a */
-  update(dt: number, game: any, a: number) {
+  update(dt: number, game: Game, a: number) {
     this.game = game;
     const rows = this._rows = this._nodes();
     if (this.i >= rows.length) this.i = Math.max(0, rows.length - 1);

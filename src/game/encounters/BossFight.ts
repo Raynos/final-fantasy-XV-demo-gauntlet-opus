@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Pack } from './Pack.ts';
 import { TitanArena } from './TitanArena.ts';
 import type { EncounterDirector } from './EncounterDirector.ts';
+import type { Game } from '../Game.ts';
 
 /**
  * A boss fight: a phase machine bolted onto one enemy instance.
@@ -31,7 +32,7 @@ export class BossFight {
   def!: any;
   dir!: EncounterDirector;
   enemies!: any;
-  game!: any;
+  game!: Game;
   pack!: Pack | null;
   phase!: number;
   thresholds!: number[];

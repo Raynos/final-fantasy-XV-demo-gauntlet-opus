@@ -3,6 +3,7 @@ import { makeCharacter } from './Cast.ts';
 import { dampAngle, angleDelta } from './Player.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
 import { Rng } from '../util/Rng.ts';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Formation specs, at module scope so `init()` and `snap()` read one table.
@@ -33,12 +34,12 @@ const PARTY_SEED = 9182;
 export class Party {
   _gaze!: THREE.Vector3;
   collision!: any;
-  game!: any;
+  game!: Game;
   members!: any[];
   player!: any;
   rnd!: Rng;
   terrain!: any;
-  async init(game: any) {
+  async init(game: Game) {
     this.game = game;
     this.members = [];
     this.rnd = new Rng(PARTY_SEED);
@@ -91,7 +92,7 @@ export class Party {
       // spread them out at spawn so the first frame is never a pile
       const p = player ? player.position : new THREE.Vector3();
       m.root.position.set(p.x + spec.slot[0], 0, p.z + spec.slot[1]);
-      m.root.position.y = terrain.heightAt(m.root.position.x, m.root.position.z);
+      m.root.position.y = terrain ? terrain.heightAt(m.root.position.x, m.root.position.z) : 0;
       // Same helper `snap()` uses, drawing from the same stream in the same
       // order, so a snapped formation is bit-identical to a booted one.
       this._seed(m);
@@ -205,7 +206,7 @@ export class Party {
     }
   }
 
-  update(dt: number, game: any) {
+  update(dt: number, game: Game) {
     const player = this.player || game.get('Player');
     if (!player) return;
     const pp = player.position;

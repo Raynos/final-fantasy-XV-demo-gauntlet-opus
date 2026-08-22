@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Game } from '../game/Game.ts';
 
 /**
  * Elemancy — fire, ice and lightning spellcraft.
@@ -18,10 +19,10 @@ export const ELEMENTS = {
 };
 
 export class Elemancy {
-  game!: any;
+  game!: Game;
   vfx!: any;
   zones!: any[];
-  constructor(vfx: any, game: any) {
+  constructor(vfx: any, game: Game) {
     this.vfx = vfx;
     this.game = game;
     this.zones = [];   // {element, pos, radius, until}
