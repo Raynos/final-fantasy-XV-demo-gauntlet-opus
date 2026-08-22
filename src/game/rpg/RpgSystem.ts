@@ -31,7 +31,7 @@ import { DayCycle, HAVENS } from './DayCycle.ts';
 import * as SaveGame from './SaveGame.ts';
 
 /** Starting kit — what the four of them drive out of Insomnia with. */
-const STARTING_ITEMS = [
+const STARTING_ITEMS: [string, number][] = [
   ['potion', 6], ['hi_potion', 2], ['phoenix_down', 2], ['antidote', 3],
   ['engine_blade', 1], ['iron_sword', 1], ['bronze_spear', 1], ['handgun', 1],
   ['hardedge', 1], ['buckler', 1], ['plunderers', 1], ['auto_crossbow', 1],
@@ -195,7 +195,7 @@ export class RpgSystem {
     if (this._newGameGil > 0) this.inventory.addGil(this._newGameGil - this.inventory.gil, 'seed');
 
     // A party this far in has picked things up along the road.
-    const kit = [
+    const kit: [string, number][] = [
       ['hi_potion', 12], ['mega_potion', 4], ['elixir', 3], ['phoenix_down', 2],
       ['remedy', 4], ['ether', 5], ['sabertusk_fang', 6], ['rusted_bit', 2],
       ['debased_silver', 5], ['sky_gemstone', 1], ['venom_fang', 4],

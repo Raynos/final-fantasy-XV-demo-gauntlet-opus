@@ -65,6 +65,18 @@ const rest  = (id: any, desc: any, waypoint?: any) => ({ id, type: 'rest', targe
 /**
  */
 
+/**
+ * Every event an objective can key off.
+ *
+ * `cook` is here because `RpgSystem.rest()` posts it when Ignis cooks, and no
+ * objective in the table listens for it yet -- so the call is inert rather than
+ * wrong. Leaving it out of the union would make the caller a compile error and
+ * hide the fact that the hook exists.
+ */
+export type ObjectiveKind =
+  | 'kill' | 'fetch' | 'reach' | 'talk' | 'escort' | 'photo'
+  | 'craft' | 'cook' | 'rest' | 'draw' | 'fish' | 'quest';
+
 /** One quest as authored in the table below. */
 export interface Quest {
   id: string;
@@ -530,7 +542,7 @@ export class QuestLog {
    * @param payload `{ target, count }` — target matches the objective's target
    * @returns the quests that changed
    */
-  notify(type: 'kill' | 'fetch' | 'reach' | 'talk' | 'escort' | 'photo' | 'craft' | 'rest' | 'draw' | 'fish' | 'quest', payload: any = {}): any[] {
+  notify(type: ObjectiveKind, payload: any = {}): any[] {
     const target = payload.target ?? payload.enemy ?? payload.item ?? payload.id ?? 'any';
     const amount = payload.count ?? 1;
     const changed = [];

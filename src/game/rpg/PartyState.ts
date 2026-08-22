@@ -68,7 +68,17 @@ export const BASE_TECH_BARS = 3;
  * Bond levels. Affinity rises from fighting alongside someone, link-strikes,
  * camping and eating what they like. Each level grants a passive.
  */
-export const BOND_LEVELS = [
+/** One bond tier and the passive it grants. `linkCrit` is a flag, not a number. */
+export interface BondLevel {
+  level: number;
+  /** Bond points needed. */
+  at: number;
+  name: string;
+  desc: string;
+  effect?: Record<string, number | boolean>;
+}
+
+export const BOND_LEVELS: BondLevel[] = [
   { level: 0, at: 0,   name: 'Travelling Companion', desc: 'You share a car.' },
   { level: 1, at: 100, name: 'Trusted',              desc: 'Link-strike offers come 15% more often.', effect: { linkRate: 0.15 } },
   { level: 2, at: 280, name: 'Reliable',             desc: 'Their techniques deal 10% more damage.', effect: { techDamage: 0.10 } },
@@ -369,7 +379,8 @@ export class PartyState {
       if (m.id === 'noctis') continue;
       const b = this.bond(m.id);
       for (const level of BOND_LEVELS) {
-        if (level.level <= b.level && level.effect?.[key as keyof typeof level.effect]) sum += level.effect[key as keyof typeof level.effect];
+        const v = level.effect?.[key];
+        if (level.level <= b.level && typeof v === 'number') sum += v;
       }
     }
     return sum;
@@ -416,7 +427,7 @@ export class PartyState {
    *
    * @param hour current world hour (absolute, monotonically rising)
    */
-  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0) {
+  cook(recipeId: string, inventory: import('./Inventory.ts').Inventory, hour: number = 0): { ok: boolean, reason?: string, missing?: any[], buff?: any, cookingLevel?: number } {
     const check = this.canCook(recipeId, inventory);
     if (!check.ok) return check;
     const r = RECIPE_TABLE[recipeId];

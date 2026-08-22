@@ -272,7 +272,7 @@ export class DayCycle {
    * @param {object} ctx
    * @returns the rest summary the results screen renders
    */
-  rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} } = {}): any {
+  rest(ctx: { expBank: import('./Stats.ts').ExpBank, party: import('./PartyState.ts').PartyState, inventory?: import('./Inventory.ts').Inventory, lodging?: string, wakeHour?: number, havenExpBonus?: number, force?: boolean, pos?: {x:number,z:number} }): any {
     const lodgingId = ctx.lodging || 'haven';
     const lodging = LODGINGS[lodgingId as keyof typeof LODGINGS];
     if (!lodging) return { ok: false, reason: 'unknown-lodging' };

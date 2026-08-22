@@ -220,7 +220,7 @@ export class CollisionWorld {
   /**
    * Bucket a triangle array into a two-level sparse uniform grid.
    */
-  * _grid(tri: any): {grid: Map<any, any>, coarse: Map<any, any>} {
+  * _grid(tri: any): Generator<void, {grid: Map<any, any>, coarse: Map<any, any>}> {
     const SPAN = 16;
     const fine = new Map();
     const big = new Map();
