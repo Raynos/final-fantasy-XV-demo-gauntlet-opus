@@ -4,12 +4,13 @@
  *
  *   node src/tools/bootprof.mts            # one cold + one warm load, per-system breakdown
  *   node src/tools/bootprof.mts --n 3      # 3 loads, report each
- *   node src/tools/bootprof.mts --prod     # against the production bundle
+ *   node src/tools/bootprof.mts --mem      # attribute the resident memory instead
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.
  */
 import { chromium } from 'playwright';
+import { execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
@@ -38,15 +39,117 @@ async function ensureServer() {
   throw new Error('vite failed to start');
 }
 
+/**
+ * Everything the page can see about its own footprint.
+ *
+ * Runs in the page, so it can only report the *renderer* process's JS heap and
+ * what three.js knows it has uploaded. The GPU-process and browser-process
+ * halves of the total are added from the OS side by {@link reportMemory}, and
+ * that separation is the whole point: the 1.4 GB in `project/TODO.md` is
+ * process RSS across several processes, not a JS heap.
+ */
+const MEM_PROBE = `(() => {
+  const g = window.GAME;
+  const texSeen = new Set(), geoSeen = new Set();
+  let cpuTexels = 0, cpuTexCount = 0, gpuTexels = 0, gpuTexCount = 0;
+  let attrBytes = 0, idxBytes = 0, geoCount = 0;
+  const addTex = (t) => {
+    if (!t || texSeen.has(t)) return; texSeen.add(t);
+    const img = t.image; if (!img || !img.width) return;
+    // Mip chains add a third again; a texture without them does not.
+    const mip = t.generateMipmaps === false ? 1 : 4 / 3;
+    gpuTexels += img.width * img.height * 4 * mip; gpuTexCount++;
+    if (img.data && img.data.byteLength) { cpuTexels += img.data.byteLength; cpuTexCount++; }
+  };
+  const addMat = (m) => {
+    if (!m) return;
+    for (const k in m) { const v = m[k]; if (v && v.isTexture) addTex(v); }
+    if (m.uniforms) for (const k in m.uniforms) { const v = m.uniforms[k] && m.uniforms[k].value; if (v && v.isTexture) addTex(v); }
+  };
+  g.scene.traverse((o) => {
+    if (o.geometry && !geoSeen.has(o.geometry)) {
+      geoSeen.add(o.geometry); geoCount++;
+      for (const nm in o.geometry.attributes) {
+        const a = o.geometry.attributes[nm];
+        if (a && a.array) attrBytes += a.array.byteLength;
+      }
+      if (o.geometry.index && o.geometry.index.array) idxBytes += o.geometry.index.array.byteLength;
+    }
+    const m = o.material;
+    if (Array.isArray(m)) m.forEach(addMat); else addMat(m);
+  });
+  addTex(g.scene.environment); addTex(g.scene.background);
+  const mem = performance.memory || null;
+  return {
+    heapUsed: mem ? mem.usedJSHeapSize : 0,
+    heapTotal: mem ? mem.totalJSHeapSize : 0,
+    precise: !!(mem && mem.usedJSHeapSize % 1024 !== 0),
+    cpuTexels, cpuTexCount, gpuTexels, gpuTexCount,
+    attrBytes, idxBytes, geoCount,
+    info: JSON.parse(JSON.stringify(g.renderer.info.memory)),
+    programs: g.renderer.info.programs ? g.renderer.info.programs.length : 0,
+    dpr: g.renderer.getPixelRatio(),
+    gl: (() => {
+      try {
+        const c = g.renderer.getContext();
+        const d = c.getExtension('WEBGL_debug_renderer_info');
+        return d ? String(c.getParameter(d.UNMASKED_RENDERER_WEBGL)) : 'unknown renderer';
+      } catch { return 'unknown renderer'; }
+    })(),
+  };
+})()`;
+
+/** Resident set of the browser's whole process tree, in bytes. */
+function treeRss(pid: number): { total: number, rows: string[] } {
+  try {
+    const ps = execFileSync('ps', ['-Ao', 'pid=,ppid=,rss=,args='], { encoding: 'utf8' });
+    const byPid = new Map<number, { ppid: number, rss: number, comm: string }>();
+    for (const line of ps.split('\n')) {
+      const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/);
+      if (!m) continue;
+      // Chromium's four helpers are the same binary; only `--type=` tells them
+      // apart, and which one holds the memory is the whole question.
+      const args = m[4];
+      const type = /--type=([a-z-]+)/.exec(args);
+      const exe = (args.split(' ')[0] || '').split('/').pop() || '?';
+      byPid.set(Number(m[1]), {
+        ppid: Number(m[2]), rss: Number(m[3]) * 1024,
+        comm: type ? `${exe} --type=${type[1]}` : exe,
+      });
+    }
+    const want = new Set<number>([pid]);
+    // Chromium's helpers are grandchildren, so walk to a fixpoint rather than
+    // one generation down.
+    for (let pass = 0; pass < 6; pass++) {
+      for (const [p, v] of byPid) if (want.has(v.ppid)) want.add(p);
+    }
+    let total = 0; const rows: string[] = [];
+    for (const p of want) {
+      const v = byPid.get(p);
+      if (!v) continue;
+      total += v.rss;
+      if (v.rss > 40e6) rows.push(`    ${(v.rss / 1e6).toFixed(0).padStart(5)} MB  ${v.comm}`);
+    }
+    return { total, rows };
+  } catch { return { total: 0, rows: [] }; }
+}
+
+const MB = (b: number) => `${(b / 1e6).toFixed(1)} MB`;
+
 async function main() {
   const argv = process.argv.slice(2);
-  let n = 2, nobake = false;
+  let n = 2, nobake = false, mem = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--n') n = Number(argv[++i]);
     else if (argv[i] === '--nobake') nobake = true;
+    else if (argv[i] === '--mem') mem = true;
   }
 
   const server = await ensureServer();
+  if (mem) {
+    try { await reportMemory(nobake); } finally { if (server) server.kill(); }
+    return;
+  }
   const browser = await chromium.launch({
     args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
       '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
@@ -79,6 +182,68 @@ async function main() {
   } finally {
     await browser.close();
     if (server) server.kill();
+  }
+}
+
+/**
+ * Split the process footprint into JS heap, GPU-side bytes and the browser's
+ * own overhead, for the plain page and for `?debug=1`.
+ *
+ * The TODO this answers reads "it uses 1.4 GB of RAM in ?debug and maybe in
+ * prod mode too". Both halves of that need separating before anything is
+ * optimised, because a JS heap and a resident set are not the same quantity
+ * and the dev suite turns out not to be the expensive one.
+ */
+async function reportMemory(nobake: boolean) {
+  // Playwright does not type `browser.process()`, so the browser is found the
+  // same way its helpers are: as this process's own descendant.
+  const base = treeRss(process.pid).total;
+  console.log(`\nnode alone: ${MB(base)}`);
+  console.log('Each variant gets its own browser launch. Navigating one page twice does not\n'
+    + 'free the first world, and comparing prod against ?debug in one tab is how you\n'
+    + 'conclude the dev suite costs 400 MB when it costs 20.');
+
+  for (const q of ['', '&debug=1']) {
+    const browser = await chromium.launch({
+      args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
+        '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
+        '--hide-scrollbars', '--mute-audio',
+        // `performance.memory` is rounded to a 100 kB bucket without this,
+        // which is coarse enough to hide the thing being measured.
+        '--enable-precise-memory-info'],
+    });
+    const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+    const idle = treeRss(process.pid).total;
+    await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}${q}`,
+      { waitUntil: 'domcontentloaded', timeout: 300000 });
+    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
+    // Four seconds of settle, so streaming and the first shadow refresh are
+    // paid for and the number is not a half-built world.
+    await page.waitForTimeout(4000);
+    const m = await page.evaluate(MEM_PROBE) as {
+      heapUsed: number, heapTotal: number, cpuTexels: number, cpuTexCount: number,
+      gpuTexels: number, gpuTexCount: number, attrBytes: number, idxBytes: number,
+      geoCount: number, info: { geometries: number, textures: number }, programs: number,
+      gl: string,
+    };
+    const rss = treeRss(process.pid);
+    const gpu = m.gpuTexels + m.attrBytes + m.idxBytes;
+    console.log(`\n=== ${q ? '?debug=1' : 'plain page'}   [${m.gl}]`);
+    console.log(`  browser at rest       ${MB(idle - base)}`);
+    console.log(`  with the game loaded  ${MB(rss.total - base)}   (+${MB(rss.total - idle)} for the world)`);
+    for (const r of rss.rows) console.log(r);
+    console.log(`  JS heap used          ${MB(m.heapUsed)}  of ${MB(m.heapTotal)} allocated`);
+    console.log(`    CPU texel arrays    ${MB(m.cpuTexels)}  over ${m.cpuTexCount} DataTextures`);
+    console.log(`    geometry attributes ${MB(m.attrBytes)} + ${MB(m.idxBytes)} index, ${m.geoCount} geometries`);
+    console.log(`    everything else     ${MB(m.heapUsed - m.cpuTexels - m.attrBytes - m.idxBytes)}`);
+    console.log(`  GPU-side estimate     ${MB(gpu)}`);
+    console.log(`    textures + mips     ${MB(m.gpuTexels)}  over ${m.gpuTexCount} textures`);
+    console.log(`    vertex + index      ${MB(m.attrBytes + m.idxBytes)}`);
+    console.log(`  three.js says         ${JSON.stringify(m.info)}, ${m.programs} programs`);
+    console.log(`  unattributed          ${MB(rss.total - idle - m.heapUsed - gpu)}`
+      + '   (process overhead, render targets, shader binaries, and under a software\n'
+      + '                        rasteriser a host-memory copy of every GPU resource)');
+    await browser.close();
   }
 }
 
