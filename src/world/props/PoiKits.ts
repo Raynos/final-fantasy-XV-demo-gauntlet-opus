@@ -4,6 +4,11 @@ import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
 import { dressAt, type Dress } from './ZoneDress.ts';
 import {
+  bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
+  cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
+  STOREY, CILL, type Opening,
+} from './BuildKit.ts';
+import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
@@ -60,9 +65,21 @@ function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   );
 }
 
-/** Flat-coloured PBR material — no map, so it cannot stretch. */
+/**
+ * Flat-coloured PBR material — no map, so it cannot stretch.
+ *
+ * `vertexColors` is on for all of them and it is what makes flat acceptable.
+ * These materials are deliberately mapless above a couple of metres (see
+ * {@link poiMaterials}), which used to mean thirty-five buildings drawn from
+ * four literal colours. `BuildKit.bakeTone` multiplies in a per-vertex tone --
+ * grime at the splash zone, bleach at the parapet, a per-object value and
+ * warmth jitter, and a pale lift on every chamfer facet -- so the same four
+ * colours carry as much variation as a texture would, and cost one byte-free
+ * attribute rather than a sampler. `PartBuilder` synthesises white for any
+ * piece that does not bake one, so nothing here can draw black.
+ */
 function plain(hex: number, rough = 0.85, metal = 0) {
-  return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
+  return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal, vertexColors: true });
 }
 
 /** A slab with a slightly irregular top — reads as cut stone, not a cube. */
@@ -516,6 +533,149 @@ export class PoiKits {
   }
 
   /**
+   * One building. The thing the POI kits did not have.
+   *
+   * Before this, a settlement block was a `BoxGeometry` with 3% vertex noise, a
+   * parapet made of two more boxes, one 2.4 m cube on the roof for plant, and
+   * emissive quads sitting 70 mm proud of the wall for windows. Captured
+   * `poi_fishing` and read it: they were flat dark slabs with a lighter top,
+   * and they were the worst thing in the frame by a wide margin in a shot where
+   * the terrain, the sky and the trees are not.
+   *
+   * What is different here is entirely geometric, because the defect was:
+   *
+   * - **Every wall is a run of real thickness with the openings punched
+   *   through it** ({@link wallRun}), so a window is a hole with a 280 mm
+   *   reveal, a cill that throws a shadow, and a lintel — not a bright quad
+   *   floating on the wall plane.
+   * - **The block stands on a plinth** and is finished with a parapet whose
+   *   coping has a drip lip, so it neither runs straight into the ground nor
+   *   ends at a single hard edge against the sky.
+   * - **The four silhouette corners are piers**, 340 mm square and struck with
+   *   a 75 mm chamfer, which is the only size of arris that survives the
+   *   projection at the range a town is seen from.
+   * - **Roof furniture is cased plant, a stair head and a tank**, not a cube.
+   * - **Tone is baked per vertex** ({@link bakeTone}), so the four flat wall
+   *   colours become thirty-odd buildings that differ in value, warmth, how
+   *   dirty their splash zone is and how bleached their parapets are.
+   *
+   * Built in a local frame with the ground at y=0 and `faceZ` naming which of
+   * the two long elevations is the street, then merged per role and placed once.
+   * Merging in local space is what keeps a whole block to one geometry per
+   * material instead of one per box.
+   */
+  _block(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    w: number; d: number; storeys: number; x: number; z: number; ry?: number;
+    shell: THREE.Material; rng: Rng; faceZ?: 1 | -1; lit?: number; base?: number;
+  }) {
+    const M = this.mats;
+    const { w, d, storeys, x, z, ry = 0, shell, rng, faceZ = 1, lit = 0.3, base = 0.5 } = o;
+    const b = bag();
+    const wallT = 0.3;
+    const H = storeys * STOREY;
+    const y0 = base;
+    const tv = toneVariant(rng);
+
+    plinth(b.shell, { w, d, h: y0, proud: 0.15 });
+
+    // Elevations. Each storey is its own run so the openings land on the floor
+    // they belong to, and the two long faces carry the window rhythm while the
+    // ends get half as many -- which is how a terrace block is actually
+    // fenestrated, and it halves the cost of the faces nobody stands in front of.
+    const bays = (len: number, spacing: number) => Math.max(1, Math.round(len / spacing) - 1);
+    const faces: { len: number; ry: number; ox: number; oz: number; n: number; street: boolean }[] = [
+      { len: w, ry: 0, ox: 0, oz: 1, n: bays(w, 3.0), street: faceZ > 0 },
+      { len: w, ry: Math.PI, ox: 0, oz: -1, n: bays(w, 3.0), street: faceZ < 0 },
+      { len: d, ry: Math.PI / 2, ox: 1, oz: 0, n: bays(d, 4.4), street: false },
+      { len: d, ry: -Math.PI / 2, ox: -1, oz: 0, n: bays(d, 4.4), street: false },
+    ];
+    const half = { x: w / 2 - wallT / 2, z: d / 2 - wallT / 2 };
+    for (const f of faces) {
+      const runLen = f.ox ? d - wallT * 2 : w;
+      for (let st = 0; st < storeys; st++) {
+        const local = bag();
+        const openings: Opening[] = [];
+        const ground = st === 0;
+        // Run-local: `wallRun` and the window units are built with the storey's
+        // own floor at y=0 and the whole run is translated into place below.
+        // Adding `st * STOREY` here as well put the top storey's windows above
+        // the parapet and left the wall solid, because the opening no longer
+        // fell inside the run `wallRun` was punching.
+        const wy = ground ? CILL + 0.28 : CILL;
+        const wh = ground ? 1.75 : 1.5;
+        for (let i = 0; i < f.n; i++) {
+          const bx = -runLen / 2 + (runLen * (i + 1)) / (f.n + 1);
+          // A shopfront door in the middle bay of the street elevation, ground
+          // floor only: the one opening a person walks through, so it is the one
+          // that gets the hood, the threshold and the step.
+          if (ground && f.street && f.n >= 3 && i === (f.n - 1) >> 1) {
+            openings.push(doorUnit(local, { x: bx, wallT, w: 1.35, h: 2.25 }));
+            continue;
+          }
+          openings.push(windowUnit(local, {
+            x: bx, y: wy, w: ground ? 1.35 : 1.15, h: wh, wallT,
+            lit: rng.next() < lit, plain: !ground,
+          }));
+        }
+        for (const g of wallRun(runLen, STOREY, wallT, openings)) local.shell.push(g);
+        const px = f.ox * half.x, pz = f.oz * half.z;
+        for (const k of Object.keys(local)) {
+          for (const g of local[k]) b[k].push(xform(g, { ry: f.ry, x: px, y: y0 + st * STOREY, z: pz }));
+        }
+      }
+    }
+
+    // String course at every floor line above the first: the single cheapest way
+    // to stop a multi-storey facade reading as one flat rectangle.
+    for (let st = 1; st < storeys; st++) stringCourse(b.trim, { w, d, y: y0 + st * STOREY - 0.1 });
+    cornerPier(b.shell, { w: w + 0.7, d: d + 0.7, y0: y0 + 0.12, y1: y0 + H, sec: 0.42, proud: 0.05, arris: 0.09 });
+
+    // Roof: a deck inside the parapet, then furniture that is not a cube.
+    b.roof.push(box(w - 0.3, 0.22, d - 0.3, { y: y0 + H + 0.11 }));
+    parapet(b.shell, b.trim, { w, d, y: y0 + H + 0.2, t: 0.19, h: 0.62 });
+    const ry0 = y0 + H + 0.22;
+    const spot = () => [rng.range(-1, 1) * (w / 2 - 2.0), rng.range(-1, 1) * (d / 2 - 1.8)];
+    {
+      const [ax, az] = spot();
+      plantUnit(b, { x: ax, y: ry0, z: az, w: rng.range(1.6, 2.4), h: rng.range(1.0, 1.5), d: rng.range(1.3, 1.9), ry: rng.range(0, 3.1) });
+    }
+    if (rng.next() < 0.55) { const [ax, az] = spot(); stairHead(b, { x: ax, y: ry0, z: az, ry: rng.range(0, 3.1) }); }
+    if (rng.next() < 0.45) { const [ax, az] = spot(); roofTank(b, { x: ax, y: ry0, z: az, r: rng.range(0.8, 1.2), h: rng.range(1.2, 1.7) }); }
+    // Aerials: two thin verticals off the parapet. Free silhouette.
+    for (let i = 0; i < 2; i++) {
+      const [ax, az] = spot();
+      b.metal.push(cyl(0.035, rng.range(1.6, 3.2), 4, { x: ax, y: ry0 + rng.range(0.8, 1.6), z: az }));
+    }
+
+    // Ground-floor awning on the street elevation: canvas on two struts, tilted.
+    if (rng.next() < 0.6) {
+      const aw = w * 0.62, zf = faceZ * (d / 2 + 0.95);
+      b.cloth.push(box(aw, 0.09, 2.0, { y: y0 + 2.95, z: zf, rx: faceZ * -0.19 }));
+      b.cloth.push(box(aw, 0.34, 0.06, { y: y0 + 2.72, z: zf + faceZ * 0.95 }));
+      for (const sx of [-1, 1]) {
+        b.metal.push(cyl(0.035, 2.6, 5, { x: sx * aw * 0.46, y: y0 + 1.5, z: zf + faceZ * 0.85 }));
+      }
+    }
+
+    const merged = mergeBag(b);
+    const mats: Record<string, THREE.Material> = {
+      shell, shell2: M.concrete, trim: M.cream, metal: M.steel, glass: M.glass,
+      glow: M.lamp, dark: M.void, roof: M.roof, wood: M.plank, cloth: M.red,
+    };
+    const place = world.clone().multiply(mat4([x, 0, z], [0, ry, 0]));
+    for (const [role, g] of Object.entries(merged)) {
+      // Tone is baked on the finished, merged piece and measured against the
+      // building's own extent -- the plan's meta-lesson, applied: enforce on the
+      // shipped mesh, not on the recipe. Emissive and glass roles opt out; a
+      // grime gradient on a lit window is nonsense.
+      if (role !== 'glow' && role !== 'glass' && role !== 'dark') {
+        bakeTone(g, { y0: 0, y1: y0 + H, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
+      }
+      B.add(mats[role] ?? shell, g, place);
+    }
+  }
+
+  /**
    * A settlement, built as a *skyline* rather than as architecture.
    *
    * Lestallum and Galdin Quay are seen from a kilometre away far more often
@@ -540,32 +700,17 @@ export class PoiKits {
         const blocks = 1 + (rng.next() < 0.5 ? 1 : 0);
         for (let b = 0; b < blocks; b++) {
           const w = rng.range(9, 14), dp = rng.range(8, 12);
-          const h = rng.range(4.5, 9) + (Math.hypot(jx, jz) < 22 ? rng.range(0, 7) : 0);
+          // Storeys, not a continuous height: a building is a stack of floors
+          // and every horizontal on it lands on a multiple of STOREY. The
+          // continuous `range(4.5, 9)` this replaces is why the old blocks had
+          // window rows that did not agree with their own parapets.
+          const storeys = 1 + Math.floor(rng.next() * 2) + (Math.hypot(jx, jz) < 22 ? Math.floor(rng.next() * 2) : 0);
           const px = jx + (b ? rng.range(-5, 5) : 0), pz = jz + (b ? rng.range(-5, 5) : 0);
-          const mat = walls[Math.floor(rng.next() * walls.length)];
-          put(mat, roughBox(gx * 31 + gz * 7 + b, w, h, dp, 0.03), [px, h * 0.5 + 0.5, pz]);
-          // parapet: the thing that stops a flat-roofed box reading as a crate
-          put(M.roof, new THREE.BoxGeometry(w + 0.5, 0.65, dp + 0.5), [px, h + 0.75, pz]);
-          put(M.concrete, new THREE.BoxGeometry(w - 0.9, 0.5, dp - 0.9), [px, h + 0.8, pz]);
-          // a stair block or a tank on about half the roofs
-          if (rng.next() < 0.5) {
-            put(M.roof, new THREE.BoxGeometry(2.4, 1.8, 2.2), [px + rng.range(-3, 3), h + 1.9, pz + rng.range(-3, 3)]);
-          }
-          // lit windows on the two long faces
-          for (let f = 0; f < 2; f++) {
-            const sgn = f ? 1 : -1;
-            for (let k = -1; k <= 1; k++) {
-              for (let r = 0; r < Math.max(1, Math.floor(h / 3.4)); r++) {
-                put(M.lamp, new THREE.BoxGeometry(w * 0.15, 0.75, 0.1),
-                  [px + k * w * 0.3, 1.9 + r * 3.2, pz + sgn * (dp * 0.5 + 0.07)]);
-              }
-            }
-          }
-          // ground-floor awning toward the square
-          if (rng.next() < 0.45) {
-            put(M.red, new THREE.BoxGeometry(w * 0.7, 0.14, 1.8),
-              [px, 3.1, pz + (pz > 0 ? -1 : 1) * (dp * 0.5 + 0.9)], [pz > 0 ? -0.22 : 0.22, 0, 0]);
-          }
+          this._block(B, world, {
+            w, d: dp, storeys, x: px, z: pz, ry: rng.range(-0.06, 0.06),
+            shell: walls[Math.floor(rng.next() * walls.length)],
+            rng, faceZ: pz > 0 ? -1 : 1, lit: 0.35,
+          });
         }
       }
     }

@@ -28,7 +28,10 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "checkJs": false,
-    "baseUrl": ".",
+    // No `baseUrl`: TypeScript 7 removed it, and `paths` now resolves relative
+    // to this file, which is what the mapping below already wanted. Leaving it
+    // in made `npm run typecheck:tools` -- and therefore the pre-commit hook --
+    // fail on every commit in the repo, in every worktree.
     "paths": { "/*": ["./src/*"] }
   },
   // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
