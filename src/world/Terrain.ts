@@ -299,6 +299,32 @@ export class Terrain implements Ground {
   }
 
   /**
+   * Ring spacing at a given viewing distance, independent of where the camera
+   * happens to be standing right now.
+   *
+   * This is the one `seatHeightAt` wants for anything placed ONCE, at boot, in
+   * a world you then drive across. `clipSpacingAt` answers for the live camera,
+   * which for a prop 6 km away at build time is the coarsest ring in the stack
+   * and has nothing to do with how that prop will be seen. Pass the distance at
+   * which the prop is still drawn instead:
+   *
+   *     const cell = terrain.clipSpacingForDistance(kind.cullDistance);
+   *     y = terrain.seatHeightAt(x, z, kind.size, cell);
+   *
+   * A prop culled at 400 m is only ever seen over ground drawn at 6 m or finer,
+   * so seating it against the 24 m ring would bury it for no reason.
+   */
+  clipSpacingForDistance(d: number): number {
+    const cm = this.clipmap;
+    const cell0 = cm ? cm.cell0 : 1.5;
+    const n = cm ? cm.n : 48;
+    const levels = cm ? cm.levels : 7;
+    let sp = cell0;
+    while (sp < cell0 * Math.pow(2, levels - 1) && d > 2 * n * sp) sp *= 2;
+    return sp;
+  }
+
+  /**
    * The height a clipmap vertex is displaced to at cell size `cell`.
    *
    * The CPU twin of `tf_heightLod` in `terrain/TerrainMaterial.ts`, and it has

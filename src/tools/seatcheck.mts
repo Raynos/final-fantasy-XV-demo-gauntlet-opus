@@ -40,6 +40,7 @@ function parseArgs(argv: string[]) {
   const o = {
     home: 'hero_full', span: 100, res: 128, size: 1.5, settle: 60,
     bands: [60, 150, 300, 600, 1200, 2400],
+    viewDists: [150, 300, 600, 1200],
     tol: 0.05,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -51,6 +52,7 @@ function parseArgs(argv: string[]) {
     else if (a === '--settle') o.settle = Number(argv[++i]);
     else if (a === '--tol') o.tol = Number(argv[++i]);
     else if (a === '--bands') o.bands = argv[++i].split(',').map(Number);
+    else if (a === '--viewdists') o.viewDists = argv[++i].split(',').map(Number);
     else throw new Error(`unknown flag ${a}`);
   }
   return o;
@@ -205,7 +207,42 @@ const out = await page.evaluate(async (c) => {
       vsField: stat(vsField), vsModel: stat(vsModel), seatGap: stat(seatGap),
     });
   }
-  return { shot: c.home, camera: { x: cam.position.x, z: cam.position.z }, rows };
+  /**
+   * The second question, and the one a prop system actually has to answer: for
+   * a prop that is still drawn at `D` metres, how far off the ground it is seen
+   * over does seating it on `heightAt` put it?
+   *
+   * Pure CPU, so it can sample the whole world rather than one rect, and it
+   * uses `clipSpacingForDistance` rather than the live camera because a prop is
+   * placed once at boot and then looked at from everywhere.
+   */
+  const sweep = [];
+  for (const D of c.viewDists) {
+    const cell = t.clipSpacingForDistance(D);
+    const off: number[] = [];
+    // A deterministic lattice across the detailed field, skipping the ocean.
+    const step = 137;
+    for (let x = -3900; x <= 3900; x += step) {
+      for (let z = -3900; z <= 3900; z += step) {
+        const h = t.heightAt(x, z);
+        if (h < 2) continue;
+        off.push(h - t.drawnHeightAt(x, z, cell));
+      }
+    }
+    off.sort((a, b) => a - b);
+    const abs = off.map(Math.abs).sort((a, b) => a - b);
+    sweep.push({
+      dist: D, cell, n: off.length,
+      medianAbs: abs[Math.floor(abs.length * 0.5)],
+      p95: abs[Math.floor(abs.length * 0.95)],
+      p99: abs[Math.floor(abs.length * 0.99)],
+      worstFloat: off[off.length - 1],
+      worstSink: off[0],
+      over25: abs.filter((v) => v > 0.25).length / abs.length,
+    });
+  }
+
+  return { shot: c.home, camera: { x: cam.position.x, z: cam.position.z }, rows, sweep };
 }, cfg);
 
 await browser.close();
@@ -223,6 +260,20 @@ for (const r of out.rows) {
     `${f(r.vsField.mean)} ${f(r.vsField.worst)}      ` +
     `${f(r.vsModel.mean)} ${f(r.vsModel.worst)}      ` +
     `${f(r.seatGap.mean)} ${f(r.seatGap.worst)}`,
+  );
+}
+console.log('-'.repeat(88));
+
+console.log('\nSeated on `heightAt`, how far off the drawn ground is a prop that is still');
+console.log('visible at D metres? Sampled over the whole detailed field, land only.\n');
+console.log('    D   ring   samples   median    p95    p99   worst float   worst sink   >0.25 m');
+console.log('-'.repeat(88));
+for (const s of out.sweep) {
+  console.log(
+    `${String(s.dist).padStart(5)} ${s.cell.toFixed(1).padStart(6)} ${String(s.n).padStart(9)}  ` +
+    `${s.medianAbs.toFixed(3).padStart(6)} ${s.p95.toFixed(2).padStart(6)} ${s.p99.toFixed(2).padStart(6)}  ` +
+    `${s.worstFloat.toFixed(2).padStart(11)}  ${s.worstSink.toFixed(2).padStart(11)}   ` +
+    `${(s.over25 * 100).toFixed(0).padStart(5)}%`,
   );
 }
 console.log('-'.repeat(88));
