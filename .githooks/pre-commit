@@ -1,11 +1,15 @@
 #!/bin/sh
 #
-# Refuse a commit that does not build.
+# Refuse a commit that does not build or does not type-check.
 #
 # A syntax error in a module the dev server happens not to have re-parsed yet
 # still boots fine in `vite dev`, then fails in `vite build` and hangs the
 # capture harness on `waitForFunction`. Catching it here costs a few seconds and
 # saves a confusing timeout.
+#
+# The build alone does not check types: vite strips them and never looks. `tsc`
+# is the only thing that reads them, and a contract broken between two systems
+# -- the class of bug the port exists to catch -- shows up nowhere else.
 #
 # Skip with:  git commit --no-verify
 # Install with: git config core.hooksPath .githooks
@@ -16,7 +20,7 @@ if [ -n "$SKIP_BUILD_CHECK" ]; then
 fi
 
 # Only worth running when source actually changed.
-if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.js|package\.json)'; then
+if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.js|package\.json|tsconfig.*\.json)'; then
   exit 0
 fi
 
@@ -29,4 +33,16 @@ if ! out=$(npx vite build 2>&1); then
   exit 1
 fi
 echo "pre-commit: build ok"
+
+echo "pre-commit: typechecking..."
+for cfg in tsconfig.json tsconfig.tools.json; do
+  if ! out=$(npx tsc --noEmit -p "$cfg" 2>&1); then
+    echo "$out" | tail -25
+    echo
+    echo "pre-commit: TYPECHECK FAILED ($cfg) -- commit aborted."
+    echo "            fix the error, or re-run with --no-verify if you know better."
+    exit 1
+  fi
+done
+echo "pre-commit: typecheck ok"
 exit 0
