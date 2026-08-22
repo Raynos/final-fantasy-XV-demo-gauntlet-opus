@@ -155,6 +155,7 @@ const results = await page.evaluate(async () => {
 
   check('hold-to-combo chains steps', () => {
     clearField();
+    pin(spawnAhead('sabertusk'));
     combat.drawSlot(0); step(2);
     let maxIndex = -1;
     mouseDown(0);
@@ -277,6 +278,7 @@ const results = await page.evaluate(async () => {
   check('damage number == Stats.computeDamage output', () => {
     clearField();
     combat.drawSlot(0); step(2);
+    pin(spawnAhead('sabertusk'));
     let seen: any = null; let roll = null;
     const off = combat.on('damage', (d: any) => {
       if (seen || d.source) return;              // ignore companion hits
@@ -441,6 +443,7 @@ const results = await page.evaluate(async () => {
     rpg.party.techCharge = 0;
     rpg.inCombat = false;
     combat.drawSlot(0); step(2);
+    pin(spawnAhead('irongiant', 2.4, { hp: 900000 }));
     for (let i = 0; i < 180; i++) {
       if (i % 16 === 0) mouseDown(0);
       step(1);
@@ -531,6 +534,7 @@ const results = await page.evaluate(async () => {
   check('damage numbers appear on the HUD', () => {
     clearField();
     combat.drawSlot(0); step(2);
+    pin(spawnAhead('sabertusk'));
     document.querySelectorAll<HTMLElement>('.dmg').forEach((n) => n.remove());
     let last = 0;
     const off = combat.on('damage', (d: any) => { if (!d.source) last = d.damage; });
