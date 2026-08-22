@@ -50,6 +50,33 @@ const SCENES: Record<string, Scene> = {
     after: `g.get('HUD').say('Ignis', 'The road ahead narrows past the outpost. We should press on before dark.')`,
     then: 45,
   },
+  // The camp menu, standing on a real haven, with the meal effects and the
+  // running meal it now prints. This is the decision the camp asks the player
+  // to make, and until it showed effects it was a list of ranks.
+  camp_cook: {
+    shot: 'hud_field', settle: 30,
+    after: `
+      var rpg=g.get('Rpg'), ix=g.get('Interaction'), pl=g.get('Player'), terr=g.get('Terrain');
+      var h=rpg.day.havens()[0];
+      var hx=h.pos[0]+2.5, hz=h.pos[2];
+      pl.root.position.set(hx, terr.heightAt(hx,hz), hz);
+      // The staged shot pinned the camera where the player *was*, so put it
+      // behind him at the haven and drop the shot so nothing fights it.
+      g.get('Camera').clearShot && g.get('Camera').clearShot();
+      g.camera.position.set(hx-7, terr.heightAt(hx-7,hz+8)+3.4, hz+8);
+      g.camera.lookAt(hx, terr.heightAt(hx,hz)+1.2, hz);
+      g.get('Menus').setScreen(null);
+      g.get('HUD').fx.cardState = null;
+      rpg.havenCamp.open(h);
+      ix.dialogue._goto('cook');
+      // finish the typewriter and step past the first line so the "currently
+      // running" line and the whole choice list are on screen
+      ix.dialogue._typed = ix.dialogue._full.length;
+      ix.dialogue._advance();
+      ix.dialogue._typed = ix.dialogue._full.length;
+    `,
+    then: 60,
+  },
   low_hp: {
     shot: 'combat_wide', settle: 40,
     after: `var p=g.get('Player');p.stats.hp=Math.round(p.stats.maxHp*0.14);p.stats.mp=18;g.get('HUD').hit(0.5);g.get('HUD').callOut('Parry!','Perfect guard  ·  counter ready')`,
