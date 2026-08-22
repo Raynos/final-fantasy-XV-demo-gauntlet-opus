@@ -16,6 +16,11 @@
  */
 
 import { HAVENS } from './DayCycle.ts';
+import type { Haven } from './DayCycle.ts';
+import type { Recipe } from './PartyState.ts';
+import type { RpgSystem, CampResult } from './RpgSystem.ts';
+import type { Game } from '../Game.ts';
+import type { InteractableHandle } from '../interaction/Interactables.ts';
 
 /** Wake time after a night at a haven — FFXV puts you out at first light. */
 const WAKE_HOUR = 6.5;
@@ -23,21 +28,23 @@ const WAKE_HOUR = 6.5;
 const MENU_SIZE = 5;
 
 export class HavenCamp {
-  _handles: any[] = [];
+  /** One per haven, from `Interaction.register`. Dropped by `dispose`. */
+  _handles: InteractableHandle[] = [];
   _installed = false;
-  rpg: any;
-  game: any = null;
+  rpg: RpgSystem;
+  /** Set by `install`, so `open` can reach `Interaction` and the HUD. */
+  game: Game | null = null;
 
-  constructor(rpg: any) { this.rpg = rpg; }
+  constructor(rpg: RpgSystem) { this.rpg = rpg; }
 
   /**
    * Take the interaction handles, once, on the first tick that finds an
    * `Interaction` system. Safe to call every frame.
    */
-  install(game: any) {
+  install(game: Game) {
     if (this._installed) return false;
-    const ix = game && game.get ? game.get('Interaction') : null;
-    if (!ix || !ix.register) return false;
+    const ix = game?.get?.('Interaction');
+    if (!ix) return false;
     this.game = game;
     this._installed = true;
     for (const h of HAVENS) {
@@ -77,14 +84,19 @@ export class HavenCamp {
    * is built from the bag as it stands when the camp opens. Nothing can spend
    * an ingredient while the conversation is up.
    */
-  open(haven: any) {
+  open(haven: Haven) {
     const rpg = this.rpg;
     const game = this.game;
-    const ix = game.get('Interaction');
+    const ix = game?.get?.('Interaction');
     if (!ix) return;
     rpg.day.discoverHaven(haven.id);
 
-    let result: any = null;
+    /**
+     * What the night did, read back by the `slept` and `failed` lines.
+     * `CampResult` is the refusal union too, which is why every read below
+     * narrows on `ok` or on `exp` before it touches a field.
+     */
+    let result: CampResult | { ok: true, exp: null } | null = null;
     let cookedName: string | null = null;
 
     const recipes = rpg.party.cookableNow(rpg.inventory).slice(0, MENU_SIZE);
@@ -92,7 +104,7 @@ export class HavenCamp {
       + (rpg.ascension.value('havenExpBonus') || 0);
 
     const sleep = (recipeId: string | null) => {
-      const r = recipes.find((x: any) => x.id === recipeId);
+      const r = recipes.find((x: Recipe) => x.id === recipeId);
       cookedName = r ? r.name : null;
       result = rpg.camp({
         lodging: 'haven',
@@ -101,7 +113,7 @@ export class HavenCamp {
         wakeHour: WAKE_HOUR,
       });
       if (!result || result.ok === false) { cookedName = null; return 'failed'; }
-      const hud = game.get('HUD');
+      const hud = game?.get?.('HUD');
       if (hud && hud.areaTitle) {
         hud.areaTitle(String(haven.name).toUpperCase(), 'Haven', `Dawn · Day ${rpg.day.day}`);
       }
@@ -164,7 +176,7 @@ export class HavenCamp {
           hue: 268,
           lines: () => `Cooking level ${rpg.party.cookingLevel}. "I've come up with a few things."`,
           choices: [
-            ...recipes.map((r: any) => ({
+            ...recipes.map((r: Recipe) => ({
               label: r.name,
               note: `rank ${r.rank}`,
               action: () => sleep(r.id),
@@ -175,16 +187,18 @@ export class HavenCamp {
 
         slept: {
           lines: () => {
-            const exp = (result && result.exp) || null;
+            const exp = result && 'exp' in result ? result.exp : null;
             const ups = exp
-              ? exp.perMember.filter((m: any) => m.to > m.from).map((m: any) => `${m.name} ${m.from} → ${m.to}`)
+              ? exp.perMember.filter((m) => m.to > m.from).map((m) => `${m.name} ${m.from} → ${m.to}`)
               : [];
             const head = cookedName
               ? `${cookedName}, then sleep. Morning, day ${rpg.day.day}.`
               : `Morning, day ${rpg.day.day}.`;
             const banked = exp
               ? (exp.total > 0
-                ? `${exp.base.toLocaleString()} EXP at ×${exp.bonus.toFixed(1)} — ${exp.total.toLocaleString()} to each of you.`
+                // `base` is the unmultiplied bank and is optional on
+                // `ExpRedemption`; fall back to dividing the payout out again.
+                ? `${Math.round(exp.base ?? exp.total / (exp.bonus || 1)).toLocaleString()} EXP at ×${exp.bonus.toFixed(1)} — ${exp.total.toLocaleString()} to each of you.`
                 : 'Nothing banked to redeem.')
               : 'You sat out the dark. Nothing banked.';
             return [head, banked, ups.length ? ups.join(' · ') : 'Nobody levelled — the road is longer than that.'];
@@ -193,7 +207,7 @@ export class HavenCamp {
         },
 
         failed: {
-          lines: () => `Something is wrong with this campsite. (${(result && result.reason) || 'unknown'})`,
+          lines: () => `Something is wrong with this campsite. (${(result && 'reason' in result && result.reason) || 'unknown'})`,
           next: null,
         },
       },
