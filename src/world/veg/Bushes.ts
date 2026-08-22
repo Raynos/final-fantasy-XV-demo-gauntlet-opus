@@ -363,6 +363,16 @@ export class Bushes {
         ? { bend: 0.62, flutter: 0.45, translucency: 1.1 } : {});
       // A one-metre frond contributes nothing legible to a 2 km cascade and
       // there are two thousand of them; the shadow pass is not the place.
+      //
+      // Measured 2026-08-22, because the same claim about *grass* turned out to
+      // be worth 1.012 mean/255 once it cast from a proxy coarse enough to
+      // resolve, and this comment deserved the same test. It survives it:
+      // turning these on and diffing zone_alstor, the shot with the most fern
+      // mass in the corpus, moves the frame by **0.137 mean/255** — below the
+      // measured 0.30 capture floor, so it is not a small effect, it is no
+      // effect — for +6,990 triangles and +9 draw calls. The difference from
+      // grass is range: the sward proxy casts inside 26 m, where a cascade texel
+      // is centimetres, while these scatter to 132 m. Do not re-litigate.
       const mesh = new THREE.InstancedMesh(cardGeo[key as keyof typeof cardGeo], mat, per);
       mesh.castShadow = false; mesh.receiveShadow = true;
       mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
