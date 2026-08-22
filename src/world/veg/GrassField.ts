@@ -779,7 +779,18 @@ export class GrassField {
             // its short neighbour stands up, which is what stops a tuft reading
             // as one shape scaled N times.
             const hRel = h / Math.max(hTuft, 1e-4);
-            const lean = (0.08 + edge * 0.40) * (0.55 + rng.next() * 0.85)
+            // Splay, bounded so a tuft reads as a tussock rather than a
+            // starburst.
+            //
+            // This used to reach 0.99 rad -- 57 degrees -- at the rim of a tall
+            // tuft, and a ring of blades laid over that far from a shared root
+            // is a sea urchin, not a plant. The measured reference
+            // (docs/reference/ART-DIRECTION.md section 7, sampled from
+            // duscae-plains-chocobo-02) shows near-camera blades standing close
+            // to upright with rim-light down individual silhouettes; the splay
+            // is at the edge of the clump, not the whole clump. Ceiling is now
+            // ~0.58 rad, and edge blades still lean furthest.
+            const lean = (0.06 + edge * 0.22) * (0.55 + rng.next() * 0.85)
               * (0.62 + hRel * 0.85);
             const yaw = a + rng.gauss(0, 0.5);
             const zj = (0.42 + h * 3.4) * (0.55 + rng.next() * 1.05)
