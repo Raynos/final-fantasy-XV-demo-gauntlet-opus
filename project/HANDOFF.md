@@ -17,7 +17,7 @@ Read next, in this order: `BRIEF.md` (the contract every agent works against),
 `docs/SCOPE.md` (atomic checklist), `project/PROGRESS.md` (status + bug log), `docs/plans/2026-08-17-opus-content-gameplay.md`
 **`project/handoff/2026-08-22-coordinator.md`** (start here — latest
 session handoff), **`project/RESCUE.md`** (the open-work ledger), `docs/WORLDMAP.md` (cartography), `docs/plans/2026-08-21-opus-dev-suite.md`
-(in-game debug/review suite), `docs/plans/2026-08-17-opus-typescript-port.md`.
+(in-game debug/review suite), `project/handoff/typescript.md` (the TypeScript port -- done; what it found and what is left).
 
 ---
 

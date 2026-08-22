@@ -5,9 +5,15 @@ whose numbers are badly stale: it says 235 modules / ~79,500 lines. Measured
 2026-08-22, it is **274 files / 96,518 lines**, and it grows roughly 5k lines a
 session. Read that document for *why*; read this one for *what and in what order*.
 
-**Status:** ready to start. The gate — every branch merged and the tree quiet — is
-met for the first time in the project's history: 290 commits, no `agent/*`
-branches, worktrees pruned, 9/9 gates green.
+**Status: done (2026-08-22).** Zero `.js`/`.mjs` under `src/`, both typechecks
+clean, 9/9 gates green, imgdiff inside each shot's own noise floor, perf inside
+variance against a worktree at the pre-port commit. What was found, what is left,
+and the one regression it introduced: `project/handoff/typescript.md`.
+
+The one deviation from §3 below: the *rename* was done in one move rather than
+thirteen, because import specifiers, `src/index.html` and the hardcoded paths in
+`src/tools/**` all have to agree and churning them thirteen times buys nothing.
+The typing order followed the plan.
 
 ---
 
@@ -93,14 +99,20 @@ Unchanged from the original plan and still right:
 
 ## 5. Definition of done
 
-- [ ] `npm run typecheck` and `typecheck:tools` both clean
-- [ ] Zero `.js` files under `src/`
-- [ ] **`npm run check` — all 9 gates still green** (this is the real proof)
-- [ ] `imgdiff` shows no shot above the harness noise floor. **Measure the floor
-      for the shots you compare** — it is per-shot, not a constant: `prompto_closeup`
-      measures 0.373, not the 1.5–1.9 quoted for the corpus.
-- [ ] `gameplay.mjs` no worse than the phase-1 baseline (`walk` 49.8 fps)
-- [ ] Both typechecks added to `.githooks/pre-commit` alongside the build
+- [x] `npm run typecheck` and `typecheck:tools` both clean
+- [x] Zero `.js` files under `src/` (and zero `.mjs`)
+- [x] **`npm run check` — all 9 gates still green** (this is the real proof, and
+      it is what caught the one regression: four enemy spawns deleted from
+      `combatloop` by the dead-code pass)
+- [x] `imgdiff` shows no shot above the harness noise floor. The floor was
+      measured per shot by capturing each twice on the same build: it ranges from
+      0.013 (`menu_map`) to 1.78 (`party_formation`), and every pre→post delta
+      lands within about 1% of it.
+- [x] `gameplay.mts` no worse than the pre-port build — A/B'd against a worktree
+      at the pre-port commit rather than trusted to the 49.8 fps number, which
+      does not reproduce on this machine: pre-port measures 44.6 / 47.8 fps on
+      `walk`, post-port 47.8 / 48.3.
+- [x] Both typechecks added to `.githooks/pre-commit` alongside the build
 
 ## 6. Explicitly not in scope
 
