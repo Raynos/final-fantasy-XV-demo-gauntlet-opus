@@ -1,6 +1,10 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: PROPOSED (2026-08-21, fable). No game code is changed by this file.
+Status: IN-PROGRESS (2026-08-22, opus) — Wave 1 is being built. **§2.1
+(determinism pinning) is DONE**, closed 2026-08-22 in commit `417ca86`:
+order-dependence 1.836 -> 0.340 mean/255 against a measured 0.302 floor. The
+cause was not the one this plan predicted (see below). §2.3-§2.6 are owned by
+the `instruments` lane; Waves 2-4 are still proposals.
 Author: Fable 5 audit pass, against commit `a1df21d`.
 Sources: full audits of the sibling repos under
 `/Users/raynos/projects/game-demos/gauntlet-demos/` — `final-fantasy-XV-demo-opus`
@@ -59,6 +63,27 @@ party formation snap, animator clock zero, TAA history rewind, exposure
 history, weather/wind phase. Two harness-side fixes were already tried and
 reverted; the sibling evidence says the fix belongs in-page, exactly like
 this. *Difficulty: medium. Source: `metal-gear-solid-5-opus-demo/src/main.ts`.*
+
+**DONE 2026-08-22 — and the diagnosis above was wrong in an instructive way.**
+`Party.snap()`, `Animator.rest()`, per-shot `resetClock()` and `post.resetHistory()`
+had all already landed before this session; they left a 1.836/255 residual against
+a 0.302 floor. Two further causes, neither of them formation state:
+
+- **The wind.** `Weather.resetClock` set only `_snap` (which skips the lerp toward
+  the target preset) while `_gust` is integrated forever and drives `windStrength`
+  through three sines, and `windDir` drifts permanently. Neither is part of
+  `target`, so no preset change and no clock reset touched them. Probed:
+  `windStrength` 0.840 on a page's first shot, 0.944 after one other. **This was
+  the whole residual.**
+- **Wall-clock streaming budgets.** Grass, scrub and trees each built tiles against
+  `performance.now() + budgetMs`, so residency depended on machine speed and on
+  what the previous camera had cached. Fixed with a `converge(camPos)` called from
+  `Game.settle` after the first frame. Necessary, but worth only 0.009/255 on its
+  own — it is the machine-independence that matters, not the number.
+
+The lesson for the rest of this plan: the sibling evidence that the fix belongs
+*in-page* was right, and the specific list of what to pin was incomplete. **Pin
+every integrated phase, not the ones a handoff happens to name.**
 
 ### 2.2 Shader warm + compileAsync — kills the 15.8 s freeze class
 

@@ -301,7 +301,15 @@ trusting the document that recorded it**. Treat every handoff as a *lead*.
 | the horizontal wood grain = the analytic strata | the rock **tile** — `Layers.ts` recipe 3 |
 | grass costs 8.9 ms | 0.3–1.2 ms |
 | `walk` runs at ~57.5 fps | **49.8 fps.** The 57.5 was taken under six-agent load and was never real. |
+| capture order-dependence = "likely vegetation tile streaming" | **the wind.** Pinning vegetation streaming moved the measurement by 0.009/255. `Weather.resetClock` set only `_snap`, which skips the preset lerp, while the gust phase it never touched drove `windStrength` 0.840 vs 0.944 between a page's first shot and its sixth. |
 
 The pattern is the same every time: a correct negative result, an inference drawn
 from it that was never itself tested, and a well-written paragraph that made the
 inference look measured. **Ask which probe was run, not what the conclusion was.**
+
+The wind entry is worth one more sentence, because it shows the failure mode from
+the other side. The diff was concentrated on grass tips, twigs and hair — thin
+silhouettes — which reads as *streaming* or *TAA* and reads as **noise** if you
+only look at the mean. It only named itself once the state was probed directly
+and two numbers came back different. **When a visual difference has no obvious
+carrier, print the state, do not stare at the frame.**
