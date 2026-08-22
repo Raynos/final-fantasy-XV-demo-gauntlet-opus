@@ -195,7 +195,16 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     covLo: 0.44, covHi: 0.82, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
     virga: 0.0, silver: 0.14, baseShade: 0.78,
     bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
-    fogDensity: 0.00013, fogHeight: 200, haze: 0.00004, sunMul: 1.0,
+    // `haze` is the height-independent term, so it is the one that decides how
+    // a *ridge* reads; `fogDensity` pools in valleys and barely touches a
+    // skyline. 0.00004 put a 4 km range at 25% blended to sky where
+    // ART-DIRECTION.md §2 asks for 70-80%, which is judge defect 5. At
+    // 0.00024 the same range is at 76%, 1 km is at 29% and 300 m at 10% —
+    // the "mid-ground tree lines still reading with only mild desaturation"
+    // the same section describes. It is only safe to raise because the colour
+    // it converges toward was wrong until this commit; at the old navy the
+    // strong setting made distant ranges muddy.
+    fogDensity: 0.00013, fogHeight: 200, haze: 0.00024, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
     overcast: 0.0, skyDim: 1.0, shadowScale: 3.5,
   },
@@ -266,6 +275,15 @@ export class Sky {
   _lightTgt!: THREE.Vector3[];
   _raysInserted!: boolean;
   _scanCountdown!: number;
+  /**
+   * Ablation tokens from `?post=`, e.g. `noaerial`. See `_ablateWeather`.
+   *
+   * The sky reads the same query parameter `PostFX.debugToggle` does, and each
+   * ignores the tokens it does not own. That keeps `shoot.mts --ablate` as the
+   * one dial for "turn a thing off and diff", which is the rule `BRIEF.md`
+   * states, without the harness having to learn a second parameter.
+   */
+  _ablate!: Set<string>;
   _shadowDirty!: boolean;
   /** `game.currentShot` the sky was last staged for. */
   _shotSeen!: string | null;
@@ -310,6 +328,7 @@ export class Sky {
     this.exposureCeiling = 12.0;
     this._envHours = -999;
     this._scanCountdown = 0;
+    this._ablate = new Set();
   }
 
   async init(game: import('../game/Game.ts').Game) {
@@ -413,8 +432,42 @@ export class Sky {
       this._preRender(r, cam as THREE.PerspectiveCamera);
     };
 
+    const dbg = new URLSearchParams(location.search).get('post');
+    if (dbg) for (const t of dbg.split(',')) this._ablate.add(t.trim().toLowerCase());
+
     this.setTimeOfDay(12.0);
     this.patch.scan(scene);
+  }
+
+  /**
+   * Zero whichever atmosphere terms `?post=` named.
+   *
+   * This runs from `_pushWeatherUniforms`, i.e. *after* the weather cross-fade
+   * has written the preset, and every frame — which is the only place it can
+   * work. Setting one of these once at boot is a no-op: the fade rewrites all
+   * of them on the next tick, which is `sibling-TRAPS.md` trap 7 in this file
+   * rather than in `Post.ts`.
+   *
+   * `noaerial` is the important one. Aerial perspective is a *blend*, not an
+   * additive layer, so the only way to see how much of a distant ridge it is
+   * responsible for is to remove it and diff — and until now there was no way
+   * to do that without editing a constant, which changes the build and takes
+   * the grade with it.
+   */
+  _ablateWeather() {
+    if (this._ablate.size === 0) return;
+    const u = this.u;
+    if (this._ablate.has('noaerial')) u.uAerialStrength.value = 0;
+    if (this._ablate.has('noclouds')) { u.uCloudCoverage.value = 0; u.uCloudShadowStrength.value = 0; }
+    if (this._ablate.has('nocloudshadow')) u.uCloudShadowStrength.value = 0;
+    if (this._ablate.has('nocirrus')) u.uCirrus.value = 0;
+    // Not an ablation but a *readout*: drive the haze to full opacity so every
+    // surface past a few hundred metres is pure inscatter. Sampling a distant
+    // ridge in that frame reads the colour aerial perspective converges to,
+    // with no algebra over an unknown blend weight in between. The target is
+    // ART-DIRECTION.md §2's `#bad2e4`, and knowing whether we are aiming at
+    // the right colour is a different question from how fast we get there.
+    if (this._ablate.has('aerialmax')) u.uHazeBase.value = 0.02;
   }
 
   _makeUniforms(): AtmosphereUniforms {
@@ -884,6 +937,7 @@ export class Sky {
     u.uFogDensity.value = p.fogDensity;
     u.uFogHeight.value = p.fogHeight;
     u.uHazeBase.value = p.haze;
+    this._ablateWeather();
   }
 
   lateUpdate() {

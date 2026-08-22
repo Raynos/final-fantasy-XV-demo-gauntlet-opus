@@ -172,10 +172,31 @@ export class MaterialPatch {
         // forward lobe about the sun. Weighting them separately is what puts
         // cool haze on the anti-solar side of a golden hour frame and keeps the
         // warm inscatter where the sun actually is.
-        vec3 highDir = normalize(vec3(apDir.x, apDir.y + 0.55, apDir.z));
+        // The elevation this is sampled at decides the *value* aerial
+        // perspective converges to, and it was the whole defect. Measured with
+        // ?post=aerialmax (haze driven to full opacity, so a distant ridge
+        // renders as pure inscatter and can be read with an eyedropper): a
+        // 0.55 rise — about 29 degrees — mixed 40% toward the zenith converged
+        // on #274f8e, a deep navy at luma 72. ART-DIRECTION.md §2 measures
+        // a distant FFXV ridge at #bad2e4, luma 206. Right hue, a third of
+        // the value, which is why turning the density up made far ranges go
+        // dark and muddy instead of pale — and why every previous attempt to
+        // strengthen aerial perspective here would have made the frame worse.
+        //
+        // It is wrong physically as well as by the numbers. mix(surface,
+        // inCol, 1-T) converges to the *equilibrium* radiance of the path,
+        // and the equilibrium of a near-horizontal path a few kilometres above
+        // the ground is the sky radiance at that elevation — a long column,
+        // hence pale and bright. Sampling 29 degrees up reads a column several
+        // times shorter, and the zenith mix takes it further the same way.
+        //
+        // The small rise that remains is real: a few kilometres of ground haze
+        // is not the infinite column the true horizon sample integrates, so it
+        // sits a little short of full horizon brightness.
+        vec3 highDir = normalize(vec3(apDir.x, apDir.y + 0.10, apDir.z));
         vec3 zenith  = atmSkyRadiance(uSkyLut, r, vec3(0.0, 1.0, 0.0), uSunDir) * uSunIntensity;
         vec3 rayCol  = atmSkyRadiance(uSkyLut, r, highDir, uSunDir) * uSunIntensity;
-        rayCol = mix(rayCol, zenith, 0.40);
+        rayCol = mix(rayCol, zenith, 0.12);
         vec3 mieCol  = atmSkyRadiance(uSkyLut, r, apDir, uSunDir) * uSunIntensity;
         // The near-sun entry of the sky LUT carries the whole solar aureole,
         // integrated over the entire atmosphere. A few kilometres of surface
