@@ -49,7 +49,9 @@ const RE = /(?<![A-Za-z0-9_$])any(?![A-Za-z0-9_$])/g;
 async function walk(dir: string, out: string[] = []): Promise<string[]> {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const f = path.join(dir, e.name);
-    if (e.isDirectory()) { if (e.name !== 'public') await walk(f, out); }
+    // `typemods/` is the migration scaffolding, not the game: it drives the
+    // TypeScript compiler API and is excluded from the tools typecheck too.
+    if (e.isDirectory()) { if (e.name !== 'public' && e.name !== 'typemods') await walk(f, out); }
     else if (/\.(ts|mts)$/.test(e.name)) out.push(f);
   }
   return out;

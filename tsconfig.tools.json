@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     // `vite/client` for the CSS side-effect imports the game files use, and the
     // same class-field semantics as `tsconfig.json`: the tools config reaches
     // into the game through `src/globals.d.ts`, and a file must not compile two
@@ -32,5 +32,8 @@
   // the page (`probe.mts` wraps them in `(async () => { ... })()`), so they
   // legitimately have a top-level `return` and are not modules. Nothing imports
   // them, so nothing type-strips them either.
-  "exclude": ["src/tools/_probe/**", "src/tools/probes/**"]
+  // `typemods/**` is the migration scaffolding: it drives the TypeScript
+  // compiler API, which is `any`-heavy by nature, and it is excluded until the
+  // codebase it is fixing is done. It is the one place `any` is still expected.
+  "exclude": ["src/tools/_probe/**", "src/tools/probes/**", "src/tools/typemods/**"]
 }
