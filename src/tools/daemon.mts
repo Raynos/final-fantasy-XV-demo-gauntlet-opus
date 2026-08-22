@@ -137,6 +137,15 @@ export interface PageOpts {
   prod?: boolean;
   /** Force a fresh page, for a run that must be provably independent. */
   cold?: boolean;
+  /**
+   * Post-chain ablation, passed straight through to `?post=` and read by
+   * `PostFX.debugToggle` — `nobloom`, `nogtao`, `nocontact`, `plain`, ...
+   *
+   * It is part of the page IDENTITY, not of one capture, which is what makes it
+   * safe here: the daemon only reuses a page whose query matches, so an ablated
+   * run can never be served a frame from an un-ablated page.
+   */
+  post?: string;
 }
 
 /** `POST /shots` */
@@ -146,6 +155,21 @@ export interface ShotsRequest extends PageOpts {
   out: string;
   /** JPEG quality 1..100; 0 or absent means PNG. */
   jpeg?: number;
+  /**
+   * Scene objects to hide for this capture, by case-insensitive substring of
+   * `Object3D.name`. Restored afterwards, so it does not leak into the next
+   * shot on the same page.
+   */
+  hide?: string[];
+  /**
+   * Capture the RAW scene render instead of the composited frame.
+   *
+   * The point of an ablation is to localise, and the post chain destroys that:
+   * hide one mesh and auto-exposure, bloom and the grade all move, so tens of
+   * thousands of pixels change that have nothing to do with the mesh. Diff raw
+   * renders and the difference is where the mesh was.
+   */
+  raw?: boolean;
 }
 
 /** One captured frame, plus what the renderer cost to draw it. */
@@ -322,8 +346,8 @@ class Harness {
    * Reuses the open one whenever it matches; reboots only when it cannot.
    */
   async page_(opts: PageOpts): Promise<Page> {
-    const { w = 1600, h = 900, q = 'ultra', nobake = false, prod = false, cold = false } = opts;
-    const query = `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}`;
+    const { w = 1600, h = 900, q = 'ultra', nobake = false, prod = false, cold = false, post = '' } = opts;
+    const query = `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}${post ? `&post=${encodeURIComponent(post)}` : ''}`;
     // Errors belong to the request that provoked them, so the slate is wiped
     // here — before a boot, so boot-time errors are still attributed to it.
     this.errors.length = 0;
@@ -419,31 +443,60 @@ function queue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
-  const { shots, settle = 60, out, jpeg = 0, ...rest } = body;
+  const { shots, settle = 60, out, jpeg = 0, hide = [], raw = false, ...rest } = body;
   const page = await harness.page_(rest);
   const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
   await mkdir(outDir, { recursive: true });
   const results: ShotResult[] = [];
   for (const name of shots) {
     const t0 = Date.now();
-    const meta = await page.evaluate(([n, s]: [string, number]) => {
+    const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
       const g = window.GAME;
       g.applyShot(n);
       g.settle(s);
       g.applyShot(n);          // re-anchor follow shots after settling
       g.settle(8);
+      // Ablate AFTER settling: hiding a mesh must not change what the sim did,
+      // only what the frame contains. Anything else and the two sides of the
+      // diff are different worlds, not the same world minus one object.
+      const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
+      if (hideList.length) {
+        const want = hideList.map((h) => h.toLowerCase());
+        g.scene.traverse((o) => {
+          const nm = (o.name || '').toLowerCase();
+          if (nm && want.some((h) => nm.includes(h))) {
+            hidden.push({ o, was: o.visible });
+            o.visible = false;
+          }
+        });
+        g.frame(1 / 60);
+      }
+      // The raw pre-post render: the scene straight to the default framebuffer,
+      // no composer. `screenshot()` then reads exactly that.
+      if (rawFrame) {
+        g.renderer.setRenderTarget(null);
+        g.renderer.clear(true, true, false);
+        g.renderer.render(g.scene, g.camera);
+      }
       const gl = g.renderer.info;
-      return {
+      const out = {
+        hidden: hidden.length,
         triangles: gl.render.triangles,
         calls: gl.render.calls,
         textures: gl.memory.textures,
         geometries: gl.memory.geometries,
         programs: g.renderer.info.programs?.length ?? 0,
       };
-    }, [name, settle] as [string, number]);
+      for (const h of hidden) h.o.visible = h.was;
+      return out;
+    }, [name, settle, hide, raw] as [string, number, string[], boolean]);
+    if (hide.length && meta.hidden === 0) {
+      harness.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
+    }
     const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
     await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
-    results.push({ name, file: path.relative(ROOT, file), ...meta, ms: Date.now() - t0 });
+    const { hidden: _hidden, ...counts } = meta;
+    results.push({ name, file: path.relative(ROOT, file), ...counts, ms: Date.now() - t0 });
   }
   return { results, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses, bootMs: harness.bootMs };
 }
