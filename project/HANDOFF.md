@@ -35,21 +35,32 @@ dispatch parallel agents on disjoint files
   -> feed critique back as the next round's briefs
 ```
 
-Five rules that produced most of the value:
+Six rules that produced most of the value:
 
 1. **Agents must look at their own output.** Every brief says "read the PNGs with
    the Read tool and actually look at them". Agents that only check for absence
    of errors ship ugly work that renders fine.
-2. **Grade against shipped FFXV, never against improvement.** Critics are told
+2. **For any visual defect, ablate before re-tinting.** Looking at a frame says
+   *that* something is wrong and is remarkably bad at saying *what*: the chevron
+   hatch was GTAO, not the heightfield normals; the character shadow detachment
+   was grass casting nothing, not the shadow bias. `shoot.mts --hide <mesh>` and
+   `--ablate <pass>` are the dials, `--raw` on **both** sides is mandatory for a
+   mesh ablation (with post on, hiding one object moves auto-exposure, bloom and
+   the grade, so tens of thousands of pixels change that have nothing to do with
+   it), and `imgdiff --heat` is how you see where the difference actually is.
+   The recipe is in `BRIEF.md`. This rule overturned eight confident diagnoses in
+   the sibling repos, and it is the same discipline as the last rule's "ask which
+   probe was run, not what the conclusion was".
+3. **Grade against shipped FFXV, never against improvement.** Critics are told
    this explicitly. "Better than last round" is not a bar.
-3. **Do not trust an agent's report — verify the merge.** Several reports were
+4. **Do not trust an agent's report — verify the merge.** Several reports were
    wrong in ways that mattered; `LANDMINES.md` ends with the list. Merge,
    capture, look.
-4. **Disjoint file ownership.** Agents run in git worktrees and own directories.
+5. **Disjoint file ownership.** Agents run in git worktrees and own directories.
    Anything cross-boundary is *reported*, not edited, and the coordinator applies
    it. Two agents editing `_readInput` independently caused the only merge
    conflict in 114 commits.
-5. **Every agent keeps `project/handoff/<topic>.md` current.** An agent that can
+6. **Every agent keeps `project/handoff/<topic>.md` current.** An agent that can
    be replaced by its handoff is one you can retire the moment it stops being
    worth its cost; one that can't has taken its afternoon hostage. Same principle
    as `STATUS.md`: the state lives on disk, not in a context window.
@@ -89,10 +100,12 @@ Everything is `.mts` and runs under Node's type stripping. Shot names are
 | tool | what it is for |
 |---|---|
 | `gameplay.mts` | **The primary perf gate.** Drives the real loop with synthetic input across 13 segments (walk, sprint, combat, warp, menus, streaming, weather). Posed shots hide the hitches that ruin play. |
-| `perf.mts` | Posed frame-time benchmark, `gl.finish()`-bracketed, median/min/mean/p95. |
+| `perf.mts` | Posed frame-time benchmark. `thru` (median of pipelined blocks) is the headline and the gate; `lat` is the old per-frame `gl.finish()` number, kept beside it. Prints a contention verdict before measuring and voids itself (`RULER_VALID: false`, exit 3) if the measured noise floor is too big to resolve the frame. |
+| `ruler.mts` | The instrument half of both perf tools: contention verdict, ABBA frame-paired differences, a *measured* noise floor, `RULER_VALID`, and the rule that a median moving less than the floor has not moved (`--baseline`). |
+| `seatcheck.mts` | Proves `Terrain.drawnHeightAt` is the renderer's own arithmetic (0.000 m residual against the rasterised clipmap) and sizes how far `heightAt` is from the surface a prop is *seen* sitting on. |
 | `attrib.mts` | Per-subsystem cost attribution, A/B/A baselined. |
 | `bootprof.mts` | Cold and warm page load with a per-system breakdown. |
-| `imgdiff.mts` | Visual regression. **The noise floor is per-shot** — measure it for the shot you are comparing rather than quoting the 1.5–1.9 constant. PNG only. |
+| `imgdiff.mts` | Visual regression. **The noise floor is per-shot** — measure it for the shot you are comparing rather than quoting the 1.5–1.9 constant. PNG only. `--heat <dir>` writes a map of *where* the two differ, which is what turns a mean into a diagnosis. |
 | `driftcheck.mts`, `detcheck.mts` | Does the rendered surface stay put as the camera travels; is nondeterminism from boot or from stepping. |
 
 **Framing and inspection**
