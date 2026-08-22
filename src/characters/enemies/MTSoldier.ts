@@ -439,6 +439,8 @@ function weather(geo: any, amount = 1) {
 }
 
 class MTSoldierEnemy extends BipedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override attackId!: any;
   override deathPush!: any;
   override deathSide!: any;

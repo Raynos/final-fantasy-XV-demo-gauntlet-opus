@@ -221,6 +221,8 @@ function buildPrototype() {
  * fight, and the animation has to hand the player the window honestly.
  */
 class IronGiantEnemy extends BipedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override anim!: any;
   override deathPush!: any;
   override deathSide!: any;

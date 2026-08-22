@@ -86,7 +86,12 @@ function buildPrototype() {
   }
 
   const B = new CBuilder();
-  const P = [];
+  /**
+   * Built parts and how each attaches: to one bone, or skinned along a chain.
+   * A tuple union rather than two fields, because the pair below reads it with
+   * `bind[0] === 'chain'`.
+   */
+  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
   const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -401,6 +406,8 @@ const mix = mixc;
 const col = colc;
 
 class DualhornEnemy extends QuadrupedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override anim!: any;
   override attackId!: any;
   override state!: any;

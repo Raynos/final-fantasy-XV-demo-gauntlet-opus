@@ -117,7 +117,12 @@ function buildPrototype() {
   }
 
   const B = new CBuilder();
-  const P = [];
+  /**
+   * Built parts and how each attaches: to one bone, or skinned along a chain.
+   * A tuple union rather than two fields, because the pair below reads it with
+   * `bind[0] === 'chain'`.
+   */
+  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
   const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -314,7 +319,8 @@ function buildPrototype() {
 
   /* ------------------------------------------------------- dorsal ------ */
   // A low sawtooth of scutes rather than the sabertusk's hair bristles.
-  for (const [bone, z0, z1, n] of [['hips', -0.80, -0.34, 4], ['spine', -0.28, 0.18, 5], ['chest', 0.22, 0.56, 3]]) {
+  const spurs: [string, number, number, number][] = [['hips', -0.80, -0.34, 4], ['spine', -0.28, 0.18, 5], ['chest', 0.22, 0.56, 3]];
+  for (const [bone, z0, z1, n] of spurs) {
     B.group(6);
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
@@ -463,6 +469,8 @@ const mix = mixc;
 const col = colc;
 
 class VoretoothEnemy extends QuadrupedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override attackId!: any;
   override id!: any;
   override state!: any;

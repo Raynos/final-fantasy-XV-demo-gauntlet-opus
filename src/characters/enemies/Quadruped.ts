@@ -46,7 +46,7 @@ export class QuadrupedEnemy extends Enemy {
   override type!: any;
   override visual!: any;
   /** @returns tuning block; subclasses must define it. */
-  get A(): any { return this.constructor.ANIM; }
+  get A(): any { return (this.constructor as any).ANIM; }
 
   override setupAnim(anim: any) {
     const A = this.A;

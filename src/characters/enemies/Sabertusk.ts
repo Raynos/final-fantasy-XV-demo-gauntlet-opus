@@ -103,7 +103,12 @@ function buildPrototype() {
   }
 
   const B = new CBuilder();
-  const P = [];
+  /**
+   * Built parts and how each attaches: to one bone, or skinned along a chain.
+   * A tuple union rather than two fields, because the pair below reads it with
+   * `bind[0] === 'chain'`.
+   */
+  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
 
   /* ---------------------------------------------------------- torso ---- */
   // theta 0 = +Z side of the ring; because the sweep runs along +Z the ring
@@ -299,7 +304,8 @@ function buildPrototype() {
   // The bristle ridge. Emitted as flattened blades rather than cones so the
   // ridge reads as hair standing up, and split across three bones so it moves
   // with the spine when the animal hunches.
-  for (const [bone, z0, z1, n] of [['hips', -0.72, -0.30, 4], ['spine', -0.26, 0.16, 5], ['chest', 0.20, 0.56, 4]]) {
+  const spurs: [string, number, number, number][] = [['hips', -0.72, -0.30, 4], ['spine', -0.26, 0.16, 5], ['chest', 0.20, 0.56, 4]];
+  for (const [bone, z0, z1, n] of spurs) {
     B.group(5);
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
@@ -474,6 +480,8 @@ function blend(a: number | THREE.Color, b: number | THREE.Color, t: number) {
 }
 
 class SabertuskEnemy extends QuadrupedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override attackId!: any;
   constructor(opts: any) { super(SABERTUSK, opts); }
 

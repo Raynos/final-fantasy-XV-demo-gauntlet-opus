@@ -147,7 +147,14 @@ export class Rig {
   /**
    * Merge everything and produce the SkinnedMesh.
    */
-  build(material: THREE.Material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null } = {}): {group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>} {
+  build(material: THREE.Material, { castShadow = true, radius = 4, uvTiles = DETAIL_TILES, coat = null }: {
+    castShadow?: boolean,
+    /** Bounding-sphere radius for culling; the bind pose is smaller than the posed mesh. */
+    radius?: number,
+    uvTiles?: any,
+    /** Hide weathering, applied per part before the merge. See `weatherCoat`. */
+    coat?: CoatOpts | null,
+  } = {}): {group:THREE.Group, mesh:THREE.SkinnedMesh, bones:Map<string,THREE.Bone>} {
     if (coat) for (const g of this.parts) weatherCoat(g, coat);
     if (uvTiles) for (const g of this.parts) detailUV(g, uvTiles);
     const geo = mergeCreature(this.parts, (material.userData && material.userData.defMat) || [0.8, 0]);
@@ -380,10 +387,28 @@ function asColor(out: THREE.Color, v: number | THREE.Color) {
  * @param {object} [o]
  * 
  */
+/** Hide weathering knobs. All of them modulate what the species author built. */
+export interface CoatOpts {
+  /** Body-scale blotching. */
+  mottle?: number;
+  /** Bleached guard-hair tips over the topline. */
+  tick?: number;
+  /** Tip colour; null keeps the part's own, lightened. */
+  light?: number | null;
+  /** Underside bounce shadow. */
+  shade?: number;
+  dark?: number;
+  /** Dust carried up the legs. */
+  dust?: number;
+  /** How far up the dust reaches, metres off the ground. */
+  dustTop?: number;
+  dustColor?: number;
+}
+
 export function weatherCoat(geo: THREE.BufferGeometry, {
   mottle = 0.12, tick = 0.14, light = null, shade = 0.16, dark = 0x120e09,
   dust = 0, dustTop = 0.55, dustColor = 0x8d7c5e,
-}: { mottle?: number, tick?: number, light?: number | null, shade?: number, dark?: number, dust?: number, dustTop?: number, dustColor?: number } = {}) {
+}: CoatOpts = {}) {
   const pos = geo.attributes.position, cl = geo.attributes.color, nr = geo.attributes.normal;
   if (!pos || !cl) return geo;
   // `Color.setHex` runs `Math.floor` on its argument, so handing it a

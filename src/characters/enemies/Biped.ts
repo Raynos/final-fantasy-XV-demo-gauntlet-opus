@@ -37,7 +37,7 @@ export class BipedEnemy extends Enemy {
   override stateTime!: any;
   override type!: any;
   override visual!: any;
-  get A() { return this.constructor.ANIM; }
+  get A() { return (this.constructor as any).ANIM; }
 
   override setupAnim(anim: any) {
     const A = this.A;

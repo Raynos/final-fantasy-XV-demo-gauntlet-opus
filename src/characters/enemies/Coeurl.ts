@@ -113,7 +113,12 @@ function buildPrototype() {
   }
 
   const B = new CBuilder();
-  const P = [];
+  /**
+   * Built parts and how each attaches: to one bone, or skinned along a chain.
+   * A tuple union rather than two fields, because the pair below reads it with
+   * `bind[0] === 'chain'`.
+   */
+  const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
   const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
@@ -300,7 +305,8 @@ function buildPrototype() {
   }
 
   /* ----------------------------------------------------- spine spurs --- */
-  for (const [bone, z0, z1, n] of [['hips', -0.84, -0.36, 4], ['spine', -0.30, 0.16, 5], ['chest', 0.20, 0.52, 3]]) {
+  const spurs: [string, number, number, number][] = [['hips', -0.84, -0.36, 4], ['spine', -0.30, 0.16, 5], ['chest', 0.20, 0.52, 3]];
+  for (const [bone, z0, z1, n] of spurs) {
     B.group(6);
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
@@ -450,6 +456,8 @@ const mix = mixc;
 const col = colc;
 
 class CoeurlEnemy extends QuadrupedEnemy {
+  /** Tuning block, assigned below the class body. Read through `this.A`. */
+  static ANIM: any;
   override anim!: any;
   override attackId!: any;
   override moveSpeed!: any;
