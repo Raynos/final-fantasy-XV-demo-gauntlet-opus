@@ -188,8 +188,8 @@ export class Enemy {
     const byName = new Map(), rest = new Map();
     let mesh: any = null;
     group.traverse((o) => {
-      if (o.isBone) { byName.set(o.name, o); rest.set(o.name, o.quaternion.clone()); }
-      if (o.isSkinnedMesh) mesh = o;
+      if ((o as THREE.Bone).isBone) { byName.set(o.name, o); rest.set(o.name, o.quaternion.clone()); }
+      if ((o as THREE.SkinnedMesh).isSkinnedMesh) mesh = o;
     });
     if (mesh) { mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false; }
     this.rig = { byName, rest };

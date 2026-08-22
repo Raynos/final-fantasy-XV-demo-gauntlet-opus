@@ -4,6 +4,7 @@ import { organicNormal, organicRoughness } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
+import type * as THREE from 'three';
 
 /* Hairless, so the palette has to do the work fur would: a mottled hide that
  * lifts to a paler underside, with bone and claw reading much brighter.

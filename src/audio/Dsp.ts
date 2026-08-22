@@ -184,7 +184,7 @@ const SPECTRA = {
 /**
  * Cached PeriodicWave for a named timbre.
  */
-export function wave(ctx: BaseAudioContext, name: keyof SPECTRA) {
+export function wave(ctx: BaseAudioContext, name: keyof typeof SPECTRA) {
   let map = WAVE_CACHE.get(ctx);
   if (!map) { map = new Map(); WAVE_CACHE.set(ctx, map); }
   let w = map.get(name);

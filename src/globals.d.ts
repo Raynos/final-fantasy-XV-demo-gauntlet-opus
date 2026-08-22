@@ -20,6 +20,7 @@ declare global {
     DEV?: any;
     /** Safari still ships the prefixed constructor. */
     webkitAudioContext?: typeof AudioContext;
+    webkitOfflineAudioContext?: typeof OfflineAudioContext;
   }
 }
 
@@ -46,7 +47,7 @@ declare global {
     'ffxv-damage': CustomEvent<any>;
     'ffxv-callout': CustomEvent<{ word?: string, sub?: string }>;
     'ffxv-say': CustomEvent<{ who?: string, line?: string, dur?: number }>;
-    'ffxv-banter': CustomEvent<{ who?: string, line?: string }>;
+    'ffxv-banter': CustomEvent<{ who?: string, line?: string, dur?: number }>;
     'ffxv-area': CustomEvent<{ name?: string, sub?: string, meta?: any }>;
     'ffxv-hit': CustomEvent<{ amount?: number }>;
     'ffxv-cutscene': CustomEvent<{ phase: 'start' | 'end', id: string, skipped?: boolean }>;

@@ -4,6 +4,7 @@ import { organicNormal, organicRoughness } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth, lerp } from '../rig/CreatureAnim.ts';
+import type * as THREE from 'three';
 
 /* A black animal is the hardest thing to light. Pure black is a hole in the
  * frame, so the "black" here is a lifted blue-grey and every plane that could

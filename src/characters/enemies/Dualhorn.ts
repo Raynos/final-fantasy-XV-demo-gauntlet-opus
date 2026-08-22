@@ -4,6 +4,7 @@ import { organicNormal, organicRoughness } from './EnemyBase.ts';
 import { QuadrupedEnemy } from './Quadruped.ts';
 import { CBuilder, sweep, sculptBlob, horn } from '../rig/Sculpt.ts';
 import { attackEnvelope, clamp01, smooth } from '../rig/CreatureAnim.ts';
+import type * as THREE from 'three';
 
 const HIDE = 0x6e5b41;
 const HIDE_DARK = 0x3c3123;

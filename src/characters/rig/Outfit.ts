@@ -74,7 +74,7 @@ function under(fn: any, u0: any, u1: any, damp = 0.88) {
  * An outfit is data: a list of pieces, dispatched here.
  */
 
-const PIECES = {};
+const PIECES: Record<string, (...args: any[]) => any> = {};
 
 /**
  * @param look character description; `look.outfit` is the piece list
@@ -101,7 +101,7 @@ export function buildOutfit(rig: any, look: any): THREE.BufferGeometry {
 }
 
 /** Register a garment type. */
-function piece(name: any, fn: any) { PIECES[name as keyof typeof PIECES] = fn; }
+function piece(name: string, fn: (...args: any[]) => any) { PIECES[name] = fn; }
 
 // ---------------------------------------------------------------------------
 // torso layers

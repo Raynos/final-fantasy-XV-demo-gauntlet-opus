@@ -292,6 +292,15 @@ export function poseBoneMix(rig: any, name: any, x: any, y: any, z: any, k: any,
 export function creatureMaterial({
   roughness = 0.72, metalness = 0.05, normalMap = null, normalScale = 0.7,
   roughnessMap = null, envMapIntensity = 1.0, rim = null,
+}: {
+  roughness?: number,
+  metalness?: number,
+  normalMap?: THREE.Texture | null,
+  normalScale?: number,
+  roughnessMap?: THREE.Texture | null,
+  envMapIntensity?: number,
+  /** Fresnel rim light, for the daemons that need to read against a night sky. */
+  rim?: { color: number, strength: number } | null,
 } = {}) {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff, vertexColors: true, roughness: 1, metalness: 1,

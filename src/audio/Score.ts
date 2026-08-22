@@ -132,7 +132,7 @@ export class Score {
    * cross-fade, so nothing ever cuts.
    * @param [o] {immediate, fade}
    */
-  setState(name: keyof STATES, o: any = {}) {
+  setState(name: keyof typeof STATES, o: any = {}) {
     if (!STATES[name]) return;
     if (name === this.stateName && !o.force) { this.pending = null; return; }
     if (o.immediate) this._applyState(name, o.fade ?? 0.6);

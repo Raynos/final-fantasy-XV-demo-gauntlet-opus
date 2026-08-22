@@ -256,5 +256,5 @@ export class AssetBrowser {
   }
 }
 
-const load = (k: any, f: any) => { try { return JSON.parse(localStorage.getItem(k)) || f; } catch { return f; } };
+const load = (k: any, f: any) => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') || f; } catch { return f; } };
 const save = (k: any, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };

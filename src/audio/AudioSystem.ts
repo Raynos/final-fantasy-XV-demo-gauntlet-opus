@@ -139,7 +139,7 @@ export class AudioSystem {
    * needs a line of code added to make the game audible.
    */
   _wireEvents() {
-    const on = (name: any, fn: any) => window.addEventListener(`combat:${name}`, (e) => {
+    const on = (name: any, fn: any) => window.addEventListener(`combat:${name}`, (e: any) => {
       try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
     });
 
