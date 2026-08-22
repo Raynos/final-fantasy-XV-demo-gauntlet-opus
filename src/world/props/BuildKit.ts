@@ -422,10 +422,14 @@ export function windowUnit(b: Bag, o: {
   // makes a window read as joinery rather than as a hole in a slab, and it is
   // the cheapest per-building identity there is.
   if (!plain) {
+    // Jambs only, and they stop at the head. The first pass ran the architrave
+    // up past the opening and added a head band on top of it, which put two
+    // 55 mm slabs inside the lintel's own 500 mm depth at the same height: the
+    // window heads rendered as a cross-hatched moire of z-fighting. The lintel
+    // IS the head trim on a building detailed like this.
     for (const sx of [-1, 1]) {
-      b.trim.push(box(0.09, h + 0.16, 0.055, { x: x + sx * (w / 2 + 0.045), y: y + h / 2 + 0.02, z: face + faceZ * 0.026 }));
+      b.trim.push(box(0.09, h - 0.02, 0.055, { x: x + sx * (w / 2 + 0.045), y: y + h / 2 - 0.01, z: face + faceZ * 0.026 }));
     }
-    b.trim.push(box(w + 0.18, 0.08, 0.055, { x, y: y + h + 0.075, z: face + faceZ * 0.026 }));
   }
   if (barred) {
     const zb = z + faceZ * (wallT / 2 - 0.06);
@@ -597,13 +601,13 @@ export function bakeTone(g: THREE.BufferGeometry, o: {
  * Decorrelated draws: value, warmth and grime each come off their own call, so
  * the jitter that darkens a building does not also decide it is the warm one.
  */
-export function toneVariant(rng: Rng, { valueAmp = 0.13, warmAmp = 0.045 } = {}) {
+export function toneVariant(rng: Rng, { valueAmp = 0.26, warmAmp = 0.085 } = {}) {
   const v = 1 + rng.gauss(0, valueAmp * 0.5);
   const warm = rng.gauss(0, warmAmp);
   return {
-    jitter: Math.min(1.25, Math.max(0.76, v)),
+    jitter: Math.min(1.30, Math.max(0.74, v)),
     tint: [1 + warm, 1, 1 - warm * 0.85] as [number, number, number],
-    grime: 0.62 + rng.next() * 0.18,
-    streak: rng.next() * 0.14,
+    grime: 0.72 + rng.next() * 0.16,
+    streak: 0.10 + rng.next() * 0.20,
   };
 }

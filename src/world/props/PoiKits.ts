@@ -198,6 +198,19 @@ export function poiMaterials() {
     roof: plain(0x4b5058, 0.72, 0.3),
     wall: plain(0xa2957e, 0.82),
     wall2: plain(0x7b7160, 0.84),
+    // Four more renders, and the point of them is that they are not four more
+    // greys. The kit's whole wall palette was `a2957e / 7b7160 / 8d8779 /
+    // 968a76` -- one hue, one value, four names -- so a settlement read as one
+    // flat colour no matter how many buildings it had. These are a Lucian
+    // hill-town palette: limewashed ochre, sun-bleached sand, an oxide render
+    // and a cool grey-green, far enough apart in hue that two neighbours are
+    // visibly different buildings rather than the same building twice.
+    render1: plain(0xb08a5c, 0.86),
+    render2: plain(0xc3b393, 0.84),
+    render3: plain(0x9a6f5e, 0.87),
+    render4: plain(0x7d8478, 0.85),
+    /** Painted joinery: architraves, copings, window frames. */
+    joinery: plain(0xb6a98f, 0.74),
     wood: woodMaterial(0x7d674c),
     plank: woodMaterial(0x5d4c39),
     rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
@@ -206,12 +219,23 @@ export function poiMaterials() {
     red: plain(0x8f3a2c, 0.68, 0.1),
     magitek: plain(0x3a4048, 0.62, 0.45),
     cloth: canvasClothMaterial(0x3d4148),
-    glass: new THREE.MeshStandardMaterial({ color: 0x121a20, roughness: 0.14, metalness: 0.4 }),
+    // Glass, and it is deliberately not black. A pane lit only by the sky, with
+    // a 0.06 roughness and nothing behind it, renders as a hole -- which is how
+    // the first pass drew every unlit window on a shaded elevation. Dusty glass
+    // with a real base value reads as a window at every sun angle, and the
+    // reveal's own shadow is still the darkest thing in the opening.
+    glass: new THREE.MeshStandardMaterial({ color: 0x4b5560, roughness: 0.3, metalness: 0.3 }),
     lamp: glowMaterial(0xffe6b4, 0.5, 0x141310),
     rune: glowMaterial(0x8fd8ff, 1.4, 0x0b1620),
     arcane: glowMaterial(0xa878ff, 1.2, 0x140b20),
     hot: glowMaterial(0xff5a20, 1.4, 0x1a0703),
     void: new THREE.MeshBasicMaterial({ color: 0x05070a }),
+    // The card behind a pane. Not `void`: an unlit 0x05070a quad reads as a
+    // hole punched through the world rather than as a room, and a window that
+    // is a hole is the same defect as a window that is a decal. A dark warm
+    // grey that takes ambient sits a stop or two under the wall and lets the
+    // reveal's own shadow still be the darkest thing in the opening.
+    interior: plain(0x211f1c, 0.97),
     runeface: new THREE.MeshStandardMaterial({
       map: runeTexture(), transparent: true, roughness: 0.7, metalness: 0,
       emissive: 0x2a5f8a, emissiveIntensity: 0.6, side: THREE.DoubleSide,
@@ -573,10 +597,14 @@ export class PoiKits {
     const b = bag();
     const wallT = 0.3;
     const H = storeys * STOREY;
-    const y0 = base;
+    // The plinth stands ON the pad, not inside it. Built from y=0 with the pad
+    // top at `base`, all three of its courses were buried and the walls met the
+    // ground on a line again -- the exact defect the course exists to fix.
+    const plinthH = 0.5;
+    const y0 = base + plinthH;
     const tv = toneVariant(rng);
 
-    plinth(b.shell, { w, d, h: y0, proud: 0.15 });
+    plinth(b.shell, { w, d, h: plinthH, proud: 0.15, y: base });
 
     // Elevations. Each storey is its own run so the openings land on the floor
     // they belong to, and the two long faces carry the window rhythm while the
@@ -627,13 +655,20 @@ export class PoiKits {
 
     // String course at every floor line above the first: the single cheapest way
     // to stop a multi-storey facade reading as one flat rectangle.
-    for (let st = 1; st < storeys; st++) stringCourse(b.trim, { w, d, y: y0 + st * STOREY - 0.1 });
+    // In the shell material, not a contrasting one: a projecting course reads by
+    // the shadow it throws, and painting it a different colour turns the one
+    // horizontal that should be architecture into a racing stripe.
+    for (let st = 1; st < storeys; st++) stringCourse(b.shell, { w, d, y: y0 + st * STOREY - 0.1 });
     cornerPier(b.shell, { w: w + 0.7, d: d + 0.7, y0: y0 + 0.12, y1: y0 + H, sec: 0.42, proud: 0.05, arris: 0.09 });
 
-    // Roof: a deck inside the parapet, then furniture that is not a cube.
-    b.roof.push(box(w - 0.3, 0.22, d - 0.3, { y: y0 + H + 0.11 }));
-    parapet(b.shell, b.trim, { w, d, y: y0 + H + 0.2, t: 0.19, h: 0.62 });
-    const ry0 = y0 + H + 0.22;
+    // Roof: a deck INSIDE the parapet, then furniture that is not a cube. The
+    // deck has to clear the parapet's inner face and sit above the wall head,
+    // or it shows on the elevation as a dark band between the wall and the
+    // coping -- which is what the first pass drew.
+    const par = 0.19;
+    b.roof.push(box(w - par * 2 - 0.06, 0.2, d - par * 2 - 0.06, { y: y0 + H + 0.1 }));
+    parapet(b.shell, b.trim, { w, d, y: y0 + H, t: par, h: 0.62 });
+    const ry0 = y0 + H + 0.2;
     const spot = () => [rng.range(-1, 1) * (w / 2 - 2.0), rng.range(-1, 1) * (d / 2 - 1.8)];
     {
       const [ax, az] = spot();
@@ -645,6 +680,17 @@ export class PoiKits {
     for (let i = 0; i < 2; i++) {
       const [ax, az] = spot();
       b.metal.push(cyl(0.035, rng.range(1.6, 3.2), 4, { x: ax, y: ry0 + rng.range(0.8, 1.6), z: az }));
+    }
+
+    // Scuppers and downpipes. Two per building: they are where the vertical
+    // staining on a real facade comes from, and a 110 mm pipe standing 70 mm off
+    // the wall is a hard vertical line and its own shadow all the way down --
+    // the cheapest thing that stops an elevation being a plane.
+    for (const sx of [-w * 0.34, w * 0.36]) {
+      const zf = faceZ * (d / 2 + 0.09);
+      b.metal.push(cyl(0.055, H + 0.4, 6, { x: sx, y: base + (H + 0.4) / 2, z: zf }));
+      b.metal.push(xform(cyl(0.05, 0.42, 6), { rx: Math.PI / 2, x: sx, y: y0 + H + 0.32, z: zf + faceZ * 0.2 }));
+      for (let k = 0; k < storeys; k++) b.metal.push(box(0.18, 0.05, 0.05, { x: sx, y: y0 + 0.9 + k * STOREY, z: zf - faceZ * 0.03 }));
     }
 
     // Ground-floor awning on the street elevation: canvas on two struts, tilted.
@@ -659,8 +705,8 @@ export class PoiKits {
 
     const merged = mergeBag(b);
     const mats: Record<string, THREE.Material> = {
-      shell, shell2: M.concrete, trim: M.cream, metal: M.steel, glass: M.glass,
-      glow: M.lamp, dark: M.void, roof: M.roof, wood: M.plank, cloth: M.red,
+      shell, shell2: M.concrete, trim: M.joinery, metal: M.steel, glass: M.glass,
+      glow: M.lamp, dark: M.interior, roof: M.roof, wood: M.plank, cloth: M.red,
     };
     const place = world.clone().multiply(mat4([x, 0, z], [0, ry, 0]));
     for (const [role, g] of Object.entries(merged)) {
@@ -669,7 +715,7 @@ export class PoiKits {
       // shipped mesh, not on the recipe. Emissive and glass roles opt out; a
       // grime gradient on a lit window is nonsense.
       if (role !== 'glow' && role !== 'glass' && role !== 'dark') {
-        bakeTone(g, { y0: 0, y1: y0 + H, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
+        bakeTone(g, { y0: base, y1: y0 + H, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
       }
       B.add(mats[role] ?? shell, g, place);
     }
@@ -691,7 +737,7 @@ export class PoiKits {
     this._apron(B, 52, 18, 33);
     put(M.gravel, new THREE.CylinderGeometry(51, 52, 0.6, 26), [0, 0.2, 0]);
     // a street grid rather than a scatter: blocks share walls and align
-    const walls = [M.wall, M.wall2, M.concrete, M.stone];
+    const walls = [M.wall, M.wall2, M.stone, M.render1, M.render2, M.render3, M.render4];
     for (let gx = -2; gx <= 2; gx++) {
       for (let gz = -2; gz <= 2; gz++) {
         if (gx === 0 && gz === 0) continue;                 // the square
