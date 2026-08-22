@@ -274,7 +274,7 @@ export function mergeParts(geos: any) {
  *
  * @param {Object} o
  * */
-export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, theta1?: number, uvOffset?: number[], ref?: any, colorAt?: any, matAt?: any, capStart?: any, capHeight?: any }) {
+export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg: number, shape?: (theta:number,t:number)=>number, offset?: (theta:number,t:number,out:THREE.Vector3)=>void, uvScale?: number[], theta0?: number, theta1?: number, uvOffset?: number[], ref?: any, colorAt?: any, matAt?: any, capStart?: any, capEnd?: any, capHeight?: any }) {
   const nodes = o.nodes;
   const steps = o.steps || 16;
   const seg = o.seg || 16;
@@ -388,6 +388,61 @@ export function sweepTube(B: MeshBuilder, o: { nodes: any[], steps: number, seg:
     }
     const last = domeRows[domeRows.length - 1];
     for (let j = 0; j < seg; j++) B.tri(last[(j + 1) % cols], last[j], tip);
+  }
+
+  // Dome the *far* end. Every sweep in this codebase used to stop dead, leaving
+  // an open cylinder, and every caller that cared plugged it with a separate
+  // `blob` — which is a second object with its own normals, its own material
+  // state and its own UV island butting against the rim. On the fingertips that
+  // showed up as a dark bead at the end of every digit: the plug shaded as a
+  // ball rather than as a continuation of the finger, and no amount of matching
+  // its radius to the rim fixed the discontinuity. A dome built from the sweep's
+  // own last ring shares the ring's vertices, so its normals average across the
+  // seam and the tip is simply the end of the finger.
+  if (o.capEnd && closed) {
+    const p1v = curve.getPoint(1);
+    const tan1 = curve.getTangent(1).normalize();
+    _f.copy(ref).addScaledVector(tan1, -ref.dot(tan1));
+    if (_f.lengthSq() < 1e-6) _f.set(1, 0, 0).addScaledVector(tan1, -tan1.x);
+    _f.normalize();
+    _r.crossVectors(_f, tan1).normalize();
+    const rx1 = crScalar(rxs, 1), rz1 = crScalar(rzs, 1);
+    const h = (o.capHeight ?? 0.9) * (rx1 + rz1) * 0.5;
+    const domeRows = [rings[rings.length - 1]];
+    const layers = 3;
+    const w = weightsAt(nodes, 1);
+    for (let k = 1; k <= layers; k++) {
+      const a = (k / (layers + 1)) * Math.PI * 0.5;
+      const scale = Math.cos(a);
+      const lift = Math.sin(a) * h;
+      B.skin(w);
+      const row = [];
+      for (let j = 0; j < cols; j++) {
+        const th = t0 + (t1 - t0) * (j / seg);
+        if (o.colorAt) B.color(o.colorAt(th, 1));
+        if (o.matAt) { const q = o.matAt(th, 1); B.mat(q[0], q[1] ?? 0, q[2] ?? 0); }
+        const m = shape ? shape(th, 1) : 1;
+        const x = Math.sin(th) * rx1 * m * scale;
+        const z = Math.cos(th) * rz1 * m * scale;
+        row.push(B.v(
+          p1v.x + _r.x * x + _f.x * z + tan1.x * lift,
+          p1v.y + _r.y * x + _f.y * z + tan1.y * lift,
+          p1v.z + _r.z * x + _f.z * z + tan1.z * lift,
+          uvO[0] + (j / seg) * uvS[0], uvO[1] + uvS[1] + 0.02 * k
+        ));
+      }
+      domeRows.push(row);
+    }
+    const tip = B.v(p1v.x + tan1.x * h, p1v.y + tan1.y * h, p1v.z + tan1.z * h, 0.5, uvO[1] + uvS[1] + 0.1);
+    for (let k = 0; k < domeRows.length - 1; k++) {
+      const A = domeRows[k], C = domeRows[k + 1];
+      for (let j = 0; j < seg; j++) {
+        const j2 = (j + 1) % cols;
+        B.quad(A[j], A[j2], C[j2], C[j]);
+      }
+    }
+    const last = domeRows[domeRows.length - 1];
+    for (let j = 0; j < seg; j++) B.tri(last[j], last[(j + 1) % cols], tip);
   }
   return rings;
 }
@@ -564,11 +619,33 @@ export function roundedBox(B: any, o: any) {
   return grid;
 }
 
-/** Sphere/ellipsoid blob, welded, for muscle caps and joints. */
+/**
+ * Sphere/ellipsoid blob, welded, for muscle caps and joints.
+ *
+ * Three UV modes, and the choice matters more than it looks:
+ *
+ * - default: the sphere's own 0..1 parameterisation. A blob that spans the
+ *   whole 0..1 texture samples the *entire* face map, so a 2 cm ear picks up
+ *   the lips and the nostrils and renders as a mottled red lump.
+ * - `uv`: **pins** every vertex to one texel. Fixes the map-sampling problem
+ *   and introduces a worse one — every vertex carries the same UV, so
+ *   `dFdx(uv)` and `dFdy(uv)` are both zero across the whole part and
+ *   three.js's derivative-based tangent frame degenerates. What it renders is
+ *   a constant, arbitrary shading normal over a curved surface, which reads as
+ *   a flat facet and goes fully black whenever that one normal faces away from
+ *   the key. Every pinned fingertip cap on the first build of the new hand was
+ *   a black bead for exactly this reason.
+ * - `uvSpan` (+ optional `uv` as its centre): a small, *non-degenerate* window
+ *   of the map. The derivatives stay finite so the tangent frame is well
+ *   conditioned, and the window is narrow enough that a 5 mm cap still samples
+ *   one small neighbourhood rather than the whole atlas. This is what any
+ *   small blob on a mapped material wants.
+ */
 export function blob(B: any, o: any) {
   const segU = o.segU || 12, segV = o.segV || 8;
   const c = o.center;
   const s = o.scale;
+  const span = o.uvSpan ? (Array.isArray(o.uvSpan) ? o.uvSpan : [o.uvSpan, o.uvSpan]) : null;
   const q = o.rot ? new THREE.Quaternion().setFromEuler(new THREE.Euler().fromArray(o.rot)) : null;
   const rows = [];
   for (let v = 0; v <= segV; v++) {
@@ -583,10 +660,12 @@ export function blob(B: any, o: any) {
       );
       if (q) p.applyQuaternion(q);
       p.add(new THREE.Vector3().fromArray(c));
-      // `uv` pins every vertex to one texel. A blob that spans the whole 0..1
-      // texture samples the *entire* face map, so a 2 cm ear picks up the lips
-      // and the nostrils and renders as a mottled red lump.
-      row.push(o.uv ? B.vv(p, o.uv[0], o.uv[1]) : B.vv(p, u / segU, v / segV));
+      if (span) {
+        const cu = o.uv ? o.uv[0] : 0.5, cv = o.uv ? o.uv[1] : 0.5;
+        row.push(B.vv(p, cu + (u / segU - 0.5) * span[0], cv + (v / segV - 0.5) * span[1]));
+      } else {
+        row.push(o.uv ? B.vv(p, o.uv[0], o.uv[1]) : B.vv(p, u / segU, v / segV));
+      }
     }
     rows.push(row);
   }
