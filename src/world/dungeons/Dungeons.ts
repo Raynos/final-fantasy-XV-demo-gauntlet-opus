@@ -14,6 +14,7 @@ import type { Terrain } from '../Terrain.ts';
 import type { Player } from '../../characters/Player.ts';
 import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
 import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
+import { bootPhase } from '../../engine/BootProfile.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
@@ -180,7 +181,7 @@ export class Dungeons {
     for (const def of this.defs.values()) {
       const e = def.entrance;
       const make = builders[e.kind];
-      const built = make(this.terrain, e.x, e.z, e.heading, def.seed || 7);
+      const built = bootPhase(`Dungeons.entrance.${e.kind}`, () => make(this.terrain, e.x, e.z, e.heading, def.seed || 7));
       game.scene.add(built.group);
       calls += built.stats.calls;
       tris += built.stats.tris;

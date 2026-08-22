@@ -5,6 +5,8 @@ import type { EcoSite } from '../props/EcoSites.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import type { Props } from '../Props.ts';
 import { townMaterials, type TownMats } from './TownMaterials.ts';
+import { bootPhase } from '../../engine/BootProfile.ts';
+import { loadTexBake } from '../../engine/TexBake.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
   carShell, patioSet, palletStack, type PlaceFn,
@@ -155,11 +157,14 @@ export class Hammerhead {
     this.world = mat4([site.x, this.base, site.z], [0, this.yaw, 0]);
     this.origin = new THREE.Vector3(site.x, this.base, site.z);
 
-    this._build();
+    // The baked texel cache saves ~1.4 s of texture synthesis here. The fetch
+    // started at module evaluation, so on a warm disk this is already settled.
+    await bootPhase('Town.texbake', () => loadTexBake());
+    bootPhase('Town.build', () => this._build());
     game.scene.add(this.root);
 
-    this._registerScreens(game);
-    this._registerInteractables(game);
+    bootPhase('Town.screens', () => this._registerScreens(game));
+    bootPhase('Town.interactables', () => this._registerInteractables(game));
     if (game.debug) {
       console.log('[Hammerhead]', JSON.stringify({
         origin: [+this.origin.x.toFixed(1), +this.base.toFixed(1), +this.origin.z.toFixed(1)],
@@ -287,7 +292,7 @@ export class Hammerhead {
   /* --------------------------------------------------------------- build */
 
   _build() {
-    const M = this.mats = townMaterials();
+    const M = this.mats = bootPhase('Town.materials', () => townMaterials());
     for (const [k, m] of Object.entries(M)) if (!m.name) m.name = `hh_${k}`;
 
     const rng = this.rng = new Rng(90210);
@@ -298,20 +303,22 @@ export class Hammerhead {
     const putS: PlaceFn = (m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
     const putC: PlaceFn = (m, g, p, r, sc) => { C.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
 
-    this._ground(putS, M);
-    this._canopy(putS, putC, M, rng);
-    this._pylon(putS, M);
-    this._diner(putS, putC, M, rng);
-    this._garage(putS, putC, M, rng);
-    this._caravan(putS, putC, M);
-    this._yard(putS, putC, M, rng);
-    this._carPark(putS, putC, M, rng);
-    this._streetFurniture(putS, putC, M, rng);
-    this._lights(putS, M);
+    bootPhase('Town.parts', () => {
+      this._ground(putS, M);
+      this._canopy(putS, putC, M, rng);
+      this._pylon(putS, M);
+      this._diner(putS, putC, M, rng);
+      this._garage(putS, putC, M, rng);
+      this._caravan(putS, putC, M);
+      this._yard(putS, putC, M, rng);
+      this._carPark(putS, putC, M, rng);
+      this._streetFurniture(putS, putC, M, rng);
+      this._lights(putS, M);
+    });
 
     this.shell = new THREE.Group();
     this.shell.name = 'hh_shell';
-    S.build(this.shell, { cast: true, receive: true, name: 'hh' });
+    bootPhase('Town.merge', () => S.build(this.shell, { cast: true, receive: true, name: 'hh' }));
     this.root.add(this.shell);
 
     // Signage and glazing never cast: they are flat planes whose shadows read
@@ -328,7 +335,7 @@ export class Hammerhead {
     // cascades is 42 draw calls nobody would miss.
     this.clutter = new THREE.Group();
     this.clutter.name = 'hh_clutter';
-    C.build(this.clutter, { cast: false, receive: true, name: 'hhc' });
+    bootPhase('Town.mergeClutter', () => C.build(this.clutter, { cast: false, receive: true, name: 'hhc' }));
     this.root.add(this.clutter);
 
     this.stats = {

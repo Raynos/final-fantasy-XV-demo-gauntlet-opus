@@ -1,4 +1,5 @@
 import { bake } from './bake.mts';
+import { texBake } from './texbake.mts';
 
 /**
  * Make sure the baked world artifacts exist before anything is served or built.
@@ -14,10 +15,18 @@ export function bakePlugin(): import('vite').Plugin {
   return {
     name: 'eos-bake',
     async configResolved() {
-      if (!done) done = bake({}).then(() => undefined).catch((e) => {
-        // Never block a server start on the cache: the game regenerates.
-        console.warn('[bake] failed, the browser will generate at runtime:', e && e.message);
-      });
+      if (!done) done = Promise.all([
+        // The terrain field, and the world dressing's procedural textures.
+        // Both are content-hashed against their own generator sources, so both
+        // are a no-op on every start after the first.
+        bake({}).catch((e) => {
+          // Never block a server start on the cache: the game regenerates.
+          console.warn('[bake] failed, the browser will generate at runtime:', e && e.message);
+        }),
+        texBake({}).catch((e) => {
+          console.warn('[texbake] failed, the browser will generate at runtime:', e && e.message);
+        }),
+      ]).then(() => undefined);
       await done;
     },
   };

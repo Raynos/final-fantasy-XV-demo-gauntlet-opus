@@ -11,6 +11,7 @@ import { Outposts } from './props/Outposts.ts';
 import { Wildlife } from './props/Wildlife.ts';
 import { PoiKits } from './props/PoiKits.ts';
 import type { Game } from '../game/Game.ts';
+import { bootPhase } from '../engine/BootProfile.ts';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -43,33 +44,49 @@ export class Props {
     const veg = game.get('Vegetation');
     this.ecology = (veg && veg.ecology) || new Ecology(game, game.seed ?? 1337);
 
-    this.rocks = new Rocks(this.ecology, game.scene, { quality });
-    this.rocks.build();
+    bootPhase('Props.rocks', () => {
+      this.rocks = new Rocks(this.ecology, game.scene, { quality });
+      this.rocks.build();
+    });
 
-    this.landmarks = new Landmarks(this.ecology, game.scene);
-    this.landmarks.build();
+    bootPhase('Props.landmarks', () => {
+      this.landmarks = new Landmarks(this.ecology, game.scene);
+      this.landmarks.build();
+    });
 
-    this.mega = new Megastructures(this.ecology, game.scene);
-    this.mega.build();
+    bootPhase('Props.mega', () => {
+      this.mega = new Megastructures(this.ecology, game.scene);
+      this.mega.build();
+    });
 
-    this.outposts = new Outposts(this.ecology, game.scene);
-    this.outposts.build();
+    bootPhase('Props.outposts', () => {
+      this.outposts = new Outposts(this.ecology, game.scene);
+      this.outposts.build();
+    });
 
-    this.roadKit = new RoadFurniture(this.ecology, game.scene);
-    this.roadKit.build();
+    bootPhase('Props.roadKit', () => {
+      this.roadKit = new RoadFurniture(this.ecology, game.scene);
+      this.roadKit.build();
+    });
 
-    this.wildlife = new Wildlife(this.ecology, game.scene, { quality });
-    this.wildlife.build();
+    bootPhase('Props.wildlife', () => {
+      this.wildlife = new Wildlife(this.ecology, game.scene, { quality });
+      this.wildlife.build();
+    });
 
-    this.debris = new Debris(this.ecology, game.scene, { quality });
-    this.debris.build();
+    bootPhase('Props.debris', () => {
+      this.debris = new Debris(this.ecology, game.scene, { quality });
+      this.debris.build();
+    });
 
     // Built form at every point of interest on the map. Streams itself in
     // around the camera, so this call only enumerates the sites.
-    this.poiKits = new PoiKits(this.ecology, game.scene, { quality });
-    this.poiKits.build();
+    bootPhase('Props.poiKits', () => {
+      this.poiKits = new PoiKits(this.ecology, game.scene, { quality });
+      this.poiKits.build();
+    });
 
-    this._buildRegalia(game);
+    bootPhase('Props.regalia', () => this._buildRegalia(game));
     this._camPos = new THREE.Vector3();
   }
 
