@@ -28,7 +28,11 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "checkJs": false,
-    "baseUrl": ".",
+    // No `baseUrl`: TypeScript 7 removed it (TS5102), and `package.json` asks
+    // for `^7.0.2`, so a fresh `npm install` made this config fail to load at
+    // all -- which blocks the pre-commit hook for every agent. Without
+    // `baseUrl`, `paths` resolves relative to this file, which is what the
+    // mapping already assumed.
     "paths": { "/*": ["./src/*"] }
   },
   // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
