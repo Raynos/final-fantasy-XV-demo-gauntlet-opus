@@ -355,9 +355,9 @@ const _pc = new THREE.Color(), _pd = new THREE.Color();
  * on the body, which is the same thing the swept species get from `colorAt`.
  *
  * @param fn
- *   returns `[colour, blotchAmount]` for a bind-pose position
+ *   the colour for a bind-pose position
  */
-function paint(geo: THREE.BufferGeometry, fn: (x:number,y:number,z:number)=>[number|THREE.Color, number]) {
+function paint(geo: THREE.BufferGeometry, fn: (x: number, y: number, z: number) => THREE.Color) {
   const pos = geo.attributes.position;
   const n = pos.count;
   const arr = new Float32Array(n * 3);
@@ -371,7 +371,7 @@ function paint(geo: THREE.BufferGeometry, fn: (x:number,y:number,z:number)=>[num
 }
 
 /** sRGB mix that accepts a hex or an already-mixed Colour at either end. */
-function mix(a: any, b: any, t: any) {
+function mix(a: any, b: any, t: number): THREE.Color {
   if (typeof b === 'number') _pd.setHex(b, THREE.SRGBColorSpace); else _pd.copy(b);
   if (typeof a === 'number') _pc.setHex(a, THREE.SRGBColorSpace); else if (a !== _pc) _pc.copy(a);
   return _pc.lerp(_pd, t < 0 ? 0 : t > 1 ? 1 : t);
@@ -382,7 +382,7 @@ function mix(a: any, b: any, t: any) {
  * black at the extremities, blotched everywhere. `down` is how far under the
  * body the point faces, `ext` how far out along a limb it is.
  */
-function goblinSkin(x: any, y: any, z: any, ext = 0) {
+function goblinSkin(x: number, y: number, z: number, ext = 0): THREE.Color {
   // three incommensurate sines make a blotch field that never repeats visibly
   const n = Math.sin(x * 23.7 + y * 11.3) * 0.5 + Math.sin(y * 17.1 - z * 13.9) * 0.35
     + Math.sin(z * 29.3 + x * 7.7) * 0.25;

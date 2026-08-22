@@ -1055,8 +1055,12 @@ export class Enemy {
     }
   }
 
-  /** Subclasses override. */
-  pose() {}
+  /**
+   * Subclasses override. Called with the pose name, the stride/animation phase
+   * and a per-frame context; a species that needs none of them declares none,
+   * which is why every parameter is optional here.
+   */
+  pose(_state?: any, _phase?: any, _ctx?: any): void {}
 
   /** Force a specific pose/phase and stop the AI (screenshot scenarios). */
   freeze(state: any, phase: any, ctx: any) {

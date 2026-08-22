@@ -39,7 +39,7 @@ const _c = new THREE.Color();
 export function tube({
   nodes, steps = 14, seg = 10, ref = [0, 1, 0], shape = null,
   colorAt, region = 0, blendAt = null, capStart = 0, capEnd = 0,
-}: { nodes: Array<{p:number[], r:number, rz?:number}>, steps?: number, seg?: number, ref?: number[], shape?: (th:number,u:number)=>number, colorAt: (th:number,u:number,p:THREE.Vector3)=>THREE.Color, region?: number, blendAt?: (p:THREE.Vector3,u:number)=>number, capStart?: number, capEnd?: number } | null): THREE.BufferGeometry {
+}: { nodes: Array<{p:number[], r:number, rz?:number}>, steps?: number, seg?: number, ref?: number[], shape?: ((th:number,u:number)=>number) | null, colorAt: (th:number,u:number,p:THREE.Vector3)=>THREE.Color, region?: number, blendAt?: ((p:THREE.Vector3,u:number)=>number) | null, capStart?: number, capEnd?: number }): THREE.BufferGeometry {
   // Catmull-Rom needs three points to have a shape; a two-node segment gets a
   // midpoint so short parts (an eye, a lock of hair) do not degenerate.
   if (nodes.length < 3) {
