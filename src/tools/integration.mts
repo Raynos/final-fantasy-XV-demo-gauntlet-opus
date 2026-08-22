@@ -150,12 +150,33 @@ const results = await page.evaluate(async () => {
       : F('enemy would not die');
   });
 
+  /**
+   * This used to check that `m.ai || m.combat` was truthy — a field, not a
+   * behaviour, and exactly the "existence is not integration" mistake this file
+   * was written to catch. Watch an enemy's HP instead, with the player's hands
+   * off the controls, so the only thing that can be doing the damage is the
+   * party.
+   */
   probe('combat', 'party companions fight', () => {
-    const ai = g.get('Party');
-    const m = (ai.members || [])[0];
-    if (!m) return F('no party members');
-    const hasAi = !!(m.ai || m.combat || m.character?.play);
-    return hasAi ? P(`${ai.members.length} companions with combat hooks`) : F('no combat hook');
+    const party = g.get('Party'); const enemies = g.get('Enemies');
+    const player = g.get('Player'); const enc = g.get('Encounters');
+    if (!party?.members?.length) return F('no party members');
+    if (enc) {
+      enc.suppressRoamers = true; enc.budget = 0;
+      for (const id of [...enc.active.keys()]) enc.deactivate(id);
+      enc.packs.length = 0;
+    }
+    enemies.clear(); step(2);
+    const V = g.camera.position.constructor;
+    const e = enemies.spawn('sabertusk', { pos: player.position.clone().add(new V(7, 0, 0)) });
+    e.target = player; e.awareness = 1; e.setState('chase');
+    for (const m of party.members) m.root.position.copy(player.position).add(new V(1.5, 0, 1.5));
+    const hp0 = e.hp;
+    step(900);                                   // 15 s, no player input at all
+    const dealt = hp0 - e.hp;
+    return dealt > 0
+      ? P(`${party.members.length} companions took ${dealt} hp of ${hp0} off a sabertusk in 15 s, hands off`)
+      : F(`enemy still on ${e.hp}/${hp0} after 15 s with three companions on it`);
   });
 
   probe('combat', 'player death -> downed -> game over', () => {
@@ -335,6 +356,30 @@ const results = await page.evaluate(async () => {
     return rpg.noctis.level > lv0
       ? P(`day ${day0}->${rpg.day.day}, gil ${gil0}->${rpg.inventory.gil}, banked ${Math.round(bank0)}->${Math.round(banked)}, level ${lv0}->${rpg.noctis.level}`)
       : W(`redeemed ${Math.round(bank0)} EXP but level stayed ${lv0}`);
+  });
+
+  /**
+   * Camping is FFXV's signature loop and until tonight it had no entrance: all
+   * twelve registered interactables were inside Hammerhead, and `canCamp()`
+   * measured against a haven table still written in the pre-8 km world, so
+   * `rpg.camp()` answered `no-haven` wherever the player stood. Assert both
+   * halves — that a `Camp` prompt exists at a real haven, and that sleeping on
+   * one actually rolls the clock.
+   */
+  probe('gameplay', 'camp at a haven', () => {
+    const rpg = g.get('Rpg'); const ix = g.get('Interaction');
+    const havens = rpg.day.havens();
+    if (!havens.length) return F('no havens');
+    const h = havens[0];
+    const prompts = [...ix.items.keys()].filter((k) => String(k).startsWith('haven_'));
+    if (!prompts.length) return F(`${ix.items.size} interactables, none of them a haven`);
+    const day0 = rpg.day.day;
+    const on = rpg.camp({ lodging: 'haven', pos: { x: h.pos[0], z: h.pos[2] } });
+    const off = rpg.camp({ lodging: 'haven', pos: { x: h.pos[0] + 400, z: h.pos[2] } });
+    if (!on || on.ok === false) return F(`standing on ${h.id} (${Math.round(h.pos[0])},${Math.round(h.pos[2])}): ${on && on.reason}`);
+    return off && off.ok === false
+      ? P(`${prompts.length} camps; slept at "${h.name}", day ${day0}->${rpg.day.day}; refused 400 m away`)
+      : W(`slept at ${h.id}, but camping 400 m away was also allowed`);
   });
 
   return out;
