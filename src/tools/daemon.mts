@@ -26,7 +26,9 @@
  * with it. Nothing is left burning CPU on a shared box.
  */
 import { chromium } from 'playwright';
+import type { Browser, ConsoleMessage, Page } from 'playwright';
 import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
@@ -51,7 +53,7 @@ import { readdirSync, statSync } from 'node:fs';
  */
 function sourceStamp() {
   const parts = [];
-  const walk = (dir: any) => {
+  const walk = (dir: string) => {
     let entries;
     try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
@@ -76,26 +78,92 @@ export const DAEMON_PORT = APP_PORT + 1;
 const BROWSER_IDLE_MS = Number(process.env.BROWSER_IDLE_MIN || 6) * 60_000;
 const DAEMON_IDLE_MS = Number(process.env.DAEMON_IDLE_MIN || 25) * 60_000;
 
-const sleep = (ms: any) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); });
 
-const portOpen = (p: any) => new Promise((res) => {
+const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
   s.on('connect', () => { s.destroy(); res(true); });
   s.on('error', () => res(false));
   setTimeout(() => { s.destroy(); res(false); }, 800);
 });
 
+// --------------------------------------------------------------- the protocol
+
+/** Which build the open page is showing. */
+type PageMode = 'dev' | 'prod';
+
+/** What every client sends to say which page it wants. */
+export interface PageOpts {
+  w?: number;
+  h?: number;
+  q?: string;
+  nobake?: boolean;
+  prod?: boolean;
+  /** Force a fresh page, for a run that must be provably independent. */
+  cold?: boolean;
+}
+
+/** `POST /shots` */
+export interface ShotsRequest extends PageOpts {
+  shots: string[];
+  settle?: number;
+  out: string;
+  /** JPEG quality 1..100; 0 or absent means PNG. */
+  jpeg?: number;
+}
+
+/** One captured frame, plus what the renderer cost to draw it. */
+export interface ShotResult {
+  name: string;
+  file: string;
+  triangles: number;
+  calls: number;
+  textures: number;
+  geometries: number;
+  programs: number;
+  ms: number;
+}
+
+/**
+ * Every response carries the reuse counters, so a client can tell a warm
+ * capture from a cold one without a second call to `/health`.
+ */
+interface Counters {
+  errors: string[];
+  boots: number;
+  reuses: number;
+}
+
+export interface ShotsResponse extends Counters { results: ShotResult[]; bootMs: number }
+
+/** `POST /eval` -- `fn` is a function *source string*, evaluated in the page. */
+export interface EvalRequest extends PageOpts { fn: string; arg?: unknown }
+export interface EvalResponse extends Counters { value: unknown }
+
+export interface HealthResponse {
+  ok: boolean;
+  appPort: number;
+  page: boolean;
+  browser: boolean;
+  mode: PageMode | null;
+  query: string | null;
+  boots: number;
+  reuses: number;
+  bootMs: number;
+  idleSec: number;
+}
+
 // --------------------------------------------------------------- client side
 
-/** POST JSON to the daemon. @returns */
-export async function call(route: any, body?: any, { timeout = 600_000 }: { timeout?: number } = {}): Promise<any> {
+/** POST JSON to the daemon. The caller names the response it expects. */
+export async function call<T = unknown>(route: string, body?: unknown, { timeout = 600_000 }: { timeout?: number } = {}): Promise<T> {
   const res = await fetch(`http://127.0.0.1:${DAEMON_PORT}${route}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(timeout),
   });
-  const j = await res.json();
+  const j = await res.json() as T & { error?: string };
   if (!res.ok) throw new Error(j.error || `daemon ${res.status}`);
   return j;
 }
@@ -110,8 +178,8 @@ export async function ensureDaemon(): Promise<boolean> {
     // worktree runs the same tools on the same default ports. Silently reusing
     // it captures the other repo's build, which has already produced at least
     // one false result that took a round to unpick. Refuse rather than lie.
-    let root = null;
-    try { root = (await call('/root')).root; } catch { /* daemon predates the route */ }
+    let root: string | null = null;
+    try { root = (await call<{ root: string }>('/root')).root; } catch { /* daemon predates the route */ }
     if (root && path.resolve(root) !== path.resolve(ROOT)) {
       throw new Error(
         `a capture daemon on port ${DAEMON_PORT} is serving a different checkout:\n`
@@ -138,16 +206,17 @@ export async function ensureDaemon(): Promise<boolean> {
 class Harness {
   bootMs!: number;
   boots!: number;
-  browser!: any;
-  errors!: any[];
-  lastUsed!: any;
-  mode!: any;
-  page!: any;
-  query!: any;
+  browser!: Browser | null;
+  errors!: string[];
+  lastUsed!: number;
+  mode!: PageMode | null;
+  page!: Page | null;
+  query!: string | null;
   reuses!: number;
-  server!: any;
-  stamp!: any;
-  viewport!: any;
+  /** The vite child, or null when one was already listening on the port. */
+  server!: ChildProcess | null;
+  stamp!: string | null;
+  viewport!: { w: number, h: number } | null;
   constructor() {
     this.server = null;      // vite child process
     this.browser = null;
@@ -163,7 +232,7 @@ class Harness {
     this.bootMs = 0;
   }
 
-  async ensureServer(prod: any) {
+  async ensureServer(prod: boolean) {
     if (this.server || await portOpen(APP_PORT)) return;
     if (prod) {
       await new Promise<void>((res, rej) => {
@@ -187,7 +256,7 @@ class Harness {
    * Get a page showing a booted game at the requested viewport and query.
    * Reuses the open one whenever it matches; reboots only when it cannot.
    */
-  async page_(opts: any) {
+  async page_(opts: PageOpts): Promise<Page> {
     const { w = 1600, h = 900, q = 'ultra', nobake = false, prod = false, cold = false } = opts;
     const query = `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}`;
     // Errors belong to the request that provoked them, so the slate is wiped
@@ -200,7 +269,7 @@ class Harness {
     const stamp = sourceStamp();
     if (this.page && !cold && this.query === query
         && this.mode === (prod ? 'prod' : 'dev') && this.stamp === stamp) {
-      if (this.viewport.w !== w || this.viewport.h !== h) {
+      if (this.viewport && (this.viewport.w !== w || this.viewport.h !== h)) {
         await this.page.setViewportSize({ width: w, height: h });
         this.viewport = { w, h };
         // a resize invalidates every temporal buffer and the post-chain targets
@@ -215,12 +284,23 @@ class Harness {
     await this.closePage();
     if (!this.browser) this.browser = await chromium.launch({ args: CHROMIUM_ARGS });
     const page = await this.browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
-    page.on('pageerror', (e: any) => this.errors.push(String(e)));
-    page.on('console', (m: any) => { if (m.type() === 'error') this.errors.push(m.text()); });
+    page.on('pageerror', (e: Error) => this.errors.push(String(e)));
+    page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') this.errors.push(m.text()); });
 
     const t0 = Date.now();
     await page.goto(`http://127.0.0.1:${APP_PORT}/${query}`, { waitUntil: 'domcontentloaded', timeout: 300_000 });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300_000 });
+    // `ready` is set one warm frame before `main.ts` adds `#boot.done`, and that
+    // class only starts an 800 ms opacity transition -- so a capture taken the
+    // instant the page reports ready contains the loading screen, at full
+    // opacity or half way through the fade. It is silent: the shot still
+    // reports its real triangle and draw-call counts, so nothing looks wrong
+    // until someone opens the image. Only the *first* capture after a boot can
+    // hit it, which is why it survives a warm daemon and a contact sheet.
+    await page.waitForFunction(() => {
+      const b = document.getElementById('boot');
+      return !b || getComputedStyle(b).opacity === '0';
+    }, null, { timeout: 30_000 });
     this.bootMs = Date.now() - t0;
     this.page = page;
     this.viewport = { w, h };
@@ -262,24 +342,24 @@ class Harness {
 }
 
 const harness = new Harness();
-let busy: any = null;
+let busy: Promise<unknown> | null = null;
 
 /** Serialise every request: exactly one browser doing exactly one thing. */
-function queue(fn: any) {
+function queue<T>(fn: () => Promise<T>): Promise<T> {
   const run = (busy || Promise.resolve()).then(fn, fn);
   busy = run.catch(() => {});
   return run;
 }
 
-async function routeShots(body: any) {
+async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
   const { shots, settle = 60, out, jpeg = 0, ...rest } = body;
   const page = await harness.page_(rest);
   const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
   await mkdir(outDir, { recursive: true });
-  const results = [];
+  const results: ShotResult[] = [];
   for (const name of shots) {
     const t0 = Date.now();
-    const meta = await page.evaluate(([n, s]: any) => {
+    const meta = await page.evaluate(([n, s]: [string, number]) => {
       const g = window.GAME;
       g.applyShot(n);
       g.settle(s);
@@ -293,7 +373,7 @@ async function routeShots(body: any) {
         geometries: gl.memory.geometries,
         programs: g.renderer.info.programs?.length ?? 0,
       };
-    }, [name, settle]);
+    }, [name, settle] as [string, number]);
     const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
     await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
     results.push({ name, file: path.relative(ROOT, file), ...meta, ms: Date.now() - t0 });
@@ -301,11 +381,13 @@ async function routeShots(body: any) {
   return { results, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses, bootMs: harness.bootMs };
 }
 
-async function routeEval(body: any) {
+async function routeEval(body: EvalRequest): Promise<EvalResponse> {
   const page = await harness.page_(body);
-  const value = await page.evaluate(
-    new Function('arg', `return (${body.fn})(arg)`), body.arg
-  );
+  // `body.fn` arrives as source text, so the function has to be built here.
+  // `new Function` is typed `Function`, which `evaluate` will not take; the
+  // signature is the one it is constructed with.
+  const fn = new Function('arg', `return (${body.fn})(arg)`) as (arg: unknown) => unknown;
+  const value = await page.evaluate(fn, body.arg);
   return { value, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses };
 }
 
@@ -314,13 +396,14 @@ async function serve() {
     let raw = '';
     req.on('data', (d) => { raw += d; });
     req.on('end', async () => {
-      const send = (code: any, obj: any) => {
+      const send = (code: number, obj: unknown) => {
         res.writeHead(code, { 'content-type': 'application/json' });
         res.end(JSON.stringify(obj));
       };
       const url = (req.url || '').split('?')[0];
-      let body = {};
-      try { body = raw ? JSON.parse(raw) : {}; } catch { return send(400, { error: 'bad json' }); }
+      let body: Record<string, unknown> = {};
+      try { body = raw ? JSON.parse(raw) as Record<string, unknown> : {}; }
+      catch { return send(400, { error: 'bad json' }); }
       try {
         if (url === '/health') {
           return send(200, {
@@ -334,11 +417,19 @@ async function serve() {
         // own ROOT so a worktree can never silently capture another repo.
         if (url === '/root') return send(200, { root: ROOT });
         if (url === '/stop') { send(200, { ok: true }); setTimeout(stop, 50); return; }
-        if (url === '/shots') return send(200, await queue(() => routeShots(body)));
-        if (url === '/eval') return send(200, await queue(() => routeEval(body)));
+        if (url === '/shots') {
+          if (!Array.isArray(body.shots) || typeof body.out !== 'string') {
+            return send(400, { error: '/shots needs { shots: string[], out: string }' });
+          }
+          return send(200, await queue(() => routeShots(body as unknown as ShotsRequest)));
+        }
+        if (url === '/eval') {
+          if (typeof body.fn !== 'string') return send(400, { error: '/eval needs { fn: string }' });
+          return send(200, await queue(() => routeEval(body as unknown as EvalRequest)));
+        }
         return send(404, { error: `no route ${url}` });
-      } catch (e: any) {
-        return send(500, { error: String((e && e.stack) || e) });
+      } catch (e) {
+        return send(500, { error: e instanceof Error ? e.stack ?? e.message : String(e) });
       }
     });
   });
@@ -364,8 +455,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     try { await call('/stop', {}); console.log('stopped'); }
     catch { console.log('not running'); }
   } else if (argv.includes('--health')) {
-    try { console.log(JSON.stringify(await call('/health'), null, 2)); }
-    catch (e: any) { console.log('not running:', e.message); process.exit(1); }
+    try { console.log(JSON.stringify(await call<HealthResponse>('/health'), null, 2)); }
+    catch (e) { console.log('not running:', e instanceof Error ? e.message : String(e)); process.exit(1); }
   } else {
     await serve();
   }

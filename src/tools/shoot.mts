@@ -31,6 +31,7 @@
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import { call, ensureDaemon } from './daemon.mts';
+import type { ShotsResponse } from './daemon.mts';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -136,7 +137,7 @@ function line(r: any) {
 async function viaDaemon(opts: any, shots: any, outDir: any): Promise<any> {
   const started = await ensureDaemon();
   if (started) console.log('[shoot] started capture daemon');
-  const out = await call('/shots', {
+  const out = await call<ShotsResponse>('/shots', {
     shots, out: outDir, settle: opts.settle, w: opts.w, h: opts.h,
     nobake: opts.nobake, prod: opts.prod, cold: opts.cold, jpeg: opts.jpeg,
   });
