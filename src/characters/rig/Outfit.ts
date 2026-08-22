@@ -47,7 +47,7 @@ function clothShade(o: OutfitPiece): ClothShade {
   const base = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
   const rough = o.rough ?? 0.78;
   const metal = o.metal ?? 0;
-  const seams = o.seams ?? [Math.PI, Math.PI * 0.54, Math.PI * 1.46];
+  const seams = o.seams ?? [Math.PI, Math.PI * 0.54, Math.PI * 1.46, Math.PI * 0.19, Math.PI * 1.81];
   const yoke = o.yoke ?? 0.76;
   const wear = o.wear ?? 1;
   const out = new THREE.Color();
@@ -61,15 +61,15 @@ function clothShade(o: OutfitPiece): ClothShade {
     0.85 * ridge(t, o.hemAt ?? 0.030, 0.042)
     + 0.45 * ridge(t, 0.885, 0.055) * Math.pow(Math.abs(Math.sin(th)), 2.0)
   );
-  const mottle = (th: number, t: number) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
+  const mottle = (th: number, t: number) => 0.17 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
   return {
     /** Seam mask, 0..1 — also drives the raised topstitch ridge in `shape`. */
     seam: seamK,
     wear: wearK,
     color: (th, t) => out.copy(base).multiplyScalar(
-      (1 - 0.40 * seamK(th, t)) * (1 + 0.62 * wearK(th, t)) * (1 + mottle(th, t))
+      (1 - 0.52 * seamK(th, t)) * (1 + 0.86 * wearK(th, t)) * (1 + mottle(th, t))
     ),
-    mat: (th, t) => [clamp01(rough + 0.15 * seamK(th, t) - 0.18 * wearK(th, t)), metal, 0],
+    mat: (th, t) => [clamp01(rough + 0.22 * seamK(th, t) - 0.30 * wearK(th, t)), metal, 0],
   };
 }
 
@@ -157,36 +157,96 @@ piece('shirt', (B, ctx, o) => {
   const cut = o.neckCut ?? 0.55;
   const body = under(torsoShape(ctx.rig.profile.muscle), u0, u1, 0.92);
   const printC = new THREE.Color().setHex(o.printColor ?? 0xcccccc, THREE.SRGBColorSpace);
-  const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.52, Math.PI * 1.48], yoke: o.yoke ?? 0.86 });
+  const shade = clothShade({ ...o, seams: o.seams ?? [Math.PI * 0.52, Math.PI * 1.48, Math.PI * 0.17, Math.PI * 1.83], yoke: o.yoke ?? 0.86 });
   const tee = new THREE.Color();
-  const print = o.print;
+  const shapeFn = (th: number, t: number) => body(th, t)
+    + (o.chest ?? 0.0) * abump(th, 0, 1.2) * bump(t, 0.7, 0.3)
+    - 0.35 * cut * abump(th, 0, 0.75) * smooth((t - 0.86) / 0.15)     // neckline scoop
+    - 0.30 * cut * abump(th, Math.PI, 0.9) * smooth((t - 0.9) / 0.12)
+    // Folds used to be masked to `bump(t, 0.35, 0.4)` and `bump(t, 0.55, 0.45)`,
+    // both of which are zero above t≈0.78 — so the chest and shoulders, the
+    // part of a tee that is always on camera, were the one part with no relief
+    // at all. Cloth over a chest does crease less than cloth at a waist, so the
+    // upper set is shallower rather than absent.
+    + (o.wrinkle ?? 0.020) * Math.sin(th * 9 + t * 22) * bump(t, 0.35, 0.4)
+    + (o.wrinkle ?? 0.020) * 0.7 * Math.sin(th * 4.5 - t * 12.0) * bump(t, 0.55, 0.45)
+    + (o.wrinkle ?? 0.020) * 0.55 * Math.sin(th * 6.5 - t * 15.0) * bump(t, 0.86, 0.26)
+    // side and shoulder seams as raised topstitch, plus the ribbed neckband
+    // and the doubled hem — the two edges of a tee that ever catch light
+    + (o.seamRib ?? 0.011) * shade.seam(th, t)
+    + (o.neckRib ?? 0.013) * ridge(t, 0.965, 0.030)
+    + (o.hemRib ?? 0.011) * ridge(t, 0.030, 0.026);
   sweepTube(B, {
     nodes, steps: o.steps ?? 20, seg: o.seg ?? 32,
-    shape: (th, t) => body(th, t)
-      + (o.chest ?? 0.0) * abump(th, 0, 1.2) * bump(t, 0.7, 0.3)
-      - 0.35 * cut * abump(th, 0, 0.75) * smooth((t - 0.86) / 0.15)     // neckline scoop
-      - 0.30 * cut * abump(th, Math.PI, 0.9) * smooth((t - 0.9) / 0.12)
-      + (o.wrinkle ?? 0.020) * Math.sin(th * 9 + t * 22) * bump(t, 0.35, 0.4)
-      + (o.wrinkle ?? 0.020) * 0.7 * Math.sin(th * 4.5 - t * 12.0) * bump(t, 0.55, 0.45)
-      // side and shoulder seams as raised topstitch, plus the ribbed neckband
-      // and the doubled hem — the two edges of a tee that ever catch light
-      + (o.seamRib ?? 0.011) * shade.seam(th, t)
-      + (o.neckRib ?? 0.013) * ridge(t, 0.965, 0.030)
-      + (o.hemRib ?? 0.011) * ridge(t, 0.030, 0.026),
-    colorAt: print
-      ? (th: number, t: number) => tee.copy(shade.color(th, t))
-        .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026))
-        .lerp(printC, print(th, t))
-      : (th: number, t: number) => tee.copy(shade.color(th, t))
-        .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026)),
-    matAt: print
-      ? (th: number, t: number) => { const m = shade.mat(th, t); return [clamp01(m[0] + 0.12 * print(th, t)), m[1], 0]; }
-      : shade.mat,
+    shape: shapeFn,
+    colorAt: (th: number, t: number) => tee.copy(shade.color(th, t))
+      .multiplyScalar(1 + 0.40 * ridge(t, 0.965, 0.030) + 0.30 * ridge(t, 0.030, 0.026)),
+    matAt: shade.mat,
     uvScale: [1.4, 2.4],
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
+  // The chest print is a *decal patch*, not vertex colour on the tee.
+  //
+  // Painted into the tee's own `colorAt`, a print is drawn at the tee's vertex
+  // density: Noctis's skull spans 0.75 rad of a 76-segment ring and 0.29 of a
+  // 42-step sweep, which is nine vertices across and twelve down. That is why
+  // it rendered as a blurry nine-pixel blob — no falloff tuning could have
+  // fixed it, because the mesh had no resolution to carry the shape. This
+  // patch re-sweeps the same surface (same drape, same `shapeFn`, so it lies
+  // exactly on the tee) over just the print's window, at ~2 mm resolution,
+  // lifted 1.4 mm clear so it never z-fights.
+  if (o.print) printPatch(B, ctx, o, nodes, shapeFn, shade, printC, u0, u1);
   if (o.hemBand) hemBand(B, ctx, o);
 });
+
+/**
+ * High-density decal patch lying on a shirt sweep.
+ *
+ * `window` is [thetaMin, thetaMax, tMin, tMax] in the shirt's own sweep
+ * parameters; the patch is that window re-swept at `seg`×`steps` and tinted by
+ * `o.print`. It carries the shirt's shade everywhere the print is zero, so the
+ * patch border is invisible.
+ */
+function printPatch(
+  B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece, nodes: SweepNode[],
+  shapeFn: (theta: number, t: number) => number,
+  shade: ClothShade, printC: THREE.Color, u0: number, u1: number,
+) {
+  // Only ever called behind `if (o.print)`; bind it so the closures below do
+  // not each have to re-prove that.
+  const print = o.print;
+  if (!print) return;
+  const win = o.printWindow ?? [-0.62, 0.62, 0.46, 0.94];
+  const [th0, th1, ta, tb] = win;
+  const pad = o.pad ?? 0.010;
+  const sub = drape(ctx.torso, u0 + (u1 - u0) * ta, u0 + (u1 - u0) * tb, 8, pad, o.padZ);
+  const tt = (t: number) => ta + (tb - ta) * t;
+  // The lift has to *taper to zero at the patch border*, or the border is a
+  // 2 mm step that GTAO and the shadow map both find and draw as a rectangle
+  // round the print — which is exactly what the first build of this did. Fold
+  // it into the shape multiplier instead of the drape pad, so it is a smooth
+  // bubble under the ink and nothing at the edges.
+  const lift = (o.printLift ?? 0.0016) / 0.17;
+  const taper = (th: number, t: number) =>
+    smooth(Math.min((th - th0) / 0.16, (th1 - th) / 0.16))
+    * smooth(Math.min(t / 0.12, (1 - t) / 0.12));
+  const c = new THREE.Color();
+  sweepTube(B, {
+    nodes: sub,
+    steps: o.printSteps ?? 56, seg: o.printSeg ?? 64,
+    theta0: th0, theta1: th1,
+    shape: (th, t) => shapeFn(th, tt(t)) * (1 + lift * taper(th, t)),
+    colorAt: (th: number, t: number) => c.copy(shade.color(th, tt(t)))
+      .multiplyScalar(1 + 0.40 * ridge(tt(t), 0.965, 0.030) + 0.30 * ridge(tt(t), 0.030, 0.026))
+      .lerp(printC, print(th, tt(t))),
+    // print ink sits flatter and matter than the jersey it is screened onto
+    matAt: (th: number, t: number) => {
+      const m = shade.mat(th, tt(t));
+      return [clamp01(m[0] + 0.14 * print(th, tt(t))), m[1], 0];
+    },
+    uvScale: [0.6, 0.9],
+  });
+}
 
 /** Open-front jacket / coat body, with lapels, thickness and a flared hem. */
 piece('jacket', (B, ctx, o) => {

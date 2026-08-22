@@ -38,8 +38,22 @@ import { encodePlanes8, decodePlanes8 } from '../world/terrain/FieldCodec.ts';
 /** Container magic. Bump the version whenever the layout below changes. */
 const MAGIC = 'EOSTEX01';
 export const TEX_BAKE_VERSION = 1;
-/** Where the build step drops the artifact, relative to the site root. */
+/**
+ * Where the build step drops the artifacts, relative to the site root.
+ *
+ * Two, not one, and the split is not cosmetic. `tex.bin.gz` holds the textures
+ * `src/tools/texbake.mts` can compute under Node — pure per-texel functions,
+ * baked in seven seconds with no browser. `texc.bin.gz` holds the ones that are
+ * *drawn*: the painted faces, whose generator uses a real 2D canvas, whose mip
+ * chain is hand-built by `contrastMips`, and which therefore only exist inside
+ * a browser. That one is baked by `--canvas`, which boots the page.
+ *
+ * They are separate files with separate source hashes because they have
+ * separate costs: the Node bake can run from the vite plugin on every server
+ * start, and the browser bake cannot — it needs the server that is starting.
+ */
 export const TEX_BAKE_PATH = 'baked/tex.bin.gz';
+export const TEX_CANVAS_PATH = 'baked/texc.bin.gz';
 
 /** One texture's bytes in the container. */
 export interface TexEntry {
@@ -65,17 +79,27 @@ interface TexHeader {
  * is not waste: the dungeon interiors are built on first `enter()`, long after
  * boot, and they are the reason this is not simply freed when `init()` ends.
  */
-let store: { buf: Uint8Array, index: Map<string, TexEntry> } | null = null;
+let store: { index: Map<string, TexEntry & { buf: Uint8Array }> } | null = null;
 /** Filled instead of `store` when the bake tool is driving. */
 let recorder: Map<string, { w: number, h: number, data: Uint8Array }> | null = null;
+/**
+ * When set, only textures produced by {@link bakedCanvasMips} are recorded.
+ *
+ * The browser bake boots the whole game, so without this it would re-record
+ * every material texture `src/tools/texbake.mts` had already baked under Node
+ * and ship a second copy of them — 27 MB of duplicate transfer on every page
+ * load, for nothing.
+ */
+let recordDrawnOnly = false;
 let loading: Promise<boolean> | null = null;
 
 /**
  * Collect every generated texture instead of reading the cache.
  * Called by `src/tools/texbake.mts` before it imports any material module.
  */
-export function beginRecording() {
+export function beginRecording({ drawnOnly = false } = {}) {
   recorder = new Map();
+  recordDrawnOnly = drawnOnly;
   store = null;
 }
 
@@ -121,9 +145,8 @@ function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
   if (header.version !== TEX_BAKE_VERSION) return false;
   if (hash && header.hash !== hash) return false;
   const body = 12 + hlen;
-  const index = new Map<string, TexEntry>();
-  for (const e of header.entries) index.set(e.k, { ...e, off: body + e.off });
-  store = { buf, index };
+  if (!store) store = { index: new Map() };
+  for (const e of header.entries) store.index.set(e.k, { ...e, off: body + e.off, buf });
   return true;
 }
 
@@ -143,19 +166,24 @@ export function loadTexBake(): Promise<boolean> {
     if (typeof fetch !== 'function' || typeof DecompressionStream !== 'function') return false;
     if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobake')) return false;
     const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
-    try {
-      const res = await fetch(base + TEX_BAKE_PATH);
-      if (!res.ok) return false;
-      // vite dev and preview both recognise `.gz` and send `Content-Encoding:
-      // gzip`, in which case the body is already inflated; inflating again
-      // aborts the stream. Only decode in JS when the transfer was opaque.
-      const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
-      const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
-      const buf = new Uint8Array(await new Response(body).arrayBuffer());
-      return decodeTexBake(buf, null);
-    } catch {
-      return false;
-    }
+    // Both artifacts, in parallel, and a missing one is not an error: the
+    // canvas half is baked by a separate opt-in command and is routinely
+    // absent on a fresh clone.
+    const got = await Promise.all([TEX_BAKE_PATH, TEX_CANVAS_PATH].map(async (path) => {
+      try {
+        const res = await fetch(base + path);
+        if (!res.ok) return false;
+        // vite dev and preview both recognise `.gz` and send `Content-Encoding:
+        // gzip`, in which case the body is already inflated; inflating again
+        // aborts the stream. Only decode in JS when the transfer was opaque.
+        const encoded = (res.headers.get('content-encoding') || '').includes('gzip');
+        const body = encoded ? res.body : res.body!.pipeThrough(new DecompressionStream('gzip'));
+        return decodeTexBake(new Uint8Array(await new Response(body).arrayBuffer()), null);
+      } catch {
+        return false;
+      }
+    }));
+    return got.some(Boolean);
   })();
   return loading;
 }
@@ -185,20 +213,91 @@ function dress(tex: THREE.DataTexture, {
  * @param gen builds the texture the slow way
  */
 function cached(key: string, size: number, opts: TextureOpts, gen: () => THREE.DataTexture): THREE.Texture {
-  const hit = store && store.index.get(key);
-  if (hit && hit.w === size && hit.h === size) {
-    store!.index.delete(key);
-    const n = size * size * 4;
-    const data = decodePlanes8(store!.buf.subarray(hit.off, hit.off + n), size, size, 4);
-    return dress(new THREE.DataTexture(data, size, size, THREE.RGBAFormat), opts);
-  }
+  const hit = take(key, size, size);
+  if (hit) return dress(new THREE.DataTexture(hit, size, size, THREE.RGBAFormat), opts);
   const tex = gen();
   if (recorder) {
-    if (recorder.has(key)) throw new Error(`[texbake] duplicate key ${key}`);
     const img = tex.image as { data: Uint8Array, width: number, height: number };
-    recorder.set(key, { w: img.width, h: img.height, data: img.data });
+    record(key, img.width, img.height, img.data);
   }
   return tex;
+}
+
+/**
+ * Pull one entry's texels out of the cache, dropping it from the index.
+ *
+ * Dropping is what keeps the resident set honest: after boot the only texels
+ * held are the ones a live texture owns plus the ones nothing has asked for
+ * yet, and that second set is the dungeon interiors, which are built on first
+ * `enter()`.
+ *
+ * @returns the RGBA bytes, or null on a miss or a size disagreement
+ */
+function take(key: string, w: number, h: number): Uint8Array | null {
+  const hit = store && store.index.get(key);
+  if (!hit || hit.w !== w || hit.h !== h) return null;
+  store!.index.delete(key);
+  return decodePlanes8(hit.buf.subarray(hit.off, hit.off + w * h * 4), w, h, 4);
+}
+
+/**
+ * Add one entry to the recording, refusing a key that is already taken.
+ * @param drawn true when the source is {@link bakedCanvasMips}
+ */
+function record(key: string, w: number, h: number, data: Uint8Array, drawn = false) {
+  if (!recorder) return;
+  if (recordDrawnOnly && !drawn) return;
+  if (recorder.has(key)) throw new Error(`[texbake] duplicate key ${key}`);
+  recorder.set(key, { w, h, data });
+}
+
+/**
+ * A canvas-drawn texture with a hand-built mip chain, served from the bake.
+ *
+ * The painted faces are the reason this exists. Each one is a 1024^2 canvas
+ * whose pixels come from a million four-octave noise samples, and eleven
+ * townspeople plus four heroes is 3.1 s of boot — the largest single item left
+ * on the profile once the material bake landed.
+ *
+ * It hands back **canvases**, not a texture, and the caller uploads them
+ * exactly as it always did. Reconstructing a `DataTexture` from the same bytes
+ * would have been less code and a different upload path — different `flipY`,
+ * different alpha handling (`project/LANDMINES.md`: canvas upload loses alpha
+ * in this renderer) — and the whole value of a cache like this is that it
+ * cannot change what the frame looks like.
+ *
+ * @param key namespaced cache key; levels are stored as `key/0`, `key/1`, ...
+ * @param build draws the thing, returning the mip chain, level 0 first
+ */
+export function bakedCanvasMips(key: string, build: () => HTMLCanvasElement[]): HTMLCanvasElement[] {
+  if (store && store.index.has(`${key}/0`)) {
+    const mips: HTMLCanvasElement[] = [];
+    for (let level = 0; ; level++) {
+      const e = store.index.get(`${key}/${level}`);
+      if (!e) break;
+      const bytes = take(`${key}/${level}`, e.w, e.h);
+      if (!bytes) break;
+      const cv = document.createElement('canvas');
+      cv.width = e.w; cv.height = e.h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+      const img = ctx.createImageData(e.w, e.h);
+      img.data.set(bytes);
+      ctx.putImageData(img, 0, 0);
+      mips.push(cv);
+    }
+    // A chain that stops short is a corrupt cache, not a cheaper texture: fall
+    // through and draw it rather than upload a partial pyramid.
+    if (mips.length && mips[mips.length - 1].width === 1) return mips;
+  }
+  const mips = build();
+  if (recorder) {
+    for (let level = 0; level < mips.length; level++) {
+      const cv = mips[level];
+      const d = cv.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, cv.width, cv.height).data;
+      record(`${key}/${level}`, cv.width, cv.height, new Uint8Array(d.buffer, d.byteOffset, d.byteLength), true);
+    }
+  }
+  return mips;
 }
 
 /** {@link makeTexture}, served from the bake when one is resident. */
@@ -216,7 +315,39 @@ export function bakedNormal(key: string, size: number, height: HeightFn, strengt
   return cached(key, size, { colorSpace: THREE.NoColorSpace, ...opts }, () => normalFromHeight(size, height, strength, opts));
 }
 
+/**
+ * Hand a browser-side recording back to `src/tools/texbake.mts --canvas`.
+ *
+ * The alternative was returning the bytes through `page.evaluate`, which means
+ * base64 across the CDP channel: the face chain alone is 84 MB raw, and
+ * turning that into a 112 MB JSON string to move it one process sideways is
+ * not a trade worth making. A POST to a socket the bake tool is already
+ * holding open moves the compressed bytes and nothing else.
+ *
+ * @param url where the tool is listening
+ * @param hash content hash of the generator sources, stamped into the header
+ */
+export async function postRecording(url: string, hash: string): Promise<number> {
+  const raw = encodeTexBake(hash);
+  const gz = new Response(new Blob([raw as BlobPart]).stream().pipeThrough(new CompressionStream('gzip')));
+  const body = await gz.arrayBuffer();
+  // No `content-type`: naming one would put `application/octet-stream` outside
+  // the CORS-safelisted set and turn this into a preflighted request for no
+  // benefit. The receiver knows what it asked for.
+  await fetch(url, { method: 'POST', body });
+  return body.byteLength;
+}
+
 // Start the transfer as early as the module graph allows: the first consumer
 // is `Props.init()`, seven systems into the boot order, so on a warm disk the
 // inflate is finished before anything asks.
-if (typeof window !== 'undefined') void loadTexBake();
+if (typeof window !== 'undefined') {
+  // `?texbake=canvas` is the browser bake: record instead of reading, so the
+  // generators run for real and every drawn texture is captured on the way past.
+  if (new URLSearchParams(location.search).get('texbake') === 'canvas') {
+    beginRecording({ drawnOnly: true });
+    (window as unknown as { TEX_BAKE_POST: typeof postRecording }).TEX_BAKE_POST = postRecording;
+  } else {
+    void loadTexBake();
+  }
+}

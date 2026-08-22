@@ -88,12 +88,7 @@ export class Warmup {
 
     try {
       this._step('scene', () => this._compileScene(rt));
-      this._step('shadow casters', () => this._warmShadows(rt));
-      this._step('weapons', () => this._warmWeapons(rt));
-      this._step('vfx', () => this._warmVfx(rt));
-      this._step('weather', () => this._warmWeather(rt));
-      this._step('post passes', () => this._warmPostPasses());
-      this._step('time of day', () => this._warmTimeOfDay(rt));
+      this._rest(rt);
     } finally {
       this.renderer.setRenderTarget(prevTarget);
       rt.dispose();
@@ -105,6 +100,62 @@ export class Warmup {
       programs: this.programCount - before,
       steps: this.log,
     };
+  }
+
+  /**
+   * The same sweep with the scene compile handed to `renderer.compileAsync`.
+   *
+   * `KHR_parallel_shader_compile` lets the driver link on its own threads and
+   * three polls `COMPLETION_STATUS_KHR` until they are done, so on paper the
+   * 110 programs of the `scene` step could overlap instead of queueing. Whether
+   * that is true *here* is the whole question, and a probe that clones a
+   * material and adds an unread `#define` cannot answer it — that changes
+   * three's program key without changing the GLSL ANGLE compiles, so it
+   * measures the polling loop and nothing else. This measures the real sweep.
+   *
+   * Everything after the scene step stays synchronous and in order, because
+   * `_warmPostPasses` renders through the composer and resets the temporal
+   * history: interleaving it with anything is a determinism problem, not a
+   * speed one.
+   */
+  async runAsync(): Promise<{ ms: number, programs: number, steps: WarmupStep[] }> {
+    const t0 = performance.now();
+    const rt = new THREE.WebGLRenderTarget(64, 64, { depthBuffer: true });
+    const prevTarget = this.renderer.getRenderTarget();
+    const before = this.programCount;
+
+    try {
+      const t = performance.now();
+      const p0 = this.programCount;
+      try {
+        this._patchAll();
+        await this.renderer.compileAsync(this.scene, this.camera);
+        this._render(rt);
+        this.log.push({ name: 'scene (async)', ms: +(performance.now() - t).toFixed(1), programs: this.programCount - p0 });
+      } catch (e: unknown) {
+        this.log.push({ name: 'scene (async)', error: e instanceof Error ? e.message : String(e) });
+      }
+      this._rest(rt);
+    } finally {
+      this.renderer.setRenderTarget(prevTarget);
+      rt.dispose();
+    }
+
+    this.ms = performance.now() - t0;
+    return { ms: this.ms, programs: this.programCount - before, steps: this.log };
+  }
+
+  /**
+   * Everything after the scene compile. Shared by both entry points so the two
+   * are the same sweep and the only variable is how the scene was compiled.
+   */
+  _rest(rt: THREE.WebGLRenderTarget) {
+    this._step('shadow casters', () => this._warmShadows(rt));
+    this._step('weapons', () => this._warmWeapons(rt));
+    this._step('vfx', () => this._warmVfx(rt));
+    this._step('weather', () => this._warmWeather(rt));
+    this._step('post passes', () => this._warmPostPasses());
+    this._step('time of day', () => this._warmTimeOfDay(rt));
   }
 
   _step(name: string, fn: () => void) {

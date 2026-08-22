@@ -130,6 +130,12 @@ export class PostFX {
   viewProj!: THREE.Matrix4;
   /** The last boot warm-up report, for the dev overlay. */
   warmupReport!: WarmupReport | null;
+  /**
+   * Settles when the warm-up sweep has finished, which under `?warm=async` is
+   * after `GAME.ready`. `src/tools/bootprof.mts` awaits it so the number it
+   * prints is the whole sweep and not the part that happened to be synchronous.
+   */
+  warmupDone: Promise<WarmupReport> | null = null;
   width!: number;
   constructor(rnd: Renderer) {
     this.rnd = rnd;
@@ -690,8 +696,32 @@ export class PostFX {
     this._warmed = true;
     try {
       const warm = new Warmup(game);
+      // `?warm=async` compiles the scene through `renderer.compileAsync`.
+      //
+      // It is a URL flag and not the default because it cannot be: `Game.init`
+      // calls `post.render()` and then sets `ready` on the next line, without
+      // awaiting, so an asynchronous sweep finishes *after* the harness has
+      // been told the page is ready. That is fine for correctness — a program
+      // the frame needs and the driver has not linked yet is compiled on
+      // demand, same pixels — but it moves work into the window a capture
+      // settles in, and capture determinism is not something to spend on an
+      // unmeasured hypothesis. So: measure it first. `warmupDone` is what the
+      // measurement awaits.
+      const async = typeof location !== 'undefined'
+        && new URLSearchParams(location.search).get('warm') === 'async';
+      if (async) {
+        const report: WarmupReport = { ms: 0, programs: 0, steps: [] };
+        this.warmupReport = report;
+        this.warmupDone = warm.runAsync().then((r) => {
+          Object.assign(report, r);
+          if (game.debug) console.info('[warmup:async]', r);
+          return report;
+        });
+        return report;
+      }
       const report = warm.run();
       this.warmupReport = report;
+      this.warmupDone = Promise.resolve(report);
       if (game.debug) console.info('[warmup]', report);
       return report;
     } catch (e) {

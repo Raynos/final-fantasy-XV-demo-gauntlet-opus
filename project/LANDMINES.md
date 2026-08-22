@@ -188,6 +188,13 @@ in this file.
 - **A stale capture daemon from a dead worktree holds the port.** `shoot.mts`
   correctly refuses to reuse it and the error names the running root.
   `lsof -ti :<port> -sTCP:LISTEN | xargs kill`.
+- **`shoot.mts --prod` leaves a `vite preview` on your `PORT`, and nothing after
+  it refuses to reuse it.** `bootprof.mts` and `probe.mts` both take an open port
+  as a running dev server, so every measurement after a `--prod` capture is
+  silently taken against the `dist/` that existed at build time. It looks like
+  the change simply had no effect — `bootPhase` marks added minutes earlier just
+  do not appear. `ps -o command= -p $(lsof -ti :$PORT -sTCP:LISTEN)` names it in
+  one line; the tell is the word `preview`.
 - **The noise floor is per-shot, not the constant 1.5–1.9 everyone quotes.**
   `prompto_closeup` measures 0.373. The determinism work would have been declared
   finished at 2.068 without measuring the floor for that specific shot.
@@ -205,6 +212,32 @@ in this file.
 - **`tmp/` is disposable by design** and gets cleared. A probe worth keeping goes
   in `src/tools/`, not `tmp/`. A shared scratchpad is shared — another agent
   overwrote a live probe script mid-session; name scratch files with your agent id.
+
+## Baked caches
+
+- **A stale texel bake is the one cache failure with no symptom.** `src/public/baked/`
+  holds two caches of our own generators — `terrain.bin.gz` (the heightfield) and
+  `tex.bin.gz` (143 procedural `DataTexture`s, from `src/engine/TexBake.ts`).
+  A *missing* or *corrupt* artifact is harmless: every path falls back to the
+  generator and costs only the time it used to cost. A **stale** one is not. The
+  keys still resolve, the page still boots, every gate still passes, and the
+  world renders with the texels a previous version of your generator produced —
+  so the material edit you just made appears to do nothing, and you go looking
+  in the shader.
+- **Freshness keys on a content hash of a fixed source list**, `TEX_SOURCES` in
+  `src/tools/texbake.mts` (and `SOURCES` in `bake.mts`). The vite plugin
+  re-bakes at server start *and* on HMR when a listed file changes. **A keyed
+  generator whose file is not on that list is the whole bug**: nothing re-bakes,
+  nothing misses, and the old texels are served forever. Add to the list when
+  you add a generator.
+- **`node src/tools/texbake.mts --force` is the reset**, and `?nobake=1` takes
+  both caches out of the loop entirely for one page load — which is also how you
+  prove a suspected bake bug is or is not one, in thirty seconds.
+- **`src/public/baked/` is a symlink to the main checkout from every worktree,
+  so the cache is shared between concurrently running agents** while the
+  freshness stamp is computed from whichever worktree baked last. Nothing
+  breaks, but a boot number taken while another worktree owns the cache is not
+  yours. `--force` after a merge.
 
 ## Process
 
