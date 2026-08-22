@@ -174,7 +174,8 @@ Merge them, verify, then re-run the critic pass.
    Written because every defect in the r4 corpus round was *visible* but not
    *findable*: the only way to look at the game was a 20-minute batch capture of
    fixed cameras.
-7. **The TypeScript port** — `docs/plans/2026-08-17-opus-typescript-port.md`, gated on a quiet tree.
+7. **The TypeScript port** — **done** (2026-08-22). All of `src/` is `.ts`/`.mts`,
+   both typechecks clean, 9/9 gates green. `project/handoff/typescript.md`.
 7. **Content still missing:** chocobos, fishing, photo-mode capture, camping at
    havens (only the Hammerhead caravan works), fast travel, the remaining towns.
 
