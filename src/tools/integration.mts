@@ -62,6 +62,9 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 
 const results = await page.evaluate(async () => {
   const g = window.GAME;
+  // Hoisted so the probes below can stay synchronous: `probe` calls its fn
+  // without awaiting, so a probe that returned a promise would silently pass.
+  const worldMap = (await import('/world/map/WorldMap.ts')).worldMap;
   /** One probe's verdict. `WIRED` is "the system is there but idle". */
   interface Row { area: string; name: string; status: 'PASS' | 'WIRED' | 'FAIL'; evidence: string }
   const out: Row[] = [];
@@ -285,6 +288,22 @@ const results = await page.evaluate(async () => {
     const n = npcs.list?.length ?? 0;
     return town && n ? P(`town at (${Math.round(town.origin?.x)},${Math.round(town.origin?.z)}), ${n} NPCs`)
       : F('town or npcs empty');
+  });
+
+  // The pin and the buildings drifted 516 m apart and nothing noticed for
+  // months: `Hammerhead.ts` builds on an `Ecology` site while the POI inherited
+  // its position from a road node half a kilometre west. Every quest waypoint,
+  // the compass, the minimap and fast travel read the POI. This turns that
+  // silent drift into a red gate.
+  probe('world', 'the Hammerhead pin is on the Hammerhead town', () => {
+    const town = g.get('Town')!;
+    const poi = worldMap.poiById('hammerhead');
+    if (!poi || !town?.origin) return F('no POI or no town origin');
+    const d = Math.hypot(poi.x - town.origin.x, poi.z - town.origin.z);
+    const msg = `pin (${poi.x},${poi.z}) vs town (${Math.round(town.origin.x)},${Math.round(town.origin.z)}) = ${d.toFixed(0)} m`;
+    // 60 m is inside the town's own footprint: close enough that the compass
+    // points at buildings and fast travel lands on the apron.
+    return d <= 60 ? P(msg) : F(msg);
   });
 
   /* --------------------------------------------------------- regalia ---- */
