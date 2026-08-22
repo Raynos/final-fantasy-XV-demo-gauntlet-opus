@@ -14,7 +14,7 @@ const cache = new Map();
 const vfxNoise = new Noise(4242);
 
 /** Build an RGBA DataTexture from a per-texel callback writing into `out[4]`. */
-function rgba(size: any, fn: any, { colorSpace = THREE.SRGBColorSpace, mips = true } = {}) {
+function rgba(size: any, fn: any, { colorSpace = THREE.SRGBColorSpace, mips = true }: { colorSpace?: THREE.ColorSpace, mips?: boolean } = {}) {
   const data = new Uint8Array(size * size * 4);
   const out = [0, 0, 0, 0];
   for (let y = 0; y < size; y++) {

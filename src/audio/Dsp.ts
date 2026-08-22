@@ -87,7 +87,7 @@ export function noiseBuffer(ctx: BaseAudioContext, seconds: number, color: 'whit
  *
  * @param {object} o
  * */
-export function impulseResponse(ctx: BaseAudioContext, o: { seconds: number, decay: number, predelay: number, damp: number, early: number[][], width: number, seed: number } = {}) {
+export function impulseResponse(ctx: BaseAudioContext, o: { seconds: number, decay: number, predelay: number, damp: number, early?: number[][], width?: number, seed?: number } = {}) {
   const seconds = o.seconds ?? 2.4;
   const decay = o.decay ?? 2.4;
   const predelay = o.predelay ?? 0.012;

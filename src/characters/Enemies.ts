@@ -197,7 +197,7 @@ export class Enemies {
    * Enemies whose capsule intersects a sphere — the melee hit query.
    * @param centre @param radius
    */
-  sphereQuery(centre: THREE.Vector3, radius: number, out = []) {
+  sphereQuery(centre: THREE.Vector3, radius: number, out: any[] = []) {
     out.length = 0;
     for (const e of this.list) {
       if (e.dead) continue;
@@ -214,7 +214,7 @@ export class Enemies {
    * Swept-capsule query for a weapon arc: samples the segment from `a` to `b`.
    * Cheap, deterministic, and good enough for readable melee.
    */
-  sweepQuery(a: any, b: any, radius: any, out = []) {
+  sweepQuery(a: any, b: any, radius: any, out: any[] = []) {
     out.length = 0;
     const steps = 5;
     const p = this._tmp;

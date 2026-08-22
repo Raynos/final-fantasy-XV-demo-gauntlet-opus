@@ -163,7 +163,12 @@ export class Game {
     // Deterministic seeded RNG so every screenshot of the same shot matches.
     this.seed = 1337;
 
-    const order: [SystemKey, () => System][] = [
+    /**
+     * Boot order. The pair type keeps each factory tied to its own key, so a
+     * line that builds the wrong system for its name is a compile error.
+     */
+    type Entry = { [K in SystemKey]: [K, () => SystemRegistry[K]] }[SystemKey];
+    const order: Entry[] = [
       ['Sky', () => new Sky()],
       ['Terrain', () => new Terrain()],
       ['Water', () => new Water()],
@@ -207,7 +212,7 @@ export class Game {
     for (let i = 0; i < order.length; i++) {
       const [name, make] = order[i];
       p(0.05 + 0.8 * (i / order.length), name);
-      const sys = this.add(make(), name);
+      const sys = this.add(make() as any, name);
       // eslint-disable-next-line no-await-in-loop
       if (sys.init) await sys.init(this);
     }

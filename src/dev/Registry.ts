@@ -143,12 +143,12 @@ export class Registry {
    * report was filed from a tampered state.
    */
   deltas(): Record<string, {is:any, was:any}> {
-    const out = {};
+    const out: Record<string, { is: any, was: any }> = {};
     for (const [name, c] of this.cvars) {
       const was = this.defaults.get(name);
       let is;
       try { is = c.get(); } catch { continue; }
-      if (JSON.stringify(is) !== JSON.stringify(was)) out[name as keyof typeof out] = { is, was };
+      if (JSON.stringify(is) !== JSON.stringify(was)) out[name] = { is, was };
     }
     return out;
   }

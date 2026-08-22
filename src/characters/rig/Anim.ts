@@ -895,7 +895,8 @@ export class Animator {
     const cx = this.coat.x.step(tgtX, dt);
     const cz = this.coat.z.step(tgtZ, dt);
     const bob = Math.sin(this.phase * Math.PI * 4) * 0.05 * clamp01(this.speed / s);
-    for (const [n, sgn] of [['coatL', 1], ['coatR', -1], ['coatF', 0]]) {
+    const coats: [string, number][] = [['coatL', 1], ['coatR', -1], ['coatF', 0]];
+    for (const [n, sgn] of coats) {
       const b = this.rig.byName[n];
       if (!b) continue;
       _e.set(cx + bob * (0.6 + 0.4 * sgn), 0, cz + sgn * 0.05 * cx, 'YXZ');

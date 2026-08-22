@@ -3,6 +3,10 @@ import { Rng } from '../util/Rng.ts';
 import { WEAPONS, Weapon, Armiger } from './Weapons.ts';
 import { Elemancy } from './Elemancy.ts';
 import type { CombatEvents, CombatEventName } from './CombatEvents.ts';
+import type { WeaponClass } from './Weapons.ts';
+
+/** The three castable elements. */
+export type ElementKind = 'fire' | 'ice' | 'lightning';
 
 /**
  * Real-time action combat.
@@ -288,12 +292,12 @@ export class CombatSystem {
     if (!s) return false;
     this.weaponSlot = slot;
     this.weaponItem = s.item;
-    this.setWeapon(s.kind);
+    this.setWeapon(s.kind as WeaponClass);
     this.emit('weapon', { slot, kind: s.kind, item: s.item });
     return true;
   }
 
-  setWeapon(kind: 'sword' | 'greatsword' | 'polearm' | 'daggers' | 'firearm', { materialise = true } = {}) {
+  setWeapon(kind: WeaponClass, { materialise = true }: { materialise?: boolean } = {}) {
     if (this.weapon && this.weapon.kind === kind) return this.weapon;
     let w = this.weaponCache.get(kind);
     if (!w) {
@@ -621,7 +625,7 @@ export class CombatSystem {
    * uncrafted fallback — see `castSpell` for a real flask.
    * @param [o] `{power, motion, radius, poise}`
    */
-  cast(element: 'fire' | 'ice' | 'lightning', at?: THREE.Vector3, o: any = {}) {
+  cast(element: ElementKind, at?: THREE.Vector3, o: any = {}) {
     const p = this.player;
     const pos = at || (this.lockTarget ? this.lockTarget.centre() : this.elemancy.defaultTarget());
     if (!pos || !p) return null;
@@ -1455,7 +1459,7 @@ const ITEM_CLASS_TO_KIND = {
 };
 
 /** What the three magic keys do before anything has been crafted. */
-const FALLBACK_ELEMENTS = ['fire', 'ice', 'lightning'];
+const FALLBACK_ELEMENTS: ('fire' | 'ice' | 'lightning')[] = ['fire', 'ice', 'lightning'];
 
 function ease(n: any) { const t = THREE.MathUtils.clamp(n, 0, 1); return t * t * (3 - 2 * t); }
 /** Fast attack, slow settle — makes a swing feel like it has weight. */

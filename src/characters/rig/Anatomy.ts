@@ -154,13 +154,17 @@ export function legShape(m: any) {
  * @param u0 start parameter
  * @param u1 end parameter
  * @param count nodes to emit
- * @param pad radial padding in metres
+ * @param pad radial padding in metres -- a constant, or a function of `(t, u)`
  */
-export function drape(nodes: any[], u0: number, u1: number, count: number, pad: (u:number)=>number|number, padZ?: any) {
+export function drape(
+  nodes: any[], u0: number, u1: number, count: number,
+  pad: number | ((t: number, u: number) => number),
+  padZ?: number | ((t: number, u: number) => number),
+) {
   const curve = new THREE.CatmullRomCurve3(nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5);
   const rxs = nodes.map((n) => n.rx);
   const rzs = nodes.map((n) => n.rz ?? n.rx);
-  const out = [];
+  const out: any[] = [];
   for (let i = 0; i < count; i++) {
     const t = count === 1 ? 0 : i / (count - 1);
     const u = u0 + (u1 - u0) * t;
