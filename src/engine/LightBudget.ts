@@ -70,7 +70,7 @@ export class LightBudget {
     this.rescan();
   }
 
-  _makeBallast(kind: any, n: any) {
+  _makeBallast(kind: string, n: number) {
     const pool = this.ballast[kind];
     while (pool.length > n) {
       const l = pool.pop();
@@ -134,7 +134,7 @@ export class LightBudget {
     this._balanceKind('spot');
   }
 
-  _balanceKind(kind: any) {
+  _balanceKind(kind: string) {
     const entries = this._real[kind];
     const budget = this.budget[kind];
     const live = [];

@@ -17,8 +17,8 @@
 
 /** Small helpers so the scripts below read like dialogue, not like plumbing. */
 const rpgOf = (game: any) => game.get('RpgSystem') || game.get('Rpg') || null;
-const questStatus = (game: any, id: any) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
-const openShop = (game: any, id: any) => {
+const questStatus = (game: any, id: string) => rpgOf(game)?.quests?.status?.(id) || 'unknown';
+const openShop = (game: any, id: string) => {
   const ix = game.get('Interaction');
   const menus = game.get('Menus');
   if (menus?.screens?.shop?.setShop) menus.screens.shop.setShop(id);

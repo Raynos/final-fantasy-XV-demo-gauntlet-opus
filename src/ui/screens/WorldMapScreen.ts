@@ -288,7 +288,7 @@ export class WorldMapScreen {
     }
   }
 
-  _setFilter(i: any) {
+  _setFilter(i: number) {
     this.filter = (i + FILTERS.length) % FILTERS.length;
     for (let k = 0; k < this.filterEls.length; k++) {
       this.filterEls[k].classList.toggle('on', k === this.filter);
@@ -404,7 +404,7 @@ export class WorldMapScreen {
   }
 
   /** Nearest drawn point within 16 css px of a chart position. */
-  _pick(px: any, py: any) {
+  _pick(px: number, py: number) {
     let best: any = null, bd = 16 * 16;
     for (const [p, s] of this._screenPos) {
       const dx = s[0] - px, dy = s[1] - py;
@@ -486,7 +486,7 @@ export class WorldMapScreen {
     this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
   }
 
-  _draw(game: any, t: any, rev: any) {
+  _draw(game: any, t: any, rev: number) {
     const c = this.ctx, dpr = this.dpr;
     const W = this.w * dpr, H = this.h * dpr;
     const ppm = this.zoom * dpr;
@@ -639,7 +639,7 @@ export class WorldMapScreen {
    *
    * @param paint false = measure and reserve only, true = draw
    */
-  _regionLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any, paint: boolean = true) {
+  _regionLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer, paint: boolean = true) {
     const a = clamp(1 - (ppm / dpr - 0.145) / 0.06, 0, 1) * rev;
     if (a <= 0.01) { this._regionPlaced = []; return; }
     if (paint && this._regionPlaced) {
@@ -693,7 +693,7 @@ export class WorldMapScreen {
     this._regionPlaced = paint ? null : placed;
   }
 
-  _paintRegion(c: any, g: {x:number,y:number,name:string,sub:string}, dpr: any, a: any) {
+  _paintRegion(c: any, g: {x:number,y:number,name:string,sub:string}, dpr: any, a: number) {
     // on the atlas the region names are the sheet's headline type, not a
     // watermark under a chart the player is navigating
     const rk = this.atlas ? 1.72 : 1;
@@ -709,7 +709,7 @@ export class WorldMapScreen {
     c.shadowBlur = 0;
   }
 
-  _zoneLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any, fade: any) {
+  _zoneLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer, fade: any) {
     const a = fade * rev;
     if (a <= 0.01) return;
     // biggest zones first, so a small zone yields its label to a large one
@@ -739,7 +739,7 @@ export class WorldMapScreen {
     }
   }
 
-  _routeLabels(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, place: any) {
+  _routeLabels(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, place: LabelPlacer) {
     const a = clamp((ppm / dpr - 0.3) / 0.14, 0, 1) * rev;
     if (a <= 0.01) return;
     c.font = `300 ${Math.round(8.5 * dpr)}px "Helvetica Neue", Inter, system-ui, sans-serif`;
@@ -773,7 +773,7 @@ export class WorldMapScreen {
     }
   }
 
-  _pois(c: any, sx: any, sy: any, ppm: any, dpr: any, rev: any, t: any, place: any, W: any, H: any) {
+  _pois(c: any, sx: any, sy: any, ppm: number, dpr: number, rev: any, t: any, place: LabelPlacer, W: number, H: number) {
     const f = FILTERS[this.filter];
     const selected = this.list?.[this.sel];
     this._screenPos.clear();
@@ -862,7 +862,7 @@ export class WorldMapScreen {
     }
   }
 
-  _player(c: any, sx: any, sy: any, ppm: any, dpr: any, t: any) {
+  _player(c: any, sx: any, sy: any, ppm: number, dpr: number, t: any) {
     const player = this.game?.get('Player');
     if (!player?.position) return;
     const px = sx(player.position.x), py = sy(player.position.z);
@@ -928,7 +928,7 @@ export class WorldMapScreen {
     c.restore();
   }
 
-  _compass(c: any, W: any, H: any, dpr: any, rev: any) {
+  _compass(c: any, W: number, H: number, dpr: number, rev: any) {
     const R = 30 * dpr;
     const x = W - R - 30 * dpr, y = R + 30 * dpr;
     c.save();
@@ -968,7 +968,7 @@ export class WorldMapScreen {
   }
 }
 
-function fmtTime(sec: any) {
+function fmtTime(sec: number) {
   if (!isFinite(sec)) return '—';
   const m = Math.floor(sec / 60), s = Math.round(sec % 60);
   if (m >= 60) return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;

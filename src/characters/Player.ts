@@ -220,7 +220,7 @@ export class Player {
 }
 
 /** Shortest-arc damped angle. */
-export function dampAngle(a: any, b: any, lambda: any, dt: any) {
+export function dampAngle(a: any, b: number, lambda: number, dt: any) {
   return a + angleDelta(a, b) * (1 - Math.exp(-lambda * dt));
 }
 

@@ -46,7 +46,7 @@ export class DevConsole {
     this.print('dev console — `help` lists everything, Tab completes.', 'dim');
   }
 
-  setOpen(v: any) {
+  setOpen(v: boolean) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
     if (this.open) { this.input.focus(); this.input.select(); }

@@ -66,7 +66,7 @@ export class SystemScreen {
     const pct = (v: any) => `${Math.round(v * 100)}%`;
     void game;
 
-    const bus = (id: any, name: any, desc: any) => ({
+    const bus = (id: string, name: string, desc: string) => ({
       key: id, name, kind: 'slider', desc,
       get: () => (audio() ? audio().volumeOf(id === 'master' ? 'master' : id) : 0),
       set: (v: any) => audio() && audio().setVolume(id, v),
@@ -194,7 +194,7 @@ export class SystemScreen {
 
   enter(game: any) { if (game) this.game = game; this._cur = null; this._msg = null; this._msgAge = 9; }
 
-  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ------------------------------------------------------------ input */
 

@@ -569,11 +569,24 @@ interface LandformBase {
 
 /** A landform placed as a disc: centre, radius, height. */
 export interface DiscLandform extends LandformBase {
-  kind: 'mesa' | 'butte' | 'basin' | 'peak' | 'crater' | 'volcano';
+  kind: 'mesa' | 'butte' | 'basin' | 'peak' | 'volcano';
   x: number;
   z: number;
   r: number;
-  h?: number;
+  /** Height above the surrounding ground; negative sinks a basin. */
+  h: number;
+}
+
+/** A ring and a hole rather than a height: the Disc of Cauthess. */
+export interface CraterLandform extends LandformBase {
+  kind: 'crater';
+  x: number;
+  z: number;
+  r: number;
+  /** Rim height. */
+  rim: number;
+  /** Floor depth below the surrounding ground. */
+  depth: number;
 }
 
 /** A hogback: a line with a half-width. */
@@ -616,7 +629,8 @@ export interface SpireLandform extends LandformBase {
   count: number;
 }
 
-export type Landform = DiscLandform | FinLandform | CanyonLandform | TerraceLandform | SpireLandform;
+export type Landform =
+  | DiscLandform | CraterLandform | FinLandform | CanyonLandform | TerraceLandform | SpireLandform;
 
 export const LANDFORMS: Landform[] = [
   // --- Leide: the badland stage set around Hammerhead ---------------------
@@ -766,7 +780,7 @@ export class WorldMap {
     // Coarse POI bucket grid for O(1)-ish nearest queries.
     this._cell = 512;
     this._buckets = new Map();
-    for (const p of POIS) {
+    for (const p of POIS as Poi[]) {
       const k = this._key(p.x, p.z);
       let a = this._buckets.get(k);
       if (!a) { a = []; this._buckets.set(k, a); }
@@ -774,7 +788,7 @@ export class WorldMap {
     }
   }
 
-  _key(x: any, z: any) {
+  _key(x: number, z: number) {
     return `${Math.floor(x / this._cell)},${Math.floor(z / this._cell)}`;
   }
 
@@ -813,7 +827,7 @@ export class WorldMap {
     return rest * inv;
   }
 
-  zoneWeights(x: any, z: any, out: any = {}) {
+  zoneWeights(x: number, z: number, out: any = {}) {
     for (const k in out) delete out[k as keyof typeof out];
     const rest = this._weigh(x, z);
     const w = this._wBuf;

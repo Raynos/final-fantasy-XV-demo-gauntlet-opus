@@ -162,7 +162,7 @@ export class GearScreen {
   }
 
   /** Everything in the bag this member is allowed to put in this slot. */
-  _candidates(r: any, charId: any, kind: any, slot: any) {
+  _candidates(r: any, charId: any, kind: string, slot: any) {
     const rows = [];
     if (!slot.empty) rows.push({ id: null, name: '— Remove —', stat: 'Back into the bag', count: 0 });
     const allowed = CLASS_OK[charId as keyof typeof CLASS_OK] || CLASS_OK.noctis;
@@ -222,7 +222,7 @@ export class GearScreen {
     this.back();
   }
 
-  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   enter(game: any) {
     if (game) this.game = game;

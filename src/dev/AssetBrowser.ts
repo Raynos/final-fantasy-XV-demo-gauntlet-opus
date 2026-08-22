@@ -82,7 +82,7 @@ export class AssetBrowser {
     return some.length ? some : all;
   }
 
-  setOpen(v: any) {
+  setOpen(v: boolean) {
     this.open = !!v;
     this.node.style.display = this.open ? '' : 'none';
     if (this.open) { this.stage.enter(this.game); this.select(0); }
@@ -136,7 +136,7 @@ export class AssetBrowser {
   }
 
   /** Cycle the animation state for families that have one. */
-  stepPose(d: any) {
+  stepPose(d: number) {
     const poses = this.family.poses();
     if (!poses.length) return;
     this.poseAt = (this.poseAt + d + poses.length) % poses.length;
@@ -258,5 +258,5 @@ export class AssetBrowser {
   }
 }
 
-const load = (k: any, f: any) => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') || f; } catch { return f; } };
-const save = (k: any, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+const load = (k: string, f: any) => { try { return JSON.parse(localStorage.getItem(k) ?? 'null') || f; } catch { return f; } };
+const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };

@@ -166,7 +166,7 @@ const WAVE_CACHE = new WeakMap();
  */
 const SPECTRA = {
   // Bowed string: strong odd/even mix, gentle rolloff, slight 2nd-formant bump.
-  string: (n: any) => (1 / Math.pow(n, 1.08)) * Math.exp(-n / 15) * (n === 3 ? 1.35 : 1),
+  string: (n: number) => (1 / Math.pow(n, 1.08)) * Math.exp(-n / 15) * (n === 3 ? 1.35 : 1),
   // Brass: bright, slow rolloff, formant plateau around the 4th–7th partial.
   brass: (n: any) => (1 / Math.pow(n, 0.72)) * Math.exp(-n / 22) * (n >= 3 && n <= 8 ? 1.5 : 1),
   // Clarinet-ish reed: odd harmonics dominate.
@@ -235,16 +235,16 @@ export function hit(p: any, t: any, peak: any, decay: any) {
 }
 
 /** Safe exponential ramp that tolerates a zero target. */
-export function expTo(p: any, v: any, t: any) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
+export function expTo(p: any, v: number, t: any) { p.exponentialRampToValueAtTime(Math.max(EPS, v), t); }
 
 /** Equal-tempered frequency from a semitone offset above a reference. */
-export function ftom(ref: any, semis: any) { return ref * Math.pow(2, semis / 12); }
+export function ftom(ref: number, semis: any) { return ref * Math.pow(2, semis / 12); }
 
 /** Random within a range from a supplied rng. */
 export function rr(rng: any, a: any, b: any) { return a + (b - a) * rng(); }
 
 /** Clamp. */
-export function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
+export function clamp(v: any, a: number, b: any) { return v < a ? a : v > b ? b : v; }
 
 /** Linear interpolation. */
 export function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }

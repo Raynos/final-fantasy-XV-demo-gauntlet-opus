@@ -6,7 +6,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const PLATE = 0x33383f;
 const PLATE_DARK = 0x191c21;
@@ -365,8 +365,8 @@ class MagitekArmourEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
-    const M = (n: any, x: any, y: any, z: any, k: any) => poseBoneMix(rig, n, x, y, z, k);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
+    const M = (n: string, x: number, y: number, z: number, k: number) => poseBoneMix(rig, n, x, y, z, k);
     this.visual.rotation.z = 0;
     this.visual.position.x = 0;
 

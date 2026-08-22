@@ -47,7 +47,7 @@ export const BLOCKADE = {
     const enemies = game.get('Enemies');
     ctx.data.spawned = [];
     if (enemies && enemies.spawn) {
-      const put = (f: any, l: any, state: any, at: any) => {
+      const put = (f: number, l: number, state: string, at: number) => {
         const p = F.ground(ctx.terrain, f, l, 0.95);
         const e = enemies.spawn('mt', { pos: new THREE.Vector3(p[0], p[1], p[2]) });
         if (!e) return;

@@ -113,7 +113,7 @@ export class InventoryScreen {
   }
 
   /** Rebuild the row list for the current tab. */
-  _rebuild(items: any, key: any, game: any) {
+  _rebuild(items: any, key: string, game: any) {
     this.items = items;
     this.list.textContent = '';
     this.rows = this.items.slice(0, MAX_ROWS).map((it) => {
@@ -189,7 +189,7 @@ export class InventoryScreen {
     }
   }
 
-  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   enter(game: any) { if (game) this.game = game; this._key = null; this._msg = null; this._msgAge = 9; }
 

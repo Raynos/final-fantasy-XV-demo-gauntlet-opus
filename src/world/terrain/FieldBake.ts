@@ -3,7 +3,7 @@ import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
 import {
-  decodeF32Planes, decodePlanes8, encodeF32Planes, encodePlanes8, packContainer, unpackContainer,
+  decodeF32Planes, decodePlanes8, sectionField, encodeF32Planes, encodePlanes8, packContainer, unpackContainer,
 } from './FieldCodec.ts';
 
 /**
@@ -59,10 +59,10 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
   const roadY = c.section('roadY');
   if (!h || !far || !ctrl || !farCtrl || !roadY) throw new Error('bake missing a section');
 
-  field.h = decodeF32Planes(h.bytes, h.n);
-  field.far = decodeF32Planes(far.bytes, far.n);
-  field.ctrl = decodePlanes8(ctrl.bytes, ctrl.w, ctrl.h, ctrl.ch);
-  field.farCtrl = decodePlanes8(farCtrl.bytes, farCtrl.w, farCtrl.h, farCtrl.ch);
+  field.h = decodeF32Planes(h.bytes, sectionField(h, 'n'));
+  field.far = decodeF32Planes(far.bytes, sectionField(far, 'n'));
+  field.ctrl = decodePlanes8(ctrl.bytes, sectionField(ctrl, 'w'), sectionField(ctrl, 'h'), sectionField(ctrl, 'ch'));
+  field.farCtrl = decodePlanes8(farCtrl.bytes, sectionField(farCtrl, 'w'), sectionField(farCtrl, 'h'), sectionField(farCtrl, 'ch'));
   field.deriveNormals();
 
   // The road graph rebuilds itself from `WorldMap` for free; only the solved
@@ -80,7 +80,7 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
  * Decode the layer texels out of a container.
  * @returns `buildLayerData`-shaped texels, or null if absent
  */
-export function bakedLayers(buf: any): any | null {
+export function bakedLayers(buf: Uint8Array): any | null {
   const c = unpackContainer(buf);
   const meta = c.section('layerMeta');
   const a = c.section('layerAlbedo'), s = c.section('layerSurf'), d = c.section('layerDetail');
@@ -89,9 +89,9 @@ export function bakedLayers(buf: any): any | null {
   return {
     size,
     detailSize,
-    albedo: decodePlanes8(a.bytes, a.w, a.h, a.ch),
-    surf: decodePlanes8(s.bytes, s.w, s.h, s.ch),
-    detail: decodePlanes8(d.bytes, d.w, d.h, d.ch),
+    albedo: decodePlanes8(a.bytes, sectionField(a, 'w'), sectionField(a, 'h'), sectionField(a, 'ch')),
+    surf: decodePlanes8(s.bytes, sectionField(s, 'w'), sectionField(s, 'h'), sectionField(s, 'ch')),
+    detail: decodePlanes8(d.bytes, sectionField(d, 'w'), sectionField(d, 'h'), sectionField(d, 'ch')),
   };
 }
 

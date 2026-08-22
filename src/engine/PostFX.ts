@@ -17,6 +17,7 @@ import { Exposure } from './postfx/Exposure.ts';
 import { LightBudget } from './LightBudget.ts';
 import { Warmup } from './Warmup.ts';
 import { GRADES, lutFor } from '../shaders/post/grades.ts';
+import type { Renderer } from './Renderer.ts';
 
 /** Visible point/spot lights held resident per quality tier. See LightBudget. */
 const LIGHT_BUDGET = {
@@ -104,7 +105,7 @@ export class PostFX {
   viewProj!: THREE.Matrix4;
   warmupReport!: any;
   width!: any;
-  constructor(rnd: any) {
+  constructor(rnd: Renderer) {
     this.rnd = rnd;
     const { renderer, scene, camera } = rnd;
     this.scene = scene;
@@ -173,11 +174,11 @@ export class PostFX {
     // it warms are the ones the budgeted light count will actually ask for.
     this.lights = new LightBudget(scene, LIGHT_BUDGET[rnd.quality as keyof typeof LIGHT_BUDGET] || LIGHT_BUDGET.high);
     const prevBefore = scene.onBeforeRender;
-    scene.onBeforeRender = (r: any, sc: any, cam: any, rt: any) => {
+    scene.onBeforeRender = (r, sc, cam, geo, mat, group) => {
       // Every render — beauty pass, water reflection, VFX depth prepass — goes
       // through the program cache, so every one of them has to see the budget.
       this.lights.balance(cam);
-      if (prevBefore) prevBefore.call(scene, r, sc, cam, rt);
+      if (prevBefore) prevBefore.call(scene, r, sc, cam, geo, mat, group);
     };
 
     this.scenePass = new ScenePass(this);
@@ -742,22 +743,22 @@ function todGrade(hours: any): [string, string, number] {
 }
 
 /** Are two view-projection matrices the same to within a sub-pixel shift? */
-function matricesClose(a: any, b: any) {
+function matricesClose(a: THREE.Matrix4, b: THREE.Matrix4) {
   const ae = a.elements, be = b.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(ae[i] - be[i]) > 1e-7) return false;
   return true;
 }
 
-function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
-function smooth(t: any) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+function smooth(t: number) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
 
 /** Halton(2,3) low-discrepancy sequence for the TAA jitter. */
-function haltonSequence(n: any) {
+function haltonSequence(n: number) {
   const out = [];
   for (let i = 1; i <= n; i++) out.push([radical(i, 2), radical(i, 3)]);
   return out;
 }
-function radical(index: any, base: any) {
+function radical(index: number, base: number) {
   let f = 1, r = 0, i = index;
   while (i > 0) { f /= base; r += f * (i % base); i = Math.floor(i / base); }
   return r;

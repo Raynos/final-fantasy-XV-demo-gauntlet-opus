@@ -420,14 +420,14 @@ function buildPrototype() {
   return rig.build(mat, { radius: 2.2 });
 }
 
-function reset(B: any) {
+function reset(B: CBuilder) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
 }
 
 const _c = new THREE.Color();
-function col(hex: any, k = 1) {
+function col(hex: number, k = 1) {
   _c.setHex(hex, THREE.SRGBColorSpace);
   if (k !== 1) _c.multiplyScalar(k);
   return _c;

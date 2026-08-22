@@ -134,7 +134,7 @@ export class Triggers {
   }
 
   /** Push an external event (quest / combat) through the same matcher. */
-  notify(kind: any, payload: any, fire: any) { this._match(kind, payload, fire); }
+  notify(kind: string, payload: any, fire: any) { this._match(kind, payload, fire); }
 
   _match(kind: any, payload: any, fire: any) {
     for (const t of this.list) {

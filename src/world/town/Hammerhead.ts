@@ -201,7 +201,7 @@ export class Hammerhead {
   }
 
   /** Local (u, v) around an arbitrary origin -> world [x, z]. */
-  _toWorldFlat(ox: any, oz: any, u: any, v: any) {
+  _toWorldFlat(ox: any, oz: any, u: number, v: number) {
     // rotationY(yaw): (1,0,0) -> (cos, 0, -sin); (0,0,1) -> (sin, 0, cos)
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     return [ox + u * c + v * s, oz - u * s + v * c];
@@ -343,7 +343,7 @@ export class Hammerhead {
     // The apron flaring out to the highway — two throats of tarmac laid over
     // the berm so the town has an approach rather than an edge.
     // tilted so it ramps down onto the verge instead of ending in a step
-    const throat = (u: any) => {
+    const throat = (u: number) => {
       put(M.asphalt, uvScale(box(13, 6, 12).clone(), 1.4, 1.3), [u, -3.55, PAD.v0 - 5.6], [0.09, 0, 0]);
     };
     throat(-13);
@@ -356,7 +356,7 @@ export class Hammerhead {
     put(M.gravel, uvScale(box(26, 0.3, 13).clone(), 3.0, 1.6), [16, 0.13, 12]);
 
     // Painted bay markings for the car park, and the Regalia's own bay.
-    const line = (u: any, v: any, len: any, yaw = 0, mat = M.paint) =>
+    const line = (u: number, v: number, len: number, yaw = 0, mat = M.paint) =>
       put(mat, box(0.12, 0.02, len), [u, 0.29, v], [0, yaw, 0]);
     for (let i = 0; i < 6; i++) line(-25 + i * 3.2, -6.6, 5.4);
     line(-25 + 6 * 3.2, -6.6, 5.4);
@@ -368,7 +368,7 @@ export class Hammerhead {
 
   // ---- fuel canopy and pumps --------------------------------------------
 
-  _canopy(put: any, putC: any, M: any, rng: any) {
+  _canopy(put: any, putC: any, M: any, rng: Rng) {
     const cu = -6, cv = -19;
     const deck = 5.35;
     // four columns
@@ -453,7 +453,7 @@ export class Hammerhead {
 
   // ---- the Crow's Nest ---------------------------------------------------
 
-  _diner(put: any, putC: any, M: any, rng: any) {
+  _diner(put: any, putC: any, M: any, rng: Rng) {
     const cu = -16, cv = 3.6;
     const W = 14.4, D = 9.6, H = 3.9;
 
@@ -540,7 +540,7 @@ export class Hammerhead {
 
   // ---- Cid's garage ------------------------------------------------------
 
-  _garage(put: any, putC: any, M: any, rng: any) {
+  _garage(put: any, putC: any, M: any, rng: Rng) {
     const cu = 13, cv = 3.4;
     const W = 18.0, D = 12.0, H = 5.6;
 
@@ -627,9 +627,9 @@ export class Hammerhead {
   _caravan(put: any, putC: any, M: any) {
     const cu = 23.0, cv = -14.5, yaw = 0.30;
     const c = Math.cos(yaw), s = Math.sin(yaw);
-    const P = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => put(m, g,
+    const P = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => put(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
-    const PC = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => putC(m, g,
+    const PC = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => putC(m, g,
       [cu + u * c + v * s, y, cv - u * s + v * c], [rot[0], yaw + rot[1], rot[2]]);
 
     // Body. Squatter than the first pass — a caravan roof sits at about 2.9 m,
@@ -683,7 +683,7 @@ export class Hammerhead {
 
   // ---- the parts yard ----------------------------------------------------
 
-  _yard(put: any, putC: any, M: any, rng: any) {
+  _yard(put: any, putC: any, M: any, rng: Rng) {
     const F = { u0: 3.5, u1: 28.5, v0: 10.0, v1: 16.5 };
     fenceRun(put, M, [F.u0, F.v1], [F.u1, F.v1]);
     fenceRun(put, M, [F.u1, F.v0], [F.u1, F.v1]);
@@ -725,7 +725,7 @@ export class Hammerhead {
 
   // ---- parked vehicles ---------------------------------------------------
 
-  _carPark(put: any, putC: any, M: any, rng: any) {
+  _carPark(put: any, putC: any, M: any, rng: Rng) {
     // Nose-in to the bays, clear of the diner porch — a car parked across the
     // door is the fastest way to make a lot read as a render rather than a
     // place somebody actually uses.
@@ -749,7 +749,7 @@ export class Hammerhead {
     // Culless Munitions van, backed onto the lot edge with its shutter up
     const vu = -26.0, vv = -14.5, vyaw = -0.5;
     const c = Math.cos(vyaw), s = Math.sin(vyaw);
-    const V = (m: any, g: any, u: any, y: any, v: any, rot = [0, 0, 0]) => put(m, g,
+    const V = (m: any, g: any, u: number, y: number, v: number, rot = [0, 0, 0]) => put(m, g,
       [vu + u * c + v * s, y, vv - u * s + v * c], [rot[0], vyaw + rot[1], rot[2]]);
     V(M.panelBlue, box(2.4, 2.3, 5.4), 0, 1.75, 0);
     V(M.panelBlue, box(2.2, 1.2, 1.6), 0, 1.5, -3.2);
@@ -769,7 +769,7 @@ export class Hammerhead {
 
   // ---- everything else that makes it look lived in -----------------------
 
-  _streetFurniture(put: any, putC: any, M: any, rng: any) {
+  _streetFurniture(put: any, putC: any, M: any, rng: Rng) {
     // telegraph pole feeding the site, with a stay wire
     put(M.wood, cyl(0.18, 0.24, 9.0, 8), [-27.5, 4.5, -20.0]);
     put(M.wood, box(0.14, 0.14, 2.4), [-27.5, 8.4, -20.0]);
@@ -854,7 +854,7 @@ export class Hammerhead {
   _registerScreens(game: any) {
     const menus = game.get('Menus');
     if (!menus || !menus.screens || !menus.wrap) return;
-    const add = (key: any, Screen: any) => {
+    const add = (key: string, Screen: any) => {
       if (menus.screens[key]) return;
       const s = new Screen(menus);
       s.node = document.createElement('div');
@@ -874,7 +874,7 @@ export class Hammerhead {
     if (!ix) { console.warn('[Hammerhead] no InteractionSystem'); return; }
     const A = this.anchors;
 
-    const openShop = (id: any) => {
+    const openShop = (id: string) => {
       const menus = game.get('Menus');
       const screen = menus?.screens?.shop;
       if (screen && screen.setShop) screen.setShop(id);
@@ -1109,7 +1109,7 @@ export class Hammerhead {
 }
 
 /** Scale a geometry's UVs so a tiling material keeps a constant texel size. */
-function uvScale(g: any, su: any, sv: any) {
+function uvScale(g: any, su: number, sv: number) {
   const uv = g.attributes.uv;
   if (!uv) return g;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
@@ -1117,7 +1117,7 @@ function uvScale(g: any, su: any, sv: any) {
   return g;
 }
 
-function countTris(group: any) {
+function countTris(group: THREE.Group) {
   let n = 0;
   group.traverse((o: any) => { if (o.isMesh && o.geometry?.index) n += o.geometry.index.count / 3; });
   return n;

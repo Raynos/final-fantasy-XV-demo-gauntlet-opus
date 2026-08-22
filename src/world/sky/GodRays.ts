@@ -62,7 +62,7 @@ export class GodRaysPass extends Pass {
   compositeMaterial!: THREE.ShaderMaterial;
   raysMaterial!: THREE.ShaderMaterial;
   rt!: THREE.WebGLRenderTarget;
-  constructor(width: any, height: any) {
+  constructor(width: number, height: number) {
     super();
     this.needsSwap = true;
     this.enabled = true;
@@ -97,7 +97,7 @@ export class GodRaysPass extends Pass {
     this._quad = new FullScreenQuad(this.raysMaterial);
   }
 
-  override setSize(w: any, h: any) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
+  override setSize(w: number, h: number) { this.rt.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2)); }
 
   override render(renderer: any, writeBuffer: any, readBuffer: any) {
     if (this.compositeMaterial.uniforms.uIntensity.value <= 0.0005) {

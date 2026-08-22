@@ -72,7 +72,7 @@ export class Enemies {
    * with `variant()` carry a `protoKey`, so a boss shares its base species'
    * geometry rather than building a second copy of it.
    */
-  prototype(key: any) {
+  prototype(key: string) {
     const type = TYPES[key as keyof typeof TYPES];
     if (!type) throw new Error(`unknown enemy ${key}`);
     const pk = type.protoKey || key;

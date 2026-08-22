@@ -29,7 +29,7 @@ const lerp = THREE.MathUtils.lerp;
 const ss = THREE.MathUtils.smoothstep;
 
 /** Shared boilerplate: albedo + normal + roughness from one height function. */
-function pbr(key: any, {
+function pbr(key: string, {
   tint, height, size = 512, normalStrength = 2.0, rough = [0.7, 0.3], metal = 0,
   metalMap = null, albedo = null, roughness = 0.9, sheen = 0, normalHeight = null,
 }: any) {

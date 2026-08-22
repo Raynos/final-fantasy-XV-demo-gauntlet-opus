@@ -261,7 +261,7 @@ export class Terrain {
   }
 
   /** Nearest segment in Z; falls back to the closest endpoint off the ends. */
-  _findRoadSegment(pts: any, z: any) {
+  _findRoadSegment(pts: any, z: number) {
     let best = 0, bestD = Infinity;
     for (let i = 0; i < pts.length - 1; i++) {
       if (this._bracketsZ(pts, i, z)) return i;
@@ -275,7 +275,7 @@ export class Terrain {
    * Rough surface classification, mirroring the splat weights the shader uses.
    * Vegetation should look at `weights.grass` and `sediment`.
    */
-  sampleMaterial(x: any, z: any): any {
+  sampleMaterial(x: number, z: number): any {
     const f = this.field;
     const c: any = f.ctrlAt(x, z, this._ctrl);
     const h = f.heightAt(x, z);
@@ -431,7 +431,7 @@ export class Terrain {
   update() {}
 }
 
-function ss(a: any, b: any, x: any) {
+function ss(a: number, b: number, x: any) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }

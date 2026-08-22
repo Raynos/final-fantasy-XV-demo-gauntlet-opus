@@ -4,7 +4,12 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "lib": ["ES2022", "DOM"],
-    "types": ["node"],
+    // `vite/client` for the CSS side-effect imports the game files use, and the
+    // same class-field semantics as `tsconfig.json`: the tools config reaches
+    // into the game through `src/globals.d.ts`, and a file must not compile two
+    // different ways depending on which config pulled it in.
+    "types": ["node", "vite/client"],
+    "useDefineForClassFields": false,
     "strict": true,
     "noUnusedLocals": true,
     "noEmit": true,

@@ -557,7 +557,7 @@ export class Enemy {
     if (this.pack) this.pack.onDeath(this);
   }
 
-  setState(s: any) {
+  setState(s: string) {
     if (this.state === s) return;
     this.state = s;
     this.stateTime = 0;
@@ -660,7 +660,7 @@ export class Enemy {
   }
 
   /** Timing for the current attack, falling back to the legacy table. */
-  _timing(field: any) {
+  _timing(field: string) {
     const t = this.type.timing || DEFAULT_TIMING;
     if (this.attack && this.attack[field] != null) return this.attack[field];
     return t[field] != null ? t[field] : DEFAULT_TIMING[field as keyof typeof DEFAULT_TIMING];
@@ -771,7 +771,7 @@ export class Enemy {
    * Knockback decay. Being hit shoves a creature and it has to dig in and stop
    * — that friction is a large part of why a hit reads as having landed.
    */
-  _slide(dt: any, ctx: any) {
+  _slide(dt: number, ctx: any) {
     const kb = this._kb;
     if (!kb || kb.lengthSq() < 1e-5) return;
     this.root.position.x += kb.x * dt;
@@ -784,7 +784,7 @@ export class Enemy {
    * Additive layer applied after the species pose: impact springs whipping
    * through the spine, the gait's vertical bounce, and the residual shove.
    */
-  _postPose(dt: any) {
+  _postPose(dt: number) {
     const a = this.anim;
     if (!a || !this.rig) return;
     a.commit(dt, (name: any, x: any, y: any, z: any) => {
@@ -806,7 +806,7 @@ export class Enemy {
   }
 
   /** Notice things, lose interest in things. */
-  _sense(dt: any, ctx: any) {
+  _sense(dt: number, ctx: any) {
     this._senseTimer -= dt;
     if (this._senseTimer > 0) return;
     this._senseTimer = 0.22;
@@ -893,7 +893,7 @@ export class Enemy {
     this.heading += (this._wanderAngle - this.heading) * Math.min(1, dt * 0.8);
   }
 
-  _tickPatrol(dt: any, ctx: any) {
+  _tickPatrol(dt: number, ctx: any) {
     const p = this.patrol;
     if (!p || !p.points.length) { this.setState('idle'); return; }
     const wp = p.points[p.index % p.points.length];
@@ -909,13 +909,13 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.32, ctx);
   }
 
-  _tickAlert(dt: any, ctx: any, tp: any) {
+  _tickAlert(dt: number, ctx: any, tp: any) {
     // stand up, look toward whatever it was
     if (tp) this._face(tp, dt, 3.0);
     if (this.stateTime > 4.5 && this.awareness < 0.2) this.setState('patrol');
   }
 
-  _tickReturn(dt: any, ctx: any) {
+  _tickReturn(dt: number, ctx: any) {
     if (this.home.lengthSq() === 0) { this.setState('idle'); return; }
     const dx = this.home.x - this.root.position.x, dz = this.home.z - this.root.position.z;
     const d = Math.hypot(dx, dz);
@@ -924,7 +924,7 @@ export class Enemy {
     this._move(dt, dx / d, dz / d, this.speed * 0.55, ctx);
   }
 
-  _tickChase(dt: any, ctx: any, target: any, tp: any, dist: any) {
+  _tickChase(dt: number, ctx: any, target: any, tp: any, dist: number) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 5);
@@ -951,7 +951,7 @@ export class Enemy {
   }
 
   /** Circle the target waiting for a turn. This is what stops the conga line. */
-  _tickStrafe(dt: any, ctx: any, target: any, tp: any, dist: any) {
+  _tickStrafe(dt: number, ctx: any, target: any, tp: any, dist: number) {
     if (!target || !tp) { this.setState('return'); return; }
     this._role(dt);
     this._face(tp, dt, 4.5);
@@ -978,7 +978,7 @@ export class Enemy {
     if (this.stateTime > 4.5) { this._strafeDir *= -1; this.stateTime = 0; }
   }
 
-  _tickTelegraph(dt: any, ctx: any, tp: any, dist: any) {
+  _tickTelegraph(dt: number, ctx: any, tp: any, dist: number) {
     const a = this.attack;
     this._face(tp, dt, a && a.tracking != null ? a.tracking : 2.4);
     if (a && a.approachDuring && tp) {
@@ -989,7 +989,7 @@ export class Enemy {
     if (this.stateTime > this._timing('telegraph')) this.setState('attack');
   }
 
-  _tickAttack(dt: any, ctx: any, target: any, tp: any, dist: any) {
+  _tickAttack(dt: number, ctx: any, target: any, tp: any, dist: number) {
     const a = this.attack;
     // a lunge carries all the way through the active window, decaying, so a
     // leap actually arrives instead of stopping short of its own target
@@ -1031,7 +1031,7 @@ export class Enemy {
   }
 
   /** Move along a unit direction with pack separation. */
-  _move(dt: any, nx: any, nz: any, sp: any, ctx: any, skipSeparation = false) {
+  _move(dt: any, nx: number, nz: number, sp: any, ctx: any, skipSeparation = false) {
     this.root.position.x += nx * sp * dt;
     this.root.position.z += nz * sp * dt;
     this.velocity.set(nx * sp, 0, nz * sp);

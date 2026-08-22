@@ -93,7 +93,7 @@ export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {c
   if (caps) {
     // fan-cap both ends by adding a centre vertex each
     const extra: any[] = [];
-    const addCap = (i: any, flip: any) => {
+    const addCap = (i: number, flip: boolean) => {
       let cy = 0, cz = 0;
       for (let j = 0; j < N; j++) { cy += sections[i].pts[j][0]; cz += sections[i].pts[j][1]; }
       cy /= N; cz /= N;
@@ -123,7 +123,7 @@ export function loft(sections: {x:number, pts:number[][]}[], { caps = true }: {c
 }
 
 /** A superelliptic ring in the YZ plane, used for lofted car bodies. */
-export function ring(n: any, halfWidth: any, yLow: any, yHigh: any, power = 3.6, shear = 0) {
+export function ring(n: number, halfWidth: number, yLow: any, yHigh: any, power = 3.6, shear = 0) {
   const pts = [];
   const cy = (yLow + yHigh) * 0.5, hh = (yHigh - yLow) * 0.5;
   const e = 2 / power;
@@ -138,7 +138,7 @@ export function ring(n: any, halfWidth: any, yLow: any, yHigh: any, power = 3.6,
 }
 
 /** Extract a contiguous band of a loft's rings as an open shell. */
-export function loftBand(sections: any, j0: any, j1: any, offsetOut = 0) {
+export function loftBand(sections: any, j0: number, j1: number, offsetOut = 0) {
   const N = sections[0].pts.length;
   const S = sections.length;
   const cols = [];

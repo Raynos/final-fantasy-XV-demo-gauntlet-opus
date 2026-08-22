@@ -124,7 +124,7 @@ function buildPrototype() {
    * `bind[0] === 'chain'`.
    */
   const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
-  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -436,7 +436,7 @@ function buildPrototype() {
 }
 
 /** Three long reptilian toes with hooked claws. */
-function foot(B: any, x: any, y: any, z: any, dir: any) {
+function foot(B: CBuilder, x: number, y: number, z: number, dir: number) {
   const sgn = Math.sign(x) || 1;
   for (let i = -1; i <= 1; i++) {
     const ox = x + i * 0.030 * sgn;
@@ -458,7 +458,7 @@ function foot(B: any, x: any, y: any, z: any, dir: any) {
   }
 }
 
-function reset(B: any) {
+function reset(B: CBuilder) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);

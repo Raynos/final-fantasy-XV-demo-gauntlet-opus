@@ -205,7 +205,7 @@ export class TrailRibbon {
 export class TrailPool {
   _next!: number;
   items!: any[];
-  constructor(parent: any, size = 8, opts = {}) {
+  constructor(parent: THREE.Group, size = 8, opts = {}) {
     this.items = [];
     for (let i = 0; i < size; i++) {
       const t = new TrailRibbon(opts);
@@ -224,7 +224,7 @@ export class TrailPool {
     return t;
   }
 
-  update(dt: any, clock: any) { for (const t of this.items) t.update(dt, clock); }
+  update(dt: any, clock: number) { for (const t of this.items) t.update(dt, clock); }
   clear() { for (const t of this.items) t.reset(); }
 }
 

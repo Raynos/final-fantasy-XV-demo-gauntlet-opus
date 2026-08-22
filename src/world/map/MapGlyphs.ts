@@ -69,7 +69,7 @@ export const POI_GLYPH = {
 };
 
 const _p2d = new Map();
-function path2d(key: any, d: any) {
+function path2d(key: string, d: string) {
   let p = _p2d.get(key);
   if (!p) { p = new Path2D(d); _p2d.set(key, p); }
   return p;
@@ -138,7 +138,7 @@ export function glyphSvg(kind: string, opt: {size?:number, stroke?:number} = {})
 }
 
 /** Minimal namespaced element helper — this module must not depend on the UI. */
-function svgEl(tag: any, attrs: any) {
+function svgEl(tag: string, attrs: any) {
   const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const k of Object.keys(attrs)) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
   return n;

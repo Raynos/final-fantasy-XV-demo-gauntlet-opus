@@ -6,6 +6,7 @@ import { WORLD } from '../map/WorldMap.ts';
 import { buildTree } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { leafClusterTex, fernTex, reedTex, padTex, barkMaps } from './VegTextures.ts';
+import type { Ecology } from './Ecology.ts';
 
 /**
  * The ground layer: scrub, undergrowth and the water's edge.
@@ -99,7 +100,7 @@ const _s = new THREE.Vector3();
  * Radial spray of arching fronds. `wide` flattens the spray and lengthens the
  * fronds, which turns a fern into a bracken mat.
  */
-function frondGeometry(seed: any, { fronds = 8, lean = [0.35, 0.75], len = [0.40, 0.68], wid = 0.44 } = {}) {
+function frondGeometry(seed: number, { fronds = 8, lean = [0.35, 0.75], len = [0.40, 0.68], wid = 0.44 } = {}) {
   const rng = new Rng(seed);
   const p = [], n = [], uv = [], col = [], idx = [], flex = [];
   for (let i = 0; i < fronds; i++) {
@@ -164,7 +165,7 @@ function stemCardGeometry(planes = 3, width = 0.5) {
 }
 
 /** A raft of flat pads lying on the water. */
-function padGeometry(seed: any) {
+function padGeometry(seed: number) {
   const rng = new Rng(seed);
   const pos = [], nor = [], uv = [], col = [], idx = [];
   let v = 0;
@@ -214,7 +215,7 @@ export class Bushes {
   range!: number;
   scene!: any;
   tileCacheMax!: number;
-  constructor(eco: any, scene: any, { quality = 1, range = 132 } = {}) {
+  constructor(eco: Ecology, scene: any, { quality = 1, range = 132 } = {}) {
     this.eco = eco;
     this.scene = scene;
     /** Named parent so the whole ground layer can be priced or hidden at once. */
@@ -370,7 +371,7 @@ export class Bushes {
     const wantWater = (b0.reedD > 0 || b0.lilyD > 0) && wetAny > -2.0;
     if (any < 0.02 && !wantWater) return out;
 
-    const bil = (a: any, u: any, v: any) => {
+    const bil = (a: Float32Array, u: number, v: number) => {
       const fu = u * DG, fv = v * DG;
       const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;
@@ -430,7 +431,7 @@ export class Bushes {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(tx: any, tz: any): any[] | null {
+  _tile(tx: number, tz: number): any[] | null {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }

@@ -185,7 +185,7 @@ export class CharacterController {
    * with the glazing above holding them there. With it, the allowance only
    * ever builds where there is somewhere to end up.
    */
-  _ledgeAhead(pos: any, vx: any, vz: any, speed: any): boolean {
+  _ledgeAhead(pos: THREE.Vector3, vx: number, vz: number, speed: number): boolean {
     const w = this.world;
     if (!w.ready || !w.enabled || speed < 1e-3) return false;
     const ahead = this.radius + 0.30;

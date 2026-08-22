@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const FLESH = 0x6d5068;
 const FLESH_DARK = 0x3b2c40;
@@ -222,7 +222,7 @@ class BussemandEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     // the hunch is permanent — it cannot stand up, only lean further over
     const hunch = (k = 1) => {
       S('spine', 0.26 * k, 0, 0);

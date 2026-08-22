@@ -12,6 +12,7 @@
 
 import { Stats, emptyMods, addMods } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
+import type { Ascension } from './Ascension.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Roster                                                                    */
@@ -307,7 +308,7 @@ export class PartyState {
   }
 
   /** Techniques a member currently has, hydrated. */
-  techniquesFor(id: any) {
+  techniquesFor(id: string) {
     const known = this.members[id]?.techniques || [];
     return (TECHNIQUES[id as keyof typeof TECHNIQUES] || []).filter((t: any) => known.includes(t.id));
   }
@@ -324,7 +325,7 @@ export class PartyState {
   }
 
   /** Charge the tech bar (call with dt while in combat). */
-  chargeTech(dt: any, inCombat = true) {
+  chargeTech(dt: number, inCombat = true) {
     if (!inCombat) return;
     const rate = this.techChargeRate * (1 + this.bonuses.techCharge + this.bondBonus('techCharge'));
     this.techCharge = Math.min(this.maxTechBars, this.techCharge + rate * dt);
@@ -346,7 +347,7 @@ export class PartyState {
   }
 
   /** Teach a technique (from an Ascension node). */
-  learnTechnique(memberId: any, techId: any) {
+  learnTechnique(memberId: string, techId: string) {
     const list = this.members[memberId]?.techniques;
     if (!list || list.includes(techId)) return false;
     if (!(TECHNIQUES[memberId as keyof typeof TECHNIQUES] || []).some((t: any) => t.id === techId)) return false;
@@ -357,7 +358,7 @@ export class PartyState {
   /* -- Affinity ---------------------------------------------------------- */
 
   /** Raise a companion's affinity. */
-  addAffinity(memberId: any, amount: any) {
+  addAffinity(memberId: string, amount: number) {
     const m = this.members[memberId];
     if (!m || memberId === 'noctis') return 0;
     const before = bondFor(m.affinity).level;
@@ -371,10 +372,10 @@ export class PartyState {
   }
 
   /** Bond level object for a member. */
-  bond(memberId: any) { return bondFor(this.members[memberId]?.affinity || 0); }
+  bond(memberId: string) { return bondFor(this.members[memberId]?.affinity || 0); }
 
   /** Sum of one bond effect across the three companions. */
-  bondBonus(key: any) {
+  bondBonus(key: string) {
     let sum = 0;
     for (const m of MEMBERS) {
       if (m.id === 'noctis') continue;
@@ -483,7 +484,7 @@ export class PartyState {
   }
 
   /** Drop buffs whose time is up. Call from the day cycle. */
-  expireBuffs(hour: any) {
+  expireBuffs(hour: number) {
     const expired = this.activeBuffs.filter((b) => hour >= b.expiresAt);
     if (!expired.length) return [];
     this.activeBuffs = this.activeBuffs.filter((b) => hour < b.expiresAt);
@@ -513,7 +514,7 @@ export class PartyState {
   }
 
   /** Pull Ascension tunables in. */
-  applyAscension(ascension: any) {
+  applyAscension(ascension: Ascension) {
     this.bonuses.techCharge = ascension.value('techCharge');
     this.bonuses.techDamage = ascension.value('techDamage');
     this.bonuses.affinityGain = ascension.value('affinityGain');
@@ -550,7 +551,7 @@ export class PartyState {
     };
   }
 
-  static fromJSON(data: any, emitter: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null) {
     const p = new PartyState(emitter);
     if (!data) return p;
     for (const m of MEMBERS) {

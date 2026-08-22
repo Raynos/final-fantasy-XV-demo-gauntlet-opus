@@ -330,7 +330,7 @@ export class DayCycle {
     };
   }
 
-  static fromJSON(data: any, emitter: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null) {
     const d = new DayCycle(emitter);
     if (!data) return d;
     d.day = data.day || 1;

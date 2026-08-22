@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { turbulence } from './VfxTextures.ts';
+import type { Rng } from '../util/Rng.ts';
 
 /**
  * Camera-facing polyline ribbons: warp dash streaks, lightning arcs, magic
@@ -151,7 +152,7 @@ export class PolyBeam {
 }
 
 /** Build a jagged branching lightning path between two points. */
-export function lightningPath(from: any, to: any, rng: any, { jitter = 0.5, points = 14 } = {}) {
+export function lightningPath(from: any, to: any, rng: Rng, { jitter = 0.5, points = 14 } = {}) {
   const pts = [];
   const dir = new THREE.Vector3().subVectors(to, from);
   const len = dir.length();

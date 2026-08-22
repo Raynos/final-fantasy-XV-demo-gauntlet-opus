@@ -87,7 +87,7 @@ export class Dungeons {
     this.terrain = game.get('Terrain') ?? null;
     this.sky = game.get('Sky') ?? null;
     this.fader = new Fader(game.uiRoot);
-    this.ambience = new DungeonAmbience(game.get('Audio'));
+    this.ambience = new DungeonAmbience(game.get('Audio') ?? null);
 
     const builders = { bunker: buildBunkerEntrance, mine: buildMineHead, cave: buildCaveMouth };
     let calls = 0, tris = 0;
@@ -499,7 +499,7 @@ export class Dungeons {
     }
   }
 
-  _confine(pos: any, margin: any) {
+  _confine(pos: any, margin: number) {
     const p = this.current.clamp(pos.x, pos.z, margin);
     pos.x = p[0];
     pos.z = p[1];

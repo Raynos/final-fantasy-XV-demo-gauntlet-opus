@@ -67,6 +67,11 @@ export interface SystemRegistry {
   Npcs: Npcs;
   Director: Director;
   Dungeons: Dungeons;
+  /**
+   * The `?debug` suite, registered by `installDevSuite` when the flag is on --
+   * a type-only import, so the dev code stays out of a production bundle.
+   */
+  Dev: import('../dev/DevSuite.ts').DevSuite;
   // aliases -- callers grew up using the class name as well as the short label
   CombatSystem: CombatSystem;
   CameraRig: CameraRig;
@@ -353,7 +358,7 @@ export class Game {
   }
 
   /** Advance one frame. Exposed so the screenshot harness can step deterministically. */
-  frame(fixedDt?: any) {
+  frame(fixedDt?: number) {
     const t = this.time;
     if (fixedDt != null) {
       t.rawDt = fixedDt; t.raw += fixedDt;

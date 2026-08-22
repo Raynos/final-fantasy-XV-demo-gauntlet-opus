@@ -93,7 +93,7 @@ export function rectCross(round = 0.22, n = 16) {
 }
 
 /** Generalised tube through a polyline with per-point radii. */
-export function tube(points: any, radii: any, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
+export function tube(points: THREE.Vector3[], radii: any, { radialSeg = 8, capStart = true, capEnd = true, flat = 1 } = {}) {
   const n = radialSeg, m = points.length;
   const pos = [], uv = [], idx = [];
   const up = new THREE.Vector3(0, 1, 0);
@@ -192,7 +192,7 @@ export function spike(r: any, h: any, seg = 8) {
 }
 
 /** Ellipsoid. */
-export function blob(rx: any, ry: any, rz: any, wSeg = 12, hSeg = 8) {
+export function blob(rx: number, ry: number, rz: number, wSeg = 12, hSeg = 8) {
   const g = new THREE.SphereGeometry(1, wSeg, hSeg);
   g.scale(rx, ry, rz);
   return g;
@@ -200,20 +200,22 @@ export function blob(rx: any, ry: any, rz: any, wSeg = 12, hSeg = 8) {
 
 /** Apply a TRS to a geometry in place. */
 export function place(geo: any, { pos, rot, quat, scale }: {
-  pos?: number[], rot?: number[], quat?: THREE.Quaternion, scale?: number | number[],
+  pos?: number[] | null, rot?: number[] | null, quat?: THREE.Quaternion | null,
+  scale?: number | number[] | null,
 } = {}) {
   const m = new THREE.Matrix4();
   const q = quat || new THREE.Quaternion();
   if (!quat && rot) q.setFromEuler(new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0, 'XYZ'));
   const s = scale === undefined ? new THREE.Vector3(1, 1, 1)
-    : (typeof scale === 'number' ? new THREE.Vector3(scale, scale, scale) : new THREE.Vector3().fromArray(scale));
+    : (typeof scale === 'number' ? new THREE.Vector3(scale, scale, scale)
+      : (scale ? new THREE.Vector3().fromArray(scale) : new THREE.Vector3(1, 1, 1)));
   m.compose(pos ? new THREE.Vector3().fromArray(pos) : new THREE.Vector3(), q, s);
   geo.applyMatrix4(m);
   return geo;
 }
 
 /** Stamp a flat vertex colour (albedo tint) onto a geometry. */
-export function tint(geo: any, hex: any, jitter = 0) {
+export function tint(geo: any, hex: number, jitter = 0) {
   const c = new THREE.Color(hex);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -233,7 +235,7 @@ export function tint(geo: any, hex: any, jitter = 0) {
 }
 
 /** Stamp per-vertex emissive (glowing eyes, magitek seams, crystal fuller). */
-export function glow(geo: any, hex: any, strength = 1) {
+export function glow(geo: any, hex: number, strength = 1) {
   const c = new THREE.Color(hex).multiplyScalar(strength);
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
@@ -298,7 +300,7 @@ export function merge(geos: any) {
  * attribute. Lets one material serve an entire creature — glowing eyes,
  * magitek seams and dull armour in a single draw call.
  */
-export function enableVertexEmissive(material: any) {
+export function enableVertexEmissive(material: THREE.MeshStandardMaterial) {
   material.onBeforeCompile = (shader: any) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 aEmissive;\nvarying vec3 vEmissive;')

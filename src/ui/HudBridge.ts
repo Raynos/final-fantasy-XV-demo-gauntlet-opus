@@ -49,7 +49,7 @@ export class HudBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** A call-out banner, rate-limited so a flurry does not strobe. */
-  _call(key: any, sub?: any) {
+  _call(key: string, sub?: string) {
     const now = this.game?.time?.now ?? 0;
     if (now - this._lastCall < 1.1) return;
     this._lastCall = now;
@@ -60,7 +60,7 @@ export class HudBridge {
   /* -- combat ------------------------------------------------------------ */
 
   _wireCombat() {
-    const on = (name: any, fn: any) => {
+    const on = (name: string, fn: any) => {
       const h = (e: any) => fn(e.detail || {});
       window.addEventListener(`combat:${name}`, h);
       this._off.push(() => window.removeEventListener(`combat:${name}`, h));
@@ -98,7 +98,7 @@ export class HudBridge {
   _wireRpg(game: any) {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
-    const on = (n: any, fn: any) => this._off.push(rpg.on(n, fn));
+    const on = (n: string, fn: any) => this._off.push(rpg.on(n, fn));
     const toast = (label: string, value: string, ico?: string, tone?: string) =>
       this.hud.toasts.push(label, value, ico, tone);
 

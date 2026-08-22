@@ -232,7 +232,7 @@ export const ROUTES = [
 const SAMPLE_STEP = 6;
 
 /** Catmull-Rom through a control list, resampled at ~`step` metres. */
-function resample(ctrl: any, step: any) {
+function resample(ctrl: any, step: number) {
   if (ctrl.length < 2) return ctrl.map((p: any) => ({ x: p[0], z: p[1], y: 0, s: 0, tx: 0, tz: 1 }));
   const raw = [];
   for (let i = 0; i < ctrl.length - 1; i++) {

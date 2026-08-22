@@ -9,7 +9,7 @@ import type { Game } from '../game/Game.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
-const smoothstep = (a: any, b: any, x: any) => {
+const smoothstep = (a: number, b: number, x: number) => {
   const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
@@ -278,7 +278,7 @@ export class Sky {
     const prevHook = scene.onBeforeRender;
     scene.onBeforeRender = (r, sc, cam, geo, mat, group) => {
       if (prevHook) prevHook.call(scene, r, sc, cam, geo, mat, group);
-      this._preRender(r, cam);
+      this._preRender(r, cam as THREE.PerspectiveCamera);
     };
 
     this.setTimeOfDay(12.0);
@@ -391,7 +391,7 @@ export class Sky {
 
   // -------------------------------------------------------------- internals
 
-  _sunAngles(h: any) {
+  _sunAngles(h: number) {
     let elev, az;
     if (h >= SUNRISE && h <= SUNSET) {
       const f = (h - SUNRISE) / (SUNSET - SUNRISE);
@@ -406,7 +406,7 @@ export class Sky {
     return { elev, az };
   }
 
-  _moonAngles(h: any) {
+  _moonAngles(h: number) {
     const nh = h < MOONRISE ? h + 24 : h;
     const f = (nh - MOONRISE) / (MOONSET - MOONRISE);
     const elev = f <= 1 ? MOON_MAX_ELEV * Math.sin(Math.PI * f) : -25;
@@ -414,7 +414,7 @@ export class Sky {
     return { elev, az };
   }
 
-  static dirFrom(elevDeg: any, azDeg: any, out: any) {
+  static dirFrom(elevDeg: number, azDeg: number, out: THREE.Vector3) {
     const e = elevDeg * DEG, a = azDeg * DEG;
     return out.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).normalize();
   }
@@ -424,7 +424,7 @@ export class Sky {
    * the given elevation. This is what reddens the sun near the horizon; the
    * light colour is not hand authored.
    */
-  static sunTransmittance(sinElev: any) {
+  static sunTransmittance(sinElev: number) {
     const Rg = 6360e3, Rt = 6460e3;
     const bR = [5.802e-6, 13.558e-6, 33.1e-6];
     const bM = 4.44e-6;
@@ -453,7 +453,7 @@ export class Sky {
     ];
   }
 
-  _applyTimeOfDay(force: any) {
+  _applyTimeOfDay(force: boolean) {
     const u = this.u;
     const h = this.hours;
     const p = this.params;
@@ -853,7 +853,7 @@ export class Sky {
   }
 
   /** Runs immediately before the scene render, with the final camera. */
-  _preRender(renderer: any, camera: any) {
+  _preRender(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera) {
     // The dome rides with whatever camera is drawing it — including the water
     // reflection pass — so this part is unconditional.
     camera.updateMatrixWorld();

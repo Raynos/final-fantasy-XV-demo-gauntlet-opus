@@ -10,7 +10,7 @@ import { Noise } from '../../util/Noise.ts';
  */
 
 const cache = new Map();
-function memo(key: any, make: any) {
+function memo(key: string, make: any) {
   if (!cache.has(key)) cache.set(key, make());
   return cache.get(key);
 }
@@ -38,7 +38,7 @@ function memo(key: any, make: any) {
 const MIN_COVERAGE_SIZE = 16;
 
 function buildAlphaMips(data: any, size: any, alphaRef = 0.42, tinyFade = 1.0) {
-  const coverageOf = (buf: any, scale: any) => {
+  const coverageOf = (buf: any, scale: number) => {
     let n = 0;
     for (let i = 3; i < buf.length; i += 4) if ((buf[i] / 255) * scale >= alphaRef) n++;
     return n / (buf.length / 4);
@@ -128,11 +128,11 @@ function buildAlphaMips(data: any, size: any, alphaRef = 0.42, tinyFade = 1.0) {
  * @returns the gamma applied (1 == no change), for logging
  */
 function normalizeAlbedo(data: Uint8Array, target: number): number {
-  const toLin = (b: any) => {
+  const toLin = (b: number) => {
     const s = b / 255;
     return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
   };
-  const toSrgb = (v: any) => {
+  const toSrgb = (v: number) => {
     const c = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
     return Math.max(0, Math.min(255, Math.round(c * 255)));
   };
@@ -151,7 +151,7 @@ function normalizeAlbedo(data: Uint8Array, target: number): number {
     wsum += a;
   }
   if (wsum <= 0) return 1;
-  const meanAt = (g: any) => {
+  const meanAt = (g: number) => {
     let s = 0;
     for (let b = 0; b < BINS; b++) {
       if (hist[b] === 0) continue;
@@ -179,7 +179,7 @@ function normalizeAlbedo(data: Uint8Array, target: number): number {
 }
 
 /** Apply the hand-built mip chain to an RGBA DataTexture. */
-function withAlphaMips(tex: any, data: any, size: any, alphaRef: any, tinyFade?: any) {
+function withAlphaMips(tex: THREE.DataTexture, data: Uint8Array, size: number, alphaRef: number, tinyFade?: number) {
   tex.mipmaps = buildAlphaMips(data, size, alphaRef, tinyFade);
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -230,7 +230,7 @@ export function alphaTex(size: number, draw: (ctx:CanvasRenderingContext2D, size
 }
 
 /** One tapered, curved blade stroke. */
-function blade(ctx: any, x0: any, y0: any, len: any, wid: any, lean: any, colA: any, colB: any) {
+function blade(ctx: CanvasRenderingContext2D, x0: number, y0: number, len: number, wid: number, lean: number, colA: string, colB: string) {
   const steps = 8;
   const left = [], right = [];
   for (let i = 0; i <= steps; i++) {
@@ -350,7 +350,7 @@ export function leafClusterTex(kind = 'broad') {
     const HUE = kind === 'dry' ? [1.06, 1, 0.80]
       : kind === 'conifer' ? [0.87, 1, 0.90]
         : [0.91, 1, 0.79];
-    const ink = (g: any) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
+    const ink = (g: number) => `rgba(${g * HUE[0] | 0},${g * HUE[1] | 0},${g * HUE[2] | 0},1)`;
     for (let i = 0; i < n; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = Math.pow(rng.next(), 0.62) * s * 0.47;
@@ -712,7 +712,7 @@ export function barkMaps(tint = 0x6b5642) {
     // compressed to 0.72x, the brightest ridge lands just under 1.0 at the
     // target mean, so the ridge contrast survives without clipping to white.
     const KMEAN = 0.925, KCONTRAST = 0.72;
-    const toSrgb = (v: any) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
+    const toSrgb = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(Math.min(1, v), 1 / 2.4) - 0.055);
     const map = makeTexture(256, (u: any, v: any, c: any) => {
       const k = 1 + ((0.55 + h(u, v) * 0.75) / KMEAN - 1) * KCONTRAST;
       const L = BARK_DETAIL_MEAN * k;

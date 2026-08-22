@@ -55,7 +55,7 @@ export class Instruments {
    * Common tail of every voice: attach the chain to its destination (through a
    * panner when the sound has a place in the world) and schedule the teardown.
    */
-  _finish(node: any, o: any, src: any, nodes: any, extraGain: any, handle: any, end: any) {
+  _finish(node: any, o: any, src: any, nodes: any, extraGain: number, handle: any, end: any) {
     const g = this.ctx.createGain();
     g.gain.value = (o.gain ?? 1) * (extraGain ?? 1);
     node.connect(g);
@@ -158,7 +158,7 @@ export class Instruments {
    * Brass. The defining trick is that the spectrum tracks the envelope, so a
    * forte entry is bright and a soft pad is dark — same note, different animal.
    */
-  brass(f: any, t: any, dur: any, o: any = {}) {
+  brass(f: number, t: any, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -207,7 +207,7 @@ export class Instruments {
   }
 
   /** Flute / clarinet, with the breath noise that sells a wind instrument. */
-  wood(f: any, t: any, dur: any, o: any = {}) {
+  wood(f: number, t: any, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -256,7 +256,7 @@ export class Instruments {
    * vowel, not a pad with reverb on it.
    * @param {'ah'|'oo'|'mm'} [o.vowel]
    */
-  choir(f: any, t: any, dur: any, o: any = {}) {
+  choir(f: number, t: any, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -314,7 +314,7 @@ export class Instruments {
   }
 
   /** Warm sustained bed. The cheapest sustained voice we have — 4 nodes. */
-  pad(f: any, t: any, dur: any, o: any = {}) {
+  pad(f: number, t: any, dur: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 0, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -439,7 +439,7 @@ export class Instruments {
   /* -------------------------------------------------------- percussion */
 
   /** Timpani: a pitched membrane — fundamental plus two inharmonic partials. */
-  timpani(f: any, t: any, o: any = {}) {
+  timpani(f: number, t: any, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -580,7 +580,7 @@ export class Instruments {
   }
 
   /** Low gong / tam-tam for boss stingers. */
-  gong(f: any, t: any, o: any = {}) {
+  gong(f: number, t: any, o: any = {}) {
     return this.bell(f, t, { ratio: 1.93, index: 4.5, decay: o.decay ?? 4.5, ...o });
   }
 }

@@ -188,7 +188,7 @@ export class Menus {
   }
 
   /** Push a screen, remembering where to return to on back. */
-  push(name: any) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
+  push(name: string) { if (this.name) this.stack.push(this.name); this.setScreen(name); }
 
   /**
    * Go back one level: first to whatever modal the current screen is holding
@@ -209,7 +209,7 @@ export class Menus {
     this.shown = null;
   }
 
-  _activate(name: any) {
+  _activate(name: string) {
     this._hideShown();
     this.name = name;
     this.shown = name;
@@ -318,9 +318,9 @@ export class Menus {
   _input(game: any) {
     const inp = game.input;
     if (!inp) return;
-    const down = (c: any) => inp.keyDown?.(c);
-    const gp = (i: any) => inp.gamepad?.buttons?.[i]?.pressed;
-    const edge = (k: any, v: any) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
+    const down = (c: string) => inp.keyDown?.(c);
+    const gp = (i: number) => inp.gamepad?.buttons?.[i]?.pressed;
+    const edge = (k: string, v: any) => { const p = this._gpPrev?.[k]; (this._gpPrev = this._gpPrev || {})[k] = v; return v && !p; };
     // read every pad edge every frame, or a button held across a frame where it
     // was not consulted reads as a fresh press the next time it is
     const b = {

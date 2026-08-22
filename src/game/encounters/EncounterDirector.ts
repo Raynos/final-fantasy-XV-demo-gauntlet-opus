@@ -194,10 +194,10 @@ export class EncounterDirector {
   }
 
   /** Give each member a rotated copy of the route so they string out. */
-  _offsetRoute(route: any, i: any) {
+  _offsetRoute(route: THREE.Vector3[], i: number) {
     if (i === 0) return route;
     const out = route.slice();
-    for (let k = 0; k < i % route.length; k++) out.push(out.shift());
+    for (let k = 0; k < i % route.length; k++) { const head = out.shift(); if (head) out.push(head); }
     return out;
   }
 
@@ -311,7 +311,7 @@ export class EncounterDirector {
   }
 
   /** Tear down the active boss fight. */
-  endBoss(victory: any) {
+  endBoss(victory: boolean) {
     const b = this.boss;
     if (!b) return;
     this.boss = null;
@@ -494,7 +494,7 @@ export class EncounterDirector {
     return false;
   }
 
-  _emitCombat(name: any, detail: any) {
+  _emitCombat(name: string, detail: any) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }
@@ -617,7 +617,7 @@ export class EncounterDirector {
     }));
   }
 
-  _exitCombat(victory: any) {
+  _exitCombat(victory: boolean) {
     if (this.state !== 'combat') return;
     this.state = 'field';
     this.game.state = 'field';
@@ -631,7 +631,7 @@ export class EncounterDirector {
     this.encounter = null;
   }
 
-  _warn(text: any) {
+  _warn(text: string) {
     window.dispatchEvent(new CustomEvent('encounter:warn', { detail: { text } }));
   }
 

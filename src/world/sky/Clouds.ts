@@ -20,7 +20,7 @@ const MARCH_SCALE = 0.45;
  * offsets cover their respective cells evenly over the same eight frames.
  */
 const HALTON = (() => {
-  const radical = (i: any, b: any) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+  const radical = (i: number, b: number) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
   const out = [];
   for (let i = 1; i <= 8; i++) out.push([radical(i, 2), radical(i, 3)]);
   return out;
@@ -409,7 +409,7 @@ export class Clouds {
   }
 
   /** Raymarch the layer for the current camera. */
-  render(camera: any, frame: any) {
+  render(camera: any, frame: number) {
     const u = this.marchUniforms;
     u.uCamPos.value.setFromMatrixPosition(camera.matrixWorld);
     u.uInvViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();

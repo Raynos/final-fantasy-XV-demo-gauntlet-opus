@@ -72,7 +72,7 @@ export function tube({
     secs.push({ c, n: _n.clone(), b: _b.clone(), t: _t.clone(), rx: _r.x, ry: _r.y, u });
   }
 
-  const emitRing = (c: any, n: any, b: any, rx: any, ry: any, u: any, scale: any) => {
+  const emitRing = (c: THREE.Vector3, n: THREE.Vector3, b: THREE.Vector3, rx: number, ry: number, u: number, scale: number) => {
     const base = pos.length / 3;
     for (let j = 0; j <= seg; j++) {
       const th = (j / seg) * Math.PI * 2;
@@ -120,7 +120,7 @@ export function tube({
   }
 
   // apexes
-  const apex = (s: any, dir: any, cap: any) => {
+  const apex = (s: any, dir: number, cap: number) => {
     const c = s.c.clone().addScaledVector(s.t, dir * cap * s.rx);
     const base = pos.length / 3;
     pos.push(c.x, c.y, c.z);
@@ -159,7 +159,7 @@ export function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry 
 }
 
 /** Scratch colour for `colorAt` callbacks — never retained. */
-export function col(hex: any) { return _c.setHex(hex, THREE.SRGBColorSpace); }
+export function col(hex: number) { return _c.setHex(hex, THREE.SRGBColorSpace); }
 
 /**
  * Blend two sRGB hexes and return the scratch colour.
@@ -169,7 +169,7 @@ export function mix(a: number, b: number, k: number) {
   const t = THREE.MathUtils.clamp(k, 0, 1);
   const ar = ((a >> 16) & 255) / 255, ag = ((a >> 8) & 255) / 255, ab = (a & 255) / 255;
   const br = ((b >> 16) & 255) / 255, bg = ((b >> 8) & 255) / 255, bb = (b & 255) / 255;
-  const s = (v: any) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const s = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
   return _c.setRGB(
     s(ar + (br - ar) * t), s(ag + (bg - ag) * t), s(ab + (bb - ab) * t),
     THREE.LinearSRGBColorSpace);
@@ -234,7 +234,7 @@ mat3 hrZ(float a){ float c = cos(a), s = sin(a); return mat3(c,s,0., -s,c,0., 0.
 `;
 
 /** Smoothstep, matching the GLSL one so CPU and shader agree. */
-export function smooth(e0: any, e1: any, x: any) {
+export function smooth(e0: number, e1: number, x: any) {
   const t = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
   return t * t * (3 - 2 * t);
 }

@@ -122,11 +122,11 @@ export class Character {
     }
 
     // weapon sockets
-    const socket = (name: any, boneName: any, pos: any, rot: any) => {
+    const socket = (name: string, boneName: string, pos: number[], rot?: number[] | null) => {
       const o = new THREE.Object3D();
       o.name = name;
       o.position.fromArray(pos);
-      if (rot) o.rotation.fromArray(rot);
+      if (rot) o.rotation.fromArray(rot as [number, number, number]);
       rig.byName[boneName].add(o);
       return o;
     };
@@ -235,7 +235,7 @@ export class Character {
     }
   }
 
-  _skinned(geo: any, mat: any, name: any) {
+  _skinned(geo: any, mat: any, name: string) {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `${this.name}_${name}`;
     mesh.castShadow = true;

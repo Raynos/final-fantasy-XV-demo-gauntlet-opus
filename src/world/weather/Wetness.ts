@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Game } from '../../game/Game.ts';
 
 /**
  * Wet-surface response.
@@ -20,7 +21,7 @@ export class Wetness {
   _ssrOn!: boolean;
   game!: any;
   value!: number;
-  constructor(game: any) {
+  constructor(game: Game) {
     this.game = game;
     this.value = -1;
     this._scanIn = 0;

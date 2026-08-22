@@ -69,7 +69,7 @@ export class Rig {
    * creases rather than collapsing.
    * @param soft 0..1 width of the blend band around the joint
    */
-  attachBlend(geo: any, aName: any, bName: any, soft: number = 1.0) {
+  attachBlend(geo: any, aName: string, bName: string, soft: number = 1.0) {
     const ia = this.bones.indexOf(this.byName.get(aName));
     const ib = this.bones.indexOf(this.byName.get(bName));
     const pa = this._world.get(aName), pb = this._world.get(bName);

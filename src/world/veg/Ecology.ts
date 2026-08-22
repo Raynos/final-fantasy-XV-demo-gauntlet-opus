@@ -331,7 +331,7 @@ export class Ecology {
       const t = this.roadTangent(z, new THREE.Vector2());
       return Math.atan2(t.x, t.y);
     };
-    const beside = (type: any, z: any, side: any, off: any, r: any, extra = {}) => {
+    const beside = (type: string, z: number, side: number, off: number, r: number, extra = {}) => {
       const p = this.roadPoint(z, side, off, new THREE.Vector3());
       put(type, p.x, p.z, r, { roadZ: z, side, yaw: roadYaw(z), ...extra });
     };
@@ -375,7 +375,7 @@ export class Ecology {
   }
 
   /** Search a small ring for the flattest spot near (x,z) — keeps camps level. */
-  _findFlat(x: any, z: any, radius: any, tries: any) {
+  _findFlat(x: number, z: number, radius: number, tries: number) {
     let best = { x, z, s: this.slope01(x, z) };
     for (let i = 0; i < tries; i++) {
       const a = (i / tries) * Math.PI * 2;
@@ -403,7 +403,7 @@ export class Ecology {
    * Grass wants flats, valleys and moisture. It stops dead on the carriageway
    * and thins out on the verge so the road reads as travelled.
    */
-  grassDensity(x: any, z: any) {
+  grassDensity(x: number, z: number) {
     const slope = this.slope01(x, z);
     if (slope > 0.66) return 0;
     if (this.waterDepth(x, z) > 0.15) return 0;      // nothing grows under a lake
@@ -525,7 +525,7 @@ export class Ecology {
    * Approximate ground albedo so vegetation roots can be tinted to match and
    * don't look pasted on. Prefers a real Terrain sampler if one exists.
    */
-  groundColor(x: any, z: any, out = new THREE.Color()): THREE.Color {
+  groundColor(x: number, z: number, out = new THREE.Color()): THREE.Color {
     const t = this.terrain;
     if (t && typeof t.groundColorAt === 'function') return t.groundColorAt(x, z, out);
     if (t && typeof t.colorAt === 'function') return t.colorAt(x, z, out);
@@ -545,7 +545,7 @@ export class Ecology {
    * straw end of the ramp, and green is reserved for the drainage lines that
    * {@link wetness} picks out.
    */
-  grassColor(x: any, z: any, out = new THREE.Color()) {
+  grassColor(x: number, z: number, out = new THREE.Color()) {
     const b = vegAt(x, z);
     const m = this.wetness(x, z) + b.wetBias;
     return this._grassRamp(b, x, z, THREE.MathUtils.smoothstep(m, 0.22, 0.86), out);
@@ -562,7 +562,7 @@ export class Ecology {
    * palette entirely, and did — it put Leide's grass at 1.76x red over green,
    * which is highlighter yellow, from a ramp whose own dry end is 1.33x.
    */
-  grassDryColor(x: any, z: any, out = new THREE.Color()) {
+  grassDryColor(x: number, z: number, out = new THREE.Color()) {
     return this._grassRamp(vegAt(x, z), x, z, 0, out);
   }
 
@@ -573,7 +573,7 @@ export class Ecology {
    * than Leide's lush end.
    * @private
    */
-  _grassRamp(b: any, x: any, z: any, t: any, out: any) {
+  _grassRamp(b: any, x: any, z: any, t: number, out: THREE.Color) {
     const v = this.nTint.fbm2(x * 0.02, z * 0.02, 2) * 0.5 + 0.5;
     out.copy(b.dryC).lerp(b.lushC, t);
     const k = 0.86 + v * 0.3;
@@ -581,10 +581,10 @@ export class Ecology {
   }
 
   /** Height multiplier for the grass field: ankle tuft .. waist-high reed. */
-  grassScale(x: any, z: any) { return vegAt(x, z).grassH; }
+  grassScale(x: number, z: number) { return vegAt(x, z).grassH; }
 
   /** Fraction of tufts that are last season's, bleached whatever the ground does. */
-  grassDead(x: any, z: any) { return vegAt(x, z).grassDead; }
+  grassDead(x: number, z: number) { return vegAt(x, z).grassDead; }
 
   // ------------------------------------------------------------ distribution
 

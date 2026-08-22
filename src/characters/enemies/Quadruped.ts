@@ -121,7 +121,7 @@ export class QuadrupedEnemy extends Enemy {
    * just swung. Front legs parent to the chest and inherit the whole sum; back
    * legs parent to the hips and inherit only the first link.
    */
-  spine(S: any, pitch: any, yaw = 0, roll = 0, w = SPINE_W) {
+  spine(S: any, pitch: number, yaw = 0, roll = 0, w = SPINE_W) {
     const t = this.A.trunk;
     // The weights are *shares of one bend*, so they are normalised against the
     // run from hips to chest. Used raw they compound down the parent chain and
@@ -145,7 +145,7 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /** Sum of the spine weights from hips to chest, cached per weight array. */
-  _spineNorm(w: any) {
+  _spineNorm(w: number[]) {
     if (this._normW === w) return this._normV;
     const t = this.A.trunk;
     let sum = 0;
@@ -164,7 +164,7 @@ export class QuadrupedEnemy extends Enemy {
    * translation the leg solver has to cancel so the paw does not follow the
    * shoulder into the dirt.
    */
-  _rootShift(rootName: any, pitch: any, w: any, total: any) {
+  _rootShift(rootName: any, pitch: number, w: number[], total: number) {
     const t = this.A.trunk;
     const p = this._bindAt(rootName || t[Math.max(0, t.length - 3)]);
     if (!p) return { pitch, dy: 0, dz: 0 };
@@ -226,7 +226,7 @@ export class QuadrupedEnemy extends Enemy {
   }
 
   /** Tail bones as a lagging travelling wave. */
-  tail(t: any, base: any, amp: any, freq: any, curl = 0) {
+  tail(t: any, base: any, amp: number, freq: number, curl = 0) {
     const names = this.A.tails;
     if (!names) return;
     for (let i = 0; i < names.length; i++) {

@@ -55,7 +55,7 @@ export const EYE = {
  * a real almond: the upper lid peaks slightly nasal of centre, the lower lid
  * troughs slightly temporal of it.
  */
-export function lidMargin(f: any, upper: any, openU: any) {
+export function lidMargin(f: any, upper: any, openU: number) {
   const peak = upper ? 0.44 : 0.60;
   // a cosine lobe skewed toward `peak`, zero at both canthi
   const g = f < peak ? f / peak : (1 - f) / (1 - peak);
@@ -215,14 +215,14 @@ function brushes(look: any) {
  * through the face. Below the equator the profile is deliberately fuller so the
  * jaw keeps real mass all the way down to the chin line.
  */
-function profileW(yn: any) {
+function profileW(yn: number) {
   if (yn >= 0) return Math.sqrt(Math.max(0, 1 - yn * yn));
   const a = Math.min(1, Math.abs(yn) / 1.055);
   return Math.pow(Math.max(0, 1 - Math.pow(a, 2.6)), 0.46);
 }
 
 /** Un-sculpted skull surface point for a spherical coordinate. */
-function shellPoint(theta: any, phi: any, rr: any, out: any) {
+function shellPoint(theta: any, phi: any, rr: any, out: THREE.Vector3) {
   const yn = Math.cos(phi);
   const w = profileW(yn);
   return out.set(w * Math.sin(theta) * rr[0], yn * rr[1], w * Math.cos(theta) * rr[2]);
@@ -231,7 +231,7 @@ function shellPoint(theta: any, phi: any, rr: any, out: any) {
 const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3();
 
 /** Surface point plus a numerically differentiated outward normal. */
-function skullPoint(theta: any, phi: any, rr: any) {
+function skullPoint(theta: number, phi: number, rr: number[]) {
   const e = 0.01;
   const ph = Math.min(Math.PI - e, Math.max(e, phi));   // poles have no tangent frame
   const p = shellPoint(theta, phi, rr, new THREE.Vector3());
@@ -393,7 +393,7 @@ export function buildHead(rig: any, look: any): {geometry: THREE.BufferGeometry,
     B.color(0xffffff);
 
     // a ridge, authored in the ear's own (y, z) plane and swept as a ribbon
-    const ridge = (a0: any, a1: any, ry: any, rz: any, cy: any, cz: any, out: any, wid: any, n: any) => {
+    const ridge = (a0: number, a1: number, ry: number, rz: number, cy: number, cz: number, out: number, wid: number, n: number) => {
       const pts = [];
       for (let k = 0; k <= n; k++) {
         const a = lerp(a0, a1, k / n);
@@ -502,14 +502,14 @@ function eyePoint(ec: any, sg: any, a: any, e: any, rad: any, f: any) {
  * running from the inner canthus to the outer, with the margin dipping at both
  * corners so the opening reads as an almond rather than a circle.
  */
-function buildLid(B: any, o: any) {
+function buildLid(B: MeshBuilder, o: any) {
   const { put, ec, sg, upper, bone, head, look, onSkull, uv } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]);
   const cols = 20, rows = 5;
   const arc = EYE.arc;
 
-  const pt = (a: any, e: any, rad: any, f: any) => eyePoint(ec, sg, a, e, rad, f);
+  const pt = (a: any, e: any, rad: number, f: any) => eyePoint(ec, sg, a, e, rad, f);
 
   const dark = new THREE.Color().setHex(upper ? 0x140f10 : 0x3a2620, THREE.SRGBColorSpace);
   const skinC = new THREE.Color(1, 1, 1);
@@ -693,7 +693,7 @@ export function buildEyes(rig: any, look: any) {
  * disappears the moment the head turns; these hold the eye's dark accent from
  * every angle and are the cheapest "this is a person" cue on the whole model.
  */
-function buildLashes(B: any, o: any) {
+function buildLashes(B: MeshBuilder, o: any) {
   const { put, scale, ec, sg, look } = o;
   const R = FACE.eyeR;
   const openU = (look.eyeOpen ?? 1) * LID_OPEN[0];
@@ -701,7 +701,7 @@ function buildLashes(B: any, o: any) {
   const col = new THREE.Color().setHex(look.lashColor ?? 0x0d0a0c, THREE.SRGBColorSpace);
   const arc = EYE.arc;
 
-  const pt = (a: any, e: any, rad: any) => new THREE.Vector3(
+  const pt = (a: any, e: number, rad: number) => new THREE.Vector3(
     ec[0] + Math.sin(a * sg) * Math.cos(e) * rad,
     ec[1] + Math.sin(e) * rad * 1.02,
     ec[2] + Math.cos(a) * Math.cos(e) * rad * 0.92
@@ -752,7 +752,7 @@ function buildLashes(B: any, o: any) {
  * as a dark texel instead of a 12% grey tint. Mean luminance is restored per
  * level, so the face does not drift dark with distance — only more contrasty.
  */
-function contrastMips(canvas: any) {
+function contrastMips(canvas: HTMLCanvasElement) {
   const mips = [canvas];
   let src = canvas;
   let level = 0;
@@ -760,7 +760,7 @@ function contrastMips(canvas: any) {
     level++;
     const sw = src.width, sh = src.height;
     const w = sw >> 1, h = sh >> 1;
-    const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+    const sd = src.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, sw, sh).data;
     const dst = document.createElement('canvas');
     dst.width = w; dst.height = h;
     const dctx = dst.getContext('2d', { willReadFrequently: true });
@@ -812,7 +812,7 @@ function contrastMips(canvas: any) {
 }
 
 /** Canvas texture whose mip chain keeps facial value structure (see above). */
-function faceTexture(size: any, draw: any) {
+function faceTexture(size: number, draw: any) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   draw(cv.getContext('2d', { willReadFrequently: true }), size);
@@ -850,7 +850,7 @@ function paintFace(look: any, uv: any) {
   const PY = S / (FACE.yMax - FACE.yMin);
   const skin = new THREE.Color().setHex(look.skin.getHex(THREE.SRGBColorSpace), THREE.SRGBColorSpace);
   // (the base tone itself is applied below via SKIN_BASE, shared with Body.js)
-  const hexOf = (c: any) => `#${c.getHexString(THREE.SRGBColorSpace)}`;
+  const hexOf = (c: THREE.Color) => `#${c.getHexString(THREE.SRGBColorSpace)}`;
   const rng = new Rng(look.seed || 7);
   const n = new Noise((look.seed || 7) + 11);
 
@@ -903,7 +903,7 @@ function paintFace(look: any, uv: any) {
     };
 
     /** Filled closed path through face-plane (x,y) points, cubic-smoothed. */
-    const shape = (pts: any, style: any, { mode = 'source-over', alpha = 1, blur = 0 } = {}) => {
+    const shape = (pts: number[][], style: any, { mode = 'source-over', alpha = 1, blur = 0 } = {}) => {
       const q = pts.map(([x, y]: any) => fx(x, y));
       ctx.save();
       ctx.globalCompositeOperation = mode;
@@ -923,7 +923,7 @@ function paintFace(look: any, uv: any) {
     };
 
     /** Stroked open curve through face-plane points. `w` in metres. */
-    const stroke = (pts: any, style: any, w: any, { mode = 'source-over', alpha = 1, blur = 0, cap = 'round' } = {}) => {
+    const stroke = (pts: number[][], style: string, w: number, { mode = 'source-over', alpha = 1, blur = 0, cap = 'round' } = {}) => {
       const q = pts.map(([x, y]: any) => fx(x, y));
       ctx.save();
       ctx.globalCompositeOperation = mode;
@@ -983,7 +983,7 @@ function paintFace(look: any, uv: any) {
     // grey-brown that reads as dirt or bruising rather than as shadow. Damping
     // the whole stack in one place keeps the relative structure (which is what
     // survives to mip 5) and stops the pile-up.
-    const ao = (p: any, rx: any, ry: any, a: any, col = '104,68,62') => {
+    const ao = (p: number[], rx: number, ry: number, a: number, col = '104,68,62') => {
       const rgbv = col.split(',').map((k) => Math.round(+k + (205 - +k) * 0.22));
       return soft(p, rx, ry, `rgba(${rgbv.join(',')},${a * 0.80})`, 1, 'multiply');
     };
@@ -1138,7 +1138,7 @@ function paintFace(look: any, uv: any) {
        * Canonical (x,y) of a point on the eye sphere at fissure fraction `f`,
        * elevation `e`, radius `eR * rk`.
        */
-      const eq = (f: any, e: any, rk = EYE.lidR) => {
+      const eq = (f: any, e: number, rk = EYE.lidR) => {
         const a = lerp(EYE.arc[0], EYE.arc[1], f);
         const spread = 1 + EYE.canthusSpread * Math.pow(Math.abs(f * 2 - 1), 2.2);
         return [
@@ -1150,9 +1150,9 @@ function paintFace(look: any, uv: any) {
       const em = (f: any, upper: any, d = 0, rk = EYE.lidR) =>
         eq(f, lidMargin(f, upper, (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]))
           + (upper ? d : -d), rk);
-      const ep = (p: any) => px([sg * p[0], p[1], 0.0795 - Math.abs(p[0] - 0.033) * 0.42]);
+      const ep = (p: number[]) => px([sg * p[0], p[1], 0.0795 - Math.abs(p[0] - 0.033) * 0.42]);
       /** Stroke a curve sampled along the fissure. */
-      const lidCurve = (upper: any, d: any, rk: any, f0 = 0.03, f1 = 0.97) => {
+      const lidCurve = (upper: boolean, d: number, rk: number, f0 = 0.03, f1 = 0.97) => {
         ctx.beginPath();
         for (let i = 0; i <= 12; i++) {
           const q = ep(em(lerp(f0, f1, i / 12), upper, d, rk));

@@ -52,7 +52,7 @@ export class CBuilder {
   }
 
   /** Smoothing group — normals only average between vertices sharing one. */
-  group(g: any) { this._g = g; return this; }
+  group(g: number) { this._g = g; return this; }
 
   /** Base colour for subsequent vertices. */
   color(c: any) {
@@ -85,10 +85,10 @@ export class CBuilder {
     return this.pos.length / 3 - 1;
   }
 
-  vv(p: any, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
+  vv(p: THREE.Vector3, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
   tri(a: any, b: any, c: any) { this.idx.push(a, b, c); return this; }
-  quad(a: any, b: any, c: any, d: any) { this.idx.push(a, b, c, a, c, d); return this; }
+  quad(a: number, b: number, c: number, d: number) { this.idx.push(a, b, c, a, c, d); return this; }
 
   get count() { return this.pos.length / 3; }
 
@@ -245,7 +245,7 @@ export function sweep(B: CBuilder, o: { nodes: any[], steps?: number, seg?: numb
 }
 
 /** Dome a sweep end so it reads as an end of a limb, not an open pipe. */
-function capRing(B: any, ring: any, p: any, tan: any, sign: any, height: any) {
+function capRing(B: CBuilder, ring: number[], p: THREE.Vector3, tan: THREE.Vector3, sign: number, height: any) {
   const n = ring.length;
   // measure the ring radius so the dome matches the tube it closes
   let rad = 0;
@@ -329,7 +329,7 @@ export function sculptBlob(B: CBuilder, o: any) {
  * Bevelled box built as a superellipsoid — the magitek panel primitive.
  * `power` 2 is a pill, 8 is a hard-edged plate with a crisp chamfer.
  */
-export function plate(B: any, o: any) {
+export function plate(B: CBuilder, o: any) {
   const s = o.size;
   const c = o.center || [0, 0, 0];
   const pw = o.power ?? 7;
@@ -447,7 +447,7 @@ export function mergeCreature(list: THREE.BufferGeometry[], defMat: number[] = [
   return out;
 }
 
-function fill(n: any, size: any, vals: any) {
+function fill(n: number, size: number, vals: number[]) {
   const a = new Float32Array(n * size);
   for (let i = 0; i < n; i++) for (let k = 0; k < size; k++) a[i * size + k] = vals[k];
   return a;

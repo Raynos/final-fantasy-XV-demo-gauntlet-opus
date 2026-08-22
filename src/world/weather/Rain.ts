@@ -155,7 +155,7 @@ void main() {
 `;
 
 /** Build an instanced quad field with a per-instance seed attribute. */
-function instancedQuad(count: any, seedSize: any, rand: any) {
+function instancedQuad(count: number, seedSize: number, rand: any) {
   const base = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
   geo.index = base.index;

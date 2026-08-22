@@ -106,7 +106,7 @@ export class RoadPath {
   }
 
   /** Yaw that faces an actor's +Z axis down the path at `f`. */
-  yawAt(f: any) { const t = this.tangent(f, this._t); return Math.atan2(t.x, t.z); }
+  yawAt(f: number) { const t = this.tangent(f, this._t); return Math.atan2(t.x, t.z); }
 
   /**
    * A world point: `f` metres along the road, `l` metres to the screen-left of

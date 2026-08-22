@@ -73,7 +73,7 @@ export class RoadPath {
     }
   }
 
-  _key(cx: any, cz: any) { return cx * 73856093 ^ cz * 19349663; }
+  _key(cx: number, cz: number) { return cx * 73856093 ^ cz * 19349663; }
 
   /**
    * Closest point on the centreline, with signed lateral offset.
@@ -186,7 +186,7 @@ export class RoadPath {
     return worst;
   }
 
-  _curvatureAt(s: any, h: any) {
+  _curvatureAt(s: number, h: number) {
     const a = this._t0 || (this._t0 = { x: 0, y: 0, z: 0, tx: 0, tz: 1 });
     const b = this._t1 || (this._t1 = { x: 0, y: 0, z: 0, tx: 0, tz: 1 });
     this.at(s - h, a);

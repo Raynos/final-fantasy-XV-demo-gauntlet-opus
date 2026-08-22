@@ -5,7 +5,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /* Albedo, and it was charcoal: PLATE at 0x33383f is 3.9% linear reflectance
  * and JOINT at 0x14161a is 0.9% — darker than any real surface outside a
@@ -267,7 +267,7 @@ class AxemanEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     this.visual.rotation.y = 0;
 
     // axe shouldered across the body, both hands on the haft
@@ -280,7 +280,7 @@ class AxemanEnemy extends Enemy {
       S('hdL', 0, -0.35 * k, 0);
     };
     // both arms hauled over the right shoulder, axe head high behind the helm
-    const wound = (e: any) => {
+    const wound = (e: number) => {
       S('shR', 0.28 - 3.20 * e, -0.10 - 0.35 * e, -0.42 + 0.60 * e);
       S('elR', -0.80 - 0.70 * e, 0, 0);
       S('hdR', -0.30 + 0.28 * e, 0, 0);

@@ -333,7 +333,7 @@ export class Cinematics {
 
   /* -------------------------------------------------------------- cues -- */
 
-  _cue(c: any, skipping: any) {
+  _cue(c: any, skipping: boolean) {
     const ctx = this.ctx;
     try {
       if (c.fn) c.fn(ctx, skipping);
@@ -366,8 +366,8 @@ export class Cinematics {
   _input(game: any) {
     const inp = game.input;
     if (!inp || !this.skippable) return;
-    const down = (k: any) => inp.keyDown && inp.keyDown(k);
-    const gp = (i: any) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
+    const down = (k: string) => inp.keyDown && inp.keyDown(k);
+    const gp = (i: number) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
     if (down('Escape') || down('Enter') || down('Space') || gp(1)) this.skip();
   }
 }

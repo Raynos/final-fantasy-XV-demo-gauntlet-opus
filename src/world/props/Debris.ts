@@ -527,7 +527,7 @@ export class Debris {
    * zone table does not know: a zone can want driftwood, but only the water's
    * edge can actually have any.
    */
-  _fit(key: any, x: any, z: any) {
+  _fit(key: string, x: number, z: number) {
     const eco = this.eco;
     const slope = eco.slope01(x, z);
     if (slope > 0.72) return 0;
@@ -586,7 +586,7 @@ export class Debris {
     }
   }
 
-  _genCell(cx: any, cz: any, out: any) {
+  _genCell(cx: number, cz: number, out: any) {
     const c = this.cell;
     const rng = new Rng(hash3(cx, cz, 0x5d13));
     const bx = cx * c, bz = cz * c;
@@ -612,7 +612,7 @@ export class Debris {
     }
   }
 
-  update(camPos: any) {
+  update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos) >= 100;
     const changed = this.stream.update(camPos);
     if (!moved && !changed) return;

@@ -114,7 +114,7 @@ function buildPrototype() {
   // theta 0 = +Z side of the ring; because the sweep runs along +Z the ring
   // frame puts theta = π/2 on the animal's left and 0 on its back.
   B.group(1);
-  const backline = (th: any) => Math.cos(th);           // +1 on the spine, -1 on the belly
+  const backline = (th: number) => Math.cos(th);           // +1 on the spine, -1 on the belly
   sweep(B, {
     nodes: [
       { p: [0, 0.70, -0.80], rx: 0.145, rz: 0.155 },
@@ -433,7 +433,7 @@ function buildPrototype() {
 }
 
 /** Toe pad group: three digits and their claws. */
-function paw(B: any, x: any, y: any, z: any, dir: any) {
+function paw(B: CBuilder, x: number, y: number, z: number, dir: number) {
   const sgn = Math.sign(x) || 1;
   for (let i = -1; i <= 1; i++) {
     const ox = x + i * 0.033 * sgn;
@@ -455,7 +455,7 @@ function paw(B: any, x: any, y: any, z: any, dir: any) {
   }
 }
 
-function resetB(B: any) {
+function resetB(B: CBuilder) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);

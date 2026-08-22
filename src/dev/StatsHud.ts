@@ -40,7 +40,7 @@ export class StatsHud {
     this.visible = true;
   }
 
-  setVisible(v: any) {
+  setVisible(v: boolean) {
     this.visible = !!v;
     this.node.style.display = v ? '' : 'none';
   }
@@ -66,7 +66,7 @@ export class StatsHud {
     let worst = 0;
     for (const s of this.samples) if (s > worst) worst = s;
 
-    const row = (k: any, v: any) => `<div><span>${k}</span><b>${v}</b></div>`;
+    const row = (k: string, v: any) => `<div><span>${k}</span><b>${v}</b></div>`;
     this.rows.innerHTML = [
       row('fps', (game.time.fps || 0).toFixed(1)),
       row('frame', `${ms.toFixed(1)} ms`),

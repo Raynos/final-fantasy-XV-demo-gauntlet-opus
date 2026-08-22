@@ -373,7 +373,7 @@ export function readGear(game: any, id: string) {
   return out;
 }
 
-function slotView(slot: any, def: any) {
+function slotView(slot: string, def: any) {
   if (!def) return { slot, name: '— Empty —', stat: '', empty: true, id: null };
   return {
     slot, id: def.id, name: def.name,

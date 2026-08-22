@@ -33,7 +33,7 @@ export class Spring {
   v!: number;
   x!: number;
   constructor(k = 90, c = 14) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target: any, dt: any) {
+  step(target: number, dt: any) {
     // sub-step so a long frame (or a hitstop leaving and re-entering) stays stable
     const n = dt > 0.033 ? Math.ceil(dt / 0.016) : 1;
     const h = dt / n;
@@ -44,7 +44,7 @@ export class Spring {
     if (!Number.isFinite(this.x)) { this.x = 0; this.v = 0; }
     return this.x;
   }
-  kick(v: any) { this.v += v; return this; }
+  kick(v: number) { this.v += v; return this; }
   reset() { this.x = 0; this.v = 0; return this; }
 }
 
@@ -409,7 +409,7 @@ export class CreatureAnim {
 
 export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
-export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Slow start, hard finish — a limb accelerating into a blow. */
 export function accelerate(x: any, p = 2.6) { return Math.pow(clamp01(x), p); }
@@ -472,7 +472,7 @@ export function attackEnvelope(state: string, t: number, timing: any) {
  * Hit-reaction shape. `level` 0 flinch → 3 launch. Returns the blend weight
  * of the reaction pose plus a recoil that decays with a bounce.
  */
-export function hitCurve(t: any, dur: any, level = 0) {
+export function hitCurve(t: any, dur: number, level = 0) {
   const f = clamp01(t / dur);
   const rise = clamp01(t / (0.04 + level * 0.02));
   const fall = 1 - smooth(clamp01((f - 0.35) / 0.65));

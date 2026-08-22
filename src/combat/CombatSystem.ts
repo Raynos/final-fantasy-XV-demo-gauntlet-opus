@@ -363,7 +363,7 @@ export class CombatSystem {
    * other choreography keep time here rather than owning a clock each.
    * @param delay @param fn @param [arg]
    */
-  schedule(delay: number, fn: ((...args: any[]) => any), arg?: any) { this._sched.push({ t: delay, fn, arg }); }
+  schedule(delay: number, fn: ((...args: any[]) => any), arg?: number) { this._sched.push({ t: delay, fn, arg }); }
 
   _drain(dt: any) {
     const s = this._sched;
@@ -396,7 +396,7 @@ export class CombatSystem {
     return true;
   }
 
-  _startSwing(index: any) {
+  _startSwing(index: number) {
     const def = this.weapon.def;
     const step = def.combo[index % def.combo.length];
     this.heavySwing = false;
@@ -674,7 +674,7 @@ export class CombatSystem {
     const power = Math.max(0.6, Math.min(2.2, spell.radius / 4));
     const bursts = Math.max(1, spell.multicast || 1);
 
-    const fire = (i: any) => {
+    const fire = (i: number) => {
       const p = pos.clone();
       if (i > 0) { p.x += this.rng.range(-2, 2); p.z += this.rng.range(-2, 2); }
       this.cast(spell.element, p, { power, motion, radius: spell.radius, poise: 30 + spell.tier * 20 });
@@ -1084,8 +1084,8 @@ export class CombatSystem {
     // controls card can print both columns without either being a promise the
     // game does not keep. `gpDown` is a real rising edge tracked by Input.
     const pad = input.gpDown ? input : null;
-    const gpHeld = (i: any) => !!(pad && input.gpButton(i));
-    const gpEdge = (i: any) => !!(pad && input.gpDown(i));
+    const gpHeld = (i: number) => !!(pad && input.gpButton(i));
+    const gpEdge = (i: number) => !!(pad && input.gpDown(i));
 
     // Circle taps to dodge and holds to phase, exactly as FFXV does it. A/Cross
     // stays free for the interact verb, which owns it everywhere else.
@@ -1206,7 +1206,7 @@ export class CombatSystem {
    * arc is, which is both how a sword is actually swung and what makes the
    * trail ribbon read as a sweep rather than a flick.
    */
-  _poseHand(ang: any, step: any, phase: any, n: any) {
+  _poseHand(ang: number, step: any, phase: string, n: number) {
     const h = this.hand;
     const k = THREE.MathUtils.clamp(n, 0, 1);
     // near-vertical at rest, laid right over through the active window
@@ -1310,12 +1310,12 @@ export class CombatSystem {
     }
   }
 
-  _closestOn(enemy: any, p: any) {
+  _closestOn(enemy: any, p: THREE.Vector3) {
     const c = enemy.centre();
     return c.lerp(p, 0.55);
   }
 
-  _fireShot(n: any) {
+  _fireShot(n: number) {
     if (this._shotFired) return;
     this._shotFired = true;
     const target = this.lockTarget || this.autoTarget(30);
@@ -1461,8 +1461,8 @@ const ITEM_CLASS_TO_KIND = {
 /** What the three magic keys do before anything has been crafted. */
 const FALLBACK_ELEMENTS: ('fire' | 'ice' | 'lightning')[] = ['fire', 'ice', 'lightning'];
 
-function ease(n: any) { const t = THREE.MathUtils.clamp(n, 0, 1); return t * t * (3 - 2 * t); }
+function ease(n: number) { const t = THREE.MathUtils.clamp(n, 0, 1); return t * t * (3 - 2 * t); }
 /** Fast attack, slow settle — makes a swing feel like it has weight. */
-function snap(n: any) { const t = THREE.MathUtils.clamp(n, 0, 1); return 1 - Math.pow(1 - t, 3.4); }
+function snap(n: number) { const t = THREE.MathUtils.clamp(n, 0, 1); return 1 - Math.pow(1 - t, 3.4); }
 
 export { WEAPONS };

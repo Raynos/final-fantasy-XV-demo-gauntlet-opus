@@ -1,4 +1,5 @@
 import { impulseResponse, softClipCurve, EPS, clamp } from './Dsp.ts';
+import type * as THREE from 'three';
 
 /**
  * The mix. Every sound in the game lands on one of five buses, and the buses
@@ -306,7 +307,7 @@ export class AudioGraph {
   }
 
   /** Reverb depth for music (0..1). Camp and interiors want a drier score. */
-  setMusicReverb(v: any, glide = 1.2, at: any = null) {
+  setMusicReverb(v: number, glide = 1.2, at: any = null) {
     this.sendLong.gain.setTargetAtTime(clamp(v, 0, 1) * 0.5, at ?? this.now, glide);
   }
 
@@ -342,7 +343,7 @@ export class AudioGraph {
   }
 
   /** Drop finished voices and return how many are still sounding at `t`. */
-  _compact(t: any) {
+  _compact(t: number) {
     const e = this._live;
     let k = 0;
     for (let i = 0; i < e.length; i++) if (e[i].end > t) e[k++] = e[i];
@@ -429,7 +430,7 @@ export class AudioGraph {
   }
 
   /** Move the listener to the camera. Called once a frame. */
-  setListener(pos: any, forward: any, up: any) {
+  setListener(pos: THREE.Vector3, forward: THREE.Vector3, up: THREE.Vector3) {
     const L = this.ctx.listener;
     if (!L) return;
     if (this.hasParamListener) {

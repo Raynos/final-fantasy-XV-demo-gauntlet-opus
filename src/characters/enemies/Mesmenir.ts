@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow, loft, bladeCross } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const HIDE = 0x2c2a36;
 const HIDE_DARK = 0x161520;
@@ -60,7 +60,7 @@ export const MESMENIR = {
  * One flame streamer: a flat swept tapered blade built hanging along -Y so
  * `place` can aim it. No particles anywhere on this creature.
  */
-function flame(len: any, w: any, sweep: any, seg = 4) {
+function flame(len: number, w: number, sweep: number, seg = 4) {
   const secs = [];
   for (let i = 0; i < seg; i++) {
     const t = i / (seg - 1);
@@ -315,10 +315,10 @@ class MesmenirEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: any, y: number, z: number) => poseBone(rig, n, x, y, z);
 
     /** Mane and tail fire: a travelling ripple down each chain. */
-    const fire = (lift: any, amp: any, freq: any, drag: any) => {
+    const fire = (lift: number, amp: number, freq: number, drag: number) => {
       S('mn1', lift + Math.sin(t * freq) * amp, Math.sin(t * freq * 0.7) * amp * 0.8, 0);
       S('mn2', lift * 0.8 + Math.sin(t * freq - 0.8) * amp * 1.3, Math.sin(t * freq * 0.7 - 0.6) * amp, 0);
       S('mn3', lift * 0.6 + Math.sin(t * freq - 1.6) * amp * 1.7, Math.sin(t * freq * 0.7 - 1.2) * amp * 1.2, 0);
@@ -328,7 +328,7 @@ class MesmenirEnemy extends Enemy {
     };
 
     /** A real four-beat gallop: four distinct footfalls, then suspension. */
-    const gallop = (ph: any, reach: any) => {
+    const gallop = (ph: number, reach: number) => {
       for (const s of [-1, 1]) {
         const n = s < 0 ? 'L' : 'R';
         const fo = GALLOP[`f${n}`], bo = GALLOP[`b${n}`];

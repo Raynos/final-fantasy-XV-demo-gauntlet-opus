@@ -236,7 +236,7 @@ export class Layout {
    * doorways where two regions overlap.
    * @returns [x, z]
    */
-  clampInside(x: any, z: any, margin = 0.55): number[] {
+  clampInside(x: number, z: number, margin = 0.55): number[] {
     if (this.regionAt(x, z)) {
       // already inside: only nudge if a wall is closer than the margin *and*
       // no neighbouring region covers the overlap (i.e. it is not a doorway)
@@ -341,7 +341,7 @@ function elbow(pts: any, order: any) {
  * Trim a corridor path so it begins on the room's wall rather than at its
  * centre. Without this every corridor would tunnel through the room's floor.
  */
-function clipToRoom(path: any, room: any, width: any, fromEnd: any) {
+function clipToRoom(path: any, room: any, width: any, fromEnd: boolean) {
   const hx = room.w * 0.5, hz = room.d * 0.5;
   const inside = (p: any) => Math.abs(p[0] - room.x) < hx - 0.01 && Math.abs(p[1] - room.z) < hz - 0.01;
   if (fromEnd) {
@@ -375,7 +375,7 @@ function wallPoint(outside: any, centre: any, room: any) {
   return [outside[0] + dx * t, outside[1] + dz * t, y0 + (y1 - y0) * t];
 }
 
-export function corridorContains(c: any, x: any, z: any, pad: any) {
+export function corridorContains(c: any, x: any, z: any, pad: number) {
   return distToPath(c.path, x, z) <= c.width * 0.5 + pad;
 }
 
@@ -423,7 +423,7 @@ function roomFloor(r: any, x: any, z: any) {
   return r.y;
 }
 
-function pushIn(r: any, x: any, z: any, margin: any) {
+function pushIn(r: any, x: any, z: any, margin: number) {
   if (r.isRoom) return nearestInRect(r.x, r.z, r.w, r.d, x, z, margin);
   return nearestOnCorridor(r, x, z, margin);
 }

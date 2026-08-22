@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 /**
  * Camera-relative scatter streaming.
  *
@@ -113,7 +114,7 @@ export class TileStream {
   get settling() { return this._pending.length > 0; }
 
   /** Drain the whole backlog now. Used once at build time. */
-  flush(camPos: any, maxCells = 4000) {
+  flush(camPos: THREE.Vector3, maxCells = 4000) {
     const b = this.budget;
     this.budget = maxCells;
     this.update(camPos);

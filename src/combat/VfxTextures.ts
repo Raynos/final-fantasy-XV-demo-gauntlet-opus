@@ -14,7 +14,7 @@ const cache = new Map();
 const vfxNoise = new Noise(4242);
 
 /** Build an RGBA DataTexture from a per-texel callback writing into `out[4]`. */
-function rgba(size: any, fn: any, { colorSpace = THREE.SRGBColorSpace, mips = true }: { colorSpace?: THREE.ColorSpace, mips?: boolean } = {}) {
+function rgba(size: number, fn: any, { colorSpace = THREE.SRGBColorSpace, mips = true }: { colorSpace?: THREE.ColorSpace, mips?: boolean } = {}) {
   const data = new Uint8Array(size * size * 4);
   const out = [0, 0, 0, 0];
   for (let y = 0; y < size; y++) {
@@ -37,11 +37,11 @@ function rgba(size: any, fn: any, { colorSpace = THREE.SRGBColorSpace, mips = tr
   return tex;
 }
 
-function c255(v: any) { return v < 0 ? 0 : v > 1 ? 255 : (v * 255) | 0; }
-function smoothstep(a: any, b: any, x: any) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+function c255(v: number) { return v < 0 ? 0 : v > 1 ? 255 : (v * 255) | 0; }
+function smoothstep(a: number, b: number, x: number) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
 /** Cached accessor. */
-function tex(name: any, make: any) {
+function tex(name: string, make: any) {
   let t = cache.get(name);
   if (!t) { t = make(); cache.set(name, t); }
   return t;
@@ -244,7 +244,7 @@ export function crackDecal() {
   });
 }
 
-function stamp(buf: any, size: any, x: any, y: any, r: any, amt: any) {
+function stamp(buf: Float32Array, size: number, x: number, y: number, r: number, amt: number) {
   const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(size - 1, Math.ceil(x + r));
   const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(size - 1, Math.ceil(y + r));
   for (let j = y0; j <= y1; j++) {

@@ -5,7 +5,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const CHAR = 0x322c28;
 const CHAR_DARK = 0x1c1917;
@@ -66,7 +66,7 @@ export const RED_GIANT = {
 };
 
 /** A thin inset strip of molten light, for the cracks between the plates. */
-function seam(w: any, h: any, d: any, pos: any, rot: any, heat = 2.6) {
+function seam(w: number, h: number, d: number, pos: number[], rot: number[] | null, heat = 2.6) {
   return glow(tint(place(slab(w, h, d, Math.min(w, h, d) * 0.2), { pos, rot }), EMBER), MOLTEN, heat);
 }
 
@@ -287,7 +287,7 @@ class RedGiantEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     // sword resting point-down at the right side, left hand loose
     const carry = (k = 1) => {
       S('shR', 0.34 * k, 0, -0.30 * k);

@@ -1,3 +1,4 @@
+import type { AudioSystem } from '../../../audio/AudioSystem.ts';
 /**
  * Per-dungeon ambient audio.
  *
@@ -17,7 +18,7 @@ export class DungeonAmbience {
   desc!: any;
   nodes!: any;
   /** @param audio the game's AudioSystem (may be a stub) */
-  constructor(audio: any) {
+  constructor(audio: AudioSystem | null) {
     this.audio = audio;
     this.nodes = null;
     this.desc = null;
@@ -119,7 +120,7 @@ export class DungeonAmbience {
     this.nodes = null;
   }
 
-  _noise(ctx: any, seconds: any) {
+  _noise(ctx: any, seconds: number) {
     const len = Math.floor(ctx.sampleRate * seconds);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);

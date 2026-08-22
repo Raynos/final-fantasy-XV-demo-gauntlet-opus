@@ -205,7 +205,7 @@ export class CameraRig {
    * Sweep the arm from the focus point outward and return the first distance
    * at which the camera would clip something.
    */
-  _armDistance(game: any, focus: any, dir: any, wanted: any) {
+  _armDistance(game: any, focus: THREE.Vector3, dir: THREE.Vector3, wanted: number) {
     let d = wanted;
     const terrain = game.get('Terrain');
     if (terrain && terrain.heightAt) {
@@ -236,12 +236,12 @@ export class CameraRig {
     return d;
   }
 
-  _shakeOffset(dt: any, out: any, rot: any) {
+  _shakeOffset(dt: any, out: THREE.Vector3, rot: THREE.Vector3) {
     const tr = this.trauma;
     if (tr <= 0.0001) { out.set(0, 0, 0); rot.set(0, 0, 0); return; }
     const s = tr * tr;                       // quadratic falloff reads better
     const t = this._t * this.shakeFreq;
-    const n = (o: any) => this._noise.simplex2(t, o);
+    const n = (o: number) => this._noise.simplex2(t, o);
     out.set(n(0.0), n(11.3), n(23.7)).multiplyScalar(s * this.shakePos);
     if (this._traumaDir.lengthSq() > 0.01) {
       out.addScaledVector(this._traumaDir, s * this.shakePos * 0.9 * n(31.1));
@@ -249,7 +249,7 @@ export class CameraRig {
     rot.set(n(41.2) * this.shakeRot * s, n(53.9) * this.shakeRot * s, n(67.5) * this.shakeRot * 1.6 * s);
   }
 
-  _drivePost(game: any, focusPoint: any) {
+  _drivePost(game: any, focusPoint: THREE.Vector3) {
     const post = game.post;
     if (!post) return;
     if (!post.game && post.attach) post.attach(game);
@@ -375,7 +375,7 @@ export class CameraRig {
     const hh = this.handheld;
     if (hh > 0) {
       const t = this._t;
-      const n = (o: any, f: any) => this._noise.simplex2(t * f, o);
+      const n = (o: number, f: number) => this._noise.simplex2(t * f, o);
       this._smooth.x += n(3.1, 0.42) * 0.020 * hh;
       this._smooth.y += n(9.7, 0.31) * 0.026 * hh;
       this._smooth.z += n(15.3, 0.37) * 0.020 * hh;
@@ -414,7 +414,7 @@ export class CameraRig {
 }
 
 /** Shortest-arc lerp between two angles. */
-function angleLerp(a: any, b: any, t: any) {
+function angleLerp(a: number, b: number, t: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

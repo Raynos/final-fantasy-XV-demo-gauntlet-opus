@@ -221,7 +221,7 @@ function placeCrew(ctx: any, t: any) {
   const F = ctx.data.F;
   if (!F) return;
   const f = carF(t);
-  const yawAt = (ff: any) => (F.yawAt ? F.yawAt(ff) : F.yaw);
+  const yawAt = (ff: number) => (F.yawAt ? F.yawAt(ff) : F.yaw);
 
   // ---- the Regalia -------------------------------------------------------
   const car = ctx.data.car;
@@ -263,7 +263,7 @@ function placeCrew(ctx: any, t: any) {
 }
 
 /** Terrain height at a scene-frame offset. */
-function height(terrain: any, F: any, f: any, l: any) {
+function height(terrain: any, F: any, f: number, l: number) {
   const p = F.at(f, l, 0);
   return terrain.heightAt(p[0], p[2]);
 }
@@ -297,11 +297,11 @@ function buildShots(ctx: any) {
    * the move — the sort of error that reads as "the framing is a bit off" and
    * is actually a coordinate bug.
    */
-  const G = (f: any, l: any, u: any) => F.ground(terrain, f, l * S, u);
+  const G = (f: number, l: number, u: any) => F.ground(terrain, f, l * S, u);
   /** The centre of the pushing line at scene time `t`. */
-  const crew = (t: any, u: any) => G(carF(t) - 3.4, 0, u);
+  const crew = (t: number, u: number) => G(carF(t) - 3.4, 0, u);
   /** One of the four, exactly where `placeCrew` will put him. */
-  const man = (t: any, id: any, u: any) => G(carF(t) + SLOTS[id as keyof typeof SLOTS][0], SLOTS[id as keyof typeof SLOTS][1] / S, u);
+  const man = (t: number, id: string, u: number) => G(carF(t) + SLOTS[id as keyof typeof SLOTS][0], SLOTS[id as keyof typeof SLOTS][1] / S, u);
   const stopL = (ctx.data.stopL ?? 0) / (S || 1);
 
   return [

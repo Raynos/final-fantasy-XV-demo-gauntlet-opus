@@ -166,4 +166,4 @@ export class AutoDrive {
   }
 }
 
-function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
+function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }

@@ -30,7 +30,8 @@ export class Score {
   state!: MusicState;
   _at!: number | null;
   _queue!: any[];
-  _timer!: number | null;
+  /** See `Radio._timer`: the handle type differs between DOM and node. */
+  _timer!: ReturnType<typeof setInterval> | null;
   ctx!: any;
   cycle!: number;
   filter!: any;
@@ -160,7 +161,7 @@ export class Score {
     this.graph.setMusicReverb(st.reverb ?? 0.8, Math.max(0.5, fade * 0.5), this.clock);
   }
 
-  _fadeLayers(fade: any) {
+  _fadeLayers(fade: number) {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
@@ -173,7 +174,7 @@ export class Score {
   }
 
   /** Intensity reshapes the arrangement inside a state without changing it. */
-  _layerTarget(name: any, base: any) {
+  _layerTarget(name: string, base: number) {
     if (base <= 0) return 0;
     const i = this.intensity;
     if (this.stateName === 'combat' || this.stateName === 'boss') {
@@ -262,7 +263,7 @@ export class Score {
   }
 
   /** Arrange and schedule one bar starting at `t`. */
-  _bar(t: any) {
+  _bar(t: number) {
     const st = this.state;
     const beat = this.beatDur;
     const meter = st.meter;
@@ -284,7 +285,7 @@ export class Score {
 
   /* ------------------------------------------------------------- layers */
 
-  _bass(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
+  _bass(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.bass ?? 0) <= 0) return;
     const dest = this.layer.bass;
     const root = ftom(A2, tonic + chord.r);
@@ -322,7 +323,7 @@ export class Score {
     }
   }
 
-  _pad(t: any, barLen: any, chord: any, tonic: any) {
+  _pad(t: any, barLen: number, chord: any, tonic: number) {
     if ((this.state.layers!.pad ?? 0) <= 0) return;
     const dest = this.layer.pad;
     // Three voices maximum: a fourth costs a voice and adds nothing you can
@@ -336,7 +337,7 @@ export class Score {
     }
   }
 
-  _strings(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
+  _strings(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.strings ?? 0) <= 0) return;
     const dest = this.layer.strings;
     const notes = voiceChord(chord, 12);
@@ -364,7 +365,7 @@ export class Score {
     }
   }
 
-  _harp(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
+  _harp(t: any, barLen: number, beat: number, chord: any, tonic: number, meter: number) {
     if ((this.state.layers!.harp ?? 0) <= 0) return;
     const dest = this.layer.harp;
     const notes = voiceChord(chord, 12);
@@ -382,7 +383,7 @@ export class Score {
     }
   }
 
-  _choir(t: any, barLen: any, chord: any, tonic: any, first: any) {
+  _choir(t: any, barLen: number, chord: any, tonic: number, first: boolean) {
     if ((this.state.layers!.choir ?? 0) <= 0) return;
     const dest = this.layer.choir;
     // The choir is expensive (three formant filters a voice) — two notes only.
@@ -397,7 +398,7 @@ export class Score {
     }
   }
 
-  _brass(t: any, barLen: any, beat: any, chord: any, next: any, tonic: any, meter: any) {
+  _brass(t: any, barLen: number, beat: number, chord: any, next: any, tonic: number, meter: number) {
     if ((this.state.layers!.brass ?? 0) <= 0) return;
     const dest = this.layer.brass;
     const notes = voiceChord(chord, 0);
@@ -428,7 +429,7 @@ export class Score {
     }
   }
 
-  _perc(t: any, beat: any, meter: any, first: any) {
+  _perc(t: any, beat: number, meter: number, first: boolean) {
     if ((this.state.layers!.perc ?? 0) <= 0) return;
     const dest = this.layer.perc;
     const s = this.stateName;
@@ -473,7 +474,7 @@ export class Score {
    * The tune. Which instrument carries it is the state's whole personality:
    * strings on the field, brass in combat, choir at a boss, flute at camp.
    */
-  _melody(t: any, beat: any, meter: any, tonic: any) {
+  _melody(t: any, beat: number, meter: number, tonic: number) {
     const weight = this.state.layers!.melody ?? 0;
     if (weight <= 0) return;
     const mel = this.state.melody;

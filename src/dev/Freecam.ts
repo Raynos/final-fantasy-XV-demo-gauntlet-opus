@@ -149,7 +149,7 @@ export class Freecam {
     // loses yaw entirely and the camera snaps to a random heading.
     this.pitch = THREE.MathUtils.clamp(this.pitch, -Math.PI / 2 + 0.001, Math.PI / 2 - 0.001);
 
-    const k = (c: any) => (input.key(c) ? 1 : 0);
+    const k = (c: string) => (input.key(c) ? 1 : 0);
     const fwd = k('KeyW') - k('KeyS');
     const strafe = k('KeyD') - k('KeyA');
     const lift = k('KeyE') - k('KeyQ');
@@ -218,7 +218,7 @@ export class Freecam {
     this._e.set(this.pitch, this.yaw, 0, 'YXZ');
     this._q.setFromEuler(this._e);
     const f = this._fwd.set(0, 0, -1).applyQuaternion(this._q);
-    const r = (n: any) => Number(n.toFixed(1));
+    const r = (n: number) => Number(n.toFixed(1));
     return {
       pos: [r(this.pos.x), r(this.pos.y), r(this.pos.z)],
       target: [r(this.pos.x + f.x * 30), r(this.pos.y + f.y * 30), r(this.pos.z + f.z * 30)],

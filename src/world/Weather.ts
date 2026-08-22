@@ -46,7 +46,7 @@ const PRESETS = {
 };
 
 /** Dawn adds a cold pool of mist to the low ground whatever the weather is. */
-function dawnFogBoost(hours: any) {
+function dawnFogBoost(hours: number) {
   const h = ((hours % 24) + 24) % 24;
   const dawn = Math.max(0, 1 - Math.abs(h - 6.6) / 2.4);
   const dusk = Math.max(0, 1 - Math.abs(h - 20.0) / 1.8);

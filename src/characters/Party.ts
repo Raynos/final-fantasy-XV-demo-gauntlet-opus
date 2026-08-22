@@ -104,7 +104,7 @@ export class Party {
   get stats() { return this.members.map((m) => m.stats); }
 
   /** @returns member by character name */
-  get(name: any): any | undefined { return this.members.find((m) => m.name === name || m.key === name); }
+  get(name: string): any | undefined { return this.members.find((m) => m.name === name || m.key === name); }
 
   /**
    * Draw the stochastic fields for one member off `this.rnd`.
@@ -127,7 +127,7 @@ export class Party {
    * target) and `snap()` (as the place to put them). If these two ever disagree
    * the formation drifts on the first frame after a snap.
    */
-  _slotTarget(m: any, pp: any, cos: any, sin: any, out: any) {
+  _slotTarget(m: any, pp: any, cos: number, sin: number, out: any) {
     const ox = m.slot.x + Math.sin(m.wander) * 0.42;
     const oz = m.slot.y + Math.cos(m.wander * 0.73) * 0.34;
     return out.set(pp.x + ox * cos + oz * sin, 0, pp.z - ox * sin + oz * cos);
@@ -228,7 +228,7 @@ export class Party {
 
       // separation from Noctis and from each other
       const push = new THREE.Vector3();
-      const addPush = (ox2: any, oz2: any, minD: any, weight: any) => {
+      const addPush = (ox2: any, oz2: any, minD: number, weight: number) => {
         const dx = m.root.position.x - ox2, dz = m.root.position.z - oz2;
         const d = Math.hypot(dx, dz);
         if (d < minD && d > 1e-4) push.add(new THREE.Vector3(dx / d, 0, dz / d).multiplyScalar((minD - d) * weight));

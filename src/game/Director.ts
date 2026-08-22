@@ -140,7 +140,7 @@ export class Director {
    * the past, so a *frozen* frame still shows a fully populated, mid-life
    * particle field instead of a single burst.
    */
-  seedAmbient(centre: any, radius: any, t0: any, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
+  seedAmbient(centre: any, radius: number, t0: number, { motes = 90, dust = 60, color = 0xffd9a8 } = {}) {
     const vfx = this.vfx, rng = this.rng;
     const c = new THREE.Color(color);
     for (let i = 0; i < motes; i++) {

@@ -294,7 +294,7 @@ export class LightRig {
   }
 }
 
-function hash(i: any) {
+function hash(i: number) {
   let s = (i * 2654435761) >>> 0;
   s = Math.imul(s ^ (s >>> 15), s | 1);
   s ^= s + Math.imul(s ^ (s >>> 7), s | 61);

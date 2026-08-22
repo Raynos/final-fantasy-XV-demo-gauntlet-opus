@@ -84,7 +84,7 @@ export class ScreenFX {
   }
 
   /** Cinematic edge darkening strength (0..1). */
-  setCinematic(v: any) { this.cineAmt = clamp(v, 0, 1); }
+  setCinematic(v: number) { this.cineAmt = clamp(v, 0, 1); }
 
   /**
    * @param dt seconds
@@ -109,7 +109,7 @@ export class ScreenFX {
     this._updateLevel(dt);
   }
 
-  _updateCard(dt: any) {
+  _updateCard(dt: number) {
     const s = this.cardState;
     if (!s) { this.card.style.opacity = '0'; return; }
     s.clip.step(dt);
@@ -132,7 +132,7 @@ export class ScreenFX {
     this.card.style.transform = `translateY(${(-out * 10).toFixed(1)}px)`;
   }
 
-  _updateLevel(dt: any) {
+  _updateLevel(dt: number) {
     const s = this.luState;
     if (!s) { this.lu.style.opacity = '0'; return; }
     s.step(dt);

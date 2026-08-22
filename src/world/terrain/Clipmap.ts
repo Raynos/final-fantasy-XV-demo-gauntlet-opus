@@ -57,7 +57,7 @@ export class Clipmap {
   }
 
   /** One quadrant of one ring, in level-local metres. */
-  _quadrant(level: any, cell: any, sx: any, sz: any) {
+  _quadrant(level: number, cell: number, sx: number, sz: number) {
     const n = this.n;
     const outer = 2 * n;              // cells from centre to edge
     const hole = level === 0 ? 0 : n - 4;

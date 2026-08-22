@@ -79,7 +79,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Arm pose as three joint angles per side. */
-  arm(S: any, side: any, sh: any, el: any, hd: any) {
+  arm(S: any, side: string, sh: any, el: number[], hd: number[] | null) {
     const c = this.A.arms[side];
     if (!c) return;
     S(c[0], sh[0], sh[1], sh[2]);
@@ -164,7 +164,7 @@ export class BipedEnemy extends Enemy {
    * Arms during locomotion. Default is a counter-swing; a species carrying a
    * weapon overrides this to keep the weapon on target instead.
    */
-  poseArms(S: any, t: any, swing: any, norm: any) {
+  poseArms(S: any, t: any, swing: number, norm: any) {
     const A = this.A;
     this.arm(S, 'L', [swing, 0, A.armOut ?? 0.10], [-(A.elbow ?? 0.4) - Math.max(0, swing) * 0.5, 0, 0], null);
     this.arm(S, 'R', [-swing, 0, -(A.armOut ?? 0.10)], [-(A.elbow ?? 0.4) - Math.max(0, -swing) * 0.5, 0, 0], null);
@@ -177,7 +177,7 @@ export class BipedEnemy extends Enemy {
   }
 
   /** Species wind-up. Default: shoulders load back, weight onto the rear foot. */
-  poseWindUp(S: any, t: any, k: any, env: any) {
+  poseWindUp(S: any, t: any, k: number, env: any) {
     const A = this.A;
     this.stance(S, {
       drop: (A.crouch ?? 0.06) * k,

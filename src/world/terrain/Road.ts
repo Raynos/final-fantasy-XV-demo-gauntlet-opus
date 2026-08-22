@@ -370,7 +370,7 @@ export class RoadNetwork {
   }
 }
 
-function smoothstep(a: any, b: any, x: any) {
+function smoothstep(a: any, b: any, x: number) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }

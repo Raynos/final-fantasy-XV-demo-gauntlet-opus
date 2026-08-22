@@ -31,7 +31,7 @@ import type { RoadPath } from './RoadPath.ts';
 const G = 9.81;
 
 /** Longitudinal drive force available at a given road speed, newtons. */
-function engineCurve(v: any, maxForce: any, vMax: any) {
+function engineCurve(v: number, maxForce: number, vMax: number) {
   if (v < 0) return maxForce;                       // rolling backwards: full shove
   const t = Math.min(1, v / vMax);
   // flat-ish to 35% of vMax then falling away; zero at vMax
@@ -108,7 +108,7 @@ export class VehicleBody {
   yawDamp!: number;
   yawRate!: number;
   /** Highest support under a wheel: town slabs and pads before raw terrain. */
-  _groundAt(t: any, x: any, z: any, fromY: any) {
+  _groundAt(t: any, x: number, z: number, fromY: number) {
     if (this.collision && this.collision.ready) {
       const g = this.collision.groundAt(x, z, fromY, 1.2, 4);
       if (g) return g.y;
@@ -217,7 +217,7 @@ export class VehicleBody {
   }
 
   /** Place the car, at rest, facing `heading`. */
-  reset(x: any, z: any, heading: any) {
+  reset(x: any, z: any, heading: number) {
     this.pos.set(x, 0, z);
     this.heading = heading;
     this.yawRate = 0;
@@ -309,7 +309,7 @@ export class VehicleBody {
     for (let i = 0; i < n; i++) this._substep(sub, c);
   }
 
-  _substep(dt: any, c: any) {
+  _substep(dt: number, c: any) {
     const throttle = clamp01(c.throttle || 0);
     const brake = clamp01(c.brake || 0);
     const hand = c.handbrake ? 1 : 0;
@@ -564,7 +564,7 @@ export class VehicleBody {
   get kmh() { return this.speed * 3.6; }
 }
 
-function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
+function clamp(v: any, a: number, b: any) { return v < a ? a : v > b ? b : v; }
 function clamp01(v: any) { return v < 0 ? 0 : v > 1 ? 1 : v; }
-function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
-function damp(a: any, b: any, lambda: any, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }
+function lerp(a: number, b: number, t: any) { return a + (b - a) * t; }
+function damp(a: any, b: any, lambda: number, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }

@@ -29,7 +29,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   const sample = skullSampler(look);
   const B = new MeshBuilder('hair');
 
-  const put = (p: any) => new THREE.Vector3(p.x, p.y, p.z).multiplyScalar(scale).add(origin);
+  const put = (p: THREE.Vector3) => new THREE.Vector3(p.x, p.y, p.z).multiplyScalar(scale).add(origin);
   const base = new THREE.Color().setHex(H.color, THREE.SRGBColorSpace);
   const tip = new THREE.Color().setHex(H.tipColor ?? H.color, THREE.SRGBColorSpace);
   const rootC = base.clone().multiplyScalar(0.84);
@@ -75,7 +75,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   const shell = [];
   const shellN = new Noise((look.seed || 7) * 3 + 17);
   B.color(base).mat((H.rough ?? 0.36) + 0.22, 0, 0).skin([[I.head, 1]]);
-  const shellPoint = (th: any, t: any) => {
+  const shellPoint = (th: number, t: number) => {
     const pm = phiOf(th);
     const phi = pm * Math.min(1, t * 1.02);
     const { p, n } = sample(th, phi);
@@ -153,7 +153,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
   // `hug: 0` opts a tuft out entirely — that is what a spike is.
   const rrH = [HEAD_R[0] * (look.headWidth ?? 1), HEAD_R[1], HEAD_R[2]];
   const _q = new THREE.Vector3();
-  const hugSkull = (v: any, maxOff: any, k: any) => {
+  const hugSkull = (v: THREE.Vector3, maxOff: any, k: any) => {
     // fade the clamp out below the jaw and above the crown, where the skull's
     // spherical parameterisation stops meaning anything and a mane hanging past
     // the shoulders would otherwise be shoved back into the neck

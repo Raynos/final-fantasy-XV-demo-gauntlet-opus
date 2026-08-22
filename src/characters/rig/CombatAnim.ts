@@ -131,7 +131,7 @@ export class CombatAnim {
   /* ------------------------------------------------------- pose layers */
 
   /** Additive Euler offset onto whatever the animator produced. */
-  add(B: any, name: any, x: any, y: any, z: any) {
+  add(B: any, name: string, x: number, y: number, z: number) {
     const b = B[name];
     if (!b) return;
     _e.set(x, y, z, 'YXZ');
@@ -140,7 +140,7 @@ export class CombatAnim {
   }
 
   /** Absolute override — used where the base layer must not show through. */
-  set(B: any, name: any, x: any, y: any, z: any) {
+  set(B: any, name: string, x: number, y: number, z: number) {
     const b = B[name];
     if (!b) return;
     _e.set(x, y, z, 'YXZ');
@@ -172,7 +172,7 @@ export class CombatAnim {
    * The swing itself: hips and shoulders counter-rotate into the arc, the
    * front foot steps into it, and the whole mass drops slightly on contact.
    */
-  poseSwing(B: any, s: any, combat: any, style: any, dt: any) {
+  poseSwing(B: any, s: any, combat: any, style: any, dt: number) {
     const k = this.swingCurve(combat, style);
     const step = combat.comboStep;
     // the arc's sign says whether this link of the combo goes left or right;
@@ -427,7 +427,7 @@ export class CombatAnim {
    *
    * @returns the driving side, so the caller can close that fist
    */
-  weaponIK(rig: any, combat: any, style: any, weight: any): 'L' | 'R' | null {
+  weaponIK(rig: any, combat: any, style: any, weight: number): 'L' | 'R' | null {
     const anchor = combat.hand;
     if (!anchor) return null;
     anchor.updateWorldMatrix(true, false);
@@ -518,7 +518,7 @@ const GRIP_FIX = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 
 const PHASE_KEY = { wind: 'wind', active: 'active', rec: 'rec', none: 'rec' };
 
 /** Rotate `bone` so its bind-space child direction points at `target`. */
-function aimTo(bone: any, bindFrom: any, bindTo: any, target: any, pole: any, w: any) {
+function aimTo(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, pole: THREE.Vector3, w: number) {
   bone.parent.updateMatrixWorld();
   _aim.copy(bindTo).sub(bindFrom).normalize();
   _worldP.setFromMatrixPosition(bone.matrixWorld);
@@ -540,7 +540,7 @@ const _want = new THREE.Vector3();
 const _worldP = new THREE.Vector3();
 const _qc = new THREE.Quaternion();
 
-function basis(mat: any, z: any, up: any) {
+function basis(mat: THREE.Matrix4, z: THREE.Vector3, up: any) {
   _bz.copy(z).normalize();
   _by.copy(up).addScaledVector(_bz, -up.dot(_bz));
   if (_by.lengthSq() < 1e-8) _by.set(_bz.y, -_bz.x, 0);

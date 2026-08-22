@@ -258,7 +258,7 @@ export class HuntBoardScreen {
     }
   }
 
-  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: any, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 

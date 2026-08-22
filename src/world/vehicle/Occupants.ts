@@ -182,7 +182,7 @@ export class Occupants {
     const ignis = party.get('ignis');
     const prompto = party.get('prompto');
 
-    const push = (key: any, char: any, root: any, seat: any, pose: any) => {
+    const push = (key: string, char: any, root: any, seat: string, pose: string) => {
       if (!char || !root) return;
       // A character root is at the soles; the seat anchor is at the top of the
       // squab. The offset between them is that rig's own hip height — and it
@@ -222,7 +222,7 @@ export class Occupants {
   }
 
   /** Put everyone back on their feet beside the car. */
-  exit(worldPos: any, heading: any) {
+  exit(worldPos: THREE.Vector3, heading: number) {
     const p = this.player, party = this.party;
     if (!p || !party || !this._saved) { this.seated = false; return; }
     p.terrain = this._saved.playerTerrain;
@@ -286,7 +286,7 @@ export class Occupants {
   }
 
   /** Overwrite the seated bones on top of whatever the animator produced. */
-  _applyPose(r: any, i: any, leanX: any, leanZ: any, jog: any, ctx: any) {
+  _applyPose(r: any, i: number, leanX: any, leanZ: any, jog: number, ctx: any) {
     const bones = r.char.rig.byName;
     const pose = r.pose;
     const t = this._t + i * 1.7;
@@ -355,4 +355,4 @@ export class Occupants {
   }
 }
 
-function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
+function clamp(v: any, a: number, b: number) { return v < a ? a : v > b ? b : v; }

@@ -1,3 +1,4 @@
+import type { Game } from '../game/Game.ts';
 /**
  * Boot-time profiler.
  *
@@ -50,7 +51,7 @@ export interface BootProfile {
   warmup?: any;
 }
 
-export function installBootProfile(game: any): BootProfile {
+export function installBootProfile(game: Game): BootProfile {
   const profile: BootProfile = {
     nav: typeof performance !== 'undefined' && performance.timeOrigin ? performance.timeOrigin : 0,
     moduleEval: now(),

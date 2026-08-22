@@ -154,7 +154,7 @@ export class NpcBody {
     this.height = rig.dims.height;
   }
 
-  _skinned(geo: any, mat: any, name: any) {
+  _skinned(geo: any, mat: any, name: string) {
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.name = `npc_${this.arch.key}_${name}`;
     mesh.castShadow = true;

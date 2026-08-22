@@ -45,7 +45,7 @@ export class Input {
   pointerLocked!: boolean;
   pressed!: Set<any>;
   released!: Set<any>;
-  constructor(domElement: any) {
+  constructor(domElement: HTMLCanvasElement) {
     this.dom = domElement;
     this.keys = new Set();
     this.pressed = new Set();   // edge: this frame
@@ -109,8 +109,8 @@ export class Input {
     this.dom.addEventListener('contextmenu', this._onCtx);
   }
 
-  key(code: any) { return this.keys.has(code); }
-  keyDown(code: any) { return this.pressed.has(code); }
+  key(code: string) { return this.keys.has(code); }
+  keyDown(code: string) { return this.pressed.has(code); }
   keyUp(code: any) { return this.released.has(code); }
 
   /**
@@ -170,7 +170,7 @@ export class Input {
     if (this.key('KeyW') || this.key('ArrowUp')) my += 1;
     if (this.key('KeyS') || this.key('ArrowDown')) my -= 1;
     if (gp) {
-      const dz = (v: any) => (Math.abs(v) < 0.18 ? 0 : v);
+      const dz = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
       mx += dz(gp.axes[0]); my += -dz(gp.axes[1]);
       this.look.x += dz(gp.axes[2] || 0) * 18 * this.lookScale;
       this.look.y += dz(gp.axes[3] || 0) * 18 * this.lookScale * (this.invertY ? -1 : 1);
@@ -187,7 +187,7 @@ export class Input {
     if (this.enabled === false) { this.move.set(0, 0); this.look.set(0, 0); }
   }
 
-  gpButton(i: any) { return !!(this.gamepad && this.gamepad.buttons[i] && this.gamepad.buttons[i].pressed); }
+  gpButton(i: number) { return !!(this.gamepad && this.gamepad.buttons[i] && this.gamepad.buttons[i].pressed); }
 
   /**
    * Rising edge on a gamepad button, tracked internally so several callers can

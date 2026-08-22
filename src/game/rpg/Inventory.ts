@@ -115,7 +115,7 @@ const TREASURES = [
 /* Ingredients                                                               */
 /* ------------------------------------------------------------------------ */
 
-const ING = (id: any, name: any, price: any, desc: any, tags: any) => ({ id, name, price, desc, tags });
+const ING = (id: string, name: string, price: number, desc: string, tags: string[]) => ({ id, name, price, desc, tags });
 
 const INGREDIENTS = [
   ING('lucian_tomato',   'Lucian Tomato',        60,   'Sun-fat and sweet. Grows wild along the Leide roadside.', ['vegetable']),
@@ -176,7 +176,7 @@ const KEY_ITEMS = [
  * @param special free-text special effect (combat reads `tags`)
  * @param tags machine-readable effect tags
  */
-const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders: any = null) => ({
+const W = (id: string, name: string, cls: string, attack: number, price: number, mods: any, special: string, tags: string[], desc: string, wielders: string[] | null = null) => ({
   id, name, category: 'weapon', class: cls, attack, price, mods: mods || {},
   special, tags: tags || [], desc,
   // null = anyone whose class permission covers it; royal arms are Noctis-only.
@@ -240,7 +240,7 @@ const WEAPONS = [
 /* Accessories                                                               */
 /* ------------------------------------------------------------------------ */
 
-const A = (id: any, name: any, price: any, mods: any, desc: any, tags: any[] = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
+const A = (id: string, name: string, price: number, mods: any, desc: string, tags: any[] = []) => ({ id, name, category: 'accessory', price, mods, desc, tags });
 
 const ACCESSORIES = [
   A('bronze_bangle',   'Bronze Bangle',     400,   { hp: 300 },                                'A plain band. Adds a little padding.'),
@@ -270,7 +270,7 @@ const ACCESSORIES = [
 /** Every item definition in the game, keyed by id. */
 export const ITEMS = (() => {
   const map: Record<string, any> = {};
-  const push = (list: any, category: any) => {
+  const push = (list: any, category: string) => {
     for (const it of list) {
       const price = it.price ?? 0;
       map[it.id] = {
@@ -419,7 +419,7 @@ export class Inventory {
     return this.gil;
   }
 
-  spendGil(n: any) {
+  spendGil(n: number) {
     if (this.gil < n) return false;
     this.addGil(-n, 'spend');
     return true;
@@ -551,7 +551,7 @@ export class Inventory {
   }
 
   /** Tags contributed by everything a character has on (e.g. 'status-immune'). */
-  tagsFor(charId: any) {
+  tagsFor(charId: string) {
     const tags = new Set();
     const rack = this.equipment[charId];
     if (!rack) return tags;
@@ -618,7 +618,7 @@ export class Inventory {
 
   toJSON() { return { bag: { ...this.bag }, gil: this.gil, equipment: this.equipment, sellBonus: this.sellBonus }; }
 
-  static fromJSON(data: any, emitter: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null) {
     const inv = new Inventory(emitter);
     if (!data) return inv;
     for (const id of Object.keys(data.bag || {})) if (ITEMS[id]) inv.bag[id] = data.bag[id];

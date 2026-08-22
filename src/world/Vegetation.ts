@@ -74,7 +74,7 @@ export class Vegetation {
     const out = this._actors;
     const pool = this._pool;
     out.length = 0;
-    const add = (obj: any, radius: any) => {
+    const add = (obj: any, radius: number) => {
       const p = obj && (obj.position || (obj.root && obj.root.position));
       if (!p) return;
       const d2 = (p.x - centre.x) ** 2 + (p.z - centre.z) ** 2;

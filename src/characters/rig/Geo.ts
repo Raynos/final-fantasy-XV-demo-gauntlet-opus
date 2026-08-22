@@ -24,17 +24,17 @@ const _r = new THREE.Vector3();
 
 export const clamp01 = (x: any) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
-export const smoothIn = (a: any, b: any, x: any) => smooth((x - a) / (b - a));
+export const smoothIn = (a: number, b: number, x: any) => smooth((x - a) / (b - a));
 export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
 
 /** Cosine bump centred on `c` with half-width `w`, in units of the input. */
-export function bump(x: any, c: any, w: any, amp = 1) {
+export function bump(x: any, c: number, w: number, amp = 1) {
   const d = Math.abs(x - c) / w;
   return d >= 1 ? 0 : amp * 0.5 * (1 + Math.cos(d * Math.PI));
 }
 
 /** Angular cosine bump — handles wrap-around at 2π. */
-export function abump(theta: any, c: any, w: any, amp = 1) {
+export function abump(theta: any, c: number, w: number, amp = 1) {
   let d = Math.abs(theta - c) % (Math.PI * 2);
   if (d > Math.PI) d = Math.PI * 2 - d;
   d /= w;
@@ -93,7 +93,7 @@ export class MeshBuilder {
   }
 
   /** Smoothing group: normals are only averaged between vertices sharing one. */
-  group(g: any) { this._g = g; return this; }
+  group(g: number) { this._g = g; return this; }
 
   /** Base colour for subsequent vertices (linear-ish sRGB THREE.Color or hex). */
   color(c: any) {
@@ -119,7 +119,7 @@ export class MeshBuilder {
    * weave direction on cloth. Object space; the shader skins and view-transforms
    * it. Defaults to +Y, which is what an unset surface gets.
    */
-  tang(x: any, y: any, z: any) {
+  tang(x: number, y: number, z: number) {
     const l = Math.hypot(x, y, z) || 1;
     this._t = [x / l, y / l, z / l];
     return this;
@@ -152,13 +152,13 @@ export class MeshBuilder {
 
   vv(p: any, u = 0, w = 0) { return this.v(p.x, p.y, p.z, u, w); }
 
-  tri(a: any, b: any, c: any) { this.idx.push(a, b, c); return this; }
-  quad(a: any, b: any, c: any, d: any) { this.idx.push(a, b, c, a, c, d); return this; }
+  tri(a: number, b: number, c: number) { this.idx.push(a, b, c); return this; }
+  quad(a: number, b: number, c: number, d: number) { this.idx.push(a, b, c, a, c, d); return this; }
 
   get count() { return this.pos.length / 3; }
 
   /** Darken vertex colours near a world point — cheap baked contact occlusion. */
-  occlude(px: any, py: any, pz: any, radius: any, amount: any) {
+  occlude(px: number, py: number, pz: number, radius: number, amount: number) {
     const n = this.count;
     for (let i = 0; i < n; i++) {
       const dx = this.pos[i * 3] - px, dy = this.pos[i * 3 + 1] - py, dz = this.pos[i * 3 + 2] - pz;
@@ -492,7 +492,7 @@ export function expandMirrors(list: any) {
  * cheeks) push a midline vertex differently from left to right and leave the
  * face subtly asymmetric.
  */
-export function applyBrushes(p: any, nrm: any, brushes: any) {
+export function applyBrushes(p: any, nrm: THREE.Vector3, brushes: any) {
   const d = new THREE.Vector3();
   const acc = _a.set(0, 0, 0);
   const px = p.x, py = p.y, pz = p.z;
@@ -527,7 +527,7 @@ export function roundedBox(B: any, o: any) {
   const q = new THREE.Quaternion();
   if (o.rot) q.setFromEuler(new THREE.Euler().fromArray(o.rot));
   const seg = o.seg || 3;
-  const push = (x: any, y: any, z: any) => {
+  const push = (x: number, y: number, z: number) => {
     const p = new THREE.Vector3(x, y, z).applyQuaternion(q).add(new THREE.Vector3().fromArray(c));
     return B.vv(p, (x / sx) + 0.5, (y / sy) + 0.5);
   };

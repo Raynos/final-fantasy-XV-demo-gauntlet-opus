@@ -207,7 +207,7 @@ export class PropKit {
     for (let k = 0; k < 2; k++) {
       for (let i = 0; i < segs; i++) {
         const t0 = i / segs - 0.5, t1 = (i + 1) / segs - 0.5;
-        const sag = (a: any) => -Math.sin((a + 0.5) % (1 / 3) * Math.PI * 3) * 0.16;
+        const sag = (a: number) => -Math.sin((a + 0.5) % (1 / 3) * Math.PI * 3) * 0.16;
         const p0 = [x + c * t0 * len, y + sag(t0) - k * 0.11, z - sn * t0 * len];
         const p1 = [x + c * t1 * len, y + sag(t1) - k * 0.11, z - sn * t1 * len];
         const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2];
@@ -403,7 +403,7 @@ export class PropKit {
     const t = this.ao(x, y + 0.5, z);
     const cy = y + (s.tipped ? 0.42 : 0.72);
     // hopper — four canted sides so it does not read as a crate
-    const push = (dx: any, dz: any, sx: any, sz: any, tilt: any) => {
+    const push = (dx: number, dz: number, sx: number, sz: number, tilt: number) => {
       const px = x + Math.cos(rot) * dx - Math.sin(rot) * dz;
       const pz = z + Math.sin(rot) * dx + Math.cos(rot) * dz;
       this.m.place(steel, box(), [px, cy, pz], [tilt * Math.cos(rot) + tip, rot, tilt * Math.sin(rot)],
@@ -598,7 +598,7 @@ export class PropKit {
     // the middle over a few thousand years, not a length of pipe
     for (let i = 0; i < segs; i++) {
       const t0 = i / segs, t1 = (i + 1) / segs;
-      const prof = (t: any) => 0.42 + 0.72 * Math.abs(Math.cos(t * Math.PI))
+      const prof = (t: number) => 0.42 + 0.72 * Math.abs(Math.cos(t * Math.PI))
         + 0.26 * (this.n.fbm2(x * 0.5 + t * 5, z * 0.5, 3) * 0.5 + 0.5);
       const r0 = r * prof(t0), r1 = r * prof(t1);
       const g = geo(`taper${(r1 / r0).toFixed(2)}`, () => new THREE.CylinderGeometry(0.5 * (r1 / r0), 0.5, 1, 9));

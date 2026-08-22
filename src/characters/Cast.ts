@@ -11,7 +11,7 @@ import { smoothIn, clamp01 } from './rig/Geo.ts';
  * tall and narrow, Prompto is the smallest and loosest.
  */
 
-const srgb = (hex: any) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
+const srgb = (hex: number) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
 
 /** Gladiolus's eagle tattoo, drawn in torso-sweep space onto the skin mesh. */
 function eagleInk(th: any, t: any) {

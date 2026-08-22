@@ -7,7 +7,7 @@ import {
   tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross, bladeCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /* Oxidised wrought iron, not battleship grey. The old palette was blue-grey
  * with a cool highlight, which is a Battletech mech; an Iron Giant is a suit
@@ -261,7 +261,7 @@ class IronGiantEnemy extends BipedEnemy {
     this.add(S, 'head', j * 0.050, -j * 0.085, -0.03);
   }
 
-  add(S: any, name: any, x: any, y: any, z: any) {
+  add(S: any, name: string, x: number, y: number, z: number) {
     const b = this.rig.byName.get(name);
     if (!b) return;
     _e.set(x, y, z, 'XYZ');
@@ -393,7 +393,7 @@ const _q = new THREE.Quaternion();
 
 const _ic = new THREE.Color(), _id = new THREE.Color();
 /** sRGB mix accepting a hex or an already-mixed Colour at either end. */
-function mix(a: any, b: any, t: any) {
+function mix(a: number, b: number, t: number) {
   if (typeof b === 'number') _id.setHex(b, THREE.SRGBColorSpace); else _id.copy(b);
   if (typeof a === 'number') _ic.setHex(a, THREE.SRGBColorSpace); else if (a !== _ic) _ic.copy(a);
   return _ic.lerp(_id, t < 0 ? 0 : t > 1 ? 1 : t);

@@ -102,7 +102,7 @@ export class ParticleSystem {
     geo.setIndex([0, 1, 2, 0, 2, 3]);
     geo.instanceCount = capacity;
 
-    const mk = (n: any) => {
+    const mk = (n: number) => {
       const a = new THREE.InstancedBufferAttribute(new Float32Array(capacity * n), n);
       a.setUsage(THREE.DynamicDrawUsage);
       return a;

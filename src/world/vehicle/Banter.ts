@@ -42,7 +42,7 @@ const PRIORITY = {
 };
 
 /** Reading time for a line, seconds. */
-function readTime(text: any) {
+function readTime(text: string) {
   return Math.max(2.4, Math.min(7.5, 1.5 + text.length * 0.046));
 }
 
@@ -136,7 +136,7 @@ export class Banter {
   }
 
   /** Uniform pick that avoids anything in the recency ring. */
-  _pick(category: any, n: any) {
+  _pick(category: string, n: number) {
     let ring = this._recent[category];
     if (!ring) { ring = []; this._recent[category] = ring; }
     const keep = Math.min(n - 1, Math.max(1, Math.floor(n * 0.6)));

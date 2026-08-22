@@ -9,6 +9,7 @@ import { ViewModes } from './ViewModes.ts';
 import { SHOTS } from '../game/Shots.ts';
 import { worldMap } from '../world/map/WorldMap.ts';
 import './dev.css';
+import type { Game } from '../game/Game.ts';
 
 /**
  * In-game developer / review suite. Loaded only under `?debug`.
@@ -23,8 +24,8 @@ import './dev.css';
  * The suite never touches `src/ui/**`: it mounts its own `#dev` root, the same
  * way `TitleScreen` owns `#title`.
  */
-class DevSuite {
-  _toastT!: number;
+export class DevSuite {
+  _toastT?: ReturnType<typeof setTimeout>;
   _inputWas!: any;
   _scale!: any;
   _tainted!: boolean;
@@ -376,9 +377,9 @@ class DevSuite {
     return `${key}: ${JSON.stringify(this.tuning[key])}`;
   }
 
-  _toast(text: any) {
+  _toast(text: string) {
     this.hint.textContent = text;
-    clearTimeout(this._toastT);
+    if (this._toastT) clearTimeout(this._toastT);
     this._toastT = setTimeout(() => { this.hint.innerHTML = HINT; }, 4000);
   }
 
@@ -443,17 +444,17 @@ class DevSuite {
 
 const HINT = '<b>`</b> console · <b>F8</b> fly · <b>P</b> pause+fly · <b>F4</b> assets · <b>F9</b> note · <b>F2</b> stats';
 
-const load = (k: any, fallback: any) => {
+const load = (k: string, fallback: any) => {
   try { return JSON.parse(localStorage.getItem(k) ?? 'null') || fallback; } catch { return fallback; }
 };
-const save = (k: any, v: any) => {
+const save = (k: string, v: any) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ }
 };
 
 /**
  * Attach the suite to a booted game.
  */
-export async function installDevSuite(game: any) {
+export async function installDevSuite(game: Game) {
   const suite = new DevSuite();
   game.add(suite, 'Dev');
   suite.init(game);

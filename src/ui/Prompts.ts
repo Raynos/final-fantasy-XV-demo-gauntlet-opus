@@ -46,7 +46,7 @@ export class Prompts {
     this.mode = null;
   }
 
-  _render(mode: any) {
+  _render(mode: string) {
     this.row.textContent = '';
     for (const [key, label] of SETS[mode as keyof typeof SETS] || SETS.field) {
       this.row.appendChild(el('div.prompt.key', {}, [

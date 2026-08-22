@@ -119,7 +119,7 @@ export function waderGeometry(): THREE.BufferGeometry {
 
 // ---------------------------------------------------------------- shader
 
-const V3 = (a: any) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
+const V3 = (a: number[]) => `vec3(${a[0].toFixed(4)}, ${a[1].toFixed(4)}, ${a[2].toFixed(4)})`;
 
 const RIG_GLSL = RIG_PREAMBLE + /* glsl */`
 // aanim = (phase, stab rate, spare, plumage brightness)

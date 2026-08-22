@@ -36,7 +36,7 @@ export function svg(tag: string, attrs: any = {}, kids: Array<Node | string> = [
   return node;
 }
 
-function applyAttrs(node: any, attrs: any, isSvg?: any) {
+function applyAttrs(node: any, attrs: any, isSvg?: boolean) {
   for (const k of Object.keys(attrs)) {
     const v = attrs[k];
     if (v == null || v === false) continue;
@@ -57,13 +57,13 @@ function append(node: any, kids: any) {
 }
 
 /** Remove every child of `node`. */
-export function clear(node: any) { while (node.firstChild) node.removeChild(node.firstChild); }
+export function clear(node: HTMLElement) { while (node.firstChild) node.removeChild(node.firstChild); }
 
 /** Toggle a class without touching the rest of the class list. */
 export function cls(node: any, name: any, on: any) { node.classList.toggle(name, !!on); }
 
-export const clamp = (v: any, a: any, b: any) => (v < a ? a : v > b ? b : v);
-export const lerp = (a: any, b: any, t: any) => a + (b - a) * t;
+export const clamp = (v: any, a: number, b: any) => (v < a ? a : v > b ? b : v);
+export const lerp = (a: any, b: any, t: number) => a + (b - a) * t;
 /** Frame-rate independent exponential approach. */
 export const damp = (a: any, b: any, lambda: any, dt: any) => lerp(a, b, 1 - Math.exp(-lambda * dt));
 export const smooth = (t: any) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
@@ -78,7 +78,7 @@ export function easeBack(t: any) {
 }
 
 /** Deterministic 32-bit hash-based RNG (mulberry32). */
-export function rng(seed: any) {
+export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -107,7 +107,7 @@ export function clock(hours: any) {
  * Split a string into per-character spans so it can be revealed letter by
  * letter (used by the area title card and menu headings).
  */
-export function letters(text: any, tag = 'span.ltr'): {node: HTMLElement, chars: HTMLElement[]} {
+export function letters(text: string, tag = 'span.ltr'): {node: HTMLElement, chars: HTMLElement[]} {
   const node = el('span.letters');
   const chars = [];
   for (const ch of text) {
@@ -142,7 +142,7 @@ export class Clip {
   hold!: number;
   /** The shot this clip was raised in; a shot change clears it. `Subtitles`. */
   shot?: any;
-  constructor(dur: any, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
+  constructor(dur: number, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }
   step(dt: any) { this.age += dt; return this; }
   get t() { return clamp(this.age / this.dur, 0, 1); }
   get alive() { return this.age < this.dur + this.hold; }

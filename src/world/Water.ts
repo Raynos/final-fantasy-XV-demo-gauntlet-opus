@@ -74,7 +74,7 @@ export class Water {
   _buildTextures() {
     const n = this.noise;
     // Two octave sets at different scales so the normals never visibly repeat.
-    const wave = (u: any, v: any, sx: any, sy: any) =>
+    const wave = (u: any, v: any, sx: number, sy: number) =>
       n.fbm2(u * sx, v * sy, 4, 2.1, 0.55) * 0.6 +
       n.fbm2(u * sx * 3.7 + 11, v * sy * 3.7 + 3, 3, 2.3, 0.5) * 0.4;
 

@@ -1055,7 +1055,7 @@ export function createTerrainMaterial(res: any, cell: number, level: number): TH
 }
 
 /** Depth material for shadow casting — must displace identically. */
-export function createTerrainDepthMaterial(res: any, cell: any) {
+export function createTerrainDepthMaterial(res: any, cell: number) {
   const mat = new THREE.MeshDepthMaterial();
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, res.uniforms, { uCell: { value: cell } });

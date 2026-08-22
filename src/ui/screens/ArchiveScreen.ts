@@ -158,7 +158,7 @@ export class ArchiveScreen {
   _datalogRows() {
     const r = this.rpg;
     const out: any[] = [];
-    const add = (name: any, value: any, desc: any) => out.push({ kind: 'log', key: name, name, value, desc });
+    const add = (name: string, value: any, desc: string) => out.push({ kind: 'log', key: name, name, value, desc });
     if (!r) {
       add('Journey', '—', 'No save is loaded.');
       return out;

@@ -145,7 +145,7 @@ export class ArmigerScreen {
     if (this.src.unlock(row.id)) { this._say(`${row.def.name} unlocked.`, true); this._sig = null; }
   }
 
-  _say(text: any, ok: any) { this._msg = { text, ok }; this._msgAge = 0; }
+  _say(text: string, ok: boolean) { this._msg = { text, ok }; this._msgAge = 0; }
 
   /* ----------------------------------------------------------- render */
 

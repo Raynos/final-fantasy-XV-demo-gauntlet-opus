@@ -93,7 +93,7 @@ function buildPrototype() {
    * `bind[0] === 'chain'`.
    */
   const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
-  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   B.group(1);
@@ -376,7 +376,7 @@ function buildPrototype() {
 }
 
 /** A cloven hoof: two keratin toes with a dewclaw behind. */
-function hoof(B: any, x: any, y: any, z: any) {
+function hoof(B: CBuilder, x: number, y: number, z: number) {
   const s = Math.sign(x) || 1;
   for (const i of [-1, 1]) {
     sweep(B, {
@@ -395,7 +395,7 @@ function hoof(B: any, x: any, y: any, z: any) {
   });
 }
 
-function reset(B: any) {
+function reset(B: CBuilder) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);

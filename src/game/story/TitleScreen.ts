@@ -164,9 +164,9 @@ export class TitleScreen {
   _input(game: any) {
     const inp = game.input;
     if (!inp || this.chosen) return;
-    const down = (k: any) => inp.keyDown && inp.keyDown(k);
-    const gp = (i: any) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
-    const edge = (k: any, v: any) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
+    const down = (k: string) => inp.keyDown && inp.keyDown(k);
+    const gp = (i: number) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
+    const edge = (k: string, v: any) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
 
     let d = 0;
     if (down('ArrowUp') || down('KeyW') || edge('u', gp(12))) d -= 1;
@@ -183,7 +183,7 @@ export class TitleScreen {
     if (down('Enter') || down('Space') || edge('a', gp(0))) this.choose();
   }
 
-  _enabled(i: any) {
+  _enabled(i: number) {
     const id = this.items[i].id;
     if (id === 'continue') return this.canContinue();
     if (id === 'extras') return false;
@@ -313,7 +313,7 @@ export class TitleScreen {
  */
 function crestSvg() {
   const S = svg('svg.ti-crest', { width: 168, height: 104, viewBox: '0 0 168 104', fill: 'none' });
-  const stroke = (d: any, w = 1.1, o = 1) => svg('path', {
+  const stroke = (d: string, w = 1.1, o = 1) => svg('path', {
     d, stroke: 'currentColor', 'stroke-width': w, 'stroke-opacity': o,
     'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none',
   });

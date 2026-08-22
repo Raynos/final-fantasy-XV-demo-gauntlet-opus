@@ -164,7 +164,7 @@ function rockGeometry(seed: number, {
   // Vertices past the plane are projected *onto* it, so the cut leaves a
   // genuinely flat facet rather than a dent, and the ring where it meets the
   // old surface becomes a hard arris.
-  const cut = (nx: any, ny: any, nz: any, frac: any) => {
+  const cut = (nx: number, ny: number, nz: number, frac: any) => {
     let hi = -Infinity, lo = Infinity;
     for (let i = 0; i < count; i++) {
       const d = P[i * 3] * nx + P[i * 3 + 1] * ny + P[i * 3 + 2] * nz;
@@ -349,7 +349,7 @@ export class Rocks {
    * on a cliff face, the carriageway is swept — but the *amount* is the zone's
    * business: Ravatogh is a scree field, Alstor Slough is mud.
    */
-  _density(x: any, z: any) {
+  _density(x: number, z: number) {
     const eco = this.eco;
     const slope = eco.slope01(x, z);
     // Scree gathers on slopes, but nothing rests on a cliff face. The cut-off
@@ -374,7 +374,7 @@ export class Rocks {
    * of anchor blocks around it, and spalled fragments at the foot of each.
    * Pure function of (cx, cz) — this is what lets the window move.
    */
-  _genCell(cx: any, cz: any, out: any) {
+  _genCell(cx: number, cz: number, out: any) {
     const c = this.cell, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x40c8));
     const seedX = (cx + rng.next()) * c, seedZ = (cz + rng.next()) * c;
@@ -408,7 +408,7 @@ export class Rocks {
    * metres an outcrop is a landform, not a pebble — it is what stops the
    * middle distance reading as an empty dust bowl.
    */
-  _genOutcrop(cx: any, cz: any, out: any) {
+  _genOutcrop(cx: number, cz: number, out: any) {
     const c = 176, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x0c1f));
     for (let m = 0; m < 2; m++) {
@@ -447,7 +447,7 @@ export class Rocks {
     }
   }
 
-  _item(kind: any, x: any, z: any, rng: any, w: any, dress: any) {
+  _item(kind: any, x: number, z: number, rng: Rng, w: number, dress: any) {
     const t = Math.pow(rng.next(), 1.65);
     const nrm = this.eco.normal(x, z);
     // A five metre block centred on a forty-degree face overhangs it by half
@@ -532,7 +532,7 @@ export class Rocks {
     this.update(o);
   }
 
-  _mesh(geo: any, mat: any, max: any, name: any) {
+  _mesh(geo: any, mat: any, max: number, name: string) {
     const mesh = new THREE.InstancedMesh(geo, mat, max);
     mesh.castShadow = true; mesh.receiveShadow = true;
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
@@ -544,7 +544,7 @@ export class Rocks {
 
   // ---------------------------------------------------------------- update
 
-  update(camPos: any) {
+  update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos) >= 121;
     const a = this.stream.update(camPos);
     const b = this.outcrops.update(camPos);

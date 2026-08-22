@@ -35,7 +35,7 @@ export class CrystalShards {
     geo.setAttribute('uv', base.getAttribute('uv'));
     geo.instanceCount = capacity;
 
-    const mk = (n: any) => {
+    const mk = (n: number) => {
       const a = new THREE.InstancedBufferAttribute(new Float32Array(capacity * n), n);
       a.setUsage(THREE.DynamicDrawUsage);
       return a;
@@ -83,7 +83,7 @@ export class CrystalShards {
   emit(s: any) {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.capacity;
-    const w = (attr: any, v: any, n: any) => {
+    const w = (attr: THREE.InstancedBufferAttribute, v: any, n: number) => {
       const a = attr.array;
       a[i * n] = v.x !== undefined ? v.x : v[0];
       a[i * n + 1] = v.y !== undefined ? v.y : v[1];
@@ -121,7 +121,7 @@ export class CrystalShards {
     this._dirtyLo = Infinity; this._dirtyHi = -Infinity;
   }
 
-  setClock(c: any) { this.uniforms.uTime.value = c; }
+  setClock(c: number) { this.uniforms.uTime.value = c; }
 
   clear() {
     const q = this.aParams.array;

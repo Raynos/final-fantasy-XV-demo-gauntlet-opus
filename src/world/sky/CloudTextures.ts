@@ -21,7 +21,7 @@ function hash3i(x: any, y: any, z: any, seed: any) {
 }
 
 /** Feature-point grid for tileable 3D worley noise. */
-function makePointGrid(cells: any, seed: any) {
+function makePointGrid(cells: number, seed: number) {
   const pts = new Float32Array(cells * cells * cells * 3);
   let i = 0;
   for (let z = 0; z < cells; z++) {
@@ -37,7 +37,7 @@ function makePointGrid(cells: any, seed: any) {
 }
 
 /** Inverted worley (1 - f1) in [0,1]; p in cell units, wraps at `cells`. */
-function worley3(pts: any, cells: any, px: any, py: any, pz: any) {
+function worley3(pts: Float32Array, cells: number, px: number, py: number, pz: number) {
   const xi = Math.floor(px), yi = Math.floor(py), zi = Math.floor(pz);
   let best = 1e9;
   for (let dz = -1; dz <= 1; dz++) {
@@ -61,16 +61,16 @@ function worley3(pts: any, cells: any, px: any, py: any, pz: any) {
   return 1 - Math.min(1, Math.sqrt(best));
 }
 
-function fade(t: any) { return t * t * t * (t * (t * 6 - 15) + 10); }
+function fade(t: number) { return t * t * t * (t * (t * 6 - 15) + 10); }
 
 /** Tileable 3D value noise with integer period. */
-function value3(px: any, py: any, pz: any, period: any, seed: any) {
+function value3(px: number, py: number, pz: number, period: number, seed: any) {
   const xi = Math.floor(px), yi = Math.floor(py), zi = Math.floor(pz);
   const fx = fade(px - xi), fy = fade(py - yi), fz = fade(pz - zi);
   const x0 = ((xi % period) + period) % period, x1 = (x0 + 1) % period;
   const y0 = ((yi % period) + period) % period, y1 = (y0 + 1) % period;
   const z0 = ((zi % period) + period) % period, z1 = (z0 + 1) % period;
-  const c = (x: any, y: any, z: any) => hash3i(x, y, z, seed);
+  const c = (x: number, y: number, z: number) => hash3i(x, y, z, seed);
   const n00 = c(x0, y0, z0) + fx * (c(x1, y0, z0) - c(x0, y0, z0));
   const n10 = c(x0, y1, z0) + fx * (c(x1, y1, z0) - c(x0, y1, z0));
   const n01 = c(x0, y0, z1) + fx * (c(x1, y0, z1) - c(x0, y0, z1));
@@ -80,7 +80,7 @@ function value3(px: any, py: any, pz: any, period: any, seed: any) {
   return n0 + fz * (n1 - n0);
 }
 
-function valueFbm3(x: any, y: any, z: any, period: any, octaves: any, seed: any) {
+function valueFbm3(x: number, y: number, z: number, period: number, octaves: number, seed: number) {
   let a = 0.5, sum = 0, norm = 0, f = 1;
   for (let o = 0; o < octaves; o++) {
     sum += a * value3(x * f, y * f, z * f, period * f, seed + o * 37);
@@ -90,18 +90,18 @@ function valueFbm3(x: any, y: any, z: any, period: any, octaves: any, seed: any)
 }
 
 /** Tileable 2D value fbm, period in cells. */
-function value2(px: any, py: any, period: any, seed: any) {
+function value2(px: number, py: number, period: number, seed: any) {
   const xi = Math.floor(px), yi = Math.floor(py);
   const fx = fade(px - xi), fy = fade(py - yi);
   const x0 = ((xi % period) + period) % period, x1 = (x0 + 1) % period;
   const y0 = ((yi % period) + period) % period, y1 = (y0 + 1) % period;
-  const c = (x: any, y: any) => hash3i(x, y, 0, seed);
+  const c = (x: number, y: number) => hash3i(x, y, 0, seed);
   const n0 = c(x0, y0) + fx * (c(x1, y0) - c(x0, y0));
   const n1 = c(x0, y1) + fx * (c(x1, y1) - c(x0, y1));
   return n0 + fy * (n1 - n0);
 }
 
-function valueFbm2(x: any, y: any, period: any, octaves: any, seed: any) {
+function valueFbm2(x: number, y: number, period: number, octaves: number, seed: number) {
   let a = 0.5, sum = 0, norm = 0, f = 1;
   for (let o = 0; o < octaves; o++) {
     sum += a * value2(x * f, y * f, period * f, seed + o * 71);
@@ -110,7 +110,7 @@ function valueFbm2(x: any, y: any, period: any, octaves: any, seed: any) {
   return sum / norm;
 }
 
-const remap = (v: any, a: any, b: any, c: any, d: any) => c + ((v - a) / (b - a)) * (d - c);
+const remap = (v: number, a: number, b: number, c: number, d: number) => c + ((v - a) / (b - a)) * (d - c);
 const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**

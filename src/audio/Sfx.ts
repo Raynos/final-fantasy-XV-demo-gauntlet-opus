@@ -312,7 +312,7 @@ export class Sfx {
   }
 
   /** Resolve a (possibly legacy) name to a synthesis program. */
-  _route(name: any) {
+  _route(name: string) {
     const parts = name.split(':');
     const head = parts[0];
     switch (head) {

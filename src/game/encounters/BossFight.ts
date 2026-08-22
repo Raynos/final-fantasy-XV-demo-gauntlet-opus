@@ -136,7 +136,7 @@ export class BossFight {
   }
 
   /** World position of one of Titan's hands. */
-  _handPos(name: any) {
+  _handPos(name: string) {
     const b = this.boss?.rig?.byName?.get(name);
     if (!b) return null;
     b.updateWorldMatrix(true, false);
@@ -174,7 +174,7 @@ export class BossFight {
 
   /* ------------------------------------------------------------- phases */
 
-  _enterPhase(n: any) {
+  _enterPhase(n: number) {
     if (n <= this.phase) return;
     this.phase = n;
     const b = this.boss;

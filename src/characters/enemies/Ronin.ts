@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, metalNormal, metalRoughness } from './EnemyBase.ts';
 import { tube, blob, slab, spike, place, tint, glow, rectCross, loft, circleCross } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const LACQUER = 0x342830;
 const LACQUER_RED = 0x6d1c22;
@@ -260,7 +260,7 @@ class RoninEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     /** The resting iai stance: blade hand drawn back to the left hip. */
     const stance = (k = 1) => {
       S('shR', -0.30 * k, -0.55 * k, 0.85 * k);

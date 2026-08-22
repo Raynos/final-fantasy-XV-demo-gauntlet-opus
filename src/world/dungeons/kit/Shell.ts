@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Noise } from '../../../util/Noise.ts';
 import { SurfaceBuilder, clamp, smoothstep } from './Build.ts';
 import type { Layout } from './Layout.ts';
+import type { InteriorMerger } from './Build.ts';
 
 /**
  * Turns a {@link Layout} into interior geometry.
@@ -50,7 +51,7 @@ export class ShellBuilder {
     return this.surfaces.get(mat);
   }
 
-  pick(which: any, region: any) {
+  pick(which: string, region: any) {
     const m = this.opts[which];
     return typeof m === 'function' ? m(region) : m;
   }
@@ -67,7 +68,7 @@ export class ShellBuilder {
   }
 
   /** Build everything and merge into `merger`. */
-  build(merger: any) {
+  build(merger: InteriorMerger) {
     for (const r of this.L.rooms.values()) {
       if (r.style === 'cave') this.caveChamber(r);
       else this.boxRoom(r);
@@ -276,7 +277,7 @@ export class ShellBuilder {
   }
 
   /** The square where two corridor legs meet: floor, ceiling and two walls. */
-  elbow(c: any, p: any, inDir: any, outDir: any, s: any, mats: any, hw: any) {
+  elbow(c: any, p: any, inDir: number[], outDir: number[], s: any, mats: any, hw: number) {
     const ao = this._ao;
     const y = p[2];
     this.sb(mats.floorMat).patch({
@@ -362,7 +363,7 @@ export class ShellBuilder {
     const RINGS = 14, SIDES = 30;
     const a = r.w * 0.5, b = r.d * 0.5;
 
-    const radius = (th: any, k: any) => {
+    const radius = (th: number, k: number) => {
       const t = k / RINGS;
       const ct = Math.cos(th), st = Math.sin(th);
       const ell = 1 / Math.sqrt((ct / a) ** 2 + (st / b) ** 2);
@@ -385,7 +386,7 @@ export class ShellBuilder {
       }
     }
     const holes = r.holes || [];
-    const inHole = (th: any, yLo: any, yHi: any) => {
+    const inHole = (th: number, yLo: any, yHi: any) => {
       for (const h of holes) {
         let d = th - h.theta;
         while (d > Math.PI) d -= Math.PI * 2;
@@ -457,7 +458,7 @@ export function cutDoorways(layout: import('./Layout.ts').Layout) {
   }
 }
 
-function cutEnd(layout: any, c: any, roomId: any, end: any, inner: any) {
+function cutEnd(layout: Layout, c: any, roomId: any, end: any, inner: any) {
   const r = layout.rooms.get(roomId);
   if (!r || !end || !inner) return;
 
@@ -504,13 +505,13 @@ function dirOf(a: any, b: any) {
 }
 
 /** Which face of an elbow square a leg enters or leaves through. */
-function faceKey(d: any, incoming: any) {
+function faceKey(d: any, incoming: boolean) {
   const s = incoming ? -1 : 1;
   if (d[0] !== 0) return d[0] * s > 0 ? 'x+' : 'x-';
   return d[1] * s > 0 ? 'z+' : 'z-';
 }
 
-function resample(path: any, step: any) {
+function resample(path: any, step: number) {
   const out = [];
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i], b = path[i + 1];

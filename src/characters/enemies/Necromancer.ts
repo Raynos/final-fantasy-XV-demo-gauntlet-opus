@@ -5,7 +5,7 @@ import {
   tube, blob, spike, slab, place, tint, glow, loft, circleCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const ROBE = 0x3d3342;
 const ROBE_DARK = 0x241d28;
@@ -20,7 +20,7 @@ const WITCH = 0x74ff3a;
 const SHREDS = 12;
 
 /** Fluted robe cross-section — a soft-lobed ring, not a cylinder. */
-function robeCross(n: any, lobes: any, depth: any) {
+function robeCross(n: number, lobes: number, depth: number) {
   const c = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
@@ -269,7 +269,7 @@ class NecromancerEnemy extends Enemy {
    * Drift the hem tatters. `sweep` leans them all one way (drag as it moves),
    * `life` is how much they writhe on their own.
    */
-  _trail(t: any, sweep: any, life: any) {
+  _trail(t: any, sweep: number, life: number) {
     const rig = this.rig;
     for (let i = 0; i < SHREDS; i++) {
       const ph = t * 1.35 + i * 0.83;
@@ -283,7 +283,7 @@ class NecromancerEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     const H = NECROMANCER.hover;
     // both hands up in front of the hood, fingers framing whatever it is about to do
     const frame = (k = 1) => {

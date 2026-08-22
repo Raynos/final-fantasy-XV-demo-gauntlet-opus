@@ -254,9 +254,9 @@ export class Dialogue {
   _input(game: any) {
     const inp = game.input;
     if (!inp) return;
-    const down = (c: any) => inp.keyDown?.(c);
-    const gp = (i: any) => !!inp.gamepad?.buttons?.[i]?.pressed;
-    const edge = (k: any, v: any) => { const p = this._gp?.[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
+    const down = (c: string) => inp.keyDown?.(c);
+    const gp = (i: number) => !!inp.gamepad?.buttons?.[i]?.pressed;
+    const edge = (k: string, v: boolean) => { const p = this._gp?.[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
 
     const hasChoices = !!(this.chNodes && this.chNodes.length);
     const choosing = hasChoices && this._lineDone && this._lineIdx >= this._lines.length - 1;

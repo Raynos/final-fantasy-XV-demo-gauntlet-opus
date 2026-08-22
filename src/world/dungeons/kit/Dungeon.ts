@@ -125,15 +125,17 @@ export class Dungeon {
   }
 
   /** Resolve a layout lamp declaration into fixture geometry plus an emitter. */
-  _lamp(kit: any, l: any) {
+  _lamp(kit: PropKit, l: any) {
     const [x, z] = l.at;
     const floor = this.layout.floorAt(x, z);
     const y = l.y != null ? l.y : (floor != null ? floor + 2.6 : 2.6);
-    const fn = ({
+    const FN: Record<string, keyof PropKit> = {
       emergency: 'emergencyStrip', dead: 'deadStrip', flood: 'floodLight',
       lantern: 'lantern', fungus: 'fungus',
-    } as any)[l.kind];
-    if (fn && kit[fn]) kit[fn](x, y, z, l);
+    };
+    const fn = FN[l.kind];
+    const make = fn ? kit[fn] : undefined;
+    if (typeof make === 'function') make(x, y, z, l);
     else rigOnly(kit.rig, x, y, z, l);
   }
 

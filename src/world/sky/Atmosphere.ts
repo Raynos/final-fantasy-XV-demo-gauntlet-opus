@@ -68,7 +68,7 @@ export class Atmosphere {
   skyViewRT!: THREE.WebGLRenderTarget;
   transmittanceRT!: THREE.WebGLRenderTarget;
   uniforms!: any;
-  constructor(renderer: any) {
+  constructor(renderer: THREE.WebGLRenderer) {
     this.renderer = renderer;
 
     this.transmittanceRT = new THREE.WebGLRenderTarget(256, 64, {

@@ -331,7 +331,7 @@ export class Downed {
     return this.party.members.filter((m: any) => !m.downed);
   }
 
-  _nearest(list: any, p: any) {
+  _nearest(list: any, p: THREE.Vector3) {
     let best: any = null, bd = Infinity;
     for (const m of list) {
       const d = m.root.position.distanceTo(p);

@@ -12,7 +12,7 @@ export function lensDirtTexture(size: number = 256, seed: number = 90210): THREE
   const rng = new Rng(seed);
   const buf = new Float32Array(size * size);
 
-  const splat = (cx: any, cy: any, rx: any, ry: any, ang: any, amp: any, power: any) => {
+  const splat = (cx: any, cy: any, rx: any, ry: number, ang: any, amp: any, power: any) => {
     const ca = Math.cos(ang), sa = Math.sin(ang);
     const rad = Math.ceil(Math.max(rx, ry)) + 2;
     for (let y = Math.floor(cy - rad); y <= cy + rad; y++) {

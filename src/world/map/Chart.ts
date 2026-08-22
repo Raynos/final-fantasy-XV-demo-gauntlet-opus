@@ -36,9 +36,9 @@ import { worldMap, WORLD } from './WorldMap.ts';
  * Everything here is deterministic: same terrain in, byte-identical chart out.
  */
 
-const clamp01 = (v: any) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const mix = (a: any, b: any, t: any) => a + (b - a) * t;
-const ss = (e0: any, e1: any, x: any) => {
+const ss = (e0: number, e1: number, x: any) => {
   const t = clamp01((x - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
 };
@@ -76,7 +76,7 @@ export class Chart {
   ms!: any;
   ppm!: any;
   size!: any;
-  constructor(canvas: any, ppm: any, size: any, height: any, water: any, ms: any) {
+  constructor(canvas: HTMLCanvasElement, ppm: number, size: any, height: any, water: Uint8Array, ms: number) {
     /** @type {HTMLCanvasElement} */
     this.canvas = canvas;
     /** Canvas pixels per world metre. */
@@ -415,7 +415,7 @@ export function bakeChart(terrain: any, opt: {size?:number} = {}): Chart {
 // ------------------------------------------------------------------ helpers
 
 /** Separable box blur with running sums. @returns */
-function boxBlur2D(src: any, n: any, r: any): Float32Array {
+function boxBlur2D(src: Float32Array, n: number, r: number): Float32Array {
   const tmp = new Float32Array(n * n);
   const out = new Float32Array(n * n);
   const inv = 1 / (r * 2 + 1);
@@ -441,7 +441,7 @@ function boxBlur2D(src: any, n: any, r: any): Float32Array {
 
 const clampI = (v: any, n: any) => (v < 0 ? 0 : v > n - 1 ? n - 1 : v);
 
-function sampleBilinear(a: any, n: any, x: any, y: any) {
+function sampleBilinear(a: any, n: number, x: number, y: number) {
   let i = x | 0, j = y | 0;
   if (i < 0) i = 0; else if (i > n - 2) i = n - 2;
   if (j < 0) j = 0; else if (j > n - 2) j = n - 2;
@@ -452,14 +452,14 @@ function sampleBilinear(a: any, n: any, x: any, y: any) {
 }
 
 /** Deterministic 0..1 hash of two integers — the paper grain. */
-function hash2(i: any, j: any) {
+function hash2(i: number, j: number) {
   let h = Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1);
   h = Math.imul(h ^ (h >>> 15), 0x2545f491);
   return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
 }
 
 /** Smooth value noise on a `p`-pixel lattice. 0..1. */
-function lnoise(i: any, j: any, p: any) {
+function lnoise(i: number, j: number, p: number) {
   const fx = i / p, fy = j / p;
   const i0 = Math.floor(fx), j0 = Math.floor(fy);
   const tx = fx - i0, ty = fy - j0;

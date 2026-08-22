@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
+import type { VehicleBody } from './VehicleBody.ts';
 
 /**
  * The driving camera.
@@ -92,7 +93,7 @@ export class DriveCamera {
   }
 
   /** Snap the rig to the car — call on entry so there is no swoop. */
-  reset(body: any) {
+  reset(body: VehicleBody) {
     this.yaw = body.heading;
     this.freeYaw = 0; this.freePitch = 0;
     this._first = true;
@@ -109,7 +110,7 @@ export class DriveCamera {
   }
 
   /** Add camera shake, 0..1. */
-  addTrauma(v: any) { this.trauma = Math.min(1, this.trauma + v); }
+  addTrauma(v: number) { this.trauma = Math.min(1, this.trauma + v); }
 
   /**
    * @param [look] free-look delta this frame
@@ -186,7 +187,7 @@ export class DriveCamera {
     const jolt = this.trauma + body.rough * 0.55 * Math.min(1, speed / 12) + t * 0.16 + body.slide * 0.2;
     if (jolt > 0.002) {
       const s = jolt * jolt;
-      const n = (o: any) => this._noise.simplex2(this._t * 15.0, o);
+      const n = (o: number) => this._noise.simplex2(this._t * 15.0, o);
       this._smooth.x += n(0.0) * s * 0.30;
       this._smooth.y += n(11.3) * s * 0.24;
       this._smooth.z += n(23.7) * s * 0.30;
@@ -210,7 +211,7 @@ export class DriveCamera {
    * *inside* Ignis's head, and the nose of the car in the bottom of frame is
    * what makes a bonnet view read as a car at all.
    */
-  _bonnet(dt: any, body: any) {
+  _bonnet(dt: number, body: VehicleBody) {
     const f = body.forward(), r = body.right();
     this._pos.copy(body.pos)
       .addScaledVector(f, 0.85)
@@ -218,7 +219,7 @@ export class DriveCamera {
     this._pos.y += 1.52;
     // the head bobs with the body, not with the camera spring
     const jolt = body.rough * 0.35 * Math.min(1, body.speed / 12) + this.trauma;
-    const n = (o: any) => this._noise.simplex2(this._t * 12.0, o);
+    const n = (o: number) => this._noise.simplex2(this._t * 12.0, o);
     this._pos.y += n(3.3) * jolt * 0.10;
 
     this._look.copy(this._pos)
@@ -248,10 +249,10 @@ export class DriveCamera {
   }
 }
 
-function clamp(v: any, a: any, b: any) { return v < a ? a : v > b ? b : v; }
-function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
-function damp(a: any, b: any, lambda: any, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }
-function angleLerp(a: any, b: any, t: any) {
+function clamp(v: number, a: number, b: number) { return v < a ? a : v > b ? b : v; }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+function damp(a: any, b: number, lambda: number, dt: any) { return b + (a - b) * Math.exp(-lambda * dt); }
+function angleLerp(a: number, b: any, t: number) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;

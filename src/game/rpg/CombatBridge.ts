@@ -64,7 +64,7 @@ export class CombatBridge {
     const combat = game?.get?.('Combat');
     if (!combat || typeof combat.on !== 'function') return false;
     this.combat = combat;
-    const on = (n: any, fn: any) => this._off.push(combat.on(n, fn));
+    const on = (n: string, fn: any) => this._off.push(combat.on(n, fn));
 
     on('damage', (ev: any) => this._onDamage(ev));
     on('death', (ev: any) => this._onDeath(ev));
@@ -86,7 +86,7 @@ export class CombatBridge {
   detach() { for (const off of this._off) off(); this._off.length = 0; }
 
   /** Called from `RpgSystem.update`. */
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     const combat = this.combat || game?.get?.('Combat');
     if (!combat) return;
     // The tech bar only charges in a fight. `EncounterDirector` overwrites this
@@ -186,7 +186,7 @@ export class CombatBridge {
   }
 
   /** Add to the shared tech bar, clamped to its segment count. */
-  _chargeTech(bars: any) {
+  _chargeTech(bars: number) {
     if (!(bars > 0)) return;
     const p = this.rpg.party;
     p.techCharge = Math.min(p.maxTechBars, p.techCharge + Math.min(0.5, bars));

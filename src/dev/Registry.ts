@@ -90,10 +90,10 @@ export class Registry {
    * seven-character string `"false"`, which is truthy.
    * @param name @param value
    */
-  set(name: string, value: any) {
+  set(name: string, value: string) {
     const c = this.cvars.get(name);
     if (!c) throw new Error(`unknown cvar: ${name}`);
-    let v = value;
+    let v: string | number | boolean = value;
     if (typeof value === 'string') {
       const cur = this.defaults.has(name) ? this.defaults.get(name) : c.get();
       if (typeof cur === 'boolean') v = value !== 'false' && value !== '0' && value !== '';

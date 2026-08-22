@@ -106,7 +106,7 @@ export const KEYCATRICH = {
   // ----------------------------------------------------------------- dressing
 
   dress(kit: any, L: any) {
-    const strip = (x: any, z: any, y: any, rot: any, live = true, o = {}) => {
+    const strip = (x: number, z: number, y: number, rot: number, live = true, o = {}) => {
       if (live) kit.emergencyStrip(x, y, z, { rot, ...o });
       else kit.deadStrip(x, y, z, { rot });
     };

@@ -144,19 +144,19 @@ function bladeGeometry(segs = 5) {
   // did the opposite — it took a sixth of the width off in the first eighth of
   // the length, which is a spear, and a field of spears is the "spiky star"
   // read the tufts had.
-  const widthAt = (t: any) => HALF_W * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2.2)));
+  const widthAt = (t: number) => HALF_W * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2.2)));
   // A slight lateral S on top of the forward droop, so a blade is not a plane
   // curve. Instance yaw is already random, so this reads as blades twisting out
   // of the tuft rather than as a field all bending one way.
-  const swayAt = (t: any) => SWAY * t * t * (1.35 - t);
-  const shadeAt = (t: any) => 0.40 + Math.pow(t, 0.75) * 0.62;
+  const swayAt = (t: number) => SWAY * t * t * (1.35 - t);
+  const shadeAt = (t: number) => 0.40 + Math.pow(t, 0.75) * 0.62;
   // The root-to-tip ramp carries *hue* as well as value. A real blade loses
   // chroma into the shaded litter it grows out of and bleaches warm at the tip,
   // so the base is darker and greyer and the tip is lighter and strawier. The
   // old constant (0.99, 1, 0.83) gave every blade the same warm cast from root
   // to point, which is one more reason the field averaged to a single colour.
-  const warmAt = (t: any) => 0.92 + t * 0.16;
-  const coolAt = (t: any) => 0.94 - t * 0.20;
+  const warmAt = (t: number) => 0.92 + t * 0.16;
+  const coolAt = (t: number) => 0.94 - t * 0.20;
   for (let i = 0; i < segs; i++) {
     const t = i / segs;
     const w = widthAt(t);
@@ -391,7 +391,7 @@ export class GrassField {
    * @returns
    *   null when the frame's generation budget is spent.
    */
-  _tileFor(ring: any, li: any, tx: any, tz: any): {mesh:THREE.InstancedMesh|null, n:number, stamp:number} | null {
+  _tileFor(ring: any, li: number, tx: number, tz: number): {mesh:THREE.InstancedMesh|null, n:number, stamp:number} | null {
     const key = (tx & 2047) * 4096 + (tz & 2047);
     const e = ring.pool.get(key);
     if (e) return e;
@@ -489,7 +489,7 @@ export class GrassField {
         if (h > y1) y1 = h;
       }
     }
-    const bil = (arr: any, g: any, u: any, v: any, stride = 1, c = 0) => {
+    const bil = (arr: Float32Array, g: number, u: any, v: any, stride = 1, c = 0) => {
       const fu = u * g, fv = v * g;
       const iu = Math.min(g - 1, fu | 0), iv = Math.min(g - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;
@@ -524,7 +524,7 @@ export class GrassField {
     // brightness, pull everything back toward its own luminance so no clump can
     // be more saturated than the palette allows, and only then apply a value
     // jitter that is symmetric about the base instead of a one-way lift.
-    const tint = (u: any, v: any, dry: any, k: any, hue: any, sat: any) => {
+    const tint = (u: number, v: number, dry: number, k: number, hue: number, sat: number) => {
       const lr = bil(cg, CG, u, v, 3, 0), lg = bil(cg, CG, u, v, 3, 1), lb = bil(cg, CG, u, v, 3, 2);
       const dr = bil(cd, CG, u, v, 3, 0), dgc = bil(cd, CG, u, v, 3, 1), db = bil(cd, CG, u, v, 3, 2);
       let r = lr + (dr - lr) * dry;

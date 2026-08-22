@@ -33,7 +33,7 @@ export class Bar {
   }
 
   /** Add extra classes to the fill element (e.g. `mp`, `hostile`, `armiger`). */
-  tint(name: any) { this.fill.classList.add(name); return this; }
+  tint(name: string) { this.fill.classList.add(name); return this; }
 
   /** Jump both bars to `v` (0..1) with no chase animation. */
   reset(v: any) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }

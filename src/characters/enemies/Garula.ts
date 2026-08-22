@@ -101,7 +101,7 @@ function buildPrototype() {
    * `bind[0] === 'chain'`.
    */
   const P: { geo: THREE.BufferGeometry, bind: ['chain', string[]] | ['bone', string] }[] = [];
-  const emit = (bind: any) => { P.push({ geo: B.build(), bind }); reset(B); };
+  const emit = (bind: ['chain', string[]] | ['bone', string]) => { P.push({ geo: B.build(), bind }); reset(B); };
 
   /* ------------------------------------------------------------ torso -- */
   // One continuous barrel. Deepest and widest just behind the shoulder, then
@@ -177,7 +177,7 @@ function buildPrototype() {
   // buried both times; the table below is the sweep's own node list.
   const RIDGE = [[-1.86, 2.34], [-1.42, 2.68], [-0.82, 2.88], [-0.16, 3.06],
     [0.42, 3.18], [0.86, 3.02], [1.10, 2.72]];
-  const ridgeY = (z: any) => {
+  const ridgeY = (z: number) => {
     for (let k = 1; k < RIDGE.length; k++) {
       if (z <= RIDGE[k][0] || k === RIDGE.length - 1) {
         const [z0, y0] = RIDGE[k - 1], [z1, y1] = RIDGE[k];
@@ -447,7 +447,7 @@ function buildPrototype() {
 }
 
 /** A heavy three-toed foot: two front toes, a broad pad, a rear dewclaw. */
-function hoof(B: any, x: any, y: any, z: any) {
+function hoof(B: CBuilder, x: number, y: number, z: number) {
   const s = Math.sign(x) || 1;
   for (const i of [-1, 1]) {
     sweep(B, {
@@ -466,7 +466,7 @@ function hoof(B: any, x: any, y: any, z: any) {
   });
 }
 
-function reset(B: any) {
+function reset(B: CBuilder) {
   B.pos.length = 0; B.uv.length = 0; B.col.length = 0;
   B.emi.length = 0; B.mp.length = 0; B.grp.length = 0; B.idx.length = 0;
   B.glow(null);
@@ -474,20 +474,20 @@ function reset(B: any) {
 
 const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _c3 = new THREE.Color();
 /** Blend two sRGB hexes into the shared working colour. */
-function mix(a: any, b: any, t: any) {
+function mix(a: number, b: number, t: any) {
   _c1.setHex(a, THREE.SRGBColorSpace);
   _c2.setHex(b, THREE.SRGBColorSpace);
   return _c1.lerp(_c2, clamp01(t));
 }
 /** Same blend, but returns a hex so it can be fed back into `mix`/`hex`. */
-function mix2(a: any, b: any, t: any) {
+function mix2(a: number, b: number, t: number) {
   _c3.setHex(a, THREE.SRGBColorSpace);
   _c2.setHex(b, THREE.SRGBColorSpace);
   return _c3.lerp(_c2, clamp01(t)).getHex();
 }
 /** A second scratch colour, so a `.lerp` target does not clobber `mix`. */
-function hex(h: any) { return _c2.setHex(h, THREE.SRGBColorSpace); }
-function col(h: any) { return _c1.setHex(h, THREE.SRGBColorSpace); }
+function hex(h: number) { return _c2.setHex(h, THREE.SRGBColorSpace); }
+function col(h: number) { return _c1.setHex(h, THREE.SRGBColorSpace); }
 
 class GarulaEnemy extends QuadrupedEnemy {
   /** Tuning block, assigned below the class body. Read through `this.A`. */

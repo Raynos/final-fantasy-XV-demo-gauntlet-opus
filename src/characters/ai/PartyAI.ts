@@ -261,7 +261,7 @@ export class PartyAI {
     return res;
   }
 
-  _emit(name: any, detail: any) {
+  _emit(name: string, detail: any) {
     if (this.combat && this.combat.emit) this.combat.emit(name, detail);
     else window.dispatchEvent(new CustomEvent(`combat:${name}`, { detail }));
   }

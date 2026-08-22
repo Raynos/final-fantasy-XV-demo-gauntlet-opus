@@ -4,7 +4,7 @@ import {
 } from '../../combat/GeoKit.ts';
 import { metalNormal, metalRoughness } from '../../characters/enemies/EnemyBase.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const HULL = 0x2a2d33;
 const HULL_DARK = 0x14161a;
@@ -171,7 +171,7 @@ export class Dropship {
   }
 
   /** Thruster wash — a downdraught of dust and hot exhaust. */
-  _thrusters(dt: any, power: any) {
+  _thrusters(dt: any, power: number) {
     const vfx = this.vfx;
     if (!vfx) return;
     this._acc = (this._acc || 0) + dt * power * 22;

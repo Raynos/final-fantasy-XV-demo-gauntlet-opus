@@ -5,7 +5,7 @@ import {
   tube, blob, slab, place, tint, glow, rectCross, loft, circleCross,
 } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /* Albedo, and it was charcoal: PLATE at 0x33383f is 3.9% linear reflectance
  * and JOINT at 0x14161a is 0.9% — darker than any real surface outside a
@@ -260,7 +260,7 @@ class SniperEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     // rifle carried muzzle-down across the body
     const ready = (k = 1) => {
       S('shR', -0.95 * k, -0.30 * k, -0.30 * k);

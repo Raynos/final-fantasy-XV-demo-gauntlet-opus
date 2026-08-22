@@ -325,7 +325,7 @@ export class Ascension {
   get allNodes() { return Object.keys(NODES); }
 
   /** Look one node up. */
-  node(id: any) { return NODES[id] || null; }
+  node(id: string) { return NODES[id] || null; }
 
   /** Total AP required to fully clear the grid. */
   get totalApRequired() { return Object.values(NODES).reduce((a, n) => a + n.ap, 0); }
@@ -362,7 +362,7 @@ export class Ascension {
   /** Grant raw AP outside the rule table (debug, story rewards). */
   grantRaw(amount: any, reason = 'reward') { return this._grant(amount, reason); }
 
-  _grant(amount: any, reason: any) {
+  _grant(amount: any, reason: string) {
     const gained = Math.max(0, Math.round(amount * (1 + this.value('apGain'))));
     if (gained <= 0) return 0;
     this.ap += gained;
@@ -372,7 +372,7 @@ export class Ascension {
   }
 
   /** Tick AP cooldowns. Called from RpgSystem.update. */
-  update(dt: any) {
+  update(dt: number) {
     for (const k of Object.keys(this._cooldowns)) {
       if (this._cooldowns[k] > 0) this._cooldowns[k] = Math.max(0, this._cooldowns[k] - dt);
     }
@@ -381,7 +381,7 @@ export class Ascension {
   /* -- Unlocking --------------------------------------------------------- */
 
   /** Has this node been bought? */
-  isUnlocked(id: any) { return this.unlocked.has(id); }
+  isUnlocked(id: string) { return this.unlocked.has(id); }
 
   /**
    * Why a node can or can't be bought right now.
@@ -466,9 +466,9 @@ export class Ascension {
   }
 
   /** Convenience: does the party have this ability flag? */
-  has(flag: any) { return this.activeEffects().flags.has(flag); }
+  has(flag: string) { return this.activeEffects().flags.has(flag); }
   /** Convenience: read a scalar tunable, defaulting to 0. */
-  value(key: any) { return this.activeEffects().values[key] || 0; }
+  value(key: string) { return this.activeEffects().values[key] || 0; }
 
   /* -- Serialisation ----------------------------------------------------- */
 
@@ -476,7 +476,7 @@ export class Ascension {
     return { ap: this.ap, apSpent: this.apSpent, apLifetime: this.apLifetime, unlocked: [...this.unlocked], distance: this._distance };
   }
 
-  static fromJSON(data: any, emitter: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null) {
     const a = new Ascension(emitter);
     if (!data) return a;
     a.ap = data.ap || 0;

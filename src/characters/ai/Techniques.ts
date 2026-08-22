@@ -26,7 +26,7 @@ const V = new THREE.Vector3();
 /* ------------------------------------------------------------ helpers */
 
 /** Everything alive within `r` of a point. */
-function around(ai: any, p: any, r: any) {
+function around(ai: any, p: any, r: number) {
   const out = [];
   const r2 = r * r;
   for (const e of ai.enemies.list) {

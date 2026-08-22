@@ -141,7 +141,7 @@ export class RoadFurniture {
     }
   }
 
-  _pushRun(samples: any, cls: any, key: any) {
+  _pushRun(samples: any, cls: any, key: string) {
     let cx = 0, cz = 0;
     for (const p of samples) { cx += p.x; cz += p.z; }
     cx /= samples.length; cz /= samples.length;
@@ -153,7 +153,7 @@ export class RoadFurniture {
   }
 
   /** Perpendicular offset from a road sample. */
-  _side(p: any, off: any) {
+  _side(p: any, off: number) {
     return { x: p.x + p.tz * off, z: p.z - p.tx * off };
   }
 
@@ -200,7 +200,7 @@ export class RoadFurniture {
    * White marker posts on both verges every 24 m. Nothing sells "highway"
    * faster than a line of identical objects converging to a vanishing point.
    */
-  _delineators(c: any, B: any, G: any) {
+  _delineators(c: any, B: PartBuilder, G: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x8080);
     let acc = 1e9;
@@ -226,7 +226,7 @@ export class RoadFurniture {
    * W-beam barrier on the stretches where the ground falls away from the
    * shoulder — which is where a real highway authority would have paid for it.
    */
-  _guardrail(c: any, B: any) {
+  _guardrail(c: any, B: PartBuilder) {
     const M = this.mats, eco = this.eco, geo = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x2121);
     let run: any[] = [];
@@ -270,7 +270,7 @@ export class RoadFurniture {
   // ---------------------------------------------------------------- markers
 
   /** Distance plates every 200 m and hazard chevrons on the sharpest bends. */
-  _markers(c: any, B: any) {
+  _markers(c: any, B: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     let acc = Math.abs(c.samples[0].s) % 200;
     for (let i = 2; i < c.samples.length - 2; i++) {
@@ -301,7 +301,7 @@ export class RoadFurniture {
   // --------------------------------------------------------------- culverts
 
   /** Concrete headwalls and a pipe mouth wherever the road crosses a wash. */
-  _culverts(c: any, B: any) {
+  _culverts(c: any, B: PartBuilder) {
     const M = this.mats, eco = this.eco;
     let acc = 1e9, placed = 0;
     for (const p of c.samples) {
@@ -335,7 +335,7 @@ export class RoadFurniture {
   // ----------------------------------------------------------------- litter
 
   /** Oil drums, a shredded tyre, crates: the things that fall off trucks. */
-  _litter(c: any, B: any) {
+  _litter(c: any, B: PartBuilder) {
     const M = this.mats, eco = this.eco, g = this.geo;
     const rng = new Rng(hash32(c.key) ^ 0x6161);
     let acc = 1e9;
@@ -366,7 +366,7 @@ export class RoadFurniture {
   // ----------------------------------------------------------- shoulder grit
 
   /** A band of loose stone either side of the carriageway. */
-  _gravel(c: any, B: any) {
+  _gravel(c: any, B: PartBuilder) {
     const eco = this.eco, g = this.geo, M = this.mats;
     const rng = new Rng(hash32(c.key) ^ 0x9393);
     for (const p of c.samples) {
@@ -386,7 +386,7 @@ export class RoadFurniture {
    * Rubber laid down where a corner catches drivers out. The ribbon samples
    * terrain height per vertex so it lies on the camber instead of hovering.
    */
-  _skid(c: any, B: any) {
+  _skid(c: any, B: PartBuilder) {
     const eco = this.eco, M = this.mats;
     const rng = new Rng(hash32(c.key) ^ 0x4242);
     if (rng.next() > 0.3) return;
@@ -429,7 +429,7 @@ export class RoadFurniture {
    * seconds), and the release radius is deliberately far outside the draw
    * radius so a three-point turn never re-merges the same geometry.
    */
-  update(camPos: any) {
+  update(camPos: THREE.Vector3) {
     const BUILD = 420, DRAW = 340, CAST = 110, FREE = 900;
     let made = 0;
     let bestD = BUILD * BUILD, best: any = null;

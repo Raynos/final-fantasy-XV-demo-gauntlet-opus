@@ -34,12 +34,12 @@ export function geo(key: string, make: () => THREE.BufferGeometry): THREE.Buffer
 }
 
 export const box = (w: any, h: any, d: any) => geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
-export const cyl = (rt: any, rb: any, h: any, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
-export const plane = (w: any, h: any) => geo(`p${w}_${h}`, () => new THREE.PlaneGeometry(w, h));
-export const torus = (r: any, t: any, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => new THREE.TorusGeometry(r, t, a, b));
+export const cyl = (rt: number, rb: number, h: any, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
+export const plane = (w: number, h: number) => geo(`p${w}_${h}`, () => new THREE.PlaneGeometry(w, h));
+export const torus = (r: any, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => new THREE.TorusGeometry(r, t, a, b));
 
 /** A cylinder lying on its side along X, i.e. a wheel/tyre. */
-export const wheel = (r: any, w: any, s = 14) => geo(`w${r}_${w}_${s}`, () => {
+export const wheel = (r: number, w: number, s = 14) => geo(`w${r}_${w}_${s}`, () => {
   const g = new THREE.CylinderGeometry(r, r, w, s);
   g.rotateZ(Math.PI / 2);
   return g;
@@ -80,7 +80,7 @@ export function fenceRun(put: ((...args: any[]) => any), M: any, a: number[], b:
  * A floodlight mast. Returns the world-local head position so the caller can
  * hang a real light off it.
  */
-export function floodMast(put: any, M: any, [x, z]: any, { y = 0, height = 8.4, heads = 2, yaw = 0 } = {}) {
+export function floodMast(put: any, M: any, [x, z]: number[], { y = 0, height = 8.4, heads = 2, yaw = 0 } = {}) {
   put(M.galv, cyl(0.11, 0.16, height, 8), [x, y + height * 0.5, z]);
   put(M.galv, box(0.16, 0.16, 1.9), [x, y + height - 0.1, z], [0, yaw, 0]);
   for (let i = 0; i < heads; i++) {
@@ -95,7 +95,7 @@ export function floodMast(put: any, M: any, [x, z]: any, { y = 0, height = 8.4, 
 }
 
 /** A stack of tyres. */
-export function tyreStack(put: any, M: any, [x, z]: any, { y = 0, n = 5, r = 0.42, rng }: any) {
+export function tyreStack(put: any, M: any, [x, z]: number[], { y = 0, n = 5, r = 0.42, rng }: any) {
   for (let i = 0; i < n; i++) {
     const a = rng ? rng.next() * 3.1 : i * 0.7;
     const j = rng ? rng.gauss(0, 0.045) : 0;
@@ -105,7 +105,7 @@ export function tyreStack(put: any, M: any, [x, z]: any, { y = 0, n = 5, r = 0.4
 }
 
 /** A 200-litre oil drum, upright or on its side. */
-export function drum(put: any, M: any, [x, z]: any, { y = 0, tipped = false, yaw = 0, mat }: {
+export function drum(put: any, M: any, [x, z]: number[], { y = 0, tipped = false, yaw = 0, mat }: {
   y?: number, tipped?: boolean, yaw?: number, mat?: any,
 } = {}) {
   const m = mat || M.scrap;
@@ -124,7 +124,7 @@ export function drum(put: any, M: any, [x, z]: any, { y = 0, tipped = false, yaw
  * A generic 1950s-Americana saloon shell — the cars that fill an FFXV car park.
  * Deliberately simple: they are silhouettes at 20 m and set dressing at 5 m.
  */
-export function carShell(put: any, M: any, [x, z]: any, {
+export function carShell(put: any, M: any, [x, z]: number[], {
   y = 0, yaw = 0, body, len = 4.6, wid = 1.86, ride = 0.42, wreck = false,
 }: {
   y?: number, yaw?: number, body?: any, len?: number, wid?: number, ride?: number, wreck?: boolean,
@@ -132,7 +132,7 @@ export function carShell(put: any, M: any, [x, z]: any, {
   const b = body || M.panelRed;
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (ax: any, az: any) => [x + ax * c + az * s, 0, z - ax * s + az * c];
-  const P = (mat: any, g: any, ax: any, ay: any, az: any, rot = [0, 0, 0], sc?: any) => {
+  const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0], sc?: any) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[2]], [rot[0], yaw + rot[1], rot[2]], sc);
   };
@@ -171,10 +171,10 @@ export function carShell(put: any, M: any, [x, z]: any, {
 }
 
 /** Outdoor diner seating: a table with a parasol and two benches. */
-export function patioSet(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, parasol = true } = {}) {
+export function patioSet(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, parasol = true } = {}) {
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (ax: any, az: any) => [x + ax * c + az * s, z - ax * s + az * c];
-  const P = (mat: any, g: any, ax: any, ay: any, az: any, rot = [0, 0, 0]) => {
+  const P = (mat: any, g: any, ax: number, ay: number, az: number, rot = [0, 0, 0]) => {
     const p = at(ax, az);
     put(mat, g, [p[0], y + ay, p[1]], [rot[0], yaw + rot[1], rot[2]]);
   };
@@ -207,7 +207,7 @@ export function patioSet(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, paraso
 }
 
 /** A pallet with a few crates on it. */
-export function palletStack(put: any, M: any, [x, z]: any, { y = 0, yaw = 0, n = 2, rng }: {
+export function palletStack(put: any, M: any, [x, z]: number[], { y = 0, yaw = 0, n = 2, rng }: {
   y?: number, yaw?: number, n?: number, rng?: any,
 } = {}) {
   put(M.wood, box(1.2, 0.14, 0.9), [x, y + 0.07, z], [0, yaw, 0]);

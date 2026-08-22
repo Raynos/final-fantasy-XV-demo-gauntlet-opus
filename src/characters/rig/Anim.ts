@@ -71,7 +71,7 @@ function breathe(t: number, rate: number): number {
 }
 
 /** Bell envelope for a one-shot gesture: ease in, hold, ease out. */
-function bell(u: any, holdFrac: any) {
+function bell(u: number, holdFrac: any) {
   const inT = (1 - holdFrac) * 0.37;
   const outT = (1 - holdFrac) * 0.63;
   if (u <= 0 || u >= 1) return 0;
@@ -198,7 +198,7 @@ class Spring {
   v!: number;
   x!: number;
   constructor(k = 90, c = 13) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
-  step(target: any, dt: any) {
+  step(target: number, dt: any) {
     const a = this.k * (target - this.x) - this.c * this.v;
     this.v += a * dt;
     this.x += this.v * dt;
@@ -371,13 +371,13 @@ export class Animator {
   setLookTarget(v: any) { this.lookTarget = v; }
 
   // -- pose accumulation ---------------------------------------------------
-  set(name: any, x: any, y: any, z: any) {
+  set(name: string, x: any, y: any, z: any) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] = x; e[1] = y; e[2] = z;
   }
 
-  add(name: any, x: any, y: any, z: any, w = 1) {
+  add(name: string, x: any, y: any, z: any, w = 1) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] += x * w; e[1] += y * w; e[2] += z * w;
@@ -437,7 +437,7 @@ export class Animator {
   }
 
   /** The parametric locomotion cycle. */
-  evalGait(p: any, g: any, w: any, st: any) {
+  evalGait(p: number, g: any, w: any, st: any) {
     if (w <= 0.001) return;
     const legs = ['L', 'R'];
     for (let i = 0; i < 2; i++) {
@@ -549,7 +549,7 @@ export class Animator {
     // vertical. Solve in the root's frame and take the roll back out.
     const roll = (this.pose.get('hips') || [0, 0, 0])[2];
     const cr = Math.cos(roll), sr = Math.sin(roll);
-    const solveZ = (sgn: any, free: any) => {
+    const solveZ = (sgn: number, free: any) => {
       const bind = sgn * hipX;
       const joint = this.hipShift + bind * cr - hipDy * sr;
       const want = lerp(bind, sgn * (0.055 + free * 0.120) * stW * this.rig.dims.s, fw);
@@ -778,7 +778,7 @@ export class Animator {
   }
 
   /** Look-at, blink, lean and sway layers. */
-  evalAdditive(dt: any, st: any, moveW: any) {
+  evalAdditive(dt: number, st: any, moveW: any) {
     // ---- look-at
     let yaw = 0, pitch = 0, want = 0;
     if (this.lookTarget) {
@@ -826,7 +826,7 @@ export class Animator {
   }
 
   /** Keyframed action layer. */
-  evalAction(dt: any) {
+  evalAction(dt: number) {
     const a = this.action;
     if (!a) return;
     a.t += dt * a.speed;
@@ -890,7 +890,7 @@ export class Animator {
   }
 
   /** Coat tails and long hair — angular springs driven by motion and wind. */
-  springs(dt: any, st: any) {
+  springs(dt: number, st: any) {
     const vel = st.velocity || _v.set(0, 0, 0);
     const yawInv = -(this.char.root.rotation.y);
     const cos = Math.cos(yawInv), sin = Math.sin(yawInv);
@@ -922,7 +922,7 @@ export class Animator {
    * to the slope and dips the pelvis when a foot needs to reach below the
    * animated pose.
    */
-  footIK(dt: any, st: any) {
+  footIK(dt: number, st: any) {
     const terrain = st.terrain;
     const rig = this.rig;
     const root = this.char.root;
@@ -1029,7 +1029,7 @@ export class Animator {
  * Rotate `bone` so the segment toward its child points at `target`, keeping the
  * given pole direction as the joint's forward reference.
  */
-function aimBone(bone: any, bindFrom: any, bindTo: any, target: any, pole: any) {
+function aimBone(bone: any, bindFrom: any, bindTo: any, target: THREE.Vector3, pole: THREE.Vector3) {
   bone.parent.updateMatrixWorld();
   const parentQ = bone.parent.getWorldQuaternion(_q).clone();
   const worldPos = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
@@ -1046,7 +1046,7 @@ function aimBone(bone: any, bindFrom: any, bindTo: any, target: any, pole: any) 
   bone.quaternion.copy(parentQ).invert().multiply(world);
 }
 
-function basis(m: any, z: any, up: any) {
+function basis(m: THREE.Matrix4, z: any, up: any) {
   _v.copy(z).normalize();
   _v2.copy(up).addScaledVector(_v, -up.dot(_v));
   if (_v2.lengthSq() < 1e-8) _v2.set(_v.y, -_v.x, 0);

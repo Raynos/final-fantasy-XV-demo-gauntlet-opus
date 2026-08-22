@@ -289,7 +289,7 @@ export class Minimap {
     // ---- party and hostiles ----
     c.save();
     c.translate(R, R);
-    const blip = (wx: any, wz: any, col: any, rad: any, ring?: any) => {
+    const blip = (wx: any, wz: any, col: string, rad: number, ring?: string) => {
       const gx = lx(wx, wz), gy = ly(wx, wz);
       if (Math.hypot(gx, gy) > R - 5 * dpr) return;
       if (ring) {
@@ -362,7 +362,7 @@ export class Minimap {
   }
 
   /** The bezel: a graduated ring, cardinals, and four angular corner ticks. */
-  _compass(c: any, S: any, dpr: any) {
+  _compass(c: any, S: number, dpr: number) {
     const R = S / 2 - 2 * dpr;
     c.save();
     c.translate(S / 2, S / 2);

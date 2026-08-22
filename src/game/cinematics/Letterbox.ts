@@ -148,7 +148,7 @@ export class Letterbox {
   }
 
   /** Jump the fade with no travel. */
-  snapFade(v: any, colour = 'black') {
+  snapFade(v: number, colour = 'black') {
     this.fade.classList.toggle('white', colour === 'white');
     this.fadeAmt = this.fadeGoal = clamp(v, 0, 1);
   }
@@ -253,7 +253,7 @@ export class Letterbox {
     this._objective(dt);
   }
 
-  _line(dt: any) {
+  _line(dt: number) {
     const s = this.lineState;
     if (!s) { this.line.style.opacity = '0'; return; }
     s.step(dt);
@@ -274,7 +274,7 @@ export class Letterbox {
     this.line.style.bottom = `${(9.5 + this.bar * this.barMax * 100 * 0.62).toFixed(2)}%`;
   }
 
-  _chapter(dt: any) {
+  _chapter(dt: number) {
     const s = this.chapState;
     if (!s) { this.chap.style.opacity = '0'; return; }
     s.clip.step(dt);
@@ -296,7 +296,7 @@ export class Letterbox {
     this.chap.style.transform = `translateY(${(-out * 8).toFixed(2)}px)`;
   }
 
-  _objective(dt: any) {
+  _objective(dt: number) {
     const s = this.objState;
     if (!s) { this.obj.style.opacity = '0'; return; }
     s.step(dt);

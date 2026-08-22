@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, slab, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 /* Daemon flesh, not a colour swatch. The goblin used to be one flat violet
  * from ear to claw, which is what made it read as a purple mannequin: no value
@@ -222,7 +222,7 @@ class GoblinEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     // permanent hunch — the goblin is never upright
     const hunch = () => { S('spine', 0.30, 0, 0); S('chest', 0.20, 0, 0); S('neck', -0.30, 0, 0); };
 
@@ -371,7 +371,7 @@ function paint(geo: THREE.BufferGeometry, fn: (x: number, y: number, z: number) 
 }
 
 /** sRGB mix that accepts a hex or an already-mixed Colour at either end. */
-function mix(a: any, b: any, t: number): THREE.Color {
+function mix(a: any, b: number, t: number): THREE.Color {
   if (typeof b === 'number') _pd.setHex(b, THREE.SRGBColorSpace); else _pd.copy(b);
   if (typeof a === 'number') _pc.setHex(a, THREE.SRGBColorSpace); else if (a !== _pc) _pc.copy(a);
   return _pc.lerp(_pd, t < 0 ? 0 : t > 1 ? 1 : t);

@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const SKIN = 0xbdb6a4;
 const SKIN_DARK = 0x8b8474;
@@ -243,7 +243,7 @@ function buildPrototype() {
 }
 
 /** Bone-name suffix for leg `i` on side `s`. */
-function legName(i: any, s: any) { return `${i}${s < 0 ? 'L' : 'R'}`; }
+function legName(i: number, s: number) { return `${i}${s < 0 ? 'L' : 'R'}`; }
 
 class ArachneEnemy extends Enemy {
   override attackId!: any;
@@ -255,7 +255,7 @@ class ArachneEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
     /** Run `fn(name, i, s, group)` over all eight legs. */
     const legs = (fn: any) => {
       for (let i = 0; i < 4; i++) {

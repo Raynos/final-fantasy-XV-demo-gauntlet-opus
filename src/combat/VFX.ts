@@ -141,7 +141,7 @@ export class VFX {
   }
 
   /** Scale every additive/alpha particle system at once (0..1+). */
-  setExposure(v: any) {
+  setExposure(v: number) {
     this.exposure = v;
     for (const s of this.systems) {
       s.uniforms.uGlobal.value = s.useFog ? Math.min(1, v * 1.7) : v;
@@ -734,7 +734,7 @@ export class VFX {
     }
   }
 
-  _makeDepthRT(w: any, h: any) {
+  _makeDepthRT(w: number, h: number) {
     if (this.depthRT) this.depthRT.dispose();
     const dt = new THREE.DepthTexture(w, h);
     dt.format = THREE.DepthFormat;
@@ -822,7 +822,7 @@ export class VFX {
 const V2D = new THREE.Vector2();
 
 /** Uniformly sample a direction inside a cone of half-angle `spread` about `dir`. */
-function randomCone(rng: any, dir: any, spread: any, out: any) {
+function randomCone(rng: Rng, dir: THREE.Vector3, spread: any, out: THREE.Vector3) {
   const cosMax = Math.cos(Math.min(Math.PI, spread));
   const z = rng.range(cosMax, 1);
   const s = Math.sqrt(Math.max(0, 1 - z * z));

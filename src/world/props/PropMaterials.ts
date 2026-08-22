@@ -9,7 +9,7 @@ import { alphaTex } from '../veg/VegTextures.ts';
  */
 
 const cache = new Map();
-function memo(k: any, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
+function memo(k: string, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
 
 /**
  * Cracked, weather-bitten stone.
@@ -140,7 +140,7 @@ export function runeTexture() {
     ctx.lineWidth = s * 0.008;
     ctx.globalAlpha = 0.95;
     const cx = s * 0.5, cy = s * 0.5;
-    const ring = (r: any, dash: any) => {
+    const ring = (r: number, dash: any) => {
       ctx.save();
       ctx.setLineDash(dash);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -188,7 +188,7 @@ export function signTexture(kind = 0) {
     ctx.textAlign = 'center';
     // fitted rather than fixed: 'HAMMERHEAD' at 0.15em overruns the plate and
     // the sign ends up reading 'MMERHE'
-    const fit = (text: any, size: any, y: any) => {
+    const fit = (text: string, size: number, y: number) => {
       let px = Math.round(s * size);
       ctx.font = `${px}px sans-serif`;
       while (px > 8 && ctx.measureText(text).width > s * 0.82) {

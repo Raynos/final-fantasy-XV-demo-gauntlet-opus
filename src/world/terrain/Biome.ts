@@ -222,8 +222,8 @@ export function buildBiomeLut(size: number, coarse: number = 128): Uint8Array {
   return out;
 }
 
-function bilerp(a: any, b: any, c: any, d: any, tx: any, ty: any) {
+function bilerp(a: number, b: number, c: number, d: number, tx: number, ty: number) {
   return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
 }
 
-function byte(v: any) { return v < 0 ? 0 : v > 255 ? 255 : (v + 0.5) | 0; }
+function byte(v: number) { return v < 0 ? 0 : v > 255 ? 255 : (v + 0.5) | 0; }

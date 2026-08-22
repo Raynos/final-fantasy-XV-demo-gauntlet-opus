@@ -31,7 +31,7 @@ export class MaterialPatch {
   }
 
   /** Walk the scene and patch anything new. Cheap enough to run every frame. */
-  scan(scene: any) {
+  scan(scene: THREE.Scene) {
     scene.traverse((o: any) => {
       const m = o.material;
       if (!m) return;

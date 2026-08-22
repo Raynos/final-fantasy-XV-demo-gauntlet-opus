@@ -39,7 +39,7 @@ const ARCH_TOP = 0.96;             // y the arch crown lifts to
 const ARCH_TUCK = 0.14;            // how far the well tucks inboard
 
 /** Piecewise-linear profile lookup with smooth interpolation. */
-function curve(u: any, keys: any) {
+function curve(u: number, keys: number[][]) {
   if (u <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) {
     if (u <= keys[i][0]) {
@@ -60,7 +60,7 @@ const GH0 = 0.175, GH1 = 0.652;    // greenhouse span in u
 const GHW = [[0, 0.50], [0.16, 0.80], [0.35, 0.855], [0.62, 0.855], [0.82, 0.79], [1, 0.52]];
 const GRF = [[0, 1.00], [0.12, 1.36], [0.24, 1.50], [0.56, 1.51], [0.76, 1.41], [0.9, 1.27], [1, 1.12]];
 
-const smooth = (a: any, b: any, x: any) => THREE.MathUtils.smoothstep(x, a, b);
+const smooth = (a: number, b: number, x: any) => THREE.MathUtils.smoothstep(x, a, b);
 
 /**
  * Circular arch cutout profile at a given hull x — 0 outside the opening,
@@ -83,7 +83,7 @@ function archK(x: any) {
  * rectangle. The tuck then pulls everything under the tyre axis inboard, which
  * is what puts the tyre *inside* the body rather than beside it.
  */
-function carveArch(pts: any, x: any, yLow: any) {
+function carveArch(pts: number[][], x: number, yLow: any) {
   const k = archK(x);
   if (k <= 0) return pts;
   const liftTo = yLow + (ARCH_TOP - yLow) * k;
@@ -417,7 +417,7 @@ export function buildRegalia({ envMap = null, drivable = false }: { envMap?: THR
   // that is one thigh — or a seated figure cannot get its knees under the
   // dashboard and its shoulders end up below the door line.
   const SEAT_Y = 0.86;                 // top face at 0.925
-  const seat = (sx: any, sz: any, backH: any) => {
+  const seat = (sx: number, sz: number, backH: number) => {
     B.place(hide, new THREE.BoxGeometry(0.56, 0.13, 0.52), [sx, SEAT_Y, sz]);
     B.place(hide, new THREE.BoxGeometry(0.16, backH, 0.5), [sx - 0.28, SEAT_Y + backH * 0.46, sz], [0, 0, 0.2]);
     B.place(hide, new THREE.BoxGeometry(0.14, 0.2, 0.36), [sx - 0.42, SEAT_Y + 0.04 + backH, sz], [0, 0, 0.18]);

@@ -57,7 +57,7 @@ const EXP_ANCHORS: Array<[number, number]> = [
 export const MAX_LEVEL = 99;
 
 /** EXP required to go from `level` to `level + 1`. 0 at the cap. */
-export function expToNext(level: any) {
+export function expToNext(level: number) {
   if (level >= MAX_LEVEL) return 0;
   if (level <= EXP_ANCHORS[0][0]) return EXP_ANCHORS[0][1];
   for (let i = 0; i < EXP_ANCHORS.length - 1; i++) {
@@ -76,7 +76,7 @@ export function expToNext(level: any) {
 }
 
 /** Cumulative EXP needed to reach `level` from level 1. */
-export function totalExpFor(level: any) {
+export function totalExpFor(level: number) {
   let sum = 0;
   for (let l = 1; l < Math.min(level, MAX_LEVEL); l++) sum += expToNext(l);
   return sum;
@@ -130,7 +130,7 @@ export const GROWTH = {
 };
 
 /** Interpolate a growth pair at a level, rounded to a whole number. */
-function growAt(pair: any, level: any, curve: any) {
+function growAt(pair: any, level: number, curve: any) {
   const t = Math.pow(Math.max(0, Math.min(1, (level - 1) / (MAX_LEVEL - 1))), curve);
   return Math.round(pair[0] + (pair[1] - pair[0]) * t);
 }
@@ -196,7 +196,7 @@ export class Stats {
   }
 
   /** Final value of a stat including every modifier. Never below 1. */
-  get(stat: any) {
+  get(stat: string) {
     const flat = this.base(stat) + this.bonus(stat);
     const mult = 1 + ((this.gear.mult?.[stat] || 0) + (this.buff.mult?.[stat] || 0) + (this.ascension.mult?.[stat] || 0));
     return Math.max(stat === 'hp' || stat === 'mp' ? 1 : 0, Math.round(flat * mult));
@@ -241,7 +241,7 @@ export class Stats {
   }
 
   /** Heal, clamped to max HP. Returns the amount actually restored. */
-  heal(amount: any) {
+  heal(amount: number) {
     if (this.ko && amount > 0) this.ko = false;
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + Math.max(0, Math.round(amount)));

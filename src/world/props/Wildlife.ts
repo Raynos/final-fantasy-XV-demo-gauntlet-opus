@@ -198,7 +198,7 @@ export class Wildlife {
     this.birds.stream.flush(new THREE.Vector3());
   }
 
-  _genKettle(cx: any, cz: any, out: any) {
+  _genKettle(cx: number, cz: number, out: any) {
     const c = 340;
     const rng = new Rng(hash3(cx, cz, 0x8175));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -272,7 +272,7 @@ export class Wildlife {
    * few paces along the arc every cycle and crops with its head down in
    * between, so a herd slowly redistributes itself across the pasture.
    */
-  _genHerd(cx: any, cz: any, out: any) {
+  _genHerd(cx: number, cz: number, out: any) {
     const c = 260, eco = this.eco;
     const rng = new Rng(hash3(cx, cz, 0x2b91));
     const x = (cx + rng.next()) * c, z = (cz + rng.next()) * c;
@@ -354,7 +354,7 @@ export class Wildlife {
     this.waders.stream.flush(new THREE.Vector3());
   }
 
-  _genWaders(cx: any, cz: any, out: any) {
+  _genWaders(cx: number, cz: number, out: any) {
     const c = 180, eco = this.eco, sea = WORLD.seaLevel;
     // one sample rejects every cell that is not lake country
     if (eco.height((cx + 0.5) * c, (cz + 0.5) * c) > sea + 60) return;

@@ -119,7 +119,7 @@ export class GroundFX {
   rings!: any[];
   _decalNext!: number;
   _ringNext!: number;
-  constructor(parent: any, { rings = 6, decals = 12 } = {}) {
+  constructor(parent: THREE.Group, { rings = 6, decals = 12 } = {}) {
     this.rings = [];
     this.decals = [];
     for (let i = 0; i < rings; i++) {
@@ -136,7 +136,7 @@ export class GroundFX {
     this._decalNext = 0;
   }
 
-  _take(pool: any, cursorKey: any) {
+  _take(pool: any, cursorKey: string) {
     for (const p of pool) if (p.free) return p;
     const p = pool[(this as any)[cursorKey]];
     (this as any)[cursorKey] = ((this as any)[cursorKey] + 1) % pool.length;
@@ -191,7 +191,7 @@ export class GroundFX {
     return p;
   }
 
-  update(dt: any, clock: any) {
+  update(dt: any, clock: number) {
     for (const list of [this.rings, this.decals]) {
       for (const p of list) {
         if (p.free) continue;

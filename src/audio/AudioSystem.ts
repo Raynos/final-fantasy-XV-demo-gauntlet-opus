@@ -139,7 +139,7 @@ export class AudioSystem {
    * needs a line of code added to make the game audible.
    */
   _wireEvents() {
-    const on = (name: any, fn: any) => window.addEventListener(`combat:${name}`, (e: any) => {
+    const on = (name: string, fn: any) => window.addEventListener(`combat:${name}`, (e: any) => {
       try { fn(e.detail || {}); } catch (err) { console.error('[audio]', name, err); }
     });
 
@@ -339,14 +339,14 @@ export class AudioSystem {
   }
 
   /** Current user setting for a bus, 0..1. */
-  volumeOf(bus: any) { return this._userVolume[bus] ?? 1; }
+  volumeOf(bus: string) { return this._userVolume[bus] ?? 1; }
 
   setMuted(on?: boolean) { return this.graph ? this.graph.setMuted(on) : false; }
 
   /** Master volume, 0..1. */
   get volume() { return this._volume ?? 1; }
 
-  _nudgeVolume(d: any) {
+  _nudgeVolume(d: number) {
     this._volume = clamp((this._volume ?? 1) + d, 0, 1);
     this.graph.setVolume('master', this._volume);
     this.sfx.play('ui:move', null, {});

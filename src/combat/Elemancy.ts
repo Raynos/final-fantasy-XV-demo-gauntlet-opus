@@ -73,7 +73,7 @@ export class Elemancy {
   }
 
   /** Flask arcing in before the burst. */
-  _throw(element: any, from: any, to: any, t0: any, def: any) {
+  _throw(element: string, from: any, to: any, t0: number, def: any) {
     const vfx = this.vfx;
     const b = vfx.acquireBeam();
     b.uniforms.uHead.value.set(def.hot);
@@ -252,7 +252,7 @@ export class Elemancy {
 
   /* -------------------------------------------------------- reactions */
 
-  _reactionAt(pos: any, element: any) {
+  _reactionAt(pos: any, element: string) {
     const now = this.vfx.clock;
     this.zones = this.zones.filter((z) => z.until > now);
     for (const z of this.zones) {
@@ -266,7 +266,7 @@ export class Elemancy {
     return null;
   }
 
-  _reaction(kind: any, pos: any, t0: any, power: any, terrain: any) {
+  _reaction(kind: string, pos: any, t0: any, power: any, terrain: any) {
     const vfx = this.vfx;
     if (kind === 'steam') {
       vfx.smokePlume({

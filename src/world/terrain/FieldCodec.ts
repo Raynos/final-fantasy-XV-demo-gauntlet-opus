@@ -55,7 +55,7 @@ export function encodeF32Planes(src: any) {
   return out;
 }
 
-export function decodeF32Planes(bytes: any, n: any): Float32Array {
+export function decodeF32Planes(bytes: Uint8Array, n: number): Float32Array {
   const out = new Float32Array(n);
   const u8 = new Uint8Array(out.buffer);
   for (let c = 0; c < 4; c++) {
@@ -106,7 +106,7 @@ export function decodeQ16D(bytes: any, w: any, h: any, min: any, scale: any): Fl
  * their own neighbours, and gzip only sees a window of the recent past — so
  * de-interleaving is worth ~2x here for free.
  */
-export function encodePlanes8(src: any, w: any, h: any, ch: any) {
+export function encodePlanes8(src: any, w: any, h: number, ch: number) {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -117,7 +117,7 @@ export function encodePlanes8(src: any, w: any, h: any, ch: any) {
 }
 
 /** @returns interleaved RGBA8 */
-export function decodePlanes8(bytes: any, w: any, h: any, ch: any): Uint8Array {
+export function decodePlanes8(bytes: Uint8Array, w: number, h: number, ch: number): Uint8Array {
   const n = w * h;
   const out = new Uint8Array(n * ch);
   for (let c = 0; c < ch; c++) {
@@ -154,6 +154,16 @@ export function packContainer(meta: any, sections: Array<{name:string, kind:stri
  * The header fields differ per section kind -- `n` for plane counts, `w`/`h`/`ch`
  * for an 8-bit control map -- so the index signature stays.
  */
+/**
+ * A header field the section kind guarantees. A bake missing one is corrupt,
+ * and saying so here beats decoding `undefined` into a NaN heightfield.
+ */
+export function sectionField(s: BakeSection, key: 'n' | 'w' | 'h' | 'ch'): number {
+  const v = s[key];
+  if (typeof v !== 'number') throw new Error(`bake: section '${s.name}' has no ${key}`);
+  return v;
+}
+
 export interface BakeSection {
   name: string;
   kind: string;

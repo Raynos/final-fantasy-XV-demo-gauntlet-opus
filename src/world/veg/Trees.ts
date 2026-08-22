@@ -4,6 +4,7 @@ import { hash3 } from './Ecology.ts';
 import { buildTree, TREE_SPECIES } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { leafClusterTex, bakeTreeImpostor, bakeCanopyCard, barkMaps } from './VegTextures.ts';
+import type { Ecology } from './Ecology.ts';
 
 /**
  * The forest. Streamed, instanced, three LODs deep.
@@ -87,7 +88,7 @@ const BIOME_HUE = 0.5;
 const _lum = (c: any) => Math.max(1e-4, 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]);
 /** biome tint array -> species key -> composed [r,g,b]. Keyed by identity. */
 const _tintCache = new WeakMap();
-function composeTint(sp: any, t: any, bt: any) {
+function composeTint(sp: any, t: number[], bt: any) {
   let bySpecies = _tintCache.get(bt);
   if (!bySpecies) { bySpecies = new Map(); _tintCache.set(bt, bySpecies); }
   let out = bySpecies.get(sp);
@@ -110,7 +111,7 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 /** Impostor: two crossed quads anchored at the base. */
-function billboardGeo(width: any, height: any) {
+function billboardGeo(width: number, height: number) {
   const g = new THREE.BufferGeometry();
   const p = [], n = [], uv = [], idx = [], col = [];
   const hw = width * 0.5;
@@ -162,7 +163,7 @@ export class Trees {
   scene!: any;
   tileCacheMax!: number;
   variants!: any[];
-  constructor(eco: any, scene: any, {
+  constructor(eco: Ecology, scene: any, {
     quality = 1, geoRange = 88, impRange = 330,
     canopyNear = 296, canopyRange = 1250,
   } = {}) {
@@ -320,7 +321,7 @@ export class Trees {
    * probes and evaluating it once per candidate would put tens of milliseconds
    * into a stream-in.
    */
-  _makeTile(tx: any, tz: any) {
+  _makeTile(tx: number, tz: number) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
     const rng = new Rng(hash3(tx, tz, 0x7ee5));
@@ -336,7 +337,7 @@ export class Trees {
     }
     if (any < 0.015) return [];
 
-    const bil = (u: any, v: any) => {
+    const bil = (u: number, v: number) => {
       const fu = u * DG, fv = v * DG;
       const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
       const su = fu - iu, sv = fv - iv;
@@ -378,7 +379,7 @@ export class Trees {
   }
 
   /** Build (and cache) the far canopy stand cards for one 256 m tile. */
-  _makeCanopyTile(tx: any, tz: any) {
+  _makeCanopyTile(tx: number, tz: number) {
     const eco = this.eco;
     const x0 = tx * CTILE, z0 = tz * CTILE;
     const rng = new Rng(hash3(tx, tz, 0x51c0));
@@ -416,7 +417,7 @@ export class Trees {
   }
 
   /** @returns null when this frame's generation budget is spent */
-  _tile(map: any, key: any, make: any): any[] | null {
+  _tile(map: any, key: number, make: any): any[] | null {
     const e = map.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
     if (this._primed && performance.now() > this._deadline) return null;

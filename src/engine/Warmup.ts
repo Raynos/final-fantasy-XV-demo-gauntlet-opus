@@ -72,7 +72,7 @@ export class Warmup {
     };
   }
 
-  _step(name: any, fn: any) {
+  _step(name: string, fn: any) {
     const t = performance.now();
     const p0 = this.renderer.info.programs.length;
     try { fn(); } catch (e: any) {

@@ -135,7 +135,7 @@ export function drawRoads(c: CanvasRenderingContext2D, sx: ((a0: number) => numb
  * Junction pips — a small tick where two named routes meet, which is what
  * makes a road network read as a network rather than as crossing lines.
  */
-export function drawJunctions(c: any, sx: any, sy: any, scale: any, alpha: any) {
+export function drawJunctions(c: any, sx: any, sy: any, scale: number, alpha: number) {
   const g = worldMap.roadGraph;
   c.save();
   c.globalAlpha = alpha;
@@ -204,7 +204,7 @@ export function zoneBorders(): Array<Float32Array> {
   const segs: any[] = [];
   const key = (a: any, b: any) => a * 4096 + b;
   const at = new Map();
-  const push = (ax: any, ay: any, bx: any, by: any) => {
+  const push = (ax: number, ay: number, bx: number, by: number) => {
     const idx = segs.length;
     segs.push([ax, ay, bx, by, false]);
     for (const k of [key(ax, ay), key(bx, by)]) {
@@ -317,7 +317,7 @@ export function spacedText(c: CanvasRenderingContext2D, text: string, x: number,
 }
 
 /** Width a `spacedText` run would take. */
-export function spacedWidth(c: any, text: any, spacing: any) {
+export function spacedWidth(c: any, text: any, spacing: number) {
   let total = 0;
   for (const ch of text) total += c.measureText(ch).width + spacing;
   return total - spacing;
@@ -343,5 +343,5 @@ export class LabelPlacer {
     return true;
   }
   /** Reserve a box without testing it (for marks that must always show). */
-  reserve(x0: any, y0: any, x1: any, y1: any) { this.rects.push([x0, y0, x1, y1]); }
+  reserve(x0: number, y0: number, x1: number, y1: number) { this.rects.push([x0, y0, x1, y1]); }
 }

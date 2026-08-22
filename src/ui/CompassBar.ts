@@ -16,7 +16,7 @@ const REGION_NAME = {
   insomnia: ['Insomnia', 'The Crown City'],
 };
 
-const wrap180 = (d: any) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; };
+const wrap180 = (d: number) => { let x = ((d + 180) % 360 + 360) % 360 - 180; return x; };
 
 /**
  * Top-right compass strip with cardinal ticks and world-space quest markers,

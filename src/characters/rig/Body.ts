@@ -29,7 +29,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
   const base = look.skin.clone().multiplyScalar(SKIN_BASE);
   B.color(base).mat(0.57, 0);
 
-  const y = (v: any) => v * s;
+  const y = (v: number) => v * s;
 
   // ---- torso -------------------------------------------------------------
   const torso = torsoNodes(rig);
@@ -77,7 +77,7 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
   for (const side of ['L', 'R']) {
     const sg = side === 'L' ? 1 : -1;
     const sh = P[`upperArm${side}`];
-    const R = (v: any) => v * s;
+    const R = (v: number) => v * s;
 
     sweepTube(B, {
       nodes: armNodes(rig, side), steps: 22, seg: 16,
@@ -124,21 +124,21 @@ export function buildBody(rig: any, look: any): THREE.BufferGeometry {
  * When the character wears gloves the same geometry is re-coloured and given a
  * cloth response, which is what a thin glove actually looks like.
  */
-function buildHand(B: any, rig: any, side: any, look: any) {
+function buildHand(B: MeshBuilder, rig: any, side: string, look: any) {
   const { index: I, P, dims } = rig;
   const gl = look.gloves;
   if (gl) B.color(gl.color).mat(gl.rough ?? 0.72, 0);
   else B.color(look.skin.clone().multiplyScalar(SKIN_BASE)).mat(0.57, 0);
   const s = dims.s;
   const sg = side === 'L' ? 1 : -1;
-  const R = (v: any) => v * s;
+  const R = (v: number) => v * s;
   const wr = P[`hand${side}`];
   const kn = P[`fingers${side}`];
   const dir = new THREE.Vector3().subVectors(kn, wr).normalize();
   const sideAxis = new THREE.Vector3(1, 0, 0);
   const front = new THREE.Vector3().crossVectors(sideAxis, dir).normalize().multiplyScalar(-1);
 
-  const pt = (along: any, across: any, depth: any) => new THREE.Vector3()
+  const pt = (along: number, across: number, depth: number) => new THREE.Vector3()
     .copy(wr)
     .addScaledVector(dir, along * s)
     .addScaledVector(sideAxis, across * s * sg)

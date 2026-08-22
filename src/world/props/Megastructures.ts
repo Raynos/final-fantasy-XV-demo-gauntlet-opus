@@ -34,7 +34,7 @@ function mat4(pos: any, rot = [0, 0, 0], scale = [1, 1, 1]) {
 }
 
 /** Angular rock/crystal mass — meteor shards and ruin rubble at scale. */
-function shard(seed: any, r: any, stretch = [1, 1, 1], warp = 0.4) {
+function shard(seed: number, r: any, stretch = [1, 1, 1], warp = 0.4) {
   const g = new THREE.IcosahedronGeometry(r, 1);
   const n = new Noise(seed);
   const p = g.attributes.position;
@@ -188,7 +188,7 @@ export class Megastructures {
     for (let i = 0; i < 3; i++) {
       const at = mat4([i * -128 + rng.gauss(0, 26), i * 22, i * -92 + rng.gauss(0, 26)],
         [0, rng.gauss(0, 0.06), 0], [1.6, 1.6, 1.6]);
-      const put = (mat: any, geo: any, p: any, r?: any) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
+      const put = (mat: any, geo: any, p: number[], r?: number[]) => B.add(mat, geo, at.clone().multiply(mat4(p, r)));
       put(M.hull, hullGeo, [0, 0, 0]);
       for (const sz of [-1, 1]) {
         put(M.hullDark, new THREE.BoxGeometry(15, 1.6, 16), [-2, 3, sz * 10], [sz * 0.2, 0, 0]);
@@ -329,7 +329,7 @@ export class Megastructures {
     const rng = new Rng(5150);
     const a = { x: -1010, z: -740 }, b = { x: -790, z: 300 };
     const bays = 21;
-    const bayAt = (i: any) => ({
+    const bayAt = (i: number) => ({
       x: a.x + (b.x - a.x) * (i / bays),
       z: a.z + (b.z - a.z) * (i / bays),
     });
@@ -350,7 +350,7 @@ export class Megastructures {
     for (let i = 0; i <= bays; i++) deck[i] += 54;
 
     // the middle bays came down long ago
-    const gone = (i: any) => i >= 9 && i <= 12;
+    const gone = (i: number) => i >= 9 && i <= 12;
 
     for (let i = 0; i <= bays; i++) {
       const p = bayAt(i);

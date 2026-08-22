@@ -289,7 +289,7 @@ export class AscensionScreen {
     this.svg.appendChild(this.bracket);
   }
 
-  _chrome(root: any) {
+  _chrome(root: HTMLElement) {
     const hud = el('div.asc-hud', {}, [
       el('div.ap-k', { text: 'Ability Points' }),
       el('div.ap-v', { text: String(this.ap) }),

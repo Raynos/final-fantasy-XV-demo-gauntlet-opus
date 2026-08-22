@@ -35,7 +35,7 @@ export class SurfaceBuilder {
 
   get empty() { return this.idx.length === 0; }
 
-  _push(p: any, n: any, u: any, c: any) {
+  _push(p: any, n: number[], u: number[], c: any) {
     this.pos.push(p[0], p[1], p[2]);
     this.nrm.push(n[0], n[1], n[2]);
     this.uv.push(u[0], u[1]);
@@ -48,7 +48,7 @@ export class SurfaceBuilder {
    *
    * @param {object} o
    * */
-  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x: any,y: any,z: any)=>number, ao?: (x: any,y: any,z: any)=>number, flip?: boolean, uvOffset?: number[] }) {
+  patch(o: { origin: number[], uAxis: number[], vAxis: number[], uLen: number, vLen: number, cell?: number, uvScale?: number, displace?: (x: number,y: number,z: number)=>number, ao?: (x: number,y: number,z: number)=>number, flip?: boolean, uvOffset?: number[] }) {
     const {
       origin, uAxis, vAxis, uLen, vLen,
       cell = 1.4, uvScale = 3.0, displace = null, ao = null, flip = false,
@@ -150,7 +150,7 @@ export class SurfaceBuilder {
     return this;
   }
 
-  _cap(ringStart: any, sides: any, centre: any, front: any, ao: any) {
+  _cap(ringStart: number, sides: any, centre: number[], front: boolean, ao: any) {
     const c = this._push(centre, [0, 1, 0], [0.5, 0.5], ao ? ao(centre[0], centre[1], centre[2]) : 1);
     for (let j = 0; j < sides; j++) {
       const a = ringStart + j;
@@ -185,7 +185,7 @@ export class InteriorMerger {
   constructor() { this.byMat = new Map(); }
 
   /** @param mat @param geo */
-  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix: any) {
+  add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4 | null) {
     let g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
     const keep = ['position', 'normal', 'uv', 'color'];
     for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
@@ -249,18 +249,18 @@ export class InteriorMerger {
 
 /* ----------------------------------------------------------------- helpers */
 
-export function cross(a: any, b: any) {
+export function cross(a: number[], b: number[]) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
-export function norm(a: any) {
+export function norm(a: number[]) {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 }
 
-export function smoothstep(a: any, b: any, x: any) {
+export function smoothstep(a: number, b: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-export function clamp(x: any, a: any, b: any) { return x < a ? a : x > b ? b : x; }
+export function clamp(x: any, a: number, b: any) { return x < a ? a : x > b ? b : x; }

@@ -19,6 +19,7 @@
 import { ITEMS } from './Inventory.ts';
 import type { Emitter } from './Emitter.ts';
 import type { Inventory } from './Inventory.ts';
+import type { Ascension } from './Ascension.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Elements                                                                  */
@@ -74,7 +75,7 @@ export const DEPOSITS = [
 /* ------------------------------------------------------------------------ */
 
 /** Potency -> tier index (0..2). */
-export function tierFor(potency: any) {
+export function tierFor(potency: number) {
   if (potency >= 200) return 2;
   if (potency >= 100) return 1;
   return 0;
@@ -104,7 +105,7 @@ function catalystLevel(cat: any, count: number, bonus: number = 0) {
  */
 function deriveEffects({ cat, catLevel, catName, tier, mix, dominant, potency, purity, total }: any): Array<{name:string, level:number, desc:string, payload:any}> {
   const effects: any[] = [];
-  const add = (name: any, level: any, desc: any, payload: any) => effects.push({ name, level, desc, payload });
+  const add = (name: string, level: any, desc: string, payload: any) => effects.push({ name, level, desc, payload });
 
   if (cat && catLevel > 0) {
     const tags = cat.tags || [];
@@ -447,7 +448,7 @@ export class Elemancy {
   }
 
   /** Pull Ascension tunables in. Called by RpgSystem whenever a node unlocks. */
-  applyAscension(ascension: any) {
+  applyAscension(ascension: Ascension) {
     this.bonuses.drawYield = ascension.value('drawYield');
     this.bonuses.spellPower = ascension.value('spellPower');
     this.bonuses.catalystPower = ascension.value('catalystPower');
@@ -461,7 +462,7 @@ export class Elemancy {
     return { energy: { ...this.energy }, deposits: this.deposits, spells: this.spells, equipped: this.equipped };
   }
 
-  static fromJSON(data: any, emitter: any = null, inventory: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null, inventory: Inventory | null = null) {
     const el = new Elemancy(emitter, inventory);
     if (!data) return el;
     Object.assign(el.energy, data.energy || {});

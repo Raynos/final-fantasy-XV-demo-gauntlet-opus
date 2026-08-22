@@ -144,7 +144,7 @@ export class Ambience {
     this.scheduledTo = 0;
   }
 
-  _band(src: any, type: any, freq: any, q: any, dest: any = null) {
+  _band(src: any, type: string, freq: number, q: number, dest: any = null) {
     const ctx = this.ctx;
     const f = ctx.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -369,7 +369,7 @@ export class Ambience {
    * Birdsong: two to five syllables, each a fast frequency sweep. Real birds
    * chirp in units; a single sine blip sounds like a game menu.
    */
-  _bird(t: any, origin: any) {
+  _bird(t: number, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
@@ -410,7 +410,7 @@ export class Ambience {
   }
 
   /** A cricket: a short burst of a resonant band, repeated in a trill. */
-  _cricket(t: any, origin: any) {
+  _cricket(t: number, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;
@@ -444,7 +444,7 @@ export class Ambience {
   }
 
   /** A drop off a rock or a leaf — what makes rain sound like a place. */
-  _drip(t: any, origin: any) {
+  _drip(t: number, origin: any) {
     const slot = this.graph.take(0, t);
     if (!slot) return;
     const ctx = this.ctx;

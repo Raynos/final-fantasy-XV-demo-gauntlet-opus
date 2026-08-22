@@ -50,14 +50,14 @@ export const HUNT_RANKS = {
 /* Objective helpers                                                         */
 /* ------------------------------------------------------------------------ */
 
-const kill  = (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'kill', target, count, desc, waypoint });
-const fetch_= (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'fetch', target, count, desc, waypoint });
-const reach = (id: any, target: any, desc: any, waypoint: any, radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
-const talk  = (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
-const photo = (id: any, target: any, count: any, desc: any, waypoint?: any) => ({ id, type: 'photo', target, count, desc, waypoint });
-const escort= (id: any, target: any, desc: any, waypoint: any) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
-const craft = (id: any, target: any, count: any, desc: any) => ({ id, type: 'craft', target, count, desc });
-const rest  = (id: any, desc: any, waypoint?: any) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
+const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'kill', target, count, desc, waypoint });
+const fetch_= (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'fetch', target, count, desc, waypoint });
+const reach = (id: string, target: string, desc: string, waypoint: number[], radius = 12) => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
+const talk  = (id: string, target: string, desc: string, waypoint: number[]) => ({ id, type: 'talk', target, count: 1, desc, waypoint });
+const photo = (id: string, target: string, count: number, desc: string, waypoint?: number[]) => ({ id, type: 'photo', target, count, desc, waypoint });
+const escort= (id: string, target: string, desc: string, waypoint: number[]) => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
+const craft = (id: string, target: string, count: number, desc: string) => ({ id, type: 'craft', target, count, desc });
+const rest  = (id: string, desc: string, waypoint?: number[]) => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -455,7 +455,7 @@ export class QuestLog {
   setFlag(flag: any) { this.flags.add(flag); this.refresh(); }
 
   /** Quests in a given status, hydrated with their definitions. */
-  byStatus(status: any) {
+  byStatus(status: string) {
     return QUEST_TABLE.filter((q) => this.states[q.id].status === status)
       .map((q) => this.view(q.id));
   }
@@ -529,7 +529,7 @@ export class QuestLog {
   }
 
   /** Make the compass point at this quest. */
-  track(id: any) {
+  track(id: string) {
     if (!this.states[id]) return false;
     this.tracked = id;
     this.emitter?.emit('quest-updated', { quest: QUESTS[id], status: this.states[id].status, phase: 'tracked' });
@@ -672,7 +672,7 @@ export class QuestLog {
     return { states: this.states, tracked: this.tracked, hunterPoints: this.hunterPoints, flags: [...this.flags] };
   }
 
-  static fromJSON(data: any, emitter: any = null) {
+  static fromJSON(data: any, emitter: Emitter | null = null) {
     const log = new QuestLog(emitter);
     if (!data) return log;
     for (const id of Object.keys(log.states)) {

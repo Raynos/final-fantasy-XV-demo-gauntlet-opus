@@ -108,7 +108,7 @@ export const FOCIAUGH = {
   // ----------------------------------------------------------------- dressing
 
   dress(kit: any, L: any) {
-    const F = (x: any, y: any, z: any, o: any) => kit.fungus(x, y, z, o);
+    const F = (x: number, y: number, z: number, o: any) => kit.fungus(x, y, z, o);
 
     // ---- cave mouth: daylight dying about six metres in -------------------
     kit.dripField(0, 7.0, -1.5, { count: 14, radius: 5.0, len: 1.5, r: 0.24 });

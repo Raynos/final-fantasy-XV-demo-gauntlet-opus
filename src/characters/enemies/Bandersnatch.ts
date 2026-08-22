@@ -3,7 +3,7 @@ import { Rig, poseBone, creatureMaterial } from './RigBuilder.ts';
 import { Enemy, organicNormal, organicRoughness } from './EnemyBase.ts';
 import { tube, blob, spike, place, tint, glow } from '../../combat/GeoKit.ts';
 
-const P = (x: any, y: any, z: any) => new THREE.Vector3(x, y, z);
+const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const FUR = 0x584e42;
 const FUR_DARK = 0x2f2b25;
@@ -220,14 +220,14 @@ class BandersnatchEnemy extends Enemy {
   override pose(state: any, t: any) {
     const rig = this.rig;
     if (!rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(rig, n, x, y, z);
+    const S = (n: string, x: number, y: number, z: number) => poseBone(rig, n, x, y, z);
 
     /**
      * A bounding gallop: both forelegs swing nearly together, both hind legs
      * nearly together, and the spine folds and snaps open between them. The
      * small left/right offset keeps it from looking mechanical.
      */
-    const gallop = (ph: any) => {
+    const gallop = (ph: number) => {
       for (const s of [-1, 1]) {
         const n = s < 0 ? 'L' : 'R';
         const lead = s < 0 ? 0 : 0.42;

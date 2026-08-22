@@ -104,7 +104,7 @@ export function aoFromHeight(size: any, heightFn: any, radius = 4, opts = {}) {
 }
 
 /** Canvas-based generation for anything easier to draw than to compute. */
-export function canvasTexture(size: any, draw: any, { colorSpace = THREE.SRGBColorSpace, repeat = 1 } = {}) {
+export function canvasTexture(size: number, draw: any, { colorSpace = THREE.SRGBColorSpace, repeat = 1 } = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d');
@@ -155,7 +155,7 @@ export function blueNoise(size = 64, seed = 7) {
   return makeDataMap(size, () => rnd(), { generateMipmaps: false });
 }
 
-function clamp255(v: any) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
+function clamp255(v: number) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
 
 /** sRGB hex -> linear THREE.Color, so authored palettes stay perceptual. */
 export function srgb(hex: any) { return new THREE.Color().setHex(hex, THREE.SRGBColorSpace); }

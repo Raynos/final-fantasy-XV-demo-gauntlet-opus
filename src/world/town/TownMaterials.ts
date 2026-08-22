@@ -20,7 +20,7 @@ const cache = new Map();
 function memo(k: any, f: any) { if (!cache.has(k)) cache.set(k, f()); return cache.get(k); }
 
 /** A textured PBR set built from one height function. */
-function pbr(key: any, {
+function pbr(key: string, {
   tint, rough = 0.8, metal = 0, height, albedo, roughAt, normalScale = 1.0, size = 256, repeat = 1,
 }: any) {
   return memo(key, () => {
@@ -98,7 +98,7 @@ export function slabMaterial() {
   });
 }
 
-function sawEdge(x: any, period: any) {
+function sawEdge(x: any, period: number) {
   const t = Math.abs((x % period) / period - 0.5) * 2;
   return 1 - THREE.MathUtils.smoothstep(t, 0.86, 1.0);
 }
@@ -274,7 +274,7 @@ export function lampMaterial(color = 0xffe6b4, base = 0x14120e) {
  * Draw text scaled down until it fits. Fixed sizes overrun and the sign ends
  * up reading "MMERHE" — the same trap the highway signs already fell into.
  */
-function fit(ctx: any, text: any, s: any, maxFrac: any, px0: any, y: any, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
+function fit(ctx: any, text: string, s: any, maxFrac: number, px0: number, y: number, { weight = 700, family = 'sans-serif', track = 0 } = {}) {
   let px = Math.round(s * px0);
   const set = () => { ctx.font = `${weight} ${px}px ${family}`; };
   set();
@@ -536,7 +536,7 @@ export function chainlinkMaterial() {
 }
 
 /** Wrap a canvas texture into a flat sign material. */
-export function signMaterial(key: any, tex: any, { emissive = 0, rough = 0.62, metal = 0.06 } = {}) {
+export function signMaterial(key: string, tex: any, { emissive = 0, rough = 0.62, metal = 0.06 } = {}) {
   return memo(`signmat_${key}`, () => {
     const m = new THREE.MeshStandardMaterial({
       map: tex, roughness: rough, metalness: metal, side: THREE.DoubleSide,

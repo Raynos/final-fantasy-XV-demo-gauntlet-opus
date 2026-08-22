@@ -174,7 +174,7 @@ function faceted(geo: any) {
  * ribbed rubber tube, and the ridges catch the rim light that tells you a hand
  * belongs there.
  */
-function wrappedGrip(y0: any, y1: any, r0: any, r1: any,
+function wrappedGrip(y0: number, y1: number, r0: number, r1: number,
   { flat = 0.76, turns = 2.6, lobes = 4, steps = 16, waist = 0.10 } = {}) {
   const secs = [];
   for (let i = 0; i <= steps; i++) {
@@ -241,7 +241,7 @@ export function swordGeometry() {
   // --- crossguard: a compact angular cross-piece, not a pair of gold wings
   const guard = place(slab(0.108, 0.030, 0.032, 0.006), { pos: [0, 0.090, 0] });
   parts.push(tint(guard, IRON));
-  const quillon = (side: any) => place(faceted(loft(chamferCross(0.36), [
+  const quillon = (side: number) => place(faceted(loft(chamferCross(0.36), [
     { y: 0.000, sx: 0.0130, sz: 0.0150 },
     { y: 0.020, sx: 0.0110, sz: 0.0125 },
     { y: 0.034, sx: 0.0042, sz: 0.0050 },
@@ -312,7 +312,7 @@ export function greatswordGeometry() {
   parts.push(tint(ricasso, 0x4c515a, 0.05));
 
   // --- crossbar: short, heavy, swept forward. Not a 400 mm slab.
-  const bar = (side: any) => place(faceted(loft(chamferCross(0.32), [
+  const bar = (side: number) => place(faceted(loft(chamferCross(0.32), [
     { y: 0.000, sx: 0.0230, sz: 0.0250 },
     { y: 0.048, sx: 0.0205, sz: 0.0215 },
     { y: 0.092, sx: 0.0175, sz: 0.0170 },
@@ -330,7 +330,7 @@ export function greatswordGeometry() {
   // --- the long two-hand grip: lead hand at y = 0, off hand near -0.30
   parts.push(surf(tint(wrappedGrip(-0.380, 0.076, 0.0225, 0.0215,
     { turns: 6.2, steps: 26, waist: 0.05 }), LEATHER, 0.05), 0.84, 0));
-  const band = (y: any) => faceted(loft(chamferCross(0.30), [
+  const band = (y: number) => faceted(loft(chamferCross(0.30), [
     { y: y - 0.008, sx: 0.0245, sz: 0.0198 },
     { y: y + 0.008, sx: 0.0245, sz: 0.0198 },
   ]));
@@ -357,7 +357,7 @@ export function polearmGeometry() {
   // wrapped section around the origin, where the lead hand closes
   parts.push(surf(tint(wrappedGrip(-0.120, 0.150, 0.0212, 0.0208,
     { flat: 1, turns: 3.0, waist: 0.03 }), LEATHER, 0.05), 0.84, 0));
-  const ring = (y: any) => loft(chamferCross(0.34), [
+  const ring = (y: number) => loft(chamferCross(0.34), [
     { y: y - 0.008, sx: 0.0222, sz: 0.0222 },
     { y: y + 0.008, sx: 0.0222, sz: 0.0222 },
   ]);
@@ -652,8 +652,8 @@ function steelMaps() {
   const N = 256;
   const frac = (x: any) => x - Math.floor(x);
   // `p` is the tiling period in cells, so the streaks wrap cleanly in u
-  const h1 = (i: any, p: any) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
-  const vn = (x: any, p: any) => {
+  const h1 = (i: number, p: any) => frac(Math.sin((((i % p) + p) % p) * 127.1 + p * 3.7) * 43758.5453);
+  const vn = (x: number, p: number) => {
     const i = Math.floor(x), f = frac(x), s = f * f * (3 - 2 * f);
     return h1(i, p) * (1 - s) + h1(i + 1, p) * s;
   };
@@ -768,7 +768,7 @@ export class Weapon {
   }
 
   /** 0 = fully dematerialised, 1 = solid steel. */
-  setReveal(v: any) {
+  setReveal(v: number) {
     this.reveal = THREE.MathUtils.clamp(v, 0, 1);
     this.material.userData.uniforms.uReveal.value = this.reveal;
     this.root.visible = this.reveal > 0.001;

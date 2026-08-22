@@ -129,7 +129,7 @@ export class Shot {
   }
 
   /** Handheld + breathe, applied in world space around the sampled boom. */
-  _layers(out: any, local: any) {
+  _layers(out: any, local: number) {
     const n = this._noise;
     const hh = this.handheld;
     if (this.breathe > 0) {

@@ -6,7 +6,7 @@ import { Noise } from '../../util/Noise.ts';
 const _cloth = new Noise(9137);
 
 /** Gaussian ridge centred on `c`, half-width `w`. */
-const ridge = (x: any, c: any, w: any) => Math.exp(-((x - c) / w) * ((x - c) / w));
+const ridge = (x: any, c: any, w: number) => Math.exp(-((x - c) / w) * ((x - c) / w));
 
 /** Same, on an angle, wrapping at 2π. */
 function aridge(th: any, c: any, w: any) {
@@ -36,17 +36,17 @@ function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:n
   const yoke = o.yoke ?? 0.76;
   const wear = o.wear ?? 1;
   const out = new THREE.Color();
-  const seamK = (th: any, t: any) => {
+  const seamK = (th: number, t: number) => {
     let s = 0;
     for (const c of seams) s = Math.max(s, aridge(th, c, o.seamW ?? 0.055));
     s = Math.max(s, ridge(t, yoke, 0.020) * 0.9);
     return s;
   };
-  const wearK = (th: any, t: any) => wear * (
+  const wearK = (th: number, t: number) => wear * (
     0.85 * ridge(t, o.hemAt ?? 0.030, 0.042)
     + 0.45 * ridge(t, 0.885, 0.055) * Math.pow(Math.abs(Math.sin(th)), 2.0)
   );
-  const mottle = (th: any, t: any) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
+  const mottle = (th: number, t: number) => 0.11 * _cloth.fbm2(Math.cos(th) * 2.6 + 7.3, Math.sin(th) * 2.6 + t * 4.4, 3);
   return {
     /** Seam mask, 0..1 — also drives the raised topstitch ridge in `shape`. */
     seam: seamK,
@@ -524,7 +524,7 @@ piece('glasses', (B: any, ctx: any, o: any) => {
   const I = rig.index;
   const s = rig.dims.headScale;
   const org = rig.dims.headOrigin;
-  const put = (x: any, y: any, z: any) => [org.x + x * s, org.y + y * s, org.z + z * s];
+  const put = (x: number, y: number, z: number) => [org.x + x * s, org.y + y * s, org.z + z * s];
   B.skin([[I.head, 1]]);
   B.color(o.color ?? 0x23262c).mat(0.26, 0.55);
   const w = 0.0345, h = 0.0145;

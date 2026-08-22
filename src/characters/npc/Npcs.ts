@@ -126,7 +126,7 @@ export class Npcs {
     };
 
     // Local (u, v) helper so placement below reads as a plan view of the town.
-    const L = (u: any, v: any, y = 0) => town.local(u, y, v, new THREE.Vector3());
+    const L = (u: number, v: number, y = 0) => town.local(u, y, v, new THREE.Vector3());
 
     /* -- the named four --------------------------------------------------- */
 
@@ -432,7 +432,7 @@ export class Npcs {
   }
 }
 
-function dampAngle(a: any, b: any, lambda: any, dt: any) {
+function dampAngle(a: any, b: number, lambda: number, dt: any) {
   let d = (b - a) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;
