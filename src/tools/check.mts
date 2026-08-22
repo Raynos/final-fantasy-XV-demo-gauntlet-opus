@@ -54,6 +54,10 @@ const GATES: Gate[] = [
   { name: 'creaturecheck', script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
   { name: 'combatloop', script: 'combatloop.mts', expect: '30/30' },
   { name: 'roadcheck', script: 'roadcheck.mts', expect: '0 failures' },
+  // No browser and no server: the horizon sweep and its brute-force reference
+  // are both plain arithmetic, so this runs in a second and belongs among the
+  // cheap gates.
+  { name: 'horizoncheck', script: 'horizoncheck.mts', expect: 'MCC >= 0.85 vs the ray march' },
   // These two do NOT spawn a server; they assume one is already up. Everything
   // else starts its own, and `strictPort` means a pre-started vite on the same
   // port would break those -- so they get a dedicated one, scanned for below.
