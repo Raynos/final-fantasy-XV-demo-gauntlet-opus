@@ -381,6 +381,19 @@ const SHOT_TABLE = {
   },
 
   // --- zones : Leide ----------------------------------------------------
+  // --- zones ------------------------------------------------------------
+  //
+  // **A zone shot is named after the zone's DISPLAY NAME, not its `WorldMap`
+  // id**, and the two frequently differ: `crown_verge` is "Ostium Gorge",
+  // `kelbass` is "Vannath Coast", `balouve` is "The Callaegh Steps",
+  // `cauthess` is "Mencemoor", `meldacio` is "Pallareth Pass" and
+  // `weaverwilds` is "The Malacchi Hills". All nineteen zones have a shot.
+  //
+  // This is worth stating because grepping `zone_<id>` against `WorldMap`
+  // makes seven of them look uncovered, and `project/STATUS.md` carried
+  // exactly that false gap ("`zone_weaverwilds` has no shot to capture it
+  // with") until someone checked. The name a player would read is the right
+  // one for a shot; the trap is only that the check is not a grep.
   zone_longwythe: {
     doc: 'Longwythe: the 445 m horn off to the right, the tutorial pan running under it',
     time: 8.2, weather: 'clear',

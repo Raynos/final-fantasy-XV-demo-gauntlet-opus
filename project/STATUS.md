@@ -127,10 +127,12 @@ next thing worth doing after the current lanes merge.
 Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
 strata and silhouette, the world map, the opening cutscene, warp-strike VFX.
 
-Known weak and now owned: hands are mittens, outfits flat black, hair reads as
-quills (heroart). Still unowned: `Bushes.ts` (491 lines) has never been audited,
-`MapScreen` is a 22-line stub, `zone_weaverwilds` has no shot to capture it with,
-and `anak` needs a sculpt rather than paint.
+Known weak: hair still reads as quills; hands and outfits were rebuilt tonight
+and now grade 6/10 and 5.5/10. Still unowned: `Bushes.ts` (491 lines) has never
+been audited, `MapScreen` is a 22-line stub, and `anak` needs a sculpt rather
+than paint. **Struck from this list: "`zone_weaverwilds` has no shot" — it has
+one, called `zone_malacchi`.** Shots are named for a zone's display name, not
+its id, so seven zones look uncovered to a grep and none of them are.
 
 ## Next, in order
 
