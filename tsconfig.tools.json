@@ -16,5 +16,16 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src/tools/**/*.mts"]
+  // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
+  // game declares, and the harness is the other end of it.
+  "include": [
+    "src/tools/**/*.mts", "src/tools/**/*.d.ts", "src/globals.d.ts",
+    // Two more harness scripts, which live next to what they measure.
+    "src/audio/tools/**/*.mts"
+  ],
+  // Probe snippets are read as text and evaluated as a *function body* inside
+  // the page (`probe.mts` wraps them in `(async () => { ... })()`), so they
+  // legitimately have a top-level `return` and are not modules. Nothing imports
+  // them, so nothing type-strips them either.
+  "exclude": ["src/tools/_probe/**", "src/tools/probes/**"]
 }

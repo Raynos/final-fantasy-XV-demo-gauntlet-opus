@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "shoot": "node src/tools/shoot.mjs",
-    "check": "node src/tools/check.mjs",
-    "check:perf": "node src/tools/check.mjs --perf",
+    "shoot": "node src/tools/shoot.mts",
+    "check": "node src/tools/check.mts",
+    "check:perf": "node src/tools/check.mts --perf",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json"
   },
