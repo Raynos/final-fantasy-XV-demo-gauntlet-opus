@@ -12,8 +12,8 @@ Port 5460 throughout (daemon 5461).
 | `b0d676f` | halve the LOD filter's cost after measuring it |
 | `b89d8b2` | decouple the `_outcrops` RNG from the heightfield |
 
-Files touched, and the only files touched: `src/world/terrain/TerrainMaterial.js`,
-`src/world/terrain/Field.js`, `src/world/terrain/Layers.js`, `src/world/Terrain.js`,
+Files touched, and the only files touched: `src/world/terrain/TerrainMaterial.ts`,
+`src/world/terrain/Field.ts`, `src/world/terrain/Layers.ts`, `src/world/Terrain.ts`,
 this file. Probes live in `tmp/tr/` (git-ignored).
 
 ---
@@ -37,7 +37,7 @@ real answer once you know it.
 | `tf_micro()` forced to 0 | unchanged → not the analytic micro relief |
 | `polygonOffset = false` | unchanged |
 
-`PostFX.js:136` calls `GTAOPass.setGBuffer(this.rtScene.depthTexture)` with **no
+`PostFX.ts:136` calls `GTAOPass.setGBuffer(this.rtScene.depthTexture)` with **no
 normal texture**, which sets `NORMAL_VECTOR_TYPE = 0` in three's GTAO material:
 AO normals are **reconstructed from depth**. So GTAO never sees the carefully
 low-passed `tf_surfNormal`; it sees the raw triangles.
@@ -51,7 +51,7 @@ are the rest of the bisection.
 Half of it was ours. The clipmap vertex shader **point-sampled the 4 m heightfield
 at a 12–96 m vertex pitch** — decimation, not filtering, leaving several metres of
 pseudo-random per-vertex jitter on every coarse ring. `tf_heightLod(p, cell)` in
-`TerrainMaterial.js` low-passes the height by the level's own cell before
+`TerrainMaterial.ts` low-passes the height by the level's own cell before
 displacing (5-tap cross, `w = (cell - 4) * 1.1`; a no-op for levels 0–1, where
 `cell` is 1.5 m and 3 m). The morph target is filtered with the **next** level's
 cell so the rings still meet exactly and the seam cannot crack.
@@ -68,7 +68,7 @@ depth-derived normals see all of them. No amount of height filtering removes tha
 
 ## 2. `Terrain.groundColorAt` — it did not exist at all
 
-`veg/Ecology.js:499-500` calls `Terrain.groundColorAt` if it exists and
+`veg/Ecology.ts:499-500` calls `Terrain.groundColorAt` if it exists and
 `Terrain.colorAt` if that does not. **Neither existed.** For the whole life of the
 project every blade, bush and tree has tinted itself from Ecology's own fallback: a
 hard-coded `C_SOIL_RED → C_SOIL_DRY → C_SOIL_WET` lerp on moisture, a warm brown
@@ -105,7 +105,7 @@ Diagnosed as the analytic strata twice before, and wrong both times. My
 `cliffAmt = bedThrough = runnelAmt = 0` probe reproduces the previous agent's
 negative result exactly (`tmp/tr/tCc.png`, unchanged) — but the constant-albedo
 probe removes it (`tmp/tr/tAc.png`), which rules out geometry *and* normals. Forcing
-`alb[3].rgb = uLayerAvg[3]` removes it (`tmp/tr/tDc.png`). It is `Layers.js` recipe 3.
+`alb[3].rgb = uLayerAvg[3]` removes it (`tmp/tr/tDc.png`). It is `Layers.ts` recipe 3.
 
 - `hueSel = 0.5 + 0.5 * b2` was a pure sinusoid of **world Y** at two cycles per
   12.2 m tile driving red +20 % against blue −14 %, drawn triplanar. That is the
@@ -131,11 +131,11 @@ purpose, and never again for a reason that is not local.
 
 ## 5. The terracing change
 
-`Field.js` separately stops benching humid ground: `lastTerrace` is now damped by
+`Field.ts` separately stops benching humid ground: `lastTerrace` is now damped by
 `1 - 0.88 * smoothstep(0.28, 0.60, moist)`. Taelpar's `terrace: 0.68` was pulling
 the ground 56 % onto a 22 m staircase and the splat read tread-as-dirt /
 riser-as-rock. Leide's `moist` is 0.18–0.24 so the gate never opens there and the
-badland benching is untouched. **`WorldMap.js` needs no change** — the realisation
+badland benching is untouched. **`WorldMap.ts` needs no change** — the realisation
 was the problem, as the brief allowed for.
 
 ---
@@ -145,10 +145,10 @@ was the problem, as the brief allowed for.
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (pre-commit hook, all three commits) |
-| `node src/tools/roadcheck.mjs` | **pass** — 0 failures, 0 warnings, 30.26 km / 50 edges / 50 nodes, worst grade 13.0 % (limit 13) — identical to baseline |
-| `node src/tools/heightcheck.mjs` | **pass — 0.000 m at every probe**, micro and grid separately |
-| `node src/tools/driftcheck.mjs` | **pass** — drift 0.000 m, gpu-vs-`heightAt` worst 0.373 m (tol 0.45); coarse-LOD spread worst **1.281 m, was 1.330 m** — the LOD filter did not widen it |
-| `node src/tools/perf.mjs` | **pre-existing FAIL, and measured A/B'd.** Full corpus: mean **73.7 fps**, worst **41.5 fps at `vista_dawn`** — against `agent/grass`'s last recorded run of mean 73.6 / worst 39.1, i.e. unchanged. See the A/B below. |
+| `node src/tools/roadcheck.mts` | **pass** — 0 failures, 0 warnings, 30.26 km / 50 edges / 50 nodes, worst grade 13.0 % (limit 13) — identical to baseline |
+| `node src/tools/heightcheck.mts` | **pass — 0.000 m at every probe**, micro and grid separately |
+| `node src/tools/driftcheck.mts` | **pass** — drift 0.000 m, gpu-vs-`heightAt` worst 0.373 m (tol 0.45); coarse-LOD spread worst **1.281 m, was 1.330 m** — the LOD filter did not widen it |
+| `node src/tools/perf.mts` | **pre-existing FAIL, and measured A/B'd.** Full corpus: mean **73.7 fps**, worst **41.5 fps at `vista_dawn`** — against `agent/grass`'s last recorded run of mean 73.6 / worst 39.1, i.e. unchanged. See the A/B below. |
 
 ### The one perf number that is mine
 
@@ -219,12 +219,19 @@ against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
 
 | what | where |
 |---|---|
-| **GTAO reconstructs its normals from depth and has no camera-distance falloff, so it draws the triangle facets of every distant massif as a regular hatch.** This is the residue of the chevron defect and it cannot be fixed from `world/terrain/**`. Two candidate one-liners: fade `gtao.blendIntensity` / the AO term to zero past ~600 m, or pass a real normal target as `setGBuffer(depth, normal)` — `patchGBufferMaterial` already exists and already displaces the terrain for exactly that path, it is simply not being fed. Reproduce with `node tmp/tr/pshot.mjs zone_longwythe out.png "&post=nogtao"`. | `src/engine/PostFX.js:134-155` |
-| `GROUND_BLEED = 0.22` in `veg/GrassField.js` was tuned against the *broken* ground colour (a warm brown at luminance 0.090). Now that `groundColorAt` returns the real ground it is worth re-judging — the grass agent's §5 says exactly this and it is now actionable. | `src/world/veg/GrassField.js:61` |
-| `zone_malacchi` frames a canopy interior; `zone_mencemoor` still frames the inside of the meteor (`agent/splat` reported this and it is still true). | `src/game/Shots.js` |
-| `src/world/map/MapRaster.js` still orphaned. Pre-existing, not mine. | — |
+| **GTAO reconstructs its normals from depth and has no camera-distance falloff, so it draws the triangle facets of every distant massif as a regular hatch.** This is the residue of the chevron defect and it cannot be fixed from `world/terrain/**`. Two candidate one-liners: fade `gtao.blendIntensity` / the AO term to zero past ~600 m, or pass a real normal target as `setGBuffer(depth, normal)` — `patchGBufferMaterial` already exists and already displaces the terrain for exactly that path, it is simply not being fed. Reproduce with `node tmp/tr/pshot.mjs zone_longwythe out.png "&post=nogtao"`. | `src/engine/PostFX.ts:134-155` |
+| `GROUND_BLEED = 0.22` in `veg/GrassField.ts` was tuned against the *broken* ground colour (a warm brown at luminance 0.090). Now that `groundColorAt` returns the real ground it is worth re-judging — the grass agent's §5 says exactly this and it is now actionable. | `src/world/veg/GrassField.ts:61` |
+| `zone_malacchi` frames a canopy interior; `zone_mencemoor` still frames the inside of the meteor (`agent/splat` reported this and it is still true). | `src/game/Shots.ts` |
+| `src/world/map/MapRaster.ts` still orphaned. Pre-existing, not mine. | — |
 
 ## Gotchas — read before touching any of this
+
+> **The `tmp/tr/` probes named below are gone** — `pshot`, `relief`, `bio`, `gc`,
+> `gate`. `tmp/` is disposable by design and was cleared. Each is short and the
+> paragraph that names it says what it did and why it was worth having; rebuild
+> the one you need, or promote it into `src/tools/`. `pshot` in particular is the
+> only way to pass a `?post=` query string to a capture, which `shoot.mts` does
+> not do.
 
 - **Backticks inside a `/* glsl */` template literal terminate the string.** I wrote
   ``…whose cells are `cell` metres…`` in a GLSL doc comment and got
@@ -235,7 +242,7 @@ against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
   and `view unlit` replace the material outright, so the clipmap renders as an
   undisplaced flat plane. Bisect by editing `tf_shade`'s outputs instead — that is
   what `tmp/tr/pshot.mjs` is for, and `?post=<token>` (`PostFX.debugToggle`) is the
-  other half. `src/tools/shoot.mjs` does not pass a query string, hence the probe.
+  other half. `src/tools/shoot.mts` does not pass a query string, hence the probe.
 - **`tmp/tr/relief.mjs`** renders a CPU hillshade of the real `Field` with any one
   term monkey-patched out (`node tmp/tr/relief.mjs noerode 950 -1000 600 800`). It
   is how I found that `_peak`'s `spoke` term is a function of **angle only**, so it
@@ -250,7 +257,7 @@ against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
   is what the landmine about small-zone dilution asks you to measure. Use it before
   authoring any table entry. `tmp/tr/gc.mjs` does the same for `groundColorAt` and
   `tmp/tr/gate.mjs` for the `lowAlt` gate.
-- **The dev server is not on 5460 as often as you think.** `src/tools/shoot.mjs`
+- **The dev server is not on 5460 as often as you think.** `src/tools/shoot.mts`
   spawns and then kills its own vite when the port is free, so a `heightcheck` run
   straight after a `shoot` finds nothing listening and hangs for its full timeout.
   Start `npx vite --port 5460 --strictPort` yourself and check it is still up.

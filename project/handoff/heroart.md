@@ -27,7 +27,7 @@ Nothing in the four commits needed reverting.
 straight, wide, flat, faceted blades with sky between every one. Three separate causes,
 all now fixed, and the third was the one that actually mattered:
 
-1. *One ribbon per root.* `Hair.js` now emits `clump` locks per root (3 on all four
+1. *One ribbon per root.* `Hair.ts` now emits `clump` locks per root (3 on all four
    heroes, 4 on the beard), sharing a direction and splaying toward the tips at a
    fraction of the width each. Total cross-section is held; the density inside the
    silhouette triples.
@@ -107,10 +107,10 @@ geometry only adds fuzz at the edge.
 
 | file | why |
 |---|---|
-| `src/characters/rig/Hair.js` | clumping; shell density + noise relief + UV; hairline front term and ear notch; per-lock value spread; root value lift |
-| `src/characters/rig/Materials.js` | the luminance-normalised hair specular tint (the big one); the mask/filament frequency fixes; `SSS_RED` shared by face and body; matched roughness/sheen/specular between the two skin materials |
-| `src/characters/rig/Face.js` | `ao()` damped and lifted in one place; ear paint blob removed; ear ridges lifted clear of the plate; ear subsurface thickness halved and plate/concha given their own values |
-| `src/characters/Cast.js` | appearance data only: `clump` on all four heroes; crown-mat coverage and flow; Prompto's quiff; Noctis's crown spikes; Ignis and Prompto hair colour; Gladio's beard and stubble |
+| `src/characters/rig/Hair.ts` | clumping; shell density + noise relief + UV; hairline front term and ear notch; per-lock value spread; root value lift |
+| `src/characters/rig/Materials.ts` | the luminance-normalised hair specular tint (the big one); the mask/filament frequency fixes; `SSS_RED` shared by face and body; matched roughness/sheen/specular between the two skin materials |
+| `src/characters/rig/Face.ts` | `ao()` damped and lifted in one place; ear paint blob removed; ear ridges lifted clear of the plate; ear subsurface thickness halved and plate/concha given their own values |
+| `src/characters/Cast.ts` | appearance data only: `clump` on all four heroes; crown-mat coverage and flow; Prompto's quiff; Noctis's crown spikes; Ignis and Prompto hair colour; Gladio's beard and stubble |
 
 Nothing outside my ownership was touched.
 
@@ -121,11 +121,11 @@ Nothing outside my ownership was touched.
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (also enforced by `.githooks/pre-commit` on every commit) |
-| `node src/tools/integration.mjs` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
-| `node src/tools/orphans.mjs` | **pass** — 272 modules, 272 reachable, no orphans |
+| `node src/tools/integration.mts` | **pass** — 18 pass · 0 wired-but-unproven · 0 not integrated |
+| `node src/tools/orphans.mts` | **pass** — 272 modules, 272 reachable, no orphans |
 | draw calls | **unchanged.** `hero_full` 543, `hero_face` 478, `town_npcs` 839 — identical to the baseline at the merge |
 | triangles | **up 30%.** `hero_full` 5.27 M -> 6.87 M, `town_npcs` 7.88 M -> 9.63 M. That is the cost of tripling the strand count; I took 30% back by dropping clumped locks to 5 sides / 5 steps. See §4.2 if it needs to come down further. |
-| `node src/tools/perf.mjs` | **FAIL — but it failed before my changes too, and worse.** At the merge commit `b40394a`: mean 60.7 fps, worst 22.1 (`zone_nebulawood`). After my changes: mean 72.1 fps, worst 34.7 (`menu_title`). Run-to-run variance on a machine shared with sibling agents dominates both numbers. The perf failure is **not** mine, but the triangle increase is, and someone should measure it on a quiet machine. |
+| `node src/tools/perf.mts` | **FAIL — but it failed before my changes too, and worse.** At the merge commit `b40394a`: mean 60.7 fps, worst 22.1 (`zone_nebulawood`). After my changes: mean 72.1 fps, worst 34.7 (`menu_title`). Run-to-run variance on a machine shared with sibling agents dominates both numbers. The perf failure is **not** mine, but the triangle increase is, and someone should measure it on a quiet machine. |
 
 The baseline numbers quoted in older docs (4.78-4.85 M tris) predate the four rescued
 commits. Measured at `b40394a`, the real baseline is 5.27 M.
@@ -139,7 +139,7 @@ commits. Measured at `b40394a`, the real baseline is 5.27 M.
    untouched thing I own.
 2. **Outfits.** Flat black shapes, no layering, no hardware. Same: untouched.
 3. **The face reads as a child.** `ha22/noctis_front.jpg`. Needs cheekbone, jaw-width
-   and cranium-width brushes in `Face.js` `brushes()`, not more paint. Note
+   and cranium-width brushes in `Face.ts` `brushes()`, not more paint. Note
    `look.cheek` / `look.jaw` already exist as brush drivers — start there.
 4. **The ear is present but flat.** Its ridges clear the plate now, but every vertex
    still pins to a single texel (deliberately — §5.6), so it has no albedo variation
@@ -161,7 +161,7 @@ commits. Measured at `b40394a`, the real baseline is 5.27 M.
 
 ### 5.1 The DoubleSide occluder (the big one)
 
-`Character.js:73` sets `this.faceMat.side = THREE.DoubleSide`. That file is not mine
+`Character.ts:73` sets `this.faceMat.side = THREE.DoubleSide`. That file is not mine
 and I did not change it, but it drives the single most confusing behaviour in this
 system:
 
@@ -215,19 +215,19 @@ bucket.
 
 `hero_face` frames the whole party at ~4 m; Noctis's head is about 100 px tall. None
 of the defects in this document are visible in it, and none of the fixes are either.
-**Face work must be judged through `src/tools/framecam.mjs`.** Everything I found, I found
+**Face work must be judged through `src/tools/framecam.mts`.** Everything I found, I found
 at 0.4–0.6 m and nowhere else.
 
-### 5.3 `framecam.mjs` traps
+### 5.3 `framecam.mts` traps
 
-- `PORT` must be the **vite** port. `daemon.mjs` uses `PORT+1`; aiming framecam at the
+- `PORT` must be the **vite** port. `daemon.mts` uses `PORT+1`; aiming framecam at the
   daemon port makes it talk to the control server and hang for the full 300 s
   `waitForFunction` timeout. (Already in the plan; still true; still bit me once.)
 - **Absolute `pos`/`target` framings drift.** framecam settles the sim between
   captures, so a framing measured once in the probe is further out of frame with
   every later shot in the list — by the 13th spec the subject was completely gone. Use
   `follow` shots instead; the camera rig re-anchors on the live root every frame.
-  `src/tools/_probe/heads.mjs` emits follow shots for exactly this reason.
+  `src/tools/_probe/heads.mts` emits follow shots for exactly this reason.
 - `import 'three'` fails inside a probe (no bare-specifier resolution in
   `page.evaluate`) and `/node_modules/three/build/three.module.js` 404s under vite.
   Do the vector maths by hand, or read matrix elements directly:
@@ -252,24 +252,24 @@ Saves you the trip:
   clean sclera, a fibrous iris, a limbal ring and a decent glint. See
   `tmp/shots/diag/diag_nohead.png` — that is what is hiding behind the face.
 - The globes are positioned correctly. Pupillary distance / head width = 0.43, which
-  is the real ratio. `dims.eyeY`/`eyeZ` in `Skeleton.js` match `FACE.eye` exactly.
-- `Anim.js:466`'s `+0.11` rad gaze pitch is small (6.3°) and not the cause of
+  is the real ratio. `dims.eyeY`/`eyeZ` in `Skeleton.ts` match `FACE.eye` exactly.
+- `Anim.ts:466`'s `+0.11` rad gaze pitch is small (6.3°) and not the cause of
   anything, though with the aperture now symmetric its justifying comment ("the lid
   aperture opens slightly below the globe's equator") is no longer true and it should
   probably go to 0. That is `agent/idles`' file.
-- Blinking is not it. `Anim.js` blinks deterministically but transiently.
+- Blinking is not it. `Anim.ts` blinks deterministically but transiently.
 
 ---
 
 ### 5.6 A clean `vite build` does not mean the page runs
 
 A bad `perl -0pi -e 's|...|...|'` — the pattern contained `\|\|` and the delimiter was
-`|` — prepended seven lines of function-body code **above the imports** in `Hair.js`.
+`|` — prepended seven lines of function-body code **above the imports** in `Hair.ts`.
 That is valid module syntax, so `vite build` was clean and the pre-commit hook was
 happy. The page threw a `ReferenceError` on load, and the only symptom was a 300 s
 `framecam` timeout with an **empty** console log (`log: []`) and a
 `[vite] server connection lost` line under `VERBOSE=1`. I spent forty minutes on ports,
-daemons and `cleanup.mjs` before reading the top of the file I had just edited.
+daemons and `cleanup.mts` before reading the top of the file I had just edited.
 
 If a capture hangs immediately after an edit: `head -5` the file you touched, then
 `git diff` it, before touching the harness. And prefer the `Edit` tool over `perl` for
@@ -298,7 +298,7 @@ The nasion, the mandible body and a real chin all landed in the rescued commits 
 they hold up at 0.4 m. The ear is visible in profile for the first time. What is still
 weak: the jaw has no gonial angle worth the name from this angle, and there is a hard
 flat facet where the head mesh meets the neck (visible bottom-left of
-`ha22/noctis_profile.jpg`). That junction is `Body.js` + `Face.js` and it is mine, but I
+`ha22/noctis_profile.jpg`). That junction is `Body.ts` + `Face.ts` and it is mine, but I
 did not get to it.
 
 ### 6.2 Hair — **substantially fixed**, see §1
@@ -326,8 +326,8 @@ three portrait bands near the top of `paintFace`), not in the `ao()` stack.
 ## 7. How to judge this
 
 ```bash
-PORT=<unique vite port> node src/tools/framecam.mjs \
-  --probe src/tools/_probe/heads.mjs --out tmp/shots/<round> --settle 8
+PORT=<unique vite port> node src/tools/framecam.mts \
+  --probe src/tools/_probe/heads.mts --out tmp/shots/<round> --settle 8
 ```
 
 Emits 28 framings — for each of the four heroes: `_front`, `_eyes` (0.4 m, fov 13),
@@ -351,18 +351,18 @@ the socket.
 
 ## 8. Cross-boundary items
 
-1. **`src/characters/rig/Character.js:73** — `this.faceMat.side = THREE.DoubleSide`.
+1. **`src/characters/rig/Character.ts:73** — `this.faceMat.side = THREE.DoubleSide`.
    Not mine to change, and it is the mechanism behind §5.1. If the socket sculpt is
    ever made fold-free, this can stay; until then it is load-bearing in a way nobody
    intended. At minimum it deserves a comment saying so.
-2. **`src/characters/rig/Anim.js:466`** — `this.char.eyes.rotation.set((this.eyePitch
+2. **`src/characters/rig/Anim.ts:466`** — `this.char.eyes.rotation.set((this.eyePitch
    || 0) + 0.11, ...)`. The `+0.11` was compensating for an aperture that no longer
    exists; its comment is now false. `agent/idles` owns this file. Suggest 0.
-3. **`src/world/map/MapRaster.js`** — no longer orphaned; `orphans.mjs` reports 272
+3. **`src/world/map/MapRaster.ts`** — no longer orphaned; `orphans.mts` reports 272
    modules, 272 reachable. Resolved by someone else. No action.
 4. The DOF finding from the earlier plan is **resolved on `main`**
    (`PostFX._headObject()` now racks focus onto the shot's `follow` subject). No action.
-5. **`src/tools/perf.mjs` fails on `main`, before any character work.** Measured at the
+5. **`src/tools/perf.mts` fails on `main`, before any character work.** Measured at the
    merge commit `b40394a`: mean 60.7 fps, worst 22.1 fps on `zone_nebulawood`. That is
    nothing to do with characters and it is not in anyone's handoff that I can find.
    Whoever owns the world/vegetation systems should see it.

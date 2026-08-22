@@ -12,11 +12,11 @@ Every claim below is either **verified by eye at capture** or explicitly flagged
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (every commit, via `.githooks/pre-commit`) |
-| `node src/tools/combatloop.mjs` | **30/30** (was 21/30) |
-| `node src/tools/uxcheck.mjs` | **89/89, 0 failures** — was 86/86. The three new checks are `Tab`/`Backspace`/`Escape` close on the newly registered `map_wide` screen; uxcheck audits every registered screen, so the count grows by three whenever one is added. No check regressed. |
-| `node src/tools/integration.mjs` | **18 pass · 0 wired · 0 not integrated** |
+| `node src/tools/combatloop.mts` | **30/30** (was 21/30) |
+| `node src/tools/uxcheck.mts` | **89/89, 0 failures** — was 86/86. The three new checks are `Tab`/`Backspace`/`Escape` close on the newly registered `map_wide` screen; uxcheck audits every registered screen, so the count grows by three whenever one is added. No check regressed. |
+| `node src/tools/integration.mts` | **18 pass · 0 wired · 0 not integrated** |
 
-`npm run check` / `src/tools/check.mjs` does not exist in this worktree — it landed
+`npm run check` / `src/tools/check.mts` does not exist in this worktree — it landed
 on `main` after this branch was cut. The four gates above were run individually.
 
 ---
@@ -26,19 +26,19 @@ on `main` after this branch was cut. The four gates above were run individually.
 Each is **verified by applying it temporarily, capturing, looking, and reverting**.
 The working tree is clean of all three.
 
-### 1a. `src/game/cinematics/Cinematics.js` — the subtitle that burns into every later shot
+### 1a. `src/game/cinematics/Cinematics.ts` — the subtitle that burns into every later shot
 
 **This is the one the coordinator flagged, and it is not in `src/ui`.**
 
 The line is drawn by **`Letterbox`** (`#cine .cine-line`), which is deliberately
 separate from the HUD's `Subtitles` because the HUD hides wholesale during a
-cutscene (`Letterbox.js:10-14` says so). `Letterbox.clearLine()` exists at
-`Letterbox.js:151`. `Cinematics.skip()` calls it. **`Cinematics.stop()` does
+cutscene (`Letterbox.ts:10-14` says so). `Letterbox.clearLine()` exists at
+`Letterbox.ts:151`. `Cinematics.skip()` calls it. **`Cinematics.stop()` does
 not** — it resets the bars and the fade and leaves the line up. So any scene
 stopped by a new shot leaves its last line on screen for the rest of the page.
 
 The fix is one line, in `Cinematics.stop()`, immediately before `this.box.setBars(0);`
-(currently `Cinematics.js:161`):
+(currently `Cinematics.ts:161`):
 
 ```js
     this.box.clearLine();
@@ -50,8 +50,8 @@ The fix is one line, in `Cinematics.stop()`, immediately before `this.box.setBar
 
 | repro | before | after |
 |---|---|---|
-| `shoot.mjs cine_opening menu_title` | "For the record, nobody was listening." across the title card (`tmp/shots/uisub2`, `uisub4`) | clean (`tmp/shots/uisub5/menu_title.jpg`) |
-| `shoot.mjs cine_astral zone_malmalam` (the coordinator's) | "PROMPTO / The ground — the ground is moving, the ground is actually—" over the canopy (`tmp/shots/uisub6`) | clean (`tmp/shots/uisub7/zone_malmalam.jpg`) |
+| `shoot.mts cine_opening menu_title` | "For the record, nobody was listening." across the title card (`tmp/shots/uisub2`, `uisub4`) | clean (`tmp/shots/uisub5/menu_title.jpg`) |
+| `shoot.mts cine_astral zone_malmalam` (the coordinator's) | "PROMPTO / The ground — the ground is moving, the ground is actually—" over the canopy (`tmp/shots/uisub6`) | clean (`tmp/shots/uisub7/zone_malmalam.jpg`) |
 
 `cine_opening` itself still carries its own line with the fix applied
 (`tmp/shots/uisub5/cine_opening.jpg`) — `stop()` runs when the scene ends, not
@@ -62,7 +62,7 @@ anyway (see §5) and it is safe to call, but the HUD subtitle stack now retires
 its own stale lines without help, so `StorySystem.applyShot` does not need to
 call anything.
 
-### 1b. `src/game/Shots.js:220` — the `map_wide` go-ahead
+### 1b. `src/game/Shots.ts:220` — the `map_wide` go-ahead
 
 **`map_wide` now exists.** `menu_map_wide` may be repointed:
 
@@ -77,15 +77,15 @@ Captured with that edit applied and reverted: `tmp/shots/uimap5/menu_map_wide.pn
 `menu_world` is unaffected — the atlas is a second instance and **does not touch
 the shared fog mask**, so there is no capture-order dependency between them (§3).
 
-### 1c. `src/tools/combatloop.mjs` — landed, but outside my declared ownership
+### 1c. `src/tools/combatloop.mts` — landed, but outside my declared ownership
 
-Commit **`e7f0ad7`** is a two-tap edit to `src/tools/combatloop.mjs`. It is
+Commit **`e7f0ad7`** is a two-tap edit to `src/tools/combatloop.mts`. It is
 deliberately its own isolated commit so it can be reverted or cherry-picked
 alone. Rationale in §2 — the game was never broken.
 
 ---
 
-## 2. `combatloop.mjs` 21/30 → 30/30 · commit `e7f0ad7`
+## 2. `combatloop.mts` 21/30 → 30/30 · commit `e7f0ad7`
 
 **Root cause: one stale line in the test. Nothing in `src/ui` needed to change.**
 
@@ -93,14 +93,14 @@ Commit `4693e3f` ("UX: kill the dead menu rows...") introduced a deliberately
 collision-free keymap and moved the companion techniques from **G/H/J to G/J/K**
 so that **H** could open the controls card. Three places agree on G/J/K:
 
-- `src/characters/ai/PartyAI.js:437-439` — `KeyG` / `KeyJ` / `KeyK`
-- `src/ui/screens/ControlsScreen.js:37-39` — the printed keymap says G / J / K
-- `src/tools/uxcheck.mjs:243-250` — *positively asserts* that `KeyH` opens and
+- `src/characters/ai/PartyAI.ts:437-439` — `KeyG` / `KeyJ` / `KeyK`
+- `src/ui/screens/ControlsScreen.ts:37-39` — the printed keymap says G / J / K
+- `src/tools/uxcheck.mts:243-250` — *positively asserts* that `KeyH` opens and
   closes the controls card
 
-`combatloop.mjs:433-436` was never updated. Its technique check still tapped
+`combatloop.mts:433-436` was never updated. Its technique check still tapped
 `KeyH`, which opened the controls screen; nothing in the run ever closed it,
-`Menus._pointerLock` (`Menus.js:238`) then set `input.enabled = false`, and
+`Menus._pointerLock` (`Menus.ts:238`) then set `input.enabled = false`, and
 **every later check that needs a key press failed.** That is exactly the
 `menuOpen=true menusA=1.00 menu=controls` diagnostic the nameplate check printed,
 and it explains the shape of the failure list precisely: the first failure is
@@ -118,7 +118,7 @@ Two taps repointed at the shipped bindings. **30/30.**
 
 ## 3. `map_wide` — the atlas of Lucis · commit `7f7b268`
 
-`src/ui/screens/WorldMapScreen.js`, `src/ui/Menus.js`.
+`src/ui/screens/WorldMapScreen.ts`, `src/ui/Menus.ts`.
 
 **A fit-all zoom step had to be invented.** `ZOOMS[0]` was `0.118` px/m and its
 comment claimed it fitted the continent; it does not. `WORLD.size` is 8192 m and
@@ -152,13 +152,13 @@ so `menu_world` opens at exactly the scale it did before.
 - POI names the sheet edge would slice in half are dropped ("…ATOGH").
 
 Shots: `tmp/shots/uimap5/menu_map_wide.png` (final), `uimap/` → `uimap4/` (the
-iterations). See §1b for the `Shots.js` go-ahead.
+iterations). See §1b for the `Shots.ts` go-ahead.
 
 ---
 
 ## 4. BLINDSIDE doubling · commit `66563e1`
 
-`src/ui/ui.css` `.callout`, `src/ui/CombatHUD.js:_updateCallout`.
+`src/ui/ui.css` `.callout`, `src/ui/CombatHUD.ts:_updateCallout`.
 All three compounding causes were present at once:
 
 1. `.co-word` ran a fractional `transform: scale(1.14 → 1.0)` per frame, which
@@ -183,7 +183,7 @@ Before/after at 3×: `tmp/shots/ui0p/callout.png` vs `tmp/shots/ui2p/callout.png
 
 ## 5. Subtitles own their shot · commit `a6d701e`
 
-`src/ui/Subtitles.js`, `src/ui/HUD.js`.
+`src/ui/Subtitles.ts`, `src/ui/HUD.ts`.
 
 Every line and banter bubble is stamped with `game.currentShot` when spoken;
 anything whose stamp no longer matches the live shot is dropped on the next
@@ -203,7 +203,7 @@ saw is `Letterbox`, not this — see §1a.
 
 ## 6. One owner for the bottom-left corner · commit `9b75ded`
 
-`src/ui/PartyPanel.js`, `src/ui/CombatHUD.js`, `src/ui/Toasts.js`, `src/ui/HUD.js`, `ui.css`.
+`src/ui/PartyPanel.ts`, `src/ui/CombatHUD.ts`, `src/ui/Toasts.ts`, `src/ui/HUD.ts`, `ui.css`.
 
 Four things live down there: the Armiger gauge, the technique rail, the toast
 column and the party stack. Three were parked at hand-measured `bottom:` offsets
@@ -250,7 +250,7 @@ over bright Leide as a side effect.
 - **Portrait cards** were 26–30 % saturation. At HUD size they are 38px chips,
   but the pause menu blows them to 112×132 and the four read as an
   orange/purple/olive swatch strip. FFXV's are almost grey with a breath of the
-  character's colour in the shadow: **8–11 %** (`Icons.js portrait()`).
+  character's colour in the shadow: **8–11 %** (`Icons.ts portrait()`).
 - **Menu scrim** centre 0.62 → 0.74 opaque. That is where every screen puts its
   type, and the terrain behind was bright enough to compete with a 9px label.
 
@@ -301,17 +301,17 @@ Ordered by value.
 ## 9. Files touched
 
 ```
-src/ui/CombatHUD.js          callout rewrite, corner slot, layer fade
-src/ui/HUD.js                corner slots, Subtitles gets `game`
-src/ui/Icons.js              portrait() desaturated
-src/ui/Menus.js              map_wide registered + its footer set
-src/ui/PartyPanel.js         owns the bottom-left corner
-src/ui/Subtitles.js          shot stamping + clear()
-src/ui/Toasts.js             lives in the corner's notice slot
-src/ui/screens/MainScreen.js one hint shortened
-src/ui/screens/WorldMapScreen.js  fit-all zoom, the atlas variant, label ordering
+src/ui/CombatHUD.ts          callout rewrite, corner slot, layer fade
+src/ui/HUD.ts                corner slots, Subtitles gets `game`
+src/ui/Icons.ts              portrait() desaturated
+src/ui/Menus.ts              map_wide registered + its footer set
+src/ui/PartyPanel.ts         owns the bottom-left corner
+src/ui/Subtitles.ts          shot stamping + clear()
+src/ui/Toasts.ts             lives in the corner's notice slot
+src/ui/screens/MainScreen.ts one hint shortened
+src/ui/screens/WorldMapScreen.ts  fit-all zoom, the atlas variant, label ordering
 src/ui/ui.css                shadow tokens, corner column, callout, menu_main, scrim
-src/tools/combatloop.mjs     keymap (OUT OF SCOPE — isolated commit e7f0ad7)
+src/tools/combatloop.mts     keymap (OUT OF SCOPE — isolated commit e7f0ad7)
 ```
 
 ## 10. Where the images are

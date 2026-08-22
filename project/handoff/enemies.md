@@ -1,10 +1,10 @@
 # Handoff — `agent/enemies`
 
-Owned: `src/characters/enemies/**`, `src/characters/rig/CreatureAnim.js`,
-`src/characters/Enemies.js`, `src/tools/creaturecheck.mjs`.
+Owned: `src/characters/enemies/**`, `src/characters/rig/CreatureAnim.ts`,
+`src/characters/Enemies.ts`, `src/tools/creaturecheck.mts`.
 
 > **Sections 1, 2, 3 and 6 are the previous agent's and are still accurate** —
-> the grounding fix, `creaturecheck.mjs`, the systemic surface pass and the
+> the grounding fix, `creaturecheck.mts`, the systemic surface pass and the
 > gotchas list. Sections 0, 4, 5, 7, 8 and 9 are this round's. Read **section 0
 > first**: it revises two claims the older text makes that turned out to be
 > false, and both of them were shipping visible bugs.
@@ -16,7 +16,7 @@ Owned: `src/characters/enemies/**`, `src/characters/rig/CreatureAnim.js`,
 **Two species recorded as "deep rebuild, verified by eye" were rendering half
 black.** `Color.setHex` runs `Math.floor`, so a `THREE.Color` where a hex is
 expected yields `NaN` and the surface renders black with no error. Section 6
-says the sabertusk was the only casualty and that "`Dualhorn.js` has its own
+says the sabertusk was the only casualty and that "`Dualhorn.ts` has its own
 `mix` which already handles it". Neither is true:
 
 - **Dualhorn/bloodhorn**: whole flank, whole head, all four legs flat black.
@@ -27,17 +27,17 @@ And there is a second failure mode underneath the first that a type guard alone
 does *not* fix: two module-level scratch registers cannot survive nesting. JS
 evaluates arguments left to right, so in `mix(mix(A,B,s), mix(C,D,u), t)` the
 second inner call overwrites the register the first just returned, and the outer
-call blends a colour with itself. `Garula.js` had already discovered this and
+call blends a colour with itself. `Garula.ts` had already discovered this and
 worked around it privately with `mix2`/`_c3`.
 
-**Fixed properly**: new `src/characters/enemies/Palette.js` — one blend for the
+**Fixed properly**: new `src/characters/enemies/Palette.ts` — one blend for the
 whole bestiary, with a type guard on both ends and a ring of eight scratch
 colours, both arguments read into component scratch before an output register
 is claimed. Safe at any depth. Coeurl, Voretooth and Dualhorn import it.
 
-**If you add a species, use `mixc`/`colc` from `Palette.js`.** Do not write
-another local `mix`. Files still carrying their own are `Garula.js` (has the
-`mix2` workaround), `Goblin.js`, `IronGiant.js` and `Sabertusk.js` (all guarded,
+**If you add a species, use `mixc`/`colc` from `Palette.ts`.** Do not write
+another local `mix`. Files still carrying their own are `Garula.ts` (has the
+`mix2` workaround), `Goblin.ts`, `IronGiant.ts` and `Sabertusk.ts` (all guarded,
 none nesting more than one deep) — they are correct today but they are four more
 copies of a footgun.
 
@@ -89,7 +89,7 @@ only in captures.
 The fix:
 
 1. `EnemyBase._resetVisual()` is now unconditional; `autoResetVisual` is gone
-   from `Biped.js` and `Quadruped.js`. The older assign-style species set
+   from `Biped.ts` and `Quadruped.ts`. The older assign-style species set
    `visual.position`/`rotation` outright in every branch, so a zero beforehand
    is invisible to them, and the two conventions can no longer silently coexist.
 2. New `EnemyBase.repose(dt, ctx)` — reset, `pose()`, `_postPose()` — is the
@@ -146,19 +146,19 @@ pose, swinging the foot down and back off the end of a 0.9 m segment.
 
 ---
 
-## 2. `src/tools/creaturecheck.mjs` — the regression gate
+## 2. `src/tools/creaturecheck.mts` — the regression gate
 
 **Please keep this wired into the check suite.** It is the gate for the whole
 class of bug above, and it is what proves a sculpt change has not re-buried
 anything.
 
 ```bash
-node src/tools/creaturecheck.mjs                     # whole roster, every pose
-node src/tools/creaturecheck.mjs --species sabertusk,irongiant
-node src/tools/creaturecheck.mjs --hold 240          # frames to hold each pose
-node src/tools/creaturecheck.mjs --tol 0.25          # fail above this |foot|, metres
-node src/tools/creaturecheck.mjs --json out.json     # includes the calibration curves
-PORT=5399 node src/tools/creaturecheck.mjs           # pick a free port
+node src/tools/creaturecheck.mts                     # whole roster, every pose
+node src/tools/creaturecheck.mts --species sabertusk,irongiant
+node src/tools/creaturecheck.mts --hold 240          # frames to hold each pose
+node src/tools/creaturecheck.mts --tol 0.25          # fail above this |foot|, metres
+node src/tools/creaturecheck.mts --json out.json     # includes the calibration curves
+PORT=5399 node src/tools/creaturecheck.mts           # pick a free port
 ```
 
 It measures the **skinned** AABB — every vertex through `applyBoneTransform`;
@@ -204,7 +204,7 @@ to 0.25 m.
   because u usually closes a loop around a limb and a fractional count puts a
   seam down the side of every leg.
 - **`organicNormal`/`organicRoughness`/`metalNormal`/`metalRoughness`** in
-  `EnemyBase.js` rebuilt for that density — guard hairs / pores / folds, and
+  `EnemyBase.ts` rebuilt for that density — guard hairs / pores / folds, and
   brush / dishing / rivets / seams. Made periodic by cross-fading against
   shifted copies (`tileable()`): simplex and worley are not periodic and at 7
   tiles/m the seam repeats every 14 cm down every limb.
@@ -309,14 +309,14 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
    visible in `tmp/shots/v6/anak.jpg`: **legs end in round brown balls, not
    hooves**; the tail is a flat white card sticking out sideways; the
    shoulder/neck join is a visible box; the whole body is faceted. Port it to
-   `CBuilder`/`sweep` the way `Sabertusk.js` is built.
+   `CBuilder`/`sweep` the way `Sabertusk.ts` is built.
 2. **Titan.** `tmp/shots/titan/bestiary_titan.jpg`. He reads better than the
    "boxy grey rock pile" note suggests — a dark basalt colossus with a spiked
    crown and a planted fist. But **a dozen `fissure()` wedges are floating free
    above the terrain**, in arcs around and in front of the hands, detached from
    the finger and palm geometry they are supposed to be rammed into. They are
    blinding orange rectangles hovering over dirt and they look like a UI glitch.
-   The call sites are `Titan.js:336`, `:342` (palm furnace), `:360`, `:361`
+   The call sites are `Titan.ts:336`, `:342` (palm furnace), `:360`, `:361`
    (fingers) and `:368` — all positioned in absolute coordinates that no longer
    match the hand slabs. Fix by measuring the hand geometry, not by dimming
    them. His lower body is also one featureless matte-black mass.
@@ -342,16 +342,16 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
 - **`blend()`/`mix()` and `Color.setHex`.** `setHex` runs `Math.floor` on its
   argument, so passing a `THREE.Color` where a hex literal is expected yields
   `NaN` and the surface renders **black, silently, with no error anywhere**.
-  `Sabertusk.js` had exactly this in its head (`blend(blend(...), BELLY, ...)`)
+  `Sabertusk.ts` had exactly this in its head (`blend(blend(...), BELLY, ...)`)
   and the sabertusk's head has been black for as long as it has existed. I
   chased it for three capture rounds thinking my palette was wrong. `blend` in
-  `Sabertusk.js` and `mix` in `Goblin.js`/`IronGiant.js` now accept a Colour at
+  `Sabertusk.ts` and `mix` in `Goblin.ts`/`IronGiant.ts` now accept a Colour at
   either end. **Any other species that starts nesting these needs the same
-  guard** — `Dualhorn.js` has its own `mix` which already handles it.
-  > **Correction, next round.** The last clause is wrong: `Dualhorn.js` did
-  > *not* handle it, and neither did `Coeurl.js` or `Voretooth.js`. All three
+  guard** — `Dualhorn.ts` has its own `mix` which already handles it.
+  > **Correction, next round.** The last clause is wrong: `Dualhorn.ts` did
+  > *not* handle it, and neither did `Coeurl.ts` or `Voretooth.ts`. All three
   > were rendering large parts of the body flat black. A type guard is also only
-  > half the fix — see section 0. Blending now lives in `Palette.js`.
+  > half the fix — see section 0. Blending now lives in `Palette.ts`.
 - **Strided vertex sampling lies about depth.** See section 1, `poseFloor`. A
   480-sample stride over a 30k-vertex magitek under-reported by 0.33 m, which
   made the calibration curve produce a *wrong correction* that looked like a
@@ -365,7 +365,7 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
 - **Do not calibrate the gaits.** `groundLift` is indexed on `stateTime`;
   `approach`/`run` are driven by `gaitPhase`, so a curve read off `stateTime`
   would inject an arbitrary bob into the stride rather than remove a sink.
-  `GROUND_CAL_POSES` in `EnemyBase.js` documents this.
+  `GROUND_CAL_POSES` in `EnemyBase.ts` documents this.
 - **A creature that is meant to be underground needs `buriedBase`**, not a
   wider tolerance. Titan without it gets hoisted 3 m out of his arena by a
   correction that is doing exactly what it was asked to.
@@ -375,7 +375,7 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
   behaviour is left alone — there is a comment at the site recording that a
   held pose therefore differs slightly from a live one.
 - **Detail maps are baked lazily and shared.** `organicNormal()` etc. are
-  module-level singletons in `EnemyBase.js`; the `tileable()` wrapper costs 4x
+  module-level singletons in `EnemyBase.ts`; the `tileable()` wrapper costs 4x
   the noise evaluations, paid once on the first enemy build.
 - **The capture daemon reboots on any source edit** (`sourceStamp()`), so a
   `--cold` round after an edit is ~13 s of boot before the first shot. Batch
@@ -392,14 +392,14 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
 - **The party is now darker than the daemons at night.** In
   `tmp/shots/dn2/daemon_night.jpg` the four heroes in the foreground are the
   blackest shapes in the frame while the daemon pack behind them reads. Whoever
-  owns `src/characters/Cast.js` / the hero materials should apply the same
+  owns `src/characters/Cast.ts` / the hero materials should apply the same
   measurement: compare hero albedo against the ~30 % ground.
-- **`src/game/Shots.js` ~726-732** — the `KNOWN BAD` comment on the Iron Giant
+- **`src/game/Shots.ts` ~726-732** — the `KNOWN BAD` comment on the Iron Giant
   shot is stale (repeat of last round's report; still unactioned).
-- **`src/world/props/Grazer.js`** — the ambient garula herds are still flat
+- **`src/world/props/Grazer.ts`** — the ambient garula herds are still flat
   brown blobs with no coat, clearly visible in `bestiary_titan`. They bypass
   `RigBuilder`, so `detailUV`, `weatherCoat` and the rim never reach them.
-- **`src/tools/creaturecheck.mjs` is still not wired into any npm script.**
+- **`src/tools/creaturecheck.mts` is still not wired into any npm script.**
   Please add it; it is the gate for the whole grounding class of bug and it
   caught nothing this round only because nothing broke.
 
@@ -410,9 +410,9 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** (also enforced by `.githooks/pre-commit`) |
-| `node src/tools/creaturecheck.mjs` | **pass** — 207 poses, 0 failures |
-| `node src/tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mjs` | **pass** — 273 modules, 0 orphans (`MapRaster.js` was deleted upstream) |
+| `node src/tools/creaturecheck.mts` | **pass** — 207 poses, 0 failures |
+| `node src/tools/integration.mts` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mts` | **pass** — 273 modules, 0 orphans (`MapRaster.ts` was deleted upstream) |
 
 Draw calls measured at 505-567 across the daemon and titan shots; budget 800.
 Triangle deltas this round: coeurl +288, garula +420. Two extra shader programs
@@ -422,13 +422,13 @@ for the daemon rim.
 
 ## 9. Reviewing a species without a bestiary shot
 
-Only 13 of the 23 species have a shot in `src/game/Shots.js`. The rest are
+Only 13 of the 23 species have a shot in `src/game/Shots.ts`. The rest are
 reachable through the dev suite's **isolation stage**, and it is far faster than
 a corpus capture: `npm run dev`, `http://127.0.0.1:5410/?debug=1`, **F4**, then
 `←→` asset, `↑↓` family, `,` `.` pose, `O` ok, `K` flag, `U` unreviewed.
 
 For headless review this round used a throwaway script that drives the same
-machinery — boot with `?q=ultra&debug=1` (**not** `shoot=1`; `src/main.js:34`
+machinery — boot with `?q=ultra&debug=1` (**not** `shoot=1`; `src/main.ts:34`
 hard-gates the dev suite off under the capture harness), wait for `window.DEV`,
 then `DEV.reg.exec('assets on')`, `DEV.stage.spin = false`,
 `DEV.browser.select(i)`, `GAME.settle(n)`, screenshot. It was left in

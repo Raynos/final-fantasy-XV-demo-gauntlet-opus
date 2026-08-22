@@ -1,6 +1,6 @@
 # Handoff — vegetation (`agent/grass`, then `agent/veg`)
 
-Owned: `src/world/veg/**`, `src/world/Vegetation.js`, this file.
+Owned: `src/world/veg/**`, `src/world/Vegetation.ts`, this file.
 Nothing under `src/world/terrain/**` has ever been edited from here.
 
 Capture rounds: `tmp/shots/gr0`-`gr7` (the grass pass), `tmp/shots/veg0`-`veg2`
@@ -71,7 +71,7 @@ the texture.
   contract the clump card is built on. Runs before the mip chain, so every level
   inherits the corrected albedo. Exposed through `alphaTex`'s new `albedo`
   option — reusable for the leaf cards when someone does the tree pass.
-- `GRASS_CARD_ALBEDO = 0.58` (exported from `VegTextures.js`) is the number the
+- `GRASS_CARD_ALBEDO = 0.58` (exported from `VegTextures.ts`) is the number the
   field is tuned against.
 - `crossCardGeometry`'s vertical ramp 0.50→0.98 becomes 0.86→1.06
   (coverage-weighted mean 0.931). The clump texture already paints a
@@ -108,7 +108,7 @@ card stood where a 0.2 m tussock belongs.
 of that spread is the honest difference between one blade, one tuft and a stand
 of several.
 
-The mechanism is `tuftHeight(d, wet, hMul, jitter)` in `GrassField.js`: the one
+The mechanism is `tuftHeight(d, wet, hMul, jitter)` in `GrassField.ts`: the one
 height law, returning the apparent height of a single tuft. Each ring multiplies
 it by its own `LODS[i].hMul` (1.0 / 1.05 / 1.45) and *nothing else*, so a blade
 tuft and the card that replaces it can no longer drift. The zone `grassH`
@@ -158,7 +158,7 @@ luminance-preserving and still bounded by step 3.
 
 Also: the blade's root-to-tip vertex ramp now carries hue as well as value (base
 darker and greyer, tip lighter and strawier) instead of one constant warm cast;
-the Leide `dry`/`lush` pairs in `Biomes.js` are re-authored toward dusty khaki.
+the Leide `dry`/`lush` pairs in `Biomes.ts` are re-authored toward dusty khaki.
 
 **Measured after**, same spot: **r/g 1.30, b/g 0.57**, mean linear luminance
 **0.243** (was 0.296), peak channel **0.506** (was 0.974). The three rings now
@@ -174,7 +174,7 @@ agree on mean tint to within 2% — 0.305 / 0.304 / 0.300, against
 
 `GrassField` blends every clump's colour toward `Ecology.groundColor`, which
 delegates to the terrain. I pulled that blend from **0.32 to 0.22**
-(`GROUND_BLEED` in `GrassField.js`) because a third of every blade's hue was
+(`GROUND_BLEED` in `GrassField.ts`) because a third of every blade's hue was
 coming from the terrain's macro tint — which `agent/splat` independently
 confirmed is a hard-coded Leide ochre that never reads `WorldMap` — so it was
 dragging Duscae's grass toward the desert too.
@@ -278,6 +278,11 @@ its near ring; Nebulawood and Malmalam are unchanged in character.
 
 ### Wind, verified in motion
 
+> **The `tmp/veg-a489/` scripts named below are gone** — `tmp/` is disposable by
+> design and was cleared. The method is what survives; rebuild the two scripts
+> (they are short) or promote them into `src/tools/`. Kept because a motion
+> check is the only way to judge wind and nothing in the harness does it.
+
 Stills cannot show a gust, so: `tmp/veg-a489/windstrip.mjs` boots one page,
 applies a shot, and screenshots every N `GAME.settle()` steps;
 `tmp/veg-a489/motionmap.mjs` writes the amplified per-pixel difference of two
@@ -314,11 +319,11 @@ monoculture did; Leide is unchanged.
 **Every number below was taken with six or more sibling agents live. Treat them
 as indicative only; re-measure on a quiet tree before judging.**
 
-- `src/tools/perf.mjs`, load average 2.3 rising to 5.1 during the run:
+- `src/tools/perf.mts`, load average 2.3 rising to 5.1 during the run:
   **mean 73.6 fps, worst 39.1 fps (`vista_dawn`)**, which the tool reports as a
   FAIL against its 60 fps target. **I have no before/after comparison** — I did
-  not baseline `perf.mjs` before the first edit, which was a mistake. `perf.mjs`
-  was already failing its gate on `main` per `project/SESSION-STATE.md` (`gameplay.mjs`
+  not baseline `perf.mts` before the first edit, which was a mistake. `perf.mts`
+  was already failing its gate on `main` per `project/SESSION-STATE.md` (`gameplay.mts`
   `walk` at ~57.5 fps, shadow cascades ~22 ms dominating), so the failure is
   very unlikely to be mine, but that is an inference and not a measurement.
 - What I *can* state as a direct comparison, from the capture manifests, same
@@ -331,18 +336,18 @@ as indicative only; re-measure on a quiet tree before judging.**
     five-segment blade put ~3.5% back.
 - Draw calls across the twelve-shot set stayed in 378–596, inside the 800 budget.
 
-`src/tools/gameplay.mjs` was **not run** — it is the expensive one and the machine
+`src/tools/gameplay.mts` was **not run** — it is the expensive one and the machine
 was contended.
 
 ---
 
 ## 7. Exact next steps, in priority order
 
-1. **Baseline and re-measure `perf.mjs` and `gameplay.mjs` on a quiet tree.**
+1. **Baseline and re-measure `perf.mts` and `gameplay.mts` on a quiet tree.**
    Still the largest unknown in this directory. No vegetation number in this file
    was ever taken with fewer than six sibling Chromiums live. The near ring gained
    ~50 geometry trees at `poi_chocobo`; that is the only cost change worth a look.
-2. **Bushes, ferns and reeds have never been touched by anyone.** `Bushes.js` is
+2. **Bushes, ferns and reeds have never been touched by anyone.** `Bushes.ts` is
    491 lines nobody has audited. They pick their species per instance
    (`pickFrom(b.scrubTable, rng.next())`), so they do *not* have the grove bug,
    but their albedo has never been pinned the way the grass and leaf cards now
@@ -356,7 +361,7 @@ was contended.
 4. **`zone_malacchi` is a wall of leaf card.** The cull fix rescued `zone_alstor`
    but not this one — the camera sits inside a grove of small broadleaf whose
    crowns are under the cull radius. The frame is not *broken* now, but it is a
-   green wall and it is the zone's only shot. The framing lives in `Shots.js`
+   green wall and it is the zone's only shot. The framing lives in `Shots.ts`
    (coordinator).
 5. **Leaf cards read as soft spray at mid distance.** Crisp and leaf-shaped in a
    closeup (`veg-c1/zone_malacchi.jpg`), mushy at 20-40 m. Probably the mip chain
@@ -369,23 +374,23 @@ was contended.
 
 - **`#include <project_vertex>` — do not consume it.** `VegMaterial.patchVeg`
   folds the sway into `transformed` inside `<begin_vertex>` precisely so it does
-  not eat the `<project_vertex>` marker that `world/sky/MaterialPatch.js`
+  not eat the `<project_vertex>` marker that `world/sky/MaterialPatch.ts`
   replaces to write `vAtmWorld`. Consume it and every leaf and grass card
   computes its eye distance as `length(cameraPosition)`, so all vegetation more
   than a kilometre from Hammerhead floods to 100% sky inscatter — flat
   blue-white cards over brown ground. The existing comment says all this; I left
   it intact and verified distant vegetation is clean on
   `tmp/shots/gr5/vista_noon.png` and `zone_three_valleys.png` after every shader
-  edit. **Check those two shots after any change to `VegMaterial.js`.**
+  edit. **Check those two shots after any change to `VegMaterial.ts`.**
 - **GLSL reserved words cost me two full rounds.** A local in the vegetation
   shader may not be called `cross` or `patch` — both are reserved, and both fail
   as `'Illegal use of reserved word'` at *link* time behind the useless message
   `THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false`. Now commented
-  in place at `VegMaterial.js`.
-- **`shoot.mjs --no-daemon` did not surface those shader errors; the daemon path
+  in place at `VegMaterial.ts`.
+- **`shoot.mts --no-daemon` did not surface those shader errors; the daemon path
   did.** I could not reproduce them on the `--no-daemon` route at all. If you
   are hunting a shader bug, use the daemon, and get the *full* error text — the
-  daemon's `/shots` response carries it but `shoot.mjs` prints only
+  daemon's `/shots` response carries it but `shoot.mts` prints only
   `e.split('\n')[0]`, which throws away the shader source and the actual GLSL
   diagnostic. A five-line script against `call('/shots', …)` printing the whole
   string is what found it.
@@ -404,15 +409,15 @@ was contended.
   mid-session. Name scratch files with your agent id. This session's live in
   `tmp/veg-a489/`: `probe2`-`probe7.mjs` (daemon `/eval` measurements),
   `windstrip.mjs`, `motionmap.mjs`.
-- **A stale capture daemon from a dead worktree holds the port.** `shoot.mjs`
+- **A stale capture daemon from a dead worktree holds the port.** `shoot.mts`
   refuses to reuse it (correctly — it would capture the other checkout) and the
   error names the running root. `lsof -ti :5431 -sTCP:LISTEN | xargs kill`.
 - **`import('three')` does not resolve inside a `/eval` body.** The page has no
   import map for the bare specifier. Grab the constructor off a live object
   instead: `g.scene.traverse(o => { if (o.isLight) CC = o.color.constructor; })`.
-  App modules *do* resolve, by their served path — `import('/world/veg/Biomes.js')`,
+  App modules *do* resolve, by their served path — `import('/world/veg/Biomes.ts')`,
   **not** `/src/world/...`, because `src/` is vite's root.
-- **`imgdiff.mjs` and `crop.mjs` decode PNG only.** Capture `--jpeg` for reading,
+- **`imgdiff.mts` and `crop.mts` decode PNG only.** Capture `--jpeg` for reading,
   PNG for measuring; do not mix them up and then debug the decoder.
 - **`Trees.composeTint` caches on the identity of the biome's `treeTint` array.**
   That is safe *only* because `VEG_BIOME` holds module-level literals that are
@@ -423,15 +428,15 @@ was contended.
 
 ## 9. Cross-boundary items
 
-- `src/world/veg/Ecology.js:497-500` — `groundColor` delegates to
+- `src/world/veg/Ecology.ts:497-500` — `groundColor` delegates to
   `Terrain.groundColorAt` / `Terrain.colorAt`. This is the only coupling from
   vegetation into terrain colour, and it is read-only. `agent/splat` changing
   either function changes my grass. See §5.
 - `src/world/terrain/**` `lowAlt` gate — reported by `agent/splat` as gating
   grass off above 120 m. **Not mine, not touched.** Visible in
   `tmp/shots/gr5/zone_three_valleys.png`.
-- `src/tools/orphans.mjs` now reports **no orphans** (272/272 reachable). The
-  `MapRaster.js` orphan noted here previously has been resolved by someone else.
+- `src/tools/orphans.mts` now reports **no orphans** (272/272 reachable). The
+  `MapRaster.ts` orphan noted here previously has been resolved by someone else.
 - **`Terrain.groundColorAt` disagrees with the rendered ground.** At
   `zone_fallgrove` it returns linear lum 0.090 / r/g 1.34 — a warm brown — while
   the ground rendered in that frame is a pale, desaturated grey-green. Every
@@ -447,7 +452,7 @@ was contended.
   visible as the bare highland in `veg-final/zone_three_valleys.jpg`. Not mine.
 - `zone_ravatogh` frames a green forested valley rather than the volcano. The
   biome table asks for ash and dead wood there; the *shot* is standing outside
-  the zone. `Shots.js:391`, coordinator-owned. See `veg-zones/_sheet-1.jpg`.
+  the zone. `Shots.ts:391`, coordinator-owned. See `veg-zones/_sheet-1.jpg`.
 
 ---
 
@@ -456,9 +461,9 @@ was contended.
 | gate | result |
 |---|---|
 | `npx vite build` | **PASS** (also enforced by the pre-commit hook on every commit) |
-| `node src/tools/integration.mjs` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mjs` | **PASS** — 272 modules, 272 reachable, no orphans |
-| `node src/tools/shoot.mjs` page errors | **0** across 24 shots (`veg-final`, `veg-zones`) |
+| `node src/tools/integration.mts` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mts` | **PASS** — 272 modules, 272 reachable, no orphans |
+| `node src/tools/shoot.mts` page errors | **0** across 24 shots (`veg-final`, `veg-zones`) |
 | draw calls | 378-582 over the twelve-shot `veg-final` set, budget 800 |
-| `node src/tools/perf.mjs` | **not re-run this session.** Last figure is `vista_dawn` 39.1 fps under six-agent contention with no before-baseline. See §6 |
-| `node src/tools/gameplay.mjs` | **not run** |
+| `node src/tools/perf.mts` | **not re-run this session.** Last figure is `vista_dawn` 39.1 fps under six-agent contention with no before-baseline. See §6 |
+| `node src/tools/gameplay.mts` | **not run** |

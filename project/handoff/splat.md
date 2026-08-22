@@ -8,18 +8,18 @@ Branch `agent/splat`, based on `main` (merged at `7b377dd`, so the dev suite is 
 | `7b377dd` | merge `main` (dev suite, meteor zone move) |
 | `56610c3` | this session's corrections: bedding suppression in green regions, Ravatogh pre-compensation |
 
-Files owned and touched: `src/world/Terrain.js`, `src/world/terrain/Biome.js` (new),
-`src/world/terrain/Layers.js`, `src/world/terrain/TerrainMaterial.js`. Nothing else.
+Files owned and touched: `src/world/Terrain.ts`, `src/world/terrain/Biome.ts` (new),
+`src/world/terrain/Layers.ts`, `src/world/terrain/TerrainMaterial.ts`. Nothing else.
 
 ---
 
 ## The two root causes (restated so they survive this conversation)
 
-**1 — The splat never read `WorldMap`.** `TerrainMaterial.js` `tf_shade()` derived
+**1 — The splat never read `WorldMap`.** `TerrainMaterial.ts` `tf_shade()` derived
 every colour it drew from slope, altitude, flow, sediment and noise. Every one of
 those is a *global* field that has never heard of the cartography. Concretely: the
 macro tint was a hard-coded `ochre / ash / olive` triple, the strata tint was a
-hard-coded rust, and all six `Layers.js` recipes are authored red-ochre. `WorldMap`
+hard-coded rust, and all six `Layers.ts` recipes are authored red-ochre. `WorldMap`
 does carry `moist` and `rocky` per zone, but those only ever reached the heightfield
 and the vegetation (`Ecology.moisture()` uses `zoneMoist()`; the splat did not).
 Result: the whole 8 km world drew as one Leide badland — the Nebulawood, the
@@ -74,7 +74,7 @@ rather than committed; it is ~35 lines and trivial to rewrite (see *Gotchas*).
 
 ### Not done
 
-- `src/tools/perf.mjs` was **not run**. `tf_stoch` costs 6 array fetches per active
+- `src/tools/perf.mts` was **not run**. `tf_stoch` costs 6 array fetches per active
   layer instead of 4; with the `wCut` early-out typically ~2 layers are live, so
   roughly +4 fetches per pixel. Draw calls and triangles in every shot were inside
   budget (384-596 calls against a budget of 800), but the fragment cost is unmeasured.
@@ -87,7 +87,7 @@ rather than committed; it is ~35 lines and trivial to rewrite (see *Gotchas*).
 
 ## The biome LUT
 
-`src/world/terrain/Biome.js`:
+`src/world/terrain/Biome.ts`:
 
 - `SURFACE` — one authored entry per zone id plus a `_default` frontier entry,
   `{ ground:[r,g,b], rock:[r,g,b], green, damp }`. The two colours are **multipliers
@@ -103,7 +103,7 @@ rather than committed; it is ~35 lines and trivial to rewrite (see *Gotchas*).
   finest feature the table can express is a zone whose radius is over a kilometre,
   so 64 m per sample is already several times oversampled) and bilinearly upsamples.
 
-**Packing — and why.** The LUT is **not an eighth sampler**. `TerrainMaterial.js`
+**Packing — and why.** The LUT is **not an eighth sampler**. `TerrainMaterial.ts`
 documents that the terrain fragment shader already sits on the **16-texture-unit
 limit** once the atmosphere patch and the shadow cascades are injected into it, and
 a seventh standalone sampler tips it over. So the palette is appended as two extra
@@ -122,7 +122,7 @@ Tints run 0..2 encoded into a byte at ~0.008 steps. The shader reads it in two
 control flow is undefined. The uv is clamped in-shader for the same reason. The LUT
 is deliberately *not* baked: it costs single-digit ms and depends on `WorldMap`
 rather than on the layer recipes, so baking it would only add a second staleness
-dependency. `FieldBake.js` and `src/tools/bake.mjs` therefore need no change.
+dependency. `FieldBake.ts` and `src/tools/bake.mts` therefore need no change.
 
 ---
 
@@ -154,12 +154,12 @@ round), `tmp/shots/sp2` (after the bedding fix).
 | gate | result |
 |---|---|
 | `npx vite build` | **pass** — also runs as a pre-commit hook |
-| `node src/tools/integration.mjs` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mjs` | **fails, pre-existing and not mine** — `src/world/map/MapRaster.js` is orphaned. Nothing anywhere imports it; last touched by the cartography agent in `5fd2876`. Unrelated to any file I own. |
-| `node src/tools/roadcheck.mjs` | **pass** — 0 failures, 0 warnings, 30.26 km over 50 edges / 50 nodes |
-| `node src/tools/heightcheck.mjs` | **pass — d 0.000 m on every probe**, gpu vs cpu, including the `micro` and `grid` components separately |
-| `node src/tools/driftcheck.mjs` | **pass** — tolerance 0.05 m drift / 0.45 m vs `heightAt` |
-| `node src/tools/perf.mjs` | **not run** |
+| `node src/tools/integration.mts` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
+| `node src/tools/orphans.mts` | **fails, pre-existing and not mine** — `src/world/map/MapRaster.ts` is orphaned. Nothing anywhere imports it; last touched by the cartography agent in `5fd2876`. Unrelated to any file I own. |
+| `node src/tools/roadcheck.mts` | **pass** — 0 failures, 0 warnings, 30.26 km over 50 edges / 50 nodes |
+| `node src/tools/heightcheck.mts` | **pass — d 0.000 m on every probe**, gpu vs cpu, including the `micro` and `grid` components separately |
+| `node src/tools/driftcheck.mts` | **pass** — tolerance 0.05 m drift / 0.45 m vs `heightAt` |
+| `node src/tools/perf.mts` | **not run** |
 
 `heightcheck` and `driftcheck` reading exactly 0.000 is the load-bearing result: it
 confirms the change really is colour-only. That was guaranteed by construction — no
@@ -168,7 +168,7 @@ edit here, because it is the cheapest possible proof that `roadcheck`, POI place
 and the `_outcrops` RNG stream cannot have moved.
 
 **Ports.** All of the above need a vite server and several default to 5173/5321,
-which collide with the other agents. Run them as `PORT=5261 node src/tools/<x>.mjs`
+which collide with the other agents. Run them as `PORT=5261 node src/tools/<x>.mts`
 against a server you started yourself; `heightcheck`/`driftcheck`/`roadcheck` do
 **not** spawn one, they assume it is already up.
 
@@ -184,7 +184,7 @@ in precisely the regions that are defined as green. The gate is now regional:
 float lowAlt = 1.0 - smoothstep(48.0 + 190.0 * bioGreen, 120.0 + 320.0 * bioGreen, alt);
 ```
 
-Mirrored exactly in `Terrain.sampleMaterial()` (`src/world/Terrain.js`), whose only
+Mirrored exactly in `Terrain.sampleMaterial()` (`src/world/Terrain.ts`), whose only
 consumer is `AudioSystem` footsteps. The grass weight itself also gained a regional
 term — both its gain and its threshold move with `bioGreen`, so a green basin is
 grassland with dirt showing through in patches rather than dirt with the odd tuft.
@@ -194,7 +194,7 @@ Tinting alone was not enough: a green region is green because there is a *mat* o
 
 ## Next steps, in priority order
 
-1. **Run `src/tools/perf.mjs`.** This is the one unmeasured risk in the whole change.
+1. **Run `src/tools/perf.mts`.** This is the one unmeasured risk in the whole change.
    If `tf_stoch` does not pay for itself, gate it to `vTDist < 400 m` and single-tap
    beyond — the lattice is only visible near, which is the whole reason the sampler
    exists.
@@ -235,7 +235,7 @@ the *rust colour* component), but a second probe with all three strata terms for
 to zero shows the horizontal banding still there and essentially unchanged
 (`tmp/shots/probeB/zone_taelpar.png` vs `tmp/shots/sp2/zone_taelpar.png`). It is geometric —
 almost certainly the per-zone `terrace` biome parameter stepping the heightfield.
-**Do not try to fix either of these from `TerrainMaterial.js`. You cannot.**
+**Do not try to fix either of these from `TerrainMaterial.ts`. You cannot.**
 
 **Dark near-ground in green zones is pre-existing, not the palette.** Fallgrove,
 Lestallum and Vannath all show a near-black foreground under bright green midground,
@@ -252,7 +252,7 @@ worst case and is now pre-compensated in place, with the arithmetic written into
 comment. **Before authoring or retuning any entry, measure what actually arrives** —
 `surfaceAt()` at the zone's `cx`/`cz` — rather than assuming the table value lands.
 
-**Zone centres are `cx`/`cz`, not `x`/`z`.** `ZONES[]` in `WorldMap.js` uses `cx`,
+**Zone centres are `cx`/`cz`, not `x`/`z`.** `ZONES[]` in `WorldMap.ts` uses `cx`,
 `cz`, `rx`, `rz`. My first probe read `zn.x` / `zn.z`, silently got `undefined`, and
 produced a full table of `NaN` and `0.00` that looked exactly like a broken LUT. I
 lost a cycle to it.
@@ -266,8 +266,8 @@ with no dedicated shot. Do not use one list to audit the other.
 **`macroMix` is now dead for layers 0,1,2,4,5** but is still computed and still used
 by the rock path. Do not delete it.
 
-**`src/public/baked/` is a gitignored deterministic cache.** `Layers.js` is in
-`src/tools/bake.mjs` `SOURCES`, so editing it auto-invalidates the bake; `Biome.js` is
+**`src/public/baked/` is a gitignored deterministic cache.** `Layers.ts` is in
+`src/tools/bake.mts` `SOURCES`, so editing it auto-invalidates the bake; `Biome.ts` is
 not, deliberately. Delete `src/public/baked/` freely.
 
 ---
@@ -296,9 +296,9 @@ every shot above therefore has its vegetation over my ground. What I assumed:
 
 | what | where |
 |---|---|
-| `zone_mencemoor` frames the *inside* of the Disc of Cauthess meteor — the whole frame is its underside. `main`'s `c526d9b`/`0be851f` moved the meteor to its own zone; the shot camera at `pos: [...]` was not moved with it. Duscae cannot be assessed from this shot. | `src/game/Shots.js`, `zone_mencemoor` entry (~line 359) |
-| `zone_ravatogh` frames a green forested valley with the cone at the top of frame rather than the volcano itself. Flagged in the original plan and still true. | `src/game/Shots.js`, `zone_ravatogh` entry (~line 391) |
-| Chevron hatch on all conical peaks — heightfield normals, see *Gotchas*. Owner is whoever owns `Field.heightAt()` / the far normal texture (`agent/terrainfix`?). | `src/world/terrain/Field.js` (height), not `TerrainMaterial.js` |
-| Horizontal terracing bands on Taelpar's valley walls — geometric, almost certainly the per-zone `terrace` biome parameter. | `src/world/map/WorldMap.js` `biome.terrace`; realised in `Field.js` |
-| `src/world/map/MapRaster.js` is orphaned and fails `src/tools/orphans.mjs`. Nothing imports it. | `src/world/map/MapRaster.js` |
-| `project/SESSION-STATE.md` records `src/tools/gameplay.mjs` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |
+| `zone_mencemoor` frames the *inside* of the Disc of Cauthess meteor — the whole frame is its underside. `main`'s `c526d9b`/`0be851f` moved the meteor to its own zone; the shot camera at `pos: [...]` was not moved with it. Duscae cannot be assessed from this shot. | `src/game/Shots.ts`, `zone_mencemoor` entry (~line 359) |
+| `zone_ravatogh` frames a green forested valley with the cone at the top of frame rather than the volcano itself. Flagged in the original plan and still true. | `src/game/Shots.ts`, `zone_ravatogh` entry (~line 391) |
+| Chevron hatch on all conical peaks — heightfield normals, see *Gotchas*. Owner is whoever owns `Field.heightAt()` / the far normal texture (`agent/terrainfix`?). | `src/world/terrain/Field.ts` (height), not `TerrainMaterial.ts` |
+| Horizontal terracing bands on Taelpar's valley walls — geometric, almost certainly the per-zone `terrace` biome parameter. | `src/world/map/WorldMap.ts` `biome.terrace`; realised in `Field.ts` |
+| `src/world/map/MapRaster.ts` is orphaned and fails `src/tools/orphans.mts`. Nothing imports it. | `src/world/map/MapRaster.ts` |
+| `project/SESSION-STATE.md` records `src/tools/gameplay.mts` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |

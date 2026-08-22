@@ -16,8 +16,8 @@ head had been.
 reclaimed), no orphaned vite/chromium. **`npm run check` — 9/9 gates green.**
 
 `npm run check` is new: one command, all nine gates, one table. `--perf` adds
-`perf.mjs` and `gameplay.mjs`, opt-in because a perf number taken while agents run
-is meaningless. It exists because `combatloop.mjs` slid 30/30 → 21/30 and nobody
+`perf.mts` and `gameplay.mts`, opt-in because a perf number taken while agents run
+is meaningless. It exists because `combatloop.mts` slid 30/30 → 21/30 and nobody
 noticed for weeks — the cheap gates were run at every merge and the expensive ones
 were not.
 
@@ -28,7 +28,7 @@ rather than by trusting the handoff that recorded it.**
 
 | recorded as | actually |
 |---|---|
-| `combatloop` 21/30 = a pre-existing game regression | **a stale test.** `combatloop.mjs` still pressed `KeyH` for a technique after the keymap moved to G/J/K; that opened the controls card, `Menus._pointerLock` disabled input, and every later check failed |
+| `combatloop` 21/30 = a pre-existing game regression | **a stale test.** `combatloop.mts` still pressed `KeyH` for a technique after the keymap moved to G/J/K; that opened the controls card, `Menus._pointerLock` disabled input, and every later check failed |
 | the chevron hatch = heightfield normals | **GTAO** reconstructing normals from depth, drawing distant triangle facets. `?post=nogtao` alone removes it |
 | `Terrain.groundColorAt` disagrees with the shader | **it never existed.** `Ecology.groundColor` called two undefined functions, so every plant in the world tinted from a hard-coded brown ramp |
 | dualhorn/bloodhorn "deep rebuild, **verified by eye**" | rendering **flat black** from a `Color.setHex` NaN |
@@ -70,8 +70,8 @@ project has had**, because every previous one was taken with agents live:
 
 | gate | result |
 |---|---|
-| `perf.mjs` | mean ~70 fps, **worst 37.9 fps on `vista_dawn` — FAIL** |
-| `gameplay.mjs` | **worst segment `walk` at 49.8 fps — FAIL** |
+| `perf.mts` | mean ~70 fps, **worst 37.9 fps on `vista_dawn` — FAIL** |
+| `gameplay.mts` | **worst segment `walk` at 49.8 fps — FAIL** |
 
 `walk` is *worse* than the ~57.5 fps the old `SESSION-STATE.md` recorded; that
 figure was taken under load and was never real. **Nobody owns either failure.**
@@ -95,7 +95,7 @@ each phase now has its own plan:
    how stubbed the game is was drawn while that gate was misreporting.
 
 Open and deliberately not closed: hands still mittens, outfits still flat black,
-hair reads as quills, anak needs a sculpt not paint, `Bushes.js` (491 lines) never
+hair reads as quills, anak needs a sculpt not paint, `Bushes.ts` (491 lines) never
 audited by anyone, `MapScreen` a 22-line stub, `zone_weaverwilds` has no shot to
 capture it with, and **a fresh harsh-critic pass — the last score was 4.5/10 and
 predates essentially everything now in the game.**
