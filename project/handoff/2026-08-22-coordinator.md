@@ -1,7 +1,9 @@
 # Coordinator handoff — 2026-08-22
 
-Written for whoever picks this up next. **Read `project/RESCUE.md` first** — it is
-the ledger this session worked from and it records what is still open.
+Written for whoever picks this up next. The ledger this session worked from is
+`project/archive/RESCUE-2026-08-21.md`; it closed with this session and is
+archived. **Open work is now `project/STATUS.md`, and its landmines are in
+`project/LANDMINES.md`** — read those, not the ledger.
 
 This session rescued the work abandoned when session `07642602` and its seven
 subagents were force-killed (~3 GB RSS, ~80 MB transcript, stopped along with

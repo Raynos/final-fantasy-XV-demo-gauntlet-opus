@@ -1,7 +1,7 @@
 # Handoff — `agent/ui`
 
 Owned: `src/ui/**`, `project/handoff/ui.md`.
-Scope: `project/RESCUE.md` §B5 (combatloop 21/30) and §B10 (all UI work).
+Scope: `project/archive/RESCUE-2026-08-21.md` §B5 (combatloop 21/30) and §B10 (all UI work).
 
 Every claim below is either **verified by eye at capture** or explicitly flagged as not.
 

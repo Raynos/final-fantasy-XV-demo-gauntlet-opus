@@ -8,7 +8,7 @@ file.
 
 ## Context
 
-`project/RESCUE.md` §C ("Harness") names the defect that killed three agents last
+`project/archive/RESCUE-2026-08-21.md` §C ("Harness") names the defect that killed three agents last
 session:
 
 > **The machine saturates.** 6+ concurrent headless Chromiums make every
@@ -21,22 +21,22 @@ structural causes, and only the first is the one people notice.
 `src/tools/` call `chromium.launch` themselves; seventeen spawn their own `vite`
 too. Each carries a copy-pasted `portOpen()` / `ensureServer()` /
 `page.goto('?q=…&shoot=1')` / `waitForFunction('window.GAME.ready')` preamble —
-`perf.mjs:47-70`, `gameplay.mjs:80-82`, `combatloop`, `integration`, `uxcheck`,
+`perf.mts:47-70`, `gameplay.mts:80-82`, `combatloop`, `integration`, `uxcheck`,
 `driftcheck`, `heightcheck`, `mapshoot`, `ui-shoot`, `dresscam`, `bootprof`,
 `chartshoot`, `detcheck`, `attrib`, `shrink`, `sheet`, `probe`, `mapview`. Every
 one is an independent, unbudgeted claim on the machine.
 
 **Cause two — the daemon serialises, so agents route around it.**
-`src/tools/daemon.mjs` already solves *boot cost* correctly: one vite, one
+`src/tools/daemon.mts` already solves *boot cost* correctly: one vite, one
 chromium, one warm page, a source fingerprint so a stale page is never reused
-(`daemon.mjs:36-69`), `--cold` for provable independence. But `queue()`
-(`daemon.mjs:249-254`) chains every request onto one promise — exactly one
-browser doing exactly one thing — so only `shoot.mjs` and `corpus.mjs` use it.
+(`daemon.mts:36-69`), `--cold` for provable independence. But `queue()`
+(`daemon.mts:249-254`) chains every request onto one promise — exactly one
+browser doing exactly one thing — so only `shoot.mts` and `corpus.mts` use it.
 **Agents bypass the daemon because it serialises them, and bypassing it is what
 saturates the machine.**
 
 **Cause three — the daemon is scoped to a checkout, and we run many checkouts.**
-`ensureDaemon()` (`daemon.mjs:104-121`) *refuses* a daemon serving a different
+`ensureDaemon()` (`daemon.mts:104-121`) *refuses* a daemon serving a different
 root, and `CLAUDE.md` says "one `PORT` per worktree". So today's design is one
 daemon per worktree; with three agent worktrees live, a perfect per-daemon cap of
 4 still puts twelve chromiums on one GPU. **A browser budget is a property of the
@@ -48,17 +48,17 @@ can ever see the whole machine.
 | fact | source |
 |---|---|
 | 18 cores, 128 GB RAM, **one** GPU | `sysctl hw.ncpu hw.memsize` |
-| Cold capture ≈ 12 s, warm ≈ 1.5 s | `daemon.mjs:27` |
-| Boot is ~110 shader compiles + world build, not chromium launch | `daemon.mjs:14-17` |
+| Cold capture ≈ 12 s, warm ≈ 1.5 s | `daemon.mts:27` |
+| Boot is ~110 shader compiles + world build, not chromium launch | `daemon.mts:14-17` |
 | Toggling one light's `visible` recompiled 43 programs — 9.5 s freeze | RESCUE §C |
-| `?shoot=1` pages **do not run rAF** (`main.js:27` gates `game.start()`) | `src/main.js` |
-| Uncapped rAF measured *worse*; deliberately absent | `chromium.mjs:5-18` |
+| `?shoot=1` pages **do not run rAF** (`main.ts:27` gates `game.start()`) | `src/main.ts` |
+| Uncapped rAF measured *worse*; deliberately absent | `chromium.mts:5-18` |
 | Remote is now `git@github.com:Raynos/final-fantasy-XV-demo-gauntlet-opus.git` | `git remote -v` |
 | Three agent worktrees live, all sharing one `.git` | `git worktree list` |
 
 **The 18-core / 128 GB figure falsifies the obvious explanation.** Six chromiums
 cannot saturate 18 cores or 128 GB. What they *can* saturate is the single Metal
-GPU they all render through (`--use-angle=metal`, `chromium.mjs:29`). If so, the
+GPU they all render through (`--use-angle=metal`, `chromium.mts:29`). If so, the
 cap belongs on concurrently *rendering* pages, not on browsers, and
 parked-but-resident browsers are nearly free. **We do not know yet. Phase 0
 exists to find out before any number becomes a default.**
@@ -82,7 +82,7 @@ work here"). That is the better substrate here, and not only for the daemon:
   terrain cache is expensive to regenerate, three vite servers, three daemons,
   three ports to keep unique, and a coordinator merge step per agent.
 - **They break every cross-agent optimisation.** Shared warm pages, cross-agent
-  cache hits, request coalescing and machine-wide quiescing for `perf.mjs` are
+  cache hits, request coalescing and machine-wide quiescing for `perf.mts` are
   all impossible across checkouts and free within one.
 
 ### What must come with it (from kami-kakushi, verbatim in spirit)
@@ -119,14 +119,14 @@ that repo, several after being learned the hard way:
    created `O_EXCL`, reaped when the owner's pid/pane is gone. Useful for
    cross-*session* mutexes (push, exit) that the daemon cannot see.
 7. **The repo is the memory.** Journal every session; keep one replaced-in-place
-   status snapshot. We have `project/journal/` and `project/SESSION-STATE.md`
+   status snapshot. We have `project/journal/` and `project/STATUS.md`
    already — RESCUE §D notes the snapshot currently lies, claiming 7 running
    agents and listing fixed bugs as open.
 
 ### The cost the single tree introduces, and the honest answer
 
 **Every agent's unsaved edit changes the source under every other agent's
-capture.** `sourceStamp()` (`daemon.mjs:36-69`) stats every file in `src/`, so
+capture.** `sourceStamp()` (`daemon.mts:36-69`) stats every file in `src/`, so
 one save by anyone invalidates every cached frame and reboots every warm page
 for everyone. In a worktree world that could not happen.
 
@@ -172,7 +172,7 @@ And the pressure valve for the tight edit loop:
   never cached, and every response flagged `dirty: true` with the base sha and
   the list of modified paths. A dirty frame is for the builder's own eyes —
   never quoted as evidence, exactly as `../game-scaffold` treats `pose.mts`
-  output. Tools print the flag; `sheet.mjs` and `corpus.mjs` refuse dirty frames
+  output. Tools print the flag; `sheet.mts` and `corpus.mts` refuse dirty frames
   outright.
 - **Honest caveat:** on a shared tree a `dirty:` capture contains *every* agent's
   in-flight edits, not just yours. That is the real cost of Decision 1, it is not
@@ -182,7 +182,7 @@ And the pressure valve for the tight edit loop:
 ## Decision 3 — one daemon per repository, keyed off the remote
 
 ```js
-// src/tools/identity.mjs
+// src/tools/identity.mts
 export function repoKey() {
   const remote = git('config --get remote.origin.url');    // now: git@github.com:Raynos/…
   if (remote) return normaliseRemote(remote);              // host + path, no scheme/auth/.git
@@ -196,11 +196,11 @@ started}`); clients read it, fall back to the derived port, autostart on miss �
 the existing `ensureDaemon()` flow, unchanged in shape.
 
 **This deletes the `PORT`-per-worktree convention and the trap both `CLAUDE.md`
-and RESCUE §C warn about** — aiming `framecam.mjs` at the daemon port and hanging
+and RESCUE §C warn about** — aiming `framecam.mts` at the daemon port and hanging
 for the full 300 s. Nobody picks a port; the daemon allocates vite ports from its
 own block per build identity and returns them in the response.
 
-The different-root refusal at `daemon.mjs:110-118` — which exists because
+The different-root refusal at `daemon.mts:110-118` — which exists because
 *"silently reusing it captures the other repo's build, which has already produced
 at least one false result"* — is **replaced, not weakened**. Cross-build
 contamination is now prevented where it belongs, in page identity
@@ -230,7 +230,7 @@ thing that isn't there.**
   migration — must not kill the shared daemon.
 - **`--stop` is global and says so.** A tool done with a build calls
   `/release-build`, which stops that build's server and recycles its pages. Only
-  an explicit `daemon.mjs --stop` kills the daemon itself.
+  an explicit `daemon.mts --stop` kills the daemon itself.
 - **Idle exit stays as-is**: browsers close after `BROWSER_IDLE_MIN`, the daemon
   after `DAEMON_IDLE_MIN`, taking every build server with it.
 
@@ -261,9 +261,9 @@ through it.
   Measured on a 12-core box with a toy game whose boot is 7.7 s of
   mostly-single-threaded CPU. Ours is ~110 shader compiles against one GPU. The
   curve shape may hold; the knee does not. Phase 0 re-derives them, and the
-  numbers go into a comment in the style of `chromium.mjs:5-18`.
+  numbers go into a comment in the style of `chromium.mts:5-18`.
 - **Scaffold's park rationale verbatim.** It parks because a posed `__READY__`
-  page burns 0.6–1.8 cores of rAF. **Ours does not** — `main.js:27` never starts
+  page burns 0.6–1.8 cores of rAF. **Ours does not** — `main.ts:27` never starts
   the loop under `?shoot=1`. Our park case is RSS and the GPU context: strong for
   play-mode pages (`gameplay`, `combatloop`, `uxcheck` run the real loop),
   unproven for capture pages. Two measurements, two timers.
@@ -281,7 +281,7 @@ through it.
 RESCUE §B1 is the determinism hole: companions are still steering to wandering
 formation slots when a shot settles, **formation state carries across shots**, and
 *"all 47 `follow` shots are order-dependent"*. `Animator.rest()` exists at
-`Anim.js:279` with zero callers; `Party.snap()` was never written.
+`Anim.ts:279` with zero callers; `Party.snap()` was never written.
 
 Page reuse is what makes that bug *matter* rather than merely exist — a warm
 daemon is a machine for carrying state across shots, and a shared daemon carries
@@ -300,7 +300,7 @@ Nothing else starts until this is done. RESCUE's "~4" and scaffold's "8" are bot
 unmeasured *for this game on this machine*; shipping either as a default repeats
 the mistake this document is about.
 
-Port `bench_test.sh` to `src/tools/bench.mjs`. As scaffold's does: take a lock (a
+Port `bench_test.sh` to `src/tools/bench.mts`. As scaffold's does: take a lock (a
 previous run once survived its supervisor and ran concurrently with a new one —
 every number was garbage and looked fine), default small enough to run
 constantly, and **separate the three things a client's wall time actually is** —
@@ -335,7 +335,7 @@ screenshot. Parallelism that quietly changes pixels is worse than the serial
 queue we have.
 
 Deliverable: `project/journal/2026-08-21-harness-bench.md` with the table, and
-every default in `daemon.mjs` traceable to a row in it.
+every default in `daemon.mts` traceable to a row in it.
 
 ### Phase 1 — the single-trunk substrate
 
@@ -349,17 +349,17 @@ Decision 2 tolerable.
 - Split the pre-commit gate into a **fast commit lane** (build + the sub-10 s
   checks) and a **full push gate** (`creaturecheck`, `combatloop`, `integration`,
   `gameplay`, `roadcheck`) with one source of truth for the roster, and a
-  `npm run check:gate` that runs it — RESCUE §B14 notes `creaturecheck.mjs`'s
+  `npm run check:gate` that runs it — RESCUE §B14 notes `creaturecheck.mts`'s
   207-pose grounding gate is wired to nothing, and §B5 argues for the full suite
   at every merge after `combatloop` silently fell to 21/30.
-- Fix `project/SESSION-STATE.md`, which RESCUE §D says still claims 7 running
+- Fix `project/STATUS.md`, which RESCUE §D says still claims 7 running
   agents and lists fixed bugs as open.
 - **Retire the worktrees** once Phase 3 lands: commit or land each one's work,
   `git worktree remove`, delete the per-worktree `PORT` guidance.
 
 ### Phase 2 — repo identity and build identity
 
-- `src/tools/identity.mjs` — `repoKey()`, `keyHash()`, `derivedPort()`.
+- `src/tools/identity.mts` — `repoKey()`, `keyHash()`, `derivedPort()`.
 - Registry at `~/.cache/ffxv-harness/<keyhash>.json`; `ensureDaemon()` reads it,
   autostarts on miss, hard-errors on key mismatch.
 - `BuildStore`: `resolve(ref) → sha`, materialise to
@@ -368,7 +368,7 @@ Decision 2 tolerable.
   the live tree, exclusive.
 - `Harness` holds `builds: Map<buildId, {port, server, lastUsed}>`; every route
   takes `build` (default `HEAD`).
-- `PROTOCOL` constant + `/version`. **An agent editing `daemon.mjs` does not
+- `PROTOCOL` constant + `/version`. **An agent editing `daemon.mts` does not
   restart the running daemon**, so a client with a mismatched `PROTOCOL` must
   fail loudly with the restart command rather than silently talk to an older
   daemon. Harness work is self-hosting; this is the one place it bites.
@@ -380,7 +380,7 @@ already the difference between the machine working and not.
 
 ### Phase 3 — one client, every tool through the daemon
 
-Extract the copy-pasted preamble into `src/tools/harness.mjs` (mirroring
+Extract the copy-pasted preamble into `src/tools/harness.mts` (mirroring
 scaffold's `harness.mts`):
 
 ```js
@@ -407,8 +407,8 @@ Two tiers:
   the tool keeps full Playwright control. This is scaffold's `/lease` verbatim and
   why that route exists.
 
-`perf.mjs` and `bootprof.mjs` take the **exclusive profile lease** (Phase 7).
-`bake.mjs`, `imgdiff.mjs`, `crop.mjs`, `orphans.mjs`, `agentstats.mjs` need no
+`perf.mts` and `bootprof.mts` take the **exclusive profile lease** (Phase 7).
+`bake.mts`, `imgdiff.mts`, `crop.mts`, `orphans.mts`, `agentstats.mts` need no
 browser and are untouched.
 
 **One tool per commit.** These twenty conversions are on disjoint files and
@@ -436,14 +436,14 @@ Worker count from Phase 0.
 ### Phase 5 — the reset contract and spare pooling
 
 **Prerequisite: `Party.snap()` (RESCUE §B1)**, called from `Game.applyShot`
-(`Game.js:174`).
+(`Game.ts:174`).
 
 ```js
 reset() {
   this.stop();
-  this.resetClock();                     // Game.js:255, already correct
+  this.resetClock();                     // Game.ts:255, already correct
   this.get('Party')?.snap();             // RESCUE B1 — the determinism hole
-  this.get('Menus')?.setScreen('main');  // Menus.js:156
+  this.get('Menus')?.setScreen('main');  // Menus.ts:156
   this.get('Story')?.applyShot(null);
   this.get('Dungeons')?.exit?.();        // exterior lighting restored — RESCUE §A
   this.get('HUD')?.toasts?.clear();
@@ -481,7 +481,7 @@ must not go near `src/public/baked/`, which costs a re-bake.
 - **Prune whole shas**, N at each end: the oldest as a record of where we
   started, the newest for the active loop. 1600×900 PNGs over a 139-shot corpus
   reach gigabytes in a session.
-- **`imgdiff.mjs` records each side's sha** and refuses — or loudly annotates — a
+- **`imgdiff.mts` records each side's sha** and refuses — or loudly annotates — a
   comparison where both sides came from the same one, since a cached frame is
   byte-identical by construction and such a diff proves nothing about the code.
   Conversely `imgdiff a1b2c3 d4e5f6 hero_full` becomes a first-class operation.
@@ -492,7 +492,7 @@ must not go near `src/public/baked/`, which costs a re-bake.
   `estimatedWaitMs`, `ownCostMs`, `why` (naming who is ahead) and a `hint`.
   Clients exit 4, not 1, so a saturated machine is distinguishable from a broken
   build.
-- **The exclusive profile lease** for `perf.mjs`/`bootprof.mjs`: refuse unless
+- **The exclusive profile lease** for `perf.mts`/`bootprof.mts`: refuse unless
   every queue is idle and no lease is out, `pool.closeAll()` before handing over,
   block new work until released. **This is the payoff of Decisions 1 and 3.**
   RESCUE §B6 threw away every perf number from last session because they were
@@ -507,7 +507,7 @@ must not go near `src/public/baked/`, which costs a re-bake.
   block killing the daemon or a pooled browser. Escapes named and ledgered. Never
   blanket-kill chromium on a shared box — scaffold ships `browser-guard.sh` for
   exactly this.
-- **`cleanup.mjs`** learns the registry: report the daemon, its builds, its
+- **`cleanup.mts`** learns the registry: report the daemon, its builds, its
   browsers, and any chromium/vite it disclaims. `--kill` targets only the latter.
 - **`/health`** reports, per build: sha or dirty flag, server port, pages, queue
   depth per lane; and machine-wide: workers busy/total, pool size and park state,
@@ -530,7 +530,7 @@ Phase 1  single-trunk substrate (guards, gates, docs) ────┤  (independ
 Phase 2  repo identity + build identity  ◄──── ship alone, still serial
    │
    ▼
-Phase 3  harness.mjs + convert 20 tools   ── parallelisable across agents
+Phase 3  harness.mts + convert 20 tools   ── parallelisable across agents
    │
    ▼
 Phase 4  scheduler + fair share
@@ -540,7 +540,7 @@ Phase 4  scheduler + fair share
    └──► Phase 7  deadlines, quiet lane, guards, health, docs
 ```
 
-Phases 2, 4 and 5 all touch `daemon.mjs` and want **one owner, sequentially**.
+Phases 2, 4 and 5 all touch `daemon.mts` and want **one owner, sequentially**.
 Phase 3 is the bulk of the work and is almost perfectly parallel.
 
 ## Risks and landmines
@@ -556,7 +556,7 @@ Phase 3 is the bulk of the work and is almost perfectly parallel.
 - **Disk growth from materialised trees.** Each sha tree is a full `src/` plus a
   `dist/`. Prune aggressively and measure it in Phase 0, question 4. The terrain
   cache must be shared or symlinked across trees, never re-baked per sha.
-- **Version skew on the daemon itself.** Editing `daemon.mjs` does not restart the
+- **Version skew on the daemon itself.** Editing `daemon.mts` does not restart the
   running daemon. `PROTOCOL` + `/version` + a loud client refusal.
 - **Cross-build contamination.** Serving one build's page to another build's
   request is the false-result failure the old different-root refusal existed to
@@ -585,12 +585,12 @@ Phase 3 is the bulk of the work and is almost perfectly parallel.
 
 - [ ] Phase 0 bench in `project/journal/`, with the knee and its cause (GPU / CPU
       / RSS), park and reset costs, sha-tree cost, and the concurrency
-      byte-stability result. Every default in `daemon.mjs` traceable to a row.
+      byte-stability result. Every default in `daemon.mts` traceable to a row.
 - [ ] `git worktree list` shows **one** entry; `CLAUDE.md` no longer mentions a
       per-worktree `PORT`; the sweep guard is installed and its ledger exists.
 - [ ] **One daemon serves every agent**, found without anyone choosing a port, and
       it survives the session that started it.
-- [ ] `grep -l chromium.launch src/tools/*.mjs` returns **`daemon.mjs` and nothing
+- [ ] `grep -l chromium.launch src/tools/*.mts` returns **`daemon.mts` and nothing
       else**.
 - [ ] Five agents capture concurrently and the machine never exceeds the measured
       browser budget — verified by watching `/health` during a real fan-out.
@@ -602,7 +602,7 @@ Phase 3 is the bulk of the work and is almost perfectly parallel.
       page or cached frames.
 - [ ] Reset drift on a `follow` shot is byte-identical — RESCUE §B1's acceptance
       test, checked automatically once per build.
-- [ ] `perf.mjs` refuses to run unless the whole machine is quiet, and stamps every
+- [ ] `perf.mts` refuses to run unless the whole machine is quiet, and stamps every
       report with the state and sha it was taken under.
 - [ ] A request that cannot meet its deadline returns `429` with a real estimate,
       names who is ahead, and exits 4. No tool hangs for 300 s.

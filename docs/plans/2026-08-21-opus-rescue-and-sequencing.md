@@ -8,9 +8,9 @@ have their own plans.
 **Written 2026-08-21.** The order of work from here, agreed with the human, and
 the reasoning behind that order.
 
-Companion documents: **`project/RESCUE.md`** is the item-by-item ledger of what
+Companion documents: **`project/archive/RESCUE-2026-08-21.md`** is the item-by-item ledger of what
 the force-killed session left behind — this file is the *sequence*, that file is
-the *contents*. `project/SESSION-STATE.md` is the live snapshot.
+the *contents*. `project/STATUS.md` is the live snapshot.
 
 ---
 
@@ -22,7 +22,7 @@ every agent under it, after each was told only to "hand off and prepare to
 exit". No *committed* work was lost — all seven branches had merged and every
 worktree was pruned — but everything still in a head was.
 
-`project/RESCUE.md` reconstructs that from the handoffs and, critically,
+`project/archive/RESCUE-2026-08-21.md` reconstructs that from the handoffs and, critically,
 **reconciles each claim against what is actually on `main`** rather than
 trusting the docs. Seven items turned out to be already landed; roughly sixty
 were genuinely abandoned.
@@ -78,7 +78,7 @@ agents outright — that is how the previous round lost three of them.
 
 ## 3. What has landed so far
 
-Each verified by eye or by measurement. Detail in `project/SESSION-STATE.md`.
+Each verified by eye or by measurement. Detail in `project/STATUS.md`.
 
 - **`Party.snap()`** and its call from `Game.applyShot`. `Animator.rest()` had
   existed with zero callers.
@@ -91,8 +91,8 @@ Each verified by eye or by measurement. Detail in `project/SESSION-STATE.md`.
   match, and **his fist now closes** (`setGrip` had no caller on the player path).
 - **Blades read as steel** instead of flat navy planes.
 - **`cine_opening` pushes the visible Regalia** rather than empty air.
-- `SESSION-STATE.md` rewritten; `claude-resume.md` deleted; `MapRaster.js`
-  deleted by a peer session (`orphans.mjs` is clean at 272/272 for the first time).
+- `SESSION-STATE.md` rewritten; `claude-resume.md` deleted; `MapRaster.ts`
+  deleted by a peer session (`orphans.mts` is clean at 272/272 for the first time).
 
 ### The determinism result, with its control
 

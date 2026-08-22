@@ -57,7 +57,7 @@ has become a named, measured, unowned problem.
 | **WS-3** | Hammerhead, NPCs, the interaction verb | WS-1 | The first place a player stands still and *does* something |
 | **WS-4** | Quests and hunts | WS-1, WS-3 | |
 | **WS-5** | Camp, cook, rest, day cycle | WS-1, WS-3 | |
-| **WS-6** | The Regalia | WS-1, WS-3 | Note `SHOT_STAGES` and the two-Regalia trap in `project/handoff/cineui.md` §6.3 |
+| **WS-6** | The Regalia | WS-1, WS-3 | Note `SHOT_STAGES` and the two-Regalia trap in `project/archive/handoff/cineui.md` §6.3 |
 | **WS-7** | Character fidelity | — | Parallel, whole-run. **Start from `project/handoff/heroart.md`** — hands and outfits are untouched and are the largest single art gap |
 
 ## 4. How to parallelise this
@@ -69,8 +69,8 @@ already paid for:
 - **Cap concurrency at ~4.** Six or more headless Chromiums saturate the machine,
   make every measurement worthless and stall agents outright.
 - **Disjoint directory ownership, stated explicitly in the brief.** Anything
-  outside an agent's list is *reported*, not edited. `src/game/Game.js` and
-  `src/game/Shots.js` stay the coordinator's.
+  outside an agent's list is *reported*, not edited. `src/game/Game.ts` and
+  `src/game/Shots.ts` stay the coordinator's.
 - **Tell every agent to commit early and often, even unverified `WIP:` commits.**
   This is the single highest-leverage line in a brief. Three agents were killed
   mid-flight by a laptop sleep this session and lost nothing because of it.

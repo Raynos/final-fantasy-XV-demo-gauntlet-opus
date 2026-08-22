@@ -10,7 +10,7 @@ Sources: dedicated geometry audits of `final-fantasy-XV-demo-opus`,
 `metal-gear-solid-5-opus-demo`, and `final-fantasy-XV-demo-ogl-opus` (all under
 `/Users/raynos/projects/game-demos/gauntlet-demos/`), plus a full inventory of
 this repo's own generators (`src/world/**`, `src/characters/**`,
-`src/combat/GeoKit.js`).
+`src/combat/GeoKit.ts`).
 
 ---
 
@@ -35,19 +35,19 @@ re-checked on what actually ships.
 
 ## 1. Baseline — our four toolkits and where they're weak
 
-We build with four coexisting kits: `MeshBuilder` (`src/characters/rig/Geo.js`,
-heroes), `CBuilder`/Sculpt (`src/characters/rig/Sculpt.js`, 6 rebuilt enemies),
-`GeoKit` (`src/combat/GeoKit.js`, weapons + ~15 legacy enemies), and
-`PartBuilder` (`src/world/props/PartBuilder.js`, props/town/Regalia). Terrain
-is `WorldMap.js` zone fields + `Field.js` stamps + 620k-droplet erosion + a
+We build with four coexisting kits: `MeshBuilder` (`src/characters/rig/Geo.ts`,
+heroes), `CBuilder`/Sculpt (`src/characters/rig/Sculpt.ts`, 6 rebuilt enemies),
+`GeoKit` (`src/combat/GeoKit.ts`, weapons + ~15 legacy enemies), and
+`PartBuilder` (`src/world/props/PartBuilder.ts`, props/town/Regalia). Terrain
+is `WorldMap.ts` zone fields + `Field.ts` stamps + 620k-droplet erosion + a
 7-level clipmap; rocks are 8 fracture-plane base meshes; trees are a recursive
 random-walk grower with frontal-bake impostors; Hammerhead is a box kit with
 one bespoke terrain-skirt berm; dungeons are a no-CSG loft/patch kit.
 
 The inventory's top weaknesses (each with handoff provenance): profile head
-collapse (`Face.js` — brush sums, no nasion/mandible), quill hair
-(`Geo.js ribbon()`), zero facial animation, single-view tree impostors with
-hard-coded normals + trees carrying the grass albedo bug (`Trees.js:289/331`),
+collapse (`Face.ts` — brush sums, no nasion/mandible), quill hair
+(`Geo.ts ribbon()`), zero facial animation, single-view tree impostors with
+hard-coded normals + trees carrying the grass albedo bug (`Trees.ts:289/331`),
 ~13 enemy species as primitive stacks, no rivers/overhangs, an 8-mesh rock
 variety ceiling, box-primitive tells within ~10 m of every structure,
 single-LOD kits, plumb vegetation on slopes, and RNG-coupled outcrops.
@@ -57,7 +57,7 @@ single-LOD kits, plumb vegetation on slopes, and RNG-coupled outcrops.
 The cheapest quality-per-line in the whole audit lives here.
 
 - **2.1 Seat on the drawn surface, verify on the finished matrix** (MGS5
-  `Terrain.js:2193-2265`, `Scatter.js:594-877`). `seatHeightAt` = min over
+  `Terrain.ts:2193-2265`, `Scatter.ts:594-877`). `seatHeightAt` = min over
   the lattice heights of every clipmap ring that could draw this point (from
   the renderer's own level-selection rule — an object-size rule was the
   floating-rock bug); then `proudOf` pushes the variant's support points
@@ -67,7 +67,7 @@ The cheapest quality-per-line in the whole audit lives here.
   `seatHeightAt` mention in the companion plan with the full contract; it
   kills our floating-pickup / apron-3.2 m class outright. *~200 lines +
   exposing the clipmap's level rule. Difficulty: medium.*
-- **2.2 Talus aprons by cone dilation** (MGS5 `TalusApron.js`).
+- **2.2 Talus aprons by cone dilation** (MGS5 `TalusApron.ts`).
   `apron(p) = max_q(ground(q) − tan(repose)·|p−q|)` — a grey-scale dilation
   seeded only from the bottoms of >40° faces, bounded by rise above local
   low ground, mottled, soft-floored. One self-contained grid solve that
@@ -89,7 +89,7 @@ The cheapest quality-per-line in the whole audit lives here.
   *Difficulty: low-medium — a new sampler behind `Ecology`/`TileStream`.*
 - **2.4 Erosion outputs as the placement API** (MGS5 `surfaceAt`
   {rock, scree, flow, accum, deposit}; FFXV-opus's identical conclusion).
-  We already record `flow`/`sed` grids in `Field.js` — but only the splat
+  We already record `flow`/`sed` grids in `Field.ts` — but only the splat
   reads them. Publish them through `Terrain` and key scatter on them: stone
   bars on raw accumulation (not the blurred mask — measured to zero out),
   boulder trains walking steepest descent, debris fining downstream, reeds
@@ -99,7 +99,7 @@ The cheapest quality-per-line in the whole audit lives here.
 - **2.5 Placement hygiene trio** (OGL + FFXV-opus, all trivial):
   **seed avalanching** (`mixSeed`) before any xorshift-family RNG — OGL's
   seeds 101/202/303 produced 0.0002/0.0004/0.0007, making every "variant" a
-  near-clone silently (audit our `Rng.js`/hash paths for the same disease,
+  near-clone silently (audit our `Rng.ts`/hash paths for the same disease,
   and it bears directly on our RNG-coupled `_outcrops` open item);
   **decorrelated hash draws per decision** (position/gate/yaw/scale/tint
   each from its own salt — reusing one biases exactly the property it also
@@ -116,7 +116,7 @@ The cheapest quality-per-line in the whole audit lives here.
 
 Our `rockGeometry()` fracture is sound; the siblings' wins are all in what
 happens *after* the cut, and in cut orientation. All bolt onto
-`src/world/props/Rocks.js`:
+`src/world/props/Rocks.ts`:
 
 - **3.1 Conjugate joint sets** (OGL `rock.ts`): draw cut planes from a
   geologic frame — one bedding normal (near-horizontal, slightly tilted) +
@@ -125,7 +125,7 @@ happens *after* the cut, and in cut orientation. All bolt onto
   to corner chamfers. Our `upright` bias is a scalar approximation of this;
   the three-modal-direction version is why their blocks read as geology.
 - **3.2 Edge chamfer + convexity-weighted weathering** (MGS5
-  `RockGeometry.js`): a 2–4% chamfer band on every arris ("catches a bright
+  `RockGeometry.ts`): a 2–4% chamfer band on every arris ("catches a bright
   sliver of sun exactly the way a worn edge does — the difference between
   low-poly asset and rock"), then a Laplacian weighted by convexity × upness
   (`upBias 0.55`, strength ~0.24 — 0.45 eats the facets) so exposed tops
@@ -218,7 +218,7 @@ The MGS5 outpost kit is the direct answer to our "box-primitive tells within
   ~46 mm cap) with chamfer facets *marked in an attribute* so shading can
   treat arrises differently ("a 45° normal on a box edge and a cylinder are
   indistinguishable — geometry must mark what shading can't recover").
-  Retrofit into `TownKit`/`PoiKits`/dungeon `Build.js`. *Difficulty: low —
+  Retrofit into `TownKit`/`PoiKits`/dungeon `Build.ts`. *Difficulty: low —
   drop-in module; biggest visual lift per line for the town.*
 - **5.2 Human-scale + architectural-detail constants**: storeys 3.2 m,
   doors 2.1×1.1, cills ~1.05 m, parapet coping + 50 mm drip lip ("bright
@@ -295,7 +295,7 @@ We have no shore geometry and no rivers; both siblings solved one each:
   demand, so LOD1 is a **re-skin of the same skeleton at lower ring count**
   and lands on the identical surface by construction (measured 4082→2442
   tris, indistinguishable; decimators optimize triangles against a mesh,
-  not an outline). A data-model transplant for `TreeBuilder.js`.
+  not an outline). A data-model transplant for `TreeBuilder.ts`.
 - **7.2 Junction and root treatment** (FFXV-opus `skin.ts`, OGL): parent
   radius inflated over ±1.4× child radius biased to the child's azimuth,
   child's first ring re-planed onto the axis bisector ("without this a
@@ -323,7 +323,7 @@ We have no shore geometry and no rivers; both siblings solved one each:
   Check whether our leaf cards and impostor swap do either.
 - **7.5 Tree debt already on our books**: the albedo-pin fix
   (`normalizeAlbedo`) that grass got and trees never did
-  (`Trees.js:289/331` — verified live), per-tile immutable instancing
+  (`Trees.ts:289/331` — verified live), per-tile immutable instancing
   (grass's fix, not adopted by trees/bushes), slope alignment (we plant
   everything plumb; OGL leans 22% toward the normal with wind-combed yaw),
   and multi-view impostors (our frontal bakes are wrong from above; the
@@ -497,11 +497,11 @@ Each item should land with its check from §9 in the same commit.
   facets. Chamfering (3.2) raises the demand on this; budget detail 2.
 - Our `_outcrops` RNG coupling (coordinator open item) must be fixed
   *before* 2.3/2.5 land, or every placement change reshuffles the world.
-- Anything touching `Field.js` invalidates the terrain bake — bump
-  `BAKE_VERSION`, re-run `bake.mjs`, and expect every shot to shift;
+- Anything touching `Field.ts` invalidates the terrain bake — bump
+  `BAKE_VERSION`, re-run `bake.mts`, and expect every shot to shift;
   batch 4.x changes rather than trickling them.
 - The seat contract (2.1) needs the clipmap's real level-selection rule —
-  derive it from `Clipmap.js`, don't approximate from object size (that
+  derive it from `Clipmap.ts`, don't approximate from object size (that
   approximation was the original MGS5 bug).
 
 ## 13. Definition of done
@@ -511,7 +511,7 @@ Each item should land with its check from §9 in the same commit.
       (floating props, town close-ups, tree LOD swaps).
 - [ ] A silhouette bench exists in `src/tools/` and gates at least trees
       and the rebuilt enemy species.
-- [ ] `seatHeightAt`+`proudOf` runs in `integration.mjs` or a new check —
+- [ ] `seatHeightAt`+`proudOf` runs in `integration.mts` or a new check —
       zero floating instances across the POI corpus.
 - [ ] The head/hair rebuild (if taken) is judged by the width-profile
       bench and a blind A/B, not by eye alone.

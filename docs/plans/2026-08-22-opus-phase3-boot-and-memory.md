@@ -16,7 +16,7 @@ running, do not start this, because both touch every system's `init()`.
 
 ## 1. Boot — measured
 
-`node src/tools/bootprof.mjs`, quiet tree, 2026-08-22:
+`node src/tools/bootprof.mts`, quiet tree, 2026-08-22:
 
 ```
 load cold: 13.55 s wall, 12.95 s in Game.init()
@@ -55,7 +55,7 @@ is the expensive one — is 314 ms.
 
 1. **Shader warmup, 1722 ms for 150 programs.** It exists for a good reason: this
    project measured a **15.8 s single-frame freeze** from compiling lights on
-   demand, and `engine/LightBudget.js` pins the counts to stop it. So the warmup
+   demand, and `engine/LightBudget.ts` pins the counts to stop it. So the warmup
    cannot simply be deleted. The question is whether it can be *deferred* — warm
    the ~40 programs the first frame actually needs, then compile the rest across
    subsequent frames while the title screen is up. **Verify with `?shoot`
@@ -65,7 +65,7 @@ is the expensive one — is 314 ms.
    on first `enter()`. Watch the ~9.5 s light-recompile landmine — a dungeon
    entered for the first time mid-play must not stall.
 3. **`Props` 1930 ms and `Town` 1426 ms.** Both build the whole world's dressing up
-   front. `TileStream.js` already exists for streaming; find out why props and town
+   front. `TileStream.ts` already exists for streaming; find out why props and town
    do not go through it.
 4. **`Minimap` 600 ms at boot** for a widget that is not on screen in most shots.
 
@@ -74,7 +74,7 @@ is the expensive one — is 314 ms.
 `src/public/baked/` already caches the terrain field (a 32 MB deterministic blob
 regenerated from our own generators). **Nothing else is cached.** If props, town
 and dungeon geometry can be baked the same way — keyed on a source fingerprint,
-exactly as `daemon.mjs`'s `sourceStamp()` already does — a warm load could skip
+exactly as `daemon.mts`'s `sourceStamp()` already does — a warm load could skip
 most of the 6.6 s. That is the single highest-leverage idea here and it is
 untested; prototype it on one system (`Props`) before committing to it.
 
@@ -110,7 +110,7 @@ there are two separate questions and they need separating before any work starts
 - Take a Chrome heap snapshot on the prod page and rank retainers. Do not
   optimise before this.
 - Count how many of the 251 textures are procedurally generated and whether any
-  are duplicated per-instance rather than shared at module level. `EnemyBase.js`
+  are duplicated per-instance rather than shared at module level. `EnemyBase.ts`
   already shares its detail maps deliberately; check the other generators follow suit.
 - Measure GPU memory separately (`WEBGL_debug_renderer_info` plus the renderer's
   own `info.memory`) so the 1.4 GB can be attributed rather than guessed at.

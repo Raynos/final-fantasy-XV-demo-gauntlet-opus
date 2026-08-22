@@ -12,7 +12,7 @@ We have built a renderer with an RPG library bolted to the side of it and no
 wire between them. `src/game/rpg/**` is 5,765 lines of correct, tested-looking
 quest / inventory / ascension / day-cycle logic, and **nothing outside that
 directory imports it** — the HUD, the menus and the combat system all read
-hardcoded fallback tables in `src/ui/GameData.js`. The single highest-value
+hardcoded fallback tables in `src/ui/GameData.ts`. The single highest-value
 action in this project is not authoring new content; it is *connecting the
 content that already exists*. After that, the minimum set that turns this into a
 game is: a live encounter loop (spawn → aggro → fight → EXP → drops → back to
@@ -31,50 +31,50 @@ work, and that piece is a one-day fix.
 
 | area | files | state |
 |---|---|---|
-| Terrain | `src/world/Terrain.js`, `terrain/{Field,Clipmap,Layers,Road,TerrainMaterial}.js` | 3 km eroded Leide basin, geometry clipmap (7 levels), 6-layer triplanar splat, road spline with `roadDistance()`. Real. |
-| Sky/atmosphere | `src/world/Sky.js`, `sky/{Atmosphere,Clouds,GodRays,CloudTextures}.js` | Physically-motivated sky, volumetric-ish clouds, god rays. Real. |
-| Weather | `src/world/Weather.js`, `weather/{Rain,Wetness,Lightning,VolumePass}.js` | `set('clear'\|'storm'\|'fog'\|'overcast')`. Real. |
-| Vegetation | `src/world/Vegetation.js`, `veg/**` | Grass fields, procedural trees/bushes, an `Ecology` sampler that also owns **site layout**. Real. |
-| Props | `src/world/Props.js`, `props/**` (3,000+ lines) | Rocks, landmarks, megastructures, road furniture, wildlife, debris, and a lofted **Regalia**. Real. |
+| Terrain | `src/world/Terrain.ts`, `terrain/{Field,Clipmap,Layers,Road,TerrainMaterial}.ts` | 3 km eroded Leide basin, geometry clipmap (7 levels), 6-layer triplanar splat, road spline with `roadDistance()`. Real. |
+| Sky/atmosphere | `src/world/Sky.ts`, `sky/{Atmosphere,Clouds,GodRays,CloudTextures}.ts` | Physically-motivated sky, volumetric-ish clouds, god rays. Real. |
+| Weather | `src/world/Weather.ts`, `weather/{Rain,Wetness,Lightning,VolumePass}.ts` | `set('clear'\|'storm'\|'fog'\|'overcast')`. Real. |
+| Vegetation | `src/world/Vegetation.ts`, `veg/**` | Grass fields, procedural trees/bushes, an `Ecology` sampler that also owns **site layout**. Real. |
+| Props | `src/world/Props.ts`, `props/**` (3,000+ lines) | Rocks, landmarks, megastructures, road furniture, wildlife, debris, and a lofted **Regalia**. Real. |
 | Post chain | `src/engine/postfx/**` (13 passes) | TAA, bloom, DoF, SSR, GTAO, motion blur, CAS, grade, exposure, contact shadows. Real. |
 | Character rig | `src/characters/rig/**` (10 files) | Procedural skeleton, body, face, hair, outfit, gait, foot IK, look targets. Real, quality-limited (see §4). |
-| Combat feel | `src/combat/CombatSystem.js` (716 lines) + `Weapons.js`, `VFX.js` (819), `Trails.js`, `Elemancy.js` | Hold-to-attack combos across 5 weapon classes, dodge, hold-to-phase with MP drain and a slow-mo counter window, blindside, warp-strike and point-warp with Stasis, Armiger burst, elemancy casts. Event-emitting. Real and genuinely good. |
-| Enemies | `src/characters/Enemies.js` + `enemies/{Sabertusk,Goblin,MTSoldier,IronGiant}.js` | 4 species, one draw call each, per-species AI states (run/pounce/telegraph/attack/stagger), HP, damage, death. Real. |
+| Combat feel | `src/combat/CombatSystem.ts` (716 lines) + `Weapons.ts`, `VFX.ts` (819), `Trails.ts`, `Elemancy.ts` | Hold-to-attack combos across 5 weapon classes, dodge, hold-to-phase with MP drain and a slow-mo counter window, blindside, warp-strike and point-warp with Stasis, Armiger burst, elemancy casts. Event-emitting. Real and genuinely good. |
+| Enemies | `src/characters/Enemies.ts` + `enemies/{Sabertusk,Goblin,MTSoldier,IronGiant}.ts` | 4 species, one draw call each, per-species AI states (run/pounce/telegraph/attack/stagger), HP, damage, death. Real. |
 | UI chrome | `src/ui/**` (13 files + 6 screens) | Field HUD, combat HUD, weapon wheel, compass, subtitles, damage numbers, call-outs; main / inventory / ascension / map / gear / photo screens with cross-fades. Real, but see §1.2. |
 | RPG logic | `src/game/rpg/**` (5,765 lines) | Level curve to 99 + EXP banking, 106-node Ascension across 9 constellations, 137 items / 37 weapons / 18 accessories / 5 shops, computed elemancy, 30 quests (7 main, 12 hunts, 11 side) with 6 tipsters and a 10-rank hunt table, 13 techniques, 30 recipes, bond levels, 10 havens, save/load with migration. Real, correct-looking, **and dead code**. |
-| Tooling | `src/tools/{shoot,perf,gameplay,detcheck,ui-shoot,sheet,attrib}.mjs` | Screenshot harness, frame-time benchmark, scripted-input gameplay benchmark, determinism checker. Excellent — better than most real projects have. |
+| Tooling | `src/tools/{shoot,perf,gameplay,detcheck,ui-shoot,sheet,attrib}.mts` | Screenshot harness, frame-time benchmark, scripted-input gameplay benchmark, determinism checker. Excellent — better than most real projects have. |
 
 ### 1.2 What is stubbed — the load-bearing finding
 
 **The RPG layer is orphaned.** Verified by grep:
 
 ```
-$ grep -rn "rpg\|Rpg\|RPG" src --include=*.js -l | grep -v "src/game/rpg/"
-src/game/Game.js
-$ grep -rn "hudState\|\.quests\|\.inventory\|\.ascension\|enemyKilled\|gainExp" src --include=*.js | grep -v "^src/game/rpg/"
+$ grep -rn "rpg\|Rpg\|RPG" src --include=*.ts -l | grep -v "src/game/rpg/"
+src/game/Game.ts
+$ grep -rn "hudState\|\.quests\|\.inventory\|\.ascension\|enemyKilled\|gainExp" src --include=*.ts | grep -v "^src/game/rpg/"
 (no results)
 ```
 
-`Game.js` constructs `RpgSystem` and ticks it. Nothing ever reads it. Concretely:
+`Game.ts` constructs `RpgSystem` and ticks it. Nothing ever reads it. Concretely:
 
-- **`src/ui/GameData.js` is the actual source of truth for every UI surface.**
+- **`src/ui/GameData.ts` is the actual source of truth for every UI surface.**
   The party is a literal (`Noctis, level 27, 3040/3200 HP`), the quest is a
   literal (`A Better Engine Blade — Deliver the Rare Metal to Cid`, 1240 m), the
   map pins are six literals with normalised chart coordinates, the 12 items are
-  literals. None of it comes from `Inventory.js`'s 137 items or `Quests.js`'s 30
+  literals. None of it comes from `Inventory.ts`'s 137 items or `Quests.ts`'s 30
   quests.
 - **`Player.stats` is a hardcoded object literal** — `{hp:3200, maxHp:3200,
-  mp:100, maxMp:100, level:27}` (`src/characters/Player.js:29`). `RpgSystem.update`
+  mp:100, maxMp:100, level:27}` (`src/characters/Player.ts:29`). `RpgSystem.update`
   *does* mirror Noctis' vitals onto it, but nothing else reads the result because
   the HUD prefers `GameData.PARTY` and only merges `Player.stats` on top.
 - **`Party.stats` is `this.members.map(() => ({hp:2800, maxHp:2800}))`**
-  (`src/characters/Party.js:64`). The companions are pure followers: formation
+  (`src/characters/Party.ts:64`). The companions are pure followers: formation
   steering, separation, glance timers. They have **no combat AI, no techniques,
   no downed state, and never attack anything.**
-- **`AscensionScreen.js` generates its own procedural node graph** rather than
-  reading `Ascension.js`'s 106 authored nodes. Two independent ascension grids
+- **`AscensionScreen.ts` generates its own procedural node graph** rather than
+  reading `Ascension.ts`'s 106 authored nodes. Two independent ascension grids
   exist; the pretty one is fake.
-- **`Director.js` is a screenshot author, not an encounter director.**
+- **`Director.ts` is a screenshot author, not an encounter director.**
   `setScenario('combat')` spawns six enemies at seeded offsets, **freezes them**
   (`enemies.frozen = true`) in authored poses, pins the VFX clock, and emits
   three fake `damage` events with literal numbers (1284, 486, 731). It is a photo
@@ -84,7 +84,7 @@ $ grep -rn "hudState\|\.quests\|\.inventory\|\.ascension\|enemyKilled\|gainExp" 
   vehicle controller, no seats, no ignition, no driving.
 - **Player death does nothing.** `CombatSystem._enemyStrike` decrements
   `player.stats.hp` to a floor of 0 and emits `playerHit`. Nothing listens.
-- **The RPG layer's world coordinates are fiction.** `Quests.js` waypoints
+- **The RPG layer's world coordinates are fiction.** `Quests.ts` waypoints
   Hammerhead at `[8, 0, -102]`, Galdin Quay at `[210, 0, 262]`, Lestallum at
   `[-40, 0, 200]`; `DayCycle.HAVENS` lists 10 havens across three regions;
   `Elemancy.DEPOSITS` lists 10 deposits. **None of these coordinates correspond
@@ -92,7 +92,7 @@ $ grep -rn "hudState\|\.quests\|\.inventory\|\.ascension\|enemyKilled\|gainExp" 
   Coernix-style fuel stop beside the road at `z ≈ 25`, an imperial roadblock at
   `z ≈ 72`, a crashed dropship at `(-60, -230)`, a comms outpost at `≈(-150,
   -350)`, and the Regalia at `z = 14`. (Source: `Ecology._layoutSites`,
-  `src/world/veg/Ecology.js:193`.)
+  `src/world/veg/Ecology.ts:193`.)
 
 ### 1.3 What is entirely missing
 
@@ -122,7 +122,7 @@ From `tmp/shots/perf-baseline.json` and `tmp/shots/gameplay-baseline.json` in th
 | triangles / frame | **100 M – 169 M** | — | absurd |
 | programs | 170 → 369 during a session | — | see below |
 
-**Scripted gameplay (`src/tools/gameplay.mjs`):**
+**Scripted gameplay (`src/tools/gameplay.mts`):**
 
 | segment | median | p99 | max |
 |---|---|---|---|
@@ -146,7 +146,7 @@ Three separate problems, with very different costs to fix:
    use `KHR_parallel_shader_compile` to poll rather than block. It must land
    first because it poisons every other agent's iteration loop.
 2. **`magic` throws** `Cannot destructure property 'pos' of 'undefined'` three
-   times per run — a real bug in the elemancy cast path, and a `shoot.mjs`
+   times per run — a real bug in the elemancy cast path, and a `shoot.mts`
    non-zero exit under the project's own rules.
 3. **10,000 draw calls and 130 M triangles is a rendering-architecture problem**,
    not a content problem. Content work adds a handful of NPCs and one vehicle; it
@@ -171,16 +171,16 @@ answer, in strict priority order:
 | 1 | **Wire the RPG layer to the UI and combat** | S | Enormous | Converts 5,765 lines of dead code into a visible progression system. Kills a kill → banks EXP → the HUD number moves → sleeping levels you up. Almost zero new content authored. This is the cheapest "it's a game" delta available and *everything else depends on it.* |
 | 2 | **A live encounter loop** | M | Enormous | Roaming packs, aggro radius, combat entry/exit, victory, drops, player death and revive. Without it, combat is a photo booth and the world is a walking sim. |
 | 3 | **Hammerhead as a real place** | M | Very high | The one hub. NPCs you can stand in front of and press a key at: Cindy, Cid, Takka. Hunt board, item shop, caravan, fuel pump. It is where the quest loop closes. Build it by *promoting the existing `reststop` site*, not from scratch. |
-| 4 | **Camp / rest cycle at the haven** | S | Very high | FFXV's signature loop and it is ~90 % already coded in `DayCycle.js` + `PartyState.cook()` + `ExpBank.redeem()`. Needs a camp UX, a cooking pick-list, a sleep fade, a level-up card. Cheapest high-impact item after #1. |
+| 4 | **Camp / rest cycle at the haven** | S | Very high | FFXV's signature loop and it is ~90 % already coded in `DayCycle.ts` + `PartyState.cook()` + `ExpBank.redeem()`. Needs a camp UX, a cooking pick-list, a sleep fade, a level-up card. Cheapest high-impact item after #1. |
 | 5 | **The Regalia as a vehicle** | M–L | Very high | The single most iconic FFXV verb. Enter/exit, drive the road, Ignis auto-drive to a map waypoint, headlights, the night-daemon warning, in-car banter. |
 | 6 | **Three authored encounters incl. one boss** | M | High | Gives the loop a destination. |
-| 7 | **Hunt board with 6 real hunts** | S–M | High | The content that makes #2 and #3 mean something; mostly data, since `Quests.js` already has the ranks and reward maths. |
+| 7 | **Hunt board with 6 real hunts** | S–M | High | The content that makes #2 and #3 mean something; mostly data, since `Quests.ts` already has the ranks and reward maths. |
 
 ### 3.2 Where I disagree with the brief's instinct
 
 - **"Shops" is over-weighted.** A shop UI is a menu with a gil counter. It reads
   as game-y but adds about ten seconds of play. Ship *one* item shop with eight
-  SKUs (potions, phoenix down, antidote, one weapon) and stop. `Inventory.js`
+  SKUs (potions, phoenix down, antidote, one weapon) and stop. `Inventory.ts`
   already has five shops with real prices; wiring one screen to one of them is
   an afternoon. Do not build weapon crafting, accessory shops, or the Regalia
   customisation shop.
@@ -225,7 +225,7 @@ testing. It is a one-day fix (pre-instantiate the 5 weapon classes and the VFX /
 elemancy material pools into a warm-up scene at boot, `renderer.compile()` them,
 poll `KHR_parallel_shader_compile` instead of blocking). Ship it first. The
 `magic`-segment `Cannot destructure property 'pos' of 'undefined'` crash rides
-along in the same change — it is a hard rule violation (`shoot.mjs` exits
+along in the same change — it is a hard rule violation (`shoot.mts` exits
 non-zero on console errors) and it sits in the elemancy cast path that WS-3 will
 touch.
 
@@ -267,15 +267,15 @@ content**, all running concurrently after day 0.
 
 ## 5. Workstreams
 
-Each is sized for one agent, end to end, with disjoint file ownership. `Game.js`
-and `Shots.js` are shared and must be edited only by the named owner
+Each is sized for one agent, end to end, with disjoint file ownership. `Game.ts`
+and `Shots.ts` are shared and must be edited only by the named owner
 (`WS-1`) — everyone else wires from their own system's `init()`, per `BRIEF.md`
 rule 4.
 
 ### WS-0a — Shader pre-warm and the magic crash · **BLOCKING, ~1 day**
 
-**Owns:** `src/engine/Warmup.js` (new), `src/engine/Renderer.js`,
-`src/combat/Elemancy.js`.
+**Owns:** `src/engine/Warmup.ts` (new), `src/engine/Renderer.ts`,
+`src/combat/Elemancy.ts`.
 **Does:**
 - Build a warm-up pass at boot: instantiate `Weapon` for all 5 classes
   (`sword`, `greatsword`, `polearm`, `daggers`, `firearm`), prime the VFX
@@ -285,37 +285,37 @@ rule 4.
 - Use `KHR_parallel_shader_compile` (`COMPLETION_STATUS_KHR`) so the boot bar
   advances instead of the tab hanging.
 - Fix `Cannot destructure property 'pos' of 'undefined'` in the elemancy cast
-  path (reproduces 3× per `node src/tools/gameplay.mjs` run).
-**Done when:** `src/tools/gameplay.mjs` reports `weapon-swap` p99 under 50 ms and
+  path (reproduces 3× per `node src/tools/gameplay.mts` run).
+**Done when:** `src/tools/gameplay.mts` reports `weapon-swap` p99 under 50 ms and
 zero `failures[]` entries across all 13 segments.
 
 ### WS-0b — Rendering performance · **parallel, whole-run**
 
-**Owns:** `src/engine/**` (except `Warmup.js` after WS-0a lands),
+**Owns:** `src/engine/**` (except `Warmup.ts` after WS-0a lands),
 `src/world/terrain/**`, `src/world/veg/**`, `src/world/sky/**`,
 `src/world/weather/**`, `src/shaders/**`.
 **Does:** draw-call and triangle reduction per §4 targets. Merge cascade passes,
 cut the finest clipmap ring, cut LOD0 grass instance count and widen the tile
 band, share the GTAO and VFX depth prepasses instead of running two, budget the
 grass tile generator per frame.
-**Scoreboard:** `node src/tools/perf.mjs --out tmp/shots/perf-baseline.json` and
-`node src/tools/gameplay.mjs`. Must not regress `src/tools/detcheck.mjs`.
+**Scoreboard:** `node src/tools/perf.mts --out tmp/shots/perf-baseline.json` and
+`node src/tools/gameplay.mts`. Must not regress `src/tools/detcheck.mts`.
 
 ### WS-1 — The wire: RPG ↔ UI ↔ combat ↔ world · **FIRST CONTENT WORKSTREAM**
 
-**Owns:** `src/ui/GameData.js`, `src/ui/HUD.js`, `src/ui/PartyPanel.js`,
-`src/ui/CompassBar.js`, `src/ui/screens/**`, `src/game/Game.js`,
-`src/game/Shots.js`, `src/game/rpg/RpgSystem.js`.
+**Owns:** `src/ui/GameData.ts`, `src/ui/HUD.ts`, `src/ui/PartyPanel.ts`,
+`src/ui/CompassBar.ts`, `src/ui/screens/**`, `src/game/Game.ts`,
+`src/game/Shots.ts`, `src/game/rpg/RpgSystem.ts`.
 
 This is the keystone. Nothing else in the content plan is worth building until
 the existing data reaches the screen. Concretely:
 
-1. **Invert `GameData.js`.** It becomes a thin adapter over
+1. **Invert `GameData.ts`.** It becomes a thin adapter over
    `rpg.hudState()` with the current literals kept *only* as a fallback for when
    `game.get('Rpg')` is absent (the screenshot harness may boot without it).
    `readParty()` reads `hudState().party` (4 members with real HP/MP/level/KO/
    bond), not the `PARTY` literal.
-2. **Delete the duplicate ascension grid.** `AscensionScreen.js` currently
+2. **Delete the duplicate ascension grid.** `AscensionScreen.ts` currently
    generates its own procedural node layout. Replace it with
    `rpg.tables.nodes` (106 real nodes), `rpg.tables.constellations` (9), and
    `rpg.tables.edges` for the connecting lines. Wire `accept()` to
@@ -332,7 +332,7 @@ the existing data reaches the screen. Concretely:
 7. **HUD clock** reads `hudState().clock` / `.day` / `.phase` (`DayCycle` is
    already synced from `Sky`).
 8. **Combat → RPG.** Subscribe in `RpgSystem` (or a small
-   `src/game/rpg/CombatBridge.js`) to the combat events that already exist:
+   `src/game/rpg/CombatBridge.ts`) to the combat events that already exist:
    - `death` → `rpg.enemyKilled(enemyDef, { byWarpStrike, byTechnique })`
    - `warp` impact → `rpg.warpStrike()`
    - `parry` → `rpg.parry()`
@@ -343,8 +343,8 @@ the existing data reaches the screen. Concretely:
      currently thrown away).
 9. **RPG → combat.** `CombatSystem` reads Noctis' real `maxHp`/`maxMp` and the
    real weapon `atk` from `rpg.inventory` rather than the literals in
-   `Weapons.js`'s `WEAPONS` table; damage routes through `rpg.damage()`.
-10. **Add gameplay shots** to `Shots.js` so the harness can prove all this:
+   `Weapons.ts`'s `WEAPONS` table; damage routes through `rpg.damage()`.
+10. **Add gameplay shots** to `Shots.ts` so the harness can prove all this:
     `town_hammerhead`, `camp_cooking`, `hunt_board`, `regalia_driving`,
     `boss_fight`, `level_up`.
 
@@ -354,9 +354,9 @@ and spending AP changes a stat.
 
 ### WS-2 — Encounters, party combat AI and death · **depends on WS-1 (8)**
 
-**Owns:** `src/game/encounters/**` (new: `EncounterDirector.js`, `SpawnTable.js`,
-`Aggro.js`), `src/characters/Enemies.js`, `src/characters/enemies/**`,
-`src/characters/Party.js` (combat behaviour only), `src/combat/CombatSystem.js`.
+**Owns:** `src/game/encounters/**` (new: `EncounterDirector.ts`, `SpawnTable.ts`,
+`Aggro.ts`), `src/characters/Enemies.ts`, `src/characters/enemies/**`,
+`src/characters/Party.ts` (combat behaviour only), `src/combat/CombatSystem.ts`.
 
 **Does:**
 - A real `EncounterDirector` that replaces the screenshot-only `Director`
@@ -398,12 +398,12 @@ killed if you stand still.
 ### WS-3 — Hammerhead, NPCs and the interaction verb · **depends on WS-1**
 
 **Owns:** `src/world/town/**` (new), `src/characters/npc/**` (new),
-`src/game/interaction/**` (new: `Interactables.js`, `InteractPrompt.js`),
-`src/ui/screens/ShopScreen.js`, `src/ui/screens/HuntBoardScreen.js` (new).
+`src/game/interaction/**` (new: `Interactables.ts`, `InteractPrompt.ts`),
+`src/ui/screens/ShopScreen.ts`, `src/ui/screens/HuntBoardScreen.ts` (new).
 
 The world already has a Coernix-style fuel stop laid out beside the road at
 `roadZ ≈ 25`, offset 34 m to the east (`Ecology._layoutSites`,
-`src/world/veg/Ecology.js:243`). **Promote that site into Hammerhead** rather
+`src/world/veg/Ecology.ts:243`). **Promote that site into Hammerhead** rather
 than build a town from scratch — the ecology sampler has already cleared the
 vegetation there and the road shots already frame it.
 
@@ -418,7 +418,7 @@ vegetation there and the road shots already frame it.
   |---|---|---|
   | **Cindy Aurum** | garage / car lift | Regalia: refuel (10 gil), repair, and later the Type-D quest |
   | **Cid Sophiar** | garage interior | *A Better Engine Blade* — hand over a **Rusted Bit** to upgrade the Engine Blade |
-  | **Takka** | diner counter | item shop (the `hammerhead` shop in `Inventory.js`, 13 real SKUs) + tipster for hunts |
+  | **Takka** | diner counter | item shop (the `hammerhead` shop in `Inventory.ts`, 13 real SKUs) + tipster for hunts |
   | **Dave** | outside the diner | the dog-tag side quests (*Gone Hunting*) |
 - **The interaction verb.** There is currently *nothing pressable in the game*.
   Add a proximity interactable registry: nearest interactable within 2.5 m and
@@ -445,12 +445,12 @@ world read as larger than it is).
 
 ### WS-4 — The quest and hunt loop · **depends on WS-1, WS-3**
 
-**Owns:** `src/game/rpg/Quests.js` (data only — coordinate re-anchoring),
-`src/game/quests/**` (new: `QuestRuntime.js`, `Waypoints.js`),
-`src/ui/screens/QuestScreen.js` (new), `src/ui/QuestTracker.js` (new).
+**Owns:** `src/game/rpg/Quests.ts` (data only — coordinate re-anchoring),
+`src/game/quests/**` (new: `QuestRuntime.ts`, `Waypoints.ts`),
+`src/ui/screens/QuestScreen.ts` (new), `src/ui/QuestTracker.ts` (new).
 
 **The critical fix first: re-anchor the quest coordinates to the real world.**
-Every waypoint in `Quests.js`, every haven in `DayCycle.HAVENS` and every
+Every waypoint in `Quests.ts`, every haven in `DayCycle.HAVENS` and every
 deposit in `Elemancy.DEPOSITS` is at a made-up coordinate. Rewrite them against
 the actual `Ecology.sites` layout:
 
@@ -480,7 +480,7 @@ Hunter rank thresholds follow FFXV's real ladder: **Rank 1 Apprentice (5 stars),
 tipster; `QuestLog` already has `huntsAt(tipsterId)` and `HUNT_RANKS` with
 `gilMult` and `hunterPoints` — use them rather than reinventing.
 
-**Plus two side quests**, both already authored in `Quests.js`:
+**Plus two side quests**, both already authored in `Quests.ts`:
 - **A Better Engine Blade** (Cid) — find a **Rusted Bit** in the world, return
   it, get the Engine Blade upgraded. FFXV's real chain is Engine Blade → II →
   III (Glass Gemstone) → Ultima Blade (Sturdy Helixhorn); ship the first step.
@@ -490,9 +490,9 @@ tipster; `QuestLog` already has `huntsAt(tipsterId)` and `HUNT_RANKS` with
 
 ### WS-5 — Camp, cook, rest and the day cycle UX · **depends on WS-1, WS-3**
 
-**Owns:** `src/game/camp/**` (new: `CampSystem.js`, `CampScene.js`),
-`src/ui/screens/CampScreen.js`, `src/ui/screens/CookScreen.js`,
-`src/ui/screens/LevelUpScreen.js` (all new), `src/game/rpg/DayCycle.js`.
+**Owns:** `src/game/camp/**` (new: `CampSystem.ts`, `CampScene.ts`),
+`src/ui/screens/CampScreen.ts`, `src/ui/screens/CookScreen.ts`,
+`src/ui/screens/LevelUpScreen.ts` (all new), `src/game/rpg/DayCycle.ts`.
 
 Cheapest very-high-impact workstream in the plan: `DayCycle.rest()`,
 `PartyState.cook()` and `ExpBank.redeem()` are all written and tested-looking.
@@ -522,10 +522,10 @@ What is missing is everything the player sees.
 
 ### WS-6 — The Regalia · **depends on WS-1, WS-3; parallel with WS-4/5**
 
-**Owns:** `src/game/vehicle/**` (new: `RegaliaController.js`, `DriveCamera.js`,
-`RoadFollow.js`, `Radio.js`), `src/world/props/Regalia.js`,
-`src/game/banter/**` (new: `BanterDirector.js`, `BanterLines.js`),
-`src/ui/DriveHUD.js` (new).
+**Owns:** `src/game/vehicle/**` (new: `RegaliaController.ts`, `DriveCamera.ts`,
+`RoadFollow.ts`, `Radio.ts`), `src/world/props/Regalia.ts`,
+`src/game/banter/**` (new: `BanterDirector.ts`, `BanterLines.ts`),
+`src/ui/DriveHUD.ts` (new).
 
 **Does:**
 - **Enter/exit** at the parked car (the interactable from WS-3). Four seats:
@@ -558,7 +558,7 @@ What is missing is everything the player sees.
 
 **Owns:** `src/characters/rig/**` only (`Anatomy`, `Body`, `Face`, `Hair`,
 `Outfit`, `Geo`, `Materials`, `Skeleton`, `Anim`, `Character`),
-`src/characters/Cast.js`.
+`src/characters/Cast.ts`.
 Not a content workstream; listed so the ownership map is complete and so no
 content agent touches these files. Target: 5.5/10 → 8/10 on the blind
 comparison, judged on `hero_closeup`, `hero_full`, `party_walk`.
@@ -588,16 +588,16 @@ cheaply. WS-6 is the longest single content item and should start as soon as
 WS-3's interaction verb exists, since it needs nothing else from WS-3.
 
 **Collision risks to watch:**
-- WS-1 owns `Game.js` and `Shots.js`. Everyone else registers systems from their
+- WS-1 owns `Game.ts` and `Shots.ts`. Everyone else registers systems from their
   own `init()` and asks WS-1 for a one-line `order[]` entry.
-- WS-2 and WS-1 both touch `CombatSystem.js`. Give the file to **WS-2**; WS-1's
-  combat→RPG bridge lives in a separate `src/game/rpg/CombatBridge.js` that
+- WS-2 and WS-1 both touch `CombatSystem.ts`. Give the file to **WS-2**; WS-1's
+  combat→RPG bridge lives in a separate `src/game/rpg/CombatBridge.ts` that
   subscribes to the events `CombatSystem` already emits, so neither edits the
   other's lines.
-- WS-4 edits `Quests.js` *data*; WS-1 must not.
-- WS-0b owns `src/world/veg/**`, which contains `Ecology.js` and therefore the
+- WS-4 edits `Quests.ts` *data*; WS-1 must not.
+- WS-0b owns `src/world/veg/**`, which contains `Ecology.ts` and therefore the
   site layout WS-3 needs. WS-3 should **read** `ecology.sites` and add its own
-  town geometry in `src/world/town/**` rather than editing `Ecology.js`; if a
+  town geometry in `src/world/town/**` rather than editing `Ecology.ts`; if a
   new site entry is genuinely required, WS-0b makes the one-line addition.
 
 ---
@@ -635,11 +635,11 @@ Ranked by how much time they would eat relative to what they add here.
    A **rideable chocobo** (reusing the player locomotion controller with a
    different mount rig) is a fraction of the cost of racing and delivers most of
    the recognisability — but even that sits below everything in §5.
-6. **The full 13 Royal Arms with HP-drain economy.** `Inventory.js` already
+6. **The full 13 Royal Arms with HP-drain economy.** `Inventory.ts` already
    defines eight of them with real names and stats. Ship exactly **one** — the
    **Sword of the Wise**, as the Iron Giant boss reward — with its HP drain
    working. The other twelve are twelve tomb locations we will not build.
-7. **Elemancy catalyst crafting depth.** `Elemancy.js` computes tiers,
+7. **Elemancy catalyst crafting depth.** `Elemancy.ts` computes tiers,
    potencies and catalyst effects (Expericast, Healcast, Quintcast) correctly
    already. Building the full crafting *UI* with 30 catalysts is a week for a
    system the player uses twice. Ship draw-from-deposit → three fixed spell
@@ -647,7 +647,7 @@ Ranked by how much time they would eat relative to what they add here.
 8. **Regalia customisation (paint, decals, wheels, interiors).** A cosmetic
    menu on a car seen from behind at speed. The **Type-D** off-road conversion
    is a genuine gameplay unlock and worth considering; paint jobs are not.
-9. **A save/load UI with multiple slots.** `SaveGame.js` already does slots and
+9. **A save/load UI with multiple slots.** `SaveGame.ts` already does slots and
    migration. Autosave-on-rest plus a single Continue entry is enough; a save
    browser is menu work with no player-facing payoff at this scale.
 10. **Wait Mode.** A tactical-pause layer over a combat system whose entire
@@ -749,7 +749,7 @@ a Dualhorn species; we have Sabertusk, Goblin, MT Soldier and Iron Giant. So:
 1. **The `BRIEF.md` draw-call budget of ~400 is not achievable** with 3 CSM
    cascades, a GTAO depth prepass and a separate VFX depth prepass. Should
    WS-0b renegotiate it to ~2,500, or should it cut a pass?
-2. **Do we keep `Director.js`'s frozen screenshot scenarios?** They are how
+2. **Do we keep `Director.ts`'s frozen screenshot scenarios?** They are how
    every combat and warp capture in `tmp/shots/` was made. My assumption is yes,
    kept alongside the live `EncounterDirector`, since the harness depends on
    them and determinism is a hard rule.
@@ -933,9 +933,9 @@ in FFXV. Renaming them costs a string table and an area-title-card call, and it
 is the cheapest single thing in this document that makes the world read as Eos
 rather than as a terrain demo. **WS-3 should do this in an afternoon.**
 
-*Ownership note:* the landmark keys live in `src/world/terrain/Field.js` and the
-site types in `src/world/veg/Ecology.js`, both owned by WS-0b. So WS-3 must not
-rename them in place. Instead WS-3 adds `src/world/town/PlaceNames.js` mapping
+*Ownership note:* the landmark keys live in `src/world/terrain/Field.ts` and the
+site types in `src/world/veg/Ecology.ts`, both owned by WS-0b. So WS-3 must not
+rename them in place. Instead WS-3 adds `src/world/town/PlaceNames.ts` mapping
 `{ landmarkKey | siteType | worldXZ } → { name, region, kind }` and drives the
 area title card and the map screen from that. The internal identifiers stay as
 they are; only what the player sees changes.
@@ -965,7 +965,7 @@ Other free naming wins:
 - **Shops** — the arms vendor everywhere in Lucis is **Culless Munitions**; the
   Hammerhead diner is **Takka's Pit Stop**; the chocobo stand is **Rent-a-Bird**;
   the diner chain is **Crow's Nest**; the general store chain is **JM Market**.
-- **The tipster table in `Quests.js`** already names Takka, Coctura, Ezma and
+- **The tipster table in `Quests.ts`** already names Takka, Coctura, Ezma and
   Dave correctly. Keep them. `Kimya` and `Old Lestif` are invented — replace
   with **Monica Elshett** (the hunter liaison introduced at Prairie Outpost) and
   **Dustin Ackers**, who are real and are exactly this role.

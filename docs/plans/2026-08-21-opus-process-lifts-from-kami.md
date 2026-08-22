@@ -90,7 +90,7 @@ is already 395 lines and `PROGRESS.md` 232, and the human's own `TODO.md` says
 into **displace** — to add a line you must cull a weaker one.
 
 **Do:** add to `.githooks/pre-commit` a ~20-line check over a small table:
-`CLAUDE.md` 120 · `BRIEF.md` 150 · `project/SESSION-STATE.md` 150 ·
+`CLAUDE.md` 120 · `BRIEF.md` 150 · `project/STATUS.md` 150 ·
 `project/HANDOFF.md` 250. Warn at 85 %, block at the cap, `SKIP_DOCBUDGET=1`
 escapes. Skip the "genre leak" regexes — that is their journal problem.
 

@@ -44,7 +44,7 @@ the delta each sibling proved and we lack.
 
 ## 2. Wave 1 — proven fixes for defects already on our books
 
-Each item here is wired to an open item in `project/RESCUE.md` or a handoff.
+Each item here is wired to an open item in `project/archive/RESCUE-2026-08-21.md` or a handoff.
 
 ### 2.1 Determinism pinning (`__pinDeterminism`) — RESCUE §B1, the top item
 
@@ -53,12 +53,12 @@ phase, exposure history and grain phase before a capture; it dropped their
 screenshot noise floor **11× (RMS 5.20 → 0.23)** and made A/B diffs
 falsifiable. Our #1 open defect — all 47 `follow` shots order-dependent
 because formation never settles — is the same disease. Build `Party.snap()`
-(RESCUE already locates the dead `Animator.rest()` at `Anim.js:279`) **as
+(RESCUE already locates the dead `Animator.rest()` at `Anim.ts:279`) **as
 one piece of a general pin call** invoked from `Game.applyShot`, covering:
 party formation snap, animator clock zero, TAA history rewind, exposure
 history, weather/wind phase. Two harness-side fixes were already tried and
 reverted; the sibling evidence says the fix belongs in-page, exactly like
-this. *Difficulty: medium. Source: `metal-gear-solid-5-opus-demo/src/main.js`.*
+this. *Difficulty: medium. Source: `metal-gear-solid-5-opus-demo/src/main.ts`.*
 
 ### 2.2 Shader warm + compileAsync — kills the 15.8 s freeze class
 
@@ -83,9 +83,9 @@ floating-rocks-at-200–800 m bug class outright. We have the same class: the
 Hammerhead apron sits 3.2 m above `heightAt` (landmine catalog), a floating
 pickup in the garage, and props seated against the *simulation* heightfield
 under a clipmap that draws something coarser far away. Port into
-`src/world/Terrain.js` beside `heightAt`, and re-seat prop placement through
+`src/world/Terrain.ts` beside `heightAt`, and re-seat prop placement through
 it. *Difficulty: low. Source:
-`metal-gear-solid-5-opus-demo/src/world/Terrain.js` (`seatHeightAt`,
+`metal-gear-solid-5-opus-demo/src/world/Terrain.ts` (`seatHeightAt`,
 `clipSpacingAt`, `drawnEnvelope`).*
 
 ### 2.4 Self-validating perf ruler — RESCUE §B6 (re-baseline) done right
@@ -94,8 +94,8 @@ Every round-5 perf number here was taken under 6+ Chromium contention. MGS5
 built the instrument for exactly this: paired frame differences against a
 measured noise floor, `RULER_VALID: false` voids the run, a machine-
 contention VERDICT line before measuring, "a median that moves less than the
-IQR has not moved", refuse to print sub-noise numbers. Port into `perf.mjs`
-/ `gameplay.mjs` before re-baselining, or the new baseline is as untrustworthy
+IQR has not moved", refuse to print sub-noise numbers. Port into `perf.mts`
+/ `gameplay.mts` before re-baselining, or the new baseline is as untrustworthy
 as the old one. *Difficulty: low. Source:
 `metal-gear-solid-5-opus-demo/tools/probes/perf.js`, `tools/bench.mjs`.*
 
@@ -108,7 +108,7 @@ a shared tree without rebuilding; bablyon's standing rule — "the first
 diagnosis from looking at the frame was wrong, and an ablation was right —
 measure before re-tinting" — was earned three separate times. We have probes
 but no first-class ablation. Port: `?ablate=` page seam + `--hide/--ablate`
-on `shoot.mjs`, and write the rule into BRIEF/HANDOFF: **for any visual
+on `shoot.mts`, and write the rule into BRIEF/HANDOFF: **for any visual
 defect, ablate before re-tinting.** Diff raw pre-post renders, not final
 frames (post moves 40k px when you hide one mesh). *Difficulty: low.*
 
@@ -214,7 +214,7 @@ textures. Two fetches buy (a) kilometre-scale terrain sun-shadow that a
 AO. Our shadow cascades cost **~22 ms and dominate the failing walk
 segment** (RESCUE §B6); a horizon map lets distant terrain self-shadow
 without cascades reaching further, and valley shade at golden hour is the
-signature FFXV look. Runs in `bake.mjs`, ships in the existing baked cache.
+signature FFXV look. Runs in `bake.mts`, ships in the existing baked cache.
 Their measured counter-intuitive: 1 centre ray per bin beats a 3-ray sector
 max (MCC 0.929 vs 0.664). *Difficulty: low-medium. Source:
 `final-fantasy-XV-demo-opus/src/world/terrain/skyOcclusion.ts`.*
@@ -268,7 +268,7 @@ shadow-killing ambient flood; ours may share it — cheap ablation test).
 (b) PCSS (blocker search + Vogel disc) via `shadowmap_pars_fragment` chunk
 override for contact-hardening penumbras. Both are golden-hour levers.
 *Difficulty: medium; measure first. Source:
-`metal-gear-solid-5-opus-demo/src/render/Lighting.js`.*
+`metal-gear-solid-5-opus-demo/src/render/Lighting.ts`.*
 
 ## 4. Wave 3 — performance
 
@@ -296,7 +296,7 @@ override for contact-hardening penumbras. Both are golden-hour levers.
 - **GenCache generator-hash invalidation** (MGS5): our bake cache
   invalidates manually; theirs keys blobs on a vite-injected hash of the
   generator source (edit terrain → exact invalidation), atomic writes, LRU.
-  11.6 s erosion → 360 ms fetch. Nice upgrade to `bake.mjs`/`daemon.mjs`,
+  11.6 s erosion → 360 ms fetch. Nice upgrade to `bake.mts`/`daemon.mts`,
   not urgent. *Difficulty: low.*
 - **AI cost control** (MGS5), for when encounter density rises: senses on a
   rotating schedule with per-guard wall-clock dt (population-independent
@@ -321,7 +321,7 @@ override for contact-hardening penumbras. Both are golden-hour levers.
   (aim settle, magazine → 2.6–3.4 s head-down reload, burst rests);
   hit-chance ladder rewarding movement between bursts; misses land *near*
   and feed suppression VFX. Direct fit for MTs and gun-daemons.
-- **Sphere-swept camera collision** (MGS5 `PlayerCamera.js`): r=0.30 m
+- **Sphere-swept camera collision** (MGS5 `PlayerCamera.ts`): r=0.30 m
   swept against obstacles+terrain in one pass — a point test left the lens
   inside geometry in 4.8% of poses. Our CameraRig surely has the same
   disease in dungeons and Hammerhead interiors. `lookScale()` (tangent-
@@ -346,16 +346,16 @@ override for contact-hardening penumbras. Both are golden-hour levers.
 1. **Ablate before re-tinting.** Earned independently in three repos.
    Apparent art problems are usually arithmetic/engine bugs.
 2. **Per-shot noise floors.** FFXV-opus measured 0.06 on a vista and 4.73
-   on a party-walk shot — 77×. Our global 1.58–1.99 floor in `imgdiff.mjs`
+   on a party-walk shot — 77×. Our global 1.58–1.99 floor in `imgdiff.mts`
    is wrong on both ends; make it per-shot.
 3. **Shipgate vs corpus** (gpt-5-6): one battery on a final build proves
    the build; only a multi-seed corpus catches reliability variance (4/42
-   of their runs still failed after a 14/14 shipgate). Our `gameplay.mjs`
+   of their runs still failed after a 14/14 shipgate). Our `gameplay.mts`
    is a shipgate; consider a seed sweep.
 4. **"Present but never reached" is the dominant failure class.** Both
    siblings repeatedly built features with zero callers (SSS dead 4
    rounds; `setRenderScale` documented 5 rounds, never called; our own
-   RPG layer was 5,765 dead lines). `orphans.mjs` catches dead *modules*;
+   RPG layer was 5,765 dead lines). `orphans.mts` catches dead *modules*;
    consider an audit for dead *uniforms/paths* — FFXV-opus's shader-audit
    pattern (every injection registers a marker; a frame reports
    compiles/injections/failures) exists because CSM silently overwrites
@@ -391,7 +391,7 @@ override for contact-hardening penumbras. Both are golden-hour levers.
   debug/perf uniform split.
 - **MGS5's AO pass as-is** — self-described as needing a rewrite; root
   cause of four separately-filed defects.
-- **MGS5's `Obstacles.js`** top-down height bake — right for one compound,
+- **MGS5's `Obstacles.ts`** top-down height bake — right for one compound,
   wrong for an open world.
 - **Their clipmap/erosion/splat/sky cores** — we have equivalents; port
   constants and lessons (§6.7), not systems.
@@ -426,7 +426,7 @@ work for Wave 5's AI pieces).
   numbers across different tonemaps is how their sepia-filter bug happened.
 - `NUM_POINT_LIGHTS`-style program cache keys: adding lights or changing
   light counts recompiles every program — interacts with our 8-light
-  pinned pool (`engine/LightBudget.js`) and the 9.5 s recompile landmine.
+  pinned pool (`engine/LightBudget.ts`) and the 9.5 s recompile landmine.
 - The audits live in agent reports, not in the sibling repos' READMEs.
   When implementing an item, **read the cited source file** — every § here
   names its file; do not implement from this summary alone.
