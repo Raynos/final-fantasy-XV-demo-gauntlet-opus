@@ -104,7 +104,8 @@ export class Character {
 
     const look = this.look;
     const bodyGeo = buildBody(rig, look);
-    const head = buildHead(rig, look);
+    // Four heroes, one painted face each, and the name is the cast key.
+    const head = buildHead(rig, look, `face/hero/${this.def.name}`);
     const hairGeo = buildHair(rig, look);
     const outfitGeo = buildOutfit(rig, look);
     const eyes = buildEyes(rig, look);

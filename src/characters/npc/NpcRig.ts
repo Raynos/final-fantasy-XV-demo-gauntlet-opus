@@ -5,6 +5,7 @@ import { buildHead, buildEyes } from '../rig/Face.ts';
 import { buildHair } from '../rig/Hair.ts';
 import { buildOutfit } from '../rig/Outfit.ts';
 import { Animator } from '../rig/Anim.ts';
+import { bootPhase } from '../../engine/BootProfile.ts';
 import {
   skinMaterial, faceMaterial, garmentMaterial, hairMaterial, eyeMaterial, contactShadowMaterial,
 } from '../rig/Materials.ts';
@@ -108,20 +109,22 @@ export function archetype(key: string, def: CharacterDef): NpcArchetype {
   const S = shared();
   const rig = buildSkeleton(def.profile);
   const look = def.look;
-  const head = buildHead(rig, look);
+  // Every cast member is one archetype and one painted 1024^2 face; the boot
+  // profile needs the split, because the two halves have very different fixes.
+  const head = bootPhase('Npcs.head', () => buildHead(rig, look, `face/npc/${key}`));
   const a: NpcArchetype = {
     key,
     def,
     profile: def.profile,
     look,
     dims: rig.dims,
-    geo: {
+    geo: bootPhase('Npcs.geo', () => ({
       body: buildBody(rig, look),
       head: head.geometry,
       hair: buildHair(rig, look),
       outfit: buildOutfit(rig, look),
       eyes: buildEyes(rig, look).geometry,
-    },
+    })),
     mat: {
       skin: S.skin,
       garment: S.garment,

@@ -1,5 +1,5 @@
 import { bake } from './bake.mts';
-import { texBake, TEX_SOURCES } from './texbake.mts';
+import { texBake, pruneStaleCanvasBake, TEX_SOURCES } from './texbake.mts';
 
 /**
  * Make sure the baked world artifacts exist before anything is served or built.
@@ -26,6 +26,15 @@ export function bakePlugin(): import('vite').Plugin {
         texBake({}).catch((e) => {
           console.warn('[texbake] failed, the browser will generate at runtime:', e && e.message);
         }),
+        // The browser-baked half cannot be produced here — it needs the server
+        // that is starting — so the most this can do is make sure a stale one
+        // is never served. Deleting it costs the boot time it was saving;
+        // serving it costs fifteen faces that no longer match their sculpt,
+        // with no symptom. `node src/tools/texbake.mts --canvas` puts it back.
+        pruneStaleCanvasBake().then((pruned) => {
+          if (pruned) console.warn('[texbake] dropped a stale painted-face cache — '
+            + 're-bake it with `node src/tools/texbake.mts --canvas`');
+        }).catch(() => {}),
       ]).then(() => undefined);
       await done;
     },

@@ -6,6 +6,7 @@ import type { Rig } from './Skeleton.ts';
 import type { Look } from './Look.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
+import { bakedCanvasMips } from '../../engine/TexBake.ts';
 
 /**
  * Head, face and eyes.
@@ -293,7 +294,7 @@ function uvOf(x: number, y: number, z: number) {
 /**
  * Build the head mesh (skull + lids + ears) in character space.
  */
-export function buildHead(rig: Rig, look: Look): HeadBuild {
+export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): HeadBuild {
   const { index: I, dims } = rig;
   const scale = dims.headScale;
   const origin = dims.headOrigin;
@@ -468,7 +469,7 @@ export function buildHead(rig: Rig, look: Look): HeadBuild {
   }
 
   const geometry = B.build();
-  const map = paintFace(look, uvOf);
+  const map = paintFace(look, uvOf, bakeKey);
   return { geometry, map, origin, scale, uvOf };
 }
 
@@ -858,18 +859,35 @@ function contrastMips(canvas: HTMLCanvasElement) {
   return mips;
 }
 
-/** Canvas texture whose mip chain keeps facial value structure (see above). */
-function faceTexture(size: number, draw: (ctx: CanvasRenderingContext2D, size: number) => void) {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = size;
-  draw(cv.getContext('2d', { willReadFrequently: true })!, size);
-  const tex = new THREE.CanvasTexture(cv);
+/**
+ * Canvas texture whose mip chain keeps facial value structure (see above).
+ *
+ * A million four-octave noise samples and an eleven-level hand-built pyramid,
+ * per face — measured at 190 ms each on a quiet machine, and there are fifteen
+ * faces in the world. `bakeKey` opts the whole chain into the texel cache; it
+ * is threaded down from the caller rather than derived from `look` because the
+ * *sculpt* moves these pixels too (the paint is authored in canonical head
+ * metres and projected through the head's own UV), so a key that named only
+ * the look would go stale on a change to the skull and never say so.
+ *
+ * No key means no caching, which is the right default for anything built at
+ * runtime from a look nobody baked.
+ */
+function faceTexture(bakeKey: string | null, size: number, draw: (ctx: CanvasRenderingContext2D, size: number) => void) {
+  const build = () => {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    draw(cv.getContext('2d', { willReadFrequently: true })!, size);
+    return contrastMips(cv);
+  };
+  const mips = bakeKey ? bakedCanvasMips(bakeKey, build) : build();
+  const tex = new THREE.CanvasTexture(mips[0]);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 16;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.mipmaps = contrastMips(cv);
+  tex.mipmaps = mips;
   tex.generateMipmaps = false;
   tex.needsUpdate = true;
   return tex;
@@ -899,7 +917,7 @@ interface PaintOpts {
  * structure of a face. Sockets, nostrils, the vermilion border, the shadow the
  * fringe throws on the forehead.
  */
-function paintFace(look: Look, uv: FaceUV) {
+function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
   const S = 1024;
   // texels per metre, measured at the front of the face where the features are
   const PX = S / (0.085 * Math.PI * 2);
@@ -917,7 +935,7 @@ function paintFace(look: Look, uv: FaceUV) {
   // canonical point -> texel, for points authored on the face plane
   const fx = (x: number, y: number) => px([x, y, 0.085 - Math.abs(x) * 2.6 * Math.abs(x)]);
 
-  return faceTexture(S, (ctx) => {
+  return faceTexture(bakeKey, S, (ctx) => {
     ctx.fillStyle = hexOf(skin.clone().multiplyScalar(SKIN_BASE));
     ctx.fillRect(0, 0, S, S);
 
