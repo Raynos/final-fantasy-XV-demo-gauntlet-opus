@@ -225,7 +225,7 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x322e2e), rough: 0.40 },
       hair: {
-        color: 0x9a8261, tipColor: 0xcab596, rough: 0.34, shell: 0.011, volume: 0.85,
+        color: 0xb08543, tipColor: 0xe4c67e, rough: 0.34, shell: 0.011, volume: 0.85,
         hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         tufts: [
           { n: 260, th: [-3.14, 3.14], phi: [0.0, 0.92], dir: [0, 0.14, -0.98], out: 0.40, hug: 0.44, bend: 0.94, len: 0.076, width: 0.0016, thick: 0.52, spike: 0.78, dirJit: 0.04, lenVar: 0.26, steps: 6, sides: 5 },

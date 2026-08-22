@@ -321,15 +321,25 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
       ).normalize();
       const mid = root.clone().addScaledVector(nrm.clone().lerp(d, 0.45).normalize(), len * 0.5);
       const tipP = mid.clone().addScaledVector(d, len * 0.6);
+      // These are meant to be *fine* — the whole point is to dissolve the
+      // hairline, not to draw on it. They were 2.6-4.0 mm half-width, i.e. up
+      // to an 8 mm card, on a four-sided flat section, with `tipColor: base`
+      // lifting the tip *above* the root. Eight millimetres of bright flat
+      // blade pointing down over the brow is the single most visible quill on
+      // the whole cast, and on a blond it is a row of yellow needles across
+      // the forehead. A third of the width, a rolled six-sided section, and a
+      // tip at or below the root value.
+      const ww = 0.0009 * scale * (0.7 + rng.next() * 0.8);
       B.color(rootC);
       ribbon(B, {
         points: [root, mid, tipP].map((q) => put(q).toArray()),
-        steps: 3,
-        width: 0.0026 * scale * (0.7 + rng.next() * 0.8),
-        thick: 0.0009 * scale,
+        steps: 4,
+        sides: 6,
+        width: ww,
+        thick: ww * 0.7,
         up: nrm.toArray(),
-        color: rootC.clone().multiplyScalar(0.9 + 0.3 * rng.next()),
-        tipColor: base,
+        color: rootC.clone().multiplyScalar(0.86 + 0.24 * rng.next()),
+        tipColor: rootC.clone().multiplyScalar(0.92),
         taper: (t: any) => Math.pow(1 - t, 0.5),
       });
     }
