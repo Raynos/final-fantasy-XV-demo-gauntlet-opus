@@ -143,7 +143,7 @@ export class StorySystem {
    * scene owns the screen.
    * @param [opts] `{ replay }`
    */
-  playScene(id: string, opts: any = {}): Promise | null {
+  playScene(id: string, opts: any = {}): Promise<any> | null {
     const def = SCENES[id];
     if (!def) { console.warn(`[Story] unknown scene: ${id}`); return null; }
     if (!opts.replay && this.seen.has(id)) return null;

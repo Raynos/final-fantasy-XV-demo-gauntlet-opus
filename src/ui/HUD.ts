@@ -93,7 +93,7 @@ export class HUD {
     this._scale();
 
     window.addEventListener('ffxv-damage', (e) => this.combat.damage(e.detail));
-    window.addEventListener('ffxv-callout', (e) => this.combat.callOut(e.detail?.word, e.detail?.sub));
+    window.addEventListener('ffxv-callout', (e) => this.combat.callOut(e.detail?.word ?? '', e.detail?.sub));
 
     // Combat and RPG events -> damage numbers, call-outs, toasts, level-ups.
     this.bridge = new HudBridge(this);

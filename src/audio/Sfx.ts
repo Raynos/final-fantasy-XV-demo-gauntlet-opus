@@ -905,6 +905,8 @@ interface SurfaceVoice {
   pink?: boolean;
   /** Grain count for a loose surface. */
   grains?: number;
+  /** Filter type for the noise burst; `bandpass` unless stated. */
+  filter?: string;
 }
 
 const SURFACE: Record<string, SurfaceVoice> = {

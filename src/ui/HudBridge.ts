@@ -98,7 +98,7 @@ export class HudBridge {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
     const on = (n: any, fn: any) => this._off.push(rpg.on(n, fn));
-    const toast = (...a) => this.hud.toasts.push(...a);
+    const toast = (...a: any[]) => this.hud.toasts.push(...a);
 
     on('level-up', (p: any) => {
       if (p.member === 'noctis') this.hud.levelUp(p.to);

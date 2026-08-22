@@ -135,7 +135,7 @@ const IGNIS = [
       const info = bestiaryEntry(target.type.key) || { name: target.name, weak: [] };
       for (const e of around(ai, target.root.position, 14)) e.analysed = 24;
       window.dispatchEvent(new CustomEvent('encounter:analysed', {
-        detail: { name: target.name, level: target.level, hp: Math.round(target.hp), maxHp: target.maxHp, ...info },
+        detail: Object.assign({ name: target.name, level: target.level, hp: Math.round(target.hp), maxHp: target.maxHp }, info),
       }));
       if (ai.vfx) {
         const c = target.centre();

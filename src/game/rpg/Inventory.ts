@@ -274,7 +274,7 @@ export const ITEMS = (() => {
       const price = it.price ?? 0;
       map[it.id] = {
         sell: Math.max(1, Math.round(price * 0.5)),
-        stack: STACK_LIMITS[it.category || category as keyof typeof STACK_LIMITS],
+        stack: STACK_LIMITS[(it.category || category) as keyof typeof STACK_LIMITS],
         tags: [],
         ...it,
         category: it.category || category,

@@ -78,8 +78,8 @@ export class Cinematics {
    * @param def scene definition
    * @param [opts] `{ skippable }`
    */
-  play(def: any, opts: any = {}): Promise<{skipped:boolean, id:string}> {
-    if (!def) return Promise.resolve({ skipped: false, id: null as string | null });
+  play(def: any, opts: any = {}): Promise<{skipped:boolean, id:string | null}> {
+    if (!def) return Promise.resolve({ skipped: false, id: null });
     if (this.playing) this.stop({ skipped: true });
 
     const game = this.game;

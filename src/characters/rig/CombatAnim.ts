@@ -101,7 +101,7 @@ export class CombatAnim {
     char.root.position.set(0, 0, 0);
     char.root.rotation.set(0, 0, 0);
 
-    const style = STYLE[combat.weapon ? combat.weapon.kind : 'sword' as keyof typeof STYLE] || DEFAULT_STYLE;
+    const style = STYLE[(combat.weapon ? combat.weapon.kind : 'sword') as keyof typeof STYLE] || DEFAULT_STYLE;
     const st = combat.state;
     let ikWeight = 1;
 

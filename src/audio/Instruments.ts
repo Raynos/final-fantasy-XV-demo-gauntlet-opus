@@ -260,7 +260,7 @@ export class Instruments {
     if (!slot) return false;
     const ctx = this.ctx;
     const nodes = [];
-    const V = FORMANTS[o.vowel || 'ah' as keyof typeof FORMANTS];
+    const V = FORMANTS[(o.vowel || 'ah') as keyof typeof FORMANTS];
     const env = ctx.createGain();
     nodes.push(env);
 
