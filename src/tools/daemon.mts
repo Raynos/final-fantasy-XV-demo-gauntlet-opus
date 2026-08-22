@@ -51,6 +51,42 @@ import { readdirSync, statSync } from 'node:fs';
  * Cheap and sufficient: names, sizes and mtimes of every source file. No
  * hashing of contents, so it costs a stat per file.
  */
+/**
+ * Fingerprint of the daemon's *own* code.
+ *
+ * `sourceStamp()` below guards the open *page* -- reusing a page booted before
+ * an edit serves the old build. It does not guard the daemon **process**, which
+ * has been running since whenever it was started and cannot reload itself. So
+ * editing `daemon.mts` and running a capture silently exercises the old daemon:
+ * the port is open, `/root` matches, and the client happily reuses it.
+ *
+ * That cost a round. A capture came back with the loading screen still in it,
+ * the fix was applied, the capture came back wrong *again*, and the code being
+ * blamed was not the code that ran. Clients compare this and restart rather
+ * than reuse.
+ */
+function selfStamp() {
+  const parts = [];
+  for (const f of ['daemon.mts', 'chromium.mts']) {
+    try {
+      const st = statSync(path.join(ROOT, 'src/tools', f));
+      parts.push(`${f}:${st.size}:${st.mtimeMs}`);
+    } catch { parts.push(`${f}:missing`); }
+  }
+  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 12);
+}
+
+/**
+ * Taken **once, at startup**, and never recomputed.
+ *
+ * The first version of this check called `selfStamp()` inside the `/root`
+ * handler, so the running daemon and the client both read the current file off
+ * disk and always agreed -- the check could not fail, which is a worse bug than
+ * the one it was added for. What matters is the code this process *started*
+ * with, not what is on disk now.
+ */
+const SELF_STAMP = selfStamp();
+
 function sourceStamp() {
   const parts = [];
   const walk = (dir: string) => {
@@ -173,21 +209,35 @@ export async function call<T = unknown>(route: string, body?: unknown, { timeout
  * @returns true if this call started it
  */
 export async function ensureDaemon(): Promise<boolean> {
+  let stale = false;
   if (await portOpen(DAEMON_PORT)) {
     // A daemon on the port may belong to a *different* checkout — every agent
     // worktree runs the same tools on the same default ports. Silently reusing
     // it captures the other repo's build, which has already produced at least
     // one false result that took a round to unpick. Refuse rather than lie.
     let root: string | null = null;
-    try { root = (await call<{ root: string }>('/root')).root; } catch { /* daemon predates the route */ }
-    if (root && path.resolve(root) !== path.resolve(ROOT)) {
+    let self: string | null = null;
+    try {
+      const r = await call<{ root: string, self?: string }>('/root');
+      root = r.root;
+      self = r.self ?? null;
+    } catch { /* daemon predates the route */ }
+    // A daemon running code older than this file cannot be reused: it will
+    // serve behaviour that no longer exists in the tree. Stop it and start a
+    // fresh one rather than quietly capturing through the old one.
+    if (root && path.resolve(root) === path.resolve(ROOT) && self !== selfStamp()) {
+      try { await call('/stop', {}); } catch { /* already going */ }
+      for (let i = 0; i < 50 && await portOpen(DAEMON_PORT); i++) await sleep(100);
+      stale = true;
+    } else if (root && path.resolve(root) !== path.resolve(ROOT)) {
       throw new Error(
         `a capture daemon on port ${DAEMON_PORT} is serving a different checkout:\n`
         + `  running: ${root}\n  wanted:  ${ROOT}\n`
         + 'Set PORT (and DAEMON_PORT) to values unique to this worktree, '
         + 'or stop that daemon.');
     }
-    return false;
+    if (!stale) return false;
+    console.log('[daemon] the running daemon is older than src/tools/daemon.mts; restarting it');
   }
   const child = spawn(process.execPath, [path.join(ROOT, 'src/tools/daemon.mts')], {
     cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, PORT: String(APP_PORT) },
@@ -292,15 +342,17 @@ class Harness {
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300_000 });
     // `ready` is set one warm frame before `main.ts` adds `#boot.done`, and that
     // class only starts an 800 ms opacity transition -- so a capture taken the
-    // instant the page reports ready contains the loading screen, at full
-    // opacity or half way through the fade. It is silent: the shot still
-    // reports its real triangle and draw-call counts, so nothing looks wrong
-    // until someone opens the image. Only the *first* capture after a boot can
-    // hit it, which is why it survives a warm daemon and a contact sheet.
-    await page.waitForFunction(() => {
-      const b = document.getElementById('boot');
-      return !b || getComputedStyle(b).opacity === '0';
-    }, null, { timeout: 30_000 });
+    // instant the page reports ready contains the loading screen. It is silent:
+    // the shot still reports its real triangle and draw-call counts, so nothing
+    // looks wrong until someone opens the image. Only the *first* capture after
+    // a boot can hit it, which is why it survives a warm daemon.
+    //
+    // Remove the node rather than waiting for the fade. `probe`, `framecam` and
+    // `creaturecheck` all already do exactly this, and for a reason: the
+    // transition needs frames, and a headless page that the harness has just
+    // stopped the render loop on is not guaranteed to get them. Waiting on
+    // `opacity === '0'` hung every capture for the full timeout.
+    await page.evaluate(() => { document.getElementById('boot')?.remove(); });
     this.bootMs = Date.now() - t0;
     this.page = page;
     this.viewport = { w, h };
@@ -413,9 +465,9 @@ async function serve() {
             idleSec: Math.round((Date.now() - harness.lastUsed) / 1000),
           });
         }
-        // Which checkout this daemon serves. Clients compare it against their
-        // own ROOT so a worktree can never silently capture another repo.
-        if (url === '/root') return send(200, { root: ROOT });
+        // Which checkout this daemon serves, and which version of its own code
+        // it is running. Clients compare both.
+        if (url === '/root') return send(200, { root: ROOT, self: SELF_STAMP });
         if (url === '/stop') { send(200, { ok: true }); setTimeout(stop, 50); return; }
         if (url === '/shots') {
           if (!Array.isArray(body.shots) || typeof body.out !== 'string') {
