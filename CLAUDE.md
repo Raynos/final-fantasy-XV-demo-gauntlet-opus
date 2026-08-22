@@ -11,7 +11,7 @@ Four buckets, and the root holds nothing but config and the three docs below.
 - **`src/`** — everything the build reads. The game, plus `src/index.html` (vite's
   `root`, so in-page dev-server URLs are `/world/...`, **not** `/src/world/...`),
   `src/public/` (the generated terrain cache, ignored) and `src/tools/` (the
-  harness: capture, checks, probes for `src/tools/probe.mjs`).
+  harness: capture, checks, probes for `src/tools/probe.mts`).
 - **`docs/`** — durable reference: what the game *is*. `docs/SCOPE.md`,
   `docs/WORLDMAP.md`, `docs/plans/<YYYY-MM-DD>-<model>-<topic>.md` — every plan is
   named with the date it was written and the model that wrote it (`opus`, `fable`),
@@ -28,6 +28,14 @@ Four buckets, and the root holds nothing but config and the three docs below.
 generated, both ignored, neither belongs in `tmp/` because losing them costs a
 re-bake. The cache cannot live in `dist/` either: vite empties `dist/` on every
 build and never serves it in dev. It is copied into `dist/baked/` at build time.
+
+The whole of `src/` is TypeScript: `.ts` for the game, `.mts` for the harness
+(which runs under Node's strip-only type stripping, hence `erasableSyntaxOnly` in
+`tsconfig.tools.json`). `npm run typecheck` covers the game, `npm run
+typecheck:tools` the harness, and both run in the pre-commit hook. Probe snippets
+under `src/tools/_probe/` and `src/tools/probes/` are excluded from the tools
+config: they are read as text and evaluated as a *function body* in the page, so
+a top-level `return` is correct and they are not modules.
 
 Root: `README.md` (the human's original brief), `CLAUDE.md`, `BRIEF.md` (the
 contract), and build config. New file that is none of the above? It belongs in one
@@ -68,33 +76,34 @@ date and stop at a sensible pause rather than opening a new line of investigatio
 Non-negotiable, per `BRIEF.md`: capture, then **read the image and actually look at it**.
 Structural correctness is not the bar.
 
-- Capture review frames with `--jpeg`: `node src/tools/shoot.mjs hero_full --out tmp/shots/x --jpeg`.
+- Capture review frames with `--jpeg`: `node src/tools/shoot.mts hero_full --out tmp/shots/x --jpeg`.
   A 1600×900 capture is downscaled to a 1568 px long edge before you see it either way,
   so a 2.5 MB PNG shows you nothing a 250 KB JPEG doesn't — it just makes every later
-  turn carry it. Leave PNG as the default when the capture feeds `src/tools/imgdiff.mjs`,
+  turn carry it. Leave PNG as the default when the capture feeds `src/tools/imgdiff.mts`,
   which measures pixels and has a 1.5–1.9/255 noise floor.
 - Contact sheets come out paginated: read `_sheet-1.jpg`, `_sheet-2.jpg` … one at a time.
   Never read a `_sheet.png` — the old single-image sheets reach 45 MB and 30 000 px tall,
   and arrive as an illegible strip.
-- Shot names are **positional** on `src/tools/shoot.mjs`, not `--shot`.
+- Shot names are **positional** on `src/tools/shoot.mts`, not `--shot`.
 
 ## Reading tool output
 
-Use judgement. `perf.mjs`, `gameplay.mjs`, `integration.mjs`, `combatloop.mjs`,
-`roadcheck.mjs` and friends print bounded reports meant to be read whole — read them.
+Use judgement. `perf.mts`, `gameplay.mts`, `integration.mts`, `combatloop.mts`,
+`roadcheck.mts` and friends print bounded reports meant to be read whole — read them.
 `manifest.json`, full-corpus captures and `git log` over a long range are unbounded;
 slice those to the part you need.
 
 ## Running the harness
 
-- One `PORT` per worktree, and the capture daemon takes `PORT+1`. Aiming `framecam.mjs`
+- One `PORT` per worktree, and the capture daemon takes `PORT+1`. Aiming `framecam.mts`
   at the daemon port hangs for the full 300 s timeout.
-- `git config core.hooksPath .githooks` — the pre-commit hook runs `vite build`. A syntax
-  error that the dev server tolerated will otherwise hang the next capture for 120 s with
-  no useful error.
-- `node src/tools/cleanup.mjs` reports orphaned vite/chromium; `--kill` acts.
+- `git config core.hooksPath .githooks` — the pre-commit hook runs `vite build` and both
+  typechecks. A syntax error that the dev server tolerated will otherwise hang the next
+  capture for 120 s with no useful error, and a broken cross-system contract shows up
+  nowhere else at all: vite strips the types without reading them.
+- `node src/tools/cleanup.mts` reports orphaned vite/chromium; `--kill` acts.
 - **`npm run check` runs the whole gate suite** and prints one table. Run it at
-  every merge, not just the cheap gates -- `combatloop.mjs` slid from 30/30 to
+  every merge, not just the cheap gates -- `combatloop.mts` slid from 30/30 to
   21/30 and went unnoticed for weeks because the expensive gates were skipped.
-  `npm run check:perf` adds `perf.mjs` and `gameplay.mjs`; only ever pass that on
+  `npm run check:perf` adds `perf.mts` and `gameplay.mts`; only ever pass that on
   a **quiet tree**, since a perf number taken while agents run is meaningless.

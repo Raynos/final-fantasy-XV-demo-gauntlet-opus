@@ -42,28 +42,28 @@ shipped-console-game* quality.
 ## Hard rules
 
 1. **No network, no binary assets.** Everything procedural — geometry built in
-   code, textures synthesised via `src/util/TextureGen.js`. No `fetch`, no CDN,
+   code, textures synthesised via `src/util/TextureGen.ts`. No `fetch`, no CDN,
    no `.glb`/`.png`/`.hdr` loads. If you need a texture, generate it.
 2. **Determinism.** Use `Rng`/`Noise` from `src/util/` with fixed seeds. Two runs
-   of `src/tools/shoot.mjs` must produce identical images.
+   of `src/tools/shoot.mts` must produce identical images.
 3. **Performance budget.** ≥60 fps at 1600×900 on an Apple M-series GPU with the
-   full post chain on, measured by `src/tools/perf.mjs` (posed) **and**
-   `src/tools/gameplay.mjs` (real input, streaming, combat, menus). No frame in a
+   full post chain on, measured by `src/tools/perf.mts` (posed) **and**
+   `src/tools/gameplay.mts` (real input, streaming, combat, menus). No frame in a
    gameplay session may exceed 33 ms. Instance everything repeated. Draw-call
    budget is **800** — the original 400 predated the town, dungeons, 124 POIs
    and three shadow cascades, and was unreachable. Measured range today is
    351-506.
-4. **Do not edit `src/game/Game.js` or `src/game/Shots.js`** unless you are the
+4. **Do not edit `src/game/Game.ts` or `src/game/Shots.ts`** unless you are the
    agent who owns them — they are shared. Create new files inside *your own*
    directory and wire them from your system's `init()`.
-5. **No page errors.** `src/tools/shoot.mjs` exits non-zero on any console error.
+5. **No page errors.** `src/tools/shoot.mts` exits non-zero on any console error.
    A run that exits non-zero is a failed run.
 6. Match the surrounding code style: ES modules, no semicolon-free style, JSDoc
    on public methods, no framework, no TypeScript.
 
 ## Engine contracts
 
-`Game` (`src/game/Game.js`) constructs systems in order and ticks them:
+`Game` (`src/game/Game.ts`) constructs systems in order and ticks them:
 
 ```js
 class MySystem {
@@ -97,17 +97,17 @@ Cross-system APIs other code already calls — **implement these if you own the 
 ## The screenshot harness — this is how you check your work
 
 ```bash
-node src/tools/shoot.mjs                        # all shots -> tmp/shots/
-node src/tools/shoot.mjs vista_dusk hero_full   # named shots
-node src/tools/shoot.mjs --out tmp/shots/veg-r2 --w 1920 --h 1080 --settle 90
+node src/tools/shoot.mts                        # all shots -> tmp/shots/
+node src/tools/shoot.mts vista_dusk hero_full   # named shots
+node src/tools/shoot.mts --out tmp/shots/veg-r2 --w 1920 --h 1080 --settle 90
 ```
 
 It boots vite, waits for `window.GAME.ready`, steps the sim with a fixed
-timestep, applies the named shot from `src/game/Shots.js`, and writes PNGs plus
+timestep, applies the named shot from `src/game/Shots.ts`, and writes PNGs plus
 a `manifest.json` with triangle/draw-call counts. **Read the PNGs back with the
 Read tool and actually look at them.** Iterate: shoot → look → fix → shoot.
 
-`VERBOSE=1 node src/tools/shoot.mjs ...` echoes page console output for debugging.
+`VERBOSE=1 node src/tools/shoot.mts ...` echoes page console output for debugging.
 
 ## Definition of done for your task
 
