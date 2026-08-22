@@ -5,6 +5,7 @@
  *   node src/tools/bootprof.mts            # one cold + one warm load, per-system breakdown
  *   node src/tools/bootprof.mts --n 3      # 3 loads, report each
  *   node src/tools/bootprof.mts --mem      # attribute the resident memory instead
+ *   node src/tools/bootprof.mts --warm-ab  # A/B the shader warm-up, sync vs compileAsync
  *
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.
@@ -138,11 +139,12 @@ const MB = (b: number) => `${(b / 1e6).toFixed(1)} MB`;
 
 async function main() {
   const argv = process.argv.slice(2);
-  let n = 2, nobake = false, mem = false;
+  let n = 2, nobake = false, mem = false, warmAb = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--n') n = Number(argv[++i]);
     else if (argv[i] === '--nobake') nobake = true;
     else if (argv[i] === '--mem') mem = true;
+    else if (argv[i] === '--warm-ab') warmAb = true;
   }
 
   const server = await ensureServer();
@@ -160,14 +162,23 @@ async function main() {
   page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE ERR:', m.text().slice(0, 200)); });
 
   try {
-    for (let run = 0; run < n; run++) {
+    for (let run = 0; run < n * (warmAb ? 2 : 1); run++) {
+      // The A/B alternates so a machine that gets busier partway through
+      // penalises both arms equally rather than whichever went second.
+      const async = warmAb && run % 2 === 1;
       const t0 = Date.now();
-      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}`,
-        { waitUntil: 'domcontentloaded', timeout: 300000 });
+      await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}`
+        + `${async ? '&warm=async' : ''}`,
+      { waitUntil: 'domcontentloaded', timeout: 300000 });
       await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
+      // Under `?warm=async` the sweep outlives `ready`, so the wall clock to
+      // `ready` is not the number that matters and the sweep has to be waited
+      // for explicitly or its own report is still zero.
+      await page.evaluate(() => window.GAME.post && window.GAME.post.warmupDone);
       const wall = Date.now() - t0;
       const prof = await page.evaluate(() => window.BOOT_PROFILE);
-      const label = run === 0 ? 'cold' : `warm ${run}`;
+      if (warmAb) console.log(`\n--- warm-up ${async ? 'compileAsync' : 'sync'} ---`);
+      const label = warmAb ? `run ${run}` : run === 0 ? 'cold' : `warm ${run}`;
       console.log(`\n=== load ${label}: ${(wall / 1000).toFixed(2)} s wall, ${(prof!.total / 1000).toFixed(2)} s in Game.init()`);
       const marks = prof!.marks.slice().sort((a, b) => b.ms - a.ms);
       for (const m of marks) {
