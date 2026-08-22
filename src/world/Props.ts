@@ -25,7 +25,7 @@ export class Props {
   mega!: Megastructures;
   outposts!: Outposts;
   poiKits!: PoiKits;
-  regalia!: any;
+  regalia!: THREE.Group;
   regaliaLamp!: any;
   regaliaLights!: any;
   regaliaTail!: any;

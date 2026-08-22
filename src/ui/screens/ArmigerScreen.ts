@@ -3,6 +3,7 @@ import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import { readAscension, readArmiger, rpg } from '../GameData.ts';
+import type { Menus } from '../Menus.ts';
 
 /**
  * The Armiger — the arsenal of the Lucian kings.
@@ -18,32 +19,32 @@ import { readAscension, readArmiger, rpg } from '../GameData.ts';
  */
 export class ArmigerScreen {
   _age!: number;
-  _cur!: any;
+  _cur!: string | null;
   _msg!: any;
   _msgAge!: number;
   _rows!: any;
   _sig!: any;
-  act!: any;
-  actLb!: any;
-  cols!: any;
-  dD!: any;
-  dI!: any;
-  dK!: any;
-  dN!: any;
-  dRule!: any;
-  dSpecs!: any;
-  detail!: any;
+  act!: HTMLElement;
+  actLb!: HTMLElement;
+  cols!: HTMLElement;
+  dD!: HTMLElement;
+  dI!: HTMLElement;
+  dK!: HTMLElement;
+  dN!: HTMLElement;
+  dRule!: HTMLElement;
+  dSpecs!: HTMLElement;
+  detail!: HTMLElement;
   game!: any;
-  gauge!: any;
+  gauge!: HTMLElement;
   gaugeBar!: Bar;
-  gaugeD!: any;
-  gaugeV!: any;
+  gaugeD!: HTMLElement;
+  gaugeV!: HTMLElement;
   i!: number;
-  list!: any;
-  menus!: any;
-  msg!: any;
+  list!: HTMLElement;
+  menus!: Menus;
+  msg!: HTMLElement;
   rowNodes!: any;
-  specVals!: any;
+  specVals!: HTMLElement[];
   src!: any;
   sub!: string;
   title!: string;

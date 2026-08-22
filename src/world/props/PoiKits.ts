@@ -7,6 +7,7 @@ import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * Built form for the hundred and twenty-four points of interest of Lucis.
@@ -80,11 +81,11 @@ function roughBox(seed: any, w: any, h: any, d: any, amp = 0.05) {
 export class PoiKits {
   built!: any[];
   _exclusions!: any;
-  eco!: any;
+  eco!: Ecology;
   mats!: any;
-  quality!: any;
+  quality!: number;
   root!: THREE.Group;
-  scene!: any;
+  scene!: THREE.Scene;
   sites!: any[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;

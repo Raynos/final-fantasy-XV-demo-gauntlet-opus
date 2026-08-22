@@ -5,6 +5,7 @@ import {
   rockMaterial, woodMaterial, rustMaterial, concreteMaterial, paintedMaterial,
   magitekMaterial, glowMaterial, canvasClothMaterial, imperialTexture, signTexture,
 } from './PropMaterials.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * The built world between the landmarks: a fuel stop, an imperial roadblock,
@@ -71,12 +72,12 @@ function lattice(B: any, mat: any, world: any, { height, baseW, topW, bays = 6, 
 
 export class Outposts {
   crash!: any;
-  eco!: any;
+  eco!: Ecology;
   groups!: any[];
   lights!: any[];
   mats!: any;
   root!: THREE.Group;
-  scene!: any;
+  scene!: THREE.Scene;
   spinners!: any[];
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;

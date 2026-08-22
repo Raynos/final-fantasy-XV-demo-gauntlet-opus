@@ -1,3 +1,4 @@
+import type { RoadPath } from './RoadPath.ts';
 /**
  * Ignis at the wheel.
  *
@@ -23,12 +24,12 @@ export class AutoDrive {
   _targetSpeed!: number;
   arrived!: boolean;
   controls!: any;
-  cruise!: any;
-  destination!: any;
+  cruise!: number;
+  destination!: string | null;
   dir!: number;
   enabled!: boolean;
-  road!: any;
-  targetS!: any;
+  road!: RoadPath;
+  targetS!: number;
   constructor(road: import('./RoadPath.ts').RoadPath) {
     this.road = road;
     this.enabled = false;

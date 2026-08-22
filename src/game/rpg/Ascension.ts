@@ -17,6 +17,7 @@
  */
 
 import { emptyMods } from './Stats.ts';
+import type { Emitter } from './Emitter.ts';
 
 /* ------------------------------------------------------------------------ */
 /* AP earning rules                                                          */
@@ -305,7 +306,7 @@ export class Ascension {
   ap!: number;
   apLifetime!: number;
   apSpent!: number;
-  emitter!: any;
+  emitter!: Emitter | null;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     this.ap = 0;

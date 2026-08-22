@@ -20,7 +20,7 @@ import { PLACES, REGION_CARDS } from './Chapters.ts';
 export class Triggers {
   _places!: any;
   place!: any;
-  region!: any;
+  region!: string | null;
   _hour!: any;
   _t!: number;
   game!: any;

@@ -18,10 +18,10 @@ export class BloomPass extends Pass {
   anamorphic!: number;
   anamorphicTint!: THREE.Color;
   baseDivisor!: number;
-  compositeMat!: any;
-  dirt!: any;
+  compositeMat!: THREE.ShaderMaterial;
+  dirt!: THREE.DataTexture;
   dirtAmount!: number;
-  downMat!: any;
+  downMat!: THREE.ShaderMaterial;
   flareThreshold!: number;
   floor!: number;
   fx!: any;
@@ -31,14 +31,14 @@ export class BloomPass extends Pass {
   levels!: number;
   mipFalloff!: number;
   mips!: any[];
-  prefilterMat!: any;
+  prefilterMat!: THREE.ShaderMaterial;
   radius!: number;
   streak!: any;
-  streakMat!: any;
+  streakMat!: THREE.ShaderMaterial;
   strength!: number;
   sunAmount!: number;
   threshold!: number;
-  upMat!: any;
+  upMat!: THREE.ShaderMaterial;
   constructor(fx: any, w: any, h: any) {
     super();
     this.fx = fx;

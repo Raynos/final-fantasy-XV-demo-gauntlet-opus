@@ -35,15 +35,15 @@ export interface RoadHit {
 export class RoadPath {
   _grid!: Map<any, any>;
   _h!: any;
-  _hit!: any;
+  _hit!: RoadHit;
   _lastI!: number;
   _t0!: any;
   _t1!: any;
-  length!: any;
+  length!: number;
   pts!: any;
   road!: any;
-  shoulder!: any;
-  width!: any;
+  shoulder!: number;
+  width!: number;
   constructor(road: {points: any[], length: number, width: number, shoulder: number}) {
     this.road = road;
     this.pts = road && road.points ? road.points : [];

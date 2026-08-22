@@ -52,14 +52,14 @@ export class PostFX {
   focusDistance!: number;
   focusTarget!: any;
   _focusGoal!: number;
-  _halton!: any;
+  _halton!: number[][];
   _head!: any;
   _headWho!: any;
   _prevCamPos!: THREE.Vector3;
   _v!: THREE.Vector3;
   _v2!: THREE.Vector3;
   _warmed!: boolean;
-  aaMode!: any;
+  aaMode!: string;
   aoScale!: number;
   autoFocusHead!: boolean;
   autoGrade!: boolean;
@@ -88,7 +88,7 @@ export class PostFX {
   motionBlur!: MotionBlurPass;
   oneTexture!: THREE.DataTexture;
   prevViewProj!: THREE.Matrix4;
-  quality!: any;
+  quality!: string;
   rnd!: any;
   rtScene!: THREE.WebGLRenderTarget;
   rtVel!: THREE.WebGLRenderTarget;

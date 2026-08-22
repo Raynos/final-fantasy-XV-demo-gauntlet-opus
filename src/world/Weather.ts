@@ -3,6 +3,8 @@ import { Rain } from './weather/Rain.ts';
 import { VolumePass } from './weather/VolumePass.ts';
 import { Lightning } from './weather/Lightning.ts';
 import { Wetness } from './weather/Wetness.ts';
+import type { Game } from '../game/Game.ts';
+import type { Terrain } from './Terrain.ts';
 
 const lerp = THREE.MathUtils.lerp;
 const clamp = THREE.MathUtils.clamp;
@@ -68,14 +70,14 @@ export class Weather {
   _fogSun!: THREE.Vector3;
   _gust!: number;
   _shotSeen!: any;
-  game!: any;
+  game!: Game;
   lightning!: Lightning;
   name!: string;
   p!: any;
   rain!: Rain;
   rainIntensity!: number;
   target!: any;
-  terrain!: any;
+  terrain!: Terrain | null;
   volume!: VolumePass;
   wet!: Wetness;
   wetness!: number;
@@ -106,7 +108,7 @@ export class Weather {
   async init(game: import('../game/Game.ts').Game) {
     this.game = game;
     const terrain = game.get('Terrain');
-    this.terrain = terrain;
+    this.terrain = terrain ?? null;
 
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.4
       : game.rnd && game.rnd.quality === 'medium' ? 0.7 : 1.0;

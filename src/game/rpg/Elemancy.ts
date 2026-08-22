@@ -17,6 +17,8 @@
  */
 
 import { ITEMS } from './Inventory.ts';
+import type { Emitter } from './Emitter.ts';
+import type { Inventory } from './Inventory.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Elements                                                                  */
@@ -282,10 +284,10 @@ export class Elemancy {
   bonuses!: any;
   capBonus!: number;
   deposits!: any;
-  emitter!: any;
+  emitter!: Emitter | null;
   energy!: any;
   equipped!: any;
-  inventory!: any;
+  inventory!: Inventory | null;
   /**
    * @param [inventory] used to consume catalysts on craft
    */

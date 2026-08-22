@@ -1,7 +1,9 @@
 import { el, clamp, commas, easeOut, easeOutQuint } from '../UIKit.ts';
+import type { CachedNode } from '../UIKit.ts';
 import { icon, portrait } from '../Icons.ts';
 import { Bar } from '../Bar.ts';
 import { readParty, readQuest, hudState } from '../GameData.ts';
+import type { Menus } from '../Menus.ts';
 
 /**
  * Every row of the pause menu, and the screen it opens.
@@ -35,28 +37,28 @@ const ENTRIES = [
 
 /** The FFXV-style pause menu: a vertical list over a blurred game frame. */
 export class MainScreen {
-  _cur!: any;
+  _cur!: string;
   _pvAge!: number;
-  _q!: any;
-  _qs!: any;
+  _q!: string;
+  _qs!: string;
   cards!: any[];
   i!: number;
-  list!: any;
-  mark!: any;
-  menus!: any;
-  partyWrap!: any;
-  preview!: any;
-  pvB!: any;
-  pvR!: any;
-  pvT!: any;
+  list!: HTMLElement;
+  mark!: HTMLElement;
+  menus!: Menus;
+  partyWrap!: HTMLElement;
+  preview!: HTMLElement;
+  pvB!: HTMLElement;
+  pvR!: HTMLElement;
+  pvT!: HTMLElement;
   rows!: any;
-  statNodes!: any;
-  stats!: any;
+  statNodes!: CachedNode[];
+  stats!: HTMLElement;
   sub!: string;
   title!: string;
-  track!: any;
-  trackQ!: any;
-  trackS!: any;
+  track!: HTMLElement;
+  trackQ!: HTMLElement;
+  trackS!: HTMLElement;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Main Menu';

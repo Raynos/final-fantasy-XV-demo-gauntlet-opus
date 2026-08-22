@@ -3,6 +3,7 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from './Ecology.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
 import { grassClumpTex } from './VegTextures.ts';
+import type { Ecology } from './Ecology.ts';
 
 /**
  * Camera-following instanced grass with three LOD rings:
@@ -248,11 +249,11 @@ export class GrassField {
   _primed!: boolean;
   _stamp!: number;
   budgetMs!: number;
-  eco!: any;
+  eco!: Ecology;
   group!: THREE.Group;
-  quality!: any;
+  quality!: number;
   rings!: any[];
-  scene!: any;
+  scene!: THREE.Scene;
   /** Debug switch for bisecting the pack-skip optimisation against a capture. */
   constructor(eco: import('./Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 } = {}) {
     this.eco = eco;

@@ -25,15 +25,15 @@ const BLUR = 1.3;                  // sheet px — a 21 m edge, crisp on purpose
 
 export class FogOfWar {
   _sheet!: any;
-  _ctx!: any;
+  _ctx!: CanvasRenderingContext2D | null;
   _dirty!: boolean;
-  _maskCanvas!: any;
+  _maskCanvas!: HTMLCanvasElement;
   _maskCtx!: any;
   _maskImg!: any;
   _parchment!: any;
   cell!: number;
   mask!: Uint8Array;
-  n!: any;
+  n!: number;
   constructor(n = CELLS) {
     this.n = n;
     this.cell = WORLD.size / n;
@@ -126,7 +126,7 @@ export class FogOfWar {
       toPx: (x: any) => (x + WORLD.half) * ppm,
       toPz: (z: any) => (z + WORLD.half) * ppm,
     };
-    this._parchment = this._ctx.createPattern(parchmentTile(), 'repeat');
+    this._parchment = this._ctx!.createPattern(parchmentTile(), 'repeat');
   }
 
   _paint() {
@@ -140,19 +140,19 @@ export class FogOfWar {
     this._maskCtx.putImageData(this._maskImg, 0, 0);
 
     const c = this._ctx;
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.globalCompositeOperation = 'source-over';
-    c.clearRect(0, 0, SHEET, SHEET);
-    c.imageSmoothingEnabled = true;
-    c.imageSmoothingQuality = 'high';
-    c.filter = `blur(${BLUR}px)`;
-    c.drawImage(this._maskCanvas, 0, 0, SHEET, SHEET);
-    c.filter = 'none';
+    c!.setTransform(1, 0, 0, 1, 0, 0);
+    c!.globalCompositeOperation = 'source-over';
+    c!.clearRect(0, 0, SHEET, SHEET);
+    c!.imageSmoothingEnabled = true;
+    c!.imageSmoothingQuality = 'high';
+    c!.filter = `blur(${BLUR}px)`;
+    c!.drawImage(this._maskCanvas, 0, 0, SHEET, SHEET);
+    c!.filter = 'none';
     // paint the haze through the mask
-    c.globalCompositeOperation = 'source-in';
-    c.fillStyle = this._parchment;
-    c.fillRect(0, 0, SHEET, SHEET);
-    c.globalCompositeOperation = 'source-over';
+    c!.globalCompositeOperation = 'source-in';
+    c!.fillStyle = this._parchment;
+    c!.fillRect(0, 0, SHEET, SHEET);
+    c!.globalCompositeOperation = 'source-over';
   }
 }
 

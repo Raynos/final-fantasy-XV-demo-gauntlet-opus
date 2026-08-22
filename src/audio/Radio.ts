@@ -108,7 +108,7 @@ export class Radio {
   _duckUntil!: number;
   _melodyRng!: Rng;
   _rng!: Rng;
-  _timer!: any;
+  _timer!: number | null;
   bar!: number;
   ctx!: any;
   duckGain!: any;

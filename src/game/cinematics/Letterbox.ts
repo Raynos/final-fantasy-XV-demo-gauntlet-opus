@@ -18,38 +18,38 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 
  * byte-identical.
  */
 export class Letterbox {
-  line!: any;
-  lineR!: any;
-  lineT!: any;
+  line!: HTMLElement;
+  lineR!: HTMLElement;
+  lineT!: HTMLElement;
   _onResize!: any;
   active!: boolean;
   bar!: number;
   barMax!: number;
   barTarget!: number;
-  bot!: any;
-  chap!: any;
-  chapK!: any;
-  chapN!: any;
-  chapR!: any;
-  chapS!: any;
+  bot!: HTMLElement;
+  chap!: HTMLElement;
+  chapK!: HTMLElement;
+  chapN!: HTMLElement;
+  chapR!: HTMLElement;
+  chapS!: HTMLElement;
   chapState!: any;
   chars!: any[];
-  fade!: any;
+  fade!: HTMLElement;
   fadeAmt!: number;
   fadeGoal!: number;
   fadeRate!: number;
-  lineSp!: any;
+  lineSp!: HTMLElement;
   lineState!: Clip | null;
-  obj!: any;
-  objK!: any;
-  objR!: any;
-  objS!: any;
+  obj!: HTMLElement;
+  objK!: HTMLElement;
+  objR!: HTMLElement;
+  objS!: HTMLElement;
   objState!: Clip | null;
-  objT!: any;
-  root!: any;
-  skip!: any;
+  objT!: HTMLElement;
+  root!: HTMLElement;
+  skip!: HTMLElement;
   skipShown!: number;
-  top!: any;
+  top!: HTMLElement;
   uiScale!: any;
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'cine' });

@@ -119,13 +119,27 @@ export function letters(text: any, tag = 'span.ltr'): {node: HTMLElement, chars:
 }
 
 /**
+ * An element that remembers what it last rendered, so a frame loop can skip the
+ * DOM write when nothing changed. Every screen that redraws at 60 Hz uses this:
+ * `if (n._v !== v) { n.textContent = v; n._v = v; }`.
+ */
+export interface CachedNode extends HTMLElement {
+  /** Last value written into this node. */
+  _v?: string | number;
+  /** Last `on` state toggled onto this node. */
+  _on?: boolean;
+  /** A child this node updates in place -- a count chip, a value cell. */
+  _count?: HTMLElement;
+}
+
+/**
  * A one-shot normalised timeline. `t` runs 0..1 over `dur` seconds and then
  * stays at 1; `alive` stays true until `dur + hold` has elapsed.
  */
 export class Clip {
   age!: number;
   dur!: any;
-  hold!: any;
+  hold!: number;
   /** The shot this clip was raised in; a shot change clears it. `Subtitles`. */
   shot?: any;
   constructor(dur: any, hold = 0) { this.dur = dur; this.hold = hold; this.age = 0; }

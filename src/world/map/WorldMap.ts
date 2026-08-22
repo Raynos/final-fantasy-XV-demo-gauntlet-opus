@@ -252,13 +252,14 @@ export const POI_TYPES = {
  * settlement can never drift off the road that serves it -- and are filled in
  * before anything reads them.
  */
-export interface Poi {
+export interface PoiSpec {
   id: string;
   name: string;
   type: string;
   zone: string;
   /** Discovery radius, metres. */
   r: number;
+  /** Absent when `at` names the road node to inherit the position from. */
   x?: number;
   z?: number;
   /** Road node to inherit `x`/`z` from. */
@@ -270,7 +271,17 @@ export interface Poi {
   [extra: string]: any;
 }
 
-export const POIS: Poi[] = [
+/**
+ * A POI once the map has resolved it: every one has a position, whether it was
+ * authored with `x`/`z` or inherited from its road node. This is what
+ * `worldMap.pois` hands out, and it is why nothing downstream has to guard.
+ */
+export interface Poi extends PoiSpec {
+  x: number;
+  z: number;
+}
+
+export const POIS: PoiSpec[] = [
   // ============================== LEIDE ==============================
   { id: 'hammerhead', name: 'Hammerhead', type: 'town', zone: 'longwythe', at: 'n_hammerhead', r: 210, travel: true, lv: 1,
     does: 'Garage, diner, fuel, weapon shop, hunt board. Cid, Cindy, Takka, Dave.', gate: null },
@@ -683,14 +694,14 @@ export class WorldMap {
   _buckets!: Map<any, any>;
   _cell!: number;
   _defB!: Float64Array;
-  _nz!: any;
+  _nz!: number;
   _wBuf!: Float64Array;
   _zb!: Float64Array;
   _zc!: Float64Array;
   byId!: Map<any, any>;
   landforms!: any;
   poiTypes!: any;
-  pois!: any;
+  pois!: Poi[];
   regionById!: Map<any, any>;
   regions!: any;
   roadGraph!: RoadGraph;
@@ -701,7 +712,8 @@ export class WorldMap {
     this.world = WORLD;
     this.regions = REGIONS;
     this.zones = ZONES;
-    this.pois = POIS;
+    // every `at:` anchor was resolved above, so these are `Poi`, not `PoiSpec`
+    this.pois = POIS as Poi[];
     this.landforms = LANDFORMS;
     this.poiTypes = POI_TYPES;
 

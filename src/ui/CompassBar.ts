@@ -24,25 +24,25 @@ const wrap180 = (d: any) => { let x = ((d + 180) % 360 + 360) % 360 - 180; retur
  */
 export class CompassBar {
   _area!: any;
-  _day!: any;
-  _dist!: any;
-  _qs!: any;
-  _qt!: any;
+  _day!: string;
+  _dist!: string;
+  _qs!: string;
+  _qt!: string;
   _sub!: any;
   _time!: any;
-  box!: any;
-  dayEl!: any;
-  locEl!: any;
-  locSub!: any;
+  box!: HTMLElement;
+  dayEl!: HTMLElement;
+  locEl!: HTMLElement;
+  locSub!: HTMLElement;
   marks!: any[];
-  qDist!: any;
-  qName!: any;
-  qStep!: any;
-  root!: any;
-  strip!: any;
-  svg!: any;
+  qDist!: HTMLElement;
+  qName!: HTMLElement;
+  qStep!: HTMLElement;
+  root!: HTMLElement;
+  strip!: HTMLElement;
+  svg!: SVGElement;
   ticks!: any[];
-  timeEl!: any;
+  timeEl!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.tr');
     this.box = el('div.compass');

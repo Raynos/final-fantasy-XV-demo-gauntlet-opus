@@ -1,5 +1,6 @@
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { fsMaterial, blit } from './Fx.ts';
+import type * as THREE from 'three';
 
 /**
  * Renders the scene into the pipeline's own HDR + depth target (so every later
@@ -10,7 +11,7 @@ import { fsMaterial, blit } from './Fx.ts';
  */
 export class ScenePass extends Pass {
   fx!: any;
-  material!: any;
+  material!: THREE.ShaderMaterial;
   constructor(fx: any) {
     super();
     this.fx = fx;

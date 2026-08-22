@@ -24,30 +24,30 @@ function project(p: any, camera: any, w: any, h: any) {
  */
 export class CombatHUD {
   callout!: any;
-  calloutSub!: any;
-  _armPct!: any;
+  calloutSub!: HTMLElement;
+  _armPct!: string;
   _armigerDriven!: boolean;
   _beat!: number;
   _didCall!: boolean;
   _lastTarget!: any;
-  _wasActive!: any;
+  _wasActive!: boolean;
   armiger!: any;
   armigerVal!: number;
-  calloutNode!: any;
-  calloutRule!: any;
-  calloutWord!: any;
+  calloutNode!: HTMLElement;
+  calloutRule!: HTMLElement;
+  calloutWord!: HTMLElement;
   corner!: any;
-  dmgLayer!: any;
+  dmgLayer!: HTMLElement;
   lockAge!: number;
   lockOn!: any;
   mockEnemies!: any;
   mockSeq!: number;
   mockT!: number;
   numbers!: any[];
-  plateLayer!: any;
+  plateLayer!: HTMLElement;
   plates!: any[];
   reticle!: any;
-  root!: any;
+  root!: HTMLElement;
   techs!: any;
   /**
    * @param parent full-screen layer for world-anchored chrome

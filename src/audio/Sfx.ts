@@ -1,4 +1,6 @@
 import { noiseBuffer, hit, expTo, EPS, makeRng, clamp, ftom } from './Dsp.ts';
+import type { AudioGraph } from './Graph.ts';
+import type { Instruments } from './Instruments.ts';
 
 /**
  * The SFX bank — every non-musical sound in the game.
@@ -26,7 +28,7 @@ class Shot {
   nodes!: any[];
   ok!: boolean;
   out!: any;
-  sfx!: any;
+  sfx!: Sfx;
   /**
    * @param o play options
    */
@@ -264,13 +266,13 @@ class Shot {
 export class Sfx {
   played!: number;
   _recent!: Map<any, any>;
-  brown!: any;
+  brown!: AudioBuffer;
   ctx!: any;
-  graph!: any;
-  inst!: any;
-  pink!: any;
+  graph!: AudioGraph;
+  inst!: Instruments;
+  pink!: AudioBuffer;
   rng!: any;
-  white!: any;
+  white!: AudioBuffer;
   constructor(graph: import('./Graph.ts').AudioGraph, inst: import('./Instruments.ts').Instruments) {
     this.graph = graph;
     this.inst = inst;

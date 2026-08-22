@@ -1,4 +1,5 @@
 import { el, clamp, easeOut, easeOutQuint, damp } from '../UIKit.ts';
+import type { CachedNode } from '../UIKit.ts';
 import { worldMap, WORLD, POI_TYPES, REGIONS } from '../../world/map/WorldMap.ts';
 import { getChart } from '../../world/map/Chart.ts';
 import {
@@ -6,6 +7,9 @@ import {
 } from '../../world/map/MapDraw.ts';
 import { drawGlyph, glyphSvg, POI_GLYPH } from '../../world/map/MapGlyphs.ts';
 import { fog } from '../../world/map/FogOfWar.ts';
+import type { Chart } from '../../world/map/Chart.ts';
+import type { WorldMap } from '../../world/map/WorldMap.ts';
+import type { Menus } from '../Menus.ts';
 
 /**
  * THE CHART OF LUCIS — the full-screen atlas.
@@ -72,46 +76,46 @@ const SETTLED = ['town', 'outpost', 'reststop', 'chocobo'];
 export class WorldMapScreen {
   _drag!: any;
   _onResize!: any;
-  card!: any;
+  card!: HTMLElement;
   _a!: number;
   _cardKey!: string;
   _cursor!: any;
   _keys!: any;
   _regionPlaced!: any[] | null;
-  _rowEls!: any;
+  _rowEls!: HTMLElement[][];
   _screenPos!: Map<any, any>;
   atlas!: boolean;
   cam!: any;
   camT!: any;
-  canvas!: any;
-  cardDoes!: any;
-  cardFt!: any;
-  cardGlyph!: any;
-  cardName!: any;
-  cardRows!: any;
-  cardType!: any;
-  chart!: any;
+  canvas!: HTMLCanvasElement;
+  cardDoes!: HTMLElement;
+  cardFt!: HTMLElement;
+  cardGlyph!: HTMLElement;
+  cardName!: HTMLElement;
+  cardRows!: HTMLElement;
+  cardType!: HTMLElement;
+  chart!: Chart;
   ctx!: any;
-  dpr!: any;
+  dpr!: number;
   filter!: number;
-  filterEls!: any;
+  filterEls!: CachedNode[];
   game!: any;
-  h!: any;
+  h!: number;
   hover!: any;
   list!: any;
-  map!: any;
-  menus!: any;
-  rail!: any;
-  scaleBar!: any;
-  scaleLine!: any;
-  scaleTxt!: any;
+  map!: WorldMap;
+  menus!: Menus;
+  rail!: HTMLElement;
+  scaleBar!: HTMLElement;
+  scaleLine!: HTMLElement;
+  scaleTxt!: HTMLElement;
   sel!: number;
-  sub!: any;
-  survey!: any;
-  surveyV!: any;
-  title!: any;
-  w!: any;
-  wrap!: any;
+  sub!: string;
+  survey!: HTMLElement;
+  surveyV!: HTMLElement;
+  title!: string;
+  w!: number;
+  wrap!: HTMLElement;
   zoom!: any;
   zoomI!: number;
   /**
@@ -280,7 +284,7 @@ export class WorldMapScreen {
     for (let i = 0; i < FILTERS.length; i++) {
       const ff = FILTERS[i];
       const n = this.map.pois.filter((p: any) => seen(p) && (!ff.types || ff.types.includes(p.type))).length;
-      this.filterEls[i]._count.textContent = String(n);
+      this.filterEls[i]._count!.textContent = String(n);
     }
   }
 

@@ -3,6 +3,7 @@ import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { RoadNetwork } from './Road.ts';
 import { worldMap, LANDFORMS, WORLD } from '../map/WorldMap.ts';
+import type { WorldMap } from '../map/WorldMap.ts';
 
 // packed biome vector slots, see WorldMap.BIOME_KEYS
 const B_BASE = 0, B_RELIEF = 1, B_RIDGE = 2, B_RIDGEIN = 3, B_TERRACE = 4, B_STYLE = 9, B_WARP = 6;
@@ -97,15 +98,15 @@ export function microDetail(x: any, z: any): number {
 }
 
 export class Field {
-  clear!: any;
-  CELL!: any;
-  HALF!: any;
-  N!: any;
+  clear!: Float32Array;
+  CELL!: number;
+  HALF!: number;
+  N!: number;
   _b!: any;
-  _coarse!: any;
-  _farMs!: any;
-  _terr!: any;
-  corr!: any;
+  _coarse!: Float32Array | null;
+  _farMs!: number;
+  _terr!: Float32Array;
+  corr!: Float32Array;
   ctrl!: Uint8Array;
   far!: Float32Array;
   farCtrl!: Uint8Array;
@@ -113,7 +114,7 @@ export class Field {
   flow!: Float32Array | null;
   h!: Float32Array;
   lastTerrace!: number;
-  map!: any;
+  map!: WorldMap;
   massRaise!: Float32Array;
   n!: Noise;
   n2!: Noise;
@@ -125,7 +126,7 @@ export class Field {
   roadMask!: Float32Array | null;
   roadSpline!: any;
   sed!: Float32Array | null;
-  slope0!: any;
+  slope0!: Float32Array | null;
   stats!: any;
   constructor(seed = 1337) {
     this.N = N; this.HALF = HALF; this.CELL = CELL;

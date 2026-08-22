@@ -47,7 +47,7 @@ export class CombatSystem {
   comboStep!: any;
   comboTimer!: number;
   counterWindow!: number;
-  dodgeDir!: any;
+  dodgeDir!: THREE.Vector3;
   elemancy!: Elemancy;
   enemies!: any;
   game!: any;

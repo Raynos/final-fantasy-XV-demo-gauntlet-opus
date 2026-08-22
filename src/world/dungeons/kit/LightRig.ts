@@ -28,16 +28,16 @@ export class LightRig {
   emitters!: any[];
   gain!: any;
   glow!: THREE.Mesh;
-  glowMat!: any;
+  glowMat!: THREE.ShaderMaterial;
   group!: THREE.Group;
   lamp!: THREE.PointLight;
   moteBox!: any;
-  moteColor!: any;
-  moteCount!: any;
+  moteColor!: number;
+  moteCount!: number;
   moteMat!: THREE.ShaderMaterial;
   motes!: THREE.Points;
   pool!: any[];
-  poolSize!: any;
+  poolSize!: number;
   shafts!: any[];
   /**
    * @param {object} o

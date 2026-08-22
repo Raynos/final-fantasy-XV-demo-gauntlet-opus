@@ -17,9 +17,9 @@ export class PolyBeam {
   mesh!: THREE.Mesh;
   pathPos!: Float32Array;
   pathTan!: Float32Array;
-  posAttr!: any;
-  segments!: any;
-  tanAttr!: any;
+  posAttr!: THREE.BufferAttribute;
+  segments!: number;
+  tanAttr!: THREE.BufferAttribute;
   uniforms!: any;
   constructor({
     segments = 56, head = 0xbfe8ff, tail = 0x1b3f8f, core = 0xffffff,

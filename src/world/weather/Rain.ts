@@ -174,8 +174,8 @@ export class Rain {
   intensity!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  quality!: any;
-  scene!: any;
+  quality!: number;
+  scene!: THREE.Scene;
   splash!: THREE.Mesh;
   splashMaterial!: THREE.ShaderMaterial;
   stats!: any;

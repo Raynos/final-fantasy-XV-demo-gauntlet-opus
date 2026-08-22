@@ -19,7 +19,7 @@ export class StatsHud {
   canvas!: any;
   ctx!: any;
   head!: number;
-  node!: any;
+  node!: HTMLDivElement;
   rows!: any;
   samples!: any;
   visible!: boolean;

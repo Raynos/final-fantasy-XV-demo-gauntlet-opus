@@ -13,16 +13,16 @@ export class WeaponWheel {
   _capKey!: any;
   active!: number;
   built!: boolean;
-  cap!: any;
-  capKind!: any;
-  capName!: any;
-  col!: any;
-  hub!: any;
+  cap!: HTMLElement;
+  capKind!: HTMLElement;
+  capName!: HTMLElement;
+  col!: HTMLElement;
+  hub!: HTMLElement;
   hubPad!: any;
-  root!: any;
+  root!: HTMLElement;
   slots!: any[];
-  spokes!: any;
-  wheel!: any;
+  spokes!: SVGElement;
+  wheel!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.br');
     this.col = el('div.wpn-col');

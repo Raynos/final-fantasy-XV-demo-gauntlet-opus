@@ -18,19 +18,19 @@ const _v = new THREE.Vector3();
 export class InteractPrompt {
   _age!: number;
   _key!: any;
-  _sig!: any;
-  body!: any;
-  dot!: any;
-  hint!: any;
-  keyWrap!: any;
-  node!: any;
-  ring!: any;
-  root!: any;
-  stem!: any;
-  sub!: any;
-  txt!: any;
+  _sig!: string | null;
+  body!: HTMLElement;
+  dot!: HTMLElement;
+  hint!: HTMLElement;
+  keyWrap!: HTMLElement;
+  node!: HTMLElement;
+  ring!: HTMLElement;
+  root!: HTMLElement;
+  stem!: HTMLElement;
+  sub!: HTMLElement;
+  txt!: HTMLElement;
   uiScale!: any;
-  verb!: any;
+  verb!: HTMLElement;
   /** @param parent usually `game.uiRoot` */
   constructor(parent: HTMLElement) {
     ensureInteractCss();

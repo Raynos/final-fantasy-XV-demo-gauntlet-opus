@@ -28,14 +28,14 @@ import { TitleScreen } from './TitleScreen.ts';
  */
 export class StorySystem {
   _banterAt!: number;
-  _lastTag!: any;
+  _lastTag!: string | null;
   _seenPlace!: any;
   _started!: boolean;
   chapter!: any;
   chapterN!: number;
   cine!: any;
   game!: any;
-  headless!: any;
+  headless!: boolean;
   queue!: any[];
   rpg!: any;
   seen!: Set<any>;

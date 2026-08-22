@@ -6,6 +6,7 @@ import {
   glowMaterial, markerTexture,
 } from './PropMaterials.ts';
 import { alphaTex } from '../veg/VegTextures.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * Everything a real highway carries and an empty landscape does not: crash
@@ -60,11 +61,11 @@ export class RoadFurniture {
   _lastCam!: THREE.Vector3;
   _live!: any[];
   chunks!: any[];
-  eco!: any;
+  eco!: Ecology;
   geo!: any;
   mats!: any;
   root!: THREE.Group;
-  scene!: any;
+  scene!: THREE.Scene;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;

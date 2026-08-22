@@ -37,17 +37,17 @@ export class Shot {
   _noise!: Noise;
   _out!: any;
   aim!: any;
-  aimU!: any;
-  breathe!: any;
-  dur!: any;
-  fStop!: any;
+  aimU!: number;
+  breathe!: number;
+  dur!: number;
+  fStop!: number | null;
   focus!: any;
-  handheld!: any;
+  handheld!: number;
   keys!: any;
   label!: any;
-  spline!: any;
-  t0!: any;
-  t1!: any;
+  spline!: boolean;
+  t0!: number;
+  t1!: number;
   /**
    * @param {object} def
    * */
@@ -162,11 +162,11 @@ export class Shot {
  */
 export class Frame {
   _v!: THREE.Vector3;
-  floor!: any;
-  fwd!: any;
-  origin!: any;
-  right!: any;
-  up!: any;
+  floor!: number | null;
+  fwd!: THREE.Vector3;
+  origin!: THREE.Vector3;
+  right!: THREE.Vector3;
+  up!: THREE.Vector3;
   /**
    * @param forward world direction the scene faces
    */

@@ -68,7 +68,7 @@ export class MeshBuilder {
   grp!: any[];
   idx!: any[];
   mp!: any[];
-  name!: any;
+  name!: string;
   pos!: any[];
   si!: any[];
   sw!: any[];

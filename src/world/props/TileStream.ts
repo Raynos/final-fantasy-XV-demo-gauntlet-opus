@@ -26,12 +26,12 @@ export class TileStream {
   _pendCz!: number;
   _pending!: any[];
   budget!: any;
-  cell!: any;
+  cell!: number;
   dirty!: boolean;
   gen!: any;
   keep2!: number;
   live!: Map<any, any>;
-  radius!: any;
+  radius!: number;
   /**
    * @param {object} o
    * */

@@ -315,7 +315,9 @@ void main() {
  * composites, plus a tiling ground-shadow bake that every lit surface samples.
  */
 export class Clouds {
-  renderer!: any;
+  /** The original `render`, while `Dungeons` has the sky stubbed out. */
+  __dungeonStub?: Clouds['render'] | null;
+  renderer!: THREE.WebGLRenderer;
   textures!: any;
   _marchQuad!: FullScreenQuad;
   _shadowQuad!: FullScreenQuad;

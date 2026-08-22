@@ -35,12 +35,12 @@ const BAD_STATUS = new Set(['poison', 'stone', 'toad']);
  * a single toast printed straight through them.
  */
 export class PartyPanel {
-  banterSlot!: any;
+  banterSlot!: HTMLElement;
   built!: boolean;
-  combatSlot!: any;
-  list!: any;
-  noticeSlot!: any;
-  root!: any;
+  combatSlot!: HTMLElement;
+  list!: HTMLElement;
+  noticeSlot!: HTMLElement;
+  root!: HTMLElement;
   rows!: any[];
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bl');

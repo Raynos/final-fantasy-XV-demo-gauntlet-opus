@@ -444,7 +444,7 @@ class MTSoldierEnemy extends BipedEnemy {
   override attackId!: any;
   override deathPush!: any;
   override deathSide!: any;
-  recoil!: any;
+  recoil!: number;
   override rig!: any;
   override state!: any;
   override stateTime!: any;

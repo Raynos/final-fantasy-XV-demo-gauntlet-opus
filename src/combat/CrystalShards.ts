@@ -10,15 +10,15 @@ import * as THREE from 'three';
  * clock the particle systems use, so a scenario can freeze the swarm mid-flight.
  */
 export class CrystalShards {
-  _dirtyHi!: any;
-  _dirtyLo!: any;
-  aAxis!: any;
-  aColor!: any;
-  aParams!: any;
-  aParams2!: any;
-  aPos0!: any;
-  aVel!: any;
-  capacity!: any;
+  _dirtyHi!: number;
+  _dirtyLo!: number;
+  aAxis!: THREE.InstancedBufferAttribute;
+  aColor!: THREE.InstancedBufferAttribute;
+  aParams!: THREE.InstancedBufferAttribute;
+  aParams2!: THREE.InstancedBufferAttribute;
+  aPos0!: THREE.InstancedBufferAttribute;
+  aVel!: THREE.InstancedBufferAttribute;
+  capacity!: number;
   cursor!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
@@ -109,8 +109,11 @@ export class CrystalShards {
   flush() {
     if (this._dirtyHi < this._dirtyLo) return;
     const lo = this._dirtyLo, n = this._dirtyHi - lo + 1;
-    for (const [a, s] of [[this.aPos0, 3], [this.aVel, 3], [this.aAxis, 3],
-      [this.aColor, 3], [this.aParams, 4], [this.aParams2, 4]]) {
+    const buffers: [THREE.InstancedBufferAttribute, number][] = [
+      [this.aPos0, 3], [this.aVel, 3], [this.aAxis, 3],
+      [this.aColor, 3], [this.aParams, 4], [this.aParams2, 4],
+    ];
+    for (const [a, s] of buffers) {
       a.clearUpdateRanges();
       a.addUpdateRange(lo * s, n * s);
       a.needsUpdate = true;

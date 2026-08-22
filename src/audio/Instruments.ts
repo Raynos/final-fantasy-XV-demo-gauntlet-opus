@@ -1,4 +1,5 @@
 import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.ts';
+import type { AudioGraph } from './Graph.ts';
 
 /**
  * The orchestra.
@@ -18,9 +19,9 @@ import { wave, noiseBuffer, adsr, hit, expTo, EPS, makeRng, clamp } from './Dsp.
 export class Instruments {
   _plucks!: Map<any, any>;
   ctx!: any;
-  graph!: any;
-  noise!: any;
-  pinkNoise!: any;
+  graph!: AudioGraph;
+  noise!: AudioBuffer;
+  pinkNoise!: AudioBuffer;
   rng!: any;
   vibFast!: any;
   vibSlow!: any;

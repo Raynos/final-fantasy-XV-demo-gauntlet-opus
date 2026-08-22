@@ -1,3 +1,4 @@
+import type { Emitter } from './Emitter.ts';
 /**
  * Quest engine: main-story chapters, side quests and bounty hunts.
  *
@@ -406,7 +407,7 @@ export const HUNTS = QUEST_TABLE.filter((q) => q.type === 'hunt');
 export class QuestLog {
   states!: any;
   tracked!: any;
-  emitter!: any;
+  emitter!: Emitter | null;
   flags!: Set<any>;
   hunterPoints!: number;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {

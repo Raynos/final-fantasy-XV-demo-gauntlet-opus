@@ -41,15 +41,21 @@ export interface PoolOpts {
   depthTest?: boolean;
 }
 
+/** A point, however the caller happens to hold one. */
+export type Vec3Like = THREE.Vector3 | number[] | { x: number, y: number, z: number };
+/** A colour, likewise. */
+export type ColorLike = THREE.Color | number[] | { r: number, g: number, b: number };
+
 export interface ParticleSpec {
-  pos: THREE.Vector3 | number[];
-  vel?: THREE.Vector3 | number[];
-  color?: THREE.Color | number[];
-  /** Birth time, seconds on the effect clock. */
-  t0?: number;
-  /** Lifetime, seconds. */
-  life?: number;
-  size0?: number;
+  pos: Vec3Like;
+  vel?: Vec3Like;
+  color?: ColorLike;
+  /** Birth time, seconds on the effect clock. Every caller sets it. */
+  t0: number;
+  /** Lifetime, seconds. Every caller sets it. */
+  life: number;
+  /** Start size. Every caller sets it; `size1` defaults to it. */
+  size0: number;
   size1?: number;
   drag?: number;
   gravity?: number;
@@ -60,25 +66,24 @@ export interface ParticleSpec {
   turbulence?: number;
   intensity?: number;
   fade?: number;
-  [extra: string]: any;
 }
 
 export class ParticleSystem {
-  _dirtyHi!: any;
-  _dirtyLo!: any;
-  aColor!: any;
-  aParams!: any;
-  aParams2!: any;
-  aParams3!: any;
-  aPos0!: any;
-  aVel!: any;
-  capacity!: any;
+  _dirtyHi!: number;
+  _dirtyLo!: number;
+  aColor!: THREE.InstancedBufferAttribute;
+  aParams!: THREE.InstancedBufferAttribute;
+  aParams2!: THREE.InstancedBufferAttribute;
+  aParams3!: THREE.InstancedBufferAttribute;
+  aPos0!: THREE.InstancedBufferAttribute;
+  aVel!: THREE.InstancedBufferAttribute;
+  capacity!: number;
   cursor!: number;
   live!: number;
-  material!: any;
+  material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
   uniforms!: any;
-  useFog!: any;
+  useFog!: boolean;
   constructor({
     capacity = 2048, map, blending = THREE.AdditiveBlending, fog = false,
     softness = 0.9, renderOrder = 20, name = 'particles', depthTest = true,
@@ -195,10 +200,11 @@ export class ParticleSystem {
   flush() {
     if (this._dirtyHi < this._dirtyLo) return;
     const lo = this._dirtyLo, n = this._dirtyHi - lo + 1;
-    for (const [attr, size] of [
+    const buffers: [THREE.InstancedBufferAttribute, number][] = [
       [this.aPos0, 3], [this.aVel, 3], [this.aColor, 3],
       [this.aParams, 4], [this.aParams2, 4], [this.aParams3, 4],
-    ]) {
+    ];
+    for (const [attr, size] of buffers) {
       attr.clearUpdateRanges();
       attr.addUpdateRange(lo * size, n * size);
       attr.needsUpdate = true;

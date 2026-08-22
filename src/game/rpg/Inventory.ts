@@ -15,6 +15,7 @@
  */
 
 import { emptyMods, addMods } from './Stats.ts';
+import type { Emitter } from './Emitter.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Categories                                                                */
@@ -335,7 +336,7 @@ export const CLASS_PERMISSION = {
  */
 export class Inventory {
   bag!: any;
-  emitter!: any;
+  emitter!: Emitter | null;
   equipment!: any;
   gil!: number;
   sellBonus!: number;

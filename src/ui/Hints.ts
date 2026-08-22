@@ -23,17 +23,17 @@ const HOLD = 9;
 export class Hints {
   a!: number;
   age!: number;
-  body!: any;
-  card!: any;
+  body!: HTMLElement;
+  card!: HTMLElement;
   cur!: any;
-  icoW!: any;
-  keys!: any;
+  icoW!: HTMLElement;
+  keys!: HTMLElement;
   muted!: boolean;
   queue!: any[];
-  root!: any;
+  root!: HTMLElement;
   seen!: Set<any>;
-  ttl!: any;
-  txt!: any;
+  ttl!: HTMLElement;
+  txt!: HTMLElement;
   /** @param parent usually `game.uiRoot` */
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'hints' });

@@ -329,7 +329,7 @@ export function spacedWidth(c: any, text: any, spacing: any) {
  * rather than allowed to overlap.
  */
 export class LabelPlacer {
-  pad!: any;
+  pad!: number;
   rects!: any[];
   constructor(pad = 3) { this.rects = []; this.pad = pad; }
   clear() { this.rects.length = 0; }

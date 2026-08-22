@@ -76,23 +76,23 @@ export class Menus {
   _lockHeld!: boolean | null;
   _onResize!: any;
   a!: number;
-  foot!: any;
-  footRule!: any;
+  foot!: HTMLElement;
+  footRule!: HTMLElement;
   game!: any;
-  grain!: any;
-  head!: any;
-  headR!: any;
-  headS!: any;
-  headT!: any;
+  grain!: HTMLElement;
+  head!: HTMLElement;
+  headR!: HTMLElement;
+  headS!: HTMLElement;
+  headT!: HTMLElement;
   name!: any;
   open!: boolean;
-  pending!: any;
-  root!: any;
+  pending!: string | null;
+  root!: HTMLElement;
   screens!: any;
-  scrim!: any;
+  scrim!: HTMLElement;
   shown!: any;
   stack!: any[];
-  wrap!: any;
+  wrap!: HTMLElement;
   async init(game: any) {
     this.game = game;
     this.root = el('div', { id: 'menus' });
@@ -166,7 +166,7 @@ export class Menus {
   _renderFoot(kind: any) {
     if (this._foot === kind) return;
     this._foot = kind;
-    while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild);
+    while (this.foot.childNodes.length > 1) this.foot.removeChild(this.foot.lastChild!);
     for (const [key, label] of FOOT[kind as keyof typeof FOOT] || FOOT.default) {
       this.foot.appendChild(el('div.prompt.key', {}, [
         button(key, { size: key.length > 2 ? 24 : 20 }), el('div.lb', { text: label }),
@@ -287,7 +287,8 @@ export class Menus {
     this.scrim.style.opacity = (e * (clean ? 0.30 : 1)).toFixed(3);
     this.scrim.style.backdropFilter = clean ? 'none'
       : `blur(${(e * 26).toFixed(1)}px) saturate(${(1 - e * 0.42).toFixed(3)}) brightness(${(1 - e * 0.46).toFixed(3)})`;
-    this.scrim.style.webkitBackdropFilter = this.scrim.style.backdropFilter;
+    // Safari only honours the prefixed property, which `lib.dom` does not declare.
+    this.scrim.style.setProperty('-webkit-backdrop-filter', this.scrim.style.backdropFilter);
     this.grain.style.opacity = (e * (clean ? 0 : 0.5)).toFixed(3);
 
     this.headT.style.opacity = easeOut(clamp((this.a - 0.1) / 0.6, 0, 1)).toFixed(3);

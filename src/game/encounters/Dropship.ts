@@ -24,7 +24,7 @@ export class Dropship {
   _dropped!: number;
   _tmp!: THREE.Vector3;
   at!: THREE.Vector3;
-  exit!: any;
+  exit!: THREE.Vector3;
   from!: THREE.Vector3;
   game!: any;
   mesh!: any;

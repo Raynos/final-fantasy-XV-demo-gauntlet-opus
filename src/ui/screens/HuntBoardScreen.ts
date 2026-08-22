@@ -1,6 +1,8 @@
 import { el, clear, clamp, commas, easeOut, easeOutQuint } from '../UIKit.ts';
+import type { CachedNode } from '../UIKit.ts';
 import { icon, button } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
+import type { Menus } from '../Menus.ts';
 
 /**
  * The bounty board on the wall of the Crow's Nest.
@@ -41,43 +43,43 @@ function ledgerOf(hunt: any, tipsters: any) {
 
 export class HuntBoardScreen {
   _rows!: any;
-  rankP!: any;
-  rankV!: any;
+  rankP!: HTMLElement;
+  rankV!: HTMLElement;
   _age!: number;
-  _cur!: any;
+  _cur!: string;
   _msg!: any;
   _msgAge!: number;
-  _sig!: any;
-  _tabSig!: any;
+  _sig!: string | null;
+  _tabSig!: string;
   _tabs!: any;
-  cAct!: any;
-  cActLb!: any;
-  cD!: any;
-  cGrid!: any;
-  cK!: any;
-  cMark!: any;
-  cN!: any;
-  cObj!: any;
-  cObjList!: any;
-  cRule!: any;
-  cStars!: any;
-  cVals!: any;
-  card!: any;
-  cols!: any;
-  empty!: any;
+  cAct!: HTMLElement;
+  cActLb!: HTMLElement;
+  cD!: HTMLElement;
+  cGrid!: HTMLElement;
+  cK!: HTMLElement;
+  cMark!: HTMLElement;
+  cN!: HTMLElement;
+  cObj!: HTMLElement;
+  cObjList!: HTMLElement;
+  cRule!: HTMLElement;
+  cStars!: HTMLElement;
+  cVals!: HTMLElement[];
+  card!: HTMLElement;
+  cols!: HTMLElement;
+  empty!: HTMLElement;
   game!: any;
   i!: number;
-  list!: any;
-  menus!: any;
-  msg!: any;
-  rankBox!: any;
-  rankFill!: any;
-  rankGauge!: any;
+  list!: HTMLElement;
+  menus!: Menus;
+  msg!: HTMLElement;
+  rankBox!: HTMLElement;
+  rankFill!: HTMLElement;
+  rankGauge!: HTMLElement;
   rowNodes!: any[];
   sub!: string;
   tab!: number;
-  tabNodes!: any;
-  tabsEl!: any;
+  tabNodes!: CachedNode[];
+  tabsEl!: HTMLElement;
   title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();

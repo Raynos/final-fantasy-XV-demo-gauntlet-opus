@@ -35,7 +35,7 @@ export class Input {
   _onWheel!: any;
   dom!: any;
   enabled!: boolean;
-  gamepad!: any;
+  gamepad!: Gamepad | null;
   invertY!: boolean;
   lockLost!: boolean;
   look!: THREE.Vector2;

@@ -49,7 +49,7 @@ function readTime(text: any) {
 export class Banter {
   _busyUntil!: number;
   _catAt!: any;
-  _curPriority!: any;
+  _curPriority!: number;
   _lastWho!: any;
   _queue!: any[];
   _recent!: any;

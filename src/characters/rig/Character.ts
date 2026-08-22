@@ -50,9 +50,9 @@ export class Character {
   attach!: any;
   body!: any;
   def!: any;
-  eyeMat!: any;
-  eyes!: any;
-  faceMat!: any;
+  eyeMat!: THREE.Material;
+  eyes!: THREE.Object3D;
+  faceMat!: THREE.Material;
   grip!: any;
   groundShadow!: any;
   hair!: any;

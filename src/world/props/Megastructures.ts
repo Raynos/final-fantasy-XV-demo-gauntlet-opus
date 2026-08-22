@@ -3,6 +3,7 @@ import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import { PartBuilder, loft, ring } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * The things on the horizon that tell you what world this is.
@@ -50,13 +51,13 @@ function shard(seed: any, r: any, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 export class Megastructures {
-  dreadnought!: any;
-  eco!: any;
+  dreadnought!: THREE.Object3D;
+  eco!: Ecology;
   glows!: any[];
   mats!: any;
   movers!: any[];
   root!: THREE.Group;
-  scene!: any;
+  scene!: THREE.Scene;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene) {
     this.eco = eco;
     this.scene = scene;

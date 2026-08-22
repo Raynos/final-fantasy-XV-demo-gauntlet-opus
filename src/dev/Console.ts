@@ -1,3 +1,4 @@
+import type { Registry } from './Registry.ts';
 /**
  * Console overlay over the {@link Registry}.
  *
@@ -17,9 +18,9 @@ export class DevConsole {
   histAt!: number;
   input!: any;
   log!: any;
-  node!: any;
+  node!: HTMLDivElement;
   open!: boolean;
-  reg!: any;
+  reg!: Registry;
   constructor(root: HTMLElement, reg: import('./Registry.ts').Registry) {
     this.reg = reg;
     this.open = false;

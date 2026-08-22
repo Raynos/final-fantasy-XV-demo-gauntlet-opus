@@ -53,7 +53,7 @@ export class VFX {
   smoke!: ParticleSystem;
   softEnabled!: boolean;
   sparks!: ParticleSystem;
-  systems!: any;
+  systems!: ParticleSystem[];
   tex!: any;
   trails!: TrailPool;
   usingGtaoDepth!: boolean;

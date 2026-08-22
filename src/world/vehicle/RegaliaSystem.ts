@@ -69,7 +69,7 @@ export class RegaliaSystem {
   _distanceAp!: number;
   _ducked!: boolean;
   _enterCooldown!: number;
-  _gaze!: any;
+  _gaze!: THREE.Vector3[];
   _interest!: THREE.Vector3;
   _lastControls!: any;
   _lightLevel!: number;
@@ -95,7 +95,7 @@ export class RegaliaSystem {
   fuel!: number;
   game!: any;
   headlights!: string;
-  homeS!: any;
+  homeS!: number;
   isDriving!: boolean;
   lampMat!: any;
   lights!: any;

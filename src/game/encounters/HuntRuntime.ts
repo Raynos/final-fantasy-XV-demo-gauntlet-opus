@@ -1,4 +1,5 @@
 import { HUNT_TARGETS, SET_PIECES } from './SpawnTables.ts';
+import type { EncounterDirector } from './EncounterDirector.ts';
 
 /**
  * Hunts, made real.
@@ -17,7 +18,7 @@ import { HUNT_TARGETS, SET_PIECES } from './SpawnTables.ts';
 export class HuntRuntime {
   _off!: any;
   active!: Map<any, any>;
-  dir!: any;
+  dir!: EncounterDirector;
   rpg!: any;
   constructor(dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.dir = dir;

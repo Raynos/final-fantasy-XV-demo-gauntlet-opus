@@ -6,22 +6,22 @@ import { clock } from './UIKit.ts';
  * damage-taken red flash, the FFXV area title card, and the level-up flourish.
  */
 export class ScreenFX {
-  card!: any;
-  cardMeta!: any;
-  cardName!: any;
-  cardRule!: any;
+  card!: HTMLElement;
+  cardMeta!: HTMLElement;
+  cardName!: HTMLElement;
+  cardRule!: HTMLElement;
   cardState!: any;
-  cardSub!: any;
-  cine!: any;
+  cardSub!: HTMLElement;
+  cine!: HTMLElement;
   cineAmt!: any;
-  flash!: any;
+  flash!: HTMLElement;
   flashAmt!: number;
-  low!: any;
-  lu!: any;
-  luN!: any;
+  low!: HTMLElement;
+  lu!: HTMLElement;
+  luN!: HTMLElement;
   luState!: Clip | null;
-  luT!: any;
-  root!: any;
+  luT!: HTMLElement;
+  root!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'screenfx' });
     parent.appendChild(this.root);

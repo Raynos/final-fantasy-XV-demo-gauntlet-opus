@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { Rng } from '../../../util/Rng.ts';
 import { Noise } from '../../../util/Noise.ts';
 import * as M from './InteriorMaterials.ts';
+import type { Layout } from './Layout.ts';
+import type { InteriorMerger } from './Build.ts';
+import type { LightRig } from './LightRig.ts';
 
 /**
  * The set-dressing kit. Everything a dungeon puts inside its shell — the
@@ -27,13 +30,13 @@ const sph = (seg = 10) => geo(`sph${seg}`, () => new THREE.SphereGeometry(0.5, s
 const plane = () => geo('plane', () => new THREE.PlaneGeometry(1, 1));
 
 export class PropKit {
-  L!: any;
+  L!: Layout;
   animated!: any[];
-  group!: any;
+  group!: THREE.Group;
   interactables!: any[];
-  m!: any;
+  m!: InteriorMerger;
   n!: Noise;
-  rig!: any;
+  rig!: LightRig;
   rng!: Rng;
   /**
    * @param {object} o
@@ -500,7 +503,7 @@ export class PropKit {
     const wood = M.pitTimber();
     const w = s.w || 3.2, d = s.d || 3.2, h = s.h || 2.8;
     const g = new THREE.Group();
-    const sub = new (this.m.constructor)();
+    const sub = new (this.m.constructor as new () => typeof this.m)();
     sub.place(wood, box(), [0, 0.09, 0], [0, 0, 0], [w, 0.18, d], 0.9);
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
@@ -693,7 +696,7 @@ export class PropKit {
 
     // lid
     const lid = new THREE.Group();
-    const sub = new (this.m.constructor)();
+    const sub = new (this.m.constructor as new () => typeof this.m)();
     sub.place(wood, box(), [0, 0.09 * scale, -d * 0.5], [0, 0, 0], [w, 0.18 * scale, d], t);
     for (const sg of [-1, 1]) {
       sub.place(iron, box(), [w * 0.36 * sg, 0.10 * scale, -d * 0.5], [0, 0, 0], [0.09, 0.21 * scale, d * 1.03], t);
@@ -737,7 +740,7 @@ export class PropKit {
     this.m.place(steel, box(), [x, y + h + 0.16, z], [0, rot, 0], [w + 0.9, 0.34, 0.55], t);
 
     const leaf = new THREE.Group();
-    const sub = new (this.m.constructor)();
+    const sub = new (this.m.constructor as new () => typeof this.m)();
     sub.place(steel, box(), [0, 0, 0], [0, 0, 0], [w, h, 0.22], t);
     for (let i = -1; i <= 1; i++) {
       sub.place(M.corrodedSteel(0x3a3630), box(), [i * w * 0.3, 0, 0.14], [0, 0, 0], [0.14, h * 0.9, 0.08], t);

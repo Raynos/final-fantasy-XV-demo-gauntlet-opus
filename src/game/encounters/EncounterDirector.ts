@@ -33,7 +33,7 @@ export class EncounterDirector {
   _streamTimer!: number;
   _tmp!: THREE.Vector3;
   _tmp2!: THREE.Vector3;
-  boss!: any;
+  boss!: BossFight | null;
   budget!: number;
   combat!: any;
   cooldowns!: Map<any, any>;

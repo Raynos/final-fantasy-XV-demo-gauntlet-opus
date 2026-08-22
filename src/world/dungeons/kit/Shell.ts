@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../../util/Noise.ts';
 import { SurfaceBuilder, clamp, smoothstep } from './Build.ts';
+import type { Layout } from './Layout.ts';
 
 /**
  * Turns a {@link Layout} into interior geometry.
@@ -26,7 +27,7 @@ const STYLE = {
 };
 
 export class ShellBuilder {
-  L!: any;
+  L!: Layout;
   _ao!: any;
   n!: Noise;
   opts!: any;

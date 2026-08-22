@@ -6,6 +6,7 @@ import { hash3 } from '../veg/Ecology.ts';
 import { rockMaterial } from './PropMaterials.ts';
 import { TileStream } from './TileStream.ts';
 import { dressAt, pickWeighted } from './ZoneDress.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * Boulders, slabs and pebbles.
@@ -322,12 +323,12 @@ export class Rocks {
   _last!: THREE.Vector3;
   byKey!: Map<any, any>;
   cell!: number;
-  eco!: any;
+  eco!: Ecology;
   groups!: any[];
   outcrops!: TileStream;
-  quality!: any;
+  quality!: number;
   radius!: number;
-  scene!: any;
+  scene!: THREE.Scene;
   stream!: TileStream;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1, radius = 560 }: {quality?:number, radius?:number} = {}) {
     this.eco = eco;

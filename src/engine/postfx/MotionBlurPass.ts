@@ -15,7 +15,7 @@ export class MotionBlurPass extends FilterPass {
   _enabled!: boolean;
   _wanted!: boolean;
   override fx!: any;
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   maxRadius!: number;
   samples!: number;
   shutter!: number;

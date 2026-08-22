@@ -22,7 +22,7 @@ import { attackEnvelope, hitCurve, clamp01, smooth, lerp, decelerate, legPhase }
  * ```
  */
 export class BipedEnemy extends Enemy {
-  _chestPitch!: any;
+  _chestPitch!: number;
   _chestYaw!: number;
   override _dt!: any;
   override anim!: any;

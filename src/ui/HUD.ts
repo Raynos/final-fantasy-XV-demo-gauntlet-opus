@@ -55,7 +55,7 @@ export class HUD {
   mode!: string;
   party!: PartyPanel;
   prompts!: Prompts;
-  root!: any;
+  root!: HTMLElement;
   subtitles!: Subtitles;
   uiScale!: any;
   visible!: boolean;

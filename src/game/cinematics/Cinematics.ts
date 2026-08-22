@@ -47,7 +47,7 @@ export class Cinematics {
   game!: any;
   playing!: boolean;
   scene!: any;
-  skippable!: any;
+  skippable!: boolean;
   stage!: Stage;
   tl!: Timeline | null;
   async init(game: any) {

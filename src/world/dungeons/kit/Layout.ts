@@ -28,14 +28,14 @@ export class Layout {
   props!: any[];
   rooms!: Map<any, any>;
   _critical!: any[];
-  corridorHeight!: any;
-  corridorWidth!: any;
+  corridorHeight!: number;
+  corridorWidth!: number;
   corridors!: any[];
   exitAt!: number[];
-  id!: any;
-  name!: any;
+  id!: string;
+  name!: string;
   spawn!: number[];
-  style!: any;
+  style!: string;
   constructor(id: string, opts: {name?:string, style?:string, corridorWidth?:number, corridorHeight?:number} = {}) {
     this.id = id;
     this.name = opts.name || id;

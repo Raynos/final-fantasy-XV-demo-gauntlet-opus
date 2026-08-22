@@ -1,3 +1,4 @@
+import type { HUD } from './HUD.ts';
 /**
  * Every event in the game, plugged into the HUD.
  *
@@ -29,7 +30,7 @@ export class HudBridge {
   _lastCall!: number;
   _off!: any[];
   game!: any;
-  hud!: any;
+  hud!: HUD;
   constructor(hud: import('./HUD.ts').HUD) {
     this.hud = hud;
     this.game = null;
@@ -98,7 +99,8 @@ export class HudBridge {
     const rpg = game?.get?.('Rpg');
     if (!rpg || typeof rpg.on !== 'function') return;
     const on = (n: any, fn: any) => this._off.push(rpg.on(n, fn));
-    const toast = (...a: any[]) => this.hud.toasts.push(...a);
+    const toast = (label: string, value: string, ico?: string, tone?: string) =>
+      this.hud.toasts.push(label, value, ico, tone);
 
     on('level-up', (p: any) => {
       if (p.member === 'noctis') this.hud.levelUp(p.to);

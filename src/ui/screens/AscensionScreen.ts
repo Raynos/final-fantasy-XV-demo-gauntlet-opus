@@ -1,5 +1,6 @@
 import { el, svg, clamp, rng, easeOut, easeOutQuint } from '../UIKit.ts';
 import { readAscension } from '../GameData.ts';
+import type { Menus } from '../Menus.ts';
 
 const W = 1600, H = 900;
 // keep every node and label inside this box so nothing collides with the chrome
@@ -23,42 +24,42 @@ const CAPSTONE_AP = 88;
  */
 export class AscensionScreen {
   _ap!: any;
-  _curKey!: any;
+  _curKey!: string | null;
   _selAge!: number;
   ap!: number;
-  apEl!: any;
-  apHud!: any;
-  apSub!: any;
-  bracket!: any;
+  apEl!: ChildNode;
+  apHud!: HTMLElement;
+  apSub!: ChildNode;
+  bracket!: SVGElement;
   byId!: Map<any, any>;
-  cC!: any;
-  cC2!: any;
-  cD!: any;
-  cK!: any;
-  cN!: any;
-  cReq!: any;
-  card!: any;
+  cC!: HTMLElement;
+  cC2!: HTMLElement;
+  cD!: HTMLElement;
+  cK!: HTMLElement;
+  cN!: HTMLElement;
+  cReq!: HTMLElement;
+  card!: HTMLElement;
   constellations!: any;
   edgeEls!: any;
-  edgeG!: any;
+  edgeG!: SVGElement;
   edges!: any;
-  flowG!: any;
+  flowG!: SVGElement;
   flows!: any;
   game!: any;
-  labelG!: any;
+  labelG!: SVGElement;
   labels!: any;
-  legend!: any;
-  menus!: any;
+  legend!: HTMLElement;
+  menus!: Menus;
   nodeEls!: any;
-  nodeG!: any;
+  nodeG!: SVGElement;
   nodes!: any;
   place!: any;
   sel!: any;
   src!: any;
   sub!: string;
-  svg!: any;
+  svg!: SVGElement;
   title!: string;
-  wrap!: any;
+  wrap!: HTMLElement;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Ascension';
@@ -450,8 +451,8 @@ export class AscensionScreen {
       const missing = (check.missing || []).map((m: any) => this.src.nodes[m]?.name).filter(Boolean);
       this.cReq.textContent = missing.length ? `Requires  ·  ${missing.join('  ·  ')}` : '';
       this.cReq.style.display = missing.length ? '' : 'none';
-      this.cC.lastChild.textContent = cur.state === 'done' ? 'Owned' : `${def.ap} AP`;
-      this.cC.lastChild.style.color = cur.state === 'reach' ? 'var(--danger)' : '';
+      this.cC.lastChild!.textContent = cur.state === 'done' ? 'Owned' : `${def.ap} AP`;
+      (this.cC.lastChild as HTMLElement).style.color = cur.state === 'reach' ? 'var(--danger)' : '';
       this._curKey = key;
     }
     if (this._ap !== this.src.ap) {

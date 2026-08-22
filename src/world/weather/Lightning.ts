@@ -16,7 +16,7 @@ export class Lightning {
   color!: THREE.Vector3;
   flash!: number;
   light!: THREE.HemisphereLight;
-  seed!: any;
+  seed!: number;
   constructor(seed: number) {
     this.seed = seed >>> 0;
     /** Current flash strength, 0..~1.6. */

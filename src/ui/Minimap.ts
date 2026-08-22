@@ -4,6 +4,9 @@ import { getChart } from '../world/map/Chart.ts';
 import { drawRoads } from '../world/map/MapDraw.ts';
 import { drawGlyph, POI_GLYPH } from '../world/map/MapGlyphs.ts';
 import { fog } from '../world/map/FogOfWar.ts';
+import type { Chart } from '../world/map/Chart.ts';
+import type { FogOfWar } from '../world/map/FogOfWar.ts';
+import type { WorldMap } from '../world/map/WorldMap.ts';
 
 /**
  * The field minimap.
@@ -38,24 +41,24 @@ export class Minimap {
   _discAt!: any;
   _flash!: any;
   _heading!: number;
-  canvas!: any;
-  chart!: any;
+  canvas!: HTMLCanvasElement;
+  chart!: Chart;
   cost!: number;
   ctx!: any;
-  dpr!: any;
-  fog!: any;
-  frame!: any;
+  dpr!: number;
+  fog!: FogOfWar;
+  frame!: HTMLElement;
   game!: any;
-  map!: any;
+  map!: WorldMap;
   range!: number;
-  regionEl!: any;
-  root!: any;
+  regionEl!: HTMLElement;
+  root!: HTMLElement;
   rotate!: boolean;
-  scaleEl!: any;
+  scaleEl!: HTMLElement;
   terrain!: any;
   visible!: boolean;
   waypoint!: any;
-  zoneEl!: any;
+  zoneEl!: HTMLElement;
   constructor() {
     /** Metres from the player edge-to-centre. */
     this.range = 480;

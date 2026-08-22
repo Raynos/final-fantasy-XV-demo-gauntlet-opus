@@ -11,11 +11,11 @@ import * as THREE from 'three';
  * crack-free.
  */
 export class Clipmap {
-  castShadow!: any;
-  cell0!: any;
+  castShadow!: boolean;
+  cell0!: number;
   group!: THREE.Group;
-  levels!: any;
-  n!: any;
+  levels!: number;
+  n!: number;
   rings!: any[];
   triangles!: number;
   /**

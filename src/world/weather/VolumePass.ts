@@ -338,9 +338,9 @@ void main() {
 const MARCH_SCALE = 0.4;
 
 export class VolumePass extends FilterPass {
-  composite!: any;
+  composite!: THREE.ShaderMaterial;
   override fx!: any;
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   rtVol!: any;
   constructor(fx: import('../../engine/PostFX.ts').PostFX) {
     super(fx);

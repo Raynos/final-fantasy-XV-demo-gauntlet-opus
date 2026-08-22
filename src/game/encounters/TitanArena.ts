@@ -13,10 +13,10 @@ import { Rng } from '../../util/Rng.ts';
  */
 export class TitanArena {
   _tmp!: THREE.Vector3;
-  centre!: any;
+  centre!: THREE.Vector3;
   game!: any;
   mesh!: THREE.Mesh;
-  radius!: any;
+  radius!: number;
   risen!: number;
   rng!: Rng;
   root!: THREE.Group;

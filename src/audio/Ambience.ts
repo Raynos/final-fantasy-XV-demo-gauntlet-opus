@@ -1,4 +1,6 @@
 import { noiseBuffer, makeRng, clamp, EPS, hit } from './Dsp.ts';
+import type { AudioGraph } from './Graph.ts';
+import type { Sfx } from './Sfx.ts';
 
 /**
  * The world's own soundtrack.
@@ -17,12 +19,12 @@ export class Ambience {
   _nextCreak!: number;
   _nextDrip!: number;
   _nextHowl!: number;
-  brown!: any;
+  brown!: AudioBuffer;
   cicada!: any;
   cicadaLfo!: any;
   cicadaSrc!: any;
   ctx!: any;
-  graph!: any;
+  graph!: AudioGraph;
   gustA!: any;
   gustAG!: any;
   gustB!: any;
@@ -34,7 +36,7 @@ export class Ambience {
   nightDepth!: number;
   nightSrc!: any;
   out!: any;
-  pink!: any;
+  pink!: AudioBuffer;
   rain!: number;
   rainHiss!: any;
   rainPatter!: any;
@@ -42,9 +44,9 @@ export class Ambience {
   rainSrc!: any;
   rng!: any;
   scheduledTo!: number;
-  sfx!: any;
+  sfx!: Sfx;
   water!: any;
-  white!: any;
+  white!: AudioBuffer;
   wind!: number;
   windBands!: any[];
   windSrc!: any;
@@ -75,7 +77,7 @@ export class Ambience {
     this.windSrc.buffer = this.pink;
     this.windSrc.loop = true;
     this.windBands = [];
-    const BANDS = [
+    const BANDS: { f: number, q: number, g: number, type: BiquadFilterType }[] = [
       { f: 95, q: 0.7, g: 0.55, type: 'lowpass' },     // the body you feel
       { f: 430, q: 0.9, g: 0.42, type: 'bandpass' },   // the moan around rock
       { f: 2200, q: 0.6, g: 0.20, type: 'bandpass' },  // grass and scrub hiss

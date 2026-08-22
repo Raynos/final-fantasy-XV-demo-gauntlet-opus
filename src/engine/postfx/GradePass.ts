@@ -13,7 +13,7 @@ import { CHUNK_COLOR, CHUNK_TONEMAP, CHUNK_LUT, CHUNK_HASH } from '../../shaders
  * procedurally baked 32^3 print emulation applied in display space.
  */
 export class GradePass extends FilterPass {
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   constructor(fx: any) {
     super(fx);
     this.material = fsMaterial({

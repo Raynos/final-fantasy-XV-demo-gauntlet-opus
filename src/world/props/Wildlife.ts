@@ -8,6 +8,7 @@ import { puffTexture } from './PropMaterials.ts';
 import { garulaGeometry, grazerMaterials, walkCycle, CYCLE_DISTANCE } from './Grazer.ts';
 import { waderGeometry, waderMaterial } from './Waders.ts';
 import { WORLD } from '../map/WorldMap.ts';
+import type { Ecology } from '../veg/Ecology.ts';
 
 /**
  * The moving half of "inhabited".
@@ -137,11 +138,11 @@ export class Wildlife {
   insects!: any;
   smoke!: any;
   waders!: any;
-  eco!: any;
+  eco!: Ecology;
   herd!: any;
-  quality!: any;
+  quality!: number;
   root!: THREE.Group;
-  scene!: any;
+  scene!: THREE.Scene;
   timeRef!: any;
   constructor(eco: import('../veg/Ecology.ts').Ecology, scene: THREE.Scene, { quality = 1 }: {quality?:number} = {}) {
     this.eco = eco;

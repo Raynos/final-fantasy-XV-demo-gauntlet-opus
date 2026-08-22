@@ -16,12 +16,12 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_BICUBIC } from '../../shaders/post/comm
 export class TaaPass extends Pass {
   _reset!: boolean;
   clampScale!: number;
-  copy!: any;
+  copy!: THREE.ShaderMaterial;
   feedbackMax!: number;
   feedbackMin!: number;
   fx!: any;
   history!: any;
-  material!: any;
+  material!: THREE.ShaderMaterial;
   ping!: number;
   constructor(fx: any, w: any, h: any) {
     super();

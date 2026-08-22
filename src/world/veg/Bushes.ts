@@ -203,15 +203,15 @@ export class Bushes {
   _pending!: boolean;
   _primed!: boolean;
   _stamp!: number;
-  _tick!: any;
-  budget!: any;
+  _tick!: number;
+  budget!: number;
   budgetMs!: number;
-  count!: any;
+  count!: number;
   eco!: any;
   group!: THREE.Group;
   kinds!: Map<any, any>;
-  quality!: any;
-  range!: any;
+  quality!: number;
+  range!: number;
   scene!: any;
   tileCacheMax!: number;
   constructor(eco: any, scene: any, { quality = 1, range = 132 } = {}) {

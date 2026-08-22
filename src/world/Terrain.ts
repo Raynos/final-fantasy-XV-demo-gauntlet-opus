@@ -11,6 +11,7 @@ import {
   createTerrainMaterial, createTerrainDepthMaterial, makeTerrainUniforms, patchGBufferMaterial,
 } from './terrain/TerrainMaterial.ts';
 import { worldMap, WORLD } from './map/WorldMap.ts';
+import type { WorldMap } from './map/WorldMap.ts';
 
 /**
  * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
@@ -30,6 +31,16 @@ import { worldMap, WORLD } from './map/WorldMap.ts';
  *   landmarks                          named hero features for shot framing
  */
 export class Terrain {
+  /**
+   * The originals, while `Dungeons` has ground queries redirected to a dungeon
+   * floor. Set by `Dungeons._patchTerrain` and cleared on the way out --
+   * declared here because a monkey patch that nothing declares is a monkey
+   * patch nobody can find.
+   */
+  __dungeonPatch?: {
+    origH: (x: number, z: number) => number,
+    origN: (x: number, z: number, out?: THREE.Vector3) => THREE.Vector3,
+  } | null;
   _bio!: any;
   _biome!: any;
   _ctrl!: any;
@@ -40,8 +51,8 @@ export class Terrain {
   field!: Field;
   game!: any;
   landmarks!: any;
-  layerNames!: any;
-  map!: any;
+  layerNames!: string[];
+  map!: WorldMap;
   res!: any;
   road!: any;
   size!: number;
@@ -173,12 +184,12 @@ export class Terrain {
   /**
    * Surface height at a world position — exactly what the GPU renders.
    */
-  heightAt(x: any, z: any): number { return this.field.heightAt(x, z); }
+  heightAt(x: number, z: number): number { return this.field.heightAt(x, z); }
 
   /**
    * Surface normal at a world position.
    */
-  normalAt(x: any, z: any, out = new THREE.Vector3()): THREE.Vector3 {
+  normalAt(x: number, z: number, out: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 {
     const e = CELL;
     const f = this.field;
     const hL = f.heightAt(x - e, z), hR = f.heightAt(x + e, z);

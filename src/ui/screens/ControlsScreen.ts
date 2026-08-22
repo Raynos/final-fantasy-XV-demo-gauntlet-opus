@@ -1,5 +1,6 @@
 import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { button, icon } from '../Icons.ts';
+import type { Menus } from '../Menus.ts';
 
 /**
  * Every binding the game answers to, in the four groups a player thinks in.
@@ -82,11 +83,11 @@ const GROUPS = [
  */
 export class ControlsScreen {
   cols!: any;
-  grid!: any;
+  grid!: HTMLElement;
   i!: number;
   j!: number;
-  menus!: any;
-  note!: any;
+  menus!: Menus;
+  note!: HTMLElement;
   sub!: string;
   title!: string;
   constructor(menus: import('../Menus.ts').Menus) {

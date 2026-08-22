@@ -49,10 +49,10 @@ export class Ecology {
   nGrove!: Noise;
   nMoist!: Noise;
   nTint!: Noise;
-  seed!: any;
+  seed!: number;
   sites!: any;
   terrain!: any;
-  worldRadius!: any;
+  worldRadius!: number;
   /**
    * @param game the Game instance (needs .get('Terrain'))
    * @param seed master seed

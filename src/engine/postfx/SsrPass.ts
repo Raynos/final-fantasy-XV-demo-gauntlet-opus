@@ -16,7 +16,7 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
 export class SsrPass extends FilterPass {
   override fx!: any;
   intensity!: number;
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   maxDistance!: number;
   maxHeight!: number;
   roughness!: number;

@@ -10,11 +10,11 @@ export class Bar {
   _lastC!: number;
   _lastV!: number;
   c!: number;
-  chaseEl!: any;
+  chaseEl!: HTMLElement;
   delay!: any;
-  fill!: any;
+  fill!: HTMLElement;
   hold!: number;
-  node!: any;
+  node!: HTMLElement;
   speed!: any;
   v!: number;
   /**

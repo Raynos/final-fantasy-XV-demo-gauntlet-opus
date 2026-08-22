@@ -11,6 +11,7 @@
  */
 
 import { Stats, emptyMods, addMods } from './Stats.ts';
+import type { Emitter } from './Emitter.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Roster                                                                    */
@@ -233,7 +234,7 @@ export class PartyState {
   activeBuffs!: any[];
   bonuses!: any;
   cookingLevel!: number;
-  emitter!: any;
+  emitter!: Emitter | null;
   flags!: Set<any>;
   knownRecipes!: Set<any>;
   mealsCooked!: number;

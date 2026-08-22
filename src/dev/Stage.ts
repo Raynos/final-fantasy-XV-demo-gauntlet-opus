@@ -29,7 +29,7 @@ const KEY_OFFSET = 0.6;
  */
 export class Stage {
   _hidden!: any[];
-  _current!: any;
+  _current!: THREE.Object3D | null;
   _keep!: Set<any>;
   _needFrame!: boolean;
   _timeWas!: any;

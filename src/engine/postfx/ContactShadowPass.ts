@@ -30,7 +30,7 @@ export class ContactShadowPass extends FilterPass {
   override fx!: any;
   intensity!: number;
   length!: number;
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   maxDistance!: number;
   thickness!: number;
   tint!: THREE.Color;

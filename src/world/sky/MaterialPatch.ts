@@ -19,7 +19,7 @@ import { ATMO_COMMON } from '../../shaders/atmosphere.glsl.ts';
  */
 export class MaterialPatch {
   count!: number;
-  csm!: any;
+  csm!: import('three/examples/jsm/csm/CSM.js').CSM;
   uniforms!: any;
   /**
    * @param uniforms shared uniform objects (LUTs, fog, cloud shadow)

@@ -3,6 +3,7 @@ import { icon, portrait } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
 import { readGear, readParty, rpg } from '../GameData.ts';
+import type { Menus } from '../Menus.ts';
 
 const SLOT_ICON = { Weapon: 'sword', Accessory: 'ap' };
 
@@ -28,14 +29,14 @@ export class GearScreen {
   _msgAge!: number;
   cards!: any[];
   game!: any;
-  grid!: any;
+  grid!: HTMLElement;
   i!: number;
   j!: number;
-  menus!: any;
-  msg!: any;
-  pick!: any;
-  pickH!: any;
-  pickList!: any;
+  menus!: Menus;
+  msg!: HTMLElement;
+  pick!: HTMLElement;
+  pickH!: HTMLElement;
+  pickList!: HTMLElement;
   picker!: any;
   sub!: string;
   title!: string;

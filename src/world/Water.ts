@@ -27,13 +27,13 @@ export class Water {
   _sinceReflect!: number;
   _vp!: THREE.Matrix4;
   bodies!: any[];
-  caustics!: any;
+  caustics!: THREE.DataTexture;
   enabled!: boolean;
   game!: any;
   level!: number;
   noise!: Noise;
-  normalA!: any;
-  normalB!: any;
+  normalA!: THREE.DataTexture;
+  normalB!: THREE.DataTexture;
   reflectCam!: THREE.PerspectiveCamera;
   reflectTarget!: THREE.WebGLRenderTarget;
   reflectionRes!: number;

@@ -462,7 +462,7 @@ export class Debris {
   eco!: any;
   groups!: Map<any, any>;
   mats!: any;
-  quality!: any;
+  quality!: number;
   radius!: number;
   scene!: any;
   stream!: TileStream;

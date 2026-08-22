@@ -6,6 +6,11 @@ import { DungeonAmbience } from './kit/Ambience.ts';
 import { KEYCATRICH } from './Keycatrich.ts';
 import { BALOUVE } from './Balouve.ts';
 import { FOCIAUGH } from './Fociaugh.ts';
+import type { InteractionSystem } from '../../game/interaction/Interactables.ts';
+import type { Game } from '../../game/Game.ts';
+import type { Sky } from '../Sky.ts';
+import type { Terrain } from '../Terrain.ts';
+import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
 
@@ -39,10 +44,10 @@ const DEFS = [KEYCATRICH, BALOUVE, FOCIAUGH];
  * data is available for any other system to poll.
  */
 export class Dungeons {
-  _interaction!: any;
+  _interaction!: InteractionSystem | null;
   _camLocal!: any;
   _hidden!: any[];
-  _returnTo!: any;
+  _returnTo!: THREE.Vector3;
   _saved!: any;
   _shotSeen!: any;
   _tmp!: THREE.Vector3;
@@ -52,13 +57,13 @@ export class Dungeons {
   defs!: Map<any, any>;
   entrances!: any[];
   fader!: Fader;
-  game!: any;
+  game!: Game;
   keys!: Set<any>;
   prompt!: any;
-  sky!: any;
+  sky!: Sky | null;
   state!: string;
   stats!: any;
-  terrain!: any;
+  terrain!: Terrain | null;
   constructor() {
     /** @type {Map<string, object>} id -> definition */
     this.defs = new Map(DEFS.map((d) => [d.id, d]));
@@ -79,8 +84,8 @@ export class Dungeons {
 
   async init(game: import('../../game/Game.ts').Game) {
     this.game = game;
-    this.terrain = game.get('Terrain');
-    this.sky = game.get('Sky');
+    this.terrain = game.get('Terrain') ?? null;
+    this.sky = game.get('Sky') ?? null;
     this.fader = new Fader(game.uiRoot);
     this.ambience = new DungeonAmbience(game.get('Audio'));
 
@@ -119,7 +124,7 @@ export class Dungeons {
           onUse: () => this.enter(e.id),
         });
       }
-      this._interaction = interaction;
+      this._interaction = interaction ?? null;
     }
   }
 
@@ -257,8 +262,11 @@ export class Dungeons {
         m.root.position.set(spawn.x + m.slot.x * 0.8, spawn.y, spawn.z + m.slot.y * 0.8);
       }
     }
-    const cam = game.get('Camera');
-    if (cam && cam.snap) cam.snap();
+    // NOTE: no camera snap on a dungeon transition. This used to read
+    // `if (cam && cam.snap) cam.snap()` and `CameraRig` has never had a `snap()`
+    // -- the guard was always false, so the arm eases into the new room rather
+    // than cutting. `CameraRig._cut()` is the method that would do it, and
+    // wiring it up is a change to how the transition looks, not a port fix.
 
     this.ambience.start(def.ambience || {});
     const audio = game.get('Audio');
@@ -289,8 +297,11 @@ export class Dungeons {
         m.root.position.set(back.x + m.slot.x * 0.8, back.y, back.z + m.slot.y * 0.8);
       }
     }
-    const cam = game.get('Camera');
-    if (cam && cam.snap) cam.snap();
+    // NOTE: no camera snap on a dungeon transition. This used to read
+    // `if (cam && cam.snap) cam.snap()` and `CameraRig` has never had a `snap()`
+    // -- the guard was always false, so the arm eases into the new room rather
+    // than cutting. `CameraRig._cut()` is the method that would do it, and
+    // wiring it up is a change to how the transition looks, not a port fix.
 
     this.ambience.stop();
     const audio = game.get('Audio');
@@ -308,7 +319,7 @@ export class Dungeons {
     const e = def.entrance;
     const c = Math.cos(e.heading), s = Math.sin(e.heading);
     const x = e.x + s * -7.5, z = e.z + c * -7.5;
-    return new THREE.Vector3(x, this.terrain.heightAt(x, z), z);
+    return new THREE.Vector3(x, this.terrain!.heightAt(x, z), z);
   }
 
   /**
@@ -319,19 +330,23 @@ export class Dungeons {
    */
   _hideExterior() {
     const game = this.game;
-    const keep = new Set();
-    const add = (o: any) => { if (o && o.isObject3D) keep.add(o); };
-    for (const name of ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director']) {
-      const s = game.get(name);
+    const keep = new Set<THREE.Object3D>();
+    const add = (o: unknown) => { if (isObject3D(o)) keep.add(o); };
+    // The systems whose content belongs to the party rather than to the world.
+    // Typed as a tuple of registry keys so a rename shows up here.
+    const KEEP_SYSTEMS = ['Player', 'Party', 'Enemies', 'VFX', 'Combat', 'Director'] as const;
+    for (const name of KEEP_SYSTEMS) {
+      const s = game.get(name) as unknown as Record<string, unknown> | undefined;
       if (!s) continue;
       for (const k of ['root', 'group', 'container']) add(s[k]);
-      if (s.members) for (const m of s.members) add(m.root);
+      const members = s.members;
+      if (Array.isArray(members)) for (const m of members) add(m.root);
     }
     if (this.current) keep.add(this.current.group);
 
     this._hidden = [];
     for (const c of game.scene.children) {
-      if (keep.has(c) || c.isCamera || c.isLight || !c.visible) continue;
+      if (keep.has(c) || isCamera(c) || isLight(c) || !c.visible) continue;
       c.visible = false;
       this._hidden.push(c);
     }
@@ -361,28 +376,28 @@ export class Dungeons {
    */
   _patchTerrain() {
     const t = this.terrain;
-    if (t.__dungeonPatch) return;
-    const origH = t.heightAt.bind(t);
-    const origN = t.normalAt.bind(t);
+    if (t!.__dungeonPatch) return;
+    const origH = t!.heightAt.bind(t);
+    const origN = t!.normalAt.bind(t);
     const self = this;
-    t.heightAt = function (x: any, z: any) {
+    t!.heightAt = function (x: any, z: any) {
       const h = self.floorAt(x, z);
       return h != null ? h : origH(x, z);
     };
-    t.normalAt = function (x: any, z: any, out: any) {
+    t!.normalAt = function (x: any, z: any, out: any) {
       const h = self.floorAt(x, z);
       if (h != null) return (out || new THREE.Vector3()).set(0, 1, 0);
       return origN(x, z, out);
     };
-    t.__dungeonPatch = { origH, origN };
+    t!.__dungeonPatch = { origH, origN };
   }
 
   _unpatchTerrain() {
     const t = this.terrain;
-    if (!t.__dungeonPatch) return;
-    t.heightAt = t.__dungeonPatch.origH;
-    t.normalAt = t.__dungeonPatch.origN;
-    t.__dungeonPatch = null;
+    if (!t!.__dungeonPatch) return;
+    t!.heightAt = t!.__dungeonPatch.origH;
+    t!.normalAt = t!.__dungeonPatch.origN;
+    t!.__dungeonPatch = null;
   }
 
   _saveWorldLighting() {

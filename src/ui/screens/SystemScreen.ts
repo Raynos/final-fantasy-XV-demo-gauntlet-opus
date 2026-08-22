@@ -2,6 +2,7 @@ import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { Bar } from '../Bar.ts';
+import type { Menus } from '../Menus.ts';
 
 const QUALITY = ['low', 'medium', 'high', 'ultra'];
 
@@ -18,21 +19,21 @@ const QUALITY = ['low', 'medium', 'high', 'ultra'];
  */
 export class SystemScreen {
   _age!: number;
-  _cur!: any;
+  _cur!: string | null;
   _msg!: any;
   _msgAge!: number;
-  cols!: any;
-  dD!: any;
-  dI!: any;
-  dK!: any;
-  dN!: any;
-  dRule!: any;
-  detail!: any;
+  cols!: HTMLElement;
+  dD!: HTMLElement;
+  dI!: HTMLElement;
+  dK!: HTMLElement;
+  dN!: HTMLElement;
+  dRule!: HTMLElement;
+  detail!: HTMLElement;
   game!: any;
   i!: number;
-  list!: any;
-  menus!: any;
-  msg!: any;
+  list!: HTMLElement;
+  menus!: Menus;
+  msg!: HTMLElement;
   nodes!: any;
   sub!: string;
   title!: string;

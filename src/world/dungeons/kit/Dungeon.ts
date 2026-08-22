@@ -6,6 +6,7 @@ import { LightRig } from './LightRig.ts';
 import { PropKit } from './InteriorProps.ts';
 import { buildExitVestibule } from './Portal.ts';
 import { DungeonMap } from './DungeonMap.ts';
+import type { Game } from '../../../game/Game.ts';
 
 /**
  * One built dungeon interior.
@@ -23,17 +24,17 @@ export class Dungeon {
   built!: boolean;
   def!: any;
   discovered!: Set<any>;
-  game!: any;
+  game!: Game;
   group!: THREE.Group;
   id!: any;
   interactables!: any;
   keys!: Set<any>;
-  kit!: any;
-  layout!: any;
+  kit!: PropKit;
+  layout!: Layout;
   map!: DungeonMap;
   name!: any;
   origin!: THREE.Vector3;
-  rig!: any;
+  rig!: LightRig;
   stats!: any;
   vestibule!: any;
   /**

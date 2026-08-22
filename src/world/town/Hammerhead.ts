@@ -48,8 +48,8 @@ const PAD = { u0: -28, u1: 29, v0: -31, v1: 17 };
 export class Hammerhead {
   lights!: any[];
   _camPos!: THREE.Vector3;
-  _cast!: any;
-  _casters!: any;
+  _cast!: boolean;
+  _casters!: THREE.Object3D[];
   _handles!: any[];
   _restFail!: any;
   _restSummary!: any;
@@ -65,8 +65,8 @@ export class Hammerhead {
   shell!: THREE.Group;
   site!: any;
   stats!: any;
-  world!: any;
-  yaw!: any;
+  world!: THREE.Matrix4;
+  yaw!: number;
   constructor() {
     this.root = new THREE.Group();
     this.root.name = 'hammerhead';

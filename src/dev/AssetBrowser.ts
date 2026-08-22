@@ -5,6 +5,8 @@ import { NPC_CAST } from '../characters/npc/NpcCast.ts';
 import { archetype, NpcBody } from '../characters/npc/NpcRig.ts';
 import { WEAPONS, Weapon } from '../combat/Weapons.ts';
 import { ACTIONS } from '../characters/rig/Anim.ts';
+import type { Character } from '../characters/rig/Character.ts';
+import type { Stage } from './Stage.ts';
 
 /**
  * Step through every asset in the game, one at a time, on the isolation stage.
@@ -25,23 +27,23 @@ import { ACTIONS } from '../characters/rig/Anim.ts';
 const ENEMY_POSES = ['idle', 'approach', 'telegraph', 'attack', 'flinch', 'stagger', 'death'];
 
 export class AssetBrowser {
-  _weaponObj!: any;
+  _weaponObj!: Weapon | null;
   familyAt!: number;
-  _char!: any;
+  _char!: Character | null;
   _made!: any;
-  _npcBody!: any;
+  _npcBody!: NpcBody | null;
   _spawned!: any;
   error!: string | null;
   families!: any;
   game!: any;
   info!: any;
   itemAt!: number;
-  node!: any;
+  node!: HTMLDivElement;
   open!: boolean;
   phase!: number;
   playing!: boolean;
   poseAt!: number;
-  stage!: any;
+  stage!: Stage;
   status!: any;
   unreviewedOnly!: boolean;
   constructor(root: HTMLElement, game: any, stage: import('./Stage.ts').Stage) {

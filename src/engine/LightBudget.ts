@@ -32,7 +32,7 @@ export class LightBudget {
   ballast!: any;
   budget!: any;
   enabled!: boolean;
-  scene!: any;
+  scene!: THREE.Scene;
   /**
    * @param [budget] visible lights of each type
    */

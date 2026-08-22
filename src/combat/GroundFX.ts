@@ -14,11 +14,11 @@ export class GroundPatch {
   age!: number;
   center!: any;
   free!: boolean;
-  grid!: any;
+  grid!: number;
   life!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  posAttr!: any;
+  posAttr!: THREE.BufferAttribute;
   positions!: Float32Array;
   size!: any;
   uniforms!: any;

@@ -28,8 +28,8 @@ import * as THREE from 'three';
 
 /** Critically-ish damped angular spring. */
 export class Spring {
-  c!: any;
-  k!: any;
+  c!: number;
+  k!: number;
   v!: number;
   x!: number;
   constructor(k = 90, c = 14) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
@@ -96,10 +96,10 @@ export function legPhase(u: any, gait: any): {stance:boolean, f:number, reach:nu
 export class LegChain {
   L1!: any;
   L2!: any;
-  footRel!: any;
+  footRel!: THREE.Vector3;
   hasHock!: boolean;
-  names!: any;
-  ok!: any;
+  names!: string[];
+  ok!: boolean;
   reachLen!: any;
   seg!: any[];
   /**

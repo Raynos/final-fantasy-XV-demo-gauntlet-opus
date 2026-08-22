@@ -1,3 +1,5 @@
+import type { Layout } from './Layout.ts';
+import type { Dungeon } from './Dungeon.ts';
 /**
  * The dungeon map.
  *
@@ -8,8 +10,8 @@
  * or a HUD inset can call straight onto a 2D context.
  */
 export class DungeonMap {
-  L!: any;
-  dungeon!: any;
+  L!: Layout;
+  dungeon!: Dungeon;
   constructor(layout: import('./Layout.ts').Layout, dungeon: import('./Dungeon.ts').Dungeon) {
     this.L = layout;
     this.dungeon = dungeon;

@@ -736,8 +736,8 @@ export class Weapon {
   baseLocal!: THREE.Vector3;
   def!: any;
   geometry!: any;
-  kind!: any;
-  material!: any;
+  kind!: string;
+  material!: THREE.MeshStandardMaterial;
   mesh!: THREE.Mesh;
   reveal!: number;
   root!: THREE.Group;
@@ -796,9 +796,9 @@ export class Armiger {
   _q!: THREE.Quaternion;
   _s!: THREE.Vector3;
   active!: number;
-  count!: any;
+  count!: number;
   group!: THREE.Group;
-  material!: any;
+  material!: THREE.ShaderMaterial;
   meshes!: any[];
   phase!: number;
   slots!: any[];

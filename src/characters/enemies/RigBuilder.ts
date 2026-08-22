@@ -14,7 +14,7 @@ export class Rig {
   bones!: any[];
   _world!: Map<any, any>;
   byName!: Map<any, any>;
-  group!: any;
+  group!: THREE.Group;
   mesh!: any;
   parts!: any[];
   rest!: Map<any, any>;

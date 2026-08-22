@@ -27,7 +27,7 @@ import { CreatureAnim } from '../rig/CreatureAnim.ts';
 export class Enemy {
   poise!: number;
   _atkCooldown!: number;
-  _dt!: any;
+  _dt!: number;
   _kb!: any;
   _lostTimer!: number;
   _roleTimer!: number;
@@ -50,11 +50,11 @@ export class Enemy {
   corpseTime!: number;
   damage!: any;
   dead!: boolean;
-  deathPush!: any;
-  deathSide!: any;
+  deathPush!: number;
+  deathSide!: number;
   expClass!: any;
   faction!: any;
-  flinchDir!: any;
+  flinchDir!: THREE.Vector3;
   flinchTime!: number;
   fov!: any;
   frozenPose!: any;
@@ -68,7 +68,7 @@ export class Enemy {
   invulnerable!: boolean;
   killer!: any;
   knockbackCap!: any;
-  lastHitAt!: any;
+  lastHitAt!: number;
   leash!: any;
   level!: any;
   locked!: boolean;
@@ -99,7 +99,7 @@ export class Enemy {
   target!: any;
   type!: any;
   velocity!: THREE.Vector3;
-  visual!: any;
+  visual!: THREE.Object3D;
   constructor(type: any, opts: any = {}) {
     this.type = type;
     this.id = opts.id ?? 0;

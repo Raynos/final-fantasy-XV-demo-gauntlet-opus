@@ -24,24 +24,24 @@ import './dev.css';
  * way `TitleScreen` owns `#title`.
  */
 class DevSuite {
-  _toastT!: any;
+  _toastT!: number;
   _inputWas!: any;
   _scale!: any;
-  _tainted!: any;
+  _tainted!: boolean;
   bookmarks!: any;
   browser!: AssetBrowser;
   cam!: Freecam;
   console!: DevConsole;
   game!: any;
-  hint!: any;
+  hint!: HTMLDivElement;
   inbox!: Inbox;
   reg!: Registry;
-  root!: any;
+  root!: HTMLDivElement;
   shotAt!: number;
-  shotNames!: any;
+  shotNames!: string[];
   stage!: Stage;
   stats!: StatsHud;
-  taint!: any;
+  taint!: HTMLDivElement;
   tuning!: any;
   views!: ViewModes;
   constructor() {

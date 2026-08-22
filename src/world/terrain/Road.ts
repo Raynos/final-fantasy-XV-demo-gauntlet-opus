@@ -1,4 +1,5 @@
 import { Noise } from '../../util/Noise.ts';
+import type { RoadGraph } from '../map/RoadGraph.ts';
 
 /**
  * Carves the whole road network of Lucis into the heightfield.
@@ -20,7 +21,7 @@ import { Noise } from '../../util/Noise.ts';
  */
 export class RoadNetwork {
   _noise!: Noise;
-  graph!: any;
+  graph!: RoadGraph;
   nodeY!: any;
   shoulder!: number;
   spine!: any;

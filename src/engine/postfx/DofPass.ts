@@ -20,16 +20,16 @@ import { CHUNK_COLOR, CHUNK_DEPTH, CHUNK_HASH } from '../../shaders/post/common.
 export class DofPass extends Pass {
   blades!: number;
   bokehScale!: number;
-  composite!: any;
+  composite!: THREE.ShaderMaterial;
   fStop!: number;
   farScale!: number;
   focusDistance!: number;
   fx!: any;
-  gather!: any;
+  gather!: THREE.ShaderMaterial;
   height!: any;
   maxCoc!: number;
   nearScale!: number;
-  prefilter!: any;
+  prefilter!: THREE.ShaderMaterial;
   rtBlur!: any;
   rtPre!: any;
   sensorHeight!: number;

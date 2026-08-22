@@ -193,8 +193,8 @@ export const ACTIONS: Record<string, Action> = {
 
 /** A critically-ish damped angular spring used for cloth and hair bones. */
 class Spring {
-  c!: any;
-  k!: any;
+  c!: number;
+  k!: number;
   v!: number;
   x!: number;
   constructor(k = 90, c = 13) { this.k = k; this.c = c; this.x = 0; this.v = 0; }
@@ -219,7 +219,7 @@ export class Animator {
   blink!: number;
   blinkSeq!: number;
   blinkTimer!: number;
-  blinkTimer0!: any;
+  blinkTimer0!: number;
   bobY!: number;
   bones!: any;
   char!: any;
@@ -231,7 +231,7 @@ export class Animator {
   g!: any;
   gesture!: any;
   gestureTimer!: number;
-  gestureTimer0!: any;
+  gestureTimer0!: number;
   hipShift!: number;
   lean!: number;
   leanSpring!: Spring;
@@ -241,7 +241,7 @@ export class Animator {
   p!: any;
   pelvisIK!: number;
   phase!: number;
-  phase0!: any;
+  phase0!: number;
   plant!: number[];
   pose!: Map<any, any>;
   prevVel!: THREE.Vector3;
@@ -251,7 +251,7 @@ export class Animator {
   stanceDrop!: number;
   sway!: any;
   t!: number;
-  t0!: any;
+  t0!: number;
   tail!: any;
   turnSpring!: Spring;
   /**

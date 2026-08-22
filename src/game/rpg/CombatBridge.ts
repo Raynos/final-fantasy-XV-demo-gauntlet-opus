@@ -26,6 +26,7 @@
  */
 
 import { Rng } from '../../util/Rng.ts';
+import type { RpgSystem } from './RpgSystem.ts';
 
 export class CombatBridge {
   _off!: any[];
@@ -36,7 +37,7 @@ export class CombatBridge {
   combat!: any;
   game!: any;
   lastRoll!: any;
-  rpg!: any;
+  rpg!: RpgSystem;
   constructor(rpg: import('./RpgSystem.ts').RpgSystem) {
     this.rpg = rpg;
     this.combat = null;

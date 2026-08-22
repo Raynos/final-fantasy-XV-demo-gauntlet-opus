@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WALKABLE_Y } from './CollisionWorld.ts';
+import type { CollisionWorld } from './CollisionWorld.ts';
 
 /** Below this the surface no longer holds a character at all. */
 const SLIDE_Y = Math.cos(58 * Math.PI / 180);
@@ -33,16 +34,16 @@ export class CharacterController {
   climb!: any;
   climbMax!: any;
   grounded!: boolean;
-  height!: any;
+  height!: number;
   normal!: THREE.Vector3;
   onProp!: boolean;
   progress!: number;
-  radius!: any;
+  radius!: number;
   riseRate!: any;
-  stepDown!: any;
-  stepUp!: any;
+  stepDown!: number;
+  stepUp!: number;
   vy!: number;
-  world!: any;
+  world!: CollisionWorld;
   constructor(world: import('./CollisionWorld.ts').CollisionWorld, opts: {radius?:number, height?:number, stepUp?:number, stepDown?:number, climbMax?: any, riseRate?: any } = {}) {
     this.world = world;
     this.radius = opts.radius != null ? opts.radius : 0.36;

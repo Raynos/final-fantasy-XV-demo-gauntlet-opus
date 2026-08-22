@@ -53,7 +53,7 @@ export class CameraRig {
   pitch!: number;
   pitchMax!: number;
   pitchMin!: number;
-  pitchTarget!: any;
+  pitchTarget!: number;
   posDamp!: number;
   posDampY!: number;
   probeRadius!: number;

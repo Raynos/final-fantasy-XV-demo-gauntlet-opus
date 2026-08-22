@@ -19,10 +19,10 @@ import * as THREE from 'three';
 export class RoadPath {
   _t!: THREE.Vector3;
   _v!: THREE.Vector3;
-  fwd!: any;
-  i0!: any;
+  fwd!: THREE.Vector3;
+  i0!: number;
   lane!: number;
-  origin!: any;
+  origin!: THREE.Vector3;
   pts!: any;
   right!: THREE.Vector3;
   s0!: any;

@@ -15,18 +15,18 @@ const MAX_SEG = 34;
 export class TrailRibbon {
   _samples!: any[];
   active!: boolean;
-  ageAttr!: any;
+  ageAttr!: THREE.BufferAttribute;
   ages!: Float32Array;
   count!: number;
-  life!: any;
+  life!: number;
   material!: THREE.ShaderMaterial;
   mesh!: THREE.Mesh;
-  posAttr!: any;
+  posAttr!: THREE.BufferAttribute;
   positions!: Float32Array;
-  segments!: any;
+  segments!: number;
   strength!: number;
   uniforms!: any;
-  uvAttr!: any;
+  uvAttr!: THREE.BufferAttribute;
   uvs!: Float32Array;
   constructor({
     segments = MAX_SEG, head = 0x9fd8ff, tail = 0x1a4c9c, core = 0xffffff,

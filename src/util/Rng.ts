@@ -1,7 +1,7 @@
 /** Deterministic, fast PRNG (mulberry32). Every system must use a seeded RNG
  *  so screenshots are reproducible between runs and between agents. */
 export class Rng {
-  s!: any;
+  s!: number;
   constructor(seed = 1337) { this.s = seed >>> 0; }
   next() {
     this.s = (this.s + 0x6d2b79f5) >>> 0;

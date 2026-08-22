@@ -6,6 +6,7 @@ import {
   rockMaterial, woodMaterial, rustMaterial, canvasClothMaterial,
   runeTexture, signTexture, glowMaterial, flameTexture,
 } from './PropMaterials.ts';
+import { isMesh } from '../../util/three-guards.ts';
 
 /**
  * FFXV-flavoured structures: a haven, ruined pylons, an abandoned outpost,
@@ -54,10 +55,10 @@ function block(seed: any, w: any, h: any, d: any, rough = 0.16) {
 }
 
 export class Landmarks {
-  B!: any;
+  B!: PartBuilder;
   eco!: any;
-  flames!: any;
-  havenTop!: any;
+  flames!: THREE.Group;
+  havenTop!: number;
   lights!: any[];
   mats!: any;
   root!: THREE.Group;
@@ -684,7 +685,7 @@ export class Landmarks {
       this.flames.scale.set(s * 0.95, s, s * 0.95);
       this.flames.rotation.y = Math.sin(time * 1.7) * 0.16;
       for (const m of this.flames.children) {
-        m.material.opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 9.1));
+        if (isMesh(m)) (m.material as THREE.Material).opacity = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 9.1));
       }
     }
   }

@@ -54,7 +54,7 @@ export class VelocityPass extends Pass {
   _black!: THREE.Color;
   _frame!: number;
   fx!: any;
-  moverCount!: any;
+  moverCount!: number;
   proxyScene!: THREE.Scene;
   tracked!: Map<any, any>;
   constructor(fx: any) {

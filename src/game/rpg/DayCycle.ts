@@ -12,6 +12,7 @@
  */
 
 import { LODGINGS, nightScaling } from './Stats.ts';
+import type { Emitter } from './Emitter.ts';
 
 /** Named phases of the day, with the hour ranges that define them. */
 export const PHASES = [
@@ -57,13 +58,13 @@ export const HAVEN_RADIUS = 14;
  * `daemons-receding`, `haven-discovered` and `rested`.
  */
 export class DayCycle {
-  _phase!: any;
-  _daemonsUp!: any;
-  _lastHourInt!: any;
-  absoluteHour!: any;
+  _phase!: string;
+  _daemonsUp!: boolean;
+  _lastHourInt!: number;
+  absoluteHour!: number;
   day!: number;
   driveSky!: boolean;
-  emitter!: any;
+  emitter!: Emitter | null;
   havenState!: any;
   hour!: number;
   minutesPerSecond!: number;

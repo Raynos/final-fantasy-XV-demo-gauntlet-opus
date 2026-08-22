@@ -3,6 +3,7 @@ import { makeCharacter } from './Cast.ts';
 import { updateSun } from './rig/Materials.ts';
 import { CollisionWorld } from '../world/collision/CollisionWorld.ts';
 import { CharacterController } from '../world/collision/CharacterController.ts';
+import type { Character } from './rig/Character.ts';
 
 /**
  * Noctis — the playable character.
@@ -27,11 +28,11 @@ export class Player {
   _gait!: number;
   _gazeSeq!: any;
   _look!: THREE.Vector3;
-  _prevHeading!: any;
+  _prevHeading!: number;
   _right!: THREE.Vector3;
   _wish!: THREE.Vector3;
   body!: CharacterController;
-  character!: any;
+  character!: Character;
   collision!: any;
   game!: any;
   grounded!: boolean;

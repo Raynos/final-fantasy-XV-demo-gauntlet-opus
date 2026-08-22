@@ -1,7 +1,9 @@
 import { el, clear, clamp, commas, easeOut, easeOutQuint } from '../UIKit.ts';
+import type { CachedNode } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import { rpg } from '../GameData.ts';
+import type { Menus } from '../Menus.ts';
 
 /** Tabs, and the quest-log status each one gathers. */
 const TABS = [
@@ -30,38 +32,38 @@ const MAX_ROWS = 16;
 export class QuestScreen {
   _rows!: any;
   _age!: number;
-  _cur!: any;
+  _cur!: string | null;
   _msg!: any;
   _msgAge!: number;
-  _sig!: any;
-  act!: any;
-  actLb!: any;
-  cols!: any;
-  dD!: any;
-  dI!: any;
-  dK!: any;
-  dN!: any;
-  dObj!: any;
-  dObjList!: any;
-  dRule!: any;
-  dSpecs!: any;
-  detail!: any;
-  empty!: any;
+  _sig!: string | null;
+  act!: HTMLElement;
+  actLb!: HTMLElement;
+  cols!: HTMLElement;
+  dD!: HTMLElement;
+  dI!: HTMLElement;
+  dK!: HTMLElement;
+  dN!: HTMLElement;
+  dObj!: HTMLElement;
+  dObjList!: HTMLElement;
+  dRule!: HTMLElement;
+  dSpecs!: HTMLElement;
+  detail!: HTMLElement;
+  empty!: HTMLElement;
   game!: any;
   i!: number;
-  list!: any;
-  menus!: any;
-  msg!: any;
+  list!: HTMLElement;
+  menus!: Menus;
+  msg!: HTMLElement;
   rowNodes!: any[];
   scroll!: number;
-  specVals!: any;
+  specVals!: HTMLElement[];
   sub!: string;
   tab!: number;
-  tabNodes!: any;
-  tabsEl!: any;
-  tally!: any;
-  tallyD!: any;
-  tallyV!: any;
+  tabNodes!: CachedNode[];
+  tabsEl!: HTMLElement;
+  tally!: HTMLElement;
+  tallyD!: HTMLElement;
+  tallyV!: HTMLElement;
   title!: string;
   constructor(menus: import('../Menus.ts').Menus) {
     ensureInteractCss();
@@ -274,7 +276,7 @@ export class QuestScreen {
       active: 'Nothing in hand. Take a contract from a bounty board.',
       available: 'No new leads. Talk to the people of Lucis.',
       complete: 'Nothing finished yet.',
-    })[TABS[this.tab].status];
+    })[TABS[this.tab].status] ?? null;
 
     for (let i = 0; i < (this.rowNodes || []).length; i++) {
       const rn = this.rowNodes[i];

@@ -14,7 +14,7 @@ import { icon } from './Icons.ts';
 export class Toasts {
   items!: any[];
   max!: number;
-  root!: any;
+  root!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div.toasts');
     // `parent` is the bottom-left corner's notice slot, which sits above the

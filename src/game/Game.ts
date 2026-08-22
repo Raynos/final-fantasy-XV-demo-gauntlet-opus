@@ -99,21 +99,21 @@ const SYSTEM_ALIASES = {
 export class Game {
   state!: string;
   _hudCache!: any;
-  _raf!: any;
+  _raf!: number;
   _registry!: Map<string, System>;
   _running!: boolean;
-  camera!: any;
+  camera!: THREE.PerspectiveCamera;
   container!: any;
   currentShot!: any;
-  debug!: any;
+  debug!: boolean;
   input!: Input;
   onProgress!: any;
   paused!: boolean;
   post!: PostFX;
   ready!: boolean;
-  renderer!: any;
+  renderer!: THREE.WebGLRenderer;
   rnd!: Renderer;
-  scene!: any;
+  scene!: THREE.Scene;
   seed!: number;
   systems!: System[];
   time!: Time;

@@ -50,11 +50,11 @@ export class AudioSystem {
   enabled!: boolean;
   game!: any;
   graph!: AudioGraph;
-  headless!: any;
+  headless!: boolean;
   inst!: Instruments;
   score!: Score;
   sfx!: Sfx;
-  weatherName!: any;
+  weatherName!: string;
   async init(game: any) {
     this.game = game;
     this.enabled = false;

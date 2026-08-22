@@ -10,7 +10,7 @@ export class Renderer {
   onResize!: any;
   camera!: THREE.PerspectiveCamera;
   container!: any;
-  isWebGL2!: any;
+  isWebGL2!: boolean;
   quality!: any;
   renderer!: THREE.WebGLRenderer;
   scene!: THREE.Scene;

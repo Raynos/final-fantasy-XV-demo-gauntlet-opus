@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { RoadPath } from './RoadPath.ts';
 
 /**
  * The Regalia's chassis: an arcade-sim vehicle model.
@@ -39,9 +40,9 @@ function engineCurve(v: any, maxForce: any, vMax: any) {
 
 export class VehicleBody {
   _groundAvg!: number;
-  _groundMax!: any;
+  _groundMax!: number;
   _right!: THREE.Vector3;
-  _axPrev!: any;
+  _axPrev!: number;
   _fwd!: THREE.Vector3;
   _gy!: number[];
   _gyF!: number;
@@ -54,7 +55,7 @@ export class VehicleBody {
   a!: number;
   airborne!: boolean;
   b!: number;
-  bound!: any;
+  bound!: number;
   brakeForce!: number;
   chassisY!: number;
   collision!: any;
@@ -79,7 +80,7 @@ export class VehicleBody {
   pitch!: number;
   pos!: THREE.Vector3;
   reverseForce!: number;
-  road!: any;
+  road!: RoadPath;
   roadDist!: number;
   roadLat!: number;
   roadS!: number;

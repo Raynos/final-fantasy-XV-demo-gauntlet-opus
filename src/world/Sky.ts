@@ -5,6 +5,7 @@ import { Clouds } from './sky/Clouds.ts';
 import { MaterialPatch } from './sky/MaterialPatch.ts';
 import { GodRaysPass } from './sky/GodRays.ts';
 import { SHOTS } from '../game/Shots.ts';
+import type { Game } from '../game/Game.ts';
 
 const DEG = Math.PI / 180;
 const lerp = THREE.MathUtils.lerp;
@@ -124,7 +125,7 @@ const WEATHER = {
  *   setTimeOfDay(hours)  setWeather(name)  sun  moon  cloudShadowTexture
  */
 export class Sky {
-  _camAnchor!: any;
+  _camAnchor!: THREE.Vector3;
   _camAspect!: number;
   _camFov!: number;
   _envHours!: number;
@@ -132,8 +133,8 @@ export class Sky {
   _godRayBase!: number;
   _keyDir!: THREE.Vector3;
   _lastPreFrame!: number;
-  _lightPos!: any;
-  _lightTgt!: any;
+  _lightPos!: THREE.Vector3[];
+  _lightTgt!: THREE.Vector3[];
   _raysInserted!: boolean;
   _scanCountdown!: number;
   _shadowDirty!: boolean;
@@ -142,16 +143,16 @@ export class Sky {
   _windOffset!: THREE.Vector2;
   ambient!: THREE.HemisphereLight;
   atmo!: Atmosphere;
-  cascadeRes!: any;
-  cascadeStride!: any;
+  cascadeRes!: number[];
+  cascadeStride!: number[];
   clouds!: Clouds;
   csm!: CSM;
-  dome!: any;
+  dome!: THREE.Mesh;
   envRT!: any;
   envScene!: THREE.Scene;
   exposure!: number;
   exposureCeiling!: number;
-  game!: any;
+  game!: Game;
   godRays!: GodRaysPass;
   hours!: number;
   moon!: THREE.DirectionalLight;
@@ -275,8 +276,8 @@ export class Sky {
     // final once the camera rig has run; scene.onBeforeRender gives us exactly
     // that, one step before the render list is built.
     const prevHook = scene.onBeforeRender;
-    scene.onBeforeRender = (r: any, sc: any, cam: any, rt: any) => {
-      if (prevHook) prevHook.call(scene, r, sc, cam, rt);
+    scene.onBeforeRender = (r, sc, cam, geo, mat, group) => {
+      if (prevHook) prevHook.call(scene, r, sc, cam, geo, mat, group);
       this._preRender(r, cam);
     };
 

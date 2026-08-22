@@ -92,12 +92,12 @@ export function archetype(key: string, def: any) {
  * per-instance build cost.
  */
 export class NpcBody {
-  _lod!: any;
+  _lod!: number;
   anim!: Animator;
   arch!: any;
   body!: any;
   eyeMesh!: THREE.Mesh;
-  eyes!: any;
+  eyes!: THREE.Object3D;
   groundShadow!: any;
   hair!: any;
   head!: any;

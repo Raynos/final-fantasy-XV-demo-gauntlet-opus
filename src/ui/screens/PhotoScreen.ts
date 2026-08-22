@@ -1,5 +1,7 @@
 import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
+import type { Menus } from '../Menus.ts';
+import type { CachedNode } from '../UIKit.ts';
 
 const FILTERS = [
   'None', 'Vintage', 'Monochrome', 'Cross Process', 'Sepia Wash',
@@ -13,31 +15,31 @@ const FRAMES = ['3:2 Full', '16:9 Wide', '1:1 Square', 'Polaroid'];
  * Chrome-free: the shared menu heading and footer are suppressed.
  */
 export class PhotoScreen {
-  _ap!: any;
+  _ap!: string;
   age!: number;
-  apBar!: any;
-  apV!: any;
+  apBar!: HTMLElement;
+  apV!: HTMLElement;
   aperture!: number;
   bars!: any;
   chrome!: boolean;
-  corners!: any;
-  dials!: any;
-  exBar!: any;
-  exV!: any;
+  corners!: HTMLElement[];
+  dials!: HTMLElement;
+  exBar!: HTMLElement;
+  exV!: HTMLElement;
   exposure!: number;
   filter!: number;
   flashAt!: number;
-  frV!: any;
+  frV!: HTMLElement;
   frame!: number;
-  frameEl!: any;
-  grid!: any;
+  frameEl!: HTMLElement;
+  grid!: HTMLElement;
   gridLines!: any[];
-  menus!: any;
-  rows!: any;
+  menus!: Menus;
+  rows!: CachedNode[];
   scrim!: boolean;
-  side!: any;
+  side!: HTMLElement;
   title!: string;
-  title2!: any;
+  title2!: HTMLElement;
   constructor(menus: import('../Menus.ts').Menus) {
     this.menus = menus;
     this.title = 'Photo';
@@ -149,8 +151,8 @@ export class PhotoScreen {
 
     const ap = `f/${this.aperture.toFixed(1)}`;
     if (ap !== this._ap) { this.apV.textContent = ap; this._ap = ap; }
-    this.apBar.firstChild.style.width = `${(clamp((16 - this.aperture) / 14.8, 0, 1) * 100).toFixed(1)}%`;
-    this.exBar.firstChild.style.width = '50%';
+    (this.apBar.firstChild as HTMLElement).style.width = `${(clamp((16 - this.aperture) / 14.8, 0, 1) * 100).toFixed(1)}%`;
+    (this.exBar.firstChild as HTMLElement).style.width = '50%';
     this.frV.textContent = FRAMES[this.frame];
   }
 }

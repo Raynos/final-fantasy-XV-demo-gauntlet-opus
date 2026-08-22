@@ -145,13 +145,13 @@ function growAt(pair: any, level: any, curve: any) {
  * ever permanently corrupts the base numbers.
  */
 export class Stats {
-  ascension!: any;
-  buff!: any;
+  ascension!: StatMods;
+  buff!: StatMods;
   exp!: number;
-  gear!: any;
-  hp!: any;
+  gear!: StatMods;
+  hp!: number;
   hpDrain!: number;
-  id!: any;
+  id!: string;
   ko!: boolean;
   level!: number;
   mp!: number;

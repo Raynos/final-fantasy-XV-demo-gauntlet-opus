@@ -9,7 +9,7 @@ import { CHUNK_HASH } from '../../shaders/post/common.ts';
  */
 export class CasPass extends FilterPass {
   dither!: number;
-  override material!: any;
+  override material!: THREE.ShaderMaterial;
   sharpness!: number;
   constructor(fx: any) {
     super(fx);

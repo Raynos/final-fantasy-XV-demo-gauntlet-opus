@@ -36,8 +36,8 @@ const SETS = {
  */
 export class Prompts {
   mode!: any;
-  root!: any;
-  row!: any;
+  root!: HTMLElement;
+  row!: HTMLElement;
   constructor(parent: HTMLElement) {
     this.root = el('div.hud-corner.bc');
     this.row = el('div.prompts');

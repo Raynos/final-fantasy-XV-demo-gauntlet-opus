@@ -40,7 +40,7 @@ export class DriveCamera {
   armFar!: number;
   armNear!: number;
   baseFov!: number;
-  cam!: any;
+  cam!: THREE.PerspectiveCamera;
   cinOffset!: number;
   fov!: any;
   fovGain!: number;
@@ -50,7 +50,7 @@ export class DriveCamera {
   heightFar!: number;
   heightNear!: number;
   mode!: string;
-  modes!: any;
+  modes!: string[];
   pitch!: number;
   trauma!: number;
   yaw!: number;

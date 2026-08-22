@@ -1,4 +1,5 @@
 import { capture, gather } from './Report.ts';
+import type { Registry } from './Registry.ts';
 
 const SEVERITY = ['blocker', 'major', 'minor', 'polish'];
 const AREA = ['terrain', 'vegetation', 'characters', 'enemies', 'combat', 'ui', 'camera', 'audio', 'perf', 'world', 'other'];
@@ -23,10 +24,10 @@ export class Inbox {
   game!: any;
   img!: any;
   meta!: any;
-  node!: any;
+  node!: HTMLDivElement;
   open!: boolean;
   pending!: any;
-  reg!: any;
+  reg!: Registry;
   sev!: any;
   status!: any;
   text!: any;
@@ -64,8 +65,8 @@ export class Inbox {
     this.meta = this.node.querySelector('.dev-meta');
     this.status = this.node.querySelector('.dev-status');
 
-    this.node.querySelector('.dev-submit').addEventListener('click', () => this.submit());
-    this.node.querySelector('.dev-cancel').addEventListener('click', () => this.close());
+    this.node.querySelector('.dev-submit')!.addEventListener('click', () => this.submit());
+    this.node.querySelector('.dev-cancel')!.addEventListener('click', () => this.close());
     // Same reason as the console: the engine's Input listens on window, so a
     // note typed here would otherwise also drive the camera.
     for (const ev of ['keydown', 'keyup', 'keypress']) {

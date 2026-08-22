@@ -1,5 +1,8 @@
 import { STATES, LAYERS, voiceChord } from './Themes.ts';
 import { ftom, clamp, EPS, makeRng } from './Dsp.ts';
+import type { MusicState } from './Themes.ts';
+import type { AudioGraph } from './Graph.ts';
+import type { Instruments } from './Instruments.ts';
 
 /** Reference pitches. A2 in the bass, A3 in the middle, A4 for the tune. */
 const A2 = 110, A3 = 220, A4 = 440;
@@ -24,15 +27,15 @@ const A2 = 110, A3 = 220, A4 = 440;
 export class Score {
   bar!: number;
   intensity!: number;
-  state!: any;
-  _at!: any;
+  state!: MusicState;
+  _at!: number | null;
   _queue!: any[];
-  _timer!: any;
+  _timer!: number | null;
   ctx!: any;
   cycle!: number;
   filter!: any;
-  graph!: any;
-  inst!: any;
+  graph!: AudioGraph;
+  inst!: Instruments;
   layer!: any;
   lookahead!: number;
   nextBarTime!: number;
@@ -161,7 +164,7 @@ export class Score {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
-      const target = this._layerTarget(name, L[name] ?? 0);
+      const target = this._layerTarget(name, L![name] ?? 0);
       const g = this.layer[name].gain;
       g.cancelScheduledValues(t);
       g.setValueAtTime(Math.max(EPS, g.value), t);
@@ -197,7 +200,7 @@ export class Score {
     const t = this.clock;
     const L = this.state.layers;
     for (const name of LAYERS) {
-      const target = this._layerTarget(name, L[name] ?? 0);
+      const target = this._layerTarget(name, L![name] ?? 0);
       this.layer[name].gain.setTargetAtTime(target, t, 1.2);
     }
   }
@@ -282,7 +285,7 @@ export class Score {
   /* ------------------------------------------------------------- layers */
 
   _bass(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
-    if ((this.state.layers.bass ?? 0) <= 0) return;
+    if ((this.state.layers!.bass ?? 0) <= 0) return;
     const dest = this.layer.bass;
     const root = ftom(A2, tonic + chord.r);
     const riff = this.state.riff;
@@ -320,7 +323,7 @@ export class Score {
   }
 
   _pad(t: any, barLen: any, chord: any, tonic: any) {
-    if ((this.state.layers.pad ?? 0) <= 0) return;
+    if ((this.state.layers!.pad ?? 0) <= 0) return;
     const dest = this.layer.pad;
     // Three voices maximum: a fourth costs a voice and adds nothing you can
     // hear under the strings.
@@ -334,7 +337,7 @@ export class Score {
   }
 
   _strings(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
-    if ((this.state.layers.strings ?? 0) <= 0) return;
+    if ((this.state.layers!.strings ?? 0) <= 0) return;
     const dest = this.layer.strings;
     const notes = voiceChord(chord, 12);
     if (this.state.riff) {
@@ -362,7 +365,7 @@ export class Score {
   }
 
   _harp(t: any, barLen: any, beat: any, chord: any, tonic: any, meter: any) {
-    if ((this.state.layers.harp ?? 0) <= 0) return;
+    if ((this.state.layers!.harp ?? 0) <= 0) return;
     const dest = this.layer.harp;
     const notes = voiceChord(chord, 12);
     const up = notes.concat(notes.map((n) => n + 12));
@@ -380,7 +383,7 @@ export class Score {
   }
 
   _choir(t: any, barLen: any, chord: any, tonic: any, first: any) {
-    if ((this.state.layers.choir ?? 0) <= 0) return;
+    if ((this.state.layers!.choir ?? 0) <= 0) return;
     const dest = this.layer.choir;
     // The choir is expensive (three formant filters a voice) — two notes only.
     const notes = voiceChord(chord, 0);
@@ -395,7 +398,7 @@ export class Score {
   }
 
   _brass(t: any, barLen: any, beat: any, chord: any, next: any, tonic: any, meter: any) {
-    if ((this.state.layers.brass ?? 0) <= 0) return;
+    if ((this.state.layers!.brass ?? 0) <= 0) return;
     const dest = this.layer.brass;
     const notes = voiceChord(chord, 0);
     if (this.stateName === 'boss') {
@@ -426,7 +429,7 @@ export class Score {
   }
 
   _perc(t: any, beat: any, meter: any, first: any) {
-    if ((this.state.layers.perc ?? 0) <= 0) return;
+    if ((this.state.layers!.perc ?? 0) <= 0) return;
     const dest = this.layer.perc;
     const s = this.stateName;
     if (s === 'combat') {
@@ -471,7 +474,7 @@ export class Score {
    * strings on the field, brass in combat, choir at a boss, flute at camp.
    */
   _melody(t: any, beat: any, meter: any, tonic: any) {
-    const weight = this.state.layers.melody ?? 0;
+    const weight = this.state.layers!.melody ?? 0;
     if (weight <= 0) return;
     const mel = this.state.melody;
     if (!mel || !mel.length) return;
@@ -508,7 +511,7 @@ export class Score {
         this.inst.strings(f, at, dur * 0.94, {
           dest, gain: g * 1.25, unison: 2, spread: 7, attack: 0.075, release: 0.45, bright: 1.1, priority: 3,
         });
-        if ((this.state.layers.wood ?? 0) > 0 && vel > 0.8) {
+        if ((this.state.layers!.wood ?? 0) > 0 && vel > 0.8) {
           this.inst.wood(f * 2, at, dur * 0.9, { dest: this.layer.wood, gain: g * 0.5, priority: 1 });
         }
       }

@@ -32,8 +32,8 @@ export class Director {
   game!: any;
   home!: any;
   homeHeading!: any;
-  hunts!: any;
-  live!: any;
+  hunts!: HuntRuntime;
+  live!: boolean;
   partyAI!: any;
   pinTime!: number;
   player!: any;

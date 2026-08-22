@@ -307,7 +307,7 @@ export function buildExitVestibule(parent: any, rig: any, { x, y, z, facing = 0,
  */
 export class Fader {
   _onBlack!: any;
-  el!: any;
+  el!: HTMLDivElement;
   speed!: number;
   target!: number;
   value!: number;
