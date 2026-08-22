@@ -311,6 +311,15 @@ export class RpgSystem {
     this.emitter.on('node-unlocked', () => this.refreshDerived());
     this.emitter.on('equipment-changed', () => this.refreshGear());
 
+    // Teach the quest log to read the bag and the wallet. Ten of the eleven
+    // `fetch` objectives in the table had no notifier at all -- the only
+    // `notify('fetch')` in the repo is Cid's hand-over line -- so picking a
+    // Rusted Bit up off a dead MT trooper moved nothing and the log printed
+    // 0/3 with three in the bag. @see QuestLog.settle
+    this._attachHoldings();
+    this.emitter.on('item-gained', () => this.quests.settleAll());
+    this.emitter.on('gil-changed', () => this.quests.settleAll());
+
     // Quest completion pays out.
     this.emitter.on('quest-updated', (p: QuestUpdate) => {
       if (p.phase !== 'complete') return;
@@ -333,6 +342,20 @@ export class RpgSystem {
       this.refreshDerived();
       this.save('auto');
     });
+  }
+
+  /**
+   * Point the quest log at the live bag and wallet.
+   *
+   * Re-run after `loadGame`, which swaps in a brand-new `QuestLog` — the
+   * subscriptions above read `this.quests` late so they survive the swap, but
+   * the holdings live on the object itself and do not.
+   */
+  _attachHoldings() {
+    this.quests.holdings = {
+      bag: (id: string) => this.inventory.count(id),
+      gil: () => this.inventory.gil,
+    };
   }
 
   /** Recompute every derived bucket. Cheap enough to call on any change. */
@@ -653,6 +676,11 @@ export class RpgSystem {
     this.day = DayCycle.fromJSON(d.day, this.emitter);
     this.chapter = d.chapter || 1;
     this.playTime = d.playTime || 0;
+    this._attachHoldings();
+    // A save written before `settle` existed can hold a quest whose standing
+    // objectives were already true and never recorded. Bring it up to date on
+    // load rather than waiting for the next coin to change hands.
+    this.quests.settleAll();
     this.refreshDerived();
     this.emitter.emit('game-loaded', { slot, migrated: res.migrated, from: res.from, meta: d.meta });
     return { ok: true, migrated: res.migrated, meta: d.meta };

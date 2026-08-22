@@ -640,6 +640,29 @@ export interface QuestSave {
  * Live quest state. Emits `quest-updated` for every transition and objective
  * tick, with `{ quest, status, phase, objective? }`.
  */
+/**
+ * How the log asks the world what is already true.
+ *
+ * Two objective kinds describe a *state* rather than an event: `fetch` ("have
+ * three Rusted Bits") and `quest` ("have finished a bounty"). An event-only
+ * log gets both of them wrong. It printed `Collect Rusted Bits 0/3` with three
+ * in the bag, because the only `notify('fetch')` in the whole repo is Cid's
+ * hand-over line; and `The Pauper Prince` was unfinishable from the first
+ * frame, because the seeded save completes `hunt_killer_wasps` *before* it
+ * accepts the quest whose second objective is "complete a bounty", so the
+ * `notify('quest')` that would have ticked it fired into an inactive quest and
+ * was gone for good.
+ *
+ * `RpgSystem` supplies this at construction; without it the log behaves as it
+ * did before, which is what keeps `QuestLog` unit-testable on its own.
+ */
+export interface Holdings {
+  /** How many of an item id the party is carrying. */
+  bag: (itemId: string) => number;
+  /** The wallet, for `gil:N` targets. */
+  gil: () => number;
+}
+
 export class QuestLog {
   /** Runtime state per quest id. One entry per row of `QUEST_TABLE`. */
   states!: Record<string, QuestState>;
@@ -647,6 +670,8 @@ export class QuestLog {
   emitter!: Emitter | null;
   flags!: Set<string>;
   hunterPoints!: number;
+  /** @see Holdings — null until a `RpgSystem` wires one in. */
+  holdings: Holdings | null = null;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     this.states = {};
@@ -748,7 +773,93 @@ export class QuestLog {
     st.startedAt = Date.now();
     if (!this.tracked) this.tracked = id;
     this.emitter?.emit('quest-updated', { quest: q, status: 'active', phase: 'accepted' });
+    // Anything the quest asks for that the player already has, or has already
+    // done, counts from the moment it goes active. @see settle
+    this.settle(id);
     return { ok: true, quest: this.view(id) };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Standing state: objectives that describe a fact, not an event       */
+  /* ------------------------------------------------------------------ */
+
+  /** Objectives complete in order, so an earlier unfinished one blocks. */
+  _blocked(st: QuestState, i: number) {
+    return st.objectives.slice(0, i).some((p) => !p.done);
+  }
+
+  /**
+   * Raise one objective's progress and fire the transition if it lands.
+   *
+   * Progress only ever rises. Selling a Lucian tomato does not un-collect it,
+   * and every hand-over line checks the bag itself before it takes anything —
+   * so a monotonic log cannot hand out a reward for goods the player no longer
+   * has, and cannot flicker an objective back open behind the player's back.
+   *
+   * @returns true if anything moved
+   */
+  _raise(q: Quest, i: number, value: number) {
+    const os = this.states[q.id].objectives[i];
+    const o = q.objectives[i];
+    const next = Math.min(o.count, Math.max(os.progress, value));
+    if (next <= os.progress && os.done) return false;
+    const moved = next !== os.progress;
+    os.progress = next;
+    if (next >= o.count && !os.done) {
+      os.done = true;
+      this.emitter?.emit('quest-updated', { quest: q, status: 'active', phase: 'objective', objective: { ...o, ...os } });
+      return true;
+    }
+    return moved;
+  }
+
+  /**
+   * Bring one active quest's standing objectives up to date with the world.
+   *
+   * Walks the objectives in order and stops at the first one it cannot satisfy,
+   * because a later objective is not reachable past an unfinished earlier one
+   * anyway. Handles the two kinds that describe a state:
+   *
+   * - `fetch` — `gil:N` against the wallet, anything else against the bag
+   * - `quest` — satisfied if the named quest is already complete
+   *
+   * Called on `accept`, after every `notify` that moved something, and by
+   * `RpgSystem` whenever the bag or the wallet changes.
+   *
+   * @returns true if anything moved
+   */
+  settle(id: string) {
+    const q = QUESTS[id];
+    const st = this.states[id];
+    if (!q || !st || st.status !== 'active') return false;
+    let moved = false;
+    for (let i = 0; i < q.objectives.length; i++) {
+      if (st.objectives[i].done) continue;
+      if (this._blocked(st, i)) break;
+      const o = q.objectives[i];
+      let have = -1;
+      if (o.type === 'quest') have = this.states[o.target]?.status === 'complete' ? o.count : 0;
+      else if (o.type === 'fetch' && this.holdings) {
+        const [kind, arg] = String(o.target).split(':');
+        have = kind === 'gil'
+          ? (this.holdings.gil() >= Number(arg) ? o.count : 0)
+          : this.holdings.bag(o.target);
+      }
+      if (have < 0) break;              // not a standing objective; stop here
+      if (this._raise(q, i, have)) moved = true;
+      if (!st.objectives[i].done) break;
+    }
+    if (moved && st.objectives.every((o) => o.done)) this.complete(id);
+    return moved;
+  }
+
+  /** {@link settle} over every active quest. */
+  settleAll() {
+    let moved = false;
+    for (const q of QUEST_TABLE) {
+      if (this.states[q.id].status === 'active' && this.settle(q.id)) moved = true;
+    }
+    return moved;
   }
 
   /** Drop an active quest back to available. */
@@ -814,7 +925,10 @@ export class QuestLog {
 
       if (touched) {
         changed.push(q.id);
-        if (st.objectives.every((o) => o.done)) this.complete(q.id);
+        // Finishing one objective can unblock a standing one behind it: talking
+        // to Takka is what lets "complete a bounty" see the bounty already in
+        // the ledger. `settle` may finish the quest, so ask it first.
+        if (!this.settle(q.id) && st.objectives.every((o) => o.done)) this.complete(q.id);
       }
     }
     return changed.map((id) => this.view(id)).filter((v): v is QuestView => v != null);
