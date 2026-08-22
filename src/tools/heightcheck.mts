@@ -19,20 +19,33 @@ await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { 
 await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 const out = await page.evaluate(async (shot) => {
   const g = window.GAME;
-  const t = g.get('Terrain');
+  const t = g.get('Terrain')!;
   g.applyShot(shot); g.settle(30);
   const tm = await import('/world/terrain/TerrainMaterial.ts');
   const fld = await import('/world/terrain/Field.ts');
   const FIELD = tm.TERRAIN_FIELD_GLSL;
 
+  /**
+   * The class a live object came from, as a constructor.
+   *
+   * A bare `three` specifier does not resolve inside `page.evaluate` -- the
+   * browser is doing the import, not vite -- and the probe rig must use the
+   * *page's* three anyway, not a second copy. `Object.constructor` is typed
+   * `Function`, which has no construct signature; this is the one place that
+   * says otherwise, and the type argument keeps it checked: hand it the wrong
+   * instance and every `new` below stops compiling. Same trick as
+   * `src/tools/driftcheck.mts`.
+   */
+  const classOf = <T extends object>(o: T) => o.constructor as new (...args: readonly unknown[]) => T;
+
   const mesh0 = t.clipmap.rings[0].meshes[0];
-  const Mesh = mesh0.constructor;
-  const BufferGeometry = mesh0.geometry.constructor;
-  const BufferAttribute = mesh0.geometry.attributes.position.constructor;
-  const Scene = g.scene.constructor;
-  const ShaderMaterial = g.post.taa.material.constructor;
-  const RT = g.post.rtScene.constructor;
-  const V2 = g.post.jitterUv.constructor;
+  const Mesh = classOf(mesh0);
+  const BufferGeometry = classOf(mesh0.geometry);
+  const BufferAttribute = classOf(mesh0.geometry.attributes.position);
+  const Scene = classOf(g.scene);
+  const ShaderMaterial = classOf(g.post.taa.material);
+  const RT = classOf(g.post.rtScene);
+  const V2 = classOf(g.post.jitterUv);
   const res = t.res;
 
   const NP = 64;
@@ -82,7 +95,7 @@ const out = await page.evaluate(async (shot) => {
   };
 
   const cam = g.camera.position.clone();
-  const player = g.get('Player');
+  const player = g.get('Player')!;
   const pp = player ? player.position.clone() : cam;
   const list = [];
   // a ring of probes around the player plus a few at range

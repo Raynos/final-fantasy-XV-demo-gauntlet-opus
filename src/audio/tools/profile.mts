@@ -32,7 +32,7 @@ const PROFILE = async (mode: string) => {
     for (let n = 1; n < N; n++) im[n] = (1 / Math.pow(n, 1.08)) * Math.exp(-n / 15);
     return ctx.createPeriodicWave(re, im);
   };
-  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const Audio: typeof AudioSystem = window.GAME.get('Audio')!.constructor;
   const seconds = 20;
   const t0 = performance.now();
   const { stats } = await Audio.renderSession({

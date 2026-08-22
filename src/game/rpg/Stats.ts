@@ -144,15 +144,41 @@ export type LodgingId = keyof typeof LODGINGS;
  * `curve` shapes the ramp (>1 = back-loaded, <1 = front-loaded). Interpolation
  * is deterministic so a level-53 Gladio is identical in every save.
  */
+/**
+ * One character's growth curve. Each core stat is a `[level 1, level 99]`
+ * pair the level interpolates between; `curve` shapes the ramp.
+ */
+export interface GrowthProfile {
+  name: string;
+  hp: [number, number];
+  mp: [number, number];
+  strength: [number, number];
+  vitality: [number, number];
+  magic: [number, number];
+  spirit: [number, number];
+  /** >1 back-loads the ramp, <1 front-loads it. */
+  curve: number;
+}
+
+/** The six stats a growth profile interpolates. Everything else comes from gear. */
+export const CORE_STATS = ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit'] as const;
+
+/** One of {@link CORE_STATS}. */
+export type CoreStat = typeof CORE_STATS[number];
+
+function isCoreStat(s: string): s is CoreStat {
+  return (CORE_STATS as readonly string[]).includes(s);
+}
+
 export const GROWTH = {
   noctis:  { name: 'Noctis',   hp: [520, 8600], mp: [80, 220], strength: [42, 240], vitality: [30, 190], magic: [38, 250], spirit: [30, 200], curve: 1.15 },
   gladio:  { name: 'Gladiolus', hp: [760, 11800], mp: [40, 120], strength: [58, 300], vitality: [46, 260], magic: [16, 90], spirit: [24, 150], curve: 1.10 },
   ignis:   { name: 'Ignis',    hp: [480, 7600], mp: [70, 200], strength: [40, 210], vitality: [28, 170], magic: [34, 230], spirit: [36, 240], curve: 1.12 },
   prompto: { name: 'Prompto',  hp: [440, 6900], mp: [60, 180], strength: [36, 196], vitality: [24, 150], magic: [28, 170], spirit: [26, 165], curve: 1.18 },
-};
+} satisfies Record<string, GrowthProfile>;
 
 /** Interpolate a growth pair at a level, rounded to a whole number. */
-function growAt(pair: any, level: number, curve: number) {
+function growAt(pair: readonly [number, number], level: number, curve: number) {
   const t = Math.pow(Math.max(0, Math.min(1, (level - 1) / (MAX_LEVEL - 1))), curve);
   return Math.round(pair[0] + (pair[1] - pair[0]) * t);
 }
@@ -177,14 +203,14 @@ export class Stats {
   ko!: boolean;
   level!: number;
   mp!: number;
-  name!: any;
-  profile!: any;
+  name!: string;
+  profile!: GrowthProfile;
   /**
    * @param id character key, e.g. 'noctis'
    * @param {object} [opts]
    * 
    */
-  constructor(id: string, opts: { level?: number, exp?: any } = {}) {
+  constructor(id: string, opts: { level?: number, exp?: number } = {}) {
     this.id = id;
     this.profile = GROWTH[id as keyof typeof GROWTH] || GROWTH.noctis;
     this.name = this.profile.name;
@@ -205,20 +231,24 @@ export class Stats {
     this.ko = false;
   }
 
-  /** Base (pre-gear) value of a core stat at the current level. */
-  base(stat: string) {
+  /**
+   * Base (pre-gear) value of a stat at the current level. Only the six
+   * {@link CORE_STATS} have a growth curve; `attack`, `critRate` and the rest
+   * are entirely gear and read 0 here.
+   */
+  base(stat: StatKey) {
     const p = this.profile;
-    if (!p[stat]) return 0;
+    if (!isCoreStat(stat)) return 0;
     return growAt(p[stat], this.level, p.curve);
   }
 
   /** Sum of gear + buff + ascension modifiers for a stat. */
-  bonus(stat: string) {
+  bonus(stat: StatKey) {
     return (this.gear[stat] || 0) + (this.buff[stat] || 0) + (this.ascension[stat] || 0);
   }
 
   /** Final value of a stat including every modifier. Never below 1. */
-  get(stat: string) {
+  get(stat: StatKey) {
     const flat = this.base(stat) + this.bonus(stat);
     const mult = 1 + ((this.gear.mult?.[stat] || 0) + (this.buff.mult?.[stat] || 0) + (this.ascension.mult?.[stat] || 0));
     return Math.max(stat === 'hp' || stat === 'mp' ? 1 : 0, Math.round(flat * mult));
@@ -245,7 +275,7 @@ export class Stats {
   get critDamage() { return 1.5 + (this.gear.critDamage || 0) + (this.buff.critDamage || 0) + (this.ascension.critDamage || 0); }
 
   /** Elemental resistance percent for one element (100 = neutral). */
-  resistance(element: any) {
+  resistance(element: Element) {
     const g = this.gear.resist?.[element] ?? 0;
     const b = this.buff.resist?.[element] ?? 0;
     const a = this.ascension.resist?.[element] ?? 0;
@@ -368,8 +398,10 @@ export interface StatMods {
   critRate: number; critDamage: number;
   resist: Record<string, number>;
   mult: Record<string, number>;
-  [extra: string]: any;
 }
+
+/** A numeric stat a `StatMods` bucket carries — everything but the two tables. */
+export type StatKey = Exclude<keyof StatMods, 'resist' | 'mult'>;
 
 export function emptyMods(): StatMods {
   return {
@@ -384,15 +416,16 @@ export function emptyMods(): StatMods {
 /** Add `src` into `dst` in place (used to fold gear lists into one bucket). */
 export function addMods(dst: StatMods, src: Partial<StatMods> | null | undefined): StatMods {
   if (!src) return dst;
-  for (const k of Object.keys(src)) {
+  for (const k of Object.keys(src) as Array<keyof StatMods>) {
     if (k === 'resist') {
       const r = src.resist || {};
       for (const e of Object.keys(r)) dst.resist[e] = (dst.resist[e] || 0) + r[e];
     } else if (k === 'mult') {
       const m = src.mult || {};
       for (const e of Object.keys(m)) dst.mult[e] = (dst.mult[e] || 0) + m[e];
-    } else if (typeof src[k] === 'number') {
-      dst[k] = (dst[k] || 0) + src[k];
+    } else {
+      const v = src[k];
+      if (typeof v === 'number') dst[k] = (dst[k] || 0) + v;
     }
   }
   return dst;
@@ -410,7 +443,8 @@ export class ExpBank {
   banked!: number;
   lifetime!: number;
   multiplier!: number;
-  sources!: any;
+  /** Banked EXP broken down by the label it was earned under. */
+  sources!: Record<string, number>;
   constructor() {
     this.banked = 0;
     /** Breakdown by source for the "Camp / Rest" results screen. */

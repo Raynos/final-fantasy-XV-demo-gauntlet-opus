@@ -5,7 +5,6 @@ import type { Letterbox } from './Letterbox.ts';
 import type { Cinematics } from './Cinematics.ts';
 import type { Frame } from './CameraMove.ts';
 import type { EASE } from './Easing.ts';
-import type { POSES } from './Poses.ts';
 import type { Terrain } from '../../world/Terrain.ts';
 import type { Props } from '../../world/Props.ts';
 import type { Sky } from '../../world/Sky.ts';
@@ -32,7 +31,7 @@ import type { MusicStateName } from '../../audio/Themes.ts';
 export type ActorId = 'noctis' | 'gladio' | 'ignis' | 'prompto';
 
 /** A held cinematic pose, keyed in `Poses.ts`. */
-export type PoseName = keyof typeof POSES;
+export type { PoseName } from './Poses.ts';
 
 /** A curve name in `Easing.ts`. */
 export type EaseName = keyof typeof EASE;

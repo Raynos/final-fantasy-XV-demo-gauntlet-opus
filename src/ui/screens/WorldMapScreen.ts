@@ -9,9 +9,20 @@ import { drawGlyph, glyphSvg, POI_GLYPH } from '../../world/map/MapGlyphs.ts';
 import { fog } from '../../world/map/FogOfWar.ts';
 import type { Chart } from '../../world/map/Chart.ts';
 import type { WorldMap } from '../../world/map/WorldMap.ts';
-import type { Menus } from '../Menus.ts';
+import type { ScreenName } from '../Menus.ts';
 import type { Poi } from '../../world/map/WorldMap.ts';
 import type { Game } from '../../game/Game.ts';
+
+/**
+ * All this screen ever asks of the thing that owns it: close me.
+ *
+ * Deliberately narrower than `Menus`. `mapshoot.mts` builds a world map
+ * outside the menu stack -- `Menus` is not in the boot order when it runs --
+ * and the whole surface it has to stand in for is one method.
+ */
+export interface ScreenHost {
+  setScreen(name: ScreenName | null): void;
+}
 
 /**
  * THE CHART OF LUCIS — the full-screen atlas.
@@ -146,7 +157,7 @@ export class WorldMapScreen {
   hover!: Poi | null;
   list!: Poi[];
   map!: WorldMap;
-  menus!: Menus;
+  menus!: ScreenHost;
   rail!: HTMLElement;
   scaleBar!: HTMLElement;
   scaleLine!: HTMLElement;
@@ -169,7 +180,7 @@ export class WorldMapScreen {
    *   make `menu_world` depend on whether `menu_map_wide` was captured first,
    *   which is exactly the order-dependence the capture harness forbids.
    */
-  constructor(menus: import('../Menus.ts').Menus, opts: {atlas?:boolean} = {}) {
+  constructor(menus: ScreenHost, opts: {atlas?:boolean} = {}) {
     this.menus = menus;
     this.atlas = !!opts.atlas;
     this.title = this.atlas ? 'Atlas' : 'Map';

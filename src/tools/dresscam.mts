@@ -108,18 +108,18 @@ async function main() {
           if (!zn) throw new Error(`unknown zone ${t}`);
           x = zn.cx; z = zn.cz;
         }
-        const terr = g.get('Terrain');
+        const terr = g.get('Terrain')!;
         const yaw = (o.yaw * Math.PI) / 180;
         const cx = x + Math.cos(yaw) * o.dist, cz = z + Math.sin(yaw) * o.dist;
         const cy = terr.heightAt(cx, cz) + o.eye;
         const ty = terr.heightAt(x, z) + o.look;
-        const sky = g.get('Sky');
+        const sky = g.get('Sky')!;
         if (sky && sky.setTimeOfDay) sky.setTimeOfDay(o.time);
-        const rig = g.get('CameraRig');
+        const rig = g.get('CameraRig')!;
         rig.followShot = null;
         rig.setShot({ pos: [cx, cy, cz], target: [x, ty, z], fov: 42 });
         g.settle(o.settle);
-        const hud = g.get('HUD');
+        const hud = g.get('HUD')!;
         if (hud) { hud.toasts?.clear(); hud.setVisible?.(false); }
         rig.setShot({ pos: [cx, cy, cz], target: [x, ty, z], fov: 42 });
         g.settle(8);

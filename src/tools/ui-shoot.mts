@@ -116,11 +116,12 @@ async function main() {
       await page.evaluate(([s]) => {
         const g = window.GAME;
         // reset UI state between scenes
-        g.get('Menus').setScreen(null);
-        g.get('Menus').a = 0;
-        const hud = g.get('HUD');
+        const menus = g.get('Menus')!;
+        menus.setScreen(null);
+        menus.a = 0;
+        const hud = g.get('HUD')!;
         hud.resetDemo();
-        const p = g.get('Player');
+        const p = g.get('Player')!;
         p.stats.hp = p.stats.maxHp; p.stats.mp = p.stats.maxMp;
         g.applyShot(s.shot);
         g.settle(s.settle);

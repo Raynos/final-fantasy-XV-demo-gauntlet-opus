@@ -75,12 +75,12 @@ try {
     const meta = await page.evaluate(async ([zoom, filter, revealAll]) => {
       const g = window.GAME;
       const { fog } = await import('/world/map/FogOfWar.ts');
-      if (revealAll) { fog.revealAll(); for (const p of g.get('Terrain').map.pois) g.get('Terrain').map.discover(p.id); }
-      const menus = g.get('Menus');
+      if (revealAll) { fog.revealAll(); const map = g.get('Terrain')!.map; for (const p of map.pois) map.discover(p.id); }
+      const menus = g.get('Menus')!;
       if (zoom < 0) {                       // field HUD only: measure the minimap
         menus.setScreen(null);
         g.settle(120);
-        const mm0 = g.get('Minimap');
+        const mm0 = g.get('Minimap')!;
         return { cost: mm0 ? +mm0.cost.toFixed(3) : null, zoom: 0 };
       }
       menus.setScreen('map');
@@ -89,7 +89,7 @@ try {
       s.zoomI = zoom; s.zoom = s.constructor === Object ? 0 : s.zoom;
       s._setFilter(filter);
       g.settle(45);
-      const mm = g.get('Minimap');
+      const mm = g.get('Minimap')!;
       return { cost: mm ? +mm.cost.toFixed(3) : null, zoom: s.zoom };
     }, [zoom, filter, revealAll]);
     const buf = await page.screenshot({ type: 'png' });

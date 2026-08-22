@@ -46,6 +46,7 @@ interface Gate {
 /** Ordered cheapest-first, so a broken tree fails fast. */
 const GATES: Gate[] = [
   { name: 'build', cmd: 'npx', args: ['vite', 'build'], expect: 'builds' },
+  { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
   { name: 'integration', script: 'integration.mts', expect: '18 pass, 0 fail' },
   { name: 'uxcheck', script: 'uxcheck.mts', expect: '86/86' },

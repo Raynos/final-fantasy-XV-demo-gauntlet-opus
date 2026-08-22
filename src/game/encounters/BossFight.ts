@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { Pack } from './Pack.ts';
 import { TitanArena } from './TitanArena.ts';
 import { threatPos } from '../../characters/enemies/EnemyBase.ts';
-import type { EncounterDirector } from './EncounterDirector.ts';
+import type { EncounterDirector, StrikeSpec } from './EncounterDirector.ts';
+import type { SetPiece } from './SpawnTables.ts';
+import type { Enemy, EnemyAttack } from '../../characters/enemies/EnemyBase.ts';
+import type { Enemies } from '../../characters/Enemies.ts';
+import type { VFX } from '../../combat/VFX.ts';
 import type { Game } from '../Game.ts';
 
 /**
@@ -26,24 +30,25 @@ export class BossFight {
   _phaseHold!: number;
   _rise!: number;
   _tmp!: THREE.Vector3;
-  adds!: any[];
+  /** The rank and file that came with the boss. */
+  adds!: Enemy[];
   arena!: TitanArena | null;
-  boss!: any;
+  boss!: Enemy | null;
   centre!: THREE.Vector3;
-  def!: any;
+  def!: SetPiece;
   dir!: EncounterDirector;
-  enemies!: any;
+  enemies!: Enemies;
   game!: Game;
   pack!: Pack | null;
   phase!: number;
   thresholds!: number[];
   time!: number;
-  vfx!: any;
+  vfx!: VFX | undefined;
   window!: number;
   /**
    * @param def a `SET_PIECES` entry
    */
-  constructor(def: any, dir: import('./EncounterDirector.ts').EncounterDirector) {
+  constructor(def: SetPiece, dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.def = def;
     this.dir = dir;
     this.game = dir.game;
@@ -63,7 +68,7 @@ export class BossFight {
   }
 
   /** Is `e` part of this fight? */
-  owns(e: any) { return e === this.boss || this.adds.includes(e); }
+  owns(e: Enemy) { return e === this.boss || this.adds.includes(e); }
 
   /**
    * Put the boss in the world.
@@ -84,12 +89,13 @@ export class BossFight {
       ? dir.ground(at.x + Math.sin(bearing) * (def.arena || 60) * 0.9, at.z + Math.cos(bearing) * (def.arena || 60) * 0.9).clone()
       : dir.ground(at.x + Math.sin(bearing) * 16, at.z + Math.cos(bearing) * 16).clone();
 
-    this.boss = this.enemies.spawn(def.boss, {
+    const boss = this.enemies.spawn(def.boss, {
       pos: stand, level: def.level, pack: this.pack, leash: 400,
       heading: bearing + Math.PI, expClass: 'boss', owner: `boss:${def.id}`,
     });
-    this.boss.boss = true;
-    this.boss.keepCorpse = true;
+    this.boss = boss;
+    boss.boss = true;
+    boss.keepCorpse = true;
 
     for (const a of def.adds || []) {
       for (let i = 0; i < a.count; i++) {
@@ -107,13 +113,13 @@ export class BossFight {
       this.arena = new TitanArena(this.game, at, def.arena || 60);
       this.arena.build();
       // Titan does not walk in — he is simply, suddenly, there
-      this.boss.root.position.y -= 6;
+      boss.root.position.y -= 6;
       this._rise = 0;
     }
     if (def.dropship && dir.dropship) {
-      dir.dropship.arrive(dir.ground(stand.x, stand.z).clone(), [this.boss, ...this.adds]);
+      dir.dropship.arrive(dir.ground(stand.x, stand.z).clone(), [boss, ...this.adds]);
     } else if (player) {
-      for (const e of [this.boss, ...this.adds]) {
+      for (const e of [boss, ...this.adds]) {
         e.target = player;
         e.awareness = 1;
         e.setState('chase');
@@ -127,8 +133,16 @@ export class BossFight {
     return this;
   }
 
-  /** Custom strike resolution so a forty-metre fist hits where it lands. */
-  resolveStrike(e: any, a: any) {
+  /**
+   * Custom strike resolution so a forty-metre fist hits where it lands.
+   *
+   * **Nothing calls this.** `Enemies.onStrike` goes to
+   * `EncounterDirector.resolveStrike`, which sweeps an arc off the enemy's
+   * root and never asks the boss whether it wants the blow — so Titan's slam,
+   * `slamAt` and `_handPos` below have never run. Wiring it up is a behaviour
+   * change, not a typing one; it is left here and typed so the gap is visible.
+   */
+  resolveStrike(e: Enemy, a: EnemyAttack) {
     if (e !== this.boss || this.def.kind !== 'astral') return false;
     const hand = a.id === 'slam_l' ? 'handL' : 'handR';
     const p = this._handPos(hand);
@@ -149,7 +163,7 @@ export class BossFight {
    * The signature moment: a fist lands, the arena rings, and everything
    * inside the crater is thrown.
    */
-  slamAt(p: THREE.Vector3, a: any) {
+  slamAt(p: THREE.Vector3, a: StrikeSpec) {
     const dir = this.dir;
     const r = (a.hitRadius || 14);
     const ground = dir.ground(p.x, p.z).clone();
@@ -166,11 +180,13 @@ export class BossFight {
     if (cam && cam.addTrauma) cam.addTrauma(0.9);
     if (this.arena) this.arena.quake(1);
 
+    const boss = this.boss;
+    if (!boss) return;
     for (const t of dir.threats) {
       const tp = threatPos(t);
       if (!tp) continue;
       if (Math.hypot(tp.x - ground.x, tp.z - ground.z) > r) continue;
-      dir.damageThreat(t, this.boss, a);
+      dir.damageThreat(t, boss, a);
     }
   }
 
@@ -210,20 +226,22 @@ export class BossFight {
 
   _imperialPhase(n: number) {
     const dir = this.dir;
+    const b = this.boss;
+    if (!b) return;
     if (n === 1) {
       // the missile arm goes; the garrison sends more bodies
-      const p = this.boss.root.position;
+      const p = b.root.position;
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * Math.PI * 2;
         const at = dir.ground(p.x + Math.cos(a) * 12, p.z + Math.sin(a) * 12).clone();
         const e = this.enemies.spawn('mt', {
           pos: at, level: this.def.level - 8, pack: this.pack, leash: 160, owner: `boss:${this.def.id}`,
         });
-        e.target = dir.player; e.awareness = 1; e.setState('chase');
+        e.target = dir.player ?? null; e.awareness = 1; e.setState('chase');
         this.adds.push(e);
       }
       if (this.vfx) {
-        const c = this.boss.centre();
+        const c = b.centre();
         this.vfx.smokePlume({ pos: c, count: 26, speed: 2.6, life: 4.0, color: 0x18140f, size: 1.2, rise: 3.0 });
       }
     }
@@ -293,7 +311,7 @@ export class BossFight {
   }
 
   /** The boss died. */
-  onBossDeath(e: any) {
+  onBossDeath(e: Enemy) {
     if (e !== this.boss) return;
     const c = e.centre();
     if (this.vfx) {

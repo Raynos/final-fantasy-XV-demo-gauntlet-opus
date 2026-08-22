@@ -144,6 +144,16 @@ export type DrawResult =
   | { ok: false, reason: 'unknown-deposit' }
   | { ok: false, reason: 'depleted', refillAt: number };
 
+/**
+ * @see Elemancy.craft
+ *
+ * Annotated rather than inferred: a bare `return { ok: false, ... }` widens
+ * `ok` to `boolean`, which stops `if (!res.ok)` narrowing at every call site.
+ */
+export type CraftResult =
+  | { ok: true, spell: CarriedSpell }
+  | SpellRefused;
+
 /** @see Elemancy.cast */
 export type CastResult =
   | { ok: true, spell: CarriedSpell, remaining: number }
@@ -515,7 +525,7 @@ export class Elemancy {
    * result in the spell list.
    *
    */
-  craft(energy: {fire?:number, ice?:number, lightning?:number}, catalyst: {id:string, count:number} | null = null, magic: number = 100) {
+  craft(energy: {fire?:number, ice?:number, lightning?:number}, catalyst: {id:string, count:number} | null = null, magic: number = 100): CraftResult {
     const want = {
       fire: Math.max(0, Math.floor(energy?.fire || 0)),
       ice: Math.max(0, Math.floor(energy?.ice || 0)),

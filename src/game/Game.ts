@@ -28,7 +28,8 @@ import { Minimap } from '../ui/Minimap.ts';
 import { Cinematics } from './cinematics/Cinematics.ts';
 import { StorySystem } from './story/StorySystem.ts';
 import { Dungeons } from '../world/dungeons/Dungeons.ts';
-import { SHOTS } from './Shots.ts';
+import { SHOTS, isFollowShot, isApplicableShot } from './Shots.ts';
+import type { ApplicableShot } from './Shots.ts';
 import type { System } from '../engine/System.ts';
 import type { HudCache } from '../ui/GameData.ts';
 
@@ -107,6 +108,16 @@ const SYSTEM_ALIASES = {
   Story: ['StorySystem'],
 };
 
+/** What `main.ts` hands the game at construction. */
+export interface GameOpts {
+  /** Canvas host — `Renderer` builds its WebGL context inside this element. */
+  container: HTMLElement;
+  /** Where every DOM UI layer (HUD, menus, minimap, subtitles) appends itself. */
+  uiRoot: HTMLElement;
+  /** Loading-screen progress: 0..1 and the stage being booted. */
+  onProgress?: (t: number, label: string | null) => void;
+}
+
 /**
  * Root orchestrator. Systems are initialised in dependency order and then
  * ticked every frame: update() for simulation, lateUpdate() for anything that
@@ -119,11 +130,12 @@ export class Game {
   _registry!: Map<string, System>;
   _running!: boolean;
   camera!: THREE.PerspectiveCamera;
-  container!: any;
-  currentShot!: any;
+  container!: HTMLElement;
+  /** The shot `applyShot` last locked the world into, or null in normal play. */
+  currentShot!: ApplicableShot | null;
   debug!: boolean;
   input!: Input;
-  onProgress!: any;
+  onProgress!: (t: number, label: string | null) => void;
   paused!: boolean;
   post!: PostFX;
   ready!: boolean;
@@ -133,8 +145,8 @@ export class Game {
   seed!: number;
   systems!: System[];
   time!: Time;
-  uiRoot!: any;
-  constructor({ container, uiRoot, onProgress }: any) {
+  uiRoot!: HTMLElement;
+  constructor({ container, uiRoot, onProgress }: GameOpts) {
     this.container = container;
     this.uiRoot = uiRoot;
     this.onProgress = onProgress || (() => {});
@@ -180,55 +192,59 @@ export class Game {
     this.seed = 1337;
 
     /**
-     * Boot order. The pair type keeps each factory tied to its own key, so a
-     * line that builds the wrong system for its name is a compile error.
+     * Boot order. `step` ties each factory to its own key, so a line that
+     * builds the wrong system for its name is a compile error. It closes over
+     * the pair rather than storing it, because a `[K, () => R[K]]` *union*
+     * loses the correlation the moment it is destructured — which is what the
+     * `as any` this replaced was hiding.
      */
-    type Entry = { [K in SystemKey]: [K, () => SystemRegistry[K]] }[SystemKey];
-    const order: Entry[] = [
-      ['Sky', () => new Sky()],
-      ['Terrain', () => new Terrain()],
-      ['Water', () => new Water()],
-      ['Vegetation', () => new Vegetation()],
-      ['Props', () => new Props()],
-      ['Weather', () => new Weather()],
-      ['VFX', () => new VFX()],
-      ['Player', () => new Player()],
-      ['Party', () => new Party()],
-      ['Enemies', () => new Enemies()],
-      ['Combat', () => new CombatSystem()],
-      ['Camera', () => new CameraRig()],
+    const step = <K extends SystemKey>(name: K, make: () => SystemRegistry[K] & System) =>
+      ({ name, boot: () => this.add(make(), name) });
+    const order: Array<{ name: SystemKey, boot: () => System }> = [
+      step('Sky', () => new Sky()),
+      step('Terrain', () => new Terrain()),
+      step('Water', () => new Water()),
+      step('Vegetation', () => new Vegetation()),
+      step('Props', () => new Props()),
+      step('Weather', () => new Weather()),
+      step('VFX', () => new VFX()),
+      step('Player', () => new Player()),
+      step('Party', () => new Party()),
+      step('Enemies', () => new Enemies()),
+      step('Combat', () => new CombatSystem()),
+      step('Camera', () => new CameraRig()),
       // After Camera: the drive camera writes the lens in lateUpdate.
-      ['Regalia', () => new RegaliaSystem()],
-      ['Audio', () => new AudioSystem()],
+      step('Regalia', () => new RegaliaSystem()),
+      step('Audio', () => new AudioSystem()),
       // Before HUD — the HUD reads it during init. Start mid-game so the
       // capture shots show a party with real progression, not a level 1 save:
       // a level-27 retinue with a walked Ascension path, a live quest log, a
       // stocked bag and AP left to spend. Every number the UI draws comes from
       // here (see src/ui/GameData.ts).
-      ['Rpg', () => new RpgSystem({ startLevel: 27, startGil: 42180, startAp: 148 })],
-      ['HUD', () => new HUD()],
-      ['Minimap', () => new Minimap()],
-      ['Menus', () => new Menus()],
+      step('Rpg', () => new RpgSystem({ startLevel: 27, startGil: 42180, startAp: 148 })),
+      step('HUD', () => new HUD()),
+      step('Minimap', () => new Minimap()),
+      step('Menus', () => new Menus()),
       // WS-3: the interaction verb, then Hammerhead, then the people in it.
       // Order matters — Town registers its interactables and its two screens,
       // and Npcs places itself against the anchors Town publishes.
       // After Camera so cinematics win the lens; before Director so its VFX
       // depth prepass sees the final camera.
-      ['Cinematics', () => new Cinematics()],
-      ['Story', () => new StorySystem()],
-      ['Interaction', () => new InteractionSystem()],
-      ['Town', () => new Hammerhead()],
-      ['Npcs', () => new Npcs()],
-      ['Director', () => new Director()],
+      step('Cinematics', () => new Cinematics()),
+      step('Story', () => new StorySystem()),
+      step('Interaction', () => new InteractionSystem()),
+      step('Town', () => new Hammerhead()),
+      step('Npcs', () => new Npcs()),
+      step('Director', () => new Director()),
       // Last: entering a dungeon overrides exposure, grade and the whole
       // atmosphere, so it must get the final word each frame.
-      ['Dungeons', () => new Dungeons()],
+      step('Dungeons', () => new Dungeons()),
     ];
 
     for (let i = 0; i < order.length; i++) {
-      const [name, make] = order[i];
+      const { name, boot } = order[i];
       p(0.05 + 0.8 * (i / order.length), name);
-      const sys = this.add(make() as any, name);
+      const sys = boot();
       // eslint-disable-next-line no-await-in-loop
       if (sys.init) await sys.init(this);
     }
@@ -260,9 +276,12 @@ export class Game {
    * Put the world into a named, reproducible state (see Shots.ts) and lock the
    * camera. Used by src/tools/shoot.mts and by photo mode.
    */
-  applyShot(name: any) {
-    const shot = SHOTS[name as keyof typeof SHOTS];
-    if (!shot) throw new Error(`unknown shot: ${name}`);
+  applyShot(name: string) {
+    if (!isApplicableShot(name)) throw new Error(`unknown shot: ${name}`);
+    const shot = SHOTS[name];
+    // Only `PROBE_SHOT` can be a name with no shot behind it: the slot is
+    // declared, and the harness has to write a framing into it first.
+    if (!shot) throw new Error(`shot slot is empty: ${name}`);
     this.currentShot = name;
 
     // Rewind the clock per shot, not once per page. Everything phased off
@@ -311,7 +330,7 @@ export class Game {
     if (player && player.character && player.character.anim) player.character.anim.rest();
 
     const rig = this.get('CameraRig');
-    if (shot.follow) {
+    if (isFollowShot(shot)) {
       const p = this.followAnchor(shot.follow);
       rig!.setShot({
         pos: [p.x + shot.offset[0], p.y + shot.offset[1], p.z + shot.offset[2]],
@@ -325,7 +344,7 @@ export class Game {
       rig!.followShot = shot;
     } else {
       rig!.followShot = null;
-      rig!.setShot({ pos: shot.pos, target: shot.target, fov: shot.fov });
+      rig!.setShot({ pos: [...shot.pos], target: [...shot.target], fov: shot.fov });
     }
     return shot;
   }

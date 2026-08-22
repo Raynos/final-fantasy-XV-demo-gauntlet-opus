@@ -221,14 +221,13 @@ export interface WeaponSlot {
 /**
  * An enemy as combat sees it.
  *
- * `vulnerable` is written straight onto the boss by
- * `BossFight._tickBoss` and `EnemyBase` does not declare it, so it is optional
- * here rather than invented there. It belongs on `Enemy`.
+ * `vulnerable` used to be declared here because `EnemyBase` did not have it.
+ * It does now — `BossFight.update` is the only writer and the declaration
+ * belongs next to the rest of the encounter-layer state it lives beside — so
+ * this is `Enemy` with nothing added, kept as a name because it says which
+ * side of the boundary a value came from.
  */
-export interface CombatTarget extends Enemy {
-  /** Set for the length of a boss' recovery window; worth x1.5 damage. */
-  vulnerable?: boolean;
-}
+export type CombatTarget = Enemy;
 
 /**
  * Real-time action combat.

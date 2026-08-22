@@ -97,10 +97,9 @@ try {
 
   rows = await page.evaluate(async (cfg) => {
     const g = window.GAME;
-    const enemies = g.get('Enemies');
-    const terrain = g.get('Terrain');
+    const enemies = g.get('Enemies')!;
+    const terrain = g.get('Terrain')!;
     const bes = await import('/characters/enemies/Bestiary.ts');
-    const V3 = g.scene.position.constructor;
 
     /**
      * Every pose vocabulary word any species answers to. `POSE_MAP` in
@@ -109,7 +108,7 @@ try {
      * `run` are real poses even though no AI state is called that.
      */
     const POSES = ['idle', 'approach', 'run', 'pounce', 'telegraph', 'attack',
-      'flinch', 'stagger', 'death'];
+      'flinch', 'stagger', 'death'] as const;
     /** Poses whose whole point is that the creature is off the ground. */
     const AIRBORNE = new Set(['pounce']);
 
@@ -154,7 +153,9 @@ try {
       geometry?: { attributes?: { position?: { count: number } } };
       isSkinnedMesh?: boolean;
       skeleton?: { update(): void };
-      applyBoneTransform(i: number, v: Vec3Like): void;
+      /** Optional: a plain `Object3D` has none, which is what `traverse` hands
+       *  the callback. Guarded by `isSkinnedMesh` at the one call site. */
+      applyBoneTransform?(i: number, v: Vec3Like): void;
       matrixWorld: unknown;
       traverse(fn: (o: DrawNode) => void): void;
     }
@@ -166,7 +167,7 @@ try {
 
     const drawnBox = (e: { root: { updateMatrixWorld(f: boolean): void }, visual: DrawNode }) => {
       e.root.updateMatrixWorld(true);
-      const v: Vec3Like = new V3();
+      const v: Vec3Like = g.scene.position.clone();
       let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
       let minZ = Infinity, maxZ = -Infinity, n = 0;
       e.visual.traverse((o) => {
@@ -179,7 +180,7 @@ try {
         const step = Math.max(1, Math.floor(pos.count / 3000));
         for (let i = 0; i < pos.count; i += step) {
           v.fromBufferAttribute(pos, i);
-          if (o.isSkinnedMesh) o.applyBoneTransform(i, v);
+          if (o.isSkinnedMesh) o.applyBoneTransform?.(i, v);
           v.applyMatrix4(o.matrixWorld);
           if (v.y < minY) minY = v.y;
           if (v.y > maxY) maxY = v.y;
@@ -196,8 +197,8 @@ try {
     const keys = cfg.species || bes.speciesKeys();
     const out = [];
     // A patch of ground the harness already trusts: the player's own footing.
-    const player = g.get('Player');
-    const base = player ? player.position.clone() : new V3(0, 0, 0);
+    const player = g.get('Player')!;
+    const base = player.position.clone();
 
     for (const key of keys) {
       for (const pose of POSES) {
@@ -247,7 +248,7 @@ try {
           // The measured ground-correction curve `calibrateGround()` built for
           // this pose, so a wrong lift can be told apart from a wrong pose.
           cal: e.type._groundCal && e.type._groundCal[pose]
-            ? Array.from(e.type._groundCal[pose] as number[], (n) => +n.toFixed(3)) : null,
+            ? Array.from(e.type._groundCal[pose], (n) => +n.toFixed(3)) : null,
         });
         enemies.clear();
         enemies.frozen = false;

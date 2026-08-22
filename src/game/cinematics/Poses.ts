@@ -14,8 +14,11 @@
  *   lowerArm    −X bends the elbow
  */
 
+import type { Action, ActionKey } from '../../characters/rig/Anim.ts';
+import type { Character } from '../../characters/rig/Character.ts';
+
 /** Two-key hold: rest → pose, then park. */
-function hold(pose: any, blend = 0.42) {
+function hold(pose: ActionKey['pose'], blend = 0.42): Action {
   return { dur: blend, hold: true, mask: 'upper', keys: [{ t: 0, pose: {} }, { t: blend, pose }] };
 }
 
@@ -130,6 +133,9 @@ export const POSES = {
   }, 0.28),
 };
 
+/** The poses a scene may name. */
+export type PoseName = keyof typeof POSES;
+
 /**
  * Install a held pose on a character by handing the animator an action
  * definition directly. `Character.play()` can only name poses that ship in
@@ -140,14 +146,14 @@ export const POSES = {
  * @param name key in {@link POSES}, or null to release
  * @param [speed=1]
  */
-export function setPose(character: any, name: string | null, speed: number = 1) {
-  const anim = character && character.anim;
+export function setPose(character: Character, name: PoseName | null, speed: number = 1) {
+  const anim = character.anim;
   if (!anim) return;
   if (!name) {
     if (anim.action && anim.action.cinematic) anim.stopAction();
     return;
   }
-  const def = POSES[name as keyof typeof POSES];
+  const def = POSES[name];
   if (!def) return;
   if (anim.action && anim.action.name === name) return;      // already held
   anim.action = { def, name, t: 0, speed, w: 0, hold: true, cinematic: true };

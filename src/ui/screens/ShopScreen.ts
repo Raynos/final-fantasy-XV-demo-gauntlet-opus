@@ -56,8 +56,9 @@ function effectOf(def: ItemDef | null): string {
   if (def.category === 'accessory') {
     const m = def.mods || {};
     const parts = [];
-    for (const k of ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit', 'defense']) {
-      if (m[k]) parts.push(`${k.toUpperCase()} +${m[k]}`);
+    for (const k of ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit', 'defense'] as const) {
+      const v = m[k];
+      if (v) parts.push(`${k.toUpperCase()} +${v}`);
     }
     if (m.critRate) parts.push(`CRIT +${Math.round(m.critRate * 100)}%`);
     const resist = m.resist;

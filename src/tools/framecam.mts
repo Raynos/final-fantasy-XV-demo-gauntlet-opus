@@ -120,7 +120,7 @@ async function main() {
         // buried in a hill that grew under it, which is how half of the corpus
         // came to render black or to aim at a dirt face.
         if (s.camAt) {
-          const terr = g.get('Terrain');
+          const terr = g.get('Terrain')!;
           const cy = terr.heightAt(s.camAt[0], s.camAt[1]) + (s.eye ?? 12);
           const ay = terr.heightAt(s.aimAt[0], s.aimAt[1]) + (s.aimUp ?? 4);
           s.pos = [s.camAt[0], +cy.toFixed(1), s.camAt[1]];

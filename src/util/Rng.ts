@@ -12,7 +12,7 @@ export class Rng {
   }
   range(a: number, b: number) { return a + (b - a) * this.next(); }
   int(a: number, b: number) { return Math.floor(this.range(a, b + 1)); }
-  pick(arr: any) { return arr[Math.floor(this.next() * arr.length)]; }
+  pick<T>(arr: readonly T[]): T { return arr[Math.floor(this.next() * arr.length)]; }
   sign() { return this.next() < 0.5 ? -1 : 1; }
   /** Normally distributed (Box-Muller). */
   gauss(mu = 0, sigma = 1) {

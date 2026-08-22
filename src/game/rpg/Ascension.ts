@@ -16,8 +16,106 @@
  *   { value: 'apGain', amount: 0.10 }     scalar tunable
  */
 
-import { emptyMods } from './Stats.ts';
+import { emptyMods, CORE_STATS } from './Stats.ts';
+import type { StatKey, StatMods } from './Stats.ts';
 import type { Emitter } from './Emitter.ts';
+
+/**
+ * What one Ascension node does. Five exclusive arms — a node authors exactly
+ * one shape, which is why `activeEffects` dispatches on the first match rather
+ * than testing all five.
+ */
+export type AscensionEffect =
+  | { stat: StatKey, value: number }
+  | { mult: StatKey, value: number }
+  /** Multiply all six core stats by the same amount. */
+  | { multAll: number }
+  | { flag: string }
+  | { value: string, amount: number };
+
+/**
+ * A node **as authored** in `CONSTELLATIONS`: no layout resolved, no owning
+ * constellation stamped on it yet. `NODES` is the resolved form.
+ */
+interface AuthoredNode {
+  id: string;
+  name: string;
+  ap: number;
+  /** Offset from the constellation origin, roughly -1..1. */
+  at: number[];
+  /** Prerequisite node ids. Absent on a constellation's root. */
+  req?: string[];
+  desc: string;
+  effect: AscensionEffect;
+}
+
+/** One constellation as authored, with its node payloads. */
+interface AuthoredConstellation {
+  id: string;
+  name: string;
+  color: string;
+  /** Centre in star-map space, `[x, y]`. */
+  origin: number[];
+  desc: string;
+  nodes: AuthoredNode[];
+}
+
+/** One node of the Ascension grid, with its layout resolved. */
+export interface AscensionNode {
+  id: string;
+  name: string;
+  /** AP it costs to unlock. */
+  ap: number;
+  /** Offset from the constellation origin, roughly -1..1. */
+  at: number[];
+  /** Prerequisite node ids. */
+  req: string[];
+  desc: string;
+  effect: AscensionEffect;
+  /** Owning constellation id, and its display name and colour. */
+  constellation: string;
+  constellationName: string;
+  color: string;
+  /** Absolute star-map position, `[x, y]`. */
+  pos: number[];
+}
+
+/** One prerequisite line between two nodes. */
+export interface AscensionEdge {
+  from: string;
+  to: string;
+  constellation: string;
+}
+
+/** One constellation, without its node payloads. */
+export interface ConstellationInfo {
+  id: string;
+  name: string;
+  color: string;
+  /** Centre in star-map space, `[x, y]`. */
+  origin: number[];
+  desc: string;
+  nodeIds: string[];
+  totalAp: number;
+}
+
+/** Every unlocked node's effects, folded into one bundle. */
+export interface AscensionEffects {
+  mods: StatMods;
+  flags: Set<string>;
+  values: Record<string, number>;
+  nodes: string[];
+}
+
+/** The serialised Ascension state. */
+export interface AscensionSave {
+  ap?: number;
+  apSpent?: number;
+  apLifetime?: number;
+  unlocked?: string[];
+  /** Part-metres banked toward the next distance award, per rule. */
+  distance?: Record<string, number>;
+}
 
 /* ------------------------------------------------------------------------ */
 /* AP earning rules                                                          */
@@ -70,7 +168,7 @@ export const AP_RULES: Record<string, ApRule> = {
  * map; each node's `at` is an offset from that centre. Both are in a
  * roughly -1..1 space; the UI scales it to whatever canvas it has.
  */
-const CONSTELLATIONS = [
+const CONSTELLATIONS: AuthoredConstellation[] = [
   /* ------------------------------------------------------------------ */
   {
     id: 'armiger', name: 'Armiger', color: '#6fd0ff', origin: [0, 0],
@@ -256,7 +354,7 @@ const CONSTELLATIONS = [
 
 /** Every node, keyed by id, with absolute layout coordinates resolved. */
 export const NODES = (() => {
-  const map: Record<string, any> = {};
+  const map: Record<string, AscensionNode> = {};
   for (const c of CONSTELLATIONS) {
     for (const n of c.nodes) {
       map[n.id] = {
@@ -273,15 +371,15 @@ export const NODES = (() => {
 })();
 
 /** Constellation metadata for the star-map UI (no node payloads). */
-export const CONSTELLATION_INFO = CONSTELLATIONS.map((c) => ({
+export const CONSTELLATION_INFO: ConstellationInfo[] = CONSTELLATIONS.map((c) => ({
   id: c.id, name: c.name, color: c.color, origin: c.origin, desc: c.desc,
   nodeIds: c.nodes.map((n) => n.id),
   totalAp: c.nodes.reduce((a, n) => a + n.ap, 0),
 }));
 
 /** Every prerequisite edge, for drawing the constellation lines. */
-export const EDGES = (() => {
-  const out = [];
+export const EDGES: AscensionEdge[] = (() => {
+  const out: AscensionEdge[] = [];
   for (const id of Object.keys(NODES)) {
     for (const r of NODES[id].req) {
       if (NODES[r]) out.push({ from: r, to: id, constellation: NODES[id].constellation });
@@ -299,10 +397,12 @@ export const EDGES = (() => {
  * bundle. Emits `node-unlocked` and `ap-gained` through the injected emitter.
  */
 export class Ascension {
-  unlocked!: Set<any>;
-  _cooldowns!: any;
-  _distance!: any;
-  _effectsCache!: any;
+  unlocked!: Set<string>;
+  /** Cooldown timers keyed by AP reason, so warp-strike spam doesn't print AP. */
+  _cooldowns!: Record<string, number>;
+  /** Accumulators for distance-based rules, in metres. */
+  _distance!: Record<string, number>;
+  _effectsCache!: AscensionEffects | null;
   ap!: number;
   apLifetime!: number;
   apSpent!: number;
@@ -312,11 +412,8 @@ export class Ascension {
     this.ap = 0;
     this.apSpent = 0;
     this.apLifetime = 0;
-    /** @type {Set<string>} */
     this.unlocked = new Set();
-    /** Cooldown timers keyed by AP reason, so warp-strike spam doesn't print AP. */
     this._cooldowns = {};
-    /** Accumulators for distance-based rules. */
     this._distance = { 'regalia-distance': 0, 'chocobo-distance': 0 };
     this._effectsCache = null;
   }
@@ -325,7 +422,7 @@ export class Ascension {
   get allNodes() { return Object.keys(NODES); }
 
   /** Look one node up. */
-  node(id: string) { return NODES[id] || null; }
+  node(id: string): AscensionNode | null { return NODES[id] || null; }
 
   /** Total AP required to fully clear the grid. */
   get totalApRequired() { return Object.values(NODES).reduce((a, n) => a + n.ap, 0); }
@@ -390,7 +487,7 @@ export class Ascension {
     const n = NODES[id];
     if (!n) return { ok: false, reason: 'unknown', missing: [], ap: 0 };
     if (this.unlocked.has(id)) return { ok: false, reason: 'already-unlocked', missing: [], ap: n.ap };
-    const missing = n.req.filter((r: any) => !this.unlocked.has(r));
+    const missing = n.req.filter((r) => !this.unlocked.has(r));
     if (missing.length) return { ok: false, reason: 'locked', missing, ap: n.ap };
     if (this.ap < n.ap) return { ok: false, reason: 'not-enough-ap', missing: [], ap: n.ap };
     return { ok: true, reason: 'ok', missing: [], ap: n.ap };
@@ -419,7 +516,7 @@ export class Ascension {
   /** Nodes whose prerequisites are met (affordable or not) — the "frontier". */
   frontier() {
     return this.allNodes
-      .filter((id) => !this.unlocked.has(id) && NODES[id].req.every((r: any) => this.unlocked.has(r)))
+      .filter((id) => !this.unlocked.has(id) && NODES[id].req.every((r) => this.unlocked.has(r)))
       .map((id) => NODES[id]);
   }
 
@@ -427,9 +524,9 @@ export class Ascension {
    * Cheapest prerequisite chain to reach a node, in purchase order.
    */
   pathTo(id: string): {path:string[], ap:number} {
-    const path: any[] = [];
-    const seen = new Set();
-    const walk = (nid: any) => {
+    const path: string[] = [];
+    const seen = new Set<string>();
+    const walk = (nid: string) => {
       if (seen.has(nid) || this.unlocked.has(nid)) return;
       seen.add(nid);
       const n = NODES[nid];
@@ -446,20 +543,24 @@ export class Ascension {
   /**
    * Fold every unlocked node into one payload.
    */
-  activeEffects(): {mods:any, flags:Set<string>, values:Record<string,number>, nodes:string[]} {
+  activeEffects(): AscensionEffects {
     if (this._effectsCache) return this._effectsCache;
     const mods = emptyMods();
-    const flags = new Set();
+    const flags = new Set<string>();
     const values: Record<string, number> = {};
     for (const id of this.unlocked) {
       const e = NODES[id]?.effect;
       if (!e) continue;
-      if (e.stat) mods[e.stat as keyof typeof mods] = (mods[e.stat as keyof typeof mods] || 0) + e.value;
-      if (e.mult) mods.mult[e.mult as keyof typeof mods.mult] = (mods.mult[e.mult as keyof typeof mods.mult] || 0) + e.value;
-      if (e.multAll) for (const s of ['hp', 'mp', 'strength', 'vitality', 'magic', 'spirit']) mods.mult[s as keyof typeof mods.mult] = (mods.mult[s as keyof typeof mods.mult] || 0) + e.multAll;
-      if (e.flag) flags.add(e.flag);
-      if (e.value) values[e.value] = (values[e.value] || 0) + e.amount;
-      if (e.resist) for (const el of Object.keys(e.resist)) mods.resist[el as keyof typeof mods.resist] = (mods.resist[el as keyof typeof mods.resist] || 0) + e.resist[el];
+      // One arm each, tested in order. This used to be five independent `if`s
+      // over an untyped payload, and `{ stat, value }` / `{ mult, value }` both
+      // fell into the `value` arm as well -- writing `values['500'] = NaN` for
+      // every flat stat node. Nothing ever read those keys (`value()` returns
+      // `NaN || 0`), so dropping them changes no number the game uses.
+      if ('stat' in e) mods[e.stat] = (mods[e.stat] || 0) + e.value;
+      else if ('mult' in e) mods.mult[e.mult] = (mods.mult[e.mult] || 0) + e.value;
+      else if ('multAll' in e) for (const st of CORE_STATS) mods.mult[st] = (mods.mult[st] || 0) + e.multAll;
+      else if ('flag' in e) flags.add(e.flag);
+      else values[e.value] = (values[e.value] || 0) + e.amount;
     }
     this._effectsCache = { mods, flags, values, nodes: [...this.unlocked] };
     return this._effectsCache;
@@ -476,13 +577,13 @@ export class Ascension {
     return { ap: this.ap, apSpent: this.apSpent, apLifetime: this.apLifetime, unlocked: [...this.unlocked], distance: this._distance };
   }
 
-  static fromJSON(data: any, emitter: Emitter | null = null) {
+  static fromJSON(data: AscensionSave | null | undefined, emitter: Emitter | null = null) {
     const a = new Ascension(emitter);
     if (!data) return a;
     a.ap = data.ap || 0;
     a.apSpent = data.apSpent || 0;
     a.apLifetime = data.apLifetime || 0;
-    a.unlocked = new Set((data.unlocked || []).filter((id: any) => NODES[id]));
+    a.unlocked = new Set((data.unlocked || []).filter((id) => NODES[id]));
     a._distance = data.distance || a._distance;
     return a;
   }

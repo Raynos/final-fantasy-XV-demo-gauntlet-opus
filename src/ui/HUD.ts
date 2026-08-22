@@ -168,7 +168,7 @@ export class HUD {
     if (s === 'live') return g.get?.('Combat')?.inCombat ? 'combat' : 'field';
     if (typeof s === 'string') return s;
     if (g.get?.('Combat')?.inCombat) return 'combat';
-    const shot = SHOTS[g.currentShot as keyof typeof SHOTS];
+    const shot = g.currentShot ? SHOTS[g.currentShot] : undefined;
     return shot?.scenario || 'field';
   }
 

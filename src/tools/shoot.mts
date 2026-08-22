@@ -223,7 +223,7 @@ async function main() {
 
     for (const name of shots) {
       const t0 = Date.now();
-      const meta = await page.evaluate(([n, settle]) => {
+      const meta = await page.evaluate(({ n, settle }) => {
         const g = window.GAME;
         g.applyShot(n);
         g.settle(settle);
@@ -237,7 +237,7 @@ async function main() {
           geometries: gl.memory.geometries,
           programs: g.renderer.info.programs?.length ?? 0,
         };
-      }, [name, opts.settle]);
+      }, { n: name, settle: opts.settle });
 
       const file = path.join(outDir, `${name}.${opts.jpeg ? 'jpg' : 'png'}`);
       const buf = await page.screenshot(

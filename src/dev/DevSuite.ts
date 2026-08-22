@@ -6,7 +6,8 @@ import { Inbox } from './Inbox.ts';
 import { Stage } from './Stage.ts';
 import { AssetBrowser } from './AssetBrowser.ts';
 import { ViewModes } from './ViewModes.ts';
-import { SHOTS } from '../game/Shots.ts';
+import { SHOTS, isShotName } from '../game/Shots.ts';
+import type { ShotName } from '../game/Shots.ts';
 import { worldMap } from '../world/map/WorldMap.ts';
 import './dev.css';
 import type { Game } from '../game/Game.ts';
@@ -59,7 +60,7 @@ export class DevSuite {
   reg!: Registry;
   root!: HTMLDivElement;
   shotAt!: number;
-  shotNames!: string[];
+  shotNames!: ShotName[];
   stage!: Stage;
   stats!: StatsHud;
   taint!: HTMLDivElement;
@@ -70,7 +71,7 @@ export class DevSuite {
     this.reg = new Registry();
     this.bookmarks = load('dev.bookmarks', {});
     this.tuning = load('dev.tuning', {});
-    this.shotNames = Object.keys(SHOTS);
+    this.shotNames = Object.keys(SHOTS).filter(isShotName);
     this.shotAt = -1;
     this._inputWas = null;
   }
@@ -362,19 +363,20 @@ export class DevSuite {
 
   _shot(arg: string) {
     if (arg === 'list') return this.shotNames.join(' ');
-    let name = arg;
+    let name: ShotName;
     if (arg === 'next' || arg === 'prev' || !arg) {
       const d = arg === 'prev' ? -1 : 1;
       this.shotAt = (this.shotAt + d + this.shotNames.length) % this.shotNames.length;
       name = this.shotNames[this.shotAt];
     } else {
-      const i = this.shotNames.indexOf(name);
-      if (i < 0) throw new Error(`unknown shot '${name}'`);
+      const i = this.shotNames.findIndex((n) => n === arg);
+      if (i < 0) throw new Error(`unknown shot '${arg}'`);
+      name = this.shotNames[i];
       this.shotAt = i;
     }
     this._setFly(false);
     this.game.applyShot(name);
-    const doc = SHOTS[name as keyof typeof SHOTS].doc || '';
+    const doc = SHOTS[name].doc || '';
     this._toast(`${name} — ${doc}`);
     return `${name}: ${doc}`;
   }

@@ -211,7 +211,7 @@ export class Menus {
       controls: new ControlsScreen(this),
       photo: new PhotoScreen(this),
     };
-    for (const k of Object.keys(this.screens) as ScreenName[]) {
+    for (const k of this.screenNames) {
       const s: MenuScreen | undefined = this.screens[k];
       if (!s) continue;
       s.node = el(`div.screen.s-${k}`);
@@ -254,6 +254,13 @@ export class Menus {
    * Show a screen, or `null` to close. Transitions are animated; calling this
    * with the current name is a no-op.
    */
+  /**
+   * Every screen currently registered. `Object.keys` widens to `string[]`,
+   * and the keys of `screens` are exactly `ScreenName` by construction -- this
+   * getter is the one place that says so, rather than each caller asserting.
+   */
+  get screenNames(): ScreenName[] { return Object.keys(this.screens) as ScreenName[]; }
+
   setScreen(name: ScreenName | null) {
     if (name === this.name && !this.pending) return;
     if (!name) { this.pending = null; this.name = null; this.stack.length = 0; return; }

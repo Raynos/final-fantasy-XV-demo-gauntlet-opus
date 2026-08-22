@@ -47,10 +47,12 @@ async function ensureServer() {
 /**
  * Types for the in-page half.
  *
- * `window.GAME` is declared `any` in `src/globals.d.ts`, so the first thing
- * every page function here does is give what it pulls off it a real type. That
- * is an assignment, not an assertion: if `renderSession` or `Score.at` changes
- * shape, this harness stops compiling instead of failing at 3 a.m. in a page.
+ * `window.GAME` is `Game` now, but the *static* side of `AudioSystem` still
+ * has to be named: `Object.constructor` is typed `Function`, so the class
+ * declares `['constructor']` to reach its own statics. Every page function
+ * here then gives what it pulls off the page a real type by assignment, not by
+ * assertion: if `renderSession` or `Score.at` changes shape, this harness
+ * stops compiling instead of failing at 3 a.m. in a page.
  */
 
 /** One point on the session timeline, and what the score was playing there. */
@@ -61,7 +63,7 @@ interface Window1s { s: number; rms: number; db: number; peak: number }
 
 /** Renders the scripted session offline and analyses the result. */
 const OFFLINE = async (seconds: number) => {
-  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const Audio: typeof AudioSystem = window.GAME.get('Audio')!.constructor;
   const marks: Mark[] = [];
   const t0 = performance.now();
   const { buffer, stats } = await Audio.renderSession({
@@ -200,7 +202,7 @@ const OFFLINE = async (seconds: number) => {
 
 /** Renders the score alone and reports the level of each cue. */
 const MUSIC_ONLY = async ({ seconds, raw }: { seconds: number, raw: boolean }) => {
-  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const Audio: typeof AudioSystem = window.GAME.get('Audio')!.constructor;
   const plan: [number, MusicStateName][] =
     [[0, 'field'], [12, 'tension'], [20, 'combat'], [32, 'boss'], [42, 'victory'], [50, 'night']];
   const { buffer } = await Audio.renderSession({
@@ -238,7 +240,7 @@ const MUSIC_ONLY = async ({ seconds, raw }: { seconds: number, raw: boolean }) =
 
 /** Renders one cue in isolation for 16 s and returns its level. */
 const CUE = async ({ name, raw }: { name: MusicStateName, raw: boolean }) => {
-  const Audio: typeof AudioSystem = window.GAME.get('Audio').constructor;
+  const Audio: typeof AudioSystem = window.GAME.get('Audio')!.constructor;
   const { buffer } = await Audio.renderSession({
     seconds: 16, sampleRate: 44100,
     script: (api) => {
@@ -272,12 +274,12 @@ const CUE = async ({ name, raw }: { name: MusicStateName, raw: boolean }) => {
  */
 const AB = async (blocks: number) => {
   const g: Game = window.GAME;
-  const audio = g.get('Audio');
+  const audio = g.get('Audio')!;
   if (!audio || !audio.ctx) throw new Error('AB needs a booted AudioContext (?audio=force)');
-  const player = g.get('Player');
-  const combat = g.get('Combat');
-  const enemies = g.get('Enemies');
-  const rig = g.get('CameraRig');
+  const player = g.get('Player')!;
+  const combat = g.get('Combat')!;
+  const enemies = g.get('Enemies')!;
+  const rig = g.get('CameraRig')!;
   g.applyShot('hud_field');
   rig?.clearShot?.();
   g.resetClock();
@@ -406,7 +408,7 @@ async function main() {
     // anything still holding nodes.
     out.settled = await p2.evaluate(async () => {
       const g: Game = window.GAME;
-      const audio = g.get('Audio');
+      const audio = g.get('Audio')!;
       if (!audio) throw new Error('no Audio system on the settle page');
       g.input.keys.clear();
       // Stop the score first: the leak question is "does anything outlive its

@@ -17,11 +17,17 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 
  * caller passes in — no CSS transitions, so a capture after N fixed steps is
  * byte-identical.
  */
+/** The chapter card mid-flight: its per-letter spans and the clip driving them. */
+interface ChapterCardState {
+  chars: HTMLElement[];
+  clip: Clip;
+}
+
 export class Letterbox {
   line!: HTMLElement;
   lineR!: HTMLElement;
   lineT!: HTMLElement;
-  _onResize!: any;
+  _onResize!: () => void;
   active!: boolean;
   bar!: number;
   barMax!: number;
@@ -32,8 +38,9 @@ export class Letterbox {
   chapN!: HTMLElement;
   chapR!: HTMLElement;
   chapS!: HTMLElement;
-  chapState!: any;
-  chars!: any[];
+  chapState!: ChapterCardState | null;
+  /** The per-character spans of the current spoken line, revealed one by one. */
+  chars!: HTMLElement[];
   fade!: HTMLElement;
   fadeAmt!: number;
   fadeGoal!: number;

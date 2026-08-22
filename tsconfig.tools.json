@@ -19,7 +19,9 @@
     "erasableSyntaxOnly": true,
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "baseUrl": ".",
+    "paths": { "/*": ["./src/*"] }
   },
   // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
   // game declares, and the harness is the other end of it.

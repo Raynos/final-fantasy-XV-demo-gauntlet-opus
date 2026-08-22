@@ -30,6 +30,7 @@
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
+import type * as THREE from 'three';
 
 const PORT = Number(process.env.PORT || 5173);
 
@@ -86,21 +87,29 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 
 const out = await page.evaluate(async (cfg) => {
   const g = window.GAME;
-  const t = g.get('Terrain');
+  const t = g.get('Terrain')!;
   const tm = await import('/world/terrain/TerrainMaterial.ts');
 
-  // Constructors are harvested from live objects rather than imported: a bare
-  // `three` specifier does not resolve inside `page.evaluate`, because the
-  // browser is doing the import, not vite. Same trick as src/tools/heightcheck.mts.
-  const surf0 = t.clipmap.rings[0].meshes[0].material;
   /**
-   * The bits of a three orthographic camera the probe rig drives. Written down
-   * rather than imported because the constructor is lifted off a live object.
+   * The class a live object came from, as a constructor.
+   *
+   * Constructors are harvested from live objects rather than imported: a bare
+   * `three` specifier does not resolve inside `page.evaluate`, because the
+   * browser is doing the import, not vite -- and the probe rig must use the
+   * *page's* three, not a second copy. `Object.constructor` is typed
+   * `Function`, which has no construct signature; this is the one place that
+   * says otherwise, and the type argument keeps it checked: hand it the wrong
+   * instance and every `new` below stops compiling.
    */
+  const classOf = <T extends object>(o: T) => o.constructor as new (...args: readonly unknown[]) => T;
   /** A scene node as the sun search reads it. */
   interface SceneNode {
+    /** Every `Object3D` has one. Present so this is not an all-optional
+     *  "weak type", which `Scene.traverse`'s callback could not be given. */
+    type: string;
     isLight?: boolean;
-    shadow?: { camera?: { isOrthographicCamera?: boolean, constructor: OrthoCtor } };
+    color?: THREE.Color;
+    shadow?: { camera?: { isOrthographicCamera?: boolean } & THREE.OrthographicCamera };
   }
 
   /** One mesh of a clipmap ring, with the material the probe swaps out. */
@@ -109,26 +118,29 @@ const out = await page.evaluate(async (cfg) => {
   /** One LOD ring of the terrain clipmap. */
   interface ClipmapRing { cell: number; level: number; meshes: ClipmapMesh[] }
 
-  interface OrthoCam {
-    up: { set(x: number, y: number, z: number): void };
-    position: { set(x: number, y: number, z: number): void };
-    lookAt(x: number, y: number, z: number): void;
-    updateMatrixWorld(force?: boolean): void;
-  }
-  type OrthoCtor = new (l: number, r: number, t: number, b: number, n: number, f: number) => OrthoCam;
+  type OrthoCtor = new (l: number, r: number, t: number, b: number, n: number, f: number)
+    => THREE.OrthographicCamera;
 
-  const Scene = g.scene.constructor;
-  const ShaderMaterial = g.post.taa.material.constructor;
-  const RenderTarget = g.post.rtScene.constructor;
-  const Color = surf0.color.constructor;
-  // Constructors are pulled off live objects rather than imported: this file
-  // runs in the page and must use the *page's* three, not a second copy.
-  let OrthographicCamera: OrthoCtor | null = null;
-  g.scene.traverse((o: SceneNode) => {
-    if (!OrthographicCamera && o.isLight && o.shadow && o.shadow.camera
-        && o.shadow.camera.isOrthographicCamera) OrthographicCamera = o.shadow.camera.constructor;
+  const Scene = classOf(g.scene);
+  const ShaderMaterial = classOf(g.post.taa.material);
+  const RenderTarget = classOf(g.post.rtScene);
+  // The sun's shadow camera is the only orthographic camera in the scene, and
+  // its `color` is the only `THREE.Color` reachable without guessing: the
+  // terrain material is a `ShaderMaterial` and has no `color` at all, which is
+  // what `surf0.color.constructor` had been reaching for.
+  let orthoCtor: OrthoCtor | null = null;
+  let colorCtor: (new () => THREE.Color) | null = null;
+  g.scene.traverse((obj) => {
+    const o: SceneNode = obj;
+    if (!orthoCtor && o.isLight && o.shadow && o.shadow.camera
+        && o.shadow.camera.isOrthographicCamera) orthoCtor = classOf(o.shadow.camera);
+    if (!colorCtor && o.color) colorCtor = classOf(o.color);
   });
-  if (!OrthographicCamera) throw new Error('no orthographic camera to clone a constructor from');
+  if (!orthoCtor) throw new Error('no orthographic camera to clone a constructor from');
+  if (!colorCtor) throw new Error('no light to lift a Color constructor from');
+  // `const` so the narrowing above survives into the render closures below.
+  const OrthographicCamera: OrthoCtor = orthoCtor;
+  const Color: new () => THREE.Color = colorCtor;
   const FloatType = 1015, RGBAFormat = 1023, NearestFilter = 1003, DoubleSide = 2;
 
   // ---- probe rig ---------------------------------------------------------
@@ -212,7 +224,7 @@ const out = await page.evaluate(async (cfg) => {
 
   // ---- baseline, at a fresh boot -----------------------------------------
   goHome();
-  const player = g.get('Player');
+  const player = g.get('Player')!;
   const p0 = (player ? player.position : g.camera.position).clone();
   const rect = { cx: p0.x, cz: p0.z, span: cfg.span };
   const before = probe(rect.cx, rect.cz, rect.span);

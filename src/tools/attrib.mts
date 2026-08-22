@@ -60,18 +60,18 @@ const out = await page.evaluate(async ([shot, n]: [string, number]) => {
   };
 
   // --- post passes -----------------------------------------------------
-  for (const key of ['gtao', 'ssr', 'taa', 'dof', 'motionBlur', 'bloom', 'grade', 'cas', 'contact']) {
+  for (const key of ['gtao', 'ssr', 'taa', 'dof', 'motionBlur', 'bloom', 'grade', 'cas', 'contact'] as const) {
     const pass = p[key];
     if (!pass || pass.enabled === undefined) continue;
     test(`post.${key}`, () => { pass.enabled = false; }, () => { pass.enabled = true; });
   }
 
   // --- world systems ---------------------------------------------------
-  const water = g.get('Water');
+  const water = g.get('Water')!;
   if (water && water.enabled) {
     test('water reflection', () => { water.enabled = false; }, () => { water.enabled = true; });
   }
-  const sky = g.get('Sky');
+  const sky = g.get('Sky')!;
   if (sky && sky.clouds) {
     const prev = sky.u?.uCloudMode?.value;
     if (prev !== undefined) {
@@ -82,23 +82,34 @@ const out = await page.evaluate(async ([shot, n]: [string, number]) => {
     test('shadow cascades', () => { g.renderer.shadowMap.enabled = false; },
       () => { g.renderer.shadowMap.enabled = true; });
   }
-  const wx = g.get('Weather');
+  const wx = g.get('Weather')!;
   if (wx && wx.volume) {
     test('weather volume', () => { wx.volume.enabled = false; }, () => { wx.volume.enabled = true; });
   }
 
   // --- scene content ---------------------------------------------------
-  for (const [label, sys] of [
-    ['vegetation grass', 'Vegetation', 'grass'], ['terrain', 'Terrain', 'clipmap'],
-    ['props', 'Props', 'root'], ['characters', 'Party', 'root'],
-  ]) {
-    const s = g.get(sys);
-    if (!s) continue;
-    let roots: Array<{ visible: boolean, name?: string }> = [];
-    if (sys === 'Vegetation') roots = [s.grass?.group, s.bushes?.group, s.trees?.group].filter(Boolean);
-    else if (sys === 'Terrain') roots = [s.clipmap?.group].filter(Boolean);
-    else if (sys === 'Props') roots = g.scene.children.filter((c: { name?: string }) => /rock|landmark|prop|regalia|road|outpost|mega|wild|debris/i.test(c.name || ''));
-    else if (sys === 'Party') roots = [g.get('Player')?.root, ...(s.members || []).map((m: { root: unknown }) => m.root)].filter(Boolean);
+  // One entry per switchable slice of the frame. Written out rather than
+  // driven off a `[label, systemKey, field]` table: the field name in that
+  // table was never read, and `g.get(key)` over a `string` hands back every
+  // system at once, which is how three of the four branches came to be
+  // reaching for fields the union does not have.
+  const veg = g.get('Vegetation');
+  const terr = g.get('Terrain');
+  const party = g.get('Party');
+  const content: Array<{ label: string, roots: Array<{ visible: boolean }> }> = [
+    { label: 'vegetation grass', roots: veg ? [veg.grass.group, veg.bushes.group, veg.trees.group] : [] },
+    { label: 'terrain', roots: terr ? [terr.clipmap.group] : [] },
+    {
+      label: 'props',
+      roots: g.scene.children.filter((c) => /rock|landmark|prop|regalia|road|outpost|mega|wild|debris/i.test(c.name || '')),
+    },
+    {
+      label: 'characters',
+      roots: [g.get('Player')?.root, ...(party?.members ?? []).map((m) => m.root)]
+        .filter((r): r is NonNullable<typeof r> => !!r),
+    },
+  ];
+  for (const { label, roots } of content) {
     if (!roots.length) continue;
     test(label, () => roots.forEach((r) => { r.visible = false; }),
       () => roots.forEach((r) => { r.visible = true; }));

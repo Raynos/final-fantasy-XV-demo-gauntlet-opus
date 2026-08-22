@@ -117,27 +117,27 @@ async function main() {
             if (sh.wmFilter) for (let i = 0; i < sh.wmFilter; i++) ws.screen.nav(0, 1);
             if (sh.wmZoom != null) ws.screen.zoomI = sh.wmZoom;
             if (sh.revealAll && mm) mm.fog.revealAll();
-            if (sh.discoverAll) for (const p of g.get('Terrain').map.pois) g.get('Terrain').map.discover(p.id);
+            if (sh.discoverAll) { const map = g.get('Terrain')!.map; for (const p of map.pois) map.discover(p.id); }
             if (sh.wmSel != null) { ws.screen._rebuildList(); ws.screen.sel = sh.wmSel;
               const t = ws.screen.list[sh.wmSel]; if (t) { ws.screen.camT.x = t.x; ws.screen.camT.z = t.z;
                 ws.screen.cam.x = t.x; ws.screen.cam.z = t.z; } }
             for (let i = 0; i < 40; i++) ws.screen.update(1 / 60, g, 1);
           }
         }
-        const sky = g.get('Sky');
+        const sky = g.get('Sky')!;
         if (sh.time != null && sky) sky.setTimeOfDay(sh.time);
-        const weather = g.get('Weather');
+        const weather = g.get('Weather')!;
         if (sh.weather && weather) weather.set(sh.weather);
-        const hud = g.get('HUD');
+        const hud = g.get('HUD')!;
         if (hud) hud.setVisible(!!sh.hud);
-        const menus = g.get('Menus');
+        const menus = g.get('Menus')!;
         if (menus) menus.setScreen(sh.menu || null);
-        const rig = g.get('CameraRig');
+        const rig = g.get('CameraRig')!;
         rig.setShot({ pos: sh.pos, target: sh.target, fov: sh.fov || 45 });
         g.settle(st);
         rig.setShot({ pos: sh.pos, target: sh.target, fov: sh.fov || 45 });
         g.settle(8);
-        const t = g.get('Terrain');
+        const t = g.get('Terrain')!;
         return {
           tris: g.renderer.info.render.triangles,
           calls: g.renderer.info.render.calls,

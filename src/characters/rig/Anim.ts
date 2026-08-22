@@ -136,13 +136,19 @@ export interface Action {
 }
 
 /** An action in flight. */
-interface ActionState {
+export interface ActionState {
   def: Action;
   name: string;
   t: number;
   speed: number;
   w: number;
   hold: boolean;
+  /**
+   * Set by `cinematics/Poses.ts`, which installs a held pose straight onto
+   * `action` rather than through `play()`. It is how a scene tells its own
+   * poses apart from a combat action it must not release.
+   */
+  cinematic?: boolean;
 }
 
 /** Options for `Animator.play`. */

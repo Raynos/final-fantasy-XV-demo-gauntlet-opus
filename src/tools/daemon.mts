@@ -189,6 +189,21 @@ export interface HealthResponse {
   idleSec: number;
 }
 
+/**
+ * The two request bodies arrive as untrusted JSON off a socket, so they are
+ * narrowed here rather than asserted at the call. A predicate is worth the four
+ * extra lines over a cast: it narrows, so `routeShots` receives a checked
+ * `ShotsRequest`, and the `400` and the type stay in step because they are
+ * derived from the same test.
+ */
+function isShotsRequest(b: Record<string, unknown>): b is Record<string, unknown> & ShotsRequest {
+  return Array.isArray(b.shots) && b.shots.every((s) => typeof s === 'string') && typeof b.out === 'string';
+}
+
+function isEvalRequest(b: Record<string, unknown>): b is Record<string, unknown> & EvalRequest {
+  return typeof b.fn === 'string';
+}
+
 // --------------------------------------------------------------- client side
 
 /** POST JSON to the daemon. The caller names the response it expects. */
@@ -470,14 +485,14 @@ async function serve() {
         if (url === '/root') return send(200, { root: ROOT, self: SELF_STAMP });
         if (url === '/stop') { send(200, { ok: true }); setTimeout(stop, 50); return; }
         if (url === '/shots') {
-          if (!Array.isArray(body.shots) || typeof body.out !== 'string') {
+          if (!isShotsRequest(body)) {
             return send(400, { error: '/shots needs { shots: string[], out: string }' });
           }
-          return send(200, await queue(() => routeShots(body as unknown as ShotsRequest)));
+          return send(200, await queue(() => routeShots(body)));
         }
         if (url === '/eval') {
-          if (typeof body.fn !== 'string') return send(400, { error: '/eval needs { fn: string }' });
-          return send(200, await queue(() => routeEval(body as unknown as EvalRequest)));
+          if (!isEvalRequest(body)) return send(400, { error: '/eval needs { fn: string }' });
+          return send(200, await queue(() => routeEval(body)));
         }
         return send(404, { error: `no route ${url}` });
       } catch (e) {

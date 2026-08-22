@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { loft, rectCross, place, tint, glow, merge, enableVertexEmissive } from '../../combat/GeoKit.ts';
 import { Rng } from '../../util/Rng.ts';
 import type { Game } from '../Game.ts';
+import type { Terrain } from '../../world/Terrain.ts';
+import type { VFX } from '../../combat/VFX.ts';
 
 /**
  * The Disc of Cauthess — the arena you fight Titan in.
@@ -22,8 +24,8 @@ export class TitanArena {
   rng!: Rng;
   root!: THREE.Group;
   shake!: number;
-  terrain!: any;
-  vfx!: any;
+  terrain!: Terrain | undefined;
+  vfx!: VFX | undefined;
   constructor(game: Game, centre: THREE.Vector3, radius: number = 60) {
     this.game = game;
     this.centre = centre.clone();
@@ -146,7 +148,7 @@ export class TitanArena {
     if (party && party.members) for (const m of party.members) this._contain(m.root.position);
   }
 
-  _contain(p: any) {
+  _contain(p: THREE.Vector3) {
     const dx = p.x - this.centre.x, dz = p.z - this.centre.z;
     const d = Math.hypot(dx, dz);
     const lim = this.radius - 4;

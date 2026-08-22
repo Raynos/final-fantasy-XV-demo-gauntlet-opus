@@ -15,6 +15,10 @@
 
 import { NODES, EDGES, CONSTELLATION_INFO } from '../game/rpg/Ascension.ts';
 import type { Game } from '../game/Game.ts';
+import type { RollOpts } from '../game/rpg/CombatBridge.ts';
+import type {
+  AscensionEffect, AscensionNode, AscensionEdge, ConstellationInfo,
+} from '../game/rpg/Ascension.ts';
 import type { QuestLog, Quest, QuestView, ObjectiveView } from '../game/rpg/Quests.ts';
 import type { ItemDef } from '../game/rpg/Inventory.ts';
 import type { StatMods, computeDamage } from '../game/rpg/Stats.ts';
@@ -212,67 +216,14 @@ export interface TechniqueView {
 export type DamageRoll = ReturnType<typeof computeDamage>;
 
 /** Everything `CombatBridge.roll` accepts about how a hit was landed. */
-export interface RollOpts {
-  /** Motion value of the swing; 1.0 is a neutral light attack. */
-  motion?: number;
-  /** Set for a spell; leaves `weaponClass` unused. */
-  element?: string;
-  weaponClass?: string;
-  isWarpStrike?: boolean;
-  isBackAttack?: boolean;
-  staggerMult?: number;
-  /** Folded into the seeded RNG so a replayed frame rolls the same number. */
-  seed?: number;
-}
+export type { RollOpts };
 
 /**
- * What one Ascension node does. The four arms are the payload shapes
- * `Ascension.activeEffects()` sums, documented at the top of `Ascension.ts`.
+ * The Ascension grid's vocabulary. Declared beside the data in
+ * `game/rpg/Ascension.ts` and re-exported here, so a screen can keep importing
+ * everything it draws from one place.
  */
-export type AscensionEffect =
-  | { stat: string, value: number }
-  | { mult: string, value: number }
-  | { flag: string }
-  | { value: string, amount: number };
-
-/** One node of the Ascension grid, with its layout resolved. */
-export interface AscensionNode {
-  id: string;
-  name: string;
-  /** AP it costs to unlock. */
-  ap: number;
-  /** Offset from the constellation origin, roughly -1..1. */
-  at: number[];
-  /** Prerequisite node ids. */
-  req: string[];
-  desc: string;
-  effect: AscensionEffect;
-  /** Owning constellation id, and its display name and colour. */
-  constellation: string;
-  constellationName: string;
-  color: string;
-  /** Absolute star-map position, `[x, y]`. */
-  pos: number[];
-}
-
-/** One prerequisite line between two nodes. */
-export interface AscensionEdge {
-  from: string;
-  to: string;
-  constellation: string;
-}
-
-/** One constellation, without its node payloads. */
-export interface ConstellationInfo {
-  id: string;
-  name: string;
-  color: string;
-  /** Centre in star-map space, `[x, y]`. */
-  origin: number[];
-  desc: string;
-  nodeIds: string[];
-  totalAp: number;
-}
+export type { AscensionEffect, AscensionNode, AscensionEdge, ConstellationInfo };
 
 /** Why a node can or cannot be bought right now. */
 export interface UnlockCheck {
@@ -652,7 +603,10 @@ function modLine(mods: Partial<StatMods> | undefined): string {
   if (!mods) return '';
   const K = { hp: 'HP', mp: 'MP', strength: 'STR', vitality: 'VIT', magic: 'MAG', spirit: 'SPR', attack: 'ATK', defense: 'DEF', magicAttack: 'M.ATK', magicDefense: 'M.DEF' };
   const bits: string[] = [];
-  for (const k of Object.keys(K)) if (mods[k]) bits.push(`${K[k as keyof typeof K]} ${mods[k] > 0 ? '+' : ''}${mods[k]}`);
+  for (const k of Object.keys(K) as Array<keyof typeof K>) {
+    const v = mods[k];
+    if (v) bits.push(`${K[k]} ${v > 0 ? '+' : ''}${v}`);
+  }
   if (mods.critRate) bits.push(`Crit +${Math.round(mods.critRate * 100)}%`);
   const resist = mods.resist || {};
   for (const e of Object.keys(resist)) if (resist[e]) bits.push(`${e} res +${resist[e]}%`);

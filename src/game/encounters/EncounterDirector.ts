@@ -454,7 +454,7 @@ export class EncounterDirector {
    * @param e the attacker
    * @param atk the attack definition (may be null for legacy species)
    */
-  resolveStrike(e: Enemy, atk: EnemyAttack | null) {
+  resolveStrike(e: Enemy, atk: StrikeSpec | null) {
     const a: StrikeSpec = atk || { hitRadius: 1.8, mult: 1, arc: Math.PI / 2 };
     const reach = (a.hitRadius || 1.8) * e.scale;
     const arc = a.arc != null ? a.arc : Math.PI / 2;

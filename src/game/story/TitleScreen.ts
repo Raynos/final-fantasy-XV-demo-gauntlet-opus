@@ -16,16 +16,43 @@ import type { Game } from '../Game.ts';
  * The attract camera is a single very slow move that ping-pongs on a cosine, so
  * it loops forever with no seam and no state to reset.
  */
+/** What the title screen's menu can answer with. */
+export type TitleChoice = 'new' | 'continue' | 'extras';
+
+/** One menu row as authored. */
+interface TitleItem {
+  id: TitleChoice;
+  title: string;
+  desc: string;
+}
+
+/** One menu row as built: its elements, plus the damped highlight amount. */
+interface TitleRow {
+  row: HTMLElement;
+  bg: HTMLElement;
+  /** The two marks that slide out either side of the highlighted row. */
+  ml: HTMLElement;
+  mr: HTMLElement;
+  t: HTMLElement;
+  d: HTMLElement;
+  it: TitleItem;
+  /** Highlight amount, damped toward 0/1 each frame. */
+  _k?: number;
+}
+
 export class TitleScreen {
-  chosen!: any;
-  onChoose!: any;
+  /** The pick being committed, held while the screen fades to black. */
+  chosen!: TitleChoice | null;
+  onChoose!: ((pick: TitleChoice) => void) | null;
   shown!: boolean;
   _camPos!: THREE.Vector3;
   _camTgt!: THREE.Vector3;
-  _gp!: any;
-  _hudWas!: any;
+  /** Last-frame gamepad button states, for edge detection. */
+  _gp!: Record<string, boolean> | null;
+  /** HUD visibility saved on `show`, restored on `hide`. */
+  _hudWas!: boolean | undefined;
   _noise!: Noise;
-  _onResize!: any;
+  _onResize!: () => void;
   a!: number;
   crest!: SVGElement;
   fade!: HTMLElement;
@@ -34,11 +61,11 @@ export class TitleScreen {
   foot!: HTMLElement;
   game!: Game;
   index!: number;
-  items!: any;
+  items!: TitleItem[];
   mark!: HTMLElement;
   menu!: HTMLElement;
   root!: HTMLElement;
-  rows!: any;
+  rows!: TitleRow[];
   rule!: HTMLElement;
   t!: number;
   tag!: HTMLElement;
@@ -76,7 +103,7 @@ export class TitleScreen {
       { id: 'extras', title: 'Extras', desc: 'Not in this build' },
     ];
     this.menu = el('div.ti-menu');
-    this.rows = this.items.map((it: any) => {
+    this.rows = this.items.map((it): TitleRow => {
       const row = el('div.ti-row');
       const bg = el('div.tr-bg');
       const ml = el('div.tr-m.l');
@@ -166,8 +193,8 @@ export class TitleScreen {
     const inp = game.input;
     if (!inp || this.chosen) return;
     const down = (k: string) => inp.keyDown && inp.keyDown(k);
-    const gp = (i: number) => inp.gamepad && inp.gamepad.buttons && inp.gamepad.buttons[i] && inp.gamepad.buttons[i].pressed;
-    const edge = (k: string, v: any) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
+    const gp = (i: number) => !!inp.gamepad?.buttons?.[i]?.pressed;
+    const edge = (k: string, v: boolean) => { const p = this._gp && this._gp[k]; (this._gp = this._gp || {})[k] = v; return v && !p; };
 
     let d = 0;
     if (down('ArrowUp') || down('KeyW') || edge('u', gp(12))) d -= 1;
@@ -192,7 +219,7 @@ export class TitleScreen {
   }
 
   /** Commit the highlighted item. */
-  choose(id?: any) {
+  choose(id?: TitleChoice) {
     const pick = id || this.items[this.index].id;
     if (!id && !this._enabled(this.index)) return;
     this.chosen = pick;

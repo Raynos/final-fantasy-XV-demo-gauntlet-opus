@@ -3,6 +3,7 @@ import { SCENES } from './scenes/index.ts';
 import { Triggers } from './Triggers.ts';
 import { Conversation } from './Dialogue.ts';
 import { TitleScreen } from './TitleScreen.ts';
+import type { TitleChoice } from './TitleScreen.ts';
 import type { Game } from '../Game.ts';
 import type { Chapter } from './Chapters.ts';
 import type { Trigger, TriggerPayload } from './Triggers.ts';
@@ -12,7 +13,7 @@ import type { RpgSystem } from '../rpg/RpgSystem.ts';
 import type { QuestUpdate } from '../rpg/Quests.ts';
 
 /** What the title screen's menu can answer with. */
-export type TitleChoice = 'new' | 'continue' | 'extras';
+export type { TitleChoice };
 
 /** A callback the story parks for `at` seconds of world time. */
 interface QueuedBeat {

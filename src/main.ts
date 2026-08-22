@@ -1,16 +1,16 @@
 import { Game } from './game/Game.ts';
 import { installBootProfile } from './engine/BootProfile.ts';
 
-// These three live in `src/index.html` and the loading screen cannot run
-// without them, so an assertion here is the honest reading -- a null would be
-// a broken page, not a case to handle.
+// These five live in `src/index.html` and neither the loading screen nor the
+// game can run without them, so an assertion here is the honest reading -- a
+// null would be a broken page, not a case to handle.
 const boot = document.getElementById('boot')!;
 const bar = document.getElementById('boot-bar')!;
 const label = document.getElementById('boot-label')!;
 
 const game = new Game({
-  container: document.getElementById('app'),
-  uiRoot: document.getElementById('ui'),
+  container: document.getElementById('app')!,
+  uiRoot: document.getElementById('ui')!,
   onProgress: (t: number, text: string | null) => {
     bar.style.right = `${Math.max(0, 100 - t * 100).toFixed(1)}%`;
     if (text) label.textContent = text;

@@ -17,8 +17,23 @@ export interface TextureOpts {
   generateMipmaps?: boolean;
 }
 
+/**
+ * Per-texel callback. Writes the colour into `c` as three 0..1 channels rather
+ * than returning one, so a 512x512 bake allocates no arrays.
+ */
+export type TexelFn = (u: number, v: number, c: number[], x: number, y: number) => void;
+
+/** Per-texel callback for a single-channel map: returns one 0..1 value. */
+export type ScalarFn = (u: number, v: number, x: number, y: number) => number;
+
+/** Per-texel height sample, in whatever units the caller's slope maths expects. */
+export type HeightFn = (u: number, v: number, x: number, y: number) => number;
+
+/** Immediate-mode draw into a `size` x `size` canvas. */
+export type CanvasDrawFn = (ctx: CanvasRenderingContext2D, size: number) => void;
+
 /** Build an RGBA DataTexture from a per-texel callback returning [r,g,b] in 0..1. */
-export function makeTexture(size: number, fn: any, {
+export function makeTexture(size: number, fn: TexelFn, {
   colorSpace = THREE.SRGBColorSpace,
   repeat = 1,
   anisotropy = 16,
@@ -49,8 +64,8 @@ export function makeTexture(size: number, fn: any, {
 }
 
 /** Single-channel (packed into RGB) map — for roughness / metalness / AO. */
-export function makeDataMap(size: number, fn: any, opts = {}) {
-  return makeTexture(size, (u: any, v: any, c: any, x: any, y: any) => {
+export function makeDataMap(size: number, fn: ScalarFn, opts: TextureOpts = {}) {
+  return makeTexture(size, (u, v, c, x, y) => {
     const g = fn(u, v, x, y);
     c[0] = c[1] = c[2] = g;
   }, { colorSpace: THREE.NoColorSpace, ...opts });
@@ -60,13 +75,13 @@ export function makeDataMap(size: number, fn: any, opts = {}) {
  * Derive a tangent-space normal map from a height callback using Sobel.
  * `strength` scales the slope; 1 is subtle, 4 is pronounced.
  */
-export function normalFromHeight(size: number, heightFn: any, strength = 2.0, opts = {}) {
+export function normalFromHeight(size: number, heightFn: HeightFn, strength = 2.0, opts: TextureOpts = {}) {
   const h = new Float32Array(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
   const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)];
-  return makeTexture(size, (u: any, v: any, c: any, x: number, y: number) => {
+  return makeTexture(size, (u, v, c, x, y) => {
     const dx =
       (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) -
       (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
@@ -82,13 +97,13 @@ export function normalFromHeight(size: number, heightFn: any, strength = 2.0, op
 }
 
 /** Cheap ambient-occlusion approximation from a height field (cavity map). */
-export function aoFromHeight(size: number, heightFn: any, radius = 4, opts = {}) {
+export function aoFromHeight(size: number, heightFn: HeightFn, radius = 4, opts: TextureOpts = {}) {
   const h = new Float32Array(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
   const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)];
-  return makeDataMap(size, (u: any, v: any, x: number, y: number) => {
+  return makeDataMap(size, (u, v, x, y) => {
     const c = at(x, y);
     let occ = 0, n = 0;
     for (let a = 0; a < 8; a++) {
@@ -104,7 +119,7 @@ export function aoFromHeight(size: number, heightFn: any, radius = 4, opts = {})
 }
 
 /** Canvas-based generation for anything easier to draw than to compute. */
-export function canvasTexture(size: number, draw: any, { colorSpace = THREE.SRGBColorSpace, repeat = 1 } = {}) {
+export function canvasTexture(size: number, draw: CanvasDrawFn, { colorSpace = THREE.SRGBColorSpace, repeat = 1 } = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d')!;

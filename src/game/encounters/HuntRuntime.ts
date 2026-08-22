@@ -1,5 +1,13 @@
 import { HUNT_TARGETS, SET_PIECES } from './SpawnTables.ts';
 import type { EncounterDirector } from './EncounterDirector.ts';
+import type { RpgSystem } from '../rpg/RpgSystem.ts';
+import type { Quest, QuestUpdate, GrantedRewards } from '../rpg/Quests.ts';
+
+/** A hunt with a mark in the world: whether it spawned, and the job itself. */
+interface ArmedHunt {
+  spawned: boolean;
+  quest: Quest | null;
+}
 
 /**
  * Hunts, made real.
@@ -16,10 +24,12 @@ import type { EncounterDirector } from './EncounterDirector.ts';
  * and the tidy-up.
  */
 export class HuntRuntime {
-  _off!: any;
-  active!: Map<any, any>;
+  /** Unsubscribe for the `quest-updated` handler. */
+  _off!: (() => void) | null;
+  /** Quest id -> the mark it put in the world. */
+  active!: Map<string, ArmedHunt>;
   dir!: EncounterDirector;
-  rpg!: any;
+  rpg!: RpgSystem | undefined;
   constructor(dir: import('./EncounterDirector.ts').EncounterDirector) {
     this.dir = dir;
     this.rpg = dir.rpg;
@@ -30,7 +40,7 @@ export class HuntRuntime {
   /** Subscribe to the quest log. */
   init() {
     if (!this.rpg) return this;
-    this._off = this.rpg.on('quest-updated', (p: any) => this._onQuest(p));
+    this._off = this.rpg.on<QuestUpdate>('quest-updated', (p) => this._onQuest(p));
     // anything already accepted before we booted still deserves a mark
     for (const q of this.rpg.quests.active) {
       if (q.type === 'hunt') this.arm(q.id);
@@ -38,7 +48,7 @@ export class HuntRuntime {
     return this;
   }
 
-  _onQuest(p: any) {
+  _onQuest(p: QuestUpdate) {
     if (!p || !p.quest || p.quest.type !== 'hunt') return;
     if (p.phase === 'accepted') this.arm(p.quest.id);
     else if (p.phase === 'complete') this.finish(p.quest.id, p.rewards);
@@ -58,7 +68,7 @@ export class HuntRuntime {
     if (set) spawned = this.dir.startSetPiece(set.id);
     else spawned = this.dir.spawnHunt(id);
     const q = this.rpg?.quests?.def(id);
-    this.active.set(id, { spawned: !!spawned, quest: q });
+    this.active.set(id, { spawned: !!spawned, quest: q ?? null });
     window.dispatchEvent(new CustomEvent('encounter:hunt-armed', {
       detail: {
         quest: id, name: q ? q.name : id, target: q ? q.target : t.key,
@@ -72,7 +82,7 @@ export class HuntRuntime {
    * The board hears about it. The payout itself has already happened inside
    * `RpgSystem`'s `quest-updated` handler; this is the report back.
    */
-  finish(id: string, rewards: any) {
+  finish(id: string, rewards: GrantedRewards | null | undefined) {
     const rec = this.active.get(id);
     this.active.delete(id);
     this.dir.hunts?.delete(id);
@@ -89,7 +99,7 @@ export class HuntRuntime {
   }
 
   /** Despawn a hunt's remaining marks. */
-  clear(id: any) {
+  clear(id: string) {
     this.active.delete(id);
     const hunts = this.dir.hunts;
     const h = hunts && hunts.get(id);

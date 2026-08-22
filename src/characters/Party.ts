@@ -88,8 +88,14 @@ export interface PartyMember {
   swingIndex: number;
   downed: boolean;
   downTimer: number;
-  /** Noctis, while he is on the floor and this companion is reviving him. */
-  reviveTarget: THREE.Object3D | null;
+  /**
+   * Noctis, while he is on the floor and this companion is reviving him.
+   *
+   * `Player`, not `Object3D`: `Downed` is the only writer and always writes
+   * the player, and `PartyAI._station` reads `.position` off it -- which
+   * `Player` publishes as a getter onto `root.position`, not as an `Object3D`.
+   */
+  reviveTarget: Player | null;
   /** the blow this swing will land, and when. */
   _pending: PendingHit | null;
   /** one entry per carried weapon: Ignis has two kukris, the others one. */

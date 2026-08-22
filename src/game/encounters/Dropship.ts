@@ -3,6 +3,9 @@ import {
   loft, rectCross, tube, slab, spike, blob, place, tint, glow, merge, enableVertexEmissive,
 } from '../../combat/GeoKit.ts';
 import { metalNormal, metalRoughness } from '../../characters/enemies/EnemyBase.ts';
+import type { Enemy } from '../../characters/enemies/EnemyBase.ts';
+import type { Terrain } from '../../world/Terrain.ts';
+import type { VFX } from '../../combat/VFX.ts';
 import type { Game } from '../Game.ts';
 
 const P = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -20,6 +23,9 @@ const RED = 0xff2a18;
  * troopers onto the tarmac before climbing away. It is one merged mesh (one
  * draw call), built once and reused for every arrival.
  */
+
+/** Where an arrival is in its flight. */
+export type DropshipState = 'idle' | 'approach' | 'hover' | 'drop' | 'depart';
 export class Dropship {
   _acc!: number;
   _dropped!: number;
@@ -28,13 +34,14 @@ export class Dropship {
   exit!: THREE.Vector3;
   from!: THREE.Vector3;
   game!: Game;
-  mesh!: any;
-  payload!: any[];
+  mesh!: THREE.Mesh;
+  /** The squad being delivered — spawned already, held airborne until the drop. */
+  payload!: Enemy[];
   root!: THREE.Group;
-  state!: string;
+  state!: DropshipState;
   t!: number;
-  terrain!: any;
-  vfx!: any;
+  terrain!: Terrain | undefined;
+  vfx!: VFX | undefined;
   init(game: Game) {
     this.game = game;
     this.terrain = game.get('Terrain');
@@ -46,7 +53,7 @@ export class Dropship {
     this.root.add(this.mesh);
     game.scene.add(this.root);
 
-    this.state = 'idle';       // idle | approach | hover | drop | depart
+    this.state = 'idle';
     this.t = 0;
     this.at = new THREE.Vector3();
     this.from = new THREE.Vector3();
@@ -63,7 +70,7 @@ export class Dropship {
    * @param at ground point
    * @param payload enemies to drop
    */
-  arrive(at: THREE.Vector3, payload: any[]) {
+  arrive(at: THREE.Vector3, payload: Enemy[]) {
     this.at.copy(at);
     this.payload = payload || [];
     for (const e of this.payload) {
@@ -135,7 +142,7 @@ export class Dropship {
           if (e.root.position.y <= gy + 1e-3) {
             e.airborne = false;
             e.root.position.y = gy;
-            e.target = this.game.get('Player');
+            e.target = this.game.get('Player') ?? null;
             e.awareness = 1;
             e.setState('chase');
             if (this.vfx) {

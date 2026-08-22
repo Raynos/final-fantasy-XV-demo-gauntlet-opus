@@ -83,6 +83,13 @@ export interface SessionStats {
  * which is what the offline verification harness uses.
  */
 export class AudioSystem {
+  /**
+   * Types `this.constructor` so the offline renderer's static side is
+   * reachable from a live instance -- `src/audio/tools/verify.mts` and
+   * `profile.mts` pull `AudioSystem` out of the page through
+   * `game.get('Audio').constructor`, and `Object.constructor` is `Function`.
+   */
+  declare ['constructor']: typeof AudioSystem;
   /** User-facing 0..1 volume per bus, master included. */
   _userVolume!: Record<BusName, number>;
   _volume!: number;

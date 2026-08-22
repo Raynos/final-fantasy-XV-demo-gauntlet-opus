@@ -75,7 +75,7 @@ await page.evaluate(() => {
 
 const menuAudit = await page.evaluate(async () => {
   const g = window.GAME;
-  const menus = g.get('Menus');
+  const menus = g.get('Menus')!;
   const main = menus.screens.main;
   menus.setScreen('main');
   window.step(40);
@@ -113,8 +113,8 @@ for (const r of menuAudit) {
 
 const closeAudit = await page.evaluate(async () => {
   const g = window.GAME;
-  const menus = g.get('Menus');
-  const names = Object.keys(menus.screens);
+  const menus = g.get('Menus')!;
+  const names = menus.screenNames;
   const out = [];
   for (const n of names) {
     for (const code of ['Tab', 'Backspace', 'Escape']) {
@@ -141,7 +141,7 @@ for (const c of closeAudit) {
 
 const lock = await page.evaluate(async () => {
   const g = window.GAME;
-  const menus = g.get('Menus');
+  const menus = g.get('Menus')!;
   const inp = g.input;
   const out: Record<string, unknown> = {};
 
@@ -159,7 +159,7 @@ const lock = await page.evaluate(async () => {
   let requested = 0;
   const dom = inp.dom;
   const orig = dom.requestPointerLock;
-  dom.requestPointerLock = function spy() { requested++; };
+  dom.requestPointerLock = function spy() { requested++; return Promise.resolve(); };
   const row = document.querySelector<HTMLElement>('#menus .mrow');
   row!.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
   out.requestedFromMenuClick = requested;
@@ -196,9 +196,9 @@ ok('unexpected lock exit opens the pause menu', lock.menuAfterLockLost === 'main
 
 const drive = await page.evaluate(async () => {
   const g = window.GAME;
-  const car = g.get('Regalia');
-  const ix = g.get('Interaction');
-  const player = g.get('Player');
+  const car = g.get('Regalia')!;
+  const ix = g.get('Interaction')!;
+  const player = g.get('Player')!;
   const out: Record<string, unknown> = { enabled: !!car?.enabled };
   if (!car || !car.enabled) return out;
 
@@ -237,7 +237,7 @@ ok('walking up does not hand the wheel to Ignis', drive.autoDrive === false);
 /* the global hotkeys                                                    */
 
 const hotkeys = await page.evaluate(async () => {
-  const menus = window.GAME.get('Menus');
+  const menus = window.GAME.get('Menus')!;
   const out: Record<string, unknown> = {};
   menus.setScreen(null); window.step(20);
   window.press('KeyH', 30); out.hOpens = menus.name;
@@ -264,8 +264,8 @@ ok('closing the card returns to the screen underneath', hotkeys.hBackToScreen ==
 
 const live = await page.evaluate(async () => {
   const g = window.GAME;
-  const menus = g.get('Menus');
-  const rpg = g.get('Rpg');
+  const menus = g.get('Menus')!;
+  const rpg = g.get('Rpg')!;
   const out: Record<string, unknown> = {};
 
   // quests: Enter tracks
@@ -293,10 +293,11 @@ const live = await page.evaluate(async () => {
   const gear = menus.screens.gear;
   gear.i = 0; gear.j = 0; window.step(6);
   gear.accept(); window.step(6);
-  out.gearPicker = !!gear.picker && gear.picker.rows.length > 0;
-  const wanted = gear.picker.rows.find((r: { id: string | null }) => r.id);
-  if (wanted) {
-    gear.picker.i = gear.picker.rows.indexOf(wanted);
+  const picker = gear.picker;
+  out.gearPicker = !!picker && picker.rows.length > 0;
+  const wanted = picker?.rows.find((r) => r.id);
+  if (picker && wanted) {
+    picker.i = picker.rows.indexOf(wanted);
     gear.accept(); window.step(6);
     out.gearEquipped = rpg.inventory.equipped('noctis').weapon[0]?.id === wanted.id;
   }
@@ -313,8 +314,9 @@ const live = await page.evaluate(async () => {
   sys.i = q; const q0 = g.rnd.quality; sys.nav(1, 0); window.step(4);
   out.qualityChanged = g.rnd.quality !== q0;
   const v = sys.nodes.findIndex((n: { row: { key: string } }) => n.row.key === 'master');
-  sys.i = v; const v0 = g.get('Audio')?.volumeOf('master'); sys.nav(-1, 0); window.step(4);
-  out.volumeChanged = g.get('Audio') ? g.get('Audio').volumeOf('master') !== v0 : 'no-audio';
+  const audio = g.get('Audio');
+  sys.i = v; const v0 = audio?.volumeOf('master'); sys.nav(-1, 0); window.step(4);
+  out.volumeChanged = audio ? audio.volumeOf('master') !== v0 : 'no-audio';
 
   // armiger: real nodes off the ascension grid
   menus.setScreen('armiger'); window.step(40);
@@ -344,8 +346,8 @@ ok('Archives: lists the real bestiary', Number(live.archiveRows) > 0, `${live.ar
 
 const hints = await page.evaluate(async () => {
   const g = window.GAME;
-  const hud = g.get('HUD');
-  const menus = g.get('Menus');
+  const hud = g.get('HUD')!;
+  const menus = g.get('Menus')!;
   const h = hud.hints;
   const out: Record<string, unknown> = {};
   g.currentShot = null;

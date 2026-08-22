@@ -94,12 +94,12 @@ async function main() {
       const gl = g.renderer.getContext();
       const dt = 1 / 60;
       const inp = g.input;
-      const player = g.get('Player');
-      const combat = g.get('Combat');
-      const menus = g.get('Menus');
-      const sky = g.get('Sky');
-      const weather = g.get('Weather');
-      const rig = g.get('CameraRig');
+      const player = g.get('Player')!;
+      const combat = g.get('Combat')!;
+      const menus = g.get('Menus')!;
+      const sky = g.get('Sky')!;
+      const weather = g.get('Weather')!;
+      const rig = g.get('CameraRig')!;
 
       const hold = (...codes: string[]) => { inp.keys.clear(); for (const c of codes) inp.keys.add(c); };
       const look = (x: number, y: number) => { inp.look.set(x, y); };
@@ -133,7 +133,7 @@ async function main() {
           setup: () => hold(),
           each: (i) => {
             if (i % 6 === 0 && combat?.setWeapon) {
-              const kinds = ['sword', 'greatsword', 'polearm', 'daggers', 'firearm'];
+              const kinds = ['sword', 'greatsword', 'polearm', 'daggers', 'firearm'] as const;
               combat.setWeapon(kinds[(i / 6) % kinds.length]);
             }
           },
@@ -161,9 +161,16 @@ async function main() {
           setup: () => { hold(); },
           each: (i) => {
             if (i % 20 !== 0 || !player) return;
-            const pos = player.position;
-            const at = { x: pos.x + 6, y: pos.y, z: pos.z + 6 };
-            combat?.castSpell?.('fire', at) ?? combat?.elemancy?.cast?.({ element: 'fire', pos: at, potency: 100 });
+            const at = player.position.clone();
+            at.x += 6; at.z += 6;
+            // `castSpell` takes a *slot index*, not an element name:
+            // `castSpell('fire', at)` looked up `elemancy.equipped['fire']`,
+            // missed every time and answered `{ ok: false, reason:
+            // 'empty-slot' }` -- an object, so the `??` fallback behind it
+            // never ran either, and this scenario has been measuring an idle
+            // field for its whole life. It now fires the effect directly,
+            // which is what that dead fallback was reaching for.
+            combat?.elemancy?.cast('fire', { pos: at });
           },
         },
         {

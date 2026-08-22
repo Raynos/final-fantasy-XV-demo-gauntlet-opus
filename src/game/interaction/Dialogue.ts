@@ -35,17 +35,84 @@ import type { Game } from '../Game.ts';
 /** Characters revealed per second while a line types on. */
 const TYPE_RATE = 46;
 
+/**
+ * One row of a `choices` node, as `_renderChoices` and `_pick` read it.
+ */
+export interface DialogueChoice {
+  label: string;
+  /** node id to jump to when this row is taken. */
+  next?: string;
+  /**
+   * Run on selection. Returning a node id redirects there; returning anything
+   * else falls through to `end` / `next`.
+   */
+  action?: (game: Game, dlg: Dialogue) => string | null | void;
+  /** close the conversation after `action`. */
+  end?: boolean;
+  /** small right-hand tag on the row — `Shop`, `Hunts`. */
+  note?: string;
+  /** shown only while this passes. */
+  when?: (game: Game) => boolean;
+}
+
+/**
+ * One node of a script: who is speaking, what they say, and where it goes.
+ *
+ * `speaker` / `role` / `hue` / `tone` are optional here and fall back to the
+ * script's — a node only restates them when someone else butts in on the line.
+ */
+export interface DialogueNode {
+  speaker?: string;
+  role?: string;
+  /** Portrait hue, 0..360. */
+  hue?: number;
+  /** Portrait expression, 0..1. */
+  tone?: number;
+  /**
+   * The lines to speak, in order. A function is evaluated when the node is
+   * *shown*, so a line can read live gil, banked EXP or the clock.
+   */
+  lines?: string | string[] | ((game: Game, dlg: Dialogue) => string | string[]);
+  /** Node to follow when the lines run out. `null` ends the conversation. */
+  next?: string | null;
+  choices?: DialogueChoice[];
+  /** Run on the way in, before the node renders. */
+  enter?: (game: Game, dlg: Dialogue) => void;
+}
+
+/** A whole conversation, as an NPC or a prop authors it. */
+export interface DialogueScript {
+  speaker?: string;
+  role?: string;
+  hue?: number;
+  tone?: number;
+  /** Node to open on; defaults to the first key of `nodes`. */
+  start?: string;
+  nodes: Record<string, DialogueNode>;
+  onEnd?: (game: Game) => void;
+}
+
+/** A rendered choice row, and the last `on` state written onto it. */
+interface ChoiceRow {
+  row: HTMLElement;
+  bg: HTMLElement;
+  def: DialogueChoice;
+  _on?: boolean;
+}
+
 export class Dialogue {
-  _full!: any;
-  _gp!: any;
+  /** The line currently typing on, in full. */
+  _full!: string;
+  /** Last-frame gamepad button states, for edge detection. */
+  _gp!: Record<string, boolean> | null;
   _lineIdx!: number;
-  _lines!: any;
-  _portraitHue!: any;
+  _lines!: string[];
+  _portraitHue!: number | null;
   _sel!: number;
   _typed!: number;
   a!: number;
   active!: boolean;
-  chNodes!: any[];
+  chNodes!: ChoiceRow[];
   choices!: HTMLElement;
   foot!: HTMLElement;
   footLb!: HTMLElement;
@@ -53,13 +120,13 @@ export class Dialogue {
   head!: HTMLElement;
   line!: HTMLElement;
   nm!: HTMLElement;
-  node!: any;
-  nodeId!: any;
+  node!: DialogueNode | null;
+  nodeId!: string | null;
   pf!: HTMLElement;
   role!: HTMLElement;
   root!: HTMLElement;
   rule!: HTMLElement;
-  script!: any;
+  script!: DialogueScript | null;
   wrap!: HTMLElement;
   constructor(parent: HTMLElement) {
     ensureInteractCss();
@@ -102,7 +169,7 @@ export class Dialogue {
    * Begin a conversation.
    * @param script `{ speaker, role, hue, start, nodes, onEnd }`
    */
-  start(script: any, game: Game) {
+  start(script: DialogueScript, game: Game) {
     if (!script || !script.nodes) return false;
     this.script = script;
     this.game = game;
@@ -121,8 +188,10 @@ export class Dialogue {
     this.script = null;
   }
 
-  _goto(id: any) {
-    const node = this.script.nodes[id];
+  _goto(id: string) {
+    const script = this.script;
+    if (!script) return;
+    const node = script.nodes[id];
     if (!node) { this.end(); return; }
     this.node = node;
     this.nodeId = id;
@@ -132,16 +201,16 @@ export class Dialogue {
     if (node.enter) node.enter(this.game, this);
 
     // Speaker can be overridden per node (Cid butting in on Cindy's line).
-    const speaker = node.speaker || this.script.speaker || '';
-    const role = node.role || this.script.role || '';
-    const hue = node.hue ?? this.script.hue ?? 210;
+    const speaker = node.speaker || script.speaker || '';
+    const role = node.role || script.role || '';
+    const hue = node.hue ?? script.hue ?? 210;
     this.nm.textContent = speaker;
     this.role.textContent = role;
     this.role.style.display = role ? '' : 'none';
     if (this._portraitHue !== hue) {
       this._portraitHue = hue;
       clear(this.pf);
-      this.pf.appendChild(portrait(hue, node.tone ?? this.script.tone ?? 0.5));
+      this.pf.appendChild(portrait(hue, node.tone ?? script.tone ?? 0.5));
     }
 
     // `lines` may be a function so a node can read live state (gil, banked EXP,
@@ -177,7 +246,7 @@ export class Dialogue {
   /** Choices whose `when` predicate passes right now. */
   _visibleChoices() {
     const raw = this.node?.choices || [];
-    return raw.filter((c: any) => !c.when || c.when(this.game));
+    return raw.filter((c) => !c.when || c.when(this.game));
   }
 
   /** True when the current line has finished typing. */
@@ -195,7 +264,8 @@ export class Dialogue {
       this._pick();
       return;
     }
-    if (this.node.next) { this._goto(this.node.next); return; }
+    const next = this.node?.next;
+    if (next) { this._goto(next); return; }
     this.end();
   }
 
@@ -203,7 +273,7 @@ export class Dialogue {
     const c = this.chNodes[this._sel];
     if (!c) { this.end(); return; }
     if (c.def.action) {
-      const r = c.def.action(this.game, this);
+      const r: string | null | void = c.def.action(this.game, this);
       // An action may redirect: return a node id to jump there.
       if (typeof r === 'string') { this._goto(r); return; }
     }

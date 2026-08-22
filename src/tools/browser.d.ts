@@ -1,26 +1,21 @@
 /**
- * Modules the harness imports *inside the page*, by dev-server URL.
+ * The harness's own additions to the page's `window`.
  *
- * `page.evaluate(() => import('/world/map/Chart.ts'))` is resolved by vite at
- * runtime against its own root (`src/`), not by the type checker against the
- * filesystem -- there is no `/world` directory.
+ * There used to be a `declare module '/*'` wildcard above this, because the
+ * harness imports game modules *inside the page* by dev-server URL --
+ * `page.evaluate(() => import('/world/map/Chart.ts'))`, which vite resolves
+ * against its own root (`src/`) at runtime while the type checker sees no
+ * `/world` directory at all.
  *
- * The wildcard says "this is a URL the page resolves", which is more honest
- * than a `@ts-expect-error` on each of the ten call sites.
- *
- * **This is the last `any` in `src/tools/`.** Mapping each URL to the real
- * module -- `declare module '/ui/Minimap.ts' { export * from '../ui/Minimap.ts' }`
- * -- does not work: TypeScript treats an ambient module name beginning with
- * `/` as a rooted path and refuses to match the declaration, so only the
- * wildcard form resolves at all. Closing it properly means giving the tools
- * config a path mapping from `/` to `src/`, which is a config change rather
- * than a typing one.
+ * That is now resolved properly: `tsconfig.tools.json` maps `"/*"` to
+ * `"./src/*"`, so each in-page import gets the real module's types. Per-module
+ * ambient declarations (`declare module '/ui/Minimap.ts'`) do **not** work --
+ * TypeScript reads an ambient module name starting with `/` as a rooted path
+ * and refuses to match it -- so the path mapping is the only form that closes
+ * it. Two contract bugs fell out the moment it did: `SHOTS.__probe` (now
+ * `PROBE_SHOT` in `game/Shots.ts`) and `WorldMapScreen`'s constructor, which
+ * asked for a whole `Menus` and uses one method of it (`ScreenHost`).
  */
-declare module '/*' {
-  const mod: any;
-  export = mod;
-}
-
 /**
  * What the harness itself installs on the page's `window`.
  *

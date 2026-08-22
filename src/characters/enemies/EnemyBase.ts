@@ -520,6 +520,20 @@ export class Enemy {
    * status catalyst does not carry the key at all.
    */
   status?: { kind: string, until: number } | null;
+  /**
+   * Set for the length of a boss' recovery window, when the fight is wide
+   * open: `CombatSystem.resolve` multiplies the stagger term by 1.5 while it
+   * is true. Written only by `BossFight.update`, which is why it is optional —
+   * an enemy that has never been a boss does not carry the key at all.
+   * `despawn()` does **not** clear it, like the two fields above.
+   */
+  vulnerable?: boolean;
+  /**
+   * Seconds this trooper has been falling out of a dropship's bay. Written,
+   * read and finished with entirely inside `encounters/Dropship.ts`; absent
+   * until the bay opens, which is how the drop loop tells who is still inside.
+   */
+  _fall?: number;
   /** Seconds this member has waited for an engage token. Owned by `Pack`. */
   _waited!: number;
 

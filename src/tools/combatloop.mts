@@ -17,6 +17,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mts';
+import type { DownedState } from '../game/encounters/Downed.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5199);
@@ -80,16 +81,21 @@ const results = await page.evaluate(async () => {
   const mouseUp = (button: number) => window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
   const holdMouse = (button: number, frames: number) => { mouseDown(button); step(frames); mouseUp(button); step(1); };
 
-  const combat = g.get('Combat');
-  const enemies = g.get('Enemies');
-  const rpg = g.get('Rpg');
-  const player = g.get('Player');
-  const party = g.get('Party');
-  const dir = g.get('Director');
-  const enc = g.get('Encounters');
-  const downed = g.get('Downed');
-  const hud = g.get('HUD');
-  const V3 = g.camera.position.constructor;
+  const combat = g.get('Combat')!;
+  const enemies = g.get('Enemies')!;
+  const rpg = g.get('Rpg')!;
+  const player = g.get('Player')!;
+  const party = g.get('Party')!;
+  const dir = g.get('Director')!;
+  const enc = g.get('Encounters')!;
+  const downed = g.get('Downed')!;
+  const hud = g.get('HUD')!;
+  /**
+   * Read `Downed.state` fresh. A plain `downed.state` read stays narrowed by
+   * whatever the last comparison or assignment in the same check said, and
+   * `step()` moving the state machine underneath is invisible to that.
+   */
+  const downedState = (): DownedState => downed.state;
 
   dir.play();
   enc.suppressRoamers = true;
@@ -100,7 +106,7 @@ const results = await page.evaluate(async () => {
   g.get('Cinematics')?.stop?.({ skipped: true });
   g.get('Menus')?.setScreen?.(null);
   step(20);
-  const menus = g.get('Menus');
+  const menus = g.get('Menus')!;
   const bootMenu = menus.name;
   if (menus.name) menus.setScreen(null);
   step(90);
@@ -119,7 +125,7 @@ const results = await page.evaluate(async () => {
 
   /** Put an enemy `d` metres in front of Noctis and point him at it. */
   const spawnAhead = (key: string, d = 1.6, opts = {}) => {
-    const f = g.camera.getWorldDirection(new V3());
+    const f = g.camera.getWorldDirection(player.position.clone());
     f.y = 0; f.normalize();
     const p = player.position.clone().addScaledVector(f, d);
     player.heading = Math.atan2(f.x, f.z);
@@ -324,7 +330,11 @@ const results = await page.evaluate(async () => {
   check('elemental affinity changes the number', () => {
     clearField();
     const e = pin(spawnAhead('sabertusk'));
-    const w = e.type.weakness || 'fire';
+    // A species' `weakness` spans all six elements, but a cast only carries
+    // the three magic ones -- so anything else falls back to fire, which the
+    // `resistance(w) !== 100` guard below then reports as inconclusive.
+    const wk = e.type.weakness;
+    const w = wk === 'fire' || wk === 'ice' || wk === 'lightning' ? wk : 'fire';
     const weak = combat.resolve(e, { motion: 2, element: w });
     const other = combat.resolve(e, { motion: 2, element: w === 'fire' ? 'ice' : 'fire' });
     return e.resistance(w) !== 100
@@ -539,7 +549,7 @@ const results = await page.evaluate(async () => {
     const want = 40;
     return name === e.name && Math.abs(w - want) < 3
       ? P(`"${name}" ${lv}, bar ${w.toFixed(1)}% vs model ${want}%`)
-      : F(`plates [${shown.join(' ')}] enemies [${live.join(' ')}] combatA=${hud.combatA.toFixed(2)} fieldA=${hud.fieldA.toFixed(2)} menuOpen=${hud.menuOpen} menusA=${(g.get('Menus').a ?? -1).toFixed(2)} menu=${g.get('Menus').name} boot=${bootMenu} dt=${g.time.dt.toFixed(4)} scale=${g.time.scale.toFixed(2)} mode=${hud.mode}`);
+      : F(`plates [${shown.join(' ')}] enemies [${live.join(' ')}] combatA=${hud.combatA.toFixed(2)} fieldA=${hud.fieldA.toFixed(2)} menuOpen=${hud.menuOpen} menusA=${(g.get('Menus')!.a ?? -1).toFixed(2)} menu=${g.get('Menus')!.name} boot=${bootMenu} dt=${g.time.dt.toFixed(4)} scale=${g.time.scale.toFixed(2)} mode=${hud.mode}`);
   });
 
   check('damage numbers appear on the HUD', () => {
@@ -613,9 +623,10 @@ const results = await page.evaluate(async () => {
       if (r) r.root.position.copy(player.root.position);
       step(1);
     }
-    return downed.state === 'ok' && n.hp > 0
+    const after = downedState();
+    return after === 'ok' && n.hp > 0
       ? P(`downed (bleed-out ${bleed.toFixed(0)} s), revived by an ally at ${Math.round(n.hp)} hp, grey bar ${Math.round(n.hpDrain)}`)
-      : F(`state=${downed.state} hp=${Math.round(n.hp)}`);
+      : F(`state=${after} hp=${Math.round(n.hp)}`);
   });
 
   check('game over -> retry restores the party', () => {
@@ -629,9 +640,10 @@ const results = await page.evaluate(async () => {
     downed.retry();
     step(6);
     g.input.enabled = true;
-    return over && downed.state === 'ok' && rpg.noctis.hp === rpg.noctis.maxHp
+    const after = downedState();
+    return over && after === 'ok' && rpg.noctis.hp === rpg.noctis.maxHp
       ? P(`game over reached, retry restored ${Math.round(rpg.noctis.hp)} hp`)
-      : F(`state=${downed.state} hp=${Math.round(rpg.noctis.hp)}`);
+      : F(`state=${after} hp=${Math.round(rpg.noctis.hp)}`);
   });
 
   return out;

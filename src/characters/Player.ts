@@ -162,7 +162,7 @@ export class Player {
     // Capture shots that are *about* movement drive themselves when no player
     // input is present, so the harness sees the gait and the party formation
     // rather than four people standing still.
-    if (mag < 0.001 && WALK_SHOTS.has(game.currentShot)) {
+    if (mag < 0.001 && game.currentShot != null && WALK_SHOTS.has(game.currentShot)) {
       const t = game.time.raw;
       wish.set(Math.sin(0.10 * t + 0.6), 0, Math.cos(0.10 * t + 0.6));
       mag = 0.42;                       // a walk, not a sprint

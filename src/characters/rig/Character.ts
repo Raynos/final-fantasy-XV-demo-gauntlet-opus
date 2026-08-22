@@ -290,7 +290,7 @@ export class Character {
   }
 
   /** @param name see ACTIONS */
-  play(name: string, opts: PlayOpts) { this.anim.play(name, opts); }
+  play(name: string, opts?: PlayOpts) { this.anim.play(name, opts ?? {}); }
 
   /** Hit reaction: recoil pose plus an impulse into the cloth springs. */
   hit(power = 1) {

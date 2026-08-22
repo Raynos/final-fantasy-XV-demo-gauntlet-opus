@@ -1,8 +1,32 @@
 import * as THREE from 'three';
 import { Noise } from '../util/Noise.ts';
+import { isVector3 } from '../util/three-guards.ts';
 import type { Game } from './Game.ts';
+import type { FollowShot } from './Shots.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * A framing the rig is locked to, as `setShot` receives it.
+ *
+ * `pos` and `target` are mutable `number[]`, not `Shots.Vec3`: a follow shot
+ * rewrites both every frame, and the ground clamp in `lateUpdate` raises
+ * `pos[1]`. `Game.applyShot` therefore hands over a *copy* of the authored
+ * arrays — passing `SHOTS[name].pos` straight through meant the clamp wrote the
+ * raised height back into the shot table.
+ */
+export interface CameraShot {
+  pos: number[];
+  target: number[];
+  /** Vertical field of view in degrees; the current lens is kept if omitted. */
+  fov?: number;
+  /**
+   * Camera roll in radians, applied after the look-at. Read by `lateUpdate`;
+   * no caller in the tree passes it — the cutscene camera rolls through
+   * `Cinematics`, which does not go via `setShot`.
+   */
+  roll?: number;
+}
 
 /**
  * Third-person game camera.
@@ -33,17 +57,23 @@ export class CameraRig {
   _tmp2!: THREE.Vector3;
   _traumaDir!: THREE.Vector3;
   baseFov!: number;
-  cam!: any;
+  cam!: THREE.PerspectiveCamera;
   combatFraming!: number;
   distance!: number;
-  followShot!: any;
+  followShot!: FollowShot | null;
   fov!: number;
   fovMax!: number;
   fovSpeedGain!: number;
   game!: Game;
   handheld!: number;
   height!: number;
-  lockOn!: any;
+  /**
+   * Combat framing target — see `setLockOn`. **Nothing in the tree calls
+   * `setLockOn`**, so this has only ever been `null` and the framing block in
+   * `lateUpdate` has never run. `CombatSystem.setLockOn` drives the HUD
+   * reticle, not the camera.
+   */
+  lockOn!: THREE.Object3D | THREE.Vector3 | null;
   lookAhead!: number;
   lookAheadMax!: number;
   lookDamp!: number;
@@ -62,7 +92,7 @@ export class CameraRig {
   shakeFreq!: number;
   shakePos!: number;
   shakeRot!: number;
-  shot!: any;
+  shot!: CameraShot | null;
   shoulder!: number;
   sprintFov!: number;
   targetDistance!: number;
@@ -142,7 +172,7 @@ export class CameraRig {
   // ------------------------------------------------------------------ API
 
   /** Freeze the camera on a cinematic shot. */
-  setShot(shot: any) {
+  setShot(shot: CameraShot) {
     this.shot = shot;
     this._cut();
   }
@@ -167,8 +197,8 @@ export class CameraRig {
     else this._traumaDir.set(0, 0, 0);
   }
 
-  /** Lock-on framing target (an Object3D or null). */
-  setLockOn(target: any) { this.lockOn = target || null; }
+  /** Lock-on framing target (an Object3D, a world point, or null). */
+  setLockOn(target: THREE.Object3D | THREE.Vector3 | null) { this.lockOn = target || null; }
 
   /** Nudge the orbit directly (used by cutscenes / auto-follow). */
   setOrbit(yaw: number, pitch: number) {
@@ -299,7 +329,7 @@ export class CameraRig {
     // ---- combat framing: bias the orbit so the lock-on target is in frame
     const lock = this.lockOn;
     if (lock) {
-      const lp = lock.isVector3 ? lock : this._tmp.setFromMatrixPosition(lock.matrixWorld);
+      const lp = isVector3(lock) ? lock : this._tmp.setFromMatrixPosition(lock.matrixWorld);
       const toTarget = this._tmp2.copy(lp).sub(player.position);
       const flat = Math.hypot(toTarget.x, toTarget.z);
       const wantYaw = Math.atan2(-toTarget.x, -toTarget.z);
@@ -374,7 +404,7 @@ export class CameraRig {
 
     this._lookAt.copy(this._focusSmooth);
     if (lock) {
-      const lp = lock.isVector3
+      const lp = isVector3(lock)
         ? lock
         : new THREE.Vector3().setFromMatrixPosition(lock.matrixWorld);
       this._lookAt.lerp(lp, 0.32 * this.combatFraming);

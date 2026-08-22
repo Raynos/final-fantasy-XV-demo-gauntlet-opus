@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { InteractPrompt } from './InteractPrompt.ts';
 import { Dialogue } from './Dialogue.ts';
+import type { DialogueScript } from './Dialogue.ts';
 import type { Game } from '../Game.ts';
 import type { ScreenName } from '../../ui/Menus.ts';
 
@@ -165,7 +166,7 @@ export class InteractionSystem {
    * and the dialogue owns E / Enter / arrows.
    * @param script see Dialogue.start
    */
-  say(script: any) { return this.dialogue.start(script, this.game); }
+  say(script: DialogueScript) { return this.dialogue.start(script, this.game); }
 
   /** True while a conversation is on screen. */
   get talking() { return this.dialogue && this.dialogue.active; }

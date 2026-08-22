@@ -22,6 +22,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mts';
+import type { SystemKey } from '../game/Game.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
@@ -79,7 +80,7 @@ const results = await page.evaluate(async () => {
 
   /* ---------------------------------------------------------- systems ---- */
   probe('engine', 'all systems registered', () => {
-    const want = ['Sky', 'Terrain', 'Water', 'Vegetation', 'Props', 'Weather', 'VFX', 'Player',
+    const want: SystemKey[] = ['Sky', 'Terrain', 'Water', 'Vegetation', 'Props', 'Weather', 'VFX', 'Player',
       'Party', 'Enemies', 'Combat', 'Camera', 'Regalia', 'Audio', 'Rpg', 'HUD', 'Minimap',
       'Menus', 'Cinematics', 'Story', 'Interaction', 'Town', 'Npcs', 'Director', 'Dungeons'];
     const missing = want.filter((k) => !g.get(k));
@@ -88,14 +89,14 @@ const results = await page.evaluate(async () => {
 
   /* -------------------------------------------------------------- rpg ---- */
   probe('rpg', 'HUD reads the real stat model', () => {
-    const rpg = g.get('Rpg'); const hud = g.get('HUD');
+    const rpg = g.get('Rpg')!; const hud = g.get('HUD')!;
     if (!rpg || !hud) return F('rpg or hud missing');
     const n = rpg.noctis;
     const before = n.hp;
     n.applyDamage(137);
     step(3);
     const damaged = n.hp;
-    const shown = g.get('Player').stats.hp;
+    const shown = g.get('Player')!.stats.hp;
     n.heal(137);
     return shown === damaged && shown !== before
       ? P(`model ${before}->${damaged}, Player.stats mirrored ${shown}`)
@@ -103,28 +104,35 @@ const results = await page.evaluate(async () => {
   });
 
   probe('rpg', 'ascension spends real AP', () => {
-    const a = g.get('Rpg').ascension;
-    const ap = a.ap; const before = a.unlocked.size ?? a.unlocked.length;
-    const cand = (a.availableNodes ? a.availableNodes() : []).find((n: { cost?: number }) => (n.cost ?? 0) <= ap);
+    const a = g.get('Rpg')!.ascension;
+    // `unlocked` is a Set, so the old `?? a.unlocked.length` arm was dead; and
+    // a node's price is `ap`, never `cost`, so `(n.cost ?? 0) <= ap` compared
+    // 0 against the wallet and let every node through. `availableNodes()`
+    // already filters on affordability, so the pick is the same one.
+    const ap = a.ap; const before = a.unlocked.size;
+    const cand = a.availableNodes().find((n) => n.ap <= ap);
     if (!cand) return W(`no affordable node (ap=${ap})`);
     a.unlock(cand.id);
-    const after = a.unlocked.size ?? a.unlocked.length;
+    const after = a.unlocked.size;
     return after > before && a.ap < ap
       ? P(`unlocked ${cand.id}, ap ${ap}->${a.ap}`) : F('unlock did not take');
   });
 
   probe('rpg', 'inventory + gil economy', () => {
-    const inv = g.get('Rpg').inventory;
-    const gil = inv.gil ?? g.get('Rpg').gil;
-    const all = inv.list ? inv.list() : [];
-    const cur = inv.listByCategory ? inv.listByCategory('curative') : [];
+    const inv = g.get('Rpg')!.inventory;
+    const gil = inv.gil;
+    const all = inv.list();
+    // `listByCategory()` takes no argument -- it buckets the whole bag -- so
+    // the old `listByCategory('curative')` returned every category, and the
+    // "curative" count in the report was the number of *categories* carried.
+    const cur = inv.listByCategory().curative ?? [];
     return all.length
       ? P(`${all.length} stacks carried (${cur.length} curative), gil ${gil}`)
       : F('bag is empty');
   });
 
   probe('rpg', 'save + load round-trips', () => {
-    const rpg = g.get('Rpg');
+    const rpg = g.get('Rpg')!;
     if (!rpg.save || !rpg.loadGame) return F('no save/loadGame');
     const lv = rpg.noctis.level;
     rpg.save('audit');
@@ -137,13 +145,13 @@ const results = await page.evaluate(async () => {
 
   /* ----------------------------------------------------------- combat ---- */
   probe('combat', 'encounter: spawn -> aggro -> kill -> reward', () => {
-    const enc = g.get('Director'); const enemies = g.get('Enemies'); const rpg = g.get('Rpg');
+    const enc = g.get('Director')!; const enemies = g.get('Enemies')!; const rpg = g.get('Rpg')!;
     enc.setScenario('combat'); step(30);
     const alive = enemies.alive ? enemies.alive().length : enemies.list.length;
     if (!alive) return F('scenario spawned nothing');
     const exp0 = rpg.bankedExp ?? 0;
     const e = (enemies.alive ? enemies.alive() : enemies.list)[0];
-    const up = new (g.camera.position.constructor)(0, 1, 0);
+    const up = g.camera.position.clone().set(0, 1, 0);
     for (let i = 0; i < 60 && !e.dead; i++) { e.hit(99999, up, {}); step(1); }
     const exp1 = rpg.bankedExp ?? 0;
     return e.dead
@@ -153,44 +161,49 @@ const results = await page.evaluate(async () => {
   });
 
   probe('combat', 'party companions fight', () => {
-    const ai = g.get('Party');
+    const ai = g.get('Party')!;
     const m = (ai.members || [])[0];
     if (!m) return F('no party members');
-    const hasAi = !!(m.ai || m.combat || m.character?.play);
+    // `m.ai` and `m.combat` have never existed on a `PartyMember` -- the AI
+    // lives in `PartyAI`, keyed by member. The live arm is the character rig.
+    const hasAi = !!m.character?.play;
     return hasAi ? P(`${ai.members.length} companions with combat hooks`) : F('no combat hook');
   });
 
   probe('combat', 'player death -> downed -> game over', () => {
-    const d = g.get('Downed') || g.get('Rpg')?.downed;
+    // `RpgSystem.downed` does not exist; `Downed` is registered by `Director`.
+    const d = g.get('Downed');
     if (!d) return W('no Downed system registered by name');
     return P('downed system present');
   });
 
   probe('combat', 'weapon swap is free', () => {
-    const c = g.get('Combat');
+    const c = g.get('Combat')!;
     const t0 = performance.now();
-    for (const k of ['greatsword', 'polearm', 'daggers', 'firearm', 'sword']) { c.setWeapon(k); step(1); }
+    for (const k of ['greatsword', 'polearm', 'daggers', 'firearm', 'sword'] as const) { c.setWeapon(k); step(1); }
     const ms = performance.now() - t0;
     return ms < 250 ? P(`5 swaps in ${ms.toFixed(0)} ms`) : F(`5 swaps cost ${ms.toFixed(0)} ms`);
   });
 
   /* ------------------------------------------------------ interaction ---- */
   probe('world', 'interaction verb finds targets', () => {
-    const ix = g.get('Interaction'); const town = g.get('Town'); const player = g.get('Player');
+    const ix = g.get('Interaction')!; const town = g.get('Town')!; const player = g.get('Player')!;
     if (!ix || !town) return F('interaction or town missing');
-    const n = ix.items ? (ix.items.size ?? ix.items.length ?? 0) : 0;
+    const n = ix.items.size;
     const a = town.anchors && (town.anchors.huntBoard || town.anchors.pump);
     if (!a) return W(`${n} interactables registered, no anchor to walk to`);
-    player.root.position.set(a.x ?? a[0], player.root.position.y, a.z ?? a[2]);
+    player.root.position.set(a.x, player.root.position.y, a.z);
     step(6);
-    const cur = ix.current || ix.target || ix.nearest;
+    // `ix.target` / `ix.nearest` have never existed -- the selection is
+    // `current`, and `_pick()` is the private thing that fills it.
+    const cur = ix.current;
     return cur ? P(`${n} registered; standing at the board selects "${cur.label || cur.verb}"`)
       : W(`${n} registered but none selected at the anchor`);
   });
 
   probe('world', 'shop + hunt board screens open with real data', () => {
-    const menus = g.get('Menus');
-    const has = ['shop', 'hunts'].filter((k) => menus.screens && menus.screens[k]);
+    const menus = g.get('Menus')!;
+    const has = (['shop', 'hunts'] as const).filter((k) => menus.screens && menus.screens[k]);
     if (has.length < 2) return F('screens not registered: ' + has.join(','));
     menus.setScreen('shop'); step(10);
     const open = menus.name === 'shop';
@@ -199,18 +212,20 @@ const results = await page.evaluate(async () => {
   });
 
   probe('world', 'Hammerhead is built and populated', () => {
-    const town = g.get('Town'); const npcs = g.get('Npcs');
-    const n = npcs && (npcs.list?.length ?? npcs.npcs?.length ?? 0);
+    const town = g.get('Town')!; const npcs = g.get('Npcs')!;
+    // `npcs.npcs` does not exist; the placed townsfolk are `npcs.list`.
+    const n = npcs.list?.length ?? 0;
     return town && n ? P(`town at (${Math.round(town.origin?.x)},${Math.round(town.origin?.z)}), ${n} NPCs`)
       : F('town or npcs empty');
   });
 
   /* --------------------------------------------------------- regalia ---- */
   probe('traversal', 'Regalia enter -> drive -> exit', () => {
-    const r = g.get('Regalia');
+    const r = g.get('Regalia')!;
     if (!r || !r.enter) return F('no Regalia system');
     r.enter(false); step(10);          // enter(autoDrive) — not enter(game)
-    const inCar = !!(r.isDriving || r.driving || r.occupied);
+    // `r.driving` / `r.occupied` have never existed on `RegaliaSystem`.
+    const inCar = !!r.isDriving;
     if (!inCar) return F('enter() did not take');
     const p0 = r.body ? { x: r.body.pos.x, z: r.body.pos.z } : null;
     g.input.keys.add('KeyW');
@@ -225,21 +240,23 @@ const results = await page.evaluate(async () => {
 
   /* --------------------------------------------------------- dungeon ---- */
   probe('world', 'dungeon enter + exit', () => {
-    const d = g.get('Dungeons');
+    const d = g.get('Dungeons')!;
     if (!d) return F('no Dungeons system');
     const ids = d.defs instanceof Map ? [...d.defs.keys()] : Object.keys(d.defs || {});
     if (!ids.length) return F('no dungeons defined');
     d.enter(ids[0]); step(24);
-    const inside = typeof d.isInside === 'function' ? d.isInside() : !!(d.isInside || d.current);
-    if (d.leave) { d.leave(); step(12); }
-    const out = typeof d.isInside === 'function' ? !d.isInside() : !(d.isInside || d.current);
+    // `isInside` is a getter, not a method, so the `typeof === 'function'`
+    // arm has never been taken.
+    const inside = d.isInside;
+    d.leave(); step(12);
+    const out = !d.isInside;
     return inside && out ? P(`${ids.length} dungeons (${ids.join(', ')}); entered and left`)
       : F(inside ? 'entered but leave() failed' : 'enter() did not take');
   });
 
   /* ----------------------------------------------------------- story ---- */
   probe('story', 'title -> cutscene -> chapter', () => {
-    const s = g.get('Story');
+    const s = g.get('Story')!;
     if (!s) return F('no Story system');
     s.applyShot('title'); step(20);
     const titleUp = !!s.title?.shown;
@@ -255,7 +272,7 @@ const results = await page.evaluate(async () => {
 
   /* ----------------------------------------------------------- audio ---- */
   probe('audio', 'audio graph runs and reacts to combat', () => {
-    const a = g.get('Audio');
+    const a = g.get('Audio')!;
     if (!a) return F('no Audio system');
     if (!a.enabled || !a.ctx) return F('context never booted under audio=force');
     const before = a.ctx.currentTime;
@@ -265,24 +282,27 @@ const results = await page.evaluate(async () => {
 
   /* ------------------------------------------------------------- map ---- */
   probe('map', 'world map data + minimap render', () => {
-    const mm = g.get('Minimap');
+    const mm = g.get('Minimap')!;
     const wm = mm && (mm.map || g.get('Terrain')?.map);
-    const pois = wm && (wm.pois?.length ?? wm.list?.().length);
+    // `wm.list()` does not exist on `WorldMap`; the POIs are the `pois` array.
+    const pois = wm?.pois?.length ?? 0;
     return pois ? P(`${pois} POIs, minimap ${mm.root ? 'in DOM' : 'headless'}`)
       : W('minimap present, POI count unavailable');
   });
 
   /* ------------------------------------------------------- rest/camp ---- */
   probe('gameplay', 'rest banks EXP at a lodging', () => {
-    const rpg = g.get('Rpg');
-    const day = rpg.day;
-    if (!day || !day.rest) return F('no rest()');
-    rpg.noctis.applyExp ? null : null;
+    const rpg = g.get('Rpg')!;
     const lv0 = rpg.noctis.level;
-    if (rpg.gainExp) rpg.gainExp(4000); else if (rpg.expBank?.add) rpg.expBank.add(4000);
-    const res = day.rest('caravan');
-    return res !== undefined ? P(`rest('caravan') ran, level ${lv0}->${rpg.noctis.level}`)
-      : W('rest() returned undefined');
+    rpg.gainExp(4000);
+    // `DayCycle.rest` takes a *context* (`{ expBank, party, lodging, ... }`),
+    // not a lodging id. The old `day.rest('caravan')` handed it a string, so
+    // `ctx.expBank` was undefined, the redemption was skipped and the probe
+    // asserted only that a value came back. `restAt` is the game's own entry
+    // point and the one Hammerhead's caravan uses.
+    const res = rpg.restAt('caravan');
+    return res.ok ? P(`restAt('caravan') ran, level ${lv0}->${rpg.noctis.level}`)
+      : W(`rest refused: ${res.reason}`);
   });
 
   return out;

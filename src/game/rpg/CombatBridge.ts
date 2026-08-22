@@ -27,19 +27,43 @@
 
 import { Rng } from '../../util/Rng.ts';
 import type { CombatEventName, CombatEvents } from '../../combat/CombatEvents.ts';
+import type { CombatSystem } from '../../combat/CombatSystem.ts';
+import type { Enemy } from '../../characters/enemies/EnemyBase.ts';
 import type { RpgSystem } from './RpgSystem.ts';
+import type { DamageResult, Element, WeaponClass } from './Stats.ts';
 import type { Game } from '../Game.ts';
 
+/**
+ * Everything `CombatBridge.roll` accepts about how a hit was landed.
+ *
+ * Every field is optional: the whole point of the resolver is that a caller
+ * describes only what differs from a neutral light attack.
+ */
+export interface RollOpts {
+  /** Motion value of the swing; 1.0 is a neutral light attack. */
+  motion?: number;
+  /** Set for a spell; leaves `weaponClass` unused. */
+  element?: Element;
+  weaponClass?: WeaponClass;
+  isWarpStrike?: boolean;
+  isBackAttack?: boolean;
+  staggerMult?: number;
+  /** Folded into the seeded RNG so a replayed frame rolls the same number. */
+  seed?: number;
+}
+
 export class CombatBridge {
-  _off!: any[];
-  _onTech!: any;
+  /** Unsubscribes, dropped together by `detach()`. */
+  _off!: Array<() => void>;
+  _onTech!: (e: WindowEventMap['encounter:tech']) => void;
   _rng!: Rng;
   _warpUntil!: number;
   armiger!: number;
-  combat!: any;
+  combat!: CombatSystem | null;
   /** Null until `attach()` runs, and `attach()` is optional — every read guards. */
   game!: Game | null;
-  lastRoll!: any;
+  /** Last resolved damage roll, for anything that wants to inspect it. */
+  lastRoll!: DamageResult | null;
   rpg!: RpgSystem;
   constructor(rpg: import('./RpgSystem.ts').RpgSystem) {
     this.rpg = rpg;
@@ -49,7 +73,6 @@ export class CombatBridge {
     /** Seeded per hit so a posed capture's roll depends only on sim state. */
     this._rng = new Rng(0xa53f11);
     this._warpUntil = -1;
-    /** Last resolved damage roll, for anything that wants to inspect it. */
     this.lastRoll = null;
     /**
      * The Armiger gauge, 0..1. FFXV fills it from damage dealt and warp-strikes
@@ -80,7 +103,7 @@ export class CombatBridge {
 
     // Techniques are fired by `PartyAI`, which announces on the window bus.
     // Give each one a cinematic beat: a banner and a sliver of slow motion.
-    this._onTech = (e: any) => this._techBeat(e.detail || {});
+    this._onTech = (e) => this._techBeat(e.detail);
     window.addEventListener('encounter:tech', this._onTech);
     this._off.push(() => window.removeEventListener('encounter:tech', this._onTech));
     return true;
@@ -114,7 +137,7 @@ export class CombatBridge {
 
   /* -- events ------------------------------------------------------------ */
 
-  _onWarp(ev: any) {
+  _onWarp(ev: CombatEvents['warp']) {
     if (ev?.phase !== 'impact') return;
     // A window rather than a flag: the Director's frozen scenarios emit the
     // damage event after the warp impact rather than before it.
@@ -127,7 +150,7 @@ export class CombatBridge {
    * through `computeDamage` before it ever left the swing. All that is owed
    * here is the meters it feeds.
    */
-  _onDamage(ev: any) {
+  _onDamage(ev: CombatEvents['damage']) {
     const dmg = ev?.damage;
     if (!dmg || dmg <= 0) return;
     const byPlayer = !ev.source;               // `PartyAI` stamps a member id
@@ -156,7 +179,7 @@ export class CombatBridge {
    * (a posed scenario, a bare harness world), so a kill is never paid twice
    * and never paid zero.
    */
-  _onDeath(ev: any) {
+  _onDeath(ev: CombatEvents['death']) {
     const e = ev?.enemy;
     if (!e || e._looted) return;
     const dir = this.game?.get?.('Encounters');
@@ -180,7 +203,7 @@ export class CombatBridge {
    * again here (which is what this used to do) meant every enemy blow landed
    * twice. All that is owed is the screen flash and the tech-bar charge.
    */
-  _onPlayerHit(ev: any) {
+  _onPlayerHit(ev: CombatEvents['playerHit']) {
     const dmg = Math.max(0, Math.round(ev?.damage || 0));
     if (!dmg) return;
     const n = this.rpg.noctis;
@@ -197,7 +220,7 @@ export class CombatBridge {
   }
 
   /** A technique fired: banner it and drop a beat of slow motion under it. */
-  _techBeat(d: any) {
+  _techBeat(d: WindowEventMap['encounter:tech']['detail']) {
     const hud = this.game?.get?.('HUD');
     if (hud?.callOut) hud.callOut(d.name || 'Technique', `${d.member || ''}`.toUpperCase());
     if (this.combat) this.combat.slowmo = Math.max(this.combat.slowmo, 0.22);
@@ -215,11 +238,10 @@ export class CombatBridge {
    * already, so there is no per-species table to drift out of date.
    *
    * @param enemy an `Enemy` from `src/characters/enemies/**`
-   * @param [o] `{ motion, element, weaponClass, isWarpStrike,
-   *                        isBackAttack, staggerMult, seed }`
+   * @param [o] see {@link RollOpts}
    * @returns the `computeDamage` result
    */
-  roll(enemy: any, o: any = {}): any {
+  roll(enemy: Enemy, o: RollOpts = {}): DamageResult {
     // Seeded from sim state so identical frames give identical numbers, no
     // matter what order the shots were captured in.
     this._rng.s = (Math.imul((enemy.id ?? 0) + 1, 0x9e3779b1)

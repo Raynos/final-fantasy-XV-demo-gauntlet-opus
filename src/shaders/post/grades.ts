@@ -13,6 +13,34 @@ import * as THREE from 'three';
 /**
  */
 
+/**
+ * The non-linear half of a grade, baked once into the 32^3 LUT by `bakeLut`.
+ * Every field is required: `bakeLut` reads all of them with no default, and a
+ * missing one would multiply a texel by `undefined` and print a NaN.
+ */
+export interface GradeLook {
+  /** Lifted black floor, so the deepest shadow never lands on zero. */
+  toe: number;
+  /** Soft-shoulder blend toward a smoothstep roll-off, 0..1. */
+  shoulder: number;
+  /** Display-referred pivot the S-curve turns about. */
+  pivot: number;
+  contrast: number;
+  /** Per-range rgb tints, weighted by luma. */
+  shadowTint: number[];
+  midTint: number[];
+  highTint: number[];
+  /** Overall saturation, and its shadow / highlight weighting. */
+  sat: number;
+  satShadow: number;
+  satHigh: number;
+  /** Row-major 3x3 channel mixer, applied in linear. */
+  mixer: number[];
+  /** Flashed-film print fade: how far toward `fadeTint` the whole frame goes. */
+  fade: number;
+  fadeTint: number[];
+}
+
 /** One colour-grade preset, as consumed by the LUT builder and the grade pass. */
 export interface GradePreset {
   /** White balance [temperature, tint] in -1..1. */
@@ -33,8 +61,7 @@ export interface GradePreset {
   /** Auto-exposure key value (target luminance). */
   key: number;
   /** Parameters baked into the LUT. */
-  look?: any;
-  [extra: string]: any;
+  look: GradeLook;
 }
 
 export const GRADES: Record<string, GradePreset> = {
@@ -210,10 +237,11 @@ export function bakeLut(preset: GradePreset): THREE.DataTexture {
   return tex;
 }
 
-const _cache = new Map();
+const _cache = new Map<string, THREE.DataTexture>();
 
 /** Cached LUT for a preset name. */
-export function lutFor(name: string) {
-  if (!_cache.has(name)) _cache.set(name, bakeLut(GRADES[name] || GRADES.day));
-  return _cache.get(name);
+export function lutFor(name: string): THREE.DataTexture {
+  let tex = _cache.get(name);
+  if (!tex) { tex = bakeLut(GRADES[name] || GRADES.day); _cache.set(name, tex); }
+  return tex;
 }

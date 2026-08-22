@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import type { Game } from '../Game.ts';
+import type { Player, Vitals } from '../../characters/Player.ts';
+import type { Party, PartyMember, CompanionKey } from '../../characters/Party.ts';
+import type { CombatSystem } from '../../combat/CombatSystem.ts';
+import type { Enemies } from '../../characters/Enemies.ts';
+import type { VFX } from '../../combat/VFX.ts';
+import type { RpgSystem } from '../rpg/RpgSystem.ts';
+import type { Stats } from '../rpg/Stats.ts';
 
 /**
  * Danger, Down, revive and game over.
@@ -19,35 +26,45 @@ import type { Game } from '../Game.ts';
  *   `encounter:gameover` {reason}
  *   `encounter:retry`
  */
+
+/** Where Noctis is in the danger ladder. */
+export type DownedState = 'ok' | 'danger' | 'downed' | 'gameover';
 export class Downed {
-  reviver!: any;
-  _allyPotion!: Map<any, any>;
+  /** The companion currently walking over to pick Noctis up. */
+  reviver!: PartyMember | null;
+  /** Companion key -> seconds until they may drink another potion. */
+  _allyPotion!: Map<CompanionKey, number>;
   _checkTimer!: number;
   _downPos!: THREE.Vector3;
   bleedOut!: number;
   bleedOutMax!: number;
-  checkpoint!: any;
-  combat!: any;
+  /** Where a retry puts the party back. */
+  checkpoint!: THREE.Vector3;
+  combat!: CombatSystem | undefined;
   dangerAt!: number;
-  enemies!: any;
+  enemies!: Enemies | undefined;
   game!: Game;
-  party!: any;
-  player!: any;
+  party!: Party | undefined;
+  /**
+   * `Player` is in `Game.init`'s boot order and this system is registered by
+   * `Director` once the world is up, so it is always there -- every other
+   * system here is guarded because a capture scenario can run without it.
+   */
+  player!: Player;
   reviveProgress!: number;
   reviveTime!: number;
-  rpg!: any;
-  state!: string;
-  vfx!: any;
+  rpg!: RpgSystem | undefined;
+  state!: DownedState;
+  vfx!: VFX | undefined;
   async init(game: Game) {
     this.game = game;
-    this.player = game.get('Player');
+    this.player = game.get('Player')!;
     this.party = game.get('Party');
     this.combat = game.get('Combat');
     this.rpg = game.get('Rpg');
     this.enemies = game.get('Enemies');
     this.vfx = game.get('VFX');
 
-    /** 'ok' | 'danger' | 'downed' | 'gameover' */
     this.state = 'ok';
     /** Seconds left before the party wipes. */
     this.bleedOut = 0;
@@ -67,14 +84,21 @@ export class Downed {
     return this;
   }
 
-  /** Noctis' authoritative stat block. */
-  get noctis() {
+  /**
+   * Noctis' authoritative stat block.
+   *
+   * Genuinely two shapes, and this is the one place that knows it: with the
+   * RPG up it is the full `Stats` (levels, gear, the grey `hpDrain` bar); on a
+   * capture scenario with no RPG it is `Player.stats`, the bare HP/MP mirror.
+   * Every caller below narrows with `in` rather than guessing.
+   */
+  get noctis(): Stats | Vitals | null {
     if (this.rpg) return this.rpg.noctis;
     return this.player ? this.player.stats : null;
   }
 
   /** Companion stat block by party-member key. */
-  memberStats(key: any) {
+  memberStats(key: CompanionKey) {
     if (!this.rpg) return null;
     return this.rpg.party.stats[key];
   }
@@ -92,7 +116,7 @@ export class Downed {
     this.player.downed = true;
     // the grey bar: max HP is chipped away every time you go down
     const n = this.noctis;
-    if (n && n.hpDrain != null) n.hpDrain = Math.min(n.get('hp') * 0.5, n.hpDrain + n.get('hp') * 0.12);
+    if (n && 'hpDrain' in n) n.hpDrain = Math.min(n.get('hp') * 0.5, n.hpDrain + n.get('hp') * 0.12);
     if (this.combat) {
       this.combat.state = 'idle';
       this.combat.lockOn(null);
@@ -119,7 +143,7 @@ export class Downed {
     this.reviver = null;
     const n = this.noctis;
     if (n) {
-      if (n.heal) n.heal(n.maxHp * fraction);
+      if ('heal' in n) n.heal(n.maxHp * fraction);
       else { n.hp = Math.round(n.maxHp * fraction); }
       if (n.ko != null) n.ko = false;
     }
@@ -327,13 +351,13 @@ export class Downed {
     }
   }
 
-  _liveAllies() {
+  _liveAllies(): PartyMember[] {
     if (!this.party) return [];
-    return this.party.members.filter((m: any) => !m.downed);
+    return this.party.members.filter((m) => !m.downed);
   }
 
-  _nearest(list: any, p: THREE.Vector3) {
-    let best: any = null, bd = Infinity;
+  _nearest(list: PartyMember[], p: THREE.Vector3) {
+    let best: PartyMember | null = null, bd = Infinity;
     for (const m of list) {
       const d = m.root.position.distanceTo(p);
       if (d < bd) { bd = d; best = m; }

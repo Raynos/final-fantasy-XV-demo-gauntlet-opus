@@ -174,6 +174,13 @@ export interface FollowShot extends ShotState {
 
 export type Shot = FixedShot | FollowShot;
 
+/**
+ * Which of the two framing modes a shot is. A plain `if (shot.follow)` does not
+ * narrow the union — `FixedShot.follow` is `never | undefined`, and TypeScript
+ * cannot rule out an empty-string `follow` on the other arm.
+ */
+export function isFollowShot(s: Shot): s is FollowShot { return s.follow != null; }
+
 const SHOT_TABLE = {
   // --- character --------------------------------------------------------
   // These run FIRST in the file on purpose — see "Order matters" above. Left
@@ -978,8 +985,38 @@ const SHOT_TABLE = {
 export type ShotName = keyof typeof SHOT_TABLE;
 
 /**
+ * The harness's scratch slot.
+ *
+ * `framecam.mts` resolves a camera recipe against the live heightfield in the
+ * page, writes the finished framing into `SHOTS.__probe`, and applies it by
+ * name. That is how a framing that is *not* in the corpus gets rendered
+ * without being added to it -- `corpus.mts`, `sheet.mts` and `shoot.mts` all
+ * enumerate `SHOT_TABLE`, which never contains it.
+ */
+export const PROBE_SHOT = '__probe';
+
+/**
  * The table, with every entry checked against `Shot` and read back as one.
  * `satisfies` on the literal is what keeps the key union exact while still
  * rejecting a shot that mixes the two framing modes.
  */
-export const SHOTS: Record<ShotName, Shot> = SHOT_TABLE;
+export const SHOTS: Record<ShotName, Shot> & { [PROBE_SHOT]?: Shot } = SHOT_TABLE;
+
+/** A name `Game.applyShot` accepts: a corpus shot, or the scratch slot. */
+export type ApplicableShot = ShotName | typeof PROBE_SHOT;
+
+/**
+ * Runtime check that a string names a shot. `Object.keys(SHOTS)` widens to
+ * `string[]`, so this is how a name off the CLI or the dev console crosses
+ * into `Game.applyShot`.
+ */
+export function isShotName(s: string): s is ShotName { return Object.hasOwn(SHOT_TABLE, s); }
+
+/**
+ * The same check, widened to include the harness's scratch slot. This is what
+ * `Game.applyShot` uses, because every caller outside the game itself -- the
+ * capture tools, the dev console -- has a name off a command line.
+ */
+export function isApplicableShot(s: string): s is ApplicableShot {
+  return s === PROBE_SHOT || isShotName(s);
+}

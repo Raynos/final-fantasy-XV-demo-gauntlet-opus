@@ -9,15 +9,25 @@
  */
 import type { BootProfile } from './engine/BootProfile.ts';
 import type { CombatEvents } from './combat/CombatEvents.ts';
+import type { DamageEvent } from './ui/CombatHUD.ts';
+import type { Game } from './game/Game.ts';
+import type { DevSuite } from './dev/DevSuite.ts';
 
 declare global {
   interface Window {
-    /** The running game. Set by `src/main.ts` once `init()` resolves. */
-    GAME?: any;
+    /**
+     * The running game.
+     *
+     * Non-optional: `src/main.ts` assigns it at module scope, before `init()`
+     * is even called, so any page that ran the entry script has it. Every
+     * harness `page.evaluate` reaches for it after
+     * `waitForFunction('window.GAME && window.GAME.ready === true')`.
+     */
+    GAME: Game;
     /** Boot timing record, filled in as boot proceeds. `installBootProfile()`. */
     BOOT_PROFILE?: BootProfile;
-    /** `?debug` -- the in-page dev suite. */
-    DEV?: any;
+    /** `?debug` -- the in-page dev suite. Absent without the flag. */
+    DEV?: DevSuite;
     /** Safari still ships the prefixed constructor. */
     webkitAudioContext?: typeof AudioContext;
     webkitOfflineAudioContext?: typeof OfflineAudioContext;
@@ -53,12 +63,19 @@ declare global {
      */
     'encounter:tech': CustomEvent<{ member: string, tech: string, name: string }>;
     'encounter:kill': CustomEvent<{ name: string, level: number, exp: number, drops: string[], boss: boolean }>;
-    /** UI-side events, dispatched by the game rather than by combat. */
-    'ffxv-damage': CustomEvent<any>;
+    /**
+     * UI-side events, dispatched by the game rather than by combat.
+     *
+     * `ffxv-damage` is the HUD's public floating-number bus, listed in
+     * `HUD.ts`'s class doc as part of its input API. **Nothing in the tree
+     * dispatches it** — the live damage numbers come off `combat:damage` — so
+     * it is typed from its one consumer, `CombatHUD.damage`.
+     */
+    'ffxv-damage': CustomEvent<DamageEvent>;
     'ffxv-callout': CustomEvent<{ word?: string, sub?: string }>;
     'ffxv-say': CustomEvent<{ who?: string, line?: string, dur?: number }>;
     'ffxv-banter': CustomEvent<{ who?: string, line?: string, dur?: number }>;
-    'ffxv-area': CustomEvent<{ name?: string, sub?: string, meta?: any }>;
+    'ffxv-area': CustomEvent<{ name?: string, sub?: string, meta?: string }>;
     'ffxv-hit': CustomEvent<{ amount?: number }>;
     'ffxv-cutscene': CustomEvent<{ phase: 'start' | 'end', id: string, skipped?: boolean }>;
   }
