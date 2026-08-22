@@ -55,7 +55,7 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
  * function rather than a literal inside the class so {@link MegaMats} is the
  * set itself.
  */
-function megaMaterials() {
+export function megaMaterials() {
   return {
     hull: magitekMaterial(0x2a2f37),
     hullDark: magitekMaterial(0x171a20),

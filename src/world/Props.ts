@@ -12,6 +12,7 @@ import { Wildlife } from './props/Wildlife.ts';
 import { PoiKits } from './props/PoiKits.ts';
 import type { Game } from '../game/Game.ts';
 import { bootPhase } from '../engine/BootProfile.ts';
+import { loadTexBake } from '../engine/TexBake.ts';
 
 /**
  * World dressing: geology, landmarks, scatter debris and the Regalia.
@@ -40,6 +41,11 @@ export class Props {
     this.game = game;
     const quality = game.rnd && game.rnd.quality === 'low' ? 0.5
       : game.rnd && game.rnd.quality === 'medium' ? 0.75 : 1.0;
+
+    // Props is the first system to touch a keyed material, so it is where the
+    // baked texel cache has to be resident. The fetch started at module
+    // evaluation, several systems ago, so this normally costs nothing.
+    await bootPhase('Props.texbake', () => loadTexBake());
 
     const veg = game.get('Vegetation');
     this.ecology = (veg && veg.ecology) || new Ecology(game, game.seed ?? 1337);

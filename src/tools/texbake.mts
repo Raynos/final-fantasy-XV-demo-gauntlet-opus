@@ -113,16 +113,31 @@ function installCanvasStub() {
 async function generateAll(log: (...a: unknown[]) => void) {
   const load = (rel: string) => import(pathToFileURL(path.join(ROOT, rel)).href);
   const jobs: Array<[string, () => Promise<void>]> = [
-    ['town', async () => { const m = await load('src/world/town/TownMaterials.ts'); m.townMaterials(); }],
-    ['props', async () => {
+    // Each entry calls the *same* material-table factory the system's `build()`
+    // calls, so the set of keys baked is the set of keys asked for by
+    // construction rather than by a list that can drift.
+    ['town', async () => { (await load('src/world/town/TownMaterials.ts')).townMaterials(); }],
+    ['landmarks', async () => { (await load('src/world/props/Landmarks.ts')).landmarkMaterials(); }],
+    ['mega', async () => { (await load('src/world/props/Megastructures.ts')).megaMaterials(); }],
+    ['outposts', async () => { (await load('src/world/props/Outposts.ts')).outpostMaterials(); }],
+    ['roadFurniture', async () => { (await load('src/world/props/RoadFurniture.ts')).roadMaterials(); }],
+    ['poiKits', async () => { (await load('src/world/props/PoiKits.ts')).poiMaterials(); }],
+    ['debris', async () => { (await load('src/world/props/Debris.ts')).debrisMaterials(); }],
+    ['rocks', async () => {
+      // Rocks has no table: it asks `PropMaterials` directly, at the two tints
+      // `Rocks.build()` uses.
       const m = await load('src/world/props/PropMaterials.ts');
-      if (m.bakeAllPropMaterials) m.bakeAllPropMaterials();
+      m.rockMaterial(); m.rockMaterial(0x6a5849, 0.93);
     }],
-    ['dungeon', async () => {
-      const rel = 'src/world/dungeons/kit/InteriorMaterials.ts';
-      if (!existsSync(path.join(ROOT, rel))) return;
-      const m = await load(rel);
-      if (m.bakeAllInteriorMaterials) m.bakeAllInteriorMaterials();
+    ['dungeons', async () => {
+      const m = await load('src/world/dungeons/kit/InteriorMaterials.ts');
+      for (const k of Object.keys(m)) {
+        // Every zero-argument material factory in the kit. The entrances and
+        // the interiors both draw from it, and the defaults are what they ask
+        // for, so calling each once with no arguments records the whole set.
+        if (!/^(trench|magitek|mine|ore|pit|rail|wet|cave|drip|corroded|pool)/.test(k)) continue;
+        try { m[k](); } catch { /* a factory that needs arguments is not ours to guess */ }
+      }
     }],
   ];
   for (const [name, run] of jobs) {

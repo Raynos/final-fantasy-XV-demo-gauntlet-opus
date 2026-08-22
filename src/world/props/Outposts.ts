@@ -89,7 +89,7 @@ function lattice(B: PartBuilder, mat: THREE.Material, world: THREE.Matrix4, { he
  * rather than a literal inside the class so {@link OutpostMats} is the set
  * itself and cannot drift from a parallel interface.
  */
-function outpostMaterials() {
+export function outpostMaterials() {
   return {
     rock: rockMaterial(0x8d7663, 0.93, false),
     pale: rockMaterial(0xa2967e, 0.9, false),

@@ -61,7 +61,7 @@ function block(seed: number, w: number, h: number, d: number, rough = 0.16) {
  * rather than a literal inside the class so {@link LandmarkMats} is the set
  * itself rather than a parallel interface that can drift.
  */
-function landmarkMaterials() {
+export function landmarkMaterials() {
   return {
     rock: rockMaterial(0x8d7663, 0.93, false),
     pale: rockMaterial(0x9c8d78, 0.9, false),

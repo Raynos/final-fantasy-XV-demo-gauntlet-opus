@@ -56,8 +56,16 @@ interface TexHeader {
   entries: TexEntry[];
 }
 
-/** Decoded entries, by key, once the artifact has loaded. */
-let store: Map<string, Uint8Array> | null = null;
+/**
+ * The inflated container and where each key's planes live in it.
+ *
+ * Decoding is deferred to the lookup and the entry is dropped from the index
+ * once served, so the only texels resident at any moment are the ones a live
+ * `DataTexture` owns plus the ones nothing has asked for yet. That second set
+ * is not waste: the dungeon interiors are built on first `enter()`, long after
+ * boot, and they are the reason this is not simply freed when `init()` ends.
+ */
+let store: { buf: Uint8Array, index: Map<string, TexEntry> } | null = null;
 /** Filled instead of `store` when the bake tool is driving. */
 let recorder: Map<string, { w: number, h: number, data: Uint8Array }> | null = null;
 let loading: Promise<boolean> | null = null;
@@ -113,12 +121,9 @@ function decodeTexBake(buf: Uint8Array, hash: string | null): boolean {
   if (header.version !== TEX_BAKE_VERSION) return false;
   if (hash && header.hash !== hash) return false;
   const body = 12 + hlen;
-  const m = new Map<string, Uint8Array>();
-  for (const e of header.entries) {
-    const n = e.w * e.h * 4;
-    m.set(e.k, decodePlanes8(buf.subarray(body + e.off, body + e.off + n), e.w, e.h, 4));
-  }
-  store = m;
+  const index = new Map<string, TexEntry>();
+  for (const e of header.entries) index.set(e.k, { ...e, off: body + e.off });
+  store = { buf, index };
   return true;
 }
 
@@ -180,9 +185,12 @@ function dress(tex: THREE.DataTexture, {
  * @param gen builds the texture the slow way
  */
 function cached(key: string, size: number, opts: TextureOpts, gen: () => THREE.DataTexture): THREE.Texture {
-  const hit = store && store.get(key);
-  if (hit && hit.length === size * size * 4) {
-    return dress(new THREE.DataTexture(hit, size, size, THREE.RGBAFormat), opts);
+  const hit = store && store.index.get(key);
+  if (hit && hit.w === size && hit.h === size) {
+    store!.index.delete(key);
+    const n = size * size * 4;
+    const data = decodePlanes8(store!.buf.subarray(hit.off, hit.off + n), size, size, 4);
+    return dress(new THREE.DataTexture(data, size, size, THREE.RGBAFormat), opts);
   }
   const tex = gen();
   if (recorder) {
