@@ -155,7 +155,7 @@ round), `tmp/shots/sp2` (after the bedding fix).
 |---|---|
 | `npx vite build` | **pass** — also runs as a pre-commit hook |
 | `node src/tools/integration.mts` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
-| `node src/tools/orphans.mts` | **fails, pre-existing and not mine** — `src/world/map/MapRaster.ts` is orphaned. Nothing anywhere imports it; last touched by the cartography agent in `5fd2876`. Unrelated to any file I own. |
+| `node src/tools/orphans.mts` | ~~**fails, pre-existing and not mine** — `MapRaster` is orphaned.~~ **RESOLVED 2026-08-22:** the file was a re-export facade and was deleted; `orphans` is clean. |
 | `node src/tools/roadcheck.mts` | **pass** — 0 failures, 0 warnings, 30.26 km over 50 edges / 50 nodes |
 | `node src/tools/heightcheck.mts` | **pass — d 0.000 m on every probe**, gpu vs cpu, including the `micro` and `grid` components separately |
 | `node src/tools/driftcheck.mts` | **pass** — tolerance 0.05 m drift / 0.45 m vs `heightAt` |
@@ -298,7 +298,7 @@ every shot above therefore has its vegetation over my ground. What I assumed:
 |---|---|
 | `zone_mencemoor` frames the *inside* of the Disc of Cauthess meteor — the whole frame is its underside. `main`'s `c526d9b`/`0be851f` moved the meteor to its own zone; the shot camera at `pos: [...]` was not moved with it. Duscae cannot be assessed from this shot. | `src/game/Shots.ts`, `zone_mencemoor` entry (~line 359) |
 | `zone_ravatogh` frames a green forested valley with the cone at the top of frame rather than the volcano itself. Flagged in the original plan and still true. | `src/game/Shots.ts`, `zone_ravatogh` entry (~line 391) |
-| Chevron hatch on all conical peaks — heightfield normals, see *Gotchas*. Owner is whoever owns `Field.heightAt()` / the far normal texture (`agent/terrainfix`?). | `src/world/terrain/Field.ts` (height), not `TerrainMaterial.ts` |
+| ~~Chevron hatch on all conical peaks — heightfield normals.~~ **WRONG, and it cost two agents a round each. It is GTAO** reconstructing normals from depth and drawing the raw triangle facets of every distant massif; `?post=nogtao` alone removes it. Half of it *was* the clipmap point-sampling the heightfield below its vertex pitch, and that half is fixed. See `project/LANDMINES.md`. | `src/engine/PostFX.ts`, not `Field.ts` |
 | Horizontal terracing bands on Taelpar's valley walls — geometric, almost certainly the per-zone `terrace` biome parameter. | `src/world/map/WorldMap.ts` `biome.terrace`; realised in `Field.ts` |
-| `src/world/map/MapRaster.ts` is orphaned and fails `src/tools/orphans.mts`. Nothing imports it. | `src/world/map/MapRaster.ts` |
+| ~~`MapRaster.ts` is orphaned and fails `orphans.mts`.~~ **RESOLVED 2026-08-22** — deleted; `orphans` is clean at 273/273. | — |
 | `project/STATUS.md` records `src/tools/gameplay.mts` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |

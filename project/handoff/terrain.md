@@ -222,7 +222,7 @@ against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
 | **GTAO reconstructs its normals from depth and has no camera-distance falloff, so it draws the triangle facets of every distant massif as a regular hatch.** This is the residue of the chevron defect and it cannot be fixed from `world/terrain/**`. Two candidate one-liners: fade `gtao.blendIntensity` / the AO term to zero past ~600 m, or pass a real normal target as `setGBuffer(depth, normal)` — `patchGBufferMaterial` already exists and already displaces the terrain for exactly that path, it is simply not being fed. Reproduce with `node tmp/tr/pshot.mjs zone_longwythe out.png "&post=nogtao"`. | `src/engine/PostFX.ts:134-155` |
 | `GROUND_BLEED = 0.22` in `veg/GrassField.ts` was tuned against the *broken* ground colour (a warm brown at luminance 0.090). Now that `groundColorAt` returns the real ground it is worth re-judging — the grass agent's §5 says exactly this and it is now actionable. | `src/world/veg/GrassField.ts:61` |
 | `zone_malacchi` frames a canopy interior; `zone_mencemoor` still frames the inside of the meteor (`agent/splat` reported this and it is still true). | `src/game/Shots.ts` |
-| `src/world/map/MapRaster.ts` still orphaned. Pre-existing, not mine. | — |
+| ~~`MapRaster.ts` still orphaned.~~ **RESOLVED 2026-08-22** — deleted; `orphans` is clean at 273/273. | — |
 
 ## Gotchas — read before touching any of this
 
