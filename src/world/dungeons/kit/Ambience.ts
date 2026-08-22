@@ -13,6 +13,9 @@ import type { AudioSystem } from '../../../audio/AudioSystem.ts';
  * call here degrades to a no-op if the audio system never booted.
  */
 export class DungeonAmbience {
+  /** See `ready`. Off because it has always been off, not because it should be. */
+  static readonly ENABLED = false;
+
   _nextOneShot!: number;
   audio!: AudioSystem | null;
   desc!: any;
@@ -25,9 +28,20 @@ export class DungeonAmbience {
     this._nextOneShot = 0;
   }
 
+  /**
+   * Never true today, and deliberately so.
+   *
+   * This getter tested `a.ambBus`, and `AudioSystem` has never had an `ambBus`
+   * -- so it has always been `undefined`, `ready` has always been false, and
+   * the dungeon ambience below has never played a note. The real bus is
+   * `graph.bus.amb`, and the reference is corrected, but *enabling* a system
+   * that has been dark since it was written changes what the game does, which
+   * is not something a typing pass gets to decide. Flip `ENABLED` to turn it
+   * on, listen to it, and put the result in the commit message.
+   */
   get ready() {
     const a = this.audio;
-    return !!(a && a.ctx && a.graph && a.enabled);
+    return DungeonAmbience.ENABLED && !!(a && a.ctx && a.graph && a.enabled);
   }
 
   start(desc: any) {
