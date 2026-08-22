@@ -3,14 +3,24 @@
 Every discrete thing the game should contain, one line each, checkable.
 `[x]` shipped and verified · `[~]` in progress right now · `[ ]` not started.
 
-Taking over? Start with **[`project/HANDOFF.md`](project/HANDOFF.md)**.
+Taking over? Start with **[`project/STATUS.md`](../project/STATUS.md)**, then
+**[`project/HANDOFF.md`](../project/HANDOFF.md)**.
 
-Companion docs: `project/PROGRESS.md` (status by area, scoreboard, bug log) ·
-`docs/plans/2026-08-17-opus-content-gameplay.md` (design audit and sequencing) · `docs/WORLDMAP.md` (cartographic design, pending) ·
-`BRIEF.md` (engineering + art contract).
+This is now the **only** inventory. `project/PROGRESS.md` used to carry a second,
+prose version of it and drifted apart from this one; it is archived at
+`project/archive/PROGRESS-2026-08-17.md`. Status by area, the critic scoreboard
+and what is in flight all live in `project/STATUS.md`; the bug log it kept is in
+`project/LANDMINES.md`.
 
-**Counts at last update (2026-08-17 ~08:00, verified against `main` @ 98 commits):**
-335 atoms · **249 shipped** · **2 in progress** · **84 not started**.
+Companion docs: `docs/plans/2026-08-17-opus-content-gameplay.md` (design audit
+and sequencing) · `docs/WORLDMAP.md` (cartography) · `BRIEF.md` (engineering +
+art contract).
+
+> ⚠ **STALE — these counts are 240 commits old and must not be quoted.**
+> **Counts at last update (2026-08-17 ~08:00, verified against `main` @ 98 commits):**
+> 335 atoms · **249 shipped** · **2 in progress** · **84 not started**.
+> `main` is now at 338 commits and 337 source files. Re-verifying this file
+> against current `main` is open work -- item 6 in `project/STATUS.md`.
 
 Every `[x]` below was checked against the code on `main`, not against an agent's
 report. Where a claim was only partly true it has been reworded rather than ticked.
@@ -28,7 +38,7 @@ grep -c '^- \[ \]' docs/SCOPE.md   # not started
 
 ### 1.1 Cartography
 - [x] Authored world map design (`docs/WORLDMAP.md`) — not noise-grown terrain
-- [x] `WorldMap.js` as single source of truth: zones, POIs, road graph, biome params
+- [x] `WorldMap.ts` as single source of truth: zones, POIs, road graph, biome params
 - [x] Zone query API — `zoneAt`, `nearestPOI`, `poiById`, `discover`, `roadGraph`
 - [x] Terrain generated *from* the map design rather than decorated after the fact
 - [x] World substantially larger than the current 3 km basin — **8192 x 8192 m**
@@ -53,7 +63,7 @@ grep -c '^- \[ \]' docs/SCOPE.md   # not started
 
 ### 1.3 Points of interest (target 50+)
 
-`[x]` here means **placed in `WorldMap.js` with coordinates, type and gating**, and
+`[x]` here means **placed in `WorldMap.ts` with coordinates, type and gating**, and
 discoverable on the map. Only Hammerhead is additionally *built* as a visitable
 place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] **124 POIs** with name, type, coordinates, discovery radius, purpose, gating
@@ -92,7 +102,7 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [x] Every drivable POI reachable by road
 - [ ] Bridges over canyons/water
 - [ ] Tunnels
-- [x] Drivability assertion test — `src/tools/roadcheck.mjs`, 39/39 reachable, 0 failures
+- [x] Drivability assertion test — `src/tools/roadcheck.mts`, 39/39 reachable, 0 failures
 
 ### 1.5 Minimap & world map
 - [x] Minimap — baked relief chart shared with the atlas, roads, glyphs, compass; 0.5-0.7 ms/frame
@@ -435,17 +445,17 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 ## 13. Performance & engineering
 
 - [x] Screenshot harness with error gating
-- [x] Posed FPS benchmark (`src/tools/perf.mjs`)
-- [x] Gameplay FPS benchmark with scripted input (`src/tools/gameplay.mjs`)
-- [x] Subsystem cost attribution (`src/tools/attrib.mjs`)
+- [x] Posed FPS benchmark (`src/tools/perf.mts`)
+- [x] Gameplay FPS benchmark with scripted input (`src/tools/gameplay.mts`)
+- [x] Subsystem cost attribution (`src/tools/attrib.mts`)
 - [x] Production build verified (`--prod`)
 - [x] Contact sheets for critic review
 - [x] Build-time bake + Vite plugin — terrain init 8,320 ms → 285 ms
 - [x] Capture daemon — warm single-shot capture 23.6 s → 1.5 s
-- [x] Image-diff regression tool (`src/tools/imgdiff.mjs`), noise floor 1.58–1.99/255
+- [x] Image-diff regression tool (`src/tools/imgdiff.mts`), noise floor 1.58–1.99/255
 - [x] Pre-commit build check (`.githooks/pre-commit`)
-- [x] Orphan process cleanup (`src/tools/cleanup.mjs`)
-- [x] Boot profiler (`src/tools/bootprof.mjs`), road drivability check (`src/tools/roadcheck.mjs`)
+- [x] Orphan process cleanup (`src/tools/cleanup.mts`)
+- [x] Boot profiler (`src/tools/bootprof.mts`), road drivability check (`src/tools/roadcheck.mts`)
 - [x] Shader pre-warm (programs climb 174 → 369 in-session)
 - [x] Weapon swap freeze (15.8 s) eliminated
 - [x] Shadow cascade cost (83% of frame)
@@ -458,14 +468,19 @@ place with geometry, NPCs and interiors — the rest are markers on real ground.
 - [ ] 60 fps on all 13 gameplay segments
 - [ ] Zero frames over 33 ms in a session
 - [x] Draw-call budget renegotiated in `BRIEF.md` — 400 → 800
-- [x] Automated visual regression diffing (`src/tools/imgdiff.mjs`)
+- [x] Automated visual regression diffing (`src/tools/imgdiff.mts`)
 - [ ] Quality tiers (low/medium/high/ultra) verified meaningful
 
 ---
 
-## 14. TypeScript port (planned — blocked on the current agent wave)
+## 14. TypeScript port — ✅ done (2026-08-22)
 
-Full detail in **[`docs/plans/2026-08-17-opus-typescript-port.md`](docs/plans/2026-08-17-opus-typescript-port.md)**.
+Full detail in **[`project/handoff/typescript.md`](../project/handoff/typescript.md)**
+and the plan it ran from, `docs/plans/2026-08-22-opus-phase2-typescript-port.md`.
+Every file under `src/` is TypeScript, both typechecks are clean under `strict`,
+all 9 gates green, and the pixel diff against the pre-port build is inside each
+shot's own run-to-run noise. **Follow-on, in progress: zero `any`** — 7,861 →
+5,253, ratcheted by `src/tools/anycheck.mts` against `ANY_BUDGET.json`.
 
 Match the sibling attempts `../final-fantasy-XV-demo-opus` (172 `.ts`) and
 `../final-fantasy-XV-demo-ogl-opus` (100 `.ts`), which are 100% TypeScript with
@@ -485,22 +500,23 @@ zero `.js` in `src/`.
 - devDeps: `typescript`, `@types/node`, `@types/three`
 - scripts: `typecheck` and `typecheck:tools`, both `tsc --noEmit`
 
-**Sequencing — do not start while agents are live.** 235 modules and ~79,500
-lines are under concurrent edit by six agents; porting under that would conflict
-with everything. Order:
+**Sequencing — it is a whole-repo lock and cannot use the agent-wave method.**
+That is why it waited for a quiet tree. The scale figures the original plan
+carried were 40% low: it said 235 modules / ~79,500 lines, and the port ran
+against 314.
 
-- [ ] Land every in-flight agent branch and merge to `main`
-- [ ] Add tsconfigs, devDeps and the two `typecheck` scripts (no renames yet)
-- [ ] Port `src/util/**` first — leaf modules, no internal imports, they define
+- [x] Land every in-flight agent branch and merge to `main`
+- [x] Add tsconfigs, devDeps and the two `typecheck` scripts (no renames yet)
+- [x] Port `src/util/**` first — leaf modules, no internal imports, they define
       the shared types (`Noise`, `Rng`, `TextureGen`)
-- [ ] Port `src/engine/**` and define the core interfaces: the `System` contract
+- [x] Port `src/engine/**` and define the core interfaces: the `System` contract
       (`init`/`update`/`lateUpdate`), `Game`'s registry, and a typed `SHOTS` shape
-- [ ] Port `src/game/rpg/**` — pure logic, no three.js, highest type value
-- [ ] Port `src/world/**`, `src/characters/**`, `src/combat/**`, `src/ui/**`
-- [ ] Port `src/tools/**` to `.mts` under `erasableSyntaxOnly`
-- [ ] `typecheck` and `typecheck:tools` clean, `vite build` passes, and the
+- [x] Port `src/game/rpg/**` — pure logic, no three.js, highest type value
+- [x] Port `src/world/**`, `src/characters/**`, `src/combat/**`, `src/ui/**`
+- [x] Port `src/tools/**` to `.mts` under `erasableSyntaxOnly`
+- [x] `typecheck` and `typecheck:tools` clean, `vite build` passes, and the
       integration audit still reports 0 failures
-- [ ] Add both typechecks to the pre-commit hook alongside the build
+- [x] Add both typechecks to the pre-commit hook alongside the build
 
 **Why it is worth doing here specifically.** Two of the worst bugs this project
 hit were type errors a compiler catches for free: `Game.get()` keyed on

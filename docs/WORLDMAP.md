@@ -4,10 +4,10 @@ A cartographic design for the open world of *FINAL FANTASY XV — Eos*, and the
 contract the terrain, the vegetation, the props, the quests, the town, the
 driving system and the UI all read from.
 
-The design lives as data in **`src/world/map/WorldMap.js`** (zones, points of
-interest, required landforms) and **`src/world/map/RoadGraph.js`** (junctions,
+The design lives as data in **`src/world/map/WorldMap.ts`** (zones, points of
+interest, required landforms) and **`src/world/map/RoadGraph.ts`** (junctions,
 routes, road classes). Nothing in this document is prose-only: every coordinate
-below is in one of those two files, and `src/world/terrain/Field.js` *realises*
+below is in one of those two files, and `src/world/terrain/Field.ts` *realises*
 them rather than inventing its own.
 
 ---
@@ -40,7 +40,7 @@ budget is honest about that. At 2048² the choice is *span versus cell size*.
 8192 m at 4 m cells costs exactly what the previous 3072 m at 1.5 m cells cost
 — same memory, same build time — and buys 7× the area. What it loses is the
 1.5–4 m detail band, which is put back analytically by `microDetail()` in
-`Field.js` and its exact GLSL twin `tf_micro()` in `TerrainMaterial.js`, so
+`Field.ts` and its exact GLSL twin `tf_micro()` in `TerrainMaterial.ts`, so
 `heightAt()` still returns the surface the GPU displaces to, to the millimetre.
 A larger world than this needs real streaming, which is a different workstream.
 
@@ -236,7 +236,7 @@ Roads are not drawn on the terrain; the terrain is **cut for them**.
    neck); the Disc crater is held back 130 m (which is what puts the overlook
    on a spur of the rim rather than in the hole).
 
-`node src/tools/roadcheck.mjs` builds the real heightfield and asserts all of it.
+`node src/tools/roadcheck.mts` builds the real heightfield and asserts all of it.
 
 ---
 
@@ -279,7 +279,7 @@ groups, Longwythe Peak, the Disc crater, the Ravatogh cone, the Taelpar and
 Meldacio canyons, the Lestallum/Old Lestallum/Cotisse/Vesperpool terraces, the
 Alstor and Vesperpool lake basins, the Galdin and Caem seas); level pads under
 every settlement, rest stop, camp and parking bay; the whole road network's plan,
-profile, camber, berm and wheel ruts; the water bodies, which `Water.js`
+profile, camber, berm and wheel ruts; the water bodies, which `Water.ts`
 discovers automatically because the basins are carved below −6.5 m.
 
 **Still procedural noise, deliberately:** the mid-scale rolling relief inside
@@ -294,7 +294,7 @@ to be looked at.
 ## 7. Open coordination items
 
 - **`Ecology.worldRadius` caps vegetation at 620 m from the origin**
-  (`src/world/veg/Ecology.js:59`, `Math.min(620, …)`). Everything outside that
+  (`src/world/veg/Ecology.ts:59`, `Math.min(620, …)`). Everything outside that
   is bare ground: Duscae's forest, the Vesperpool's drowned trees and the
   Malmalam thicket have terrain but no plants. That file belongs to another
   workstream; the fix is one number.
