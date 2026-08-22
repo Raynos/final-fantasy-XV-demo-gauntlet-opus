@@ -171,11 +171,15 @@ const results = await page.evaluate(async () => {
     const e = enemies.spawn('sabertusk', { pos: player.position.clone().add(new V(7, 0, 0)) });
     e.target = player; e.awareness = 1; e.setState('chase');
     for (const m of party.members) m.root.position.copy(player.position).add(new V(1.5, 0, 1.5));
+    // Up to 15 s of simulation, but stop the moment the HP moves: waiting the
+    // full fifteen puts this probe at several minutes on a loaded machine, and
+    // one landed hit is the whole claim.
     const hp0 = e.hp;
-    step(900);                                   // 15 s, no player input at all
+    let f = 0;
+    for (; f < 900 && e.hp >= hp0; f++) step(1);
     const dealt = hp0 - e.hp;
     return dealt > 0
-      ? P(`${party.members.length} companions took ${dealt} hp of ${hp0} off a sabertusk in 15 s, hands off`)
+      ? P(`${party.members.length} companions took ${dealt} hp of ${hp0} off a sabertusk in ${(f / 60).toFixed(1)} s, hands off`)
       : F(`enemy still on ${e.hp}/${hp0} after 15 s with three companions on it`);
   });
 

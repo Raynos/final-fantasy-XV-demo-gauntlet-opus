@@ -189,11 +189,31 @@ PASS  the hunt loop pays                      12 credited kills -> complete, +11
 PASS  camp at Cotisse Haven                   "[E] Camp Cotisse Haven" -> Cup Noodles -> sleep
                                               day 1->2, 91,200 EXP redeemed, party 27 -> 34
 PASS  markers land in the world               16 markers, 0 outside the field; draw at a deposit ok
+PASS  party companions fight (gate)           468 hp of 780 off a sabertusk in 0.1 s, hands off
+PASS  camp at a haven (gate)                  17 camps; slept at Cotisse Haven; refused 400 m away
 ```
 
-`integration.mts` 19/19, `combatloop.mts` 30/30, `orphans` 278/278,
-`roadcheck` 0 failures, `build` clean. Four gates in `npm run check` failed on
-`ERR_CONNECTION_REFUSED` rather than on an assertion — see §7.5.
+`npm run check` on a quiet tree: **7/9**, and the two failures are a harness
+port collision, not the game — see §7.5.
+
+```
+  build         PASS   orphans       PASS  278/278 reachable
+  integration   PASS   20/20         uxcheck       PASS  89/89
+  creaturecheck PASS   207 poses     combatloop    PASS  30/30
+  roadcheck     PASS   0 failures
+  heightcheck   FAIL   0.3s  ERR_CONNECTION_REFUSED
+  driftcheck    FAIL   0.5s  ERR_CONNECTION_REFUSED
+```
+
+`uxcheck` 89/89 is the one that mattered for the E change: yielding the key to
+the interaction layer did not cost the menus anything.
+
+And I looked at it. `tmp/shots/haven/camp_cotisse_wide.png` — the rune shelf,
+the tent and the fire ring are genuinely built at `(962, -712)`, on the shelf
+below Longwythe Peak with a track running up to it, so the `Camp` prompt is
+standing on real geometry rather than on a coordinate. Ignis is saying *"The
+light is going. We should find a haven before dark"* over it, which as of
+tonight is advice a player can act on.
 
 **What a player can do now that they could not this morning:**
 
@@ -275,14 +295,25 @@ and it will fix itself the moment the two agree.
    points; the seeded save has one point and a rank-1 hunt pays one. At that rate
    the Meldacio tome opens after roughly seventy-five rank-1 hunts. Worth an hour
    of design before WS-4 authors anything new.
-5. **Four gates failed in `npm run check` for environmental reasons, not
-   assertions.** `uxcheck`, `creaturecheck`, `heightcheck` and `driftcheck` all
-   died on `ERR_CONNECTION_REFUSED`; `creaturecheck` printed
-   `207 poses probed · 0 failures` and *then* failed. I had a probe running on
-   the same `PORT` at the time, which is my mistake and worth not repeating —
-   `heightcheck` and `driftcheck` do not start their own server, they take the
-   aux one `check.mts` puts on `PORT + 50`. Re-run on a quiet tree before
-   believing anything about those four.
+5. **`heightcheck` and `driftcheck` cannot pass in a multi-agent session, and
+   it is the harness, not the game.** Neither starts its own server; they take
+   the aux one `check.mts` puts on **`PORT + 50`**. With agents assigned ports
+   fifty apart, that is *another agent's port*: mine is 5340, so the aux port is
+   5390, and 5390 was already held (`vite: Port 5390 is already in use`, pid
+   66679 listening and refusing the game page). `check.mts` swallows the failure
+   — `try { aux = await serve(auxPort) } catch { /* reported by the gate */ }` —
+   and the two gates then fail 0.3 s later against a port serving something
+   else. Both gates were green on a single-agent tree yesterday.
+
+   The fix is one line in `check.mts`: pick a *free* aux port instead of a fixed
+   offset. I have left it alone because a coordinator running the suite alone
+   will not see this and may prefer a different allocation scheme.
+
+   Also worth knowing: **do not run a probe while `npm run check` is running.**
+   An earlier run of mine came back 5/9 with `uxcheck` and `creaturecheck` dead
+   on connection-refused — `creaturecheck` printed `207 poses probed · 0
+   failures` and *then* failed. That was my probe on the same port, not a
+   regression.
 
 Files touched: `src/combat/CombatSystem.ts`, `src/game/rpg/DayCycle.ts`,
 `src/game/rpg/Elemancy.ts`, `src/game/rpg/HavenCamp.ts` (new),
