@@ -251,7 +251,9 @@ const QUEST_TABLE: Quest[] = [
     summary: 'Insomnia has fallen. Cor Leonis leads you to the tomb of the Wise.',
     objectives: [
       reach('trench', 'keycatrich_trench', 'Meet Cor at Keycatrich Trench', at('keycatrich_trench'), 20),
-      kill('mts', 'magitek_trooper', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
+      // The bestiary key is `mt`; `magitek_trooper` matched nothing, so this
+      // objective -- and `side_power_play`'s below -- could never tick.
+      kill('mts', 'mt', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
       fetch_('sword', 'sword_wise', 1, 'Claim the Sword of the Wise', at('tomb_wise')),
     ],
     rewards: { gil: 1200, exp: 4000, ap: 25, items: [{ id: 'sword_wise', count: 1 }], unlocks: ['armiger'] },
@@ -473,7 +475,7 @@ const QUEST_TABLE: Quest[] = [
     summary: 'The Exineris plant is losing pressure and Holly suspects sabotage.',
     objectives: [
       talk('holly', 'holly', 'Meet Holly at the power plant', at('exineris')),
-      kill('mts', 'magitek_trooper', 12, 'Clear the intruders from the substation', at('exineris')),
+      kill('mts', 'mt', 12, 'Clear the intruders from the substation', at('exineris')),
       fetch_('relay', 'imperial_relay', 1, 'Recover the imperial relay unit'),
     ],
     rewards: { gil: 6000, exp: 9000, ap: 20, items: [{ id: 'magitek_suit', count: 1 }] },
@@ -932,6 +934,41 @@ export class QuestLog {
       }
     }
     return changed.map((id) => this.view(id)).filter((v): v is QuestView => v != null);
+  }
+
+  /**
+   * Credit a kill to one hunt, whatever the corpse was called.
+   *
+   * A hunt's mark is spawned by `HuntRuntime` from `HUNT_TARGETS`, which names
+   * a *bestiary key*, while the objective names the mark the way the board
+   * words it. Six of the twelve hunts disagree — `hunt_naga` spawns an
+   * `arachne`, `hunt_zu` spawns a renamed `bandersnatch`, `hunt_adamantoise`
+   * spawns a `titan`, and `hunt_garulessa`, `hunt_iron_giant` and
+   * `hunt_killer_wasps` all miss by a word — so `notify('kill', speciesId)`
+   * matched nothing and **those six hunts could never be completed**. The
+   * player killed the thing the board sent them to kill and the board did not
+   * notice.
+   *
+   * Renaming the objectives to bestiary keys would fix the six and lose the
+   * copy ("Slay Deadeye" is not "kill a bloodhorn"), and would still break the
+   * next time a mark is reskinned. A mark is a mark: if this enemy was spawned
+   * *for* this hunt, its death counts towards it.
+   *
+   * The caller only reaches here when the ordinary species notify did not
+   * already credit this quest, so a matching hunt cannot be paid twice.
+   *
+   * @param questId the hunt the dead mark belonged to
+   * @returns true if an objective moved
+   */
+  creditMark(questId: string, count = 1) {
+    const q = QUESTS[questId];
+    const st = this.states[questId];
+    if (!q || !st || st.status !== 'active') return false;
+    const i = q.objectives.findIndex((o, k) => o.type === 'kill' && !st.objectives[k].done);
+    if (i < 0 || this._blocked(st, i)) return false;
+    if (!this._raise(q, i, st.objectives[i].progress + count)) return false;
+    if (!this.settle(questId) && st.objectives.every((o) => o.done)) this.complete(questId);
+    return true;
   }
 
   /** Force an objective complete (debug / cutscene shortcuts). */

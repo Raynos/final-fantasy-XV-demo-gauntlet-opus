@@ -93,6 +93,12 @@ export interface KilledEnemy {
 export interface KillContext {
   byWarpStrike?: boolean;
   byTechnique?: boolean;
+  /**
+   * The hunt this corpse was spawned as a mark for, if any.
+   * @see QuestLog.creditMark — a mark counts towards its own hunt whatever the
+   * bestiary calls it.
+   */
+  hunt?: string | null;
 }
 
 /** What a camp attempt did. */
@@ -508,7 +514,11 @@ export class RpgSystem {
     if (ctx.byWarpStrike) this.ascension.awardAp('warp-strike-kill');
     if (ctx.byTechnique) this.ascension.awardAp('tech-finish');
     if (enemy.expClass === 'boss') this.ascension.awardAp('boss-kill');
-    this.quests.notify('kill', { target: enemy.id, count: 1 });
+    const credited = this.quests.notify('kill', { target: enemy.id, count: 1 });
+    // A hunt's mark counts towards its own hunt even when the board calls it
+    // something the bestiary does not — but only if the species line above did
+    // not already pay this quest, so a matching hunt is never paid twice.
+    if (ctx.hunt && !credited.some((v) => v.id === ctx.hunt)) this.quests.creditMark(ctx.hunt);
     for (const m of MEMBERS) this.party.addAffinity(m.id, 1);
 
     const drops = [];
