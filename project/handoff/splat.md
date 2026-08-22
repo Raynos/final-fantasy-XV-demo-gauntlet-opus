@@ -301,4 +301,4 @@ every shot above therefore has its vegetation over my ground. What I assumed:
 | Chevron hatch on all conical peaks — heightfield normals, see *Gotchas*. Owner is whoever owns `Field.heightAt()` / the far normal texture (`agent/terrainfix`?). | `src/world/terrain/Field.ts` (height), not `TerrainMaterial.ts` |
 | Horizontal terracing bands on Taelpar's valley walls — geometric, almost certainly the per-zone `terrace` biome parameter. | `src/world/map/WorldMap.ts` `biome.terrace`; realised in `Field.ts` |
 | `src/world/map/MapRaster.ts` is orphaned and fails `src/tools/orphans.mts`. Nothing imports it. | `src/world/map/MapRaster.ts` |
-| `project/SESSION-STATE.md` records `src/tools/gameplay.mts` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |
+| `project/STATUS.md` records `src/tools/gameplay.mts` already failing its 60 fps gate on streaming/weather hitches, independent of this work. | — |

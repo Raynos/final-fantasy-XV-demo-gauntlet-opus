@@ -323,7 +323,7 @@ as indicative only; re-measure on a quiet tree before judging.**
   **mean 73.6 fps, worst 39.1 fps (`vista_dawn`)**, which the tool reports as a
   FAIL against its 60 fps target. **I have no before/after comparison** — I did
   not baseline `perf.mts` before the first edit, which was a mistake. `perf.mts`
-  was already failing its gate on `main` per `project/SESSION-STATE.md` (`gameplay.mts`
+  was already failing its gate on `main` per `project/STATUS.md` (`gameplay.mts`
   `walk` at ~57.5 fps, shadow cascades ~22 ms dominating), so the failure is
   very unlikely to be mine, but that is an inference and not a measurement.
 - What I *can* state as a direct comparison, from the capture manifests, same

@@ -2,7 +2,7 @@
 
 `BRIEF.md` is the contract — art direction, engine contracts, definition of done.
 Read it before writing code. Coordinating rather than implementing? `project/HANDOFF.md`
-first, then `project/SESSION-STATE.md` for who currently owns what.
+first, then `project/STATUS.md` for who currently owns what.
 
 ## Layout
 
@@ -54,7 +54,7 @@ happens here:
   commits are what keep the coordinator's merges trivial — the one merge conflict
   in 114 commits came from two agents sitting on a large uncommitted change.
 - A retired or crashed agent loses only what it had not committed. This is the
-  same principle as `project/SESSION-STATE.md`: the state lives on disk.
+  same principle as `project/STATUS.md`: the state lives on disk.
 
 Do not batch unrelated changes to save a turn, and do not wait until a system is
 "finished" — commit the working intermediate step. Messages stay long-form: say

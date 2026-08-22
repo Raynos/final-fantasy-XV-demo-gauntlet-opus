@@ -1,108 +1,113 @@
-# Session state
+# Status — 2026-08-22
 
-Live snapshot for resuming after an interruption. Updated 2026-08-21.
+> **This is a snapshot, and it is REPLACED in place, never appended to.** No
+> dated "update —" bullets: that is the `journal/` genre. The lossless history is
+> `journal/` and the git log, so deleting a line that has stopped being true
+> loses nothing. It is capped at 150 lines by `.githooks/pre-commit` for exactly
+> this reason — `PROGRESS.md` was allowed to accrete instead and drifted five
+> months out of date while still reading as current.
 
-> **The previous coordinator session `07642602` and its 7 subagents were
-> force-killed** — that session had grown to ~3 GB RSS and an ~80 MB transcript
-> and had to be stopped along with every agent under it. No committed work was
-> lost: all seven branches had been merged and every worktree pruned. What was
-> lost was whatever was still in a head.
->
-> **`project/RESCUE.md` is the ledger of what that session left unfinished**,
-> reconciled against what is actually on `main` rather than what the handoffs
-> claim. Read it before picking anything up.
+**`main` @ 338 commits · 337 source files · ~108,200 lines · 139 shots · 25
+registered systems.** Tree otherwise clean: no `agent/*` branches, no worktrees,
+no orphaned vite/chromium.
 
----
+## Live right now
 
-## Tree state
+| who | what | owns |
+|---|---|---|
+| zero-`any` agent | **5,253 `any` left**, from 7,861 — 33% gone. Ratcheted by `ANY_BUDGET.json`; `node src/tools/anycheck.mts` counts and enforces, `--set` lowers the ceiling. | all of `src/` |
 
-`main`, clean. No `agent/*` branches, no worktrees from the killed round, no
-orphaned vite/chromium.
+`project/handoff/no-any.md` is that agent's handoff and is the live document for
+it. **`src/` is being edited broadly right now** — do not take a perf number, and
+do not read a dirty `git status` as your own.
 
-The repo was restructured on 2026-08-21: **`src/` is now vite's root**, so the
-tools live at `src/tools/`, the entry is `src/index.html`, and assets are
-`src/public/`. In-page dev-server imports are `/world/...`, **not**
-`/src/world/...`. The root holds only config and the four buckets
-(`src/`, `docs/`, `project/`, `tmp/`).
+## Where the truth is
 
-Plans in `docs/plans/` are now date- and model-prefixed
-(`2026-08-17-opus-typescript-port.md`, and so on).
+- `BRIEF.md` — the contract. Art direction, engine contracts, definition of done.
+- `project/HANDOFF.md` — how this is built: the method, the tooling, the
+  architecture. Read it before writing code.
+- `project/LANDMINES.md` — what will bite you, and the seven diagnoses that were
+  confidently wrong. Read the last section twice.
+- `docs/SCOPE.md` — the atomic inventory. **Stale: last verified against `main`
+  @ 98 commits (2026-08-17), 240 commits ago.** Re-verifying it is open work.
+- `project/README.md` — which document is which genre, and the rules that keep
+  them from rotting.
 
-## Rescue progress this session
+## Gates
 
-Landed, each verified by eye or by measurement:
+Last full `npm run check` was **9/9 green on 2026-08-22**, before the zero-`any`
+work started. Not re-run since — the tree has been dirty throughout.
 
-| item | result |
+| gate | last result |
 |---|---|
-| **`Party.snap()`** (`RESCUE.md` B1) | Written and called from `Game.applyShot`. Rewinds the RNG, re-draws every stochastic field through the same helper `init()` uses, places each member on its slot, zeroes the controller's integrators, rests the animator. `Animator.rest()` existed with zero callers; it now has one. |
-| **`Director.setScenario` early-out removed** | It returned early when asked for the scenario it already had, so consecutive `field` shots skipped the reset entirely and inherited the previous shot's drift. Also restores the boot heading — the formation is defined in the player's frame, so an inherited facing rotated all of it. |
-| **Per-shot `resetClock()`** | It ran once per *page*, so `time.now` accumulated across a batch and wind, grass sway, water, wildlife, film grain and the TAA history all sat at a different phase. |
-| **Noctis is right-handed** (B3) | The anchor at `x = +0.30` put the blade in his left hand, because the rig's right side is −X and `weaponIK` picks the arm by sign. Mirrored, with the rotations mirrored to match. |
-| **Noctis' fist closes** (B3) | `weaponIK` now returns the driving side and `CombatAnim` calls `setGrip` on it. |
-| **Blades read as steel** (B4) | Was a flat navy plane: at `metalness 0.90` the diffuse term is ~0 so the blade took its colour entirely from the blue sky PMREM. Now 0.76 / 0.42 / 0.82 with a neutral-warm `STEEL` palette. |
-| **`agent/idles` verified by eye** (B2) | Merged unverified by the killed session. The A-pose lineup **is** gone — four distinct stances, weight shifted, feet no longer parallel. Confirmed in `hero_face`. |
+| `npx vite build` + both typechecks | pass, enforced per-commit by `.githooks/pre-commit` |
+| `integration.mts` | 18 pass · 0 fail |
+| `uxcheck.mts` | 89/89 |
+| `orphans.mts` | 273/273, no dead code |
+| `combatloop.mts` | **30/30** (was 21/30; the 21 was a stale test, not a regression) |
+| `roadcheck.mts` | 0 failures, 30.26 km |
+| `heightcheck.mts` | 0.000 m GPU vs CPU |
+| `creaturecheck.mts` | pass |
 
-### The determinism result, measured
+**Run `npm run check` at every merge, not just the cheap gates.** `combatloop`
+slid 30/30 → 21/30 and went unnoticed for weeks because the expensive ones were
+skipped. `npm run check:perf` adds `perf.mts` and `gameplay.mts` and is opt-in —
+only ever run it on a quiet tree.
 
-Same `follow` shot alone versus sixth in a batch, mean delta per 255:
+## The two failures nobody owns
 
-| state | delta |
+Measured on a genuinely quiet tree on 2026-08-22 — **the first trustworthy perf
+numbers this project has had**, because every earlier one was taken with agents
+live.
+
+| gate | result |
 |---|---|
-| before | **39.200** (camera behind his head, party scattered, weapons drawn) |
-| after `Party.snap()` | 4.672 |
-| after per-shot `resetClock()` | **2.068** |
-| control: two identical alone-runs | **0.305** |
+| `perf.mts` | mean ~70 fps, **worst 37.9 fps on `vista_dawn` — FAIL** |
+| `gameplay.mts` | **worst segment `walk` at 49.8 fps — FAIL** |
 
-**The control matters.** This shot's true noise floor is 0.305, not the
-1.5–1.9 quoted for the corpus generally, so 2.068 is still real
-order-dependence — roughly 5% of pixels over 8/255, most likely vegetation tile
-streaming. It is a 19× improvement and the framing is now stable, but it is
-**not** yet at the floor. Do not record this as closed.
+Known contributors: 180–600 ms streaming and weather-rebuild hitches, `storm` at
+~21 ms. The gate is every segment ≥60 fps median with no frame over 33 ms.
 
-## Agents — all five merged, all worktrees pruned
+## Determinism — improved 19×, not closed
 
-`enemies-art`, `ui`, `veg`, `heroart` and `terrain` all landed and were verified
-by eye by the coordinator before merging. No `agent/*` branches remain, worktrees
-are pruned (2.3 GB reclaimed), no orphaned vite/chromium.
+A `follow` shot alone versus sixth in a batch: **39.200 → 1.511** mean/255,
+against a **measured control floor of 0.373 for that shot**. Three causes, only
+the first of which was in any handoff — `Party.snap()`; `Director.setScenario`
+early-returning when the scenario name was unchanged, so consecutive `field`
+shots skipped the reset entirely; and `resetClock()` running once per page rather
+than per shot. **Still ~4× this shot's own floor.** Likely vegetation tile
+streaming. Do not record it as closed.
 
-**Four inherited diagnoses turned out to be wrong**, each caught only by measuring
-rather than trusting the handoff. This is the single most useful thing to carry
-forward:
+## Quality — the scores are stale and you are flying on them
 
-| recorded as | actually |
-|---|---|
-| `combatloop` 21/30 = a game regression | **a stale test** — `combatloop.mjs` still pressed `KeyH` after the keymap moved to G/J/K, which opened the controls card and disabled input |
-| the chevron hatch = heightfield normals | **GTAO** reconstructing normals from depth and drawing distant triangle facets |
-| `Terrain.groundColorAt` disagrees with the shader | **it never existed** — every plant in the world tinted from a hard-coded brown ramp |
-| dualhorn/bloodhorn "deep rebuild, verified by eye" | **rendering flat black** from a `Color.setHex` NaN |
+Last harsh-critic pass: **4.5/10 overall** — environment 7.5, world dressing 5,
+UI 8, combat VFX 6.5, characters 5.5. That pass **predates essentially everything
+now in the game**: clouds, cartography, collision, menus, the combat loop, the
+rebuilt bestiary, biomes, dressing, the dev suite and the TypeScript port.
 
-## Verification state
+Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
+strata and silhouette, the world map, the opening cutscene, warp-strike VFX.
 
-| check | result |
-|---|---|
-| `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
-| `src/tools/integration.mjs` | **18 pass · 0 fail** |
-| `src/tools/uxcheck.mjs` | **86/86** |
-| `src/tools/orphans.mjs` | **272/272** — clean for the first time, `MapRaster.js` deleted |
-| `src/tools/combatloop.mjs` | **21/30** — pre-existing, lead is a stuck `menu=controls`; owned by the `ui` agent |
-| `src/tools/roadcheck.mjs` | 0 failures, 30.26 km |
-| `src/tools/heightcheck.mjs` | 0.000 m GPU vs CPU |
-| `src/tools/perf.mjs` / `gameplay.mjs` | **not re-measured.** Four agents are live — any number taken now is meaningless. B6. |
+Known weak, and open: hands are still mittens, outfits still flat black, hair
+reads as quills, anak needs a sculpt not paint, `Bushes.ts` (491 lines) has never
+been audited by anyone, `MapScreen` is a 22-line stub, and `zone_weaverwilds` has
+no shot to capture it with.
 
-## Next, in order (rescue is closed; see `project/RESCUE.md` for the open tail)
+## Next, in order
 
-1. Finish the `RESCUE.md` B-track — the four agents above, plus the serial items
-   still open: the residual 2.068 determinism gap, the six unviewed zones (B7),
-   `cine_opening`'s invisible car (B8), `cine_astral` (B9), and the hygiene list
-   in B14.
-2. Re-measure `perf.mjs` and `gameplay.mjs` **on a quiet tree**, once the agents
-   are done.
-3. A fresh harsh-critic pass. The last score was 4.5/10 and predates clouds,
-   cartography, collision, menus, combat, the rebuilt bestiary, biomes, dressing
-   and everything since.
-4. **TypeScript port** — `docs/plans/2026-08-17-opus-typescript-port.md`. Gated
-   on a quiet tree; it is a whole-repo lock and cannot run as a parallel wave.
-   Note the plan is stale on scale: it says 235 modules / ~79,500 lines; it is
-   now **274 / ~94,900**.
-5. The human's `project/TODO.md` items: boot time and the 1.4 GB `?debug` RSS.
-6. The content/gameplay plan.
+1. **Finish zero-`any`.** In flight; whole-repo lock, cannot run as a parallel
+   wave.
+2. **A fresh harsh-critic pass**, graded against shipped FFXV. Everything above
+   about quality is guesswork until this runs.
+3. **Own the two perf failures.** Re-measure on a quiet tree first — the numbers
+   above are trustworthy but three weeks old.
+4. **Phase 3 — boot and memory** (`docs/plans/2026-08-22-opus-phase3-boot-and-memory.md`).
+   Boot is 13.55 s cold / 12.84 s warm, so nothing is cached. Note the human's
+   memory premise in `TODO.md` is backwards: `?debug` uses *less* JS heap than
+   the plain page.
+5. **Phase 4 — content and gameplay** (`docs/plans/2026-08-22-opus-phase4-content-and-gameplay.md`).
+   Re-audit first: the 985-line audit was drawn while `combatloop` was
+   misreporting.
+6. **Re-verify `docs/SCOPE.md`** against current `main`.
+7. Still missing entirely: chocobos, fishing, photo-mode capture, camping at
+   havens (only the Hammerhead caravan works), fast travel, the remaining towns.

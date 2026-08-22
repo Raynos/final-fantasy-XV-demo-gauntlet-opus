@@ -68,7 +68,7 @@ because two agents in one directory corrupt each other's work. Map roughly:
 | `camera` | `src/game/CameraRig.js`, `src/game/Shots.js` |
 | `perf` | wherever the profile points — attribute first with `src/tools/attrib.mjs` |
 
-**Read `project/SESSION-STATE.md` before dispatching.** It carries the live ownership
+**Read `project/STATUS.md` before dispatching.** It carries the live ownership
 table. If an agent already owns a directory, do not dispatch a second one into
 it — route the note to the existing agent with `SendMessage` instead.
 
