@@ -67,6 +67,32 @@ export class Vegetation {
     this.actorRange = 45;        // metres from camera; past that no blade reads
   }
 
+  /**
+   * The gust envelope is accumulated, not derived from `time.now`, so without
+   * this it carried its phase across shots: the same shot alone and sixth in a
+   * batch leaned its grass differently, which is most of the ground-band
+   * difference the determinism measurement was showing.
+   */
+  resetClock() {
+    this._gust = 0;
+  }
+
+  /**
+   * Finish streaming grass, scrub and trees at wherever the camera is now.
+   *
+   * Called by `Game.settle` once the camera has reached the shot. All three
+   * streamers spend a wall-clock millisecond budget per update, so what is
+   * resident after N frames otherwise depends on machine speed and on what the
+   * previous shot had already cached — order-dependence that no amount of
+   * settling converges away.
+   */
+  converge() {
+    this._camPos.setFromMatrixPosition(this.game.camera.matrixWorld);
+    this.grass.converge(this._camPos);
+    this.bushes.converge(this._camPos);
+    this.trees.converge(this._camPos);
+  }
+
   /** Wind strength, 0.4 = still air, 2.5 = storm. Weather can drive this. */
   setWind(strength: number, dirRadians: number) {
     VegUniforms.uWindStrength.value = strength;

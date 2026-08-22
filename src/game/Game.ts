@@ -374,7 +374,14 @@ export class Game {
 
   /** Advance the simulation by `frames` fixed steps without presenting. */
   settle(frames = 30, dt = 1 / 60) {
-    for (let i = 0; i < frames; i++) this.frame(dt);
+    for (let i = 0; i < frames; i++) {
+      this.frame(dt);
+      // After the first frame CameraRig has the camera at the shot, so the
+      // streaming systems can be told to finish *there*. Doing it here rather
+      // than in `applyShot` is the whole point: at `applyShot` time the camera
+      // is still wherever the previous shot left it.
+      if (i === 0) for (const s of this.systems) if (s.converge) s.converge();
+    }
   }
 
   /**

@@ -274,6 +274,8 @@ export class GrassField {
   _pending!: boolean;
   _primed!: boolean;
   _stamp!: number;
+  /** True only inside `converge`: tile generation then ignores `budgetMs`. */
+  _unbounded!: boolean;
   budgetMs!: number;
   eco!: Ecology;
   group!: THREE.Group;
@@ -309,6 +311,26 @@ export class GrassField {
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;
+    this._unbounded = false;
+  }
+
+  /**
+   * Build every tile this camera wants, now, ignoring the per-frame budget.
+   *
+   * The budget above is a wall-clock deadline, which means how much of the
+   * field exists after N frames depends on how fast the machine was and on
+   * what the *previous* camera position had already cached. That is fine in
+   * play and fatal for a capture: it made the same shot differ by 1.8/255
+   * alone versus sixth in a batch, against a 0.30 floor, concentrated in the
+   * ground. `Game.settle` calls this once the camera is at the shot, so
+   * residency becomes a pure function of where the camera is.
+   */
+  converge(camPos: THREE.Vector3) {
+    this._unbounded = true;
+    // defeat the movement early-out: this is an explicit request, not a poll
+    this._last.set(1e9, 0, 1e9);
+    this._pending = true;
+    try { this.update(camPos); } finally { this._unbounded = false; }
   }
 
   build() {
@@ -421,7 +443,7 @@ export class GrassField {
     const key = (tx & 2047) * 4096 + (tz & 2047);
     const e = ring.pool.get(key);
     if (e) return e;
-    if (this._primed && performance.now() > this._deadline) return null;
+    if (this._primed && !this._unbounded && performance.now() > this._deadline) return null;
 
     const t = this._makeTile(li, tx, tz);
     let mesh: THREE.InstancedMesh | null = null;
@@ -693,7 +715,7 @@ export class GrassField {
   update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 25 && !this._pending) return;
-    this._deadline = performance.now() + this.budgetMs;
+    this._deadline = this._unbounded ? Infinity : performance.now() + this.budgetMs;
     this._last.copy(camPos);
     this._stamp++;
     let pending = false;

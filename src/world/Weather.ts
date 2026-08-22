@@ -124,6 +124,8 @@ export class Weather {
   volume!: VolumePass;
   wet!: Wetness;
   wetness!: number;
+  /** Authored base bearing. `windDir` integrates away from it; `resetClock` puts it back. */
+  _dir0!: number;
   windDir!: number;
   windStrength!: number;
   windVector!: THREE.Vector2;
@@ -134,6 +136,7 @@ export class Weather {
 
     /** Wind heading, radians in the XZ plane. */
     this.windDir = 2.05;
+    this._dir0 = this.windDir;
     /** Current wind speed including gusts — Vegetation reads this. */
     this.windStrength = 1.0;
     this.windVector = new THREE.Vector2(1, 0);
@@ -213,7 +216,23 @@ export class Weather {
     if (this.lightning) this.lightning.reset();
   }
 
-  resetClock() { this._snap = true; }
+  /**
+   * A capture must not inherit the wind phase of whatever ran before it.
+   *
+   * `_snap` alone only skips the lerp toward the target preset. The gust
+   * envelope `_gust` is integrated forever and drives `windStrength` through
+   * three sines, and `windDir` drifts permanently — neither survives a preset
+   * change because neither is part of `target`. So the same shot came back
+   * with the wind at a different point in its cycle depending on how many
+   * shots ran before it: measured as `windStrength` 0.840 alone versus 0.944
+   * after one other shot. Grass, scrub, twigs and hair all sway off that, which
+   * is why the residual difference sat on exactly the thin silhouettes.
+   */
+  resetClock() {
+    this._snap = true;
+    this.windDir = this._dir0;
+    this.snap();
+  }
 
   // ----------------------------------------------------------------- update
 

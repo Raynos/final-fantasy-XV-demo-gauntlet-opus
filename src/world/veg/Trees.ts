@@ -221,6 +221,8 @@ export class Trees {
   _primed!: boolean;
   _stamp!: number;
   _tick!: number;
+  /** True only inside `converge`: tile generation then ignores `budgetMs`. */
+  _unbounded!: boolean;
   budgetMs!: number;
   byKey!: Map<string, TreeVariant>;
   canBudget!: number;
@@ -274,6 +276,7 @@ export class Trees {
     this._stamp = 0;
     /** Milliseconds of *tile generation* one update may spend. See GrassField. */
     this.budgetMs = 4;
+    this._unbounded = false;
 
     // How many of each LOD may be on screen at once. These are the honest
     // cost knobs: geometry is ~1-3 k triangles a tree, the other two are eight.
@@ -281,6 +284,14 @@ export class Trees {
     this.impBudget = Math.max(200, Math.round(3000 * quality));
     this.canBudget = Math.max(120, Math.round(1200 * quality));
     this.tileCacheMax = 320;
+  }
+
+  /** Finish streaming at `camPos` in one pass. See {@link GrassField#converge}. */
+  converge(camPos: THREE.Vector3) {
+    this._unbounded = true;
+    this._last.set(1e9, 0, 1e9);
+    this._pending = true;
+    try { this.update(camPos); } finally { this._unbounded = false; }
   }
 
   /** @param renderer needed to bake impostors */
@@ -506,7 +517,7 @@ export class Trees {
   _tile<T>(map: Map<number, TileEntry<T>>, key: number, make: () => T[]): T[] | null {
     const e = map.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
-    if (this._primed && performance.now() > this._deadline) return null;
+    if (this._primed && !this._unbounded && performance.now() > this._deadline) return null;
     const list = make();
     map.set(key, { list, stamp: this._stamp });
     if (map.size > this.tileCacheMax) {
@@ -540,7 +551,7 @@ export class Trees {
       if ((this._tick = (this._tick | 0) + 1) % 6 !== 0) return;
     }
     this._last.copy(camPos);
-    this._deadline = performance.now() + this.budgetMs;
+    this._deadline = this._unbounded ? Infinity : performance.now() + this.budgetMs;
     this._stamp++;
     let pending = false;
 

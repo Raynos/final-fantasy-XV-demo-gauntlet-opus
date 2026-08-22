@@ -247,6 +247,8 @@ export class Bushes {
   _primed!: boolean;
   _stamp!: number;
   _tick!: number;
+  /** True only inside `converge`: tile generation then ignores `budgetMs`. */
+  _unbounded!: boolean;
   budget!: number;
   budgetMs!: number;
   count!: number;
@@ -278,6 +280,15 @@ export class Bushes {
     this.budgetMs = 2;
     this.budget = Math.max(300, Math.round(2000 * quality));
     this.tileCacheMax = 220;
+    this._unbounded = false;
+  }
+
+  /** Finish streaming at `camPos` in one pass. See {@link GrassField#converge}. */
+  converge(camPos: THREE.Vector3) {
+    this._unbounded = true;
+    this._last.set(1e9, 0, 1e9);
+    this._pending = true;
+    try { this.update(camPos); } finally { this._unbounded = false; }
   }
 
   build() {
@@ -481,7 +492,7 @@ export class Bushes {
     const key = (tx & 4095) * 8192 + (tz & 4095);
     const e = this.tiles.get(key);
     if (e) { e.stamp = this._stamp; return e.list; }
-    if (this._primed && performance.now() > this._deadline) return null;
+    if (this._primed && !this._unbounded && performance.now() > this._deadline) return null;
     const list = this._makeTile(tx, tz);
     this.tiles.set(key, { list, stamp: this._stamp });
     if (this.tiles.size > this.tileCacheMax) {
@@ -503,7 +514,7 @@ export class Bushes {
       if ((this._tick = (this._tick | 0) + 1) % 5 !== 0) return;
     }
     this._last.copy(camPos);
-    this._deadline = performance.now() + this.budgetMs;
+    this._deadline = this._unbounded ? Infinity : performance.now() + this.budgetMs;
     this._stamp++;
     let pending = false;
 

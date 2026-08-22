@@ -19,4 +19,12 @@ export interface System {
   update?(dt: number, game: Game): unknown;
   lateUpdate?(dt: number, game: Game): unknown;
   resetClock?(): void;
+  /**
+   * Finish any progressive streaming at the camera's current position.
+   *
+   * Called once from `Game.settle`, after the first frame has moved the camera
+   * to the shot. A system that streams against a per-frame time budget is
+   * order- and machine-dependent until it is told to converge.
+   */
+  converge?(): void;
 }
