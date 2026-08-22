@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LAYER_AVG, LAYER_ROUGH, LAYER_SCALE } from './Layers.ts';
+import { HORIZON_GLSL } from './Horizon.ts';
 
 /**
  * Terrain surface shader. Built on MeshStandardMaterial via onBeforeCompile so
@@ -187,6 +188,7 @@ export const TERRAIN_VERT_BEGIN = VERT_BEGIN;
 
 const FRAG_PARS = /* glsl */`
 ${NOISE_GLSL}
+${HORIZON_GLSL}
 uniform sampler2D uNormalTex;
 uniform sampler2D uFarNormalTex;
 uniform sampler2D uCtrlTex;
@@ -1010,9 +1012,35 @@ vec3 normal = tfNormalW;
 vec3 nonPerturbedNormal = normal;
 `;
 
+/**
+ * Ambient occlusion, and the horizon map's two terms.
+ *
+ * This runs at `<aomap_fragment>`, which in `meshphysical_frag` sits *after*
+ * `<lights_fragment_end>` — so `reflectedLight.directDiffuse` already carries
+ * three's cascade shadow and can simply be scaled here. That makes one
+ * injection point carry both halves of `terrain/Horizon.ts`.
+ *
+ * **The cascade fade is not a nicety.** The horizon map is swept from the far
+ * grid at a 64 m texel, so near the camera it is a much coarser statement about
+ * the ground than the cascades are, and letting it shadow the first few hundred
+ * metres would put soft 64 m-scale darkening on terrain that CSM is already
+ * resolving correctly. `uHorizonMix.zw` fades it in across that handover, so
+ * the cascades own the near field and the bake owns everything past them —
+ * which is exactly the split that justifies the bake existing.
+ *
+ * The AO term has no such fade: sky visibility is a legitimate statement at any
+ * distance, and at 64 m it is describing valley shape, which is the scale a
+ * valley is.
+ */
 const FRAG_AO = /* glsl */`
-reflectedLight.indirectDiffuse *= mix(1.0, tfAO, 0.85);
-reflectedLight.indirectSpecular *= mix(1.0, tfAO, 0.95);
+float tfSkyAo = tf_horizonAo(vTW.xz, tfNormalW);
+float tfSun = mix(1.0, tf_horizonSun(vTW.xz, 0.035),
+  uHorizonMix.x * smoothstep(uHorizonMix.z, uHorizonMix.w, vTDist));
+reflectedLight.directDiffuse *= tfSun;
+reflectedLight.directSpecular *= tfSun;
+float tfAmb = tfAO * mix(1.0, tfSkyAo, uHorizonMix.y);
+reflectedLight.indirectDiffuse *= mix(1.0, tfAmb, 0.85);
+reflectedLight.indirectSpecular *= mix(1.0, tfAmb, 0.95);
 `;
 
 /**
@@ -1030,6 +1058,10 @@ export interface TerrainTextures {
   albedoArray: THREE.DataArrayTexture;
   surfArray: THREE.DataArrayTexture;
   detailArray: THREE.DataArrayTexture;
+  /** Horizon bins 0-3 (layer 0) and 4-7 (layer 1) from `terrain/Horizon.ts`. */
+  horizonArr: THREE.DataArrayTexture;
+  /** `HorizonMap.transform()` — world XZ to horizon UV. */
+  horizonXf: THREE.Vector4;
 }
 
 /** The heightfield grid constants the shader needs to address the textures. */
@@ -1059,6 +1091,12 @@ export interface TerrainUniforms {
   uDetailArr: THREE.IUniform<THREE.DataArrayTexture>;
   uAlbedoArr: THREE.IUniform<THREE.DataArrayTexture>;
   uSurfArr: THREE.IUniform<THREE.DataArrayTexture>;
+  /** The 2-layer horizon bake, sin(skyline elevation). */
+  uHorizonArr: THREE.IUniform<THREE.DataArrayTexture>;
+  /** `(1/extent, -x0/extent, -z0/extent, 0)` — world XZ to horizon UV. */
+  uHorizonXf: THREE.IUniform<THREE.Vector4>;
+  /** `(shadowStrength, aoStrength, fadeNear, fadeFar)`. */
+  uHorizonMix: THREE.IUniform<THREE.Vector4>;
   /** `(HALF, CELL, N, BLEND_OUT)`. */
   uField: THREE.IUniform<THREE.Vector4>;
   /** `(FAR_HALF, FAR_CELL, FAR_N, 0)`. */
@@ -1185,6 +1223,12 @@ export function makeTerrainUniforms(tex: TerrainTextures, field: FieldConstants,
     uDetailArr: { value: tex.detailArray },
     uAlbedoArr: { value: tex.albedoArray },
     uSurfArr: { value: tex.surfArray },
+    uHorizonArr: { value: tex.horizonArr },
+    uHorizonXf: { value: tex.horizonXf.clone() },
+    // (shadowStrength, aoStrength, fadeNear, fadeFar). The fade band starts at
+    // the cascade far plane (320 m) and is complete a little past it, so the two
+    // shadow sources never both claim the same ground at full strength.
+    uHorizonMix: { value: new THREE.Vector4(1.0, 1.0, 300, 620) },
     uField: { value: new THREE.Vector4(field.HALF, field.CELL, field.N, field.BLEND_OUT) },
     uFarP: { value: new THREE.Vector4(field.FAR_HALF, field.FAR_CELL, field.FAR_N, 0) },
     uLayerAvg: { value: LAYER_AVG.map((c) => new THREE.Vector3(c[0], c[1], c[2])) },
