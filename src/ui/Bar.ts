@@ -36,7 +36,7 @@ export class Bar {
   tint(name: string) { this.fill.classList.add(name); return this; }
 
   /** Jump both bars to `v` (0..1) with no chase animation. */
-  reset(v: any) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }
+  reset(v: number) { this.v = this.c = clamp(v, 0, 1); this.hold = 0; this._write(); }
 
   /**
    * @param v target 0..1

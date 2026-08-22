@@ -431,7 +431,7 @@ class DualhornEnemy extends QuadrupedEnemy {
    * `telegraphScale` already inverts the body drop; this adds the forelegs
    * leaving the ground and the head going back, which is the readable part.
    */
-  override poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: number) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'stomp') {
       if (this.attackId === 'charge') {
@@ -457,7 +457,7 @@ class DualhornEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.10 * rear;
   }
 
-  override poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: number) {
     if (this.attackId !== 'stomp') { super.poseAttack(S, t); return; }
     // the drop: both forefeet come down together and the ground takes it
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());

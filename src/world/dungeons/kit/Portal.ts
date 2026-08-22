@@ -40,8 +40,8 @@ function frame(terrain: any, x: number, z: number, heading: number) {
   const w = (r: number, f: number) => [x + c * r + s * f, z - s * r + c * f];
   return {
     y,
-    P: (r: any, f: number, u: number) => { const p = w(r, f); return [p[0], y + u, p[1]]; },
-    G: (r: any, f: any, u: any) => { const p = w(r, f); return [p[0], terrain.heightAt(p[0], p[1]) + u, p[1]]; },
+    P: (r: number, f: number, u: number) => { const p = w(r, f); return [p[0], y + u, p[1]]; },
+    G: (r: number, f: number, u: number) => { const p = w(r, f); return [p[0], terrain.heightAt(p[0], p[1]) + u, p[1]]; },
     ground: (r: number, f: number) => { const p = w(r, f); return terrain.heightAt(p[0], p[1]); },
   };
 }
@@ -51,7 +51,7 @@ function frame(terrain: any, x: number, z: number, heading: number) {
  * whose bases are pinned to the ground under each one. A single big box reads
  * as a crate dropped on the landscape from orbit; this reads as an outcrop.
  */
-function mound(mg: InteriorMerger, mat: any, F: any, rng: Rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }) {
+function mound(mg: InteriorMerger, mat: THREE.Material, F: any, rng: Rng, { r = 0, f = 0, radius = 9, height = 8, blobs = 14, tint = 0.9 }) {
   for (let i = 0; i < blobs; i++) {
     const a = rng.range(0, Math.PI * 2);
     const d = Math.pow(rng.next(), 0.6) * radius;
@@ -69,7 +69,7 @@ function mound(mg: InteriorMerger, mat: any, F: any, rng: Rng, { r = 0, f = 0, r
  * Keycatrich: an imperial blockhouse driven into a spoil berm, with a cut
  * trench approach, a blast door and a great deal of rusted steel.
  */
-export function buildBunkerEntrance(terrain: Terrain | null, x: any, z: any, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3, lamp?: any } {
+export function buildBunkerEntrance(terrain: Terrain | null, x: number, z: number, heading = 0, seed = 11): {group:THREE.Object3D, stats:any, doorway:THREE.Vector3, lamp?: any } {
   const g = new THREE.Group();
   g.name = 'keycatrich-entrance';
   const mg = new InteriorMerger();
@@ -145,7 +145,7 @@ export function buildBunkerEntrance(terrain: Terrain | null, x: any, z: any, hea
  * Balouve: an adit driven into an outcrop under a timber-and-steel headframe,
  * with the rail running out of the portal to a spoil tip.
  */
-export function buildMineHead(terrain: any, x: any, z: any, heading = 0, seed = 22) {
+export function buildMineHead(terrain: any, x: number, z: number, heading = 0, seed = 22) {
   const g = new THREE.Group();
   g.name = 'balouve-entrance';
   const mg = new InteriorMerger();
@@ -221,7 +221,7 @@ export function buildMineHead(terrain: any, x: any, z: any, heading = 0, seed = 
  * Fociaugh: a collapse-dolined cave mouth under a limestone overhang, ringed by
  * breakdown blocks. No architecture at all — the world just opens.
  */
-export function buildCaveMouth(terrain: any, x: any, z: any, heading = 0, seed = 33) {
+export function buildCaveMouth(terrain: any, x: number, z: number, heading = 0, seed = 33) {
   const g = new THREE.Group();
   g.name = 'fociaugh-entrance';
   const mg = new InteriorMerger();

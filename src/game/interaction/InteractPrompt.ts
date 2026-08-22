@@ -29,7 +29,7 @@ export class InteractPrompt {
   stem!: HTMLElement;
   sub!: HTMLElement;
   txt!: HTMLElement;
-  uiScale!: any;
+  uiScale!: number;
   verb!: HTMLElement;
   /** @param parent usually `game.uiRoot` */
   constructor(parent: HTMLElement) {

@@ -10,17 +10,17 @@
 const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 export const EASE = {
-  linear: (t: any) => clamp01(t),
+  linear: (t: number) => clamp01(t),
   in: (t: number) => { t = clamp01(t); return t * t; },
   out: (t: number) => { t = clamp01(t); return 1 - (1 - t) * (1 - t); },
   inOut: (t: number) => { t = clamp01(t); return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; },
   inCubic: (t: number) => { t = clamp01(t); return t * t * t; },
   outCubic: (t: number) => { t = clamp01(t); return 1 - Math.pow(1 - t, 3); },
   inOutCubic: (t: number) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
-  outQuint: (t: any) => 1 - Math.pow(1 - clamp01(t), 5),
-  inOutSine: (t: any) => -(Math.cos(Math.PI * clamp01(t)) - 1) / 2,
-  outSine: (t: any) => Math.sin((clamp01(t) * Math.PI) / 2),
-  inSine: (t: any) => 1 - Math.cos((clamp01(t) * Math.PI) / 2),
+  outQuint: (t: number) => 1 - Math.pow(1 - clamp01(t), 5),
+  inOutSine: (t: number) => -(Math.cos(Math.PI * clamp01(t)) - 1) / 2,
+  outSine: (t: number) => Math.sin((clamp01(t) * Math.PI) / 2),
+  inSine: (t: number) => 1 - Math.cos((clamp01(t) * Math.PI) / 2),
   /** Long slow settle — the workhorse for a held push-in. */
   outExpo: (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -9 * clamp01(t))),
   /** Almost linear in the middle, kissed off at both ends. Crane moves. */

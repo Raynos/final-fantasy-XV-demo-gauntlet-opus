@@ -228,7 +228,7 @@ export function adsr(p: AudioParam, t: number, dur: number, o: any = {}) {
 }
 
 /** Percussive envelope: instant attack, exponential fall. */
-export function hit(p: AudioParam, t: number, peak: number, decay: any) {
+export function hit(p: AudioParam, t: number, peak: number, decay: number) {
   p.setValueAtTime(Math.max(EPS, peak), t);
   p.exponentialRampToValueAtTime(EPS, t + decay);
   return t + decay;

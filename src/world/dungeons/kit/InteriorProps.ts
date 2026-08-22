@@ -55,7 +55,7 @@ export class PropKit {
   }
 
   /** Baked occlusion at a point so props share the shell's shading. */
-  ao(x: any, y: any, z: any) { return this.L.occlusion(x, y, z); }
+  ao(x: number, y: number, z: number) { return this.L.occlusion(x, y, z); }
 
   /** Data-driven placement: `layout.prop('minecart', [x,z], {...})`. */
   place(kind: any, spec: any) {
@@ -98,7 +98,7 @@ export class PropKit {
   }
 
   /** A dead strip: same fixture, no light. Contrast is what sells the live ones. */
-  deadStrip(x: any, y: any, z: any, s: any = {}) {
+  deadStrip(x: number, y: number, z: number, s: any = {}) {
     const steel = M.corrodedSteel(0x3c3a36);
     const t = this.ao(x, y, z) * 0.8;
     this.m.place(steel, box(), [x, y, z], [0, s.rot || 0, 0], [(s.len || 1.9) + 0.22, 0.30, 0.16], t);
@@ -465,7 +465,7 @@ export class PropKit {
   }
 
   /** Hanging oil lantern — the mine's warm, swinging key light. */
-  lantern(x: any, y: number, z: any, s: any = {}) {
+  lantern(x: number, y: number, z: number, s: any = {}) {
     const steel = M.corrodedSteel(0x4a3c2e);
     const flame = M.emissiveMaterial(0xffa246, 2.2);
     const drop = s.drop || 0.9;
@@ -640,7 +640,7 @@ export class PropKit {
   }
 
   /** Still water: a dark mirror that doubles every light above it. */
-  pool(x: number, y: any, z: number, s: any = {}) {
+  pool(x: number, y: number, z: number, s: any = {}) {
     const g = new THREE.Mesh(plane(), M.poolMaterial(s.tint || 0x08151a));
     g.rotation.x = -Math.PI / 2;
     g.scale.set(s.w || 6, s.d || 6, 1);

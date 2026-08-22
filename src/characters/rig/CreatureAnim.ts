@@ -408,20 +408,20 @@ export class CreatureAnim {
 /* ---------------------------------------------------------------- curves */
 
 export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
+export const smooth = (x: number) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Slow start, hard finish — a limb accelerating into a blow. */
-export function accelerate(x: any, p = 2.6) { return Math.pow(clamp01(x), p); }
+export function accelerate(x: number, p = 2.6) { return Math.pow(clamp01(x), p); }
 /** Hard start, long settle — the follow-through after one lands. */
-export function decelerate(x: any, p = 3.2) { return 1 - Math.pow(1 - clamp01(x), p); }
+export function decelerate(x: number, p = 3.2) { return 1 - Math.pow(1 - clamp01(x), p); }
 /** Overshoot then settle. `s` is how far past the target it goes. */
-export function overshoot(x: any, s = 1.5) {
+export function overshoot(x: number, s = 1.5) {
   const t = clamp01(x);
   return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2);
 }
 /** Damped oscillation about 1 — a mass arriving and ringing down. */
-export function settle(x: any, freq = 3.2, damp = 5.5) {
+export function settle(x: number, freq = 3.2, damp = 5.5) {
   const t = clamp01(x);
   return 1 - Math.exp(-damp * t) * Math.cos(freq * Math.PI * t);
 }

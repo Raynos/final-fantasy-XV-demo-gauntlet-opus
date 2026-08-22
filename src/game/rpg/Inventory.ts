@@ -360,10 +360,10 @@ export class Inventory {
   /* -- Bag --------------------------------------------------------------- */
 
   /** How many of an item the party is carrying. */
-  count(id: any) { return this.bag[id] || 0; }
+  count(id: string) { return this.bag[id] || 0; }
 
   /** True if the party has at least `n`. */
-  has(id: any, n = 1) { return this.count(id) >= n; }
+  has(id: string, n = 1) { return this.count(id) >= n; }
 
   /**
    * Add items. Respects stack limits; returns how many were actually taken.
@@ -575,7 +575,7 @@ export class Inventory {
   }
 
   /** Gil paid for one unit, including the Bargain Hunter bonus. */
-  sellPrice(id: any) {
+  sellPrice(id: string) {
     const def = ITEMS[id];
     if (!def) return 0;
     return Math.round((def.sell || 0) * (1 + this.sellBonus));

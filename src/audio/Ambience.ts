@@ -179,7 +179,7 @@ export class Ambience {
   }
 
   /** @param intensity Weather.rainIntensity 0..1 */
-  setRain(intensity: number, at: any = null) {
+  setRain(intensity: number, at: number | null = null) {
     const t = at ?? this.ctx.currentTime;
     this.rain = intensity;
     const i = clamp(intensity, 0, 1);
@@ -209,7 +209,7 @@ export class Ambience {
   }
 
   /** 0 = outdoors, 1 = fully enclosed. Muffles wind and rain. */
-  setIndoors(v: any, at: number | null = null) {
+  setIndoors(v: number, at: number | null = null) {
     this.indoors = clamp(v, 0, 1);
     this.setWind(this.wind, at);
     this.setRain(this.rain, at);

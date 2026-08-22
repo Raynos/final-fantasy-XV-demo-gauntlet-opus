@@ -20,7 +20,7 @@ export class GroundPatch {
   mesh!: THREE.Mesh;
   posAttr!: THREE.BufferAttribute;
   positions!: Float32Array;
-  size!: any;
+  size!: number;
   uniforms!: any;
   constructor({ grid = 14, additive = false, renderOrder = 6 } = {}) {
     this.grid = grid;
@@ -191,7 +191,7 @@ export class GroundFX {
     return p;
   }
 
-  update(dt: any, clock: number) {
+  update(dt: number, clock: number) {
     for (const list of [this.rings, this.decals]) {
       for (const p of list) {
         if (p.free) continue;

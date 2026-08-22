@@ -49,7 +49,7 @@ export function makeTexture(size: number, fn: any, {
 }
 
 /** Single-channel (packed into RGB) map — for roughness / metalness / AO. */
-export function makeDataMap(size: any, fn: any, opts = {}) {
+export function makeDataMap(size: number, fn: any, opts = {}) {
   return makeTexture(size, (u: any, v: any, c: any, x: any, y: any) => {
     const g = fn(u, v, x, y);
     c[0] = c[1] = c[2] = g;
@@ -65,7 +65,7 @@ export function normalFromHeight(size: number, heightFn: any, strength = 2.0, op
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
-  const at = (x: any, y: any) => h[((y + size) % size) * size + ((x + size) % size)];
+  const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)];
   return makeTexture(size, (u: any, v: any, c: any, x: number, y: number) => {
     const dx =
       (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) -
@@ -87,7 +87,7 @@ export function aoFromHeight(size: number, heightFn: any, radius = 4, opts = {})
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) h[y * size + x] = heightFn(x / size, y / size, x, y);
   }
-  const at = (x: any, y: any) => h[((y + size) % size) * size + ((x + size) % size)];
+  const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)];
   return makeDataMap(size, (u: any, v: any, x: number, y: number) => {
     const c = at(x, y);
     let occ = 0, n = 0;

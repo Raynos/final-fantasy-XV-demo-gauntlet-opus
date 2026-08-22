@@ -231,7 +231,7 @@ function buildPrototype() {
       from: [ox, 1.135, 1.045], dir: [spread, 0.56, -0.82], len,
       curve: [spread * 0.4, -0.09, -0.05], r0: 0.050, r1: 0.006, flat: 0.28,
       seg: 6, steps: 5,
-      colorAt: (th: any, u: any) => mix(BONE_DARK, BONE, smooth(u)), matAt: () => M_BONE,
+      colorAt: (th: any, u: number) => mix(BONE_DARK, BONE, smooth(u)), matAt: () => M_BONE,
     });
   }
   // scutes marching down the skull between the crest roots
@@ -522,7 +522,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, k * (this.attackId === 'lunge' ? 1 : 0.7), Math.sin(t * 34) * 0.05 * k);
   }
 
-  override poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: number) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
     if (this.attackId === 'tailwhip') {
@@ -550,7 +550,7 @@ class VoretoothEnemy extends QuadrupedEnemy {
     this.maw(S, open * clamp01(k + 0.5));
   }
 
-  override poseDeath(S: any, t: any) {
+  override poseDeath(S: any, t: number) {
     super.poseDeath(S, t);
     // jaw and mandibles hang slack straight away — no muscle left to hold them
     const slack = smooth(clamp01(this.stateTime / 0.30));

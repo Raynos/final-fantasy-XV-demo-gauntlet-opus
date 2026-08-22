@@ -294,7 +294,7 @@ export class PostFX {
     this.setQuality(rnd.quality || 'high');
     this.setSize(rnd.width, rnd.height);
 
-    rnd.onResize = (w: any, h: any) => this.setSize(w, h);
+    rnd.onResize = (w: number, h: number) => this.setSize(w, h);
 
     const dbg = new URLSearchParams(location.search).get('post');
     if (dbg) this.debugToggle(dbg);
@@ -441,7 +441,7 @@ export class PostFX {
   }
 
   /** Pick and cross-fade the grade from a 0..24 clock. */
-  setGradeForTimeOfDay(h: any) {
+  setGradeForTimeOfDay(h: number) {
     const [a, b, t] = todGrade(h);
     this.setGradeBlend(a, b, t);
   }

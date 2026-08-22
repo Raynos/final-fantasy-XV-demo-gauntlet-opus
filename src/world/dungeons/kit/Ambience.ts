@@ -99,7 +99,7 @@ export class DungeonAmbience {
   }
 
   /** Sparse one-shots: water drips, settling rock, a relay clicking over. */
-  update(dt: any, now: number, listenerPos: any) {
+  update(dt: number, now: number, listenerPos: any) {
     if (!this.ready || !this.nodes || !this.desc) return;
     if (now < this._nextOneShot) return;
     const d = this.desc;

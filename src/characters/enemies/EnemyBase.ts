@@ -1207,7 +1207,7 @@ export function organicRoughness() {
   if (!_organicRough) {
     const broad = tileable((u, v) => texNoise.fbm2(u * 4 + 17, v * 4 + 29, 4));
     const fine = tileable((u, v) => texNoise.fbm2(u * 19 + 5, v * 19 + 41, 2));
-    _organicRough = makeDataMap(256, (u: any, v: any) => {
+    _organicRough = makeDataMap(256, (u: number, v: number) => {
       const b = broad(u, v) * 0.5 + 0.5;
       const f = fine(u, v) * 0.5 + 0.5;
       // 0.5 is a waxy, healthy hide; 0.95 is dry dusty fur in a crease
@@ -1258,7 +1258,7 @@ export function metalRoughness() {
   if (!_metalRough) {
     const patch = tileable((u, v) => texNoise.warped2(u * 5 + 43, v * 5 + 7, 1.4, 3));
     const grain = tileable((u, v) => texNoise.fbm2(u * 15 + 61, v * 15 + 23, 3));
-    _metalRough = makeDataMap(256, (u: any, v: any) => {
+    _metalRough = makeDataMap(256, (u: number, v: number) => {
       const p = patch(u, v);
       const rust = Math.max(0, p) * 0.9;          // oxidised, flat
       const scour = Math.max(0, -p - 0.25) * 1.4; // rubbed back to metal

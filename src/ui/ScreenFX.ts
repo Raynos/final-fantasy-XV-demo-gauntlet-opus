@@ -13,7 +13,7 @@ export class ScreenFX {
   cardState!: any;
   cardSub!: HTMLElement;
   cine!: HTMLElement;
-  cineAmt!: any;
+  cineAmt!: number;
   flash!: HTMLElement;
   flashAmt!: number;
   low!: HTMLElement;

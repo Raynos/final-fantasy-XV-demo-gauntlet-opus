@@ -194,7 +194,7 @@ export class Score {
    * How hot the fight is, 0..1. Called from the game each frame; only a real
    * change is pushed at the graph, so this is free to call every tick.
    */
-  setIntensity(v: any) {
+  setIntensity(v: number) {
     const n = clamp(v, 0, 1);
     if (Math.abs(n - this.intensity) < 0.08) return;
     this.intensity = n;

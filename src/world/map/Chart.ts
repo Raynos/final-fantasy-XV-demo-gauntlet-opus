@@ -97,14 +97,14 @@ export class Chart {
   toPz(z: number) { return (z + WORLD.half) * this.ppm; }
 
   /** Elevation at a world position, straight off the baked grid. */
-  heightAt(x: any, z: any) {
+  heightAt(x: number, z: number) {
     const i = Math.round(this.toPx(x)), j = Math.round(this.toPz(z));
     if (i < 0 || j < 0 || i >= this.size || j >= this.size) return 0;
     return this.height[j * this.size + i];
   }
 
   /** True if this world position is under the water plane. */
-  isWater(x: any, z: any) {
+  isWater(x: number, z: number) {
     const i = Math.round(this.toPx(x)), j = Math.round(this.toPz(z));
     if (i < 0 || j < 0 || i >= this.size || j >= this.size) return false;
     return !!this.water[j * this.size + i];

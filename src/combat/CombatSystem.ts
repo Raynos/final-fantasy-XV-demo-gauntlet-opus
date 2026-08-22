@@ -1078,7 +1078,7 @@ export class CombatSystem {
    * | `T` | draw elemental energy from a nearby deposit |
    * | `G` `J` `K` | Gladiolus / Ignis / Prompto technique (see `PartyAI`) |
    */
-  _readInput(input: any, dt: any) {
+  _readInput(input: any, dt: number) {
     const m = input.mouse;
     // Gamepad face buttons mirror the keyboard verbs one for one, so the
     // controls card can print both columns without either being a promise the
@@ -1364,7 +1364,7 @@ export class CombatSystem {
 
   /* ---------------------------------------------------------- warp */
 
-  _tickWarp(dt: any) {
+  _tickWarp(dt: number) {
     const w = this.warp;
     const p = this.player;
     if (!w) { this.state = 'idle'; return; }

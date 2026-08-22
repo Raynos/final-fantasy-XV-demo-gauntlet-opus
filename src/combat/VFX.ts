@@ -45,7 +45,7 @@ export class VFX {
   ground!: GroundFX;
   lights!: any[];
   motes!: ParticleSystem;
-  pinned!: any;
+  pinned!: number | null;
   rng!: Rng;
   root!: THREE.Group;
   shardSprites!: ParticleSystem;

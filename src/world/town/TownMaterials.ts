@@ -70,7 +70,7 @@ export function asphaltMaterial() {
       c[1] = (base.g * k + dust * 0.082 + bleach * 0.09) * (1 - tar * 0.28);
       c[2] = (base.b * k + dust * 0.050 + bleach * 0.08) * (1 - tar * 0.28);
     },
-    roughAt: (u: any, v: any) => 0.82 + h(u, v) * 0.17,
+    roughAt: (u: number, v: number) => 0.82 + h(u, v) * 0.17,
   });
 }
 
@@ -94,7 +94,7 @@ export function slabMaterial() {
       c[1] = base.g * k * (1 - oil * 0.68) + dust * 0.065;
       c[2] = base.b * k * (1 - oil * 0.64) + dust * 0.035;
     },
-    roughAt: (u: any, v: any) => 0.78 + h(u, v) * 0.2,
+    roughAt: (u: number, v: number) => 0.78 + h(u, v) * 0.2,
   });
 }
 
@@ -119,7 +119,7 @@ export function gravelMaterial() {
       c[1] = base.g * k * (1 + red * 0.10);
       c[2] = base.b * k * (1 - red * 0.28);
     },
-    roughAt: (u: any, v: any) => 0.90 + h(u, v) * 0.1,
+    roughAt: (u: number, v: number) => 0.90 + h(u, v) * 0.1,
   });
 }
 
@@ -144,7 +144,7 @@ export function corrugatedMaterial(tint = 0xb9b09a, rough = 0.62, metal = 0.35) 
       c[1] = (base.g * k) * (1 - streak * 0.30) + dust * 0.07;
       c[2] = (base.b * k) * (1 - streak * 0.36) + dust * 0.04;
     },
-    roughAt: (u: any, v: any) => rough * (0.86 + h(u, v) * 0.28),
+    roughAt: (u: number, v: number) => rough * (0.86 + h(u, v) * 0.28),
   });
 }
 
@@ -181,7 +181,7 @@ export function galvMaterial() {
       c[1] = base.g * k * (1 + rust * 0.24);
       c[2] = base.b * k * (1 - rust * 0.36);
     },
-    roughAt: (u: any, v: any) => 0.36 + h(u, v) * 0.4,
+    roughAt: (u: number, v: number) => 0.36 + h(u, v) * 0.4,
   });
 }
 
@@ -199,7 +199,7 @@ export function scrapMaterial(tint = 0x8a5432) {
       c[1] = THREE.MathUtils.lerp(0.27, base.g, rust) * k;
       c[2] = THREE.MathUtils.lerp(0.28, base.b * 0.8, rust) * k;
     },
-    roughAt: (u: any, v: any) => 0.55 + h(u, v) * 0.42,
+    roughAt: (u: number, v: number) => 0.55 + h(u, v) * 0.42,
   });
 }
 

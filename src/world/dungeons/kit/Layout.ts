@@ -217,14 +217,14 @@ export class Layout {
   /**
    * Walkable floor height, or null outside the dungeon.
    */
-  floorAt(x: any, z: any): number | null {
+  floorAt(x: number, z: number): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     if (r.isRoom) return roomFloor(r, x, z);
     return corridorFloor(r, x, z);
   }
 
-  ceilingAt(x: any, z: any): number | null {
+  ceilingAt(x: number, z: number): number | null {
     const r = this.regionAt(x, z);
     if (!r) return null;
     return r.isRoom ? r.y + r.h : corridorFloor(r, x, z) + r.height;
@@ -375,11 +375,11 @@ function wallPoint(outside: any, centre: any, room: any) {
   return [outside[0] + dx * t, outside[1] + dz * t, y0 + (y1 - y0) * t];
 }
 
-export function corridorContains(c: any, x: any, z: any, pad: number) {
+export function corridorContains(c: any, x: number, z: number, pad: number) {
   return distToPath(c.path, x, z) <= c.width * 0.5 + pad;
 }
 
-export function distToPath(path: any, x: any, z: any) {
+export function distToPath(path: any, x: number, z: number) {
   let best = Infinity;
   for (let i = 0; i < path.length - 1; i++) {
     best = Math.min(best, distToSeg(path[i], path[i + 1], x, z).d);
@@ -396,7 +396,7 @@ function distToSeg(a: any, b: any, x: number, z: number) {
   return { d: Math.hypot(x - px, z - pz), t, px, pz };
 }
 
-function corridorFloor(c: any, x: any, z: any) {
+function corridorFloor(c: any, x: number, z: number) {
   let best: any = null, bestD = Infinity;
   for (let i = 0; i < c.path.length - 1; i++) {
     const s = distToSeg(c.path[i], c.path[i + 1], x, z);

@@ -245,7 +245,7 @@ export function railSteel() {
   return pbr('railSteel', {
     tint: 0x5a4a3c, height: h, size: 256, normalStrength: 1.2,
     rough: [0.3, 0.42], roughness: 0.5, metal: 0.92,
-    albedo: (u: any, v: number, c: any, base: any) => {
+    albedo: (u: number, v: number, c: any, base: any) => {
       // the running surface is worn bright; the web and foot are scale-brown
       const worn = 1 - ss(0.30, 0.46, Math.abs(v - 0.5));
       const k = 0.5 + h(u, v) * 0.7;

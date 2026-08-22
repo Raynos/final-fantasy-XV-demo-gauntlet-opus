@@ -139,7 +139,7 @@ export const OPENING = {
   },
 
   /* ---------------------------------------------------------- per frame -- */
-  tick(t: any, dt: any, ctx: any) {
+  tick(t: number, dt: any, ctx: any) {
     placeCrew(ctx, t);
   },
 

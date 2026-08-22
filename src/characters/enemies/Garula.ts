@@ -474,7 +474,7 @@ function reset(B: CBuilder) {
 
 const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _c3 = new THREE.Color();
 /** Blend two sRGB hexes into the shared working colour. */
-function mix(a: number, b: number, t: any) {
+function mix(a: number, b: number, t: number) {
   _c1.setHex(a, THREE.SRGBColorSpace);
   _c2.setHex(b, THREE.SRGBColorSpace);
   return _c1.lerp(_c2, clamp01(t));
@@ -514,7 +514,7 @@ class GarulaEnemy extends QuadrupedEnemy {
    * there for a beat before it comes down. The negative `telegraphScale`
    * already inverts the body drop; this adds the rear itself.
    */
-  override poseTelegraph(S: any, t: any) {
+  override poseTelegraph(S: any, t: number) {
     super.poseTelegraph(S, t);
     if (this.attackId !== 'quake') {
       if (this.attackId === 'barrel') {
@@ -546,7 +546,7 @@ class GarulaEnemy extends QuadrupedEnemy {
     this.visual.position.y += 0.14 * rear;
   }
 
-  override poseAttack(S: any, t: any) {
+  override poseAttack(S: any, t: number) {
     if (this.attackId !== 'quake') { super.poseAttack(S, t); return; }
     // and down: both forefeet together, the body driving through the ground
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack',

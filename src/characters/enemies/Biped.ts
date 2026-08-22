@@ -46,9 +46,9 @@ export class BipedEnemy extends Enemy {
     if (A.legs.R) anim.leg('fR', A.legs.R);
   }
 
-  override pose(state: any, t: any) {
+  override pose(state: any, t: number) {
     if (!this.rig) return;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(this.rig, n, x, y, z);
+    const S = (n: any, x: number, y: number, z: number) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'walk':
@@ -131,7 +131,7 @@ export class BipedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S: any, t: any) {
+  poseLocomotion(S: any, t: number) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -164,20 +164,20 @@ export class BipedEnemy extends Enemy {
    * Arms during locomotion. Default is a counter-swing; a species carrying a
    * weapon overrides this to keep the weapon on target instead.
    */
-  poseArms(S: any, t: any, swing: number, norm: any) {
+  poseArms(S: any, t: number, swing: number, norm: number) {
     const A = this.A;
     this.arm(S, 'L', [swing, 0, A.armOut ?? 0.10], [-(A.elbow ?? 0.4) - Math.max(0, swing) * 0.5, 0, 0], null);
     this.arm(S, 'R', [-swing, 0, -(A.armOut ?? 0.10)], [-(A.elbow ?? 0.4) - Math.max(0, -swing) * 0.5, 0, 0], null);
   }
 
-  poseTelegraph(S: any, t: any) {
+  poseTelegraph(S: any, t: number) {
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
     this.poseWindUp(S, t, k, env);
   }
 
   /** Species wind-up. Default: shoulders load back, weight onto the rear foot. */
-  poseWindUp(S: any, t: any, k: number, env: any) {
+  poseWindUp(S: any, t: number, k: number, env: any) {
     const A = this.A;
     this.stance(S, {
       drop: (A.crouch ?? 0.06) * k,
@@ -189,13 +189,13 @@ export class BipedEnemy extends Enemy {
     this.arm(S, 'L', [-0.3 * k, 0.35 * k, 0.4 * k], [-1.0 * k, 0, 0], null);
   }
 
-  poseAttack(S: any, t: any) {
+  poseAttack(S: any, t: number) {
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     this.poseSwing(S, t, env.k, env);
   }
 
   /** Species strike. Default: a committed downward swing with follow-through. */
-  poseSwing(S: any, t: any, k: number, env: any) {
+  poseSwing(S: any, t: number, k: number, env: any) {
     const A = this.A;
     const kp = clamp01(k);
     this.stance(S, {
@@ -239,7 +239,7 @@ export class BipedEnemy extends Enemy {
     this.visual.rotation.x += 0.10 * k;
   }
 
-  poseDeath(S: any, t: any) {
+  poseDeath(S: any, t: number) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;

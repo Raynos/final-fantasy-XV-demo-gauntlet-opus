@@ -147,7 +147,7 @@ export class RoadNetwork {
   // ---------------------------------------------------------------- queries
 
   /** Metres to the nearest road centreline. */
-  distance(x: any, z: any) { return this.graph.distance(x, z, 320); }
+  distance(x: number, z: number) { return this.graph.distance(x, z, 320); }
 
   // -------------------------------------------------------- bake / restore
 
@@ -365,7 +365,7 @@ export class RoadNetwork {
         };
       },
       /** Distance to the nearest road of any class, metres. */
-      distance(x: any, z: any) { return self.distance(x, z); },
+      distance(x: number, z: number) { return self.distance(x, z); },
     };
   }
 }

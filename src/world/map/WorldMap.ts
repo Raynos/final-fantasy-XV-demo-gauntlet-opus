@@ -840,7 +840,7 @@ export class WorldMap {
    * Blended biome parameters as a packed `Float64Array` in {@link BIOME_KEYS}
    * order. Reuses one buffer — copy it if you need to keep it.
    */
-  biomeVec(x: any, z: any): Float64Array {
+  biomeVec(x: number, z: number): Float64Array {
     const rest = this._weigh(x, z);
     const w = this._wBuf, zb = this._zb, out = this._bBuf, def = this._defB;
     for (let k = 0; k < NB; k++) out[k] = def[k] * rest;
@@ -874,7 +874,7 @@ export class WorldMap {
   }
 
   /** The region record covering this point (via its dominant zone). */
-  regionAt(x: any, z: any) {
+  regionAt(x: number, z: number) {
     const zn = this.zoneAt(x, z);
     return zn ? this.regionById.get(zn.region) : null;
   }
@@ -885,7 +885,7 @@ export class WorldMap {
    * @param [out] reused object
    * @returns same shape as `ZONES[i].biome`
    */
-  biomeAt(x: any, z: any, out: any = {}): any {
+  biomeAt(x: number, z: number, out: any = {}): any {
     const v = this.biomeVec(x, z);
     for (let k = 0; k < NB; k++) out[BIOME_KEYS[k]] = v[k];
     return out;

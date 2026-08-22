@@ -238,7 +238,7 @@ export function garulaGeometry(): THREE.BufferGeometry {
   }
 
   /* -------------------------------------------------------------- legs -- */
-  const legColor = (th: any, u: any, p: any) => {
+  const legColor = (th: number, u: number, p: any) => {
     if (p.y < 0.28) return mix(HOOF, HIDE_DARK, smooth(0.28, 0.16, p.y) * 0.2);
     const feather = 1 - smooth(0.26, 0.52, u);
     return mix(mix(HIDE, HIDE_DARK, smooth(0.30, 0.95, u) * 0.75).getHex(THREE.SRGBColorSpace),

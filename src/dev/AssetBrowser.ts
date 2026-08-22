@@ -60,10 +60,10 @@ export class AssetBrowser {
     this.unreviewedOnly = false;
 
     this.families = [
-      { id: 'enemies', keys: () => speciesKeys(), make: (k: any, at: any) => this._enemy(k, at), poses: () => ENEMY_POSES },
-      { id: 'heroes', keys: () => Object.keys(CAST), make: (k: any, at: any) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
-      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k: any, at: any) => this._npc(k, at), poses: () => [] },
-      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k: any, at: any) => this._weapon(k, at), poses: () => [] },
+      { id: 'enemies', keys: () => speciesKeys(), make: (k: string, at: any) => this._enemy(k, at), poses: () => ENEMY_POSES },
+      { id: 'heroes', keys: () => Object.keys(CAST), make: (k: string, at: any) => this._hero(k, at), poses: () => Object.keys(ACTIONS) },
+      { id: 'npcs', keys: () => Object.keys(NPC_CAST), make: (k: string, at: any) => this._npc(k, at), poses: () => [] },
+      { id: 'weapons', keys: () => Object.keys(WEAPONS), make: (k: string, at: any) => this._weapon(k, at), poses: () => [] },
     ];
 
     this.node = document.createElement('div');

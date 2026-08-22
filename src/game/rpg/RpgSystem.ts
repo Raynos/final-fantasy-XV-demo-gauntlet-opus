@@ -335,7 +335,7 @@ export class RpgSystem {
   /** Subscribe. Returns an unsubscribe function. */
   on(event: string, fn: any) { return this.emitter.on(event, fn); }
   /** Subscribe once. */
-  once(event: any, fn: any) { return this.emitter.once(event, fn); }
+  once(event: string, fn: any) { return this.emitter.once(event, fn); }
   /** Unsubscribe. */
   off(event: any, fn: any) { return this.emitter.off(event, fn); }
   /** Fire an event (mostly for other systems to announce things). */

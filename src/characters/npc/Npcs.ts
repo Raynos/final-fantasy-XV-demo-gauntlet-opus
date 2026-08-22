@@ -121,7 +121,7 @@ export class Npcs {
     // under Hammerhead is up to three metres below the graded pad — feed it the
     // pad instead or every townsperson stands knee-deep in their own tarmac.
     this.ground = {
-      heightAt: (x: any, z: any) => this._groundAt(x, z),
+      heightAt: (x: number, z: number) => this._groundAt(x, z),
       normalAt: (x: any, z: any, out: any) => (out ? out.set(0, 1, 0) : new THREE.Vector3(0, 1, 0)),
     };
 
@@ -391,7 +391,7 @@ export class Npcs {
    * Written straight onto bone rotations, which is safe because nothing else
    * touches them between here and the render.
    */
-  _applyPosture(npc: any, dt: any, t: number) {
+  _applyPosture(npc: any, dt: number, t: number) {
     const b = npc.body.rig.byName;
     const w = 1 - Math.min(1, npc.moveSpeed / 0.4);
     const pose = npc.posture;

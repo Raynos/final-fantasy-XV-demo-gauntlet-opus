@@ -159,7 +159,7 @@ export class Outposts {
     const base = this._base(site.x, site.z, 12);
     const yaw = (site.yaw || 0) + Math.PI / 2;
     const world = mat4([site.x, base, site.z], [0, yaw, 0]);
-    const put = (mat: any, geo: any, p: any, r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
+    const put = (mat: any, geo: any, p: number[], r?: number[], s?: any) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
     // forecourt slab
     put(M.concrete, new THREE.BoxGeometry(20, 0.3, 15), [0, 0.12, 0]);

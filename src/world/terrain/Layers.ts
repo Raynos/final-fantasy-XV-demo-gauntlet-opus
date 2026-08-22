@@ -66,7 +66,7 @@ function vnoise(u: number, v: number, px: number, py: number, seed: number) {
   return (a + (b - a) * su) * (1 - sv) + (c + (d - c) * su) * sv;
 }
 
-function fbm(u: any, v: any, px: number, py: number, seed: number, oct = 4, gain = 0.5) {
+function fbm(u: number, v: number, px: number, py: number, seed: number, oct = 4, gain = 0.5) {
   let s = 0, a = 1, norm = 0, f = 1;
   for (let o = 0; o < oct; o++) {
     s += a * vnoise(u, v, px * f, py * f, seed + o * 71);
@@ -106,7 +106,7 @@ function sstep(a: number, b: number, x: number) { const t = clamp01((x - a) / (b
  */
 const RECIPES = [
   // 0 — red-ochre wind-blown sand: ripples, drift lines, scattered coarse grit
-  (u: any, v: number) => {
+  (u: number, v: number) => {
     const warpA = fbm(u, v, 6, 6, 11, 3) - 0.5;
     const drift = fbm(u, v, 3, 5, 41, 4);
     const ripple = 0.5 + 0.5 * Math.sin((v * 11 + warpA * 9.0) * Math.PI * 2);
@@ -241,7 +241,7 @@ const RECIPES = [
     };
   },
   // 5 — compacted dirt road: wheel tracks, embedded stones, fine dust
-  (u: any, v: any) => {
+  (u: number, v: number) => {
     const groove = fbm(u, v, 18, 5, 151, 4);
     const stones = worley(u, v, 20, 20, 23);
     const pebble = clamp01(1 - stones.f1 * 2.4);

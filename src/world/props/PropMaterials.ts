@@ -46,7 +46,7 @@ export function rockMaterial(tint: number = 0x8a7461, rough: number = 0.94, inst
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     const normalMap = normalFromHeight(512, h, 3.2);
     normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
-    const roughnessMap = makeDataMap(256, (u: any, v: any) => 0.72 + h(u, v) * 0.28);
+    const roughnessMap = makeDataMap(256, (u: number, v: number) => 0.72 + h(u, v) * 0.28);
     roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, map, normalMap, roughnessMap, roughness: rough, metalness: 0,
@@ -64,7 +64,7 @@ export function woodMaterial(tint = 0x7a6449) {
       return grain * 0.55 + (n.fbm2(u * 12, v * 40, 3) * 0.5 + 0.5) * 0.45;
     };
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: any, v: any, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: any) => {
       const k = 0.62 + h(u, v) * 0.62;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });
@@ -119,7 +119,7 @@ export function canvasClothMaterial(tint = 0x2f3a44) {
     const h = (u: number, v: number) => (Math.sin(u * 420) * 0.5 + 0.5) * 0.35 + (Math.sin(v * 420) * 0.5 + 0.5) * 0.35
       + (n.fbm2(u * 8, v * 8, 3) * 0.5 + 0.5) * 0.3;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
-    const map = makeTexture(256, (u: any, v: any, c: any) => {
+    const map = makeTexture(256, (u: number, v: number, c: any) => {
       const k = 0.72 + h(u, v) * 0.5;
       c[0] = base.r * k; c[1] = base.g * k; c[2] = base.b * k;
     });

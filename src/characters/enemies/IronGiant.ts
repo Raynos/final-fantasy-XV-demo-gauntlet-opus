@@ -269,7 +269,7 @@ class IronGiantEnemy extends BipedEnemy {
     b.quaternion.multiply(_q);
   }
 
-  override poseLocomotion(S: any, t: any) {
+  override poseLocomotion(S: any, t: number) {
     super.poseLocomotion(S, t);
     // the sword hand does not swing; it hauls
     const sw = Math.sin(this.anim.gaitPhase * Math.PI * 2);
@@ -281,7 +281,7 @@ class IronGiantEnemy extends BipedEnemy {
 
   override poseArms() { /* the carry pose owns the arms */ }
 
-  override poseWindUp(S: any, t: any, k: any, env: any) {
+  override poseWindUp(S: any, t: any, k: number, env: any) {
     // Rear back and haul the blade overhead. Two-thirds of the wind-up is
     // spent getting there; the last third is a held, trembling threat.
     const e = smooth(k);
@@ -353,7 +353,7 @@ class IronGiantEnemy extends BipedEnemy {
     this.visual.position.z -= A.hipY * Math.sin(th) * 0.6;
   }
 
-  override poseIdle(S: any, t: any) {
+  override poseIdle(S: any, t: number) {
     super.poseIdle(S, t);
     this.carry(S, 1);
     this.miasma(S, t);

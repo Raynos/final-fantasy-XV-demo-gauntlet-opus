@@ -65,13 +65,13 @@ export function cls(node: any, name: any, on: any) { node.classList.toggle(name,
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** Frame-rate independent exponential approach. */
-export const damp = (a: any, b: any, lambda: number, dt: number) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+export const damp = (a: number, b: number, lambda: number, dt: number) => lerp(a, b, 1 - Math.exp(-lambda * dt));
 export const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-export const easeOut = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
-export const easeOutQuint = (t: any) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
-export const easeIn = (t: any) => Math.pow(clamp(t, 0, 1), 3);
+export const easeOut = (t: number) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+export const easeOutQuint = (t: number) => 1 - Math.pow(1 - clamp(t, 0, 1), 5);
+export const easeIn = (t: number) => Math.pow(clamp(t, 0, 1), 3);
 /** Overshoot ease used for pop-in of damage numbers and callouts. */
-export function easeBack(t: any) {
+export function easeBack(t: number) {
   const c = 1.70158 + 1;
   const x = clamp(t, 0, 1) - 1;
   return 1 + c * x * x * x + 1.70158 * x * x;

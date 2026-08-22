@@ -236,7 +236,7 @@ export class CameraRig {
     return d;
   }
 
-  _shakeOffset(dt: any, out: THREE.Vector3, rot: THREE.Vector3) {
+  _shakeOffset(dt: number, out: THREE.Vector3, rot: THREE.Vector3) {
     const tr = this.trauma;
     if (tr <= 0.0001) { out.set(0, 0, 0); rot.set(0, 0, 0); return; }
     const s = tr * tr;                       // quadratic falloff reads better

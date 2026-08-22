@@ -224,7 +224,7 @@ export class TrailPool {
     return t;
   }
 
-  update(dt: any, clock: number) { for (const t of this.items) t.update(dt, clock); }
+  update(dt: number, clock: number) { for (const t of this.items) t.update(dt, clock); }
   clear() { for (const t of this.items) t.reset(); }
 }
 

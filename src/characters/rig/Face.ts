@@ -509,7 +509,7 @@ function buildLid(B: MeshBuilder, o: any) {
   const cols = 20, rows = 5;
   const arc = EYE.arc;
 
-  const pt = (a: any, e: any, rad: number, f: any) => eyePoint(ec, sg, a, e, rad, f);
+  const pt = (a: number, e: number, rad: number, f: any) => eyePoint(ec, sg, a, e, rad, f);
 
   const dark = new THREE.Color().setHex(upper ? 0x140f10 : 0x3a2620, THREE.SRGBColorSpace);
   const skinC = new THREE.Color(1, 1, 1);
@@ -1147,7 +1147,7 @@ function paintFace(look: any, uv: any) {
         ];
       };
       /** Lid-margin point, pushed `d` radians further from the aperture. */
-      const em = (f: any, upper: boolean, d = 0, rk = EYE.lidR) =>
+      const em = (f: number, upper: boolean, d = 0, rk = EYE.lidR) =>
         eq(f, lidMargin(f, upper, (look.eyeOpen ?? 1) * (upper ? LID_OPEN[0] : LID_OPEN[1]))
           + (upper ? d : -d), rk);
       const ep = (p: number[]) => px([sg * p[0], p[1], 0.0795 - Math.abs(p[0] - 0.033) * 0.42]);

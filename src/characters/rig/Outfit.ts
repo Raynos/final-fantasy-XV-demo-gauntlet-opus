@@ -60,7 +60,7 @@ function clothShade(o: any): {color:(th:number,t:number)=>THREE.Color, mat:(th:n
 
 /** Damped body shaping remapped into a garment's own sweep parameter. */
 function under(fn: any, u0: number, u1: number, damp = 0.88) {
-  return (th: any, t: number) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
+  return (th: number, t: number) => 1 + (fn(th, u0 + (u1 - u0) * t) - 1) * damp;
 }
 
 /**
@@ -145,7 +145,7 @@ piece('shirt', (B: MeshBuilder, ctx: any, o: any) => {
 });
 
 /** Open-front jacket / coat body, with lapels, thickness and a flared hem. */
-piece('jacket', (B: any, ctx: any, o: any) => {
+piece('jacket', (B: MeshBuilder, ctx: any, o: any) => {
   const gap = o.gap ?? 0.42;
   const u0 = o.u0 ?? 0.30, u1 = o.u1 ?? 0.96;
   // the pad tucks in toward the yoke so the cut edge hides against the shoulder
@@ -228,7 +228,7 @@ piece('jacket', (B: any, ctx: any, o: any) => {
 });
 
 /** Stand-up or fold-down collar wrapped around the neck. */
-function collar(B: any, ctx: any, o: any) {
+function collar(B: MeshBuilder, ctx: any, o: any) {
   const { rig } = ctx;
   const s = ctx.s;
   const y = (v: number) => v * s;
@@ -262,7 +262,7 @@ function collar(B: any, ctx: any, o: any) {
 }
 
 /** Skirt / coat tails hanging from the waist, driven by the coat spring bones. */
-piece('skirt', (B: any, ctx: any, o: any) => {
+piece('skirt', (B: MeshBuilder, ctx: any, o: any) => {
   const { rig } = ctx;
   const I = rig.index;
   const s = ctx.s;
@@ -292,7 +292,7 @@ piece('skirt', (B: any, ctx: any, o: any) => {
     shape: (th: number, t: number) => 1
       + (o.wave ?? 0.05) * Math.sin(th * 6) * t
       + (o.backLong ?? 0) * abump(th, Math.PI, 1.4) * t,
-    offset: (th: any, t: number, out: any) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
+    offset: (th: number, t: number, out: any) => { out.y = -(o.backLong ?? 0) * abump(th, Math.PI, 1.5) * 0.4 * s * t; },
     uvScale: [1.6, 1.2],
   });
 });

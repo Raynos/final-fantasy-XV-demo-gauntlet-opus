@@ -128,7 +128,7 @@ export function torsoShape(m: number) {
 export function armShape(m: number, sg: number) {
   // t indices follow armNodes(): 0..0.22 clavicle, 0.22 acromion, 0.67 elbow,
   // 1.0 wrist.
-  return (th: any, t: any) => 1
+  return (th: number, t: number) => 1
     + (0.045 + 0.10 * m) * abump(th, sg * Math.PI * 0.5, 1.5) * bump(t, 0.30, 0.15)
     + (0.05 + 0.16 * m) * abump(th, 0, 1.2) * bump(t, 0.44, 0.15)
     + (0.04 + 0.12 * m) * abump(th, Math.PI, 1.2) * bump(t, 0.47, 0.17)
@@ -139,7 +139,7 @@ export function armShape(m: number, sg: number) {
 
 /** Glute tie-in, quad sweep, calf. */
 export function legShape(m: number) {
-  return (th: any, t: any) => 1
+  return (th: number, t: number) => 1
     + (0.05 + 0.09 * m) * abump(th, Math.PI, 1.1) * bump(t, 0.14, 0.2)
     + (0.03 + 0.07 * m) * abump(th, 0, 1.0) * bump(t, 0.26, 0.2)
     + (0.04 + 0.10 * m) * abump(th, Math.PI, 1.0) * bump(t, 0.62, 0.12)

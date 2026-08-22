@@ -567,7 +567,7 @@ class CoeurlEnemy extends QuadrupedEnemy {
       const T = this._timing('attack');
       const a = clamp01(this.stateTime / (T * 0.44));
       const b = clamp01((this.stateTime - T * 0.40) / (T * 0.46));
-      const sw = (x: any) => Math.sin(clamp01(x) * Math.PI);
+      const sw = (x: number) => Math.sin(clamp01(x) * Math.PI);
       const k1 = sw(a), k2 = sw(b);
       const rear = Math.max(k1, k2);
       this.stance(S, {

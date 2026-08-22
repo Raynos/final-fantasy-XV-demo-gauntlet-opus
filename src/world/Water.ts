@@ -78,7 +78,7 @@ export class Water {
       n.fbm2(u * sx, v * sy, 4, 2.1, 0.55) * 0.6 +
       n.fbm2(u * sx * 3.7 + 11, v * sy * 3.7 + 3, 3, 2.3, 0.5) * 0.4;
 
-    this.normalA = normalFromHeight(256, (u: any, v: any) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
+    this.normalA = normalFromHeight(256, (u: number, v: number) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
     this.normalB = normalFromHeight(256, (u: number, v: number) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
 
     // Subtle caustic-ish sub-surface texture for shallow water.

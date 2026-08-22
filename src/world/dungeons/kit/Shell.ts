@@ -43,7 +43,7 @@ export class ShellBuilder {
     this.n = new Noise(opts.seed || 4242);
     /** @type {Map<object, SurfaceBuilder>} */
     this.surfaces = new Map();
-    this._ao = (x: any, y: any, z: any) => layout.occlusion(x, y, z);
+    this._ao = (x: number, y: number, z: number) => layout.occlusion(x, y, z);
   }
 
   sb(mat: any) {

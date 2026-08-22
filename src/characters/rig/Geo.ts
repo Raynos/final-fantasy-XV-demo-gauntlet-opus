@@ -23,7 +23,7 @@ const _f = new THREE.Vector3();
 const _r = new THREE.Vector3();
 
 export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-export const smooth = (x: any) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
+export const smooth = (x: number) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 export const smoothIn = (a: number, b: number, x: number) => smooth((x - a) / (b - a));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -42,7 +42,7 @@ export function abump(theta: number, c: number, w: number, amp = 1) {
 }
 
 /** Catmull-Rom through a scalar array, `u` in [0,1] over (n-1) spans. */
-export function crScalar(vals: any, u: any) {
+export function crScalar(vals: any, u: number) {
   const n = vals.length;
   if (n === 1) return vals[0];
   const p = clamp01(u) * (n - 1);
@@ -426,7 +426,7 @@ export function sweepShell(B: MeshBuilder, o: any) {
 }
 
 /** Interpolated skin weights between node weight maps. */
-export function weightsAt(nodes: any, u: any) {
+export function weightsAt(nodes: any, u: number) {
   const n = nodes.length;
   const p = clamp01(u) * (n - 1);
   let i = Math.min(n - 2, Math.floor(p));

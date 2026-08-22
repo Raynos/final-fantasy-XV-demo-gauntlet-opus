@@ -117,7 +117,7 @@ export class WorldMapScreen {
   title!: string;
   w!: number;
   wrap!: HTMLElement;
-  zoom!: any;
+  zoom!: number;
   zoomI!: number;
   /**
    * @param [opts] `atlas: true` registers the second,
@@ -487,7 +487,7 @@ export class WorldMapScreen {
     this.cardFt.className = `wm-ft${known && p.travel ? ' on' : ''}`;
   }
 
-  _draw(game: any, t: any, rev: number) {
+  _draw(game: any, t: number, rev: number) {
     const c = this.ctx, dpr = this.dpr;
     const W = this.w * dpr, H = this.h * dpr;
     const ppm = this.zoom * dpr;

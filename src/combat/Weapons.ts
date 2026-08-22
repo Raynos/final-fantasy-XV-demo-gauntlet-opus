@@ -667,7 +667,7 @@ function steelMaps() {
     0.12 * vn((u + v * 0.0040) * 97, 97)
   );
   STEEL_MAPS = {
-    rough: makeDataMap(N, (u: any, v: any) => 0.32 + 0.62 * height(u, v)),
+    rough: makeDataMap(N, (u: number, v: number) => 0.32 + 0.62 * height(u, v)),
     norm: normalFromHeight(N, height, 0.30),
   };
   return STEEL_MAPS;

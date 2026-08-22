@@ -399,7 +399,7 @@ export class CombatHUD {
     }
   }
 
-  _syncPlates(enemies: any, cam: any, w: number, h: number, dt: number, game: any, appear: number) {
+  _syncPlates(enemies: any, cam: THREE.Camera, w: number, h: number, dt: number, game: any, appear: number) {
     while (this.plates.length < enemies.length) {
       const bar = new Bar({ cls: 'slim cut' }).tint('hostile');
       const name = el('div.np-name');
@@ -445,7 +445,7 @@ export class CombatHUD {
     }
   }
 
-  _updateReticle(dt: number, game: any, cam: any, w: number, h: number, enemies: any, appear: number) {
+  _updateReticle(dt: number, game: any, cam: THREE.Camera, w: number, h: number, enemies: any, appear: number) {
     let target = this.lockOn;
     // `Combat.lockOn` is the *setter method*; the current target is
     // `lockTarget`. Reading the method here made the reticle follow a function.
@@ -472,7 +472,7 @@ export class CombatHUD {
     this.reticle.node.style.opacity = (easeOut(t) * easeOut(clamp(appear / 0.5, 0, 1))).toFixed(3);
   }
 
-  _updateNumbers(dt: number, cam: any, w: number, h: number) {
+  _updateNumbers(dt: number, cam: THREE.Camera, w: number, h: number) {
     for (let i = this.numbers.length - 1; i >= 0; i--) {
       const n = this.numbers[i];
       n.clip.step(dt);

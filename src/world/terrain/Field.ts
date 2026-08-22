@@ -174,7 +174,7 @@ export class Field {
     this._settlementPads();
     this.network.carve({
       N, HALF, CELL, h: this.h, road: this.roadMask, roadLat: this.roadLat,
-      rawHeightAt: (x: any, z: any) => this.rawHeightAt(x, z),
+      rawHeightAt: (x: number, z: number) => this.rawHeightAt(x, z),
       micro: microDetail,
     });
     /** Legacy single-spline handle: the main highway. */

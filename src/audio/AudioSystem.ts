@@ -31,7 +31,7 @@ import { clamp } from './Dsp.ts';
  */
 export class AudioSystem {
   _userVolume!: any;
-  _volume!: any;
+  _volume!: number;
   state!: string;
   _camping!: boolean;
   _encounterKills!: number;
@@ -439,7 +439,7 @@ export class AudioSystem {
 
   /* ------------------------------------------------------------- music */
 
-  _music(dt: any, game: any) {
+  _music(dt: number, game: any) {
     const combat = game.get('Combat');
     const enemies = game.get('Enemies');
     const sky = game.get('Sky');

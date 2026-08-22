@@ -224,10 +224,10 @@ export class Terrain {
   /**
    * The zone record covering this point, or null on the frontier.
    */
-  zoneAt(x: any, z: any): any | null { return this.map.zoneAt(x, z); }
+  zoneAt(x: number, z: number): any | null { return this.map.zoneAt(x, z); }
 
   /** Blended biome humidity, 0 = Leide badlands, 1 = the Vesperpool. */
-  moistureAt(x: any, z: any) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
+  moistureAt(x: number, z: number) { return this.map.biomeAt(x, z, this._biome || (this._biome = {})).moist; }
 
   /**
    * X of the road centreline at a given Z.

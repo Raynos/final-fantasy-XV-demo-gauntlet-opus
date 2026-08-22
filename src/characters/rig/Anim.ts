@@ -214,7 +214,7 @@ export class Animator {
   _up!: THREE.Vector3;
   accel!: THREE.Vector3;
   action!: any;
-  actionEnv!: any;
+  actionEnv!: number;
   actionMask!: any;
   blink!: number;
   blinkSeq!: number;
@@ -371,7 +371,7 @@ export class Animator {
   setLookTarget(v: any) { this.lookTarget = v; }
 
   // -- pose accumulation ---------------------------------------------------
-  set(name: string, x: any, y: any, z: any) {
+  set(name: string, x: number, y: number, z: number) {
     let e = this.pose.get(name);
     if (!e) { e = [0, 0, 0]; this.pose.set(name, e); }
     e[0] = x; e[1] = y; e[2] = z;
@@ -778,7 +778,7 @@ export class Animator {
   }
 
   /** Look-at, blink, lean and sway layers. */
-  evalAdditive(dt: number, st: any, moveW: any) {
+  evalAdditive(dt: number, st: any, moveW: number) {
     // ---- look-at
     let yaw = 0, pitch = 0, want = 0;
     if (this.lookTarget) {

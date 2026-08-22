@@ -132,7 +132,7 @@ export class Minimap {
   toggleRotate() { this.rotate = !this.rotate; }
 
   /** 0..1 how surveyed the cell containing this point is. */
-  fogAt(x: any, z: any) { return fog.at(x, z); }
+  fogAt(x: number, z: number) { return fog.at(x, z); }
 
   // ------------------------------------------------------------------ frame
 
@@ -180,7 +180,7 @@ export class Minimap {
     this._caption(px, pz);
   }
 
-  _caption(px: any, pz: any) {
+  _caption(px: number, pz: number) {
     const zone = this.map.zoneAt(px, pz);
     const region = zone ? this.map.regionById.get(zone.region) : null;
     this.zoneEl.textContent = (zone ? zone.name : 'The Frontier').toUpperCase();
@@ -289,7 +289,7 @@ export class Minimap {
     // ---- party and hostiles ----
     c.save();
     c.translate(R, R);
-    const blip = (wx: any, wz: any, col: string, rad: number, ring?: string) => {
+    const blip = (wx: number, wz: number, col: string, rad: number, ring?: string) => {
       const gx = lx(wx, wz), gy = ly(wx, wz);
       if (Math.hypot(gx, gy) > R - 5 * dpr) return;
       if (ring) {

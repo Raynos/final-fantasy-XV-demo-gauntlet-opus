@@ -132,7 +132,7 @@ export class Hammerhead {
    * in `_berm` carries that fill down to the terrain the way a real earthworks
    * would.
    */
-  _padHeight(x: any, z: any) {
+  _padHeight(x: number, z: number) {
     const hs = [];
     for (let i = 0; i <= 10; i++) {
       for (let j = 0; j <= 10; j++) {

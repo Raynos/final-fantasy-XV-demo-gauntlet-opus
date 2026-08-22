@@ -548,7 +548,7 @@ export class PartyAI {
   }
 
   /** A downed companion lies where they fell. */
-  _poseDown(m: any, dt: any) {
+  _poseDown(m: any, dt: number) {
     m.slot.copy(m.baseSlot);
     m.speedMul = 0.0001;
     m.aiTarget = null;

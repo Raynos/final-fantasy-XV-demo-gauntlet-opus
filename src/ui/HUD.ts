@@ -57,7 +57,7 @@ export class HUD {
   prompts!: Prompts;
   root!: HTMLElement;
   subtitles!: Subtitles;
-  uiScale!: any;
+  uiScale!: number;
   visible!: boolean;
   wheel!: WeaponWheel;
   async init(game: any) {

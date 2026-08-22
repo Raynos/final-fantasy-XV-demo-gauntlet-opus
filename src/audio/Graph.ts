@@ -256,7 +256,7 @@ export class AudioGraph {
    * @param hold seconds at depth
    * @param release seconds back to unity
    */
-  duck(depth: number, hold: number = 0.2, release: number = 0.45, at: any = null) {
+  duck(depth: number, hold: number = 0.2, release: number = 0.45, at: number | null = null) {
     const t = at ?? this.now;
     const end = t + hold + release;
     // A deeper duck already running wins; never let a footstep undo a line.

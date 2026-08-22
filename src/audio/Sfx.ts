@@ -316,34 +316,34 @@ export class Sfx {
     const parts = name.split(':');
     const head = parts[0];
     switch (head) {
-      case 'swing': return (t: any, o: any) => this.swing(t, { kind: parts[1] || 'sword', ...o });
-      case 'impact': return (t: any, o: any) => this.impact(t, { material: parts[1] || 'flesh', ...o });
-      case 'hit': return (t: any, o: any) => this.impact(t, { material: 'flesh', ...o });
-      case 'step': return (t: any, o: any) => this.step(t, { surface: parts[1] || 'dirt', ...o });
-      case 'voc': return (t: any, o: any) => this.vocal(t, { species: parts[1] || 'goblin', mood: parts[2] || 'aggro', ...o });
+      case 'swing': return (t: number, o: any) => this.swing(t, { kind: parts[1] || 'sword', ...o });
+      case 'impact': return (t: number, o: any) => this.impact(t, { material: parts[1] || 'flesh', ...o });
+      case 'hit': return (t: number, o: any) => this.impact(t, { material: 'flesh', ...o });
+      case 'step': return (t: number, o: any) => this.step(t, { surface: parts[1] || 'dirt', ...o });
+      case 'voc': return (t: number, o: any) => this.vocal(t, { species: parts[1] || 'goblin', mood: parts[2] || 'aggro', ...o });
       case 'spell':
-      case 'magic': return (t: any, o: any) => this.spell(t, { element: parts[1] || 'fire', ...o });
-      case 'ui': return (t: any, o: any) => this.ui(t, { kind: parts[1] || 'move', ...o });
-      case 'warp': return (t: any, o: any) => (parts[1] === 'impact' ? this.warpImpact(t, o) : this.warpStart(t, o));
-      case 'parry': return (t: any, o: any) => this.parry(t, o);
-      case 'armiger': return (t: any, o: any) => this.armiger(t, o);
-      case 'armigerHit': return (t: any, o: any) => this.armigerHit(t, o);
-      case 'thunder': return (t: any, o: any) => this.thunder(t, o);
-      case 'gunshot': return (t: any, o: any) => this.gunshot(t, o);
-      case 'cloth': return (t: any, o: any) => this.cloth(t, o);
-      case 'grunt': return (t: any, o: any) => this.grunt(t, o);
-      case 'death': return (t: any, o: any) => this.playerDeath(t, o);
-      case 'stagger': return (t: any, o: any) => this.stagger(t, o);
-      case 'link': return (t: any, o: any) => this.link(t, o);
-      case 'lockon': return (t: any, o: any) => this.lockon(t, o);
-      case 'stasis': return (t: any, o: any) => this.stasis(t, o);
-      case 'combo': return (t: any, o: any) => this.comboTick(t, o);
-      case 'levelup': return (t: any, o: any) => this.levelUp(t, o);
-      case 'quest': return (t: any, o: any) => this.questSting(t, o);
-      case 'item': return (t: any, o: any) => this.itemPickup(t, o);
-      case 'materialise': return (t: any, o: any) => this.materialise(t, o);
-      case 'splash': return (t: any, o: any) => this.splash(t, o);
-      case 'howl': return (t: any, o: any) => this.daemonHowl(t, o);
+      case 'magic': return (t: number, o: any) => this.spell(t, { element: parts[1] || 'fire', ...o });
+      case 'ui': return (t: number, o: any) => this.ui(t, { kind: parts[1] || 'move', ...o });
+      case 'warp': return (t: number, o: any) => (parts[1] === 'impact' ? this.warpImpact(t, o) : this.warpStart(t, o));
+      case 'parry': return (t: number, o: any) => this.parry(t, o);
+      case 'armiger': return (t: number, o: any) => this.armiger(t, o);
+      case 'armigerHit': return (t: number, o: any) => this.armigerHit(t, o);
+      case 'thunder': return (t: number, o: any) => this.thunder(t, o);
+      case 'gunshot': return (t: number, o: any) => this.gunshot(t, o);
+      case 'cloth': return (t: number, o: any) => this.cloth(t, o);
+      case 'grunt': return (t: number, o: any) => this.grunt(t, o);
+      case 'death': return (t: number, o: any) => this.playerDeath(t, o);
+      case 'stagger': return (t: number, o: any) => this.stagger(t, o);
+      case 'link': return (t: number, o: any) => this.link(t, o);
+      case 'lockon': return (t: number, o: any) => this.lockon(t, o);
+      case 'stasis': return (t: number, o: any) => this.stasis(t, o);
+      case 'combo': return (t: number, o: any) => this.comboTick(t, o);
+      case 'levelup': return (t: number, o: any) => this.levelUp(t, o);
+      case 'quest': return (t: number, o: any) => this.questSting(t, o);
+      case 'item': return (t: number, o: any) => this.itemPickup(t, o);
+      case 'materialise': return (t: number, o: any) => this.materialise(t, o);
+      case 'splash': return (t: number, o: any) => this.splash(t, o);
+      case 'howl': return (t: number, o: any) => this.daemonHowl(t, o);
       default: return null;
     }
   }
@@ -649,7 +649,7 @@ export class Sfx {
   }
 
   /** Player takes a hit. */
-  grunt(t: any, o = {}) {
+  grunt(t: number, o = {}) {
     const s = new Shot(this, { volume: 0.9, ...o }, 'voice', 3);
     if (!s.ok) return false;
     const f = 132 * (0.94 + this.rng() * 0.12);
@@ -663,7 +663,7 @@ export class Sfx {
     return s.done();
   }
 
-  playerDeath(t: any, o = {}) {
+  playerDeath(t: number, o = {}) {
     const s = new Shot(this, { volume: 1, ...o }, 'voice', 3);
     if (!s.ok) return false;
     const f = 122;

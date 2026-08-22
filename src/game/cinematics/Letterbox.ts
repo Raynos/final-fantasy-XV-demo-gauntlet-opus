@@ -50,7 +50,7 @@ export class Letterbox {
   skip!: HTMLElement;
   skipShown!: number;
   top!: HTMLElement;
-  uiScale!: any;
+  uiScale!: number;
   constructor(parent: HTMLElement) {
     this.root = el('div', { id: 'cine' });
     parent.appendChild(this.root);
@@ -133,7 +133,7 @@ export class Letterbox {
   setBars(v: number) { this.barTarget = clamp(v, 0, 1); }
 
   /** Snap the matte with no travel (used on a hard cut into a scene). */
-  snapBars(v: any) { this.barTarget = this.bar = clamp(v, 0, 1); }
+  snapBars(v: number) { this.barTarget = this.bar = clamp(v, 0, 1); }
 
   /**
    * Fade to or from a flat colour.

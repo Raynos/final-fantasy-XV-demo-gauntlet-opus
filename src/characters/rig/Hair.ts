@@ -64,7 +64,7 @@ export function buildHair(rig: any, look: any): THREE.BufferGeometry {
     y += (H.earNotch ?? 0.056) * Math.exp(-Math.pow((ath - 1.66) / 0.34, 2));
     return y;
   };
-  const phiOf = (th: any) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
+  const phiOf = (th: number) => Math.acos(clamp01((hairline(th) / HEAD_R[1] + 1) / 2) * 2 - 1);
 
   // ---- scalp shell -------------------------------------------------------
   // A denser shell, because the thing it has to stop being is *smooth*: at

@@ -122,7 +122,7 @@ export class RoadPath {
   }
 
   /** Same as {@link at}, but `u` is measured from the terrain at that point. */
-  ground(terrain: any, f: any, l = 0, u = 0) {
+  ground(terrain: any, f: number, l = 0, u = 0) {
     const p = this.at(f, l, 0);
     const t = terrain || this.terrain;
     const y = t && t.heightAt ? t.heightAt(p[0], p[2]) : this.origin.y;
@@ -130,7 +130,7 @@ export class RoadPath {
   }
 
   /** Vector3 form of {@link at}. */
-  vec(f: any, l = 0, u = 0) { return new THREE.Vector3().fromArray(this.at(f, l, u)); }
+  vec(f: number, l = 0, u = 0) { return new THREE.Vector3().fromArray(this.at(f, l, u)); }
 
   /** Frame-compatible yaw at the anchor. */
   get yaw() { return this.yawAt(0); }

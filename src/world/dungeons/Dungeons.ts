@@ -213,7 +213,7 @@ export class Dungeons {
   }
 
   /** World-space floor height inside the current dungeon, else null. */
-  floorAt(x: any, z: any) { return this.current ? this.current.floorAt(x, z) : null; }
+  floorAt(x: number, z: number) { return this.current ? this.current.floorAt(x, z) : null; }
 
   // -------------------------------------------------------------- transition
 
@@ -464,7 +464,7 @@ export class Dungeons {
 
   // ---------------------------------------------------------------- ticking
 
-  update(dt: any, game: any) {
+  update(dt: number, game: any) {
     this.fader.update(dt);
 
     // the capture harness selects a dungeon through the shot definition

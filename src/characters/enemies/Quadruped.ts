@@ -66,7 +66,7 @@ export class QuadrupedEnemy extends Enemy {
     // gets no compensation, which is the old behaviour rather than a wrong one.
     this._comp = null;
     this._chestPitch = 0;
-    const S = (n: any, x: any, y: any, z: any) => poseBone(this.rig, n, x, y, z);
+    const S = (n: any, x: number, y: number, z: number) => poseBone(this.rig, n, x, y, z);
     switch (state) {
       case 'run':
       case 'approach': this.poseLocomotion(S, t); break;
@@ -246,7 +246,7 @@ export class QuadrupedEnemy extends Enemy {
 
   /* -------------------------------------------------------------- poses */
 
-  poseLocomotion(S: any, t: any) {
+  poseLocomotion(S: any, t: number) {
     const A = this.A, a = this.anim;
     const sp = this.moveSpeed || 0;
     const norm = clamp01(sp / this.speed);
@@ -281,7 +281,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, A.tailRun ?? -0.3, 0.2 + norm * 0.14, 4 + norm * 4);
   }
 
-  poseTelegraph(S: any, t: any) {
+  poseTelegraph(S: any, t: number) {
     const A = this.A;
     const env = attackEnvelope('telegraph', this.stateTime, this._timingAll());
     const k = env.tension;
@@ -307,7 +307,7 @@ export class QuadrupedEnemy extends Enemy {
   /** Species multiplier on how far the strike leaves the ground. */
   leapScale() { return 1; }
 
-  poseAttack(S: any, t: any) {
+  poseAttack(S: any, t: number) {
     const A = this.A;
     const env = attackEnvelope(this.state === 'recover' ? 'recover' : 'attack', this.stateTime, this._timingAll());
     const k = env.k;
@@ -330,7 +330,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.x += -(A.pitchThrough ?? 0.10) * k;
   }
 
-  poseFlinch(S: any, t: any) {
+  poseFlinch(S: any, t: number) {
     const A = this.A;
     const k = hitCurve(this.stateTime, 0.35, 0);
     const p = Math.min(1.3, this.hitPower || 0.5);
@@ -349,7 +349,7 @@ export class QuadrupedEnemy extends Enemy {
     this.tail(t, 0.25 * k, 0.2, 6);
   }
 
-  poseStagger(S: any, t: any) {
+  poseStagger(S: any, t: number) {
     const A = this.A;
     const total = this.type.staggerDuration || 2.4;
     const k = smooth(this.stateTime / 0.18) * clamp01(1 - (this.stateTime - total * 0.72) / (total * 0.28));
@@ -366,7 +366,7 @@ export class QuadrupedEnemy extends Enemy {
     this.visual.rotation.z += wob * 0.08;
   }
 
-  poseDeath(S: any, t: any) {
+  poseDeath(S: any, t: number) {
     const A = this.A;
     const T = this.stateTime;
     const sl = A.deathSlow || 1;

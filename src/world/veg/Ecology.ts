@@ -594,7 +594,7 @@ export class Ecology {
    * rejection-sampled against `density`. Returns [{x,z,y,w}] where w is the
    * local density (useful for size/health variation).
    */
-  scatterClustered(seed: any, {
+  scatterClustered(seed: number, {
     radius, inner = 0, cellSize = 46, perCell = 6, spread = 13,
     density, jitterLone = 0.22, maxCount = 100000, center = { x: 0, z: 0 },
   }: any) {

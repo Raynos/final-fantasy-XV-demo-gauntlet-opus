@@ -258,7 +258,7 @@ export function zoneMoist(x: number, z: number) {
 }
 
 /** The zone id at a world position, or `'_default'` on the frontier. */
-export function zoneIdAt(x: any, z: any) {
+export function zoneIdAt(x: number, z: number) {
   const zn = worldMap.zoneAt(x, z);
   return zn ? zn.id : '_default';
 }

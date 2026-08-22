@@ -507,7 +507,7 @@ export class RegaliaSystem {
   }
 
   /** Doors, camera modes, radio, off-road, auto-drive. */
-  _input(dt: any, game: any) {
+  _input(dt: number, game: any) {
     const inp = game.input;
     // `enabled === false` means a menu, a shop or a conversation owns the
     // keyboard — without this, Backspace-ing out of the shop screen while

@@ -401,7 +401,7 @@ export class Instruments {
   /**
    * Play a plucked/struck string.
    */
-  pluck(kind: 'harp' | 'pizz' | 'piano', f: number, t: any, o: any = {}) {
+  pluck(kind: 'harp' | 'pizz' | 'piano', f: number, t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 1, t);
     if (!slot) return false;
     const ctx = this.ctx;
@@ -557,7 +557,7 @@ export class Instruments {
   }
 
   /** Tubular bell / chime — 2-operator FM with a fast index decay. */
-  bell(f: number, t: any, o: any = {}) {
+  bell(f: number, t: number, o: any = {}) {
     const slot = this.graph.take(o.priority ?? 2, t);
     if (!slot) return false;
     const ctx = this.ctx;
