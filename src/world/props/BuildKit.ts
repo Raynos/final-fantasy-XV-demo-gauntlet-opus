@@ -542,6 +542,63 @@ export function stairHead(b: Bag, o: { x: number; y: number; z: number; w?: numb
 }
 
 /**
+ * A shipping container, ribbed.
+ *
+ * Worth its own function because the kits use containers as set dressing
+ * everywhere -- outposts, imperial bases, the docks -- and drew them as a
+ * single 6.1 x 2.6 x 2.5 box wearing `rustMaterial`, a map authored for a one
+ * metre part. Stretched over six metres it reads as lava, which is exactly the
+ * failure `poiMaterials` documents for walls and had not been applied to props.
+ * A container is trivially better as geometry: it is *corrugated*, and the
+ * corrugations are the whole read. Corner castings, top and bottom rails, a
+ * rib every 280 mm on the long sides, and doors with two locking bars.
+ */
+export function container(b: Bag, o: {
+  x?: number; y?: number; z?: number; ry?: number; len?: number; h?: number; d?: number;
+}) {
+  const { x = 0, y = 0, z = 0, ry = 0, len = 6.06, h = 2.59, d = 2.44 } = o;
+  const local = bag();
+  const t = 0.06;
+  // Body panels, held in from the corner posts so the posts read as posts.
+  for (const sz of [-1, 1]) local.shell.push(box(len - 0.3, h - 0.3, t, { y: h / 2, z: sz * (d / 2 - t / 2) }));
+  for (const sx of [-1, 1]) local.shell.push(box(t, h - 0.3, d - 0.3, { x: sx * (len / 2 - t / 2), y: h / 2 }));
+  local.shell.push(box(len - 0.2, t, d - 0.2, { y: h - t / 2 }));
+  local.shell.push(box(len - 0.2, t, d - 0.2, { y: t / 2 }));
+  // Corrugations. 70 mm proud, which is what actually catches the sun.
+  const n = Math.max(6, Math.round((len - 0.5) / 0.28));
+  for (let i = 0; i < n; i++) {
+    const rx = -(len - 0.5) / 2 + ((len - 0.5) * (i + 0.5)) / n;
+    for (const sz of [-1, 1]) local.shell.push(box(0.12, h - 0.42, 0.07, { x: rx, y: h / 2, z: sz * (d / 2 + 0.02) }));
+  }
+  const nd = Math.max(4, Math.round((d - 0.4) / 0.28));
+  for (let i = 0; i < nd; i++) {
+    const rz = -(d - 0.4) / 2 + ((d - 0.4) * (i + 0.5)) / nd;
+    local.shell.push(box(0.07, h - 0.42, 0.12, { x: -(len / 2 + 0.02), y: h / 2, z: rz }));
+  }
+  // Corner posts and castings: the four blocks a crane picks it up by, and the
+  // reason a container's silhouette is never a plain cuboid.
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    local.metal.push(box(0.15, h - 0.3, 0.15, { x: sx * (len / 2 - 0.075), y: h / 2, z: sz * (d / 2 - 0.075) }));
+    for (const sy of [0.09, h - 0.09]) {
+      local.metal.push(box(0.29, 0.18, 0.19, { x: sx * (len / 2 - 0.145), y: sy, z: sz * (d / 2 - 0.095) }));
+    }
+  }
+  // Top and bottom rails.
+  for (const sz of [-1, 1]) {
+    local.metal.push(box(len - 0.32, 0.14, 0.1, { y: h - 0.09, z: sz * (d / 2 + 0.01) }));
+    local.metal.push(box(len - 0.32, 0.16, 0.12, { y: 0.1, z: sz * (d / 2 + 0.01) }));
+  }
+  // Doors on the +X end: two leaves, four locking bars, hinges.
+  for (const sz of [-1, 1]) {
+    local.trim.push(box(0.05, h - 0.4, d / 2 - 0.22, { x: len / 2 + 0.03, y: h / 2, z: sz * (d / 4 - 0.02) }));
+    for (const k of [0.3, 0.72]) {
+      local.metal.push(cyl(0.035, h - 0.5, 6, { x: len / 2 + 0.075, y: h / 2, z: sz * (d / 2 - 0.2) * (k * 2 - 0.2) }));
+    }
+  }
+  for (const k of Object.keys(local)) for (const g of local[k]) b[k].push(xform(g, { ry, x, y, z }));
+}
+
+/**
  * Bake the per-vertex tone that makes flat, mapless materials stop being flat.
  *
  * Three signals multiply into `attributes.color`:

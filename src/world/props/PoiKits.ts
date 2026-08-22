@@ -6,7 +6,7 @@ import { dressAt, type Dress } from './ZoneDress.ts';
 import {
   bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
-  STOREY, CILL, type Opening,
+  container, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
@@ -489,12 +489,8 @@ export class PoiKits {
       put(M.steel, new THREE.BoxGeometry(1.3, 0.16, 1.0), [sx, 1.85, 0]);
       put(M.glass, new THREE.BoxGeometry(0.7, 0.5, 0.05), [sx, 1.35, 0.42]);
     }
-    // shop
-    put(M.cream, new THREE.BoxGeometry(11, 3.6, 7), [-3, 1.95, -12]);
-    put(M.roof, new THREE.BoxGeometry(11.6, 0.4, 7.6), [-3, 3.9, -12]);
-    put(M.glass, new THREE.BoxGeometry(6.4, 1.9, 0.1), [-3.6, 2.1, -8.55]);
-    put(M.plank, new THREE.BoxGeometry(1.2, 2.4, 0.12), [1.6, 1.35, -8.55]);
-    put(M.lamp, new THREE.BoxGeometry(5.4, 0.5, 0.08), [-3.6, 3.45, -8.6]);
+    // shop: a real hut with a door you can see into, not a box with two decals
+    this._hut(B, world, { w: 11, d: 7, x: -3, z: -12, rng, base: 0.15 });
     // pylon sign
     put(M.steel, new THREE.BoxGeometry(0.5, 8.5, 0.5), [13.5, 4.4, 6]);
     put(M.sign, new THREE.PlaneGeometry(4.2, 2.4), [13.5, 9.4, 6.3]);
@@ -518,12 +514,8 @@ export class PoiKits {
     const huts = 2 + Math.floor(rng.next() * 2);
     for (let i = 0; i < huts; i++) {
       const px = -8 + i * 8.5 + rng.gauss(0, 0.6), pz = -6 + rng.gauss(0, 1.4);
-      const w = rng.range(5, 8), h = rng.range(2.8, 3.6), d = rng.range(4, 6);
-      put(M.cream, new THREE.BoxGeometry(w, h, d), [px, h * 0.5 + 0.3, pz]);
-      put(M.roof, new THREE.BoxGeometry(w + 0.7, 0.34, d + 0.7), [px, h + 0.45, pz]);
-      put(M.glass, new THREE.BoxGeometry(w * 0.4, 0.9, 0.1), [px, h * 0.62, pz + d * 0.5 + 0.02]);
-      put(M.plank, new THREE.BoxGeometry(1.1, 2.2, 0.1), [px + w * 0.3, 1.35, pz + d * 0.5 + 0.02]);
-      put(M.lamp, new THREE.BoxGeometry(0.5, 0.2, 0.12), [px + w * 0.3, 2.75, pz + d * 0.5 + 0.1]);
+      const w = rng.range(5, 8), d = rng.range(4, 6);
+      this._hut(B, world, { w, d, x: px, z: pz, rng, base: 0.3 });
     }
     // fuel pump and a canopy over it
     put(M.cream, new THREE.BoxGeometry(1.1, 1.7, 0.8), [7, 1.15, 4]);
@@ -531,10 +523,7 @@ export class PoiKits {
     put(M.steel, new THREE.BoxGeometry(0.3, 3.6, 0.3), [8.4, 2.1, 4]);
     put(M.roof, new THREE.BoxGeometry(4.2, 0.28, 3.2), [7, 3.9, 4]);
     // containers
-    for (let i = 0; i < 3; i++) {
-      put(i % 2 ? M.rust : M.red, new THREE.BoxGeometry(6.1, 2.6, 2.5),
-        [-9 + rng.gauss(0, 1.2), 1.6 + (i === 2 ? 2.6 : 0), 6 + i * 0.4], [0, rng.gauss(0, 0.1), 0]);
-    }
+    this._containers(B, world, { n: 3, x: -9, z: 6, rng, stack: true });
     // comms mast: four legs and cross-bracing, tapering
     const H = 16;
     for (let i = 0; i < 4; i++) {
@@ -718,6 +707,104 @@ export class PoiKits {
         bakeTone(g, { y0: base, y1: y0 + H, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
       }
       B.add(mats[role] ?? shell, g, place);
+    }
+  }
+
+  /**
+   * A short row of shipping containers, optionally stacked.
+   *
+   * These were three 6.1 x 2.6 x 2.5 boxes wearing `rustMaterial` -- a map
+   * authored for a one-metre part, stretched over six metres, which renders as
+   * lava. `poiMaterials` documents that exact failure for walls; nothing had
+   * applied it to props. {@link container} builds the corrugations instead, and
+   * they are the whole read.
+   */
+  _containers(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    n: number; x: number; z: number; rng: Rng; stack?: boolean; y?: number;
+  }) {
+    const M = this.mats;
+    const { n, x, z, rng, stack = false, y = 0 } = o;
+    const paint = [M.red, M.render3, M.render4, M.wall2, M.steel];
+    for (let i = 0; i < n; i++) {
+      const b = bag();
+      container(b, {});
+      const merged = mergeBag(b);
+      const tv = toneVariant(rng, { valueAmp: 0.2, warmAmp: 0.05 });
+      const shell = paint[Math.floor(rng.next() * paint.length)];
+      const place = world.clone().multiply(mat4(
+        [x + rng.gauss(0, 1.2), y + (stack && i === n - 1 ? 2.62 : 0), z + i * 0.45],
+        [0, rng.gauss(0, 0.09), 0]));
+      for (const [role, g] of Object.entries(merged)) {
+        bakeTone(g, { y0: 0, y1: 2.59, grime: tv.grime * 0.92, jitter: tv.jitter, tint: tv.tint, streak: tv.streak * 1.6 });
+        B.add(role === 'metal' ? M.steel : role === 'trim' ? shell : shell, g, place);
+      }
+    }
+  }
+
+  /**
+   * A single-storey hut: the outpost's, the reststop's, the workshop's.
+   *
+   * The same three defects {@link PoiKits._block} fixes, at a scale where they
+   * are *worse* rather than better, because an outpost hut is something a
+   * player stands two metres from. It gets a monopitch roof rather than a flat
+   * one -- a slab lid on a box is the tell that survives every other fix -- with
+   * a real eaves overhang, a fascia and a rafter row under it, so the roof
+   * throws a hard shadow line across the elevation instead of ending on the wall.
+   */
+  _hut(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    w: number; d: number; x: number; z: number; ry?: number; rng: Rng; base?: number;
+  }) {
+    const M = this.mats;
+    const { w, d, x, z, ry = 0, rng, base = 0 } = o;
+    const b = bag();
+    const wallT = 0.22;
+    const h = 2.85, rise = 0.55;               // monopitch, falling toward -Z
+    const plinthH = 0.28;
+    const y0 = base + plinthH;
+    const tv = toneVariant(rng, { valueAmp: 0.2, warmAmp: 0.07 });
+    plinth(b.shell, { w, d, h: plinthH, proud: 0.11, y: base });
+
+    // Front elevation: a door, and a window beside it.
+    const front = bag();
+    const openings: Opening[] = [
+      doorUnit(front, { x: w * 0.28, wallT, w: 0.95, h: 2.05 }),
+      windowUnit(front, { x: -w * 0.2, y: 1.0, w: Math.min(1.5, w * 0.32), h: 1.1, wallT, lit: rng.next() < 0.3 }),
+    ];
+    for (const g of wallRun(w, h + rise, wallT, openings)) front.shell.push(g);
+    for (const k of Object.keys(front)) for (const g of front[k]) b[k].push(xform(g, { y: y0, z: d / 2 - wallT / 2 }));
+    for (const g of wallRun(w, h, wallT, [])) b.shell.push(xform(g, { y: y0, z: -d / 2 + wallT / 2 }));
+    // The two ends step up under the pitch: three short runs of rising height
+    // rather than a trapezoid, which keeps every piece a chamfered box.
+    for (const sx of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        const zc = -d / 2 + (d * (k + 0.5)) / 3;
+        const hk = h + rise * ((k + 0.5) / 3);
+        b.shell.push(xform(box(d / 3, hk, wallT, { y: hk / 2 }), { ry: Math.PI / 2, x: sx * (w / 2 - wallT / 2), y: y0, z: zc }));
+      }
+    }
+    // Roof: deck, fascia, and a rafter row showing under the eaves.
+    const pitch = Math.atan2(rise, d);
+    const rl = Math.hypot(d + 0.8, rise);
+    b.roof.push(xform(box(w + 0.9, 0.16, rl), { rx: -pitch, x: 0, y: y0 + h + rise / 2 + 0.08, z: 0 }));
+    b.trim.push(box(w + 1.0, 0.16, 0.1, { x: 0, y: y0 + h + rise - 0.02, z: d / 2 + 0.42 }));
+    const nr = Math.max(3, Math.round(w / 0.9));
+    for (let i = 0; i < nr; i++) {
+      const rx2 = -w / 2 + (w * (i + 0.5)) / nr;
+      b.wood.push(box(0.07, 0.14, 0.5, { x: rx2, y: y0 + h + rise - 0.12, z: d / 2 + 0.2 }));
+    }
+    b.metal.push(box(0.5, 0.2, 0.12, { x: w * 0.28, y: y0 + 2.5, z: d / 2 + 0.16 }));
+
+    const merged = mergeBag(b);
+    const mats: Record<string, THREE.Material> = {
+      shell: M.cream, shell2: M.concrete, trim: M.joinery, metal: M.steel, glass: M.glass,
+      glow: M.lamp, dark: M.interior, roof: M.roof, wood: M.plank, cloth: M.red,
+    };
+    const place = world.clone().multiply(mat4([x, 0, z], [0, ry, 0]));
+    for (const [role, g] of Object.entries(merged)) {
+      if (role !== 'glow' && role !== 'glass' && role !== 'dark') {
+        bakeTone(g, { y0: base, y1: y0 + h + rise, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
+      }
+      B.add(mats[role] ?? M.cream, g, place);
     }
   }
 
