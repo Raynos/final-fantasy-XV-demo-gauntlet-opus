@@ -11,8 +11,67 @@
 # is the only thing that reads them, and a contract broken between two systems
 # -- the class of bug the port exists to catch -- shows up nowhere else.
 #
+# It also caps the length of the documents that are always in an agent's context,
+# and warns on a plan with no Status: line. Both are cheap and both run FIRST --
+# see the note on ordering below.
+#
 # Skip with:  git commit --no-verify
 # Install with: git config core.hooksPath .githooks
+
+# ---------------------------------------------------------------------------
+# Documentation gates.
+#
+# These MUST come before the SKIP_BUILD_CHECK early-out and before the "only if
+# src/ changed" filter below, because a docs-only commit matches neither and
+# would otherwise reach no check at all.
+#
+# The caps turn append into displace: to add a line to an always-loaded document
+# you have to cull a weaker one. This exists because PROGRESS.md was allowed to
+# accrete instead, reached 232 lines, and drifted five months out of date while
+# still reading as current -- nobody could bring themselves to trim it because
+# nothing said they were allowed to. project/README.md states the rule the caps
+# enforce: a snapshot is replaced in place, never appended to, and the lossless
+# history is project/journal/ and the git log.
+# ---------------------------------------------------------------------------
+
+if [ -z "$SKIP_DOCBUDGET" ] && git diff --cached --name-only | grep -q '\.md$'; then
+  docfail=0
+  # <path> <cap>
+  while read -r doc cap; do
+    [ -z "$doc" ] && continue
+    git diff --cached --name-only | grep -qxF "$doc" || continue
+    n=$(git show ":$doc" | wc -l | tr -d ' ')
+    warn=$((cap * 85 / 100))
+    if [ "$n" -gt "$cap" ]; then
+      echo "pre-commit: DOC BUDGET -- $doc is $n lines, cap $cap."
+      echo "            Cut something rather than appending. The history is in"
+      echo "            project/journal/ and the git log, so trimming loses nothing."
+      docfail=1
+    elif [ "$n" -gt "$warn" ]; then
+      echo "pre-commit: doc budget warning -- $doc is $n/$cap lines."
+    fi
+  done <<EOF
+CLAUDE.md 120
+BRIEF.md 150
+project/STATUS.md 150
+project/HANDOFF.md 250
+EOF
+  if [ "$docfail" = 1 ]; then
+    echo
+    echo "pre-commit: commit aborted. SKIP_DOCBUDGET=1 to bypass."
+    exit 1
+  fi
+
+  # A plan nobody can tell the state of is a plan nobody picks up. Warn only:
+  # the vocabulary is PROPOSED / LOCKED / IN-PROGRESS / DONE / PARKED /
+  # SUPERSEDED, and DONE or SUPERSEDED means it belongs in project/archive/.
+  for plan in $(git diff --cached --name-only --diff-filter=A | grep '^docs/plans/.*\.md$'); do
+    case "$plan" in */README.md) continue ;; esac
+    if ! git show ":$plan" | head -20 | grep -qE '^\*?\*?Status:'; then
+      echo "pre-commit: note -- $plan has no 'Status:' line. See docs/plans/README.md."
+    fi
+  done
+fi
 
 if [ -n "$SKIP_BUILD_CHECK" ]; then
   echo "pre-commit: build check skipped (SKIP_BUILD_CHECK set)"
