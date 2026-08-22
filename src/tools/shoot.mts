@@ -12,6 +12,22 @@
  *   node src/tools/shoot.mts --no-daemon           # own the browser in-process (old path)
  *   node src/tools/shoot.mts --jpeg               # write .jpg instead of .png (review captures)
  *   node src/tools/shoot.mts --jpeg 70            # ...at a chosen quality (default 82)
+ *   node src/tools/shoot.mts --ablate nobloom,nogtao   # turn post stages off
+ *   node src/tools/shoot.mts --hide grass,rock          # hide scene objects by name
+ *   node src/tools/shoot.mts --raw                      # capture the pre-post render
+ *
+ * ABLATION IS THE DIAGNOSIS, NOT THE FRAME. For any visual defect, ablate
+ * before re-tinting: hide the mesh you suspect, or turn off the pass you
+ * suspect, and diff. In the sibling repos this overturned eight confident
+ * diagnoses arrived at by looking at the frame -- the shadow that was grass
+ * casting nothing, the chevron hatch that was GTAO and not the heightfield.
+ *
+ * `--raw` matters more than it looks. Hide one mesh with the post chain on and
+ * auto-exposure, bloom and the grade all move, so tens of thousands of pixels
+ * change that have nothing to do with the mesh -- measured at ~40k in the
+ * sibling. `--raw` captures the scene render before any of that, so the
+ * difference between two captures is where the object was and nothing else.
+ * ALWAYS pass it on both sides of an ablation diff.
  *
  * By default this hands the work to `src/tools/daemon.mts`, which keeps one vite
  * server, one Chromium and one booted page alive between invocations — so the
@@ -62,12 +78,19 @@ interface ShootOpts {
   cold: boolean;
   /** JPEG quality, or 0 for PNG. */
   jpeg: number;
+  /** `?post=` tokens: `nobloom`, `nogtao`, `nocontact`, `plain`, ... */
+  ablate: string;
+  /** Scene object names (case-insensitive substrings) to hide. */
+  hide: string[];
+  /** Capture the raw scene render rather than the composited frame. */
+  raw: boolean;
 }
 
 function parseArgs(argv: string[]) {
   const opts: ShootOpts = {
     w: 1600, h: 900, settle: 60, out: 'shots', shots: [], keep: false, prod: false,
     timeout: 120000, nobake: false, daemon: true, cold: false, jpeg: 0,
+    ablate: '', hide: [], raw: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -84,6 +107,9 @@ function parseArgs(argv: string[]) {
     else if (a === '--h') opts.h = Number(argv[++i]);
     else if (a === '--settle') opts.settle = Number(argv[++i]);
     else if (a === '--out') opts.out = argv[++i];
+    else if (a === '--ablate') opts.ablate = argv[++i];
+    else if (a === '--hide') opts.hide = argv[++i].split(',').map((v) => v.trim()).filter(Boolean);
+    else if (a === '--raw') opts.raw = true;
     else if (a === '--keep') opts.keep = true;
     else if (a === '--prod') opts.prod = true;
     else if (a.startsWith('--')) throw new Error(`unknown flag ${a}`);
@@ -160,6 +186,7 @@ async function viaDaemon(opts: ShootOpts, shots: string[], outDir: string): Prom
   const out = await call<ShotsResponse>('/shots', {
     shots, out: outDir, settle: opts.settle, w: opts.w, h: opts.h,
     nobake: opts.nobake, prod: opts.prod, cold: opts.cold, jpeg: opts.jpeg,
+    post: opts.ablate, hide: opts.hide, raw: opts.raw,
   });
   for (const r of out.results) line(r);
   console.log(`[shoot] daemon: ${out.boots} boot(s), ${out.reuses} page reuse(s), last boot ${out.bootMs} ms`);
@@ -202,7 +229,8 @@ async function main() {
 
   const results = [];
   try {
-    const query = `?q=ultra&shoot=1${opts.nobake ? '&nobake=1' : ''}`;
+    const query = `?q=ultra&shoot=1${opts.nobake ? '&nobake=1' : ''}`
+      + (opts.ablate ? `&post=${encodeURIComponent(opts.ablate)}` : '');
     await page.goto(`${URL_BASE}/${query}`, { waitUntil: 'domcontentloaded', timeout: opts.timeout });
     await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: opts.timeout });
 
@@ -223,21 +251,43 @@ async function main() {
 
     for (const name of shots) {
       const t0 = Date.now();
-      const meta = await page.evaluate(({ n, settle }) => {
+      const meta = await page.evaluate(({ n, settle, hide, raw }) => {
         const g = window.GAME;
         g.applyShot(n);
         g.settle(settle);
         g.applyShot(n);          // re-anchor follow shots after settling
         g.settle(8);
+        // Ablate after settling: hiding a mesh must change what the frame
+        // contains, never what the simulation did.
+        const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
+        if (hide.length) {
+          const want = hide.map((h) => h.toLowerCase());
+          g.scene.traverse((o) => {
+            const nm = (o.name || '').toLowerCase();
+            if (nm && want.some((h) => nm.includes(h))) { hidden.push({ o, was: o.visible }); o.visible = false; }
+          });
+          g.frame(1 / 60);
+        }
+        if (raw) {
+          g.renderer.setRenderTarget(null);
+          g.renderer.clear(true, true, false);
+          g.renderer.render(g.scene, g.camera);
+        }
         const gl = g.renderer.info;
-        return {
+        const out = {
+          hidden: hidden.length,
           triangles: gl.render.triangles,
           calls: gl.render.calls,
           textures: gl.memory.textures,
           geometries: gl.memory.geometries,
           programs: g.renderer.info.programs?.length ?? 0,
         };
-      }, { n: name, settle: opts.settle });
+        for (const h of hidden) h.o.visible = h.was;
+        return out;
+      }, { n: name, settle: opts.settle, hide: opts.hide, raw: opts.raw });
+      if (opts.hide.length && meta.hidden === 0) {
+        errors.push(`--hide ${opts.hide.join(',')} matched no scene object in ${name}`);
+      }
 
       const file = path.join(outDir, `${name}.${opts.jpeg ? 'jpg' : 'png'}`);
       const buf = await page.screenshot(
@@ -245,7 +295,8 @@ async function main() {
       );
       await writeFile(file, buf);
       const ms = Date.now() - t0;
-      results.push({ name, file: path.relative(ROOT, file), ...meta, ms });
+      const { hidden: _hidden, ...counts } = meta;
+      results.push({ name, file: path.relative(ROOT, file), ...counts, ms });
       line(results[results.length - 1]);
     }
   } finally {

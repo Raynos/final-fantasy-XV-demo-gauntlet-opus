@@ -109,6 +109,26 @@ Read tool and actually look at them.** Iterate: shoot → look → fix → shoot
 
 `VERBOSE=1 node src/tools/shoot.mts ...` echoes page console output for debugging.
 
+## For any visual defect, ablate before re-tinting
+
+Looking at a frame says *that* something is wrong and is remarkably bad at
+saying *what*: the chevron hatch was GTAO, not heightfield normals; the shadow
+detachment was grass casting nothing, not the bias. So measure first.
+
+```bash
+node src/tools/shoot.mts hero_full --out tmp/a --raw
+node src/tools/shoot.mts hero_full --out tmp/b --raw --hide grass
+node src/tools/imgdiff.mts tmp/a tmp/b --heat tmp/heat --gain 8   # then LOOK at it
+```
+
+`--hide <names>` removes scene objects by name; `--ablate <tokens>` turns post
+stages off (`nobloom`, `nogtao`, `nocontact`, `plain`, …). **`--raw` goes on
+both sides of a mesh ablation** — with post on, hiding one object moves
+exposure, bloom and the grade, so tens of thousands of unrelated pixels change.
+Read the heat map, not just the mean: 1.8/255 with a max of 149 is either a
+nudged frame or one rewritten band. A `--hide` matching nothing is an error, so
+never read a null ablation as innocence.
+
 ## Definition of done for your task
 
 - Your shots render with zero console errors.
