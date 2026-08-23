@@ -376,10 +376,30 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
   // Y-shaped ridge inside it (antihelix), and the flap over the canal (tragus).
   // Without them the profile has a bump where an ear should be, which is worse
   // than nothing because the eye goes looking for the detail and finds a lump.
+  // Where the side of the *sculpted* skull actually is at the ear's own
+  // direction from the head centre. `FACE.ear[0]` is 0.0725 against a canonical
+  // half-width `HR[0]` of 0.0785, so the auricular plate — 0.0080 half-thick,
+  // centred at 0.97 of that — had its lateral face at 0.0783 canonical, i.e.
+  // level with the skull it is supposed to stand off. Captured `hero_profile`
+  // with `--hide hair` and the whole ear was *submerged*: what rendered was the
+  // painted helix line and concha oval on the face map plus one bead of lobe
+  // poking through, and nothing else. Every ridge in this block was being
+  // authored inside the head.
+  //
+  // This is the same failure the helix comment below describes one level down
+  // ("at out=0.055 the rolled rim was inside the plate"), and it recurs because
+  // the ear is placed against a *constant* while the surface it sits on is a
+  // sculpt that four characters and thirty brushes move. So place it against
+  // the surface instead: `skinSnap` projects a canonical point onto the skull
+  // along its own direction from the centre, which is exactly the argument its
+  // own doc comment makes for the eyelid band. 0.006 puts the plate's medial
+  // face ~2 mm inside the skull, so it stays attached at every head width.
+  const earSnap = skinSnap(look, hw);
+  const earAnchorX = Math.abs(earSnap([FACE.ear[0] * hw, FACE.ear[1], FACE.ear[2]])[0]);
   for (const sg of [1, -1]) {
     const e = FACE.ear;
-    const ex = e[0] * sg * hw;
-    const c = put([ex * 0.97, e[1], e[2]]);
+    const ex = sg * (earAnchorX + 0.006);
+    const c = put([ex, e[1], e[2]]);
     // Every piece of the ear pins to one texel of the face map — the ear's own.
     // A blob whose UV spans 0..1 samples the whole painted face, so the old ear
     // wore the lips and the nostrils and read as a mottled red lump.
@@ -445,10 +465,14 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
       center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0062 * scale, 0.0032 * scale],
       rot: [0, sg * 0.5, 0], segU: 8, segV: 6, uv: eUV,
     });
-    // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim
-    const lb = put([ex * 1.035, e[1] - 0.0296, e[2] + 0.0026]);
+    // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim.
+    // It hung 1 mm clear of the plate's lower tip once the ear came out of the
+    // skull and stopped being hidden by it: an ellipsoid narrows fastest at its
+    // poles, so a lobe placed level with the plate's bottom edge meets nothing
+    // there. Raised into the plate's body and grown a little so the two merge.
+    const lb = put([ex * 1.030, e[1] - 0.0262, e[2] + 0.0026]);
     blob(B, {
-      center: [lb.x, lb.y, lb.z], scale: [0.0062 * scale, 0.0075 * scale, 0.0068 * scale],
+      center: [lb.x, lb.y, lb.z], scale: [0.0064 * scale, 0.0092 * scale, 0.0072 * scale],
       rot: [0, sg * 0.25, 0], segU: 8, segV: 6, uv: eUV,
     });
     B.mat(0.5, 0, 0);
