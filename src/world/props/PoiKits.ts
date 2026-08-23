@@ -1794,7 +1794,12 @@ export class PoiKits {
     const merged = mergeBag(b);
     for (const [role, g] of Object.entries(merged)) {
       bakeTone(g, { y0: 0, y1: 4, grime: 0.66, bleach: 1.08, jitter: tv.jitter, tint: tv.tint, streak: 0.2 });
-      put(role === 'trim' ? M.concrete : M.stone, g, [0, 0, 0]);
+      // One material, deliberately. A contrasting cap on the stele would be a
+      // second material and therefore a second draw call, on **twenty-three**
+      // landmarks -- and the cap's read comes from its shadow and its baked
+      // tone, neither of which needs a different colour. Cost here is draws.
+      put(M.stone, g, [0, 0, 0]);
+      void role;
     }
     put(M.runeface, new THREE.PlaneGeometry(0.85, 1.7), [0, 2.4, 0.30]);
     // Cairn: a cone of set stones, wider at the foot than a stack of spheres.
