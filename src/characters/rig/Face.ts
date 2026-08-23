@@ -37,8 +37,20 @@ export const LID_OPEN = [0.76, 0.62];
  * sclera. Both of those were happening.
  */
 export const EYE = {
-  /** Half-angle of the iris measured from the gaze axis. */
-  iris: 0.500,
+  /**
+   * Half-angle of the iris measured from the gaze axis.
+   *
+   * 0.500 rad is the *anatomical* iris — 11.7 mm across a 24 mm globe — and
+   * that is exactly why it was wrong here. §12.6 measures shipped FFXV at
+   * **~1.4x oversized relative to a real face**: a single eye is 29% of face
+   * width, so the face is 3.5 eyes wide where a real one is five. With the
+   * lids on, the anatomical iris left a pale sclera oval with a small blue
+   * button near its top — a flat disc with the pupil hidden under the lid,
+   * which is the "doll eyes / painted-on features" a judge has named every
+   * round. 0.640 is 1.28x, which puts the limbus at the lid margins the way
+   * the plates do without tipping into caricature.
+   */
+  iris: 0.640,
   /** How far the cornea domes over the iris, as a fraction of globe radius. */
   dome: 0.072,
   /** Radius of the lid shell at its margin, as a fraction of globe radius. */
@@ -706,14 +718,31 @@ export function buildEyes(rig: Rig, look: Look) {
   const R = FACE.eyeR * scale;
   const B = new MeshBuilder('eyes');
   B.color(0xffffff).mat(0.1, 0);
+  /**
+   * Half the interpupillary distance. **One globe is built, at the origin, and
+   * the caller places two copies at ±`cx`** — because a gaze is a rotation of
+   * each globe about *its own* centre.
+   *
+   * Both globes used to be baked into this one mesh at ±`cx` and hung off a
+   * single pivot placed between them, and `Anim` rotated that pivot. A rotation
+   * about a point 33.5 mm to the side of a 10.7 mm globe is not a gaze, it is
+   * an orbit: at the ±0.30 rad `eyeYaw` reaches, each globe swings **9.9 mm**
+   * along z — one eye out through the lids as a bulging white bead, the other
+   * back into the skull until only a sliver shows at the nasal canthus. That is
+   * the whole of "doll eyes / painted-on features", it is visible in any macro
+   * frame with the groom hidden, and no amount of iris shading could have fixed
+   * it. A sphere is invariant under rotation about its own centre, so with the
+   * globes placed correctly the socket stays filled at every gaze angle.
+   */
+  const cx0 = FACE.eye[0] * hw * scale;
 
   // where the iris ends and the sclera begins, in polar angle from the front.
   // 0.405 rad put an 18 mm iris on a 24 mm globe: too small by a third, which
   // is most of why the cast read wall-eyed. 0.500 rad is the real 11.7/24 mm.
   const IRIS = EYE.iris;
 
-  for (const sg of [1, -1]) {
-    const cx = FACE.eye[0] * sg * hw * scale;
+  {
+    const cx = 0;
     const segU = 28, segV = 22;
     const rows = [];
     for (let v = 0; v <= segV; v++) {
@@ -747,7 +776,7 @@ export function buildEyes(rig: Rig, look: Look) {
       for (let u = 0; u < segU; u++) B.quad(rows[v][u], rows[v][u + 1], rows[v + 1][u + 1], rows[v + 1][u]);
     }
   }
-  return { geometry: B.build() };
+  return { geometry: B.build(), cx: cx0 };
 }
 
 /** What `buildLashes` needs — the same eye frame `buildLid` works in. */

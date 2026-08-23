@@ -86,6 +86,8 @@ export interface NpcArchetype {
     hair: THREE.BufferGeometry;
     outfit: THREE.BufferGeometry;
     eyes: THREE.BufferGeometry;
+    /** half the interpupillary distance — where each globe's own pivot goes. */
+    eyeCx: number;
   };
   mat: {
     skin: THREE.Material;
@@ -118,13 +120,17 @@ export function archetype(key: string, def: CharacterDef): NpcArchetype {
     profile: def.profile,
     look,
     dims: rig.dims,
-    geo: bootPhase('Npcs.geo', () => ({
-      body: buildBody(rig, look),
-      head: head.geometry,
-      hair: buildHair(rig, look),
-      outfit: buildOutfit(rig, look),
-      eyes: buildEyes(rig, look).geometry,
-    })),
+    geo: bootPhase('Npcs.geo', () => {
+      const eyes = buildEyes(rig, look);
+      return {
+        body: buildBody(rig, look),
+        head: head.geometry,
+        hair: buildHair(rig, look),
+        outfit: buildOutfit(rig, look),
+        eyes: eyes.geometry,
+        eyeCx: eyes.cx,
+      };
+    }),
     mat: {
       skin: S.skin,
       garment: S.garment,
@@ -147,8 +153,10 @@ export class NpcBody implements AnimTarget {
   anim!: Animator;
   arch!: NpcArchetype;
   body!: THREE.SkinnedMesh;
-  eyeMesh!: THREE.Mesh;
+  eyeMeshes!: THREE.Mesh[];
+  /** the gaze carrier at the midpoint; the globes ride their own pivots. */
   eyes!: THREE.Object3D;
+  eyeGlobes!: THREE.Object3D[];
   groundShadow!: THREE.Mesh;
   hair!: THREE.SkinnedMesh;
   head!: THREE.SkinnedMesh;
@@ -186,14 +194,26 @@ export class NpcBody implements AnimTarget {
     this.hair = this._skinned(arch.geo.hair, arch.mat.hair, 'hair');
     this.outfit = this._skinned(arch.geo.outfit, arch.mat.garment, 'outfit');
 
+    // One pivot per globe at its own centre; `eyes` is the gaze carrier at the
+    // midpoint and holds no geometry. See `buildEyes` for why.
     const pivot = new THREE.Object3D();
     pivot.position.set(0, rig.dims.eyeY, rig.dims.eyeZ).sub(rig.P.head);
     rig.byName.head.add(pivot);
-    this.eyeMesh = new THREE.Mesh(arch.geo.eyes, arch.mat.eye);
-    this.eyeMesh.castShadow = false;
-    this.eyeMesh.frustumCulled = false;
-    pivot.add(this.eyeMesh);
     this.eyes = pivot;
+    this.eyeMeshes = [];
+    this.eyeGlobes = [];
+    for (const sg of [1, -1]) {
+      const gp = new THREE.Object3D();
+      gp.position.copy(pivot.position);
+      gp.position.x += sg * arch.geo.eyeCx;
+      rig.byName.head.add(gp);
+      const em = new THREE.Mesh(arch.geo.eyes, arch.mat.eye);
+      em.castShadow = false;
+      em.frustumCulled = false;
+      gp.add(em);
+      this.eyeMeshes.push(em);
+      this.eyeGlobes.push(gp);
+    }
 
     const blob = new THREE.Mesh(S.shadowGeo, S.shadow);
     blob.scale.setScalar(0.98 * rig.dims.s);
@@ -234,7 +254,7 @@ export class NpcBody implements AnimTarget {
     this._lod = level;
     const vis = level < 2;
     for (const m of this.meshes) { m.visible = vis; m.castShadow = level === 0; }
-    this.eyeMesh.visible = level === 0;
+    for (const em of this.eyeMeshes) em.visible = level === 0;
     this.groundShadow.visible = level === 0;
   }
 }

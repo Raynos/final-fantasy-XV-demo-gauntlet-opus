@@ -67,7 +67,10 @@ export class Character {
   body!: THREE.SkinnedMesh;
   def!: CharacterDef;
   eyeMat!: THREE.Material;
+  /** The gaze carrier at the midpoint between the eyes: rotation only. */
   eyes!: THREE.Object3D;
+  /** One pivot per globe, each at its own centre. See `buildEyes`. */
+  eyeGlobes!: THREE.Object3D[];
   faceMat!: THREE.Material;
   /** How closed each fist is, 0 open .. 1 gripping. See `setGrip`. */
   grip!: Record<Side, number>;
@@ -120,16 +123,28 @@ export class Character {
     this.hair = this._skinned(hairGeo, S.hair, 'hair');
     this.outfit = this._skinned(outfitGeo, S.garment, 'outfit');
 
-    // eyes ride a gaze pivot under the head bone
+    // Each eye rides its **own** pivot, at its own globe centre, under the head
+    // bone — see `buildEyes` for the 9.9 mm orbit the single shared pivot was
+    // putting on both globes. `this.eyes` stays as the gaze carrier at the
+    // midpoint: `Anim` writes the gaze onto it and `PostFX` autofocuses on it,
+    // and neither should have to know there are two of anything.
     const pivot = new THREE.Object3D();
     pivot.position.set(0, rig.dims.eyeY, rig.dims.eyeZ).sub(rig.P.head);
     rig.byName.head.add(pivot);
-    const eyeMesh = new THREE.Mesh(eyes.geometry, this.eyeMat);
-    eyeMesh.castShadow = false;
-    eyeMesh.frustumCulled = false;
-    pivot.add(eyeMesh);
     this.eyes = pivot;
-    this.meshes.push(eyeMesh);
+    this.eyeGlobes = [];
+    for (const sg of [1, -1]) {
+      const gp = new THREE.Object3D();
+      gp.position.copy(pivot.position);
+      gp.position.x += sg * eyes.cx;
+      rig.byName.head.add(gp);
+      const eyeMesh = new THREE.Mesh(eyes.geometry, this.eyeMat);
+      eyeMesh.castShadow = false;
+      eyeMesh.frustumCulled = false;
+      gp.add(eyeMesh);
+      this.eyeGlobes.push(gp);
+      this.meshes.push(eyeMesh);
+    }
 
     if (look.lenses) {
       const lens = new THREE.Mesh(this._lensGeo(rig), lensMaterial());

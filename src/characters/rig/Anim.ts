@@ -200,8 +200,10 @@ export interface AnimTarget {
   look: Look;
   /** per-instance seed, so two copies never blink in lockstep. */
   seedRnd?: Rng;
-  /** the gaze pivot the eyes ride on, if this owner built one. */
+  /** the gaze carrier at the midpoint between the eyes, if this owner built one. */
   eyes?: THREE.Object3D | null;
+  /** one pivot per globe, each at its own centre — see `buildEyes`. */
+  eyeGlobes?: THREE.Object3D[] | null;
 }
 
 /** Keyframed action poses for combat. Values are XYZ Euler radians. */
@@ -1003,7 +1005,15 @@ export class Animator {
     // so a mathematically level gaze parks the iris high and the character
     // reads as permanently startled.
     if (this.char.eyes) {
-      this.char.eyes.rotation.set((this.eyePitch || 0) + 0.11, this.eyeYaw || 0, 0);
+      const ex = (this.eyePitch || 0) + 0.11;
+      const ey = this.eyeYaw || 0;
+      this.char.eyes.rotation.set(ex, ey, 0);
+      // ...and onto each globe's own pivot. `char.eyes` sits at the *midpoint*
+      // between the eyes and carries no geometry: rotating a globe about a
+      // point 33.5 mm to one side of it orbits it 9.9 mm out of its socket at
+      // full gaze, which is what `buildEyes` records in full.
+      const globes = this.char.eyeGlobes;
+      if (globes) for (const gp of globes) gp.rotation.set(ex, ey, 0);
     }
   }
 

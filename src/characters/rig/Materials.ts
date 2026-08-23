@@ -363,7 +363,14 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
     // It must not be *paper*, though: at 0.74 with a 0.72 sky lift on top it
     // blew to pure white at grazing angles and the far eye of any three-quarter
     // frame rendered as a blank bead.
-    float sh = ( 0.44 + 0.17 * min( 1.0, ( eT - 1.0 ) * 1.2 ) ) * mix( 1.0, lidShade, 0.62 );
+    // ...and it must not be *brighter than the brightest thing in the game
+    // either*. Measured over the lit eye, the sclera ran to Y 249 at p99.5 --
+    // §12.5 puts a **white tee in full sunlight** at #ecfbff, Y 249, and calls
+    // that the clip. A sclera sits at the bottom of a socket under a brow: it
+    // cannot be the same value as sunlit white cloth, and when it is, the eye
+    // is two hard-edged extremes side by side with no gradient between them,
+    // which is the whole of "painted-on".
+    float sh = ( 0.33 + 0.13 * min( 1.0, ( eT - 1.0 ) * 1.2 ) ) * mix( 1.0, lidShade, 0.62 );
     // the sclera is a curved, self-shadowed ball: it darkens toward the canthi
     // and toward the top where the lid and the brow shade it
     float corner = clamp( 1.0 - abs( eUp ) * 1.4, 0.0, 1.0 ) * clamp( ( eT - 1.05 ) * 1.6, 0.0, 1.0 );
@@ -396,7 +403,7 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // three-quarter frame rendered as a featureless white bead. Fading it with
   // N.V keeps the near eye alive and lets the far one keep its shading.
   float face = clamp( dot( eN, eV ), 0.0, 1.0 );
-  gl_FragColor.rgb += eyeC * uSunColor * 0.46 * pow( skyE, 1.2 ) * ( 0.30 + 0.70 * face );
+  gl_FragColor.rgb += eyeC * uSunColor * 0.34 * pow( skyE, 1.2 ) * ( 0.30 + 0.70 * face );
   gl_FragColor.rgb += ( g1 * 4.0 + g2 * 1.5 + wet * 0.08 ) * uSunColor * ${gloss.toFixed(2)} * ( 0.25 + 0.75 * face );
 }`);
     }
