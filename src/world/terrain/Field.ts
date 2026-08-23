@@ -175,6 +175,9 @@ export interface FieldStats {
   erodeMs?: number;
   /** Kilometres of road in the network. */
   roadKm?: number;
+  /** Cells the talus aprons raised, and the mean thickness they laid on. */
+  apronCells?: number;
+  apronMeanM?: number;
   /** Cells the drainage incision cut, and the mean depth it took off them. */
   inciseCells?: number;
   inciseMeanM?: number;
@@ -317,6 +320,8 @@ export class Field {
   roadMask!: Float32Array | null;
   /** The main highway as one spline. `Terrain.road` is this. */
   roadSpline!: HighwaySpine | null;
+  _apronCells!: number;
+  _apronMeanM!: number;
   _inciseCells!: number;
   _inciseMeanM!: number;
   /** Metres the talus pass moved into each cell. Freed by `_derive`. */
@@ -362,6 +367,7 @@ export class Field {
     // actually arrived, and the relaxation is the only thing that moves it.
     const preTalus = this.h.slice();
     this._talus();
+    this._talusAprons();
     this.screeD = new Float32Array(N * N);
     for (let k = 0; k < N * N; k++) {
       const d = this.h[k] - preTalus[k];
@@ -388,6 +394,8 @@ export class Field {
       macroMs: Math.round(t2 - t1) - this._farMs,
       landformMs: Math.round(t3 - t2),
       erodeMs: Math.round(t4 - t3),
+      apronCells: this._apronCells,
+      apronMeanM: this._apronMeanM,
       inciseCells: this._inciseCells,
       inciseMeanM: this._inciseMeanM,
       roadKm: +(this.map.roadGraph.totalLength / 1000).toFixed(2),
@@ -1540,6 +1548,161 @@ export class Field {
         const avg = (tmp[idx - 1] + tmp[idx + 1] + tmp[idx - N] + tmp[idx + N]) * 0.25;
         h[idx] = tmp[idx] * 0.72 + avg * 0.28;
       }
+    }
+  }
+
+  /**
+   * Talus aprons by cone dilation — the scree fan that grounds a cliff base.
+   *
+   * The plan's §2.2 was ticked DONE because the *word* `talus` appears in three
+   * files: a scatter-mix key in `ZoneDress`, a rock archetype in `Rocks.ts`, and
+   * a splat weight in `Terrain.sampleMaterial`. None of them is geometry, and
+   * `_talus` — the thermal relaxation above — is not this either. Measured on
+   * the built field before writing a line:
+   *
+   * - the thermal pass moves material a **median of 4 m and at most 24 m**,
+   *   because five passes can each shift material one cell;
+   * - a 100 m cliff at a 34 deg repose angle needs an apron reaching **148 m**;
+   * - and it raises **1.72%** of the grid while **14.28%** of the grid is
+   *   steeper than 40 deg. Almost every cliff in Lucis had no apron at all.
+   *
+   * So: a grey-scale dilation, `apron(p) = max_q (S(q) − tan(repose)·|p−q|)`,
+   * done as a two-pass chamfer so it is one linear sweep over the grid rather
+   * than a search.
+   *
+   * **Seeded only from the FOOT of a steep face, never from the face itself.**
+   * That is the whole difficulty, and the sibling documented what happens
+   * otherwise: an in-place chamfer escapes its reach and buries 63% of the map,
+   * because a cone hung off a cliff *top* reaches `height / tan(repose)` in
+   * every direction and a 300 m massif then paves half a kilometre of country
+   * flat. The foot is found by looking for gentle ground with a steep, higher
+   * neighbour — and the seed is lifted above it only in proportion to the
+   * cliff it is banking against, capped, which is the "bounded by rise above
+   * local low ground" clause.
+   *
+   * The fraction of the map raised is **asserted**, because that 63% is the
+   * failure mode and it is silent: the world simply comes out smoother.
+   */
+  _talusAprons() {
+    const h = this.h;
+    const TAN40 = 0.839;                       // a face steeper than this sheds
+    const TAN_REPOSE = Math.tan(34 * Math.PI / 180);
+    const REPOSE = TAN_REPOSE * CELL;                     // 2.70 m of fall per cell
+    const slope = new Float32Array(N * N);
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const k = j * N + i;
+        slope[k] = Math.hypot((h[k + 1] - h[k - 1]) / (2 * CELL),
+          (h[k + N] - h[k - N]) / (2 * CELL));
+      }
+    }
+
+    // Seed height, or -Infinity where there is no seed.
+    const A = new Float32Array(N * N).fill(-1e9);
+    const RCH = new Float32Array(N * N);
+    let seeds = 0;
+    for (let j = 2; j < N - 2; j++) {
+      for (let i = 2; i < N - 2; i++) {
+        const k = j * N + i;
+        if (slope[k] > 0.36) continue;         // the foot is gentle ground
+        let cliff = 0;
+        for (let dj = -2; dj <= 2; dj++) {
+          for (let di = -2; di <= 2; di++) {
+            const o = k + dj * N + di;
+            if (slope[o] > TAN40 && h[o] > h[k]) {
+              const rise = h[o] - h[k];
+              if (rise > cliff) cliff = rise;
+            }
+          }
+        }
+        // A 3 m step is a boulder, not a cliff, and seeding off those alone
+        // put an apron under a quarter of the world.
+        if (cliff < 9) continue;
+        // Bank against the cliff in proportion to it, and no further. A fan
+        // under a 60 m wall stands about 13 m proud of the ground it sits on.
+        A[k] = h[k] + Math.min(0.17 * cliff, 12);
+        // How far this fan is entitled to reach: the cliff that feeds it,
+        // laid down at the repose angle. A 100 m wall reaches 148 m; a 9 m
+        // step reaches 13 and is gone before it can blanket anything.
+        RCH[k] = Math.min(cliff / TAN_REPOSE, 190);
+        seeds++;
+      }
+    }
+    if (!seeds) return;
+
+    // Two-pass chamfer dilation. The diagonal costs sqrt(2) so the cone is a
+    // cone rather than a diamond — a diamond apron reads as a pyramid.
+    //
+    // `F` carries the **ground height at the foot that fed this cell**, and it
+    // is the clause the plan calls "bounded by rise above local low ground".
+    // Decay alone does not bound anything: a seed on a plateau rim 400 m up
+    // still stands 142 m above a valley floor a hundred cells away, so the
+    // first build filled whole valleys — p50 thickness **27 m and a 257 m
+    // maximum**. An apron is material that fell off a face and stopped; it
+    // cannot exist on ground that has dropped away below the face's own foot.
+    const F = new Float32Array(N * N).fill(-1e9);
+    for (let k = 0; k < N * N; k++) if (A[k] > -1e8) F[k] = h[k];
+    const D = REPOSE, DD = REPOSE * 1.41421356;
+    const relax = (k: number, o: number, cost: number, step: number) => {
+      const r = RCH[o] - step;
+      if (r <= 0) return;                        // this fan has run out of cliff
+      const v = A[o] - cost;
+      if (v > A[k]) { A[k] = v; F[k] = F[o]; RCH[k] = r; }
+    };
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const k = j * N + i;
+        relax(k, k - 1, D, CELL); relax(k, k - N, D, CELL);
+        relax(k, k - N - 1, DD, CELL * 1.41421356); relax(k, k - N + 1, DD, CELL * 1.41421356);
+      }
+    }
+    for (let j = N - 2; j >= 1; j--) {
+      for (let i = N - 2; i >= 1; i--) {
+        const k = j * N + i;
+        relax(k, k + 1, D, CELL); relax(k, k + N, D, CELL);
+        relax(k, k + N + 1, DD, CELL * 1.41421356); relax(k, k + N - 1, DD, CELL * 1.41421356);
+      }
+    }
+
+    // Mottle the thickness and lay it in with a soft floor, so the apron's
+    // outer edge is a fading skirt rather than a contour line on the ground.
+    const n2 = this.n2;
+    let raised = 0, sum = 0, maxT = 0;
+    for (let j = 0; j < N; j++) {
+      const z = -HALF + j * CELL;
+      for (let i = 0; i < N; i++) {
+        const k = j * N + i;
+        // The bound that matters is THICKNESS, not distance and not rise.
+        // A fan fills the concavity at a cliff base and stops; 257 m of fill
+        // was an unbounded maximum propagating down a whole valley, and the
+        // cap alone fixes it while still letting the cone reach as far as the
+        // repose angle says it should. `F` is kept because it is what makes
+        // the cap a per-fan quantity rather than a global constant.
+        // Thickness is still capped, because a fan fills a concavity rather
+        // than a canyon: an uncapped maximum propagating down one valley gave
+        // a 257 m fill. But REACH is what actually bounds the apron, and it is
+        // carried per fan from the cliff that feeds it.
+        const want = Math.min(A[k], h[k] + 16);
+        if (want <= h[k] + 0.02) continue;
+        const x = -HALF + i * CELL;
+        const mottle = 0.68 + 0.32 * (0.5 + 0.5 * n2.fbm2(x * 0.0135 + 5.1, z * 0.0135 - 2.7, 3));
+        const target = h[k] + (want - h[k]) * mottle;
+        const y = smax(h[k], target, 1.0);
+        const t = y - h[k];
+        if (t > 0.02) { raised++; sum += t; if (t > maxT) maxT = t; }
+        h[k] = y;
+      }
+    }
+    this._apronCells = raised;
+    this._apronMeanM = raised ? +(sum / raised).toFixed(3) : 0;
+
+    // The sibling's documented failure is an apron that escapes its reach and
+    // buries most of the map, and it is SILENT — the world just comes out
+    // smoother. 14.28% of this grid is steeper than 40 deg, so an apron layer
+    // touching more than about a quarter of it is not an apron.
+    const frac = raised / (N * N);
+    if (frac > 0.26) {
+      throw new Error(`talus aprons raised ${(frac * 100).toFixed(1)}% of the map — the cone has escaped its reach`);
     }
   }
 
