@@ -1129,13 +1129,28 @@ export class Rocks {
   _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.38) {
     const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
     const s0 = it.s;
+    const w0 = s0 * (this.ext.get(it.k) ?? _EXT1)[0];
     const cs = corestones(rng, n);
     let y = it.y, hPrev = 0;
     for (let i = 0; i < cs.length; i++) {
       const c = cs[i];
       const kind = i === 0 ? kindOf(it.k)
         : kindOf(rng.next() < 0.5 ? 'bedded' : rng.next() < 0.6 ? 'granite' : 'slab');
-      const s = s0 * c.s;
+      // **The taper runs on the finished WIDTH, not on `s`.**
+      //
+      // `corestones` returns `c.s` as a fraction of the parent's long axis, and
+      // the long axis is not the width: the kinds' measured x half-extents run
+      // 0.461 (`spire`) to 1.000 (`cobble`), better than two to one. So a
+      // `slab` course at `c.s` 0.60 above a `spire` base at 1.00 is *wider*
+      // than the block it is standing on, and what that renders as is a
+      // balanced rock -- a mushroom on a stalk. `zone_ostium_gorge` came back
+      // with four of them in one frame.
+      //
+      // Same principle as §3.5's aspect floor and for the same reason: the
+      // guarantee has to be stated about the hull that ships, not about the
+      // number the recipe drew.
+      const wantW = w0 * c.s;                            // finished half-width
+      const s = wantW / (this.ext.get(kind.key) ?? _EXT1)[0];
       const sy = _sc(it.sy * c.sy);
       // **The half-height is measured, not assumed.** `rockGeometry` normalises
       // to the mesh's bounding RADIUS, so the instance scale `s` is the long
@@ -1261,17 +1276,23 @@ export class Rocks {
         const kind = kindOf(r < 0.42 ? 'granite' : r < 0.62 ? 'slab'
           : r < 0.82 ? 'bedded' : 'spire');
         const it = this._item(kind, px, pz, rng, 1, dress);
+        const ex = this.ext.get(kind.key) ?? _EXT1;
         // hard ceiling: past about eleven metres a "boulder" is a landform,
         // and landforms belong to the heightfield, not to the prop layer
         const flatness = 1 - THREE.MathUtils.clamp((eco.slope01(px, pz) - 0.14) / 0.4, 0, 1) * 0.6;
         it.s = Math.min(11, Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand * flatness));
+        // A course may not be wider than the one it stands on, measured on the
+        // finished hull. Without this the upper courses of a bluff are as often
+        // caps as they are crowns, and a cap on a narrower block is a balanced
+        // rock rather than an outcrop.
+        it.s *= (1 - 0.22 * course) * (0.90 / Math.max(0.55, ex[0]));
         // 0.70 of a full block height per course is the 30% overlap. Anything
         // near 1.0 leaves a visible dark seam between the courses, and at this
         // range a dark seam is a gap. **Through the measured half-extent**, not
         // through `s`: `s` is the long axis, and using it directly raised every
         // upper course by half a block and produced outcrops with daylight
         // under them. See `hy`.
-        it.y += course * it.s * it.sy * (this.hy.get(kind.key) ?? 0.75) * 2 * 0.70;
+        it.y += course * it.s * it.sy * ex[1] * 2 * 0.70;
         it.bury = kind.bury * rng.range(0.35, 0.8);
         it.pitch *= 0.35; it.roll *= 0.35;
         if (course > 0) { it.pitch *= 0.4; it.roll *= 0.4; it.bury = 0; }
@@ -1336,24 +1357,53 @@ export class Rocks {
     // reads as a cairn -- five separate pebbles balanced on each other --
     // rather than as one weathered mass.
     const lap = fin ? 0.68 : boss ? 0.34 : 0.45;
-    let y = base - s0 * 0.30;                       // the foot is buried
+    // **Both the taper and the courses run on the MEASURED hull**, the same
+    // rule and for the same reason as `_stack`. `it.s` is the long axis, and
+    // the eight kinds' x half-extents run 0.461 (`spire`) to 1.000 (`cobble`)
+    // and their y half-extents 0.447 (`slab`) to 0.988 (`spire`) -- so a taper
+    // applied to `s` puts a wide `slab` course on top of a narrow `spire` one
+    // and a lap applied to `s` leaves daylight between them. `zone_ostium_gorge`
+    // came back with four balanced rocks -- caps on stalks -- in one frame, and
+    // they came from here rather than from the corestone stacks.
+    // The three forms are stated as **finished half-width and half-height in
+    // metres**, and the instance scales are solved backwards from them.
+    //
+    // They used to be stated as `s` plus an `sy` multiplier, and `s` is the
+    // mesh's *long axis*, which is a different axis for different kinds: the
+    // eight x half-extents run 0.461 (`spire`) to 1.000 (`cobble`) and the y
+    // half-extents 0.447 (`slab`) to 0.988 (`spire`). So the same `s` was a wide
+    // flat plate on one course and a tall needle on the next, a taper on `s`
+    // put a wide slab on top of a narrow spire, and a lap on `s` left daylight
+    // between courses. `zone_ostium_gorge` came back with four balanced rocks —
+    // caps on stalks — in one frame, all of them from here rather than from the
+    // corestone stacks; and solving for width alone then made every
+    // spire-topped tor a needle, because `s` for a spire is 2.1x its width.
+    // Both numbers have to be named or one of them runs free.
+    const w0 = s0 * (fin ? 0.46 : boss ? 1.05 : 0.78);
+    const h0 = s0 * (fin ? 1.60 : boss ? 0.50 : 0.76);
+    let y = base - s0 * 0.30;                       // the buried foot of the stack
     let cx = ox, cz = oz;
     for (let i = 0; i < n; i++) {
       const r = rng.next();
       const kind = kindOf(fin ? 'spire' : i === n - 1 ? 'spire' : r < 0.46 ? 'granite' : r < 0.78 ? 'bedded' : 'slab');
       const it = this._item(kind, cx, cz, rng, 1, dress);
-      const sz = s0 * (1 - i * taper) * rng.range(0.82, 1.12);
-      it.s = sz;
-      it.y = y + sz * 0.5;
+      const ex = this.ext.get(kind.key) ?? _EXT1;
+      if (boss) { it.sx = _sc(it.sx * rng.range(1.1, 1.5)); it.sz = _sc(it.sz * rng.range(1.1, 1.5)); }
       it.bury = 0;
       it.pitch *= 0.22; it.roll *= 0.22;
-      it.sy = _sc(it.sy * (fin ? rng.range(1.5, 2.2) : boss ? rng.range(0.55, 0.85) : rng.range(0.9, 1.35)));
-      if (boss) { it.sx = _sc(it.sx * rng.range(1.1, 1.5)); it.sz = _sc(it.sz * rng.range(1.1, 1.5)); }
+      // Width tapers with height; the height of each course tapers more gently,
+      // so the stack narrows rather than shrinking.
+      const wz = w0 * (1 - i * taper) * rng.range(0.86, 1.10);
+      const hz = h0 * (1 - i * taper * 0.6) * rng.range(0.85, 1.15);
+      it.s = wz / (ex[0] * it.sx);
+      it.sy = _sc(hz / (it.s * ex[1]));
+      const h = it.s * it.sy * ex[1];               // finished half-height
+      it.y = y + h;
       it.far = true;
       out.push(it);
-      y += sz * lap * (fin ? it.sy : boss ? it.sy : 1);
-      cx += rng.gauss(0, sz * (boss ? 0.35 : 0.16));
-      cz += rng.gauss(0, sz * (boss ? 0.35 : 0.16));
+      y += 2 * h * lap;                             // `lap` of this block's own height
+      cx += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
+      cz += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
     }
     // A skirt of spalled blocks, so the tor grows out of the ground rather
     // than being set down on it.
