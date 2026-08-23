@@ -58,8 +58,19 @@ for (const id of Object.keys(Q.QUESTS)) {
   for (const o of q.objectives) {
     let verdict = 'ok';
     if (o.type === 'kill') {
-      if (!bestiary.includes(o.target)) verdict = `NO SUCH SPECIES "${o.target}"`;
-      else if (!spawnable.has(o.target)) verdict = `species never spawns`;
+      // A hunt's mark is spawned *for* that hunt, and `QuestLog.creditMark`
+      // credits its death whatever the corpse is called -- which is the whole
+      // reason six of these hunts work at all, since the board words the mark
+      // ("Naga") and the table names the species (`arachne`). Reporting those
+      // six as dead objectives hid the ones that really were: this probe
+      // called 21 objectives unsatisfiable when 15 was the truth. A staged
+      // fight is the same case, one table along.
+      const mark = S.HUNT_TARGETS[id];
+      const set = q.setPiece ? S.SET_PIECES[q.setPiece] : null;
+      if (mark) verdict = mark.key === o.target ? 'ok' : `ok (credited as the mark, which spawns "${mark.key}")`;
+      else if (set) verdict = set.boss === o.target ? 'ok (set piece)' : `ok (set piece "${set.id}" spawns "${set.boss}")`;
+      else if (!bestiary.includes(o.target)) verdict = `NO SUCH SPECIES "${o.target}"`;
+      else if (!spawnable.has(o.target)) verdict = 'species never spawns';
     } else if (o.type === 'fetch') {
       if (o.target.startsWith('gil:')) verdict = 'ok (wallet)';
       else if (!items[0] && false) verdict = 'x';
@@ -71,11 +82,17 @@ for (const id of Object.keys(Q.QUESTS)) {
       else if (!placed.has(o.target)) verdict = 'has dialogue, but is not placed anywhere in this world';
     } else if (o.type === 'reach') {
       if (!o.waypoint) verdict = 'no waypoint';
-    } else if (o.type === 'photo' || o.type === 'escort' || o.type === 'fish') {
+    } else if (o.type === 'photo') {
+      // The shutter is the only thing that posts `photo`, so the objective is
+      // only satisfiable if the screen still classifies subjects. Proven for
+      // real by `probes/photoshot.mts`, which frames a beast and presses it.
+      const shot = g.get('Menus')?.screens?.photo;
+      verdict = typeof shot?.subjects === 'function' ? 'ok (photo mode)' : 'nothing in the repo notifies "photo"';
+    } else if (o.type === 'escort' || o.type === 'fish') {
       verdict = `nothing in the repo notifies "${o.type}"`;
     }
     rows.push(`    ${o.type}/${o.target}  ${verdict}`);
-    if (verdict !== 'ok' && verdict !== 'ok (wallet)') bad.push(`${id}: ${o.type}/${o.target} -- ${verdict}`);
+    if (!verdict.startsWith('ok')) bad.push(`${id}: ${o.type}/${o.target} -- ${verdict}`);
   }
   out.push(`  ${id} [${q.type}]`);
   out.push(rows.join('\n'));

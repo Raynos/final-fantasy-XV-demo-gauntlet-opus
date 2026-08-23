@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { el, clamp, easeOut, easeOutQuint } from '../UIKit.ts';
 import { icon } from '../Icons.ts';
 import type { Menus } from '../Menus.ts';
@@ -9,6 +10,24 @@ const FILTERS = [
   'Golden Hour', 'Neon Fringe', 'Sunbleach',
 ];
 const FRAMES = ['3:2 Full', '16:9 Wide', '1:1 Square', 'Polaroid'];
+
+/**
+ * The Meteor of the Disc, in world space.
+ *
+ * `Megastructures._meteor` hard-codes the same pair, which is the centre of
+ * the `cauthess` zone. Duplicated rather than imported because the props lane
+ * owns that file and a photo objective must not be able to break its build.
+ */
+const METEOR: [number, number] = [-1020, -2160];
+
+/** What the shutter says it caught. */
+const SUBJECT_NAME = (s: string) => ({
+  meteor: 'The Meteor of the Disc', beast: 'A beast', party: 'The four of us', vista: 'A vista',
+}[s] ?? s);
+
+const _fwd = new THREE.Vector3();
+const _eye = new THREE.Vector3();
+const _to = new THREE.Vector3();
 
 /**
  * Prompto's camera. A framing overlay with rule-of-thirds guides and corner
@@ -123,7 +142,97 @@ export class PhotoScreen {
     if (dx) this.aperture = clamp(Math.round((this.aperture + dx * 0.4) * 10) / 10, 1.2, 16);
   }
 
-  accept() { this.flashAt = 0; }
+  /**
+   * The shutter — and the only thing in the game that ever notified `photo`.
+   *
+   * Four quest objectives are `photo` objectives (`side_nice_shot` wants a
+   * vista, a beast and the party; `main_ch4_lestallum` wants the Meteor) and
+   * **nothing in the repo posted the event**, so all four were uncompletable
+   * and chapter 4 could not close. The screen itself was finished: framing
+   * guides, filters, aperture, a flash. It just never told anyone.
+   *
+   * Wiring the verb rather than cutting the objectives, because the cost is
+   * this method and the alternative is deleting the only non-combat verb in
+   * the game.
+   */
+  accept() {
+    this.flashAt = 0;
+    const game = this.menus?.game;
+    if (!game) return;
+    const got = this.subjects(game);
+    const rpg = game.get('Rpg');
+    for (const s of got) rpg?.quests?.notify?.('photo', { target: s });
+    const hud = game.get('HUD');
+    if (hud?.callOut) hud.callOut('PHOTO TAKEN', got.length ? got.map(SUBJECT_NAME).join(' · ') : 'No subject');
+  }
+
+  /**
+   * What is in this frame that a quest cares about.
+   *
+   * Deliberately generous on angle and mean on distance: a player framing a
+   * shot has already done the work of pointing the camera, and a photo mode
+   * that rejects a good-looking frame on a two-degree miss is worse than one
+   * that occasionally credits a lucky one. Everything is judged against the
+   * live camera, so it is the *frame* that counts, not where the party stands.
+   */
+  subjects(game: Game): string[] {
+    const cam = game.camera;
+    cam.getWorldDirection(_fwd);
+    cam.getWorldPosition(_eye);
+    const out: string[] = [];
+
+    /** cosine of the angle between the camera and a world point */
+    const facing = (x: number, z: number) => {
+      _to.set(x - _eye.x, 0, z - _eye.z);
+      const d = Math.hypot(_to.x, _to.z);
+      if (d < 0.001) return { cos: 1, dist: 0 };
+      return { cos: (_to.x * _fwd.x + _to.z * _fwd.z) / (d * Math.hypot(_fwd.x, _fwd.z)), dist: d };
+    };
+
+    // The Meteor of the Disc, the thing the whole Cauthess region is named for.
+    const m = facing(METEOR[0], METEOR[1]);
+    if (m.dist < 4200 && m.cos > 0.77) out.push('meteor');
+
+    // A beast, mid-battle or not: anything alive and pointed at.
+    const enemies = game.get('Enemies');
+    for (const e of enemies?.list ?? []) {
+      if (e.dead || !e.root) continue;
+      const f = facing(e.root.position.x, e.root.position.z);
+      if (f.dist < 90 && f.cos > 0.71) { out.push('beast'); break; }
+    }
+
+    // The party, "all four of you at camp".
+    //
+    // Not judged on facing, which was the first attempt and was wrong: the
+    // party *follows* the player, so from a camera on the player's shoulder
+    // they are permanently behind the lens and the objective could never tick.
+    // It is a camp photo — Prompto holds the camera out — so the test is the
+    // camp: at a haven, with the party gathered. That also stops it being
+    // satisfiable by every photograph ever taken, which a bare distance test
+    // would be.
+    const party = game.get('Party');
+    const rpg = game.get('Rpg');
+    // `canCamp` is the same test the camp prompt uses, so "at camp" means the
+    // same thing to the camera as it does to the bedroll -- and it is asked of
+    // the **player**, not the lens. The camera trails several metres behind and
+    // can be outside the haven while the party is sitting in the middle of it.
+    const at = game.get('Player')?.position ?? _eye;
+    const camp = rpg?.day?.canCamp?.({ x: at.x, z: at.z });
+    if (camp?.ok) {
+      let gathered = 0;
+      for (const mm of party?.members ?? []) {
+        if (!mm.root) continue;
+        if (facing(mm.root.position.x, mm.root.position.z).dist < 22) gathered++;
+      }
+      if (gathered >= 3) out.push('party');
+    }
+
+    // A vista: outdoors, above the horizon line, and not standing in a hole.
+    const inside = game.get('Dungeons')?.isInside;
+    if (!inside && _fwd.y > -0.16 && !out.includes('party')) out.push('vista');
+
+    return out;
+  }
 
   enter() { this.age = 0; }
 

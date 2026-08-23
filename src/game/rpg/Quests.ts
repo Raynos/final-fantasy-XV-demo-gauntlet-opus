@@ -170,7 +170,6 @@ const fetch_= (id: string, target: string, count: number, desc: string, waypoint
 const reach = (id: string, target: string, desc: string, waypoint: number[], radius = 12): Objective => ({ id, type: 'reach', target, count: 1, desc, waypoint, radius });
 const talk  = (id: string, target: string, desc: string, waypoint: number[]): Objective => ({ id, type: 'talk', target, count: 1, desc, waypoint });
 const photo = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'photo', target, count, desc, waypoint });
-const escort= (id: string, target: string, desc: string, waypoint: number[]): Objective => ({ id, type: 'escort', target, count: 1, desc, waypoint, failable: true });
 const craft = (id: string, target: string, count: number, desc: string): Objective => ({ id, type: 'craft', target, count, desc });
 const rest  = (id: string, desc: string, waypoint?: number[]): Objective => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
 
@@ -570,10 +569,18 @@ const QUEST_TABLE: Quest[] = [
   {
     id: 'side_chocobo', type: 'side', name: 'The Ever Elusive Chocobo',
     region: 'duscae', level: 15, giver: 'Wiz', requires: ['main_ch3_deadeye'],
-    summary: 'With Deadeye dead the chocobos will come back — if you walk one home first.',
+    summary: 'With Deadeye dead the chocobos will come back — if somebody goes and finds one.',
+    // **The escort verb is cut, not wired.** An escort is a follower with
+    // pathing, a leash, a fail state and a death check, and none of that
+    // exists; half of it is a chocobo that walks into a rock and fails the
+    // quest. `reach` then `talk` is the same beat — go and find her, come back
+    // and say so — in verbs the game actually has. `escort` stays in
+    // `ObjectiveKind` because `Objective.failable` still describes it and a
+    // future follower system will want the type; nothing authors it now.
     objectives: [
       talk('wiz', 'wiz', 'Speak to Wiz at the chocobo post', at('wiz_chocobo')),
-      escort('escort', 'chocobo', 'Escort the chocobo back to the post', at('wiz_paddocks')),
+      reach('find', 'wiz_paddocks', 'Find the stray out at the paddocks', at('wiz_paddocks'), 20),
+      talk('back', 'wiz', 'Tell Wiz she is on her way in', at('wiz_chocobo')),
     ],
     rewards: { gil: 1800, exp: 3400, ap: 20, items: [{ id: 'chocobo_whistle', count: 1 }, { id: 'sylkis_greens', count: 3 }] },
   },
@@ -589,12 +596,20 @@ const QUEST_TABLE: Quest[] = [
     rewards: { gil: 6000, exp: 9000, ap: 20, items: [{ id: 'magitek_suit', count: 1 }] },
   },
   {
-    id: 'side_legendary_fish', type: 'side', name: 'The One That Got Away',
+    id: 'side_legendary_fish', type: 'side', name: 'What Is Eating Navyth\'s Catch',
     region: 'duscae', level: 18, giver: 'Navyth', requires: ['main_ch4_lestallum'],
-    summary: 'Navyth has been after the Alstor trout for eleven years. He is not proud.',
+    summary: 'Navyth has been after the Alstor trout for eleven years. Something else got there first.',
+    // **The fishing verb is cut, not wired.** There is no fishing anywhere in
+    // this game — no rod, no line, no cast, no minigame — and a `fish`
+    // objective that ticks off a keypress is not fishing, it is a lie with a
+    // trout in it. Doing it properly is a workstream, and it is written up as
+    // one in the handoff: eight `type: 'fishing'` POIs already exist and would
+    // give the world its only non-combat verb. Until then the quest is about
+    // the thing that *is* built — the voretooth pack on the Alstor shore, which
+    // is exactly why he has not caught anything in years.
     objectives: [
       reach('pier', 'alstor_pier', 'Find Navyth at the Alstor Slough pier', at('alstor_dock'), 12),
-      { id: 'catch', type: 'fish', target: 'alstor_trout', count: 1, desc: 'Land the Alstor Slough trout' },
+      kill('vore', 'voretooth', 4, 'Clear the voretooth off the shoreline', at('coernix_alstor')),
     ],
     rewards: { gil: 2400, exp: 5200, ap: 20, items: [{ id: 'alstor_trout', count: 2 }], recipes: ['sea_bass_meuniere'] },
   },
