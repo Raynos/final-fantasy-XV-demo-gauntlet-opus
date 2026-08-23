@@ -131,7 +131,10 @@ export const POSTURE: Record<string, Partial<Posture>> = {
     slouch: 0.65, chest: 0,
     armOut: 0.02, elbow: 0.42, armTwist: 0.10, asym: 0.40,
     breathRate: 0.215, breathDepth: 1.0,
-    headRate: 0.075, headAmp: 0.20, headDown: 0.10, headTilt: 0.04,
+    // 0.10 here plus a 0.65 slouch used to bury both eyes under the fringe in
+    // `hero_portrait`. The slouch now carries its own weight (see `evalIdle`),
+    // so this is the whole chin-drop and it can be small: bored, not asleep.
+    headRate: 0.075, headAmp: 0.20, headDown: 0.030, headTilt: 0.04,
     fidget: 0.75, biasW: 0.45,
     lead: 1, guard: 1.0,
     gestures: ['pocket', 'shoulder_roll'], gestureGap: [7.5, 13.0],

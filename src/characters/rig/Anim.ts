@@ -696,8 +696,16 @@ export class Animator {
     this.add('spine01', sl * 0.040 - ch * 0.052, 0, 0);
     this.add('spine02', sl * 0.105 - ch * 0.055, 0, 0);
     this.add('spine03', sl * 0.125 - ch * 0.065, 0, 0);
-    this.add('neck', -sl * 0.075 + ch * 0.042, 0, 0);
-    this.add('head', -sl * 0.050 + ch * 0.034, 0, 0);
+    // The cervical spine has to give back nearly all of the thoracic flexion,
+    // or a slouch becomes a man staring at his own feet. It used to return 46%
+    // of it (-0.125 against a spine sum of +0.270), which on Noctis's 0.65
+    // slouch left the head pitched 11 degrees down before `headDown` was even
+    // added — and `hero_portrait`, the one shot in the corpus whose whole job is
+    // to show a face, could not see either eye under the fringe. 90% now, so
+    // `headDown` is the only thing that decides where the chin points, which is
+    // what the posture descriptor says it is.
+    this.add('neck', -sl * 0.150 + ch * 0.042, 0, 0);
+    this.add('head', -sl * 0.093 + ch * 0.034, 0, 0);
     // resting shoulder drop, protracted forward when slouched and pulled back
     // and down when the chest is open
     this.add('clavicleL', -sl * 0.30 + ch * 0.20, -sl * 0.19 + ch * 0.11, -0.030 - sl * 0.060 + ch * 0.075);
