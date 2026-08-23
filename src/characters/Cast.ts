@@ -278,7 +278,7 @@ export const CAST = {
     // *vertical* rather than as small. `muscle` 0.40 keeps a wiry forearm on him
     // — the difference between Ignis and Prompto is not girth, it is that Ignis
     // has 12 cm of height and a straight spine over him.
-    profile: { height: 1.865, shoulder: 0.96, muscle: 0.40, hip: 0.86, neck: 0.94, legScale: 1.03, armScale: 1.04, headScale: 1.02 },
+    profile: { height: 1.865, shoulder: 0.96, muscle: 0.40, hip: 0.86, neck: 0.96, legScale: 1.03, armScale: 1.04, headScale: 1.02 },
     look: {
       seed: 37,
       idle: {
@@ -357,7 +357,7 @@ export const CAST = {
     // relatively wide (0.93 against a 0.85 shoulder) because that inverted
     // shoulder-to-hip ratio is most of why a slight frame looks slight, and a
     // 1.07 head keeps the boyishness the face already has.
-    profile: { height: 1.725, shoulder: 0.85, muscle: 0.14, hip: 0.93, neck: 0.94, headScale: 1.07 },
+    profile: { height: 1.725, shoulder: 0.85, muscle: 0.14, hip: 0.93, neck: 1.00, armScale: 0.96, headScale: 1.07 },
     look: {
       seed: 53,
       idle: {

@@ -153,10 +153,15 @@ export function torsoShape(m: number) {
     // sweep, so the neck ring stays slim while the yoke slopes out to the
     // acromion. Without it the neck is a bare cylinder meeting a flat plate at
     // 90°, and that step is most of why the neck reads twice its real length.
+    // The trapezius is the one term here that must NOT open up symmetrically:
+    // its whole job is to stop the neck meeting the yoke at 90 degrees, and a
+    // slight character needs that as much as a heavy one. At x1.55 Prompto's
+    // 0.14 muscle lost a fifth of his and the neck went back to reading as a
+    // pipe on a plate. x1.35, and the nape term x1.2.
     const trap = (abump(th, Math.PI * 0.5, 0.78) + abump(th, -Math.PI * 0.5, 0.78));
-    k += (0.3346 + 0.5270 * m) * trap * smoothIn(0.80, 1.0, t);
+    k += (0.3584 + 0.4590 * m) * trap * smoothIn(0.80, 1.0, t);
     // and it carries a little of the same mass round the back of the neck
-    k += (0.1208 + 0.2520 * m) * abump(th, Math.PI, 0.8) * smoothIn(0.84, 1.0, t);
+    k += (0.1502 + 0.1680 * m) * abump(th, Math.PI, 0.8) * smoothIn(0.84, 1.0, t);
     return k;
   };
 }
