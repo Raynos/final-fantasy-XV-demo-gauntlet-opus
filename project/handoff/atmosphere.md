@@ -234,6 +234,23 @@ Neither is mine to fix and both are reported here rather than edited.
    `vista_overcast` and `storm` were checked by eye and neither regressed, so
    this is a tidy-up rather than a defect.
 
+## State of the tree
+
+`npm run check`: **10/11**, on a tree with no other agent's paths dirty. The one
+failure is `anycheck` — 11 `any`, all in `src/game/rpg/HavenCamp.ts`, pre-existing
+and not this lane. `combatloop` is back to **30/30** and `heightcheck`,
+`driftcheck` and `horizoncheck` all pass *under the runner*, which the previous
+handoff records as not being the case (it had 6/10 with two gates that only
+passed standalone).
+
+`check:perf` was **not** run: other lanes were live and a perf number taken then
+is meaningless. **The horizon bake's perf risk that the previous handoff flagged
+is still unmeasured, and this lane has now added a second unmeasured cost** — the
+cloud march is unchanged in shape (same step budget, same LOD ramps) but aerial
+perspective is 6x stronger, which costs nothing, and the cirrus is one fewer
+noise octave's worth of anisotropy but the same number of fetches. Neither
+should move the frame. Somebody still has to take the ruler.
+
 ## Instruments added
 
 `?post=` tokens, all read by `Sky._ablateWeather` and applied from
