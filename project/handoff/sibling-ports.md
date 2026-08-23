@@ -20,7 +20,8 @@ renderer changes and again after the camera change.
 | `4d94169` | sky: ablate the two diffuse ambients separately — one is inert |
 | `fd1a153` | camera: lens no longer ends up inside hills (4.77% -> 0.00%) |
 | `347b392` | camera: `lookScale()` — look that does not retune under the sprint FOV |
-| `7419942` | the plan re-audit itself |
+| `77555a7` | enemies: grass hides you from sight, and only if you hold still |
+| `7419942`, `236e8f7` | the plan re-audit, and the 3.7 correction |
 
 Measured net on the grade, six graded shots against the FFXV field corpus:
 median range **9.46 -> 11.06 stops** (ref 9.79), black point 3.5 -> 1.1 (3.4),
@@ -37,6 +38,10 @@ median range **9.46 -> 11.06 stops** (ref 9.79), black point 3.5 -> 1.1 (3.4),
   unpinned numbers read backwards.
 - `src/tools/probes/camsweep.mts` — camera lens-inside-terrain rate over 13,872
   poses. Run it before and after anything touching `_armDistance`.
+- `src/tools/probes/conceal.mts` — vegetation concealment: whether it is
+  *wired* and whether it *changes an answer*, asked separately. **It ticks
+  `Enemies.update` once first** — reading `_ctx` straight out of a settled
+  capture reports a live system as dead, which it did on its first run.
 - `imgdiff --calibrate` + `project/noise-floors.json` — per-shot floors.
   Regenerate with two `--cold` captures of one build.
 
@@ -69,11 +74,22 @@ So, in value order:
 - `vista_dusk` clips 14.1% against FFXV-golden's 16.0%, which is fine, but its
   median luma is 137.8 against 104.5. The mids sit a third of a stop high at
   golden hour and nobody has chased it.
-- **The perf re-baseline is still not certified.** Two runs on 2026-08-23
-  returned `RULER_VALID: false` — noise floor 1.58 ms against a 5.9 ms frame,
-  27%, with `cleanup.mts` reporting no orphans of ours and system load ~4.5.
-  The machine has other work on it. The ruler refused rather than lying, which
-  is 2.4 working. This item is argued into **phase4's WS-0b** in the plan.
+- **Perf: three runs, and the certified one fails.** Two voided
+  (`RULER_VALID: false`, floor 27% of the frame). The third certified —
+  `RULER_VALID: true`, floor 22% — with **mean 166.4 fps and worst 51 fps on
+  `bestiary_necromancer`** against a 60 fps target, where the stored baseline
+  has that shot at 179.
+
+  **Do not attribute it to this round's work without re-running.** That shot
+  read 179 / 150 / 51 fps across the three runs, its baseline row already
+  carried `p95 31.8 ms, max 133.2 ms`, and system load was ~4.5 from outside
+  this repo throughout — `cleanup.mts` reports no orphans of ours, and perf
+  takes the daemon's exclusive lease, so the contention is not something this
+  repo can drain. Nothing landed this round is a plausible 30% frame cost: the
+  bleach and the haze split are a handful of ALU ops, the toe and grain are
+  LUT-bake-time with no runtime, and the camera adds one `heightAt` per frame.
+  **Needs an idle machine.** Owned by **phase4's WS-0b**, with Wave 3's
+  frame-cost split behind it.
 
 ## Files touched
 

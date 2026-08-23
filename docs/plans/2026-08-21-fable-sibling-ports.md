@@ -1,7 +1,8 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 done. Wave 2 done bar 3.6
-and 3.7. Wave 3 audited to a verdict, one item open. Wave 4 two of five.**
+Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 done. Wave 2 done bar 3.6,
+which the plan graph gives to another lane. Wave 3 audited to a verdict, one
+item open on the perf re-baseline. Wave 4 three of five.**
 Re-audited against the tree and rebuilt 2026-08-23 (second opus pass, starting
 from `d377fc7`). This table **replaces** the previous audit's, which was hours
 old and still had two rows wrong — see "what 3.3 actually was" below, because
@@ -24,7 +25,7 @@ how it was wrong is the more useful half.
 | 3.7 water depth model | **DONE — and audited wrong twice** | `Water.ts:15-43`. Per-channel Beer-Lambert `exp(-sigma*path)` with `sigma.r >> sigma.b`, path along the **refracted** ray (`refract(-V, N, 0.7502)`, one Snell step, no scene copy), bed re-sampled from the heightfield, alpha as the complement of transmittance so the waterline silhouette comes from the bed, and foam derived from depth broken by the wave field rather than stamped as a contour. That is every element 3.7 asks for |
 | 3.8 sky-SH + PCSS | **(a) MEASURED, worth building, not built. (b) not evaluated** | `4d94169`. See below — the measurement found something better than it went looking for |
 | Wave 3 (perf) | **AUDITED to a verdict; one item open** | four of six items closed by reading and measuring, see below |
-| Wave 4 (gameplay) | **2 of 5** | swept camera `fd1a153`, `lookScale` `347b392`. Perception meter, cover/fire and adaptive music untouched |
+| Wave 4 (gameplay) | **3 of 5, and the biggest one was mostly already built** | swept camera `fd1a153`, `lookScale` `347b392`, vegetation concealment `77555a7`. The perception *meter* and its ladder already existed (`awareness`, thresholds 0.12/0.55); what was missing was the concealment term the plan says MGS5 never wrote, and that is now in and measured. Cover/fire rhythm, the `setMotion` rate contract and adaptive music are untouched |
 | §6.2 per-shot noise floors | **DONE** | `9db4548`. Measured a 16x spread; the old global floor was above all twelve |
 
 ### What 3.3 actually was, and why the last audit misread it
@@ -599,11 +600,16 @@ Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
       is in `BRIEF.md` and extended with four new dials this pass; §6.2
       per-shot noise floors are measured and checked in.
 - [ ] **Perf re-baseline published from the new ruler with noise floor and
-      contention verdict attached.** Still the single most load-bearing open
-      item in the repo. It is *last by design* — `docs/plans/README.md` puts it
-      after phase3 and phase4 — and this pass changed the renderer, so any
-      number taken before those land is stale on arrival. **It belongs to
-      phase4's WS-0b, not here.**
+      contention verdict attached.** Attempted three times on 2026-08-23. Two
+      voided (`RULER_VALID: false`, floor 27% of the frame); **the third
+      certified and FAILED** — `RULER_VALID: true`, floor 22%, mean 166.4 fps,
+      worst **51 fps on `bestiary_necromancer`** against a 60 fps target.
+      *That is a result, not a baseline.* The shot has read 179 / 150 / 51 fps
+      across the three runs, its stored baseline row already carried
+      `p95 31.8 ms, max 133.2 ms`, and system load was ~4.5 from outside this
+      repo throughout. A spike-dominated shot on a busy machine is not evidence
+      about the renderer. **Needs an idle machine, and it belongs to phase4's
+      WS-0b** — which is also where Wave 3's frame-cost split waits.
 
 ### What this plan does NOT close, and who owns it
 
@@ -615,7 +621,7 @@ Archiving this plan requires these to be re-filed, not forgotten:
 | 3.8(a) SH probe + specular-only env; the inert `HemisphereLight` | unassigned; measured and specified above, needs a lighting lane |
 | 3.8(b) PCSS | unassigned, not evaluated |
 | Wave 3's frame-cost split, and post consolidation behind it | `2026-08-22-opus-phase4` (WS-0b perf) |
-| Wave 4 perception meter + alert ladder, cover/fire rhythm | `2026-08-22-opus-phase4-content-and-gameplay` |
+| Wave 4 cover/fire rhythm (the meter and ladder are done) | `2026-08-22-opus-phase4-content-and-gameplay` |
 | Wave 4 `setMotion` animation-rate contract | procedural-modeling / whoever next touches posture |
 | Wave 4 adaptive music re-targeting | unassigned, tuning-level |
 | 2.6 grounding | `project/handoff/grounding.md` |
