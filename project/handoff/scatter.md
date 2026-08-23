@@ -260,13 +260,72 @@ of every establishing frame.
   and the per-species cap `c._w >= c.max` truncates in scan order *within* a
   species on top of that.
 
-The §2.5 fix is one line each: rank by `hashU(p.seed, i, SALT)` and keep the top
-`budget`, or simply skip with probability `1 − budget/estimated` from a position
-hash. **I have not measured whether either budget actually binds in a shipped
-frame**, and that is the first thing to check before spending anything on it —
-if `far` never reaches `impBudget` this is a latent bug and not a live one.
+The §2.5 fix would be one line each: rank by `hashU(p.seed, i, SALT)` and keep
+the top `budget`. **Do not spend it. Measured, and neither budget binds.**
+Running the real `_makeTile` / `_makeCanopyTile` over the actual ring geometry
+at four zone cameras:
+
+| zone | geo wanted (budget 1200) | impostors wanted (3000) | far cards wanted (1200) |
+|---|---|---|---|
+| nebulawood | 2012 -> 1200 + **812 overflow** | 2310 | 567 |
+| fallgrove | 569 | 512 | 539 |
+| alstor | 423 | 504 | — |
+| mencemoor | 46 | 55 | 211 |
+
+Only `geoBudget` binds, and it truncates by a **distance sort** — which is
+correct and is the one budget that should not be shuffled, because the closest
+trees are exactly the ones that must keep their geometry. The two scan-order
+budgets have 23% and 53% of headroom in the worst zone measured. **The defect is
+real in the code and absent in the frame**, and it should be recorded as such
+rather than fixed: the fix costs a comparison per instance and buys nothing
+until the forest roughly doubles. Re-measure if `quality` drops (the budgets
+scale with it and the demand does not) or if the Matérn swap raises counts —
+this lane tuned it for parity precisely so that it would not.
 
 ---
+
+## Cost, and what the frames show
+
+`tmp/shots/scatter-before` (`39d4d16^`, the immediate parent, so the only
+difference is this lane's commit) against `tmp/shots/scatter-r2` (`39d4d16`):
+
+| shot | triangles | Δ | draws before -> after |
+|---|---|---|---|
+| `town_forecourt` | 12 411 973 -> 11 493 347 | **−7.40%** | 1037 -> 1037 |
+| `poi_reststop` | 12 542 805 -> 11 670 471 | **−6.95%** | 1011 -> 1011 |
+| `zone_fallgrove` | 14 826 337 -> 14 101 279 | −4.89% | 605 -> **625** |
+| `poi_parking` | 17 306 491 -> 17 037 989 | −1.55% | 725 -> 701 |
+| `zone_longwythe` | 9 015 174 -> 9 001 778 | −0.15% | 588 -> 584 |
+| `zone_nebulawood` | 25 992 043 -> 26 213 347 | +0.85% | 642 -> 642 |
+
+Net −8 draws across six shots and nothing near the 800 budget. The +20 at
+`zone_fallgrove` is the grass field's chunk allocation moving, not a new mesh —
+no `InstancedMesh` is created or destroyed by any of this, and a new visible one
+would have cost four. The two big triangle drops are the pad exclusion: a town
+forecourt was carrying most of a million triangles of grass and scrub that the
+buildings stand on top of.
+
+**`town_forecourt` before/after is the frame that shows it.** Before, dark green
+shrubs sit on the graded apron between the caravan and the garage and across the
+dirt beside the animals; after, that band is clean and the nearest scrub is out
+past the pad radius where it belongs. `zone_fallgrove` shows the hydrology term:
+the canopy thins on the right-hand shoulder and a small clearing opens
+centre-right where the ground is convex and dry.
+
+**And two frames show the defect this lane could not fix**, which is worth
+recording as the visual counterpart of the statistic rather than as a
+complaint:
+
+- `tmp/shots/scatter-r2/zone_longwythe.jpg` — the scrub across the plain is an
+  even sprinkle of near-identical dark dots at almost constant spacing, with no
+  knots and no bare ground between them. That is R = 0.971 rendered.
+- `tmp/shots/scatter-r2/zone_fallgrove.jpg` — the canopy line is a field of
+  individual round crowns with a uniform gap between each. Nowhere do three
+  stems crowd each other and nowhere is there a hole. That is R = 0.930.
+
+`zone_nebulawood` cannot judge any of this: the camera sits at eye height inside
+a closed canopy and the frame is a wall of leaf cards. That is a shot-framing
+problem for whoever owns the corpus, not a vegetation one.
 
 ## Files touched
 
