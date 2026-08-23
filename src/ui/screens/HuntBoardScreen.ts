@@ -4,6 +4,7 @@ import { icon, button } from '../Icons.ts';
 import { ensureInteractCss } from '../../game/interaction/interact.css.ts';
 import type { Menus } from '../Menus.ts';
 import type { Game } from '../../game/Game.ts';
+import { HUNTER_RANKS, RANK_GATE } from '../../game/rpg/Quests.ts';
 import type { Objective, ObjectiveView, Quest, QuestStatus, QuestView, Tipster } from '../../game/rpg/Quests.ts';
 import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
 
@@ -24,20 +25,6 @@ import type { RpgSystem } from '../../game/rpg/RpgSystem.ts';
  * Controls: ↑↓ pick, ←→ change ledger, Enter accept (or track, if already
  * taken). Everything animates from `game.time`; no CSS transitions.
  */
-
-/** Hunter ranks, in points. FFXV's ladder, with our own thresholds. */
-export const HUNTER_RANKS = [
-  { at: 0, name: 'Unranked', reward: null },
-  { at: 5, name: 'Apprentice', reward: 'Bronze Bangle' },
-  { at: 15, name: 'Trapper', reward: 'Titanium Bangle' },
-  { at: 30, name: 'Chaser', reward: 'Heliodor Bracelet' },
-  { at: 50, name: 'Ranger', reward: 'Silver Bangle' },
-  { at: 80, name: 'Warrior', reward: "Champion's Anklet" },
-  { at: 120, name: 'Legend', reward: 'Ribbon' },
-];
-
-/** Hunter points needed before a bounty of this rank may be taken. */
-const RANK_GATE = { 1: 0, 2: 5, 3: 15, 4: 30, 5: 50, 6: 75, 8: 110, 10: 150 };
 
 /** Which ledger a hunt is pinned in. */
 function ledgerOf(hunt: Quest, tipsters: Partial<Record<string, Tipster>> | undefined) {
@@ -233,7 +220,7 @@ export class HuntBoardScreen {
       const status = log.status(h.id);
       if (tab === 'Accepted') { if (status !== 'active') continue; }
       else if (ledgerOf(h, tips) !== tab) continue;
-      const gate = RANK_GATE[h.rank as keyof typeof RANK_GATE] ?? 0;
+      const gate = RANK_GATE[h.rank ?? 1] ?? 0;
       const view = log.view(h.id);
       const blockedByRank = pts < gate;
       const blockedByChain = status === 'locked';
@@ -359,8 +346,10 @@ export class HuntBoardScreen {
     // hunter rank readout
     const { cur, next, points } = this.rank();
     this.rankV.textContent = cur.name;
+    // Name the *unlock*, not just the rung. "next: Trapper" says nothing about
+    // why you would want it; "opens ★★★ contracts" is the reason to work.
     this.rankP.textContent = next
-      ? `${points} / ${next.at} pts  ·  next: ${next.name}`
+      ? `${points} / ${next.at} pts  ·  ${next.name} opens ${'★'.repeat(Math.min(6, next.unlocks))} contracts`
       : `${points} pts  ·  top of the ladder`;
     const lo = cur.at, hi = next ? next.at : Math.max(cur.at, points);
     const frac = hi > lo ? clamp((points - lo) / (hi - lo), 0, 1) : 1;

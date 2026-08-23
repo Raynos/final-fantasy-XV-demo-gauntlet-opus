@@ -77,6 +77,60 @@ export const HUNT_RANKS = {
   10: { stars: '★★★★★★★★★★',  name: 'Rank 10', gilMult: 40.0, hunterPoints: 60 },
 } satisfies Record<number, HuntRankInfo>;
 
+/**
+ * The hunter ladder: what each rung is called, what it costs, what it pays and
+ * what it opens.
+ *
+ * **The old curve could not be climbed.** Rank-2 bounties wanted 5 points, a
+ * rank-1 hunt pays 1, and the board had exactly two rank-1 hunts — so the
+ * ceiling was 2 points and ten of the twelve bounties were unreachable for the
+ * whole life of the game. `Legend` at 120 was likewise past the 84 points the
+ * entire board could ever pay. Nobody had checked the arithmetic against the
+ * table it gates.
+ *
+ * The curve now runs off what the board actually pays, in order, with about
+ * one contract of slack at every rung. Doing every hunt in ladder order banks:
+ *
+ * ```
+ * killer wasps    1     bloodhorn    10     magitek armour  40     bandersnatch 100
+ * sabertusks      2     garulessa    14     zu              52     adamantoise  160
+ * dualhorn        4     coeurl       21     naga            64
+ * voretooth       6     mesmenir     28     iron giants     82
+ * ```
+ *
+ * so every `at` below lands one contract *before* its band is exhausted, and
+ * the top rung is reachable without a clean sweep. The first rung is
+ * deliberately at 1: the second bounty you take should visibly grow the board,
+ * because a ladder you cannot see moving in the first ten minutes is not a
+ * ladder, it is a wall.
+ *
+ * `unlocks` is the bounty rank this rung opens, and `RANK_GATE` is derived from
+ * it rather than written twice — the two drifting apart is exactly how the
+ * unclimbable curve survived.
+ */
+export const HUNTER_RANKS = [
+  { at: 0, name: 'Unranked', unlocks: 1, reward: null, item: null },
+  { at: 1, name: 'Apprentice', unlocks: 2, reward: 'Bronze Bangle', item: 'bronze_bangle' },
+  { at: 4, name: 'Trapper', unlocks: 3, reward: 'Silver Bangle', item: 'silver_bangle' },
+  { at: 10, name: 'Chaser', unlocks: 4, reward: 'Topaz Bracelet', item: 'topaz_bracelet' },
+  { at: 21, name: 'Ranger', unlocks: 5, reward: 'Gold Bangle', item: 'gold_bangle' },
+  { at: 40, name: 'Warrior', unlocks: 6, reward: "Champion's Anklet", item: 'champions_anklet' },
+  { at: 82, name: 'Legend', unlocks: 10, reward: 'Ribbon', item: 'ribbon' },
+];
+
+/**
+ * Hunter points needed before a bounty of this rank may be taken.
+ *
+ * Derived from {@link HUNTER_RANKS}: the cheapest rung that opens this rank.
+ * The table has no 7 and no 9, so a rank asks for the first rung that reaches
+ * *at least* it.
+ */
+export const RANK_GATE: Record<number, number> = {};
+for (const r of [1, 2, 3, 4, 5, 6, 8, 10]) {
+  const rung = HUNTER_RANKS.find((h) => h.unlocks >= r);
+  RANK_GATE[r] = rung ? rung.at : HUNTER_RANKS[HUNTER_RANKS.length - 1].at;
+}
+
 /** A rank the table actually has an entry for. Note the gaps: no 7 and no 9. */
 export type HuntRank = keyof typeof HUNT_RANKS;
 
@@ -208,6 +262,19 @@ export interface Quest {
   /** `hunt` only: the mark is a daemon. The hunt board prints it as a caveat. */
   daemon?: boolean;
   /**
+   * A `SET_PIECES` entry this quest stages instead of an ordinary pack.
+   *
+   * `HuntRuntime` arms it when the objective *before* the kill lands — so the
+   * boss is there when you arrive and not before, and the announcement does
+   * not fire while the party is two kilometres away. If the kill is the first
+   * objective it arms on accept.
+   *
+   * This is on `Quest` rather than on `HUNT_TARGETS` because the main line
+   * needs it too: `main_ch3_deadeye` and `main_ch5_titan` are both set pieces
+   * and neither is a bounty.
+   */
+  setPiece?: string;
+  /**
    * Story flags that must be set before this becomes available.
    *
    * `refresh()` honours it, but **no quest in the table sets it** -- so the
@@ -267,6 +334,9 @@ const QUEST_TABLE: Quest[] = [
   {
     id: 'main_ch3_deadeye', type: 'main', chapter: 3, name: 'A Behemoth Undying',
     region: 'duscae', level: 14, giver: 'Dave', requires: ['main_ch3_openworld'],
+    // The species exists in the bestiary and in no spawn table; a staged fight
+    // is the only honest home for a named, one-off, 34,000 hp behemoth.
+    setPiece: 'deadeye',
     summary: 'Deadeye has been killing hunters in Duscae for years. Finish it.',
     objectives: [
       talk('dave', 'dave', 'Take the job from Dave', at('longwythe_rest')),
@@ -289,6 +359,7 @@ const QUEST_TABLE: Quest[] = [
   {
     id: 'main_ch5_titan', type: 'main', chapter: 5, name: 'Dark Clouds',
     region: 'duscae', level: 25, giver: 'Ignis', requires: ['main_ch4_lestallum'],
+    setPiece: 'titan',
     summary: 'The Archaean stirs beneath the Disc of Cauthess. Answer the summons.',
     objectives: [
       reach('disc', 'disc_of_cauthess', 'Descend into the Disc of Cauthess', at('disc_cauthess'), 30),
@@ -323,6 +394,32 @@ const QUEST_TABLE: Quest[] = [
     summary: 'Dualhorns have wandered onto the grazing land and will not be moved politely.',
     objectives: [kill('dualhorns', 'dualhorn', 4, 'Drive off the Dualhorns', at('saxham'))],
     rewards: { gil: 2200, exp: 3200, ap: 15, items: [{ id: 'dualhorn_steak', count: 2 }, { id: 'silver_bangle', count: 1 }] },
+  },
+  {
+    // The two bounties that light the staged fights. `BossFight` has three
+    // kinds -- field, imperial, astral -- and until these existed only the
+    // astral one had a quest that could reach it, on chapter 5. A rank-3 and a
+    // rank-5 contract put the other two inside the ordinary hunt ladder.
+    id: 'hunt_bloodhorn', type: 'hunt', name: 'The Bull of Saxham',
+    region: 'leide', level: 18, rank: 3, tipster: 'longwythe', requires: ['hunt_dualhorn'],
+    target: 'Bloodhorn', timeOfDay: 'day', setPiece: 'bloodhorn',
+    summary: 'One dualhorn came back from the grazing land bigger, redder and alone.',
+    objectives: [
+      reach('field', 'saxham_field', 'Reach the Saxham grazing land', at('saxham', 120, -90), 24),
+      kill('bull', 'bloodhorn', 1, 'Put the Bloodhorn down', at('saxham', 120, -90)),
+    ],
+    rewards: { gil: 4200, exp: 6000, ap: 15, items: [{ id: 'behemoth_horn', count: 1 }, { id: 'hi_potion', count: 3 }] },
+  },
+  {
+    id: 'hunt_magitek_armour', type: 'hunt', name: 'Steel at the Blockade',
+    region: 'leide', level: 30, rank: 5, tipster: 'takka', requires: ['hunt_coeurl'],
+    target: 'MA-X Cuirass', timeOfDay: 'any', setPiece: 'magitek_armour',
+    summary: 'The empire has parked something at Norduscaen that walks. The hunters want it not to.',
+    objectives: [
+      reach('blockade', 'norduscaen', 'Approach the Norduscaen Blockade', at('norduscaen', 90, 60), 26),
+      kill('cuirass', 'magitek_armour', 1, 'Destroy the MA-X Cuirass', at('norduscaen', 90, 60)),
+    ],
+    rewards: { gil: 15000, exp: 21000, ap: 15, items: [{ id: 'magitek_booster', count: 6 }, { id: 'imperial_relay', count: 1 }] },
   },
   {
     id: 'hunt_voretooth', type: 'hunt', name: 'Bloodthirsty Beasts',

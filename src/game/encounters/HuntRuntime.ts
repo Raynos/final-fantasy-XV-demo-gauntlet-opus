@@ -43,16 +43,58 @@ export class HuntRuntime {
     this._off = this.rpg.on<QuestUpdate>('quest-updated', (p) => this._onQuest(p));
     // anything already accepted before we booted still deserves a mark
     for (const q of this.rpg.quests.active) {
-      if (q.type === 'hunt') this.arm(q.id);
+      if (q.setPiece) this.armSetPiece(q.id);
+      else if (q.type === 'hunt') this.arm(q.id);
     }
     return this;
   }
 
   _onQuest(p: QuestUpdate) {
-    if (!p || !p.quest || p.quest.type !== 'hunt') return;
+    if (!p || !p.quest) return;
+    // A set piece is not always a bounty: chapter 3 ends on Deadeye and
+    // chapter 5 on the Archaean, and both are main quests.
+    if (p.quest.setPiece) {
+      if (p.phase === 'accepted' || p.phase === 'objective') this.armSetPiece(p.quest.id);
+      else if (p.phase === 'abandoned' || p.phase === 'failed') this.clear(p.quest.id);
+      if (p.quest.type !== 'hunt') return;
+    }
+    if (p.quest.type !== 'hunt') return;
     if (p.phase === 'accepted') this.arm(p.quest.id);
     else if (p.phase === 'complete') this.finish(p.quest.id, p.rewards);
     else if (p.phase === 'abandoned' || p.phase === 'failed') this.clear(p.quest.id);
+  }
+
+  /**
+   * Stage a quest's set-piece fight, once the party is up to the kill.
+   *
+   * The timing is the whole point. `BossFight.begin` sets the boss chasing and
+   * fires `encounter:boss` immediately, so arming on `accepted` would announce
+   * the Archaean while the party is still in Hammerhead. It arms when the
+   * objective *before* the kill lands — you follow the trail into the
+   * Nebulawood and Deadeye is there — or on accept when the kill comes first.
+   *
+   * The anchor is the quest's own kill waypoint, which resolves through
+   * `WorldMap`, rather than the `SET_PIECES` literal. A boss that is not where
+   * the compass points is the same defect as a quest marker in empty desert.
+   */
+  armSetPiece(id: string) {
+    if (this.active.has(id)) return null;
+    const q = this.rpg?.quests?.def(id);
+    const st = this.rpg?.quests?.state(id);
+    const set = q?.setPiece ? SET_PIECES[q.setPiece] : null;
+    if (!q || !st || !set || st.status !== 'active') return null;
+    const k = q.objectives.findIndex((o) => o.type === 'kill');
+    if (k < 0) return null;
+    // every objective before the kill must be done, and the kill must not be
+    if (st.objectives[k].done) return null;
+    for (let i = 0; i < k; i++) if (!st.objectives[i].done) return null;
+    const wp = q.objectives[k].waypoint || q.objectives[Math.max(0, k - 1)].waypoint;
+    const spawned = this.dir.startSetPiece(set.id, wp ? { at: [wp[0], wp[2]] } : {});
+    this.active.set(id, { spawned: !!spawned, quest: q });
+    window.dispatchEvent(new CustomEvent('encounter:hunt-armed', {
+      detail: { quest: id, name: q.name, target: q.target || set.name, rank: q.rank ?? 1, level: set.level },
+    }));
+    return spawned;
   }
 
   /**

@@ -39,6 +39,13 @@ export const MESMENIR = {
   senses: { sight: 36, fov: 2.2, hearing: 22, nocturnal: true },
   drops: [
     { id: 'mesmenir_mane', chance: 0.5, count: 1 },
+    // `side_gemstone_run` wants two sky gemstones and nothing in the game
+    // dropped, sold or awarded one, so the quest could not be finished. The
+    // stone comes off things that fly in FFXV; there is no flier in this
+    // bestiary, and the Mesmenir is the nearest thing to one — a spectral
+    // horse of the Cleigne moors, in the region and level band the quest is
+    // written for. A Zu in the bestiary would be the better answer.
+    { id: 'sky_gemstone', chance: 0.5, count: 1 },
   ],
   timing: { telegraph: 0.85, strike: 0.28, attack: 0.90, recover: 1.15 },
   attacks: [

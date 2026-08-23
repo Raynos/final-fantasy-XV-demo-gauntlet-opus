@@ -26,7 +26,7 @@ import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.ts';
 import { Inventory, ITEMS, SHOPS } from './Inventory.ts';
 import { Elemancy, DEPOSITS } from './Elemancy.ts';
-import { QuestLog, QUESTS, HUNTS, TIPSTERS } from './Quests.ts';
+import { QuestLog, QUESTS, HUNTS, HUNTER_RANKS, TIPSTERS } from './Quests.ts';
 import { PartyState, MEMBERS, RECIPE_TABLE } from './PartyState.ts';
 import { DayCycle, HAVENS } from './DayCycle.ts';
 import * as SaveGame from './SaveGame.ts';
@@ -156,6 +156,8 @@ export class RpgSystem {
   ascension!: Ascension;
   autosaveInterval!: number;
   chapter!: number;
+  /** Highest hunter rung already paid out. @see _checkHunterRank */
+  _rankSeen?: number;
   combatBridge!: CombatBridge;
   havenCamp!: HavenCamp;
   day!: DayCycle;
@@ -326,11 +328,15 @@ export class RpgSystem {
     this.emitter.on('item-gained', () => this.quests.settleAll());
     this.emitter.on('gil-changed', () => this.quests.settleAll());
 
+    // Record the rung the save is already on, so the first hunt of the session
+    // pays its rank-up instead of being swallowed as "the baseline".
+    this._checkHunterRank();
+
     // Quest completion pays out.
     this.emitter.on('quest-updated', (p: QuestUpdate) => {
       if (p.phase !== 'complete') return;
       this.grantRewards(p.rewards, `quest:${p.quest.id}`);
-      if (p.quest.type === 'hunt') this.ascension.awardAp('hunt-complete');
+      if (p.quest.type === 'hunt') { this.ascension.awardAp('hunt-complete'); this._checkHunterRank(); }
       else if (p.quest.type === 'main') {
         this.ascension.awardAp('chapter-complete');
         this.chapter = Math.max(this.chapter, (p.quest.chapter || this.chapter) + 1);
@@ -562,6 +568,37 @@ export class RpgSystem {
   giveItem(id: string, count = 1, source = 'reward') { return this.inventory.add(id, count, source); }
 
   /** Apply a quest/story reward bundle. */
+  /**
+   * Pay the hunter rank-up the board has always promised and never handed over.
+   *
+   * `HUNTER_RANKS` carried a `reward` string per rung and it was printed on the
+   * board and never granted — so the ladder went up and nothing came of it,
+   * which is the "fight -> reward -> spend -> fight better" loop stopping one
+   * step short. Crossing a rung now pays its accessory once, and the crossing
+   * itself is announced.
+   *
+   * `_rankSeen` is the highest rung already paid. It is derived from the points
+   * on load rather than saved, so an existing save cannot be paid twice and a
+   * new rung added later still pays out.
+   */
+  _checkHunterRank() {
+    const pts = this.quests.hunterPoints;
+    let seen = this._rankSeen;
+    if (seen == null) seen = -1;
+    let top = -1;
+    for (let i = 0; i < HUNTER_RANKS.length; i++) if (pts >= HUNTER_RANKS[i].at) top = i;
+    if (top <= seen) { this._rankSeen = Math.max(seen, top); return null; }
+    const rung = HUNTER_RANKS[top];
+    this._rankSeen = top;
+    if (seen < 0) return null;               // first call on a loaded save: record, do not pay
+    if (rung.item) this.inventory.add(rung.item, 1, 'hunter-rank');
+    this.emit('hunter-rank-up', { rank: top, name: rung.name, points: pts, reward: rung.reward });
+    window.dispatchEvent(new CustomEvent('ffxv-hunter-rank', {
+      detail: { rank: top, name: rung.name, points: pts, reward: rung.reward, unlocks: rung.unlocks },
+    }));
+    return rung;
+  }
+
   grantRewards(rewards: RewardBundle | null | undefined, source = 'reward') {
     if (!rewards) return null;
     if (rewards.gil) this.inventory.addGil(rewards.gil, source);

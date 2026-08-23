@@ -56,6 +56,10 @@ export const NECROMANCER = {
   /** Metres it floats above the terrain — it never touches the ground. */
   drops: [
     { id: 'dark_matter_shard', chance: 0.35, count: 1 },
+    // `side_scraps` wants five torn map fragments and no enemy, shelf or
+    // reward in the game produced one. A daemon that raises the dead is the
+    // one thing in Lucis that would be carrying somebody else's papers.
+    { id: 'old_book', chance: 0.45, count: 1 },
   ],
   timing: { telegraph: 1.0, strike: 0.3, attack: 0.9, recover: 1.2 },
   attacks: [

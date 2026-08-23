@@ -334,25 +334,53 @@ export interface SetPiece {
   music: 'boss-field' | 'boss-imperial' | 'boss-astral';
 }
 
+/**
+ * The four staged fights.
+ *
+ * Every `at` used to be a literal pair written against the 3 km world -- the
+ * Archaean waited at (-215, -395), which is 2.4 km from the Disc of Cauthess
+ * the map draws. It never showed, because **nothing armed any of them**: a set
+ * piece is reached only through `HuntRuntime.arm` behind `if (t.setPiece)` and
+ * no table row set it, so `BossFight` and `TitanArena` -- a complete phase
+ * machine and a merged-mesh basalt arena with quake and rising spires -- had
+ * never executed in play or in the harness.
+ *
+ * They are armed by `Quest.setPiece` now, and `HuntRuntime` passes the quest's
+ * own kill waypoint as the anchor, so the fight happens where the compass sent
+ * you. `near()` keeps these honest for any caller that does not.
+ */
 export const SET_PIECES: Record<string, SetPiece> = {
   bloodhorn: {
     id: 'bloodhorn', name: 'Bloodhorn', kind: 'field',
-    at: [-96, -132], radius: 40, level: 22, boss: 'bloodhorn',
+    at: near('saxham', 120, -90), radius: 40, level: 22, boss: 'bloodhorn',
     adds: [{ key: 'dualhorn', count: 2, level: 14 }],
     music: 'boss-field',
   },
   magitek_armour: {
     id: 'magitek_armour', name: 'MA-X Cuirass', kind: 'imperial',
-    at: [34, 72], radius: 44, level: 30, boss: 'magitek_armour',
+    at: near('norduscaen', 90, 60), radius: 44, level: 30, boss: 'magitek_armour',
     dropship: true,
     adds: [{ key: 'mt', count: 4, level: 20 }, { key: 'axeman', count: 1, level: 24 }],
     music: 'boss-imperial',
   },
   titan: {
     id: 'titan', name: 'Titan, the Archaean', kind: 'astral',
-    at: [-215, -395], radius: 70, level: 45, boss: 'titan',
+    at: near('disc_cauthess'), radius: 70, level: 45, boss: 'titan',
     arena: 62,
     music: 'boss-astral',
+  },
+  /**
+   * Deadeye. The species was fully defined in the bestiary -- 34,000 HP, boss
+   * flag, super armour -- and appeared in no spawn table anywhere, so chapter
+   * 3's second quest could not be finished and `StorySystem.completeChapter`
+   * needs *every* chapter quest done before the next one opens. The story
+   * stopped here.
+   */
+  deadeye: {
+    id: 'deadeye', name: 'Deadeye', kind: 'field',
+    at: near('nebulawood'), radius: 46, level: 28, boss: 'deadeye',
+    adds: [{ key: 'voretooth', count: 3, level: 18 }],
+    music: 'boss-field',
   },
 };
 
