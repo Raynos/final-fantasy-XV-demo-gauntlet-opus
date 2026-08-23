@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LAYER_AVG, LAYER_ROUGH, LAYER_SCALE } from './Layers.ts';
 import { HORIZON_GLSL } from './Horizon.ts';
+import { VegUniforms } from '../veg/VegMaterial.ts';
 
 /**
  * Terrain surface shader. Built on MeshStandardMaterial via onBeforeCompile so
@@ -209,6 +210,11 @@ uniform float uDetailScale;
 uniform float uMicro;
 /** World metres per pixel per metre of camera distance: 2*tan(fovY/2)/heightPx. */
 uniform float uPxScale;
+// The vegetation lane's own wind uniforms, shared by object identity rather
+// than copied -- see the tier-D sward in tf_shade for why that matters.
+uniform float uTime;
+uniform vec2 uWindDir;
+uniform float uWindStrength;
 varying vec3 vTW;
 varying float vTDist;
 
@@ -284,6 +290,30 @@ float tf_lodW(float L, float px) { return 1.0 - smoothstep(L * 0.125, L * 0.25, 
 
 /** Smooth absolute value. See the gully field for why the crease matters. */
 float tf_sabs(float x) { return sqrt(x * x + 0.020); }
+
+/**
+ * The gust amplitude at a world XZ, in the same units and with the same phase
+ * as vegSway() in veg/VegMaterial.ts.
+ *
+ * This is a deliberate duplicate of that expression and it must stay one. The
+ * tier-D sward below is what the field looks like where the blades have
+ * stopped being drawn, and a wind band that crosses the seam is the whole point
+ * of painting it here rather than tinting the ground a flat green -- so the two
+ * have to agree on where the band IS. They share the uniform objects, not
+ * copies of their values, so uTime and the weather's wind can never drift
+ * between the two halves of one field. gustFreq is VegMaterial's default 0.055,
+ * a 114 m wavelength: at 155 m that band is most of the width of frame.
+ */
+float tf_gust(vec2 o) {
+  vec2 wd = normalize(uWindDir);
+  vec2 perp = vec2(-wd.y, wd.x);
+  float crossWave = sin(dot(o, perp) * 0.03465 + uTime * 0.41);
+  float phase = dot(o, wd) * 0.055 - uTime * 1.35 + crossWave * 1.9;
+  float g = sin(phase) * 0.5 + 0.5;
+  g = g * g * (0.55 + 0.45 * (sin(phase * 0.37 + 1.7) * 0.5 + 0.5));
+  float windPatch = sin(o.x * 0.031 + uTime * 0.17) * sin(o.y * 0.027 - uTime * 0.13);
+  return uWindStrength * (0.22 + 1.05 * g) * (0.78 + 0.34 * windPatch);
+}
 
 /**
  * Perturb a surface normal by the screen-space gradient of a scalar height,
@@ -1130,6 +1160,56 @@ void tf_shade() {
   // gully read as cut *into* the face rather than drawn on it.
   ao *= 0.82 + 0.24 * reliefN;
 
+  // ---- tier-D grass: the sward the geometry stops drawing ------------------
+  //
+  // GrassField's outermost ring ends at far: 155 and past it there is no grass
+  // representation at all -- the ground reverts to bare terrain, and
+  // zone_fallgrove draws a band across the middle of frame where that happens.
+  // Ablated rather than assumed: --hide grass makes the NEAR ground take on
+  // exactly the pale mottle the mid distance already had, so the seam is the
+  // grass stopping, not a far-LOD albedo mismatch.
+  //
+  // The honest LOD for a thing smaller than a pixel is to darken the pixel.
+  // Sub-pixel blades read as white confetti to every critic, so tier D is not
+  // more geometry: it is the aggregate of grass and the dirt between it,
+  // painted into the terrain. Two things make that read as a field rather than
+  // as a green wash:
+  //
+  //  - it is PATCHY at clump scale. At 155 m a 0.3 m tuft is two pixels and a
+  //    3 m patch of sward is twenty, so the patch is the thing there is to
+  //    draw. Both octaves are band-limited on their own screen footprint, so
+  //    the field simply smooths out as it recedes instead of boiling.
+  //  - it takes the WIND, from the same uniform objects the blades sway on, so
+  //    a gust band runs across the seam instead of stopping at it. That is the
+  //    reason this belongs in the terrain shader and not in a lookup table.
+  //
+  // The colour is measured, not invented: two --raw captures of zone_fallgrove
+  // with and without grass, over a 900x160 near-ground patch, read
+  // (125.6, 121.5, 82.2) bare against (115.8, 117.6, 72.8) grassed. Grass
+  // multiplies its ground by (0.92, 0.97, 0.89) -- darker, and greener by
+  // taking more out of red and blue than out of green. Held to exactly that at
+  // full cover.
+  float swardAmt = smoothstep(100.0, 185.0, vTDist) * clamp(w[4] * 1.7, 0.0, 1.0)
+                 * smoothstep(0.06, 0.30, bioGreen);
+  if (swardAmt > 0.003) {
+    float sv1 = tf_snoise(P.xz * 0.115 + 51.0);
+    float sv2 = tf_snoise(P.xz * 0.345 - 27.0);
+    float cover = clamp(0.5
+      + 0.60 * sv1 * tf_lodW(8.7, tfPx)
+      + 0.36 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0);
+    cover = smoothstep(0.16, 0.84, cover) * swardAmt;
+    // A gust lays the blades over, and laid-over grass shows more of its own
+    // shadowed base and less of its lit tips. 1.0 is the still-air amplitude
+    // the sway uses, so this is centred on it rather than on zero.
+    float gust = clamp(tf_gust(P.xz) - 1.0, -0.8, 0.8);
+    vec3 swardCol = vec3(0.922, 0.968, 0.887) * (1.0 - 0.10 * gust);
+    col *= mix(vec3(1.0), swardCol, cover);
+    // A sward is a mat of scattering fibres: rougher than the soil it stands
+    // on, and it holds its own shade between the tufts.
+    rgh = mix(rgh, min(1.0, rgh * 1.12 + 0.05), cover);
+    ao *= mix(1.0, 0.88, cover);
+  }
+
   // ---- macro tinting -------------------------------------------------------
   // three overlapping colour fields at 600 m / 140 m / 40 m: the thing that
   // makes a procedural surface stop reading as one material.
@@ -1329,6 +1409,10 @@ export interface TerrainUniforms {
   uMicro: THREE.IUniform<number>;
   /** `2 * tan(fovY/2) / drawingBufferHeight`, written every frame by `Terrain`. */
   uPxScale: THREE.IUniform<number>;
+  /** The three `VegUniforms` the tier-D sward shares with the blades. */
+  uTime: THREE.IUniform<number>;
+  uWindDir: THREE.IUniform<THREE.Vector2>;
+  uWindStrength: THREE.IUniform<number>;
   /** `(seaLevel, 1 / worldSize, 0, 0)`. */
   uEnv: THREE.IUniform<THREE.Vector4>;
   /** `(wetness, dryness, 0, 0)`. */
@@ -1465,6 +1549,12 @@ export function makeTerrainUniforms(tex: TerrainTextures, field: FieldConstants,
     // 900 px, so a shader that somehow renders before then is merely slightly
     // mis-filtered rather than wrong.
     uPxScale: { value: 2 * Math.tan(0.48) / 900 },
+    // Shared by IDENTITY with veg/VegMaterial.ts, not copied. The tier-D sward
+    // has to gust in phase with the blades it hands over from, and a copied
+    // value would drift the moment the weather moved one of them.
+    uTime: VegUniforms.uTime,
+    uWindDir: VegUniforms.uWindDir,
+    uWindStrength: VegUniforms.uWindStrength,
     // sea level lets the ground darken as it runs into the water, and the
     // reciprocal world span maps a world position onto the biome LUT. Both are
     // uniforms rather than a texture on purpose: the fragment shader has no
