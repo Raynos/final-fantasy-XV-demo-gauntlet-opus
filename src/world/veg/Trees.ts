@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
+import { hashU } from './Cluster.ts';
 import { hash3 } from './Ecology.ts';
 import { buildTree, TREE_SPECIES } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
@@ -55,11 +56,16 @@ import type { Ecology } from './Ecology.ts';
 
 const VARIANTS = 3;
 
-/** Tree placement tile, metres, and candidate slots per axis inside it. */
+/**
+ * Tree placement tile, metres.
+ *
+ * There is no longer a candidate grid inside it. `GRID = 8` (an 8 m jittered
+ * lattice) and `DG = 6` (the bilerped density grid it was thinned by) are gone
+ * with `Ecology.groveScatter`: a lattice caps peak density at one tree per cell
+ * and therefore cannot express a grove at *any* density, which is arithmetic
+ * rather than tuning. See `Trees._clumpBias`.
+ */
 const TILE = 64;
-const GRID = 8;
-/** Density samples per axis inside a tile (a (DG+1)^2 grid, bilerped). */
-const DG = 6;
 
 /** Far canopy tile and the cells inside it. */
 const CTILE = 256;
@@ -133,6 +139,16 @@ const SLOPE_LEAN = 0.22;
  * re-scatters, and no change in this file is ablatable against an earlier shot.
  */
 const TIER_CDF = [0.50, 0.86];
+/**
+ * Salts for the per-instance draws keyed off `ClusterPoint.seed`.
+ *
+ * One salt per *meaning*, never one shared salt with a running index, so that
+ * adding a draw here can never shift an existing one. That is the property the
+ * old tile-wide `Rng` stream did not have and the reason two comments in this
+ * file used to call the draw count load-bearing.
+ */
+const S_TIER = 0x11a3, S_SIZE = 0x27b1, S_SHADE = 0x3d09, S_HUE = 0x4e57;
+const S_YAW = 0x5b2d, S_PHI = 0x6c41;
 function pickTier(u: number): number {
   for (let i = 0; i < TIER_CDF.length; i++) if (u < TIER_CDF[i]) return i;
   return Math.min(VARIANTS - 1, TIER_CDF.length);
@@ -751,137 +767,157 @@ export class Trees {
     return (1 - Math.pow(1 - Math.min(d, 1), Math.exp(CLUMP_K * n))) * gate;
   }
 
+  /**
+   * The clump field as a **bias on the sampler's parents**, not on its children.
+   *
+   * `_clumped` used to be the whole clustering story: bend the density field,
+   * then run a Bernoulli test per lattice cell. The scatter lane's arithmetic
+   * says why that could never work — a jittered 8 m grid caps peak density at
+   * one tree per 64 m², the Nebulawood's `treeDensity` peaks at 1.000 against a
+   * mean of 0.727, so there is 38% of headroom and no density field can express
+   * a grove once the cell size has capped the peak. Measured, the shipped
+   * Nebulawood scatter came out at Clark-Evans **R = 1.129 — dispersed, more
+   * even than random** — after a lane spent an afternoon making the field
+   * lumpier.
+   *
+   * What survives is the part that was never about local spacing: the **glade
+   * gate**, which is the half of `_clumped` that reads, and the 31 m / 104 m
+   * octaves that move stands around. As a parent bias they decide where a grove
+   * starts and how big it grows, and they never touch an individual tree, which
+   * is exactly the division `Cluster.ts` exists to enforce.
+   *
+   * @returns the multiplier `_clumped` applies to a raw density, 0-1
+   */
+  _clumpBias(x: number, z: number) {
+    const d = this.eco.treeDensity(x, z);
+    if (d <= 1e-4) return 0;
+    return Math.min(1, this._clumped(x, z, d) / d);
+  }
+
   _makeTile(tx: number, tz: number) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
-    const rng = new Rng(hash3(tx, tz, 0x7ee5));
+    const out: TreePlacement[] = [];
 
-    const dg = new Float32Array((DG + 1) * (DG + 1));
-    let peakDensity = 0;
-    for (let j = 0; j <= DG; j++) {
-      for (let i = 0; i <= DG; i++) {
-        const d = eco.treeDensity(x0 + (i / DG) * TILE, z0 + (j / DG) * TILE);
-        dg[j * (DG + 1) + i] = d;
-        if (d > peakDensity) peakDensity = d;
-      }
-    }
-    if (peakDensity < 0.015) return [];
-
-    const bil = (u: number, v: number) => {
-      const fu = u * DG, fv = v * DG;
-      const iu = Math.min(DG - 1, fu | 0), iv = Math.min(DG - 1, fv | 0);
-      const su = fu - iu, sv = fv - iv;
-      const a = dg[iv * (DG + 1) + iu], b = dg[iv * (DG + 1) + iu + 1];
-      const c = dg[(iv + 1) * (DG + 1) + iu], d = dg[(iv + 1) * (DG + 1) + iu + 1];
-      return (a * (1 - su) + b * su) * (1 - sv) + (c * (1 - su) + d * su) * sv;
-    };
-
-    const out = [];
-    for (let gz = 0; gz < GRID; gz++) {
-      for (let gx = 0; gx < GRID; gx++) {
-        const u = (gx + rng.next()) / GRID, v = (gz + rng.next()) / GRID;
-        const d0 = bil(u, v);
-        if (d0 < 0.02) continue;
-        const x = x0 + u * TILE, z = z0 + v * TILE;
-        const d = this._clumped(x, z, d0);
-        if (rng.next() > d) continue;
-        if (Math.hypot(x, z) > eco.worldRadius) continue;
-        const b = eco.veg(x, z);
-        const sp = eco.treeSpecies(x, z);
-        if (!TREE_SPECIES[sp as keyof typeof TREE_SPECIES]) continue;
-        const vi = pickTier(rng.next());
-        const variant = this.byKey.get(`${sp}_${vi}`);
-        if (!variant) continue;
-        // Stand structure, not a scale range. The authored `treeS` band is only
-        // about 1.5:1 and is biased toward its low end, so every tree in a
-        // grove came out within a few per cent of every other one and the
-        // treeline was a level wall -- half of what the blind judge means by
-        // "no silhouette variety", and the half a normal map cannot touch. A
-        // real stand is a canopy line with a few emergents through it and a few
-        // suppressed stems under it, so the tails are drawn explicitly and the
-        // author's band stays the *typical* tree rather than the whole range.
-        const s0 = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
-        // Drawn from a *position* hash, not from `rng`. Taking two more numbers
-        // off the tile stream re-rolls every later candidate's acceptance test,
-        // species and yaw, so the whole forest re-scatters and the change stops
-        // being ablatable -- the first version of this did exactly that and
-        // `zone_fallgrove` came back as a different grove with a different
-        // composition, which says nothing about whether stand structure helps.
-        const tier = hash3(x * 64 | 0, z * 64 | 0, 0x5721) / 4294967296;
-        const spread = hash3(x * 64 | 0, z * 64 | 0, 0x9ac3) / 4294967296;
-        const s = s0 * (tier > 0.88 ? 1.10 + (tier - 0.88) * 2.5
-          : tier < 0.16 ? 0.62 + tier * 1.5 : 1);
-        // Crown spread, independent of height. A tree's width is not a function
-        // of its height -- a suppressed stem is narrow and tall, an open-grown
-        // one is broad -- and a card scaled uniformly gives every impostor in
-        // the frame the same aspect ratio, which is the other half of it.
-        const sw = 0.78 + spread * 0.52;
-        // Plan *asymmetry*, and it is what makes the yaw matter. `buildTree`
-        // spreads its branches over a full turn, so a grown tree is very
-        // nearly rotationally symmetric and the per-instance yaw that has
-        // always been in this record rotated a shape onto itself: a hundred
-        // trees at a hundred different yaws still presented one outline. One
-        // ellipse ratio per tree, oriented by that same yaw, turns the yaw
-        // back into a silhouette parameter for nothing.
-        const aspect = hash3(x * 64 | 0, z * 64 | 0, 0x31b9) / 4294967296;
-        const ar = 1 + (aspect - 0.5) * 0.44;
-        // Lean. It was `gauss(0, 0.04)` -- 2.3 degrees, i.e. plumb -- and it
-        // was applied as `(tilt, yaw, tilt * 0.7)`, so the x and z components
-        // were *the same number*: every tree in the world leaned along one
-        // fixed diagonal. `tmp/crop/v0-trunks.png` is a row of dead-vertical
-        // dowels and it reads as a scatter pass, which is what the judge kept
-        // calling it.
-        //
-        // Magnitude is `u^2` so the typical tree is still near-upright and the
-        // tail carries the few that are not; azimuth is free, but with a
-        // *local* bias so a stand agrees with itself the way a wind-formed or
-        // downhill-leaning stand does. A per-tree azimuth alone is noise; the
-        // 48 m cell is about a stand across.
-        const lu = hash3(x * 64 | 0, z * 64 | 0, 0x6d02) / 4294967296;
-        const lean = lu * lu * LEAN_MAX;
-        const local = hash3((x / 48) | 0, (z / 48) | 0, 0x1f77) / 4294967296;
-        const jitter = hash3(x * 64 | 0, z * 64 | 0, 0xa9e4) / 4294967296;
-        const c = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
-        const shade = SHADE_MIN + rng.next() * SHADE_SPAN;
-        const hue = rng.gauss(0, 0.06);
-        const yaw = rng.next() * Math.PI * 2;
-        // The old `tilt` draw is still taken, and its *value* is now only a
-        // small extra azimuth jitter. The count of draws per candidate is
-        // load-bearing: drop one and every later candidate in the tile
-        // re-rolls its acceptance test, species and yaw, so the whole forest
-        // re-scatters and none of this is ablatable against `tmp/shots/v1`.
-        // Same rule as the position hashes above, approached from the other
-        // side.
-        const phi = local * Math.PI * 2 + (jitter - 0.5) * 1.6 + rng.gauss(0, 0.04) * 6;
-        // Slope lean, added as a *vector* to the wind lean. `Ecology.normal`
-        // tilts downhill, so this is the downhill direction and the magnitude
-        // is `SLOPE_LEAN` of the slope angle itself: flat ground contributes
-        // nothing at all and a 30-degree hillside contributes about 6.6
-        // degrees. Total magnitude is capped so a cliff-edge stem does not lie
-        // down.
-        eco.normal(x, z, _nrm);
-        const nh = Math.hypot(_nrm.x, _nrm.z);
-        const sl = nh > 1e-4 ? SLOPE_LEAN * Math.atan2(nh, Math.max(1e-4, _nrm.y)) : 0;
-        let tx = lean * Math.cos(phi) + (nh > 1e-4 ? sl * _nrm.x / nh : 0);
-        let tz = lean * Math.sin(phi) + (nh > 1e-4 ? sl * _nrm.z / nh : 0);
-        const tm = Math.hypot(tx, tz);
-        if (tm > LEAN_MAX * 1.6) { const k = LEAN_MAX * 1.6 / tm; tx *= k; tz *= k; }
-        barkTone(x, z, _bark);
-        out.push({
-          x, z, y: eco.height(x, z), sp, vi, s,
-          swx: sw * ar, swz: sw / ar, yaw,
-          lx: tx, lz: tz,
-          r: shade * c[0] * (1 + hue),
-          g: shade * c[1],
-          b: shade * c[2] * (1 - hue * 0.8),
-          wr: _bark[0], wg: _bark[1], wb: _bark[2],
-          h: variant.height * s,
-        });
-      }
+    // A grove, not a lawn. `groveScatter` darts cluster parents at a 26 m
+    // minimum pitch, scales each parent's Poisson rate by `treeDensity` **at
+    // the parent only**, and scatters Gaussian children around it — so a poor
+    // site grows a small grove or none rather than a moth-eaten one, and the
+    // ground between stands is genuinely empty. Measured by `scatterstat.mts`,
+    // Clark-Evans R: fallgrove 0.930 -> 0.741, nebulawood 1.129 -> 0.740.
+    //
+    // Everything the lattice needed and this does not: the `DG` density grid
+    // and its bilerp, the `_clumped` call per candidate, and the
+    // `rng.next() > d` acceptance test. Suitability is the sampler's job now.
+    for (const p of eco.groveScatter(x0, z0, TILE, TILE, { bias: (x, z) => this._clumpBias(x, z) })) {
+      const x = p.x, z = p.z;
+      // **A grove is one species**, chosen once at the parent and carried by
+      // every child. The lattice drew `treeSpecies` per tree, so a stand was a
+      // salad wherever two species' fields overlapped; measured on the shipped
+      // undergrowth a plant's nearest neighbour was the same species 32-43% of
+      // the time, against 88-95% after this.
+      const sp = p.kind;
+      if (!TREE_SPECIES[sp as keyof typeof TREE_SPECIES]) continue;
+      const b = eco.veg(x, z);
+      // Every per-instance draw now comes off `p.seed` rather than a tile-wide
+      // `Rng` stream. The old comments called the *count* of draws per candidate
+      // load-bearing, and they were right: one more or one fewer re-rolled every
+      // later candidate's acceptance test, species and yaw, the whole forest
+      // re-scattered, and no change in this file was ablatable against an
+      // earlier shot. Keyed draws have no such coupling — a later lane can add
+      // a parameter here and the world does not move.
+      const vi = pickTier(hashU(p.seed, 0, S_TIER));
+      const variant = this.byKey.get(`${sp}_${vi}`);
+      if (!variant) continue;
+      // Stand structure, not a scale range. The authored `treeS` band is only
+      // about 1.5:1 and is biased toward its low end, so every tree in a
+      // grove came out within a few per cent of every other one and the
+      // treeline was a level wall -- half of what the blind judge means by
+      // "no silhouette variety", and the half a normal map cannot touch. A
+      // real stand is a canopy line with a few emergents through it and a few
+      // suppressed stems under it, so the tails are drawn explicitly and the
+      // author's band stays the *typical* tree rather than the whole range.
+      const s0 = b.treeS[0] + Math.pow(hashU(p.seed, 1, S_SIZE), 1.4) * (b.treeS[1] - b.treeS[0]);
+      // Drawn from a *position* hash. Kept as position hashes rather than moved
+      // onto `p.seed` because these are meant to agree between neighbours --
+      // `tier` and `spread` are per tree, but `local` below is a 48 m cell and
+      // has to be the same number for every stem in that cell.
+      const tier = hash3(x * 64 | 0, z * 64 | 0, 0x5721) / 4294967296;
+      const spread = hash3(x * 64 | 0, z * 64 | 0, 0x9ac3) / 4294967296;
+      const s = s0 * (tier > 0.88 ? 1.10 + (tier - 0.88) * 2.5
+        : tier < 0.16 ? 0.62 + tier * 1.5 : 1);
+      // Crown spread, independent of height. A tree's width is not a function
+      // of its height -- a suppressed stem is narrow and tall, an open-grown
+      // one is broad -- and a card scaled uniformly gives every impostor in
+      // the frame the same aspect ratio, which is the other half of it.
+      const sw = 0.78 + spread * 0.52;
+      // Plan *asymmetry*, and it is what makes the yaw matter. `buildTree`
+      // spreads its branches over a full turn, so a grown tree is very
+      // nearly rotationally symmetric and the per-instance yaw that has
+      // always been in this record rotated a shape onto itself: a hundred
+      // trees at a hundred different yaws still presented one outline. One
+      // ellipse ratio per tree, oriented by that same yaw, turns the yaw
+      // back into a silhouette parameter for nothing.
+      const aspect = hash3(x * 64 | 0, z * 64 | 0, 0x31b9) / 4294967296;
+      const ar = 1 + (aspect - 0.5) * 0.44;
+      // Lean. It was `gauss(0, 0.04)` -- 2.3 degrees, i.e. plumb -- and it
+      // was applied as `(tilt, yaw, tilt * 0.7)`, so the x and z components
+      // were *the same number*: every tree in the world leaned along one
+      // fixed diagonal.
+      //
+      // Magnitude is `u^2` so the typical tree is still near-upright and the
+      // tail carries the few that are not; azimuth is free, but with a
+      // *local* bias so a stand agrees with itself the way a wind-formed or
+      // downhill-leaning stand does. A per-tree azimuth alone is noise; the
+      // 48 m cell is about a stand across.
+      const lu = hash3(x * 64 | 0, z * 64 | 0, 0x6d02) / 4294967296;
+      const lean = lu * lu * LEAN_MAX;
+      const local = hash3((x / 48) | 0, (z / 48) | 0, 0x1f77) / 4294967296;
+      const jitter = hash3(x * 64 | 0, z * 64 | 0, 0xa9e4) / 4294967296;
+      const c = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
+      const shade = SHADE_MIN + hashU(p.seed, 2, S_SHADE) * SHADE_SPAN;
+      // Two uniforms summed: sd is `0.147 * sqrt(2/12) = 0.06`, which is the
+      // `gauss(0, 0.06)` this replaces, without a second hash for Box-Muller.
+      const hue = (hashU(p.seed, 3, S_HUE) + hashU(p.seed, 4, S_HUE) - 1) * 0.147;
+      const yaw = hashU(p.seed, 5, S_YAW) * Math.PI * 2;
+      const phi = local * Math.PI * 2 + (jitter - 0.5) * 1.6
+        + (hashU(p.seed, 6, S_PHI) - 0.5) * 0.83;
+      // Slope lean, added as a *vector* to the wind lean. `Ecology.normal`
+      // tilts downhill, so this is the downhill direction and the magnitude
+      // is `SLOPE_LEAN` of the slope angle itself: flat ground contributes
+      // nothing at all and a 30-degree hillside contributes about 6.6
+      // degrees. Total magnitude is capped so a cliff-edge stem does not lie
+      // down.
+      eco.normal(x, z, _nrm);
+      const nh = Math.hypot(_nrm.x, _nrm.z);
+      const sl = nh > 1e-4 ? SLOPE_LEAN * Math.atan2(nh, Math.max(1e-4, _nrm.y)) : 0;
+      let tx2 = lean * Math.cos(phi) + (nh > 1e-4 ? sl * _nrm.x / nh : 0);
+      let tz2 = lean * Math.sin(phi) + (nh > 1e-4 ? sl * _nrm.z / nh : 0);
+      const tm = Math.hypot(tx2, tz2);
+      if (tm > LEAN_MAX * 1.6) { const k = LEAN_MAX * 1.6 / tm; tx2 *= k; tz2 *= k; }
+      barkTone(x, z, _bark);
+      out.push({
+        x, z,
+        // Seated against the ground the clipmap actually *draws* at the range
+        // this instance is still visible over, not against the heightfield. One
+        // placement serves the geometry and the impostor rings, so it is seated
+        // for the coarser of the two: measured over 4 000 wooded samples the
+        // 6 m impostor cell floats 12.8% of instances more than half a metre,
+        // and `seatHeightAt` takes the *minimum* over the levels, so a near tree
+        // sinks a few centimetres rather than a far one hanging in the air.
+        y: eco.farSeat(x, z, variant.height * s, this.impRange),
+        sp, vi, s,
+        swx: sw * ar, swz: sw / ar, yaw,
+        lx: tx2, lz: tz2,
+        r: shade * c[0] * (1 + hue),
+        g: shade * c[1],
+        b: shade * c[2] * (1 - hue * 0.8),
+        wr: _bark[0], wg: _bark[1], wb: _bark[2],
+        h: variant.height * s,
+      });
     }
     return out;
   }
-
   /** Build (and cache) the far canopy stand cards for one 256 m tile. */
   _makeCanopyTile(tx: number, tz: number) {
     const eco = this.eco;
@@ -913,7 +949,19 @@ export class Trees {
         // how the near ring used to blow its highlights out to white
         const shade = Math.min(1, (0.62 + 0.3 * d) * rng.range(0.9, 1.1));
         out.push({
-          x, z, y: eco.height(x, z), sp,
+          x, z,
+          // The far ring is where seating actually bites. Measured over 4 000
+          // wooded samples the 24 m clip cell this ring is drawn against floats
+          // **27.1% of stand cards more than half a metre and 10.6% more than
+          // two metres, worst case 19.5 m**. The mean float is *negative*
+          // (-0.43 m) because half are already buried, which is exactly why no
+          // frame average ever showed it: it is a pure positive tail, and the
+          // tail is on the skyline. `farSeat` is `Terrain.seatHeightAt` at
+          // `clipSpacingForDistance(range)` — the pair `seatcheck.mts`
+          // certifies at 0.000 m residual — and deliberately not a third
+          // seating model.
+          y: eco.farSeat(x, z, c.height * sy, this.canopyRange),
+          sp,
           sx, sy, yaw: rng.next() * Math.PI * 2,
           r: shade * tc[0], g: shade * tc[1], b: shade * tc[2],
         });

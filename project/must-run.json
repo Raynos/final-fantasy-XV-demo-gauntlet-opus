@@ -33,5 +33,8 @@
  "Animator.rest",
  "Terrain.seatHeightAt",
  "Terrain.drawnEnvelope",
- "Terrain.erosionAt"
+ "Terrain.erosionAt",
+ "Ecology.groveScatter",
+ "Ecology.scrubScatter",
+ "Ecology.farSeat"
 ]

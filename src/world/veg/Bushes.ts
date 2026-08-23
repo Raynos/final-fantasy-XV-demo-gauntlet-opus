@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
+import { hashU } from './Cluster.ts';
 import { hash3 } from './Ecology.ts';
-import { pickFrom } from './Biomes.ts';
 import { WORLD } from '../map/WorldMap.ts';
 import type { TreeSpec } from './TreeBuilder.ts';
 import { buildTree } from './TreeBuilder.ts';
@@ -49,6 +49,13 @@ import type { Ecology } from './Ecology.ts';
  */
 const SCRUB_CLUMP_NEAR = 1 / 17, SCRUB_CLUMP_FAR = 1 / 61;
 const SCRUB_CLUMP_K = 1.15;
+
+/**
+ * Salts for the per-instance draws keyed off `ClusterPoint.seed`. One salt per
+ * *meaning*, so adding a draw can never shift an existing one.
+ */
+const S_SIZE = 0x21c7, S_SHADE = 0x33b9, S_TILT = 0x4a05;
+const S_VAR = 0x5e6b, S_YAW = 0x6f21;
 
 const TILE = 32;
 /** Candidate slots per axis inside a tile — 4 m nominal scrub spacing. */
@@ -640,11 +647,17 @@ export class Bushes {
         } else if (depth > 0.05) {
           continue;                        // submerged, and nothing floats here
         } else {
-          const d = this._clumped(x, z, bil(dg, u, v));
-          if (d < 0.02 || roll > d * 0.85) continue;
-          kind = pickFrom(b.scrubTable, rng.next()) || 'shrub';
-          if (kind === 'reed') kind = 'shrub';    // reeds only at the water
-          y = eco.height(x, z);
+          // Woody scrub is no longer placed here. This lattice survives *only*
+          // for the water line — `scrubScatter` rejects standing water outright
+          // and places neither reeds nor lilies, and in Alstor Slough, where
+          // most of the scrub budget is reeds, it emits 0.14x the lattice's
+          // count. That is correct rather than a regression, and it is why this
+          // branch continues instead of falling through. See the second loop.
+          //
+          // The `rng` draws above are still taken for every cell whether or not
+          // it places anything, because the water band's own scatter has to be
+          // bit-identical to what it was.
+          continue;
         }
 
         const spec = this.kinds.get(kind);
@@ -664,7 +677,66 @@ export class Bushes {
         });
       }
     }
+
+    // Woody scrub, in knots: a few bushes growing off each other's litter,
+    // clustered by `Ecology.scrubScatter` (Matern, parents at a 12 m minimum
+    // pitch, 4 m spread) instead of thinned out of a 4 m lattice. Measured by
+    // `scatterstat.mts`, Clark-Evans R over the shipped undergrowth
+    // 0.920-0.983 — dispersed, i.e. *more even than random* — against
+    // 0.628-0.720 after; same-species coherence 32-43% to 88-95%, because a
+    // knot is one species chosen at the parent rather than a per-plant lucky
+    // dip out of `scrubTable`.
+    if (peakDensity >= 0.02) {
+      for (const p of eco.scrubScatter(x0, z0, TILE, TILE,
+        { bias: (x, z) => this._clumpBias(x, z) })) {
+        const x = p.x, z = p.z;
+        const depth = eco.waterDepth(x, z);
+        // The two exclusions the lattice's branch order used to express: this
+        // sampler is the `else` arm and must not reach into the bands above it.
+        if (depth > 0.05) continue;
+        const b = eco.veg(x, z);
+        if (depth > -1.1 && b.reedD > 0) continue;
+        let kind = p.kind;
+        if (kind === 'reed') kind = 'shrub';    // reeds only at the water
+        const spec = this.kinds.get(kind);
+        if (!spec) continue;
+        const nv = spec.variants.length;
+        const sc = spec.scale;
+        // heavy-tailed size: mostly knee-high, the odd waist-high bush
+        const s = (0.62 + hashU(p.seed, 0, S_SIZE) * 0.5)
+          * (sc[0] + Math.pow(hashU(p.seed, 1, S_SIZE), 2.0) * (sc[1] - sc[0]));
+        const t = spec.tint;
+        const shade = (0.8 + hashU(p.seed, 2, S_SHADE) * 0.42) * (1 - b.mossy * 0.12);
+        // Two uniforms summed give sd `0.11 * sqrt(2/12) = 0.045`, close enough
+        // to the `gauss(0, 0.09)` tilt this replaces at half the hashes; the
+        // tail it loses is a tilt nothing could see.
+        const tilt = (hashU(p.seed, 3, S_TILT) + hashU(p.seed, 4, S_TILT) - 1) * 0.156;
+        out.push({
+          x, y: eco.height(x, z), z, kind,
+          vi: (hashU(p.seed, 5, S_VAR) * nv) | 0,
+          s, yaw: hashU(p.seed, 6, S_YAW) * Math.PI * 2, tilt,
+          r: shade * t[0], g: shade * t[1], b: shade * t[2],
+        });
+      }
+    }
     return out;
+  }
+
+  /**
+   * The scrub clump field as a **bias on the sampler's parents**.
+   *
+   * Same division as `Trees._clumpBias`: the octaves decide where a knot starts
+   * and how big it grows, and never touch an individual plant. Evaluating a
+   * density field at a child re-imposes its own almost-uniform statistics on
+   * the cluster and shreds it straight back to Poisson, which is the single
+   * mistake the whole construction exists to avoid.
+   *
+   * @returns the multiplier `_clumped` applies to a raw density, 0-1
+   */
+  _clumpBias(x: number, z: number) {
+    const d = this.eco.scrubDensity(x, z);
+    if (d <= 1e-4) return 0;
+    return Math.min(1, this._clumped(x, z, d) / d);
   }
 
   /** @returns null when this frame's generation budget is spent */
