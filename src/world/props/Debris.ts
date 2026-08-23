@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { seatY } from './Seat.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng } from '../../util/Rng.ts';
 import { hash3 } from '../veg/Ecology.ts';
@@ -639,7 +640,10 @@ export class Debris {
         const f = this._fit(key, x, z);
         if (f <= 0.02 || rng.next() > f) continue;
         out.push({
-          k: key, x, z, y: this.eco.height(x, z),
+          // Seated on the drawn surface: debris is small, close-range clutter
+          // and a twig floating two centimetres over the ground at 40 m is the
+          // most obvious kind of wrong there is. See `Seat.ts` for the table.
+          k: key, x, z, y: seatY(this.eco, x, z, def.scale[1], this.radius),
           s: def.scale[0] + rng.next() * (def.scale[1] - def.scale[0]),
           yaw: rng.next() * Math.PI * 2,
           tilt: def.flat ? 0 : rng.gauss(0, def.tilt !== undefined ? def.tilt : 0.12),

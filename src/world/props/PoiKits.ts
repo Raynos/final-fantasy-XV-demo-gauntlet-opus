@@ -8,6 +8,7 @@ import {
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
   container, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
+import { seatY } from './Seat.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
@@ -305,12 +306,17 @@ export class PoiKits {
    * below the point the map actually names, and the skirt in {@link _apron}
    * covers whatever gap is left on the downhill side.
    */
-  _base(x: number, z: number, r: number, drop = 2.2) {
-    const h0 = this.eco.height(x, z);
+  _base(x: number, z: number, r: number, drop = 2.2, cull = DRAW_R) {
+    // Seated on the surface the clipmap draws at this POI's own draw range, not
+    // on the analytic field. A settlement is the largest thing a prop system
+    // places and the one a player walks up to, so a metre of float at 300 m --
+    // the median at that range is 0.67 m and the p95 is 5.7 -- is a town on
+    // stilts or a town with its plinths buried.
+    const h0 = seatY(this.eco, x, z, r, cull);
     let sum = 0, lo = h0;
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
-      const h = this.eco.height(x + Math.cos(a) * r * 0.72, z + Math.sin(a) * r * 0.72);
+      const h = seatY(this.eco, x + Math.cos(a) * r * 0.72, z + Math.sin(a) * r * 0.72, r, cull);
       sum += h; lo = Math.min(lo, h);
     }
     const avg = (sum / 10) * 0.6 + h0 * 0.4;
@@ -1229,7 +1235,8 @@ export class PoiKits {
     const yaw = this._yaw(p, rng);
     const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
-    const base = this._base(p.x, p.z, probe);
+    const base = this._base(p.x, p.z, probe, 2.2,
+      DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R);
     const res = site.fn.call(this, B, site, { rng, dress, yaw, base }) || {};
     const g = new THREE.Group();
     g.name = `poi_${p.type}_${p.id}`;

@@ -5,6 +5,7 @@ import { Rng } from '../../util/Rng.ts';
 import { hash3 } from '../veg/Ecology.ts';
 import { rockMaterial } from './PropMaterials.ts';
 import { TileStream } from './TileStream.ts';
+import { seatY } from './Seat.ts';
 import { dressAt, pickWeighted, type Dress, type StoneKind } from './ZoneDress.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 
@@ -515,6 +516,21 @@ const K_PEBBLE = KINDS.find((k) => k.key === 'pebble')!;
 /** Kinds big enough to be worth a distant LOD and a long draw range. */
 const BIG = new Set(['granite', 'bedded', 'worn', 'slab', 'spire']);
 
+/**
+ * How far each kind is still drawn — the number {@link seatY} needs.
+ *
+ * This is the *outermost* range in `build`'s table (outcrops for the big kinds,
+ * the near range for the small ones), because seating has to be right at the
+ * last range the stone is visible at, not the first. Placement happens once at
+ * scatter time, so it cannot be the live camera's spacing: a rock 6 km from
+ * spawn is under the coarsest ring in the stack at build time and that has
+ * nothing to do with how it will be seen.
+ */
+const CULL: Record<StoneKind, number> = {
+  granite: 1150, bedded: 1150, worn: 1150, slab: 1150, spire: 1150,
+  talus: 130, cobble: 105, pebble: 62,
+};
+
 /** A kind that {@link KINDS} definitely declares. */
 function kindOf(key: StoneKind): RockKindDef {
   const k = K.get(key);
@@ -714,7 +730,12 @@ export class Rocks {
     const tone = (1.02 + rng.next() * 0.46) * dress.bright;
     const v = 1 + rng.gauss(0, 0.05);
     return {
-      k: kind.key, x, z, y: this.eco.height(x, z),
+      // Seated on the surface the clipmap will DRAW at the range this kind is
+      // still drawn at, not on the analytic field. `Seat.seatY` carries the
+      // numbers; the short version is that a rock seated on `heightAt` and
+      // visible at 150 m is over a quarter of a metre out across 57% of the
+      // world, and a boulder that floats is louder than one slightly buried.
+      k: kind.key, x, z, y: seatY(this.eco, x, z, kind.size[1], CULL[kind.key]),
       nx: nrm.x, ny: nrm.y, nz: nrm.z,
       s: size,
       sx: 1 + rng.gauss(0, 0.16), sy: 1 + rng.gauss(0, 0.13), sz: 1 + rng.gauss(0, 0.16),
