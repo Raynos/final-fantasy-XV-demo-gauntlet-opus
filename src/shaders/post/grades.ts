@@ -54,7 +54,13 @@ export interface GradeLook {
   satHigh: number;
   /** Row-major 3x3 channel mixer, applied in linear. */
   mixer: number[];
-  /** Flashed-film print fade: how far toward `fadeTint` the whole frame goes. */
+  /**
+   * Flashed-film print fade: how far toward `fadeTint` the **shadows** go.
+   *
+   * Weighted by the shadow weight in `bakeLut`, never applied flat. Applied
+   * flat it is a highlight cap — see the baker for the trace — and a grade
+   * whose white cannot reach 255 reads veiled no matter what else is right.
+   */
   fade: number;
   fadeTint: number[];
 }
@@ -253,8 +259,20 @@ export function bakeLut(preset: GradePreset): THREE.DataTexture {
         const s = L.sat * (L.satShadow * wS + 1.0 * wM + L.satHigh * wH) / Math.max(1e-4, wS + wM + wH);
         for (let i = 0; i < 3; i++) d[i] = y2 + (d[i] - y2) * s;
 
-        // print fade — a hint of flashed film in the deep shadows
-        for (let i = 0; i < 3; i++) d[i] = d[i] * (1 - L.fade) + L.fadeTint[i] * L.fade;
+        // Print fade — a hint of flashed film in the deep shadows, and *only*
+        // there. Weighted by `wS`, the same shadow weight the tinting uses.
+        //
+        // This was a flat lerp until it was traced: at display-white a flat
+        // fade lands the top texel at 252 for `golden` and `storm` and 245 for
+        // `night`, so no pixel leaving the LUT could ever reach 254 and
+        // `imagestats`' `clip%` was structurally pinned near zero. That is the
+        // sibling repo's "nothing in this game clips" bug exactly — theirs was
+        // a highlight tint capping blue at 244 — and it is what makes a frame
+        // read veiled. Traced with the fade removed, every preset reaches 255.
+        // The flash itself is not the bug and is kept; applying it to
+        // highlights was.
+        const wFade = L.fade * wS;
+        for (let i = 0; i < 3; i++) d[i] = d[i] * (1 - wFade) + L.fadeTint[i] * wFade;
 
         const idx = ((g * w) + (b * n + r)) * 4;
         data[idx] = Math.round(sat01(d[0]) * 255);
