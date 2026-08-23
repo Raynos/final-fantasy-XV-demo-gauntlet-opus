@@ -10,6 +10,14 @@ routes, road classes). Nothing in this document is prose-only: every coordinate
 below is in one of those two files, and `src/world/terrain/Field.ts` *realises*
 them rather than inventing its own.
 
+> **Verified against `main` @ 421 commits (2026-08-23).** Every count, coordinate,
+> distance and travel time below was re-derived from the code or from a
+> `roadcheck.mts` run, not carried forward. Three things were stale and are now
+> corrected: the Crown City Checkpoint coordinate, one row of §5, and the
+> vegetation-radius item in §7. What a *re-verifier* should re-derive rather than
+> read: the zone table (§2), the POI totals (§3), the road totals (§4) and every
+> row of §5 — all of them are counts of a live table and all of them move.
+
 ---
 
 ## 0. The sheet
@@ -134,7 +142,7 @@ start; otherwise a chapter, a level or a prerequisite dungeon).
 
 ### The spine, west from the Crown City
 
-`Crown City Checkpoint` (3856, 546) → **Ostium Gorge** → `Formouth Garrison`
+`Crown City Checkpoint` (3478, 498) → **Ostium Gorge** → `Formouth Garrison`
 (3240, −170, imperial, ch3) → `Longwythe Rest Area` (1120, 62) → **Hammerhead**
 (60, 18) → `Coernix Station – Alstor` (−1080, −120) → `Norduscaen Blockade`
 (−1560, −228, imperial, ch4) → `Taelpar Rest Area` (−2130, −420) →
@@ -245,10 +253,18 @@ Roads are not drawn on the terrain; the terrain is **cut for them**.
 Speeds: walk 2.4 m/s · sprint 5.6 m/s · chocobo 11 m/s · Regalia 26 m/s
 average over the road distance (30 m/s cruise on highway).
 
+**The `road km` column governs the `drive` column only.** `WorldMap.travel()`
+routes on the graph for `drive` and uses *straight line × 1.15* for chocobo and
+*× 1.25* for sprint and walk — a chocobo cuts corners and a walker leaves the
+road. So the three right-hand columns are not road times, and a pair whose
+straight line and road distance diverge (Galdin Quay → Meldacio) shows it: 10.23
+road km against 7.9 km of chocobo path. Every row below is `travel()`'s own
+output, re-derived 2026-08-23.
+
 | from | to | road km | drive | chocobo | sprint | walk |
 |---|---|---|---|---|---|---|
 | Hammerhead | Longwythe Rest Area | 1.06 | 41 s | 1 m 51 s | 3 m 57 s | 9 m 13 s |
-| Hammerhead | Keycatrich Ruins | 1.69 | 1 m 05 s | 2 m 03 s | 4 m 24 s | 10 m 15 s |
+| Hammerhead | Keycatrich Ruins | 1.69 | 1 m 05 s | 2 m 21 s | 5 m 02 s | 11 m 45 s |
 | Hammerhead | Coernix Station – Alstor | 1.15 | 44 s | 2 m 00 s | 4 m 16 s | 9 m 58 s |
 | Coernix – Alstor | Taelpar Rest Area | 1.09 | 42 s | 1 m 54 s | 4 m 04 s | 9 m 29 s |
 | Prairie Outpost | Wiz Chocobo Post | 1.86 | 1 m 11 s | 2 m 33 s | 5 m 26 s | 12 m 41 s |
@@ -279,8 +295,18 @@ groups, Longwythe Peak, the Disc crater, the Ravatogh cone, the Taelpar and
 Meldacio canyons, the Lestallum/Old Lestallum/Cotisse/Vesperpool terraces, the
 Alstor and Vesperpool lake basins, the Galdin and Caem seas); level pads under
 every settlement, rest stop, camp and parking bay; the whole road network's plan,
-profile, camber, berm and wheel ruts; the water bodies, which `Water.ts`
-discovers automatically because the basins are carved below −6.5 m.
+profile, camber, berm and wheel ruts; the water bodies (up to four), which
+`Water.ts` discovers automatically by flood-filling the basins carved below
+−6.5 m; the per-zone surface palette in `terrain/Biome.ts`, blended by the same
+Gaussian zone weights; and, since the horizon bake landed, the kilometre-scale
+terrain self-shadowing — `terrain/Horizon.ts` sweeps the *far* grid (1024² over
+±16 km) for the maximum elevation angle in eight azimuth bins, so the shadow a
+range casts across a valley is a property of the map, not of the cascades.
+
+**And built on top of the map, not merely marked on it:** `props/PoiKits.ts`
+gives every POI but Hammerhead a per-type kit of real geometry, streamed
+nearest-first. All 124 named places are visitable objects; 123 of them are
+generated from the table below rather than hand-placed.
 
 **Still procedural noise, deliberately:** the mid-scale rolling relief inside
 each zone; the ridged badland belt's exact crest lines (amplitude, style and
@@ -293,14 +319,52 @@ to be looked at.
 
 ## 7. Open coordination items
 
-- **`Ecology.worldRadius` caps vegetation at 620 m from the origin**
-  (`src/world/veg/Ecology.ts:59`, `Math.min(620, …)`). Everything outside that
-  is bare ground: Duscae's forest, the Vesperpool's drowned trees and the
-  Malmalam thicket have terrain but no plants. That file belongs to another
-  workstream; the fix is one number.
+- ~~**`Ecology.worldRadius` caps vegetation at 620 m from the origin.**~~
+  **Closed.** `src/world/veg/Ecology.ts:126` now computes
+  `Math.min(4200, tsize * 0.5 - 40)` = **4056 m**, so vegetation reaches the
+  edge of the playable field. Duscae's forest, the Vesperpool's drowned trees
+  and the Malmalam thicket all have plants.
 - **Bridges and tunnels are terrain, not structures.** The Taelpar crossing is a
-  carved neck between two 235 m walls rather than a span on piers. A real deck
-  belongs to whoever owns props.
-- **Fast travel** is implemented in `WorldMapScreen.accept()` as a teleport plus
-  a velocity reset. A proper fade and a load-screen tip belong to the story
-  workstream.
+  carved neck between two 235 m walls rather than a span on piers, and
+  `n_taelpar_bridge` is a junction name with no geometry behind it. A real deck
+  belongs to whoever owns props. Same for tunnels: none exist.
+- **The `trail` road class is declared and unused.** `RoadGraph.ROAD_CLASS.trail`
+  carries a full profile (1.4 m half-width, 36% grade, 6 m radius) and **no
+  route is of that class**, so every "trail" in this document is a `track`.
+- **Fast travel works**, in `WorldMapScreen.accept()`: a position set snapped to
+  `Terrain.heightAt`, a velocity reset and a menu close, gated on `travel: true`
+  (49 POIs) and discovery. What is still missing is that **only the player
+  moves** — the party and the Regalia stay where they were — and that nothing
+  charges time, gil or a fade. Those belong to the story and vehicle
+  workstreams.
+- **Map discovery does not persist.** `FogOfWar` has no serialiser and
+  `SaveData` has no map field, so `worldMap.discovered` reseeds to Hammerhead
+  every boot and the atlas forgets the continent. That belongs to whoever owns
+  `game/rpg/SaveGame.ts`.
+
+---
+
+## 8. Zone ids are not zone names, and six of nineteen differ
+
+This has cost real time twice, so it is written here rather than left to be
+rediscovered. `ZONES` carries both an `id` (used by the data) and a `name` (what
+a player reads), and **`src/game/Shots.ts` names its zone shots after the
+display name**:
+
+| `WorldMap` id | display name | shot |
+|---|---|---|
+| `crown_verge` | Ostium Gorge | `zone_ostium_gorge` |
+| `kelbass` | Vannath Coast | `zone_vannath` |
+| `balouve` | The Callaegh Steps | `zone_callaegh` |
+| `weaverwilds` | The Malacchi Hills | `zone_malacchi` |
+| `cauthess` | Mencemoor | `zone_mencemoor` |
+| `meldacio` | Pallareth Pass | `zone_pallareth` |
+| `lestallum_shelf` | The Lestallum Shelf | `zone_lestallum` |
+
+The other twelve agree. **All nineteen zones have a shot**, but grepping
+`zone_<id>` against `WorldMap` makes seven of them look uncovered, and
+`project/STATUS.md` carried exactly that false gap ("`zone_weaverwilds` has no
+shot") for weeks. The name a player would read is the right one for a shot; the
+trap is only that the check is not a grep. `Shots.ts:383-396` says the same at
+the site — though it lists six pairs and misses `lestallum_shelf`, which is the
+seventh.
