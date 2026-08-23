@@ -6,7 +6,7 @@ import { WORLD } from '../map/WorldMap.ts';
 import type { TreeSpec } from './TreeBuilder.ts';
 import { buildTree } from './TreeBuilder.ts';
 import { patchVeg, bakeFlex, registerAlphaCard } from './VegMaterial.ts';
-import { leafClusterTex, fernTex, reedTex, padTex, barkMaps } from './VegTextures.ts';
+import { leafClusterTex, fernTex, reedTex, padTex, barkMaps, bakeTreeImpostor } from './VegTextures.ts';
 import type { Ecology } from './Ecology.ts';
 
 /**
@@ -28,6 +28,36 @@ import type { Ecology } from './Ecology.ts';
 const TILE = 32;
 /** Candidate slots per axis inside a tile — 4 m nominal scrub spacing. */
 const GRID = 8;
+
+/**
+ * Crossed quads for a scrub impostor, anchored at the base. The same primitive
+ * `Trees.billboardGeo` builds, and for the same reason: past ~130 m a bush is a
+ * few pixels of dry speckle, and the branch geometry that draws it is hundreds
+ * of triangles. The plane normal is per quad because `patchVeg`'s `crownNormal`
+ * needs a real one.
+ */
+function scrubCardGeo(width: number, height: number) {
+  const g = new THREE.BufferGeometry();
+  const p: number[] = [], n: number[] = [], uv: number[] = [], idx: number[] = [], col: number[] = [];
+  const hw = width * 0.5;
+  for (let k = 0; k < 2; k++) {
+    const dx = k === 0 ? hw : 0, dz = k === 0 ? 0 : hw;
+    const base = k * 4;
+    p.push(-dx, 0, -dz, dx, 0, dz, dx, height, dz, -dx, height, -dz);
+    for (let i = 0; i < 4; i++) n.push(k === 0 ? 0 : 1, 0, k === 0 ? 1 : 0);
+    uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+    for (let i = 0; i < 4; i++) col.push(1, 1, 1);
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  bakeFlex(g);
+  g.computeBoundingSphere();
+  return g;
+}
 /** Density samples per axis (a (DG+1)^2 grid, bilerped per candidate). */
 const DG = 4;
 
@@ -229,9 +259,19 @@ interface ScrubVariant {
   _w: number;
 }
 
+/** The card ring for one woody kind: one instanced mesh per built variant. */
+interface ScrubCards {
+  mesh: THREE.InstancedMesh;
+  tint: THREE.InstancedBufferAttribute;
+  max: number;
+  _w: number;
+}
+
 /** Everything drawn for one scrub kind. */
 interface ScrubKind {
   variants: ScrubVariant[];
+  /** Distance impostors, one per variant. Empty for the card kinds. */
+  cards?: ScrubCards[];
   /** Per-instance tint, linear RGB. Every kind's table entry carries one. */
   tint: number[];
   /** `[min, max]` scale. */
@@ -257,9 +297,21 @@ export class Bushes {
   kinds!: Map<string, ScrubKind>;
   quality!: number;
   range!: number;
+  /** How far the *card* ring reaches. Past `range`, up to this. */
+  impRange!: number;
+  impBudget!: number;
+  impCount!: number;
   scene!: THREE.Scene;
   tileCacheMax!: number;
-  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1, range = 132 } = {}) {
+  /**
+   * `range` is where branch geometry gives way to the card. It was 132 m, from
+   * when there was nothing past it and the choice was geometry or bare ground.
+   * With a card ring behind it the trade is different: at 100 m a knee-high
+   * bush is about six pixels tall, and drawing those six pixels out of four
+   * hundred triangles is what took `zone_longwythe` up 14.6% in triangles the
+   * moment the flat-ground scrub floor was raised. The card costs eight.
+   */
+  constructor(eco: Ecology, scene: THREE.Scene, { quality = 1, range = 96, impRange = 280 } = {}) {
     this.eco = eco;
     this.scene = scene;
     /** Named parent so the whole ground layer can be priced or hidden at once. */
@@ -279,7 +331,12 @@ export class Bushes {
     this._stamp = 0;
     this.budgetMs = 2;
     this.budget = Math.max(300, Math.round(2000 * quality));
-    this.tileCacheMax = 220;
+    this.impRange = impRange;
+    this.impBudget = Math.max(600, Math.round(4200 * quality));
+    this.impCount = 0;
+    // the card ring reaches more than four times the area the geometry ring
+    // does, and every tile it touches is a tile the cache has to hold
+    this.tileCacheMax = 900;
     this._unbounded = false;
   }
 
@@ -291,7 +348,8 @@ export class Bushes {
     try { this.update(camPos); } finally { this._unbounded = false; }
   }
 
-  build() {
+  /** @param renderer needed to bake the distance cards */
+  build(renderer: THREE.WebGLRenderer | null = null) {
     const bark = barkMaps(0x7a6650);
     const per = Math.max(48, Math.round(420 * this.quality));
 
@@ -316,6 +374,7 @@ export class Bushes {
       }
 
       const variants: ScrubVariant[] = [];
+      const cards: ScrubCards[] = [];
       for (let v = 0; v < spec.variants; v++) {
         const t = buildTree(spec.base, 4242 + v * 613 + key.length * 71, spec.params);
         const wood = new THREE.InstancedMesh(t.wood, woodMat, per);
@@ -336,8 +395,42 @@ export class Bushes {
           this.group.add(leaves);
         }
         variants.push({ wood, woodTint: null, leaves, leafTint, max: per, _w: 0 });
+
+        if (renderer) {
+          const baked = bakeTreeImpostor(renderer, {
+            wood: t.wood, leaves: t.leaves,
+            woodMap: bark.map, woodColor: spec.params.bark ?? 0x7a6650,
+            leafMap: leafMat ? leafMat.map : null,
+            height: t.height, radius: Math.max(t.radius, t.height * 0.30),
+          }, 128);
+          const cardMatImp = patchVeg(new THREE.MeshStandardMaterial({
+            map: baked.tex, color: 0xffffff, vertexColors: true,
+            alphaTest: 0.42, transparent: false, side: THREE.DoubleSide,
+            roughness: 0.95, metalness: 0,
+          }), {
+            bend: 0.14, flutter: 0.05, gustFreq: 0.04, flexPow: 2.6,
+            twoSidedNormals: true, translucency: 0.4, specular: 0.05,
+            crownNormal: baked.normalMap,
+          });
+          const cap = Math.max(200, Math.round(1500 * this.quality));
+          const mesh = new THREE.InstancedMesh(
+            scrubCardGeo(Math.max(t.radius, t.height * 0.30) * 2.12, t.height * 1.02),
+            cardMatImp, cap);
+          // Not in the shadow pass. A bush at 130-280 m casts a shadow a couple
+          // of texels across at the cascade density that reaches out there, and
+          // there are thousands of them; the shadows lane's own rule is that a
+          // caster with no pixels is cost with nothing to show for it.
+          mesh.castShadow = false; mesh.receiveShadow = true;
+          mesh.count = 0; mesh.visible = false; mesh.frustumCulled = false;
+          mesh.name = `scrub_${key}_${v}_card`;
+          const tint = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+          mesh.instanceColor = tint;
+          registerAlphaCard(mesh);
+          this.group.add(mesh);
+          cards.push({ mesh, tint, max: cap, _w: 0 });
+        }
       }
-      this.kinds.set(key, { variants, tint: spec.tint, scale: spec.scale });
+      this.kinds.set(key, { variants, cards, tint: spec.tint, scale: spec.scale });
     }
 
     const cardMat = (map: THREE.Texture, opts: Parameters<typeof patchVeg>[1]) => patchVeg(new THREE.MeshStandardMaterial({
@@ -528,25 +621,50 @@ export class Bushes {
     this._stamp++;
     let pending = false;
 
-    for (const [, k] of this.kinds) for (const v of k.variants) v._w = 0;
+    for (const [, k] of this.kinds) {
+      for (const v of k.variants) v._w = 0;
+      if (k.cards) for (const c of k.cards) c._w = 0;
+    }
 
     const r2 = this.range * this.range;
-    const rt = Math.ceil(this.range / TILE) + 1;
+    const ir2 = this.impRange * this.impRange;
+    const rt = Math.ceil(this.impRange / TILE) + 1;
     const cx = Math.floor(camPos.x / TILE), cz = Math.floor(camPos.z / TILE);
-    let n = 0;
+    let n = 0, nc = 0;
     for (let dz = -rt; dz <= rt; dz++) {
       for (let dx = -rt; dx <= rt; dx++) {
         const tx = cx + dx, tz = cz + dz;
         const ox = (tx + 0.5) * TILE - camPos.x, oz = (tz + 0.5) * TILE - camPos.z;
-        if (Math.hypot(ox, oz) > this.range + TILE) continue;
+        if (Math.hypot(ox, oz) > this.impRange + TILE) continue;
         const list = this._tile(tx, tz);
         if (!list) { pending = true; continue; }
-        for (let i = 0; i < list.length && n < this.budget; i++) {
+        for (let i = 0; i < list.length; i++) {
           const p = list[i];
           const ddx = p.x - camPos.x, ddz = p.z - camPos.z;
-          if (ddx * ddx + ddz * ddz > r2) continue;
+          const d2 = ddx * ddx + ddz * ddz;
+          if (d2 > ir2) continue;
           const spec = this.kinds.get(p.kind);
-          const v = spec && spec.variants[p.vi];
+          if (!spec) continue;
+          if (d2 > r2) {
+            // Past the geometry ring: the card, if this kind has one. The card
+            // kinds (fern, bracken, reed) deliberately do not -- they are
+            // forest-floor and water-line cover that nothing sees from 200 m.
+            const cd = spec.cards && spec.cards[p.vi];
+            if (!cd || cd._w >= cd.max || nc >= this.impBudget) continue;
+            const cw = cd._w++;
+            nc++;
+            _e.set(0, p.yaw, 0);
+            _q.setFromEuler(_e);
+            _p.set(p.x, p.y - 0.06, p.z);
+            _s.set(p.s, p.s * 0.94, p.s);
+            _m.compose(_p, _q, _s);
+            _m.toArray(cd.mesh.instanceMatrix.array, cw * 16);
+            const ca = cd.tint.array;
+            ca[cw * 3] = p.r; ca[cw * 3 + 1] = p.g; ca[cw * 3 + 2] = p.b;
+            continue;
+          }
+          if (n >= this.budget) continue;
+          const v = spec.variants[p.vi];
           if (!v || v._w >= v.max) continue;
           const w = v._w++;
           n++;
@@ -568,6 +686,14 @@ export class Bushes {
     }
 
     for (const [, k] of this.kinds) {
+      if (k.cards) {
+        for (const c of k.cards) {
+          c.mesh.count = c._w;
+          c.mesh.visible = c._w > 0;
+          c.mesh.instanceMatrix.needsUpdate = true;
+          c.tint.needsUpdate = true;
+        }
+      }
       for (const v of k.variants) {
         v.wood.count = v._w;
         v.wood.visible = v._w > 0;
@@ -582,6 +708,7 @@ export class Bushes {
       }
     }
     this.count = n;
+    this.impCount = nc;
     this._pending = pending;
     this._primed = true;
   }

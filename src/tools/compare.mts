@@ -84,6 +84,15 @@ const PAIRING: Record<string, string[]> = {
   zone_lestallum: ['town-daytime-altissia-01.jpg', 'party-roadtrip-galdin-01.jpg'],
   zone_galdin: ['party-roadtrip-galdin-01.jpg', 'water-lake-01.jpg'],
   zone_nebulawood: ['duscae-wilderness-04.jpg', 'beast-party-plains-03.jpg'],
+  // Added by the vegetation lane, *before* round 5 was run rather than after
+  // seeing a number. The shadows lane recorded that round 4 under-sampled its
+  // own change because these two shots -- the ones where a vegetation or
+  // shadow change shows most -- had no rows here at all, so six in-table shots
+  // were chosen instead and four of them were bare Leide, overcast or coastal.
+  // `zone_fallgrove` is a wooded slope under a high sun; `zone_vannath` is
+  // scattered trees on an open plain with a mountain horizon.
+  zone_fallgrove: ['duscae-wilderness-04.jpg', 'behemoth-deadeye-duscae-02.jpg'],
+  zone_vannath: ['duscae-plains-lake-01.jpg', 'beast-party-plains-03.jpg'],
   hero_full: ['character-noctis-mastershot-04.jpg', 'party-three-field-02.jpg'],
   hero_closeup: ['character-noctis-face-01.jpg', 'character-ignis-face-01.jpg'],
   hero_face: ['character-noctis-face-01.jpg', 'character-gladiolus-face-01.jpg'],

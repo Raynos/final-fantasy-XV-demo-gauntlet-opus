@@ -492,7 +492,15 @@ export class Ecology {
     // an undergrowth layer instead, and `scrubD` is what decides which.
     let d = (0.35 + 0.65 * (1 - THREE.MathUtils.smoothstep(m, 0.22, 0.72))) * b.scrubD;
     d = Math.min(d, 1.6);
-    d *= 0.35 + 0.65 * THREE.MathUtils.smoothstep(slope, 0.05, 0.4);
+    // Flat ground used to be cut to 0.35 of the slope value, which is most of
+    // why Leide's establishing shots read as bare hardpan: `zone_longwythe`
+    // looks across a plain, so every scrub density along the view ray was
+    // multiplied by a third before the patch mask got to it. Probed on the
+    // camera's own rays it came back 0.12-0.23 -- one bush per 140 square
+    // metres, a bush every twelve paces -- against a reference plate
+    // (`duscae-wilderness-04.jpg`) whose flat ground is continuous low cover.
+    // The slope preference is real and is kept; the floor is not a third.
+    d *= 0.60 + 0.40 * THREE.MathUtils.smoothstep(slope, 0.05, 0.4);
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.55, 0.78);
     const p = this.patch(x - 300, z + 220, 0.017, 3);
     d *= THREE.MathUtils.smoothstep(p, 0.3, 0.72);

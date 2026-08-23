@@ -111,7 +111,20 @@ const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
-/** Impostor: two crossed quads anchored at the base. */
+/**
+ * Impostor: two crossed quads anchored at the base.
+ *
+ * **Each quad carries its true plane normal**, not a shared fake one. Until
+ * this lane it was `(0, 0.62, 0.78)` on all eight vertices of both quads — one
+ * up-tilted normal for a card whose two halves are ninety degrees apart, which
+ * flat-shades the entire crown by a single N.L that is a pure function of the
+ * instance's random yaw. Probed over `zone_fallgrove`, the per-instance mean
+ * lambert of the 1 239 impostors had **sd 0.378** against the geometry ring's
+ * **0.086** on an identical mean. The soft up-facing bias that fake normal was
+ * carrying now lives in the crown normal map (`crownNormalTex`'s `up`), where
+ * it is one term of a field instead of the whole of it, and `patchVeg`'s
+ * `crownNormal` rebuilds the card's frame from the plane normal below.
+ */
 function billboardGeo(width: number, height: number) {
   const g = new THREE.BufferGeometry();
   const p = [], n = [], uv = [], idx = [], col = [];
@@ -120,7 +133,7 @@ function billboardGeo(width: number, height: number) {
     const dx = k === 0 ? hw : 0, dz = k === 0 ? 0 : hw;
     const base = k * 4;
     p.push(-dx, 0, -dz, dx, 0, dz, dx, height, dz, -dx, height, -dz);
-    for (let i = 0; i < 4; i++) n.push(0, 0.62, 0.78);
+    for (let i = 0; i < 4; i++) n.push(k === 0 ? 0 : 1, 0, k === 0 ? 1 : 0);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
     for (let i = 0; i < 4; i++) col.push(1, 1, 1);
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -146,6 +159,8 @@ interface TreePlacement {
   vi: number;
   /** Trunk scale. */
   s: number;
+  /** Crown spread: an extra scale on x/z only, applied by *every* ring. */
+  sw: number;
   yaw: number;
   tilt: number;
   /** Per-instance tint, linear RGB. */
@@ -356,14 +371,15 @@ export class Trees {
         if (v === 0) canopySrc = src;
 
         // distance impostor, baked straight off this variant's geometry
-        const impTex = bakeTreeImpostor(renderer, src, 256);
+        const imposter = bakeTreeImpostor(renderer, src, 256);
         const impMat = patchVeg(new THREE.MeshStandardMaterial({
-          map: impTex, color: 0xffffff, vertexColors: true,
+          map: imposter.tex, color: 0xffffff, vertexColors: true,
           alphaTest: 0.42, transparent: false, side: THREE.DoubleSide,
           roughness: 0.95, metalness: 0,
         }), {
           bend: 0.2, flutter: 0.06, gustFreq: 0.03, flexPow: 3.0,
           twoSidedNormals: true, translucency: 0.5, specular: 0.06,
+          crownNormal: imposter.normalMap,
         });
         const cardW = src.radius * 2.12;
         const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
@@ -391,6 +407,7 @@ export class Trees {
       }), {
         bend: 0.06, flutter: 0.02, gustFreq: 0.02, flexPow: 3.0,
         twoSidedNormals: true, translucency: 0.35, specular: 0.0,
+        crownNormal: stand.normalMap,
       });
       const can = new THREE.InstancedMesh(
         billboardGeo(stand.width, stand.height), canMat, perCanopy);
@@ -457,12 +474,35 @@ export class Trees {
         const vi = (rng.next() * VARIANTS) | 0;
         const variant = this.byKey.get(`${sp}_${vi}`);
         if (!variant) continue;
-        const s = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
+        // Stand structure, not a scale range. The authored `treeS` band is only
+        // about 1.5:1 and is biased toward its low end, so every tree in a
+        // grove came out within a few per cent of every other one and the
+        // treeline was a level wall -- half of what the blind judge means by
+        // "no silhouette variety", and the half a normal map cannot touch. A
+        // real stand is a canopy line with a few emergents through it and a few
+        // suppressed stems under it, so the tails are drawn explicitly and the
+        // author's band stays the *typical* tree rather than the whole range.
+        const s0 = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
+        // Drawn from a *position* hash, not from `rng`. Taking two more numbers
+        // off the tile stream re-rolls every later candidate's acceptance test,
+        // species and yaw, so the whole forest re-scatters and the change stops
+        // being ablatable -- the first version of this did exactly that and
+        // `zone_fallgrove` came back as a different grove with a different
+        // composition, which says nothing about whether stand structure helps.
+        const tier = hash3(x * 64 | 0, z * 64 | 0, 0x5721) / 4294967296;
+        const spread = hash3(x * 64 | 0, z * 64 | 0, 0x9ac3) / 4294967296;
+        const s = s0 * (tier > 0.88 ? 1.10 + (tier - 0.88) * 2.5
+          : tier < 0.16 ? 0.62 + tier * 1.5 : 1);
+        // Crown spread, independent of height. A tree's width is not a function
+        // of its height -- a suppressed stem is narrow and tall, an open-grown
+        // one is broad -- and a card scaled uniformly gives every impostor in
+        // the frame the same aspect ratio, which is the other half of it.
+        const sw = 0.82 + spread * 0.42;
         const c = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
         const shade = SHADE_MIN + rng.next() * SHADE_SPAN;
         const hue = rng.gauss(0, 0.06);
         out.push({
-          x, z, y: eco.height(x, z), sp, vi, s,
+          x, z, y: eco.height(x, z), sp, vi, s, sw,
           yaw: rng.next() * Math.PI * 2,
           tilt: rng.gauss(0, 0.04),
           r: shade * c[0] * (1 + hue),
@@ -629,7 +669,7 @@ export class Trees {
       _e.set(p.tilt, p.yaw, p.tilt * 0.7);
       _q.setFromEuler(_e);
       _p.set(p.x, p.y - 0.15, p.z);
-      _s.set(p.s, p.s, p.s);
+      _s.set(p.s * p.sw, p.s, p.s * p.sw);
       _m.compose(_p, _q, _s);
       _m.toArray(v.wood.instanceMatrix.array, w * 16);
       if (v.leaves && v.leafTint) {
@@ -713,7 +753,8 @@ export class Trees {
     _e.set(0, p.yaw, 0);
     _q.setFromEuler(_e);
     _p.set(p.x, p.y - 0.15, p.z);
-    _s.set(p.s, p.s, p.s);
+    // the same spread the geometry ring uses, so the swap stays invisible
+    _s.set(p.s * p.sw, p.s, p.s * p.sw);
     _m.compose(_p, _q, _s);
     _m.toArray(im.mesh.instanceMatrix.array, w * 16);
     const c = im.tint.array;
