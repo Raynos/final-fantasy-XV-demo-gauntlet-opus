@@ -106,7 +106,25 @@ the last handoff guessed.**
   brightest object in the frame; all three are rusted steel.
 - **And the compound cast no shadow at all**, because `outpost` was not in
   `Outposts.build`'s `casters` set. That is the judge's "box/decal props, no
-  contact AO" verbatim. +19 draw calls on `vista_noon` (529 -> 548 of 800).
+  contact AO" verbatim.
+
+**A correction against my own commit message.** `74e771a` says the caster change
+cost "+19 draw calls on `vista_noon` (529 -> 548)". **It does not — it costs
+zero**, and the 529 was capture-order noise from a six-shot run. Re-measured
+properly, one shot per capture, base against HEAD:
+
+| shot | draws before | after | triangles before | after |
+|---|---|---|---|---|
+| `zone_longwythe` | 598 | 598 | 8 071 812 | 8 071 812 |
+| `vista_noon` | 549 | **548** | 8 289 683 | 8 289 683 |
+| `zone_three_valleys` | 555 | 555 | 8 281 671 | 8 281 671 |
+
+Triangle-identical to the triangle, and one draw call *cheaper* — dropping
+`M.red` from the containers removed a material from the merged group, which is
+worth a colour draw plus its cascades and pays for the group entering the shadow
+pass. **The whole lane is free in the currency this renderer is bound on.** I
+made the same mistake the handoff warns about two sections down, in the same
+session in which I wrote the warning.
 
 ### 2. `c2339eb` — a dry-country ground layer painted into the terrain
 
@@ -234,6 +252,98 @@ the world** including Leide and the towns. Reverted.
 
 ---
 
+## Blind round 9, run twice, and neither run is a clean instrument
+
+Both rounds used `compare.mts`'s own printed question verbatim, a fresh agent
+with no repo access and no sight of the key, and **landscape-only panels
+throughout** — every crop verified by eye to hold no party member, no Regalia,
+no boat, no chocobo, no behemoth and no HUD, because a control that leaks a
+character lets the judge identify the *game* instead of the *render*. That was
+`variety.md`'s parting instruction and it is now done.
+
+**Round 9a — `tmp/ab/r9/`, seed 9317, ten pairs, five real and five control.**
+
+    real     5 identified, 0 fooled, 0 hesitated   — all five HIGH
+    control  5 of 5 declined ("cannot tell", MEDIUM), 0 false positives
+
+**Round 9b — `tmp/ab/r9b/`, seed 9741, eight pairs, four real and four control.**
+
+    real     4 identified, 0 fooled, 0 hesitated   — all four HIGH
+    control  1 of 4 declined, **3 FALSE POSITIVES at HIGH**
+
+**Each round has a defect, and they are different defects. Read them together
+or not at all.**
+
+*9a leaks through recurrence.* Six plate crops were reused across ten pairs
+while each of our five frames appeared exactly once. The judge said so
+unprompted — *"distinct frames recur across pairs, so effectively five demo
+frames are being pitted against a rotating pool of game frames"* — which means
+5/5 could have come from counting repeats with no rendering judgement at all.
+Its control result is clean, but its verdict is not evidence.
+
+*9b closes that (every panel image used once, twelve distinct plates) and breaks
+the control instead.* Its judge called three of four plate-vs-plate pairs at
+HIGH. The mechanism is visible in my own build script and is the finding worth
+carrying: **our panels are 1400x788 out of a 1600x900 frame — most of the
+composition — while several control panels are 700x394 crops of a 1920x1080
+plate, upscaled.** Cropping tightly into a shipped frame throws away exactly the
+cues that make it read as shipped: the composition, the depth layering, the
+aerial perspective across a full field of view. A tight crop of a real game
+frame looks like a demo, so the control was harder than the test.
+
+**The rule for round 10: the control panels must be the same fraction of their
+source that our panels are of ours.** Which, given that most plates put a
+character in the middle of that fraction, probably means curating more
+landscape-only plates rather than cropping harder into the ones we have.
+
+What can be said with both defects in view: **we were identified in 9 of 9 real
+pairs across two rounds, with zero hesitation, which is where this has sat since
+round 2.** The win rate did not move.
+
+### What moved is the cue, and the ground-layer clause is gone from it
+
+The cue this lane was sent to close, stated by the round-8/9 judge that
+validated against a hardened control:
+
+> *"...over a single flat ground texture with **no ground-layer scatter or
+> contact AO**"*
+
+Neither round-9 judge says that. Asked for the single most reliable cue across
+the whole set:
+
+| round | the cue, verbatim |
+|---|---|
+| 9a | *"**Whether small objects are individuals or copies.** In every demo panel the scatter — trees, rocks, terrain bumps — is a few meshes stamped repeatedly ... and shadows that read as flat dark decals sitting apart from the object."* |
+| 9b | *"**Whether surfaces hold detail when you get close to them.** ... terrain, cliffs, walls, ground — are either smooth vertex-lit gradients or one low-resolution texture stretched over a huge area, with no normal-mapped micro-relief."* Second: *"atmospheric depth ... the demo panels render far geometry at near-field contrast and paste clouds on as hard-edged billboards."* |
+
+"No ground-layer scatter" has dropped out of both. What replaced it is **the
+terrain's own surface and silhouette**, **instance variety and shadow
+anchoring**, and **sky and aerial perspective** — the first is arguably still
+this lane's, the second is `variety.md`'s and the shadow lane's, the third has
+been named every round since 5 and belongs to nobody.
+
+Three findings from the per-frame reasons are worth acting on:
+
+1. **Both rounds independently named the Meteor.** 9a: *"faceted low-poly
+   floating rock with visible flat facets"* on `zone_longwythe`. 9b: *"visible
+   flat polygon facets on the left rock mesh"*. That settles open item 1 — it is
+   **not** aerial perspective doing its job, it is a dead surface, and it is in
+   `props/Megastructures.ts`.
+2. **The Insomnia skyline reads as "a cluster of flat blue prisms" / "extruded
+   boxes"** in both rounds, on both `zone_longwythe` and `zone_three_valleys`.
+   Also `props/Megastructures.ts`.
+3. **The birds repeat visibly.** 9b, unprompted: *"retire the identical bird
+   sprites while you are in there — they repeat visibly in pairs 1B, 4A and
+   8B"*. Cheap, concrete, and nobody has ever named it before.
+
+And the `vista_noon` outpost is **gone from the complaint**. Five consecutive
+rounds ended their guess on the dish and the containers; round 9b's reason for
+that frame is *"ridges wear a vertically stretched terrain texture with no
+normal map"*, and 9a's is the mast plus *"painted-on cloud sprites"*. That is
+the one thing in this lane that demonstrably retired an item.
+
+---
+
 ## Instruments added or corrected
 
 Nothing was added to `src/tools/`. Three measurement *methods* are worth
@@ -262,4 +372,77 @@ carrying forward and are written into the commit messages:
   after, and beside `duscae-plains-noon-05`. The pair that carries the terrain
   argument, and the frame this was actually judged in.
 - `tmp/crop/lw-slabs.jpg` — the untextured Meteor, open item 1.
-- `tmp/ab/r9/` + `tmp/ab/r9-KEY.json` — blind round 9 and its control.
+- `tmp/crop/FINAL-2x.jpg` — `zone_longwythe`'s mid-ground at 4x from the PNG
+  captures the cost table was taken from: before, after, and the plate.
+- `tmp/ab/r9/` + `tmp/ab/r9-KEY.json`, `tmp/ab/r9b/` + `tmp/ab/r9b-KEY.json` —
+  the two blind rounds and their controls.
+
+---
+
+## Gates and cost
+
+`PORT=5530 npm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
+`uxcheck` 93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged),
+`heightcheck`, `driftcheck`, `roadcheck`, `creaturecheck`, `integration`,
+`orphans`, build. `npm run typecheck` and `typecheck:tools` clean.
+
+**Cost: zero draw calls, zero triangles**, measured one shot per capture on both
+sides — see the correction under §1 above.
+
+`reliefstat` on the full post-processed captures the cost table was taken from,
+default ground ROI, before -> after:
+
+| shot | d1 | d2 | d4 | d8 | d16 | d32 | tot |
+|---|---|---|---|---|---|---|---|
+| `zone_longwythe` before | 11.30 | 10.39 | 10.01 | 10.09 | 10.95 | 11.33 | 28.96 |
+| `zone_longwythe` after | 11.85 | **12.33** | **10.65** | 10.22 | 11.03 | 11.39 | **30.12** |
+| `zone_three_valleys` before | 10.99 | 10.43 | 10.25 | 10.45 | 11.88 | 12.61 | 30.12 |
+| `zone_three_valleys` after | **12.19** | **11.38** | **10.66** | 10.46 | 11.78 | 12.46 | **30.87** |
+| `FFXV-ground` | 11.32 | 15.45 | 16.76 | 18.44 | 21.22 | 21.79 | 49.00 |
+
+`zone_longwythe` goes from 59% to **62%** of the reference total, d4 from 60% to
+64%. `zone_three_valleys` from 61% to 63%. **That is a real move and it is a
+small one, and the size of it is the honest headline of this lane.**
+
+The gain lands in d2 and d4 rather than in d8-d16, which is where I aimed it.
+The ROI runs from about 80 m at the bottom of frame to 400 m at the top, and the
+0.74 m octave is 18 px at 80 m but 4 px at 300 m — most of the ROI's *area* is
+the far part, so the pyramid puts most of the added energy low. The term is
+doing what it was designed to do; the ROI is weighted against seeing it. A
+distance-stratified ROI would report this better and does not exist.
+
+---
+
+## My honest grade for the environment, against shipped FFXV
+
+**4.5 / 10.** The same number the variety lane claimed, and I am not claiming
+more, because the win rate did not move: nine of nine real pairs identified
+across two rounds with zero hesitation.
+
+What this lane can defend. The `vista_noon` outpost has been the judge's
+closing evidence for five consecutive rounds and is now gone from the
+complaint — and the two things that fixed it were a metalness constant and an
+aim, not the three passes of geometry three lanes spent on it. The judge's
+"no ground-layer scatter" clause is gone from both round-9 cues. Leide's ground
+went from 59% to 62% of the reference's detail energy for zero draw calls and
+zero triangles, and the 4x crop before and after is a different material rather
+than a different tint. And the ablation that decided the approach —
+**every bush card in the frame is worth 0.955 mean/255 over 2.0% of its
+pixels** — is the kind of number that should stop the next four lanes from
+spending instances on this problem.
+
+What keeps it at 4.5. Three per cent of `reliefstat` is not a frame anybody
+mistakes for a shipped game, and I knew that while I was measuring it. The gap
+in that shot is not a texture gap any more, it is that **we point a camera at a
+kilometre of empty plain and shipped FFXV never does** — every reference plate
+has something in its first thirty metres. Both judges spent their reasons on the
+Meteor, the skyline, the cliff UVs, the clouds and the aerial perspective, and
+not one of those is a mid-ground ground-cover problem. The lane closed the
+defect it was given and the frame is still obviously ours.
+
+And one thing against myself, twice over. I wrote a backtick into a GLSL comment
+after reading four separate warnings about it, and I priced a change off two
+multi-shot captures and put "+19 draw calls" into a commit message that is
+simply wrong — in the same session in which I wrote the warning about
+order-dependent draw counts into this file. Both are in the traps section
+because writing the rule down is evidently not the same as following it.
