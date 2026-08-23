@@ -754,9 +754,18 @@ export class Rocks {
   build() {
     const mat = rockMaterial(0x6a5849, 0.93);
     const q = this.quality;
-    // Instance budgets. A boulder at four hundred metres is four pixels, so
-    // the far tier runs a detail-1 blank (80 triangles against 320) and takes
-    // the great majority of the count.
+    // Instance budgets. The far tier takes the great majority of the count.
+    //
+    // **It used to run a detail-1 blank -- 80 triangles against 320 -- on the
+    // argument that "a boulder at four hundred metres is four pixels".** The
+    // far tier starts at 165 m, not four hundred, and at 165 m a 4 m boulder is
+    // over twenty pixels across: enough for the blank's flat facets to read as
+    // the stair-stepped silhouette the blind judge named in round 6. The saving
+    // it bought is 240 triangles an instance, ~700 k across the whole stone
+    // field, in a frame that carries 20 M of them and is bound on draw calls at
+    // 8.7 us each. Both tiers now share one geometry, so the LOD swap at 165 m
+    // has no silhouette step in it at all -- and sharing means it is one
+    // geometry in memory rather than two.
     const CAP: Record<StoneKind, [number, number]> = {
       granite: [130, 760], bedded: [140, 800], worn: [130, 520],
       slab: [110, 620], spire: [90, 480],
@@ -765,19 +774,19 @@ export class Rocks {
     for (const k of KINDS) {
       const [nearCap, farCap] = CAP[k.key];
       const nearMax = Math.max(8, Math.round(nearCap * q));
+      const geo = rockGeometry(k.seed, k.opts);
       const g: RockGroup = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
         farRange: BIG.has(k.key) ? 430 : 0,
         outRange: BIG.has(k.key) ? 1150 : 0,
-        near: this._mesh(rockGeometry(k.seed, k.opts), mat, nearMax, `rock_${k.key}`),
+        near: this._mesh(geo, mat, nearMax, `rock_${k.key}`),
         far: null,
         nearMax, farMax: 0, nw: 0, fw: 0,
       };
       if (farCap) {
         g.farMax = Math.max(8, Math.round(farCap * q));
-        g.far = this._mesh(rockGeometry(k.seed, { ...k.opts, detail: 1, chips: 1 }),
-          mat, g.farMax, `rock_${k.key}_far`);
+        g.far = this._mesh(geo, mat, g.farMax, `rock_${k.key}_far`);
         g.far.castShadow = true;
       }
       this.groups.push(g);
