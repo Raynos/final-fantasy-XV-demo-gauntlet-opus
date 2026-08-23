@@ -65,17 +65,51 @@
  * and the run is VOID rather than a pass.
  */
 import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-interface Opts { worst: number; json: string | null; }
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const BASELINE = path.join(ROOT, 'project', 'float-baseline.json');
+
+interface Opts { worst: number; json: string | null; setBaseline: boolean; at: number[] | null; }
 
 function parseArgs(argv: string[]): Opts {
-  const o: Opts = { worst: 20, json: null };
+  const o: Opts = { worst: 20, json: null, setBaseline: false, at: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--worst') o.worst = Number(argv[++i]);
     else if (argv[i] === '--json') o.json = argv[++i];
+    else if (argv[i] === '--set-baseline') o.setBaseline = true;
+    // `--at x,z` walks the world to a named place and streams THERE. The
+    // ratchet is measured at spawn so it is comparable run to run; `--at` is
+    // for pointing the instrument at a frame somebody has already seen a
+    // floating rock in, which is the only way to calibrate against a
+    // known-bad rather than against the tool's own opinion.
+    else if (argv[i] === '--at') o.at = argv[++i].split(',').map(Number);
   }
   return o;
+}
+
+/**
+ * The ratchet, in the shape `anycheck.mts` and `silhouette.mts` already use.
+ *
+ * Gating any of these four counts at zero would be wrong, and the reason is the
+ * same one in both directions: **the check cannot see intent.** A stacked rock
+ * course is meant to rest on the rock below it and not on the ground; a POI's
+ * apron is meant to be metres into the ground; a canopy roof is meant to be in
+ * the air. Every one of those is arithmetically identical to a placement bug.
+ *
+ * What CAN be enforced without knowing intent is that the numbers do not go up.
+ * The floats and burials below are a measured inventory of the world as it is
+ * tonight, and a lane that adds one is told immediately. See the handoff for
+ * what it would take to gate them at zero — it needs the placers to declare
+ * which instances are meant to be grounded, which is a change in files this
+ * lane does not own.
+ */
+interface Baseline {
+  note: string;
+  poiFloating: number; poiBuried: number;
+  instFloating: number; instBuried: number;
 }
 
 const opts = parseArgs(process.argv.slice(2));
@@ -87,7 +121,7 @@ const errors: string[] = [];
 page.on('pageerror', (e) => { errors.push(String(e).split('\n')[0]); });
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
 
-const out = await page.evaluate(async () => {
+const out = await page.evaluate(async (cfg: { at: number[] | null }) => {
   const g = window.GAME;
   const seat = await import('/world/props/Seat.ts');
   const props = g.get('Props')!;
@@ -108,6 +142,9 @@ const out = await page.evaluate(async () => {
     }
     return r;
   };
+
+  interface Walkable { traverse: (f: (o: { traverse?: unknown }) => void) => void }
+  type Walkable0 = Walkable;
 
   /** The shape of a `Mesh` this check needs, without importing three. */
   interface MeshLike {
@@ -171,12 +208,20 @@ const out = await page.evaluate(async () => {
       // exactly that reason. So lift it clear of its own sink and then by a
       // known 2 m, which makes the expected answer exactly 2.000 rather than
       // 'more than nothing'.
-      const placed = seat.proudOf(eco, sp, m0, cell0);
-      const lift = placed.sink + 2.0;
-      const m = m0.slice(); m[13] += lift;
-      const lifted = seat.proudOf(eco, sp, m, cell0);
-      const mSeated = m0.slice(); mSeated[13] += placed.sink;
-      const seated = seat.proudOf(eco, sp, mSeated, cell0);
+      // Find where the mesh's tightest support point actually is, by lifting it
+      // so far that the answer must be positive and subtracting: float(L) =
+      // minGap + L for any L that clears the ground, so minGap = float(1000) -
+      // 1000. Then lift by exactly (2 - minGap) and the true answer is 2.000,
+      // and by (-minGap) and the true answer is 0.000. That tests the
+      // instrument's arithmetic and its zero in the same breath, on the real
+      // geometry, rather than asserting 'more than nothing'.
+      const at = (dy: number) => {
+        const m = m0.slice(); m[13] += dy;
+        return seat.proudOf(eco, sp, m, cell0);
+      };
+      const minGap = at(1000).float - 1000;
+      const lifted = at(2 - minGap);
+      const seated = at(-minGap);
       calib.lifted = lifted.float;
       calib.seated = seated.float;
       calib.subject = built0.group.name;
@@ -229,12 +274,40 @@ const out = await page.evaluate(async () => {
   interface InstRow { name: string; i: number; float: number; sink: number; height: number; x: number; z: number; }
   const insts: InstRow[] = [];
   let instTotal = 0, instMeshes = 0;
-  interface Walkable { traverse: (f: (o: { traverse?: unknown }) => void) => void }
+
   // Rocks and debris STREAM, so on a page that has never ticked there are none
   // at all -- the first run of this tool measured zero instances and had to say
-  // so rather than call it a pass. Settle the sim first, then read whatever the
-  // streamer built around spawn.
-  g.settle(120);
+  // so rather than call it a pass.
+  //
+  // Settling a FIXED number of steps is not enough either: tile generation is
+  // budgeted in **wall-clock milliseconds** per frame, so how much has streamed
+  // after 120 steps depends on what else the machine is doing. Two runs came
+  // back 134/1073 and 486/874 for that reason, which would make any ratchet on
+  // these counts cry wolf forever. So settle until the live instance count
+  // stops moving, and the measured set is the same one every time.
+  if (cfg.at) {
+    const [ax, az] = cfg.at;
+    const pl = g.get('Player');
+    const ay = g.get('Terrain')!.heightAt(ax, az);
+    if (pl && pl.root) pl.root.position.set(ax, ay, az);
+    g.camera.position.set(ax, ay + 6, az + 12);
+    g.camera.lookAt(ax, ay, az);
+  }
+  const liveCount = () => {
+    let n = 0;
+    (g.scene as unknown as Walkable0).traverse((node) => {
+      const o = node as unknown as { isInstancedMesh?: boolean, count?: number, name?: string };
+      if (o.isInstancedMesh && /^(rock|deb|debris|stone|boulder)_/.test(o.name || '')) n += o.count || 0;
+    });
+    return n;
+  };
+  let stable = 0, prev = -1, settles = 0;
+  for (; settles < 60 && stable < 3; settles++) {
+    g.settle(30);
+    const n = liveCount();
+    stable = n === prev ? stable + 1 : 0;
+    prev = n;
+  }
   const rootsToWalk: { name: string, obj: Walkable }[] = [{ name: 'scene', obj: g.scene as unknown as Walkable }];
   for (const r of rootsToWalk) {
     r.obj.traverse((node) => {
@@ -264,9 +337,10 @@ const out = await page.evaluate(async () => {
 
   return {
     calib, builtNow, poiSites: pk.sites.length, pois, insts,
-    instTotal, instMeshes, cell0, maxSink: seat.MAX_SINK,
+    instTotal, instMeshes, cell0, maxSink: seat.MAX_SINK, settles,
+    at: cfg.at,
   };
-});
+}, { at: opts.at });
 
 await leased.release();
 
@@ -312,6 +386,7 @@ for (const p of knife.slice(0, opts.worst)) {
 }
 
 console.log(`\n2. placed instances — ${out.instTotal} live across ${out.instMeshes} instanced meshes (rocks, debris)`);
+console.log(`   streamed to a standstill in ${out.settles} settle rounds`);
 if (out.instTotal === 0) {
   console.log('   MEASURED NOTHING. Streaming had not run; this is not a pass.');
 }
@@ -338,9 +413,59 @@ if (errors.length) {
   for (const e of errors.slice(0, 10)) console.log(`  ${e}`);
 }
 
-const fails = floating.length + buried.length + out.insts.length + (out.instTotal === 0 ? 1 : 0);
-if (fails) {
-  console.log(`\nFAIL — ${floating.length} floating compounds, ${buried.length} buried compounds, ${out.insts.length} bad instances.`);
+/* --------------------------------------------------------------- the ratchet */
+
+const now = {
+  poiFloating: floating.length, poiBuried: buried.length,
+  instFloating: instFloat.length, instBuried: instBuried.length,
+};
+
+if (out.instTotal === 0) {
+  console.log('\nVOID: gate 2 measured nothing. A run with no instances is not a pass.');
+  process.exit(2);
+}
+
+if (out.at) {
+  console.log(`\n--at ${out.at.join(',')}: a directed read, NOT the ratchet's measurement.`);
+  console.log('The baseline is taken at spawn so it is comparable run to run.');
+  process.exit(instFloat.length ? 1 : 0);
+}
+
+if (opts.setBaseline) {
+  const b: Baseline = {
+    note: 'Measured inventory of floats and burials, not a target. The gate fails '
+      + 'when a count goes UP. It is not zero because this check cannot see intent: '
+      + 'a stacked rock course rests on rock, a POI apron is meant to be underground, '
+      + 'and a canopy roof is meant to be in the air. Re-run with --set-baseline only '
+      + 'to LOWER these.',
+    ...now,
+  };
+  await writeFile(BASELINE, `${JSON.stringify(b, null, 1)}\n`);
+  console.log(`\nwrote ${path.relative(ROOT, BASELINE)}: ${JSON.stringify(now)}`);
+  process.exit(0);
+}
+
+let base: Baseline | null = null;
+try { base = JSON.parse(await readFile(BASELINE, 'utf8')) as Baseline; } catch { base = null; }
+if (!base) {
+  console.log(`\nno ${path.relative(ROOT, BASELINE)} — run --set-baseline once to arm the ratchet.`);
+  console.log(JSON.stringify(now));
+  process.exit(0);
+}
+
+const worse: string[] = [];
+const better: string[] = [];
+for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {
+  if (now[k] > base[k]) worse.push(`${k}: ${base[k]} -> ${now[k]}`);
+  else if (now[k] < base[k]) better.push(`${k}: ${base[k]} -> ${now[k]}`);
+}
+console.log(`\nratchet, against ${path.relative(ROOT, BASELINE)}:`);
+for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {
+  console.log(`  ${pad(k, 14)} ${String(now[k]).padStart(5)}   baseline ${base[k]}`);
+}
+if (better.length) console.log(`  improved: ${better.join(', ')} — lower the ratchet with --set-baseline`);
+if (worse.length) {
+  console.log(`\nFAIL — ${worse.length} count(s) went up: ${worse.join('; ')}`);
   process.exit(1);
 }
-console.log(`\nPASS — 0 floating instances across ${out.pois.length} POIs and ${out.instTotal} placed instances.`);
+console.log(`\nPASS — nothing new floats or is buried across ${out.pois.length} POIs and ${out.instTotal} placed instances.`);

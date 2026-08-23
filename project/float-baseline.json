@@ -1,0 +1,7 @@
+{
+ "note": "Measured inventory of floats and burials, not a target. The gate fails when a count goes UP. It is not zero because this check cannot see intent: a stacked rock course rests on rock, a POI apron is meant to be underground, and a canopy roof is meant to be in the air. Re-run with --set-baseline only to LOWER these.",
+ "poiFloating": 0,
+ "poiBuried": 25,
+ "instFloating": 329,
+ "instBuried": 936
+}
