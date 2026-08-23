@@ -62,6 +62,8 @@ export class Enemies {
   /** species geometry, keyed on `SpeciesDef.protoKey ?? key`. */
   prototypes!: Map<string, EnemyPrototype>;
   _ctx!: EnemyCtx;
+  /** Cached vegetation-density sampler; see `update`. */
+  _conceal!: ((x: number, z: number) => number) | null;
   _dir!: THREE.Vector3;
   _tmp!: THREE.Vector3;
   combatAnim!: CombatAnim;
@@ -98,9 +100,11 @@ export class Enemies {
     this.onStrike = null;
     /** Legacy single-argument hook CombatSystem installs. */
     this.onEnemyStrike = null;
+    this._conceal = null;
     this._ctx = {
       terrain: null, player: null, others: this.list, threats: null,
-      night: 0, onStrike: null, onEnemyStrike: null, rng: () => this.rng.next(),
+      night: 0, concealment: null,
+      onStrike: null, onEnemyStrike: null, rng: () => this.rng.next(),
     };
     /** Seconds a corpse lingers before it is recycled. */
     this.corpseLinger = 6;
@@ -319,6 +323,18 @@ export class Enemies {
     ctx.player = game.get('Player') ?? null;
     ctx.threats = this.threats;
     ctx.night = this.night;
+    // Vegetation concealment (sibling-ports Wave 4). Bound here rather than in
+    // `EnemyBase` so the bestiary keeps no dependency on `world/veg/`, and
+    // re-read per frame because `Vegetation` is built by a later boot step than
+    // this one -- binding it once in the constructor would silently leave every
+    // encounter with no concealment, which is exactly the class of dead system
+    // `reachcheck` exists to catch.
+    if (!this._conceal) {
+      const veg = game.get('Vegetation');
+      const eco = veg && veg.ecology;
+      if (eco) this._conceal = (x: number, z: number) => eco.grassDensity(x, z);
+    }
+    ctx.concealment = this._conceal;
     ctx.onStrike = this.onStrike;
     ctx.onEnemyStrike = this.onEnemyStrike;
 

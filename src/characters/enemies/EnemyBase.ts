@@ -315,6 +315,12 @@ export interface GroundSampler {
  * `Game.get()`, which returns `undefined` for a system that is not registered
  * in the current scenario — a bestiary capture runs with no terrain at all.
  */
+/**
+ * The most sight can ever be suppressed by vegetation. Below 1 on purpose --
+ * see `_concealFactor`: an enemy that a bush can permanently blind is a bug.
+ */
+const MAX_CONCEALMENT = 0.72;
+
 export interface EnemyCtx {
   terrain?: GroundSampler | null;
   player?: Threat | null;
@@ -324,6 +330,16 @@ export interface EnemyCtx {
   others: Enemy[];
   /** 0..1 night depth; widens a daemon's sight and narrows an animal's. */
   night: number;
+  /**
+   * How much cover the vegetation gives at a world point, 0..1.
+   *
+   * Sibling-ports Wave 4 asks for a concealment term in the perception model
+   * and notes that the repo it came from never wrote one, because it had no
+   * real vegetation to sample. We do. Optional and duck-typed on purpose: the
+   * enemies must not depend on `world/veg/`, and an encounter with no
+   * vegetation system wired simply has no concealment.
+   */
+  concealment?: ((x: number, z: number) => number) | null;
   /** called as `onStrike(enemy, attack)` when an attack's active frame lands. */
   onStrike: ((e: Enemy, a: EnemyAttack | null) => void) | null;
   /** the legacy single-argument hook `CombatSystem` installs. */
@@ -1066,13 +1082,45 @@ export class Enemy {
       const dot = (dx / d) * fx + (dz / d) * fz;
       // very close range is felt, not seen
       if (d < this.radius * 3 + 2.5 || dot > Math.cos(this.fov)) {
-        return THREE.MathUtils.clamp(1.6 - d / sightRange, 0.25, 1);
+        const seen = THREE.MathUtils.clamp(1.6 - d / sightRange, 0.25, 1);
+        return seen * this._concealFactor(t, p, d, ctx);
       }
     }
     const noise = t.speed != null ? THREE.MathUtils.clamp(t.speed / 5, 0.25, 1.4) : 0.8;
     const hear = this.hearing * noise;
     if (d2 < hear * hear) return 0.45;
     return 0;
+  }
+
+  /**
+   * How much the vegetation at the target's feet hides it from *sight*.
+   * 1 is fully exposed, 0 fully hidden.
+   *
+   * Three terms, each of them a rule the genre already obeys:
+   *
+   * - **Cover only helps at range.** Inside the "felt, not seen" radius it does
+   *   nothing; it ramps in over the next fifteen metres or so. Grass does not
+   *   hide someone standing on top of you.
+   * - **Moving gives you away.** Concealment scales down with the target's
+   *   speed and is gone by a run. Thrashing vegetation is *more* visible than
+   *   still vegetation, which is why the walk-and-stop rhythm is the whole
+   *   texture of stalking.
+   * - **It never reaches zero.** Capped so a target in the deepest grass is
+   *   still eventually noticed; an enemy that can be permanently blinded by
+   *   standing in a bush is a bug, not a stealth system.
+   *
+   * Hearing is deliberately untouched. You can hear someone in long grass, and
+   * in fact rather better.
+   */
+  _concealFactor(t: Threat, p: THREE.Vector3, d: number, ctx: EnemyCtx | null) {
+    const at = ctx && ctx.concealment;
+    if (!at) return 1;
+    const cover = THREE.MathUtils.clamp(at(p.x, p.z), 0, 1);
+    if (cover <= 0) return 1;
+    const nearR = this.radius * 3 + 2.5;
+    const ranged = THREE.MathUtils.clamp((d - nearR) / 15, 0, 1);
+    const still = t.speed != null ? THREE.MathUtils.clamp(1 - t.speed / 3.4, 0, 1) : 0.6;
+    return 1 - MAX_CONCEALMENT * cover * ranged * still;
   }
 
   /* ------------------------------------------------------------ combat */
