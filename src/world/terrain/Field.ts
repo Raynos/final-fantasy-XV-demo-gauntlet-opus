@@ -1518,36 +1518,49 @@ export class Field {
       }
     }
 
-    // Rank to percentiles so the three band thresholds mean shares of the
-    // drained world rather than magnitudes of one bake's erosion constants.
-    const nz: number[] = [];
-    for (let k = 0; k < fb.length; k++) if (fb[k] > 0) nz.push(fb[k]);
-    if (!nz.length) return;
-    nz.sort((a, b) => a - b);
-    const at = (p: number) => nz[Math.min(nz.length - 1, Math.floor(nz.length * p))];
+    // Rank to percentiles FIRST, and interpolate the bands on the rank rather
+    // than on the value. Interpolating on the raw magnitude is the same
+    // heavy-tail mistake that the placement channel already had to unlearn, and
+    // it is much worse here: the top band's `hi` was the single maximum of a
+    // field whose p99.7 is a small fraction of it, so `smoothstep(lo, hi, a)`
+    // evaluated to about zero for every cell in the band. Measured: exactly
+    // **51 cells in the whole world** were cut past 4 m, and the trunk valleys
+    // this pass exists to carve did not exist.
+    const pct = new Float32Array(N * N);
+    {
+      const idx: number[] = [];
+      for (let k = 0; k < fb.length; k++) if (fb[k] > 0) idx.push(k);
+      if (!idx.length) return;
+      idx.sort((a, b) => fb[a] - fb[b]);
+      for (let r = 0; r < idx.length; r++) pct[idx[r]] = r / (idx.length - 1 || 1);
+    }
+
     // share of drained cells | depth | how far the shoulder reaches
     const BANDS = [
-      { lo: at(0.960), hi: at(0.988), depth: 1.4, shoulder: 2 },
-      { lo: at(0.988), hi: at(0.997), depth: 3.2, shoulder: 4 },
-      { lo: at(0.997), hi: at(1.000), depth: 6.4, shoulder: 7 },
+      { lo: 0.940, hi: 0.985, depth: 1.6, shoulder: 2 },
+      { lo: 0.985, hi: 0.996, depth: 4.0, shoulder: 5 },
+      { lo: 0.996, hi: 0.9995, depth: 9.0, shoulder: 9 },
     ];
 
     const cut = new Float32Array(N * N);
+    const wid = new Float32Array(N * N);
     for (let j = 2; j < N - 2; j++) {
       for (let i = 2; i < N - 2; i++) {
         const k = j * N + i;
-        const a = fb[k];
+        const a = pct[k];
         if (a <= BANDS[0].lo) continue;
         const gx = (h[k + 1] - h[k - 1]) / (2 * CELL);
         const gz = (h[k + N] - h[k - N]) / (2 * CELL);
         const gate = smoothstep(0.02, 0.06, Math.hypot(gx, gz));
         if (gate <= 0) continue;
-        let d = 0;
+        let d = 0, w = 0;
         for (const b of BANDS) {
           if (a <= b.lo) continue;
-          d = Math.max(d, b.depth * smoothstep(b.lo, b.hi, a));
+          const t = smoothstep(b.lo, b.hi, a);
+          if (b.depth * t > d) { d = b.depth * t; w = b.shoulder * t; }
         }
         cut[k] = d * gate;
+        wid[k] = w * gate;
       }
     }
 
@@ -1560,7 +1573,7 @@ export class Field {
         const k = j * N + i;
         const d = cut[k];
         if (d <= 0.01) continue;
-        const R = d > 4 ? 7 : d > 2 ? 4 : 2;
+        const R = Math.max(1, Math.round(wid[k]));
         for (let dj = -R; dj <= R; dj++) {
           const jj = j + dj; if (jj < 1 || jj >= N - 1) continue;
           for (let di = -R; di <= R; di++) {
