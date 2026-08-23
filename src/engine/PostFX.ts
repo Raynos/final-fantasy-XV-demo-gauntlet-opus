@@ -14,6 +14,7 @@ import { ContactShadowPass } from './postfx/ContactShadowPass.ts';
 import { GradePass } from './postfx/GradePass.ts';
 import { CasPass } from './postfx/CasPass.ts';
 import { Exposure } from './postfx/Exposure.ts';
+import { sceneSamples } from './postfx/Msaa.ts';
 import { LightBudget } from './LightBudget.ts';
 import { Warmup } from './Warmup.ts';
 import type { WarmupStep } from './Warmup.ts';
@@ -638,10 +639,16 @@ export class PostFX {
   _wantSamples(tier: QualityTier) {
     const post = (new URLSearchParams(location.search).get('post') || '').toLowerCase();
     if (post.split(',').some((t) => t.trim() === 'nomsaa')) return 0;
-    if (tier === 'low') return 0;
-    if (tier === 'medium') return 2;
-    if (tier === 'high') return 4;
-    return 8;
+    const n = tier === 'low' ? 0 : tier === 'medium' ? 2 : tier === 'high' ? 4 : 8;
+    // The materials already committed to a coverage ramp on `sceneSamples()`'s
+    // answer, before this object existed. If the two ever disagree the flag is
+    // set with nowhere to write, so say so loudly rather than shipping a
+    // silhouette that is a ramp-width fat on one tier and nobody's fault.
+    if (n !== sceneSamples()) {
+      console.warn(`PostFX: tier ${tier} wants ${n} samples but the vegetation ` +
+        `materials were built for ${sceneSamples()}. See sceneSamples().`);
+    }
+    return n;
   }
 
   _applyGrade() {

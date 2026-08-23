@@ -12,8 +12,8 @@ lane's whole brief. Also load-bearing: `project/handoff/perf.md`, which is why
 this fix was affordable at all.
 
 **Status: fixed, measured, priced, and blind-tested.** Silhouette step size at
-the treeline is down 26% at p90 and the speckle — the isolated texels the judge
-named twice — is down 89%. The frame-time cost is **below the ruler's own noise
+the treeline is down 27% at p90 and the speckle — the isolated texels the judge
+named twice — is down 82%. The frame-time cost is **below the ruler's own noise
 floor on all five shots measured**, on a run that certified itself. `check` is
 11/11 and determinism is unchanged. In blind round 6 the defect fell from the
 judge's number one to its number nine, and changed subject on the way down.
@@ -70,6 +70,31 @@ before, and `rtVel` — single-sampled, colour-cleared only, depth-testing mover
 against the scene's depth — attaches the *resolved* texture and never touches
 the multisample buffer. Nothing in `src/engine/postfx/` needed a line changed.
 
+### 1b. `src/engine/postfx/Msaa.ts` — one answer, asked from both ends
+
+The two halves are decided at opposite ends of boot: `Game` builds
+`Vegetation` at step four and constructs `PostFX` after every system, so the
+material carrying `alphaToCoverage` cannot ask the object carrying `samples`.
+`sceneSamples()` is a free function in a file that imports nothing, so both
+sides get the same answer — and `VegMaterial` importing a *value* out of
+`PostFX.ts` would have dragged the whole composer graph into the vegetation
+chunk and invited a cycle.
+
+**Setting the flag with no samples is not harmless, which is why this exists.**
+The hardware half is a strict no-op at one sample — GLES 3.0 skips multisample
+fragment operations when `SAMPLE_BUFFERS` is zero — but the *shader* half is
+not: three still defines `ALPHA_TO_COVERAGE`, the coverage ramp still runs, and
+on an opaque material a fractional alpha then does exactly one thing, which is
+move where the discard happens. `low` would have come out with a silhouette a
+ramp-width fatter and every bit as hard. It also made `?post=nomsaa` a *dirty*
+control until this landed, because the ablation turned off the samples and left
+the ramp running; with both halves reading the same function, `nomsaa` now
+reproduces the pre-change frame exactly (see the table below).
+
+`PostFX._wantSamples` warns at boot if its tier-based answer ever disagrees
+with `sceneSamples()`'s query-string one, so the failure mode is a console line
+rather than a silhouette that is subtly wrong on one tier and nobody's fault.
+
 ### 2. `1245d14` — straddle the cutoff
 
 three's alpha-to-coverage chunk is
@@ -102,10 +127,12 @@ where each leaf is biggest on screen.
 ## The numbers
 
 `src/tools/edgestat.mts` is new and is the instrument for this defect.
-`reliefstat.mts` structurally cannot grade it: it measures RMS contrast per
-octave, and a binary edge and a coverage-antialiased one carry nearly the same
-energy. What separates them is how that energy is *distributed across
-neighbouring pixels*. So, per ROI, on luminance:
+`reliefstat.mts` sees the *aggregate* of it — one number, `d1`, and the section
+further down shows that number moving cleanly — but it cannot describe the
+shape, because a binary edge and a coverage-antialiased one carry nearly the
+same RMS contrast per octave. What separates them is how that energy is
+*distributed across neighbouring pixels*, which is a per-pixel question and not
+a spectral one. So, per ROI, on luminance:
 
 - **edge%** — pixels whose largest 4-neighbour difference is ≥ 8/255.
 - **hard%** — of those, the fraction stepping ≥ 48/255 in one hop.
@@ -116,22 +143,35 @@ neighbouring pixels*. So, per ROI, on luminance:
 - **mid%** — pixels sitting between the two Otsu classes. Partial coverage
   *is* this band.
 
-`zone_fallgrove`, four states of the same frame:
+`zone_fallgrove`, five states of the same frame:
 
 | roi `1150,350,120,68` (treeline) | edge% | hard% | p90 | speck | mid% |
 |---|---|---|---|---|---|
-| binary cut (`--ablate nomsaa`) | 53.9 | 21.9 | 97.5 | 34.7 | 5.75 |
 | baseline as inherited | 53.5 | 22.0 | 98.2 | 36.0 | 5.66 |
+| **`--ablate nomsaa` on the shipped tree** | **53.6** | **22.1** | **98.1** | **36.0** | **5.71** |
 | `samples: 4`, three's ramp | 51.4 | 23.3 | 86.5 | 15.4 | 7.32 |
-| `samples: 4`, centred ramp | 53.5 | 20.6 | **72.7** | 10.3 | 8.37 |
-| `samples: 8`, centred ramp | 53.7 | 20.1 | **70.2** | **3.9** | 8.45 |
+| `samples: 4`, centred ramp | 53.5 | 20.6 | 72.7 | 10.3 | 8.37 |
+| **shipped (`ultra`, 8, centred)** | 53.2 | 20.4 | **71.5** | **6.4** | **8.37** |
 
 | roi `900,355,400,90` (the whole treeline) | p90 | speck |
 |---|---|---|
 | baseline | 73.2 | 16.3 |
+| `--ablate nomsaa` | 73.3 | 16.3 |
 | `samples: 4`, three's ramp | 69.4 | 8.0 |
 | `samples: 4`, centred ramp | 59.5 | 7.1 |
-| `samples: 8`, centred ramp | **58.1** | **4.9** |
+| **shipped** | **58.1** | **5.4** |
+
+**Read row two of each table before anything else: `--ablate nomsaa` on the
+shipped tree reproduces the inherited baseline to the third digit** — 98.1
+against 98.2, 36.0 against 36.0, 53.6% against 53.5%. That is the control
+working, and it is the sentence that makes every other row in the table mean
+something. It only became a clean control after `sceneSamples()` was factored
+out (section 1b above): before that, `nomsaa` turned off the samples but left the material
+flag set, so the shader ramp still ran with nowhere to write.
+
+Headline, baseline to shipped: **p90 step 98.2 → 71.5 (−27%), speckle 36.0 →
+6.4 (−82%)** on the treeline ROI, and 73.2 → 58.1 (−21%) / 16.3 → 5.4 (−67%)
+across the whole treeline band.
 
 | roi `260,250,120,68` (a near crown) | p90 | speck |
 |---|---|---|
@@ -275,7 +315,11 @@ game uses least.
 Five shots, `q=ultra`, both passes inside one quiet window, `RULER_VALID: true`
 on both. `perf.mts` has no `--ablate`, so the second pass was taken with
 `_wantSamples` forced to return 0 — `?post=nomsaa` cannot be reached from that
-harness.
+harness. That turns out to be the *better* attribution rather than a
+compromise: it leaves the material flag and the coverage ramp exactly as they
+are and removes only the samples, so what the two columns bracket is the
+multisample buffer's bandwidth and fill and nothing else. The shader half costs
+one `fwidth` and one `smoothstep` per foliage fragment on both sides.
 
 | shot | `samples: 8` | `samples: 0` | Δ | draws | tris |
 |---|---|---|---|---|---|
@@ -378,6 +422,7 @@ else's ground, and both have been climbing for three rounds.
 
 - `src/engine/PostFX.ts` — `samples` field, the `rtScene` option,
   `_wantSamples`, the `nomsaa` token in `debugToggle`.
+- `src/engine/postfx/Msaa.ts` — new, `sceneSamples()`, imports nothing.
 - `src/world/veg/VegMaterial.ts` — `coverageAA`, called from both
   `registerAlphaCard` and `patchVeg`; the `<alphatest_fragment>` rewrite.
 - `src/tools/edgestat.mts` — new.
@@ -399,6 +444,7 @@ part of it touched is the alpha path.
 | a wider coverage ramp keeps helping | floor 0.06 → 0.11, captured both | **no.** Identical to three significant figures. `fwidth(a)` is the binding term at these distances, not the floor. |
 | `samples: 8` is the same picture as 4 for more bandwidth | captured both | **half true, and the half that is false is the one that matters.** Step size the same (72.7 → 70.2); speckle 10.3 → 3.9 and 12.8 → 2.6. |
 | the "dithered" in the complaint is CAS's ordered dither | it is ±0.5/255 | **false.** The dither is 48× below the threshold the speckle statistic counts. It is CAS's *sharpen*, which doubles both the edge count and the speckle. |
+| `alphaToCoverage` is harmless where there is no MSAA, so the flag can be unconditional | reasoned it through the GLES 3.0 spec and three's chunk | **false, and it made the ablation dirty.** The hardware half is a no-op at one sample; the *shader* half is not, so `low` gets a fatter, equally hard silhouette and `?post=nomsaa` was not a clean control until `sceneSamples()` gated both halves. |
 | turning CAS's sharpness down is the next win | banded it on four shots, then looked at `hero_full` at 4× | **a trade, not a win.** CAS's benefit and its cost are the same octave. `d1` lands on the reference with it off, and the roofline, path stones and shrubs visibly soften. Not landed. |
 | a coverage-preserving mip chain is a fix still to build | read `VegTextures.buildAlphaMips` | **it already exists and is good.** Every card's chain binary-searches an alpha scale per level to hold the level-0 coverage at the material's own `alphaRef`, capped at one stop, with `tinyFade` for the sub-8 px levels. This was on the list of alternatives to try; it was built two lanes ago. |
 
@@ -467,7 +513,7 @@ What this lane was sent to fix is fixed and it was fixed by measurement. The
 judge's round-5 number one, the sentence that named this defect three different
 ways in one clause, is not in round 6's list at all; what is left of it is at
 number nine and is about terrain ridges. The silhouette step size at the
-treeline is down 26% at p90, the speckle is down 89%, the crops at 8× are a
+treeline is down 27% at p90, the speckle is down 82%, the crops at 8× are a
 different picture, `check` is 11/11, determinism is unchanged and no other
 lane's file moved.
 
