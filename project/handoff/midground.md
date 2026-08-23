@@ -226,12 +226,30 @@ the world** including Leide and the towns. Reverted.
 
 ## What is left, ranked, and what is known about each
 
-1. **The Meteor of the Disc renders as a flat untextured pale grey-blue slab**
-   and it is the largest thing in the upper half of `zone_longwythe`.
-   `tmp/crop/lw-slabs.jpg` at 2.6x. It uses a real `rockMaterial`, so this is
-   either the aerial-perspective fade doing its job correctly at 4-5 km or a
-   genuinely dead surface — **and I did not ablate it, so I do not know which.**
-   Do not re-tint it before capturing it with the fog off. `props/Megastructures.ts`.
+1. **The Meteor of the Disc, and it is a silhouette problem, not a texture one.**
+   Both round-9 judges named it independently — *"faceted low-poly floating rock
+   with visible flat facets"*, *"visible flat polygon facets on the left rock
+   mesh"* — and it is the largest thing in the upper half of `zone_longwythe`.
+   `tmp/crop/lw-slabs.jpg` at 2.6x.
+
+   **Read the code before re-tinting it, because the obvious diagnosis is
+   wrong.** It is not untextured: `M.stone` is a real `rockMaterial` with an
+   albedo, normal and roughness map, `splitNormals` bakes per-face triplanar UVs
+   (so no stretched-stripe smear), and `meteorMass` passes
+   `uvScale: 22 / (r * 1.95)`, which tiles the map every 27 m — about eleven
+   repeats across a 300 m mass. The vertex-colour trap is handled too and there
+   is a comment about it.
+
+   What *is* wrong is the shading of the cuts. `meteorMass` takes 16 cleave
+   planes, and a cleave plane makes a genuinely flat face; at four kilometres,
+   under one directional light, a set of large flat faces reads as exactly the
+   hard value steps both judges called "polygon facets". The fix is surface
+   break-up on the cut faces — a relief term, or more and shallower cuts — not
+   a texture and not a tint. `props/Megastructures.ts`.
+
+   **And the Insomnia skyline, in the same file, is the other half of it**:
+   both rounds called it *"a cluster of flat blue prisms"* / *"extruded boxes"*,
+   on both `zone_longwythe` and `zone_three_valleys`.
 2. **Our graded Leide shots frame a bare plain from 80 m out, and shipped FFXV
    never does.** Every `FFXV-ground` plate has foreground objects in the bottom
    band; `zone_longwythe` has none. That is why its `tot` cannot be closed by
@@ -385,6 +403,12 @@ carrying forward and are written into the commit messages:
 `uxcheck` 93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged),
 `heightcheck`, `driftcheck`, `roadcheck`, `creaturecheck`, `integration`,
 `orphans`, build. `npm run typecheck` and `typecheck:tools` clean.
+
+`perf.mts` on a quiet tree: **PASS, `RULER_VALID: true`**, mean **248.6 fps**,
+worst **157 fps** (`town_forecourt`), noise floor 0.38 ms end IQR against a
+median 4.3 ms frame. `project/handoff/budget.md` certified mean 202.9 / worst
+152 for comparison; nothing regressed, and the difference is not this lane's to
+claim.
 
 **Cost: zero draw calls, zero triangles**, measured one shot per capture on both
 sides — see the correction under §1 above.
