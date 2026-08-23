@@ -275,6 +275,8 @@ export class Sky {
   _camAnchor!: THREE.Vector3;
   _camAspect!: number;
   _camFov!: number;
+  /** Snapped distance to the nearest ground the frame actually contains. */
+  _csmNear!: number;
   _envHours!: number;
   _envIntensity!: number;
   _godRayBase!: number;
@@ -345,6 +347,14 @@ export class Sky {
     const scene = game.scene;
     const renderer = game.renderer;
 
+    // Read `?post=` here rather than after the cascade rig is built. Two of the
+    // tokens below have to be honoured *before* the first program compiles:
+    // `castShadow` is part of a lit material's program cache key, so flipping
+    // it once the world is up is the measured 9.5 s / 43-program freeze that
+    // `LANDMINES.md` records against toggling a light's `visible`.
+    const dbg = new URLSearchParams(location.search).get('post');
+    if (dbg) for (const t of dbg.split(',')) this._ablate.add(t.trim().toLowerCase());
+
     // PCFSoftShadowMap is deprecated in three 0.185 and blurs the cascades to
     // mush; PCF with a tight normal bias is sharper and cheaper.
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -383,6 +393,10 @@ export class Sky {
     // four frames inside a 200 m box — invisible.
     this.cascadeStride = (SHADOW_STRIDE[tier as keyof typeof SHADOW_STRIDE] || SHADOW_STRIDE.high).slice();
 
+    // Set before the CSM is built: its constructor calls `updateFrustums`,
+    // which calls the split callback.
+    this._csmNear = game.camera.near;
+
     this.csm = new CSM({
       camera: game.camera,
       parent: scene,
@@ -390,7 +404,14 @@ export class Sky {
       // 260 m put the far cascade's texels on ground that aerial perspective
       // has already washed out; 190 m keeps every shadow the eye can resolve.
       maxFar: 190,
-      mode: 'practical',
+      // 'custom', not 'practical', so the split can start at the nearest ground
+      // the frame actually contains rather than at `camera.near`. See
+      // `_splitCascades` — the callback is a practical split with one number
+      // changed, and with `_csmNear` pinned at `camera.near` it is bit-for-bit
+      // what `mode: 'practical'` produced before.
+      mode: 'custom',
+      customSplitsCallback: (n: number, _near: number, far: number, target: number[]) =>
+        this._splitCascades(n, far, target),
       shadowMapSize: res,
       shadowBias: -0.00018,
       lightIntensity: 3.0,
@@ -410,6 +431,23 @@ export class Sky {
       // which it does on every top-level render() call.
       l.shadow.autoUpdate = false;
       l.shadow.needsUpdate = true;
+      // `?post=nomask` — how much of the frame the cast shadows are actually
+      // responsible for. `shadow.intensity` is a plain uniform
+      // (`shadowIntensity`), so zeroing it makes `getShadow` return exactly 1.0
+      // with the *identical program*: same defines, same cascade gating, same
+      // number of `RE_Direct` calls, same light count.
+      //
+      // **Do not "simplify" this to `l.castShadow = false`.** That was the
+      // first version and it is confounded past usefulness: it takes
+      // `NUM_DIR_LIGHT_SHADOWS` to 0, which drops the CSM chunk out of its
+      // cascade branch into the plain `#else` loop — and that loop calls
+      // `RE_Direct` for *every* directional light instead of for the one
+      // cascade the fragment falls in. Three cascade lights of equal colour
+      // and intensity then light the ground three times over. It measured a
+      // +62/255 "shadow contribution" on `zone_longwythe` where the honest
+      // figure, taken here, is **+0.17/255**. A 360-fold error, in the
+      // direction that would have confirmed the wrong diagnosis.
+      if (this._ablate.has('nomask')) l.shadow.intensity = 0;
     });
     this._lightPos = this.csm.lights.map(() => new THREE.Vector3());
     this._lightTgt = this.csm.lights.map(() => new THREE.Vector3());
@@ -440,9 +478,6 @@ export class Sky {
       if (prevHook) prevHook.call(scene, r, sc, cam, geo, mat, group);
       this._preRender(r, cam as THREE.PerspectiveCamera);
     };
-
-    const dbg = new URLSearchParams(location.search).get('post');
-    if (dbg) for (const t of dbg.split(',')) this._ablate.add(t.trim().toLowerCase());
 
     this.setTimeOfDay(12.0);
     this.patch.scan(scene);
@@ -1047,6 +1082,86 @@ export class Sky {
   }
 
   /**
+   * The cascade splits, as fractions of `maxFar`.
+   *
+   * This is three's `practicalSplit` — a 50/50 lerp of a logarithmic and a
+   * uniform split — with exactly one number changed: the near bound is
+   * {@link _csmNear}, the distance to the nearest ground the frame actually
+   * contains, not `camera.near`.
+   *
+   * **That one number was the whole of the shadow defect, and it is worth
+   * saying why rather than just how.** `camera.near` is 0.15 m. A logarithmic
+   * split anchored at 0.15 m spends its first cascade on 0.15–32 m, because
+   * that is where a log split puts its detail. In the third-person gameplay
+   * camera that is right: the ground starts about 3 m from the lens and the
+   * near cascade is doing the work. In an elevated establishing shot — which
+   * is every frame the blind A/B is graded on — the camera sits 35–45 m above
+   * the ground on a rise, and the nearest ground *in frame* is 61 m
+   * (`zone_fallgrove`) or 80 m (`zone_longwythe`). Measured by marching the
+   * real camera rays onto the heightfield, not assumed.
+   *
+   * So the 2048² near cascade was rendering the whole world into a 54 m box
+   * every frame and **not one pixel of the frame ever sampled it**: the
+   * shader gates cascade 0 on `linearDepth < 0.171`, and nothing on screen was
+   * that close. The mid cascade caught a sliver. Everything else fell into
+   * cascade 2 — 1024² over a 314 m box, 0.31 m per texel, which is coarser
+   * than the tree trunks and bushes it was being asked to resolve.
+   *
+   * Anchoring the split at the near ground moves cascade 0 onto the band that
+   * is actually on screen *and* is still inside the casters' cull ranges. It
+   * costs nothing: same cascade count, same resolutions, same stride.
+   */
+  _splitCascades(amount: number, far: number, target: number[]) {
+    const near = Math.min(Math.max(this._csmNear || this.game.camera.near, this.game.camera.near), far * 0.5);
+    for (let i = 1; i < amount; i++) {
+      const log = near * (far / near) ** (i / amount);
+      const uni = near + (far - near) * (i / amount);
+      target.push(((log + uni) * 0.5) / far);
+    }
+    target.push(1);
+  }
+
+  /**
+   * Distance to the nearest ground the camera can actually see, snapped to a
+   * coarse ladder.
+   *
+   * Marched on the CPU against `Terrain.heightAt` down the bottom-centre ray,
+   * which is the nearest ground in frame for any camera that is not rolled.
+   * Twenty-odd height samples; the terrain field is the same one the physics
+   * queries every frame.
+   *
+   * **The snapping is not an optimisation, it is the correctness condition.**
+   * A continuously-varying near bound would re-derive the splits every frame,
+   * which re-fits every cascade's box every frame, which desynchronises the
+   * stale depth maps `_updateCascades` exists to keep — the stride would stop
+   * buying anything and the shadows would swim. Snapping to a ×1.6 ladder
+   * means the splits change only when the camera has genuinely changed what
+   * kind of view it is, a handful of times in a play session.
+   */
+  _nearGround(camera: THREE.PerspectiveCamera): number {
+    const terrain = this.game.get('Terrain') as { heightAt?: (x: number, z: number) => number } | null;
+    if (!terrain || !terrain.heightAt) return camera.near;
+    const e = camera.matrixWorld.elements;
+    const tanY = Math.tan((camera.fov * DEG) * 0.5);
+    // bottom-centre ray: forward (-col2) minus up (col1) scaled by the half-fov
+    const dx = -e[8] - e[4] * tanY, dy = -e[9] - e[5] * tanY, dz = -e[10] - e[6] * tanY;
+    const il = 1 / Math.hypot(dx, dy, dz);
+    const rx = dx * il, ry = dy * il, rz = dz * il;
+    const p = camera.position;
+    if (ry >= 0) return camera.near;              // looking at or above the horizon
+    let t = camera.near;
+    for (let i = 0; i < 48; i++) {
+      const y = p.y + ry * t;
+      if (y <= terrain.heightAt(p.x + rx * t, p.z + rz * t)) break;
+      t *= 1.25;
+      if (t > 900) return camera.near;            // no ground in the lower half
+    }
+    // snap down a x1.6 ladder so small camera moves do not re-fit the cascades
+    const snapped = 1.6 ** Math.floor(Math.log(Math.max(t, 1)) / Math.log(1.6));
+    return Math.min(Math.max(snapped, camera.near), 90);
+  }
+
+  /**
    * Re-fit and re-render the cascades on their stride.
    *
    * `CSM.update()` refits every cascade at once, so a cascade we mean to leave
@@ -1118,9 +1233,11 @@ export class Sky {
     this.u.uCamAlt.value = Math.max(2, camera.position.y);
 
     // cascades
-    if (camera.fov !== this._camFov || camera.aspect !== this._camAspect) {
+    const near = this._ablate.has('nearsplit') ? camera.near : this._nearGround(camera);
+    if (camera.fov !== this._camFov || camera.aspect !== this._camAspect || near !== this._csmNear) {
       this._camFov = camera.fov;
       this._camAspect = camera.aspect;
+      this._csmNear = near;
       this.csm.updateFrustums();
       for (const l of this.csm.lights) l.shadow.needsUpdate = true;
     }
