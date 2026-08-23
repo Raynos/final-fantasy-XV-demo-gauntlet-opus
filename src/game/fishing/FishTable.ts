@@ -54,18 +54,18 @@ export const FISH: Record<string, FishSpec> = Object.fromEntries([
   // Alstor Slough — freshwater, the beginner water.
   F('alstor_trout',    'Slough Trout',                 34, 0.62, 7,  [0.7, 2.4],  [14, 20], 320),
   F('alstor_bass',     'Alstor Bass',                  26, 0.82, 10, [1.4, 5.1],  [16, 24], 640),
-  F('chocobo_carp',    'Dapper Chocobo-Tail Carp',     8,  1.06, 15, [3.2, 9.8],  [20, 28], 1900),
+  F('chocobo_carp',    'Dapper Chocobo-Tail Carp',     8,  1.06, 13, [3.2, 9.8],  [18, 24], 1900),
   // Galdin Quay — open sea, bigger and heavier.
   F('sea_bass',        'Sea Bass',                     30, 0.74, 9,  [1.1, 4.6],  [18, 26], 420),
-  F('allural_sea_bass','Allural Sea Bass',             14, 0.98, 13, [2.8, 8.2],  [20, 30], 1250),
-  F('murk_grouper',    'Murk Grouper',                 18, 1.14, 16, [4.0, 12.5], [18, 26], 1600),
+  F('allural_sea_bass','Allural Sea Bass',             14, 0.98, 12, [2.8, 8.2],  [18, 26], 1250),
+  F('murk_grouper',    'Murk Grouper',                 18, 1.14, 14, [4.0, 12.5], [16, 22], 1600),
   // Cape Caem — rock fishing off the headland.
   F('barramundi',      'Barramundi',                   24, 0.88, 11, [1.9, 6.4],  [16, 24], 780),
   F('sea_bream',       'Sea Bream',                    28, 0.70, 8,  [0.9, 3.1],  [14, 22], 360),
   // The Vesperpool — the best fishing in Lucis, and it fights like it.
-  F('vesper_gar',      'Vesper Gar',                   20, 1.22, 18, [5.5, 15.0], [22, 32], 2400),
-  F('pink_jade_gar',   'Pink Jade Gar',                9,  1.34, 21, [7.0, 19.0], [24, 34], 4200),
-  F('cygillan_devil',  'Devil of the Cygillan',        2,  1.62, 30, [24.0, 61.0],[28, 38], 14000),
+  F('vesper_gar',      'Vesper Gar',                   20, 1.22, 15, [5.5, 15.0], [18, 24], 2400),
+  F('pink_jade_gar',   'Pink Jade Gar',                9,  1.34, 17, [7.0, 19.0], [19, 26], 4200),
+  F('cygillan_devil',  'Devil of the Cygillan',        2,  1.62, 22, [24.0, 61.0],[22, 30], 14000),
 ].map((f) => [f.id, f]));
 
 /**

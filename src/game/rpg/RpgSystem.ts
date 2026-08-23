@@ -454,6 +454,19 @@ export class RpgSystem {
     }
   }
 
+  /**
+   * After everything has moved.
+   *
+   * Only the fishing tackle needs this, and it needs it for two reasons that
+   * are worth naming because both were invisible defects in a working frame:
+   * the rod hangs off a **bone socket**, whose world matrix is stale during
+   * `update`, and `Menus` boots after `Rpg`, so a `setMenuOpen` written in
+   * `update` is overwritten in the same frame.
+   */
+  lateUpdate(dt: number, game: Game) {
+    this.fishing.lateUpdate(dt, game);
+  }
+
   /* -- Event API --------------------------------------------------------- */
 
   /** Subscribe. Returns an unsubscribe function. */

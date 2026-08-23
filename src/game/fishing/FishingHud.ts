@@ -36,6 +36,9 @@ export interface FishingView {
   /** Which way the player is leaning on the rod. */
   tilt: -1 | 0 | 1;
   reeling: boolean;
+  /** True during a surge — the half-second where a greedy gauge reading costs
+   * you the fish. Trebles the chevrons and reddens the caption. */
+  lunge: boolean;
   /** One line of guidance under the caption. */
   note: string;
 }
@@ -152,7 +155,7 @@ export class FishingHud {
     const [cap, tone] = CAPTION[v.phase];
     this._cap.textContent = v.phase === 'wait' || v.phase === 'cast' || v.phase === 'flight'
       ? `${cap} · ${v.spot}` : cap;
-    this._cap.className = `fsh-cap${tone ? ` ${tone}` : ''}`;
+    this._cap.className = `fsh-cap${v.lunge && v.phase === 'fight' ? ' bad' : tone ? ` ${tone}` : ''}`;
     this._sub.textContent = v.note;
 
     const casting = v.phase === 'cast' || v.phase === 'flight';
@@ -185,9 +188,11 @@ export class FishingHud {
 
       const counterL = v.run === 1 && v.tilt === -1;
       const counterR = v.run === -1 && v.tilt === 1;
+      this._runL.textContent = v.lunge ? '\u25c0\u25c0\u25c0' : '\u25c0\u25c0';
+      this._runR.textContent = v.lunge ? '\u25b6\u25b6\u25b6' : '\u25b6\u25b6';
       this._runL.className = `ch${v.run === -1 ? ' on' : counterL ? ' counter' : ''}`;
       this._runR.className = `ch${v.run === 1 ? ' on' : counterR ? ' counter' : ''}`;
-      this._runMid.textContent = v.run === 0 ? 'tiring' : 'running';
+      this._runMid.textContent = v.lunge ? 'surging' : v.run === 0 ? 'tiring' : 'running';
       this._keyE.className = `kk${v.reeling ? ' on' : ''}`;
       this._keyA.className = `kk${v.tilt === -1 ? ' on' : ''}`;
       this._keyD.className = `kk${v.tilt === 1 ? ' on' : ''}`;

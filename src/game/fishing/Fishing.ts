@@ -57,6 +57,12 @@ import type { InteractableHandle } from '../interaction/Interactables.ts';
  * the coordinator's file and a new system cannot register itself there.
  */
 
+const _seg = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _rodEuler = new THREE.Euler();
+const _rodQ = new THREE.Quaternion();
+const _parentQ = new THREE.Quaternion();
+
 /** How far from a fishing pin to look for real water. */
 const SEARCH_R = 170;
 /** Metres inland of the waterline the player stands. */
@@ -117,6 +123,10 @@ export class Fishing {
   reeling = false;
   note = '';
   _runTimer = 0;
+  /** Seconds left of a surge. A run that starts as a lunge pulls harder. */
+  _lunge = 0;
+  /** Seconds the line has been slack. Past 1.5 the hook comes out. */
+  _slack = 0;
   _biteAt = 0;
   _held = false;
   _seed = 1;
@@ -129,9 +139,13 @@ export class Fishing {
   _tip: THREE.Object3D | null = null;
   _bob: THREE.Object3D | null = null;
   _ring: THREE.Mesh | null = null;
-  _lineMesh: THREE.Line | null = null;
+  _lineMesh: THREE.Mesh | null = null;
   _bobTarget = new THREE.Vector3();
   _bobFrom = new THREE.Vector3();
+  /** Camera framing to put back when the cast ends. */
+  _camWas: { d: number, s: number, h: number } | null = null;
+  /** Formation slots to put back when the cast ends. */
+  _slotsWere: THREE.Vector2[] | null = null;
 
   constructor(rpg: RpgSystem) { this.rpg = rpg; }
 
@@ -276,11 +290,34 @@ export class Fishing {
       player.heading = Math.atan2(spot.out.x, spot.out.y);
       player.root.rotation.y = player.heading;
       player.velocity?.set(0, 0, 0);
-      game.get('Party')?.snap?.();
+      // **Give the party room.** At 3.4 m the default formation puts Gladiolus
+      // between the lens and the rod -- he took a third of the first close
+      // frame. Widening the slots and pushing them back is also simply what
+      // three people do when the fourth is casting; they are restored the
+      // moment the cast ends.
+      const party = game.get('Party');
+      if (party?.members) {
+        this._slotsWere = party.members.map((m) => m.slot.clone());
+        for (const m of party.members) m.slot.set(m.slot.x * 1.85, m.slot.y * 2.4 - 1.8);
+      }
+      party?.snap?.();
       // Camera behind the shoulder, looking the way the rod points: the rig's
       // `dir` runs *from* the focus *to* the camera, so the yaw that frames the
       // water is the player's heading turned through pi.
-      game.get('Camera')?.setOrbit?.(player.heading + Math.PI, 0.10);
+      //
+      // And **in close**, which the first capture proved is not optional. At
+      // the field distance of 5.6 m the rod is a stub, the float is four pixels
+      // on moving water, and three companions stand between the player and the
+      // thing he is doing. 3.4 m over a wider shoulder with the lens tipped
+      // down puts the rod, the line and the float in one frame.
+      const cam = game.get('Camera');
+      if (cam) {
+        this._camWas = { d: cam.targetDistance, s: cam.shoulder, h: cam.height };
+        cam.targetDistance = 3.4;
+        cam.shoulder = 1.0;
+        cam.height = 1.70;
+        cam.setOrbit(player.heading + Math.PI, 0.20);
+      }
     }
 
     const ix = game.get('Interaction');
@@ -310,6 +347,18 @@ export class Fishing {
     this._dropTackle();
     if (game) {
       if (game.input) game.input.enabled = true;
+      const party = game.get('Party');
+      if (party?.members && this._slotsWere) {
+        party.members.forEach((m, i) => { const w = this._slotsWere?.[i]; if (w) m.slot.copy(w); });
+        this._slotsWere = null;
+      }
+      const cam = game.get('Camera');
+      if (cam && this._camWas) {
+        cam.targetDistance = this._camWas.d;
+        cam.shoulder = this._camWas.s;
+        cam.height = this._camWas.h;
+        this._camWas = null;
+      }
       const ix = game.get('Interaction');
       // Suppress the prompt for a beat so the key that landed the fish does not
       // immediately re-open the cast -- the same guard `openScreen` uses.
@@ -363,8 +412,26 @@ export class Fishing {
         if (this.t > CARD_TIME) { this._end(); return; }
         break;
     }
-    this._tackleFrame(dt, game);
     this.hud?.draw(this.view());
+  }
+
+  /**
+   * Presentation, after everything has moved.
+   *
+   * The rod hangs off `attach.handR`, which is a **bone socket**: read during
+   * `RpgSystem.update` its world matrix is whatever the last frame's animation
+   * left there, and the first capture had the line leaving Noctis at chest
+   * height and lying flat in the grass instead of running from the rod tip.
+   * `Rpg` also boots before `Menus`, so a `setMenuOpen` written in `update` is
+   * overwritten by `Menus.update` in the same frame -- which is why the field
+   * HUD stayed at full brightness underneath the gauges. Both belong here.
+   */
+  lateUpdate(dt: number, game: Game) {
+    if (!this.active) return;
+    // Fade the field HUD the way a conversation does: the party panel and the
+    // weapon wheel sit exactly where the gauges go.
+    game.get('HUD')?.setMenuOpen?.(true);
+    this._tackleFrame(dt, game);
   }
 
   /** Everything the overlay and the probe read. */
@@ -383,6 +450,7 @@ export class Fishing {
       run: this.run,
       tilt: this.tilt,
       reeling: this.reeling,
+      lunge: this._lunge > 0,
       note: this.note,
     };
   }
@@ -456,6 +524,8 @@ export class Fishing {
       this.strain = 0;
       this._runTimer = 0.45;
       this.run = 0;
+      this._lunge = 0;
+      this._slack = 0;
       this._enter('bite');
       this.note = 'Strike!';
       game.get('Audio')?.play?.('ui', null, { volume: 0.9 });
@@ -503,20 +573,53 @@ export class Fishing {
         // A tired fish rests longer. This is what makes the back half of a big
         // fight winnable at all.
         this._runTimer = 0.7 + this._rnd() * 0.8 + (1 - this.stamina) * 1.4;
+      } else if (this.stamina <= 0.06) {
+        // Spent. It has nothing left and the last few metres are the reward
+        // for the fight -- without this the fish keeps running on an empty bar
+        // and the stamina gauge is decoration.
+        this.run = 0;
+        this._runTimer = 1.5;
       } else {
         this.run = this._rnd() < 0.5 ? -1 : 1;
         this._runTimer = 0.7 + this._rnd() * 1.5 * Math.max(0.35, this.stamina);
+        // A third of runs start as a surge. Without one the fight is a solved
+        // policy: tension is a perfectly predictable integrator, so a player
+        // who has learnt "reel under 0.6, lean against the run" can never lose
+        // again. The lunge is the reason to leave headroom on the gauge, and
+        // it is telegraphed -- the chevrons treble and the caption changes on
+        // the frame it starts -- so it is a reaction test and not a coin toss.
+        if (this._rnd() < 0.32 && this.stamina > 0.25) this._lunge = 0.55;
       }
     }
+    this._lunge = Math.max(0, this._lunge - dt);
     const running = this.run !== 0;
-    const pull = f.power * (running ? 1 : 0.22);
+    // A surge is **additive**, not a multiplier. A multiplier turned the top of
+    // the table into a wall -- 1.9 x the Devil's 1.62 is a pull no amount of
+    // side-strain can answer, and it measured 0/12 for every way of playing it.
+    // A flat +0.55 nearly doubles a trout and adds a third to the Devil, which
+    // is the right shape: a surge is the fish's whole body, and a trout has
+    // proportionally more of that in reserve than something already pulling at
+    // its limit.
+    const pull = f.power * (running ? 1 : 0.22) + (this._lunge > 0 ? 0.55 : 0);
     const counter = running && this.tilt !== 0 && this.tilt === -this.run;
     const withIt = running && this.tilt !== 0 && this.tilt === this.run;
     this.reeling = hold;
 
     // -- tension --------------------------------------------------------
-    let rate = hold ? (0.12 + pull * 1.45) : -0.95;
-    if (counter) rate -= 0.46;
+    // **A running fish loads the rod whether you are reeling or not.** Letting
+    // go used to be a free and total reset, which is what made the fight
+    // solvable: there was no state a competent player could not bleed out of.
+    // Now the drag itself pulls against a run, so above about 1.15 `power` --
+    // the gar and the Devil -- tension *climbs* on an idle reel and the
+    // side-strain lean is the only relief there is.
+    let rate = hold ? (0.12 + pull * 1.45) : (-0.95 + pull * 0.82);
+    // Side-strain relief scales with the pull, so **there is always a correct
+    // play**. A flat relief left the gar and the Devil in a state no input
+    // could bleed out of, which is not difficulty, it is a bug with a gauge on
+    // it. It still does not make reeling through a run survivable on a big
+    // fish -- that is the intended answer to a run, and it is why the counter
+    // is worth learning at all.
+    if (counter) rate -= 0.46 + pull * 0.42;
     if (withIt) rate += 0.28;
     this.tension = Math.max(0, Math.min(1, this.tension + rate * dt));
 
@@ -525,9 +628,17 @@ export class Fishing {
     else this.strain = Math.max(0, this.strain - dt * 1.7);
     if (this.strain >= 1) { this._lose(game, 'The line parted.'); return; }
 
+    // **Slack loses the fish too.** Without this the safe play against anything
+    // under about 1.1 `power` is to hold nothing down at all: tension floors at
+    // zero, the fish takes line at 0.85 m/s and the fight becomes a waiting
+    // game with no way to fail it. Keeping a bend in the rod is the actual
+    // skill of playing a fish, so the gauge has a floor as well as a ceiling.
+    this._slack = this.tension < 0.06 ? this._slack + dt : 0;
+    if (this._slack > 1.5) { this._lose(game, 'Slack line — it threw the hook.'); return; }
+
     // -- line -----------------------------------------------------------
     if (hold) this.line -= Math.max(0.25, 2.9 - pull * 1.55) * dt;
-    else this.line += (running ? 1.15 : 0.35) * dt;
+    else this.line += (running ? 0.85 : 0.3) * dt;
     if (this.line <= 0) { this._land(game); return; }
     if (this.line > this.line0 * 1.35 + 4) { this._lose(game, 'It spooled you.'); return; }
 
@@ -535,9 +646,10 @@ export class Fishing {
     const drain = (0.06 + (hold ? 0.05 : 0) + (counter ? 0.115 : 0)) * (1 + anglersEye);
     this.stamina = Math.max(0, this.stamina - (drain * dt * 8) / f.stamina);
 
-    this.note = this.tension > SNAP_AT ? 'Give it line!'
-      : running ? (counter ? 'Holding it — reel when it tires' : 'It is running — lean against it')
-        : 'It is tiring — reel now';
+    this.note = this._lunge > 0 ? 'It is going! Off the reel and lean into it'
+      : this.tension > SNAP_AT ? 'Give it line!'
+        : running ? (counter ? 'Holding it — reel when it tires' : 'It is running — lean against it')
+          : 'It is tiring — reel now';
   }
 
   /* ------------------------------------------------------------------ */
@@ -564,6 +676,9 @@ export class Fishing {
     if (!f || !spot) return;
     this.line = 0;
     this._enter('landed');
+    // The fight's last note ("It is tiring -- reel now") otherwise sits under
+    // the result card telling you to reel a fish that is already in the bag.
+    this.note = 'Into the bag. Ignis can work with that.';
     this.rpg.inventory.add(f.id, 1, 'fishing');
     this.rpg.gainExp(Math.round(f.exp * (1 + spot.lv * 0.012)), 'fishing');
     this.rpg.ascension?.awardAp?.('fishing');
@@ -587,9 +702,11 @@ export class Fishing {
     const player = game.get('Player');
     const hand = player?.attach?.handR;
     const rod = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.55, metalness: 0.1 });
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.017, 2.05, 6), mat);
-    shaft.position.y = 1.0;
+    // Warm dark brown with a little sheen, not black: at this size a pure-black
+    // cylinder against water reads as a hole in the frame rather than a rod.
+    const mat = new THREE.MeshStandardMaterial({ color: 0x50402e, roughness: 0.38, metalness: 0.22 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.019, 1.72, 6), mat);
+    shaft.position.y = 0.85;
     rod.add(shaft);
     const grip = new THREE.Mesh(
       new THREE.CylinderGeometry(0.023, 0.021, 0.26, 6),
@@ -597,38 +714,52 @@ export class Fishing {
     grip.position.y = 0.1;
     rod.add(grip);
     const tip = new THREE.Object3D();
-    tip.position.y = 2.02;
+    tip.position.y = 1.70;
     rod.add(tip);
-    // Held out and up, the way a rod sits between casts.
-    rod.rotation.set(-0.62, 0, 0.22);
+    // The orientation is written every frame in `_tackleFrame`; this is only
+    // what it looks like on the frame it is created.
+    rod.rotation.set(0.42, 0, 0.08);
     this._rod = rod; this._tip = tip;
     (hand || game.scene).add(rod);
 
     const bob = new THREE.Group();
+    // A float has to be legible at 30 m against moving water, so it is bigger
+    // than scale and lit from inside. The first pass was 7.5 cm and physically
+    // correct, and could not be found in the capture at all.
     const top = new THREE.Mesh(
-      new THREE.SphereGeometry(0.075, 8, 6),
-      new THREE.MeshStandardMaterial({ color: 0xd6432f, roughness: 0.5, emissive: 0x2a0703 }));
-    top.position.y = 0.045;
+      new THREE.SphereGeometry(0.15, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf2543c, roughness: 0.42, emissive: 0x7a1a0c, emissiveIntensity: 1.1 }));
+    top.position.y = 0.10;
     const bottom = new THREE.Mesh(
-      new THREE.SphereGeometry(0.062, 8, 6),
-      new THREE.MeshStandardMaterial({ color: 0xf1efe6, roughness: 0.6 }));
-    bottom.position.y = -0.03;
+      new THREE.SphereGeometry(0.125, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf6f4ec, roughness: 0.5, emissive: 0x3a3a34 }));
+    bottom.position.y = -0.05;
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.014, 0.34, 5),
+      new THREE.MeshStandardMaterial({ color: 0xf6f4ec, roughness: 0.5, emissive: 0x3a3a34 }));
+    stem.position.y = 0.30;
+    bob.add(stem);
     bob.add(top, bottom);
     this._bob = bob;
     game.scene.add(bob);
 
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.2, 0.34, 24),
-      new THREE.MeshBasicMaterial({ color: 0xbcd6e8, transparent: true, opacity: 0.4, depthWrite: false }));
+      new THREE.RingGeometry(0.42, 0.66, 28),
+      new THREE.MeshBasicMaterial({ color: 0xdceaf5, transparent: true, opacity: 0.45, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
     this._ring = ring;
     game.scene.add(ring);
 
-    const geo = new THREE.BufferGeometry().setFromPoints(
-      [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]);
-    const lineMesh = new THREE.Line(geo, new THREE.LineBasicMaterial({
-      color: 0xe8f0f8, transparent: true, opacity: 0.55, depthWrite: false,
-    }));
+    // **A cylinder, not a `THREE.Line`.** `linewidth` is a no-op on every WebGL
+    // renderer, so a `Line` is one pixel wide whatever you ask for -- against
+    // sunlit water it disappeared entirely in the first three captures, and a
+    // fishing game where you cannot see the line is missing its subject. A unit
+    // cylinder scaled and aimed between the rod tip and the float is one draw
+    // call with real thickness. It is drawn taut, which is what a hooked line
+    // is; the sag the `Line` carried never read anyway.
+    const lineMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 1, 5, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xf8fcff, transparent: true, opacity: 0.85, depthWrite: false }));
     lineMesh.frustumCulled = false;
     this._lineMesh = lineMesh;
     game.scene.add(lineMesh);
@@ -686,22 +817,35 @@ export class Fishing {
       (ring.material as THREE.MeshBasicMaterial).opacity = 0.34 * (this.phase === 'fight' ? 1 : 0.7);
     }
 
-    // Rod bend: a rotation, because a bent cylinder needs a skinned mesh and
-    // the silhouette that reads at 12 m is the angle, not the curve.
-    if (rod) {
-      const load = this.phase === 'fight' ? this.tension : this.phase === 'cast' ? this.power * 0.4 : 0.08;
-      rod.rotation.x = -0.62 + load * 0.55;
-      rod.rotation.z = 0.22 - (this.phase === 'fight' ? this.tilt * 0.3 : 0);
+    // **Aim the rod in world space, not in the socket's.** It hangs off
+    // `attach.handR`, which is a bone: whatever local Euler looks right in one
+    // pose is a spear through Noctis' head in the next, and the first capture
+    // was exactly that. The shaft is the group's +Y, so a `YXZ` Euler of
+    // (tilt, heading, roll) points it along the player's facing and leans it
+    // back by `tilt` -- and then the parent's world rotation is divided out.
+    const player = game.get('Player');
+    if (rod && rod.parent && player) {
+      const load = this.phase === 'fight' ? this.tension
+        : this.phase === 'cast' ? this.power * 0.5 : 0.1;
+      // Upright between casts, driven down toward the water as the fish loads
+      // it. 0.42 rad off vertical at rest, 1.05 with the line singing.
+      const tilt = 0.42 + load * 0.63;
+      const roll = this.phase === 'fight' ? -this.tilt * 0.42 : 0.08;
+      _rodEuler.set(tilt, player.heading, roll, 'YXZ');
+      _rodQ.setFromEuler(_rodEuler);
+      rod.parent.getWorldQuaternion(_parentQ);
+      rod.quaternion.copy(_parentQ.invert()).multiply(_rodQ);
     }
 
     const tip = this._tipWorld(game);
-    const mid = tip.clone().lerp(bob.position, 0.5);
-    mid.y -= 0.25 + (this.phase === 'fight' ? -this.tension * 0.22 : 0.5) * Math.min(1, this.line / 12);
-    const pos = lm.geometry.getAttribute('position') as THREE.BufferAttribute;
-    pos.setXYZ(0, tip.x, tip.y, tip.z);
-    pos.setXYZ(1, mid.x, mid.y, mid.z);
-    pos.setXYZ(2, bob.position.x, bob.position.y, bob.position.z);
-    pos.needsUpdate = true;
+    _seg.subVectors(bob.position, tip);
+    const len = Math.max(0.05, _seg.length());
+    lm.position.copy(tip).addScaledVector(_seg, 0.5);
+    // A cylinder's axis is +Y, so aim it by rotating +Y onto the segment.
+    lm.quaternion.setFromUnitVectors(_up, _seg.divideScalar(len));
+    // Thicker further out so it does not vanish at 30 m, but never a rope.
+    const r = 0.006 + len * 0.0005;
+    lm.scale.set(r, len, r);
   }
 
   /* ------------------------------------------------------------------ */

@@ -21,15 +21,22 @@ const CSS = `
 #fishing * { box-sizing: border-box; }
 #fishing.off { display: none; }
 
-/* A low vignette so the gauges sit on something, without curtaining the water. */
+/* A low vignette so the gauges sit on something, without curtaining the water.
+   Sunlit grass is the brightest thing in this game and the first pass put thin
+   white type straight on top of it -- unreadable in the capture, which is the
+   whole reason to take one. */
 .fsh-veil {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 42%;
-  background: linear-gradient(180deg, rgba(3,6,12,0), rgba(3,6,12,.34) 58%, rgba(3,6,12,.62));
+  position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+  background: linear-gradient(180deg, rgba(3,6,12,0), rgba(3,6,12,.52) 52%, rgba(3,6,12,.80));
 }
 
 .fsh {
-  position: absolute; left: 50%; bottom: 8.5%; width: 640px; margin-left: -320px;
-  display: flex; flex-direction: column; align-items: center; gap: 13px;
+  position: absolute; left: 50%; bottom: 12.5%; width: 560px; margin-left: -280px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 18px 26px 20px;
+  background: linear-gradient(180deg, rgba(6,10,18,.30), rgba(6,10,18,.72));
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+  box-shadow: 0 10px 40px rgba(0,0,0,.55), inset 0 0 0 1px rgba(206,224,250,.10);
 }
 
 /* ---------- the state caption ---------------------------------------- */
