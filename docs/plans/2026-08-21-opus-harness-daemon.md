@@ -1,7 +1,10 @@
 # Harness plan — one trunk, one daemon, content-addressed builds
 
 Status: PROPOSED (2026-08-21, opus) — **Decision 1 is LOCKED**; Decisions 2 and 3
-and every phase below are proposals that assume it.
+and every phase below are proposals that assume it. **Decision 1 was tested
+against a night of running roughly a dozen agents the other way on 2026-08-23
+and it survives, but one of its three reasons was wrong and the phase order
+should change — see the evidence section under it.** Nothing here is built.
 
 Supersedes the unprefixed `2026-08-21-harness-daemon.md`, now merged into this
 file.
@@ -84,6 +87,53 @@ work here"). That is the better substrate here, and not only for the daemon:
 - **They break every cross-agent optimisation.** Shared warm pages, cross-agent
   cache hits, request coalescing and machine-wide quiescing for `perf.mts` are
   all impossible across checkouts and free within one.
+
+### Decision 1, tested against a night of running it the other way (2026-08-23)
+
+Roughly a dozen agents ran tonight in worktrees on disjoint directories. That is
+the substrate this decision proposes to replace, so it is worth saying what it
+actually cost, bullet by bullet. **The conclusion survives; the reasons reorder,
+and one of the three was wrong.**
+
+**"Worktrees were not buying isolation anyway" — this one was wrong.** Not a
+single conflict tonight came from a shared index, because there wasn't one. Every
+conflict was *semantic*: a lane that branched before the zero-`any` pass merging
+code written against the untyped shapes (`Geo.ts`, `Hair.ts`, `Outfit.ts`,
+`DayCycle.ts`, `Elemancy.ts`, `Quests.ts`, `integration.mts`). Worktrees isolated
+the index exactly as advertised. What they did not isolate is *time* — and the
+sharpest example is `tsconfig.tools.json`, where **three lanes independently
+found and fixed the same broken `baseUrl` within about two hours**, because each
+branched from a base that still had it. A single trunk would have made that one
+fix, once. That is a real argument for Decision 1, and it is not the argument the
+bullet makes.
+
+**"They actively cost" — confirmed, and worse than stated.** The plan names the
+cost of re-baking `src/public/baked/` per checkout. The workaround we used —
+symlinking it into every worktree — introduced a hazard the plan does not
+anticipate: `texbake.mts --force` from any worktree rewrites the **shared**
+artifacts from *that branch's* sources, so every other tree then boots on
+textures its own code never generated. Self-healing on merge and completely
+invisible before it. A shared mutable cache across isolated checkouts is the
+worst of both models. Separately, a worktree can be created from a stale ref with
+no warning at all: one agent opened **131 commits behind** and spent the top of
+its session discovering that.
+
+**"They break every cross-agent optimisation" — confirmed, and this turned out
+to be the strongest reason of the three.** Machine-wide quiescing is the one that
+bit hardest: **`perf.mts` could not be certified once all night.** The new ruler
+voided every run it was asked for, correctly, because something else was always
+capturing. Two perf gates therefore remain formally unmeasured after a session
+that changed the renderer substantially. Port allocation is the same story in
+miniature — five tools carried hand-picked default ports, one collided with a
+co-agent, and `npm run check` reported a combat regression that did not exist.
+
+**What this changes about the plan.** Nothing about the decision. It does argue
+for reordering the phases: **Phase 3 (one client, every tool through the daemon)
+is worth more than Phase 1 or 2**, because port ownership and quiescing were the
+two things that actually cost measurements tonight, and both are Phase 3's.
+Meanwhile Phase 1's guard is no longer hypothetical — the sweepguard shipped, and
+it blocks whole-tree staging and bare commits today. The precondition that made
+Decision 1 unsafe to act on is already half-built.
 
 ### What must come with it (from kami-kakushi, verbatim in spirit)
 
