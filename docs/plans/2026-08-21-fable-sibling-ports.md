@@ -253,6 +253,18 @@ Four compatible upgrades to `src/world/veg/`:
   from the other side: "the honest LOD for a thing smaller than a pixel is
   to darken the pixel" — sub-pixel blades read as white confetti to every
   critic. Check what our outermost ring does past its last LOD.
+
+  **Checked, 2026-08-23: past its last LOD our outermost ring does nothing.**
+  `LODS` in `GrassField.ts` ends at `far: 155`, and beyond that there is no
+  grass representation at all — the ground reverts to bare terrain material.
+  Confirmed by ablation rather than by eye: `shoot zone_fallgrove --hide grass`
+  makes the *near* ground take on exactly the pale mottled green the
+  mid-distance already had, so the visible band across that shot is not a
+  far-LOD albedo mismatch, it is the grass simply stopping. Tier-D is a real gap,
+  not a speculative one. **Not built yet, deliberately:** the fix is a terrain
+  *material* layer, and the atmosphere lane is rebuilding the grade, the cloud
+  cover and aerial perspective right now. A ground tint matched to a grade that
+  is being replaced would only have to be matched again afterwards.
 - **Shadow-only sward proxy**: blades can't cast (6 mm ≈ 1/10 cascade
   texel); a coarse tuft mesh casts *only* (colour pass collapses verts to
   zero-area triangles, shadow pass via `customDepthMaterial` carrying the
