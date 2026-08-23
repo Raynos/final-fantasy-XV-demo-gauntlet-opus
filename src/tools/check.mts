@@ -56,6 +56,9 @@ const GATES: Gate[] = [
   { name: 'creaturecheck', script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
   { name: 'combatloop', script: 'combatloop.mts', expect: '30/30' },
   { name: 'roadcheck', script: 'roadcheck.mts', expect: '0 failures' },
+  // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
+  // six systems passed that and never executed. See `reachcheck.mts`.
+  { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes' },
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.
