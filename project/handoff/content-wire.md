@@ -297,7 +297,15 @@ at 300 m and 120 m up.
 
 1. **Seven fishing pins have no water.** §2.2. The largest single content hole
    left, and it is a `Water.ts` or a `WorldMap.ts` + re-bake job, not a fishing
-   one.
+   one. **This is the most likely thing to break a 30-minute playthrough now**,
+   because the world map's `Fishing` filter lists all ten. Measured at two of
+   them: `swainsmere` is at 68.4 m of elevation under closed forest canopy and
+   `malacchi_pond` at 20.0 m, and both answer `prompt=none` — a player who fast
+   travels there on the strength of the map finds a jetty on a hillside and
+   nothing to press. Until the water question is settled, a cheap mitigation
+   inside `src/ui/screens/WorldMapScreen.ts` would be to draw a fishing pin the
+   live survey does not know about as unavailable, the way `MainScreen` draws a
+   screen a build did not register.
 2. **The energy deposits are invisible.** §4. Next content job.
 3. **Fishing is nearly silent.** §2.3. A reel click, a splash and a line whine.
 4. **Fociaugh's cave mouth sits on a 1.26 bank** and Keycatrich's ramp has a
