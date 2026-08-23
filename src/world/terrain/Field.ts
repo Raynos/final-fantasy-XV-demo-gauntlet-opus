@@ -230,6 +230,43 @@ export function microDetail(x: number, z: number): number {
     + 0.30 * gnoise2(x * 0.2650 + 5.0, z * 0.2650 - 3.0)) * 0.95;
 }
 
+/** cos/sin of the conjugate direction, 62 degrees off the regional strike. */
+const CONJ_C = Math.cos(1.0821), CONJ_S = Math.sin(1.0821);
+
+/**
+ * The structural frame a ridge field is sampled in: a **regional** strike
+ * rotation and an anisotropy that never inverts.
+ *
+ * Both ridge belts used to build this frame per point, and measuring it is what
+ * showed why our ranges read as fields of separate cones instead of as ranges.
+ * Two independent faults, over a 33x33 km survey at 250 m:
+ *
+ * - The aspect ratio was `(a + b*e) * (c + d*e)` for a noise field `e`, which
+ *   sweeps *through* 1.0. Along-axis against across-axis ran p10 0.54 to p90
+ *   2.06 in the far field: the grain ran **perpendicular** to the nominal axis
+ *   on 34.7% of the world and was effectively isotropic — a cone — on 28.8%.
+ *   Only the remainder ever looked like a ridge, and which third you got was
+ *   set by a noise field nobody was reading as a switch.
+ * - The strike angle turned **48.5 degrees per kilometre** in the near-field
+ *   belt (23.0 in the far field). A four-kilometre range rotated through most
+ *   of two right angles along its own length, so no belt could run anywhere
+ *   even where the aspect happened to favour it.
+ *
+ * The frame here fixes the aspect at 2.2:1 to 3.4:1 **always along u**, and
+ * drops the strike frequency ~6x so a province shares an axis and a range bends
+ * rather than spins. `kU * kV` is the aspect and is never less than 2.2.
+ *
+ * @param fa angle-field frequency; @param fe elongation-field frequency
+ */
+function strikeFrame(nz: Noise, x: number, z: number,
+  fa: number, ax: number, az: number, fe: number, ex: number, ez: number): [number, number, number, number] {
+  const th = 3.14159 * nz.fbm2(x * fa + ax, z * fa + az, 2);
+  const e = clamp01(0.5 + 0.72 * nz.fbm2(x * fe + ex, z * fe + ez, 2));
+  const aspect = 2.2 + 1.2 * e;
+  const k = Math.sqrt(aspect);
+  return [Math.cos(th), Math.sin(th), k, k];
+}
+
 export class Field {
   clear!: Float32Array;
   CELL!: number;
@@ -490,14 +527,18 @@ export class Field {
     const q1 = n2.fbm2(wx * 0.62 + 11.3, wz * 0.62 - 4.1, 3);
     const q2 = n2.fbm2(wx * 0.62 - 7.7, wz * 0.62 + 9.4, 3);
 
-    const th = 3.14159 * n3.fbm2(x * 0.000071 + 71.3, z * 0.000071 - 12.7, 2);
-    const ca = Math.cos(th), sa = Math.sin(th);
-    const elong = clamp01(0.5 + 0.72 * n3.fbm2(x * 0.0000975 - 44.1, z * 0.0000975 + 18.9, 2));
-    const uu = (wx * ca + wz * sa) / (0.50 + 1.20 * elong) + 0.85 * q1;
-    const vv = (-wx * sa + wz * ca) * (0.62 + 1.05 * elong) + 0.85 * q2;
+    const [ca, sa, kU, kV] = strikeFrame(n3, x, z, 0.0000122, 71.3, -12.7, 0.0000975, -44.1, 18.9);
+    const uu = (wx * ca + wz * sa) / kU + 0.85 * q1;
+    const vv = (-wx * sa + wz * ca) * kV + 0.85 * q2;
     let rg = n.ridged2(uu, vv, 5, 2.03, 0.44);
     rg *= 1 - 0.44 * smoothstep(0.28, 0.86,
       0.5 + 0.62 * n3.fbm2(uu * 4.7 + 3.3, vv * 4.7 - 7.1, 3));
+    // Conjugate set at ~62 deg off the strike. A range built from one direction
+    // is corduroy; real ranges carry a second structural grain across the first,
+    // and the cols and saddles are where the two meet.
+    const cu = (wx * CONJ_C + wz * CONJ_S) / kU;
+    const cv = (-wx * CONJ_S + wz * CONJ_C) * kV;
+    rg = Math.max(rg, 0.62 * n.ridged2(cu * 1.21 + 17.7, cv * 1.21 - 5.3, 4, 2.07, 0.46));
 
     const r = Math.hypot(x, z) / 2670;
     // the northern (-Z) wall is the tallest: it backs the hero and vista shots
@@ -618,14 +659,15 @@ export class Field {
     const belt = smoothstep(120, 240 + b[B_RIDGEIN] * 0.55, corr)
       * (0.16 + 0.84 * smoothstep(30, 340, this.clearAt(x, z)));
     if (belt > 0.002 && bRidge > 1) {
-      const th = 3.14159 * n2.fbm2(x * 0.000165 + 12.9, z * 0.000165 - 31.5, 2);
-      const ca = Math.cos(th), sa = Math.sin(th);
-      const elong = clamp01(0.5 + 0.75 * n2.fbm2(x * 0.000229 - 7.7, z * 0.000229 + 22.1, 2));
-      const bu = (wx * ca + wz * sa) * 0.000506 / (0.55 + 1.05 * elong) + 21.5;
-      const bv = (-wx * sa + wz * ca) * 0.000506 * (0.62 + 1.00 * elong) + 4.2;
+      const [ca, sa, kU, kV] = strikeFrame(n2, x, z, 0.0000275, 12.9, -31.5, 0.000229, -7.7, 22.1);
+      const bu = (wx * ca + wz * sa) * 0.000506 / kU + 21.5;
+      const bv = (-wx * sa + wz * ca) * 0.000506 * kV + 4.2;
       let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
       rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
         0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
+      const cu = (wx * CONJ_C + wz * CONJ_S) * 0.000506 / kU + 8.1;
+      const cv = (-wx * CONJ_S + wz * CONJ_C) * 0.000506 * kV - 3.4;
+      rg = Math.max(rg, 0.58 * n.ridged2(cu * 1.17, cv * 1.17, 4, 2.09, 0.5));
 
       const style = clamp01(b[B_STYLE] + 0.34 * n2.fbm2(x * 0.000195 + 61.3, z * 0.000195 - 37.1, 2));
       let beltH = Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.30 + 1.05 * style)
