@@ -149,7 +149,7 @@ void main() {
 
     // --- empty space skipping -------------------------------------------
     if (miss >= MISS_MAX) {
-      gCloudLod = clamp(log2(1.0 + t * 0.00001), 0.0, 2.0);
+      gCloudLod = clamp(log2(1.0 + t * 0.000045), 0.0, 3.0);
       if (cloudDensity(q, 0.0) + cloudVirga(q) <= 0.0) { t += coarse; continue; }
       t = max(t0, t - coarse);            // back up and re-enter at full rate
       miss = 0;
@@ -168,7 +168,7 @@ void main() {
     // read at full detail across everything the camera can actually resolve and
     // only softens beyond the far horizon, where the step length rather than
     // the pixel is what needs band limiting.
-    gCloudLod = clamp(log2(1.0 + t * 0.00001), 0.0, 2.0);
+    gCloudLod = clamp(log2(1.0 + t * 0.000045), 0.0, 3.0);
     float d = cloudDensity(q, detFade);
     float vd = cloudVirga(q);
 
@@ -336,7 +336,7 @@ export class Clouds {
     this.shared = shared;
 
 
-    const tex = buildCloudTextures({ baseSize: 64, detailSize: 48, weatherSize: 256, seed: 1337 });
+    const tex = buildCloudTextures({ baseSize: 64, detailSize: 48, weatherSize: 512, seed: 1337 });
     shared.uCloudBase.value = tex.base;
     shared.uCloudDetail.value = tex.detail;
     shared.uCloudWeather.value = tex.weather;

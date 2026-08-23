@@ -630,7 +630,7 @@ export class Sky {
       uCloudDensity: { value: 0.016 },
       uCloudDetailAmt: { value: 0.42 },
       uCloudType: { value: 0.86 },
-      uCloudBaseTile: { value: 9000 },
+      uCloudBaseTile: { value: 4200 },
       uCloudVertTile: { value: 3600 },
       uCloudDetailTile: { value: 900 },
       uWeatherTile: { value: 27000 },
