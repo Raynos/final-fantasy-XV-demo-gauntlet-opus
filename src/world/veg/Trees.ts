@@ -512,7 +512,8 @@ export class Trees {
         vertexColors: true,
         map: bark.map, normalMap: bark.normalMap,
         normalScale: new THREE.Vector2(0.85, 0.85),
-      }), { bend: 0.55, flutter: 0.1, gustFreq: 0.03, flexPow: 2.4 });
+      }), { bend: 0.55, flutter: 0.1, gustFreq: 0.03, flexPow: 2.4,
+         groundContact: 0.62, groundSpan: 0.30 });
 
       let leafMat: THREE.MeshStandardMaterial | null = null;
       if (S.leafCount > 0) {
@@ -524,6 +525,7 @@ export class Trees {
         }), {
           bend: 0.75, flutter: 0.5, gustFreq: 0.032, flexPow: 2.2,
           translucency: 0.75, twoSidedNormals: true, specular: 0.12,
+          groundContact: 0.50, groundSpan: 0.34,
         });
       }
 
@@ -576,6 +578,7 @@ export class Trees {
           bend: 0.2, flutter: 0.06, gustFreq: 0.03, flexPow: 3.0,
           twoSidedNormals: true, translucency: 0.5, specular: 0.06,
           crownNormal: imposter.normalMap,
+          groundContact: 0.62, groundSpan: 0.34,
         });
         const cardW = src.radius * 2.12;
         const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
@@ -604,6 +607,7 @@ export class Trees {
         bend: 0.06, flutter: 0.02, gustFreq: 0.02, flexPow: 3.0,
         twoSidedNormals: true, translucency: 0.35, specular: 0.0,
         crownNormal: stand.normalMap,
+        groundContact: 0.52, groundSpan: 0.40,
       });
       const can = new THREE.InstancedMesh(
         billboardGeo(stand.width, stand.height), canMat, perCanopy);
