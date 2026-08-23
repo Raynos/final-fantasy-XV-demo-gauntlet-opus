@@ -458,16 +458,26 @@ if (!base) {
 // set around spawn, re-derived per run against a trunk seven lanes are
 // committing to, and they drift by a count or two between two adjacent commits.
 // An exact ratchet on those cried wolf at 320 -> 321 within one minute.
-const slack = (k: string, v: number) => (k.startsWith('inst') ? Math.max(3, Math.round(v * 0.01)) : 0);
+// **Only the POI counts gate.** They are structural: every site is force-built
+// every run and they do not move unless the world does. The instance counts are
+// dominated by stacked rock courses, which rest on rock rather than on soil and
+// are a float by arithmetic and not by defect -- so they move whenever the rocks
+// lane legitimately changes the stacks. Measured: 320 -> 321 within a minute on
+// a moving trunk, then 320 -> 379 when corestone stacks landed. Every one of
+// those would have been a red gate blaming the wrong lane. They are printed as
+// an inventory, and the note in the baseline says what it would take to gate
+// them: one boolean per instance saying it is meant to be grounded.
+const GATED = ['poiFloating', 'poiBuried'] as const;
 const worse: string[] = [];
 const better: string[] = [];
-for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {
-  if (now[k] > base[k] + slack(k, base[k])) worse.push(`${k}: ${base[k]} -> ${now[k]}`);
-  else if (now[k] < base[k] - slack(k, base[k])) better.push(`${k}: ${base[k]} -> ${now[k]}`);
+for (const k of GATED) {
+  if (now[k] > base[k]) worse.push(`${k}: ${base[k]} -> ${now[k]}`);
+  else if (now[k] < base[k]) better.push(`${k}: ${base[k]} -> ${now[k]}`);
 }
 console.log(`\nratchet, against ${path.relative(ROOT, BASELINE)}:`);
 for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {
-  console.log(`  ${pad(k, 14)} ${String(now[k]).padStart(5)}   baseline ${base[k]}`);
+  const gated = (GATED as readonly string[]).includes(k);
+  console.log(`  ${pad(k, 14)} ${String(now[k]).padStart(5)}   baseline ${String(base[k]).padStart(5)}   ${gated ? 'gated' : 'reported only'}`);
 }
 if (better.length) console.log(`  improved: ${better.join(', ')} — lower the ratchet with --set-baseline`);
 if (worse.length) {

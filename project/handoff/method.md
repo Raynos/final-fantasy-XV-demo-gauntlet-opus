@@ -39,9 +39,16 @@ ring at `CULL = 400`; the reshape moved the ring out from under it.
 
 **I deliberately did not baseline it away.** `poiFloating` is pinned at 0 in
 `project/float-baseline.json` and is the one count with no benign reading, so
-the gate stays red until the landmarks are re-seated. The other three counts are
-measured inventory. Whoever owns `props/Landmarks.ts` — this is yours; I do not
-own that file.
+the gate stays red until the landmarks are re-seated. Whoever owns
+`props/Landmarks.ts` — this is yours; I do not own that file.
+
+**Only the two POI counts gate.** The instance counts are printed as an
+inventory and gate nothing: they are dominated by stacked rock courses, which
+rest on rock rather than on soil and are a float by arithmetic rather than by
+defect. Measured, they moved 320 → 321 within a minute on a moving trunk and
+320 → 379 when the rocks lane landed corestone stacks. Every one of those would
+have been a red gate blaming the wrong lane. Gating them needs **one boolean per
+instance saying it is meant to be grounded**, and that lives in the placers.
 
 ### `node src/tools/silhouette.mts` — LANDED, wired, passing
 
