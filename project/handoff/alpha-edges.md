@@ -11,9 +11,12 @@ Predecessor: `project/handoff/vegetation.md`, whose final section is this
 lane's whole brief. Also load-bearing: `project/handoff/perf.md`, which is why
 this fix was affordable at all.
 
-**Status: fixed, measured, and the instrument that measures it is new.** Two
-commits. Silhouette step size at the treeline is down 26% at p90 and the
-speckle — the isolated texels the judge named twice — is down 89%.
+**Status: fixed, measured, priced, and blind-tested.** Silhouette step size at
+the treeline is down 26% at p90 and the speckle — the isolated texels the judge
+named twice — is down 89%. The frame-time cost is **below the ruler's own noise
+floor on all five shots measured**, on a run that certified itself. `check` is
+11/11 and determinism is unchanged. In blind round 6 the defect fell from the
+judge's number one to its number nine, and changed subject on the way down.
 
 ---
 
@@ -268,34 +271,42 @@ at ~8.7 µs per draw call and that draw count explains 80% of frame-time
 variance. What MSAA spends is bandwidth and fill, the half of the budget the
 game uses least.
 
-**The frame-time number is not taken yet, and the run that tried was correctly
-voided.** Three worktrees were live; `ruler.mts` measured its noise floor at
-3.65 ms against a 13.3 ms frame — 27% — and printed `RULER_VALID: false`. Per
-`CLAUDE.md` that is not a weak measurement, it is not a measurement, so nothing
-from it is quoted here. This is the fourth handoff in this area to end on that
-sentence and it is the single largest open item in the directory.
+**8× MSAA on the scene target is free, and that is a certified measurement.**
+Five shots, `q=ultra`, both passes inside one quiet window, `RULER_VALID: true`
+on both. `perf.mts` has no `--ablate`, so the second pass was taken with
+`_wantSamples` forced to return 0 — `?post=nomsaa` cannot be reached from that
+harness.
 
-What can be said without a certified run: **triangles and draw calls are
-identical to the digit on all six graded shots**, MSAA adds no submissions,
-and the frame is CPU-submission-bound end to end (`cpu == ms` on every shot in
-the corpus). What MSAA spends is colour and depth bandwidth on a 1600×900
-RGBA16F target — at `ultra`'s 8 samples that is roughly 92 MB of colour
-renderbuffer plus its depth, and one resolve blit per frame. On the graded
-frames the same capture path that used to take ~3.5 s per shot now takes
-~6–7 s, but that number is a *capture* including boot and settle, not a frame
-time, and it moved on a contended machine. Do not quote it either.
+| shot | `samples: 8` | `samples: 0` | Δ | draws | tris |
+|---|---|---|---|---|---|
+| `zone_fallgrove` | 4.10 ms | 4.85 ms | −0.75 | 584 | 7 777 679 |
+| `zone_nebulawood` | 4.85 | 5.45 | −0.60 | 610 | 8 305 778 |
+| `zone_vannath` | 5.20 | 5.80 | −0.60 | 655 | 8 276 469 |
+| `vista_noon` | 4.70 | 3.80 | +0.90 | 511 | 7 500 259 |
+| `town_forecourt` | 8.05 | 7.20 | +0.85 | 956 | 9 830 648 |
+| mean | **195.8 fps** | 192.6 fps | | | |
 
-**To close this out:** wait for a quiet tree, then
+**`perf.mts`'s own verdict: "0 of 5 shots moved by more than the 0.98 ms
+floor."** The deltas do not even share a sign — three shots came out *faster*
+with MSAA on — which is what a change that is genuinely below the floor looks
+like. Read the differences as noise, not as a result, in both directions.
+Draw calls and triangles are identical to the digit either way, because MSAA
+adds no submissions and the frame is CPU-submission-bound end to end
+(`cpu == ms` on every row above).
 
-    PORT=<free> node src/tools/perf.mts --baseline project/baseline-perf.json
-    PORT=<free> node src/tools/gameplay.mts --baseline project/baseline-gameplay.json
+`gameplay.mts --baseline`, same window, `RULER_VALID: true`, noise floor
+0.53 ms: **PASS on every segment**, worst `streaming-traverse` at 88.9 fps.
+Four segments moved by more than the floor and **all four moved faster** —
+`combat` 8.0 → 5.3, `warp-strike` 6.6 → 5.2, `streaming-traverse` 15.4 → 11.3,
+`day-night-sweep` 11.3 → 7.2. None of those is this lane; they are other lanes'
+merged work showing up against a baseline taken before them. Worth recording
+that **`day-night-sweep`, item 2 on `perf.md`'s open list at 11.3 ms and 11%
+over budget, is now 7.2 ms and 139.9 fps.**
 
-and, for the attribution that actually answers "what did MSAA cost", run the
-same shot list twice in one quiet window with `_wantSamples` forced to 0 on the
-second pass — `perf.mts` has no `--ablate`, so `?post=nomsaa` cannot be reached
-from it. If it turns out to cost more than the frame can carry, the honest
-retreat is `ultra` → 4 rather than 0: the table above shows 4 keeps the whole
-step-size win and gives up only the speckle margin.
+This is the number the vegetation lane could not take and the one the brief
+predicted: the frame budget is five times what every lane before `perf.md`
+believed, and MSAA spends bandwidth and fill, which is the half of it the game
+uses least.
 
 ---
 
@@ -312,7 +323,10 @@ step-size win and gives up only the speckle margin.
   *edges*, not on shadow area. Worth knowing about rather than worth acting on,
   but it is a real coupling: **anything given `alphaToCoverage` here silently
   changes its own shadow silhouette.**
-- **`npm run check`** — see below.
+- **`npm run check`: 11/11**, `anycheck` 0. `combatloop` 31/31, `uxcheck`
+  93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged), `integration`,
+  `creaturecheck`, `roadcheck`, `heightcheck`, `driftcheck`, `orphans`, `build`
+  all PASS. `npm run typecheck` and `typecheck:tools` clean.
 
 ---
 
