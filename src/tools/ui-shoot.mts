@@ -41,6 +41,10 @@ const SCENES: Record<string, Scene> = {
   menu_map: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('map')`, then: 90 },
   menu_gear: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('gear')`, then: 80 },
   photo_mode: { shot: 'hud_field', settle: 20, after: `g.get('Menus').setScreen('photo')`, then: 80 },
+  // The bounty board, which is where the hunter ladder is read. Worth a scene
+  // because the ladder is the only visible long-arc progression in the game and
+  // its curve was unclimbable until it was measured against what the board pays.
+  menu_hunts: { shot: 'menu_main', settle: 20, after: `g.get('Menus').setScreen('hunts')`, then: 90 },
   area_card: {
     shot: 'hud_field', settle: 30,
     after: `g.get('HUD').areaTitle('Leide', 'Kingdom of Lucis', 'Longwythe Region  ·  Level 12 — 20')`,
