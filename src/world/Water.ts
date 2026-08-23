@@ -7,6 +7,8 @@ import {
 } from './terrain/Field.ts';
 import { Noise } from '../util/Noise.ts';
 import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
+import { buildShoreRibbon, type ShoreStats } from './water/Shore.ts';
+import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -116,6 +118,16 @@ export class Water {
   } | null;
   reflectionRes!: number;
   stride!: number;
+  /**
+   * The merged shoreline ribbon (plan 6.1) — one mesh, one draw call, every
+   * body in the world. Null when nothing crossed a water level anywhere.
+   */
+  shore!: THREE.Mesh | null;
+  shoreMat!: THREE.ShaderMaterial | null;
+  /** What the ribbon build measured. Read by the handoff and by probes. */
+  shoreStats!: ShoreStats | null;
+  /** Tiling two-channel noise the swash reads. */
+  shoreNoise!: THREE.DataTexture;
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
@@ -129,6 +141,9 @@ export class Water {
     this._reflectRoots = null;
     this._bed = null;
     this._sinceReflect = 1e9;
+    this.shore = null;
+    this.shoreMat = null;
+    this.shoreStats = null;
   }
 
   async init(game: Game) {
@@ -148,6 +163,35 @@ export class Water {
 
     this.enabled = this.bodies.length > 0;
     if (this.enabled) this._collectReflectRoots(game);
+    if (this.enabled) this._buildShore(game, terrain);
+  }
+
+  /**
+   * Lay the shoreline ribbon along every body's waterline (plan 6.1).
+   *
+   * One merged mesh for the whole world. A body's water level rides in the
+   * `aShore` attribute rather than in a uniform, which is the only reason a sea
+   * at -6.5 m and a tarn at +53 m can share a draw call.
+   *
+   * Built from `Terrain.heightAt` — the *eroded* field, so the contour follows
+   * the drainage the bake cut rather than the smooth basin it started as.
+   */
+  _buildShore(game: Game, terrain: Terrain) {
+    const specs = this.bodies.map((b) => ({ cx: b.cx, cz: b.cz, w: b.w, d: b.d, level: b.level, name: b.name }));
+    const built = buildShoreRibbon(terrain, specs);
+    this.shoreStats = built.stats;
+    if (!built.geometry) return;
+    this.shoreMat = makeShoreMaterial(this.shoreNoise);
+    const mesh = new THREE.Mesh(built.geometry, this.shoreMat);
+    mesh.name = 'shoreRibbon';
+    // Before the water surface (renderOrder 5) so the submerged rows are
+    // already in the buffer when the water reads the frame behind it.
+    mesh.renderOrder = 3;
+    mesh.frustumCulled = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    game.scene.add(mesh);
+    this.shore = mesh;
   }
 
   /**
@@ -181,6 +225,17 @@ export class Water {
 
     this.normalA = normalFromHeight(256, (u: number, v: number) => wave(u, v, 6, 6), 1.6, { repeat: 14 });
     this.normalB = normalFromHeight(256, (u: number, v: number) => wave(u + 0.37, v + 0.71, 11, 11), 1.1, { repeat: 31 });
+
+    // Two independent noise channels for the shoreline swash: .x is the slow
+    // group envelope that decides which wave trains run furthest, .y is the
+    // lace of foam sliding back down the sand. Independent on purpose -- one
+    // channel driving both correlates the envelope with the foam and the beach
+    // comes out banded.
+    this.shoreNoise = makeTexture(256, (u: number, v: number, c: number[]) => {
+      c[0] = 0.5 + 0.5 * n.fbm2(u * 5 + 31, v * 5 + 17, 4, 2.1, 0.55);
+      c[1] = 0.5 + 0.5 * n.fbm2(u * 13 - 5, v * 13 + 41, 3, 2.4, 0.5);
+      c[2] = 0;
+    }, { colorSpace: THREE.NoColorSpace, repeat: 1 });
 
     // Subtle caustic-ish sub-surface texture for shallow water.
     this.caustics = makeTexture(256, (u: number, v: number, c: number[]) => {
@@ -628,6 +683,16 @@ export class Water {
       if (sky && sky.ambient) {
         u.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
       }
+    }
+    if (this.shoreMat) {
+      const s = this.shoreMat.uniforms as ShoreUniforms;
+      s.uTime.value = game.time.now;
+      s.uCameraPos.value.copy(cam.position);
+      if (sky && sky.sun) {
+        s.uSunDir.value.copy(sky.sun.position).normalize();
+        s.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
+      }
+      if (sky && sky.ambient) s.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
     }
   }
 
