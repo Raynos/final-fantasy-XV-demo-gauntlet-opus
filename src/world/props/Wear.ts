@@ -389,12 +389,19 @@ export function gradePad(o: PadOpts): PadResult {
       let d = th - rampYaw;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
-      const k = Math.max(0, 1 - Math.abs(d) / 0.42);
+      const k = Math.max(0, 1 - Math.abs(d) / 0.26);
       slopeFill = fill + (9 - fill) * (k * k * (3 - 2 * k));
     }
     // How far this bearing's batter has to run: measured, not assumed.
     const hEdge = groundAt(x + ct * e, z + st * e);
-    const reachOut = Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0);
+    // Capped, and the cap is a composition decision rather than an engineering
+    // one: a pad on a real hillside wants forty metres of 1:3 embankment, and
+    // forty metres of bare fill is then the largest thing in the frame. Beyond
+    // the cap the batter simply meets the ground steeper than a dozer would.
+    const reachOut = Math.min(
+      r * 1.15 + 6,
+      Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0),
+    );
     let crestY = 0, crestS = e;
 
     for (let i = 0; i < rings.length; i++) {

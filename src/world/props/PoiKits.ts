@@ -8,7 +8,7 @@ import {
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
   container, membraneSag, tarpEnvelope, sandbagStack, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
-import { seatY } from './Seat.ts';
+import { coverY } from './Seat.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
@@ -84,19 +84,13 @@ function plain(hex: number, rough = 0.85, metal = 0) {
   return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal, vertexColors: true });
 }
 
-/** A slab with a slightly irregular top — reads as cut stone, not a cube. */
-function roughBox(seed: number, w: number, h: number, d: number, amp = 0.05) {
-  const g = new THREE.BoxGeometry(w, h, d, 2, 1, 2);
-  const rng = new Rng(seed);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    p.setXYZ(i, p.getX(i) + rng.gauss(0, amp) * w * 0.2,
-      p.getY(i) + rng.gauss(0, amp) * h * 0.2,
-      p.getZ(i) + rng.gauss(0, amp) * d * 0.2);
-  }
-  g.computeVertexNormals();
-  return g;
-}
+/*
+ * `roughBox` used to live here: a `BoxGeometry` with 3% Gaussian vertex noise,
+ * which was the seven remaining kits' idea of "cut stone". It is gone because
+ * nothing calls it any more -- every one of those kits now builds through
+ * `BuildKit`, whose chamfered box carries the arris the noise was standing in
+ * for. Jitter on a box's vertices moves its corners; it does not give it any.
+ */
 
 /**
  * The three things every kit builder is handed, named.
@@ -323,20 +317,35 @@ export class PoiKits {
    * covers whatever gap is left on the downhill side.
    */
   _base(x: number, z: number, r: number, drop = 2.2, cull = DRAW_R) {
-    // Seated on the surface the clipmap draws at this POI's own draw range, not
-    // on the analytic field. A settlement is the largest thing a prop system
-    // places and the one a player walks up to, so a metre of float at 300 m --
-    // the median at that range is 0.67 m and the p95 is 5.7 -- is a town on
-    // stilts or a town with its plinths buried.
-    const h0 = seatY(this.eco, x, z, r, cull);
-    let sum = 0, lo = h0;
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      const h = seatY(this.eco, x + Math.cos(a) * r * 0.72, z + Math.sin(a) * r * 0.72, r, cull);
-      sum += h; lo = Math.min(lo, h);
+    // The DRAWN surface, and the *upper* envelope of it. `seatY` is the lower
+    // envelope and is right for a prop standing on the ground; a pad is the
+    // ground, and a deck cut to the lower envelope has the clipmap's own
+    // chords poking up through it.
+    const h0 = coverY(this.eco, x, z, r, cull);
+    // A grid over the footprint, not a ring: a hummock in the middle of a
+    // compound is invisible to a ring of probes and is exactly what punches
+    // through the deck. Hammerhead's `_padHeight` already learned this and
+    // takes the 98.5th percentile of an 11x11 grid for the same reason -- "the
+    // basin's own relief punches humps of scrub straight up through the
+    // forecourt". The POI kits took a ring average and a `Math.min`, so
+    // `poi_costlemark_menace` came back with a green mound standing in the
+    // middle of its own sealed court (`tmp/shots/kits-r10/`).
+    const hs: number[] = [];
+    for (let i = -3; i <= 3; i++) {
+      for (let j = -3; j <= 3; j++) {
+        const d = Math.hypot(i, j) / 3;
+        if (d > 1.02) continue;
+        hs.push(coverY(this.eco, x + (i / 3) * r, z + (j / 3) * r, r, cull));
+      }
     }
-    const avg = (sum / 10) * 0.6 + h0 * 0.4;
-    return Math.max(Math.min(avg, h0), h0 - drop, lo - 0.2);
+    hs.sort((a, b) => a - b);
+    // The 88th percentile rather than the maximum: one boulder inside the
+    // footprint must not lift the whole settlement onto a plinth, and the
+    // batter carries whatever is left over.
+    const hi = hs[Math.min(hs.length - 1, Math.floor((hs.length - 1) * 0.88))];
+    // Still bounded against the point the map actually names, in both
+    // directions -- a deck three metres over the named spot is a plateau.
+    return Math.max(Math.min(hi, h0 + 2.4), h0 - drop);
   }
 
   /**
@@ -1547,7 +1556,15 @@ export class PoiKits {
     return { cast: false, r: 40 };
   }
 
-  /** A chocobo post: paddock rails, barn, feed silo, trough, signboard. */
+  /**
+   * A chocobo post: paddock, barn, feed silo, trough, signboard.
+   *
+   * The barn was a 13 x 5.2 x 9 box with a half cylinder on it and a black
+   * rectangle for a door. A barn is read from its **gable end and its door**,
+   * and from the fact that it is built out of boards: so it gets a plinth, a
+   * board-and-batten elevation, a real gable with barge boards, a sliding door
+   * on a rail with its own head beam, and a hay door in the loft.
+   */
   _chocobo(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
@@ -1564,25 +1581,112 @@ export class PoiKits {
         put(M.plank, new THREE.BoxGeometry(len + 0.1, 0.1, 0.06), [mx, h, mz], [0, -(a + a2) * 0.5 + Math.PI / 2, 0]);
       }
     }
-    // barn
-    put(M.plank, new THREE.BoxGeometry(13, 5.2, 9), [-9, 2.9, -11]);
-    put(M.red, new THREE.CylinderGeometry(5.0, 5.0, 13, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
-      [-9, 5.5, -11], [0, Math.PI / 2, 0]);
-    put(M.void, new THREE.BoxGeometry(4.4, 4.0, 0.2), [-9, 2.3, -6.55]);
-    put(M.lamp, new THREE.BoxGeometry(0.6, 0.24, 0.14), [-6, 5.0, -6.6]);
+
+    // Barn.
+    {
+      const b = bag();
+      const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.06 });
+      const W = 13, D = 9, H = 4.6, rise = 3.1, T = 0.26;
+      plinth(b.shell, { w: W, d: D, h: 0.42, proud: 0.16 });
+      const y0 = 0.42;
+      // Board-and-batten: the wall, then a batten every 600 mm standing 40 mm
+      // proud. That rhythm is what makes timber read as timber at any range.
+      const front = bag();
+      const openings: Opening[] = [
+        { x: 0, w: 4.4, y0: 0, h: 4.0 },
+        { x: 0, w: 1.9, y0: H + 0.5, h: 1.5 },
+      ];
+      for (const g of wallRun(W, H, T, [openings[0]])) front.shell.push(g);
+      for (const k of Object.keys(front)) for (const g of front[k]) b[k].push(xform(g, { y: y0, z: D / 2 - T / 2 }));
+      for (const g of wallRun(W, H, T, [])) b.shell.push(xform(g, { y: y0, z: -D / 2 + T / 2 }));
+      for (const sx of [-1, 1]) {
+        for (const g of wallRun(D - T * 2, H, T, [])) {
+          b.shell.push(xform(g, { ry: Math.PI / 2, x: sx * (W / 2 - T / 2), y: y0 }));
+        }
+      }
+      const nb = Math.round(W / 0.62);
+      for (let i = 0; i <= nb; i++) {
+        const bx = -W / 2 + (W * i) / nb;
+        if (Math.abs(bx) < 2.4) continue;
+        for (const sz of [-1, 1]) b.wood.push(box(0.09, H, 0.045, { x: bx, y: y0 + H / 2, z: sz * (D / 2 + 0.02) }));
+      }
+      // Gable ends, stepped so every piece stays a chamfered box, and the two
+      // roof planes over them with barge boards on the rake.
+      for (const sz of [-1, 1]) {
+        const NG = 5;
+        for (let i = 0; i < NG; i++) {
+          const t = i / NG;
+          b.shell.push(box(W * (1 - t), rise / NG, T, { y: y0 + H + rise * (t + 0.5 / NG), z: sz * (D / 2 - T / 2) }));
+        }
+        for (const sx of [-1, 1]) {
+          const len = Math.hypot(W / 2, rise), ang = Math.atan2(rise, W / 2);
+          b.trim.push(xform(box(len, 0.22, 0.14), {
+            rz: -sx * ang, x: sx * W / 4, y: y0 + H + rise / 2, z: sz * (D / 2 + 0.12),
+          }));
+        }
+      }
+      {
+        const slope = Math.hypot(W / 2 + 0.5, rise), ang = Math.atan2(rise, W / 2 + 0.5);
+        for (const sx of [-1, 1]) {
+          b.roof.push(xform(box(slope, 0.22, D + 1.0), { rz: -sx * ang, x: sx * (W / 4 + 0.25), y: y0 + H + rise / 2 + 0.05 }));
+        }
+        b.trim.push(box(0.5, 0.2, D + 1.2, { y: y0 + H + rise + 0.1, arris: 0.04 }));
+      }
+      // The sliding door: a leaf hung on a rail outside the opening, with a
+      // head beam over it. A hole with a leaf beside it beats a black rectangle.
+      b.dark.push(box(4.4, 4.0, 0.1, { y: y0 + 2.0, z: D / 2 - T - 0.06, sharp: true }));
+      b.trim.push(box(5.4, 0.26, 0.3, { y: y0 + 4.3, z: D / 2 + 0.16 }));
+      b.metal.push(box(5.6, 0.09, 0.09, { y: y0 + 4.14, z: D / 2 + 0.28 }));
+      b.wood.push(box(2.5, 3.9, 0.12, { x: -2.9, y: y0 + 1.98, z: D / 2 + 0.28 }));
+      for (let i = 0; i < 5; i++) b.wood.push(box(0.1, 3.9, 0.05, { x: -4.0 + i * 0.55, y: y0 + 1.98, z: D / 2 + 0.35 }));
+      // Loft door and its hoist beam.
+      b.dark.push(box(1.9, 1.5, 0.1, { y: y0 + H + 1.25, z: D / 2 - 0.1, sharp: true }));
+      b.wood.push(box(0.22, 0.22, 1.5, { y: y0 + H + 2.3, z: D / 2 + 0.6 }));
+
+      const merged = mergeBag(b);
+      const roleMat: Record<string, THREE.Material> = {
+        shell: M.red, shell2: M.concrete, trim: M.cream, metal: M.steel, glass: M.glass,
+        glow: M.lamp, dark: M.interior, roof: M.roof, wood: M.plank, cloth: M.cloth,
+      };
+      for (const [role, g] of Object.entries(merged)) {
+        if (role !== 'glow' && role !== 'dark') {
+          bakeTone(g, { y0: 0, y1: y0 + H + rise, grime: 0.7, bleach: 1.08, jitter: tv.jitter, tint: tv.tint, streak: 0.22 });
+        }
+        put(roleMat[role] ?? M.red, g, [-9, 0, -11]);
+      }
+      put(M.lamp, new THREE.BoxGeometry(0.6, 0.24, 0.14), [-6, 5.0, -6.4]);
+    }
+
     // feed silo
     put(M.steel, new THREE.CylinderGeometry(1.9, 1.9, 7.5, 14), [4, 4.1, -13]);
     put(M.steel, new THREE.ConeGeometry(2.0, 1.6, 14), [4, 8.6, -13]);
     put(M.steel, new THREE.ConeGeometry(1.9, 2.2, 14).rotateZ(Math.PI), [4, 0.9, -13]);
-    // trough, hay bales, signboard
-    put(M.plank, new THREE.BoxGeometry(4.4, 0.6, 1.1), [6, 0.65, 4]);
+    for (let i = 0; i < 5; i++) {
+      put(M.steel, new THREE.TorusGeometry(1.95, 0.05, 4, 14).rotateX(Math.PI / 2), [4, 1.4 + i * 1.5, -13]);
+    }
+    // trough, hay under a tarp, signboard
+    put(M.plank, box(4.4, 0.6, 1.1, { arris: 0.04 }), [6, 0.65, 4]);
+    for (const sx of [-1, 1]) put(M.plank, box(0.14, 0.5, 0.9, { arris: 0.03 }), [6 + sx * 2.1, 0.25, 4]);
     for (let i = 0; i < 6; i++) {
       put(M.wood, new THREE.CylinderGeometry(0.8, 0.8, 1.5, 10).rotateZ(Math.PI / 2),
         [rng.range(-14, 12), 0.9 + (i > 3 ? 1.6 : 0), rng.range(-4, 8)], [0, rng.next() * 3, 0]);
     }
+    {
+      // A tarp over the stacked bales: the `max` envelope gives it the ridge
+      // between the two rows that a smooth mound cannot have.
+      const tarp = tarpEnvelope({
+        w: 5.0, d: 3.4, skirt: 0.35, drape: 0.09,
+        lumps: [
+          { x: -1.2, z: 0, w: 1.7, d: 2.6, h: 1.7 },
+          { x: 0.6, z: 0.2, w: 1.7, d: 2.6, h: 1.7 },
+          { x: 1.9, z: -0.1, w: 1.5, d: 2.2, h: 0.95 },
+        ],
+      });
+      put(M.cloth, tarp, [11, 0.05, -4], [0, rng.range(0, 3), 0]);
+    }
     put(M.plank, new THREE.CylinderGeometry(0.13, 0.15, 4.4, 6), [13, 2.4, 12]);
     put(M.sign, new THREE.PlaneGeometry(3.4, 1.8), [13, 4.6, 12.1]);
-    put(M.cream, new THREE.BoxGeometry(3.6, 2.0, 0.16), [13, 4.6, 12]);
+    put(M.cream, box(3.6, 2.0, 0.16, { arris: 0.04 }), [13, 4.6, 12]);
     return { cast: true, r: 26 };
   }
 
@@ -1631,39 +1735,84 @@ export class PoiKits {
     return { cast: true, r: 16, noApron: true };
   }
 
-  /** A viewpoint: waymark stele, cairn, a bench. Lighthouses get a tower. */
+  /**
+   * A viewpoint: waymark stele, cairn, a bench. Lighthouses get a tower.
+   *
+   * The smallest kit and the most numerous — twenty-three of them — so the bar
+   * is *legibility at range* rather than detail. A stele on a base with a
+   * chamfered nosing throws two horizontals; a bench with real legs throws a
+   * shadow you can sit in; a cairn is a cone of stones and not a stack of
+   * spheres. All three now come through {@link BuildKit} and carry a baked tone.
+   */
   _landmark(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     if (/lighthouse/.test(s.poi.id)) {
-      this._apron(B, 6, 9, 21, undefined, { yaw, wear: [[4.5, 3.0, 0.8]] });
-      put(M.cream, new THREE.CylinderGeometry(2.0, 3.2, 20, 16), [0, 10, 0]);
-      put(M.red, new THREE.CylinderGeometry(2.1, 2.1, 1.4, 16), [0, 13.5, 0]);
-      put(M.steel, new THREE.CylinderGeometry(2.5, 2.5, 0.35, 16), [0, 20.2, 0]);
-      put(M.glass, new THREE.CylinderGeometry(1.8, 1.8, 2.4, 12), [0, 21.6, 0]);
-      put(M.lamp, new THREE.SphereGeometry(1.1, 10, 8), [0, 21.6, 0]);
-      put(M.rust, new THREE.ConeGeometry(2.3, 2.0, 16), [0, 23.8, 0]);
-      put(M.cream, new THREE.BoxGeometry(6.5, 3.2, 5.0), [4.5, 1.9, 3.0]);
-      put(M.roof, new THREE.BoxGeometry(7.1, 0.3, 5.6), [4.5, 3.6, 3.0]);
-      return { cast: true, r: 10 };
+      this._apron(B, 8, 9, 21, undefined, { yaw, wear: [[4.5, 3.0, 0.8]] });
+      const b = bag();
+      // The tower stands on a splayed plinth and is banded at every storey:
+      // a bare tapered cylinder has no scale at all against an empty sky.
+      plinth(b.shell, { w: 7.4, d: 7.4, h: 0.7, proud: 0.24 });
+      b.shell.push(xform(new THREE.CylinderGeometry(2.0, 3.2, 20, 18), { y: 10.7 }));
+      for (let i = 0; i < 5; i++) {
+        const t = i / 5, rr = 3.2 + (2.0 - 3.2) * t;
+        b.trim.push(xform(new THREE.CylinderGeometry(rr * 1.05, rr * 1.07, 0.22, 18), { y: 0.7 + 20 * t + 2.0 }));
+      }
+      b.trim.push(xform(new THREE.CylinderGeometry(2.55, 2.35, 0.34, 18), { y: 20.9 }));
+      // Gallery rail round the lamp room.
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        b.metal.push(cyl(0.035, 1.0, 4, { x: Math.cos(a) * 2.35, y: 21.6, z: Math.sin(a) * 2.35 }));
+      }
+      b.metal.push(xform(new THREE.TorusGeometry(2.35, 0.05, 4, 18).rotateX(Math.PI / 2), { y: 22.05 }));
+      const merged = mergeBag(b);
+      const tvL = toneVariant(rng, { valueAmp: 0.1, warmAmp: 0.04 });
+      for (const [role, g] of Object.entries(merged)) {
+        bakeTone(g, { y0: 0, y1: 22, grime: 0.72, bleach: 1.1, jitter: tvL.jitter, tint: tvL.tint, streak: 0.2 });
+        put(role === 'metal' ? M.steel : role === 'trim' ? M.red : M.cream, g, [0, 0, 0]);
+      }
+      put(M.glass, new THREE.CylinderGeometry(1.8, 1.8, 2.4, 14), [0, 22.3, 0]);
+      put(M.lamp, new THREE.SphereGeometry(1.1, 10, 8), [0, 22.3, 0]);
+      put(M.rust, new THREE.ConeGeometry(2.3, 2.0, 16), [0, 24.5, 0]);
+      // Keeper's cottage, with a real door and window.
+      this._hut(B, world, { w: 6.5, d: 5.0, x: 4.5, z: 3.0, ry: 0.3, rng, base: 0.1 });
+      return { cast: true, r: 12 };
     }
-    // waymark stele
-    put(M.stone, roughBox(3, 1.1, 3.4, 0.5, 0.05), [0, 1.7, 0], [0.03, 0, rng.gauss(0, 0.03)]);
-    put(M.runeface, new THREE.PlaneGeometry(0.85, 1.7), [0, 2.2, 0.27]);
-    put(M.stone, roughBox(5, 2.2, 0.5, 1.6, 0.06), [0, 0.25, 0]);
-    // cairn
+    // Waymark stele on a two-course base, its face carved.
+    const b = bag();
+    const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.06 });
+    b.shell.push(box(2.4, 0.34, 1.8, { y: 0.17, arris: 0.05 }));
+    b.shell.push(box(2.0, 0.26, 1.5, { y: 0.44, arris: 0.05 }));
+    b.shell.push(xform(box(1.15, 3.3, 0.55, { arris: 0.055 }), { rz: rng.gauss(0, 0.03), y: 2.2 }));
+    b.trim.push(box(1.35, 0.2, 0.75, { y: 3.92, arris: 0.04 }));
+    const merged = mergeBag(b);
+    for (const [role, g] of Object.entries(merged)) {
+      bakeTone(g, { y0: 0, y1: 4, grime: 0.66, bleach: 1.08, jitter: tv.jitter, tint: tv.tint, streak: 0.2 });
+      put(role === 'trim' ? M.concrete : M.stone, g, [0, 0, 0]);
+    }
+    put(M.runeface, new THREE.PlaneGeometry(0.85, 1.7), [0, 2.4, 0.30]);
+    // Cairn: a cone of set stones, wider at the foot than a stack of spheres.
     let h = 0;
-    for (let i = 0; i < 7; i++) {
-      const r = 0.55 * (1 - i / 9);
-      put(M.dark, new THREE.DodecahedronGeometry(r, 0),
-        [2.6 + rng.gauss(0, 0.06), h + r * 0.7, -1.4 + rng.gauss(0, 0.06)],
-        [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]);
-      h += r * 1.35;
+    for (let i = 0; i < 11; i++) {
+      const r = 0.5 * (1 - i / 13);
+      const ring = i < 3 ? 3 : i < 7 ? 2 : 1;
+      for (let k = 0; k < ring; k++) {
+        const a = (k / ring) * 6.28 + i * 1.1;
+        put(M.dark, new THREE.DodecahedronGeometry(r * rng.range(0.8, 1.15), 0),
+          [2.6 + Math.cos(a) * r * (ring > 1 ? 0.85 : 0), h + r * 0.7, -1.4 + Math.sin(a) * r * (ring > 1 ? 0.85 : 0)],
+          [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]);
+      }
+      h += r * 0.95;
     }
-    // a bench facing the view, and a couple of set stones
-    put(M.plank, new THREE.BoxGeometry(2.4, 0.14, 0.55), [-2.6, 0.62, 1.2], [0, rng.gauss(0, 0.2), 0]);
-    for (const sx of [-3.5, -1.7]) put(M.dark, new THREE.BoxGeometry(0.3, 0.6, 0.5), [sx, 0.3, 1.2]);
+    // Bench facing the view: a slatted seat on two real legs, not a floating slab.
+    const bx = -2.6, bz = 1.2, bry = rng.gauss(0, 0.2);
+    for (let i = 0; i < 3; i++) {
+      put(M.plank, box(2.4, 0.07, 0.16, { arris: 0.015 }), [bx, 0.62, bz - 0.18 + i * 0.18], [0, bry, 0]);
+    }
+    for (const sx of [-1, 1]) {
+      put(M.dark, box(0.28, 0.58, 0.5, { arris: 0.04 }), [bx + sx * 0.95 * Math.cos(bry), 0.29, bz - sx * 0.95 * Math.sin(bry)], [0, bry, 0]);
+    }
     for (let i = 0; i < 5; i++) {
       const a = rng.next() * 6.28, d = rng.range(3.5, 8);
       put(M.stone, new THREE.DodecahedronGeometry(rng.range(0.4, 1.1), 0),
@@ -1672,31 +1821,95 @@ export class PoiKits {
     return { cast: true, r: 9, noApron: true };
   }
 
-  /** A menace lair: a sealed sigil in a ring of leaning stones. */
+  /**
+   * A menace lair: a sealed sigil in a ring of leaning stones.
+   *
+   * It was a pale disc with nine `roughBox` slabs standing on it and a magenta
+   * ring lying flat — a coaster with matchsticks
+   * (`tmp/shots/kits-r0b/poi_costlemark_menace.png`). What a sealed thing needs
+   * is **enclosure**: the sigil sits *down* in a dished court behind a kerb,
+   * the stones are trilithons rather than posts, and the whole ring is dark
+   * against the ground rather than paler than it.
+   */
   _menace(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.3, 1.3, 1.3]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 12, 9, 83, undefined, { yaw, wear: [[0, 3.2, 1.2]] });
-    put(M.dark, new THREE.CylinderGeometry(9.4, 10, 0.6, 22), [0, 0.24, 0]);
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2;
-      const h = rng.range(3.2, 5.8);
-      put(M.dark, roughBox(i * 5 + 2, 1.2, h, 0.8, 0.08),
-        [Math.cos(a) * 8, h * 0.5 + 0.4, Math.sin(a) * 8],
-        [Math.sin(a) * 0.12, -a, -Math.cos(a) * 0.12]);
+
+    const b = bag();
+    const tv = toneVariant(rng, { valueAmp: 0.12, warmAmp: 0.03 });
+    // The court: a kerb ring standing proud, the floor dished inside it. A flat
+    // disc lying on the ground has no inside; a kerb makes one.
+    const R = 9.6;
+    const NK = 22;
+    for (let i = 0; i < NK; i++) {
+      const a = (i / NK) * Math.PI * 2, a2 = ((i + 1) / NK) * Math.PI * 2;
+      const mx = (Math.cos(a) + Math.cos(a2)) * 0.5 * R, mz = (Math.sin(a) + Math.sin(a2)) * 0.5 * R;
+      const len = Math.hypot(Math.cos(a2) - Math.cos(a), Math.sin(a2) - Math.sin(a)) * R;
+      b.shell.push(xform(box(len + 0.12, 0.72, 1.1, { arris: 0.06 }), {
+        ry: -(a + a2) * 0.5 + Math.PI / 2, x: mx, y: 0.2, z: mz,
+      }));
     }
-    // the sigil and the stair down
-    put(M.arcane, new THREE.RingGeometry(2.0, 3.4, 32).rotateX(-Math.PI / 2), [0, 0.58, 0]);
-    put(M.arcane, new THREE.RingGeometry(0.5, 0.9, 20).rotateX(-Math.PI / 2), [0, 0.59, 0]);
-    put(M.void, new THREE.CircleGeometry(1.9, 24).rotateX(-Math.PI / 2), [0, 0.5, 0]);
+    b.shell.push(xform(new THREE.CylinderGeometry(R - 0.5, R - 0.9, 0.55, 24), { y: -0.16 }));
+
+    // Trilithons: pairs of leaners with a lintel across, so the ring has a
+    // silhouette with holes in it rather than a fence of sticks.
     for (let i = 0; i < 5; i++) {
-      put(M.dark, new THREE.BoxGeometry(3.4, 0.3, 0.7), [0, 0.4 - i * 0.32, 2.2 + i * 0.7]);
+      const a = (i / 5) * Math.PI * 2 + 0.3;
+      const h = rng.range(3.6, 5.4);
+      const gap = 1.5;
+      for (const sk of [-1, 1]) {
+        const px = Math.cos(a) * (R - 1.1) - Math.sin(a) * sk * gap;
+        const pz = Math.sin(a) * (R - 1.1) + Math.cos(a) * sk * gap;
+        b.shell.push(xform(box(1.15, h, 0.85, { arris: 0.08 }), {
+          rz: Math.cos(a) * 0.07, rx: -Math.sin(a) * 0.07, ry: -a, x: px, y: 0.4 + h / 2, z: pz,
+        }));
+      }
+      if (rng.next() < 0.7) {
+        b.shell.push(xform(box(gap * 2 + 1.3, 0.75, 0.95, { arris: 0.07 }), {
+          ry: -a + Math.PI / 2, x: Math.cos(a) * (R - 1.1), y: 0.4 + h + 0.38, z: Math.sin(a) * (R - 1.1),
+        }));
+      }
     }
-    return { cast: true, r: 12 };
+    // Four solitary leaners between them, some snapped.
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 1.0;
+      const h = rng.range(2.0, 4.6);
+      b.shell.push(xform(box(1.0, h, 0.75, { arris: 0.08 }), {
+        rz: rng.gauss(0, 0.16), ry: -a, x: Math.cos(a) * (R - 1.4), y: 0.4 + h / 2, z: Math.sin(a) * (R - 1.4),
+      }));
+    }
+
+    const merged = mergeBag(b);
+    for (const [role, g] of Object.entries(merged)) {
+      // Dark and getting darker toward the seal: this is a place with something
+      // under it, and value is how that reads before any glow does.
+      bakeTone(g, { y0: -0.4, y1: 6.0, grime: 0.5, bleach: 0.86, jitter: tv.jitter, tint: tv.tint, streak: 0.2 });
+      put(role === 'trim' ? M.stone : M.dark, g, [0, 0, 0]);
+    }
+
+    // The seal, sunk in the dish, and the stair that goes down past it.
+    put(M.arcane, new THREE.RingGeometry(2.0, 3.4, 32).rotateX(-Math.PI / 2), [0, 0.16, 0]);
+    put(M.arcane, new THREE.RingGeometry(0.5, 0.9, 20).rotateX(-Math.PI / 2), [0, 0.17, 0]);
+    put(M.void, new THREE.CircleGeometry(1.9, 24).rotateX(-Math.PI / 2), [0, 0.1, 0]);
+    for (let i = 0; i < 6; i++) {
+      put(M.dark, box(3.4 - i * 0.12, 0.28, 0.7, { arris: 0.04 }), [0, 0.02 - i * 0.3, 2.3 + i * 0.72]);
+    }
+    for (const sx of [-1, 1]) {
+      put(M.dark, box(0.4, 2.2, 4.6, { arris: 0.06 }), [sx * 2.0, -0.85, 4.0]);
+    }
+    return { cast: true, r: 13 };
   }
 
-  /** A dungeon mouth: dressed jambs and a lintel set into a rubble mound. */
+  /**
+   * A dungeon mouth: a corbelled portal cut into a rubble mound.
+   *
+   * The jambs and lintel were three `roughBox` slabs against a squashed sphere.
+   * A portal is read from its **depth** — the reveal, the relieving arch over
+   * the lintel and the shadow inside — and from the *approach*, because a hole
+   * in a hill that nobody has worn a path to is scenery, not an entrance.
+   */
   _dungeon(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.35, 1.35, 1.35]);
@@ -1705,20 +1918,43 @@ export class PoiKits {
     // the mound the portal is cut into
     put(M.dark, new THREE.SphereGeometry(9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
       [0, -0.6, -4], [0, 0, 0], [1, 0.62, 1]);
-    for (const sx of [-2.4, 2.4]) {
-      put(M.stone, roughBox(sx > 0 ? 7 : 8, 1.3, 5.4, 1.6, 0.04), [sx, 2.7, 0.5]);
+
+    const b = bag();
+    const tv = toneVariant(rng, { valueAmp: 0.12, warmAmp: 0.05 });
+    // Jambs: three courses each, stepping *forward* as they rise, so the head
+    // corbels out over the opening and throws a shadow onto the reveal.
+    for (const sx of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        b.shell.push(box(1.35 + k * 0.1, 1.9, 1.7 + k * 0.22, {
+          x: sx * (2.4 - k * 0.04), y: 0.95 + k * 1.9, z: 0.5 + k * 0.11, arris: 0.07,
+        }));
+      }
     }
-    put(M.stone, roughBox(9, 6.6, 1.3, 2.0, 0.04), [0, 5.9, 0.5]);
-    put(M.stone, roughBox(10, 7.4, 0.7, 2.6, 0.05), [0, 6.85, 0.5]);
-    put(M.void, new THREE.BoxGeometry(3.6, 5.0, 0.3), [0, 2.5, 0.2]);
-    put(M.runeface, new THREE.PlaneGeometry(2.6, 0.9), [0, 5.9, 1.55]);
+    b.shell.push(box(6.9, 1.2, 2.35, { y: 6.3, z: 0.72, arris: 0.08 }));      // lintel
+    b.shell.push(box(7.7, 0.72, 2.9, { y: 7.25, z: 0.78, arris: 0.07 }));     // relieving course
+    b.trim.push(box(8.1, 0.18, 3.2, { y: 7.68, z: 0.8, arris: 0.04 }));        // capping
+    b.trim.push(box(7.9, 0.07, 0.07, { y: 7.5, z: 2.3 }));                     // drip lip
+    // Reveal: a lining set back inside the jambs, which is what gives the mouth
+    // its depth. Without it the doorway is a dark rectangle painted on rock.
+    for (const sx of [-1, 1]) b.trim.push(box(0.22, 5.1, 1.5, { x: sx * 1.78, y: 2.55, z: -0.2, arris: 0.03 }));
+    b.trim.push(box(3.8, 0.22, 1.5, { y: 5.1, z: -0.2, arris: 0.03 }));
+    // Threshold and two worn steps up to it.
+    for (let k = 0; k < 2; k++) b.shell.push(box(5.4 - k * 0.6, 0.3, 1.3, { y: 0.15 + k * 0.3, z: 2.3 + k * 1.2, arris: 0.05 }));
+
+    const merged = mergeBag(b);
+    for (const [role, g] of Object.entries(merged)) {
+      bakeTone(g, { y0: 0, y1: 8, grime: 0.62, bleach: 1.02, jitter: tv.jitter, tint: tv.tint, streak: 0.22 });
+      put(role === 'trim' ? M.concrete : M.stone, g, [0, 0, 0]);
+    }
+    put(M.void, new THREE.BoxGeometry(3.6, 5.0, 0.3), [0, 2.5, -0.5]);
+    put(M.runeface, new THREE.PlaneGeometry(2.6, 0.9), [0, 6.3, 1.92]);
     // braziers and spill
-    for (const sx of [-3.6, 3.6]) {
+    for (const sx of [-3.9, 3.9]) {
       put(M.dark, new THREE.CylinderGeometry(0.42, 0.3, 1.0, 8), [sx, 0.5, 2.4]);
       put(M.hot, new THREE.SphereGeometry(0.36, 8, 6), [sx, 1.15, 2.4]);
     }
-    for (let i = 0; i < 12; i++) {
-      const a = rng.range(-1.6, 1.6), d = rng.range(3, 9);
+    for (let i = 0; i < 14; i++) {
+      const a = rng.range(-1.7, 1.7), d = rng.range(3, 9);
       put(M.stone, new THREE.DodecahedronGeometry(rng.range(0.25, 0.95), 0),
         [Math.sin(a) * d, 0.2, Math.cos(a) * d + 1], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]);
     }
