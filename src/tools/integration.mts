@@ -62,6 +62,10 @@ await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?
 
 const results = await page.evaluate(async () => {
   const g = window.GAME;
+  // Hoisted so the probes below can stay synchronous: `probe` calls its fn
+  // without awaiting, so a probe that returned a promise would silently pass.
+  const worldMap = (await import('/world/map/WorldMap.ts')).worldMap;
+  const bestiary = (await import('/characters/enemies/Bestiary.ts')).BESTIARY;
   /** One probe's verdict. `WIRED` is "the system is there but idle". */
   interface Row { area: string; name: string; status: 'PASS' | 'WIRED' | 'FAIL'; evidence: string }
   const out: Row[] = [];
@@ -132,6 +136,27 @@ const results = await page.evaluate(async () => {
     return all.length
       ? P(`${all.length} stacks carried (${cur.length} curative), gil ${gil}`)
       : F('bag is empty');
+  });
+
+  // Camping is the loop the day cycle hangs off, and a loop needs a supply
+  // line. Fourteen of the 28 ingredients `RECIPE_TABLE` calls for had no source
+  // anywhere in the game — no drop, no shelf — so 24 of the 30 recipes could
+  // never be cooked, Cup Noodles among them. This fails if that comes back.
+  probe('rpg', 'every recipe can be restocked', () => {
+    const rpg = g.get('Rpg')!;
+    const source = new Set<string>();
+    for (const s of Object.values(rpg.tables.shops)) for (const id of s.stock) source.add(id);
+    for (const def of Object.values(bestiary)) for (const d of def.drops ?? []) source.add(d.id);
+    // Deliberately earned rather than bought: the rank-10 recipe's one
+    // ingredient is the Adamantoise's drop.
+    const EARNED = new Set(['adamantite']);
+    const recipes = Object.values(rpg.tables.recipes);
+    const blocked = recipes.filter((r) => r.ingredients.some((i) => !source.has(i.id) && !EARNED.has(i.id)));
+    const orphans = new Set<string>();
+    for (const r of blocked) for (const i of r.ingredients) if (!source.has(i.id) && !EARNED.has(i.id)) orphans.add(i.id);
+    return blocked.length === 0
+      ? P(`${recipes.length} recipes, every ingredient buyable or dropped`)
+      : F(`${blocked.length}/${recipes.length} recipes unreachable; no source for ${[...orphans].join(', ')}`);
   });
 
   probe('rpg', 'save + load round-trips', () => {
@@ -229,6 +254,48 @@ const results = await page.evaluate(async () => {
       : W(`${n} registered but none selected at the anchor`);
   });
 
+  // The probe above asks whether *something* is selected, which is how it went
+  // on passing while standing at the hunt board selected Cindy Aurum. This one
+  // asks whether the thing you walked up to is the thing you get: `_pick` scored
+  // priority at ten times the weight of distance and facing combined, so Dave —
+  // 1.8 m from the board and one priority step above it — took every press
+  // aimed at the bounty board from any angle but dead-on.
+  probe('world', 'walking up to a thing selects that thing', () => {
+    const ix = g.get('Interaction')!; const player = g.get('Player')!;
+    const terrain = g.get('Terrain')!;
+    const items = [...ix.items.values()];
+    if (!items.length) return F('nothing registered');
+    const missed: string[] = [];
+    for (const it of items) {
+      // 2.2 m out on the diagonal, facing the anchor: a normal walk-up, not a
+      // laboratory approach down one axis.
+      const ax = it.pos.x + 1.55, az = it.pos.z + 1.55;
+      const ay = terrain.heightAt(ax, az);
+      player.root.position.set(ax, ay, az);
+      player.heading = Math.atan2(it.pos.x - ax, it.pos.z - az);
+      player.root.rotation.y = player.heading;
+      // The camera has to come too. `Npcs.update` LODs out past 85 m and stops
+      // writing the talk anchors, so with the camera left behind every NPC
+      // anchor stays wherever it was last written and three of them collapse
+      // onto one another. That is a harness artefact -- in play the camera is
+      // always on the player -- but it reads exactly like a picker bug.
+      g.camera.position.set(ax + 4, ay + 3, az + 4);
+      g.camera.lookAt(it.pos.x, ay + 1.2, it.pos.z);
+      ix.current = null;
+      for (let i = 0; i < 8; i++) {
+        player.root.position.set(ax, ay, az);
+        step(1);
+      }
+      // `ix.current = null` above narrows the field to `null`, so read it back
+      // through the registry rather than fighting the narrowing.
+      const gotId = ix.current ? (ix.current as { id: string }).id : null;
+      if (gotId !== it.id) missed.push(`${it.id}->${gotId ?? 'nothing'}`);
+    }
+    return missed.length === 0
+      ? P(`all ${items.length} selectable from a 2.2 m diagonal walk-up`)
+      : F(`${missed.length}/${items.length} unreachable: ${missed.slice(0, 6).join(', ')}`);
+  });
+
   /**
    * The probe above proves a prompt is *offered*. This one proves it can be
    * *taken*, which is a different claim and the one that was false: `KeyE` was
@@ -285,6 +352,22 @@ const results = await page.evaluate(async () => {
     const n = npcs.list?.length ?? 0;
     return town && n ? P(`town at (${Math.round(town.origin?.x)},${Math.round(town.origin?.z)}), ${n} NPCs`)
       : F('town or npcs empty');
+  });
+
+  // The pin and the buildings drifted 516 m apart and nothing noticed for
+  // months: `Hammerhead.ts` builds on an `Ecology` site while the POI inherited
+  // its position from a road node half a kilometre west. Every quest waypoint,
+  // the compass, the minimap and fast travel read the POI. This turns that
+  // silent drift into a red gate.
+  probe('world', 'the Hammerhead pin is on the Hammerhead town', () => {
+    const town = g.get('Town')!;
+    const poi = worldMap.poiById('hammerhead');
+    if (!poi || !town?.origin) return F('no POI or no town origin');
+    const d = Math.hypot(poi.x - town.origin.x, poi.z - town.origin.z);
+    const msg = `pin (${poi.x},${poi.z}) vs town (${Math.round(town.origin.x)},${Math.round(town.origin.z)}) = ${d.toFixed(0)} m`;
+    // 60 m is inside the town's own footprint: close enough that the compass
+    // points at buildings and fast travel lands on the apron.
+    return d <= 60 ? P(msg) : F(msg);
   });
 
   /* --------------------------------------------------------- regalia ---- */

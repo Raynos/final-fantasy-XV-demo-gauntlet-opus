@@ -557,15 +557,54 @@ const results = await page.evaluate(async () => {
     combat.drawSlot(0); step(2);
     pin(spawnAhead('sabertusk'));
     document.querySelectorAll<HTMLElement>('.dmg').forEach((n) => n.remove());
+    // Sample every frame rather than only at the end. A floating number lives
+    // 1.05 s (1.35 s for a crit) and the hold is 1.5 s, so reading the DOM once
+    // afterwards asked whether the number was still on screen, not whether it
+    // was ever drawn — and answered "no" whenever the swing landed early. That
+    // is a stopwatch, not a wire check.
     let last = 0;
-    const off = combat.on('damage', (d: { source?: string, damage: number }) => { if (!d.source) last = d.damage; });
-    holdMouse(0, 90);
-    step(2);
+    const seen = new Set<number>();
+    const events: number[] = [];
+    const off = combat.on('damage', (d: { source?: string, damage: number }) => {
+      if (!d.source) { last = d.damage; events.push(d.damage); }
+    });
+    mouseDown(0);
+    for (let i = 0; i < 90; i++) {
+      step(1);
+      for (const n of document.querySelectorAll<HTMLElement>('.dmg .dv')) seen.add(Number(n.textContent.replace(/,/g, '')));
+    }
+    mouseUp(0); step(1);
+    for (const n of document.querySelectorAll<HTMLElement>('.dmg .dv')) seen.add(Number(n.textContent.replace(/,/g, '')));
     off();
+    const missed = events.filter((d) => !seen.has(d));
+    if (!events.length) return F('the player landed no hits in 1.5 s of held attack');
+    return !missed.length
+      ? P(`${events.length} player hits, every one drawn (last ${last}; ${seen.size} numbers seen)`)
+      : F(`hits [${events.join(',')}] but [${missed.join(',')}] never reached the HUD; drawn [${[...seen].join(',')}]`);
+  });
+
+  // The number the player is most likely to be looking at is the one on the
+  // opening hit of a fight, and that is the one the HUD used to eat: the combat
+  // layer's "rewind the stand-in" edge fired on the same frame and cleared the
+  // array. The check above cannot see it, because by then the layer is already
+  // up — so drive the edge deliberately.
+  check('the opening hit of a fight still prints its number', () => {
+    clearField();
+    const e = pin(spawnAhead('sabertusk'));
+    combat.drawSlot(0); step(2);
+    document.querySelectorAll<HTMLElement>('.dmg').forEach((n) => n.remove());
+    hud.combat.numbers.length = 0;
+    // put the combat layer back down, so the next frame is its rising edge
+    hud.combatA = 0;
+    hud.combat._wasActive = false;
+    window.dispatchEvent(new CustomEvent('combat:damage', {
+      detail: { enemy: e, damage: 1234, position: e.centre(), crit: false },
+    }));
+    step(1);
     const nodes = [...document.querySelectorAll<HTMLElement>('.dmg .dv')].map((n) => Number(n.textContent.replace(/,/g, '')));
-    return nodes.length && nodes.includes(last)
-      ? P(`${nodes.length} floating numbers, last event ${last} present`)
-      : F(`numbers ${nodes.join(',')} vs event ${last}`);
+    return nodes.includes(1234)
+      ? P(`1234 survived the combat layer coming up (${nodes.length} on screen)`)
+      : F(`opening number wiped by the layer's rising edge; on screen [${nodes.join(',')}]`);
   });
 
   check('Armiger gauge on the HUD reads the earned value', () => {

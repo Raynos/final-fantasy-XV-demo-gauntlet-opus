@@ -192,7 +192,7 @@ export class CombatBridge {
       level: e.level,
       expClass: e.expClass,
       drops: e.type?.drops || [],
-    }, { byWarpStrike: now <= this._warpUntil });
+    }, { byWarpStrike: now <= this._warpUntil, hunt: e.hunt });
   }
 
   /**

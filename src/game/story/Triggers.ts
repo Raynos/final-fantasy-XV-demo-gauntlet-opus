@@ -1,4 +1,5 @@
 import { PLACES, REGION_CARDS } from './Chapters.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
 import type { Game } from '../Game.ts';
 import type { AreaCard, Place } from './Chapters.ts';
 import type { EcoSite } from '../../world/props/EcoSites.ts';
@@ -133,14 +134,35 @@ export class Triggers {
   }
 
   /**
-   * The region a world position belongs to. This world is Leide; the other two
-   * exist so the plumbing is real rather than a stub, and so a later agent
-   * adding Duscae terrain gets region cards for free.
+   * The region a world position belongs to, asked of the map rather than
+   * guessed from three thresholds.
+   *
+   * The thresholds were written for the 3 km world: `z < -640` meant Cleigne.
+   * The world is 8 km now, so standing on Cotisse Haven at (962, -712) -- a
+   * haven `WorldMap` puts in the Longwythe zone of Leide, 700 m from the car --
+   * announced **"CLEIGNE / The Vesperpool Road"** across the screen while the
+   * minimap in the corner said LONGWYTHE / LEIDE. Two bits of HUD contradicting
+   * each other, in the same frame, about where the player is standing.
+   *
+   * `worldMap.regionAt` resolves through the same zone ellipses the minimap,
+   * the world map screen and the terrain biome blend all read, so the card and
+   * the compass cannot disagree again.
    */
   regionAt(pos: { x: number, z: number }) {
-    if (pos.z > 520 || pos.x < -700) return 'duscae';
-    if (pos.z < -640) return 'cleigne';
-    return 'leide';
+    return worldMap.regionAt(pos.x, pos.z)?.id ?? 'leide';
+  }
+
+  /**
+   * The card a region change shows. Named from the live map -- the region for
+   * the headline, the *zone* for the sub-line -- so it says "Leide / Longwythe"
+   * where the minimap says LONGWYTHE, falling back to the authored table for a
+   * region the map does not know.
+   */
+  regionCard(id: string, pos: { x: number, z: number }): AreaCard | undefined {
+    const region = worldMap.regionAt(pos.x, pos.z);
+    const zone = worldMap.zoneAt(pos.x, pos.z);
+    if (!region) return REGION_CARDS[id];
+    return { name: region.name, sub: zone ? zone.name : region.sub, meta: 'Kingdom of Lucis' };
   }
 
   /**
@@ -174,7 +196,7 @@ export class Triggers {
     if (r !== this.region) {
       const from = this.region;
       this.region = r;
-      this._match('region', { id: r, from, card: REGION_CARDS[r] }, fire);
+      this._match('region', { id: r, from, card: this.regionCard(r, pos) }, fire);
     }
 
     // ---- hour -------------------------------------------------------------

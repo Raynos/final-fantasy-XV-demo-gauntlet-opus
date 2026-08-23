@@ -628,7 +628,9 @@ export class EncounterDirector {
       const byWarpStrike = !!(this.combat && this.combat.state === 'warp');
       const res = rpg.enemyKilled(
         { id: e.speciesId, level: e.level, expClass: e.expClass, drops: [] },
-        { byWarpStrike, byTechnique: by === 'tech' }
+        // `hunt` is what lets a mark credit its own hunt when the board's word
+        // for it and the bestiary's key disagree. @see QuestLog.creditMark
+        { byWarpStrike, byTechnique: by === 'tech', hunt: e.hunt }
       );
       exp = res.exp;
       // roll our own drops so they stay on the encounter's seeded RNG

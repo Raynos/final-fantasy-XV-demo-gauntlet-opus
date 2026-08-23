@@ -286,13 +286,29 @@ export class CombatHUD {
   /** @param v 0..1 */
   setArmiger(v: number) { this.armigerVal = clamp(v, 0, 1); this._armigerDriven = true; }
 
-  /** Rewind the stand-in encounter — used by the capture harness between shots. */
-  resetDemo() {
+  /**
+   * Rewind the stand-in beat schedule, and nothing else.
+   *
+   * Split out of {@link resetDemo} because `update` calls it on the frame the
+   * combat layer comes up, and the full reset **wiped the damage number the
+   * player had just earned**. The order is: `CombatSystem` (system 11) emits
+   * `combat:damage`, `HudBridge` turns it into a floating number, and then
+   * `HUD.lateUpdate` runs `update` on the same frame — sees `appear` cross
+   * 0.01 for the first time, and clears the array. So the opening hit of every
+   * fight printed no number, which is precisely the warp-strike the player is
+   * looking at. Measured: one 252 event, `numbers.length` never left 0.
+   */
+  _rewindStandIn() {
     this.mockT = 0; this._beat = 0; this._didCall = false; this.mockEnemies = null;
-    for (const n of this.numbers) this._retire(n);
-    this.numbers.length = 0;
     this.callout = null;
     this.lockAge = 0;
+  }
+
+  /** Rewind the stand-in encounter — used by the capture harness between shots. */
+  resetDemo() {
+    this._rewindStandIn();
+    for (const n of this.numbers) this._retire(n);
+    this.numbers.length = 0;
   }
 
   // ---- per-frame ------------------------------------------------------
@@ -309,7 +325,9 @@ export class CombatHUD {
     // the stand-in encounter only runs while the combat layer is actually up,
     // and rewinds each time a fight starts, so captures land mid-flurry
     const active = appear > 0.01;
-    if (active && !this._wasActive) this.resetDemo();
+    // Rewind the beats, keep the numbers: see `_rewindStandIn`. The harness's
+    // between-shot reset still goes through `HUD.resetDemo`, which clears both.
+    if (active && !this._wasActive) this._rewindStandIn();
     this._wasActive = active;
     // the Armiger/technique rail lives in the shared bottom-left column now, so
     // it has to be collapsed out of the flow explicitly — otherwise it would

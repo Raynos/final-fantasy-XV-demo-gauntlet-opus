@@ -332,7 +332,7 @@ export const POI_TYPES: Record<PoiTypeName, PoiType> = {
 
 /**
  * One named place. `x`/`z` are optional in the *table* -- a POI written with
- * `at: 'n_hammerhead'` inherits its position from that road node at load, so a
+ * `at: 'n_longwythe'` inherits its position from that road node at load, so a
  * settlement can never drift off the road that serves it -- and are filled in
  * before anything reads them.
  */
@@ -371,7 +371,16 @@ export interface Poi extends PoiSpec {
 
 export const POIS: PoiSpec[] = [
   // ============================== LEIDE ==============================
-  { id: 'hammerhead', name: 'Hammerhead', type: 'town', zone: 'longwythe', at: 'n_hammerhead', r: 210, travel: true, lv: 1,
+  // Authored `x`/`z` rather than `at: 'n_hammerhead'` on purpose. `Hammerhead.ts`
+  // builds the town on `Ecology`'s `reststop` site -- `beside('reststop', 44, 1, 34, 26)`,
+  // which resolves to (576, 10), 34 m off the Route 1 shoulder. The road node
+  // `n_hammerhead` sits at (60, 18), 516 m west, so the pin, the minimap, the
+  // compass and every quest waypoint that named Hammerhead pointed half a
+  // kilometre from the diner they meant. The town is built geometry with props,
+  // roads, NPC anchors and the caravan seated against it; the pin was one record.
+  // Moving the pin is the one-line half of that pair. Keep this in step with
+  // `Ecology._layoutSites` if the reststop site ever moves.
+  { id: 'hammerhead', name: 'Hammerhead', type: 'town', zone: 'longwythe', x: 576, z: 10, r: 210, travel: true, lv: 1,
     does: 'Garage, diner, fuel, weapon shop, hunt board. Cid, Cindy, Takka, Dave.', gate: null },
   { id: 'hammerhead_layby', name: 'Hammerhead Parking', type: 'parking', zone: 'longwythe', x: 246, z: 52, r: 46, travel: true, lv: 1,
     does: 'Park the Regalia. The road trip begins and ends on this apron.', gate: null },
@@ -847,8 +856,10 @@ export class WorldMap {
 
     this.roadGraph = new RoadGraph(NODES, ROUTES, ROAD_CLASS);
 
-    // A POI written as `at: 'n_hammerhead'` inherits the road node's position,
-    // so a settlement can never drift off the road that serves it.
+    // A POI written as `at: 'n_longwythe'` inherits the road node's position,
+    // so a settlement can never drift off the road that serves it. Hammerhead is
+    // the exception and says why at its own record: its town is built from an
+    // Ecology site, not from a node.
     for (const p of POIS) {
       if (p.at) {
         const nd = this.roadGraph.nodes.get(p.at);

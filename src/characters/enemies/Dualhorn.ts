@@ -50,6 +50,11 @@ export const DUALHORN = {
   drops: [
     { id: 'dualhorn_horn', chance: 0.5, count: 1 },
     { id: 'beast_hide', chance: 0.4, count: 1 },
+    // `side_meat_magnificent` reads "Hunt a pair of Dualhorns" then "Recover
+    // the steaks", and nothing in the world dropped a steak -- the only source
+    // of `dualhorn_steak` was `hunt_dualhorn`'s reward bundle, a different
+    // quest entirely. Takka wants a cut of dualhorn; a dualhorn now carries one.
+    { id: 'dualhorn_steak', chance: 0.45, count: 1 },
   ],
   timing: { telegraph: 0.7, strike: 0.26, attack: 0.8, recover: 1.0 },
   attacks: [

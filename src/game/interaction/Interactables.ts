@@ -257,8 +257,24 @@ export class InteractionSystem {
         if (cos < limit) continue;
         facing = (cos - limit) / (1 - limit + 1e-4);
       }
-      // Lower is better. Priority dominates; distance and facing break ties.
-      const score = -item.priority * 10
+      // Lower is better. The doc on `priority` says "higher wins a tie;
+      // distance and facing break the rest", and this line used to say the
+      // opposite: `-priority * 10` against a distance term that spans 1.0 and a
+      // facing term that spans 0.35, so a priority step could never be closed
+      // by standing closer or looking straight at something.
+      //
+      // What that cost: Dave stands 1.8 m from the Hammerhead hunt board and is
+      // priority 3 to the board's 2, so **the board was unreachable** from every
+      // approach except dead-on frontal, where Dave happens to fall outside his
+      // own cone. Walk up to the bounty board at any angle and you talked to
+      // Dave instead. Measured with `src/tools/probes/reachall.mts`: 1/12 of the
+      // Hammerhead cluster missed on a 45-degree approach, and it was that one.
+      //
+      // 0.3 is under the 1.35 the other two terms span, so priority now decides
+      // only when distance and facing are close — which is the intent it was
+      // written for: a person standing at a counter beats the counter, and does
+      // not beat the counter you are pressed against.
+      const score = -item.priority * 0.3
         + (d / reach) * 1.0
         - facing * 0.35
         - (incumbent ? 0.22 : 0);

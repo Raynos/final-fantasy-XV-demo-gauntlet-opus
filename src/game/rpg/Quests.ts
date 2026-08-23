@@ -98,11 +98,17 @@ export type HuntRank = keyof typeof HUNT_RANKS;
  * the quest moves with it. An unknown id throws at load rather than silently
  * pointing at the origin — a wrong waypoint is exactly the kind of thing that
  * survives for months otherwise.
+ *
+ * `dx`/`dz` nudge the marker off the pin, which matters more than it sounds: a
+ * landmark's pin is its *centre*, and several of them are centred on the thing
+ * that makes them a landmark. `three_valleys` sits on a hogback at a 0.48
+ * gradient and `alstor_slough` sits in sixteen metres of water. A fight has to
+ * happen somewhere a party can stand.
  */
-const at = (poiId: string): number[] => {
+const at = (poiId: string, dx = 0, dz = 0): number[] => {
   const p = worldMap.poiById(poiId);
   if (!p) throw new Error(`Quests: waypoint anchored to unknown POI "${poiId}"`);
-  return [p.x, 0, p.z];
+  return [p.x + dx, 0, p.z + dz];
 };
 
 const kill  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'kill', target, count, desc, waypoint });
@@ -251,7 +257,9 @@ const QUEST_TABLE: Quest[] = [
     summary: 'Insomnia has fallen. Cor Leonis leads you to the tomb of the Wise.',
     objectives: [
       reach('trench', 'keycatrich_trench', 'Meet Cor at Keycatrich Trench', at('keycatrich_trench'), 20),
-      kill('mts', 'magitek_trooper', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
+      // The bestiary key is `mt`; `magitek_trooper` matched nothing, so this
+      // objective -- and `side_power_play`'s below -- could never tick.
+      kill('mts', 'mt', 8, 'Clear the imperial patrol', at('keycatrich_ruins')),
       fetch_('sword', 'sword_wise', 1, 'Claim the Sword of the Wise', at('tomb_wise')),
     ],
     rewards: { gil: 1200, exp: 4000, ap: 25, items: [{ id: 'sword_wise', count: 1 }], unlocks: ['armiger'] },
@@ -303,7 +311,9 @@ const QUEST_TABLE: Quest[] = [
     region: 'leide', level: 5, rank: 1, tipster: 'longwythe', requires: [], autoAvailable: true,
     target: 'Sabertusk Pack', timeOfDay: 'any',
     summary: 'A pack has taken to running down anything on two legs between the outposts.',
-    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', at('three_valleys'))],
+    // 200 m south of the pin: the pin is on the hogback between the washes
+    // (gradient 0.48) and the wash floor behind it is flat.
+    objectives: [kill('tusks', 'sabertusk', 12, 'Cull the Sabertusk pack', at('three_valleys', 0, 200))],
     rewards: { gil: 1100, exp: 1400, ap: 15, items: [{ id: 'sabertusk_fang', count: 3 }, { id: 'hi_potion', count: 2 }] },
   },
   {
@@ -319,7 +329,10 @@ const QUEST_TABLE: Quest[] = [
     region: 'duscae', level: 11, rank: 2, tipster: 'prairie', requires: [],
     target: 'Voretooth Pack', timeOfDay: 'any',
     summary: 'Something is taking the Prairie Outpost\'s goats. It is not subtle about it.',
-    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', at('alstor_slough'))],
+    // Not `alstor_slough`: that pin is the middle of the lake, sixteen metres
+    // under the water plane, and `spawnHunt` would have grounded ten voretooth
+    // on the lake bed. The Coernix station on its shore is dry.
+    objectives: [kill('vore', 'voretooth', 10, 'Hunt down the Voretooth pack', at('coernix_alstor'))],
     rewards: { gil: 2800, exp: 4200, ap: 15, items: [{ id: 'voretooth_tail', count: 3 }, { id: 'debased_silver', count: 4 }] },
   },
   {
@@ -473,7 +486,7 @@ const QUEST_TABLE: Quest[] = [
     summary: 'The Exineris plant is losing pressure and Holly suspects sabotage.',
     objectives: [
       talk('holly', 'holly', 'Meet Holly at the power plant', at('exineris')),
-      kill('mts', 'magitek_trooper', 12, 'Clear the intruders from the substation', at('exineris')),
+      kill('mts', 'mt', 12, 'Clear the intruders from the substation', at('exineris')),
       fetch_('relay', 'imperial_relay', 1, 'Recover the imperial relay unit'),
     ],
     rewards: { gil: 6000, exp: 9000, ap: 20, items: [{ id: 'magitek_suit', count: 1 }] },
@@ -640,6 +653,29 @@ export interface QuestSave {
  * Live quest state. Emits `quest-updated` for every transition and objective
  * tick, with `{ quest, status, phase, objective? }`.
  */
+/**
+ * How the log asks the world what is already true.
+ *
+ * Two objective kinds describe a *state* rather than an event: `fetch` ("have
+ * three Rusted Bits") and `quest` ("have finished a bounty"). An event-only
+ * log gets both of them wrong. It printed `Collect Rusted Bits 0/3` with three
+ * in the bag, because the only `notify('fetch')` in the whole repo is Cid's
+ * hand-over line; and `The Pauper Prince` was unfinishable from the first
+ * frame, because the seeded save completes `hunt_killer_wasps` *before* it
+ * accepts the quest whose second objective is "complete a bounty", so the
+ * `notify('quest')` that would have ticked it fired into an inactive quest and
+ * was gone for good.
+ *
+ * `RpgSystem` supplies this at construction; without it the log behaves as it
+ * did before, which is what keeps `QuestLog` unit-testable on its own.
+ */
+export interface Holdings {
+  /** How many of an item id the party is carrying. */
+  bag: (itemId: string) => number;
+  /** The wallet, for `gil:N` targets. */
+  gil: () => number;
+}
+
 export class QuestLog {
   /** Runtime state per quest id. One entry per row of `QUEST_TABLE`. */
   states!: Record<string, QuestState>;
@@ -647,6 +683,8 @@ export class QuestLog {
   emitter!: Emitter | null;
   flags!: Set<string>;
   hunterPoints!: number;
+  /** @see Holdings — null until a `RpgSystem` wires one in. */
+  holdings: Holdings | null = null;
   constructor(emitter: import('./Emitter.ts').Emitter | null = null) {
     this.emitter = emitter;
     this.states = {};
@@ -748,7 +786,93 @@ export class QuestLog {
     st.startedAt = Date.now();
     if (!this.tracked) this.tracked = id;
     this.emitter?.emit('quest-updated', { quest: q, status: 'active', phase: 'accepted' });
+    // Anything the quest asks for that the player already has, or has already
+    // done, counts from the moment it goes active. @see settle
+    this.settle(id);
     return { ok: true, quest: this.view(id) };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Standing state: objectives that describe a fact, not an event       */
+  /* ------------------------------------------------------------------ */
+
+  /** Objectives complete in order, so an earlier unfinished one blocks. */
+  _blocked(st: QuestState, i: number) {
+    return st.objectives.slice(0, i).some((p) => !p.done);
+  }
+
+  /**
+   * Raise one objective's progress and fire the transition if it lands.
+   *
+   * Progress only ever rises. Selling a Lucian tomato does not un-collect it,
+   * and every hand-over line checks the bag itself before it takes anything —
+   * so a monotonic log cannot hand out a reward for goods the player no longer
+   * has, and cannot flicker an objective back open behind the player's back.
+   *
+   * @returns true if anything moved
+   */
+  _raise(q: Quest, i: number, value: number) {
+    const os = this.states[q.id].objectives[i];
+    const o = q.objectives[i];
+    const next = Math.min(o.count, Math.max(os.progress, value));
+    if (next <= os.progress && os.done) return false;
+    const moved = next !== os.progress;
+    os.progress = next;
+    if (next >= o.count && !os.done) {
+      os.done = true;
+      this.emitter?.emit('quest-updated', { quest: q, status: 'active', phase: 'objective', objective: { ...o, ...os } });
+      return true;
+    }
+    return moved;
+  }
+
+  /**
+   * Bring one active quest's standing objectives up to date with the world.
+   *
+   * Walks the objectives in order and stops at the first one it cannot satisfy,
+   * because a later objective is not reachable past an unfinished earlier one
+   * anyway. Handles the two kinds that describe a state:
+   *
+   * - `fetch` — `gil:N` against the wallet, anything else against the bag
+   * - `quest` — satisfied if the named quest is already complete
+   *
+   * Called on `accept`, after every `notify` that moved something, and by
+   * `RpgSystem` whenever the bag or the wallet changes.
+   *
+   * @returns true if anything moved
+   */
+  settle(id: string) {
+    const q = QUESTS[id];
+    const st = this.states[id];
+    if (!q || !st || st.status !== 'active') return false;
+    let moved = false;
+    for (let i = 0; i < q.objectives.length; i++) {
+      if (st.objectives[i].done) continue;
+      if (this._blocked(st, i)) break;
+      const o = q.objectives[i];
+      let have = -1;
+      if (o.type === 'quest') have = this.states[o.target]?.status === 'complete' ? o.count : 0;
+      else if (o.type === 'fetch' && this.holdings) {
+        const [kind, arg] = String(o.target).split(':');
+        have = kind === 'gil'
+          ? (this.holdings.gil() >= Number(arg) ? o.count : 0)
+          : this.holdings.bag(o.target);
+      }
+      if (have < 0) break;              // not a standing objective; stop here
+      if (this._raise(q, i, have)) moved = true;
+      if (!st.objectives[i].done) break;
+    }
+    if (moved && st.objectives.every((o) => o.done)) this.complete(id);
+    return moved;
+  }
+
+  /** {@link settle} over every active quest. */
+  settleAll() {
+    let moved = false;
+    for (const q of QUEST_TABLE) {
+      if (this.states[q.id].status === 'active' && this.settle(q.id)) moved = true;
+    }
+    return moved;
   }
 
   /** Drop an active quest back to available. */
@@ -814,10 +938,48 @@ export class QuestLog {
 
       if (touched) {
         changed.push(q.id);
-        if (st.objectives.every((o) => o.done)) this.complete(q.id);
+        // Finishing one objective can unblock a standing one behind it: talking
+        // to Takka is what lets "complete a bounty" see the bounty already in
+        // the ledger. `settle` may finish the quest, so ask it first.
+        if (!this.settle(q.id) && st.objectives.every((o) => o.done)) this.complete(q.id);
       }
     }
     return changed.map((id) => this.view(id)).filter((v): v is QuestView => v != null);
+  }
+
+  /**
+   * Credit a kill to one hunt, whatever the corpse was called.
+   *
+   * A hunt's mark is spawned by `HuntRuntime` from `HUNT_TARGETS`, which names
+   * a *bestiary key*, while the objective names the mark the way the board
+   * words it. Six of the twelve hunts disagree — `hunt_naga` spawns an
+   * `arachne`, `hunt_zu` spawns a renamed `bandersnatch`, `hunt_adamantoise`
+   * spawns a `titan`, and `hunt_garulessa`, `hunt_iron_giant` and
+   * `hunt_killer_wasps` all miss by a word — so `notify('kill', speciesId)`
+   * matched nothing and **those six hunts could never be completed**. The
+   * player killed the thing the board sent them to kill and the board did not
+   * notice.
+   *
+   * Renaming the objectives to bestiary keys would fix the six and lose the
+   * copy ("Slay Deadeye" is not "kill a bloodhorn"), and would still break the
+   * next time a mark is reskinned. A mark is a mark: if this enemy was spawned
+   * *for* this hunt, its death counts towards it.
+   *
+   * The caller only reaches here when the ordinary species notify did not
+   * already credit this quest, so a matching hunt cannot be paid twice.
+   *
+   * @param questId the hunt the dead mark belonged to
+   * @returns true if an objective moved
+   */
+  creditMark(questId: string, count = 1) {
+    const q = QUESTS[questId];
+    const st = this.states[questId];
+    if (!q || !st || st.status !== 'active') return false;
+    const i = q.objectives.findIndex((o, k) => o.type === 'kill' && !st.objectives[k].done);
+    if (i < 0 || this._blocked(st, i)) return false;
+    if (!this._raise(q, i, st.objectives[i].progress + count)) return false;
+    if (!this.settle(questId) && st.objectives.every((o) => o.done)) this.complete(questId);
+    return true;
   }
 
   /** Force an objective complete (debug / cutscene shortcuts). */
