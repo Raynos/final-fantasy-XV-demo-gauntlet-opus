@@ -12,37 +12,13 @@
  *
  *   node src/tools/uxcheck.mts
  */
-import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
 import path from 'node:path';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5178, ROOT);
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'],
-    { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
-  const deadline = Date.now() + 90000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 const results: Array<{ name: string, pass: boolean, note: string }> = [];
 const ok = (name: string, pass: unknown, note = '') => {
@@ -50,15 +26,14 @@ const ok = (name: string, pass: unknown, note = '') => {
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${note ? `  — ${note}` : ''}`);
 };
 
-const server = await ensureServer();
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+const ha = harnessArgs(process.argv.slice(2), { q: 'low', play: true });
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const pageErrors: string[] = [];
 page.on('pageerror', (e) => pageErrors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 200)); });
 
-await page.goto(`http://127.0.0.1:${PORT}/?q=low`, { waitUntil: 'domcontentloaded', timeout: 300000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
 await page.evaluate(() => { document.getElementById('boot')?.remove(); });
 
 // Drive the sim from the test rather than rAF, so every assertion is taken on a
@@ -422,8 +397,7 @@ ok('no keyboard binding is claimed by two systems in the same mode',
 
 ok('no page errors', pageErrors.length === 0, pageErrors.slice(0, 4).join(' | '));
 
-await browser.close();
-if (server) server.kill();
+await leased.release();
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

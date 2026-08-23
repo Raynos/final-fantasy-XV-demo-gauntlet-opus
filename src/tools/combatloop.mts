@@ -11,49 +11,20 @@
  *
  *   node src/tools/combatloop.mts
  */
-import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import type { DownedState } from '../game/encounters/Downed.ts';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5199, ROOT);
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'],
-    { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
-const server = await ensureServer();
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const ha = harnessArgs(process.argv.slice(2), { q: 'low', w: 1280, h: 720 });
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const pageErrors: string[] = [];
 page.on('pageerror', (e) => pageErrors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text().slice(0, 200)); });
 
-await page.goto(`http://127.0.0.1:${PORT}/?q=low&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 300000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
-await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
 const results = await page.evaluate(async () => {
   const g = window.GAME;
@@ -691,8 +662,7 @@ const results = await page.evaluate(async () => {
   return out;
 });
 
-await browser.close();
-if (server) server.kill();
+await leased.release();
 
 let pass = 0;
 for (const r of results) {

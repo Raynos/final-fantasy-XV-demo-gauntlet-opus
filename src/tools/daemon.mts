@@ -156,6 +156,26 @@ export interface PageOpts {
   /** Force a fresh page, for a run that must be provably independent. */
   cold?: boolean;
   /**
+   * Boot the game WITHOUT `?shoot=1`, so the render loop runs.
+   *
+   * `main.ts` gates `game.start()` on the absence of `shoot`, which is a hard
+   * determinism gate for captures — a page that free-runs between "ready" and
+   * the harness taking over has advanced TAA history, the exposure integrator
+   * and enemy AI by a nondeterministic amount. `uxcheck` genuinely wants that:
+   * it is testing what a player sees, not what a screenshot contains.
+   *
+   * It is part of page IDENTITY, so a play page and a capture page can never be
+   * confused for one another in the pool.
+   */
+  play?: boolean;
+  /**
+   * Extra query parameters, appended verbatim — `audio=force` and friends.
+   *
+   * Part of page IDENTITY like every other query bit, so a page booted with the
+   * audio graph forced on is never handed to a request that did not ask for it.
+   */
+  extra?: string;
+  /**
    * Serve the production bundle rather than the dev server.
    *
    * Rare and opt-in. It costs a `vite build` per sha and it removes the ability
@@ -825,8 +845,9 @@ function pageKey(build: BuildId, w: number, h: number, query: string, prod = fal
 }
 
 function queryOf(opts: PageOpts): string {
-  const { q = 'ultra', nobake = false, post = '' } = opts;
-  return `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}${post ? `&post=${encodeURIComponent(post)}` : ''}`;
+  const { q = 'ultra', nobake = false, post = '', play = false, extra = '' } = opts;
+  return `?q=${q}${play ? '' : '&shoot=1'}${nobake ? '&nobake=1' : ''}`
+    + `${post ? `&post=${encodeURIComponent(post)}` : ''}${extra ? `&${extra}` : ''}`;
 }
 
 /** Boot a page in a slot, or reuse the one already there. */
@@ -845,7 +866,9 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
       // A resize invalidates every temporal buffer and the post-chain targets.
       await slot.page.evaluate(() => { window.GAME.rnd.resize(); window.GAME.post?.resetHistory?.(); });
     }
-    await resetPage(slot.page);
+    // A play page is handed over RUNNING; stopping it here is the one thing the
+    // tool leasing it does not want.
+    if (!opts.play) await resetPage(slot.page);
     return slot.page;
   }
   if (isDirty(build.id)) build.stamp = build.currentStamp();
@@ -885,7 +908,7 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
   slot.key = key;
   slot.build = build.id;
   slot.viewport = { w, h };
-  await resetPage(page);
+  if (!opts.play) await resetPage(page);
   return page;
 }
 
@@ -1106,8 +1129,19 @@ async function releaseLease(id: string): Promise<void> {
     // it back to about:blank is the whole reset; there is no game state to
     // lose, and keeping the browser is what makes the next image tool free.
     await l.slot.page?.goto('about:blank').catch(() => {});
-  } else {
+  } else if (l.slot.key.includes('shoot=1')) {
     await resetPage(l.slot.page).catch(async () => { await pool.recycle(l.slot); });
+  } else {
+    // A PLAY page is not reset, it is thrown away. It has been driven through
+    // real input for minutes: combat state, quest flags, the day cycle, enemy
+    // AI and the physics broadphase have all moved, and `stop()` + a zeroed
+    // clock puts none of it back. Pooling one would hand the next tool a world
+    // somebody else already played, which is the "plausible and wrong" failure
+    // the reset-drift check exists to catch. Closing the page keeps the
+    // browser, which is the expensive half.
+    if (l.slot.page) { await l.slot.page.close().catch(() => {}); l.slot.page = null; }
+    l.slot.key = '';
+    l.slot.build = null;
   }
   if (pool.slots.includes(l.slot)) pool.release(l.slot);
 }

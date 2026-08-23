@@ -34,21 +34,14 @@
  * stamped `RULER_VALID: false` and exits 3 without certifying anything. See
  * `ruler.mts` for why, and for where it was ported from.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
 import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } from './ruler.mts';
 import type { Floor } from './ruler.mts';
-import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
   const o = {
@@ -72,46 +65,26 @@ function parseArgs(argv: string[]) {
   return o;
 }
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  const server = await ensureServer();
 
   // BEFORE measuring. Everything below is only as good as the machine it ran
   // on, and this is the cheapest thing that says what that machine was.
   const load = printContention();
   console.log('');
 
-  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-  const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
+  const ha = harnessArgs(process.argv.slice(2), { q: 'ultra' });
+  announceBuild(ha);
+  const leased = await lease(pageOpts(ha));
+  const page = leased.page;
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
   let out;
   try {
-    await page.goto(`http://127.0.0.1:${PORT}/?q=${o.q}&shoot=1${o.nobake ? '&nobake=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-    await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
     await page.evaluate(RULER_PAGE_SRC);
 
     const gpu = await page.evaluate(() => {
@@ -327,8 +300,7 @@ async function main() {
       return { results, floorStart, floorEnd, hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25) };
     }, [o.scale, o.hitchMs, o.pairs]);
   } finally {
-    await browser.close();
-    if (server) server.kill();
+    await leased.release();
   }
 
   // The worse of the two floors: a session that started quiet and ended

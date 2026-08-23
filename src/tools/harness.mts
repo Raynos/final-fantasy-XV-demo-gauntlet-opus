@@ -60,6 +60,8 @@ export interface HarnessArgs {
   post: string;
   nobake: boolean;
   prod: boolean;
+  play: boolean;
+  extra: string;
 }
 
 /**
@@ -90,6 +92,8 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
     post: val('ablate', val('post', defaults.post ?? '')),
     nobake: has('nobake'),
     prod: has('prod'),
+    play: defaults.play ?? false,
+    extra: defaults.extra ?? '',
   };
 }
 
@@ -97,7 +101,7 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
 export function pageOpts(a: HarnessArgs): PageOpts {
   return {
     w: a.w, h: a.h, q: a.q, post: a.post, nobake: a.nobake, cold: a.cold,
-    build: a.build, lane: a.lane, agent: a.agent, deadlineMs: a.deadlineMs, prod: a.prod,
+    build: a.build, lane: a.lane, agent: a.agent, deadlineMs: a.deadlineMs, prod: a.prod, play: a.play, extra: a.extra,
   };
 }
 
