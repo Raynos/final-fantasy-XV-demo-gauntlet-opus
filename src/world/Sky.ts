@@ -33,6 +33,33 @@ const SHADOW_RES = { low: 1024, medium: 1536, high: 2048, ultra: 2048 };
 /** Frames between refreshes for each cascade, near to far. */
 const SHADOW_STRIDE = { low: [2, 6, 12], medium: [1, 3, 6], high: [1, 2, 4], ultra: [1, 2, 4] };
 
+/**
+ * The three cascade map sizes for a tier. **The outer two are halved only below
+ * `high`.**
+ *
+ * Halving them everywhere was one of three savings taken together against a
+ * frame time that turned out to be five times too slow: `ruler.mts` was
+ * rendering 20 frames inside one synchronous task and throttling itself, and
+ * the calm frame is 5.4 ms rather than the 23 ms every constant in this file
+ * was sized against.
+ *
+ * The other two savings in that group — the stride, and not rebuilding the maps
+ * for secondary render passes — both save *draw calls*, which is the currency
+ * this renderer is genuinely bound in (`corr(ms, draws) = 0.801`, 8.7 us per
+ * call, `cpu == ms` on all 140 corpus shots). **Resolution is not in that
+ * currency at all**: a cascade at 2048 issues exactly the same draws as one at
+ * 1024, and costs shadow-map fill plus 12 MB of depth.
+ *
+ * What it buys is the mid-distance ground shadow. At 1024 texels across a
+ * ~190 m box the far cascade is ~5 texels per metre, which is why the shadow
+ * under a grove reads as chunky dark blobs rather than as a canopy —
+ * `tmp/shots/before/zone_fallgrove.jpg`. `low` and `medium` keep the halving:
+ * they exist for machines where fill really is the constraint.
+ */
+function cascadeResFor(tier: string, res: number): number[] {
+  return tier === 'low' || tier === 'medium' ? [res, res / 2, res / 2] : [res, res, res];
+}
+
 /** Weather presets. Values are lerped toward, so transitions are continuous. */
 /**
  * Fog is calibrated in *extinction at range*, not in taste units. With
@@ -387,7 +414,7 @@ export class Sky {
     // secondary render passes.
     const tier = (game.rnd && game.rnd.quality) || 'high';
     const res = SHADOW_RES[tier as keyof typeof SHADOW_RES] || SHADOW_RES.high;
-    this.cascadeRes = [res, res / 2, res / 2];
+    this.cascadeRes = cascadeResFor(tier, res);
     // frames between refreshes: near cascade every frame, mid every other,
     // far every fourth. At sprint speed the far cascade drifts 0.7 m across
     // four frames inside a 200 m box — invisible.
@@ -401,9 +428,27 @@ export class Sky {
       camera: game.camera,
       parent: scene,
       cascades: 3,
-      // 260 m put the far cascade's texels on ground that aerial perspective
-      // has already washed out; 190 m keeps every shadow the eye can resolve.
-      maxFar: 190,
+      // **Where the cast shadow stops.**
+      //
+      // It was 190, with the note "260 m put the far cascade's texels on ground
+      // that aerial perspective has already washed out; 190 m keeps every
+      // shadow the eye can resolve." Both halves of that were decided while the
+      // far cascade ran at half resolution *and* while the frame was believed
+      // to cost 23 ms. Neither holds now: cascades 2 and 3 are full resolution
+      // (see {@link cascadeResFor}), so 320 m carries better texel density than
+      // 190 m did before, and the cost of a cascade is not in this renderer's
+      // binding currency at all — `src/tools/probes/shadowfar.mts` measures 484
+      // draw calls at 190 and 484 at 320, because the map size and the split
+      // distance change what a cascade *covers*, never how many times the scene
+      // is submitted.
+      //
+      // What 190 m was actually doing is visible in the graded shots: the
+      // graded frames are elevated establishing shots, so the clearing in the
+      // middle of `zone_fallgrove` sits past 190 m and was rendering as flat
+      // blown-out sand with trees standing on it casting nothing. At 320 m the
+      // same clearing carries raking tree shadows and the ground sits down
+      // under the grove.
+      maxFar: 320,
       // 'custom', not 'practical', so the split can start at the nearest ground
       // the frame actually contains rather than at `camera.near`. See
       // `_splitCascades` — the callback is a practical split with one number
@@ -1069,7 +1114,7 @@ export class Sky {
   setShadowQuality(tier: 'low' | 'medium' | 'high' | 'ultra') {
     if (!this.csm) return;
     const res = SHADOW_RES[tier] || SHADOW_RES.high;
-    this.cascadeRes = [res, res / 2, res / 2];
+    this.cascadeRes = cascadeResFor(tier, res);
     const stride = SHADOW_STRIDE[tier] || SHADOW_STRIDE.high;
     for (let i = 0; i < this.cascadeStride.length; i++) this.cascadeStride[i] = stride[i];
     this.csm.lights.forEach((l, i) => {
