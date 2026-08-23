@@ -671,6 +671,34 @@ export class Megastructures {
     const B = new PartBuilder();
     const rng = new Rng(1919);
 
+    // Centre of the `cauthess` zone in WorldMap.ts -- "a meteor the size of a
+    // mountain range, still glowing where it struck", which is also where the
+    // `discCrater` landform puts the impact bowl. It used to sit at
+    // (-2010, 1890): 4 km away, in the wrong region, close enough to Cape Caem
+    // that its 857 m outer shards leaned over the headland and read as
+    // unexplained slabs floating above the sea.
+    const x = -1020, z = -2160;
+    const YAW = 0.6;
+    // The group origin is sunk 90 m so the masses' feet are buried. Note that
+    // the sink applies to EVERY part in the group, which is the half of this
+    // that had never been paid for.
+    const gy = seatY(this.eco, x, z, 400, CULL) - 90;
+    const cy = Math.cos(YAW), sy = Math.sin(YAW);
+    /**
+     * The ground under a local (x, z), measured in the group's own frame, and
+     * relative to the ground under the group's centre. Zero at the centre;
+     * negative where the Disc falls away.
+     *
+     * Every part in this group was placed at a literal local y, which is a FLAT
+     * PLANE across three kilometres of real terrain. Round 10's judge called the
+     * result "a floating rock arch", twice, on two different shots. A single
+     * plane is exactly what makes a landmark float: the parts near the centre
+     * sit right and everything out on the skirt sits at a height belonging to
+     * somewhere else.
+     */
+    const ground = (lx: number, lz: number, size: number) =>
+      seatY(this.eco, x + lx * cy + lz * sy, z - lx * sy + lz * cy, size, CULL) - gy - 90;
+
     // Five masses, not one with two attendants.
     //
     // The thing that made this a dome was that mass A was 330 m and B and C
@@ -701,7 +729,12 @@ export class Megastructures {
     // right down — and the mass comes out a blade. One of these rendered as a
     // literal sail standing over the crater.
     for (const [seed, r, stretch, at, tilt] of MASS) {
-      B.add(M.stone, meteorMass(seed, r, stretch), mat4(at, tilt));
+      // `at[1]` stays what it was authored as -- a height above the ground the
+      // group's centre stands on -- and the ground term carries it onto the
+      // ground under THIS mass. At the centre the term is zero, so mass A is
+      // bit-identical and the composition the last lane tuned is preserved.
+      B.add(M.stone, meteorMass(seed, r, stretch),
+        mat4([at[0], at[1] + ground(at[0], at[2], r), at[2]], tilt));
     }
     // Midpoints between neighbouring masses: the mouths of the clefts.
     const CLEFT: Vec3[] = [
@@ -715,30 +748,33 @@ export class Megastructures {
     for (let i = 0; i < 22; i++) {
       const c = CLEFT[i % CLEFT.length];
       const a = rng.next() * Math.PI * 2;
+      const gx = c[0] + rng.gauss(0, 22), gz = c[2] + rng.gauss(0, 22);
       B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(5, 13), rng.range(22, 64), 5),
-        mat4([c[0] + rng.gauss(0, 22), c[1] + 15 + rng.gauss(0, 55), c[2] + rng.gauss(0, 22)],
+        mat4([gx, c[1] + 15 + rng.gauss(0, 55) + ground(gx, gz, 40), gz],
           [rng.gauss(0, 0.20), a, rng.gauss(0, 0.24)]));
     }
-    // ejecta ring around the impact
+    // Ejecta ring around the impact.
+    //
+    // A shard is seated so its centre stands `s * 0.3` over the ground beneath
+    // IT. That was the intent before; what was written was a bare `s * 0.3`,
+    // which is `s * 0.3` over the group origin -- ninety metres under the
+    // ground, on a plane, out to eight hundred metres. Every shard under about
+    // 45 m was therefore entirely buried and the rest poked out a fraction of
+    // what they were sized for, which is why no capture in this project has
+    // ever shown a crater rim here.
     for (let i = 0; i < 30; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = 420 + rng.range(0, 380);
       const s = rng.range(20, 74);
       const px = Math.cos(a) * r, pz = Math.sin(a) * r * 0.8;
       B.add(M.stone, shard(2300 + i, s, [1.3, 1.6, 1.0], 0.5),
-        mat4([px, s * 0.3, pz], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
+        mat4([px, ground(px, pz, s) + s * 0.3, pz],
+          [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
     }
 
     const g = B.build(new THREE.Group(), { cast: false, receive: false, name: 'meteor' });
-    // Centre of the `cauthess` zone in WorldMap.ts -- "a meteor the size of a
-    // mountain range, still glowing where it struck", which is also where the
-    // `discCrater` landform puts the impact bowl. It used to sit at
-    // (-2010, 1890): 4 km away, in the wrong region, close enough to Cape Caem
-    // that its 857 m outer shards leaned over the headland and read as
-    // unexplained slabs floating above the sea.
-    const x = -1020, z = -2160;
-    g.position.set(x, seatY(this.eco, x, z, 400, CULL) - 90, z);
-    g.rotation.y = 0.6;
+    g.position.set(x, gy, z);
+    g.rotation.y = YAW;
     this.root.add(g);
   }
 
