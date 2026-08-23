@@ -205,8 +205,46 @@ export class Ecology {
     return this.terrain.erosionAt(x, z, this._ero);
   }
 
-  /** Ground height. */
+  /** Ground height — the analytic surface, at full detail. */
   height(x: number, z: number) { return this.terrain.heightAt(x, z); }
+
+  /**
+   * Ground height for something that is only ever SEEN from far away (§2.6).
+   *
+   * A clipmap lattice cannot carry relief finer than its own spacing, so the
+   * surface actually drawn at 1 km is a low-passed version of the one
+   * {@link height} returns, and anything planted on the analytic height floats
+   * above it by whatever the low-pass removed. OGL's note is the right one: *a
+   * floating tree at the skyline is much louder than a slightly buried one*, so
+   * the sink is one-sided — `seatHeightAt` takes the minimum over every ring
+   * that could draw the point and never raises anything.
+   *
+   * Measured here in bare Node against the baked field, 4 000 samples on ground
+   * with `treeDensity > 0.05`, planted height minus the height the coarse mesh
+   * actually draws:
+   *
+   * | ring | viewCell | > 0.5 m | > 2 m | p99 | max |
+   * |---|---|---|---|---|---|
+   * | tree geometry (250 m) | 3 m | 1.6% | 0.0% | 0.61 m | 1.28 m |
+   * | tree impostor (330 m) | 6 m | 12.8% | 0.1% | 1.25 m | 2.46 m |
+   * | far canopy card (1250 m) | 24 m | **27.1%** | **10.6%** | 8.48 m | 19.51 m |
+   *
+   * So the geometry ring is fine, the impostor ring is marginal, and **one far
+   * stand card in ten hangs more than two metres clear of the hillside it is
+   * meant to be growing out of.** The mean float is *negative* (-0.43 m): half
+   * of them are already buried, which is why this never showed up as a
+   * systematic offset anyone could have spotted in a frame average — it is
+   * entirely a positive tail, and the tail is at the skyline.
+   *
+   * @param size the body's own height, metres — a tall body reads through
+   *   coarser rings once the camera backs off past its own footprint
+   * @param dist the distance at which this instance is still drawn (its cull or
+   *   LOD range), NOT its distance from the camera now: the tile is built once
+   *   and the seat has to be right for the whole band it is visible over
+   */
+  farSeat(x: number, z: number, size: number, dist: number) {
+    return this.terrain.seatHeightAt(x, z, size, this.terrain.clipSpacingForDistance(dist));
+  }
 
   /** Ground normal, computed locally so we never depend on Terrain's out-param. */
   normal(x: number, z: number, out = _v) {
@@ -499,7 +537,9 @@ export class Ecology {
     // road corridor
     const rd = this.roadDist(x, z);
     d *= THREE.MathUtils.smoothstep(rd, 2.4, 10.5);
-    d *= 1 - this.siteBlock(x, z);
+    // `cleared`, not `siteBlock` — see the note on {@link cleared}. This was
+    // `siteBlock` alone and grass grew across every town plaza in the world.
+    d *= 1 - this.cleared(x, z);
     return THREE.MathUtils.clamp(d, 0, 1);
   }
 
@@ -527,7 +567,9 @@ export class Ecology {
     const p = this.patch(x - 300, z + 220, 0.017, 3);
     d *= THREE.MathUtils.smoothstep(p, 0.3, 0.72);
     d *= THREE.MathUtils.smoothstep(this.roadDist(x, z), 3.4, 13);
-    d *= 1 - this.siteBlock(x, z);
+    // As {@link grassDensity}: this was `siteBlock` alone, and scrub grew
+    // through the outpost pads.
+    d *= 1 - this.cleared(x, z);
     return THREE.MathUtils.clamp(d, 0, 1);
   }
 
@@ -562,6 +604,17 @@ export class Ecology {
     d *= b.treeD;
     d *= 1 - THREE.MathUtils.smoothstep(slope, 0.28, 0.5);
     d *= 1 - this.exposure(x, z) * 0.62;
+    // "Low, sheltered, wetter ground" is what the docstring above has always
+    // claimed, and until this lane the only thing behind it was fbm plus a 12 m
+    // convexity stencil — the function guessed at hydrology it could have asked
+    // for. `erosion().wet` is the erosion pass's own answer, a percentile among
+    // land cells (measured mean 0.505 over 40 000 samples), so this term is
+    // deliberately **mean-neutral**: it moves the canopy off the dry
+    // interfluves and into the drainage without changing how many trees the
+    // world grows, which is what keeps the draw-call budget out of the
+    // argument. `exposure` stays; a 12 m crest and a 16 m channel are different
+    // scales and they disagree usefully.
+    d *= 0.55 + 0.90 * this.erosion(x, z).wet;
     d *= THREE.MathUtils.smoothstep(this.roadDist(x, z), 6, 18);
     d *= 1 - this.siteBlock(x, z);
     d *= 1 - this.poiClear(x, z);
