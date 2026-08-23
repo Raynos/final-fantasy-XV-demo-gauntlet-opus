@@ -58,19 +58,43 @@ uniform float uSssAmt, uTrans;
 `;
 
 /**
+ * The macro-normal varying, declared only on hair.
+ *
+ * Every patched material shares one `patch()`, and a varying costs its slot in
+ * every program that declares it whether or not the program reads it. Skin, the
+ * face, garments and the eyeball have no groom, so they do not carry this and
+ * their varying budget is exactly what it was.
+ */
+const GROOM_HEAD = /* glsl */`
+varying vec3 vGroomV;
+`;
+
+/**
  * Wire per-vertex roughness / metalness / thickness and an optional shading
  * extension (subsurface, hair anisotropy, cornea glint) into a standard or
  * physical material.
  *
  * @param {Object} o
  * */
-/** Kajiya-Kay anisotropic highlight pair, aligned to the strand tangent. */
+/**
+ * The anisotropic highlight pair: two bands placed on the *macro* scalp normal
+ * (`MeshBuilder.groom`) and broken into filaments by a Kajiya-Kay term on the
+ * strand tangent.
+ */
 interface HairSpec {
   /** specular strength of the primary band. */
   spec?: number;
-  /** how far the secondary band is shifted along the strand. */
+  /**
+   * How far the two bands are separated, as a tilt of the macro normal along
+   * the strand flow: the primary lands toward the roots, the secondary toward
+   * the tips. Roughly radians of arc across the head.
+   */
   shift?: number;
-  /** primary / secondary band exponents. */
+  /**
+   * Band exponents on the tilted macro normals — these set how *thin* each band
+   * is. `exp1` is the narrow neutral streak §12.3 measures; `exp2` is the broad
+   * hue-carrying one under it.
+   */
   exp1?: number;
   exp2?: number;
   /** how much of the hair's own hue the secondary band takes. */
@@ -113,7 +137,8 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
 
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>',
-        '#include <common>\nattribute vec3 aMat;\nattribute vec3 aTan;\nvarying vec3 vMat;\nvarying vec3 vTanV;\nvarying vec3 vObjN;')
+        '#include <common>\nattribute vec3 aMat;\nattribute vec3 aTan;\nvarying vec3 vMat;\nvarying vec3 vTanV;\nvarying vec3 vObjN;'
+        + (hair ? '\nattribute vec3 aGroom;\nvarying vec3 vGroomV;' : ''))
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvMat = aMat;')
       // object-space normal, before skinning: on the eyeball this is exactly the
       // direction from the globe centre, which is the only stable way to place an
@@ -128,10 +153,20 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
       #ifdef USE_SKINNING
         tanRaw = ( skinMatrix * vec4( tanRaw, 0.0 ) ).xyz;
       #endif
-      vTanV = normalize( normalMatrix * tanRaw );`);
+      vTanV = normalize( normalMatrix * tanRaw );`
+        // The macro surface normal, on hair only. A strand that never had a
+        // groom set falls back to vObjN and not to objectNormal: this runs
+        // *after* skinnormal_vertex, so objectNormal has already been skinned
+        // once and skinning it again would bend it by the square of the pose.
+        + (hair ? /* glsl */`
+      vec3 groomRaw = dot( aGroom, aGroom ) > 1e-6 ? aGroom : vObjN;
+      #ifdef USE_SKINNING
+        groomRaw = ( skinMatrix * vec4( groomRaw, 0.0 ) ).xyz;
+      #endif
+      vGroomV = normalize( normalMatrix * groomRaw );` : ''));
 
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\n${HEAD}`)
+      .replace('#include <common>', `#include <common>\n${HEAD}${hair ? GROOM_HEAD : ''}`)
       .replace('#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\n\troughnessFactor = clamp( vMat.x, 0.035, 1.0 );')
       .replace('#include <metalnessmap_fragment>',
@@ -197,18 +232,53 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
       blocks.push(/* glsl */`
 {
   vec3 hN = normalize( vNormal );
+  // The *macro* normal: the scalp under the groom, not the strand's own pipe.
+  // See MeshBuilder.groom. Everything that decides *where on the head* the
+  // streak lands is read off this and nothing else.
+  vec3 gN = normalize( vGroomV );
   vec3 hV = normalize( vViewPosition );
   vec3 hL = uSunDirView;
   vec3 hT = normalize( vTanV );
   vec3 hH = normalize( hL + hV );
-  // per-strand jitter so the band breaks into filaments instead of a chrome bar
-  float jit = fract( sin( dot( vMapUv, vec2( 91.7, 47.3 ) ) ) * 4371.1 ) - 0.5;
-  vec3 t1 = normalize( hT + hN * ( ${(-shift).toFixed(3)} + jit * 0.05 ) );
-  vec3 t2 = normalize( hT + hN * ( ${(shift * 1.9).toFixed(3)} + jit * 0.07 ) );
-  float d1 = dot( t1, hH ), d2 = dot( t2, hH );
-  float s1 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d1 * d1 ) ) ), ${exp1.toFixed(1)} );
-  float s2 = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - d2 * d2 ) ) ), ${exp2.toFixed(1)} );
-  float vis = clamp( dot( hN, hL ) * 0.7 + 0.3, 0.0, 1.0 );
+  // Per-lock jitter. It used to come from vMapUv, i.e. per *fragment*, which is
+  // the one thing a shifted-tangent model cannot survive: the shift is what
+  // places the band, so jittering it per pixel replaces the band with noise.
+  // vColor is authored per lock in Hair.ts (each ribbon draws its own value out
+  // of a wide spread), so its luminance is a free per-lock random that is
+  // constant down a strand.
+  float luminance = dot( vColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
+  float jit = fract( luminance * 137.31 ) - 0.5;
+  // ---- where the streak sits on the head ---------------------------------
+  //
+  // Kajiya-Kay alone is a function of the strand direction and of nothing else,
+  // so an entire fringe of parallel strands lights at once wherever the light
+  // happens to run across them. That is a flat frosted wash over the whole
+  // groom, and it is what this produced: at spec 6.0 the crown was uniform
+  // sparkle with no band anywhere in it.
+  //
+  // What makes a streak a streak is the *surface*. A strand is a cylinder; it
+  // throws its specular cone at the eye only over a narrow range of scalp
+  // orientations, and that range sweeps across the head as the light moves --
+  // which is precisely the behaviour §12.3 describes and the one thing our hair
+  // did not have. So the band is placed by the macro normal, and the two lobes
+  // are separated by tilting *that* along the flow: the primary sits a little
+  // toward the roots, the secondary further down toward the tips, exactly as a
+  // real primary/secondary pair does.
+  vec3 n1 = normalize( gN + hT * ${(shift).toFixed(3)} );
+  vec3 n2 = normalize( gN - hT * ${(shift * 2.6).toFixed(3)} );
+  float a1 = pow( clamp( dot( n1, hH ), 0.0, 1.0 ), ${exp1.toFixed(1)} );
+  float a2 = pow( clamp( dot( n2, hH ), 0.0, 1.0 ), ${exp2.toFixed(1)} );
+  // ...and Kajiya-Kay then modulates it *within* the band, so a lock running
+  // along the light stays dark while its neighbour running across it catches.
+  // That is what breaks the band into filaments rather than a chrome bar. The
+  // exponent is deliberately mild: at 90 it saturated to 1 over the whole head
+  // and did no work at all.
+  float dth = dot( hT, hH );
+  float fil = pow( max( 1e-4, sqrt( max( 0.0, 1.0 - dth * dth ) ) ), 22.0 );
+  fil = 0.30 + 0.70 * fil;
+  float s1 = a1 * fil * ( 1.0 + 0.60 * jit );
+  float s2 = a2 * ( 0.55 + 0.45 * fil );
+  float vis = clamp( dot( gN, hL ) * 0.7 + 0.3, 0.0, 1.0 );
   // Break the band along the strand so it reads as filaments catching light
   // rather than a chrome stripe painted down a tube. This ran on vMapUv.x,
   // which is the coordinate *across* the ribbon: 34 cycles across a 3 mm strand
@@ -223,7 +293,6 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   // Ignis's hair into straw, and no amount of geometry work could fix it,
   // because the strands were correct and simply over-exposed. Normalising by
   // luminance gives every hair colour the same specular energy.
-  float luminance = dot( vColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
   vec3 hueC = vColor.rgb / max( 0.10, luminance );
   vec3 sheenC = mix( vec3( 1.0 ), hueC, ${tint.toFixed(2)} );
   // vMat.z is 1 on strands and 0 on the scalp shell: the shell must stay a
@@ -485,7 +554,7 @@ export function hairMaterial() {
   });
   return patch(m, {
     sss: 0,
-    hair: { spec: 0.40, shift: 0.055, exp1: 90.0, exp2: 16.0, tint: 0.85 },
+    hair: { spec: 0.55, shift: 0.30, exp1: 110.0, exp2: 20.0, tint: 0.85 },
   });
 }
 

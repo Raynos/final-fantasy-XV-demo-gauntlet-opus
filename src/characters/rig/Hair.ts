@@ -171,12 +171,17 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
     const t = r / rows;
     for (let c = 0; c <= cols; c++) {
       const th = (c / cols) * Math.PI * 2;
-      const { p } = shellPoint(th, t);
+      const { p, n: sn } = shellPoint(th, t);
       // strand flow runs crown -> hairline; the highlight band is perpendicular
       const q = shellPoint(th, Math.min(1, t + 0.02)).p;
       const d = q.clone().sub(p);
       if (d.lengthSq() < 1e-10) d.set(0, -1, 0);
       B.tang(d.x, d.y, d.z);
+      // The shell's own normal already *is* the macro scalp normal, but its
+      // lock-scale relief displaces it by up to 6.7 mm of noise; `sample`'s
+      // normal is the smooth sculpted skull under all of it, which is what the
+      // highlight band has to be a function of.
+      B.groom(sn.x, sn.y, sn.z);
       const w = put(p);
       // A parting is a value break, not a shape: the crown is lighter than the
       // nape and the roots at the hairline are darkest of all. The shell used to
@@ -368,6 +373,11 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
       B.mat(tuft.rough ?? H.rough ?? 0.36, 0, 1);
+      // Every vertex of every lock in this clump carries the scalp normal at
+      // the root it grew from — not the normal of its own pipe, which sweeps a
+      // full turn around each strand and can only ever produce speckle. This is
+      // the smooth field the anisotropic band is read against.
+      B.groom(nrm.x, nrm.y, nrm.z);
 
       // ---- clumping -------------------------------------------------------
       // One ribbon per root is what read as straw. At any strand width fine
@@ -474,6 +484,7 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       // tip at or below the root value.
       const ww = 0.0009 * scale * (0.7 + rng.next() * 0.8);
       B.color(rootC);
+      B.groom(nrm.x, nrm.y, nrm.z);
       ribbon(B, {
         points: [root, mid, tipP].map((q) => put(q).toArray()),
         steps: 4,
@@ -505,6 +516,8 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const L = (bw.len ?? 0.012) * (1 - 0.25 * t);
       const pts = [root, root.clone().addScaledVector(d, L * 0.55), root.clone().addScaledVector(d, L)];
       B.color(bcol.clone().multiplyScalar(0.85 + 0.3 * rng.next()));
+      // a brow rides the brow ridge, so `out` is its macro normal
+      B.groom(out.x, out.y, out.z);
       ribbon(B, {
         points: pts.map((q) => put(q).toArray()),
         steps: 3,

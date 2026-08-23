@@ -100,6 +100,9 @@ export class MeshBuilder {
   _m!: number[];
   _s!: number[];
   _t!: number[];
+  _gn!: number[];
+  _gnUsed!: boolean;
+  gn!: number[];
   col!: number[];
   grp!: number[];
   idx!: number[];
@@ -117,6 +120,7 @@ export class MeshBuilder {
     this.col = [];
     this.mp = [];
     this.tn = [];
+    this.gn = [];
     this.si = [];
     this.sw = [];
     this.grp = [];
@@ -125,6 +129,8 @@ export class MeshBuilder {
     this._c = [1, 1, 1];
     this._m = [0.7, 0, 0];
     this._t = [0, 1, 0];
+    this._gn = [0, 0, 0];
+    this._gnUsed = false;
     this._s = [0, 0, 0, 0, 1, 0, 0, 0];
   }
 
@@ -161,6 +167,28 @@ export class MeshBuilder {
     return this;
   }
 
+  /**
+   * Macro surface normal for anisotropic shading — on hair, the *scalp* normal
+   * at the strand's root rather than the normal of the strand's own tube.
+   *
+   * A hair ribbon is a six-sided pipe, so its shading normal sweeps a full turn
+   * around every strand. Any highlight keyed on that normal is therefore
+   * decided per-facet and lands as speckle scattered over the whole head, which
+   * is not what a specular streak is. The streak in `ART-DIRECTION.md` §12.3 is
+   * a *macro* feature: it travels across the head as the light moves, because
+   * it is a function of the head's own smooth surface. That surface is the
+   * scalp, and this is where a builder records it.
+   *
+   * Unset it stays zero and the shader falls back to the shading normal, so
+   * every other part built with this class is unaffected and pays nothing.
+   */
+  groom(x: number, y: number, z: number) {
+    const l = Math.hypot(x, y, z) || 1;
+    this._gn = [x / l, y / l, z / l];
+    this._gnUsed = true;
+    return this;
+  }
+
   /** Skin binding: array of [boneIndex, weight]; normalised, max 4. */
   skin(pairs: SkinWeights) {
     const p = pairs.slice().sort((a, b) => b[1] - a[1]).slice(0, 4);
@@ -180,6 +208,7 @@ export class MeshBuilder {
     this.col.push(this._c[0], this._c[1], this._c[2]);
     this.mp.push(this._m[0], this._m[1], this._m[2]);
     this.tn.push(this._t[0], this._t[1], this._t[2]);
+    this.gn.push(this._gn[0], this._gn[1], this._gn[2]);
     this.si.push(this._s[0], this._s[1], this._s[2], this._s[3]);
     this.sw.push(this._s[4], this._s[5], this._s[6], this._s[7]);
     this.grp.push(this._g);
@@ -214,6 +243,9 @@ export class MeshBuilder {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     geo.setAttribute('aMat', new THREE.Float32BufferAttribute(this.mp, 3));
     geo.setAttribute('aTan', new THREE.Float32BufferAttribute(this.tn, 3));
+    // only hair sets a groom normal; every other mesh skips the 12 bytes a
+    // vertex and the shader's own guard falls back to the shading normal
+    if (this._gnUsed) geo.setAttribute('aGroom', new THREE.Float32BufferAttribute(this.gn, 3));
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
     geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
     geo.setIndex(this.idx);
