@@ -12,8 +12,8 @@ Perf and gameplay both **PASS** with `RULER_VALID: true` on a quiet tree.
 
 ## The session goal
 
-Finish every open plan in `docs/plans/`, then take the game to AAA. **Each plan's
-`Status:` line carries its own state**, so `ls docs/plans/` answers what is open.
+Finish every plan in `docs/plans/` (**done** — each carries its own `Status:`),
+then take the game to AAA (**not done**; see the grade).
 
 ## Live right now — nobody
 
@@ -50,43 +50,31 @@ Insomnia's massing — its surface landed, its silhouette did not.
 
 ## What this session learned about itself
 
-Two patterns, both worth more than any fix in it.
-
 **Six systems were declared, documented, referenced in handoffs — and never
-executed.** `Animator.rest`, the subsurface skin model (a measured no-op at
-0.150/255), `BossFight.resolveStrike`, three whole LOD tiers flagged not to cast
-while 1,239 of them filled the frame, three's one-sided alpha ramp, and `gully`,
-which had never displaced a vertex anywhere. `orphans` passed all six: it proves
-a module is *reachable*, not that it *runs*. **`reachcheck.mts` now closes that**
-— it instruments 1,877 methods with no annotations, drives the game with real key
-events, and gates on `project/must-run.json`. Verified by breaking a registration
-on purpose.
+executed.** `orphans` passed all six: it proves a module is *reachable*, not that
+it *runs*. **`reachcheck.mts` closes that** — 1,877 methods instrumented with no
+annotations, driven by real key events, gated on `project/must-run.json`.
 
-**Five instruments were measuring themselves**: a stale texel cache with no
-symptom, a gate runner reporting a terrain regression when the gate never ran,
-capture tools that would silently photograph another worktree, a boot profile
-with no contention guard (6.88 s quiet, 17.05 s loaded), and the perf ruler.
-The rule that came out of it, and it is now standing practice: **before trusting
-a number, make the instrument report on a case whose answer you already know.**
+**Five instruments were measuring themselves**, ending with a perf ruler that
+throttled itself fivefold and reported 63 fps for a game running at 190 —
+correlation 0.107, ranking inverted, after being written into this file as fact.
+The rule: **before trusting a number, make the instrument report on a case whose
+answer you already know.** It applies to tooling too — the last thing built this
+session was reverted for exactly this mistake.
 
-Narrative account: `project/journal/2026-08-22-985c9fe3.md`.
+Full account: `project/journal/2026-08-22-985c9fe3.md`.
 
-## Determinism — CLOSED, at the noise floor
+## Determinism — CLOSED
 
-A shot alone versus sixth in a batch: **1.836 -> 0.340 mean/255** against a
-measured floor of 0.302. The cause was the **wind**, not the vegetation
-streaming every handoff had guessed. Account in `417ca86`; lesson in
-`LANDMINES.md`.
+A shot alone versus sixth in a batch: **1.836 -> 0.340 mean/255** against a 0.302
+floor. The cause was the **wind**, not the vegetation streaming every handoff had
+guessed. Account in `417ca86`.
 
 ## Where the truth is
 
-- `BRIEF.md` — the contract. Art direction, engine contracts, definition of done.
-- `project/HANDOFF.md` — the method, the tooling, the architecture.
-- `project/LANDMINES.md` — what will bite you, and the diagnoses that were
-  confidently wrong. Read the last section twice.
-- `docs/SCOPE.md` — the atomic inventory. **Stale: last verified against `main`
-  @ 98 commits (2026-08-17), 243 commits ago.** Re-verifying it is open work.
-- `project/README.md` — which document is which genre.
+`BRIEF.md` (the contract) · `project/HANDOFF.md` (method) · `project/LANDMINES.md`
+(read its last section twice) · `docs/SCOPE.md` (the inventory) ·
+`project/README.md` (which document is which genre).
 
 ## Gates — 11/11, 2026-08-23
 
@@ -119,27 +107,42 @@ each, corr 0.801 vs 0.628 for triangles — so triangles and fill are nearly fre
 and **a new visible `InstancedMesh` costs four draws, not one** (colour plus three
 cascades). Per-instance variation is free. Design to that.
 
-## Still weak, and who has it
+## Still weak
 
-Hair still reads as quills. `Bushes.ts` (491 lines) has never been audited.
-`MapScreen` is a 22-line stub. `anak` needs a sculpt rather than paint. Nothing
-in our frame ever reaches white — eight of ten reference plates clip >=0.10%,
-four of our six clip at exactly 0.00% — and the fix is internal dynamic range in
-the cloud, not exposure.
+Hair and eyes shipped unjudged. `Layers.ts`'s splat reads as one texture, not a
+material system. Nothing in our frame ever reaches white — eight of ten reference
+plates clip >=0.10%, four of our six clip at exactly 0.00%.
 
-Genuinely strong: the field HUD, atmosphere and aerial perspective (measured on
-the reference now), terrain strata and silhouette, the world map, the opening
-cutscene, warp-strike VFX, and km-scale terrain shadow.
+Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
+strata, the world map, the opening cutscene, warp-strike VFX, km-scale terrain
+shadow.
 
 ## Next, in order
 
-1. **Cloud billboards** and **terrain triangulation** — named by four consecutive
-   judges, nobody assigned to either. Both are in the round-10 write-up.
-2. **A floating rock arch**, round 10, twice, cheap. `project/handoff/landmarks.md`
-   open item 0.
-3. **Hair**, then **eyes** (3/10, gradeable for the first time now `hero_portrait`
-   shows a face).
-4. **Motion.** Every judgment this project has ever made is on a still frame. The
-   game only became playable end-to-end tonight and nobody has watched it move.
-5. Extend `reachcheck`'s exercise to land a set-piece strike, so
-   `EncounterDirector.resolveStrike` can join `must-run.json`.
+Three lanes were stopped mid-flight at the end of the session. **Their diagnoses
+are the deliverable; two of the three shipped code that has never been judged.**
+
+1. **Grounding** — the judge's #1, and now diagnosed. It is structural, not a
+   missing mechanism: every grounding term we have is scaled to human dimensions
+   and every scenery object in a graded frame is past all of them. GTAO gathers
+   at **0.62 m** and fades from 220 m; `ContactShadowPass` marches **0.5 m** and
+   range-gates at **55 m**; CSM `maxFar` is **190 m** — while the graded shots'
+   nearest visible ground is 61–80 m. A boulder at 400 m gets none of the three.
+   `aoBoost` is applied to grass and nothing else. **A measured negative comes
+   with it:** a world-metre contact ramp is dead on arrival, because at 61–80 m
+   a 1.5 m shrub is eight pixels and 0.34 m of it is one. What FFXV ships is the
+   object's own lower body going dark, not a disc on the ground. One untested
+   lead: `ContactShadowPass` scales `bias` with distance but leaves `thickness`
+   at 0.45, so its accept window is empty past ~140 m. `project/handoff/grounding.md`.
+2. **Clouds** — five commits, unjudged. The field was drawn 5x too coarse,
+   coverage was applied twice (which made it optically thin), and the march had
+   step aliasing the old blur was hiding. Its last WIP commit is *unverified*.
+3. **Hair and eyes** — four commits, unjudged, +8 draws and +0.42 M triangles
+   unmeasured. Kajiya-Kay was measurably nothing (0.897/255, under the floor) and
+   shifted along the strand's own normal, which can only speckle. **The inherited
+   "eyes 3/10" was wrong**: with the head hidden the eyeball has radial fibres, a
+   real pupil, a limbal ring and a catchlight — the grade was occlusion and
+   framing. Open: a skin-coloured wedge covers a third of each aperture.
+4. `Layers.ts` — the splat reads as "one texture, not a material system"; six
+   layers whose mean lumas span only 0.35–0.47.
+5. **Motion.** Every judgment this project has made is on a still frame.
