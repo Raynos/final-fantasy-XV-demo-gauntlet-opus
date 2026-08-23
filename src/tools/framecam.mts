@@ -23,41 +23,18 @@
  * `offset`/`lookOffset`, `time`, `weather`, `scenario`, `dungeon`, `story`,
  * `hud`, `menu`.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  const deadline = Date.now() + 120000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 async function main() {
+  const ha = harnessArgs(process.argv.slice(2));
+  announceBuild(ha);
   const argv = process.argv.slice(2);
   const opts: { out: string, settle: number, file: string | null, probe: string | null, w: number, h: number } =
     { out: 'tmp/shots/probe', settle: 60, file: null, probe: null, w: 1600, h: 900 };
@@ -77,25 +54,13 @@ async function main() {
   const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
   await mkdir(outDir, { recursive: true });
 
-  const server = await ensureServer();
-  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-  const page = await browser.newPage({
-    viewport: { width: opts.w, height: opts.h }, deviceScaleFactor: 1,
-  });
+  const leased = await lease(pageOpts(ha));
+  const page = leased.page;
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
   try {
-    await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, {
-      waitUntil: 'domcontentloaded', timeout: 300000,
-    });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300000 });
-    await page.evaluate(() => {
-      window.GAME.stop();
-      window.GAME.resetClock();
-      document.getElementById('boot')?.remove();
-    });
 
     if (opts.probe) {
       const src = await readFile(path.resolve(opts.probe), 'utf8');
@@ -144,8 +109,7 @@ async function main() {
     }
     if (resolved.length) await writeFile(path.join(outDir, '_resolved.json'), JSON.stringify(resolved, null, 1));
   } finally {
-    await browser.close();
-    if (server) server.kill();
+    await leased.release();
   }
   if (errors.length) {
     console.error(`\n${errors.length} page error(s):`);

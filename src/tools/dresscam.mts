@@ -22,45 +22,18 @@
  *   --yaw N    approach bearing in degrees (default 135)
  *   --time N   time of day in hours (default 11.5)
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
-const URL_BASE = `http://127.0.0.1:${PORT}`;
 
-const portOpen = (port: number) => new Promise<boolean>((res) => {
-  const s = net.connect(port, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  proc.stderr.on('data', (d) => process.stderr.write(`[vite] ${d}`));
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((r) => setTimeout(r, 300));
-    // eslint-disable-next-line no-await-in-loop
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 async function main() {
+  const ha = harnessArgs(process.argv.slice(2));
+  announceBuild(ha);
   const argv = process.argv.slice(2);
   const opts: { out: string, dist: number, eye: number, look: number, yaw: number, time: number, settle: number, targets: string[] } =
     { out: 'tmp/shots/dresscam', dist: 70, eye: 12, look: 4, yaw: 135, time: 11.5, settle: 90, targets: [] };
@@ -78,22 +51,14 @@ async function main() {
   const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
   await mkdir(outDir, { recursive: true });
 
-  const server = await ensureServer();
-  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  const leased = await lease(pageOpts(ha));
+  const page = leased.page;
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
   const results = [];
   try {
-    await page.goto(`${URL_BASE}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 120000 });
-    await page.evaluate(() => {
-      window.GAME.stop();
-      window.GAME.resetClock();
-      document.getElementById('boot')?.remove();
-    });
 
     for (const target of opts.targets) {
       const meta = await page.evaluate(async ([t, o]: [string, typeof opts]) => {
@@ -137,8 +102,7 @@ async function main() {
       console.log(`✓ ${name.padEnd(24)} (${meta.x},${meta.z})  ${String(meta.triangles).padStart(9)} tris  ${String(meta.calls).padStart(4)} calls`);
     }
   } finally {
-    await browser.close();
-    if (server) server.kill();
+    await leased.release();
   }
   if (errors.length) {
     console.error(`\n${errors.length} page error(s):`);
