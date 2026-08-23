@@ -49,7 +49,34 @@ const rows: ProcRow[] = ps.map((l) => {
 }).filter((r): r is ProcRow => r !== null);
 
 const alive = new Set(rows.map((r) => r!.pid));
-const isOurs = (r: ProcRow) => /final-fantasy-XV-demo-gauntlet/.test(r.args) || /vite --port 52\d\d/.test(r.args);
+const childOf = (pid: number): ProcRow | null => rows.find((c) => c!.ppid === pid) ?? null;
+
+/**
+ * `npm exec vite --port 5321 --strictPort` carries no path in its argv, so the
+ * wrapper row alone cannot say which checkout it belongs to -- only the child
+ * node process it spawned can. The old test fell back to a hardcoded port range
+ * (`vite --port 52\d\d`) and that was a silent liar: every port this repo
+ * actually hands out drifted out of the 5200s, so `cleanup` printed
+ * "clean -- no orphaned servers" while seven abandoned servers held 2.7 GB.
+ * Ask the child instead of guessing at the port.
+ */
+const OURS = /final-fantasy-XV-demo-gauntlet/;
+const isOurs = (r: ProcRow) => OURS.test(r.args) || OURS.test(childOf(r.pid)?.args ?? '');
+
+/**
+ * Both shapes leak. `npm exec vite` is the detached-subshell form; a bare
+ * `node_modules/.bin/vite` reparented to 1 is what a dead capture daemon leaves
+ * behind, since `Harness.ensureServer` spawns it as a plain (non-detached)
+ * child and nothing reaps it when the daemon dies.
+ */
+const isViteServer = (a: string) => /npm exec vite/.test(a) || /node_modules\/\.bin\/vite/.test(a);
+
+/** `ps` etime is `[[dd-]hh:]mm:ss`; anything over a day broke the naive split. */
+function etimeHours(etime: string): number {
+  const m = etime.match(/^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/);
+  if (!m) return 0;
+  return (Number(m[1] ?? 0) * 24) + Number(m[2] ?? 0) + (Number(m[3]) / 60);
+}
 
 /**
  * A vite server reparented to PID 1 is not automatically dead weight: agents
@@ -68,7 +95,7 @@ const liveWorktrees = new Set(
 const worktreeGone = (tag: string) => tag !== 'main'
   && !existsSync(path.join(ROOT, '.claude', 'worktrees', tag));
 
-const candidates = rows.filter((r) => r!.ppid === 1 && isOurs(r) && /npm exec vite/.test(r!.args));
+const candidates = rows.filter((r) => r!.ppid === 1 && isViteServer(r!.args) && isOurs(r));
 const orphanServers: Target[] = [];
 for (const r of candidates) {
   // inherit the worktree tag from the child, which carries the resolved path
@@ -78,7 +105,7 @@ for (const r of candidates) {
   // "certain" only if nothing in that worktree is running and either the
   // worktree is gone or it has sat idle for hours. Killing a live agent's
   // server would break its next capture, so anything else is reported only.
-  const hours = /(\d+):(\d\d):(\d\d)/.test(r!.etime) ? Number(r!.etime.split(':')[0]) : 0;
+  const hours = etimeHours(r!.etime);
   if (busy) continue;
   orphanServers.push({ ...r, certain: worktreeGone(tag) || hours >= 3, tag });
 }
