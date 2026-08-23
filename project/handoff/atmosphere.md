@@ -121,6 +121,52 @@ for it. **A negative can be a fact about the frame rather than about the idea.**
 
 ---
 
+## Blind A/B round 2 — `tmp/ab/r2/`, seed 8171, six pairs
+
+**6 identified, 0 fooled, 1 hesitated.** The tool prints `hesitated 0`
+because it counts only LOW confidence; the judge returned **five HIGH and one
+MEDIUM**, against round 1's six-of-six at high confidence. That is the metric
+the previous handoff said moves first, and it moved one notch. The win rate did
+not.
+
+What changed is the judge's *defect list*, and that is the real reading. Round 1
+ranked five defects; this is where they went.
+
+| round 1 | round 2 |
+|---|---|
+| 1. no exposure discipline — sky clips to pure white while the ground crushes to black, no rolloff either end | **gone. Not mentioned once, in any of six frames.** |
+| 5. distant geometry takes no aerial perspective | now 4th, and narrowed from all distant geometry to one object: "the city as a flat blue cutout with no aerial-perspective haze separating it from what it overlaps" |
+| 4. clouds are an opaque single-layer slab with no scattering | now 3rd, and reframed: not "no scattering" but "hard-edged cutout cumulus with no self-shadowing… degenerating into a smeared blur blob when near-camera" |
+| 3. terrain silhouettes are smooth cones with no erosion, one tiling texture on a 60° face | **now 1st, and the loudest tell in four of six frames.** "Smooth vertex-coloured brown lumps at every distance — no detail normal, no roughness variation, no strata, no erosion." *Not this lane.* |
+| 2. foliage unlit on its shadow side | now 6th–7th. *Not this lane.* |
+
+Three of the judge's eight are things this lane owns, and two are new:
+
+- The cirrus banding, named twice — **fixed in `102ee7c`, after the round.**
+  A round 3 should not see it.
+- Cloud silhouette: hard-edged and un-self-shadowed at distance, a smeared blob
+  near camera. This is `MARCH_SCALE 0.45` plus the composite's tap filter, and
+  it is the strongest single remaining item in this lane.
+- Insomnia specifically. Everything else at that distance now hazes correctly;
+  the skyline is a separate mesh and may not be taking the aerial term at all.
+  **Ablate `?post=noaerial` on `zone_three_valleys` and check the skyline pixels
+  move before assuming it is a strength problem.**
+
+**Two of the judge's top five are free wins for other lanes and someone should
+take them today:**
+
+1. **"Interact prompts with nobody there."** `TALK / TAKKA` and
+   `TALK / CINDY AURUM` float over an empty landscape in three of six frames.
+   The judge ranked this **2nd of eight** and called it "the cheapest fix with
+   the biggest payoff". An interaction volume is firing with no NPC rendered.
+2. **A placeholder primitive shipped in frame.** An untextured white sphere on
+   the ridge beside the radio mast in `vista_noon` — the judge named it as
+   decisive. It is presumably a radome that never got a material.
+   `daycycle_dawn` also has two white vertical bars near the Insomnia wall that
+   look like the same class of bug.
+
+Neither is mine to fix and both are reported here rather than edited.
+
 ## Measured negatives, recorded as first-class results
 
 - **Narrowing the coverage window alone does not open the deck.** `coverage`
@@ -154,20 +200,17 @@ for it. **A negative can be a fact about the frame rather than about the idea.**
    gap.** `p99.9` 241 vs 252, `clip%` 0.00 vs 0.50 — and the codec asymmetry
    makes it worse, not better: the handoff before this one measured that PNG
    reads *higher* `clip%` than JPEG (3.25 vs 0.71 on one shot), so our 0.00 as
-   PNG would be no higher as JPEG. Four of five reference plates reach 235–255.
+   PNG would be no higher as JPEG. Measured per plate rather than off the
+   median: **eight of the ten `FFXV-field` plates reach p99.9 ≥ 246 and eight
+   of ten clip at ≥ 0.10%**, where four of our six clip at *exactly* 0.00%.
    The likely cause is that our cloud now has too little *internal* dynamic
    range: I brought the whole body under white where what a cumulus wants is a
    body at ~0.8 and a sunlit crown at 3–4. That is the "no scattering" half of
    judge defect 4 and it is still open. Do not fix it by raising exposure — the
    median is already right.
-2. **The cirrus sheet reads as parallel scratches.** `src/shaders/sky.glsl.ts`
-   `skyCirrus`: the fibre noise is sampled at 20:1 and 17:1 anisotropy in a
-   plane whose UVs stretch without bound as `rd.y → 0`, so near the horizon it
-   becomes long straight parallel lines all in one screen direction. Visible in
-   every daylight vista, top-left of `tmp/shots/atm-g1/zone_longwythe.jpg`.
-   Ablated at 1.60 mean/255 and 5.4% of pixels on `vista_noon` (`?post=nocirrus`)
-   — small, but it is an *artefact*, and artefacts cost more with a judge than
-   their pixel count says.
+2. ~~The cirrus sheet reads as parallel scratches.~~ **Done, `102ee7c`**, after
+   the blind judge named it twice. `tmp/crop-cirrus.jpg` and `tmp/crop-cir1.jpg`
+   are the same crop at 2x, before and after.
 3. **The cloud silhouette is soft.** `MARCH_SCALE 0.45` plus TAA gives blurred
    edges where FFXV's cumulus are crisp. Before touching the march resolution,
    ablate: it may be the composite's tap filter rather than the march.
