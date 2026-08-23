@@ -16,9 +16,10 @@ Finish every plan in `docs/plans/`, then take the game to AAA. The 2026-08-23
 audit found **no plan DONE and 6 of 37 done-boxes ticked**. Since then
 **`2026-08-21-opus-harness-daemon` is built, verified and archived**, and
 **`2026-08-21-fable-sibling-ports` is at 5 of 6 done-boxes** — Waves 1 and 2
-complete bar 3.6 (another lane's), Wave 3 audited to a verdict, Wave 4 two of
-five. Its one open box is the perf re-baseline, argued into phase4's WS-0b.
-Four plans remain open; `docs/plans/README.md` has the graph.
+done bar 3.6 (another lane's), Wave 3 five of six, Wave 4 three of five.
+**Deliberately not archived**: its open box is a *failing* perf gate, and
+3.8 is measured but unbuilt. `project/handoff/sibling-ports.md` is the file to
+read first. Four plans open; `docs/plans/README.md` has the graph.
 
 ## Live right now — nobody
 
