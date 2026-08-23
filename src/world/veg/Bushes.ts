@@ -411,7 +411,8 @@ export class Bushes {
         color: spec.params.bark, roughness: spec.params.barkRough, metalness: 0,
         map: bark.map, normalMap: bark.normalMap,
         normalScale: new THREE.Vector2(0.6, 0.6),
-      }), { bend: 0.28, flutter: 0.22, gustFreq: 0.05, flexPow: 1.9 });
+      }), { bend: 0.28, flutter: 0.22, gustFreq: 0.05, flexPow: 1.9,
+         groundContact: 0.58, groundSpan: 0.55 });
 
       let leafMat: THREE.MeshStandardMaterial | null = null;
       if ((spec.params.leafCount ?? 0) > 0) {
@@ -422,6 +423,7 @@ export class Bushes {
         }), {
           bend: 0.42, flutter: 0.55, gustFreq: 0.05, flexPow: 1.7,
           translucency: 0.9, twoSidedNormals: true, specular: 0.1,
+          groundContact: 0.58, groundSpan: 0.55,
         });
       }
 
@@ -463,6 +465,7 @@ export class Bushes {
             bend: 0.14, flutter: 0.05, gustFreq: 0.04, flexPow: 2.6,
             twoSidedNormals: true, translucency: 0.4, specular: 0.05,
             crownNormal: baked.normalMap,
+            groundContact: 0.58, groundSpan: 0.55,
           });
           const cap = Math.max(200, Math.round(3400 * this.quality));
           const mesh = new THREE.InstancedMesh(
@@ -492,6 +495,7 @@ export class Bushes {
     }), {
       bend: 0.4, flutter: 0.6, gustFreq: 0.05, flexPow: 1.6,
       translucency: 1.0, twoSidedNormals: true, trample: 0.5, specular: 0.08,
+      groundContact: 0.50, groundSpan: 0.50,
       ...opts,
     });
 
