@@ -86,18 +86,15 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
     polygonOffsetUnits: -6,
     vertexShader: /* glsl */`
       attribute vec3 aPhase;
-      attribute vec2 aShore;
-      attribute vec3 aGround;
+      attribute vec3 aShore;     // elevation above this body's level, offset, paleness
       varying vec3 vPhase;
-      varying vec2 vShore;
-      varying vec3 vGround;
+      varying vec3 vShore;
       varying vec3 vWorld;
       void main(){
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vWorld = wp.xyz;
         vPhase = aPhase;
         vShore = aShore;
-        vGround = aGround;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -107,8 +104,7 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
       uniform sampler2D uNoise;
       uniform vec3 uCameraPos, uSunDir, uSunColor, uAmbient;
       varying vec3 vPhase;
-      varying vec2 vShore;
-      varying vec3 vGround;
+      varying vec3 vShore;
       varying vec3 vWorld;
 
       const float TAU = 6.28318530718;
@@ -142,7 +138,7 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
         // Sand holds the water; bare rock and grass barely darken. The baked
         // ground albedo is the only handle on that here, and a pale dry surface
         // is a sand-or-dust surface almost everywhere on this map.
-        float pale = clamp((vGround.r + vGround.g + vGround.b) * 1.55, 0.25, 1.0);
+        float pale = clamp(vShore.z * 1.55, 0.25, 1.0);
         wet *= mix(0.55, 1.0, pale);
 
         // --- foam ---------------------------------------------------------

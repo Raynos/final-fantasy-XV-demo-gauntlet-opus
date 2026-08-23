@@ -169,7 +169,6 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
   const pos: number[] = [];
   const phase: number[] = [];
   const shore: number[] = [];
-  const grd: number[] = [];
   const idx: number[] = [];
   const snapDists: number[] = [];
 
@@ -307,6 +306,20 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
 
       const nrmX = new Float64Array(m), nrmZ = new Float64Array(m);
       const off = new Float64Array(m * SHORE_ROWS);
+      /**
+       * Per-point, not per-vertex: how far the drawn ground rises above the
+       * field here, and how pale the surface is.
+       *
+       * Both were sampled at every one of the 21 rows first, and both are the
+       * same answer 21 times. `drawnEnvelope` walks the clipmap's ring lattice
+       * — twelve height samples — and `groundColorAt` runs a nineteen-zone
+       * biome blend; between them they were **two thirds of a 1.5 s build**, to
+       * resolve a variation across fifteen metres of beach that neither of them
+       * has. Once per point took the build to a third of that with nothing
+       * visible changing.
+       */
+      const lift = new Float64Array(m);
+      const pale = new Float64Array(m);
       for (let i = 0; i < m; i++) {
         const x = line[i * 2], z = line[i * 2 + 1];
         const tx = tanX[i], tz = tanZ[i];
@@ -314,6 +327,9 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
         const i1 = c.closed ? (i + 1) % m : Math.min(m - 1, i + 1);
         const nx2 = side * -tz, nz2 = side * tx;
         nrmX[i] = nx2; nrmZ[i] = nz2;
+        if (ground.drawnEnvelope) lift[i] = Math.max(0, Math.min(0.9, ground.drawnEnvelope(x, z, 0, 6) - h(x, z)));
+        if (ground.groundColorAt) { ground.groundColorAt(x, z, col); pale[i] = col.r + col.g + col.b; }
+        else pale[i] = 0.25;
 
         // Signed radius of curvature, and the marches it will allow. The bend
         // direction is the change in tangent; when it points inland the centre
@@ -434,22 +450,18 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
           const o = off[i * SHORE_ROWS + r];
           const px = x + nx2 * o, pz = z + nz2 * o;
           const hh = h(px, pz);
-          // Lifted to the UPPER envelope of what the clipmap can rasterise here,
-          // clamped. A decal built on the field's own height is swallowed by the
+          // Lifted onto the UPPER envelope of what the clipmap can rasterise
+          // here. A decal built on the field's own height is swallowed by the
           // mesh that is actually drawn: the two disagree by metres once the
           // rings coarsen, and the symptom is a shoreline that dissolves at
           // exactly the range where it starts to matter to the composition.
-          let y = hh;
-          if (ground.drawnEnvelope) y = Math.min(hh + 0.9, Math.max(hh, ground.drawnEnvelope(px, pz, 0, 6)));
-          pos.push(px, y + 0.06, pz);
+          pos.push(px, hh + lift[i] + 0.06, pz);
           phase.push(arc / lam[0], arc / lam[1], arc / lam[2]);
           // The elevation attribute is read back at the offset that survived the
           // slope bound, not at the one the target asked for. A shader told the
           // ground is at +0.35 m when it is at +0.9 m paints the swash on dry
           // sand, and no capture would say which of the two lied.
-          shore.push(hh - L, o);
-          if (ground.groundColorAt) { ground.groundColorAt(px, pz, col); grd.push(col.r, col.g, col.b); }
-          else grd.push(0.35, 0.30, 0.24);
+          shore.push(hh - L, o, pale[i]);
         }
       }
 
@@ -563,11 +575,10 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 3));
-  geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shore, 2));
-  geo.setAttribute('aGround', new THREE.Float32BufferAttribute(grd, 3));
+  geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shore, 3));
   geo.setIndex(idx);
   geo.computeBoundingSphere();
-  assertAttributes('shore ribbon', geo, ['position', 'aPhase', 'aShore', 'aGround']);
+  assertAttributes('shore ribbon', geo, ['position', 'aPhase', 'aShore']);
 
   // The gate, on the final index buffer, every triangle, after every clamp,
   // rejection and merge above.
