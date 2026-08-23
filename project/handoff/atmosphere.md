@@ -147,10 +147,17 @@ Three of the judge's eight are things this lane owns, and two are new:
 - Cloud silhouette: hard-edged and un-self-shadowed at distance, a smeared blob
   near camera. This is `MARCH_SCALE 0.45` plus the composite's tap filter, and
   it is the strongest single remaining item in this lane.
-- Insomnia specifically. Everything else at that distance now hazes correctly;
-  the skyline is a separate mesh and may not be taking the aerial term at all.
-  **Ablate `?post=noaerial` on `zone_three_valleys` and check the skyline pixels
-  move before assuming it is a strength problem.**
+- Insomnia specifically — **and I checked this one, so do not chase the haze.**
+  Ablated on `zone_three_valleys` with `--raw` on both sides, the skyline
+  moves `#8a939b` → `#738ead`: it takes the aerial term, and correctly. The
+  capital sits at `(2560, 150, -3180)` and that camera at `(1180, 79, 1420)`,
+  so 4.8 km, which the current haze puts at **79% blended to sky** —
+  back-solving the two samples gives an inscatter colour of about
+  `rgb(109, 141, 178)`, exactly the mid-blue it should be. What the judge is
+  actually seeing is that `Megastructures._capital` is untextured flat-shaded
+  boxes built with `cast: false, receive: false`, so the silhouette is one
+  value before the haze ever touches it and the haze then flattens it further.
+  **A props/megastructure item, not an atmosphere one.**
 
 **Two of the judge's top five are free wins for other lanes and someone should
 take them today:**
