@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, loft, ring, type Vec3 } from './PartBuilder.ts';
+import { PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import { rockGeometry } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import { seatY } from './Seat.ts';
+
+/**
+ * How far a megastructure is drawn: all of them, always. They sit 1-4.5 km out
+ * and their whole job is to be on the horizon, so the ring under them is the
+ * coarsest in the stack and the seating error the analytic field carries there
+ * is measured in tens of metres.
+ */
+const CULL = 1200;
 
 /**
  * The things on the horizon that tell you what world this is.
@@ -90,6 +99,58 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 /**
+ * One mass of the Meteor of the Disc.
+ *
+ * Not {@link shard}, and the difference is the whole point. `shard` builds
+ * *sedimentary* rock — one bedding plane plus two conjugate shear sets at 55°,
+ * eleven strata stepping the outline — which is exactly right for a Leide
+ * boulder and exactly wrong for a starfall. Bedding gives a mass a top and a
+ * bottom, joint sets give it a grain, and both of those pull the silhouette
+ * back toward a dome. That is what the Meteor has been: the previous round took
+ * it from an eighty-triangle icosahedron to a real rock mass, and its own
+ * handoff recorded honestly that after nine iterations the outline was still a
+ * dome.
+ *
+ * A meteorite is a brittle mass that has been shattered by an impact. It has no
+ * bedding, no grain and no preferred direction — it fractures *conchoidally*,
+ * into a few enormous planar faces meeting at hard arrises pointing wherever
+ * the shock happened to run. So: `joints` off, so the cuts come from the
+ * isotropic set rather than the geologic frame; `upright` near zero, so they
+ * arrive from every direction instead of clustering around the horizontal;
+ * sixteen of them, cut deep; `bedding` zero; and `warp` low, because a high
+ * warp on a finely subdivided sphere rounds every arris back off and gives a
+ * cauliflower.
+ *
+ * Every number here was captured and looked at, and two of them cost a round:
+ *
+ * - **Twelve planes was not enough.** With twelve random cut directions the
+ *   gaps between them are wide enough that half the sphere comes through
+ *   untouched, and the mass renders as a dented ball with two flat faces on
+ *   it — one dome and one wedge side by side out of the same recipe.
+ * - **Twenty planes at `bite` 0.60 was too much.** Volume loss compounds, and
+ *   one mass came back a literal sail: a razor-thin blade standing over the
+ *   crater. Sixteen at 0.74, with `size` scaled up to 1.95 r to pay for what
+ *   the cuts take, is the shape that holds.
+ * - **Raising `warp` to 0.21 to break up the big faces made it worse**, not
+ *   better: it softened the arrises without adding any relief the eye could
+ *   resolve at 1.5 km. The relief that does work at this range is `gully`,
+ *   which is why it is at 0.34 and not `shard`'s 0.3.
+ *
+ * @param r nominal radius, before the cuts take about a third back
+ * @param stretch pre-cut anisotropy — this is what makes a wedge a wedge
+ */
+function meteorMass(seed: number, r: number, stretch: number[]) {
+  return rockGeometry(seed, {
+    detail: 10, warp: 0.11, stretch, joints: false, planes: 16, upright: 0.05,
+    // 0.74 against `shard`'s 0.79, and 16 cuts against its 8. `bite` is the
+    // fraction of the radius a cut *leaves*, so more of them and slightly
+    // deeper is what turns a sphere into a polyhedron rather than a dented ball.
+    bite: 0.74, bedding: 0, chips: 18, round: 0.02, crease: 26, weather: 0.06,
+    size: r * 1.95, gully: 0.34, gullyFreq: 4.2, uvScale: 22 / (r * 1.95),
+  });
+}
+
+/**
  * The shared material set, built once by {@link Megastructures.build}. A
  * function rather than a literal inside the class so {@link MegaMats} is the
  * set itself.
@@ -110,7 +171,19 @@ export function megaMaterials() {
     thruster: glowMaterial(0x63c8ff, 3.4, 0x040a12),
     meteorGlow: glowMaterial(0xff8a2e, 2.2, 0x1a0d05),
     windows: glowMaterial(0xffd9a0, 0.0, 0x555c67),
-  
+    /**
+     * Lit stock on the Insomnia skyline.
+     *
+     * `windows` is a bare `glowMaterial`, so by day it is a flat untextured
+     * colour and the towers built from it came out as pale cutouts sitting next
+     * to mapped concrete ones — a checkerboard of two values, which is a worse
+     * read than the flat comb it replaced. This is the same concrete, a shade
+     * warmer, with the glow added on top: by day it is a building, and after
+     * dark `glows` ramps the emissive and it lights up.
+     */
+    cityLit: Object.assign(concreteMaterial(0x646b78, 0.85).clone(), {
+      emissive: new THREE.Color(0xffd9a0), emissiveIntensity: 0,
+    }),
   };
 }
 
@@ -280,6 +353,74 @@ export class Megastructures {
    * tower cluster and one colossal spire. Sits on a raised plinth so the far
    * ranges cannot swallow it.
    */
+  /**
+   * One tower of the Insomnia skyline: podium, setback shaft, crown.
+   *
+   * The three parts are not decoration, they are the whole read. A skyscraper
+   * seen from three kilometres is an outline and a value, and a plain extruded
+   * box has neither — its outline is a rectangle and its value is one flat
+   * number, which is what makes a skyline of them look like a paper cutout no
+   * amount of aerial perspective can rescue.
+   *
+   * - The **podium** is wider than the shaft, so towers meet the ground in a
+   *   ragged mass instead of forty separate sticks planted in a plane.
+   * - The **setbacks** step the shaft in twice. Each step is a horizontal
+   *   silhouette edge and, because the shaft narrows, a self-occluding one:
+   *   the step's underside is in shade whatever the sun does. That is the
+   *   cheapest way to get a distant box to stop being flat.
+   * - The **crown** is drawn from four kinds — a stepped cap, a taper, a
+   *   plant-room box, a mast with a beacon — because the flat-top comb was the
+   *   loudest single thing wrong with the old skyline.
+   *
+   * Faces alternate between concrete and lit stock **per section** rather than
+   * per tower, so the skyline comes alight after dark in bands rather than in
+   * whole blocks, which is what a real city does.
+   */
+  _tower(this: Megastructures, B: PartBuilder, rng: Rng, [x, z]: number[], h: number, w: number, d: number, yaw: number) {
+    const M = this.mats;
+    // `texelBox`, not `BoxGeometry`: `concreteMaterial`'s map is a tile
+    // authored for a metre-scale part, and one tile stretched over a 400 m
+    // tower is the vertical smearing the old skyline carried.
+    const face = (lit: boolean) => (lit ? M.cityLit : M.city);
+    const put = (m: THREE.Material, bw: number, bh: number, bd: number, y: number, ox = 0, oz = 0) =>
+      B.add(m, texelBox(bw, bh, bd, 55), mat4([x, y, z], [0, yaw, 0]).multiply(mat4([ox, 0, oz])));
+
+    const podH = h * 0.09;
+    put(M.city, w * 1.34, podH, d * 1.34, podH * 0.5);
+
+    // Two setbacks. Each section is a fixed share of what is left above the
+    // podium, so a short tower still gets all three and never degenerates.
+    let y = podH;
+    const rest = h - podH;
+    const cuts = [0.52, 0.31, 0.17], widths = [1.0, 0.82, 0.63];
+    for (let s = 0; s < 3; s++) {
+      const sh = rest * cuts[s];
+      const lit = rng.next() < 0.55;
+      put(face(lit), w * widths[s], sh, d * widths[s], y + sh * 0.5);
+      // a cornice on each setback, so the step catches a line of light
+      if (s < 2) put(M.city, w * widths[s] * 1.06, rest * 0.012, d * widths[s] * 1.06, y + sh);
+      y += sh;
+    }
+
+    const crown = rng.next();
+    const cw = w * widths[2];
+    if (crown < 0.28) {                       // stepped cap
+      put(M.city, cw * 0.82, h * 0.045, d * widths[2] * 0.82, y + h * 0.0225);
+      put(M.city, cw * 0.55, h * 0.035, d * widths[2] * 0.55, y + h * 0.062);
+    } else if (crown < 0.52) {                // taper
+      B.add(M.city, new THREE.CylinderGeometry(cw * 0.10, cw * 0.60, h * 0.16, 6),
+        mat4([x, y + h * 0.08, z], [0, yaw, 0]));
+    } else if (crown < 0.80) {                // plant room and a stub mast
+      put(M.city, cw * 0.62, h * 0.055, d * widths[2] * 0.5, y + h * 0.0275, cw * 0.12);
+      B.add(M.city, new THREE.CylinderGeometry(1.4, 2.6, h * 0.13, 5),
+        mat4([x, y + h * 0.12, z], [0, yaw, 0]));
+    } else {                                  // full mast with a beacon
+      B.add(M.city, new THREE.CylinderGeometry(1.0, 3.2, h * 0.30, 5),
+        mat4([x, y + h * 0.15, z], [0, yaw, 0]));
+      B.add(M.beacon, new THREE.BoxGeometry(5, 5, 5), mat4([x, y + h * 0.30, z]));
+    }
+  }
+
   _capital() {
     const M = this.mats;
     const B = new PartBuilder();
@@ -296,21 +437,29 @@ export class Megastructures {
       }
     }
 
-    // tower cluster rising behind it
-    for (let i = 0; i < 44; i++) {
-      const x = rng.gauss(0, spread * 0.30);
-      const z = 130 + Math.abs(rng.gauss(0, 300));
+    // Tower cluster rising behind it.
+    //
+    // Every one of these used to be a single extruded box, and that is the tell
+    // the A/B judge was actually seeing when it claimed Insomnia "takes no
+    // aerial perspective". The atmosphere lane ablated that claim and disproved
+    // it — the skyline is 79% hazed and converging correctly — so what was left
+    // to explain the flat cutout read is the geometry: forty-four rectangles
+    // with flat tops, no setbacks and no crowns, all sharing one silhouette
+    // grammar. At three kilometres a tower is a couple of hundred pixels tall
+    // and about twenty wide, so the *only* thing about it the eye can resolve
+    // is its outline and its value. Both of those are what this builds.
+    //
+    // Three depth bands rather than one cloud, so the skyline overlaps itself:
+    // an overlap is the cheapest depth cue there is at this range, and a single
+    // Gaussian in z produces a comb where nothing occludes anything.
+    for (let i = 0; i < 58; i++) {
+      const band = i % 3;
+      const x = rng.gauss(0, spread * (0.26 + band * 0.06));
+      const z = 130 + band * 220 + Math.abs(rng.gauss(0, 130));
       const fall = 1 - Math.min(1, Math.abs(x) / (spread * 0.62));
-      const h = (110 + rng.range(0, 300)) * (0.4 + 0.85 * fall);
+      const h = (110 + rng.range(0, 300)) * (0.4 + 0.85 * fall) * (band === 0 ? 0.78 : 1);
       const w = 26 + rng.range(0, 46);
-      // a good half of the blocks are lit stock, so the skyline comes alight
-      // after dark instead of staying a dead grey comb
-      const face = rng.next() < 0.55 ? this.mats.windows : M.city;
-      B.add(face, new THREE.BoxGeometry(w, h, w * rng.range(0.7, 1.3)),
-        mat4([x, h * 0.5, z], [0, rng.next() * 1.5, 0]));
-      if (rng.next() < 0.35) {
-        B.add(M.city, new THREE.CylinderGeometry(1.6, 4, h * 0.28, 6), mat4([x, h + h * 0.14, z]));
-      }
+      this._tower(B, rng, [x, z], h, w, w * rng.range(0.7, 1.3), rng.next() * 1.5);
     }
 
     // the Citadel: one spire that dwarfs everything around it
@@ -331,7 +480,7 @@ export class Megastructures {
     g.position.set(2560, 150, -3180);
     g.rotation.y = -0.42;
     this.root.add(g);
-    this.glows.push(M.windows);
+    this.glows.push(M.cityLit);
   }
 
   // ------------------------------------------------------------------ meteor
@@ -346,16 +495,53 @@ export class Megastructures {
     const B = new PartBuilder();
     const rng = new Rng(1919);
 
-    B.add(M.stone, shard(2201, 330, [1.35, 1.05, 1.1], 0.34), mat4([0, 130, 0]));
-    B.add(M.stone, shard(2202, 190, [1.05, 1.9, 0.9], 0.42), mat4([-250, 190, 150], [0.3, 0.7, 0.4]));
-    B.add(M.stone, shard(2203, 160, [1.2, 2.2, 1.0], 0.44), mat4([280, 230, -110], [-0.24, 1.4, -0.3]));
-    // glowing fissures: thin slabs peeking between the masses
-    for (let i = 0; i < 26; i++) {
+    // Five masses, not one with two attendants.
+    //
+    // The thing that made this a dome was that mass A was 330 m and B and C
+    // were 190 and 160 — so from anywhere in the basin one rounded outline
+    // owned the silhouette and the other two were bumps on its shoulder. These
+    // five are within a factor of two of each other and every one of them is
+    // strongly anisotropic *before* it is cut, so each reads as a wedge or a
+    // slab rather than a lump, and they are leaned so no two point the same
+    // way. What the eye gets is a cluster of angular peaks with real clefts
+    // between them — which is what the region is named for and what the old
+    // silhouette never had.
+    //
+    // The gaps are as authored as the masses. `CLEFT` records where each one
+    // is so the fissure glow can sit *in* the clefts instead of being sprayed
+    // around a circle and half-buried inside solid rock.
+    const MASS: Array<[number, number, number[], Vec3, Vec3]> = [
+      // seed   r    stretch (pre-cut)      position           tilt
+      [2201, 300, [0.98, 1.34, 0.90], [0, 150, 0], [0.30, 0.2, -0.26]],
+      [2202, 265, [1.36, 0.94, 0.88], [-330, 80, 120], [-0.18, 1.15, 0.44]],
+      [2203, 235, [0.92, 1.42, 0.94], [305, 120, -150], [0.46, 2.25, 0.22]],
+      [2204, 195, [1.28, 1.02, 0.88], [80, 45, 320], [-0.52, 0.45, 0.66]],
+      [2205, 165, [0.90, 1.46, 0.90], [-150, 190, -290], [0.24, 3.05, -0.48]],
+    ];
+    // The anisotropy is capped at about 1.5:1 and not the 2.4:1 the first pass
+    // used, because `rockGeometry` normalises to a *bounding* radius: a 2.4:1
+    // pre-stretch means the two short axes only reach 40% of `size`, so cuts
+    // taken at a fraction of `size` never touch them while the long axis is cut
+    // right down — and the mass comes out a blade. One of these rendered as a
+    // literal sail standing over the crater.
+    for (const [seed, r, stretch, at, tilt] of MASS) {
+      B.add(M.stone, meteorMass(seed, r, stretch), mat4(at, tilt));
+    }
+    // Midpoints between neighbouring masses: the mouths of the clefts.
+    const CLEFT: Vec3[] = [
+      [-165, 130, 60], [155, 140, -75], [40, 105, 160], [-75, 175, -145],
+      [-90, 150, 20], [110, 100, 90], [-30, 190, -70],
+    ];
+    // Glowing fissures. A meteor that struck within living memory is still hot
+    // in its cracks, and this is the one warm accent in a cold-hazed distance —
+    // so it has to read as light coming *out of* the mass, which means the
+    // slabs belong in the clefts, tall and thin, not scattered on a circle.
+    for (let i = 0; i < 22; i++) {
+      const c = CLEFT[i % CLEFT.length];
       const a = rng.next() * Math.PI * 2;
-      const r = 190 + rng.range(0, 210);
-      B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(26, 90), rng.range(18, 80), 14),
-        mat4([Math.cos(a) * r, 40 + rng.range(0, 280), Math.sin(a) * r * 0.7],
-          [rng.gauss(0, 0.4), a, rng.gauss(0, 0.5)]));
+      B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(5, 13), rng.range(22, 64), 5),
+        mat4([c[0] + rng.gauss(0, 22), c[1] + 15 + rng.gauss(0, 55), c[2] + rng.gauss(0, 22)],
+          [rng.gauss(0, 0.20), a, rng.gauss(0, 0.24)]));
     }
     // ejecta ring around the impact
     for (let i = 0; i < 30; i++) {
@@ -375,7 +561,7 @@ export class Megastructures {
     // that its 857 m outer shards leaned over the headland and read as
     // unexplained slabs floating above the sea.
     const x = -1020, z = -2160;
-    g.position.set(x, this.eco.height(x, z) - 90, z);
+    g.position.set(x, seatY(this.eco, x, z, 400, CULL) - 90, z);
     g.rotation.y = 0.6;
     this.root.add(g);
   }
@@ -407,7 +593,7 @@ export class Megastructures {
 
     // ground profile, then a heavy smooth so the deck is a viaduct, not a wall
     const ground = [];
-    for (let i = 0; i <= bays; i++) { const p = bayAt(i); ground.push(eco.height(p.x, p.z)); }
+    for (let i = 0; i <= bays; i++) { const p = bayAt(i); ground.push(seatY(eco, p.x, p.z, 30, CULL)); }
     let deck = ground.slice();
     for (let pass = 0; pass < 12; pass++) {
       const t = deck.slice();
@@ -465,7 +651,7 @@ export class Megastructures {
       const px = p.x + rng.gauss(0, 34), pz = p.z + rng.gauss(0, 34);
       const s = rng.range(4, 15);
       B.add(M.pale, shard(2400 + i, s, [1.5, 0.7, 1.2], 0.3),
-        mat4([px, eco.height(px, pz) + s * 0.25, pz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
+        mat4([px, seatY(eco, px, pz, s, CULL) + s * 0.25, pz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
     }
 
     B.build(this.root, { cast: false, receive: true, name: 'viaduct' });

@@ -2,6 +2,18 @@ import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import { seatY } from './Seat.ts';
+
+/**
+ * How far a landmark is still drawn.
+ *
+ * The range at which a landmark's FOOT is still read against the ground, not
+ * the range at which its top is a visible silhouette. `seatY` returns the lower
+ * envelope of every ring that could draw the point, and that envelope is tens
+ * of metres down by the coarse rings — seating a haven there to protect a
+ * kilometre-range silhouette sinks it at the range a player camps on it.
+ */
+const CULL = 400;
 import type { EcoSite, RoadsideSite } from './EcoSites.ts';
 import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import {
@@ -160,9 +172,9 @@ export class Landmarks {
     let base = Infinity;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      base = Math.min(base, eco.height(cx + Math.cos(a) * 9.2, cz + Math.sin(a) * 9.2));
+      base = Math.min(base, seatY(eco, cx + Math.cos(a) * 9.2, cz + Math.sin(a) * 9.2, 2, CULL));
     }
-    base = Math.min(base, eco.height(cx, cz));
+    base = Math.min(base, seatY(eco, cx, cz, 2, CULL));
     // A haven is a rock, not a paving slab: it stands proud of the scrub so it
     // reads as a place at a hundred metres and in silhouette at dusk.
     //
@@ -181,7 +193,7 @@ export class Landmarks {
       const px = cx + Math.cos(a) * d, pz = cz + Math.sin(a) * d;
       const s = rng.range(0.7, 2.6);
       B.add(M.rock, block(600 + i, s * 1.6, s, s * 1.4, 0.3),
-        mat4([px, eco.height(px, pz) - s * 0.24, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
+        mat4([px, seatY(eco, px, pz, s, CULL) - s * 0.24, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
     }
     // a flight of steps up onto the rock
     for (let i = 0; i < 4; i++) {
@@ -422,7 +434,7 @@ export class Landmarks {
     const M = this.mats, eco = this.eco;
     const rng = new Rng(1300 + Math.round(site.x));
     const h = site.tall || 20;
-    const y = eco.height(site.x, site.z);
+    const y = seatY(eco, site.x, site.z, 6, CULL);
     // stepped plinth
     B.add(M.pale, block(880, 7.4, 1.1, 7.4, 0.06), mat4([site.x, y + 0.2, site.z], [0, 0.3, 0]));
     B.add(M.pale, block(881, 5.4, 0.9, 5.4, 0.06), mat4([site.x, y + 1.1, site.z], [0, 0.1, 0]));
@@ -446,7 +458,7 @@ export class Landmarks {
       const px = site.x + Math.cos(a) * d, pz = site.z + Math.sin(a) * d;
       const s = rng.range(0.6, 2.2);
       B.add(M.pale, block(910 + i, s * 1.5, s * 0.8, s, 0.2),
-        mat4([px, eco.height(px, pz) - s * 0.2, pz],
+        mat4([px, seatY(eco, px, pz, s, CULL) - s * 0.2, pz],
           [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
     }
   }
@@ -460,7 +472,7 @@ export class Landmarks {
     let base = Infinity;
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      base = Math.min(base, eco.height(cx + Math.cos(a) * 3.4, cz + Math.sin(a) * 3.4));
+      base = Math.min(base, seatY(eco, cx + Math.cos(a) * 3.4, cz + Math.sin(a) * 3.4, 1, CULL));
     }
     const yaw = -0.35;
     const W = 5.4, D = 4.2, H = 2.9;
@@ -507,7 +519,7 @@ export class Landmarks {
     for (let i = 0; i < 4; i++) {
       const a = rng.next() * Math.PI * 2, d = 3.6 + rng.range(0, 2.4);
       const px = cx + Math.cos(a) * d, pz = cz + Math.sin(a) * d;
-      const gy = eco.height(px, pz);
+      const gy = seatY(eco, px, pz, 0.7, CULL);
       if (i % 2 === 0) {
         B.add(M.rust, new THREE.CylinderGeometry(0.31, 0.31, 0.9, 14),
           mat4([px, gy + 0.44, pz], [rng.gauss(0, 0.05), rng.next() * 3, rng.gauss(0, 0.05)]));
@@ -524,7 +536,7 @@ export class Landmarks {
 
   _truck(B: PartBuilder, site: EcoSite) {
     const M = this.mats, eco = this.eco;
-    const y = eco.height(site.x, site.z);
+    const y = seatY(eco, site.x, site.z, 6, CULL);
     const world = mat4([site.x, y, site.z], [0, site.yaw || 0, 0.03]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
