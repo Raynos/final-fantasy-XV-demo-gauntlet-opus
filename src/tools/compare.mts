@@ -212,8 +212,16 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
      * make the instrument report on a case whose answer you already know.
      */
     let i = 0;
+    // One composite per distinct *plate pair*, not per PAIRING row. Several
+    // rows share the same two plates, and emitting both hands the judge the
+    // same image twice — one caught two of four as identical by MD5, which
+    // costs the round its independence.
+    const seenPair = new Set<string>();
     for (const [shot, plates] of Object.entries(PAIRING)) {
       if (plates.length < 2 || plates[0] === plates[1]) continue;
+      const sig = [plates[0], plates[1]].sort().join('|');
+      if (seenPair.has(sig)) continue;
+      seenPair.add(sig);
       i += 1;
       pairs.push({
         n: i,
@@ -290,7 +298,12 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
   console.log(`key: ${path.relative(ROOT, path.join(out, 'ANSWER-KEY.json'))}   DO NOT SHOW THE JUDGE`);
   console.log(`\nHand the judge only the ab-*.jpg files, and this question:`);
   console.log(`  "One of these two panels is a shipped PS4 game and the other is a WebGL`);
-  console.log(`   demo. Which is which, how confident are you, and what gave it away?"`);
+  console.log(`   demo. **Name the panel you believe is the shipped PS4 game** — A or B —`);
+  console.log(`   how confident are you, and what gave it away?"`);
+  console.log(`\n  Ask for the SHIPPED panel, not the demo. The old wording was "which is`);
+  console.log(`  which", which does not say which one to name; a judge may answer with`);
+  console.log(`  either, nothing records what it did, and --reveal assumes one. That`);
+  console.log(`  turned one round's 9-identified into a printed "9 fooled".`);
   console.log(`\nThen: node src/tools/compare.mts --reveal ${path.relative(ROOT, out)} --answers 1=A,2=B,...`);
 }
 
@@ -319,6 +332,11 @@ async function reveal(arg: (n: string, d?: string) => string | undefined): Promi
   }
 
   let identified = 0, fooled = 0, unsure = 0;
+  // State the convention in the output, every time. It is the one thing a
+  // reader cannot recover from the numbers, and getting it backwards inverts
+  // the entire result silently — a perfect round reads as a perfect loss.
+  console.log('CONVENTION: --answers gives the panel the judge called the SHIPPED GAME.');
+  console.log('            If your judge named the demo instead, invert before scoring.\n');
   console.log('pair  our shot                        judge said   was          verdict');
   console.log('-'.repeat(78));
   for (const k of keys) {
