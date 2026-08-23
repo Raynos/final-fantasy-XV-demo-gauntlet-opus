@@ -1225,26 +1225,78 @@ void tf_shade() {
   // multiplies its ground by (0.92, 0.97, 0.89) -- darker, and greener by
   // taking more out of red and blue than out of green. Held to exactly that at
   // full cover.
+  // **The original colour measurement was taken the wrong way and it cost the
+  // term most of its effect.** It read a 900x160 rectangle of near ground with
+  // and without grass and took the ratio of the two means -- but a rectangle
+  // averages the grassed pixels with the bare ones between them, so the ratio
+  // it produces is the *partial-cover* ratio, and applying it at FULL cover
+  // understates the material by however sparse the field happened to be there.
+  // Re-measured over the pixels the blades actually cover (the ones where a
+  // --raw pair differs by more than 40/255, 11.9% and 12.9% of the two frames):
+  //
+  //     zone_fallgrove   grassed (81.5,102.8, 53.3)  bare (98.7,99.8,72.5)
+  //                      ratio (0.826, 1.029, 0.735)
+  //     zone_vannath     grassed (110.5,109.5,69.6)  bare (107.6,84.0,62.0)
+  //                      ratio (1.028, 1.303, 1.123)
+  //
+  // Two findings in that. The humid ratio is roughly twice the chroma swing the
+  // shipped (0.922, 0.968, 0.887) had. And **the dry-savannah ratio is above
+  // one on every channel** -- pale straw-green grass over red soil is *lighter*
+  // than what it grows on, where wet Duscae grass over dark loam is darker. One
+  // tint could never have been right for both, and the one that shipped was the
+  // wrong sign for half the world.
+  //
+  // So the endpoints are regional, and they are bimodal on the tuft's own
+  // height for the same reason the dry cover below is: our mid-ground band is a
+  // stop short of the reference's value RANGE and short at the top of it, so a
+  // flat multiply in either direction closes nothing. The 0.9 m octave is new
+  // and is the point -- 8.7 m and 2.9 m are both large enough to land in d32,
+  // where reliefstat already says we are at 167% of the reference, while d4 sat
+  // at 80%.
   float swardAmt = smoothstep(100.0, 185.0, vTDist) * clamp(w[4] * 1.7, 0.0, 1.0)
                  * smoothstep(0.06, 0.30, bioGreen);
   if (swardAmt > 0.003) {
     float sv1 = tf_snoise(P.xz * 0.115 + 51.0);
     float sv2 = tf_snoise(P.xz * 0.345 - 27.0);
-    float cover = clamp(0.5
-      + 0.60 * sv1 * tf_lodW(8.7, tfPx)
-      + 0.36 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0);
-    cover = smoothstep(0.16, 0.84, cover) * swardAmt;
+    float sv3 = tf_snoise(P.xz * 1.11 + 133.0);
+    float swardTuft = clamp(0.5 + 0.62 * sv3 * tf_lodW(0.90, tfPx)
+                                + 0.30 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0);
+    float cover = smoothstep(0.16, 0.84, clamp(0.5
+        + 0.60 * sv1 * tf_lodW(8.7, tfPx)
+        + 0.36 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0)) * swardAmt;
     // A gust lays the blades over, and laid-over grass shows more of its own
     // shadowed base and less of its lit tips. 1.0 is the still-air amplitude
     // the sway uses, so this is centred on it rather than on zero.
     float gust = clamp(tf_gust(P.xz) - 1.0, -0.8, 0.8);
-    vec3 swardCol = vec3(0.922, 0.968, 0.887) * (1.0 - 0.10 * gust);
-    col *= mix(vec3(1.0), swardCol, cover);
+    float humid = smoothstep(0.30, 0.82, bioGreen);
+    vec3 swardMean = mix(vec3(1.028, 1.303, 1.123), vec3(0.826, 1.029, 0.735), humid);
+    vec3 swardShade = swardMean * (0.82 - 0.08 * gust);
+    vec3 swardTip = swardMean * (1.18 - 0.10 * gust);
+    col *= mix(vec3(1.0), mix(swardShade, swardTip, smoothstep(0.28, 0.84, swardTuft)), cover);
     // A sward is a mat of scattering fibres: rougher than the soil it stands
     // on, and it holds its own shade between the tufts.
     rgh = mix(rgh, min(1.0, rgh * 1.12 + 0.05), cover);
-    ao *= mix(1.0, 0.88, cover);
+    ao *= mix(1.0, 0.86, cover * (1.0 - swardTuft));
   }
+  // **This is close to a measured negative and it is recorded as one.** The
+  // rewrite above is right on its own terms -- the old ratio was a
+  // partial-cover ratio applied at full cover, and it was the wrong sign for
+  // every dry-savannah zone -- but on the graded frames it moves almost
+  // nothing. Paired --raw captures, only this block changed: zone_fallgrove
+  // **0.037 mean/255 over 0.006% of pixels**, against an imgdiff floor of
+  // 1.5-1.9, and the 3x mid-ground crops before and after are not
+  // distinguishable by eye.
+  //
+  // The reason is reach, not strength. The endpoints moved by 10-17% per
+  // channel; for that to come out as 0.037 over the frame, the ground that
+  // satisfies both the grass splat weight and the 100-185 m ramp at the same
+  // time has to be a small fraction of it, at modest cover. **Anyone extending
+  // this should widen its reach before touching its colour again** -- and
+  // should ask the same question of the dry-cover term below, which is gated
+  // the same way and moves seventy times as much, only because Leide's ground
+  // is most of Leide's frame. Kept because it costs three noise evaluations
+  // inside a branch that already existed, and because shipping a tint that is
+  // the wrong sign for half the world is not a defensible resting state.
 
   // ---- tier-D dry cover: the thorn mat and tussock nothing else draws -------
   //
