@@ -40,7 +40,6 @@ is the fast lane, **pre-push** runs `check:gate`.
 `src/tools/compare.mts` runs a blind A/B against pixel-sampled FFXV plates in
 `docs/reference/`. **`--control` is not optional**: without it a round cannot
 tell a real gap from a saturated instrument.
-
 Ten rounds, 3 -> 4.5/10, **never fooled it**. Its own answer for what gives us
 away is **authoring** — *"the same few instances repeated"* — not rendering
 defects: the absence of someone having chosen.
@@ -52,9 +51,8 @@ construction. **All ten rounds predate this grade; the next would be the first
 to see it.**
 
 **Open, named by four consecutive judges, nobody assigned:** cloud billboards,
-and terrain that reveals its mesh (`landmark_insomnia`). Then: a floating rock
-arch (round 10, twice, cheap), hair, and Insomnia's massing — its surface landed,
-its silhouette did not.
+and terrain that reveals its mesh (`landmark_insomnia`). Then a floating rock
+arch (round 10, twice, cheap), hair, and Insomnia's massing.
 
 ## What this session learned about itself
 
@@ -92,20 +90,22 @@ unnoticed for weeks when that was something people were asked to remember.
 
 ## Perf — uncertified
 
-The last certified pair — perf mean **243.7 fps** / worst 148, gameplay worst
-segment **92.2 fps** with 2 hitches, both `RULER_VALID: true` — **predates this
-round's renderer work.** `project/baseline-*.json` are the origin.
+Prior certified pair (`project/baseline-*.json`): perf mean **243.7 fps** /
+worst 148, gameplay worst segment **92.2 fps**, 2 hitches.
 
-**Two runs on 2026-08-23 voided** (`RULER_VALID: false`, floor 1.58 ms of a
-5.9 ms frame) with no orphans of ours and system load ~4.5. The ruler refused
-rather than lying, which is the instrument working. Perf takes the daemon's
-exclusive lease, so quiet is enforced *within* the repo — the contention is
-from outside it.
+**A third run on 2026-08-23 certified and FAILED**: `RULER_VALID: true`, floor
+22% of a 6.0 ms frame, **mean 166.4 fps, worst 51 fps on
+`bestiary_necromancer`** against a 60 fps target. Two earlier runs voided at
+27%. **Do not attribute it yet.** That shot's worst has read 179 / 150 / 51 fps
+across the three runs and its *baseline* row already carried `p95 31.8 ms,
+max 133.2 ms` — it is spike-dominated, and system load was ~4.5 from outside
+this repo throughout. Perf takes the daemon's exclusive lease, so quiet is
+enforced within the repo and not beyond it. **Re-run on an idle machine before
+anyone reads the mean as a regression.**
 
-Attribution: held frame 5.4 ms is `post.render` 4.2 (`ScenePass` 3.3), game
-systems 0.9. Cost tracks **draw calls** — ~8.7 us each, corr 0.801 vs 0.628 for
-triangles — so **a new visible `InstancedMesh` costs four draws, not one**
-(colour plus three cascades). Per-instance variation is free.
+Cost tracks **draw calls** — ~8.7 us each, corr 0.801 vs 0.628 for triangles —
+so **a new visible `InstancedMesh` costs four draws, not one** (colour plus
+three cascades). Per-instance variation is free.
 
 ## Still weak
 
