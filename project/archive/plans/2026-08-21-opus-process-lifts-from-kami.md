@@ -69,6 +69,14 @@ it thinks to. kami's `src/scripts/session-brief.sh` is a pure-read script wired
 to `SessionStart` that prints the human queue + active plans + recent commits
 straight into context. Cold pickup stops depending on the agent's curiosity.
 
+**SHIPPED 2026-08-23** as `src/tools/brief.sh`, wired to `SessionStart`. One
+change from the spec: it reads each plan's `Status:` **token** rather than
+trusting that `docs/plans/` only contains open plans. Those are meant to be the
+same thing — item 4 says a plan graduates when it is `DONE` — but the whole
+reason item 4 exists is that they drift, and four `Status:` lines were stale
+tonight. A brief that reports the directory instead of the token would report
+the drift as fact.
+
 **Do:** `src/tools/brief.sh` — under 60 lines, ≤2 s, no `git log` over a long
 range:
 - unticked `- [ ]` items from `project/TODO.md` (human-written, we never tick),

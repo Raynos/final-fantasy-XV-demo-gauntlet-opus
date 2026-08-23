@@ -247,6 +247,14 @@ in this file.
 - **`node src/tools/texbake.mts --force` is the reset**, and `?nobake=1` takes
   all three caches out of the loop entirely for one page load — which is also how you
   prove a suspected bake bug is or is not one, in thirty seconds.
+- **A shared cache means any agent can rewrite everyone's.** `src/public/baked/`
+  is a symlink into the main checkout from every worktree, which is right — a
+  32 MB heightfield should not be re-baked per branch. The consequence is that
+  `texbake.mts --force` run from a worktree rewrites the **shared** artifacts
+  from *that branch's* sources, and every other tree then boots on textures its
+  own code did not generate. It is self-healing on merge and invisible until
+  then. **Re-bake from `main` after every merge**, and treat a boot number or a
+  material capture taken while another lane holds the cache as unverified.
 - **`src/public/baked/` is a symlink to the main checkout from every worktree,
   so the cache is shared between concurrently running agents** while the
   freshness stamp is computed from whichever worktree baked last. Nothing

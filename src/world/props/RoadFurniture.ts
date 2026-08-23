@@ -8,6 +8,19 @@ import {
 import { alphaTex } from '../veg/VegTextures.ts';
 import { isMesh } from '../../util/three-guards.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import { seatY, coverY } from './Seat.ts';
+
+/**
+ * How far a chunk of road furniture is still drawn.
+ *
+ * A module constant rather than a local in `update`, because it is now two
+ * things: the visibility radius, and the range `Seat` needs in order to know
+ * *which clipmap ring* will be drawing the ground under a delineator post at
+ * the moment it matters. Passing the live camera's spacing instead is the
+ * sibling's floating-rock bug (plan §2.1) — an object-size rule where a
+ * level-selection rule was needed.
+ */
+const DRAW = 340;
 
 /**
  * Everything a real highway carries and an empty landscape does not: crash
@@ -267,7 +280,7 @@ export class RoadFurniture {
       for (const side of [-1, 1]) {
         if (rng.next() < 0.06) continue;             // a few knocked flat
         const q = this._side(p, side * 6.6);
-        const y = eco.height(q.x, q.z);
+        const y = seatY(eco, q.x, q.z, 0.3, DRAW);
         const yaw = Math.atan2(p.tx, p.tz);
         const lean = rng.gauss(0, 0.05);
         B.add(M.post, g.shaft, mat4([q.x, y + 0.6, q.z], [lean, yaw, rng.gauss(0, 0.06)]));
@@ -311,13 +324,20 @@ export class RoadFurniture {
       for (const side of [-1, 1]) {
         const near = this._side(p, side * 7.5);
         const far = this._side(p, side * 17);
+        // Analytic on purpose, and this is the distinction the whole `Seat`
+        // retrofit turns on: this is a question about the *shape* of the
+        // ground, not about where a thing sits on it. A difference of two
+        // clipmap envelopes is a difference of two quantisations, and it would
+        // put crash barrier on and off a bend depending on which ring happened
+        // to be drawing it. Where the post goes once we have decided to build
+        // it is `seatY`, below.
         const drop = eco.height(near.x, near.z) - eco.height(far.x, far.z);
         if (drop > 2.6 && (!best || drop > best.drop)) {
           best = { drop, q: this._side(p, side * 7.2) };
         }
       }
       if (!best) { flush(); continue; }
-      const y = eco.height(best.q.x, best.q.z);
+      const y = seatY(eco, best.q.x, best.q.z, 0.4, DRAW);
       run.push({ x: best.q.x, z: best.q.z, y });
     }
     flush();
@@ -340,13 +360,13 @@ export class RoadFurniture {
         acc = 0;
         const side = (a.tx * b.tz - a.tz * b.tx) > 0 ? 1 : -1;
         const q = this._side(p, side * 9.5);
-        const y = eco.height(q.x, q.z);
+        const y = seatY(eco, q.x, q.z, 0.3, DRAW);
         B.add(M.dark, new THREE.CylinderGeometry(0.05, 0.06, 1.9, 6), mat4([q.x, y + 0.9, q.z]));
         B.add(M.chevron, new THREE.PlaneGeometry(1.5, 0.62), mat4([q.x, y + 1.55, q.z], [0, yaw + Math.PI / 2, 0]));
       } else if (acc > 200) {
         acc = 0;
         const q = this._side(p, -8.2);
-        const y = eco.height(q.x, q.z);
+        const y = seatY(eco, q.x, q.z, 0.3, DRAW);
         B.add(M.concrete, g.plateBack, mat4([q.x, y + 0.5, q.z], [0, yaw, 0]));
         B.add(M.plate, new THREE.PlaneGeometry(0.24, 0.3), mat4([q.x, y + 0.86, q.z], [0, yaw + Math.PI / 2, 0])
           .multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.1)));
@@ -369,7 +389,7 @@ export class RoadFurniture {
       acc = 0; placed++;
       const side = dh > 0 ? -1 : 1;
       const q = this._side(p, side * 8.4);
-      const y = eco.height(q.x, q.z);
+      const y = seatY(eco, q.x, q.z, 3.4, DRAW);
       const yaw = Math.atan2(p.tx, p.tz);
       B.add(M.concrete, new THREE.BoxGeometry(3.4, 1.9, 0.4), mat4([q.x, y + 0.5, q.z], [0, yaw + Math.PI / 2, 0]));
       for (const s of [-1, 1]) {
@@ -383,7 +403,7 @@ export class RoadFurniture {
         const r = 1.2 + k * 0.55;
         const px = q.x + p.tz * side * r, pz = q.z - p.tx * side * r;
         B.add(M.concrete, new THREE.BoxGeometry(0.5, 0.22, 0.4),
-          mat4([px, eco.height(px, pz) + 0.06, pz], [0, k * 1.7, 0]));
+          mat4([px, coverY(eco, px, pz, 0.5, DRAW) + 0.06, pz], [0, k * 1.7, 0]));
       }
     }
   }
@@ -404,7 +424,7 @@ export class RoadFurniture {
         const off = rng.sign() * rng.range(7, 14);
         const q = this._side(p, off);
         const px = q.x + rng.gauss(0, 1.6), pz = q.z + rng.gauss(0, 1.6);
-        const y = eco.height(px, pz);
+        const y = seatY(eco, px, pz, 0.7, DRAW);
         const r = rng.next();
         if (r < 0.42) {
           const fell = rng.next() < 0.45;
@@ -431,7 +451,7 @@ export class RoadFurniture {
         const q = this._side(p, off);
         const px = q.x + rng.gauss(0, 1.4), pz = q.z + rng.gauss(0, 1.4);
         const s = rng.range(0.5, 1.9);
-        B.add(M.grit, g.grit, mat4([px, eco.height(px, pz) - 0.04, pz], [0, rng.next() * 6, 0], [s, s * 0.8, s]));
+        B.add(M.grit, g.grit, mat4([px, coverY(eco, px, pz, 2.5, DRAW) - 0.04, pz], [0, rng.next() * 6, 0], [s, s * 0.8, s]));
       }
     }
   }
@@ -461,7 +481,7 @@ export class RoadFurniture {
       const cz = p.z + p.tz * along - p.tx * lateral;
       for (const w of [-1, 1]) {
         const px = cx + p.tz * w * 0.95, pz = cz - p.tx * w * 0.95;
-        pos.push(px, eco.height(px, pz) + 0.045, pz);
+        pos.push(px, coverY(eco, px, pz, 0.3, DRAW) + 0.045, pz);
         uv.push(w * 0.5 + 0.5, t);
       }
       if (s > 0) {
@@ -486,7 +506,7 @@ export class RoadFurniture {
    * radius so a three-point turn never re-merges the same geometry.
    */
   update(camPos: THREE.Vector3) {
-    const BUILD = 420, DRAW = 340, CAST = 110, FREE = 900;
+    const BUILD = 420, CAST = 110, FREE = 900;
     let made = 0;
     let bestD = BUILD * BUILD, best: RoadChunk | null = null;
     for (const c of this.chunks) {

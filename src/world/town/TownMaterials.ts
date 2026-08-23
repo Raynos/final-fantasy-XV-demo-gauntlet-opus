@@ -190,12 +190,28 @@ export function corrugatedMaterial(tint = 0xb9b09a, rough = 0.62, metal = 0.35) 
   });
 }
 
-/** Painted panel steel: the canopy, the caravan shell, vehicle bodies. */
-export function panelMaterial(tint = 0xd8cfb4, rough = 0.44, metal = 0.55) {
+/**
+ * Painted panel steel: the canopy, the caravan shell, vehicle bodies.
+ *
+ * Two things about this were wrong until `TownKit`'s texel-density pass made
+ * them visible. The relief was `fbm2(u * 26)` at `normalScale` 0.55 — white
+ * noise at roughly a fifth of a tile, which is *grain*, and painted sheet steel
+ * has none: what it has is **oil-canning**, a gentle long wave across each
+ * unsupported panel. And it was `metalness` 0.55, so every one of those grain
+ * bumps mirrored the sky; on the canopy fascia and the diner trim the pair read
+ * as lava rock. Paint is a dielectric over the steel, so the metal term belongs
+ * near zero and the sheen belongs in roughness. `chrome` still passes its own
+ * 0.95 because bare polished trim genuinely is metal.
+ */
+export function panelMaterial(tint = 0xd8cfb4, rough = 0.52, metal = 0.06) {
   const n = new Noise(6613);
-  const h = (u: number, v: number) => n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5;
+  const h = (u: number, v: number) => {
+    const oilcan = n.fbm2(u * 2.6, v * 2.6, 2) * 0.5 + 0.5;
+    const grain = n.fbm2(u * 26, v * 26, 3) * 0.5 + 0.5;
+    return oilcan * 0.84 + grain * 0.16;
+  };
   return pbr(`town_panel${tint}${rough}${metal}`, {
-    tint, rough, metal, size: 256, normalScale: 0.55, height: h,
+    tint, rough, metal, size: 256, normalScale: 0.16, height: h,
     albedo: (u: number, v: number, c: Texel, base: THREE.Color) => {
       // Chipping has to be *sparse*: a paint chip is a few square millimetres,
       // and a threshold low enough to show up everywhere reads as black mould.
@@ -609,15 +625,15 @@ export function townMaterials() {
     gravel: gravelMaterial(),
     corr: corrugatedMaterial(0xb6ad96, 0.62, 0.35),
     corrRoof: corrugatedMaterial(0x8d8676, 0.68, 0.4),
-    panel: panelMaterial(0xe0d7bc, 0.42, 0.5),
-    panelRed: panelMaterial(0x9c3423, 0.40, 0.5),
-    panelBlue: panelMaterial(0x33506a, 0.46, 0.42),
-    panelCream: panelMaterial(0xcfc4a4, 0.46, 0.4),
+    panel: panelMaterial(0xe0d7bc, 0.50, 0.05),
+    panelRed: panelMaterial(0x9c3423, 0.48, 0.05),
+    panelBlue: panelMaterial(0x33506a, 0.52, 0.05),
+    panelCream: panelMaterial(0xcfc4a4, 0.54, 0.04),
     galv: galvMaterial(),
     scrap: scrapMaterial(0x8a5432),
     rubber: rubberMaterial(),
     wood: woodMaterial(0x7d6a4e),
-    dark: panelMaterial(0x24262a, 0.6, 0.3),
+    dark: panelMaterial(0x24262a, 0.62, 0.08),
     chrome: panelMaterial(0xc8ced6, 0.16, 0.95),
     glass: glassMaterial(0x121a20),
     glassDark: darkGlassMaterial(),
