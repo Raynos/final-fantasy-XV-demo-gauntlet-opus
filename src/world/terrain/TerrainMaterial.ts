@@ -788,11 +788,43 @@ void tf_shade() {
   // thickness, and freq is cycles per metre, so 1/freq IS that thickness in
   // metres and the amplitude needs no separate tuning: thick beds at the base
   // of a stack step further out than the fine laminations at the top, which is
-  // what a real stack does. aaFade is the same band limit the colour uses —
-  // once a bed is under about a pixel and a half it stops standing proud as
-  // well as stops being coloured, which is the only self-consistent answer.
+  // what a real stack does.
+  //
+  // The band limit is its OWN, and deliberately four times wider than aaFade,
+  // which is what the bed *colour* uses. That difference is the whole of round
+  // 10's first-named giveaway — "terrain that reveals its mesh, visible
+  // triangulation" on landmark_insomnia — and it is not a triangulation at
+  // all. sw is fwidth(sy1), cycles of bedding per pixel, so 1/sw is pixels per
+  // bed. aaFade holds full contrast down to about six pixels per bed and only
+  // dies at one and a half. For a COLOUR that is right: a bed too fine to
+  // resolve should blur toward its mean, and mush is what a distant stack
+  // ought to look like. For a HEIGHT it is catastrophic, because this term is
+  // not read, it is DIFFERENTIATED — tf_bump takes dFdx/dFdy of it in screen
+  // space. bedA is a near-square pulse in fract(sy1), and a full-amplitude
+  // square pulse whose edge lands inside one pixel differentiates to a spike
+  // whose sign is set by where that pixel centre happened to fall. A sign that
+  // alternates pixel to pixel across a whole face draws as a woven diagonal
+  // crosshatch, and a judge reading that frame calls it the mesh.
+  //
+  // So the relief gets the same 4–8 px rule tf_lodW applies to every other
+  // octave of this field, expressed in the bedding's own coordinate: full
+  // amplitude while a bed is 8 px or wider, gone by 4 px. The bed COLOUR is
+  // untouched at every range because aaFade is unchanged — measured, and the
+  // distinction between the two is the point.
+  //
+  // Four ablations came first and were all negative. Recorded so nobody
+  // re-runs them: GTAO off (LANDMINES names GTAO for the chevron hatch — it is
+  // not this one, the lattice is pixel-identical without it); a
+  // foreshortening-corrected tfPx, on the theory that grazing faces were
+  // under-filtered; the sign and the conditioning of tf_bump's det, which is
+  // positive and reads |det|/area = 1 over the whole frame; and the
+  // structSlope > 0.295 branch flickering per pixel, which it does not —
+  // structSlope is smooth and saturated there. What named it was a probe, not
+  // a guess: |dFd(gully)|, |dFd(wash)| and |dFd(bedRelief)| written into three
+  // colour channels. Only the blue channel wove.
+  float bedReliefFade = 1.0 - smoothstep(0.125, 0.25, sw);
   bedRelief = (bedA - 0.34) * (1.0 / max(freq, 0.02)) * 0.085
-            * aaFade * bedStr * bedRegion * smoothstep(0.30, 0.70, structSlope);
+            * bedReliefFade * bedStr * bedRegion * smoothstep(0.30, 0.70, structSlope);
   // the runnels darken independently of the bedding, at every distance, so even
   // a range past the band fade still has vertical structure. These survive a
   // green region far better than the beds do — a wooded valley wall still has
