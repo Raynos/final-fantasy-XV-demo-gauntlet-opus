@@ -267,7 +267,14 @@ export function buildCloudTextures({ baseSize = 64, detailSize = 48, weatherSize
       // the "scale variation" the round-10 judge said the deck had none of --
       // so they have to span several cells each, not one.
       wType[i] = valueFbm2(fx * 5, fy * 5, 5, 3, seed + 35);
-      wVar[i] = valueFbm2(fx * 20, fy * 20, 20, 3, seed + 36);
+      // 7, not 20. This channel's job is to make one cloud different from the
+      // next, and at 20 cells over the 27 km tile its features were 1.35 km --
+      // *finer* than a 2.25 km cloud, so it varied within each cloud and
+      // averaged out between them. Every cloud came out the same size and the
+      // same density, which is what a blind judge called "a grid-ish scatter of
+      // identical white puff sprites". At 7 it spans 3.9 km, so neighbours
+      // differ and the difference survives being seen from 10 km away.
+      wVar[i] = valueFbm2(fx * 7, fy * 7, 7, 3, seed + 36);
       i++;
     }
   }

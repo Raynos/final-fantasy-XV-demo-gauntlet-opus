@@ -83,7 +83,9 @@ float gCloudLod = 0.0;
 
 void cloudWeather(vec2 xz, out float wc, out float type, out float sag) {
   vec3 w = textureLod(uCloudWeather, (xz + uCloudWind) / uWeatherTile, gCloudLod).rgb;
-  wc = clamp(smoothstep(uCovRange.x, uCovRange.y, w.r) * (0.66 + 0.68 * w.b), 0.0, 1.0);
+  // The variation channel's range is wide on purpose. Narrow, it is a texture;
+  // wide, it is the difference between a fat cumulus and a scrap.
+  wc = clamp(smoothstep(uCovRange.x, uCovRange.y, w.r) * (0.48 + 0.98 * w.b), 0.0, 1.0);
   float t = uCloudType + (w.g - 0.5) * 0.55;
   type = clamp(t * mix(1.0 - uTowerAmt, 1.0 + uTowerAmt * 0.45, wc), 0.0, 1.0);
   // The condensation level is not a plane. Displacing the whole profile per
