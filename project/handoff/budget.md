@@ -7,11 +7,15 @@ agents in a row**).
 Predecessor: `project/handoff/perf.md`, which is the discovery this lane exists
 for. Read it before this.
 
-**Status: four commits landed, all gated. `npm run check` is 11/11,
+**Status: six commits landed, all gated. `npm run check` is 11/11,
 `gameplay.mts` and `perf.mts` both PASS with `RULER_VALID: true`, and nothing in
 the corpus regressed. The forest shots now carry roughly twice the geometry they
-did and the frame got *faster*.** What is left is at the bottom, with the blind
-judge's round-6 verdict, which is unflattering and specific.
+did and the frame got *faster*.**
+
+**And the blind judge is still 8/8 against us, twice.** That is at the bottom
+with what it said, because it is the part of this lane that matters most to
+whoever picks it up: the frame budget was never the thing standing between this
+game and a shipped one.
 
 ---
 
@@ -94,7 +98,44 @@ of **0.726/255**, below `imgdiff`'s own 1.5-1.9/255 floor. The resolution only
 pays once the cascade has further ground to cover. The two constants move
 together or not at all.
 
-### 3. `780dea8` — the pricing, and a warning about how it was nearly got wrong
+### 3. `11d4ced` — the ground layer stopped at 280 m, and the judge said so
+
+Round 6's number one tell was *"vegetation simply stops at a radius"*, named on
+the four open zones — every one of which ended its ground layer at
+`Bushes.impRange` = 280 m. A 1.5 m bush at 400 m is three or four pixels, which
+is what stops a hillside reading as one tiling texture.
+
+    impRange      280 -> 440 m
+    impBudget     4200 -> 9000
+    per-card cap  1500 -> 3400
+    tileCacheMax  900 -> 1800
+
+**This one could not be judged the way the others were.** The cost is not in
+triangles (9 000 cards of eight triangles is 72 k) and not in draw calls
+(`zone_three_valleys` reports 535 calls before and after). It is in the tile
+loop in `Bushes.update`, which is `O(impRange^2)` and runs inside
+`Vegetation.update` — the one currency here that is genuinely scarce. And
+`converge()` ignores `budgetMs`, so **a posed capture cannot see it either
+way**. Judged on `gameplay.mts`: `streaming-traverse` 13.1 -> 12.4 ms, i.e.
+*faster*, PASS on every segment, `RULER_VALID: true`.
+
+### 4. `a0f50cd` — the rock far-LOD deleted, and a clean negative with it
+
+`Rocks.build` gave the far tier a detail-1 blank (80 triangles against 320) on
+the note "a boulder at four hundred metres is four pixels". The far tier starts
+at **165 m**, where a 4 m boulder is over twenty pixels. Both tiers now share
+one geometry, so the swap at 165 m has no silhouette step and there is one
+geometry in memory instead of two.
+
+**It is not visible in a still frame, and that is the result.** Three graded
+shots captured as PNG on both sides of the one line: `zone_three_valleys` mean
+**0.648/255**, `zone_longwythe` **0.674**, `zone_keycatrich` **0.624** — all
+under `imgdiff`'s own 1.5-1.9/255 floor. Cost: 0 of 6 shots moved past the
+0.72 ms floor, draws identical. What is kept is a *pop* removed by construction
+(two meshes with different vertex and chip counts), whose magnitude at the
+boundary was **not** measured — a still is the wrong instrument for it.
+
+### 5. `780dea8` — the pricing, and a warning about how it was nearly got wrong
 
 `src/tools/probes/vegattr.mts` walks the levers ABAB from one page — old, trees
 only, old, shadow only, old, both, old — so a drifting machine moves both sides
@@ -164,94 +205,143 @@ under 1 ms.
 
 ---
 
-## What the blind judge says, round 6
+## What the blind judge says — two rounds, and the complaint moved
 
-`tmp/ab/`, eight pairs, `compare.mts`'s own question, no added instructions.
-**8 identified, 0 fooled, high confidence on every one.** The verdict is
-unflattering and it is still mostly about vegetation, so this is where the next
-round of this lane goes.
+Both rounds used `compare.mts`'s own question with nothing added, eight pairs,
+sealed key. **Round 6 (`tmp/ab/`, before the ground layer and rocks): 8
+identified, 0 fooled. Round 7 (`tmp/ab2/`, current HEAD): 8 identified, 0
+fooled.** The win rate did not move and the hesitation rate is 0%. That is the
+headline and it should not be softened.
 
-Its three ranked tells, verbatim in substance:
+**But the vocabulary on the forest shot changed, and that is a result.** Two
+different judge instances, same shot, `zone_fallgrove`:
 
-1. **"Vegetation density and LOD falloff. The single most reliable tell. WebGL
-   panels use a handful of instanced meshes with identical silhouettes and
-   rotations, and vegetation simply *stops* at a radius, leaving bare textured
-   terrain to the horizon."** Clearest on `vista_noon`, `zone_galdin`,
-   `zone_longwythe`, `zone_three_valleys` — the open zones. Note this was said
-   about a build that already had this lane's changes in it.
-2. **"Shadow poverty... No ambient occlusion or contact darkening anywhere, so
-   trees, rocks and structures all appear to float."** And: *"no
-   foliage-onto-foliage shadowing: canopies are lit uniformly, so a whole forest
-   reads as one flat green mass instead of the layered light/dark structure the
-   PS4 panels show."*
-3. **"Sky and distance handling."** Blobby clouds on a skydome, no
-   aerial-perspective haze, hard horizon lines, tiling terrain texture obvious
-   at mid-to-far range.
+  round 6  *"The forest is a scatter pass: two or three tree meshes repeated at
+           even spacing with identical silhouettes, no contact darkening at any
+           trunk base"*
+  round 7  *"a field of near-identical small trees at near-uniform spacing with
+           pale untextured trunks"* — and, separately, *"trunk shadows in the
+           near band and none in the far band, marking the shadow-cascade
+           cutoff"*
 
-By distance, its own breakdown: **near** — "leaves are alpha-cut cards with
-hard, dark cutout edges and no translucency; nothing lights through them from
-behind"; **middle** — "instancing repetition unmissable, the same two or three
-silhouettes at even spacing, no grass skirt or shadow where trunk meets ground";
-**far** — "vegetation vanishes at a visible radius... no forest-tinted terrain
-texture to fake distant canopy, so the far ground reads as bare tiling rock".
+Round 6 read the mid-ground as **billboards**; round 7 reads it as **trees with
+a variety problem** and can see individual trunks and their shadows. The defect
+that remains is *placement and species variety*, which is `Trees._makeTile` and
+`Biomes.ts` — the vegetation lane's territory, not a cost constant. Comparing
+two judge instances is weak evidence and is offered as exactly that.
 
-Some of that is factually wrong about the build (there *is* an impostor band,
-and there *are* three grass rings), which matters: the judge is reporting what
-the frame reads as, not what it contains. Treat every line as a symptom.
+Round 7's three ranked tells, in its own words:
 
----
+1. **Vegetation density and variety at 100-300 m.** *"In every demo panel the
+   middle distance either went completely bare... or filled with a single cloned
+   asset — the same small tree, same canopy shape, same pale trunk, at
+   near-uniform spacing."* The "completely bare" cases it names are
+   `vista_noon`, `zone_longwythe` and `zone_three_valleys` — **the dry zones,
+   and extending the bush ring to 440 m did not fix them.** `scrubbind.mts`
+   already says why: `Ecology.scrubDensity` returns 0.09-0.34 there and nothing
+   is capping it. This is an ecology-density question, not a budget one.
+2. **Vegetation stopping at a visible radius.** *"The boundary is often circular
+   and camera-centred, which is the giveaway that it's an instancing radius and
+   not terrain."* Still true past 440 m. The answer is almost certainly not more
+   instances — it is the terrain's own far-LOD grass/canopy tint carrying cover
+   to the horizon inside haze, which is `src/world/terrain/TerrainMaterial.ts`.
+3. **Cast shadows on open ground away from the camera.** *"Trunk shadows in the
+   near band and none in the far band, marking the shadow-cascade cutoff."*
+   `maxFar` moved 190 -> 320 in this lane and the cutoff is **still visible**.
+   320 is not a cost limit either — `shadowfar.mts` measured identical draw
+   counts at every distance tried. The next lane can take it further, but should
+   check the far cascade's texel density first: at 320 m with a 2048 map it is
+   already back to roughly what 190 m had at 1024.
+
+Two supporting tells worth passing on unchanged, because neither is in this
+lane and both were named in both rounds: **painted/sprite clouds with hard alpha
+edges**, and **no aerial perspective — distant geometry stays fully saturated
+instead of hazing.**
+
 
 ## What is left, ranked, and what is known about each
 
-1. **The open zones read as bare ground past ~150 m.** `GrassField.LODS[2].far`
-   is 155 m and `Bushes.impRange` is 280. **Neither is a fictional-budget
-   constant** — the grass one is justified on *quality* (an alpha-cut card that
-   small samples mips where its silhouette no longer exists, and the field turns
-   into a rash of dark rectangles), and the bush ring's cost is in the tile loop,
-   which is `Vegetation.update` CPU, the one currency that is not free. The
-   right answer here is probably **not more instances**: it is the terrain's own
-   far-LOD grass/canopy tint carrying cover to the horizon, which lives in
-   `src/world/terrain/TerrainMaterial.ts`. Unmeasured.
+**The first two are negatives. Read them before opening either line of work.**
 
-2. **There is no budget bug left in the ground layer, and this is a first-class
-   negative.** `src/tools/probes/scrubbind.mts` prints all four things that
-   could be capping the undergrowth. Geometry budget 137-352 of 2000, card
+1. **There is no budget bug left in the ground layer.**
+   `src/tools/probes/scrubbind.mts` prints all four things that could be capping
+   the undergrowth in a forest zone. Geometry budget 137-352 of 2000, card
    budget 451-2769 of 4200, every per-kind `InstancedMesh` under a third full.
    The limit is `Ecology.scrubDensity` returning **0.09-0.34**, which is
-   authored ecology and the vegetation lane's call. Raising a cost cap here
-   would do nothing at all.
+   authored ecology and the vegetation lane's call. Raising a cost cap here does
+   nothing at all. This is also why extending the bush card ring to 440 m did
+   not fix the judge's "completely bare middle distance" on `vista_noon`,
+   `zone_longwythe` and `zone_three_valleys`: those zones are thin because the
+   ecology says they are.
 
-3. **`Rocks` has the same shape of constant and it is unexamined.** `Rocks.build`
-   caps the near tier at 90-140 instances a kind and gives the far tier a
-   *detail-1 blank* (80 triangles against 320) past `nearRange` 62-165 m,
-   justified as "a boulder at four hundred metres is four pixels". Each kind is
-   one `InstancedMesh`, so both the caps and the detail level are triangle
-   decisions and should be free. Not measured, not touched — it is one probe's
-   work with `geosweep.mts` as the template.
+2. **`GrassField`'s 155 m outer ring is not a fictional-budget constant.** It is
+   justified on *quality*, and the justification is good: an alpha-cut card that
+   small samples mips where its own silhouette no longer exists, so the whole
+   quad passes or fails as one block and the field becomes a rash of dark
+   rectangles. Moving it out needs an answer to that first, not a bigger budget.
+   Note also that the ring's tile grid means extending it is one of the few
+   vegetation changes that genuinely *does* cost draw calls — ~124 of them in a
+   graded frame already, and they scale with `far^2 / tile^2`.
 
-4. **`Trees.impRange` 330 and `canopyNear` 296 are the gate on going past 250 m
+3. **The judge's remaining number one is vegetation *variety* in the middle
+   distance, not vegetation *presence*.** Round 7, on `zone_fallgrove`: *"a
+   field of near-identical small trees at near-uniform spacing with pale
+   untextured trunks."* That is `Trees._makeTile`'s placement and species draw
+   plus the bark material — the vegetation lane's territory. Nothing about it is
+   a cost decision, and this lane's widened geometry ring is what made it
+   visible: at 88 m there were only 97-130 real trees to look repetitive.
+
+4. **The shadow cascade cutoff is still visible and is still not a cost limit.**
+   Round 7: *"trunk shadows in the near band and none in the far band, marking
+   the shadow-cascade cutoff."* `maxFar` moved 190 -> 320 here and
+   `shadowfar.mts` measured **identical draw counts at every distance tried**,
+   so the next step out is free in the binding currency. Check the far cascade's
+   texel density before taking it: at 320 m on a 2048 map it is already back to
+   roughly what 190 m had at 1024, so another step wants either a fourth cascade
+   or a larger map, and cascade *count* recompiles every lit material.
+
+5. **`Trees.impRange` 330 and `canopyNear` 296 are the gate on going past 250 m
    of geometry.** Both are cheap in draws (one per variant / per species). What
    is *not* cheap is the tile iteration in `Trees.update`, which is bounded by
    `impRange` and is `O(impRange^2)`: 330 -> 480 takes the loop from 121 tiles
    to 225. That is `Vegetation.update`, the 7.8 ms half of the moving frame.
-   Measure with `gameplay.mts`, not with a held shot.
+   **Measure it with `gameplay.mts`, never with a held shot** — `converge()`
+   ignores `budgetMs`, so a posed capture is blind to streaming cost. The bush
+   ring change in this lane is the worked example.
 
-5. **The judge's "no foliage-onto-foliage shadowing" is now testable and was
-   not before.** With `geoRange` 250 and `maxFar` 320 there are ~1 200 real
-   canopies inside the cascades where there were 130 inside 190 m. If canopies
-   still read as one flat mass, the cause is not the cascade — it is the leaf
-   material's `translucency` / `twoSidedNormals` handling, which is
-   `VegMaterial.ts`.
+6. **The far horizon past the last instance is a terrain problem.** Round 7:
+   *"the boundary is often circular and camera-centred, which is the giveaway
+   that it's an instancing radius and not terrain."* Both judges wanted a
+   forest-tinted terrain far-LOD carrying cover into haze, which is
+   `src/world/terrain/TerrainMaterial.ts`. Unmeasured, and the highest-value
+   thing left that this lane did not reach.
+
+7. **Two tells outside this lane, named in both rounds, unchanged:**
+   painted/sprite clouds with hard alpha edges, and no aerial perspective —
+   distant geometry stays fully saturated instead of hazing.
 
 ## Files touched
 
-`src/world/veg/Trees.ts` (three constants and their comments),
-`src/world/Sky.ts` (`cascadeResFor`, `maxFar`), and six new probes under
-`src/tools/probes/`: `vegcensus`, `vegcost`, `vegattr`, `geosweep`,
-`shadowres`, `shadowfar`, `scrubbind`. Nothing else in `src/` was touched, so
-no other lane's work moved.
+Game code, four files, all inside this lane's ownership:
 
-Shots: `tmp/shots/before/` (pre-lane), `tmp/shots/t1` (trees at 170),
-`tmp/shots/t2` (full-res cascades at 190), `tmp/shots/t3` (maxFar 320),
-`tmp/shots/t4` (geoRange 250 — the current state), `tmp/shots/judge/` and
-`tmp/ab/` (round 6), `tmp/shots/shfar/` (the shadow crops).
+- `src/world/veg/Trees.ts` — `geoRange`, `geoBudget`, `perVariant`, and their
+  comments
+- `src/world/Sky.ts` — new `cascadeResFor`, and `maxFar`
+- `src/world/veg/Bushes.ts` — `impRange`, `impBudget`, per-card cap,
+  `tileCacheMax`
+- `src/world/props/Rocks.ts` — the far tier shares the near geometry
+
+Nothing else in `src/` was touched, so no other lane's work moved.
+
+Seven new probes under `src/tools/probes/`: `vegcensus` (draws/instances/
+triangles per ring, in frustum), `vegattr` (ABAB attribution of this lane's
+levers), `geosweep` (sweep the geometry ring), `shadowfar` and `shadowres` (the
+cascade pair), `scrubbind` (what caps the undergrowth), `vegcost` (kept, but see
+the warning in `780dea8` — its sequential loop drifts and it should be rewritten
+ABAB before anyone trusts it).
+
+Shots: `tmp/shots/before/` (pre-lane), `t1` (trees at 170), `t2` (full-res
+cascades at 190), `t3` (maxFar 320), `t4` (geoRange 250), `t5`/`t6` (bush ring
+at 440), `t7` and `rockA`/`rockB` (the rock LOD pair), `tmp/shots/shfar/` (the
+shadow crops), `tmp/shots/judge/` + `tmp/ab/` (round 6), `tmp/shots/judge2/` +
+`tmp/ab2/` (round 7).
