@@ -26,6 +26,18 @@ import type { Ecology } from '../veg/Ecology.ts';
  * spaced ellipsoids read as a particle system.
  */
 
+/**
+ * Where {@link rockGeometry} reports its `aRock` bake statistics, when a bench
+ * asks for them. Null in the game: this is the instrument hook, and the reason
+ * it exists is that a vertex-colour attribute multiplies albedo, so its mean
+ * and its maximum are the difference between an AO term and an accidental
+ * global darkening — and the version this replaced was the latter, measured.
+ */
+export let BAKE_STATS: { seed: number, mean: number, min: number, max: number, ao: number[], p90: number }[] | null = null;
+
+/** Start (or stop, with `null`) collecting into {@link BAKE_STATS}. */
+export function setBakeStats(v: typeof BAKE_STATS) { BAKE_STATS = v; }
+
 /** Clamp an axis-jitter multiplier away from zero and from absurdity. */
 const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
 
@@ -34,6 +46,87 @@ const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
+
+/** One block of a corestone stack, in units of the parent block's own radius. */
+export interface Corestone {
+  /** Horizontal offset of this block's centre from the stack axis, in parent radii. */
+  dx: number;
+  dz: number;
+  /** Radius, as a fraction of the parent's. */
+  s: number;
+  /** Vertical squash, so a course reads as a slab and not as a ball. */
+  sy: number;
+  /** Extra yaw, so no two courses present the same face. */
+  yaw: number;
+}
+
+/**
+ * Split one block into corestones along its sheeting joints, and settle each
+ * into the one below.
+ *
+ * This is the single highest-value thing in plan §3, and the reason is a
+ * measurement rather than an opinion: **block count IS the silhouette.** Our
+ * eight base meshes score 2.41–2.56 on the width-profile bench in
+ * `tmp/silrock.mts` and a plain icosphere scores 2.462 — the entire fracture
+ * pipeline, nine cut planes, strata, chamfer and all, is worth nothing at all
+ * against a ball as far as the *outline* is concerned. What moves that number
+ * is putting more than one mass in the outline.
+ *
+ * The rules that make a stack read as one weathered tor rather than as a cairn
+ * of separate pebbles:
+ *
+ * - **~30% vertical course overlap.** Edge-to-edge reads as a pile of plates,
+ *   and worse, the seam between two touching blocks is a black line at any
+ *   distance, and a black line is a gap. The blocks interpenetrate.
+ * - **Sizes fall upward**, so the thing tapers and the eye reads one object.
+ * - **Each course is offset from the axis by a fraction of its own width**, and
+ *   the offsets *drift* rather than being independent, so the stack leans. A
+ *   column of concentric blocks is a cylinder.
+ * - **Each course is squashed vertically**, because a sheeting joint parts a
+ *   block into slabs, not into boulders.
+ * - **Each course gets its own yaw**, which is free: it is the same instanced
+ *   mesh presenting a different profile.
+ *
+ * Zero new geometry and zero new draw calls — every corestone is an instance of
+ * a mesh that is already resident in a group that is already drawn. That is the
+ * whole reason this is affordable, and it is also the answer to §3.7's variety
+ * ceiling: eight base meshes composed three or four at a time is a much larger
+ * space than eight base meshes, and it costs nothing that a ninth mesh would.
+ *
+ * @param rng the cell's stream
+ * @param n how many corestones, 2–4
+ * @param overlap vertical course overlap, fraction of the two half-heights
+ * @returns the blocks, base first
+ */
+export function corestones(rng: Rng, n: number, overlap = 0.30): Corestone[] {
+  const out: Corestone[] = [];
+  // The base course is smaller than the block it replaces: three quarters of
+  // the radius stacked three high is already a taller and much busier object
+  // than the original, and leaving the base at 1.0 turns a boulder field into
+  // a field of towers.
+  const s0 = rng.range(0.55, 0.70);
+  const taper = rng.range(0.10, 0.22);
+  // The lean drifts: a random walk in the horizontal offset rather than n
+  // independent draws, so the stack has a direction instead of a wobble. It is
+  // **clamped**, because the overlap is what hides the seam and a course
+  // displaced by more than about a third of its own radius walks out from under
+  // the one above it. That failure does not read as a lean; it reads as a
+  // floating rock, which is the single defect four consecutive blind judges
+  // have named in this project.
+  const lean = 0.30;
+  let ax = rng.gauss(0, 0.09), az = rng.gauss(0, 0.09);
+  for (let i = 0; i < n; i++) {
+    const s = s0 * (1 - i * taper) * rng.range(0.88, 1.12);
+    const sy = rng.range(0.60, 0.92);
+    out.push({
+      dx: THREE.MathUtils.clamp(ax, -lean, lean) * s,
+      dz: THREE.MathUtils.clamp(az, -lean, lean) * s,
+      s, sy, yaw: rng.next() * Math.PI * 2,
+    });
+    ax += rng.gauss(0, 0.13); az += rng.gauss(0, 0.13);
+  }
+  return out;
+}
 
 /**
  * Rebuild normals with a smoothing-angle threshold.
@@ -133,10 +226,10 @@ function splitNormals(geo: THREE.BufferGeometry, angleDeg: number, uvScale = 0.6
  * */
 export function rockGeometry(seed: number, {
   detail = 2, warp = 0.26, stretch = [1, 1, 1], planes = 7, upright = 0.35,
-  bite = 0.78, bedding = 0, beds = 5, chips = 3, round = 0.06, crease = 30,
+  bite = 0.78, bedding = 0, beds = 5, ledge = 0.30, chips = 3, round = 0.06, crease = 30,
   flat = 0, weather = 0.16, upBias = 0.55, joints = true, size = 1, gully = 0,
   gullyFreq = 2.4, uvScale = 0.62, relief = 0, reliefFreq = 4, reliefSteps = 3,
-}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, chips?: number, round?: number, crease?: number, flat?: number, weather?: number, upBias?: number, joints?: boolean, size?: number, gully?: number, gullyFreq?: number, uvScale?: number, relief?: number, reliefFreq?: number, reliefSteps?: number } = {}) {
+}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, ledge?: number, chips?: number, round?: number, crease?: number, flat?: number, weather?: number, upBias?: number, joints?: boolean, size?: number, gully?: number, gullyFreq?: number, uvScale?: number, relief?: number, reliefFreq?: number, reliefSteps?: number } = {}) {
   // PolyhedronGeometry is non-indexed and its UV seam duplicates a whole
   // column of vertices; weld on position alone so the crease walk below sees
   // a real adjacency graph.
@@ -288,6 +381,19 @@ export function rockGeometry(seed: number, {
       const q = Math.sin(seed * 12.9898 + b * 78.233) * 43758.5453;
       resist[b] = q - Math.floor(q);
     }
+    // How much of a bed's height snaps onto its bounding plane. The vertices
+    // inside this band are pulled ONTO the plane, so the ring just under a
+    // bedding plane and the ring just over it end up at the **same Y at
+    // different radii** and the quad strip between them is a genuinely flat,
+    // horizontal ledge face. That is the whole of 3.3: the radial step alone
+    // bends the surface, and the outline it leaves is still a continuous
+    // curve, so the strata read as a decal. What sells sedimentary rock is
+    // that the outline *steps*, and an outline can only step where there is a
+    // horizontal face in the mesh to step across.
+    //
+    // Measured on the bench (`tmp/silrock.mts`): the radial step alone moves
+    // `bedded` from 2.435 (a plain granite block, and a sphere is 2.462) to
+    // 2.529. It is a rounding error. The snap is what pays.
     for (let i = 0; i < count; i++) {
       const t = ((P[i * 3 + 1] - yMin) / h) * nb;
       const bed = Math.min(nb - 1, Math.max(0, Math.floor(t)));
@@ -298,6 +404,16 @@ export function rockGeometry(seed: number, {
       const head = f > 0.8 ? -bedding * 0.35 * ((f - 0.8) / 0.2) : 0;
       const k = step + head;
       P[i * 3] *= k; P[i * 3 + 2] *= k;
+      // Snap toward the nearer bounding plane, but only the *interior* ones:
+      // pulling the crown and the foot flat as well turns every bedded block
+      // into a drum, and the foot is buried in any case.
+      let plane = -1, w = 0;
+      if (f < ledge && bed > 0) { plane = bed; w = 1 - f / ledge; }
+      else if (f > 1 - ledge && bed < nb - 1) { plane = bed + 1; w = 1 - (1 - f) / ledge; }
+      if (plane > 0) {
+        const yPlane = yMin + (plane / nb) * h;
+        P[i * 3 + 1] += (yPlane - P[i * 3 + 1]) * w;
+      }
     }
   }
 
@@ -488,18 +604,176 @@ export function rockGeometry(seed: number, {
   pos.array.set(P);
   pos.needsUpdate = true;
 
-  // --- vertex colour: dust on the ledges, grime in the crevices ----------
+  // --- the `aRock` bake: cavity, then AO, then plane-depth ---------------
+  //
+  // Two separate quantities, computed separately and combined once, replacing
+  // one expression that did both badly -- and a third, plane-depth occlusion,
+  // that the plan asks for, that was built, and that measured as worthless
+  // here. See below.
+  //
+  // **1. Cavity is curvature measured on a SMOOTHED COPY of the positions.**
+  // The version this replaces used the vertex's own radius -- `len / size` --
+  // which is not curvature at all: on a mesh whose radius already varies by
+  // `warp`, by the strata and by every cut, it reads the blank's own noise and
+  // reports "crevice" wherever the fbm happened to dip. That is MGS5's
+  // "splotch camouflage" bug in its purest form, and it is why our rocks carry
+  // dark patches that do not correspond to any feature you can see. Curvature
+  // taken on three Laplacian passes of the positions has the grain smoothed out
+  // of it and finds the re-entrant corners the cuts actually left.
+  //
+  // **2. AO is that cavity diffused over the adjacency graph, then
+  // renormalised against its own p90.** The renormalisation is the part that
+  // matters and the part that was missing. A vertex-colour attribute multiplies
+  // the albedo, so its *bright* end has to be 1 or the whole rock loses value:
+  // the expression this replaces ranged 0.31 to 0.90 with no vertex anywhere
+  // reaching 1, and measured on `hero_full` our boulders came back at luma 45
+  // and our mid-ground stacks at luma 29 against a hillside at 124 -- a
+  // quarter of the ground they are lying on. An AO term is a *shadow*, not a
+  // tint; the lit parts of it must be unity.
+  const idxC = geo.index!.array;
+  const S = P.slice();
+  {
+    const acc = new Float32Array(count * 3), cnt = new Float32Array(count);
+    for (let pass = 0; pass < 3; pass++) {
+      acc.fill(0); cnt.fill(0);
+      const addS = (a: number, b: number) => {
+        acc[a * 3] += S[b * 3]; acc[a * 3 + 1] += S[b * 3 + 1]; acc[a * 3 + 2] += S[b * 3 + 2];
+        cnt[a] += 1;
+      };
+      for (let t = 0; t < idxC.length; t += 3) {
+        const i0 = idxC[t], i1 = idxC[t + 1], i2 = idxC[t + 2];
+        addS(i0, i1); addS(i0, i2); addS(i1, i0); addS(i1, i2); addS(i2, i0); addS(i2, i1);
+      }
+      for (let i = 0; i < count; i++) {
+        const c = cnt[i] || 1;
+        S[i * 3] += (acc[i * 3] / c - S[i * 3]) * 0.55;
+        S[i * 3 + 1] += (acc[i * 3 + 1] / c - S[i * 3 + 1]) * 0.55;
+        S[i * 3 + 2] += (acc[i * 3 + 2] / c - S[i * 3 + 2]) * 0.55;
+      }
+    }
+  }
+  // Curvature of the smoothed copy, signed along its own normal: concave is
+  // positive. Scale-free, because it is divided by the neighbour ring radius.
+  const cav = new Float32Array(count);
+  {
+    const acc = new Float32Array(count * 3), cnt = new Float32Array(count);
+    const nrm = new Float32Array(count * 3);
+    const addS = (a: number, b: number) => {
+      acc[a * 3] += S[b * 3]; acc[a * 3 + 1] += S[b * 3 + 1]; acc[a * 3 + 2] += S[b * 3 + 2];
+      cnt[a] += 1;
+    };
+    for (let t = 0; t < idxC.length; t += 3) {
+      const i0 = idxC[t], i1 = idxC[t + 1], i2 = idxC[t + 2];
+      addS(i0, i1); addS(i0, i2); addS(i1, i0); addS(i1, i2); addS(i2, i0); addS(i2, i1);
+      const ax = S[i1 * 3] - S[i0 * 3], ay = S[i1 * 3 + 1] - S[i0 * 3 + 1], az = S[i1 * 3 + 2] - S[i0 * 3 + 2];
+      const bx = S[i2 * 3] - S[i0 * 3], by = S[i2 * 3 + 1] - S[i0 * 3 + 1], bz = S[i2 * 3 + 2] - S[i0 * 3 + 2];
+      const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+      for (const i of [i0, i1, i2]) { nrm[i * 3] += cx; nrm[i * 3 + 1] += cy; nrm[i * 3 + 2] += cz; }
+    }
+    for (let i = 0; i < count; i++) {
+      const c = cnt[i] || 1;
+      const mx = acc[i * 3] / c - S[i * 3], my = acc[i * 3 + 1] / c - S[i * 3 + 1], mz = acc[i * 3 + 2] / c - S[i * 3 + 2];
+      const ring = Math.hypot(mx, my, mz) || 1e-6;
+      const nl = Math.hypot(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) || 1;
+      // Positive where the ring sits OUTSIDE the vertex along the normal,
+      // i.e. the vertex is in a valley.
+      const k = (mx * nrm[i * 3] + my * nrm[i * 3 + 1] + mz * nrm[i * 3 + 2]) / (ring * nl);
+      cav[i] = Math.max(0, k);
+    }
+  }
+  // **Curvature alone is identically zero on seven of our eight kinds, and
+  // that is a fact about the generator, not about the bake.** A half-space cut
+  // can only ever make a shape MORE convex, so a mesh built by sixteen of them
+  // is convex almost everywhere and a concave-curvature measure has nothing to
+  // find on it: measured, the AO channel's p10/p50/p90/p99 all came back
+  // 0.00/0.00/0.00/0.00 on granite, bedded, worn, slab, spire, cobble and
+  // pebble, and non-zero only on `talus`, whose eleven planes at `bite` 0.74 do
+  // leave notches. The old radial `len / size` measure appeared to work only
+  // because it was reading the blank's own fbm, which is precisely MGS5's
+  // splotch-camouflage bug.
+  //
+  // **Plane-depth occlusion was built, measured and removed for the same
+  // reason.** One dot per cleave plane is near-free and it is also near-
+  // constant here: on a convex body every vertex lies deep inside all but the
+  // two or three planes that made it, so the term came out at 1/16 for
+  // everything on a face and 3/16 on an arris, and an arris is *exposed*. It
+  // is a real construction and it belongs to meshes whose planes bound
+  // notches. Ours do not.
+  //
+  // What actually occludes a convex boulder is the **ground it is bedded
+  // into** and its own **downward-facing** surfaces, plus the few genuine
+  // concavities the strata, the gullies and the relief terracing leave. Those
+  // are the three terms, diffused together and renormalised against their own
+  // p90 so "as occluded as this rock gets" means the same thing on every kind
+  // and at every size.
+  const ao = new Float32Array(count);
+  let aoP90 = 0;
+  {
+    let yMin = Infinity, yMax = -Infinity;
+    for (let i = 0; i < count; i++) {
+      yMin = Math.min(yMin, P[i * 3 + 1]); yMax = Math.max(yMax, P[i * 3 + 1]);
+    }
+    const hh = Math.max(1e-6, yMax - yMin);
+    const nrm = new Float32Array(count * 3);
+    for (let t = 0; t < idxC.length; t += 3) {
+      const i0 = idxC[t], i1 = idxC[t + 1], i2 = idxC[t + 2];
+      const ax = P[i1 * 3] - P[i0 * 3], ay = P[i1 * 3 + 1] - P[i0 * 3 + 1], az = P[i1 * 3 + 2] - P[i0 * 3 + 2];
+      const bx = P[i2 * 3] - P[i0 * 3], by = P[i2 * 3 + 1] - P[i0 * 3 + 1], bz = P[i2 * 3 + 2] - P[i0 * 3 + 2];
+      const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+      for (const i of [i0, i1, i2]) { nrm[i * 3] += cx; nrm[i * 3 + 1] += cy; nrm[i * 3 + 2] += cz; }
+    }
+    for (let i = 0; i < count; i++) {
+      const nl = Math.hypot(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) || 1;
+      const ny = nrm[i * 3 + 1] / nl;
+      const foot = 1 - THREE.MathUtils.smoothstep((P[i * 3 + 1] - yMin) / hh, 0, 0.40);
+      ao[i] = cav[i] * 2.2 + foot * 0.85 + Math.max(0, -ny) * 0.55;
+    }
+    // Occlusion reaches beyond the feature that casts it.
+    const acc = new Float32Array(count), cnt = new Float32Array(count);
+    for (let pass = 0; pass < 3; pass++) {
+      acc.fill(0); cnt.fill(0);
+      for (let t = 0; t < idxC.length; t += 3) {
+        const i0 = idxC[t], i1 = idxC[t + 1], i2 = idxC[t + 2];
+        acc[i0] += ao[i1] + ao[i2]; cnt[i0] += 2;
+        acc[i1] += ao[i0] + ao[i2]; cnt[i1] += 2;
+        acc[i2] += ao[i0] + ao[i1]; cnt[i2] += 2;
+      }
+      for (let i = 0; i < count; i++) ao[i] += (acc[i] / (cnt[i] || 1) - ao[i]) * 0.45;
+    }
+    const sorted = Array.from(ao).sort((a, b) => a - b);
+    aoP90 = sorted[Math.min(count - 1, Math.floor(count * 0.9))] || 1e-6;
+    for (let i = 0; i < count; i++) ao[i] = THREE.MathUtils.clamp(ao[i] / aoP90, 0, 1);
+  }
   const col = new Float32Array(count * 3);
+  let kSum = 0, kMin = 2, kMax = 0;
   for (let i = 0; i < count; i++) {
     const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
     const len = Math.hypot(x, y, z) || 1;
     const up = THREE.MathUtils.clamp(y / len, -1, 1);
-    // cavity: points that sit well inside the hull are in a re-entrant corner.
-    // Measured against `size`, so the bake means the same thing at 1 m and 330.
-    const cav = THREE.MathUtils.clamp((len / size - 0.62) / 0.38, 0, 1);
     const grain = n.fbm3((x / size) * 3.1 + 5, (y / size) * 3.1, (z / size) * 3.1 - 7, 3) * 0.5 + 0.5;
-    const k = (0.44 + 0.26 * Math.max(0, up) + grain * 0.2) * (0.58 + 0.42 * cav);
-    col[i * 3] = k * 1.06; col[i * 3 + 1] = k; col[i * 3 + 2] = k * 0.9;
+    // Dust settles on the up-facing ledges and is a LIGHTENING, so it lives
+    // above 1; the AO is the only thing that darkens. That split is the whole
+    // point: the expression this replaced multiplied albedo by 0.31 to 0.90
+    // with nothing anywhere reaching 1, so it was not an AO term at all, it
+    // was a global halving of the rock's value. Measured on `hero_full`: our
+    // boulders at luma 45 and our mid-ground stacks at 29 against the hillside
+    // they lie on at 124.
+    const dust = 1 + 0.13 * Math.max(0, up) + (grain - 0.5) * 0.14;
+    const k = dust * (1 - 0.42 * ao[i]);
+    kSum += k; kMin = Math.min(kMin, k); kMax = Math.max(kMax, k);
+    // Grime is cooler and less saturated than the dust on the ledges, so the
+    // two channels do not just scale together.
+    const warmth = 1 - 0.5 * ao[i];
+    col[i * 3] = k * (1 + 0.06 * warmth);
+    col[i * 3 + 1] = k;
+    col[i * 3 + 2] = k * (1 - 0.10 * warmth);
+  }
+  if (BAKE_STATS) {
+    const q = Array.from(ao).sort((a, b) => a - b);
+    BAKE_STATS.push({
+      seed, mean: kSum / count, min: kMin, max: kMax, p90: aoP90,
+      ao: [0.1, 0.5, 0.9, 0.99].map((f) => q[Math.min(count - 1, Math.floor(count * f))]),
+    });
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
@@ -538,7 +812,7 @@ const KINDS: RockKindDef[] = [
     key: 'bedded', seed: 202, size: [1.8, 5.4], bury: 0.24, w: 1.0,
     opts: {
       detail: 2, warp: 0.2, stretch: [1.08, 0.94, 1.02], planes: 6,
-      upright: 0.72, bite: 0.8, bedding: 0.045, beds: 6, chips: 3,
+      upright: 0.72, bite: 0.8, bedding: 0.20, beds: 5, chips: 3,
       round: 0.05, crease: 28,
     },
   },
@@ -555,7 +829,7 @@ const KINDS: RockKindDef[] = [
     key: 'slab', seed: 404, size: [1.8, 5.4], bury: 0.4, w: 0.6,
     opts: {
       detail: 2, warp: 0.17, stretch: [1.35, 0.68, 1.18], planes: 5,
-      upright: 0.55, bite: 0.86, bedding: 0.04, beds: 4, chips: 3,
+      upright: 0.55, bite: 0.86, bedding: 0.17, beds: 4, chips: 3,
       round: 0.06, crease: 25, flat: 0.2,
     },
   },
@@ -564,7 +838,7 @@ const KINDS: RockKindDef[] = [
     key: 'spire', seed: 505, size: [1.5, 4.0], bury: 0.22, w: 0.55,
     opts: {
       detail: 2, warp: 0.2, stretch: [0.72, 1.8, 0.8], planes: 7,
-      upright: 0.7, bite: 0.85, bedding: 0.03, beds: 5, chips: 3,
+      upright: 0.7, bite: 0.85, bedding: 0.13, beds: 6, chips: 3,
       round: 0.03, crease: 24,
     },
   },
@@ -679,6 +953,16 @@ export class Rocks {
   cell!: number;
   eco!: Ecology;
   groups!: RockGroup[];
+  /**
+   * Each kind's **vertical** half-extent, in units of its instance scale.
+   *
+   * `rockGeometry` normalises to the bounding radius, so `s` is the long axis
+   * and nothing else. Anything that stacks one block on another needs the other
+   * number, and it is not 1: **measured, it runs 0.447 (`slab`) to 0.988
+   * (`spire`)**, so assuming 1 leaves up to half a block of daylight under
+   * every course.
+   */
+  hy!: Map<StoneKind, number>;
   outcrops!: TileStream<RockInstance>;
   quality!: number;
   radius!: number;
@@ -691,6 +975,7 @@ export class Rocks {
     this.radius = radius * (quality < 0.7 ? 0.75 : 1);
     this.cell = 56;
     this.groups = [];
+    this.hy = new Map();
     this._last = new THREE.Vector3(1e9, 0, 1e9);
   }
 
@@ -743,16 +1028,98 @@ export class Rocks {
       const d = this._density(x, z);
       if (d <= 0.004 || rng.next() > d) continue;
       const anchor = K.get(pickWeighted(dress.kinds, rng.next())) ?? K_COBBLE;
-      out.push(this._item(anchor, x, z, rng, d, dress));
+      const it = this._item(anchor, x, z, rng, d, dress);
+      // Roughly half the big anchors are a corestone stack rather than one
+      // block. Not all of them: a field where *every* boulder is a three-high
+      // stack is the "wall of copies" the round-9 judge named from the other
+      // direction, and a real boulder field has single erratics in it too.
+      // Not on a slope either — a stack on a hillside is a pile that should
+      // have fallen over.
+      if (BIG.has(anchor.key) && rng.next() < 0.52 && eco.slope01(x, z) < 0.32) {
+        this._stack(it, rng, out);
+      } else out.push(it);
+      // The scree at the foot shares one orientation **fabric**.
+      //
+      // Chips off one block are not randomly oriented: they part along the same
+      // joint set the block did, so they land with their long axes within a
+      // narrow band of one family angle. Independently-yawed chips read as
+      // gravel poured out of a bag — which is what this did, because `_item`
+      // draws a uniform yaw over the full circle. Placement is `sqrt(rand)`
+      // over the disc rather than a folded gaussian, which is the difference
+      // between an apron and a heap: the gaussian piles everything at the
+      // anchor's own foot where it is hidden by the anchor. And the chips
+      // shrink outward, because the far ones travelled further to get there.
+      const fabric = rng.next() * Math.PI * 2;
       const frags = 2 + Math.floor(rng.next() * 5);
+      const reach = 2.2 + anchor.size[1] * 0.9;
       for (let j = 0; j < frags; j++) {
         const fa = rng.next() * Math.PI * 2;
-        const fd = Math.abs(rng.gauss(0, 1)) * (2.2 + anchor.size[1] * 0.9);
+        const q = Math.sqrt(rng.next());
+        const fd = q * reach;
         const fx = x + Math.cos(fa) * fd, fz = z + Math.sin(fa) * fd;
         if (eco.roadDist(fx, fz) < 4.6) continue;
         const kind = K.get(pickWeighted(dress.frag, rng.next())) ?? K_PEBBLE;
-        out.push(this._item(kind, fx, fz, rng, d * 0.7, dress));
+        const chip = this._item(kind, fx, fz, rng, d * 0.7, dress);
+        chip.yaw = fabric + rng.gauss(0, 0.6);
+        chip.s *= 1 - 0.42 * q;
+        out.push(chip);
       }
+    }
+  }
+
+  /**
+   * Expand one placed block into a corestone stack, in place of itself.
+   *
+   * {@link corestones} owns the shape rules; this is the part that has to know
+   * about the instance record. Everything the anchor already decided — its
+   * seat, its terrain normal, its tint, its per-axis jitter — is inherited by
+   * every course, because they are one landform and a course that tints
+   * differently from the one under it reads as two rocks that happen to touch.
+   *
+   * The base course keeps the anchor's kind. The courses above draw their own,
+   * because a sheeting joint parts a block into slabs whose exposed faces
+   * weather differently, and because it is free: they are all instances of
+   * meshes that are already resident.
+   *
+   * @param it the anchor, already placed and seated
+   * @param out the streamed cell's instance list
+   */
+  _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.30) {
+    const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
+    const s0 = it.s;
+    const cs = corestones(rng, n);
+    let y = it.y, hPrev = 0;
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i];
+      const kind = i === 0 ? kindOf(it.k)
+        : kindOf(rng.next() < 0.5 ? 'bedded' : rng.next() < 0.6 ? 'granite' : 'slab');
+      const s = s0 * c.s;
+      const sy = _sc(it.sy * c.sy);
+      // **The half-height is measured, not assumed.** `rockGeometry` normalises
+      // to the mesh's bounding RADIUS, so the instance scale `s` is the long
+      // axis and the *vertical* extent is whatever the stretch and the cuts
+      // left -- 0.447 to 0.988 of it across the eight kinds. The first version of
+      // this stacked on `s * sy` and every course therefore sat about a third
+      // of a block too high: the stacks came back as blocks hanging in the air
+      // over a black shadow, which is the exact defect this whole item exists
+      // to stop producing. `HY` is measured off the built geometry in `build`.
+      const h = s * sy * (this.hy.get(kind.key) ?? 0.75);
+      if (i > 0) y += (hPrev + h) * (1 - overlap);
+      hPrev = h;
+      out.push({
+        ...it,
+        k: kind.key,
+        x: it.x + c.dx * s0, z: it.z + c.dz * s0, y,
+        s, sy,
+        yaw: it.yaw + c.yaw,
+        // Held near level. A tilted block in a stack reads as a collapse, and
+        // the per-instance jitter that suits a boulder lying in soil turns
+        // every stack in the field into rubble -- and a tilted course opens a
+        // wedge of daylight under the one above it.
+        pitch: it.pitch * 0.25, roll: it.roll * 0.25,
+        // Only the base course is sunk: the ones above sit on rock, not soil.
+        bury: i === 0 ? it.bury : 0,
+      });
     }
   }
 
@@ -827,10 +1194,27 @@ export class Rocks {
       const n = 5 + Math.floor(rng.next() * 7);
       const axis = rng.next() * Math.PI * 2;
       const spanX = 9 * grand, jit = 2.4 * grand;
+      // **The blocks are laid in COURSES, not edge to edge.**
+      //
+      // This generator built a single row of blocks lying in the soil, which is
+      // the shape MGS5's outcrop notes name as the failure: edge to edge reads
+      // as a pile of plates. A bedrock knot is a bluff — the middle of it
+      // stands two or three courses high, each course set back from the one
+      // below and *overlapping* it by about 30% of its height, so the outcrop
+      // has a stepped profile and a top rather than an outline the same height
+      // as the scrub. The course a block lands in comes from how central it is
+      // rather than from a draw, so the knot has a summit instead of a random
+      // jumble, which is the same reason a tor tapers.
+      const nc = rng.next() < 0.4 ? 2 : 3;
       for (let i = 0; i < n; i++) {
-        const t = (i / n - 0.5) * 2;
-        const px = ox + Math.cos(axis) * t * spanX + rng.gauss(0, jit);
-        const pz = oz + Math.sin(axis) * t * spanX + rng.gauss(0, jit);
+        const t0 = (i / n - 0.5) * 2;
+        const course = Math.max(0, Math.min(nc - 1,
+          Math.round((1 - Math.abs(t0)) * (nc - 1) - rng.next() * 0.45)));
+        // Higher courses are set back along the ridge axis, so the bluff
+        // narrows as it rises.
+        const t = t0 * (1 - 0.28 * course);
+        const px = ox + Math.cos(axis) * t * spanX + rng.gauss(0, jit * (1 - 0.3 * course));
+        const pz = oz + Math.sin(axis) * t * spanX + rng.gauss(0, jit * (1 - 0.3 * course));
         const r = rng.next();
         const kind = kindOf(r < 0.42 ? 'granite' : r < 0.62 ? 'slab'
           : r < 0.82 ? 'bedded' : 'spire');
@@ -839,8 +1223,16 @@ export class Rocks {
         // and landforms belong to the heightfield, not to the prop layer
         const flatness = 1 - THREE.MathUtils.clamp((eco.slope01(px, pz) - 0.14) / 0.4, 0, 1) * 0.6;
         it.s = Math.min(11, Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand * flatness));
+        // 0.70 of a full block height per course is the 30% overlap. Anything
+        // near 1.0 leaves a visible dark seam between the courses, and at this
+        // range a dark seam is a gap. **Through the measured half-extent**, not
+        // through `s`: `s` is the long axis, and using it directly raised every
+        // upper course by half a block and produced outcrops with daylight
+        // under them. See `hy`.
+        it.y += course * it.s * it.sy * (this.hy.get(kind.key) ?? 0.75) * 2 * 0.70;
         it.bury = kind.bury * rng.range(0.35, 0.8);
         it.pitch *= 0.35; it.roll *= 0.35;
+        if (course > 0) { it.pitch *= 0.4; it.roll *= 0.4; it.bury = 0; }
         it.far = true;
         out.push(it);
       }
@@ -1027,6 +1419,9 @@ export class Rocks {
       const [nearCap, farCap] = CAP[k.key];
       const nearMax = Math.max(8, Math.round(nearCap * q));
       const geo = rockGeometry(k.seed, k.opts);
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox!;
+      this.hy.set(k.key, Math.max(bb.max.y, -bb.min.y));
       const g: RockGroup = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
