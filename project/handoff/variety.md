@@ -8,7 +8,7 @@ Predecessors: `project/handoff/budget.md` (which handed this over and carries
 the pricing everything below depends on), `project/handoff/vegetation.md`,
 `project/handoff/perf.md`.
 
-**Status: five commits landed, all gated. `npm run check` 11/11, `anycheck` 0,
+**Status: five commits landed, all gated. `pnpm run check` 11/11, `anycheck` 0,
 `perf.mts` and `gameplay.mts` both PASS with `RULER_VALID: true` and nothing
 regressed. Net draw-call change across the six graded vegetation shots is
 -20, +5, +1, 0, -3, 0 — i.e. zero, with the wooded frame actually cheaper.**
@@ -199,10 +199,10 @@ and it passes: nothing is systematically inflated.
 
 ## Gates
 
-`PORT=5520 npm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
+`PORT=5520 pnpm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
 `uxcheck` 93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged),
 `heightcheck`, `driftcheck`, `roadcheck`, `creaturecheck`, `integration`,
-`orphans`, build. `npm run typecheck` and `typecheck:tools` clean.
+`orphans`, build. `pnpm run typecheck` and `typecheck:tools` clean.
 
 ---
 

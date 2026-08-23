@@ -84,7 +84,7 @@ Each brief must contain:
 - The repro: shot name, or camera coordinates plus `warp`/`goto` command.
 - Its exact ownership list, and an instruction to *report* rather than edit
   anything outside it.
-- The standing gates: `npx vite build`, `node src/tools/integration.mjs`,
+- The standing gates: `pnpm exec vite build`, `node src/tools/integration.mjs`,
   `node src/tools/orphans.mjs`, plus any area-specific check (`roadcheck`,
   `heightcheck`, `driftcheck`, `combatloop`, `uxcheck`, `creaturecheck`).
 - **"Look at your own output with the Read tool."** Non-negotiable.

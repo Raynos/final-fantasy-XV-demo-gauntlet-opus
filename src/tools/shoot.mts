@@ -56,6 +56,8 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const PORT = resolvePort(5173, ROOT);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
@@ -135,14 +137,14 @@ async function ensureServer(prod: boolean) {
   if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
   if (prod) {
     await new Promise<void>((res, rej) => {
-      const b = spawn('npx', ['vite', 'build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+      const b = spawn(VITE, ['build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
       b.on('exit', (c) => (c === 0 ? res() : rej(new Error(`vite build failed (${c})`))));
     });
   }
   const args = prod
-    ? ['vite', 'preview', '--port', String(PORT), '--strictPort']
-    : ['vite', '--port', String(PORT), '--strictPort'];
-  const proc = spawn('npx', args, {
+    ? ['preview', '--port', String(PORT), '--strictPort']
+    : ['--port', String(PORT), '--strictPort'];
+  const proc = spawn(VITE, args, {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: false,
   });
   proc.stderr.on('data', (d) => process.stderr.write(`[vite] ${d}`));

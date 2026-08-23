@@ -244,7 +244,7 @@ next thing I would do.
 
 ## State of the tree
 
-`npm run check`: **6/10**, and the four failures are all pre-existing or
+`pnpm run check`: **6/10**, and the four failures are all pre-existing or
 environmental, none from this lane.
 
 - `anycheck` — 11 `any`, all in `src/game/rpg/HavenCamp.ts`. Not mine.

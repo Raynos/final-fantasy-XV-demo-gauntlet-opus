@@ -80,7 +80,7 @@ session's contribution is the *verification* of it, plus the merge of `main`.
 
 Gates, all run this session on the merged tree:
 
-* `npx vite build` — **pass** (353 ms; the >500 kB chunk warning is pre-existing).
+* `pnpm exec vite build` — **pass** (353 ms; the >500 kB chunk warning is pre-existing).
 * `node src/tools/integration.mjs` — **18 pass, 0 wired-but-unproven, 0 not
   integrated.** Includes `combat / weapon swap is free — 5 swaps in 24 ms`, which
   cycles all five classes and so exercises the new anchors.
@@ -175,7 +175,7 @@ shading. The baked `groundBlade` gradient is invisible because it only tints F0.
 It is a different failure from the pre-existing chrome mirror, but it lands in the
 same place — a blue surfboard.
 
-Fastest way to judge: `npm run dev`, `http://127.0.0.1:<port>/?debug=1`, **F4**,
+Fastest way to judge: `pnpm run dev`, `http://127.0.0.1:<port>/?debug=1`, **F4**,
 then `` ` `` and `asset weapons greatsword`. A scripted version of exactly that is
 in this session's scratchpad (see Gotchas).
 

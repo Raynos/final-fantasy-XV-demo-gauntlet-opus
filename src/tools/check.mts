@@ -24,6 +24,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(HERE, '..', '..', 'node_modules/.bin/vite');
 
 /**
  * One gate: either a `.mts` under this directory or an explicit command.
@@ -46,7 +48,7 @@ interface Gate {
 
 /** Ordered cheapest-first, so a broken tree fails fast. */
 const GATES: Gate[] = [
-  { name: 'build', cmd: 'npx', args: ['vite', 'build'], expect: 'builds' },
+  { name: 'build', cmd: VITE, args: ['build'], expect: 'builds' },
   { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
   { name: 'integration', script: 'integration.mts', expect: '18 pass, 0 fail' },
@@ -93,7 +95,7 @@ function parse(argv: string[]) {
  */
 function serve(port: number): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-    const p = spawn('npx', ['vite', '--port', String(port), '--strictPort'], {
+    const p = spawn(VITE, ['--port', String(port), '--strictPort'], {
       cwd: path.join(HERE, '..', '..'), env: { ...process.env, PORT: String(port) },
     });
     let out = '', settled = false;

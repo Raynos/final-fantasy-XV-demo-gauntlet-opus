@@ -85,7 +85,7 @@ ordering). The fix belongs in `Party`, not in the harness.
 
 ## Gate status
 
-`npx vite build` — **passes**. Nothing else was run. `integration.mjs`,
+`pnpm exec vite build` — **passes**. Nothing else was run. `integration.mjs`,
 `orphans.mjs` and `gameplay.mjs` are unverified against this branch.
 
 ## Next steps, in order

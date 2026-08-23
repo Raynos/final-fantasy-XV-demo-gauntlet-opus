@@ -409,7 +409,7 @@ Before/after: `tmp/shots/dn` vs `tmp/shots/dn2`. Draw calls unchanged at 567 on
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** (also enforced by `.githooks/pre-commit`) |
+| `pnpm exec vite build` | **pass** (also enforced by `.githooks/pre-commit`) |
 | `node src/tools/creaturecheck.mts` | **pass** — 207 poses, 0 failures |
 | `node src/tools/integration.mts` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
 | `node src/tools/orphans.mts` | **pass** — 273 modules, 0 orphans (`MapRaster.ts` was deleted upstream) |
@@ -424,7 +424,7 @@ for the daemon rim.
 
 Only 13 of the 23 species have a shot in `src/game/Shots.ts`. The rest are
 reachable through the dev suite's **isolation stage**, and it is far faster than
-a corpus capture: `npm run dev`, `http://127.0.0.1:5410/?debug=1`, **F4**, then
+a corpus capture: `pnpm run dev`, `http://127.0.0.1:5410/?debug=1`, **F4**, then
 `←→` asset, `↑↓` family, `,` `.` pose, `O` ok, `K` flag, `U` unreviewed.
 
 For headless review this round used a throwaway script that drives the same

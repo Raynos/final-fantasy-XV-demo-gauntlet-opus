@@ -460,7 +460,7 @@ was contended.
 
 | gate | result |
 |---|---|
-| `npx vite build` | **PASS** (also enforced by the pre-commit hook on every commit) |
+| `pnpm exec vite build` | **PASS** (also enforced by the pre-commit hook on every commit) |
 | `node src/tools/integration.mts` | **PASS** — 18 pass, 0 wired-but-unproven, 0 not integrated |
 | `node src/tools/orphans.mts` | **PASS** — 272 modules, 272 reachable, no orphans |
 | `node src/tools/shoot.mts` page errors | **0** across 24 shots (`veg-final`, `veg-zones`) |

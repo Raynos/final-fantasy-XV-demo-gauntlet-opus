@@ -81,7 +81,7 @@ export function assertOwnPort(port: number, root: string): void {
  * 5299, 5321) at a time when one checkout ran one tool. With agents in parallel
  * worktrees those are just five more numbers that can collide, and one did:
  * `combatloop`'s 5199 was held by a co-agent, so the gate refused to reuse a
- * foreign tree — correctly — and `npm run check` reported a combat regression
+ * foreign tree — correctly — and `pnpm run check` reported a combat regression
  * that did not exist. The refusal was right; the fixed number was the bug.
  *
  * Synchronous on purpose: every caller uses it in a module-level `const`.

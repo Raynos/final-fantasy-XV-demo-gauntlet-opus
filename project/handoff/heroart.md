@@ -1,7 +1,7 @@
 # Handoff — `heroart` (four builds, and the portrait that can finally see an eye)
 
 Branch `worktree-agent-ae95c94c3ff458e00`, four commits on top of `main` (merged
-current at the start of the session, 248 commits behind). `npm run check` is
+current at the start of the session, 248 commits behind). `pnpm run check` is
 **11/11**, `anycheck` 0, `creaturecheck` 207 poses.
 
 This lane took the previous one's closing recommendation — *"Party silhouette

@@ -31,7 +31,7 @@ looks exactly like "nothing left to do".
 | `unused` | Removes what `noUnusedLocals` finds. **`--impure` deletes declarations whose initialiser is a call** — that is how four enemy spawns disappeared out of `combatloop`. Read every one before letting it run. |
 | `optionalize` | Trailing parameters callers omit become `?`. |
 
-The loop that works: run a pass, run `npx tsc --noEmit -p tsconfig.json`, fix
+The loop that works: run a pass, run `pnpm exec tsc --noEmit -p tsconfig.json`, fix
 what it surfaced by hand, repeat. The errors a pass surfaces are the point — a
 type that was `any` could not be wrong, and the moment it is real, the places
 that disagreed with it show up.

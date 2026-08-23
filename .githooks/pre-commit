@@ -84,7 +84,7 @@ if ! git diff --cached --name-only | grep -qE '^(src/|index\.html|vite\.config\.
 fi
 
 echo "pre-commit: building..."
-if ! out=$(npx vite build 2>&1); then
+if ! out=$(./node_modules/.bin/vite build 2>&1); then
   echo "$out" | tail -25
   echo
   echo "pre-commit: BUILD FAILED — commit aborted."
@@ -95,7 +95,7 @@ echo "pre-commit: build ok"
 
 echo "pre-commit: typechecking..."
 for cfg in tsconfig.json tsconfig.tools.json; do
-  if ! out=$(npx tsc --noEmit -p "$cfg" 2>&1); then
+  if ! out=$(./node_modules/.bin/tsc --noEmit -p "$cfg" 2>&1); then
     echo "$out" | tail -25
     echo
     echo "pre-commit: TYPECHECK FAILED ($cfg) -- commit aborted."

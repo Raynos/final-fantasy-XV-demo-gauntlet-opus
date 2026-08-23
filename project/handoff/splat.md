@@ -153,7 +153,7 @@ round), `tmp/shots/sp2` (after the bedding fix).
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** — also runs as a pre-commit hook |
+| `pnpm exec vite build` | **pass** — also runs as a pre-commit hook |
 | `node src/tools/integration.mts` | **pass** — 18 pass, 0 wired-but-unproven, 0 not integrated |
 | `node src/tools/orphans.mts` | ~~**fails, pre-existing and not mine** — `MapRaster` is orphaned.~~ **RESOLVED 2026-08-22:** the file was a re-export facade and was deleted; `orphans` is clean. |
 | `node src/tools/roadcheck.mts` | **pass** — 0 failures, 0 warnings, 30.26 km over 50 edges / 50 nodes |

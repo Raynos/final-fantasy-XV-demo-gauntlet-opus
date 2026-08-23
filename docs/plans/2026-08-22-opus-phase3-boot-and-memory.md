@@ -122,7 +122,7 @@ there are two separate questions and they need separating before any work starts
 ## 3. Definition of done
 
 - [ ] Cold boot **under 6 s**, warm boot **under 3 s** (from 13.55 / 12.84)
-- [ ] `npm run check` — all 9 gates still green
+- [ ] `pnpm run check` — all 9 gates still green
 - [ ] **Capture determinism unchanged**: two cold captures still diff at the
       measured noise floor. Deferring shader warmup is the risk here.
 - [ ] The 1.4 GB attributed: JS heap vs GPU vs browser overhead, with numbers

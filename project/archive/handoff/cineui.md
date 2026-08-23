@@ -173,7 +173,7 @@ Zero work done on any of these. `src/ui/**` is **untouched** on this branch.
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** (also passed via `.githooks/pre-commit`) |
+| `pnpm exec vite build` | **pass** (also passed via `.githooks/pre-commit`) |
 | `node src/tools/integration.mjs` | **18 pass · 0 wired · 0 not integrated** |
 | `node src/tools/orphans.mjs` | **260/261 reachable** — 1 orphan, `src/world/map/MapRaster.js`, **pre-existing** (introduced by `5fd2876` "Cartography"; nothing has ever imported it). Not caused by this branch. |
 | `node src/tools/uxcheck.mjs` | **86/86**, 0 failures. Unchanged — no screen was registered. |

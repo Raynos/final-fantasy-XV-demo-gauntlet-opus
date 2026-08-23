@@ -30,7 +30,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
+  const proc = spawn('pnpm exec', ['vite', '--port', String(PORT), '--strictPort'], {
     cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
   });
   proc.stderr.on('data', (d) => process.env.VERBOSE && console.error(String(d)));

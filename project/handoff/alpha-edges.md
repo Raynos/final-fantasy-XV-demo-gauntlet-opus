@@ -5,7 +5,7 @@ Branch: `worktree-agent-ace74adb2d32d4fe9`, merged up from `main` at `6b61bec`
 (**the worktree was created 200 commits behind, and with no `node_modules` and
 no `src/public/` at all** — that is now four agents in a row; check
 `git rev-list --count HEAD..main` before anything else, and expect to run
-`npm install` and `mkdir -p src/public` before the baked-cache symlink will
+`pnpm install` and `mkdir -p src/public` before the baked-cache symlink will
 take).
 Predecessor: `project/handoff/vegetation.md`, whose final section is this
 lane's whole brief. Also load-bearing: `project/handoff/perf.md`, which is why
@@ -367,10 +367,10 @@ uses least.
   *edges*, not on shadow area. Worth knowing about rather than worth acting on,
   but it is a real coupling: **anything given `alphaToCoverage` here silently
   changes its own shadow silhouette.**
-- **`npm run check`: 11/11**, `anycheck` 0. `combatloop` 31/31, `uxcheck`
+- **`pnpm run check`: 11/11**, `anycheck` 0. `combatloop` 31/31, `uxcheck`
   93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged), `integration`,
   `creaturecheck`, `roadcheck`, `heightcheck`, `driftcheck`, `orphans`, `build`
-  all PASS. `npm run typecheck` and `typecheck:tools` clean.
+  all PASS. `pnpm run typecheck` and `typecheck:tools` clean.
 
 ---
 

@@ -26,7 +26,7 @@ their own map pins, a complete Elemancy model with no screen, `BossFight.
 resolveStrike` executing for the first time in its life, and a way to
 photograph anything a probe can drive.
 
-Eight commits, `527fe72..4dc4e2b`. **`npm run check`: 11/11 green** on a tree
+Eight commits, `527fe72..4dc4e2b`. **`pnpm run check`: 11/11 green** on a tree
 with nothing else running. `integration` **27** (up from 26, with the new one
 ablated -- §9), `combatloop` 31/31, `uxcheck` 93/93, `anycheck` 0,
 `questaudit` 0 unsatisfiable objectives, `mainchain` chapter 1 to the end of

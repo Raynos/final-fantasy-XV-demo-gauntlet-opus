@@ -17,7 +17,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 });
 async function ensureServer() {
   if (await portOpen(PORT)) return null;
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
+  const proc = spawn('pnpm exec', ['vite', '--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 300));

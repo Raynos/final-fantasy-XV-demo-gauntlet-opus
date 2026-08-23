@@ -399,10 +399,10 @@ carrying forward and are written into the commit messages:
 
 ## Gates and cost
 
-`PORT=5530 npm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
+`PORT=5530 pnpm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
 `uxcheck` 93/93, `horizoncheck` PASS at worst MCC 0.766 (unchanged),
 `heightcheck`, `driftcheck`, `roadcheck`, `creaturecheck`, `integration`,
-`orphans`, build. `npm run typecheck` and `typecheck:tools` clean.
+`orphans`, build. `pnpm run typecheck` and `typecheck:tools` clean.
 
 `perf.mts` on a quiet tree: **PASS, `RULER_VALID: true`**, mean **248.6 fps**,
 worst **157 fps** (`town_forecourt`), noise floor 0.38 ms end IQR against a

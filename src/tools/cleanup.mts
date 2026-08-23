@@ -7,7 +7,7 @@
  *
  * The capture tools spawn a vite server and kill it on exit, so a healthy run
  * leaves nothing. Two things do leak:
- *   - a server started from a detached subshell — `(npx vite &)` reparents to
+ *   - a server started from a detached subshell — `(pnpm exec vite &)` reparents to
  *     PID 1 and then outlives the session,
  *   - a playwright browser whose driving node process died mid-run.
  *
