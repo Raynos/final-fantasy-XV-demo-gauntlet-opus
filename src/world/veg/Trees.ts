@@ -159,6 +159,8 @@ interface TreePlacement {
   vi: number;
   /** Trunk scale. */
   s: number;
+  /** Crown spread: an extra scale on x/z only, applied by *every* ring. */
+  sw: number;
   yaw: number;
   tilt: number;
   /** Per-instance tint, linear RGB. */
@@ -472,12 +474,35 @@ export class Trees {
         const vi = (rng.next() * VARIANTS) | 0;
         const variant = this.byKey.get(`${sp}_${vi}`);
         if (!variant) continue;
-        const s = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
+        // Stand structure, not a scale range. The authored `treeS` band is only
+        // about 1.5:1 and is biased toward its low end, so every tree in a
+        // grove came out within a few per cent of every other one and the
+        // treeline was a level wall -- half of what the blind judge means by
+        // "no silhouette variety", and the half a normal map cannot touch. A
+        // real stand is a canopy line with a few emergents through it and a few
+        // suppressed stems under it, so the tails are drawn explicitly and the
+        // author's band stays the *typical* tree rather than the whole range.
+        const s0 = b.treeS[0] + Math.pow(rng.next(), 1.4) * (b.treeS[1] - b.treeS[0]);
+        // Drawn from a *position* hash, not from `rng`. Taking two more numbers
+        // off the tile stream re-rolls every later candidate's acceptance test,
+        // species and yaw, so the whole forest re-scatters and the change stops
+        // being ablatable -- the first version of this did exactly that and
+        // `zone_fallgrove` came back as a different grove with a different
+        // composition, which says nothing about whether stand structure helps.
+        const tier = hash3(x * 64 | 0, z * 64 | 0, 0x5721) / 4294967296;
+        const spread = hash3(x * 64 | 0, z * 64 | 0, 0x9ac3) / 4294967296;
+        const s = s0 * (tier > 0.88 ? 1.10 + (tier - 0.88) * 2.5
+          : tier < 0.16 ? 0.62 + tier * 1.5 : 1);
+        // Crown spread, independent of height. A tree's width is not a function
+        // of its height -- a suppressed stem is narrow and tall, an open-grown
+        // one is broad -- and a card scaled uniformly gives every impostor in
+        // the frame the same aspect ratio, which is the other half of it.
+        const sw = 0.82 + spread * 0.42;
         const c = composeTint(sp, SPECIES_TINT[sp as keyof typeof SPECIES_TINT] || [1, 1, 1], b.treeTint);
         const shade = SHADE_MIN + rng.next() * SHADE_SPAN;
         const hue = rng.gauss(0, 0.06);
         out.push({
-          x, z, y: eco.height(x, z), sp, vi, s,
+          x, z, y: eco.height(x, z), sp, vi, s, sw,
           yaw: rng.next() * Math.PI * 2,
           tilt: rng.gauss(0, 0.04),
           r: shade * c[0] * (1 + hue),
@@ -644,7 +669,7 @@ export class Trees {
       _e.set(p.tilt, p.yaw, p.tilt * 0.7);
       _q.setFromEuler(_e);
       _p.set(p.x, p.y - 0.15, p.z);
-      _s.set(p.s, p.s, p.s);
+      _s.set(p.s * p.sw, p.s, p.s * p.sw);
       _m.compose(_p, _q, _s);
       _m.toArray(v.wood.instanceMatrix.array, w * 16);
       if (v.leaves && v.leafTint) {
@@ -728,7 +753,8 @@ export class Trees {
     _e.set(0, p.yaw, 0);
     _q.setFromEuler(_e);
     _p.set(p.x, p.y - 0.15, p.z);
-    _s.set(p.s, p.s, p.s);
+    // the same spread the geometry ring uses, so the swap stays invisible
+    _s.set(p.s * p.sw, p.s, p.s * p.sw);
     _m.compose(_p, _q, _s);
     _m.toArray(im.mesh.instanceMatrix.array, w * 16);
     const c = im.tint.array;
