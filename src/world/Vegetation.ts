@@ -49,7 +49,7 @@ export class Vegetation {
     this.grass.build();
 
     this.bushes = new Bushes(this.ecology, game.scene, { quality });
-    this.bushes.build();
+    this.bushes.build(game.renderer);
 
     this.trees = new Trees(this.ecology, game.scene, { quality });
     this.trees.build(game.renderer);
