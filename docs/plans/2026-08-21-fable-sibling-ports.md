@@ -5,8 +5,10 @@ which the plan graph gives to another lane. Wave 3 audited to a verdict, one
 item open on the perf re-baseline. Wave 4 three of five.**
 Re-audited against the tree and rebuilt 2026-08-23 (second opus pass, starting
 from `d377fc7`). This table **replaces** the previous audit's, which was hours
-old and still had two rows wrong — see "what 3.3 actually was" below, because
-how it was wrong is the more useful half.
+old and still had **three** rows wrong — 3.3, 3.7 and 3.6's shadow proxy, all
+of them calling something open that was closed. See "what 3.3 actually was" and
+"a third audit row that was wrong" below: how they were wrong is the more
+useful half.
 
 | item | state | evidence |
 |---|---|---|
@@ -24,7 +26,7 @@ how it was wrong is the more useful half.
 | 3.6 grass tier-D et al | **REASSIGNED** (shadow proxy already built) | `docs/plans/README.md` gives `src/world/veg/` to procedural-modeling. The shadow-only sward proxy is **already built** (`GrassField._tileFor`); tier-D, root blend and coverage math go with the lane |
 | 3.7 water depth model | **DONE — and audited wrong twice** | `Water.ts:15-43`. Per-channel Beer-Lambert `exp(-sigma*path)` with `sigma.r >> sigma.b`, path along the **refracted** ray (`refract(-V, N, 0.7502)`, one Snell step, no scene copy), bed re-sampled from the heightfield, alpha as the complement of transmittance so the waterline silhouette comes from the bed, and foam derived from depth broken by the wave field rather than stamped as a contour. That is every element 3.7 asks for |
 | 3.8 sky-SH + PCSS | **(a) MEASURED, worth building, not built. (b) not evaluated** | `4d94169`. See below — the measurement found something better than it went looking for |
-| Wave 3 (perf) | **AUDITED to a verdict; one item open** | four of six items closed by reading and measuring, see below |
+| Wave 3 (perf) | **AUDITED to a verdict; one item open** | five of six closed by reading and measuring — four already satisfied, one not applicable. Only the frame-cost split is open, and it is behind the perf re-baseline. See below |
 | Wave 4 (gameplay) | **3 of 5, and the biggest one was mostly already built** | swept camera `fd1a153`, `lookScale` `347b392`, vegetation concealment `77555a7`. The perception *meter* and its ladder already existed (`awareness`, thresholds 0.12/0.55); what was missing was the concealment term the plan says MGS5 never wrote, and that is now in and measured. Cover/fire rhythm, the `setMotion` rate contract and adaptive music are untouched |
 | §6.2 per-shot noise floors | **DONE** | `9db4548`. Measured a 16x spread; the old global floor was above all twelve |
 
@@ -592,10 +594,11 @@ Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
       repaired this pass — four of its eleven verdict lines asserted defects on
       frames that did not have them.)*
 - [x] Each Wave 2 lever landed, or rejected with a measured negative.
-      **6 of 8 landed** (3.1, 3.2, 3.3, 3.4, 3.5, and 3.8(a) as a measurement
-      with a verdict, and 3.7 which was already built); 3.6 goes to
-      procedural-modeling by the plan
-      graph; and 3.7, audited as untouched **twice** and in fact fully built.
+      **Six landed** — 3.1, 3.2, 3.3, 3.4, 3.5 and 3.7 (that last audited as
+      untouched *twice* and in fact fully built). **3.8(a) is a measurement
+      with a verdict** and is not built; 3.8(b) is not evaluated. **3.6** goes
+      to procedural-modeling, which the plan graph already owns
+      `src/world/veg/`.
 - [x] §6 methodology adopted where it is code rather than prose: §6.1 ablation
       is in `BRIEF.md` and extended with four new dials this pass; §6.2
       per-shot noise floors are measured and checked in.
@@ -610,6 +613,36 @@ Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
       repo throughout. A spike-dominated shot on a busy machine is not evidence
       about the renderer. **Needs an idle machine, and it belongs to phase4's
       WS-0b** — which is also where Wave 3's frame-cost split waits.
+
+### State at exit, 2026-08-23
+
+This session stopped deliberately at a pause, not mid-change. Working tree
+clean, sixteen commits `05fa8fb`..`072ee4b`, `pnpm run check` **12/12** verified
+three times across the round — after the grade work, after the camera work, and
+after the perception change. `project/handoff/sibling-ports.md` is current and
+is the file to read first.
+
+**The plan stays IN-PROGRESS and is deliberately NOT archived.** Four things
+are genuinely open, and none of them is a formality:
+
+1. **3.8(a)** — measured as worth building, specified, not built.
+2. **3.8(b) PCSS** — not evaluated at all.
+3. **Wave 4's remaining two and a half** — cover/fire rhythm, the `setMotion`
+   rate contract, adaptive music re-targeting.
+4. **The perf re-baseline** — certified and *failing*, see the last DoD box
+   above.
+
+Archiving it now would file a plan as DONE with a failing perf gate and an
+unevaluated lighting item inside it, which is precisely the accretion
+`docs/plans/README.md` exists to prevent.
+
+**Do not re-derive today's measurements.** Four new ablation dials
+(`nobleach`, `noactorhaze`, `noambient`, `noenv`) and two new probes
+(`camsweep.mts`, `conceal.mts`) exist so the next agent settles these in one
+command each. Two traps are written into the handoff and worth repeating here:
+the bleach is *scene-referred*, so `?post=nolut` does not ablate it; and the
+ambient dials read backwards unless paired with `?post=noexp`, because
+closed-loop exposure compensates for what you removed.
 
 ### What this plan does NOT close, and who owns it
 
