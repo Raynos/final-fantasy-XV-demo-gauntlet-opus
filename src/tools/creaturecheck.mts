@@ -36,19 +36,9 @@
  * off the ground than `--tol` (airborne poses — a pounce, a leap — are exempt
  * by name, because being off the ground is the point of them).
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
-import net from 'node:net';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
   const o: { hold: number, tol: number, driftTol: number, species: string[] | null, json: string | null, quiet: boolean } =
@@ -68,35 +58,17 @@ function parseArgs(argv: string[]) {
 
 const opts = parseArgs(process.argv.slice(2));
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
-const server = await ensureServer();
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 800, height: 450 } });
+const ha = harnessArgs(process.argv.slice(2));
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
 
 let rows = [];
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-  await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
   rows = await page.evaluate(async (cfg) => {
     const g = window.GAME;
@@ -260,8 +232,7 @@ try {
     return out;
   }, { hold: opts.hold, species: opts.species });
 } finally {
-  await browser.close();
-  if (server) server.kill();
+  await leased.release();
 }
 
 /* ------------------------------------------------------------- reporting */

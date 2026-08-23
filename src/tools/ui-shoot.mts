@@ -9,19 +9,12 @@
  *   PORT=5206 node src/tools/ui-shoot.mts --out tmp/shots/ui-r1
  *   PORT=5206 node src/tools/ui-shoot.mts menu_ascension photo_mode --out tmp/shots/x
  */
-import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
-const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 /** name -> { shot, settle, after: source of a function body run in the page } */
 /** One UI capture: a shot to stage, and optional in-page setup after it. */
@@ -91,28 +84,11 @@ const SCENES: Record<string, Scene> = {
   },
 };
 
-const portOpen = (port: number) => new Promise<boolean>((res) => {
-  const s = net.connect(port, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  proc.stderr.on('data', (d) => process.stderr.write(`[vite] ${d}`));
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 async function main() {
+  const ha = harnessArgs(process.argv.slice(2));
+  announceBuild(ha);
   const argv = process.argv.slice(2);
   const opts: { w: number, h: number, out: string, names: string[] } = { w: 1600, h: 900, out: 'tmp/shots/ui', names: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -126,12 +102,8 @@ async function main() {
   const outDir = path.isAbsolute(opts.out) ? opts.out : path.join(ROOT, opts.out);
   await mkdir(outDir, { recursive: true });
 
-  const server = await ensureServer();
-  const browser = await chromium.launch({
-    args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-      '--ignore-gpu-blocklist', '--force-color-profile=srgb', '--hide-scrollbars', '--mute-audio'],
-  });
-  const page = await browser.newPage({ viewport: { width: opts.w, height: opts.h }, deviceScaleFactor: 1 });
+  const leased = await lease(pageOpts(ha));
+  const page = leased.page;
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
@@ -140,9 +112,6 @@ async function main() {
   });
 
   try {
-    await page.goto(`${URL_BASE}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 120000 });
-    await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
     for (const name of names) {
       const sc = SCENES[name as keyof typeof SCENES];
@@ -168,8 +137,7 @@ async function main() {
       console.log(`✓ ${name}`);
     }
   } finally {
-    await browser.close();
-    if (server) server.kill();
+    await leased.release();
   }
 
   if (errors.length) {

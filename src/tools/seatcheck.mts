@@ -30,11 +30,9 @@
  *
  * Assumes a dev server is already up on `PORT` (like `heightcheck`/`driftcheck`).
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import type * as THREE from 'three';
 
-const PORT = Number(process.env.PORT || 5173);
 
 function parseArgs(argv: string[]) {
   const o = {
@@ -60,14 +58,13 @@ function parseArgs(argv: string[]) {
 
 const cfg = parseArgs(process.argv.slice(2));
 
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const ha = harnessArgs(process.argv.slice(2));
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const errors: string[] = [];
 page.on('pageerror', (e) => { errors.push(String(e).split('\n')[0]); });
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
-await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
 const out = await page.evaluate(async (c) => {
   const g = window.GAME;
@@ -245,7 +242,7 @@ const out = await page.evaluate(async (c) => {
   return { shot: c.home, camera: { x: cam.position.x, z: cam.position.z }, rows, sweep };
 }, cfg);
 
-await browser.close();
+await leased.release();
 
 console.log(`seatcheck — ${out.shot}, camera at ${out.camera.x.toFixed(0)}, ${out.camera.z.toFixed(0)}\n`);
 console.log('The GPU column is the rasterised clipmap surface. Positive means the');
