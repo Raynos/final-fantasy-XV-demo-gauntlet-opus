@@ -201,7 +201,17 @@ export interface Proud {
    * the ground, which is exactly the floating-prop bug.
    */
   float: number;
-  /** Metres the deepest support point is below the drawn ground. */
+  /**
+   * Metres the object's lowest point is below the ground **at its own seat
+   * position** — not below the ground under that point.
+   *
+   * The difference is the whole measurement. Measured per support point, a
+   * boulder resting correctly on a hillside is "buried" by its own width times
+   * the slope, and the first run of `floatcheck.mts` called 1,085 of 1,314
+   * correctly-placed rocks buried for exactly that reason. Burial is a
+   * placement error — the seat was too low — and a placement error is a
+   * property of the seat point, so that is where it is measured.
+   */
   sink: number;
   /** The instance's own world height, which is what `sink` is judged against. */
   height: number;
@@ -280,20 +290,24 @@ export function proudOf(
   // never had.
   const scaleY = Math.hypot(m[4], m[5], m[6]);
   const height = support.height * (scaleY || 1);
-  let minGap = Infinity, bx = 0, bz = 0;
+  let minGap = Infinity, bx = 0, bz = 0, bottomY = Infinity;
   for (let i = 0; i < support.pts.length; i += 3) {
     const lx = support.pts[i], ly = support.pts[i + 1], lz = support.pts[i + 2];
     const wx = m[0] * lx + m[4] * ly + m[8] * lz + m[12];
     const wy = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
     const wz = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
     const gap = wy - ground(wx, wz);
+    if (wy < bottomY) bottomY = wy;
     if (gap < minGap) { minGap = gap; bx = wx; bz = wz; }
   }
   if (!Number.isFinite(minGap)) {
     return { float: 0, sink: 0, height, x: 0, z: 0, ok: false, why: 'no-support-points' };
   }
+  // Float is per support point: a corner clear of the ground under IT is a
+  // visible sliver of sky, and on a slope the downhill corner is the one that
+  // shows. Sink is against the seat point, for the reason on the field above.
   const float = Math.max(0, minGap);
-  const sink = Math.max(0, -minGap);
+  const sink = Math.max(0, ground(m[12], m[14]) - bottomY);
   const buried = height > 1e-6 && sink > MAX_SINK * height;
   return {
     float, sink, height, x: bx, z: bz,
