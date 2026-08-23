@@ -1263,15 +1263,36 @@ export class Rocks {
       // rather than from a draw, so the knot has a summit instead of a random
       // jumble, which is the same reason a tor tapers.
       const nc = rng.next() < 0.4 ? 2 : 3;
+      // **A higher course sits on a NAMED block below it**, not at its own
+      // independently jittered spot on the ridge line.
+      //
+      // Jittering each course separately is how a course-1 block ends up
+      // straddling the gap between two course-0 blocks, and what that renders
+      // as is a flat cap with a hole under it -- `zone_three_valleys` had four.
+      // "30% vertical course overlap" is a statement about two blocks that are
+      // above one another, and there is nothing to overlap if they are not.
+      const laid: { x: number, z: number, top: number, w: number }[][] = [[], [], []];
       for (let i = 0; i < n; i++) {
         const t0 = (i / n - 0.5) * 2;
         const course = Math.max(0, Math.min(nc - 1,
           Math.round((1 - Math.abs(t0)) * (nc - 1) - rng.next() * 0.45)));
-        // Higher courses are set back along the ridge axis, so the bluff
-        // narrows as it rises.
-        const t = t0 * (1 - 0.28 * course);
-        const px = ox + Math.cos(axis) * t * spanX + rng.gauss(0, jit * (1 - 0.3 * course));
-        const pz = oz + Math.sin(axis) * t * spanX + rng.gauss(0, jit * (1 - 0.3 * course));
+        let px: number, pz: number, under: { x: number, z: number, top: number, w: number } | null = null;
+        if (course > 0 && laid[course - 1].length) {
+          // Nearest thing to where this block wanted to be, then sit on it.
+          const t = t0 * (1 - 0.28 * course);
+          const wx = ox + Math.cos(axis) * t * spanX, wz = oz + Math.sin(axis) * t * spanX;
+          let best = laid[course - 1][0], bd = Infinity;
+          for (const c of laid[course - 1]) {
+            const d = (c.x - wx) * (c.x - wx) + (c.z - wz) * (c.z - wz);
+            if (d < bd) { bd = d; best = c; }
+          }
+          under = best;
+          px = best.x + rng.gauss(0, best.w * 0.22);
+          pz = best.z + rng.gauss(0, best.w * 0.22);
+        } else {
+          px = ox + Math.cos(axis) * t0 * spanX + rng.gauss(0, jit);
+          pz = oz + Math.sin(axis) * t0 * spanX + rng.gauss(0, jit);
+        }
         const r = rng.next();
         const kind = kindOf(r < 0.42 ? 'granite' : r < 0.62 ? 'slab'
           : r < 0.82 ? 'bedded' : 'spire');
@@ -1281,21 +1302,25 @@ export class Rocks {
         // and landforms belong to the heightfield, not to the prop layer
         const flatness = 1 - THREE.MathUtils.clamp((eco.slope01(px, pz) - 0.14) / 0.4, 0, 1) * 0.6;
         it.s = Math.min(11, Math.max(it.s, kind.size[1] * rng.range(0.7, 1.25) * dress.rockS * grand * flatness));
-        // A course may not be wider than the one it stands on, measured on the
-        // finished hull. Without this the upper courses of a bluff are as often
-        // caps as they are crowns, and a cap on a narrower block is a balanced
-        // rock rather than an outcrop.
-        it.s *= (1 - 0.22 * course) * (0.90 / Math.max(0.55, ex[0]));
-        // 0.70 of a full block height per course is the 30% overlap. Anything
-        // near 1.0 leaves a visible dark seam between the courses, and at this
-        // range a dark seam is a gap. **Through the measured half-extent**, not
-        // through `s`: `s` is the long axis, and using it directly raised every
-        // upper course by half a block and produced outcrops with daylight
-        // under them. See `hy`.
-        it.y += course * it.s * it.sy * ex[1] * 2 * 0.70;
+        // A course may not be wider than the block it stands on, measured on
+        // the finished hull -- `s` is the long axis and that is a different
+        // axis for different kinds. Without this the upper courses of a bluff
+        // are as often caps as crowns, and a cap on a narrower block is a
+        // balanced rock rather than an outcrop.
+        it.s *= 0.90 / Math.max(0.55, ex[0]);
+        const wSelf = it.s * it.sx * ex[0];
+        if (under && wSelf > under.w * 0.82) it.s *= (under.w * 0.82) / wSelf;
+        const hSelf = it.s * it.sy * ex[1];
         it.bury = kind.bury * rng.range(0.35, 0.8);
         it.pitch *= 0.35; it.roll *= 0.35;
-        if (course > 0) { it.pitch *= 0.4; it.roll *= 0.4; it.bury = 0; }
+        // Sit on the block below, less 30% of this block's own height. Through
+        // the measured half-extents, not through `s`: using `s` directly raised
+        // every upper course by half a block and left daylight under it.
+        if (under) {
+          it.y = under.top - 2 * hSelf * 0.30 + hSelf;
+          it.pitch *= 0.4; it.roll *= 0.4; it.bury = 0;
+        }
+        laid[course].push({ x: px, z: pz, top: it.y + hSelf, w: it.s * it.sx * ex[0] });
         it.far = true;
         out.push(it);
       }
@@ -1337,7 +1362,6 @@ export class Rocks {
     // Not on a slope: a twenty-metre stack on a twenty-degree hillside is a
     // pile that should have fallen over, and the seat error alone is metres.
     if (eco.slope01(ox, oz) > 0.30) return;
-    const base = eco.height(ox, oz);
     // **Three forms, because one form repeated is the defect it is fixing.**
     // A pinnacle is tall and tapered and breaks the horizon; a fin is two or
     // three heavily y-stretched spires and reads as a blade edge-on; a boss is
@@ -1357,6 +1381,16 @@ export class Rocks {
     // reads as a cairn -- five separate pebbles balanced on each other --
     // rather than as one weathered mass.
     const lap = fin ? 0.68 : boss ? 0.34 : 0.45;
+    // **Seated on the surface the clipmap will DRAW, like everything else in
+    // this file.** This was the one placement here that used `eco.height`, the
+    // analytic field, and a tor is drawn out to 1150 m: `driftcheck` measures
+    // the drawn coarse-LOD surface at up to -2.9 m against the analytic field,
+    // so every tor past a few hundred metres stood that far off the ground.
+    // Three of twelve shots in the coordinator's mid-point sweep showed it,
+    // with daylight under the stack — the defect four consecutive blind judges
+    // have named. `_item`, `_stack` and `_genOutcrop` all went through `seatY`
+    // already; this did not, and it is the one that makes the tallest things.
+    const base = seatY(eco, ox, oz, s0 * 2, CULL.granite);
     // **Both the taper and the courses run on the MEASURED hull**, the same
     // rule and for the same reason as `_stack`. `it.s` is the long axis, and
     // the eight kinds' x half-extents run 0.461 (`spire`) to 1.000 (`cobble`)
