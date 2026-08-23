@@ -1184,53 +1184,241 @@ export class PoiKits {
     return { cast: true, r: 21 };
   }
 
-  /** A magitek base: wall, towers, landing pad, banners, floodlights. */
+  /**
+   * A magitek base: perimeter, gate, towers, hangar, landing pad.
+   *
+   * The largest thing the kit builds and it was twenty-six flat slabs in a
+   * ring, four boxes on stilts and a half-cylinder — one value, no thickness,
+   * no coping and nothing standing on anything
+   * (`tmp/shots/kits-r0b/poi_aracheole.png`). A compound is read from its
+   * **perimeter**, and a perimeter is read from four things a slab has none of:
+   * a plinth it stands on, piers that break the run, a coping that catches the
+   * sun as a bright line, and a drip lip that puts a dark line under it.
+   *
+   * Everything below goes through {@link BuildKit}, so every arris is
+   * chamfered, every opening has a reveal, the crates are the corrugated
+   * {@link container} rather than boxes wearing a one-metre map, and
+   * {@link bakeTone} runs on the finished merge — which is what stops thirty
+   * pieces of `magitek` being literally one colour.
+   */
   _imperial(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     this._apron(B, 34, 13, 47, M.gravel, { yaw, wear: [[0, 0, 5.0], [-14, 14, 1.8], [22, 16, 1.0]] });
-    // perimeter wall with a gate and a breach
+
+    const b = bag();
+    const tv = toneVariant(rng, { valueAmp: 0.16, warmAmp: 0.04 });
+    const RX = 30, RZ = 24;                        // perimeter semi-axes
     const N = 26;
     const gate = Math.floor(rng.range(3, 9));
+    const WT = 0.85;                               // wall thickness
+    const WH = 6.2;                                // wall height
+
+    // Perimeter. Each bay is a real `wallRun` of thickness with an embrasure
+    // punched near the top, standing on a plinth, capped by a coping with a
+    // drip lip and buttressed by a pier at every joint. The breaches are what
+    // makes an *abandoned* base read: a gap with a jagged stub either side.
     for (let i = 0; i < N; i++) {
-      const t = i / N * Math.PI * 2, t2 = (i + 1) / N * Math.PI * 2;
-      const px = (Math.cos(t) + Math.cos(t2)) * 15, pz = (Math.sin(t) + Math.sin(t2)) * 12;
-      const len = Math.hypot((Math.cos(t2) - Math.cos(t)) * 30, (Math.sin(t2) - Math.sin(t)) * 24);
-      const ang = Math.atan2((Math.sin(t2) - Math.sin(t)) * 24, (Math.cos(t2) - Math.cos(t)) * 30);
       if (i === gate || i === gate + 1) continue;
+      const t = (i / N) * Math.PI * 2, t2 = ((i + 1) / N) * Math.PI * 2;
+      const ax = Math.cos(t) * RX, az = Math.sin(t) * RZ;
+      const bx = Math.cos(t2) * RX, bz = Math.sin(t2) * RZ;
+      const px = (ax + bx) / 2, pz = (az + bz) / 2;
+      const len = Math.hypot(bx - ax, bz - az);
+      const ang = Math.atan2(bz - az, bx - ax);
       const breach = rng.next() < 0.14;
-      const h = breach ? rng.range(1.4, 3.0) : 6.2;
-      put(M.concrete, new THREE.BoxGeometry(len + 0.4, h, 1.1), [px, h * 0.5 + 0.3, pz], [0, -ang, 0]);
-      if (!breach) put(M.magitek, new THREE.BoxGeometry(len + 0.6, 0.5, 1.5), [px, h + 0.5, pz], [0, -ang, 0]);
+      const h = breach ? rng.range(1.4, 3.0) : WH;
+      const local = bag();
+      const openings: Opening[] = breach ? [] : [{ x: 0, w: len * 0.34, y0: h - 1.35, h: 0.75 }];
+      for (const g of wallRun(len + 0.35, h, WT, openings)) local.shell2.push(g);
+      plinth(local.shell2, { w: len + 0.5, d: WT, h: 0.55, proud: 0.16, y: -0.2 });
+      if (!breach) {
+        // Coping and drip lip: bright line over dark line over wall.
+        local.trim.push(box(len + 0.55, 0.16, WT + 0.34, { y: h + 0.08 }));
+        local.trim.push(box(len + 0.45, 0.06, 0.06, { y: h - 0.02, z: WT / 2 + 0.15 }));
+        local.trim.push(box(len + 0.45, 0.06, 0.06, { y: h - 0.02, z: -WT / 2 - 0.15 }));
+        // Merlons: the notched rhythm that says fortification at any range.
+        const nm = Math.max(2, Math.round(len / 2.6));
+        for (let k = 0; k < nm; k++) {
+          local.trim.push(box(len / nm * 0.55, 0.62, WT * 0.7, {
+            x: -len / 2 + (len * (k + 0.5)) / nm, y: h + 0.47,
+          }));
+        }
+      } else {
+        // Rubble in the gap, so a breach is a collapse and not a missing part.
+        for (let k = 0; k < 5; k++) {
+          local.shell2.push(xform(new THREE.DodecahedronGeometry(rng.range(0.4, 1.1), 0), {
+            x: rng.range(-len / 2, len / 2), y: rng.range(0.1, 0.7), z: rng.gauss(0, 1.4),
+          }));
+        }
+      }
+      // A buttress pier at the joint, standing proud on both faces.
+      local.shell2.push(box(1.05, h + 0.3, WT + 0.5, { x: len / 2, y: (h + 0.3) / 2, arris: 0.085 }));
+      for (const k of Object.keys(local)) {
+        for (const g of local[k]) b[k].push(xform(g, { ry: -ang, x: px, y: 0.35, z: pz }));
+      }
     }
-    // gate: two pylons and a barrier arm
-    for (const sy of [-1, 1]) {
-      put(M.magitek, new THREE.BoxGeometry(2.0, 6.0, 2.0),
-        [Math.cos(gate / 16 * 6.28) * 30 + sy * 2.4, 3.2, Math.sin(gate / 16 * 6.28) * 24 + sy * 2.0]);
+
+    // Gate: two pylons with a plinth and a cap, a gantry across the head with
+    // its own shadow, and a lifted barrier arm with hazard banding.
+    {
+      const ga = (gate + 1) / N * Math.PI * 2;
+      const gx = Math.cos(ga) * RX, gz = Math.sin(ga) * RZ;
+      const gang = Math.atan2(Math.cos(ga) * RZ, -Math.sin(ga) * RX);
+      const local = bag();
+      for (const sx of [-1, 1]) {
+        plinth(local.shell, { w: 2.6, d: 2.6, h: 0.6, proud: 0.18, cx: sx * 3.2 });
+        local.shell.push(box(2.2, 7.4, 2.2, { x: sx * 3.2, y: 0.6 + 3.7, arris: 0.1 }));
+        local.trim.push(box(2.75, 0.22, 2.75, { x: sx * 3.2, y: 8.11 }));
+        local.trim.push(box(2.55, 0.07, 0.07, { x: sx * 3.2, y: 7.94, z: 1.31 }));
+        local.glow.push(box(1.4, 0.24, 0.06, { x: sx * 3.2, y: 5.6, z: 1.14, sharp: true }));
+      }
+      local.shell.push(box(9.2, 1.05, 1.5, { y: 8.7, arris: 0.09 }));
+      local.trim.push(box(9.4, 0.1, 0.1, { y: 8.14, z: 0.8 }));
+      // The arm, lifted: a raised barrier is a stronger silhouette than a
+      // lowered one and it reads as "abandoned, gates open" from a distance.
+      local.metal.push(xform(box(0.18, 5.4, 0.18), { rz: 0.42, x: 2.2, y: 3.6 }));
+      for (let k = 0; k < 5; k++) {
+        local.trim.push(xform(box(0.2, 0.5, 0.2), { rz: 0.42, x: 2.2 - Math.sin(0.42) * (k - 2) * 1.0, y: 3.6 + Math.cos(0.42) * (k - 2) * 1.0 }));
+      }
+      for (const k of Object.keys(local)) {
+        for (const g of local[k]) b[k].push(xform(g, { ry: -gang, x: gx, y: 0.35, z: gz }));
+      }
     }
-    // watchtowers
+
+    // Watchtowers: X-braced legs, a cabin with a real window band, a railed
+    // catwalk round it, a ladder, and an overhanging roof. A box on four sticks
+    // is the single most placeholder thing a compound can have.
     for (const [tx, tz] of [[-26, -20], [26, 20], [26, -20]]) {
+      const local = bag();
+      const H = 11.5, LR = 1.7;
+      const legs: number[][] = [];
       for (let i = 0; i < 4; i++) {
         const a = i * Math.PI * 0.5 + 0.78;
-        put(M.steel, new THREE.CylinderGeometry(0.14, 0.18, 11, 5),
-          [tx + Math.cos(a) * 1.5, 5.8, tz + Math.sin(a) * 1.5],
-          [Math.sin(a) * 0.08, 0, -Math.cos(a) * 0.08]);
+        legs.push([Math.cos(a) * LR, Math.sin(a) * LR]);
+        local.metal.push(xform(cyl(0.16, H, 6), {
+          x: Math.cos(a) * LR * 0.55, y: H / 2, z: Math.sin(a) * LR * 0.55,
+          rx: Math.sin(a) * 0.08, rz: -Math.cos(a) * 0.08,
+        }));
       }
-      put(M.magitek, new THREE.BoxGeometry(4.4, 2.4, 4.4), [tx, 12.4, tz]);
-      put(M.roof, new THREE.BoxGeometry(5.2, 0.3, 5.2), [tx, 13.7, tz]);
-      put(M.hot, new THREE.BoxGeometry(3.4, 0.4, 0.1), [tx, 12.6, tz + 2.25]);
+      for (let lvl = 1; lvl <= 3; lvl++) {
+        const ly = (H * lvl) / 3.4;
+        for (let i = 0; i < 4; i++) {
+          const a0 = legs[i], a1 = legs[(i + 1) % 4];
+          const mx = (a0[0] + a1[0]) / 2, mz = (a0[1] + a1[1]) / 2;
+          const len = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]) * 0.95;
+          const ang = Math.atan2(a1[1] - a0[1], a1[0] - a0[0]);
+          local.metal.push(xform(box(len, 0.11, 0.11), { ry: -ang, x: mx * 0.7, y: ly, z: mz * 0.7 }));
+          // one diagonal per face per level: the X that makes a mast a truss
+          local.metal.push(xform(box(Math.hypot(len, H / 3.4), 0.08, 0.08), {
+            rz: 0.9 * (lvl % 2 ? 1 : -1), ry: -ang, x: mx * 0.7, y: ly - H / 6.8, z: mz * 0.7,
+          }));
+        }
+      }
+      const cy = H + 1.3;
+      local.shell.push(box(4.4, 2.5, 4.4, { y: cy, arris: 0.08 }));
+      local.dark.push(box(4.5, 0.85, 4.5, { y: cy + 0.5, sharp: true }));
+      for (const sz of [-1, 1]) {
+        local.trim.push(box(4.6, 0.12, 0.12, { y: cy + 0.94, z: sz * 2.26 }));
+        local.trim.push(box(4.6, 0.12, 0.12, { y: cy + 0.05, z: sz * 2.26 }));
+        local.trim.push(xform(box(4.6, 0.12, 0.12), { ry: Math.PI / 2, x: sz * 2.26, y: cy + 0.94 }));
+      }
+      local.glow.push(box(3.4, 0.4, 0.06, { y: cy + 0.2, z: 2.3, sharp: true }));
+      // Catwalk and handrail.
+      local.metal.push(box(6.0, 0.12, 6.0, { y: cy - 1.31 }));
+      for (const sz of [-1, 1]) {
+        local.metal.push(box(6.0, 0.06, 0.06, { y: cy - 0.28, z: sz * 2.95 }));
+        local.metal.push(xform(box(6.0, 0.06, 0.06), { ry: Math.PI / 2, x: sz * 2.95, y: cy - 0.28 }));
+        for (let k = -2; k <= 2; k++) {
+          local.metal.push(cyl(0.035, 1.05, 4, { x: k * 1.4, y: cy - 0.78, z: sz * 2.95 }));
+        }
+      }
+      // Roof, proud all round with a shadow gap under its nose, and a beacon.
+      local.roof.push(box(5.4, 0.28, 5.4, { y: cy + 1.39 }));
+      local.trim.push(box(5.0, 0.08, 5.0, { y: cy + 1.2 }));
+      local.metal.push(cyl(0.07, 1.6, 5, { y: cy + 2.3 }));
+      local.glow.push(xform(new THREE.SphereGeometry(0.2, 7, 6), { y: cy + 3.1 }));
+      // Ladder up one leg.
+      for (let k = 0; k < Math.round(H / 0.42); k++) {
+        local.metal.push(box(0.66, 0.05, 0.05, { x: LR * 0.55, y: 0.3 + k * 0.42, z: -LR * 0.55 }));
+      }
+      for (const k of Object.keys(local)) for (const g of local[k]) b[k].push(xform(g, { x: tx, y: 0.35, z: tz }));
     }
-    // landing pad
-    put(M.magitek, new THREE.CylinderGeometry(11, 11, 0.5, 22), [0, 0.5, 0]);
-    put(M.red, new THREE.TorusGeometry(8.4, 0.28, 5, 26).rotateX(Math.PI / 2), [0, 0.78, 0]);
-    // hangar
-    put(M.concrete, new THREE.BoxGeometry(18, 7.5, 12), [-14, 4.1, 14]);
-    put(M.roof, new THREE.CylinderGeometry(5.9, 5.9, 18, 14, 1, false, 0, Math.PI)
-      .rotateZ(Math.PI / 2), [-14, 7.7, 14], [0, Math.PI / 2, 0]);
-    put(M.magitek, new THREE.BoxGeometry(18.6, 0.7, 12.6), [-14, 7.9, 14]);
-    put(M.void, new THREE.BoxGeometry(8, 6.4, 0.2), [-14, 3.5, 20.1]);
-    // banners and floodlights
+
+    // Hangar: a plinth, ribbed barrel vault, a door with real jambs and a head
+    // beam, roof plant and a gantry rail. The ribs are the whole read — a bare
+    // half-cylinder is a croissant.
+    {
+      const local = bag();
+      const HW = 18, HH = 4.6, HD = 13;
+      plinth(local.shell, { w: HW, d: HD, h: 0.7, proud: 0.2 });
+      for (const g of wallRun(HW, HH, 0.6, [])) local.shell.push(xform(g, { y: 0.7, z: HD / 2 - 0.3 }));
+      for (const g of wallRun(HW, HH, 0.6, [])) local.shell.push(xform(g, { y: 0.7, z: -HD / 2 + 0.3 }));
+      for (const sx of [-1, 1]) {
+        for (const g of wallRun(HD - 1.2, HH, 0.6, [])) {
+          local.shell.push(xform(g, { ry: Math.PI / 2, x: sx * (HW / 2 - 0.3), y: 0.7 }));
+        }
+      }
+      // A *segmental* vault, not a semicircle. A half cylinder of the building's
+      // own width stands as tall again as the building — the first pass did
+      // exactly that and produced a nine-metre black dome that owned the whole
+      // compound (`tmp/shots/kits-r6/poi_aracheole.png`). Squashed to 0.58 it
+      // is a hangar roof.
+      const vault = new THREE.CylinderGeometry(HW / 2 + 0.4, HW / 2 + 0.4, HD + 0.8, 18, 1, false, 0, Math.PI)
+        .rotateZ(Math.PI / 2);
+      vault.scale(1, 0.58, 1);
+      local.roof.push(xform(vault, { ry: Math.PI / 2, y: HH + 0.7 }));
+      // Ribs at 2.2 m, standing 180 mm proud of the vault.
+      for (let k = 0; k <= 6; k++) {
+        const rz2 = -HD / 2 + (HD * k) / 6;
+        const rib = new THREE.TorusGeometry(HW / 2 + 0.5, 0.17, 5, 20, Math.PI);
+        rib.scale(1, 0.58, 1);
+        local.metal.push(xform(rib, { y: HH + 0.7, z: rz2 }));
+      }
+      // The door: a hole with jambs, a head beam and a dark interior behind it.
+      const dW = 8.4, dH = 4.1;
+      local.dark.push(box(dW, dH, 0.3, { y: 0.7 + dH / 2, z: HD / 2 + 0.05, sharp: true }));
+      for (const sx of [-1, 1]) {
+        local.trim.push(box(0.5, dH + 0.7, 0.9, { x: sx * (dW / 2 + 0.25), y: 0.7 + (dH + 0.7) / 2, z: HD / 2 + 0.2 }));
+      }
+      local.trim.push(box(dW + 1.4, 0.65, 1.1, { y: 0.7 + dH + 0.32, z: HD / 2 + 0.25 }));
+      local.glow.push(box(dW + 1.0, 0.14, 0.06, { y: 0.7 + dH + 0.02, z: HD / 2 + 0.72, sharp: true }));
+      plantUnit(local, { x: -5.4, y: HH + 0.7 + (HW / 2) * 0.58 - 1.1, z: 0, w: 2.2, h: 1.3, d: 1.7 });
+      for (const k of Object.keys(local)) for (const g of local[k]) b[k].push(xform(g, { x: -14, y: 0.35, z: 14 }));
+    }
+
+    const merged = mergeBag(b);
+    const roleMat: Record<string, THREE.Material> = {
+      // Two masses, not one: pale concrete carries the wall and the cabins,
+      // dark magitek plate carries every coping, merlon, jamb and roof. One
+      // material for a whole compound is what made the first pass a black ring.
+      shell: M.magitek, shell2: M.concrete, trim: M.magitek, metal: M.steel,
+      glass: M.glass, glow: M.hot, dark: M.interior, roof: M.magitek,
+      wood: M.plank, cloth: M.red,
+    };
+    for (const [role, g] of Object.entries(merged)) {
+      if (role !== 'glow' && role !== 'dark' && role !== 'glass') {
+        bakeTone(g, { y0: 0, y1: 14, grime: 0.7, bleach: 1.06, jitter: tv.jitter, tint: tv.tint, streak: 0.24 });
+      }
+      put(roleMat[role] ?? M.magitek, g, [0, 0, 0]);
+    }
+
+    // Landing pad: a platform on a chamfered edge kerb, not a disc painted on
+    // the gravel, with the approach chevrons and the edge lights that make a
+    // helipad legible from the air.
+    put(M.magitek, new THREE.CylinderGeometry(11, 11.3, 0.55, 24), [0, 0.6, 0]);
+    put(M.concrete, new THREE.CylinderGeometry(11.5, 11.8, 0.34, 24), [0, 0.3, 0]);
+    put(M.red, new THREE.TorusGeometry(8.4, 0.28, 5, 26).rotateX(Math.PI / 2), [0, 0.88, 0]);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      put(M.hot, new THREE.BoxGeometry(0.3, 0.16, 0.3), [Math.cos(a) * 10.6, 0.94, Math.sin(a) * 10.6]);
+    }
+    for (let i = 0; i < 4; i++) {
+      put(M.red, new THREE.BoxGeometry(3.2, 0.06, 0.55), [0, 0.9, -4.4 + i * 1.1]);
+    }
+
+    // Banners, floodlights, and containers where somebody left them.
     for (let i = 0; i < 5; i++) {
       const a = rng.next() * 6.28;
       put(M.banner, new THREE.PlaneGeometry(2.2, 5.4),
@@ -1238,13 +1426,13 @@ export class PoiKits {
     }
     for (const [fx, fz] of [[18, -14], [-20, -16], [20, 16]]) {
       put(M.steel, new THREE.CylinderGeometry(0.12, 0.16, 9, 6), [fx, 4.8, fz]);
+      put(M.steel, new THREE.BoxGeometry(0.5, 0.5, 0.5), [fx, 9.0, fz]);
       put(M.lamp, new THREE.BoxGeometry(1.1, 0.7, 0.4), [fx, 9.3, fz], [0.5, 0, 0]);
     }
-    // crates and drums inside the wire
-    for (let i = 0; i < 9; i++) {
-      put(i % 3 ? M.magitek : M.rust,
-        i % 3 ? new THREE.BoxGeometry(2.4, 1.6, 1.8) : new THREE.CylinderGeometry(0.34, 0.34, 1.0, 10),
-        [rng.range(-24, 24), 1.1, rng.range(-18, 18)], [0, rng.next() * 3, 0]);
+    this._containers(B, world, { n: 3, x: 16, z: -4, rng, stack: true });
+    for (let i = 0; i < 6; i++) {
+      put(M.rust, new THREE.CylinderGeometry(0.34, 0.34, 1.0, 10),
+        [rng.range(-24, 24), 0.95, rng.range(-18, 18)], [0, rng.next() * 3, 0]);
     }
     return { cast: false, r: 40 };
   }
