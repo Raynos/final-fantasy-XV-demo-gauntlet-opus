@@ -47,10 +47,12 @@ const PLATES = path.join(ROOT, 'docs/reference/plates');
 
 /** What the judge is never shown. Written beside the composite. */
 interface AnswerKey {
+  /** Set in `--control`: the PAIRING row both plates came from. */
+  control?: string;
   n: number;
   composite: string;
-  A: 'game' | 'reference';
-  B: 'game' | 'reference';
+  A: 'game' | 'reference' | 'plate-A' | 'plate-B';
+  B: 'game' | 'reference' | 'plate-A' | 'plate-B';
   gameFile: string;
   refFile: string;
   seed: number;
@@ -159,7 +161,13 @@ function html(leftUri: string, rightUri: string, panelW: number, panelH: number)
 }
 
 /** One pair to composite. */
-interface Pair { n: number; game: string; ref: string }
+interface Pair {
+  n: number;
+  game: string;
+  ref: string;
+  /** Set only in `--control`: both panels are plates, and this names the row. */
+  control?: string;
+}
 
 async function build(argv: string[], arg: (n: string, d?: string) => string | undefined): Promise<void> {
   const out = path.resolve(arg('out', 'tmp/ab')!);
@@ -170,7 +178,47 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
 
   const pairs: Pair[] = [];
   const shotsDir = arg('shots');
-  if (shotsDir) {
+  if (argv.includes('--control')) {
+    /**
+     * The calibration this tool has never had.
+     *
+     * `--selftest` checks the *shuffle* — seed parity and left/right balance.
+     * It has never checked the **judge**. Every round so far has come back
+     * "6 identified, 0 fooled", across five rounds in which four separate lanes
+     * each fixed the defect the previous round named and the colour signature
+     * converged onto the reference (R-B +20.0 -> +0.3). A verdict that never
+     * moves while the thing it measures demonstrably improves is either a real
+     * categorical gap or a saturated instrument, and nothing here can currently
+     * tell those apart.
+     *
+     * `--control` pairs two *reference plates of the same scene family* against
+     * each other and asks the identical question. Neither panel is our render.
+     * A judge that is measuring anything should sit near chance and hesitate; a
+     * judge that reports 6-of-6 HIGH here is answering some other question, and
+     * every ranking taken from it is noise.
+     *
+     * This matters in this repo specifically. Five instruments were found to be
+     * measuring themselves in one session — the perf ruler worst of all, at
+     * correlation 0.107 with the truth and an inverted ranking. The rule that
+     * came out of it is the one being applied here: before trusting a number,
+     * make the instrument report on a case whose answer you already know.
+     */
+    let i = 0;
+    for (const [shot, plates] of Object.entries(PAIRING)) {
+      if (plates.length < 2 || plates[0] === plates[1]) continue;
+      i += 1;
+      pairs.push({
+        n: i,
+        game: path.join(PLATES, plates[0]),
+        ref: path.join(PLATES, plates[1]),
+        control: shot,
+      });
+    }
+    if (!pairs.length) { console.error('no PAIRING row has two distinct plates'); process.exit(1); }
+    console.log(`CONTROL: ${pairs.length} pairs, both panels are shipped-FFXV reference plates.`);
+    console.log('Neither side is our render. Expect ~50% identification and visible hesitation.');
+    console.log('A 6-of-6 HIGH result here means the judge is not measuring what we think.\n');
+  } else if (shotsDir) {
     const dir = path.resolve(shotsDir);
     const names = (await readdir(dir)).filter((f) => /\.(png|jpe?g)$/i.test(f) && !f.startsWith('_')).sort();
     if (!names.length) { console.error(`no captures in ${dir}`); process.exit(1); }
@@ -214,8 +262,12 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
       await page.screenshot({ path: file, type: ext, ...(ext === 'jpeg' ? { quality: 88 } : {}) });
       keys.push({
         n: p.n, composite: path.basename(file),
-        A: gameLeft ? 'game' : 'reference', B: gameLeft ? 'reference' : 'game',
+        // In a control pair neither panel is our render, so the labels record
+        // which *plate* sat where rather than pretending one of them is us.
+        A: p.control ? 'plate-A' : (gameLeft ? 'game' : 'reference'),
+        B: p.control ? 'plate-B' : (gameLeft ? 'reference' : 'game'),
         gameFile: p.game, refFile: p.ref, seed,
+        ...(p.control ? { control: p.control } : {}),
       });
       console.log(`  ${path.basename(file)}   ${path.basename(p.game)}`);
     }
