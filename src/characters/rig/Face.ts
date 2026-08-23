@@ -1195,9 +1195,26 @@ function paintFace(look: Look, uv: FaceUV, bakeKey: string | null) {
     // vermilion border: a fine light line where lip meets skin
     stroke([[cL, yC - 0.0022], [-0.0160, -0.0716], [0, -0.0734], [0.0160, -0.0716], [cR, yC - 0.0022]],
       'rgba(255,226,208,0.24)', 0.0016, { blur: 2 });
-    // the mouth line itself
+    // The mouth line itself — and it was a black marker stroke.
+    //
+    // `rgba(46,18,22,0.95)`, 4 mm wide on a 74 mm face, blur 0.6: near-opaque,
+    // hard-edged, and Y≈25. Measured against the plate it is supposed to look
+    // like, over a tight mouth rect on `character-noctis-face-01.jpg`:
+    //
+    //   plate   Y p5  79 -> p50 119     ours  Y p5   3 -> p50  78
+    //
+    // The shipped mouth never goes below Y 79 anywhere in that rect — the lip
+    // seam in FFXV is a soft *warm* dark, not an absence of light — while ours
+    // bottoms out at 3, i.e. 25x darker than the darkest pixel of the thing it
+    // is copying, and darker than any pixel in any of §12.1's five face plates
+    // (whose deepest skin is `#4d3a33`, Y 62). That single stroke is why the
+    // mouth reads as a slot cut in a mask rather than as lips: at portrait
+    // range it is the only pure black on the head, so the eye reads it as a
+    // hole. Warmer, lighter, softer, and no longer fully opaque; the value
+    // break that makes a mouth is already carried by the upper lip's own
+    // multiply shadow three lines above.
     stroke([[cL, yC], [-0.0130, -0.0796], [0, -0.0784], [0.0130, -0.0796], [cR, yC]],
-      'rgba(46,18,22,0.95)', 0.0040, { blur: 0.6 });
+      'rgba(78,42,44,0.72)', 0.0034, { blur: 1.8 });
     // wet highlight on the lower lip
     soft([0, -0.0852, 0.084], 0.009, 0.0026, 'rgba(255,228,212,0.46)', 1);
     // corner shadows and the mentolabial crease
