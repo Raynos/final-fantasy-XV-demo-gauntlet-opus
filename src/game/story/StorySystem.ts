@@ -179,13 +179,13 @@ export class StorySystem {
     const ch = CHAPTER_BY_N[n];
     if (!ch) return;
     const box = this.cine && this.cine.box;
-    if (box) {
-      box.chapterCard(n, ch.name, ch.summary, 'complete');
-      const next = CHAPTER_BY_N[n + 1];
-      if (next) {
-        this.queue.push({ at: 4.6, fn: () => this.startChapter(n + 1) });
-      }
-    }
+    // The card is a flourish. **Starting the next chapter is not**, and it used
+    // to be nested inside `if (box)` — so with no letterbox (a headless run, a
+    // capture, a `Cinematics` that failed to build) the story closed a chapter
+    // and never opened another one. The card waits on the letterbox; the story
+    // does not.
+    if (box) box.chapterCard(n, ch.name, ch.summary, 'complete');
+    if (CHAPTER_BY_N[n + 1]) this.queue.push({ at: box ? 4.6 : 0.6, fn: () => this.startChapter(n + 1) });
     this.talk.react('chapter-complete');
     window.dispatchEvent(new CustomEvent('ffxv-chapter', { detail: { phase: 'complete', chapter: n, name: ch.name } }));
   }
@@ -362,6 +362,11 @@ export class StorySystem {
     this.chapterN = ch.n;
     this.chapter = ch;
     for (const c of CHAPTERS) if (c.n <= ch.n && c.scenes && c.scenes.start) this.seen.add(c.scenes.start);
+    // A save resumed mid-chapter must still be *on* something. Without this a
+    // save whose chapter has two main quests and has finished the first comes
+    // back with the second `available` and nobody holding it, and the chapter
+    // can never close. @see _advanceChapterLine
+    this._advanceChapterLine();
     this._announceChapter(ch, 0.6);
   }
 
