@@ -17,17 +17,14 @@ Finish every open plan in `docs/plans/`, then take the game's models, assets,
 world, maps and zones to AAA. **Each plan's own `Status:` line now carries its
 state**, so `ls docs/plans/` answers what is open without opening anything.
 
-## Live right now — three agents, disjoint directories, one worktree each
+## Live right now — one agent
 
 | who | lane | owns | port |
 |---|---|---|---|
-| quest-chain | 23 uncompletable objectives; two main-chain dead-ends; dungeon doors | `game/rpg/`, `ui/`, `combat/`, `characters/`, `world/map/` | 5410 |
-| terrain-material | the blind judge's **new #1 defect**, plus tier-D grass handover | `world/Terrain.ts`, `world/terrain/`, `world/veg/` (tier-D only) | 5420 |
-| modeling | Hammerhead, the Meteor, `_capital`, remaining `eco.height` sites | `world/props/`, `world/town/` | 5430 |
+| perf | the certified shortfall: rank where the open-world frame's time goes | all of `src/` — no other lane is live | 5480 |
 
-The coordinator holds `game/Game.ts`, `game/Shots.ts`, `world/Water.ts` and the
-docs. **Do not take a perf or boot number while these are live** — both tools
-now refuse to certify one, which is the instrument working.
+**Do not capture or measure while it runs**, and it must say in its handoff which
+other lanes' files it touched.
 
 ## The grade — measured, not guessed
 
@@ -52,32 +49,20 @@ and placeholder geometry (modeling lane).
 Component grades, self-assessed against shipped FFXV by the agent that did the
 work: hands 6, outfits 5.5, hair 4.5, buildings 5 (from 1), rocks 5 (from 3).
 
-## Merged tonight
+## Merged tonight — eleven lanes
 
-**Boot 13.66 s -> 6.88 s cold** via three bake caches (`terrain`, `tex`, `texc`).
+Boot **13.66 s → 6.88 s**. Wave 1 and Wave 2 §3.1/3.2/3.5 of sibling-ports. The
+main story went from unfinishable in chapter 1 to running to the end of chapter 5;
+camping, quests, hunts, shops, dungeons, Elemancy and **fishing** all work.
+Buildings 1→5, Insomnia 2→6, rocks 3→5, Hammerhead 5→6.5, hands 6, outfits 5.5.
+Impostor crowns had one constant normal shared by all eight vertices — neighbour
+scatter 0.404 → 0.008. `integration` 18 → **27/27**, `combatloop` 30 → **31/31**.
+
 **After any merge run `texbake.mts --force` AND `--canvas --force`** — the canvas
-cache can only be pruned by the plugin, and a boot number taken without it is two
+cache can only be pruned by the plugin, and a boot number without it is two
 seconds pessimistic with no symptom.
 
-**Wave 1 instruments, all four.** A ruler that voids a run rather than printing a
-number it cannot stand behind; `seatHeightAt` at 0.000 m residual to 3.4 km;
-ablation dials plus the rule *ablate before re-tinting* in `BRIEF.md`; contact
-shadows verified reaching.
-
-**Wave 2 §3.1/3.2/3.5:** the reference corpus, the blind judge, and a
-horizon-angle bake giving km-scale terrain shadow for two fetches.
-
-**Nothing in the game was pressable** — `KeyE` was eaten by combat's warp ten
-systems earlier — and **the main story was unfinishable from the first frame of
-every session**. Both fixed. Camping, quest waypoints, hunts and shops all work.
-
-**Buildings 1/10 -> 5/10, rocks 3/10 -> 5/10** for +3.1% triangles and five draw
-calls. The Meteor of the Disc was an 80-triangle icosahedron.
-
-**Two harness bugs that cost hours:** `check.mts` reported a terrain regression
-twice when the gates were never running, and every capture tool would silently
-reuse another worktree's dev server — byte-identical frames after a real change.
-Both fixed; fifteen tools now refuse a foreign tree.
+The narrative account is `project/journal/2026-08-22-985c9fe3.md`.
 
 ## Determinism — CLOSED, at the noise floor
 
@@ -107,22 +92,35 @@ worst −1.177 m (reported, not failed).
 **Run `npm run check` at every merge, not just the cheap gates.** `combatloop`
 slid 30/30 → 21/30 unnoticed for weeks because the expensive ones were skipped.
 
-## The two perf failures — formally *unknown*
+## Perf — **measured**, certified, and short
 
-`vista_dawn` 37.9 fps and `walk` 49.8 fps predate the ruler and used a different
-headline (serialised latency, not pipelined throughput). **Unmeasured until
-re-run on a quiet tree**, both printing `RULER_VALID: true`:
+Both gates were formally unknown all session because the ruler voided every run
+under contention. With every lane merged and the tree quiet, both certified
+`RULER_VALID: true`. `project/baseline-perf.json` and
+`project/baseline-gameplay.json` are the origin; later runs go `--baseline`
+against them.
 
 ```
-node src/tools/perf.mts     --out project/baseline-perf.json
-node src/tools/gameplay.mts --out project/baseline-gameplay.json
-node src/tools/seatcheck.mts
+perf      mean 63.1 fps, worst 31 (setpiece_deadeye), floor IQR 3.02 ms
+          77 of 141 shots below 60 fps
+gameplay  worst segment sprint 38.0, 27 hitches, floor 4.17 ms (24%)
+          idle 40.6 · walk 42.7 · sprint 38.0 · streaming-traverse 49.4
+          combat 95.2 · magic 87.0 · warp-strike 76.6 · weapon-swap 73.6
 ```
 
-Exit 3 means throw the run away, not discount it; `check.mts` shows it as
-**VOID**. One finding survives: on `vista_dawn` throughput is no cheaper than
-latency, so that shot is single-bottleneck and almost certainly GPU. The horizon
-bake and the grass shadow proxy are both unpriced.
+**The shape is the finding, and it is counter-intuitive.** Combat, magic and
+warp-strike clear 60 comfortably; *standing still in a field* is 40.6. The cost
+is in the open-world frame, not the effects. Nor is it simply draw count —
+`town_forecourt` runs 66 fps at 971 draws and 9.8 M triangles while `vista_dawn`
+runs 33 at 713 and 10.3 M. On `vista_dawn` pipelined throughput is no cheaper
+than serialised latency, so that shot is single-bottleneck and almost certainly
+GPU.
+
+Unpriced things that landed tonight, each with its knob: the horizon bake
+(`uHorizonMix.y → 0` drops the AO loop, keeps the shadow), the grass shadow
+proxy (+84k tris, +63 draws; knob is the tuft height threshold), impostor and
+rock shadows (+33–55 draws), analytic terrain relief, and the water depth model
+(eight texelFetches per water pixel).
 
 ## Still weak, and who has it
 
