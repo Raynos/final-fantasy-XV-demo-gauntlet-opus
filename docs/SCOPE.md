@@ -5,9 +5,10 @@ Every discrete thing the game should contain, one line each, checkable.
 > **Verified against `main` @ 421 commits, 2026-08-23.** The previous stamp was
 > `main` @ 98 commits (2026-08-17) and the file had drifted 323 commits. It was
 > wrong in **both** directions, and mostly in the direction nobody expects: it
-> **understated** the game. Nineteen atoms marked not-started were shipped and
-> reachable; a further eighteen are code that nothing in a played session can
-> reach. The full account of what moved is in `project/handoff/inventory.md`.
+> **understated** the game. Fifteen atoms marked not-started or in-progress are
+> shipped and reachable; eighteen more are code that nothing in a played session
+> can reach; and a further two dozen systems were not listed at all. The full
+> account of what moved is in `project/handoff/inventory.md`.
 >
 > **342 atoms · 257 shipped · 18 built-but-unreachable · 67 not built.**
 > Recount rather than quote — the command is below.
