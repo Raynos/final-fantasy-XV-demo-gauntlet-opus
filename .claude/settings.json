@@ -20,28 +20,6 @@
           }
         ]
       }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/src/tools/sessionlog.mts\" || true",
-            "timeout": 120
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/src/tools/sessionlog.mts\" || true",
-            "timeout": 120
-          }
-        ]
-      }
     ]
   }
 }
