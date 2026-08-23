@@ -1,301 +1,312 @@
-# Handoff — `heroart` (face, skin, and what the portrait shots finally showed)
+# Handoff — `heroart` (four builds, and the portrait that can finally see an eye)
 
-Branch `worktree-agent-a10798c70cfed7420`, six commits on top of `main` (merged
-current at the start of the session, 234 commits behind). `npm run check` is
+Branch `worktree-agent-ae95c94c3ff458e00`, four commits on top of `main` (merged
+current at the start of the session, 248 commits behind). `npm run check` is
 **11/11**, `anycheck` 0, `creaturecheck` 207 poses.
 
-This lane took the previous one's closing recommendation — *"I'd point them at
-`Face.ts` and the skin material rather than more geometry"* — and ran it against
-`hero_portrait` and `hero_profile`, which entered the corpus this session and are
-the first shipped shots that have ever shown a head at close-up range.
-
-**Read §1 first.** Four of the five findings are overturns, and two of them
-overturn things this repo has believed across multiple handoffs. Three of the
-five are not in `src/characters/` at all.
+This lane took the previous one's closing recommendation — *"Party silhouette
+variation. Five of nine blind comments this round said the four heroes are one
+body reskinned, and nothing else in the round was named that often"* — and it is
+done. **The tell is gone from the blind comments: 5 of 9 last round, 0 of 9 this
+round.** Read §1 and §2; §5 has two harness findings that will otherwise silently
+invert somebody's next round.
 
 ---
 
-## 1. The findings, in order of how much they matter
+## 1. The defect, in a number, and what actually caused it
 
-### 1.1 The "jaw seam" is not the face map and is not in `Face.ts`
+Nothing in the corpus could test "do these four read as four people?". A party
+shot puts them at four different depths and lets them occlude each other, and a
+per-character follow shot has the same problem the other way — **the first
+attempt at this framed Noctis's back while claiming to shoot Gladiolus.**
+(Same failure as the previous-previous lane's hand probe. Verify the framing
+shows the thing.)
 
-The previous handoff's §8.5 said: *"The face/neck seam. Every portrait shows a
-hard rectangular boundary where the face map ends, on the neck under the jaw, in
-a visibly different tone. It is on all four heroes and it is large. `Face.ts`."*
+`src/tools/_probe/builds.mts` (new) is the instrument: it teleports the four onto
+a line perpendicular to the camera, levels them onto the mean ground height,
+faces them all at it, pins them, and takes one frame — same lighting, same lens,
+same depth, adjacent pixels. It also reads the silhouette straight off the
+**bind-space vertices** of the body and outfit meshes, bucketed by dominant skin
+bone, so a claim about proportion is a number rather than an eyeball.
 
-**That is wrong.** It is screen-space ambient occlusion stacking with the
-contact-shadow pass. Measured in one frame, same rects, `hero_portrait`:
+The first version of that measurement was also wrong, and worth recording: a
+horizontal slab through a standing figure catches whatever limb is at that
+height, so it measured Noctis's **upper arm** and called it his chest — 1.56x too
+wide, and it reported the waist as wider than the chest on all four. Bucketing by
+dominant bone before banding by height fixed it.
 
-| | cheek Y p50 | neck Y p50 | neck as % of cheek |
+**Inherited state.** Every number is a fraction of that character's own standing
+height, so a build that is only *scaled* is identical across the row:
+
+| | noctis | gladio | ignis | prompto | spread |
+|---|---|---|---|---|---|
+| silhouette width / height | 0.3050 | 0.3204 | 0.3129 | 0.3030 | **5.7%** |
+| biceps / waist | 1.728 | 1.732 | 1.775 | 1.704 | **4.2%** |
+| chest / waist (V taper) | 1.175 | 1.312 | 1.238 | 1.163 | 12.8% |
+| shoulder / hip | 0.847 | 0.897 | 0.857 | 0.851 | 5.9% |
+| forearm width | 0.2846 | 0.2907 | 0.2945 | 0.2839 | **3.7%** |
+
+Gladiolus at `muscle` 0.95 and Prompto at 0.42 — nearly the whole width of the
+dial that is the entire mass axis — differed in **arm-to-waist ratio by four
+percent**, and in forearm girth by under four. They were the same man at two
+scales, which is exactly what a judge means by one mesh reskinned.
+
+**Cause, in `Anatomy.ts`.** Every radius carried roughly the same muscle
+coefficient — about a fifth of its base over the whole 0..1 range — so turning
+the dial inflated the figure uniformly by about a tenth and moved no proportion
+at all. It was a size knob wearing a build knob's name.
+
+**Fix.** Mass on a human is not distributed uniformly: chest, deltoid, lat,
+trapezius, arm and calf carry nearly all of it and waist, hip, wrist, knee and
+ankle carry almost none, which is *why* a heavy man reads as a V and a slight one
+as a stick. Every coefficient is now scaled by how much that landmark actually
+responds to build — ×1.55–1.8 on chest, arm and the muscle bellies, ×1.8 on legs,
+**×0.8 on the waist**, ×1.2–1.4 on the joints — and **every pair is rebased so its
+value at the default `muscle` of 0.35 is unchanged to four decimals.** The NPC
+cast spans 0.16 to 0.94 and none of them were the problem, so none of them move
+for free.
+
+Then the four profiles use the range that now exists. Prompto drops to 0.14 (he
+was carrying *more* muscle than Noctis, which is backwards for the character
+described as slight); Gladiolus goes to 0.90 with a 1.08 shoulder yoke and a
+*narrower* hip than Noctis so the V has something to taper to.
+
+**After:**
+
+| | noctis | gladio | ignis | prompto | spread |
+|---|---|---|---|---|---|
+| silhouette width / height | 0.3109 | 0.3585 | 0.3200 | 0.2920 | **22.8%** |
+| biceps / waist | 1.768 | 2.014 | 1.815 | 1.615 | **24.7%** |
+| chest / waist (V taper) | 1.211 | 1.658 | 1.268 | 1.035 | **60.2%** |
+| shoulder / hip | 0.897 | 1.168 | 0.974 | 0.800 | **46.0%** |
+| shoulder width / height | 0.1834 | 0.2796 | 0.1943 | 0.1539 | **81.7%** |
+| height (m) | 1.775 | 2.010 | 1.865 | 1.725 | 16.5% |
+| heads tall | 7.12 | 7.75 | 7.29 | 6.95 | 11.5% |
+
+Waist width stays flat by design — **9.0% spread** — because the waist is the
+reference the V is read against.
+
+### 1.1 Two things that had to be walked back, both by looking
+
+- **×2.1 on chest and arm and ×1.9 on the deltoid was a caricature.** Two hard
+  spheres on the shoulders and a chest 0.70 m across on a 2.01 m man, against a
+  plausible 0.39 m on Noctis. The committed factors are what survived the frame.
+- **Amplifying the trapezius cut both ways.** Its comment already records why it
+  exists — without it the neck is a bare cylinder meeting a flat plate at 90° and
+  that step is most of why every neck used to read twice its real length. At
+  ×1.55 Prompto's 0.14 muscle got 0.423 of it against 0.448 before, and at 3x his
+  neck went straight back to reading as a pipe on a shelf. Trapezius is ×1.35 and
+  the nape term ×1.2: still a much bigger Gladiolus yoke, without taking the floor
+  out from under the light end.
+
+---
+
+## 2. The blocker: `hero_portrait` can show an eye now
+
+It is not the camera and it is not the groom. `evalIdle` gives thoracic flexion
++0.040/+0.105/+0.125 across the three spine joints and handed the cervical spine
+only −0.075/−0.050 back — **46% of it**. Noctis's 0.65 slouch therefore arrived
+at the head as 10° of forward pitch before `headDown` contributed anything, and
+`headDown` 0.10 added 4 more. Twelve and a half degrees, on a head whose fringe
+was measured against the plate to reach the cheekbone.
+
+A real slouch does not work that way: the cervical spine extends to keep the gaze
+horizontal. The counter is now **90%** of the thoracic sum, which makes `headDown`
+the only thing that decides where the chin points — which is what `Posture.ts`
+already documents it as — and Noctis's `headDown` comes down to 0.030 to match.
+
+Gladiolus and Ignis have `slouch: 0` and do not move at all; Prompto's 0.30 lifts
+his chin about two degrees.
+
+The portrait now shows his **right eye whole** — iris, lash line, lid crease and
+brow — with the fringe across the left. `tmp/shots/m3png/z_eyes.png` is the 5x
+crop. **The next lane can grade eyes.** For the record, having finally seen it: a
+flat saturated blue disc, no catchlight, no limbal ring, no visible pupil, the
+sclera barely present. That is the "doll eyes / painted features" the judge has
+named every round, and it is now visible instead of hypothetical.
+
+---
+
+## 3. The blind round, with its control
+
+Thirteen pairs to one fresh judge in one shuffled set: **nine real pairs** (all
+character-framed — `party_formation`, `party_walk`, `hero_full`, `hero_closeup`,
+`hero_portrait`, `hero_profile` and the three companion closeups) and **four
+`--control` pairs** in which both panels are shipped plates, drawn from the
+character PAIRING rows so the controls match the round's subject. `compare.mts`'s
+own canonical question, no added instruction.
+
+- **Real pairs: 9 identified, 0 fooled.** All HIGH.
+- **Controls: 4 of 4 refused.** The judge answered "neither — control pair" on
+  every one, spontaneously flagged them as controls, and gave LOW confidence on
+  the forced picks. The instrument is not saturated; the verdict is signal.
+
+**The body tell is gone.** Last round: *"one shared body mesh reskinned across
+the party"*, *"the same body repeated"*, *"five characters sharing one body
+mesh"* — in five of nine comments and the single most repeated tell in the round.
+This round: **zero of nine.** Nothing in the judge's per-pair notes or in its
+ranked summary of recurring tells mentions body, proportion, or repetition.
+
+The judge's own ordering of what now gives us away, in its words:
+
+1. **Hair** — *"an opaque cap or a single alpha-cut shell that visibly detaches
+   from the scalp, with hard cutout edges and fringing"*. Present in **every**
+   demo panel; it calls this the single strongest signal.
+2. **Faces** — *"mannequin masks, features painted into the diffuse texture, no
+   eye geometry, no subsurface, often a hard seam where the head meets the neck"*.
+3. **Contact shadows / AO** — *"vegetation and props sit on the terrain rather
+   than in it"*, character shadows as single soft blobs.
+4. **Vegetation authoring** — spherical canopies with no branch structure, grass
+   as identical cross-billboards that stop abruptly with no LOD blend.
+5. **Material response** — *"a sword is a grey polygon, a jacket has no weave or
+   seams, a boulder is one smeared stretched texture"*; and once, on the
+   portrait, *"untextured plastic shoulder armour"* (§4).
+6. **Ground texturing** — visible tiling and UV stretching on slopes.
+
+Unprompted closing note: *"the composition and lighting of the demo panels are
+often decent — colour grading, sun angle and camp layout read as plausible FFXV.
+What gives it away is always asset-level fidelity."*
+
+Round artefacts: `tmp/ab-real` (9 real, key sealed), `tmp/ab-ctrl` (30 control
+pairs, 4 used), `tmp/ab-round` (the shuffled set the judge saw),
+`tmp/ab-round-MAP.json` (maps back — **its shot *labels* for pairs 02, 07 and 11
+are wrong**; the `pair → ab-NN` mapping is right and is what the reveal used).
+
+---
+
+## 4. The one named tell that was in my directory: leather
+
+"Untextured plastic shoulder armour" on `hero_portrait`, and widening `muscle`
+made the thing it names bigger. Two causes, both measured on `gladio_closeup`
+over a leather-only rect, `0.4594 0.3667 0.5188 0.4667` — **verified by cropping
+it and looking before trusting it; the first rect I picked was a third bare
+forearm and its p99 was skin.**
+
+| | p50 | p99 | Y p99.5 |
 |---|---|---|---|
-| shipped | 208 | **87** | 42% |
-| `--ablate nogtao` | — | 147 | 71% |
-| `--ablate nocontact` | — | 138 | 66% |
-| `--ablate nogtao,nocontact` | 209 | **187** | 89% |
+| plate, §12.4 Gladiolus leather, warm key | `#6f3b0f` Y 67 | `#fda050` Y 179 | — |
+| ours, `rough` 0.40 | `#352f35` Y 49 | `#e9dbc8` Y 238 | **238** |
+| ours, `rough` 0.62 | `#383236` Y 52 | `#a29388` Y 158 | **158** |
 
-The cheek does not move at all (208 → 209); the neck moves by 100 levels. Both
-passes independently take roughly half of it, and together they darken skin 22 mm
-from the jaw by **2.15x** before the sun's own shadow map is counted. §12.1's
-whole point is that FFXV skin never falls below 2.0–3.2x of its lit value across
-a *whole face*; ours loses more than that across one jawline.
+§12.4 is explicit that FFXV leather is high-roughness with a low specular
+intensity — *"not a mirror hit, a broad dim sheen"* — and that black leather in
+full sun tops out at Y 80 and Gladiolus's warm-key jacket at Y 179. Ours reached
+238 in a small hard-edged near-white ellipse. At 0.62 the peak lands *inside* the
+plate's instead of 59 levels past it.
 
-I also ablated the candidate that is in my lane — `Body.ts` bakes a jaw shadow
-into the neck vertices, `B.occlude(0, y(1.545), …, 0.44)` and a second at 0.30.
-Setting both to zero moved the neck from Y 87 to Y **90**. Three levels. It is
-not the cause, and deleting it would cost the 30 px read its comment defends for
-nothing, so it is unchanged.
-
-**Not my files.** `src/engine/postfx/GtaoPass` and `ContactShadowPass` should not
-both be pricing the same cavity. Whoever owns them: the fix is that they compose,
-not that either is individually wrong.
-
-### 1.2 The contact-shadow pass leaves a 1-pixel screen door on the neck
-
-At 12x the neck under the jaw is a literal checkerboard — alternating lit and
-shadowed pixels, 50% duty, hard-edged, with a diagonal boundary across the
-throat. `--ablate nocontact` removes it completely; nothing else does.
-
-`ContactShadowPass` jitters its ray start with
-`ign(gl_FragCoord.xy + mod(uFrame,8.0)*47.13)` and its own comment says *"Rotating
-the dither every frame is what lets TAA average it away."* On static world
-geometry it does. On a **character with an idle animation** the history is
-reprojected and rejected every frame, so the dither never averages and the
-occlusion term stays binary per pixel. That is why this appears on the neck and
-essentially nowhere else in the corpus, and why no previous round caught it —
-before `hero_portrait` existed, no shot put a character's neck at 1.15 m.
-
-Also not my file. Same owner as §1.1.
-
-### 1.3 The subsurface model was a measured no-op
-
-`Materials.ts` has had a two-term subsurface model for a long time and the blind
-judge has called the skin "plastic" for six rounds. Both were true at once:
-ablated `sss` to 0 on both skin and face materials, recaptured, and `imgdiff`
-puts the **entire block at 0.150/255 mean** over `hero_portrait`, with 0.194% of
-pixels past 8/255. `imgdiff`'s noise floor is 1.5–1.9/255.
-
-Cause: the terminator bleed was `exp(-ndl*ndl*11.0)` — a half-width of ~0.25 in
-N·L, a band about 15 degrees wide, a few pixels on a face at 1.15 m. The only
-term with amplitude could only ever paint a hairline.
-
-Fixed (commit `a45e94f`): band widened to `3.0`, and a wrap-fill term added that
-adds light only where `ndl < 0`, so it lifts the shadow side and the terminator
-and is identically zero on lit skin.
-
-### 1.4 The ear was inside the skull, on every character, always
-
-`hero_profile` puts the ear on screen. Captured it with `--hide hair` — verifying
-the framing showed the thing before judging the thing — and what renders is **two
-painted lines and a flat brown oval from the face map, plus one bead of lobe**.
-The auricular plate, helix, antihelix and tragus were all submerged.
-
-The arithmetic: `FACE.ear[0]` is 0.0725 against a canonical half-width `HR[0]` of
-0.0785. The plate is 0.0080 half-thick centred at 0.97 of the anchor, so its
-lateral face sat at 0.0783 — two hundredths of a millimetre *inside* the surface
-it stands off. None of it could ever have been visible at any distance.
-
-Fixed (commit `42127a6`): the anchor is now `skinSnap`'s projection of the ear
-point onto the sculpted skull plus 6 mm, so it is unconditional against head
-width and against future sculpt work. The lobe needed one follow-on — it had been
-level with the plate's bottom pole and hung clear as a detached bead once the ear
-emerged.
-
-This is the same failure mode the helix comment already recorded one level down
-(*"at out=0.055 the rolled rim was inside the plate"*). It recurs because the ear
-is placed against a **constant** while the surface under it is a sculpt that
-thirty brushes and four `headWidth` values move.
-
-### 1.5 The mouth line was pure black
-
-Measured over a tight mouth rect at a matched noon, against
-`character-noctis-face-01.jpg` at the same rect:
-
-| | Y p5 | Y p50 |
-|---|---|---|
-| plate | **79** | 119 |
-| ours (before) | **3** | 78 |
-| ours (after) | 14 | 78 |
-
-The shipped mouth never goes below Y 79 anywhere in that rect. Ours bottomed out
-at 3 — darker than any pixel in any of §12.1's five face plates, whose deepest
-skin is `#4d3a33` (Y 62). One stroke, `rgba(46,18,22,0.95)` at 4 mm wide with
-blur 0.6 on a 74 mm face, was the only pure black on the head, so the eye read it
-as a hole rather than as lips. Now `rgba(78,42,44,0.72)` at 3.4 mm, blur 1.8.
+And the shell had no creases **by construction**: `sleeve`'s wrinkle field ramps
+in over `smooth(t)` of the sleeve's own parameter, and Gladiolus's sleeve stops at
+`u1` 0.40 — so the entire garment lived in the flat part of the ramp. Full
+amplitude by a third of the way down now, plus a gather at whatever hem the
+sleeve actually has.
 
 ---
 
-## 2. The measured negatives, recorded as first-class results
+## 5. Measured negatives and harness findings — do not re-derive these
 
-**These are the useful half of the session. Do not re-run them.**
-
-- **Skin chroma is correct, and the golden-hour reading that says otherwise is a
-  trap.** At `time: 16.2` our face measures R−B **+97**, against §12.1's neutral
-  plates at +39…+54. That looks damning and is not: shot at a matched noon it is
-  **+56** against the plate's +50, and the two *warm-key* plates in §12.1 sit at
-  +118 (Gladiolus) and +173 (Ignis). This is exactly the trap the previous lane
-  fell into with Prompto's hair. **Never quote a character colour statistic
-  without a matched-hour control.**
-- **The wrap fill did not move the lit:shadow ratio.** 3.82x → 3.96x at noon,
-  and I am not claiming it did. The reason is worth keeping: p10 inside a
-  portrait face rect is *not* N·L shadow — it is the fringe's cast shadow and the
-  ambient-occlusion pit of §1.1, and a geometric wrap term cannot reach either.
-  What did move is the look; the range problem is real and is §1.1's, not
-  `Materials.ts`'s.
-- **Baked vertex occlusion on the throat is innocent.** §1.1: three levels.
-- **The mouth p50 did not move.** 78 → 78. Only the darkest tenth changed.
-
----
-
-## 3. The blind round — and the first calibrated one this project has had
-
-Thirteen pairs handed to a fresh judge in one shuffled set: **nine real pairs**
-(all character-framed) and **four `--control` pairs** in which both panels are
-shipped FFXV plates. Same judge, same session, `compare.mts`'s own canonical
-question, no added instruction.
-
-- **Real pairs: 9 identified, 0 fooled.** Every one HIGH confidence.
-- **Controls: 4 refused, all LOW confidence.** The judge answered "Neither —
-  both look shipped" on all four and *spontaneously flagged them as real-vs-real
-  controls* in its notes.
-
-**That is the result that matters.** `--control`'s own doc comment says the
-problem it was built for is that a verdict which never moves while the thing it
-measures demonstrably improves is *either a real categorical gap or a saturated
-instrument, and nothing here can currently tell those apart*. Interleaving the
-controls into the same round tells them apart: the judge sits at chance and
-hesitates when there is nothing to find, and calls every real pair HIGH. **The
-"0 fooled" verdict is signal, not saturation.** Run every future round this way.
-
-The tells, in the judge's own words — and the ordering has changed again:
-
-- **"one shared body mesh reskinned across the party"**, "the same body
-  repeated", "five characters sharing one body mesh" — in **five of nine**
-  comments, and it is now the single most repeated tell in the round.
-- "hair as an opaque low-poly shell with a visible gap at the scalp/neck",
-  "a spiky opaque shell floating clear of the scalp"
-- "faces with no subsurface", "doll eyes", "painted features"
-- "the neck/jaw seam is exposed" (§1.1)
-- "untextured flat weapons", "plastic shoulder armour with a stretched decal"
-- environment: "grass tuft billboards", "box-geometry camp props", "a single
-  glowing quad for the lamp"
-
-Closing note from the judge, unprompted: *"Every correct call in this round was
-made on the character panel alone."*
+- **`compare.mts --reveal` takes the opposite convention to the one a judge
+  reports.** The question the tool prints asks the judge to say *which is which*,
+  and a judge naturally answers with the **demo** side; `--answers` is scored as
+  the **shipped-game** side. Feeding it the judge's own words scored this round
+  as **9 fooled, 0 identified** — a perfect win that was a perfect loss. Nothing
+  in the printed hand-off line says which. Whoever owns `src/tools/compare.mts`:
+  either state it in the hand-off line or accept both.
+- **`--control` emits 30 pairs and some are byte-identical.** Different PAIRING
+  rows share the same two plates (`hero_closeup` and `hero_portrait` both use
+  `character-noctis-face-01` + `character-ignis-face-01`), so the composites
+  collide. The judge caught two of my four controls as the same file by MD5 and
+  said so. Dedupe by plate pair, not by row.
+- **`dims.ankleY` is computed and never read by anything**, and `legScale`
+  therefore moves the foot vertically with no grounding compensation:
+  `ankY = s(0.925 − 0.837·legScale)`, so Ignis's inherited `legScale: 1.03` puts
+  his ankle ~2.7 cm below where Noctis's sits relative to the root. The clean fix
+  is `hipY = Y(0.925) + 0.837·s·(legScale − 1)`, which holds `ankY` constant and
+  turns `legScale` into a real leg-length-versus-torso knob — **but the torso
+  sweep is authored at fixed absolute `y()` values that do not follow `hipY`**, so
+  raising the hip bone would move the thigh tops through an unmoved pelvis mesh.
+  Not attempted. It is the §12.6 leg/torso-split axis and it is a real piece of
+  work, not a one-liner.
+- **The cast is 6.95–7.75 heads; §12.6 measures shipped FFXV at ~9** (true head,
+  hair excluded). Untouched: closing that is a ~20% head reduction which would
+  shrink the face in `hero_portrait` and undo a lot of graded face work. Worth
+  doing deliberately, with the face lane, not as a side effect.
+- **Gladiolus's leather is still 94 levels short on chroma** — p50 R−B +2 against
+  the plate's +96. That is albedo, not roughness: his jacket is authored charcoal
+  `0x312d2d` and the plate's is brown leather. Recorded, not chased.
+- **Posture was already well differentiated and is not the problem.**
+  `stanceW` spans 0.78 to 1.55, `fidget` 0.5 to 1.6, `slouch` 0 to 0.65. It reads
+  in the lineup. The mass did not.
 
 ---
 
-## 4. My honest grade against shipped FFXV
+## 6. My honest grade against shipped FFXV
 
 Against a 2016 PS4 frame, not against last round.
 
 | | grade | why |
 |---|---|---|
-| **Skin / face shading** | **5/10** (from 4.5) | The subsurface model now measurably does something and the shadow half of the face is no longer a separate darker object joined to the lit half at a line. But the lit half of the face **clips**: 9.3% of the red channel is at 255 in the shipped `hero_portrait`, against 0% in every plate, and a face with a clipped highlight has no falloff to grade. That is auto-exposure metering on a frame two-thirds filled by a black jacket (`--ablate noexp` removes it entirely), so it is not fixable from `Materials.ts`. |
-| **Ear** | **6/10** (from 1/10 — it was not rendering) | A plate standing off the head with a rolled rim over the crown, an inner Y, a concha and a joined lobe. It is still pale and flat-shaded, the concha reads as an oval rather than a bowl, and the tragus does not show. But it is an ear, and for the whole life of this project it has been a decal. |
-| **Mouth** | **5/10** (from 4) | No longer a hole. The upper lip still carries almost no value separation from the skin above it, and the lower lip's vermilion is more chromatic than any plate's. |
-| **Eyes** | **unchanged, ungraded** | I did not touch them and I will not grade what I did not move. See §5.2 — I could not get a frame that shows both of them. |
-| **Party silhouette variation** | **4/10** | Untouched by me and now the loudest thing in the blind round (§3). |
-
----
-
-## 5. Gotchas
-
-### 5.1 A backtick inside a GLSL comment silently truncates the shader
-
-`Materials.ts` builds its shader injections as template literals. I wrote
-`` `imgdiff`'s `` in a comment inside one, which ended the literal — and the
-symptom is not an error, it is **every capture hanging for its full timeout**
-with `UND_ERR_HEADERS_TIMEOUT` and no useful message. Cost two 300 s timeouts and
-a `cleanup --kill` before I ran `npm run typecheck`, which points at the exact
-line in under a second. This is precisely the case `CLAUDE.md` says the typechecks
-exist for. **Run them before you capture, not before you commit.**
-
-### 5.2 The portrait framing catches Noctis with his head pitched down
-
-In `hero_portrait` the head is pitched far enough forward that the fringe covers
-**both** eyes and the frame is largely scalp. That is a pose/timing artefact of
-the idle, not the groom — the same character at the probe's own profile framing
-has a clear visible eye. Whoever owns `src/game/Shots.ts`: the shot would be
-worth a `settle` or a look-target that lifts the chin. As it stands the one shot
-in the corpus that exists to show a face cannot show either eye, which is why
-this lane graded eyes as untouched rather than guessing.
-
-### 5.3 Ablate the *pass* before you ablate the material
-
-I lost a round of work re-reading `Face.ts` for a face-map seam that turned out
-to be two post-process passes (§1.1). The order that would have been faster:
-`--ablate` every post stage first, one at a time, and only open the material when
-the frame stops changing. `shoot.mts`'s own header says this and it is right.
-
-### 5.4 `regionstat` needs `--skin` for anything in §12.1
-
-Without it a portrait face rect is about a third hair, collar and background, and
-the low percentiles are dragged down by tens of levels. New this session, with
-§12.1's filter verbatim; validated by reproducing the document's own row on the
-plate it was derived from, four hexes within 3/255 and the ratio exact.
-
----
-
-## 6. Shot directories
-
-| dir | what |
-|---|---|
-| `tmp/shots/base`, `tmp/shots/m0` | **the inherited state**, JPEG and PNG, with the 5x crops `z_eyes`, `z_jaw`, `z_neck10` |
-| `tmp/shots/abl_nocontact`, `abl_nogtao`, `abl_noao`, `abl_c`, `abl_g` | §1.1's attribution, one pass at a time |
-| `tmp/shots/abl_noexp` | the auto-exposure ablation behind the clipping finding |
-| `tmp/shots/abl_sssref`, `abl_withsss` | §1.3's `imgdiff` pair |
-| `tmp/shots/abl_noocc` | §2's baked-occlusion negative |
-| `tmp/shots/noon`, `noon1`, `noon2` | the `HOUR = 12.0` controls — before wrap, after wrap, after the mouth |
-| `tmp/shots/ear_nohair`, `ear1`, `ear2` | §1.4, before / after / after-with-hair |
-| `tmp/shots/blind2`, `tmp/ab-face`, `tmp/ab-ctrl`, `tmp/ab-round` | §3's round; `tmp/ab-round-MAP.json` maps shuffled pairs back |
-
-`src/tools/_probe/portrait.mts`'s `HOUR` is left at 16.2, the corpus hour. Set it
-to 12.0 for any §12 colour comparison and set it back.
+| **Party silhouette variation** | **6.5/10** (from 4/10) | Four builds that measure as four builds: width-over-height spread 5.7% → 22.8%, arm-to-waist 4.2% → 24.7%, V taper 12.8% → 60.2%, and the blind judge stopped saying it. Against the plate `party-four-casual-01.jpg` it is still short in two ways. Gladiolus's arms in that frame are thicker than Prompto's *torso* and his forearm alone matches Prompto's upper arm; mine is a strong build, not that. And all four of ours still share one shoulder *slope* — FFXV's four all have a sloped trapezius-to-deltoid line where ours steps out horizontally and then drops. |
+| **Portrait framing** | **unblocked, not graded** | It shows an eye. That is the whole claim. |
+| **Eyes** | **3/10**, first grade this project has been able to give | Now visible: a flat saturated blue disc, no catchlight, no limbal ring, no visible pupil, sclera barely present. The judge's "doll eyes" is accurate and it is the single cheapest remaining character win. |
+| **Leather / cloth specular** | **5/10** (from 4) | The mirror hit is gone and the peak is inside §12.4's range. Diffuse chroma is still nearly neutral where the plate's is strongly warm, and the sleeve is still smoother than any garment in any plate. |
+| **Hair** | **untouched, and now the loudest tell by the judge's own ordering** | Named in *every* demo panel this round. See §7. |
 
 ---
 
 ## 7. What I would do next, in order
 
-1. **Party silhouette variation.** Five of nine blind comments this round said
-   the four heroes are one body reskinned, and nothing else in the round was
-   named that often. This is bigger than any face detail and it is squarely in
-   `src/characters/`. Start from §12.6's landmark table — it gives head-to-body,
-   shoulder width as a fraction of height, and the leg/torso split, all of which
-   should differ per hero and currently barely do.
-2. **The eyes**, once §5.2 gives a frame that shows them. The judge has said
-   "doll eyes" / "painted features" in every round including this one, and it is
-   the one item on the previous lane's list that no lane has yet been able to
-   *see*, let alone fix.
-3. **Hair as a shell with a gap at the scalp** — the judge named it twice this
-   round and it is a specific, checkable geometry claim. The previous lane's §2.2
-   found and floored one inversion of that shell; this sounds like a second one at
-   the nape rather than the crown.
-4. The upper lip's value separation and the lower lip's chroma (§1.5's remainder).
-5. The ear's concha as a bowl rather than an oval, and a visible tragus (§4).
+1. **Hair.** The judge names it in every single panel and describes it precisely:
+   *"an opaque cap or a single alpha-cut shell that visibly detaches from the
+   scalp, with hard cutout edges and fringing"*. That is two checkable geometry
+   claims — a detachment at the scalp and a hard alpha edge — and the previous
+   lane found and floored one such inversion already (its §2.2). This is the
+   biggest single item left in `src/characters/`.
+2. **The eyes**, now that a frame exists that shows one. Catchlight, limbal ring,
+   a real pupil, and some sclera. §3's ranked list puts faces second and eyes are
+   the named component.
+3. **The shoulder slope** (§6). All four step out horizontally at the yoke and
+   then drop; FFXV slopes from C7 to the acromion on every character. It is one
+   term in `torsoShape`'s trapezius and one in `jacket`'s `offset`.
+4. **Gladiolus's arm mass against `party-four-casual-01.jpg`**, which is more than
+   the current 0.90 `muscle` gives — but only after the shoulder slope, because
+   more mass on a horizontal yoke is what produced the caricature the first time.
+5. The §12.6 head-count and leg/torso split (§5), deliberately and with the face
+   lane.
 
 ---
 
-## 8. Cross-boundary
+## 8. Shot directories
 
-1. **`src/engine/postfx/` — GTAO and contact shadow double-price the same
-   cavity** (§1.1). Measured: each independently accounts for about half of a
-   2.15x darkening of neck skin 22 mm from the jaw, in a frame where the cheek
-   does not move at all. §12.1 says a *whole* FFXV face spans 2.0–3.2x.
-2. **`src/engine/postfx/ContactShadowPass.ts` — its dither does not converge on
-   an animated character** (§1.2). Its own comment assumes TAA averages it away;
-   TAA rejects the history on a moving skinned mesh, so it renders as a 1-pixel
-   screen door on the neck in both shipped portrait shots.
-3. **Auto-exposure blows the face out on the new portrait framing.** 9.3% of the
-   red channel clipped at 255 on skin in `hero_portrait` (0% in every §12.1
-   plate); `--ablate noexp` removes it. The frame is two-thirds black jacket and
-   dark hair, so the meter lifts. Worth a metering weight or a shot-level
-   exposure clamp.
-4. **`src/game/Shots.ts` — `hero_portrait` catches the head pitched down** and
-   shows neither eye (§5.2).
-5. **`src/tools/compare.mts`** — I added `hero_portrait` and `hero_profile`
-   PAIRING rows so they judge against the close-up plates rather than
-   `FALLBACK`'s landscape. And **run the controls interleaved into the real
-   round from now on** (§3); it is the difference between a verdict and a number.
-6. **`src/tools/_probe/hands.mts` is still wrong** — carried forward from the
-   previous lane's §5.4, unaddressed, and its `_hand` framing still does not show
-   the dorsum.
+| dir | what |
+|---|---|
+| `tmp/shots/base0` | the inherited corpus shots, JPEG |
+| `tmp/shots/b_before` | the lineup probe on the inherited cast |
+| `tmp/shots/b_m1` | the ×2.1 caricature, kept as the negative |
+| `tmp/shots/b_m2`, `b_m3`, `b_final` | the committed state, with `z_gladio` / `z_prompto` 3x crops |
+| `tmp/shots/_BEFORE.png`, `_AFTER.png` | **the deliverable** — the four builds side by side at 2x, identical rect, before and after |
+| `tmp/shots/m3`, `m3png` | the portrait after the head-pitch fix; `m3png/z_eyes.png` is the 5x eye crop |
+| `tmp/shots/m4` | Gladiolus after the leather roughness change, with `z_sleeve` |
+| `tmp/shots/round_after` | the nine character shots the blind round was built from |
+| `tmp/ab-real`, `tmp/ab-ctrl`, `tmp/ab-round`, `tmp/ab-round-MAP.json` | §3's round |
+
+## 9. Tools added
+
+- **`src/tools/lineup.mts`** — glues the same crop rect out of several captures
+  into one strip with a rule between panels. Exists because a contact sheet pages
+  the four apart and a party shot puts them at four different depths: in both,
+  the only honest comparison (same framing, same scale, adjacent pixels) is the
+  one you cannot make.
+- **`src/tools/_probe/builds.mts`** — the lineup framing plus the bind-space
+  silhouette table of §1. Run it before and after any change to `Anatomy.ts`,
+  `Skeleton.ts` or a `profile`; the spreads in §1 are the regression baseline.
+
+## 10. Cross-boundary
+
+1. **`src/tools/compare.mts`** — the `--reveal` answer convention (§5) and the
+   duplicate `--control` composites (§5). The first one silently inverts a round.
+2. Everything the previous lane recorded in its §8 is still open and still not in
+   `src/characters/`: GTAO and contact shadow double-pricing the same cavity, the
+   contact pass's dither not converging on an animated character, and
+   auto-exposure clipping the face on the portrait framing.
+3. **`src/tools/_probe/hands.mts` is still wrong** — carried forward from two
+   lanes ago, its `_hand` framing still does not show the dorsum.
