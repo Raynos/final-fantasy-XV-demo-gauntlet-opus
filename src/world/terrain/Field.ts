@@ -554,12 +554,16 @@ export class Field {
     let rg = n.ridged2(uu, vv, 5, 2.03, 0.44);
     rg *= 1 - 0.44 * smoothstep(0.28, 0.86,
       0.5 + 0.62 * n3.fbm2(uu * 4.7 + 3.3, vv * 4.7 - 7.1, 3));
-    // Conjugate set at ~62 deg off the strike. A range built from one direction
-    // is corduroy; real ranges carry a second structural grain across the first,
-    // and the cols and saddles are where the two meet.
+    // Conjugate set at ~62 deg off the strike: it **notches** the primary ridge
+    // rather than adding mass to it. `Math.max(rg, a * conj)` was tried first
+    // and is wrong in a way that is obvious once seen — it raises the floor
+    // everywhere the second grain is strong, which fills the valleys the first
+    // grain just cut, and the Ostium massif came back visibly smoother than
+    // before the conjugate existed. Two joint sets break a range into segments
+    // separated by cross-cutting cols; they do not pile rock into the saddles.
     const cu = (wx * CONJ_C + wz * CONJ_S) / kU;
     const cv = (-wx * CONJ_S + wz * CONJ_C) * kV;
-    rg = Math.max(rg, 0.62 * n.ridged2(cu * 1.21 + 17.7, cv * 1.21 - 5.3, 4, 2.07, 0.46));
+    rg *= 0.66 + 0.44 * n.ridged2(cu * 1.21 + 17.7, cv * 1.21 - 5.3, 4, 2.07, 0.46);
 
     const r = Math.hypot(x, z) / 2670;
     // the northern (-Z) wall is the tallest: it backs the hero and vista shots
@@ -686,9 +690,10 @@ export class Field {
       let rg = n.ridged2(bu, bv, 5, 2.11, 0.5);
       rg *= 1 - 0.40 * smoothstep(0.30, 0.86,
         0.5 + 0.60 * n2.fbm2(bu * 4.3 - 9.4, bv * 4.3 + 2.8, 3));
+      // Notches the primary rather than filling it — see `farHeight`.
       const cu = (wx * CONJ_C + wz * CONJ_S) * 0.000506 / kU + 8.1;
       const cv = (-wx * CONJ_S + wz * CONJ_C) * 0.000506 * kV - 3.4;
-      rg = Math.max(rg, 0.58 * n.ridged2(cu * 1.17, cv * 1.17, 4, 2.09, 0.5));
+      rg *= 0.66 + 0.44 * n.ridged2(cu * 1.17, cv * 1.17, 4, 2.09, 0.5);
 
       const style = clamp01(b[B_STYLE] + 0.34 * n2.fbm2(x * 0.000195 + 61.3, z * 0.000195 - 37.1, 2));
       let beltH = Math.pow(Math.max(0, rg - 0.16) / 0.84, 1.30 + 1.05 * style)
