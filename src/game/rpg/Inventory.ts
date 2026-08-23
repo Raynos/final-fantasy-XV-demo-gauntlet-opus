@@ -212,6 +212,20 @@ const INGREDIENTS: AuthoredItem[] = [
   ING('birdbeast_egg',   'Birdbeast Egg',        70,   'A single egg feeds four.',                                  ['egg']),
   ING('cleigne_darkshell','Cleigne Darkshell',   340,  'A black-shelled mussel from the Vesperpool.',               ['seafood']),
   ING('alstor_trout',    'Alstor Slough Trout',  260,  'Silver-flanked, caught at dawn.',                            ['seafood', 'fish']),
+  // The catch. Every one of these is named in the `does:` line of a `fishing`
+  // POI in `WorldMap`, and until `src/game/fishing/` existed not one of them
+  // had a source anywhere in the game -- the map advertised a menu no kitchen
+  // could serve. `FISH` in `FishTable.ts` is the other half of each row.
+  ING('alstor_bass',     'Alstor Bass',          300,  'Broad-shouldered and bad-tempered. Fights the whole way in.', ['seafood', 'fish']),
+  ING('chocobo_carp',    'Dapper Chocobo-Tail Carp', 560, 'Its tail fans out like a chocobo\'s. Absurd, and delicious.', ['seafood', 'fish', 'rare']),
+  ING('sea_bass',        'Sea Bass',             220,  'The Cygillan\'s bread and butter. Firm white flesh.',        ['seafood', 'fish']),
+  ING('allural_sea_bass','Allural Sea Bass',     480,  'Bigger, fatter and far rarer than the common bass.',         ['seafood', 'fish', 'rare']),
+  ING('murk_grouper',    'Murk Grouper',         340,  'Deep-water, mud-coloured, and heavier than it looks.',       ['seafood', 'fish']),
+  ING('barramundi',      'Barramundi',           380,  'Runs the headland rocks at Caem on the turning tide.',       ['seafood', 'fish']),
+  ING('sea_bream',       'Sea Bream',            260,  'Pink-scaled and sweet. Grills whole in ten minutes.',        ['seafood', 'fish']),
+  ING('vesper_gar',      'Vesper Gar',           700,  'A living spear from the drowned forest. All teeth.',         ['seafood', 'fish']),
+  ING('pink_jade_gar',   'Pink Jade Gar',        1100, 'The Vesperpool\'s prize. The scales really are that colour.', ['seafood', 'fish', 'rare']),
+  ING('cygillan_devil',  'Devil of the Cygillan', 4000,'Sixty kilos of the Vesperpool\'s worst idea. Navyth\'s white whale.', ['seafood', 'fish', 'rare']),
   ING('vesproom',        'Vesproom',             300,  'A luminous fungus from the Vesperpool shallows.',            ['mushroom']),
   ING('malmashroom',     'Malmashroom',          380,  'Grows only in Malmalam Thicket. Faintly narcotic.',          ['mushroom']),
   ING('anak_meat',       'Anak Meat',            200,  'Lean and gamey. The staple of every outpost grill.',         ['meat']),
