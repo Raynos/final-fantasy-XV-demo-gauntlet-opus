@@ -44,9 +44,31 @@ gd="$(git rev-parse --git-dir 2>/dev/null || true)"
 gcd="$(git rev-parse --git-common-dir 2>/dev/null || true)"
 [ -n "$gd" ] && [ -n "$gcd" ] && [ "$gd" != "$gcd" ] && exit 0
 
-# The deliberate escape. Rare by construction: it has to be typed into the
-# command itself, so it shows up in the transcript next to what it allowed.
+# The deliberate escape, and its LEDGER.
+#
+# Rare by construction: it has to be typed into the command itself, so it shows
+# up in the transcript next to what it allowed. But a transcript is per-session
+# and nobody reads someone else's, so kami-kakushi appends every bypass to a
+# committed file instead -- the harness plan asks for the same here. A bypass
+# then arrives as a line in a diff, where a reviewer sees it, rather than being
+# buried in a transcript nobody will open.
+#
+# The ledger is append-only and deliberately dumb: date, cwd, and the command.
+# It is not a policy engine. Its whole job is to make the count visible, because
+# "we only skip the guard when we have to" and "we skip the guard eleven times a
+# day" look identical until somebody writes them down.
 if printf '%s' "$cmd" | grep -qE '(^|[;&|])[[:space:]]*([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*SKIP_SWEEPGUARD=1[[:space:]]'; then
+  ledger="${CLAUDE_PROJECT_DIR:-.}/project/sweepguard-ledger.md"
+  if [ -w "$(dirname "$ledger")" ]; then
+    [ -f "$ledger" ] || printf '%s\n' \
+      '# Sweepguard bypasses' '' \
+      'Every `SKIP_SWEEPGUARD=1` lands here, appended by' \
+      '`.claude/hooks/guard-git-add-all.sh`. A bypass in a diff is a bypass' \
+      'somebody sees; a bypass in a transcript is not. If this file is growing,' \
+      'the guard has a missing case — fix the guard, not the habit.' '' > "$ledger"
+    printf -- '- %s  `%s`  %s\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$(basename "$PWD")" \
+      "$(printf '%s' "$cmd" | tr '\n' ' ' | cut -c1-160)" >> "$ledger"
+  fi
   exit 0
 fi
 
