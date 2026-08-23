@@ -13,7 +13,7 @@ file. **Do not commit it.**
 Predecessors: `project/handoff/midground.md` (whose open-items list was this
 lane's brief), `project/handoff/modeling.md`, `project/handoff/variety.md`.
 
-**Status: five commits landed, all gated. `npm run check` 11/11, `anycheck` 0.**
+**Status: five commits landed, all gated. `pnpm run check` 11/11, `anycheck` 0.**
 
 ---
 
@@ -214,13 +214,110 @@ aimed at.
 
 ## Blind round 10
 
-See the section at the end of this file for the run, its control and its result.
+`tmp/ab/r10/` + `tmp/ab/r10/KEY.json`. Eight pairs: **five real and three
+plate-vs-plate controls**, shuffled into neutral `panel-NN.jpg` names, judged in
+one set by one fresh agent with no repo access, asked explicitly which panel is
+the **shipped** one and told that "CANNOT TELL" is a real answer.
+
+    real     5 identified, 0 fooled, 0 hesitated   — 4 HIGH, 1 MEDIUM
+    control  3 of 3 declined ("cannot tell"), 0 false positives
+
+**The crop rule, which is the thing round 9 got wrong twice.** Every panel in
+the round — ours and the plates — is the **top 52% of its own source, full
+width**, produced by one pass of `tmp/topcrop.mts`. Round 9b's control panels
+were tighter crops of their sources than the real panels were of theirs, which
+strips the composition and aerial perspective that make a shipped frame legible
+and made the control *harder* than the test. One identical rule removes that by
+construction.
+
+**Why the top and not the middle: the plate corpus cannot support a
+landscape-only round any other way.** Two subagents surveyed all 53 plates and
+then the crops. Of the eight landscape candidates, exactly **two** are clean
+whole-frame (`duscae-thunderstorm-03`, and `duscae-wilderness-04` only after the
+crop); every other one has a character, a car, a chocobo, a monster or a HUD.
+Our renders never have any of those, so "this panel has a person in it,
+therefore it is the shipped one" is a cue about the *corpus* and not about the
+rendering. Two of the four plates used carry birds in the sky, which is fine —
+we have birds.
+
+**Three defects in this round, stated so nobody treats it as clean.**
+
+1. **The control is not independent evidence.** The judge declined all three
+   plate-vs-plate pairs, but its stated reasoning was recurrence: *"both panels
+   are scenes that appear elsewhere paired against obvious demo frames"*. It
+   solved the control by counting which images repeat, which is round 9a's leak
+   in a new place. With four usable plates and five of our frames there is no
+   way to build eight pairs with no image used twice. **The real verdicts do not
+   depend on this** — every one of their reasons is about rendering — but the
+   control did not test what it was built to test.
+2. **The top-52% crop removes our foreground**, and the judge's single stated
+   cue was the mid-ground. It is judging a band we deliberately handed it. The
+   cue is still worth taking seriously; the *strength* of it is not measurable
+   from this round.
+3. Only three of the four plates are land, so two real pairs put a dry plain
+   against open water. Scene-mismatched pairs are not what this instrument is
+   for.
+
+### What the judge said, which is more useful than the score
+
+Its single most reliable cue: **the mid-ground** — *"every demo frame has
+nothing between the foreground terrain and the horizon... mid-ground population
+never once misled me."* The tors did not close it. Its three named giveaways:
+
+- **"Terrain that reveals its mesh."** *"Smooth symmetric cone mountains, blobby
+  noise-field hills, visible triangulation, and a single texture stretched
+  across facets."* **This is new, it is `src/world/terrain/`, and "visible
+  triangulation" on `landmark_insomnia` is a specific, findable defect nobody
+  has named before.**
+- **"Clouds that are blurry billboards rather than a rendered layer"** — no
+  underlighting, no scale variation, no thinning at the horizon. Named every
+  round since 5 and still outside every lane.
+- **"Placeholder architecture."** *"Repeating extruded skyscraper prisms with
+  tiled window textures"*, and *"a black untextured slab with a red light strip
+  for a bridge"* — the latter is the dreadnought or the viaduct, not the city.
+
+**Two things moved, and they are the honest headline.**
+
+The Meteor's *facets* are gone from the complaint. Both round-9 judges spent a
+reason each on "visible flat polygon facets"; this one does not mention facets
+anywhere. What it says instead is **"a floating rock arch"**, twice, on
+`zone_longwythe` and `zone_vannath` — the Meteor sits above the intervening
+ridgeline and does not connect to any ground. **That is a new, specific and
+actionable defect and it is the next thing to fix on this landmark.** The mass
+is at `(-1020, -2160)` seated by `seatY(...) - 90`; from 3-5 km the -90 is not
+enough to bury its skirt behind the ranges, and the ejecta ring is too small in
+radius to read as a crater rim at that distance.
+
+The skyline moved from *"a cluster of flat blue prisms"* to *"extruded prisms
+with tiled window textures"*. That is the surface half landing and the
+silhouette half not: the towers still read as prisms. `curtainMaterial` did what
+it was built to do and the thing left is that **a tower is still a box with a
+crown on it.** Real setback massing — L-plans, notches, twin slabs with a gap,
+chamfered corners — is the untried axis, and it is free.
 
 ---
 
-## What is left
+## What is left, ranked by what round 10 actually said
 
-1. **The Meteor's albedo is still flat, and `vertexColors` is off for it on
+0. **The Meteor floats.** Round 10's judge called it *"a floating rock arch"*
+   twice, unprompted, on two different shots — replacing "visible flat polygon
+   facets", which is gone. `_meteor` seats the group at
+   `seatY(eco, x, z, 400, CULL) - 90` and from 3-5 km that is not enough to put
+   its skirt behind the intervening ranges; the 420-800 m ejecta ring is also
+   too tight to read as a crater rim at that range. **This is the highest-value
+   next step on this landmark and it is cheap** — a deeper seat, a wider and
+   lower ejecta apron, and possibly a few masses whose feet are genuinely below
+   the local ridge line.
+
+1. **The towers are still prisms.** Round 10: *"repeating extruded skyscraper
+   prisms with tiled window textures"*. The surface half of `b3f4822` landed —
+   the judge can see the windows — and the silhouette half did not, because a
+   tower is still a box with a crown on it. The untried axis is **massing**:
+   L-plans, notched shafts, twin slabs with a gap between them, chamfered
+   corners, a few towers rotated off the grid. All of it is free; `_tower` is
+   merged into two materials.
+
+2. **The Meteor's albedo is still flat, and `vertexColors` is off for it on
    purpose.** `M.stone` is `rockMaterial(0x8b7f6d, 0.95, false)` because
    `rockGeometry` bakes a cavity/dust colour whose mean is ~0.55 and applying
    that to a material not calibrated for it rendered the mass near-black. The
@@ -229,29 +326,44 @@ See the section at the end of this file for the run, its control and its result.
    large-scale albedo variation for zero draws, which is the one axis this lane
    did not spend. Not attempted — no time, and it is a change to a shared
    generator that every instanced rock in the world reads.
-2. **The Meteor's normal map is grain, not rock.** `uvScale: 22 / (r * 1.95)`
+3. **The Meteor's normal map is grain, not rock.** `uvScale: 22 / (r * 1.95)`
    puts 22 tiles across the mass; at `zone_mencemoor`'s 1.46 m/px a tile is
    18 px and the map's own detail lands sub-pixel, so it reads as film noise.
    Dropping to ~8 tiles is a one-line experiment. **Untried — I ran out of
    turns before I could ablate it, and it should be ablated rather than
    assumed.**
-3. **The +1 draw call on `zone_longwythe`** from the Insomnia commit. Stable
+4. **The +1 draw call on `zone_longwythe`** from the Insomnia commit. Stable
    across repeats, single-shot on both sides, not chased.
-4. **`landmark_meteor`'s framing looks stale.** Camera `(-900, 55.7, 1400)`
+5. **`landmark_meteor`'s framing looks stale.** Camera `(-900, 55.7, 1400)`
    targets `(-1400, 104.4, 1620)` — north-west — while the Meteor moved to
    `(-1020, -2160)`, which is 3.5 km due *south*. The shot is doc'd as "the
    Meteor of the Disc backlit" and I do not believe it contains it. `Shots.ts`
    is the coordinator's; this is a report, not a change.
-5. **The city is quite saturated and quite crisp for 2.8 km.** It reads as a
+6. **The city is quite saturated and quite crisp for 2.8 km.** It reads as a
    real skyline now, which is the win, but a judge could call it under-hazed.
    `curtainMaterial`'s contrast came down once already (`tmp/crop/S3-sky.jpg`
    against `tmp/crop/S4-sky.jpg`); it may want one more step.
-6. **Painted clouds with hard alpha edges**, named every round since 5, still
-   outside every lane that has run. Not this lane's and not anybody's.
+7. **Painted clouds with hard alpha edges**, named every round since 5 and
+   again in round 10 — *"no underlighting, no scale variation, no thinning at
+   the horizon"*. Still outside every lane that has run.
+8. **Not this lane's, but nobody has named it before and round 10 did:**
+   *"terrain that reveals its mesh — visible triangulation, and a single
+   texture stretched across facets"*, specifically on `landmark_insomnia`'s
+   ridges. `src/world/terrain/`. It is a specific, findable defect and it was
+   this judge's first-named giveaway.
 
 ---
 
 ## Traps this lane hit or confirmed
+
+- **An orphaned vite/chromium from your own captures fails four gates in
+  0.07 s each** and prints a bare node stack. `npm run check` came back 7/11
+  immediately after a merge — `uxcheck`, `creaturecheck`, `combatloop` and
+  `roadcheck`, all of which need the server `check.mts` spawns. `uxcheck` run
+  standalone passed 93/93 in the same tree. `node src/tools/cleanup.mts --kill`
+  and re-run: 11/11. **Do not report a post-merge gate failure without
+  cleaning up first** — the failure looks exactly like a real regression from
+  the merge.
 
 - **`manifest.json` draw counts are capture-order dependent**, again. A six-shot
   run reported `zone_mencemoor` at 423 calls and a single-shot run at 443, with
@@ -303,3 +415,39 @@ See the section at the end of this file for the run, its control and its result.
 
 Nothing in `src/characters/`, `src/world/terrain/`, `src/world/veg/`,
 `src/engine/` or `src/game/Shots.ts`.
+
+---
+
+## My honest grade for the environment, against shipped FFXV
+
+**4.5 / 10**, the same number the last two lanes claimed, and I am not claiming
+more. Five of five real pairs identified, zero hesitation. That number has not
+moved since round 2 and this lane did not move it.
+
+What this lane can defend. The Meteor of the Disc was named by both round-9
+judges for the same defect — *visible flat polygon facets* — and that phrase
+does not appear anywhere in round 10. It is a crag now rather than a pillow,
+and the 2x crops before and after are a different object, not a different tint.
+The mid-ground lane's "kilometre of empty plain" has objects in it for the first
+time. The birds are individuals. All of it cost **one draw call across four
+systems**, and three of the four are exactly zero — which is the part I would
+most want the next lane to take: on a submission-bound frame, per-instance
+variation, mesh density inside an existing merged group, and placement are all
+free, and almost everything this lane did was one of those three.
+
+And one measured result that should stop somebody re-deriving it: **`gully` was
+never running.** Six systems in this session have now turned out to be declared
+and never executing. The instrument that found it was ten lines and thirty
+seconds, and the reason nobody ran it earlier is that a well-written comment
+already explained the symptom.
+
+What keeps it at 4.5. The judge's first-named cue is still the mid-ground, on
+the frame I spent the most turns on. The towers are still called prisms — the
+surface landed and the massing did not. The Meteor traded one named defect for
+another: it no longer has flat facets, it floats. And two of round 10's three
+giveaways — cloud billboards and terrain that shows its mesh — were never in
+this lane's directories and have now been named by four consecutive judges with
+nobody assigned to either.
+
+The frame is better than I found it in four specific, measured places, and it is
+still obviously ours.
