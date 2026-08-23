@@ -47,7 +47,7 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync, symlinkSync, readFileSync, writeFileSync, copyFileSync, utimesSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { launchPersistent } from './chromium.mts';
@@ -97,6 +97,15 @@ export const APP_PORT = Number(process.env.PORT || 5173);
 const BROWSER_BUDGET = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
 /** One job per browser: a fifth worker would only queue behind a browser anyway. */
 const WORKERS = BROWSER_BUDGET;
+/**
+ * What two frames of the same shot differ by when nothing is wrong.
+ *
+ * Measured in `project/journal/2026-08-23-harness-bench.md`: two *fresh serial
+ * boots* on a quiet machine differ by mean 1.493/255, because TAA history, the
+ * exposure integrator and the shader cache do not start from the same place
+ * twice. Every threshold in this file that compares two captures traces here.
+ */
+const DRIFT_FLOOR = 1.5;
 /** Materialised sha trees are 115 MB each; ten is 1.2 GB, which is affordable. */
 const MAX_TREES = Number(process.env.HARNESS_MAX_TREES || 10);
 /** One CDP port per pooled browser, out of a block nothing else claims. */
@@ -234,11 +243,22 @@ export interface ShotsRequest extends PageOpts {
    * renders and the difference is where the mesh was.
    */
   raw?: boolean;
+  /** Render even if the cache has this frame. `--cold` implies it. */
+  skipCache?: boolean;
 }
 
 /** One captured frame, plus what the renderer cost to draw it. */
 export interface ShotResult {
   name: string;
+  /**
+   * Served from the frame cache rather than rendered.
+   *
+   * Reported, not hidden, because the counts below come from the sidecar rather
+   * than from a renderer that just ran. A number that blinks in and out
+   * depending on whether another agent asked first is indistinguishable from
+   * geometry actually changing.
+   */
+  cached?: boolean;
   file: string;
   triangles: number;
   calls: number;
@@ -625,6 +645,82 @@ function pruneTrees() {
     rmSync(path.join(root, stale.name), { recursive: true, force: true });
   }
 }
+
+// ----------------------------------------------------------------- the cache
+
+/**
+ * Frames, content-addressed by the build that produced them.
+ *
+ * Under `~/.cache/ffxv-harness/<keyhash>/frames/<sha>/` rather than `tmp/`.
+ * `CLAUDE.md` is right that deleting `tmp/` must cost nothing, but `tmp/` is
+ * per-checkout, and a per-checkout cache cannot serve the cross-agent hits that
+ * are the entire point: five agents reviewing `HEAD` should render each shot
+ * once between them. This lives beside the registry, is equally free to delete,
+ * and must never go near `src/public/baked/`, which costs a re-bake.
+ *
+ * `dirty:` builds are NEVER cached. Their content is a moving target by
+ * definition, and a cached frame of somebody's half-saved edit is the worst
+ * possible thing to hand to a third party.
+ */
+function frameKey(build: BuildId, name: string, w: number, h: number, query: string, jpeg: number): string {
+  return createHash('sha1')
+    .update([build, name, w, h, query, jpeg, PROTOCOL].join('|'))
+    .digest('hex').slice(0, 16);
+}
+
+const framesDir = (build: BuildId) => path.join(repoCacheDir(KEY), 'frames', shaOf(build) ?? 'dirty');
+
+/**
+ * The stats sidecar, and why it is not optional.
+ *
+ * Without it a cache hit returns `{ms: 0, cached: true}` and `triangles` /
+ * `calls` come back `undefined` — so the counts appear and disappear depending
+ * on whether another agent happened to ask first. Scaffold shipped this bug and
+ * it is exactly as confusing as it sounds.
+ */
+interface Sidecar { triangles: number; calls: number; textures: number; geometries: number; programs: number; ms: number }
+
+function cacheLookup(build: BuildId, key: string, ext: string): { file: string, meta: Sidecar } | null {
+  const file = path.join(framesDir(build), `${key}.${ext}`);
+  const side = path.join(framesDir(build), `${key}.json`);
+  if (!existsSync(file) || !existsSync(side)) return null;
+  try {
+    const meta = JSON.parse(readFileSync(side, 'utf8')) as Sidecar;
+    // Touch the sha directory so the pruner keeps what is actually in use.
+    utimesSync(framesDir(build), new Date(), new Date());
+    return { file, meta };
+  } catch { return null; }
+}
+
+/**
+ * Keep the N newest sha directories and the OLDEST one.
+ *
+ * The oldest is kept deliberately: it is the record of where this session
+ * started, and "how far has this moved since we began" is the comparison
+ * somebody always wants and nobody thinks to preserve. 1600x900 PNGs over a
+ * 142-shot corpus reach gigabytes in a session, so the middle goes.
+ */
+function pruneFrames(keepNewest = 6) {
+  const root = path.join(repoCacheDir(KEY), 'frames');
+  let names: string[];
+  try { names = readdirSync(root); } catch { return; }
+  if (names.length <= keepNewest + 1) return;
+  const byAge = names
+    .map((name) => ({ name, at: statSync(path.join(root, name)).mtimeMs }))
+    .sort((a, b) => b.at - a.at);
+  const keep = new Set([...byAge.slice(0, keepNewest), byAge[byAge.length - 1]].map((e) => e.name));
+  for (const e of byAge) if (!keep.has(e.name)) rmSync(path.join(root, e.name), { recursive: true, force: true });
+}
+
+/**
+ * Renders in flight, by frame key.
+ *
+ * This is the cross-agent half of the win. Five agents asking for `hero_full`
+ * at the same sha *at the same time* miss the cache identically, and without
+ * coalescing that is five renders of one frame — four of them on browsers that
+ * could have been doing something else.
+ */
+const inflight = new Map<string, Promise<Sidecar>>();
 
 // ------------------------------------------------------------------ the pool
 
@@ -1041,63 +1137,155 @@ async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: B
 // -------------------------------------------------------------------- routes
 
 async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
-  const { shots, settle = 60, out, jpeg = 0, hide = [], raw = false, ...rest } = body;
-  return withPage(rest, async (page, slot, build) => {
-    const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
-    await mkdir(outDir, { recursive: true });
-    const results: ShotResult[] = [];
-    for (const name of shots) {
-      const t0 = Date.now();
-      const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
-        const g = window.GAME;
-        g.applyShot(n);
-        g.settle(s);
-        g.applyShot(n);          // re-anchor follow shots after settling
-        g.settle(8);
-        // Ablate AFTER settling: hiding a mesh must not change what the sim did,
-        // only what the frame contains. Anything else and the two sides of the
-        // diff are different worlds, not the same world minus one object.
-        const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
-        if (hideList.length) {
-          const want = hideList.map((h) => h.toLowerCase());
-          g.scene.traverse((o) => {
-            const nm = (o.name || '').toLowerCase();
-            if (nm && want.some((h) => nm.includes(h))) {
-              hidden.push({ o, was: o.visible });
-              o.visible = false;
-            }
-          });
-          g.frame(1 / 60);
-        }
-        // The raw pre-post render: the scene straight to the default
-        // framebuffer, no composer. `screenshot()` then reads exactly that.
-        if (rawFrame) {
-          g.renderer.setRenderTarget(null);
-          g.renderer.clear(true, true, false);
-          g.renderer.render(g.scene, g.camera);
-        }
-        const gl = g.renderer.info;
-        const out = {
-          hidden: hidden.length,
-          triangles: gl.render.triangles,
-          calls: gl.render.calls,
-          textures: gl.memory.textures,
-          geometries: gl.memory.geometries,
-          programs: g.renderer.info.programs?.length ?? 0,
-        };
-        for (const h of hidden) h.o.visible = h.was;
-        return out;
-      }, [name, settle, hide, raw] as [string, number, string[], boolean]);
-      if (hide.length && meta.hidden === 0) {
-        slot.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
+  const { shots, settle = 60, out, jpeg = 0, hide = [], raw = false, skipCache = false, ...rest } = body;
+  const buildId = rest.build ?? (DIRTY_PREFIX + ROOT);
+  const { w = 1600, h = 900, cold = false } = rest;
+  const query = queryOf(rest);
+  const ext = jpeg ? 'jpg' : 'png';
+  /**
+   * An ablation is never cached, and neither is a dirty build.
+   *
+   * `hide` and `raw` make the frame a *diagnosis* rather than a picture of the
+   * build, and the whole point of an ablation is that it is compared against
+   * its own control taken moments earlier. Serving either side of that pair
+   * from a cache written by somebody else's run is how an ablation stops
+   * proving anything.
+   */
+  const cacheable = !isDirty(buildId) && !cold && !skipCache && !hide.length && !raw;
+  const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
+  await mkdir(outDir, { recursive: true });
+  if (cacheable) mkdirSync(framesDir(buildId), { recursive: true });
+
+  const results: ShotResult[] = [];
+  const errors: string[] = [];
+  /** Shots the cache cannot answer, in request order. */
+  const todo: { name: string, key: string }[] = [];
+
+  const deliver = (name: string, from: string, meta: Sidecar, cached: boolean) => {
+    const file = path.join(outDir, `${name}.${ext}`);
+    copyFileSync(from, file);
+    results.push({ name, file: path.relative(ROOT, file), cached, ...meta });
+  };
+
+  for (const name of shots) {
+    const key = frameKey(buildId, name, w, h, query, jpeg);
+    const hit = cacheable ? cacheLookup(buildId, key, ext) : null;
+    if (hit) deliver(name, hit.file, hit.meta, true);
+    else todo.push({ name, key });
+  }
+
+  // Wait on anything another agent is already rendering, rather than rendering
+  // it again on a second browser.
+  const waited = cacheable
+    ? await Promise.all(todo.map(async (t) => {
+      const p = inflight.get(t.key);
+      if (!p) return null;
+      try { await p; } catch { return null; }
+      return cacheLookup(buildId, t.key, ext) ? t : null;
+    }))
+    : [];
+  for (const t of waited) {
+    if (!t) continue;
+    const hit = cacheLookup(buildId, t.key, ext)!;
+    deliver(t.name, hit.file, hit.meta, true);
+  }
+  const render = todo.filter((t) => !waited.includes(t));
+
+  let counters0: Counters | null = null;
+  if (render.length) {
+    // Claim every key BEFORE leasing a page, so a request that arrives while
+    // this one is still queuing waits rather than starting a second render.
+    const claims = new Map<string, { resolve: (m: Sidecar) => void, reject: (e: unknown) => void }>();
+    if (cacheable) {
+      for (const t of render) {
+        inflight.set(t.key, new Promise<Sidecar>((resolve, reject) => {
+          claims.set(t.key, { resolve, reject });
+        }));
       }
-      const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
-      await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
-      const { hidden: _hidden, ...counts } = meta;
-      results.push({ name, file: path.relative(ROOT, file), ...counts, ms: Date.now() - t0 });
     }
-    return { results, bootMs: pool.bootMs, ...counters(slot, build) };
-  });
+    try {
+      await withPage(rest, async (page, slot, build) => {
+        for (const { name, key } of render) {
+          const t0 = Date.now();
+    const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
+      const g = window.GAME;
+      g.applyShot(n);
+      g.settle(s);
+      g.applyShot(n);          // re-anchor follow shots after settling
+      g.settle(8);
+      // Ablate AFTER settling: hiding a mesh must not change what the sim did,
+      // only what the frame contains. Anything else and the two sides of the
+      // diff are different worlds, not the same world minus one object.
+      const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
+      if (hideList.length) {
+        const want = hideList.map((h) => h.toLowerCase());
+        g.scene.traverse((o) => {
+          const nm = (o.name || '').toLowerCase();
+          if (nm && want.some((h) => nm.includes(h))) {
+            hidden.push({ o, was: o.visible });
+            o.visible = false;
+          }
+        });
+        g.frame(1 / 60);
+      }
+      // The raw pre-post render: the scene straight to the default
+      // framebuffer, no composer. `screenshot()` then reads exactly that.
+      if (rawFrame) {
+        g.renderer.setRenderTarget(null);
+        g.renderer.clear(true, true, false);
+        g.renderer.render(g.scene, g.camera);
+      }
+      const gl = g.renderer.info;
+      const out = {
+        hidden: hidden.length,
+        triangles: gl.render.triangles,
+        calls: gl.render.calls,
+        textures: gl.memory.textures,
+        geometries: gl.memory.geometries,
+        programs: g.renderer.info.programs?.length ?? 0,
+      };
+      for (const h of hidden) h.o.visible = h.was;
+      return out;
+    }, [name, settle, hide, raw] as [string, number, string[], boolean]);
+          if (hide.length && meta.hidden === 0) {
+            slot.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
+          }
+          const { hidden: _hidden, ...counts } = meta;
+          const sidecar: Sidecar = { ...counts, ms: Date.now() - t0 };
+          const shot = await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' });
+          if (cacheable) {
+            const cacheFile = path.join(framesDir(buildId), `${key}.${ext}`);
+            await writeFile(cacheFile, shot);
+            writeFileSync(path.join(framesDir(buildId), `${key}.json`), JSON.stringify(sidecar));
+            deliver(name, cacheFile, sidecar, false);
+            claims.get(key)?.resolve(sidecar);
+            inflight.delete(key);
+            claims.delete(key);
+          } else {
+            const file = path.join(outDir, `${name}.${ext}`);
+            await writeFile(file, shot);
+            results.push({ name, file: path.relative(ROOT, file), cached: false, ...sidecar });
+          }
+        }
+        counters0 = counters(slot, build);
+      });
+    } finally {
+      // Anything still claimed here failed; free the key or every later request
+      // for it waits on a promise that will never settle.
+      for (const [key, c] of claims) { c.reject(new Error('render failed')); inflight.delete(key); }
+    }
+    if (cacheable) pruneFrames();
+  }
+
+  // Requested order, not completion order: a caller reading the table down the
+  // page should see the shots it asked for in the order it asked for them.
+  const byName = new Map(results.map((r) => [r.name, r]));
+  const ordered = shots.map((n) => byName.get(n)).filter((r): r is ShotResult => !!r);
+  const c: Counters = counters0 ?? {
+    errors, boots: pool.boots, reuses: pool.reuses,
+    build: shortBuild(buildId), dirty: isDirty(buildId),
+  };
+  return { results: ordered, bootMs: pool.bootMs, ...c };
 }
 
 async function routeEval(body: EvalRequest): Promise<EvalResponse> {
@@ -1257,7 +1445,7 @@ function scheduleDriftCheck(build: BuildId) {
   resetDrift[shortBuild(build)] = 'checking';
   void sched.submit('sweep', 'daemon', 'drift', 0, () => checkResetDrift(build))
     .then((v) => {
-      if (!v.startsWith('byte-identical')) console.log(`[daemon] reset drift on ${shortBuild(build)}: ${v}`);
+      if (!v.startsWith('within')) console.log(`[daemon] reset drift on ${shortBuild(build)}: ${v}`);
     })
     .catch(() => { /* recorded in resetDrift */ });
 }
@@ -1282,7 +1470,14 @@ async function checkResetDrift(build: BuildId, shot = 'party_walk'): Promise<str
     const { decodePng, compare } = await import('./imgdiff.mts');
     const { readFile } = await import('node:fs/promises');
     const d = compare(decodePng(await readFile(path.join(ROOT, fresh))), decodePng(await readFile(path.join(ROOT, after))));
-    const verdict = d.mean === 0 ? 'byte-identical' : `mean ${d.mean.toFixed(3)}/255 max ${d.max} — RESET IS DRIFTING`;
+    // The threshold is measured, not chosen. Phase 0 diffed two *fresh serial
+    // boots* on a quiet machine and got mean 1.493/255: TAA history, the
+    // exposure integrator and the shader cache do not start from the same place
+    // twice. "Byte-identical" is therefore not achievable and demanding it would
+    // make this check cry wolf on every build until somebody muted it.
+    const verdict = d.mean <= DRIFT_FLOOR
+      ? `within the ${DRIFT_FLOOR}/255 boot-to-boot floor (mean ${d.mean.toFixed(3)}, max ${d.max})`
+      : `mean ${d.mean.toFixed(3)}/255 max ${d.max} — RESET IS DRIFTING, above the ${DRIFT_FLOOR}/255 boot-to-boot floor`;
     resetDrift[shortBuild(build)] = verdict;
     return verdict;
   } catch (e) {

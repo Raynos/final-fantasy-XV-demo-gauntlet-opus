@@ -133,8 +133,12 @@ function manifest(m: ShotsResponse | { results: ShotResult[], errors: string[] }
 /** Report one shot the way this tool has always reported it. */
 function line(r: ShotResult) {
   console.log(
-    `✓ ${r.name.padEnd(16)} ${String(r.triangles).padStart(9)} tris  ` +
+    // `cached` is printed, never hidden. The counts on a hit come from the
+    // sidecar rather than from a renderer that just ran, and a reader
+    // comparing two runs has to know which of them actually drew anything.
+    `${r.cached ? '·' : '✓'} ${r.name.padEnd(16)} ${String(r.triangles).padStart(9)} tris  ` +
     `${String(r.calls).padStart(4)} calls  ${String(r.ms).padStart(5)}ms  -> ${r.file}`
+    + (r.cached ? '   (cached)' : '')
   );
 }
 
@@ -151,7 +155,9 @@ async function viaDaemon(opts: ShootOpts, shots: string[], outDir: string): Prom
     post: opts.ablate, hide: opts.hide, raw: opts.raw,
   });
   for (const r of out.results) line(r);
-  console.log(`[shoot] daemon: ${out.boots} boot(s), ${out.reuses} page reuse(s), last boot ${out.bootMs} ms`);
+  const hits = out.results.filter((r) => r.cached).length;
+  console.log(`[shoot] daemon: ${out.boots} boot(s), ${out.reuses} page reuse(s), `
+    + `${hits}/${out.results.length} from cache, last boot ${out.bootMs} ms`);
   return out;
 }
 

@@ -21,7 +21,7 @@
  */
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { inflateSync, deflateSync } from 'node:zlib';
-import { statSync } from 'node:fs';
+import { statSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -163,6 +163,41 @@ function crc32(buf: Buffer) {
   return c ^ -1;
 }
 
+/**
+ * Say which build each side came from, and refuse a comparison of a build with
+ * itself.
+ *
+ * Under content-addressed builds, `imgdiff a1b2c3 d4e5f6 hero_full` is a
+ * first-class statement about the code. The inverse is the trap: two captures
+ * of the *same* sha are byte-identical by construction -- the second was very
+ * likely a cache hit, and copying one file twice proves nothing at all. That
+ * reads as "my change had no effect", which is the single most expensive wrong
+ * conclusion this harness can produce, and it is the same shape as the
+ * wrong-port bug `portowner.mts` was written after.
+ *
+ * A missing manifest is not an error: plenty of directories here were not
+ * written by `shoot.mts`. Say nothing rather than guess.
+ */
+function provenance(aDir: string, bDir: string) {
+  const read = (d: string): { build?: string, dirty?: boolean } | null => {
+    try { return JSON.parse(readFileSync(path.join(d, 'manifest.json'), 'utf8')) as { build?: string }; }
+    catch { return null; }
+  };
+  const a = read(aDir), b = read(bDir);
+  if (!a?.build || !b?.build) return;
+  console.log(`A: ${a.build}${a.dirty ? ' (LIVE TREE)' : ''}    B: ${b.build}${b.dirty ? ' (LIVE TREE)' : ''}`);
+  if (a.dirty || b.dirty) {
+    console.log('  note: a dirty-build frame is of somebody\'s live working tree and is not evidence.');
+  }
+  if (a.build === b.build && !a.dirty) {
+    console.error(`\nREFUSED: both sides are ${a.build}. A build is byte-identical to itself by\n`
+      + 'construction — the second capture was almost certainly served from the frame\n'
+      + 'cache — so this diff says nothing about the code. Capture the other side at a\n'
+      + 'different --build, or pass --dirty to compare your working tree against it.');
+    process.exit(2);
+  }
+}
+
 async function main() {
   const [aPath, bPath, ...rest] = process.argv.slice(2);
   if (!aPath || !bPath) {
@@ -179,6 +214,7 @@ async function main() {
   }
 
   const dir = statSync(aPath).isDirectory();
+  provenance(dir ? aPath : path.dirname(aPath), dir ? bPath : path.dirname(bPath));
   const names = dir
     ? (await readdir(aPath)).filter((f) => f.endsWith('.png')).sort()
     : [null];
