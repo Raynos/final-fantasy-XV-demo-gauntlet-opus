@@ -13,15 +13,59 @@
  *
  * Anything whose parent is still alive is left alone: a long-lived vite on an
  * agent's port is almost certainly that agent still working.
+ *
+ * IT READS THE DAEMON REGISTRY FIRST, and everything the daemon claims is off
+ * limits. The daemon owns one browser pool and one vite per build for the whole
+ * machine, and it OUTLIVES the session that started it -- so from the outside
+ * its processes look exactly like the orphans this tool hunts. Killing them
+ * would take the harness down for every other agent, and `--kill` would become
+ * a thing nobody dares run. `--kill` targets only what the daemon disclaims.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readRegistry, clearRegistry } from './identity.mts';
+import { call } from './daemon.mts';
+import type { HealthResponse } from './daemon.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const KILL = process.argv.includes('--kill');
+
+/**
+ * What the daemon owns right now, by pid: itself, its build servers, its
+ * browsers.
+ *
+ * Best effort by design. A daemon that is not running claims nothing, and a
+ * `/health` that times out must not make this tool refuse to clean up -- the
+ * situation where cleanup matters most is the one where the daemon is wedged.
+ */
+async function daemonClaims(): Promise<{ pids: Set<number>, note: string }> {
+  const pids = new Set<number>();
+  const reg = readRegistry();
+  if (!reg) return { pids, note: 'no capture daemon registered' };
+  if (!isAlive(reg.pid)) {
+    clearRegistry();
+    return { pids, note: `stale registry for a dead daemon (pid ${reg.pid}); cleared` };
+  }
+  pids.add(reg.pid);
+  // Everything the daemon spawned is a descendant of it, which is a stronger
+  // claim than matching on a command line and needs no pattern to go stale.
+  let added = true;
+  while (added) {
+    added = false;
+    for (const r of rows) if (pids.has(r.ppid) && !pids.has(r.pid)) { pids.add(r.pid); added = true; }
+  }
+  let health = '';
+  try {
+    const h = await call<HealthResponse>('/health', undefined, { timeout: 4000 });
+    health = `, ${h.pool.contexts} browser(s) of ${h.budget}, ${h.builds.length} build server(s)`;
+  } catch { health = ', not answering /health'; }
+  return { pids, note: `capture daemon pid ${reg.pid} on port ${reg.port}${health} — ${pids.size} process(es) protected` };
+}
+
+const isAlive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const ps = execSync('ps -Ao pid,ppid,etime,rss,args', { encoding: 'utf8' }).split('\n').slice(1);
 
 /**
@@ -112,7 +156,9 @@ for (const r of candidates) {
 const orphanBrowsers = rows.filter((r) =>
   /chrome-headless-shell|chromium/i.test(r!.args) && !alive.has(r!.ppid) && r!.ppid !== 1);
 
-const targets: Target[] = [...orphanServers, ...orphanBrowsers];
+const claimed = await daemonClaims();
+console.log(claimed.note);
+const targets: Target[] = [...orphanServers, ...orphanBrowsers].filter((t) => !claimed.pids.has(t.pid));
 
 if (!targets.length) {
   console.log('clean — no orphaned servers or browsers');

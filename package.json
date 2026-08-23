@@ -10,6 +10,9 @@
     "shoot": "node src/tools/shoot.mts",
     "check": "node src/tools/check.mts",
     "check:perf": "node src/tools/check.mts --perf",
+    "check:gate": "node src/tools/check.mts --gate",
+    "bench": "node src/tools/bench.mts",
+    "daemon": "node src/tools/daemon.mts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json",
     "build:full": "vite build && node src/tools/texbake.mts --canvas"

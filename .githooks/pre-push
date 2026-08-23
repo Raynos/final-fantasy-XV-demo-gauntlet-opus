@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# The full gate roster, at push rather than at commit.
+#
+# WHY THE SPLIT. The commit hook is a few seconds -- build plus both
+# typechecks -- because a gate slow enough to skip *gets* skipped, and this repo
+# commits early and often on purpose. But RESCUE §B5 records `combatloop`
+# sliding from 30/30 to 21/30 and going unnoticed for weeks, precisely because
+# the expensive gates were "run at every merge" by convention and nothing
+# enforced it. Convention is not a gate.
+#
+# So the five gates that catch a broken *game* rather than a broken *build* run
+# here. The roster is not written in this file: it is the `gate: true` entries
+# in `src/tools/check.mts`, so there is one source of truth and adding a gate is
+# one line in one place.
+#
+# It costs minutes, most of it in `creaturecheck`'s 207 poses and
+# `combatloop`'s 31 scenarios. That is the right place to spend it -- once per
+# push, not once per commit.
+#
+# Escapes, both deliberate and both loud:
+#   SKIP_GATE=1 git push     # you have a reason; say it in the PR
+#   git push --no-verify     # same, bluntly
+#
+# Do NOT use these to push over somebody else's red tree. If the tree is broken
+# by another agent, leave your commit local until they fix it -- a red push
+# makes every other agent's gate lie.
+
+if [ -n "$SKIP_GATE" ]; then
+  echo "pre-push: gate roster skipped (SKIP_GATE set)"
+  exit 0
+fi
+
+echo "pre-push: running the gate roster (pnpm run check:gate) — minutes, not seconds"
+if ! pnpm run --silent check:gate; then
+  echo
+  echo "pre-push: GATE FAILED — push aborted."
+  echo "          Fix it, or SKIP_GATE=1 git push if you have a reason worth writing down."
+  exit 1
+fi
+exit 0

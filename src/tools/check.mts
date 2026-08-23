@@ -44,6 +44,18 @@ interface Gate {
   needsServer?: boolean;
   /** Only run under `--perf`, and only on a quiet tree. */
   perf?: boolean;
+  /**
+   * In the **push gate** (`pnpm run check:gate`).
+   *
+   * The roster lives here and nowhere else, which is the whole point. The
+   * commit hook is deliberately a few seconds -- build plus typecheck -- because
+   * a gate slow enough to skip *gets* skipped, and RESCUE §B5 records
+   * `combatloop` sliding from 30/30 to 21/30 unnoticed for weeks precisely
+   * because the expensive gates were "run at merge" by convention rather than
+   * by anything. These five are the ones that catch a broken game rather than a
+   * broken build, and they run before a push.
+   */
+  gate?: boolean;
 }
 
 /** Ordered cheapest-first, so a broken tree fails fast. */
@@ -51,11 +63,11 @@ const GATES: Gate[] = [
   { name: 'build', cmd: VITE, args: ['build'], expect: 'builds' },
   { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
-  { name: 'integration', script: 'integration.mts', expect: '27 pass, 0 fail' },
-  { name: 'uxcheck', script: 'uxcheck.mts', expect: '93/93' },
-  { name: 'creaturecheck', script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
-  { name: 'combatloop', script: 'combatloop.mts', expect: '31/31' },
-  { name: 'roadcheck', script: 'roadcheck.mts', expect: '0 failures' },
+  { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail' },
+  { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93' },
+  { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
+  { name: 'combatloop', gate: true, script: 'combatloop.mts', expect: '31/31' },
+  { name: 'roadcheck', gate: true, script: 'roadcheck.mts', expect: '0 failures' },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
   { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes' },
@@ -73,9 +85,10 @@ const GATES: Gate[] = [
 ];
 
 function parse(argv: string[]) {
-  const o: { perf: boolean, only: string[] | null } = { perf: false, only: null };
+  const o: { perf: boolean, only: string[] | null, gate: boolean } = { perf: false, only: null, gate: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--perf') o.perf = true;
+    else if (argv[i] === '--gate') o.gate = true;
     else if (argv[i] === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
   }
   return o;
@@ -157,7 +170,13 @@ function run(gate: Gate, env: NodeJS.ProcessEnv): Promise<{ gate: Gate, code: nu
 }
 
 const opts = parse(process.argv.slice(2));
-const todo = GATES.filter((g) => (opts.only ? opts.only.includes(g.name) : (opts.perf || !g.perf)));
+const todo = GATES.filter((g) => {
+  if (opts.only) return opts.only.includes(g.name);
+  // `--gate` is the push roster: the five that catch a broken *game*. The
+  // commit hook already covers a broken build.
+  if (opts.gate) return g.gate === true;
+  return opts.perf || !g.perf;
+});
 
 if (!opts.perf && !opts.only) {
   console.log('note: perf gates skipped. Pass --perf on a QUIET tree -- a perf');
