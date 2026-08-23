@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Noise } from '../../util/Noise.ts';
 import { Rng } from '../../util/Rng.ts';
 import { hash3 } from './Ecology.ts';
 import { pickFrom } from './Biomes.ts';
@@ -24,6 +25,30 @@ import type { Ecology } from './Ecology.ts';
  * Alstor Slough grow reeds at the water line and lily pads on the water, and
  * Ravatogh grows almost nothing.
  */
+
+/**
+ * The undergrowth's own clump field: scale in metres, and how hard it bends
+ * the local density.
+ *
+ * Same defect and same fix as `Trees`. The 4 m stratified grid here is even
+ * more uniform than the forest's 8 m one, and `scrubDensity`'s patch mask runs
+ * at 0.017 — a 59 m lobe — so it decides *whether* a hillside has scrub on it
+ * and never *how it is arranged inside a patch*. What came out is the thing
+ * visible in `tmp/shots/v0/zone_vannath.jpg` and in every open zone: an even
+ * lattice of identical dark dots, at a spacing so regular it reads as a
+ * texture rather than as plants.
+ *
+ * Real scrub grows off its own leaf litter and its own shade, so it comes in
+ * knots of three or four with bare ground between them. 17 m is about the size
+ * of one of those knots; the second octave at 61 m is the thicket the knots
+ * sit in, and it deliberately runs near the patch mask's own scale so the two
+ * agree rather than beating against each other.
+ *
+ * Applied in gap space for the reason written out at `Trees.CLUMP_NEAR`: a
+ * multiplier can only thin ground that is already at full cover.
+ */
+const SCRUB_CLUMP_NEAR = 1 / 17, SCRUB_CLUMP_FAR = 1 / 61;
+const SCRUB_CLUMP_K = 1.15;
 
 const TILE = 32;
 /** Candidate slots per axis inside a tile — 4 m nominal scrub spacing. */
@@ -283,6 +308,8 @@ export class Bushes {
   tiles!: Map<number, { list: ScrubPlacement[], stamp: number }>;
   _deadline!: number;
   _last!: THREE.Vector3;
+  /** The undergrowth clump field. See {@link SCRUB_CLUMP_NEAR}. */
+  _nClump!: Noise;
   _pending!: boolean;
   _primed!: boolean;
   _stamp!: number;
@@ -343,6 +370,7 @@ export class Bushes {
     /** kind -> { variants: [{mesh, leaves, max}], tint, scale } */
     this.kinds = new Map();
     this.tiles = new Map();
+    this._nClump = new Noise(0x9d31);
     this._last = new THREE.Vector3(1e9, 0, 1e9);
     this._pending = true;
     this._primed = false;
@@ -532,6 +560,21 @@ export class Bushes {
   // ------------------------------------------------------------------ tiles
 
   /** Build one 32 m tile's worth of ground layer. */
+  /**
+   * Bend a raw `scrubDensity` by the clump field. See {@link SCRUB_CLUMP_NEAR}.
+   *
+   * @param x world x
+   * @param z world z
+   * @param d raw density, 0-1
+   * @returns the bent density, 0-1
+   */
+  _clumped(x: number, z: number, d: number) {
+    if (d <= 0) return 0;
+    const n = this._nClump.simplex2(x * SCRUB_CLUMP_NEAR - 9, z * SCRUB_CLUMP_NEAR + 41) * 0.78
+      + this._nClump.simplex2(x * SCRUB_CLUMP_FAR + 63, z * SCRUB_CLUMP_FAR - 17) * 0.36;
+    return 1 - Math.pow(1 - Math.min(d, 1), Math.exp(SCRUB_CLUMP_K * n));
+  }
+
   _makeTile(tx: number, tz: number) {
     const eco = this.eco;
     const x0 = tx * TILE, z0 = tz * TILE;
@@ -587,7 +630,7 @@ export class Bushes {
         } else if (depth > 0.05) {
           continue;                        // submerged, and nothing floats here
         } else {
-          const d = bil(dg, u, v);
+          const d = this._clumped(x, z, bil(dg, u, v));
           if (d < 0.02 || roll > d * 0.85) continue;
           kind = pickFrom(b.scrubTable, rng.next()) || 'shrub';
           if (kind === 'reed') kind = 'shrub';    // reeds only at the water
