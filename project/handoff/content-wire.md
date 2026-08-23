@@ -1,228 +1,335 @@
-# content-wire — phase 4, WS-4 (quests and hunts) and WS-5 (camp, cook, day)
+# content-wire — phase 4, the quest chain
 
-Owner: content & gameplay agent, worktree `agent-a7340f8d11756a846`, `PORT=5370`.
+Owner: quest-chain agent, worktree `agent-a430ca1362dc1cf7e`, `PORT=5410`.
 Contract: `docs/plans/2026-08-22-opus-phase4-content-and-gameplay.md`.
-Predecessor in this lane: worktree `agent-af853a3898f7c38cd`, whose WS-0/WS-1
-findings (the E key, the pre-8 km coordinate tables, `HavenCamp`) are all merged
-and still true. **Do not re-audit whether the RPG layer is orphaned — it is not.**
+Predecessors in this lane: `agent-a7340f8d11756a846` (WS-4/WS-5, the opening
+slice) and `agent-af853a3898f7c38cd` (WS-0/WS-1). **Everything they merged is
+still true and still passing** — do not re-audit whether the RPG layer is
+orphaned, whether the E key works, or whether the pre-8 km coordinate tables
+were fixed. They were.
 
-`npm run check`: **11/11 green** on a quiet tree. `integration` 23, `combatloop`
-31/31, `anycheck` 0.
+`npm run check`: **11/11 green** on a quiet tree. `integration` **26**,
+`combatloop` 31/31, `uxcheck` 89/89, `anycheck` 0.
 
 ---
 
-## 1. What a player can do now that they could not this morning
+## 1. The headline
 
-Driven end to end with real keys by `src/tools/probes/slice.mts`, which is the
-first thing to run if you want to know whether the slice still holds:
+**The story now runs from chapter 1 to the end of chapter 5.** This morning it
+stopped at chapter 2's second objective, and would have stopped again at
+chapter 3's third, and both were hard stops that no gate was watching.
+
+`node src/tools/probe.mts src/tools/probes/mainchain.mts`:
 
 ```
-tracked  "A Better Engine Blade" — Collect Rusted Bits from the wastes
-six MT troopers          bits 2 -> 8, objective 2/3 -> 3/3
-Cid, hand over the scrap side_engine_blade COMPLETE
-Takka                    main_ch1_pauper COMPLETE — unlocks main_ch2_galdin,
-                         hunt_voretooth, hunt_mesmenir, side_meat_magnificent,
-                         side_elemancy_lesson
-the counter              2 Cup Noodles, gil 42,180 -> 41,780
-the bounty board         "[E] Hunts Bounty Board", hunts screen opens
-twelve sabertusk marks   hunt complete, +1,100 gil, hunter rank 1 -> 2
-Cotisse Haven            "[E] Camp Cotisse Haven" -> cook -> sleep,
-                         day 1 -> 2, 6,764 banked EXP redeemed
+main_ch1_pauper    complete   ch1 done -> story on chapter 2
+main_ch2_galdin    complete   ch2 done -> chapter 3
+main_ch3_openworld complete
+main_ch3_deadeye   complete   ch3 done -> chapter 4
+main_ch4_lestallum complete   ch4 done -> chapter 5
+main_ch5_titan     complete
 ```
 
-**Every step on that list was broken at the start of this session.** Specifically:
+**`questaudit`: 21 unsatisfiable objectives -> 0.** That is the number the
+brief handed me and it is the number that is gone. It was reported as 23; the
+truth was 21 when I measured it, and six of *those* were false — see §5.
 
-1. **The main story was unfinishable from the first frame of every session.**
-   `main_ch1_pauper`'s second objective is "complete any bounty", and
-   `_seedMidGame` completes `hunt_killer_wasps` *before* it accepts the quest, so
-   the `notify('quest')` fired into an inactive quest and was gone. `complete()`
-   returns `false` on a second call. Measured, not inferred.
-2. **`fetch` had one notifier in the entire repo** — Cid's hand-over line. Ten of
-   the eleven fetch objectives could never move, and the *tracked* quest printed
-   `Collect Rusted Bits 0/3` with two in the bag.
-3. **Six of the twelve hunts could not be completed** by killing the mark the
-   board sent you after: `HUNT_TARGETS` names a bestiary key, the objective names
-   the mark the way the board words it, and half the table disagrees
-   (`arachne`/`naga`, `garula`/`garulessa`, `titan`/`adamantoise`, …).
-4. **The hunt board was unreachable.** `_pick` scored `-priority * 10` against a
-   distance term spanning 1.0, so Dave — 1.8 m away and one priority step up —
-   took every press aimed at the board from any angle but dead-on.
-5. **24 of the 30 recipes could never be cooked**: 14 ingredients had no source
-   anywhere, Cup Noodles among them.
-6. **The first damage number of every fight was wiped by the HUD coming up.**
-7. **The whole inhabited world was a 1.2 km disc around the car**, wearing the
-   names of places up to 4 km away.
+## 2. The scoreboard against the brief
 
-## 2. Commits, and what each one is for
-
-| commit | what |
+| the brief said | what happened |
 |---|---|
-| `Unblock the pre-commit hook again` | `typecheck:tools` was **red on a fresh `npm install`** — `package.json` wants TS `^7.0.2`, which removed `baseUrl` (TS5102). The checkout most agents run has 5.9.3 from an older install, which is why nobody saw it. Same blast radius as the `DOM.Iterable` fix last pass. |
-| `Put the Hammerhead pin on Hammerhead` | the escalated decision, §3 |
-| `Let the quest log see what the player already has, and already did` | `QuestLog.settle` + `Holdings`, §1.1/§1.2 |
-| `Six hunts could not be completed…` | `QuestLog.creditMark`, `kill/magitek_trooper` -> `mt`, dualhorn steaks |
-| `The first damage number of every fight was wiped…` | `CombatHUD._rewindStandIn`, two `combatloop` checks |
-| `Put the named dens in the places they are named after` | `SpawnTables` anchors resolve through `WorldMap` |
-| `Type HavenCamp` | `anycheck` back to 0 |
-| `Twenty-four of the thirty recipes could never be cooked` | shop supply lines + the camp menu showing effects |
-| `The area card and the minimap disagreed…` | `Triggers.regionAt` asks the map |
-| `The hunt board was unreachable…` | `_pick` priority is a tie-breaker again |
-| `A scripted playthrough of the slice…` | `slice.mts` |
+| 5 missing NPCs | **built.** Dino, Iris, Wiz, Holly, Randolph — cast, dialogue, placement, measured ground |
+| 6 objectives on verbs nothing notifies | **4 wired** (`photo`), **2 cut** (`escort`, `fish`) with the objectives rewritten |
+| 3 items with no source | **sourced.** `sky_gemstone`, `old_book`, `imperial_relay` |
+| 1 species that never spawns | **staged.** `deadeye` is a set piece |
+| the rank curve is undesigned | **designed, and it was unclimbable** — §4 |
+| coordinator: chapter 3 cannot close | fixed, plus two more chapter-advance defects it was hiding |
+| coordinator: no dungeon can be entered | fixed; all three enterable, chests paying out |
+| coordinator: the boss set-piece path is dead | all four staged fights now run |
+| coordinator: elemancy has no in-game door | **not done.** §7 |
+| judge: prompts fire over empty landscape | fixed, reproduced and re-verified by capture |
 
-## 3. The escalated decision, resolved
+## 3. What a player can do now that they could not this morning
 
-**Hammerhead the pin moved onto Hammerhead the town.** `Hammerhead.ts` builds on
-`Ecology`'s `reststop` site — `beside('reststop', 44, 1, 34, 26)` — which resolves
-to **(576, 10)**, 34 m off the Route 1 shoulder. The POI inherited from road node
-`n_hammerhead` at (60, 18), 516 m west. The POI record now carries authored
-`x`/`z` with the reason written beside it.
+- **Walk into a dungeon.** Three interiors were built at boot and had no door.
+  The old wiring called `Interaction.add`; the method is `register`. All three
+  enterable, their chests pay 420 / 380 / 260 gil, and the exit works.
+- **Finish the main story.** Five people the quest table names did not exist,
+  a chapter-3 boss was in no spawn table, and `completeChapter` opened the next
+  chapter only if the cinematic letterbox happened to exist.
+- **Fight the four staged bosses.** `BossFight` and `TitanArena` had never
+  executed in play *or* in the harness.
+- **Climb the hunter ladder.** Ten of twelve bounties were behind gates the
+  board could not pay for.
+- **Take a photograph that counts.** Four objectives, one of them chapter 4's
+  last, keyed off an event nothing posted.
+- **Talk to somebody who is actually standing there.**
 
-Nothing else keyed off the old position: `roadcheck` is 0 failures (the town is
-34 m from the highway, well inside the 320 m town limit), the minimap and world
-map read the POI and now point at buildings, and fast travel lands on the apron.
+## 4. The rank curve, since the brief asked for the design
 
-Because that leaves a literal to keep in step by hand — exactly how the 516 m
-opened up — **`integration.mts` measures pin-to-`Town.origin` every run and fails
-over 60 m.** Currently 0 m.
+**The old one could not be climbed, and it is arithmetic, not taste.** Rank-2
+bounties wanted 5 points; a rank-1 hunt pays 1; the board had two rank-1 hunts.
+Ceiling: 2 points. `Legend` at 120 was past the 84 the whole board could pay.
+The gate table lived in `HuntBoardScreen` and the payout table in `Quests.ts`
+and nobody had held them up against each other.
 
-**Reported, not touched:** the `hammerheadPan` landform that flattens ground "for
-the garage apron" is still at (60, 40) with a 460 m radius, levelling empty desert
-while the town stands on natural ground 516 m east. The gradient under the town
-measures 0.020, flat enough that nothing looks wrong, and moving a landform
-re-bakes the terrain and moves the surface under three other lanes.
+The ladder is now **derived from what the board actually pays**, in order:
 
-## 4. What the gates cover now, and what they still do not
+```
+ 0  Unranked              1  Apprentice  -> rank 2   Bronze Bangle
+ 4  Trapper   -> rank 3  10  Chaser      -> rank 4   Topaz Bracelet
+21  Ranger    -> rank 5  40  Warrior     -> rank 6   Champion's Anklet
+82  Legend    -> rank 10                             Ribbon
+```
 
-`integration.mts` gained four probes, three of which exist because the old ones
-passed while the thing they name was broken:
+Three properties it was designed for:
 
-- `the Hammerhead pin is on the Hammerhead town` — §3
-- `walking up to a thing selects that thing` — the existing `interaction verb
-  finds targets` asks whether *something* is selected at the board anchor, and
-  has been reporting `selects "Cindy Aurum"` as a pass for its whole life. This
-  one checks all 29 from a 2.2 m diagonal walk-up.
-- `every recipe can be restocked` — fails if an ingredient loses its source.
+- **Every rung lands exactly on a hunt completion**, with about one contract of
+  slack, so no rung needs a clean sweep of its band.
+- **The first rung is at 1 point.** The *second* bounty a player takes visibly
+  grows the board. A ladder you cannot see moving in the first ten minutes is a
+  wall, and this is the single thing that makes the 30-minute slice feel like
+  progression rather than a list.
+- **The rung you see is the unlock.** `RANK_GATE` is derived from `HUNTER_RANKS`
+  rather than written twice, and the board says "Trapper opens ★★★ contracts"
+  instead of just naming the rung.
 
-`combatloop.mts` is 31/31, and two of those are new:
+It also **pays out now**. Every rung carried a `reward` string that the board
+printed and nothing ever granted — the fight → reward → spend → fight better
+loop stopping one step short of closing. `RpgSystem._checkHunterRank` grants the
+accessory once per rung and records the rung a loaded save is already on, so an
+old save is not paid twice and the first hunt of a session is not swallowed.
 
-- `damage numbers appear on the HUD` **was failing on `main`** (29/30, not the
-  30/30 the last handoff recorded — reproduced against a stashed tree). It was a
-  stopwatch: it held attack for 90 frames then read the DOM once, but a number
-  lives 1.05 s, so an early swing had aged out. It samples every frame now.
-- `the opening hit of a fight still prints its number` — the stopwatch fix does
-  *not* catch the real bug, because by then the combat layer is already up.
-  Verified both ways: 30/31 with the old code, 31/31 with the fix.
+Two new bounties fill the band gaps and light the two dead `BossFight` kinds:
+`hunt_bloodhorn` (rank 3, Saxham, field) and `hunt_magitek_armour` (rank 5,
+Norduscaen, imperial). Fourteen bounties now, all reachable.
 
-**Still blind:** no gate drives the quest chain. `slice.mts` does, and it is a
-probe, not a gate. Folding it in is the obvious next piece of gate work — it is
-already deterministic and bounded.
+`node src/tools/probe.mts src/tools/probes/rankcurve.mts` walks the whole board
+from a fresh save and prints the climb.
 
-## 5. What is still broken, ranked
+## 5. What I wired, what I cut, and why
 
-### 5.1 The main chain dead-ends at chapter 2 on a missing NPC
+**`photo` — wired.** The screen was already finished; it just never told
+anybody. `PhotoScreen.accept()` classifies the frame and notifies each subject:
+`meteor` (within 4.2 km of the Disc, pointed within ~40°), `beast` (alive,
+inside 90 m, inside the lens cone), `party`, `vista`. Generous on angle and mean
+on distance, deliberately.
 
-`main_ch2_galdin` is "drive to Galdin Quay, **speak to Dino at the pier**, stay
-the night". There is no Dino. `NPC_CAST` has eight people — cindy, cid, takka,
-dave, trucker, mechanic, traveller, kid — and all eight are in Hammerhead. Galdin
-Quay has a POI, a shop and a lodging, and nobody to talk to.
+The `party` rule is worth knowing: the first attempt tested whether the
+companions were *in front of the lens* and could never tick, because they
+follow the player and are permanently behind a shoulder camera. "All four of you
+at camp" is a camp photo, so the test is `canCamp()` — the same one the bedroll
+prompt uses — plus the party gathered. That also stops it being satisfiable by
+every photograph ever taken, which a bare distance test would have been.
 
-`src/tools/probes/questaudit.mts` prints the full list every run. **23 objectives
-across 12 quests cannot be completed**, and they fall into three groups:
+**`escort` — cut.** An escort is a follower with pathing, a leash, a fail state
+and a death check. None exists, and half of it is a chocobo that walks into a
+rock and fails the quest. `side_chocobo` is `talk → reach the paddocks → talk`:
+the same beat in verbs the game has. The type stays in `ObjectiveKind` because
+`Objective.failable` describes it and a follower system will want it back.
 
-| group | count | what it needs |
-|---|---|---|
-| an NPC who does not exist (dino, iris, wiz, holly, randolph) | 5 | cast + placement outside Hammerhead |
-| a verb nothing notifies (`photo` ×4, `escort`, `fish`) | 6 | a hook each; `photo` is cheapest — the photo screen exists |
-| an item nothing drops or sells (`old_book`, `imperial_relay`, `sky_gemstone`) | 3 | one drop-table line each |
-| a species that never spawns (`deadeye`) | 1 | a set piece; the model exists |
+**`fish` — cut.** There is no fishing in this game: no rod, no line, no cast, no
+minigame. A `fish` objective that ticks off a keypress is not fishing.
+`side_legendary_fish` is now about the voretooth pack on the Alstor shore, which
+is a better explanation for eleven years of no trout than bad luck. **Fishing is
+the highest-value thing left on the content list** — see §7.
 
-The first group is the one that blocks the slice. Everything else is chapter 3+.
+**The audit was lying about six objectives.** `questaudit` compared every `kill`
+target against the bestiary, so the six hunts credited through `creditMark`
+(`hunt_naga` spawns an `arachne`; `hunt_zu` a renamed bandersnatch) came back as
+dead every run. Six false failures is enough noise to hide a real one, which is
+the one thing an audit must not do. It asks `HUNT_TARGETS` and `SET_PIECES`
+first now.
 
-### 5.2 Hunter rank is still ungated design work
+## 6. The gate work, and the ablation that proves it
 
-Unchanged from the last handoff and still true: twelve of fifteen bounties are
-behind hunter points, a rank-1 hunt pays one, and the seeded save has one. The
-board offers `hunt_voretooth` and `hunt_mesmenir` and nothing else. Nobody has
-designed the curve. Worth an hour before WS-4 authors anything new.
+`integration` gained **three** checks. All three exist because something was
+green while the thing it names was broken.
 
-### 5.3 Known content shortcuts left alone deliberately
+- **`the main line runs from chapter 1 to the end`** — the gate the last handoff
+  asked for. Drives all seven main quests through the real notify path.
+- **`every quest objective has a source in the world`** — `questaudit` folded in,
+  and it is separate on purpose. The chain check satisfies objectives by calling
+  `notify` directly, and `notify('talk', 'dino')` ticks whether or not a Dino
+  exists. **Ablated to prove it:** comment Dino out of `Npcs.REMOTE` and you get
+  `FAIL ... main_ch2_galdin:talk/dino never placed` from this one and `PASS` from
+  the other. That split is exactly the defect that shipped here for months.
+- **`no prompt is offered where its subject is not`** — §8.
 
+Three existing checks were **passing on lies** and are fixed:
+
+- `interaction verb finds targets` teleported the player with a bare
+  `position.set` and no hold, so the controller put the party back and it
+  reported whatever was near their *real* position. That is how "standing at the
+  board" reported `selects "Cindy Aurum"` as a pass. It holds the position, uses
+  the town pad height rather than raw terrain three metres below it, and
+  requires the thing selected to be the board.
+- `walking up to a thing selects that thing` counted deliberately-disabled
+  interactables as misses.
+- `questaudit`'s six false failures, above.
+
+## 7. What is still broken, ranked
+
+### 7.1 Fishing is the biggest content gap left, and the shape is known
+
+Eight `type: 'fishing'` POIs already exist in `WorldMap`. Registering a `Fish`
+interactable at each — cast, a short wait, a small catch table, `inventory.add`,
+`notify('fish')` — would be **the world's only non-combat verb**, would make
+eight authored places do something, and would feed the cooking loop with
+ingredients. It is maybe 80 lines plus a home: the blocker is that `Game.ts` is
+the coordinator's, so a new system cannot register itself. The honest homes are
+`InteractionSystem.init` (it already owns world verbs) or an existing system's
+init. Decide that first.
+
+### 7.2 The dungeon doors are 1.2–2.8 km from their own map pins
+
+Now that dungeons can be entered, this is visible. All three entrances carry
+literal coordinates written against the old 3 km world:
+
+```
+keycatrich  pin (110, -1460)   door (-113, -229)   1,251 m apart
+balouve     pin (2784, 1146)   door (294, -232)    2,846 m apart
+fociaugh    pin (-1720, -1420) door (110, 356)     2,550 m apart
+```
+
+`main_ch3_openworld` sends the player to `at('keycatrich_trench')` and the door
+is 1.25 km away. `probes/dungeondoor.mts` prints the measurement every run.
+**Reported, not touched:** `src/world/dungeons/` geometry was the modeling
+lane's tonight, and moving an entrance re-grades terrain. This is the same
+class as the Hammerhead pin the previous lane fixed, and it wants the same
+treatment: authored coordinates that resolve through `WorldMap`.
+
+### 7.3 A live staged fight cannot be photographed
+
+`framecam` applies its shots after the probe returns, and `applyShot` runs a
+Director scenario that clears the encounter — so every attempt to capture a
+*live* set piece comes back as empty grass with the boss despawned, frozen or
+not. The corpus's `boss_field` / `boss_imperial` / `boss_astral` shots dodge
+this because `Director._bossScenario` spawns and freezes the enemy directly,
+which is precisely why they have never exercised `BossFight`. Looking at one
+needs a shot scenario that routes through `startSetPiece`, and that is
+`Shots.ts` (the coordinator's) and `Director.ts`. `probes/stagecam.mts` is kept
+because it is three lines from working the moment such a scenario exists.
+
+Behaviour is proven meanwhile by `probes/setpiece.mts` (right species, right
+HP, at the marker, 0 failures), and Deadeye's *appearance* is the Bandersnatch's
+— it is `variant(BANDERSNATCH, …)` — which is already-reviewed art.
+
+### 7.4 Elemancy still has no in-game door
+
+`RpgSystem.craftSpell` is called only from `combatloop.mts`. `side_elemancy_lesson`
+passes the audit because `draw` and `craft` both have notifiers, but there is no
+*screen* that reaches crafting, so in practice the player cannot do it. This was
+on my list and I did not get to it. It is a UI job — `src/ui/` — and the
+Elemancy model underneath is complete.
+
+### 7.5 The dead code the inventory agent flagged, re-checked
+
+`CameraRig.setLockOn`, `BossFight.resolveStrike`, `slamAt` and `_handPos` are
+**still dead**, and now that `BossFight` actually instantiates, `resolveStrike`
+is the one that matters: `Enemies.onStrike` routes to
+`EncounterDirector.resolveStrike`, an arc sweep off the enemy root, so Titan's
+forty-metre fist still does not land where the hand is. That is now a *visible*
+defect rather than a theoretical one, because the Titan fight is reachable.
+
+### 7.6 Carried forward, still true
+
+- `hammerheadPan` still flattens desert at (60, 40) with the town at (576, 10).
+  Moving a landform re-bakes terrain under other lanes. **Leave it.**
 - `hunt_zu` spawns a renamed bandersnatch, so killing the Zu also completes
-  `hunt_bandersnatch` through the ordinary species notify. Both are rank 5+ and
-  far outside the slice; the honest fix is a Zu in the bestiary, not a special
-  case in the quest log.
-- Four waypoints sit on ground steeper than 0.42 — Keycatrich Trench (0.51, a
-  dungeon mouth), the Rock of Ravatogh (1.10, a volcano), Longwythe Peak (1.18, a
-  mountain the quest tells you to climb) and Malmalam (0.72). All are `reach`
-  objectives or level 45+ marks, and all are steep because the *place* is steep.
-  `src/tools/probes/dens.mts` prints them every run so they stay visible.
+  `hunt_bandersnatch` through the ordinary species notify. Both are rank 6+.
+  The honest fix is a Zu in the bestiary — which would also give `sky_gemstone`
+  a better home than the Mesmenir.
+- Four waypoints sit on ground steeper than 0.42, all because the *place* is
+  steep. `probes/dens.mts` prints them.
+- The haven pad reads as concrete rather than FFXV's rune-cut rock shelf.
 
-### 5.4 Art, reported not touched
+## 8. Traps this cost real time to find
 
-The haven pad reads as a pale concrete apron with white dashes rather than
-FFXV's raised rock shelf with cyan runes — see `tmp/shots/ws5c/camp_cook.png`,
-which is otherwise the shot to look at for the camp menu. `src/world/props/
-PoiKits.ts` (`haven: this._haven`) is the boot lane's.
+- **A prompt anchor that is never written is a prompt over empty desert.**
+  `Npcs._registerTalk` handed every person an empty `Vector3` and `update` only
+  wrote it inside 85 m, so from the breakdown all four Hammerhead anchors read
+  (0, 0, 0) — and the game starts at (0, 0). A blind judge ranked the resulting
+  `TALK / TAKKA` over open ground **2nd of eight defects in the corpus**.
+  Reproduced with `probes/phantom.mts` against the pre-fix tree, fixed two ways
+  (seeded at registration, refreshed for every NPC every frame regardless of
+  LOD), and re-verified by capturing `shoot.mts storm`, where it is gone.
+- **A town POI is one merged volume.** The whole of Lestallum is a single 140 m
+  box, so any offset that reads as "in the market square" puts a person under a
+  roof. `CollisionWorld` does not carry those buildings, and where it does,
+  `blocked()` returns false inside a room — because the inside of a room *is*
+  clear standing room. The test has to be "is there geometry over this spot".
+  `probes/standingroom.mts` does it against the scene graph. Its answer for both
+  towns was "68 m out, in a field", so all three moved to the **`parking` POI**:
+  a paved apron by construction, where fast travel lands, and where you would
+  actually meet somebody.
+- **`look.idle` and the placement `posture` compose.** They are both additive
+  bone biases. Randolph was authored with crossed arms in the idle *and* a
+  `counter` posture and came out as a scarecrow. The convention the existing
+  eight follow, which nobody had written down: the idle carries the spine, hips
+  and stance, and the posture owns the arms. `probes/poses.mts` reads the bones.
+- **`g.get('Director')` is the play director.** The boss lives on
+  `g.get('Encounters')`. Reading `dir.boss` gives null forever and looks exactly
+  like the fight failing to start.
+- **`enemy.id` is the instance number.** `speciesId` is what the quest log
+  matches kill objectives against.
+- **A probe is a function body in the page**, so `import('three')` throws and
+  `/node_modules/...` is outside vite's root. Use methods that already live on
+  the objects in the scene (`clone()` off a live vector, a mesh's own
+  `computeBoundingBox` / `matrixWorld`).
+- **A quest whose first objective is "talk to X" and whose giver *is* X** needed
+  two identical conversations: the generic `notify('talk')` fires when the
+  conversation opens, before the player has said yes. `takeQuest` in
+  `NpcDialogue.ts` accepts and notifies together.
+- **`Party.snap()` is the supported way to reform after a teleport.** Stepping
+  and hoping leaves three companions kilometres behind and reads exactly like a
+  broken subject test.
 
-## 6. Traps this cost real time to find
+## 9. The probes, and what each is for
 
-- **`Npcs._registerTalk` hands each person an empty `Vector3`, and `Npcs.update`
-  only writes it while the camera is within 85 m.** From the player's spawn, all
-  four Hammerhead talk anchors read (0, 0, 0). A probe that reads `npc_cid.pos`
-  and stands beside it ends up on top of the car with four NPCs stacked on the
-  origin, and reports "walked up to Cid, got Cindy" — which reads exactly like
-  the picker bug that was *also* real. Move the camera, then read the anchor.
-  Both `slice.mts` and the new `integration` probe carry the fix and the comment.
-- **A `while (ix.talking)` loop can hang the page forever.** `probe.mts` has no
-  in-page timeout, so the run sits at the 420 s harness limit with an empty
-  output file and no error. Bound every dialogue-walking loop.
-- **`priority` in `Interactables` was never a tie-breaker** despite its doc
-  saying so. If you add a high-priority interactable near a low-priority one,
-  check `reachall.mts` before assuming the low one is still reachable.
-- **`hunt_voretooth` pointed into a lake.** `at('alstor_slough')` is the middle of
-  Alstor Slough, 16 m below the water plane; `spawnHunt` would have grounded ten
-  voretooth on the lake bed. A landmark's pin is its *centre*, and several
-  landmarks are centred on the thing that makes them landmarks. `at()` takes an
-  offset now, and `dens.mts` measures the terrain under every waypoint.
-
-## 7. The probes, and what each is for
-
-All under `src/tools/probes/`, run with
-`PORT=5370 node src/tools/probe.mts src/tools/probes/<name>.mts`:
+New this session, all under `src/tools/probes/`, run with
+`PORT=5410 node src/tools/probe.mts src/tools/probes/<name>.mts`:
 
 | probe | answers |
 |---|---|
-| `slice.mts` | can a player play the opening? **Start here.** |
-| `questaudit.mts` | every objective in the table vs the bestiary, the item table, the placed cast and the spawn tables |
-| `questchain.mts` | the boot state of the quest log, and whether each verb ticks |
-| `huntmark.mts` | does killing a hunt's own mark credit that hunt |
-| `reachall.mts` | can every interactable be selected by walking up to it |
-| `dens.mts` | where the territories are, and whether every waypoint is dry and flat |
-| `ingredients.mts` | can the kitchen be restocked |
-| `camploop.mts` | what a meal is worth, through the real damage formula |
-| `regioncard.mts` | does the area card agree with the minimap |
-| `dmgnum.mts` | the damage-number frame ordering |
-| `hhpos.mts` | the Hammerhead split (kept for the record) |
-| `havenloc.mts` | haven positions and what is built on them |
+| `mainchain.mts` | can the story get from chapter 1 to the end? **Start here.** |
+| `setpiece.mts` | do the four staged fights put the right boss at the marker? |
+| `rankcurve.mts` | can the hunter ladder be climbed, rung by rung? |
+| `outposts.mts` | do the five outpost NPCs build, stand on real ground, and talk? |
+| `dungeondoor.mts` | can a player enter, loot and leave each dungeon? |
+| `photoshot.mts` | does the shutter reach the quest log? |
+| `phantom.mts` | is any prompt offered where its subject is not? |
+| `standingroom.mts` | where around a POI is there room to stand and be seen? |
+| `poses.mts` | did the station posture reach the bones? |
+| `boardanchor.mts` | do the town's published anchors sit on its fixtures? |
+| `stagecam.mts` | (does not work — §7.3) |
 
-`node src/tools/ui-shoot.mts camp_cook --out tmp/shots/x` captures the camp menu.
+Inherited and still the right tools: `slice.mts` (the opening, driven with real
+keys), `questaudit.mts`, `huntmark.mts`, `reachall.mts`, `dens.mts`,
+`ingredients.mts`, `camploop.mts`, `regioncard.mts`, `dmgnum.mts`,
+`havenloc.mts`, `questchain.mts`.
 
-## 8. The exact next step
+## 10. The exact next step
 
-**Give Galdin Quay a Dino, and the other four missing NPCs a home.** That is the
-single thing standing between the current slice and a main chain that runs to
-chapter 3. It needs `NPC_CAST` entries, `NPC_DIALOGUE` trees and placement — the
-Hammerhead four are the template and they work. `src/characters/npc/` is not
-formally owned by this lane; the art lane owns meshes and materials there, so
-agree the split before starting.
+1. **Fishing**, §7.1 — decide where it lives, then build it. It is the largest
+   remaining hole in "what can a player *do*", and the world is already authored
+   for it.
+2. **Elemancy's missing screen**, §7.4 — a complete model with no door.
+3. **The dungeon entrance coordinates**, §7.2 — once the modeling lane is off
+   `src/world/dungeons/`. Same fix as the Hammerhead pin: resolve through
+   `WorldMap` instead of a literal.
+4. **A `startSetPiece` shot scenario**, §7.3, so a live boss fight can be looked
+   at rather than only measured.
 
-After that, in order: wire `photo` (the screen exists, four objectives depend on
-it), fold `slice.mts` into `integration.mts` as a gate, and design the hunter-rank
-curve before authoring any new bounty.
+## 11. Files touched
 
-Files touched: `src/game/rpg/{Quests,RpgSystem,HavenCamp,Inventory,CombatBridge}.ts`,
-`src/game/encounters/{SpawnTables,EncounterDirector}.ts`,
-`src/game/interaction/Interactables.ts`, `src/game/story/Triggers.ts`,
-`src/ui/CombatHUD.ts`, `src/characters/enemies/Dualhorn.ts`,
-`src/world/map/WorldMap.ts`, `src/tools/{integration,combatloop,ui-shoot}.mts`,
-`tsconfig.tools.json`, and twelve probes.
+`src/characters/npc/{NpcCast,NpcDialogue,Npcs}.ts` ·
+`src/characters/enemies/{Mesmenir,Necromancer}.ts` (drop tables only) ·
+`src/game/rpg/{Quests,RpgSystem}.ts` ·
+`src/game/encounters/{SpawnTables,HuntRuntime}.ts` ·
+`src/game/story/StorySystem.ts` ·
+`src/ui/screens/{PhotoScreen,HuntBoardScreen}.ts` ·
+`src/world/dungeons/Dungeons.ts` (**interaction wiring only** — `_wireInteraction`,
+`_syncVerb`, two fields, the `update` early-return, and the stale class
+docstring; no geometry, no `DungeonDef`) ·
+`src/tools/integration.mts` · eleven new probes.
