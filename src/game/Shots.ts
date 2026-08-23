@@ -228,6 +228,39 @@ const SHOT_TABLE = {
     time: 16.4, weather: 'clear', follow: 'player',
     offset: [2.6, 1.6, 2.9], lookOffset: [0, 0.95, 0], fov: 34,
   },
+  /**
+   * Head-and-shoulders, and the profile beside it.
+   *
+   * The corpus has never had either, on the strength of a claim that a portrait
+   * was *impossible*: character meshes were said to be culled on their bind-pose
+   * bounding sphere, which sits at the origin with a small radius while posed
+   * vertices reach 2 m above it. It appeared in two handoffs and a comment in
+   * this file, and it was never measured.
+   *
+   * It is wrong. `Character._skinned` sets `frustumCulled = false` on every
+   * character mesh and `git log -S` puts it there since the commit that created
+   * the party, so the renderer never tests that sphere and it cannot cull
+   * anything. `src/tools/_probe/portrait.mts` proves it and emits these
+   * framings; all sixteen render.
+   *
+   * That matters beyond two shots. Every character defect found in the last two
+   * sessions — mitten hands, quill hair, an inverted scalp shell, a lavender
+   * coat, Prompto's blond at R-B +66.5 against a plate's +6 — needed `framecam`
+   * to see, because none of it is visible at the ranges the corpus frames. A
+   * blind judge marking "painted-on eyes" and "seams at the jaw" is looking at
+   * something no shipped shot shows. These two close that.
+   */
+  hero_portrait: {
+    doc: 'Noctis head and shoulders: hair parting, brow, the eye under the fringe',
+    time: 16.2, weather: 'clear', follow: 'player',
+    offset: [-0.024, 1.61, 1.214], lookOffset: [-0.002, 1.495, 0.07], fov: 30,
+  },
+  hero_profile: {
+    doc: 'Noctis in profile — the head silhouette, which is where the sculpt is weakest',
+    time: 16.2, weather: 'clear', follow: 'player',
+    offset: [-0.936, 1.572, 0.546], lookOffset: [-0.002, 1.495, 0.07], fov: 30,
+  },
+
   gladio_closeup: {
     doc: 'Gladiolus, the shield: the build, the scar and the greatsword',
     time: 16.2, weather: 'clear', follow: 'gladio',
