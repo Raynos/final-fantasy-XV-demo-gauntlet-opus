@@ -4,9 +4,11 @@ Owner: the performance agent (`PORT=5480`), 2026-08-23.
 Branch: `worktree-agent-a11d7dcfea20336fe`, merged from `main` at `6b61bec`.
 
 **Status: the instrument is fixed, both baselines are re-taken and certified,
-and the attribution is done. The premise this lane was opened on — "the game is
-well short of 60 fps" — is false.** What is left is three real defects the old
-numbers could not have shown anyone, listed at the bottom.
+the attribution is done, and the one segment that was under target now clears
+it. The premise this lane was opened on — "the game is well short of 60 fps" —
+is false.** `gameplay.mts` prints PASS on every segment; `perf.mts` prints PASS
+on all 141 shots. What is left is two real defects and one open question,
+at the bottom.
 
 ---
 
@@ -79,10 +81,17 @@ later lane wants those numbers exactly, `perfablate.mts` is the harness for it
 
 ## What I changed
 
-Only `src/tools/` and `project/`. **No game code in `src/` was touched at all**,
-so no other lane's files moved and there is no visual risk — the `party_walk`
-capture at `tmp/shots/perf/party_walk.jpg` is unchanged in substance from before
-the work.
+`src/tools/`, `project/`, and **exactly three constants of game code**, which
+are called out first because they are somebody else's lane.
+
+**Touched outside my lane:** `src/world/veg/GrassField.ts`, `Trees.ts` and
+`Bushes.ts` — one `budgetMs` constant each, halved, with the measurement
+written next to the grass one and the other two pointing at it. Nothing else in
+`src/world`, `src/render`, `src/ui`, `src/combat` or `src/characters` was
+touched at all, so no other lane's work moved. `project/handoff/vegetation.md`
+should pick those three up.
+
+Everything else is harness and documents:
 
 - **`src/tools/ruler.mts`** — the page half is async throughout and renders one
   frame per task. `MAX_FRAMES_PER_TASK = 1`. New `cooldown()` (250 ms; recovery
@@ -100,11 +109,16 @@ the work.
   code ran each segment's script twice (once pipelined, once per-frame), and a
   segment is a *sequence*, so the two passes were measuring different game
   states.
-- **17 probes** under `src/tools/probes/perf*.mts`, one per eliminated
-  explanation.
+- **`src/tools/probes/perf*.mts`** — one probe per eliminated explanation.
 - **`project/baseline-perf.json`, `project/baseline-gameplay.json`** — replaced.
 - **`project/LANDMINES.md`** — one row in the wrong-diagnoses table and a new
-  section.
+  section, *The measurement trap*.
+- **20 probes** in total under `src/tools/probes/perf*.mts`.
+
+Captures: `tmp/shots/perf/party_walk.jpg` (the frame is unchanged in substance
+— no rendering code moved), `tmp/shots/vegafter/zone_nebulawood.jpg` (dense
+forest, fully populated after the budget halving) and `tmp/shots/vegpop/`
+(the two mid-traverse frames, full budget against half).
 
 `npm run check` is **11/11**. `npm run typecheck`, `typecheck:tools` and
 `anycheck` (0) all clean.
@@ -113,19 +127,18 @@ the work.
 
 ## What is still wrong — start here
 
-Three real defects, all of them invisible in the old numbers for the same
-reason: everything read 40 fps, so nothing stood out.
+All of these were invisible in the old numbers for the same reason: everything
+read 40 fps, so nothing stood out.
 
-1. **`streaming-traverse`: 17.3 ms, 58 fps, 60% of frames over budget.** The
-   only segment under target and the only one whose median is more than three
-   times the idle frame. Unattributed — `perfsystems.mts` was only ever run on
-   a held shot, and pointing it at a traverse is the obvious next step.
-2. **`day-night-sweep`: 11.55 ms, 87 fps, 21% over budget**, spread 6.13 ms,
-   one 51.8 ms frame.
-3. **`menu-open`: 13 hitches up to 82 ms** on a 5.3 ms median. Almost certainly
+1. ~~**`streaming-traverse`**~~ — **fixed, and it was a constant.** See below.
+   What remains of it is `Props.update` at 3.0 ms per moving frame, which is
+   the same shape of problem and is untouched.
+2. **`day-night-sweep`: 11.3 ms, 88 fps, 11% over budget.** Second slowest
+   segment, unattributed. `perfstream.mts` is the harness to point at it.
+3. **`menu-open`: 6 hitches up to 61 ms** on a 6.1 ms median. Almost certainly
    first-touch work on screens that have never been built; `menu_title` is also
-   the one shot in the corpus that is far dearer than its draw count predicts
-   (10.2 ms at 599 draws).
+   the one shot in the corpus far dearer than its draw count predicts (10.2 ms
+   at 599 draws).
 
 And one open question that is *not* a defect but is not understood either:
 
@@ -138,6 +151,53 @@ And one open question that is *not* a defect but is not understood either:
    `idle`, `walk` and `sprint` are 0% over budget — and that difference between
    the two harnesses is the sharpest lead anyone has. Do not chase it by
    staring at frames; `perfablate.mts` and `perfbisect.mts` are set up for it.
+
+## The one fix that landed: the vegetation streaming budget
+
+`streaming-traverse` 17.3 -> 15.4 ms, 58 -> 64.9 fps, a resolved -1.90 ms
+against a 1.18 ms floor, 60% -> 36% of frames over budget, 18 -> 9 hitches.
+That is what took the gameplay suite to PASS on every segment.
+
+`perfstream.mts` is the held-shot breakdown pointed at the moving case, which
+matters because a posed shot is exactly the case that does no streaming. On a
+16.6 ms steady traverse frame: `Vegetation.update` **7.8 ms**, `Props.update`
+3.0 ms, `post.render` 4.3 ms, everything else 0.7 ms. Vegetation was costing
+nearly twice the whole renderer, and steadily — the 12-frame teleport hops cost
+19.5 ms against 16.6 for the frames between, so it is the per-frame cost of
+moving and not hop work.
+
+It was 7.8 ms because it is a **constant**: `GrassField.budgetMs` 4,
+`Trees.budgetMs` 4, `Bushes.budgetMs` 2, so the streamers were told they could
+spend 10 ms of wall clock per frame. The comment on the grass budget cites
+"`streaming-traverse`'s 26 ms median" as the thing it was sized against — a
+number that was never real. Halved to 2/2/1, and the sweep is in
+`perfvegbudget.mts` (4/2/4 → 69 fps, 2/1/2 → 81, 1/0.5/1 → 89). The quarter
+budget is another 8 fps and is deliberately left on the table.
+
+It costs nothing measurable: resident vegetation triangles came back *higher*
+at the halved budget in both runs, and two mid-traverse captures are
+indistinguishable (`perfvegpop.mts`, `tmp/shots/vegpop/`). **A posed capture
+cannot see this either way** — `Vegetation.converge()` ignores `budgetMs` and
+`Game.settle` calls it, so every shot in the corpus is fully filled whatever
+the budget says. Only live traversal shows it.
+
+## A caveat on the corpus numbers, before anyone diffs against them
+
+`perf.mts`'s per-shot median is **not yet reproducible run to run** on the
+shots with a heavy `>16` tail. A full-corpus run taken right after the
+vegetation change reported 47 of 140 shots moved, several by +5 to +7 ms; the
+six biggest "regressions" re-measured immediately afterwards came back at
+4.8-6.7 ms, at or below their baseline, and the vegetation budget cannot
+affect a posed shot anyway because `converge()` ignores it. The mover list was
+noise.
+
+The mechanism is the unexplained tail below: when 30-39% of a shot's frames
+are spiking, the median of 120 samples is itself unstable. The noise floor
+does not catch this because it is measured on `shots[0]` only and then applied
+to every row. **Treat a single-shot `--baseline` delta as a lead, not a
+result, and re-measure the movers before believing them.** Fixing this
+properly means either a per-shot floor or a headline statistic computed only
+from the sub-16.7 ms frames.
 
 ## If you take one rule from this
 
