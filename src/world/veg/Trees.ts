@@ -295,7 +295,22 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 /**
- * Impostor: two crossed quads anchored at the base.
+ * Impostor: `planes` quads through the base axis, evenly spread over 180
+ * degrees — **three at 60 degrees** for the per-tree ring, not two at 90.
+ *
+ * Two crossed quads collapse to an X: look down either quad's plane and it
+ * contributes a single edge, so the crown's coverage swings by a factor of two
+ * as the camera walks around a stand and bottoms out where one card is the only
+ * thing left. Both sibling repos measured the same failure and reached the same
+ * answer — theirs read as "three green discs on a stick" at 20.8% crown fill and
+ * came back to 48.4% at three planes. It costs two triangles per instance and
+ * **no draw call at all**, which for a ring that carries 1 239 of the 1 336
+ * trees in `zone_fallgrove` is the cheapest coverage in the file.
+ *
+ * The far *stand* cards stay at two: they are 46 m wide, are only ever seen
+ * from 296 m out where the azimuth barely swings across a card's own width, and
+ * a third plane there is 400 instances of full-screen-width overdraw for a
+ * parallax nobody can resolve.
  *
  * **Each quad carries its true plane normal**, not a shared fake one. Until
  * this lane it was `(0, 0.62, 0.78)` on all eight vertices of both quads — one
@@ -308,15 +323,21 @@ const _s = new THREE.Vector3();
  * it is one term of a field instead of the whole of it, and `patchVeg`'s
  * `crownNormal` rebuilds the card's frame from the plane normal below.
  */
-function billboardGeo(width: number, height: number) {
+function billboardGeo(width: number, height: number, planes = 2) {
   const g = new THREE.BufferGeometry();
   const p = [], n = [], uv = [], idx = [], col = [];
   const hw = width * 0.5;
-  for (let k = 0; k < 2; k++) {
-    const dx = k === 0 ? hw : 0, dz = k === 0 ? 0 : hw;
+  for (let k = 0; k < planes; k++) {
+    const a = (k / planes) * Math.PI;
+    const dx = Math.cos(a) * hw, dz = Math.sin(a) * hw;
     const base = k * 4;
     p.push(-dx, 0, -dz, dx, 0, dz, dx, height, dz, -dx, height, -dz);
-    for (let i = 0; i < 4; i++) n.push(k === 0 ? 0 : 1, 0, k === 0 ? 1 : 0);
+    // `(-sin a, 0, cos a)` is the quad's *winding-derived* face normal, which
+    // the two-plane version disagreed with on its second quad — it authored
+    // `(1, 0, 0)` where the winding says `(-1, 0, 0)`. Invisible behind
+    // `DoubleSide` plus `twoSidedNormals`, wrong all the same, and it would not
+    // have stayed invisible once a third plane started overlapping the others.
+    for (let i = 0; i < 4; i++) n.push(-Math.sin(a), 0, Math.cos(a));
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
     for (let i = 0; i < 4; i++) col.push(1, 1, 1);
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -658,7 +679,7 @@ export class Trees {
           groundContact: 0.62, groundSpan: 0.34,
         });
         const cardW = src.radius * 2.12;
-        const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
+        const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02, 3), impMat, perImpostor);
         imp.castShadow = true; imp.receiveShadow = true;
         imp.count = 0; imp.visible = false; imp.frustumCulled = false;
         const impTint = new THREE.InstancedBufferAttribute(new Float32Array(perImpostor * 3), 3);
