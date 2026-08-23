@@ -101,9 +101,9 @@ Unchanged from the original plan and still right:
 
 ## 5. Definition of done
 
-- [x] `npm run typecheck` and `typecheck:tools` both clean
+- [x] `pnpm run typecheck` and `typecheck:tools` both clean
 - [x] Zero `.js` files under `src/` (and zero `.mjs`)
-- [x] **`npm run check` — all 9 gates still green** (this is the real proof, and
+- [x] **`pnpm run check` — all 9 gates still green** (this is the real proof, and
       it is what caught the one regression: four enemy spawns deleted from
       `combatloop` by the dead-code pass)
 - [x] `imgdiff` shows no shot above the harness noise floor. The floor was

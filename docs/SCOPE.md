@@ -489,7 +489,7 @@ machine never runs — not in play, and not in the capture harness either:
 - [x] **5 buses**, HRTF positional audio, dialogue ducking
 - [x] UI and dialogue audio
 - [x] The Regalia's radio — 6 stations
-- [x] `src/audio/tools/{profile,verify}.mts` — an audio-specific verification pair, **not run by `npm run check`**
+- [x] `src/audio/tools/{profile,verify}.mts` — an audio-specific verification pair, **not run by `pnpm run check`**
 - [ ] Voice acting — not feasible without assets
 
 ---
@@ -497,7 +497,7 @@ machine never runs — not in play, and not in the capture harness either:
 ## 13. Performance & engineering
 
 ### The gate suite
-- [x] **`npm run check` runs 11 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `horizoncheck` · `heightcheck` · `driftcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)*
+- [x] **`pnpm run check` runs 11 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `horizoncheck` · `heightcheck` · `driftcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)*
 - [x] **A gate can report VOID** — measured nothing — distinctly from failed. This is the honesty mechanism behind every perf number below.
 - [x] `integration.mts` asserts features are **reachable in play**, not merely present
 - [x] `orphans.mts` — static reachability from `main.ts`; **283/283 modules**
@@ -521,7 +521,7 @@ machine never runs — not in play, and not in the capture harness either:
 - [ ] Cold-boot time — the last recorded figures are **13.66 s → 6.88 s**, and they are ***unverified*** on this tree for the reason above. Probe: `bootprof.mts` on a quiet tree with all three artifacts present.
 
 ### Fixed, and now history
-- [x] Shader pre-warm · weapon-swap freeze (15.8 s) · shadow cascade cost · DOF at half resolution · water reflection gated on visibility · streaming hitch (870 → 134–161) · menu open (33 → 16 ms). ***All are historical measurements and none is assertable by reading.*** Probe for any of them: `npm run check:perf` on a quiet tree.
+- [x] Shader pre-warm · weapon-swap freeze (15.8 s) · shadow cascade cost · DOF at half resolution · water reflection gated on visibility · streaming hitch (870 → 134–161) · menu open (33 → 16 ms). ***All are historical measurements and none is assertable by reading.*** Probe for any of them: `pnpm run check:perf` on a quiet tree.
 - [x] Pre-commit hook — `vite build`, both typechecks, and the doc line budgets
 - [x] Draw-call budget renegotiated in `BRIEF.md`, 400 → 800; measured range 351–506
 - [x] **Quality tiers ship and are player-facing** — `low/medium/high/ultra` via `?q=` or `SystemScreen`, driving the light budget among other things

@@ -78,7 +78,7 @@ failure mode is silent. Read it before writing a line.
     consumes the shared `#include <common>` anchor twice. A marker assert only proves *a*
     patch landed, not that an earlier one still has its anchor. Where two systems could
     patch the same material, one must own it outright.
-16. **NEVER MEASURE PERF WHILE A BUILDER IS LIVE.** `pnpm run build` compiles the whole
+16. **NEVER MEASURE PERF WHILE A BUILDER IS LIVE.** `ppnpm run build` compiles the whole
     working tree, so any agent mid-edit is in your binary. Measured the hard way: a
     shipgate run reported 257 ms and 364 ms main-thread tasks, which was attributed to a
     grass density change and ablated against — and then `perf-stall` came back at

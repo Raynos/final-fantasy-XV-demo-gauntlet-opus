@@ -30,6 +30,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'tex.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'tex.json');
@@ -275,7 +277,7 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
   const vitePort = opts.port || Number(process.env.PORT || 5173);
   let server: ReturnType<typeof spawn> | null = null;
   if (!(await portOpen(vitePort))) {
-    server = spawn('npx', ['vite', '--port', String(vitePort), '--strictPort'],
+    server = spawn(VITE, ['--port', String(vitePort), '--strictPort'],
       { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
     const deadline = Date.now() + 60000;
     for (;;) {

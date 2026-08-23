@@ -88,7 +88,7 @@ already paid for:
 ## 5. Definition of done
 
 - [ ] **A person can play for 30 minutes** without hitting a dead end or a stub
-- [ ] `npm run check` — all gates green, including `combatloop` at 30/30
+- [ ] `pnpm run check` — all gates green, including `combatloop` at 30/30
 - [ ] **`perf` and `gameplay` pass 60 fps** — or the failure is explained, owned,
       and accepted deliberately rather than by default
 - [ ] The loop closes: fight → reward → spend → fight better

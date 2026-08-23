@@ -236,7 +236,7 @@ Neither is mine to fix and both are reported here rather than edited.
 
 ## State of the tree
 
-`npm run check`: **10/11**, on a tree with no other agent's paths dirty. The one
+`pnpm run check`: **10/11**, on a tree with no other agent's paths dirty. The one
 failure is `anycheck` — 11 `any`, all in `src/game/rpg/HavenCamp.ts`, pre-existing
 and not this lane. `combatloop` is back to **30/30** and `heightcheck`,
 `driftcheck` and `horizoncheck` all pass *under the runner*, which the previous
@@ -288,10 +288,10 @@ disagrees.
 ### One out-of-lane commit, deliberately alone (`661954e`)
 
 `package-lock.json` pins **typescript 7.0.2**, which removed the `baseUrl`
-option outright, so `npm run typecheck:tools` fails with TS5102 before reading a
+option outright, so `pnpm run typecheck:tools` fails with TS5102 before reading a
 line of code and the pre-commit hook aborts in any fresh worktree. The shared
 checkout does not see it because its `node_modules` still holds a stale 5.9.3;
-anything running `npm ci` does. Removal is a no-op — `baseUrl` was `"."` and
+anything running `pnpm install --frozen-lockfile` does. Removal is a no-op — `baseUrl` was `"."` and
 `paths` values resolve relative to the tsconfig's directory, the same directory.
 
 ## Shots that show the current state

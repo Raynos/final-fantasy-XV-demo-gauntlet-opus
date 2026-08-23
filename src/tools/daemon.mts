@@ -109,6 +109,8 @@ function sourceStamp() {
 }
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 export const APP_PORT = Number(process.env.PORT || 5173);
 export const DAEMON_PORT = APP_PORT + 1;
 const BROWSER_IDLE_MS = Number(process.env.BROWSER_IDLE_MIN || 6) * 60_000;
@@ -325,14 +327,14 @@ class Harness {
     if (this.server || await portOpen(APP_PORT)) return;
     if (prod) {
       await new Promise<void>((res, rej) => {
-        const b = spawn('npx', ['vite', 'build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+        const b = spawn(VITE, ['build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
         b.on('exit', (c) => (c === 0 ? res() : rej(new Error(`vite build failed (${c})`))));
       });
     }
     const args = prod
-      ? ['vite', 'preview', '--port', String(APP_PORT), '--strictPort']
-      : ['vite', '--port', String(APP_PORT), '--strictPort'];
-    this.server = spawn('npx', args, { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
+      ? ['preview', '--port', String(APP_PORT), '--strictPort']
+      : ['--port', String(APP_PORT), '--strictPort'];
+    this.server = spawn(VITE, args, { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       await sleep(250);

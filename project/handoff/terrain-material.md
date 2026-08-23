@@ -4,7 +4,7 @@ Owner: the terrain-material agent (`PORT=5420`).
 Branch: `worktree-agent-a7af4e4142492a120`, fast-forwarded from `main` at `7781bdf`.
 Predecessors: `project/handoff/atmosphere.md` and `project/handoff/graphics-ceiling.md`.
 
-**Four commits, all landed and all gated. `npm run check` is 11/11 and
+**Four commits, all landed and all gated. `pnpm run check` is 11/11 and
 `seatcheck` passes standalone. The blind judge no longer ranks terrain material
 first — it ranks shadowing first, which is not this lane.**
 
@@ -302,7 +302,7 @@ The two leads in it I believe, having looked at `tmp/ab/r3/ab-03.jpg` myself:
 
 ## Gates
 
-`npm run check`: **11/11**, on a tree with no other agent's paths dirty.
+`pnpm run check`: **11/11**, on a tree with no other agent's paths dirty.
 `anycheck` is 0. `seatcheck` PASS standalone, model residual p99 **0.000 m** —
 the seating model is unaffected, which is the point of that gate.
 `horizoncheck` PASS at worst MCC **0.766**, which is *lower* than the 0.858 /

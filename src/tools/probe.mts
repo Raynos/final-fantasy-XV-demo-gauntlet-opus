@@ -24,6 +24,8 @@ import { assertOwnPort, resolvePort } from './portowner.mts';
 import { mkdir } from 'node:fs/promises';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const PORT = resolvePort(5173, ROOT);
 const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');
@@ -33,7 +35,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 });
 async function ensureServer() {
   if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
+  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
   const deadline = Date.now() + 40000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 300));

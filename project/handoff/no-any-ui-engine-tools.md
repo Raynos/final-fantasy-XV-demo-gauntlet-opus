@@ -182,9 +182,9 @@ once — a real piece of work, and the right next one for whoever picks this up)
 
 ## Verification
 
-- `npx tsc --noEmit -p tsconfig.json` and `-p tsconfig.tools.json`: clean for
+- `pnpm exec tsc --noEmit -p tsconfig.json` and `-p tsconfig.tools.json`: clean for
   these four trees.
-- `npx vite build`: passes.
+- `pnpm exec vite build`: passes.
 - `uxcheck.mts` could **not** be completed: with four agents editing `src/` the
   dev server's HMR reloads the page mid-run and playwright reports "Execution
   context was destroyed". It needs a quiet tree. The first nine assertions

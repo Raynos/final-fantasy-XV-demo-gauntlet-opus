@@ -325,16 +325,16 @@ wrong number for a turn:
 
 ## Gates
 
-`PORT=5480 npm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
+`PORT=5480 pnpm run check`: **11/11**. `anycheck` 0. `combatloop` 31/31,
 `horizoncheck` PASS at worst MCC 0.766 (unchanged, the coordinator has already
 explained that number), `driftcheck`, `heightcheck`, `roadcheck`, `uxcheck`
 89/89, `creaturecheck`, `integration`, `orphans` all PASS.
-`npm run typecheck` and `npm run typecheck:tools` clean.
+`pnpm run typecheck` and `pnpm run typecheck:tools` clean.
 
 **Use an explicit free `PORT`** — the shadows lane's note about `combatloop`
 hard-coding `PORT || 5199` still applies and is still unfixed.
 
-`npm run check:perf` **not run**, per `CLAUDE.md`: the tree was not quiet.
+`pnpm run check:perf` **not run**, per `CLAUDE.md`: the tree was not quiet.
 
 ---
 

@@ -144,7 +144,7 @@ was the problem, as the brief allowed for.
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** (pre-commit hook, all three commits) |
+| `pnpm exec vite build` | **pass** (pre-commit hook, all three commits) |
 | `node src/tools/roadcheck.mts` | **pass** — 0 failures, 0 warnings, 30.26 km / 50 edges / 50 nodes, worst grade 13.0 % (limit 13) — identical to baseline |
 | `node src/tools/heightcheck.mts` | **pass — 0.000 m at every probe**, micro and grid separately |
 | `node src/tools/driftcheck.mts` | **pass** — drift 0.000 m, gpu-vs-`heightAt` worst 0.373 m (tol 0.45); coarse-LOD spread worst **1.281 m, was 1.330 m** — the LOD filter did not widen it |
@@ -260,7 +260,7 @@ against 4.5–5.2 M everywhere else, and it is the only shot in the corpus below
 - **The dev server is not on 5460 as often as you think.** `src/tools/shoot.mts`
   spawns and then kills its own vite when the port is free, so a `heightcheck` run
   straight after a `shoot` finds nothing listening and hangs for its full timeout.
-  Start `npx vite --port 5460 --strictPort` yourself and check it is still up.
+  Start `pnpm exec vite --port 5460 --strictPort` yourself and check it is still up.
 
 ## Shots
 

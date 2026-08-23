@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const PORT = resolvePort(5173, ROOT);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
@@ -32,7 +34,7 @@ const portOpen = (port: number) => new Promise<boolean>((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const p = spawn('npx', ['vite', '--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
+  const p = spawn(VITE, ['--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
   p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
   for (let i = 0; i < 120; i++) {

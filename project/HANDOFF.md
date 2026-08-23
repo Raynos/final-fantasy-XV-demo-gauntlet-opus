@@ -76,13 +76,13 @@ Everything is `.mts` and runs under Node's type stripping. Shot names are
 
 | tool | what it is for |
 |---|---|
-| `npm run check` | **The whole gate suite, one table.** Run it at every merge, not just the cheap gates — `combatloop` slid 30/30 → 21/30 and went unnoticed for weeks because the expensive ones were skipped. `npm run check:perf` adds `perf` and `gameplay`, opt-in, quiet tree only. |
+| `pnpm run check` | **The whole gate suite, one table.** Run it at every merge, not just the cheap gates — `combatloop` slid 30/30 → 21/30 and went unnoticed for weeks because the expensive ones were skipped. `pnpm run check:perf` adds `perf` and `gameplay`, opt-in, quiet tree only. |
 | `shoot.mts` | Capture named shots from `src/game/Shots.ts`. Fixed timestep, exits non-zero on any console error. `--prod` builds and serves the real bundle. `--jpeg` writes review-sized JPEGs — use it for anything an agent will read back. |
 | `daemon.mts` | Holds one vite + one Chromium + one booted page across invocations. Warm capture ~1.5 s vs ~24 s cold. Used by `shoot.mts` by default. |
 | `sheet.mts` | Contact sheet of a shot directory, paginated to `_sheet-1.jpg`, `_sheet-2.jpg` … at 12 a page. How critics review the whole game at once. |
 | `corpus.mts` | Captures every shot in `Shots.ts` and lays it out as one sheet per category — every zone, every dungeon room, every enemy, as a single image. |
 
-**Gates** — all wired into `npm run check`
+**Gates** — all wired into `pnpm run check`
 
 | tool | asserts |
 |---|---|

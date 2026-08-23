@@ -1,7 +1,7 @@
 # Goal: strictly and statically typed, with no `any` — implicit or explicit
 
 **Status: done. 0 `any`, from 7,861.** Both typechecks clean, `vite build`
-passes, and `npm run check` is **10/10** — `anycheck` is now the second gate in
+passes, and `pnpm run check` is **10/10** — `anycheck` is now the second gate in
 `src/tools/check.mts`, straight after `build`, with `ANY_BUDGET.json` at `0`.
 
     build PASS · anycheck PASS · orphans PASS · integration 18/18 ·
@@ -56,7 +56,7 @@ editing `ANY_BUDGET.json`, which is a reviewable line in a diff.
 but an edit to that file. It strips comments and string literals before
 counting, so the word `any` in prose does not register.
 
-It is wired into `npm run check` as the second gate (after `build`). It is
+It is wired into `pnpm run check` as the second gate (after `build`). It is
 deliberately **not** in the pre-commit hook: the hook already runs `vite build`
 and both typechecks, and a `--noEmit` pass catches an `any` the moment it makes
 something else untyped anyway.
@@ -121,14 +121,14 @@ Two traps, both of which cost a round here and are in the README:
 2. `node src/tools/typemods/infer.mts "$PWD" tsconfig.json src --params`
 3. Repeat 1–2 until both report zero. Each round makes more types real, which
    lets the next round infer more; it converged after 3–4 rounds each time.
-4. `npx tsc --noEmit -p tsconfig.json` — **the errors are the point.** A type
+4. `pnpm exec tsc --noEmit -p tsconfig.json` — **the errors are the point.** A type
    that was `any` could not be wrong; the moment it is real, everything that
    disagreed with it shows up.
 5. Fix those by hand. Run the mechanical helpers (`nonnull`, `nulls`,
    `undefnull`) for the null-flavoured ones first, then read the rest.
-6. `npx tsc --noEmit -p tsconfig.tools.json` too — the tools config reaches into
+6. `pnpm exec tsc --noEmit -p tsconfig.tools.json` too — the tools config reaches into
    the game through `src/globals.d.ts`, so game changes can break it.
-7. `npm run check` before committing a wave. Not the cheap half.
+7. `pnpm run check` before committing a wave. Not the cheap half.
 
 ## What has been found so far
 
@@ -171,7 +171,7 @@ more from this work:
 - **Assert once, where the reasoning lives.** The first pass at the canvas
   contexts put 331 `c!.` assertions across the drawing code; the assertion
   belongs at the nine `getContext('2d')!` calls.
-- **Behaviour does not change.** Every wave is verified by `npm run check` and,
+- **Behaviour does not change.** Every wave is verified by `pnpm run check` and,
   for anything that could move a pixel, by `imgdiff` against a capture from
   before. A found bug gets recorded and left alone unless fixing it is the
   point of the commit.
@@ -503,5 +503,5 @@ Everything in the LANDMINES §"Names nothing ever verified" second table, plus:
 Three, all of them a dead thing becoming a live one, all reported above:
 
 1. `integration`'s rest probe calls `rpg.restAt('caravan')` instead of `day.rest('caravan')`. It passes.
-2. `gameplay`'s `magic` perf scenario now actually fires an effect. **This will move that scenario's number** — it has been measuring an idle field. Run `npm run check:perf` on a quiet tree and re-baseline it.
+2. `gameplay`'s `magic` perf scenario now actually fires an effect. **This will move that scenario's number** — it has been measuring an idle field. Run `pnpm run check:perf` on a quiet tree and re-baseline it.
 3. `Game.applyShot` copies the authored `pos`/`target` instead of aliasing them.

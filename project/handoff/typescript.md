@@ -13,9 +13,9 @@ inside each shot's own run-to-run noise.
 |---|---|---|
 | `.js` / `.mjs` under `src/` | 312 | **0** |
 | `.ts` / `.mts` under `src/` | 0 | **314** |
-| `npm run typecheck` | — | **clean** (`strict`, 275 modules) |
-| `npm run typecheck:tools` | — | **clean** (`strict` + `erasableSyntaxOnly`, 39 tools) |
-| `npm run check` | 9/9 | **9/9** |
+| `pnpm run typecheck` | — | **clean** (`strict`, 275 modules) |
+| `pnpm run typecheck:tools` | — | **clean** (`strict` + `erasableSyntaxOnly`, 39 tools) |
+| `pnpm run check` | 9/9 | **9/9** |
 
 Config: `tsconfig.json` (game) and `tsconfig.tools.json` (harness), both from the
 plan, plus two deliberate additions documented in the files themselves —
@@ -24,7 +24,7 @@ snippets. Both typechecks run in `.githooks/pre-commit` alongside the build.
 
 ## Verification
 
-- **`npm run check` — 9/9.** Run it after any follow-up work here; it is the
+- **`pnpm run check` — 9/9.** Run it after any follow-up work here; it is the
   only thing that caught the one real regression this port introduced (below).
 - **imgdiff, pre-port vs post-port, 10 shots.** Every delta is inside that
   shot's own floor, measured by capturing the same shot twice on the same build:
@@ -55,7 +55,7 @@ snippets. Both typechecks run in `.githooks/pre-commit` alongside the build.
   | `perf` mean / worst | 70.1 / 39.8 fps | 72.8 / 40.0 fps |
 
   Two runs each. The port is inside the variance. Both perf gates were already
-  failing their 60 fps target before the port; that is why `npm run check`
+  failing their 60 fps target before the port; that is why `pnpm run check`
   excludes them by default and still reads 9/9.
 
 ## How it was done, in case it matters later
@@ -108,7 +108,7 @@ Real defects and drift, all of them things no test could see:
 The dead-code pass deleted `const e = pin(spawnAhead('sabertusk'))` from four
 `combatloop` checks — `noUnusedLocals` was right that nothing reads `e`, and
 wrong that the statement did nothing: it is what puts an enemy in front of
-Noctis. combatloop went 30/30 → 28/30 with "no damage event", and `npm run
+Noctis. combatloop went 30/30 → 28/30 with "no damage event", and `pnpm run
 check` is what found it. Restored as bare calls.
 
 The general lesson is the one already in `CLAUDE.md`: run the whole gate suite

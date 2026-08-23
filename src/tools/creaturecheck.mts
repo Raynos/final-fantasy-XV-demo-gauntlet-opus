@@ -46,6 +46,8 @@ import { fileURLToPath } from 'node:url';
 import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
@@ -74,7 +76,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 });
 async function ensureServer() {
   if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
+  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 300));

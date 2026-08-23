@@ -153,7 +153,7 @@ Most of the port is mechanical. These few are where the value is:
 
 - [ ] `pnpm typecheck` and `pnpm typecheck:tools` both clean
 - [ ] Zero `.js` files under `src/`
-- [ ] `npx vite build` passes
+- [ ] `pnpm exec vite build` passes
 - [ ] `node src/tools/orphans.mjs` — still 100% reachable
 - [ ] `node src/tools/integration.mjs` — still 0 failures
 - [ ] `node src/tools/shoot.mjs` — exits 0, and `src/tools/imgdiff.mjs` shows no shot

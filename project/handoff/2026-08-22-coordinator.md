@@ -15,9 +15,9 @@ head had been.
 ## 1. State of `main`
 
 290 commits. Tree clean, no `agent/*` branches, worktrees pruned (2.3 GB
-reclaimed), no orphaned vite/chromium. **`npm run check` — 9/9 gates green.**
+reclaimed), no orphaned vite/chromium. **`pnpm run check` — 9/9 gates green.**
 
-`npm run check` is new: one command, all nine gates, one table. `--perf` adds
+`pnpm run check` is new: one command, all nine gates, one table. `--perf` adds
 `perf.mts` and `gameplay.mts`, opt-in because a perf number taken while agents run
 is meaningless. It exists because `combatloop.mts` slid 30/30 → 21/30 and nobody
 noticed for weeks — the cheap gates were run at every merge and the expensive ones

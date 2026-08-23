@@ -18,8 +18,8 @@ this enemy's walk cycle look like from behind" or "why is the ground ochre
 visible.
 
 ```bash
-npm run dev      # then open http://127.0.0.1:5173/?debug=1
-npm run preview  # the built bundle, same URL suffix — the inbox still writes
+pnpm run dev      # then open http://127.0.0.1:5173/?debug=1
+pnpm run preview  # the built bundle, same URL suffix — the inbox still writes
 ```
 
 | key | does |
@@ -182,7 +182,7 @@ pruned.
 
 | check | result |
 |---|---|
-| `npx vite build` | passes (enforced by `.githooks/pre-commit`) |
+| `pnpm exec vite build` | passes (enforced by `.githooks/pre-commit`) |
 | `src/tools/integration.mjs` | 18 pass · 0 fail |
 | `src/tools/uxcheck.mjs` | 86/86 |
 | `src/tools/creaturecheck.mjs` | **207 poses across 23 species · 0 failures** (new gate) |
@@ -239,7 +239,7 @@ git config core.hooksPath .githooks # if a fresh clone
 git branch --list 'agent/*'         # unmerged round-5 work
 git worktree list                   # ~19 worktrees, 6.9 GB — prune after merging
 node src/tools/cleanup.mjs              # report orphaned vite/chromium; --kill to act
-npx vite build
+pnpm exec vite build
 node src/tools/integration.mjs
 ```
 

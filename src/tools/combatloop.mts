@@ -21,6 +21,8 @@ import type { DownedState } from '../game/encounters/Downed.ts';
 import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
+const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const PORT = resolvePort(5199, ROOT);
 
 const portOpen = (p: number) => new Promise<boolean>((res) => {
@@ -32,7 +34,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 
 async function ensureServer() {
   if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'],
+  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'],
     { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {

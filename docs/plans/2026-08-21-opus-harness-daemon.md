@@ -125,7 +125,7 @@ voided every run it was asked for, correctly, because something else was always
 capturing. Two perf gates therefore remain formally unmeasured after a session
 that changed the renderer substantially. Port allocation is the same story in
 miniature — five tools carried hand-picked default ports, one collided with a
-co-agent, and `npm run check` reported a combat regression that did not exist.
+co-agent, and `pnpm run check` reported a combat regression that did not exist.
 
 **What this changes about the plan.** Nothing about the decision. It does argue
 for reordering the phases: **Phase 3 (one client, every tool through the daemon)
@@ -399,7 +399,7 @@ Decision 2 tolerable.
 - Split the pre-commit gate into a **fast commit lane** (build + the sub-10 s
   checks) and a **full push gate** (`creaturecheck`, `combatloop`, `integration`,
   `gameplay`, `roadcheck`) with one source of truth for the roster, and a
-  `npm run check:gate` that runs it — RESCUE §B14 notes `creaturecheck.mts`'s
+  `pnpm run check:gate` that runs it — RESCUE §B14 notes `creaturecheck.mts`'s
   207-pose grounding gate is wired to nothing, and §B5 argues for the full suite
   at every merge after `combatloop` silently fell to 21/30.
 - Fix `project/STATUS.md`, which RESCUE §D says still claims 7 running
@@ -553,7 +553,7 @@ must not go near `src/public/baked/`, which costs a re-bake.
   size, agents active, load average, and the sha.
 - **`guard-harness.sh`** (`PreToolUse`, modelled on kami's `guard-dev-server.sh`,
   which ships the vite-level guard *and* the hook because one alone kept losing):
-  block a bare `vite`/`npm run dev`, block `chromium.launch` outside the daemon,
+  block a bare `vite`/`pnpm run dev`, block `chromium.launch` outside the daemon,
   block killing the daemon or a pooled browser. Escapes named and ledgered. Never
   blanket-kill chromium on a shared box — scaffold ships `browser-guard.sh` for
   exactly this.
@@ -656,5 +656,5 @@ Phase 3 is the bulk of the work and is almost perfectly parallel.
       report with the state and sha it was taken under.
 - [ ] A request that cannot meet its deadline returns `429` with a real estimate,
       names who is ahead, and exits 4. No tool hangs for 300 s.
-- [ ] `npm run check:gate` runs the five gate tools and is the documented push gate.
+- [ ] `pnpm run check:gate` runs the five gate tools and is the documented push gate.
 - [ ] `src/tools/README.md` exists and `CLAUDE.md` points at it.

@@ -11,12 +11,12 @@ Every claim below is either **verified by eye at capture** or explicitly flagged
 
 | gate | result |
 |---|---|
-| `npx vite build` | **pass** (every commit, via `.githooks/pre-commit`) |
+| `pnpm exec vite build` | **pass** (every commit, via `.githooks/pre-commit`) |
 | `node src/tools/combatloop.mts` | **30/30** (was 21/30) |
 | `node src/tools/uxcheck.mts` | **89/89, 0 failures** — was 86/86. The three new checks are `Tab`/`Backspace`/`Escape` close on the newly registered `map_wide` screen; uxcheck audits every registered screen, so the count grows by three whenever one is added. No check regressed. |
 | `node src/tools/integration.mts` | **18 pass · 0 wired · 0 not integrated** |
 
-`npm run check` / `src/tools/check.mts` does not exist in this worktree — it landed
+`pnpm run check` / `src/tools/check.mts` does not exist in this worktree — it landed
 on `main` after this branch was cut. The four gates above were run individually.
 
 ---

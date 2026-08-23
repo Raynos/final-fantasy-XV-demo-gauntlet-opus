@@ -28,14 +28,14 @@ Four buckets, and the root holds nothing but config and the three docs below.
   deploy and no dev-server run may read anything in it. `tmp/shots/` (the default
   `--out` for every capture tool) is what it is for.
 
-`dist/` is build output and `src/public/baked/` is the terrain cache — both
-generated, both ignored, neither belongs in `tmp/` because losing them costs a
-re-bake. The cache cannot live in `dist/` either: vite empties `dist/` on every
-build and never serves it in dev. It is copied into `dist/baked/` at build time.
+`dist/` is build output and `src/public/baked/` is the bake cache — both
+generated, both ignored, neither belongs in `tmp/`: losing them costs a re-bake.
+The cache cannot live in `dist/` (vite empties it every build, never serves it in
+dev); it is copied to `dist/baked/` at build time.
 
 The whole of `src/` is TypeScript: `.ts` for the game, `.mts` for the harness
 (which runs under Node's strip-only type stripping, hence `erasableSyntaxOnly` in
-`tsconfig.tools.json`). `npm run typecheck` covers the game, `npm run
+`tsconfig.tools.json`). `pnpm run typecheck` covers the game, `pnpm run
 typecheck:tools` the harness, and both run in the pre-commit hook. Probe snippets
 under `src/tools/_probe/` and `src/tools/probes/` are excluded from the tools
 config: they are read as text and evaluated as a *function body* in the page, so
@@ -106,8 +106,12 @@ slice those to the part you need.
   capture for 120 s with no useful error, and a broken cross-system contract shows up
   nowhere else at all: vite strips the types without reading them.
 - `node src/tools/cleanup.mts` reports orphaned vite/chromium; `--kill` acts.
-- **`npm run check` runs the whole gate suite** and prints one table. Run it at
+- **`pnpm run build` does not make every cache**: it *deletes* a stale painted-face
+  cache without replacing it (recording it needs a browser). Nothing breaks, no gate
+  notices, cold boot goes 6.9 -> ~9 s. **`build:full` adds it** (~21 s) — run it after
+  any merge. Tools spawn `node_modules/.bin/vite`, never `npx`/`pnpm dlx` (network).
+- **`pnpm run check` runs the whole gate suite** and prints one table. Run it at
   every merge, not just the cheap gates -- `combatloop.mts` slid from 30/30 to
   21/30 and went unnoticed for weeks because the expensive gates were skipped.
-  `npm run check:perf` adds `perf.mts` and `gameplay.mts`; only ever pass that on
+  `pnpm run check:perf` adds `perf.mts` and `gameplay.mts`; only ever pass that on
   a **quiet tree**, since a perf number taken while agents run is meaningless.

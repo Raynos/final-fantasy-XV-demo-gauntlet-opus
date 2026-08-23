@@ -120,7 +120,7 @@ Captures: `tmp/shots/perf/party_walk.jpg` (the frame is unchanged in substance
 forest, fully populated after the budget halving) and `tmp/shots/vegpop/`
 (the two mid-traverse frames, full budget against half).
 
-`npm run check` is **11/11**. `npm run typecheck`, `typecheck:tools` and
+`pnpm run check` is **11/11**. `pnpm run typecheck`, `typecheck:tools` and
 `anycheck` (0) all clean.
 
 ---

@@ -6,7 +6,7 @@ was free — `lsof -nP -iTCP:5430 -sTCP:LISTEN` before the first capture, per th
 previous agent's hour lost to photographing someone else's tree.
 
 **The worktree started 131 commits behind `main`** and had no `node_modules` and no
-`src/public/`. `git merge --ff-only main`, `npm install`, `mkdir -p src/public` and
+`src/public/`. `git merge --ff-only main`, `pnpm install`, `mkdir -p src/public` and
 *then* the `baked` symlink. Check `git rev-list --count HEAD..main` before anything
 else — nothing warns you.
 
@@ -30,7 +30,7 @@ vista_noon           7,617,633    7,621,025 (+0.04%)  472 -> 472
 ```
 
 **+0.33% worst case and exactly one extra draw call in the whole corpus** — Insomnia's
-`cityLit`. `npm run check`: **11/11**.
+`cityLit`. `pnpm run check`: **11/11**.
 
 Shots: `tmp/shots/COST-BASE/` vs `tmp/shots/COST-AFTER/` are the pairs above.
 `tmp/shots/base/` is the original before-state (whole corpus, ten shots).

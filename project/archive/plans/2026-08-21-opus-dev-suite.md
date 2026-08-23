@@ -316,7 +316,7 @@ review *suite* and, per the research, almost nobody builds it.
 ## Verification
 
 ```bash
-npx vite build                      # must pass; enforced by .githooks/pre-commit
+pnpm exec vite build                      # must pass; enforced by .githooks/pre-commit
 node src/tools/orphans.mjs              # src/dev must be reachable, no dead modules
 node src/tools/integration.mjs          # 18 pass / 0 fail — unchanged
 node src/tools/uxcheck.mjs              # 86/86 — the suite must not register a Menus screen
@@ -329,8 +329,8 @@ node src/tools/shoot.mjs hero_face combat_wide --out tmp/shots/dev-b --cold
 node src/tools/imgdiff.mjs tmp/shots/dev-a tmp/shots/dev-b   # must be at the 1.5-1.9/255 noise floor
 
 # the suite itself
-npm run dev      # then open http://127.0.0.1:5173/?debug=1
-npm run preview  # then open the preview URL with ?debug=1 — inbox must still write
+pnpm run dev      # then open http://127.0.0.1:5173/?debug=1
+pnpm run preview  # then open the preview URL with ?debug=1 — inbox must still write
 ```
 
 Manual acceptance: file a note with `F9` and confirm a JSON + PNG pair lands in

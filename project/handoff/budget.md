@@ -7,7 +7,7 @@ agents in a row**).
 Predecessor: `project/handoff/perf.md`, which is the discovery this lane exists
 for. Read it before this.
 
-**Status: six commits landed, all gated. `npm run check` is 11/11,
+**Status: six commits landed, all gated. `pnpm run check` is 11/11,
 `gameplay.mts` and `perf.mts` both PASS with `RULER_VALID: true`, and nothing in
 the corpus regressed. The forest shots now carry roughly twice the geometry they
 did and the frame got *faster*.**
@@ -167,7 +167,7 @@ Both on a quiet tree, at `geoRange` 250:
                    vs baseline: zone_fallgrove 5.10 -> 4.00,
                    poi_chocobo 8.25 -> 6.60. Ten unmoved. None regressed.
 
-    npm run check  11/11.  typecheck, typecheck:tools, anycheck 0.
+    pnpm run check  11/11.  typecheck, typecheck:tools, anycheck 0.
 
 Triangle counts those were taken at, against the same shots in
 `project/baseline-perf.json`: `zone_nebulawood` 8.3 -> 20.4 M, `zone_ravatogh`

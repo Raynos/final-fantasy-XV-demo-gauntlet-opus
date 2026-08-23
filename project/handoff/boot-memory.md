@@ -26,7 +26,7 @@ death — see below. Everything else is under 620 ms.
 | Player | 365 ms | **122 ms** |
 | **the six together** | **8343 ms** | **1339 ms** |
 
-`npm run check`: **10/10 gates pass**, run twice.
+`pnpm run check`: **10/10 gates pass**, run twice.
 
 ## What is done and verified
 

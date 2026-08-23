@@ -7,7 +7,7 @@
 > this reason — `PROGRESS.md` was allowed to accrete instead and drifted five
 > months out of date while still reading as current.
 
-**`main` @ 443 commits**, 105 tonight. Zero `any`, ratcheted. `npm run check`
+**`main` @ 443 commits**, 105 tonight. Zero `any`, ratcheted. `pnpm run check`
 **11/11**. `integration` 18 -> **20/20** and it presses keys now; `combatloop`
 30 -> **31/31** (it was really 29/30 — the damage-number check sampled once).
 
@@ -18,7 +18,7 @@ Finish every open plan in `docs/plans/`, then take the game to AAA. **Each plan'
 
 ## Live right now — nobody
 
-All lanes merged. `npm run check` **11/11**. Re-baking after a merge is still
+All lanes merged. `pnpm run check` **11/11**. Re-baking after a merge is still
 `texbake.mts --force` *and* `--canvas --force`.
 
 ## The grade — measured, not guessed
@@ -79,7 +79,7 @@ streaming every handoff had guessed. Account in `417ca86`; lesson in
 `combatloop` 30/30 · `roadcheck` 0 fail · `heightcheck` 0.000 m · `driftcheck`
 worst −1.177 m (reported, not failed).
 
-**Run `npm run check` at every merge, not just the cheap gates.** `combatloop`
+**Run `pnpm run check` at every merge, not just the cheap gates.** `combatloop`
 slid 30/30 → 21/30 unnoticed for weeks because the expensive ones were skipped.
 
 ## Perf — the game was never slow; the instrument was
