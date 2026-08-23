@@ -1,6 +1,8 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: PROPOSED (2026-08-21, fable). No game code is changed by this file.
+Status: IN-PROGRESS (2026-08-23, opus) — buildings and rocks are being built
+against it now, with the measured FFXV reference in `docs/reference/` as the bar
+and a blind A/B judge scoring the result. See `project/handoff/modeling.md`.
 Author: Fable 5 audit pass, against commit `86303de`. Companion to
 `docs/plans/2026-08-21-fable-sibling-ports.md` (which covers rendering, perf,
 gameplay and tooling); this one covers **mesh and shape construction only** —

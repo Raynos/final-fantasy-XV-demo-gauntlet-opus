@@ -9,9 +9,13 @@ still correct and are not repeated here. Read it first. This document says what
 has changed since it was written, what order to actually run the work in, and how
 to parallelise it.
 
-Status: LOCKED (2026-08-22, opus) — phase 4 of `2026-08-21-opus-rescue-and-sequencing.md`.
-Planned, not started. Runs after phase 2 (TypeScript) so the new
-systems are written in TS rather than ported afterwards.
+Status: IN-PROGRESS (2026-08-23, opus) — phase 4 of
+`2026-08-21-opus-rescue-and-sequencing.md`. Step 0 (re-audit against the gates)
+is **done, and it overturned the audit's central claim**: `src/game/rpg/**` is
+not orphaned, and WS-2, WS-3 and WS-6 all have real implementations. What was
+genuinely broken was smaller and worse — nothing in the game was pressable, and
+no quest waypoint pointed at a real place. Both fixed; `integration` is 20/20.
+WS-4 and WS-5 are in flight. See `project/handoff/content-wire.md`.
 
 ---
 

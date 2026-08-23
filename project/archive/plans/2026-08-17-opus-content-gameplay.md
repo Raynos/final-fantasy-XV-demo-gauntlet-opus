@@ -1,7 +1,18 @@
 # FFXV — Content & Gameplay Plan
 
-Status: PROPOSED (2026-08-17, opus). No game code is changed by this file.
-Runs as phase 4; re-audit first, per `2026-08-22-opus-phase4-content-and-gameplay.md`.
+Status: SUPERSEDED (2026-08-23, opus) by
+`2026-08-22-opus-phase4-content-and-gameplay.md`, whose step 0 re-audit was run
+and **falsified this document's central claim**. Section 0 asserts that
+`src/game/rpg/**` is 5,765 lines that nothing outside it imports, and that
+connecting it is the single highest-value action in the project. Twenty-two
+files outside that directory read the RPG model today, and `GameData.ts` is
+explicitly the UI's read-side adapter. The audit was drawn while `combatloop`
+was misreporting 21/30, and five rounds of work have overtaken it.
+
+Its workstream definitions, its FFXV reference appendices and its case for what
+to cut remain useful, which is why this is archived rather than deleted.
+**Do not scope work from its audit sections.** No game code is changed by this
+file.
 Author: Game Design & Content Planning pass, against commit `b676732`.
 
 ---
