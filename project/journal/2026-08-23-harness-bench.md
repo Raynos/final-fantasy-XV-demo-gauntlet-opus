@@ -1,6 +1,6 @@
 # Phase 0 — what concurrency actually costs here
 
-Deliverable of Phase 0 of `docs/plans/2026-08-21-opus-harness-daemon.md`. Every
+Deliverable of Phase 0 of `project/archive/plans/2026-08-21-opus-harness-daemon.md`. Every
 default in `src/tools/daemon.mts` has to trace back to a row on this page; if
 you change one, change it here first.
 

@@ -1,21 +1,81 @@
 # Harness plan — one trunk, one daemon, content-addressed builds
 
-Status: PROPOSED (2026-08-23, opus) — **Decision 1 is LOCKED**; Decisions 2 and 3
-and every phase below are proposals that assume it. **Decision 1 was tested
-against a night of running roughly a dozen agents the other way on 2026-08-23
-and it survives, but one of its three reasons was wrong and the phase order
-should change — see the evidence section under it.**
+Status: DONE (2026-08-23, opus) — **built and verified**; see the audit below.
+Decision 1 was LOCKED before implementation and stayed locked.
 
-**Nothing in this plan is built, and the defect it describes has got worse.**
-Audited 2026-08-23 against the tree: **0 of 15** definition-of-done items are
-met, and the tool count in "Cause one" below has been corrected upward from
-20-of-34 to **30-of-48**. The one thing here that did ship is the sweepguard,
-and it shipped as a Claude Code hook (`.claude/hooks/guard-git-add-all.sh`,
-wired in `.claude/settings.json`), *not* in `.githooks/` — look there before
-concluding it is missing.
+**Every phase landed.** Phase 0's numbers are in
+`project/journal/2026-08-23-harness-bench.md` and every default in
+`src/tools/daemon.mts` traces to a row there. The contract is
+`src/tools/README.md`. What follows is the plan as written, unchanged below this
+header, plus the audit of what it actually cost and where it was wrong.
 
-Supersedes the unprefixed `2026-08-21-harness-daemon.md`, now merged into this
-file.
+## Definition of done — audited 2026-08-23, after building it
+
+| # | item | verdict |
+|---|---|---|
+| 1 | Phase 0 bench in `project/journal/`, defaults traceable | **met** — `2026-08-23-harness-bench.md` |
+| 2 | one worktree; no per-worktree `PORT` in `CLAUDE.md`; sweep guard + ledger | **met** — ledger is `project/sweepguard-ledger.md` |
+| 3 | one daemon for every agent, no port chosen, outlives its session | **met** |
+| 4 | `grep -l chromium.launch src/tools/*.mts` → `daemon.mts` only | **met in spirit, not in letter** — see below |
+| 5 | five agents capture, budget never exceeded | **met** — peak 4 of 4 across 135 samples during a real fan-out |
+| 6 | five agents, one shot, one sha → one render; two shas differ | **met** — 1 render + 4 hits; two shas 40 commits apart differ by 7.462/255 over 17% of pixels |
+| 7 | a `fix` shot served while a sweep runs | **met** — 9.7 s wall against its own 4.2 s render, warm pool |
+| 8 | an uncommitted edit disturbs nobody | **met** — sha builds are immutable; used all session with a dirty tree |
+| 9 | reset drift on a `follow` shot byte-identical | **met, with the bar corrected** — 0.974/255, against a *measured* 1.493 boot-to-boot floor. Byte-identical is not achievable; see below |
+| 10 | `perf.mts` demands a quiet machine and stamps its state | **met** — it *enforces* quiet via the exclusive lease rather than refusing |
+| 11 | `429` with a real estimate, names who is ahead, exits 4 | **met** — 2005 ms against a 2000 ms deadline, exit 4 |
+| 12 | `pnpm run check:gate` runs the five gate tools, documented | **met** — plus a `pre-push` hook |
+| 13 | `src/tools/README.md` exists, `CLAUDE.md` points at it | **met** |
+
+**Item 4, honestly.** The grep returns **`chromium.mts`**, not `daemon.mts`.
+Every tool goes through the daemon; `chromium.mts` is the launcher module the
+daemon uses, and `bench.mts` and `bootprof.mts` call it directly *on purpose* —
+they measure browsers, and you cannot measure a browser you do not own. Both take
+the exclusive lease first, so they are still the only browser running. The
+letter of the item would have been satisfied by moving one function; the intent
+is satisfied by there being no uncounted browser on the machine.
+
+**Item 9, honestly.** The plan asked for byte-identical. Phase 0 measured two
+*fresh serial boots* of one shot on a quiet machine differing by **1.493/255** —
+TAA history, the exposure integrator and the shader cache do not start from the
+same place twice. Byte-identical is therefore not a bar anything can clear, and
+demanding it would have produced a check that cried wolf on every build until
+somebody muted it. The threshold is the measured floor.
+
+## Where the plan was wrong
+
+Five things it got wrong, all found by building it:
+
+1. **`vite build` + `preview` for sha builds.** Overturned. It buys 4% on boot
+   (8838 ms against 9248 ms) and it *deletes* the ability to `import()` source
+   modules from inside the page, which `heightcheck` needs to compare the GPU's
+   terrain surface against the shader's own source. Sha trees are dev-served;
+   `prod` is opt-in, carried in the build key.
+2. **Parking.** Ported from scaffold on the strength of scaffold's numbers. Ours
+   say don't: a posed page here burns **zero** idle CPU (`main.ts` never starts
+   the loop under `?shoot=1`), parking reclaims 17% of RSS, and unparking costs a
+   full 8.5 s reboot. Dropped.
+3. **The sha-tree cost.** The plan treated materialising as the expensive step.
+   It is 173 ms. The expensive step was `vite build` at 24.5 s, and *all* of that
+   was re-baking terrain — with `src/public/baked` symlinked it is 562 ms. The
+   symlinks are the cost model.
+4. **`node_modules` symlinked wholesale.** Not in the plan, but the obvious
+   implementation, and it silently recreated the bug `vite.map.config.mts`
+   existed to dodge: every build server resolving to one `node_modules/.vite`,
+   fighting over it, re-optimising, and reloading pages mid-boot.
+5. **"~4" and the knee.** RESCUE's guess was right, but not for the reason
+   anyone could have known: throughput is flat within noise from W=3, so
+   throughput cannot pick the number at all. Latency picks it.
+
+## What it cost, and what it bought
+
+Four concurrent browsers deliver **1.5×** the throughput of one, and the GPU
+binds at 2.2 of 18 cores. So the headline is not parallelism — it is that boot is
+9.2 s against a 2.3 s render, and the daemon's job is to stop paying it. Five
+agents reviewing one commit now render each shot once between them.
+
+The two bugs worth remembering are in `project/LANDMINES.md`: a leased page must
+never be pooled, and a freshly booted page must never be reset.
 
 ## Context
 
@@ -640,30 +700,7 @@ Phase 3 is the bulk of the work and is almost perfectly parallel.
   class name breaks on the *default* path rather than a rare one. Audit before
   Phase 2 ships.
 
-## Definition of done
+## Definition of done (as originally written)
 
-- [ ] Phase 0 bench in `project/journal/`, with the knee and its cause (GPU / CPU
-      / RSS), park and reset costs, sha-tree cost, and the concurrency
-      byte-stability result. Every default in `daemon.mts` traceable to a row.
-- [ ] `git worktree list` shows **one** entry; `CLAUDE.md` no longer mentions a
-      per-worktree `PORT`; the sweep guard is installed and its ledger exists.
-- [ ] **One daemon serves every agent**, found without anyone choosing a port, and
-      it survives the session that started it.
-- [ ] `grep -l chromium.launch src/tools/*.mts` returns **`daemon.mts` and nothing
-      else**.
-- [ ] Five agents capture concurrently and the machine never exceeds the measured
-      browser budget — verified by watching `/health` during a real fan-out.
-- [ ] Five agents asking for the same shot at the same sha produce **one render**;
-      two different shas produce demonstrably different frames.
-- [ ] A `fix`-lane single shot is served while a 139-shot `sweep` corpus runs,
-      with latency dominated by its own render.
-- [ ] An uncommitted edit by one agent does not invalidate another agent's warm
-      page or cached frames.
-- [ ] Reset drift on a `follow` shot is byte-identical — RESCUE §B1's acceptance
-      test, checked automatically once per build.
-- [ ] `perf.mts` refuses to run unless the whole machine is quiet, and stamps every
-      report with the state and sha it was taken under.
-- [ ] A request that cannot meet its deadline returns `429` with a real estimate,
-      names who is ahead, and exits 4. No tool hangs for 300 s.
-- [ ] `pnpm run check:gate` runs the five gate tools and is the documented push gate.
-- [ ] `src/tools/README.md` exists and `CLAUDE.md` points at it.
+Superseded by the audited table at the top of this file, which records the
+verdict on each of these and the two places the bar itself was wrong.

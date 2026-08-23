@@ -37,7 +37,7 @@ hook warns on a new plan with no `Status:` line; it does not block.
 ## Order — one agent per plan
 
 ```
-  2026-08-21-opus-harness-daemon              alone, first (rewrites the tools)
+  2026-08-21-opus-harness-daemon   DONE 2026-08-23 -> project/archive/plans/
                     |
     +---------------+---------------+
     |               |               |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) guard — the machine has ONE capture daemon, and it is shared.
 #
-# Phase 7 of docs/plans/2026-08-21-opus-harness-daemon.md. Every browser and
+# Phase 7 of project/archive/plans/2026-08-21-opus-harness-daemon.md. Every browser and
 # every vite on this box now belongs to one daemon that serves every agent and
 # OUTLIVES the session that started it. Three habits break that, all of them
 # reasonable-looking in isolation and all of them expensive:

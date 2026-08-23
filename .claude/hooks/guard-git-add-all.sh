@@ -2,7 +2,7 @@
 # PreToolUse(Bash) guard — force the shared-index-safe git workflow.
 #
 # Why: this repo is worked by MULTIPLE concurrent agents, and the harness plan's
-# Decision 1 (LOCKED, docs/plans/2026-08-21-opus-harness-daemon.md) drops
+# Decision 1 (LOCKED, project/archive/plans/2026-08-21-opus-harness-daemon.md) drops
 # worktrees for a single trunk — at which point they all share ONE git index.
 # Anything that snapshots that shared index — `git add -A/./-u`, `git commit -am`,
 # or a BARE `git commit` — sweeps a co-agent's in-flight staged work into the

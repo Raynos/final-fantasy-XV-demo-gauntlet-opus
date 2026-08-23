@@ -2,7 +2,7 @@
 /**
  * The one client. Every tool in `src/tools/` talks to the daemon through this.
  *
- * Phase 3 of `docs/plans/2026-08-21-opus-harness-daemon.md`. Thirty of
+ * Phase 3 of `project/archive/plans/2026-08-21-opus-harness-daemon.md`. Thirty of
  * forty-eight tools used to call `chromium.launch` themselves, and seventeen
  * spawned their own vite, each carrying a copy-pasted `portOpen()` /
  * `ensureServer()` / `goto('?q=…&shoot=1')` / `waitForFunction('GAME.ready')`

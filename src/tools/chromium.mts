@@ -76,7 +76,7 @@ const DISK_CACHE_BYTES = 1024 * 1024 * 1024;
  *
  * `chromium.launch()` hands every run a throwaway profile, and Chromium keeps
  * its compiled-program cache inside the profile — so this game's ~110 shader
- * compiles (docs/plans/2026-08-21-opus-harness-daemon.md) were paid in full on
+ * compiles (project/archive/plans/2026-08-21-opus-harness-daemon.md) were paid in full on
  * every single boot, forever, and the cache never had a chance to do its job.
  *
  * It has to be `launchPersistentContext`, not an extra `--user-data-dir` in

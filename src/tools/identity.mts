@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Who this repository is, where its daemon lives, and which build a request is
- * about. Decision 3 of `docs/plans/2026-08-21-opus-harness-daemon.md`.
+ * about. Decision 3 of `project/archive/plans/2026-08-21-opus-harness-daemon.md`.
  *
  *   node src/tools/identity.mts        # print everything, for a handoff or a bug report
  *
