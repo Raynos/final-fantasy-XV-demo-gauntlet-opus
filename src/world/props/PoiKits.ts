@@ -849,12 +849,41 @@ export class PoiKits {
     }
     // the square: a paved plaza, market stalls and strung lights
     put(M.concrete, new THREE.CylinderGeometry(11, 11, 0.35, 22), [0, 0.5, 0]);
+    // Market stalls. These were a single 3.0 x 0.12 x 2.4 box of dark canvas on
+    // two poles, which at eye level in the square reads as a flat black slab
+    // hanging in the air -- and the square is the one place in a settlement the
+    // player actually stands still. A stall is a *gable*: two sloped panels
+    // meeting at a ridge, with a valance hanging off the eaves, four legs, a
+    // counter you could put something on, and crates under it.
+    const stallCloth = [M.red, M.render3, M.render1, M.wall2];
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      put(M.cloth, new THREE.BoxGeometry(3.0, 0.12, 2.4), [Math.cos(a) * 7.5, 2.5, Math.sin(a) * 7.5], [0, -a, 0.1]);
-      for (const sx of [-1.3, 1.3]) {
-        put(M.plank, new THREE.CylinderGeometry(0.06, 0.07, 2.4, 5),
-          [Math.cos(a) * 7.5 + sx * Math.sin(a), 1.4, Math.sin(a) * 7.5 - sx * Math.cos(a)]);
+      const b = bag();
+      const cw = 3.2, cd = 2.4, top = 2.55, eave = 2.15;
+      const slope = Math.atan2(top - eave, cd / 2);
+      const panel = Math.hypot(cd / 2, top - eave);
+      for (const sz of [-1, 1]) {
+        b.cloth.push(box(cw, 0.07, panel, { y: (top + eave) / 2, z: sz * cd / 4, rx: sz * slope }));
+        // Valance: the scalloped strip that hangs off the eaves and is most of
+        // what makes a market stall read as one from twenty metres.
+        b.cloth.push(box(cw + 0.1, 0.34, 0.05, { y: eave - 0.15, z: sz * (cd / 2 + 0.02) }));
+      }
+      b.wood.push(box(0.09, 0.09, cd + 0.2, { y: top }));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        b.wood.push(cyl(0.05, eave, 5, { x: sx * (cw / 2 - 0.12), y: eave / 2, z: sz * (cd / 2 - 0.12) }));
+      }
+      b.wood.push(box(cw - 0.2, 0.09, 0.75, { y: 0.94, z: -cd * 0.18 }));
+      b.wood.push(box(cw - 0.3, 0.85, 0.06, { y: 0.47, z: -cd * 0.18 - 0.35 }));
+      for (let k = 0; k < 3; k++) {
+        b.wood.push(box(0.5, 0.42, 0.4, { x: -cw / 2 + 0.45 + k * 0.85, y: 0.21, z: cd * 0.2 }));
+      }
+      const merged = mergeBag(b);
+      const cloth = stallCloth[i % stallCloth.length];
+      const tv = toneVariant(rng, { valueAmp: 0.16, warmAmp: 0.05 });
+      const place = world.clone().multiply(mat4([Math.cos(a) * 7.5, 0.5, Math.sin(a) * 7.5], [0, -a, 0]));
+      for (const [role, g] of Object.entries(merged)) {
+        bakeTone(g, { y0: 0, y1: top, grime: tv.grime + 0.1, jitter: tv.jitter, tint: tv.tint, streak: 0 });
+        B.add(role === 'cloth' ? cloth : M.plank, g, place);
       }
       put(M.lamp, new THREE.SphereGeometry(0.16, 6, 5), [Math.cos(a) * 10.5, 4.4, Math.sin(a) * 10.5]);
     }

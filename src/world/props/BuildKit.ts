@@ -622,7 +622,13 @@ export function bakeTone(g: THREE.BufferGeometry, o: {
   y0: number; y1: number; grime?: number; bleach?: number; arrisLift?: number;
   jitter?: number; tint?: [number, number, number]; streak?: number;
 } = { y0: 0, y1: 1 }): THREE.BufferGeometry {
-  const { y0, y1, grime = 0.74, bleach = 1.07, arrisLift = 1.2, jitter = 1, tint = [1, 1, 1], streak = 0 } = o;
+  // `arrisLift` was 1.2 and it is a mistake at that strength on a long thin
+  // member. A string course or a coping seen near edge-on projects its chamfer
+  // to about a pixel, so a 20% brightening lands on a broken run of single
+  // pixels and renders as a **dotted line** stitched across the facade -- read
+  // it in tmp/shots/quay4/quay_base.png. The lift has to be small enough that
+  // where it aliases it reads as a slightly brighter edge rather than as dashes.
+  const { y0, y1, grime = 0.74, bleach = 1.07, arrisLift = 1.08, jitter = 1, tint = [1, 1, 1], streak = 0 } = o;
   const pos = g.attributes.position;
   const arrisAttr = g.attributes.aArris;
   const span = Math.max(1e-3, y1 - y0);
