@@ -21,11 +21,23 @@ done bar 3.6 (another lane's), Wave 3 five of six, Wave 4 three of five.
 3.8 is measured but unbuilt. `project/handoff/sibling-ports.md` is the file to
 read first. Four plans open; `docs/plans/README.md` has the graph.
 
-## Live right now — nobody
+## Live right now — six lanes on `2026-08-21-fable-procedural-modeling`
 
-All lanes merged, no orphaned processes. **After any merge: `build:full`**, not
-`build` — `build` deletes the painted-face cache without replacing it and cold
-boot silently regresses 6.9 -> ~9 s. Then `pnpm run check`.
+`project/handoff/2026-08-23-coordinator.md` holds the lane map and the shared
+rules; **`src/world/terrain/**` has exactly one owner** so the bake is bumped
+once. **rocks** `props/Rocks.ts` · **town** `world/town/**` + POI kits ·
+**method** `src/tools/**` + `Seat.ts` · **characters** `src/characters/**` ·
+**scatter** `veg/Ecology.ts` · **water** `Water.ts` + `world/water/**` ·
+**terrain** (coordinator) `world/terrain/**`.
+
+**Four of that plan's premises are already false**, each disproved by measuring
+before building: §2.5's `mixSeed` (mulberry32 already avalanches — lag-1
+autocorrelation −0.0103 over 4096 seeds), §12's `_outcrops` blocker, and both
+halves of §4.4. **Re-audit a plan against the tree before building from it.**
+
+**After any merge: `build:full`**, not `build` — `build` deletes the
+painted-face cache without replacing it and cold boot silently regresses
+6.9 -> ~9 s. Then `pnpm run check`.
 
 ## The harness, since 2026-08-23
 
@@ -59,21 +71,13 @@ arch (round 10, twice, cheap), hair, and Insomnia's massing.
 
 **Seven systems were declared, documented, referenced in handoffs — and never
 executed.** `orphans` proves a module is *reachable*, not that it *runs*;
-**`reachcheck.mts` closes that**, gated on `project/must-run.json`. The seventh
-(2026-08-23): the `HemisphereLight` is worth 0.4 luma of 87.7.
+**`reachcheck.mts` closes that**, gated on `project/must-run.json`.
 
-**Instruments measure themselves unless stopped.** Seven now — `imagestats`
-printed prose contradicting its own numbers; `imgdiff`'s global noise floor sat
-*above all twelve* measured per-shot floors, so it could never fail anything.
-**Before trusting a number, make the instrument report on a case whose answer
-you already know.** Boot noise is per shot and spans 16×
+**Instruments measure themselves unless stopped.** Seven now — `imgdiff`'s
+global noise floor sat *above all twelve* measured per-shot floors, so it could
+never fail anything. **Before trusting a number, make the instrument report on
+a case whose answer you already know.** Boot noise is per shot, spans 16×
 (`project/noise-floors.json`).
-
-## Determinism — CLOSED
-
-A shot alone versus sixth in a batch: **1.836 -> 0.340 mean/255** against a
-0.302 floor. The cause was the **wind** (`417ca86`), not the vegetation
-streaming every handoff guessed.
 
 ## Gates — 12/12, re-run end to end 2026-08-23
 
@@ -84,10 +88,8 @@ must-run path executed · `horizoncheck` PASS (worst MCC 0.766; the gate is
 `MCC >= 0.85` **or** disagreement <= 1%) · `heightcheck` 0.000 m · `driftcheck`
 worst **−2.928 m** at 4310 m on `zone_cape_caem` (reported, not failed).
 
-`driftcheck`'s −2.928 m measures the *drawn terrain surface*, which prop
-placement cannot move — a lead, not a regression to chase. **The expensive
-gates run at `git push`** (`check:gate`): `combatloop` slid 30/30 → 21/30
-unnoticed for weeks when that was something people were asked to remember.
+**The expensive gates run at `git push`** (`check:gate`): `combatloop` slid
+30/30 → 21/30 unnoticed for weeks when it was something people had to remember.
 
 ## Perf — uncertified
 
@@ -99,10 +101,8 @@ worst 148, gameplay worst segment **92.2 fps**, 2 hitches.
 `bestiary_necromancer`** against a 60 fps target. Two earlier runs voided at
 27%. **Do not attribute it yet.** That shot's worst has read 179 / 150 / 51 fps
 across the three runs and its *baseline* row already carried `p95 31.8 ms,
-max 133.2 ms` — it is spike-dominated, and system load was ~4.5 from outside
-this repo throughout. Perf takes the daemon's exclusive lease, so quiet is
-enforced within the repo and not beyond it. **Re-run on an idle machine before
-anyone reads the mean as a regression.**
+max 133.2 ms` — it is spike-dominated, and load was ~4.5 from outside this
+repo. **Re-run on an idle machine before reading the mean as a regression.**
 
 Cost tracks **draw calls** — ~8.7 us each, corr 0.801 vs 0.628 for triangles —
 so **a new visible `InstancedMesh` costs four draws, not one** (colour plus
