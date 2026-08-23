@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Vec3 } from '../props/PartBuilder.ts';
 import type { TownMats } from './TownMaterials.ts';
 import type { Rng } from '../../util/Rng.ts';
+import { box as bkBox } from '../props/BuildKit.ts';
 
 /**
  * How every helper here emits geometry.
@@ -53,7 +54,34 @@ export function geo(key: string, make: () => THREE.BufferGeometry): THREE.Buffer
  */
 function kind(g: THREE.BufferGeometry, k: UvKind) { g.userData.uvKind = k; return g; }
 
-export const box = (w: number, h: number, d: number) => geo(`b${w}_${h}_${d}`, () => kind(new THREE.BoxGeometry(w, h, d), 'box'));
+/**
+ * A box with a chamfered arris, from `BuildKit`.
+ *
+ * Every edge in Hammerhead was a mathematically sharp 90°, and nothing outdoors
+ * is: twenty years of dust, knocks and repainting round every arris off, and a
+ * rounded arris catches a bright sliver of sun along its length. That sliver is
+ * most of the difference between "box primitive" and "built thing" at the range
+ * a player stands at, and it is the single reason this call goes through
+ * `BuildKit` rather than `THREE.BoxGeometry`.
+ *
+ * `BuildKit.box` gates itself on the member's **section**, not its overall
+ * size, so a 45 mm fascia batten and a 30 mm rafter come back sharp — their
+ * arris would be sub-pixel at every range they are ever seen from, and paying
+ * four times the triangles to alias it is the worst of both.
+ */
+export const box = (w: number, h: number, d: number) => geo(`b${w}_${h}_${d}`, () => kind(bkBox(w, h, d), 'box'));
+
+/**
+ * A sharp box carrying plain 0..1 UVs per face — the only geometry `uvScale`
+ * can act on.
+ *
+ * `BuildKit.box` writes **object-space** UVs, so multiplying them by a repeat
+ * count is meaningless: the first pass of this retrofit did exactly that and
+ * mipped the garage's corrugation and the forecourt's slab joints away to flat
+ * colour in one step. Every corrugated sheet in the town is authored by hand
+ * (see `TEXEL`), so every corrugated sheet builds from this.
+ */
+export const sbox = (w: number, h: number, d: number) => geo(`s${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
 export const cyl = (rt: number, rb: number, h: number, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => kind(new THREE.CylinderGeometry(rt, rb, h, s), 'radial'));
 export const plane = (w: number, h: number) => geo(`p${w}_${h}`, () => new THREE.PlaneGeometry(w, h));
 export const torus = (r: number, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => kind(new THREE.TorusGeometry(r, t, a, b), 'radial'));
@@ -263,8 +291,8 @@ export function palletStack(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0
  */
 const TEXEL: Array<[RegExp, number]> = [
   [/^town_asphalt/, 9.0],
-  [/^town_slab/, 5.0],
-  [/^town_gravel/, 2.6],
+  [/^town_slab/, 7.0],
+  [/^town_gravel/, 7.0],
   [/^town_galv/, 0.75],
   [/^town_scrap/, 1.3],
   [/^town_rubber/, 0.85],

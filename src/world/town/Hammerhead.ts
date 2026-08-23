@@ -9,7 +9,7 @@ import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake } from '../../engine/TexBake.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
-  carShell, patioSet, palletStack, texelPlace, authored, type PlaceFn,
+  carShell, patioSet, palletStack, sbox, texelPlace, authored, type PlaceFn,
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
@@ -371,16 +371,16 @@ export class Hammerhead {
     // the berm so the town has an approach rather than an edge.
     // tilted so it ramps down onto the verge instead of ending in a step
     const throat = (u: number) => {
-      put(M.asphalt, uvScale(box(13, 6, 12).clone(), 1.4, 1.3), [u, -3.55, PAD.v0 - 5.6], [0.09, 0, 0]);
+      put(M.asphalt, box(13, 6, 12), [u, -3.55, PAD.v0 - 5.6], [0.09, 0, 0]);
     };
     throat(-13);
     throat(15);
 
     // Concrete hardstanding under the canopy, the diner and the garage.
-    put(M.slab, uvScale(box(20, 0.34, 15).clone(), 2.2, 1.7), [-6, 0.16, -19]);
-    put(M.slab, uvScale(box(17, 0.34, 13).clone(), 1.9, 1.5), [-16, 0.16, 3]);
-    put(M.slab, uvScale(box(21, 0.36, 15).clone(), 2.3, 1.7), [13, 0.17, 3]);
-    put(M.gravel, uvScale(box(26, 0.3, 13).clone(), 3.0, 1.6), [16, 0.13, 12]);
+    put(M.slab, box(20, 0.34, 15), [-6, 0.16, -19]);
+    put(M.slab, box(17, 0.34, 13), [-16, 0.16, 3]);
+    put(M.slab, box(21, 0.36, 15), [13, 0.17, 3]);
+    put(M.gravel, box(26, 0.3, 13), [16, 0.13, 12]);
 
     // Painted bay markings for the car park, and the Regalia's own bay.
     const line = (u: number, v: number, len: number, yaw = 0, mat = M.paint) =>
@@ -411,7 +411,7 @@ export class Hammerhead {
     put(M.panelCream, box(16.4, 0.55, 11.2), [cu, deck + 0.6, cv]);
     put(M.panelRed, box(16.8, 0.62, 11.6), [cu, deck + 1.16, cv]);
     put(M.panelCream, box(16.4, 0.14, 11.2), [cu, deck + 1.54, cv]);
-    put(M.corrRoof, uvScale(box(16.9, 0.10, 11.7).clone(), 2.6, 1.8), [cu, deck + 1.62, cv]);
+    put(M.corrRoof, uvScale(sbox(16.9, 0.10, 11.7).clone(), 2.6, 1.8), [cu, deck + 1.62, cv]);
     // Soffit. A fuel canopy at night is a glowing white ceiling — hung
     // beneath the deck, not flush with it, or the panels vanish inside the
     // slab they are supposed to be lighting.
@@ -485,9 +485,9 @@ export class Hammerhead {
     const W = 14.4, D = 9.6, H = 3.9;
 
     // shell: corrugated side and back walls, glass frontage facing -v
-    put(M.corr, uvScale(box(W, H, 0.34).clone(), 3.6, 1.0), [cu, H / 2 + 0.3, cv + D / 2]);
+    put(M.corr, uvScale(sbox(W, H, 0.34).clone(), 3.6, 1.0), [cu, H / 2 + 0.3, cv + D / 2]);
     for (const su of [-1, 1]) {
-      put(M.corr, uvScale(box(0.34, H, D).clone(), 2.4, 1.0), [cu + su * W / 2, H / 2 + 0.3, cv]);
+      put(M.corr, uvScale(sbox(0.34, H, D).clone(), 2.4, 1.0), [cu + su * W / 2, H / 2 + 0.3, cv]);
     }
     // frontage: a low cream stub wall, then glass to the eaves
     put(M.panelCream, box(W, 1.05, 0.3), [cu, 0.82, cv - D / 2]);
@@ -500,7 +500,7 @@ export class Hammerhead {
     put(M.chrome, cyl(0.035, 0.035, 1.0, 6), [cu + 3.8, 1.35, cv - D / 2 - 0.14]);
 
     // roof: shallow pitch with a deep front eave and a fascia sign
-    put(M.corrRoof, uvScale(box(W + 1.2, 0.34, D + 1.4).clone(), 3.4, 2.2), [cu, H + 0.46, cv], [0.05, 0, 0]);
+    put(M.corrRoof, uvScale(sbox(W + 1.2, 0.34, D + 1.4).clone(), 3.4, 2.2), [cu, H + 0.46, cv], [0.05, 0, 0]);
     put(M.panelCream, box(W + 1.2, 0.9, 0.30), [cu, H + 0.92, cv - D / 2 - 0.6]);
     put(M.signCN, plane(6.4, 2.3), [cu - 2.2, H + 1.62, cv - D / 2 - 0.72], [0, Math.PI, 0]);
     put(M.panelRed, box(W + 1.4, 0.30, 0.42), [cu, H + 2.86, cv - D / 2 - 0.62]);
@@ -509,7 +509,7 @@ export class Hammerhead {
     for (const su of [-1, 1]) {
       put(M.galv, cyl(0.075, 0.075, 3.0, 8), [cu + su * 5.4, 1.8, cv - D / 2 - 3.2]);
     }
-    put(M.corrRoof, uvScale(box(12.4, 0.14, 3.6).clone(), 2.4, 0.8), [cu, 3.32, cv - D / 2 - 1.7], [0.10, 0, 0]);
+    put(M.corrRoof, uvScale(sbox(12.4, 0.14, 3.6).clone(), 2.4, 0.8), [cu, 3.32, cv - D / 2 - 1.7], [0.10, 0, 0]);
     put(M.panelRed, box(12.6, 0.26, 0.16), [cu, 3.14, cv - D / 2 - 3.42]);
 
     // interior read: counter, stools, menu board, a warm ceiling glow
@@ -572,29 +572,29 @@ export class Hammerhead {
     const W = 18.0, D = 12.0, H = 5.6;
 
     // shell
-    put(M.corr, uvScale(box(W, H, 0.4).clone(), 4.5, 1.4), [cu, H / 2 + 0.35, cv + D / 2]);
+    put(M.corr, uvScale(sbox(W, H, 0.4).clone(), 4.5, 1.4), [cu, H / 2 + 0.35, cv + D / 2]);
     for (const su of [-1, 1]) {
-      put(M.corr, uvScale(box(0.4, H, D).clone(), 3.0, 1.4), [cu + su * W / 2, H / 2 + 0.35, cv]);
+      put(M.corr, uvScale(sbox(0.4, H, D).clone(), 3.0, 1.4), [cu + su * W / 2, H / 2 + 0.35, cv]);
     }
     // front: two roller-door bays with a pier between and a side office
     const front = cv - D / 2;
-    put(M.corr, uvScale(box(W, 1.5, 0.4).clone(), 4.5, 0.4), [cu, H + 0.05, front]);
-    put(M.corr, uvScale(box(1.0, H, 0.4).clone(), 0.34, 1.4), [cu, H / 2 + 0.35, front]);
+    put(M.corr, uvScale(sbox(W, 1.5, 0.4).clone(), 4.5, 0.4), [cu, H + 0.05, front]);
+    put(M.corr, uvScale(sbox(1.0, H, 0.4).clone(), 0.34, 1.4), [cu, H / 2 + 0.35, front]);
     for (const su of [-1, 1]) {
-      put(M.corr, uvScale(box(1.0, H, 0.4).clone(), 0.34, 1.4), [cu + su * (W / 2 - 0.5), H / 2 + 0.35, front]);
+      put(M.corr, uvScale(sbox(1.0, H, 0.4).clone(), 0.34, 1.4), [cu + su * (W / 2 - 0.5), H / 2 + 0.35, front]);
     }
     // bay 1 (u < 0): roller door rolled up into its drum — you can see inside
     const b1 = cu - 5.0, b2 = cu + 5.0;
     put(M.galv, cyl(0.26, 0.26, 6.6, 12), [b1, 4.78, front + 0.05], [0, 0, Math.PI / 2]);
     put(M.panelBlue, box(6.5, 0.55, 0.10), [b1, 4.42, front - 0.06]);
     // bay 2: door two-thirds down, slats reading as horizontal ribs
-    put(M.panelBlue, uvScale(box(6.5, 3.1, 0.12).clone(), 1.0, 6.0), [b2, 3.15, front - 0.06]);
+    put(M.panelBlue, uvScale(sbox(6.5, 3.1, 0.12).clone(), 1.0, 6.0), [b2, 3.15, front - 0.06]);
     for (let i = 0; i < 9; i++) put(M.galv, box(6.5, 0.05, 0.05), [b2, 1.72 + i * 0.34, front - 0.14]);
     put(M.galv, cyl(0.26, 0.26, 6.6, 12), [b2, 4.78, front + 0.05], [0, 0, Math.PI / 2]);
     put(M.dark, box(6.5, 1.6, 0.14), [b2, 0.95, front + 0.36]);
 
     // roof: mono-pitch falling to the back, with a ridge vent
-    put(M.corrRoof, uvScale(box(W + 1.0, 0.36, D + 1.2).clone(), 4.4, 3.0), [cu, H + 1.0, cv], [-0.06, 0, 0]);
+    put(M.corrRoof, uvScale(sbox(W + 1.0, 0.36, D + 1.2).clone(), 4.4, 3.0), [cu, H + 1.0, cv], [-0.06, 0, 0]);
     put(M.galv, box(W - 2.0, 0.5, 1.1), [cu, H + 1.5, cv - 1.0]);
     put(M.galv, box(W + 1.2, 0.16, 0.22), [cu, H + 0.74, front - 0.6]);
     // fascia sign over the pier
@@ -605,7 +605,7 @@ export class Hammerhead {
     put(M.dark, box(0.12, 2.1, 1.0), [cu - W / 2 - 0.2, 1.4, cv - 1.4]);
 
     // interior: car lift with a car on it, benches, racks, a compressor
-    put(M.slab, uvScale(box(W - 1.0, 0.2, D - 1.0).clone(), 2.2, 1.5), [cu, 0.42, cv]);
+    put(M.slab, box(W - 1.0, 0.2, D - 1.0), [cu, 0.42, cv]);
     put(M.galv, box(3.4, 0.34, 0.6), [b1, 1.9, cv + 0.6]);
     for (const su of [-1, 1]) put(M.galv, box(0.4, 1.9, 0.4), [b1 + su * 1.5, 1.0, cv + 0.6]);
     carShell(putC, M, [b1, cv + 0.6], { y: 2.05, yaw: Math.PI, body: M.panelBlue, wreck: false });
