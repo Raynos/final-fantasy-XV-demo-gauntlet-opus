@@ -513,39 +513,34 @@ export function applyWear(
   const worn = o.worn instanceof THREE.Color ? o.worn : new THREE.Color(o.worn ?? 0x6b5d4c);
   const lo = o.lo ?? 0.18, hi = o.hi ?? 0.72;
   const tex = field.texture();
-  // The pad's UVs are already world metres about the field centre, so the
-  // sampler only needs the field's own extent.
+  // Sampled from **world position**, not from `uv`. The material already uses
+  // `uv` for its own albedo/normal/roughness tile, and a second consumer of the
+  // same attribute is a collision waiting to happen the first time somebody
+  // re-tiles the surface. World XZ also means the field lines up with the place
+  // rather than with the mesh, so a pad rebuilt at a different rotation still
+  // has its oil stains under its own pumps.
   const uWear = { value: tex };
-  const uParam = { value: new THREE.Vector4(field.half, lo, hi, o.rough ?? 0.12) };
+  const uParam = { value: new THREE.Vector4(field.cx, field.cz, field.half, o.rough ?? 0.12) };
+  const uBand = { value: new THREE.Vector2(lo, hi) };
   const uWorn = { value: worn };
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uWear = uWear;
     shader.uniforms.uWearParam = uParam;
+    shader.uniforms.uWearBand = uBand;
     shader.uniforms.uWornColor = uWorn;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vWearUv;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvWearUv = uv;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWearPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvWearPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>',
-        '#include <common>\nvarying vec2 vWearUv;\nuniform sampler2D uWear;\nuniform vec4 uWearParam;\nuniform vec3 uWornColor;')
+        '#include <common>\nvarying vec3 vWearPos;\nuniform sampler2D uWear;\nuniform vec4 uWearParam;\nuniform vec2 uWearBand;\nuniform vec3 uWornColor;\nfloat wearAt() {\n\tvec2 w = (vWearPos.xz - uWearParam.xy) / (2.0 * uWearParam.z) + 0.5;\n\tif (w.x < 0.0 || w.x > 1.0 || w.y < 0.0 || w.y > 1.0) return 0.0;\n\treturn smoothstep(uWearBand.x, uWearBand.y, texture2D(uWear, w).r);\n}')
       .replace('#include <color_fragment>',
-        `#include <color_fragment>
-	{
-		vec2 wuv = vWearUv / (2.0 * uWearParam.x) + 0.5;
-		float wd = texture2D(uWear, clamp(wuv, 0.0, 1.0)).r;
-		float w = smoothstep(uWearParam.y, uWearParam.z, wd);
-		diffuseColor.rgb = mix(diffuseColor.rgb, uWornColor * diffuseColor.rgb * 1.7, w);
-	}`)
+        '#include <color_fragment>\n\tdiffuseColor.rgb = mix(diffuseColor.rgb, uWornColor, wearAt());')
       .replace('#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>
-	{
-		vec2 wuv2 = vWearUv / (2.0 * uWearParam.x) + 0.5;
-		float wd2 = texture2D(uWear, clamp(wuv2, 0.0, 1.0)).r;
-		roughnessFactor = clamp(roughnessFactor + uWearParam.w * smoothstep(uWearParam.y, uWearParam.z, wd2), 0.0, 1.0);
-	}`);
+        '#include <roughnessmap_fragment>\n\troughnessFactor = clamp(roughnessFactor + uWearParam.w * wearAt(), 0.0, 1.0);');
   };
-  // A material's program is keyed on this: two pads with different fields must
-  // not share a compiled shader, and two calls with the same field should.
+  // A material's program is keyed on this: two surfaces with different fields
+  // must not share a compiled shader, and two calls with the same field should.
   mat.customProgramCacheKey = () => `wear:${tex.uuid}`;
   mat.needsUpdate = true;
   return mat;
@@ -556,43 +551,60 @@ export function applyWear(
 /* ========================================================================== */
 
 /**
- * The §9 check for this item: prove the distance field survives the lattice and
- * the mask does not, on **our** numbers rather than the sibling's.
+ * The section 9 check for this item: does the encoding survive the lattice?
  *
- * Rasterises one straight path of `pathW` metres through a field, samples it at
- * a `latticeM` lattice the way per-vertex data would be, reconstructs
- * bilinearly, and reports the peak recovered value for both encodings. A mask
- * that reads back at 0.31 is a path that is in the data and not in the frame.
+ * The first version of this took one path offset and reported one number, and
+ * it was **an instrument that measured its own phase**: with the path centred
+ * on a lattice node the mask reconstructs to 1.000 and the check "fails"; half
+ * a cell over it reconstructs to 0.000 and the check "passes". Both runs are
+ * correct and neither is an answer. `LANDMINES` calls this exact shape out —
+ * a real number with an inference attached that was never itself tested — so
+ * the offset is **swept** across a whole lattice cell and what comes back is
+ * the distribution.
  *
- * Run from a probe; it needs no browser beyond an import of three.
+ * Two encodings of the same 1.5 m path, both sampled on a `latticeM` lattice
+ * and reconstructed linearly the way a vertex attribute is across a triangle:
+ *
+ * - **mask** — 1 where the vertex is on the path, 0 elsewhere. This is the
+ *   obvious construction and it is phase-dependent by nature: whether the path
+ *   appears at all depends on where the lattice happens to fall.
+ * - **field** — the distance ramp {@link WearField} stores, sampled bilinearly
+ *   from the 0.5 m raster and thresholded *after* the interpolation.
+ *
+ * @returns per-encoding `mean` and `worst` peak recovered value over the sweep,
+ *          and `pass` — the field must recover the path from **every** phase.
  */
-export function reconstructionTest(pathW = 1.5, latticeM = 1.7, offset = 0.5) {
+export function reconstructionTest(pathW = 1.5, latticeM = 1.7, phases = 64) {
   const half = 24;
-  const f = new WearField(0, 0, half, WEAR_MPT);
-  f.addLine({ pts: [-half, offset, half, offset], half: pathW / 2 });
-
-  // What a *mask* would have carried: 1 inside the path, 0 outside, sampled on
-  // the same lattice and reconstructed the same way.
-  const maskAt = (zz: number) => (Math.abs(zz - offset) <= pathW / 2 ? 1 : 0);
-
-  let peakField = 0, peakMask = 0;
-  // Walk across the path in fine steps and reconstruct both from the lattice.
-  for (let s = -6; s <= 6; s += 0.05) {
-    // lattice-linear reconstruction of the mask
-    const j = Math.floor(s / latticeM);
-    const t = s / latticeM - j;
-    const m = maskAt(j * latticeM) * (1 - t) + maskAt((j + 1) * latticeM) * t;
-    if (m > peakMask) peakMask = m;
-    // the field, sampled bilinearly at 0.5 m/texel and then thresholded
-    const v = f.sample(0, s);
-    const w = Math.max(0, Math.min(1, (v - 0.18) / (0.72 - 0.18)));
-    if (w > peakField) peakField = w;
+  const maskPeaks: number[] = [], fieldPeaks: number[] = [];
+  for (let ph = 0; ph < phases; ph++) {
+    const offset = (ph / phases) * latticeM;
+    const f = new WearField(0, 0, half, WEAR_MPT);
+    f.addLine({ pts: [-half, offset, half, offset], half: pathW / 2 });
+    const maskAt = (zz: number) => (Math.abs(zz - offset) <= pathW / 2 ? 1 : 0);
+    let pm = 0, pf = 0;
+    for (let s = -6; s <= 6; s += 0.02) {
+      const j = Math.floor(s / latticeM);
+      const t = s / latticeM - j;
+      const m = maskAt(j * latticeM) * (1 - t) + maskAt((j + 1) * latticeM) * t;
+      if (m > pm) pm = m;
+      const v = f.sample(0, s);
+      const w = Math.max(0, Math.min(1, (v - 0.18) / (0.72 - 0.18)));
+      if (w > pf) pf = w;
+    }
+    maskPeaks.push(pm); fieldPeaks.push(pf);
   }
-  return {
-    pathW, latticeM, offset,
-    peakMask: +peakMask.toFixed(3),
-    peakField: +peakField.toFixed(3),
-    /** The claim: the field recovers the path, the mask does not. */
-    pass: peakField > 0.9 && peakMask < 0.7,
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+  const out = {
+    pathW, latticeM, phases,
+    maskMean: +mean(maskPeaks).toFixed(3),
+    maskWorst: +Math.min(...maskPeaks).toFixed(3),
+    fieldMean: +mean(fieldPeaks).toFixed(3),
+    fieldWorst: +Math.min(...fieldPeaks).toFixed(3),
+    pass: false,
   };
+  // The claim, stated so it can fail: the field recovers the path from every
+  // phase, and the mask does not.
+  out.pass = out.fieldWorst > 0.9 && out.maskWorst < 0.5;
+  return out;
 }

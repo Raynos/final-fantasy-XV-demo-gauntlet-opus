@@ -25,26 +25,7 @@ export class PartBuilder {
    * @param matrix optional transform
    */
   add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4 | null) {
-    const g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
-    // normalise attributes so merges never fail on a stray extra buffer.
-    // `color` is on the keep list because it is how BuildKit carries per-object
-    // tone -- grime gradient, value jitter, the pale lift on chamfer facets --
-    // through the merge. The sibling audit records the same attribute being
-    // silently dropped by a merge for four rounds, which pinned every merged
-    // surface to one flat value; `build` synthesises white for any piece in a
-    // batch that lacks it, so a coloured piece can never poison an uncoloured
-    // neighbour or vice versa.
-    const keep = ['position', 'normal', 'uv', 'color'];
-    for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
-    if (!g.attributes.uv) {
-      g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-    }
-    if (!g.index) {
-      const n = g.attributes.position.count;
-      const idx = new Uint32Array(n);
-      for (let i = 0; i < n; i++) idx[i] = i;
-      g.setIndex(new THREE.BufferAttribute(idx, 1));
-    }
+    const g = prep(matrix ? geo.clone().applyMatrix4(matrix) : geo);
     let list = this.byMat.get(mat);
     if (!list) { list = []; this.byMat.set(mat, list); }
     list.push(g);
@@ -79,7 +60,22 @@ export class PartBuilder {
         }
       }
       const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
-      if (!merged) continue;
+      if (!merged) {
+        // A null merge used to `continue`, which deletes a whole structure and
+        // says nothing -- the systemic failure plan section 5.5 exists to fix,
+        // and the one our own `Debris` found independently. `prep` should make
+        // it unreachable; if it happens anyway the pieces still ship, at one
+        // draw call each, and the console says which material it was.
+        console.warn(`[PartBuilder] merge returned null for ${mat.name || mat.type} (${list.length} pieces); drawing them unmerged`);
+        for (const g of list) {
+          g.computeBoundingSphere();
+          const m = new THREE.Mesh(g, mat);
+          m.castShadow = cast; m.receiveShadow = receive;
+          m.name = `${name}_unmerged`;
+          parent.add(m);
+        }
+        continue;
+      }
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, mat);
       mesh.castShadow = cast;
@@ -90,6 +86,66 @@ export class PartBuilder {
     this.byMat.clear();
     return parent;
   }
+}
+
+/** Attributes a merged prop geometry is allowed to carry, and the only ones. */
+export const KEEP = ['position', 'normal', 'uv', 'color'] as const;
+
+/**
+ * Normalise one piece so a merge cannot fail on it, and so nothing it is
+ * missing reads back as zero.
+ *
+ * Plan section 5.5. Three things have to agree across a merge batch — the index,
+ * the attribute set, and what each attribute *means* — and `mergeGeometries`
+ * enforces none of them: it returns **null**, without throwing and without
+ * logging, and a whole building disappears. The sibling's audit records a
+ * variation stamp that existed only on the unmerged pieces silently pinning
+ * every merged surface to one value for four rounds.
+ *
+ * The part people get wrong is the third one. Synthesising a *zero* UV for a
+ * piece that has none makes the merge succeed and makes the piece sample one
+ * texel of its map forever — a flat patch of colour that reads as a shading
+ * decision rather than as missing data, which is exactly section 9.5's
+ * "undeclared attributes read as zero, silently". So a missing UV is
+ * synthesised as a **planar projection in the piece's own frame**, which is
+ * wrong in the same way a box projection is wrong and is at least *varying*: a
+ * seam is a bug you can see, and a flat patch is not.
+ *
+ * Our object-level variation stamp is `BuildKit.bakeTone`, which writes value,
+ * warmth, grime and the chamfer lift into `attributes.color` **before** the
+ * merge and on the finished, placed piece. `color` is on {@link KEEP} for that
+ * reason and this function must never drop it.
+ */
+export function prep(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  for (const k of Object.keys(g.attributes)) {
+    if (!(KEEP as readonly string[]).includes(k)) g.deleteAttribute(k);
+  }
+  const pos = g.attributes.position;
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (!g.attributes.uv) {
+    g.computeBoundingBox();
+    const bb = g.boundingBox;
+    const sx = bb ? Math.max(1e-3, bb.max.x - bb.min.x) : 1;
+    const sy = bb ? Math.max(1e-3, bb.max.y - bb.min.y) : 1;
+    const sz = bb ? Math.max(1e-3, bb.max.z - bb.min.z) : 1;
+    // Project on the two widest axes, so the piece's largest face is the one
+    // that comes out undistorted.
+    const drop = sx <= sy && sx <= sz ? 0 : sy <= sz ? 1 : 2;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      uv[i * 2] = drop === 0 ? z / sz : x / sx;
+      uv[i * 2 + 1] = drop === 1 ? z / sz : y / sy;
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  }
+  if (!g.index) {
+    const n = pos.count;
+    const idx = new Uint32Array(n);
+    for (let i = 0; i < n; i++) idx[i] = i;
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+  }
+  return g;
 }
 
 /**

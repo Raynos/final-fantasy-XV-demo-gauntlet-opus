@@ -250,7 +250,7 @@ export type PoiMats = ReturnType<typeof poiMaterials>;
 
 export class PoiKits {
   built!: BuiltSite[];
-  _exclusions!: THREE.Vector3[] | null;
+  _exclusions!: { x: number; z: number; r: number; sameOnly: string | null }[] | null;
   /**
    * Where the pad being built right now is, in world metres.
    *
@@ -1963,16 +1963,33 @@ export class PoiKits {
 
   // ---------------------------------------------------------------- stream
 
-  /** Positions we must not build on: another system already owns them. */
-  _exclude(game: Game): THREE.Vector3[] {
+  /**
+   * Places another system already builds, and how close a POI may come.
+   *
+   * The radius is **per kind, and it was not**. One flat 130 m ban round every
+   * dungeon entrance and the town suppressed **ten of the 123 POIs**, including
+   * three of the ten royal tombs and three of the eight menace lairs — because
+   * in FFXV a royal tomb sits *at* its dungeon, which is the whole point of it.
+   * Measured in the page rather than reasoned about: `tomb_wise` is 68 m from
+   * the Keycatrich entrance, `tomb_conqueror` 68 m from Balouve, and each of
+   * them returned an empty group. `src/game/Shots.ts` has a `poi_tomb` shot
+   * aimed at `tomb_wise`; it has been photographing bare hillside.
+   *
+   * The ban exists so `_dungeon` does not build a second portal on top of the
+   * one `Dungeons` already placed, and so nothing lands inside Hammerhead's
+   * graded pad. Neither of those is a reason to delete the tomb next door. So
+   * a *dungeon-type* POI still keeps its distance from a real entrance, the
+   * town still clears everything, and everything else only has to not overlap.
+   */
+  _exclude(game: Game): { x: number; z: number; r: number; sameOnly: string | null }[] {
     if (this._exclusions) return this._exclusions;
-    const out: THREE.Vector3[] = [];
+    const out: { x: number; z: number; r: number; sameOnly: string | null }[] = [];
     const d = game.get('Dungeons');
-    if (d) for (const e of d.entrances) out.push(e.pos.clone());
+    if (d) for (const e of d.entrances) out.push({ x: e.pos.x, z: e.pos.z, r: 130, sameOnly: 'dungeon' });
     // `origin` is declared but only assigned when the town builds, so this
     // guard is about *when* we are asked, not about whether the field exists.
     const t = game.get('Town');
-    if (t && t.origin) out.push(t.origin.clone());
+    if (t && t.origin) out.push({ x: t.origin.x, z: t.origin.z, r: 130, sameOnly: null });
     this._exclusions = out;
     return out;
   }
@@ -1980,7 +1997,10 @@ export class PoiKits {
   _make(site: PoiSite, game: Game) {
     const p = site.poi;
     for (const e of this._exclude(game)) {
-      if (Math.hypot(e.x - p.x, e.z - p.z) < 130) { site.group = new THREE.Group(); return; }
+      // A dungeon entrance only bans another dungeon mouth; the 40 m floor is
+      // "do not build inside the thing that is already there".
+      const r = e.sameOnly && e.sameOnly !== p.type ? 40 : e.r;
+      if (Math.hypot(e.x - p.x, e.z - p.z) < r) { site.group = new THREE.Group(); return; }
     }
     const rng = new Rng(hashId(p.id));
     const dress = dressAt(p.x, p.z);

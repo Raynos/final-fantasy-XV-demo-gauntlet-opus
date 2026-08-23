@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, type Vec3 } from '../props/PartBuilder.ts';
+import { PartBuilder, texelBox, type Vec3 } from '../props/PartBuilder.ts';
+import { applyWear, WearField } from '../props/Wear.ts';
 import type { EcoSite } from '../props/EcoSites.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import type { Props } from '../Props.ts';
@@ -356,8 +357,19 @@ export class Hammerhead {
     const cu = (PAD.u0 + PAD.u1) / 2, cv = (PAD.v0 + PAD.v1) / 2;
 
     // Graded pad: a deep slab so the cut side never shows daylight beneath.
-    const padGeo = box(w, 8, d).clone();
-    put(M.asphalt, uvScale(padGeo, w * 0.10, d * 0.10), [cu, -3.98, cv]);
+    //
+    // The UVs were the last authored `uvScale` in the town and they were wrong
+    // twice over. `BuildKit.box` writes **object-space** UVs in metres, so
+    // multiplying by `w * 0.10` asked for 5.7 repeats *per metre* -- an asphalt
+    // tile every 17 cm, which mips to a flat value at any range; and its V is
+    // the box's own Y, which is constant across the top face, so the surface a
+    // player actually sees sampled one row of the texture stretched fifty
+    // metres. That is the "hard-edged black polygon" the last handoff logged
+    // against `town_night`: not an edge problem, a density problem, and the
+    // same defect as the canopy soffit one round earlier.
+    const padGeo = texelBox(w, 8, d, 9.0);
+    put(M.asphalt, authored(padGeo), [cu, -3.98, cv]);
+    this._wearPad(M);
     this._berm(put, M);
     // kerb lip round the tarmac
     for (const [px, pz, sx, sz] of [
@@ -391,6 +403,64 @@ export class Hammerhead {
     // the Regalia bay, marked out wider and in a different hand
     for (const u of [3.2, 6.6]) line(u, -13.4, 6.2, 0, M.panelRed);
     put(M.panelRed, box(3.4, 0.02, 0.12), [4.9, 0.295, -16.5]);
+  }
+
+  /**
+   * What forty years of use put on the tarmac.
+   *
+   * This is the one surface in the game where the plan's **texture-carried**
+   * wear field is affordable: there is exactly one Hammerhead, so its field
+   * costs one material and no extra draw call, where the 124 POI aprons would
+   * each want their own. It is also the surface that most needs it — the last
+   * honest grade on this town said what separates it from the real place is
+   * "dressing density and wear placement: FFXV's forecourt has oil stains that
+   * follow the pump islands, tyre marks that follow the entry curve". So those
+   * are the two things stamped here, in that order, plus the paths people
+   * actually walk between the diner, the garage and the shop.
+   *
+   * Stamped in **world** metres, because {@link applyWear} samples world XZ:
+   * the pad is built in the town's local `u, v` frame and `local()` is the only
+   * thing that knows how those relate.
+   */
+  _wearPad(M: TownMats) {
+    const o = this.origin;
+    const field = new WearField(o.x, o.z, 46);
+    const at = (u: number, v: number) => {
+      const p = this.local(u, 0, v, new THREE.Vector3());
+      return [p.x - o.x, p.z - o.z];
+    };
+    const line = (pts: number[][], half: number, weight = 1) => {
+      const flat: number[] = [];
+      for (const q of pts) { const w2 = at(q[0], q[1]); flat.push(w2[0], w2[1]); }
+      field.addLine({ pts: flat, half, weight });
+    };
+    // Oil under the pump islands: a stain the shape of where a car stands, not
+    // a disc round the pump. Two bays per island, offset to the driver's side.
+    for (const su of [-1, 1]) {
+      for (const sv of [-1, 1]) {
+        const c = at(-6 + su * 3.4, -19 + sv * 2.6);
+        field.addDisc(c[0], c[1], 1.5, 0.95);
+      }
+      const c2 = at(-6 + su * 3.4, -19);
+      field.addDisc(c2[0], c2[1], 0.9, 1);
+    }
+    // Tyre marks following the entry curve: in off the highway at both throats,
+    // round the pump islands and back out. This is the *path a car takes*, and
+    // it is why a forecourt's wear is two arcs and not a blob.
+    for (const [u0, sgn] of [[-13, -1], [15, 1]] as [number, number][]) {
+      line([[u0, PAD.v0 - 6], [u0 + sgn * 2, PAD.v0 + 2], [-6 + sgn * 9, -22], [-6 + sgn * 5, -15.5],
+        [-6 - sgn * 4, -14], [-6 - sgn * 10, -18], [u0 - sgn * 3, PAD.v0 - 2]], 1.15, 0.85);
+    }
+    // The car park aisle and the Regalia's own bay.
+    line([[-27, -6.6], [-6, -8.5], [6, -13.4]], 1.6, 0.7);
+    // Walked routes: diner door to the pumps, garage bays to the forecourt,
+    // shop door to the car park. People wear a narrower, darker line than cars.
+    line([[-16 + 4.2, -9.4], [-10, -13], [-6, -17]], 0.55, 0.8);
+    line([[13 - 5, -9], [4, -12], [-2, -17]], 0.6, 0.75);
+    line([[13 + 5, -9], [16, -2], [16, 8]], 0.55, 0.7);
+    // Standing water and grit against the kerbs on the low side.
+    line([[PAD.u0 + 1, PAD.v0 + 2], [PAD.u0 + 1, PAD.v1 - 2]], 0.7, 0.5);
+    applyWear(M.asphalt, field, { worn: 0x14110e, lo: 0.2, hi: 0.78, rough: -0.16 });
   }
 
   // ---- fuel canopy and pumps --------------------------------------------
