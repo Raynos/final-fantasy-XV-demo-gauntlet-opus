@@ -337,10 +337,12 @@ for (const r of flippedRows) flippedBase[r.name] = r.flipped;
 
 if (setBaseline) {
   const b: Baseline = {
-    note: 'Outward-facing fraction of the 24 least-outward geometries. A real '
-      + 'creature has concavities, so this is not 1.0 and gating it at 1.0 would '
-      + 'cry wolf; the gate is that a geometry may not get LESS outward than it '
-      + 'was. Re-run --set-baseline only to raise these. `flipped` is the '
+    note: 'Outward-facing fraction of the 24 least-outward geometries, recorded for '
+      + 'context only. A real creature has concavities, so this is not 1.0, and a '
+      + 'ratchet on it failed on the trees lane\'s habit layer -- a legitimate shape '
+      + 'change. Only `flipped` is gated. It used to say a geometry may not get less outward than it '
+      + 'was. `worstOutward` is RECORDED and not gated -- see the note in the tool. '
+      + '`flipped` is the '
       + 'edge-parity imbalance: interior edges whose two directions are traversed '
       + 'an unequal number of times. It is NOT gated at zero because this tool '
       + 'cannot tell a mirrored limb whose index was never flipped (a real bug) '
@@ -369,12 +371,13 @@ if (!base) {
     if (r.flipped > wasFlipped) {
       regressed.push(`${r.name}: edge-parity imbalance ${wasFlipped} -> ${r.flipped}`);
     }
-    const was = base.worstOutward[r.name];
-    // 0.002 of slack: the fraction is a ratio of integer counts and a
-    // generator that adds one triangle moves it in the last digit.
-    if (was !== undefined && Number.isFinite(r.outward) && r.outward < was - 0.002) {
-      regressed.push(`${r.name}: ${(was * 100).toFixed(1)}% -> ${(r.outward * 100).toFixed(1)}%`);
-    }
+    // The outward fraction is deliberately NOT ratcheted. It is a weak read --
+    // 100% on a sphere, 52-62% on a limbed creature, 50% is chance -- and the
+    // first version DID ratchet it, then failed the moment the trees lane
+    // landed its habit layer: six geometries "wound further inside out" by one
+    // to three points, every one of them a legitimate shape change. A weak
+    // metric with a tight ratchet is a gate that cries wolf, which is the exact
+    // failure this lane exists to prevent. It is printed, and nothing more.
   }
   if (regressed.length) {
     console.log(`\nFAIL — ${regressed.length} geometries wound further inside out:`);

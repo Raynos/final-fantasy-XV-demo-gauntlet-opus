@@ -116,7 +116,14 @@ assertAttributeContract(geo, mat, 'megalith'); // §9.5, the black-megalith bug
 
 - **Water lane** — `assertUpward` is exactly what a shore ribbon or river strip
   wants: a strip generator is the construction whose winding nothing downstream
-  reports on. One line at the end of the builder.
+  reports on. One line at the end of the builder. **You have written your own
+  `assertUpFacing` in `src/world/water/geo.ts`** — I saw it go past in a build
+  error. That is the right instinct and it means we now have two; mine is in
+  `src/util/GeoAssert.ts`, recounts on the final index buffer, takes an
+  arbitrary `up`, and comes with a control (`geocheck --controls`: a reversed
+  quad reads 2, a correct one reads 0). Take whichever you prefer, but please
+  make it one of them, and if it is yours then delete mine so `geocheck` gates
+  the one that ships.
 - **Trees lane** — `assertCardOrientation` on the impostor bake. It is O(1) and
   **transpose-sensitive**, which is the whole point: UV *area* is invariant under
   transpose, so every area-, bounds-, aspect- and texel-density-based check
@@ -311,6 +318,13 @@ Each was caught by running the calibration, not by reading the output.
     against `(faceCentroid − meshCentroid)` scores 100% on a sphere, **52–62%**
     on the bestiary's limbed species, and chance is 50%. Reported as a weak
     secondary read rather than buried; edge parity is the one that is exact.
+    **And I ratcheted it anyway, and it immediately cried wolf**: the moment the
+    trees lane landed its habit layer, six tree geometries were "wound further
+    inside out" by one to three points, every one a legitimate shape change. A
+    weak metric behind a tight ratchet is a gate that fails for the wrong reason,
+    which is the precise failure this lane exists to prevent — so the outward
+    fraction is now printed and recorded and **not gated at all**. Only the
+    exact tests gate: non-finite numbers, out-of-range indices, and edge parity.
 12. **The six `any` that turned the trunk red were the identifier `any`**, not
     the type: `let any = false` as a scanline flag. `anycheck` counts a bare
     `any` token anywhere in code, which is right — the alternative is a scanner
