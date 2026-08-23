@@ -59,6 +59,7 @@ export interface HarnessArgs {
   q: string;
   post: string;
   nobake: boolean;
+  prod: boolean;
 }
 
 /**
@@ -88,6 +89,7 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
     q: val('q', defaults.q ?? 'ultra'),
     post: val('ablate', val('post', defaults.post ?? '')),
     nobake: has('nobake'),
+    prod: has('prod'),
   };
 }
 
@@ -95,7 +97,7 @@ export function harnessArgs(argv: string[], defaults: Partial<HarnessArgs> = {})
 export function pageOpts(a: HarnessArgs): PageOpts {
   return {
     w: a.w, h: a.h, q: a.q, post: a.post, nobake: a.nobake, cold: a.cold,
-    build: a.build, lane: a.lane, agent: a.agent, deadlineMs: a.deadlineMs,
+    build: a.build, lane: a.lane, agent: a.agent, deadlineMs: a.deadlineMs, prod: a.prod,
   };
 }
 
@@ -198,7 +200,7 @@ export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   const page = ctx.pages().find((p) => p.url().startsWith('http')) ?? ctx.pages()[0];
   if (!page) throw new Error('the leased browser has no page');
   let released = false;
-  return {
+  const leased: Leased = {
     page,
     browser,
     appPort: r.appPort,
@@ -207,12 +209,36 @@ export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
     async release() {
       if (released) return;
       released = true;
+      process.off('SIGINT', bail);
+      process.off('SIGTERM', bail);
+      process.off('uncaughtException', bail);
+      process.off('unhandledRejection', bail);
       // Disconnect before releasing: the daemon resets the page, and resetting
       // one a client is still driving is how a "wedged page" is manufactured.
       await browser.close().catch(() => {});
       await call('/release', { id: r.id }).catch(() => {});
     },
   };
+  /**
+   * Give the slot back when the tool dies rather than when it finishes.
+   *
+   * The daemon's lease TTL is the backstop, but a crashed tool holding one of
+   * four slots for fifteen minutes is a quarter of the machine's capacity lost
+   * to a stack trace — and the tools most likely to throw are the long play
+   * tools that hold the longest leases. Ctrl-C and an uncaught throw are what
+   * actually happen; both are covered here.
+   */
+  function bail(e?: unknown) {
+    void leased.release().then(() => {
+      if (e instanceof Error) { console.error(e.stack ?? e.message); process.exit(1); }
+      process.exit(130);
+    });
+  }
+  process.once('SIGINT', bail);
+  process.once('SIGTERM', bail);
+  process.once('uncaughtException', bail);
+  process.once('unhandledRejection', bail);
+  return leased;
 }
 
 /** Lease, run, and always give it back — including when `fn` throws. */

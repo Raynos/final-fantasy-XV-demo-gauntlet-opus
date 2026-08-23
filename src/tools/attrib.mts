@@ -5,33 +5,18 @@
  *
  *   node src/tools/attrib.mts vista_dusk
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import net from 'node:net';
-import { resolvePort } from './portowner.mts';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 
-/** Repo root, so the port resolver can tell our own dev server from a co-agent's. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-const PORT = resolvePort(5299, ROOT);
 const SHOT = process.argv[2] || 'vista_dusk';
 const N = Number(process.argv[3] || 40);
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
-if (!(await portOpen(PORT))) { console.error(`no server on ${PORT}`); process.exit(1); }
-
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
+// The daemon owns the browser, the port and the budget. This tool used to find
+// a dev server by probing a hard-coded port, which is how a co-agent's tree got
+// photographed as if it were ours -- see `portowner.mts` for the hour that cost.
+const ha = harnessArgs(process.argv.slice(2));
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 
 const out = await page.evaluate(async ([shot, n]: [string, number]) => {
   const g = window.GAME;
@@ -133,4 +118,4 @@ for (const r of out.results) {
   if (Math.abs(r.ms) < 0.05) continue;
   console.log(`${r.label.padEnd(24)} ${r.ms.toFixed(2).padStart(8)} ${((r.ms / out.base) * 100).toFixed(1).padStart(10)}%`);
 }
-await browser.close();
+await leased.release();

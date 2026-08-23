@@ -6,23 +6,16 @@
  * chosen world positions and reads it back, so the comparison is against the
  * actual displaced surface rather than an inference from depth.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { resolvePort } from './portowner.mts';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 
-/** Repo root, so the port resolver can tell our own dev server from a co-agent's. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = resolvePort(5321, ROOT);
 const SHOT = process.argv[2] || 'hero_closeup';
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+const ha = harnessArgs(process.argv.slice(2));
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 page.on('pageerror', (e) => console.error('PAGEERR', String(e).split('\n')[0]));
 page.on('console', (m) => { if (m.type() === 'error') console.error('CONSOLE', m.text().split('\n')[0]); });
-await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
+
 const out = await page.evaluate(async (shot) => {
   const g = window.GAME;
   const t = g.get('Terrain')!;
@@ -141,4 +134,4 @@ console.log(`camera  (${out.cam.map((v) => v.toFixed(2)).join(', ')})`);
 console.log(`player  (${out.player.map((v) => v.toFixed(2)).join(', ')})   cpu ground ${out.cpuGroundAtPlayer.toFixed(3)}  gpu ground ${out.gpuGroundAtPlayer.toFixed(3)}`);
 console.log(`worst |gpu - cpu| = ${out.worst.toFixed(3)} m at ${out.worstAt && out.worstAt.map((v) => v.toFixed(1)).join(', ')}\n`);
 console.log(out.rows.join('\n'));
-await browser.close();
+await leased.release();

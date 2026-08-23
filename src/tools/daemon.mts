@@ -156,6 +156,14 @@ export interface PageOpts {
   /** Force a fresh page, for a run that must be provably independent. */
   cold?: boolean;
   /**
+   * Serve the production bundle rather than the dev server.
+   *
+   * Rare and opt-in. It costs a `vite build` per sha and it removes the ability
+   * to `import()` source modules from inside the page, which several probes
+   * depend on. Use it when the *bundle* is the thing under review.
+   */
+  prod?: boolean;
+  /**
    * Post-chain ablation, passed straight through to `?post=` and read by
    * `PostFX.debugToggle` — `nobloom`, `nogtao`, `nocontact`, `plain`, ...
    *
@@ -419,17 +427,46 @@ class BuildStore {
     throw new Error('no free port for a build server');
   }
 
-  async acquire(id: BuildId): Promise<Build> {
-    const have = this.builds.get(id);
+  /**
+   * @param prod serve the production bundle instead of the dev server. Rare;
+   *   see `start()` for why it is not the default it was designed to be.
+   */
+  async acquire(id: BuildId, prod = false): Promise<Build> {
+    const key = prod ? `${id}#prod` : id;
+    const have = this.builds.get(key);
     if (have) { have.lastUsed = Date.now(); return have; }
-    const pending = this.starting.get(id);
+    const pending = this.starting.get(key);
     if (pending) return pending;
-    const p = this.start(id).finally(() => this.starting.delete(id));
-    this.starting.set(id, p);
+    const p = this.start(id, prod, key).finally(() => this.starting.delete(key));
+    this.starting.set(key, p);
     return p;
   }
 
-  private async start(id: BuildId): Promise<Build> {
+  /**
+   * DEV IS THE DEFAULT, EVEN FOR AN IMMUTABLE SHA TREE.
+   *
+   * The plan proposed `vite build` + `preview` for sha builds, on the grounds
+   * that an immutable tree only pays the build once. Two things overturned it.
+   *
+   * It buys nothing measurable: boot from a materialised tree is **9248 ms
+   * under dev against 8838 ms under preview** — 4%, against a build step and a
+   * `dist/` per sha.
+   *
+   * And it breaks real tools. `heightcheck` does
+   * `import('/world/terrain/TerrainMaterial.ts')` *inside the page*, to compare
+   * the GPU's terrain surface against the same source the shader was built
+   * from. A preview server has no such URL, so it 404s — and the failure looks
+   * like a broken probe rather than a wrong server. `bootprof` and the probe
+   * rigs are the same shape. Whatever a production build is worth reviewing
+   * for, it is not worth silently deleting the ability to import the source
+   * under test.
+   *
+   * `prod` remains available for the one thing it is actually for: looking at
+   * the bundle that ships. Note the landmine when you use it — a production
+   * build mangles class names, and `Game.add()` falls back to
+   * `constructor.name` when a system is registered without an explicit key.
+   */
+  private async start(id: BuildId, prod: boolean, key: string): Promise<Build> {
     const port = await this.freePort();
     let build: Build;
     if (isDirty(id)) {
@@ -439,16 +476,18 @@ class BuildStore {
       build.server = spawn(VITE, ['--port', String(port), '--strictPort'],
         { cwd: build.dir, stdio: ['ignore', 'ignore', 'ignore'] });
     } else {
-      const dir = materialise(id);
-      build = new Build(id, dir, port, 'prod');
-      build.server = spawn(VITE, ['preview', '--port', String(port), '--strictPort'],
-        { cwd: dir, stdio: ['ignore', 'ignore', 'ignore'] });
+      const dir = materialise(id, prod);
+      build = new Build(id, dir, port, prod ? 'prod' : 'dev');
+      build.server = spawn(VITE, prod
+        ? ['preview', '--port', String(port), '--strictPort']
+        : ['--port', String(port), '--strictPort'],
+      { cwd: dir, stdio: ['ignore', 'ignore', 'ignore'] });
     }
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       await sleep(200);
       if (await portOpen(port)) {
-        this.builds.set(id, build);
+        this.builds.set(key, build);
         console.log(`[daemon] serving ${shortBuild(id)} (${build.kind}) on ${port}`);
         return build;
       }
@@ -493,23 +532,27 @@ class BuildStore {
  * worktree experiment, where symlinking the cache into three checkouts meant
  * one agent's `--force` silently re-textured everybody else's game.
  */
-function materialise(id: BuildId): string {
+function materialise(id: BuildId, prod: boolean): string {
+  // `prod` is opt-in and rare; see BuildStore.start for why dev is the default.
   const sha = shaOf(id);
   if (!sha) throw new Error(`not a sha build: ${id}`);
   const dir = path.join(repoCacheDir(KEY), 'trees', sha);
-  if (existsSync(path.join(dir, 'dist', 'index.html'))) return dir;
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  execFileSync('bash', ['-c', `git archive ${sha} | tar -x -C ${JSON.stringify(dir)}`], { cwd: ROOT });
-  execFileSync('ln', ['-s', path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules')]);
-  const bake = path.join(ROOT, 'src/public/baked');
-  if (existsSync(bake)) {
-    mkdirSync(path.join(dir, 'src/public'), { recursive: true });
-    rmSync(path.join(dir, 'src/public/baked'), { recursive: true, force: true });
-    execFileSync('ln', ['-s', bake, path.join(dir, 'src/public/baked')]);
+  if (!existsSync(path.join(dir, 'src', 'index.html'))) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    execFileSync('bash', ['-c', `git archive ${sha} | tar -x -C ${JSON.stringify(dir)}`], { cwd: ROOT });
+    execFileSync('ln', ['-s', path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules')]);
+    const bake = path.join(ROOT, 'src/public/baked');
+    if (existsSync(bake)) {
+      mkdirSync(path.join(dir, 'src/public'), { recursive: true });
+      rmSync(path.join(dir, 'src/public/baked'), { recursive: true, force: true });
+      execFileSync('ln', ['-s', bake, path.join(dir, 'src/public/baked')]);
+    }
+    pruneTrees();
   }
-  execFileSync(VITE, ['build'], { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], timeout: 600_000 });
-  pruneTrees();
+  if (prod && !existsSync(path.join(dir, 'dist', 'index.html'))) {
+    execFileSync(VITE, ['build'], { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], timeout: 600_000 });
+  }
   return dir;
 }
 
@@ -777,8 +820,8 @@ let lastUsed = Date.now();
 /** Reset drift per build, checked once per build; see `checkResetDrift`. */
 const resetDrift: Record<string, string> = {};
 
-function pageKey(build: BuildId, w: number, h: number, query: string): string {
-  return `${build}|${w}x${h}|${query}`;
+function pageKey(build: BuildId, w: number, h: number, query: string, prod = false): string {
+  return `${build}${prod ? '#prod' : ''}|${w}x${h}|${query}`;
 }
 
 function queryOf(opts: PageOpts): string {
@@ -790,7 +833,7 @@ function queryOf(opts: PageOpts): string {
 async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Page> {
   const { w = 1600, h = 900, cold = false } = opts;
   const query = queryOf(opts);
-  const key = pageKey(build.id, w, h, query);
+  const key = pageKey(build.id, w, h, query, build.kind === 'prod');
   slot.errors.length = 0;
 
   // A dirty build's page may have booted before an edit; a sha build's cannot.
@@ -885,9 +928,9 @@ function counters(slot: Slot, build: Build): Counters {
 async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: Build) => Promise<T>): Promise<T> {
   lastUsed = Date.now();
   const buildId = opts.build ?? (DIRTY_PREFIX + ROOT);
-  const build = await store.acquire(buildId);
+  const build = await store.acquire(buildId, opts.prod);
   const { w = 1600, h = 900, cold = false } = opts;
-  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(opts)), w, h, cold);
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(opts), opts.prod), w, h, cold);
   try {
     const page = await preparePage(slot, build, opts);
     const out = await fn(page, slot, build);
@@ -1027,8 +1070,8 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
   }
 
   const buildId = body.build ?? (DIRTY_PREFIX + ROOT);
-  const build = await store.acquire(buildId);
-  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body)), w, h, cold);
+  const build = await store.acquire(buildId, body.prod);
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body), body.prod), w, h, cold);
   try {
     // The page is booted here so the caller connects to something ready, and so
     // a boot failure is the daemon's problem rather than arriving as a mystery
