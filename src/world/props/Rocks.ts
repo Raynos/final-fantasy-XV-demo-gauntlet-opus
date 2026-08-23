@@ -311,6 +311,17 @@ export function rockGeometry(seed: number, {
   // creases rather than adding lumps, which is the difference between a gully
   // and a bump, and the cut is proportional to how far down the mass a point
   // is, because drainage concentrates toward the base.
+  //
+  // **`size` is not applied yet at this point in the pipeline.** `P` is still
+  // the unit-radius blank -- the normalisation that multiplies by `size` is
+  // eighty lines below -- so the original `P / size` divided a coordinate that
+  // was already about 0.85 by five hundred and eighty-five, and evaluated the
+  // whole field inside a box 0.003 across. Measured: the ridge term came back
+  // **identically 0.00000 over four thousand samples** on the Meteor and on
+  // every shard. `gully` has never displaced a single vertex anywhere in the
+  // world, and the "2.2 does nothing visible" note above recorded the symptom
+  // and inferred a frequency problem from it. `gullyFreq` is cycles per unit
+  // radius, so it is `P` straight through.
   if (gully > 0) {
     let yMin = Infinity, yMax = -Infinity;
     for (let i = 0; i < count; i++) {
@@ -318,11 +329,10 @@ export function rockGeometry(seed: number, {
     }
     const hh = Math.max(1e-4, yMax - yMin);
     for (let i = 0; i < count; i++) {
-      const x = P[i * 3] / size, y = P[i * 3 + 1] / size, z = P[i * 3 + 2] / size;
+      const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
       const f = n.fbm3(x * gullyFreq + 31, y * gullyFreq * 0.55, z * gullyFreq - 17, 4);
       // Narrow: the crease is only where the field crosses zero. At a gentle
-      // slope this is a broad uniform shrink and does nothing visible -- which
-      // is what 2.2 measured as.
+      // slope this is a broad uniform shrink and does nothing visible.
       const ridge = 1 - Math.abs(f) * 7.0;
       const down = 1 - (P[i * 3 + 1] - yMin) / hh;         // deepest toward the foot
       const k = 1 - gully * Math.max(0, ridge) * (0.35 + 0.65 * down);
