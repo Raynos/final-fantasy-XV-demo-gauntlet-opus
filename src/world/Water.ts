@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from './Terrain.ts';
+import { worldMap } from './map/WorldMap.ts';
 import {
   N as FIELD_N, HALF as FIELD_HALF, CELL as FIELD_CELL, BLEND_OUT as FIELD_BLEND_OUT,
   FAR_N as FIELD_FAR_N, FAR_HALF as FIELD_FAR_HALF, FAR_CELL as FIELD_FAR_CELL,
@@ -55,6 +56,27 @@ export interface WaterBasin {
   /** Extent in x and z, world metres. */
   w: number;
   d: number;
+  /**
+   * World Y of this body's surface.
+   *
+   * Not a constant, and that is the point. `level` used to be one number for
+   * the whole planet, which meant the only water that could exist was the sea:
+   * every inland tarn the map advertises sits tens of metres above it, so seven
+   * of the ten authored fishing spots were a jetty on a dry hillside. A basin
+   * owns its own surface height now.
+   */
+  level: number;
+  /** For the map and for debugging: what the body is. */
+  name?: string;
+  /**
+   * How many metres of depth count as "shore", for the foam margin.
+   *
+   * A fixed band is wrong for anything but the sea. The first inland tarn was
+   * 0.5 m deep against a 1.35 m band, so *every* fragment of it qualified as
+   * shore and the whole pond came back foaming — a mouldy puddle rather than
+   * water. The margin has to be a fraction of the body it is on.
+   */
+  foamBand?: number;
 }
 
 /** A basin once it has a surface in the scene. */
@@ -121,6 +143,7 @@ export class Water {
 
     // Find basins on a coarse grid; group them into a few lake surfaces.
     const bodies = this._findBasins(terrain);
+    for (const t of this._findTarns(terrain, bodies)) bodies.push(t);
     for (const b of bodies) this._makeSurface(game, b);
 
     this.enabled = this.bodies.length > 0;
@@ -238,18 +261,94 @@ export class Water {
         bodies.push({
           cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2,
           w: maxX - minX + step * 4, d: maxZ - minZ + step * 4,
+          level: this.level, name: 'sea', foamBand: 1.35,
         });
       }
     }
     return bodies.slice(0, 4);
   }
 
+  /**
+   * Inland water, one body per authored fishing pin that the sea does not reach.
+   *
+   * The map advertises ten fishing spots and only three of them had water,
+   * because `level` was a single global number: a pin at 68 m elevation cannot
+   * be under a sea surface at -6.5 m, so the other seven were a jetty on dry
+   * rock. Fast-travelling to one on the strength of the map is the worst kind
+   * of broken promise a world map can make.
+   *
+   * The level is measured rather than authored. Sample a disc around the pin,
+   * take a low quantile of the heights as the surface, and then **check it does
+   * not spill**: if any point on the rim is below that surface, the water would
+   * run out of the basin, so the level drops to the rim. A tarn that leaks down
+   * a hillside is worse than no tarn.
+   *
+   * @param exclude bodies already found, so a pin the sea reaches is skipped
+   */
+  _findTarns(terrain: Terrain, exclude: WaterBasin[]): WaterBasin[] {
+    const out: WaterBasin[] = [];
+    const covered = (x: number, z: number) => exclude.some((b) =>
+      Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5);
+
+    for (const poi of worldMap.poisOfType('fishing')) {
+      if (covered(poi.x, poi.z)) continue;
+      // Sea-adjacent pins have no business being a tarn even if the coarse
+      // basin scan missed them by a cell.
+      if (terrain.heightAt(poi.x, poi.z) < this.level + 4) continue;
+
+      const R = 105, N = 22;
+      const hs: number[] = [];
+      let rim = -Infinity;
+      for (let j = -N; j <= N; j++) {
+        for (let i = -N; i <= N; i++) {
+          const dx = (i / N) * R, dz = (j / N) * R;
+          const r = Math.hypot(dx, dz);
+          if (r > R) continue;
+          const h = terrain.heightAt(poi.x + dx, poi.z + dz);
+          hs.push(h);
+          if (r > R * 0.86) rim = Math.max(rim, -h);   // lowest point on the rim
+        }
+      }
+      if (hs.length < 64) continue;
+      hs.sort((a, b) => a - b);
+      // A quarter of the disc under water reads as a pond rather than a puddle.
+      const wanted = hs[Math.floor(hs.length * 0.26)];
+      const spill = -rim;                               // the rim's lowest height
+      const level = Math.min(wanted, spill - 0.35);
+      // Below the basin floor means there is no hollow here at all.
+      if (level <= hs[0] + 0.4) continue;
+
+      // Extent: how far the water actually reaches, not the sample disc.
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (let j = -N; j <= N; j++) {
+        for (let i = -N; i <= N; i++) {
+          const dx = (i / N) * R, dz = (j / N) * R;
+          if (Math.hypot(dx, dz) > R) continue;
+          if (terrain.heightAt(poi.x + dx, poi.z + dz) >= level) continue;
+          minX = Math.min(minX, dx); maxX = Math.max(maxX, dx);
+          minZ = Math.min(minZ, dz); maxZ = Math.max(maxZ, dz);
+        }
+      }
+      if (!(maxX > minX)) continue;
+      const pad = 8;
+      out.push({
+        cx: poi.x + (minX + maxX) / 2, cz: poi.z + (minZ + maxZ) / 2,
+        w: (maxX - minX) + pad, d: (maxZ - minZ) + pad,
+        level, name: poi.id,
+        // A third of the deepest point, so a shallow tarn gets a narrow rim
+        // rather than foaming from bank to bank.
+        foamBand: Math.max(0.12, Math.min(1.35, (level - hs[0]) * 0.34)),
+      });
+    }
+    return out;
+  }
+
   _makeSurface(game: Game, b: WaterBasin) {
     const geo = new THREE.PlaneGeometry(b.w, b.d, 1, 1);
     geo.rotateX(-Math.PI / 2);
-    const mat = this._makeMaterial();
+    const mat = this._makeMaterial(b.level, b.foamBand ?? 1.35);
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(b.cx, this.level, b.cz);
+    mesh.position.set(b.cx, b.level, b.cz);
     mesh.renderOrder = 5;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
@@ -257,13 +356,17 @@ export class Water {
     // World bounds with headroom above the plane: a lake below the horizon is
     // still visible through its own reflection, so test a slab, not a plane.
     const bounds = new THREE.Box3(
-      new THREE.Vector3(b.cx - b.w * 0.5, this.level - 2, b.cz - b.d * 0.5),
-      new THREE.Vector3(b.cx + b.w * 0.5, this.level + 40, b.cz + b.d * 0.5)
+      new THREE.Vector3(b.cx - b.w * 0.5, b.level - 2, b.cz - b.d * 0.5),
+      new THREE.Vector3(b.cx + b.w * 0.5, b.level + 40, b.cz + b.d * 0.5)
     );
     this.bodies.push({ mesh, mat, bounds, ...b });
   }
 
-  _makeMaterial() {
+  /**
+   * @param level this body's surface height — the depth model measures from it
+   * @param foamBand metres of depth that count as shore on *this* body
+   */
+  _makeMaterial(level: number, foamBand: number) {
     const bed = this._bed;
     const uniforms = {
       uTime: { value: 0 },
@@ -307,7 +410,8 @@ export class Water {
       uSunDir: { value: new THREE.Vector3(0.4, 0.6, 0.3) },
       uSunColor: { value: new THREE.Color(0xfff0d8) },
       uCameraPos: { value: new THREE.Vector3() },
-      uLevel: { value: this.level },
+      uLevel: { value: level },
+      uFoamBand: { value: foamBand },
       uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
       uRoughness: { value: 0.06 },
       uHeightTex: { value: bed ? bed.height : null },
@@ -335,7 +439,7 @@ export class Water {
       `,
       fragmentShader: /* glsl */`
         precision highp float;
-        uniform float uTime, uLevel, uRoughness, uHasBed;
+        uniform float uTime, uLevel, uRoughness, uHasBed, uFoamBand;
         uniform sampler2D uNormalA, uNormalB, uCaustics, uReflect;
         uniform sampler2D uHeightTex, uFarHeightTex;
         uniform vec4 uField;   // half, cell, N, blendOut
@@ -466,7 +570,7 @@ export class Water {
           // single clearest tell that a shoreline was stamped, not simulated —
           // so two noise scales beat on each other and the band is required to
           // clear both. One scale alone still reads as a piped edge.
-          float edge = 1.0 - smoothstep(0.0, 1.35, dropDown);
+          float edge = 1.0 - smoothstep(0.0, uFoamBand, dropDown);
           float churn = texture2D(uNormalB, vWorld.xz * 0.085 + w * 0.03).x;
           float churn2 = texture2D(uNormalA, vWorld.xz * 0.022 - w * 0.011).y;
           float foam = smoothstep(0.34, 0.92, edge * (0.35 + 0.8 * churn + 0.5 * churn2));
@@ -580,7 +684,12 @@ export class Water {
 
     const rc = this.reflectCam;
     rc.copy(cam);
-    rc.position.y = 2 * this.level - cam.position.y;
+    // Mirror about the body the camera is actually looking at, not about the
+    // sea. One reflection target serves every body, so the plane has to be the
+    // one that matters this frame — reflecting a hillside tarn about a surface
+    // sixty metres below it puts the sky in at the wrong angle, and on a small
+    // pond viewed from its bank that is the whole image.
+    rc.position.y = 2 * this._nearestLevel(cam.position) - cam.position.y;
     rc.layers.set(REFLECT_LAYER);
 
     // mirror the orientation about the water plane
@@ -615,10 +724,27 @@ export class Water {
     renderer.shadowMap.autoUpdate = prevShadow;
   }
 
+  /**
+   * The surface height of the body nearest the camera.
+   *
+   * Nearest by centre distance, which is right for the reflection because the
+   * body filling the frame is the one you are standing at. Falls back to the
+   * sea when there is nothing else, so a world with no tarns behaves exactly
+   * as it did.
+   */
+  _nearestLevel(p: THREE.Vector3): number {
+    let best = this.level, bestD = Infinity;
+    for (const b of this.bodies) {
+      const d = (p.x - b.cx) ** 2 + (p.z - b.cz) ** 2;
+      if (d < bestD) { bestD = d; best = b.level; }
+    }
+    return best;
+  }
+
   /** Height of the water surface, or null if this point isn't over water. */
   surfaceAt(x: number, z: number) {
     for (const b of this.bodies) {
-      if (Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5) return this.level;
+      if (Math.abs(x - b.cx) < b.w * 0.5 && Math.abs(z - b.cz) < b.d * 0.5) return b.level;
     }
     return null;
   }
