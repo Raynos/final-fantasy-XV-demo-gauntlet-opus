@@ -36,5 +36,6 @@
  "Terrain.erosionAt",
  "Ecology.groveScatter",
  "Ecology.scrubScatter",
+ "Ecology.rockScatter",
  "Ecology.farSeat"
 ]
