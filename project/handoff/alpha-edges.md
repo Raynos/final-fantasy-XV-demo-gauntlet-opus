@@ -189,7 +189,34 @@ at ~8.7 µs per draw call and that draw count explains 80% of frame-time
 variance. What MSAA spends is bandwidth and fill, the half of the budget the
 game uses least.
 
-<!-- PERF -->
+**The frame-time number is not taken yet, and the run that tried was correctly
+voided.** Three worktrees were live; `ruler.mts` measured its noise floor at
+3.65 ms against a 13.3 ms frame — 27% — and printed `RULER_VALID: false`. Per
+`CLAUDE.md` that is not a weak measurement, it is not a measurement, so nothing
+from it is quoted here. This is the fourth handoff in this area to end on that
+sentence and it is the single largest open item in the directory.
+
+What can be said without a certified run: **triangles and draw calls are
+identical to the digit on all six graded shots**, MSAA adds no submissions,
+and the frame is CPU-submission-bound end to end (`cpu == ms` on every shot in
+the corpus). What MSAA spends is colour and depth bandwidth on a 1600×900
+RGBA16F target — at `ultra`'s 8 samples that is roughly 92 MB of colour
+renderbuffer plus its depth, and one resolve blit per frame. On the graded
+frames the same capture path that used to take ~3.5 s per shot now takes
+~6–7 s, but that number is a *capture* including boot and settle, not a frame
+time, and it moved on a contended machine. Do not quote it either.
+
+**To close this out:** wait for a quiet tree, then
+
+    PORT=<free> node src/tools/perf.mts --baseline project/baseline-perf.json
+    PORT=<free> node src/tools/gameplay.mts --baseline project/baseline-gameplay.json
+
+and, for the attribution that actually answers "what did MSAA cost", run the
+same shot list twice in one quiet window with `_wantSamples` forced to 0 on the
+second pass — `perf.mts` has no `--ablate`, so `?post=nomsaa` cannot be reached
+from it. If it turns out to cost more than the frame can carry, the honest
+retreat is `ultra` → 4 rather than 0: the table above shows 4 keeps the whole
+step-size win and gives up only the speckle margin.
 
 ---
 
@@ -207,6 +234,50 @@ game uses least.
   but it is a real coupling: **anything given `alphaToCoverage` here silently
   changes its own shadow silhouette.**
 - **`npm run check`** — see below.
+
+---
+
+## Blind A/B round 6 — `tmp/ab/r6/`, six pairs
+
+The same six shots as round 5, `compare.mts`'s own printed question verbatim,
+no added instructions, sealed key, a judge that read nothing but the six
+composites.
+
+**6 identified, 0 fooled, 0 hesitated, all six HIGH. Score 3.5/10**, against
+3/10 in rounds 3, 4 and 5 and 4.5/10 in round 2. **The win rate and the
+hesitation rate did not move. Again.** Six rounds now.
+
+**What did move is the thing this lane was sent for.**
+
+| round 5 | round 6 |
+|---|---|
+| **1. "Billboard/cutout vegetation. Flat crossed cards with *hard alpha edges*… aggressive alpha-cutout with speckled, dithered edges *eating the silhouette*"** | **1. terrain material — "one stretched texture over smooth extruded forms… nothing reads as rock vs dirt vs path"** |
+| 3. terrain material | 2. no ambient occlusion or contact shadowing — "objects sit *on* the ground rather than *in* it" |
+| 2. grounding / AO | 3. foliage is unlit alpha-cut billboards — "2–3 crossed planes… identical silhouettes repeated, no self-shading or translucency" |
+| (not cited) | 4. shadows hard, opaque black, no penumbra — "holes punched in the grass" |
+| 6. sky as a flat layer | 5. sky and clouds painted on, visibly tiling |
+| 7. aerial perspective | 6. no aerial perspective |
+| 4. primitive geometry in the silhouette | 7. flat silhouette landmarks — the city and the meteor are untextured cutouts |
+| — | 8. no ground clutter at the 0–1 m scale |
+| — | **9. "aliased geometry edges against sky"** |
+
+**Round 5's number one is round 6's number nine, and it changed subject on the
+way down.** What is left at 9 is *"terrain ridges shimmer-crisp"* — the
+terrain silhouette, which is not alpha-tested, is not this lane's change, and
+is not fixed by coverage AA. The words "speckled", "dithered" and "eating the
+silhouette" do not appear anywhere in round 6. What survives about foliage is
+at 3 and is explicitly about *silhouette variety and self-shading* — "identical
+silhouettes repeated, no self-shading or translucency" — which is the
+vegetation lane's ground, not the alpha cut.
+
+Take the usual caution with this: the ranking is one judge on one round, and
+five rounds of history say the *order* reshuffles freely while 6/0/0 does not
+budge. The defect leaving first place is consistent with the `edgestat` numbers
+and with the crops, but it is corroboration, not proof.
+
+The two lines the judge now leads with — terrain material, and AO/contact
+shadowing — are both flagged in `vegetation.md` and `shadows.md` as somebody
+else's ground, and both have been climbing for three rounds.
 
 ---
 
@@ -235,6 +306,15 @@ part of it touched is the alpha path.
 | a wider coverage ramp keeps helping | floor 0.06 → 0.11, captured both | **no.** Identical to three significant figures. `fwidth(a)` is the binding term at these distances, not the floor. |
 | `samples: 8` is the same picture as 4 for more bandwidth | captured both | **half true, and the half that is false is the one that matters.** Step size the same (72.7 → 70.2); speckle 10.3 → 3.9 and 12.8 → 2.6. |
 | the "dithered" in the complaint is CAS's ordered dither | it is ±0.5/255 | **false.** The dither is 48× below the threshold the speckle statistic counts. It is CAS's *sharpen*, which doubles both the edge count and the speckle. |
+| a coverage-preserving mip chain is a fix still to build | read `VegTextures.buildAlphaMips` | **it already exists and is good.** Every card's chain binary-searches an alpha scale per level to hold the level-0 coverage at the material's own `alphaRef`, capped at one stop, with `tinyFade` for the sub-8 px levels. This was on the list of alternatives to try; it was built two lanes ago. |
+
+One thing that *did* need checking and came out clean: `buildAlphaMips`
+estimates coverage with a hard `count(a >= alphaRef)`, which was the exactly
+right model when the shader did a binary test. It still is — arguably more so.
+A ramp **centred** on `alphaRef` integrates to the same 50% crossing the binary
+count measures, where three's one-sided ramp biased the true coverage below it.
+So the mip chain did not need re-deriving against the new ramp, and no line of
+`VegTextures.ts` was touched.
 
 ---
 
@@ -277,4 +357,34 @@ part of it touched is the alpha path.
   MSAA-versus-not comparison with the sharpen out of the way.
 - `tmp/crop/base-near.png` vs `tmp/crop/ramp-near.png` — a near crown, 8×.
 - `tmp/shots/base/` (as inherited) vs `tmp/shots/r6/` (now).
-- `tmp/ab/r6/` — blind round 6, sealed key.
+- `tmp/ab/r6/` — blind round 6, six pairs, sealed key.
+
+---
+
+## My honest grade for the environment, against shipped FFXV
+
+**4 / 10.** The same number the shadows and vegetation lanes gave, and like the
+vegetation lane I am not claiming its point back and adding one of my own.
+
+What this lane was sent to fix is fixed and it was fixed by measurement. The
+judge's round-5 number one, the sentence that named this defect three different
+ways in one clause, is not in round 6's list at all; what is left of it is at
+number nine and is about terrain ridges. The silhouette step size at the
+treeline is down 26% at p90, the speckle is down 89%, the crops at 8× are a
+different picture, `check` is 11/11, determinism is unchanged and no other
+lane's file moved.
+
+What keeps it at 4 is that 6/0/0 has not moved in five rounds, and this round
+did not move it either — the judge identified every panel in under a second and
+said so. The three lines it now leads with (terrain material, ambient
+occlusion, foliage silhouette variety) are each somebody else's ground and each
+has been climbing for three rounds, which is the same reading the vegetation
+lane arrived at: the ranking reshuffles because the lanes are hitting real
+things, and the win rate does not move because the gap is not one defect deep.
+
+The specific caution I would leave for whoever takes the next one: **the thing
+I fixed was invisible at 1× and unmissable at 8×, and it survived five rounds
+because nobody magnified the frame.** The judge could see it at 1× as a
+*texture* — "speckled" — without being able to say what it was. If a defect
+keeps being described in words that do not match any system you own, magnify
+before you re-tint.
