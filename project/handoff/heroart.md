@@ -310,3 +310,28 @@ Against a 2016 PS4 frame, not against last round.
    auto-exposure clipping the face on the portrait framing.
 3. **`src/tools/_probe/hands.mts` is still wrong** — carried forward from two
    lanes ago, its `_hand` framing still does not show the dorsum.
+
+---
+
+## 11. Next lane (hair + eyes), cut short — three commits, `pnpm run check` 12/12
+
+**Changed.** (1) The Kajiya-Kay hair band was measurably nothing — ablated, the
+whole block moved `hero_profile` by 0.897/255 mean, under `imgdiff`'s noise
+floor — because its shift was ~50x too small to place a band and it was shifted
+along the *strand tube's* normal, which spins a full turn per strand and can only
+make speckle; `MeshBuilder.groom`/`aGroom` now carry the **scalp** normal and the
+band is placed on that, and there is a real narrow streak. (2) A halo of fine
+guided flyaways rides *outside* the scalp shell, because every guided lock is born
+inside it and the back of the head was a smooth blurred arc with no strand
+crossing it. (3) Each eye globe now has its own pivot: they shared one pivot
+33.5 mm to the side, so `eyeYaw` orbited each globe **9.9 mm** in opposite
+directions; plus `EYE.iris` 0.500 -> 0.640 per §12.6's 1.4x, and the sclera no
+longer out-clips §12.5's sunlit white tee (Y 249 -> 233).
+
+**Exact next step.** Run the blind round with `--control` — none was run, so
+**nothing here is judged**, and `perf.mts` came back `VOID` (contended machine,
+27% noise floor) with +8 draw calls and +0.42 M tris from these changes still
+unmeasured. Then read `src/tools/_probe/eyes.mts` (`HIDE_HAIR`/`HIDE_HEAD`): with
+the head hidden the eyeball is *good* — fibres, pupil, limbal ring, catchlight —
+so the "doll eyes" grade was occlusion and framing, and the open question is what
+skin-coloured wedge covers a third of each aperture in the with-head frames.

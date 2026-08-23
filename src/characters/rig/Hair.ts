@@ -171,12 +171,17 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
     const t = r / rows;
     for (let c = 0; c <= cols; c++) {
       const th = (c / cols) * Math.PI * 2;
-      const { p } = shellPoint(th, t);
+      const { p, n: sn } = shellPoint(th, t);
       // strand flow runs crown -> hairline; the highlight band is perpendicular
       const q = shellPoint(th, Math.min(1, t + 0.02)).p;
       const d = q.clone().sub(p);
       if (d.lengthSq() < 1e-10) d.set(0, -1, 0);
       B.tang(d.x, d.y, d.z);
+      // The shell's own normal already *is* the macro scalp normal, but its
+      // lock-scale relief displaces it by up to 6.7 mm of noise; `sample`'s
+      // normal is the smooth sculpted skull under all of it, which is what the
+      // highlight band has to be a function of.
+      B.groom(sn.x, sn.y, sn.z);
       const w = put(p);
       // A parting is a value break, not a shape: the crown is lighter than the
       // nape and the roots at the hairline are darkest of all. The shell used to
@@ -368,6 +373,11 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const bw = tuft.spring || 0;
       B.skin(bw ? [[I.tail, bw], [I.head, 1 - bw]] : [[I.head, 1]]);
       B.mat(tuft.rough ?? H.rough ?? 0.36, 0, 1);
+      // Every vertex of every lock in this clump carries the scalp normal at
+      // the root it grew from — not the normal of its own pipe, which sweeps a
+      // full turn around each strand and can only ever produce speckle. This is
+      // the smooth field the anisotropic band is read against.
+      B.groom(nrm.x, nrm.y, nrm.z);
 
       // ---- clumping -------------------------------------------------------
       // One ribbon per root is what read as straw. At any strand width fine
@@ -444,6 +454,99 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
     }
   }
 
+  // ---- halo --------------------------------------------------------------
+  //
+  // The scalp shell stands off the skull by up to 1.12x its own `shell` value
+  // plus 1.7x of relief on top, and a lock roots at 0.8x of it. A guided lock
+  // then *follows the head*, which is the whole point of the guides — so over
+  // the crown and the back of the skull, where the groom sweeps along the
+  // surface rather than away from it, every strand stays inside the shell and
+  // the shell's own edge is the silhouette. Measured on `hero_profile`: the
+  // back of the head was a smooth blurred arc with no strand crossing it
+  // anywhere, which is exactly the judge's "opaque cap that visibly detaches
+  // from the scalp, with hard cutout edges".
+  //
+  // §12.6 is explicit that this is not a detail: in the reference plate
+  // "individual strand silhouettes are visible against the background across
+  // the entire top and side profile, not just at a rim". So a head needs hair
+  // *outside* its shell everywhere, not only where the style happens to lift.
+  //
+  // These are flyaways, not locks: they take the same guided path so they read
+  // as part of the groom, and are then floated off the surface by a standoff
+  // that grows along the strand. They are also very fine — the failure mode of
+  // every previous outline-breaking pass in this file was a wide flat blade
+  // pointing at the sky, which is a quill and reads worse than no strand.
+  {
+    const nh = H.halo ?? 380;
+    const vol = (H.volume ?? 1) * (H.shell ?? 0.011);
+    const liftK = H.haloLift ?? 1.0;
+    B.skin([[I.head, 1]]).mat((H.rough ?? 0.36) + 0.04, 0, 1);
+    const _hg = new THREE.Vector3();
+    for (let i = 0; i < nh; i++) {
+      const th = rng.range(-Math.PI, Math.PI);
+      const pf = clamp01((i * 0.61803398875) % 1 * 0.92 + 0.04);
+      const pm = phiOf(th);
+      const { p, n: nrm } = sample(th, pm * pf);
+      // Where it ends up: the same two-guide blend the locks use, so a flyaway
+      // over the crown sweeps back with the crown and one at the temple falls
+      // with the temple.
+      let ga: FitGuide | null = null, gb: FitGuide | null = null, wa = 1;
+      if (guides) {
+        const u = uOf(th);
+        let d0i = Infinity, d1i = Infinity;
+        for (const g of guides) {
+          const d = guideDist(u, pf, g.u, g.v);
+          if (d < d0i) { d1i = d0i; gb = ga; d0i = d; ga = g; }
+          else if (d < d1i) { d1i = d; gb = g; }
+        }
+        if (!gb) { gb = ga; d1i = d0i; }
+        const w0 = 1 / Math.max(1e-6, d0i * d0i);
+        const w1 = 1 / Math.max(1e-6, d1i * d1i);
+        wa = w0 / (w0 + w1);
+      }
+      // Short: a flyaway that is as long as a lock is just another lock, and
+      // the ones that read on a real head are the 2-5 cm strays.
+      const len = (0.014 + rng.next() * 0.026) * (H.volume ?? 1);
+      // The standoff. It starts at the shell surface — anything less and the
+      // strand is born inside the thing it is supposed to stand outside of —
+      // and opens out along the strand so the tip is clear of the relief too.
+      // Skewed hard toward small: at 620 strands all standing 2-4 cm proud the
+      // head read as a dandelion clock, which is a different wrong answer from
+      // the moulded cap but is still not hair. Most strays only just clear the
+      // shell and break the outline where it counts; a handful carry further.
+      const off0 = vol * 1.10;
+      const off1 = off0 + vol * (0.45 + 3.6 * Math.pow(rng.next(), 2.1)) * liftK;
+      const segs = 5;
+      const pts: THREE.Vector3[] = [];
+      for (let k = 0; k <= segs; k++) {
+        const t = k / segs;
+        const q = p.clone();
+        if (ga && gb) q.addScaledVector(guideBlend(ga, gb, wa, t, _hg), len);
+        else q.addScaledVector(nrm, len * t);
+        // a stray does not lie flat: it arcs away from the head and keeps going
+        q.addScaledVector(nrm, lerp(off0, off1, smooth(t)));
+        pts.push(q);
+      }
+      const ww = 0.00085 * scale * (0.7 + rng.next() * 0.7);
+      B.groom(nrm.x, nrm.y, nrm.z);
+      // A flyaway that is lighter than the mass reads as a scratch on the
+      // lens, not as hair. It stays at or under the root value.
+      const c0 = rootC.clone().multiplyScalar(0.72 + 0.42 * rng.next());
+      B.color(c0);
+      ribbon(B, {
+        points: pts.map((q) => put(q).toArray()),
+        steps: 5,
+        sides: 5,
+        width: ww,
+        thick: ww * 0.8,
+        up: nrm.toArray(),
+        color: c0,
+        tipColor: c0.clone().multiplyScalar(0.80 + 0.30 * rng.next()),
+        taper: (t: number) => Math.pow(clamp01(1 - t), 0.5),
+      });
+    }
+  }
+
   // ---- hairline wisps ----------------------------------------------------
   // The scalp shell meets the forehead along a hard geometric edge. Real hair
   // never does: a few dozen fine, short, low-contrast strands crossing that
@@ -474,6 +577,7 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       // tip at or below the root value.
       const ww = 0.0009 * scale * (0.7 + rng.next() * 0.8);
       B.color(rootC);
+      B.groom(nrm.x, nrm.y, nrm.z);
       ribbon(B, {
         points: [root, mid, tipP].map((q) => put(q).toArray()),
         steps: 4,
@@ -505,6 +609,8 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const L = (bw.len ?? 0.012) * (1 - 0.25 * t);
       const pts = [root, root.clone().addScaledVector(d, L * 0.55), root.clone().addScaledVector(d, L)];
       B.color(bcol.clone().multiplyScalar(0.85 + 0.3 * rng.next()));
+      // a brow rides the brow ridge, so `out` is its macro normal
+      B.groom(out.x, out.y, out.z);
       ribbon(B, {
         points: pts.map((q) => put(q).toArray()),
         steps: 3,

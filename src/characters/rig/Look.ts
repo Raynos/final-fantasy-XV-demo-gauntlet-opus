@@ -143,6 +143,14 @@ export interface HairStyle {
   /** fine strands crossing the hairline, so the shell edge is not a seam. */
   wisps?: number;
   wispLen?: number;
+  /**
+   * Flyaways riding *outside* the scalp shell, so the head's outline is broken
+   * by strands rather than being the shell's own edge. See the halo pass in
+   * `Hair.ts` for why a groom made entirely of guided locks cannot do this.
+   */
+  halo?: number;
+  /** how far the halo floats off the shell, as a multiple of the shell standoff. */
+  haloLift?: number;
   /** default `clump` for tufts that do not set their own. */
   clump?: number;
 }
