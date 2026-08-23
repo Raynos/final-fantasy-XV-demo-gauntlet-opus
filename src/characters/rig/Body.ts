@@ -59,7 +59,7 @@ export function buildBody(rig: Rig, look: Look): THREE.BufferGeometry {
   // ---- neck --------------------------------------------------------------
   // a 9cm neck makes every head look detached; real male necks are 12-13cm
   // across, and the sternocleidomastoid keeps it from reading as a pipe
-  const neckR = (0.0505 + 0.0125 * m) * s * rig.profile.neck;
+  const neckR = (0.0479 + 0.0200 * m) * s * rig.profile.neck;
   sweepTube(B, {
     nodes: [
       { p: [0, y(1.406), -0.010 * s], rx: neckR * 1.62, rz: neckR * 1.52, w: [[I.spine03, 0.9], [I.neck, 0.1]] },

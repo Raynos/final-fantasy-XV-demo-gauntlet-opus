@@ -64,7 +64,13 @@ export const CAST = {
     // 1.775 m at 7.6 heads. FFXV's cast is stylised-realistic, not anime: an
     // 1.05 head scale put them at 7.1 heads, which is precisely the ratio that
     // reads as a doll no matter how good the shading is.
-    profile: { height: 1.775, shoulder: 0.90, muscle: 0.36, hip: 0.95, neck: 1.02, headScale: 1.045 },
+    //
+    // The reference build the other three are read against: `muscle` 0.34 is
+    // ordinary, and everything about him is the middle of the party's range.
+    // He only reads as "between" if the other three actually leave room, which
+    // before this pass they did not — Prompto, the *slight* one, was carrying
+    // more muscle than Noctis.
+    profile: { height: 1.775, shoulder: 0.93, muscle: 0.34, hip: 0.94, neck: 1.00, headScale: 1.045 },
     look: {
       seed: 11,
       idle: {
@@ -170,7 +176,15 @@ export const CAST = {
   // ----------------------------------------------------------- Gladiolus --
   gladio: {
     name: 'Gladiolus',
-    profile: { height: 2.00, shoulder: 0.95, muscle: 0.95, hip: 1.02, neck: 1.06, armScale: 1.02, headScale: 0.99 },
+    // The shield. He is meant to *dwarf* the other three, and a 0.95 shoulder
+    // against Noctis's 0.90 never did that — normalised for height he was 3%
+    // wider than Noctis and shared his torso taper to within 2.5%. The width
+    // now comes from three places at once, because one of them alone reads as a
+    // scaling artefact: a 1.16 shoulder yoke, `muscle` pinned at the top of the
+    // range where `Anatomy.ts` puts the chest, deltoid, lat and trapezius, and
+    // a *narrower* hip than Noctis so the V has something to taper to.
+    // 2.01 m and a 0.96 head: the smallest head on the tallest body.
+    profile: { height: 2.01, shoulder: 1.08, muscle: 0.90, hip: 0.98, neck: 1.12, armScale: 1.05, headScale: 0.96 },
     look: {
       seed: 23,
       idle: {
@@ -246,8 +260,8 @@ export const CAST = {
         // a real jacket: heavy hems, a fold-down collar standing off the neck,
         // and enough thickness at the open edge to read as leather rather than
         // as two straps drawn on a bare chest
-        { type: 'jacket', color: 0x312d2d, rough: 0.40, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
-        { type: 'sleeve', color: 0x312d2d, rough: 0.40, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
+        { type: 'jacket', color: 0x312d2d, rough: 0.62, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
+        { type: 'sleeve', color: 0x312d2d, rough: 0.62, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
         { type: 'belt', color: 0x3d3322, rough: 0.36, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
         { type: 'pouch', color: 0x3d3322, rough: 0.42, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
         { type: 'boots', color: 0x352d20, rough: 0.38, shaft: 0.70, strap: true, width: 0.052, height: 0.040 },
@@ -259,7 +273,12 @@ export const CAST = {
   // --------------------------------------------------------------- Ignis --
   ignis: {
     name: 'Ignis',
-    profile: { height: 1.865, shoulder: 0.94, muscle: 0.45, hip: 0.92, neck: 0.98, legScale: 1.03, headScale: 1.025 },
+    // Lean, and lean is not the same as slight: he is the second-tallest, with
+    // the narrowest hips in the party and long limbs, so the figure reads as
+    // *vertical* rather than as small. `muscle` 0.40 keeps a wiry forearm on him
+    // — the difference between Ignis and Prompto is not girth, it is that Ignis
+    // has 12 cm of height and a straight spine over him.
+    profile: { height: 1.865, shoulder: 0.96, muscle: 0.40, hip: 0.86, neck: 0.96, legScale: 1.03, armScale: 1.04, headScale: 1.02 },
     look: {
       seed: 37,
       idle: {
@@ -332,7 +351,13 @@ export const CAST = {
   // ------------------------------------------------------------- Prompto --
   prompto: {
     name: 'Prompto',
-    profile: { height: 1.745, shoulder: 0.89, muscle: 0.42, hip: 0.90, neck: 1.02, headScale: 1.05 },
+    // Slight. The shortest of the four and by a long way the lightest: `muscle`
+    // 0.14 is below anything in the NPC cast except the child, and it is what
+    // makes his arms read as a teenager's next to Gladiolus's. The hip stays
+    // relatively wide (0.93 against a 0.85 shoulder) because that inverted
+    // shoulder-to-hip ratio is most of why a slight frame looks slight, and a
+    // 1.07 head keeps the boyishness the face already has.
+    profile: { height: 1.725, shoulder: 0.85, muscle: 0.14, hip: 0.93, neck: 1.00, armScale: 0.96, headScale: 1.07 },
     look: {
       seed: 53,
       idle: {
