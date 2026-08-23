@@ -26,7 +26,11 @@ their own map pins, a complete Elemancy model with no screen, `BossFight.
 resolveStrike` executing for the first time in its life, and a way to
 photograph anything a probe can drive.
 
-Six commits, `a0e097d..99e2107` off `527fe72`.
+Eight commits, `527fe72..4dc4e2b`. **`npm run check`: 11/11 green** on a tree
+with nothing else running. `integration` **27** (up from 26, with the new one
+ablated -- §9), `combatloop` 31/31, `uxcheck` 93/93, `anycheck` 0,
+`questaudit` 0 unsatisfiable objectives, `mainchain` chapter 1 to the end of
+chapter 5, 0 failures.
 
 ## 2. Fishing
 
@@ -146,8 +150,20 @@ A proper reel-click, a splash and a line-out whine would carry it.
   for it, take the bite, play the fish properly and land it, find it in the bag
   as an ingredient, then cast again and lose one by mashing the reel. 18
   checks, all passing.
+- **`integration`'s new `a fish can be caught and cooked with`** — the same
+  loop, folded into the gate suite, and **ablated**: comment out the
+  `inventory.add` in `Fishing._land` and it reports `landed, but the bag went
+  0 -> 0` while the other 26 stay green. Three checks were found passing on
+  lies last session; this one is not one of them.
 - Looked at all six stages (`tmp/shots/fish6/`). §8 lists the six defects that
   only the pictures found.
+
+One thing worth knowing about writing gates here: the fishing check resets the
+play state before it runs (`Director.play`, no screen, no cutscene, HUD out of
+menu mode). Twenty-five probes run before it, any of them can leave a screen or
+a paused Director behind, `Interaction` suppresses the verb for all three, and
+the resulting failure reads as a broken rod. That is exactly what its first run
+reported.
 
 ## 3. Dungeon doors
 
