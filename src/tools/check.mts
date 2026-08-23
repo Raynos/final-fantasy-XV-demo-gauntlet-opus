@@ -68,6 +68,12 @@ const GATES: Gate[] = [
   // meshes sharing one silhouette, not on the debt recorded in
   // `project/silhouette-baseline.json`.
   { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes' },
+  // Bare Node too, but it builds the field, so ~20 s. Two claims in
+  // `Terrain.erosionAt`'s contract -- every channel is a percentile, and the
+  // hot cells form a network rather than a haze -- each against its own
+  // control, including the checkerboard that says whether the instrument is
+  // saturated.
+  { name: 'hydrocheck', script: 'hydrocheck.mts', expect: 'percentile medians, and lift over the shuffled null' },
   { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail' },
   { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93' },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
@@ -76,6 +82,10 @@ const GATES: Gate[] = [
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
   { name: 'reachcheck', script: 'reachcheck.mts', expect: 'every must-run path executes' },
+  // `proudOf` over the final instance matrices, across the whole POI corpus
+  // (every site force-built in one boot) and every live rock/debris instance.
+  // A ratchet: the counts may not go up. See `project/float-baseline.json`.
+  { name: 'floatcheck', script: 'floatcheck.mts', expect: 'nothing new floats or is buried' },
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.
