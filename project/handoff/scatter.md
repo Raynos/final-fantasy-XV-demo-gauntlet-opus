@@ -327,6 +327,27 @@ complaint:
 a closed canopy and the frame is a wall of leaf cards. That is a shot-framing
 problem for whoever owns the corpus, not a vegetation one.
 
+## Gates
+
+`pnpm run check` at `e2ab324`, on a contended tree with six agents running:
+**11/16**. None of the five failures is this lane's, and each was attributed by
+measurement rather than by argument:
+
+- `anycheck` — reported 1 over the ceiling during the suite; re-run immediately
+  after, **`0 any across 0 files`**. A co-agent's in-flight edit.
+- `floatcheck` — `poiFloating: 0 -> 13`. **Run at `39d4d16^` and at `39d4d16`
+  it is 13 / 6 / 909 on both sides, byte for byte.** The regression predates
+  this lane's commit and belongs to whoever moved the POI kits or the terrain.
+  (`instBuried` 909 against a 952 baseline is *down* on both sides.)
+- `uxcheck`, `combatloop`, `driftcheck` — all three died with "Target page,
+  context or browser has been closed". Contention, not content; this lane
+  touches no UI, no combat and no camera.
+
+`build`, `orphans`, `silhouette`, `geocheck`, `hydrocheck`, `integration`,
+`creaturecheck`, `roadcheck`, `reachcheck`, `horizoncheck`, `heightcheck` all
+PASS. `reachcheck` reports `Terrain.erosionAt (51312x)` — the erosion API this
+lane consumes is genuinely running.
+
 ## Files touched
 
 - `src/world/veg/Cluster.ts` — new, the sampler.
