@@ -378,28 +378,53 @@ function verdict(ours: Stats, ref: Stats): string {
   const say = (bad: boolean, msg: string) => out.push(`${bad ? 'OFF ' : 'ok  '} ${msg}`);
   const d = (k: keyof Stats): string => `${ours[k].toFixed(1)} vs ${ref[k].toFixed(1)}`;
 
+  /**
+   * A two-sided check, printed as **one** line: the arm that fired, or a
+   * neutral `ok` when neither did.
+   *
+   * `say` twice does not work for a two-sided test. It printed both arms
+   * unconditionally, so a frame clipping three times the reference still
+   * emitted `ok   clipping 1.50% vs 0.50% — nothing in the frame reaches
+   * white` directly above the line saying it blows out far more — the two
+   * sentences contradict each other and the true one is not marked. An
+   * instrument whose prose says the opposite of its number is worse than no
+   * prose, and this file exists because grading against an unreliable
+   * impression is what it is meant to replace.
+   */
+  const sayPair = (low: boolean, lowMsg: string, high: boolean, highMsg: string, okMsg: string) => {
+    if (low) say(true, lowMsg);
+    else if (high) say(true, highMsg);
+    else say(false, okMsg);
+  };
+
   say(Math.abs(ours.shRmB - ref.shRmB) > 8,
     `shadow warmth  R-B ${d('shRmB')}${ours.shRmB > ref.shRmB ? ' — our shadows are warmer than the reference' : ' — our shadows are cooler than the reference'}`);
   say(Math.abs(ours.hiRmB - ref.hiRmB) > 8,
     `highlight warmth R-B ${d('hiRmB')}${ours.hiRmB > ref.hiRmB ? ' — our highlights are warmer' : ' — our highlights are cooler'}`);
   say(Math.abs((ours.hiRmB - ours.shRmB) - (ref.hiRmB - ref.shRmB)) > 12,
     `split-tone SPREAD hi-sh ${(ours.hiRmB - ours.shRmB).toFixed(1)} vs ${(ref.hiRmB - ref.shRmB).toFixed(1)} — confounded by sky fraction; only read this against a scene-matched slice`);
-  say(ours.clip < ref.clip * 0.25,
-    `clipping ${ours.clip.toFixed(2)}% vs ${ref.clip.toFixed(2)}% — nothing in the frame reaches white. Zero clipping is what makes a grade read veiled`);
-  say(ours.clip > ref.clip * 4 + 1,
-    `clipping ${ours.clip.toFixed(2)}% vs ${ref.clip.toFixed(2)}% — blowing out far more of the frame than the reference does`);
+  const clipD = `clipping ${ours.clip.toFixed(2)}% vs ${ref.clip.toFixed(2)}%`;
+  sayPair(
+    ours.clip < ref.clip * 0.25,
+    `${clipD} — nothing in the frame reaches white. Zero clipping is what makes a grade read veiled`,
+    ours.clip > ref.clip * 4 + 1,
+    `${clipD} — blowing out far more of the frame than the reference does`,
+    `${clipD} — the frame reaches white about as often as the reference`);
   say(ours.p01 > ref.p01 + 8,
-    `black point ${d('p01')} — lifted further than the reference; the frame will read hazy`);
+    `black point ${d('p01')}${ours.p01 > ref.p01 + 8 ? ' — lifted further than the reference; the frame will read hazy' : ' — as deep as the reference'}`);
   say(ours.p50 < ref.p50 - 20 || ours.p50 > ref.p50 + 20,
     `median luma ${d('p50')} — where the mass of the image sits`);
-  say(ours.sat > ref.sat + 6,
-    `saturation ${ours.sat.toFixed(1)}% vs ${ref.sat.toFixed(1)}% — FFXV is a desaturated grade; sunlit grass medians olive #6f753b`);
-  say(ours.sat < ref.sat - 8,
-    `saturation ${ours.sat.toFixed(1)}% vs ${ref.sat.toFixed(1)}% — flatter than the reference, which is a different failure from being too punchy`);
+  const satD = `saturation ${ours.sat.toFixed(1)}% vs ${ref.sat.toFixed(1)}%`;
+  sayPair(
+    ours.sat < ref.sat - 8,
+    `${satD} — flatter than the reference, which is a different failure from being too punchy`,
+    ours.sat > ref.sat + 6,
+    `${satD} — FFXV is a desaturated grade; sunlit grass medians olive #6f753b`,
+    `${satD} — as saturated as the reference`);
   say(Math.abs(ours.meanL - ref.meanL) > 25,
     `exposure, mean luma ${d('meanL')}`);
   say(ours.stops < ref.stops - 1.5,
-    `range ${ours.stops.toFixed(2)} stops vs ${ref.stops.toFixed(2)} — using less of the display than the reference does`);
+    `range ${ours.stops.toFixed(2)} stops vs ${ref.stops.toFixed(2)}${ours.stops < ref.stops - 1.5 ? ' — using less of the display than the reference does' : ' — using the display as fully as the reference'}`);
   return out.join('\n');
 }
 
