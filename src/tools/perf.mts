@@ -259,7 +259,7 @@ async function main() {
   const worst = rows.reduce((a, b) => (a.fps < b.fps ? a : b));
   const meanFps = rows.reduce((s, r) => s + r.fps, 0) / rows.length;
   const medianFrame = quantiles(rows.map((r) => r.thru)).median;
-  const validity = validate(floor, medianFrame);
+  const validity = validate(floor, medianFrame, floorStart.iqrMs);
 
   console.log('-'.repeat(80));
   console.log(`mean ${meanFps.toFixed(1)} fps   worst ${worst.fps.toFixed(0)} fps (${worst.name})`);

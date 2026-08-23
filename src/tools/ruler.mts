@@ -162,8 +162,17 @@ export interface Validity {
  * Both conditions are necessary. Requiring only that the bias sit inside the
  * IQR passes trivially when the IQR is enormous — that is precisely what a
  * contended machine produces.
+ *
+ * @param startIqrMs the floor measured *before* the run, when there is one.
+ *   With it, a void run can say which of two very different things happened,
+ *   and they want opposite responses: a floor that was already wide at the
+ *   start is somebody else's load, and you should wait; a floor that *grew*
+ *   during the run is the game itself destabilising, and waiting will not help.
+ *   `gameplay.mts` voided twice on a provably quiet machine with the floor
+ *   going 2.30 -> 5.18 ms across the run, while the message told the reader to
+ *   go and find the contention. There wasn't any.
  */
-export function validate(floor: Floor, frameMs: number): Validity {
+export function validate(floor: Floor, frameMs: number, startIqrMs?: number): Validity {
   const biasOk = Math.abs(floor.biasMs) < floor.iqrMs;
   const floorOk = floor.iqrMs < 0.25 * frameMs;
   if (biasOk && floorOk) return { valid: true, biasOk, floorOk };
@@ -181,7 +190,13 @@ export function validate(floor: Floor, frameMs: number): Validity {
       (floorOk
         ? ''
         : `The noise floor is ${floor.iqrMs.toFixed(2)} ms against a ${frameMs.toFixed(1)} ms frame (${pct}%), ` +
-          'so nothing in this frame is separable. This is what a CONTENDED machine looks like — ' +
+          'so nothing in this frame is separable. ' +
+          (startIqrMs != null && floor.iqrMs > startIqrMs * 1.6
+            ? `The floor GREW during the run (${startIqrMs.toFixed(2)} -> ${floor.iqrMs.toFixed(2)} ms), which is ` +
+              'the workload destabilising rather than the machine being busy — streaming, GC or a cache filling. ' +
+              'Waiting for a quiet machine will NOT fix this one; the run itself is what got noisier. ' +
+              'The hitch list below is still real and still worth reading. '
+            : 'This is what a CONTENDED machine looks like — ') +
           'wait until the other worktrees are quiet and measure again.'),
   };
 }

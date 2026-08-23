@@ -325,7 +325,7 @@ async function main() {
   const floorEnd: Floor = out.floorEnd;
   const floor: Floor = floorEnd.iqrMs > floorStart.iqrMs ? floorEnd : floorStart;
   const medianFrame = quantiles(out.results.map((r) => r.thru)).median;
-  const validity = validate(floor, medianFrame);
+  const validity = validate(floor, medianFrame, floorStart.iqrMs);
   const targetMs = 1000 / o.target;
 
   console.log(
