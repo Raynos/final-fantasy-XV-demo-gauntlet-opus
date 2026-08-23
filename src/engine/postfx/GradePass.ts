@@ -130,10 +130,20 @@ export class GradePass extends FilterPass {
           vec3 graded = mix(sampleLut(tLutA, disp), sampleLut(tLutB, disp), uLutMix);
           disp = mix(disp, graded, uLutAmount);
 
-          // film grain: finer in the highlights, coarse in the shadows
+          // Film grain, mid-weighted: 4*l*(1-l) peaks at mid grey and falls to
+          // zero at both rails. Real film grain is densest in the mids because
+          // that is where the most silver halide is developed; it is invisible
+          // in a blown highlight and it is not what makes a shadow noisy.
+          //
+          // This was shadow-weighted, which put the most grain exactly where an
+          // 8-bit night has the least headroom and where our night frames
+          // already read hazy against the reference. The sibling repo measured
+          // the extreme form of the same mistake -- shadow-weighted grain in
+          // *linear* space swinging 28/255 near black. Ours is applied after
+          // the sRGB encode, which is right and is kept.
           float g = hash12(gl_FragCoord.xy + fract(uTime) * 719.7) - 0.5;
           float gl2 = luma(disp);
-          disp += g * uGrain * (0.35 + 0.85 * (1.0 - smoothstep(0.0, 0.75, gl2)));
+          disp += g * uGrain * (4.0 * gl2 * (1.0 - gl2));
 
           // Temporal dither with a hard floor of ~1.5 LSB. The deep blue
           // gradients of a night sky are exactly the case where 8 bits runs

@@ -117,9 +117,17 @@ export const GRADES: Record<string, GradePreset> = {
     bleach: [0.55, 3.4, 0.55],
     look: {
       toe: 0.012, shoulder: 0.96, pivot: 0.40, contrast: 1.21,
+      // Measured negative, 2026-08-23: pulling this from [0.88,0.97,1.17] to
+      // [0.95,0.99,1.08] -- most of the way to neutral -- moved the daylight
+      // shadow R-B only -9.7 -> -8.8 against a +5.8 reference. Like the
+      // highlight cast that produced `bleach`, our shadow coolness is in the
+      // scene and not in the grade: it is the ambient probe, which is what
+      // sibling-ports 3.8 exists to evaluate. Reverted rather than kept, so the
+      // grade does not carry a change that bought 0.9 points of a 15-point gap
+      // and cost the atmosphere lane's intent.
       shadowTint: [0.88, 0.97, 1.17], midTint: [1.0, 1.0, 0.985], highTint: [1.04, 1.0, 0.94],
       highGate: 1.0,
-      sat: 0.99, satShadow: 1.0, satHigh: 0.88,
+      sat: 0.99, satShadow: 0.84, satHigh: 0.88,
       mixer: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
       fade: 0.006, fadeTint: [0.04, 0.06, 0.11],
     },
@@ -150,7 +158,7 @@ export const GRADES: Record<string, GradePreset> = {
       toe: 0.030, shoulder: 0.78, pivot: 0.39, contrast: 1.19,
       shadowTint: [0.66, 0.89, 1.42], midTint: [1.01, 1.0, 0.99], highTint: [1.10, 1.01, 0.87],
       highGate: 1.0,
-      sat: 1.02, satShadow: 1.08, satHigh: 0.82,
+      sat: 1.00, satShadow: 0.90, satHigh: 0.82,
       mixer: [1.0, 0.01, -0.01, 0.0, 1.0, 0.0, -0.02, 0.01, 1.0],
       fade: 0.012, fadeTint: [0.05, 0.08, 0.15],
     },
@@ -205,6 +213,15 @@ export const GRADES: Record<string, GradePreset> = {
 
 const LUT_SIZE = 32;
 
+/**
+ * How hard `GradeLook.toe` expands the shadows, per unit of `toe`.
+ *
+ * `toe` used to be a lift in display units and is now an expansion strength;
+ * this constant is what re-scales the presets' existing numbers into the new
+ * meaning without re-tuning all four by hand. See `bakeLut`.
+ */
+const SHADOW_SLOPE = 4.0;
+
 function srgbToLin(c: number) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
 function linToSrgb(c: number) { return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(Math.max(c, 0), 1 / 2.4) - 0.055; }
 function sat01(v: number) { return v < 0 ? 0 : v > 1 ? 1 : v; }
@@ -253,10 +270,31 @@ export function bakeLut(preset: GradePreset): THREE.DataTexture {
           d[i] = x;
         }
 
-        // toe + shoulder: never let pure black or pure white hit the rails
+        // Toe and shoulder.
+        //
+        // The toe is a shadow *expansion*, not a lift pedestal. It was
+        // `toe + (1 - toe) * x`, which raises the black floor by `toe` for
+        // every pixel in the frame: at `night`'s 0.055 that is a floor near
+        // 14/255 before dither, and the reference night corpus sits at a 0.1
+        // percentile of 1.0 with 11.12 stops against our 8.49.
+        //
+        // That lift was invisible for as long as the grain was shadow-weighted,
+        // because symmetric noise in the darkest band dithered pixels back down
+        // and the measured black point read 5.1 rather than the 9.1 that was
+        // really there. Mid-weighting the grain is what exposed it.
+        //
+        // Instead: identity above `knee`, and below it the range is expanded
+        // toward zero with slope `1 + toe*SHADOW_SLOPE`, so the deepest shadow
+        // reaches black while the band just above it is *spread* rather than
+        // crushed. Separation in the shadows is what the pedestal was for, and
+        // expansion buys more of it than a lift does. Banding has the explicit
+        // 1.5-LSB temporal dither in `GradePass` to fall into -- that is what
+        // the dither is for, and it does not cost a black point to provide.
+        const knee = 0.06;
         for (let i = 0; i < 3; i++) {
           let x = sat01(d[i]);
-          x = L.toe + (1.0 - L.toe) * x;                       // lifted toe
+          if (x < knee) x = knee - (knee - x) * (1 + L.toe * SHADOW_SLOPE);
+          x = sat01(x);
           x = x * L.shoulder + (1.0 - L.shoulder) * (x * x * (3 - 2 * x)); // soft shoulder
           d[i] = x;
         }
