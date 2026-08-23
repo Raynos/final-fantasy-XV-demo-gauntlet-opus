@@ -13,7 +13,7 @@
  */
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, runTool } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -129,4 +129,4 @@ async function main() {
   console.log(`\n${shots.length} shots -> ${out}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+await runTool(main);

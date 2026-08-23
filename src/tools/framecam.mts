@@ -25,7 +25,7 @@
  */
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, runTool } from './harness.mts';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -119,5 +119,5 @@ async function main() {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
-  main().catch((e) => { console.error(e); process.exit(1); });
+  await runTool(main);
 }

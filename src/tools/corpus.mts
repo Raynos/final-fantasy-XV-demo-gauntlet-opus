@@ -46,7 +46,7 @@
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { call, ensureDaemon, harnessArgs, announceBuild, withBlankPage } from './harness.mts';
+import { call, ensureDaemon, harnessArgs, announceBuild, withBlankPage, runTool } from './harness.mts';
 import type { ShotsResponse } from './harness.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -330,4 +330,4 @@ async function main() {
   console.log(`\n${total} shots across ${cats.length} sheets -> ${path.relative(ROOT, outDir)}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+await runTool(main);

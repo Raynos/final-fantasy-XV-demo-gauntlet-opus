@@ -899,6 +899,8 @@ interface Job<T = unknown> {
   run: () => Promise<T>;
   resolve: (v: T) => void;
   reject: (e: unknown) => void;
+  /** Fires the `429` while the client still cares; cleared once the job runs. */
+  timer?: NodeJS.Timeout;
 }
 
 /**
@@ -941,10 +943,35 @@ class Scheduler {
 
   submit<T>(lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.queues[lane].push({
+      const job: Job = {
         lane, agent, kind, enqueuedAt: Date.now(), deadlineMs, run,
         resolve: resolve as (v: unknown) => void, reject,
-      });
+      };
+      /**
+       * The deadline fires from a TIMER, not from the dispatch check.
+       *
+       * The first version only tested `waited > deadlineMs` when the job
+       * reached the front of the queue -- so a 2-second deadline behind a
+       * 20-shot sweep returned its `429` seventy seconds later. That is not a
+       * deadline, it is a note about the past: the client had already hung for
+       * exactly as long as the deadline existed to prevent. "No tool hangs for
+       * 300 s" only means something if the answer arrives when it is still
+       * useful.
+       *
+       * The job is pulled out of its queue on the way, so nothing later runs
+       * work whose client has gone.
+       */
+      if (deadlineMs > 0) {
+        job.timer = setTimeout(() => {
+          const q = this.queues[lane];
+          const i = q.indexOf(job);
+          if (i < 0) return;                       // already running; let it finish
+          q.splice(i, 1);
+          job.reject(busyError(this, Date.now() - job.enqueuedAt));
+        }, deadlineMs);
+        job.timer.unref?.();
+      }
+      this.queues[lane].push(job);
       this.pump();
     });
   }
@@ -952,9 +979,20 @@ class Scheduler {
   depth(): number { return LANES.reduce((n, l) => n + this.queues[l].length, 0); }
   get busy(): number { return this.busyWorkers; }
 
-  /** Who is ahead of a job that just arrived, so the busy answer can say so. */
+  /** Agents whose work is on a worker right now, by name. */
+  private running = new Map<string, number>();
+
+  /**
+   * Who is ahead of a job that just arrived — QUEUED *and* RUNNING.
+   *
+   * Counting only the queue produced "0 job(s) queued" as the explanation for
+   * being turned away, which is worse than saying nothing: the four agents
+   * actually holding the browsers had all been dequeued, so the honest answer
+   * looked like an empty machine refusing work.
+   */
   ahead(): Record<string, number> {
     const by: Record<string, number> = {};
+    for (const [agent, n] of this.running) by[agent] = n;
     for (const l of LANES) for (const j of this.queues[l]) by[j.agent] = (by[j.agent] ?? 0) + 1;
     return by;
   }
@@ -993,15 +1031,13 @@ class Scheduler {
     while (this.busyWorkers < WORKERS) {
       const job = this.take();
       if (!job) return;
+      if (job.timer) clearTimeout(job.timer);
       this.busyWorkers++;
-      const waited = Date.now() - job.enqueuedAt;
-      if (job.deadlineMs > 0 && waited > job.deadlineMs) {
-        this.busyWorkers--;
-        job.reject(busyError(this, waited));
-        continue;
-      }
+      this.running.set(job.agent, (this.running.get(job.agent) ?? 0) + 1);
       void job.run().then(job.resolve, job.reject).finally(() => {
         this.busyWorkers--;
+        const n = (this.running.get(job.agent) ?? 1) - 1;
+        if (n > 0) this.running.set(job.agent, n); else this.running.delete(job.agent);
         if (!this.busyWorkers && this.exclusiveWaiters.length) {
           for (const w of this.exclusiveWaiters.splice(0)) w();
         }
@@ -1038,12 +1074,14 @@ class Scheduler {
 function busyError(sched: Scheduler, waitedMs: number): Error & { busy: true, detail: unknown } {
   const ahead = sched.ahead();
   const who = Object.entries(ahead).sort((a, b) => b[1] - a[1])[0];
+  const total = Object.values(ahead).reduce((a, b) => a + b, 0);
   const e = new Error(
-    `daemon busy: waited ${waitedMs} ms, ${sched.depth()} job(s) queued`
-    + (who ? `, ${who[0]} has ${who[1]} of them ahead of you` : ''),
+    `daemon busy: waited ${waitedMs} ms, ${total} job(s) queued or running`
+    + (who ? `, ${who[0]} has ${who[1]} of them` : '')
+    + `, ${sched.busy}/${WORKERS} workers busy`,
   ) as Error & { busy: true, detail: unknown };
   e.busy = true;
-  e.detail = { busy: true, queueDepth: sched.depth(), waitedMs, ahead };
+  e.detail = { busy: true, queueDepth: sched.depth(), workersBusy: sched.busy, waitedMs, ahead };
   return e;
 }
 

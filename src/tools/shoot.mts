@@ -45,7 +45,7 @@
  * loop: an agent reading a 1600x900 capture gets it downscaled to a 1568 px long edge
  * anyway, so the extra ~2.3 MB a PNG costs buys nothing it can see.
  */
-import { call, ensureDaemon, harnessArgs, announceBuild, pageOpts, isHarnessFlag } from './harness.mts';
+import { call, ensureDaemon, harnessArgs, announceBuild, pageOpts, isHarnessFlag, runTool } from './harness.mts';
 import type { ShotResult, ShotsResponse } from './harness.mts';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -178,4 +178,4 @@ async function main() {
 
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+await runTool(main);
