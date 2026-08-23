@@ -35,11 +35,10 @@
  * round-1 judge noticed all three composites had the game on the same side.
  * `--selftest` asserts the parity correlation is gone.
  */
-import { chromium } from 'playwright';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { withBlankPage } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -257,12 +256,7 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
 
   await mkdir(out, { recursive: true });
   const keys: AnswerKey[] = [];
-  const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
-  try {
-    const page = await browser.newPage({
-      viewport: { width: panelW * 2 + 10, height: panelH + 54 },
-      deviceScaleFactor: 1,
-    });
+  await withBlankPage({ w: panelW * 2 + 10, h: panelH + 54, agent: 'compare', lane: 'sweep' }, async (page) => {
     for (const p of pairs) {
       const seed = (seed0 + p.n * 0x9e37) >>> 0;
       const gameLeft = flip(seed);
@@ -287,9 +281,7 @@ async function build(argv: string[], arg: (n: string, d?: string) => string | un
       });
       console.log(`  ${path.basename(file)}   ${path.basename(p.game)}`);
     }
-  } finally {
-    await browser.close();
-  }
+  });
 
   await writeFile(path.join(out, 'ANSWER-KEY.json'), JSON.stringify(keys, null, 2));
   // Deliberately does NOT print which side is which: stdout may be read by the

@@ -71,10 +71,12 @@ async function pickEncoder(): Promise<Encoder> {
       };
     } catch { /* fall through */ }
   }
-  const { chromium } = await import('playwright');
-  const { CHROMIUM_ARGS } = await import('./chromium.mts');
-  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-  const page = await browser.newPage();
+  // A canvas re-encode needs a browser, not a game. `lease()` rather than
+  // `withBlankPage()` because the encoder outlives any one call: the page is
+  // held for the whole run and given back by `encode.close()`.
+  const { lease } = await import('./harness.mts');
+  const leased = await lease({ blank: true, agent: 'shrink', lane: 'sweep' });
+  const page = leased.page;
   const encode: Encoder = async (src: string, out: string) => {
     const data = `data:image/png;base64,${(await readFile(src)).toString('base64')}`;
     const b64 = await page.evaluate(async ([uri, q]: [string, number]) => {
@@ -89,7 +91,7 @@ async function pickEncoder(): Promise<Encoder> {
     }, [data, quality] as [string, number]);
     await writeFile(out, Buffer.from(b64, 'base64'));
   };
-  encode.close = () => browser.close();
+  encode.close = () => leased.release();
   return encode;
 }
 

@@ -55,12 +55,10 @@
  * source tool: it keeps letterboxing, a DOM HUD strip and capture edges out of
  * a statistic that is meant to describe the *grade*.
  */
-import { chromium } from 'playwright';
-import type { Browser } from 'playwright';
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { withBlankPage } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -243,10 +241,11 @@ function fmtRow(label: string, s: Stats, width: number): string {
 
 /** Decode and measure every file, in one Chromium page. */
 async function measure(files: string[]): Promise<Row[]> {
-  const browser: Browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
   const rows: Row[] = [];
-  try {
-    const page = await browser.newPage();
+  // A blank lease: a decoder, not a game. It costs a browser either way, so it
+  // is counted against the same budget as a capture rather than added to the
+  // machine behind the daemon's back.
+  await withBlankPage({ agent: 'imagestats', lane: 'sweep' }, async (page) => {
     // Serve the bytes as data URIs rather than file:// so the page needs no
     // filesystem access and the tool works from any cwd.
     for (const f of files) {
@@ -256,9 +255,7 @@ async function measure(files: string[]): Promise<Row[]> {
       const s = await page.evaluate(pageStats, uri);
       rows.push({ file: path.basename(f), ...s });
     }
-  } finally {
-    await browser.close();
-  }
+  });
   return rows;
 }
 

@@ -14,10 +14,13 @@
  *
  * `_sheet.html` still holds every shot in one scrollable document for a human.
  *
- * Uses the already-installed chromium (no extra image deps).
+ * Renders through the shared capture daemon (no extra image deps). A contact
+ * sheet needs a browser but not a game, so it takes a BLANK lease: no build
+ * server, no boot, but a real slot against the machine-wide browser budget.
+ * Six tools use a browser as an image renderer, and six uncounted chromiums is
+ * six uncounted chromiums.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
+import { withBlankPage } from './harness.mts';
 import { readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -61,24 +64,22 @@ const html = `<!doctype html><meta charset=utf8><style>
 const htmlPath = path.join(dir, '_sheet.html');
 await writeFile(htmlPath, html);
 
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width, height: 800 } });
-await page.goto(`file://${htmlPath}`, { waitUntil: 'load', timeout: 180000 });
-// every <img> decoded before we screenshot, or the sheet has holes in it
-await page.evaluate(() => Promise.all(
-  [...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))
-));
-
-const written = [];
+const written: string[] = [];
 let tallest = 0;
-for (let i = 0; i < pages.length; i++) {
-  const el = page.locator('.page').nth(i);
-  const out = path.join(dir, `_sheet-${i + 1}.${png ? 'png' : 'jpg'}`);
-  await writeFile(out, await el.screenshot(png ? { type: 'png' } : { type: 'jpeg', quality: 86 }));
-  tallest = Math.max(tallest, Math.round((await el.boundingBox())?.height ?? 0));
-  written.push(out);
-}
-await browser.close();
+await withBlankPage({ w: width, h: 800, agent: 'sheet', lane: 'sweep' }, async (page) => {
+  await page.goto(`file://${htmlPath}`, { waitUntil: 'load', timeout: 180000 });
+  // every <img> decoded before we screenshot, or the sheet has holes in it
+  await page.evaluate(() => Promise.all(
+    [...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))
+  ));
+  for (let i = 0; i < pages.length; i++) {
+    const el = page.locator('.page').nth(i);
+    const out = path.join(dir, `_sheet-${i + 1}.${png ? 'png' : 'jpg'}`);
+    await writeFile(out, await el.screenshot(png ? { type: 'png' } : { type: 'jpeg', quality: 86 }));
+    tallest = Math.max(tallest, Math.round((await el.boundingBox())?.height ?? 0));
+    written.push(out);
+  }
+});
 
 console.log(`${cells.length} shots -> ${written.length} page(s) in ${path.relative(process.cwd(), dir)}`);
 for (const w of written) console.log(`  ${path.basename(w)}`);

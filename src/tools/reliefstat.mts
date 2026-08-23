@@ -43,13 +43,11 @@
  * what this tool was built to grade — and the reference subsets below crop the
  * same fraction out of the plates so the two are comparable.
  */
-import { chromium } from 'playwright';
-import type { Browser } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
+import { withBlankPage } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
@@ -148,10 +146,8 @@ async function pageRelief(args: { uri: string, roi: Roi }): Promise<Relief> {
 }
 
 async function measure(files: string[], roi: Roi): Promise<Row[]> {
-  const browser: Browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
   const rows: Row[] = [];
-  try {
-    const page = await browser.newPage();
+  await withBlankPage({ agent: 'reliefstat', lane: 'sweep' }, async (page) => {
     for (const f of files) {
       const buf = await readFile(f);
       const mime = MIME[path.extname(f).toLowerCase()] ?? 'image/png';
@@ -159,9 +155,7 @@ async function measure(files: string[], roi: Roi): Promise<Row[]> {
       const r = await page.evaluate(pageRelief, { uri, roi });
       rows.push({ file: path.basename(f), ...r });
     }
-  } finally {
-    await browser.close();
-  }
+  });
   return rows;
 }
 

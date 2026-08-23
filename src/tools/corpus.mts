@@ -47,8 +47,8 @@ import http from 'node:http';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureDaemon, APP_PORT, DAEMON_PORT } from './daemon.mts';
-import type { ShotsResponse } from './daemon.mts';
+import { ensureDaemon, daemonPort, harnessArgs, announceBuild, withBlankPage } from './harness.mts';
+import type { ShotsResponse } from './harness.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -122,7 +122,7 @@ async function index(): Promise<{order: string[], groups: Map<string, string[]>,
 const callDaemon = <T,>(route: string, body: unknown): Promise<T> => new Promise<T>((resolve, reject) => {
   const payload = Buffer.from(JSON.stringify(body));
   const req = http.request({
-    host: '127.0.0.1', port: DAEMON_PORT, path: route, method: 'POST',
+    host: '127.0.0.1', port: daemonPort(), path: route, method: 'POST',
     headers: { 'content-type': 'application/json', 'content-length': payload.length },
   }, (res) => {
     let raw = '';
@@ -151,7 +151,6 @@ interface SheetOpts {
 
 /** Tile a list of PNGs into one sheet, captioned with each shot's `doc`. */
 async function sheet(dir: string, names: string[], docs: Map<string, string>, { cols, w, title, out }: SheetOpts) {
-  const { chromium } = await import('playwright');
   const cells = [];
   for (const n of names) {
     try {
@@ -176,14 +175,16 @@ async function sheet(dir: string, names: string[], docs: Map<string, string>, { 
     cells.map((c) => `<figure><img src="${c.data}"><figcaption><div class=n>${esc(c.n)}</div>`
       + `<div class=d>${esc(c.doc)}</div></figcaption></figure>`).join('')
   }</div></div>`;
-  const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: w, height: 900 } });
-  await page.setContent(html);
-  await page.waitForLoadState('networkidle');
-  await writeFile(out, await page.locator('.page').screenshot(
-    out.endsWith('.png') ? { type: 'png' } : { type: 'jpeg', quality: 86 }
-  ));
-  await browser.close();
+  // A blank lease: this needs a browser to lay out HTML, not a game. It still
+  // counts against the machine-wide budget, which is the whole reason it is not
+  // simply launching its own.
+  await withBlankPage({ w, h: 900, agent: 'corpus', lane: 'sweep' }, async (page) => {
+    await page.setContent(html);
+    await page.waitForLoadState('networkidle');
+    await writeFile(out, await page.locator('.page').screenshot(
+      out.endsWith('.png') ? { type: 'png' } : { type: 'jpeg', quality: 86 }
+    ));
+  });
   return cells.length;
 }
 
@@ -283,6 +284,7 @@ async function scout(jobs: ScoutJob[]) {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
+  const ha = harnessArgs(process.argv.slice(2), { lane: 'sweep', agent: 'corpus' });
   if (o.frame) return frame(o.frame);
   if (o.scout) return scout(o.scout);
   const { order, groups, docs } = await index();
@@ -300,7 +302,8 @@ async function main() {
 
   if (!o.sheetOnly) {
     const t0 = Date.now();
-    if (await ensureDaemon()) console.log(`[corpus] started capture daemon (app on ${APP_PORT})`);
+    if (await ensureDaemon()) console.log('[corpus] started the capture daemon');
+    announceBuild(ha);
     const errors = [];
     const step = o.chunk > 0 ? o.chunk : names.length;
     for (let i = 0; i < names.length; i += step) {
@@ -311,6 +314,10 @@ async function main() {
       // so a corpus that is going to be compared against itself must boot.
       const r = await callDaemon<ShotsResponse>('/shots', {
         shots: batch, out: outDir, settle: o.settle, w: 1600, h: 900, cold: i === 0 && !o.warm,
+        // A corpus is the definition of the sweep lane: it must never starve a
+        // co-agent's single `fix` shot, and it is long enough that fair-share
+        // across agents is what keeps everyone else's captures answerable.
+        build: ha.build, lane: 'sweep', agent: ha.agent,
       });
       for (const s of r.results) {
         console.log(`  ${s.name.padEnd(26)} ${String(s.triangles).padStart(9)} tris ${String(s.calls).padStart(5)} calls ${String(s.ms).padStart(6)}ms`);
