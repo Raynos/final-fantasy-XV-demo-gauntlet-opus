@@ -22,6 +22,9 @@ import type { CtrlSample, Landmark } from './terrain/Field.ts';
 import type { TerrainResources, TerrainTextures } from './terrain/TerrainMaterial.ts';
 import type { RoadSpine, SpinePoint } from './vehicle/RoadPath.ts';
 
+/** Scratch for the per-frame drawing-buffer query, so it allocates nothing. */
+const _bufSize = new THREE.Vector2();
+
 /**
  * The land of Lucis: an 8.2 km field covering Leide, Duscae and Cleigne, drawn
  * with a camera-centred geometry clipmap and a six-layer height-blended,
@@ -754,6 +757,16 @@ export class Terrain implements Ground {
   lateUpdate(dt: number, game: Game) {
     const p = game.camera.position;
     this.clipmap.update(p.x, p.z);
+    // World metres a pixel covers, per metre of camera distance. The terrain
+    // shader's analytic relief band-limits every octave against this, which is
+    // what lets one expression run from the camera to the horizon; it has to
+    // come from the projection because deriving it in the shader from dFdx of
+    // the world position is chaotic wherever the clipmap's triangles are about
+    // a pixel across, which is exactly the far ranges the relief exists for.
+    const h = game.renderer.getDrawingBufferSize(_bufSize).y;
+    this.res.uniforms.uPxScale.value = h > 0
+      ? (2 * Math.tan(THREE.MathUtils.degToRad(game.camera.fov) * 0.5)) / h
+      : this.res.uniforms.uPxScale.value;
     if (!this._gbufferPatched && game.post && game.post.gtao) {
       patchGBufferMaterial(game.post.gtao.normalMaterial, this.res);
       this._gbufferPatched = true;
