@@ -175,12 +175,12 @@ void main() {
   float tr = 1.0;
   float meanT = 0.0, wsum = 0.0;
   int miss = MISS_MAX;
-  float fine = clamp(t0 * 0.012, 30.0, 300.0);
+  float fine = clamp(t0 * 0.017, 30.0, 440.0);
   t += fine * 2.0 * jitter;         // 2.0 == the coarse/fine ratio below
 
-  for (int i = 0; i < 224; i++) {
+  for (int i = 0; i < 192; i++) {
     if (tr < 0.008 || t > t1) break;
-    fine = clamp(t * 0.012, 30.0, 300.0);
+    fine = clamp(t * 0.017, 30.0, 440.0);
     // Skip ratio, and it is the number that decides the silhouette.
     //
     // The probe runs cloudDensity with the erosion octave off, so it can only
