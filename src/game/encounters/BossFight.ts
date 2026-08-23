@@ -4,7 +4,7 @@ import { TitanArena } from './TitanArena.ts';
 import { threatPos } from '../../characters/enemies/EnemyBase.ts';
 import type { EncounterDirector, StrikeSpec } from './EncounterDirector.ts';
 import type { SetPiece } from './SpawnTables.ts';
-import type { Enemy, EnemyAttack } from '../../characters/enemies/EnemyBase.ts';
+import type { Enemy } from '../../characters/enemies/EnemyBase.ts';
 import type { Enemies } from '../../characters/Enemies.ts';
 import type { VFX } from '../../combat/VFX.ts';
 import type { Game } from '../Game.ts';
@@ -136,13 +136,20 @@ export class BossFight {
   /**
    * Custom strike resolution so a forty-metre fist hits where it lands.
    *
-   * **Nothing calls this.** `Enemies.onStrike` goes to
-   * `EncounterDirector.resolveStrike`, which sweeps an arc off the enemy's
-   * root and never asks the boss whether it wants the blow — so Titan's slam,
-   * `slamAt` and `_handPos` below have never run. Wiring it up is a behaviour
-   * change, not a typing one; it is left here and typed so the gap is visible.
+   * **Called by `EncounterDirector.resolveStrike`, which gives the active boss
+   * fight first refusal on every blow.** It did not used to be: `Enemies.
+   * onStrike` went straight to the generic sweep, which starts at the enemy's
+   * *root* and reaches `hitRadius` along its heading. That is the right model
+   * for a sabertusk and the wrong one for a creature whose fist arrives forty
+   * metres from its navel -- Titan's slam damaged whatever was standing on his
+   * feet and nothing at all where the hand came down, and the crater, the
+   * shockwave and the quake in `slamAt` had never rendered once.
+   *
+   * Returns `true` only when it really handled the blow -- its own boss, an
+   * astral fight, and a hand bone it can find -- so anything else falls
+   * through to the generic path unchanged.
    */
-  resolveStrike(e: Enemy, a: EnemyAttack) {
+  resolveStrike(e: Enemy, a: StrikeSpec) {
     if (e !== this.boss || this.def.kind !== 'astral') return false;
     const hand = a.id === 'slam_l' ? 'handL' : 'handR';
     const p = this._handPos(hand);
