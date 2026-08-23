@@ -1,0 +1,591 @@
+import * as THREE from 'three';
+import { Noise } from '../../util/Noise.ts';
+import { Rng } from '../../util/Rng.ts';
+import { coverY } from './Seat.ts';
+import type { Ecology } from '../veg/Ecology.ts';
+
+/**
+ * How a built place meets the land: wear as a distance field, and the pad as a
+ * measured cut-and-fill platform.
+ *
+ * Two defects this file exists to fix, both named in
+ * `docs/plans/2026-08-21-fable-procedural-modeling.md` §5.4 and both visible in
+ * `tmp/shots/kits-r0b/poi_alstor_haven.png` — a cream disc standing a metre and
+ * a half proud of the grass on a vertical faceted skirt, with a ring of white
+ * boulders round its foot and no trace of anybody ever having walked to it.
+ *
+ * ## 1. Wear has to be a texture, and it has to store distance
+ *
+ * The obvious construction is a per-vertex mask: rasterise the paths, ask each
+ * vertex whether it is on one, write 1 or 0. It does not survive, and the
+ * reason is arithmetic rather than taste. A path is 1.5 m wide and the pad
+ * lattice is 1.5-1.7 m, so on average a path passes *between* two vertices; the
+ * mask is 0 at both, and the linear reconstruction between them is 0 as well.
+ * The sibling measured the peak reconstructed value of a 1.5 m path on a 1.7 m
+ * lattice at **0.31** of what was authored — a path that is there in the data
+ * and gone in the frame. {@link reconstructionTest} runs that same comparison
+ * on our own numbers and is the check this item ships with.
+ *
+ * A **distance field** survives, because bilinear interpolation of a linear
+ * ramp *is* the ramp. So {@link WearField} rasterises `distance to the nearest
+ * path centreline` at 0.5 m per texel, hands it to the GPU as an 8-bit texture,
+ * and lets the shader do the thresholding after the interpolation rather than
+ * before it. That ordering is the whole item.
+ *
+ * ## 2. A pad is an earthwork, not a plinth
+ *
+ * {@link gradePad} builds the platform as a real cut-and-fill: the deck is
+ * level, the ground is not, and the difference is carried by a batter that runs
+ * out until it *meets the ground at whatever height the ground happens to be*
+ * and then buries itself. That is the single difference between a platform and
+ * a cake stand — a cake stand has a bottom edge, an earthwork does not.
+ *
+ * Four things it does that a cylinder cannot:
+ *
+ * - **It measures its own fill.** `cut` and `fill` come back in cubic metres,
+ *   summed over the grid, so the spoil that appears on the cut side is the
+ *   spoil the cut actually produced.
+ * - **1:3 fill, 1:1.5 cut, and a 1:9 ramp** written down the road bearing —
+ *   the slopes a wheeled machine can actually build and drive.
+ * - **Spoil berms ride the pad isoline**, not a circle: they sit on the crest
+ *   where the batter meets the hillside, which is where a dozer leaves them.
+ * - **The outline wobbles.** A perfectly offset rounded rectangle of earthwork
+ *   is the tell — real cut lines wander with the material. Two octaves of
+ *   angular noise, ~8% of the radius.
+ */
+
+/* ========================================================================== */
+/* Wear fields                                                                */
+/* ========================================================================== */
+
+/** Metres of world per texel. The plan's number, and it is a resolution floor. */
+export const WEAR_MPT = 0.5;
+/**
+ * How far the stored distance ramp runs before it saturates, in metres.
+ *
+ * Everything past this is "not worn" and stores 0. It has to be several times
+ * the widest path or the ramp has nowhere to be a ramp — which is the mask
+ * failure again, just with a coarser staircase.
+ */
+export const WEAR_REACH = 6.0;
+
+/** A polyline someone walks along, in the field's own local frame. */
+export interface WearLine {
+  /** `[x0, z0, x1, z1, ...]`, metres, local to the field centre. */
+  pts: number[];
+  /** Half-width of the trodden strip, metres. */
+  half: number;
+  /** 0..1 — how hard the ground is worn along it. */
+  weight?: number;
+}
+
+/**
+ * A square raster of `distance to the nearest worn thing`, centred on a place.
+ *
+ * The stored byte is `clamp(1 - d / reach) * weight`, i.e. **1 on the
+ * centreline falling linearly to 0 at `reach`**. Storing the ramp rather than
+ * the threshold is what makes it survive magnification: the texture is sampled
+ * at 0.5 m/texel and drawn across a pad whose triangles are metres wide, so
+ * every visible pixel is an interpolation between texels and nothing else.
+ */
+export class WearField {
+  /** World x of the field centre. */
+  cx: number;
+  /** World z of the field centre. */
+  cz: number;
+  /** Half-width of the covered square, metres. */
+  half: number;
+  /** Texels per side. */
+  n: number;
+  /** Row-major `n * n`, 0..1. */
+  data: Float32Array;
+
+  constructor(cx: number, cz: number, half: number, mpt = WEAR_MPT) {
+    this.cx = cx;
+    this.cz = cz;
+    this.half = half;
+    // Cap the raster so a 60 m imperial compound cannot ask for 240x240 texels
+    // at half-metre resolution and then be sampled at ten metres per pixel
+    // anyway. 128 is 0.5 m/texel out to a 32 m half-width and degrades
+    // gracefully past it.
+    this.n = Math.min(128, Math.max(16, Math.ceil((half * 2) / mpt)));
+    this.data = new Float32Array(this.n * this.n);
+  }
+
+  /** Metres of world per texel, after the size cap. */
+  get mpt() { return (this.half * 2) / this.n; }
+
+  /** Local metres -> texel coordinate (fractional). */
+  _toTexel(x: number, z: number) {
+    const s = this.n / (this.half * 2);
+    return [(x + this.half) * s, (z + this.half) * s];
+  }
+
+  /**
+   * Stamp one trodden polyline into the field.
+   *
+   * Distance is taken to the **segment**, not to its endpoints, so a dog-leg in
+   * a desire line does not pinch. The write is a `max`, so two paths crossing
+   * make a junction rather than a double-dark patch.
+   */
+  addLine(l: WearLine) {
+    const w = l.weight ?? 1;
+    const reach = WEAR_REACH;
+    const m = this.mpt;
+    for (let k = 0; k + 3 < l.pts.length; k += 2) {
+      const ax = l.pts[k], az = l.pts[k + 1];
+      const bx = l.pts[k + 2], bz = l.pts[k + 3];
+      const lo = this._toTexel(Math.min(ax, bx) - reach - l.half, Math.min(az, bz) - reach - l.half);
+      const hi = this._toTexel(Math.max(ax, bx) + reach + l.half, Math.max(az, bz) + reach + l.half);
+      const i0 = Math.max(0, Math.floor(lo[0])), i1 = Math.min(this.n - 1, Math.ceil(hi[0]));
+      const j0 = Math.max(0, Math.floor(lo[1])), j1 = Math.min(this.n - 1, Math.ceil(hi[1]));
+      const dx = bx - ax, dz = bz - az;
+      const len2 = dx * dx + dz * dz || 1e-6;
+      for (let j = j0; j <= j1; j++) {
+        const pz = (j + 0.5) * m - this.half;
+        for (let i = i0; i <= i1; i++) {
+          const px = (i + 0.5) * m - this.half;
+          let t = ((px - ax) * dx + (pz - az) * dz) / len2;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          const ex = px - (ax + dx * t), ez = pz - (az + dz * t);
+          const d = Math.max(0, Math.hypot(ex, ez) - l.half);
+          if (d >= reach) continue;
+          const v = (1 - d / reach) * w;
+          const o = j * this.n + i;
+          if (v > this.data[o]) this.data[o] = v;
+        }
+      }
+    }
+  }
+
+  /** Stamp a worn disc — a fire ring, a turning circle, a pump island. */
+  addDisc(x: number, z: number, r: number, weight = 1) {
+    this.addLine({ pts: [x, z, x + 1e-4, z], half: r, weight });
+  }
+
+  /** Sample the field with bilinear reconstruction — what the GPU will see. */
+  sample(x: number, z: number) {
+    const [u, v] = this._toTexel(x, z);
+    const fu = u - 0.5, fv = v - 0.5;
+    const i0 = Math.floor(fu), j0 = Math.floor(fv);
+    const tu = fu - i0, tv = fv - j0;
+    const at = (i: number, j: number) => {
+      if (i < 0 || j < 0 || i >= this.n || j >= this.n) return 0;
+      return this.data[j * this.n + i];
+    };
+    const a = at(i0, j0) * (1 - tu) + at(i0 + 1, j0) * tu;
+    const b = at(i0, j0 + 1) * (1 - tu) + at(i0 + 1, j0 + 1) * tu;
+    return a * (1 - tv) + b * tv;
+  }
+
+  /**
+   * Multiply the wear into a geometry's vertex colours, sampled at its own
+   * vertices — the cheap carrier, and the one the 124 POI aprons use.
+   *
+   * The plan asks for a texture and {@link applyWear} is that. It is the right
+   * answer where there is one pad (Hammerhead), and the wrong one at 124,
+   * because a per-place field means a per-place material, and a material split
+   * is a **draw call** — 8.7 µs each against a budget of 800, with ten POIs in
+   * frame in a wide shot. So the aprons carry the field in `attributes.color`
+   * instead.
+   *
+   * That is not the failure the plan measured. What fails as vertex data is a
+   * **mask**: 1 inside the path, 0 outside, on a lattice coarser than the path,
+   * reconstructing to 0.31 of the authored value. A *ramp* interpolates
+   * linearly across a triangle, which is exactly what it did in the texture —
+   * the encoding is what survives, not the carrier. {@link reconstructionTest}
+   * measures both and is what this claim rests on.
+   *
+   * @param g       a geometry whose `uv` is world metres about the field centre
+   * @param strength how dark the fully worn ground goes, 0..1
+   */
+  sampleInto(g: THREE.BufferGeometry, strength = 0.34, lo = 0.18, hi = 0.72) {
+    const uv = g.attributes.uv, col = g.attributes.color;
+    if (!uv || !col) return g;
+    for (let i = 0; i < uv.count; i++) {
+      const d = this.sample(uv.getX(i), uv.getY(i));
+      const w = Math.max(0, Math.min(1, (d - lo) / (hi - lo)));
+      const k = 1 - strength * w * w * (3 - 2 * w);
+      col.setXYZ(i, col.getX(i) * k, col.getY(i) * k * 0.985, col.getZ(i) * k * 0.96);
+    }
+    col.needsUpdate = true;
+    return g;
+  }
+
+  /**
+   * The 8-bit texture the pad material samples.
+   *
+   * `LinearFilter` on purpose and it is the point of the whole class: the
+   * interpolation happens on the *distance*, and the shader thresholds after.
+   * `ClampToEdgeWrapping` because the field is a place, not a tile.
+   */
+  texture(): THREE.DataTexture {
+    const bytes = new Uint8Array(this.n * this.n);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.round(Math.min(1, this.data[i]) * 255);
+    const t = new THREE.DataTexture(bytes, this.n, this.n, THREE.RedFormat, THREE.UnsignedByteType);
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.needsUpdate = true;
+    return t;
+  }
+}
+
+/**
+ * Walk a desire line between two places.
+ *
+ * People do not walk the straight line and they do not walk a smooth curve
+ * either: they leave the direct route where the ground makes them and rejoin
+ * it, so a real path is the straight line plus a couple of low-frequency
+ * lateral wanders. Three control points is enough to read as a path and few
+ * enough that the raster stays cheap.
+ */
+export function desireLine(
+  ax: number, az: number, bx: number, bz: number, rng: Rng, sway = 0.11,
+): number[] {
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz) || 1;
+  const nx = -dz / len, nz = dx / len;
+  const pts: number[] = [];
+  const N = Math.max(3, Math.round(len / 6));
+  // Two sine lobes at random phase, tapering to zero at both ends: a path is
+  // pinned at its destinations and free in between.
+  const p1 = rng.range(0, Math.PI * 2), p2 = rng.range(0, Math.PI * 2);
+  const a1 = rng.gauss(0, sway) * len, a2 = rng.gauss(0, sway * 0.45) * len;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const taper = Math.sin(Math.PI * t);
+    const off = taper * (a1 * Math.sin(t * Math.PI + p1) + a2 * Math.sin(t * Math.PI * 3 + p2));
+    pts.push(ax + dx * t + nx * off, az + dz * t + nz * off);
+  }
+  return pts;
+}
+
+/* ========================================================================== */
+/* The pad                                                                    */
+/* ========================================================================== */
+
+export interface PadOpts {
+  /** For terrain heights and the drawn-surface envelope. */
+  eco: Ecology;
+  /** World centre. */
+  x: number;
+  /** World centre. */
+  z: number;
+  /** Deck height, world y — what the kit builds on. */
+  base: number;
+  /** Nominal deck radius, metres. */
+  r: number;
+  /** Seeds the outline wobble and the spoil. */
+  seed: number;
+  /** How far this kind of place is still drawn; picks the clipmap ring. */
+  cull?: number;
+  /** Bearing (radians, world) of the road approach; a 1:9 ramp is cut down it. */
+  rampYaw?: number | null;
+  /** Fill batter, run per unit rise. 3 is a dozed embankment. */
+  fill?: number;
+  /** Cut batter, run per unit rise. Steeper than fill: it stands in situ. */
+  cut?: number;
+  /** Outline wobble as a fraction of `r`. */
+  wobble?: number;
+  /** Angular / radial resolution. */
+  seg?: number;
+}
+
+export interface PadResult {
+  /** Local to the POI group: y is relative to `base`, x/z in the world frame. */
+  geo: THREE.BufferGeometry;
+  /** Cubic metres of material carted in, measured over the grid. */
+  fill: number;
+  /** Cubic metres cut out of the hill, measured over the grid. */
+  cut: number;
+  /** Furthest the earthwork reaches from the centre, metres. */
+  toe: number;
+  /** The wobbled deck edge at a world bearing. */
+  edgeAt(theta: number): number;
+  /** Where the spoil ended up: local `[x, z, scale]` triples, on the isoline. */
+  spoil: number[][];
+}
+
+/**
+ * The engineered platform every settlement, camp and compound stands on.
+ *
+ * Built as a polar grid from the centre out. Inside the wobbled deck edge it is
+ * dead level; outside, it runs down (or up) a constant batter until it reaches
+ * the drawn ground, and the last ring is pushed 120 mm *under* that ground so
+ * the earthwork emerges from the terrain instead of ending on a coplanar line.
+ *
+ * `coverY` rather than `seatY`: this is the one class of object whose whole job
+ * is to be visible lying flat, and `Seat.ts` records the sibling's apron built
+ * on the lower envelope that produced 12,450 frustum pixels with none of them
+ * passing the depth test.
+ *
+ * Vertex colours carry the material story — deck, batter, spoil — so one
+ * material draws the whole earthwork in one call.
+ */
+export function gradePad(o: PadOpts): PadResult {
+  const {
+    eco, x, z, base, r, seed, cull = 400, rampYaw = null,
+    fill = 3, cut = 1.5, wobble = 0.085,
+  } = o;
+  const seg = o.seg ?? Math.max(20, Math.min(48, Math.round(r * 1.6)));
+  const rng = new Rng((seed >>> 0) * 2654435761 % 4294967291);
+  const nz2 = new Noise(seed ^ 0x9e37);
+
+  // The wobbled deck edge. Two octaves in *angle*, so the cut line wanders the
+  // way a dozed edge does rather than scalloping regularly.
+  const edgeAt = (th: number) => {
+    const w = nz2.simplex2(Math.cos(th) * 1.7, Math.sin(th) * 1.7) * 0.68
+      + nz2.simplex2(Math.cos(th) * 4.3 + 11, Math.sin(th) * 4.3 - 7) * 0.32;
+    return r * (1 + wobble * w);
+  };
+
+  // Radial stations: dense across the batter, sparse on the deck, because the
+  // deck is flat and the batter is where every silhouette comes from.
+  const rings: number[] = [];
+  const nDeck = Math.max(3, Math.round(r / 6));
+  for (let i = 0; i <= nDeck; i++) rings.push(i / nDeck);           // 0..1 of edge
+  const OUT = 14;                                                   // batter stations
+  for (let i = 1; i <= OUT; i++) rings.push(1 + i / OUT);           // 1..2 of edge+reach
+
+  const pos: number[] = [];
+  const col: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const spoil: number[][] = [];
+  let fillV = 0, cutV = 0, toe = 0;
+
+  // Deck, batter and spoil colours. Multiplied into one flat ground material,
+  // so this is where "poured surface / raw fill / cast-up spoil" is decided.
+  const C_DECK = [1.0, 1.0, 1.0];
+  const C_BATTER = [0.86, 0.825, 0.78];
+  const C_SPOIL = [0.74, 0.70, 0.65];
+
+  const groundAt = (wx: number, wz: number) => coverY(eco, wx, wz, r * 0.35, cull) - base;
+  /**
+   * How far under the ground the earthwork buries itself once it has met it.
+   *
+   * Not a constant, and that is the difference between a toe and an outline. A
+   * constant burial makes the fill vanish along a smooth curve — a *drawn line*
+   * round the place at exactly the radius the batter happened to reach, which
+   * is the cake stand's bottom edge returning in a new costume. Two octaves of
+   * world-space noise either side of grade instead, so the crossing wanders and
+   * the fill fingers out into the grass the way spread material does.
+   */
+  const bury = (wx: number, wz: number) => 0.16
+    - 0.30 * nz2.fbm2(wx * 0.13, wz * 0.13, 2)
+    - 0.10 * nz2.fbm2(wx * 0.41 + 31, wz * 0.41 - 17, 2);
+
+  for (let j = 0; j <= seg; j++) {
+    const th = (j / seg) * Math.PI * 2;
+    const ct = Math.cos(th), st = Math.sin(th);
+    const e = edgeAt(th);
+    // The ramp. A truck has to get onto the pad, so one sector is graded at
+    // 1:9 instead of 1:3 and pushed further out; the transition is smooth in
+    // angle or the ramp reads as a wedge glued on.
+    let slopeFill = fill;
+    if (rampYaw !== null) {
+      let d = th - rampYaw;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      const k = Math.max(0, 1 - Math.abs(d) / 0.42);
+      slopeFill = fill + (9 - fill) * (k * k * (3 - 2 * k));
+    }
+    // How far this bearing's batter has to run: measured, not assumed.
+    const hEdge = groundAt(x + ct * e, z + st * e);
+    const reachOut = Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0);
+    let crestY = 0, crestS = e;
+
+    for (let i = 0; i < rings.length; i++) {
+      const t = rings[i];
+      const s = t <= 1 ? e * t : e + (t - 1) * reachOut;
+      const wx = x + ct * s, wz = z + st * s;
+      let y: number, c: number[];
+      if (t <= 1) {
+        y = 0;
+        c = C_DECK;
+        // Cut and fill, measured on the deck cells: the patch of annulus this
+        // station owns, times the gap between the deck and the ground under it.
+        const gh = groundAt(wx, wz);
+        const dr = e / nDeck;
+        const area = (2 * Math.PI * Math.max(s, dr * 0.5) * dr) / seg;
+        if (gh < 0) fillV += -gh * area;
+        else cutV += gh * area;
+      } else {
+        const g = groundAt(wx, wz);
+        const run = s - e;
+        c = C_BATTER;
+        if (g < 0) {
+          // Fill: the embankment falls away on its batter until it meets the
+          // ground, and past that point it buries itself 120 mm under — which
+          // is the whole difference between an earthwork and a cake stand.
+          y = Math.max(g, -run / slopeFill);
+          if (y <= g + 1e-3) y = g - bury(wx, wz);
+        } else {
+          // Cut: the batter climbs into the hillside and stops at the crest.
+          y = Math.min(g, run / cut);
+          if (y >= g - 1e-3) y = g - bury(wx, wz);
+          if (y > crestY) { crestY = y; crestS = s; }
+        }
+        if (Math.abs(y - g) < 0.14) toe = Math.max(toe, s);
+      }
+      pos.push(ct * s, y, st * s);
+      col.push(c[0], c[1], c[2]);
+      // World-planar UVs in the field's own frame, so a wear texture stamped in
+      // world metres lines up with the geometry whatever the pad's rotation.
+      uv.push(ct * s, st * s);
+    }
+    // Spoil rides the isoline of the cut, one lump per few degrees.
+    if (crestY > 0.35 && j % 3 === 0) {
+      const jitter = rng.gauss(0, 0.6);
+      spoil.push([
+        ct * (crestS + 0.9 + jitter), st * (crestS + 0.9 + jitter),
+        rng.range(0.5, 1.35) * Math.min(2.2, 0.6 + crestY * 0.5),
+      ]);
+    }
+  }
+
+  const perRing = rings.length;
+  for (let j = 0; j < seg; j++) {
+    for (let i = 0; i < perRing - 1; i++) {
+      const a = j * perRing + i, b = a + 1;
+      const c = (j + 1) * perRing + i, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+
+  // Spoil is real material: tint the vertices nearest each lump toward the
+  // spoil colour so the berm reads as cast-up earth even before a rock lands
+  // on it. Cheaper than more geometry and it survives the merge.
+  for (const sp of spoil) {
+    for (let v = 0; v < pos.length / 3; v++) {
+      const dx = pos[v * 3] - sp[0], dz = pos[v * 3 + 2] - sp[1];
+      const d = Math.hypot(dx, dz);
+      if (d > sp[2] * 2.2) continue;
+      const k = 1 - d / (sp[2] * 2.2);
+      col[v * 3] += (C_SPOIL[0] - col[v * 3]) * k;
+      col[v * 3 + 1] += (C_SPOIL[1] - col[v * 3 + 1]) * k;
+      col[v * 3 + 2] += (C_SPOIL[2] - col[v * 3 + 2]) * k;
+      // and lift it: a berm is a berm because it stands above the crest.
+      pos[v * 3 + 1] += k * k * sp[2] * 0.5;
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+
+  return { geo: g, fill: fillV, cut: cutV, toe: toe || r * 1.4, edgeAt, spoil };
+}
+
+/* ========================================================================== */
+/* The material that reads the field                                          */
+/* ========================================================================== */
+
+/**
+ * Mix a worn colour into a ground material by the wear field.
+ *
+ * Patched into a standard material rather than written as a `ShaderMaterial`,
+ * so the pad keeps the project's lighting, fog, shadows and the atmosphere
+ * patch — a bespoke shader here would be a hole in the aerial perspective, and
+ * `LANDMINES` has that failure twice already.
+ *
+ * The threshold is applied to the **interpolated** distance, which is the whole
+ * reason the field stores distance. `smoothstep` over a band rather than a
+ * `step`, because a hard edge on a magnified texture is a staircase.
+ */
+export function applyWear(
+  mat: THREE.MeshStandardMaterial,
+  field: WearField,
+  o: { worn?: THREE.Color | number; lo?: number; hi?: number; rough?: number } = {},
+) {
+  const worn = o.worn instanceof THREE.Color ? o.worn : new THREE.Color(o.worn ?? 0x6b5d4c);
+  const lo = o.lo ?? 0.18, hi = o.hi ?? 0.72;
+  const tex = field.texture();
+  // The pad's UVs are already world metres about the field centre, so the
+  // sampler only needs the field's own extent.
+  const uWear = { value: tex };
+  const uParam = { value: new THREE.Vector4(field.half, lo, hi, o.rough ?? 0.12) };
+  const uWorn = { value: worn };
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uWear = uWear;
+    shader.uniforms.uWearParam = uParam;
+    shader.uniforms.uWornColor = uWorn;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vWearUv;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvWearUv = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>',
+        '#include <common>\nvarying vec2 vWearUv;\nuniform sampler2D uWear;\nuniform vec4 uWearParam;\nuniform vec3 uWornColor;')
+      .replace('#include <color_fragment>',
+        `#include <color_fragment>
+	{
+		vec2 wuv = vWearUv / (2.0 * uWearParam.x) + 0.5;
+		float wd = texture2D(uWear, clamp(wuv, 0.0, 1.0)).r;
+		float w = smoothstep(uWearParam.y, uWearParam.z, wd);
+		diffuseColor.rgb = mix(diffuseColor.rgb, uWornColor * diffuseColor.rgb * 1.7, w);
+	}`)
+      .replace('#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+	{
+		vec2 wuv2 = vWearUv / (2.0 * uWearParam.x) + 0.5;
+		float wd2 = texture2D(uWear, clamp(wuv2, 0.0, 1.0)).r;
+		roughnessFactor = clamp(roughnessFactor + uWearParam.w * smoothstep(uWearParam.y, uWearParam.z, wd2), 0.0, 1.0);
+	}`);
+  };
+  // A material's program is keyed on this: two pads with different fields must
+  // not share a compiled shader, and two calls with the same field should.
+  mat.customProgramCacheKey = () => `wear:${tex.uuid}`;
+  mat.needsUpdate = true;
+  return mat;
+}
+
+/* ========================================================================== */
+/* The check                                                                  */
+/* ========================================================================== */
+
+/**
+ * The §9 check for this item: prove the distance field survives the lattice and
+ * the mask does not, on **our** numbers rather than the sibling's.
+ *
+ * Rasterises one straight path of `pathW` metres through a field, samples it at
+ * a `latticeM` lattice the way per-vertex data would be, reconstructs
+ * bilinearly, and reports the peak recovered value for both encodings. A mask
+ * that reads back at 0.31 is a path that is in the data and not in the frame.
+ *
+ * Run from a probe; it needs no browser beyond an import of three.
+ */
+export function reconstructionTest(pathW = 1.5, latticeM = 1.7, offset = 0.5) {
+  const half = 24;
+  const f = new WearField(0, 0, half, WEAR_MPT);
+  f.addLine({ pts: [-half, offset, half, offset], half: pathW / 2 });
+
+  // What a *mask* would have carried: 1 inside the path, 0 outside, sampled on
+  // the same lattice and reconstructed the same way.
+  const maskAt = (zz: number) => (Math.abs(zz - offset) <= pathW / 2 ? 1 : 0);
+
+  let peakField = 0, peakMask = 0;
+  // Walk across the path in fine steps and reconstruct both from the lattice.
+  for (let s = -6; s <= 6; s += 0.05) {
+    // lattice-linear reconstruction of the mask
+    const j = Math.floor(s / latticeM);
+    const t = s / latticeM - j;
+    const m = maskAt(j * latticeM) * (1 - t) + maskAt((j + 1) * latticeM) * t;
+    if (m > peakMask) peakMask = m;
+    // the field, sampled bilinearly at 0.5 m/texel and then thresholded
+    const v = f.sample(0, s);
+    const w = Math.max(0, Math.min(1, (v - 0.18) / (0.72 - 0.18)));
+    if (w > peakField) peakField = w;
+  }
+  return {
+    pathW, latticeM, offset,
+    peakMask: +peakMask.toFixed(3),
+    peakField: +peakField.toFixed(3),
+    /** The claim: the field recovers the path, the mask does not. */
+    pass: peakField > 0.9 && peakMask < 0.7,
+  };
+}

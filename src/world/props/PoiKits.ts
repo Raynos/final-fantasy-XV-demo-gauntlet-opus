@@ -9,6 +9,7 @@ import {
   container, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
 import { seatY } from './Seat.ts';
+import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
@@ -256,6 +257,19 @@ export type PoiMats = ReturnType<typeof poiMaterials>;
 export class PoiKits {
   built!: BuiltSite[];
   _exclusions!: THREE.Vector3[] | null;
+  /**
+   * Where the pad being built right now is, in world metres.
+   *
+   * The kits build in a *local* frame and never see their own world position,
+   * but {@link gradePad} has to read the terrain, which only exists in world
+   * coordinates. Rather than thread four more arguments through twelve kit
+   * signatures — every one of which would then be free to disagree with
+   * `_make` about which position it meant — `_make` publishes the answer once,
+   * immediately before it calls the kit.
+   */
+  _padCtx!: { x: number; z: number; base: number; cull: number };
+  /** Cut and fill the last pad measured, cubic metres. Read by `--debug`. */
+  _padStats!: { fill: number; cut: number; toe: number } | null;
   eco!: Ecology;
   mats!: PoiMats;
   quality!: number;
@@ -272,6 +286,8 @@ export class PoiKits {
     this.sites = [];
     this.built = [];
     this._exclusions = null;
+    this._padCtx = { x: 0, z: 0, base: 0, cull: DRAW_R };
+    this._padStats = null;
   }
 
   build() {
@@ -324,37 +340,78 @@ export class PoiKits {
   }
 
   /**
-   * A skirt of ground-coloured rock filling the gap between a level platform
-   * and a sloping hillside. Cheaper and far more robust than trying to level
-   * the heightfield from here — the terrain belongs to another system.
+   * The engineered platform a place stands on.
+   *
+   * This was a faceted drum — a cylinder with a batter and 7% radius jitter —
+   * and it was the "cake stand" the last two handoffs named and neither fixed.
+   * A drum has a **bottom edge**: a hard horizontal line all the way round
+   * where the extrusion stops, floating over the hill on its downhill side and
+   * buried on its uphill side, in one value, at one radius. Read
+   * `tmp/shots/kits-r0b/poi_alstor_haven.png` for what that is — a cream disc
+   * standing a metre and a half proud of the grass on a vertical skirt.
+   *
+   * {@link gradePad} replaces it with a real cut-and-fill earthwork: level
+   * deck, 1:3 fill batter, 1:1.5 cut batter, a 1:9 ramp down the road bearing,
+   * spoil berms riding the crest isoline, a wobbled outline, and an outer ring
+   * pushed under the *drawn* terrain so the fill emerges from the ground
+   * instead of ending on a line. It measures its own cut and fill, so the
+   * spoil that appears is the spoil the cut produced.
+   *
+   * Wear rides in on the same geometry: desire lines walked between the
+   * approach and the centre, encoded as a **distance ramp** rather than a mask
+   * — see {@link WearField.sampleInto} for why that distinction is the whole
+   * item, and why the aprons carry it in vertex colour rather than a texture.
+   *
+   * @param depth kept for call-site compatibility; the batter measures its own
+   *              depth against the ground and this is no longer read.
    */
-  _apron(B: PartBuilder, r: number, depth: number, seed: number, mat?: THREE.Material) {
+  _apron(B: PartBuilder, r: number, depth: number, seed: number, mat?: THREE.Material, o: {
+    yaw?: number | null; wear?: number[][];
+  } = {}) {
     const M = this.mats;
     const rng = new Rng(seed);
-    // A tapering, faceted drum rather than a smooth cylinder: on a hillside
-    // this is the most visible thing the kit builds, and a clean extruded
-    // circle reads as a cake stand. Sixteen facets with jittered radii and a
-    // batter on the face read as cut-and-fill.
-    const g = new THREE.CylinderGeometry(r, r * 1.12, depth, 16, 3);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const k = 1 + rng.gauss(0, 0.075);
-      p.setX(i, p.getX(i) * k);
-      p.setZ(i, p.getZ(i) * k);
+    const ctx = this._padCtx;
+    const pad = gradePad({
+      eco: this.eco,
+      x: ctx.x, z: ctx.z, base: ctx.base, r, seed, cull: ctx.cull,
+      // `_yaw` is a `atan2(dx, dz)` heading; the pad works in the standard
+      // `atan2(z, x)` bearing its polar grid is built on. One conversion here
+      // rather than a second convention in `Wear.ts`.
+      rampYaw: o.yaw == null ? null : Math.PI / 2 - o.yaw,
+    });
+    this._padStats = { fill: Math.round(pad.fill), cut: Math.round(pad.cut), toe: +pad.toe.toFixed(1) };
+
+    // Desire lines. People walk between the things a place has, so wear runs
+    // from the pad edge on the approach side into the centre, plus whatever the
+    // kit named; the disc at the middle is the standing-about patch.
+    // Sized to the deck, not to the toe: people wear the *platform*, and a
+    // field that covered the batter as well would put footpaths up a 1:3
+    // embankment nobody walks on.
+    const field = new WearField(0, 0, r * 1.06);
+    const entry = o.yaw == null ? rng.range(0, 6.28) : Math.PI / 2 - o.yaw;
+    field.addLine({
+      pts: desireLine(Math.cos(entry) * r, Math.sin(entry) * r, 0, 0, rng, 0.06),
+      half: 0.8,
+    });
+    field.addDisc(0, 0, Math.max(1.6, r * 0.15), 0.85);
+    for (const w of o.wear || []) {
+      field.addLine({ pts: desireLine(0, 0, w[0], w[1], rng, 0.09), half: w[2] ?? 0.7 });
     }
-    g.computeVertexNormals();
-    B.add(mat || M.ground, g, mat4([0, -depth * 0.5 + 0.06, 0]));
-    // spoil at the foot of the cut, so the drum does not meet the hill on a line
-    const n = Math.round(10 + r * 0.55);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rng.gauss(0, 0.2);
-      const d = r * rng.range(0.98, 1.22);
-      const sc = rng.range(0.5, 1.9) * (0.7 + r * 0.03);
+    field.sampleInto(pad.geo, 0.3);
+
+    B.add(mat || M.ground, pad.geo, null);
+
+    // The spoil the cut produced, as real stone standing on the berm the pad
+    // measured — not a decorative ring at a fixed radius, which is what the
+    // drum had and why it read as a garnish rather than as earthworks.
+    for (const sp of pad.spoil) {
+      const sc = sp[2] * rng.range(0.7, 1.25);
       B.add(M.dark, new THREE.DodecahedronGeometry(sc, 0),
-        mat4([Math.cos(a) * d, -rng.range(0.2, 1.4) - sc * 0.2, Math.sin(a) * d],
+        mat4([sp[0] + rng.gauss(0, 0.5), -sc * rng.range(0.2, 0.5), sp[1] + rng.gauss(0, 0.5)],
           [rng.gauss(0, 0.5), rng.next() * 6, rng.gauss(0, 0.5)],
-          [1, rng.range(0.55, 0.9), 1]));
+          [1, rng.range(0.5, 0.85), 1]));
     }
+    void depth;
   }
 
   /** Which way the structure faces: down the nearest road, else seeded. */
@@ -387,7 +444,12 @@ export class PoiKits {
     // ground: the rune plate stands a metre and a half proud so it catches the
     // light and reads as a destination from the far side of the valley.
     const lift = 1.6;
-    this._apron(B, r, 9.5, s.poi.id.length * 7 + 1, M.stone);
+    this._apron(B, r, 9.5, s.poi.id.length * 7 + 1, M.stone, {
+      yaw: ctx.yaw,
+      // The three things anyone at a haven walks between: the fire, the tent
+      // and the lamp post. Wear follows people, not a pattern.
+      wear: [[-r * 0.42, r * 0.3, 0.6], [r * 0.7, -r * 0.35, 0.5]],
+    });
     const plate = new THREE.CylinderGeometry(r, r * 0.97, 1.5, 15, 1);
     const p = plate.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -447,8 +509,7 @@ export class PoiKits {
     const w = 22, d = 13;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 13.5, 6.0, 91);
-    put(M.gravel, new THREE.BoxGeometry(w, 0.26, d), [0, 0.13, 0]);
+    this._apron(B, 13.5, 6.0, 91, M.gravel, { yaw, wear: [[w * 0.42, d * 0.34, 0.7]] });
     // bay markings as thin raised strips: paint on a procedural world is a
     // texture we would have to author, geometry is free and reads the same
     for (let i = -2; i <= 2; i++) {
@@ -478,8 +539,12 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 19, 8.0, 55);
-    put(M.gravel, new THREE.BoxGeometry(30, 0.3, 22), [0, 0.14, 0]);
+    this._apron(B, 19, 8.0, 55, M.gravel, {
+      yaw,
+      // Forecourt wear follows the pump islands and the shop door, which is
+      // the FFXV read our clean geometry has never had.
+      wear: [[-3.2, 0, 1.5], [3.2, 0, 1.5], [-3, -12, 0.9]],
+    });
     // canopy
     for (const sx of [-6.5, 6.5]) {
       for (const sz of [-4.5, 4.5]) {
@@ -515,8 +580,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 14, 8.0, 71);
-    put(M.gravel, new THREE.BoxGeometry(22, 0.3, 16), [0, 0.14, 0]);
+    this._apron(B, 14, 8.0, 71, M.gravel, { yaw, wear: [[7, 4, 0.9], [-9, 6, 0.8]] });
     const huts = 2 + Math.floor(rng.next() * 2);
     for (let i = 0; i < huts; i++) {
       const px = -8 + i * 8.5 + rng.gauss(0, 0.6), pz = -6 + rng.gauss(0, 1.4);
@@ -827,8 +891,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 52, 18, 33);
-    put(M.gravel, new THREE.CylinderGeometry(51, 52, 0.6, 26), [0, 0.2, 0]);
+    this._apron(B, 52, 18, 33, M.gravel, { yaw, wear: [[0, 0, 6.0], [22, -18, 1.0]] });
     // a street grid rather than a scatter: blocks share walls and align
     const walls = [M.wall, M.wall2, M.stone, M.render1, M.render2, M.render3, M.render4];
     for (let gx = -2; gx <= 2; gx++) {
@@ -909,59 +972,216 @@ export class PoiKits {
   }
 
   /**
-   * A royal tomb. Stepped plinth, a colonnade, a heavy lintel and the arm
-   * itself hanging over the sarcophagus. This is the kit that most has to read
-   * from a kilometre away — a tomb is a landmark before it is a room.
+   * A royal tomb — the kit that most has to read from a kilometre away.
+   *
+   * It was twelve smooth cylinders under two slabs and a triangular prism, all
+   * in one flat cream with no tonal variation anywhere on it, and it read as a
+   * white shed with poles (`tmp/shots/kits-r0b/poi_tomb_just.png`). A temple at
+   * a kilometre is decided by three things and it had none of them: a
+   * **stepped stylobate** that reads as a horizontal band of light-dark-light,
+   * an **entablature deep enough to throw its own shadow across the columns**,
+   * and a **value gradient** from a dirty base to a bleached cornice.
+   *
+   * So it is rebuilt on {@link BuildKit}: chamfered members throughout, a real
+   * three-course crepidoma, columns with a base, entasis and a two-part
+   * capital, an architrave / frieze / cornice with a drip lip, a pediment with
+   * raking cornices and a tympanum set back inside them, a cella with a doorway
+   * that has a reveal, and {@link bakeTone} over the finished merge.
+   *
+   * The cost is entirely in the roles, not in the count: one merged geometry
+   * per material for the whole building.
    */
   _tomb(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, yaw } = ctx;
     // 1.4x: a royal tomb has to hold its own against a 200 m mesa behind it
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.4, 1.4, 1.4]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 13, 11, 17);
-    // three steps
+    this._apron(B, 13, 11, 17, undefined, { yaw, wear: [[0, 6.5, 1.1]] });
+
+    const b = bag();
+    const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.05 });
+    const W = 15.2, D = 12.2;
+
+    // Crepidoma: a buried levelling course plus three steps. Each step is a
+    // chamfered box 250 mm proud of the one above, so the stylobate reads at
+    // range as a stack of bright top faces separated by dark risers -- the
+    // horizontal that says "temple" before any column is resolved.
+    const stepH = 0.52;
+    b.shell.push(box(W + 1.5, 0.9, D + 1.5, { y: -0.42, arris: 0.05 }));
     for (let i = 0; i < 3; i++) {
-      const w = 15 - i * 1.6, d = 12 - i * 1.6;
-      put(M.stone, roughBox(i * 3 + 2, w, 0.55, d, 0.03), [0, 0.28 + i * 0.55, 0]);
+      const w = W - i * 1.5, d = D - i * 1.5;
+      b.shell.push(box(w, stepH, d, { y: stepH * (i + 0.5), arris: 0.055 }));
     }
-    const deck = 1.65;
-    // colonnade
+    const deck = stepH * 3;
+
+    // Peristyle. Six columns a side, plus the two returns, so the corner is a
+    // corner rather than a gap -- a colonnade with open ends reads as a fence.
     const cols = 6;
+    const colR = 0.44, colH = 5.3;
+    const spanX = 10.4, spanZ = 3.9;
+    const shaft = (px: number, pz: number, broken: boolean) => {
+      const h = broken ? rng.range(1.7, 4.0) : colH;
+      // Plinth and torus base.
+      b.shell.push(box(colR * 2.5, 0.2, colR * 2.5, { x: px, y: deck + 0.1, z: pz, arris: 0.045 }));
+      b.shell.push(xform(new THREE.CylinderGeometry(colR * 1.12, colR * 1.22, 0.22, 12), { x: px, y: deck + 0.31, z: pz }));
+      // Entasis: three drums of falling radius rather than one cylinder. A
+      // straight-sided column reads as a pipe; the swell is what makes it stone.
+      const dr = [1.0, 0.94, 0.86];
+      for (let k = 0; k < 3; k++) {
+        const y0 = deck + 0.42 + (h - 0.42) * (k / 3);
+        const y1 = deck + 0.42 + (h - 0.42) * ((k + 1) / 3);
+        b.shell.push(xform(new THREE.CylinderGeometry(colR * dr[Math.min(2, k + 1)], colR * dr[k], y1 - y0, 12), {
+          x: px, y: (y0 + y1) / 2, z: pz,
+        }));
+      }
+      if (broken) {
+        // A snapped column ends in a jagged stump, not a flat disc.
+        b.shell.push(xform(new THREE.DodecahedronGeometry(colR * 0.95, 0), {
+          x: px + rng.gauss(0, 0.05), y: deck + h + 0.05, z: pz + rng.gauss(0, 0.05),
+        }));
+        return;
+      }
+      // Capital: echinus then abacus, each proud of the one below.
+      b.shell.push(xform(new THREE.CylinderGeometry(colR * 1.32, colR * 0.86, 0.3, 12), { x: px, y: deck + h + 0.15, z: pz }));
+      b.shell.push(box(colR * 2.9, 0.26, colR * 2.9, { x: px, y: deck + h + 0.43, z: pz, arris: 0.05 }));
+    };
+    const colTop = deck + colH + 0.56;
     for (let i = 0; i < cols; i++) {
+      const px = (i / (cols - 1) - 0.5) * spanX;
+      for (const sz of [-1, 1]) shaft(px, sz * spanZ, rng.next() < 0.16);
+    }
+    for (const sx of [-1, 1]) shaft(sx * spanX * 0.5, 0, rng.next() < 0.1);
+
+    // Entablature. Architrave, then a frieze set BACK, then a cornice thrown
+    // forward over both with a drip lip under its nose. Bright line over dark
+    // line over wall -- the same three-part read `BuildKit.parapet` documents,
+    // and the reason a temple has a shadow under its eaves at any sun angle.
+    const eW = spanX + colR * 3.4, eD = spanZ * 2 + colR * 3.4;
+    b.shell.push(box(eW + 0.5, 0.62, eD + 0.5, { y: colTop + 0.31, arris: 0.06 }));
+    b.shell.push(box(eW + 0.2, 0.5, eD + 0.2, { y: colTop + 0.87, arris: 0.05 }));
+    b.trim.push(box(eW + 1.3, 0.3, eD + 1.3, { y: colTop + 1.27, arris: 0.05 }));
+    b.trim.push(box(eW + 1.12, 0.09, eD + 1.12, { y: colTop + 1.08, arris: 0.02 }));
+    // Triglyph rhythm on the frieze: one per column and one between. Free
+    // silhouette at close range and a dashed shadow line at long range.
+    for (let i = 0; i < cols * 2 - 1; i++) {
+      const px = (i / (cols * 2 - 2) - 0.5) * eW;
       for (const sz of [-1, 1]) {
-        const px = (i / (cols - 1) - 0.5) * 9.6;
-        const broken = rng.next() < 0.18;
-        const h = broken ? rng.range(1.6, 4.2) : 5.4;
-        put(M.stone, new THREE.CylinderGeometry(0.42, 0.5, h, 10), [px, deck + h * 0.5, sz * 3.6]);
-        if (!broken) {
-          put(M.stone, new THREE.BoxGeometry(1.25, 0.4, 1.25), [px, deck + h + 0.2, sz * 3.6]);
-        }
+        b.shell.push(box(0.28, 0.46, 0.1, { x: px, y: colTop + 0.87, z: sz * (eD / 2 + 0.13), sharp: true }));
       }
     }
-    // cella walls and roof
-    put(M.stone, roughBox(9, 8.2, 4.6, 4.4, 0.03), [0, deck + 2.3, 0]);
-    put(M.void, new THREE.BoxGeometry(2.6, 3.4, 0.2), [0, deck + 1.7, 2.25]);
-    put(M.stone, roughBox(11, 12.6, 0.85, 9.4, 0.025), [0, deck + 6.2, 0]);
-    put(M.stone, roughBox(12, 11.0, 0.6, 8.0, 0.025), [0, deck + 6.85, 0]);
-    // pediment
-    put(M.stone, new THREE.CylinderGeometry(0.01, 2.4, 12.4, 3).rotateZ(Math.PI / 2),
-      [0, deck + 8.0, 0], [Math.PI / 2, 0, 0]);
-    // sarcophagus and the arm, glowing
-    put(M.dark, new THREE.BoxGeometry(3.0, 1.1, 1.4), [0, deck + 0.55, 4.4]);
-    put(M.rune, new THREE.BoxGeometry(0.12, 2.6, 0.5), [0, deck + 3.1, 4.4], [0, 0, 0.22]);
-    put(M.rune, new THREE.BoxGeometry(0.5, 0.12, 0.12), [0, deck + 2.5, 4.4], [0, 0, 0.22]);
-    // braziers
+
+    // Pediment and roof. The ridge runs along Z so the gable faces the way the
+    // door does: what a temple is *for*, visually, is one triangle over a row
+    // of columns, and the first pass of this put the ridge the other way and
+    // then crossed two pyramids over it -- read
+    // `tmp/shots/kits-r3/poi_tomb_just.png` for the spike that produced.
+    //
+    // The tympanum is six stepped courses rather than a solid triangle, because
+    // everything in this kit is a chamfered box and the raking cornice stands
+    // proud of it on both faces, so the steps are never on the silhouette.
+    const gable = 2.6;
+    const eaves = colTop + 1.42;
+    const NT = 6;
+    for (const sz of [-1, 1]) {
+      for (let i = 0; i < NT; i++) {
+        const t = i / NT;
+        const w = (eW + 1.0) * (1 - t);
+        b.shell.push(box(w, gable / NT, 0.34, {
+          y: eaves + gable * (t + 0.5 / NT), z: sz * (eD / 2 + 0.5), arris: 0.03,
+        }));
+      }
+      // Raking cornices: the bright line that draws the triangle.
+      for (const sx of [-1, 1]) {
+        const len = Math.hypot(eW / 2 + 0.5, gable);
+        const ang = Math.atan2(gable, eW / 2 + 0.5);
+        b.trim.push(xform(box(len, 0.28, 0.62), {
+          rz: -sx * ang, x: sx * (eW / 4 + 0.25), y: eaves + gable / 2, z: sz * (eD / 2 + 0.72),
+        }));
+      }
+    }
+    // Two roof planes off the ridge, and a ridge capping course over them.
+    {
+      const slope = Math.hypot(eW / 2 + 0.7, gable);
+      const ang = Math.atan2(gable, eW / 2 + 0.7);
+      for (const sx of [-1, 1]) {
+        b.roof.push(xform(box(slope, 0.3, eD + 1.5), {
+          rz: -sx * ang, x: sx * (eW / 4 + 0.35), y: eaves + gable / 2 + 0.05,
+        }));
+      }
+      b.trim.push(box(0.62, 0.24, eD + 1.7, { y: eaves + gable + 0.12, arris: 0.05 }));
+    }
+    // Acroteria: the three verticals that break the roofline against the sky.
+    for (const sz of [-1, 1]) {
+      b.trim.push(box(0.52, 0.8, 0.52, { y: eaves + gable + 0.5, z: sz * (eD / 2 + 0.7), arris: 0.06 }));
+      for (const sx of [-1, 1]) {
+        b.trim.push(box(0.46, 0.62, 0.46, { x: sx * (eW / 2 + 0.4), y: eaves + 0.4, z: sz * (eD / 2 + 0.7), arris: 0.06 }));
+      }
+    }
+
+    // Cella: a real walled room inside the peristyle, with a doorway that has a
+    // reveal, a threshold and a hood. `wallRun` punches the opening, so the
+    // dark inside the tomb is a hole and not a painted rectangle.
+    const cW = spanX * 0.74, cD = spanZ * 1.3, cH = colH + 0.2, cT = 0.42;
+    {
+      const local = bag();
+      const openings: Opening[] = [doorUnit(local, { x: 0, wallT: cT, w: 1.5, h: 2.6 })];
+      for (const g of wallRun(cW, cH, cT, openings)) local.shell.push(g);
+      for (const k of Object.keys(local)) for (const g of local[k]) b[k].push(xform(g, { y: deck, z: cD / 2 - cT / 2 }));
+    }
+    for (const g of wallRun(cW, cH, cT, [])) b.shell.push(xform(g, { y: deck, z: -cD / 2 + cT / 2 }));
+    for (const sx of [-1, 1]) {
+      for (const g of wallRun(cD - cT * 2, cH, cT, [])) {
+        b.shell.push(xform(g, { ry: Math.PI / 2, x: sx * (cW / 2 - cT / 2), y: deck, z: 0 }));
+      }
+    }
+    b.shell.push(box(cW + 0.7, 0.34, cD + 0.7, { y: deck + cH + 0.17, arris: 0.05 }));
+    b.dark.push(box(1.5, 2.6, 0.12, { y: deck + 1.3, z: cD / 2 - cT - 0.1, sharp: true }));
+
+    const merged = mergeBag(b);
+    const roleMat: Record<string, THREE.Material> = {
+      shell: M.stone, trim: M.concrete, metal: M.steel, glass: M.glass,
+      glow: M.rune, dark: M.interior, roof: M.stone, wood: M.plank, cloth: M.cloth,
+      shell2: M.stone,
+    };
+    for (const [role, g] of Object.entries(merged)) {
+      if (role !== 'glow' && role !== 'dark') {
+        // A temple's value gradient is the opposite way round from a shed's:
+        // the stylobate is where the dirt and the moss are, the cornice is
+        // where thirty centuries of sun have been. Wider than the default.
+        bakeTone(g, {
+          y0: -0.5, y1: colTop + 1.4 + gable, grime: 0.68, bleach: 1.12,
+          jitter: tv.jitter, tint: tv.tint, streak: 0.16,
+        });
+      }
+      put(roleMat[role] ?? M.stone, g, [0, 0, 0]);
+    }
+
+    // Sarcophagus, the arm, and the braziers that light it.
+    put(M.dark, box(3.0, 1.1, 1.4, { arris: 0.06 }), [0, deck + 0.55, cD / 2 + 2.6]);
+    put(M.stone, box(3.3, 0.16, 1.7, { arris: 0.04 }), [0, deck + 1.16, cD / 2 + 2.6]);
+    put(M.rune, new THREE.BoxGeometry(0.12, 2.6, 0.5), [0, deck + 3.1, cD / 2 + 2.6], [0, 0, 0.22]);
+    put(M.rune, new THREE.BoxGeometry(0.5, 0.12, 0.12), [0, deck + 2.5, cD / 2 + 2.6], [0, 0, 0.22]);
     for (const sx of [-5.2, 5.2]) {
-      put(M.dark, new THREE.CylinderGeometry(0.5, 0.34, 1.2, 8), [sx, deck + 0.6, 4.6]);
-      put(M.hot, new THREE.SphereGeometry(0.42, 8, 6), [sx, deck + 1.35, 4.6]);
+      put(M.dark, new THREE.CylinderGeometry(0.5, 0.34, 1.2, 8), [sx, deck + 0.6, cD / 2 + 2.8]);
+      put(M.hot, new THREE.SphereGeometry(0.42, 8, 6), [sx, deck + 1.35, cD / 2 + 2.8]);
     }
-    // fallen blocks around the base
-    for (let i = 0; i < 7; i++) {
-      const a = rng.next() * 6.28, d = rng.range(7.5, 12);
-      put(M.stone, roughBox(i * 7 + 31, rng.range(0.6, 1.8), rng.range(0.5, 1.2), rng.range(0.6, 1.6), 0.1),
-        [Math.cos(a) * d, 0.4, Math.sin(a) * d], [rng.gauss(0, 0.2), rng.next() * 3, rng.gauss(0, 0.2)]);
+    // Fallen blocks: dressed masonry, so they read as *this* building's stone
+    // rather than as boulders that happen to be nearby.
+    for (let i = 0; i < 9; i++) {
+      const a = rng.next() * 6.28, d = rng.range(8.5, 13);
+      const bw = rng.range(0.7, 1.9);
+      const g = box(bw, rng.range(0.45, 1.0), bw * rng.range(0.6, 1.1), { arris: 0.06 });
+      bakeTone(g, { y0: -0.5, y1: 1.0, grime: 0.62, bleach: 0.9, jitter: tv.jitter });
+      put(M.stone, g, [Math.cos(a) * d, 0.35, Math.sin(a) * d],
+        [rng.gauss(0, 0.22), rng.next() * 3, rng.gauss(0, 0.22)]);
     }
-    return { cast: true, r: 19 };
+    // A drum off a fallen column, lying where it rolled.
+    for (let i = 0; i < 3; i++) {
+      const a = rng.range(0, 6.28), d = rng.range(7, 11);
+      put(M.stone, new THREE.CylinderGeometry(colR * 0.95, colR, rng.range(0.8, 1.5), 12),
+        [Math.cos(a) * d, 0.6, Math.sin(a) * d], [Math.PI / 2, rng.next() * 3, rng.gauss(0, 0.3)]);
+    }
+    return { cast: true, r: 21 };
   }
 
   /** A magitek base: wall, towers, landing pad, banners, floodlights. */
@@ -969,8 +1189,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 34, 13, 47);
-    put(M.gravel, new THREE.BoxGeometry(64, 0.4, 52), [0, 0.18, 0]);
+    this._apron(B, 34, 13, 47, M.gravel, { yaw, wear: [[0, 0, 5.0], [-14, 14, 1.8], [22, 16, 1.0]] });
     // perimeter wall with a gate and a breach
     const N = 26;
     const gate = Math.floor(rng.range(3, 9));
@@ -1035,8 +1254,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 22, 9, 63);
-    put(M.gravel, new THREE.CylinderGeometry(22, 23, 0.4, 20), [0, 0.16, 0]);
+    this._apron(B, 22, 9, 63, M.gravel, { yaw, wear: [[-9, -11, 1.4], [6, 4, 0.9], [13, 12, 0.6]] });
     // paddock: post and two rails, all the way round
     const N = 34, R = 20;
     for (let i = 0; i < N; i++) {
@@ -1121,7 +1339,7 @@ export class PoiKits {
     const world = mat4([0, 0, 0], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
     if (/lighthouse/.test(s.poi.id)) {
-      this._apron(B, 6, 9, 21);
+      this._apron(B, 6, 9, 21, undefined, { yaw, wear: [[4.5, 3.0, 0.8]] });
       put(M.cream, new THREE.CylinderGeometry(2.0, 3.2, 20, 16), [0, 10, 0]);
       put(M.red, new THREE.CylinderGeometry(2.1, 2.1, 1.4, 16), [0, 13.5, 0]);
       put(M.steel, new THREE.CylinderGeometry(2.5, 2.5, 0.35, 16), [0, 20.2, 0]);
@@ -1161,7 +1379,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.3, 1.3, 1.3]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 12, 9, 83);
+    this._apron(B, 12, 9, 83, undefined, { yaw, wear: [[0, 3.2, 1.2]] });
     put(M.dark, new THREE.CylinderGeometry(9.4, 10, 0.6, 22), [0, 0.24, 0]);
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2;
@@ -1185,7 +1403,7 @@ export class PoiKits {
     const M = this.mats, { rng, yaw } = ctx;
     const world = mat4([0, 0, 0], [0, yaw, 0], [1.35, 1.35, 1.35]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, pos: Vec3, rot?: Vec3, sc?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(pos, rot, sc)));
-    this._apron(B, 11, 9, 29);
+    this._apron(B, 11, 9, 29, undefined, { yaw, wear: [[0, 2.5, 1.4]] });
     // the mound the portal is cut into
     put(M.dark, new THREE.SphereGeometry(9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
       [0, -0.6, -4], [0, 0, 0], [1, 0.62, 1]);
@@ -1235,8 +1453,12 @@ export class PoiKits {
     const yaw = this._yaw(p, rng);
     const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
-    const base = this._base(p.x, p.z, probe, 2.2,
-      DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R);
+    const cull = DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R;
+    const base = this._base(p.x, p.z, probe, 2.2, cull);
+    // Published before the kit runs, so `_apron` can grade against the real
+    // ground without every kit having to carry the coordinates itself.
+    this._padCtx = { x: p.x, z: p.z, base, cull };
+    this._padStats = null;
     const res = site.fn.call(this, B, site, { rng, dress, yaw, base }) || {};
     const g = new THREE.Group();
     g.name = `poi_${p.type}_${p.id}`;
