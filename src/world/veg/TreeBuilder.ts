@@ -740,12 +740,15 @@ export function buildTree(name: string, seed: number, over: Partial<TreeSpec> = 
    */
   const nLobe = 3 + (Math.abs(seed) % 3);
   const lobePhase = (seed % 97) * 0.0647;
-  const flareH = Math.max(0.5, S.trunkR * 2.8);
+  const flareH = Math.max(0.45, S.trunkR * 2.2);
   const FR = 3, FS = 10;
   const flareBase = wood.verts;
   for (let ring = 0; ring < FR; ring++) {
-    const t = ring / (FR - 1);
-    const y = -0.30 + t * (flareH + 0.30);
+    // Ring heights biased low (`t^1.5`), because a compact-support cubic does
+    // nearly all of its work in the bottom third and three evenly spaced rings
+    // spend two of them on a surface that is already flat.
+    const t = Math.pow(ring / (FR - 1), 1.5);
+    const y = -0.25 + t * (flareH + 0.25);
     const s01 = Math.max(0, 1 - Math.max(0, y) / flareH);
     const w = s01 * s01 * s01;
     // d(w)/dy, for the normal: the flare's surface slopes in as it rises
@@ -753,7 +756,7 @@ export function buildTree(name: string, seed: number, over: Partial<TreeSpec> = 
     for (let s = 0; s <= FS; s++) {
       const a = (s / FS) * Math.PI * 2;
       const ridge = Math.pow(Math.max(0, Math.cos(nLobe * a + lobePhase)), 1.6);
-      const amp = 0.55 + 1.25 * ridge;
+      const amp = 0.28 + 0.66 * ridge;
       const r = S.trunkR * (1 + w * amp);
       const drdy = S.trunkR * amp * dwdy;
       wood.p.push(Math.cos(a) * r, y, Math.sin(a) * r);
@@ -764,11 +767,22 @@ export function buildTree(name: string, seed: number, over: Partial<TreeSpec> = 
       if (r > maxR) maxR = r;
     }
   }
+  // Winding matches the *branch tubes*, and it did not before.
+  //
+  // `frame(+y)` picks `ref = +x`, so a tube ring's `(u, v)` comes out
+  // `(0,0,-1)` and `(-1,0,0)`: a tube's angle parameter sweeps the opposite
+  // rotational sense to this flare's plain `(cos a, y, sin a)`. Emitting both
+  // with the same index pattern therefore gave the flare the *opposite* facing
+  // to every other triangle on the tree — measured, `tmp/windprobe.mts`: 640
+  // tube triangles disagreeing with their own vertex normals and 40 flare
+  // triangles agreeing. The skirt this replaces had the same bug and was small
+  // enough and dark enough to have hidden it since it was written, which is
+  // most of why trunks have always read as posts pushed into dirt.
   for (let ring = 0; ring < FR - 1; ring++) {
     for (let s = 0; s < FS; s++) {
       const a = flareBase + ring * (FS + 1) + s, b = a + 1;
       const c = a + FS + 1, d = c + 1;
-      wood.i.push(a, c, b, b, c, d);
+      wood.i.push(a, b, c, b, d, c);
     }
   }
 
