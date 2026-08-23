@@ -21,17 +21,16 @@
  */
 import { readFile, writeFile, mkdir, stat, rm } from 'node:fs/promises';
 import http from 'node:http';
-import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
+import { lease, buildServer } from './harness.mts';
+import { resolveBuild } from './identity.mts';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
 const BAKE_DIR = path.join(ROOT, 'src', 'public', 'baked');
 const OUT = path.join(BAKE_DIR, 'tex.bin.gz');
 const STAMP = path.join(BAKE_DIR, 'tex.json');
@@ -243,14 +242,6 @@ export async function texBake(opts: {force?: boolean, quiet?: boolean} = {}): Pr
   return true;
 }
 
-/** True when something is already listening. */
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const sk = net.connect(p, '127.0.0.1');
-  sk.on('connect', () => { sk.destroy(); res(true); });
-  sk.on('error', () => res(false));
-  setTimeout(() => { sk.destroy(); res(false); }, 800);
-});
-
 /**
  * The browser bake: the painted faces.
  *
@@ -274,18 +265,11 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
   const t0 = Date.now();
   const hash = await hashOf(CANVAS_SOURCES);
 
-  const vitePort = opts.port || Number(process.env.PORT || 5173);
-  let server: ReturnType<typeof spawn> | null = null;
-  if (!(await portOpen(vitePort))) {
-    server = spawn(VITE, ['--port', String(vitePort), '--strictPort'],
-      { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
-    const deadline = Date.now() + 60000;
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 250));
-      if (await portOpen(vitePort)) break;
-      if (Date.now() > deadline) { server.kill(); throw new Error('vite failed to start'); }
-    }
-  }
+  // THE LIVE TREE, always. This records `src/public/baked/` for the checkout it
+  // is run from, so a capture of some committed sha would bake the wrong
+  // sources into the working tree's cache. `resolveBuild(undefined)` is the
+  // dirty root by definition.
+  const { port: vitePort } = await buildServer({ build: resolveBuild(undefined) });
 
   // A socket the page can POST to. Port 0 so it never collides with a
   // worktree PORT or its capture daemon on PORT+1.
@@ -310,14 +294,11 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
   await new Promise<void>((r) => sink.listen(0, '127.0.0.1', () => r()));
   const sinkPort = (sink.address() as net.AddressInfo).port;
 
-  const { chromium } = await import('playwright');
-  const browser = await chromium.launch({
-    args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-      '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
-      '--hide-scrollbars', '--mute-audio'],
-  });
+  // A blank lease and its own navigation: `?texbake=canvas` is only honoured on
+  // a fresh load, so a page the daemon has already booted is the wrong page.
+  const leased = await lease({ blank: true, w: 1600, h: 900, agent: 'texbake', lane: 'sweep' });
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+    const { page } = leased;
     page.on('pageerror', (e) => log('PAGEERROR:', String(e).split('\n')[0]));
     log('booting the page with recording on...');
     await page.goto(`http://127.0.0.1:${vitePort}/?q=ultra&shoot=1&texbake=canvas`,
@@ -334,9 +315,8 @@ export async function texBakeCanvas(opts: {force?: boolean, quiet?: boolean, por
     log(`${(gz.length / 1e6).toFixed(1)} MB gz (posted ${(posted / 1e6).toFixed(1)} MB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     return true;
   } finally {
-    await browser.close();
+    await leased.release();
     sink.close();
-    if (server) server.kill();
   }
 }
 

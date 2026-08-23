@@ -10,39 +10,10 @@
  * Prints the wall clock from navigation to `GAME.ready` and the per-system
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.
  */
-import { chromium } from 'playwright';
 import { contention, printContention } from './ruler.mts';
 import { execFileSync } from 'node:child_process';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
-
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
-
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 250));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
+import { launchPersistent } from './chromium.mts';
+import { harnessArgs, announceBuild, buildServer, withExclusive } from './harness.mts';
 
 /**
  * Everything the page can see about its own footprint.
@@ -139,6 +110,18 @@ function treeRss(pid: number): { total: number, rows: string[] } {
   } catch { return { total: 0, rows: [] }; }
 }
 
+/**
+ * A software-rasteriser-capable flag set, deliberately not `CHROMIUM_ARGS`.
+ *
+ * Boot profiling has to run where the capture path runs AND where it does not,
+ * so `--enable-unsafe-swiftshader` stays: a boot number from a box with no GPU
+ * is still a boot number, and losing it would mean this tool cannot run at all
+ * on half the machines it is useful on.
+ */
+const ARGS_BOOTPROF = ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
+      '--hide-scrollbars', '--mute-audio'];
+
 const MB = (b: number) => `${(b / 1e6).toFixed(1)} MB`;
 
 /**
@@ -185,17 +168,25 @@ async function main() {
     console.log('');
   }
 
-  const server = await ensureServer();
+  // The build server comes from the daemon, so nobody picks a port and nobody
+  // can attach to a co-agent's tree by accident.
+  const ha = harnessArgs(process.argv.slice(2));
+  announceBuild(ha);
+  const { port: PORT } = await buildServer({ build: ha.build });
   if (mem) {
-    try { await reportMemory(nobake); } finally { if (server) server.kill(); tail(busy); }
+    try { await reportMemory(PORT, nobake); } finally { tail(busy); }
     return;
   }
-  const browser = await chromium.launch({
-    args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-      '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
-      '--hide-scrollbars', '--mute-audio'],
-  });
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+  // Its OWN browser, on purpose, and the daemon's exclusive lease is what makes
+  // that legitimate: the boot is the measurement, so a page the daemon already
+  // booted answers the question before it is asked, and a shared shader cache
+  // is precisely the confound. `main()` holds the quiet lane for the duration,
+  // so this is still the only browser on the machine.
+  const { ctx } = await launchPersistent({ width: 1600, height: 900 }, 0,
+    { extraArgs: ARGS_BOOTPROF, persistent: false });
+  const browser = ctx;
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
   page.on('pageerror', (e) => console.log('PAGEERROR:', String(e).split('\n')[0]));
   page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE ERR:', m.text().slice(0, 200)); });
 
@@ -230,7 +221,6 @@ async function main() {
     }
   } finally {
     await browser.close();
-    if (server) server.kill();
     tail(busy);
   }
 }
@@ -244,7 +234,7 @@ async function main() {
  * optimised, because a JS heap and a resident set are not the same quantity
  * and the dev suite turns out not to be the expensive one.
  */
-async function reportMemory(nobake: boolean) {
+async function reportMemory(PORT: number, nobake: boolean) {
   // Playwright does not type `browser.process()`, so the browser is found the
   // same way its helpers are: as this process's own descendant.
   const base = treeRss(process.pid).total;
@@ -254,15 +244,15 @@ async function reportMemory(nobake: boolean) {
     + 'conclude the dev suite costs 400 MB when it costs 20.');
 
   for (const q of ['', '&debug=1']) {
-    const browser = await chromium.launch({
-      args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-        '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
-        '--hide-scrollbars', '--mute-audio',
-        // `performance.memory` is rounded to a 100 kB bucket without this,
-        // which is coarse enough to hide the thing being measured.
-        '--enable-precise-memory-info'],
+    const { ctx } = await launchPersistent({ width: 1600, height: 900 }, 0, {
+      // `performance.memory` is rounded to a 100 kB bucket without this, which
+      // is coarse enough to hide the thing being measured.
+      extraArgs: [...ARGS_BOOTPROF, '--enable-precise-memory-info'],
+      persistent: false,
     });
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+    const browser = ctx;
+    const page = await browser.newPage();
+    await page.setViewportSize({ width: 1600, height: 900 });
     const idle = treeRss(process.pid).total;
     await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1${nobake ? '&nobake=1' : ''}${q}`,
       { waitUntil: 'domcontentloaded', timeout: 300000 });
@@ -297,4 +287,10 @@ async function reportMemory(nobake: boolean) {
   }
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+/**
+ * The quiet lane, for the same reason `perf.mts` takes it: this measures boot,
+ * and a boot measured beside three other browsers is a measurement of the other
+ * three. Under one daemon owning one machine that is enforceable rather than
+ * hoped for -- which is exactly what RESCUE §B6 could not do.
+ */
+await withExclusive('bootprof', main).catch((e) => { console.error(e); process.exit(1); });

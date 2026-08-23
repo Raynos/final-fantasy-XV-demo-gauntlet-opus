@@ -65,6 +65,26 @@ export interface HarnessArgs {
 }
 
 /**
+ * The shared flags, named once so a tool's own parser can skip them.
+ *
+ * Every tool here rejects unknown flags -- correctly, since a typo'd flag that
+ * is silently ignored is a capture of the wrong thing. That means adding a
+ * shared flag breaks every hand-rolled parser unless they can all ask what the
+ * shared ones are.
+ */
+export const HARNESS_VALUE_FLAGS = ['build', 'lane', 'agent', 'deadline', 'q', 'post', 'ablate'];
+export const HARNESS_SWITCHES = ['dirty', 'cold', 'nobake', 'prod'];
+
+/** True if `argv[i]` is a shared flag; the caller skips it and its value. */
+export function isHarnessFlag(a: string): 'switch' | 'value' | null {
+  if (!a.startsWith('--')) return null;
+  const name = a.slice(2);
+  if (HARNESS_SWITCHES.includes(name)) return 'switch';
+  if (HARNESS_VALUE_FLAGS.includes(name)) return 'value';
+  return null;
+}
+
+/**
  * Parse the flags every tool now has, leaving the rest to the tool.
  *
  * `--dirty` is the escape from the `HEAD` default and is what the tight edit

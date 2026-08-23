@@ -103,12 +103,24 @@ export async function launchPersistent(
    * is what every capture path wants.
    */
   cdpPort = 0,
+  /**
+   * Extra flags, and whether the shared profile may be used at all.
+   *
+   * `bootprof` needs both: `--enable-precise-memory-info` (without it
+   * `performance.memory` is rounded to a 100 kB bucket, which is coarse enough
+   * to hide the thing being measured) and a **throwaway** profile, because a
+   * warm shader cache is exactly what a boot profile must not silently inherit.
+   * It is one of the two tools that legitimately owns a browser — you cannot
+   * measure a browser you do not own — and it takes the daemon's exclusive
+   * lease first so it is still the only one running.
+   */
+  { extraArgs = [], persistent = true }: { extraArgs?: string[], persistent?: boolean } = {},
 ): Promise<{ ctx: BrowserContext, persistent: boolean }> {
   const dir = profileDir();
-  const debugArgs = cdpPort ? [`--remote-debugging-port=${cdpPort}`] : [];
+  const debugArgs = [...(cdpPort ? [`--remote-debugging-port=${cdpPort}`] : []), ...extraArgs];
   // An escape hatch that is also the only honest way to measure this: the two
   // paths have to be A/B-able in one tree, or "the cache helps" is a guess.
-  if (process.env.HARNESS_PERSISTENT_PROFILE === '0') {
+  if (!persistent || process.env.HARNESS_PERSISTENT_PROFILE === '0') {
     const browser = await chromium.launch({ args: [...CHROMIUM_ARGS, ...debugArgs] });
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     ctx.on('close', () => { void browser.close().catch(() => {}); });
