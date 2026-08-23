@@ -16,12 +16,56 @@ import type { BodyProfileSpec } from './Skeleton.ts';
  * straight to a 2D context.
  */
 
+/**
+ * One grooming guide: an authored flow *curve* for a region of the scalp.
+ *
+ * A tuft's `dir` can only say "every strand here ends up pointing that way",
+ * which is a direction field with no shape in it — a strand leaves the scalp and
+ * travels in what is nearly a straight line to its tip. That is a quill, and no
+ * amount of jitter on a quill makes a groom: there is no parting, no flow across
+ * a tuft boundary and no way to say "lie along the skull for four centimetres,
+ * then fall".
+ *
+ * A guide says exactly that, as a cubic Bezier from the root. Each strand bends
+ * as an inverse-square blend of its **two nearest** guides, which is what makes
+ * a few hundred independent ribbons read as one continuous mass: neighbouring
+ * strands either side of a tuft boundary see the same two guides and agree, and
+ * a parting appears wherever two adjacent guides send hair opposite ways.
+ *
+ * The curve is **scale-free** — `Hair.ts` normalises it by `|c3|` — so it carries
+ * shape only and the tuft's own `len` still sets the strand's length in metres.
+ * That keeps every length already tuned in `Cast.ts` meaningful.
+ *
+ * Ported from `final-fantasy-XV-demo-opus`'s `src/actors/body/hair.ts`, whose
+ * grooming model is described in `docs/plans/2026-08-21-fable-procedural-modeling.md`
+ * §8.3. Theirs grows alpha cards directly off the guides; ours keeps this repo's
+ * tufts as the root *placement* and takes only the flow, which is the part we
+ * were missing.
+ */
+export interface HairGuide {
+  /** scalp anchor azimuth in radians — same convention as `HairTuft.th`, 0 is front. */
+  th: number;
+  /** scalp anchor elevation: 0 at the crown, 1 at the hairline. */
+  v: number;
+  /** first Bezier handle, canonical head space. Near-tangential keeps hair *on* the head. */
+  c1: number[];
+  c2: number[];
+  /** the tip, relative to the root. Its direction is the strand's overall fall. */
+  c3: number[];
+}
+
 /** One clump of hair strands: where it roots, which way it flows, how it tapers. */
 export interface HairTuft {
   /** azimuth range on the skull, `[from, to]` radians. */
   th: number[];
-  /** styled flow direction the strand bends toward. */
+  /** styled flow direction the strand bends toward. Ignored when guides apply. */
   dir: number[];
+  /**
+   * Opt out of the style's grooming guides, keeping the `dir`/`out`/`bend` path.
+   * Beards and other `absPhi` tufts opt out automatically: they are not on the
+   * scalp, so the guides' `(th, v)` coordinates do not describe them.
+   */
+  guided?: boolean;
   /** strands to emit (default 8). */
   n?: number;
   /** elevation range, `[from, to]`; a fraction of the hairline unless `absPhi`. */
@@ -75,6 +119,11 @@ export interface HairTuft {
 export interface HairStyle {
   color: number;
   tufts: HairTuft[];
+  /**
+   * The groom's flow field. Two or more enable the guide path for every scalp
+   * tuft that does not set `guided: false`; absent, tufts keep the `dir` path.
+   */
+  guides?: HairGuide[];
   tipColor?: number;
   rough?: number;
   /** scalp shell standoff in canonical head metres. */
@@ -247,6 +296,29 @@ export interface OutfitPiece {
   shaft?: number;
   strap?: boolean;
   strapColor?: number;
+
+  // ---- jacket hardware -------------------------------------------------
+  // Panels alone read as a shell. See `hardware()` in `rig/Outfit.ts`: at a
+  // metre the difference between "a black garment" and "a tailored one" is
+  // pockets, studs, tabs and a zip slider, and all of it is geometry, so it
+  // catches a real specular edge from any direction and survives minification
+  // in a way a painted line does not.
+  /** flapped patch pockets on the chest, each closed by a stud. */
+  pockets?: boolean;
+  /** azimuth of the pocket pair, radians either side of centre front. */
+  pocketTh?: number;
+  /** height of the pocket on the jacket sweep, 0 hem .. 1 shoulder. */
+  pocketT?: number;
+  pocketW?: number;
+  /** buttoned strap across each shoulder. */
+  epaulettes?: boolean;
+  epauletteTh?: number;
+  /** zip tape down both front edges, plus the slider. */
+  zip?: boolean;
+  /** where the slider sits on the sweep. */
+  zipAt?: number;
+  /** metal colour for studs, buttons and the zip slider. */
+  studColor?: number;
 
   // ---- belt / band / pad / pouch / camera / plate ----------------------
   buckle?: number;
