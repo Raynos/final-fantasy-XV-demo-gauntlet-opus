@@ -24,6 +24,8 @@ export const SKY_UNIFORM_DECL = /* glsl */`
 uniform sampler2D uSkyLut;
 uniform sampler2D uTransLut;
 uniform sampler2D uCloudTex;
+uniform vec2  uCloudTexel;   // 1 / march-target size
+uniform float uCloudTap;     // upsample Gaussian radius, in march texels
 uniform vec2  uResolution;
 uniform float uCloudMode;
 
@@ -317,19 +319,35 @@ void main() {
   // --- volumetric cumulus ------------------------------------------------
   vec4 cl;
   if (uCloudMode > 0.5) {
-    // 5 tap cross on the half res buffer: removes the raymarch step dither
-    // without visibly softening the cloud silhouettes
+    // Upsample of the march buffer.
+    //
+    // uCloudTap is the Gaussian's radius **in march texels**, and it is a
+    // uniform rather than a constant because it is the single largest control
+    // over whether the deck reads as a rendered volume or as an airbrushed
+    // billboard. It used to be a hard 1.4 with a comment claiming it did not
+    // visibly soften the silhouettes; at 1600x900 that is a 3x3 Gaussian
+    // spanning +-3.1 full-res pixels on top of the bilinear upsample's own
+    // box, and a 2x crop of vista_noon showed cloud edges taking twenty
+    // pixels to cross from sky to body. It was the whole defect.
+    //
+    // uCloudTexel is 1/size of the actual march target, so the duplicated
+    // 0.45 that used to live here cannot drift from MARCH_SCALE any more.
+    // At uCloudTap = 0 the branch collapses to a single bilinear fetch.
     vec2 tuv = gl_FragCoord.xy / uResolution;
-    vec2 texel = 1.4 / max(uResolution * 0.45, vec2(1.0));
-    cl  = texture2D(uCloudTex, tuv) * 0.2270;
-    cl += (texture2D(uCloudTex, tuv + vec2(texel.x, 0.0)) +
-           texture2D(uCloudTex, tuv - vec2(texel.x, 0.0)) +
-           texture2D(uCloudTex, tuv + vec2(0.0, texel.y)) +
-           texture2D(uCloudTex, tuv - vec2(0.0, texel.y))) * 0.1247;
-    cl += (texture2D(uCloudTex, tuv + texel) +
-           texture2D(uCloudTex, tuv - texel) +
-           texture2D(uCloudTex, tuv + vec2(texel.x, -texel.y)) +
-           texture2D(uCloudTex, tuv + vec2(-texel.x, texel.y))) * 0.0685;
+    if (uCloudTap > 0.001) {
+      vec2 texel = uCloudTexel * uCloudTap;
+      cl  = texture2D(uCloudTex, tuv) * 0.2270;
+      cl += (texture2D(uCloudTex, tuv + vec2(texel.x, 0.0)) +
+             texture2D(uCloudTex, tuv - vec2(texel.x, 0.0)) +
+             texture2D(uCloudTex, tuv + vec2(0.0, texel.y)) +
+             texture2D(uCloudTex, tuv - vec2(0.0, texel.y))) * 0.1247;
+      cl += (texture2D(uCloudTex, tuv + texel) +
+             texture2D(uCloudTex, tuv - texel) +
+             texture2D(uCloudTex, tuv + vec2(texel.x, -texel.y)) +
+             texture2D(uCloudTex, tuv + vec2(-texel.x, texel.y))) * 0.0685;
+    } else {
+      cl = texture2D(uCloudTex, tuv);
+    }
   } else {
     cl = cloudAnalytic(ro, dir, uSunDir, sunRadHigh, sky);
   }

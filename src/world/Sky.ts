@@ -101,6 +101,8 @@ export interface AtmosphereUniforms {
   uCloudDetail: THREE.IUniform<THREE.Texture | null>;
   uCloudWeather: THREE.IUniform<THREE.Texture | null>;
   uResolution: THREE.IUniform<THREE.Vector2>;
+  uCloudTexel: THREE.IUniform<THREE.Vector2>;
+  uCloudTap: THREE.IUniform<number>;
   uCloudMode: THREE.IUniform<number>;
   uPixelAngle: THREE.IUniform<number>;
   uTime: THREE.IUniform<number>;
@@ -568,6 +570,11 @@ export class Sky {
       const m = this.clouds.marchUniforms;
       if (this._ablate.has('nocloudsun')) m.uCloudSunGain.value = 0;
       if (this._ablate.has('nocloudamb')) m.uAmbientBoost.value = 0;
+      // The upsample filter, as a dial. `cloudtap0` is a single bilinear
+      // fetch; `cloudtapmax` restores the 1.4 the tree shipped with, so the
+      // two ends of the billboard question can be captured from one build.
+      if (this._ablate.has('cloudtap0')) u.uCloudTap.value = 0;
+      if (this._ablate.has('cloudtapmax')) u.uCloudTap.value = 1.4;
     }
   }
 
@@ -582,6 +589,11 @@ export class Sky {
       uCloudWeather: { value: null },
 
       uResolution: { value: new THREE.Vector2(1600, 900) },
+      // 1 / the march target's size, written by `Clouds.setSize`.
+      uCloudTexel: { value: new THREE.Vector2(1 / 720, 1 / 405) },
+      // Upsample Gaussian radius in march texels. See sky.glsl.ts; 1.4 was the
+      // billboard defect. `?post=cloudtap0` collapses it to one bilinear fetch.
+      uCloudTap: { value: 1.4 },
       uCloudMode: { value: 1 },
       uPixelAngle: { value: 0.001 },
       uTime: { value: 0 },

@@ -408,6 +408,11 @@ export class Clouds {
     const sw = Math.max(2, Math.floor(w * MARCH_SCALE));
     const sh = Math.max(2, Math.floor(h * MARCH_SCALE));
     if (sw !== this.rt.width || sh !== this.rt.height) this.rt.setSize(sw, sh);
+    // The sky dome's upsample needs the march target's texel size. It used to
+    // recompute it from `uResolution * 0.45` -- a second copy of MARCH_SCALE
+    // living in a different file, which is exactly the kind of constant that
+    // drifts silently the first time the march resolution is touched.
+    this.shared.uCloudTexel.value.set(1 / sw, 1 / sh);
   }
 
   /** Raymarch the layer for the current camera. */
