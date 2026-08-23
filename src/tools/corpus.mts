@@ -43,11 +43,10 @@
  *     lit cloud deck on a fresh page and a black zenith on a reused one — and a
  *     corpus is meaningless if half of it was shot under different conditions.
  */
-import http from 'node:http';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureDaemon, daemonPort, harnessArgs, announceBuild, withBlankPage } from './harness.mts';
+import { call, ensureDaemon, harnessArgs, announceBuild, withBlankPage } from './harness.mts';
 import type { ShotsResponse } from './harness.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -111,33 +110,6 @@ async function index(): Promise<{order: string[], groups: Map<string, string[]>,
   return { order, groups, docs };
 }
 
-/**
- * POST to the capture daemon over raw `node:http`.
- *
- * Deliberately not `fetch`: undici aborts a request whose *headers* have not
- * arrived within 300 s, and the daemon serialises work, so a corpus run behind
- * another agent's job blows that budget while rendering perfectly well. This
- * has no header deadline, only a generous socket-idle one.
- */
-const callDaemon = <T,>(route: string, body: unknown): Promise<T> => new Promise<T>((resolve, reject) => {
-  const payload = Buffer.from(JSON.stringify(body));
-  const req = http.request({
-    host: '127.0.0.1', port: daemonPort(), path: route, method: 'POST',
-    headers: { 'content-type': 'application/json', 'content-length': payload.length },
-  }, (res) => {
-    let raw = '';
-    res.setEncoding('utf8');
-    res.on('data', (d) => { raw += d; });
-    res.on('end', () => {
-      let j;
-      try { j = JSON.parse(raw); } catch { return reject(new Error(`daemon: ${raw.slice(0, 200)}`)); }
-      return res.statusCode === 200 ? resolve(j) : reject(new Error(j.error || `daemon ${res.statusCode}`));
-    });
-  });
-  req.setTimeout(45 * 60_000, () => req.destroy(new Error('daemon socket idle')));
-  req.on('error', reject);
-  req.end(payload);
-});
 
 /** How one contact sheet is laid out. */
 interface SheetOpts {
@@ -312,7 +284,7 @@ async function main() {
       // another invocation comes back with a stale sky: the same shot renders
       // a lit cloud deck on a fresh page and a black zenith on a reused one,
       // so a corpus that is going to be compared against itself must boot.
-      const r = await callDaemon<ShotsResponse>('/shots', {
+      const r = await call<ShotsResponse>('/shots', {
         shots: batch, out: outDir, settle: o.settle, w: 1600, h: 900, cold: i === 0 && !o.warm,
         // A corpus is the definition of the sweep lane: it must never starve a
         // co-agent's single `fix` shot, and it is long enough that fair-share

@@ -357,23 +357,59 @@ function isEvalRequest(b: Record<string, unknown>): b is Record<string, unknown>
 
 // --------------------------------------------------------------- client side
 
-/** POST JSON to the daemon. The caller names the response it expects. */
-export async function call<T = unknown>(route: string, body?: unknown, { timeout = 600_000 }: { timeout?: number } = {}): Promise<T> {
-  const res = await fetch(`http://127.0.0.1:${DAEMON_PORT}${route}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(timeout),
+/**
+ * POST JSON to the daemon. The caller names the response it expects.
+ *
+ * DELIBERATELY NOT `fetch`. undici aborts a request whose *headers* have not
+ * arrived within 300 s, and that timeout is not configurable from `fetch` --
+ * `AbortSignal.timeout(600_000)` does not raise it, it only adds a second,
+ * later deadline. A long job blows the 300 s budget while rendering perfectly
+ * well, and the client sees `TypeError: fetch failed` with an
+ * `UND_ERR_HEADERS_TIMEOUT` cause that names nothing about what it was doing.
+ *
+ * `corpus.mts` hit this and grew a private `node:http` copy of this function to
+ * escape it. Then a 20-shot sweep on the `sweep` lane hit it again from the
+ * shared client, which is the point at which a workaround in one tool stops
+ * being enough: the whole design of the sweep lane is that a request may
+ * legitimately queue for a long time behind somebody else's work.
+ *
+ * So: raw `node:http`, no header deadline, and a generous socket-IDLE timeout
+ * instead -- which is the honest thing to bound, since a daemon that has gone
+ * quiet for 45 minutes really is wedged.
+ */
+export function call<T = unknown>(route: string, body?: unknown, { timeout = 45 * 60_000 }: { timeout?: number } = {}): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
+    const req = http.request({
+      host: '127.0.0.1',
+      port: DAEMON_PORT,
+      path: route,
+      method: payload ? 'POST' : 'GET',
+      headers: payload
+        ? { 'content-type': 'application/json', 'content-length': payload.length }
+        : {},
+    }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (d: string) => { raw += d; });
+      res.on('end', () => {
+        let j: T & { error?: string };
+        try { j = JSON.parse(raw) as T & { error?: string }; }
+        catch { return reject(new Error(`daemon ${res.statusCode}: ${raw.slice(0, 200)}`)); }
+        if (res.statusCode === 429) {
+          const err = new Error(j.error || 'daemon busy') as Error & { busy: true, detail: unknown };
+          err.busy = true;
+          err.detail = j;
+          return reject(err);
+        }
+        if (res.statusCode !== 200) return reject(new Error(j.error || `daemon ${res.statusCode}`));
+        return resolve(j);
+      });
+    });
+    req.setTimeout(timeout, () => req.destroy(new Error(`daemon socket idle for ${Math.round(timeout / 1000)} s`)));
+    req.on('error', reject);
+    req.end(payload ?? undefined);
   });
-  const j = await res.json() as T & { error?: string, busy?: boolean };
-  if (res.status === 429) {
-    const err = new Error(j.error || 'daemon busy') as Error & { busy: true, detail: unknown };
-    err.busy = true;
-    err.detail = j;
-    throw err;
-  }
-  if (!res.ok) throw new Error(j.error || `daemon ${res.status}`);
-  return j;
 }
 
 /** What the daemon says about itself before any work is asked of it. */
@@ -760,18 +796,33 @@ class BrowserPool {
 
   get pages(): number { return this.slots.filter((s) => s.page).length; }
 
+  /** CDP ports handed out but whose browser has not finished launching. */
+  private reservedCdp = new Set<number>();
+
   private async newSlot(w: number, h: number): Promise<Slot> {
-    // A CDP port per slot, from a block nothing else uses. It is opened on
-    // every slot rather than on demand because a browser cannot grow one later,
-    // and a play tool must not have to wait for a fresh launch to get a lease.
-    const used = new Set(this.slots.map((s) => s.cdpPort));
+    // A CDP port per slot, from a block nothing else uses. It is opened on every
+    // slot rather than on demand because a browser cannot grow one later, and a
+    // play tool must not have to wait for a fresh launch to get a lease.
+    //
+    // RESERVE IT BEFORE AWAITING. A slot only joins `this.slots` once its
+    // browser has launched, so two concurrent `newSlot` calls both saw an empty
+    // set and both picked 9333 -- two chromiums fighting for one debug port,
+    // which surfaces as `browserType.launch: Timeout 180000ms exceeded` with
+    // nothing in it that names a port. Five agents fanning out on a cold pool is
+    // exactly the shape that hits it, which is to say the normal one.
+    const used = new Set([...this.slots.map((s) => s.cdpPort), ...this.reservedCdp]);
     let cdpPort = CDP_BASE;
     while (used.has(cdpPort)) cdpPort++;
-    const { ctx, persistent } = await launchPersistent({ width: w, height: h }, cdpPort);
-    this.persistentProfile = persistent;
-    const slot = new Slot(ctx, cdpPort);
-    this.slots.push(slot);
-    return slot;
+    this.reservedCdp.add(cdpPort);
+    try {
+      const { ctx, persistent } = await launchPersistent({ width: w, height: h }, cdpPort);
+      this.persistentProfile = persistent;
+      const slot = new Slot(ctx, cdpPort);
+      this.slots.push(slot);
+      return slot;
+    } finally {
+      this.reservedCdp.delete(cdpPort);
+    }
   }
 
   /**
