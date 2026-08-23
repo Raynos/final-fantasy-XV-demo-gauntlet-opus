@@ -1,247 +1,278 @@
-# Handoff — `heroart` (hands, outfits, hair, faces)
+# Handoff — `heroart` (hair, outfits, hands)
 
-Branch `worktree-agent-a09ead00312c39211`, four commits on top of `main`.
-This session took the three named-and-untouched gaps in priority order: **hands**,
-**outfits**, **hair**. The head profile was not reached.
+Branch `worktree-agent-aa16b803fd8d73f7e`, five commits on top of `main`
+(merged current at the start of the session, 200 commits behind).
 
-**Read §5 first if you are short of time.** Four of the gotchas cost me an hour each
-and three of them are things I would have got wrong again.
+This session took the previous lane's own priority order — **hair first**, then
+outfit hardware, then the hand's dorsal surface — and answered the two structural
+questions the brief attached to it. `npm run check` is **11/11**, `anycheck` 0,
+`creaturecheck` 207 poses.
 
----
-
-## 1. What changed, and what I verified by eye
-
-Every claim below was checked against a captured frame at a stated range. Shot
-directories are listed in §6.
-
-### 1.1 Hands — **rebuilt.** The mitten is gone.
-
-`src/characters/rig/Body.ts`. The old hand was a mitten for four *arithmetic*
-reasons, none of them shading, and finding them was measurement rather than taste:
-
-| defect | measurement |
-|---|---|
-| **40% too short** | ran wrist→tip 0.107·s; a hand is ~0.11 of stature, so 0.19·s on this 1.73·s skeleton. The **skeleton already had it right** (`fingers` at 0.085·s, `fingerTip` at 0.157·s) — only the geometry disagreed, so both distal bones were driving vertices nowhere near them. Now 0.165·s. |
-| **fingers fused** | centre pitch 13.5 mm, proximal diameter 20–21 mm. Every finger overlapped both neighbours by 3 mm a side, so what rendered was one wedge with four grooves in it. The palm is now 74 mm across the knuckles — 0.44 of hand length, the real ratio. |
-| **no joints** | three nodes at constant radius is a cone. Now three phalanges walked by an accumulating frame, flexing at each joint, splaying at the knuckle, radius swelling at each joint, flat pad on the palmar side. |
-| **straight knuckle row** | all four fingers left the palm at the same distance in the same plane. Now the real oblique arch: middle furthest and proudest, little finger 15 mm shorter and lower. |
-
-Plus: the thumb ran to `+front`, i.e. **straight out of the back of the hand** — every
-relaxed pose was a permanent thumbs-up. It now rotates palmar out of a thenar mound.
-
-Two shading fixes rode along. The hand sweeps carried **no `uvScale`**, so the shared
-pore normal map (`repeat(15,23)`) tiled fifteen times across one 70 mm palm — sub-pixel
-at every range a hand is ever seen at, so the whole map aliased to flat. Now ~13 mm/tile,
-matching the torso and arm. And the tone is split palmar/dorsal with joint creases and a
-glossier nail plate.
-
-**Verified:** `cf5p/noctis_handL.jpg` (0.30 m) against `cf0p/noctis_handL.jpg`. Four
-separated digits with knuckles, a thumb, a palm with a thenar mound and a hollow.
-
-### 1.2 Outfits — **lifted off the floor and split by material.**
-
-`src/characters/rig/Outfit.ts`, `src/characters/Cast.ts`.
-
-I ablated before re-tinting, per the plan, and it was worth it. Forcing every garment
-to mid-grey with `vertexColors` off — so only geometry and per-vertex roughness speak —
-showed a smooth undifferentiated balloon with a fine uniform grain (`cfgrey/`). That
-told me the seam/fold machinery was *partly* live and *entirely* invisible.
-
-- **The albedo was on the floor.** Every garment on all four heroes sat between
-  0x1e1c1e and 0x2e2c21 — 0.012–0.025 linear. `clothShade` modulates that by
-  ±40–60% for seams, wear and mottle, and 40% of 0.012 is 0.005: the same pixel after
-  tonemapping. *Nothing the shading pass computed could ever have arrived.* Bases are
-  now 0x2b–0x3d.
-- **My first lift went straight to slate blue** and produced exactly the "generic
-  slate NPCs" failure `garmentMaterial` warns about in its own comment. Shipped values
-  are the same lift on a neutral-to-warm hue. **If you lift further, check the hue.**
-- **Roughness now separates the layers.** Jacket, tee and trousers sat within 0.15
-  roughness of each other, so three near-identical blacks were one shape. Leather is
-  now 0.30–0.42, jersey and canvas 0.88–0.94.
-- **The chest print is a decal patch** (`printPatch`). Painted into the tee's own
-  `colorAt` it was drawn at the tee's vertex density — Noctis's skull spans 0.75 rad
-  of a 76-segment ring by 0.29 of a 42-step sweep, i.e. **nine vertices across by
-  twelve down**. That is why it was a blurry blob, and why no amount of tuning
-  `skullPrint`'s falloffs was ever going to fix it.
-- The tee's fold terms were masked by `bump(t,0.35,0.4)` and `bump(t,0.55,0.45)`, both
-  **zero above t≈0.78** — the chest and shoulders, always on camera, were the one part
-  with no relief. And the default seam angles were π, 0.54π, 1.46π: centre-back and the
-  two sides, **none of which a front three-quarter ever sees**. Both fixed.
-
-**Verified:** `cf7p/noctis_chest.jpg` and `cf12/hero_face.jpg` against `cf5p`/`cf0`.
-The three layers now separate; Gladio's leather reads as leather against olive canvas.
-
-### 1.3 Hair — **crown mats laid along the skull; the loudest quill removed.**
-
-`src/characters/Cast.ts`, `src/characters/rig/Hair.ts`.
-
-The first thing this needed was an honest framing. The probe's crown shot was at
-0.50 m, where a 2.4 mm lock is **18 px** — a macro view no player ever sees, at which
-*any* groom is a bundle of blades. `_crown`/`_nape` are now at 0.86 m and there is a
-new `_hairfield` at 2.6 m.
-
-At those ranges the diagnosis is not the cross-section (a previous pass fixed that) nor
-the density (the same pass tripled it). It is that **the crown mat was authored as
-fur**: 46–58 mm locks on a 90 mm head radius — half a head radius — pushed out along
-the surface normal at `out` 0.60–0.66 with no `hug`. Short, outward and isolated is the
-definition of a quill. All four heroes' crown mats, crown layers, side sweeps and
-flyaways now run 50–60% longer at `out` ~0.40 / `hug` ~0.44, `thick` 0.50–0.52 rather
-than 0.34–0.36, `steps` 6 rather than 4.
-
-Two measured findings:
-
-- **Golden hour is not why Prompto reads olive.** The previous handoff left this open
-  with three candidates and suggested a noon render. Done — `cfnoon/prompto_crown.jpg`
-  at `time: 12.0` is the same olive khaki. Environment eliminated. The base was the
-  cause: 0x9a8261 is (154,130,97), R−G 24 and G−B 33, a desaturated khaki. Gold blond
-  carries most of its chroma in the G−B gap. Now 0xb08543 / 0xe4c67e.
-- **The hairline wisps were the loudest quill on the whole cast.** Their own comment
-  says "fine, short, low-contrast". They were 2.6–4.0 mm *half*-width — up to an 8 mm
-  card — on `ribbon`'s default four-sided flat section (which that function's own
-  docstring calls a blade) with `tipColor: base`, lifting the tip **above** the root.
-  Thirty-four of them pointing down over the brow. On a blond that is a row of yellow
-  needles across the forehead. Now a third of the width, six-sided, tip at 0.92 of root.
-
-**Verified:** `cf9p/noctis_crown.jpg` + `cf9p/noctis_hairfield.jpg` against `cf8p`
-(hedgehog → connected mass with a directional sweep and a real asymmetric fringe);
-`cf11p/prompto_*` against `cf9p` (needles gone).
-
-### 1.4 Two toolkit fixes in `src/characters/rig/Geo.ts`
-
-- **`sweepTube` grew `capEnd`.** Every sweep in this codebase stopped dead at an open
-  cylinder and every caller that cared plugged it with a separate `blob` — a second
-  object with its own normals, material state and UV island butting against the rim.
-  On the fingertips that shaded as a ball stuck on the end of a finger. A dome built
-  from the sweep's own last ring shares those vertices so the normals average.
-- **`blob` grew `uvSpan`.** The existing `uv` pin gives every vertex the same UV, which
-  zeroes `dFdx/dFdy` and degenerates three.js's derivative-based tangent frame. (This
-  turned out *not* to be the fingertip bug — see §5.3 — but it is still wrong, and
-  `Face.ts`'s ear uses the same pin.)
+**Read §5 first if you are short of time.** Four of those cost an hour each and
+two of them overturn things this repo believed.
 
 ---
 
-## 2. Files I touched
+## 1. The two structural answers, up front
+
+### 1.1 There is no culling bug. The portrait shot works today.
+
+The previous handoff's §9.1 said a head-and-shoulders shot was impossible because
+character meshes are culled on their bind-pose bounding sphere, and named a
+one-line fix location in `Character.ts`. **That diagnosis is wrong, and it had
+never been measured.** `mesh.frustumCulled = false` is set on every character
+mesh in `Character._skinned`, and `git log -S` puts it there since the *first*
+commit that created the party. The renderer never tests the sphere, so the sphere
+cannot cull anything.
+
+Measured rather than argued: `src/tools/_probe/portrait.mts` emits specs in
+exactly the `follow` + `offset` + `lookOffset` form `src/game/Shots.ts` uses, at
+1.15 m on a 30° lens, and dumps every mesh's `frustumCulled` flag and bounding
+sphere alongside. All sixteen framings render. `tmp/shots/h0/*_portrait.jpg` is
+what a `hero_portrait` entry would produce, from the inherited state.
+
+**So: `hero_portrait` and `party_portrait` can be added to the corpus whenever
+the coordinator wants them.** No engine change is needed. Suggested values, which
+are the ones the probe uses and which I have looked at on all four heroes:
+
+```
+hero_portrait: { follow: 'player', offset: <head + 1.15 m at 3/4>, lookOffset: <head - 0.055>, fov: 30 }
+```
+
+### 1.2 The frame budget
+
+`hero_full` after this session: **7.72 M triangles, 647 draw calls** (7.35 M /
+543 in the previous handoff — but that number predates my merge of 200 commits
+from `main`, so the delta is not all mine and I cannot attribute it). Hair
+`steps`/`segs` went up, the palm ring went 20 → 40 segments, and the jacket
+hardware is a few thousand triangles. All of it lands in existing builder groups.
+`perf.mts` **not run** — other lanes were live all session.
+
+---
+
+## 2. What changed
+
+### 2.1 Hair — grooming guides. This is the session's main change.
+
+`HairTuft.dir` is a *direction field*: it says where every strand in a tuft ends
+up pointing, and the strand travels in something close to a straight line to get
+there. That is a quill, and a head of them is a hedgehog however they are tinted,
+tapered, jittered or clumped — which is why Prompto read as a straw sunburst
+through four rounds of parameter work *inside* that model. There was no way to
+say "lie along the skull for four centimetres, then fall", and no way for two
+neighbouring strands in different tufts to agree about anything.
+
+`HairGuide` (`rig/Look.ts`) says it, as a cubic Bezier from the root. Each strand
+bends as an **inverse-square blend of its two nearest guides** in the scalp's
+`(u, v)` chart. That blend is the whole trick: a root on a guide takes it whole,
+a root halfway between takes the mean, no seam in between — so a few hundred
+independent ribbons read as one connected mass with a parting in it.
+
+This is `final-fantasy-XV-demo-opus`'s model from `src/actors/body/hair.ts`, read
+from the source as §8.3 instructs. **Theirs grows alpha cards straight off the
+guides; ours keeps this repo's tufts as the root *placement* and takes only the
+flow.** That is deliberate — it means every length, width, clump, spring and
+spike already tuned in `Cast.ts` stays meaningful, and the blast radius is one
+function. Guide curves are normalised by `|c3|`, so a guide carries *shape* and
+the tuft's `len` still carries metres.
+
+Roots are slotted too: `v` was `rng.next()`, and uniform over the 20-70 roots
+most tufts carry clumps badly. Both axes are now evenly slotted and jittered by
+at most half a slot — "an even fan is a comb, fully random leaves bald patches".
+
+All four grooms are on it, graded against their own plates:
+
+| | what the plate says | what ours was doing |
+|---|---|---|
+| Noctis | one mass, parting high on one side, fringe **across** the brow, sides to the jaw | radial quills, sides stopping at the ear |
+| Gladiolus | **face completely clear**; up-and-back quiff, sides tight, ears out, only the back long | every front and temple lock hanging forward over his eyes |
+| Prompto | quiff off a low side parting, sides flat, one long fringe over the eye | straw sunburst — `out` 0.62-0.82, i.e. radiating along the normal |
+| Ignis | the same quiff, neater | ditto, shorter |
+
+**Lengths were the other half.** The reference fringe reaches the cheekbone,
+about 0.6 of skull height below the hairline, and side locks reach the jaw. Ours
+were 29-58 mm on a 113 mm skull — a third of that — and no flow field fixes a
+groom that stops at the top of the ear. Watch the overshoot: a 70 mm fringe on
+curves that fell straight down closed over both of Noctis's eyes (`tmp/shots/h4`,
+worth looking at). The fringe guides now travel further sideways than down.
+
+### 2.2 The scalp shell was inverting through the skull
+
+At 0.86 m the crown was covered in hard-edged patches of pale scalp, which reads
+as gaps torn in the hair. **They are not gaps between locks.** `shellPoint`'s
+lock-scale relief is signed noise with amplitude `1.7 · vol` riding on a base
+standoff of at most `1.12 · vol` — so wherever it swung strongly negative the
+shell was displaced up to **6.7 mm inside the sculpted skull** and the head mesh
+came through it. Relief is a ridge, not a trench; the standoff floors at the
+skull. `scratchpad z1.jpg` vs `z2.jpg` at 5× is the before/after.
+
+This predates my change and would have been there for every previous hair pass.
+
+### 2.3 Hair value, measured — and one overturn
+
+New instrument, `src/tools/regionstat.mts`: per-channel percentiles over a
+rectangle, in the fractional coordinates §12's tables are written in. **Validated
+against the document it serves** — run over `character-noctis-face-01.jpg` at
+§12.3's own region it returns p50 `#1d2630` against the table's `#1f2630`, Y
+20→139 against 20→140.
+
+| | plate Y p50 | before | after |
+|---|---|---|---|
+| Noctis (black) | 37-44 | 11 | **41** |
+| Gladiolus (brown) | 11 | 11 | 32 |
+| Prompto (blond) | 81 | 132 | 97 |
+| Ignis (ash) | 48 | 139 | 135 |
+
+**Prompto is a measured overturn of the previous pass.** That pass moved his base
+from `0x9a8261` to `0xb08543` chasing gold — nearly doubling `R−B` from 57 to
+109. Shot at `time: 12.0` to match the plate's full midday sun and control for
+golden hour, his hair renders `R−B` **+66.5 against the plate's +6**. The hour is
+not the cause, the base albedo is, and the previous move was *away* from the
+reference. §12.3 says why: even blond medians at `#4a5453`, a desaturated
+grey-olive, and the blond lives in the top few percent of the pixels.
+
+**Honest caveat, recorded not buried:** taking his base all the way to the
+plate's `R−B` renders as sage, not blond. The plate's median comes off a full-sun
+frame where shadowed hair is most of the region; matching it on a golden-hour
+render greys the *lit* hair too. He now sits between — most of the desaturation,
+the tip carrying the colour. Someone with a lit-versus-shadow split should finish
+it. Ignis's Y 135 is the remaining outlier and his region leaks a lot of sky;
+tighten the rect before concluding anything.
+
+### 2.4 Outfits — hardware, and Ignis out of lavender
+
+`hardware()` in `rig/Outfit.ts`, driven by `pockets` / `epaulettes` / `zip` /
+`studColor` in `Cast.ts`: flapped chest pockets with studs, buttoned shoulder
+tabs, a zip slider. All placed through a new `sweepFrame`, which reproduces the
+frame `sweepTube`/`sweepShell` build their vertices in — so a pocket follows the
+chest it is sewn to and takes the skin weights of its own ring. `tmp/shots/h8/
+noctis_chest.jpg` against `h5` is the read.
+
+**Ignis was wearing lavender.** `0x393648` on coat, sleeves, skirt and belt
+renders violet-blue under sky bounce. §12.4's jackets median `#111312` to
+`#171a21` — near-black neutrals — and nobody in FFXV wears lavender, so a violet
+party member is a blind-test tell on its own. Measured over the chest his coat
+moves Y p50 **19 → 16**. Prompto's vest was already right (10 against the plate's
+9); Noctis's sits at 42 against a plate row shot in cool ambient with no key, so
+it is not like-for-like and I left it.
+
+### 2.5 Hand — tendons, knuckles, a wrist fold
+
+`Body.ts`. Four extensor tendons, four separate metacarpal heads in place of the
+single continuous bar, and a wrist fold. Ring 20 → 40 segments, because four
+tendons across a ~1.8 rad dorsum need three samples each and at 20 the step is
+wider than a tendon (§8.5: pattern frequency is bounded by vertex spacing).
+Colour comes off the *groove* between tendons, not the ridge — under ambient a
+2 mm ridge on a 37 mm radius shades almost not at all.
+
+Verified honestly: knuckle scalloping reads, wrist fold reads, **tendons do
+not**, at 0.24 m in the rest pose's own shadow. See §5.4.
+
+---
+
+## 3. Files touched
 
 | file | why |
 |---|---|
-| `src/characters/rig/Body.ts` | the whole hand rebuild |
-| `src/characters/rig/Geo.ts` | `sweepTube.capEnd`, `blob.uvSpan` |
-| `src/characters/rig/Outfit.ts` | `printPatch`; `clothShade` amplitudes and seam angles; the tee's chest fold mask |
-| `src/characters/rig/Hair.ts` | hairline wisps |
-| `src/characters/Cast.ts` | garment palette + roughness for all four; hair tuft geometry for all four; Prompto's blond; Ignis's coat chroma; the skull print's size |
-| `src/tools/_probe/hands.mts` | **new** — see §3 |
+| `src/characters/rig/Hair.ts` | guide machinery, root slotting, shell floor |
+| `src/characters/rig/Look.ts` | `HairGuide`, `HairTuft.guided`, jacket hardware fields |
+| `src/characters/Cast.ts` | four guide tables, lengths, hair colours, jacket hardware, Ignis's palette |
+| `src/characters/rig/Outfit.ts` | `sweepFrame`, `hardware()` |
+| `src/characters/rig/Body.ts` | tendons, metacarpal heads, wrist fold, palm ring density |
+| `src/tools/regionstat.mts` | **new** — §12's instrument |
+| `src/tools/_probe/portrait.mts` | **new** — portrait, profile, chest, dorsum, two hair ranges |
 
-Nothing outside `src/characters/` except the new probe.
+Nothing outside `src/characters/` except the two harness files.
 
 ---
 
-## 3. The probe — read this before capturing anything
-
-`src/tools/_probe/hands.mts`, run through `framecam.mts`:
+## 4. The tools, and how to run them
 
 ```bash
-PORT=5350 node src/tools/framecam.mts --probe src/tools/_probe/hands.mts \
+PORT=5510 node src/tools/framecam.mts --probe src/tools/_probe/portrait.mts \
   --out tmp/shots/<round> --settle 8
 ```
 
-It emits 40 framings — per hero: `_handL/R`, `_palmL/R`, `_chest`, `_shoulder`, `_hip`,
-`_crown`, `_nape`, `_hairfield`.
-
-It exists because **`_probe/heads.mts`'s `_hand` framing is broken**: it aims along the
-root's forward axis at the hand's *height*, which is the hip. Every `*_hand.png` that
-probe has ever produced is a picture of a black trouser leg — including the ones in the
-previous handoff's baseline directories. This one aims at the bone's world position.
-
-`framecam.mts` writes **PNG only** — no `--jpeg`. Convert before reading or you will
-carry 2.5 MB per frame for the rest of the session:
+Twenty framings: per hero `_portrait` (1.15 m), `_profile`, `_chest` (0.95 m),
+`_crown` (0.86 m), `_hairfield` (2.6 m), plus `_dorsumL/R`. **`framecam.mts`
+writes PNG only.** Measure first, then convert, then read:
 
 ```bash
-for f in tmp/shots/<round>/*.png; do
-  sips -s format jpeg -s formatOptions 72 "$f" --out "${f%.png}.jpg" >/dev/null; rm "$f"
-done
+node src/tools/regionstat.mts tmp/shots/<round>/noctis_portrait.png 0.40 0.02 0.58 0.22
 ```
 
----
+The probe's `HOUR` constant at the top is the clock. 16.2 is the corpus's golden
+hour, 12.0 the noon control that §12.3's Prompto row needs. `framecam` reads the
+probe as text and cannot pass a parameter in, so edit it.
 
-## 4. Gate status
-
-`npm run check` — **9/9 pass** (build, orphans, integration 18, uxcheck 89/89,
-creaturecheck 207 poses, combatloop 30/30, roadcheck, heightcheck, driftcheck).
-
-| | before | after |
-|---|---|---|
-| `hero_full` triangles | 7.03 M | **7.35 M** (+4.5%, all of it hair `steps` 4→6) |
-| `hero_full` draw calls | 543 | **543** |
-
-`perf.mts`/`gameplay.mts` **not run** — three other agents were live all session and any
-number would have been meaningless.
+Multi-step shell (`for` loops, chained globs) is refused inside a worktree —
+put it in a script under the scratchpad and `bash` it. The three I used are
+`tojpg.sh`, `zoom.sh` (sips crop + magnify, for the 4-5× reads), `ours.sh`.
 
 ---
 
-## 5. Gotchas and dead ends — read this twice
+## 5. Gotchas and dead ends
 
-### 5.1 Near-black albedo swallows every shading pass you write
+### 5.1 A diagnosis that was never measured survived three handoffs
 
-This is the single most useful thing in this document. A garment at 0x1e1c1e is 0.012
-linear. `clothShade` was computing seams, wear, mottle and a roughness break on top of
-it — all correct, all invisible, because ±40% of 0.012 is ±0.005 and the tonemapper
-cannot show that. **Before writing another break-up pass on a dark material, check
-whether the base has the headroom to carry it.** The same applies to Ignis's glove,
-which I spent forty minutes chasing as a geometry bug (§5.3) before realising 0x1b1b21
-simply goes to zero wherever it turns from the key.
+The culling story (§1.1) was written down, carried forward, and used to explain
+why the shot corpus has no portrait — and one `grep` plus one capture disproved
+it. It cost me nothing because I checked it first; it cost the previous lane
+every defect it had to hunt with `framecam`. **When a handoff hands you a cause,
+check that someone measured it.** The same applies to mine.
 
-### 5.2 Judge hair at the range the game shows it
+### 5.2 Judge hair at the range the game shows it — and check what is *behind* it
 
-A 2.4 mm lock is **18 px at 0.50 m and 2 px at 3 m**. At 0.50 m every groom that has
-ever existed is a bundle of blades and you will "fix" things that were never wrong. The
-first hour of my hair work was spent looking at a macro shot. Use `_crown` (0.86 m) and
-`_hairfield` (2.6 m).
+The previous lane's §5.2 is right and I would add to it: at 0.86 m the loudest
+defect on the crown was not the locks at all, it was the shell underneath them
+(§2.2). If hair looks gappy, magnify before deciding the gaps are between
+strands. `zoom.sh` at 5× settled it in one look; hard-edged pale *polygons* are
+never a lighting artefact.
 
-### 5.3 The fingertip hunt — three wrong diagnoses, all disproved by ablation
+### 5.3 One statistic is not the same as one look
 
-Ignis's fingertips rendered as black beads. In order I believed, and disproved:
+Matching §12.3's `R−B` on Prompto is defensible from the number and wrong to the
+eye (§2.3). The plate is a differently-lit frame and its median is dominated by
+shadowed hair. Use the tables to find *which direction* is wrong and by roughly
+how much — they caught a doubling of chroma in the wrong direction, which is what
+they are for — and then look at the frame before you land the last 40%.
 
-1. **Inverted winding on `blob`.** Measured directly: signed volume via the divergence
-   theorem, computed in-page on a fresh `MeshBuilder`. `blob` −3.85, `sweepTube` −4.08 —
-   **both negative, i.e. consistently wound**, so they cannot disagree with each other.
-   (Note for whoever cares: the whole geometry pipeline is negative-signed-volume and
-   still renders under `FrontSide`. I did not chase why. It is *consistent*, which is
-   all that matters, but do not reason about winding from first principles here.)
-2. **Degenerate tangent frame from the pinned blob UV.** Fixed it (`uvSpan`) — black
-   beads unchanged. A real bug, not this bug.
-3. **The fingers curling under and self-shadowing.** Opened the rest pose — improved
-   the hand a lot, black beads unchanged.
+### 5.4 The hand probe was photographing the wrong side of the hand
 
-What settled it: an oversized **bright red** cap blob plus a nail ablation in one frame,
-then a two-colour ablation (glove tube red, glove cap green). The tube went red, so the
-glove path was live everywhere; the beads were dark *red*. They were never geometry —
-`0x1b1b21` on a surface turning away from the key **is** black. See §5.1.
+`_probe/hands.mts`'s `_hand` framing builds its direction from the **root's**
+forward and right. A hand rolls with the forearm, so in the rest pose the dorsum
+ends up nearly edge-on to a camera aimed that way. The measurement that settles
+it: I ablated the tendons to **six times** their amplitude — an 11 mm ridge,
+grotesque — and there was **no visible change** in that framing. Its `_palm`
+framing is worse: it sits inside the forearm and renders a defocused wall of
+skin.
 
-**The lesson that generalises:** every one of those three was a plausible geometry story
-and every one was wrong. The ablations cost ~3 minutes each and each one closed a
-direction I would otherwise have spent an hour in. Ablate first, every time.
+So the previous lane's "verified: four separated digits with knuckles" was read
+off a view that was not the dorsum, and so was my first tendon check. Note the
+irony: that probe was written *because* `heads.mts`'s `_hand` framing was a
+picture of a trouser leg. It fixed the aim point and left the direction.
 
-### 5.4 A decal patch's lift must taper to zero at its border
+`portrait.mts`'s `_dorsum` framing goes off the hand bone's own basis. Which axis
+is dorsal was settled by emitting all six and looking for the knuckle row — it is
+**minus the bone's x column** — not reasoned about from first principles.
 
-`printPatch`'s first build put the 2.4 mm lift into the drape's `pad`, i.e. constant
-across the patch. GTAO and the shadow map both found the step at the border and drew a
-visible **rectangle around the print**. The lift now lives in the `shape` multiplier and
-smoothsteps to zero over the outer 0.16 rad / 0.12 of the window. Anything else you lay
-on a garment as a patch wants the same treatment.
+### 5.5 `abump` has compact support
 
-### 5.5 `git` inside this worktree
+`abump(th, c, w)` is a raised cosine that is **exactly zero beyond `w`**, so `w`
+is a half-width, not a sigma. My first tendon set used 0.19 rad at 0.44 spacing:
+four ridges each narrower than one 0.31 rad ring segment, landing 8 and 22 mm off
+the midline of a 74 mm hand. Both the spacing and the width were arithmetic
+errors and both were invisible rather than wrong-looking.
 
-The harness refuses any bash command it cannot statically prove stays inside the
-worktree — that includes `cd`, chained `&&` with globs, and `for f in ...; do ... done`
-one-liners. Put multi-step shell in a script file under the scratchpad and `bash` it.
-This is why §3's conversion snippet is written the way it is.
+### 5.6 Model what is not already in the panel
 
-### 5.6 Things I checked that were *not* the problem
-
-- The hair ribbon cross-section and density. Both were fixed by the previous pass and
-  both are fine. The quill read is *lock length and outward push*, not section.
-- Golden hour on Prompto's blond (§1.3) — measured and eliminated.
-- `blob` winding (§5.3) — measured and eliminated.
+The zip's first build laid a tape down each front edge as seven stacked plates.
+Every plate is a flat chord across a curved torso, so they stepped apart and the
+"tape" rendered as a column of disconnected rectangles floating off the chest —
+worse than no zip. The tape's step was **already in the panel** (`placket` raises
+a band along exactly that line); what a ridge cannot be is metal. Only the slider
+is modelled now. §8.5's rule generalises: compute what the feature adds over what
+is already there, not just its pixel size.
 
 ---
 
@@ -249,78 +280,116 @@ This is why §3's conversion snippet is written the way it is.
 
 | dir | what |
 |---|---|
-| `tmp/shots/cf0`, `cf0p`, `cf0h` | **the inherited state**, before anything of mine. `cf0h` is `heads.mts`'s output including its broken `_hand` framings. |
-| `tmp/shots/cf5p` | after the hand rebuild, before the outfit work |
-| `tmp/shots/cfgrey` | **the grey-garment ablation** that started the outfit work — worth looking at before touching `Outfit.ts` |
-| `tmp/shots/cf7p`, `cf7` | after the outfit pass |
-| `tmp/shots/cf8p` | hair, before, at the corrected framings |
-| `tmp/shots/cf9p` | after the crown-mat pass |
-| `tmp/shots/cfnoon` | Prompto at `time: 12.0` — the measurement behind §1.3 |
-| `tmp/shots/cf11p`, `cf12` | **now** |
-| `tmp/shots/cfabl`, `cfabl2`, `cf2dbl` | the fingertip ablations behind §5.3 |
+| `tmp/shots/h0` | **the inherited state** — the first portraits this project has had |
+| `tmp/shots/m0` | the same, kept as PNG, and the baseline `regionstat` numbers |
+| `tmp/shots/h1` | Noctis on guides, everything else unchanged — the clean ablation |
+| `tmp/shots/h2` | + the scalp-shell floor |
+| `tmp/shots/h3` | all four on guides, original lengths |
+| `tmp/shots/h3noon` | **the `time: 12.0` control** behind §2.3's overturn |
+| `tmp/shots/h4` | the length **overshoot** — worth seeing before you lengthen anything |
+| `tmp/shots/h5` | lengths corrected + hair colours |
+| `tmp/shots/h7`, `h8` | outfit hardware, before and after the pocket height fix |
+| `tmp/shots/hh1`, `hh2`, `hhabl` | the hand, and the **6× ablation** behind §5.4 |
+| `tmp/shots/hax` | the six hand-bone axes that found the dorsal one |
+| `tmp/shots/blind`, `tmp/ab-hero` | the blind round |
 
 ---
 
 ## 7. My honest grade against shipped FFXV
 
-Not against last round. Against a 2016 PS4 frame.
+Against a 2016 PS4 frame, not against last round.
 
 | | grade | why |
 |---|---|---|
-| **Hands** | **6/10** (from ~2) | Reads as a hand at any range now: separated knuckled digits, an opposed thumb, a palm with structure. What is missing is *surface*: it is still a smooth pale casting with no tendon relief on the dorsum, no skin fold at the wrist, and knuckle creases that only exist as vertex colour. FFXV hands have visible extensor tendons and a bony knuckle silhouette. |
-| **Outfits** | **5.5/10** (from ~3) | The layers now read as different materials and the black reads as charcoal leather rather than a hole. But at 1 m there is still **no visible stitching, no hardware, no zip, no pocket** — the seams exist as a 2 mm rib and a value break and neither survives to the frame. FFXV's Kingsglaive black is *covered* in hardware: buckles, zips, quilted panels, a lining that shows at every cut edge. Ours is smooth panels. |
-| **Hair** | **4.5/10** (from ~3) | Noctis at field range is genuinely close — an asymmetric fringe with a swept crown and a real silhouette. Prompto and Gladio are not: still a spiky mass and a dark nest. The remaining gap is that we have no **grooming guides** — every lock is an independent root with a jittered direction, so there is no flow, no parting, and no large-scale shape. §8.2 is what to do about it. |
+| **Hair** | **6.5/10** (from 4.5) | The hedgehog is gone on all four. Noctis at portrait range is a connected mass with a real parting, a fringe that sweeps across the brow with the eye under it, and a value on the plate. That is the biggest single move of the session. What is missing: the silhouette edge is still too smooth — FFXV's is fringed with fine layered points and ours is an arc; Prompto's mass is still coarse-fibred straw rather than smooth layers; and there is no anisotropic streak, which §12.3 says is a *narrow, desaturating* band and is most of what makes hair read as hair. |
+| **Outfits** | **6.5/10** (from 5.5) | Pockets, studs, tabs and a slider mean the jacket now reads as tailored rather than as panels, and Ignis is no longer the one man in the party wearing lavender. Still missing: no stitching that survives to the frame (the 2 mm topstitch rib is below a pixel at a metre), no lining at any cut edge, no quilting, and the pockets read as slabs laid on rather than sewn — they need a border seam and a shadow under the flap. |
+| **Hands** | **6/10** (unchanged) | I am not claiming an improvement I could not see. The knuckle scalloping and the wrist fold read; the tendons do not, at the only correct framing I have. The geometry is right by construction and its arithmetic is checked, but "correct in the mesh" is not the bar this repo sets, so it stays at the previous lane's number until someone verifies it under a key. |
 
 ---
 
-## 8. What is left, in the order I would do it
+## 7.5 The blind round — and the thing worth reading in it
 
-1. **Hair guides — the real fix, and the one the plan already specifies.**
-   `docs/plans/2026-08-21-fable-procedural-modeling.md` §8.3: cards grown from 6–10
-   Bezier **guides** authored in skull-radius units, each card bending as an
-   inverse-square blend of its two nearest guides, hairline and tail length as
-   `a + b·cos(longitude)`, roots evenly slotted then jittered ≤0.55 slot ("an even fan
-   is a comb, fully random leaves bald patches"). Everything I did this session was
-   parameter work *inside* the existing per-root model; that model has no way to
-   express a parting or a flow, which is why Prompto is still a hedgehog. **Read
-   `final-fantasy-XV-demo-opus`'s `hair.ts` before starting** — the plan says the
-   sibling solved this and the plan is a summary, not a spec.
-2. **Outfit hardware.** Zips, buckles, quilted panels, a visible lining at every cut
-   edge. `roundedBox` and `sweepShell` already exist and `Outfit.ts` already has a
-   `buckleBox`; this is content, not new machinery. Biggest remaining outfit gap by a
-   distance, and cheap per unit.
-3. **Dorsal tendon relief on the hand.** Four shallow ridges wrist→knuckle in the palm
-   sweep's `shape`, plus a real knuckle bulge. Half an hour, and it is the difference
-   between the hand reading as a casting and as a hand.
-4. **Gladio's mane.** The long back tufts (`len: 0.205`/`0.250`) were **not** touched
-   this session and they still spike over his face in every three-quarter. Same
-   treatment as the crown mats: `out` down, `hug` up.
-5. **The head in profile**, which I did not reach at all. The previous handoff's §6.1
-   is still current: the gonial angle is weak and there is a hard flat facet where the
-   head mesh meets the neck.
-6. **The skull print's *drawing*.** It has the resolution now; `skullPrint`'s shapes are
-   crude and it reads as a cartoon ghost. It is pure 2D maths in `Cast.ts`, cheap to
-   iterate, and it is the largest single element on Noctis's chest.
+Round 6, all seven frames character-framed, judged by a fresh agent given only
+`compare.mts`'s own canonical question and no other instruction:
 
-## 9. Cross-boundary items
+**7 identified, 0 fooled, 0 hesitated.** Unmoved from the previous five rounds.
+Do not read that as "nothing changed" — read *what it was identified on*, because
+that is the part that moved. The judge's tells, in its own words:
 
-1. **`src/game/Shots.ts` (coordinator's).** There is still no head-and-shoulders
-   portrait shot in the corpus, and the reason is the **character root culling** bug:
-   meshes use the bind-pose bounding sphere, which sits at the origin with a small
-   radius while posed vertices reach 2 m up, so a character vanishes the instant the
-   root leaves the frustum. The one-line fix location is in
-   `src/characters/rig/Character.ts` (see the `hero_closeup` comment in `Shots.ts`).
-   I did not touch it — `Character.ts`'s culling is not clearly mine and the shot
-   corpus definitely is not. **If someone fixes the culling, ask for `hero_portrait`
-   and `party_portrait` shots**; every defect in this document was found through
-   `framecam` and none of it is visible in the shipped corpus.
-2. **`src/tools/_probe/heads.mts`'s `_hand` framing is wrong** (§3). Whoever owns that
-   probe should either fix it or delete the framing; leaving it produces
-   confident-looking evidence about hands that is a photograph of a trouser leg.
-3. **`src/characters/rig/Character.ts:96`** — `faceMat.side = THREE.DoubleSide`. The
-   previous handoff flagged this as load-bearing for the eye sockets. My winding
-   measurement (§5.3) is relevant to anyone revisiting it: the pipeline is uniformly
-   negative-signed-volume, so "the sculpt folds" and "the winding is inverted" are
-   different claims and only the first is evidenced.
-4. **`perf.mts` was not run** (§4). Triangles are up 4.5%; someone should confirm on a
-   quiet tree.
+- "flat vertex-lit characters, **seams at the shoulder/jaw**"
+- "a mannequin-smooth face with **painted-on eyes**", "the face has **no shading
+  falloff**", "plastic skin"
+- "**smooth featureless arms**", "hands are stiff undeformed meshes"
+- "no shadow contact under the feet"
+- environment: sprite-card grass, tiled ground stretching over a hillside,
+  untextured planes at the haven
+
+**Hair appears once in seven frames**, and only on Prompto — "a straw-like hair
+card" — which is exactly where my own grade puts it. Across five previous rounds
+the recorded verdict was that actor silhouettes lost every test; the silhouette
+is no longer the first thing the judge reaches for. The character tells are now
+**skin shading, eyes, and the seams between body parts**, none of which this
+session touched.
+
+That is what §8 is ordered by. It also means the next character lane's highest
+-value work is probably *not* more silhouette: it is `Face.ts` and the skin
+material.
+
+One methodological note the judge raised unprompted: it noticed our frames sit on
+the right in four pairs and the left in three, and inferred the side was "only
+partly randomised". Seven coin flips landing 4/3 is exactly what randomisation
+looks like, and `compare.mts --selftest` covers the parity failure this repo
+actually had — but a judge that starts reasoning about the *assembly* rather than
+the frames is a judge partly outside the test. Nine or more pairs per round would
+give that less purchase.
+
+## 8. What I would do next, in order
+
+1. **The anisotropic hair streak.** §12.3 measures it precisely — Noctis spans
+   Y 20 to 140 within one head, the bright end reached by a few percent of pixels
+   and arriving as a *neutral* `#838786` with the blue tint washed out. We have
+   no such band. The sibling's `HAIR_PHYSICAL_SUBS` is a Kajiya-Kay term riding
+   the strand tangent, and `Hair.ts` already writes a tangent on the shell
+   (`B.tang`) — most of the plumbing exists. Biggest remaining hair gap and it is
+   shading, not geometry.
+2. **The silhouette edge.** Ours is a smooth arc; the reference's is fringed with
+   fine layered points. A thin outer layer of longer, finer, sparser locks on the
+   existing guides, at a third of the width.
+3. **Prompto's fibre coarseness** — his locks read as straw at portrait range
+   where the others read as hair. Narrower ribbons, more of them.
+4. **Gladiolus's beard.** It reads as scattered dark specks on a flat tan face —
+   at portrait range it looks like insects, and it is now the loudest defect on
+   his head, louder than the hair was. 534 strands at 5.8 mm and 0.9 mm wide are
+   discrete dots; a beard is a continuous darkening with texture in it. Cheapest
+   real fix is to let the face map's `stubble` carry the mass and drop the
+   strands' contrast hard.
+5. **The face/neck seam.** Every portrait shows a hard rectangular boundary where
+   the face map ends, on the neck under the jaw, in a visibly different tone. It
+   is on all four heroes and it is large. `Face.ts`.
+6. **The shoulder balloon.** At portrait range the deltoid is a smooth inflated
+   sausage with no acromion and no scapular edge. It is the largest smooth area
+   in a portrait after the hair.
+7. Outfit stitching and linings (§7), then the head profile, which no lane has
+   reached yet.
+
+**But see §7.5 before committing to that order.** The blind judge reached for
+skin shading, painted-on eyes and body-part seams before it reached for any
+silhouette, and 4, 5 and 6 above are the items that answer it. If I had another
+session I would start at 5.
+
+## 9. Cross-boundary
+
+1. **`src/game/Shots.ts` (coordinator's): `hero_portrait` and `party_portrait`
+   can be added now.** §1.1 — there is no culling bug and never was. Values in
+   §1.1; the probe's output is what they would produce.
+2. **`src/tools/_probe/hands.mts` is not mine and is wrong** (§5.4). Its `_hand`
+   framing does not show the dorsum and its `_palm` framing is inside the
+   forearm. Whoever owns it should take `portrait.mts`'s bone-basis approach or
+   delete both framings — as it stands it produces confident-looking evidence
+   about hands from a view of the wrong side of one.
+3. **`perf.mts` not run** (§1.2). `hero_full` is 7.72 M / 647 calls; someone
+   should confirm on a quiet tree, and note that number spans a 200-commit merge
+   so it is not all this lane's.
+4. **`regionstat.mts` is general**, not a hair tool — §12.1 (skin) and §12.4
+   (cloth) have the same kind of table and the same absence of an instrument.
+   Skin has not been measured against §12.1 by anyone yet.

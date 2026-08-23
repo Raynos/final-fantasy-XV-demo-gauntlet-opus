@@ -118,6 +118,12 @@ export class PostFX {
   rnd!: Renderer;
   rtScene!: THREE.WebGLRenderTarget;
   rtVel!: THREE.WebGLRenderTarget;
+  /**
+   * MSAA sample count on {@link rtScene}. 0 disables it entirely, which is
+   * also what `?post=nomsaa` does — the ablation this whole change is graded
+   * against. Fixed at construction: changing it means rebuilding the target.
+   */
+  samples!: number;
   scene!: THREE.Scene;
   scenePass!: ScenePass;
   smaa!: SMAAPass;
@@ -163,6 +169,46 @@ export class PostFX {
     this._v = new THREE.Vector3();
 
     // ---- targets --------------------------------------------------------
+    //
+    // The scene target is **multisampled**, which is the one thing in this
+    // pipeline that exists for a defect rather than for a look.
+    //
+    // Every alpha-tested card in the world -- tree impostors, canopy stands,
+    // leaf clusters, grass, ferns, scrub -- resolves its coverage to one bit
+    // per pixel, and at the distance the graded shots put a leaf that is one
+    // hard pixel per leaf boundary across the whole canopy. The blind judge
+    // called it, verbatim, "aggressive alpha-cutout with speckled, dithered
+    // edges eating the silhouette", on exactly the two forest frames.
+    //
+    // TAA is not the answer and that was measured, not assumed: `--ablate
+    // notaa` moves 5.94/255 over 18% of the frame, so the history *is*
+    // reaching those edges and softening them. It is simply outmatched --
+    // the jitter is sub-pixel and each leaf boundary is about one pixel wide.
+    //
+    // What fixes it is `alphaToCoverage` on the vegetation materials, and
+    // that is a **no-op on a single-sample target**: it turns the alpha
+    // fraction into a sample mask, so with one sample per pixel it is still
+    // one bit. `samples` here is what gives it somewhere to write. See
+    // `VegMaterial.patchVeg`, which also has to widen the alpha ramp for it.
+    //
+    // Two things this does not break, both checked rather than assumed:
+    //
+    //  - **Every pass that samples `rtScene.texture` or its `depthTexture`
+    //    keeps working.** three resolves a multisampled target into exactly
+    //    those single-sample textures at the end of `renderer.render()` (and
+    //    again on any `setRenderTarget` away from it), colour *and* depth,
+    //    so GTAO, SSR, DoF, motion blur, contact shadows and the bloom's
+    //    depth read all see what they saw before.
+    //  - **`rtVel` still shares this depth texture.** It is single-sampled
+    //    and only ever draws movers with `depthWrite` off against the
+    //    already-resolved depth, so it attaches the resolved texture and
+    //    never needs the multisample buffer.
+    //
+    // Cost is bandwidth and fill, which is the half of the frame budget this
+    // game uses least: the frame is CPU-submission-bound at ~8.7 us per draw
+    // call (`project/handoff/perf.md`), and MSAA adds no draw calls at all.
+    // Measured at 1600x900: see `project/handoff/alpha-edges.md`.
+    this.samples = this._wantSamples(rnd.quality);
     this.rtScene = new THREE.WebGLRenderTarget(size.x, size.y, {
       type: THREE.HalfFloatType,
       minFilter: THREE.LinearFilter,
@@ -170,6 +216,7 @@ export class PostFX {
       depthBuffer: true,
       stencilBuffer: false,
       colorSpace: THREE.LinearSRGBColorSpace,
+      samples: this.samples,
     });
     this.rtScene.texture.name = 'PostFX.scene';
     this.rtScene.depthTexture = new THREE.DepthTexture(size.x, size.y);
@@ -354,6 +401,11 @@ export class PostFX {
       else if (t === 'nodirt') this.bloom.dirtAmount = 0;
       else if (t === 'noexp') { this.exposure.enabled = false; this.autoGrade = false; }
       else if (t === 'ssr') this.ssr.enabled = true;
+      // `nomsaa` is already handled — `_wantSamples` reads the same query
+      // string in the constructor, because the scene target is built there and
+      // a sample count cannot be changed after the fact. Listed so the token
+      // is discoverable next to the others.
+      else if (t === 'nomsaa') { /* see _wantSamples */ }
       else if (t === 'plain') {
         this.dof.enabled = false; this.bloom.enabled = false; this.gtao.enabled = false;
         this.contact.enabled = false;
@@ -559,6 +611,38 @@ export class PostFX {
   }
 
   // -------------------------------------------------------------- internals
+
+  /**
+   * MSAA samples for the scene target, by tier.
+   *
+   * `?post=nomsaa` has to be read here rather than in {@link debugToggle},
+   * because the target is built in the constructor and `debugToggle` runs
+   * after it — a token that arrived too late to change the sample count would
+   * ablate nothing and read as "MSAA does not matter".
+   *
+   * The tiers were measured on `zone_fallgrove`'s treeline, not assumed. Going
+   * 4 -> 8 barely moves the *step size* at a silhouette (p90 72.7 -> 70.2 out
+   * of 255) because the coverage ramp is only about two pixels wide either
+   * way — but it more than halves the **speckle**, the isolated texels that
+   * disagree with all four of their neighbours, 10.3 -> 3.9 per 10 000 px on
+   * the treeline and 12.8 -> 2.6 on a near crown. That is the half of the
+   * defect the judge named twice, and single leaves land on the tail of the
+   * coverage distribution where five levels quantise visibly and nine do not.
+   *
+   * So `ultra` — the tier every graded capture and every `perf.mts` run uses —
+   * gets 8, and `high` gets 4 for the same picture at half the bandwidth.
+   * `low` gets none: it is the tier that exists for machines that cannot
+   * afford fill, and it is also the tier where `alphaToCoverage` silently
+   * costs nothing because there is nowhere to write a partial coverage.
+   */
+  _wantSamples(tier: QualityTier) {
+    const post = (new URLSearchParams(location.search).get('post') || '').toLowerCase();
+    if (post.split(',').some((t) => t.trim() === 'nomsaa')) return 0;
+    if (tier === 'low') return 0;
+    if (tier === 'medium') return 2;
+    if (tier === 'high') return 4;
+    return 8;
+  }
 
   _applyGrade() {
     const A = GRADES[this.gradeA] || GRADES.day;

@@ -4,7 +4,67 @@ import { skullSampler, HEAD_R } from './Face.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import type { Rig } from './Skeleton.ts';
-import type { Look } from './Look.ts';
+import type { Look, HairGuide } from './Look.ts';
+
+/** A guide with its curve normalised to unit tip length, so `len` sets metres. */
+interface FitGuide {
+  u: number;
+  v: number;
+  c1: THREE.Vector3;
+  c2: THREE.Vector3;
+  c3: THREE.Vector3;
+}
+
+const TAU = Math.PI * 2;
+/** Azimuth to `u` in `[0, 1)`. */
+const uOf = (th: number) => ((th / TAU) % 1 + 1) % 1;
+
+/**
+ * Wrapped distance in the scalp's `(u, v)` chart. `u` is an azimuth, so 0.98 and
+ * 0.02 are neighbours and a guide behind the right ear must be able to claim a
+ * strand rooted just in front of it. `v` is weighted up because the chart is far
+ * shorter crown-to-hairline than it is around, and unweighted a crown guide wins
+ * strands at the nape purely by being at a similar azimuth.
+ */
+const guideDist = (au: number, av: number, bu: number, bv: number) => {
+  let du = Math.abs(au - bu);
+  if (du > 0.5) du = 1 - du;
+  const dv = (av - bv) * 1.5;
+  return Math.sqrt(du * du + dv * dv);
+};
+
+/**
+ * Normalise each guide by the length of its tip offset. What a guide carries is
+ * a *shape* — how far along the skull the strand travels before it falls, and
+ * where it ends up relative to where it started. Its overall scale is the tuft's
+ * `len`, which is already tuned per tuft in `Cast.ts` and stays meaningful.
+ */
+const fitGuides = (gs: HairGuide[]): FitGuide[] => gs.map((g) => {
+  const c3 = new THREE.Vector3().fromArray(g.c3);
+  const k = 1 / Math.max(1e-6, c3.length());
+  return {
+    u: uOf(g.th),
+    v: g.v,
+    c1: new THREE.Vector3().fromArray(g.c1).multiplyScalar(k),
+    c2: new THREE.Vector3().fromArray(g.c2).multiplyScalar(k),
+    c3: c3.multiplyScalar(k),
+  };
+});
+
+/** Cubic Bezier through `(0, c1, c2, c3)`, blended over two guides. */
+const guideBlend = (
+  a: FitGuide, b: FitGuide, wa: number, t: number, out: THREE.Vector3,
+) => {
+  const s = 1 - t;
+  const k1 = 3 * s * s * t, k2 = 3 * s * t * t, k3 = t * t * t;
+  const wb = 1 - wa;
+  out.set(
+    (a.c1.x * k1 + a.c2.x * k2 + a.c3.x * k3) * wa + (b.c1.x * k1 + b.c2.x * k2 + b.c3.x * k3) * wb,
+    (a.c1.y * k1 + a.c2.y * k2 + a.c3.y * k3) * wa + (b.c1.y * k1 + b.c2.y * k2 + b.c3.y * k3) * wb,
+    (a.c1.z * k1 + a.c2.z * k2 + a.c3.z * k3) * wa + (b.c1.z * k1 + b.c2.z * k2 + b.c3.z * k3) * wb,
+  );
+  return out;
+};
 
 /**
  * Hair.
@@ -97,7 +157,14 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       0.62 * shellN.simplex2(Math.cos(th) * 11, Math.sin(th) * 11 + t * 2.2)
       + 0.38 * shellN.simplex2(Math.cos(th) * 26, Math.sin(th) * 26 + t * 4.5)
     ) * vol * 1.7 * smooth(clamp01((1 - t) * 2.4));
-    return { p: p.clone().addScaledVector(n, off + relief), n };
+    // Relief is a ridge, not a trench. The noise above is signed with amplitude
+    // `1.7 * vol`, and the base offset it rides on is at most `1.12 * vol` — so
+    // wherever it swung strongly negative the shell was displaced up to 6.7 mm
+    // *inside* the sculpted skull and the head came through it. That is what put
+    // hard-edged patches of pale scalp all over the crown: not gaps between the
+    // locks, the shell itself inverted. Hair stops at the skull, so the standoff
+    // does too.
+    return { p: p.clone().addScaledVector(n, Math.max(vol * 0.10, off + relief)), n };
   };
   for (let r = 0; r <= rows; r++) {
     const row = [];
@@ -171,13 +238,45 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
     if (target !== off) v.addScaledVector(n, (target - off) * k * fade);
   };
 
+  // The floor half of `hugSkull` on its own: never *inside* the skull, but no
+  // ceiling. A guided strand's path is authored, so the corridor's upper clamp
+  // has nothing left to correct — it only fights the groom. What still has to
+  // hold is that no strand passes through the head.
+  const liftOutOfSkull = (v: THREE.Vector3, minOff: number) => {
+    const yn = Math.abs(v.y) / rrH[1];
+    const fade = 1 - clamp01((yn - 0.88) / 0.24);
+    if (fade <= 0) return;
+    const th = Math.atan2(v.x / rrH[0], v.z / rrH[2]);
+    const ph = Math.acos(clamp01((v.y / rrH[1] + 1) / 2) * 2 - 1);
+    const { p: q, n } = sample(th, ph);
+    const off = _q.copy(v).sub(q).dot(n);
+    if (off < minOff) v.addScaledVector(n, (minOff - off) * fade);
+  };
+
+  // ---- grooming guides ---------------------------------------------------
+  const guides = H.guides && H.guides.length >= 2 ? fitGuides(H.guides) : null;
+  const _gs = new THREE.Vector3();
+
   // ---- tufts -------------------------------------------------------------
   for (const tuft of H.tufts) {
     const n = tuft.n || 8;
+    // Guides describe the scalp, in the same `(u, v)` chart the roots are placed
+    // in. A beard is not on the scalp, so `absPhi` opts out by construction.
+    const guided = !!guides && !tuft.absPhi && tuft.guided !== false;
+    // Root slots. An even fan is a comb and fully random leaves bald patches, so
+    // roots are slotted and then jittered by at most half a slot. `v` used to be
+    // `rng.next()` — uniform, and uniform over the 20-70 roots most tufts carry
+    // clumps badly; a golden-ratio sequence is the same spread with none of the
+    // gaps, and the bounded jitter keeps it off a lattice.
+    const thSlot = (tuft.th[1] - tuft.th[0]) / Math.max(1, n - 1);
+    const vSlot = 1 / Math.max(1, n);
     for (let i = 0; i < n; i++) {
       const f = n === 1 ? 0.5 : i / (n - 1);
-      const th = lerp(tuft.th[0], tuft.th[1], f) + rng.gauss(0, tuft.thJit ?? 0.05);
-      const pf = (tuft.phi ? lerp(tuft.phi[0], tuft.phi[1], rng.next()) : 0.55);
+      const th = lerp(tuft.th[0], tuft.th[1], f)
+        + (rng.next() - 0.5) * 1.10 * thSlot
+        + rng.gauss(0, tuft.thJit ?? 0.05);
+      const pv = clamp01((i * 0.61803398875) % 1 + (rng.next() - 0.5) * 1.10 * vSlot);
+      const pf = (tuft.phi ? lerp(tuft.phi[0], tuft.phi[1], pv) : 0.55);
       const pm = phiOf(th);
       // `absPhi` reads phi as a real polar angle instead of a fraction of the
       // hairline, which is the only way to root strands below the equator —
@@ -187,8 +286,37 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const root = p.clone().addScaledVector(nrm, (H.shell ?? 0.011) * (H.volume ?? 1) * 0.8 + (tuft.lift ?? 0));
 
       const len = (tuft.len || 0.09) * (1 + rng.gauss(0, tuft.lenVar ?? 0.14));
+
+      // Which two guides claim this root, and how the blend splits between them.
+      // Inverse-square is what makes the field continuous: a root sitting exactly
+      // on one guide takes it whole, a root halfway between takes the mean, and
+      // there is no seam anywhere in between — which is the entire reason a few
+      // hundred separate ribbons can read as one groom.
+      let ga: FitGuide | null = null, gb: FitGuide | null = null, wa = 1;
+      if (guided) {
+        const u = uOf(th);
+        let d0i = Infinity, d1i = Infinity;
+        for (const g of guides!) {
+          const d = guideDist(u, pf, g.u, g.v);
+          if (d < d0i) { d1i = d0i; gb = ga; d0i = d; ga = g; }
+          else if (d < d1i) { d1i = d; gb = g; }
+        }
+        if (!gb) { gb = ga; d1i = d0i; }
+        const w0 = 1 / Math.max(1e-6, d0i * d0i);
+        const w1 = 1 / Math.max(1e-6, d1i * d1i);
+        wa = w0 / (w0 + w1);
+      }
+
       const d1 = new THREE.Vector3().fromArray(tuft.dir).normalize();
-      if (tuft.dirJit) {
+      if (guided) {
+        // The strand's overall fall, which is what the bow axis and the clump
+        // splay basis are built on. Taken from the blended curve so a clump
+        // splays across its own flow rather than across the tuft's nominal one.
+        guideBlend(ga!, gb!, wa, 1, d1);
+        if (d1.lengthSq() < 1e-10) d1.set(0, -1, 0);
+        d1.normalize();
+      }
+      if (tuft.dirJit && !guided) {
         d1.x += rng.gauss(0, tuft.dirJit); d1.y += rng.gauss(0, tuft.dirJit); d1.z += rng.gauss(0, tuft.dirJit);
         d1.normalize();
       }
@@ -202,21 +330,33 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const bow = rng.gauss(0, tuft.bow ?? 0.11) * len;
       const hug = tuft.hug ?? 0.85;
       const puff = tuft.puff ?? 0.30;
-      const segs = tuft.segs || (tuft.steps && tuft.steps > 6 ? 5 : 4);
+      // A guided strand needs more control points than a near-straight one: its
+      // curve turns through most of a right angle between leaving the scalp and
+      // reaching its tip, and four segments chord that into a bent stick.
+      const segs = tuft.segs || (guided ? 7 : (tuft.steps && tuft.steps > 6 ? 5 : 4));
       const baseOff = (H.shell ?? 0.011) * (H.volume ?? 1) * 0.8 + (tuft.lift ?? 0);
       const pts = [root.clone()];
       let cur = root.clone();
       for (let k = 1; k <= segs; k++) {
         const t = k / segs;
-        const d = d0.clone().lerp(d1, smooth(Math.pow(t, tuft.bendPow ?? 0.8) * (tuft.bend ?? 0.9))).normalize();
-        cur = cur.clone().addScaledVector(d, len / segs);
+        if (guided) {
+          // The whole path is the blended curve, laid from the root and scaled
+          // by the strand's own length — not an integration of a turning
+          // direction. That is the difference between a lock that lies along the
+          // skull and then falls, and one that leaves in a line and stays in it.
+          cur = root.clone().addScaledVector(guideBlend(ga!, gb!, wa, t, _gs), len);
+        } else {
+          const d = d0.clone().lerp(d1, smooth(Math.pow(t, tuft.bendPow ?? 0.8) * (tuft.bend ?? 0.9))).normalize();
+          cur = cur.clone().addScaledVector(d, len / segs);
+        }
         cur.y -= (tuft.sag || 0) * t * t * len;
         if (tuft.curl) {
           cur.x += Math.sin(t * 4 + i) * tuft.curl * len * 0.2;
           cur.z += Math.cos(t * 4 + i) * tuft.curl * len * 0.2;
         }
         cur.addScaledVector(bowAxis, bow * Math.sin(Math.PI * t));
-        if (hug > 0) hugSkull(cur, baseOff + puff * len * t, hug);
+        if (guided) liftOutOfSkull(cur, baseOff);
+        else if (hug > 0) hugSkull(cur, baseOff + puff * len * t, hug);
         pts.push(cur.clone());
       }
 
@@ -266,7 +406,8 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
             // the locks are together at the root and apart at the tip
             const s = splay * (0.10 + 0.90 * t * t);
             const v = q.clone().addScaledVector(ax, ox * s).addScaledVector(ay, oy * s);
-            if (hug > 0) hugSkull(v, baseOff + puff * len * t + splay * 0.6, hug * 0.8);
+            if (guided) liftOutOfSkull(v, baseOff);
+            else if (hug > 0) hugSkull(v, baseOff + puff * len * t + splay * 0.6, hug * 0.8);
             return v;
           });
         }
