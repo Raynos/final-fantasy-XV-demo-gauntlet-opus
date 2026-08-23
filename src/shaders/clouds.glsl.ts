@@ -150,7 +150,25 @@ float cloudDensity(vec3 p, float detail) {
     e = clamp(cRemap(e, m * uCloudDetailAmt * detail, 1.0, 0.0, 1.0), 0.0, 1.0);
   }
 
-  return e * cov * uCloudDensity;
+  // Note what is *not* here: a second multiply by cov.
+  //
+  // cov appears once already, as the low end of the remap that produces e --
+  // that is what decides which columns have cloud in them and how much of the
+  // cell is filled. Multiplying the result by cov as well made the whole field
+  // proportional to coverage a second time, so a fair-weather sky at coverage
+  // 0.30 rendered its cumulus at 30% of nominal density. Over a 1 km path that
+  // is an optical depth of about 6 where a real cumulus is 20-100, and an
+  // optically thin cloud has no interior: the light march never saturates, so
+  // every sample from crown to base returns nearly the same energy and the
+  // body prints one flat value. That is the "no scattering, no self-shadowing,
+  // no internal dynamic range" half of the judges' cloud defect, and it is
+  // also why the deck could not be brought under white without going grey --
+  // there was no gradient to keep, only a level.
+  //
+  // Removing it makes clear-weather cloud 1/0.30 = 3.3x thicker at exactly the
+  // same silhouette, because e is still 0 at the cell edge and 1 in the core.
+  // The heavy presets run at coverage 1.0 and are unchanged by construction.
+  return e * uCloudDensity;
 }
 
 /**
