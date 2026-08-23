@@ -265,6 +265,64 @@ export function palletStack(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0
   }
 }
 
+/**
+ * A fuel dispenser.
+ *
+ * It replaces a single cream box with a red cap, which is what the last audit
+ * of this town called out by name: the pumps are the one piece of geometry a
+ * player stands within two metres of and looks straight at while the fuel-up
+ * prompt is on screen, and they were reading as placeholder.
+ *
+ * The form is the real one, and every band in it is load-bearing for the read:
+ * a cast skirt that the body sits *on* rather than in, corner posts that give
+ * the cabinet an edge instead of a silhouette, a **recessed** bezel on both
+ * faces (the old one had a display on one side only, so half of every approach
+ * saw a blank), a red shoulder band, and a valance the branding goes on. Both
+ * faces are dressed because a pump island is served from both sides — the
+ * cheapest possible way to be caught out here is to detail the side the shot
+ * happens to be framed from.
+ *
+ * @param put shell placer — the cabinet, which reads from across the forecourt
+ * @param putC clutter placer — hose, boots and nozzle, none of it worth a
+ *   shadow or a draw beyond about thirty metres
+ * @param y0 the island cap's top surface
+ */
+export function fuelPump(put: PlaceFn, putC: PlaceFn, M: TownMats, [x, z]: number[], { y0 = 0.69, yaw = 0 } = {}) {
+  const R: Vec3 = [0, yaw, 0];
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  /** Place at a local (across, up, out) offset from the pump's own axis. */
+  const P = (m: THREE.Material, g: THREE.BufferGeometry, a: number, up: number, out: number) =>
+    put(m, g, [x + a * c + out * s, y0 + up, z - a * s + out * c], R);
+  const PC = (m: THREE.Material, g: THREE.BufferGeometry, a: number, up: number, out: number, r: Vec3 = R) =>
+    putC(m, g, [x + a * c + out * s, y0 + up, z - a * s + out * c], r);
+
+  P(M.dark, box(0.84, 0.16, 0.64), 0, 0.08, 0);            // cast skirt
+  P(M.panelCream, box(0.76, 1.10, 0.56), 0, 0.71, 0);      // cabinet
+  for (const sa of [-1, 1]) for (const so of [-1, 1]) {     // corner posts
+    P(M.galv, box(0.055, 1.12, 0.055), sa * 0.375, 0.71, so * 0.275);
+  }
+  P(M.panelRed, box(0.82, 0.17, 0.62), 0, 1.345, 0);       // shoulder band
+  P(M.panelCream, box(0.72, 0.30, 0.30), 0, 1.60, 0);      // valance
+  P(M.neon, box(0.60, 0.20, 0.02), 0, 1.60, 0.156);
+  P(M.neon, box(0.60, 0.20, 0.02), 0, 1.60, -0.156);
+  P(M.galv, box(0.78, 0.045, 0.34), 0, 1.77, 0);           // valance cap
+
+  // Both faces get the bezel: an island is served from both sides.
+  for (const so of [-1, 1]) {
+    P(M.dark, box(0.62, 0.66, 0.035), 0, 0.94, so * 0.284);
+    P(M.neon, box(0.50, 0.30, 0.02), 0, 1.06, so * 0.30);   // the litres/gil readout
+    P(M.dark, box(0.20, 0.15, 0.02), -0.16, 0.80, so * 0.30); // keypad
+    P(M.galv, box(0.24, 0.03, 0.02), 0.17, 0.79, so * 0.30);  // grade buttons
+  }
+
+  // Nozzle boots on the ends, and a hose looping down into each.
+  for (const sa of [-1, 1]) {
+    PC(M.dark, box(0.13, 0.30, 0.14), sa * 0.44, 0.86, 0.10);
+    PC(M.galv, cyl(0.026, 0.026, 0.30, 6), sa * 0.44, 1.05, 0.10, [0.22, yaw, 0]);
+    PC(M.dark, cyl(0.024, 0.024, 0.62, 6), sa * 0.47, 1.16, 0.10, [0.1, yaw, sa * 0.55]);
+  }
+}
+
 /* -- texel density --------------------------------------------------------- */
 
 /**

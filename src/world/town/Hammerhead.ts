@@ -9,7 +9,7 @@ import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake } from '../../engine/TexBake.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
-  carShell, patioSet, palletStack, sbox, texelPlace, authored, type PlaceFn,
+  carShell, patioSet, palletStack, fuelPump, sbox, texelPlace, authored, type PlaceFn,
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
@@ -398,12 +398,17 @@ export class Hammerhead {
   _canopy(put: PlaceFn, putC: PlaceFn, M: TownMats, rng: Rng) {
     const cu = -6, cv = -19;
     const deck = 5.35;
-    // four columns
+    // Four columns. A fuel canopy column is a cased steel section, so it gets
+    // the three things a cased column has and a plain box does not: a splayed
+    // base that the dirt banks against, an impact collar at bumper height
+    // (every one of these has been hit), and a capital where it meets the deck.
     for (const su of [-1, 1]) {
       for (const sv of [-1, 1]) {
         const u = cu + su * 6.3, v = cv + sv * 3.6;
+        put(M.slab, box(1.02, 0.30, 1.02), [u, 0.30, v]);
+        put(M.slab, box(0.86, 0.20, 0.86), [u, 0.55, v]);
         put(M.panelCream, box(0.5, deck, 0.5), [u, deck / 2 + 0.3, v]);
-        put(M.slab, box(0.9, 0.42, 0.9), [u, 0.42, v]);
+        put(M.panelRed, box(0.55, 0.34, 0.55), [u, 1.10, v]);
         put(M.galv, box(0.62, 0.10, 0.62), [u, deck + 0.32, v]);
       }
     }
@@ -412,15 +417,32 @@ export class Hammerhead {
     put(M.panelRed, box(16.8, 0.62, 11.6), [cu, deck + 1.16, cv]);
     put(M.panelCream, box(16.4, 0.14, 11.2), [cu, deck + 1.54, cv]);
     put(M.corrRoof, uvScale(sbox(16.9, 0.10, 11.7).clone(), 2.6, 1.8), [cu, deck + 1.62, cv]);
-    // Soffit. A fuel canopy at night is a glowing white ceiling — hung
-    // beneath the deck, not flush with it, or the panels vanish inside the
-    // slab they are supposed to be lighting.
-    for (let i = -2; i <= 2; i++) {
-      put(M.lamp, box(3.1, 0.12, 2.6), [cu + i * 3.3, deck + 0.20, cv]);
-      put(M.galv, box(3.3, 0.05, 2.8), [cu + i * 3.3, deck + 0.28, cv]);
+    // A drip lip under the fascia. Without it the fascia's bottom edge is the
+    // silhouette against a bright sky and reads as paper-thin.
+    put(M.galv, box(16.9, 0.09, 11.7), [cu, deck + 0.86, cv]);
+
+    // Soffit. A fuel canopy is the one ceiling in the game a player stands
+    // under and looks up at, and a flat plane is exactly what it must not be:
+    // the real thing is a coffered grid of downstand beams with the light
+    // panels recessed between them, so that even at noon the ceiling carries a
+    // pattern of its own shadows. Six bays, on the same 3.3 m module the old
+    // flat panels used.
+    const BX = 4, BZ = 2;              // bays across and deep
+    const bw = 15.6 / BX, bd = 10.4 / BZ;
+    for (let i = 0; i <= BX; i++) {    // beams running across the island
+      put(M.panelCream, box(0.22, 0.34, 10.8), [cu + (i - BX / 2) * bw, deck + 0.16, cv]);
     }
-    for (const sv of [-1, 1]) {
-      put(M.lamp, box(14.2, 0.10, 0.5), [cu, deck + 0.22, cv + sv * 4.5]);
+    for (let j = 0; j <= BZ; j++) {
+      put(M.panelCream, box(16.0, 0.34, 0.22), [cu, deck + 0.16, cv + (j - BZ / 2) * bd]);
+    }
+    for (let i = 0; i < BX; i++) {
+      for (let j = 0; j < BZ; j++) {
+        const u = cu + (i - (BX - 1) / 2) * bw, v = cv + (j - (BZ - 1) / 2) * bd;
+        // Recessed into the coffer, not hung below it: the beams have to be
+        // what is closest to the eye or the grid stops reading as depth.
+        put(M.lamp, box(bw - 0.5, 0.09, bd - 0.5), [u, deck + 0.28, v]);
+        put(M.galv, box(bw - 0.34, 0.04, bd - 0.34), [u, deck + 0.335, v]);
+      }
     }
     // a hanging price plate under the near edge
     put(M.dark, box(2.4, 0.9, 0.12), [cu + 6.0, deck - 0.42, cv - 5.6]);
@@ -433,16 +455,10 @@ export class Hammerhead {
       put(M.panelCream, box(9.2, 0.12, 2.0), [cu, 0.63, v]);
       for (const su of [-1, 1]) {
         const u = cu + su * 2.5;
-        // pump body, head, display, hose and nozzle boot
-        put(M.panelCream, box(0.82, 1.62, 0.62), [u, 1.44, v]);
-        put(M.panelRed, box(0.88, 0.24, 0.68), [u, 2.32, v]);
-        put(M.dark, box(0.52, 0.34, 0.10), [u, 1.94, v + sv * 0.34]);
-        put(M.neon, box(0.44, 0.26, 0.04), [u, 1.94, v + sv * 0.39]);
-        put(M.galv, box(0.10, 0.10, 0.72), [u, 2.52, v], [0, 0, 0]);
-        putC(M.dark, cyl(0.028, 0.028, 1.5, 6), [u + 0.46, 1.55, v + sv * 0.2], [0.5, 0, 0.7]);
-        putC(M.dark, box(0.12, 0.26, 0.10), [u + 0.52, 0.95, v + sv * 0.3], [0, 0, 0.2]);
+        fuelPump(put, putC, M, [u, v], { y0: 0.69 });
         // bollard
         putC(M.panelRed, cyl(0.11, 0.13, 0.95, 8), [u + 1.5, 0.68, v + sv * 0.75]);
+        putC(M.galv, box(0.24, 0.03, 0.24), [u + 1.5, 1.17, v + sv * 0.75]);
       }
     }
     // air-and-water pillar and a bin at the island end
