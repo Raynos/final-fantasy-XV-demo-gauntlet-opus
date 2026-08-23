@@ -106,14 +106,22 @@ in this file.
 
 ## Characters and faces
 
-- **`Character.ts:73` sets `faceMat.side = THREE.DoubleSide`, and a back-facing
-  surface renders in front of the eyeball and hides it completely.** So socket
-  depth controls eye visibility **non-monotonically**: too shallow by a little
-  and an inverted-winding *fold* covers the globe while the skull does not —
-  identical in appearance to a shading bug that does not exist. A `FrontSide`
-  test passes while the shipped material still fails, so **verify with
-  `DoubleSide` specifically.** The real fix is to stop the sculpt folding: widen
-  the socket brushes toward `[0.048, 0.032, 0.058]` and add `pow: 1.6`.
+- **`DoubleSide` on the face material hid backwards winding in three separate
+  parts, and covered every eye in the game.** A back-facing surface renders in
+  front of the eyeball and hides it completely — which is the "doll eyes /
+  painted-on features / mannequin mask" a blind judge named in *every* round,
+  while a full eye assembly (sclera, iris, pupil, limbal ring, catchlight, lash
+  line, lid crease) sat underneath having never been visible in a shipped frame.
+  **The fix is `FrontSide`**, plus the three parts `DoubleSide` was hiding:
+  `buildLid` switched winding on `upper === (sg > 0)` when only `sg` may switch
+  it (48 of 48 covering triangles below the eye centre), `ribbon()` in `Geo.ts`
+  (ear ridges, lash fans) and `buildHead`'s chin cap.
+  **This entry used to prescribe widening the socket brushes toward
+  `[0.048, 0.032, 0.058]` with `pow: 1.6`. That is wrong and cost a lane most of
+  a session**: measured, it cut the covering area 831 mm² -> 265 mm² and changed
+  the rendered frame by *nothing*; widening further made it 250 mm² and still
+  changed nothing; the brow ridge, under-brow hollow and nasion moved it 3% and
+  changed nothing. The fold was never the carrier.
 - **Do not "simplify" `skinSnap()` away.** Without it any socket change re-opens
   the lid-band bucket.
 - **The corpus closeups are not closeups.** `hero_face` puts Noctis' head at
