@@ -251,9 +251,26 @@ const SHOT_TABLE = {
    * something no shipped shot shows. These two close that.
    */
   hero_portrait: {
-    doc: 'Noctis head and shoulders: hair parting, brow, the eye under the fringe',
+    doc: 'Noctis head and shoulders: hair parting, brow, and both eyes',
+    // Low and looking slightly up, which is not the obvious framing for a
+    // portrait and is deliberate.
+    //
+    // The first version aimed at the head centre from above eye height and
+    // caught Noctis with his head pitched down, showing **neither eye** — so
+    // the corpus's only face shot could not answer the thing a blind judge kept
+    // marking it on ("painted-on eyes"), and the face lane had to leave the eyes
+    // ungraded because it could not see them.
+    //
+    // Dropping the camera 160 mm and lifting the target gets the eye region into
+    // frame and roughly doubles the face's share of it. **It does not fully fix
+    // the shot, and the camera cannot.** The head is pitched down in the settled
+    // pose and the hair fringe hangs over the eye; two framings established that
+    // and a third would not have helped. The remaining fix is a head-pitch
+    // change in the settled pose or a shorter fringe, both in `src/characters/`.
+    // Recorded here rather than iterated on, so the next character lane inherits
+    // the diagnosis instead of the search.
     time: 16.2, weather: 'clear', follow: 'player',
-    offset: [-0.024, 1.61, 1.214], lookOffset: [-0.002, 1.495, 0.07], fov: 30,
+    offset: [-0.024, 1.45, 1.100], lookOffset: [-0.002, 1.565, 0.07], fov: 30,
   },
   hero_profile: {
     doc: 'Noctis in profile — the head silhouette, which is where the sculpt is weakest',
