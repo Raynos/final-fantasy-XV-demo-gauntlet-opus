@@ -93,6 +93,14 @@ for (const [key, id] of Object.entries(who)) {
     lookOffset: r3(aim),
   });
 
+  // The chest at 0.95 m: the range that decides whether a jacket has pockets,
+  // stitching and hardware on it or is a black shell with panels.
+  const ch = bone('spine03') || bone('spine02');
+  if (ch) {
+    shot(`${key}_chest`, off(ch, 0, 0.02, 0),
+      norm([fwd[0] * 0.94 + right[0] * 0.34, 0.12, fwd[2] * 0.94 + right[2] * 0.34]), 0.95, 26);
+  }
+
   const hd = bone('head');
   if (!hd) continue;
   // A portrait: near eye level, three-quarter, 1.15 m on a ~40 mm-equivalent

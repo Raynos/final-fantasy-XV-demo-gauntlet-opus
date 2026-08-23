@@ -297,6 +297,29 @@ export interface OutfitPiece {
   strap?: boolean;
   strapColor?: number;
 
+  // ---- jacket hardware -------------------------------------------------
+  // Panels alone read as a shell. See `hardware()` in `rig/Outfit.ts`: at a
+  // metre the difference between "a black garment" and "a tailored one" is
+  // pockets, studs, tabs and a zip slider, and all of it is geometry, so it
+  // catches a real specular edge from any direction and survives minification
+  // in a way a painted line does not.
+  /** flapped patch pockets on the chest, each closed by a stud. */
+  pockets?: boolean;
+  /** azimuth of the pocket pair, radians either side of centre front. */
+  pocketTh?: number;
+  /** height of the pocket on the jacket sweep, 0 hem .. 1 shoulder. */
+  pocketT?: number;
+  pocketW?: number;
+  /** buttoned strap across each shoulder. */
+  epaulettes?: boolean;
+  epauletteTh?: number;
+  /** zip tape down both front edges, plus the slider. */
+  zip?: boolean;
+  /** where the slider sits on the sweep. */
+  zipAt?: number;
+  /** metal colour for studs, buttons and the zip slider. */
+  studColor?: number;
+
   // ---- belt / band / pad / pouch / camera / plate ----------------------
   buckle?: number;
   buckleBox?: boolean;

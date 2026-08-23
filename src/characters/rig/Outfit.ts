@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp, smooth, clamp01 } from './Geo.ts';
+import { MeshBuilder, sweepTube, sweepShell, blob, roundedBox, abump, bump, lerp, smooth, clamp01, crScalar, weightsAt } from './Geo.ts';
 import type { SweepNode, SkinWeights } from './Geo.ts';
 import { torsoNodes, armNodes, legNodes, drape, torsoShape, armShape, legShape } from './Anatomy.ts';
 import { SIDES } from './Skeleton.ts';
@@ -330,8 +330,186 @@ piece('jacket', (B, ctx, o) => {
     matAt: (th: number, t: number) => { const m = shade.mat(th, t); return [clamp01(m[0] - 0.26 * proud(th, t)), m[1], 0]; },
   });
   B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
+  hardware(B, ctx, o, nodes, (th: number, t: number) => body(th, t) + (o.flare ?? 0.10) * smooth((0.18 - t) / 0.18));
   if (o.collar !== false) collar(B, ctx, o);
 });
+
+/**
+ * A point and a surface basis on a garment sweep, in exactly the frame
+ * `sweepTube`/`sweepShell` build their vertices in — so anything placed through
+ * this sits *on* the panel rather than near it.
+ *
+ * `along` runs around the ring, `up` runs along the sweep and `out` is the
+ * radial. The radial is not quite the shaded normal where `shape` varies
+ * steeply, but hardware is small and rigid and does not care.
+ */
+function sweepFrame(nodes: SweepNode[], shape: (th: number, t: number) => number) {
+  const curve = new THREE.CatmullRomCurve3(
+    nodes.map((n) => new THREE.Vector3().fromArray(n.p)), false, 'centripetal', 0.5,
+  );
+  const rxs = nodes.map((n) => n.rx);
+  const rzs = nodes.map((n) => n.rz ?? n.rx);
+  const f = new THREE.Vector3(), r = new THREE.Vector3(), tan = new THREE.Vector3();
+  const ref = new THREE.Vector3(0, 0, 1);
+  return (th: number, t: number) => {
+    const u = clamp01(t);
+    const p = curve.getPoint(u);
+    tan.copy(curve.getTangent(u)).normalize();
+    f.copy(ref).addScaledVector(tan, -ref.dot(tan));
+    if (f.lengthSq() < 1e-6) f.set(1, 0, 0).addScaledVector(tan, -tan.x);
+    f.normalize();
+    r.crossVectors(f, tan).normalize();
+    const m = shape(th, u);
+    const sx = Math.sin(th) * crScalar(rxs, u) * m;
+    const sz = Math.cos(th) * crScalar(rzs, u) * m;
+    const pos = new THREE.Vector3(
+      p.x + r.x * sx + f.x * sz, p.y + r.y * sx + f.y * sz, p.z + r.z * sx + f.z * sz,
+    );
+    const out = new THREE.Vector3(
+      r.x * Math.sin(th) + f.x * Math.cos(th),
+      r.y * Math.sin(th) + f.y * Math.cos(th),
+      r.z * Math.sin(th) + f.z * Math.cos(th),
+    ).normalize();
+    const along = new THREE.Vector3(
+      r.x * Math.cos(th) - f.x * Math.sin(th),
+      r.y * Math.cos(th) - f.y * Math.sin(th),
+      r.z * Math.cos(th) - f.z * Math.sin(th),
+    ).normalize();
+    const up = new THREE.Vector3().crossVectors(out, along).normalize();
+    return { pos, out, along, up, w: weightsAt(nodes, u) };
+  };
+}
+
+const _hwM = new THREE.Matrix4();
+const _hwE = new THREE.Euler();
+
+/**
+ * Jacket hardware: patch pockets with flaps, epaulette tabs, and the studs that
+ * close them.
+ *
+ * This is the gap the previous pass named and could not close: at a metre our
+ * black reads as charcoal leather but carries **no stitching, no hardware, no
+ * zip and no pocket**, and FFXV's Kingsglaive black is covered in them —
+ * `plates/character-noctis-face-01.jpg` shows two flapped chest pockets each
+ * with a stud, a buttoned epaulette tab on each shoulder, and topstitching
+ * along every edge. Panels alone cannot read as tailoring.
+ *
+ * All of it is placed through `sweepFrame`, so a pocket follows the chest it is
+ * sewn to rather than floating at an authored coordinate, and every piece takes
+ * the skin weights of the ring it sits on so it deforms with the torso.
+ *
+ * Cost is geometry, not materials: it all lands in the jacket's own builder
+ * group, so this is triangles on a budget that is bound by draw-call
+ * submission, not by triangle count (see `project/handoff/perf.md`).
+ */
+function hardware(
+  B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece, nodes: SweepNode[],
+  shape: (th: number, t: number) => number,
+) {
+  const s = ctx.s;
+  const at = sweepFrame(nodes, shape);
+  const rotOf = (fr: { out: THREE.Vector3; along: THREE.Vector3; up: THREE.Vector3 }) => {
+    _hwM.makeBasis(fr.along, fr.up, fr.out);
+    _hwE.setFromRotationMatrix(_hwM);
+    return [_hwE.x, _hwE.y, _hwE.z] as [number, number, number];
+  };
+  const body = new THREE.Color().setHex(o.color ?? 0x2a2a30, THREE.SRGBColorSpace);
+  const trim = body.clone().multiplyScalar(1.18);
+  const studC = new THREE.Color().setHex(o.studColor ?? 0x8f9298, THREE.SRGBColorSpace);
+
+  /** A rigid plate lying on the panel: `size` is [along, up, out] in metres. */
+  const plate = (th: number, t: number, size: number[], lift: number) => {
+    const fr = at(th, t);
+    B.skin(fr.w);
+    roundedBox(B, {
+      size: [size[0]! * s, size[1]! * s, size[2]! * s],
+      center: fr.pos.addScaledVector(fr.out, (lift + size[2]! * 0.5) * s).toArray(),
+      rot: rotOf(fr),
+      bevel: Math.min(size[0]!, size[1]!, size[2]!) * s * 0.30,
+    });
+    return fr;
+  };
+
+  // ---- chest pockets ----------------------------------------------------
+  // A patch pocket is a panel sewn on plus a flap over its mouth; the step
+  // between them is what reads at a metre, so the flap sits proud of the pocket
+  // and the pocket proud of the jacket.
+  if (o.pockets) {
+    const th0 = o.pocketTh ?? 0.66;
+    const t0 = o.pocketT ?? 0.36;
+    const w = o.pocketW ?? 0.085;
+    for (const sg of [1, -1]) {
+      const th = sg * th0;
+      B.color(body).mat((o.rough ?? 0.78) + 0.04, 0, 0);
+      plate(th, t0, [w, 0.090, 0.007], 0.0);
+      B.color(trim).mat((o.rough ?? 0.78) - 0.10, 0, 0);
+      plate(th, t0 + 0.046, [w * 1.06, 0.032, 0.006], 0.007);
+      // the stud closing the flap
+      B.color(studC).mat(0.26, 0.85, 0);
+      const fr = at(th, t0 + 0.033);
+      B.skin(fr.w);
+      blob(B, {
+        center: fr.pos.addScaledVector(fr.out, 0.0145 * s).toArray(),
+        scale: [0.0055 * s, 0.0055 * s, 0.0032 * s], segU: 10, segV: 6, rot: rotOf(fr),
+      });
+    }
+  }
+
+  // ---- epaulette tabs ---------------------------------------------------
+  // A strap from the shoulder seam inboard to a button at the neck. It runs
+  // along the sweep rather than around the ring, which is why it needs a real
+  // surface basis and not an authored rotation.
+  if (o.epaulettes) {
+    for (const sg of [1, -1]) {
+      const th = sg * (o.epauletteTh ?? 1.30);
+      B.color(trim).mat((o.rough ?? 0.78) - 0.12, 0, 0);
+      plate(th, 0.905, [0.034, 0.072, 0.006], 0.0);
+      B.color(studC).mat(0.26, 0.85, 0);
+      const fr = at(th, 0.938);
+      B.skin(fr.w);
+      blob(B, {
+        center: fr.pos.addScaledVector(fr.out, 0.0105 * s).toArray(),
+        scale: [0.0048 * s, 0.0048 * s, 0.0028 * s], segU: 10, segV: 6, rot: rotOf(fr),
+      });
+    }
+  }
+
+  // ---- zip --------------------------------------------------------------
+  // A tape either side of the opening and a slider on it. The teeth themselves
+  // are sub-millimetre at any range this is seen at — `docs/plans/...` §8.5's
+  // pre-check applies, compute the pixel size before modelling it — so what is
+  // modelled is the two things that are not: the tape's own step, and the
+  // slider, which is the only part of a zip that ever catches a specular.
+  if (o.zip) {
+    // The slider, and only the slider. The first build laid a tape down each
+    // front edge as seven stacked plates, and every plate is a flat chord
+    // across a curved torso — so they stepped away from each other and the
+    // "tape" rendered as a column of disconnected rectangles floating off the
+    // chest, which is worse than no zip at all. The tape's own step is already
+    // in the panel: `placket` raises a band along exactly this line. What that
+    // ridge cannot be is *metal*, and the slider is the only part of a zip that
+    // ever catches a specular at the range a zip is seen from.
+    const gap = (o.gap ?? 0.42) + 0.06;
+    B.color(studC).mat(0.24, 0.85, 0);
+    const t0 = o.zipAt ?? 0.30;
+    const fr = at(gap, t0);
+    B.skin(fr.w);
+    roundedBox(B, {
+      size: [0.016 * s, 0.030 * s, 0.008 * s],
+      center: fr.pos.addScaledVector(fr.out, 0.007 * s).toArray(),
+      rot: rotOf(fr), bevel: 0.003 * s,
+    });
+    // the pull, hanging below it
+    const fp = at(gap, t0 - 0.055);
+    B.skin(fp.w);
+    roundedBox(B, {
+      size: [0.008 * s, 0.030 * s, 0.003 * s],
+      center: fp.pos.addScaledVector(fp.out, 0.009 * s).toArray(),
+      rot: rotOf(fp), bevel: 0.0012 * s,
+    });
+  }
+  B.color(o.color ?? 0x2a2a30).mat(o.rough ?? 0.78, o.metal ?? 0, 0);
+}
 
 /** Stand-up or fold-down collar wrapped around the neck. */
 function collar(B: MeshBuilder, ctx: OutfitCtx, o: OutfitPiece) {

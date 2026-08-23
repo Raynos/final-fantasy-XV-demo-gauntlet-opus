@@ -158,7 +158,7 @@ export const CAST = {
       outfit: [
         { type: 'shirt', color: 0x3a3a3c, rough: 0.93, u0: 0.30, u1: 0.95, pad: 0.010, neckCut: 0.34, steps: 42, seg: 76, print: skullPrint, printColor: 0xc6c9d2, printWindow: [-0.60, 0.60, 0.44, 0.94] },
         { type: 'pants', color: 0x2d2b2b, rough: 0.88, padHip: 0.016, padAnkle: 0.010, u1: 0.95, knee: 0.03, wrinkle: 0.024 },
-        { type: 'jacket', color: 0x2c2a29, rough: 0.40, u0: 0.36, u1: 0.965, pad: 0.019, gap: 0.58, flare: 0.05, waist: 0.070, thickness: 0.011, collarH: 0.098, collarR: 0.062, collarFlare: 1.16, seamRib: 0.019, wrinkle: 0.036 },
+        { type: 'jacket', color: 0x2c2a29, rough: 0.40, u0: 0.36, u1: 0.965, pad: 0.019, gap: 0.58, flare: 0.05, waist: 0.070, thickness: 0.011, collarH: 0.098, collarR: 0.062, collarFlare: 1.16, seamRib: 0.019, wrinkle: 0.036, pockets: true, pocketTh: 0.70, pocketT: 0.50, epaulettes: true, epauletteTh: 1.26, studColor: 0x8a8d94 },
         { type: 'skirt', color: 0x2c2a29, rough: 0.40, top: 1.04, bottom: 0.775, rTop: 0.166, rBot: 0.176, gap: 0.60, backLong: 0.16, spring: 0.9, wave: 0.04, depth: 0.86 },
         { type: 'sleeve', color: 0x2c2a29, rough: 0.40, u0: 0.03, u1: 0.89, pad: 0.015, cuff: 0.05, cuffBand: true, cuffColor: 0x252220 },
         { type: 'belt', color: 0x322e2c, rough: 0.32, metal: 0.1, u: 0.365, pad: 0.020, buckleBox: true, buckleColor: 0x9aa0a8 },
@@ -246,7 +246,7 @@ export const CAST = {
         // a real jacket: heavy hems, a fold-down collar standing off the neck,
         // and enough thickness at the open edge to read as leather rather than
         // as two straps drawn on a bare chest
-        { type: 'jacket', color: 0x312d2d, rough: 0.40, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006 },
+        { type: 'jacket', color: 0x312d2d, rough: 0.40, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
         { type: 'sleeve', color: 0x312d2d, rough: 0.40, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
         { type: 'belt', color: 0x3d3322, rough: 0.36, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
         { type: 'pouch', color: 0x3d3322, rough: 0.42, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
@@ -317,10 +317,10 @@ export const CAST = {
       outfit: [
         { type: 'shirt', color: 0x2e2c2c, rough: 0.94, u0: 0.32, u1: 0.99, pad: 0.010, neckCut: 0.22 },
         { type: 'pants', color: 0x2e2b2c, rough: 0.88, padHip: 0.016, padAnkle: 0.012, u1: 0.95, wrinkle: 0.020 },
-        { type: 'jacket', color: 0x393648, rough: 0.74, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarGap: 0.16 },
-        { type: 'skirt', color: 0x393648, rough: 0.74, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
-        { type: 'sleeve', color: 0x393648, rough: 0.74, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x4a4460 },
-        { type: 'belt', color: 0x474160, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
+        { type: 'jacket', color: 0x25242c, rough: 0.62, u0: 0.42, u1: 0.965, pad: 0.024, gap: 0.26, flare: 0.04, thickness: 0.012, collarH: 0.108, collarR: 0.064, collarFlare: 1.06, collarGap: 0.16, zip: true, zipAt: 0.34, epaulettes: true, epauletteTh: 1.22, studColor: 0x8d9098 },
+        { type: 'skirt', color: 0x25242c, rough: 0.62, top: 1.02, bottom: 0.70, rTop: 0.160, rBot: 0.178, gap: 0.46, backLong: 0.12, spring: 0.92, wave: 0.05, depth: 0.86 },
+        { type: 'sleeve', color: 0x25242c, rough: 0.62, u0: 0.03, u1: 0.92, pad: 0.015, cuff: 0.04, cuffBand: true, cuffColor: 0x33313d },
+        { type: 'belt', color: 0x2e2c38, rough: 0.34, u: 0.375, pad: 0.020, buckleBox: true, buckleColor: 0x8e9298 },
         { type: 'boots', color: 0x2b2827, rough: 0.32, shaft: 0.78, height: 0.036 },
         // Ignis without visible frames is just a man with a shiny patch on his
         // face; the rim geometry is the whole silhouette read
@@ -393,7 +393,7 @@ export const CAST = {
       outfit: [
         { type: 'shirt', color: 0x8d897e, rough: 0.94, u0: 0.30, u1: 0.98, pad: 0.011, neckCut: 0.42, wrinkle: 0.016 },
         { type: 'pants', color: 0x302d2d, rough: 0.90, padHip: 0.016, padAnkle: 0.011, u1: 0.95, wrinkle: 0.026, knee: 0.03 },
-        { type: 'jacket', color: 0x2f2c2b, rough: 0.52, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16 },
+        { type: 'jacket', color: 0x2f2c2b, rough: 0.52, u0: 0.34, u1: 0.955, pad: 0.026, gap: 0.50, flare: 0.05, thickness: 0.013, collarH: 0.062, collarR: 0.070, collarFlare: 1.16, zip: true, zipAt: 0.28, pockets: true, pocketTh: 0.86, pocketT: 0.48, studColor: 0x94989f },
         { type: 'sleeve', color: 0x2f2c2b, rough: 0.52, u0: 0.03, u1: 0.38, pad: 0.017, cuff: 0.04, cuffBand: true, cuffColor: 0x272423 },
         { type: 'belt', color: 0x353130, rough: 0.34, u: 0.36, pad: 0.020, buckleBox: true, buckleColor: 0xa8adb4 },
         { type: 'band', color: 0x373332, rough: 0.62, sides: ['L', 'R'], u: 0.90, pad: 0.010, ridge: 0.04 },
