@@ -56,7 +56,7 @@ export class MaterialPatch {
     mat.onBeforeCompile = function (shader, renderer) {
       if (prev) prev.call(this, shader, renderer);
       if (csmHook) csmHook.call(this, shader, renderer);
-      self.inject(shader);
+      self.inject(shader, this as THREE.Material);
     };
     const key = mat.customProgramCacheKey;
     mat.customProgramCacheKey = function () {
@@ -66,8 +66,10 @@ export class MaterialPatch {
     this.count++;
   }
 
-  inject(shader: { uniforms: Record<string, THREE.IUniform>, vertexShader: string, fragmentShader: string }) {
+  inject(shader: { uniforms: Record<string, THREE.IUniform>, vertexShader: string, fragmentShader: string }, mat?: THREE.Material) {
     for (const k of Object.keys(this.uniforms)) shader.uniforms[k] = this.uniforms[k];
+    // Per-material, so it must not come from the shared uniform block above.
+    shader.uniforms.uActorHaze = { value: mat?.userData?.__actorHaze ? 1 : 0 };
 
     shader.vertexShader = 'varying vec3 vAtmWorld;\n' + shader.vertexShader.replace(
       '#include <project_vertex>',
@@ -98,6 +100,8 @@ export class MaterialPatch {
       uniform float uHazeBase;
       uniform vec3  uAerialTint;
       uniform float uAerialStrength;
+      uniform float uActorHaze;
+      uniform vec2  uAerialNear;
       uniform float uSpecIBL;
       uniform float uSkyDim;
       uniform float uOvercast;
@@ -229,6 +233,30 @@ export class MaterialPatch {
         // horizon stops joining up.
         inCol += uNightTint * uNight * 1.6;
         float k = (1.0 - T) * uAerialStrength;
+
+        // The creature/terrain haze split (sibling-ports 3.4).
+        //
+        // 1 - T is already the airDepth law -- how much air sits in front of
+        // this pixel -- and it is physically right for *terrain*, which is a
+        // continuous surface receding into the distance. It is wrong for an
+        // actor, and the reference is unambiguous about it: a boss standing
+        // against the sky in FFXV is a near-black 1:10 cutout that takes no
+        // aerial perspective at all, while the hillside behind it at the same
+        // range is fully hazed. That contrast is what reads as "a character in
+        // a place" rather than a decal at the same depth as its background.
+        //
+        // Physically this is not a cheat: an actor is metres deep where the
+        // terrain behind it is kilometres deep, and it is lit by a key that the
+        // haze column never intercepts. So on an actor the haze is suppressed
+        // across the near field and ramps in only past uAerialNear.y, where
+        // there really is a scattering column in front of it.
+        //
+        // ACTORS ARE MARKED BY userData.__actorHaze, NOT BY LAYER. A layer or
+        // visible flag cannot express this -- the same mesh has to be hazed
+        // one way in the colour pass and is irrelevant in the shadow pass.
+        float actorK = mix(1.0, smoothstep(uAerialNear.x, uAerialNear.y, atmDist), uActorHaze);
+        k *= actorK;
+
         gl_FragColor.rgb = mix(gl_FragColor.rgb, inCol, clamp(k, 0.0, 1.0));
       }
       `

@@ -385,6 +385,12 @@ export function creatureMaterial({
  * near-black silhouette from the ground behind it. `{ color, power, strength }`.
  */
 export function enableVertexMaterial(material: THREE.Material) {
+  // Bestiary counterpart of the flag `characters/rig/Materials.ts` sets: this
+  // is the chokepoint every creature material passes through, and the haze
+  // split in `sky/MaterialPatch.ts` needs it to know an actor from terrain.
+  // Daemons at night are the case it was ported for -- readability there was
+  // diagnosed as an albedo problem, and it is a haze problem.
+  material.userData.__actorHaze = true;
   const rim = (material.userData && material.userData.rim) || null;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader

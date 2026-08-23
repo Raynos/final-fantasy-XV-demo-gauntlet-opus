@@ -122,6 +122,14 @@ function patch(mat: THREE.Material, o: PatchOpts = {}) {
   const { sss = 0, sssColor = 0xff5b3a, translucency = 0.5, hair = null, cornea = null } = o;
   mat.defines = mat.defines || {};
   mat.userData.sss = sss;
+  // The creature/terrain haze split (sibling-ports 3.4). Every character
+  // material comes through here, so this is the one place that has to say it.
+  // `sky/MaterialPatch.ts` reads the flag and suppresses aerial perspective on
+  // this material across the near field: an actor is metres deep where the
+  // terrain behind it is kilometres deep, and the reference's boss-against-sky
+  // is a 1:10 cutout taking no aerial perspective while its hillside is fully
+  // hazed.
+  mat.userData.__actorHaze = true;
   const sssCol = { value: new THREE.Color().setHex(sssColor, THREE.SRGBColorSpace) };
   const sssAmt = { value: sss };
   const trans = { value: translucency };

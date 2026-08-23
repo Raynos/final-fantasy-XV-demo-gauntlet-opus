@@ -158,6 +158,12 @@ export interface AtmosphereUniforms {
   uHazeBase: THREE.IUniform<number>;
   uAerialTint: THREE.IUniform<THREE.Vector3>;
   uAerialStrength: THREE.IUniform<number>;
+  /**
+   * `[near, nearEnd]` metres: the band over which aerial perspective ramps in
+   * on a material marked `userData.__actorHaze`. Terrain ignores it entirely.
+   * See the haze split in `sky/MaterialPatch.ts`.
+   */
+  uAerialNear: THREE.IUniform<THREE.Vector2>;
   uSpecIBL: THREE.IUniform<number>;
 }
 
@@ -563,6 +569,9 @@ export class Sky {
     if (this._ablate.size === 0) return;
     const u = this.u;
     if (this._ablate.has('noaerial')) u.uAerialStrength.value = 0;
+    // `?post=noactorhaze` collapses the actor law back onto the terrain law, so
+    // the split can be diffed rather than argued about.
+    if (this._ablate.has('noactorhaze')) u.uAerialNear.value.set(0, 1e-3);
     if (this._ablate.has('noclouds')) { u.uCloudCoverage.value = 0; u.uCloudShadowStrength.value = 0; }
     if (this._ablate.has('nocloudshadow')) u.uCloudShadowStrength.value = 0;
     if (this._ablate.has('nocirrus')) u.uCirrus.value = 0;
@@ -672,6 +681,10 @@ export class Sky {
       uHazeBase: { value: 0.00045 },
       uAerialTint: { value: new THREE.Vector3(1, 1, 1) },
       uAerialStrength: { value: 1.0 },
+      // An actor is metres deep where the terrain behind it is kilometres
+      // deep. Nothing inside 120 m takes haze; it reaches the terrain law by
+      // 900 m, which is past anything an actor is legible at anyway.
+      uAerialNear: { value: new THREE.Vector2(120, 900) },
       uSpecIBL: { value: 0.30 },
     };
   }
