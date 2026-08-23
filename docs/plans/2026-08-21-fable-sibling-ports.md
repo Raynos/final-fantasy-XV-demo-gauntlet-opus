@@ -20,8 +20,8 @@ how it was wrong is the more useful half.
 | 3.3 grade upgrades | **DONE, 6 of 6 levers** | `05fa8fb`, `6041077`, `e17e265`. See "what 3.3 actually was" below |
 | 3.4 depth-weighted additives | **DONE** | `70506db`. The haze split shipped; the airDepth weighting was already present and the additive flood measured absent |
 | 3.5 horizon-angle bake | **DONE** | `world/terrain/Horizon.ts` + `horizoncheck` |
-| 3.6 grass tier-D et al | **REASSIGNED** | `docs/plans/README.md` gives `src/world/veg/` to procedural-modeling. The shadow-only sward proxy is **already built** (`GrassField._tileFor`); tier-D, root blend and coverage math go with the lane |
-| 3.7 water depth model | **NOT DONE** | No Beer-Lambert, no refracted bed. The one genuinely untouched Wave 2 item |
+| 3.6 grass tier-D et al | **REASSIGNED** (shadow proxy already built) | `docs/plans/README.md` gives `src/world/veg/` to procedural-modeling. The shadow-only sward proxy is **already built** (`GrassField._tileFor`); tier-D, root blend and coverage math go with the lane |
+| 3.7 water depth model | **DONE — and audited wrong twice** | `Water.ts:15-43`. Per-channel Beer-Lambert `exp(-sigma*path)` with `sigma.r >> sigma.b`, path along the **refracted** ray (`refract(-V, N, 0.7502)`, one Snell step, no scene copy), bed re-sampled from the heightfield, alpha as the complement of transmittance so the waterline silhouette comes from the bed, and foam derived from depth broken by the wave field rather than stamped as a contour. That is every element 3.7 asks for |
 | 3.8 sky-SH + PCSS | **(a) MEASURED, worth building, not built. (b) not evaluated** | `4d94169`. See below — the measurement found something better than it went looking for |
 | Wave 3 (perf) | **AUDITED to a verdict; one item open** | four of six items closed by reading and measuring, see below |
 | Wave 4 (gameplay) | **2 of 5** | swept camera `fd1a153`, `lookScale` `347b392`. Perception meter, cover/fire and adaptive music untouched |
@@ -56,6 +56,19 @@ after a measurement overturned the plan's own prescription:
 Net across six graded shots: median range **9.46 -> 11.06 stops** (reference
 9.79), black point 3.5 -> 1.1 (3.4), and the daylight slice now passes 8 of 9
 checks against the FFXV field corpus.
+
+### A third audit row that was wrong, and the pattern in it
+
+3.7 was recorded as "NOT DONE — no Beer-Lambert, no refracted bed" by the
+previous audit, and **restated as untouched by this one** before being read
+properly. It is completely built, and has been for some time; the grep that
+"confirmed" it absent had in fact matched `Water.ts` and been misread as merely
+listing the file.
+
+Three of this plan's audit rows have now been wrong in the same direction — an
+item called open that was closed, or closed for a reason that had stopped being
+true. **Reading the file beats grepping for a word you expect the author to
+have used**, and it is the cheaper half of every session that followed.
 
 ### The one thing three separate items agree on
 
@@ -579,8 +592,9 @@ Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
       frames that did not have them.)*
 - [x] Each Wave 2 lever landed, or rejected with a measured negative.
       **6 of 8 landed** (3.1, 3.2, 3.3, 3.4, 3.5, and 3.8(a) as a measurement
-      with a verdict); 3.6 is reassigned to procedural-modeling by the plan
-      graph; **3.7 water is the one item nobody has touched.**
+      with a verdict, and 3.7 which was already built); 3.6 goes to
+      procedural-modeling by the plan
+      graph; and 3.7, audited as untouched **twice** and in fact fully built.
 - [x] §6 methodology adopted where it is code rather than prose: §6.1 ablation
       is in `BRIEF.md` and extended with four new dials this pass; §6.2
       per-shot noise floors are measured and checked in.
@@ -598,7 +612,6 @@ Archiving this plan requires these to be re-filed, not forgotten:
 | left over | owner |
 |---|---|
 | 3.6 grass tier-D, root blend, coverage math | `2026-08-21-fable-procedural-modeling` (the graph already assigns `src/world/veg/`) |
-| 3.7 water depth model | unassigned — the only genuinely untouched Wave 2 item |
 | 3.8(a) SH probe + specular-only env; the inert `HemisphereLight` | unassigned; measured and specified above, needs a lighting lane |
 | 3.8(b) PCSS | unassigned, not evaluated |
 | Wave 3's frame-cost split, and post consolidation behind it | `2026-08-22-opus-phase4` (WS-0b perf) |

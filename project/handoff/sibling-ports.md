@@ -42,11 +42,13 @@ median range **9.46 -> 11.06 stops** (ref 9.79), black point 3.5 -> 1.1 (3.4),
 
 ## Next step, exactly
 
-**3.7 water depth model** is the one Wave 2 item nobody has touched — no
-Beer-Lambert, no refracted bed, `src/world/Water.ts` is planar reflection only.
-It is self-contained and has no dependency on anything above.
+**3.7 is already built** — do not start it. It was audited as missing twice,
+including once by me, before anyone read the file: `Water.ts:15-43` has
+per-channel Beer-Lambert, a real Snell step (`refract(-V, N, 0.7502)`), the
+heightfield bed and flow-derived foam. Wave 2 is therefore complete apart from
+3.6, which belongs to procedural-modeling.
 
-After that, in value order:
+So, in value order:
 
 1. **3.8(a)**, which is measured and specified in the plan: the env cube is the
    entire diffuse ambient at 5% of scene luma and 3.9 of the 12.5-point
