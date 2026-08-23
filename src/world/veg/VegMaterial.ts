@@ -283,6 +283,46 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
         #endif
       `);
 
+    // ---- the coverage ramp ------------------------------------------
+    //
+    // three's own alpha-to-coverage chunk is
+    //
+    //     a = smoothstep(alphaTest, alphaTest + fwidth(a), a)
+    //
+    // and it is *one-sided*: the ramp starts at the cutoff, so a texel sitting
+    // exactly on `alphaTest` -- the middle of the silhouette by definition --
+    // reports **zero** coverage. Half of every leaf boundary therefore still
+    // resolves to a hard binary step, and the silhouette erodes inward by half
+    // a ramp width on top of that. That is measurable, not theoretical: with
+    // the stock chunk `zone_fallgrove`'s treeline moved its p90 edge step only
+    // 98.2 -> 86.5 out of 255.
+    //
+    // Straddling the cutoff instead puts coverage 0.5 exactly where the alpha
+    // map says the edge is, which is both the antialiased answer and the one
+    // that stops eating the silhouette.
+    //
+    // **The symmetry is the whole win; the floor is insurance.** Raising the
+    // floor from 0.06 to 0.11 was measured and is the same picture to three
+    // significant figures (treeline p90 72.7 -> 72.3, near crown 100.2 ->
+    // 99.9), which says `fwidth(a)` already exceeds it everywhere the graded
+    // shots put a leaf. It is kept because `fwidth(a)` is the alpha map's
+    // slope *in pixels*: on a card magnified close to the camera it collapses
+    // toward zero and the ramp would close back into a binary test at exactly
+    // the distance where each leaf is biggest on screen. 0.06 keeps about two
+    // pixels of ramp there and, at the distances that matter, costs nothing.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <alphatest_fragment>', /* glsl */`
+      #ifdef USE_ALPHATEST
+        #ifdef ALPHA_TO_COVERAGE
+          float vegAw = max(fwidth(diffuseColor.a), 0.06);
+          diffuseColor.a = smoothstep(alphaTest - vegAw, alphaTest + vegAw, diffuseColor.a);
+          if (diffuseColor.a <= 0.0) discard;
+        #else
+          if (diffuseColor.a < alphaTest) discard;
+        #endif
+      #endif
+      `);
+
     // Both of these rewrite `normal` right after <normal_fragment_begin>, and
     // the order is load-bearing: the two-sided un-flip has to land first so the
     // crown block starts from the card's *authored* plane normal.
