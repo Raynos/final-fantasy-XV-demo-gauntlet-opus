@@ -44,7 +44,7 @@ const _s = new THREE.Vector3();
  * @param angleDeg crease threshold in degrees
  * @returns non-indexed geometry with split normals
  */
-function splitNormals(geo: THREE.BufferGeometry, angleDeg: number): THREE.BufferGeometry {
+function splitNormals(geo: THREE.BufferGeometry, angleDeg: number, uvScale = 0.62): THREE.BufferGeometry {
   const pos = geo.attributes.position;
   const idx = geo.index!.array;
   const nTri = idx.length / 3;
@@ -105,7 +105,7 @@ function splitNormals(geo: THREE.BufferGeometry, angleDeg: number): THREE.Buffer
   // top of a slab, a bedding ledge — into a smear of stretched stripes, which
   // is the single loudest "this is a primitive" tell on a big rock.
   const UV = new Float32Array(nTri * 6);
-  const K = 0.62;
+  const K = uvScale;
   for (let t = 0; t < nTri; t++) {
     const ax = Math.abs(unit[t * 3]), ay = Math.abs(unit[t * 3 + 1]), az = Math.abs(unit[t * 3 + 2]);
     const axis = ax > ay && ax > az ? 0 : ay > az ? 1 : 2;
@@ -127,11 +127,12 @@ function splitNormals(geo: THREE.BufferGeometry, angleDeg: number): THREE.Buffer
  *
  * @param {object} o
  * */
-function rockGeometry(seed: number, {
+export function rockGeometry(seed: number, {
   detail = 2, warp = 0.26, stretch = [1, 1, 1], planes = 7, upright = 0.35,
   bite = 0.78, bedding = 0, beds = 5, chips = 3, round = 0.06, crease = 30,
-  flat = 0,
-}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, chips?: number, round?: number, crease?: number, flat?: number } = {}) {
+  flat = 0, weather = 0.16, upBias = 0.55, joints = true, size = 1, gully = 0,
+  gullyFreq = 2.4, uvScale = 0.62,
+}: { detail?: number, warp?: number, stretch?: number[], planes?: number, upright?: number, bite?: number, bedding?: number, beds?: number, chips?: number, round?: number, crease?: number, flat?: number, weather?: number, upBias?: number, joints?: boolean, size?: number, gully?: number, gullyFreq?: number, uvScale?: number } = {}) {
   // PolyhedronGeometry is non-indexed and its UV seam duplicates a whole
   // column of vertices; weld on position alone so the crease walk below sees
   // a real adjacency graph.
@@ -180,12 +181,76 @@ function rockGeometry(seed: number, {
     }
   };
 
-  for (let k = 0; k < planes; k++) {
-    // bias toward steep planes: joint sets in real rock are near-vertical
-    const th = rng.next() * Math.PI * 2;
-    const yb = rng.gauss(0, 1) * (1 - upright) * 0.9;
-    const l = Math.hypot(Math.cos(th), yb, Math.sin(th)) || 1;
-    cut(Math.cos(th) / l, yb / l, Math.sin(th) / l, bite + rng.gauss(0, 0.07));
+  // Cut directions come from a **geologic frame**, not from a sphere.
+  //
+  // Rock does not fracture isotropically. A block is bounded by one bedding
+  // plane -- near-horizontal, tilted a few degrees -- and by two *conjugate*
+  // shear sets, which share a strike and lean about 55 degrees off the bedding
+  // normal in opposite directions. Three modal directions with a little scatter
+  // is what makes a block read as geology rather than as a randomly whittled
+  // ball; the `upright` scalar this replaces is a one-parameter approximation
+  // of the same idea and cannot produce the conjugate pair at all.
+  //
+  // The order matters as much as the directions: the shear cuts go **last and
+  // deepest**, so they own the silhouette, and everything before them is
+  // reduced to detail on the faces they leave.
+  const strike = rng.next() * Math.PI * 2;
+  const dip = rng.gauss(0, 0.16);                       // bedding tilt, radians
+  const bedN: [number, number, number] = [Math.sin(dip) * Math.cos(strike), Math.cos(dip), Math.sin(dip) * Math.sin(strike)];
+  const sx0 = Math.cos(strike + Math.PI / 2), sz0 = Math.sin(strike + Math.PI / 2);
+  const shearAt = (sign: number, jitter: number): [number, number, number] => {
+    // Rotate the bedding normal `sign * 55 deg` about the strike line.
+    const a = sign * (0.96 + jitter);                   // 55 deg = 0.96 rad
+    const ca = Math.cos(a), sa = Math.sin(a);
+    // Rodrigues rotation about the horizontal strike axis (sx0, 0, sz0).
+    const kx = sx0, ky = 0, kz = sz0;
+    const dot = kx * bedN[0] + ky * bedN[1] + kz * bedN[2];
+    const cx = ky * bedN[2] - kz * bedN[1];
+    const cy = kz * bedN[0] - kx * bedN[2];
+    const cz = kx * bedN[1] - ky * bedN[0];
+    const vx = bedN[0] * ca + cx * sa + kx * dot * (1 - ca);
+    const vy = bedN[1] * ca + cy * sa + ky * dot * (1 - ca);
+    const vz = bedN[2] * ca + cz * sa + kz * dot * (1 - ca);
+    const l = Math.hypot(vx, vy, vz) || 1;
+    return [vx / l, vy / l, vz / l];
+  };
+  const jitterDir = (d: [number, number, number], sd: number): [number, number, number] => {
+    const x = d[0] + rng.gauss(0, sd), y = d[1] + rng.gauss(0, sd), z = d[2] + rng.gauss(0, sd);
+    const l = Math.hypot(x, y, z) || 1;
+    return [x / l, y / l, z / l];
+  };
+  if (joints) {
+    // Bedding first and shallowest, and only from above: it truncates the crown
+    // the way a block that has shed its cap does. Cutting the base as well
+    // sounds symmetric and is wrong -- the scale normalisation that follows
+    // divides by the largest radius, so taking both ends off turns every block
+    // into a disc. (Measured: it removed two of the three boulders visible in
+    // `poi_fishing` outright.) The base is buried anyway.
+    {
+      const d = jitterDir(bedN, 0.09);
+      cut(d[0], d[1], d[2], bite + 0.17 + rng.gauss(0, 0.05));
+    }
+    // Then the two conjugate shear sets, alternating, each cut deeper than the
+    // last so the final pair carries the outline.
+    const nShear = Math.max(2, planes - 2);
+    for (let k = 0; k < nShear; k++) {
+      const set = k % 2 === 0 ? 1 : -1;
+      const yaw = Math.floor(k / 2) * Math.PI;          // both ends of each set
+      const base = shearAt(set, rng.gauss(0, 0.12));
+      const d = jitterDir([
+        base[0] * Math.cos(yaw) - base[2] * Math.sin(yaw), base[1],
+        base[0] * Math.sin(yaw) + base[2] * Math.cos(yaw),
+      ], 0.07);
+      const depth = bite + 0.16 - (0.14 * k) / Math.max(1, nShear - 1);
+      cut(d[0], d[1], d[2], depth + rng.gauss(0, 0.04));
+    }
+  } else {
+    for (let k = 0; k < planes; k++) {
+      const th = rng.next() * Math.PI * 2;
+      const yb = rng.gauss(0, 1) * (1 - upright) * 0.9;
+      const l = Math.hypot(Math.cos(th), yb, Math.sin(th)) || 1;
+      cut(Math.cos(th) / l, yb / l, Math.sin(th) / l, bite + rng.gauss(0, 0.07));
+    }
   }
   // chipped corners: shallow shaves that only take the tip off
   for (let k = 0; k < chips; k++) {
@@ -196,21 +261,123 @@ function rockGeometry(seed: number, {
   }
 
   // --- bedding: horizontal strata ledges ---------------------------------
+  // Strata have to step the SILHOUETTE, not bend the surface.
+  //
+  // The sawtooth this replaces scaled the radius smoothly across each bed, so
+  // the outline stayed a continuous curve and the strata only ever read as
+  // shading. What sells sedimentary rock is that the outline *steps*: a hard
+  // bed is a course that stands proud and a soft one is recessed, and the
+  // boundary between them is a near-vertical riser you can see against the sky.
+  // So the radial scale is constant WITHIN a bed and jumps between beds, which
+  // makes the triangles spanning a bedding plane into the riser. Each bed draws
+  // its own resistance from the seed, so the courses differ rather than
+  // alternating, and the weathering taper inside a bed only rounds its head.
   if (bedding > 0) {
     let yMin = Infinity, yMax = -Infinity;
     for (let i = 0; i < count; i++) {
       yMin = Math.min(yMin, P[i * 3 + 1]); yMax = Math.max(yMax, P[i * 3 + 1]);
     }
     const h = Math.max(1e-4, yMax - yMin);
+    const nb = Math.max(2, Math.round(beds));
+    const resist = new Float32Array(nb + 2);
+    for (let b = 0; b <= nb + 1; b++) {
+      const q = Math.sin(seed * 12.9898 + b * 78.233) * 43758.5453;
+      resist[b] = q - Math.floor(q);
+    }
     for (let i = 0; i < count; i++) {
-      const t = ((P[i * 3 + 1] - yMin) / h) * beds;
-      const bed = Math.floor(t);
-      // sawtooth inside each bed: a hard step at every bedding plane, then the
-      // face weathers back until the next one
-      const f = t - bed;
-      const k = 1 + bedding * (0.5 - f) + bedding * 0.45 * ((bed % 2) - 0.5);
+      const t = ((P[i * 3 + 1] - yMin) / h) * nb;
+      const bed = Math.min(nb - 1, Math.max(0, Math.floor(t)));
+      const f = t - Math.floor(t);
+      // Per-bed resistance: the step. Plus a small taper over the top fifth of
+      // each bed so the course has a weathered head rather than a knife edge.
+      const step = 1 + bedding * (resist[bed] - 0.5) * 2;
+      const head = f > 0.8 ? -bedding * 0.35 * ((f - 0.8) / 0.2) : 0;
+      const k = step + head;
       P[i * 3] *= k; P[i * 3 + 2] *= k;
     }
+  }
+
+  // --- gullies: ridged incision, for masses big enough to have drainage ---
+  //
+  // A rock the size of a mountain does not have a mountain's surface, and this
+  // is why an enlarged boulder never reads as one: the only relief on it is at
+  // the scale of the blank's own fbm, so at a kilometre it is a smooth dome
+  // with facets. What a 500 m mass has, and a 3 m one does not, is *channels* --
+  // water has run down it for a long time. Ridged noise (1 - |fbm|) cuts
+  // creases rather than adding lumps, which is the difference between a gully
+  // and a bump, and the cut is proportional to how far down the mass a point
+  // is, because drainage concentrates toward the base.
+  if (gully > 0) {
+    let yMin = Infinity, yMax = -Infinity;
+    for (let i = 0; i < count; i++) {
+      yMin = Math.min(yMin, P[i * 3 + 1]); yMax = Math.max(yMax, P[i * 3 + 1]);
+    }
+    const hh = Math.max(1e-4, yMax - yMin);
+    for (let i = 0; i < count; i++) {
+      const x = P[i * 3] / size, y = P[i * 3 + 1] / size, z = P[i * 3 + 2] / size;
+      const f = n.fbm3(x * gullyFreq + 31, y * gullyFreq * 0.55, z * gullyFreq - 17, 4);
+      // Narrow: the crease is only where the field crosses zero. At a gentle
+      // slope this is a broad uniform shrink and does nothing visible -- which
+      // is what 2.2 measured as.
+      const ridge = 1 - Math.abs(f) * 7.0;
+      const down = 1 - (P[i * 3 + 1] - yMin) / hh;         // deepest toward the foot
+      const k = 1 - gully * Math.max(0, ridge) * (0.35 + 0.65 * down);
+      P[i * 3] *= k; P[i * 3 + 2] *= k;
+    }
+  }
+
+  // --- chamfer the arrises, and weather the exposed ones -----------------
+  //
+  // The cut pipeline goes straight from arris to render, and a mathematically
+  // perfect edge is the same tell on a rock that it is on a building: it makes
+  // a one-pixel lit-to-shaded transition at every distance. A real worn arris
+  // is a narrow chamfer band, and it catches a bright sliver of sun along its
+  // whole length -- which is most of the difference between a low-poly asset
+  // and a rock.
+  //
+  // On this topology the chamfer IS a convexity-weighted Laplacian: pull each
+  // vertex toward the average of its neighbours in proportion to how far it
+  // stands proud of them along its own normal. A vertex in the middle of a
+  // cleave face is coplanar with its ring and does not move at all, so the
+  // fracture planes stay planar; a vertex on an arris or a corner is strongly
+  // convex and gets rounded by a fraction of the local edge length. Weighted by
+  // upness as well, because it is the exposed tops that blunt while the
+  // sheltered cleave faces keep their edges. `weather` above about 0.45 eats
+  // the facets entirely -- the whole point is that it is a band, not a smooth.
+  if (weather > 0) {
+    const idx0 = geo.index!.array;
+    const nbrSum = new Float32Array(count * 3);
+    const nbrCnt = new Float32Array(count);
+    const nrm = new Float32Array(count * 3);
+    const add = (a: number, b: number) => {
+      nbrSum[a * 3] += P[b * 3]; nbrSum[a * 3 + 1] += P[b * 3 + 1]; nbrSum[a * 3 + 2] += P[b * 3 + 2];
+      nbrCnt[a] += 1;
+    };
+    for (let t = 0; t < idx0.length; t += 3) {
+      const i0 = idx0[t], i1 = idx0[t + 1], i2 = idx0[t + 2];
+      add(i0, i1); add(i0, i2); add(i1, i0); add(i1, i2); add(i2, i0); add(i2, i1);
+      const ax = P[i1 * 3] - P[i0 * 3], ay = P[i1 * 3 + 1] - P[i0 * 3 + 1], az = P[i1 * 3 + 2] - P[i0 * 3 + 2];
+      const bx = P[i2 * 3] - P[i0 * 3], by = P[i2 * 3 + 1] - P[i0 * 3 + 1], bz = P[i2 * 3 + 2] - P[i0 * 3 + 2];
+      const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+      for (const i of [i0, i1, i2]) { nrm[i * 3] += cx; nrm[i * 3 + 1] += cy; nrm[i * 3 + 2] += cz; }
+    }
+    const D = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const c = nbrCnt[i] || 1;
+      const mx = nbrSum[i * 3] / c - P[i * 3];
+      const my = nbrSum[i * 3 + 1] / c - P[i * 3 + 1];
+      const mz = nbrSum[i * 3 + 2] / c - P[i * 3 + 2];
+      const nl = Math.hypot(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) || 1;
+      const nx = nrm[i * 3] / nl, ny = nrm[i * 3 + 1] / nl, nz = nrm[i * 3 + 2] / nl;
+      // Convexity: how far the vertex stands proud of its own neighbour ring,
+      // normalised by the ring radius so it is scale-free.
+      const ring = Math.hypot(mx, my, mz) || 1e-6;
+      const conv = Math.max(0, -(mx * nx + my * ny + mz * nz) / ring);
+      const up = 1 - upBias + upBias * Math.max(0, ny);
+      const k = weather * conv * up;
+      D[i * 3] = mx * k; D[i * 3 + 1] = my * k; D[i * 3 + 2] = mz * k;
+    }
+    for (let i = 0; i < count * 3; i++) P[i] += D[i];
   }
 
   // --- optional blend back toward the smooth blank -----------------------
@@ -221,7 +388,13 @@ function rockGeometry(seed: number, {
   for (let i = 0; i < count; i++) {
     rad = Math.max(rad, Math.hypot(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]));
   }
-  const inv = 1 / (rad || 1);
+  // `size` is applied HERE rather than by the caller, because the triplanar UVs
+  // `splitNormals` bakes are read straight off the positions. Scaling a
+  // unit-radius mesh afterwards scales its UVs with it, so a 330 m meteor shard
+  // would carry exactly one tile of a texture authored for a one-metre part --
+  // the same stretch `poiMaterials` documents for walls. Baking at world size
+  // gives it two hundred.
+  const inv = size / (rad || 1);
   for (let i = 0; i < count * 3; i++) P[i] *= inv;
   pos.array.set(P);
   pos.needsUpdate = true;
@@ -232,15 +405,16 @@ function rockGeometry(seed: number, {
     const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
     const len = Math.hypot(x, y, z) || 1;
     const up = THREE.MathUtils.clamp(y / len, -1, 1);
-    // cavity: points that sit well inside the hull are in a re-entrant corner
-    const cav = THREE.MathUtils.clamp((len - 0.62) / 0.38, 0, 1);
-    const grain = n.fbm3(x * 3.1 + 5, y * 3.1, z * 3.1 - 7, 3) * 0.5 + 0.5;
+    // cavity: points that sit well inside the hull are in a re-entrant corner.
+    // Measured against `size`, so the bake means the same thing at 1 m and 330.
+    const cav = THREE.MathUtils.clamp((len / size - 0.62) / 0.38, 0, 1);
+    const grain = n.fbm3((x / size) * 3.1 + 5, (y / size) * 3.1, (z / size) * 3.1 - 7, 3) * 0.5 + 0.5;
     const k = (0.44 + 0.26 * Math.max(0, up) + grain * 0.2) * (0.58 + 0.42 * cav);
     col[i * 3] = k * 1.06; col[i * 3 + 1] = k; col[i * 3 + 2] = k * 0.9;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
-  const out = splitNormals(geo, crease);
+  const out = splitNormals(geo, crease, uvScale);
   geo.dispose();
   return out;
 }
@@ -275,7 +449,7 @@ const KINDS: RockKindDef[] = [
     key: 'bedded', seed: 202, size: [1.8, 5.4], bury: 0.24, w: 1.0,
     opts: {
       detail: 2, warp: 0.2, stretch: [1.08, 0.94, 1.02], planes: 6,
-      upright: 0.72, bite: 0.8, bedding: 0.1, beds: 6, chips: 3,
+      upright: 0.72, bite: 0.8, bedding: 0.045, beds: 6, chips: 3,
       round: 0.05, crease: 28,
     },
   },
@@ -292,7 +466,7 @@ const KINDS: RockKindDef[] = [
     key: 'slab', seed: 404, size: [1.8, 5.4], bury: 0.4, w: 0.6,
     opts: {
       detail: 2, warp: 0.17, stretch: [1.35, 0.68, 1.18], planes: 5,
-      upright: 0.55, bite: 0.86, bedding: 0.08, beds: 4, chips: 3,
+      upright: 0.55, bite: 0.86, bedding: 0.04, beds: 4, chips: 3,
       round: 0.06, crease: 25, flat: 0.2,
     },
   },
@@ -301,7 +475,7 @@ const KINDS: RockKindDef[] = [
     key: 'spire', seed: 505, size: [1.5, 4.0], bury: 0.22, w: 0.55,
     opts: {
       detail: 2, warp: 0.2, stretch: [0.72, 1.8, 0.8], planes: 7,
-      upright: 0.7, bite: 0.85, bedding: 0.05, beds: 5, chips: 3,
+      upright: 0.7, bite: 0.85, bedding: 0.03, beds: 5, chips: 3,
       round: 0.03, crease: 24,
     },
   },

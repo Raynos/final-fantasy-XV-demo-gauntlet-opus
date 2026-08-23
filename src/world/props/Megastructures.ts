@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { Noise } from '../../util/Noise.ts';
 import { PartBuilder, loft, ring, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
+import { rockGeometry } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 
 /**
@@ -33,21 +33,60 @@ function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   );
 }
 
-/** Angular rock/crystal mass — meteor shards and ruin rubble at scale. */
+/**
+ * Angular rock mass — meteor shards and ruin rubble at scale.
+ *
+ * This was an `IcosahedronGeometry(r, 1)` warped by fbm: **eighty triangles**
+ * for a three-hundred-and-thirty metre mass, with `computeVertexNormals`
+ * averaging across every edge. Captured `zone_mencemoor` and read it, and the
+ * Meteor of the Disc -- the landmark the whole Cauthess region is named for --
+ * was a coarse faceted polyhedron with visible flat planes, a hard silhouette
+ * and no surface at all. Ablating `--hide rock` proved it was not the boulder
+ * system: it survived, so it was this.
+ *
+ * A shard is a rock, so it is built by the rock generator: the same conjugate
+ * joint sets, the same chamfer-and-weather pass, the same strata that step the
+ * outline, at a detail level the size actually justifies. Sharing the generator
+ * rather than keeping a second one is the plan's own thesis -- archetype
+ * families out of one recipe, not a second, worse recipe per scale.
+ */
 function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
-  const g = new THREE.IcosahedronGeometry(r, 1);
-  const n = new Noise(seed);
-  const p = g.attributes.position;
-  const v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i);
-    const k = 1 + n.fbm3(v.x / r, v.y / r, v.z / r, 3) * warp;
-    v.multiplyScalar(k);
-    v.x *= stretch[0]; v.y *= stretch[1]; v.z *= stretch[2];
-    p.setXYZ(i, v.x, v.y, v.z);
-  }
-  g.computeVertexNormals();
-  return g;
+  // A 330 m mass and a 5 m lump of rubble cannot carry the same triangle count.
+  // `IcosahedronGeometry`'s `detail` subdivides each of the twenty faces into
+  // (detail+1)^2, so these are 2420 / 980 / 320 triangles -- the first is what
+  // a mountain-sized landmark on the horizon needs before strata have anywhere
+  // to land, and it is still a rounding error against a 6.5 M-triangle frame.
+  const detail = r > 120 ? 10 : r > 40 ? 6 : 3;
+  // 1.55x: `rockGeometry` normalises to a bounding radius of `size`, and then
+  // the joint cuts take a third of that back off. The old warped icosahedron
+  // reached `r * max(stretch) * (1 + warp)`, so passing `r` straight through
+  // shrank the Meteor of the Disc into its own crater.
+  return rockGeometry(seed, {
+    // Few, deep cuts and a quiet blank. A shard of starfall is *cleaved*: what
+    // it wants is a handful of big planar faces meeting at hard arrises with
+    // strata stepping across them, and a high warp on a finely subdivided
+    // sphere gives the opposite -- a cauliflower with a rounded outline, which
+    // is what the first attempt at this rendered.
+    detail, warp: warp * 0.55, stretch, planes: 8, bite: 0.79,
+    // `bedding` is a fraction of the RADIUS, not of the bed height, so on a
+    // 500 m mass eight beds at 0.13 are 35 m cliffs -- which rendered as a
+    // checkerboard of enormous light and dark facets, the low-poly read from
+    // the other direction. A bedding step wants to be a few metres on a
+    // mountain and a few centimetres on a boulder, which is this small.
+    bedding: 0.022, beds: r > 120 ? 11 : 6, chips: 4, round: 0.03,
+    crease: 23, weather: 0.14, size: r * 1.7,
+    // The mass is 500 m across and 1.5 km from the shot that judges it, so the
+    // rock material's normal map is sub-pixel and the mesh is the whole read.
+    // Gullies put relief back at a frequency the eye can resolve at that range.
+    gully: r > 120 ? 0.3 : r > 40 ? 0.18 : 0, gullyFreq: 3.6,
+    // Twenty-two tiles across the mass, not three hundred and not six. The rock map's default
+    // 0.62 tiles/m is authored for a boulder you walk up to; on a 500 m mass
+    // seen from 1.5 km every tile is a fraction of a pixel and the whole thing
+    // renders as one flat grey. Relief has to sit at a frequency the eye can
+    // actually resolve at the range the object is seen from -- the same Nyquist
+    // argument the plan makes about displacement octaves, from the other end.
+    uvScale: 22 / (r * 1.7),
+  });
 }
 
 /**
@@ -59,6 +98,10 @@ export function megaMaterials() {
   return {
     hull: magitekMaterial(0x2a2f37),
     hullDark: magitekMaterial(0x171a20),
+    // `instanceTint` stays OFF. The rock generator bakes a cavity/dust vertex
+    // colour whose mean is about 0.55, which is right when it multiplies a
+    // material calibrated for it and halves the value of one that is not --
+    // measured: it rendered the meteor near-black.
     stone: rockMaterial(0x8b7f6d, 0.95, false),
     pale: concreteMaterial(0x8e8779, 0.94),
     city: concreteMaterial(0x5d6470, 0.85),
