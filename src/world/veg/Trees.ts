@@ -10,17 +10,25 @@ import type { Ecology } from './Ecology.ts';
 /**
  * The forest. Streamed, instanced, three LODs deep.
  *
- *   geometry   0 - 170 m   real branch geometry, casts shadows
- *   impostor   170 - 330 m one baked billboard per tree
+ *   geometry   0 - 250 m   real branch geometry, casts shadows
+ *   impostor   250 - 330 m one baked billboard per tree
  *   canopy     296 - 1250 m one baked *stand* card per 51 m cell
  *
  * **The geometry ring reached 88 m until the budget lane re-priced it.** At
  * 88 m the graded shots — elevated establishing frames whose nearest visible
  * ground is 61-80 m — put essentially the whole forest in the impostor ring:
  * `zone_fallgrove` drew 97 tree geometries against 1 239 impostors. A 15 m tree
- * at 165 m is still ~88 px tall in a 900 px frame, which is far too large for a
+ * at 250 m is still ~58 px tall in a 900 px frame, which is far too large for a
  * pair of crossed cards to stand in for, and "vegetation is flat cards" has been
  * the blind judge's number one complaint for two rounds.
+ *
+ * 250 m is where it stopped, and it stopped there for a *reason of shape*
+ * rather than of cost: the impostor ring ends at 330 and the canopy stand cards
+ * begin at 296, so a geometry ring past ~250 squeezes the per-tree billboard
+ * band out of existence and the LOD chain loses its middle. The sweep in
+ * `src/tools/probes/geosweep.mts` took `zone_nebulawood` to a **20.7 M
+ * triangle** frame at `geoRange` 300 and measured 4.7 ms against 4.5-4.9 ms for
+ * the shipped configuration. Cost was never the binding constraint here.
  *
  * The reason it can move is on {@link Trees#geoBudget}: a tree costs triangles,
  * this renderer is bound on *draw calls*, and the geometry ring adds no draws
@@ -273,7 +281,7 @@ export class Trees {
   tileCacheMax!: number;
   variants!: TreeVariant[];
   constructor(eco: Ecology, scene: THREE.Scene, {
-    quality = 1, geoRange = 170, impRange = 330,
+    quality = 1, geoRange = 250, impRange = 330,
     canopyNear = 296, canopyRange = 1250,
   } = {}) {
     this.eco = eco;
@@ -333,8 +341,23 @@ export class Trees {
      * 1 672 impostors. The blind judge's round-4 number one defect is
      * "vegetation is flat cards", and the cap was the reason more than the LOD
      * ranges were.
+     *
+     * **1 200 is still not where cost bites; it is where the LOD chain does.**
+     * `src/tools/probes/geosweep.mts` walks the budget with the shipped value
+     * re-measured between every step, on a held `zone_nebulawood`:
+     *
+     *     170 / 520    10.02 M tris   520 draws   6.1, 4.6, 4.9, 4.5 ms
+     *     210 / 800    12.38 M tris   532 draws   4.8 ms
+     *     250 / 1200   15.72 M tris   538 draws   4.6 ms
+     *     300 / 1800   20.71 M tris   538 draws   4.7 ms
+     *
+     * Doubling the frame's triangles costs nothing distinguishable from the
+     * machine's own drift. What stops the ring at 250 is {@link Trees#impRange}
+     * 330 and {@link Trees#canopyNear} 296: push the geometry past ~250 and the
+     * per-tree billboard band is squeezed out and the chain loses its middle
+     * LOD. If a later lane wants to go further, move those two first.
      */
-    this.geoBudget = Math.max(24, Math.round(520 * quality));
+    this.geoBudget = Math.max(24, Math.round(1200 * quality));
     this.impBudget = Math.max(200, Math.round(3000 * quality));
     this.canBudget = Math.max(120, Math.round(1200 * quality));
     this.tileCacheMax = 320;
@@ -357,7 +380,7 @@ export class Trees {
     // and at the wider `geoRange` a single common variant carries ~150 trees on
     // its own. One instance is 16 + 3 floats, so 21 variants x 210 is ~640 kB
     // of buffer for the whole forest — the cheap half of a cheap trade.
-    const perVariant = Math.max(6, Math.round(210 * this.quality));
+    const perVariant = Math.max(6, Math.round(520 * this.quality));
     const perImpostor = Math.max(32, Math.round(340 * this.quality));
     const perCanopy = Math.max(48, Math.round(400 * this.quality));
 
