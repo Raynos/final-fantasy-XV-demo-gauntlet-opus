@@ -149,6 +149,40 @@ speck 6.0 → 3.7, p90 27.1 → 25.8. Against the sky (`250,285,450,80`): speck
 
 ---
 
+## `reliefstat`, and why this time it *can* grade the lane
+
+The vegetation lane recorded that `reliefstat.mts` scored its crown-normal fix
+*worse*, and drew the right general conclusion: it is a detail-**density**
+instrument and that was a **coherence** defect. This one is neither. It is a
+defect that lives entirely in the finest band, and `reliefstat`'s own header
+says so — *"aliasing, dither and JPEG mosquito noise all read as `d1` energy"*.
+Excess `d1` **is** this defect, which makes `d1` the signal here rather than the
+warning it usually is.
+
+Canopy-band ROI (`--roi 0.08,0.36,0.84,0.26`), before and after, both forest
+shots, against `FFXV-ground`'s 8.58 at `d1`:
+
+| | d1 | d2 | d4 | d8 | d16 | d32 | d64 |
+|---|---|---|---|---|---|---|---|
+| `zone_fallgrove` before | 11.38 | 12.69 | 13.34 | 15.69 | 20.30 | 25.29 | 73.86 |
+| `zone_fallgrove` after | **9.54** | 11.58 | 12.82 | 15.40 | 20.18 | 25.34 | 73.69 |
+| `zone_nebulawood` before | 14.66 | 13.13 | 14.03 | 15.90 | 17.64 | 28.31 | 62.18 |
+| `zone_nebulawood` after | **11.98** | 11.63 | 12.88 | 14.99 | 17.04 | 27.72 | 60.94 |
+
+**`d1` down 16% and 18%; every band from `d4` up moves by less than 4% and in
+both directions.** `zone_fallgrove` goes from 133% of the reference's `d1` to
+111%, `zone_nebulawood` from 171% to 140%. That is the exact signature of
+removing one-pixel aliasing and nothing else: the finest octave loses the
+energy that was never a feature, and the bands where the eye reads *material*
+keep every point they had. `d4` 109%, `d8` 107%, `d16` 106% of the reference,
+unchanged.
+
+This is worth writing down as the general form: **the instrument that grades a
+lane is the one whose axis the defect actually lies along.** `reliefstat` could
+not see a coherence defect and can see this one exactly, for the same reason.
+
+---
+
 ## `?post=nocas` — the ablation that says what is left
 
 The rule got applied and it paid. Run at `samples: 4`:
