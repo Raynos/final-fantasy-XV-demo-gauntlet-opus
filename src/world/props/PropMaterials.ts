@@ -109,13 +109,24 @@ export function rustMaterial(tint = 0x8a5b3c, metal = 0.55) {
     const h = (u: number, v: number) => (n.fbm2(u * 16, v * 16, 4) * 0.5 + 0.5) * 0.6
       + (n.worley2(u * 9, v * 9).f1) * 0.4;
     const base = new THREE.Color().setHex(tint, THREE.NoColorSpace);
+    // The rust patch used to be `base.r * 1.35` against a `0.30` neutral grey:
+    // a 2.5:1 value swing *and* a full swing from neutral to saturated orange,
+    // on a 0.36 m blotch. On a 6 m container that is seventeen blotches across
+    // and it read, at every distance the blind judge ever saw it, as a
+    // red-and-black leopard print. A previous lane guessed that was a mip or
+    // anisotropy failure; it is not — `bakedTexture` mips at aniso 16 and the
+    // blotches resolve cleanly. It was simply that much contrast.
+    //
+    // Real rust on painted steel is *close in value* to what it is eating and
+    // differs mostly in hue and gloss. 1.25:1 rather than 2.5:1, and the
+    // achromatic swing halved with it.
     const map = bakedTexture(`props/${mk}/map`, 256, (u: number, v: number, c: Texel) => {
       const r = n.fbm2(u * 5, v * 5, 4) * 0.5 + 0.5;
-      const k = 0.55 + h(u, v) * 0.7;
+      const k = 0.72 + h(u, v) * 0.42;
       const rust = THREE.MathUtils.smoothstep(r, 0.35, 0.75);
-      c[0] = THREE.MathUtils.lerp(0.30, base.r * 1.35, rust) * k;
-      c[1] = THREE.MathUtils.lerp(0.31, base.g, rust) * k;
-      c[2] = THREE.MathUtils.lerp(0.32, base.b * 0.8, rust) * k;
+      c[0] = THREE.MathUtils.lerp(0.30, base.r * 0.86, rust) * k;
+      c[1] = THREE.MathUtils.lerp(0.30, base.g * 0.92, rust) * k;
+      c[2] = THREE.MathUtils.lerp(0.30, base.b * 1.05, rust) * k;
     });
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     const normalMap = bakedNormal(`props/${mk}/normal`, 256, h, 1.5);

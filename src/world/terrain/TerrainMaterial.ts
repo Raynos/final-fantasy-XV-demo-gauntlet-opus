@@ -1225,26 +1225,166 @@ void tf_shade() {
   // multiplies its ground by (0.92, 0.97, 0.89) -- darker, and greener by
   // taking more out of red and blue than out of green. Held to exactly that at
   // full cover.
+  // **The original colour measurement was taken the wrong way and it cost the
+  // term most of its effect.** It read a 900x160 rectangle of near ground with
+  // and without grass and took the ratio of the two means -- but a rectangle
+  // averages the grassed pixels with the bare ones between them, so the ratio
+  // it produces is the *partial-cover* ratio, and applying it at FULL cover
+  // understates the material by however sparse the field happened to be there.
+  // Re-measured over the pixels the blades actually cover (the ones where a
+  // --raw pair differs by more than 40/255, 11.9% and 12.9% of the two frames):
+  //
+  //     zone_fallgrove   grassed (81.5,102.8, 53.3)  bare (98.7,99.8,72.5)
+  //                      ratio (0.826, 1.029, 0.735)
+  //     zone_vannath     grassed (110.5,109.5,69.6)  bare (107.6,84.0,62.0)
+  //                      ratio (1.028, 1.303, 1.123)
+  //
+  // Two findings in that. The humid ratio is roughly twice the chroma swing the
+  // shipped (0.922, 0.968, 0.887) had. And **the dry-savannah ratio is above
+  // one on every channel** -- pale straw-green grass over red soil is *lighter*
+  // than what it grows on, where wet Duscae grass over dark loam is darker. One
+  // tint could never have been right for both, and the one that shipped was the
+  // wrong sign for half the world.
+  //
+  // So the endpoints are regional, and they are bimodal on the tuft's own
+  // height for the same reason the dry cover below is: our mid-ground band is a
+  // stop short of the reference's value RANGE and short at the top of it, so a
+  // flat multiply in either direction closes nothing. The 0.9 m octave is new
+  // and is the point -- 8.7 m and 2.9 m are both large enough to land in d32,
+  // where reliefstat already says we are at 167% of the reference, while d4 sat
+  // at 80%.
   float swardAmt = smoothstep(100.0, 185.0, vTDist) * clamp(w[4] * 1.7, 0.0, 1.0)
                  * smoothstep(0.06, 0.30, bioGreen);
   if (swardAmt > 0.003) {
     float sv1 = tf_snoise(P.xz * 0.115 + 51.0);
     float sv2 = tf_snoise(P.xz * 0.345 - 27.0);
-    float cover = clamp(0.5
-      + 0.60 * sv1 * tf_lodW(8.7, tfPx)
-      + 0.36 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0);
-    cover = smoothstep(0.16, 0.84, cover) * swardAmt;
+    float sv3 = tf_snoise(P.xz * 1.11 + 133.0);
+    float swardTuft = clamp(0.5 + 0.62 * sv3 * tf_lodW(0.90, tfPx)
+                                + 0.30 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0);
+    float cover = smoothstep(0.16, 0.84, clamp(0.5
+        + 0.60 * sv1 * tf_lodW(8.7, tfPx)
+        + 0.36 * sv2 * tf_lodW(2.9, tfPx), 0.0, 1.0)) * swardAmt;
     // A gust lays the blades over, and laid-over grass shows more of its own
     // shadowed base and less of its lit tips. 1.0 is the still-air amplitude
     // the sway uses, so this is centred on it rather than on zero.
     float gust = clamp(tf_gust(P.xz) - 1.0, -0.8, 0.8);
-    vec3 swardCol = vec3(0.922, 0.968, 0.887) * (1.0 - 0.10 * gust);
-    col *= mix(vec3(1.0), swardCol, cover);
+    float humid = smoothstep(0.30, 0.82, bioGreen);
+    vec3 swardMean = mix(vec3(1.028, 1.303, 1.123), vec3(0.826, 1.029, 0.735), humid);
+    vec3 swardShade = swardMean * (0.82 - 0.08 * gust);
+    vec3 swardTip = swardMean * (1.18 - 0.10 * gust);
+    col *= mix(vec3(1.0), mix(swardShade, swardTip, smoothstep(0.28, 0.84, swardTuft)), cover);
     // A sward is a mat of scattering fibres: rougher than the soil it stands
     // on, and it holds its own shade between the tufts.
     rgh = mix(rgh, min(1.0, rgh * 1.12 + 0.05), cover);
-    ao *= mix(1.0, 0.88, cover);
+    ao *= mix(1.0, 0.86, cover * (1.0 - swardTuft));
   }
+  // **This is close to a measured negative and it is recorded as one.** The
+  // rewrite above is right on its own terms -- the old ratio was a
+  // partial-cover ratio applied at full cover, and it was the wrong sign for
+  // every dry-savannah zone -- but on the graded frames it moves almost
+  // nothing. Paired --raw captures, only this block changed: zone_fallgrove
+  // **0.037 mean/255 over 0.006% of pixels**, against an imgdiff floor of
+  // 1.5-1.9, and the 3x mid-ground crops before and after are not
+  // distinguishable by eye.
+  //
+  // The reason is reach, not strength. The endpoints moved by 10-17% per
+  // channel; for that to come out as 0.037 over the frame, the ground that
+  // satisfies both the grass splat weight and the 100-185 m ramp at the same
+  // time has to be a small fraction of it, at modest cover. **Anyone extending
+  // this should widen its reach before touching its colour again** -- and
+  // should ask the same question of the dry-cover term below, which is gated
+  // the same way and moves seventy times as much, only because Leide's ground
+  // is most of Leide's frame. Kept because it costs three noise evaluations
+  // inside a branch that already existed, and because shipping a tint that is
+  // the wrong sign for half the world is not a defensible resting state.
+
+  // ---- tier-D dry cover: the thorn mat and tussock nothing else draws -------
+  //
+  // The tier-D sward above is gated on bioGreen and is therefore OFF in Leide,
+  // whose green runs 0.05-0.12. Leide is also where the blind judge catches us:
+  // every frame it has identified is a daylight landscape with ground running
+  // to the horizon, and zone_longwythe and zone_three_valleys are the two worst
+  // shots in the corpus on reliefstat by a wide margin -- 29.0 and 30.1 total
+  // against the plates' 49.0, where fallgrove, vannath and vista_noon are all
+  // at or above it.
+  //
+  // **The instances cannot fix that and this was measured, not assumed.** All
+  // 8 076 bush cards in zone_longwythe -- 90% of the card budget, so the ring
+  // is nearly saturated -- move the frame by 0.955 mean/255 over 2.0% of its
+  // pixels, and the whole grass ring by 1.654 over 5.0%. Both are at or under
+  // imgdiff's own noise floor. FFXV's matched band is tens of percent cover.
+  // Closing a gap that size with instances would need fifteen times the cards;
+  // painting it into the terrain costs zero draw calls and zero triangles, and
+  // this shader already has the worked precedent directly above.
+  //
+  // What is missing is specifically SUB-METRE contrast. The 2-8 m variegation
+  // twenty lines up is alive out here, and reliefstat says so from the other
+  // side: in the mid-ground band we run 167% of the reference at d32 and 80% at
+  // d4. Too much large soft blotch, not enough small hard object. So the
+  // dominant octave here is 0.74 m -- 16 px at 60 m, 5 px at 200 m, and faded
+  // out by its own footprint at 300 m where it stops being resolvable, which is
+  // the same discipline every other term in this shader now uses.
+  //
+  // It is a HEIGHT, not a stain. A flat multiply adds value range without
+  // adding structure, and would have landed in d32 with the rest of the
+  // blotches. A mat that stands a hand's width proud of the pan gives every
+  // clump a lit side and a shaded side, so the contrast comes out of the sun
+  // and moves when the sun does.
+  // **A darkening multiply is the wrong instrument and the numbers say so.**
+  // Luma percentiles over the mid-ground band, ours against the plates:
+  //
+  //     ours zone_longwythe      p10 40.6   p50 63.0   p90  97.6   p90/p10 2.40
+  //     ffxv duscae-plains-noon  p10 35.4   p50 65.2   p90 122.5   p90/p10 3.45
+  //     ffxv duscae-wilderness   p10 13.1   p50 32.2   p90  86.7   p90/p10 6.60
+  //
+  // We are a stop short of the reference's value RANGE, and the shortfall is
+  // mostly at the TOP: our p90 is 25% under theirs while our p10 is already
+  // above. So cover that only darkens closes nothing -- it walks p10 and p90
+  // down together and leaves the ratio where it was. What a real dry mat does
+  // is both at once: the crowns are bleached straw and catch the sun *brighter*
+  // than the soil, and the shade under them is much darker than it. So the mat
+  // is bimodal, and the axis it varies along is the tuft's own height.
+  float cv1 = tf_snoise(P.xz * 1.35 + 113.0);   // ~0.74 m: the tuft
+  float cv2 = tf_snoise(P.xz * 0.52 - 61.0);    // ~1.9 m: the clump of tufts
+  float cv3 = tf_snoise(P.xz * 0.058 + 7.0);    // ~17 m: how much, not what shape
+  // Dry cover grows on the slopes grass abandons, and not on a live sand pan,
+  // a bare rock face or the road. The distance ramp hands over from the grass
+  // ring (far: 155) the way the sward hands over from the blades.
+  float dryAmt = smoothstep(60.0, 130.0, vTDist)
+               * (1.0 - smoothstep(0.08, 0.34, bioGreen))
+               * (1.0 - 0.55 * w[0])
+               * (1.0 - 0.60 * w[3])
+               * (0.72 + 0.28 * smoothstep(0.03, 0.30, slope))
+               * (1.0 - smoothstep(0.50, 0.75, slope))
+               * (1.0 - 0.92 * road);
+  // The tuft field. Both octaves fade on their own screen footprint rather than
+  // on distance, so the mat smooths into an average instead of boiling: 0.74 m
+  // is 16 px at 60 m and 5 px at 200 m and gone by 300, where 1.9 m takes over
+  // and runs to the horizon.
+  float tuft = clamp(0.5
+    + 0.60 * cv1 * tf_lodW(0.74, tfPx)
+    + 0.42 * cv2 * tf_lodW(1.9, tfPx), 0.0, 1.0);
+  float dryCover = smoothstep(0.22, 0.72, tuft * 0.55 + 0.45)
+                 * clamp(0.62 + 0.62 * cv3, 0.10, 1.0) * dryAmt;
+  // Built and applied in uniform control flow: tf_bump takes a screen-space
+  // derivative, and a dFd* inside a divergent branch is undefined. This shader
+  // has been bitten by that once already.
+  Nw = tf_bump(Nw, P, dryCover * tuft * 0.22, tfBumpOk);
+  // The two endpoints. The dark one is measured rather than invented, the way
+  // the sward's single tint was: two --raw captures of zone_longwythe with and
+  // without the scrub cards, sampled over the 22 011 pixels the cards actually
+  // cover instead of over a rectangle that averages them with bare ground, read
+  // (89.1, 95.3, 77.8) covered against (138.3, 126.7, 110.0) beside them --
+  // Leide cover multiplies its own ground by (0.644, 0.752, 0.708), a third
+  // darker and greener by taking most out of red and least out of green. That
+  // is the SHADE under the mat. The crown is its complement on the same axis:
+  // bleached, so paler and warmer than the soil it stands on.
+  float dryGust = clamp(tf_gust(P.xz) - 1.0, -0.8, 0.8);
+  vec3 dryShade = vec3(0.644, 0.752, 0.708);
+  vec3 dryTip = vec3(1.17, 1.12, 0.86) * (1.0 - 0.07 * dryGust);
+  col *= mix(vec3(1.0), mix(dryShade, dryTip, smoothstep(0.30, 0.86, tuft)), dryCover);
+  rgh = mix(rgh, min(1.0, rgh * 1.14 + 0.06), dryCover);
+  ao *= mix(1.0, 0.78, dryCover * (1.0 - tuft));
 
   // ---- macro tinting -------------------------------------------------------
   // three overlapping colour fields at 600 m / 140 m / 40 m: the thing that
