@@ -1,4 +1,4 @@
-import { N, FAR_N } from './Field.ts';
+import { N, FAR_N, HYD_N } from './Field.ts';
 import type { Field } from './Field.ts';
 import { RoadNetwork } from './Road.ts';
 import { LAYER_COUNT } from './Layers.ts';
@@ -33,6 +33,10 @@ export function encodeField(field: Field, meta: BakeMeta = {}, layers: LayerData
     { name: 'far', kind: 'f32planes', n: FAR_N * FAR_N, bytes: encodeF32Planes(field.far) },
     { name: 'ctrl', kind: 'planes8', w: N, h: N, ch: 4, bytes: encodePlanes8(field.ctrl, N, N, 4) },
     { name: 'farCtrl', kind: 'planes8', w: FAR_N, h: FAR_N, ch: 4, bytes: encodePlanes8(field.farCtrl, FAR_N, FAR_N, 4) },
+    // The erosion pass's own outputs, for placement rather than for the splat.
+    // A megabyte raw, and the alternative is re-running 620 000 droplets in the
+    // browser purely to find out where the water went.
+    { name: 'hydro', kind: 'planes8', w: HYD_N, h: HYD_N, ch: 4, bytes: encodePlanes8(field.hydro, HYD_N, HYD_N, 4) },
     { name: 'roadY', kind: 'f32', bytes: new Uint8Array(roadY.buffer) },
   ];
   if (layers) {
@@ -58,13 +62,14 @@ export function applyBakedField(field: Field, buf: Uint8Array) {
   const c = unpackContainer(buf);
   const h = c.section('h'), far = c.section('far');
   const ctrl = c.section('ctrl'), farCtrl = c.section('farCtrl');
-  const roadY = c.section('roadY');
-  if (!h || !far || !ctrl || !farCtrl || !roadY) throw new Error('bake missing a section');
+  const roadY = c.section('roadY'), hydro = c.section('hydro');
+  if (!h || !far || !ctrl || !farCtrl || !roadY || !hydro) throw new Error('bake missing a section');
 
   field.h = decodeF32Planes(h.bytes, sectionField(h, 'n'));
   field.far = decodeF32Planes(far.bytes, sectionField(far, 'n'));
   field.ctrl = decodePlanes8(ctrl.bytes, sectionField(ctrl, 'w'), sectionField(ctrl, 'h'), sectionField(ctrl, 'ch'));
   field.farCtrl = decodePlanes8(farCtrl.bytes, sectionField(farCtrl, 'w'), sectionField(farCtrl, 'h'), sectionField(farCtrl, 'ch'));
+  field.hydro = decodePlanes8(hydro.bytes, sectionField(hydro, 'w'), sectionField(hydro, 'h'), sectionField(hydro, 'ch'));
   field.deriveNormals();
 
   // The road graph rebuilds itself from `WorldMap` for free; only the solved

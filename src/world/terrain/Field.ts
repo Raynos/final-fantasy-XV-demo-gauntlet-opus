@@ -54,6 +54,43 @@ const COARSE_CELL = (HALF * 2) / COARSE;
 const SEA = WORLD.seaLevel;
 
 /**
+ * Resolution of the hydrology grid — the erosion pass's own outputs, kept for
+ * *placement* rather than for the splat. 16 m, deliberately coarser than the
+ * 4 m height grid: a scatterer asks "is there a wash here", not "where exactly
+ * is its thalweg", and 512^2 x 4 bytes is a megabyte instead of sixteen.
+ */
+export const HYD_N = 512;
+export const HYD_CELL = (HALF * 2) / HYD_N;     // 16 m
+
+/**
+ * Write one hydrology channel as its own **percentile among the cells that
+ * have any of it at all**, zero preserved as zero.
+ *
+ * The obvious encoding — divide by the p99.9 and clamp — was written first and
+ * measured wrong. Droplet accumulation is heavy-tailed, so linear normalisation
+ * spent 78% of the byte on the flat majority and squeezed the top percentile,
+ * which is the only part anything places against, into 0.784-1.000. Worse, it
+ * makes every threshold a magic number that has to be re-tuned whenever the
+ * erosion parameters move.
+ *
+ * A rank transform removes both problems and makes the API self-documenting:
+ * `accum > 0.97` means *wetter than 97% of the wet cells*, at any resolution,
+ * under any erosion tuning, forever. Zero has to stay zero because 87% of the
+ * world has no scree at all and ranking those together would spread "none"
+ * across seven eighths of the range.
+ */
+function rankInto(src: Float32Array, dst: Uint8Array, channel: number) {
+  const idx: number[] = [];
+  for (let k = 0; k < src.length; k++) if (src[k] > 0) idx.push(k);
+  idx.sort((a, b) => src[a] - src[b]);
+  const n = idx.length;
+  for (let r = 0; r < n; r++) {
+    // 1..255, so a cell that has *some* of this never rounds down to "none".
+    dst[idx[r] * 4 + channel] = 1 + Math.round((r / Math.max(1, n - 1)) * 254);
+  }
+}
+
+/**
  * Hero landmark anchors, world space — the same names the shot list and the
  * prop scatter have always used, now resolved out of the map instead of being
  * a second, independent set of coordinates.
@@ -78,6 +115,42 @@ export interface Landmark {
  * The four control channels the heightfield bakes per cell, as a CPU sample.
  * The shader reads the same four out of `uCtrlTex`.
  */
+/**
+ * What the erosion pass knows about a point, published for **placement**.
+ *
+ * The splat's `CtrlSample.flow` is not this and cannot substitute for it.
+ * That channel is blurred by a five-tap cross and then log-normalised so a
+ * *shader* can paint a wet-looking ground, and both steps are right for a
+ * colour and fatal for a scatterer. Measured over 65 536 samples of the built
+ * field: raw droplet accumulation is **exactly zero on 31.5%** of the world —
+ * the interfluves, where no droplet ever ran — with p50 1.92, p99 26.2 and a
+ * maximum of 51.4, which is a channel network with a heavy tail. After the
+ * blur and the log, `ctrl.r` is exactly zero on only **10.3%**, its median is
+ * 0.173, and **46.4% of the world sits above 0.2**. Keying stone bars off it
+ * would bar half of Eos.
+ *
+ * So `accum` here is the *raw* accumulation, reduced to 16 m by **maximum**
+ * rather than by mean — a wash is one or two 4 m cells wide, and averaging it
+ * into a 16 m cell is precisely the smear measured above — and then ranked
+ * rather than scaled, so a threshold on it means a share of the world rather
+ * than a share of one bake's dynamic range. See {@link rankInto}.
+ */
+export interface ErosionSample {
+  /** 0..1 raw droplet accumulation, normalised against its own p99.9. */
+  accum: number;
+  /** 0..1 sediment dropped by the droplets — the fans and the flats. */
+  deposit: number;
+  /** 0..1 loose material the talus pass moved into place — scree aprons. */
+  scree: number;
+  /** 0..1 how much standing water this point sees: accumulation plus basin. */
+  wet: number;
+  /** 0..1 bare-rock bias, as the splat sees it. */
+  rock: number;
+  /** Unit steepest-descent direction, computed live off the height gradient. */
+  flowX: number;
+  flowZ: number;
+}
+
 export interface CtrlSample {
   /** 0..1 water flow accumulation — gullies and washes. */
   flow: number;
@@ -169,6 +242,8 @@ export class Field {
   farNrm!: Uint16Array;
   flow!: Float32Array | null;
   h!: Float32Array;
+  /** 16 m RGBA8 hydrology for placement — see {@link ErosionSample}. */
+  hydro!: Uint8Array;
   lastTerrace!: number;
   map!: WorldMap;
   massRaise!: Float32Array;
@@ -181,6 +256,8 @@ export class Field {
   roadMask!: Float32Array | null;
   /** The main highway as one spline. `Terrain.road` is this. */
   roadSpline!: HighwaySpine | null;
+  /** Metres the talus pass moved into each cell. Freed by `_derive`. */
+  screeD!: Float32Array | null;
   sed!: Float32Array | null;
   slope0!: Float32Array | null;
   stats!: FieldStats;
@@ -216,7 +293,16 @@ export class Field {
     this._stitchFar();
     const t3 = performance.now();
     this._erode();
+    // Snapshot before the talus pass so the scree channel can be *measured*
+    // rather than inferred from slope: what makes an apron is material that
+    // actually arrived, and the relaxation is the only thing that moves it.
+    const preTalus = this.h.slice();
     this._talus();
+    this.screeD = new Float32Array(N * N);
+    for (let k = 0; k < N * N; k++) {
+      const d = this.h[k] - preTalus[k];
+      this.screeD[k] = d > 0 ? d : 0;
+    }
     this._outcrops();
     this._stitchFar();
     const t4 = performance.now();
@@ -1505,8 +1591,108 @@ export class Field {
       }
     }
 
+    this._hydrology();
+
     this.flow = null; this.sed = null; this._coarse = null;
+    this.screeD = null;
     this.roadLat = null; this.roadMask = null; this.slope0 = null;
+  }
+
+  /**
+   * Reduce the erosion pass's own grids to the 16 m hydrology map that survives
+   * `_derive`.
+   *
+   * **Why this exists at all.** Every one of `flow`, `sed` and `screeD` is
+   * thrown away three lines below, and until now the *only* consumer of any of
+   * them was the splat's control texture. So the world's water knew where it
+   * had run and nothing that places an object could ask. Boulder trains,
+   * debris fining downstream, reeds on wetness and stone bars on raw
+   * accumulation are all the same missing lookup.
+   *
+   * **Reduction is by maximum, not by mean.** A wash is one or two 4 m cells
+   * across; a 4x4 mean is the same low-pass that turned a network covering
+   * 68.5% of cells into a haze covering 89.7% (see {@link ErosionSample}).
+   * The maximum answers the question a scatterer actually asks — *is there a
+   * channel in this 16 m cell* — and answers it the same way at any budget.
+   *
+   * **Normalised against p99.9, not the maximum.** The maximum is one cell in
+   * four million and normalising to it puts the whole distribution in the
+   * bottom fifth of the byte.
+   */
+  _hydrology() {
+    const R = N / HYD_N;                                   // 4 source cells per hydro cell
+    const acc = new Float32Array(HYD_N * HYD_N);
+    const dep = new Float32Array(HYD_N * HYD_N);
+    const scr = new Float32Array(HYD_N * HYD_N);
+    const hgt = new Float32Array(HYD_N * HYD_N);
+    const flow = this.flow!, sed = this.sed!, screeD = this.screeD!, h = this.h;
+
+    for (let hj = 0; hj < HYD_N; hj++) {
+      for (let hi = 0; hi < HYD_N; hi++) {
+        let a = 0, d = 0, s = 0, hs = 0;
+        for (let dj = 0; dj < R; dj++) {
+          const row = (hj * R + dj) * N + hi * R;
+          for (let di = 0; di < R; di++) {
+            const k = row + di;
+            if (flow[k] > a) a = flow[k];
+            if (sed[k] > d) d = sed[k];
+            if (screeD[k] > s) s = screeD[k];
+            hs += h[k];
+          }
+        }
+        const o = hj * HYD_N + hi;
+        acc[o] = a; dep[o] = d; scr[o] = s; hgt[o] = hs / (R * R);
+      }
+    }
+    let aMax = 0;
+    for (let k = 0; k < acc.length; k++) if (acc[k] > aMax) aMax = acc[k];
+
+    // Local relief over a 10-cell (160 m) box: a point well below its own
+    // neighbourhood holds water whether or not a droplet ran through it, which
+    // is what separates a marsh from a wash.
+    const B = 10;
+    const basin = new Float32Array(HYD_N * HYD_N);
+    for (let j = 0; j < HYD_N; j++) {
+      for (let i = 0; i < HYD_N; i++) {
+        let sum = 0, n = 0;
+        for (let dj = -B; dj <= B; dj += 2) {
+          const jj = j + dj; if (jj < 0 || jj >= HYD_N) continue;
+          for (let di = -B; di <= B; di += 2) {
+            const ii = i + di; if (ii < 0 || ii >= HYD_N) continue;
+            sum += hgt[jj * HYD_N + ii]; n++;
+          }
+        }
+        const d = sum / n - hgt[j * HYD_N + i];
+        basin[j * HYD_N + i] = d > 0 ? d : 0;
+      }
+    }
+
+    // Wetness before ranking: the water that ran through plus the water that
+    // could not leave. Both terms are raw here — ranking is what gives them a
+    // scale, and ranking a sum is not the same as summing two ranks.
+    const wet = new Float32Array(HYD_N * HYD_N);
+    for (let k = 0; k < wet.length; k++) wet[k] = acc[k] / (aMax || 1) + basin[k] / 18;
+
+    this.hydro = new Uint8Array(HYD_N * HYD_N * 4);
+    const ch = [acc, dep, scr, wet];
+    for (let c = 0; c < 4; c++) rankInto(ch[c], this.hydro, c);
+
+    // The instrument reports on a case whose answer is known before anything
+    // trusts it. A percentile channel must have a median near 0.5 *among the
+    // cells that have any of it at all* — that is what the transform means, so
+    // a failure here is a bug in the transform and not an opinion about the
+    // terrain. It caught the first version of this function, whose `wet` sat at
+    // p90 = 0.965 because two clamped terms were added and then clamped again.
+    for (let c = 0; c < 4; c++) {
+      const nz: number[] = [];
+      for (let k = 0; k < HYD_N * HYD_N; k++) { const v = this.hydro[k * 4 + c]; if (v > 0) nz.push(v); }
+      if (!nz.length) throw new Error(`hydrology: channel ${c} is empty`);
+      nz.sort((p, q) => p - q);
+      const med = nz[nz.length >> 1] / 255;
+      if (med < 0.35 || med > 0.65) {
+        throw new Error(`hydrology: channel ${c} median ${med.toFixed(3)} is not a percentile`);
+      }
+    }
   }
 
   // -------------------------------------------------------------- public API
@@ -1542,6 +1728,36 @@ export class Field {
   }
 
   /** Bilinear control sample: { flow, sediment, road, rocky }. */
+  /**
+   * Bilinear sample of the 16 m hydrology map.
+   *
+   * Bilinear and not nearest: the grid is coarse enough that a nearest read
+   * puts a visible 16 m staircase into anything that thresholds on it, and a
+   * scatterer thresholding on a staircase places its objects in squares.
+   * `rock` and the flow direction are **not** stored — `rock` comes from the
+   * splat control map and the direction from the height gradient, both of
+   * which are already exact at 4 m.
+   */
+  hydroAt(x: number, z: number, out: ErosionSample): ErosionSample {
+    const fx = (x + HALF) / HYD_CELL - 0.5, fz = (z + HALF) / HYD_CELL - 0.5;
+    let i0 = Math.floor(fx), j0 = Math.floor(fz);
+    const tx = fx - i0, tz = fz - j0;
+    if (i0 < 0) i0 = 0; else if (i0 > HYD_N - 2) i0 = HYD_N - 2;
+    if (j0 < 0) j0 = 0; else if (j0 > HYD_N - 2) j0 = HYD_N - 2;
+    const hy = this.hydro;
+    const o00 = (j0 * HYD_N + i0) * 4, o10 = o00 + 4;
+    const o01 = ((j0 + 1) * HYD_N + i0) * 4, o11 = o01 + 4;
+    const w00 = (1 - tx) * (1 - tz), w10 = tx * (1 - tz);
+    const w01 = (1 - tx) * tz, w11 = tx * tz;
+    const ch = (c: number) => (hy[o00 + c] * w00 + hy[o10 + c] * w10
+      + hy[o01 + c] * w01 + hy[o11 + c] * w11) / 255;
+    out.accum = ch(0);
+    out.deposit = ch(1);
+    out.scree = ch(2);
+    out.wet = ch(3);
+    return out;
+  }
+
   ctrlAt(x: number, z: number, out: CtrlSample = { flow: 0, sediment: 0, road: 0, rocky: 0 }): CtrlSample {
     const q = Math.abs(x) > Math.abs(z) ? Math.abs(x) : Math.abs(z);
     const arr = q >= BLEND_OUT ? this.farCtrl : this.ctrl;

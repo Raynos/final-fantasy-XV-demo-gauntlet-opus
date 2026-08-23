@@ -15,6 +15,7 @@
  *   h        2048^2 float heights   -> lossless float byte planes    ~12 MB gz
  *   far      1024^2 float heights   -> same                           ~3 MB gz
  *   ctrl     2048^2 RGBA8 splat     -> de-interleaved planes         ~7.6 MB gz
+ *   hydro    512^2  RGBA8 hydrology -> same                          ~0.2 MB gz
  *   farCtrl  1024^2 RGBA8 splat     -> same                          ~1.3 MB gz
  *   road     solved centreline elevations -> raw floats                ~5 kB
  *
@@ -26,7 +27,7 @@
 
 export const MAGIC = 'EOSFLD01';
 /** Bump when the encoding or the generator's output contract changes. */
-export const BAKE_VERSION = 3;
+export const BAKE_VERSION = 4;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

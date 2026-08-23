@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   Field, LANDMARKS, gnoise2, microDetail, N, HALF, CELL, FAR_N, FAR_HALF, FAR_CELL, BLEND_OUT,
 } from './terrain/Field.ts';
+import type { ErosionSample } from './terrain/Field.ts';
 import { Clipmap } from './terrain/Clipmap.ts';
 import type { ClipmapRing } from './terrain/Clipmap.ts';
 import { loadBaked } from './terrain/FieldBake.ts';
@@ -547,6 +548,43 @@ export class Terrain implements Ground {
   slopeAt(x: number, z: number) {
     const n = this.normalAt(x, z, this._v);
     return 1 - n.y;
+  }
+
+  /**
+   * What the erosion pass knows about this point — the placement API.
+   *
+   * 620 000 droplets run at bake time and write down where the water went,
+   * what it dropped and what fell off the cliffs afterwards. Until this
+   * existed the **only** consumer of any of it was the splat's control
+   * texture, and everything that places an object — boulders, debris, reeds,
+   * scree — guessed from slope and noise instead. Placement keyed on this is
+   * what makes material, plants and props agree about where water went, which
+   * is the difference between a world that reads composed and one that reads
+   * scattered.
+   *
+   * **Do not substitute `sampleMaterial().flow` for `accum`.** That channel is
+   * blurred and log-normalised for a shader; the numbers are in
+   * {@link ErosionSample} and they say it covers 46% of the world above 0.2
+   * where the raw field is *exactly zero* on 31.5%.
+   *
+   * `flowX`/`flowZ` are the unit steepest-descent direction at 4 m, taken live
+   * off the height gradient rather than stored — that is what a boulder train
+   * walks down. It is `(0, 0)` on genuinely flat ground.
+   *
+   * @param out reused scratch; the returned object is `out`
+   */
+  erosionAt(x: number, z: number, out: ErosionSample = {
+    accum: 0, deposit: 0, scree: 0, wet: 0, rock: 0, flowX: 0, flowZ: 0,
+  }): ErosionSample {
+    this.field.hydroAt(x, z, out);
+    out.rock = this.field.ctrlAt(x, z, this._ctrl).rocky;
+    const f = this.field;
+    const e = CELL;
+    const gx = f.rawHeightAt(x + e, z) - f.rawHeightAt(x - e, z);
+    const gz = f.rawHeightAt(x, z + e) - f.rawHeightAt(x, z - e);
+    const m = Math.hypot(gx, gz);
+    if (m < 1e-5) { out.flowX = 0; out.flowZ = 0; } else { out.flowX = -gx / m; out.flowZ = -gz / m; }
+    return out;
   }
 
   /**
