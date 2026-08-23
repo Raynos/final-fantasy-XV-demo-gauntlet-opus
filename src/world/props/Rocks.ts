@@ -26,6 +26,9 @@ import type { Ecology } from '../veg/Ecology.ts';
  * spaced ellipsoids read as a particle system.
  */
 
+/** Clamp an axis-jitter multiplier away from zero and from absurdity. */
+const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
+
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -720,8 +723,24 @@ export class Rocks {
     // its own width and reads as floating. Steep ground gets talus, not
     // boulders — which is also what a real scree slope looks like.
     const steep = THREE.MathUtils.clamp((1 - nrm.y - 0.16) / 0.4, 0, 1);
+    // A boulder field's size distribution has a long tail, and this one did
+    // not: `size` spans [2.2, 6.0] for granite with `t = u^1.65` on top, so
+    // the median stone sat near the bottom of the band and *every* boulder in
+    // a frame came out within a factor of two of every other one. That is a
+    // large part of what "the same few instances repeated" is actually seeing
+    // -- not the mesh, the size class. A real field has erratics in it that
+    // are landmarks, and one 12 m block does more for a middle distance than
+    // fifty 3 m ones.
+    //
+    // Drawn from a position hash rather than `rng` so the boulder field does
+    // not re-scatter (same rule as `Trees.barkTone`), and restricted to the
+    // {@link BIG} kinds: a pebble at 2.4x is still a pebble, and the small
+    // kinds are what fill the near field where a wrong seat shows.
+    const grand = BIG.has(kind.key)
+      ? 1 + Math.max(0, hash3(x * 32 | 0, z * 32 | 0, 0x5ce3) / 4294967296 - 0.90) * 12
+      : 1;
     const size = (kind.size[0] + (kind.size[1] - kind.size[0]) * t * (0.6 + w * 0.7))
-      * (BIG.has(kind.key) ? dress.rockS : 1) * (1 - steep * 0.62);
+      * (BIG.has(kind.key) ? dress.rockS : 1) * (1 - steep * 0.62) * grand;
     const settle = THREE.MathUtils.clamp(1 - size / 5, 0.18, 1);
     // The instance tint multiplies a deliberately dark base material, so the
     // old 0.7..1.04 range rendered every boulder past a hundred metres as a
@@ -738,7 +757,22 @@ export class Rocks {
       k: kind.key, x, z, y: seatY(this.eco, x, z, kind.size[1], CULL[kind.key]),
       nx: nrm.x, ny: nrm.y, nz: nrm.z,
       s: size,
-      sx: 1 + rng.gauss(0, 0.16), sy: 1 + rng.gauss(0, 0.13), sz: 1 + rng.gauss(0, 0.16),
+      // Per-axis jitter, roughly doubled. This is the free half of the shape
+      // question: the instance matrix's linear part is `R * S` with `S`
+      // diagonal, which three's instanced normal path handles *exactly* (it
+      // divides by the column square-lengths, which is the correct
+      // inverse-transpose for a rotation times an axis scale), so anisotropy
+      // here costs nothing and is not an approximation. A shear would be.
+      //
+      // The expensive half -- three real fracture patterns per kind instead of
+      // one -- was built and measured and is not worth it. See
+      // `project/handoff/variety.md`: +104 draw calls on `zone_three_valleys`
+      // for a 1.077/255 mean difference, i.e. under `imgdiff`'s own noise
+      // floor. What reads at these distances is size class and proportion,
+      // not the fracture.
+      sx: _sc(1 + rng.gauss(0, 0.30)),
+      sy: _sc(1 + rng.gauss(0, 0.24)),
+      sz: _sc(1 + rng.gauss(0, 0.30)),
       yaw: rng.next() * Math.PI * 2,
       pitch: rng.gauss(0, 0.3) * settle, roll: rng.gauss(0, 0.3) * settle,
       bury: kind.bury * rng.range(0.7, 1.5),
