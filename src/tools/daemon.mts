@@ -236,7 +236,20 @@ export interface EvalRequest extends PageOpts { fn: string; arg?: unknown }
 export interface EvalResponse extends Counters { value: unknown }
 
 /** `POST /lease` -- a play tool takes the whole page over CDP. */
-export interface LeaseRequest extends PageOpts { ttlMs?: number }
+export interface LeaseRequest extends PageOpts {
+  ttlMs?: number;
+  /**
+   * A page with no game in it.
+   *
+   * Six tools -- `sheet`, `corpus`, `compare`, `imagestats`, `reliefstat`,
+   * `shrink` -- use a browser purely as an image and HTML renderer: contact
+   * sheets, canvas re-encodes, luminance histograms. They still need a browser,
+   * so they still spend GPU and RSS, so they still belong under the budget. But
+   * booting the game for them would be absurd, and navigating a *game* page to
+   * a `file://` URL would silently poison the pool.
+   */
+  blank?: boolean;
+}
 export interface LeaseResponse extends Counters {
   id: string;
   cdp: string;
@@ -795,9 +808,15 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
   if (isDirty(build.id)) build.stamp = build.currentStamp();
 
   if (slot.page) { await slot.page.close().catch(() => {}); slot.page = null; }
+  // EXACTLY ONE PAGE PER CONTEXT, always. A leased play tool finds its page by
+  // asking the CDP connection what pages exist, so a context that has quietly
+  // accumulated a second one hands the tool a page nobody booted -- which fails
+  // as a timeout waiting for `GAME.ready` on a blank tab, thirty seconds away
+  // from anything that names the real cause.
+  for (const stray of slot.ctx.pages().slice(1)) await stray.close().catch(() => {});
   // A persistent context fixes its viewport at launch, so a later request for a
   // different size has to resize rather than ask for it up front.
-  const page = slot.ctx.pages()[0]?.url() === 'about:blank' ? slot.ctx.pages()[0] : await slot.ctx.newPage();
+  const page = slot.ctx.pages()[0] ?? await slot.ctx.newPage();
   await page.setViewportSize({ width: w, height: h });
   page.on('pageerror', (e: Error) => slot.errors.push(String(e)));
   page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') slot.errors.push(m.text()); });
@@ -965,20 +984,57 @@ async function routeEval(body: EvalRequest): Promise<EvalResponse> {
  * and the tool keeps full Playwright control of the page. That division is the
  * only reason those eight tools can stop launching their own browsers.
  */
-const leases = new Map<string, { slot: Slot, build: Build, timer: NodeJS.Timeout }>();
+const leases = new Map<string, { slot: Slot, build: Build | null, timer: NodeJS.Timeout }>();
 
 async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
   lastUsed = Date.now();
+  const { w = 1600, h = 900, cold = false, ttlMs = 15 * 60_000, blank = false } = body;
+
+  if (blank) {
+    // No build, no server, no boot -- but a real slot, so an image tool still
+    // counts against the same budget as a capture. That is the point: the
+    // reason to route these through the daemon at all is that six more
+    // uncounted chromiums is six more uncounted chromiums.
+    const slot = await pool.lease(`blank|${w}x${h}`, w, h, cold);
+    try {
+      if (!slot.page) {
+        for (const stray of slot.ctx.pages().slice(1)) await stray.close().catch(() => {});
+        const page = slot.ctx.pages()[0] ?? await slot.ctx.newPage();
+        await page.setViewportSize({ width: w, height: h });
+        await page.goto('about:blank');
+        slot.page = page;
+        slot.key = `blank|${w}x${h}`;
+        slot.build = null;
+        slot.viewport = { w, h };
+      }
+      const id = newLeaseId();
+      leases.set(id, { slot, build: null, timer: setTimeout(() => { void releaseLease(id); }, ttlMs) });
+      return {
+        id,
+        cdp: `http://127.0.0.1:${slot.cdpPort}`,
+        url: 'about:blank',
+        appPort: 0,
+        errors: [...slot.errors],
+        boots: pool.boots,
+        reuses: pool.reuses,
+        build: 'blank',
+        dirty: false,
+      };
+    } catch (e) {
+      await pool.recycle(slot);
+      throw e;
+    }
+  }
+
   const buildId = body.build ?? (DIRTY_PREFIX + ROOT);
   const build = await store.acquire(buildId);
-  const { w = 1600, h = 900, cold = false, ttlMs = 15 * 60_000 } = body;
   const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body)), w, h, cold);
   try {
     // The page is booted here so the caller connects to something ready, and so
     // a boot failure is the daemon's problem rather than arriving as a mystery
     // on the far side of a CDP socket.
     await preparePage(slot, build, body);
-    const id = createHash('sha1').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 10);
+    const id = newLeaseId();
     const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
     leases.set(id, { slot, build, timer });
     return {
@@ -994,12 +1050,22 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
   }
 }
 
+const newLeaseId = () => createHash('sha1').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 10);
+
 async function releaseLease(id: string): Promise<void> {
   const l = leases.get(id);
   if (!l) return;
   clearTimeout(l.timer);
   leases.delete(id);
-  await resetPage(l.slot.page).catch(async () => { await pool.recycle(l.slot); });
+  if (!l.build) {
+    // A blank page has been driven somewhere arbitrary -- a file:// contact
+    // sheet, a data: URI, an OffscreenCanvas full of somebody's frame. Sending
+    // it back to about:blank is the whole reset; there is no game state to
+    // lose, and keeping the browser is what makes the next image tool free.
+    await l.slot.page?.goto('about:blank').catch(() => {});
+  } else {
+    await resetPage(l.slot.page).catch(async () => { await pool.recycle(l.slot); });
+  }
   if (pool.slots.includes(l.slot)) pool.release(l.slot);
 }
 
