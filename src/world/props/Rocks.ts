@@ -118,7 +118,7 @@ export interface Corestone {
  * @param overlap vertical course overlap, fraction of the two half-heights
  * @returns the blocks, base first
  */
-export function corestones(rng: Rng, n: number, overlap = 0.30): Corestone[] {
+export function corestones(rng: Rng, n: number, overlap = 0.38): Corestone[] {
   const out: Corestone[] = [];
   // The base course is smaller than the block it replaces: three quarters of
   // the radius stacked three high is already a taller and much busier object
@@ -137,7 +137,7 @@ export function corestones(rng: Rng, n: number, overlap = 0.30): Corestone[] {
   let ax = rng.gauss(0, 0.09), az = rng.gauss(0, 0.09);
   for (let i = 0; i < n; i++) {
     const s = s0 * (1 - i * taper) * rng.range(0.88, 1.12);
-    const sy = rng.range(0.60, 0.92);
+    const sy = rng.range(0.52, 1.00);
     out.push({
       dx: THREE.MathUtils.clamp(ax, -lean, lean) * s,
       dz: THREE.MathUtils.clamp(az, -lean, lean) * s,
@@ -1126,7 +1126,7 @@ export class Rocks {
    * @param it the anchor, already placed and seated
    * @param out the streamed cell's instance list
    */
-  _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.30) {
+  _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.38) {
     const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
     const s0 = it.s;
     const cs = corestones(rng, n);
