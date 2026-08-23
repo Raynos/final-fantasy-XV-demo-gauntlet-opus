@@ -273,6 +273,49 @@ export class Game {
   stop() { this._running = false; cancelAnimationFrame(this._raf); }
 
   /**
+   * Put the page back where a fresh load leaves it, without reloading it.
+   *
+   * This is the contract the capture daemon's page reuse rests on. Measured
+   * (`project/journal/2026-08-23-harness-bench.md`): a soft reset plus a repose
+   * is **1.97 s against an 11.1 s reload**, and 2.00 s against 10.9 s even from
+   * a dungeon interior — the lighting-changing case that was expected to invert
+   * the result, because RESCUE recorded 43 shader recompiles and a 9.5 s freeze
+   * from toggling one light. Leaving a dungeon costs 6 recompiles, not 43.
+   *
+   * THE SPEED IS NOT THE RISK. A reset that leaves formation, dungeon lighting,
+   * weather or a toast behind produces frames that are *plausible and wrong*,
+   * which is the most expensive kind — nothing looks broken, so the difference
+   * gets attributed to whatever code changed. Under a shared daemon that state
+   * crosses *agents*, where it is invisible and unattributable. So the daemon
+   * checks this claim rather than trusting it: `checkResetDrift` poses a
+   * `follow` shot on a reset page and byte-compares it against the fresh-boot
+   * frame, once per build, because RESCUE §B1 says all 47 `follow` shots are
+   * order-dependent and they are therefore the ones with something to say.
+   *
+   * Order matters. The dungeon is left FIRST, because leaving restores the
+   * exterior lighting rig that everything after it renders under; the clock is
+   * zeroed BEFORE the systems reset, so anything that stamps `time.now` (the
+   * HUD's banter timer does) stamps zero.
+   */
+  reset() {
+    this.stop();
+    // `instant`, or the leave animates over frames nobody is going to step.
+    const dungeons = this.get('Dungeons');
+    if (dungeons && dungeons.isInside) dungeons.leave({ instant: true });
+    this.resetClock();
+    this.currentShot = null;
+    this.get('Party')?.snap();
+    this.get('Story')?.applyShot(null);
+    this.get('Menus')?.setScreen('main');
+    this.get('HUD')?.resetDemo();
+    for (const s of this.systems) if (s !== dungeons && s.reset) s.reset();
+    // The loading screen is removed rather than faded: the transition needs
+    // frames, and a page whose render loop has just been stopped is not
+    // guaranteed to get them.
+    document.getElementById('boot')?.remove();
+  }
+
+  /**
    * Put the world into a named, reproducible state (see Shots.ts) and lock the
    * camera. Used by src/tools/shoot.mts and by photo mode.
    */

@@ -27,4 +27,18 @@ export interface System {
    * order- and machine-dependent until it is told to converge.
    */
   converge?(): void;
+  /**
+   * Return to the state a fresh boot leaves this system in.
+   *
+   * Called from `Game.reset()`, which is what lets the capture daemon reuse a
+   * booted page instead of reloading it -- 1.97 s against 11.1 s, measured. The
+   * bar is higher than it looks: whatever this leaves behind will silently
+   * appear in some other agent's capture, so a system that carries state across
+   * shots (formation, weather, quest flags, a toast) either implements this or
+   * is a source of frames that are plausible and wrong.
+   *
+   * `resetClock` is called BEFORE this, so anything stamping `time.now` stamps
+   * zero.
+   */
+  reset?(): void;
 }

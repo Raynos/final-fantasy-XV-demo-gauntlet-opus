@@ -1241,8 +1241,32 @@ async function releaseLease(id: string): Promise<void> {
  * carries it across agents, where it is invisible and unattributable. A
  * drifting reset is a lying reset.
  */
+const driftChecked = new Set<string>();
+
+/**
+ * Run the drift check once per build, in the background, on the sweep lane.
+ *
+ * Automatic rather than opt-in because the failure it catches is silent: a
+ * reset that leaves state behind produces frames that look right. Background
+ * and sweep-laned because it costs three captures, and the agent whose request
+ * triggered it must not pay for them.
+ */
+function scheduleDriftCheck(build: BuildId) {
+  if (driftChecked.has(build)) return;
+  driftChecked.add(build);
+  resetDrift[shortBuild(build)] = 'checking';
+  void sched.submit('sweep', 'daemon', 'drift', 0, () => checkResetDrift(build))
+    .then((v) => {
+      if (!v.startsWith('byte-identical')) console.log(`[daemon] reset drift on ${shortBuild(build)}: ${v}`);
+    })
+    .catch(() => { /* recorded in resetDrift */ });
+}
+
 async function checkResetDrift(build: BuildId, shot = 'party_walk'): Promise<string> {
   const shoot = async (cold: boolean) => {
+    // Called from inside a worker, so these go straight to `routeShots` rather
+    // than back through `sched.submit` -- re-queueing from a worker is how a
+    // scheduler deadlocks against its own worker count.
     const out = await routeShots({
       shots: [shot], out: path.join(repoCacheDir(KEY), 'drift', cold ? 'cold' : 'warm'),
       build, cold, agent: 'daemon', lane: 'sweep',
@@ -1336,7 +1360,11 @@ async function serve() {
           if (!isShotsRequest(body)) {
             return send(400, { error: '/shots needs { shots: string[], out: string }' });
           }
-          return send(200, await queued('shots', () => routeShots(body)));
+          {
+            const out = await queued('shots', () => routeShots(body));
+            scheduleDriftCheck(body.build ?? (DIRTY_PREFIX + ROOT));
+            return send(200, out);
+          }
         }
         if (url === '/eval') {
           if (!isEvalRequest(body)) return send(400, { error: '/eval needs { fn: string }' });
