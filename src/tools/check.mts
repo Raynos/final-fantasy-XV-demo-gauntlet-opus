@@ -68,6 +68,10 @@ const GATES: Gate[] = [
   // meshes sharing one silhouette, not on the debt recorded in
   // `project/silhouette-baseline.json`.
   { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes' },
+  // Winding, orientation and attribute asserts over every generator bare Node
+  // can build. Five controls with known answers run first and the tool exits
+  // VOID rather than PASS if any comes back wrong.
+  { name: 'geocheck', script: 'geocheck.mts', expect: '0 non-finite, 0 bad indices, no new edge-parity imbalance' },
   // Bare Node too, but it builds the field, so ~20 s. Two claims in
   // `Terrain.erosionAt`'s contract -- every channel is a percentile, and the
   // hot cells form a network rather than a haze -- each against its own
