@@ -9,6 +9,8 @@ import { Noise } from '../util/Noise.ts';
 import { makeTexture, normalFromHeight } from '../util/TextureGen.ts';
 import { buildShoreRibbon, type ShoreStats } from './water/Shore.ts';
 import { makeShoreMaterial, type ShoreUniforms } from './water/ShoreMaterial.ts';
+import { buildRivers, type RiverStats } from './water/River.ts';
+import { makeRiverWaterMaterial, makeRiverBankMaterial, type RiverUniforms } from './water/RiverMaterial.ts';
 import type { Game } from '../game/Game.ts';
 
 /**
@@ -128,6 +130,11 @@ export class Water {
   shoreStats!: ShoreStats | null;
   /** Tiling two-channel noise the swash reads. */
   shoreNoise!: THREE.DataTexture;
+  /** The rivers (plan 6.2): one mesh for the water, one for both banks. */
+  riverWater!: THREE.Mesh | null;
+  riverBank!: THREE.Mesh | null;
+  riverMats!: THREE.ShaderMaterial[];
+  riverStats!: RiverStats | null;
   constructor() {
     this.level = -6.5;          // world Y of the water plane
     this.bodies = [];
@@ -144,6 +151,10 @@ export class Water {
     this.shore = null;
     this.shoreMat = null;
     this.shoreStats = null;
+    this.riverWater = null;
+    this.riverBank = null;
+    this.riverMats = [];
+    this.riverStats = null;
   }
 
   async init(game: Game) {
@@ -164,6 +175,41 @@ export class Water {
     this.enabled = this.bodies.length > 0;
     if (this.enabled) this._collectReflectRoots(game);
     if (this.enabled) this._buildShore(game, terrain);
+    this._buildRivers(game, terrain);
+  }
+
+  /**
+   * Trace the drainage and lay river strips in the channels 4.2 cut (plan 6.2).
+   *
+   * Two meshes and two draw calls for every river in the world: the water
+   * surface, and both banks merged into one decal. Neither casts a shadow --
+   * a river's shadow is the gorge it is in.
+   */
+  _buildRivers(game: Game, terrain: Terrain) {
+    const built = buildRivers(terrain, { level: this.level, half: (terrain.size || 8192) * 0.5 });
+    this.riverStats = built.stats;
+    if (built.water) {
+      const mat = makeRiverWaterMaterial(this.shoreNoise);
+      const mesh = new THREE.Mesh(built.water, mat);
+      mesh.name = 'riverWater';
+      mesh.renderOrder = 4;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      game.scene.add(mesh);
+      this.riverWater = mesh;
+      this.riverMats.push(mat);
+    }
+    if (built.bank) {
+      const mat = makeRiverBankMaterial(this.shoreNoise);
+      const mesh = new THREE.Mesh(built.bank, mat);
+      mesh.name = 'riverBank';
+      mesh.renderOrder = 3;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      game.scene.add(mesh);
+      this.riverBank = mesh;
+      this.riverMats.push(mat);
+    }
   }
 
   /**
@@ -693,6 +739,16 @@ export class Water {
         s.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
       }
       if (sky && sky.ambient) s.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
+    }
+    for (const m of this.riverMats) {
+      const r = m.uniforms as RiverUniforms;
+      r.uTime.value = game.time.now;
+      r.uCameraPos.value.copy(cam.position);
+      if (sky && sky.sun) {
+        r.uSunDir.value.copy(sky.sun.position).normalize();
+        r.uSunColor.value.copy(sky.sun.color).multiplyScalar(Math.min(2, sky.sun.intensity));
+      }
+      if (sky && sky.ambient) r.uAmbient.value.copy(sky.ambient.color).multiplyScalar(sky.ambient.intensity);
     }
   }
 
