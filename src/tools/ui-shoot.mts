@@ -15,10 +15,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort } from './portowner.mts';
+import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = Number(process.env.PORT || 5173);
+const PORT = resolvePort(5173, ROOT);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 /** name -> { shot, settle, after: source of a function body run in the page } */

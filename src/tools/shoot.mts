@@ -47,7 +47,7 @@
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import { call, ensureDaemon } from './daemon.mts';
-import { assertOwnPort } from './portowner.mts';
+import { assertOwnPort, resolvePort } from './portowner.mts';
 import type { ShotResult, ShotsResponse } from './daemon.mts';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -56,7 +56,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = Number(process.env.PORT || 5173);
+const PORT = resolvePort(5173, ROOT);
 const URL_BASE = `http://127.0.0.1:${PORT}`;
 
 /** Everything the command line can set. */

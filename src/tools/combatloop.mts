@@ -18,10 +18,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import type { DownedState } from '../game/encounters/Downed.ts';
-import { assertOwnPort } from './portowner.mts';
+import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = Number(process.env.PORT || 5199);
+const PORT = resolvePort(5199, ROOT);
 
 const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');

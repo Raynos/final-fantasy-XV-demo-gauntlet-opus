@@ -30,10 +30,10 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assertOwnPort } from './portowner.mts';
+import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = Number(process.env.PORT || 5173);
+const PORT = resolvePort(5173, ROOT);
 
 const portOpen = (p: number) => new Promise<boolean>((res) => {
   const s = net.connect(p, '127.0.0.1');

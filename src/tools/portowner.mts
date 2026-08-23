@@ -68,3 +68,34 @@ export function assertOwnPort(port: number, root: string): void {
     + 'capture daemon takes PORT+1), or stop the other server.'
   );
 }
+
+/**
+ * A port this tool may use: the preferred one if it is free or already ours,
+ * otherwise the next such port upward.
+ *
+ * An explicit `PORT` in the environment always wins — that is a human or a
+ * harness making a deliberate choice, and `assertOwnPort` will still refuse it
+ * if it belongs to somebody else. This only decides the *default*.
+ *
+ * It exists because the defaults were hand-picked per tool (5173, 5178, 5199,
+ * 5299, 5321) at a time when one checkout ran one tool. With agents in parallel
+ * worktrees those are just five more numbers that can collide, and one did:
+ * `combatloop`'s 5199 was held by a co-agent, so the gate refused to reuse a
+ * foreign tree — correctly — and `npm run check` reported a combat regression
+ * that did not exist. The refusal was right; the fixed number was the bug.
+ *
+ * Synchronous on purpose: every caller uses it in a module-level `const`.
+ *
+ * @param preferred the tool's historical default
+ * @param root this tool's repository root
+ */
+export function resolvePort(preferred: number, root: string): number {
+  const env = Number(process.env.PORT);
+  if (env) return env;
+  for (let p = preferred; p < preferred + 200; p += 1) {
+    const owner = ownerOf(p);
+    // free, unknowable (no lsof), or already this checkout's — all usable.
+    if (!owner || path.resolve(owner) === path.resolve(root)) return p;
+  }
+  return preferred;                    // nothing free: let the caller fail loudly
+}

@@ -8,7 +8,13 @@
  */
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
-const PORT = Number(process.env.PORT || 5321);
+import { resolvePort } from './portowner.mts';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** Repo root, so the port resolver can tell our own dev server from a co-agent's. */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const PORT = resolvePort(5321, ROOT);
 const SHOT = process.argv[2] || 'hero_closeup';
 const browser = await chromium.launch({ args: CHROMIUM_ARGS });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });

@@ -31,8 +31,14 @@
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import type * as THREE from 'three';
+import { resolvePort } from './portowner.mts';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PORT = Number(process.env.PORT || 5173);
+/** Repo root, so the port resolver can tell our own dev server from a co-agent's. */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
   const o = {
