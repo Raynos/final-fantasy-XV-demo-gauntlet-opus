@@ -913,11 +913,16 @@ export function ribbon(B: MeshBuilder, o: RibbonOpts) {
     }
     rows.push(row);
   }
+  // Wound outward. It was wound inward, which cost nothing for as long as
+  // every material that consumes a ribbon was `DoubleSide` — hair still is —
+  // and became visible the moment the face material went `FrontSide`: the ear's
+  // helix, antihelix and tragus ridges and the eyelash fans are all ribbons,
+  // and all of them disappeared, leaving an ear made of holes.
   for (let i = 0; i < steps; i++) {
     const a = rows[i], b = rows[i + 1];
     for (let k = 0; k < sides; k++) {
       const k2 = (k + 1) % sides;
-      B.quad(a[k], a[k2], b[k2], b[k]);
+      B.quad(a[k], b[k], b[k2], a[k2]);
     }
   }
   // close the tip with a fan rather than leaving an open pipe
@@ -925,6 +930,6 @@ export function ribbon(B: MeshBuilder, o: RibbonOpts) {
   const e = curve.getPoint(1);
   B.tang(0, 1, 0);
   const cap = o.uv ? B.vv(_t.copy(e), o.uv[0], o.uv[1]) : B.vv(_t.copy(e), 0.5, 1);
-  for (let k = 0; k < sides; k++) B.tri(last[(k + 1) % sides], last[k], cap);
+  for (let k = 0; k < sides; k++) B.tri(last[k], last[(k + 1) % sides], cap);
   return rows;
 }

@@ -379,7 +379,11 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     const c = put([0, -HR[1] * 1.055, -0.014]);
     const centre = B.v(c.x, c.y, c.z, 0.5, 0);
     const last = idx[segV];
-    for (let u = 0; u < segU; u++) B.tri(centre, last[u + 1], last[u]);
+    // Wound to match the skull grid above it. It was the other way round, and
+    // under the face material's old `DoubleSide` that cost nothing and was
+    // invisible; the moment the material became `FrontSide` the cap vanished
+    // and left a hole under the jaw looking into the inside of the head.
+    for (let u = 0; u < segU; u++) B.tri(centre, last[u], last[u + 1]);
   }
 
   // ---- ears --------------------------------------------------------------
