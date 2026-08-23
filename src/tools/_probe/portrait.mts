@@ -93,6 +93,37 @@ for (const [key, id] of Object.entries(who)) {
     lookOffset: r3(aim),
   });
 
+  // ---- the back of the hand, framed off the hand bone's own axes ---------
+  // `_probe/hands.mts`'s `_hand` framing builds its direction from the *root's*
+  // forward and right, which is not where the back of a hand faces: the hand
+  // rolls with the forearm, and in the rest pose the dorsum ends up nearly
+  // edge-on to a camera aimed that way. Ablating the dorsal tendons to six
+  // times their amplitude produced no visible change in that framing at all,
+  // which is the measurement that says it is not looking at the dorsum. (Its
+  // `_palm` framing is worse — it sits inside the forearm.)
+  //
+  // `Body.ts` builds the palm sweep with `ref: front`, and `front` is the
+  // dorsal normal, so the axis to look down is the hand bone's own. Reading it
+  // off `matrixWorld` is what makes this framing correct for any pose.
+  // Which of the bone's three axes is dorsal was settled by emitting all six
+  // and looking: it is **minus the bone's x column**, the view with the knuckle
+  // row across it. The other five are a palm, two edge-on profiles and two
+  // views up the forearm — which is the class the old framing kept landing in.
+  for (const sd of ['L', 'R']) {
+    const hb = byName[`hand${sd}`];
+    const kb = byName[`fingers${sd}`];
+    if (!hb || !kb) continue;
+    hb.updateWorldMatrix(true, false);
+    const he = hb.matrixWorld.elements;
+    const dorsal = norm([-he[0], -he[1], -he[2]]);
+    const w = wp(hb); const k = wp(kb);
+    const c = [(w[0] + k[0]) * 0.5, (w[1] + k[1]) * 0.5, (w[2] + k[2]) * 0.5];
+    // pulled a little toward the sun so the relief has a key to catch; straight
+    // down the dorsal axis in the rest pose the hand sits in its own shadow
+    shot(`${key}_dorsum${sd}`, off(c, 0, 0, 0),
+      norm([dorsal[0], dorsal[1] + 0.45, dorsal[2]]), 0.24, 20);
+  }
+
   // The chest at 0.95 m: the range that decides whether a jacket has pockets,
   // stitching and hardware on it or is a black shell with panels.
   const ch = bone('spine03') || bone('spine02');

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshBuilder, sweepTube, blob, abump, bump, clamp01 } from './Geo.ts';
+import { MeshBuilder, sweepTube, blob, abump, bump, clamp01, smooth } from './Geo.ts';
 import type { SweepNode, SkinWeights } from './Geo.ts';
 import { SIDES } from './Skeleton.ts';
 import type { Rig, Side } from './Skeleton.ts';
@@ -213,6 +213,55 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
     return [0.66 - 0.16 * d, 0, thick * (0.35 + 0.65 * (1 - d))];
   };
 
+  /**
+   * The four extensor tendons and the metacarpal heads they run to.
+   *
+   * The last pass got this hand from a mitten to something that reads as a hand
+   * at any range, and named what was still missing: it is a smooth pale casting
+   * with no tendon relief on the dorsum and no bony knuckle silhouette. Those
+   * are the two things that separate a hand from a glove, and both are surface,
+   * not proportion — which is why nothing in the proportion work reached them.
+   *
+   * Each tendon runs from mid-metacarpal to its knuckle, standing about 1.3 mm
+   * proud of a 35 mm radius, swelling at the head. The knuckle bump was one
+   * continuous bar across the whole dorsum, which is a ridge, not four bones;
+   * it is four now, so the silhouette over the knuckles is scalloped.
+   */
+  const tendons = (th: number, t: number) => {
+    let k = 0;
+    for (let i = 0; i < 4; i++) {
+      // Spread across the whole dorsum, index nearest the thumb side. The
+      // spacing is arithmetic, not taste: the palm sweep is a flattened ellipse
+      // at `rx` 36.6 mm and `rz` 11.6 mm, so the *lateral* offset of a point is
+      // `sin(theta) * rx`. At 0.44 rad apart the four tendons landed at 8 and
+      // 22 mm from the midline — bunched into the middle third of a 74 mm hand.
+      // At 0.62 they reach 30 mm, which is where the fourth metacarpal is.
+      const c = (i - 1.5) * 0.62 * sg;
+      // `abump` has compact support, so `w` is the half-width, not a sigma:
+      // 0.30 puts the four ridges nearly edge to edge with shallow grooves
+      // between them, which is what the back of a relaxed hand looks like.
+      k += 0.052 * abump(th, c, 0.30) * smooth((t - 0.28) / 0.34) * (1 - 0.35 * smooth((t - 0.88) / 0.12));
+      // the metacarpal head under it — the middle two stand proudest, and the
+      // little finger's sits lower, which is the real oblique knuckle arch
+      const proud = 1 - 0.30 * Math.abs(i - 1.4) / 1.6;
+      k += 0.070 * proud * abump(th, c, 0.34) * bump(t, 0.93 - 0.02 * Math.abs(i - 1.4), 0.20);
+    }
+    return k;
+  };
+
+  /**
+   * The groove *between* the tendons, 0..1. Colour comes off this rather than
+   * off the displacement, because on a hand lit by ambient alone a 2 mm ridge
+   * on a 37 mm radius produces almost no shading of its own — the read has to
+   * be carried by the occluded valley, which is how a real hand reads too.
+   */
+  const tendonGroove = (th: number, t: number) => {
+    let ridge = 0;
+    for (let i = 0; i < 4; i++) ridge = Math.max(ridge, abump(th, (i - 1.5) * 0.62 * sg, 0.30));
+    return (1 - ridge) * smooth((t - 0.30) / 0.32) * (1 - smooth((t - 0.86) / 0.14))
+      * Math.max(0, Math.cos(th));
+  };
+
   // ---- palm --------------------------------------------------------------
   // 82 mm from the wrist to the middle knuckle, 74 mm across: a hand, not a
   // paddle. uvScale puts the pore map at ~13 mm/tile, matching the forearm.
@@ -224,21 +273,36 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
       { p: pt(0.046, 0.001, 0.0028).toArray(), rx: R(0.0356), rz: R(0.0146), w: [[I[`hand${side}`], 0.94], [I[`fingers${side}`], 0.06]] },
       { p: pt(0.070, -0.001, 0.0032).toArray(), rx: R(0.0366), rz: R(0.0116), w: [[I[`hand${side}`], 0.74], [I[`fingers${side}`], 0.26]] },
     ],
-    steps: 10, seg: 20, ref: front.toArray(),
+    // 40 segments, not 20. Four extensor tendons across a dorsum that spans
+    // about 1.8 rad need three segments each to resolve; at 20 the ring is
+    // 0.31 rad per segment and a tendon is narrower than one, so it aliases
+    // into the ring rather than blurring — §8.5's rule that pattern frequency
+    // is bounded by vertex spacing. This is 560 vertices against 200 on a
+    // budget bound by draw calls.
+    steps: 14, seg: 40, ref: front.toArray(),
     uvScale: [0.78, 0.24],
-    // thenar and hypothenar mounds either side of a hollow palm, a dorsal
-    // metacarpal ridge under the knuckles, and the ulnar styloid at the wrist
+    // thenar and hypothenar mounds either side of a hollow palm, the four
+    // extensor tendons and metacarpal heads across the back, and the ulnar
+    // styloid at the wrist
     shape: (th, t) => 1
       + 0.20 * abump(th, thenar, 0.92) * (0.30 + 0.70 * bump(t, 0.34, 0.62))
       + 0.125 * abump(th, hypo, 0.80) * (1 - 0.45 * t)
       - 0.115 * abump(th, Math.PI, 0.62) * bump(t, 0.66, 0.52)
-      + 0.055 * abump(th, 0, 1.05) * bump(t, 0.92, 0.34)
-      + 0.10 * abump(th, thUlnar * 0.55, 0.55) * bump(t, 0.03, 0.22),
+      + tendons(th, t)
+      + 0.10 * abump(th, thUlnar * 0.55, 0.55) * bump(t, 0.03, 0.22)
+      // The wrist fold. A hand does not meet a forearm along a smooth taper —
+      // there is a crease at the joint and a step of skin above it, and its
+      // absence is a large part of what made this read as one cast piece.
+      - 0.055 * bump(t, 0.055, 0.10) * (0.55 + 0.45 * dorsalness(th)),
     colorAt: (th: number, t: number) => tone(th,
       // the web between the thumb and the index finger, and the crease across
       // the base of the fingers, are the two shadows a hand always has
       (1 - 0.16 * abump(th, thRadial, 0.85) * bump(t, 0.80, 0.34))
-      * (1 - 0.10 * abump(th, Math.PI, 0.9) * bump(t, 0.66, 0.5))),
+      * (1 - 0.10 * abump(th, Math.PI, 0.9) * bump(t, 0.66, 0.5))
+      // the tendons are lit ridges, the valleys between them shadow, and the
+      // wrist crease is the darkest line on the whole hand
+      * (1 - 0.13 * tendonGroove(th, t))
+      * (1 - 0.13 * bump(t, 0.055, 0.075))),
     matAt: (th: number, t: number) => finish(th, 0.20 + 0.35 * bump(t, 0.86, 0.4)),
   });
 
