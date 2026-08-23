@@ -175,6 +175,9 @@ export interface FieldStats {
   erodeMs?: number;
   /** Kilometres of road in the network. */
   roadKm?: number;
+  /** Cells the drainage incision cut, and the mean depth it took off them. */
+  inciseCells?: number;
+  inciseMeanM?: number;
   /** True when the field came out of the bake rather than the generator. */
   baked?: boolean;
 }
@@ -256,6 +259,8 @@ export class Field {
   roadMask!: Float32Array | null;
   /** The main highway as one spline. `Terrain.road` is this. */
   roadSpline!: HighwaySpine | null;
+  _inciseCells!: number;
+  _inciseMeanM!: number;
   /** Metres the talus pass moved into each cell. Freed by `_derive`. */
   screeD!: Float32Array | null;
   sed!: Float32Array | null;
@@ -293,6 +298,7 @@ export class Field {
     this._stitchFar();
     const t3 = performance.now();
     this._erode();
+    this._inciseDrainage();
     // Snapshot before the talus pass so the scree channel can be *measured*
     // rather than inferred from slope: what makes an apron is material that
     // actually arrived, and the relaxation is the only thing that moves it.
@@ -324,6 +330,8 @@ export class Field {
       macroMs: Math.round(t2 - t1) - this._farMs,
       landformMs: Math.round(t3 - t2),
       erodeMs: Math.round(t4 - t3),
+      inciseCells: this._inciseCells,
+      inciseMeanM: this._inciseMeanM,
       roadKm: +(this.map.roadGraph.totalLength / 1000).toFixed(2),
     };
   }
@@ -1461,6 +1469,126 @@ export class Field {
         h[idx] = tmp[idx] * 0.72 + avg * 0.28;
       }
     }
+  }
+
+  /**
+   * Cut real channels out of the accumulation field the droplets left.
+   *
+   * The droplet pass moves material and records where the water ran, but it is
+   * a *transport* model: it lowers a bed by a few decimetres where a hundred
+   * droplets crossed and leaves the valley it belongs to unmarked. So the world
+   * has washes in the splat and none in the geometry, and every gully we own is
+   * noise-shaped rather than drainage-shaped. This is the missing step toward
+   * the rivers `docs/SCOPE.md` asks for, and it is what makes tributaries meet
+   * exactly where the drainage meets rather than wherever two noise fields
+   * happen to cross.
+   *
+   * **Three widening bands off one field.** Depth and width both come from the
+   * same ranked accumulation, so the bands nest by construction: a headwater
+   * nick opens into a gully which opens into a valley floor, and two channels
+   * that merge upstream are one channel downstream without any junction logic.
+   * Cutting three independent fields is what produces tributaries that cross
+   * without joining.
+   *
+   * **The hard slope gate is not optional.** Accumulation on a flat is not a
+   * channel, it is the tie-breaking noise of a transport model that had nowhere
+   * downhill to go — MGS5 measured what incising it does and got ploughed-field
+   * chevrons across every pan. Nothing is cut below 0.02 m/m, and the gate is
+   * fully open only past 0.06.
+   *
+   * Runs **after** erosion and **before** the talus pass on purpose: erosion
+   * would fill a channel cut before it, and talus is what lays the fresh walls
+   * back to a repose angle instead of leaving a trench with vertical sides.
+   */
+  _inciseDrainage() {
+    const h = this.h, flow = this.flow!;
+
+    // One light blur before ranking, and only here. A droplet track is a
+    // one-cell string of hits with gaps in it; a channel is a connected line.
+    // The blur is what turns the first into the second, and it is exactly the
+    // step that must NOT happen on the placement channel, where it costs the
+    // interfluves (see `ErosionSample`).
+    const fb = new Float32Array(N * N);
+    for (let j = 1; j < N - 1; j++) {
+      for (let i = 1; i < N - 1; i++) {
+        const k = j * N + i;
+        fb[k] = flow[k] * 0.36
+          + (flow[k - 1] + flow[k + 1] + flow[k - N] + flow[k + N]) * 0.13
+          + (flow[k - N - 1] + flow[k - N + 1] + flow[k + N - 1] + flow[k + N + 1]) * 0.03;
+      }
+    }
+
+    // Rank to percentiles so the three band thresholds mean shares of the
+    // drained world rather than magnitudes of one bake's erosion constants.
+    const nz: number[] = [];
+    for (let k = 0; k < fb.length; k++) if (fb[k] > 0) nz.push(fb[k]);
+    if (!nz.length) return;
+    nz.sort((a, b) => a - b);
+    const at = (p: number) => nz[Math.min(nz.length - 1, Math.floor(nz.length * p))];
+    // share of drained cells | depth | how far the shoulder reaches
+    const BANDS = [
+      { lo: at(0.960), hi: at(0.988), depth: 1.4, shoulder: 2 },
+      { lo: at(0.988), hi: at(0.997), depth: 3.2, shoulder: 4 },
+      { lo: at(0.997), hi: at(1.000), depth: 6.4, shoulder: 7 },
+    ];
+
+    const cut = new Float32Array(N * N);
+    for (let j = 2; j < N - 2; j++) {
+      for (let i = 2; i < N - 2; i++) {
+        const k = j * N + i;
+        const a = fb[k];
+        if (a <= BANDS[0].lo) continue;
+        const gx = (h[k + 1] - h[k - 1]) / (2 * CELL);
+        const gz = (h[k + N] - h[k - N]) / (2 * CELL);
+        const gate = smoothstep(0.02, 0.06, Math.hypot(gx, gz));
+        if (gate <= 0) continue;
+        let d = 0;
+        for (const b of BANDS) {
+          if (a <= b.lo) continue;
+          d = Math.max(d, b.depth * smoothstep(b.lo, b.hi, a));
+        }
+        cut[k] = d * gate;
+      }
+    }
+
+    // Widen: a channel is a V, not a slot. Each cell's cut reaches its
+    // neighbours at a falloff set by its own depth, so the big valleys are
+    // wide and the headwater nicks stay narrow off the same pass.
+    const wide = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const k = j * N + i;
+        const d = cut[k];
+        if (d <= 0.01) continue;
+        const R = d > 4 ? 7 : d > 2 ? 4 : 2;
+        for (let dj = -R; dj <= R; dj++) {
+          const jj = j + dj; if (jj < 1 || jj >= N - 1) continue;
+          for (let di = -R; di <= R; di++) {
+            const ii = i + di; if (ii < 1 || ii >= N - 1) continue;
+            const r = Math.hypot(di, dj) / (R + 0.5);
+            if (r >= 1) continue;
+            const v = d * (1 - r * r);
+            const o = jj * N + ii;
+            if (v > wide[o]) wide[o] = v;
+          }
+        }
+      }
+    }
+
+    // The seabed floor may only ever hold a cut back, never lift the ground:
+    // clamping to a constant raised 17 772 cells that were already below it,
+    // which is a floor doing the opposite of its job in the one place nobody
+    // looks. Bound by this cell's own height as well as by the constant.
+    let moved = 0, cells = 0;
+    for (let k = 0; k < N * N; k++) {
+      if (wide[k] <= 0.01) continue;
+      const y = h[k] - wide[k];
+      const floor = Math.min(h[k], SEA - 2);
+      h[k] = y < floor ? floor : y;
+      moved += wide[k]; cells++;
+    }
+    this._inciseCells = cells;
+    this._inciseMeanM = cells ? +(moved / cells).toFixed(3) : 0;
   }
 
   /**
