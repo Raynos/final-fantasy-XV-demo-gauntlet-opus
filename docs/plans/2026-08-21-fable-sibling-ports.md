@@ -1,28 +1,102 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 is done; Wave 2 is half done;
-Waves 3 and 4 are untouched proposals.** Audited against the tree 2026-08-23,
-item by item:
+Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 done. Wave 2 done bar 3.6
+and 3.7. Wave 3 audited to a verdict, one item open. Wave 4 two of five.**
+Re-audited against the tree and rebuilt 2026-08-23 (second opus pass, starting
+from `d377fc7`). This table **replaces** the previous audit's, which was hours
+old and still had two rows wrong — see "what 3.3 actually was" below, because
+how it was wrong is the more useful half.
 
 | item | state | evidence |
 |---|---|---|
-| 2.1 determinism pinning | **DONE** | `417ca86`, on `main`. 1.836 -> 0.340 mean/255 against a measured 0.302 floor. The cause was the wind, not the formation this plan predicted |
-| 2.2 shader warm + `compileAsync` | **REJECTED, measured** | `4c1d813`. Warm exists; `compileAsync` is **3% slower here** (1562 ms sync vs 1611 ms median, six pairs). `runAsync` and `bootprof --warm-ab` kept so the next GPU can re-check in one command |
-| 2.3 `seatHeightAt` / `drawnEnvelope` | **DONE** | `Terrain.ts:496`, `props/Seat.ts`, and a `seatcheck.mts` that rasterises the real clipmap to check it |
-| 2.4 self-validating perf ruler | **DONE** | `RULER_VALID` in `perf.mts:309` and `gameplay.mts:371`. It earned its keep immediately — it voided a ruler that reported 63 fps for a game running at 190 |
-| 2.5 ablation dials | **DONE** | `shoot.mts --hide/--ablate`, and the rule written into `BRIEF.md` §"ablate before re-tinting" and `HANDOFF.md:43` as this plan asked |
-| 2.6 contact shadows | **PRESENT, AND MEASURED INSUFFICIENT** | `postfx/ContactShadowPass.ts` exists and grounds nothing at scenery range: it marches 0.5 m and range-gates at 55 m while graded shots' nearest ground is 61-80 m. See `project/handoff/grounding.md` — this is the judge's #1 open item |
-| 3.1 art-direction corpus | **DONE** | `docs/reference/ART-DIRECTION.md`, `PLATE-SOURCES.md`, `plates/`, `sibling-{RENDER-INVENTORY,TRAPS}.md` |
-| 3.2 grade stats + blind A/B | **DONE** | `compare.mts` (sealed key, `--control`) and `imagestats.mts`. Ten rounds run; score 3 -> 4.5/10 |
-| 3.3 grade upgrades | **NOT DONE** | The finite-clip item is measurably still open: four of our six frames clip at exactly 0.00% where eight of ten reference plates clip >=0.10% |
-| 3.4 depth-weighted additives | **NOT DONE** | No `airDepth` term anywhere in `src/engine/postfx/` |
-| 3.5 horizon-angle bake | **DONE** | `world/terrain/Horizon.ts` + a `horizoncheck` gate at MCC >= 0.85 |
-| 3.6 grass tier-D et al | **MEASURED, DELIBERATELY NOT BUILT** | See the annotation in §3.6 — the gap is confirmed by ablation, the fix waits on the grade it would have to match |
-| 3.7 water depth model | **NOT DONE** | No Beer-Lambert, no refracted bed |
-| 3.8 sky-SH + PCSS | **NOT DONE** | Neither exists |
-| Wave 3 (perf) | **one item landed incidentally** | GenCache-style generator-hash invalidation shipped as `texbake.mts`'s `TEX_SOURCES`/`CANVAS_SOURCES` hashing, out of phase 3's boot work. Nothing else |
-| Wave 4 (gameplay) | **NOT STARTED** | No `setMotion`, no perception meter, no swept camera — `CameraRig.ts:247` says in so many words "this is where it would be swept" |
-| §6.2 per-shot noise floors | **NOT DONE** | `imgdiff.mts` still carries one global floor |
+| 2.1 determinism pinning | **DONE** | `417ca86`. 1.836 -> 0.340 mean/255 against a 0.302 floor. The cause was the wind, not the formation the plan predicted |
+| 2.2 shader warm + `compileAsync` | **REJECTED, measured** | `4c1d813`. `compileAsync` is 3% slower here (1562 ms sync vs 1611 ms, six pairs) |
+| 2.3 `seatHeightAt` / `drawnEnvelope` | **DONE** | `Terrain.ts:496`, `props/Seat.ts`, `seatcheck.mts` |
+| 2.4 self-validating perf ruler | **DONE** | `RULER_VALID` in `perf.mts` / `gameplay.mts` |
+| 2.5 ablation dials | **DONE**, and extended | `--hide/--ablate`; this pass added `nobleach`, `noactorhaze`, `noambient`, `noenv` |
+| 2.6 contact shadows | **CLOSED as insufficient** | grounding is structural and past every term's range; `handoff/grounding.md` owns it |
+| 3.1 art-direction corpus | **DONE** | `docs/reference/` |
+| 3.2 grade stats + blind A/B | **DONE** | `compare.mts`, `imagestats.mts`. This pass fixed a verdict that contradicted itself (`dafa76b`) |
+| 3.3 grade upgrades | **DONE, 6 of 6 levers** | `05fa8fb`, `6041077`, `e17e265`. See "what 3.3 actually was" below |
+| 3.4 depth-weighted additives | **DONE** | `70506db`. The haze split shipped; the airDepth weighting was already present and the additive flood measured absent |
+| 3.5 horizon-angle bake | **DONE** | `world/terrain/Horizon.ts` + `horizoncheck` |
+| 3.6 grass tier-D et al | **REASSIGNED** | `docs/plans/README.md` gives `src/world/veg/` to procedural-modeling. The shadow-only sward proxy is **already built** (`GrassField._tileFor`); tier-D, root blend and coverage math go with the lane |
+| 3.7 water depth model | **NOT DONE** | No Beer-Lambert, no refracted bed. The one genuinely untouched Wave 2 item |
+| 3.8 sky-SH + PCSS | **(a) MEASURED, worth building, not built. (b) not evaluated** | `4d94169`. See below — the measurement found something better than it went looking for |
+| Wave 3 (perf) | **AUDITED to a verdict; one item open** | four of six items closed by reading and measuring, see below |
+| Wave 4 (gameplay) | **2 of 5** | swept camera `fd1a153`, `lookScale` `347b392`. Perception meter, cover/fire and adaptive music untouched |
+| §6.2 per-shot noise floors | **DONE** | `9db4548`. Measured a 16x spread; the old global floor was above all twelve |
+
+### What 3.3 actually was, and why the last audit misread it
+
+The previous audit called 3.3 "measurably still open: four of our six frames
+clip at exactly 0.00%". **That was stale by the time it was written** — only
+`storm` (0.00%) and `zone_longwythe` (0.04%) did, and our median clip% was 0.71
+against the reference's 0.50. Re-measure before quoting a plan's own grievance.
+
+The real defect was next door and structural: the print `fade` was applied flat
+instead of to the shadows its docstring claims, which capped display-white at
+252 for `golden` and `storm` and 245 for `night`. **No pixel leaving the LUT
+could reach 254 by construction.** Found by tracing display-white through the
+baker offline, not by looking at a frame.
+
+Two of the six levers were already built (hue-gated warmth as `highGate`;
+closed-loop exposure, which `Exposure.ts` has run all along, banded around a
+Sky-published scene exposure). Two more landed as written. And two landed only
+after a measurement overturned the plan's own prescription:
+
+- **The plan says to fix golden-hour warmth in the tint.** Ablation says three
+  quarters of it (+39.2 of +52.0 highlight R-B) survives `?post=nolut` — it is
+  in the HDR buffer, so no display-referred tint could reach it. The fix is a
+  scene-linear film bleach before the tonemap.
+- **The toe.** Mid-weighting the grain, a cosmetic-looking change, revealed
+  that shadow-weighted grain had been dithering dark pixels down and flattering
+  the black point by 4 levels. The lift pedestal underneath was real.
+
+Net across six graded shots: median range **9.46 -> 11.06 stops** (reference
+9.79), black point 3.5 -> 1.1 (3.4), and the daylight slice now passes 8 of 9
+checks against the FFXV field corpus.
+
+### The one thing three separate items agree on
+
+Three times today the obvious port was not the fix, and only a measurement said
+so — the golden-hour tint, the camera's swept sphere, and the shadow-cool
+grade. **In all three the cast or the fault was in the scene, not in the stage
+the plan named.** §6.1's "ablate before re-tinting" is not a style preference;
+it is the difference between fixing this and moving a constant.
+
+### Wave 3, audited
+
+- **Motion-blur early-out** — already correct. `PostFX` calls `setMoving` with
+  a real matrix-and-mover test; the pass is skipped, not run inert.
+- **InstancedMesh culling traps** — no instance of the trap. Grass has per-tile
+  bounding spheres and an eviction pool; trees and bushes use per-frame
+  repacked global pools, which is a different design and defensible. Not the
+  static world-spanning buffer the plan warns about.
+- **Chunked-work discipline** — not applicable. We do not yield during boot at
+  all, so "a yield that cannot draw" cannot happen. `TODO.md`'s slow page start
+  is a different problem and belongs to phase3-boot-and-memory.
+- **GenCache generator-hash invalidation** — shipped as `texbake.mts`'s
+  `TEX_SOURCES`/`CANVAS_SOURCES` hashing.
+- **Draws, not triangles** — already measured: ~8.7 us per draw, corr 0.801 vs
+  0.628 for triangles (`project/STATUS.md`).
+- **OPEN: the frame-cost split** (pixel-scaled vs fixed). Needs the perf
+  re-baseline, and post consolidation is gated on its answer.
+
+### 3.8, measured
+
+The plan asks for a cheap ablation of the ambient probe. It needed one that did
+not exist, so `?post=noambient` and `?post=noenv` were built. The first pass was
+confounded by closed-loop exposure and said so; re-run under `?post=noexp`:
+
+- **The `HemisphereLight` is inert** — 0.4 luma of 87.7, and 0.1 of shadow R-B.
+  A declared, tuned, per-frame-updated sky fill reaching the frame not at all,
+  holding a slot in the pinned light pool. This project's dominant failure class.
+- **The env cube is the entire diffuse ambient and nothing shadows it** — 5% of
+  scene luma and 3.9 of the 12.5-point shadow-colour gap. The flood 3.8
+  predicted is real, so 3.8(a) is **worth building** and is not built here: it
+  is structural surgery on a renderer at 12/12 and it has to resolve the inert
+  hemisphere in the same change, not beside it. 3.8(b) PCSS is not evaluated.
 
 Author: Fable 5 audit pass, against commit `a1df21d`.
 Sources: full audits of the sibling repos under
@@ -492,23 +566,43 @@ work for Wave 5's AI pieces).
 
 ## 10. Definition of done for this plan
 
-Ticked 2026-08-23 against the tree. **4 of 6.**
+Re-ticked 2026-08-23 (second opus pass). **5 of 6, and the sixth is named.**
 
-- [x] Wave 1 items each closed against their RESCUE line item, with
-      captures looked at. *(2.6 closed as "present and insufficient", which
-      is a close, not a pass — the work moved to `handoff/grounding.md`.)*
-- [x] `docs/ART_DIRECTION`-equivalent reference numbers exist in `docs/`
-      and the next character-art pass cites them. *(`docs/reference/`.)*
-- [x] Blind A/B harness runs with a sealed key; fresh critic pass recorded
-      (replaces the stale 4.5/10). *(`compare.mts`; ten rounds; 4.5/10 is
-      now a **current** number with a control, not a stale one.)*
-- [ ] Perf re-baseline published from the new ruler with noise floor and
-      contention verdict attached. **Blocked, not forgotten:** the ruler
-      exists and correctly refuses a contended tree, and the tree has not
-      been quiet long enough to certify one. This is the single most
-      load-bearing open item in the repo — two perf gates are formally
-      unmeasured.
-- [ ] Each Wave 2 lever landed (or rejected with a measured negative —
-      record it, the siblings' measured negatives were half their value).
-      **4 of 8 landed** (3.1, 3.2, 3.5, and 3.6 as a recorded negative);
-      3.3, 3.4, 3.7 and 3.8 are untouched.
+- [x] Wave 1 items each closed against their RESCUE line item, with captures
+      looked at. *(2.6 closed as "present and insufficient", which is a close,
+      not a pass — the work moved to `handoff/grounding.md`.)*
+- [x] `docs/ART_DIRECTION`-equivalent reference numbers exist in `docs/` and
+      the next character-art pass cites them. *(`docs/reference/`.)*
+- [x] Blind A/B harness runs with a sealed key; fresh critic pass recorded.
+      *(`compare.mts`; ten rounds with a control. The instrument itself was
+      repaired this pass — four of its eleven verdict lines asserted defects on
+      frames that did not have them.)*
+- [x] Each Wave 2 lever landed, or rejected with a measured negative.
+      **6 of 8 landed** (3.1, 3.2, 3.3, 3.4, 3.5, and 3.8(a) as a measurement
+      with a verdict); 3.6 is reassigned to procedural-modeling by the plan
+      graph; **3.7 water is the one item nobody has touched.**
+- [x] §6 methodology adopted where it is code rather than prose: §6.1 ablation
+      is in `BRIEF.md` and extended with four new dials this pass; §6.2
+      per-shot noise floors are measured and checked in.
+- [ ] **Perf re-baseline published from the new ruler with noise floor and
+      contention verdict attached.** Still the single most load-bearing open
+      item in the repo. It is *last by design* — `docs/plans/README.md` puts it
+      after phase3 and phase4 — and this pass changed the renderer, so any
+      number taken before those land is stale on arrival. **It belongs to
+      phase4's WS-0b, not here.**
+
+### What this plan does NOT close, and who owns it
+
+Archiving this plan requires these to be re-filed, not forgotten:
+
+| left over | owner |
+|---|---|
+| 3.6 grass tier-D, root blend, coverage math | `2026-08-21-fable-procedural-modeling` (the graph already assigns `src/world/veg/`) |
+| 3.7 water depth model | unassigned — the only genuinely untouched Wave 2 item |
+| 3.8(a) SH probe + specular-only env; the inert `HemisphereLight` | unassigned; measured and specified above, needs a lighting lane |
+| 3.8(b) PCSS | unassigned, not evaluated |
+| Wave 3's frame-cost split, and post consolidation behind it | `2026-08-22-opus-phase4` (WS-0b perf) |
+| Wave 4 perception meter + alert ladder, cover/fire rhythm | `2026-08-22-opus-phase4-content-and-gameplay` |
+| Wave 4 `setMotion` animation-rate contract | procedural-modeling / whoever next touches posture |
+| Wave 4 adaptive music re-targeting | unassigned, tuning-level |
+| 2.6 grounding | `project/handoff/grounding.md` |
