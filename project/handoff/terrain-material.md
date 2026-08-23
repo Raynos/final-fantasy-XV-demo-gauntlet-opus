@@ -377,3 +377,33 @@ two other lanes' work and it is worth more than another round of mine. The
 honest read of this lane is that it has stopped being the top-ranked defect,
 which is what it was asked to do, and that the next agent should be looking at
 shadows and at near-field ground cover rather than at this shader.
+
+---
+
+## Answered by the coordinator: when `horizoncheck`'s MCC moved, and why
+
+You asked someone to find when the worst MCC went from 0.858 to 0.766. It moved
+with the **content lane's Hammerhead merge**, and it is not a regression in the
+bake.
+
+`heightcheck` samples a fixed world point and reports it every run. It read
+**8.130 m** before that merge and **7.417 m** after — the terrain field itself
+changed shape. Neither gate failed, so nothing flagged it.
+
+The cause is the escalated decision to move the Hammerhead POI onto the town at
+(576,10), because the flattening pan follows the town. Probed across a 120 m box:
+
+| site | height spread |
+|---|---|
+| town, (576,10) | **1.81 m** |
+| old POI, (60,18) | 6.49 m |
+| origin | 5.36 m |
+
+The town now sits on the flattest ground of the three by a factor of three, and
+the old site has gone back to natural terrain — which is exactly what should
+happen, and it is why the sample point near the origin dropped 0.71 m.
+
+So the horizon bake is measuring a **different skyline**, correctly. Nothing to
+fix. Worth the twenty minutes it took, because "a gate's number moved and nobody
+knows when" is how this repo has acquired most of its wrong diagnoses — and the
+answer here happened to be benign, which you cannot know until you look.
