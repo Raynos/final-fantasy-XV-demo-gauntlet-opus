@@ -213,7 +213,7 @@ export interface Leased {
  */
 export async function lease(opts: LeaseRequest = {}): Promise<Leased> {
   await ensureDaemon();
-  const r = await call<LeaseResponse>('/lease', opts);
+  const r = await call<LeaseResponse>('/lease', { ...opts, pid: process.pid });
   const browser = await chromium.connectOverCDP(r.cdp);
   const ctx = browser.contexts()[0];
   const page = ctx.pages().find((p) => p.url().startsWith('http')) ?? ctx.pages()[0];
@@ -296,7 +296,11 @@ export async function withBlankPage<T>(
  */
 export async function withExclusive<T>(agent: string, fn: () => Promise<T>): Promise<T> {
   await ensureDaemon();
-  await call('/exclusive', { agent });
+  // The pid is what lets the daemon reap this if the tool dies holding it --
+  // `perf.mts` exits via process.exit() on a failing shot, which skips every
+  // `finally` in the process, so a release that only happens on the happy path
+  // is not a release.
+  await call('/exclusive', { agent, pid: process.pid });
   // Stamp the state the measurement was taken under, before it is taken. A perf
   // number without this is not comparable, and two sessions arguing about a
   // regression that was really a busy box costs an afternoon.

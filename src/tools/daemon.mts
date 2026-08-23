@@ -47,7 +47,7 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync, symlinkSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { launchPersistent } from './chromium.mts';
@@ -204,6 +204,12 @@ export interface PageOpts {
   agent?: string;
   /** Give up rather than queue past this many ms. */
   deadlineMs?: number;
+  /**
+   * The client's pid, so the daemon can give back what a dead client is
+   * holding. A TTL either expires on a legitimate long run or leaves a corpse
+   * in place; liveness does neither.
+   */
+  pid?: number;
 }
 
 /** `POST /shots` */
@@ -561,7 +567,7 @@ function materialise(id: BuildId, prod: boolean): string {
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     execFileSync('bash', ['-c', `git archive ${sha} | tar -x -C ${JSON.stringify(dir)}`], { cwd: ROOT });
-    execFileSync('ln', ['-s', path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules')]);
+    linkNodeModules(dir);
     const bake = path.join(ROOT, 'src/public/baked');
     if (existsSync(bake)) {
       mkdirSync(path.join(dir, 'src/public'), { recursive: true });
@@ -574,6 +580,32 @@ function materialise(id: BuildId, prod: boolean): string {
     execFileSync(VITE, ['build'], { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], timeout: 600_000 });
   }
   return dir;
+}
+
+/**
+ * A per-tree `node_modules` that shares every package but NOT `.vite`.
+ *
+ * Symlinking `node_modules` wholesale is the obvious move and it reintroduces a
+ * bug this repo already paid for. Vite resolves its dependency cache to
+ * `<root>/node_modules/.vite`, which through a wholesale symlink is the *same
+ * directory* for every build server — so several vites fight over one cache,
+ * each decides the config changed, each re-optimises, and each triggers a full
+ * page reload that the capture harness sees as a boot which never finishes.
+ * `src/tools/vite.map.config.mts` existed solely to dodge that with a private
+ * `cacheDir`, back when the collision was between worktrees.
+ *
+ * So: a real directory, one symlink per top-level entry, and `.vite` left for
+ * this tree's vite to create for itself. A few hundred symlinks, well under the
+ * 173 ms the archive costs.
+ */
+function linkNodeModules(dir: string) {
+  const src = path.join(ROOT, 'node_modules');
+  const dest = path.join(dir, 'node_modules');
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(src)) {
+    if (name === '.vite' || name.startsWith('.vite-')) continue;
+    try { symlinkSync(path.join(src, name), path.join(dest, name)); } catch { /* already there */ }
+  }
 }
 
 /**
@@ -738,7 +770,27 @@ class Scheduler {
   private lastAgent = new Map<Lane, string>();
   /** An exclusive holder quiesces everything; see `/exclusive`. */
   exclusive: string | null = null;
+  /**
+   * The holder's pid, because a holder that dies must not keep the machine.
+   *
+   * `perf.mts` calls `process.exit(2)` when a shot misses its target, which
+   * skips every `finally` in the process — so the release never went out, the
+   * lease stayed held forever, and every later request queued behind a gate
+   * nobody was standing at. It looked exactly like a hung daemon. Liveness is
+   * the only honest owner check: a TTL either expires on a legitimate long run
+   * or leaves a dead holder in place, and this leaves neither.
+   */
+  private exclusivePid = 0;
   private exclusiveWaiters: (() => void)[] = [];
+
+  /** Drop an exclusive lease whose holder is gone. Cheap; called before every decision. */
+  reapExclusive() {
+    if (!this.exclusive || !this.exclusivePid) return;
+    try { process.kill(this.exclusivePid, 0); } catch {
+      console.log(`[daemon] exclusive holder ${this.exclusive} (pid ${this.exclusivePid}) is gone; releasing`);
+      this.releaseExclusive();
+    }
+  }
 
   submit<T>(lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -785,11 +837,15 @@ class Scheduler {
   }
 
   private pump() {
+    this.reapExclusive();
+    // A holder's own job must not satisfy the quiesce it is waiting for, so
+    // nothing runs at all until the drain completes. Checked before `take()`,
+    // which removes a job from its queue: returning after taking one would drop
+    // it on the floor and hang its client for the full request timeout.
+    if (this.exclusive && this.exclusiveWaiters.length) return;
     while (this.busyWorkers < WORKERS) {
       const job = this.take();
       if (!job) return;
-      // A holder's own job must not satisfy the quiesce it is waiting for.
-      if (this.exclusive && this.exclusiveWaiters.length) return;
       this.busyWorkers++;
       const waited = Date.now() - job.enqueuedAt;
       if (job.deadlineMs > 0 && waited > job.deadlineMs) {
@@ -816,13 +872,20 @@ class Scheduler {
    * cannot quiesce browsers it does not own. Here "the machine is quiet" is a
    * property that can be enforced rather than hoped for.
    */
-  async takeExclusive(holder: string): Promise<void> {
+  async takeExclusive(holder: string, pid: number): Promise<void> {
+    this.reapExclusive();
     if (this.exclusive) throw new Error(`exclusive lease already held by ${this.exclusive}`);
     this.exclusive = holder;
+    this.exclusivePid = pid;
     if (this.busyWorkers) await new Promise<void>((r) => this.exclusiveWaiters.push(r));
   }
 
-  releaseExclusive() { this.exclusive = null; this.pump(); }
+  releaseExclusive() {
+    this.exclusive = null;
+    this.exclusivePid = 0;
+    for (const w of this.exclusiveWaiters.splice(0)) w();
+    this.pump();
+  }
 }
 
 function busyError(sched: Scheduler, waitedMs: number): Error & { busy: true, detail: unknown } {
@@ -1057,7 +1120,21 @@ async function routeEval(body: EvalRequest): Promise<EvalResponse> {
  * and the tool keeps full Playwright control of the page. That division is the
  * only reason those eight tools can stop launching their own browsers.
  */
-const leases = new Map<string, { slot: Slot, build: Build | null, timer: NodeJS.Timeout }>();
+const leases = new Map<string, { slot: Slot, build: Build | null, timer: NodeJS.Timeout, pid: number }>();
+
+/**
+ * Give back leases whose holder is gone.
+ *
+ * The TTL is the backstop for a client that hangs; this is for one that dies. A
+ * crashed tool holding one of four slots is a quarter of the machine, and the
+ * tools that crash are the long-running ones holding the longest leases.
+ */
+function reapLeases() {
+  for (const [id, l] of leases) {
+    if (!l.pid) continue;
+    try { process.kill(l.pid, 0); } catch { void releaseLease(id); }
+  }
+}
 
 async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
   lastUsed = Date.now();
@@ -1081,7 +1158,7 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
         slot.viewport = { w, h };
       }
       const id = newLeaseId();
-      leases.set(id, { slot, build: null, timer: setTimeout(() => { void releaseLease(id); }, ttlMs) });
+      leases.set(id, { slot, build: null, timer: setTimeout(() => { void releaseLease(id); }, ttlMs), pid: Number(body.pid) || 0 });
       return {
         id,
         cdp: `http://127.0.0.1:${slot.cdpPort}`,
@@ -1109,7 +1186,7 @@ async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
     await preparePage(slot, build, body);
     const id = newLeaseId();
     const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
-    leases.set(id, { slot, build, timer });
+    leases.set(id, { slot, build, timer, pid: Number(body.pid) || 0 });
     return {
       id,
       cdp: `http://127.0.0.1:${slot.cdpPort}`,
@@ -1290,7 +1367,7 @@ async function serve() {
           return send(200, { ok: true });
         }
         if (url === '/exclusive') {
-          await sched.takeExclusive(agent);
+          await sched.takeExclusive(agent, Number(body.pid) || 0);
           await pool.closeAll();
           return send(200, { ok: true, holder: agent });
         }
@@ -1329,6 +1406,8 @@ async function serve() {
     process.exit(0);
   };
   setInterval(() => {
+    sched.reapExclusive();
+    reapLeases();
     store.reapIdle();
     const idle = Date.now() - lastUsed;
     if (idle > DAEMON_IDLE_MS) { console.log('[daemon] idle, exiting'); void stop(); }

@@ -9,38 +9,19 @@
  * captures the frame. `src/tools/shoot.mts` can only render the states baked into
  * `Shots.ts`, which another agent owns; this drives the live screen instead so
  * every zoom level can be looked at. Temporary tooling.
+ *
+ * This used to run its own vite against `vite.map.config.mts`, whose only
+ * purpose was a private `cacheDir` — several vite servers sharing one
+ * `node_modules/.vite` re-optimise in a loop and the harness sees a boot that
+ * never finishes. The daemon gives every build its own dependency cache now, so
+ * that config is gone and this is an ordinary lease.
  */
-import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
-
-const portOpen = (port: number) => new Promise<boolean>((res) => {
-  const s = net.connect(port, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
-
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const p = spawn(VITE, ['--config', 'src/tools/vite.map.config.mts', '--port', String(PORT), '--strictPort'],
-    { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
-  p.stdout.on('data', (d) => process.stdout.write(`[vite] ${d}`));
-  for (let i = 0; i < 160; i++) {
-    if (await portOpen(PORT)) return p;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error('vite did not start');
-}
 
 const argv = process.argv.slice(2);
 let out = 'tmp/shots/mapview';
@@ -51,13 +32,10 @@ for (let i = 0; i < argv.length; i++) {
 }
 if (!states.length) states.push([0, 0, 1]);
 
-const server = await ensureServer();
-const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-    '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb',
-    '--hide-scrollbars', '--mute-audio'],
-});
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+const ha = harnessArgs(argv);
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => {
@@ -65,13 +43,6 @@ page.on('console', (m) => {
   if (process.env.VERBOSE) console.log(`[page] ${m.text()}`);
 });
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 240000 });
-  await page.evaluate(() => {
-    window.GAME.stop();
-    window.GAME.resetClock();
-    document.getElementById('boot')?.remove();
-  });
   const dir = path.join(ROOT, out);
   await mkdir(dir, { recursive: true });
   for (const [zoom, filter, revealAll] of states) {
@@ -101,8 +72,7 @@ try {
     console.log(`✓ ${name}  minimap ${meta.cost} ms/frame  ppm ${meta.zoom.toFixed(3)}`);
   }
 } finally {
-  await browser.close();
-  if (server) server.kill();
+  await leased.release();
 }
 if (errors.length) {
   console.error(`\n${errors.length} page error(s):`);
