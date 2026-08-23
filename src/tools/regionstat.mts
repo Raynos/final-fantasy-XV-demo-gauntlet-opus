@@ -43,9 +43,18 @@ const [, , file, ...rest] = process.argv;
 const nums = rest.filter((a) => !a.startsWith('--')).map(Number);
 const labelAt = rest.indexOf('--label');
 const label = labelAt >= 0 ? rest[labelAt + 1] ?? '' : '';
+/**
+ * §12.1's skin-chromaticity filter, verbatim from the paragraph that heads the
+ * section: `R > G > B`, `R − B > 18`, `R > 55`. Without it a face rect is
+ * polluted by hair, collar and background, and every §12.1 row was produced
+ * *with* it — so comparing an unfiltered rect of ours to that table compares
+ * two different statistics. It is what makes the lit:shadow ratio in §12.1
+ * ("2.0–3.2x, never more") a number our frames can be held to.
+ */
+const skinOnly = rest.includes('--skin');
 
 if (!file || nums.length < 4) {
-  console.error('usage: regionstat.mts <shot.png> <x0> <y0> <x1> <y1> [--label name]');
+  console.error('usage: regionstat.mts <shot.png> <x0> <y0> <x1> <y1> [--label name] [--skin]');
   process.exit(2);
 }
 
@@ -66,6 +75,7 @@ for (let y = y0; y < y1; y++) {
     const r = img.data[s]!;
     const g = img.data[s + 1] ?? r;
     const b = img.data[s + 2] ?? r;
+    if (skinOnly && !(r > g && g > b && r - b > 18 && r > 55)) continue;
     R.push(r); G.push(g); B.push(b); Y.push(luma(r, g, b));
   }
 }
@@ -85,6 +95,13 @@ const name = label || file;
 console.log(`${name}  ${x1 - x0}x${y1 - y0} px  (${R.length} samples)`);
 console.log(`  p10 ${at(0.10)}   p50 ${at(0.50)}   p90 ${at(0.90)}   p99 ${at(0.99)}`);
 console.log(`  Y   p5 ${pct(Y, 0.05).toFixed(0)} -> p50 ${pct(Y, 0.50).toFixed(0)} -> p99.5 ${pct(Y, 0.995).toFixed(0)}`);
+if (skinOnly) {
+  // §12.1's four columns and the one derived number the section turns on.
+  const y10 = pct(Y, 0.10), y90 = pct(Y, 0.90);
+  console.log(`  §12.1 p10 ${at(0.10)} p35 ${at(0.35)} p65 ${at(0.65)} p90 ${at(0.90)}`);
+  console.log(`  lit:shadow Y p90/p10 = ${(y90 / Math.max(1, y10)).toFixed(2)}x  (plates 2.0-3.2x)`);
+  console.log(`  clipped (any channel 255): ${(100 * R.filter((v) => v >= 255).length / R.length).toFixed(2)}% of R`);
+}
 // Sign of R-B at the median is the cool/warm call §12.3 turns on: hair must be
 // negative (blue-black), skin positive.
 const rb = pct(R, 0.5) - pct(B, 0.5);
