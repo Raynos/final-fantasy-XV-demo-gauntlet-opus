@@ -1071,8 +1071,26 @@ export class Rocks {
     // `rockSuit` keys the parents on the erosion pass's `accum` and `scree`
     // channels, so the stones now land where this world's own water put them
     // and where its own faces shed them, rather than on a private noise field.
+    // **`dress.rockD` is the bias, not `_density`.** The first version passed
+    // the whole of `_density`, which was measured as a 6-9x thinning: the
+    // sampler's own `rockSuit` already encodes where stone belongs, from the
+    // erosion pass's `accum` and `scree` channels, and `rockScatter`'s `reject`
+    // already carries the road, water and cleared-pad exclusions. Multiplying
+    // a second suitability field on top of both counted the same thing twice
+    // and stripped the boulder field to a tenth of its density. Counted per
+    // 56 m cell over 169 cells per zone, against the process this replaced:
+    //
+    //     zone            _density bias   rockD bias   old
+    //     longwythe            1.81          11.75     9.98
+    //     three_valleys        1.50           9.65    13.50
+    //     callaegh             0.48           3.64     3.91
+    //     fallgrove            0.73           6.19     7.07
+    //     ravatogh             0.59           4.53     5.38
+    //
+    // Nothing in the game would have reported this. `emit` drops a stone
+    // silently once a group's cap is full and says nothing when it is empty.
     const pts = eco.rockScatter(cx * c, cz * c, c, c, {
-      bias: (x, z) => this._density(x, z),
+      bias: (x, z) => dressAt(x, z).rockD,
       // The radius an instance claims is its own footprint, so the sampler's
       // rejection is in metres of stone and not in an abstract count.
       radius: (x, z, u) => 0.7 + 4.2 * Math.pow(u, 1.65) * dressAt(x, z).rockS,
@@ -1080,8 +1098,11 @@ export class Rocks {
     });
     for (const p of pts) {
       const dress = dressAt(p.px, p.pz);
+      // `_density` still weights the SIZE draw, and deliberately does not
+      // reject: thinning children by a second suitability field re-imposes its
+      // own near-uniform statistics on the cluster and shreds it straight back
+      // to Poisson, which is the one mistake §2.3 exists to warn about.
       const d = this._density(p.x, p.z);
-      if (d <= 0.004) continue;
       // **`fromParent` is what separates the block from the chip.** It is the
       // distance from the cluster's own centre in units of its spread, and it
       // is the whole reason to use a cluster process rather than a Poisson
@@ -1118,6 +1139,29 @@ export class Rocks {
       if (near && BIG.has(kind.key) && rng.next() < 0.52 && eco.slope01(p.x, p.z) < 0.32) {
         this._stack(it, rng, out);
       } else out.push(it);
+      // **The spall apron stays**, on top of the sampler's own edge children.
+      //
+      // The sampler places ten children per cluster and splits them between
+      // blocks and scree by `fromParent`, which gets the cluster's *shape*
+      // right and leaves the ground bare: measured, the chip count fell from
+      // 1347 to 342 per 169 cells in Longwythe. A block sheds its own debris at
+      // its own foot and that is a different process from where the cluster put
+      // the block. Both, and the apron carries the cluster's fabric angle so it
+      // reads as one joint set rather than as two scatters on the same ground.
+      const fabric = hashU(Math.round(p.px), Math.round(p.pz), 0x51ed) * Math.PI * 2;
+      const reach = 2.2 + kind.size[1] * 0.9;
+      const frags = 2 + Math.floor(rng.next() * 5);
+      for (let j = 0; j < frags; j++) {
+        const fa = rng.next() * Math.PI * 2;
+        const q = Math.sqrt(rng.next());
+        const fx = p.x + Math.cos(fa) * q * reach, fz = p.z + Math.sin(fa) * q * reach;
+        if (eco.roadDist(fx, fz) < 4.6) continue;
+        const ck = K.get(pickWeighted(dress.frag, rng.next())) ?? K_PEBBLE;
+        const chip = this._item(ck, fx, fz, rng, d * 0.7, dress);
+        chip.yaw = fabric + rng.gauss(0, 0.6);
+        chip.s *= 1 - 0.42 * q;
+        out.push(chip);
+      }
     }
   }
 
