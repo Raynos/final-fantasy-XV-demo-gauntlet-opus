@@ -572,6 +572,12 @@ export class Sky {
     // `?post=noactorhaze` collapses the actor law back onto the terrain law, so
     // the split can be diffed rather than argued about.
     if (this._ablate.has('noactorhaze')) u.uAerialNear.value.set(0, 1e-3);
+    // The two unshadowable diffuse ambients, ablatable separately (`noambient`,
+    // `noenv`; applied at their per-frame assignment sites, not here). Both feed
+    // shade, neither is occluded by anything, and sibling-ports 3.8 asks
+    // whether they double-count -- the FFXV-opus repo found its own probe was
+    // the ambient flood that was killing its shadows. Answering that needs each
+    // arm removable on its own, which is what these two tokens are for.
     if (this._ablate.has('noclouds')) { u.uCloudCoverage.value = 0; u.uCloudShadowStrength.value = 0; }
     if (this._ablate.has('nocloudshadow')) u.uCloudShadowStrength.value = 0;
     if (this._ablate.has('nocirrus')) u.uCirrus.value = 0;
@@ -923,7 +929,10 @@ export class Sky {
     // deliberately excluded from the meter, otherwise adding blue shadow light
     // would immediately stop the frame down again and cancel itself out.
     const fillBase = lerp(0.155, 0.16, day) * p.ambient;
-    this.ambient.intensity = fillBase + 0.54 * golden * p.ambient;
+    // `?post=noambient` -- see `_ablateWeather`. Applied here and not there
+    // because this line runs every frame and would overwrite a one-shot zero.
+    this.ambient.intensity = this._ablate.has('noambient')
+      ? 0 : fillBase + 0.54 * golden * p.ambient;
 
     // The probe is baked from the sky dome, so at low sun it is a bucket of
     // amber. Dialling it back through the golden band hands that job to the
@@ -1040,7 +1049,8 @@ export class Sky {
     const prev = this.envRT;
     // analytic clouds for the probe: cheap and it is blurred to irradiance anyway
     this.envRT = this.pmrem.fromScene(this.envScene, 0.0, 1, 20000);
-    this.game.scene.environment = this.envRT.texture;
+    // `?post=noenv` -- the same every-frame caveat as `noambient` above.
+    this.game.scene.environment = this._ablate.has('noenv') ? null : this.envRT.texture;
     this.game.scene.environmentIntensity = this._envIntensity != null ? this._envIntensity : 1.0;
     if (prev) prev.dispose();
   }
