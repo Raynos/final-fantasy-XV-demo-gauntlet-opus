@@ -25,8 +25,7 @@
  * no work and the daemon exits after DAEMON_IDLE_MIN (default 25), taking vite
  * with it. Nothing is left burning CPU on a shared box.
  */
-import { chromium } from 'playwright';
-import type { Browser, ConsoleMessage, Page } from 'playwright';
+import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import http from 'node:http';
@@ -34,7 +33,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CHROMIUM_ARGS } from './chromium.mts';
+import { launchPersistent } from './chromium.mts';
 import { createHash } from 'node:crypto';
 import { readdirSync, statSync } from 'node:fs';
 
@@ -207,6 +206,8 @@ export interface HealthResponse {
   appPort: number;
   page: boolean;
   browser: boolean;
+  /** False means the GPU program cache is cold every boot; see chromium.mts. */
+  persistentProfile: boolean;
   mode: PageMode | null;
   query: string | null;
   boots: number;
@@ -297,7 +298,9 @@ export async function ensureDaemon(): Promise<boolean> {
 class Harness {
   bootMs!: number;
   boots!: number;
-  browser!: Browser | null;
+  persistentProfile!: boolean;
+  /** The persistent-profile context; named `browser` because it is one, lifetime-wise. */
+  browser!: BrowserContext | null;
   errors!: string[];
   lastUsed!: number;
   mode!: PageMode | null;
@@ -311,6 +314,7 @@ class Harness {
   constructor() {
     this.server = null;      // vite child process
     this.browser = null;
+    this.persistentProfile = false;
     this.page = null;
     this.errors = [];
     this.viewport = null;
@@ -373,8 +377,18 @@ class Harness {
     }
 
     await this.closePage();
-    if (!this.browser) this.browser = await chromium.launch({ args: CHROMIUM_ARGS });
-    const page = await this.browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+    if (!this.browser) {
+      const { ctx, persistent } = await launchPersistent({ width: w, height: h });
+      this.browser = ctx;
+      this.persistentProfile = persistent;
+    }
+    // A persistent context fixes its viewport at launch, so a later request for
+    // a different size has to resize rather than ask for it up front. The reuse
+    // path already does exactly this; a fresh page just joins it.
+    const page = this.browser.pages()[0]?.url() === 'about:blank'
+      ? this.browser.pages()[0]
+      : await this.browser.newPage();
+    await page.setViewportSize({ width: w, height: h });
     page.on('pageerror', (e: Error) => this.errors.push(String(e)));
     page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') this.errors.push(m.text()); });
 
@@ -530,6 +544,7 @@ async function serve() {
         if (url === '/health') {
           return send(200, {
             ok: true, appPort: APP_PORT, page: !!harness.page, browser: !!harness.browser,
+            persistentProfile: harness.persistentProfile,
             mode: harness.mode, query: harness.query, boots: harness.boots,
             reuses: harness.reuses, bootMs: harness.bootMs,
             idleSec: Math.round((Date.now() - harness.lastUsed) / 1000),
