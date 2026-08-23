@@ -368,8 +368,37 @@ export class GrassField {
      * fills over as many frames as it needs and the frame budget is never
      * blown. The very first update runs unbounded so the loading screen, not
      * the first second of play, pays for the initial dressing.
+     *
+     * **4 -> 2, because the frame it was sized against was never real.** This
+     * plus `Trees` (4) and `Bushes` (2) told the streamers they could spend
+     * 10 ms of wall clock per frame, which is defensible against the 23 ms
+     * frame the old harness reported and absurd against the 4.3 ms one it
+     * actually is — see `project/LANDMINES.md`, *The measurement trap*.
+     * `Vegetation.update` was the largest single cost in the moving frame at
+     * 7.8 ms, more than the entire renderer.
+     *
+     * Measured on the halving, over a 180-frame traverse
+     * (`src/tools/probes/perfvegbudget.mts`):
+     *
+     *     4/2/4 ms   14.4 ms frame, 69 fps, 19% of frames over budget
+     *     2/1/2 ms   12.3 ms frame, 81 fps,  6% over
+     *     1/0.5/1    11.2 ms frame, 89 fps,  6% over
+     *
+     * and it costs nothing visible: resident vegetation triangles came back
+     * *higher* at 2/1/2 than at 4/2/4 in both runs, and two mid-traverse
+     * captures at the same frame index are indistinguishable
+     * (`src/tools/probes/perfvegpop.mts`, `tmp/shots/vegpop/`). Note that no
+     * ordinary capture can see this either way: `Vegetation.converge()`
+     * ignores `budgetMs` and `Game.settle` calls it, so every posed shot in
+     * the corpus is fully filled whatever this says. Only live traversal
+     * shows it.
+     *
+     * The quarter budget is another 8 fps and is left on the table
+     * deliberately: 6% over budget is already not the binding constraint, and
+     * a later lane tuning grass density should re-measure rather than inherit
+     * a number tuned against a different density.
      */
-    this.budgetMs = 4;
+    this.budgetMs = 2;
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;

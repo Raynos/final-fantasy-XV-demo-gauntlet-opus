@@ -289,8 +289,12 @@ export class Trees {
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;
-    /** Milliseconds of *tile generation* one update may spend. See GrassField. */
-    this.budgetMs = 4;
+    /**
+     * Milliseconds of *tile generation* one update may spend. See GrassField,
+     * which carries the measurement for the 4 -> 2 halving of all three
+     * streamers.
+     */
+    this.budgetMs = 2;
     this._unbounded = false;
 
     // How many of each LOD may be on screen at once. These are the honest

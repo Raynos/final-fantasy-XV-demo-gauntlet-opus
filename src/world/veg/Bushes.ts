@@ -329,7 +329,8 @@ export class Bushes {
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;
-    this.budgetMs = 2;
+    /** See GrassField for the measurement behind the 2 -> 1 halving. */
+    this.budgetMs = 1;
     this.budget = Math.max(300, Math.round(2000 * quality));
     this.impRange = impRange;
     this.impBudget = Math.max(600, Math.round(4200 * quality));
