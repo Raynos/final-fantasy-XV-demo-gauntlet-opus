@@ -26,7 +26,12 @@ const standAt = (x, z, lookAt) => {
   const y = terr.heightAt(x, z);
   const h = lookAt ? Math.atan2(lookAt[0] - x, lookAt[1] - z) : 0;
   _hold = { x, y, z, h };
-  step(16);
+  // The camera comes too: `Npcs.update` LODs out past 85 m and stops writing
+  // the talk anchors, so a teleport that leaves the camera behind leaves every
+  // NPC anchor stale and the prompt names the wrong person.
+  g.camera.position.set(x - Math.sin(h) * 4, y + 3, z - Math.cos(h) * 4);
+  g.camera.lookAt(lookAt ? lookAt[0] : x, y + 1.2, lookAt ? lookAt[1] : z);
+  step(24);
 };
 const prompt = () => (ix.current ? `[E] ${ix.current.verb} ${ix.current.label}` : 'none');
 const q = (id) => {
@@ -62,9 +67,24 @@ out.push(`after six troopers: bits ${rpg.inventory.count('rusted_bit')}, quest $
 
 out.push('');
 out.push('=== 2. Hammerhead: Cid, then Takka ===');
+// Walk into town BEFORE reading any NPC anchor. `Npcs._registerTalk` gives each
+// person an empty Vector3 and `Npcs.update` only writes it while the camera is
+// within 85 m, so from the breakdown all four Hammerhead anchors read (0,0,0)
+// and a probe that trusts them stands on top of the car talking to nobody.
+const town = g.get('Town');
+standAt(town.origin.x, town.origin.z + 6, [town.origin.x, town.origin.z]);
+step(40);
 const cid = [...ix.items.values()].find((i) => i.id === 'npc_cid');
+out.push(`Cid's anchor, once the town is loaded: (${cid.pos.x.toFixed(0)},${cid.pos.z.toFixed(0)})`);
 standAt(cid.pos.x + 1.4, cid.pos.z + 1.4, [cid.pos.x, cid.pos.z]);
 out.push(`standing at Cid: ${prompt()}`);
+{
+  const p = player.position;
+  const near = [...ix.items.values()]
+    .map((i) => [i.id, Math.hypot(i.pos.x - p.x, i.pos.z - p.z), i.radius, i.priority])
+    .filter(([, dd]) => dd < 12).sort((a, b) => a[1] - b[1]);
+  out.push(`  player at (${p.x.toFixed(1)},${p.z.toFixed(1)}); in range: ${near.map(([id, dd, r, pr]) => `${id} ${dd.toFixed(1)}m r${r} p${pr}`).join(', ')}`);
+}
 tap('KeyE', 3);
 out.push(`dialogue open: ${ix.talking}`);
 // walk the hand-over: advance to the choice list, pick "Hand over the Rusted Bits"
@@ -131,17 +151,21 @@ out.push(`standing on ${haven.name}: ${prompt()}`);
 const lv0 = rpg.noctis.level, day0 = rpg.day.day, bank0 = Math.round(rpg.expBank.banked);
 tap('KeyE', 3);
 out.push(`camp dialogue open: ${ix.talking}`);
-// arrive -> menu -> cook -> first recipe
-for (let i = 0; i < 20 && ix.talking; i++) {
+// arrive -> menu -> "Ask Ignis to cook" -> the first recipe -> sleep
+const trail = [];
+for (let i = 0; i < 24 && ix.talking; i++) {
+  trail.push(d.node?.id ?? d._nodeId ?? '?');
   d._typed = d._full.length;
   if (d.chNodes && d.chNodes.length) {
-    const k = d.chNodes.findIndex((c) => /cook/i.test(c.def.label || ''));
-    if (k >= 0) { d._sel = k; d._advance(); step(2); continue; }
-    d._sel = 0; d._advance(); step(2); continue;
+    const labels = d.chNodes.map((c) => c.def.label);
+    const k = labels.findIndex((l) => /ask ignis to cook/i.test(l || ''));
+    d._sel = k >= 0 ? k : 0;
+    trail.push(`pick "${labels[d._sel]}" of [${labels.join(' | ')}]`);
   }
   d._advance(); step(2);
 }
 step(10);
+out.push(`dialogue trail: ${trail.join(' -> ')}`);
 out.push(`after cooking and sleeping: day ${day0}->${rpg.day.day}, level ${lv0}->${rpg.noctis.level}, banked ${bank0}->${Math.round(rpg.expBank.banked)}`);
 out.push(`meal running: ${rpg.party.activeBuffs.filter((b) => b.kind === 'meal').map((b) => `${b.name} (${(b.recipe?.effects || []).join(', ')})`).join('; ') || 'none'}`);
 out.push(`clock ${rpg.day.clockString}, phase ${rpg.day.phase.name}`);
