@@ -260,8 +260,8 @@ export const CAST = {
         // a real jacket: heavy hems, a fold-down collar standing off the neck,
         // and enough thickness at the open edge to read as leather rather than
         // as two straps drawn on a bare chest
-        { type: 'jacket', color: 0x312d2d, rough: 0.40, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
-        { type: 'sleeve', color: 0x312d2d, rough: 0.40, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
+        { type: 'jacket', color: 0x312d2d, rough: 0.62, u0: 0.30, u1: 0.955, pad: 0.026, gap: 0.40, waist: 0.075, flare: 0.07, thickness: 0.020, collarH: 0.052, collarR: 0.082, collarFlare: 1.24, collarGap: 0.34, shoulderDrop: 0.006, pockets: true, pocketTh: 0.92, pocketT: 0.46, pocketW: 0.095, studColor: 0x9a8f74 },
+        { type: 'sleeve', color: 0x312d2d, rough: 0.62, u0: 0.03, u1: 0.40, pad: 0.014, cuff: 0.05, cuffBand: true, cuffColor: 0x262322 },
         { type: 'belt', color: 0x3d3322, rough: 0.36, u: 0.35, pad: 0.026, buckleBox: true, buckleColor: 0xb0a082 },
         { type: 'pouch', color: 0x3d3322, rough: 0.42, sides: ['R'], u: 0.24, size: [0.055, 0.10, 0.04] },
         { type: 'boots', color: 0x352d20, rough: 0.38, shaft: 0.70, strap: true, width: 0.052, height: 0.040 },
