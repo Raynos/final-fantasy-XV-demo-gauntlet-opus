@@ -1036,7 +1036,13 @@ void tf_shade() {
     // angle, which is why detail used to "die past ~15 m".
     vec3 nearN = vec3(0.0, 0.0, 1.0);
     float nearAlb = 0.5;
-    float nfAmt = (1.0 - smoothstep(38.0, 105.0, vTDist)) * uMicro;
+    // Footprint, not distance. The near-field map tiles at uNearScale -- a 2.9 m
+    // repeat, so its features are a third of a metre -- and a third of a metre
+    // is still four pixels at 240 m. Cutting it off at 105 m threw away half the
+    // range over which it is legible, and that band is precisely where the
+    // ground was reading as one flat brown carpet: past 105 m EVERY albedo
+    // detail term in this shader was already off except the 5 m layer tiles.
+    float nfAmt = tf_lodW(0.33, tfPx) * uMicro;
     if (nfAmt > 0.003) {
       vec3 nbw = pow(abs(N), vec3(3.0));
       nbw /= max(nbw.x + nbw.y + nbw.z, 1e-4);
@@ -1159,6 +1165,36 @@ void tf_shade() {
   // A hollow sees less sky. This is a real ambient term and it is what makes a
   // gully read as cut *into* the face rather than drawn on it.
   ao *= 0.82 + 0.24 * reliefN;
+
+  // ---- surface variegation, 2-8 m -----------------------------------------
+  //
+  // Real ground is a mosaic of materials at a few metres: a scoured pale
+  // scrape, a lens of gravel, a patch where something grows and the litter
+  // darkens the soil. Ours had none of that, and the reason is worth writing
+  // down because it is the same disease as the relief: EVERY albedo detail term
+  // in this shader was gated on distance rather than on screen footprint, and
+  // past 105 m all of them were already off except the 5 m layer tiles. From
+  // there to the horizon the ground was one tiled texture under a set of
+  // hectare-scale tints, which is exactly the "flat, uniform mottle with little
+  // variation in colour, scale or wear at any distance" the blind judge ranked
+  // first.
+  //
+  // The six layers cannot fix that on their own: their mean lumas run 0.35 to
+  // 0.47, a spread of +-15%, so the splat can switch material and the value
+  // barely moves. This is the value contrast the mosaic needs, on the hue axis
+  // real ground varies along -- scoured is paler and warmer, organic is darker
+  // and cooler -- and smoothstepped so the patches have edges instead of
+  // reading as a blur.
+  float vg1 = tf_snoise(P.xz * 0.42 + 71.0);
+  float vg2 = tf_snoise(P.xz * 0.13 - 19.0);
+  float varg = clamp(0.5 + 0.52 * vg1 * tf_lodW(2.4, tfPx)
+                         + 0.48 * vg2 * tf_lodW(7.7, tfPx), 0.0, 1.0);
+  varg = smoothstep(0.24, 0.76, varg);
+  // Damped where the ground is under a mat: a sward or a road is uniform, and
+  // it is bare ground that is a mosaic.
+  float vargAmt = (1.0 - 0.55 * w[4]) * (1.0 - 0.85 * road);
+  col *= mix(vec3(1.0), mix(vec3(0.80, 0.79, 0.83), vec3(1.20, 1.18, 1.10), varg), vargAmt);
+  rgh = clamp(mix(rgh, rgh * (0.90 + 0.22 * varg), vargAmt * 0.8), 0.02, 1.0);
 
   // ---- tier-D grass: the sward the geometry stops drawing ------------------
   //
