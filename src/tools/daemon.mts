@@ -1074,8 +1074,25 @@ async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Pa
   slot.key = key;
   slot.build = build.id;
   slot.viewport = { w, h };
-  if (!opts.play) await resetPage(page);
+  // A FRESHLY BOOTED PAGE IS NOT RESET. It is already in the state a fresh load
+  // leaves it in, which is the state `reset()` is trying to reproduce -- so
+  // calling it here can only move the page AWAY from that state, never toward
+  // it. `integration.mts` proved that too: 27 pass at the session's starting
+  // commit, 24 pass with two "not integrated" once `reset()` existed and ran
+  // after every boot, because `Menus.setScreen('main')` had opened the title
+  // screen on a page nothing had dirtied. It only needs the clock zeroed and
+  // the loading screen gone.
+  if (!opts.play) await freshenPage(page);
   return page;
+}
+
+/** What a *just-booted* page needs, and nothing more. */
+async function freshenPage(page: Page) {
+  await page.evaluate(() => {
+    window.GAME.stop();
+    window.GAME.resetClock();
+    document.getElementById('boot')?.remove();
+  });
 }
 
 /**
@@ -1401,16 +1418,26 @@ async function releaseLease(id: string): Promise<void> {
     // it back to about:blank is the whole reset; there is no game state to
     // lose, and keeping the browser is what makes the next image tool free.
     await l.slot.page?.goto('about:blank').catch(() => {});
-  } else if (l.slot.key.includes('shoot=1')) {
-    await resetPage(l.slot.page).catch(async () => { await pool.recycle(l.slot); });
   } else {
-    // A PLAY page is not reset, it is thrown away. It has been driven through
-    // real input for minutes: combat state, quest flags, the day cycle, enemy
-    // AI and the physics broadphase have all moved, and `stop()` + a zeroed
-    // clock puts none of it back. Pooling one would hand the next tool a world
-    // somebody else already played, which is the "plausible and wrong" failure
-    // the reset-drift check exists to catch. Closing the page keeps the
-    // browser, which is the expensive half.
+    // EVERY LEASED GAME PAGE IS THROWN AWAY, NOT POOLED.
+    //
+    // The first version of this pooled a leased page whose query carried
+    // `?shoot=1`, on the theory that `shoot=1` means "capture" and capture
+    // pages are safe to reuse. That is wrong, and `integration.mts` proved it
+    // within an hour: it boots with `?shoot=1` and then drives fifteen minutes
+    // of real gameplay -- combat, quests, camping, fishing -- stepping the sim
+    // by hand. Two consecutive runs disagreed with each other (26 pass / 1 not
+    // integrated, then 24 pass / 2 not integrated) because the second was
+    // handed a world the first had already played.
+    //
+    // The discriminator is not the query, it is HOW THE PAGE WAS OBTAINED. A
+    // tool that asked for frames (`/shots`) only ever posed shots, and its page
+    // is reset and pooled. A tool that took a LEASE asked for the page itself,
+    // which means it intends to do something the daemon cannot see or undo --
+    // and `stop()` plus a zeroed clock puts none of it back.
+    //
+    // Closing the page keeps the browser, which is the expensive half: a boot
+    // is 9.2 s and a chromium launch is a fraction of that.
     if (l.slot.page) { await l.slot.page.close().catch(() => {}); l.slot.page = null; }
     l.slot.key = '';
     l.slot.build = null;
