@@ -329,12 +329,31 @@ lives in the tool rather than in a handoff is what makes it survivable.**
 
 ## Gates
 
-`npm run check`: **10/11**. `combatloop` errored at 0.4 s *inside the suite* while
-captures were running on this worktree, and passes **31/31 standalone** — it is a
-harness collision, not a regression. `anycheck` 0. `horizoncheck` PASS at worst
+`PORT=5460 npm run check`: **11/11**. `anycheck` 0. `horizoncheck` PASS at worst
 MCC 0.766 (the coordinator already explained that number: it moved with the
-Hammerhead merge and is not a regression). `driftcheck`, `heightcheck`,
-`roadcheck`, `creaturecheck`, `uxcheck`, `integration`, `orphans` all PASS.
+Hammerhead merge and is not a regression). `combatloop` **31/31**.
+
+**Read that `PORT=` — a plain `npm run check` gave me 10/11 with `combatloop`
+FAIL, and it was not a regression.** `combatloop.mts:24` hard-codes
+`PORT || 5199`, and it is not a `needsServer` gate, so `check.mts` does not hand
+it the aux port it found — it inherits the environment and goes to 5199, which
+tonight is a co-agent's dev server. `assertOwnPort` correctly refuses the foreign
+server and the gate dies in 0.4 s with a Node stack, which reads in the summary
+table as a combat regression. It passes 31/31 standalone and 31/31 under `check`
+the moment `PORT` points somewhere free.
+
+**This is the same bug `check.mts`'s own comments describe for `heightcheck` and
+`driftcheck`** — the one that "cost two separate lanes an investigation tonight
+before anyone noticed the two gates were not failing, they were never running."
+Those two were fixed by giving them a `freePort` aux server. `combatloop` was
+not, because it starts its own; but starting your own on a hard-coded port is the
+same assumption. The fix is to give `combatloop.mts` the `freePort` scan the aux
+server already has. **Until then, run `npm run check` with an explicit free
+`PORT` and do not believe a 0.4-second `combatloop` failure.**
+
+Also note the table's `expect: '30/30'` for `combatloop` is stale display text —
+the gate now verifies 31 mechanics and reports `31/31`. It is not asserted
+against, so nothing breaks, but the summary line lies about the target.
 
 `npm run typecheck` and `npm run typecheck:tools` both clean.
 
