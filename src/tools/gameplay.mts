@@ -38,7 +38,7 @@ import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } fr
 import type { Floor } from './ruler.mts';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, withExclusive } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -403,4 +403,18 @@ async function main() {
   console.log(`\nPASS: every segment >= ${o.target} fps, on a ruler that validated itself`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+/**
+ * THE QUIET LANE. This is the payoff of one daemon owning one machine.
+ *
+ * RESCUE §B6 threw away every perf number from a whole session because they
+ * were taken under six concurrent chromiums. Under per-worktree daemons that
+ * was unfixable: a daemon cannot quiesce browsers it does not own. Here it can,
+ * so "the machine is quiet" stops being a thing you hope for and becomes a
+ * thing the harness enforces -- every worker drained, every pooled page closed,
+ * and no new work admitted until this releases.
+ *
+ * The state the measurement was taken under is stamped into the report, because
+ * a perf number without it is not comparable, and two sessions arguing about a
+ * regression that was really a busy box is a whole afternoon.
+ */
+await withExclusive('gameplay', main).catch((e) => { console.error(e); process.exit(1); });

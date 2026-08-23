@@ -770,8 +770,13 @@ class Scheduler {
       const q = this.queues[lane];
       if (!q.length) continue;
       const last = this.lastAgent.get(lane);
-      let i = q.findIndex((j) => j.agent !== last);
-      if (i < 0) i = 0;
+      // While an exclusive lease is out, the holder is the only agent that runs
+      // — including its own work. Without this the quiet lane deadlocks: perf
+      // quiesces the machine and then queues behind its own gate forever.
+      const eligible = (j: Job) => !this.exclusive || j.agent === this.exclusive;
+      if (!q.some(eligible)) continue;
+      let i = q.findIndex((j) => eligible(j) && j.agent !== last);
+      if (i < 0) i = q.findIndex(eligible);
       const [job] = q.splice(i, 1);
       this.lastAgent.set(lane, job.agent);
       return job;
@@ -780,9 +785,11 @@ class Scheduler {
   }
 
   private pump() {
-    while (!this.exclusive && this.busyWorkers < WORKERS) {
+    while (this.busyWorkers < WORKERS) {
       const job = this.take();
       if (!job) return;
+      // A holder's own job must not satisfy the quiesce it is waiting for.
+      if (this.exclusive && this.exclusiveWaiters.length) return;
       this.busyWorkers++;
       const waited = Date.now() - job.enqueuedAt;
       if (job.deadlineMs > 0 && waited > job.deadlineMs) {
@@ -1262,6 +1269,21 @@ async function serve() {
         if (url === '/release') {
           await releaseLease(String(body.id ?? ''));
           return send(200, { ok: true });
+        }
+        if (url === '/build') {
+          // A served build WITHOUT a page: the port, and nothing else.
+          //
+          // `bootprof` times `goto` to `GAME.ready` over and over, `texbake`
+          // records a canvas cache through a query the game only honours on a
+          // fresh load, and `detcheck` compares a reused page against a fresh
+          // one. All three need a URL and their own navigation; none of them
+          // wants the daemon to have booted the page first, because the boot
+          // IS the measurement. They pair this with a blank lease, so they
+          // still hold exactly one slot against the budget.
+          const id = typeof body.build === 'string' ? body.build : (DIRTY_PREFIX + ROOT);
+          const b = await store.acquire(id, body.prod === true);
+          lastUsed = Date.now();
+          return send(200, { port: b.port, build: shortBuild(b.id), dirty: isDirty(b.id), kind: b.kind });
         }
         if (url === '/release-build') {
           store.release(String(body.build ?? ''));

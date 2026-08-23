@@ -14,35 +14,11 @@
  * `window.__shot(name)` at each moment instead; every one is written next to
  * `--shot`'s path with the name appended.
  */
-import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
-import net from 'node:net';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { mkdir } from 'node:fs/promises';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed');
-}
 
 const argv = process.argv.slice(2);
 const shotIx = argv.indexOf('--shot');
@@ -50,18 +26,13 @@ const shotPath = shotIx >= 0 ? argv[shotIx + 1] : null;
 const probeFile = argv.find((a, i) => !a.startsWith('--') && argv[i - 1] !== '--shot');
 if (!probeFile) throw new Error('usage: probe.mts <probe.mts> [--shot out.jpg]');
 const src = await readFile(probeFile, 'utf8');
-const server = await ensureServer();
-const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=default', '--enable-unsafe-swiftshader',
-    '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--force-color-profile=srgb', '--mute-audio'],
-});
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+const ha = harnessArgs(process.argv.slice(2), {});
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 page.on('console', (m) => console.log(`[page:${m.type()}]`, m.text()));
 page.on('pageerror', (e) => console.log('[pageerror]', String(e)));
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-  await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
   // `await window.__shot('name')` from inside the probe grabs the canvas *at
   // that moment*. The binding is async, so the page's JS thread is idle while
@@ -94,4 +65,4 @@ try {
       ...(ext === '.png' ? {} : { quality: 84 }) });
     console.log(`[shot] ${shotPath}`);
   }
-} finally { await browser.close(); if (server) server.kill(); }
+} finally { await leased.release(); }

@@ -42,21 +42,14 @@
  *
  * Exits 0 on pass, 2 if a shot is below target, 3 if the run is void.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
 import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } from './ruler.mts';
 import type { Floor } from './ruler.mts';
-import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import net from 'node:net';
+import { harnessArgs, announceBuild, lease, pageOpts, withExclusive } from './harness.mts';
 import { fileURLToPath } from 'node:url';
-import { assertOwnPort, resolvePort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
   const o: {
@@ -84,25 +77,7 @@ function parseArgs(argv: string[]) {
   return o;
 }
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], {
-    cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  const deadline = Date.now() + 40000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 async function listShots() {
   const src = await readFile(path.join(ROOT, 'src/game/Shots.ts'), 'utf8');
@@ -129,7 +104,6 @@ interface Row {
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  const server = await ensureServer();
   const shots = o.shots.length ? o.shots : await listShots();
 
   // BEFORE measuring, not after. Everything below is only as good as the
@@ -137,8 +111,10 @@ async function main() {
   const load = printContention();
   console.log('');
 
-  const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-  const page = await browser.newPage({ viewport: { width: o.w, height: o.h }, deviceScaleFactor: 1 });
+  const ha = harnessArgs(process.argv.slice(2), {});
+  announceBuild(ha);
+  const leased = await lease(pageOpts(ha));
+  const page = leased.page;
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -147,9 +123,6 @@ async function main() {
   let floorStart: Floor = { iqrMs: 0, biasMs: 0, pairs: 0 };
   let floorEnd: Floor = { iqrMs: 0, biasMs: 0, pairs: 0 };
   try {
-    await page.goto(`http://127.0.0.1:${PORT}/?q=${o.q}&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-    await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
     await page.evaluate(RULER_PAGE_SRC);
 
     const gpu = await page.evaluate(() => {
@@ -287,8 +260,7 @@ async function main() {
 
     floorEnd = await measureFloor(shots[0], o.pairs);
   } finally {
-    await browser.close();
-    if (server) server.kill();
+    await leased.release();
   }
 
   // The worse of the two floors. A run that started quiet and ended contended
@@ -361,4 +333,18 @@ async function main() {
   console.log(`\nPASS: every shot >= ${o.target} fps, on a ruler that validated itself`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+/**
+ * THE QUIET LANE. This is the payoff of one daemon owning one machine.
+ *
+ * RESCUE §B6 threw away every perf number from a whole session because they
+ * were taken under six concurrent chromiums. Under per-worktree daemons that
+ * was unfixable: a daemon cannot quiesce browsers it does not own. Here it can,
+ * so "the machine is quiet" stops being a thing you hope for and becomes a
+ * thing the harness enforces -- every worker drained, every pooled page closed,
+ * and no new work admitted until this releases.
+ *
+ * The state the measurement was taken under is stamped into the report, because
+ * a perf number without it is not comparable, and two sessions arguing about a
+ * regression that was really a busy box is a whole afternoon.
+ */
+await withExclusive('perf', main).catch((e) => { console.error(e); process.exit(1); });

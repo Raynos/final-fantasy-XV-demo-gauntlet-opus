@@ -175,6 +175,21 @@ export async function probe<T = unknown>(file: string, opts: PageOpts = {}): Pro
   return r.value as T;
 }
 
+/**
+ * A served build's port, with no page attached.
+ *
+ * For the three tools whose measurement *is* the navigation: `bootprof` times
+ * `goto` to `GAME.ready` repeatedly, `texbake` records a canvas cache through a
+ * query only honoured on a fresh load, and `detcheck` compares a reused page
+ * against a fresh one. Pair it with `withBlankPage()` so the browser is still
+ * one of the four the budget knows about.
+ */
+export async function buildServer(opts: { build?: BuildId, prod?: boolean } = {}):
+Promise<{ port: number, build: string, dirty: boolean, kind: 'dev' | 'prod' }> {
+  await ensureDaemon();
+  return call('/build', opts);
+}
+
 // --------------------------------------------------------------- play tier
 
 /** A leased page: a real Playwright `Page` in a browser the daemon owns. */
@@ -282,6 +297,12 @@ export async function withBlankPage<T>(
 export async function withExclusive<T>(agent: string, fn: () => Promise<T>): Promise<T> {
   await ensureDaemon();
   await call('/exclusive', { agent });
+  // Stamp the state the measurement was taken under, before it is taken. A perf
+  // number without this is not comparable, and two sessions arguing about a
+  // regression that was really a busy box costs an afternoon.
+  const os = await import('node:os');
+  console.log(`[harness] quiet lane held by ${agent} — load ${os.loadavg()[0].toFixed(2)}, `
+    + `${os.cpus().length} cores, pool drained`);
   try { return await fn(); }
   finally { await call('/exclusive-release', {}).catch(() => {}); }
 }

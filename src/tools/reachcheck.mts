@@ -37,50 +37,26 @@
  * human is supposed to be able to reach, this tool asserts each one ran, and a
  * zero is a failure. Every entry in it is there because it was found dead.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
-import { assertOwnPort, resolvePort } from './portowner.mts';
-import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import net from 'node:net';
 import path from 'node:path';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
-const VITE = path.join(ROOT, 'node_modules/.bin/vite');
-const PORT = resolvePort(5173, ROOT);
 
-const portOpen = (p: number) => new Promise<boolean>((res) => {
-  const s = net.connect(p, '127.0.0.1');
-  s.on('connect', () => { s.destroy(); res(true); });
-  s.on('error', () => res(false));
-  setTimeout(() => { s.destroy(); res(false); }, 800);
-});
 
-async function ensureServer() {
-  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
-  const proc = spawn(VITE, ['--port', String(PORT), '--strictPort'], { cwd: ROOT, stdio: 'ignore' });
-  const deadline = Date.now() + 240000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 400));
-    if (await portOpen(PORT)) return proc;
-  }
-  throw new Error('vite failed to start');
-}
 
 interface Result { reached: Record<string, number>; unreached: string[]; instrumented: number; errors: string[] }
 
 const argv = process.argv.slice(2);
-const server = await ensureServer();
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
+const ha = harnessArgs(process.argv.slice(2), { q: 'medium', w: 1280, h: 720 });
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 let out: Result;
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errs: string[] = [];
   page.on('pageerror', (e) => errs.push(String(e)));
-  await page.goto(`http://127.0.0.1:${PORT}/?q=medium&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
 
   const src = await readFile(path.join(ROOT, 'src/tools/_reach/instrument.mts'), 'utf8');
   const drive = await readFile(path.join(ROOT, 'src/tools/_reach/exercise.mts'), 'utf8');
@@ -89,8 +65,7 @@ try {
   out = await page.evaluate(() => (window as unknown as { __REACH: () => Result }).__REACH()) as Result;
   out.errors = errs;
 } finally {
-  await browser.close();
-  if (server) server.kill();
+  await leased.release();
 }
 
 const must: string[] = JSON.parse(await readFile(path.join(ROOT, 'project/must-run.json'), 'utf8'));

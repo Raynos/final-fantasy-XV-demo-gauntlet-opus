@@ -28,17 +28,10 @@
  * two probes, or if it disagrees with `Terrain.heightAt()` by more than
  * `--tol-cpu`.
  */
-import { chromium } from 'playwright';
-import { CHROMIUM_ARGS } from './chromium.mts';
 import type * as THREE from 'three';
-import { resolvePort } from './portowner.mts';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 
-/** Repo root, so the port resolver can tell our own dev server from a co-agent's. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-const PORT = resolvePort(5173, ROOT);
 
 function parseArgs(argv: string[]) {
   const o = {
@@ -82,14 +75,13 @@ const DEFAULT_TOUR = [
 const opts = parseArgs(process.argv.slice(2));
 const tour = opts.tour || DEFAULT_TOUR;
 
-const browser = await chromium.launch({ args: CHROMIUM_ARGS });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const ha = harnessArgs(process.argv.slice(2), { q: 'ultra', w: 1280, h: 720 });
+announceBuild(ha);
+const leased = await lease(pageOpts(ha));
+const page = leased.page;
 const errors: string[] = [];
 page.on('pageerror', (e) => { errors.push(String(e).split('\n')[0]); });
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().split('\n')[0]); });
-await page.goto(`http://127.0.0.1:${PORT}/?q=ultra&shoot=1`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 180000 });
-await page.evaluate(() => { window.GAME.stop(); document.getElementById('boot')?.remove(); });
 
 const out = await page.evaluate(async (cfg) => {
   const g = window.GAME;
@@ -318,7 +310,7 @@ const out = await page.evaluate(async (cfg) => {
   };
 }, { ...opts, tour });
 
-await browser.close();
+await leased.release();
 
 const f = (v: number | null | undefined, d = 3) => (v == null ? 'n/a' : Number(v).toFixed(d));
 console.log(`home shot        ${out.home}`);
