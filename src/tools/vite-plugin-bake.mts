@@ -4,16 +4,27 @@ import { texBake, pruneStaleCanvasBake, TEX_SOURCES } from './texbake.mts';
 /**
  * Make sure the baked world artifacts exist before anything is served or built.
  *
- * Runs in dev, preview and build alike. The bake is content-hashed against its
- * generator sources, so this is a no-op on every start after the first, and an
- * edit to `Field.ts` re-bakes automatically instead of quietly serving stale
- * terrain.
+ * Runs in **dev and build**, and deliberately not in `preview`. The bake is
+ * content-hashed against its generator sources, so it is a no-op on every start
+ * after the first, and an edit to `Field.ts` re-bakes automatically instead of
+ * quietly serving stale terrain.
  *
+ * Preview is skipped because it serves `dist/`, which already has its own copy
+ * of the cache from the build that produced it — so baking there does no work
+ * the preview can see. It was also actively harmful: `pruneStaleCanvasBake`
+ * would run *after* `build:full` had just recorded a painted-face cache, and
+ * delete it on any hash disagreement.
  */
 export function bakePlugin(): import('vite').Plugin {
   let done: Promise<void> | null = null;
   return {
     name: 'eos-bake',
+    // `apply` is the supported way to say which commands a plugin runs in, and
+    // it is cleaner than sniffing the resolved config: `isPreview` is not on
+    // `ResolvedConfig` in vite 8. `preview` serves `dist/`, which already has
+    // its own copy of the cache; see the note above for why baking there is not
+    // merely wasted but harmful.
+    apply: (_cfg, env) => !env.isPreview,
     async configResolved() {
       if (!done) done = Promise.all([
         // The terrain field, and the world dressing's procedural textures.
