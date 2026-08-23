@@ -1,0 +1,338 @@
+{
+  "RULER_VALID": true,
+  "contention": {
+    "headlessProcs": 0,
+    "browsers": 0,
+    "viteProcs": 6,
+    "load1": 2.79931640625,
+    "cores": 18,
+    "trees": [
+      "agent-a430ca1362dc1cf7e"
+    ],
+    "busy": false,
+    "verdict": "quiet — safe to measure."
+  },
+  "ruler": {
+    "floorStart": {
+      "iqrMs": 2.7,
+      "biasMs": 0.05,
+      "pairs": 24
+    },
+    "floorEnd": {
+      "iqrMs": 4.17,
+      "biasMs": 1.45,
+      "pairs": 24
+    },
+    "medianFrameMs": 17.74,
+    "headline": "thru = median of 3 pipelined 16-frame blocks; lat/p95/p99/max = per-frame gl.finish()",
+    "rule": "a median that moves less than the floor IQR has not moved"
+  },
+  "results": [
+    {
+      "name": "idle",
+      "frames": 60,
+      "thru": 24.61,
+      "spread": 1.08,
+      "median": 26.099999994039536,
+      "p95": 41.400000005960464,
+      "p99": 44,
+      "max": 44,
+      "over16": 0.95,
+      "hitches": 6,
+      "failures": []
+    },
+    {
+      "name": "walk",
+      "frames": 120,
+      "thru": 23.41,
+      "spread": 1.43,
+      "median": 27.099999994039536,
+      "p95": 37.29999999701977,
+      "p99": 41,
+      "max": 49.20000000298023,
+      "over16": 0.95,
+      "hitches": 11,
+      "failures": []
+    },
+    {
+      "name": "sprint",
+      "frames": 150,
+      "thru": 26.3,
+      "spread": 1.68,
+      "median": 24.200000002980232,
+      "p95": 29.5,
+      "p99": 46,
+      "max": 51.599999994039536,
+      "over16": 0.98,
+      "hitches": 4,
+      "failures": []
+    },
+    {
+      "name": "sprint+turn",
+      "frames": 150,
+      "thru": 23.04,
+      "spread": 13.19,
+      "median": 16.19999998807907,
+      "p95": 24.299999997019768,
+      "p99": 38.5,
+      "max": 40.19999998807907,
+      "over16": 0.4066666666666667,
+      "hitches": 2,
+      "failures": []
+    },
+    {
+      "name": "strafe+camera",
+      "frames": 120,
+      "thru": 14.63,
+      "spread": 1.31,
+      "median": 14.900000005960464,
+      "p95": 19.900000005960464,
+      "p99": 24.099999994039536,
+      "max": 25.099999994039536,
+      "over16": 0.275,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "weapon-swap",
+      "frames": 90,
+      "thru": 13.59,
+      "spread": 0.76,
+      "median": 14.5,
+      "p95": 18.399999991059303,
+      "p99": 26.599999994039536,
+      "max": 26.599999994039536,
+      "over16": 0.1111111111111111,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "combat",
+      "frames": 240,
+      "thru": 10.5,
+      "spread": 1.46,
+      "median": 13.299999997019768,
+      "p95": 20.299999997019768,
+      "p99": 24.5,
+      "max": 31.599999994039536,
+      "over16": 0.17916666666666667,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "warp-strike",
+      "frames": 120,
+      "thru": 13.05,
+      "spread": 0.25,
+      "median": 13.599999994039536,
+      "p95": 19.400000005960464,
+      "p99": 23,
+      "max": 24.69999998807907,
+      "over16": 0.09166666666666666,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "magic",
+      "frames": 90,
+      "thru": 11.5,
+      "spread": 0.78,
+      "median": 12.700000002980232,
+      "p95": 16.200000002980232,
+      "p99": 27,
+      "max": 27,
+      "over16": 0.044444444444444446,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "streaming-traverse",
+      "frames": 180,
+      "thru": 20.24,
+      "spread": 0.7,
+      "median": 19.599999994039536,
+      "p95": 30.5,
+      "p99": 35.6000000089407,
+      "max": 58.5,
+      "over16": 0.7555555555555555,
+      "hitches": 3,
+      "failures": []
+    },
+    {
+      "name": "day-night-sweep",
+      "frames": 150,
+      "thru": 17.74,
+      "spread": 1.21,
+      "median": 17.700000002980232,
+      "p95": 21.600000008940697,
+      "p99": 24.600000008940697,
+      "max": 25.600000008940697,
+      "over16": 0.6666666666666666,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "weather-change",
+      "frames": 120,
+      "thru": 12.36,
+      "spread": 3.62,
+      "median": 20.400000005960464,
+      "p95": 26.799999997019768,
+      "p99": 29.69999998807907,
+      "max": 30.5,
+      "over16": 0.9666666666666667,
+      "hitches": 0,
+      "failures": []
+    },
+    {
+      "name": "menu-open",
+      "frames": 90,
+      "thru": 21.13,
+      "spread": 0.69,
+      "median": 19,
+      "p95": 29.600000008940697,
+      "p99": 36.599999994039536,
+      "max": 36.599999994039536,
+      "over16": 0.7,
+      "hitches": 1,
+      "failures": []
+    }
+  ],
+  "floorStart": {
+    "iqrMs": 2.7,
+    "biasMs": 0.05,
+    "pairs": 24
+  },
+  "floorEnd": {
+    "iqrMs": 4.17,
+    "biasMs": 1.45,
+    "pairs": 24
+  },
+  "hitches": [
+    {
+      "segment": "streaming-traverse",
+      "frame": 107,
+      "ms": 58.5
+    },
+    {
+      "segment": "sprint",
+      "frame": 91,
+      "ms": 51.6
+    },
+    {
+      "segment": "walk",
+      "frame": 87,
+      "ms": 49.2
+    },
+    {
+      "segment": "sprint",
+      "frame": 0,
+      "ms": 46
+    },
+    {
+      "segment": "sprint",
+      "frame": 18,
+      "ms": 45
+    },
+    {
+      "segment": "idle",
+      "frame": 9,
+      "ms": 44
+    },
+    {
+      "segment": "sprint",
+      "frame": 10,
+      "ms": 43.4
+    },
+    {
+      "segment": "idle",
+      "frame": 18,
+      "ms": 41.6
+    },
+    {
+      "segment": "idle",
+      "frame": 1,
+      "ms": 41.4
+    },
+    {
+      "segment": "walk",
+      "frame": 8,
+      "ms": 41
+    },
+    {
+      "segment": "sprint+turn",
+      "frame": 32,
+      "ms": 40.2
+    },
+    {
+      "segment": "walk",
+      "frame": 3,
+      "ms": 39.6
+    },
+    {
+      "segment": "idle",
+      "frame": 4,
+      "ms": 38.6
+    },
+    {
+      "segment": "walk",
+      "frame": 23,
+      "ms": 38.5
+    },
+    {
+      "segment": "sprint+turn",
+      "frame": 25,
+      "ms": 38.5
+    },
+    {
+      "segment": "idle",
+      "frame": 25,
+      "ms": 38.2
+    },
+    {
+      "segment": "walk",
+      "frame": 11,
+      "ms": 37.4
+    },
+    {
+      "segment": "walk",
+      "frame": 0,
+      "ms": 37.3
+    },
+    {
+      "segment": "menu-open",
+      "frame": 7,
+      "ms": 36.6
+    },
+    {
+      "segment": "walk",
+      "frame": 14,
+      "ms": 35.9
+    },
+    {
+      "segment": "walk",
+      "frame": 21,
+      "ms": 35.8
+    },
+    {
+      "segment": "streaming-traverse",
+      "frame": 143,
+      "ms": 35.6
+    },
+    {
+      "segment": "walk",
+      "frame": 13,
+      "ms": 34.2
+    },
+    {
+      "segment": "walk",
+      "frame": 29,
+      "ms": 34.1
+    },
+    {
+      "segment": "streaming-traverse",
+      "frame": 95,
+      "ms": 34.1
+    }
+  ]
+}
