@@ -363,12 +363,15 @@ export const NPC_CAST = {
     profile: { height: 1.775, shoulder: 0.94, muscle: 0.42, hip: 0.96, neck: 1.0, headScale: 1.0 },
     look: {
       seed: 199,
-      // weight cocked back, one hand out mid-sentence: he is always mid-sentence
+      // Weight cocked back on one hip. The arms are deliberately near-neutral:
+      // the placement's `posture` is layered on top of this, additively, and an
+      // idle that already poses the arms fights it -- an idle with the arms
+      // crossed under a `counter` posture came out as a scarecrow.
       idle: {
         hips: [0, 0.04, -0.09], spine01: [-0.03, 0.03, 0.04], spine03: [-0.05, 0.06, 0.03],
         neck: [0.02, 0.04, -0.02], head: [-0.04, 0.05, -0.03],
-        upperArmL: [0.04, 0.02, 0.09], lowerArmL: [-0.38, 0.06, 0],
-        upperArmR: [-0.24, -0.16, -0.26], lowerArmR: [-0.92, -0.12, 0], handR: [0.2, 0, -0.3],
+        upperArmL: [0.04, 0.02, 0.09], lowerArmL: [-0.30, 0.06, 0],
+        upperArmR: [0.03, -0.02, -0.07], lowerArmR: [-0.26, 0, 0],
         thighL: [-0.04, 0, 0.05], shinL: [0.08, 0, 0],
       },
       stance: -0.4,
@@ -401,12 +404,13 @@ export const NPC_CAST = {
     profile: { height: 1.615, shoulder: 0.86, muscle: 0.26, hip: 1.04, neck: 0.96, headScale: 1.08 },
     look: {
       seed: 211,
-      // up on the balls of her feet, hands clasped behind, leaning in
+      // Up on the balls of her feet, leaning in. Arms near-neutral; the
+      // placement posture owns them.
       idle: {
         hips: [-0.03, 0.03, 0.04], spine01: [0.05, -0.03, 0], spine03: [0.06, -0.05, -0.02],
         neck: [-0.06, 0.05, 0.02], head: [-0.08, 0.07, 0.03],
-        upperArmL: [-0.30, 0.26, 0.20], lowerArmL: [-1.30, 0.30, 0],
-        upperArmR: [-0.30, -0.26, -0.20], lowerArmR: [-1.34, -0.30, 0],
+        upperArmL: [0.05, 0.03, 0.10], lowerArmL: [-0.34, 0.04, 0],
+        upperArmR: [0.05, -0.03, -0.10], lowerArmR: [-0.34, -0.04, 0],
         thighL: [0.03, 0, 0.05], thighR: [0.03, 0, -0.05],
       },
       stance: 0.3,
@@ -435,11 +439,12 @@ export const NPC_CAST = {
     profile: { height: 1.805, shoulder: 0.97, muscle: 0.62, hip: 1.04, neck: 1.06, headScale: 1.0 },
     look: {
       seed: 223,
-      // thumbs in the belt, the stance of a man who stands in a paddock all day
+      // The wide, settled stance of a man who stands in a paddock all day.
+      // Arms near-neutral; the placement posture owns them.
       idle: {
         hips: [-0.02, 0, 0.03], spine02: [-0.04, 0, 0], neck: [0.08, 0, 0], head: [0.03, 0, 0],
-        upperArmL: [-0.10, 0.18, 0.30], lowerArmL: [-1.05, 0.24, 0],
-        upperArmR: [-0.10, -0.18, -0.30], lowerArmR: [-1.05, -0.24, 0],
+        upperArmL: [0.03, 0.02, 0.10], lowerArmL: [-0.28, 0.04, 0],
+        upperArmR: [0.03, -0.02, -0.10], lowerArmR: [-0.28, -0.04, 0],
         thighL: [0.02, 0, 0.06], thighR: [0.02, 0, -0.06],
       },
       skin: srgb(0xa9855f), iris: 0x6d5b3c,
@@ -474,12 +479,13 @@ export const NPC_CAST = {
     profile: { height: 1.705, shoulder: 0.88, muscle: 0.34, hip: 1.02, neck: 0.98, headScale: 1.02 },
     look: {
       seed: 227,
-      // clipboard arm crooked, other hand on the hip: mid-inspection
+      // Weight on one hip, chin level: mid-inspection. Arms near-neutral; the
+      // placement posture owns them.
       idle: {
         hips: [0, 0.04, -0.10], spine03: [-0.04, 0.05, 0.03],
         neck: [0.04, 0.03, -0.02], head: [-0.02, 0.05, -0.03],
-        upperArmL: [-0.42, 0.22, 0.30], lowerArmL: [-1.35, 0.24, 0], handL: [0.3, 0, 0],
-        upperArmR: [-0.20, -0.24, -0.34], lowerArmR: [-0.80, -0.16, 0],
+        upperArmL: [0.05, 0.03, 0.09], lowerArmL: [-0.36, 0.06, 0],
+        upperArmR: [0.04, -0.03, -0.09], lowerArmR: [-0.32, -0.04, 0],
         thighR: [-0.04, 0, -0.06], shinR: [0.08, 0, 0],
       },
       stance: -0.5,
@@ -510,12 +516,13 @@ export const NPC_CAST = {
     profile: { height: 1.955, shoulder: 1.08, muscle: 0.94, hip: 1.14, neck: 1.16, headScale: 0.96 },
     look: {
       seed: 233,
-      // arms crossed high over a chest that has no business being that wide
+      // A chest that has no business being that wide, and the shoulders that
+      // go with it. Arms near-neutral; the placement posture owns them.
       idle: {
         spine02: [-0.04, 0, 0], spine03: [-0.06, 0, 0], neck: [0.10, 0, 0], head: [0.03, 0, 0],
         clavicleL: [-0.07, 0, -0.07], clavicleR: [-0.07, 0, 0.07],
-        upperArmL: [-0.78, 0.32, -0.58], lowerArmL: [-1.66, 0.36, 0],
-        upperArmR: [-0.74, -0.32, 0.56], lowerArmR: [-1.74, -0.36, 0],
+        upperArmL: [0.03, 0.04, 0.13], lowerArmL: [-0.30, 0.06, 0],
+        upperArmR: [0.03, -0.04, -0.13], lowerArmR: [-0.30, -0.06, 0],
         thighL: [0.02, 0, 0.07], thighR: [0.02, 0, -0.07],
       },
       skin: srgb(0xb08a63), iris: 0x53422a,
@@ -532,12 +539,12 @@ export const NPC_CAST = {
         return h;
       })(),
       outfit: [
-        { type: 'shirt', color: 0x8b8377, rough: 0.92, u0: 0.30, u1: 0.86, pad: 0.013, neckCut: 0.30, wrinkle: 0.026 },
+        { type: 'shirt', color: 0x5d564c, rough: 0.92, u0: 0.30, u1: 0.86, pad: 0.013, neckCut: 0.30, wrinkle: 0.026 },
         { type: 'pants', color: 0x3b342a, rough: 0.88, padHip: 0.024, padAnkle: 0.018, u1: 0.94, wrinkle: 0.026 },
-        { type: 'plate', color: 0x4a2f1e, rough: 0.80, u0: 0.20, u1: 0.84, pad: 0.016, theta: [2.05, 4.25] },
-        { type: 'strap', color: 0x4a2f1e, rough: 0.82, side: 'L', width: 0.020, to: [-0.06, 1.28, -0.10] },
+        { type: 'plate', color: 0x7a5232, rough: 0.80, u0: 0.20, u1: 0.84, pad: 0.016, theta: [2.05, 4.25] },
+        { type: 'strap', color: 0x7a5232, rough: 0.82, side: 'L', width: 0.020, to: [-0.06, 1.28, -0.10] },
         { type: 'belt', color: 0x33291f, rough: 0.6, u: 0.34, pad: 0.028, buckleBox: true, buckleColor: 0x8e7c52 },
-        { type: 'band', color: 0x4a2f1e, rough: 0.8, sides: ['L', 'R'], u: 0.72, pad: 0.016, ridge: 0.05 },
+        { type: 'band', color: 0x6a462a, rough: 0.8, sides: ['L', 'R'], u: 0.72, pad: 0.016, ridge: 0.05 },
         { type: 'boots', color: 0x2b241c, rough: 0.62, shaft: 0.60, height: 0.044 },
       ],
     },

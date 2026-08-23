@@ -198,16 +198,31 @@ export interface RemoteNpc {
  * footprint, not a spot to stand on.
  */
 export const REMOTE: RemoteNpc[] = [
-  // On the boardwalk at Galdin, facing back up the causeway at whoever arrives.
-  { castKey: 'dino', at: 'galdin_quay', dx: 18, dz: -26, face: 2.6, posture: 'lean', task: 'inspect' },
-  // Outside the Leville, watching the market square.
-  { castKey: 'iris', at: 'lestallum', dx: -34, dz: 22, face: 0.8, posture: 'pockets' },
+  // Every offset below was measured, not guessed. A town POI is a *merged*
+  // volume — the whole of Lestallum is one 140 m box — so an offset chosen to
+  // read as "in the market square" puts the person under the roofs, invisible,
+  // and `CollisionWorld.blocked` calls it clear because the inside of a room is
+  // clear standing room. `src/tools/probes/standingroom.mts` sweeps rings around
+  // each POI against the actual scene graph and prints the open ground; these
+  // are its answers, taking the spots closest to a wall so nobody is standing
+  // in the middle of a field.
+  //
+  // The **parking** POI, not the town POI. Both towns are one merged volume
+  // whose only open ground is 68 m out in a grass field, and a named NPC alone
+  // in a field reads worse than no NPC at all. A `parking` POI is a graded,
+  // paved apron by construction, it is where fast travel lands, and it is
+  // where you would actually meet someone — which is where FFXV puts Iris.
+  //
+  // On the Galdin apron where the causeway starts, facing whoever parks.
+  { castKey: 'dino', at: 'galdin_carpark', dx: 7, dz: 5, face: -1.0, posture: 'lean', task: 'inspect' },
+  // Waiting at the Lestallum parking, which is exactly how the game meets her.
+  { castKey: 'iris', at: 'lestallum_lookout', dx: -7, dz: 4, face: 1.2, posture: 'pockets' },
   // At the paddock rail, arms folded, watching the birds.
   { castKey: 'wiz', at: 'wiz_chocobo', dx: 26, dz: 14, face: -1.9, posture: 'folded' },
-  // On the plant apron with a clipboard.
-  { castKey: 'holly', at: 'exineris', dx: 40, dz: -30, face: 1.4, posture: 'folded', task: 'inspect' },
-  // At his anvil on the far side of the Lestallum market from Iris.
-  { castKey: 'randolph', at: 'lestallum', dx: 44, dz: -18, face: -2.2, posture: 'counter', task: 'wrench' },
+  // On the plant apron with a clipboard, beside the sheds.
+  { castKey: 'holly', at: 'exineris', dx: -8, dz: 12, face: -2.2, posture: 'folded', task: 'inspect' },
+  // His stall is at the far end of the same apron, 18 m round from Iris.
+  { castKey: 'randolph', at: 'lestallum_lookout', dx: 8, dz: -6, face: 2.4, posture: 'folded' },
 ];
 
 /** Metres at which a {@link REMOTE} placement is built. @see Npcs._place */
