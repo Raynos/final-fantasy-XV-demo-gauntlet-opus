@@ -459,3 +459,50 @@ does **not** appear in `gameplay.mts`'s segments, where `idle`, `walk` and
 is itself unexplained. Nobody has separated the part that is ours from the part
 that is the harness, so it is printed as its own `>16` column rather than
 folded into a median.
+
+## The daemon reuses pages, and reuse is a state machine
+
+Two bugs from the harness build, opposite ends of one mistake. Both produced
+frames and results that were **plausible and wrong**, which is the class this
+whole document exists for.
+
+**A leased page must never be pooled.** The first pooling rule was "`?shoot=1`
+means capture, and capture pages are safe to reuse". That sounds right and it is
+not: `integration.mts` boots with `?shoot=1` and then drives fifteen minutes of
+real gameplay — combat, quests, camping, fishing — stepping the sim by hand. Two
+consecutive runs disagreed (26 pass, then 24 pass with two "not integrated")
+because the second was handed a world the first had already played. **The
+discriminator is not the query, it is how the page was obtained.** A tool that
+asked for frames only posed shots; a tool that took a *lease* asked for the page
+because it intends to do something the daemon can neither see nor undo.
+
+**A freshly booted page must never be reset.** A fresh boot is already in the
+state `GAME.reset()` is trying to reproduce, so calling it there can only move
+the page *away* from that state. It did: `Menus.setScreen('main')` opened the
+title screen on a page nothing had dirtied, and `integration` went from 27 pass
+to 24 with no error anywhere. A just-booted page needs the clock zeroed and the
+loading screen removed, nothing else. `reset()` is for **reuse**.
+
+The general shape: **if a page hand-off can carry state, something must check
+that it does not.** That is `checkResetDrift` — a `follow` shot posed on a page
+driven through a dungeon and reset, byte-compared against the fresh-boot frame,
+once per build. Currently 0.974/255 against a *measured* 1.493/255 boot-to-boot
+floor. Note the floor: two fresh boots of the same shot on a quiet machine are
+**not** byte-identical, so any check that demands zero will cry wolf forever.
+
+## Numbers that cannot be picked from throughput
+
+`BROWSER_BUDGET = 4` looks like it should come from a throughput curve. It
+cannot: measured three times, W=4 came back at 0.29, 0.31 and 0.31 req/s on a
+plateau that is itself only 20% wide, so reading a peak off that column is
+reading noise. It comes from **latency**, which is not noisy — mean boot 9.2 s at
+W=1, 14.8 s at W=4, 32.3 s at W=6.
+
+Two corollaries people get wrong here:
+
+- **The machine always looks idle.** At the budget it is using 2.2 of 18 cores
+  and 10 of 137 GB. The single Metal GPU binds. Do not raise the budget because
+  `top` looks bored.
+- **Four browsers buy 1.5× the throughput of one.** Parallelism is nearly
+  worthless; not re-booting is worth 4×. Every trade-off should protect boot
+  reuse over concurrency.
