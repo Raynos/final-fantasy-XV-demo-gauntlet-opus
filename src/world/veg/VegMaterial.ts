@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sceneSamples } from '../../engine/postfx/Msaa.ts';
 
 /**
  * Shared shader plumbing for everything that grows.
@@ -63,11 +64,17 @@ const alphaCards = new Set<AlphaCard>();
  * changing either half; on their own each one is a no-op.
  *
  * Only alpha-*tested* opaque materials get it. A blended material already has
- * real partial coverage and A2C would fight its sort order.
+ * real partial coverage and A2C would fight its sort order. And only when
+ * `sceneSamples()` says there will be samples to write into: with one sample
+ * the hardware half is a no-op but the *shader* half is not, and the coverage
+ * ramp on an opaque material would just move the discard outward and hand the
+ * `low` tier a silhouette a ramp-width fatter and every bit as hard. That
+ * function is a free function precisely so it can be asked here, where
+ * `PostFX` does not exist yet.
  */
 function coverageAA(m: THREE.Material) {
   m.allowOverride = false;
-  if (m.alphaTest > 0 && !m.transparent) m.alphaToCoverage = true;
+  if (m.alphaTest > 0 && !m.transparent && sceneSamples() > 0) m.alphaToCoverage = true;
 }
 
 /** Mark a mesh as alpha-silhouetted. @returns what was handed in */
