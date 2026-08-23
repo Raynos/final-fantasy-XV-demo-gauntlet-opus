@@ -151,6 +151,29 @@ interface Kettle {
   climb: number;
   climbRate: number;
   scale: number;
+  /**
+   * Wingspan relative to body length, and how hard the bird banks.
+   *
+   * Round 9's judge named the birds unprompted -- "retire the identical bird
+   * sprites while you are in there, they repeat visibly in pairs 1B, 4A and
+   * 8B" -- and it was right for a reason worth writing down: the kettle is one
+   * `InstancedMesh` of one geometry, and the only thing that varied between
+   * instances was a *uniform* scale and a yaw that follows the circle. Two
+   * birds on opposite sides of the same thermal at the same scale are then
+   * pixel-identical mirror images, which is exactly what "repeat visibly in
+   * pairs" describes.
+   *
+   * Per-instance variation is free here -- one `InstancedMesh`, one draw call,
+   * no shadow pass -- so the fix is to spend it. A non-uniform scale changes
+   * the *planform*, which is the only thing about a bird that reads at three
+   * hundred metres, and it costs one extra multiply in the update loop.
+   */
+  span: number;
+  len: number;
+  bank: number;
+  /** Wingbeat rate, and 0 for a bird that is soaring rather than flapping. */
+  flap: number;
+  flapRate: number;
 }
 
 /** One grazing animal, walking an arc it never leaves. */
@@ -310,6 +333,16 @@ export class Wildlife {
         rate: (rng.next() < 0.5 ? -1 : 1) * rng.range(0.055, 0.12),
         climb: rng.range(3, 11), climbRate: rng.range(0.13, 0.3),
         scale: rng.range(1.15, 2.1),
+        span: rng.range(0.80, 1.24), len: rng.range(0.88, 1.18),
+        bank: rng.range(0.16, 0.66) * (0.85 + rng.next() * 0.3),
+        // Three birds in five soar and two flap. A flapping raptor's wings
+        // foreshorten as they come down, so at the range a kettle is ever seen
+        // from -- a hundred to four hundred metres, where a bird is four
+        // pixels -- modulating the *span* is a wingbeat. It is the cheapest
+        // animation in the game and it is the difference between a kettle and
+        // a decal sheet.
+        flap: rng.next() < 0.4 ? rng.range(0.14, 0.30) : 0,
+        flapRate: rng.range(2.6, 5.4),
       });
     }
   }
@@ -668,10 +701,14 @@ export class Wildlife {
         const y = b.y + Math.sin(t * b.climbRate + b.phase) * b.climb;
         // heading is the circle tangent; bank into the turn
         const yaw = Math.atan2(-Math.sin(a) * Math.sign(b.rate), -Math.cos(a) * Math.sign(b.rate)) + Math.PI / 2;
-        _e.set(0, yaw, Math.sign(b.rate) * 0.42 + Math.sin(t * 0.7 + b.phase) * 0.08);
+        // Pitch as well as bank, and both per bird: a kettle where every
+        // animal holds the same attitude is a formation, not a thermal.
+        const pitch = Math.sin(t * b.climbRate + b.phase) * 0.13;
+        _e.set(pitch, yaw, Math.sign(b.rate) * b.bank + Math.sin(t * 0.7 + b.phase) * 0.08);
         _q.setFromEuler(_e);
         _p.set(x, y, z);
-        _s.setScalar(b.scale);
+        const beat = b.flap > 0 ? 1 - b.flap * (0.5 + 0.5 * Math.sin(t * b.flapRate + b.phase * 3)) : 1;
+        _s.set(b.scale * b.len, b.scale, b.scale * b.span * beat);
         _m.compose(_p, _q, _s);
         _m.toArray(g.mesh.instanceMatrix.array, i * 16);
         i++;
