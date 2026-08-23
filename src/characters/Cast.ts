@@ -96,6 +96,34 @@ export const CAST = {
         // hairline actually hurt: it dropped the fringe roots 11 mm and the locks
         // ended up over both eyes. He gets most of it back per-character.
         hairline: 0.013, peak: 0.35, wisps: 46, wispLen: 0.85, clump: 3,
+        // The groom, as a flow field. See `HairGuide` in `rig/Look.ts` for what
+        // these curves are and why a per-tuft `dir` cannot express one.
+        //
+        // Read `c3` as where the tip lands relative to the root; `c1` and `c2`
+        // decide whether the lock leaves the scalp *along* the head (a sweep) or
+        // straight off it (a spike). The scale is arbitrary — `Hair.ts`
+        // normalises each curve by `|c3|` and the tuft's `len` sets the metres.
+        //
+        // Graded against `docs/reference/plates/character-noctis-face-01.jpg`:
+        // one connected mass, a parting high on his +x side, a heavy fringe
+        // sweeping across the brow to −x, sides falling past the ear to the
+        // jaw, the back falling to the collar. Nothing radiates.
+        guides: [
+          // fringe: forward off the brow, then down and across
+          { th: 0.00, v: 1.00, c1: [-0.06, -0.10, 0.28], c2: [-0.30, -0.52, 0.36], c3: [-0.46, -0.86, 0.22] },
+          { th: 1.10, v: 0.98, c1: [0.10, -0.12, 0.24], c2: [-0.06, -0.55, 0.34], c3: [-0.28, -0.92, 0.20] },
+          { th: -1.10, v: 0.98, c1: [-0.16, -0.16, 0.22], c2: [-0.26, -0.58, 0.26], c3: [-0.34, -0.94, 0.10] },
+          // temples: down the side of the face, hugging then dropping
+          { th: 1.55, v: 0.95, c1: [0.16, -0.24, 0.06], c2: [0.20, -0.66, 0.02], c3: [0.18, -0.98, -0.02] },
+          { th: -1.55, v: 0.95, c1: [-0.16, -0.24, 0.06], c2: [-0.20, -0.66, 0.02], c3: [-0.18, -0.98, -0.02] },
+          // crown: over the top of the skull and back — the mass, not a spike
+          { th: 0.00, v: 0.15, c1: [0.00, 0.12, -0.26], c2: [0.00, 0.06, -0.66], c3: [-0.10, -0.34, -0.94] },
+          { th: 3.14, v: 0.30, c1: [0.00, 0.06, -0.30], c2: [0.00, -0.30, -0.68], c3: [0.00, -0.82, -0.72] },
+          // behind the ear, and the nape falling to the collar
+          { th: 2.30, v: 0.75, c1: [0.14, -0.20, -0.20], c2: [0.16, -0.62, -0.42], c3: [0.10, -0.92, -0.42] },
+          { th: -2.30, v: 0.75, c1: [-0.14, -0.20, -0.20], c2: [-0.16, -0.62, -0.42], c3: [-0.10, -0.92, -0.42] },
+          { th: 3.14, v: 1.00, c1: [0.00, -0.28, -0.14], c2: [0.00, -0.72, -0.18], c3: [0.00, -1.00, -0.12] },
+        ],
         tufts: [
           // Layered clumps that lie *along* the skull. Pushing strands out along
           // the surface normal (`out` near 1) is what turned this into a sea
