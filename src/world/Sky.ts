@@ -593,7 +593,7 @@ export class Sky {
       uCloudTexel: { value: new THREE.Vector2(1 / 720, 1 / 405) },
       // Upsample Gaussian radius in march texels. See sky.glsl.ts; 1.4 was the
       // billboard defect. `?post=cloudtap0` collapses it to one bilinear fetch.
-      uCloudTap: { value: 1.4 },
+      uCloudTap: { value: 0.90 },
       uCloudMode: { value: 1 },
       uPixelAngle: { value: 0.001 },
       uTime: { value: 0 },
@@ -1111,7 +1111,13 @@ export class Sky {
     // fade with how far the sun is outside the frame and how much we face it
     const off = Math.max(Math.abs(sx - 0.5), Math.abs(sy - 0.5));
     const inFrame = smoothstep(1.25, 0.45, off) * smoothstep(0.05, 0.45, facing);
-    gr.compositeMaterial.uniforms.uIntensity.value = (this._godRayBase || 0) * inFrame * 0.55;
+    // `?post=nogodrays` -- the pass has no token in `PostFX.debugToggle`
+    // because Sky, not PostFX, owns its intensity. It is here because the
+    // radial blur's ghosting is frame-wide and reads as an artefact of
+    // whatever it lands on, so it has to be separable from the thing being
+    // looked at.
+    const grOff = this._ablate.has('nogodrays') ? 0 : 1;
+    gr.compositeMaterial.uniforms.uIntensity.value = (this._godRayBase || 0) * inFrame * 0.55 * grOff;
     gr.raysMaterial.uniforms.uThreshold.value = 1.1 * (this.exposure > 1.4 ? 0.5 : 1.0);
   }
 

@@ -126,23 +126,77 @@ void main() {
   // never reaches the cloud behind it. That is a silent, total loss of the
   // deck, so the ratio is load bearing.
   const int MISS_MAX = 6;
-  // Partial jitter: a full [0,1) offset is unbiased but its variance shows as
-  // a diagonal hatch once the half-res buffer is upsampled. Half the span
-  // halves the noise, and what banding it trades in sits at half the step
-  // frequency, which the composite's tap filter removes.
-  float jitter = 0.25 + 0.5 * atmDither(gl_FragCoord.xy + uFrame * 3.11);
+  // Entry jitter, and it has to span a *coarse* step, not a fine one.
+  //
+  // The march's silhouette is not decided by the fine sampling. It is decided
+  // by the empty-space skip: the probe steps at 3x fine with the erosion
+  // octave off, and a cloud thinner than one coarse step that happens to lie
+  // between two probes is missed outright. The phase of that probe grid along
+  // the ray is set entirely by this offset, and t0 -- the range at which the
+  // ray enters the layer -- varies smoothly down the screen, so the phase
+  // drifts smoothly with it and whole rows of texels miss the same cloud
+  // together. That is the horizontal comb-teeth and the free-floating
+  // horizontal dashes in every dusk frame: not a filter, not a resolution, a
+  // sampling grid beating against a smoothly varying entry distance.
+  //
+  // It was jittered over half a *fine* step, which is 1/6 of the grid it needed
+  // to break up, so the eight-frame TAA history saw eight nearly identical
+  // phases and averaged them into the same bands. Over a full coarse step the
+  // eight frames are eight independent phases and the bands resolve into noise
+  // the accumulation removes. Confirmed by ablation rather than inferred:
+  // marching at full resolution instead of 0.45 halved the tooth height and
+  // changed nothing else about the pattern, which is the signature of a step
+  // artefact and not of an upsample.
+  //
+  // The previous comment here argued for the half-span on variance grounds --
+  // that a full offset shows as a diagonal hatch. That trade was real, and it
+  // was being paid to suppress a much smaller artefact than the one it caused.
+  // Temporal decorrelation, which this did not actually have.
+  //
+  // atmDither is interleaved gradient noise: fract(52.98 * fract(dot(p, k)))
+  // with k = (0.06711056, 0.00583715). Offsetting its *input* by uFrame * 3.11
+  // on both axes adds 3.11 * (kx + ky) = 0.2269 per frame inside the dot, and
+  // 52.98 * 0.2269 = 12.02 -- so each frame advanced the phase by 12.02, whose
+  // fractional part is 0.02. Over the eight frames the TAA history spans, the
+  // whole sequence covered a range of 0.16. The march was jittering against
+  // essentially one fixed pattern, eight times, and TAA had nothing to
+  // average. Every step artefact the jitter existed to dissolve was therefore
+  // baked in as a static pattern instead.
+  //
+  // Adding a golden-ratio sequence to the *output* is the standard fix and it
+  // is the right one here: IGN gives the spatial decorrelation between
+  // neighbouring pixels, fract(n * 0.618034) gives eight well-spread phases in
+  // time, and the two are independent. This is also why the previous entry
+  // jitter had to be kept small to look acceptable -- with no temporal
+  // averaging, a wide jitter is just static noise.
+  float jitter = fract(atmDither(gl_FragCoord.xy) + uFrame * 0.6180339887);
   float t = t0;
   vec3 scat = vec3(0.0);
   float tr = 1.0;
   float meanT = 0.0, wsum = 0.0;
   int miss = MISS_MAX;
   float fine = clamp(t0 * 0.012, 30.0, 300.0);
-  t += fine * jitter;
+  t += fine * 2.0 * jitter;         // 2.0 == the coarse/fine ratio below
 
-  for (int i = 0; i < 160; i++) {
+  for (int i = 0; i < 224; i++) {
     if (tr < 0.008 || t > t1) break;
     fine = clamp(t * 0.012, 30.0, 300.0);
-    float coarse = fine * 3.0;
+    // Skip ratio, and it is the number that decides the silhouette.
+    //
+    // The probe runs cloudDensity with the erosion octave off, so it can only
+    // ever over-report -- it cannot miss a cloud it lands inside. What it can
+    // do is step clean over one. The shape volume's finest features are 100 to
+    // 260 m across (uCloudBaseTile 4200 through worley at 4/8/16 cells, and a
+    // second octave at 2.63x on top), and at 3x a fine step capped at 300 m
+    // the probe interval reached 900 m. Everything narrower than that was
+    // present or absent depending on where the grid happened to fall, and
+    // since the grid's phase is set by t0 -- which varies smoothly down the
+    // screen -- whole rows dropped the same feature together. That was the
+    // horizontal comb-teeth in every dusk frame.
+    //
+    // 2.0 halves the window. MISS_MAX has to stay strictly above the ratio for
+    // the reason written at its declaration, and 6 > 2 comfortably.
+    float coarse = fine * 2.0;
     vec3 sp = uCamPos + rd * t;
     float alt = length(P + rd * t) - ATM_PLANET_R;
     vec3 q = vec3(sp.x, alt, sp.z);
@@ -172,8 +226,25 @@ void main() {
     float d = cloudDensity(q, detFade);
     float vd = cloudVirga(q);
 
+    // Two different thresholds, on purpose, and they used to be one.
+    //
+    // The skip probe treats anything above *zero* as cloud. The fine march
+    // treated anything below 0.0004 as a miss, and six consecutive misses send
+    // the ray back to skipping -- which then advances two coarse steps and can
+    // land beyond the cloud entirely, at a point the probe also reads as
+    // empty. The cloud is then gone for that ray and only that ray. Whether it
+    // happens depends on the sampling phase, so it fires on scattered columns
+    // and leaves the vertical drips and torn edges that the dusk frames show
+    // hanging off every large cumulus. It is the same failure the MISS_MAX
+    // comment above describes, arriving through a threshold rather than
+    // through a ratio.
+    //
+    // So: the miss counter now asks the same question the probe asks, and the
+    // 0.0004 threshold is kept only for the lighting, which is what it was
+    // actually there to guard -- a sample that thin contributes nothing and
+    // does not deserve a light march.
+    if (d + vd > 0.0) miss = 0; else miss++;
     if (d + vd > 0.0004) {
-      miss = 0;
       float hf = clamp((alt - uCloudBottom) / max(1.0, uCloudTop - uCloudBottom), 0.0, 1.0);
 
       // --- sun energy with a 3 octave multiple scattering approximation ---
@@ -249,8 +320,6 @@ void main() {
       meanT += t * w;
       wsum += w;
       tr *= sampleTr;
-    } else {
-      miss++;
     }
     t += step;
   }
