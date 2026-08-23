@@ -90,6 +90,58 @@ function shard(seed: number, r: number, stretch = [1, 1, 1], warp = 0.4) {
 }
 
 /**
+ * One mass of the Meteor of the Disc.
+ *
+ * Not {@link shard}, and the difference is the whole point. `shard` builds
+ * *sedimentary* rock — one bedding plane plus two conjugate shear sets at 55°,
+ * eleven strata stepping the outline — which is exactly right for a Leide
+ * boulder and exactly wrong for a starfall. Bedding gives a mass a top and a
+ * bottom, joint sets give it a grain, and both of those pull the silhouette
+ * back toward a dome. That is what the Meteor has been: the previous round took
+ * it from an eighty-triangle icosahedron to a real rock mass, and its own
+ * handoff recorded honestly that after nine iterations the outline was still a
+ * dome.
+ *
+ * A meteorite is a brittle mass that has been shattered by an impact. It has no
+ * bedding, no grain and no preferred direction — it fractures *conchoidally*,
+ * into a few enormous planar faces meeting at hard arrises pointing wherever
+ * the shock happened to run. So: `joints` off, so the cuts come from the
+ * isotropic set rather than the geologic frame; `upright` near zero, so they
+ * arrive from every direction instead of clustering around the horizontal;
+ * sixteen of them, cut deep; `bedding` zero; and `warp` low, because a high
+ * warp on a finely subdivided sphere rounds every arris back off and gives a
+ * cauliflower.
+ *
+ * Every number here was captured and looked at, and two of them cost a round:
+ *
+ * - **Twelve planes was not enough.** With twelve random cut directions the
+ *   gaps between them are wide enough that half the sphere comes through
+ *   untouched, and the mass renders as a dented ball with two flat faces on
+ *   it — one dome and one wedge side by side out of the same recipe.
+ * - **Twenty planes at `bite` 0.60 was too much.** Volume loss compounds, and
+ *   one mass came back a literal sail: a razor-thin blade standing over the
+ *   crater. Sixteen at 0.74, with `size` scaled up to 1.95 r to pay for what
+ *   the cuts take, is the shape that holds.
+ * - **Raising `warp` to 0.21 to break up the big faces made it worse**, not
+ *   better: it softened the arrises without adding any relief the eye could
+ *   resolve at 1.5 km. The relief that does work at this range is `gully`,
+ *   which is why it is at 0.34 and not `shard`'s 0.3.
+ *
+ * @param r nominal radius, before the cuts take about a third back
+ * @param stretch pre-cut anisotropy — this is what makes a wedge a wedge
+ */
+function meteorMass(seed: number, r: number, stretch: number[]) {
+  return rockGeometry(seed, {
+    detail: 10, warp: 0.11, stretch, joints: false, planes: 16, upright: 0.05,
+    // 0.74 against `shard`'s 0.79, and 16 cuts against its 8. `bite` is the
+    // fraction of the radius a cut *leaves*, so more of them and slightly
+    // deeper is what turns a sphere into a polyhedron rather than a dented ball.
+    bite: 0.74, bedding: 0, chips: 18, round: 0.02, crease: 26, weather: 0.06,
+    size: r * 1.95, gully: 0.34, gullyFreq: 4.2, uvScale: 22 / (r * 1.95),
+  });
+}
+
+/**
  * The shared material set, built once by {@link Megastructures.build}. A
  * function rather than a literal inside the class so {@link MegaMats} is the
  * set itself.
@@ -434,16 +486,53 @@ export class Megastructures {
     const B = new PartBuilder();
     const rng = new Rng(1919);
 
-    B.add(M.stone, shard(2201, 330, [1.35, 1.05, 1.1], 0.34), mat4([0, 130, 0]));
-    B.add(M.stone, shard(2202, 190, [1.05, 1.9, 0.9], 0.42), mat4([-250, 190, 150], [0.3, 0.7, 0.4]));
-    B.add(M.stone, shard(2203, 160, [1.2, 2.2, 1.0], 0.44), mat4([280, 230, -110], [-0.24, 1.4, -0.3]));
-    // glowing fissures: thin slabs peeking between the masses
-    for (let i = 0; i < 26; i++) {
+    // Five masses, not one with two attendants.
+    //
+    // The thing that made this a dome was that mass A was 330 m and B and C
+    // were 190 and 160 — so from anywhere in the basin one rounded outline
+    // owned the silhouette and the other two were bumps on its shoulder. These
+    // five are within a factor of two of each other and every one of them is
+    // strongly anisotropic *before* it is cut, so each reads as a wedge or a
+    // slab rather than a lump, and they are leaned so no two point the same
+    // way. What the eye gets is a cluster of angular peaks with real clefts
+    // between them — which is what the region is named for and what the old
+    // silhouette never had.
+    //
+    // The gaps are as authored as the masses. `CLEFT` records where each one
+    // is so the fissure glow can sit *in* the clefts instead of being sprayed
+    // around a circle and half-buried inside solid rock.
+    const MASS: Array<[number, number, number[], Vec3, Vec3]> = [
+      // seed   r    stretch (pre-cut)      position           tilt
+      [2201, 300, [0.98, 1.34, 0.90], [0, 150, 0], [0.30, 0.2, -0.26]],
+      [2202, 265, [1.36, 0.94, 0.88], [-330, 80, 120], [-0.18, 1.15, 0.44]],
+      [2203, 235, [0.92, 1.42, 0.94], [305, 120, -150], [0.46, 2.25, 0.22]],
+      [2204, 195, [1.28, 1.02, 0.88], [80, 45, 320], [-0.52, 0.45, 0.66]],
+      [2205, 165, [0.90, 1.46, 0.90], [-150, 190, -290], [0.24, 3.05, -0.48]],
+    ];
+    // The anisotropy is capped at about 1.5:1 and not the 2.4:1 the first pass
+    // used, because `rockGeometry` normalises to a *bounding* radius: a 2.4:1
+    // pre-stretch means the two short axes only reach 40% of `size`, so cuts
+    // taken at a fraction of `size` never touch them while the long axis is cut
+    // right down — and the mass comes out a blade. One of these rendered as a
+    // literal sail standing over the crater.
+    for (const [seed, r, stretch, at, tilt] of MASS) {
+      B.add(M.stone, meteorMass(seed, r, stretch), mat4(at, tilt));
+    }
+    // Midpoints between neighbouring masses: the mouths of the clefts.
+    const CLEFT: Vec3[] = [
+      [-165, 130, 60], [155, 140, -75], [40, 105, 160], [-75, 175, -145],
+      [-90, 150, 20], [110, 100, 90], [-30, 190, -70],
+    ];
+    // Glowing fissures. A meteor that struck within living memory is still hot
+    // in its cracks, and this is the one warm accent in a cold-hazed distance —
+    // so it has to read as light coming *out of* the mass, which means the
+    // slabs belong in the clefts, tall and thin, not scattered on a circle.
+    for (let i = 0; i < 22; i++) {
+      const c = CLEFT[i % CLEFT.length];
       const a = rng.next() * Math.PI * 2;
-      const r = 190 + rng.range(0, 210);
-      B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(26, 90), rng.range(18, 80), 14),
-        mat4([Math.cos(a) * r, 40 + rng.range(0, 280), Math.sin(a) * r * 0.7],
-          [rng.gauss(0, 0.4), a, rng.gauss(0, 0.5)]));
+      B.add(M.meteorGlow, new THREE.BoxGeometry(rng.range(5, 13), rng.range(22, 64), 5),
+        mat4([c[0] + rng.gauss(0, 22), c[1] + 15 + rng.gauss(0, 55), c[2] + rng.gauss(0, 22)],
+          [rng.gauss(0, 0.20), a, rng.gauss(0, 0.24)]));
     }
     // ejecta ring around the impact
     for (let i = 0; i < 30; i++) {
