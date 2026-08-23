@@ -212,6 +212,51 @@ Two findings, and the second is a live lead for whoever takes this next.
   Note the dither is *not* the carrier: it is ±0.5/255, an order of magnitude
   below the 24/255 the speckle statistic counts. It is the sharpen.
 
+### I tried to turn CAS down and stopped, with the measurement
+
+`CasPass.ts` *is* this lane's file, so this was mine to change and I nearly
+did. The band analysis makes the case look overwhelming — CAS on against CAS
+off, canopy ROI on the two forest shots and a 0.2,0.15,0.6,0.7 ROI on
+`hero_full` and `town_forecourt`:
+
+| | d1 | d2 | d4 | d8 | d16 | d32 |
+|---|---|---|---|---|---|---|
+| `zone_fallgrove` CAS on | 9.54 | 11.58 | 12.82 | 15.40 | 20.18 | 25.34 |
+| `zone_fallgrove` CAS off | **7.37** | 10.31 | 12.27 | 15.20 | 20.12 | 25.33 |
+| `zone_nebulawood` CAS on | 11.98 | 11.63 | 12.88 | 14.99 | 17.04 | 27.72 |
+| `zone_nebulawood` CAS off | **7.68** | 9.98 | 12.26 | 14.79 | 17.00 | 27.70 |
+| `hero_full` CAS on | 14.75 | 14.57 | 16.22 | 17.85 | 20.84 | 23.35 |
+| `hero_full` CAS off | **10.67** | 12.84 | 15.61 | 17.67 | 20.78 | 23.36 |
+| `town_forecourt` CAS on | 10.11 | 11.30 | 12.68 | 15.74 | 17.16 | 21.70 |
+| `town_forecourt` CAS off | **7.90** | 10.11 | 12.29 | 15.62 | 17.15 | 21.72 |
+
+**CAS is a `d1`/`d2` generator and nothing else, on every shot in the game.**
+It adds 2.2–4.3 points at `d1`, 1.2–1.7 at `d2`, about 0.5 at `d4`, 0.15 at
+`d8` and literally nothing above — and with it off the median `d1` across the
+four lands on **8.61 against `FFXV-ground`'s 8.58**, dead on the reference,
+where with it on the forest shots sit 11–40% over.
+
+**And I still did not change it, for two reasons that are both in writing
+already.**
+
+- `reliefstat`'s own header says *"our captures are PNG and the plates are
+  JPEG, so the reference's `d1` is if anything understated — never claim a win
+  on `d1` alone"*. Landing a look change on a `d1` match is the exact claim it
+  warns against.
+- I looked. `tmp/crop/hero-cas.png` against `tmp/crop/hero-nocas.png` at 4×:
+  the roof edge, the path stones and the shrub all lose real definition with
+  CAS off. It is not subtle and it is not foliage.
+
+So the honest finding is a **trade, not a defect**: CAS's benefit and CAS's
+cost live in the *same octave*, and the pass cannot tell a real edge at that
+scale from sub-pixel canopy. Turning it down globally buys a cleaner treeline
+by softening every roofline and every stone in the game. A spatially varying
+sharpness — back off where the local depth gradient is large, or where the
+neighbourhood is high-frequency in a way that says "many surfaces per pixel" —
+is the fix that does not pay that price, and it is a real piece of work with a
+look decision inside it rather than a constant. Handed over rather than
+half-attempted, with the numbers above and the crops to argue from.
+
 ---
 
 ## Cost
@@ -340,6 +385,7 @@ part of it touched is the alpha path.
 | a wider coverage ramp keeps helping | floor 0.06 → 0.11, captured both | **no.** Identical to three significant figures. `fwidth(a)` is the binding term at these distances, not the floor. |
 | `samples: 8` is the same picture as 4 for more bandwidth | captured both | **half true, and the half that is false is the one that matters.** Step size the same (72.7 → 70.2); speckle 10.3 → 3.9 and 12.8 → 2.6. |
 | the "dithered" in the complaint is CAS's ordered dither | it is ±0.5/255 | **false.** The dither is 48× below the threshold the speckle statistic counts. It is CAS's *sharpen*, which doubles both the edge count and the speckle. |
+| turning CAS's sharpness down is the next win | banded it on four shots, then looked at `hero_full` at 4× | **a trade, not a win.** CAS's benefit and its cost are the same octave. `d1` lands on the reference with it off, and the roofline, path stones and shrubs visibly soften. Not landed. |
 | a coverage-preserving mip chain is a fix still to build | read `VegTextures.buildAlphaMips` | **it already exists and is good.** Every card's chain binary-searches an alpha scale per level to hold the level-0 coverage at the material's own `alphaRef`, capped at one stop, with `tinyFade` for the sub-8 px levels. This was on the list of alternatives to try; it was built two lanes ago. |
 
 One thing that *did* need checking and came out clean: `buildAlphaMips`
@@ -354,12 +400,13 @@ So the mip chain did not need re-deriving against the new ramp, and no line of
 
 ## Exact next steps, in priority order
 
-1. **CAS sharpness on foliage frames.** The measurement is above and it is one
-   constant. `nocas` halves the residual speckle and drops the edge-pixel count
-   by half again. It needs somebody who owns the look to decide, because it
-   softens the whole frame and not only the canopy — a spatially-varying
-   sharpness (back off where the local depth gradient is large) is the honest
-   version and is more than a constant.
+1. **A spatially varying CAS sharpness.** The full measurement is in the
+   section above, including why turning the constant down is *not* the answer
+   and what it costs when you look at the frame. CAS is the largest remaining
+   term in this defect — it doubles the residual speckle and is the entire
+   source of the frame's excess `d1` — but its benefit is in the same octave as
+   its cost, so the lever has to be spatial rather than scalar. `fx.rtScene`'s
+   depth texture is already bound by four other passes and is the obvious input.
 2. **The near ring's leaf cards are still chunky at 8×** —
    `tmp/crop/ramp-near.png`. That is not an AA defect any more, it is the alpha
    map's own texel resolution and mip chain. `VegTextures.ts` already builds a
@@ -390,6 +437,8 @@ So the mip chain did not need re-deriving against the new ramp, and no line of
 - `tmp/crop/nocas-edge.png` vs `tmp/crop/nomsaa-nocas-edge.png` — the clean
   MSAA-versus-not comparison with the sharpen out of the way.
 - `tmp/crop/base-near.png` vs `tmp/crop/ramp-near.png` — a near crown, 8×.
+- `tmp/crop/hero-cas.png` vs `tmp/crop/hero-nocas.png` — `hero_full` at 4×,
+  with and without the sharpen. The pair that stopped me turning CAS down.
 - `tmp/shots/base/` (as inherited) vs `tmp/shots/r6/` (now).
 - `tmp/ab/r6/` — blind round 6, six pairs, sealed key.
 
