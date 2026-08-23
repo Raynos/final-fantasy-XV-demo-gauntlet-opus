@@ -185,17 +185,35 @@ export interface SkyPreset {
 
 const WEATHER: Record<WeatherName, SkyPreset> = {
   clear: {
-    // "Clear" has to mean *blue with cumulus in it*. At 0.80 the field closed
-    // over into a continuous deck and the sky at midday was a lid — the thing a
-    // clear-weather preset must never produce. 0.52 leaves the strong columns
-    // building full cumulus while the weak ones are empty, which is what puts
-    // blue holes between the banks; the extra erosion and silver lining are
-    // what stop the banks that remain from reading as cotton wool.
-    coverage: 0.52, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
-    covLo: 0.44, covHi: 0.82, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
+    // "Clear" has to mean *blue with cumulus in it*, and 0.52 did not deliver
+    // it: `vista_noon` at 12.5 h was a near-total grey blanket with one blue
+    // hole, which is the frame the graphics-ceiling handoff named. 0.30 is
+    // where the deck opens. Measured, not guessed — with the cloud march
+    // ablated (`?post=noclouds`) the six-shot median hi(R-B) is -25.8 and with
+    // the old deck it is +4.6, against a FFXV-field reference of -13.5: the
+    // reference sits about halfway between our all-cloud and no-cloud states,
+    // so roughly half the cloud had to go.
+    //
+    // The window narrows with it. A wide window (0.44..0.82) at coverage 0.30
+    // still ran a continuous white band across the top of the frame, because a
+    // wide window lets every weak column contribute a little; a narrow high
+    // window (0.54..0.74) empties the weak ones outright and leaves separated
+    // banks with blue between, which is the shape of FFXV's fair-weather sky
+    // in `duscae-plains-lake-01`.
+    coverage: 0.30, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
+    covLo: 0.54, covHi: 0.74, tower: 0.55, baseLift: 0.0, baseSag: 0.10, cloudHaze: 0.0000290,
     virga: 0.0, silver: 0.14, baseShade: 0.78,
     bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
-    fogDensity: 0.00013, fogHeight: 200, haze: 0.00004, sunMul: 1.0,
+    // `haze` is the height-independent term, so it is the one that decides how
+    // a *ridge* reads; `fogDensity` pools in valleys and barely touches a
+    // skyline. 0.00004 put a 4 km range at 25% blended to sky where
+    // ART-DIRECTION.md §2 asks for 70-80%, which is judge defect 5. At
+    // 0.00024 the same range is at 76%, 1 km is at 29% and 300 m at 10% —
+    // the "mid-ground tree lines still reading with only mild desaturation"
+    // the same section describes. It is only safe to raise because the colour
+    // it converges toward was wrong until this commit; at the old navy the
+    // strong setting made distant ranges muddy.
+    fogDensity: 0.00013, fogHeight: 200, haze: 0.00024, sunMul: 1.0,
     exposureMul: 1.0, godRays: 1.0, ambient: 1.0, wind: 7.5,
     overcast: 0.0, skyDim: 1.0, shadowScale: 3.5,
   },
@@ -266,6 +284,15 @@ export class Sky {
   _lightTgt!: THREE.Vector3[];
   _raysInserted!: boolean;
   _scanCountdown!: number;
+  /**
+   * Ablation tokens from `?post=`, e.g. `noaerial`. See `_ablateWeather`.
+   *
+   * The sky reads the same query parameter `PostFX.debugToggle` does, and each
+   * ignores the tokens it does not own. That keeps `shoot.mts --ablate` as the
+   * one dial for "turn a thing off and diff", which is the rule `BRIEF.md`
+   * states, without the harness having to learn a second parameter.
+   */
+  _ablate!: Set<string>;
   _shadowDirty!: boolean;
   /** `game.currentShot` the sky was last staged for. */
   _shotSeen!: string | null;
@@ -310,6 +337,7 @@ export class Sky {
     this.exposureCeiling = 12.0;
     this._envHours = -999;
     this._scanCountdown = 0;
+    this._ablate = new Set();
   }
 
   async init(game: import('../game/Game.ts').Game) {
@@ -413,8 +441,54 @@ export class Sky {
       this._preRender(r, cam as THREE.PerspectiveCamera);
     };
 
+    const dbg = new URLSearchParams(location.search).get('post');
+    if (dbg) for (const t of dbg.split(',')) this._ablate.add(t.trim().toLowerCase());
+
     this.setTimeOfDay(12.0);
     this.patch.scan(scene);
+  }
+
+  /**
+   * Zero whichever atmosphere terms `?post=` named.
+   *
+   * This runs from `_pushWeatherUniforms`, i.e. *after* the weather cross-fade
+   * has written the preset, and every frame — which is the only place it can
+   * work. Setting one of these once at boot is a no-op: the fade rewrites all
+   * of them on the next tick, which is `sibling-TRAPS.md` trap 7 in this file
+   * rather than in `Post.ts`.
+   *
+   * `noaerial` is the important one. Aerial perspective is a *blend*, not an
+   * additive layer, so the only way to see how much of a distant ridge it is
+   * responsible for is to remove it and diff — and until now there was no way
+   * to do that without editing a constant, which changes the build and takes
+   * the grade with it.
+   */
+  _ablateWeather() {
+    if (this._ablate.size === 0) return;
+    const u = this.u;
+    if (this._ablate.has('noaerial')) u.uAerialStrength.value = 0;
+    if (this._ablate.has('noclouds')) { u.uCloudCoverage.value = 0; u.uCloudShadowStrength.value = 0; }
+    if (this._ablate.has('nocloudshadow')) u.uCloudShadowStrength.value = 0;
+    if (this._ablate.has('nocirrus')) u.uCirrus.value = 0;
+    // Not an ablation but a *readout*: drive the haze to full opacity so every
+    // surface past a few hundred metres is pure inscatter. Sampling a distant
+    // ridge in that frame reads the colour aerial perspective converges to,
+    // with no algebra over an unknown blend weight in between. The target is
+    // ART-DIRECTION.md §2's `#bad2e4`, and knowing whether we are aiming at
+    // the right colour is a different question from how fast we get there.
+    if (this._ablate.has('aerialmax')) u.uHazeBase.value = 0.02;
+    // Which light is painting the deck. A cumulus is lit by the sun *and* by
+    // the whole blue sky hemisphere, and the ratio between those two is what
+    // decides whether it prints warm-white or blue-white -- measured against
+    // ART-DIRECTION.md's plates, FFXV's cumulus are blue-white at R-B -45.
+    // Reasoning about the ratio from the shader is hopeless because the
+    // 3-octave sum, the diffusion floor and the silver lining all feed the sun
+    // arm; turning one arm off and reading the frame is not.
+    if (this.clouds) {
+      const m = this.clouds.marchUniforms;
+      if (this._ablate.has('nocloudsun')) m.uCloudSunGain.value = 0;
+      if (this._ablate.has('nocloudamb')) m.uAmbientBoost.value = 0;
+    }
   }
 
   _makeUniforms(): AtmosphereUniforms {
@@ -667,9 +741,37 @@ export class Sky {
     // underside — the part the camera sees — is far darker than a fair-weather
     // cumulus base. Pulling the march's ambient down under heavy cover is what
     // turns the deck from pale mush into a lid.
+    //
+    // These two, not the constructor's, are the live values. `Clouds.ts` still
+    // declares 1.15 and 0.42 and they are dead — sibling-TRAPS.md trap 7. It
+    // cost a capture to find out: editing the constructor changed the frame by
+    // nothing at all, byte for byte on the sampled patches.
+    //
+    // The fair-weather numbers were 1.15 and 0.42 and both were wrong, in ways
+    // that only showed once the deck had holes in it:
+    //
+    // - Sun gain 0.42 drove a sunlit cumulus clean off the top of the scene
+    //   buffer. A `--raw` capture (pre-post, so no tonemap and no grade) read
+    //   the deck at a flat 255,255,255 across its whole body, not just its
+    //   sunlit crown. Everything above white is hue that the tonemap's
+    //   shoulder and the grade's highlight desaturation then have to invent,
+    //   and what they invent is the grade's own warm highTint. That is judge
+    //   defect 1, "the sky clips to pure white", *and* most of the measured
+    //   highlight-warmth gap, in one number. At 0.26 the raw body reads
+    //   #e3e9ea — under white, faintly cool — and only the sunlit crown still
+    //   clips, which is correct for a cumulus at midday.
+    // - Ambient 1.15 made the sky's contribution to the deck 2% of its
+    //   radiance, measured by ablating each arm in turn (`?post=nocloudamb`
+    //   moved the cloud by 4 levels out of 213). A cumulus is lit by the whole
+    //   blue hemisphere as well as by the sun, and FFXV's are blue-white for
+    //   it: `duscae-plains-lake-01` samples them at #b1ccde, R-B -45, against
+    //   a sky of #5ea0c9. Part of the shortfall is dimensional — the term
+    //   samples sky *radiance* where what falls on a cloud element is sky
+    //   *irradiance*, which is pi times larger. 4.0 covers that with a little
+    //   over for the multiple scattering the 3-octave sum cannot reach.
     if (this.clouds) {
-      this.clouds.marchUniforms.uAmbientBoost.value = lerp(1.15, 0.20, overcast);
-      this.clouds.marchUniforms.uCloudSunGain.value = lerp(0.42, 0.24, overcast);
+      this.clouds.marchUniforms.uAmbientBoost.value = lerp(4.00, 0.30, overcast);
+      this.clouds.marchUniforms.uCloudSunGain.value = lerp(0.26, 0.20, overcast);
     }
 
     // --- ambient / IBL -----------------------------------------------------
@@ -884,6 +986,7 @@ export class Sky {
     u.uFogDensity.value = p.fogDensity;
     u.uFogHeight.value = p.fogHeight;
     u.uHazeBase.value = p.haze;
+    this._ablateWeather();
   }
 
   lateUpdate() {

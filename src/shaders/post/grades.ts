@@ -30,6 +30,24 @@ export interface GradeLook {
   shadowTint: number[];
   midTint: number[];
   highTint: number[];
+  /**
+   * 0..1: how far `highTint` is gated on the pixel already being warm.
+   *
+   * FFXV's split-tone is a statement about *light*, not about pixels: sunlit
+   * surfaces go warm, shade goes teal. Applied flat, a warm highlight tint
+   * also lands on the two brightest things in an outdoor frame that are not
+   * lit surfaces at all — the sky and the cloud deck — and warms them, which
+   * is the opposite of what the reference does. `duscae-plains-lake-01`
+   * samples its cumulus at #b1ccde (R-B -45) over a sky at #5ea0c9, and the
+   * FFXV-field corpus reads hi(R-B) -13.5 against our +18 for exactly this
+   * reason.
+   *
+   * At 1.0 the tint's departure from neutral is scaled by how warm the pixel
+   * already is, so it saturates warmth that is there rather than inventing it.
+   * At 0 it applies flat, which is right for `night` and `storm`, whose
+   * highTint is already neutral-to-cool and would be cancelled by the gate.
+   */
+  highGate: number;
   /** Overall saturation, and its shadow / highlight weighting. */
   sat: number;
   satShadow: number;
@@ -78,6 +96,7 @@ export const GRADES: Record<string, GradePreset> = {
     look: {
       toe: 0.012, shoulder: 0.96, pivot: 0.40, contrast: 1.21,
       shadowTint: [0.88, 0.97, 1.17], midTint: [1.0, 1.0, 0.985], highTint: [1.04, 1.0, 0.94],
+      highGate: 1.0,
       sat: 0.99, satShadow: 1.0, satHigh: 0.88,
       mixer: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
       fade: 0.006, fadeTint: [0.04, 0.06, 0.11],
@@ -104,6 +123,7 @@ export const GRADES: Record<string, GradePreset> = {
     look: {
       toe: 0.030, shoulder: 0.78, pivot: 0.39, contrast: 1.19,
       shadowTint: [0.66, 0.89, 1.42], midTint: [1.01, 1.0, 0.99], highTint: [1.10, 1.01, 0.87],
+      highGate: 1.0,
       sat: 1.02, satShadow: 1.08, satHigh: 0.82,
       mixer: [1.0, 0.01, -0.01, 0.0, 1.0, 0.0, -0.02, 0.01, 1.0],
       fade: 0.012, fadeTint: [0.05, 0.08, 0.15],
@@ -123,6 +143,7 @@ export const GRADES: Record<string, GradePreset> = {
     look: {
       toe: 0.055, shoulder: 0.95, pivot: 0.33, contrast: 1.10,
       shadowTint: [0.62, 0.84, 1.46], midTint: [0.84, 0.94, 1.20], highTint: [0.97, 1.0, 1.08],
+      highGate: 0.0,
       sat: 0.90, satShadow: 0.86, satHigh: 0.76,
       mixer: [1.0, 0.0, 0.03, 0.0, 1.0, 0.02, 0.02, 0.0, 1.0],
       fade: 0.018, fadeTint: [0.03, 0.05, 0.14],
@@ -141,6 +162,7 @@ export const GRADES: Record<string, GradePreset> = {
     look: {
       toe: 0.018, shoulder: 0.94, pivot: 0.38, contrast: 1.16,
       shadowTint: [0.86, 0.97, 1.12], midTint: [0.95, 0.99, 1.02], highTint: [1.0, 1.01, 1.01],
+      highGate: 0.0,
       sat: 0.86, satShadow: 0.80, satHigh: 0.80,
       mixer: [1.0, 0.0, 0.01, 0.01, 1.0, 0.01, 0.0, 0.0, 1.0],
       fade: 0.014, fadeTint: [0.05, 0.07, 0.10],
@@ -159,6 +181,12 @@ function sat01(v: number) { return v < 0 ? 0 : v > 1 ? 1 : v; }
  * Deterministic and cheap (32k texels of pure arithmetic).
  *
  */
+/** smoothstep, clamped, for the LUT baker. */
+function smooth01(x: number, a: number, b: number) {
+  const t = sat01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+}
+
 export function bakeLut(preset: GradePreset): THREE.DataTexture {
   const L = preset.look;
   const n = LUT_SIZE;
@@ -205,8 +233,18 @@ export function bakeLut(preset: GradePreset): THREE.DataTexture {
         const wS = Math.pow(1 - sat01(y), 2.0);
         const wH = Math.pow(sat01(y), 2.0);
         const wM = Math.max(0, 1 - wS - wH);
+        // Gate the highlight tint on how warm the pixel already is. See
+        // GradeLook.highGate: a flat warm tint lands on sky and cloud, which
+        // are the brightest things in an outdoor frame and the two the
+        // reference keeps coolest. Normalising R-B by luma makes the gate a
+        // question about hue rather than about exposure, so a bright cloud and
+        // a dim one are judged the same way.
+        const yT = d[0] * lum[0] + d[1] * lum[1] + d[2] * lum[2];
+        const chroma = (d[0] - d[2]) / Math.max(yT, 0.02);
+        const gate = L.highGate * (1 - smooth01(chroma, 0.0, 0.14)) ;
         for (let i = 0; i < 3; i++) {
-          const t = L.shadowTint[i] * wS + L.midTint[i] * wM + L.highTint[i] * wH;
+          const hi = L.highTint[i] + (1 - L.highTint[i]) * gate;
+          const t = L.shadowTint[i] * wS + L.midTint[i] * wM + hi * wH;
           d[i] *= t;
         }
 

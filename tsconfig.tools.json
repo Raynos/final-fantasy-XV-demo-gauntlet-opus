@@ -37,9 +37,9 @@
     // `baseUrl`, `paths` resolves relative to this file, which is what the
     // mapping below already assumed.
     //
-    // Two agents found and fixed this independently within an hour of each
-    // other, which is usually a sign the failure was expensive enough to be
-    // worth a comment this long.
+    // THREE agents found and fixed this independently, in three separate
+    // worktrees, within about two hours. That is a reliable signal that the
+    // failure was expensive, and the reason the comment is this long.
     "paths": { "/*": ["./src/*"] }
   },
   // `src/globals.d.ts` is the same `window.GAME` / `BOOT_PROFILE` contract the
