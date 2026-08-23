@@ -28,7 +28,8 @@ export const BALOUVE: DungeonDef = {
   corridorWidth: 3.6,
   corridorHeight: 3.4,
 
-  entrance: { x: 294, z: -232, heading: -2.05, kind: 'mine' },
+  entrance: { poi: 'balouve_mines', heading: -2.05, kind: 'mine' },
+  /** A private interior frame; see the note on `KEYCATRICH.origin`. */
   origin: [294, -34, -232],
   spawn: [0, 2.6],
   exit: { at: [0, 3.8], facing: 0, w: 3.6, h: 3.2, color: 0xf0e0c0, intensity: 260 },

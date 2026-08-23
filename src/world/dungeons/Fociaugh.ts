@@ -29,7 +29,8 @@ export const FOCIAUGH: DungeonDef = {
   corridorWidth: 3.0,
   corridorHeight: 3.2,
 
-  entrance: { x: 110, z: 356, heading: 2.60, kind: 'cave' },
+  entrance: { poi: 'fociaugh', heading: 2.60, kind: 'cave' },
+  /** A private interior frame; see the note on `KEYCATRICH.origin`. */
   origin: [110, -22, 356],
   spawn: [0, 2.4],
   exit: { at: [0, 4.0], facing: 0, w: 3.4, h: 3.4, color: 0xcfe8d8, intensity: 240 },
