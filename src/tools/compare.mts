@@ -96,6 +96,14 @@ const PAIRING: Record<string, string[]> = {
   zone_fallgrove: ['duscae-wilderness-04.jpg', 'behemoth-deadeye-duscae-02.jpg'],
   zone_vannath: ['duscae-plains-lake-01.jpg', 'beast-party-plains-03.jpg'],
   hero_full: ['character-noctis-mastershot-04.jpg', 'party-three-field-02.jpg'],
+  // `hero_portrait` and `hero_profile` entered the corpus this session, and
+  // §12.6 measured that FFXV has exactly two character framings and nothing
+  // between them: a ~30%-of-frame-height close-up and a ~14% mid-shot. The
+  // portrait shots are the close-up, so they pair against the close-up plates
+  // — falling back to a landscape row would have asked the judge which of a
+  // face and a plain looks like a console game.
+  hero_portrait: ['character-noctis-face-01.jpg', 'character-ignis-face-01.jpg'],
+  hero_profile: ['character-noctis-face-01.jpg', 'character-gladiolus-face-01.jpg'],
   hero_closeup: ['character-noctis-face-01.jpg', 'character-ignis-face-01.jpg'],
   hero_face: ['character-noctis-face-01.jpg', 'character-gladiolus-face-01.jpg'],
   gladio_closeup: ['character-gladiolus-face-01.jpg', 'character-gladiolus-sunlit-02.jpg'],
