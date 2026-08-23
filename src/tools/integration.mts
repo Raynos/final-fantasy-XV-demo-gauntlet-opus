@@ -90,6 +90,25 @@ const results = await page.evaluate(async () => {
       add(area, name, r.status, r.evidence);
     } catch (e: unknown) { add(area, name, 'FAIL', 'threw: ' + (e instanceof Error ? e.message : String(e))); }
   };
+  /**
+   * Every fish a hole with **real water under it** can pay out.
+   *
+   * Not `HOLES` and not the item table: `Water` is one global plane at
+   * y = -6.5, so seven of the ten `fishing` pins stand on ground twenty to a
+   * hundred and twenty metres above it and can never have water.
+   * `Fishing._survey` is the only thing that knows which three are live, so it
+   * is what both checks below ask -- a source that is only true in a table is
+   * not a source.
+   */
+  const fishable = () => {
+    const set = new Set<string>();
+    const f = g.get('Rpg')?.fishing;
+    if (!f) return set;
+    f.install(g);
+    for (const spot of f.spots.values()) for (const id of spot.fish) set.add(id);
+    return set;
+  };
+
   const P = (evidence: unknown) => ({ status: 'PASS' as const, evidence });
   const W = (evidence: unknown) => ({ status: 'WIRED' as const, evidence });
   const F = (evidence: unknown) => ({ status: 'FAIL' as const, evidence });
@@ -159,6 +178,8 @@ const results = await page.evaluate(async () => {
     // Deliberately earned rather than bought: the rank-10 recipe's one
     // ingredient is the Adamantoise's drop.
     const EARNED = new Set(['adamantite']);
+    // The third supply line: anything landed at a fishing hole with real water.
+    for (const id of fishable()) source.add(id);
     const recipes = Object.values(rpg.tables.recipes);
     const blocked = recipes.filter((r) => r.ingredients.some((i) => !source.has(i.id) && !EARNED.has(i.id)));
     const orphans = new Set<string>();
@@ -539,7 +560,15 @@ const results = await page.evaluate(async () => {
           if (!o.waypoint) bad.push(`${where} no waypoint`);
         } else if (o.type === 'photo') {
           if (typeof g.get('Menus')?.screens?.photo?.subjects !== 'function') bad.push(`${where} the shutter posts nothing`);
-        } else if (o.type === 'escort' || o.type === 'fish') {
+        } else if (o.type === 'fish') {
+          // Stricter than "the item exists": the species has to be stocked by a
+          // hole the water actually reaches, or the objective points at one of
+          // the seven dry pins.
+          const live = fishable();
+          if (o.target === 'any') { if (!live.size) bad.push(`${where} no fishable water in the world`); }
+          else if (!rpg.tables.items[o.target]) bad.push(`${where} no such item`);
+          else if (!live.has(o.target)) bad.push(`${where} no fishing hole with real water stocks it`);
+        } else if (o.type === 'escort') {
           bad.push(`${where} nothing in the game posts "${o.type}"`);
         }
       }
@@ -676,6 +705,84 @@ const results = await page.evaluate(async () => {
     return off && off.ok === false
       ? P(`${prompts.length} camps; slept at "${h.name}", day ${day0}->${rpg.day.day}; refused 400 m away`)
       : W(`slept at ${h.id}, but camping 400 m away was also allowed`);
+  });
+
+  /**
+   * The world's only non-combat verb, driven the way a player drives it.
+   *
+   * Deliberately end-to-end rather than a unit test of `Fishing`: it presses
+   * the keys, waits out a real bite, plays a real fight, and then asks the
+   * **bag** whether an ingredient arrived. Everything before the bag can be
+   * green while nothing reaches the kitchen -- which is exactly the failure
+   * this whole gate exists for.
+   */
+  probe('gameplay', 'a fish can be caught and cooked with', () => {
+    const rpg = g.get('Rpg')!; const ix = g.get('Interaction')!;
+    const f = rpg.fishing;
+    f.install(g);
+    if (!f.spots.size) return F(`no fishing hole has water under it (${f.dry.length} dry pins)`);
+    const spot = f.spots.get('alstor_dock') ?? [...f.spots.values()][0];
+    const prompts = [...ix.items.keys()].filter((k) => String(k).startsWith('fish_'));
+    if (!prompts.length) return F(`${ix.items.size} interactables, none of them a rod`);
+
+    const player = g.get('Player')!;
+    const hold = () => {
+      if (f.busy) return;
+      player.root.position.copy(spot.stand);
+      player.heading = Math.atan2(spot.out.x, spot.out.y);
+      player.root.rotation.y = player.heading;
+      player.velocity?.set(0, 0, 0);
+    };
+    const tick = (n: number) => { for (let i = 0; i < n; i++) { hold(); g.frame(1 / 60); } };
+    const down = (c: string) => window.dispatchEvent(new KeyboardEvent('keydown', { code: c, bubbles: true }));
+    const up = (c: string) => window.dispatchEvent(new KeyboardEvent('keyup', { code: c, bubbles: true }));
+
+    // Read the phase through a call so the compiler cannot narrow it across a
+    // loop that ticks the game: `f.phase` is mutated by `Fishing.update`, and
+    // TS otherwise decides the `wait` loop leaves it still `'wait'`.
+    const phase = () => f.phase as string;
+
+    // Twenty-five probes have run before this one and any of them may have left
+    // a screen, a conversation or a paused Director behind; `Interaction`
+    // suppresses the verb for all three, so the press would go nowhere and the
+    // failure would read as a broken rod.
+    g.get('Director')?.play?.();
+    g.get('Menus')!.setScreen(null);
+    g.get('Cinematics')?.stop?.({ skipped: true });
+    g.get('HUD')!.setMenuOpen(false);
+    g.input.pointerLocked = true;
+    hold(); tick(24);
+    if (ix.current?.id !== `fish_${spot.id}`) {
+      return F(`standing on the bank at ${spot.name} offers `
+        + `"${ix.current ? `${ix.current.verb} ${ix.current.label}` : 'nothing'}"`);
+    }
+    down('KeyE'); tick(26); up('KeyE'); tick(50);
+    if (phase() !== 'wait') return F(`E did not produce a cast (phase=${phase()})`);
+    for (let i = 0; i < 1200 && phase() === 'wait'; i++) tick(1);
+    if (phase() !== 'bite') return F(`no bite inside 20 s (phase=${phase()})`);
+    const hooked = f.fish;
+    down('KeyE'); tick(2); up('KeyE'); tick(2);
+    if (phase() !== 'fight') return F(`E inside the window did not hook it (phase=${phase()})`);
+
+    const bagBefore = rpg.inventory.count(hooked!.id);
+    let reeling = false; let lean: string | null = null;
+    for (let i = 0; i < 5400 && phase() === 'fight'; i++) {
+      const wantLean = f.run === 1 ? 'KeyA' : f.run === -1 ? 'KeyD' : null;
+      if (wantLean !== lean) { if (lean) up(lean); lean = wantLean; if (lean) down(lean); }
+      const wantReel = f.tension < 0.62;
+      if (wantReel !== reeling) { reeling = wantReel; (wantReel ? down : up)('KeyE'); }
+      tick(1);
+    }
+    if (reeling) up('KeyE');
+    if (lean) up(lean);
+    if (phase() !== 'landed') return F(`played properly, the ${hooked!.name} was still lost: ${f.note}`);
+    tick(200);
+    const got = rpg.inventory.count(hooked!.id) - bagBefore;
+    const def = rpg.tables.items[hooked!.id];
+    if (got !== 1) return F(`landed, but the bag went ${bagBefore} -> ${bagBefore + got}`);
+    if (!def || def.category !== 'ingredient') return F(`${hooked!.id} is a ${def && def.category}, not an ingredient`);
+    return P(`${prompts.length} holes with water; landed a ${f.kg.toFixed(1)} kg ${hooked!.name} `
+      + `at "${spot.name}" and it is a cookable ingredient`);
   });
 
   return out;
