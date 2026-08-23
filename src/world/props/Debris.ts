@@ -7,6 +7,7 @@ import { woodMaterial, rustMaterial } from './PropMaterials.ts';
 import { TileStream } from './TileStream.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import { dressAt, zoneMoist, LITTER_KINDS, type LitterKind } from './ZoneDress.ts';
+import type { ErosionSample } from '../terrain/Field.ts';
 import { WORLD } from '../map/WorldMap.ts';
 import { leafClusterTex } from '../veg/VegTextures.ts';
 import { patchVeg, registerAlphaCard } from '../veg/VegMaterial.ts';
@@ -566,10 +567,16 @@ export class Debris {
    * zone table does not know: a zone can want driftwood, but only the water's
    * edge can actually have any.
    */
+  /** Reused erosion sample — `_fit` runs per candidate per cell. */
+  _ero: ErosionSample = { accum: 0, deposit: 0, scree: 0, wet: 0, rock: 0, flowX: 0, flowZ: 0 };
+
   _fit(key: string, x: number, z: number) {
     const eco = this.eco;
     const slope = eco.slope01(x, z);
     if (slope > 0.72) return 0;
+    // Where the water went, from the erosion pass itself rather than from a
+    // noise field that has never heard of it. See `Terrain.erosionAt`.
+    const ero = eco.terrain.erosionAt(x, z, this._ero);
     // Lucis is rolling badland: gating litter at a 0.55 slope meant almost the
     // whole map counted as "too steep" and the debris layer only ever landed
     // on the valley floors.
@@ -590,11 +597,24 @@ export class Debris {
         // zone recipe already says how much timber belongs here; all this adds
         // is clumping, plus a bonus under an actual grove.
         const clump = 0.35 + 0.65 * eco.patch(x - 120, z + 260, 0.02, 2);
-        return base * THREE.MathUtils.clamp(clump * (0.7 + eco.treeDensity(x, z) * 0.9), 0, 1);
+        // Debris fines downstream. A leaf travels the length of the drainage;
+        // a log strands on the first bar it cannot get over. So the light
+        // stuff follows accumulation and the heavy stuff avoids it, off the
+        // same channel — which is the whole reason this is one field and not
+        // two noise masks that happen to disagree.
+        const fine = key === 'leaves' ? 0.55 + 0.75 * ero.accum
+          : key === 'branch' ? 0.85 + 0.25 * ero.accum
+          : 1.25 - 0.45 * ero.accum;
+        return base * THREE.MathUtils.clamp(
+          clump * (0.7 + eco.treeDensity(x, z) * 0.9) * fine, 0, 1);
       }
       case 'bones':
+        // Bones bleach where nothing washes them away. `wet` is the erosion
+        // pass's own answer and it disagrees with the climate blend exactly
+        // where it should: a dry zone still has damp hollows.
         return base * (1 - THREE.MathUtils.smoothstep(
-          Math.max(eco.moisture(x, z), zoneMoist(x, z)), 0.3, 0.62));
+          Math.max(eco.moisture(x, z), zoneMoist(x, z)), 0.3, 0.62))
+          * (1 - 0.65 * ero.wet);
       case 'deadtrunk': {
         // Depth of water over the bed, in metres. A trunk stands on the bed,
         // so it only reads if the bed is within a trunk's height of the
@@ -605,18 +625,28 @@ export class Debris {
           * (1 - THREE.MathUtils.smoothstep(d, 4.0, 6.5));
       }
       case 'reeds': {
-        // a band in the shallows and just above the waterline
+        // Two places reeds grow, and until now we only had one of them: the
+        // band at the waterline, and any ground that stays wet. The second is
+        // most of them — a marsh is not a lake edge — and it is the erosion
+        // pass, not the sea level, that knows where it is.
         const dw = SEA - h;
-        return base * THREE.MathUtils.smoothstep(dw, -1.6, -0.2)
+        const shore = THREE.MathUtils.smoothstep(dw, -1.6, -0.2)
           * (1 - THREE.MathUtils.smoothstep(dw, 0.6, 1.6));
+        const marsh = THREE.MathUtils.smoothstep(ero.wet, 0.80, 0.97);
+        return base * Math.min(1, shore + marsh);
       }
       case 'driftwood':
-        return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 3, 22));
+        // A strandline is where water ran, not merely where it stood.
+        return base * (1 - THREE.MathUtils.smoothstep(Math.abs(h - SEA), 3, 22))
+          * (0.25 + 0.75 * THREE.MathUtils.smoothstep(ero.accum, 0.55, 0.92));
       case 'rubble':
       case 'barrel':
       case 'planks':
-        // man-made rubbish gathers where people were: near the road
-        return base * (0.3 + 0.7 * (1 - THREE.MathUtils.smoothstep(eco.roadDist(x, z), 20, 90)));
+        // Man-made rubbish gathers where people were — and then the weather
+        // moves it, which is why it also collects where the water drops what
+        // it is carrying instead of staying in a ring around the road.
+        return base * (0.3 + 0.7 * (1 - THREE.MathUtils.smoothstep(eco.roadDist(x, z), 20, 90)))
+          * (0.55 + 0.55 * ero.deposit);
       case 'cairn':
         // waymarks sit on high ground you can see from
         return base * THREE.MathUtils.smoothstep(eco.patch(x + 4000, z - 2200, 0.02, 2), 0.55, 0.85);
