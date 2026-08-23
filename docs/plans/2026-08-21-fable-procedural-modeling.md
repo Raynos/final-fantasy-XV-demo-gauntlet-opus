@@ -1,26 +1,42 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 is roughly half built; the
-tooling this plan asks for is not.** Buildings and rocks landed against it, with
-the measured FFXV reference in `docs/reference/` as the bar and a blind A/B judge
-scoring the result. See `project/handoff/modeling.md`, which grades its own work
-5-6.5/10 and is the more honest read.
+Status: IN-PROGRESS (2026-08-24, opus) — **an overnight seven-lane push is
+building the whole plan.** `project/handoff/2026-08-23-coordinator.md` has the
+lane map and the shared rules; each lane keeps its own
+`project/handoff/<lane>.md`. `project/handoff/modeling.md` remains the honest
+read on the round that landed §5.1 and the texel-density defect.
 
-Audited against the tree 2026-08-23:
+**Four of this plan's own premises were false, and each was disproved by
+measurement before anything was built against it.** They are listed in the
+table because a plan that reads as current and is not is the more expensive
+kind of wrong — re-audit against the tree before building from a row.
+
+Re-audited against the tree 2026-08-24:
 
 | item | state | evidence |
 |---|---|---|
 | 2.1 seat contract | **DONE** | `Terrain.seatHeightAt`, `props/Seat.ts`, `seatcheck.mts` |
-| 2.5 RNG hygiene | **NOT DONE** | The `_outcrops` RNG coupling this plan's §12 says must be fixed *first* is still open |
-| 2.3 Matérn scatter | **NOT DONE** | No Matérn anywhere in `src/` |
+| 2.2 talus aprons | **DONE** | `Terrain.ts`, `props/{ZoneDress,Rocks}.ts` |
+| **2.4 erosion outputs as the placement API** | **DONE 2026-08-24** | `Terrain.erosionAt` -> `{accum, deposit, scree, wet, rock, flowX, flowZ}` off a 16 m ranked grid baked beside the heightfield; five consumers in `Debris._fit`; `src/tools/hydrocheck.mts` gates it. Verified a channel network and not a haze against a **white-noise control**: neighbour-also-hot lift **3.19x** at p90, **4.65x** at p95, **11.13x** at p99, control **0.94x** |
+| **4.2 drainage incision** | **DONE 2026-08-24** | `Field._inciseDrainage`, three widening bands off one *ranked* field, hard slope gate at 0.02 m/m. **800 266 cells, 18.58% of the grid, mean 2.10 m, max 9.0 m**, connected at **4.72x** chance |
+| **4.3 strike-frame anisotropy** | **DONE 2026-08-24** | `Field.strikeFrame` + a conjugate set at 62°. Aspect was sweeping *through* 1.0 — grain ran perpendicular on **34.7%** of the world and was isotropic on **28.8%** — and the strike turned **48.5°/km**. Now p50 **2.78:1**, 0.0% inverted, 0.0% isotropic, **3.9-6.1°/km** |
+| **4.4 compositing rules** | **DONE 2026-08-24, and three quarters of it was already built** | `smax` softplus at `_mesa`'s rim and `_bench`'s scarp was the only open part |
 | 3.2 chamfer + weathering | **DONE** | `chamfer` in 7 files across `props/`, `town/`, `combat/`, `rig/` |
 | 4.1 strata | **DONE** | `terrain/{Field,Layers,Biome,TerrainMaterial}.ts`, `props/Rocks.ts` |
 | 5.1 `wallRun` + chamfered box | **DONE** | `props/BuildKit.ts`, `props/PoiKits.ts` |
-| 2.2 talus aprons | **DONE** | `Terrain.ts`, `props/{ZoneDress,Rocks}.ts` |
 | **the texel-density defect** | **DONE, and it was the big one** | `TownKit.texelPlace` — one cause behind three separately-written-up symptoms (caustic soffit, wood-grain fascia, gravel-scale speckle on furniture). Cost: **+0.33% triangles worst case and one extra draw call across nine shots** |
-| §9.2 silhouette bench | **NOT BUILT** | `edgestat.mts` measures alpha-edge hardness and `lineup.mts` glues crops side by side; neither is the 8-azimuth height-normalised width-profile bench this plan specifies. Tree and creature *shape* variety is still ungated |
-| §13 `proudOf` | **NOT BUILT** | The symbol does not exist in the repo |
-| 8.x characters | **NOT STARTED** | Head, hair, skinning and LOD are untouched by this lane; hair and eyes shipped from a *different* lane, unjudged |
+| **2.5 seed avalanching (`mixSeed`)** | **NON-PORT — measured, do not build** | OGL's xorshift turned seeds 101/202/303 into 0.0002/0.0004/0.0007. Ours is **mulberry32**, which avalanches inside `next()`: over 4096 consecutive seeds the first draw has lag-1 autocorrelation **−0.0103**, mean **0.49893**; the second draw's is **0.00501**. Seeds 101/202/303 give 0.136/0.129/0.932 |
+| **§12's "`_outcrops` coupling must be fixed first"** | **ALREADY FIXED — the plan is stale** | `Field._outcrops` draws all nine numbers per candidate whether it places or not, with the reason in its docstring. §2.3 was never blocked |
+| **§4.4's Nyquist violation** | **ALREADY FIXED — the plan is stale** | `tf_heightLod` fades `tf_micro` over `smoothstep(4, 14, cell)` and `Terrain._vertexHeight` mirrors it exactly, five-tap grid filter included |
+| **§4.4's unit-circle ring noise** | **ALREADY OBEYED — the plan is stale** | All **seven** `atan2` sites in `Field.ts` feed `cos(ang)`/`sin(ang)` into `fbm2`, never the angle |
+| 2.3 Matérn scatter · 2.6 far sink | IN FLIGHT | scatter lane, `veg/Ecology.ts` + `veg/Cluster.ts` + `tools/scatterstat.mts` |
+| 3.1, 3.3-3.7 rock finishing | IN FLIGHT | rocks lane, `props/Rocks.ts` |
+| 5.2-5.5 town, wear, pads, soft goods | IN FLIGHT | town lane, `world/town/**` + POI kits + `props/Wear.ts` |
+| 6.1 shoreline · 6.2 rivers | IN FLIGHT | water lane, unblocked by 4.2 landing — there are channels to sit a river in now |
+| 7.x trees and vegetation | NOT STARTED | partly eaten already by the `variety`, `vegetation` and `silhouette` lanes without this plan knowing — **re-audit before building** |
+| 8.x characters | IN FLIGHT | characters lane, `src/characters/**`. Hair and eyes shipped from the `heroart` lane and are **unjudged** |
+| §9.x method, §13 `proudOf` | IN FLIGHT | method lane; `floatcheck.mts` and `hydrocheck.mts` have landed |
+
 Author: Fable 5 audit pass, against commit `86303de`. Companion to
 `docs/plans/2026-08-21-fable-sibling-ports.md` (which covers rendering, perf,
 gameplay and tooling); this one covers **mesh and shape construction only** —
