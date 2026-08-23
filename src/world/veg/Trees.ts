@@ -102,6 +102,43 @@ const SHADE_MIN = 0.70, SHADE_SPAN = 0.30;
 const LEAN_MAX = 0.30;
 
 /**
+ * How far a tree leans toward the ground's own normal, as a fraction of the
+ * slope angle.
+ *
+ * **We planted everything plumb.** A trunk is a hard vertical line and a
+ * hillside is not, so a plumb stand on a slope is the one arrangement that
+ * cannot occur in nature and it is instantly legible as a scatter pass — the
+ * trees read as pins stuck into the terrain rather than as things that grew out
+ * of it. Real stems compromise between gravity and the surface they germinated
+ * on; OGL settled on 22% and so does this.
+ *
+ * It is added to the wind lean as a **vector**, not as a second Euler term, so
+ * a windward slope leans harder and a leeward one straightens. See
+ * {@link Trees._orient} for why that had to be a vector at all.
+ */
+const SLOPE_LEAN = 0.22;
+
+/**
+ * Which variant tier one tree draws, from one uniform number.
+ *
+ * The tiers are habits (`TREE_HABITS`), not seeds, so they are **not**
+ * equiprobable: `typical` is the tree the species describes and should be most
+ * of the stand, while `snapped` is a storm-broken stem and a forest with a
+ * third of its trunks snapped off is a battlefield. 0.50 / 0.36 / 0.14.
+ *
+ * It consumes exactly one `rng.next()`, which is what the old
+ * `(rng.next() * VARIANTS) | 0` did. The count of draws per candidate is
+ * load-bearing — take one more or one fewer and every later candidate in the
+ * tile re-rolls its acceptance test, species and yaw, the whole forest
+ * re-scatters, and no change in this file is ablatable against an earlier shot.
+ */
+const TIER_CDF = [0.50, 0.86];
+function pickTier(u: number): number {
+  for (let i = 0; i < TIER_CDF.length; i++) if (u < TIER_CDF[i]) return i;
+  return Math.min(VARIANTS - 1, TIER_CDF.length);
+}
+
+/**
  * How hard the clump field bends the local tree density, and over what scale.
  *
  * **The scatter was a stratified grid thinned by a Bernoulli test, which is
@@ -224,6 +261,36 @@ const _bark: number[] = [1, 1, 1];
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
+const _nrm = new THREE.Vector3();
+const _axis = new THREE.Vector3();
+const _qy = new THREE.Quaternion();
+const _UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Orientation for one placed tree: yaw about its own axis, then a lean of
+ * `|(lx, lz)|` radians toward the world direction `(lx, lz)`.
+ *
+ * **This used to be `Euler(lx, yaw, lz)`, and that is not a lean in a
+ * direction — it is a lean in a direction the yaw rotates.** Composed XYZ,
+ * `up` comes out tilted toward `(-lz*cos(yaw), lx + lz*sin(yaw))`, so a tree's
+ * lean azimuth is its authored azimuth scrambled by an unrelated random yaw.
+ * That was invisible while the azimuth was itself noise; it is not survivable
+ * once the lean has to point *downhill* ({@link SLOPE_LEAN}), because a
+ * downhill lean pointing anywhere but downhill is worse than no lean at all.
+ *
+ * Building it as `q_tilt * q_yaw` applies the yaw in the trunk's own frame and
+ * the tilt in the world's, which is what "this tree leans that way" means.
+ * Two quaternions and a multiply per instance per frame.
+ */
+function orient(lx: number, lz: number, yaw: number, out: THREE.Quaternion) {
+  const m = Math.hypot(lx, lz);
+  _qy.setFromAxisAngle(_UP, yaw);
+  if (m < 1e-5) return out.copy(_qy);
+  // axis = up x lean-direction
+  _axis.set(lz / m, 0, -lx / m);
+  out.setFromAxisAngle(_axis, m);
+  return out.multiply(_qy);
+}
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
@@ -286,7 +353,12 @@ interface TreePlacement {
   swx: number;
   swz: number;
   yaw: number;
-  /** Lean, as the x and z components of the instance Euler. See `LEAN_MAX`. */
+  /**
+   * Lean, as a **world-space horizontal vector**: the direction the crown moves
+   * toward, with the tilt angle in radians as its magnitude. See `LEAN_MAX`,
+   * `SLOPE_LEAN` and {@link orient} — it was a pair of Euler components and a
+   * pair of Euler components cannot carry a direction.
+   */
   lx: number;
   lz: number;
   /** Per-instance tint, linear RGB. */
@@ -531,7 +603,12 @@ export class Trees {
 
       let canopySrc: TreeBakeSource | null = null;
       for (let v = 0; v < VARIANTS; v++) {
-        const t = buildTree(sp, 9001 + v * 733 + sp.length * 37);
+        // The variant index **is** the habit tier (plan 7.3). Three independent
+        // random draws over three habits leave one unrepresented 44% of the
+        // time, which for a `VARIANTS = 3` band means the usual outcome is two
+        // shapes and a duplicate; a table lookup on `v` covers every habit the
+        // species declares, every run. See `TREE_HABITS`.
+        const t = buildTree(sp, 9001 + v * 733 + sp.length * 37, {}, v);
         if (!t.wood.getAttribute('color')) {
           const n = t.wood.getAttribute('position').count;
           const white = new Float32Array(n * 3).fill(1);
@@ -691,7 +768,7 @@ export class Trees {
         const b = eco.veg(x, z);
         const sp = eco.treeSpecies(x, z);
         if (!TREE_SPECIES[sp as keyof typeof TREE_SPECIES]) continue;
-        const vi = (rng.next() * VARIANTS) | 0;
+        const vi = pickTier(rng.next());
         const variant = this.byKey.get(`${sp}_${vi}`);
         if (!variant) continue;
         // Stand structure, not a scale range. The authored `treeS` band is only
@@ -755,11 +832,24 @@ export class Trees {
         // Same rule as the position hashes above, approached from the other
         // side.
         const phi = local * Math.PI * 2 + (jitter - 0.5) * 1.6 + rng.gauss(0, 0.04) * 6;
+        // Slope lean, added as a *vector* to the wind lean. `Ecology.normal`
+        // tilts downhill, so this is the downhill direction and the magnitude
+        // is `SLOPE_LEAN` of the slope angle itself: flat ground contributes
+        // nothing at all and a 30-degree hillside contributes about 6.6
+        // degrees. Total magnitude is capped so a cliff-edge stem does not lie
+        // down.
+        eco.normal(x, z, _nrm);
+        const nh = Math.hypot(_nrm.x, _nrm.z);
+        const sl = nh > 1e-4 ? SLOPE_LEAN * Math.atan2(nh, Math.max(1e-4, _nrm.y)) : 0;
+        let tx = lean * Math.cos(phi) + (nh > 1e-4 ? sl * _nrm.x / nh : 0);
+        let tz = lean * Math.sin(phi) + (nh > 1e-4 ? sl * _nrm.z / nh : 0);
+        const tm = Math.hypot(tx, tz);
+        if (tm > LEAN_MAX * 1.6) { const k = LEAN_MAX * 1.6 / tm; tx *= k; tz *= k; }
         barkTone(x, z, _bark);
         out.push({
           x, z, y: eco.height(x, z), sp, vi, s,
           swx: sw * ar, swz: sw / ar, yaw,
-          lx: lean * Math.cos(phi), lz: lean * Math.sin(phi),
+          lx: tx, lz: tz,
           r: shade * c[0] * (1 + hue),
           g: shade * c[1],
           b: shade * c[2] * (1 - hue * 0.8),
@@ -924,8 +1014,7 @@ export class Trees {
       }
       const w = v._w++;
       geo++;
-      _e.set(p.lx, p.yaw, p.lz);
-      _q.setFromEuler(_e);
+      orient(p.lx, p.lz, p.yaw, _q);
       _p.set(p.x, p.y - 0.15, p.z);
       _s.set(p.s * p.swx, p.s, p.s * p.swz);
       _m.compose(_p, _q, _s);
@@ -1013,8 +1102,7 @@ export class Trees {
     const w = im._w++;
     // The same lean and the same spread the geometry ring uses, so the swap at
     // `geoRange` steps neither the silhouette nor the plan outline.
-    _e.set(p.lx, p.yaw, p.lz);
-    _q.setFromEuler(_e);
+    orient(p.lx, p.lz, p.yaw, _q);
     _p.set(p.x, p.y - 0.15, p.z);
     _s.set(p.s * p.swx, p.s, p.s * p.swz);
     _m.compose(_p, _q, _s);

@@ -430,7 +430,13 @@ export class Bushes {
       const variants: ScrubVariant[] = [];
       const cards: ScrubCards[] = [];
       for (let v = 0; v < spec.variants; v++) {
-        const t = buildTree(spec.base, 4242 + v * 613 + key.length * 71, spec.params);
+        // Tier 0 — `typical` — deliberately, for every bush variant. A bush's
+        // `spec.params` already rewrites most of what a habit would multiply
+        // (`trunkFrac`, `spread`, `depth`), and `snapped` on a knee-high shrub
+        // is a splintered stump, not variety. Bush variety is a `Bushes`
+        // problem and should be solved with bush deltas; this is an opt-out,
+        // not an oversight.
+        const t = buildTree(spec.base, 4242 + v * 613 + key.length * 71, spec.params, 0);
         const wood = new THREE.InstancedMesh(t.wood, woodMat, per);
         wood.castShadow = true; wood.receiveShadow = true;
         wood.count = 0; wood.visible = false; wood.frustumCulled = false;
