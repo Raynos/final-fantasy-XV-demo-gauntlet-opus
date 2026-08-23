@@ -285,14 +285,14 @@ export function silhouette(tris: Float32Array, label: string): Sil {
     let boxLo = w, boxHi = -1, tot = 0, rowsUsed = 0;
     for (let r = 0; r < h; r++) {
       const base = r * w;
-      let any = false;
+      let hit = false;
       for (let c = 0; c < w; c++) {
         if (!mask[base + c]) continue;
-        tot++; any = true;
+        tot++; hit = true;
         if (c < boxLo) boxLo = c;
         if (c > boxHi) boxHi = c;
       }
-      if (any) rowsUsed++;
+      if (hit) rowsUsed++;
     }
     fillSum += boxHi < boxLo ? 0 : tot / (rowsUsed * (boxHi - boxLo + 1));
 
@@ -310,14 +310,14 @@ export function silhouette(tris: Float32Array, label: string): Sil {
       if (bandCov[b] < 0.10) empty++;
       for (let r = b * ROWS; r < (b + 1) * ROWS; r++) {
         const base = r * w;
-        let any = false;
+        let hit = false;
         for (let c = 0; c < w; c++) {
           if (!mask[base + c]) continue;
-          cTot++; any = true;
+          cTot++; hit = true;
           if (c < cLo) cLo = c;
           if (c > cHi) cHi = c;
         }
-        if (any) cRows++;
+        if (hit) cRows++;
       }
     }
     crownFillSum += cHi < cLo ? 0 : cTot / (cRows * (cHi - cLo + 1));

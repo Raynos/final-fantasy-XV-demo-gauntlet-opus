@@ -453,11 +453,17 @@ if (!base) {
   process.exit(0);
 }
 
+// The POI counts are structural -- every site is force-built, every run, and
+// they do not move unless the world does. The instance counts are the streamed
+// set around spawn, re-derived per run against a trunk seven lanes are
+// committing to, and they drift by a count or two between two adjacent commits.
+// An exact ratchet on those cried wolf at 320 -> 321 within one minute.
+const slack = (k: string, v: number) => (k.startsWith('inst') ? Math.max(3, Math.round(v * 0.01)) : 0);
 const worse: string[] = [];
 const better: string[] = [];
 for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {
-  if (now[k] > base[k]) worse.push(`${k}: ${base[k]} -> ${now[k]}`);
-  else if (now[k] < base[k]) better.push(`${k}: ${base[k]} -> ${now[k]}`);
+  if (now[k] > base[k] + slack(k, base[k])) worse.push(`${k}: ${base[k]} -> ${now[k]}`);
+  else if (now[k] < base[k] - slack(k, base[k])) better.push(`${k}: ${base[k]} -> ${now[k]}`);
 }
 console.log(`\nratchet, against ${path.relative(ROOT, BASELINE)}:`);
 for (const k of ['poiFloating', 'poiBuried', 'instFloating', 'instBuried'] as const) {

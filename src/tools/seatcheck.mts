@@ -278,6 +278,13 @@ console.log('-'.repeat(88));
 const modelWorst = out.rows.reduce((a, r) => Math.max(a, Math.abs(r.vsModel.p99)), 0);
 const fieldWorst = out.rows.reduce((a, r) => Math.max(a, Math.abs(r.vsField.p99)), 0);
 console.log(`model residual p99 ${modelWorst.toFixed(3)} m   vs   heightAt error p99 ${fieldWorst.toFixed(3)} m`);
+// Plan section 9.3: every check declares what it is blind to, in its own
+// output. A gate that does not gets trusted for things it never measured.
+console.log('\nblind to: whether anything is actually SEATED through this model — it proves');
+console.log('          drawnHeightAt is the renderer\'s arithmetic, and floatcheck.mts is');
+console.log('          the one that reads the placed instances; the ground under a prop at');
+console.log('          a ring the camera is not standing in; anything the clipmap does not');
+console.log('          draw (props, water, the town pad, which grades 3.2 m of its own).');
 if (errors.length) {
   console.error(`\n${errors.length} page error(s):`);
   for (const e of [...new Set(errors)].slice(0, 6)) console.error('  ' + e);

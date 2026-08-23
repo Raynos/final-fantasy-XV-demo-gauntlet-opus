@@ -150,3 +150,10 @@ for (const f of files) {
 }
 console.log(['file'.padEnd(42), 'roi'.padEnd(18), 'edge%', ' hard%', '  p50', '  p90', ' speck', '  mid%'].join(' '));
 for (const r of rows) console.log(r);
+// Plan section 9.3: declare the blind spots in the output, not in a docstring
+// somebody has to go and find.
+console.log('\nblind to: SHAPE. This is alpha-edge hardness and speckle, and the plan says');
+console.log('          explicitly that it is not the silhouette bench — two identical trees');
+console.log('          and two different ones score the same. That is src/tools/silhouette.mts.');
+console.log('          Also blind to what is off-ROI, to colour, and to anything a JPEG\'s');
+console.log('          chroma subsampling smeared: measure edges on PNG.');
