@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { Noise } from '../../util/Noise.ts';
-import { Rng } from '../../util/Rng.ts';
 import { srgb } from '../../util/TextureGen.ts';
 import type { VegBiome } from './Biomes.ts';
 import type { EcoSite, SiteType } from '../props/EcoSites.ts';
@@ -8,6 +7,14 @@ import type { Terrain } from '../Terrain.ts';
 import { vegAt, zoneMoist, pickFrom } from './Biomes.ts';
 import { WORLD, worldMap } from '../map/WorldMap.ts';
 import type { Game } from '../../game/Game.ts';
+import type { ErosionSample } from '../terrain/Field.ts';
+import { maternScatter } from './Cluster.ts';
+import type { ClusterPoint } from './Cluster.ts';
+
+// `hash3` moved down to `Cluster.ts` — this file is the layer above it — and is
+// re-exported here so `Trees`, `Bushes`, `Rocks`, `Debris` and the probes that
+// import it from `Ecology` are unaffected.
+export { hash3 } from './Cluster.ts';
 
 /**
  * Shared world-sampling layer used by both Vegetation and Props.
@@ -37,14 +44,6 @@ const C_SOIL_WET = srgb(0x4c4a30);
 const _tmpA = new THREE.Color();
 const _tmpB = new THREE.Color();
 
-/** Cheap integer hash so tile content is position-derived, not sequence-derived. */
-export function hash3(x: number, y: number, s: number) {
-  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041);
-  h = (h ^ (h >>> 13)) >>> 0;
-  h = Math.imul(h, 1274126177) >>> 0;
-  return (h ^ (h >>> 16)) >>> 0;
-}
-
 /** One cleared disc around a settlement, and how far its clearing reaches. */
 interface Clearing {
   x: number;
@@ -61,36 +60,12 @@ interface ClearingGrid {
   grid: Map<number, Clearing[]>;
 }
 
-/**
- * A scatter candidate: where it goes, and the local density that produced it.
- * `rng` is a fresh 0..1 draw for whatever variation the caller wants.
- */
-export interface ScatterPoint {
-  x: number;
-  z: number;
-  y: number;
-  /** Local density at this point, 0..1. */
-  w: number;
-  rng: number;
-}
-
-/** How a clustered scatter is laid out over a disc. */
-export interface ScatterOpts {
-  radius: number;
-  /** Hole in the middle, metres. */
-  inner?: number;
-  /** Cluster seed grid, metres. */
-  cellSize?: number;
-  /** Candidates per cluster. */
-  perCell?: number;
-  /** Gaussian spread of a cluster's members, metres. */
-  spread?: number;
-  /** 0..1 acceptance probability at a point. */
-  density: (x: number, z: number) => number;
-  /** How far a lone candidate strays from its cell. */
-  jitterLone?: number;
+/** Extra per-caller bias on a clustered scatter — zone dressing, budgets. */
+export interface ScatterBias {
+  /** Multiplied into the PARENT's suitability. Never evaluated at a child. */
+  bias?: (x: number, z: number) => number;
+  /** Cap on emitted instances; truncation is hash-shuffled, not scan-order. */
   maxCount?: number;
-  center?: { x: number, z: number };
 }
 
 export class Ecology {
@@ -106,6 +81,8 @@ export class Ecology {
   sites!: EcoSite[];
   terrain!: Terrain;
   worldRadius!: number;
+  /** Reused erosion sample. `erosionAt` writes into it and returns it. */
+  _ero!: ErosionSample;
   /**
    * @param game the Game instance (needs .get('Terrain'))
    * @param seed master seed
@@ -121,6 +98,7 @@ export class Ecology {
     this.nPatch = new Noise(seed ^ 0x9e377);
     this.nGrove = new Noise(seed ^ 0x2f1d5);
     this.nTint = new Noise(seed ^ 0x77c19);
+    this._ero = { accum: 0, deposit: 0, scree: 0, wet: 0, rock: 0, flowX: 0, flowZ: 0 };
 
     const tsize = (this.terrain && this.terrain.size) || 1400;
     this.worldRadius = Math.min(4200, tsize * 0.5 - 40);
@@ -181,7 +159,51 @@ export class Ecology {
     return b;
   }
 
+  /**
+   * How much of this point has been cleared by people, 0..1 — the union of the
+   * authored landmark sites and the world map's POI pads.
+   *
+   * **Every density must multiply by `1 - cleared`, and for most of this file's
+   * life two of the three did not.** `treeDensity` took `siteBlock` *and*
+   * `poiClear`; `grassDensity` and `scrubDensity` took only `siteBlock`, which
+   * knows about the handful of landmarks near the origin and nothing about the
+   * 124 POIs. Measured before the fix, at the pad centres: Galdin Quay's plaza
+   * `grassDensity` 0.746, Schier Heights parking `scrubDensity` 0.587, and
+   * `poiClear` exactly 1.00 at both. Hammerhead only read 0.003 because it has
+   * an authored `site` sitting on top of it, which is why the symptom looked
+   * like a Hammerhead-specific mystery rather than what it was: grass and scrub
+   * growing through every town plaza and every outpost pad in the world, while
+   * the trees correctly stopped at the edge.
+   *
+   * This is the *disc* half of the exclusion. The per-building half —
+   * `PoiKits._exclusions` — is published and has **no consumer anywhere in the
+   * tree**; it cannot be one from here, because `Props` initialises after
+   * `Vegetation` and this object is built by both.
+   */
+  cleared(x: number, z: number) {
+    return Math.max(this.siteBlock(x, z), this.poiClear(x, z));
+  }
+
   // ---------------------------------------------------------------- terrain
+
+  /**
+   * The erosion pass's own outputs at this point (plan §2.4).
+   *
+   * Every channel is a **percentile**, so `wet > 0.9` means *wetter than 90% of
+   * the world*, at any resolution and under any erosion tuning. Measured over
+   * 40 000 land samples: `wet` and `accum` are near-uniform (mean 0.505 /
+   * 0.500, no zeros), `scree` is 83.2% zero with p95 = 0.40 — it is a sparse
+   * mask, not a field, and terms built on it must expect that.
+   *
+   * **Do not substitute `sampleMaterial().flow` for `accum`**: that channel is
+   * blurred and log-normalised for the shader and reads above 0.2 on 46% of the
+   * world where the raw field is exactly zero on 31.5%.
+   *
+   * The returned object is shared scratch — read it, do not keep it.
+   */
+  erosion(x: number, z: number): ErosionSample {
+    return this.terrain.erosionAt(x, z, this._ero);
+  }
 
   /** Ground height. */
   height(x: number, z: number) { return this.terrain.heightAt(x, z); }
@@ -656,41 +678,174 @@ export class Ecology {
   // ------------------------------------------------------------ distribution
 
   /**
-   * Clustered scatter over a disc: cluster seeds are jittered on a coarse grid,
-   * members fall around them with a gaussian, and every candidate is
-   * rejection-sampled against `density`. Returns [{x,z,y,w}] where w is the
-   * local density (useful for size/health variation).
+   * Matérn cluster scatter, the shared sampler (plan §2.3).
+   *
+   * Replaces `scatterClustered`, which was a jittered grid with a Gaussian
+   * sprinkle bolted on and, more to the point, **had zero callers for the whole
+   * life of the project** — every scatter in the world was `Trees._makeTile`'s
+   * or `Bushes._makeTile`'s own 8 m / 4 m stratified lattice. It, its
+   * `ScatterPoint` and its `ScatterOpts` are deleted rather than kept: a dead
+   * sampler in the file the live ones import from is how the next agent spends
+   * an afternoon tuning something nothing draws.
+   *
+   * Measured with `src/tools/scatterstat.mts` — Clark–Evans R against a
+   * calibrated Poisson / lattice / cluster triple. The numbers are in
+   * `project/handoff/scatter.md`; do not change a parameter here without
+   * re-running it, because the difference between a grove and a lawn with a
+   * density mask over it is about 0.4 in R and about nothing in a screenshot.
+   *
+   * @param suit  suitability, evaluated at the PARENT and nowhere else
+   * @param reject hard exclusion, evaluated per child — water, cliff, road, pad
    */
-  scatterClustered(seed: number, {
-    radius, inner = 0, cellSize = 46, perCell = 6, spread = 13,
-    density, jitterLone = 0.22, maxCount = 100000, center = { x: 0, z: 0 },
-  }: ScatterOpts): ScatterPoint[] {
-    const out: ScatterPoint[] = [];
-    const half = Math.ceil(radius / cellSize);
-    const cx0 = Math.round(center.x / cellSize), cz0 = Math.round(center.z / cellSize);
-    for (let gz = -half; gz <= half; gz++) {
-      for (let gx = -half; gx <= half; gx++) {
-        const cx = cx0 + gx, cz = cz0 + gz;
-        const rng = new Rng(hash3(cx, cz, seed));
-        const seedX = (cx + rng.next()) * cellSize;
-        const seedZ = (cz + rng.next()) * cellSize;
-        const localBias = density(seedX, seedZ);
-        // lone stragglers keep the field from looking like polka dots
-        const n = Math.round(perCell * (localBias * (1 - jitterLone) + jitterLone) * rng.range(0.4, 1.6));
-        for (let i = 0; i < n; i++) {
-          const a = rng.next() * Math.PI * 2;
-          const r = Math.abs(rng.gauss(0, 1)) * spread;
-          const x = seedX + Math.cos(a) * r;
-          const z = seedZ + Math.sin(a) * r;
-          const dc = Math.hypot(x - center.x, z - center.z);
-          if (dc > radius || dc < inner) continue;
-          const d = density(x, z);
-          if (d <= 0.004 || rng.next() > d) continue;
-          out.push({ x, z, y: this.height(x, z), w: d, rng: rng.next() });
-          if (out.length >= maxCount) return out;
-        }
-      }
-    }
-    return out;
+  _scatter(
+    salt: number, x0: number, z0: number, w: number, h: number,
+    parentMin: number, spread: number, mean: number,
+    suit: (x: number, z: number) => number,
+    reject: (x: number, z: number) => boolean,
+    kind: ((x: number, z: number, u: number) => string) | undefined,
+    o: ScatterBias & { radius?: (x: number, z: number, u: number, k: string) => number, slack?: number },
+  ): ClusterPoint[] {
+    const bias = o.bias;
+    return maternScatter({
+      seed: this.seed ^ salt, x0, z0, w, h, parentMin, spread, mean,
+      suitability: bias
+        ? (x, z) => suit(x, z) * bias(x, z)
+        : suit,
+      reject, kind, radius: o.radius, slack: o.slack, maxCount: o.maxCount,
+    });
+  }
+
+  /**
+   * Parent suitability for a wood: is this a site a grove would start on?
+   *
+   * `treeDensity` already composes climate, biome, slope, exposure and the
+   * hydrology, and it is the right field — but it is asked **only at the
+   * parent**. Thinning the children by it would re-impose its own
+   * almost-uniform statistics on the cluster and shred the grove straight back
+   * to Poisson, which is the single mistake §2.3 exists to warn about.
+   */
+  groveSuit(x: number, z: number) { return this.treeDensity(x, z); }
+
+  /** Parent suitability for a knot of scrub. Same rule: parents only. */
+  scrubSuit(x: number, z: number) { return this.scrubDensity(x, z); }
+
+  /**
+   * Parent suitability for a boulder cluster, from the erosion pass (§2.4).
+   *
+   * Stones come to rest where water put them or where a face shed them, so this
+   * reads `accum` (the drainage lines that carry and strand bedload) and
+   * `scree` (the sparse mask under a shedding face — 83% of the world is
+   * exactly zero on it, so it is an *additive* term here, never a multiplier).
+   * Keying rock on the same two channels the material and the plants read is
+   * the whole of the plan's "the world reads composed": otherwise the stones
+   * and the trees each invent their own answer to where the water went.
+   */
+  rockSuit(x: number, z: number) {
+    const e = this.erosion(x, z);
+    const accum = e.accum, scree = e.scree, rock = e.rock;
+    const slope = this.slope01(x, z);
+    // A bar of cobbles in a wash, plus talus under anything shedding, plus the
+    // bedrock the control channel already says is exposed.
+    let d = 0.16 + 0.62 * THREE.MathUtils.smoothstep(accum, 0.55, 0.95)
+      + 1.15 * scree + 0.45 * rock;
+    d *= 1 - THREE.MathUtils.smoothstep(slope, 0.62, 0.86);
+    return THREE.MathUtils.clamp(d, 0, 1);
+  }
+
+  /**
+   * Hard exclusion for anything rooted in the ground.
+   *
+   * Distinct from suitability *on purpose*: these are not preferences to be
+   * traded off against a good site, and a tree standing in a lake because its
+   * parent was on the shore is not grove coherence. Kept cheap — it runs per
+   * child, where suitability runs per parent.
+   */
+  rootBlocked(x: number, z: number) {
+    if (Math.hypot(x, z) > this.worldRadius) return true;
+    if (this.waterDepth(x, z) > 0.3) return true;
+    if (this.slope01(x, z) > 0.5) return true;
+    if (this.roadDist(x, z) < 6) return true;
+    return this.cleared(x, z) > 0.06;
+  }
+
+  /**
+   * Trees, in groves. `parentMin` 26 m is the pitch between possible stands and
+   * `spread` 10 m their radius, so a stand is roughly 30 m across with empty
+   * ground between — a hard edge, which is what a jittered grid cannot produce
+   * at any density.
+   *
+   * **`mean` is tuned for count parity with the lattice it replaces, and that
+   * is deliberate.** Measured over the five graded zones the emitted counts
+   * come out 0.92-1.35x the shipped `Trees._makeTile` (`scatterstat.mts`).
+   * Clustering must change *where* the matrices go, not how many there are:
+   * per-instance work is free, instance count is triangles, and a sampler that
+   * quietly halved the forest would read as an improvement in every perf number
+   * while being a different world. Re-run `scatterstat` after touching these.
+   *
+   * **A grove is one species.** `treeSpecies` is sampled at the parent and
+   * carried by every child, which is the plan's 72% grove-coherence figure and
+   * the reason a bank of thicket reads as a bank of thicket.
+   */
+  groveScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias = {}) {
+    return this._scatter(
+      0x67a1, x0, z0, w, h, 26, 10, 30,
+      (x, z) => this.groveSuit(x, z),
+      (x, z) => this.rootBlocked(x, z),
+      (x, z) => this.treeSpecies(x, z),
+      o);
+  }
+
+  /**
+   * Scrub, in knots. Tighter and more numerous than trees: a few bushes growing
+   * off each other's litter, in a thicket of knots. Counts come out 0.85-1.08x
+   * the shipped lattice on dry ground.
+   *
+   * **It does not place reeds or lily pads.** `Bushes._makeTile` treats the
+   * water line as a separate band with its own depth test, and this sampler
+   * rejects standing water outright: in Alstor Slough, where most of the scrub
+   * budget is reeds, it emits 0.14x the lattice's count and that is correct
+   * rather than a regression. Whoever wires this in keeps the water-line branch.
+   */
+  scrubScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias = {}) {
+    return this._scatter(
+      0x5c3b, x0, z0, w, h, 12, 4, 24,
+      (x, z) => this.scrubSuit(x, z),
+      (x, z) => this.rootBlocked(x, z),
+      // A knot of scrub is one species for the same reason a grove is: these
+      // are plants growing off each other's litter, not a lucky dip. Measured
+      // on the shipped lattice, whose species is a per-instance `rng.next()`,
+      // a bush's nearest neighbour is the same species 32-43% of the time —
+      // the even salad the grove noise was added to kill, still running in the
+      // undergrowth.
+      (x, z, u) => pickFrom(vegAt(x, z).scrubTable, u) || 'shrub',
+      o);
+  }
+
+  /**
+   * Boulders, in clusters, with **radius-aware separation**: two stones are
+   * pushed apart by `(r1 + r2) * slack`, so a 12 m erratic clears a berth a
+   * pebble does not. A single global spacing cannot say that, and a boulder
+   * field built on one either interpenetrates its big stones or scatters its
+   * small ones.
+   *
+   * `fromParent` on each point is distance from the cluster centre in units of
+   * `spread`: the rocks lane wants the big blocks at `fromParent < 0.7` and
+   * scree/talus out past 1.2, which is OGL's own edge rule.
+   *
+   * @param radius what an instance claims, metres — the caller's own size draw
+   */
+  rockScatter(
+    x0: number, z0: number, w: number, h: number,
+    o: ScatterBias & { radius?: (x: number, z: number, u: number, k: string) => number, slack?: number } = {},
+  ) {
+    return this._scatter(
+      0x40c8, x0, z0, w, h, 40, 13, 10,
+      (x, z) => this.rockSuit(x, z),
+      (x, z) => Math.hypot(x, z) > this.worldRadius
+        || this.waterDepth(x, z) > 0.1
+        || this.roadDist(x, z) < 4.6
+        || this.cleared(x, z) > 0.06,
+      undefined,
+      { slack: 1.0, radius: () => 1.6, ...o });
   }
 }
