@@ -13,6 +13,7 @@ import type { CombatSystem } from '../combat/CombatSystem.ts';
 import type { VFX } from '../combat/VFX.ts';
 import type { TrailRibbon } from '../combat/Trails.ts';
 import type { Terrain } from '../world/Terrain.ts';
+import { SET_PIECES } from './encounters/SpawnTables.ts';
 
 /** Where the player was parked by a scenario, so every frame can re-assert it. */
 interface FrozenPlayer {
@@ -265,7 +266,78 @@ export class Director {
     else if (name === 'boss_imperial') this._bossScenario('magitek_armour');
     else if (name === 'boss_astral') this._bossScenario('titan');
     else if (name === 'daemons') this._daemonScenario();
+    else if (name === 'setpiece_astral') this._setPieceScenario('titan');
+    else if (name === 'setpiece_field') this._setPieceScenario('deadeye');
     else this._fieldScenario();
+  }
+
+  /**
+   * A set piece that is actually **running**, rather than a posed still of one.
+   *
+   * Every other boss scenario here spawns the mark itself and freezes it. That
+   * is right for a portrait and it is precisely why `BossFight` — the system
+   * that owns arena bounds, phase transitions and the fist that lands — had
+   * never executed in a capture or in play. `LANDMINES.md` has carried
+   * `BossFight.resolveStrike` as dead code for weeks; it is not dead, it was
+   * unreachable, and the two are indistinguishable from a coverage report.
+   *
+   * So this one starts the fight through the same `startSetPiece` the hunt
+   * runtime calls and then leaves the loop live, which means the capture is of
+   * whatever the fight genuinely does N fixed steps in.
+   *
+   * Determinism survives because the ingredients are deterministic: `settle()`
+   * is a fixed timestep, `this.rng` was reseeded above, `BossFight` contains no
+   * `Math.random`, and roamers — the one live system that would wander
+   * something unrelated into frame — are suppressed. The VFX clock is
+   * deliberately *not* pinned: pinning it is what makes the posed shots
+   * reproducible, and here the whole subject is the passage of time.
+   *
+   * @param id which `SET_PIECES` entry to run
+   */
+  _setPieceScenario(id: 'titan' | 'deadeye') {
+    const enc = this.encounters;
+    const { enemies, player } = this;
+    if (!enc || !enemies) { this._fieldScenario(); return; }
+    this.game.state = 'combat';
+
+    // Live, but only for the fight. `setLive(true)` re-enables the encounter
+    // loop wholesale, so the roamer half is turned back off immediately —
+    // a wandering sabertusk in a Titan capture is the exact failure the posed
+    // scenarios exist to avoid.
+    this.setLive(true);
+    enc.suppressRoamers = true;
+    enc.packs.length = 0;
+    enc.active.clear();
+    enemies.frozen = false;
+
+    // The player moves BEFORE the fight starts, not after. `BossFight.begin`
+    // computes the mark's standing position from a bearing off the player, so
+    // starting first and repositioning second puts the boss behind the camera.
+    // That ordering is load-bearing and not obvious from either file alone.
+    const def = SET_PIECES[id];
+    const arena = def ? def.at : null;
+    if (player && arena) {
+      // Outside the mark's reach, facing it. Titan's arena is 62 m and his
+      // reach is most of it, so the stand-off comes from the kind rather than
+      // from a guess.
+      const back = def.kind === 'astral' ? 34 : 12;
+      const px = arena[0], pz = arena[1] + back;
+      player.root.position.set(px, this.groundY(px, pz), pz);
+      player.velocity.set(0, 0, 0);
+      const h = Math.PI;                       // looking back along -z, at the mark
+      player.heading = h;
+      player.root.rotation.y = h;
+      player.speed = 0;
+      if (player.character && player.character.anim) player.character.anim.rest();
+    }
+
+    return enc.startSetPiece(id);
+  }
+
+  /** Ground height at a world xz, or the scenario anchor's if terrain is absent. */
+  groundY(x: number, z: number): number {
+    const t = this.game.get('Terrain');
+    return t && t.heightAt ? t.heightAt(x, z) : this.home.y;
   }
 
   /**

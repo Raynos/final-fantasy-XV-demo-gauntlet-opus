@@ -119,7 +119,12 @@ export type Vec3 = readonly [number, number, number];
  */
 export type ScenarioName =
   | 'field' | 'combat' | 'warp'
-  | 'boss_field' | 'boss_imperial' | 'boss_astral' | 'daemons';
+  | 'boss_field' | 'boss_imperial' | 'boss_astral' | 'daemons'
+  // The `setpiece_*` scenarios run a boss fight *live* rather than posing one.
+  // `boss_field` and friends spawn the mark and freeze it directly, which is
+  // exactly why `BossFight` — the system that actually runs a set piece — had
+  // never executed in a capture, in play or in the harness. See `Director`.
+  | 'setpiece_astral' | 'setpiece_field';
 
 /** Everything a shot may set that is not the framing. */
 export interface ShotState {
@@ -790,6 +795,45 @@ const SHOT_TABLE = {
     time: 15.0, weather: 'clear', scenario: 'boss_astral', follow: 'player',
     offset: [10, 5.5, 20], lookOffset: [2, 16, -34], fov: 52,
   },
+  /**
+   * The shot that looks at a set piece *running*.
+   *
+   * Every other boss shot here poses one: `Director._bossScenario` spawns the
+   * mark, freezes it mid-telegraph and pins the VFX clock, which is right for a
+   * portrait and is why `BossFight` had never executed in a capture. These
+   * route through `startSetPiece` and leave the loop live, so what they show is
+   * whatever the fight genuinely does N fixed steps in.
+   *
+   * It is therefore the only shot in the corpus whose subject is *time*, and
+   * the only one that will notice if a set piece stops working.
+   *
+   * **It is also the only shot that is not deterministic to the capture floor,
+   * and that is inherent rather than a defect.** Measured: alone versus third
+   * in a batch it diffs at **0.789 mean/255 with a max of 255 over 0.42% of
+   * pixels**, against the corpus floor of 0.302. A fight that is genuinely
+   * running has state the harness does not pin — the posed scenarios buy their
+   * byte-equality precisely by freezing the thing this shot exists to show.
+   * Look at it; do not `imgdiff` it against a stored PNG and expect the floor.
+   */
+  // A `setpiece_titan` shot belongs here and is deliberately absent, because an
+  // unusable shot in the corpus is worse than a missing one. Five attempts at
+  // framing it all came back as a wall of cracked stone, and what that stone is
+  // matters: Titan measures **33.8 x 28.7 x 22.6 m, base y 165.9, at
+  // (-1020, -2215)**, so at the 63 m stand-off of the last attempt he should
+  // occupy about half the frame height at fov 46. He does not, which means the
+  // mass filling the frame is not him — almost certainly the Disc of Cauthess
+  // landmark the arena sits inside. Framing this wants someone in freecam
+  // finding a vantage with a clear line, not another guess at an offset.
+  //
+  // Two art defects were visible while trying, both outside this file: Titan's
+  // hide tiles at a plainly visible scale with seams down it, and his magma
+  // vents render as flat unlit yellow quads.
+  setpiece_deadeye: {
+    doc: 'Deadeye and its voretooth pack, live, in the Nebulawood',
+    time: 13.5, weather: 'overcast', scenario: 'setpiece_field', follow: 'player',
+    offset: [5.5, 3.0, 9.5], lookOffset: [0, 2.2, -9], fov: 46,
+  },
+
   daemon_night: {
     doc: 'A daemon pack after dark',
     time: 23.0, weather: 'clear', scenario: 'daemons', follow: 'player',
