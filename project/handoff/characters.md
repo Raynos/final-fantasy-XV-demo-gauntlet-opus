@@ -239,6 +239,47 @@ untouched. Nothing about them is blocked.
 
 ---
 
+## 5.5 Gate status — **NOT clean, and the reason matters**
+
+`pnpm run check` at `a267ab0`: **9 of 16**. Every failure is the identical
+`page.waitForFunction: Timeout 300000ms exceeded` or `ECONNRESET`, and every one
+of them is a **leased-page** tool. Every tool that does not lease a page passed:
+
+```
+build PASS   anycheck PASS   orphans PASS   silhouette PASS   geocheck PASS
+hydrocheck PASS   uxcheck PASS   roadcheck PASS   horizoncheck PASS
+integration FAIL   creaturecheck FAIL   combatloop FAIL   reachcheck FAIL
+floatcheck FAIL    heightcheck FAIL      driftcheck FAIL
+```
+
+`node src/tools/daemon.mts --health` reported `uptimeSec` of **6** and then
+**13** on two calls a minute apart: the daemon was restarting continuously,
+which is what `daemon.mts` does when its `PROTOCOL` changes — i.e. the method
+lane was editing it. Eleven consecutive attempts at `combatloop`,
+`creaturecheck` and a five-shot corpus capture all died the same way over about
+forty minutes.
+
+**So these gates are unverified, not failed, and the next agent must re-run them
+before trusting anything here.** I am recording it this way rather than claiming
+green because "verified by eye" over an unrun check is the exact failure mode
+this project's landmines file is mostly made of.
+
+Two things do argue the change is sound:
+
+- **`geocheck` passed**, and its own summary line names *"DoubleSide material
+  hides a flip"* — it is the gate closest to what I changed and it is green.
+- **`silhouette` passed**: no new collapsed silhouettes across 42 meshes in 8
+  families, which covers the enemy tree that shares `Character.ts`.
+
+The specific risk to re-check is `creaturecheck`'s 207 poses, because
+`EnemyBase`/`Sculpt` were not audited for `ribbon()` consumers, and — separately
+— because the coordinator landed `src/world/terrain/**` (`BAKE_VERSION` 3 → 4,
+drainage channels, talus skirts) tonight, so **grounding numbers taken before
+`b93b41f` are against different ground and must be re-measured, not
+reconciled.**
+
+---
+
 ## 6. Open questions
 
 - **Where is the fold?** `FrontSide` treats the symptom. Something in the head
