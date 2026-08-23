@@ -13,18 +13,13 @@
 
 ## The session goal
 
-Finish every open plan in `docs/plans/`, then take the game's models, assets,
-world, maps and zones to AAA. **Each plan's own `Status:` line now carries its
-state**, so `ls docs/plans/` answers what is open without opening anything.
+Finish every open plan in `docs/plans/`, then take the game to AAA. **Each plan's
+`Status:` line carries its own state**, so `ls docs/plans/` answers what is open.
 
-## Live right now — one agent
+## Live right now — nobody
 
-| who | lane | owns | port |
-|---|---|---|---|
-| perf | the certified shortfall: rank where the open-world frame's time goes | all of `src/` — no other lane is live | 5480 |
-
-**Do not capture or measure while it runs**, and it must say in its handoff which
-other lanes' files it touched.
+All lanes merged. `npm run check` **11/11**. Re-baking after a merge is still
+`texbake.mts --force` *and* `--canvas --force`.
 
 ## The grade — measured, not guessed
 
@@ -49,27 +44,22 @@ and placeholder geometry (modeling lane).
 Component grades, self-assessed against shipped FFXV by the agent that did the
 work: hands 6, outfits 5.5, hair 4.5, buildings 5 (from 1), rocks 5 (from 3).
 
-## Merged tonight — eleven lanes
+## Merged tonight — twelve lanes
 
-Boot **13.66 s → 6.88 s**. Wave 1 and Wave 2 §3.1/3.2/3.5 of sibling-ports. The
-main story went from unfinishable in chapter 1 to running to the end of chapter 5;
+Boot **13.66 s -> 6.88 s**. sibling-ports Wave 1 and Wave 2 §3.1/3.2/3.5. The main
+story went from unfinishable in chapter 1 to running to the end of chapter 5;
 camping, quests, hunts, shops, dungeons, Elemancy and **fishing** all work.
-Buildings 1→5, Insomnia 2→6, rocks 3→5, Hammerhead 5→6.5, hands 6, outfits 5.5.
-Impostor crowns had one constant normal shared by all eight vertices — neighbour
-scatter 0.404 → 0.008. `integration` 18 → **27/27**, `combatloop` 30 → **31/31**.
+Buildings 1->5, Insomnia 2->6, rocks 3->5, Hammerhead 5->6.5, hands 6, outfits 5.5.
+Impostor crowns shared one constant normal across all eight vertices — neighbour
+scatter 0.404 -> 0.008. `integration` 18 -> **27/27**, `combatloop` 30 -> **31/31**.
 
-**After any merge run `texbake.mts --force` AND `--canvas --force`** — the canvas
-cache can only be pruned by the plugin, and a boot number without it is two
-seconds pessimistic with no symptom.
-
-The narrative account is `project/journal/2026-08-22-985c9fe3.md`.
+Narrative account: `project/journal/2026-08-22-985c9fe3.md`.
 
 ## Determinism — CLOSED, at the noise floor
 
 A shot alone versus sixth in a batch: **1.836 -> 0.340 mean/255** against a
 measured floor of 0.302. The cause was the **wind**, not the vegetation
-streaming every handoff had guessed. `imgdiff` is trustworthy and A/B diffs are
-falsifiable. Full account in `417ca86`; the wrong-diagnosis entry is in
+streaming every handoff had guessed. Account in `417ca86`; lesson in
 `LANDMINES.md`.
 
 ## Where the truth is
@@ -92,35 +82,47 @@ worst −1.177 m (reported, not failed).
 **Run `npm run check` at every merge, not just the cheap gates.** `combatloop`
 slid 30/30 → 21/30 unnoticed for weeks because the expensive ones were skipped.
 
-## Perf — **measured**, certified, and short
+## Perf — the game was never slow; the instrument was
 
-Both gates were formally unknown all session because the ruler voided every run
-under contention. With every lane merged and the tree quiet, both certified
-`RULER_VALID: true`. `project/baseline-perf.json` and
-`project/baseline-gameplay.json` are the origin; later runs go `--baseline`
-against them.
+**Every perf number this project ever produced was wrong by a factor of five,
+including the "certified" baseline taken earlier in this same session.**
 
-```
-perf      mean 63.1 fps, worst 31 (setpiece_deadeye), floor IQR 3.02 ms
-          77 of 141 shots below 60 fps
-gameplay  worst segment sprint 38.0, 27 hitches, floor 4.17 ms (24%)
-          idle 40.6 · walk 42.7 · sprint 38.0 · streaming-traverse 49.4
-          combat 95.2 · magic 87.0 · warp-strike 76.6 · weapon-swap 73.6
-```
+`ruler.mts` rendered 20 frames inside one synchronous JS task. A synchronous task
+that keeps the GPU busy past one 16.7 ms refresh gets throttled ~5x on this
+machine. Frames per task, held `party_walk`: **1 -> 5.4 ms, 2 -> 5.6, 4 -> 22.8,
+16 -> 21.7, 64 -> 23.9.** Nine probes, each written to kill the previous
+explanation, ruled out thermal, queue depth and content; a 1 ms yield at 86% GPU
+duty fixes it completely, while a per-frame `gl.finish()` without a yield does
+not.
 
-**The shape is the finding, and it is counter-intuitive.** Combat, magic and
-warp-strike clear 60 comfortably; *standing still in a field* is 40.6. The cost
-is in the open-world frame, not the effects. Nor is it simply draw count —
-`town_forecourt` runs 66 fps at 971 draws and 9.8 M triangles while `vista_dawn`
-runs 33 at 713 and 10.3 M. On `vista_dawn` pipelined throughput is no cheaper
-than serialised latency, so that shot is single-bottleneck and almost certainly
-GPU.
+| | as "certified" earlier | on the fixed ruler |
+|---|---|---|
+| perf mean | 63.1 fps | **186–190 fps, every shot >= 60, PASS** |
+| idle / walk / sprint | 40.6 / 42.7 / 38.0 | **177 / 189 / 177** |
+| worst segment | sprint 38.0 | streaming-traverse **64.9**, PASS |
 
-Unpriced things that landed tonight, each with its knob: the horizon bake
-(`uHorizonMix.y → 0` drops the AO loop, keeps the shadow), the grass shadow
-proxy (+84k tris, +63 draws; knob is the tuft height threshold), impostor and
-rock shadows (+33–55 draws), analytic terrain relief, and the water depth model
-(eight texelFetches per water pixel).
+**It was not a scale error. Correlation with the truth is 0.107 and the ranking
+inverted** — `vista_dawn` was called second-worst at 33 fps and is 208; the town
+shots it called comfortable are the six slowest in the game.
+
+**Attribution.** Held frame (5.4 ms): `post.render` 4.2, of which `ScenePass` 3.3
+and every other post pass 0.0; all game systems together 0.9. Cost is draw count
+— corr 0.801 vs 0.628 for triangles, ~8.7 us per draw, CPU-submission-bound.
+Moving frame (16.6 ms) is different: `Vegetation.update` 7.8, `Props.update` 3.0.
+Everything unpriced from last night lives inside that 3.3 ms `ScenePass`; none of
+it is worth turning off.
+
+**One real fix landed:** the vegetation streaming budget was 10 ms/frame
+(`GrassField` 4, `Trees` 4, `Bushes` 2), sized against a 23 ms frame that never
+existed. Halved: `streaming-traverse` 17.3 -> 15.4 ms, resolved -1.90 ms against
+a 1.18 ms floor, 18 -> 9 hitches, no measurable visual cost.
+
+**Open and unexplained:** 12-31% of frames cost 20-90 ms even paced at 60 Hz.
+Every system, every pass and presentation individually ruled out; turning off
+*any* post pass moves it 21% -> 12-15%, an aggregate signature. It does not
+appear in `gameplay.mts` at all. Now printed as a `>16` column rather than hidden
+in a median. Also: `perf.mts`'s per-shot median is not yet reproducible run to
+run on tail-heavy shots, so treat single-shot `--baseline` deltas as leads.
 
 ## Still weak, and who has it
 
