@@ -35,6 +35,8 @@ export class GradePass extends FilterPass {
         uExposure: { value: 1.0 },
         uBalance: { value: new THREE.Vector2(0.06, 0.0) },
         uLutAmount: { value: 1.0 },
+        // (knee, end, amount) — see `bleachHighlights` in the shader.
+        uBleach: { value: new THREE.Vector3(1.0, 6.0, 0.0) },
       },
       fragmentShader: /* glsl */`
         precision highp float;
@@ -42,12 +44,41 @@ export class GradePass extends FilterPass {
         uniform vec2 uResolution, uBalance;
         uniform float uTime, uVignette, uGrain, uChroma, uSaturation, uContrast;
         uniform float uExposure, uLutMix, uLutAmount;
-        uniform vec3 uLift, uGain;
+        uniform vec3 uLift, uGain, uBleach;
         varying vec2 vUv;
         ${CHUNK_COLOR}
         ${CHUNK_TONEMAP}
         ${CHUNK_LUT}
         ${CHUNK_HASH}
+
+        /**
+         * Film bleach: hot pixels lose chroma before the tone map.
+         *
+         * Photographic highlights go white, not to their brightest primary.
+         * Ours did the opposite, and it was measured rather than assumed: at
+         * golden hour our highlight R-B read +52.0 against a +7.6 reference
+         * median, and ablating the whole grade LUT (?post=nolut) still left
+         * +39.2 of it. So three quarters of the cast was already in the HDR
+         * buffer, and no display-referred tint could have reached it -- which
+         * is why this runs in scene-linear before tonemapACES rather than in
+         * the LUT.
+         *
+         * Bloom was ruled out the same way and points the other direction:
+         * ?post=nobloom reads +68.6, so bloom is spreading white sun energy
+         * and *cooling* the highlights. God rays and lens flare moved it under
+         * four points each.
+         *
+         * b is (knee, end, amount) in scene-linear luminance. Below the knee
+         * this is exactly identity, so mids and every shadow keep their chroma
+         * untouched -- the desaturation is bought only where the sensor would
+         * have run out of headroom anyway.
+         */
+        vec3 bleachHighlights(vec3 c, vec3 b) {
+          if (b.z <= 0.0) return c;
+          float y = luma(c);
+          float t = smoothstep(b.x, max(b.y, b.x + 1e-3), y);
+          return mix(c, vec3(y), t * b.z);
+        }
 
         vec3 whiteBalance(vec3 c, float temp, float tint) {
           vec3 g = vec3(1.0 + temp * 0.24 + tint * 0.02,
@@ -90,6 +121,8 @@ export class GradePass extends FilterPass {
           // lens falloff: natural cos^4-ish, applied as light not as paint
           float v = 1.0 - uVignette * 0.9 * pow(clamp(r2 * 2.0, 0.0, 1.0), 1.35);
           col *= clamp(v, 0.0, 1.0);
+
+          col = bleachHighlights(col, uBleach);
 
           vec3 tm = tonemapACES(col);
           vec3 disp = linearToSrgb(tm);

@@ -90,6 +90,8 @@ export class PostFX {
   aoScale!: number;
   autoFocusHead!: boolean;
   autoGrade!: boolean;
+  /** `?post=nobleach` ablation scale on the preset's film bleach. 0 or 1. */
+  bleachScale!: number;
   bloom!: BloomPass;
   camera!: THREE.PerspectiveCamera;
   cas!: CasPass;
@@ -343,6 +345,7 @@ export class PostFX {
 
     // ---- grade state ----------------------------------------------------
     this.autoGrade = true;
+    this.bleachScale = 1;
     this.gradeA = 'day';
     this.gradeB = 'day';
     this.gradeMix = 0;
@@ -397,6 +400,11 @@ export class PostFX {
       else if (t === 'nocas') this.cas.sharpness = 0;
       else if (t === 'nograin') this.grade.uniforms.uGrain.value = 0;
       else if (t === 'nolut') this.grade.uniforms.uLutAmount.value = 0;
+      // The bleach is a *scene-referred* stage, so `nolut` cannot ablate it and
+      // an agent diffing `nolut` would wrongly conclude the grade is innocent
+      // of a highlight cast. It needs its own token. `_applyGrade` re-reads the
+      // preset every frame, hence a scale rather than a write to the uniform.
+      else if (t === 'nobleach') this.bleachScale = 0;
       else if (t === 'novig') this.grade.uniforms.uVignette.value = 0;
       else if (t === 'noflare') { this.bloom.ghostAmount = 0; this.bloom.haloAmount = 0; this.bloom.sunAmount = 0; }
       else if (t === 'nodirt') this.bloom.dirtAmount = 0;
@@ -663,6 +671,9 @@ export class PostFX {
     u.uGrain.value = lerp(A.grain, B.grain, t);
     u.uChroma.value = lerp(A.chroma, B.chroma, t);
     u.uSaturation.value = lerp(A.saturation, B.saturation, t);
+    u.uBleach.value.set(
+      lerp(A.bleach[0], B.bleach[0], t), lerp(A.bleach[1], B.bleach[1], t),
+      lerp(A.bleach[2], B.bleach[2], t) * this.bleachScale);
     u.uContrast.value = lerp(A.contrast, B.contrast, t);
     u.uBalance.value.set(lerp(A.balance[0], B.balance[0], t), lerp(A.balance[1], B.balance[1], t));
     u.uLift.value.set(

@@ -84,6 +84,19 @@ export interface GradePreset {
   grain: number;
   /** Auto-exposure key value (target luminance). */
   key: number;
+  /**
+   * Film bleach, as `[knee, end, amount]` in **scene-linear** luminance:
+   * how far a highlight is pulled toward neutral before the tone map.
+   *
+   * Photographic highlights go white; ours drove to their brightest primary,
+   * measured at golden hour as a +52.0 highlight R-B against a +7.6 reference
+   * median. Ablation put three quarters of that in the HDR buffer rather than
+   * the grade, so it cannot be fixed by a tint in `look` -- see
+   * `bleachHighlights` in `GradePass.ts`.
+   *
+   * Below `knee` it is identity, so this never touches mids or shadows.
+   */
+  bleach: number[];
   /** Parameters baked into the LUT. */
   look: GradeLook;
 }
@@ -99,6 +112,9 @@ export const GRADES: Record<string, GradePreset> = {
     contrast: 1.13, saturation: 1.02,
     lift: [0.0, 0.0, 0.003], gain: [1.0, 1.0, 1.0],
     vignette: 0.30, chroma: 0.7, grain: 0.020, key: 0.225,
+    // Noon's key light is already near-neutral, so a light bleach is enough to
+    // stop the sun disc and the brightest cloud tops taking a primary.
+    bleach: [0.55, 3.4, 0.55],
     look: {
       toe: 0.012, shoulder: 0.96, pivot: 0.40, contrast: 1.21,
       shadowTint: [0.88, 0.97, 1.17], midTint: [1.0, 1.0, 0.985], highTint: [1.04, 1.0, 0.94],
@@ -126,6 +142,10 @@ export const GRADES: Record<string, GradePreset> = {
     contrast: 1.14, saturation: 1.0,
     lift: [0.0, 0.004, 0.022], gain: [1.0, 1.0, 1.005],
     vignette: 0.38, chroma: 1.0, grain: 0.024, key: 0.215,
+    // The strongest bleach of the four, and the reason this lever exists: a
+    // low amber sun drives every lit highlight toward red, and the reference's
+    // golden hour keeps its hot pixels within +7.6 R-B of neutral.
+    bleach: [0.42, 2.6, 0.85],
     look: {
       toe: 0.030, shoulder: 0.78, pivot: 0.39, contrast: 1.19,
       shadowTint: [0.66, 0.89, 1.42], midTint: [1.01, 1.0, 0.99], highTint: [1.10, 1.01, 0.87],
@@ -146,6 +166,10 @@ export const GRADES: Record<string, GradePreset> = {
     contrast: 1.06, saturation: 0.94,
     lift: [0.0, 0.004, 0.016], gain: [0.93, 0.98, 1.10],
     vignette: 0.44, chroma: 1.3, grain: 0.024, key: 0.115,
+    // Night's highlights are moonlight and practicals, and the reference night
+    // corpus is the *most* saturated slice we hold (76.4% against our 54.2%).
+    // Bleaching it would push the wrong way, so this is deliberately off.
+    bleach: [0.80, 4.0, 0.0],
     look: {
       toe: 0.055, shoulder: 0.95, pivot: 0.33, contrast: 1.10,
       shadowTint: [0.62, 0.84, 1.46], midTint: [0.84, 0.94, 1.20], highTint: [0.97, 1.0, 1.08],
@@ -165,6 +189,9 @@ export const GRADES: Record<string, GradePreset> = {
     contrast: 1.12, saturation: 0.82,
     lift: [0.003, 0.005, 0.011], gain: [0.95, 0.99, 1.05],
     vignette: 0.42, chroma: 0.9, grain: 0.032, key: 0.200,
+    // A storm's bright break is a white hole in a black lid. Light bleach, but
+    // the storm frame's real problem is that it has no bright pixels at all.
+    bleach: [0.60, 3.0, 0.45],
     look: {
       toe: 0.018, shoulder: 0.94, pivot: 0.38, contrast: 1.16,
       shadowTint: [0.86, 0.97, 1.12], midTint: [0.95, 0.99, 1.02], highTint: [1.0, 1.01, 1.01],
