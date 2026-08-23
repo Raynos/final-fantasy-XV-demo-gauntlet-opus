@@ -12,6 +12,14 @@
 //
 //   PORT=<vite> node src/tools/framecam.mts --probe src/tools/_probe/portrait.mts \
 //     --out tmp/shots/<round> --settle 8
+// The hour every framing is shot at. `docs/reference/ART-DIRECTION.md` §12.3's
+// plate rows were shot under different keys — Prompto's in full midday sun,
+// Gladiolus's in a warm low one — so comparing our hair statistics to theirs
+// means being able to move the clock and control for it. `framecam.mts` reads
+// this file as text and has no way to pass a parameter in, so edit it: 16.2 is
+// the corpus's golden hour, 12.0 is the noon control.
+const HOUR = 16.2;
+
 const g = window.GAME;
 g.settle(90);
 if (g.post && g.post.dof) g.post.dof.enabled = false;
@@ -80,7 +88,7 @@ for (const [key, id] of Object.entries(who)) {
   const bone = (n) => (byName[n] ? wp(byName[n]) : null);
   const off = (p, dx, dy, dz) => r3([p[0] - rp[0] + dx, p[1] - rp[1] + dy, p[2] - rp[2] + dz]);
   const shot = (name, aim, dir, dist, fov) => out.specs.push({
-    name, fov, time: 16.2, weather: 'clear', follow: id || 'player',
+    name, fov, time: HOUR, weather: 'clear', follow: id || 'player',
     offset: r3([aim[0] + dir[0] * dist, aim[1] + dir[1] * dist, aim[2] + dir[2] * dist]),
     lookOffset: r3(aim),
   });
