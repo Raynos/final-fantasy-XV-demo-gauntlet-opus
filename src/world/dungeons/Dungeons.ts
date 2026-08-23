@@ -14,11 +14,15 @@ import type { Terrain } from '../Terrain.ts';
 import type { Player } from '../../characters/Player.ts';
 import type { DungeonMapData, MapDrawOpts } from './kit/DungeonMap.ts';
 import type { ChestInteractable, DoorInteractable, Interactable } from './kit/InteriorProps.ts';
+import type { InteractableHandle } from '../../game/interaction/Interactables.ts';
 import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake } from '../../engine/TexBake.ts';
 import { isCamera, isLight, isObject3D } from '../../util/three-guards.ts';
 
 const DEFS: DungeonDef[] = [KEYCATRICH, BALOUVE, FOCIAUGH];
+
+/** Origin fallback for `_syncVerb` when there is somehow no current interior. */
+const ZERO = new THREE.Vector3();
 
 /** An entrance in the world, as the party can act on it. */
 export interface EntranceTarget {
@@ -122,9 +126,9 @@ function shotDungeon(name: unknown): string | null {
  *
  * ### Interaction
  * `listInteractables()` / `nearest(pos)` / `interact(target)` are the public
- * verb API. If a system registered as `Interaction` exists and exposes `add`,
- * every door, chest and entrance is handed to it at init; otherwise the same
- * data is available for any other system to poll.
+ * verb API, and `_wireInteraction` hangs a single `InteractionSystem`
+ * registration off them so `E` reaches all four kinds — entrance, door, chest,
+ * exit — without either side duplicating the other's rules.
  */
 export class Dungeons {
   /** A bare position carrier in dungeon-local space -- not a camera. */
@@ -135,6 +139,10 @@ export class Dungeons {
   /** The last `game.currentShot` acted on, so a shot change fires once. */
   _shotSeen!: unknown;
   _tmp!: THREE.Vector3;
+  /** The one registered interaction, re-pointed each frame. @see _wireInteraction */
+  _verb?: InteractableHandle;
+  /** Live position the registered verb reads; see `_syncVerb`. */
+  _verbPos!: THREE.Vector3;
   ambience!: DungeonAmbience;
   /** Built interiors, by id. */
   built!: Map<string, Dungeon>;
@@ -203,26 +211,51 @@ export class Dungeons {
     this.stats.outsideTris = tris;
     if (game.debug) console.log('[Dungeons] entrances', JSON.stringify(this.stats));
 
-    // NOTE: dungeon entrances are handed to no interaction system.
-    //
-    // This used to read `const i = game.get('Interaction'); if (i && typeof
-    // i.add === 'function') { ... }` and `InteractionSystem` has never had an
-    // `add` -- the method is `register`, and its payload is `{ pos, radius,
-    // verb, label, handler }`, not `{ position, ..., onUse }`. Every field of
-    // the call was wrong, so the guard was always false and the block was
-    // never entered; `this._interaction` was never assigned either, and
-    // nothing has ever read it. Removed rather than left as dead weight, and
-    // recorded here because *wiring it up is a real change*: it would give
-    // every entrance an interaction prompt the world has never shown. The
-    // shape it would need is
-    //
-    //   for (const e of this.entrances) interaction.register({
-    //     pos: e.pos, radius: e.radius, verb: e.verb, label: e.name,
-    //     handler: () => this.enter(e.id),
-    //   });
-    //
-    // `listInteractables()` / `nearest()` / `interact()` are the working API
-    // in the meantime, and the HUD prompt below is driven from those.
+    this._wireInteraction(game);
+  }
+
+  /**
+   * Give every door in the place a key that opens it.
+   *
+   * Until this existed, **no dungeon could be entered at all**: the old wiring
+   * called `game.get('Interaction').add(...)` and `InteractionSystem` has never
+   * had an `add` — the method is `register` — so the guard was always false and
+   * every entrance, chest, door and exit was unreachable. Three interiors, with
+   * their treasure, hazards and locked doors, were built at boot and had no way
+   * in. `Dungeons.prompt` was written every frame and read by nobody.
+   *
+   * One registration, not one per target. `nearest()` already answers "what is
+   * the party standing next to" for both states — the entrances outside, the
+   * doors, chests and the way out inside — and `interact()` already knows what
+   * each kind means. Registering the *verb* and re-pointing it every frame from
+   * `this.prompt` keeps that single source of truth, and means an interior
+   * built lazily on first entry needs no second registration pass.
+   *
+   * The proxy sits at the target's own position with the target's own reach, so
+   * the picker's cone test and its priority tie-break behave exactly as they do
+   * for an NPC or a shop counter. `priority: 4` puts a doorway above the people
+   * standing near it — an entrance is the only thing you can plausibly mean
+   * when you are inside 4.6 m of one.
+   */
+  _wireInteraction(game: Game) {
+    const ix = game.get('Interaction');
+    if (!ix) return;
+    this._verbPos = new THREE.Vector3();
+    this._verb = ix.register({
+      id: 'dungeon_verb',
+      pos: this._verbPos,
+      radius: 4.6,
+      priority: 4,
+      verb: 'Enter',
+      label: 'Dungeon',
+      enabled: () => !!this.prompt && this.state !== 'entering' && this.state !== 'leaving',
+      handler: () => {
+        const r = this.interact(this.prompt?.target ?? null);
+        // A locked door has to say so; `interact` returns the reason and
+        // nothing else in the world would ever print it.
+        if (!r.ok && r.message) game.get('HUD')?.callOut?.('LOCKED', r.message);
+      },
+    });
   }
 
   // ------------------------------------------------------------------- API
@@ -577,6 +610,16 @@ export class Dungeons {
       }
     }
 
+    // Outside, the only targets are the entrances. This used to be computed
+    // only while *inside*, so `prompt` was null everywhere it mattered.
+    if (!this.isInside) {
+      const p = game.get('Player');
+      const near = p ? this.nearest(p.position) : null;
+      this.prompt = near ? { verb: near.verb, label: near.name, target: near } : null;
+      this._syncVerb();
+      return;
+    }
+
     if (!this.current || this.state !== 'inside') return;
     const d = this.current;
 
@@ -594,7 +637,25 @@ export class Dungeons {
       this._hazards(dt, player);
       const near = this.nearest(player.position);
       this.prompt = near ? { verb: near.verb, label: near.name, target: near } : null;
+      this._syncVerb();
     }
+  }
+
+  /**
+   * Point the registered verb at whatever `prompt` currently names.
+   *
+   * Interior interactables are authored in dungeon-local space; entrances are
+   * already world-space. Getting that wrong puts every chest prompt a few
+   * hundred metres from the chest, which is invisible until you try to open one.
+   */
+  _syncVerb() {
+    const h = this._verb;
+    const p = this.prompt;
+    if (!h || !p) return;
+    const t = p.target;
+    if (t.kind === 'entrance') this._verbPos.copy(t.pos);
+    else this._verbPos.copy(t.pos).add(this.current ? this.current.origin : ZERO);
+    h.set({ verb: p.verb, label: p.label, radius: t.radius + 0.4 });
   }
 
   _confine(pos: THREE.Vector3, margin: number) {
