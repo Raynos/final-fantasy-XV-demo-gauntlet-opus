@@ -230,6 +230,27 @@ export function microDetail(x: number, z: number): number {
     + 0.30 * gnoise2(x * 0.2650 + 5.0, z * 0.2650 - 3.0)) * 0.95;
 }
 
+/**
+ * Softplus smooth maximum, in metres.
+ *
+ * `Math.max` of two surfaces is C0 but not C1: the derivative jumps where the
+ * two branches swap, and a heightfield mesh draws that jump as a **line** —
+ * a crease running along the locus, which reads as a modelling seam and which
+ * GTAO then amplifies, because it reconstructs its normals from depth and sees
+ * the raw triangles. Lerping to the crest instead is not the fix either: it
+ * digs a ring ditch just inside the join.
+ *
+ * `k` is the blend width **in metres of height difference**, so it has a
+ * physical meaning at any cell size. The result exceeds `max(a, b)` by at most
+ * `k * ln 2`, which is material added exactly at the join and nowhere else —
+ * a mesa rim comes out weathered rather than knife-cut, which is what a rim
+ * that has stood for an age actually looks like.
+ */
+function smax(a: number, b: number, k: number) {
+  const d = a > b ? a - b : b - a;
+  return (a > b ? a : b) + k * Math.log1p(Math.exp(-d / k));
+}
+
 /** cos/sin of the conjugate direction, 62 degrees off the regional strike. */
 const CONJ_C = Math.cos(1.0821), CONJ_S = Math.sin(1.0821);
 
@@ -1043,7 +1064,8 @@ export class Field {
           // the scarp: a steep face falling from the bench to the local ground
           const t = (d - 0.94) / 0.56;
           const y = top - (top - h[idx]) * Math.pow(t, 0.55);
-          if (y > h[idx]) h[idx] = h[idx] + (y - h[idx]) * (1 - smoothstep(0, 1, t)) * 0.9;
+          const lift = h[idx] + (y - h[idx]) * (1 - smoothstep(0, 1, t)) * 0.9;
+          h[idx] = smax(h[idx], lift, 0.8);
         }
       }
     }
@@ -1195,7 +1217,10 @@ export class Field {
         const k = s <= 0 ? 0.94
           : 0.94 * (1 - smoothstep(0, radius * cliffFrac * 1.6, s));
         const cut = h[idx] + (y - h[idx]) * k;
-        h[idx] = y > cut ? y : cut;
+        // Softplus rather than `Math.max`: the hard branch swap ran a visible
+        // crease right around every mesa at the rim, which is the one line on
+        // the landform a player looks straight at.
+        h[idx] = smax(y, cut, 1.2);
       }
     }
   }
