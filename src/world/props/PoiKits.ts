@@ -8,7 +8,7 @@ import {
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
   container, membraneSag, tarpEnvelope, sandbagStack, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
-import { coverY } from './Seat.ts';
+import { seatY } from './Seat.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
 import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
@@ -317,11 +317,16 @@ export class PoiKits {
    * covers whatever gap is left on the downhill side.
    */
   _base(x: number, z: number, r: number, drop = 2.2, cull = DRAW_R) {
-    // The DRAWN surface, and the *upper* envelope of it. `seatY` is the lower
-    // envelope and is right for a prop standing on the ground; a pad is the
-    // ground, and a deck cut to the lower envelope has the clipmap's own
-    // chords poking up through it.
-    const h0 = coverY(this.eco, x, z, r, cull);
+    // `seatY`, the LOWER envelope, and this is not a free choice. The first
+    // version of this rewrite used `coverY` on the reasoning that a pad *is*
+    // the ground -- true of the apron, false of the compound standing on it.
+    // `coverY` is the highest any ring will draw the point, and for a tomb with
+    // a 1300 m cull that ring is very coarse indeed, so the deck came out
+    // metres above the surface the player is standing on: `floatcheck` found
+    // **13 POI compounds entirely in the air**, `tomb_rogue` by 8.64 m. The
+    // apron's own visibility is `gradePad`'s problem and it solves it with
+    // geometry that reaches down to the ground, not by lifting the deck.
+    const h0 = seatY(this.eco, x, z, r, cull);
     // A grid over the footprint, not a ring: a hummock in the middle of a
     // compound is invisible to a ring of probes and is exactly what punches
     // through the deck. Hammerhead's `_padHeight` already learned this and
@@ -335,7 +340,7 @@ export class PoiKits {
       for (let j = -3; j <= 3; j++) {
         const d = Math.hypot(i, j) / 3;
         if (d > 1.02) continue;
-        hs.push(coverY(this.eco, x + (i / 3) * r, z + (j / 3) * r, r, cull));
+        hs.push(seatY(this.eco, x + (i / 3) * r, z + (j / 3) * r, r, cull));
       }
     }
     hs.sort((a, b) => a - b);

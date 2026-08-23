@@ -409,6 +409,7 @@ export function gradePad(o: PadOpts): PadResult {
       const s = t <= 1 ? e * t : e + (t - 1) * reachOut;
       const wx = x + ct * s, wz = z + st * s;
       let y: number, c: number[];
+      const last = i === rings.length - 1;
       if (t <= 1) {
         y = 0;
         c = C_DECK;
@@ -435,6 +436,13 @@ export function gradePad(o: PadOpts): PadResult {
           if (y >= g - 1e-3) y = g - bury(wx, wz);
           if (y > crestY) { crestY = y; crestS = s; }
         }
+        // The outermost station **always** meets the ground, whatever slope
+        // that takes. Without this the reach cap can end the batter in mid-air
+        // on a steep site and the whole compound is then a platform floating on
+        // nothing -- which is exactly what `floatcheck` caught: 13 POIs in the
+        // air, `tomb_rogue` by 8.64 m. An earthwork's last requirement is that
+        // it touches the hill; the slopes it prefers come second.
+        if (last) y = g - bury(wx, wz);
         if (Math.abs(y - g) < 0.14) toe = Math.max(toe, s);
       }
       pos.push(ct * s, y, st * s);
