@@ -385,6 +385,7 @@ trusting the document that recorded it**. Treat every handoff as a *lead*.
 | grass costs 8.9 ms | 0.3–1.2 ms |
 | `walk` runs at ~57.5 fps | **49.8 fps.** The 57.5 was taken under six-agent load and was never real. |
 | capture order-dependence = "likely vegetation tile streaming" | **the wind.** Pinning vegetation streaming moved the measurement by 0.009/255. `Weather.resetClock` set only `_snap`, which skips the preset lerp, while the gust phase it never touched drove `windStrength` 0.840 vs 0.944 between a page's first shot and its sixth. |
+| `walk` runs at 42.7 fps, and the whole open world at ~40 | **189 fps.** Every perf number ever taken here was 3-5x too slow. `ruler.mts` rendered 20 frames inside one synchronous JS task, and a task that keeps the GPU busy past one 16.7 ms refresh is throttled ~5x. The `49.8 fps` row above is wrong for the same reason, and so is the correction that replaced it. |
 
 The pattern is the same every time: a correct negative result, an inference drawn
 from it that was never itself tested, and a well-written paragraph that made the
@@ -396,3 +397,65 @@ silhouettes — which reads as *streaming* or *TAA* and reads as **noise** if yo
 only look at the mean. It only named itself once the state was probed directly
 and two numbers came back different. **When a visual difference has no obvious
 carrier, print the state, do not stare at the frame.**
+
+## The measurement trap that cost this project every perf number it ever had
+
+Read this beside the table above; it is the same failure at the scale of an
+instrument rather than a diagnosis.
+
+**A rendering loop that never returns to the event loop measures the harness.**
+On this machine a synchronous task that keeps the GPU busy for longer than one
+16.7 ms display refresh is throttled by about five times. Frames rendered per
+synchronous task, against the steady state of a held `party_walk`:
+
+| frames per task | 1 | 2 | 4 | 8 | 16 | 64 |
+|---|---|---|---|---|---|---|
+| ms per frame | 5.4 | 5.6 | 22.8 | 22.3 | 21.7 | 23.9 |
+
+`ruler.mts` rendered twenty. Every number in `project/baseline-perf.json` and
+`project/baseline-gameplay.json`, and every perf claim in every handoff before
+2026-08-23, was taken a factor of five inside that cliff.
+
+Four things make it nastier than an ordinary slow instrument.
+
+- **It is not a constant factor.** Correlation between the old per-shot numbers
+  and the true ones, over the 140 shots the two runs share, is **0.107**. The
+  ranking inverted: `vista_dawn` was called the second worst shot in the game
+  at 33 fps and is 208 fps, while the town shots it called comfortable are the
+  six slowest in the corpus. An old number cannot be rescued by dividing it.
+- **It is not thermal, not duty cycle, not queue depth.** A 1 ms `setTimeout`
+  between frames — 86% GPU duty, almost no idle — removes it entirely. A
+  `gl.finish()` after every single frame does *not*, if the loop never yields.
+  A nearly empty scene degrades 3.1x on the same loop, which is what proves it
+  has nothing to do with what we draw.
+- **It hid a second bug behind itself.** A loop that never yields never lets a
+  promise continuation run, so streaming, decodes and every deferred build in
+  the game were frozen for the whole of every measurement ever taken. The
+  harness was photographing a game with its async half switched off. `perf.mts`
+  now warms the *page* before its first noise floor, because the first few
+  hundred yielding frames are the game catching up on work it was owed: the
+  floor reads 23.60 ms there and 0.95 ms at the end of the same run.
+- **It looked exactly like a real result.** 40 fps standing in a field, combat
+  comfortably faster than walking, a mean of 63 fps — an entirely plausible
+  profile for a three.js open world, and the plausible *shape* is what made it
+  credible. `attrib.mts` then took its baseline in the fast window before the
+  throttle engaged and reported subsystem costs summing to 300% of the frame.
+  That absurdity was the only visible symptom, and it read as "ablation is
+  noisy".
+
+The probes are kept, one per eliminated explanation, in the order they were
+written: `perfdrift`, `perfstep`, `perfpaced`, `perfduty`, `perffalsify`,
+`perfdepth`, `perfseries`, `perfknee`, `perfgroup`. If you are ever about to
+write a loop that times rendering, read `perfgroup.mts` first.
+
+**Still unexplained, and reported rather than buried.** Even paced at 60 Hz on
+a static shot, 12–31% of frames cost 20–90 ms instead of 5. It is pure CPU time
+inside `post.render`; it creates no GL resources; it survives rendering
+offscreen so it is not presentation; it attaches to no composer pass (it lands
+on whichever one is executing); and turning off *any* post pass moves it from
+21% to 12–15%, which is the signature of an aggregate and not of a cause. It
+does **not** appear in `gameplay.mts`'s segments, where `idle`, `walk` and
+`sprint` are all 0% over budget — and that difference between the two harnesses
+is itself unexplained. Nobody has separated the part that is ours from the part
+that is the harness, so it is printed as its own `>16` column rather than
+folded into a median.
