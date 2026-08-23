@@ -63,6 +63,11 @@ const GATES: Gate[] = [
   { name: 'build', cmd: VITE, args: ['build'], expect: 'builds' },
   { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
+  // Bare Node, ~3 s: it grows the trees and the bestiary in process and
+  // compares outlines. A ratchet like `anycheck` -- it fails on a NEW pair of
+  // meshes sharing one silhouette, not on the debt recorded in
+  // `project/silhouette-baseline.json`.
+  { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes' },
   { name: 'integration', gate: true, script: 'integration.mts', expect: '27 pass, 0 fail' },
   { name: 'uxcheck', gate: true, script: 'uxcheck.mts', expect: '93/93' },
   { name: 'creaturecheck', gate: true, script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
