@@ -26,8 +26,15 @@ export class PartBuilder {
    */
   add(mat: THREE.Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4 | null) {
     const g = matrix ? geo.clone().applyMatrix4(matrix) : geo;
-    // normalise attributes so merges never fail on a stray extra buffer
-    const keep = ['position', 'normal', 'uv'];
+    // normalise attributes so merges never fail on a stray extra buffer.
+    // `color` is on the keep list because it is how BuildKit carries per-object
+    // tone -- grime gradient, value jitter, the pale lift on chamfer facets --
+    // through the merge. The sibling audit records the same attribute being
+    // silently dropped by a merge for four rounds, which pinned every merged
+    // surface to one flat value; `build` synthesises white for any piece in a
+    // batch that lacks it, so a coloured piece can never poison an uncoloured
+    // neighbour or vice versa.
+    const keep = ['position', 'normal', 'uv', 'color'];
     for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
     if (!g.attributes.uv) {
       g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
@@ -56,6 +63,21 @@ export class PartBuilder {
 
   build(parent: THREE.Object3D, { cast = true, receive = true, name = 'part' }: {cast?:boolean, receive?:boolean, name?:string} = {}): THREE.Object3D {
     for (const [mat, list] of this.byMat) {
+      // If the material reads vertex colours -- or if any piece in this batch
+      // carries them -- then every piece must have them. `mergeGeometries`
+      // returns null on an attribute mismatch and does so silently, and a
+      // material with `vertexColors` and no `color` attribute draws BLACK,
+      // because GLSL reads an absent attribute as zero. Both failures are
+      // invisible until something in the frame is missing or is a silhouette.
+      const wantsColor = (mat as THREE.Material & { vertexColors?: boolean }).vertexColors === true;
+      if ((wantsColor || list.some(g => g.attributes.color)) && list.some(g => !g.attributes.color)) {
+        for (const g of list) {
+          if (g.attributes.color) continue;
+          const n = g.attributes.position.count;
+          const white = new Float32Array(n * 3).fill(1);
+          g.setAttribute('color', new THREE.BufferAttribute(white, 3));
+        }
+      }
       const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
       if (!merged) continue;
       merged.computeBoundingSphere();

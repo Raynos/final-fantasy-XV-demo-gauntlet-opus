@@ -29,6 +29,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { assertOwnPort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
@@ -42,7 +43,7 @@ const portOpen = (port: number) => new Promise<boolean>((res) => {
 });
 
 async function ensureServer() {
-  if (await portOpen(PORT)) return null;
+  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
   const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
   });

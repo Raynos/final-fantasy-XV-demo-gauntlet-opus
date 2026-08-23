@@ -4,6 +4,12 @@ import { PartBuilder, type Vec3 } from './PartBuilder.ts';
 import { worldMap, WORLD, type Poi } from '../map/WorldMap.ts';
 import { dressAt, type Dress } from './ZoneDress.ts';
 import {
+  bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
+  cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
+  container, STOREY, CILL, type Opening,
+} from './BuildKit.ts';
+import { seatY } from './Seat.ts';
+import {
   woodMaterial, rustMaterial, glowMaterial, canvasClothMaterial,
   signTexture, imperialTexture, runeTexture,
 } from './PropMaterials.ts';
@@ -60,9 +66,21 @@ function mat4(pos: Vec3, rot: Vec3 = [0, 0, 0], scale: Vec3 = [1, 1, 1]) {
   );
 }
 
-/** Flat-coloured PBR material — no map, so it cannot stretch. */
+/**
+ * Flat-coloured PBR material — no map, so it cannot stretch.
+ *
+ * `vertexColors` is on for all of them and it is what makes flat acceptable.
+ * These materials are deliberately mapless above a couple of metres (see
+ * {@link poiMaterials}), which used to mean thirty-five buildings drawn from
+ * four literal colours. `BuildKit.bakeTone` multiplies in a per-vertex tone --
+ * grime at the splash zone, bleach at the parapet, a per-object value and
+ * warmth jitter, and a pale lift on every chamfer facet -- so the same four
+ * colours carry as much variation as a texture would, and cost one byte-free
+ * attribute rather than a sampler. `PartBuilder` synthesises white for any
+ * piece that does not bake one, so nothing here can draw black.
+ */
 function plain(hex: number, rough = 0.85, metal = 0) {
-  return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
+  return new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal, vertexColors: true });
 }
 
 /** A slab with a slightly irregular top — reads as cut stone, not a cube. */
@@ -181,6 +199,19 @@ export function poiMaterials() {
     roof: plain(0x4b5058, 0.72, 0.3),
     wall: plain(0xa2957e, 0.82),
     wall2: plain(0x7b7160, 0.84),
+    // Four more renders, and the point of them is that they are not four more
+    // greys. The kit's whole wall palette was `a2957e / 7b7160 / 8d8779 /
+    // 968a76` -- one hue, one value, four names -- so a settlement read as one
+    // flat colour no matter how many buildings it had. These are a Lucian
+    // hill-town palette: limewashed ochre, sun-bleached sand, an oxide render
+    // and a cool grey-green, far enough apart in hue that two neighbours are
+    // visibly different buildings rather than the same building twice.
+    render1: plain(0xb08a5c, 0.86),
+    render2: plain(0xc3b393, 0.84),
+    render3: plain(0x9a6f5e, 0.87),
+    render4: plain(0x7d8478, 0.85),
+    /** Painted joinery: architraves, copings, window frames. */
+    joinery: plain(0xb6a98f, 0.74),
     wood: woodMaterial(0x7d674c),
     plank: woodMaterial(0x5d4c39),
     rust: Object.assign(rustMaterial(0x8f5c39, 0.5), { side: THREE.DoubleSide }),
@@ -189,12 +220,23 @@ export function poiMaterials() {
     red: plain(0x8f3a2c, 0.68, 0.1),
     magitek: plain(0x3a4048, 0.62, 0.45),
     cloth: canvasClothMaterial(0x3d4148),
-    glass: new THREE.MeshStandardMaterial({ color: 0x121a20, roughness: 0.14, metalness: 0.4 }),
+    // Glass, and it is deliberately not black. A pane lit only by the sky, with
+    // a 0.06 roughness and nothing behind it, renders as a hole -- which is how
+    // the first pass drew every unlit window on a shaded elevation. Dusty glass
+    // with a real base value reads as a window at every sun angle, and the
+    // reveal's own shadow is still the darkest thing in the opening.
+    glass: new THREE.MeshStandardMaterial({ color: 0x4b5560, roughness: 0.3, metalness: 0.3 }),
     lamp: glowMaterial(0xffe6b4, 0.5, 0x141310),
     rune: glowMaterial(0x8fd8ff, 1.4, 0x0b1620),
     arcane: glowMaterial(0xa878ff, 1.2, 0x140b20),
     hot: glowMaterial(0xff5a20, 1.4, 0x1a0703),
     void: new THREE.MeshBasicMaterial({ color: 0x05070a }),
+    // The card behind a pane. Not `void`: an unlit 0x05070a quad reads as a
+    // hole punched through the world rather than as a room, and a window that
+    // is a hole is the same defect as a window that is a decal. A dark warm
+    // grey that takes ambient sits a stop or two under the wall and lets the
+    // reveal's own shadow still be the darkest thing in the opening.
+    interior: plain(0x211f1c, 0.97),
     runeface: new THREE.MeshStandardMaterial({
       map: runeTexture(), transparent: true, roughness: 0.7, metalness: 0,
       emissive: 0x2a5f8a, emissiveIntensity: 0.6, side: THREE.DoubleSide,
@@ -264,12 +306,17 @@ export class PoiKits {
    * below the point the map actually names, and the skirt in {@link _apron}
    * covers whatever gap is left on the downhill side.
    */
-  _base(x: number, z: number, r: number, drop = 2.2) {
-    const h0 = this.eco.height(x, z);
+  _base(x: number, z: number, r: number, drop = 2.2, cull = DRAW_R) {
+    // Seated on the surface the clipmap draws at this POI's own draw range, not
+    // on the analytic field. A settlement is the largest thing a prop system
+    // places and the one a player walks up to, so a metre of float at 300 m --
+    // the median at that range is 0.67 m and the p95 is 5.7 -- is a town on
+    // stilts or a town with its plinths buried.
+    const h0 = seatY(this.eco, x, z, r, cull);
     let sum = 0, lo = h0;
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
-      const h = this.eco.height(x + Math.cos(a) * r * 0.72, z + Math.sin(a) * r * 0.72);
+      const h = seatY(this.eco, x + Math.cos(a) * r * 0.72, z + Math.sin(a) * r * 0.72, r, cull);
       sum += h; lo = Math.min(lo, h);
     }
     const avg = (sum / 10) * 0.6 + h0 * 0.4;
@@ -448,12 +495,8 @@ export class PoiKits {
       put(M.steel, new THREE.BoxGeometry(1.3, 0.16, 1.0), [sx, 1.85, 0]);
       put(M.glass, new THREE.BoxGeometry(0.7, 0.5, 0.05), [sx, 1.35, 0.42]);
     }
-    // shop
-    put(M.cream, new THREE.BoxGeometry(11, 3.6, 7), [-3, 1.95, -12]);
-    put(M.roof, new THREE.BoxGeometry(11.6, 0.4, 7.6), [-3, 3.9, -12]);
-    put(M.glass, new THREE.BoxGeometry(6.4, 1.9, 0.1), [-3.6, 2.1, -8.55]);
-    put(M.plank, new THREE.BoxGeometry(1.2, 2.4, 0.12), [1.6, 1.35, -8.55]);
-    put(M.lamp, new THREE.BoxGeometry(5.4, 0.5, 0.08), [-3.6, 3.45, -8.6]);
+    // shop: a real hut with a door you can see into, not a box with two decals
+    this._hut(B, world, { w: 11, d: 7, x: -3, z: -12, rng, base: 0.15 });
     // pylon sign
     put(M.steel, new THREE.BoxGeometry(0.5, 8.5, 0.5), [13.5, 4.4, 6]);
     put(M.sign, new THREE.PlaneGeometry(4.2, 2.4), [13.5, 9.4, 6.3]);
@@ -477,12 +520,8 @@ export class PoiKits {
     const huts = 2 + Math.floor(rng.next() * 2);
     for (let i = 0; i < huts; i++) {
       const px = -8 + i * 8.5 + rng.gauss(0, 0.6), pz = -6 + rng.gauss(0, 1.4);
-      const w = rng.range(5, 8), h = rng.range(2.8, 3.6), d = rng.range(4, 6);
-      put(M.cream, new THREE.BoxGeometry(w, h, d), [px, h * 0.5 + 0.3, pz]);
-      put(M.roof, new THREE.BoxGeometry(w + 0.7, 0.34, d + 0.7), [px, h + 0.45, pz]);
-      put(M.glass, new THREE.BoxGeometry(w * 0.4, 0.9, 0.1), [px, h * 0.62, pz + d * 0.5 + 0.02]);
-      put(M.plank, new THREE.BoxGeometry(1.1, 2.2, 0.1), [px + w * 0.3, 1.35, pz + d * 0.5 + 0.02]);
-      put(M.lamp, new THREE.BoxGeometry(0.5, 0.2, 0.12), [px + w * 0.3, 2.75, pz + d * 0.5 + 0.1]);
+      const w = rng.range(5, 8), d = rng.range(4, 6);
+      this._hut(B, world, { w, d, x: px, z: pz, rng, base: 0.3 });
     }
     // fuel pump and a canopy over it
     put(M.cream, new THREE.BoxGeometry(1.1, 1.7, 0.8), [7, 1.15, 4]);
@@ -490,10 +529,7 @@ export class PoiKits {
     put(M.steel, new THREE.BoxGeometry(0.3, 3.6, 0.3), [8.4, 2.1, 4]);
     put(M.roof, new THREE.BoxGeometry(4.2, 0.28, 3.2), [7, 3.9, 4]);
     // containers
-    for (let i = 0; i < 3; i++) {
-      put(i % 2 ? M.rust : M.red, new THREE.BoxGeometry(6.1, 2.6, 2.5),
-        [-9 + rng.gauss(0, 1.2), 1.6 + (i === 2 ? 2.6 : 0), 6 + i * 0.4], [0, rng.gauss(0, 0.1), 0]);
-    }
+    this._containers(B, world, { n: 3, x: -9, z: 6, rng, stack: true });
     // comms mast: four legs and cross-bracing, tapering
     const H = 16;
     for (let i = 0; i < 4; i++) {
@@ -516,6 +552,269 @@ export class PoiKits {
   }
 
   /**
+   * One building. The thing the POI kits did not have.
+   *
+   * Before this, a settlement block was a `BoxGeometry` with 3% vertex noise, a
+   * parapet made of two more boxes, one 2.4 m cube on the roof for plant, and
+   * emissive quads sitting 70 mm proud of the wall for windows. Captured
+   * `poi_fishing` and read it: they were flat dark slabs with a lighter top,
+   * and they were the worst thing in the frame by a wide margin in a shot where
+   * the terrain, the sky and the trees are not.
+   *
+   * What is different here is entirely geometric, because the defect was:
+   *
+   * - **Every wall is a run of real thickness with the openings punched
+   *   through it** ({@link wallRun}), so a window is a hole with a 280 mm
+   *   reveal, a cill that throws a shadow, and a lintel — not a bright quad
+   *   floating on the wall plane.
+   * - **The block stands on a plinth** and is finished with a parapet whose
+   *   coping has a drip lip, so it neither runs straight into the ground nor
+   *   ends at a single hard edge against the sky.
+   * - **The four silhouette corners are piers**, 340 mm square and struck with
+   *   a 75 mm chamfer, which is the only size of arris that survives the
+   *   projection at the range a town is seen from.
+   * - **Roof furniture is cased plant, a stair head and a tank**, not a cube.
+   * - **Tone is baked per vertex** ({@link bakeTone}), so the four flat wall
+   *   colours become thirty-odd buildings that differ in value, warmth, how
+   *   dirty their splash zone is and how bleached their parapets are.
+   *
+   * Built in a local frame with the ground at y=0 and `faceZ` naming which of
+   * the two long elevations is the street, then merged per role and placed once.
+   * Merging in local space is what keeps a whole block to one geometry per
+   * material instead of one per box.
+   */
+  _block(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    w: number; d: number; storeys: number; x: number; z: number; ry?: number;
+    shell: THREE.Material; rng: Rng; faceZ?: 1 | -1; lit?: number; base?: number;
+  }) {
+    const M = this.mats;
+    const { w, d, storeys, x, z, ry = 0, shell, rng, faceZ = 1, lit = 0.3, base = 0.5 } = o;
+    const b = bag();
+    const wallT = 0.3;
+    const H = storeys * STOREY;
+    // The plinth stands ON the pad, not inside it. Built from y=0 with the pad
+    // top at `base`, all three of its courses were buried and the walls met the
+    // ground on a line again -- the exact defect the course exists to fix.
+    const plinthH = 0.5;
+    const y0 = base + plinthH;
+    const tv = toneVariant(rng);
+
+    plinth(b.shell, { w, d, h: plinthH, proud: 0.15, y: base });
+
+    // Elevations. Each storey is its own run so the openings land on the floor
+    // they belong to, and the two long faces carry the window rhythm while the
+    // ends get half as many -- which is how a terrace block is actually
+    // fenestrated, and it halves the cost of the faces nobody stands in front of.
+    const bays = (len: number, spacing: number) => Math.max(1, Math.round(len / spacing) - 1);
+    const faces: { len: number; ry: number; ox: number; oz: number; n: number; street: boolean }[] = [
+      { len: w, ry: 0, ox: 0, oz: 1, n: bays(w, 3.0), street: faceZ > 0 },
+      { len: w, ry: Math.PI, ox: 0, oz: -1, n: bays(w, 3.0), street: faceZ < 0 },
+      { len: d, ry: Math.PI / 2, ox: 1, oz: 0, n: bays(d, 4.4), street: false },
+      { len: d, ry: -Math.PI / 2, ox: -1, oz: 0, n: bays(d, 4.4), street: false },
+    ];
+    const half = { x: w / 2 - wallT / 2, z: d / 2 - wallT / 2 };
+    for (const f of faces) {
+      const runLen = f.ox ? d - wallT * 2 : w;
+      for (let st = 0; st < storeys; st++) {
+        const local = bag();
+        const openings: Opening[] = [];
+        const ground = st === 0;
+        // Run-local: `wallRun` and the window units are built with the storey's
+        // own floor at y=0 and the whole run is translated into place below.
+        // Adding `st * STOREY` here as well put the top storey's windows above
+        // the parapet and left the wall solid, because the opening no longer
+        // fell inside the run `wallRun` was punching.
+        const wy = ground ? CILL + 0.28 : CILL;
+        const wh = ground ? 1.75 : 1.5;
+        for (let i = 0; i < f.n; i++) {
+          const bx = -runLen / 2 + (runLen * (i + 1)) / (f.n + 1);
+          // A shopfront door in the middle bay of the street elevation, ground
+          // floor only: the one opening a person walks through, so it is the one
+          // that gets the hood, the threshold and the step.
+          if (ground && f.street && f.n >= 3 && i === (f.n - 1) >> 1) {
+            openings.push(doorUnit(local, { x: bx, wallT, w: 1.35, h: 2.25 }));
+            continue;
+          }
+          openings.push(windowUnit(local, {
+            x: bx, y: wy, w: ground ? 1.35 : 1.15, h: wh, wallT,
+            lit: rng.next() < lit, plain: !ground,
+          }));
+        }
+        for (const g of wallRun(runLen, STOREY, wallT, openings)) local.shell.push(g);
+        const px = f.ox * half.x, pz = f.oz * half.z;
+        for (const k of Object.keys(local)) {
+          for (const g of local[k]) b[k].push(xform(g, { ry: f.ry, x: px, y: y0 + st * STOREY, z: pz }));
+        }
+      }
+    }
+
+    // String course at every floor line above the first: the single cheapest way
+    // to stop a multi-storey facade reading as one flat rectangle.
+    // In the shell material, not a contrasting one: a projecting course reads by
+    // the shadow it throws, and painting it a different colour turns the one
+    // horizontal that should be architecture into a racing stripe.
+    for (let st = 1; st < storeys; st++) stringCourse(b.shell, { w, d, y: y0 + st * STOREY - 0.1 });
+    cornerPier(b.shell, { w: w + 0.7, d: d + 0.7, y0: y0 + 0.12, y1: y0 + H, sec: 0.42, proud: 0.05, arris: 0.09 });
+
+    // Roof: a deck INSIDE the parapet, then furniture that is not a cube. The
+    // deck has to clear the parapet's inner face and sit above the wall head,
+    // or it shows on the elevation as a dark band between the wall and the
+    // coping -- which is what the first pass drew.
+    const par = 0.19;
+    b.roof.push(box(w - par * 2 - 0.06, 0.2, d - par * 2 - 0.06, { y: y0 + H + 0.1 }));
+    parapet(b.shell, b.trim, { w, d, y: y0 + H, t: par, h: 0.62 });
+    const ry0 = y0 + H + 0.2;
+    const spot = () => [rng.range(-1, 1) * (w / 2 - 2.0), rng.range(-1, 1) * (d / 2 - 1.8)];
+    {
+      const [ax, az] = spot();
+      plantUnit(b, { x: ax, y: ry0, z: az, w: rng.range(1.6, 2.4), h: rng.range(1.0, 1.5), d: rng.range(1.3, 1.9), ry: rng.range(0, 3.1) });
+    }
+    if (rng.next() < 0.55) { const [ax, az] = spot(); stairHead(b, { x: ax, y: ry0, z: az, ry: rng.range(0, 3.1) }); }
+    if (rng.next() < 0.45) { const [ax, az] = spot(); roofTank(b, { x: ax, y: ry0, z: az, r: rng.range(0.8, 1.2), h: rng.range(1.2, 1.7) }); }
+    // Aerials: two thin verticals off the parapet. Free silhouette.
+    for (let i = 0; i < 2; i++) {
+      const [ax, az] = spot();
+      b.metal.push(cyl(0.035, rng.range(1.6, 3.2), 4, { x: ax, y: ry0 + rng.range(0.8, 1.6), z: az }));
+    }
+
+    // Scuppers and downpipes. Two per building: they are where the vertical
+    // staining on a real facade comes from, and a 110 mm pipe standing 70 mm off
+    // the wall is a hard vertical line and its own shadow all the way down --
+    // the cheapest thing that stops an elevation being a plane.
+    for (const sx of [-w * 0.34, w * 0.36]) {
+      const zf = faceZ * (d / 2 + 0.09);
+      b.metal.push(cyl(0.055, H + 0.4, 6, { x: sx, y: base + (H + 0.4) / 2, z: zf }));
+      b.metal.push(xform(cyl(0.05, 0.42, 6), { rx: Math.PI / 2, x: sx, y: y0 + H + 0.32, z: zf + faceZ * 0.2 }));
+      for (let k = 0; k < storeys; k++) b.metal.push(box(0.18, 0.05, 0.05, { x: sx, y: y0 + 0.9 + k * STOREY, z: zf - faceZ * 0.03 }));
+    }
+
+    // Ground-floor awning on the street elevation: canvas on two struts, tilted.
+    if (rng.next() < 0.6) {
+      const aw = w * 0.62, zf = faceZ * (d / 2 + 0.95);
+      b.cloth.push(box(aw, 0.09, 2.0, { y: y0 + 2.95, z: zf, rx: faceZ * -0.19 }));
+      b.cloth.push(box(aw, 0.34, 0.06, { y: y0 + 2.72, z: zf + faceZ * 0.95 }));
+      for (const sx of [-1, 1]) {
+        b.metal.push(cyl(0.035, 2.6, 5, { x: sx * aw * 0.46, y: y0 + 1.5, z: zf + faceZ * 0.85 }));
+      }
+    }
+
+    const merged = mergeBag(b);
+    const mats: Record<string, THREE.Material> = {
+      shell, shell2: M.concrete, trim: M.joinery, metal: M.steel, glass: M.glass,
+      glow: M.lamp, dark: M.interior, roof: M.roof, wood: M.plank, cloth: M.red,
+    };
+    const place = world.clone().multiply(mat4([x, 0, z], [0, ry, 0]));
+    for (const [role, g] of Object.entries(merged)) {
+      // Tone is baked on the finished, merged piece and measured against the
+      // building's own extent -- the plan's meta-lesson, applied: enforce on the
+      // shipped mesh, not on the recipe. Emissive and glass roles opt out; a
+      // grime gradient on a lit window is nonsense.
+      if (role !== 'glow' && role !== 'glass' && role !== 'dark') {
+        bakeTone(g, { y0: base, y1: y0 + H, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
+      }
+      B.add(mats[role] ?? shell, g, place);
+    }
+  }
+
+  /**
+   * A short row of shipping containers, optionally stacked.
+   *
+   * These were three 6.1 x 2.6 x 2.5 boxes wearing `rustMaterial` -- a map
+   * authored for a one-metre part, stretched over six metres, which renders as
+   * lava. `poiMaterials` documents that exact failure for walls; nothing had
+   * applied it to props. {@link container} builds the corrugations instead, and
+   * they are the whole read.
+   */
+  _containers(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    n: number; x: number; z: number; rng: Rng; stack?: boolean; y?: number;
+  }) {
+    const M = this.mats;
+    const { n, x, z, rng, stack = false, y = 0 } = o;
+    const paint = [M.red, M.render3, M.render4, M.wall2, M.steel];
+    for (let i = 0; i < n; i++) {
+      const b = bag();
+      container(b, {});
+      const merged = mergeBag(b);
+      const tv = toneVariant(rng, { valueAmp: 0.2, warmAmp: 0.05 });
+      const shell = paint[Math.floor(rng.next() * paint.length)];
+      const place = world.clone().multiply(mat4(
+        [x + rng.gauss(0, 1.2), y + (stack && i === n - 1 ? 2.62 : 0), z + i * 0.45],
+        [0, rng.gauss(0, 0.09), 0]));
+      for (const [role, g] of Object.entries(merged)) {
+        bakeTone(g, { y0: 0, y1: 2.59, grime: tv.grime * 0.92, jitter: tv.jitter, tint: tv.tint, streak: tv.streak * 1.6 });
+        B.add(role === 'metal' ? M.steel : role === 'trim' ? shell : shell, g, place);
+      }
+    }
+  }
+
+  /**
+   * A single-storey hut: the outpost's, the reststop's, the workshop's.
+   *
+   * The same three defects {@link PoiKits._block} fixes, at a scale where they
+   * are *worse* rather than better, because an outpost hut is something a
+   * player stands two metres from. It gets a monopitch roof rather than a flat
+   * one -- a slab lid on a box is the tell that survives every other fix -- with
+   * a real eaves overhang, a fascia and a rafter row under it, so the roof
+   * throws a hard shadow line across the elevation instead of ending on the wall.
+   */
+  _hut(this: PoiKits, B: PartBuilder, world: THREE.Matrix4, o: {
+    w: number; d: number; x: number; z: number; ry?: number; rng: Rng; base?: number;
+  }) {
+    const M = this.mats;
+    const { w, d, x, z, ry = 0, rng, base = 0 } = o;
+    const b = bag();
+    const wallT = 0.22;
+    const h = 2.85, rise = 0.55;               // monopitch, falling toward -Z
+    const plinthH = 0.28;
+    const y0 = base + plinthH;
+    const tv = toneVariant(rng, { valueAmp: 0.2, warmAmp: 0.07 });
+    plinth(b.shell, { w, d, h: plinthH, proud: 0.11, y: base });
+
+    // Front elevation: a door, and a window beside it.
+    const front = bag();
+    const openings: Opening[] = [
+      doorUnit(front, { x: w * 0.28, wallT, w: 0.95, h: 2.05 }),
+      windowUnit(front, { x: -w * 0.2, y: 1.0, w: Math.min(1.5, w * 0.32), h: 1.1, wallT, lit: rng.next() < 0.3 }),
+    ];
+    for (const g of wallRun(w, h + rise, wallT, openings)) front.shell.push(g);
+    for (const k of Object.keys(front)) for (const g of front[k]) b[k].push(xform(g, { y: y0, z: d / 2 - wallT / 2 }));
+    for (const g of wallRun(w, h, wallT, [])) b.shell.push(xform(g, { y: y0, z: -d / 2 + wallT / 2 }));
+    // The two ends step up under the pitch: three short runs of rising height
+    // rather than a trapezoid, which keeps every piece a chamfered box.
+    for (const sx of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        const zc = -d / 2 + (d * (k + 0.5)) / 3;
+        const hk = h + rise * ((k + 0.5) / 3);
+        b.shell.push(xform(box(d / 3, hk, wallT, { y: hk / 2 }), { ry: Math.PI / 2, x: sx * (w / 2 - wallT / 2), y: y0, z: zc }));
+      }
+    }
+    // Roof: deck, fascia, and a rafter row showing under the eaves.
+    const pitch = Math.atan2(rise, d);
+    const rl = Math.hypot(d + 0.8, rise);
+    b.roof.push(xform(box(w + 0.9, 0.16, rl), { rx: -pitch, x: 0, y: y0 + h + rise / 2 + 0.08, z: 0 }));
+    b.trim.push(box(w + 1.0, 0.16, 0.1, { x: 0, y: y0 + h + rise - 0.02, z: d / 2 + 0.42 }));
+    const nr = Math.max(3, Math.round(w / 0.9));
+    for (let i = 0; i < nr; i++) {
+      const rx2 = -w / 2 + (w * (i + 0.5)) / nr;
+      b.wood.push(box(0.07, 0.14, 0.5, { x: rx2, y: y0 + h + rise - 0.12, z: d / 2 + 0.2 }));
+    }
+    b.metal.push(box(0.5, 0.2, 0.12, { x: w * 0.28, y: y0 + 2.5, z: d / 2 + 0.16 }));
+
+    const merged = mergeBag(b);
+    const mats: Record<string, THREE.Material> = {
+      shell: M.cream, shell2: M.concrete, trim: M.joinery, metal: M.steel, glass: M.glass,
+      glow: M.lamp, dark: M.interior, roof: M.roof, wood: M.plank, cloth: M.red,
+    };
+    const place = world.clone().multiply(mat4([x, 0, z], [0, ry, 0]));
+    for (const [role, g] of Object.entries(merged)) {
+      if (role !== 'glow' && role !== 'glass' && role !== 'dark') {
+        bakeTone(g, { y0: base, y1: y0 + h + rise, grime: tv.grime, jitter: tv.jitter, tint: tv.tint, streak: tv.streak });
+      }
+      B.add(mats[role] ?? M.cream, g, place);
+    }
+  }
+
+  /**
    * A settlement, built as a *skyline* rather than as architecture.
    *
    * Lestallum and Galdin Quay are seen from a kilometre away far more often
@@ -531,7 +830,7 @@ export class PoiKits {
     this._apron(B, 52, 18, 33);
     put(M.gravel, new THREE.CylinderGeometry(51, 52, 0.6, 26), [0, 0.2, 0]);
     // a street grid rather than a scatter: blocks share walls and align
-    const walls = [M.wall, M.wall2, M.concrete, M.stone];
+    const walls = [M.wall, M.wall2, M.stone, M.render1, M.render2, M.render3, M.render4];
     for (let gx = -2; gx <= 2; gx++) {
       for (let gz = -2; gz <= 2; gz++) {
         if (gx === 0 && gz === 0) continue;                 // the square
@@ -540,43 +839,57 @@ export class PoiKits {
         const blocks = 1 + (rng.next() < 0.5 ? 1 : 0);
         for (let b = 0; b < blocks; b++) {
           const w = rng.range(9, 14), dp = rng.range(8, 12);
-          const h = rng.range(4.5, 9) + (Math.hypot(jx, jz) < 22 ? rng.range(0, 7) : 0);
+          // Storeys, not a continuous height: a building is a stack of floors
+          // and every horizontal on it lands on a multiple of STOREY. The
+          // continuous `range(4.5, 9)` this replaces is why the old blocks had
+          // window rows that did not agree with their own parapets.
+          const storeys = 1 + Math.floor(rng.next() * 2) + (Math.hypot(jx, jz) < 22 ? Math.floor(rng.next() * 2) : 0);
           const px = jx + (b ? rng.range(-5, 5) : 0), pz = jz + (b ? rng.range(-5, 5) : 0);
-          const mat = walls[Math.floor(rng.next() * walls.length)];
-          put(mat, roughBox(gx * 31 + gz * 7 + b, w, h, dp, 0.03), [px, h * 0.5 + 0.5, pz]);
-          // parapet: the thing that stops a flat-roofed box reading as a crate
-          put(M.roof, new THREE.BoxGeometry(w + 0.5, 0.65, dp + 0.5), [px, h + 0.75, pz]);
-          put(M.concrete, new THREE.BoxGeometry(w - 0.9, 0.5, dp - 0.9), [px, h + 0.8, pz]);
-          // a stair block or a tank on about half the roofs
-          if (rng.next() < 0.5) {
-            put(M.roof, new THREE.BoxGeometry(2.4, 1.8, 2.2), [px + rng.range(-3, 3), h + 1.9, pz + rng.range(-3, 3)]);
-          }
-          // lit windows on the two long faces
-          for (let f = 0; f < 2; f++) {
-            const sgn = f ? 1 : -1;
-            for (let k = -1; k <= 1; k++) {
-              for (let r = 0; r < Math.max(1, Math.floor(h / 3.4)); r++) {
-                put(M.lamp, new THREE.BoxGeometry(w * 0.15, 0.75, 0.1),
-                  [px + k * w * 0.3, 1.9 + r * 3.2, pz + sgn * (dp * 0.5 + 0.07)]);
-              }
-            }
-          }
-          // ground-floor awning toward the square
-          if (rng.next() < 0.45) {
-            put(M.red, new THREE.BoxGeometry(w * 0.7, 0.14, 1.8),
-              [px, 3.1, pz + (pz > 0 ? -1 : 1) * (dp * 0.5 + 0.9)], [pz > 0 ? -0.22 : 0.22, 0, 0]);
-          }
+          this._block(B, world, {
+            w, d: dp, storeys, x: px, z: pz, ry: rng.range(-0.06, 0.06),
+            shell: walls[Math.floor(rng.next() * walls.length)],
+            rng, faceZ: pz > 0 ? -1 : 1, lit: 0.35,
+          });
         }
       }
     }
     // the square: a paved plaza, market stalls and strung lights
     put(M.concrete, new THREE.CylinderGeometry(11, 11, 0.35, 22), [0, 0.5, 0]);
+    // Market stalls. These were a single 3.0 x 0.12 x 2.4 box of dark canvas on
+    // two poles, which at eye level in the square reads as a flat black slab
+    // hanging in the air -- and the square is the one place in a settlement the
+    // player actually stands still. A stall is a *gable*: two sloped panels
+    // meeting at a ridge, with a valance hanging off the eaves, four legs, a
+    // counter you could put something on, and crates under it.
+    const stallCloth = [M.red, M.render3, M.render1, M.wall2];
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      put(M.cloth, new THREE.BoxGeometry(3.0, 0.12, 2.4), [Math.cos(a) * 7.5, 2.5, Math.sin(a) * 7.5], [0, -a, 0.1]);
-      for (const sx of [-1.3, 1.3]) {
-        put(M.plank, new THREE.CylinderGeometry(0.06, 0.07, 2.4, 5),
-          [Math.cos(a) * 7.5 + sx * Math.sin(a), 1.4, Math.sin(a) * 7.5 - sx * Math.cos(a)]);
+      const b = bag();
+      const cw = 3.2, cd = 2.4, top = 2.55, eave = 2.15;
+      const slope = Math.atan2(top - eave, cd / 2);
+      const panel = Math.hypot(cd / 2, top - eave);
+      for (const sz of [-1, 1]) {
+        b.cloth.push(box(cw, 0.07, panel, { y: (top + eave) / 2, z: sz * cd / 4, rx: sz * slope }));
+        // Valance: the scalloped strip that hangs off the eaves and is most of
+        // what makes a market stall read as one from twenty metres.
+        b.cloth.push(box(cw + 0.1, 0.34, 0.05, { y: eave - 0.15, z: sz * (cd / 2 + 0.02) }));
+      }
+      b.wood.push(box(0.09, 0.09, cd + 0.2, { y: top }));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        b.wood.push(cyl(0.05, eave, 5, { x: sx * (cw / 2 - 0.12), y: eave / 2, z: sz * (cd / 2 - 0.12) }));
+      }
+      b.wood.push(box(cw - 0.2, 0.09, 0.75, { y: 0.94, z: -cd * 0.18 }));
+      b.wood.push(box(cw - 0.3, 0.85, 0.06, { y: 0.47, z: -cd * 0.18 - 0.35 }));
+      for (let k = 0; k < 3; k++) {
+        b.wood.push(box(0.5, 0.42, 0.4, { x: -cw / 2 + 0.45 + k * 0.85, y: 0.21, z: cd * 0.2 }));
+      }
+      const merged = mergeBag(b);
+      const cloth = stallCloth[i % stallCloth.length];
+      const tv = toneVariant(rng, { valueAmp: 0.16, warmAmp: 0.05 });
+      const place = world.clone().multiply(mat4([Math.cos(a) * 7.5, 0.5, Math.sin(a) * 7.5], [0, -a, 0]));
+      for (const [role, g] of Object.entries(merged)) {
+        bakeTone(g, { y0: 0, y1: top, grime: tv.grime + 0.1, jitter: tv.jitter, tint: tv.tint, streak: 0 });
+        B.add(role === 'cloth' ? cloth : M.plank, g, place);
       }
       put(M.lamp, new THREE.SphereGeometry(0.16, 6, 5), [Math.cos(a) * 10.5, 4.4, Math.sin(a) * 10.5]);
     }
@@ -922,7 +1235,8 @@ export class PoiKits {
     const yaw = this._yaw(p, rng);
     const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
-    const base = this._base(p.x, p.z, probe);
+    const base = this._base(p.x, p.z, probe, 2.2,
+      DRAW_BY_TYPE[p.type as keyof typeof DRAW_BY_TYPE] || DRAW_R);
     const res = site.fn.call(this, B, site, { rng, dress, yaw, base }) || {};
     const g = new THREE.Group();
     g.name = `poi_${p.type}_${p.id}`;

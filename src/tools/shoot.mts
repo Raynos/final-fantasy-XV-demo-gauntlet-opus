@@ -47,6 +47,7 @@
 import { chromium } from 'playwright';
 import { CHROMIUM_ARGS } from './chromium.mts';
 import { call, ensureDaemon } from './daemon.mts';
+import { assertOwnPort } from './portowner.mts';
 import type { ShotResult, ShotsResponse } from './daemon.mts';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -131,7 +132,7 @@ const portOpen = (port: number) => new Promise<boolean>((res) => {
  * so anything keyed off `constructor.name` works in dev and breaks in a build.
  */
 async function ensureServer(prod: boolean) {
-  if (await portOpen(PORT)) return null;
+  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
   if (prod) {
     await new Promise<void>((res, rej) => {
       const b = spawn('npx', ['vite', 'build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });

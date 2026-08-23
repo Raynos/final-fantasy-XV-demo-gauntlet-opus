@@ -175,10 +175,29 @@ vec4 skyCirrus(vec3 ro, vec3 rd, vec3 sunDir, vec3 sunRad, vec3 skyCol) {
   // the jet, so the field has to be filaments, not a blanket. A wide, soft
   // threshold on an isotropic fbm is what made this a flat haze — and once it
   // also *darkened* what was behind it, the dawn sky went muddy grey-tan.
-  float fib = nFbm2(vec2(p.x * 0.35, p.y * 7.0) + warp * 0.5, 4);
-  float fine = nFbm2(vec2(p.x * 1.1, p.y * 19.0) + warp * 0.3, 3);
+  //
+  // Where the sheet IS has to be decided before what it looks like. The
+  // isotropic octave used to be one of three summed terms carrying 0.42 of the
+  // weight, and the ridged term carrying 0.52 -- and a ridged noise is high
+  // nearly everywhere, so the threshold passed nearly everywhere. The result
+  // was not cirrus: it was a continuous sheet of thin parallel near-horizontal
+  // lines, evenly spaced, running the full width of every daylight frame,
+  // which reads as scratches on the lens. A blind judge named it unprompted in
+  // two of six frames as "horizontal cloud streak banding".
+  //
+  // So: n gates presence, and the fibres only texture the inside of a patch.
+  // The anisotropy comes down with it (7:1 and 19:1 -> 4.5:1 and 8.5:1),
+  // because the projection already stretches these UVs without bound as the
+  // ray flattens toward the horizon, and the two stretches compounded is what
+  // made the filaments dead straight across the whole hemisphere.
+  float fib = nFbm2(vec2(p.x * 0.52, p.y * 4.5) + warp * 0.5, 4);
+  float fine = nFbm2(vec2(p.x * 1.3, p.y * 8.5) + warp * 0.3, 3);
   float ridge = 1.0 - abs(fib * 2.0 - 1.0);
-  float a = smoothstep(0.56, 0.90, n * 0.42 + ridge * 0.52 + fine * 0.16);
+  // NOT patch: that is a reserved word in GLSL ES 3.00 (tessellation), and
+  // using it fails with nothing but VALIDATE_STATUS false and no message,
+  // exactly like the duplicate-uniform trap the previous handoff records.
+  float sheet = smoothstep(0.44, 0.74, n);
+  float a = sheet * smoothstep(0.40, 0.88, ridge * 0.74 + fine * 0.26);
   a *= uCirrus * smoothstep(0.012, 0.18, rd.y);
   if (a <= 0.001) return vec4(0.0, 0.0, 0.0, 1.0);
 

@@ -11,11 +11,13 @@
  * `init()` breakdown collected by `src/engine/BootProfile.ts`.
  */
 import { chromium } from 'playwright';
+import { contention, printContention } from './ruler.mts';
 import { execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertOwnPort } from './portowner.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.PORT || 5173);
@@ -28,7 +30,7 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
 });
 
 async function ensureServer() {
-  if (await portOpen(PORT)) return null;
+  if (await portOpen(PORT)) { assertOwnPort(PORT, ROOT); return null; }
   const proc = spawn('npx', ['vite', '--port', String(PORT), '--strictPort'], {
     cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -137,6 +139,28 @@ function treeRss(pid: number): { total: number, rows: string[] } {
 
 const MB = (b: number) => `${(b / 1e6).toFixed(1)} MB`;
 
+/**
+ * Repeat the contention warning next to the result.
+ *
+ * The VERDICT at the top scrolls away behind a per-system table, and the line
+ * people quote is the one at the bottom. A warning that is not adjacent to the
+ * number it qualifies does not qualify it.
+ */
+function tail(busyBefore: boolean) {
+  // Check again at the end, and judge on the worse of the two — the same rule
+  // `ruler.mts` applies to its own noise floor, and for the same reason. A boot
+  // profile takes the better part of a minute, and a co-agent that was idle when
+  // it started can be mid-capture by the time it finishes. Tonight the verdict
+  // printed "quiet — safe to measure" while naming three live worktrees, and the
+  // number that came back was 17.05 s against a real 6.88 s. A single sample of
+  // "is the machine busy" is not a measurement of a window.
+  const after = contention();
+  if (!busyBefore && !after.busy) return;
+  console.log(`\n!! CONTENDED ${busyBefore && after.busy ? 'throughout' : busyBefore ? 'at the start' : 'by the end'}`
+    + ` — the numbers above include somebody else's load. Not a baseline.`);
+  if (after.trees.length) console.log(`   live worktrees: ${after.trees.join(', ')}`);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   let n = 2, nobake = false, mem = false, warmAb = false;
@@ -147,9 +171,21 @@ async function main() {
     else if (argv[i] === '--warm-ab') warmAb = true;
   }
 
+  // A boot number is as contention-sensitive as a frame time, and this tool had
+  // no guard at all while `perf.mts` grew a whole ruler. Measured tonight: 6.88 s
+  // cold on a quiet tree, 17.05 s with three agents capturing. Anyone reading the
+  // second number without this block would have concluded boot had regressed by
+  // ten seconds. Printed before anything is measured, never after.
+  const busy = printContention().busy;
+  if (busy) {
+    console.log('         boot times below are NOT a baseline. Re-run on a quiet tree.\n');
+  } else {
+    console.log('');
+  }
+
   const server = await ensureServer();
   if (mem) {
-    try { await reportMemory(nobake); } finally { if (server) server.kill(); }
+    try { await reportMemory(nobake); } finally { if (server) server.kill(); tail(busy); }
     return;
   }
   const browser = await chromium.launch({
@@ -193,6 +229,7 @@ async function main() {
   } finally {
     await browser.close();
     if (server) server.kill();
+    tail(busy);
   }
 }
 
