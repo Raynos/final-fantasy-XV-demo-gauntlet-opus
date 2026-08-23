@@ -9,7 +9,7 @@ import { bootPhase } from '../../engine/BootProfile.ts';
 import { loadTexBake } from '../../engine/TexBake.ts';
 import {
   mat4, box, cyl, plane, torus, wheel, fenceRun, floodMast, tyreStack, drum,
-  carShell, patioSet, palletStack, type PlaceFn,
+  carShell, patioSet, palletStack, texelPlace, authored, type PlaceFn,
 } from './TownKit.ts';
 import { ShopScreen } from '../../ui/screens/ShopScreen.ts';
 import { HuntBoardScreen } from '../../ui/screens/HuntBoardScreen.ts';
@@ -300,8 +300,12 @@ export class Hammerhead {
     // Two builders: the shell (always drawn) and the clutter (culled far away).
     const S = new PartBuilder();
     const C = new PartBuilder();
-    const putS: PlaceFn = (m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
-    const putC: PlaceFn = (m, g, p, r, sc) => { C.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); };
+    // `texelPlace` re-UVs every piece to the constant world texel density its
+    // material was authored for. Without it a box's 0..1 face UVs stretch one
+    // 256-pixel tile across whatever the box happens to be: the canopy soffit
+    // was a paint-chip texture over 16.4 x 11.2 m, which read as water caustics.
+    const putS: PlaceFn = texelPlace((m, g, p, r, sc) => { S.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); });
+    const putC: PlaceFn = texelPlace((m, g, p, r, sc) => { C.add(m, g, this.world.clone().multiply(mat4(p, r, sc))); });
 
     bootPhase('Town.parts', () => {
       this._ground(putS, M);
@@ -1136,13 +1140,21 @@ export class Hammerhead {
   }
 }
 
-/** Scale a geometry's UVs so a tiling material keeps a constant texel size. */
+/**
+ * Scale a geometry's UVs by hand, and mark the result exempt from
+ * `texelPlace`'s automatic density pass.
+ *
+ * Only corrugated needs this now. Its grime is a `(1 - v)` run-down streak that
+ * has to span one sheet exactly once, so V cannot tile and the sheet's height
+ * has to be written into the call — which is why every `M.corr` placement below
+ * still names two numbers.
+ */
 function uvScale(g: THREE.BufferGeometry, su: number, sv: number) {
   const uv = g.attributes.uv;
-  if (!uv) return g;
+  if (!uv) return authored(g);
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
   uv.needsUpdate = true;
-  return g;
+  return authored(g);
 }
 
 function countTris(group: THREE.Group) {

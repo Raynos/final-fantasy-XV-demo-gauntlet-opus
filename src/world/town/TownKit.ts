@@ -45,16 +45,24 @@ export function geo(key: string, make: () => THREE.BufferGeometry): THREE.Buffer
   return G[key];
 }
 
-export const box = (w: number, h: number, d: number) => geo(`b${w}_${h}_${d}`, () => new THREE.BoxGeometry(w, h, d));
-export const cyl = (rt: number, rb: number, h: number, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
+/**
+ * Tag a primitive with the parameterisation `texelPlace` should rebuild it
+ * under. It rides in `userData` rather than in the key because the geometry is
+ * memoised and handed to `put` by value — the placement site never knows which
+ * constructor made it.
+ */
+function kind(g: THREE.BufferGeometry, k: UvKind) { g.userData.uvKind = k; return g; }
+
+export const box = (w: number, h: number, d: number) => geo(`b${w}_${h}_${d}`, () => kind(new THREE.BoxGeometry(w, h, d), 'box'));
+export const cyl = (rt: number, rb: number, h: number, s = 10) => geo(`c${rt}_${rb}_${h}_${s}`, () => kind(new THREE.CylinderGeometry(rt, rb, h, s), 'radial'));
 export const plane = (w: number, h: number) => geo(`p${w}_${h}`, () => new THREE.PlaneGeometry(w, h));
-export const torus = (r: number, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => new THREE.TorusGeometry(r, t, a, b));
+export const torus = (r: number, t: number, a = 8, b = 14) => geo(`t${r}_${t}_${a}_${b}`, () => kind(new THREE.TorusGeometry(r, t, a, b), 'radial'));
 
 /** A cylinder lying on its side along X, i.e. a wheel/tyre. */
 export const wheel = (r: number, w: number, s = 14) => geo(`w${r}_${w}_${s}`, () => {
   const g = new THREE.CylinderGeometry(r, r, w, s);
   g.rotateZ(Math.PI / 2);
-  return g;
+  return kind(g, 'radial');
 });
 
 /* -- structures ------------------------------------------------------------ */
@@ -227,4 +235,136 @@ export function palletStack(put: PlaceFn, M: TownMats, [x, z]: number[], { y = 0
     const j = rng ? rng.gauss(0, 0.06) : 0;
     put(M.wood, box(0.86, 0.56, 0.7), [x + j, y + 0.42 + i * 0.58, z + j], [0, yaw + (rng ? rng.gauss(0, 0.12) : 0), 0]);
   }
+}
+
+/* -- texel density --------------------------------------------------------- */
+
+/**
+ * How many metres of world one tile of each material's texture covers.
+ *
+ * This table is the fix for the worst material read in Hammerhead. Every town
+ * material is a 256- or 512-pixel tile authored for a *specific* physical size:
+ * `panelMaterial`'s chipping noise is `fbm2(u * 19)`, so one chip is about a
+ * twentieth of a tile — a few centimetres if the tile is 2 m, and **a metre
+ * wide once the tile is stretched over a 16 m canopy soffit**. Box geometry
+ * carries 0..1 UVs per face, so that stretch is what every unannotated `put`
+ * has been doing: the fuel canopy's soffit read as blue-green water caustics,
+ * the diner's fascia as marbled wood, and the same texture squeezed onto a
+ * 30 cm chair leg read as gravel.
+ *
+ * Keyed on the material's `name`, which `TownMaterials.pbr` sets from its cache
+ * key, so a new tint of an existing material inherits the right density free.
+ *
+ * The exclusions are deliberate. `town_corr` has a **non-tiling V**: its grime
+ * is `(1 - v)`, a run-down gradient that must span a whole sheet exactly once,
+ * so corrugated is authored by hand at every call site. `sign_*` and
+ * `town_chainlink` carry authored UVs for the same reason — a sign tiled twice
+ * says the name twice.
+ */
+const TEXEL: Array<[RegExp, number]> = [
+  [/^town_asphalt/, 9.0],
+  [/^town_slab/, 5.0],
+  [/^town_gravel/, 2.6],
+  [/^town_galv/, 0.75],
+  [/^town_scrap/, 1.3],
+  [/^town_rubber/, 0.85],
+  [/^town_panel/, 2.2],
+  // `PropMaterials.woodMaterial` never names itself, so `Hammerhead._build`
+  // stamps it `hh_wood` on the way past. Match the suffix, not the prefix.
+  [/wood$/, 1.5],
+];
+
+/** Metres per texture tile for a material, or 0 to leave its UVs alone. */
+function texelSize(mat: THREE.Material): number {
+  const n = mat.name || '';
+  for (const [re, m] of TEXEL) if (re.test(n)) return m;
+  return 0;
+}
+
+/**
+ * How a geometry's UVs should be rebuilt by {@link texelPlace}.
+ *
+ * `box` gets a true per-face planar projection off the vertex normal — the only
+ * construction that holds density on all six faces of a slab that is 16 m one
+ * way and 0.55 m the other. Everything else keeps its authored
+ * parameterisation and is only *scaled*, because a cylinder's wrap and a
+ * torus's sweep already run the right way round and a planar projection would
+ * seam them.
+ */
+export type UvKind = 'box' | 'radial' | 'planar';
+
+const _uvCache = new WeakMap<THREE.BufferGeometry, Map<number, THREE.BufferGeometry>>();
+/** Geometry whose UVs a call site authored itself; never touched. */
+const _authored = new WeakSet<THREE.BufferGeometry>();
+
+/** Mark a geometry as carrying hand-authored UVs, exempt from texelization. */
+export function authored(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  _authored.add(g);
+  return g;
+}
+
+/**
+ * Rebuild `g`'s UVs so one texture tile covers `mpt` metres, whatever the
+ * piece's size. Cached per (geometry, density) pair — the primitives are
+ * memoised and shared across hundreds of placements, so this runs a few dozen
+ * times for the whole town rather than once per `put`.
+ */
+function texelize(g: THREE.BufferGeometry, mpt: number): THREE.BufferGeometry {
+  let byM = _uvCache.get(g);
+  if (!byM) { byM = new Map(); _uvCache.set(g, byM); }
+  const hit = byM.get(mpt);
+  if (hit) return hit;
+
+  const out = g.clone();
+  const kind: UvKind = typeof g.userData.uvKind === 'string' ? g.userData.uvKind as UvKind : 'planar';
+  const pos = out.attributes.position;
+  const uv = out.attributes.uv;
+  if (kind === 'box' && out.attributes.normal && uv) {
+    // Per-face planar projection. The dominant axis of the face normal picks
+    // which two object-space coordinates become U and V, so the top of a slab
+    // is projected in XZ and its sides in XY / ZY — each at the same texels per
+    // metre, and each independent of how the piece is later rotated, because
+    // this runs in the primitive's own frame.
+    const nrm = out.attributes.normal;
+    const s = 1 / mpt;
+    for (let i = 0; i < pos.count; i++) {
+      const nx = Math.abs(nrm.getX(i)), ny = Math.abs(nrm.getY(i)), nz = Math.abs(nrm.getZ(i));
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      if (ny >= nx && ny >= nz) uv.setXY(i, x * s, z * s);
+      else if (nx >= nz) uv.setXY(i, z * s, y * s);
+      else uv.setXY(i, x * s, y * s);
+    }
+  } else if (uv) {
+    out.computeBoundingBox();
+    const b = out.boundingBox;
+    if (b) {
+      const dx = b.max.x - b.min.x, dy = b.max.y - b.min.y, dz = b.max.z - b.min.z;
+      // A cylinder's U runs the whole way round, so its span is the
+      // circumference, not the diameter: scaling by the bounding box alone
+      // leaves the barrel texture pi times too coarse.
+      const wide = Math.max(dx, dz);
+      const su = (kind === 'radial' ? Math.PI * wide : wide) / mpt;
+      const sv = Math.max(dy, 0.02) / mpt;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+    }
+  }
+  if (uv) uv.needsUpdate = true;
+  byM.set(mpt, out);
+  return out;
+}
+
+/**
+ * Wrap a {@link PlaceFn} so every piece it places is re-UV'd to the constant
+ * world texel density its material wants.
+ *
+ * A wrapper rather than a change inside `PartBuilder` because only the town's
+ * material set carries a density table; the prop kits use `BuildKit`, which
+ * solves the same problem the other way round — flat, mapless materials above a
+ * couple of metres plus a baked per-vertex tone channel.
+ */
+export function texelPlace(put: PlaceFn): PlaceFn {
+  return (mat, g, pos, rot, scale) => {
+    const mpt = _authored.has(g) ? 0 : texelSize(mat);
+    put(mat, mpt ? texelize(g, mpt) : g, pos, rot, scale);
+  };
 }
