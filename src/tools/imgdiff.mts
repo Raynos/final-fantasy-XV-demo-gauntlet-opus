@@ -13,8 +13,29 @@
  *
  * Prints mean and max per-channel delta and the fraction of pixels that differ
  * by more than a threshold, so "visually unchanged" can be a measurement rather
- * than an assertion. Exits non-zero if any pair exceeds `--max` (default 2/255
- * mean, which is below this project's own run-to-run capture noise of ~0.4).
+ * than an assertion. Exits non-zero if any pair exceeds its floor.
+ *
+ * ## The floor is per shot, not global (sibling-ports plan section 6.2)
+ *
+ * A single global threshold is wrong at both ends, and by a lot. The sibling
+ * repo measured a boot-to-boot floor of 0.06/255 on a static vista and 4.73 on
+ * a party-walk shot -- 77x apart -- because what makes a frame noisy is moving
+ * actors, streamed vegetation and a TAA history, not the renderer. Held to one
+ * number, a vista hides real regressions under a threshold eighty times too
+ * generous while a party shot fails on nothing at all.
+ *
+ * So the floors are measured and checked in at `project/noise-floors.json`,
+ * keyed by shot name:
+ *
+ *   node src/tools/shoot.mts --out tmp/nf/a --cold
+ *   node src/tools/shoot.mts --out tmp/nf/b --cold
+ *   node src/tools/imgdiff.mts tmp/nf/a tmp/nf/b --calibrate
+ *
+ * `--calibrate` writes each pair's measured mean as that shot's floor, times
+ * `FLOOR_MARGIN`. Two cold boots of the same build differ by exactly the
+ * capture noise and nothing else, which is the definition being measured.
+ * An explicit `--max` still overrides everything, and a shot with no recorded
+ * floor falls back to `DEFAULT_LIMIT`.
  *
  * Decodes PNG itself: Playwright writes 8-bit RGBA non-interlaced, which is a
  * zlib stream plus one filter byte per row.
@@ -198,28 +219,61 @@ function provenance(aDir: string, bDir: string) {
   }
 }
 
+/** Fallback for a shot with no measured floor. */
+const DEFAULT_LIMIT = 2;
+/**
+ * How far above the measured boot-to-boot mean a shot's floor sits.
+ *
+ * The calibration pair is two samples, so its mean is itself noisy; a floor set
+ * exactly at it fails roughly half the time on an unchanged tree. 1.5x is the
+ * smallest margin that did not, over the calibration runs in
+ * `project/noise-floors.json`.
+ */
+const FLOOR_MARGIN = 1.5;
+/** Where the measured per-shot floors live. Checked in; regenerate with --calibrate. */
+const FLOORS_FILE = path.join(path.dirname(path.dirname(path.dirname(new URL(import.meta.url).pathname))), 'project/noise-floors.json');
+
+interface Floors { measured: string; note: string; floors: Record<string, number> }
+
+async function readFloors(): Promise<Floors['floors']> {
+  try { return (JSON.parse(await readFile(FLOORS_FILE, 'utf8')) as Floors).floors || {}; }
+  catch { return {}; }
+}
+
 async function main() {
   const [aPath, bPath, ...rest] = process.argv.slice(2);
   if (!aPath || !bPath) {
-    console.error('usage: imgdiff.mts <a> <b> [--max 2] [--heat <dir-or-file>] [--gain 8]');
+    console.error('usage: imgdiff.mts <a> <b> [--max N] [--calibrate] [--heat <dir-or-file>] [--gain 8]');
     process.exit(2);
   }
-  let limit = 2;
+  let limit = 0;
   let heat: string | null = null;
   let gain = 8;
+  let calibrate = false;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--max') limit = Number(rest[++i]);
     else if (rest[i] === '--heat') heat = rest[++i];
     else if (rest[i] === '--gain') gain = Number(rest[++i]);
+    else if (rest[i] === '--calibrate') calibrate = true;
   }
+  const floors = await readFloors();
+  /** This shot's threshold: an explicit --max wins, then the measured floor. */
+  const limitFor = (name: string | null): number =>
+    limit || (name ? floors[name.replace(/\.png$/, '')] : undefined) || DEFAULT_LIMIT;
 
   const dir = statSync(aPath).isDirectory();
-  provenance(dir ? aPath : path.dirname(aPath), dir ? bPath : path.dirname(bPath));
+  // `--calibrate` is the one case where two captures of the SAME build is the
+  // point rather than a mistake: the boot-to-boot floor is by definition what
+  // one build's frames differ by. `provenance` exists to stop an agent reading
+  // a cache hit as evidence about code, and it would refuse exactly this.
+  // Cold-boot both sides or the frame cache will hand back a zero.
+  if (!calibrate) provenance(dir ? aPath : path.dirname(aPath), dir ? bPath : path.dirname(bPath));
   const names = dir
     ? (await readdir(aPath)).filter((f) => f.endsWith('.png')).sort()
     : [null];
 
   let worst = 0, bad = 0;
+  const measured: Record<string, number> = {};
   for (const name of names) {
     const fa = name ? path.join(aPath, name) : aPath;
     const fb = name ? path.join(bPath, name) : bPath;
@@ -236,15 +290,31 @@ async function main() {
     }
     catch (e: unknown) { console.log(`${(name || '').padEnd(20)} ERROR ${e instanceof Error ? e.message : String(e)}`); bad++; continue; }
     worst = Math.max(worst, r.mean);
-    const flag = r.mean > limit ? '  <<' : '';
-    if (r.mean > limit) bad++;
+    const shot = (name || path.basename(aPath)).replace(/\.png$/, '');
+    if (calibrate) { measured[shot] = Number((r.mean * FLOOR_MARGIN).toFixed(3)); }
+    const lim = limitFor(name || path.basename(aPath));
+    const flag = !calibrate && r.mean > lim ? '  <<' : '';
+    if (!calibrate && r.mean > lim) bad++;
     console.log(
-      `${(name || path.basename(aPath)).padEnd(20)} mean ${r.mean.toFixed(3).padStart(7)}  ` +
-      `max ${String(r.max).padStart(3)}  >8/255 ${(r.over * 100).toFixed(3).padStart(7)}%${flag}`
+      `${shot.padEnd(20)} mean ${r.mean.toFixed(3).padStart(7)}  ` +
+      `max ${String(r.max).padStart(3)}  >8/255 ${(r.over * 100).toFixed(3).padStart(7)}%  ` +
+      `floor ${lim.toFixed(2).padStart(5)}${flag}`
     );
   }
   console.log(`\nworst mean delta ${worst.toFixed(3)}/255 over ${names.length} image(s)`);
-  if (bad) { console.error(`${bad} image(s) over the ${limit}/255 mean threshold`); process.exit(1); }
+  if (calibrate) {
+    const out: Floors = {
+      measured: new Date().toISOString().slice(0, 10),
+      note: 'Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with '
+        + 'two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts.',
+      floors: { ...(await readFloors()), ...measured },
+    };
+    await mkdir(path.dirname(FLOORS_FILE), { recursive: true });
+    await writeFile(FLOORS_FILE, JSON.stringify(out, null, 2) + '\n');
+    console.log(`calibrated ${Object.keys(measured).length} shot(s) -> ${path.relative(process.cwd(), FLOORS_FILE)}`);
+    return;
+  }
+  if (bad) { console.error(`${bad} image(s) over their measured per-shot floor`); process.exit(1); }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) await main();

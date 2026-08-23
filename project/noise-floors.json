@@ -1,0 +1,18 @@
+{
+  "measured": "2026-08-23",
+  "note": "Boot-to-boot capture noise per shot, times FLOOR_MARGIN. Regenerate with two --cold captures of one build and `imgdiff --calibrate`. See imgdiff.mts.",
+  "floors": {
+    "hero_full": 2.254,
+    "hero_portrait": 0.185,
+    "party_formation": 2.851,
+    "party_walk": 1.513,
+    "poi_haven": 0.913,
+    "storm": 0.178,
+    "vista_dusk": 0.247,
+    "vista_night": 0.819,
+    "vista_noon": 0.385,
+    "zone_fallgrove": 0.69,
+    "zone_longwythe": 0.965,
+    "zone_three_valleys": 0.742
+  }
+}
