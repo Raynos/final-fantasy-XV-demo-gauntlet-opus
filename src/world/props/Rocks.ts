@@ -38,6 +38,26 @@ export let BAKE_STATS: { seed: number, mean: number, min: number, max: number, a
 /** Start (or stop, with `null`) collecting into {@link BAKE_STATS}. */
 export function setBakeStats(v: typeof BAKE_STATS) { BAKE_STATS = v; }
 
+/**
+ * The most anisotropic hull this generator may ship, plan §3.5.
+ *
+ * Enforced on the finished, placed mesh in {@link Rocks.update}, never on the
+ * recipe. 3.2 is the number a real jointed block reaches: a bedding-bounded
+ * slab is long and thin and 3:1 is normal, 4:1 starts to read as a sheet of
+ * plywood, and the sibling's critic found a 25 m x 2 m plate at 12:1.
+ */
+const ASPECT_MAX = 3.2;
+
+/**
+ * Minimum burial, as a fraction of the finished footprint diameter (OGL's
+ * `ROCK_SINK`). A rock set down tangent to the ground draws a clean elliptical
+ * contact line and reads as a sticker.
+ */
+const SINK_FRAC = 0.12;
+
+/** Fallback extents for a kind that somehow has no measured hull. */
+const _EXT1: [number, number, number] = [1, 1, 1];
+
 /** Clamp an axis-jitter multiplier away from zero and from absurdity. */
 const _sc = (v: number) => THREE.MathUtils.clamp(v, 0.45, 1.85);
 
@@ -963,6 +983,26 @@ export class Rocks {
    * every course.
    */
   hy!: Map<StoneKind, number>;
+  /**
+   * Each kind's finished half-extents, in units of its instance scale, x/y/z.
+   *
+   * Measured off the built geometry — after the cuts, the strata, the relief
+   * and the weathering — because {@link Rocks.emit}'s aspect floor is a
+   * guarantee on the **finished, placed hull** and not on the recipe. `hy` is
+   * this table's `y` column and is kept separate only because the stacking code
+   * reads it on a hot path.
+   */
+  ext!: Map<StoneKind, [number, number, number]>;
+  /**
+   * How many instances the §3.5 guarantees corrected on the last update, and
+   * the worst finished aspect ratio actually shipped.
+   *
+   * Reported rather than silent, because "built but never executed" is this
+   * repo's chronic disease and a guarantee that never fires is
+   * indistinguishable from one that is not wired. `src/tools/probes/rockhull.mts`
+   * reads them.
+   */
+  guard!: { aspect: number, sink: number, worstAspect: number, drawn: number };
   outcrops!: TileStream<RockInstance>;
   quality!: number;
   radius!: number;
@@ -976,6 +1016,8 @@ export class Rocks {
     this.cell = 56;
     this.groups = [];
     this.hy = new Map();
+    this.ext = new Map();
+    this.guard = { aspect: 0, sink: 0, worstAspect: 0, drawn: 0 };
     this._last = new THREE.Vector3(1e9, 0, 1e9);
   }
 
@@ -1421,7 +1463,11 @@ export class Rocks {
       const geo = rockGeometry(k.seed, k.opts);
       geo.computeBoundingBox();
       const bb = geo.boundingBox!;
-      this.hy.set(k.key, Math.max(bb.max.y, -bb.min.y));
+      const ex: [number, number, number] = [
+        Math.max(bb.max.x, -bb.min.x), Math.max(bb.max.y, -bb.min.y), Math.max(bb.max.z, -bb.min.z),
+      ];
+      this.hy.set(k.key, ex[1]);
+      this.ext.set(k.key, ex);
       const g: RockGroup = {
         kind: k, key: k.key,
         nearRange: BIG.has(k.key) ? 165 : (k.key === 'talus' ? 130 : k.key === 'cobble' ? 105 : 62),
@@ -1482,6 +1528,7 @@ export class Rocks {
     this._last.copy(camPos);
 
     for (const g of this.groups) { g.nw = 0; g.fw = 0; }
+    this.guard.aspect = 0; this.guard.sink = 0; this.guard.worstAspect = 0; this.guard.drawn = 0;
     const cx = camPos.x, cz = camPos.z;
 
     const emit = (arr: RockInstance[]) => {
@@ -1501,9 +1548,55 @@ export class Rocks {
         } else continue;
         _e.set(it.pitch, it.yaw, it.roll);
         _q.setFromEuler(_e);
-        const sink = it.s * it.bury;
+        // --- plan 3.5: the two guarantees, on the FINISHED, PLACED hull -----
+        //
+        // Both of these are enforced here, at the one line in this file where
+        // an instance record becomes a matrix, and not where the numbers are
+        // drawn. That is the whole point of the item. A critic found the
+        // sibling's 25 m x 2 m plate with local aspect caps in place, because
+        // downstream code had "routed around them by tilt, 40 instances
+        // measured" -- and this generator has four separate places that write
+        // `s`, `sx`, `sy` and `sz` after `_item` has drawn them (`_genOutcrop`,
+        // `_genTor`, `_stack`, and the scree shrink), so a cap at the draw site
+        // would be defeated by all four. Near and far tiers come through the
+        // same code with the same factor, which is the other half of what 3.5
+        // asks for.
+        const ex = this.ext.get(it.k) ?? _EXT1;
+        let jx = it.sx, jy = it.sy, jz = it.sz;
+        {
+          // Aspect floor. `ex` is the mesh's own anisotropy, `j*` the
+          // instance's; the product is what ships. `slab` alone is 2.3:1 before
+          // any jitter and `_sc` allows 1.85/0.45 = 4.1:1 on top of it, so the
+          // worst case this generator could previously emit was **9.4:1** --
+          // a plate.
+          const ax = jx * ex[0], ay = jy * ex[1], az = jz * ex[2];
+          const mx = Math.max(ax, ay, az), mn = Math.min(ax, ay, az);
+          this.guard.drawn++;
+          if (mn > 0 && mx > mn * ASPECT_MAX) {
+            const floor = mx / ASPECT_MAX;
+            if (ax < floor) jx *= floor / ax;
+            if (ay < floor) jy *= floor / ay;
+            if (az < floor) jz *= floor / az;
+            this.guard.aspect++;
+          }
+          const fx = jx * ex[0], fy = jy * ex[1], fz = jz * ex[2];
+          const r = Math.max(fx, fy, fz) / Math.max(1e-9, Math.min(fx, fy, fz));
+          if (r > this.guard.worstAspect) this.guard.worstAspect = r;
+        }
+        // Burial floor, baked against the finished footprint rather than the
+        // recipe's `bury`. OGL sinks 12% of the footprint diameter INTO the
+        // mesh so that no instance transform can put a rock down tangent to
+        // the ground and leave a clean elliptical contact line. Ours sinks
+        // through the transform, which is the defeatable version -- and it is
+        // defeated in two places already: `_genTor` and `_stack` both set
+        // `bury` to 0 on every course above the base. Enforcing the floor here
+        // catches those and is also, exactly, 3.4's "settle each corestone
+        // into the one below".
+        const foot = Math.max(ex[0], ex[2]) * 2;
+        if (it.bury < SINK_FRAC * foot) this.guard.sink++;
+        const sink = it.s * Math.max(it.bury, SINK_FRAC * foot);
         _p.set(it.x - it.nx * sink, it.y - it.ny * sink, it.z - it.nz * sink);
-        _s.set(it.s * it.sx, it.s * it.sy, it.s * it.sz);
+        _s.set(it.s * jx, it.s * jy, it.s * jz);
         _m.compose(_p, _q, _s);
         _m.toArray(mesh.instanceMatrix.array, slot * 16);
         const c = mesh.instanceColor.array;
