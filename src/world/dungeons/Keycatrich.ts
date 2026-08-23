@@ -29,8 +29,20 @@ export const KEYCATRICH: DungeonDef = {
   corridorHeight: 3.5,
 
   /** Where the entrance sits in the world, and which way it faces. */
-  entrance: { x: -112, z: -228, heading: 0.62, kind: 'bunker' },
-  /** Interior origin: directly under the entrance, well below the badlands. */
+  entrance: { poi: 'keycatrich_trench', heading: 0.62, kind: 'bunker' },
+  /**
+   * Interior origin. **Not derived from the entrance, deliberately.**
+   *
+   * Twelve authored shots in `src/game/Shots.ts` frame these rooms by absolute
+   * world coordinate — `dun_keycatrich_entry` sits at (-113.5, -44.2, -225)
+   * under a comment reading "Interior origin (-112, -46, -228)". Moving the
+   * origin with the door would leave all twelve framing solid rock, and
+   * `Shots.ts` is the coordinator's file. Nothing needs the two to agree: the
+   * interior is entered through a fade, `Dungeons` redirects `heightAt` to the
+   * room floor while inside, the shaft of daylight is built from the interior's
+   * own geometry, and no frame ever contains both. It is a private coordinate
+   * frame, and this is the note that says so.
+   */
   origin: [-112, -46, -228],
   spawn: [0, 2.5],
   exit: { at: [0, 3.6], facing: 0, w: 3.6, h: 3.4, color: 0xcfe0f6, intensity: 150 },

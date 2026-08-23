@@ -456,6 +456,17 @@ export class EncounterDirector {
    */
   resolveStrike(e: Enemy, atk: StrikeSpec | null) {
     const a: StrikeSpec = atk || { hitRadius: 1.8, mult: 1, arc: Math.PI / 2 };
+
+    // **An active boss fight gets first refusal.** This one line is what
+    // `BossFight.resolveStrike`, `slamAt` and `_handPos` were waiting for: they
+    // have been in the tree, typed and compiling, and had never executed once.
+    // The sweep below starts at the enemy's *root* and reaches `hitRadius`
+    // along its heading, which is the right model for a sabertusk and the wrong
+    // one for a creature whose fist arrives forty metres from its navel --
+    // Titan's slam landed on his own feet. `BossFight` returns true only when
+    // it actually handled the blow (its own boss, an astral fight, a hand it
+    // can find), so everything else still falls through to the generic path.
+    if (this.boss && this.boss.resolveStrike(e, a)) return;
     const reach = (a.hitRadius || 1.8) * e.scale;
     const arc = a.arc != null ? a.arc : Math.PI / 2;
     const fx = Math.sin(e.heading), fz = Math.cos(e.heading);

@@ -326,7 +326,7 @@ harness's in-page `import('/…')` URLs resolve). **The gates were guessing too:
 | `Set.length` / `Map.length` (`a.unlocked.size ?? a.unlocked.length`, `ix.items.size ?? ix.items.length`) | neither collection has `length`. Always `undefined`, always the second arm dead. |
 | `attrib`: a `[label, systemKey, field]` table driving `g.get(key)` | the third column was never read, and `g.get()` over a `string` hands back *every* system at once — three of the four branches were reaching for fields the union does not have. |
 | `driftcheck`: `surf0.color.constructor` for `THREE.Color` | the terrain material is a `ShaderMaterial` and has no `color` at all. The `Color` now comes off a light. |
-| `BossFight.resolveStrike` / `slamAt` / `_handPos` | **nothing calls them.** `Enemies.onStrike` goes to `EncounterDirector.resolveStrike`, which sweeps an arc off the enemy's root and never asks the boss — so Titan's forty-metre fist has never landed where the hand is. |
+| `BossFight.resolveStrike` / `slamAt` / `_handPos` | **nothing called them**, for months, while typed and compiling. `Enemies.onStrike` went to `EncounterDirector.resolveStrike`, which sweeps an arc off the enemy's *root* — right for a sabertusk, wrong for a creature whose fist arrives thirteen metres from its navel, so Titan's slam damaged whatever stood on his feet and the crater never rendered. **Fixed (`99e2107`)**: the director gives an active boss fight first refusal and `BossFight` returns true only when it really handled the blow. `probes/titanfist.mts` measures it, through `Enemies.onStrike` rather than by calling the method. |
 | `CameraRig.setLockOn` | **nothing calls it.** `lockOn` has only ever been `null`, so the combat-framing block in `lateUpdate` has never run; `CombatSystem.setLockOn` drives the HUD reticle, not the camera. |
 | `Ascension.activeEffects`: five independent `if`s over one payload | `{ stat, value }` and `{ mult, value }` also fell into the `value` arm, writing `values['500'] = NaN` for every flat stat node. Inert (`value()` returns `NaN \|\| 0`), but it is why the arms are now exclusive. |
 | `Game.applyShot`: `rig.setShot({ pos: shot.pos })` | passed the authored array **by reference**, so `lateUpdate`'s ground clamp wrote the raised height back into the `SHOTS` table. It copies now. |
@@ -340,6 +340,34 @@ What to do about it:
   `import()` and cvar tables all take one. When you rename, grep the strings.
 - **Type the receiver and the dead arms fall out by themselves.** Every entry
   above was found by making one `any` real, not by auditing.
+
+## Drawing things you cannot see
+
+Four defects from the fishing lane, all of them invisible to a probe that
+reported entirely correct numbers, and all of them found only by reading the
+capture.
+
+- **A `THREE.Line` is one pixel wide, always.** `linewidth` is a no-op on every
+  WebGL renderer. The fishing line was absent from three consecutive captures
+  while the probe printed the right endpoints every time; it is a scaled
+  cylinder now. If you cannot see a thin thing you drew, check the *primitive*
+  before you check the maths.
+- **A bone socket's world matrix is stale during `update`.** Anything hung off
+  `attach.handR` and read in a system's `update` is posed from the previous
+  frame — the fishing line left Noctis at chest height and lay flat in the
+  grass. Read it in `lateUpdate`. The same tick is where a `hud.setMenuOpen`
+  belongs, because `Menus` boots after `Rpg` and overwrites it otherwise.
+- **A local Euler on a bone socket is a spear through the character's head.**
+  Whatever angle looks right in one pose is wrong in the next. Write the world
+  quaternion and divide the parent's out.
+- **Physically correct is not legible.** A 7.5 cm float at 20 m on moving water
+  cannot be found in a 1600x900 frame, and white type on sunlit grass cannot be
+  read at all. Both were correct and both were useless.
+
+And one measurement trap, because the failure looked exactly like a real
+defect: **an animating rig moves several metres between frames.** Comparing
+Titan's slam point against a hand position read four frames earlier measures
+the animation, not the wiring.
 
 ## Diagnoses that were wrong
 

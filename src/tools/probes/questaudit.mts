@@ -88,7 +88,21 @@ for (const id of Object.keys(Q.QUESTS)) {
       // real by `probes/photoshot.mts`, which frames a beast and presses it.
       const shot = g.get('Menus')?.screens?.photo;
       verdict = typeof shot?.subjects === 'function' ? 'ok (photo mode)' : 'nothing in the repo notifies "photo"';
-    } else if (o.type === 'escort' || o.type === 'fish') {
+    } else if (o.type === 'fish') {
+      // `Fishing._land` is the only thing that posts `fish`, so the objective
+      // is satisfiable exactly when the named species can be pulled out of a
+      // hole that has real water under it -- which is stricter than "the item
+      // exists", and is the check that catches a quest pointing at one of the
+      // seven pins the water plane leaves dry.
+      const F = g.get('Rpg').fishing;
+      F.install(g);
+      const live = new Set();
+      for (const sp of F.spots.values()) for (const f of sp.fish) live.add(f);
+      if (o.target === 'any') verdict = live.size ? 'ok (any fish)' : 'no fishable water in the world';
+      else if (!Object.prototype.hasOwnProperty.call(I.ITEMS, o.target)) verdict = `NO SUCH ITEM "${o.target}"`;
+      else if (!live.has(o.target)) verdict = `no fishing hole with real water stocks "${o.target}"`;
+      else verdict = 'ok (fishing)';
+    } else if (o.type === 'escort') {
       verdict = `nothing in the repo notifies "${o.type}"`;
     }
     rows.push(`    ${o.type}/${o.target}  ${verdict}`);

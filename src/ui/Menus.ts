@@ -4,6 +4,7 @@ import { button } from './Icons.ts';
 import { MainScreen } from './screens/MainScreen.ts';
 import { InventoryScreen } from './screens/InventoryScreen.ts';
 import { AscensionScreen } from './screens/AscensionScreen.ts';
+import { ElemancyScreen } from './screens/ElemancyScreen.ts';
 import { MapScreen } from './screens/MapScreen.ts';
 import { WorldMapScreen } from './screens/WorldMapScreen.ts';
 import { GearScreen } from './screens/GearScreen.ts';
@@ -45,6 +46,7 @@ export interface ScreenMap {
   main: MainScreen;
   inventory: InventoryScreen;
   ascension: AscensionScreen;
+  elemancy: ElemancyScreen;
   armiger: ArmigerScreen;
   map: MapScreen;
   world: WorldMapScreen;
@@ -100,6 +102,7 @@ export interface MenuScreen {
 const FOOT = {
   default: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['Bksp', 'Back'], ['Tab', 'Close']],
   main: [['↑↓', 'Select'], ['Enter', 'Confirm'], ['H', 'Controls'], ['Tab', 'Close']],
+  elemancy: [['↑↓', 'Row'], ['←→', 'Dial'], ['Enter', 'Craft'], ['Bksp', 'Back']],
   ascension: [['↑↓←→', 'Navigate'], ['Enter', 'Unlock'], ['Bksp', 'Back'], ['Tab', 'Close']],
   photo: [['↑↓', 'Filter'], ['←→', 'Aperture'], ['Space', 'Shoot'], ['Bksp', 'Exit']],
   inventory: [['↑↓', 'Select'], ['←→', 'Category'], ['Enter', 'Use'], ['Bksp', 'Back']],
@@ -198,6 +201,7 @@ export class Menus {
       main: new MainScreen(this),
       inventory: new InventoryScreen(this),
       ascension: new AscensionScreen(this),
+      elemancy: new ElemancyScreen(this),
       armiger: new ArmigerScreen(this),
       map: new MapScreen(this),
       world: new WorldMapScreen(this),

@@ -44,21 +44,33 @@ out.push(`registered verb: ${dun._verb ? dun._verb.id : 'NONE - nothing wired'}`
 out.push('');
 
 // The same trap the quest waypoints and the spawn tables both fell into: these
-// three entrances carry literal coordinates written against the 3 km world,
-// while the map, the compass and `at('keycatrich_trench')` all resolve against
-// the 8 km one. Reported every run so it cannot go quiet again.
+// three entrances used to carry literal coordinates written against the 3 km
+// world, while the map, the compass and `at('keycatrich_trench')` all resolve
+// against the 8 km one -- 1 251 m, 2 846 m and 2 550 m adrift respectively.
+// `EntranceDef.poi` resolves through `WorldMap` now and `entranceAt` throws on
+// an id the map does not have, but this is **asserted** and not merely
+// printed, because "reported every run" is exactly how the old numbers stayed
+// quiet for months.
 out.push('where the map says each dungeon is, against where its door actually is:');
 const { worldMap } = await import('/world/map/WorldMap.ts');
 const POI = { keycatrich: 'keycatrich_trench', balouve: 'balouve_mines', fociaugh: 'fociaugh' };
-for (const e of dun.entrances) {
-  const p = worldMap.poiById(POI[e.id]);
-  const d = p ? Math.hypot(p.x - e.pos.x, p.z - e.pos.z) : NaN;
-  out.push(`  ${e.id.padEnd(11)} pin (${p.x}, ${p.z})  door (${e.pos.x.toFixed(0)}, ${e.pos.z.toFixed(0)})  ${d.toFixed(0)} m apart${d > 60 ? '   <-- the pin is not on the door' : ''}`);
-}
-out.push('');
 
 let fails = 0;
 const check = (name, ok, extra = '') => { if (!ok) fails++; out.push(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? `  ${extra}` : ''}`); };
+
+for (const e of dun.entrances) {
+  const p = worldMap.poiById(POI[e.id]);
+  const d = p ? Math.hypot(p.x - e.pos.x, p.z - e.pos.z) : NaN;
+  // The approach grade too: an entrance the map moved onto a bank is walkable
+  // but reads badly, and Fociaugh's is the steepest of the three.
+  const h = e.def.entrance.heading;
+  const ax = e.pos.x + Math.sin(h) * -6, az = e.pos.z + Math.cos(h) * -6;
+  const grade = (terr.heightAt(e.pos.x, e.pos.z) - terr.heightAt(ax, az)) / 6;
+  out.push(`  ${e.id.padEnd(11)} pin (${p.x}, ${p.z})  door (${e.pos.x.toFixed(0)}, ${e.pos.z.toFixed(0)})`
+    + `  ${d.toFixed(0)} m apart  approach grade ${grade.toFixed(2)}`);
+  check(`${e.id}: the door is on its own map pin`, d <= 40, `${d.toFixed(0)} m`);
+}
+out.push('');
 
 for (const e of dun.entrances) {
   out.push(`-- ${e.id} --`);

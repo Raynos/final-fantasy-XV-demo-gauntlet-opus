@@ -22,6 +22,7 @@ import { Rng } from '../../util/Rng.ts';
 import { Emitter } from './Emitter.ts';
 import { CombatBridge } from './CombatBridge.ts';
 import { HavenCamp } from './HavenCamp.ts';
+import { Fishing } from '../fishing/Fishing.ts';
 import { ExpBank, LODGINGS, computeDamage, expForKill, nightScaling, totalExpFor, MAX_LEVEL, EXP_TABLE } from './Stats.ts';
 import { Ascension, AP_RULES, NODES, CONSTELLATION_INFO, EDGES } from './Ascension.ts';
 import { Inventory, ITEMS, SHOPS } from './Inventory.ts';
@@ -160,6 +161,7 @@ export class RpgSystem {
   _rankSeen?: number;
   combatBridge!: CombatBridge;
   havenCamp!: HavenCamp;
+  fishing!: Fishing;
   day!: DayCycle;
   elemancy!: Elemancy;
   emitter!: Emitter;
@@ -214,6 +216,8 @@ export class RpgSystem {
     this.combatBridge = new CombatBridge(this);
     /** The "Camp" prompt at every haven. Installed on the first tick — see below. */
     this.havenCamp = new HavenCamp(this);
+    /** The "Fish" prompt at every fishing hole that has real water under it. */
+    this.fishing = new Fishing(this);
   }
 
   /* -- Lifecycle --------------------------------------------------------- */
@@ -399,6 +403,8 @@ export class RpgSystem {
     // `Interaction` boots six systems after this one, so the camp prompts
     // cannot be registered in `init()`. This is a no-op after the first tick.
     this.havenCamp.install(game);
+    // Installs itself the same way, and owns the input while a cast is live.
+    this.fishing.update(dt, game);
     this.combatBridge.update(dt, game);
     this.day.update(dt, game);
     this.ascension.update(dt);
@@ -446,6 +452,19 @@ export class RpgSystem {
       this._autosaveTimer += dt;
       if (this._autosaveTimer >= this.autosaveInterval) { this._autosaveTimer = 0; this.save('auto'); }
     }
+  }
+
+  /**
+   * After everything has moved.
+   *
+   * Only the fishing tackle needs this, and it needs it for two reasons that
+   * are worth naming because both were invisible defects in a working frame:
+   * the rod hangs off a **bone socket**, whose world matrix is stale during
+   * `update`, and `Menus` boots after `Rpg`, so a `setMenuOpen` written in
+   * `update` is overwritten in the same frame.
+   */
+  lateUpdate(dt: number, game: Game) {
+    this.fishing.lateUpdate(dt, game);
   }
 
   /* -- Event API --------------------------------------------------------- */

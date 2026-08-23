@@ -285,9 +285,22 @@ export const RECIPES = [
   R('chargrilled_herb_fillet', 'Chargrilled Herb Fillet', 4, [['dualhorn_steak', 1], ['kettier_ginger', 2], ['allural_shallot', 1]],
     { hp: 1200, strength: 60, critRate: 0.06 }, ['Max HP +1200', 'Strength +60', 'Critical rate +6%'], 14,
     'Herb crust, pink centre, absolutely no arguments.'),
-  R('sea_bass_meuniere', 'Sea Bass Meunière', 4, [['alstor_trout', 2], ['fine_cleigne_wheat', 1], ['duscaen_olives', 1]],
+  // Named for a fish it did not contain: for as long as this table has existed
+  // the only fish in the game was the slough trout, so the Meuniere was made of
+  // trout and the paella of mussels. `src/game/fishing/` pays out ten more, so
+  // the recipes can use what they say they use.
+  R('sea_bass_meuniere', 'Sea Bass Meunière', 4, [['sea_bass', 2], ['fine_cleigne_wheat', 1], ['duscaen_olives', 1]],
     { mp: 30, magic: 80, spirit: 40 }, ['Max MP +30', 'Magic +80', 'Spirit +40'], 14,
     'Browned butter and a great deal of patience.'),
+  R('grouper_carpaccio', 'Murk Grouper Carpaccio', 4, [['murk_grouper', 1], ['duscaen_olives', 2], ['kettier_ginger', 1]],
+    { mp: 25, spirit: 75, resist: { ice: 25 } }, ['Max MP +25', 'Spirit +75', 'Ice resistance +25%'], 14,
+    'Sliced thin enough to read a map through.'),
+  R('barramundi_sauteed', 'Sautéed Barramundi', 3, [['barramundi', 1], ['leiden_pepper', 1], ['saxham_rice', 1]],
+    { hp: 900, strength: 45, spirit: 30 }, ['Max HP +900', 'Strength +45', 'Spirit +30'], 12,
+    'Skin down, hot pan, do not touch it. Ignis says this twice.'),
+  R('bream_carpaccio', 'Sea Bream Carpaccio', 2, [['sea_bream', 2], ['duscaen_olives', 1]],
+    { mp: 20, magic: 40 }, ['Max MP +20', 'Magic +40'], 10,
+    'Cape Caem\'s answer to a starter.'),
   R('golden_tail_soup', 'Golden Tail Soup', 5, [['basilisk_ribs', 1], ['schier_turmeric', 2], ['aegir_root', 1]],
     { hp: 1800, vitality: 90, spirit: 60 }, ['Max HP +1800', 'Vitality +90', 'Spirit +60'], 16,
     'Clear, golden, and simmered for most of the night.'),
@@ -300,6 +313,9 @@ export const RECIPES = [
   R('fishermans_paella', 'Fisherman\'s Favorite Paella', 5, [['cleigne_darkshell', 3], ['saxham_rice', 2], ['schier_turmeric', 1]],
     { hp: 1400, mp: 35, magic: 95, spirit: 50 }, ['Max HP +1400', 'Max MP +35', 'Magic +95', 'Spirit +50'], 16,
     'A pan the size of a wheel, and not a grain left over.'),
+  R('gar_confit', 'Vesper Gar Confit', 7, [['vesper_gar', 1], ['pink_jade_gar', 1], ['fine_cleigne_wheat', 1]],
+    { hp: 2400, mp: 45, magic: 130, spirit: 90 }, ['Max HP +2400', 'Max MP +45', 'Magic +130', 'Spirit +90'], 20,
+    'Two fish out of the drowned forest, cooked in their own fat. The best thing Ignis makes.'),
   R('crown_city_fish', 'Crown City Grilled Fish', 6, [['alstor_trout', 3], ['allural_shallot', 2], ['duscaen_olives', 1]],
     { hp: 1600, magic: 110, resist: { lightning: 25 } }, ['Max HP +1600', 'Magic +110', 'Lightning resistance +25%'], 18,
     'The way they did it back home, before the Wall came down.'),

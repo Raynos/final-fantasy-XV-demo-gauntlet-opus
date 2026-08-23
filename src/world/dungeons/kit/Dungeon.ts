@@ -6,6 +6,7 @@ import { LightRig } from './LightRig.ts';
 import { PropKit } from './InteriorProps.ts';
 import { buildExitVestibule } from './Portal.ts';
 import { DungeonMap } from './DungeonMap.ts';
+import { worldMap } from '../../map/WorldMap.ts';
 import type { MergeStats } from './Build.ts';
 import type { DungeonStyle, Lamp, LampKind, Point2 } from './Layout.ts';
 import type { Interactable, PropPlacer } from './InteriorProps.ts';
@@ -40,12 +41,39 @@ export interface DungeonAtmosphere {
 
 /** Where a dungeon's exterior architecture sits in the world. */
 export interface EntranceDef {
-  x: number;
-  z: number;
+  /**
+   * The `WorldMap` POI this doorway belongs to, resolved by `entranceAt`.
+   *
+   * It used to be a literal `x` / `z` pair, and all three of them were written
+   * against the **3 km world**: Keycatrich's door stood 1 251 m from its own
+   * map pin, Balouve's 2 846 m and Fociaugh's 2 550 m. `main_ch3_openworld`
+   * sends the player to `at('keycatrich_trench')` and there was no door within
+   * a kilometre of where they arrive. This is the same class of defect as the
+   * Hammerhead pin two lanes ago, and it wants the same treatment: a
+   * coordinate the map owns, resolved by id, throwing on an id the map does
+   * not have rather than silently reading as the origin.
+   */
+  poi: string;
   /** Which way the doorway faces, radians. */
   heading: number;
   /** Which piece of architecture `Dungeons.init` builds. */
   kind: 'bunker' | 'mine' | 'cave';
+}
+
+/**
+ * Where a dungeon's doorway stands, from the map.
+ *
+ * Throws rather than falling back. A door that quietly lands at (0, 0) is a
+ * door in the middle of Leide with nothing around it, and the whole point of
+ * moving these off literals is that the failure has to be loud.
+ */
+export function entranceAt(def: DungeonDef): { x: number, z: number } {
+  const p = worldMap.poiById(def.entrance.poi);
+  if (!p) throw new Error(`Dungeon "${def.id}": entrance anchored to unknown POI "${def.entrance.poi}"`);
+  if (p.type !== 'dungeon') {
+    throw new Error(`Dungeon "${def.id}": POI "${def.entrance.poi}" is a ${p.type}, not a dungeon`);
+  }
+  return { x: p.x, z: p.z };
 }
 
 /** The way back out, as the author places it inside the interior. */

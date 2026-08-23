@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SHOTS } from '../../game/Shots.ts';
 import type { Shot } from '../../game/Shots.ts';
 import { Dungeon } from './kit/Dungeon.ts';
+import { entranceAt } from './kit/Dungeon.ts';
 import type { DungeonDef } from './kit/Dungeon.ts';
 import { Fader, buildBunkerEntrance, buildMineHead, buildCaveMouth } from './kit/Portal.ts';
 import { DungeonAmbience } from './kit/Ambience.ts';
@@ -194,8 +195,9 @@ export class Dungeons {
     let calls = 0, tris = 0;
     for (const def of this.defs.values()) {
       const e = def.entrance;
+      const at = entranceAt(def);
       const make = builders[e.kind];
-      const built = bootPhase(`Dungeons.entrance.${e.kind}`, () => make(this.terrain, e.x, e.z, e.heading, def.seed || 7));
+      const built = bootPhase(`Dungeons.entrance.${e.kind}`, () => make(this.terrain, at.x, at.z, e.heading, def.seed || 7));
       game.scene.add(built.group);
       calls += built.stats.calls;
       tris += built.stats.tris;
@@ -452,8 +454,9 @@ export class Dungeons {
   /** Where the party is standing when they step back out. */
   _exitPoint(def: DungeonDef) {
     const e = def.entrance;
+    const at = entranceAt(def);
     const c = Math.cos(e.heading), s = Math.sin(e.heading);
-    const x = e.x + s * -7.5, z = e.z + c * -7.5;
+    const x = at.x + s * -7.5, z = at.z + c * -7.5;
     return new THREE.Vector3(x, this.terrain.heightAt(x, z), z);
   }
 

@@ -172,6 +172,7 @@ const talk  = (id: string, target: string, desc: string, waypoint: number[]): Ob
 const photo = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'photo', target, count, desc, waypoint });
 const craft = (id: string, target: string, count: number, desc: string): Objective => ({ id, type: 'craft', target, count, desc });
 const rest  = (id: string, desc: string, waypoint?: number[]): Objective => ({ id, type: 'rest', target: 'any', count: 1, desc, waypoint });
+const fish  = (id: string, target: string, count: number, desc: string, waypoint?: number[]): Objective => ({ id, type: 'fish', target, count, desc, waypoint });
 
 /* ------------------------------------------------------------------------ */
 /* The quest table                                                           */
@@ -599,17 +600,23 @@ const QUEST_TABLE: Quest[] = [
     id: 'side_legendary_fish', type: 'side', name: 'What Is Eating Navyth\'s Catch',
     region: 'duscae', level: 18, giver: 'Navyth', requires: ['main_ch4_lestallum'],
     summary: 'Navyth has been after the Alstor trout for eleven years. Something else got there first.',
-    // **The fishing verb is cut, not wired.** There is no fishing anywhere in
-    // this game — no rod, no line, no cast, no minigame — and a `fish`
-    // objective that ticks off a keypress is not fishing, it is a lie with a
-    // trout in it. Doing it properly is a workstream, and it is written up as
-    // one in the handoff: eight `type: 'fishing'` POIs already exist and would
-    // give the world its only non-combat verb. Until then the quest is about
-    // the thing that *is* built — the voretooth pack on the Alstor shore, which
-    // is exactly why he has not caught anything in years.
+    // **The `fish` objective is back, and it is now a real one.** The previous
+    // lane cut it -- "a `fish` objective that ticks off a keypress is not
+    // fishing, it is a lie with a trout in it" -- and was right to; there was
+    // no rod, no line, no cast and no minigame. `src/game/fishing/` is all
+    // four, so the quest can ask for the thing it was always about. The
+    // voretooth beat stays: it is why nobody has fished this shore in years,
+    // and clearing them is what makes the bank safe to stand on.
+    //
+    // The target is the **bass**, not the trout Navyth has been after. The
+    // trout is the commonest fish in the slough at draw weight 34 and would
+    // tick on the first cast; the bass is 26 and fights nearly twice as hard.
+    // An objective you cannot fail to satisfy is the keypress again, wearing a
+    // minigame.
     objectives: [
       reach('pier', 'alstor_pier', 'Find Navyth at the Alstor Slough pier', at('alstor_dock'), 12),
       kill('vore', 'voretooth', 4, 'Clear the voretooth off the shoreline', at('coernix_alstor')),
+      fish('bass', 'alstor_bass', 1, 'Land an Alstor Bass at Neeglyss Pond', at('alstor_dock')),
     ],
     rewards: { gil: 2400, exp: 5200, ap: 20, items: [{ id: 'alstor_trout', count: 2 }], recipes: ['sea_bass_meuniere'] },
   },

@@ -33,6 +33,8 @@ const ENTRIES: MenuEntry[] = [
     body: 'Potions, elixirs and the odd hunt trophy. Ignis keeps the inventory in order — mostly.' },
   { key: 'ascension', label: 'Ascension', icon: 'ascension', hint: 'Spend AP on the grid', to: 'ascension',
     body: 'Channel the accumulated Ability Points of the retinue into the Astral constellations. Unlocked nodes are permanent.' },
+  { key: 'elemancy', label: 'Elemancy', icon: 'fire', hint: 'Craft spells from drawn energy', to: 'elemancy',
+    body: 'Fire, ice and lightning drawn from the deposits of Lucis, mixed in the flask and carried as spells. A catalyst thrown in gives the spell a second job.' },
   { key: 'armiger', label: 'Armiger', icon: 'armiger', hint: 'The royal arms', to: 'armiger',
     body: 'Thirteen weapons of the Lucian kings orbit the heir. Fill the gauge in battle to call them all at once.' },
   { key: 'gear', label: 'Gear', icon: 'gear', hint: 'Weapons & accessories', to: 'gear',
