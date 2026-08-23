@@ -96,6 +96,36 @@ export class PartBuilder {
  * Loft a closed tube through a list of cross-sections.
  * @param sections rings of [y,z]
  */
+/**
+ * A box whose UVs are a world-space projection rather than 0..1 per face.
+ *
+ * `PropMaterials`' maps are tiles authored for a roughly metre-sized part:
+ * `paintedMaterial`'s chipping is `fbm2(u * 11)`, so one chip is a tenth of a
+ * tile. A plain `BoxGeometry` puts exactly one tile on every face whatever the
+ * face is, so a 6.1 m shipping container gets 60 cm paint chips — which is what
+ * turns the stacked containers at the mesa outpost into a red-and-black
+ * checkerboard, and it is the same defect the town's canopy soffit had.
+ *
+ * The dominant axis of each face normal picks which two coordinates become U
+ * and V, so all six faces come out at the same texels per metre.
+ *
+ * @param mpt metres of world per texture tile
+ */
+export function texelBox(w: number, h: number, d: number, mpt = 2.0): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const pos = g.attributes.position, nrm = g.attributes.normal, uv = g.attributes.uv;
+  const s = 1 / mpt;
+  for (let i = 0; i < pos.count; i++) {
+    const nx = Math.abs(nrm.getX(i)), ny = Math.abs(nrm.getY(i)), nz = Math.abs(nrm.getZ(i));
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (ny >= nx && ny >= nz) uv.setXY(i, x * s, z * s);
+    else if (nx >= nz) uv.setXY(i, z * s, y * s);
+    else uv.setXY(i, x * s, y * s);
+  }
+  uv.needsUpdate = true;
+  return g;
+}
+
 export function loft(sections: LoftSection[], { caps = true }: {caps?:boolean, vScale?:number} = {}) {
   const N = sections[0].pts.length;
   const S = sections.length;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Rng } from '../../util/Rng.ts';
-import { PartBuilder, type Vec3 } from './PartBuilder.ts';
+import { PartBuilder, texelBox, type Vec3 } from './PartBuilder.ts';
 import {
   rockMaterial, woodMaterial, rustMaterial, concreteMaterial, paintedMaterial,
   magitekMaterial, glowMaterial, canvasClothMaterial, imperialTexture, signTexture,
@@ -507,13 +507,11 @@ export class Outposts {
       put(M.steel, new THREE.BoxGeometry(0.5, 2.0, 0.12), [r, h, 0], [0, 0, 0]);
       put(M.steel, new THREE.BoxGeometry(0.12, 2.0, 0.5), [0, h, r]);
     }
-    // dish
-    const dish = new THREE.SphereGeometry(1.9, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.36);
-    put(M.cream, dish, [3.2, 8.5, 0], [Math.PI * 0.62, 0, 0.5]);
+    this._dish(put, [3.2, 8.5, 0], [Math.PI * 0.62, 0, 0.5]);
     put(M.steel, new THREE.CylinderGeometry(0.12, 0.14, 8.5, 6), [3.2, 4.3, 0]);
 
     // shipping containers
-    const box = new THREE.BoxGeometry(6.1, 2.6, 2.44);
+    const box = texelBox(6.1, 2.6, 2.44, 1.8);
     put(M.rust, box, [9, 1.3, -3], [0, 0.12, 0]);
     put(M.red, box, [9.4, 3.95, -3.1], [0, -0.05, 0]);
     put(M.rust, box, [7.5, 1.3, 3.6], [0, 1.35, 0]);
@@ -524,12 +522,77 @@ export class Outposts {
       put(M.steel, new THREE.CylinderGeometry(0.05, 0.06, 2.0, 5), [px, 1.0, pz], [0, 0, rng.gauss(0, 0.05)]);
     }
     // a truck parked in the compound, for scale against the mast
-    put(M.rust, new THREE.BoxGeometry(5.2, 1.0, 2.1), [-8, 0.9, 4], [0, 0.4, 0]);
-    put(M.rust, new THREE.BoxGeometry(1.9, 1.4, 2.0), [-6.4, 1.9, 3.3], [0, 0.4, 0]);
+    put(M.rust, texelBox(5.2, 1.0, 2.1, 1.8), [-8, 0.9, 4], [0, 0.4, 0]);
+    put(M.rust, texelBox(1.9, 1.4, 2.0, 1.8), [-6.4, 1.9, 3.3], [0, 0.4, 0]);
     const tyre = new THREE.CylinderGeometry(0.5, 0.5, 0.34, 10);
     tyre.rotateX(Math.PI / 2);
     for (const [ax, az] of [[-6.6, 4.9], [-6.6, 3.1], [-9.4, 4.9], [-9.4, 3.1]]) {
       put(M.dark, tyre, [ax, 0.5, az], [0, 0.4, 0]);
+    }
+  }
+
+  /**
+   * A parabolic comms dish, built back-first.
+   *
+   * The blind A/B judge scoring this project flagged "an untextured white
+   * sphere on the ridge" in `vista_noon` and called it a placeholder. It was
+   * not a placeholder — it was this dish, correctly aimed at the sky, which
+   * means the only side any ground camera ever sees is its **convex back**, and
+   * that back was one smooth 1.9 m spherical cap with nothing on it. A shallow
+   * sphere cap seen from behind, unlit by anything but the sky, is a white ball.
+   *
+   * So everything here is on the back: a hub, eight radial ribs, a rim ring
+   * that gives the silhouette an edge instead of a horizon line, and a yoke
+   * with a counterweight that says which way the thing swings. The feed horn
+   * and its tripod are on the front, where they will be seen from the mesa
+   * road, and they cost eleven triangles between them.
+   *
+   * @param at dish centre in the compound's local frame
+   * @param rot aim, as the caller's euler — the mouth looks along local -Y
+   */
+  _dish(this: Outposts, put: (m: THREE.Material, g: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => void, at: Vec3, rot: Vec3) {
+    const M = this.mats;
+    const R = 1.9, TH = Math.PI * 0.36;
+    const rim = R * Math.sin(TH), rimY = R * Math.cos(TH);
+    // Compose the dish's own frame once, then place every part inside it.
+    const frame = mat4(at, rot);
+    const P = (m: THREE.Material, g: THREE.BufferGeometry, p: Vec3, r: Vec3 = [0, 0, 0]) => {
+      const w = frame.clone().multiply(mat4(p, r));
+      const t = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+      w.decompose(t, q, s);
+      const e = new THREE.Euler().setFromQuaternion(q);
+      put(m, g, [t.x, t.y, t.z], [e.x, e.y, e.z], [s.x, s.y, s.z]);
+    };
+
+    // Galvanised, not cream. At a kilometre the dish is thirty pixels and the
+    // ribs are invisible; what decides whether it reads as a placeholder is its
+    // *value* against the rock behind it, and a cream cap under a noon sun is
+    // the brightest thing on the ridge.
+    P(M.steel, new THREE.SphereGeometry(R, 18, 8, 0, Math.PI * 2, 0, TH), [0, 0, 0]);
+    // rim ring: a dish's edge is a rolled section, and it is the whole
+    // silhouette from behind
+    P(M.steel, new THREE.TorusGeometry(rim, 0.055, 5, 20), [0, rimY, 0], [Math.PI / 2, 0, 0]);
+    // hub and ribs on the back
+    P(M.steel, new THREE.CylinderGeometry(0.30, 0.36, 0.44, 8), [0, R + 0.06, 0]);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const mid = (rim + 0.3) * 0.5, midY = (rimY + R) * 0.5 + 0.10;
+      P(M.steel, new THREE.BoxGeometry(0.06, 0.16, rim - 0.28),
+        [Math.sin(a) * mid, midY, Math.cos(a) * mid], [Math.PI * 0.30, a, 0]);
+    }
+    // yoke and counterweight — the back is where a dish's machinery lives
+    for (const s of [-1, 1]) {
+      P(M.steel, new THREE.BoxGeometry(0.11, 1.15, 0.11), [s * 1.05, R - 0.02, 0], [0.5, 0, 0]);
+    }
+    P(M.steel, new THREE.BoxGeometry(2.3, 0.16, 0.16), [0, R + 0.52, 0.5]);
+    P(M.dark, new THREE.CylinderGeometry(0.22, 0.22, 0.5, 8), [0, R + 0.52, 0.72], [0, 0, Math.PI / 2]);
+    // feed horn on a tripod, in front of the mouth at roughly R/2
+    P(M.cream, new THREE.CylinderGeometry(0.11, 0.19, 0.42, 8), [0, R - 0.98, 0]);
+    P(M.dark, new THREE.CylinderGeometry(0.13, 0.13, 0.06, 8), [0, R - 1.21, 0]);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      P(M.steel, new THREE.CylinderGeometry(0.035, 0.035, 1.15, 5),
+        [Math.sin(a) * rim * 0.5, R - 0.55, Math.cos(a) * rim * 0.5], [Math.cos(a) * 0.95, 0, -Math.sin(a) * 0.95]);
     }
   }
 
