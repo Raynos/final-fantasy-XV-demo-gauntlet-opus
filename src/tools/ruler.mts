@@ -224,8 +224,74 @@ export function deltaVerdict(before: number, after: number, floorMs: number): st
  * function's source and drops its module scope, and these helpers reference
  * each other. It is deliberately dependency-free: `render(i)` is supplied by
  * the caller and is the only thing it knows about the game.
+ *
+ * ============================================================================
+ * EVERY FUNCTION HERE IS ASYNC, AND THE `await` BETWEEN FRAMES IS THE POINT
+ * ============================================================================
+ *
+ * The first version of this file rendered `warm + n` = 20 frames inside one
+ * synchronous task. That is a factor of ten over a cliff nobody knew was
+ * there, and it made every perf number in the repo 4-5x too slow.
+ *
+ * What the cliff is, measured by `src/tools/probes/perfgroup.mts` and the
+ * eight probes beside it: a synchronous task that keeps the GPU busy for
+ * longer than roughly one 16.7 ms display refresh gets throttled, and the
+ * throttle costs about 5x. Frames per synchronous task against the steady
+ * state of a held `party_walk`:
+ *
+ *     1 frame   5.4 ms        4 frames   22.8 ms
+ *     2 frames  5.6 ms        8 frames   22.3 ms
+ *                            16 frames   21.7 ms
+ *                            64 frames   23.9 ms
+ *
+ * Sleeping is NOT what fixes it. A 1 ms `setTimeout` and a 16 ms one give the
+ * same 5.2 ms, at 86% and 26% GPU duty respectively, so this is not a duty
+ * cycle, not thermal and not a power governor. Returning to the event loop is
+ * the whole of it. Queue depth is not it either: a `gl.finish()` after every
+ * frame degrades exactly as far as one every 32 frames, if neither yields.
+ * And a nearly empty scene degrades 3.1x on the same loop, which is what
+ * proves the effect has nothing to do with what we draw.
+ *
+ * Three consequences for anyone editing this file:
+ *
+ *  - **Never render more than `MAX_FRAMES_PER_TASK` frames without an
+ *    `await`.** It is 1. Two measured clean and there is no reason to spend
+ *    the margin.
+ *  - **The yield sits outside the timed region**, so it costs the reported
+ *    number nothing. It costs wall-clock time on the run, which is the price.
+ *  - **Pipelined block throughput is gone.** It cannot be measured here: a
+ *    block long enough to pipeline is long enough to throttle. It was also
+ *    never what the game does — a 60 Hz game presents one frame per refresh
+ *    and never has sixteen in flight. What replaces it is the per-frame
+ *    serialised latency, which is *conservative*: it charges CPU and GPU end
+ *    to end with no overlap, so a real frame is at worst this and usually
+ *    less. `cpuMs` is reported beside it so the two halves are separable —
+ *    a 60 Hz frame costs about `max(cpuMs, ms - cpuMs)`, and `ms` itself is
+ *    the honest upper bound.
  */
 export const RULER_PAGE_SRC = `(() => {
+  /** See the header: the cliff is between 2 and 4, and 1 is the safe side. */
+  const MAX_FRAMES_PER_TASK = 1;
+
+  /**
+   * Return to the event loop. A macrotask, not a microtask: \`await null\`
+   * stays inside the same task and does not clear the throttle, which
+   * \`perfdepth.mts\` checked directly (25.9 ms with a bare await, 5.5 with a
+   * timer).
+   */
+  const yieldTask = () => new Promise((r) => setTimeout(r, 0));
+
+  /**
+   * Leave the throttled state before timing anything.
+   *
+   * \`GAME.settle()\` renders its warm-up frames back to back, so a shot is
+   * *always* throttled by the time it is ready to measure. \`perffalsify.mts\`
+   * timed the recovery: 50 ms of idle is not enough (23.9 ms), 200 ms is
+   * (5.1 ms). 250 is that with margin. Call it after every \`settle\` and
+   * before every measurement, or the run measures the warm-up.
+   */
+  const cooldown = (ms) => new Promise((r) => setTimeout(r, ms || 250));
+
   const quantiles = (xs) => {
     const s = xs.slice().sort((a, b) => a - b);
     const at = (q) => {
@@ -239,34 +305,78 @@ export const RULER_PAGE_SRC = `(() => {
   const gl = () => window.GAME.renderer.getContext();
 
   /**
-   * Throughput of one block: warm frames, a finish, N timed frames, a finish.
-   * Frames inside the block are PIPELINED, which is how the game actually
-   * runs. Per-frame gl.finish() instead measures latency with a full pipeline
-   * bubble per frame and reads systematically slower.
+   * One frame, timed twice: \`cpu\` is \`render()\` returning, which is JS plus
+   * the driver accepting the commands; \`ms\` is that plus \`gl.finish()\`, so
+   * it includes the GPU actually finishing the work.
    */
-  function timeBlock(render, warm, n) {
-    for (let i = 0; i < warm; i++) render(i);
+  function timeOne(render, i) {
     gl().finish();
     const t0 = performance.now();
-    for (let i = 0; i < n; i++) render(i);
+    render(i);
+    const t1 = performance.now();
     gl().finish();
-    return (performance.now() - t0) / n;
+    return { cpu: t1 - t0, ms: performance.now() - t0 };
   }
 
   /**
-   * Headline frame time: the MEDIAN of several pipelined blocks, with the IQR
-   * across blocks beside it. Neither the mean nor the minimum survives a
-   * shared machine — one block landing in a trough reported 2.5 ms for a
-   * standing player in the sibling repo. If \`spreadMs\` rivals \`ms\`, the
-   * machine drifted during the scenario and nothing finer than the spread is
-   * meaningful.
+   * \`n\` timed frames, yielding between every one. Warm frames are rendered
+   * first and thrown away, and they yield too — a warmup that throttles hands
+   * the throttled state straight to the measurement.
    */
-  function throughput(render, opts) {
+  async function timeFrames(render, warm, n, startIndex) {
+    let idx = startIndex || 0;
+    for (let i = 0; i < warm; i++) { render(idx++); await yieldTask(); }
+    const ms = [], cpu = [];
+    for (let i = 0; i < n; i++) {
+      const s = timeOne(render, idx++);
+      ms.push(s.ms); cpu.push(s.cpu);
+      await yieldTask();
+    }
+    return { ms, cpu, nextIndex: idx };
+  }
+
+  /**
+   * Headline frame time: the MEDIAN per-frame cost over \`blocks * n\` frames,
+   * with the IQR of the per-block medians beside it as \`spreadMs\`. The blocks
+   * no longer bound a pipelined region — they only exist so that \`spreadMs\`
+   * still answers "did the machine drift while this shot was being measured".
+   *
+   * \`opts.n\` and \`opts.blocks\` keep their old names and meanings so the
+   * call sites did not have to change; what changed is that the frames inside
+   * a block are no longer rendered back to back.
+   */
+  async function throughput(render, opts) {
     const o = Object.assign({ blocks: 3, warm: 4, n: 16 }, opts || {});
-    const b = [];
-    for (let i = 0; i < o.blocks; i++) b.push(timeBlock(render, o.warm, o.n));
-    const q = quantiles(b);
-    return { ms: +q.median.toFixed(2), fps: Math.round(1000 / q.median), spreadMs: +q.iqr.toFixed(2), blocks: b.map((x) => +x.toFixed(2)) };
+    const all = [], allCpu = [], blockMed = [];
+    let idx = 0;
+    for (let i = 0; i < o.blocks; i++) {
+      const r = await timeFrames(render, i === 0 ? o.warm : 0, o.n, idx);
+      idx = r.nextIndex;
+      all.push.apply(all, r.ms);
+      allCpu.push.apply(allCpu, r.cpu);
+      blockMed.push(quantiles(r.ms).median);
+    }
+    const q = quantiles(all);
+    const sorted = all.slice().sort((a, b) => a - b);
+    const pick = (p) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+    return {
+      ms: +q.median.toFixed(2),
+      fps: Math.round(1000 / q.median),
+      spreadMs: +quantiles(blockMed).iqr.toFixed(2),
+      cpuMs: +quantiles(allCpu).median.toFixed(2),
+      /**
+       * Share of frames over one 60 Hz budget. Reported rather than folded
+       * into the median because on this machine it is 12-21% even on a shot
+       * whose median is 5 ms, and because no ablation has yet separated the
+       * part of it that is ours from the part that is the harness.
+       */
+      overBudget: +(all.filter((x) => x > 16.7).length / all.length).toFixed(3),
+      blocks: blockMed.map((x) => +x.toFixed(2)),
+      p95: +pick(0.95).toFixed(2),
+      p99: +pick(0.99).toFixed(2),
+      max: +sorted[sorted.length - 1].toFixed(2),
+      samples: all.map((x) => +x.toFixed(2)),
+    };
   }
 
   /**
@@ -276,25 +386,53 @@ export const RULER_PAGE_SRC = `(() => {
    * change big enough that alternating it every frame would thrash driver
    * state harder than the change costs). Returns the median difference and the
    * IQR, and refuses to call the difference resolved unless |median| > IQR.
+   *
+   * \`group\` is clamped to \`MAX_FRAMES_PER_TASK\`: a caller asking for eight
+   * frames per side would measure the throttle instead of the change, and
+   * silently, which is how this whole class of error happened the first time.
    */
-  function paired(applyA, applyB, render, opts) {
-    const o = Object.assign({ pairs: 24, group: 1, warm: 4 }, opts || {});
+  async function paired(applyA, applyB, render, opts) {
+    const o = Object.assign({ pairs: 24, group: 9, warm: 4 }, opts || {});
     let idx = 0;
-    applyB(); for (let i = 0; i < o.warm; i++) render(idx++);
-    applyA(); for (let i = 0; i < o.warm; i++) render(idx++);
-    gl().finish();
-    const timeGroup = () => {
-      gl().finish();
-      const t0 = performance.now();
-      for (let i = 0; i < o.group; i++) render(idx++);
-      gl().finish();
-      return (performance.now() - t0) / o.group;
+    applyB(); for (let i = 0; i < o.warm; i++) { render(idx++); await yieldTask(); }
+    applyA(); for (let i = 0; i < o.warm; i++) { render(idx++); await yieldTask(); }
+    /**
+     * One side of a pair: \`group\` frames, each in its own task, reduced by
+     * MEDIAN rather than mean.
+     *
+     * The mean was wrong here for a specific measured reason. Even paced at
+     * 60 Hz on a static shot, 12-21% of frames cost 20-90 ms instead of 5,
+     * and the share tracks total GPU work rather than any subsystem --
+     * \`perfbisect.mts\` turned off each post pass in turn and every one moved
+     * it from 21% to 12-15%, which is what an aggregate looks like and what
+     * no single cause looks like. A mean over five frames inherits that tail
+     * whole and blows the noise floor past the point where the run can
+     * certify; a median over nine frames does not. Nine rather than five
+     * because the frame itself is now 5 ms rather than 23, so the SAME
+     * absolute floor is four times larger as a fraction of it, and the
+     * validity rule is relative: a 1.5 ms floor that was 6% of the old
+     * measurement is 30% of the true one. This changes what the
+     * floor is an estimate OF -- the calm frame, not the calm frame plus its
+     * outliers -- so the tail is reported separately by the callers instead
+     * of being smuggled into the headline.
+     */
+    const timeGroup = async () => {
+      const s = [];
+      for (let i = 0; i < o.group; i++) {
+        gl().finish();
+        const t0 = performance.now();
+        render(idx++);
+        gl().finish();
+        s.push(performance.now() - t0);
+        await yieldTask();
+      }
+      return quantiles(s).median;
     };
     const diffs = [];
     for (let p = 0; p < o.pairs; p++) {
       let a, b;
-      if (p % 2 === 0) { applyA(); a = timeGroup(); applyB(); b = timeGroup(); }
-      else { applyB(); b = timeGroup(); applyA(); a = timeGroup(); }
+      if (p % 2 === 0) { applyA(); a = await timeGroup(); applyB(); b = await timeGroup(); }
+      else { applyB(); b = await timeGroup(); applyA(); a = await timeGroup(); }
       diffs.push(b - a);
     }
     applyA();
@@ -315,36 +453,46 @@ export const RULER_PAGE_SRC = `(() => {
    * smallest effect this machine can resolve right now; its median is the
    * residual bias and should be ~0.
    */
-  function noiseFloor(render, opts) {
+  async function noiseFloor(render, opts) {
     const nop = () => {};
-    const r = paired(nop, nop, render, opts);
+    const r = await paired(nop, nop, render, opts);
     return { iqrMs: r.iqrMs, biasMs: r.medianMs, pairs: r.pairs };
   }
 
-  window.__RULER = { quantiles, timeBlock, throughput, paired, noiseFloor };
+  window.__RULER = { quantiles, timeOne, timeFrames, throughput, paired, noiseFloor, yieldTask, cooldown, MAX_FRAMES_PER_TASK };
   return true;
 })()`;
 
 /** What `RULER_PAGE_SRC` installs, for the `page.evaluate` bodies that use it. */
 export interface PageRuler {
   quantiles(xs: number[]): Quantiles;
-  timeBlock(render: (i: number) => void, warm: number, n: number): number;
+  timeOne(render: (i: number) => void, i: number): { cpu: number; ms: number };
+  timeFrames(
+    render: (i: number) => void, warm: number, n: number, startIndex?: number,
+  ): Promise<{ ms: number[]; cpu: number[]; nextIndex: number }>;
   throughput(
     render: (i: number) => void,
     opts?: { blocks?: number; warm?: number; n?: number },
-  ): { ms: number; fps: number; spreadMs: number; blocks: number[] };
+  ): Promise<{
+    ms: number; fps: number; spreadMs: number; cpuMs: number; overBudget: number;
+    blocks: number[]; p95: number; p99: number; max: number; samples: number[];
+  }>;
   paired(
     applyA: () => void,
     applyB: () => void,
     render: (i: number) => void,
     opts?: { pairs?: number; group?: number; warm?: number },
-  ): { medianMs: number; iqrMs: number; pairs: number; resolved: boolean; verdict: string };
+  ): Promise<{ medianMs: number; iqrMs: number; pairs: number; resolved: boolean; verdict: string }>;
   noiseFloor(
     render: (i: number) => void,
     opts?: { pairs?: number; group?: number; warm?: number },
-  ): Floor;
+  ): Promise<Floor>;
+  /** return to the event loop; see the header for why every loop must */
+  yieldTask(): Promise<void>;
+  /** idle long enough to leave the throttled state a `settle()` always enters */
+  cooldown(ms?: number): Promise<void>;
+  MAX_FRAMES_PER_TASK: number;
 }
-
 declare global {
   interface Window {
     /** installed by `RULER_PAGE_SRC` */

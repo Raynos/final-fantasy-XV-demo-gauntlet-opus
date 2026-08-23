@@ -13,16 +13,24 @@
  *
  * TWO NUMBERS PER SHOT, AND THEY MEAN DIFFERENT THINGS.
  *
- *   `thru` is the headline: the median of several PIPELINED blocks (16 frames
- *   between two `gl.finish()` calls). That is how the game actually runs — the
- *   CPU builds frame N+1 while the GPU is still on N — so it is the number a
- *   60 fps target is about, and it is what the pass/fail gate reads.
+ *   `ms` is the headline and what the gate reads: the median cost of one
+ *   frame, rendered alone in its own task and `gl.finish()`-ed, so it charges
+ *   CPU and GPU end to end with no overlap. That is an *upper* bound on what a
+ *   60 Hz frame costs, which is the direction a target wants to be wrong in.
  *
- *   `lat` is the old headline: every frame individually `gl.finish()`-ed. That
- *   inserts a full pipeline bubble per frame, so it measures CPU+GPU serialised
- *   and reads systematically slower than the game. It is kept because the tail
- *   (`p95`, `max`) is only meaningful per frame, and because a big gap between
- *   `thru` and `lat` is itself a finding: it means the frame is not overlapping.
+ *   `cpu` is the same frame timed before the GPU is waited on: JS, culling,
+ *   uniform uploads and the driver accepting the commands. `ms - cpu` is the
+ *   GPU half, and which of the two is larger says which side to work on.
+ *
+ * WHY THERE IS NO LONGER A PIPELINED BLOCK NUMBER. There was, and it was
+ * wrong by a factor of five. `ruler.mts` used to render 20 frames inside one
+ * synchronous task; a task that keeps the GPU busy past one display refresh
+ * gets throttled ~5x, and every perf number in this repo was taken inside that
+ * throttle. `src/tools/probes/perfgroup.mts` and the eight probes beside it
+ * establish it, and the header of `ruler.mts` states the rule. A block long
+ * enough to pipeline is long enough to throttle, so the pipelined number is
+ * not measurable here — and a 60 Hz game presenting one frame per refresh
+ * never had sixteen frames in flight anyway.
  *
  * AND A RULER THAT CHECKS ITSELF. `ruler.mts` measures the noise floor by
  * running the same paired procedure with the SAME configuration on both sides,
@@ -106,8 +114,10 @@ interface Row {
   fps: number;
   /** IQR across the blocks: this shot's own drift while it was measured */
   spread: number;
-  /** per-frame `gl.finish()` median — serialised latency, not throughput */
-  lat: number;
+  /** median time `g.frame()` itself takes, before the GPU is waited on */
+  cpu: number;
+  /** share of frames over one 60 Hz budget; see `ruler.mts` on the tail */
+  over16: number;
   p95: number;
   max: number;
   scene: number;
@@ -155,13 +165,32 @@ async function main() {
      * judged against — a machine that got busy halfway through must not be able
      * to hide behind a quiet opening.
      */
-    const measureFloor = (shot: string, pairs: number) => page.evaluate(([n, p]: [string, number]) => {
+    const measureFloor = (shot: string, pairs: number) => page.evaluate(async ([n, p]: [string, number]) => {
       const g = window.GAME;
       g.resetClock();
       g.applyShot(n);
       g.settle(20);
+      await window.__RULER.cooldown();
       return window.__RULER.noiseFloor((_i: number) => g.frame(1 / 60), { pairs: p });
     }, [shots[0], o.pairs] as [string, number]);
+
+    /**
+     * Warm the PAGE, not just the shot, before the first floor is taken.
+     *
+     * Every loop in this harness now yields, and yielding is what finally lets
+     * the game's promise continuations run -- streaming, decodes, deferred
+     * builds. All of that had been frozen since boot by loops that never
+     * returned to the event loop, so the first few hundred yielding frames are
+     * the game catching up on work it was owed, and a floor measured inside
+     * them came back at 23.60 ms against a 5.1 ms frame while the same floor
+     * at the end of the same run came back at 0.95 ms.
+     */
+    await page.evaluate(async ([n]: [string]) => {
+      const g = window.GAME;
+      g.resetClock(); g.applyShot(n); g.settle(20);
+      for (let i = 0; i < 200; i++) { g.frame(1 / 60); await window.__RULER.yieldTask(); }
+      await window.__RULER.cooldown(500);
+    }, [shots[0]] as [string]);
 
     floorStart = await measureFloor(shots[0], o.pairs);
     console.log(
@@ -169,7 +198,7 @@ async function main() {
       `IQR ${floorStart.iqrMs.toFixed(2)} ms, bias ${floorStart.biasMs >= 0 ? '+' : ''}${floorStart.biasMs.toFixed(2)} ms\n`,
     );
 
-    console.log('shot                thru    fps  spread     lat     p95     max   draws     tris');
+    console.log('shot                 ms    fps  spread     cpu    >16     p95     max   draws     tris');
     console.log('-'.repeat(80));
 
     for (const name of shots) {
@@ -184,19 +213,18 @@ async function main() {
 
         const render = (_i: number) => g.frame(1 / 60);
 
-        // Headline: pipelined blocks, median across blocks, IQR beside it.
-        const t = window.__RULER.throughput(render, { blocks: 5, warm: 4, n: 16 });
+        // `settle()` renders back to back, so the shot arrives here already in
+        // the throttled state `ruler.mts` documents. Idle it off first, or the
+        // whole run measures the warm-up.
+        await window.__RULER.cooldown();
 
-        // Tail: per-frame samples, each individually flushed, so p95 and max
-        // describe real single frames rather than a block average.
-        const samples = new Float64Array(frames);
-        gl.finish();
-        for (let i = 0; i < frames; i++) {
-          const t0 = performance.now();
-          render(i);
-          gl.finish();
-          samples[i] = performance.now() - t0;
-        }
+        // Headline and tail from ONE set of per-frame samples, each yielding
+        // to the event loop. There is no longer a separate pipelined pass:
+        // a block long enough to pipeline is long enough to throttle.
+        const blocks = 5;
+        const t = await window.__RULER.throughput(render, {
+          blocks, warm: 4, n: Math.max(8, Math.round(frames / blocks)),
+        });
 
         // Snapshot the counters from a single clean frame *before* any extra
         // rendering below — renderer.info.autoReset is off, so anything drawn
@@ -215,20 +243,27 @@ async function main() {
           g.renderer.setRenderTarget(null);
           g.renderer.render(g.scene, g.camera);
           gl.finish();
-          const t0 = performance.now();
-          for (let i = 0; i < 20; i++) g.renderer.render(g.scene, g.camera);
-          gl.finish();
-          scene = (performance.now() - t0) / 20;
+          await window.__RULER.cooldown();
+          const each: number[] = [];
+          for (let i = 0; i < 20; i++) {
+            gl.finish();
+            const t0 = performance.now();
+            g.renderer.render(g.scene, g.camera);
+            gl.finish();
+            each.push(performance.now() - t0);
+            await window.__RULER.yieldTask();
+          }
+          scene = window.__RULER.quantiles(each).median;
         }
 
-        const sorted = Array.from(samples).sort((a, b) => a - b);
         return {
           thru: t.ms,
           fps: t.fps,
           spread: t.spreadMs,
-          lat: sorted[Math.floor(sorted.length * 0.5)],
-          p95: sorted[Math.floor(sorted.length * 0.95)],
-          max: sorted[sorted.length - 1],
+          cpu: t.cpuMs,
+          over16: t.overBudget,
+          p95: t.p95,
+          max: t.max,
           scene, ...counts,
         };
       }, [name, o.frames, o.warmup, o.breakdown] as [string, number, number, boolean]);
@@ -242,7 +277,8 @@ async function main() {
         : (Math.abs(r.thru - targetMs) <= r.spread ? '  ~~' : '');
       console.log(
         `${name.padEnd(16)} ${r.thru.toFixed(2).padStart(7)} ${r.fps.toFixed(0).padStart(6)} ` +
-        `${r.spread.toFixed(2).padStart(7)} ${r.lat.toFixed(2).padStart(7)} ${r.p95.toFixed(2).padStart(7)} ` +
+        `${r.spread.toFixed(2).padStart(7)} ${r.cpu.toFixed(2).padStart(7)} ` +
+        `${(r.over16 * 100).toFixed(0).padStart(5)}% ${r.p95.toFixed(2).padStart(7)} ` +
         `${r.max.toFixed(1).padStart(7)} ${String(r.draws).padStart(7)} ${String(r.tris).padStart(8)}${flag}`,
       );
     }
@@ -297,7 +333,7 @@ async function main() {
       contention: load,
       ruler: {
         floorStart, floorEnd, medianFrameMs: medianFrame,
-        headline: 'thru = median of 5 pipelined 16-frame blocks; lat = per-frame gl.finish()',
+        headline: 'thru = median per-frame CPU+GPU cost, one frame per task, gl.finish()-ed; cpu = the CPU half',
         rule: 'a median that moves less than the floor IQR has not moved',
       },
       rows, meanFps, worst,

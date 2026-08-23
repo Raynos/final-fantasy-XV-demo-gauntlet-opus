@@ -18,11 +18,14 @@
  * what players actually feel; a good median with 100 ms spikes is a bad game.
  * Exits non-zero if the p99 is over budget or any segment medians below target.
  *
- * TWO NUMBERS PER SEGMENT, as in `perf.mts`. `thru` is the median of pipelined
- * blocks and is what the gate reads, because that is how the game runs a frame.
- * `lat` and the whole tail (`p95`, `p99`, `max`, `hitches`) come from per-frame
- * `gl.finish()` sampling, which is the only way a single bad frame stays
- * visible instead of being averaged into a block.
+ * ONE PASS PER SEGMENT, as in `perf.mts`. `thru` is the median cost of one
+ * frame rendered alone in its own task and `gl.finish()`-ed, and the whole
+ * tail (`p95`, `p99`, `max`, `hitches`) comes from those same samples, which
+ * is the only way a single bad frame stays visible instead of being averaged
+ * into a block. There used to be a pipelined-block headline beside it; it ran
+ * 20 frames inside one synchronous task, which throttles the GPU ~5x, and it
+ * is what made every gameplay number in this repo five times too slow. See
+ * the header of `ruler.mts` and `src/tools/probes/perfgroup.mts`.
  *
  * AND THE RUN VALIDATES ITSELF. The noise floor is measured — walking, the
  * same paired procedure with the same configuration on both sides — before the
@@ -250,13 +253,14 @@ async function main() {
        * IQR is the smallest per-segment difference this machine can resolve
        * right now, and it is what `--baseline` comparisons are judged against.
        */
-      const measureFloor = () => {
+      const measureFloor = async () => {
         hold('KeyW');
         look(0, 0);
         for (let i = 0; i < 20; i++) g.frame(dt);
+        await window.__RULER.cooldown();
         return window.__RULER.noiseFloor(() => g.frame(dt), { pairs });
       };
-      const floorStart = measureFloor();
+      const floorStart = await measureFloor();
 
       const results = [];
       const allHitches = [];
@@ -272,34 +276,40 @@ async function main() {
         // dominate: 6 warm frames, then measure
         for (let i = 0; i < 6; i++) { act(i); g.frame(dt); }
         gl.finish();
+        // The warm-up above ran back to back, which throttles; see ruler.mts.
+        await window.__RULER.cooldown();
 
-        // Headline: pipelined blocks, which is how the game submits frames.
-        // The segment's own `each` keeps driving, so a block is the same
-        // workload as the samples below, only without a stall per frame.
-        // `throughput` restarts its index at 0 for every block, and a segment's
-        // `each` is phased off that index (`i % 12`, `Math.sin(i * 0.06)`), so
-        // it gets a counter of its own that only ever goes forward.
-        let k = 0;
-        const thru = window.__RULER.throughput(() => { act(k++); g.frame(dt); }, { blocks: 3, warm: 4, n: 16 });
-
-        // Tail: per-frame `gl.finish()`. This is what makes a single 180 ms
-        // streaming frame visible instead of averaged away inside a block.
+        // ONE pass, not two. There used to be a pipelined-block headline and a
+        // per-frame tail beside it, which ran the segment's script twice and
+        // measured the first pass inside the throttle. A segment is a
+        // *sequence* -- `each(i)` walks, turns and swings -- so it can only be
+        // measured in order anyway. Every frame yields to the event loop; the
+        // yield is outside the timed region and costs the number nothing.
         const samples = [];
         for (let i = 0; i < seg.frames; i++) {
           act(i);
+          gl.finish();
           const t0 = performance.now();
           g.frame(dt);
           gl.finish();
           const ms = performance.now() - t0;
           samples.push(ms);
           if (ms > hitchMs) allHitches.push({ segment: seg.name, frame: i, ms: +ms.toFixed(1) });
+          await window.__RULER.yieldTask();
         }
         const s = samples.slice().sort((a, b) => a - b);
+        // `spread` still answers "did the machine drift while this segment was
+        // measured": the IQR of the four quarter-medians of the same samples.
+        const quarter = Math.max(1, samples.length >> 2);
+        const parts = [];
+        for (let i = 0; i + quarter <= samples.length; i += quarter) {
+          parts.push(window.__RULER.quantiles(samples.slice(i, i + quarter)).median);
+        }
         results.push({
           name: seg.name,
           frames: seg.frames,
-          thru: thru.ms,
-          spread: thru.spreadMs,
+          thru: +window.__RULER.quantiles(samples).median.toFixed(2),
+          spread: +window.__RULER.quantiles(parts).iqr.toFixed(2),
           median: s[Math.floor(s.length * 0.5)],
           p95: s[Math.floor(s.length * 0.95)],
           p99: s[Math.floor(s.length * 0.99)],
@@ -310,7 +320,7 @@ async function main() {
         });
       }
 
-      const floorEnd = measureFloor();
+      const floorEnd = await measureFloor();
       if (start && player) player.root.position.copy(start);
       return { results, floorStart, floorEnd, hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25) };
     }, [o.scale, o.hitchMs, o.pairs]);
@@ -392,7 +402,7 @@ async function main() {
       contention: load,
       ruler: {
         floorStart, floorEnd, medianFrameMs: medianFrame,
-        headline: 'thru = median of 3 pipelined 16-frame blocks; lat/p95/p99/max = per-frame gl.finish()',
+        headline: 'thru = median per-frame CPU+GPU cost, one frame per task, gl.finish()-ed; tail from the same samples',
         rule: 'a median that moves less than the floor IQR has not moved',
       },
       ...out,
