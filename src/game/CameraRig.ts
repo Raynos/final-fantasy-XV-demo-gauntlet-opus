@@ -261,6 +261,20 @@ export class CameraRig {
     return d;
   }
 
+  /**
+   * Tangent-ratio look scale: `tan(fov/2) / tan(baseFov/2)`.
+   *
+   * 1.0 at the base FOV, above it when the lens is wider. Angles, not degrees,
+   * because the screen distance a rotation covers goes as the tangent and not
+   * as the angle -- at this rig's FOVs a linear ratio is wrong by several
+   * percent, which is the difference between an aim that feels fixed and one
+   * that drifts under the sprint kick.
+   */
+  _lookScale() {
+    const half = (f: number) => Math.tan(THREE.MathUtils.degToRad(f) * 0.5);
+    return half(this.fov) / Math.max(1e-4, half(this.baseFov));
+  }
+
   _shakeOffset(dt: number, out: THREE.Vector3, rot: THREE.Vector3) {
     const tr = this.trauma;
     if (tr <= 0.0001) { out.set(0, 0, 0); rot.set(0, 0, 0); return; }
@@ -332,9 +346,20 @@ export class CameraRig {
     if (!player) return;
 
     // ---- orbit ---------------------------------------------------------
-    this.yawTarget -= input.look.x * this.sensitivity;
+    // Mouse movement is scaled by the tangent ratio against the base FOV, so a
+    // given mouse delta always sweeps the same distance *on screen* rather than
+    // the same angle in the world.
+    //
+    // Without it the sprint FOV kick silently retunes the player's aim: this
+    // rig widens the lens by up to `fovMax + sprintFov` degrees while running,
+    // and a flat sensitivity then makes the same flick cover visibly more
+    // screen than it did at rest -- worst exactly when the player is moving
+    // fastest and needs it least. Warp-strike aim rides on the same kick.
+    // Ported from the sibling's `lookScale()` (sibling-ports section 5).
+    const look = this.sensitivity * this._lookScale();
+    this.yawTarget -= input.look.x * look;
     this.pitchTarget = THREE.MathUtils.clamp(
-      this.pitchTarget + input.look.y * this.sensitivity, this.pitchMin, this.pitchMax);
+      this.pitchTarget + input.look.y * look, this.pitchMin, this.pitchMax);
     this.targetDistance = THREE.MathUtils.clamp(
       this.targetDistance + input.mouse.wheel * 0.5, 2.2, this.maxDistance);
     this.restDistance = this.targetDistance;
