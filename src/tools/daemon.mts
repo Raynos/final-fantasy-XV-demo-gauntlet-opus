@@ -1,118 +1,109 @@
 #!/usr/bin/env node
 /**
- * Capture daemon: one vite server, one Chromium, one warm page, reused across
- * every tool invocation.
+ * ONE capture daemon per repository, for every agent on the machine.
  *
  *   node src/tools/daemon.mts            # run in the foreground (clients autostart it)
- *   node src/tools/daemon.mts --stop     # stop it and its server
+ *   node src/tools/daemon.mts --stop     # stop it, its builds and its browsers
  *   node src/tools/daemon.mts --health
  *
- * Why this exists: booting the game is the dominant cost of every capture. A
- * cold `src/tools/shoot.mts` pays chromium launch + vite start + module transform +
- * world build + ~110 shader compiles before it can take its first picture, and
- * every tool paid it separately, every time. Holding the page open makes the
- * second and subsequent runs cost only their own frames — and it removes the
- * repeated boot from a machine that several agents are already saturating.
+ * Why this exists: booting the game is the dominant cost of every capture.
+ * Measured on this machine (`project/journal/2026-08-23-harness-bench.md`) boot
+ * is **9.2 s against a 2.3 s render**, and four concurrent browsers deliver only
+ * **1.5x** the throughput of one — the GPU binds, not the 18 cores or the
+ * 137 GB. So the win was never "run more browsers". It is *not booting the same
+ * page over and over*, and that is what a warm, shared daemon is.
  *
- * Safety of reuse: `src/tools/shoot.mts` has always rendered all of its shots on one
- * page in sequence, so cross-shot reuse is the established contract; this only
- * extends it across invocations. `/reset` restores the same starting condition
- * the harness sets up after a fresh load (rAF stopped, clock zeroed, shot state
- * re-applied), and `--cold` on any client forces a fresh page when a run must be
- * provably independent.
+ * ONE DAEMON, NOT ONE PER CHECKOUT. The old design was scoped to a checkout and
+ * `CLAUDE.md` told every worktree to pick its own `PORT` — three agents, three
+ * daemons, three pools, and a perfect per-daemon cap of four still putting
+ * twelve chromiums on one GPU. A browser budget is a property of the *machine*,
+ * so the process that owns it must be too. `identity.mts` keys the daemon off
+ * the repository rather than the directory, which is what makes the budget
+ * enforceable at all — and it is why `perf.mts` can now demand a quiet machine
+ * and actually get one.
  *
- * Lifetime: the browser closes after BROWSER_IDLE_MIN (default 6) minutes with
- * no work and the daemon exits after DAEMON_IDLE_MIN (default 25), taking vite
- * with it. Nothing is left burning CPU on a shared box.
+ * BUILDS, NOT DIRECTORIES. A request names a **build identity**: `sha:<tree>`
+ * (content-addressed, immutable, materialised once, shared by everyone) or
+ * `dirty:<root>` (the live working tree — never cached, always flagged). That is
+ * what lets five agents type while a sixth captures `HEAD` and gets stable
+ * frames; under the old source-fingerprint scheme one save by anyone rebooted
+ * every warm page for everyone.
+ *
+ * SERVING A BUILD IS CHEAP AND THAT IS NOT AN ACCIDENT. `git archive` is 173 ms
+ * and `vite build` is 562 ms — *provided* `src/public/baked` is symlinked into
+ * the tree rather than re-baked. Without that symlink the same build measured
+ * 24 514 ms. See `materialise()`.
+ *
+ * Lifetime: browsers close after BROWSER_IDLE_MIN (default 6) minutes with no
+ * work, build servers after BUILD_IDLE_MIN (default 10), and the daemon exits
+ * after DAEMON_IDLE_MIN (default 25). It **outlives the session that started
+ * it**: retiring the agent that happened to autostart it must not take the
+ * machine's harness down with it.
  */
 import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { launchPersistent } from './chromium.mts';
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { readdirSync, statSync } from 'node:fs';
+import { launchPersistent } from './chromium.mts';
+import {
+  ROOT, repoKey, keyHash, derivedPort, repoCacheDir, readRegistry, writeRegistry, clearRegistry,
+  resolveBuild, isDirty, shaOf, shortBuild, DIRTY_PREFIX,
+} from './identity.mts';
+import type { BuildId, Registry } from './identity.mts';
 
 /**
- * Fingerprint of everything the page's behaviour depends on.
+ * Bumped whenever a route, a request shape or a response shape changes.
  *
- * The daemon holds a booted page across invocations, which is the whole point —
- * a warm capture is ~1.5 s against ~12 s cold. But a page booted *before* an
- * edit keeps the modules it booted with, so reusing it silently serves the old
- * build. That produced a completely false bug diagnosis once: two captures
- * taken either side of an edit were compared as if they were the same build,
- * and the difference was read as a rendering fault in the game.
- *
- * Cheap and sufficient: names, sizes and mtimes of every source file. No
- * hashing of contents, so it costs a stat per file.
+ * An agent editing this file does **not** restart the running daemon, so
+ * without this a new client talks to an old daemon over a port that is open and
+ * a key that matches, and gets behaviour that no longer exists in the tree.
+ * That cost a whole round once: a capture came back with the loading screen in
+ * it, the fix was applied, the capture came back wrong *again*, and the code
+ * being blamed was not the code that ran. Harness work is self-hosting; this is
+ * the one place it bites.
  */
-/**
- * Fingerprint of the daemon's *own* code.
- *
- * `sourceStamp()` below guards the open *page* -- reusing a page booted before
- * an edit serves the old build. It does not guard the daemon **process**, which
- * has been running since whenever it was started and cannot reload itself. So
- * editing `daemon.mts` and running a capture silently exercises the old daemon:
- * the port is open, `/root` matches, and the client happily reuses it.
- *
- * That cost a round. A capture came back with the loading screen still in it,
- * the fix was applied, the capture came back wrong *again*, and the code being
- * blamed was not the code that ran. Clients compare this and restart rather
- * than reuse.
- */
-function selfStamp() {
-  const parts = [];
-  for (const f of ['daemon.mts', 'chromium.mts']) {
-    try {
-      const st = statSync(path.join(ROOT, 'src/tools', f));
-      parts.push(`${f}:${st.size}:${st.mtimeMs}`);
-    } catch { parts.push(`${f}:missing`); }
-  }
-  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 12);
-}
+export const PROTOCOL = 3;
 
-/**
- * Taken **once, at startup**, and never recomputed.
- *
- * The first version of this check called `selfStamp()` inside the `/root`
- * handler, so the running daemon and the client both read the current file off
- * disk and always agreed -- the check could not fail, which is a worse bug than
- * the one it was added for. What matters is the code this process *started*
- * with, not what is on disk now.
- */
-const SELF_STAMP = selfStamp();
-
-function sourceStamp() {
-  const parts = [];
-  const walk = (dir: string) => {
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
-      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-      const f = path.join(dir, e.name);
-      if (e.isDirectory()) walk(f);
-      else if (/\.(js|mjs|css|html|json)$/.test(e.name)) {
-        try { const st = statSync(f); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* raced */ }
-      }
-    }
-  };
-  walk(path.join(ROOT, 'src'));
-  for (const f of ['src/index.html', 'vite.config.js']) {
-    try { const st = statSync(path.join(ROOT, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
-  }
-  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
-}
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** The local vite binary. Never `npx`/`pnpm dlx`: those can fetch from the network. */
 const VITE = path.join(ROOT, 'node_modules/.bin/vite');
+
+const KEY = repoKey();
+export const DAEMON_PORT = Number(process.env.HARNESS_DAEMON_PORT || derivedPort(KEY));
+/**
+ * Legacy: the app port a *dirty* build gets when nothing else has claimed one.
+ * Build servers are allocated out of the daemon's own block now, so nobody
+ * picks a port and `PORT` no longer means anything to a client.
+ */
 export const APP_PORT = Number(process.env.PORT || 5173);
-export const DAEMON_PORT = APP_PORT + 1;
+
+/**
+ * Measured, not guessed. `project/journal/2026-08-23-harness-bench.md`:
+ * throughput is flat within noise from W=3 (0.29-0.31 req/s at W=4 across three
+ * runs, on a plateau only 20% wide), so throughput cannot pick this number.
+ * Latency can, and is not noisy: mean boot 9.2 s at W=1, 14.8 s at W=4, 32.3 s
+ * at W=6, 40.5 s at W=8. Four is the largest W that still boots within 2x of
+ * serial.
+ *
+ * At four: 2.2 of 18 cores and 10 of 137 GB. Neither binds — the single Metal
+ * GPU does. Do not raise this because the machine "looks idle"; it always
+ * looks idle.
+ */
+const BROWSER_BUDGET = Number(process.env.HARNESS_BROWSER_BUDGET || 4);
+/** One job per browser: a fifth worker would only queue behind a browser anyway. */
+const WORKERS = BROWSER_BUDGET;
+/** Materialised sha trees are 115 MB each; ten is 1.2 GB, which is affordable. */
+const MAX_TREES = Number(process.env.HARNESS_MAX_TREES || 10);
+/** One CDP port per pooled browser, out of a block nothing else claims. */
+const CDP_BASE = Number(process.env.HARNESS_CDP_BASE || 9333);
+
 const BROWSER_IDLE_MS = Number(process.env.BROWSER_IDLE_MIN || 6) * 60_000;
+const BUILD_IDLE_MS = Number(process.env.BUILD_IDLE_MIN || 10) * 60_000;
 const DAEMON_IDLE_MS = Number(process.env.DAEMON_IDLE_MIN || 25) * 60_000;
 
 const sleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); });
@@ -124,10 +115,37 @@ const portOpen = (p: number) => new Promise<boolean>((res) => {
   setTimeout(() => { s.destroy(); res(false); }, 800);
 });
 
-// --------------------------------------------------------------- the protocol
+/**
+ * Fingerprint of a *dirty* build's sources.
+ *
+ * Only dirty builds need one: a `sha:` build is immutable by construction, so
+ * its fingerprint is its name. This stays deliberately paranoid — names, sizes
+ * and mtimes of every source file — because a page booted before an edit serves
+ * the old build, and that produced a completely false bug diagnosis once. Do
+ * not "optimise" it to a subset; sha builds make it cheap by making it rare.
+ */
+function sourceStamp(root: string) {
+  const parts: string[] = [];
+  const walk = (dir: string) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.(js|mjs|ts|mts|css|html|json)$/.test(e.name)) {
+        try { const st = statSync(f); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* raced */ }
+      }
+    }
+  };
+  walk(path.join(root, 'src'));
+  for (const f of ['src/index.html', 'vite.config.js']) {
+    try { const st = statSync(path.join(root, f)); parts.push(`${f}:${st.size}:${st.mtimeMs}`); } catch { /* absent */ }
+  }
+  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
+}
 
-/** Which build the open page is showing. */
-type PageMode = 'dev' | 'prod';
+// --------------------------------------------------------------- the protocol
 
 /** What every client sends to say which page it wants. */
 export interface PageOpts {
@@ -135,7 +153,6 @@ export interface PageOpts {
   h?: number;
   q?: string;
   nobake?: boolean;
-  prod?: boolean;
   /** Force a fresh page, for a run that must be provably independent. */
   cold?: boolean;
   /**
@@ -143,10 +160,22 @@ export interface PageOpts {
    * `PostFX.debugToggle` — `nobloom`, `nogtao`, `nocontact`, `plain`, ...
    *
    * It is part of the page IDENTITY, not of one capture, which is what makes it
-   * safe here: the daemon only reuses a page whose query matches, so an ablated
-   * run can never be served a frame from an un-ablated page.
+   * safe here: a page is only reused when its query matches, so an ablated run
+   * can never be served a frame from an un-ablated page.
    */
   post?: string;
+  /**
+   * `sha:<tree>` or `dirty:<root>`, or a ref the client already resolved.
+   * Absent means the live tree of whoever is asking, which is the conservative
+   * reading of an unversioned request.
+   */
+  build?: BuildId;
+  /** Priority class: `fix` wants latency, `sweep` wants throughput. */
+  lane?: Lane;
+  /** Who is asking, for fair-share and for `/health` to name who is ahead. */
+  agent?: string;
+  /** Give up rather than queue past this many ms. */
+  deadlineMs?: number;
 }
 
 /** `POST /shots` */
@@ -186,13 +215,18 @@ export interface ShotResult {
 }
 
 /**
- * Every response carries the reuse counters, so a client can tell a warm
- * capture from a cold one without a second call to `/health`.
+ * Every response carries the reuse counters and the build it came from, so a
+ * client can tell a warm capture from a cold one, and a shared frame from its
+ * own, without a second call.
  */
 interface Counters {
   errors: string[];
   boots: number;
   reuses: number;
+  /** Short form of the build identity these results are of. */
+  build: string;
+  /** True when the frames are of somebody's live working tree. Never quote them. */
+  dirty: boolean;
 }
 
 export interface ShotsResponse extends Counters { results: ShotResult[]; bootMs: number }
@@ -201,27 +235,50 @@ export interface ShotsResponse extends Counters { results: ShotResult[]; bootMs:
 export interface EvalRequest extends PageOpts { fn: string; arg?: unknown }
 export interface EvalResponse extends Counters { value: unknown }
 
+/** `POST /lease` -- a play tool takes the whole page over CDP. */
+export interface LeaseRequest extends PageOpts { ttlMs?: number }
+export interface LeaseResponse extends Counters {
+  id: string;
+  cdp: string;
+  url: string;
+  appPort: number;
+}
+
+export interface BuildHealth {
+  build: string;
+  dirty: boolean;
+  port: number;
+  kind: 'dev' | 'prod';
+  pages: number;
+  idleSec: number;
+}
+
 export interface HealthResponse {
   ok: boolean;
-  appPort: number;
-  page: boolean;
-  browser: boolean;
+  protocol: number;
+  repoKey: string;
+  daemonPort: number;
+  uptimeSec: number;
   /** False means the GPU program cache is cold every boot; see chromium.mts. */
   persistentProfile: boolean;
-  mode: PageMode | null;
-  query: string | null;
+  budget: number;
+  workers: { busy: number, total: number };
+  pool: { pages: number, contexts: number, budget: number };
+  queue: { lane: Lane, depth: number, agents: Record<string, number> }[];
+  builds: BuildHealth[];
   boots: number;
   reuses: number;
   bootMs: number;
   idleSec: number;
+  exclusive: string | null;
+  resetDrift: Record<string, string>;
 }
 
 /**
- * The two request bodies arrive as untrusted JSON off a socket, so they are
+ * The request bodies arrive as untrusted JSON off a socket, so they are
  * narrowed here rather than asserted at the call. A predicate is worth the four
- * extra lines over a cast: it narrows, so `routeShots` receives a checked
- * `ShotsRequest`, and the `400` and the type stay in step because they are
- * derived from the same test.
+ * extra lines over a cast: it narrows, so the route receives a checked request,
+ * and the `400` and the type stay in step because they derive from one test.
  */
 function isShotsRequest(b: Record<string, unknown>): b is Record<string, unknown> & ShotsRequest {
   return Array.isArray(b.shots) && b.shots.every((s) => typeof s === 'string') && typeof b.out === 'string';
@@ -241,48 +298,53 @@ export async function call<T = unknown>(route: string, body?: unknown, { timeout
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(timeout),
   });
-  const j = await res.json() as T & { error?: string };
+  const j = await res.json() as T & { error?: string, busy?: boolean };
+  if (res.status === 429) {
+    const err = new Error(j.error || 'daemon busy') as Error & { busy: true, detail: unknown };
+    err.busy = true;
+    err.detail = j;
+    throw err;
+  }
   if (!res.ok) throw new Error(j.error || `daemon ${res.status}`);
   return j;
 }
 
+/** What the daemon says about itself before any work is asked of it. */
+interface VersionResponse { protocol: number; repoKey: string; pid: number; startedFrom: string }
+
 /**
  * Make sure a daemon is listening, starting a detached one if not.
+ *
+ * Three failure modes, all of which have actually happened here:
+ *
+ * - **A daemon for a different repository.** Reusing it captures the other
+ *   repo's build. Hard error, never a silent reuse.
+ * - **A daemon speaking an older protocol.** Stop it and start a fresh one. It
+ *   cannot reload itself, and a client that quietly talks to it debugs code
+ *   that is not running.
+ * - **Nothing there.** Start one, detached, so it survives this agent.
+ *
  * @returns true if this call started it
  */
 export async function ensureDaemon(): Promise<boolean> {
-  let stale = false;
-  if (await portOpen(DAEMON_PORT)) {
-    // A daemon on the port may belong to a *different* checkout — every agent
-    // worktree runs the same tools on the same default ports. Silently reusing
-    // it captures the other repo's build, which has already produced at least
-    // one false result that took a round to unpick. Refuse rather than lie.
-    let root: string | null = null;
-    let self: string | null = null;
-    try {
-      const r = await call<{ root: string, self?: string }>('/root');
-      root = r.root;
-      self = r.self ?? null;
-    } catch { /* daemon predates the route */ }
-    // A daemon running code older than this file cannot be reused: it will
-    // serve behaviour that no longer exists in the tree. Stop it and start a
-    // fresh one rather than quietly capturing through the old one.
-    if (root && path.resolve(root) === path.resolve(ROOT) && self !== selfStamp()) {
-      try { await call('/stop', {}); } catch { /* already going */ }
-      for (let i = 0; i < 50 && await portOpen(DAEMON_PORT); i++) await sleep(100);
-      stale = true;
-    } else if (root && path.resolve(root) !== path.resolve(ROOT)) {
+  const reg = readRegistry(KEY);
+  const port = reg?.port ?? DAEMON_PORT;
+  if (await portOpen(port)) {
+    let v: VersionResponse | null = null;
+    try { v = await call<VersionResponse>('/version', undefined, { timeout: 5_000 }); } catch { /* pre-/version daemon */ }
+    if (v && v.repoKey !== KEY) {
       throw new Error(
-        `a capture daemon on port ${DAEMON_PORT} is serving a different checkout:\n`
-        + `  running: ${root}\n  wanted:  ${ROOT}\n`
-        + 'Set PORT (and DAEMON_PORT) to values unique to this worktree, '
-        + 'or stop that daemon.');
+        `the daemon on port ${port} serves a different repository:\n`
+        + `  running: ${v.repoKey}\n  wanted:  ${KEY}\n`
+        + 'That is a port collision between two repos. Set HARNESS_DAEMON_PORT, or stop that daemon.');
     }
-    if (!stale) return false;
-    console.log('[daemon] the running daemon is older than src/tools/daemon.mts; restarting it');
+    if (v && v.protocol === PROTOCOL) return false;
+    console.log(`[daemon] running daemon speaks protocol ${v?.protocol ?? '<none>'}, this client speaks ${PROTOCOL}; restarting it`);
+    try { await call('/stop', {}); } catch { /* already going */ }
+    for (let i = 0; i < 100 && await portOpen(port); i++) await sleep(100);
   }
   const child = spawn(process.execPath, [path.join(ROOT, 'src/tools/daemon.mts')], {
-    cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env, PORT: String(APP_PORT) },
+    cwd: ROOT, detached: true, stdio: 'ignore', env: { ...process.env },
   });
   child.unref();
   const deadline = Date.now() + 90_000;
@@ -293,238 +355,731 @@ export async function ensureDaemon(): Promise<boolean> {
   throw new Error('daemon failed to start');
 }
 
-// --------------------------------------------------------------- server side
+// ---------------------------------------------------------------- the builds
 
-class Harness {
-  bootMs!: number;
-  boots!: number;
-  persistentProfile!: boolean;
-  /** The persistent-profile context; named `browser` because it is one, lifetime-wise. */
-  browser!: BrowserContext | null;
-  errors!: string[];
-  lastUsed!: number;
-  mode!: PageMode | null;
-  page!: Page | null;
-  query!: string | null;
-  reuses!: number;
-  /** The vite child, or null when one was already listening on the port. */
-  server!: ChildProcess | null;
-  stamp!: string | null;
-  viewport!: { w: number, h: number } | null;
-  constructor() {
-    this.server = null;      // vite child process
-    this.browser = null;
-    this.persistentProfile = false;
-    this.page = null;
-    this.errors = [];
-    this.viewport = null;
-    this.mode = null;        // 'dev' | 'prod'
-    this.query = null;
-    this.stamp = null;       // source fingerprint the open page booted with
-    this.lastUsed = Date.now();
-    this.boots = 0;
-    this.reuses = 0;
-    this.bootMs = 0;
+/** One servable build: a directory, a vite server and a port. */
+class Build {
+  id: BuildId;
+  dir: string;
+  port: number;
+  kind: 'dev' | 'prod';
+  server: ChildProcess | null = null;
+  lastUsed = Date.now();
+  /** Only meaningful for a dirty build; a sha build is its own fingerprint. */
+  stamp: string;
+
+  constructor(id: BuildId, dir: string, port: number, kind: 'dev' | 'prod') {
+    this.id = id;
+    this.dir = dir;
+    this.port = port;
+    this.kind = kind;
+    this.stamp = isDirty(id) ? sourceStamp(dir) : (shaOf(id) ?? id);
   }
 
-  async ensureServer(prod: boolean) {
-    if (this.server || await portOpen(APP_PORT)) return;
-    if (prod) {
-      await new Promise<void>((res, rej) => {
-        const b = spawn(VITE, ['build'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
-        b.on('exit', (c) => (c === 0 ? res() : rej(new Error(`vite build failed (${c})`))));
-      });
+  /** The fingerprint a page must have booted with to still be valid. */
+  currentStamp(): string { return isDirty(this.id) ? sourceStamp(this.dir) : this.stamp; }
+
+  url(query: string): string { return `http://127.0.0.1:${this.port}/${query}`; }
+
+  stop() { if (this.server) { this.server.kill(); this.server = null; } }
+}
+
+/**
+ * Materialise, serve and prune build identities.
+ *
+ * The daemon allocates every server port out of its own block, so no human ever
+ * picks one — which retires the `PORT`-per-worktree convention and the trap
+ * both `CLAUDE.md` and RESCUE warned about (aiming a tool at the daemon's port
+ * and hanging for the full 300 s).
+ */
+class BuildStore {
+  builds = new Map<BuildId, Build>();
+  private starting = new Map<BuildId, Promise<Build>>();
+  private nextPort = DAEMON_PORT + 1;
+
+  private async freePort(): Promise<number> {
+    for (let i = 0; i < 200; i++) {
+      const p = this.nextPort++;
+      if (this.nextPort > DAEMON_PORT + 200) this.nextPort = DAEMON_PORT + 1;
+      if (![...this.builds.values()].some((b) => b.port === p) && !(await portOpen(p))) return p;
     }
-    const args = prod
-      ? ['preview', '--port', String(APP_PORT), '--strictPort']
-      : ['--port', String(APP_PORT), '--strictPort'];
-    this.server = spawn(VITE, args, { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'] });
+    throw new Error('no free port for a build server');
+  }
+
+  async acquire(id: BuildId): Promise<Build> {
+    const have = this.builds.get(id);
+    if (have) { have.lastUsed = Date.now(); return have; }
+    const pending = this.starting.get(id);
+    if (pending) return pending;
+    const p = this.start(id).finally(() => this.starting.delete(id));
+    this.starting.set(id, p);
+    return p;
+  }
+
+  private async start(id: BuildId): Promise<Build> {
+    const port = await this.freePort();
+    let build: Build;
+    if (isDirty(id)) {
+      // The live tree, served by a dev server. A full production build per
+      // keystroke is exactly what this path exists to avoid.
+      build = new Build(id, id.slice(DIRTY_PREFIX.length), port, 'dev');
+      build.server = spawn(VITE, ['--port', String(port), '--strictPort'],
+        { cwd: build.dir, stdio: ['ignore', 'ignore', 'ignore'] });
+    } else {
+      const dir = materialise(id);
+      build = new Build(id, dir, port, 'prod');
+      build.server = spawn(VITE, ['preview', '--port', String(port), '--strictPort'],
+        { cwd: dir, stdio: ['ignore', 'ignore', 'ignore'] });
+    }
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
-      await sleep(250);
-      if (await portOpen(APP_PORT)) return;
+      await sleep(200);
+      if (await portOpen(port)) {
+        this.builds.set(id, build);
+        console.log(`[daemon] serving ${shortBuild(id)} (${build.kind}) on ${port}`);
+        return build;
+      }
     }
-    throw new Error('vite failed to start');
+    build.stop();
+    throw new Error(`vite failed to serve ${shortBuild(id)} on ${port}`);
+  }
+
+  release(id: BuildId) {
+    const b = this.builds.get(id);
+    if (!b) return;
+    b.stop();
+    this.builds.delete(id);
+  }
+
+  /** Drop build servers nothing has asked for lately. The trees stay on disk. */
+  reapIdle() {
+    for (const [id, b] of this.builds) {
+      if (Date.now() - b.lastUsed > BUILD_IDLE_MS) {
+        console.log(`[daemon] ${shortBuild(id)} idle, stopping its server`);
+        this.release(id);
+      }
+    }
+  }
+
+  closeAll() { for (const id of [...this.builds.keys()]) this.release(id); }
+}
+
+/**
+ * Lay a tree sha out on disk, once, and build it.
+ *
+ * THE SYMLINKS ARE THE WHOLE COST MODEL. Measured
+ * (`project/journal/2026-08-23-harness-bench.md`): `git archive` 173 ms +
+ * `vite build` **562 ms**. The first version of that measurement said 24 514 ms,
+ * and the entire difference was `src/public/baked` — without the symlink every
+ * sha re-bakes the terrain, and `--build HEAD` stops being affordable as a
+ * default.
+ *
+ * The bake cache is shared and therefore **read-only from here**. A
+ * `texbake.mts --force` run inside a materialised tree would rewrite the
+ * artifacts every other tree is booting against — the exact hazard that bit the
+ * worktree experiment, where symlinking the cache into three checkouts meant
+ * one agent's `--force` silently re-textured everybody else's game.
+ */
+function materialise(id: BuildId): string {
+  const sha = shaOf(id);
+  if (!sha) throw new Error(`not a sha build: ${id}`);
+  const dir = path.join(repoCacheDir(KEY), 'trees', sha);
+  if (existsSync(path.join(dir, 'dist', 'index.html'))) return dir;
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  execFileSync('bash', ['-c', `git archive ${sha} | tar -x -C ${JSON.stringify(dir)}`], { cwd: ROOT });
+  execFileSync('ln', ['-s', path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules')]);
+  const bake = path.join(ROOT, 'src/public/baked');
+  if (existsSync(bake)) {
+    mkdirSync(path.join(dir, 'src/public'), { recursive: true });
+    rmSync(path.join(dir, 'src/public/baked'), { recursive: true, force: true });
+    execFileSync('ln', ['-s', bake, path.join(dir, 'src/public/baked')]);
+  }
+  execFileSync(VITE, ['build'], { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'], timeout: 600_000 });
+  pruneTrees();
+  return dir;
+}
+
+/**
+ * Keep the N most recently touched trees.
+ *
+ * 115 MB each, so ten is 1.2 GB — cheap enough that pruning harder would cost
+ * more in re-materialising than it saves on disk.
+ */
+function pruneTrees() {
+  const root = path.join(repoCacheDir(KEY), 'trees');
+  let entries: string[];
+  try { entries = readdirSync(root); } catch { return; }
+  const byAge = entries
+    .map((name) => ({ name, at: statSync(path.join(root, name)).mtimeMs }))
+    .sort((a, b) => b.at - a.at);
+  for (const stale of byAge.slice(MAX_TREES)) {
+    rmSync(path.join(root, stale.name), { recursive: true, force: true });
+  }
+}
+
+// ------------------------------------------------------------------ the pool
+
+/** A booted page, leased rather than owned. */
+class Slot {
+  ctx: BrowserContext;
+  page: Page | null = null;
+  /** `(build, viewport, query)` — the identity a page must match to be reused. */
+  key = '';
+  build: BuildId | null = null;
+  busy = false;
+  lastUsed = Date.now();
+  errors: string[] = [];
+  cdpPort: number;
+  viewport = { w: 0, h: 0 };
+  constructor(ctx: BrowserContext, cdpPort: number) { this.ctx = ctx; this.cdpPort = cdpPort; }
+}
+
+/**
+ * The one object that knows what every chromium on this machine is for, which
+ * is why it is the one object that can enforce a budget.
+ *
+ * BROWSER_BUDGET = 4, measured. Note what Phase 0 says about *parking*: unlike
+ * `../game-scaffold`, a posed page here burns **zero** idle CPU (`main.ts`
+ * never starts the render loop under `?shoot=1`), parking to `about:blank`
+ * reclaims 17% of its RSS, and unparking costs a full 8.5 s reboot. So this
+ * pool does not park. It holds up to four contexts, keyed by what they are
+ * showing, and evicts the least recently used when a fifth identity is wanted.
+ */
+class BrowserPool {
+  slots: Slot[] = [];
+  persistentProfile = false;
+  boots = 0;
+  reuses = 0;
+  bootMs = 0;
+  private waiters: (() => void)[] = [];
+
+  get pages(): number { return this.slots.filter((s) => s.page).length; }
+
+  private async newSlot(w: number, h: number): Promise<Slot> {
+    // A CDP port per slot, from a block nothing else uses. It is opened on
+    // every slot rather than on demand because a browser cannot grow one later,
+    // and a play tool must not have to wait for a fresh launch to get a lease.
+    const used = new Set(this.slots.map((s) => s.cdpPort));
+    let cdpPort = CDP_BASE;
+    while (used.has(cdpPort)) cdpPort++;
+    const { ctx, persistent } = await launchPersistent({ width: w, height: h }, cdpPort);
+    this.persistentProfile = persistent;
+    const slot = new Slot(ctx, cdpPort);
+    this.slots.push(slot);
+    return slot;
   }
 
   /**
-   * Get a page showing a booted game at the requested viewport and query.
-   * Reuses the open one whenever it matches; reboots only when it cannot.
+   * Take a slot showing `key`, booting or evicting as needed.
+   *
+   * Prefers, in order: a free slot already showing this exact page, a free empty
+   * slot, a new slot under budget, the least recently used free slot. Only when
+   * every slot is busy does it wait — and that wait is what the deadline and
+   * the `429` exist to bound.
    */
-  async page_(opts: PageOpts): Promise<Page> {
-    const { w = 1600, h = 900, q = 'ultra', nobake = false, prod = false, cold = false, post = '' } = opts;
-    const query = `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}${post ? `&post=${encodeURIComponent(post)}` : ''}`;
-    // Errors belong to the request that provoked them, so the slate is wiped
-    // here — before a boot, so boot-time errors are still attributed to it.
-    this.errors.length = 0;
-    await this.ensureServer(prod);
-
-    // A page that booted before a source edit is serving the old build; reusing
-    // it would hand back captures of code that no longer exists.
-    const stamp = sourceStamp();
-    if (this.page && !cold && this.query === query
-        && this.mode === (prod ? 'prod' : 'dev') && this.stamp === stamp) {
-      if (this.viewport && (this.viewport.w !== w || this.viewport.h !== h)) {
-        await this.page.setViewportSize({ width: w, height: h });
-        this.viewport = { w, h };
-        // a resize invalidates every temporal buffer and the post-chain targets
-        await this.page.evaluate(() => { window.GAME.rnd.resize(); window.GAME.post?.resetHistory?.(); });
+  async lease(key: string, w: number, h: number, cold: boolean): Promise<Slot> {
+    for (;;) {
+      if (!cold) {
+        const match = this.slots.find((s) => !s.busy && s.page && s.key === key);
+        if (match) { match.busy = true; match.lastUsed = Date.now(); this.reuses++; return match; }
       }
-      this.reuses++;
-      this.lastUsed = Date.now();
-      await this.reset();
-      return this.page;
+      const empty = this.slots.find((s) => !s.busy && !s.page);
+      if (empty) { empty.busy = true; return empty; }
+      if (this.slots.length < BROWSER_BUDGET) {
+        const slot = await this.newSlot(w, h);
+        slot.busy = true;
+        return slot;
+      }
+      const free = this.slots.filter((s) => !s.busy).sort((a, b) => a.lastUsed - b.lastUsed)[0];
+      if (free) { await this.evict(free); free.busy = true; return free; }
+      await new Promise<void>((r) => this.waiters.push(r));
     }
-
-    await this.closePage();
-    if (!this.browser) {
-      const { ctx, persistent } = await launchPersistent({ width: w, height: h });
-      this.browser = ctx;
-      this.persistentProfile = persistent;
-    }
-    // A persistent context fixes its viewport at launch, so a later request for
-    // a different size has to resize rather than ask for it up front. The reuse
-    // path already does exactly this; a fresh page just joins it.
-    const page = this.browser.pages()[0]?.url() === 'about:blank'
-      ? this.browser.pages()[0]
-      : await this.browser.newPage();
-    await page.setViewportSize({ width: w, height: h });
-    page.on('pageerror', (e: Error) => this.errors.push(String(e)));
-    page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') this.errors.push(m.text()); });
-
-    const t0 = Date.now();
-    await page.goto(`http://127.0.0.1:${APP_PORT}/${query}`, { waitUntil: 'domcontentloaded', timeout: 300_000 });
-    await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300_000 });
-    // `ready` is set one warm frame before `main.ts` adds `#boot.done`, and that
-    // class only starts an 800 ms opacity transition -- so a capture taken the
-    // instant the page reports ready contains the loading screen. It is silent:
-    // the shot still reports its real triangle and draw-call counts, so nothing
-    // looks wrong until someone opens the image. Only the *first* capture after
-    // a boot can hit it, which is why it survives a warm daemon.
-    //
-    // Remove the node rather than waiting for the fade. `probe`, `framecam` and
-    // `creaturecheck` all already do exactly this, and for a reason: the
-    // transition needs frames, and a headless page that the harness has just
-    // stopped the render loop on is not guaranteed to get them. Waiting on
-    // `opacity === '0'` hung every capture for the full timeout.
-    await page.evaluate(() => { document.getElementById('boot')?.remove(); });
-    this.bootMs = Date.now() - t0;
-    this.page = page;
-    this.viewport = { w, h };
-    this.mode = prod ? 'prod' : 'dev';
-    this.query = query;
-    this.stamp = stamp;
-    this.boots++;
-    this.lastUsed = Date.now();
-    await this.reset();
-    return page;
   }
 
-  /** Return the page to the state a fresh load leaves it in for the harness. */
-  async reset() {
-    // A concurrent request can close the page between reuse and reset (a source
-    // edit forces a reboot); treat a missing page as "nothing to reset".
-    if (!this.page || this.page.isClosed?.()) return;
-    await this.page.evaluate(() => {
-      const g = window.GAME;
-      g.stop();
-      g.resetClock();
-      document.getElementById('boot')?.remove();
+  release(slot: Slot) {
+    slot.busy = false;
+    slot.lastUsed = Date.now();
+    const w = this.waiters.shift();
+    if (w) w();
+  }
+
+  /** Drop the page but keep the browser: relaunching chromium is the expensive half. */
+  private async evict(slot: Slot) {
+    if (slot.page) { await slot.page.close().catch(() => {}); }
+    slot.page = null;
+    slot.key = '';
+    slot.build = null;
+  }
+
+  /** A wedged page must never be pooled; recycle the whole context. */
+  async recycle(slot: Slot) {
+    await slot.ctx.close().catch(() => {});
+    this.slots = this.slots.filter((s) => s !== slot);
+    const w = this.waiters.shift();
+    if (w) w();
+  }
+
+  async closeAll() {
+    const slots = this.slots;
+    this.slots = [];
+    for (const s of slots) await s.ctx.close().catch(() => {});
+    for (const w of this.waiters.splice(0)) w();
+  }
+
+  get idle(): boolean { return this.slots.every((s) => !s.busy); }
+}
+
+// ------------------------------------------------------------- the scheduler
+
+export type Lane = 'fix' | 'sweep';
+const LANES: Lane[] = ['fix', 'sweep'];
+
+interface Job<T = unknown> {
+  lane: Lane;
+  agent: string;
+  kind: string;
+  enqueuedAt: number;
+  deadlineMs: number;
+  run: () => Promise<T>;
+  resolve: (v: T) => void;
+  reject: (e: unknown) => void;
+}
+
+/**
+ * Two priority classes, N workers, work stealing, and round-robin over the
+ * *requesting agent* before lane priority.
+ *
+ * The lanes are priority classes, not execution units: `fix` is one agent
+ * wanting one shot now, `sweep` is a 139-shot corpus that must never starve it.
+ * The fair-share layer is what stops one agent's corpus monopolising the pool —
+ * without it, "why is my capture slow" has no answer, and with it `/health`
+ * answers it by naming who is ahead.
+ */
+class Scheduler {
+  queues: Record<Lane, Job[]> = { fix: [], sweep: [] };
+  private busyWorkers = 0;
+  private lastAgent = new Map<Lane, string>();
+  /** An exclusive holder quiesces everything; see `/exclusive`. */
+  exclusive: string | null = null;
+  private exclusiveWaiters: (() => void)[] = [];
+
+  submit<T>(lane: Lane, agent: string, kind: string, deadlineMs: number, run: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.queues[lane].push({
+        lane, agent, kind, enqueuedAt: Date.now(), deadlineMs, run,
+        resolve: resolve as (v: unknown) => void, reject,
+      });
+      this.pump();
     });
   }
 
-  async closePage() {
-    if (this.page) { await this.page.close().catch(() => {}); this.page = null; }
+  depth(): number { return LANES.reduce((n, l) => n + this.queues[l].length, 0); }
+  get busy(): number { return this.busyWorkers; }
+
+  /** Who is ahead of a job that just arrived, so the busy answer can say so. */
+  ahead(): Record<string, number> {
+    const by: Record<string, number> = {};
+    for (const l of LANES) for (const j of this.queues[l]) by[j.agent] = (by[j.agent] ?? 0) + 1;
+    return by;
   }
 
-  async closeBrowser() {
-    await this.closePage();
-    if (this.browser) { await this.browser.close().catch(() => {}); this.browser = null; }
+  /**
+   * Take the next job: `fix` before `sweep`, and within a lane the agent that
+   * did *not* go last, so a corpus interleaves with everyone else's single
+   * shots rather than draining first.
+   */
+  private take(): Job | null {
+    for (const lane of LANES) {
+      const q = this.queues[lane];
+      if (!q.length) continue;
+      const last = this.lastAgent.get(lane);
+      let i = q.findIndex((j) => j.agent !== last);
+      if (i < 0) i = 0;
+      const [job] = q.splice(i, 1);
+      this.lastAgent.set(lane, job.agent);
+      return job;
+    }
+    return null;
   }
 
-  async shutdown() {
-    await this.closeBrowser();
-    if (this.server) { this.server.kill(); this.server = null; }
+  private pump() {
+    while (!this.exclusive && this.busyWorkers < WORKERS) {
+      const job = this.take();
+      if (!job) return;
+      this.busyWorkers++;
+      const waited = Date.now() - job.enqueuedAt;
+      if (job.deadlineMs > 0 && waited > job.deadlineMs) {
+        this.busyWorkers--;
+        job.reject(busyError(this, waited));
+        continue;
+      }
+      void job.run().then(job.resolve, job.reject).finally(() => {
+        this.busyWorkers--;
+        if (!this.busyWorkers && this.exclusiveWaiters.length) {
+          for (const w of this.exclusiveWaiters.splice(0)) w();
+        }
+        this.pump();
+      });
+    }
+  }
+
+  /**
+   * Quiesce the whole machine and hand it to one holder.
+   *
+   * This is the payoff of one daemon per repository. RESCUE threw away every
+   * perf number from a session because they were taken under six concurrent
+   * chromiums; under per-worktree daemons that is unfixable, because a daemon
+   * cannot quiesce browsers it does not own. Here "the machine is quiet" is a
+   * property that can be enforced rather than hoped for.
+   */
+  async takeExclusive(holder: string): Promise<void> {
+    if (this.exclusive) throw new Error(`exclusive lease already held by ${this.exclusive}`);
+    this.exclusive = holder;
+    if (this.busyWorkers) await new Promise<void>((r) => this.exclusiveWaiters.push(r));
+  }
+
+  releaseExclusive() { this.exclusive = null; this.pump(); }
+}
+
+function busyError(sched: Scheduler, waitedMs: number): Error & { busy: true, detail: unknown } {
+  const ahead = sched.ahead();
+  const who = Object.entries(ahead).sort((a, b) => b[1] - a[1])[0];
+  const e = new Error(
+    `daemon busy: waited ${waitedMs} ms, ${sched.depth()} job(s) queued`
+    + (who ? `, ${who[0]} has ${who[1]} of them ahead of you` : ''),
+  ) as Error & { busy: true, detail: unknown };
+  e.busy = true;
+  e.detail = { busy: true, queueDepth: sched.depth(), waitedMs, ahead };
+  return e;
+}
+
+// ---------------------------------------------------------------- the harness
+
+const store = new BuildStore();
+const pool = new BrowserPool();
+const sched = new Scheduler();
+const startedAt = Date.now();
+let lastUsed = Date.now();
+/** Reset drift per build, checked once per build; see `checkResetDrift`. */
+const resetDrift: Record<string, string> = {};
+
+function pageKey(build: BuildId, w: number, h: number, query: string): string {
+  return `${build}|${w}x${h}|${query}`;
+}
+
+function queryOf(opts: PageOpts): string {
+  const { q = 'ultra', nobake = false, post = '' } = opts;
+  return `?q=${q}&shoot=1${nobake ? '&nobake=1' : ''}${post ? `&post=${encodeURIComponent(post)}` : ''}`;
+}
+
+/** Boot a page in a slot, or reuse the one already there. */
+async function preparePage(slot: Slot, build: Build, opts: PageOpts): Promise<Page> {
+  const { w = 1600, h = 900, cold = false } = opts;
+  const query = queryOf(opts);
+  const key = pageKey(build.id, w, h, query);
+  slot.errors.length = 0;
+
+  // A dirty build's page may have booted before an edit; a sha build's cannot.
+  const stampOk = !isDirty(build.id) || slot.key === key;
+  if (slot.page && !cold && slot.key === key && stampOk && build.currentStamp() === build.stamp) {
+    if (slot.viewport.w !== w || slot.viewport.h !== h) {
+      await slot.page.setViewportSize({ width: w, height: h });
+      slot.viewport = { w, h };
+      // A resize invalidates every temporal buffer and the post-chain targets.
+      await slot.page.evaluate(() => { window.GAME.rnd.resize(); window.GAME.post?.resetHistory?.(); });
+    }
+    await resetPage(slot.page);
+    return slot.page;
+  }
+  if (isDirty(build.id)) build.stamp = build.currentStamp();
+
+  if (slot.page) { await slot.page.close().catch(() => {}); slot.page = null; }
+  // A persistent context fixes its viewport at launch, so a later request for a
+  // different size has to resize rather than ask for it up front.
+  const page = slot.ctx.pages()[0]?.url() === 'about:blank' ? slot.ctx.pages()[0] : await slot.ctx.newPage();
+  await page.setViewportSize({ width: w, height: h });
+  page.on('pageerror', (e: Error) => slot.errors.push(String(e)));
+  page.on('console', (m: ConsoleMessage) => { if (m.type() === 'error') slot.errors.push(m.text()); });
+
+  const t0 = Date.now();
+  await page.goto(build.url(query), { waitUntil: 'domcontentloaded', timeout: 300_000 });
+  await page.waitForFunction('window.GAME && window.GAME.ready === true', null, { timeout: 300_000 });
+  // `ready` is set one warm frame before `main.ts` adds `#boot.done`, and that
+  // class only starts an 800 ms opacity transition -- so a capture taken the
+  // instant the page reports ready contains the loading screen. It is silent:
+  // the shot still reports its real triangle and draw-call counts, so nothing
+  // looks wrong until someone opens the image. Only the *first* capture after a
+  // boot can hit it, which is why it survives a warm daemon.
+  //
+  // Remove the node rather than waiting for the fade: the transition needs
+  // frames, and a headless page whose render loop the harness has just stopped
+  // is not guaranteed to get them. Waiting on `opacity === '0'` hung every
+  // capture for the full timeout.
+  await page.evaluate(() => { document.getElementById('boot')?.remove(); });
+  pool.bootMs = Date.now() - t0;
+  pool.boots++;
+  slot.page = page;
+  slot.key = key;
+  slot.build = build.id;
+  slot.viewport = { w, h };
+  await resetPage(page);
+  return page;
+}
+
+/**
+ * Return a page to the state a fresh load leaves it in for the harness.
+ *
+ * Prefers `GAME.reset()` when the game provides it, because a soft reset
+ * measured **1.97 s against an 11.1 s reload** — and 2.00 s against 10.9 s even
+ * from a dungeon interior, the lighting-changing case that was expected to
+ * invert the result (it recompiled 6 shader programs, not the 43 that once cost
+ * a 9.5 s freeze).
+ *
+ * The speed is not the risk. A reset that leaves formation state, dungeon
+ * lighting or weather behind produces frames that are plausible and wrong,
+ * which is the most expensive kind of wrong. That is what `checkResetDrift`
+ * is for, and why it uses a `follow` shot.
+ */
+async function resetPage(page: Page | null) {
+  if (!page || page.isClosed?.()) return;
+  await page.evaluate(() => {
+    const g = window.GAME as unknown as { reset?: () => void, stop: () => void, resetClock: () => void };
+    if (typeof g.reset === 'function') g.reset();
+    else { g.stop(); g.resetClock(); }
+    document.getElementById('boot')?.remove();
+  });
+}
+
+/** The counters and provenance every response carries. */
+function counters(slot: Slot, build: Build): Counters {
+  return {
+    errors: [...slot.errors],
+    boots: pool.boots,
+    reuses: pool.reuses,
+    build: shortBuild(build.id),
+    dirty: isDirty(build.id),
+  };
+}
+
+/** Lease a page for one job, and always give it back. */
+async function withPage<T>(opts: PageOpts, fn: (page: Page, slot: Slot, build: Build) => Promise<T>): Promise<T> {
+  lastUsed = Date.now();
+  const buildId = opts.build ?? (DIRTY_PREFIX + ROOT);
+  const build = await store.acquire(buildId);
+  const { w = 1600, h = 900, cold = false } = opts;
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(opts)), w, h, cold);
+  try {
+    const page = await preparePage(slot, build, opts);
+    const out = await fn(page, slot, build);
+    lastUsed = Date.now();
+    return out;
+  } catch (e) {
+    // A page that threw may be wedged, and a wedged page must never be pooled.
+    await pool.recycle(slot);
+    throw e;
+  } finally {
+    if (pool.slots.includes(slot)) pool.release(slot);
   }
 }
 
-const harness = new Harness();
-let busy: Promise<unknown> | null = null;
-
-/** Serialise every request: exactly one browser doing exactly one thing. */
-function queue<T>(fn: () => Promise<T>): Promise<T> {
-  const run = (busy || Promise.resolve()).then(fn, fn);
-  busy = run.catch(() => {});
-  return run;
-}
+// -------------------------------------------------------------------- routes
 
 async function routeShots(body: ShotsRequest): Promise<ShotsResponse> {
   const { shots, settle = 60, out, jpeg = 0, hide = [], raw = false, ...rest } = body;
-  const page = await harness.page_(rest);
-  const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
-  await mkdir(outDir, { recursive: true });
-  const results: ShotResult[] = [];
-  for (const name of shots) {
-    const t0 = Date.now();
-    const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
-      const g = window.GAME;
-      g.applyShot(n);
-      g.settle(s);
-      g.applyShot(n);          // re-anchor follow shots after settling
-      g.settle(8);
-      // Ablate AFTER settling: hiding a mesh must not change what the sim did,
-      // only what the frame contains. Anything else and the two sides of the
-      // diff are different worlds, not the same world minus one object.
-      const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
-      if (hideList.length) {
-        const want = hideList.map((h) => h.toLowerCase());
-        g.scene.traverse((o) => {
-          const nm = (o.name || '').toLowerCase();
-          if (nm && want.some((h) => nm.includes(h))) {
-            hidden.push({ o, was: o.visible });
-            o.visible = false;
-          }
-        });
-        g.frame(1 / 60);
+  return withPage(rest, async (page, slot, build) => {
+    const outDir = path.isAbsolute(out) ? out : path.join(ROOT, out);
+    await mkdir(outDir, { recursive: true });
+    const results: ShotResult[] = [];
+    for (const name of shots) {
+      const t0 = Date.now();
+      const meta = await page.evaluate(([n, s, hideList, rawFrame]: [string, number, string[], boolean]) => {
+        const g = window.GAME;
+        g.applyShot(n);
+        g.settle(s);
+        g.applyShot(n);          // re-anchor follow shots after settling
+        g.settle(8);
+        // Ablate AFTER settling: hiding a mesh must not change what the sim did,
+        // only what the frame contains. Anything else and the two sides of the
+        // diff are different worlds, not the same world minus one object.
+        const hidden: Array<{ o: { visible: boolean }, was: boolean }> = [];
+        if (hideList.length) {
+          const want = hideList.map((h) => h.toLowerCase());
+          g.scene.traverse((o) => {
+            const nm = (o.name || '').toLowerCase();
+            if (nm && want.some((h) => nm.includes(h))) {
+              hidden.push({ o, was: o.visible });
+              o.visible = false;
+            }
+          });
+          g.frame(1 / 60);
+        }
+        // The raw pre-post render: the scene straight to the default
+        // framebuffer, no composer. `screenshot()` then reads exactly that.
+        if (rawFrame) {
+          g.renderer.setRenderTarget(null);
+          g.renderer.clear(true, true, false);
+          g.renderer.render(g.scene, g.camera);
+        }
+        const gl = g.renderer.info;
+        const out = {
+          hidden: hidden.length,
+          triangles: gl.render.triangles,
+          calls: gl.render.calls,
+          textures: gl.memory.textures,
+          geometries: gl.memory.geometries,
+          programs: g.renderer.info.programs?.length ?? 0,
+        };
+        for (const h of hidden) h.o.visible = h.was;
+        return out;
+      }, [name, settle, hide, raw] as [string, number, string[], boolean]);
+      if (hide.length && meta.hidden === 0) {
+        slot.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
       }
-      // The raw pre-post render: the scene straight to the default framebuffer,
-      // no composer. `screenshot()` then reads exactly that.
-      if (rawFrame) {
-        g.renderer.setRenderTarget(null);
-        g.renderer.clear(true, true, false);
-        g.renderer.render(g.scene, g.camera);
-      }
-      const gl = g.renderer.info;
-      const out = {
-        hidden: hidden.length,
-        triangles: gl.render.triangles,
-        calls: gl.render.calls,
-        textures: gl.memory.textures,
-        geometries: gl.memory.geometries,
-        programs: g.renderer.info.programs?.length ?? 0,
-      };
-      for (const h of hidden) h.o.visible = h.was;
-      return out;
-    }, [name, settle, hide, raw] as [string, number, string[], boolean]);
-    if (hide.length && meta.hidden === 0) {
-      harness.errors.push(`--hide ${hide.join(',')} matched no scene object in ${name}`);
+      const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
+      await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
+      const { hidden: _hidden, ...counts } = meta;
+      results.push({ name, file: path.relative(ROOT, file), ...counts, ms: Date.now() - t0 });
     }
-    const file = path.join(outDir, `${name}.${jpeg ? 'jpg' : 'png'}`);
-    await writeFile(file, await page.screenshot(jpeg ? { type: 'jpeg', quality: jpeg } : { type: 'png' }));
-    const { hidden: _hidden, ...counts } = meta;
-    results.push({ name, file: path.relative(ROOT, file), ...counts, ms: Date.now() - t0 });
-  }
-  return { results, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses, bootMs: harness.bootMs };
+    return { results, bootMs: pool.bootMs, ...counters(slot, build) };
+  });
 }
 
 async function routeEval(body: EvalRequest): Promise<EvalResponse> {
-  const page = await harness.page_(body);
-  // `body.fn` arrives as source text, so the function has to be built here.
-  // `new Function` is typed `Function`, which `evaluate` will not take; the
-  // signature is the one it is constructed with.
-  const fn = new Function('arg', `return (${body.fn})(arg)`) as (arg: unknown) => unknown;
-  const value = await page.evaluate(fn, body.arg);
-  return { value, errors: [...harness.errors], boots: harness.boots, reuses: harness.reuses };
+  return withPage(body, async (page, slot, build) => {
+    // `body.fn` arrives as source text, so the function has to be built here.
+    // `new Function` is typed `Function`, which `evaluate` will not take; the
+    // signature is the one it is constructed with.
+    const fn = new Function('arg', `return (${body.fn})(arg)`) as (arg: unknown) => unknown;
+    const value = await page.evaluate(fn, body.arg);
+    return { value, ...counters(slot, build) };
+  });
+}
+
+/**
+ * Hand a whole page to a play tool over CDP.
+ *
+ * `gameplay`, `combatloop`, `integration`, `uxcheck` and friends drive real
+ * input over a running loop; they need the `Page`, not a frame. So the daemon
+ * keeps ownership of the chromium, the budget, the deadline and the teardown,
+ * and the tool keeps full Playwright control of the page. That division is the
+ * only reason those eight tools can stop launching their own browsers.
+ */
+const leases = new Map<string, { slot: Slot, build: Build, timer: NodeJS.Timeout }>();
+
+async function routeLease(body: LeaseRequest): Promise<LeaseResponse> {
+  lastUsed = Date.now();
+  const buildId = body.build ?? (DIRTY_PREFIX + ROOT);
+  const build = await store.acquire(buildId);
+  const { w = 1600, h = 900, cold = false, ttlMs = 15 * 60_000 } = body;
+  const slot = await pool.lease(pageKey(buildId, w, h, queryOf(body)), w, h, cold);
+  try {
+    // The page is booted here so the caller connects to something ready, and so
+    // a boot failure is the daemon's problem rather than arriving as a mystery
+    // on the far side of a CDP socket.
+    await preparePage(slot, build, body);
+    const id = createHash('sha1').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 10);
+    const timer = setTimeout(() => { void releaseLease(id); }, ttlMs);
+    leases.set(id, { slot, build, timer });
+    return {
+      id,
+      cdp: `http://127.0.0.1:${slot.cdpPort}`,
+      url: build.url(queryOf(body)),
+      appPort: build.port,
+      ...counters(slot, build),
+    };
+  } catch (e) {
+    await pool.recycle(slot);
+    throw e;
+  }
+}
+
+async function releaseLease(id: string): Promise<void> {
+  const l = leases.get(id);
+  if (!l) return;
+  clearTimeout(l.timer);
+  leases.delete(id);
+  await resetPage(l.slot.page).catch(async () => { await pool.recycle(l.slot); });
+  if (pool.slots.includes(l.slot)) pool.release(l.slot);
+}
+
+/**
+ * Once per build: does a reset really put the page back where a fresh boot
+ * would?
+ *
+ * On a **`follow` shot**, because RESCUE §B1 says all 47 of them are
+ * order-dependent — companions are still steering to wandering formation slots
+ * when a shot settles, and formation state carries across shots. A warm daemon
+ * is a machine for carrying that state across captures, and a *shared* daemon
+ * carries it across agents, where it is invisible and unattributable. A
+ * drifting reset is a lying reset.
+ */
+async function checkResetDrift(build: BuildId, shot = 'party_walk'): Promise<string> {
+  const shoot = async (cold: boolean) => {
+    const out = await routeShots({
+      shots: [shot], out: path.join(repoCacheDir(KEY), 'drift', cold ? 'cold' : 'warm'),
+      build, cold, agent: 'daemon', lane: 'sweep',
+    });
+    return out.results[0]?.file;
+  };
+  try {
+    const fresh = await shoot(true);
+    // Dirty the page the way a real sequence would, then reset back to it.
+    await routeShots({ shots: ['dun_keycatrich_hall'], out: path.join(repoCacheDir(KEY), 'drift', 'via'), build, agent: 'daemon', lane: 'sweep' });
+    const after = await shoot(false);
+    if (!fresh || !after) return 'not measured';
+    const { decodePng, compare } = await import('./imgdiff.mts');
+    const { readFile } = await import('node:fs/promises');
+    const d = compare(decodePng(await readFile(path.join(ROOT, fresh))), decodePng(await readFile(path.join(ROOT, after))));
+    const verdict = d.mean === 0 ? 'byte-identical' : `mean ${d.mean.toFixed(3)}/255 max ${d.max} — RESET IS DRIFTING`;
+    resetDrift[shortBuild(build)] = verdict;
+    return verdict;
+  } catch (e) {
+    const msg = `failed: ${e instanceof Error ? e.message : String(e)}`;
+    resetDrift[shortBuild(build)] = msg;
+    return msg;
+  }
+}
+
+/**
+ * `/health` must never touch a page.
+ *
+ * "Are you busy?" is exactly the question you ask when everything is slow, and
+ * an answer that queues behind a 139-shot corpus is not an answer.
+ */
+function health(): HealthResponse {
+  return {
+    ok: true,
+    protocol: PROTOCOL,
+    repoKey: KEY,
+    daemonPort: DAEMON_PORT,
+    uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+    persistentProfile: pool.persistentProfile,
+    budget: BROWSER_BUDGET,
+    workers: { busy: sched.busy, total: WORKERS },
+    pool: { pages: pool.pages, contexts: pool.slots.length, budget: BROWSER_BUDGET },
+    queue: LANES.map((lane) => ({
+      lane,
+      depth: sched.queues[lane].length,
+      agents: sched.queues[lane].reduce<Record<string, number>>((a, j) => {
+        a[j.agent] = (a[j.agent] ?? 0) + 1; return a;
+      }, {}),
+    })),
+    builds: [...store.builds.values()].map((b) => ({
+      build: shortBuild(b.id),
+      dirty: isDirty(b.id),
+      port: b.port,
+      kind: b.kind,
+      pages: pool.slots.filter((s) => s.build === b.id && s.page).length,
+      idleSec: Math.round((Date.now() - b.lastUsed) / 1000),
+    })),
+    boots: pool.boots,
+    reuses: pool.reuses,
+    bootMs: pool.bootMs,
+    idleSec: Math.round((Date.now() - lastUsed) / 1000),
+    exclusive: sched.exclusive,
+    resetDrift,
+  };
 }
 
 async function serve() {
@@ -540,47 +1095,81 @@ async function serve() {
       let body: Record<string, unknown> = {};
       try { body = raw ? JSON.parse(raw) as Record<string, unknown> : {}; }
       catch { return send(400, { error: 'bad json' }); }
+      const lane = (body.lane === 'sweep' ? 'sweep' : 'fix') as Lane;
+      const agent = typeof body.agent === 'string' ? body.agent : 'anon';
+      const deadline = typeof body.deadlineMs === 'number' ? body.deadlineMs : 0;
+      const queued = <T,>(kind: string, fn: () => Promise<T>) => sched.submit(lane, agent, kind, deadline, fn);
       try {
-        if (url === '/health') {
-          return send(200, {
-            ok: true, appPort: APP_PORT, page: !!harness.page, browser: !!harness.browser,
-            persistentProfile: harness.persistentProfile,
-            mode: harness.mode, query: harness.query, boots: harness.boots,
-            reuses: harness.reuses, bootMs: harness.bootMs,
-            idleSec: Math.round((Date.now() - harness.lastUsed) / 1000),
-          });
+        if (url === '/health') return send(200, health());
+        if (url === '/version') {
+          return send(200, { protocol: PROTOCOL, repoKey: KEY, pid: process.pid, startedFrom: ROOT });
         }
-        // Which checkout this daemon serves, and which version of its own code
-        // it is running. Clients compare both.
-        if (url === '/root') return send(200, { root: ROOT, self: SELF_STAMP });
         if (url === '/stop') { send(200, { ok: true }); setTimeout(stop, 50); return; }
         if (url === '/shots') {
           if (!isShotsRequest(body)) {
             return send(400, { error: '/shots needs { shots: string[], out: string }' });
           }
-          return send(200, await queue(() => routeShots(body)));
+          return send(200, await queued('shots', () => routeShots(body)));
         }
         if (url === '/eval') {
           if (!isEvalRequest(body)) return send(400, { error: '/eval needs { fn: string }' });
-          return send(200, await queue(() => routeEval(body)));
+          return send(200, await queued('eval', () => routeEval(body)));
+        }
+        if (url === '/lease') return send(200, await queued('lease', () => routeLease(body as LeaseRequest)));
+        if (url === '/release') {
+          await releaseLease(String(body.id ?? ''));
+          return send(200, { ok: true });
+        }
+        if (url === '/release-build') {
+          store.release(String(body.build ?? ''));
+          return send(200, { ok: true });
+        }
+        if (url === '/exclusive') {
+          await sched.takeExclusive(agent);
+          await pool.closeAll();
+          return send(200, { ok: true, holder: agent });
+        }
+        if (url === '/exclusive-release') { sched.releaseExclusive(); return send(200, { ok: true }); }
+        if (url === '/drift') {
+          const build = typeof body.build === 'string' ? body.build : resolveBuild('HEAD');
+          return send(200, { verdict: await checkResetDrift(build) });
         }
         return send(404, { error: `no route ${url}` });
       } catch (e) {
+        const busy = e as { busy?: true, detail?: Record<string, unknown> };
+        if (busy.busy) {
+          // Exit 4 on the client, not 1: a saturated machine and a broken build
+          // must not look the same to an agent reading an exit code.
+          return send(429, { error: (e as Error).message, hint: 'retry, raise --deadline, or use --lane sweep', ...busy.detail });
+        }
         return send(500, { error: e instanceof Error ? e.stack ?? e.message : String(e) });
       }
     });
   });
   srv.listen(DAEMON_PORT, '127.0.0.1');
   srv.on('error', (e) => { console.error('[daemon]', e.message); process.exit(1); });
-  console.log(`[daemon] listening on ${DAEMON_PORT}, app on ${APP_PORT}`);
 
-  const stop = async () => { await harness.shutdown(); srv.close(); process.exit(0); };
+  const reg: Registry = {
+    port: DAEMON_PORT, pid: process.pid, key: KEY, protocol: PROTOCOL,
+    started: new Date().toISOString(), startedFrom: ROOT,
+  };
+  writeRegistry(reg);
+  console.log(`[daemon] ${keyHash(KEY)} listening on ${DAEMON_PORT}, budget ${BROWSER_BUDGET}, protocol ${PROTOCOL}`);
+
+  const stop = async () => {
+    clearRegistry(KEY);
+    await pool.closeAll();
+    store.closeAll();
+    srv.close();
+    process.exit(0);
+  };
   setInterval(() => {
-    const idle = Date.now() - harness.lastUsed;
+    store.reapIdle();
+    const idle = Date.now() - lastUsed;
     if (idle > DAEMON_IDLE_MS) { console.log('[daemon] idle, exiting'); void stop(); }
-    else if (idle > BROWSER_IDLE_MS && harness.browser) {
-      console.log('[daemon] idle, closing browser');
-      void queue(() => harness.closeBrowser());
+    else if (idle > BROWSER_IDLE_MS && pool.slots.length && pool.idle) {
+      console.log('[daemon] idle, closing browsers');
+      void pool.closeAll();
     }
   }, 15_000).unref?.();
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => void stop());

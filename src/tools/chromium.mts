@@ -92,12 +92,24 @@ const DISK_CACHE_BYTES = 1024 * 1024 * 1024;
  */
 export async function launchPersistent(
   viewport: { width: number, height: number },
+  /**
+   * Open a CDP endpoint on this port.
+   *
+   * The daemon needs it so a *play* tool can be handed a whole page without
+   * owning the browser: `gameplay`, `combatloop`, `integration` and friends
+   * drive real input over a running loop and need the `Page`, not a frame. They
+   * `chromium.connectOverCDP()` to this, and the daemon keeps the budget, the
+   * deadline and the teardown. Zero (the default) leaves the port closed, which
+   * is what every capture path wants.
+   */
+  cdpPort = 0,
 ): Promise<{ ctx: BrowserContext, persistent: boolean }> {
   const dir = profileDir();
+  const debugArgs = cdpPort ? [`--remote-debugging-port=${cdpPort}`] : [];
   // An escape hatch that is also the only honest way to measure this: the two
   // paths have to be A/B-able in one tree, or "the cache helps" is a guess.
   if (process.env.HARNESS_PERSISTENT_PROFILE === '0') {
-    const browser = await chromium.launch({ args: CHROMIUM_ARGS });
+    const browser = await chromium.launch({ args: [...CHROMIUM_ARGS, ...debugArgs] });
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     ctx.on('close', () => { void browser.close().catch(() => {}); });
     return { ctx, persistent: false };
@@ -105,14 +117,14 @@ export async function launchPersistent(
   try {
     await mkdir(dir, { recursive: true });
     const ctx = await chromium.launchPersistentContext(dir, {
-      args: [...CHROMIUM_ARGS, `--disk-cache-size=${DISK_CACHE_BYTES}`],
+      args: [...CHROMIUM_ARGS, ...debugArgs, `--disk-cache-size=${DISK_CACHE_BYTES}`],
       viewport, deviceScaleFactor: 1,
     });
     return { ctx, persistent: true };
   } catch (e) {
     console.warn(`[chromium] persistent profile unavailable (${e instanceof Error ? e.message : String(e)});`
       + ' falling back to a throwaway one — boots will re-compile every shader');
-    const browser = await chromium.launch({ args: CHROMIUM_ARGS });
+    const browser = await chromium.launch({ args: [...CHROMIUM_ARGS, ...debugArgs] });
     const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 });
     // A persistent context owns its browser, so closing it is enough. A plain
     // context does NOT: `ctx.close()` leaves the chromium running, and the
