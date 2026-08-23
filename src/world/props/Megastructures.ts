@@ -4,6 +4,15 @@ import { PartBuilder, loft, ring, texelBox, type Vec3 } from './PartBuilder.ts';
 import { magitekMaterial, concreteMaterial, glowMaterial, rockMaterial } from './PropMaterials.ts';
 import { rockGeometry } from './Rocks.ts';
 import type { Ecology } from '../veg/Ecology.ts';
+import { seatY } from './Seat.ts';
+
+/**
+ * How far a megastructure is drawn: all of them, always. They sit 1-4.5 km out
+ * and their whole job is to be on the horizon, so the ring under them is the
+ * coarsest in the stack and the seating error the analytic field carries there
+ * is measured in tens of metres.
+ */
+const CULL = 1200;
 
 /**
  * The things on the horizon that tell you what world this is.
@@ -552,7 +561,7 @@ export class Megastructures {
     // that its 857 m outer shards leaned over the headland and read as
     // unexplained slabs floating above the sea.
     const x = -1020, z = -2160;
-    g.position.set(x, this.eco.height(x, z) - 90, z);
+    g.position.set(x, seatY(this.eco, x, z, 400, CULL) - 90, z);
     g.rotation.y = 0.6;
     this.root.add(g);
   }
@@ -584,7 +593,7 @@ export class Megastructures {
 
     // ground profile, then a heavy smooth so the deck is a viaduct, not a wall
     const ground = [];
-    for (let i = 0; i <= bays; i++) { const p = bayAt(i); ground.push(eco.height(p.x, p.z)); }
+    for (let i = 0; i <= bays; i++) { const p = bayAt(i); ground.push(seatY(eco, p.x, p.z, 30, CULL)); }
     let deck = ground.slice();
     for (let pass = 0; pass < 12; pass++) {
       const t = deck.slice();
@@ -642,7 +651,7 @@ export class Megastructures {
       const px = p.x + rng.gauss(0, 34), pz = p.z + rng.gauss(0, 34);
       const s = rng.range(4, 15);
       B.add(M.pale, shard(2400 + i, s, [1.5, 0.7, 1.2], 0.3),
-        mat4([px, eco.height(px, pz) + s * 0.25, pz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
+        mat4([px, seatY(eco, px, pz, s, CULL) + s * 0.25, pz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]));
     }
 
     B.build(this.root, { cast: false, receive: true, name: 'viaduct' });

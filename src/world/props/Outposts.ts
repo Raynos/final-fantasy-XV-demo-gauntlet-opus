@@ -7,6 +7,20 @@ import {
 } from './PropMaterials.ts';
 import type { Ecology } from '../veg/Ecology.ts';
 import type { EcoSite } from './EcoSites.ts';
+import { seatY } from './Seat.ts';
+
+/**
+ * How far an outpost is still drawn.
+ *
+ * Not the range at which an outpost is a visible dot: the range at which its
+ * BASE is still read against the ground. `seatY` returns the lower envelope of
+ * every ring that could draw the point, and that envelope falls away fast — on
+ * a ridge it is ten metres under the analytic field by the 24 m ring. Seating a
+ * built structure there to protect a silhouette nobody can resolve buries it at
+ * the range where a player walks up to it, which is the range that matters. Far
+ * enough that the base never floats where the float would read; no further.
+ */
+const CULL = 300;
 
 /**
  * The built world between the landmarks: a fuel stop, an imperial roadblock,
@@ -195,14 +209,20 @@ export class Outposts {
     this.scene.add(this.root);
   }
 
-  /** Lowest ground under a footprint, so slabs never float on one corner. */
+  /**
+   * Lowest ground under a footprint, so slabs never float on one corner.
+   *
+   * One `seatY` with the footprint radius as `size`, **not** a `Math.min` over
+   * a ring of them. `seatHeightAt` already widens its envelope probe over
+   * `size`, so the ring version minimises a minimum — and the first capture of
+   * that put the whole mesa comms compound *inside* the ridge it stands on:
+   * dish, containers, truck and fence gone, with only the mast poking out of
+   * the hillside. On a knife-edge ridge the coarse ring's lower envelope is
+   * already ten metres under the analytic field, and taking a second minimum
+   * across a twenty-metre ring on top of that is another ten.
+   */
   _base(x: number, z: number, r: number) {
-    let base = this.eco.height(x, z);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      base = Math.min(base, this.eco.height(x + Math.cos(a) * r, z + Math.sin(a) * r));
-    }
-    return base;
+    return seatY(this.eco, x, z, r, CULL);
   }
 
   // -------------------------------------------------------------- rest stop
@@ -398,7 +418,7 @@ export class Outposts {
   _wreck(this: Outposts, B: PartBuilder, site: EcoSite) {
     const M = this.mats;
     const rng = new Rng(920 + (site.kind || 0) * 37);
-    const y = this.eco.height(site.x, site.z);
+    const y = seatY(this.eco, site.x, site.z, 4, CULL);
     const yaw = (site.yaw || 0) + (site.kind ? 1.1 : 0.35);
     const world = mat4([site.x, y, site.z], [0, yaw, site.kind ? 0.9 : 0.02]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
@@ -430,7 +450,7 @@ export class Outposts {
       for (let i = 0; i < 7; i++) {
         const px = rng.range(-9, -3), pz = rng.range(-4, 4);
         B.add(M.wood, new THREE.BoxGeometry(0.9, 0.62, 0.8),
-          mat4([site.x + px, this.eco.height(site.x + px, site.z + pz) + 0.3, site.z + pz],
+          mat4([site.x + px, seatY(this.eco, site.x + px, site.z + pz, 0.9, CULL) + 0.3, site.z + pz],
             [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
       }
     }
@@ -444,7 +464,7 @@ export class Outposts {
     const eco = this.eco;
     const rng = new Rng(7373);
     const yaw = site.yaw || 0;
-    const y = eco.height(site.x, site.z);
+    const y = seatY(eco, site.x, site.z, 12, CULL);
     const world = mat4([site.x, y, site.z], [0, yaw, 0]);
     const put = (mat: THREE.Material, geo: THREE.BufferGeometry, p: Vec3, r?: Vec3, s?: Vec3) => B.add(mat, geo, world.clone().multiply(mat4(p, r, s)));
 
@@ -471,14 +491,14 @@ export class Outposts {
       const pz = site.z + Math.cos(yaw) * along + rng.gauss(0, 4);
       const s = rng.range(0.7, 2.6) * (1 - t * 0.5);
       B.add(M.rock, new THREE.IcosahedronGeometry(s, 0),
-        mat4([px, eco.height(px, pz) + s * 0.25, pz], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
+        mat4([px, seatY(eco, px, pz, s, CULL) + s * 0.25, pz], [rng.gauss(0, 0.5), rng.next() * 3, rng.gauss(0, 0.5)]));
     }
     // shed panels and struts
     for (let i = 0; i < 16; i++) {
       const a = rng.next() * Math.PI * 2, d = 12 + rng.range(0, 34);
       const px = site.x + Math.cos(a) * d, pz = site.z + Math.sin(a) * d;
       B.add(M.magitek, new THREE.BoxGeometry(rng.range(1.2, 3.4), 0.22, rng.range(0.9, 2.6)),
-        mat4([px, eco.height(px, pz) + 0.14, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
+        mat4([px, seatY(eco, px, pz, 2, CULL) + 0.14, pz], [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
     }
 
     this.crash = { x: site.x, y: y + 5, z: site.z };
@@ -666,7 +686,7 @@ export class Outposts {
     for (let i = 0; i < 22; i++) {
       const a = rng.next() * Math.PI * 2, d = 8 + rng.range(0, 24);
       const px = site.x + Math.cos(a) * d, pz = site.z + Math.sin(a) * d;
-      B.add(M.pale, drum, mat4([px, eco.height(px, pz) + 0.7, pz],
+      B.add(M.pale, drum, mat4([px, seatY(eco, px, pz, 0.6, CULL) + 0.7, pz],
         [Math.PI / 2 + rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]));
     }
   }
