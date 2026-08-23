@@ -3,6 +3,7 @@ import { archetype, NpcBody } from './NpcRig.ts';
 import { NPC_CAST } from './NpcCast.ts';
 import { NPC_DIALOGUE } from './NpcDialogue.ts';
 import { Rng } from '../../util/Rng.ts';
+import { worldMap } from '../../world/map/WorldMap.ts';
 import { updateSun } from '../rig/Materials.ts';
 import type { GroundSampler } from '../rig/Anim.ts';
 import type { Hammerhead } from '../../world/town/Hammerhead.ts';
@@ -11,10 +12,12 @@ import type { InteractionSystem } from '../../game/interaction/Interactables.ts'
 import type { Game } from '../../game/Game.ts';
 
 /**
- * The population of Hammerhead.
+ * The population of Lucis.
  *
- * Eleven people, placed against the anchors the town system publishes, each
- * with a behaviour rather than a spot on the floor:
+ * Eleven people in Hammerhead, placed against the anchors the town system
+ * publishes, plus the five of {@link REMOTE} who live at outposts across the
+ * map and are built on approach. Each has a behaviour rather than a spot on
+ * the floor:
  *
  * - **station** — stands somewhere for a reason, facing something, with a
  *   posture (Cindy leaning on the fender, Takka forward over his counter).
@@ -27,7 +30,8 @@ import type { Game } from '../../game/Game.ts';
  * which is the single cheapest thing that stops a crowd reading as furniture.
  *
  * The named four also register a `Talk` interactable, so `E` in front of Cindy
- * opens Cindy's conversation and not the fuel pump behind her.
+ * opens Cindy's conversation and not the fuel pump behind her — as do all five
+ * of the outpost cast, every one of whom exists because a quest names them.
  */
 
 const _v = new THREE.Vector3();
@@ -156,6 +160,59 @@ export interface Npc {
   talkingUntil?: number;
 }
 
+/**
+ * Someone who lives somewhere other than Hammerhead.
+ *
+ * Anchored to a **POI id** rather than a town-local `(u, v)`, because there is
+ * no town system anywhere else in Lucis: `worldMap.poiById` is the same table
+ * the compass, the minimap and every quest waypoint read, so a person cannot
+ * drift away from the place they are named after.
+ */
+export interface RemoteNpc {
+  castKey: keyof typeof NPC_CAST;
+  /** POI id from `WorldMap`. */
+  at: string;
+  /** metres east of the pin. */
+  dx?: number;
+  /** metres south of the pin. */
+  dz?: number;
+  /** heading in radians they face at rest. */
+  face?: number;
+  posture?: PostureName;
+  task?: NpcTask;
+  talkRadius?: number;
+}
+
+/**
+ * The cast outside Hammerhead, and where each of them stands.
+ *
+ * Every one of these five is **named by the quest table** and had never been
+ * built — which is the whole reason the main story could not leave chapter 2.
+ * `main_ch2_galdin` says "speak to Dino at the pier"; `main_ch4_lestallum`
+ * wants Iris; `side_chocobo`, `side_power_play` and `side_gemstone_run` want
+ * Wiz, Holly and Randolph. Twelve quests were unfinishable and five of the
+ * twenty-one dead objectives were these people.
+ *
+ * The offsets keep them off the pin itself, which for a `landmark` or a `town`
+ * POI is the *centre* of the place — Lestallum's pin is the middle of the town
+ * footprint, not a spot to stand on.
+ */
+export const REMOTE: RemoteNpc[] = [
+  // On the boardwalk at Galdin, facing back up the causeway at whoever arrives.
+  { castKey: 'dino', at: 'galdin_quay', dx: 18, dz: -26, face: 2.6, posture: 'lean', task: 'inspect' },
+  // Outside the Leville, watching the market square.
+  { castKey: 'iris', at: 'lestallum', dx: -34, dz: 22, face: 0.8, posture: 'pockets' },
+  // At the paddock rail, arms folded, watching the birds.
+  { castKey: 'wiz', at: 'wiz_chocobo', dx: 26, dz: 14, face: -1.9, posture: 'folded' },
+  // On the plant apron with a clipboard.
+  { castKey: 'holly', at: 'exineris', dx: 40, dz: -30, face: 1.4, posture: 'folded', task: 'inspect' },
+  // At his anvil on the far side of the Lestallum market from Iris.
+  { castKey: 'randolph', at: 'lestallum', dx: 44, dz: -18, face: -2.2, posture: 'counter', task: 'wrench' },
+];
+
+/** Metres at which a {@link REMOTE} placement is built. @see Npcs._place */
+const REMOTE_RANGE = 420;
+
 /** Where and how one townsperson is placed. */
 export interface NpcPlacement {
   /** unique id; defaults to the cast key. Needed when a cast entry is reused. */
@@ -177,6 +234,8 @@ export class Npcs {
   _camPos!: THREE.Vector3;
   /** `InteractionSystem.register` handles, kept so they could be revoked. */
   _handles!: ReturnType<InteractionSystem['register']>[];
+  /** {@link REMOTE} placements not yet built. @see _streamRemote */
+  _pending!: RemoteNpc[];
   eco!: Ecology | undefined;
   game!: Game;
   /** The pad-aware ground the rig's foot IK plants on. See `_groundAt`. */
@@ -190,6 +249,8 @@ export class Npcs {
     this.root = new THREE.Group();
     this.root.name = 'npcs';
     this._camPos = new THREE.Vector3();
+    this._handles = [];
+    this._pending = REMOTE.slice();
   }
 
   async init(game: Game) {
@@ -197,6 +258,10 @@ export class Npcs {
     const town = game.get('Town');
     if (!town || !town.anchors || !town.local) {
       console.warn('[Npcs] no town to populate');
+      // The five outside Hammerhead do not need the town, and the main story
+      // dead-ends without them. Keep the root in the scene for them.
+      game.scene.add(this.root);
+      this.stats = { count: 0, draws: 0 };
       return this;
     }
     this.town = town;
@@ -287,6 +352,27 @@ export class Npcs {
   }
 
   /**
+   * Place one of the {@link REMOTE} cast, now that the party is near enough.
+   *
+   * Nothing here differs from a Hammerhead placement except *when* it happens.
+   * The archetype build is the expensive half — a skeleton, five geometries and
+   * a painted 1024² face — and five of those at boot would put back most of the
+   * 6.8 s cold boot the previous lane fought for. 420 m is roughly eleven
+   * seconds at road speed and two minutes on foot, so the build has landed long
+   * before anyone can read a prompt.
+   */
+  _place(game: Game, r: RemoteNpc) {
+    const p = worldMap.poiById(r.at);
+    if (!p) { console.warn(`[Npcs] ${r.castKey} anchored to unknown POI "${r.at}"`); return null; }
+    const pos = new THREE.Vector3(p.x + (r.dx || 0), 0, p.z + (r.dz || 0));
+    const face = new THREE.Vector3(pos.x + Math.sin(r.face || 0) * 6, 0, pos.z + Math.cos(r.face || 0) * 6);
+    const npc = this._spawn(r.castKey, { pos, face, posture: r.posture, task: r.task, talkRadius: r.talkRadius ?? 3.0 });
+    if (!npc) return null;
+    this._registerTalkFor(game, npc);
+    return npc;
+  }
+
+  /**
    * Place one townsperson.
    * @param castKey key in NPC_CAST
    * @param opts placement and behaviour
@@ -351,12 +437,24 @@ export class Npcs {
   _registerTalk(game: Game) {
     const ix = game.get('Interaction');
     if (!ix) return;
-    this._handles = [];
-    for (const npc of this.list) {
-      if (!npc.talkRadius) continue;
-      const make = NPC_DIALOGUE[npc.castKey as keyof typeof NPC_DIALOGUE];
-      if (!make) continue;
-      const anchor = new THREE.Vector3();
+    for (const npc of this.list) this._registerTalkFor(game, npc);
+  }
+
+  /** One person's `Talk` interactable. @see _registerTalk */
+  _registerTalkFor(game: Game, npc: Npc) {
+    const ix = game.get('Interaction');
+    if (!ix) return;
+    if (!npc.talkRadius) return;
+    const make = NPC_DIALOGUE[npc.castKey as keyof typeof NPC_DIALOGUE];
+    if (!make) return;
+    // Seeded from where the person is standing, not left at the origin.
+    // `update` refreshes it, but only for someone the camera is near — so an
+    // unseeded anchor put a phantom `Talk` prompt at (0, 0, 0), which is 60 m
+    // from where the game starts. Reading `npc_cid.pos` from a probe standing
+    // at the car is how the last lane spent an afternoon on a picker bug that
+    // was really this.
+    const anchor = npc.pos.clone();
+    {
       this._handles.push(ix.register({
         id: `npc_${npc.id}`,
         pos: anchor,
@@ -380,10 +478,11 @@ export class Npcs {
   /* --------------------------------------------------------------- tick */
 
   update(dt: number, game: Game) {
+    this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
+    this._streamRemote(game);
     if (!this.list.length) return;
     const player = game.get('Player');
     const p = player ? player.position : null;
-    this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     const t = game.time.now;
     const talking = game.get('Interaction')?.talking;
 
@@ -393,6 +492,10 @@ export class Npcs {
       // skeleton solve, and the skeleton solve is the whole per-NPC cost.
       const lod = d > 85 ? 2 : d > 38 ? 1 : 0;
       npc.body.setLod(lod);
+      // The prompt anchor is not part of the LOD. It costs a vector copy, it
+      // is what the interaction verb reads, and skipping it past 85 m is how a
+      // `TALK / TAKKA` prompt came to hang over empty desert 594 m from Takka.
+      this._anchor(npc);
       if (lod === 2) continue;
 
       if (npc.route) this._walk(npc, dt);
@@ -436,13 +539,46 @@ export class Npcs {
 
       // Posture and task ride on top of the finished pose.
       if (npc.posture && npc.moveSpeed < 0.4) this._applyPosture(npc, dt, t);
-      if (npc.anchor) {
-        npc.anchor.copy(npc.pos);
-        // stand the prompt anchor a little in front so it does not sit inside
-        // the person's own head
-        npc.anchor.x += Math.sin(npc.heading) * 0.25;
-        npc.anchor.z += Math.cos(npc.heading) * 0.25;
-      }
+    }
+  }
+
+  /**
+   * Put one person's prompt anchor where that person is.
+   *
+   * A quarter of a metre in front of them, so the prompt does not sit inside
+   * their own head. Called for **every** NPC every frame, LOD or no LOD: this
+   * is the position the interaction verb is judged against, and an anchor that
+   * stops being updated is a prompt that keeps being offered somewhere its
+   * subject has left.
+   */
+  _anchor(npc: Npc) {
+    const a = npc.anchor;
+    if (!a) return;
+    a.copy(npc.pos);
+    a.x += Math.sin(npc.heading) * 0.25;
+    a.z += Math.cos(npc.heading) * 0.25;
+  }
+
+  /**
+   * Build any {@link REMOTE} placement the camera has come within range of.
+   *
+   * One per call at most: two archetype builds in the same frame is a visible
+   * hitch, and the range gives seconds of slack even at road speed. Checked
+   * against the *camera* rather than the player because the camera is what
+   * leads a drive, and because a capture or a freecam has no player near it.
+   */
+  _streamRemote(game: Game) {
+    const pend = this._pending;
+    if (!pend || !pend.length) return;
+    for (let i = 0; i < pend.length; i++) {
+      const r = pend[i];
+      const p = worldMap.poiById(r.at);
+      if (!p) { pend.splice(i, 1); return; }
+      if (Math.hypot(p.x + (r.dx || 0) - this._camPos.x, p.z + (r.dz || 0) - this._camPos.z) > REMOTE_RANGE) continue;
+      pend.splice(i, 1);
+      this._place(game, r);
+      this.stats = { count: this.list.length, draws: this.list.length * 5 };
+      return;
     }
   }
 

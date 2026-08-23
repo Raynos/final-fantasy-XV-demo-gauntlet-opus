@@ -240,7 +240,12 @@ export class Dungeons {
   _wireInteraction(game: Game) {
     const ix = game.get('Interaction');
     if (!ix) return;
-    this._verbPos = new THREE.Vector3();
+    // Not the origin. `enabled` already keeps it silent until `prompt` names
+    // something, but an unfired interactable sitting on the player's spawn is
+    // exactly the shape of the phantom `TALK / TAKKA` prompt the NPC anchors
+    // used to raise over empty desert, and it should not be one bad guard away
+    // from being that again.
+    this._verbPos = new THREE.Vector3(0, -9999, 0);
     this._verb = ix.register({
       id: 'dungeon_verb',
       pos: this._verbPos,

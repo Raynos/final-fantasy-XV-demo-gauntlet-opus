@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { CharacterDef, HairStyle, HairTuft } from '../rig/Look.ts';
 
 /**
- * The people of Hammerhead.
+ * The people of Lucis: the eleven of Hammerhead, and the five outposts beyond.
  *
  * Each entry is a body `profile` and a `look` in exactly the format
  * `characters/rig/**` expects, so townsfolk are built by the same skeleton,
@@ -13,6 +13,8 @@ import type { CharacterDef, HairStyle, HairTuft } from '../rig/Look.ts';
  * Silhouette first, as with the leads. Cid is short, stooped and barrel-chested;
  * Takka is the widest man in the badlands; Cindy is small and stands with all
  * her weight on one hip; Dave is tall, lean and never takes the cap off.
+ * Beyond Hammerhead: Randolph is the biggest person in the game and Iris the
+ * smallest adult, and Dino is the only man in Leide wearing a waistcoat.
  */
 
 const srgb = (hex: number) => new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
@@ -336,6 +338,207 @@ export const NPC_CAST = {
         { type: 'belt', color: 0x3a3038, rough: 0.5, u: 0.37, pad: 0.018, buckleBox: true, buckleColor: 0x9aa0a8 },
         { type: 'strap', color: 0x6a5a3c, rough: 0.88, side: 'R', width: 0.014, to: [0.05, 1.15, -0.10] },
         { type: 'boots', color: 0x2f2a2a, rough: 0.5, shaft: 0.7, height: 0.036 },
+      ],
+    },
+  },
+
+  /* ------------------------------------------------- the outposts beyond -- */
+  /*
+   * Five people who are *named in the quest table* and had never been built,
+   * which is why the main story could not leave chapter 2: `main_ch2_galdin`
+   * says "speak to Dino at the pier" and there was no Dino, and
+   * `StorySystem.completeChapter` needs every chapter quest done before the
+   * next one starts. Four side quests dead-ended the same way.
+   *
+   * They are placed against world POIs rather than town anchors, and built the
+   * first time the camera comes within 420 m rather than at boot — see
+   * `Npcs.REMOTE`. A townsperson is one archetype and one painted 1024² face,
+   * and five of those at boot would put back most of what the boot lane just
+   * took out.
+   */
+  dino: {
+    name: 'Dino Ghiranze',
+    role: 'Jeweller · Reporter',
+    hue: 310,
+    profile: { height: 1.775, shoulder: 0.94, muscle: 0.42, hip: 0.96, neck: 1.0, headScale: 1.0 },
+    look: {
+      seed: 199,
+      // weight cocked back, one hand out mid-sentence: he is always mid-sentence
+      idle: {
+        hips: [0, 0.04, -0.09], spine01: [-0.03, 0.03, 0.04], spine03: [-0.05, 0.06, 0.03],
+        neck: [0.02, 0.04, -0.02], head: [-0.04, 0.05, -0.03],
+        upperArmL: [0.04, 0.02, 0.09], lowerArmL: [-0.38, 0.06, 0],
+        upperArmR: [-0.24, -0.16, -0.26], lowerArmR: [-0.92, -0.12, 0], handR: [0.2, 0, -0.3],
+        thighL: [-0.04, 0, 0.05], shinL: [0.08, 0, 0],
+      },
+      stance: -0.4,
+      skin: srgb(0xc09a72), iris: 0x4b6a4a,
+      headWidth: 0.97, jaw: 0.35, cheek: 0.2, nose: 0.55, brow: 0.35, eyeOpen: 0.96,
+      blush: 'rgba(184,92,72,0.30)', lip: 'rgba(154,86,78,0.52)',
+      browShadow: 'rgba(44,32,22,0.56)', lashColor: 0x120d08,
+      stubble: 0.22, stubbleColor: '#2e2418',
+      fringeShadow: 0.34,
+      brows: { color: 0x2a2016, len: 0.0155, width: 0.0070 },
+      // slicked straight back, nothing over the forehead
+      hair: hairSet({ color: 0x1c1712, tip: 0x38302a, len: 0.014, back: 0.040, n: 120, sweep: 0.02, spring: 0.08, rough: 0.30 }),
+      outfit: [
+        { type: 'shirt', color: 0xe6e0d2, rough: 0.72, u0: 0.28, u1: 0.98, pad: 0.010, neckCut: 0.42, wrinkle: 0.014 },
+        { type: 'sleeve', color: 0xe6e0d2, rough: 0.72, u0: 0.03, u1: 0.62, pad: 0.012, cuff: 0.03, cuffBand: true, cuffColor: 0xd8d1c0 },
+        { type: 'pants', color: 0x2c3140, rough: 0.74, padHip: 0.016, padAnkle: 0.012, u1: 0.94, wrinkle: 0.014 },
+        // an open waistcoat, which is the whole silhouette
+        { type: 'jacket', color: 0x6d2f46, rough: 0.52, u0: 0.34, u1: 0.90, pad: 0.014, gap: 0.66, flare: 0.01, waist: 0.05, thickness: 0.008, collarH: 0.034, collarR: 0.052, collarFlare: 0.9 },
+        { type: 'belt', color: 0x2f2820, rough: 0.42, u: 0.38, pad: 0.018, buckleBox: true, buckleColor: 0xc8ab62 },
+        { type: 'band', color: 0xc8ab62, rough: 0.30, sides: ['L'], u: 0.90, pad: 0.008, ridge: 0.05 },
+        { type: 'boots', color: 0x3a2d24, rough: 0.40, shaft: 0.52, height: 0.034 },
+      ],
+    },
+  },
+
+  iris: {
+    name: 'Iris Amicitia',
+    role: 'Shield\'s Sister',
+    hue: 348,
+    profile: { height: 1.615, shoulder: 0.86, muscle: 0.26, hip: 1.04, neck: 0.96, headScale: 1.08 },
+    look: {
+      seed: 211,
+      // up on the balls of her feet, hands clasped behind, leaning in
+      idle: {
+        hips: [-0.03, 0.03, 0.04], spine01: [0.05, -0.03, 0], spine03: [0.06, -0.05, -0.02],
+        neck: [-0.06, 0.05, 0.02], head: [-0.08, 0.07, 0.03],
+        upperArmL: [-0.30, 0.26, 0.20], lowerArmL: [-1.30, 0.30, 0],
+        upperArmR: [-0.30, -0.26, -0.20], lowerArmR: [-1.34, -0.30, 0],
+        thighL: [0.03, 0, 0.05], thighR: [0.03, 0, -0.05],
+      },
+      stance: 0.3,
+      skin: srgb(0xd0ab8c), iris: 0x6a4b32,
+      headWidth: 0.94, jaw: -0.55, cheek: 0.75, nose: -0.4, brow: -0.25, eyeOpen: 1.10,
+      blush: 'rgba(212,108,98,0.48)', lip: 'rgba(190,88,90,0.68)',
+      browShadow: 'rgba(58,40,28,0.44)', lashColor: 0x171009,
+      fringeShadow: 0.34,
+      brows: { color: 0x2e2118, len: 0.0125, width: 0.0052 },
+      hair: hairSet({ color: 0x2a1d14, tip: 0x54402c, len: 0.030, back: 0.036, n: 145, sweep: -0.14, spring: 0.45 }),
+      outfit: [
+        { type: 'shirt', color: 0xe4dcce, rough: 0.80, u0: 0.44, u1: 0.94, pad: 0.008, neckCut: 0.52, wrinkle: 0.016 },
+        { type: 'pants', color: 0x2f3646, rough: 0.78, u1: 0.44, padHip: 0.014, padAnkle: 0.012, wrinkle: 0.016 },
+        { type: 'jacket', color: 0xa8353c, rough: 0.60, u0: 0.42, u1: 0.90, pad: 0.016, gap: 0.70, flare: 0.04, waist: 0.04, thickness: 0.009, collarH: 0.036, collarR: 0.056, collarFlare: 1.0 },
+        { type: 'sleeve', color: 0xa8353c, rough: 0.60, u0: 0.03, u1: 0.34, pad: 0.011, cuff: 0.03 },
+        { type: 'belt', color: 0x33291f, rough: 0.5, u: 0.42, pad: 0.016, buckleBox: true, buckleColor: 0xbfae86 },
+        { type: 'boots', color: 0x2e2620, rough: 0.5, shaft: 0.80, strap: true, height: 0.036 },
+      ],
+    },
+  },
+
+  wiz: {
+    name: 'Wiz Forlane',
+    role: 'Chocobo Rancher',
+    hue: 40,
+    profile: { height: 1.805, shoulder: 0.97, muscle: 0.62, hip: 1.04, neck: 1.06, headScale: 1.0 },
+    look: {
+      seed: 223,
+      // thumbs in the belt, the stance of a man who stands in a paddock all day
+      idle: {
+        hips: [-0.02, 0, 0.03], spine02: [-0.04, 0, 0], neck: [0.08, 0, 0], head: [0.03, 0, 0],
+        upperArmL: [-0.10, 0.18, 0.30], lowerArmL: [-1.05, 0.24, 0],
+        upperArmR: [-0.10, -0.18, -0.30], lowerArmR: [-1.05, -0.24, 0],
+        thighL: [0.02, 0, 0.06], thighR: [0.02, 0, -0.06],
+      },
+      skin: srgb(0xa9855f), iris: 0x6d5b3c,
+      headWidth: 1.03, jaw: 0.85, cheek: -0.4, nose: 0.6, brow: 0.9, eyeOpen: 0.80,
+      blush: 'rgba(172,88,58,0.34)', lip: 'rgba(136,82,70,0.46)',
+      browShadow: 'rgba(52,40,26,0.58)', lashColor: 0x14100a,
+      stubble: 0.38, stubbleColor: '#6a5c48',
+      fringeShadow: 0.44,
+      brows: { color: 0x7a6a4e, len: 0.0165, width: 0.0076 },
+      hair: (() => {
+        const h = hairSet({ color: 0x6d604a, tip: 0x99896b, len: 0.016, back: 0.024, n: 90, spring: 0.1, rough: 0.52 });
+        h.tufts.push(...beard(0x6d604a, 0xa1916f, 0.017, 120));
+        return h;
+      })(),
+      outfit: [
+        { type: 'shirt', color: 0xb8a67e, rough: 0.90, u0: 0.30, u1: 0.97, pad: 0.012, neckCut: 0.34, wrinkle: 0.024 },
+        { type: 'sleeve', color: 0xb8a67e, rough: 0.90, u0: 0.03, u1: 0.52, pad: 0.014, cuff: 0.03 },
+        { type: 'pants', color: 0x4d4232, rough: 0.88, padHip: 0.020, padAnkle: 0.016, u1: 0.94, wrinkle: 0.024, knee: 0.030 },
+        // a leather work apron over the front only, the way a farrier wears one
+        { type: 'plate', color: 0x5c4326, rough: 0.78, u0: 0.24, u1: 0.72, pad: 0.014, theta: [2.05, 4.25] },
+        { type: 'belt', color: 0x3e3324, rough: 0.5, u: 0.36, pad: 0.026, buckleBox: true, buckleColor: 0xc0a463 },
+        { type: 'pouch', color: 0x3e3324, rough: 0.6, sides: ['R'], u: 0.24, size: [0.06, 0.10, 0.04] },
+        { type: 'boots', color: 0x33291d, rough: 0.6, shaft: 0.82, strap: true, height: 0.044 },
+      ],
+    },
+  },
+
+  holly: {
+    name: 'Holly Teulle',
+    role: 'EXINERIS Supervisor',
+    hue: 172,
+    profile: { height: 1.705, shoulder: 0.88, muscle: 0.34, hip: 1.02, neck: 0.98, headScale: 1.02 },
+    look: {
+      seed: 227,
+      // clipboard arm crooked, other hand on the hip: mid-inspection
+      idle: {
+        hips: [0, 0.04, -0.10], spine03: [-0.04, 0.05, 0.03],
+        neck: [0.04, 0.03, -0.02], head: [-0.02, 0.05, -0.03],
+        upperArmL: [-0.42, 0.22, 0.30], lowerArmL: [-1.35, 0.24, 0], handL: [0.3, 0, 0],
+        upperArmR: [-0.20, -0.24, -0.34], lowerArmR: [-0.80, -0.16, 0],
+        thighR: [-0.04, 0, -0.06], shinR: [0.08, 0, 0],
+      },
+      stance: -0.5,
+      skin: srgb(0x7a5b40), iris: 0x3f2c1c,
+      headWidth: 0.97, jaw: -0.15, cheek: 0.45, nose: -0.1, brow: 0.15, eyeOpen: 1.0,
+      blush: 'rgba(150,72,56,0.30)', lip: 'rgba(140,74,70,0.58)',
+      browShadow: 'rgba(26,18,12,0.60)', lashColor: 0x0b0806,
+      fringeShadow: 0.46,
+      brows: { color: 0x1c1410, len: 0.014, width: 0.0060 },
+      hair: hairSet({ color: 0x120e0b, tip: 0x2a221c, len: 0.014, back: 0.016, n: 120, spring: 0.08, rough: 0.44 }),
+      outfit: [
+        { type: 'shirt', color: 0xd9d2c2, rough: 0.86, u0: 0.30, u1: 0.97, pad: 0.010, neckCut: 0.38, wrinkle: 0.018 },
+        { type: 'pants', color: 0x2f4a48, rough: 0.84, padHip: 0.018, padAnkle: 0.014, u1: 0.94, wrinkle: 0.020, cargo: 0.04 },
+        // the plant's high-visibility tabard, over the shirt and open at the front
+        { type: 'jacket', color: 0xd7a12c, rough: 0.72, u0: 0.32, u1: 0.92, pad: 0.020, gap: 0.30, flare: 0.02, thickness: 0.010, collarH: 0.038, collarR: 0.058, collarFlare: 0.96 },
+        { type: 'band', color: 0x2b2b2b, rough: 0.70, sides: ['L', 'R'], u: 0.56, pad: 0.011, ridge: 0.03 },
+        { type: 'belt', color: 0x2c2a26, rough: 0.5, u: 0.37, pad: 0.020, buckleBox: true, buckleColor: 0x9aa0a4 },
+        { type: 'pouch', color: 0x2c2a26, rough: 0.55, sides: ['R'], u: 0.25, size: [0.05, 0.08, 0.035] },
+        { type: 'boots', color: 0x282420, rough: 0.55, shaft: 0.66, strap: true, height: 0.042 },
+      ],
+    },
+  },
+
+  randolph: {
+    name: 'Randolph',
+    role: 'Weaponsmith',
+    hue: 14,
+    profile: { height: 1.955, shoulder: 1.08, muscle: 0.94, hip: 1.14, neck: 1.16, headScale: 0.96 },
+    look: {
+      seed: 233,
+      // arms crossed high over a chest that has no business being that wide
+      idle: {
+        spine02: [-0.04, 0, 0], spine03: [-0.06, 0, 0], neck: [0.10, 0, 0], head: [0.03, 0, 0],
+        clavicleL: [-0.07, 0, -0.07], clavicleR: [-0.07, 0, 0.07],
+        upperArmL: [-0.78, 0.32, -0.58], lowerArmL: [-1.66, 0.36, 0],
+        upperArmR: [-0.74, -0.32, 0.56], lowerArmR: [-1.74, -0.36, 0],
+        thighL: [0.02, 0, 0.07], thighR: [0.02, 0, -0.07],
+      },
+      skin: srgb(0xb08a63), iris: 0x53422a,
+      headWidth: 1.10, jaw: 1.25, cheek: -0.6, nose: 0.7, brow: 1.25, eyeOpen: 0.74,
+      blush: 'rgba(184,90,58,0.34)', lip: 'rgba(132,78,66,0.44)',
+      browShadow: 'rgba(38,28,18,0.62)', lashColor: 0x0e0a06,
+      stubble: 0.30, stubbleColor: '#40301f',
+      fringeShadow: 0.5,
+      // bald on top; the beard is the character
+      brows: { color: 0x3a2c1c, len: 0.0180, width: 0.0086 },
+      hair: (() => {
+        const h = hairSet({ color: 0x3a2c1c, tip: 0x5b452c, len: 0.004, back: 0.006, n: 26, spring: 0.02, rough: 0.6 });
+        h.tufts.push(...beard(0x3a2c1c, 0x6a5334, 0.034, 170));
+        return h;
+      })(),
+      outfit: [
+        { type: 'shirt', color: 0x8b8377, rough: 0.92, u0: 0.30, u1: 0.86, pad: 0.013, neckCut: 0.30, wrinkle: 0.026 },
+        { type: 'pants', color: 0x3b342a, rough: 0.88, padHip: 0.024, padAnkle: 0.018, u1: 0.94, wrinkle: 0.026 },
+        { type: 'plate', color: 0x4a2f1e, rough: 0.80, u0: 0.20, u1: 0.84, pad: 0.016, theta: [2.05, 4.25] },
+        { type: 'strap', color: 0x4a2f1e, rough: 0.82, side: 'L', width: 0.020, to: [-0.06, 1.28, -0.10] },
+        { type: 'belt', color: 0x33291f, rough: 0.6, u: 0.34, pad: 0.028, buckleBox: true, buckleColor: 0x8e7c52 },
+        { type: 'band', color: 0x4a2f1e, rough: 0.8, sides: ['L', 'R'], u: 0.72, pad: 0.016, ridge: 0.05 },
+        { type: 'boots', color: 0x2b241c, rough: 0.62, shaft: 0.60, height: 0.044 },
       ],
     },
   },

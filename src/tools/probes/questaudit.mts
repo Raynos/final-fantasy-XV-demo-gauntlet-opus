@@ -15,11 +15,19 @@ const items = Object.keys(I.ITEMS);
 const npcCast = Object.keys(N.NPC_CAST || {});
 const withDialogue = Object.keys(D.NPC_DIALOGUE || {});
 // only an NPC that is placed AND has a dialogue tree ever fires notify('talk')
-const placed = new Set((g.get('Npcs')?.list || []).map((n) => n.castKey));
+const npcs = g.get('Npcs');
+const built = new Set((npcs?.list || []).map((n) => n.castKey));
+// The five outside Hammerhead are built when the camera comes within 420 m of
+// their POI, not at boot — a townsperson is a painted 1024^2 face and five of
+// them at boot is most of the cold-boot budget. A pending placement is still a
+// placement, so it counts here; `whereabouts` below proves each one lands.
+const pending = new Set((npcs?._pending || []).map((r) => r.castKey));
+const placed = new Set([...built, ...pending]);
 const talkable = npcCast.filter((k) => withDialogue.includes(k) && placed.has(k));
 out.push(`npc cast (${npcCast.length}): ${npcCast.join(' ')}`);
 out.push(`with dialogue (${withDialogue.length}): ${withDialogue.join(' ')}`);
-out.push(`placed in this world (${placed.size}): ${[...placed].join(' ')}`);
+out.push(`built at boot (${built.size}): ${[...built].join(' ')}`);
+out.push(`built on approach (${pending.size}): ${[...pending].join(' ')}`);
 out.push(`ACTUALLY TALKABLE (${talkable.length}): ${talkable.join(' ')}`);
 
 // what a kill can ever yield, anywhere

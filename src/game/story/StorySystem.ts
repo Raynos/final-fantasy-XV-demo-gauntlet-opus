@@ -135,6 +135,7 @@ export class StorySystem {
       if (first && rpg.quests.status(first) === 'available') rpg.quests.accept(first);
       if (first) rpg.quests.track(first);
     }
+    this._advanceChapterLine();
     const sky = this.game.get('Sky');
     if (sky && sky.setTimeOfDay && ch.hour != null) sky.setTimeOfDay(ch.hour);
 
@@ -143,6 +144,32 @@ export class StorySystem {
     else this._announceChapter(ch);
     window.dispatchEvent(new CustomEvent('ffxv-chapter', { detail: { phase: 'start', chapter: n, name: ch.name } }));
     return ch;
+  }
+
+  /**
+   * Take the next main quest of the current chapter, if one is waiting.
+   *
+   * `startChapter` accepted `ch.quests[0]` and nothing else, which is fine for
+   * a one-quest chapter and a dead end for the two that have two. Chapter 3 is
+   * "The Open World" *then* "A Behemoth Undying": finishing the first made the
+   * second `available` and nobody ever accepted it, so `completeChapter`'s
+   * "every quest complete" test could never pass and chapter 4 never opened.
+   * Chapter 1 has the same shape.
+   *
+   * The main line is not opt-in. A side quest waits for you to say yes; the
+   * story does not, and every main quest already carries its own `requires`,
+   * so this can only ever take the one the chapter is actually up to.
+   */
+  _advanceChapterLine() {
+    const rpg = this.rpg;
+    const ch = this.chapter;
+    if (!rpg || !ch) return;
+    for (const id of ch.quests) {
+      const st = rpg.quests.status(id);
+      if (st === 'complete') continue;
+      if (st === 'available') { rpg.quests.accept(id); rpg.quests.track(id); }
+      return;                       // only ever the next one, never the whole chapter
+    }
   }
 
   /**
@@ -254,6 +281,7 @@ export class StorySystem {
       if (!ch) return;
       const all = ch.quests.every((id) => rpg.quests.status(id) === 'complete');
       if (all) this.queue.push({ at: 1.4, fn: () => this.completeChapter(ch.n) });
+      else this._advanceChapterLine();
     });
     rpg.on('level-up', () => this.talk.react('level-up'));
     rpg.on('daemons-rising', () => this.talk.react('nightfall'));

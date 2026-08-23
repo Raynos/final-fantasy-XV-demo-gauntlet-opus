@@ -242,17 +242,41 @@ const results = await page.evaluate(async () => {
   /* ------------------------------------------------------ interaction ---- */
   probe('world', 'interaction verb finds targets', () => {
     const ix = g.get('Interaction')!; const town = g.get('Town')!; const player = g.get('Player')!;
+    const terrain = g.get('Terrain')!;
     if (!ix || !town) return F('interaction or town missing');
     const n = ix.items.size;
     const a = town.anchors && (town.anchors.huntBoard || town.anchors.pump);
     if (!a) return W(`${n} interactables registered, no anchor to walk to`);
-    player.root.position.set(a.x, player.root.position.y, a.z);
-    step(6);
+    // The height matters, twice over. `_pick` measures in three dimensions;
+    // this probe used to keep whatever `y` the previous probe had left the
+    // player at, and the terrain under Hammerhead is up to three metres below
+    // the graded pad the town and its fixtures stand on -- three metres is
+    // more than the board's 2.9 m reach, so a player standing on the *terrain*
+    // height at the board's own coordinates is out of range of the board.
+    const padY = Math.max(terrain.heightAt(a.x, a.z), (town.base ?? -Infinity) + 0.02);
+    // Hold it across the frames. A single `set` then `step(6)` does not stick --
+    // the player controller integrates and puts the party back where it was --
+    // so this probe spent its whole life reporting whatever happened to be near
+    // the party's *real* position, which is how "standing at the board" came to
+    // select Cindy Aurum from 570 m away.
+    for (let i = 0; i < 8; i++) { player.root.position.set(a.x, padY, a.z); step(1); }
+    player.root.position.set(a.x, padY, a.z);
     // `ix.target` / `ix.nearest` have never existed -- the selection is
     // `current`, and `_pick()` is the private thing that fills it.
     const cur = ix.current;
-    return cur ? P(`${n} registered; standing at the board selects "${cur.label || cur.verb}"`)
-      : W(`${n} registered but none selected at the anchor`);
+    if (!cur) {
+      const nearest = [...ix.items.values()]
+        .map((i) => [i.id, i.pos.distanceTo(player.root.position)] as [string, number])
+        .sort((x, y) => x[1] - y[1]).slice(0, 3)
+        .map(([id, d]) => `${id} ${d.toFixed(1)} m`).join(', ');
+      return W(`${n} registered but none selected at the anchor; nearest ${nearest}`);
+    }
+    // The board, not merely *something*: this probe reported `selects
+    // "Cindy Aurum"` as a pass for its whole life, which is the exact bug
+    // `walking up to a thing selects that thing` was written to catch.
+    return cur.id === 'hh_huntboard'
+      ? P(`${n} registered; standing at the board selects the board`)
+      : W(`${n} registered; standing at the board selects "${cur.label || cur.verb}" (${cur.id})`);
   });
 
   // The probe above asks whether *something* is selected, which is how it went
@@ -264,7 +288,11 @@ const results = await page.evaluate(async () => {
   probe('world', 'walking up to a thing selects that thing', () => {
     const ix = g.get('Interaction')!; const player = g.get('Player')!;
     const terrain = g.get('Terrain')!;
-    const items = [...ix.items.values()];
+    // `enabled()` is part of the contract, not a detail: the dungeon verb is
+    // registered once and re-pointed from `Dungeons.prompt`, so it is parked
+    // off the map and switched off until the party is standing at a door.
+    // Walking up to something that is deliberately off is not a miss.
+    const items = [...ix.items.values()].filter((i) => i.enabled());
     if (!items.length) return F('nothing registered');
     const missed: string[] = [];
     for (const it of items) {
@@ -295,6 +323,33 @@ const results = await page.evaluate(async () => {
     return missed.length === 0
       ? P(`all ${items.length} selectable from a 2.2 m diagonal walk-up`)
       : F(`${missed.length}/${items.length} unreachable: ${missed.slice(0, 6).join(', ')}`);
+  });
+
+  // A blind judge ranked this second of eight defects in the corpus: a
+  // `TALK / TAKKA` prompt drawn over empty desert, with Takka 594 m away in
+  // Hammerhead. `Npcs._registerTalk` handed every person an empty `Vector3`
+  // and `Npcs.update` only wrote it inside 85 m, so from the breakdown all
+  // four Hammerhead anchors read (0, 0, 0) -- and the game starts at (0, 0).
+  // The subject has to be where the prompt says it is; a prompt that is not
+  // is the clearest "this is a demo, not a game" tell there is.
+  probe('world', 'no prompt is offered where its subject is not', () => {
+    const ix = g.get('Interaction')!;
+    const npcs = g.get('Npcs');
+    const bad: string[] = [];
+    for (const it of ix.items.values()) {
+      if (it.id.startsWith('npc_')) {
+        const npc = (npcs?.list || []).find((n: { id: string }) => n.id === it.id.slice(4));
+        if (!npc) { bad.push(`${it.id} has no person`); continue; }
+        const off = Math.hypot(it.pos.x - npc.pos.x, it.pos.z - npc.pos.z);
+        if (off > 2) bad.push(`${it.id} ${off.toFixed(0)} m from ${npc.name}`);
+      }
+      // No real fixture in an 8 km world stands on the origin, and the origin
+      // is where the player spawns.
+      if (Math.hypot(it.pos.x, it.pos.z) < 1 && it.enabled()) bad.push(`${it.id} sits on the player's spawn`);
+    }
+    return bad.length === 0
+      ? P(`all ${ix.items.size} prompts sit on their subject`)
+      : F(bad.slice(0, 5).join('; '));
   });
 
   /**
