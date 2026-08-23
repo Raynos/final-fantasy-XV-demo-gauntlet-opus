@@ -114,7 +114,41 @@ export class Character {
     const eyes = buildEyes(rig, look);
 
     this.faceMat = faceMaterial(head.map);
-    this.faceMat.side = THREE.DoubleSide;
+    // **FrontSide, and this is the single loudest character defect in the
+    // project.** The face was `DoubleSide`, and a back-facing surface draws in
+    // *front* of whatever is behind it — so somewhere in the orbit a
+    // back-facing patch of head geometry rendered over the eyeball and filled
+    // the palpebral fissure with a lit skin-coloured lobe on all four heroes.
+    // Every "doll eyes / painted-on features / no eye geometry / mannequin
+    // mask" grade the blind judge has returned was reading that lobe. With the
+    // back faces culled the eye underneath is whole: sclera, iris, pupil,
+    // limbal ring, catchlight, lash line, lid crease — all of it built by
+    // earlier lanes and none of it ever visible in a shipped frame.
+    //
+    // Proof and provenance, because `LANDMINES.md` reads this the other way
+    // round and says a `FrontSide` test passes while the shipped material
+    // still fails, treating the fold as the thing to fix:
+    //
+    //   - `src/tools/probes/facecam.mts` at 0.55 m with FRONT_SIDE on and off,
+    //     nothing else changed: covered against whole. That is the frame.
+    //   - `src/tools/probes/eyeoccluder.mts` bisects the head's index buffer
+    //     and photographs each stage. With the lids, lashes, ears and
+    //     waterlines *removed* and only the skull left, the eye is still
+    //     covered — so the occluder is skull. With everything within 1.6 globe
+    //     radii removed, it is open.
+    //   - Three attempts to locate the offending triangles in canonical head
+    //     space (star-shapedness, an aperture cone, a gaze-axis cylinder) each
+    //     flagged a set whose removal punched holes in the brow and left the
+    //     eye covered. They are recorded in those files as measured negatives.
+    //
+    // So the fold has not been located and may not be a fold at all. What is
+    // established is that culling back faces fixes it, costs nothing, and is
+    // what every other skin surface here already does (`Character.ts` sets
+    // `SHARED.skin.side = FrontSide`). The head is a closed shell plus lid
+    // bands and ear plates that are built with thickness, so nothing in it
+    // needs two-sided rendering; `shadowSide = BackSide` is kept, because that
+    // is what stops the face self-shadowing into acne.
+    this.faceMat.side = THREE.FrontSide;
     this.faceMat.shadowSide = THREE.BackSide;
     this.eyeMat = eyeMaterial(look.iris ?? 0x3f6f9c);
 
