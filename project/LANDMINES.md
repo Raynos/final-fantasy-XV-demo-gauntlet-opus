@@ -54,7 +54,11 @@ in this file.
   strata** — diagnosed as the analytic strata twice and wrong both times.
   `Layers.ts` recipe 3 drove `hueSel` off a pure sinusoid of world Y at two
   cycles per 12.2 m tile, warped by 0.6 m, so every bed ran dead level across a
-  whole hillside.
+  whole hillside. **Fixed, and the recipe's own comments carry the history** —
+  the entry survives only because a *third* agent (2026-08-24) saw banding on a
+  pale slope at 3x and reached for this diagnosis before reading the code.
+  Whatever broad swirls remain on the Longwythe slopes are none of the three
+  causes already ruled out here. Ablate.
 - **Dark near-ground in green zones is vegetation density plus cloud shadow**,
   not the palette. The pre-change baseline has an identically dark foreground.
   **Shoot the baseline before believing any regression in this shader.**
@@ -283,6 +287,54 @@ in this file.
   edge either way.
 
 ---
+
+## Heavy-tailed fields: rank once, then use the rank
+
+Droplet accumulation, sediment and every other erosion output here has a heavy
+tail — p50 1.92 against a p99 of 26.2 and a maximum of 51.4. Reaching for the
+magnitude because it is nearer to hand cost two separate bugs in one night, and
+the second one is the instructive one because the first had already been fixed.
+
+- Encoding the placement channel as `value / p99.9`, clamped, left `wet`
+  **saturated at p90 0.965** and squeezed accumulation's top percentile — the
+  only part anything places against — into **0.784-1.000**.
+- Then the drainage incision interpolated its three bands with
+  `smoothstep(lo, hi, a)` over the same raw field, where `hi` was the single
+  maximum. The smoothstep evaluated to about zero for every cell in the top
+  band, and **exactly 51 cells in the whole world** came out deeper than 4 m.
+  The trunk valleys the pass exists to carve did not exist, the pass ran, and
+  every gate stayed green.
+
+A **percentile** channel fixes both and documents itself: `accum > 0.97` means
+*wetter than 97% of the cells that carry any water*, at any resolution, under
+any erosion tuning. See `Field.rankInto`.
+
+## A large `imgdiff` delta is not a better frame
+
+The conjugate joint set shipped as `rg = max(rg, 0.62 * conj)` and moved
+`zone_ostium_gorge` by **17.121/255 against a measured 2.00 floor, 70.3% of
+pixels past 8/255** — an enormous, unambiguous, well-above-noise result. Reading
+the two frames side by side, the massif had come back **smoother than before the
+change**: `max()` raises the floor wherever the second grain is strong, and the
+belt height is `pow(max(0, rg - 0.16) / 0.84, …)`, so it filled exactly the
+valleys the primary grain had cut. The number said *changed*. Only the picture
+said *worse*. Both halves of `BRIEF.md`'s loop are load-bearing.
+
+## An audit row can be false because a name matched
+
+`docs/plans/2026-08-21-fable-procedural-modeling.md` was ticked against the tree
+by a careful agent, and **five of its rows did not survive re-checking** — four
+"NOT DONE" rows that were long since built (`mixSeed`, the `_outcrops` RNG
+coupling, and both halves of §4.4's sampling rules), and one **"DONE"** row,
+§2.2 talus aprons, whose three cited files contained the *word* `talus` — a
+scatter-mix key, a rock archetype and a splat weight — and no geometry at all.
+`grep -rn "dilat"` returned nothing.
+
+This is the same failure as "Names nothing ever verified" below, applied to a
+document instead of to code, and it is worse there: nothing type-checks a plan.
+**Re-audit a row before building from it, and record the disproof in the plan
+rather than deleting the row** — a plan that reads as current and is not is the
+expensive kind of wrong.
 
 ## Names nothing ever verified
 
