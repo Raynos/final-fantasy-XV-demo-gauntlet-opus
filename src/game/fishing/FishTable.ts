@@ -77,7 +77,12 @@ export const FISH: Record<string, FishSpec> = Object.fromEntries([
  * a place the world does not have.
  */
 export const HOLES: Record<string, string[]> = {
-  galdin_pier:         ['sea_bass', 'allural_sea_bass', 'murk_grouper'],
+  // The bream and the barramundi were authored for Cape Caem, whose pin stands
+  // at 95 m of elevation with no water within 170 m -- so they had no source at
+  // all and the two recipes on them were unreachable. They are sea fish and
+  // Galdin is the sea; the Caem entry stays for the day that shoreline gets
+  // water under it.
+  galdin_pier:         ['sea_bass', 'allural_sea_bass', 'murk_grouper', 'barramundi', 'sea_bream'],
   alstor_dock:         ['alstor_trout', 'alstor_bass', 'chocobo_carp'],
   vesperpool_dock:     ['vesper_gar', 'pink_jade_gar', 'cygillan_devil'],
   caem_shore:          ['barramundi', 'sea_bream'],
