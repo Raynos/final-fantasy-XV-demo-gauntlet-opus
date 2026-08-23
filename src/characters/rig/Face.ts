@@ -632,7 +632,31 @@ function buildLid(B: MeshBuilder, o: LidOpts) {
   B.group(upper ? 3 : 4);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      if (upper === (sg > 0)) B.quad(gridIdx[r][c], gridIdx[r][c + 1], gridIdx[r + 1][c + 1], gridIdx[r + 1][c]);
+      // Winding depends on the **side only**. Mirroring across x reverses
+      // handedness, so `sg` has to switch it; `upper` does not, and while it
+      // did, every lower lid in the game was wound inside out.
+      //
+      // That is not a cosmetic bug, because `Character.ts:73` ships the face
+      // material `DoubleSide`: a back-facing surface draws in *front* of
+      // whatever is behind it, so the inverted lower lid rendered over the
+      // eyeball and filled the palpebral fissure with a lit skin-coloured lobe.
+      // Every "doll eyes / painted-on features / no eye geometry" grade this
+      // project has ever received was reading that lobe. `facecam.mts` with
+      // FRONT_SIDE culls the back faces and shows the eye underneath it whole —
+      // sclera, iris, pupil, limbal ring, catchlight, lash line and crease, all
+      // of it already built and none of it ever visible.
+      //
+      // Measured, not inferred: `src/tools/probes/headfold.mts` counts head
+      // triangles inside the aperture cone that face back into the globe.
+      // Below the eye centre it found **48 of 48** — the entire lower lid —
+      // and every one of them at 11-14 mm from the globe centre, which is the
+      // lid band's own radius (`EYE.lidR` 1.105 to 1.36 globe radii) and not
+      // the socket floor's. The landmines file's reading of this defect as a
+      // *sculpt* fold, correctable by widening the socket brushes, is wrong:
+      // widening them cut the covering area from 831 mm^2 to 265 mm^2 and
+      // changed the frame by nothing, because the remaining 265 mm^2 was the
+      // lid and the lid is opaque.
+      if (sg > 0) B.quad(gridIdx[r][c], gridIdx[r][c + 1], gridIdx[r + 1][c + 1], gridIdx[r + 1][c]);
       else B.quad(gridIdx[r][c + 1], gridIdx[r][c], gridIdx[r + 1][c], gridIdx[r + 1][c + 1]);
     }
   }
