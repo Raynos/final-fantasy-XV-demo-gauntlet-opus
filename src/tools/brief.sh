@@ -44,6 +44,16 @@ if [ -f project/STATUS.md ]; then
   sed -n '/^## Live right now/,/^## /p' project/STATUS.md | sed '$d' | head -14
 fi
 
+# A worktree can be created from a stale ref, and nothing warns you. An agent
+# lost the top of its session to this: 131 commits behind, no node_modules, no
+# src/public. Cheap to check, expensive to miss.
+behind="$(git rev-list --count HEAD..main 2>/dev/null || echo 0)"
+if [ "${behind:-0}" -gt 0 ]; then
+  echo
+  echo "!! this tree is $behind commits behind main."
+  echo "   git merge main   (or rebase) before you measure or capture anything."
+fi
+
 echo; echo "-- last 5 commits"
 git log --oneline -5 2>/dev/null || true
 
