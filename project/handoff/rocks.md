@@ -35,7 +35,7 @@ was taken first and why §3.7 needs no new meshes.
 | §3.1 conjugate joint sets | **was already done** — `joints` branch, bedding + two conjugate shear sets, dominant last and deepest, chips demoted to corner chamfers | `Rocks.ts` ~line 300, landed in `5f2cd22` before this lane |
 | §3.2 chamfer + weathering | already done | ditto |
 | §3.3 strata step the silhouette | **DONE** `2d91563` | `rise` 0.134 → 0.234 at 96 bands |
-| §3.4 corestone stacking + fabric + course overlap | **DONE** `2d91563` | TV 2.63 → 8.16 at n=3 |
+| §3.4 corestone stacking + fabric + course overlap | **DONE** `2d91563`, tuned `cc5fe5d`, tors/outcrops re-stated on the finished hull `6306fc6` | TV 2.628 → 4.043 and `lobes` 1.38 → 4.20 at n=3 |
 | §3.5 aspect + burial floors on the placed hull | **DONE** `1b65a91` | 214/1548 aspect, 1002/1548 burial, worst 3.200 |
 | §3.6 `aRock` bakes | **DONE** `2d91563` | rock luma 45→79 near, 29→46 mid, ground unmoved |
 | §3.7 variety ceiling | **DONE by construction** | §3.4 multiplies silhouettes with zero new meshes or draws |
@@ -47,16 +47,28 @@ falling upward, a *clamped* drifting lean, per-course vertical squash and a free
 per-course yaw. `_stack` places them; ~half the big anchors in `_genCell` become
 one, on ground under 0.32 slope. Over 24 seeds at 96 bands:
 
-    n     TV                     lobes                  rise
-    1     2.628 [2.49..2.74]     1.375 [1.00..2.13]     0.136
-    2     5.585 [3.66..6.73]     2.932 [2.00..4.13]     0.491
-    3     8.162 [4.28..9.67]     4.141 [3.00..5.50]     0.721
-    4    10.594 [6.63..13.76]    5.417 [4.38..6.50]     0.898
+    overlap 0.38, through the real `corestones()` and the real measured `hy`
+    n     TV                       lobes                   rise
+    1     2.628 [2.49..2.74]       1.375 [1.00..2.13]      0.136
+    2     3.416 [2.81..4.17]       3.005 [2.00..4.50]      0.192
+    3     4.043 [3.37..5.07]       4.203 [3.00..5.88]      0.222
+    4     4.698 [3.81..5.80]       5.417 [3.88..7.00]      0.290
 
 The sibling's 3.90 → 6.1–8.3 is a *different formula on a different
 rasteriser*; do not compare the absolutes. The comparable number is the ratio:
-theirs is 1.56–2.13×, ours is 2.1× at n=2 and 3.1× at n=3. n is 2–4 weighted
-toward 3.
+theirs is 1.56–2.13×, **ours is 1.76× at n=3**, inside their band. `lobes` —
+which counts masses in the outline directly — goes 1.38 → 4.20, which is the
+whole claim of §3.4.
+
+**`2d91563`'s commit message quotes a stale table** (n=3 at TV 8.162). That run
+predated the removal of `Corestone.dy` and the clamped lean in the same session,
+and the bench had gone on computing the old layout from its own copy of the
+rule. `cc5fe5d` records the correction; `tmp/silstack.mts` now calls
+`corestones()` and stacks through the same measured `hy` the game does, so it
+cannot drift again without the shipped code drifting with it. **This is the
+single most important thing in this handoff for whoever reads it next: a bench
+that reimplements the rule it measures produces a plausible number and no
+symptom.**
 
 Outcrops got the same rule — 2–3 courses at 30% overlap, each set back along
 the ridge axis, course chosen by how central the block is so the knot has a
@@ -162,28 +174,71 @@ draw calls for 1.077/255).
 
 ## What is left, ranked
 
-1. **The stacks read slightly like pancakes at range.** In
-   `tmp/shots/rocks-r5/hero_full.jpg` the tors at ~(540,150) and (1420,110)
-   show separable discs. The overlap is 0.30; 0.36–0.40 with more per-course
-   squash variance is the obvious next sweep, and the bench can score it
-   (`lobes` should stay up while the visible seam count falls).
-2. **Nothing has been captured on `zone_taelpar`, `zone_ostium_gorge`,
-   `zone_vannath`, `vista_noon`, `landmark_meteor`, `zone_ravatogh` since the
-   change.** `zone_ravatogh` and `zone_taelpar` are vegetation-dominated and
-   showed no rock at all in `rocks-r0`; the useful shots for this lane are
-   `zone_callaegh`, `hero_full`, `zone_three_valleys`, `zone_longwythe`.
-3. **`pnpm run check` has not been run since `1b65a91`.** Do it before trusting
-   anything above.
-4. **Draw calls and triangles**: baseline `rocks-r0` 499–716 calls / 7.9–19.8 M
-   tris across the eight review shots. After: `zone_callaegh` 636 → 656,
-   `zone_longwythe` 607 → 587, `hero_full` 691. No new `InstancedMesh` variant
-   was created and none may be — that is the §3.7 constraint.
-5. `bedded`'s `beds: 6` scored a local *minimum* on the bench at every bedding
-   amplitude, which looked like aliasing against 24 bands but reproduced at 96.
-   Not chased; it is a seed artefact of the per-bed resistance hash and worth one
-   sweep over `seed` before anyone reads meaning into it.
+1. **The tor proportions changed late and have only been eyed on two shots.**
+   `_genTor`'s three forms are now stated as finished half-width and half-height
+   in metres rather than as `s` plus an `sy` multiplier (see the commit). That
+   is the right *shape* of fix — it is the same "guarantee on the finished hull"
+   principle as §3.5 — but the constants (`fin` 0.46/1.60, `boss` 1.05/0.50,
+   other 0.78/0.76 × `s0`) were picked to roughly preserve the old envelope and
+   have been looked at on `hero_full` and `zone_ostium_gorge` only. Look at
+   `zone_three_valleys`, `zone_longwythe` and `zone_vannath` before trusting
+   them; the failure to watch for is a field of same-height columns, which is
+   the "wall of copies" the round-9 judge named.
+2. **Everything about this lane's `far` tier is unmeasured on the bench.** The
+   bench scores base meshes and stacks in isolation; it has never scored a
+   *placed* tor against the terrain behind it, which is the read that actually
+   matters at 400 m. `imgdiff --heat` between a `--hide rock_*` ablation and its
+   control would say how much of those frames the rocks are even worth.
+3. **`pnpm run check` is 12/13** at `cc5fe5d`. The single failure is `anycheck`,
+   and all six `any`s are in `src/tools/silhouette.mts` — the **method** lane's
+   in-flight file, not this one's. Everything else passes, including the new
+   `silhouette` gate.
+4. **Cost.** `tmp/shots/rocks-r0` (before, at `1e5ff00`) against
+   `tmp/shots/rocks-r7` (after, at HEAD):
+
+   | shot | tris before → after | | calls |
+   |---|---|---|---|
+   | zone_longwythe | 8,860,000 → 9,067,930 | +2.35% | 607 → 606 |
+   | zone_taelpar | 15,726,070 → 15,836,456 | +0.70% | 602 → 604 |
+   | zone_ostium_gorge | 7,920,843 → 8,137,957 | +2.74% | 499 → 497 |
+   | zone_vannath | 10,649,409 → 10,821,874 | +1.62% | 716 → 709 |
+   | zone_callaegh | 8,381,651 → 8,572,729 | +2.28% | 636 → 644 |
+   | vista_noon | 8,994,921 → 9,060,900 | +0.73% | 536 → 541 |
+   | landmark_meteor | 14,887,386 → 14,960,154 | +0.49% | 591 → 589 |
+   | zone_ravatogh | 19,776,671 → 19,590,533 | −0.94% | 646 → 650 |
+
+   **No new `InstancedMesh` variant was created and none may be.** Draw calls
+   move by −7 to +8, which is noise — and `rocks-r7` is at HEAD, so it carries
+   every other lane's commits too and the triangle column is not purely this
+   lane's.
+5. **`landmark_meteor` does not frame the Meteor.** The camera looks at a wall of
+   trees; there is no landmark anywhere in the shot
+   (`tmp/shots/rocks-r7/landmark_meteor.jpg`). Whoever owns `Shots.ts` or the
+   Duscae canopy should know — a review shot named after a landmark that cannot
+   see it has been silently passing for at least this long.
+6. `bedded`'s `beds: 6` scored a local *minimum* on the bench at every bedding
+   amplitude, reproducing at 96 bands. Probably a seed artefact of the per-bed
+   resistance hash; worth one sweep over `seed` before anyone reads meaning into
+   it. Now `beds: 5`.
+7. The near-field rock texture is one tile at one scale on every kind and it
+   reads as a crackle/dried-mud pattern at boulder scale
+   (`tmp/shots/rocks-r5/zone_callaegh.jpg`, the near cluster). `uvScale` is per
+   kind and is this lane's; `rockMaterial`'s tile is not.
+
+## Shots
+
+| dir | what |
+|---|---|
+| `rocks-r0` | before, whole corpus of eight |
+| `rocks-r4` | §3.4 landed, before the AO fix — the rocks are black |
+| `rocks-r5` | after §3.5, `zone_callaegh` + `hero_full` |
+| `rocks-r7` | whole corpus after, at HEAD |
+| `rocks-r9` | the four balanced rocks in `zone_ostium_gorge` |
+| `rocks-r10` | width fixed, height ran free — needles |
+| `rocks-r11` | both named — the current state |
 
 ## Files touched
 
 `src/world/props/Rocks.ts` only, plus the new
-`src/tools/probes/rockhull.mts`. Commits `2d91563`, `1b65a91`.
+`src/tools/probes/rockhull.mts`. Commits `2d91563`, `1b65a91`, `cc5fe5d`,
+`6306fc6`.
