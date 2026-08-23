@@ -111,7 +111,20 @@ const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
-/** Impostor: two crossed quads anchored at the base. */
+/**
+ * Impostor: two crossed quads anchored at the base.
+ *
+ * **Each quad carries its true plane normal**, not a shared fake one. Until
+ * this lane it was `(0, 0.62, 0.78)` on all eight vertices of both quads — one
+ * up-tilted normal for a card whose two halves are ninety degrees apart, which
+ * flat-shades the entire crown by a single N.L that is a pure function of the
+ * instance's random yaw. Probed over `zone_fallgrove`, the per-instance mean
+ * lambert of the 1 239 impostors had **sd 0.378** against the geometry ring's
+ * **0.086** on an identical mean. The soft up-facing bias that fake normal was
+ * carrying now lives in the crown normal map (`crownNormalTex`'s `up`), where
+ * it is one term of a field instead of the whole of it, and `patchVeg`'s
+ * `crownNormal` rebuilds the card's frame from the plane normal below.
+ */
 function billboardGeo(width: number, height: number) {
   const g = new THREE.BufferGeometry();
   const p = [], n = [], uv = [], idx = [], col = [];
@@ -120,7 +133,7 @@ function billboardGeo(width: number, height: number) {
     const dx = k === 0 ? hw : 0, dz = k === 0 ? 0 : hw;
     const base = k * 4;
     p.push(-dx, 0, -dz, dx, 0, dz, dx, height, dz, -dx, height, -dz);
-    for (let i = 0; i < 4; i++) n.push(0, 0.62, 0.78);
+    for (let i = 0; i < 4; i++) n.push(k === 0 ? 0 : 1, 0, k === 0 ? 1 : 0);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
     for (let i = 0; i < 4; i++) col.push(1, 1, 1);
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -356,14 +369,15 @@ export class Trees {
         if (v === 0) canopySrc = src;
 
         // distance impostor, baked straight off this variant's geometry
-        const impTex = bakeTreeImpostor(renderer, src, 256);
+        const imposter = bakeTreeImpostor(renderer, src, 256);
         const impMat = patchVeg(new THREE.MeshStandardMaterial({
-          map: impTex, color: 0xffffff, vertexColors: true,
+          map: imposter.tex, color: 0xffffff, vertexColors: true,
           alphaTest: 0.42, transparent: false, side: THREE.DoubleSide,
           roughness: 0.95, metalness: 0,
         }), {
           bend: 0.2, flutter: 0.06, gustFreq: 0.03, flexPow: 3.0,
           twoSidedNormals: true, translucency: 0.5, specular: 0.06,
+          crownNormal: imposter.normalMap,
         });
         const cardW = src.radius * 2.12;
         const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
@@ -391,6 +405,7 @@ export class Trees {
       }), {
         bend: 0.06, flutter: 0.02, gustFreq: 0.02, flexPow: 3.0,
         twoSidedNormals: true, translucency: 0.35, specular: 0.0,
+        crownNormal: stand.normalMap,
       });
       const can = new THREE.InstancedMesh(
         billboardGeo(stand.width, stand.height), canMat, perCanopy);

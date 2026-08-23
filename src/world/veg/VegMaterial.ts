@@ -178,6 +178,12 @@ export interface VegWindOpts {
   specular?: number;
   /** Flip the normal toward the camera on a double-sided card. */
   twoSidedNormals?: boolean;
+  /**
+   * Object-space crown normals for a fixed-orientation card, from
+   * {@link crownNormalTex}. See the block in `patchVeg` for why a card needs
+   * one and what it is measured against.
+   */
+  crownNormal?: THREE.Texture | null;
 }
 
 /**
@@ -189,7 +195,7 @@ export interface VegWindOpts {
 export function patchVeg(mat: THREE.MeshStandardMaterial, {
   bend = 0.35, flutter = 0.25, gustFreq = 0.055, trample = 0,
   translucency = 0, flexPow = 1.7, aoBoost = 0, twoSidedNormals = false,
-  specular = 1,
+  specular = 1, crownNormal = null,
 }: VegWindOpts = {}) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = VegUniforms.uTime;
@@ -252,17 +258,65 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
         #endif
       `);
 
+    // Both of these rewrite `normal` right after <normal_fragment_begin>, and
+    // the order is load-bearing: the two-sided un-flip has to land first so the
+    // crown block starts from the card's *authored* plane normal.
+    const nrm: string[] = [];
     if (twoSidedNormals) {
       // Grass blades and leaf cards carry deliberately "wrong" up-facing
       // normals for soft foliage lighting; undo three's back-face flip so the
       // far side of a card doesn't render black.
+      nrm.push(/* glsl */`
+        #ifdef DOUBLE_SIDED
+          normal *= faceDirection;
+        #endif
+      `);
+    }
+    if (crownNormal) {
+      // A distance card is one quad with one normal, so its whole crown is
+      // flat-shaded by a single N.L that depends only on the instance's random
+      // yaw. Measured over zone_fallgrove's 1 239 tree impostors, the
+      // per-instance mean lambert had sd 0.378 against the geometry ring's
+      // 0.086 on an identical mean -- a tenth of the cards fully unlit, a tenth
+      // nearly fully lit, which is the salt-and-pepper of black and bright
+      // blobs the blind judge called "flat cards with no silhouette variety".
+      //
+      // The dome is built around the **view** axis, not the quad's own plane
+      // normal, and that is a measured choice rather than a shortcut. Anchoring
+      // it to the plane normal was tried first and is visibly worse: the two
+      // crossed quads are ninety degrees apart, so each card came out folded
+      // down the middle with a lit half and a shaded half and a hard vertical
+      // seam between them (`tmp/crop/v1-mid.png`). A crown is a sphere, and a
+      // sphere presents the same dome to every viewer, so a view-aligned frame
+      // is the *correct* one for it -- both quads then agree and the seam
+      // cannot exist. `vViewPosition` runs surface-to-camera, and world up
+      // pulled through `viewMatrix` supplies the second axis.
+      //
+      // geometryNormal is assigned from `normal` in <lights_fragment_begin>,
+      // which runs later, so the hemisphere fill picks this up too and the top
+      // of a crown catches sky the way the near ring's leaves do.
+      shader.uniforms.uCrownNormal = { value: crownNormal };
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <normal_fragment_begin>', /* glsl */`
-          #include <normal_fragment_begin>
-          #ifdef DOUBLE_SIDED
-            normal *= faceDirection;
-          #endif
-        `);
+        .replace('#include <common>', '#include <common>\nuniform sampler2D uCrownNormal;');
+      nrm.push(/* glsl */`
+        {
+          vec3 bz = normalize(vViewPosition);
+          vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+          vec3 bx = cross(upV, bz);
+          float bxl = length(bx);
+          if (bxl > 1e-4) {
+            bx /= bxl;
+            vec3 by = cross(bz, bx);
+            vec3 cn = texture2D(uCrownNormal, vMapUv).xyz * 2.0 - 1.0;
+            normal = normalize(bx * cn.x + by * cn.y + bz * cn.z);
+          }
+        }
+      `);
+    }
+    if (nrm.length) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <normal_fragment_begin>',
+          `#include <normal_fragment_begin>\n${nrm.join('\n')}`);
     }
 
     if (translucency > 0 || aoBoost > 0 || specular < 1) {
@@ -298,9 +352,12 @@ export function patchVeg(mat: THREE.MeshStandardMaterial, {
         `);
     }
   };
+  // held for probes: the uniform itself lives in the compiled shader, which is
+  // not reachable from the material once it is built
+  if (crownNormal) mat.userData.crownNormal = crownNormal;
   // force a distinct program so patched/unpatched variants don't collide
   mat.customProgramCacheKey = () =>
-    `veg${bend}|${flutter}|${trample}|${translucency}|${flexPow}|${aoBoost}|${twoSidedNormals}|${specular}`;
+    `veg${bend}|${flutter}|${trample}|${translucency}|${flexPow}|${aoBoost}|${twoSidedNormals}|${specular}|${crownNormal ? 1 : 0}`;
   return mat;
 }
 

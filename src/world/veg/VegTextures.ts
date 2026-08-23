@@ -444,6 +444,176 @@ export function fernTex() {
 }
 
 /**
+ * Mean world-space upness the near ring's leaf normals carry, measured over
+ * `zone_fallgrove` by `src/tools/probes/impostorshade.mts`. Every card LOD of a
+ * tree is calibrated to it so the rings agree on *value* across the swap.
+ */
+export const CROWN_MEAN_UP = 0.84;
+
+/** Separable box blur of a scalar field, run three times to approximate a gaussian. */
+function blurField(src: Float32Array, size: number, radius: number): Float32Array {
+  let a = Float32Array.from(src);
+  let b = new Float32Array(size * size);
+  const r = Math.max(1, radius | 0);
+  const w = 1 / (2 * r + 1);
+  for (let pass = 0; pass < 3; pass++) {
+    // horizontal
+    for (let y = 0; y < size; y++) {
+      const row = y * size;
+      let acc = 0;
+      for (let x = -r; x <= r; x++) acc += a[row + Math.min(size - 1, Math.max(0, x))];
+      for (let x = 0; x < size; x++) {
+        b[row + x] = acc * w;
+        acc -= a[row + Math.min(size - 1, Math.max(0, x - r))];
+        acc += a[row + Math.min(size - 1, Math.max(0, x + r + 1))];
+      }
+    }
+    // vertical
+    for (let x = 0; x < size; x++) {
+      let acc = 0;
+      for (let y = -r; y <= r; y++) acc += b[Math.min(size - 1, Math.max(0, y)) * size + x];
+      for (let y = 0; y < size; y++) {
+        a[y * size + x] = acc * w;
+        acc -= b[Math.min(size - 1, Math.max(0, y - r)) * size + x];
+        acc += b[Math.min(size - 1, Math.max(0, y + r + 1)) * size + x];
+      }
+    }
+  }
+  return a;
+}
+
+/**
+ * Crown normals for a baked card, synthesised from the card's own alpha.
+ *
+ * **This is the fix for the measured defect that made every distant tree read
+ * as a card.** `billboardGeo` hands its eight vertices one constant normal, so
+ * an impostor is flat-shaded by a single N·L that is a pure function of the
+ * tree's random yaw. Probed over `zone_fallgrove`'s 1 239 impostors, the
+ * per-instance mean lambert had **sd 0.378** against the geometry ring's
+ * **0.086** on an identical mean (0.365 vs 0.370): a tenth of the cards sat at
+ * exactly 0, another tenth above 0.93, and the band read as salt-and-pepper
+ * black-and-bright blobs rather than as trees. No tint or albedo change can
+ * reach that — the means already agree. It is a *normal* problem.
+ *
+ * Rather than a second GPU pass baking the geometry's own normals (which for
+ * leaf cards are themselves deliberately fake, soft up-facing ones), the crown
+ * is treated as what it looks like from 200 m: an inflated blob. Blur the
+ * silhouette's coverage at two scales — one crown-wide, one lobe-wide — and
+ * take the gradient. The interior faces out of the card, the shoulders tip
+ * sideways and the top tips up, which is a dome with lobes on it, and it is
+ * what §7 of the art direction describes seeing at this range.
+ *
+ * The gradient is normalised against its own high percentile, so the shape of
+ * the result does not depend on the texture size or on how much of the card
+ * the crown fills.
+ *
+ * **`depth` is why this is a canopy and not a beach ball, and it was measured.**
+ * Taken literally the dome is a camera-facing hemisphere, which is what a solid
+ * sphere presents — and a solid sphere seen from the anti-sun side is black. In
+ * `zone_fallgrove` the sun sits behind the grove, and a full-depth dome took the
+ * on-screen impostors' mean lambert to **0.092** against the near ring's 0.382:
+ * a correct sphere and a completely wrong tree. A crown is a translucent volume
+ * of leaves, not a shell, so the out-of-card component is damped hard and the
+ * form is carried by the lateral terms, which average out against any sun
+ * direction instead of tracking it.
+ *
+ * Encoded object-space in the *bake* frame: +x right, +y up, +z out of the
+ * card face. `VegMaterial`'s `crownNormal` option rebuilds that frame per
+ * quad and rotates the sample into view space.
+ *
+ * @param rgba the baked card's RGBA bytes; only the alpha channel is read
+ * @param size square texture size
+ */
+export function crownNormalTex(rgba: Uint8Array, size: number, opts: {broad?: number, fine?: number, fineMix?: number, bulge?: number, depth?: number, targetUp?: number} = {}): THREE.DataTexture {
+  const { broad = 0.10, fine = 0.022, fineMix = 0.30, bulge = 0.92, depth = 0.14, targetUp = CROWN_MEAN_UP } = opts;
+  const n = size * size;
+  const cov = new Float32Array(n);
+  for (let i = 0; i < n; i++) cov[i] = rgba[i * 4 + 3] / 255;
+
+  const B = blurField(cov, size, Math.round(broad * size));
+  const F = blurField(cov, size, Math.round(fine * size));
+  const h = new Float32Array(n);
+  for (let i = 0; i < n; i++) h[i] = B[i] * (1 - fineMix) + F[i] * fineMix;
+
+  // central differences, then a scale taken from the field's own p90 gradient
+  const gx = new Float32Array(n), gy = new Float32Array(n);
+  const mags: number[] = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const xm = y * size + Math.max(0, x - 1), xp = y * size + Math.min(size - 1, x + 1);
+      const ym = Math.max(0, y - 1) * size + x, yp = Math.min(size - 1, y + 1) * size + x;
+      gx[i] = (h[xp] - h[xm]) * 0.5;
+      gy[i] = (h[yp] - h[ym]) * 0.5;
+      if (cov[i] > 0.02) mags.push(Math.hypot(gx[i], gy[i]));
+    }
+  }
+  mags.sort((a, b) => a - b);
+  const g90 = mags.length ? Math.max(1e-6, mags[Math.min(mags.length - 1, (mags.length * 0.90) | 0)]) : 1;
+
+  // The bare dome, before the up bias.
+  const dx = new Float32Array(n), dy = new Float32Array(n), dz = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    // point *away* from the mass: coverage falls outward, so the surface
+    // normal runs down the negative gradient
+    let nx = -gx[i] / g90 * bulge;
+    let ny = -gy[i] / g90 * bulge;
+    const r = Math.hypot(nx, ny);
+    if (r > 0.97) { nx *= 0.97 / r; ny *= 0.97 / r; }
+    dx[i] = nx; dy[i] = ny;
+    dz[i] = Math.sqrt(Math.max(1e-4, 1 - nx * nx - ny * ny)) * depth;
+  }
+
+  // Solve the up bias rather than authoring it. The card's `y` axis *is* world
+  // up (see the frame `patchVeg` builds), so the coverage-weighted mean of the
+  // encoded `y` is the tier's mean world-space upness and is view-independent —
+  // which makes it the one honest thing to match the geometry ring on. Probed
+  // over zone_fallgrove, the near ring's leaf normals average 0.84 up, the bare
+  // dome averages 0.30-0.35, and that gap alone dropped the impostors' mean
+  // lambert to 0.313 and the stand cards' to 0.186 against the near ring's
+  // 0.370 — a band that had stopped being noisy and started being *dark*.
+  const meanUpAt = (u: number) => {
+    let acc = 0, w = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cov[i];
+      if (c < 0.4) continue;
+      const ny = dy[i] + u;
+      acc += (ny / (Math.hypot(dx[i], ny, dz[i]) || 1)) * c;
+      w += c;
+    }
+    return w > 0 ? acc / w : 1;
+  };
+  let lo = 0, hi = 24;
+  if (meanUpAt(hi) > targetUp) {
+    for (let it = 0; it < 24; it++) {
+      const mid = (lo + hi) * 0.5;
+      if (meanUpAt(mid) < targetUp) lo = mid; else hi = mid;
+    }
+  }
+  const up = (lo + hi) * 0.5;
+
+  const buf = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const nx = dx[i], ny = dy[i] + up, nz = dz[i];
+    const len = Math.hypot(nx, ny, nz) || 1;
+    buf[i * 4] = Math.round((nx / len * 0.5 + 0.5) * 255);
+    buf[i * 4 + 1] = Math.round((ny / len * 0.5 + 0.5) * 255);
+    buf[i * 4 + 2] = Math.round((nz / len * 0.5 + 0.5) * 255);
+    buf[i * 4 + 3] = 255;
+  }
+
+  const tex = new THREE.DataTexture(buf, size, size, THREE.RGBAFormat);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * One built tree variant, reduced to what a card bake needs: the two
  * geometries, the two maps, and the bounds the card is sized from.
  */
@@ -464,7 +634,7 @@ export interface TreeBakeSource {
  *
  * @param size texture resolution
  */
-export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: TreeBakeSource, size: number = 256): THREE.DataTexture {
+export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: TreeBakeSource, size: number = 256): {tex: THREE.DataTexture, normalMap: THREE.DataTexture} {
   const rt = new THREE.WebGLRenderTarget(size, size, {
     samples: 4, depthBuffer: true, stencilBuffer: false,
   });
@@ -527,7 +697,7 @@ export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: TreeBakeSou
   rt.dispose();
   woodMat.dispose();
   if (leafMat) leafMat.dispose();
-  return tex;
+  return { tex, normalMap: crownNormalTex(buf, size) };
 }
 
 /**
@@ -543,7 +713,7 @@ export function bakeTreeImpostor(renderer: THREE.WebGLRenderer, src: TreeBakeSou
  *
  * @param src one variant of the species
  */
-export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: TreeBakeSource, opts: {count?:number, spread?:number, size?:number, seed?:number} = {}): {tex:THREE.DataTexture, width:number, height:number} {
+export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: TreeBakeSource, opts: {count?:number, spread?:number, size?:number, seed?:number} = {}): {tex:THREE.DataTexture, normalMap:THREE.DataTexture, width:number, height:number} {
   const { count = 5, spread = 2.1, size = 384, seed = 991 } = opts;
   const rng = new Rng(seed);
   const rt = new THREE.WebGLRenderTarget(size, size, {
@@ -619,7 +789,9 @@ export function bakeCanopyCard(renderer: THREE.WebGLRenderer, src: TreeBakeSourc
   rt.dispose();
   woodMat.dispose();
   if (leafMat) leafMat.dispose();
-  return { tex, width: halfW * 2, height: top };
+  // a stand card is a *mass* of crowns, so its lobes are whole trees: the fine
+  // octave is widened and weighted up against the single-tree impostor's
+  return { tex, normalMap: crownNormalTex(buf, size, { broad: 0.13, fine: 0.038, fineMix: 0.42 }), width: halfW * 2, height: top };
 }
 
 /**
