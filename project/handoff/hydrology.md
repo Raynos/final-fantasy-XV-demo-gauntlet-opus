@@ -178,6 +178,57 @@ looks like.
   judgement, not a measurement.
 - No blind `compare.mts` round has seen any of this.
 
+## An attribution I disproved, and it was aimed at me
+
+`project/handoff/method.md` records `floatcheck`'s `poiFloating: 0 -> 13` as
+*"appearing after the §4.3 terrain reshape"*. **It is not mine.** Bisected with
+`floatcheck --build <ref>` rather than argued:
+
+| build | what it is | compounds in the air |
+|---|---|---|
+| `2437bc0` | before the §4.3 strike | **0** |
+| `f28cd89` | the §4.3 strike | **0** |
+| `ab1aae0` | the §4.4 softplus | **0** |
+| `dedfc27` | town lane's soft goods | **0** |
+| `9ff5fc0` | after `3d1e075` | **12** |
+| `b93b41f` | after the §2.2 aprons | **13** |
+
+The only non-documentation commit between `dedfc27` and `9ff5fc0` is
+`3d1e075`, the town lane's four rebuilt `BoxGeometry` kits — and the floaters
+are `tomb_rogue`, `tomb_conqueror`, `tomb_conqueror2`, `tomb_wise` and
+`river_wennath`, which is exactly what that commit rebuilt. Handed to the town
+lane. **A correct observation with an untested inference attached** is the
+pattern `LANDMINES.md`'s last section exists for, and the reshape was a
+plausible enough carrier that nobody would have questioned it.
+
+Worth keeping: at `2437bc0` and `f28cd89` `poiBuried` reads **25** against
+today's **7**, so something in tonight's work improved burial substantially and
+nobody has claimed it.
+
+## Two corpus shots are broken, and one of them is judged
+
+Found in a 142-shot sweep (`tmp/shots/corpus-mid/`), and **neither is caused by
+tonight's work** — `landmark_meteor` is byte-comparable at `2437bc0`.
+
+- **`landmark_meteor` does not contain the Meteor.** The camera sits inside a
+  tree canopy and the frame is sky and leaves. A 1.5 km hero landmark, and its
+  own named shot has not framed it for some time. It is **not** in
+  `compare.mts`'s 30-shot `PAIRING` table, so it does not affect a blind round —
+  but it does mean the rocks lane's 5/10 grade for the Meteor was given from
+  purpose-framed captures and this shot cannot confirm or refute it.
+- **`zone_nebulawood` IS in the judged 30 and is a wall of leaf cards.** No
+  trunks, no forest floor, no dreadnought — its own docstring promises "wet
+  forest floor with the Niflheim dreadnought over it" and delivers neither. The
+  scatter lane found the same thing independently. `pos [-1300, 88.8, -880]`
+  descends *into* a canopy that has since grown.
+
+**I deliberately did not re-frame it.** Changing a judged shot silently between
+rounds destroys comparability with the ten prior rounds, and that is a call for
+the human, not for an agent optimising its own score. Candidate framings were
+prepared (`scratchpad/neb.json`: raise to 132-170 m, or look *along* the wood
+rather than down into it) and `framecam` could not run them — the daemon was
+saturated by seven lanes. **That is the exact next step for this file.**
+
 ## Two live leads, reported rather than chased
 
 - **Floating boulders are real and reproducible**, mid-ground in `zone_longwythe`
