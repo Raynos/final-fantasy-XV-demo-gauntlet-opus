@@ -67,6 +67,14 @@ const results = await page.evaluate(async () => {
   // without awaiting, so a probe that returned a promise would silently pass.
   const worldMap = (await import('/world/map/WorldMap.ts')).worldMap;
   const bestiary = (await import('/characters/enemies/Bestiary.ts')).BESTIARY;
+  const setPieces = (await import('/game/encounters/SpawnTables.ts')).SET_PIECES;
+  const chapterTable = (await import('/game/story/Chapters.ts')).CHAPTERS;
+  const spawnTables = await import('/game/encounters/SpawnTables.ts');
+  const territories = spawnTables.TERRITORIES;
+  const roamers = spawnTables.ROAMERS;
+  const huntTargets = spawnTables.HUNT_TARGETS;
+  const npcCast = (await import('/characters/npc/NpcCast.ts')).NPC_CAST;
+  const npcDialogue = (await import('/characters/npc/NpcDialogue.ts')).NPC_DIALOGUE;
   /** One probe's verdict. `WIRED` is "the system is there but idle". */
   interface Row { area: string; name: string; status: 'PASS' | 'WIRED' | 'FAIL'; evidence: string }
   const out: Row[] = [];
@@ -475,6 +483,128 @@ const results = await page.evaluate(async () => {
     if (!camOk) return F('attract camera is NaN');
     return playing ? P('title shows, attract camera valid, opening scene plays')
       : W('title works; cutscene did not report playing');
+  });
+
+  /**
+   * Every objective in the table, against the world that has to satisfy it.
+   *
+   * This is `probes/questaudit.mts` folded into the gate suite, and it exists
+   * because the chain check below **cannot catch this class**: it satisfies
+   * objectives by calling `notify` directly, and `notify('talk', 'dino')` ticks
+   * whether or not a Dino exists. Twenty-one objectives across twelve quests
+   * were unsatisfiable this morning — five people who were never built, a
+   * species in no spawn table, three items nothing produced, six verbs nothing
+   * posted — and every gate was green through all of it.
+   */
+  probe('story', 'every quest objective has a source in the world', () => {
+    const rpg = g.get('Rpg')!;
+    const npcs = g.get('Npcs');
+    const cast = Object.keys(npcCast);
+    const withDialogue = Object.keys(npcDialogue);
+    // A pending remote placement is a placement: those five are built when the
+    // camera comes within 420 m, and `probes/outposts.mts` walks to each.
+    const placed = new Set<string>([
+      ...(npcs?.list ?? []).map((n: { castKey: string }) => n.castKey),
+      ...(npcs?._pending ?? []).map((r: { castKey: string }) => r.castKey),
+    ]);
+    const spawnable = new Set<string>();
+    for (const t of territories) for (const l of t.spawn) spawnable.add(l.key);
+    for (const r of roamers) for (const l of r.spawn) spawnable.add(l.key);
+    for (const k of Object.keys(setPieces)) spawnable.add(setPieces[k].boss);
+    for (const k of Object.keys(huntTargets)) spawnable.add(huntTargets[k].key);
+    const source = new Set<string>();
+    for (const sh of Object.values(rpg.tables.shops)) for (const id of sh.stock) source.add(id);
+    for (const def of Object.values(bestiary)) for (const d of def.drops ?? []) source.add(d.id);
+    for (const q of Object.values(rpg.tables.quests)) for (const it of q.rewards?.items ?? []) source.add(it.id);
+
+    const bad: string[] = [];
+    for (const q of Object.values(rpg.tables.quests)) {
+      for (const o of q.objectives) {
+        const where = `${q.id}:${o.type}/${o.target}`;
+        if (o.type === 'talk') {
+          if (!cast.includes(o.target)) bad.push(`${where} no such person`);
+          else if (!withDialogue.includes(o.target)) bad.push(`${where} no dialogue tree`);
+          else if (!placed.has(o.target)) bad.push(`${where} never placed`);
+        } else if (o.type === 'kill') {
+          // A mark is credited by the hunt it was spawned for, whatever the
+          // corpse is called -- `hunt_naga` spawns an `arachne`. @see creditMark
+          const mark = huntTargets[q.id];
+          const set = q.setPiece ? setPieces[q.setPiece] : null;
+          if (!mark && !set && !spawnable.has(o.target)) bad.push(`${where} never spawns`);
+        } else if (o.type === 'fetch') {
+          if (String(o.target).startsWith('gil:')) continue;
+          if (!rpg.tables.items[o.target]) bad.push(`${where} no such item`);
+          else if (!source.has(o.target)) bad.push(`${where} nothing drops, sells or awards it`);
+        } else if (o.type === 'reach') {
+          if (!o.waypoint) bad.push(`${where} no waypoint`);
+        } else if (o.type === 'photo') {
+          if (typeof g.get('Menus')?.screens?.photo?.subjects !== 'function') bad.push(`${where} the shutter posts nothing`);
+        } else if (o.type === 'escort' || o.type === 'fish') {
+          bad.push(`${where} nothing in the game posts "${o.type}"`);
+        }
+      }
+    }
+    const n = Object.values(rpg.tables.quests).reduce((a: number, q) => a + q.objectives.length, 0);
+    return bad.length === 0
+      ? P(`all ${n} objectives across ${Object.keys(rpg.tables.quests).length} quests are satisfiable`)
+      : F(`${bad.length}/${n} cannot be completed: ${bad.slice(0, 4).join('; ')}`);
+  });
+
+  // Nothing has ever driven the quest chain from a gate. The story dead-ended
+  // in chapter 1 for the whole life of this project -- no Dino at Galdin, no
+  // Deadeye anywhere in a spawn table -- and every gate stayed green through
+  // it, because a quest table that parses is not a story that can be finished.
+  probe('story', 'the main line runs from chapter 1 to the end', () => {
+    const rpg = g.get('Rpg')!; const story = g.get('Story')!;
+    if (!rpg || !story) return F('no Rpg or Story');
+    story._resume();
+    const chapters = chapterTable;
+    if (!chapters.length) return F('no chapter table');
+
+    const drive = (id: string) => {
+      const def = rpg.quests.def(id); const st = rpg.quests.state(id);
+      if (!def || !st) return;
+      for (let i = 0; i < def.objectives.length; i++) {
+        if (st.objectives[i].done) continue;
+        const o = def.objectives[i];
+        // Every objective goes through the real notify path. `forceObjective`
+        // would prove only that the log can be told what to think.
+        if (o.type === 'fetch') {
+          if (String(o.target).startsWith('gil:')) rpg.inventory.addGil(Number(String(o.target).split(':')[1]), 'gate');
+          else rpg.inventory.add(o.target, o.count, 'gate');
+          rpg.quests.settle(id);
+        } else if (o.type === 'kill') {
+          const set = def.setPiece ? setPieces[def.setPiece] : null;
+          for (let k = 0; k < o.count; k++) {
+            rpg.enemyKilled({ id: set ? set.boss : o.target, level: 20, expClass: 'normal', drops: [] }, {});
+          }
+        } else if (o.type === 'quest') {
+          const other = rpg.quests.states[o.target];
+          if (other && other.status !== 'complete') { rpg.quests.accept(o.target); rpg.quests.complete(o.target); }
+          rpg.quests.settle(id);
+        } else {
+          rpg.quests.notify(o.type, { target: o.target, count: o.count });
+        }
+      }
+    };
+
+    const stuck: string[] = [];
+    for (const ch of chapters) {
+      for (const id of ch.quests) {
+        if (rpg.quests.status(id) === 'complete') continue;
+        if (rpg.quests.status(id) === 'available') rpg.quests.accept(id);
+        if (rpg.quests.status(id) !== 'active') { stuck.push(`${id} stuck ${rpg.quests.status(id)}`); continue; }
+        drive(id);
+        step(20);
+        if (rpg.quests.status(id) !== 'complete') stuck.push(`${id} ${rpg.quests.status(id)}`);
+      }
+      step(420);            // the chapter card holds for 4.6 s before the next opens
+    }
+    const last = chapters[chapters.length - 1].n;
+    if (stuck.length) return F(`${stuck.length} main quests cannot finish: ${stuck.slice(0, 3).join(', ')}`);
+    return story.chapterN >= last
+      ? P(`all ${chapters.reduce((n: number, c: { quests: string[] }) => n + c.quests.length, 0)} main quests complete; story reaches chapter ${story.chapterN}`)
+      : F(`every quest completes but the story stopped at chapter ${story.chapterN} of ${last}`);
   });
 
   /* ----------------------------------------------------------- audio ---- */
