@@ -367,7 +367,7 @@ export class Trees {
         });
         const cardW = src.radius * 2.12;
         const imp = new THREE.InstancedMesh(billboardGeo(cardW, t.height * 1.02), impMat, perImpostor);
-        imp.castShadow = false; imp.receiveShadow = true;
+        imp.castShadow = true; imp.receiveShadow = true;
         imp.count = 0; imp.visible = false; imp.frustumCulled = false;
         const impTint = new THREE.InstancedBufferAttribute(new Float32Array(perImpostor * 3), 3);
         imp.instanceColor = impTint;

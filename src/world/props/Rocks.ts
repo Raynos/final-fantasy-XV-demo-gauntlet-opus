@@ -778,7 +778,7 @@ export class Rocks {
         g.farMax = Math.max(8, Math.round(farCap * q));
         g.far = this._mesh(rockGeometry(k.seed, { ...k.opts, detail: 1, chips: 1 }),
           mat, g.farMax, `rock_${k.key}_far`);
-        g.far.castShadow = false;
+        g.far.castShadow = true;
       }
       this.groups.push(g);
     }
