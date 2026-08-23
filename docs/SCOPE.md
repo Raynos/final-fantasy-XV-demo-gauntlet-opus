@@ -497,7 +497,7 @@ machine never runs — not in play, and not in the capture harness either:
 ## 13. Performance & engineering
 
 ### The gate suite
-- [x] **`pnpm run check` runs 11 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `horizoncheck` · `heightcheck` · `driftcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)*
+- [x] **`pnpm run check` runs 12 gates and prints one table**, cheapest first: `build` (`vite build`) · `anycheck` · `orphans` · `integration` · `uxcheck` · `creaturecheck` · `combatloop` · `roadcheck` · `reachcheck` · `horizoncheck` · `heightcheck` · `driftcheck`. `--perf` adds `perf` and `gameplay` — quiet tree only. *(The two typechecks are the pre-commit hook's, not `check.mts`'s.)* Verified 12/12 green on 2026-08-23.
 - [x] **A gate can report VOID** — measured nothing — distinctly from failed. This is the honesty mechanism behind every perf number below.
 - [x] `integration.mts` asserts features are **reachable in play**, not merely present
 - [x] `orphans.mts` — static reachability from `main.ts`; **283/283 modules**
@@ -540,7 +540,7 @@ machine never runs — not in play, and not in the capture harness either:
 Full detail in **[`project/handoff/typescript.md`](../project/handoff/typescript.md)**
 and the plan it ran from, `project/archive/plans/2026-08-22-opus-phase2-typescript-port.md`.
 Every file under `src/` is TypeScript, both typechecks are clean under `strict`,
-**all 11 gates green**, and the pixel diff against the pre-port build is inside
+**all gates green** (9 at the time, 12 now), and the pixel diff against the pre-port build is inside
 each shot's own run-to-run noise. Follow-on **zero `any`: reached**, ratcheted by
 `src/tools/anycheck.mts` against `ANY_BUDGET.json`.
 

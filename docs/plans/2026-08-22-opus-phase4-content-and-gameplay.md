@@ -3,7 +3,8 @@
 The largest remaining body of work, and the one that changes what this demo *is*.
 
 **This is the execution plan. The argument and the audit live in
-`docs/plans/2026-08-17-opus-content-gameplay.md`** (985 lines) — its workstream
+`project/archive/plans/2026-08-17-opus-content-gameplay.md`** (985 lines, archived
+— this file superseded it) — its workstream
 definitions, its FFXV reference appendices and its case for what to cut are all
 still correct and are not repeated here. Read it first. This document says what
 has changed since it was written, what order to actually run the work in, and how
@@ -14,8 +15,29 @@ Status: IN-PROGRESS (2026-08-23, opus) — phase 4 of
 is **done, and it overturned the audit's central claim**: `src/game/rpg/**` is
 not orphaned, and WS-2, WS-3 and WS-6 all have real implementations. What was
 genuinely broken was smaller and worse — nothing in the game was pressable, and
-no quest waypoint pointed at a real place. Both fixed; `integration` is 20/20.
-WS-4 and WS-5 are in flight. See `project/handoff/content-wire.md`.
+no quest waypoint pointed at a real place. Both fixed.
+
+**Audited against the tree 2026-08-23. Real code landed; the definition of done
+is unevidenced; 0 of 5 boxes tick.**
+
+| workstream | state |
+|---|---|
+| 0 re-audit | **DONE**, and it overturned the audit's central claim |
+| WS-0b rendering perf | **STILL UNOWNED** — and now *unmeasurable*: the ruler correctly refuses a contended tree and the tree has not been quiet. Two gates formally uncertified |
+| WS-1 the wire | **DONE** — `Interaction` has the E verb back, quest coordinates derive from `WorldMap` instead of being typed |
+| WS-2 encounters / party AI / death | partial — `CombatBridge`, `PartyState`, `BossFight.resolveStrike` now executes for the first time. The "photo booth" finding is **not** closed |
+| WS-3 Hammerhead / NPCs / verb | **DONE** — five named NPCs, camp prompts at every haven |
+| WS-4 quests and hunts | **DONE** — 21 dead objectives to zero, six uncompletable hunts fixed, main chain reaches end of chapter 5 |
+| WS-5 camp / cook / rest / day cycle | **DONE** — `HavenCamp`, four recipes, and a gate that actually presses the key and rests |
+| WS-6 the Regalia | partial — `AutoDrive` exists; nothing verified this round |
+| WS-7 character fidelity | partial and **unjudged** — hair and eyes shipped in four commits with +8 draws and +0.42 M triangles, never measured and never scored |
+| **beyond the plan** | **fishing** — ten `type: 'fishing'` POIs had been authored into the map and did nothing. `src/game/fishing/` is a real non-combat verb, and the lane before it was right to refuse to tick a `fish` objective off a keypress |
+
+**The gate numbers in the body of this file are stale.** Live, 2026-08-23:
+`uxcheck` **93/93**, not 86/86 or 89/89. See `project/STATUS.md` for the
+current table and treat every count written below as historical.
+
+See `project/handoff/content-wire.md`.
 
 ---
 
@@ -36,9 +58,9 @@ with, not a corpus of 139 handsome stills.
 |---|---|
 | No way to look at the game except a 20-minute batch capture | **An in-game dev suite exists** — console, freecam, asset browser, review inbox (`?debug=1`). This changes iteration cost for gameplay work more than for art work, because gameplay defects are behavioural and a still frame cannot show them |
 | WS-0a "shader pre-warm and the magic crash" was BLOCKING, ~1 day | **Done.** The warmup exists and pins the light budget; the 15.8 s freeze is gone. What remains is that warmup costs 1722 ms of boot — that is **phase 3's** problem, not a blocker here |
-| Perf unknown | **Measured on a quiet tree:** `perf` worst 37.9 fps (`vista_dawn`), `gameplay` worst 49.8 fps (`walk`). Both fail the 60 fps target and **nobody owns them** |
-| `combatloop` failing | **30/30.** It was a stale test, not a broken game — the mechanics it covers were working all along |
-| Character art "below AAA at closeup" | Improved but honestly still short: hands are mittens, outfits are flat black, hair reads as quills |
+| Perf unknown | **DO NOT USE THE NUMBERS THIS ROW ORIGINALLY CARRIED.** It said `perf` worst 37.9 fps (`vista_dawn`) and `gameplay` worst 49.8 fps (`walk`), and **both came from a ruler that was measuring itself** — it rendered twenty frames in one synchronous task and throttled itself fivefold, scoring correlation **0.107** against the truth *with the ranking inverted*. `vista_dawn`, called the second-worst shot in the game, is **208 fps**. On the fixed ruler the last certified run was mean **243.7 fps** / worst segment **92.2 fps**, `RULER_VALID: true` — but that predates this round's renderer work and has not been re-certified since. See `project/LANDMINES.md`, last section. |
+| `combatloop` failing | **30/30 when this was written; 31/31 now.** It was a stale test, not a broken game — the mechanics it covers were working all along |
+| Character art "below AAA at closeup" | Improved and still short, but **not in the ways this row listed** — outfits are no longer flat black (leather lost its mirror hit, sleeves crease) and hair is out of the shell reading as strands rather than quills. What is actually open: hands, and the fact that **hair and eyes shipped unjudged**. Current state is `project/handoff/heroart.md`, not this row |
 
 **The `combatloop` correction matters for scoping.** It verifies 30 combat
 mechanics — companion techniques, energy draw, spell craft and cast, raw elemancy,
@@ -54,7 +76,7 @@ has become a named, measured, unowned problem.
 
 | # | workstream | depends on | notes |
 |---|---|---|---|
-| **0** | **Re-audit against the gates** | — | Half a day. What does `combatloop` 30/30 + `integration` 18/18 actually prove is reachable? Cut WS-1 down to what is genuinely missing |
+| **0** | **Re-audit against the gates** | — | **DONE.** (The "`integration` 18/18" here was the count at the time; it is 27 now. Numbers in this table are historical.) |
 | **WS-0b** | **Rendering performance** | — | Now concrete: `vista_dawn` 37.9, `walk` 49.8. Runs parallel, whole-run. **Assign an owner** — it has never had one |
 | **WS-1** | **The wire**: RPG ↔ UI ↔ combat ↔ world | 0 | Still the first content workstream. Scope it from the re-audit, not from the original list |
 | **WS-2** | Encounters, party combat AI, death | WS-1 | The "photo booth" fix |
@@ -87,15 +109,36 @@ already paid for:
 
 ## 5. Definition of done
 
-- [ ] **A person can play for 30 minutes** without hitting a dead end or a stub
-- [ ] `pnpm run check` — all gates green, including `combatloop` at 30/30
+Ticked 2026-08-23 against the tree. **0 of 5.** Every one of these is
+*closer* than it was and not one of them is closed.
+
+- [ ] **A person can play for 30 minutes** without hitting a dead end or a stub.
+      **Never tested.** No document in this repo records anyone playing this game
+      for thirty minutes. Every judgement made here is on a still frame or a
+      scripted probe. This is the single largest evidence gap in phase 4, and
+      the gates cannot close it — a gate proves a path is *reachable*, not that
+      half an hour of it is *worth playing*.
+- [ ] `pnpm run check` — all gates green. **Green, but the target moved:** the
+      suite is **12** gates without `--perf` and 14 with, `combatloop` is 31/31 not
+      30/30, and `uxcheck` is 93/93. Left unticked because the two `--perf`
+      gates below are part of "all gates" and they are uncertified.
 - [ ] **`perf` and `gameplay` pass 60 fps** — or the failure is explained, owned,
-      and accepted deliberately rather than by default
-- [ ] The loop closes: fight → reward → spend → fight better
-- [ ] A fresh harsh-critic pass, graded against shipped FFXV. **The last score was
-      4.5/10 and predates clouds, cartography, collision, menus, combat, the
-      rebuilt bestiary, biomes, dressing and everything in this session.** Nobody
-      currently knows what this game scores
+      and accepted deliberately rather than by default. **Neither.** The last
+      certified run passed comfortably (mean 243.7 fps, worst segment 92.2 fps,
+      `RULER_VALID: true`) but predates this round's renderer changes, and the
+      ruler has refused every run since because the tree has not been quiet.
+      **Still nobody's job.**
+- [ ] The loop closes: fight → reward → spend → fight better. Partial —
+      `combatloop` proves EXP on kill, Ascension, Elemancy craft and the
+      inventory are individually reachable. Nothing proves a player *experiences*
+      them as a loop.
+- [ ] A fresh harsh-critic pass, graded against shipped FFXV. **Run, ten rounds,
+      and this box stays open on purpose.** `compare.mts` with a sealed key and
+      a `--control` arm now scores **4.5/10** — that is a *current* number with a
+      control, not the stale one this line was written about. It is unticked
+      because the score has barely moved (3 -> 4.5) and **we have never fooled
+      the judge once.** Its own answer for what gives us away is **authoring** —
+      *"the same few instances repeated"* — not a list of rendering defects.
 
 ## 6. What would be wasted effort
 

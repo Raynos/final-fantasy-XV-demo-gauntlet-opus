@@ -1,9 +1,21 @@
 # Rescue and sequencing plan
 
-Status: IN-PROGRESS (2026-08-22, opus). The rescue itself is closed and its
+Status: IN-PROGRESS (2026-08-23, opus). The rescue itself is closed and its
 ledger archived at `project/archive/RESCUE-2026-08-21.md`. This file survives as
-the agreed *sequence*: phase 2 (TypeScript) is done, phases 3 and 4 are open and
-have their own plans.
+the agreed *sequence*, and nothing else — **it is not a record of work and it is
+not a tracker.** Read it for the order and the reasoning; read the phase plans
+for what is actually built.
+
+- **Phase 1 (rescue)** — CLOSED, ledger archived.
+- **Phase 2 (TypeScript)** — **DONE and verified**: `anycheck` 0 `any`,
+  `tsc -p tsconfig.json` and `-p tsconfig.tools.json` both clean, and both run
+  in the pre-commit hook. Plan graduated to
+  `project/archive/plans/2026-08-22-opus-phase2-typescript-port.md`.
+- **Phase 3 (boot and memory)** — open, most of the way, misses its own target.
+- **Phase 4 (content and gameplay)** — open, real code landed, definition of
+  done unevidenced.
+
+§3's determinism table below is **superseded** — see the note under it.
 
 **Written 2026-08-21.** The order of work from here, agreed with the human, and
 the reasoning behind that order.
@@ -45,9 +57,11 @@ session on a quiet tree. Doing it after the content work means porting a much
 larger codebase, in exactly the layer (`rpg/**`, the combat event map, `Shot`)
 where the plan argues the type value is highest.
 
-> The plan is **stale on scale**: it says 235 modules / ~79,500 lines. It is now
-> **274 modules / ~94,900 lines**, and it grows ~5k lines a session. Update those
-> figures before estimating.
+> The plan was **stale on scale** and this note was too: the plan said 235
+> modules / ~79,500 lines, this note said 274 / ~94,900, and as of 2026-08-23 it
+> is **291 modules / ~143,000 lines** (`orphans` counts 291 reachable). It grows
+> ~5k lines a session. Historical only — the port is done; keep the number
+> honest because other estimates cite it.
 
 **3. The human's `TODO.md`.** Boot time ("starting a new page takes forever") and
 memory ("1.4 GB of RAM in `?debug` and maybe in prod too"). Deliberately *not*
@@ -55,7 +69,9 @@ first, at the human's instruction. The third item, "repo feels chaotic", was
 resolved on 2026-08-21 by a separate session.
 
 **4. Content and gameplay**
-(`docs/plans/2026-08-17-opus-content-gameplay.md`). The largest remaining body of
+(`project/archive/plans/2026-08-17-opus-content-gameplay.md`, archived; the
+execution plan that replaced it is
+`docs/plans/2026-08-22-opus-phase4-content-and-gameplay.md`). The largest remaining body of
 work and the one that changes what the demo *is* — its load-bearing finding is
 that the game is visually deep and mechanically stubbed, with encounters still
 "currently a photo booth".
@@ -92,7 +108,8 @@ Each verified by eye or by measurement. Detail in `project/STATUS.md`.
 - **Blades read as steel** instead of flat navy planes.
 - **`cine_opening` pushes the visible Regalia** rather than empty air.
 - `SESSION-STATE.md` rewritten; `claude-resume.md` deleted; `MapRaster.ts`
-  deleted by a peer session (`orphans.mts` is clean at 272/272 for the first time).
+  deleted by a peer session (`orphans.mts` was clean at 272/272 for the first
+  time; it is 291/291 as of 2026-08-23).
 
 ### The determinism result, with its control
 
@@ -109,6 +126,17 @@ Same `follow` shot alone versus sixth in a batch, mean delta per 255:
 1.5–1.9 quoted for the corpus generally — so 2.068 is still real
 order-dependence, roughly 5% of pixels over 8/255, most likely vegetation tile
 streaming. A 19× improvement with stable framing, but **not closed**.
+
+> **SUPERSEDED 2026-08-22 by `417ca86`, and the guess in the last sentence was
+> wrong.** Determinism is now **CLOSED**: 1.836 -> **0.340** mean/255 against a
+> measured 0.302 floor. The residual was **the wind**, not vegetation streaming
+> — `Weather.resetClock` set only `_snap`, while `_gust` integrates forever and
+> `windDir` drifts permanently, so no preset change and no clock reset ever
+> touched them. Wall-clock streaming budgets were a real second cause but worth
+> only 0.009/255; what they bought was machine-independence, not the number.
+> The lesson recorded in §4 ("control before concluding") held. The lesson it
+> did *not* record, and should have: **pin every integrated phase, not the ones
+> a handoff happens to name.**
 
 ## 4. Lessons being carried forward
 

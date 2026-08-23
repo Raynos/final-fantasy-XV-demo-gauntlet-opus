@@ -1,10 +1,29 @@
 # Sibling-repo port plan — techniques worth stealing
 
-Status: IN-PROGRESS (2026-08-22, opus) — Wave 1 is being built. **§2.1
-(determinism pinning) is DONE**, closed 2026-08-22 in commit `417ca86`:
-order-dependence 1.836 -> 0.340 mean/255 against a measured 0.302 floor. The
-cause was not the one this plan predicted (see below). §2.3-§2.6 are owned by
-the `instruments` lane; Waves 2-4 are still proposals.
+Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 is done; Wave 2 is half done;
+Waves 3 and 4 are untouched proposals.** Audited against the tree 2026-08-23,
+item by item:
+
+| item | state | evidence |
+|---|---|---|
+| 2.1 determinism pinning | **DONE** | `417ca86`, on `main`. 1.836 -> 0.340 mean/255 against a measured 0.302 floor. The cause was the wind, not the formation this plan predicted |
+| 2.2 shader warm + `compileAsync` | **REJECTED, measured** | `4c1d813`. Warm exists; `compileAsync` is **3% slower here** (1562 ms sync vs 1611 ms median, six pairs). `runAsync` and `bootprof --warm-ab` kept so the next GPU can re-check in one command |
+| 2.3 `seatHeightAt` / `drawnEnvelope` | **DONE** | `Terrain.ts:496`, `props/Seat.ts`, and a `seatcheck.mts` that rasterises the real clipmap to check it |
+| 2.4 self-validating perf ruler | **DONE** | `RULER_VALID` in `perf.mts:309` and `gameplay.mts:371`. It earned its keep immediately — it voided a ruler that reported 63 fps for a game running at 190 |
+| 2.5 ablation dials | **DONE** | `shoot.mts --hide/--ablate`, and the rule written into `BRIEF.md` §"ablate before re-tinting" and `HANDOFF.md:43` as this plan asked |
+| 2.6 contact shadows | **PRESENT, AND MEASURED INSUFFICIENT** | `postfx/ContactShadowPass.ts` exists and grounds nothing at scenery range: it marches 0.5 m and range-gates at 55 m while graded shots' nearest ground is 61-80 m. See `project/handoff/grounding.md` — this is the judge's #1 open item |
+| 3.1 art-direction corpus | **DONE** | `docs/reference/ART-DIRECTION.md`, `PLATE-SOURCES.md`, `plates/`, `sibling-{RENDER-INVENTORY,TRAPS}.md` |
+| 3.2 grade stats + blind A/B | **DONE** | `compare.mts` (sealed key, `--control`) and `imagestats.mts`. Ten rounds run; score 3 -> 4.5/10 |
+| 3.3 grade upgrades | **NOT DONE** | The finite-clip item is measurably still open: four of our six frames clip at exactly 0.00% where eight of ten reference plates clip >=0.10% |
+| 3.4 depth-weighted additives | **NOT DONE** | No `airDepth` term anywhere in `src/engine/postfx/` |
+| 3.5 horizon-angle bake | **DONE** | `world/terrain/Horizon.ts` + a `horizoncheck` gate at MCC >= 0.85 |
+| 3.6 grass tier-D et al | **MEASURED, DELIBERATELY NOT BUILT** | See the annotation in §3.6 — the gap is confirmed by ablation, the fix waits on the grade it would have to match |
+| 3.7 water depth model | **NOT DONE** | No Beer-Lambert, no refracted bed |
+| 3.8 sky-SH + PCSS | **NOT DONE** | Neither exists |
+| Wave 3 (perf) | **one item landed incidentally** | GenCache-style generator-hash invalidation shipped as `texbake.mts`'s `TEX_SOURCES`/`CANVAS_SOURCES` hashing, out of phase 3's boot work. Nothing else |
+| Wave 4 (gameplay) | **NOT STARTED** | No `setMotion`, no perception meter, no swept camera — `CameraRig.ts:247` says in so many words "this is where it would be swept" |
+| §6.2 per-shot noise floors | **NOT DONE** | `imgdiff.mts` still carries one global floor |
+
 Author: Fable 5 audit pass, against commit `a1df21d`.
 Sources: full audits of the sibling repos under
 `/Users/raynos/projects/game-demos/gauntlet-demos/` — `final-fantasy-XV-demo-opus`
@@ -473,13 +492,23 @@ work for Wave 5's AI pieces).
 
 ## 10. Definition of done for this plan
 
-- [ ] Wave 1 items each closed against their RESCUE line item, with
-      captures looked at.
-- [ ] `docs/ART_DIRECTION`-equivalent reference numbers exist in `docs/`
-      and the next character-art pass cites them.
-- [ ] Blind A/B harness runs with a sealed key; fresh critic pass recorded
-      (replaces the stale 4.5/10).
+Ticked 2026-08-23 against the tree. **4 of 6.**
+
+- [x] Wave 1 items each closed against their RESCUE line item, with
+      captures looked at. *(2.6 closed as "present and insufficient", which
+      is a close, not a pass — the work moved to `handoff/grounding.md`.)*
+- [x] `docs/ART_DIRECTION`-equivalent reference numbers exist in `docs/`
+      and the next character-art pass cites them. *(`docs/reference/`.)*
+- [x] Blind A/B harness runs with a sealed key; fresh critic pass recorded
+      (replaces the stale 4.5/10). *(`compare.mts`; ten rounds; 4.5/10 is
+      now a **current** number with a control, not a stale one.)*
 - [ ] Perf re-baseline published from the new ruler with noise floor and
-      contention verdict attached.
+      contention verdict attached. **Blocked, not forgotten:** the ruler
+      exists and correctly refuses a contended tree, and the tree has not
+      been quiet long enough to certify one. This is the single most
+      load-bearing open item in the repo — two perf gates are formally
+      unmeasured.
 - [ ] Each Wave 2 lever landed (or rejected with a measured negative —
       record it, the siblings' measured negatives were half their value).
+      **4 of 8 landed** (3.1, 3.2, 3.5, and 3.6 as a recorded negative);
+      3.3, 3.4, 3.7 and 3.8 are untouched.

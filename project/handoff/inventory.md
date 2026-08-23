@@ -123,9 +123,14 @@ Cheap to fix, and each one is a future wrong diagnosis:
   lines down admits `'*'` works.
 - `src/game/Shots.ts:383-396` lists six zone id/name mismatches; there are
   **seven** — it misses `lestallum_shelf` → `zone_lestallum`.
-- `src/tools/check.mts:52-53` `expect` strings still say `integration` 18 pass
-  and `uxcheck` 86/86; `STATUS.md` reports 20/20 and 89/89. Display-only, but it
-  is what a failing gate prints at you.
+- ~~`src/tools/check.mts:52-53` `expect` strings still say `integration` 18 pass
+  and `uxcheck` 86/86; `STATUS.md` reports 20/20 and 89/89.~~ **FIXED
+  2026-08-23**, and all three numbers were wrong: a full `check` run gives
+  `integration` **27**, `uxcheck` **93/93**, `combatloop` **31/31**. The `expect`
+  strings and `STATUS.md` now both carry the measured values. This entry was
+  right that it is display-only and right that it matters — it is what a failing
+  gate prints at you, and it was the thread that unravelled four documents
+  disagreeing about one gate suite.
 - `src/world/veg/GrassField.ts:591` says tufts are 0.15–0.35 m; the height law
   at `:104-105` admits ≈0.06–0.48 m and the file's own `:90` says mean 0.157 m.
 

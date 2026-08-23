@@ -1,10 +1,18 @@
 # Harness plan — one trunk, one daemon, content-addressed builds
 
-Status: PROPOSED (2026-08-21, opus) — **Decision 1 is LOCKED**; Decisions 2 and 3
+Status: PROPOSED (2026-08-23, opus) — **Decision 1 is LOCKED**; Decisions 2 and 3
 and every phase below are proposals that assume it. **Decision 1 was tested
 against a night of running roughly a dozen agents the other way on 2026-08-23
 and it survives, but one of its three reasons was wrong and the phase order
-should change — see the evidence section under it.** Nothing here is built.
+should change — see the evidence section under it.**
+
+**Nothing in this plan is built, and the defect it describes has got worse.**
+Audited 2026-08-23 against the tree: **0 of 15** definition-of-done items are
+met, and the tool count in "Cause one" below has been corrected upward from
+20-of-34 to **30-of-48**. The one thing here that did ship is the sweepguard,
+and it shipped as a Claude Code hook (`.claude/hooks/guard-git-add-all.sh`,
+wired in `.claude/settings.json`), *not* in `.githooks/` — look there before
+concluding it is missing.
 
 Supersedes the unprefixed `2026-08-21-harness-daemon.md`, now merged into this
 file.
@@ -20,9 +28,10 @@ session:
 That is a symptom, and the "~4" is a guess nobody measured. There are three
 structural causes, and only the first is the one people notice.
 
-**Cause one — twenty tools each own a browser.** Twenty of thirty-four tools in
-`src/tools/` call `chromium.launch` themselves; seventeen spawn their own `vite`
-too. Each carries a copy-pasted `portOpen()` / `ensureServer()` /
+**Cause one — thirty tools each own a browser.** **Thirty of forty-eight** tools
+in `src/tools/` call `chromium.launch` themselves (re-counted 2026-08-23; it was
+twenty of thirty-four when this was written, so the trend is the wrong way and
+every new tool adds to it); seventeen spawn their own `vite` too. Each carries a copy-pasted `portOpen()` / `ensureServer()` /
 `page.goto('?q=…&shoot=1')` / `waitForFunction('window.GAME.ready')` preamble —
 `perf.mts:47-70`, `gameplay.mts:80-82`, `combatloop`, `integration`, `uxcheck`,
 `driftcheck`, `heightcheck`, `mapshoot`, `ui-shoot`, `dresscam`, `bootprof`,

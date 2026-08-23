@@ -1,8 +1,26 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: IN-PROGRESS (2026-08-23, opus) — buildings and rocks are being built
-against it now, with the measured FFXV reference in `docs/reference/` as the bar
-and a blind A/B judge scoring the result. See `project/handoff/modeling.md`.
+Status: IN-PROGRESS (2026-08-23, opus) — **Wave 1 is roughly half built; the
+tooling this plan asks for is not.** Buildings and rocks landed against it, with
+the measured FFXV reference in `docs/reference/` as the bar and a blind A/B judge
+scoring the result. See `project/handoff/modeling.md`, which grades its own work
+5-6.5/10 and is the more honest read.
+
+Audited against the tree 2026-08-23:
+
+| item | state | evidence |
+|---|---|---|
+| 2.1 seat contract | **DONE** | `Terrain.seatHeightAt`, `props/Seat.ts`, `seatcheck.mts` |
+| 2.5 RNG hygiene | **NOT DONE** | The `_outcrops` RNG coupling this plan's §12 says must be fixed *first* is still open |
+| 2.3 Matérn scatter | **NOT DONE** | No Matérn anywhere in `src/` |
+| 3.2 chamfer + weathering | **DONE** | `chamfer` in 7 files across `props/`, `town/`, `combat/`, `rig/` |
+| 4.1 strata | **DONE** | `terrain/{Field,Layers,Biome,TerrainMaterial}.ts`, `props/Rocks.ts` |
+| 5.1 `wallRun` + chamfered box | **DONE** | `props/BuildKit.ts`, `props/PoiKits.ts` |
+| 2.2 talus aprons | **DONE** | `Terrain.ts`, `props/{ZoneDress,Rocks}.ts` |
+| **the texel-density defect** | **DONE, and it was the big one** | `TownKit.texelPlace` — one cause behind three separately-written-up symptoms (caustic soffit, wood-grain fascia, gravel-scale speckle on furniture). Cost: **+0.33% triangles worst case and one extra draw call across nine shots** |
+| §9.2 silhouette bench | **NOT BUILT** | `edgestat.mts` measures alpha-edge hardness and `lineup.mts` glues crops side by side; neither is the 8-azimuth height-normalised width-profile bench this plan specifies. Tree and creature *shape* variety is still ungated |
+| §13 `proudOf` | **NOT BUILT** | The symbol does not exist in the repo |
+| 8.x characters | **NOT STARTED** | Head, hair, skinning and LOD are untouched by this lane; hair and eyes shipped from a *different* lane, unjudged |
 Author: Fable 5 audit pass, against commit `86303de`. Companion to
 `docs/plans/2026-08-21-fable-sibling-ports.md` (which covers rendering, perf,
 gameplay and tooling); this one covers **mesh and shape construction only** —
@@ -508,14 +526,29 @@ Each item should land with its check from §9 in the same commit.
 
 ## 13. Definition of done
 
+Ticked 2026-08-23 against the tree. **2 of 6.**
+
 - [ ] Each landed item cites its source file and ships with its §9 check.
-- [ ] Wave 1 verified by capture on the shots that showed the defect
-      (floating props, town close-ups, tree LOD swaps).
+      **Half.** The items cite their sources; the §9 checks mostly did not
+      ship with them — `seatcheck` is the exception.
+- [x] Wave 1 verified by capture on the shots that showed the defect
+      (floating props, town close-ups, tree LOD swaps). *(Nine-shot
+      before/after pairs in `tmp/shots/COST-BASE` vs `COST-AFTER`, read.)*
 - [ ] A silhouette bench exists in `src/tools/` and gates at least trees
-      and the rebuilt enemy species.
+      and the rebuilt enemy species. **Not built.** Do not mistake
+      `edgestat.mts` (alpha-edge hardness) or `lineup.mts` (crop strips)
+      for it — neither measures shape.
 - [ ] `seatHeightAt`+`proudOf` runs in `integration.mts` or a new check —
-      zero floating instances across the POI corpus.
+      zero floating instances across the POI corpus. **Half:**
+      `seatHeightAt` exists and `seatcheck.mts` rasterises the clipmap to
+      test it, but `proudOf` was never written and no gate counts floating
+      instances across the POI corpus.
 - [ ] The head/hair rebuild (if taken) is judged by the width-profile
-      bench and a blind A/B, not by eye alone.
-- [ ] Measured negatives are recorded here or in handoffs — the siblings'
+      bench and a blind A/B, not by eye alone. **Not taken by this lane.**
+      Hair and eyes shipped from the `heroart` lane and are **unjudged** —
+      exactly the failure mode this line exists to prevent.
+- [x] Measured negatives are recorded here or in handoffs — the siblings'
       rejected constructions were half the value of their logs.
+      *(`handoff/modeling.md` records the `driftcheck` −1.18 m claim as a
+      lead to re-measure rather than a regression to chase, and the dead
+      `RoadSample.y` write as suspected-dead-but-unverified.)*

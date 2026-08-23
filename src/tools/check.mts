@@ -51,10 +51,10 @@ const GATES: Gate[] = [
   { name: 'build', cmd: VITE, args: ['build'], expect: 'builds' },
   { name: 'anycheck', script: 'anycheck.mts', expect: '0 `any`' },
   { name: 'orphans', script: 'orphans.mts', expect: 'every module reachable' },
-  { name: 'integration', script: 'integration.mts', expect: '18 pass, 0 fail' },
-  { name: 'uxcheck', script: 'uxcheck.mts', expect: '86/86' },
+  { name: 'integration', script: 'integration.mts', expect: '27 pass, 0 fail' },
+  { name: 'uxcheck', script: 'uxcheck.mts', expect: '93/93' },
   { name: 'creaturecheck', script: 'creaturecheck.mts', expect: '207 poses, 0 failures' },
-  { name: 'combatloop', script: 'combatloop.mts', expect: '30/30' },
+  { name: 'combatloop', script: 'combatloop.mts', expect: '31/31' },
   { name: 'roadcheck', script: 'roadcheck.mts', expect: '0 failures' },
   // Does the code *run*? `orphans` proves a module is reachable from `main.ts`;
   // six systems passed that and never executed. See `reachcheck.mts`.
@@ -62,7 +62,7 @@ const GATES: Gate[] = [
   // No browser and no server: the horizon sweep and its brute-force reference
   // are both plain arithmetic, so this runs in a second and belongs among the
   // cheap gates.
-  { name: 'horizoncheck', script: 'horizoncheck.mts', expect: 'MCC >= 0.85 vs the ray march' },
+  { name: 'horizoncheck', script: 'horizoncheck.mts', expect: 'MCC >= 0.85, or <= 1% disagreement, vs the ray march' },
   // These two do NOT spawn a server; they assume one is already up. Everything
   // else starts its own, and `strictPort` means a pre-started vite on the same
   // port would break those -- so they get a dedicated one, scanned for below.
