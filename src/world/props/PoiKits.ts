@@ -6,7 +6,7 @@ import { dressAt, type Dress } from './ZoneDress.ts';
 import {
   bag, mergeBag, box, cyl, xform, wallRun, windowUnit, doorUnit, plinth, parapet,
   cornerPier, stringCourse, plantUnit, roofTank, stairHead, bakeTone, toneVariant,
-  container, STOREY, CILL, type Opening,
+  container, membraneSag, tarpEnvelope, sandbagStack, STOREY, CILL, type Opening,
 } from './BuildKit.ts';
 import { seatY } from './Seat.ts';
 import { gradePad, WearField, desireLine } from './Wear.ts';
@@ -434,67 +434,164 @@ export class PoiKits {
   // ----------------------------------------------------------------- kits
 
   /**
-   * A haven: the rune-marked camp rock. Raised shelf, a ring of glyphs the
-   * player can see from a distance at night, a fire ring and camp stones.
+   * A haven: the rune-marked camp rock, and the place a player spends more
+   * hours looking at than any other POI in the game.
+   *
+   * It was a cream cylinder with 5% radius jitter standing 1.5 m proud of the
+   * grass, a ring of white boulders round its foot, and a three-sided prism for
+   * a tent (`tmp/shots/kits-r0b/poi_alstor_haven.png`). Three fixes, in the
+   * order they matter:
+   *
+   * - **The shelf is a rock, so it is broken.** A cylinder has one radius and
+   *   one top; this has a wobbled plan, a battered flank, a chamfered nosing
+   *   where the rune plate meets it, and a scatter of blocks that are *part of*
+   *   the shelf rather than a garnish round it.
+   * - **The tent is solved, not authored** ({@link membraneSag}): a ridge line
+   *   and four guy points, Jacobi-relaxed twice and rescaled so the sag is the
+   *   number asked for. That is what puts a cusp at every peg and a swag
+   *   between them, which no product of cosines can do.
+   * - **Camp furniture**, because a camp is people: a tarp over the stores
+   *   ({@link tarpEnvelope}, whose `max` gives it real ridge lines), a folding
+   *   chair each, a cook pot on the fire and a bedroll.
    */
   _haven(this: PoiKits, B: PartBuilder, s: PoiSite, ctx: KitCtx): KitResult {
     const M = this.mats, { rng, dress } = ctx;
     const r = 9.6;
-    // A haven is a *raised* shelf you climb onto, not a disc painted on the
-    // ground: the rune plate stands a metre and a half proud so it catches the
-    // light and reads as a destination from the far side of the valley.
-    const lift = 1.6;
-    this._apron(B, r, 9.5, s.poi.id.length * 7 + 1, M.stone, {
+    const lift = 1.55;
+    // The apron is *dirt*, the shelf is *rock*. Both were `M.stone` and the
+    // whole camp came back one sand colour with the shelf invisible inside its
+    // own earthwork (`tmp/shots/kits-r8/poi_alstor_haven.png`).
+    this._apron(B, r + 3, 9.5, s.poi.id.length * 7 + 1, undefined, {
       yaw: ctx.yaw,
       // The three things anyone at a haven walks between: the fire, the tent
       // and the lamp post. Wear follows people, not a pattern.
       wear: [[-r * 0.42, r * 0.3, 0.6], [r * 0.7, -r * 0.35, 0.5]],
     });
-    const plate = new THREE.CylinderGeometry(r, r * 0.97, 1.5, 15, 1);
-    const p = plate.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      p.setX(i, p.getX(i) * (1 + rng.gauss(0, 0.05)));
-      p.setZ(i, p.getZ(i) * (1 + rng.gauss(0, 0.05)));
-    }
-    plate.computeVertexNormals();
-    B.add(M.stone, plate, mat4([0, lift - 0.15, 0]));
-    const deck = lift + 0.6;
+
+    // The shelf. Two courses of wobbled plate with a batter between them, so
+    // the edge is a *nosing over a shadow* rather than one extruded rim.
+    const shelf = (rad: number, h: number, y: number, wob: number) => {
+      const g = new THREE.CylinderGeometry(rad, rad * 1.06, h, 17, 1);
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const a = Math.atan2(p.getZ(i), p.getX(i));
+        const k = 1 + Math.sin(a * 3.0 + 1.1) * wob + Math.sin(a * 7.0 - 0.4) * wob * 0.45;
+        p.setX(i, p.getX(i) * k);
+        p.setZ(i, p.getZ(i) * k);
+      }
+      g.computeVertexNormals();
+      // Darker than the ground it stands on, not paler: a haven is a slab of
+      // weathered basalt with light in the glyphs, and a shelf lighter than its
+      // own apron reads as a sandpit.
+      bakeTone(g, { y0: y - h, y1: y + h, grime: 0.52, bleach: 0.78, jitter: 1, streak: 0.14 });
+      B.add(M.stone, g, mat4([0, y, 0]));
+    };
+    shelf(r * 1.03, 1.15, lift - 0.7, 0.055);
+    shelf(r * 0.94, 0.5, lift - 0.02, 0.035);
+    const deck = lift + 0.24;
+
     // glyph ring, flat on the deck
-    const ring = new THREE.RingGeometry(r * 0.44, r * 0.88, 44);
+    const ring = new THREE.RingGeometry(r * 0.42, r * 0.84, 44);
     ring.rotateX(-Math.PI / 2);
     B.add(M.runeface, ring, mat4([0, deck + 0.02, 0]));
-    const inner = new THREE.RingGeometry(r * 0.18, r * 0.29, 30);
+    const inner = new THREE.RingGeometry(r * 0.17, r * 0.28, 30);
     inner.rotateX(-Math.PI / 2);
     B.add(M.rune, inner, mat4([0, deck + 0.03, 0]));
-    // fire ring: stones round a bed of embers
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2;
-      B.add(M.dark, new THREE.DodecahedronGeometry(0.26 * rng.range(0.7, 1.3), 0),
-        mat4([Math.cos(a) * 1.15, deck + 0.1, Math.sin(a) * 1.15], [rng.next(), rng.next(), 0]));
+
+    // Fire: a ring of set stones, an ash bed, embers and a pot on a tripod.
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * Math.PI * 2 + rng.gauss(0, 0.12);
+      B.add(M.dark, new THREE.DodecahedronGeometry(0.24 * rng.range(0.7, 1.35), 0),
+        mat4([Math.cos(a) * 1.2, deck + 0.08, Math.sin(a) * 1.2], [rng.next(), rng.next(), 0]));
     }
-    B.add(M.hot, new THREE.CircleGeometry(0.85, 14).rotateX(-Math.PI / 2), mat4([0, deck + 0.05, 0]));
-    for (let i = 0; i < 4; i++) {
+    B.add(M.dark, new THREE.CircleGeometry(1.05, 16).rotateX(-Math.PI / 2), mat4([0, deck + 0.02, 0]));
+    B.add(M.hot, new THREE.CircleGeometry(0.82, 14).rotateX(-Math.PI / 2), mat4([0, deck + 0.05, 0]));
+    for (let i = 0; i < 5; i++) {
       const a = rng.next() * 6.28;
-      B.add(M.plank, new THREE.CylinderGeometry(0.06, 0.08, 1.4, 5).rotateZ(1.15),
-        mat4([Math.cos(a) * 0.4, deck + 0.28, Math.sin(a) * 0.4], [0, a, 0]));
+      B.add(M.plank, new THREE.CylinderGeometry(0.055, 0.075, 1.35, 5).rotateZ(1.15),
+        mat4([Math.cos(a) * 0.38, deck + 0.26, Math.sin(a) * 0.38], [0, a, 0]));
     }
-    // a tent, so the camp reads as a camp and not as a magic circle
-    const tent = new THREE.CylinderGeometry(1.5, 1.5, 3.0, 3, 1, false)
-      .rotateZ(Math.PI / 2).rotateY(rng.next() * 3);
-    B.add(M.cloth, tent, mat4([-r * 0.42, deck + 0.85, r * 0.3]));
-    // seating boulders and a lantern pole
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + 0.4;
+      B.add(M.steel, new THREE.CylinderGeometry(0.02, 0.02, 1.5, 4),
+        mat4([Math.cos(a) * 0.42, deck + 0.72, Math.sin(a) * 0.42],
+          [Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3]));
+    }
+    B.add(M.dark, new THREE.CylinderGeometry(0.24, 0.18, 0.3, 10), mat4([0, deck + 1.05, 0]));
+
+    // The tent: solved, not authored. Pinned along the ridge and at four guy
+    // points, so it cusps at the pegs and swags between them.
+    {
+      const tx = -r * 0.44, tz = r * 0.30, tw = 2.4, td = 3.2, th = 1.75;
+      const yaw = rng.range(0, Math.PI * 2);
+      const skin = membraneSag({
+        w: tw, d: td, sag: 0.14, nx: 12, nz: 14,
+        // The ridge is the centre line; the four corners are pegged down.
+        pin: (u, v) => Math.abs(u - 0.5) < 0.045 || ((u < 0.06 || u > 0.94) && (v < 0.09 || v > 0.91)),
+      });
+      // Lift the ridge and drop the eaves: the relaxation gives the *shape*,
+      // the A-frame gives the section it hangs on.
+      const pp = skin.attributes.position;
+      for (let i = 0; i < pp.count; i++) {
+        const u = pp.getX(i) / tw + 0.5;
+        pp.setY(i, pp.getY(i) + th * (1 - Math.abs(u - 0.5) * 2) * 0.94);
+      }
+      skin.computeVertexNormals();
+      B.add(M.cloth, skin, mat4([tx, deck + 0.1, tz], [0, yaw, 0]));
+      for (const sz of [-1, 1]) {
+        B.add(M.plank, new THREE.CylinderGeometry(0.035, 0.045, th + 0.3, 5),
+          mat4([tx - Math.sin(yaw) * sz * td * 0.48, deck + (th + 0.3) / 2, tz - Math.cos(yaw) * sz * td * 0.48]));
+      }
+      // Guy lines: four thin diagonals to pegs, which is most of what says tent.
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const ox = sx * tw * 0.52, oz = sz * td * 0.52;
+        const wx = tx + ox * Math.cos(yaw) + oz * Math.sin(yaw);
+        const wz = tz - ox * Math.sin(yaw) + oz * Math.cos(yaw);
+        B.add(M.steel, new THREE.CylinderGeometry(0.012, 0.012, 0.9, 4),
+          mat4([(wx + tx * 0.15) * 0.92, deck + 0.5, (wz + tz * 0.15) * 0.92], [sz * 0.5, -yaw, sx * 0.45]));
+      }
+    }
+
+    // A tarp over the camp stores. The `max` envelope is what makes this read
+    // as three crates under a sheet rather than as a mound.
+    {
+      const lumps = [
+        { x: -0.55, z: -0.2, w: 0.85, d: 0.62, h: 0.55 },
+        { x: 0.35, z: 0.18, w: 0.7, d: 0.7, h: 0.42 },
+        { x: 0.45, z: -0.45, w: 0.5, d: 0.5, h: 0.66 },
+      ];
+      const tarp = tarpEnvelope({ w: 2.6, d: 2.2, lumps, drape: 0.05, skirt: 0.22 });
+      B.add(M.cloth, tarp, mat4([r * 0.36, deck + 0.02, r * 0.42], [0, rng.range(0, 3), 0]));
+    }
+
+    // Two camp chairs and a bedroll: the camp is people, not a magic circle.
+    for (let i = 0; i < 2; i++) {
+      const a = 2.1 + i * 0.9;
+      const cx = Math.cos(a) * 2.4, cz = Math.sin(a) * 2.4;
+      B.add(M.cloth, box(0.5, 0.05, 0.46, { sharp: true }), mat4([cx, deck + 0.42, cz], [0, -a, 0]));
+      B.add(M.cloth, box(0.5, 0.44, 0.05, { sharp: true }), mat4([cx, deck + 0.64, cz], [0.18, -a, 0]));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        B.add(M.steel, new THREE.CylinderGeometry(0.014, 0.014, 0.42, 4),
+          mat4([cx + sx * 0.2 * Math.cos(a), deck + 0.21, cz + sz * 0.2], [sz * 0.14, -a, sx * 0.14]));
+      }
+    }
+    B.add(M.cloth, new THREE.CylinderGeometry(0.22, 0.22, 1.7, 8).rotateZ(Math.PI / 2),
+      mat4([-r * 0.2, deck + 0.22, r * 0.5], [0, rng.range(0, 3), 0]));
+
+    // Seating boulders, cut from the shelf, and the lantern pole.
     for (let i = 0; i < 6; i++) {
-      const a = rng.next() * 6.28, d = r * rng.range(0.55, 0.94);
+      const a = rng.next() * 6.28, d = r * rng.range(0.55, 0.9);
       const sc = rng.range(0.55, 1.3) * dress.rockS;
       B.add(M.stone, new THREE.DodecahedronGeometry(sc, 0),
-        mat4([Math.cos(a) * d, deck + sc * 0.3, Math.sin(a) * d],
+        mat4([Math.cos(a) * d, deck + sc * 0.28, Math.sin(a) * d],
           [rng.gauss(0, 0.3), rng.next() * 6, rng.gauss(0, 0.3)]));
     }
     B.add(M.steel, new THREE.CylinderGeometry(0.05, 0.06, 2.6, 6), mat4([r * 0.7, deck + 1.3, -r * 0.35]));
-    B.add(M.lamp, new THREE.BoxGeometry(0.26, 0.34, 0.26), mat4([r * 0.7, deck + 2.7, -r * 0.35]));
-    // a boulder pile against one flank so the shelf grows out of the hill
-    for (let i = 0; i < 7; i++) {
-      const a = rng.range(2.0, 4.2), d = r * rng.range(1.0, 1.5);
+    B.add(M.steel, box(0.2, 0.06, 0.2), mat4([r * 0.7, deck + 2.63, -r * 0.35]));
+    B.add(M.lamp, box(0.24, 0.32, 0.24, { sharp: true }), mat4([r * 0.7, deck + 2.44, -r * 0.35]));
+    // A boulder pile against one flank so the shelf grows out of the hill.
+    for (let i = 0; i < 8; i++) {
+      const a = rng.range(2.0, 4.2), d = r * rng.range(1.0, 1.4);
       const sc = rng.range(0.9, 2.6) * dress.rockS;
       B.add(M.stone, new THREE.DodecahedronGeometry(sc, 0),
         mat4([Math.cos(a) * d, -0.2 + sc * 0.2, Math.sin(a) * d],
@@ -1388,6 +1485,19 @@ export class PoiKits {
       for (const k of Object.keys(local)) for (const g of local[k]) b[k].push(xform(g, { x: -14, y: 0.35, z: 14 }));
     }
 
+    // Sandbag emplacements: two revetments inside the wire and one horseshoe
+    // beside the gate. Courses settle under the load above them, the bond
+    // alternates, and one bag in fourteen is out of line -- a perfectly laid
+    // revetment is a *rendering* of a revetment.
+    for (const em of [[-8, -19, 0.2], [19, 7, 1.9], [4, 20, 3.6]]) {
+      sandbagStack(b.cloth, {
+        len: rng.range(3.2, 5.4), courses: 5, rng,
+        x: em[0], z: em[1], ry: em[2], y: 0.35,
+        // A firing position dips in the middle: that is where you shoot from.
+        profile: (t) => (Math.abs(t - 0.5) < 0.16 ? 0.55 : 1),
+      });
+    }
+
     const merged = mergeBag(b);
     const roleMat: Record<string, THREE.Material> = {
       // Two masses, not one: pale concrete carries the wall and the cabins,
@@ -1395,7 +1505,7 @@ export class PoiKits {
       // material for a whole compound is what made the first pass a black ring.
       shell: M.magitek, shell2: M.concrete, trim: M.magitek, metal: M.steel,
       glass: M.glass, glow: M.hot, dark: M.interior, roof: M.magitek,
-      wood: M.plank, cloth: M.red,
+      wood: M.plank, cloth: M.cream,
     };
     for (const [role, g] of Object.entries(merged)) {
       if (role !== 'glow' && role !== 'dark' && role !== 'glass') {

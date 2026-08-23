@@ -674,3 +674,273 @@ export function toneVariant(rng: Rng, { valueAmp = 0.26, warmAmp = 0.085 } = {})
     streak: 0.10 + rng.next() * 0.20,
   };
 }
+
+/* ========================================================================== */
+/* Soft goods                                                                 */
+/* ========================================================================== */
+
+/**
+ * Cloth, camo net and awning: a pinned grid relaxed to a real hanging shape.
+ *
+ * Every piece of fabric in this repo has been a flat box or a `cos()` product,
+ * and both are wrong in the same way: they are *smooth*. Real hanging fabric
+ * has a **cusp** at every pin and a **swag** between them, and the ratio
+ * between those two is set by where the pins are, not by an amplitude. No
+ * product of cosines can produce a cusp, because a cosine's derivative is zero
+ * at its own extremum and a pinned membrane's is not.
+ *
+ * So it is solved rather than authored, and solved *twice*:
+ *
+ * 1. **Unloaded** — Jacobi relaxation of `y = mean(4 neighbours)` with the pins
+ *    held. That is the discrete minimal surface through the pins: the shape a
+ *    weightless membrane takes, and it is what puts the cusps in.
+ * 2. **Loaded** — the same relaxation with a constant downward term, i.e. the
+ *    discrete Poisson solve. The difference between the two is the sag.
+ *
+ * The deflection is then **rescaled so its maximum is exactly the requested
+ * sag**, which is what makes the parameter mean something: `sag: 0.35` is
+ * 350 mm at the lowest point whatever the span, the pin layout or the
+ * iteration count. Solving once and hoping the units land is how a "sag" knob
+ * ends up meaning nothing.
+ *
+ * @param o.pin returns `true` for a grid node that is held (a tie, a hook, a
+ *              pole head). At least one node must pin or the sheet falls off.
+ */
+export function membraneSag(o: {
+  w: number; d: number; nx?: number; nz?: number; sag?: number; iters?: number;
+  pin: (u: number, v: number) => boolean;
+  /** Extra downward load at a node, 0..1 — a puddle of water, a stone on the net. */
+  load?: (u: number, v: number) => number;
+}): THREE.BufferGeometry {
+  const { w, d, sag = 0.3, pin } = o;
+  const nx = o.nx ?? Math.max(6, Math.min(24, Math.round(w * 3)));
+  const nz = o.nz ?? Math.max(6, Math.min(24, Math.round(d * 3)));
+  const iters = o.iters ?? 90;
+  const N = (nx + 1) * (nz + 1);
+  const held = new Uint8Array(N);
+  const loadAt = new Float32Array(N);
+  for (let j = 0; j <= nz; j++) {
+    for (let i = 0; i <= nx; i++) {
+      const u = i / nx, v = j / nz, k = j * (nx + 1) + i;
+      held[k] = pin(u, v) ? 1 : 0;
+      loadAt[k] = o.load ? o.load(u, v) : 1;
+    }
+  }
+  const relax = (loaded: boolean) => {
+    let a = new Float32Array(N), b2 = new Float32Array(N);
+    for (let it = 0; it < iters; it++) {
+      for (let j = 0; j <= nz; j++) {
+        for (let i = 0; i <= nx; i++) {
+          const k = j * (nx + 1) + i;
+          if (held[k]) { b2[k] = 0; continue; }
+          // Neumann at the free edges: a hem is not pinned to zero, it hangs.
+          const l = a[j * (nx + 1) + Math.max(0, i - 1)];
+          const r = a[j * (nx + 1) + Math.min(nx, i + 1)];
+          const dn = a[Math.max(0, j - 1) * (nx + 1) + i];
+          const up = a[Math.min(nz, j + 1) * (nx + 1) + i];
+          b2[k] = (l + r + dn + up) * 0.25 - (loaded ? loadAt[k] * 0.02 : 0);
+        }
+      }
+      const t = a; a = b2; b2 = t;
+    }
+    return a;
+  };
+  const flat = relax(false);
+  const hung = relax(true);
+  let peak = 0;
+  for (let k = 0; k < N; k++) peak = Math.max(peak, flat[k] - hung[k]);
+  // A membrane pinned at every node has no deflection at all; scaling by zero
+  // would be a NaN sheet, which renders as nothing and reports nothing.
+  const scale = peak > 1e-6 ? sag / peak : 0;
+
+  const pos = new Float32Array(N * 3);
+  const uv = new Float32Array(N * 2);
+  for (let j = 0; j <= nz; j++) {
+    for (let i = 0; i <= nx; i++) {
+      const k = j * (nx + 1) + i;
+      pos[k * 3] = (i / nx - 0.5) * w;
+      pos[k * 3 + 1] = flat[k] + (hung[k] - flat[k]) * scale;
+      pos[k * 3 + 2] = (j / nz - 0.5) * d;
+      uv[k * 2] = i / nx; uv[k * 2 + 1] = j / nz;
+    }
+  }
+  const idx: number[] = [];
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const a = j * (nx + 1) + i, b2 = a + 1, c = a + nx + 1, e = c + 1;
+      idx.push(a, c, b2, b2, c, e);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * A tarpaulin over a heap: the **upper envelope** of the lumps under it.
+ *
+ * The construction that matters is `max`, not `sum`. Summing overlapping lumps
+ * gives one smooth mound, which is a bin bag; taking the maximum gives a
+ * **ridge line** wherever two lumps meet — a crease that runs between them and
+ * a valley either side, which is what a sheet over crates actually does and
+ * the only reason a covered stack reads as covered *crates* rather than as a
+ * boulder in a sheet.
+ *
+ * The lumps are rounded boxes rather than spheres, because what is under a tarp
+ * on a loading apron is boxes, and a superelliptic profile keeps their corners.
+ */
+export function tarpEnvelope(o: {
+  w: number; d: number; nx?: number; nz?: number;
+  lumps: { x: number; z: number; w: number; d: number; h: number; power?: number }[];
+  /** Slack between the envelope and the sheet, metres. */
+  drape?: number;
+  /** How far the skirt hangs past the lumps before it hits the ground. */
+  skirt?: number;
+}): THREE.BufferGeometry {
+  const { w, d, lumps, drape = 0.06, skirt = 0.5 } = o;
+  const nx = o.nx ?? Math.max(10, Math.min(40, Math.round(w * 6)));
+  const nz = o.nz ?? Math.max(10, Math.min(40, Math.round(d * 6)));
+  const heightAt = (x: number, z: number) => {
+    let h = 0;
+    for (const l of lumps) {
+      const p = l.power ?? 5;
+      const u = Math.abs((x - l.x) / (l.w / 2 + skirt));
+      const v = Math.abs((z - l.z) / (l.d / 2 + skirt));
+      const r = Math.pow(Math.pow(u, p) + Math.pow(v, p), 1 / p);
+      if (r >= 1) continue;
+      // A rounded-off plateau: flat over the box, falling away over the skirt.
+      const t = Math.min(1, Math.max(0, (1 - r) * 2.2));
+      h = Math.max(h, l.h * (t * t * (3 - 2 * t)));
+    }
+    return h;
+  };
+  const N = (nx + 1) * (nz + 1);
+  const pos = new Float32Array(N * 3);
+  const uv = new Float32Array(N * 2);
+  for (let j = 0; j <= nz; j++) {
+    for (let i = 0; i <= nx; i++) {
+      const k = j * (nx + 1) + i;
+      const x = (i / nx - 0.5) * w, z = (j / nz - 0.5) * d;
+      const h = heightAt(x, z);
+      // The slack: a sheet is longer than what it covers, so it bellies between
+      // the ridges. Keyed on how far below the local maximum this point sits.
+      pos[k * 3] = x;
+      pos[k * 3 + 1] = h > 0.01 ? h + drape * Math.sin(Math.PI * (i / nx)) * Math.sin(Math.PI * (j / nz)) : 0;
+      pos[k * 3 + 2] = z;
+      uv[k * 2] = i / nx; uv[k * 2 + 1] = j / nz;
+    }
+  }
+  const idx: number[] = [];
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const a = j * (nx + 1) + i, b2 = a + 1, c = a + nx + 1, e = c + 1;
+      idx.push(a, c, b2, b2, c, e);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** One sandbag: a superellipsoid, flattened by whatever is stacked on it. */
+function bagGeo(w: number, h: number, d: number, power = 3.2, seg = 8): THREE.BufferGeometry {
+  const rings = seg, segs = seg + 2;
+  const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  const e = 2 / power;
+  const sp = (t: number) => Math.sign(t) * Math.pow(Math.abs(t), e);
+  for (let j = 0; j <= rings; j++) {
+    const phi = (j / rings) * Math.PI - Math.PI / 2;
+    const cy = sp(Math.sin(phi)) * (h / 2);
+    const rr = Math.pow(Math.abs(Math.cos(phi)), e);
+    for (let i = 0; i <= segs; i++) {
+      const th = (i / segs) * Math.PI * 2;
+      pos.push(sp(Math.cos(th)) * rr * (w / 2), cy, sp(Math.sin(th)) * rr * (d / 2));
+      uv.push(i / segs, j / rings);
+    }
+  }
+  for (let j = 0; j < rings; j++) {
+    for (let i = 0; i < segs; i++) {
+      const a = j * (segs + 1) + i, b2 = a + 1, c = a + segs + 1, e2 = c + 1;
+      idx.push(a, c, b2, b2, c, e2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * A sandbag revetment: courses that settle under their own load.
+ *
+ * Three things separate a wall of bags from a wall of identical blobs, and all
+ * three are about *stacking* rather than about the bag:
+ *
+ * - **Load-accumulated course dip.** A bag near the bottom of a tall stack is
+ *   squashed by everything above it, so a course sags in the middle where the
+ *   wall is tallest and rides up at the ends. That dip accumulates downward,
+ *   which is why the bottom course is the flattest and the most bowed.
+ * - **Alternating bond.** Each course is offset half a bag from the one below,
+ *   so no vertical joint runs through two courses. A stack without it reads as
+ *   a grid, which is the tell.
+ * - **7% rogue bags** — one bag in fourteen is out of line, turned across the
+ *   course or half fallen off the top. A perfectly laid revetment is a
+ *   *rendering* of a revetment.
+ *
+ * @param out geometry sink — the caller decides the material
+ */
+export function sandbagStack(out: THREE.BufferGeometry[], o: {
+  len: number; courses: number; rng: Rng;
+  bagW?: number; bagH?: number; bagD?: number;
+  x?: number; y?: number; z?: number; ry?: number;
+  /** 0..1 across the run: how tall the wall is here. Default a flat parapet. */
+  profile?: (t: number) => number;
+}) {
+  const {
+    len, courses, rng, bagW = 0.44, bagH = 0.17, bagD = 0.26,
+    x = 0, y = 0, z = 0, ry = 0,
+  } = o;
+  const profile = o.profile ?? (() => 1);
+  const n = Math.max(1, Math.round(len / bagW));
+  // Only the bags this call adds get the run's placement; `out` may already
+  // hold a neighbour's revetment and transforming that again would move it.
+  const first = out.length;
+  // Squash per unit of load above, in metres of bag height.
+  const SETTLE = 0.055;
+  for (let c = 0; c < courses; c++) {
+    const bond = (c % 2) * 0.5;
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5 + bond) / n;
+      if (t > 1) continue;
+      const tall = Math.round(courses * profile(t));
+      if (c >= tall) continue;
+      const above = tall - c - 1;
+      // Every course below carries what is above it, so the dip accumulates.
+      const settle = SETTLE * above * bagH;
+      const px = -len / 2 + t * len;
+      const rogue = rng.next() < 0.07;
+      const g = bagGeo(
+        bagW * rng.range(0.94, 1.06),
+        (bagH - settle) * rng.range(0.92, 1.08),
+        bagD * (1 + settle * 1.6) * rng.range(0.94, 1.06),
+      );
+      const yaw = rogue ? rng.range(0.5, 1.1) * rng.sign() : rng.gauss(0, 0.09);
+      out.push(xform(g, {
+        ry: yaw,
+        rz: rogue ? rng.gauss(0, 0.35) : rng.gauss(0, 0.05),
+        x: px + (rogue ? rng.gauss(0, 0.12) : 0),
+        y: bagH * 0.5 + c * (bagH - settle * 0.5) + (rogue ? rng.range(0, 0.06) : 0),
+        z: rogue ? rng.gauss(0, 0.14) : rng.gauss(0, 0.03),
+      }));
+    }
+  }
+  for (let k = first; k < out.length; k++) xform(out[k], { ry, x, y, z });
+}
