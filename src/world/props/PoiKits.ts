@@ -76,6 +76,47 @@ const SEAT_BY_TYPE: Record<string, number> = {
   fishing: 250, parking: 250,
 };
 const SEAT_R = 300;
+/**
+ * The range a kit with **no earthwork under it** is seated at.
+ *
+ * `SEAT_BY_TYPE` is the right answer for a compound that stands on a graded
+ * pad: the pad's batter reaches down to whatever the ground turns out to be, so
+ * the deck can afford to be read against a coarse-ring envelope and be a little
+ * proud or a little sunk. A waymark stele has no pad. Its base course is the
+ * only thing that meets the earth, at one point, and it is read at the range a
+ * person walks up to it — so it is seated against the **finest ring alone**.
+ *
+ * 120 m is not a taste: `clipSpacingForDistance` returns `cell0` for anything
+ * under `2 * n * cell0` = 144 m, so any value below that reads exactly the
+ * 1.5 m lattice the player is standing on and no coarser ring at all.
+ *
+ * **The trade this makes, stated because it is real and cannot be avoided
+ * here.** Seating on the fine ring means that at 400 m — where the ground under
+ * a peak is drawn by the 6 m ring — the stele stays where it is while the
+ * summit sags beneath it. At `longwythe_peak` that sag is measured at **17.5 m**
+ * (`heightAt` 444.24, 1.5 m ring 440.49, 6 m ring 423.02). Seating on the
+ * coarse envelope instead is what put a 4.6 m stele 18.81 m *inside* the hill
+ * you can walk to. Total invisibility up close is worse than a sliver of sky at
+ * a quarter kilometre, so this takes the near read — and the sag itself is a
+ * terrain-LOD defect on the region's signature summit, requested of the terrain
+ * lane in `project/handoff/seating.md` rather than papered over here.
+ */
+const BARE_SEAT_R = 120;
+/**
+ * Does this site build its own earthwork, or does it meet the ground bare?
+ *
+ * `KitResult.noApron` records the same fact and **is returned too late to use**
+ * — `_base` has to run before the kit does, because `_apron` grades against the
+ * deck it produces. So the two no-apron kits are named here, and the flag stays
+ * where it is as the kit's own assertion of the same thing.
+ *
+ * `_fishing` is deliberately NOT in this list: its deck is set from the sea, not
+ * from the ground (`max(1.4, seaLevel + 1.5 - base)`), and its piles run 3.4 m
+ * below that, so it seats itself and a tighter base would only move the jetty.
+ */
+function seatsBare(p: Poi): boolean {
+  return p.type === 'landmark' && !/lighthouse/.test(p.id);
+}
 /** Types the rest of the codebase already builds; we must not double up. */
 const SKIP_IDS = new Set(['hammerhead']);
 
@@ -1806,16 +1847,37 @@ export class PoiKits {
       this._hut(B, world, { w: 6.5, d: 5.0, x: 4.5, z: 3.0, ry: 0.3, rng, base: 0.1 });
       return { cast: true, r: 12 };
     }
+    /**
+     * Local ground, relative to the deck this kit is built on.
+     *
+     * The stele is seated (see {@link BARE_SEAT_R}) and everything else in this
+     * kit used to be pinned to that one plane — a cairn at 2.6 m, a bench at
+     * 2.6 m and five boulders out to 8 m, all standing on a flat disc over
+     * sloping ground. On a 1-in-6 hillside the far bench leg is then half a
+     * metre in the air, which is a defect the compound gate cannot see: it goes
+     * green as soon as the *stele* reaches the earth. So each piece asks for
+     * the ground under itself.
+     *
+     * `yaw` matters: `put` composes through the kit's world rotation, so a
+     * local (x, z) has to be turned into world before the terrain is asked.
+     */
+    const gy = (lx: number, lz: number, size = 0.8) => {
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      return seatY(this.eco, s.poi.x + lx * cy + lz * sy, s.poi.z - lx * sy + lz * cy,
+        size, BARE_SEAT_R) - ctx.base;
+    };
     // Waymark stele on a two-course base, its face carved.
     const b = bag();
     const tv = toneVariant(rng, { valueAmp: 0.14, warmAmp: 0.06 });
-    // Sunk 250 mm: this kit takes no apron, so its base course is the only
-    // thing that meets the ground and the deck is seated at the footprint's
-    // 88th percentile -- which is above grade at the point the stele stands on
-    // by up to a couple of hundred millimetres. `floatcheck` reads that as a
-    // compound entirely in the air (`keycatrich_ruins`, 0.15 m). A waymark that
-    // has stood for a century is bedded in, not resting on top.
-    b.shell.push(box(2.4, 0.75, 1.8, { y: -0.18, arris: 0.05 }));
+    // Bedded 1.16 m, not resting on the deck. This kit takes no apron, so its
+    // base course is the only thing in the compound that meets the earth, and
+    // it has to still meet it when the ground under it is drawn by a coarser
+    // ring than the one it was seated against — the sag is 17.5 m at
+    // `longwythe_peak` and no bedding depth covers that, but a bedded footing
+    // is what a waymark that has stood for a century looks like anyway, and it
+    // buys back the first metre of it for free. The upper course line is
+    // unchanged, so the silhouette is the same one `kits-r11` was read at.
+    b.shell.push(box(2.4, 1.35, 1.8, { y: -0.48, arris: 0.05 }));
     b.shell.push(box(2.0, 0.26, 1.5, { y: 0.44, arris: 0.05 }));
     b.shell.push(xform(box(1.15, 3.3, 0.55, { arris: 0.055 }), { rz: rng.gauss(0, 0.03), y: 2.2 }));
     b.trim.push(box(1.35, 0.2, 0.75, { y: 3.92, arris: 0.04 }));
@@ -1831,6 +1893,9 @@ export class PoiKits {
     }
     put(M.runeface, new THREE.PlaneGeometry(0.85, 1.7), [0, 2.4, 0.30]);
     // Cairn: a cone of set stones, wider at the foot than a stack of spheres.
+    // Its foot sits on the ground under the cairn, 2.6 m off the stele, not on
+    // the stele's plane -- 250 mm of it buried so the bottom course beds in.
+    const cy0 = gy(2.6, -1.4, 1.4) - 0.25;
     let h = 0;
     for (let i = 0; i < 11; i++) {
       const r = 0.5 * (1 - i / 13);
@@ -1838,23 +1903,39 @@ export class PoiKits {
       for (let k = 0; k < ring; k++) {
         const a = (k / ring) * 6.28 + i * 1.1;
         put(M.dark, new THREE.DodecahedronGeometry(r * rng.range(0.8, 1.15), 0),
-          [2.6 + Math.cos(a) * r * (ring > 1 ? 0.85 : 0), h + r * 0.7, -1.4 + Math.sin(a) * r * (ring > 1 ? 0.85 : 0)],
+          [2.6 + Math.cos(a) * r * (ring > 1 ? 0.85 : 0), cy0 + h + r * 0.7, -1.4 + Math.sin(a) * r * (ring > 1 ? 0.85 : 0)],
           [rng.gauss(0, 0.3), rng.next() * 3, rng.gauss(0, 0.3)]);
       }
       h += r * 0.95;
     }
-    // Bench facing the view: a slatted seat on two real legs, not a floating slab.
+    // Bench facing the view: a slatted seat on two real legs, not a floating
+    // slab — and each leg on the ground under *that* leg, so the bench racks
+    // with the slope the way a bench left on a hillside does.
     const bx = -2.6, bz = 1.2, bry = rng.gauss(0, 0.2);
+    const legX = (sx: number) => bx + sx * 0.95 * Math.cos(bry);
+    const legZ = (sx: number) => bz - sx * 0.95 * Math.sin(bry);
+    const legY = [-1, 1].map((sx) => gy(legX(sx), legZ(sx), 0.5));
+    const seatTop = Math.max(legY[0], legY[1]) + 0.62;
     for (let i = 0; i < 3; i++) {
-      put(M.plank, box(2.4, 0.07, 0.16, { arris: 0.015 }), [bx, 0.62, bz - 0.18 + i * 0.18], [0, bry, 0]);
+      put(M.plank, box(2.4, 0.07, 0.16, { arris: 0.015 }), [bx, seatTop, bz - 0.18 + i * 0.18], [0, bry, 0]);
     }
-    for (const sx of [-1, 1]) {
-      put(M.dark, box(0.28, 0.58, 0.5, { arris: 0.04 }), [bx + sx * 0.95 * Math.cos(bry), 0.29, bz - sx * 0.95 * Math.sin(bry)], [0, bry, 0]);
-    }
+    [-1, 1].forEach((sx, k) => {
+      // The leg is stretched to reach its own ground rather than translated:
+      // moving it would leave the seat resting on one leg and hanging over the
+      // other, which is the same floating-corner bug one level down.
+      const hgt = seatTop - 0.04 - legY[k];
+      put(M.dark, box(0.28, hgt, 0.5, { arris: 0.04 }), [legX(sx), legY[k] + hgt * 0.5, legZ(sx)], [0, bry, 0]);
+    });
     for (let i = 0; i < 5; i++) {
       const a = rng.next() * 6.28, d = rng.range(3.5, 8);
-      put(M.stone, new THREE.DodecahedronGeometry(rng.range(0.4, 1.1), 0),
-        [Math.cos(a) * d, 0.3, Math.sin(a) * d], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]);
+      const sr = rng.range(0.4, 1.1);
+      const bxx = Math.cos(a) * d, bzz = Math.sin(a) * d;
+      // Field boulders, on the ground they lie on and a third of the way into
+      // it. Pinned to the deck they were the mesh that decided the compound's
+      // float number at `keycatrich_ruins` -- eight metres from the stele and
+      // reading for the whole waymark.
+      put(M.stone, new THREE.DodecahedronGeometry(sr, 0),
+        [bxx, gy(bxx, bzz, sr * 2) + sr * 0.62, bzz], [rng.gauss(0, 0.4), rng.next() * 3, rng.gauss(0, 0.4)]);
     }
     return { cast: true, r: 9, noApron: true };
   }
@@ -2046,7 +2127,15 @@ export class PoiKits {
     const B = new PartBuilder();
     const probe = p.type === 'town' ? 40 : p.type === 'imperial' ? 26 : 10;
     const cull = SEAT_BY_TYPE[p.type] || SEAT_R;
-    const base = this._base(p.x, p.z, probe, 2.2, cull);
+    // A kit with an apron is seated at its footprint's 88th percentile and the
+    // earthwork covers the difference. A kit with none has to meet the ground
+    // where it stands: see {@link BARE_SEAT_R}. `_base`'s grid is what put
+    // `keycatrich_ruins` 2.92 m over its own grade -- the deck landed on the
+    // upper clamp, `h0 + 3.2`, because the hill rises inside ten metres, and a
+    // stele with no pad simply stood on the top of that column of air.
+    const base = seatsBare(p)
+      ? seatY(this.eco, p.x, p.z, 2.4, BARE_SEAT_R)
+      : this._base(p.x, p.z, probe, 2.2, cull);
     // Published before the kit runs, so `_apron` can grade against the real
     // ground without every kit having to carry the coordinates itself.
     this._padCtx = { x: p.x, z: p.z, base, cull };
