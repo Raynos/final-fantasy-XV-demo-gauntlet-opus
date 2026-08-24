@@ -351,8 +351,11 @@ thing to add to it.
    the head and the one a blind judge keeps describing in different words —
    "flat sockets", "a blank cheek", "a wedge". It needs `shellPoint`, and
    `headprop.mts`'s `transverse.dropMm` is now the before/after for it.
-3. **The eyeballs are still proud spheres in flat sockets**, exactly as
-   `head-r2.md` §8.1 left them. **Do not widen the socket brushes** —
+3. **The eyeballs are still proud spheres in flat sockets** — and with the
+   muzzle gone they are now unambiguously the loudest wrong thing on the head.
+   `tmp/shots/head-r3e/noctis_q.png` is the frame: a glass marble sitting *on*
+   the face with a hard rim and a huge sclera, under a lid that is a thin band
+   rather than a fold with thickness. Exactly as `head-r2.md` §8.1 left them. **Do not widen the socket brushes** —
    `LANDMINES.md` records that as a measured dead end that cost a lane most of a
    session. And note the trap I nearly walked into: `FACE.eye[2]` moves the
    globe *and* both lids, because `buildLid` is built on the same `ec`, so
@@ -380,12 +383,18 @@ thing to add to it.
 - **`headlook.mts`, not `facecam.mts`** — confirmed, the twist is spinal.
 - **The corpus closeups are not closeups**, confirmed: `hero_face` is ~100 px
   and no change in this lane is visible in it.
-- **NEW — the studio key is a hard raking light and will always split a face in
-  half.** `headlook.mts` runs at HOUR 16.2 on purpose, to reveal form. Judging
-  "the face is split down the midline" in that frame is judging the light, not
-  the sculpt: measured, the left/right mean over 60x60 px boxes is 164 / 213 and
-  it is the *same* with the normal map ablated. The judged frame,
-  `hero_portrait`, is nearly flat-lit and has the opposite problem.
+- **NEW — `headlook.mts`'s front view cannot be used to judge anything on the
+  shadow side, and that is half the face.** It runs HOUR 16.2 on purpose, to
+  reveal form, and the price is severe: measured down two scanlines through the
+  mouth, the shadow half sits at a uniform **Y 65-100 with no detail of any
+  kind**, while the lit half is at 200-220. The left/right box mean is 164 / 213
+  and it is the **same with the normal map ablated**, so "the face is split down
+  the midline" in that frame is the light doing its job, not a sculpt defect —
+  what the normal map *does* carry is the noise on the shadow side (the same box
+  goes min 73 / range 147 with it and min 117 / range 93 without). The mouth is
+  invisible in that frame at 0.52 m and that means nothing; the judged frame,
+  `hero_portrait`, is nearly flat-lit and has the opposite problem. **Use the
+  `_side` and `_q` framings for form and `hero_portrait` for the verdict.**
 - **NEW — an offline model of the midline pays for itself in the first hour.**
   `tmp/head-r3/mid.mjs` and `eval.mjs` parse the `add({...})` calls straight out
   of `Face.ts` and run `applyBrushes` at x = 0 against `shellPoint`. It agrees
@@ -440,7 +449,71 @@ thing to add to it.
 
 ---
 
-## 10. Frames
+## 10. The blond brows, and an honest note on how far it was verified
+
+Round 13's judge, on a frame that is not the portrait: *"in another frame the two
+blond characters have no facial features at all at 3 m."*
+
+At `hero_full` a face is 0.24 px/mm and the only features that survive
+minification are the ones that are still a **value**. Blended against each
+character's own skin, the brow's luminance drop measured:
+
+| | skin Y | brow Y after blend | contrast |
+|---|---|---|---|
+| noctis | 146 | 82 | **64** |
+| gladio | 125 | 64 | **61** |
+| ignis | 142 | 90 | 52 |
+| **prompto** | 163 | 129 | **34** |
+
+A blond brow *is* lighter than a black one; half the cast's contrast is not a
+hair colour, it is an invisible brow. Both moved to the cast norm at the same
+hue — `rgba(92,64,34,0.58)` (Prompto, 55) and `rgba(50,36,25,0.56)` (Ignis, 58).
+The arithmetic is in the comments at both call sites so the next person can redo
+it rather than trust it.
+
+**How far this was verified, honestly.** The albedo change is arithmetic and is
+certain. The *frame* check is inconclusive at the size it was aimed at: in
+`tmp/shots/head-r3f/hero_full.png` Prompto's face is 30 px and its dark central
+mass is the **fringe's cast shadow**, not the brow, so a 20/255 albedo change
+under it is not separable by eye and the 34x34 px box mean moves 136.3 → 136.6.
+Both blond heroes are also backlit in that shot. If the next round still hears
+this note from a judge, the thing to attack is probably `fringeShadow` (0.28 on
+Prompto, 0.34 on Ignis) and the eye/sclera contrast, not the brow again.
+
+---
+
+## 11. Gates and budget
+
+**Draw calls: zero from this lane.** `hero_portrait` runs 593 at `020e722` and
+597 at `HEAD`, and the +4 is `9047802` — the rocks commit immediately before the
+muzzle fix, which is *already* 597. `6e49b07` on top of it is 597 with a
+triangle count identical to the last digit, **8,127,190**, because the head grid
+is unchanged at 144 x 120 and every edit is a scalar in an existing brush table.
+`poi_haven`, the shot with four heroes and the NPCs in it, is **+0 across the
+entire window**.
+
+| shot | `262cb01` | `HEAD` | Δ calls | Δ triangles |
+|---|---|---|---|---|
+| `hero_portrait` | 593 | 597 | +4 (rocks) | −0.127 M |
+| `hero_full` | 692 | 696 | +4 (rocks) | −0.126 M |
+| `party_formation` | 667 | 671 | +4 (rocks) | −0.127 M |
+| `poi_haven` | 624 | 624 | **0** | −0.201 M |
+
+Budget 800; measured range today 597-696.
+
+**`pnpm run check`: 17/17 PASS**, run at `HEAD` after every change in this
+lane. `creaturecheck` 207 poses, `combatloop` 31/31, `silhouette` 42 meshes in 8
+families, `geocheck` (whose own summary names *"DoubleSide material hides a
+flip"* — the gate closest to this work), `floatcheck` 123 POIs, `orphans`
+301/301, `reachcheck`, `uxcheck` 93/93, `integration`, `driftcheck`,
+`heightcheck`, `roadcheck`, `horizoncheck`, `hydrocheck`, `silrocks`,
+`anycheck` 0 `any`, `build`. Perf gates skipped by `check.mts` itself — a perf
+number taken while other agents run is meaningless, and a perf lane was live
+throughout.
+
+---
+
+## 12. Frames
 
 | what | where |
 |---|---|
@@ -452,7 +525,9 @@ thing to add to it.
 | studio, after the mouth relief | `tmp/shots/head-r3c/`, `head-r3d/` |
 | **the `NO_NORMALMAP` ablation pair** | `tmp/shots/head-r3d/` against **`tmp/shots/head-r3nm/`** |
 | studio + shipped, final | `tmp/shots/head-r3e/`, `tmp/shots/head-r3f/` |
-| the bench, before / after | `tmp/head-r3/prop-base.json` / `tmp/head-r3/prop-final.json` |
+| the draw-call A/B | `tmp/shots/head-r3base/` (`262cb01`) against `tmp/shots/head-r3f/`, and `head-r3ab3/` (`9047802`) against `head-r3ab4/` (`6e49b07`) for the +4 |
+| the bench, before / after | `tmp/head-r3/prop-before.json` (`--build 262cb01`) / `tmp/head-r3/prop-final.json` |
+| the offline midline / transverse models | `tmp/head-r3/mid.mjs`, `eval.mjs`, `trans.mjs` |
 
 **`tmp/shots/head-r3a/noctis_side.png` against `tmp/shots/head-r3e/noctis_side.png`
 is the before/after for the whole lane**: same framing, same light, a profile
