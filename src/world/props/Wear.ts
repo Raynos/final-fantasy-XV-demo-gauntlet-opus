@@ -386,10 +386,64 @@ export function gradePad(o: PadOpts): PadResult {
     - 0.30 * nz2.fbm2(wx * 0.13, wz * 0.13, 2)
     - 0.10 * nz2.fbm2(wx * 0.41 + 31, wz * 0.41 - 17, 2);
 
+  /**
+   * How far below the deck this bearing's fill may be asked to reach before the
+   * deck itself is the thing that is wrong.
+   *
+   * `plunge` caps the batter, for the reason written on it — an uncapped reach
+   * hung a fifty-metre curtain off a pad that clipped a cliff. But a capped
+   * batter over ground that is further down than the cap does not *fail*
+   * gracefully: it stops in the air, and what you see is a disc on a column.
+   * That is `coernix_cauthess`, measured — its deck stands **8.4 to 14.1 m**
+   * above the ground at its own edge on four of six bearings, against a plunge
+   * of 7.0 m, so seven metres of it is embankment and the rest is nothing.
+   */
+  const maxFill = plunge * 0.75;
   for (let j = 0; j <= seg; j++) {
     const th = (j / seg) * Math.PI * 2;
     const ct = Math.cos(th), st = Math.sin(th);
-    const e = edgeAt(th);
+    // The deck retreats off ground it cannot be filled up to. A dozer does not
+    // cantilever a platform over a drop; it cuts the platform back to the spur
+    // it is standing on, and the compound gets smaller on that side. Floored at
+    // three quarters of the nominal radius, because the kit's own structures
+    // are placed inside that and a deck that retreated past them would strand
+    // them in the air — which is the same defect one level in.
+    const capOut = r * 1.15 + 6;
+    let e = edgeAt(th);
+    for (let k = 0; k < 8 && e > r * 0.75; k++) {
+      if (groundAt(x + ct * e, z + st * e) > -maxFill) break;
+      e = Math.max(r * 0.75, e * 0.9);
+    }
+    /*
+     * ...and where it cannot retreat far enough, it stops being an earthwork.
+     *
+     * `nebula_parking` sits on a shelf whose ground is dead level out to 12.6 m
+     * and then falls **10 to 21 m within the next six**. Its deck is 13 m, so
+     * the deck is right — it is exactly the shelf. What was wrong is what came
+     * after it: the batter ran out at 1:3, never caught a cliff, and the
+     * outermost station's `-plunge` clamp parked it 6.5 m down **in mid air**.
+     * A 6.5 m skirt hanging over a 20 m drop is the brim of the mushroom the
+     * coordinator read off `reframe-r1/neb_a_high.png`, and the stalk under it
+     * is the shelf itself.
+     *
+     * There is no embankment that fixes that, because there is no embankment: a
+     * platform on a cliff shelf ends at the shelf. So on a bearing where the
+     * ground is already past the plunge limit, the pad gets a kerb — 1.6 m of
+     * chamfer, 0.9 m deep — and the cliff is what holds it up. That reads as
+     * what it is, which is the whole of §5.4's argument about the cake stand.
+     */
+    // Tested across the whole reach, not at the deck edge: at `nebula_parking`
+    // the ground at the edge is 0.2 m down and the cliff starts six metres
+    // further out, so an edge-only test says "gentle" about a twenty metre
+    // drop. The batter has caught the ground on this bearing if at ANY station
+    // out to the cap the 1:3 line is at or below it; if it never is, there is
+    // nothing to embank against.
+    let cliff = true;
+    for (let k = 1; k <= 5; k++) {
+      const run = (k / 5) * capOut;
+      if (groundAt(x + ct * (e + run), z + st * (e + run)) >= -run / fill) { cliff = false; break; }
+    }
+    cliff = cliff && groundAt(x + ct * e, z + st * e) < 0;
     // The ramp. A truck has to get onto the pad, so one sector is graded at
     // 1:9 instead of 1:3 and pushed further out; the transition is smooth in
     // angle or the ramp reads as a wedge glued on.
@@ -412,7 +466,6 @@ export function gradePad(o: PadOpts): PadResult {
     // drops five metres in one ring step. That is a vertical curtain at the rim
     // -- a cap on an undercut stalk. So walk out to the cap and take the
     // deepest ground the batter will actually have to cross.
-    const capOut = r * 1.15 + 6;
     let hEdge = groundAt(x + ct * e, z + st * e);
     for (let k = 1; k <= 4; k++) {
       const gk = groundAt(x + ct * (e + (k / 4) * capOut), z + st * (e + (k / 4) * capOut));
@@ -422,7 +475,7 @@ export function gradePad(o: PadOpts): PadResult {
     // one: a pad on a real hillside wants forty metres of 1:3 embankment, and
     // forty metres of bare fill is then the largest thing in the frame. Beyond
     // the cap the batter simply meets the ground steeper than a dozer would.
-    const reachOut = Math.min(
+    const reachOut = cliff ? 1.6 : Math.min(
       capOut,
       Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0),
     );
@@ -444,6 +497,12 @@ export function gradePad(o: PadOpts): PadResult {
         const area = (2 * Math.PI * Math.max(s, dr * 0.5) * dr) / seg;
         if (gh < 0) fillV += -gh * area;
         else cutV += gh * area;
+      } else if (cliff) {
+        // The kerb. Straight down the chamfer, no reach for a ground that is
+        // twenty metres below, no plunge clamp to hang it off.
+        const run = s - e;
+        y = -0.9 * (run / 1.6);
+        c = C_BATTER;
       } else {
         const g = groundAt(wx, wz);
         const run = s - e;
