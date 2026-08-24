@@ -1,3 +1,22 @@
+// **Positive control for the painted face map** (plan §9.6: "checkerboard
+// positive control before *fixing* any tiling read").
+//
+//   node src/tools/framecam.mts --probe src/tools/probes/facemark.mts \
+//     --out tmp/shots/<round> --settle 8 --dirty
+//
+// `paintFace` draws lips with a real vermilion border, nostril shadows and lash
+// lines, and `facemap.mts` shows they are all there in the canvas. None of them
+// read in a portrait, where a 55 mm mouth is 104 px. Two very different worlds:
+// the map is sampled where we think it is and the paint is simply too soft, or
+// it is not sampled there at all.
+//
+// So: stamp **pure magenta** over the mouth, the nose tip and the left eye, at
+// the UVs the mesh generator computes for those canonical anchors, into *every*
+// mip level. Magenta cannot be confused with skin, cannot be produced by
+// lighting, and cannot be filtered away. Where it lands in the frame is the
+// answer, and it is one capture.
+//
+// Everything below this block is `facecam.mts`.
 // FACE framings at the range plan §8.2 and `LANDMINES.md` say face work must be
 // judged at: **0.4 – 0.6 m**, on `follow` shots.
 //
@@ -30,28 +49,6 @@ const FRONT_SIDE = false;
 const ZERO_GAZE = true;
 /** Freeze the blink so a closed lid is never mistaken for a covered eye. */
 const NO_BLINK = true;
-/**
- * Pin the head and neck bones to their bind rotation.
- *
- * Without this a `_face` framing is not a front view: the head-turn layer leaves
- * the subject at 35-60 degrees, so the mouth and the far eye are foreshortened
- * to nothing and two rounds in a row were graded on what is really a
- * three-quarter. The `_3q` spec exists for that framing; this one has to be
- * frontal or it is not testing anything the corpus does not already cover.
- */
-const PIN_HEAD = true;
-/**
- * Turn off the two post passes that put a hard crosshatch over all skin.
- *
- * Measured by `weavehunt.mts` and `weavehunt2.mts`: it is not the material -- it
- * survives a flat white face with every map, vertex colour, sheen, specular and
- * received shadow off -- it is a per-pixel dither out of GTAO that TAA fails to
- * resolve on skinned meshes, which CAS then sharpens into a weave. It is an
- * `src/engine/postfx/**` defect and it is requested, not fixed, in
- * `project/handoff/head.md`. Leave this **off** for any frame that is meant to
- * represent what ships; turn it on to judge the model underneath it.
- */
-const NO_HATCH = false;
 
 const g = window.GAME;
 g.settle(90);
@@ -63,11 +60,6 @@ if (g.post && g.post.dof) g.post.dof.enabled = false;
 // framing. It is not the HUD and `shot.hud` does not suppress it.
 const hud = g.get('HUD');
 if (hud && hud.hints) { hud.hints.update = () => {}; hud.hints.root.remove(); }
-
-if (NO_HATCH && g.post) {
-  if (g.post.gtao) g.post.gtao.enabled = false;
-  if (g.post.cas) g.post.cas.enabled = false;
-}
 
 const party = g.get('Party');
 const player = g.get('Player');
@@ -93,7 +85,7 @@ if (party) for (const m of party.members) pin(m.root, m);
 wrap(player); wrap(party);
 
 const who = { noctis: null, gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };
-const out = { ablation: { HIDE_HAIR, HIDE_HEAD, FRONT_SIDE, ZERO_GAZE, NO_BLINK, PIN_HEAD, NO_HATCH }, heads: {}, specs: [] };
+const out = { ablation: { HIDE_HAIR, HIDE_HEAD, FRONT_SIDE, ZERO_GAZE, NO_BLINK }, heads: {}, specs: [] };
 const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const r3 = (v) => v.map((x) => +x.toFixed(4));
 
@@ -110,15 +102,6 @@ for (const [key, id] of Object.entries(who)) {
     const orig = ch.anim.update.bind(ch.anim);
     ch.anim.update = (dt, st) => { orig(dt, st); ch.anim.blink = 0; };
     ch.anim.__noBlink = true;
-  }
-  if (PIN_HEAD && ch.anim && !ch.anim.__headPinned) {
-    const bn = ch.rig.byName;
-    const orig = ch.anim.update.bind(ch.anim);
-    ch.anim.update = (dt, st) => {
-      orig(dt, st);
-      for (const b of [bn.neck, bn.head]) if (b) { b.rotation.set(0, 0, 0); b.updateMatrix(); }
-    };
-    ch.anim.__headPinned = true;
   }
   if (ZERO_GAZE && ch.eyes) {
     const zero = (o) => { o.rotation.set(0, 0, 0); o.updateMatrix(); };
@@ -170,6 +153,40 @@ for (const [key, id] of Object.entries(who)) {
     aimWorld: r3(aimW),
     faceSide: ch.faceMat && ch.faceMat.side,
   };
+}
+
+
+// ---- the positive control ------------------------------------------------
+const FACE_ANCHORS = {
+  mouth: [0, -0.079, 0.084],
+  noseTip: [0, -0.046, 0.104],
+  eye: [0.0335, -0.006, 0.0646],
+};
+const Y_MIN = -0.122, Y_MAX = 0.116;
+const uvOf = (p) => [0.5 + Math.atan2(p[0], p[2]) / (Math.PI * 2),
+  Math.min(1, Math.max(0, (p[1] - Y_MIN) / (Y_MAX - Y_MIN)))];
+
+for (const [, id] of Object.entries(who)) {
+  const m = id ? (party && party.get && party.get(id)) : player;
+  const ch = m && m.character;
+  const map = ch && ch.faceMat && ch.faceMat.map;
+  if (!map || !map.mipmaps) continue;
+  for (const [name, anchor] of Object.entries(FACE_ANCHORS)) {
+    const [u, v] = uvOf(anchor);
+    for (const cv of map.mipmaps) {
+      const cx = cv.getContext('2d');
+      if (!cx) continue;
+      cx.fillStyle = name === 'mouth' ? '#ff00ff' : name === 'noseTip' ? '#00ff00' : '#ffff00';
+      // 8 mm across, 4 mm down, in the map's own anisotropic texels
+      const px = cv.width / (0.085 * Math.PI * 2), py = cv.height / (Y_MAX - Y_MIN);
+      const w = 0.008 * px, h = 0.004 * py;
+      // v is bottom-up in canonical space and the canvas is top-down
+      cx.fillRect(u * cv.width - w / 2, (1 - v) * cv.height - h / 2, Math.max(1, w), Math.max(1, h));
+    }
+  }
+  map.needsUpdate = true;
+  out.mark = { ...(out.mark || {}), [id || 'player']: Object.fromEntries(
+    Object.entries(FACE_ANCHORS).map(([k, a]) => [k, uvOf(a).map((x) => +x.toFixed(4))])) };
 }
 
 return out;
