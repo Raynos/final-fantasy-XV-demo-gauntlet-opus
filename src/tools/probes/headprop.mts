@@ -489,7 +489,75 @@ for (const [key, m] of who) {
   const zyZy = 2 * widthAt(L, eyeY !== null ? eyeY : L.y.nasion - 0.012);
   const goGo = 2 * widthAt(L, L.y.stomion);
 
+  /**
+   * **Does the painted face map still sit on the sculpt?**
+   *
+   * Everything in `paintFace` is authored at a canonical height, and this lane
+   * moved the sculpt: the nose compressed 0.70x toward the eye line and the
+   * mouth came up 15 mm. A map that stayed put would paint lips onto a chin —
+   * and nothing in the repo would have said so, because a misregistered map is
+   * a *beautiful* texture in the wrong place and every geometry bench reads the
+   * position buffer.
+   *
+   * So: read the finished canvas back, take the mean luminance of a strip
+   * 60 texels wide down the middle of the face (the mouth is 57 mm across and
+   * the projection is cylindrical, so that is the mouth's own column), and find
+   * the darkest row inside a window around each measured landmark. The mouth
+   * line stroke and the upper lip's multiply shadow are the darkest thing on
+   * the lower face by construction; the nostril fills are the darkest thing
+   * just above it.
+   */
+  let paint = null;
+  const canvas = ch.faceMat && ch.faceMat.map && ch.faceMat.map.image;
+  if (canvas && canvas.width) {
+    const S = canvas.width;
+    const c2 = document.createElement('canvas');
+    c2.width = c2.height = S;
+    const cx2 = c2.getContext('2d', { willReadFrequently: true });
+    cx2.drawImage(canvas, 0, 0);
+    const px = cx2.getImageData(0, 0, S, S).data;
+    const HALF = Math.round(0.029 * S);       // +/- 29 mm of face, in texels
+    const lum = new Array(S).fill(0);
+    for (let ry = 0; ry < S; ry++) {
+      let acc = 0, n = 0;
+      for (let rx = (S >> 1) - HALF; rx <= (S >> 1) + HALF; rx++) {
+        const i = (ry * S + rx) * 4;
+        acc += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+        n++;
+      }
+      lum[ry] = acc / n;
+    }
+    // texel row -> canonical y, the exact inverse of `uvOf`'s v
+    const Y0 = -0.122, Y1 = 0.116;            // FACE.yMin / FACE.yMax
+    const yOfRow = (ry) => Y0 + (1 - (ry + 0.5) / S) * (Y1 - Y0);
+    const rowOfY = (y) => Math.round((1 - (y - Y0) / (Y1 - Y0)) * S - 0.5);
+    const darkestNear = (y, halfMm) => {
+      const a = rowOfY(y + halfMm), b = rowOfY(y - halfMm);
+      let best = a;
+      for (let ry = Math.max(0, a); ry <= Math.min(S - 1, b); ry++) if (lum[ry] < lum[best]) best = ry;
+      return yOfRow(best);
+    };
+    const mouthY = darkestNear(L.y.stomion, 0.014);
+    const noseY = darkestNear(L.y.subnasale, 0.010);
+    paint = {
+      size: S,
+      mouthLineY: r(mouthY), stomionY: L.y.stomion,
+      mouthOffsetMm: r((mouthY - L.y.stomion) * 1000, 1),
+      nostrilY: r(noseY), subnasaleY: L.y.subnasale,
+      nostrilOffsetMm: r((noseY - L.y.subnasale) * 1000, 1),
+      /** mean luminance of the mid-face strip, every 2 mm from the nasion down. */
+      profile: (() => {
+        const o = [];
+        for (let y = L.y.nasion; y > L.y.menton; y -= 0.002) {
+          o.push(`${Math.round((L.y.vertex - y) * 1000)}:${lum[Math.max(0, Math.min(S - 1, rowOfY(y)))].toFixed(0)}`);
+        }
+        return o.join(' ');
+      })(),
+    };
+  }
+
   out.chars[key] = {
+    paint,
     verts: pos.count, skullVerts: NSK, earVerts: nEar,
     headHeightMm: r(H * sc * 1000, 1),
     headBreadthMm: r(euEu * sc * 1000, 1),
