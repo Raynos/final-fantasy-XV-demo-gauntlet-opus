@@ -19,6 +19,28 @@
  * known (sphere, ellipsoid matched to the real head's height/width/depth, and
  * a slab matched the same way) before it reports on any character, because
  * seven instruments in this repo measured themselves until somebody checked.
+ *
+ * ## What this bench is BLIND to (plan §9.3: every check declares it)
+ *
+ * This is not a caveat, it is the reason this bench and a blind judge reached
+ * opposite verdicts on the same head in round 11 and the bench was believed.
+ * Measured by `brushsurvive.mts`; see `project/handoff/head.md` §1.
+ *
+ * 1. **Anything narrower than ~10 mm.** `NB = 24` bands over a 238 mm head is
+ *    **9.9 mm per band** — coarser than the mesh it is measuring. The mouth line
+ *    brush is 3.2 mm tall and the nostril brush 5.2 mm wide; both are below this
+ *    instrument's own quantisation and cannot move any number it returns.
+ * 2. **Everything a front-facing portrait is judged on.** `S` is the front-most
+ *    `z` on the midline strip: a *silhouette*. Mouth corners, alar wings, the
+ *    nasolabial fold, socket recess and lid occlusion are all off-midline, none
+ *    of them change the outline, and all of them are what a portrait reads.
+ * 3. **Whether the small brushes exist at all.** `ablateSculpt` projects onto
+ *    the best-fit ellipsoid, so the separation it reports is *nose + chin + jaw*
+ *    against *nothing*. A head with every feature under 10 mm deleted would score
+ *    here identically to the shipped one.
+ *
+ * So a high `sagittalRelief` means **"this head has a profile"**, and nothing
+ * whatever about whether it has a face. For that, run `brushsurvive.mts`.
  */
 
 const g = window.GAME;
@@ -166,6 +188,11 @@ function profile(pts) {
     S: S.map((v) => r(v, 3)),
     D: D.map((v) => r(v, 3)),
     holes,
+    /** Carried in the output itself so a number cannot be quoted without it. */
+    blindTo: 'silhouette only, ' + r(1 / NB, 3) + ' of head height per band (~9.9 mm): '
+      + 'blind to every feature narrower than a band and to all off-midline '
+      + 'structure. High relief means "has a profile", not "has a face". '
+      + 'Use brushsurvive.mts for the second question.',
   };
 }
 
