@@ -5,8 +5,23 @@ Megastructures,RoadFurniture,PartBuilder,BuildKit}.ts`, new
 `src/world/props/Wear.ts`. Previous round on the same files:
 `project/handoff/modeling.md` — read it too, this one does **not** repeat it.
 
-Seven commits, `4a5ca39` .. `35f0bb8`-ish (`git log --author="Jake Verbaten"
--- src/world/props/Wear.ts` finds the range).
+Nine commits, `d8f1da7` .. `02ca60c`. Every agent on this trunk commits under
+the same git author, so `--author` will not separate them; `git log --oneline --
+src/world/props/Wear.ts src/world/props/PoiKits.ts src/world/props/BuildKit.ts
+src/world/props/PartBuilder.ts src/world/town/Hammerhead.ts` is the range:
+
+```
+d8f1da7  POI aprons become measured earthworks, and the royal tomb becomes a temple
+6691bb5  The imperial base gets a perimeter, not a ring of slabs
+dedfc27  Soft goods that are solved rather than authored, and the haven that uses them
+3d1e075  The last four BoxGeometry kits, and pads that stop being punched through
+9c083de  prep() before the merge, per-kind POI exclusions, and a check that stops
+         measuring its own phase  (+ Hammerhead's asphalt pad)
+7ddd95b  Fix 13 POI compounds standing in the air, and say which inference was wrong
+8a53995  One material for the waymark stele: 23 landmarks, 23 draw calls
+4d01ecd  Seat POIs at the range their base is read, not the range they are drawn
+02ca60c  The sign is not upside down, and the handoff  (+ RoadSample.y removal in 8b0…)
+```
 
 ---
 
