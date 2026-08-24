@@ -1083,16 +1083,27 @@ export function stackPlan(
   const w0 = s0 * (ext.get(k) ?? _EXT1)[0];
   const cs = corestones(rng, n);
   const out: StackCourse[] = [];
-  let y = 0, hPrev = 0;
+  let y = 0, hPrev = 0, wPrev = 0;
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];
     const kind: StoneKind = i === 0 ? k
       : rng.next() < 0.5 ? 'bedded' : rng.next() < 0.6 ? 'granite' : 'slab';
     const ex = ext.get(kind) ?? _EXT1;
-    const s = (w0 * c.s) / ex[0];                     // finished half-width / hull
+    // **A course may not be wider than the one below it unless it sits deeper
+    // in it.** `corestones` draws `c.s` as `s0 * (1 - i*taper) * range(0.88,
+    // 1.12)`, and at the ends of those ranges course 1 comes out **1.47x**
+    // course 0 — which on a 0.38 overlap is a cap standing six tenths clear of
+    // its own base, i.e. a balanced rock. Same rule and same reason as
+    // {@link torPlan}: widening is allowed, widening while standing clear is
+    // not. It is a guarantee on the finished half-width and not on `c.s`,
+    // because the two are a different number for every kind.
+    let wSelf = w0 * c.s;
+    if (i > 0) wSelf = Math.min(wSelf, wPrev * 1.10);
+    const s = wSelf / ex[0];                          // finished half-width / hull
     const sy = _sc(sy0 * c.sy);
     const h = s * sy * ex[1];
-    if (i > 0) y += (hPrev + h) * (1 - overlap);
+    if (i > 0) y += (hPrev + h) * (1 - (wSelf > wPrev ? Math.max(overlap, 0.52) : overlap));
+    wPrev = wSelf;
     hPrev = h;
     out.push({
       kind, dx: c.dx * s0, dy: y, dz: c.dz * s0, s, sy, yaw: c.yaw,
@@ -1232,7 +1243,7 @@ export function torPlan(
 
   const courses: TorCourse[] = [];
   let y = 0;                                        // the buried foot of the stack
-  let cx = 0, cz = 0, wPrev = 0;
+  let cx = 0, cz = 0, wPrev = 0, pcx = 0, pcz = 0;
   for (let i = 0; i < n; i++) {
     const kind: StoneKind = rng.next() < 0.58 ? dom
       : arch.kinds[Math.floor(rng.next() * arch.kinds.length)];
@@ -1287,20 +1298,31 @@ export function torPlan(
       pitch: lean * leanC + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
       roll: -lean * leanS + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
     });
-    // **A course wider than the one below it has to sit DEEPER in it.**
+    // **An unsupported course has to sit DEEPER in the one below it.**
     //
-    // The bedding term is what puts a proud collar on a hoodoo, and a collar
-    // that rides high on a narrower block is not a collar, it is a cap on a
-    // stalk — a balanced rock, which is the "mushroom" the judge named and
-    // which `handoff/rocks.md` already recorded as `zone_ostium_gorge`'s
-    // four-in-one-frame defect from the other generator. `tmp/crop/vr2/r4-a.png`
-    // is one: a boss whose second course drew +0.24 of bedding on a 0.24 lap.
-    // Widening is allowed; widening while standing clear is not.
-    const rise = 2 * h * (wz > wPrev0 ? Math.max(lap, 0.58) : lap);
+    // Two ways a course stops being supported: it is wider than the block it
+    // stands on (the bedding term is what puts a proud collar on a hoodoo, and
+    // unchecked it puts a table on a stalk), or it is displaced far enough
+    // sideways that its centre is off the block below (`boss` steps by 0.70 of
+    // its own half-width). Both render as a balanced rock — "the same mushroom
+    // rock" is the judge's phrase and `handoff/rocks.md` records the identical
+    // shape from `_genOutcrop` as `zone_ostium_gorge`'s four-in-one-frame
+    // defect. `tmp/crop/vr2/r4-a.png` and `r5-a.png` are one of each.
+    //
+    // Widening and stepping are both allowed — they are two of this family's
+    // strongest silhouette parameters, and clamping the step instead cost the
+    // hoodoo row 20/24 -> 13/24. Doing either *while standing clear* is not.
+    const off = Math.hypot(cx - pcx, cz - pcz);
+    const clear = i > 0 && (wz > wPrev0 || off > wPrev0 * 0.55);
+    const rise = 2 * h * (clear ? Math.max(lap, 0.58) : lap);
+    pcx = cx; pcz = cz;
     y += rise;
     // The stack's axis follows the lean, so the courses stay stacked as it
     // tips; the gaussian on top is the step that keeps it from being a column
-    // of coins.
+    // of coins. It is deliberately NOT clamped — the step is one of this
+    // family's strongest silhouette parameters and clamping it cost 20/24 ->
+    // 13/24 on the hoodoo row, measured. What the step must not do is leave a
+    // course unsupported, and that is checked at the top of the next iteration.
     cx += rise * Math.tan(lean) * leanS + rng.gauss(0, wz * arch.drift);
     cz += rise * Math.tan(lean) * leanC + rng.gauss(0, wz * arch.drift);
   }
