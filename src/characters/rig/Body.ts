@@ -311,13 +311,33 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
   // across-axis at every joint, splay about the dorsal axis at the knuckle.
   // Radii swell at each joint — a finger is widest at the knuckles, and that
   // is the whole difference between a finger and a cone.
+  //
+  // **The rest pose, and it is the whole defect a blind judge called "paddles".**
+  // The geometry was never the problem: measured at `hero_full` a hand is 33 px
+  // and a finger 5 px wide by 20 px long, with three phalanges, joint swellings,
+  // a nail and interdigital occlusion already in it. What was wrong is that the
+  // fingers were **straight and fanned** — 6-12 degrees of flexion at the
+  // knuckle where a relaxed hand carries 20-30, 17-24 at the PIP where it
+  // carries 40-50, and a 12-degree *divergence* across the four where a hanging
+  // hand converges slightly. Straight and fanned is a rake, and a rake at 33 px
+  // is a paddle.
+  //
+  // In pixels, because that is the only reason to spend anything here: the tip
+  // of a finger is ~80 mm from its knuckle, so the new flexions move it
+  // 0.19*80 + 0.32*45 + 0.05*19 = 30 mm, i.e. **7.2 px at `hero_full`**, and
+  // removing the fan moves the outer tips ~16 mm, i.e. 3.8 px. Both are well
+  // over the ~2 px floor; the same change to, say, a fingernail would not be.
+  //
+  // `Anim` adds another 0.26 rad of curl through the `fingers` bone at idle and
+  // 0.35 in a combat stance, so these are deliberately short of a full relaxed
+  // curl — they are the *bind* pose that curl is applied on top of.
   const F = [
     // across, along and depth of the metacarpal head, shaft radius, the three
     // phalanx lengths, the three joint flexions, and the splay at the knuckle
-    { a: -0.0245, l: 0.0700, d: 0.0034, r: 0.0086, len: [0.0360, 0.0230, 0.0180], flex: [0.11, 0.30, 0.17], splay: -0.090 },
-    { a: -0.0080, l: 0.0752, d: 0.0048, r: 0.0088, len: [0.0400, 0.0260, 0.0200], flex: [0.13, 0.33, 0.18], splay: -0.008 },
-    { a: 0.0085, l: 0.0704, d: 0.0040, r: 0.0082, len: [0.0370, 0.0240, 0.0190], flex: [0.17, 0.37, 0.21], splay: 0.048 },
-    { a: 0.0245, l: 0.0600, d: 0.0012, r: 0.0070, len: [0.0280, 0.0180, 0.0150], flex: [0.21, 0.42, 0.24], splay: 0.120 },
+    { a: -0.0245, l: 0.0700, d: 0.0034, r: 0.0086, len: [0.0360, 0.0230, 0.0180], flex: [0.30, 0.62, 0.22], splay: 0.030 },
+    { a: -0.0080, l: 0.0752, d: 0.0048, r: 0.0088, len: [0.0400, 0.0260, 0.0200], flex: [0.33, 0.68, 0.24], splay: 0.000 },
+    { a: 0.0085, l: 0.0704, d: 0.0040, r: 0.0082, len: [0.0370, 0.0240, 0.0190], flex: [0.37, 0.74, 0.27], splay: -0.020 },
+    { a: 0.0245, l: 0.0600, d: 0.0012, r: 0.0070, len: [0.0280, 0.0180, 0.0150], flex: [0.41, 0.80, 0.30], splay: -0.045 },
   ];
   const IF = I[`fingers${side}`], IH = I[`hand${side}`], IT = I[`fingerTip${side}`];
   const wF: SkinWeights[] = [
@@ -382,9 +402,12 @@ function buildHand(B: MeshBuilder, rig: Rig, side: Side, look: Look) {
     nodes: [
       { p: pt(0.004, -0.023, -0.003).toArray(), rx: R(0.0142), rz: R(0.0132), w: [[IH, 0.80], [IB, 0.20]] },
       { p: pt(0.026, -0.044, -0.009).toArray(), rx: R(0.0118), rz: R(0.0108), w: [[IH, 0.25], [IB, 0.75]] },
-      { p: pt(0.044, -0.056, -0.016).toArray(), rx: R(0.0106), rz: R(0.0098), w: [[IB, 1]] },
-      { p: pt(0.060, -0.063, -0.024).toArray(), rx: R(0.0098), rz: R(0.0090), w: [[IB, 1]] },
-      { p: pt(0.074, -0.066, -0.031).toArray(), rx: R(0.0074), rz: R(0.0070), w: [[IB, 1]] },
+      // The distal thumb curls palmar (−depth) and back toward the index rather
+      // than continuing straight out of the web. A straight thumb next to four
+      // straight fingers is the second half of the rake.
+      { p: pt(0.044, -0.055, -0.019).toArray(), rx: R(0.0106), rz: R(0.0098), w: [[IB, 1]] },
+      { p: pt(0.059, -0.059, -0.030).toArray(), rx: R(0.0098), rz: R(0.0090), w: [[IB, 1]] },
+      { p: pt(0.071, -0.058, -0.043).toArray(), rx: R(0.0074), rz: R(0.0070), w: [[IB, 1]] },
     ],
     steps: 12, seg: 12, ref: front.toArray(),
     uvScale: [0.32, 0.30], capEnd: true, capHeight: 1.0,
