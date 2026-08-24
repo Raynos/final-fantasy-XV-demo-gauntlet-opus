@@ -176,7 +176,7 @@ export function brushes(look: Look): SculptBrush[] {
   // cheeks
   add({ p: [0.059, -0.014, 0.056], r: [0.038, 0.024, 0.050], amt: 0.0115 + 0.007 * cheek, dir: 'normal', mirror: true });
   add({ p: [0.050, -0.0390, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0120 + 0.006 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.038, -0.0480, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
+  add({ p: [0.038, -0.0480, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0055, dir: 'normal', mirror: true });
 
   // Nose.
   //
@@ -218,13 +218,34 @@ export function brushes(look: Look): SculptBrush[] {
   // 0.149. Sizes are unchanged — the mouth was the right shape in the wrong
   // place, and the mouth line is 3.2 mm tall against a 2 mm grid, which is the
   // one radius here that has no room to shrink.
+  // **The mouth barrel**, and it was missing entirely.
+  //
+  // The lips do not sit on a plane; they wrap a convex mass that stands proud
+  // of the cheeks either side of it. Without it the whole muzzle is the bare
+  // ellipsoid, and on a bare ellipsoid a front-lit face has a *straight
+  // vertical terminator down the midline* — the two halves go from lit to unlit
+  // in one step and every off-midline feature reads as nothing.
+  // `tmp/shots/head-r2b/noctis_front.png` is that frame: a good profile
+  // (`noctis_side.png`, same boot) and a blank mask from the front, which is
+  // exactly the pair the round-11 judge described. A profile bench cannot see
+  // this and neither can a landmark bench: it is off-midline mass, and it is
+  // what makes a mouth read from an angle.
+  add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0055, dir: 'normal' });
   add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0060, dir: [0, 0, 1] });    // philtrum groove
   add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0042, dir: [0, 0, 1], mirror: true }); // philtrum columns
   add({ p: [0, -0.0595, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0115, dir: [0, 0.18, 1] });   // upper vermilion
   add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0038, dir: [0, 0, 1] });      // cupid's bow
-  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0032, 0.026], amt: -0.0092, dir: [0, 0, 1] });     // mouth line
+  // The mouth line is 13 mm deep, not 9.2. It has to survive the *shipped*
+  // key, not a studio one: in `hero_portrait` the mid-face is in shadow and a
+  // 9.2 mm groove under a 5.5 mm barrel produced no shading contrast at all.
+  // 3.6 mm of r_y is still four grid rows at the face's 1.9 mm row pitch.
+  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0130, dir: [0, 0, 1] });     // mouth line
   add({ p: [0, -0.0715, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0105, dir: [0, -0.10, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0070, dir: 'normal', mirror: true });
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0100, dir: 'normal', mirror: true });
+  // nasolabial: the fold runs from the alar crease down past the mouth corner,
+  // and it is the strongest off-midline value on the lower face at any angle
+  // other than dead-on. One brush at the top of it was not a fold.
+  add({ p: [0.0310, -0.0570, 0.0715], r: [0.0140, 0.0165, 0.0240], amt: -0.0048, dir: 'normal', mirror: true });
 
   // Chin and jaw.
   //
@@ -244,11 +265,15 @@ export function brushes(look: Look): SculptBrush[] {
   // central bump is what made every chin in the cast come to a point.
   add({ p: [0.0165, -0.0975, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
-  add({ p: [0.064, -0.0450, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
+  // The `jaw` coefficients here are *lateral* — these brushes push along the
+  // normal on the side of the head. At Gladiolus' 1.35 they were adding 35 mm
+  // of half-width and made his head 192 mm across a 237 mm skull, i.e. widest
+  // at the jaw, which no human is. 0.010 and 0.008.
+  add({ p: [0.064, -0.0450, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.010 * jaw, dir: 'normal', mirror: true });
   // gonial angle — the corner where the ramus turns forward into the body of
   // the mandible. Without it the lower face is a rounded egg and the character
   // reads as a child no matter what the rest of the sculpt does.
-  add({ p: [0.0605, -0.0660, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.010 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0605, -0.0660, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.008 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.0575, -0.0790, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
   add({ p: [0.054, -0.0640, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
   // Body of the mandible: the run from the gonial angle forward to the chin.

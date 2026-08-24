@@ -198,7 +198,9 @@ export const CAST = {
       skin: srgb(0xa37653),
       iris: 0x7a5326,
       headWidth: 1.04,
-      jaw: 1.35, cheek: -0.20, nose: 0.55, brow: 1.05,
+      // jaw was 1.35 and it made his head 192 mm across a 237 mm skull —
+      // widest at the mandible, which no human is (`headprop.mts`).
+      jaw: 0.85, cheek: -0.20, nose: 0.55, brow: 1.05,
       eyeOpen: 0.90,
       blush: 'rgba(162,92,74,0.18)',
       lip: 'rgba(140,80,68,0.48)',
