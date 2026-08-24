@@ -9,10 +9,15 @@ Contract: `docs/plans/2026-08-21-fable-procedural-modeling.md` §2.4, §4.2, §4
 files — its chevron-hatch and clipmap-filter findings are still true and are the
 reason `tf_heightLod` exists. This file does not supersede it.
 
-**Status: five commits, all landed on `main`, `BAKE_VERSION` 3 -> 4, bake
-regenerated. `pnpm run typecheck` and `vite build` green on every one (the
-pre-commit hook runs both). A full `pnpm run check` was still running under
-seven-lane contention when this was written — see "Not yet verified".**
+**Status: nine commits, all landed on `main`, `BAKE_VERSION` 3 -> 4, all three
+bake caches regenerated. `pnpm run check` on a quiet tree afterwards: 15 of 16,
+with `floatcheck` the only red and its cause owned by the town lane.**
+
+Two items beyond §2.4/4.2/4.3/4.4 landed here because they were in this
+directory and nobody else could take them: **§2.2's talus aprons** — a *false
+DONE* row — and **the tarn basins**, which are not in the plan at all and were
+built because `integration` and `Water.ts` between them proved the map had been
+promising ten fishing spots over terrain that had a hollow at one.
 
 ---
 
@@ -178,7 +183,11 @@ looks like.
   judgement, not a measurement.
 - No blind `compare.mts` round has seen any of this.
 
-## An attribution I disproved, and it was aimed at me
+## Two attributions I disproved, one aimed at me and one at my own pass
+
+### The floating POIs were not the terrain reshape
+
+
 
 `project/handoff/method.md` records `floatcheck`'s `poiFloating: 0 -> 13` as
 *"appearing after the §4.3 terrain reshape"*. **It is not mine.** Bisected with
@@ -204,6 +213,33 @@ plausible enough carrier that nobody would have questioned it.
 Worth keeping: at `2437bc0` and `f28cd89` `poiBuried` reads **25** against
 today's **7**, so something in tonight's work improved burial substantially and
 nobody has claimed it.
+
+### The dry tarns were not the drainage incision either
+
+`project/handoff/water.md` records every inland tarn being dry as "measured,
+high confidence", caused by §4.2 cutting a channel through each rim. The first
+half is right and the second is not. Ablated: with `_inciseDrainage` stubbed out
+the same eight pins are dry with the same `spill == floor` signature, and with
+`_talusAprons` stubbed out as well they are dry again. `spill == floor` does not
+mean a breached rim — it means **the lowest point of the disc is on its edge**,
+i.e. the ground slopes straight through the pin and there is no hollow at all.
+The incision deepens two of them by about a metre and causes none of it.
+
+Only `vesperpool` and `alstorSlough` ever had a landform stamp, and neither is a
+fishing pin. `_tarnBasins` now carves the rest: **8 of 10 hold water, from 1**,
+and `integration` reports **4 fishable holes where it originally had 3**.
+
+Three things that pass measured before they passed: a shelf levelled only to
+92 m left the rim on the original slope at the 105 m radius `_findTarns`
+samples, so every basin still spilled; levelling at 0.985 left 1.5% of the
+relief and `archaeans_mirror` came out holding **0.04 m**, a fail wearing a
+plausible number; and the pass has to run **after** the road carve, which was
+refilling three basins including one called `rachsia_bridge`.
+
+And one it caught in me: averaging the shelf over a ring that straddles bank and
+lake bed levelled `vesperpool_dock` *above the Vesperpool*. `integration` failed
+with **no source for vesper_gar, pink_jade_gar** — the two fish only that lake
+has. A pin inside an authored hollow already has its water.
 
 ## Two corpus shots are broken, and one of them is judged
 
