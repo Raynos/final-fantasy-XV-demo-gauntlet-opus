@@ -640,8 +640,21 @@ function cache(): MaterialTextures {
     // Four filaments across the ribbon, not eleven: a lock is 2-3 mm wide, so
     // eleven bands across it are sub-pixel at every range the head is ever
     // seen at and alias into sparkle instead of resolving as strands.
-    const fil = 0.66 + 0.34 * Math.abs(Math.sin(u * Math.PI * 4.0 + n.simplex2(u * 6, v * 2) * 2.2));
-    const along = 0.80 + 0.20 * n.simplex2(u * 8, v * 26);
+    // Four crests per unit of `u`, which is one crest per card: a card spans
+    // exactly `1 / CARD_VARIANTS` of `u`, so `|sin(u * 4pi)|` is `sin(pi * s)`
+    // in card-local coordinates — a lit crest down the middle, dark at the two
+    // silhouette edges, which is what a rolled lock looks like. The phase noise
+    // was 2.2 rad, i.e. more than a whole period, so the crest landed anywhere
+    // relative to the card and half of them were lit at the edges and dark down
+    // the middle. It stays only to keep the shell's filaments off a lattice.
+    const fil = 0.66 + 0.34 * Math.abs(Math.sin(u * Math.PI * 4.0 + n.simplex2(u * 6, v * 2) * 0.45));
+    // Anisotropic on purpose. This was `simplex2(u * 8, v * 26)`: 26 cycles
+    // along the strand and only 8 across it, which on a 2.5 mm tube was
+    // invisible and on a 15 mm card is a horizontal bar every 3.3 mm — 6 px at
+    // portrait range, running *across* the lock. That is wicker, not hair. Hair
+    // varies filament-to-filament and drifts slowly along its own length, so
+    // the frequencies swap: 22 across, 7 along (12 mm, 23 px a cycle).
+    const along = 0.80 + 0.20 * n.simplex2(u * 22, v * 7);
     // edges of a clump are always darker than its crest
     const edge = 0.70 + 0.30 * (1.0 - across * across);
     c[0] = c[1] = c[2] = fil * along * edge;

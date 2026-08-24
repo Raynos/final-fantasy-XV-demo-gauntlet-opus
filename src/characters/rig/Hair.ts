@@ -751,7 +751,15 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   // every previous outline-breaking pass in this file was a wide flat blade
   // pointing at the sky, which is a quill and reads worse than no strand.
   {
-    const nh = H.halo ?? 380;
+    // Flyaways are cards too, and for the same arithmetic. As opaque tubes they
+    // were 1.7 mm across: 3.2 px at portrait — a hard black needle, and once
+    // the mass around them stopped being needles they were the loudest quills
+    // left in the frame — and **0.4 px at `hero_full`**, i.e. sub-pixel opaque
+    // geometry, the single thing §8.5 says must not be modelled. At 6 mm they
+    // are 11 px at portrait and 1.4 px at `hero_full`, and because they are now
+    // *alpha* the sub-pixel end mips to a coverage value instead of shimmering.
+    // Four times the width means a quarter of the count for the same mass.
+    const nh = H.halo ?? 96;
     const vol = (H.volume ?? 1) * (H.shell ?? 0.011);
     const liftK = H.haloLift ?? 1.0;
     B.skin([[I.head, 1]]).mat((H.rough ?? 0.36) + 0.04, 0, 1);
@@ -789,7 +797,10 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       // the moulded cap but is still not hair. Most strays only just clear the
       // shell and break the outline where it counts; a handful carry further.
       const off0 = vol * 1.10;
-      const off1 = off0 + vol * (0.45 + 3.6 * Math.pow(rng.next(), 2.1)) * liftK;
+      // The tail was 3.6 x `vol` — up to 50 mm of standoff, which as a tube was
+      // a needle arcing off the skull and as a card is a plank doing it. 1.9
+      // keeps the outline broken without launching anything.
+      const off1 = off0 + vol * (0.45 + 1.9 * Math.pow(rng.next(), 2.1)) * liftK;
       const segs = 5;
       const pts: THREE.Vector3[] = [];
       for (let k = 0; k <= segs; k++) {
@@ -801,22 +812,24 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
         q.addScaledVector(nrm, lerp(off0, off1, smooth(t)));
         pts.push(q);
       }
-      const ww = 0.00085 * scale * (0.7 + rng.next() * 0.7);
+      const ww = 0.0030 * scale * (0.78 + 0.44 * rng.next());
       B.groom(nrm.x, nrm.y, nrm.z);
       // A flyaway that is lighter than the mass reads as a scratch on the
       // lens, not as hair. It stays at or under the root value.
       const c0 = rootC.clone().multiplyScalar(0.72 + 0.42 * rng.next());
       B.color(c0);
-      ribbon(B, {
-        points: pts.map((q) => put(q).toArray()),
-        steps: 5,
-        sides: 5,
-        width: ww,
-        thick: ww * 0.8,
-        up: nrm.toArray(),
+      emitCard(B, {
+        points: pts.map((q) => put(q)),
+        steps: 6,
+        halfWidth: ww,
+        variant: cardVariant++,
+        upAt: (pw, out) => cardUp(pw, nrm, out),
+        taper: (t: number) => Math.pow(clamp01(1 - t * 0.94), 0.55),
         color: c0,
         tipColor: c0.clone().multiplyScalar(0.80 + 0.30 * rng.next()),
-        taper: (t: number) => Math.pow(clamp01(1 - t), 0.5),
+        // a stray is a couple of hairs, so its value is flatter across than a
+        // lock's: less crest, or it reads as a lit blade
+        spread: 0.30,
       });
     }
   }
@@ -844,24 +857,26 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       // These are meant to be *fine* — the whole point is to dissolve the
       // hairline, not to draw on it. They were 2.6-4.0 mm half-width, i.e. up
       // to an 8 mm card, on a four-sided flat section, with `tipColor: base`
-      // lifting the tip *above* the root. Eight millimetres of bright flat
-      // blade pointing down over the brow is the single most visible quill on
-      // the whole cast, and on a blond it is a row of yellow needles across
-      // the forehead. A third of the width, a rolled six-sided section, and a
-      // tip at or below the root value.
-      const ww = 0.0009 * scale * (0.7 + rng.next() * 0.8);
+      // lifting the tip *above* the root: eight millimetres of bright flat
+      // blade pointing down over the brow, and on a blond a row of yellow
+      // needles across the forehead. Then they went to 1.3-2.7 mm *opaque*,
+      // which is 2.4-5 px at portrait and 0.3-0.65 px at `hero_full` — the same
+      // sub-pixel-geometry failure as the locks and the halo, one scale down.
+      // A 3.5 mm card is 6.6 px at portrait, and its softness now comes from
+      // the cutout rather than from being too small to see.
+      const ww = 0.00175 * scale * (0.78 + 0.44 * rng.next());
       B.color(rootC);
       B.groom(nrm.x, nrm.y, nrm.z);
-      ribbon(B, {
-        points: [root, mid, tipP].map((q) => put(q).toArray()),
-        steps: 4,
-        sides: 6,
-        width: ww,
-        thick: ww * 0.7,
-        up: nrm.toArray(),
+      emitCard(B, {
+        points: [root, mid, tipP].map((q) => put(q)),
+        steps: 5,
+        halfWidth: ww,
+        variant: cardVariant++,
+        upAt: (pw, out) => cardUp(pw, nrm, out),
+        taper: (t: number) => Math.pow(1 - t * 0.92, 0.5),
         color: rootC.clone().multiplyScalar(0.86 + 0.24 * rng.next()),
         tipColor: rootC.clone().multiplyScalar(0.92),
-        taper: (t: number) => Math.pow(1 - t, 0.5),
+        spread: 0.28,
       });
     }
   }
