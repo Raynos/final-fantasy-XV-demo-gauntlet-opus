@@ -451,6 +451,39 @@ cost ever attributed this way is inflated by that offset**.
 Differencing *two* ablations cancels it, and the two instruments then agree to
 within two draws: the POI kits cost **~30 draws** at `town_forecourt`, not 349.
 
+## Every recorded `imgdiff` noise floor is a COLD floor, and nobody captures cold
+
+`project/noise-floors.json` is what stops this project reading boot noise as a
+result — and the floors in it were measured on **cold** captures, while every
+real comparison is taken **warm**. Measured 2026-08-24 while trying to A/B a
+material change:
+
+| shot | before vs after | **two captures of the SAME build** |
+|---|---|---|
+| `landmark_meteor` | 5.63 | **5.37** |
+| `zone_longwythe` | 2.96 | **2.94** |
+| `poi_haven` | 4.03 | **3.94** |
+
+The change was real and visible, and the whole-frame mean could not see it,
+because warm-to-warm noise is *already* that large. Two `--cold` captures of the
+same shots reproduce to **0.4-0.83**, which is the number the file records.
+
+So a whole-frame `imgdiff` mean is the wrong instrument for anything smaller
+than a landform. Use a **box on the thing you changed, plus a control box on
+something you did not, plus a repeat run** — that is what separated a −34%
+texture-energy change from 0.06-0.09 of run noise on the same frames.
+
+`landmark_meteor` was not in the floors file at all until `d3a7041`.
+
+## `cleanup.mts` and the daemon disagree about whether a daemon exists
+
+Seen twice in one session: `cleanup.mts` printing *"no capture daemon registered
+— clean"* while `daemon.mts --health` reported a live daemon on 36646 with
+**12 138 s of uptime**. The registry and the process disagree, and `cleanup` is
+exactly what everyone reaches for when captures start failing. Trust
+`--health`, and see the orphaned-vite entry above for what `cleanup` misses when
+the registry is empty.
+
 ## Names nothing ever verified
 
 A guess about a name compiles. `a.b || a.c || a.d` reads like defensive coding
