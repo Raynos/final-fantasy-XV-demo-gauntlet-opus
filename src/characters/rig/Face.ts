@@ -180,7 +180,7 @@ export function brushes(look: Look): SculptBrush[] {
 
   // Nose.
   //
-  // **Measured defect (`headprop.mts`, commit 6d70f2a): the nose was a third
+  // **Measured defect (`headprop.mts`): the nose was a third
   // too long and nearly twice as protruding, and that alone is what crushed the
   // mouth and chin into the bottom of the face.** Against Farkas' adult-male
   // means, all four heads read n-sn = 0.281 of head height (norm 0.211), the
@@ -260,10 +260,16 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0, -0.0828, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
   // 0.0240 overshot: the chin came out 11.4 mm proud of its own mentolabial
   // sulcus against an adult 4-6, and in three-quarter it read as a muzzle.
-  add({ p: [0, -0.1010, 0.0735], r: [0.032, 0.024, 0.040], amt: 0.0180 + 0.007 * jaw, dir: [0, 0.06, 1] });
+  // Lower and shorter in y, not further forward. The midline outline showed the
+  // chin's front wall collapsing below 0.95 of head height — 80.0 mm of z at the
+  // lower lip, 75.8 at 0.93, then 68.9, 59.6, 47.1 — where a real chin holds its
+  // projection down to the pogonion and only then turns under. The prominence
+  // was already right (7.9 mm out of its own sulcus against an adult 4-6); what
+  // was missing was the wall under it.
+  add({ p: [0, -0.1045, 0.0735], r: [0.030, 0.0205, 0.040], amt: 0.0205 + 0.007 * jaw, dir: [0, 0.06, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
-  add({ p: [0.0165, -0.0975, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
+  add({ p: [0.0165, -0.1005, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
   // The `jaw` coefficients here are *lateral* — these brushes push along the
   // normal on the side of the head. At Gladiolus' 1.35 they were adding 35 mm
