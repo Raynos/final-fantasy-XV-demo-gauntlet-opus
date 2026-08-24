@@ -557,8 +557,13 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
     // the hard way -- the first build of this file wound both the water and one
     // bank backwards and reported 61 474 folds against 331 kept triangles,
     // silently, with a clean assert.
+    // 35%, for the reason written out on the shore ribbon's gate: a reversal
+    // folds essentially everything (this very file, wound backwards, gave
+    // 61 474 against 331) while real pinching runs at a couple of per cent.
+    // Blind to a single reversed reach among several, because the count is per
+    // mesh and every reach in a mesh shares one winding rule.
     const total = fold[0] + fold[2];
-    if (total > 0 && fold[0] > total * 0.03) {
+    if (total > 0 && fold[0] > total * 0.35) {
       throw new Error(`${what}: ${fold[0]} of ${total} triangles came out face-down. The lattice is wound backwards -- swap the two triangle orders for this strip, do not make the material DoubleSide.`);
     }
     if (!idx.length) return null;

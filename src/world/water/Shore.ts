@@ -149,8 +149,15 @@ const AREA_FLOOR = 1e-7;
 const MARCH_STEP = 0.55;
 /** Along-shore resample step. */
 const SHORE_DS = 4.0;
-/** Chains shorter than this are specks, not shorelines. */
-const MIN_CHAIN = 70;
+/**
+ * Chains shorter than this are specks, not shorelines.
+ *
+ * 100 m is a 32 m pond. Below that a 21-row band marching fifteen metres either
+ * way has nowhere to go: the three smallest loops on this map came out with
+ * *more* degenerate quads than live ones (596 against 558 on one of them), which
+ * is the geometry saying it has been asked for a band wider than the water.
+ */
+const MIN_CHAIN = 100;
 /** The three along-shore swash wavelengths, metres. Detuned, never harmonic. */
 const SWASH_LAMBDA = [43.0, 71.0, 113.0];
 
@@ -558,13 +565,23 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
           x: +line[0].toFixed(0), z: +line[1].toFixed(0), m, closed: c.closed, vote: +vote.toFixed(0), folded, degenerate, kept,
         });
       }
-      // The chain-level gate. Folding is rare and local — 0.39% of triangles
-      // across the whole world's coastline, measured — so a chain that folds
-      // three per cent of itself is not pinching, it is built backwards, and the
-      // only way that happens is the inland vote coming out on the wrong side.
-      // Degenerate quads are deliberately NOT counted here: a creek narrow
-      // enough to collapse every row is a real thing and it is not a bug.
-      if (!opts.debug && folded > (folded + kept) * 0.03) {
+      // The chain-level gate: is this chain built backwards?
+      //
+      // The rate had to be measured rather than picked, and my first guess of 3%
+      // was wrong in the direction that matters. A **reversed** chain folds
+      // essentially all of itself — the river strip, wound backwards, came out
+      // at 61 474 folds against 331 kept — while a real coastline pinches at a
+      // few tenths of a per cent globally and, on a nineteen-point pond, at
+      // 4.4%. Three per cent failed the pond and would still have failed at ten.
+      // 35% cannot be reached by pinching and cannot be missed by a reversal.
+      //
+      // Blind to: a chain that is *half* reversed. Nothing here produces one —
+      // handedness is decided once per chain from a vote over the whole chain —
+      // but if that ever changes this gate will not see it.
+      //
+      // Degenerate quads are deliberately not counted: a creek narrow enough to
+      // collapse every row is a real thing and it is not a bug.
+      if (!opts.debug && folded > (folded + kept) * 0.35) {
         throw new Error(`shore ribbon: chain at (${line[0].toFixed(0)}, ${line[1].toFixed(0)}) folded ${folded} of ${folded + kept} triangles. That is a handedness bug, not a pinch — check the inland vote (${vote.toFixed(1)}) and the row order.`);
       }
     }
