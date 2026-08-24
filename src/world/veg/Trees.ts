@@ -535,10 +535,10 @@ export class Trees {
     this._stamp = 0;
     /**
      * Milliseconds of *tile generation* one update may spend. See GrassField,
-     * which carries the measurement for the 4 -> 2 halving of all three
-     * streamers.
+     * which carries the measurement for both halvings of all three streamers:
+     * 4 -> 2 last round, 2 -> 1 this one.
      */
-    this.budgetMs = 2;
+    this.budgetMs = 1;
     this._unbounded = false;
 
     /**

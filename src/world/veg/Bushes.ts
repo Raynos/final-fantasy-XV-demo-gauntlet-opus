@@ -383,8 +383,8 @@ export class Bushes {
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;
-    /** See GrassField for the measurement behind the 2 -> 1 halving. */
-    this.budgetMs = 1;
+    /** See GrassField for the measurement behind both halvings, 2 -> 1 -> 0.5. */
+    this.budgetMs = 0.5;
     this.budget = Math.max(300, Math.round(2000 * quality));
     this.impRange = impRange;
     // 4 200 was sized to the 280 m ring and would have bound at 440 long before

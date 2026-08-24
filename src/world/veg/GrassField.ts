@@ -393,12 +393,23 @@ export class GrassField {
      * the corpus is fully filled whatever this says. Only live traversal
      * shows it.
      *
-     * The quarter budget is another 8 fps and is left on the table
-     * deliberately: 6% over budget is already not the binding constraint, and
-     * a later lane tuning grass density should re-measure rather than inherit
-     * a number tuned against a different density.
+     * **Halved again, 2 -> 1, and the same evidence says the same thing.**
+     * `src/tools/probes/perfvegbudget2.mts` toggles all three budgets at
+     * runtime inside one page and interleaves the arms A-B-B-A-A-B, because by
+     * this round the trunk had other lanes live on it and a before/after run of
+     * `gameplay.mts` would have been measuring their content and their load as
+     * much as this number. Halved: `streaming-traverse` 20.4 -> 17.9 ms,
+     * 49 -> 55.9 fps, over the *same* 7.84 -> 7.85 M resident triangles a
+     * frame. Under a 60 Hz budget the streamers finish the work either way;
+     * the budget only decides how much of it lands in one frame.
+     *
+     * The thing this is protecting against is a frame like the ones
+     * `gameplay.mts` hits when it teleports the player 660 m: real motion is
+     * nowhere near it. What is left on the table now is the eighth budget,
+     * which a later lane tuning grass *density* should re-measure rather than
+     * inherit, since every one of these numbers is tuned against a density.
      */
-    this.budgetMs = 2;
+    this.budgetMs = 1;
     this._primed = false;
     this._deadline = 0;
     this._stamp = 0;
