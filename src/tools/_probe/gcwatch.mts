@@ -52,7 +52,7 @@ async function main() {
   };
   try {
     await page.evaluate(([open, sprint]) => {
-      const g = window.GAME as any;
+      const g = window.GAME;
       g.applyShot('hud_field');
       g.get('CameraRig')?.clearShot?.();
       g.resetClock();
@@ -64,8 +64,9 @@ async function main() {
         hold(); for (let i = 0; i < 66; i++) g.frame(dt);
         hold('KeyW'); for (let i = 0; i < 126; i++) g.frame(dt);
         hold('KeyW', 'ShiftLeft'); for (let i = 0; i < 156; i++) g.frame(dt);
-        (window as any).__each = (i: number) => look(Math.sin(i * 0.06) * 22, Math.sin(i * 0.021) * 5);
-        for (let i = 0; i < 6; i++) { (window as any).__each(i); g.frame(dt); }
+        const w = window as unknown as { __each?: (i: number) => void };
+        w.__each = (i: number) => look(Math.sin(i * 0.06) * 22, Math.sin(i * 0.021) * 5);
+        for (let i = 0; i < 6; i++) { w.__each(i); g.frame(dt); }
       } else {
         for (let i = 0; i < 30; i++) g.frame(dt);
         if (open) { g.get('Menus').setScreen('main'); for (let i = 0; i < 40; i++) g.frame(dt); }
@@ -79,9 +80,9 @@ async function main() {
     let pm = await metrics();
     for (let i = 0; i < FRAMES; i++) {
       const ms = await page.evaluate((i2) => {
-        const g = window.GAME as any;
+        const g = window.GAME;
         const gl = g.renderer.getContext();
-        (window as any).__each?.(i2);
+        (window as unknown as { __each?: (i: number) => void }).__each?.(i2);
         gl.finish();
         const t0 = performance.now();
         g.frame(1 / 60);
