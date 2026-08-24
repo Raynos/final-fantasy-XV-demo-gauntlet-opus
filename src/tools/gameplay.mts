@@ -301,7 +301,11 @@ async function main() {
 
       const floorEnd = await measureFloor();
       if (start && player) player.root.position.copy(start);
-      return { results, floorStart, floorEnd, hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25) };
+      return {
+        results, floorStart, floorEnd,
+        rafStarved: window.__RULER.rafStarved(),
+        hitches: allHitches.sort((a, b) => b.ms - a.ms).slice(0, 25),
+      };
     }, [o.scale, o.hitchMs, o.pairs]);
   } finally {
     await leased.release();
@@ -345,6 +349,11 @@ async function main() {
     `of the median ${medianFrame.toFixed(1)} ms segment`,
   );
   console.log(`RULER_VALID: ${validity.valid}`);
+  // Pacing is part of the ruler now: a run whose rAF never fired was paced the
+  // starving way and its tail is the instrument's, not the game's.
+  if (out.rafStarved) {
+    console.log(`rAF starved on ${out.rafStarved} yields — this page was throttled; the tail below is suspect.`);
+  }
 
   if (out.hitches.length) {
     console.log('\nworst individual frames:');

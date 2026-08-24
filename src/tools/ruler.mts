@@ -274,12 +274,64 @@ export const RULER_PAGE_SRC = `(() => {
   const MAX_FRAMES_PER_TASK = 1;
 
   /**
-   * Return to the event loop. A macrotask, not a microtask: \`await null\`
-   * stays inside the same task and does not clear the throttle, which
-   * \`perfdepth.mts\` checked directly (25.9 ms with a bare await, 5.5 with a
-   * timer).
+   * Return to the event loop **and let the browser present a frame**.
+   *
+   * A macrotask, not a microtask: \`await null\` stays inside the same task
+   * and does not clear the throttle, which \`perfdepth.mts\` checked directly
+   * (25.9 ms with a bare await, 5.5 with a timer). But a macrotask is not
+   * enough either, and that is what \`setTimeout(0)\` got wrong for the whole
+   * life of this instrument.
+   *
+   * \`setTimeout(0)\` returns to the *task queue*. Chromium's rendering
+   * lifecycle -- style, layout, paint, and the composite that puts the WebGL
+   * canvas and the DOM over it on screen -- does not run from the task queue;
+   * it runs from a BeginFrame, and a loop that posts a new task the instant
+   * the previous one ends starves it. The work does not vanish, it batches:
+   * every tenth frame the compositor finally runs, the GPU process falls
+   * behind, and the next GL call in \`ScenePass\` blocks on a full command
+   * buffer -- *inside* the timed region.
+   *
+   * That is measured, not argued (\`src/tools/_probe/gcwatch.mts\`, which
+   * reads CDP \`Performance.getMetrics\` from outside the page): on a 312.6 ms
+   * frame the renderer main thread burns **10.9 ms** of \`ThreadTime\` and
+   * 10.8 ms of \`TaskDuration\`. The frame is blocked, not working. It is why
+   * every measurement here carried a 12-35% \`>16ms\` tail that no ablation
+   * could ever attribute to anything (\`LANDMINES.md\`, "still unexplained").
+   *
+   * \`requestAnimationFrame\` is the fix and it is also the honest pacing:
+   * \`Game.start()\` runs exactly one \`frame()\` per rAF, so this is the
+   * cadence the player's machine actually runs. Same shot, same page, minutes
+   * apart, only the yield changed (\`src/tools/probes/perfpace2.mts\`):
+   *
+   *     shot             yield   median    max    >16ms
+   *     storm            t0        9.50  689.9      34%
+   *     storm            raf       7.80   13.9       0%
+   *     zone_ravatogh    t0        8.00  197.2      25%
+   *     zone_ravatogh    raf       6.40   14.2       0%
+   *     party_walk       t0        6.70  172.3      23%
+   *     party_walk       raf       6.30   11.2       0%
+   *     town_npcs        t0       11.00   33.5      15%
+   *     town_npcs        raf      10.00   31.0      24%
+   *
+   * Read \`town_npcs\` before trusting the other three: it is the control.
+   * Its tail is real work, and rAF pacing leaves it exactly where it was. The
+   * medians barely move anywhere, and **wall-clock per iteration is the same
+   * either way** (30-51 ms for \`storm\` under both), so this buys the
+   * measurement no extra idle -- it only stops the browser's own work
+   * colliding with the timed region.
+   *
+   * The \`setTimeout\` beside it is a liveness backstop, not pacing: a hidden
+   * or backgrounded page throttles rAF to a crawl, and a gate that hangs is
+   * worse than a gate that is 4% slow. \`rafStarved\` counts how often it won,
+   * so a run that quietly fell back to the old behaviour says so.
    */
-  const yieldTask = () => new Promise((r) => setTimeout(r, 0));
+  let rafStarved = 0;
+  const yieldTask = () => new Promise((r) => {
+    let done = false;
+    const fire = (viaTimer) => { if (done) return; done = true; if (viaTimer) rafStarved++; r(); };
+    const id = setTimeout(() => fire(true), 60);
+    requestAnimationFrame(() => { clearTimeout(id); fire(false); });
+  });
 
   /**
    * Leave the throttled state before timing anything.
@@ -459,7 +511,8 @@ export const RULER_PAGE_SRC = `(() => {
     return { iqrMs: r.iqrMs, biasMs: r.medianMs, pairs: r.pairs };
   }
 
-  window.__RULER = { quantiles, timeOne, timeFrames, throughput, paired, noiseFloor, yieldTask, cooldown, MAX_FRAMES_PER_TASK };
+  window.__RULER = { quantiles, timeOne, timeFrames, throughput, paired, noiseFloor, yieldTask, cooldown, MAX_FRAMES_PER_TASK,
+    rafStarved: () => rafStarved };
   return true;
 })()`;
 
@@ -491,6 +544,12 @@ export interface PageRuler {
   yieldTask(): Promise<void>;
   /** idle long enough to leave the throttled state a `settle()` always enters */
   cooldown(ms?: number): Promise<void>;
+  /**
+   * How many `yieldTask` calls fell back to the 60 ms timer because rAF did
+   * not fire. Anything but 0 means the page was throttled and the run was
+   * paced the old, starving way; print it rather than hiding it.
+   */
+  rafStarved(): number;
   MAX_FRAMES_PER_TASK: number;
 }
 declare global {
