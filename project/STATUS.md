@@ -36,31 +36,29 @@ every rock's value** (near boulder luma 45.1 -> 78.9) — four judge rounds call
 that "dark smudges" — and **640 tube triangles per tree disagree with their own
 vertex normals**, which is most of why trunks read as posts in dirt.
 
-## The grade — round 12, 2026-08-24: **3.5/10**, 12 identified, 0 fooled
+## The grade — rounds 12/13/14: **3.5 -> 3.5 -> 3.0**, 12 identified every time
 
-**The instrument was validated first.** `--control` is an if/else that *replaces*
-the round, so it was run separately: 24 plate-vs-plate composites came back
-**0 HIGH / 21 LOW**, the judge saying unasked that it *"could not find a WebGL
-demo frame anywhere in this set"*. Round 11 then scored **3/10**; round 12, after
-the head, hair, cloud, seating and postfx work, scores **3.5** — and the judge
-says the half point is **entirely atmospheric**.
+The instrument was validated first and separately: 24 plate-vs-plate composites
+came back **0 HIGH / 21 LOW** with the judge saying unasked that it *"could not
+find a WebGL demo frame anywhere in this set"*. So the rounds below are evidence.
 
-Round 11's top five, re-graded by round 12:
+**Round 14 went DOWN, and the cause is the head.** Its verdict on the previous
+round's five: terrain silhouette **BETTER** (real multi-peak ridgelines and a
+drainage chute where there were cones), dusk ground material **BETTER**, one
+instance never rotated **UNCHANGED**, props with no site **UNCHANGED**, and the
+head **WORSE** — *"the chin projects further forward than the nose... no mouth
+geometry or mouth texture on the mouth's location."*
 
-| | verdict |
-|---|---|
-| characters have no faces | **still present, marginally better** — eyes and skin now, still no mouth in the close-up |
-| nobody chose where anything goes | **unchanged**, and now the most damaging cue after the cones |
-| the sky is a particle system | **partially better** — real cirrus banding and scattering in two frames |
-| one tiling texture per surface | **still present** |
-| terrain silhouettes are primitives | **still present, and now the single worst thing** |
+**The head's depth fix overshot.** `muzzleMm` 22.44 -> 6.46 is inside the
+adult-male norm and the frame reads as a beak, because pulling the mid-face back
+put the chin ahead of the nose. **No bench here asserts that nose projection
+must exceed chin projection** — that is the gap, and it is the third time on this
+head that a measurement agreed while the picture did not.
 
-Its costed one-point lever: *"break the horizon silhouette. Every wide shot fails
-at the same place — the skyline. That single change fixes cues 1 and 2, which
-between them appear in seven of the twelve demo panels, and it costs no rendering
-work."* `_peak` is rebuilt against exactly that (`spurs + strike + cliff bands +
-talus fan`; radial CV 0 -> **39-52%**, max/min up to **9.1**); the rock family and
-the head are in flight.
+Its own costed advice: *"Fix the head, and only the head. Nothing in the
+environment can buy a point while that frame exists."* Worth 3.0 -> 4.0. The
+second lever, worth ~0.5, is **slope-keyed materials — a cliff band and a talus
+fan on every landform** — and deleting the flat-blue skyline billboard.
 
 ## Gates — 15/16 on a quiet tree, 2026-08-24
 
@@ -84,24 +82,33 @@ not yet understood.
 regressions — see `LANDMINES.md`. **Check `daemon --health` uptime and run
 `cleanup.mts` before believing a leased-page gate.**
 
-## Perf — `perf` CERTIFIED and PASSING; `gameplay` FAILS
+## Perf — `perf` PASS; `gameplay` improved hugely but **not certifiable here**
 
-**`perf.mts` PASS on a quiet machine, `RULER_VALID: true`**: every shot >= 60 fps,
-mean **188.5 fps**, worst **66 fps** (`cine_hammerhead`), noise floor 17% of a
-5.6 ms median frame. That is the first certified pass in days, and it took
-**killing 96 orphaned vite servers holding 39.7 GB** that `cleanup.mts` could not
-see — see `LANDMINES.md`. Every voided run before it was measuring that.
+`perf.mts` **PASS**, `RULER_VALID: true`, mean **186-188 fps**, worst 66-74.
 
-**`gameplay.mts` FAILS**, and it is the primary perf gate: worst segment
-**streaming-traverse at 51.2 fps**, **17 hitches**, worst frame **168.9 ms**
-(`sprint+turn`) against `BRIEF.md`'s hard *"no frame may exceed 33 ms"*. The
-prior baseline was 92.2 fps and 2 hitches, so this is a real regression from a
-night of new streamed content — and `menu-open` appears **six times** in the
-worst-frame list, which is not streaming at all. A lane is on it.
+**The long-unexplained 12-35% frame-time tail was the ruler, not the game.**
+`ruler.yieldTask` was `setTimeout(r, 0)`, which returns to the *task queue*;
+Chromium's rendering lifecycle runs from a BeginFrame, so a loop that posts a new
+task the instant the last ends **starves the compositor**. Caught from outside
+the page over CDP: a **312.6 ms frame in which the main thread burned 10.9 ms** —
+blocked, not working. It was never GC. `yieldTask` awaits `requestAnimationFrame`
+now. `storm` 34% -> **0%** of frames over 16 ms, worst frame 689.9 -> **13.9 ms**;
+`menu-open` — the stall that survived **fourteen** ablations across two lanes —
+12 hitches / 85 ms -> **0 hitches / 18.3 ms**. `town_npcs` is the control and
+stays 15-24% under both pacings, so the fix buys no false idle.
 
-Cost tracks **draw calls** — ~8.7 us each, corr 0.801 against 0.628 for
-triangles; a new visible `InstancedMesh` costs **four**. Judged shots run
-**532-744 of 800**, so the budget is not the problem: **frame-time spikes are**.
+Plus: the three vegetation layers all re-gathered on the same teleport frame and
+now rotate — `Vegetation.update` **4.21 -> 1.46 ms**.
+
+**`gameplay.mts` cannot be certified on this machine**: a *second Claude session*
+is running gates on it, and the contention detector correctly voids every run.
+The best contention-proof measurement (interleaved A/B in one page) puts
+`streaming-traverse` at **67.3 fps** and total hitches at **4**, from 44-55 fps
+and 18-25. **The 33 ms rule is still breached** — `sprint+turn` 90-104 ms, a
+GPU-process stall when Hammerhead first draws.
+
+Also open: **ten town shots draw 924-1011 calls against BRIEF's budget of 800,
+and no gate checks it.**
 
 ## Still weak
 
