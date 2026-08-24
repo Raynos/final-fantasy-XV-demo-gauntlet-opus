@@ -237,7 +237,9 @@ export function brushes(look: Look): SculptBrush[] {
   // sulcus against an adult 4-6, i.e. the chin was there as mass and absent as
   // a feature.
   add({ p: [0, -0.0828, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
-  add({ p: [0, -0.1010, 0.0735], r: [0.032, 0.024, 0.040], amt: 0.0240 + 0.009 * jaw, dir: [0, 0.06, 1] });
+  // 0.0240 overshot: the chin came out 11.4 mm proud of its own mentolabial
+  // sulcus against an adult 4-6, and in three-quarter it read as a muzzle.
+  add({ p: [0, -0.1010, 0.0735], r: [0.032, 0.024, 0.040], amt: 0.0180 + 0.007 * jaw, dir: [0, 0.06, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
   add({ p: [0.0165, -0.0975, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
@@ -312,8 +314,8 @@ function profileW(yn: number) {
  * produced the barrel.
  */
 function jawTaper(yn: number) {
-  const t = clamp01((-yn - 0.08) / 0.80);
-  return 1 - 0.42 * t * t * (3 - 2 * t);
+  const t = clamp01((-yn - 0.10) / 0.78);
+  return 1 - 0.40 * t * t * (3 - 2 * t);
 }
 
 /** Un-sculpted skull surface point for a spherical coordinate. */

@@ -66,7 +66,11 @@ export function buildBody(rig: Rig, look: Look): THREE.BufferGeometry {
       { p: [0, y(1.458), -0.014 * s], rx: neckR * 1.14, rz: neckR * 1.14, w: [[I.spine03, 0.35], [I.neck, 0.65]] },
       { p: [0, y(1.500), -0.008 * s], rx: neckR * 0.99, rz: neckR * 1.04, w: [[I.neck, 0.72], [I.head, 0.28]] },
       { p: [0, y(1.542), -0.002 * s], rx: neckR * 0.92, rz: neckR * 0.98, w: [[I.neck, 0.2], [I.head, 0.8]] },
-      { p: [0, y(1.568), 0.002 * s], rx: neckR * 0.68, rz: neckR * 0.74, w: [[I.head, 1]] },
+      // The top ring plugs into the head and must stay *inside* it. `jawTaper`
+      // in `Face.ts` closed the skull down to an adult jaw — half-width 29 mm
+      // at this height where it used to be 49 — and at 0.68 this ring is 37 mm,
+      // so the neck came out through the sides of the jaw as a flare. 0.56.
+      { p: [0, y(1.568), 0.002 * s], rx: neckR * 0.56, rz: neckR * 0.68, w: [[I.head, 1]] },
     ],
     steps: 8, seg: 18,
     shape: (th, t) => 1
