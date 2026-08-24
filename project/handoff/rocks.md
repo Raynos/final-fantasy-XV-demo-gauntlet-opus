@@ -175,6 +175,14 @@ whole meshes and cannot separate three contributions on one material.
 | `q-2-no-vertexcolor` | **still present** |
 | `q-3-no-albedomap` | **gone completely** |
 
+Three recorded negatives, which is the part worth keeping: it is **not** the
+§3.6 `aRock` vertex-colour bake (the frame with `vertexColors` off still has it),
+**not** the normal map (the frame with `normalScale` zeroed still has it, and
+more strongly), and **not** the chamfer or any geometry (nothing about the mesh
+changed between the four frames). I would have guessed the bake, because it is
+what I had just written; the ablation says otherwise and that is the whole
+reason BRIEF.md asks for one.
+
 It is `rockMaterial`'s **albedo map**, and specifically its `crack` term:
 `PropMaterials.ts:54-58` builds `worley2(u * 7, v * 7)` and weights
 `min(1, (f2 - f1) * 2.6)` at **0.42** — a hard Worley cell boundary at seven
@@ -185,7 +193,10 @@ This lane's only lever on it is `uvScale`, the triplanar UV constant
 `splitNormals` bakes (`0.62`, i.e. one tile per 1.61 m of world, so a cell is
 0.23 m). Raising it makes the honeycomb finer so it reads as grain rather than
 as quilting, but the pattern is still a honeycomb — the real fix is in the
-material. **Requested of the materials lane**: either drop `crack`'s weight well
+material. **I did not land the `uvScale` change**: `1.9` is written and reverted
+in this branch's history and was never captured, and this repo's own landmine
+about `warp` at range ("raising it to break up big flat faces makes it worse")
+is exactly this shape of change. It needs a look, not a guess. **Requested of the materials lane**: either drop `crack`'s weight well
 below 0.42, or break the cell field with a second octave at a different
 frequency, or replace the hard `f2 - f1` ridge with something that is not a
 closed cell. A single-scale Worley ridge reads as scales at every scale.
@@ -231,7 +242,11 @@ closed cell. A single-scale Worley ridge reads as scales at every scale.
 
 ## What is left, ranked
 
-0. **UNVERIFIED AT THE TIME OF WRITING: the outcrop course-stacking change.**
+0. **VERIFIED SINCE: the outcrop course-stacking change** — `tmp/shots/rocks-r16`
+   `poi_haven` and `zone_callaegh` show the courses grounded and stepping, and
+   the caps-with-holes are gone from those two frames. It is still unseen at
+   range (`zone_three_valleys`, `zone_ostium_gorge`). Original note follows.
+   **What it was:**
    `zone_three_valleys` (`tmp/shots/rocks-r12`) showed four *caps with holes
    under them* — a course-1 block straddling the gap between two course-0
    blocks, because each course jittered its own position independently along
@@ -308,17 +323,38 @@ started after `544dc94` / `db61f11` (harness lane, deadline and CDP-port work).
 and not in frames. Whoever reads this: check `--health` before concluding that a
 capture failure is your own build.
 
-### The scatter wiring is landed but UNPHOTOGRAPHED
+### The scatter wiring — VERIFIED, `tmp/shots/rocks-r16`
 
-`654c4e7` replaces the entire boulder-field point process — `_genCell` no longer
-places anything itself, it reads `eco.rockScatter` and dispatches on
-`fromParent`. It typechecks, it builds, `scatterstat` scores it clustered in
-every zone, and **no frame of it has been read**: the shared daemon spent the
-last stretch of this session returning `socket hang up` on every request, across
-`--dirty` and `--build HEAD` alike, and `cleanup.mts` reports the tree clean, so
-it is not an orphan of mine. Whoever picks this up: capture `poi_haven`,
-`zone_callaegh`, `zone_three_valleys` and `hero_full` **first**, before anything
-else in this file. The specific risks, in order of how much they would cost:
+`poi_haven`, `zone_callaegh` and `hero_full` captured at `69829e7` after five
+failed attempts against the crash-looping daemon. Read, and:
+
+- **The tor floats are gone.** `poi_haven`'s right-edge column, which was
+  hovering clear of the plain in `mid-r1`, now meets the hillside.
+- **The field is not empty and not over-dense.** `zone_callaegh` carries a
+  corestone stack with a real apron of chips around it, and the distribution
+  reads as clusters with bare ground between rather than as an even sprinkle,
+  which is the whole point of the Matérn swap.
+- Draw calls `poi_haven` 624, `zone_callaegh` 662, `hero_full` 690 — inside the
+  800 budget, and no new `InstancedMesh` variant.
+
+**Does the same audit apply to the other two swaps the coordinator routed?**
+Checked, and no: `Bushes._makeTile:691` passes `this._clumpBias(x, z)` and
+`Trees` the same — the *clumping octaves only*, not a full density field. That
+is the correct thing and it is what `handoff/scatter.md` asked for; mine was the
+one call site that passed a whole second suitability field. So trees and scrub
+do not need this audit, and the reason is specific rather than a shrug.
+
+### What is still unphotographed
+
+**`zone_three_valleys`, `zone_longwythe`, `zone_vannath`, `zone_ostium_gorge`,
+`vista_noon` and `zone_taelpar` have NOT been captured since `6306fc6`** — that
+is the tor/outcrop re-statement, the scatter wiring and the density fix, three
+commits, unseen on six of the eight review shots. `floatcheck` has not run at
+all: every attempt returned `socket hang up`. Treat the tor proportions and the
+outcrop courses as **unverified at range**; they are verified only in
+`poi_haven`, `zone_callaegh` and `hero_full`.
+
+The specific risks the frames I do have would not show, in order of cost:
 
 - **Density — FOUND AND FIXED IN BARE NODE, `69829e7`.** The first wiring
   passed the whole of `_density` as `bias` and that stripped the boulder field
