@@ -105,8 +105,8 @@ export const FACE = {
   eye: [0.0335, -0.006, 0.0646],
   eyeR: 0.0107,
   brow: [0.031, 0.005, 0.081],
-  noseTip: [0, -0.046, 0.104],
-  mouth: [0, -0.079, 0.084],
+  noseTip: [0, -0.033, 0.104],
+  mouth: [0, -0.064, 0.084],
   chin: [0, -0.108, 0.074],
   ear: [0.0725, -0.026, -0.006],
   yMin: -0.122,
@@ -170,56 +170,90 @@ export function brushes(look: Look): SculptBrush[] {
 
   // cheeks
   add({ p: [0.059, -0.014, 0.056], r: [0.038, 0.024, 0.050], amt: 0.0115 + 0.007 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.050, -0.050, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0120 + 0.006 * cheek, dir: 'normal', mirror: true });
-  add({ p: [0.038, -0.062, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.0390, 0.052], r: [0.034, 0.030, 0.046], amt: -0.0120 + 0.006 * cheek, dir: 'normal', mirror: true });
+  add({ p: [0.038, -0.0480, 0.064], r: [0.018, 0.022, 0.032], amt: -0.0035, dir: 'normal', mirror: true });
 
-  // nose
-  add({ p: [0, -0.014, 0.089], r: [0.0175, 0.032, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
-  add({ p: [0, -0.042, 0.095], r: [0.0165, 0.019, 0.028], amt: 0.0205 + 0.005 * nose, dir: [0, 0.14, 1] });
-  add({ p: [0, -0.049, 0.098], r: [0.0115, 0.010, 0.020], amt: 0.0070, dir: [0, -0.2, 1] });
+  // Nose.
+  //
+  // **Measured defect (`headprop.mts`, commit 6d70f2a): the nose was a third
+  // too long and nearly twice as protruding, and that alone is what crushed the
+  // mouth and chin into the bottom of the face.** Against Farkas' adult-male
+  // means, all four heads read n-sn = 0.281 of head height (norm 0.211), the
+  // subnasale at 0.760 from the vertex (norm 0.688) and a tip standing 37 mm in
+  // front of the subnasale (male mean ~21). A nose that long with a base that
+  // low leaves sn-gn at 0.240 (norm 0.312) and sto-gn at 0.149 (norm 0.218) —
+  // which is exactly the "cranium enormous, features crammed into the bottom
+  // third" a blind judge scored as the worst frame in the game. The vault, the
+  // brow, the nasion and the eye line all measured correct and none of them
+  // moved: the whole nose is compressed 0.70x toward the eye line, its two long
+  // y radii with it, and the tip and subnasale amounts cut so the profile
+  // projects like a nose instead of a beak.
+  add({ p: [0, -0.0117, 0.089], r: [0.0175, 0.023, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
+  add({ p: [0, -0.0313, 0.095], r: [0.0165, 0.0140, 0.028], amt: 0.0135 + 0.004 * nose, dir: [0, 0.14, 1] });
+  add({ p: [0, -0.0362, 0.098], r: [0.0115, 0.0080, 0.020], amt: 0.0045, dir: [0, -0.2, 1] });
   // alar wings: a real ball of cartilage each side of the tip, and the crease
-  // that curls around it. Without these the nose is a triangular smear.
-  add({ p: [0.0155, -0.0495, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0115, dir: 'normal', mirror: true });
-  add({ p: [0.0225, -0.0505, 0.0790], r: [0.0055, 0.0090, 0.0140], amt: -0.0055, dir: 'normal', mirror: true });
-  add({ p: [0, -0.058, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0095, dir: [0, 0, 1] });
+  // that curls around it. Without these the nose is a triangular smear. Their
+  // radii are NOT scaled with the rest — at 5-11 mm they are already at the
+  // grid's resolution floor (`brushsurvive.mts`), and shrinking them is how the
+  // nostrils lost every vertex of support the last time round.
+  add({ p: [0.0155, -0.0365, 0.0855], r: [0.0105, 0.0110, 0.0195], amt: 0.0115, dir: 'normal', mirror: true });
+  add({ p: [0.0225, -0.0372, 0.0790], r: [0.0055, 0.0090, 0.0140], amt: -0.0055, dir: 'normal', mirror: true });
+  add({ p: [0, -0.0425, 0.087], r: [0.017, 0.010, 0.024], amt: -0.0072, dir: [0, 0, 1] });
   // nostril openings, cut upward into the underside of the nose
-  add({ p: [0.0092, -0.0562, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0090, dir: [0, 0.55, 1], mirror: true });
+  add({ p: [0.0092, -0.0412, 0.0885], r: [0.0052, 0.0058, 0.0125], amt: -0.0090, dir: [0, 0.55, 1], mirror: true });
 
   // mouth — the lips are volumes, not a painted line. Upper lip rolls forward
   // under a real philtrum; the lower lip carries a fuller, rounder mass with a
   // shadowed mentolabial crease beneath it.
-  add({ p: [0, -0.0630, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0060, dir: [0, 0, 1] });    // philtrum groove
-  add({ p: [0.0090, -0.0640, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0042, dir: [0, 0, 1], mirror: true }); // philtrum columns
-  add({ p: [0, -0.0735, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0115, dir: [0, 0.18, 1] });   // upper vermilion
-  add({ p: [0, -0.0700, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0038, dir: [0, 0, 1] });      // cupid's bow
-  add({ p: [0, -0.0788, 0.0850], r: [0.030, 0.0032, 0.026], amt: -0.0092, dir: [0, 0, 1] });     // mouth line
-  add({ p: [0, -0.0855, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0105, dir: [0, -0.10, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0790, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0070, dir: 'normal', mirror: true });
+  //
+  // The whole block moves **15 mm up** with the nose base above it. Placed off
+  // Farkas rather than off the old spacing: sn-sto is 22 mm on a 232 mm head
+  // (0.095 of head height), so with the subnasale at -0.0425 the mouth line
+  // lands at -0.0637, and sto-gn then comes out at the adult 0.218 instead of
+  // 0.149. Sizes are unchanged — the mouth was the right shape in the wrong
+  // place, and the mouth line is 3.2 mm tall against a 2 mm grid, which is the
+  // one radius here that has no room to shrink.
+  add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0060, dir: [0, 0, 1] });    // philtrum groove
+  add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0042, dir: [0, 0, 1], mirror: true }); // philtrum columns
+  add({ p: [0, -0.0595, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0115, dir: [0, 0.18, 1] });   // upper vermilion
+  add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0038, dir: [0, 0, 1] });      // cupid's bow
+  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0032, 0.026], amt: -0.0092, dir: [0, 0, 1] });     // mouth line
+  add({ p: [0, -0.0715, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0105, dir: [0, -0.10, 1] });  // lower vermilion
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0070, dir: 'normal', mirror: true });
 
-  // chin + jaw
-  add({ p: [0, -0.0945, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
-  add({ p: [0, -0.1075, 0.0735], r: [0.032, 0.026, 0.040], amt: 0.0200 + 0.009 * jaw, dir: [0, 0.06, 1] });
+  // Chin and jaw.
+  //
+  // With the mouth 15 mm higher there are now 48 mm between the mouth line and
+  // the menton where there were 33, which is the adult sto-gn of 0.218 of head
+  // height. The chin's own furniture is placed inside that on Farkas' means
+  // rather than scaled with it: the mentolabial sulcus at 0.866 of head height
+  // from the vertex and the chin's prominence at 0.935. The chin brush also
+  // stands 4 mm further forward — the pogonion measured **1.0 mm** proud of the
+  // sulcus against an adult 4-6, i.e. the chin was there as mass and absent as
+  // a feature.
+  add({ p: [0, -0.0828, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
+  add({ p: [0, -0.1010, 0.0735], r: [0.032, 0.024, 0.040], amt: 0.0240 + 0.009 * jaw, dir: [0, 0.06, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
-  add({ p: [0.0165, -0.1035, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
+  add({ p: [0.0165, -0.0975, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
-  add({ p: [0.064, -0.056, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.064, -0.0450, -0.004], r: [0.028, 0.034, 0.052], amt: 0.008 + 0.014 * jaw, dir: 'normal', mirror: true });
   // gonial angle — the corner where the ramus turns forward into the body of
   // the mandible. Without it the lower face is a rounded egg and the character
   // reads as a child no matter what the rest of the sculpt does.
-  add({ p: [0.0605, -0.0800, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.010 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.0575, -0.0915, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.054, -0.078, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0605, -0.0660, 0.0075], r: [0.0165, 0.0165, 0.026], amt: 0.0135 + 0.010 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0575, -0.0790, 0.0245], r: [0.020, 0.0130, 0.030], amt: 0.0068 + 0.008 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.054, -0.0640, 0.038], r: [0.034, 0.026, 0.054], amt: 0.004 + 0.008 * jaw, dir: 'normal', mirror: true });
   // Body of the mandible: the run from the gonial angle forward to the chin.
   // There was nothing here, so the lower face went straight from the jaw corner
   // to the chin point with a hollow between them and the profile lost its whole
   // lower third.
-  add({ p: [0.0400, -0.0975, 0.0500], r: [0.0280, 0.0140, 0.0300], amt: 0.0105 + 0.008 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.0400, -0.0870, 0.0500], r: [0.0280, 0.0140, 0.0300], amt: 0.0105 + 0.008 * jaw, dir: 'normal', mirror: true });
   // The undercut below the jawline. At r_z 0.062 centred on z = 0.030 it reached
   // z = 0.092 — past the chin — and took the mandible body out with it; it now
   // cuts behind and below the jaw only.
-  add({ p: [0.050, -0.1030, 0.0180], r: [0.046, 0.028, 0.0480], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
-  add({ p: [0.042, -0.036, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
+  add({ p: [0.050, -0.1000, 0.0180], r: [0.046, 0.028, 0.0480], amt: -0.021 + 0.005 * jaw, dir: 'normal', mirror: true });
+  add({ p: [0.042, -0.0270, 0.030], r: [0.030, 0.028, 0.040], amt: -0.003 - 0.004 * cheek, dir: 'normal', mirror: true });
 
   // neck tie-in — tuck the underside so the jawline reads as an edge
   add({ p: [0, -0.108, -0.030], r: [0.076, 0.042, 0.072], amt: -0.010, dir: 'normal' });
