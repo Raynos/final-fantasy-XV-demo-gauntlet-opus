@@ -77,9 +77,16 @@ export type RoadClass = 'highway' | 'road' | 'track' | 'trail';
 /**
  * One sample along a road edge, in arc length.
  *
- * `roadY` is the carriageway height the graph baked; `y` is the *terrain*
- * height at the sample, filled in lazily by {@link RoadFurniture._buildChunk}
- * because most chunks are never built.
+ * `roadY` is the carriageway height the graph baked.
+ *
+ * There used to be a `y` here as well -- the *terrain* height at the sample,
+ * filled in lazily by `_buildChunk` "because most chunks are never built". The
+ * last handoff logged it as suspected-dead-but-unverified; it is **verified
+ * dead**. Nothing in this file or any other read it: the only other `.y` in
+ * here is `RoadGraph`'s own sample type on one line and the guardrail's local
+ * `{x, z, y}` on two more, and those three are what made the grep look alive.
+ * It cost one `Ecology.height` call per sample per built chunk and returned
+ * nothing to anybody.
  */
 interface RoadSample {
   x: number;
@@ -90,7 +97,6 @@ interface RoadSample {
   tz: number;
   /** Arc length from the start of the route, metres. */
   s: number;
-  y?: number;
 }
 
 /** ~150 m of one road edge: everything needed to build it, and what was built. */
@@ -229,8 +235,6 @@ export class RoadFurniture {
   // ------------------------------------------------------------ chunk build
 
   _buildChunk(c: RoadChunk) {
-    const eco = this.eco;
-    for (const p of c.samples) if (p.y === undefined) p.y = eco.height(p.x, p.z);
     const cast = new PartBuilder();
     const flat = new PartBuilder();
     const trail = c.cls === 'trail';
