@@ -168,6 +168,36 @@ export class Props {
     return THREE.MathUtils.clamp(1 - (elev + 0.06) * 6.5, 0, 1);
   }
 
+  /**
+   * Finish every streamed prop layer where the camera is standing *now*.
+   *
+   * `Game.settle` calls this on any system that has it, one frame after
+   * `applyShot`, i.e. with the shot's camera in place — the same contract
+   * `Vegetation.converge` runs under. It exists so that no capture depends on
+   * a streaming budget: with it, {@link TileStream.budgetMs} may be tightened
+   * for live play without a posed frame moving a pixel, and without a
+   * wall-clock budget making a capture depend on how fast the machine was.
+   *
+   * It is deliberately *not* a visual change: at the shipped cell budgets a
+   * 30-frame settle already drained every backlog (12 cells x 30 frames
+   * against a ~145-cell disc), which is why the corpus is byte-stable across
+   * this commit. It is the guarantee that matters, not the fill.
+   */
+  converge() {
+    const p = this._camPos;
+    if (this.rocks) {
+      if (this.rocks.stream) this.rocks.stream.flush(p);
+      if (this.rocks.outcrops) this.rocks.outcrops.flush(p);
+      this.rocks.update(p);
+    }
+    if (this.debris) { this.debris.stream.flush(p); this.debris.update(p); }
+    if (this.wildlife) {
+      for (const g of [this.wildlife.birds, this.wildlife.herd, this.wildlife.waders]) {
+        if (g && g.stream) g.stream.flush(p);
+      }
+    }
+  }
+
   update(dt: number, game: Game) {
     const t = game.time.now;
     const night = this._night(game);

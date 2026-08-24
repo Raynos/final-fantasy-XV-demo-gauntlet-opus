@@ -555,7 +555,9 @@ export class Debris {
     this.stream = new TileStream({
       cell: this.cell, radius: this.radius,
       gen: (cx, cz, out) => this._genCell(cx, cz, out),
-      budget: 10,
+      // See the boulder stream in `Rocks.ts`: the count is the coarse cap and
+      // the millisecond budget is the one that bounds a frame.
+      budget: 10, budgetMs: 0.3,
     });
     const o = new THREE.Vector3();
     this.stream.flush(o);

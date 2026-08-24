@@ -1,4 +1,3 @@
-import type * as THREE from 'three';
 /**
  * Camera-relative scatter streaming.
  *
@@ -33,7 +32,28 @@ export class TileStream<T> {
   _pendCz!: number;
   /** Cells still queued to generate, nearest first, as `[cx, cz]`. */
   _pending!: [number, number][];
+  /** True only inside {@link TileStream.flush}: both budgets are then ignored. */
+  _unbounded!: boolean;
   budget!: number;
+  /**
+   * Wall-clock ceiling on one `update`, milliseconds; 0 disables it.
+   *
+   * **A cell count cannot bound a cost.** `budget: 12` was written when a rock
+   * cell was a jittered lattice at 0.1 ms; the Matern cluster sampler that
+   * replaced it costs 0.34 ms, so the same twelve cells went from 1.2 ms to
+   * 4.1 ms of frame without one number in the file changing. Measured on
+   * `streaming-traverse`: rock cell generation 0.77 -> 2.56 ms per frame across
+   * the identical 1368 cells (`src/tools/probes/perftile.mts`, run against the
+   * certified baseline with `--build`). A millisecond budget is the only kind
+   * that survives somebody making a cell dearer.
+   *
+   * The count stays as the *other* cap, because a budget of pure wall clock
+   * would let a machine having a good second generate a hundred cells and a
+   * capture depend on how fast the box was. Determinism is protected properly
+   * by {@link Props.converge}, which flushes every stream before a posed shot
+   * so no capture depends on either budget.
+   */
+  budgetMs!: number;
   cell!: number;
   dirty!: boolean;
   gen!: (cx: number, cz: number, out: T[]) => void;
@@ -41,14 +61,16 @@ export class TileStream<T> {
   /** Live cells, keyed by {@link TileStream.key}. */
   live!: Map<number, T[]>;
   radius!: number;
-  constructor({ cell, radius, gen, budget = 20, keep = 1.22 }: { cell: number, radius: number, gen: (cx: number, cz: number, out: T[]) => void, budget?: number, keep?: number }) {
+  constructor({ cell, radius, gen, budget = 20, budgetMs = 0, keep = 1.22 }: { cell: number, radius: number, gen: (cx: number, cz: number, out: T[]) => void, budget?: number, budgetMs?: number, keep?: number }) {
     this.cell = cell;
     this.radius = radius;
     this.gen = gen;
     this.budget = budget;
+    this.budgetMs = budgetMs;
     this.keep2 = (radius * keep) * (radius * keep);
     this.live = new Map();
     this.dirty = false;
+    this._unbounded = false;
     this._pending = [];
     this._pendCx = 0; this._pendCz = 0;
   }
@@ -99,6 +121,10 @@ export class TileStream<T> {
       }
     }
 
+    // Both caps, and the *first* one to bite wins. The deadline is read once,
+    // before any generation, and checked after each cell so at least one cell
+    // always lands: a stream that could never make progress would never fill.
+    const deadline = this._unbounded || !this.budgetMs ? Infinity : performance.now() + this.budgetMs;
     let made = 0;
     while (made < this.budget) {
       const next = this._pending.shift();
@@ -110,6 +136,7 @@ export class TileStream<T> {
       this.gen(gx, gz, out);
       this.live.set(k, out);
       made++; changed = true;
+      if (performance.now() > deadline) break;
     }
 
     if (changed) this.dirty = true;
@@ -119,11 +146,15 @@ export class TileStream<T> {
   /** True while cells are still queued — used to hold a shot until settled. */
   get settling() { return this._pending.length > 0; }
 
-  /** Drain the whole backlog now. Used once at build time. */
-  flush(camPos: THREE.Vector3, maxCells = 4000) {
+  /**
+   * Drain the whole backlog now. Used at build time and from
+   * {@link Props.converge}, which is what keeps a posed capture independent of
+   * either budget — and therefore of the machine.
+   */
+  flush(camPos: { x: number, z: number }, maxCells = 4000) {
     const b = this.budget;
     this.budget = maxCells;
-    this.update(camPos);
-    this.budget = b;
+    this._unbounded = true;
+    try { this.update(camPos); } finally { this.budget = b; this._unbounded = false; }
   }
 }
