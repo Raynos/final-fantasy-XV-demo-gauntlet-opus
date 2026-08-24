@@ -50,6 +50,24 @@ in this file.
   special: it is the nearest large surface in a portrait, and the same march
   over the terrain behind it steps a fraction of a pixel. `post.contact.stepPx`
   caps it. **Any new post pass that walks the depth buffer needs the same cap.**
+- **...and capping a march silently invalidates every constant that was authored
+  against its length.** The cap above traded the crosshatch for a lobed,
+  stair-stepped blob over the whole mid-face and neck — the loudest thing in the
+  worst-judged frame in the game for a round. Nothing was wrong with the cap.
+  `ContactShadowPass.thickness` = 0.45 m is not an independent number: it was
+  chosen against `length` = 0.50 m, i.e. "an occluder about as deep as the
+  distance I am willing to walk", and the cap cut the march to 0.045 m at
+  portrait range and left the window at **10x** it, so `diff < thick` stopped
+  rejecting anything and every ray that dipped behind the face reported a hit.
+  `thicknessTrack` scales the window by exactly the ratio the cap applied.
+  **When you clamp a length, go and find everything that was expressed as a
+  ratio of it.**
+- **The shape of an artefact is bad evidence about its cause.** That blob was
+  lobed and stair-stepped, which reads unmistakably as quantisation — `occ` can
+  only take 13 values with `CS_STEPS = 12`. It is not: hold the reach fixed and
+  treble the step count and the blob is identical. It was a *binary* region of
+  full occlusion with a jagged boundary, and jaggedness is what a hard threshold
+  on a smooth field looks like. Ablate the threshold, not the sampling.
 
 ## Terrain
 
