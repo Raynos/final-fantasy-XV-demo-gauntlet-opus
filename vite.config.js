@@ -14,21 +14,23 @@ import { reviewPlugin } from './src/tools/vite-plugin-review.mts';
  * this does not touch it.
  */
 function debugUrlPlugin() {
+  const patchPrintUrls = (server) => {
+    const print = server.printUrls.bind(server);
+    server.printUrls = () => {
+      const resolved = server.resolvedUrls;
+      if (resolved) {
+        for (const k of ['local', 'network']) {
+          if (resolved[k]) resolved[k] = resolved[k].map((u) => `${u}?debug=1`);
+        }
+      }
+      print();
+    };
+  };
   return {
     name: 'eos-debug-url',
     apply: 'serve',
-    configureServer(server) {
-      const print = server.printUrls.bind(server);
-      server.printUrls = () => {
-        const resolved = server.resolvedUrls;
-        if (resolved) {
-          for (const k of ['local', 'network']) {
-            if (resolved[k]) resolved[k] = resolved[k].map((u) => `${u}?debug=1`);
-          }
-        }
-        print();
-      };
-    },
+    configureServer: patchPrintUrls,
+    configurePreviewServer: patchPrintUrls,
   };
 }
 
@@ -45,6 +47,7 @@ export default defineConfig({
   publicDir: path.join(ROOT, 'src', 'public'),
   plugins: [bakePlugin(), reviewPlugin(), debugUrlPlugin()],
   server: { port: 5173, strictPort: true, host: '127.0.0.1' },
+  preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
   // outDir sits outside `root`, so emptyOutDir must be explicit.
   build: { target: 'esnext', sourcemap: false, outDir: path.join(ROOT, 'dist'), emptyOutDir: true },
 });
