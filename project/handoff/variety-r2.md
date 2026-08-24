@@ -139,7 +139,7 @@ a straight column against an egg, is what "clearly different, this narrow" is
 worth. The fin family's mean was 4.93 (half of it) and is now 17.10 (nearly
 twice it).
 
-### `d5e0e19` — archetype families
+### `7d51c82` — archetype families
 
 §3.7 asks for **families**, "not harder randomisation of one generator", and the
 difference is that every number in `TORS` is a *range* the tor draws once.
@@ -175,7 +175,7 @@ every number in this handoff is at `--seeds 24` and not the default 10** — at 
 the row-to-row resampling noise is the same size as the effect, and the first
 "all four families 10/10" reading was that noise.
 
-### `2c9d55c` — a tor is stated by its finished height
+### `130ae77` — a tor is stated by its finished height
 
 Two bugs of one genus: **a number that decided the result and was never named.**
 
@@ -197,7 +197,7 @@ Plus: the foot is buried against the **footprint**, not the height (a 20 m
 pinnacle on a 2 m base does not stand 6 m deep in soil), and the skirt is sized
 on the footprint for the same reason.
 
-### `1ba5c4a` — heights up, and a boulder cluster is one bed
+### `f449165` — heights up, and a boulder cluster is one bed
 
 The first height table was too low and `tmp/shots/vr2-r3/zone_longwythe.jpg` went
 bare in the near and middle ground — `BRIEF.md` asks for "distant rock spires"
@@ -211,7 +211,7 @@ salad"). 72% of children now take a draw hashed on the *parent's* position.
 Arithmetic on Longwythe's own table: P(two anchors in a cluster share a kind)
 was `sum(w^2)` = **0.210**, is now `.72² + (1-.72²)·0.210` = **0.619**.
 
-### `f0dcb9f` — a course must be *supported*
+### `39516e4` + `a1b1cd4` — a course must be *supported*
 
 `tmp/crop/vr2/r4-a.png` and `r5-a.png`: a table rock with a wide cap and a black
 undercut. It is the shape `handoff/rocks.md` records from `_genOutcrop` as
@@ -254,8 +254,8 @@ course 0 on a 0.38 overlap.
   in `parseArgs`.
 - `src/world/props/ZoneDress.ts` — **not edited.**
 
-Commits `9e4cf00`, `d5e0e19`, `d30e2aa`, `2c9d55c`, `1ba5c4a`, `f0dcb9f`, plus
-the tidy-up at HEAD.
+Commits `9e4cf00`, `7d51c82`, `130ae77`, `d30e2aa`, `f449165`, `39516e4`,
+`a1b1cd4`, `1ff7a44`.
 
 ## Shots
 
@@ -264,7 +264,7 @@ the tidy-up at HEAD.
 | `tmp/shots/peak-B/zone_longwythe.png` | **before**, the frame the judge saw |
 | `tmp/crop/vr2/tor-a.png`, `tor-b.png` | 4x/5x crops of it — the argument. `tor-b` is three near-identical vertical eggs stacked concentrically |
 | `tmp/shots/vr2-r1` | archetype families, before the height restatement |
-| `tmp/crop/vr2/r1-a.png` | the 30 m totem — why `2c9d55c` exists |
+| `tmp/crop/vr2/r1-a.png` | the 30 m totem — why `130ae77` exists |
 | `tmp/shots/vr2-r3`, `vr2-r4` | the plain after the height restatement, and after raising it again |
 | `tmp/crop/vr2/r4-a.png`, `r5-a.png`, `r6-a.png` | the same 300x110 patch of mid-ground through the support-rule fix |
 | `tmp/shots/vr2-r7` | **after**, all five judge shots at HEAD |
