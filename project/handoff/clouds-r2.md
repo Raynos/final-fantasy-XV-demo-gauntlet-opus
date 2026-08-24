@@ -24,11 +24,12 @@ The coverage field's blob-size distribution, labelled off the 512² weather map
 with the shader's own `cloudWeather` maths (`smoothstep(covLo, covHi, w.r) *
 (0.48 + 0.98 * w.b)`, then `* uCloudCoverage`):
 
-| equivalent diameter, m | p10 | p25 | p50 | p75 | p90 | max |
-|---|---|---|---|---|---|---|
-| clear preset, 62 blobs | 222 | 341 | 561 | 1143 | 1939 | 3516 |
+| covLo/covHi | p10 | p25 | p50 | p75 | p90 | max | p90/p10 |
+|---|---|---|---|---|---|---|---|
+| 0.54 / 1.02 *(as judged)* | 222 | 341 | 561 | 1143 | 1939 | 3516 | **8.7x** |
+| 0.42 / 0.92 *(shipped)* | 168 | 314 | 856 | 1487 | 3041 | 5867 | **18.1x** |
 
-p90/p10 = **8.7x**, p75/p25 = 3.3x. On the rendered frame, connected components
+p90/p10 = 8.7x as judged, p75/p25 = 3.3x. On the rendered frame, connected components
 of the cloud mask (an ablated `?post=noclouds` frame supplies the mask) span
 p90/p10 of **6.1x** (`vista_noon`), **8.2x** (`zone_three_valleys`) and
 **12.8x** (`zone_longwythe`). That is a broad heavy-tailed size field, not a
@@ -36,6 +37,15 @@ unimodal one. **Do not add octaves to the coverage map.**
 
 Peak *coverage* per blob spans only 1.85x, which is the half of the claim that
 is true — and it is not a size problem, see §3.
+
+**What was true, and is fixed, is that the median cloud was too small.** 561 m
+against FFXV's 1.2–2.4 km, with the *spread* already right. That is what a
+threshold does to a smooth field: cut a near-Gaussian fbm high enough and the
+surviving islands are much smaller than its wavelength, roundish because the
+level set of a smooth field is, and similar to each other because they are all
+cut at the same height. `covLo` 0.54 was that height; at 0.42 the median goes
+to 856 m, the top decile to 3.0 km, and neighbouring islands merge into banks.
+`coverage` 0.34 → 0.30 pays for the area.
 
 ### 2. "distributed at even spacing" — FALSE
 
@@ -132,6 +142,17 @@ tile, so the patches are ~640 m where the clouds are 2.25 km. That is
 | commit | what |
 |---|---|
 | `cf601ca` | `uAmbBury`, `baseSag` 0.10 → 0.28 (+ the march slab widened to match), `cloudHaze` 0.0000290 → 0.000085 |
+| `06eed03` | `uCloudMaxRad` 3.2 → 9.5, and this handoff |
+| `e37601e` | `covLo`/`covHi` 0.54/1.02 → 0.42/0.92, `coverage` 0.34 → 0.30 |
+
+`uCloudMaxRad` is a soft knee, `sunL *= m/(m+pk)`, so it bounds the peak **and**
+compresses the gradient below it by `m²/(m+pk)²`. At 3.2 with the deck's lit
+faces at `pk ≈ 3` that derivative is **0.27** — three quarters of the
+crown-to-body gradient thrown away, and the result still over white, so the
+tonemap threw away the rest. The atmosphere lane recorded *lowering* this as a
+measured negative ("dull grey smoke") and that was correct on the tree as it
+then was. Raising it was never tried, because until the cloud stopped clipping
+there was nothing to raise it into.
 
 `baseSag` is the per-column vertical displacement of the whole profile and the
 only thing in this model that puts one cloud at a different **altitude** from
@@ -162,15 +183,70 @@ over a sky of `#5ea0c9`.
 `imagestats` medians over the three daylight shots, delta from the 53-plate
 `FFXV` corpus:
 
-| | baseline | shipped | FFXV |
-|---|---|---|---|
-| `R-B` | −7.6 | −10.5 | −10.0 |
-| `hi(R-B)` | −15.1 | −18.0 | −19.8 |
-| `hi230%` | 4.50 | 1.80 | 2.92 |
-| `p99.9` | 251.0 | 242.4 | 252.5 |
-| `stops` | 9.52 | 9.41 | 10.08 |
+| | baseline | after `cf601ca` | shipped | FFXV |
+|---|---|---|---|---|
+| `R-B` | −7.6 | −11.4 | −7.2 | −10.0 |
+| `hi(R-B)` | −15.1 | −20.4 | **−5.7** | −19.8 |
+| `hi230%` | 4.50 | 0.73 | 2.76 | 2.92 |
+| `p99.9` | 251.0 | 226.6 | 247.9 | 252.5 |
+| `stops` | 9.52 | 9.07 | 9.47 | 10.08 |
+
+**`hi(R-B)` is the one number that ends up worse, and it is one shot.**
+`zone_longwythe` and `zone_three_valleys` are unmoved (−0.3 and −22.3);
+`vista_noon` goes −17.0 → −5.7 because its bright quartile is now almost
+entirely cloud and **7.7% of it clips**, so the grade's warm `highTint` is
+painting hue that the tonemap's shoulder invented. That is an exposure
+question, not a colour one, and it is the top of the next lane's list.
 
 ---
+
+## Measured negatives, first class
+
+1. **"Fewer, varied" by raising the threshold makes them fewer and *thinner*.**
+   The obvious reading of the judge's own recommendation. `coverage` 0.34 →
+   0.52 with `covLo` 0.54 → 0.66 empties the mid columns and takes the skirt
+   off the survivors: the field goes sparse and weak and the frame is clearly
+   worse than what it replaced. `tmp/shots/cl2-H/zone_three_valleys.jpg`.
+   Lowering the threshold is what merges islands into banks.
+2. **Cutting `uAmbientBoost` restores the modelling and costs the colour.**
+   4.00 → 1.60 gives back the lobes and the shadowed flank — it was the
+   experiment that isolated the ambient as the flattener — but the shadow side
+   comes out warm-grey rather than blue, because the blue *is* the ambient.
+   `tmp/c-B.png`. Occluding the fill gets both; cutting it does not.
+3. **Cutting `uCloudSunGain` barely moves the clipping.** 0.26 → 0.155, a 40%
+   cut, took raw cloud clip% from 43.7 to only 35.4 on `vista_noon`, because
+   `uCloudMaxRad`'s knee was pinning the output near its own asymptote. A lever
+   whose response is that sublinear is the wrong lever; the knee was.
+   `tmp/c-A-noon.png`.
+4. **The judge's "they do not shadow the ground" is false** — see the table
+   above. Worth restating because it is the kind of claim that gets fixed by
+   adding a second shadow system to a working one.
+
+## Open, in the order I would take them
+
+1. **`vista_noon` clips 7.7% of its bright quartile and its `hi(R-B)` is
+   −5.7 against a reference −19.8.** Every other daylight shot is fine. It is
+   an auto-exposure interaction: that frame is mountain-dominated and dark, so
+   exposure lifts and the sky goes with it. Do not chase it with the cloud
+   colour.
+2. **`daycycle_dawn`'s clouds now read magenta** where the baseline's read
+   orange-red. Burying the ambient removes the blue that was desaturating them
+   at low sun, and at dawn the sun tint is extreme. Checked at dusk (fine, both
+   `vista_dusk` and `daycycle_dusk` are the best frames in the set); dawn is
+   the one hour where the trade shows. `tmp/shots/cl2-r4/daycycle_dawn.jpg`
+   against `tmp/shots/cl2-base/daycycle_dawn.jpg`.
+3. **`zone_fallgrove` still reads as an even scatter.** It is the shot whose
+   camera looks along the layer at the shallowest angle, so it sees the whole
+   deck edge-on and every cloud at a similar range. A second, higher, thinner
+   sheet — the judge's actual recommendation — would be the fix, and it is a
+   second march, not a tuning change.
+4. **Everything `clouds.md` left open is still open**, in particular why TAA is
+   not accumulating the cloud buffer (its item 1, and still the largest free
+   win in this lane) and the ground shadow patch size (its item 2).
+5. Only the `clear` preset was retuned. `overcast`, `storm` and `fog` carry
+   their own `covLo`/`covHi`/`coverage`/`cloudHaze` and were checked by eye
+   (`vista_overcast` keeps its ribbed lid, `storm` its silhouette, `vista_fog`
+   is now a dramatic broken deck) but **not** retuned.
 
 ## Instruments added
 
