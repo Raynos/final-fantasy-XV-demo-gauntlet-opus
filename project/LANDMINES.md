@@ -725,3 +725,100 @@ Two corollaries people get wrong here:
 - **Four browsers buy 1.5× the throughput of one.** Parallelism is nearly
   worthless; not re-booting is worth 4×. Every trade-off should protect boot
   reuse over concurrency.
+
+## The unexplained 12-35% frame-time tail was `setTimeout(0)`, not the game
+
+**This section replaces the "Still unexplained" paragraph at the end of "The
+measurement trap that cost this project every perf number it ever had".** The
+paragraph is correct about every fact it states and wrong about the conclusion,
+which is that nobody had separated our part from the harness's. It is all the
+harness's.
+
+`ruler.yieldTask` was `setTimeout(r, 0)`. That returns to the **task queue**.
+Chromium's rendering lifecycle — style, layout, paint, and the composite that
+puts the WebGL canvas and any DOM over it on screen — does not run from the task
+queue; it runs from a BeginFrame. A loop that posts a new task the instant the
+previous one ends starves it. The work batches, the GPU process falls behind,
+and **the next GL call inside `ScenePass` blocks on a full command buffer, inside
+the timed region**. That is why it read as "pure CPU inside `post.render`" to
+every profiler pointed at it, why it landed on whichever composer pass happened
+to be executing, and why turning off any single pass moved it a little — all of
+which are properties of a queue, not of a cause.
+
+The measurement that settles it reads the heap and the thread from **outside**
+the page, because `performance.memory` is frozen headless
+(`src/tools/_probe/gcwatch.mts`, CDP `Runtime.getHeapUsage` +
+`Performance.getMetrics`):
+
+| frame | wall ms | ThreadTime | TaskDuration |
+|---|---|---|---|
+| 8 | 4.0 | 5.1 | 5.0 |
+| **9** | **312.6** | **10.9** | **10.8** |
+| 10 | 20.1 | 6.6 | 6.5 |
+
+**A 312.6 ms frame in which the main thread burned 10.9 ms.** It is blocked, not
+working. The spikes are exactly every ten frames; 50 ms of real idle per frame
+removes every one of them; and it is **not GC** — the heap grows a flat
++0.65 MB/frame and drops 25 MB every ~39 frames, on frames the spikes are not on.
+
+`yieldTask` now awaits `requestAnimationFrame`, which is what `Game.start()`
+does. `town_npcs` is the control that proves this is not leniency: its `>16ms`
+share is real work and stays at 15-24% under both pacings, while `storm` goes
+34% → 0% and its worst frame 689.9 → 13.9 ms. Wall-clock per iteration is the
+same either way, so the change buys the measurement no idle.
+
+Consequences for reading old evidence:
+
+- **Every `>16ms` column and every worst-frame list printed before 2026-08-24 is
+  mostly this.** Not the medians — those barely moved.
+- `perf.mts`'s corpus `FAIL: storm at 51 fps` against 7 ms per-shot is explained:
+  a shot with a 34% tail has its median at the tail's edge, and load tips it in.
+- The `menu-open` stall that survived **fourteen** ablations across two lanes was
+  this. Nothing in the game caused it and nothing in the game fixed it.
+- A probe that times rendering must yield with rAF, not `setTimeout`. Several
+  probes in `src/tools/probes/` still do not; their tails are not evidence.
+
+## `contention()` cannot see a co-agent on a shared trunk
+
+Two consecutive perf lanes were briefed "the machine is yours and it is quiet",
+both printed `VERDICT: quiet`, and both measured through other lanes committing
+every few minutes. `idle` moved 6.4 → 9.1 ms and `walk` 6.3 → 11.8 ms between
+two runs with nothing touched that either could depend on.
+
+Its `trees` check greps process arguments for `worktrees/agent-*`. **Every lane
+on this repository works on one shared trunk**, so it finds nothing, always. The
+other two triggers are just as blind: one browser looks like one browser whoever
+owns it, and `load1 > cores * 0.7` is **12.6** on this eighteen-core box, which a
+single co-agent never reaches.
+
+Two triggers were added — a `vite build` count (the pre-commit hook runs one on
+every commit by every lane, and `withExclusive` cannot queue it because it never
+asks the daemon for anything) and other lanes' harness tools by name. The verdict
+now names which fired. **Do not brief a perf lane that the machine is quiet
+without running `printContention` first.**
+
+## A probe that calls `Game.start()` can poison every later measurement
+
+`Game.start()`'s loop is
+
+```js
+const loop = () => { this._raf = requestAnimationFrame(loop); this.frame(); };
+```
+
+It never checks `_running`, and `stop()` only cancels the one callback sitting in
+`_raf`. Any path that starts the loop twice leaves an orphan chaining forever —
+and **the daemon pools the page**, so the next tool handed it inherits a browser
+burning a core on a game loop nobody asked for.
+
+Seen 2026-08-24: one `chrome-headless-shell` at **105.8% CPU with nothing
+running**, and three `gameplay.mts` runs 40% worse before anyone looked. The tell
+is a headless chromium with high `%cpu` between runs; the cure is
+`node src/tools/daemon.mts --stop`, which the next tool re-spawns.
+
+## `anycheck` reads directories the typechecker does not
+
+`tsconfig.tools.json` excludes `src/tools/_probe/**`, `src/tools/_reach/**`,
+`src/tools/probes/**` and `src/tools/typemods/**`. `anycheck` greps text and
+excludes none of them, and its ceiling is **zero**. Five `as any` in a throwaway
+Node-side probe took `pnpm run check` from 17/17 to 16/17 with `tsc` perfectly
+happy.
