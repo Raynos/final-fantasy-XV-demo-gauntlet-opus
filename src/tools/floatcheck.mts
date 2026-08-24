@@ -27,7 +27,22 @@
  * the whole settlement is on stilts. That is the bug that has shipped here —
  * `handoff/modeling.md` records a `Math.min` over eight seat probes that put the
  * entire mesa compound *inside* the ridge, the same failure with the sign
- * flipped. The buried half is gated too, at `MAX_SINK` of the compound's height.
+ * flipped.
+ *
+ * **Read the compound rule before you read a number off it.** `float` is
+ * `min over MESHES of max(0, min over that mesh's support points of the gap)`.
+ * It is not any one piece's clearance — it is whichever merged mesh currently
+ * comes closest to the earth. Push the piece the report names down past the
+ * next mesh and **the printed figure goes UP**, to that next mesh's gap, which
+ * looks exactly like a sign inversion and is not one. That cost the town lane a
+ * round on `keycatrich_ruins`: 0.15 m became 0.75 m under a 0.9 m bedding.
+ * `project/handoff/seating.md` §1 has the reproduction.
+ *
+ * **1b. No POI compound is buried.** Its DECK — `_make`'s
+ * `g.position.set(p.x, base, p.z)`, the plane every kit builds relative to —
+ * must not be under the drawn ground by more than `MAX_SINK` of how tall the
+ * compound stands. See {@link deckBuried} in the page body for the two earlier
+ * versions of this rule and why both were measuring the graded apron.
  *
  * **2. No placed instance floats.** `Rocks` and `Debris` are real
  * `InstancedMesh`es with real per-instance matrices, and a rock is *always*
@@ -42,10 +57,15 @@
  *     measurement. Per-mesh floats are printed as a *diagnostic*, never gated,
  *     and a lane reading them has to know which of its pieces is cantilevered.
  *     Gating those would be a check that cries wolf, which is worse than none.
- *   - **`PoiKits._base` floats on purpose.** It seats a compound at the ring
- *     *average* rather than its minimum, so a deck on a hillside is proud on
- *     the downhill side by design and `_apron` covers the gap. So a compound
- *     passes as soon as *something* in it reaches the ground.
+ *   - **`PoiKits._base` floats on purpose.** It seats a padded compound at its
+ *     footprint's 88th percentile rather than its minimum, so a deck on a
+ *     hillside is proud on the downhill side by design and `_apron` covers the
+ *     gap. So a compound passes as soon as *something* in it reaches the
+ *     ground. (Kits with no apron — the waymarks — are seated on the finest
+ *     ring instead; `PoiKits.BARE_SEAT_R` says why.)
+ *   - **One piece sunk under a deck that is right.** The burial gate is on the
+ *     deck, so a hut on the far side of a big pad standing in a hummock is
+ *     reported per-mesh and not gated. Gating it would gate every apron.
  *   - **Streaming.** Rocks and debris exist only near the camera, so gate 2
  *     covers the tiles live at spawn, and the count is printed so a run that
  *     measured nothing cannot be read as a run that passed.
@@ -60,9 +80,13 @@
  *   known-floating   a POI's own geometry lifted 2.0 m. Must read 2.0 m float.
  *   known-seated     the same geometry dropped onto `seatY` at its own cull
  *                    distance. Must read zero float.
+ *   known-burial     a POI that is NOT buried, sunk to a quarter metre either
+ *                    side of the depth its own rule says must flip it. Must
+ *                    read clear then buried, in that order.
  *
- * If the lifted case does not come back as floating, the instrument is broken
- * and the run is VOID rather than a pass.
+ * If either case does not come back with the answer that is known in advance,
+ * the instrument is broken and the run is VOID rather than a pass. The burial
+ * gate went two rounds with no calibration at all and was wrong for both.
  */
 import { harnessArgs, announceBuild, lease, pageOpts } from './harness.mts';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -152,7 +176,11 @@ const out = await page.evaluate(async (cfg: { at: number[] | null }) => {
     isInstancedMesh?: boolean;
     count?: number;
     name?: string;
-    geometry?: { attributes: { position?: { array: ArrayLike<number> } } };
+    geometry?: {
+      attributes: { position?: { array: ArrayLike<number> } };
+      boundingBox?: { max: { y: number } } | null;
+      computeBoundingBox?: () => void;
+    };
     instanceMatrix?: { array: ArrayLike<number> };
     matrixWorld: { elements: number[] };
     updateMatrixWorld: (force: boolean) => void;
@@ -233,16 +261,61 @@ const out = await page.evaluate(async (cfg: { at: number[] | null }) => {
   interface PoiRow {
     id: string; type: string; x: number; z: number;
     float: number; meshes: number;
-    /** The tallest mesh in the compound -- the main structure, not the apron. */
+    /** Deck plane, ground under the seat point, and the compound's own top. */
+    deck: number; ground: number; stands: number; deckSink: number;
+    /** Diagnostic only now: the tallest mesh, and its own sink. See below. */
     mainHeight: number; mainSink: number; mainFloat: number;
     proudMeshes: number; worstMeshFloat: number; planeResidual: number;
   }
+  /**
+   * How deep the DECK may be under the drawn ground before the place is buried.
+   *
+   * ## Why this is not the tallest mesh's sink any more
+   *
+   * It was, and that was an instrument measuring the one thing this file's own
+   * docstring calls out as deliberately underground. The first version paired
+   * the compound's worst sink with its tallest mesh's height and flagged 92 of
+   * 113 POIs; the second judged the tallest mesh against its own height, which
+   * is only an improvement while the apron is a thin plate. `Wear.gradePad`
+   * lets an earthwork's toe plunge `max(6, r/2)` metres under the deck, so on
+   * anything bigger than a haven **the apron IS the tallest mesh**, and the
+   * check went straight back to reporting on it. Measured at `a2a7dbe`:
+   * `formouth` was called '17.59 m into the ground' -- that is its pad; its
+   * walls are 0.00 to 0.59 m under. Twelve of the fifteen were that.
+   *
+   * The version after the waymark seating landed made it undeniable. Every one
+   * of the 23 landmarks then had its deck **exactly on the drawn ground**
+   * (`ground - deck` = 0.00), and this rule still called `longwythe_peak`
+   * '22.50 m into the ground', because five field boulders seated on a steep
+   * slope 8 m away stretched the merged mesh's bounding box. It was measuring
+   * geometric SPREAD, not burial.
+   *
+   * ## What it measures now
+   *
+   * Every kit builds relative to one plane: `_make` does
+   * `g.position.set(p.x, base, p.z)` and the kit's local y = 0 is that deck. So
+   * the deck is the compound's declared idea of where the ground is, it does
+   * not move when a mesh's geometry reaches further down, and "this place is
+   * inside the hill" is exactly *the drawn ground is above the deck*. Judged
+   * against how tall the compound stands, because a 22 m fort swallowed to its
+   * eaves and a 4 m waymark swallowed to its cap are the same defect.
+   *
+   * **Blind to** a single mesh that is individually sunk while the deck is
+   * right -- a hut on the far side of a big pad, a fence post in a hummock.
+   * Those stay in the per-mesh diagnostic below, deliberately ungated, for the
+   * same reason the proud-mesh list is: a check that cannot tell a cellar from
+   * a mistake should report, not gate.
+   */
+  const deckBuried = (r: { deckSink: number, stands: number }) => (
+    r.stands > 1e-6 && r.deckSink > seat.MAX_SINK * r.stands
+  );
   const pois: PoiRow[] = [];
   for (const b of pk.built) {
     b.group.updateMatrixWorld(true);
     let compoundFloat = Infinity;
     let mainHeight = 0, mainSink = 0, mainFloat = 0;
     let meshes = 0, proudMeshes = 0, worstMeshFloat = 0;
+    let top = -Infinity;
     b.group.traverse((node) => {
       const o = node as unknown as MeshLike;
       if (!o.isMesh || !o.geometry) return;
@@ -252,22 +325,45 @@ const out = await page.evaluate(async (cfg: { at: number[] | null }) => {
       meshes++;
       if (p.float < compoundFloat) compoundFloat = p.float;
       if (p.float > 0.05) { proudMeshes++; worstMeshFloat = Math.max(worstMeshFloat, p.float); }
-      // The burial test is on the TALLEST mesh and against ITS OWN height.
-      // The first version took the max sink and the max height across the
-      // compound and paired them, which flagged 92 of 113 POIs -- because a
-      // POI's graded apron is a thin plate that is MEANT to be metres into the
-      // ground, and pairing its sink with the main hall's height reads every
-      // correctly-built settlement as buried. An instrument measuring itself.
       if (p.height > mainHeight) { mainHeight = p.height; mainSink = p.sink; mainFloat = p.float; }
+      // The compound's highest point, in world Y. Local bbox plus the mesh's
+      // own translation: every POI mesh is axis-aligned under its group, and a
+      // full 8-corner transform would only cost time to give the same number.
+      o.geometry!.computeBoundingBox!();
+      const bb = o.geometry!.boundingBox!;
+      const t = bb.max.y + o.matrixWorld.elements[13];
+      if (t > top) top = t;
     });
     if (!meshes) continue;
     const plane = seat.seatPlane(eco, b.poi.x, b.poi.z, b.radius || 20, b.draw || 900);
+    const deck = b.group.position.y;
+    const ground = terrain.drawnHeightAt(b.poi.x, b.poi.z, cell0);
     pois.push({
       id: b.poi.id, type: b.poi.type, x: Math.round(b.poi.x), z: Math.round(b.poi.z),
       float: compoundFloat === Infinity ? 0 : compoundFloat,
+      deck, ground, stands: top - deck, deckSink: ground - deck,
       mainHeight, mainSink, mainFloat, meshes, proudMeshes, worstMeshFloat,
       planeResidual: plane.residual,
     });
+  }
+
+  /* ------------------------------------ calibration for the BURIAL gate too */
+  // The float gate has had a known-answer calibration since its first run and
+  // the burial gate had none, which is how it stayed wrong for two rounds. So:
+  // take a real POI, work out the exact depth `d*` at which the rule must
+  // change its mind -- `d* = MAX_SINK * stands - deckSink` -- and sink the
+  // compound by a quarter metre either side of it. If the rule does not flip
+  // there, its arithmetic is not what this file says it is.
+  const bcal = { subject: 'none', dStar: 0, shallowBuried: true, deepBuried: false, ok: false };
+  const cal0 = pois.find((p) => p.stands > 2 && !deckBuried(p));
+  if (cal0) {
+    const dStar = seat.MAX_SINK * cal0.stands - cal0.deckSink;
+    const at = (d: number) => deckBuried({ stands: cal0.stands, deckSink: cal0.deckSink + d });
+    bcal.subject = cal0.id;
+    bcal.dStar = dStar;
+    bcal.shallowBuried = at(dStar - 0.25);
+    bcal.deepBuried = at(dStar + 0.25);
+    bcal.ok = !bcal.shallowBuried && bcal.deepBuried;
   }
 
   /* --------------------------------------------- 2. real per-instance placement */
@@ -336,7 +432,7 @@ const out = await page.evaluate(async (cfg: { at: number[] | null }) => {
   }
 
   return {
-    calib, builtNow, poiSites: pk.sites.length, pois, insts,
+    calib, bcal, builtNow, poiSites: pk.sites.length, pois, insts,
     instTotal, instMeshes, cell0, maxSink: seat.MAX_SINK, settles,
     at: cfg.at,
   };
@@ -358,17 +454,38 @@ if (!out.calib.ok) {
   console.log('\nVOID: the instrument did not reproduce a known lift. Nothing below means anything.');
   process.exit(2);
 }
+console.log(`  known-burial     ${out.bcal.subject}, whose rule must change its mind at a deck`);
+console.log(`                   ${out.bcal.dStar.toFixed(3)} m lower than it is`);
+console.log(`                   -> 0.25 m shallower reads ${out.bcal.shallowBuried ? 'BURIED' : 'clear'}   (true answer clear)`);
+console.log(`                   -> 0.25 m deeper    reads ${out.bcal.deepBuried ? 'BURIED' : 'clear'}   (true answer BURIED)`);
+if (!out.bcal.ok) {
+  console.log('\nVOID: the burial rule did not flip where its own arithmetic says it must.');
+  process.exit(2);
+}
 
 console.log(`\n1. POI corpus — ${out.pois.length} of ${out.poiSites} sites carry geometry (${out.builtNow} force-built this run)`);
 const floating = out.pois.filter((p) => p.float > 0.002);
-const buried = out.pois.filter((p) => p.mainHeight > 1e-6 && p.mainSink > out.maxSink * p.mainHeight);
+const buried = out.pois.filter((p) => p.stands > 1e-6 && p.deckSink > out.maxSink * p.stands);
 console.log(`   compounds entirely in the air: ${floating.length}`);
-console.log(`   compounds buried past ${(out.maxSink * 100).toFixed(0)}% of their height: ${buried.length}`);
+console.log(`   compounds whose DECK is under the drawn ground by more than ${(out.maxSink * 100).toFixed(0)}%`);
+console.log(`   of how tall they stand: ${buried.length}`);
 for (const p of floating.slice(0, opts.worst)) {
   console.log(`   FLOAT  ${pad(p.id, 26)} ${pad(p.type, 10)} ${p.float.toFixed(2)} m at (${p.x}, ${p.z})`);
 }
 for (const p of buried.slice(0, opts.worst)) {
-  console.log(`   BURIED ${pad(p.id, 26)} ${pad(p.type, 10)} its tallest mesh is ${p.mainSink.toFixed(2)} m into the ground and only ${p.mainHeight.toFixed(1)} m tall, at (${p.x}, ${p.z})`);
+  console.log(`   BURIED ${pad(p.id, 26)} ${pad(p.type, 10)} its deck is ${p.deckSink.toFixed(2)} m under the drawn ground and it stands only ${p.stands.toFixed(1)} m, at (${p.x}, ${p.z})`);
+}
+
+// The old rule, kept as a diagnostic rather than deleted, because it is still
+// the right question about a mesh that is not an earthwork -- and because
+// somebody comparing this run against a handoff from before the fix needs to
+// see both numbers rather than be told the count changed.
+const meshSunk = out.pois.filter((p) => p.mainHeight > 1e-6 && p.mainSink > out.maxSink * p.mainHeight);
+console.log(`\n   diagnostic, NOT gated — POIs whose TALLEST mesh is itself more than half`);
+console.log(`   under grade: ${meshSunk.length}. On a padded compound that mesh is usually the`);
+console.log('   apron, whose toe plunges max(6, r/2) below the deck on purpose.');
+for (const p of meshSunk.slice(0, opts.worst)) {
+  console.log(`     ${pad(p.id, 26)} ${pad(p.type, 10)} tallest mesh ${p.mainHeight.toFixed(1)} m tall, ${p.mainSink.toFixed(2)} m under`);
 }
 
 const proud = out.pois.filter((p) => p.proudMeshes > 0).sort((a, b) => b.worstMeshFloat - a.worstMeshFloat);
