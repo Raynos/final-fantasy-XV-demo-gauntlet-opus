@@ -1259,7 +1259,6 @@ export function torPlan(
     // used. A collar reads; a mushroom is a different object.
     if (i > 0) wz = Math.min(wz, wPrev * 1.15);
     const wPrev0 = i > 0 ? wPrev : Infinity;
-    wPrev = wz;
     let hz = h0 * (1 - i * taper * 0.6) * rng.range(0.76, 1.30);
     let dz = wz * thin * rng.range(0.80, 1.26);
     // **All three finished half-extents are named, and the instance scales are
@@ -1278,6 +1277,7 @@ export function torPlan(
       const lo = Math.max(wz, hz, dz) / ASPECT_MAX;
       wz = Math.max(wz, lo); hz = Math.max(hz, lo); dz = Math.max(dz, lo);
     }
+    wPrev = wz;                                     // after the band, not before
     const s = wz / ex[0];
     const sx = 1;
     const sy = _sc(hz / (s * ex[1]));
@@ -1891,29 +1891,13 @@ export class Rocks {
   }
 
   /**
-   * One tor: four to seven blocks stacked into a pinnacle.
-   *
-   * The whole point is the *silhouette against the sky*, so the shape rules
-   * are about the outline and nothing else.
-   *
-   * - **Each block sits a bit off the one below it**, by a fraction of its own
-   *   width rather than a constant, so the stack leans and steps instead of
-   *   standing like a column of coins. A vertical stack of concentric blocks
-   *   reads as a cylinder at four hundred metres, which is the failure this
-   *   was meant to avoid.
-   * - **Size falls with height**, so the thing tapers and the eye reads it as
-   *   one object rather than as several boulders that happen to overlap.
-   * - **They overlap by nearly half**, because a visible seam between two
-   *   blocks at this range is a black line and a black line is a gap.
-   * - **`pitch` and `roll` stay small.** A tilted block in a stack reads as a
-   *   collapse, and one collapsed tor in a field of upright ones is fine, but
-   *   the per-instance jitter that suits a boulder lying in soil turns every
-   *   one of them into rubble.
+   * One tor, seated: {@link torPlan} owns every shape rule, this owns the seat,
+   * the instance record and the skirt.
    *
    * Talus at the foot is deliberately NOT the `talus` kind: that kind culls at
    * 130 m and a tor is a mid-distance object by construction, so its own skirt
-   * would pop in and out. Small `bedded` blocks carry the same read and share
-   * the tor's own thousand-metre range.
+   * would pop in and out. Small `bedded` and `slab` blocks carry the same read
+   * and share the tor's own thousand-metre range.
    *
    * @param ox tor centre
    * @param oz tor centre
