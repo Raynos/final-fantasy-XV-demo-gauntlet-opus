@@ -1,10 +1,8 @@
 # Status — 2026-08-24
 
-> **A snapshot, REPLACED in place, never appended to.** Dated "update —"
-> bullets belong in `journal/`. Deleting a line that has stopped being true
-> loses nothing — `journal/` and the git log are lossless. Capped at 150 lines
-> by `.githooks/pre-commit`, because `PROGRESS.md` accreted instead and drifted
-> five months stale while still reading as current.
+> **A snapshot, REPLACED in place, never appended to.** Dated bullets belong in
+> `journal/`. Deleting a line that has stopped being true loses nothing.
+> Capped at 150 lines by `.githooks/pre-commit`.
 
 **`main`**, zero `any`, `pnpm run check` **15/16** on a quiet tree after
 `build:full` and both bake passes. Perf is **uncertified** — see below.
@@ -12,18 +10,16 @@
 ## Live right now — nobody. Seven lanes ran overnight and all have stopped
 
 `2026-08-21-fable-procedural-modeling` was built end to end by seven parallel
-lanes on this trunk. Every lane's handoff is current:
-`project/handoff/{rocks,town,method,characters,scatter,water,trees,hydrology}.md`,
-with `2026-08-23-coordinator.md` holding the lane map and the shared rules.
+lanes. Every handoff is current:
+`handoff/{rocks,town,method,characters,scatter,water,trees,hydrology}.md`, with
+`2026-08-23-coordinator.md` holding the lane map and shared rules.
 
 **Sixteen of that plan's rows were false**, each disproved by measuring before
-building against it, and each recorded in the plan rather than deleted. Four
-"NOT DONE" rows were long since built (`mixSeed` — mulberry32 already
-avalanches, lag-1 autocorrelation −0.0103 over 4096 seeds; §12's `_outcrops`
-blocker; both halves of §4.4). One **"DONE"** row, §2.2, cited three files that
-contained the *word* `talus` and no geometry. Four §7 rows and both of §8.2/§8.3's
-premises went the same way. **Re-audit a row against the tree before building
-from it** — nothing type-checks a plan.
+building against it and each recorded in the plan rather than deleted. Four
+"NOT DONE" rows were long since built; one **"DONE"** row, §2.2, cited three
+files containing the *word* `talus` and no geometry; four §7 rows and both of
+§8.2/§8.3's premises went the same way. **Re-audit a row against the tree before
+building from it** — nothing type-checks a plan.
 
 **After any merge: `build:full`**, not `build` — `build` deletes the
 painted-face cache without replacing it and cold boot silently regresses
@@ -31,120 +27,123 @@ painted-face cache without replacing it and cold boot silently regresses
 
 ## The one thing that mattered most last night
 
-**Every eye in the game was covered by a lit skin-coloured lobe.** The full
-assembly — sclera, iris, pupil, limbal ring, catchlight, lash line, lid crease —
-was built by two earlier lanes and had **never once been visible in a shipped
-frame**. That is the "doll eyes / painted-on features / mannequin mask" a blind
-judge has named in *every* round. Three causes, all winding or sidedness:
-`buildLid` switched on `upper === (sg > 0)` where only `sg` may, the face
-material was `DoubleSide`, and `ribbon()` and `buildHead`'s chin cap were
-backwards behind it. `LANDMINES.md`'s old prescription for this — widen the
-socket brushes — is **wrong and cost a lane most of a session**; it is corrected
-there now.
+**Every eye in the game was covered by a lit skin-coloured lobe** — the full
+assembly was built by two earlier lanes and had **never once been visible in a
+shipped frame**. Three causes, all winding or sidedness. `LANDMINES.md`'s old
+prescription for it is **wrong and cost a lane most of a session**; corrected.
+Two of the same shape: the rock **vertex-colour bake was a global halving of
+every rock's value** (near boulder luma 45.1 -> 78.9) — four judge rounds called
+that "dark smudges" — and **640 tube triangles per tree disagree with their own
+vertex normals**, which is most of why trunks read as posts in dirt.
 
-Two more of the same shape: the rock **vertex-colour bake was a global halving
-of every rock's value** (near boulder luma 45.1 -> 78.9), which is what four
-judge rounds called "dark smudges"; and **640 tube triangles per tree disagree
-with their own vertex normals**, which is most of why trunks read as posts in
-dirt.
+## The grade — round 11, 2026-08-24: **3/10, 12 identified, 0 fooled**
 
-## The grade — measured against a judge with a control
+**The instrument was validated before it was believed.** `--control` is an
+if/else that *replaces* the round, so it was run first and separately: 24
+plate-vs-plate composites came back **0 HIGH / 21 LOW**, the judge saying unasked
+that it *"could not find a WebGL demo frame anywhere in this set"*. That is the
+calibration `compare.mts`'s own docstring demands. Then the real round: **12 of
+12 HIGH, all correct, 0 hesitation.**
 
-`src/tools/compare.mts` runs a blind A/B against pixel-sampled FFXV plates in
-`docs/reference/`. **`--control` is not optional**: without it a round cannot
-tell a real gap from a saturated instrument.
-Ten rounds, 3 -> 4.5/10, **never fooled it**. Its own answer for what gives us
-away is **authoring** — *"the same few instances repeated"* — not rendering
-defects: the absence of someone having chosen.
+Its ranking, worst first, with the class of each — note **three of five are
+authoring, not rendering**:
 
-**The grade was rebuilt 2026-08-23** (sibling-ports 3.3/3.4): median range
-**9.46 -> 11.06 stops** against 9.79, black point 3.5 -> 1.1, daylight slice 8
-of 9 checks. The print fade had been capping display-white at 252/245 by
-construction. **All ten rounds predate this grade; the next would be the first
-to see it.**
+1. **The characters have no faces** (modelling absence). Checked against the
+   frame rather than trusted: the eyes are *now visible*, last night's fix
+   worked, and that exposed **no mouth at all**, a nose that is a bump,
+   asymmetric eyes, burlap-weave skin, a seam where the hair shell meets the
+   neck. **`handoff/characters.md`'s "do not rebuild the head" is not supported
+   by `tmp/shots/judge-r11/hero_portrait.png`** and should be re-opened.
+2. **Nobody chose where anything goes** (authoring) — rocks in a line, one bush
+   tiling a valley with canopies interpenetrating, no sight-line to anything.
+   This **survived the Matérn work**, which fixed the statistics without
+   supplying composition.
+3. **The sky is a particle system, not weather** (rendering + authoring) —
+   identical evenly-spaced puffs casting no light, in **seven of twelve frames**.
+   Costed by the judge at one day, with the widest reach in the set.
+4. **One tiling texture per surface, at the wrong scale** (rendering) — a ridge
+   whose fissure pattern repeats at ridge scale reads centimetres tall.
+5. **Terrain silhouettes are primitives** (modelling) — the regional strike fixed
+   the ridge *belts*; `_cone`/`_volcano` are untouched and still radially
+   symmetric.
 
-**Open, named by four consecutive judges, nobody assigned:** cloud billboards,
-and terrain that reveals its mesh (`landmark_insomnia`). Then a floating rock
-arch (round 10, twice, cheap), hair, and Insomnia's massing.
+Defects it caught that no gate does: `poi_haven`'s camera is **inside a rock**,
+a slab floats in `zone_longwythe`, god rays cross branches unoccluded, and a
+haven canopy's shadow does not match its canopy.
 
 ## Gates — 15/16 on a quiet tree, 2026-08-24
 
-Re-run after `build:full` and both `texbake --force` passes. The suite grew from
-12 to **16**: `silhouette`, `geocheck`, `hydrocheck` and `floatcheck` all landed
-last night, all with their calibration anchors re-measured every run.
+Re-run after `build:full` and both `texbake --force` passes. The suite grew
+**12 -> 16**: `silhouette`, `geocheck`, `hydrocheck` and `floatcheck` all landed
+last night, each with calibration anchors re-measured every run.
 
-`build` · `anycheck` 0 · `orphans` **301/301** · `silhouette` 42 meshes in 8
-families · `geocheck` · `hydrocheck` 4 channels are percentiles · `integration`
-**27 pass** · `uxcheck` 93/93 · `creaturecheck` 207 · `combatloop` **31/31** ·
-`roadcheck` 0 fail · `reachcheck` · `horizoncheck` PASS (worst MCC 0.766,
-unmoved by the terrain reshape) · `heightcheck` 0.000 m · `driftcheck` worst
-−2.976 m (reported, not failed).
+`build` · `anycheck` 0 · `orphans` **301/301** · `silhouette` 42 meshes /
+8 families · `geocheck` · `hydrocheck` · `integration` **27 pass** · `uxcheck`
+93/93 · `creaturecheck` 207 · `combatloop` **31/31** · `roadcheck` 0 ·
+`reachcheck` · `horizoncheck` PASS (MCC 0.766, unmoved by the reshape) ·
+`heightcheck` 0.000 m · `driftcheck` −2.976 m (reported).
 
-**`floatcheck` is the one red**, and deliberately not baselined over:
-`poiFloating 0 -> 1`, `poiBuried 6 -> 15`. The town lane took it from 13/23 and
-documented four causes in `handoff/town.md`; the remaining fourteen are *no-apron
-landmarks on sharp relief* where the drawn surface and the seat envelope
-disagree by more than the object is tall. Its own caveat is the reason nobody
-should fix it blind: bedding a stele 900 mm deeper made the reported float go
-**up**, so the metric's sign is not yet understood. The cheap fix it names is a
-small `gradePad` under each waymark, +1 to +2 draws on 23 landmarks.
+**`floatcheck` is the one red**, deliberately not baselined over:
+`poiFloating 0 -> 1`, `poiBuried 6 -> 15`. `handoff/town.md` has four causes and
+a proposed fix, plus the caveat that stops anyone fixing it blind: bedding a
+stele 900 mm deeper made the reported float go **up**, so the metric's sign is
+not yet understood.
 
-**Two gate failures last night were the harness, not the code**, and both looked
-exactly like regressions: `combatloop` returned "target page has been closed"
-until `cleanup.mts` cleared a **stale registry for a dead daemon**, then passed
-31/31 unchanged; and the characters lane's whole 9/16 run was leased-page
-timeouts during a daemon restart storm. **Check `daemon --health` uptime before
-believing a leased-page gate.**
+**Two failures last night were the harness, not the code**, and both looked like
+regressions — see `LANDMINES.md`. **Check `daemon --health` uptime and run
+`cleanup.mts` before believing a leased-page gate.**
 
 ## Perf — uncertified
 
 Prior certified pair (`project/baseline-*.json`): perf mean **243.7 fps** /
-worst 148, gameplay worst segment **92.2 fps**, 2 hitches.
-
-**A third run on 2026-08-23 certified and FAILED**: `RULER_VALID: true`, floor
-22% of a 6.0 ms frame, **mean 166.4 fps, worst 51 fps on
-`bestiary_necromancer`** against a 60 fps target. Two earlier runs voided at
-27%. **Do not attribute it yet.** That shot's worst has read 179 / 150 / 51 fps
-across the three runs and its *baseline* row already carried `p95 31.8 ms,
-max 133.2 ms` — it is spike-dominated, and load was ~4.5 from outside this
-repo. **Re-run on an idle machine before reading the mean as a regression.**
+worst 148, gameplay worst segment **92.2 fps**. A third run on 2026-08-23
+certified and **FAILED** at mean 166.4 / worst 51 on `bestiary_necromancer`,
+but that shot has read 179 / 150 / 51 across three runs and its baseline row
+already carried `p95 31.8 ms` — it is spike-dominated and the machine was
+loaded. **Not re-run after last night**: seven lanes were on the tree all night
+and `perf` takes an exclusive lease. **Run it on an idle machine before reading
+any of it as a regression.**
 
 Cost tracks **draw calls** — ~8.7 us each, corr 0.801 vs 0.628 for triangles —
-so **a new visible `InstancedMesh` costs four draws, not one** (colour plus
-three cascades). Per-instance variation is free.
+so **a new visible `InstancedMesh` costs four draws**. Per-instance variation is
+free. Across the 12 judged shots: **532-743 against a budget of 800**, so the
+night's geometry did not spend it. `town_forecourt` is the exception at **991**,
+and `handoff/town.md` records a **7.6x disagreement between two instruments**
+measuring it, to reconcile before acting on either.
 
 ## Still weak
 
 `Layers.ts`'s splat reads as one texture, not a material system — six layers
 whose mean lumas span only 0.35-0.47. Nothing in our frame reaches white: eight
 of ten reference plates clip >=0.10%, four of our six clip at 0.00%. **A page
-costs 2.1 GB of RSS** (`project/TODO.md` notices it too), which is what makes
-the browser budget bite. `zone_nebulawood` — **one of `compare.mts`'s 30 judged
-shots** — is an unreadable wall of leaf cards, and `landmark_meteor` has not
-framed the Meteor for some time. Neither was re-framed: changing what a blind
-judge sees, between rounds, to a frame an agent chose is a call for the human.
+costs 2.1 GB of RSS**, which is what makes the browser budget bite.
+`zone_nebulawood` — **one of the 30 judged shots** — is an unreadable wall of
+leaf cards, `landmark_meteor` has not framed the Meteor in a long time, and
+`poi_haven` puts the camera inside a rock. None was re-framed: changing what a
+blind judge sees, between rounds, to a frame an agent chose is a call for the
+human.
 
 Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
 strata, the world map, the opening cutscene, warp-strike VFX, km-scale shadow —
-and now the drainage network, the shorelines and rivers, and eyes that are
-visible.
+and now a real drainage network, shorelines, rivers, and eyes.
 
 ## Next, in order
 
-1. **`floatcheck`'s fourteen buried landmarks** — the one red. `handoff/town.md`
-   has the four causes and the proposed fix; read its caveat about the metric's
-   sign first.
-2. **Grounding** — the judge's #1, diagnosed as *structural*: GTAO gathers at
-   **0.62 m**, `ContactShadowPass` marches **0.5 m** (gated at 55 m), CSM
-   `maxFar` is **190 m**, and the graded shots' nearest ground is 61-80 m, so a
-   boulder at 400 m gets none of the three. **A measured negative comes with
-   it:** a world-metre contact ramp is dead on arrival — at that range a 1.5 m
-   shrub is eight pixels, and FFXV darkens the object's own lower body, not a
-   disc on the ground. Untested lead: `thickness` stays 0.45 while `bias` scales
-   with distance, so the accept window is empty past ~140 m. `handoff/grounding.md`.
-3. **Clouds** — five commits, unjudged; the last WIP commit is *unverified*.
-4. **The tarn that will not fill and the rock quilt** — `rachsia_bridge` needs a
-   causeway rather than a basin; the quilt is `rockMaterial`'s Worley `crack`
-   term at weight 0.42, proved by a four-way ablation with three recorded
-   negatives, and the mitigation was deliberately not landed unphotographed.
-5. **Motion.** Every judgment this project has made is on a still frame.
+1. **The head.** The judge's #1 and the round's whole 3/10: no mouth, a bump for
+   a nose, asymmetric eyes, burlap skin. Re-open `handoff/characters.md`'s "do
+   not rebuild" verdict against `tmp/shots/judge-r11/hero_portrait.png`.
+2. **The cloud layer** — seven of twelve frames, and the judge costs it at one
+   day with the widest reach in the set. Fewer, varied, hand-placed sheets at
+   different altitudes, sun-tinted undersides, fading into a horizon haze band.
+   Delete the even scatter.
+3. **`floatcheck`'s fourteen buried landmarks** — the one red gate.
+   `handoff/town.md` has four causes and a fix; read its caveat about the
+   metric's sign first.
+4. **Composition, not density.** The Matérn work fixed the statistics
+   (Clark-Evans 0.930 -> 0.741) and the judge still says nobody chose where
+   anything goes. Hero silhouettes and sight-lines are the missing half.
+5. **Grounding** — GTAO gathers at 0.62 m, `ContactShadowPass` marches 0.5 m
+   (gated at 55 m), CSM `maxFar` is 190 m, and the graded shots' nearest ground
+   is 61-80 m, so a boulder at 400 m gets none of the three. A world-metre
+   contact ramp is a **measured** dead end. `handoff/grounding.md`.
+6. **Motion.** Every judgment this project has made is on a still frame.
