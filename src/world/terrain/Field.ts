@@ -320,6 +320,8 @@ export class Field {
   roadMask!: Float32Array | null;
   /** The main highway as one spline. `Terrain.road` is this. */
   roadSpline!: HighwaySpine | null;
+  _tarnCount!: number;
+  _tarnSkipped!: number;
   _apronCells!: number;
   _apronMeanM!: number;
   _inciseCells!: number;
@@ -385,6 +387,11 @@ export class Field {
     });
     /** Legacy single-spline handle: the main highway. */
     this.roadSpline = this.network.spine;
+    // After the road carve, not before: the carve flattens its corridor to the
+    // solved centreline elevation and was refilling three of the basins,
+    // `rachsia_bridge` — a bridge — among them. The basins hold the corridor
+    // back instead, so a road crosses a tarn on a causeway.
+    this._tarnBasins();
 
     this._derive();
     this.stats = {
@@ -1551,6 +1558,125 @@ export class Field {
     }
   }
 
+
+  /**
+   * Carve a basin at every inland fishing spot, because the map promises ten
+   * tarns and the terrain had a hollow at **one**.
+   *
+   * `Water._findTarns` measures a level rather than authoring one, and then
+   * checks the basin does not spill — *"a tarn that leaks down a hillside is
+   * worse than no tarn"*. That check was correct and it was failing: mirroring
+   * it over the built field, eight of the ten pins came back with the lowest
+   * point on the rim **exactly equal to the basin floor**, which does not mean
+   * a breached rim, it means there is no hollow there at all. The ground simply
+   * slopes through the pin.
+   *
+   * **This is not the drainage incision's doing**, though it was reported as
+   * such and the timing made that entirely plausible. Ablated: with
+   * `_inciseDrainage` disabled the same eight are dry, with the same
+   * `spill == floor` signature, and with `_talusAprons` disabled as well they
+   * are dry again. The incision deepens two of them by a metre or so and causes
+   * none of it. `Water.ts` calls a missing tarn *"the most expensive kind of
+   * broken promise a world map can make"*, and it has been making it.
+   *
+   * The construction is `_settlementPads`' — level a disc, because a bowl cut
+   * into a hillside still spills out of its downhill rim and damming that would
+   * be a visible earthwork — and then dish the middle of it. A tarn sitting on
+   * a levelled shelf is what a cirque actually looks like.
+   *
+   * Runs **after** erosion, incision and talus and **before** the road carve,
+   * so nothing re-cuts the rim and a road still gets its corridor back.
+   */
+  _tarnBasins() {
+    const h = this.h;
+    let carved = 0, skipped = 0;
+    for (const p of this.map.poisOfType('fishing')) {
+      // Sea-adjacent pins are shoreline, not tarns; `_findTarns` skips them on
+      // the same test and carving a bowl into a beach would be worse than
+      // leaving it.
+      if (this.rawHeightAt(p.x, p.z) < SEA + 8) continue;
+
+      // `flat` must exceed the radius `Water._findTarns` samples its rim at
+      // (105 m), or the rim is still on the original slope and the basin spills
+      // no matter how deep the bowl is — which is exactly how the first attempt
+      // here failed, with `spill == floor` unchanged.
+      const bowl = 78, flat = 118, R = 232;
+      let sum = 0;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        sum += this.rawHeightAt(p.x + Math.cos(a) * flat, p.z + Math.sin(a) * flat);
+      }
+      // Bias to the ring rather than the centre: the shelf should sit where the
+      // surrounding ground is, so the dam is as small as the site allows.
+      const shelf = (sum / 16) * 0.72 + this.rawHeightAt(p.x, p.z) * 0.28;
+      const depth = 5.5;
+
+      const box = this._box(p.x, p.z, R);
+      for (let j = box.j0; j <= box.j1; j++) {
+        const z = -HALF + j * CELL;
+        for (let i = box.i0; i <= box.i1; i++) {
+          const x = -HALF + i * CELL;
+          const d = Math.hypot(x - p.x, z - p.z);
+          if (d > R) continue;
+          const idx = j * N + i;
+          // Hold the road corridor back: it is carved by now, and a tarn that
+          // eats the highway is worse than a tarn that has a causeway.
+          const keep = 1 - Math.min(1, (this.roadMask ? this.roadMask[idx] : 0) * 1.6);
+          if (keep < 0.02) continue;
+          // 1. level the shelf, exactly as a settlement pad does
+          const k = (1 - smoothstep(flat, R, d)) * keep;
+          if (k > 0.002) h[idx] += (shelf - h[idx]) * k * 0.985;
+          // 2. dish the middle of it, with a mottled floor so the water plane
+          //    does not sit on a machined cone
+          if (d < bowl) {
+            const t = d / bowl;
+            const dish = (1 - t * t) * (1 - t * t);
+            const mottle = 0.86 + 0.14 * this.n2.fbm2(x * 0.021 + 7.3, z * 0.021 - 4.9, 3);
+            h[idx] -= depth * dish * mottle * keep;
+          }
+        }
+      }
+      // Close the lip. Levelling at 0.985 leaves 1.5% of the original relief on
+      // the rim, and on a site with 18 m of fall across the disc that residual
+      // is still a spillway — `archaeans_mirror` came out holding 0.04 m, which
+      // is a fail with a plausible-looking number. So walk the annulus
+      // `_findTarns` actually samples and raise anything below the shelf.
+      //
+      // **Bounded, and the bound is the honest part.** A site that needs more
+      // than 6 m of fill to close is not a tarn basin, it is a hillside, and
+      // damming it would put a visible ring embankment on the landscape. Those
+      // are left dry and counted, rather than forced.
+      let need = 0;
+      for (let a = 0; a < 96; a++) {
+        const th = (a / 96) * Math.PI * 2;
+        for (let rr = 90; rr <= 108; rr += 3) {
+          const g = this.rawHeightAt(p.x + Math.cos(th) * rr, p.z + Math.sin(th) * rr);
+          if (shelf - g > need) need = shelf - g;
+        }
+      }
+      if (need > 6) { skipped++; continue; }
+      if (need > 0.05) {
+        for (let j = box.j0; j <= box.j1; j++) {
+          const z = -HALF + j * CELL;
+          for (let i = box.i0; i <= box.i1; i++) {
+            const x = -HALF + i * CELL;
+            const d = Math.hypot(x - p.x, z - p.z);
+            if (d < 84 || d > 150) continue;
+            const idx = j * N + i;
+            // A soft berm, widest where it is doing the most work, faded out
+            // by 150 m so it reads as a moraine rather than as a wall.
+            const w = smoothstep(84, 96, d) * (1 - smoothstep(118, 150, d));
+            const want = shelf + 0.30 * w;
+            if (h[idx] < want) h[idx] += (want - h[idx]) * w;
+          }
+        }
+      }
+      carved++;
+    }
+    this._tarnCount = carved;
+    this._tarnSkipped = skipped;
+  }
+
   /**
    * Talus aprons by cone dilation — the scree fan that grounds a cliff base.
    *
@@ -1777,17 +1903,32 @@ export class Field {
       { lo: 0.996, hi: 0.9995, depth: 9.0, shoulder: 9 },
     ];
 
+    // **A channel starts at a lake outlet; it does not cut back into the basin.**
+    // Without this the incision breached the rim of all ten authored fishing
+    // spots, `Water._findTarns` correctly measured `spill == floor` on every
+    // one, and refused to fill them — so the map advertised ten tarns and the
+    // world had none. That is the failure mode a hard slope gate cannot catch,
+    // because a rim is exactly where the slope is highest.
+    const basins = this.map.poisOfType('fishing').map((p) => ({ x: p.x, z: p.z, r: 128 }));
+
     const cut = new Float32Array(N * N);
     const wid = new Float32Array(N * N);
     for (let j = 2; j < N - 2; j++) {
+      const zc = -HALF + j * CELL;
       for (let i = 2; i < N - 2; i++) {
         const k = j * N + i;
         const a = pct[k];
         if (a <= BANDS[0].lo) continue;
         const gx = (h[k + 1] - h[k - 1]) / (2 * CELL);
         const gz = (h[k + N] - h[k - N]) / (2 * CELL);
-        const gate = smoothstep(0.02, 0.06, Math.hypot(gx, gz));
+        let gate = smoothstep(0.02, 0.06, Math.hypot(gx, gz));
         if (gate <= 0) continue;
+        const xc = -HALF + i * CELL;
+        for (const b of basins) {
+          const d = Math.hypot(xc - b.x, zc - b.z);
+          if (d < b.r) gate *= smoothstep(b.r * 0.72, b.r, d);
+        }
+        if (gate <= 0.001) continue;
         let d = 0, w = 0;
         for (const b of BANDS) {
           if (a <= b.lo) continue;
