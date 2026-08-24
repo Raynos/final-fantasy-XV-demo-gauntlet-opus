@@ -120,3 +120,109 @@ honest — the whole compound is under the hill.
 ---
 
 *(sections 2 onward are appended as the work lands)*
+
+## 2. The gate, and where it stands
+
+```
+                    on arrival     now      gated
+poiFloating              1          0        yes
+poiBuried               15          0        yes    (rule changed — see below)
+instFloating           362        362        no, inventory
+instBuried             861        861        no, inventory
+```
+
+`node src/tools/floatcheck.mts` **PASSES** at `c3ee9e9`, with the calibration
+green on all three known-answer cases.
+
+`project/float-baseline.json` is re-set at 0 / 0. **That is a target, not a
+ratchet, and the note in the file says so**: a compound with nothing touching
+the earth, and a deck under the ground it is cut into, are defects with no
+legitimate reading. The two instance counts stay ungated for the reason the tool
+already documented — they are the streamed set around spawn and they moved
+320 -> 379 the night the corestone stacks landed.
+
+**A `poiBuried` recorded before 2026-08-24 is not comparable with one after
+it.** The old baseline of 6 was never a number to return to: the method lane had
+already measured it at 25 and then 7 within one night, and it was counting the
+graded aprons anyway.
+
+### What was actually wrong, in order of how much it cost
+
+| # | defect | where | evidence |
+|---|---|---|---|
+| 1 | burial rule read the graded apron | `floatcheck.mts` | 12 of 15; `formouth` "17.59 m under" is its pad, its walls are 0.00–0.59 |
+| 2 | no-apron waymarks seated by `_base`'s padded recipe | `PoiKits._base` | `keycatrich_ruins` +2.92 m over grade; `longwythe_peak` −18.81 m under it |
+| 3 | deck allowed under the drawn ground at the named point | `PoiKits._base` | `crestholm_inlet` −3.82 m with a 2.7 m compound |
+| 4 | pad batter hanging in the air over a cliff | `Wear.gradePad` | `nebula_parking`: ground level to 12.6 m, then −10 to −21 m in six |
+
+### Commits
+
+```
+a835541  Seat the waymarks on the ground they stand on, not on a deck they have no pad for
+4f7daa9  floatcheck: judge burial on the deck, not on the graded pad
+3c4fd29  A deck may not sit under the hill it is cut into
+e105e26  Re-baseline the seating gate at zero, and say why it is not a ratchet
+7dcb128  The pad's batter measures the hill it has to cross, not the point it starts at
+c3ee9e9  A platform on a cliff shelf ends at the shelf
+```
+
+## 3. The two frames the coordinator sent back
+
+Both were **misattributed to havens, and neither is one.** Identified by
+ablation plus projection rather than by looking: `--hide poi_haven` and `--hide
+poi_fishing` each left the object standing, and projecting every POI within
+700 m through the `zone_nebulawood` camera put `nebula_parking` on its pixels.
+
+- **`reframe-r1/neb_a_high.png`, "a tan mushroom cap on a stalk"** —
+  `nebula_parking`, and the cap is its deck sitting correctly on a shelf whose
+  ground is level out to 12.6 m and 10–21 m down six metres later. The brim was
+  the batter's `-plunge` clamp parking it 6.5 m below the deck in mid air; the
+  stalk is the shelf. Fixed by `c3ee9e9`: a bearing whose 1:3 line never reaches
+  the ground gets a kerb and the cliff holds the platform up. **Before/after:
+  `tmp/shots/seat-r5/zone_nebulawood.jpg` -> `tmp/shots/seat-r8/`.** The
+  mushroom is gone and it now reads as a lay-by cut into the hillside.
+- **`reframe-r2/hav_d.png`, "a scalloped polygonal skirt"** — that one *is*
+  `poi_haven`. `seg` floored at 20 gave a 12.6 m pad a 3.9 m facet on its rim,
+  so a wobbled outline was a polygon. Floored at 36 / capped at 64, sized on
+  chord error. **Before/after: `tmp/shots/seat-r4/poi_haven.jpg` ->
+  `tmp/shots/seat-r8/poi_haven.jpg`.** The facets are gone and the outline
+  wanders. **It is a partial fix and I am not claiming otherwise**: the pad
+  still reads as a large smooth cone with no surface incident on it, and that
+  is a material/wear question rather than a seating one. Draws went **658 ->
+  638** across the change, so it was free.
+
+### The envelope question the coordinator raised, answered
+
+*"Worth checking whether the pad and the kit are seated against different
+envelopes."* **They are** — `_base` uses `seatY` (lower envelope), `gradePad`
+uses `coverY` (upper) — and it is **not** the cause of either frame. Measured
+at three havens, `coverY - drawnFine` around the pad is **mean 0.22 m, max
+0.87 m** at `longwythe_haven` and mean 0.58 / max 2.23 at `cauthess_haven`. Real
+but an order of magnitude too small to make a 6.5 m brim. Recording it as a
+measured negative so nobody spends the round I nearly did on it.
+
+## 4. Cost
+
+Draws, `--jpeg`, at `c3ee9e9` against the same shots at `5f7a583`:
+
+| shot | before | after |
+|---|---:|---:|
+| `poi_haven` | 658 | **638** |
+| `zone_nebulawood` | 703 | 723 |
+| `poi_reststop` | 990 | 990 |
+| `town_forecourt` | 993 | 993 |
+| `landmark_insomnia` | 400 | — |
+
+Nothing this lane did adds a material or a mesh: `seg` and the kerb are vertices
+in an already-merged geometry, and the waymark's pieces were already there. The
+`zone_nebulawood` +20 is other lanes' commits in the same range, not
+attributable here — six lanes are committing to this trunk and the town lane
+measured a ±450 swing between neighbouring shas.
+
+**The town lane's `gradePad`-under-each-waymark proposal was not needed and is
+withdrawn.** It costed +1 to +2 draws on 23 landmarks to fix a float that turned
+out to be a seating recipe applied to a kit it was never written for. Seating
+them on the finest ring costs nothing and fixes the burials as well.
+
+**The 7.6x ablation disagreement is NOT reconciled** and I did not get to it —
+see *What is left*.
