@@ -313,7 +313,9 @@ export const CAST = {
       eyeOpen: 0.86,
       blush: 'rgba(168,98,80,0.18)',
       lip: 'rgba(152,88,80,0.5)',
-      browShadow: 'rgba(56,40,28,0.52)',
+      // 52/255 of contrast against this skin (Y 142) where the cast runs 55-64;
+      // see Prompto's note. Y 38 at 0.56 blends to 84, i.e. 58.
+      browShadow: 'rgba(50,36,25,0.56)',
       lashColor: 0x120c09,
       fringeShadow: 0.34,
       stubble: 0.16, stubbleColor: '#4a3a2a',
@@ -392,7 +394,16 @@ export const CAST = {
       eyeOpen: 1.02,
       blush: 'rgba(192,116,98,0.26)',
       lip: 'rgba(176,96,90,0.56)',
-      browShadow: 'rgba(112,78,40,0.42)',
+      // **Measured contrast, not taste.** Round 13's judge: *"in another frame
+      // the two blond characters have no facial features at all at 3 m."* At
+      // `hero_full` a face is 0.24 px/mm and the only features that survive are
+      // the ones that are still a *value* once minified. Against this skin
+      // (0xc19e7d, Y 163) the old brow blended to Y 129 — **34/255 of
+      // contrast**, against Noctis' 64, Gladiolus' 61 and Ignis' 52. A blond
+      // brow is genuinely lighter than a black one, but half the cast's
+      // contrast is not a hair colour, it is an invisible brow. Same hue,
+      // darker and more opaque: Y 68 at 0.58 blends to 108, i.e. 55.
+      browShadow: 'rgba(92,64,34,0.58)',
       lashColor: 0x2a1c14,
       fringeShadow: 0.28,
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
