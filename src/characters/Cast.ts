@@ -246,13 +246,29 @@ export const CAST = {
           { n: 20, th: [-1.62, -1.12], phi: [0.92, 1.0], dir: [-0.30, -0.90, -0.32], out: 0.71, bend: 0.98, len: 0.082, width: 0.0020, spike: 0.7, dirJit: 0.10, lenVar: 0.26, steps: 6 },
           { n: 44, th: [-2.6, 2.6], phi: [0.35, 0.95], dir: [0.02, 0.16, -0.98], out: 0.46, hug: 0.44, puff: 0.78, bend: 0.90, len: 0.104, width: 0.0015, thick: 0.5, spike: 1.0, dirJit: 0.24, lenVar: 0.32 },
           // ---- full beard: rooted below the equator, so `absPhi` ------------
-          { n: 260, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0058, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.55, steps: 3, dirJit: 0.22, lenVar: 0.34, color: 0x40301d, tipColor: 0x6a5232 },
-          { n: 160, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0076, width: 0.0010, thick: 0.45, spike: 0.8, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.32, color: 0x40301d, tipColor: 0x6a5232 },
+          //
+          // **Measured, and it is not what §8.5 would predict from the pixels
+          // alone.** A strand here is 1.26 mm wide: 2.4 px at `hero_portrait`
+          // and 0.30 px at `hero_full`, i.e. below the 2 px floor at range and
+          // a hard black dash at portrait — and `paintFace` already draws a
+          // stubble field underneath (`look.stubble` 0.88, 24 000 grains).
+          // The obvious conclusion is "delete the geometry, keep the paint".
+          // **That was ablated (tmp/shots/hair-abl/gladio_3q.png) and it is
+          // wrong: with the tufts off Gladiolus has no beard at all.** The
+          // painted field is invisible at 0.55 m under this key — it reads as a
+          // slightly warmer jaw, not as hair. So the geometry is load-bearing
+          // and the defect is *density*, not existence: at 260/160/46 roots the
+          // strands are separated enough to read as ink flecks stuck on skin.
+          // Doubled, with the two values pulled toward each other so no single
+          // strand carries contrast on its own.
+
+          { n: 520, th: [-1.48, 1.48], phi: [2.02, 2.72], absPhi: true, dir: [0, -0.90, 0.36], out: 0.87, bend: 0.94, len: 0.0058, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.55, steps: 3, dirJit: 0.22, lenVar: 0.34, color: 0x503c26, tipColor: 0x6f573a },
+          { n: 320, th: [-1.10, 1.10], phi: [2.45, 2.88], absPhi: true, dir: [0, -0.96, 0.24], out: 0.79, bend: 0.94, len: 0.0076, width: 0.0010, thick: 0.45, spike: 0.8, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.32, color: 0x503c26, tipColor: 0x6f573a },
           // moustache
-          { n: 46, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0054, width: 0.0009, thick: 0.45, spike: 0.9, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.30, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 92, th: [-0.62, 0.62], phi: [1.86, 2.06], absPhi: true, dir: [0, -0.84, 0.52], out: 0.84, bend: 0.92, len: 0.0054, width: 0.0009, thick: 0.45, spike: 0.9, clump: 4, splay: 0.55, steps: 3, dirJit: 0.20, lenVar: 0.30, color: 0x503c26, tipColor: 0x6f573a },
           // sideburns tying the beard into the hairline
-          { n: 34, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
-          { n: 34, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x40301d, tipColor: 0x6a5232 },
+          { n: 68, th: [1.16, 1.60], phi: [1.44, 2.00], absPhi: true, dir: [0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x503c26, tipColor: 0x6f573a },
+          { n: 68, th: [-1.60, -1.16], phi: [1.44, 2.00], absPhi: true, dir: [-0.16, -0.97, -0.16], out: 0.76, bend: 0.94, len: 0.0068, width: 0.0009, thick: 0.45, spike: 0.85, clump: 4, splay: 0.50, steps: 3, dirJit: 0.16, lenVar: 0.28, color: 0x503c26, tipColor: 0x6f573a },
         ],
       },
       outfit: [
