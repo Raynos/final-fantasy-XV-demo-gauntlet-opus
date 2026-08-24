@@ -344,6 +344,48 @@ document instead of to code, and it is worse there: nothing type-checks a plan.
 rather than deleting the row** — a plan that reads as current and is not is the
 expensive kind of wrong.
 
+## An assert inside `init()` hangs the boot instead of failing it
+
+`src/util/GeoAssert.ts` landed with the geometry checks, and the first thing it
+did was cost an agent most of an hour. A `throw` from anything on an `init()`
+path means `GAME.ready` is never set, so **every browser-backed tool on the
+machine returns a bare `waitForFunction` timeout with no message** —
+indistinguishable from a slow boot, a broken build, or the daemon restarting,
+all of which can be happening at the same time. Catch and `console.error`
+instead: still red, `shoot.mts` still exits non-zero on a console error, and the
+page still boots so you can see the thing the assert is complaining about.
+
+## A stale daemon registry looks exactly like a code regression
+
+`combatloop` failed with `page.evaluate: Target page, context or browser has
+been closed` on three consecutive runs against a quiet tree. `cleanup.mts`
+reported **clean** each time. The cause was a registry entry for a **dead
+daemon** (`stale registry for a dead daemon (pid …); cleared`), and after
+clearing it the same commit passed **31/31** with nothing else changed.
+
+The same shape ate a whole gate run in another lane — 9 of 16, every failure a
+`page.waitForFunction: Timeout` or `ECONNRESET`, none of them real — while the
+daemon was restart-looping with `uptimeSec` under 15 on every poll.
+
+**Before believing any leased-page gate, check `daemon.mts --health` uptime, and
+run `cleanup.mts` when a browser-backed tool fails in a way the code cannot
+explain.** `cleanup` reporting "clean" does not mean the registry is.
+
+## `frame(+y)` reverses a tube's angular sense
+
+A ring built as a plain `(cos a, y, sin a)` and a tube built through a
+`frame(+y)` basis sweep their angle parameter in **opposite rotational
+senses**. Welding one to the other gives you a surface whose triangles disagree
+with their own vertex normals, and it renders as a black bell rather than as an
+obvious hole. Probed on one tree: **640 tube triangles disagreeing, 40 flare
+triangles agreeing** — and the old root skirt had carried the same bug for as
+long as it existed, small enough and dark enough to pass as shading. It is most
+of why trunks have always read as posts stuck in dirt.
+
+`assertConsistentWinding` does **not** catch this: edge parity is
+orientation-*relative*, and a flare is a disconnected shell. The check that
+catches it has to be orientation-absolute.
+
 ## Names nothing ever verified
 
 A guess about a name compiles. `a.b || a.c || a.d` reads like defensive coding
