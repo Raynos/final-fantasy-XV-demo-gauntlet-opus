@@ -120,12 +120,33 @@ export function contention(): Contention {
    * 9.1 ms and `walk` 6.3 -> 11.8 ms with nothing touched that either could
    * depend on.
    */
-  const self = String(process.pid);
+  /**
+   * **Exclude self by PID, not by string.** The first version filtered
+   * `!a.includes(String(process.pid))` over `ps -o args=`, and a command line
+   * does not contain its own pid — so `perf.mts` and `gameplay.mts` both
+   * counted *themselves* as "another lane" and voided every run on a quiet
+   * machine. The check that was added to stop two lanes measuring through each
+   * other then stopped anything measuring at all: `CONTENDED (another lane is
+   * running gameplay)` with nothing else on the box.
+   *
+   * `ps -A -o pid=,args=` gives the pid as a field, so it can be compared as a
+   * number. The whole process group goes too — a tool that spawns a child
+   * `.mts` is still one lane, not two.
+   */
+  const self = process.pid;
+  const rows = sh('ps -A -o pid=,ppid=,args=').split('\n');
+  const mine = new Set<number>([self]);
+  for (const r of rows) {
+    const m = r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
+    if (m && mine.has(Number(m[2]))) mine.add(Number(m[1]));
+  }
   const otherTools = [
     ...new Set(
-      args
-        .filter((a) => /node .*src\/tools\/[\w-]+\.mts/.test(a) && !a.includes(self))
-        .map((a) => (a.match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
+      rows
+        .map((r) => r.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/))
+        .filter((m): m is RegExpMatchArray => Boolean(m) && !mine.has(Number(m![1])))
+        .filter((m) => /node .*src\/tools\/[\w-]+\.mts/.test(m[3]))
+        .map((m) => (m[3].match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
         .filter((n): n is string => Boolean(n) && n !== 'daemon'),
     ),
   ].sort();
