@@ -149,16 +149,22 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
 
         // The lace of foam sliding back down behind it. Advected in offset, so
         // it travels up and down the beach rather than along it.
+        //
+        // Held to a BAND behind the run-up edge rather than to the whole wet
+        // zone. Keyed on the wet flag alone it covered everything below the
+        // run-up line, which on a beach shallow enough to have a run-up line at
+        // all is most of the frame; the shoreline came back reading as snow.
         vec2 lu = vec2(vPhase.y * 1.7, vShore.y * 0.05 - uTime * 0.055);
         float lace = texture2D(uNoise, lu).y;
-        lace = smoothstep(0.42, 0.86, lace) * swashWet * (1.0 - smoothstep(runup - 0.30, runup, elev));
+        float behind = (elev - runup * 0.45) / 0.20;
+        lace = smoothstep(0.66, 0.95, lace) * swashWet * exp(-behind * behind);
 
         // Broken water in the last metre of depth: the shore break itself.
         float shoal = smoothstep(-0.95, -0.08, elev) * (1.0 - smoothstep(-0.05, 0.10, elev));
         float bore = texture2D(uNoise, vec2(vPhase.x * 0.9 + uTime * 0.02, vShore.y * 0.03)).x;
-        float brk = shoal * smoothstep(0.40, 0.80, bore * (0.62 + 0.38 * (0.5 + 0.5 * s1)));
+        float brk = shoal * smoothstep(0.58, 0.90, bore * (0.62 + 0.38 * (0.5 + 0.5 * s1)));
 
-        float foam = clamp(lip * 0.95 + lace * 0.55 + brk * 0.65, 0.0, 1.0) * uFoam;
+        float foam = clamp(lip * 0.80 + lace * 0.42 + brk * 0.45, 0.0, 1.0) * uFoam;
 
         // A foam band thinner than a pixel can only alias, and a white confetti
         // line along every far shore is the cheapest way to lose a blind test.
@@ -178,7 +184,10 @@ export function makeShoreMaterial(noise: THREE.Texture | null): THREE.ShaderMate
         vec3 sheen = uAmbient * (graze * wet * 1.5 * near);
 
         float mul = mix(1.0, uWetDark, wet * near);
-        vec3 add = lit * foam * 0.85 + sheen;
+        // 0.40, not 0.85. Foam is bright but it is not a light source, and at
+        // 0.85 against a multiplier that floors at 0.52 a fully foamed pixel
+        // clipped white in a linear HDR buffer whatever was underneath it.
+        vec3 add = lit * foam * 0.40 + sheen;
 
         gl_FragColor = vec4(add, mul);
       }

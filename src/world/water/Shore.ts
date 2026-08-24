@@ -314,18 +314,13 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
       const nrmX = new Float64Array(m), nrmZ = new Float64Array(m);
       const off = new Float64Array(m * SHORE_ROWS);
       /**
-       * Per-point, not per-vertex: how far the drawn ground rises above the
-       * field here, and how pale the surface is.
+       * Paleness, per point rather than per vertex.
        *
-       * Both were sampled at every one of the 21 rows first, and both are the
-       * same answer 21 times. `drawnEnvelope` walks the clipmap's ring lattice
-       * — twelve height samples — and `groundColorAt` runs a nineteen-zone
-       * biome blend; between them they were **two thirds of a 1.5 s build**, to
-       * resolve a variation across fifteen metres of beach that neither of them
-       * has. Once per point took the build to a third of that with nothing
-       * visible changing.
+       * `groundColorAt` runs a nineteen-zone biome blend and was being asked for
+       * it at every one of the 21 rows, which is the same answer 21 times and
+       * was a third of a 1.5 s boot-time build. It resolves nothing across
+       * fifteen metres of beach that one sample at the waterline does not.
        */
-      const lift = new Float64Array(m);
       const pale = new Float64Array(m);
       for (let i = 0; i < m; i++) {
         const x = line[i * 2], z = line[i * 2 + 1];
@@ -334,7 +329,6 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
         const i1 = c.closed ? (i + 1) % m : Math.min(m - 1, i + 1);
         const nx2 = side * -tz, nz2 = side * tx;
         nrmX[i] = nx2; nrmZ[i] = nz2;
-        if (ground.drawnEnvelope) lift[i] = Math.max(0, Math.min(0.9, ground.drawnEnvelope(x, z, 0, 6) - h(x, z)));
         if (ground.groundColorAt) { ground.groundColorAt(x, z, col); pale[i] = col.r + col.g + col.b; }
         else pale[i] = 0.25;
 
@@ -457,12 +451,20 @@ export function buildShoreRibbon(ground: ShoreGround, specs: ShoreSpec[], opts: 
           const o = off[i * SHORE_ROWS + r];
           const px = x + nx2 * o, pz = z + nz2 * o;
           const hh = h(px, pz);
-          // Lifted onto the UPPER envelope of what the clipmap can rasterise
-          // here. A decal built on the field's own height is swallowed by the
-          // mesh that is actually drawn: the two disagree by metres once the
-          // rings coarsen, and the symptom is a shoreline that dissolves at
-          // exactly the range where it starts to matter to the composition.
-          pos.push(px, hh + lift[i] + 0.06, pz);
+          // A flat five-centimetre lift and `polygonOffset`, and NOT the
+          // clipmap's drawn envelope.
+          //
+          // The envelope is the right idea and it was measurably the wrong
+          // answer here. It lifts a decal onto the highest surface the clipmap
+          // can rasterise, which is what an apron or a graded pad wants — but it
+          // is a *per-ring* quantity, it jumped by up to the 0.9 m clamp between
+          // one shore point and its neighbour, and the ribbon came back as a
+          // scatter of white plates hovering over the beach with their own
+          // shadows under them. A shoreline is a thin band viewed edge-on; five
+          // centimetres and a depth bias is all it can afford, and past the
+          // range where the rings coarsen enough to swallow it the band has
+          // already faded out.
+          pos.push(px, hh + 0.05, pz);
           phase.push(arc / lam[0], arc / lam[1], arc / lam[2]);
           // The elevation attribute is read back at the offset that survived the
           // slope bound, not at the one the target asked for. A shader told the

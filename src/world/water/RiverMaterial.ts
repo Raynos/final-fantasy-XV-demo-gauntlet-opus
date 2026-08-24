@@ -144,7 +144,14 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         vec3 N = normalize(vec3(-grad.x, 1.0, -grad.z));
 
         vec3 V = normalize(uCameraPos - vWorld);
-        float fres = mix(0.02, 1.0, pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0));
+        // Capped at 0.62, not 1.0. A river surface is rough at every scale
+        // below a pixel, so its grazing reflection is a wide diffuse lobe rather
+        // than a mirror -- and an uncapped Fresnel against a flat sky colour is
+        // what made the first build read as a sheet of white plastic laid over
+        // the badlands. The RMS slope of the waves the pixel cannot resolve is
+        // exactly the right thing to widen it with.
+        float grazeK = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0);
+        float fres = mix(0.02, mix(0.62, 0.34, clamp(rms * 6.0, 0.0, 1.0)), grazeK);
 
         // --- body colour, metric depth ------------------------------------
         // Path length along the refracted ray, one Snell step, exactly as the
@@ -162,7 +169,7 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         // Sky, cheaply. A river is narrow and moving; a planar reflection of it
         // would be a second scene render for a surface a wave normal smears
         // beyond recognition, and the lakes already pay that once.
-        vec3 sky = uAmbient * 2.2 + uSunColor * max(uSunDir.y, 0.0) * 0.12;
+        vec3 sky = uAmbient * 1.15 + uSunColor * max(uSunDir.y, 0.0) * 0.06;
 
         // --- foam, derived ------------------------------------------------
         // Riffle-pool alternation. Two detuned periods, so the pattern never
@@ -178,9 +185,9 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         // Where it runs against the bank, always. That is not the Froude term,
         // it is the strip's own edge, and it is what stops the water ending in
         // a line.
-        float lip = (1.0 - smoothstep(0.0, 0.16, edge)) * (0.35 + 0.65 * fr);
+        float lip = (1.0 - smoothstep(0.0, 0.14, edge)) * (0.20 + 0.55 * fr);
         float scud = texture2D(uNoise, vec2(station * 0.055 - uTime * 0.16, vRiver.y * 0.09)).y;
-        foam = clamp(foam * (0.45 + 0.9 * scud) + lip * (0.35 + 0.5 * scud), 0.0, 1.0);
+        foam = clamp(foam * (0.45 + 0.9 * scud) + lip * (0.25 + 0.45 * scud), 0.0, 1.0);
         foam *= 1.0 - smoothstep(300.0, 800.0, dist);
 
         vec3 col = mix(body, sky, fres);
@@ -191,7 +198,7 @@ export function makeRiverWaterMaterial(noise: THREE.Texture | null): THREE.Shade
         // sub-pixel waves widen the lobe instead of aliasing in the normal.
         vec3 H = normalize(uSunDir + V);
         float shine = pow(max(dot(N, H), 0.0), mix(900.0, 40.0, clamp(rms * 3.0, 0.0, 1.0)));
-        col += uSunColor * shine * 1.7 * (1.0 - foam * 0.7);
+        col += uSunColor * shine * 0.6 * (1.0 - foam * 0.7);
 
         float alpha = 1.0 - max(max(Tr.r, Tr.g), Tr.b);
         alpha = clamp(max(max(alpha, fres * 0.9), foam * 0.95), 0.0, 1.0);

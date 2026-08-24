@@ -385,7 +385,12 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       // "wetter than 88% of them" rather than any absolute discharge — which is
       // the property that makes it survive a change of resolution or of erosion
       // tuning. It is a proxy for discharge and it is named one.
-      q[i] = Math.max(0, Math.min(1, (e.accum - 0.88) / 0.115));
+      // Discharge also GROWS downstream, and leaving that out was visible: the
+      // percentile is already high at the source of a traced reach, so every
+      // river came out full width from its first metre and a headwater looked
+      // like an estuary. A river gathers its catchment as it runs.
+      const grow = 0.12 + 0.88 * Math.min(1, (i * STATION) / 850);
+      q[i] = Math.min(grow, Math.max(0, Math.min(1, (e.accum - 0.88) / 0.115)));
     }
     // Smooth the discharge: the percentile field is noisy at 3 m and a river
     // that changes width every station reads as a rope, not as water.
@@ -411,7 +416,7 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       for (let i = 1; i < m - 1; i++) bedMono[i] = s[i - 1] * 0.25 + s[i] * 0.5 + s[i + 1] * 0.25;
       for (let i = 1; i < m; i++) bedMono[i] = Math.min(bedMono[i], bedMono[i - 1]);
     }
-    for (let i = 0; i < m; i++) wsl[i] = bedMono[i] + 0.35 + 1.70 * q[i];
+    for (let i = 0; i < m; i++) wsl[i] = bedMono[i] + 0.34 + 1.55 * q[i];
     for (let i = 1; i < m; i++) wsl[i] = Math.min(wsl[i], wsl[i - 1]);
     // The surface may never sit under the ground it is drawn on.
     for (let i = 0; i < m; i++) wsl[i] = Math.max(wsl[i], bed[i] + 0.06);
@@ -425,7 +430,7 @@ export function buildRivers(ground: RiverGround, opts: RiverOpts) {
       // happens to stay flat. Without the cap a reach crossing a pan bisects
       // its way to the full 32 m search limit on both sides and draws a
       // sixty-four metre sheet of standing water where there is a stream.
-      const cap = Math.min(MAX_HALF, 2.6 + 17.0 * q[i]);
+      const cap = Math.min(MAX_HALF, 1.5 + 9.5 * q[i]);
       wl[i] = firstCrossing(ground, x, z, -nx[i], -nz[i], wsl[i], cap);
       wr[i] = firstCrossing(ground, x, z, nx[i], nz[i], wsl[i], cap);
       const bankH = wsl[i] + 0.75 + 0.85 * q[i];
