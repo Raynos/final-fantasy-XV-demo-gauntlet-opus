@@ -104,7 +104,7 @@ const NORM = {
  * Midline front outline z(y) is sampled into 1 mm bands, which is ten times
  * finer than `headprofile.mts` and below every feature this is looking for.
  */
-function landmarks(pts, sagHalf) {
+function landmarks(pts, sagHalf, prom) {
   let yMin = Infinity, yMax = -Infinity, xMax = 0, zMin = Infinity, zMax = -Infinity;
   for (let i = 0; i < pts.length; i += 3) {
     const y = pts[i + 1], z = pts[i + 2];
@@ -230,7 +230,7 @@ function landmarks(pts, sagHalf) {
     }
     return list;
   };
-  const ex = extrema(0.0025);
+  const ex = extrema(prom === undefined ? 0.0025 : prom);
 
   // Pronasale: the front-most band of the whole face. Unambiguous, no search.
   let prnB = mentonB;
@@ -257,13 +257,66 @@ function landmarks(pts, sagHalf) {
   const snB = nth('min', 0, Math.max(mentonB, prnB - win(0.08)));
   const ulB = nth('max', 0, snB - 1);
   const stoB = nth('min', 1, Math.max(mentonB, snB - win(0.06)));
-  const llB = nth('max', 1, stoB - 1);
-  const sulB = nth('min', 2, Math.max(mentonB, stoB - win(0.06)));
-  // The chin's own projection is small enough on some heads to fall under the
-  // prominence floor, which is itself the finding — so it is measured, not
-  // searched: the front-most band below the sulcus, and how far it stands out.
-  let pogB = mentonB;
-  for (let b = mentonB; b <= sulB; b++) if (zf[b] > zf[pogB]) pogB = b;
+  /**
+   * **The lower lip and the mentolabial sulcus are found by range search, not
+   * by the extremum list, and the depth controls are what forced that.**
+   *
+   * On a head built to Arnett's adult-male means the labrale-inferius swing is
+   * *0.8 mm* (stomion +0.2, lower lip +1.0) — a third of this extractor's
+   * 2.5 mm prominence floor, which exists to kill a 3 mm wobble on the nasal
+   * dorsum. So on a **correct** adult profile the persistence filter merges the
+   * stomion and the lower lip away, `nth('min', 2)` finds nothing, and the
+   * sulcus falls back to a fixed window — which is why `controls.depthAdult`
+   * first came back with `mentolabialMm: 0` and a null mentolabial angle on a
+   * head whose sulcus was placed by hand at -5.3 mm. Lowering the floor is not
+   * the fix: it re-admits the dorsum decoy that bug 3 was about.
+   *
+   * Below the stomion the anatomy is not ambiguous and needs no prominence at
+   * all — there is one lip, one sulcus and one chin, in that order — so all
+   * three are extrema *of a range*: the fullest point below the mouth line, the
+   * deepest point below that, the fullest point below that. `pogB` was already
+   * found this way for the same reason.
+   */
+  const argZ = (lo, hi, want) => {
+    let best = Math.max(mentonB, Math.min(lo, hi));
+    for (let b = Math.max(mentonB, Math.min(lo, hi)); b <= Math.max(lo, hi); b++) {
+      if (want > 0 ? zf[b] > zf[best] : zf[b] < zf[best]) best = b;
+    }
+    return best;
+  };
+  // The order below the mouth line is fixed anatomy: lip, sulcus, chin. Take
+  // the two *maxima* first and let the sulcus be the minimum strictly between
+  // them — searching the sulcus downward from the lip instead walks it into the
+  // jaw wrap under the menton, where z collapses to nothing and the chin
+  // follows it there (measured: the adult control's sulcus came back 23.7 mm
+  // low and its pogonion 25.5 mm low, and both landed on the same band).
+  const llB = argZ(Math.max(mentonB + 1, stoB - win(0.075)), stoB - 1, +1);
+  // Sulcus first, in a window 4-22 mm below the lower lip, then the chin as the
+  // front-most band below *it*. Order matters and both windows are load-
+  // bearing: "the front-most band below the lower lip" finds the **lip's own
+  // skirt** on a head whose chin is retruded, which is precisely the head this
+  // axis exists to catch — measured on Noctis it returned the pogonion 11 mm
+  // high and 6 mm proud of where the chin actually is.
+  const sulB = argZ(Math.max(mentonB + 1, llB - win(0.10)), Math.max(mentonB + 1, llB - win(0.02)), -1);
+  const pogB0 = argZ(mentonB, Math.max(mentonB, sulB - 1), +1);
+  const pogB = pogB0;
+
+  /**
+   * **Glabella** — the front-most band above the nasion, i.e. the brow's own
+   * prominence. Needed by the facial-convexity angle. It is a *maximum* over a
+   * range and not a persistence-filtered extremum on purpose: on a head with a
+   * weak brow the glabella is a shoulder rather than a peak and a peak-finder
+   * returns nothing, which would make the convexity angle silently absent on
+   * exactly the heads it is most interesting on.
+   *
+   * **Columella** — the midpoint of the nose's underside, between subnasale
+   * and pronasale. The nasolabial angle needs a second ray out of subnasale
+   * and this is the standard one. Taken as the band halfway between them
+   * rather than searched, because there is no extremum there to find.
+   */
+  let glaB = nasionB;
+  for (let b = nasionB; b <= Math.min(fz.last, nasionB + win(0.13)); b++) if (zf[b] > zf[glaB]) glaB = b;
+  const colB = Math.round((snB + prnB) / 2);
 
   return {
     yMin: r(yMin), yMax: r(yMax), headHeight: r(H),
@@ -272,13 +325,17 @@ function landmarks(pts, sagHalf) {
     /** Fraction of 1 mm bands that had to be interpolated. Near 1 = fiction. */
     interpFrac: { midline: r(fz.filled / NB, 3), width: r(fw.filled / NB, 3) },
     y: {
-      vertex: r(yOf(vertexB)), nasion: r(yOf(nasionB)), pronasale: r(yOf(prnB)),
-      subnasale: r(yOf(snB)), stomion: r(yOf(stoB)), pogonion: r(yOf(pogB)),
+      vertex: r(yOf(vertexB)), glabella: r(yOf(glaB)), nasion: r(yOf(nasionB)),
+      pronasale: r(yOf(prnB)), columella: r(yOf(colB)),
+      subnasale: r(yOf(snB)), labraleSup: r(yOf(ulB)), stomion: r(yOf(stoB)),
+      labraleInf: r(yOf(llB)), sulcus: r(yOf(sulB)), pogonion: r(yOf(pogB)),
       menton: r(yOf(mentonB)),
     },
     z: {
-      nasion: r(zf[nasionB]), pronasale: r(zf[prnB]), subnasale: r(zf[snB]),
-      stomion: r(zf[stoB]), pogonion: r(zf[pogB]),
+      glabella: r(zf[glaB]), nasion: r(zf[nasionB]), pronasale: r(zf[prnB]),
+      columella: r(zf[colB]), subnasale: r(zf[snB]), labraleSup: r(zf[ulB]),
+      stomion: r(zf[stoB]), labraleInf: r(zf[llB]), sulcus: r(zf[sulB]),
+      pogonion: r(zf[pogB]),
     },
     /** The prominent extrema the assignment above was made from, auditable. */
     extrema: ex.map((q) => `${q.kind}@${Math.round((yOf(vertexB) - yOf(q.b)) * 1000)}:${(q.z * 1000).toFixed(1)}`).join(' '),
@@ -355,6 +412,250 @@ function widthProfile(L) {
   return out.map((v) => r(v / m, 3));
 }
 
+/**
+ * ============================================================================
+ * THE SAGITTAL DEPTH AXIS
+ * ============================================================================
+ *
+ * Everything above this line measures **heights** (`landmarks`) or a
+ * **half-width** profile (`widthProfile`). A head can score adult on every one
+ * of those rows and still be a snout, because "how far forward is the lower
+ * face" is the third axis and nothing here measured it. Round 13's blind judge:
+ * *"the whole lower face is now a forward-tapering muzzle wedge with no lips,
+ * philtrum or chin — the region regressed while the checklist item was ticked."*
+ * That is a **depth** complaint, and both benches were structurally deaf to it.
+ *
+ * ## The reference frame problem, and why most published norms cannot be used
+ *
+ * The modern soft-tissue standards (Arnett's TVL, Holdaway's facial angle,
+ * anything "to Frankfort") are measured against a **true vertical in natural
+ * head position**. Canonical head space here is the model's own Y axis, which
+ * is whatever `shellPoint` was authored around — tilt the head 8 degrees and
+ * every one of those numbers moves several millimetres while the face is
+ * unchanged. Quoting them against canonical Y would be measuring the rig's
+ * posture and calling it anatomy.
+ *
+ * So the metrics below are split, and the split is the point:
+ *
+ * - **Primary — tilt-invariant.** Every reference line is drawn between two
+ *   points *on the face itself*, so rotating the head rotates the line with it
+ *   and the number does not move. These are the ones a verdict may rest on.
+ * - **Secondary — tilt-dependent.** Reported because they are legible, flagged
+ *   because they are only as good as `tiltProxyDeg`.
+ *
+ * ## Primary metrics and their adult-male norms
+ *
+ * | metric | what it is | adult male |
+ * |---|---|---|
+ * | `eLineLsMm` | labrale superius off the pronasale-pogonion line (Ricketts' E-line) | **-4** |
+ * | `eLineLiMm` | labrale inferius off the same line | **-2** |
+ * | `muzzleMm` | the furthest ANY midline point between subnasale and pogonion stands in front of the subnasale-pogonion chord | **3 to 6** |
+ * | `nasolabialDeg` | columella - subnasale - labrale superius | **90 to 110** |
+ * | `mentolabialMm` | how deep the sulcus is under the labrale-inferius-pogonion chord | **4 +/- 2** |
+ * | `mentolabialDeg` | labrale inferius - sulcus - pogonion | **122 +/- 12** |
+ * | `convexityDeg` | 180 minus the angle glabella - subnasale - pogonion | **12 +/- 4** |
+ *
+ * `muzzleMm` is the headline and the only one that needs no landmark naming at
+ * all: it is a maximum over the raw outline between two unambiguous points.
+ * A peak-finder is a hypothesis; this is the curve. Cross-checked two ways ->
+ * Ricketts' E-line norms put the upper lip 4.2 mm in front of that chord and
+ * Arnett's TVL means (subnasale 0, labrale superius +3.3, pogonion -3.5) put it
+ * at 4.2 as well, which is why the band is stated as 3-6 and not as a point.
+ *
+ * ## What the depth axis is STILL blind to
+ *
+ * The midline only. The malar plane, the zygomatic arch and the cheek are
+ * off-midline depth and none of them moves a number here — `head-r2.md` §8.2
+ * is still the open item it was. And like every bench in this file it reads the
+ * position buffer, so it cannot say whether the relief it measures survives the
+ * shipped key.
+ */
+function sagittal(L, sc) {
+  const M = (v) => r(v * sc * 1000, 2);              // canonical -> mm
+  const P = (name) => [L.y[name], L.z[name]];
+  /** Signed distance in front of the chord AB, at C's own height. + = in front. */
+  const offChord = (A, B, C) => {
+    const t = Math.abs(A[0] - B[0]) < 1e-9 ? 0 : (A[0] - C[0]) / (A[0] - B[0]);
+    return C[1] - (A[1] + (B[1] - A[1]) * t);
+  };
+  /** Angle ABC in degrees, in the sagittal plane (z forward, y up). */
+  const angAt = (A, B, C) => {
+    const u = [A[1] - B[1], A[0] - B[0]], v = [C[1] - B[1], C[0] - B[0]];
+    const lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]);
+    if (!lu || !lv) return null;
+    const c = Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)));
+    return r(Math.acos(c) * 180 / Math.PI, 1);
+  };
+
+  const sn = P('subnasale'), pog = P('pogonion'), prn = P('pronasale');
+
+  // The headline. Walk the raw 1 mm outline from subnasale to pogonion and take
+  // the furthest point in front of the sn-pog chord. No landmark naming, no
+  // peak-finder, no window: a maximum over the curve itself.
+  let muzzle = -Infinity, muzzleAt = null;
+  for (let b = L._b.mentonB; b < L._b.NB; b++) {
+    const y = L._b.yMin + (b + 0.5) * L._b.BAND;
+    if (y > sn[0] || y < pog[0]) continue;
+    const d = offChord(sn, pog, [y, L._zf[b]]);
+    if (d > muzzle) { muzzle = d; muzzleAt = y; }
+  }
+
+  return {
+    primary: {
+      muzzleMm: M(muzzle),
+      muzzleAtMmBelowVertex: r((L.y.vertex - muzzleAt) * sc * 1000, 1),
+      eLineLsMm: M(offChord(prn, pog, P('labraleSup'))),
+      eLineLiMm: M(offChord(prn, pog, P('labraleInf'))),
+      eLineStoMm: M(offChord(prn, pog, P('stomion'))),
+      nasolabialDeg: angAt(P('columella'), sn, P('labraleSup')),
+      mentolabialMm: M(-offChord(P('labraleInf'), pog, P('sulcus'))),   // + = deep
+      mentolabialDeg: angAt(P('labraleInf'), P('sulcus'), pog),
+      convexityDeg: (() => {
+        const a = angAt(P('glabella'), sn, pog);
+        return a === null ? null : r(180 - a, 1);
+      })(),
+    },
+    secondary: {
+      /** All against a vertical through subnasale in CANONICAL space. */
+      _ref: 'canonical-Y vertical through subnasale; tilt-dependent, see tiltProxyDeg',
+      glabellaMm: M(L.z.glabella - sn[1]),
+      pronasaleMm: M(L.z.pronasale - sn[1]),
+      labraleSupMm: M(L.z.labraleSup - sn[1]),
+      stomionMm: M(L.z.stomion - sn[1]),
+      labraleInfMm: M(L.z.labraleInf - sn[1]),
+      sulcusMm: M(L.z.sulcus - sn[1]),
+      pogonionMm: M(L.z.pogonion - sn[1]),
+      /** Arnett's adult-male TVL means for the same rows, for reading against. */
+      arnettMale: { glabella: -8.0, pronasale: 17, labraleSup: 3.3, labraleInf: 1.0, pogonion: -3.5 },
+      /** nasion -> pogonion against canonical vertical. + = chin behind nasion. */
+      facialPlaneDeg: r(Math.atan2(L.z.nasion - pog[1], L.y.nasion - pog[0]) * 180 / Math.PI, 1),
+    },
+    /**
+     * The lower-face outline expressed as offset from the sn-pog chord, every
+     * 2 mm. `muzzleMm` is the maximum of this list; read the list before
+     * believing the maximum.
+     */
+    chordProfile: (() => {
+      const o = [];
+      for (let b = L._b.NB - 1; b >= L._b.mentonB; b--) {
+        const y = L._b.yMin + (b + 0.5) * L._b.BAND;
+        if (y > sn[0] || y < pog[0]) continue;
+        if (Math.round((L.y.vertex - y) * 1000) % 2) continue;
+        o.push(`${Math.round((L.y.vertex - y) * 1000)}:${M(offChord(sn, pog, [y, L._zf[b]])).toFixed(1)}`);
+      }
+      return o.join(' ');
+    })(),
+  };
+}
+
+/**
+ * A synthetic head whose mid-sagittal **depth** profile is chosen point by
+ * point, which is what the depth axis needs and `syntheticHead` cannot give:
+ * that one adds gaussians of chosen *amplitude*, so the z a landmark ends up at
+ * is the sum of an ellipsoid and several overlapping tails and is not known in
+ * advance. Here the midline z at every height is exactly `prof`.
+ *
+ * `prof` is `[y, z]` control points, vertex first. Between them the profile is
+ * linear, so every control point is a corner and therefore an extremum the
+ * extractor must find; at x = 0 the returned surface passes through them
+ * exactly. The lobe is 22 mm wide so the 4 mm sagittal strip stays inside it
+ * (worst case x = 4 mm, weight 0.967).
+ */
+function syntheticDepthHead(prof, rows) {
+  const p = [];
+  const hx = 0.078, hy = 0.111, hz = 0.096;
+  const NV = rows || 200;
+  const zWant = (y) => {
+    if (y >= prof[0][0]) return prof[0][1];
+    for (let i = 1; i < prof.length; i++) {
+      if (y >= prof[i][0]) {
+        const t = (prof[i - 1][0] - y) / (prof[i - 1][0] - prof[i][0]);
+        return prof[i - 1][1] + t * (prof[i][1] - prof[i - 1][1]);
+      }
+    }
+    return prof[prof.length - 1][1];
+  };
+  for (let i = 0; i <= NV; i++) {
+    const phi = (i / NV) * Math.PI;
+    for (let j = 0; j <= 220; j++) {
+      const th = (j / 220) * Math.PI * 2;
+      const cy = Math.cos(phi), sp = Math.sin(phi);
+      const x = sp * Math.sin(th) * hx, y = cy * hy;
+      let z = sp * Math.cos(th) * hz;
+      if (z > 0) {
+        const zEll = hz * Math.sqrt(Math.max(0, 1 - (y / hy) * (y / hy)));
+        z += Math.exp(-Math.pow(x / 0.022, 2)) * (zWant(y) - zEll);
+      }
+      p.push(x, y, z);
+    }
+  }
+  return p;
+}
+
+/**
+ * Build a lower-face depth profile from **offsets against the subnasale**, in
+ * millimetres, which is how every published soft-tissue table states them.
+ * The heights are the same ones `syntheticHead` uses, so the two controls are
+ * the same head measured on two different axes.
+ */
+function depthProfile(o) {
+  const H = { gla: 0.0175, n: 0.0065, prn: -0.0395, col: -0.0475, sn: -0.0555, ul: -0.0645, sto: -0.0705, ll: -0.0765, sul: -0.0855, pog: -0.0935, gn: -0.1055 };
+  const zSn = 0.083;                                   // the ellipsoid's own z there
+  const at = (mm) => zSn + mm / 1000;
+  return [
+    [0.111, 0.0], [0.060, at(-30)], [H.gla, at(o.gla)], [H.n, at(o.n)],
+    [H.prn, at(o.prn)], [H.col, at(o.col)], [H.sn, 0 + at(0)],
+    [H.ul, at(o.ul)], [H.sto, at(o.sto)], [H.ll, at(o.ll)],
+    [H.sul, at(o.sul)], [H.pog, at(o.pog)], [H.gn, at(o.gn)], [-0.111, 0.0],
+  ];
+}
+
+/**
+ * The two heads that make the depth axis worth quoting. Both are the same
+ * skull with the same landmark *heights*; they differ only in depth, which is
+ * exactly the pair the height bench and the width bench cannot tell apart.
+ *
+ * - `depthAdult` is built to Arnett's adult-male soft-tissue means
+ *   (glabella -8, pronasale +17, labrale superius +3.3, inferius +1.0,
+ *   pogonion -3.5, all against the subnasale). It must come back inside every
+ *   band in `ZNORM`.
+ * - `depthMuzzle` is that head with the lips driven 12 and 8 mm forward and
+ *   the sulcus and chin driven 12 and 8 mm back — the shape round 13 named.
+ *   It must come back **outside** every band, in the right direction.
+ *
+ * An instrument that cannot separate these two is not measuring depth, and the
+ * height bench above genuinely cannot: both heads return identical `frac`,
+ * identical `ratio` and an identical `widthProfile`.
+ */
+const DEPTH_ADULT = { gla: -8, n: -12, prn: 17, col: 6, ul: 3.3, sto: 0.2, ll: 1.0, sul: -5.3, pog: -3.5, gn: -7 };
+const DEPTH_MUZZLE = { gla: -8, n: -12, prn: 17, col: 6, ul: 15.3, sto: 6, ll: 9.0, sul: -17.3, pog: -11.5, gn: -15 };
+
+/**
+ * Adult-male norms for the depth axis. See `sagittal`'s header for sources.
+ *
+ * **Two of these are calibrated off `controls.depthAdult` rather than quoted
+ * from a table, and that is deliberate.**
+ *
+ * - `nasolabialDeg`. The published 90-110 is measured against the *tangent to
+ *   the columella*, which a midline outline in 1 mm bands does not have. This
+ *   one is `subnasale -> the outline 8 mm above it`, a different ray, and the
+ *   adult control — built to Arnett's own subnasale/pronasale/labrale means —
+ *   reads **126** through it. So the band here is 126 +/- 15, i.e. the
+ *   instrument's own reading on a head whose answer is known, and quoting the
+ *   textbook 90-110 against it would have condemned a correct nose.
+ * - `convexityDeg` **does not discriminate and is reported for completeness
+ *   only.** A bare featureless ellipsoid scores 12.2 through it — dead centre
+ *   of the adult band — because glabella, subnasale and pogonion all sit on one
+ *   smooth curve whatever is or is not carved between them.
+ */
+const ZNORM = {
+  muzzleMm: [3, 6], eLineLsMm: [-6, -1], eLineLiMm: [-4, 0],
+  nasolabialDeg: [111, 141], mentolabialMm: [2, 6], mentolabialDeg: [110, 134],
+  convexityDeg: [8, 16],
+  _notDiscriminating: ['convexityDeg'],
+  _calibratedOffControl: ['nasolabialDeg'],
+};
+
 // ---- control: a synthetic head whose landmark heights are CHOSEN -----------
 // If the extractor cannot recover these it is measuring itself, and every
 // number below is noise. Ellipsoid + a nose ridge, a mouth groove and a chin.
@@ -424,6 +725,72 @@ const out = { norm: NORM, controls: {}, chars: {} };
   out.controls.bareEllipsoid = {
     frac: flat.frac, extrema: flat.extrema, relief: flat.relief,
     mouthReliefMm: flat.ratio.mouthReliefMm, widthProfile: widthProfile(flat),
+    /** No face, so no muzzle: this must be ~0 and every angle near straight. */
+    sagittal: sagittal(flat, 1).primary,
+  };
+}
+
+// ---- controls for the DEPTH axis ------------------------------------------
+// Two heads with identical landmark heights and identical widths that differ
+// only in sagittal depth. `sagittal` must separate them; nothing above it can.
+{
+  const run = (o, rows, prom) => {
+    const L = landmarks(syntheticDepthHead(depthProfile(o), rows), SAG, prom);
+    return { L, s: sagittal(L, 1) };
+  };
+  const zErr = (L, o) => {
+    const sn = L.z.subnasale;
+    const e = (k, want) => r((L.z[k] - sn) * 1000 - want, 1);
+    return {
+      glabella: e('glabella', o.gla), pronasale: e('pronasale', o.prn),
+      labraleSup: e('labraleSup', o.ul), stomion: e('stomion', o.sto),
+      labraleInf: e('labraleInf', o.ll), sulcus: e('sulcus', o.sul),
+      pogonion: e('pogonion', o.pog),
+    };
+  };
+  const adult = run(DEPTH_ADULT, 200, 0.0025);
+  const muzzle = run(DEPTH_MUZZLE, 200, 0.0025);
+  // The shipped grid's own row count, so most 1 mm bands are interpolated.
+  const adultCoarse = run(DEPTH_ADULT, 120, 0.0025);
+
+  out.controls.depthAdult = {
+    wantMmFromSubnasale: DEPTH_ADULT, recoveredErrMm: zErr(adult.L, DEPTH_ADULT),
+    sagittal: adult.s.primary, chordProfile: adult.s.chordProfile,
+    frac: adult.L.frac, widthProfile: widthProfile(adult.L),
+    interpFrac: adult.L.interpFrac, extrema: adult.L.extrema,
+  };
+  out.controls.depthAdultMeshRows = {
+    recoveredErrMm: zErr(adultCoarse.L, DEPTH_ADULT), sagittal: adultCoarse.s.primary,
+    interpFrac: adultCoarse.L.interpFrac,
+  };
+  out.controls.depthMuzzle = {
+    wantMmFromSubnasale: DEPTH_MUZZLE, recoveredErrMm: zErr(muzzle.L, DEPTH_MUZZLE),
+    sagittal: muzzle.s.primary, chordProfile: muzzle.s.chordProfile,
+    /** Identical to `depthAdult`'s by construction — that is the whole point. */
+    frac: muzzle.L.frac, widthProfile: widthProfile(muzzle.L),
+  };
+  /**
+   * **The separation, stated as a pass/fail rather than left to a reader.**
+   * If this says false, no depth number below it means anything.
+   */
+  const maxAbs = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  out.controls.depthSeparates = {
+    /**
+     * The two heads differ by up to 27 mm of depth. If the height bench and the
+     * width bench barely move across that while `muzzleMm` moves 5x, the depth
+     * axis is measuring something neither of them could see — which is the
+     * whole claim.
+     */
+    heightBenchMaxDeltaFrac: r(maxAbs(
+      [adult.L.frac.nasion, adult.L.frac.pronasale, adult.L.frac.subnasale, adult.L.frac.stomion],
+      [muzzle.L.frac.nasion, muzzle.L.frac.pronasale, muzzle.L.frac.subnasale, muzzle.L.frac.stomion]), 3),
+    widthBenchMaxDelta: r(maxAbs(widthProfile(adult.L), widthProfile(muzzle.L)), 3),
+    muzzleMm: { adult: adult.s.primary.muzzleMm, muzzle: muzzle.s.primary.muzzleMm },
+    muzzleRatio: r(muzzle.s.primary.muzzleMm / Math.max(1e-6, adult.s.primary.muzzleMm), 2),
+    adultInsideNorms: adult.s.primary.muzzleMm >= ZNORM.muzzleMm[0] && adult.s.primary.muzzleMm <= ZNORM.muzzleMm[1],
+    muzzleOutsideNorms: muzzle.s.primary.muzzleMm > ZNORM.muzzleMm[1] * 2,
+    /** The bare ellipsoid must read ~0: no face, no muzzle. */
+    bareEllipsoidMuzzleMm: sagittal(landmarks(syntheticHead({ n: 9, prn: 9, sn: 9, ul: 9, sto: 9, ll: 9, pog: 9 }, 200), SAG), 1).primary.muzzleMm,
   };
 }
 
@@ -558,6 +925,9 @@ for (const [key, m] of who) {
 
   out.chars[key] = {
     paint,
+    /** The third axis. Read `controls.depthSeparates` before any of it. */
+    sagittal: sagittal(L, sc),
+    zNorm: ZNORM,
     verts: pos.count, skullVerts: NSK, earVerts: nEar,
     headHeightMm: r(H * sc * 1000, 1),
     headBreadthMm: r(euEu * sc * 1000, 1),
@@ -609,9 +979,11 @@ for (const [key, m] of who) {
   };
 }
 
-out.blindTo = 'landmark heights on the midline plus three width bands. '
-  + 'Blind to all off-midline relief (use brushsurvive.mts), to shading and '
-  + 'normals, and to hair. Correct proportions here say nothing about whether '
-  + 'the features read in a frame.';
+out.blindTo = 'landmark heights on the midline, a half-width profile, and (since '
+  + 'head-r3) the mid-sagittal DEPTH profile. Still blind to all OFF-midline '
+  + 'relief -- the malar plane, the zygomatic arch, the cheek -- which is '
+  + 'brushsurvive.mts\'s question and head-r2.md §8.2\'s open item; to shading, '
+  + 'normals and the shipped key; and to hair. Correct numbers on all three axes '
+  + 'still say nothing about whether the features read in a frame.';
 
 return out;
