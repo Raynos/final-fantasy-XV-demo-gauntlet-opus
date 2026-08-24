@@ -230,18 +230,18 @@ export function brushes(look: Look): SculptBrush[] {
   // exactly the pair the round-11 judge described. A profile bench cannot see
   // this and neither can a landmark bench: it is off-midline mass, and it is
   // what makes a mouth read from an angle.
-  add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0012, dir: 'normal' });
+  add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0008, dir: 'normal' });
   add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0038, dir: [0, 0, 1] });    // philtrum groove
   add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0026, dir: [0, 0, 1], mirror: true }); // philtrum columns
-  add({ p: [0, -0.0595, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0012, dir: [0, 0.18, 1] });   // upper vermilion
+  add({ p: [0, -0.0605, 0.0855], r: [0.026, 0.0075, 0.026], amt: 0.0024, dir: [0, 0.18, 1] });   // upper vermilion
   add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0010, dir: [0, 0, 1] });      // cupid's bow
   // The mouth line is 13 mm deep, not 9.2. It has to survive the *shipped*
   // key, not a studio one: in `hero_portrait` the mid-face is in shadow and a
   // 9.2 mm groove under a 5.5 mm barrel produced no shading contrast at all.
   // 3.6 mm of r_y is still four grid rows at the face's 1.9 mm row pitch.
-  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0, 1] });     // mouth line
-  add({ p: [0, -0.0715, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0038, dir: [0, -0.10, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0055, dir: 'normal', mirror: true });
+  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0.42, 1] });     // mouth line
+  add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0050, dir: [0, 0.12, 1] });  // lower vermilion
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0078, dir: 'normal', mirror: true });
   // nasolabial: the fold runs from the alar crease down past the mouth corner,
   // and it is the strongest off-midline value on the lower face at any angle
   // other than dead-on. One brush at the top of it was not a fold.
