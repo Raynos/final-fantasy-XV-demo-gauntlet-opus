@@ -77,7 +77,7 @@ const sd = (a: number[]) => {
   return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / (a.length - 1));
 };
 
-console.log('zone            set     n    tilt sd(deg)  |tilt|>5deg  aniso mean  aniso>1.4  s p50   s p95');
+console.log('zone            set     n   tilt mean/sd (deg)  >5deg  >10deg  aniso mean  aniso>1.4  s p50   s p95');
 for (const [zn, cx, cz] of ZONES) {
   const g = gather(cx, cz);
   for (const [name, set] of [['near', g.near], ['far', g.far]] as Array<[string, Inst[]]>) {
@@ -92,8 +92,10 @@ for (const [zn, cx, cz] of ZONES) {
     const ss = inWin.map((p) => p.s).sort((a, b) => a - b);
     console.log(
       `${zn.padEnd(15)} ${name.padEnd(5)} ${String(inWin.length).padStart(5)}   `
+      + `${(tilt.reduce((a, b) => a + b, 0) / tilt.length).toFixed(2).padStart(5)} `
       + `${sd(tilt).toFixed(2).padStart(6)}      `
-      + `${(100 * tilt.filter((t) => t > 5).length / tilt.length).toFixed(1).padStart(5)}%     `
+      + `${(100 * tilt.filter((t) => t > 5).length / tilt.length).toFixed(1).padStart(5)}% `
+      + `${(100 * tilt.filter((t) => t > 10).length / tilt.length).toFixed(1).padStart(5)}%   `
       + `${(aniso.reduce((a, b) => a + b, 0) / Math.max(1, aniso.length)).toFixed(3)}     `
       + `${(100 * aniso.filter((a) => a > 1.4).length / Math.max(1, aniso.length)).toFixed(1).padStart(5)}%  `
       + `${ss[Math.floor(ss.length * 0.5)].toFixed(2).padStart(6)} ${ss[Math.floor(ss.length * 0.95)].toFixed(2).padStart(6)}`,
