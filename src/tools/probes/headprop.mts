@@ -923,10 +923,49 @@ for (const [key, m] of who) {
     };
   }
 
+  /**
+   * **How fast does the face turn away from the front?**
+   *
+   * The depth axis above is a *midline* statistic and so is every other bench
+   * here. This is the transverse one, and it is what decides whether a key from
+   * either side draws a face or splits it: for a band of heights, the front-most
+   * z at |x| = 0, 15, 30 and 45 mm, as a drop from the midline in mm.
+   *
+   * A face is not an ellipse in section — it is flat-ish across the maxilla and
+   * turns at the malar — but `shellPoint` sweeps a pure ellipse in theta, so
+   * this is the row where that shows. On a head the drop at 30 mm out at the
+   * mouth is roughly 7 mm and at 45 mm roughly 18; an ellipse with this head's
+   * semi-axes (58 mm across, 89 deep at the upper-lip line) gives 12.7 and 27.
+   *
+   * Bands are 3 mm of height and 4 mm of x, both wider than the mesh's own
+   * spacing there (2 mm rows, 1.4-1.7 mm columns), so no band is empty and none
+   * of this is interpolation.
+   */
+  const transverse = (() => {
+    const rows = {};
+    const want = [['nasion', L.y.nasion], ['eye', eyeY === null ? L.y.nasion - 0.012 : eyeY],
+      ['subnasale', L.y.subnasale], ['labraleSup', L.y.labraleSup],
+      ['stomion', L.y.stomion], ['pogonion', L.y.pogonion]];
+    const XS = [0, 0.015, 0.030, 0.045];
+    for (const [name, y0] of want) {
+      const z = XS.map(() => -Infinity);
+      for (let i = 0; i < skull.length; i += 3) {
+        if (Math.abs(skull[i + 1] - y0) > 0.0015) continue;
+        const ax = Math.abs(skull[i]);
+        for (let k = 0; k < XS.length; k++) {
+          if (Math.abs(ax - XS[k]) <= 0.002 && skull[i + 2] > z[k]) z[k] = skull[i + 2];
+        }
+      }
+      rows[name] = z.map((v, k) => (isFinite(v) && isFinite(z[0]) ? r((z[0] - v) * sc * 1000, 1) : null));
+    }
+    return { xMm: [0, 15, 30, 45], dropMm: rows, adultAtMouth: [0, 2, 7, 18] };
+  })();
+
   out.chars[key] = {
     paint,
     /** The third axis. Read `controls.depthSeparates` before any of it. */
     sagittal: sagittal(L, sc),
+    transverse,
     zNorm: ZNORM,
     verts: pos.count, skullVerts: NSK, earVerts: nEar,
     headHeightMm: r(H * sc * 1000, 1),

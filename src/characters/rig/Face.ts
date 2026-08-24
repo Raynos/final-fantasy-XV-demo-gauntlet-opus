@@ -242,6 +242,38 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0.42, 1] });     // mouth line
   add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0050, dir: [0, 0.12, 1] });  // lower vermilion
   add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0078, dir: 'normal', mirror: true });
+  /**
+   * **The maxilla and the malar, and why a hard terminator ran down the
+   * midline of every front view in this repo's history.**
+   *
+   * `shellPoint` sweeps a pure ellipse in theta, so the transverse section of
+   * the mid-face is an ellipse whose semi-axes at the upper-lip line are 58 mm
+   * across and 89 mm deep. Nose-on that gives a radius of curvature of 38 mm,
+   * where a real face's transverse radius at the mouth is 45-60: the surface
+   * turns away from the front about 1.6x too fast, so a key from either side
+   * flips the face from lit to unlit almost in one step and every off-midline
+   * feature reads as nothing. Measured on the shell: from the midline out to
+   * x = 30 mm the surface falls back **12.7 mm** and at x = 42 mm **24.3 mm**,
+   * against roughly 7 and 15 on a head.
+   *
+   * head-r2 saw the symptom (`head-r2.md` §5, "a straight vertical terminator
+   * down the midline") and answered it with a 5.5 mm barrel over the muzzle,
+   * which raised the *midline* and left the sides where they were — so the
+   * terminator survived and the head gained the 22 mm of forward mass that
+   * round 13 called a muzzle wedge. The two front-lateral brushes here are the
+   * fix that barrel was standing in for: they fill the canine eminence and the
+   * malar plane, which is where the mass belongs, and they cannot move
+   * `muzzleMm` because they do not reach the midline (x = 0 is 1.15 and 1.5
+   * radii out).
+   *
+   * This is also `head-r2.md` §8.2's open item — "the cheek is a blank plane at
+   * every angle but profile ... no infra-orbital plane, no zygomatic arch, no
+   * temporal hollow". Two of the three are here; the arch and the hollow are
+   * not, and are still open.
+   */
+  add({ p: [0.0300, -0.0545, 0.0765], r: [0.028, 0.026, 0.034], amt: 0.0100 + 0.003 * cheek, dir: [0, 0, 1], mirror: true });
+  add({ p: [0.0450, -0.0370, 0.0625], r: [0.032, 0.034, 0.036], amt: 0.0120 + 0.004 * cheek, dir: [0, 0, 1], mirror: true });
+
   // nasolabial: the fold runs from the alar crease down past the mouth corner,
   // and it is the strongest off-midline value on the lower face at any angle
   // other than dead-on. One brush at the top of it was not a fold.
