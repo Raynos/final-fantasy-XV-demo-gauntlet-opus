@@ -67,12 +67,13 @@ into the bottom third". The cranium measured **correct**. What was wrong:
 | eye line from the vertex | 0.519 | 0.519 | 0.50–0.53 |
 | **subnasale from the vertex** | **0.760** | **0.692** | 0.688 |
 | **mouth line from the vertex** | **0.851** | **0.783** | 0.782 |
-| **nose length n–sn** | **0.281** | **0.213** | 0.211 |
-| **lower face sn–gn** | **0.240** | **0.308** | 0.312 |
-| **chin block sto–gn** | **0.149** | **0.217** | 0.218 |
-| **thirds, n-sn : sn-gn** | **1.17** | **0.691** | 0.68 |
-| nose projection, tip to sn | 37.2 mm | 22.8 mm | ~21 mm |
-| pogonion out of its sulcus | 1.0 mm | 8.2 mm | 4–6 mm |
+| **nose length n–sn** | **0.281** | **0.217** | 0.211 |
+| **lower face sn–gn** | **0.240** | **0.303** | 0.312 |
+| **chin block sto–gn** | **0.149** | **0.213** | 0.218 |
+| **thirds, n-sn : sn-gn** | **1.17** | **0.716** | 0.68 |
+| nose projection, tip to sn | 37.2 mm | 22.5 mm | ~21 mm |
+| pogonion out of its sulcus | 1.0 mm | 6.2 mm | 4–6 mm |
+| mouth relief, lower lip to stomion | 6.2 mm | 9.7 mm | — |
 | ear length / head height | 0.297 | 0.270 | 0.269 |
 | ear centre below the eye | 0.102 | 0.055 | 0.056 |
 
@@ -202,6 +203,18 @@ The mouth row is clean on all four.
 
 ## 7. Gates and budget
 
+`pnpm run check`: **15/16 PASS**, and the 16th is contention, not content.
+`driftcheck` fails inside the suite with `page.evaluate: Target page, context
+or browser has been closed` and **passes standalone once the lease clears** —
+`PASS (tolerance 0.05 m drift, 0.45 m vs heightAt)`. The daemon's `exclusive`
+lease was held by `gameplay` through the suite run and the first retry, which
+closes other pages under it. The previous head lane recorded the identical
+failure for the identical reason.
+Everything this lane can break is green: `creaturecheck` 207 poses,
+`combatloop` 31/31, `silhouette` 42 meshes in 8 families, `geocheck`,
+`floatcheck` 123 POIs, `orphans` 301/301, `reachcheck`, `uxcheck` 93/93,
+`integration`.
+
 
 
 **Draw calls, `tmp/shots/judge-r12/manifest.json` against
@@ -221,9 +234,10 @@ immediately before this lane's first sculpt change, against `HEAD`:
 | shot | `d30e2aa` | now | triangles |
 |---|---|---|---|
 | `hero_portrait` | **595** | **591** | 8.082 M -> 8.078 M |
-| `poi_haven` | **636** | **636** | 7.528 M -> 7.412 M |
+| `poi_haven` | **636** | **636** | 7.528 M -> 7.446 M |
 
-**Zero new draw calls, four fewer, and 4 000 fewer triangles.** That is what it
+**Zero new draw calls, four fewer at `hero_portrait`, and 4 000 fewer
+triangles.** That is what it
 should be: every change here is a number in an existing brush table, two lines
 in `shellPoint`/`jawTaper`, one neck ring radius and 63 y literals in a canvas
 painter. Same meshes, same materials, same instancing. `hero_portrait` was
@@ -314,12 +328,14 @@ above belongs to whoever committed in between, not here.
 | before, the shipped portrait | `tmp/shots/judge-r12/hero_portrait.png`, `face.png` |
 | **the contact-shadow A/B** | `tmp/shots/head-r2h/` (hair off) against **`tmp/shots/head-r2n/`** (hair off + `nocontact`) |
 | the first true front view, mid-lane | `tmp/shots/head-r2b/noctis_front.png`, `_side`, `_q` |
-| **current studio views** | **`tmp/shots/head-r2d/`** — `noctis_side.png` is the one to look at |
+| studio views, before the chin wall | `tmp/shots/head-r2d/` |
 | the `NO_FACEMAP` ablation (inconclusive, see §8.3) | `tmp/shots/head-r2e/` |
-| **current shipped frames + budget** | **`tmp/shots/head-r2q/`** |
-| the bench, four runs | `tmp/shots/head-r2/prop0..4.json` |
+| shipped frames + budget, mid-lane | `tmp/shots/head-r2q/` |
+| **final studio views** | **`tmp/shots/head-r2f/`** |
+| **final shipped frames** | **`tmp/shots/head-r2z/`** |
+| the bench, seven runs | `tmp/shots/head-r2/prop0..6.json` |
 
-`tmp/shots/head-r2d/noctis_side.png` against `tmp/shots/head-r3n/noctis_prof.png`
+`tmp/shots/head-r2f/noctis_side.png` against `tmp/shots/head-r3n/noctis_prof.png`
 is the before/after for the whole lane: same framing, same light, a head that
 had a nose, a mouth and a chin in the sampler and none of them in the right
 place, against one that does.
