@@ -378,8 +378,14 @@ matérn **0.519**, dynamic range 2.42x, not void.
 
 `pnpm run check` — see the run recorded at the foot of this file.
 
-Draw calls and triangles on the six judged frames, `tmp/shots/vr3-r0`
-(before, `1ff7a44`) against `tmp/shots/vr3-r4` (after):
+Draw calls and triangles on the six judged frames, `tmp/shots/vr3-r0` (the
+session's starting HEAD, `262cb01`) against `tmp/shots/vr3-r4`. **That window
+contains other lanes' commits too** — the terrain lane's `88efe38` and the perf
+lane's `eda9021` among them — so read it as "the budget did not move", not as
+this lane's own cost. The isolated numbers, taken immediately either side of the
+separation commit alone, are `zone_nebulawood` **731 -> 711** and
+`zone_fallgrove` **606 -> 626**: the grass field's chunk allocation moving, the
+same +-20 `handoff/scatter.md` recorded, net zero across the pair.
 
 | shot | draws | triangles |
 |---|---|---|
