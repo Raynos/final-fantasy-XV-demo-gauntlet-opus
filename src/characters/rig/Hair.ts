@@ -469,7 +469,13 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   // tuft: it keeps every style's relative distribution (fringe vs crown vs
   // nape) exactly as `Cast.ts` authored it. At 0.25 Noctis' 872 roots become
   // 218 cards, replacing 2 616 tubes.
-  const cardDensity = H.cardDensity ?? 0.25;
+  // 0.30, not 0.25: the cutout narrows continuously along a card now (its outer
+  // filaments end at 0.36-0.52 of the length, the middle ones at 0.7-1.0), so
+  // the *effective* width past mid-length is about 60% of the card's. More
+  // overlap is what a real groom has anyway — 0.30 puts Noctis at 262 cards and
+  // Ignis at 186, still inside the head lane's 150-250 band, and the whole hair
+  // mesh is 21% fewer triangles than the tubes it replaced.
+  const cardDensity = H.cardDensity ?? 0.30;
   /**
    * The card's frame reference: the scalp normal *at the point*, not at the
    * root.
@@ -642,9 +648,8 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
           // 16% over the last third. The *ragged* end is in the cutout, where
           // each filament stops at its own length; the geometry only has to
           // stop the card being a rectangle.
-          taper: (t: number) => (t < 0.66
-            ? 0.72 + 0.28 * smooth(t / 0.22)
-            : 1 - 0.84 * Math.pow((t - 0.66) / 0.34, 0.85)),
+          taper: (t: number) => (0.72 + 0.28 * smooth(t / 0.20))
+            * (1 - 0.90 * Math.pow(clamp01((t - 0.62) / 0.38), 1.05)),
           // the same wide per-lock value spread the tubes carried: at card
           // scale it is finally resolvable, which is the point
           color: tRoot.clone().lerp(tTip, 0.10 + 0.32 * Math.pow(rng.next(), 1.3)),

@@ -506,29 +506,52 @@ function hairCutTexture(size = 512): THREE.Texture {
   const half = size >> 1;
   // one deterministic strand layout per variant
   const rnd = new Rng(90210);
-  const V: { c: number, hw: number, drift: number, end: number }[][] = [];
+  interface Fil {
+    c: number, hw: number, drift: number, end: number,
+    wob: number, wobK: number, wobP: number, thK: number, thP: number,
+  }
+  const V: Fil[][] = [];
   for (let k = 0; k < CARD_VARIANTS; k++) {
-    const nStr = 5 + (k % 3);
+    const nStr = 6 + (k % 3);
     const margin = 0.045;
     const span = 1 - margin * 2;
-    const strands = [];
+    const strands: Fil[] = [];
     for (let j = 0; j < nStr; j++) {
+      const cn = (j + 0.5) / nStr;
+      // 1 down the middle of the card, 0 at its two edges
+      const mid = 1 - Math.abs(cn * 2 - 1);
       strands.push({
         // evenly slotted then jittered by well under half a slot — the same
         // rule §8.3 states for roots ("an even fan is a comb, fully random
         // leaves bald patches"), one scale down
-        c: margin + ((j + 0.5) / nStr + (rnd.next() - 0.5) * 0.34 / nStr) * span,
-        // HALF-width: 0.31 of the slot pitch puts the filament's full width at
-        // 62% of the pitch, which is the mean coverage the alpha-test/mip
-        // arithmetic in this docstring is built on. Writing the 0.62 here
-        // instead doubles it, the filaments merge, and the card goes back to
-        // being an opaque blade with a few scratches on it.
-        hw: (0.31 * span / nStr) * (0.72 + 0.56 * rnd.next()),
-        drift: rnd.gauss(0, 0.035),
-        // where this filament ends. Ragged ends over the last third are what
-        // makes the *lock* end in a point without the card's own silhouette
-        // being a clean triangle.
-        end: 0.60 + 0.40 * rnd.next(),
+        c: margin + (cn + (rnd.next() - 0.5) * 0.34 / nStr) * span,
+        // HALF-width: 0.345 of the slot pitch puts the filament's full width
+        // at 69% of the pitch. Writing 0.69 here instead doubles it, the
+        // filaments merge, and the card goes back to being an opaque blade
+        // with a few scratches on it — which is what the first build did.
+        hw: (0.345 * span / nStr) * (0.74 + 0.52 * rnd.next()),
+        // Lateral wander. At 0.035 the filaments ran dead parallel down the
+        // whole card and the result read as **wood grain inside a straight-
+        // sided blade** — the single loudest remaining tell in
+        // tmp/shots/hair-r3, and worst on pale hair where the card's own edge
+        // has contrast against the gap behind it.
+        drift: rnd.gauss(0, 0.070),
+        wob: rnd.gauss(0, 0.035),
+        wobK: 3.5 + 4 * rnd.next(),
+        wobP: rnd.next() * 6.283,
+        // **Where this filament ends, biased to the middle of the card.** A
+        // lock is not a rectangle that stops: its outer filaments peel off
+        // early and its middle carries on to the point. With every filament
+        // ending at 0.60-1.00 the card kept its full width to within a
+        // whisker of its tip and then stopped, which is a straight-sided
+        // blade with a chamfer. Outer filaments now end at 0.36-0.52 and the
+        // middle at 0.69-0.99, so the *cutout* narrows continuously and the
+        // card's silhouette is a lock rather than its own bounding box.
+        end: (0.42 + 0.48 * mid) * (0.86 + 0.28 * rnd.next()),
+        // and each thins and thickens along its length, so no filament is a
+        // straight-sided stripe either
+        thK: 2.0 + 3.5 * rnd.next(),
+        thP: rnd.next() * 6.283,
       });
     }
     V.push(strands);
@@ -549,11 +572,16 @@ function hairCutTexture(size = 512): THREE.Texture {
           // the filament narrows to nothing at its own end: "a lock ends in a
           // point", per filament, so the card's tip is ragged rather than cut
           const w = st.hw * Math.pow(Math.min(1, (st.end - t) / 0.30), 0.55)
+            // a slow swell down the filament — under one cycle over the whole
+            // card, so it thins and thickens once rather than beading
+            * (0.87 + 0.13 * Math.sin(t * st.thK + st.thP))
             // and the roots merge into one solid base, or the card shows sky
             // between its own filaments where it meets the scalp
             * (1 + 2.2 * Math.exp(-t * 16));
           if (w <= 0) continue;
-          const d = Math.abs(s - (st.c + st.drift * t));
+          const pos = Math.min(0.985, Math.max(0.015,
+            st.c + st.drift * t + st.wob * Math.sin(t * st.wobK + st.wobP)));
+          const d = Math.abs(s - pos);
           if (d >= w) continue;
           a = Math.max(a, smooth(clamp01((w - d) / (w * 0.45))));
         }
