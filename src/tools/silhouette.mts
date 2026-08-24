@@ -438,6 +438,44 @@ async function rockSubjects(seeds: number): Promise<Subject[]> {
     out.push({ family: 'rock:base', name: `base:${k.key}`, tris: trisOfGeoms([geo.get(k.key)!]) });
   }
 
+  // **A narrow-object anchor, because the global threshold is calibrated on
+  // trees and this metric is not scale-free in aspect.**
+  //
+  // The profile is a band width divided by the mesh's own height, so a family
+  // whose widest band is 0.43 of its height has every one of its 192 numbers
+  // bounded by 0.43, and the largest RMS distance two such shapes can possibly
+  // reach is bounded with them. The tree anchors that set the 5.80 threshold
+  // are parasols and spires around 0.6-1.0. So a `fin` row scoring 4 does not
+  // mean the same thing a `tree:savanna` row scoring 4 means, and reading it as
+  // if it did is exactly the "instrument measuring itself" failure this bench
+  // exists to avoid.
+  //
+  // The control: a prism, a cone and an ellipsoid, all cut to the fin family's
+  // own 0.43 aspect. Nobody would call those one shape. Whatever they score is
+  // what "clearly different, at this aspect" is worth, and it is printed every
+  // run beside the row it qualifies.
+  {
+    const narrow = (g: THREE.BufferGeometry, name: string) => {
+      g.scale(1, 1, 1);
+      return silhouette(trisOfGeoms([g]), name);
+    };
+    const A = 0.43;
+    const prism = narrow(new THREE.CylinderGeometry(A, A, 2, 24), 'narrow-prism');
+    const cone = narrow(new THREE.ConeGeometry(A, 2, 24), 'narrow-cone');
+    const egg = new THREE.SphereGeometry(1, 24, 16);
+    egg.scale(A, 1, A);
+    const ell = narrow(egg, 'narrow-ellipsoid');
+    const d = [
+      ['prism ~ cone', profileDistance(prism, cone)],
+      ['prism ~ ellipsoid', profileDistance(prism, ell)],
+      ['cone ~ ellipsoid', profileDistance(cone, ell)],
+    ] as const;
+    console.log(`narrow-object anchor at aspect ${A} — three shapes nobody would call the same:`);
+    for (const [k, v] of d) console.log(`  ${k.padEnd(20)} ${v.toFixed(3)}`);
+    console.log('  (the tree anchors that set the threshold run at aspect 0.6-1.0; a narrow');
+    console.log('   family cannot reach their numbers, so read the fin row against these.)\n');
+  }
+
   /** One course, placed exactly as `Rocks.update`'s `emit` would place it. */
   const place = (
     kind: Kind, x: number, y: number, z: number,
@@ -467,7 +505,9 @@ async function rockSubjects(seeds: number): Promise<Subject[]> {
   // changed, only which plans land in which row.
   //
   // `rockS` 1.05 is Longwythe's, the zone the judge photographed.
-  const want = new Map<string, number>([['pinnacle', seeds], ['fin', seeds], ['boss', seeds]]);
+  const want = new Map<string, number>(
+    (['fin', 'boss', 'pinnacle', 'hoodoo'] as const).map((k) => [k, seeds]),
+  );
   for (let v = 0; v < seeds * 40; v++) {
     const rng = new Rng(9001 + v * 7919);
     const plan = R.torPlan(rng, 1.05, ext);
