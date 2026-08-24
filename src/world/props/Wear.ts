@@ -329,7 +329,14 @@ export function gradePad(o: PadOpts): PadResult {
     eco, x, z, base, r, seed, cull = 400, rampYaw = null,
     fill = 3, cut = 1.5, wobble = 0.085,
   } = o;
-  const seg = o.seg ?? Math.max(20, Math.min(48, Math.round(r * 1.6)));
+  // Angular resolution. The old floor of 20 gave a haven's 12.6 m pad a 3.9 m
+  // facet on its rim, and a wobbled outline sampled at 20 points is not a
+  // wandering dozed edge -- it is a scalloped polygon, which is what the
+  // coordinator read off `reframe-r2/hav_d.png` as a poker chip. Chord error
+  // is what matters, not radius: at 36 segments a 12.6 m rim is 2.2 m per
+  // facet and at 64 a 40 m one is 3.9 m. It is one merged mesh either way, so
+  // this buys silhouette for triangles and not for draw calls.
+  const seg = o.seg ?? Math.max(36, Math.min(64, Math.round(r * 2.2)));
   const rng = new Rng((seed >>> 0) * 2654435761 % 4294967291);
   const nz2 = new Noise(seed ^ 0x9e37);
 
@@ -394,14 +401,29 @@ export function gradePad(o: PadOpts): PadResult {
       const k = Math.max(0, 1 - Math.abs(d) / 0.26);
       slopeFill = fill + (9 - fill) * (k * k * (3 - 2 * k));
     }
-    // How far this bearing's batter has to run: measured, not assumed.
-    const hEdge = groundAt(x + ct * e, z + st * e);
+    // How far this bearing's batter has to run: measured, not assumed -- and
+    // measured ALONG the batter rather than at the deck edge alone.
+    //
+    // Reading only `groundAt(edge)` is what produced the mushroom in
+    // `tmp/shots/reframe-r1/neb_a_high.png`. On a shoulder the ground is level
+    // with the deck *at the edge* and then falls away just outside it, so
+    // `hEdge` is ~0, the reach comes out at its 3.0 m floor, and the batter has
+    // no room: the outermost station then takes the `plunge` clamp below and
+    // drops five metres in one ring step. That is a vertical curtain at the rim
+    // -- a cap on an undercut stalk. So walk out to the cap and take the
+    // deepest ground the batter will actually have to cross.
+    const capOut = r * 1.15 + 6;
+    let hEdge = groundAt(x + ct * e, z + st * e);
+    for (let k = 1; k <= 4; k++) {
+      const gk = groundAt(x + ct * (e + (k / 4) * capOut), z + st * (e + (k / 4) * capOut));
+      if (gk < hEdge) hEdge = gk;
+    }
     // Capped, and the cap is a composition decision rather than an engineering
     // one: a pad on a real hillside wants forty metres of 1:3 embankment, and
     // forty metres of bare fill is then the largest thing in the frame. Beyond
     // the cap the batter simply meets the ground steeper than a dozer would.
     const reachOut = Math.min(
-      r * 1.15 + 6,
+      capOut,
       Math.max(2.5, Math.abs(hEdge) * (hEdge < 0 ? slopeFill : cut) + 3.0),
     );
     let crestY = 0, crestS = e;
