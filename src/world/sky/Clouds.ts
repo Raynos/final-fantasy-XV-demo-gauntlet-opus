@@ -480,7 +480,7 @@ export class Clouds {
       // how hard the sky-occlusion term sculpts the underside of the deck
       uBaseShade: { value: 0.65 },
       // soft ceiling on sunlit cloud radiance, in scene-linear units
-      uCloudMaxRad: { value: 3.2 },
+      uCloudMaxRad: { value: 9.5 },
       // amplitude of the high-order (diffuse) scattering floor
       uCloudMS: { value: 0.62 },
       // how fast the sky-ambient fill is extinguished going into the cloud, in
