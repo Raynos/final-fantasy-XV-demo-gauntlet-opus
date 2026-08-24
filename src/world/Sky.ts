@@ -249,7 +249,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     // Holding covLo where it was keeps the weak columns empty; pushing covHi
     // past 1 means the strong ones land anywhere from 0.5 to 0.95 instead of
     // all at 1. coverage rises 0.30 -> 0.34 to pay for the lost area.
-    coverage: 0.34, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
+    coverage: 0.30, density: 0.021, type: 0.90, detail: 0.62, anvil: 0.30,
     // baseSag 0.28, not 0.10. It is the per-column vertical displacement of the
     // whole profile, in fractions of the layer, so it is the only thing in this
     // model that puts one cloud at a different *altitude* from its neighbour --
@@ -268,7 +268,7 @@ const WEATHER: Record<WeatherName, SkyPreset> = {
     // judge's "they do not thin toward the horizon" exactly. At 0.000085 the
     // same 20 km is 82% and 40 km is 97%, so far banks dissolve into the haze
     // band instead of standing out of it as hard white cutouts.
-    covLo: 0.54, covHi: 1.02, tower: 0.55, baseLift: 0.0, baseSag: 0.28, cloudHaze: 0.000085,
+    covLo: 0.42, covHi: 0.92, tower: 0.55, baseLift: 0.0, baseSag: 0.28, cloudHaze: 0.000085,
     virga: 0.0, silver: 0.14, baseShade: 0.78,
     bottom: 1500, top: 4200, cirrus: 0.22, cloudShadow: 0.78,
     // `haze` is the height-independent term, so it is the one that decides how
