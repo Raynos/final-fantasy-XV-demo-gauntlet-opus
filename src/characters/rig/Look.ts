@@ -183,7 +183,17 @@ export interface BrowSpec {
   color?: number;
   /** length in canonical head metres. */
   len?: number;
+  /**
+   * Unused since brows became cards.
+   *
+   * It was fed to `ribbon`'s `width`, which is a **half**-width, so every value
+   * a caller wrote produced a brow blade twice as wide as it read — 11-14 mm
+   * across a 12 mm brow. Kept only so `Cast.ts` entries still typecheck; use
+   * `cardW` instead.
+   */
   width?: number;
+  /** card width multiplier on the brow's 4.8 mm default. */
+  cardW?: number;
   /** raise or lower the whole brow. */
   lift?: number;
 }

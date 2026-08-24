@@ -885,8 +885,19 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   const bw = look.brows || {};
   const bcol = new THREE.Color().setHex(bw.color ?? H.color, THREE.SRGBColorSpace);
   B.color(bcol).mat(0.5, 0).skin([[I.head, 1]]);
+  // A brow is a *tuft*, and it was nine chevrons.
+  //
+  // `ribbon`'s `width` is a HALF-width, so `bw.width` of 0.0055-0.0072 was
+  // emitting nine blades **11-14 mm wide** across a brow only 12-13 mm long —
+  // each one a triangle wider than it was long, on a four-sided flat section,
+  // overlapping its neighbours. At `hero_portrait` that is a 21-27 px gold
+  // chevron nine times over, which is precisely what Prompto's brows read as.
+  //
+  // A brow hair is 0.1 mm and can never be geometry. What a brow *is* at this
+  // range is a bundle: twelve 4.8 mm cards (9 px at portrait) laid along the
+  // ridge, each carrying its filaments in the same cutout the locks use.
   for (const sg of [1, -1]) {
-    const nb = 9;
+    const nb = 12;
     for (let i = 0; i < nb; i++) {
       const t = i / (nb - 1);
       const x = sg * lerp(0.010, 0.050, t) * (look.headWidth ?? 1);
@@ -895,18 +906,26 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       const root = new THREE.Vector3(x, y, z);
       const out = new THREE.Vector3(x * 0.6, y * 0.2 + 0.2, z).normalize();
       const d = new THREE.Vector3(sg * (0.55 + 0.5 * t), 0.28 - 0.5 * t, 0.55 - 0.4 * t).normalize();
-      const L = (bw.len ?? 0.012) * (1 - 0.25 * t);
+      const L = (bw.len ?? 0.012) * (1 - 0.25 * t) * 1.25;
       const pts = [root, root.clone().addScaledVector(d, L * 0.55), root.clone().addScaledVector(d, L)];
-      B.color(bcol.clone().multiplyScalar(0.85 + 0.3 * rng.next()));
+      const bc = bcol.clone().multiplyScalar(0.78 + 0.30 * rng.next());
+      B.color(bc);
       // a brow rides the brow ridge, so `out` is its macro normal
       B.groom(out.x, out.y, out.z);
-      ribbon(B, {
-        points: pts.map((q) => put(q).toArray()),
-        steps: 3,
-        width: (bw.width ?? 0.0055) * scale,
-        thick: (bw.width ?? 0.0055) * scale * 0.35,
-        up: out.toArray(),
-        taper: (t2: number) => Math.pow(1 - t2, 0.65),
+      emitCard(B, {
+        points: pts.map((q) => put(q)),
+        steps: 5,
+        // half of 4.8 mm, and no longer keyed on `bw.width`, which meant a
+        // half-width and is therefore a factor of two away from anything a
+        // caller would write
+        halfWidth: 0.0024 * (bw.cardW ?? 1) * scale * (0.82 + 0.36 * rng.next()),
+        variant: cardVariant++,
+        upAt: (_pw, o2) => o2.copy(out),
+        taper: (t2: number) => Math.pow(1 - t2 * 0.90, 0.65),
+        color: bc,
+        // a brow darkens toward its tail, not the other way round
+        tipColor: bc.clone().multiplyScalar(0.82),
+        spread: 0.32,
       });
     }
   }
