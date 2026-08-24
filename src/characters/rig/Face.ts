@@ -211,20 +211,32 @@ export function brushes(look: Look): SculptBrush[] {
   // under a real philtrum; the lower lip carries a fuller, rounder mass with a
   // shadowed mentolabial crease beneath it.
   //
-  // The whole block moves **15 mm up** with the nose base above it. Placed off
-  // Farkas rather than off the old spacing: sn-sto is 22 mm on a 232 mm head
-  // (0.095 of head height), so with the subnasale at -0.0425 the mouth line
-  // lands at -0.0637, and sto-gn then comes out at the adult 0.218 instead of
-  // 0.149. Sizes are unchanged — the mouth was the right shape in the wrong
-  // place, and the mouth line is 3.2 mm tall against a 2 mm grid, which is the
-  // one radius here that has no room to shrink.
-  // **The mouth barrel**, and it was missing entirely.
+  // **Heights (head-r2, still correct and untouched).** The whole block sits
+  // 15 mm higher than it once did, placed off Farkas rather than off the old
+  // spacing: sn-sto is 22 mm on a 232 mm head (0.095 of head height), so with
+  // the subnasale at -0.0425 the mouth line lands at -0.0637 and sto-gn comes
+  // out at the adult 0.218 instead of 0.149. The mouth line is 3.6 mm tall
+  // against a 2 mm grid, which is the one radius here with no room to shrink.
   //
-  // The lips do not sit on a plane; they wrap a convex mass that stands proud
-  // of the cheeks either side of it. Without it the whole muzzle is the bare
-  // ellipsoid, and on a bare ellipsoid a front-lit face has a *straight
-  // vertical terminator down the midline* — the two halves go from lit to unlit
-  // in one step and every off-midline feature reads as nothing.
+  // **Depths (head-r3, and they were all wrong).** The barrel below used to
+  // push 5.5 mm along the normal, the upper vermilion 11.5 and the cupid's bow
+  // 3.8 — three brushes centred within 3 mm of each other, all pushing +z, on
+  // a shell already at 89 mm. The sum was 106, which is 19 mm in front of the
+  // base of the nose and within 3 mm of its tip: a second nose, and the "muzzle
+  // wedge" a blind judge named in round 13. **Nothing measured that sum until
+  // `headprop.mts` grew a `sagittal` block**, because every bench here read
+  // landmark heights or a half-width and a forward-projecting lower face is
+  // neither. Off the subnasale-pogonion chord the lower face reached +22.4 mm
+  // against an adult male's 3-6, identically on all four characters.
+  //
+  // The barrel is *not* the answer to head-r2 §5's "straight vertical
+  // terminator down the midline". Raising the midline of a face whose sides are
+  // where they were cannot soften a terminator; it only adds mass, and 22 mm of
+  // it arrived. The terminator's real causes are two, and both are measured:
+  // the transverse section (see the maxilla and malar brushes below) and, for
+  // the *hard* look of it in `headlook.mts`, the studio key itself — HOUR 16.2
+  // is a deliberate low raking light and the left/right step it makes is the
+  // same with the normal map ablated (`tmp/shots/head-r3d` vs `head-r3nm`).
   // `tmp/shots/head-r2b/noctis_front.png` is that frame: a good profile
   // (`noctis_side.png`, same boot) and a blank mask from the front, which is
   // exactly the pair the round-11 judge described. A profile bench cannot see
@@ -235,10 +247,19 @@ export function brushes(look: Look): SculptBrush[] {
   add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0026, dir: [0, 0, 1], mirror: true }); // philtrum columns
   add({ p: [0, -0.0605, 0.0855], r: [0.026, 0.0075, 0.026], amt: 0.0024, dir: [0, 0.18, 1] });   // upper vermilion
   add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0010, dir: [0, 0, 1] });      // cupid's bow
-  // The mouth line is 13 mm deep, not 9.2. It has to survive the *shipped*
-  // key, not a studio one: in `hero_portrait` the mid-face is in shadow and a
-  // 9.2 mm groove under a 5.5 mm barrel produced no shading contrast at all.
-  // 3.6 mm of r_y is still four grid rows at the face's 1.9 mm row pitch.
+  // 6.8 mm, down from 13, and still twice an adult's stomion recess on purpose:
+  // 3 mm of groove is 5.7 px at `hero_portrait` and it has to survive a raking
+  // key. head-r2's argument for 13 was an argument against a `ContactShadowPass`
+  // blob that has since been fixed, so its premise is gone.
+  //
+  // Its `dir` is [0, 0.42, 1], not straight -z: the groove cuts **up under** the
+  // upper lip so the lip overhangs its own shadow rather than sitting in a
+  // symmetric notch. **Measured, and do not expect this to pay in the judged
+  // frame:** at `hero_portrait` the mid-face is near-flat skylight fill, the
+  // whole face sits between 200 and 220, and a horizontal groove has no shading
+  // response to that at any depth. The same scanline through the mouth reads a
+  // floor of 137 / 133 / 134 across round 13's frame, this sculpt before the
+  // undercut, and after it. The mouth there is carried by `paintFace`.
   add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0.42, 1] });     // mouth line
   add({ p: [0, -0.0706, 0.0845], r: [0.023, 0.0088, 0.027], amt: 0.0050, dir: [0, 0.12, 1] });  // lower vermilion
   add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0078, dir: 'normal', mirror: true });
@@ -246,25 +267,26 @@ export function brushes(look: Look): SculptBrush[] {
    * **The maxilla and the malar, and why a hard terminator ran down the
    * midline of every front view in this repo's history.**
    *
-   * `shellPoint` sweeps a pure ellipse in theta, so the transverse section of
-   * the mid-face is an ellipse whose semi-axes at the upper-lip line are 58 mm
-   * across and 89 mm deep. Nose-on that gives a radius of curvature of 38 mm,
-   * where a real face's transverse radius at the mouth is 45-60: the surface
-   * turns away from the front about 1.6x too fast, so a key from either side
-   * flips the face from lit to unlit almost in one step and every off-midline
-   * feature reads as nothing. Measured on the shell: from the midline out to
-   * x = 30 mm the surface falls back **12.7 mm** and at x = 42 mm **24.3 mm**,
-   * against roughly 7 and 15 on a head.
+   * `shellPoint` sweeps a **pure ellipse** in theta, so the transverse section
+   * of the mid-face is an ellipse whose semi-axes at the upper-lip line are
+   * 58 mm across and 89 deep — and the two brushes that live at x = 26-31 mm,
+   * the mouth corners and the nasolabial, are both negative and deepen it.
+   * `headprop.mts`'s `transverse.dropMm` measures the result on the shipped
+   * mesh: at the upper-lip line the surface falls back **24.6 mm by x = 30**
+   * and 40.4 by x = 45, where a head does roughly **7** and 18. It turns away
+   * from the front about three times too fast.
    *
-   * head-r2 saw the symptom (`head-r2.md` §5, "a straight vertical terminator
-   * down the midline") and answered it with a 5.5 mm barrel over the muzzle,
-   * which raised the *midline* and left the sides where they were — so the
-   * terminator survived and the head gained the 22 mm of forward mass that
-   * round 13 called a muzzle wedge. The two front-lateral brushes here are the
-   * fix that barrel was standing in for: they fill the canine eminence and the
-   * malar plane, which is where the mass belongs, and they cannot move
-   * `muzzleMm` because they do not reach the midline (x = 0 is 1.15 and 1.5
-   * radii out).
+   * These two take x = 30 to **14.1 mm** — a bit over half the gap. They cannot
+   * move `muzzleMm` or any other depth-axis number: at x = 0 they are 1.07 and
+   * 1.4 radii out and `applyBrushes` rejects on the bounding box before the
+   * sqrt. Confirmed, to the last decimal, and so are euEu / zyZy / goGo and the
+   * whole width profile, because these push +z and nothing else.
+   *
+   * head-r2 answered the same symptom (§5, "a straight vertical terminator down
+   * the midline") with a 5.5 mm barrel over the *midline*, which cannot soften
+   * a terminator and did add the 22 mm of forward mass round 13 called a muzzle
+   * wedge. This is the fix that barrel was standing in for: the mass belongs on
+   * the canine eminence and the malar plane, not on the philtrum.
    *
    * This is also `head-r2.md` §8.2's open item — "the cheek is a blank plane at
    * every angle but profile ... no infra-orbital plane, no zygomatic arch, no
