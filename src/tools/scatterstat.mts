@@ -94,7 +94,22 @@ const arg = (f: string, d: string) => {
 
 /* --------------------------------------------------------------- statistics */
 
-interface Pt { x: number, z: number, kind?: string }
+interface Pt {
+  x: number;
+  z: number;
+  /** Species / stone kind, as the SAMPLER chose it. Drives `same-sp`. */
+  kind?: string;
+  /**
+   * The literal drawn MESH — `species_variant`, `kind_variant`.
+   *
+   * Distinct from `kind` on purpose, and the distinction is the whole of round
+   * 13's fourth item: *"reject any placement within N metres of another copy of
+   * the same asset"*. A grove is deliberately one species, so `kind` coherence
+   * being high is the sampler working; whether two instances of the SAME MESH
+   * end up next to each other is a different question and nothing measured it.
+   */
+  id?: string;
+}
 
 /**
  * Clark–Evans R over a buffered window.
@@ -116,6 +131,19 @@ function clarkEvans(pts: Pt[], x0: number, z0: number, w: number, h: number) {
   }
   const nn: number[] = [];
   const same: number[] = [];
+  // Same-ASSET nearest neighbour: the nearest instance of the identical mesh.
+  // A separate brute-force pass rather than a second grid, because the same-id
+  // subset is 1/k of the points and the grid's cell is sized for all of them —
+  // a bucketed search would walk most of the map per query anyway.
+  const idIdx = new Map<string, number[]>();
+  for (let i = 0; i < pts.length; i++) {
+    const id = pts[i].id;
+    if (id === undefined) continue;
+    let a = idIdx.get(id);
+    if (!a) { a = []; idIdx.set(id, a); }
+    a.push(i);
+  }
+  const sameAsset: number[] = [];
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
     if (p.x < x0 || p.x >= x0 + w || p.z < z0 || p.z >= z0 + h) continue;
@@ -146,9 +174,24 @@ function clarkEvans(pts: Pt[], x0: number, z0: number, w: number, h: number) {
     if (bestJ < 0) continue;
     nn.push(best);
     if (p.kind !== undefined) same.push(pts[bestJ].kind === p.kind ? 1 : 0);
+    const peers = p.id !== undefined ? idIdx.get(p.id) : undefined;
+    if (peers && peers.length > 1) {
+      let bs = Infinity;
+      for (const j of peers) {
+        if (j === i) continue;
+        const d = Math.hypot(p.x - pts[j].x, p.z - pts[j].z);
+        if (d < bs) bs = d;
+      }
+      if (Number.isFinite(bs)) sameAsset.push(bs);
+    }
   }
   const n = nn.length;
-  if (n < 8) return { n, R: NaN, mean: NaN, expected: NaN, lambda: 0, nn, coherence: NaN };
+  if (n < 8) {
+    return {
+      n, R: NaN, mean: NaN, expected: NaN, lambda: 0, nn, coherence: NaN,
+      sameAssetMean: NaN, sameAssetRatio: NaN, touch: NaN,
+    };
+  }
   // Intensity from the SCORED region, which is where the counted points live.
   let inside = 0;
   for (const p of pts) if (p.x >= x0 && p.x < x0 + w && p.z >= z0 && p.z < z0 + h) inside++;
@@ -156,7 +199,16 @@ function clarkEvans(pts: Pt[], x0: number, z0: number, w: number, h: number) {
   const expected = 0.5 / Math.sqrt(lambda);
   const mean = nn.reduce((a, b) => a + b, 0) / n;
   const coherence = same.length ? same.reduce((a, b) => a + b, 0) / same.length : NaN;
-  return { n, R: mean / expected, mean, expected, lambda, nn, coherence };
+  const sa = sameAsset.slice().sort((a, b) => a - b);
+  const saMean = sa.length ? sa.reduce((a, b) => a + b, 0) / sa.length : NaN;
+  // Fraction of instances with ANY neighbour inside 1.5 m — two trunks in one
+  // hole. Reported beside the ratio because the two answer different halves of
+  // the round-13 item and they do not move together.
+  const touch = nn.filter((d) => d < 1.5).length / Math.max(1, nn.length);
+  return {
+    n, R: mean / expected, mean, expected, lambda, nn, coherence,
+    sameAssetMean: saMean, sameAssetRatio: saMean / mean, touch,
+  };
 }
 
 /** Nearest-neighbour histogram in units of the CSR expected distance. */
@@ -294,6 +346,9 @@ function shippedTrees(eco: Ecology, cx: number, cz: number): Pt[] {
   t._nClump = new Noise(0x4c17);
   // `_makeTile` only reads `variant.height` off this, to record the instance's
   // world height. Nothing here measures height.
+  // The stub answers every `${sp}_${vi}` key, so `pickTier`'s three tiers all
+  // resolve and the `id` column sees the real variant spread. Nothing here
+  // measures height.
   t.byKey = { get: () => ({ height: 12 }) } as unknown as Trees['byKey'];
   const out: Pt[] = [];
   const TILE = 64;
@@ -301,7 +356,7 @@ function shippedTrees(eco: Ecology, cx: number, cz: number): Pt[] {
   const j0 = Math.floor((cz - WIN / 2) / TILE), j1 = Math.floor((cz + WIN / 2) / TILE);
   for (let j = j0; j <= j1; j++) {
     for (let i = i0; i <= i1; i++) {
-      for (const p of t._makeTile(i, j)) out.push({ x: p.x, z: p.z, kind: p.sp });
+      for (const p of t._makeTile(i, j)) out.push({ x: p.x, z: p.z, kind: p.sp, id: `${p.sp}_${p.vi}` });
     }
   }
   return out;
@@ -312,14 +367,20 @@ function shippedBushes(eco: Ecology, cx: number, cz: number): Pt[] {
   const b = Object.create(Bushes.prototype) as Bushes;
   b.eco = eco;
   b._nClump = new Noise(0x9d31);
-  b.kinds = { get: () => ({ variants: [0], scale: [1, 2], tint: [1, 1, 1] }) } as unknown as Bushes['kinds'];
+  // **Two variants, because that is what `SCRUB_SPECIES` declares.** The stub
+  // used to say one, which made every bush report as variant 0 and would have
+  // let the same-asset column below print a number about the stub. `_makeTile`
+  // reads `spec.variants.length` and nothing else off this.
+  b.kinds = {
+    get: () => ({ variants: [0, 1], scale: [1, 2], tint: [1, 1, 1] }),
+  } as unknown as Bushes['kinds'];
   const out: Pt[] = [];
   const TILE = 32;
   const i0 = Math.floor((cx - WIN / 2) / TILE), i1 = Math.floor((cx + WIN / 2) / TILE);
   const j0 = Math.floor((cz - WIN / 2) / TILE), j1 = Math.floor((cz + WIN / 2) / TILE);
   for (let j = j0; j <= j1; j++) {
     for (let i = i0; i <= i1; i++) {
-      for (const p of b._makeTile(i, j)) out.push({ x: p.x, z: p.z, kind: p.kind });
+      for (const p of b._makeTile(i, j)) out.push({ x: p.x, z: p.z, kind: p.kind, id: `${p.kind}_${p.vi}` });
     }
   }
   return out;
@@ -334,9 +395,17 @@ function maternBushes(eco: Ecology, cx: number, cz: number): Pt[] {
   return eco.scrubScatter(cx - WIN / 2, cz - WIN / 2, WIN, WIN)
     .map((p: ClusterPoint) => ({ x: p.x, z: p.z, kind: p.kind }));
 }
+/**
+ * The raw boulder sampler. **Its `kind` is empty and that is not a bug here:**
+ * `rockScatter` passes no `kind` callback, because `Rocks` draws its own stone
+ * from the zone's weight table and has never consumed the sampler's species
+ * field. The `same-sp` column therefore reads `--` on this row rather than the
+ * **100%** it used to print, which is what a set of identical `undefined`s
+ * scores and is the most flattering wrong number the tool could produce.
+ */
 function maternRocks(eco: Ecology, cx: number, cz: number): Pt[] {
   return eco.rockScatter(cx - WIN / 2, cz - WIN / 2, WIN, WIN)
-    .map((p: ClusterPoint) => ({ x: p.x, z: p.z, kind: p.kind }));
+    .map((p: ClusterPoint) => ({ x: p.x, z: p.z }));
 }
 
 /* ------------------------------------------------------------------- report */
@@ -370,17 +439,21 @@ const eco = makeEco(terrain);
 const set = arg('--set', 'all');
 const CLASSES: Array<[string, (e: Ecology, x: number, z: number) => Pt[], boolean]> = [];
 if (set === 'all' || set === 'trees') {
-  CLASSES.push(['trees   grid', shippedTrees, false], ['trees   matern', maternTrees, true]);
+  // **The labels used to say `grid` and `matern` and both were stale.** The
+  // call sites landed, so `_makeTile` IS the Matern sampler now: what these two
+  // rows compare is the shipped path — the sampler plus the caller's own bias
+  // and, for bushes, its water-line branch — against the sampler on its own.
+  CLASSES.push(['trees   shipped', shippedTrees, false], ['trees   sampler', maternTrees, true]);
 }
 if (set === 'all' || set === 'bushes') {
-  CLASSES.push(['bushes  grid', shippedBushes, false], ['bushes  matern', maternBushes, true]);
+  CLASSES.push(['bushes  shipped', shippedBushes, false], ['bushes  sampler', maternBushes, true]);
 }
 if (set === 'all' || set === 'rocks') {
-  CLASSES.push(['rocks   matern', maternRocks, true]);
+  CLASSES.push(['rocks   sampler', maternRocks, true]);
 }
 
 console.log(`nearest-neighbour statistics — ${WIN} m gathered, inner ${WIN - 2 * INSET} m scored\n`);
-console.log('  zone           class            n      R   mean m   csr m  same-sp   histogram, d/E in bins '
+console.log('  zone           class             n      R   mean m   csr m  same-sp  same-asset  <1.5m   histogram, d/E in bins '
   + BINS.slice(0, -1).join('/'));
 
 const json: Record<string, unknown> = { calibration: cal.map((r) => ({ name: r.name, R: r.R, n: r.n })), zones: {} };
@@ -391,16 +464,28 @@ for (const [zname, cx, cz] of ZONES) {
     const s = clarkEvans(pts, cx - WIN / 2 + INSET, cz - WIN / 2 + INSET, WIN - 2 * INSET, WIN - 2 * INSET);
     const hist = Number.isFinite(s.expected) ? histogram(s.nn, s.expected) : [];
     console.log(
-      `  ${zname.padEnd(14)} ${cname.padEnd(14)} ${String(s.n).padStart(5)}  ${fmt(s.R, 3)}  `
+      `  ${zname.padEnd(14)} ${cname.padEnd(15)} ${String(s.n).padStart(5)}  ${fmt(s.R, 3)}  `
       + `${fmt(s.mean, 2).padStart(6)}  ${fmt(s.expected, 2).padStart(6)}  `
-      + `${Number.isFinite(s.coherence) ? (s.coherence * 100).toFixed(0).padStart(4) + '%' : '   --'}   `
+      + `${Number.isFinite(s.coherence) ? (s.coherence * 100).toFixed(0).padStart(4) + '%' : '   --'}  `
+      + `${Number.isFinite(s.sameAssetRatio) ? (fmt(s.sameAssetMean, 1) + ' ' + fmt(s.sameAssetRatio, 2) + 'x').padStart(10) : '        --'}  `
+      + `${Number.isFinite(s.touch) ? (s.touch * 100).toFixed(1).padStart(5) + '%' : '     --'}  `
       + `|${histLine(hist)}|`,
     );
-    zrows[cname.trim().replace(/\s+/g, '-')] = { n: s.n, R: s.R, mean: s.mean, csr: s.expected, coherence: s.coherence, hist };
+    zrows[cname.trim().replace(/\s+/g, '-')] = {
+      n: s.n, R: s.R, mean: s.mean, csr: s.expected, coherence: s.coherence,
+      sameAssetMean: s.sameAssetMean, sameAssetRatio: s.sameAssetRatio, touch: s.touch, hist,
+    };
   }
   (json.zones as Record<string, unknown>)[zname] = zrows;
 }
 
+console.log('\nsame-asset = mean distance to the nearest instance of the IDENTICAL mesh, and');
+console.log('  that distance over the all-asset mean. **Round 13 asked for a rule that rejects');
+console.log('  a placement within N m of another copy of the same asset. This column is what');
+console.log('  says whether such a rule can buy anything**, and the answer here is no: with k');
+console.log('  meshes assigned independently the ratio is sqrt(k), and a grove carries 3');
+console.log('  variants, so 1.7x IS the ceiling. Identity is already maximally decorrelated;');
+console.log('  what was broken is the ALL-asset spacing in the <1.5m column.');
 console.log('\nblind to: cluster SIZE and count (read the histogram); WHERE the clusters are');
 console.log('  (that is suitability — a capture and hydrocheck); anisotropy (a boulder train down');
 console.log('  a gully scores like a round grove); everything about how anything LOOKS');

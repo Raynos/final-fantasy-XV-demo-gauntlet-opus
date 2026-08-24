@@ -880,7 +880,15 @@ if (opts.pairs !== null) {
 
 console.log('\nblind to: colour and material; interior structure (see the fill column);');
 console.log('          anything below the outline (that is seatcheck/floatcheck);');
-console.log('          winding and handedness (that is geocheck); animation — bind pose only.');
+console.log('          winding and handedness (that is geocheck); animation — bind pose only;');
+console.log('          and — measured, not assumed — **the shape a whole family SHARES**.');
+console.log('          Every distance here is between two subjects, minimised over azimuth');
+console.log('          and mirror and normalised by each mesh\'s own height, so a family in');
+console.log('          which every member is a wide cap on a narrow neck scores as varied so');
+console.log('          long as the caps differ. The round-13 verdict *"ten identical mushroom');
+console.log('          rocks"* was a statement about exactly that, and it stood at 80% of');
+console.log('          `rock:tor:fin` while this bench read the row healthy. Overhang is');
+console.log('          `src/tools/probes/mushroom.mts`; plumbness is `probes/rockfield.mts`.');
 
 if (opts.json) {
   await writeFile(opts.json, JSON.stringify({
