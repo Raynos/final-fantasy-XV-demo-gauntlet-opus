@@ -13,6 +13,17 @@
  * One post pass off at a time. GTAO and contact shadows are the usual authors of
  * a *regular* hatch (an interleaved sampling pattern that never got denoised);
  * grain is the usual author of an irregular one.
+ *
+ * **This probe's answer was wrong and `src/tools/probes/weavebisect.mts`
+ * replaced it.** It reads GTAO as the author. GTAO is innocent — with the
+ * protocol below fixed, turning GTAO off makes the weave *worse*. Three things
+ * move under `settle(4)` and none of them is the pass being tested: the subject
+ * animates, TAA keeps converging (so a stage taken later is quieter for free),
+ * and four frames after a toggle is a transient in which the neighbourhood
+ * clamp is rejecting most of the history. It also toggles passes on a page that
+ * `applyShot` will later re-quality-tier, which silently re-enables `gtao`.
+ * The carrier was `ContactShadowPass`. Kept for the history and because the
+ * `all_off` stage is still the cleanest picture of the skin underneath.
  */
 const g = window.GAME;
 const hud = g.get('HUD');

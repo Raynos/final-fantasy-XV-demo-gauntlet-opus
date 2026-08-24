@@ -170,6 +170,32 @@ proud.
 
 `pnpm run check`: **16/16**.
 
+**Perf, taken last on a quiet machine** (`perf.mts`, 1600x900, ultra,
+`RULER_VALID: true` both runs):
+
+| shot | ms | fps | draws | tris |
+|---|---|---|---|---|
+| `hero_portrait` | 4.10 | 244 | 574 | 7.67 M |
+| `town_forecourt` | 8.35 | **120** | 993 | 10.21 M |
+| `zone_fallgrove` | 4.95 | 202 | 606 | 11.29 M |
+| `hero_full` | 5.20 | 192 | 692 | 7.80 M |
+
+PASS, mean 189.5 fps, worst 120 fps. A second run of the same build moved **0
+of 4 shots** by more than the 1.23 ms floor, so that is the repeatability.
+
+**I could not take a paired before/after and here is why**, because it is a tool
+bug somebody should fix: `perf.mts`'s own `parseArgs` throws on any unrecognised
+`--` flag and runs *before* `harnessArgs` sees the line, so both `--build` and
+`--dirty` are rejected and it can only ever measure `HEAD`. An A/B would have
+meant committing the pre-fix shader to the shared trunk. Instead
+`weavecost.mts` times the pass itself, ABBA, on one boot with `stepPx = 1e9` as
+the uncapped control: **capped and uncapped are both under the timer floor**
+(median 0.000 ms, p90 0.000 vs 0.100). That floor is real and not specific to
+this pass — `perfpasses.mts` reports every post pass in the chain at 0.0 ms calm
+on the same page, so 0.1 ms is what `performance.now()` resolves here. The
+change adds one matrix multiply and no texture fetch to one full-screen pass and
+changes no draw call or triangle; the bound is *under 0.1 ms*, not *zero*.
+
 ## 6. Left, and what I would do next
 
 - **Skinned motion vectors are genuinely wrong and it is now a clean, separate
@@ -206,6 +232,17 @@ proud.
   is a measured negative on a plausible suspect and it is why the branch is still
   there.
 
+## 6b. Cross-boundary — requested, not made
+
+- **`src/tools/perf.mts` (method lane): `parseArgs` throws on `--build` and
+  `--dirty`.** It runs before `harnessArgs` and rejects any unknown `--` flag,
+  so `perf.mts` can only measure `HEAD` and a before/after across a shader
+  change is impossible without committing the "before" to the shared trunk. Two
+  `else if` arms in its option loop, or pass the flags through.
+- **`src/tools/framecam.mts` (method lane): `--dirty` is still swallowed as the
+  candidate-file argument.** Reported twice already (`characters.md` §7,
+  `head.md` §6) and still true.
+
 ## 7. Files
 
 - `src/engine/postfx/ContactShadowPass.ts` — the cap, and the measurement table
@@ -217,6 +254,11 @@ proud.
 - `src/tools/probes/weavenormal.mts` — the GTAO depth-normal branch, a negative.
 - `src/tools/probes/weaveframe.mts` — the GTAO noise re-roll, a negative.
 - `src/tools/probes/weaveproof.mts` — the frame-wide before/after A/B.
+- `src/tools/probes/weavecost.mts` — the paired cost of the cap, ABBA on one
+  boot, and the note on why `perf.mts` could not do it.
+- `src/tools/probes/weavehunt2.mts` — its header recorded the wrong answer as
+  fact; it now says so and points at `weavebisect.mts`. Kept, because its
+  `all_off` stage is still the cleanest picture of the skin underneath.
 - `src/tools/probes/facecam.mts` — `NO_HATCH`'s comment carried the old
   diagnosis as fact; corrected. (Not my lane's file; a one-comment correction.)
 - `project/LANDMINES.md` — the wrong-diagnosis row, the screen-space-march rule,
