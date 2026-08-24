@@ -124,11 +124,32 @@ dark enough to have hidden it for as long as it has existed. **That is most of
 why trunks have always read as posts pushed into dirt** — the flare that was
 supposed to fix it has never been visible.
 
-`geocheck` passes both before and after. Its edge-parity test is a *parity*
-test, so a surface that is consistently inside-out but manifold reads clean, and
-it says so itself under "blind to". **The check that catches this is agreement
-between the winding-derived face normal and the authored vertex normal.** It is
-four lines. It should be in `geocheck` — see the requests below.
+**Would `assertConsistentWinding` have caught it? No, and this is worth the
+method lane's attention.** `src/util/GeoAssert.ts:338` landed tonight and
+`geocheck` passes both before and after the bug. Two independent reasons:
+
+1. It measures **edge parity**, which is orientation-*relative*: it can only
+   say that two adjacent triangles disagree with each other. A patch that is
+   uniformly inside-out is perfectly self-consistent and scores clean. The
+   docstring says as much ("a genuinely flipped patch is an IMBALANCE").
+2. Worse for this case, the flare is a **disconnected shell**. It shares no
+   edge with the branch tubes at all, so there is no interior edge anywhere in
+   the mesh whose two sides could disagree. Even a check that was
+   orientation-relative *and* strict would have had nothing to compare.
+
+The check that catches it is orientation-**absolute**: the sign of
+`(b−a)×(c−a) · n_authored`, per triangle. Four lines, no adjacency, and it works
+on a disconnected shell and on a single triangle. Trees are the calibration
+case: `broadleaf#0` reads 640 disagree / 0 agree on the tubes and 0 / 40 on the
+flare, and the mesh has been shipping like that for months.
+
+Note the corollary, which is the more alarming half: **the tube network itself
+disagrees with its own authored normals, on every tree in the world, and always
+has.** It renders correctly because the leaf and impostor materials are
+`DoubleSide` and the wood is a closed tube seen from outside, so the sign never
+mattered — until a second surface was added next to it with the other
+convention. Nothing in this lane changed it, and it should be looked at
+deliberately rather than flipped in passing.
 
 ---
 
@@ -264,55 +285,104 @@ Against the legal count the sampler is **0.91×**, and 1.03× with the bias off.
 
 ---
 
-## 8. Numbers, and the state of the machine
+## 8. Numbers
 
-Draw calls and triangles, `manifest.json`, baseline `trees-r0` (before this
-lane) against `trees-r2j` (habits + junctions + flare, before the impostor and
-scatter commits):
+`manifest.json`, baseline `tmp/shots/trees-r0` (the state as inherited) against
+`tmp/shots/trees-r4*` (everything in this lane, including the scatter wiring):
 
-| shot | draws before → after | triangles Δ |
+| shot | draws before → after | triangles before → after |
 |---|---|---|
-| `zone_fallgrove` | 623 → 624 | +3.7% |
-| `zone_nebulawood` | 642 → 635 | +21% |
-| `zone_malmalam` | 561 → 562 | −2.5% |
-| `zone_vesperpool` | 627 → 628 | +1.8% |
-| `zone_three_valleys` | 538 → 531 | +1.9% |
-| `vista_noon` | 541 → 542 | +2.3% |
-| `zone_malacchi` | 695 → 660 | +2.6% |
+| `zone_fallgrove` | 623 → **625** | 13.48 M → **12.53 M** (−7.0%) |
+| `zone_nebulawood` | 642 → **636** | 21.80 M → **25.52 M** (+17.1%) |
+| `zone_malmalam` | 561 → **564** | 19.84 M → **18.45 M** (−7.0%) |
+| `zone_vesperpool` | 627 → **631** | 17.49 M → **15.49 M** (−11.4%) |
+| `zone_three_valleys` | 538 → **531** | 9.07 M → **8.94 M** (−1.4%) |
+| `vista_noon` | 541 → **542** | 9.12 M → **8.78 M** (−3.8%) |
+| `zone_malacchi` | 695 → **639** | 16.87 M → **14.89 M** (−11.8%) |
 
-**Net −35 draw calls across seven shots.** `zone_nebulawood`'s +21% is the one
-outlier and is not yet explained; it is a closed-canopy `duscae`/`conifer` frame
-and `layered` is the +25% species. It wants a `--hide` ablation.
+**Draw calls: −1 net over seven shots** (−56 on the worst frame, `zone_malacchi`
+at 695, which was the closest any of them came to the 800 budget). Triangles
+down on six of seven.
 
-**The three-plane impostor commit (`e7c521b`) and the scatter-wiring commit
-(`10e5174`) have NOT been captured or perf-tested.** The capture daemon has been
-restarting every few seconds for the last hour — `uptimeSec` 6 on consecutive
-`--health` calls, boots timing out at 300 s, and a *known-good* tree
-(`sha:d3b206a7cead`, which I captured seven shots from earlier tonight) now
-failing to boot. The characters lane recorded the same thing independently
-(`a3f67c6`, "every failure is the daemon, not the code"). **This is not a code
-regression in this lane and it must not be read as one** — but it does mean the
-last two commits are unverified in a frame, which is the exact hole this repo's
-rules exist to close. First thing for whoever picks this up:
+`zone_nebulawood`'s **+17.1% is the one thing in this lane I cannot explain and
+did not chase.** It is a closed-canopy `duscae`/`conifer` frame and `layered` is
+the +25%-per-tree habit, which is the obvious suspect and is a hypothesis, not a
+finding. It wants a `--hide` ablation against `tree_duscae_1_leaf`. It is not a
+draw-call or a budget problem — that frame is 636 calls — but it is a 25 M
+triangle frame and it should be understood before anyone raises `geoRange`.
 
-```
-node src/tools/shoot.mts zone_fallgrove zone_malacchi zone_three_valleys \
-  vista_noon zone_vesperpool --out tmp/shots/trees-r4 --jpeg
-node src/tools/imgdiff.mts tmp/shots/trees-r2 tmp/shots/trees-r4 --heat tmp/heat
-pnpm run check && node src/tools/perf.mts && node src/tools/gameplay.mts
-```
+### Gates
 
-`--dirty` is **not** a workaround on this trunk: it handed me a Hammerhead fuel
-pump under the name `zone_fallgrove` and then a LOADING screen, because it
-carries every other agent's half-finished edit.
+`pnpm run check`: **14/16.** Both failures are attributable and neither is this
+lane's:
 
----
+- **`uxcheck`** — `page.evaluate: Target page, context or browser has been
+  closed`. A leased-page death, not an assertion. The characters lane recorded
+  the identical failure mode tonight (`a3f67c6`).
+- **`floatcheck`** — `poiFloating 0 → 1`, `poiBuried 6 → 14`, and the instance
+  it names is `rock_granite #24, float 21.46 m`. Both gated counters are **POI
+  and rock**, which is the town and rocks lanes. The two vegetation-bearing
+  counters are ungated and moved *in opposite directions*: `instBuried`
+  952 → 858 and `instFloating` 320 → 364. `farSeat` seats **down** (it takes the
+  minimum over clip levels), so the buried number falling is not what it should
+  have done and I could not separate my instances from the rocks lane's inside
+  the tool. Flagged rather than claimed.
+
+`silhouette`, `geocheck`, `orphans`, `anycheck`, `reachcheck` (**`ok
+Ecology.farSeat (6265x)`** — the wiring provably executed), `roadcheck`,
+`horizoncheck`, `heightcheck`, `driftcheck`, `creaturecheck`, `combatloop` 31/31,
+`integration`, `hydrocheck` and the build all pass.
+
+**Perf was not run.** `pnpm run check` refuses the perf gates on a busy tree and
+is right to: `project/LANDMINES.md` has an entire section on the perf numbers
+this project lost to measuring under load. `perf.mts` and `gameplay.mts` are the
+first thing to run once the machine is quiet.
+
+One page error appears in a fresh capture and it is the water lane's own assert
+firing: `[Water] shore ribbon: chain at (-3026, 1479) folded 11 of 250
+triangles`. Nothing in `src/world/veg/` logs.
+
+### What the frames actually look like, said plainly
+
+- **`zone_fallgrove` is better than it was and worse than it was at `trees-r2`.**
+  Habits, the flare and the junctions turned "pale forked poles with a green
+  blob" into trees with boles, buttressed feet and six silhouettes. Then the
+  grove sampler opened it out: `trees-r2j` is a closed layered canopy with sky
+  through it, `trees-r4` is parkland with isolated trees and wide glades. The
+  instance count barely moved (0.87×), so this is the clustering, not a loss —
+  the same trees gathered into stands with real gaps between them, which is
+  exactly what R 0.930 → 0.741 means. **Whether parkland is what Fallgrove
+  should be is a judgement I am not making unilaterally at 3 a.m. on a shot the
+  blind judge grades.** The lever is `groveScatter`'s `spread` and `mean` in
+  `Ecology.ts`, which is the scatter lane's file, or `Trees._clumpBias`, which
+  is mine and costs about 12% of the count.
+- **A grove is one species now, and that includes `dead`.** `tmp/crop/t4-snags.png`
+  is four leafless `dead` trees standing together in a Fallgrove clearing. Under
+  the old per-tree species draw they would have been single incidental snags;
+  clustered they read as a stand of standing dead timber, which is a real thing
+  a wood does and is quite striking, but it is new and somebody should agree
+  with it. It is `Ecology.treeSpecies`, not `Biomes.treeTable`.
+- **`zone_nebulawood` cannot judge vegetation and I am saying so plainly.** The
+  camera is at eye height *inside* a closed canopy; the frame is a wall of leaf
+  cards with a cliff behind it, and no tree in it has a visible trunk, crown or
+  silhouette. Every §7 change I made is invisible in that shot. The scatter lane
+  reached the same conclusion independently. It is understood that it is one of
+  `compare.mts`'s 30 judged frames and must not be re-framed between rounds by
+  an agent whose score depends on it — recorded here for the human, not acted on.
+- **`vista_noon` and `zone_three_valleys` are clean.** Both were shot after every
+  change, per the `patchVeg`/`project_vertex` landmine. No blue-white card
+  flooding, no sky inscatter on near vegetation. Nothing in this lane touched a
+  shader, and the frames confirm it.
 
 ## 9. Requests to other lanes
 
-- **method lane.** (a) `geocheck` should compare each face's winding-derived
-  normal against its authored vertex normal — that is the check that would have
-  caught §3, edge parity provably cannot, and it is four lines. (b)
+- **method lane.** (a) **`assertConsistentWinding` cannot catch §3 and here is
+  the calibration case.** Edge parity is orientation-*relative* and the flare is
+  a *disconnected* shell, so there is not even an interior edge to disagree
+  across. Add the orientation-absolute companion — `sign((b−a)×(c−a) · n)` per
+  triangle — and point it at `buildTree('broadleaf', 9001, {}, 0)`: the tubes
+  read 640 disagree / 0 agree and the flare 0 / 40, and *both* of those are
+  facts about shipped geometry. (b)
   `silhouette.mts`'s `treeSubjects` should pass the variant index as
   `buildTree`'s new fourth argument (`buildTree(species, seed, {}, v)`) so it
   measures the *stratified* band `Trees.ts` actually ships rather than a
