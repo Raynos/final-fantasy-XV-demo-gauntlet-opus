@@ -803,11 +803,308 @@ export function rockGeometry(seed: number, {
   return out;
 }
 
+
+/** The result of {@link placedScale}; a singleton, because `emit` runs it tens
+ * of thousands of times per stream update and an object per instance is GC
+ * churn on the one hot path in this file. */
+export interface PlacedScale {
+  /** Per-axis jitter after the aspect floor. */
+  jx: number;
+  jy: number;
+  jz: number;
+  /** Metres to sink along the terrain normal. */
+  sink: number;
+  /** The aspect floor moved this instance. */
+  corrected: boolean;
+  /** The finished hull's own long:short ratio, after the floor. */
+  ratio: number;
+}
+const _ps: PlacedScale = { jx: 1, jy: 1, jz: 1, sink: 0, corrected: false, ratio: 1 };
+
+/**
+ * The two plan-3.5 guarantees on the **finished, placed hull**, in the one
+ * place they are stated.
+ *
+ * Both are enforced here and not where the numbers are drawn. A critic found
+ * the sibling's 25 m x 2 m plate with local aspect caps in place, because
+ * downstream code had "routed around them by tilt, 40 instances measured" --
+ * and this generator has four separate places that write `s`, `sx`, `sy` and
+ * `sz` after `_item` has drawn them ({@link Rocks._genOutcrop},
+ * {@link torPlan}, {@link Rocks._stack}, and the scree shrink), so a cap at the
+ * draw site would be defeated by all four.
+ *
+ * **Aspect floor.** `ex` is the mesh's own anisotropy and `s*` the instance's;
+ * the product is what ships. `slab` alone is 2.3:1 before any jitter and `_sc`
+ * allows 1.85/0.45 = 4.1:1 on top of it, so the worst case this generator could
+ * previously emit was **9.4:1** -- a plate.
+ *
+ * **Burial floor.** OGL sinks 12% of the footprint diameter INTO the mesh so
+ * that no instance transform can put a rock down tangent to the ground and
+ * leave a clean elliptical contact line. Ours sinks through the transform,
+ * which is the defeatable version -- and it is defeated in two places already:
+ * {@link torPlan} and {@link Rocks._stack} both set `bury` to 0 on every course
+ * above the base. Enforcing the floor here catches those and is also, exactly,
+ * 3.4's "settle each corestone into the one below".
+ *
+ * Exported because `src/tools/silhouette.mts` composes tors and stacks out of
+ * the same rule: a bench that measures the recipe rather than the placed hull
+ * grades a shape the game never draws.
+ *
+ * @returns a shared singleton — read it before the next call, do not keep it
+ */
+export function placedScale(
+  ex: readonly [number, number, number],
+  s: number, sx: number, sy: number, sz: number, bury: number,
+): PlacedScale {
+  let jx = sx, jy = sy, jz = sz;
+  const ax = jx * ex[0], ay = jy * ex[1], az = jz * ex[2];
+  const mx = Math.max(ax, ay, az), mn = Math.min(ax, ay, az);
+  _ps.corrected = false;
+  if (mn > 0 && mx > mn * ASPECT_MAX) {
+    const floor = mx / ASPECT_MAX;
+    if (ax < floor) jx *= floor / ax;
+    if (ay < floor) jy *= floor / ay;
+    if (az < floor) jz *= floor / az;
+    _ps.corrected = true;
+  }
+  const fx = jx * ex[0], fy = jy * ex[1], fz = jz * ex[2];
+  _ps.jx = jx; _ps.jy = jy; _ps.jz = jz;
+  _ps.ratio = Math.max(fx, fy, fz) / Math.max(1e-9, Math.min(fx, fy, fz));
+  _ps.sink = s * Math.max(bury, SINK_FRAC * Math.max(ex[0], ex[2]) * 2);
+  return _ps;
+}
+
+/* ------------------------------------------------------------------- tors */
+
+/** Which archetype a tor is built to. */
+export type TorForm = 'fin' | 'boss' | 'pinnacle';
+
+/**
+ * One course of a tor, in the tor's own local frame.
+ *
+ * `dx`/`dz` are metres from the tor's axis and `dy` is metres from its buried
+ * foot, so the whole plan is independent of where the tor stands — which is
+ * what lets `src/tools/silhouette.mts` measure the composed landform without
+ * a terrain, a scene or a browser.
+ */
+export interface TorCourse {
+  kind: StoneKind;
+  dx: number;
+  dy: number;
+  dz: number;
+  /** Instance long-axis scale and per-axis jitter, exactly as `emit` uses them. */
+  s: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  yaw: number;
+  pitch: number;
+  roll: number;
+}
+
+/** A whole tor: its archetype, its nominal size, and its courses. */
+export interface TorPlan {
+  form: TorForm;
+  /** Nominal size, metres. The seat depth and the skirt are stated in it. */
+  s0: number;
+  courses: TorCourse[];
+}
+
+/** One course of a corestone stack, in the anchor block's own local frame. */
+export interface StackCourse {
+  kind: StoneKind;
+  /** Course centre relative to the anchor's own centre, metres. */
+  dx: number;
+  dy: number;
+  dz: number;
+  s: number;
+  sy: number;
+  /** Extra yaw on top of the anchor's. */
+  yaw: number;
+  /** Multiplier on the anchor's own pitch/roll. */
+  tilt: number;
+  /** Burial, or `null` to mean "keep the anchor's". */
+  bury: number | null;
+}
+
+/**
+ * Split one placed block into a corestone stack, in the block's own frame.
+ *
+ * {@link corestones} owns the course *proportions*; this owns the part that has
+ * to know about measured hulls, and it is separated from {@link Rocks._stack}
+ * for the same reason {@link torPlan} is: `2d91563` shipped a stacking table
+ * that was measured by a bench carrying its own copy of the rule, and the copy
+ * had gone stale without a single symptom. Everything that grades this now
+ * calls this function.
+ *
+ * **The taper runs on the finished WIDTH, not on `s`.** `corestones` returns
+ * `c.s` as a fraction of the parent's long axis, and the long axis is not the
+ * width: the kinds' measured x half-extents run 0.461 (`spire`) to 1.000
+ * (`cobble`), better than two to one. So a `slab` course at `c.s` 0.60 above a
+ * `spire` base at 1.00 is *wider* than the block it stands on, and what that
+ * renders as is a balanced rock — a mushroom on a stalk. `zone_ostium_gorge`
+ * came back with four of them in one frame.
+ *
+ * **The half-height is measured, not assumed.** `rockGeometry` normalises to
+ * the bounding RADIUS, so `s` is the long axis and the vertical extent is
+ * whatever the stretch and the cuts left — 0.447 to 0.988 of it across the eight
+ * kinds. The first version stacked on `s * sy` and every course sat about a
+ * third of a block too high: the stacks came back as blocks hanging in the air
+ * over a black shadow, which is the exact defect §3.4 exists to stop producing.
+ *
+ * @param k the anchor's kind
+ * @param s0 the anchor's long-axis scale
+ * @param sy0 the anchor's own vertical jitter
+ */
+export function stackPlan(
+  k: StoneKind, s0: number, sy0: number, rng: Rng,
+  ext: ReadonlyMap<StoneKind, [number, number, number]>, overlap = 0.38,
+): StackCourse[] {
+  const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
+  const w0 = s0 * (ext.get(k) ?? _EXT1)[0];
+  const cs = corestones(rng, n);
+  const out: StackCourse[] = [];
+  let y = 0, hPrev = 0;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    const kind: StoneKind = i === 0 ? k
+      : rng.next() < 0.5 ? 'bedded' : rng.next() < 0.6 ? 'granite' : 'slab';
+    const ex = ext.get(kind) ?? _EXT1;
+    const s = (w0 * c.s) / ex[0];                     // finished half-width / hull
+    const sy = _sc(sy0 * c.sy);
+    const h = s * sy * ex[1];
+    if (i > 0) y += (hPrev + h) * (1 - overlap);
+    hPrev = h;
+    out.push({
+      kind, dx: c.dx * s0, dy: y, dz: c.dz * s0, s, sy, yaw: c.yaw,
+      // Held near level. A tilted block in a stack reads as a collapse, and the
+      // per-instance jitter that suits a boulder lying in soil turns every stack
+      // in the field into rubble -- and a tilted course opens a wedge of daylight
+      // under the one above it.
+      tilt: 0.25,
+      // Only the base course is sunk: the ones above sit on rock, not soil.
+      bury: i === 0 ? null : 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * The half-extents of a built hull, in the units its instance scale is in.
+ *
+ * `rockGeometry` normalises to the **bounding radius**, so `s` is the long axis
+ * and nothing else; every rule in this file that stacks, tapers or laps one
+ * block on another needs the other two numbers. Exported because the silhouette
+ * bench needs the same numbers and a bench that recomputes the rule it measures
+ * is how `2d91563` shipped a table that was eight months stale.
+ */
+export function hullExtents(geo: THREE.BufferGeometry): [number, number, number] {
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox!;
+  return [
+    Math.max(bb.max.x, -bb.min.x),
+    Math.max(bb.max.y, -bb.min.y),
+    Math.max(bb.max.z, -bb.min.z),
+  ];
+}
+
+/**
+ * Every tor course is well over five metres on its long axis, and `_item`'s
+ * `settle` — `clamp(1 - size/5, 0.18, 1)` — therefore reads its floor for all
+ * of them. Stated here rather than recomputed, because it is a constant in
+ * practice and the shape rules below want it visible.
+ */
+const TOR_SETTLE = 0.18;
+
+/**
+ * Compose one tor, in its own local frame: the shape rules and nothing else.
+ *
+ * The whole point is the *silhouette against the sky*, so the rules are about
+ * the outline and nothing else.
+ *
+ * - **Each block sits a bit off the one below it**, by a fraction of its own
+ *   width rather than a constant, so the stack leans and steps instead of
+ *   standing like a column of coins.
+ * - **They overlap by nearly half**, because a visible seam between two blocks
+ *   at this range is a black line and a black line is a gap.
+ * - **Both the taper and the courses run on the MEASURED hull.** `s` is the
+ *   mesh's long axis, which is a different axis for different kinds: the eight
+ *   x half-extents run 0.461 (`spire`) to 1.000 (`cobble`) and the y
+ *   half-extents 0.447 (`slab`) to 0.988 (`spire`). So a taper applied to `s`
+ *   puts a wide `slab` course on top of a narrow `spire` one and a lap applied
+ *   to `s` leaves daylight between them. Each form is stated as a finished
+ *   half-width and half-height in metres and the instance scales are solved
+ *   backwards from them; solving for width alone made every spire-topped tor a
+ *   needle, because `s` for a spire is 2.1x its width, so **both** numbers have
+ *   to be named or one of them runs free.
+ *
+ * @param rockS the zone's size multiplier, `dress.rockS`
+ * @param ext each kind's measured half-extents — see {@link hullExtents}
+ */
+export function torPlan(
+  rng: Rng, rockS: number, ext: ReadonlyMap<StoneKind, [number, number, number]>,
+): TorPlan {
+  // **Three forms, because one form repeated is the defect it is fixing.**
+  // A pinnacle is tall and tapered and breaks the horizon; a fin is two or
+  // three heavily y-stretched spires and reads as a blade edge-on; a boss is
+  // wide, low and barely tapered and reads as a whaleback. They differ in
+  // height by a factor of three, which is what stops a field of them from
+  // being a comb.
+  const f = rng.next();
+  const form: TorForm = f < 0.26 ? 'fin' : f > 0.74 ? 'boss' : 'pinnacle';
+  const fin = form === 'fin', boss = form === 'boss';
+  const n = fin ? 2 + Math.floor(rng.next() * 2)
+    : boss ? 2 + Math.floor(rng.next() * 2)
+      : 4 + Math.floor(rng.next() * 4);
+  const s0 = (fin ? rng.range(5.0, 7.6) : boss ? rng.range(9.0, 13.0) : rng.range(5.6, 10.4)) * rockS;
+  const taper = boss ? 0.05 : fin ? 0.08 : 0.11;
+  // Blocks overlap by more than half. At `zone_three_valleys`' range a 0.55 lap
+  // leaves a visible dark seam between each pair and the stack reads as a
+  // cairn -- five separate pebbles balanced on each other -- rather than as one
+  // weathered mass.
+  const lap = fin ? 0.68 : boss ? 0.34 : 0.45;
+  const w0 = s0 * (fin ? 0.46 : boss ? 1.05 : 0.78);
+  const h0 = s0 * (fin ? 1.60 : boss ? 0.50 : 0.76);
+  const courses: TorCourse[] = [];
+  let y = 0;                                        // the buried foot of the stack
+  let cx = 0, cz = 0;
+  for (let i = 0; i < n; i++) {
+    const r = rng.next();
+    const kind: StoneKind = fin ? 'spire' : i === n - 1 ? 'spire'
+      : r < 0.46 ? 'granite' : r < 0.78 ? 'bedded' : 'slab';
+    const ex = ext.get(kind) ?? _EXT1;
+    let sx = _sc(1 + rng.gauss(0, 0.30));
+    let sz = _sc(1 + rng.gauss(0, 0.30));
+    if (boss) { sx = _sc(sx * rng.range(1.1, 1.5)); sz = _sc(sz * rng.range(1.1, 1.5)); }
+    // Width tapers with height; the height of each course tapers more gently,
+    // so the stack narrows rather than shrinking.
+    const wz = w0 * (1 - i * taper) * rng.range(0.86, 1.10);
+    const hz = h0 * (1 - i * taper * 0.6) * rng.range(0.85, 1.15);
+    const s = wz / (ex[0] * sx);
+    const sy = _sc(hz / (s * ex[1]));
+    const h = s * sy * ex[1];                       // finished half-height
+    courses.push({
+      kind, dx: cx, dy: y + h, dz: cz, s, sx, sy, sz,
+      yaw: rng.next() * Math.PI * 2,
+      // **`pitch` and `roll` stay small.** A tilted block in a stack reads as a
+      // collapse, and one collapsed tor in a field of upright ones is fine, but
+      // the per-instance jitter that suits a boulder lying in soil turns every
+      // one of them into rubble.
+      pitch: rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
+      roll: rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
+    });
+    y += 2 * h * lap;                               // `lap` of this block's own height
+    cx += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
+    cz += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
+  }
+  return { form, s0, courses };
+}
+
 /** The shape parameters {@link rockGeometry} takes; see its own defaults. */
 type RockShape = Parameters<typeof rockGeometry>[1];
 
 /** One kind of stone: how it is shaped, how big, and how deep it sits. */
-interface RockKindDef {
+export interface RockKindDef {
   key: StoneKind;
   seed: number;
   /** Min and max long axis, metres. */
@@ -819,7 +1116,13 @@ interface RockKindDef {
   opts: RockShape;
 }
 
-const KINDS: RockKindDef[] = [
+/**
+ * The eight base meshes, and the whole variety ceiling of §3.7.
+ *
+ * Exported for `src/tools/silhouette.mts --set rocks`, which measures them
+ * against each other and against the composed landforms they are built into.
+ */
+export const KINDS: RockKindDef[] = [
   // car-sized granite: few, huge, flat conchoidal faces and hard arrises
   {
     key: 'granite', seed: 101, size: [2.2, 6.0], bury: 0.26, w: 1.0,
@@ -1183,55 +1486,15 @@ export class Rocks {
    * @param out the streamed cell's instance list
    */
   _stack(it: RockInstance, rng: Rng, out: RockInstance[], overlap = 0.38) {
-    const n = rng.next() < 0.34 ? 2 : rng.next() < 0.78 ? 3 : 4;
-    const s0 = it.s;
-    const w0 = s0 * (this.ext.get(it.k) ?? _EXT1)[0];
-    const cs = corestones(rng, n);
-    let y = it.y, hPrev = 0;
-    for (let i = 0; i < cs.length; i++) {
-      const c = cs[i];
-      const kind = i === 0 ? kindOf(it.k)
-        : kindOf(rng.next() < 0.5 ? 'bedded' : rng.next() < 0.6 ? 'granite' : 'slab');
-      // **The taper runs on the finished WIDTH, not on `s`.**
-      //
-      // `corestones` returns `c.s` as a fraction of the parent's long axis, and
-      // the long axis is not the width: the kinds' measured x half-extents run
-      // 0.461 (`spire`) to 1.000 (`cobble`), better than two to one. So a
-      // `slab` course at `c.s` 0.60 above a `spire` base at 1.00 is *wider*
-      // than the block it is standing on, and what that renders as is a
-      // balanced rock -- a mushroom on a stalk. `zone_ostium_gorge` came back
-      // with four of them in one frame.
-      //
-      // Same principle as §3.5's aspect floor and for the same reason: the
-      // guarantee has to be stated about the hull that ships, not about the
-      // number the recipe drew.
-      const wantW = w0 * c.s;                            // finished half-width
-      const s = wantW / (this.ext.get(kind.key) ?? _EXT1)[0];
-      const sy = _sc(it.sy * c.sy);
-      // **The half-height is measured, not assumed.** `rockGeometry` normalises
-      // to the mesh's bounding RADIUS, so the instance scale `s` is the long
-      // axis and the *vertical* extent is whatever the stretch and the cuts
-      // left -- 0.447 to 0.988 of it across the eight kinds. The first version of
-      // this stacked on `s * sy` and every course therefore sat about a third
-      // of a block too high: the stacks came back as blocks hanging in the air
-      // over a black shadow, which is the exact defect this whole item exists
-      // to stop producing. `HY` is measured off the built geometry in `build`.
-      const h = s * sy * (this.hy.get(kind.key) ?? 0.75);
-      if (i > 0) y += (hPrev + h) * (1 - overlap);
-      hPrev = h;
+    for (const c of stackPlan(it.k, it.s, it.sy, rng, this.ext, overlap)) {
       out.push({
         ...it,
-        k: kind.key,
-        x: it.x + c.dx * s0, z: it.z + c.dz * s0, y,
-        s, sy,
+        k: c.kind,
+        x: it.x + c.dx, z: it.z + c.dz, y: it.y + c.dy,
+        s: c.s, sy: c.sy,
         yaw: it.yaw + c.yaw,
-        // Held near level. A tilted block in a stack reads as a collapse, and
-        // the per-instance jitter that suits a boulder lying in soil turns
-        // every stack in the field into rubble -- and a tilted course opens a
-        // wedge of daylight under the one above it.
-        pitch: it.pitch * 0.25, roll: it.roll * 0.25,
-        // Only the base course is sunk: the ones above sit on rock, not soil.
-        bury: i === 0 ? it.bury : 0,
+        pitch: it.pitch * c.tilt, roll: it.roll * c.tilt,
+        bury: c.bury ?? it.bury,
       });
     }
   }
@@ -1418,82 +1681,30 @@ export class Rocks {
     // Not on a slope: a twenty-metre stack on a twenty-degree hillside is a
     // pile that should have fallen over, and the seat error alone is metres.
     if (eco.slope01(ox, oz) > 0.30) return;
-    // **Three forms, because one form repeated is the defect it is fixing.**
-    // A pinnacle is tall and tapered and breaks the horizon; a fin is two or
-    // three heavily y-stretched spires and reads as a blade edge-on; a boss is
-    // wide, low and barely tapered and reads as a whaleback. They differ in
-    // height by a factor of three, which is what stops a field of them from
-    // being a comb.
-    const form = rng.next();
-    const fin = form < 0.26, boss = form > 0.74;
-    const n = fin ? 2 + Math.floor(rng.next() * 2)
-      : boss ? 2 + Math.floor(rng.next() * 2)
-        : 4 + Math.floor(rng.next() * 4);
-    const s0 = (fin ? rng.range(5.0, 7.6) : boss ? rng.range(9.0, 13.0) : rng.range(5.6, 10.4))
-      * dress.rockS;
-    const taper = boss ? 0.05 : fin ? 0.08 : 0.11;
-    // Blocks overlap by more than half. At `zone_three_valleys`' range a
-    // 0.55 lap leaves a visible dark seam between each pair and the stack
-    // reads as a cairn -- five separate pebbles balanced on each other --
-    // rather than as one weathered mass.
-    const lap = fin ? 0.68 : boss ? 0.34 : 0.45;
+    // {@link torPlan} owns the shape; this owns the seat and the instance
+    // record. The split is the same one {@link corestones} already has, and it
+    // exists so `src/tools/silhouette.mts --set rocks` can measure the composed
+    // landform through the shipped rule rather than through a copy of it.
+    const plan = torPlan(rng, dress.rockS, this.ext);
+    const s0 = plan.s0;
     // **Seated on the surface the clipmap will DRAW, like everything else in
     // this file.** This was the one placement here that used `eco.height`, the
     // analytic field, and a tor is drawn out to 1150 m: `driftcheck` measures
     // the drawn coarse-LOD surface at up to -2.9 m against the analytic field,
     // so every tor past a few hundred metres stood that far off the ground.
-    // Three of twelve shots in the coordinator's mid-point sweep showed it,
-    // with daylight under the stack — the defect four consecutive blind judges
-    // have named. `_item`, `_stack` and `_genOutcrop` all went through `seatY`
-    // already; this did not, and it is the one that makes the tallest things.
-    const base = seatY(eco, ox, oz, s0 * 2, CULL.granite);
-    // **Both the taper and the courses run on the MEASURED hull**, the same
-    // rule and for the same reason as `_stack`. `it.s` is the long axis, and
-    // the eight kinds' x half-extents run 0.461 (`spire`) to 1.000 (`cobble`)
-    // and their y half-extents 0.447 (`slab`) to 0.988 (`spire`) -- so a taper
-    // applied to `s` puts a wide `slab` course on top of a narrow `spire` one
-    // and a lap applied to `s` leaves daylight between them. `zone_ostium_gorge`
-    // came back with four balanced rocks -- caps on stalks -- in one frame, and
-    // they came from here rather than from the corestone stacks.
-    // The three forms are stated as **finished half-width and half-height in
-    // metres**, and the instance scales are solved backwards from them.
-    //
-    // They used to be stated as `s` plus an `sy` multiplier, and `s` is the
-    // mesh's *long axis*, which is a different axis for different kinds: the
-    // eight x half-extents run 0.461 (`spire`) to 1.000 (`cobble`) and the y
-    // half-extents 0.447 (`slab`) to 0.988 (`spire`). So the same `s` was a wide
-    // flat plate on one course and a tall needle on the next, a taper on `s`
-    // put a wide slab on top of a narrow spire, and a lap on `s` left daylight
-    // between courses. `zone_ostium_gorge` came back with four balanced rocks —
-    // caps on stalks — in one frame, all of them from here rather than from the
-    // corestone stacks; and solving for width alone then made every
-    // spire-topped tor a needle, because `s` for a spire is 2.1x its width.
-    // Both numbers have to be named or one of them runs free.
-    const w0 = s0 * (fin ? 0.46 : boss ? 1.05 : 0.78);
-    const h0 = s0 * (fin ? 1.60 : boss ? 0.50 : 0.76);
-    let y = base - s0 * 0.30;                       // the buried foot of the stack
-    let cx = ox, cz = oz;
-    for (let i = 0; i < n; i++) {
-      const r = rng.next();
-      const kind = kindOf(fin ? 'spire' : i === n - 1 ? 'spire' : r < 0.46 ? 'granite' : r < 0.78 ? 'bedded' : 'slab');
-      const it = this._item(kind, cx, cz, rng, 1, dress);
-      const ex = this.ext.get(kind.key) ?? _EXT1;
-      if (boss) { it.sx = _sc(it.sx * rng.range(1.1, 1.5)); it.sz = _sc(it.sz * rng.range(1.1, 1.5)); }
+    const y0 = seatY(eco, ox, oz, s0 * 2, CULL.granite) - s0 * 0.30;
+    for (const c of plan.courses) {
+      const it = this._item(kindOf(c.kind), ox + c.dx, oz + c.dz, rng, 1, dress);
+      // Everything the plan decided overwrites what `_item` drew; what survives
+      // is the tint, the terrain normal (the direction the sink runs along) and
+      // nothing else. `_item` is still the only place an instance record is
+      // made, so a field added there cannot be silently missed here.
+      it.s = c.s; it.sx = c.sx; it.sy = c.sy; it.sz = c.sz;
+      it.yaw = c.yaw; it.pitch = c.pitch; it.roll = c.roll;
       it.bury = 0;
-      it.pitch *= 0.22; it.roll *= 0.22;
-      // Width tapers with height; the height of each course tapers more gently,
-      // so the stack narrows rather than shrinking.
-      const wz = w0 * (1 - i * taper) * rng.range(0.86, 1.10);
-      const hz = h0 * (1 - i * taper * 0.6) * rng.range(0.85, 1.15);
-      it.s = wz / (ex[0] * it.sx);
-      it.sy = _sc(hz / (it.s * ex[1]));
-      const h = it.s * it.sy * ex[1];               // finished half-height
-      it.y = y + h;
+      it.y = y0 + c.dy;
       it.far = true;
       out.push(it);
-      y += 2 * h * lap;                             // `lap` of this block's own height
-      cx += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
-      cz += rng.gauss(0, wz * (boss ? 0.7 : 0.32));
     }
     // A skirt of spalled blocks, so the tor grows out of the ground rather
     // than being set down on it.
@@ -1601,11 +1812,7 @@ export class Rocks {
       const [nearCap, farCap] = CAP[k.key];
       const nearMax = Math.max(8, Math.round(nearCap * q));
       const geo = rockGeometry(k.seed, k.opts);
-      geo.computeBoundingBox();
-      const bb = geo.boundingBox!;
-      const ex: [number, number, number] = [
-        Math.max(bb.max.x, -bb.min.x), Math.max(bb.max.y, -bb.min.y), Math.max(bb.max.z, -bb.min.z),
-      ];
+      const ex = hullExtents(geo);
       this.hy.set(k.key, ex[1]);
       this.ext.set(k.key, ex);
       const g: RockGroup = {
@@ -1702,41 +1909,17 @@ export class Rocks {
         // same code with the same factor, which is the other half of what 3.5
         // asks for.
         const ex = this.ext.get(it.k) ?? _EXT1;
-        let jx = it.sx, jy = it.sy, jz = it.sz;
-        {
-          // Aspect floor. `ex` is the mesh's own anisotropy, `j*` the
-          // instance's; the product is what ships. `slab` alone is 2.3:1 before
-          // any jitter and `_sc` allows 1.85/0.45 = 4.1:1 on top of it, so the
-          // worst case this generator could previously emit was **9.4:1** --
-          // a plate.
-          const ax = jx * ex[0], ay = jy * ex[1], az = jz * ex[2];
-          const mx = Math.max(ax, ay, az), mn = Math.min(ax, ay, az);
-          this.guard.drawn++;
-          if (mn > 0 && mx > mn * ASPECT_MAX) {
-            const floor = mx / ASPECT_MAX;
-            if (ax < floor) jx *= floor / ax;
-            if (ay < floor) jy *= floor / ay;
-            if (az < floor) jz *= floor / az;
-            this.guard.aspect++;
-          }
-          const fx = jx * ex[0], fy = jy * ex[1], fz = jz * ex[2];
-          const r = Math.max(fx, fy, fz) / Math.max(1e-9, Math.min(fx, fy, fz));
-          if (r > this.guard.worstAspect) this.guard.worstAspect = r;
-        }
-        // Burial floor, baked against the finished footprint rather than the
-        // recipe's `bury`. OGL sinks 12% of the footprint diameter INTO the
-        // mesh so that no instance transform can put a rock down tangent to
-        // the ground and leave a clean elliptical contact line. Ours sinks
-        // through the transform, which is the defeatable version -- and it is
-        // defeated in two places already: `_genTor` and `_stack` both set
-        // `bury` to 0 on every course above the base. Enforcing the floor here
-        // catches those and is also, exactly, 3.4's "settle each corestone
-        // into the one below".
-        const foot = Math.max(ex[0], ex[2]) * 2;
-        if (it.bury < SINK_FRAC * foot) this.guard.sink++;
-        const sink = it.s * Math.max(it.bury, SINK_FRAC * foot);
-        _p.set(it.x - it.nx * sink, it.y - it.ny * sink, it.z - it.nz * sink);
-        _s.set(it.s * jx, it.s * jy, it.s * jz);
+        // Both plan-3.5 guarantees live in `placedScale`, which the silhouette
+        // bench composes tors and stacks through as well; only the counting is
+        // here, because a guarantee that never fires is indistinguishable from
+        // one that is not wired.
+        const ps = placedScale(ex, it.s, it.sx, it.sy, it.sz, it.bury);
+        this.guard.drawn++;
+        if (ps.corrected) this.guard.aspect++;
+        if (ps.ratio > this.guard.worstAspect) this.guard.worstAspect = ps.ratio;
+        if (it.bury < SINK_FRAC * Math.max(ex[0], ex[2]) * 2) this.guard.sink++;
+        _p.set(it.x - it.nx * ps.sink, it.y - it.ny * ps.sink, it.z - it.nz * ps.sink);
+        _s.set(it.s * ps.jx, it.s * ps.jy, it.s * ps.jz);
         _m.compose(_p, _q, _s);
         _m.toArray(mesh.instanceMatrix.array, slot * 16);
         const c = mesh.instanceColor.array;

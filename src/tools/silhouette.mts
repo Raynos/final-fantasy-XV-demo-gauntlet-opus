@@ -4,6 +4,7 @@
  *
  *   node src/tools/silhouette.mts                    # calibrate, then gate trees + enemies
  *   node src/tools/silhouette.mts --set trees        # one family
+ *   node src/tools/silhouette.mts --set rocks        # base meshes, tors, corestone stacks
  *   node src/tools/silhouette.mts --calibrate        # the calibration pairs alone
  *   node src/tools/silhouette.mts --pairs conifer    # every pairwise distance in a family
  *   node src/tools/silhouette.mts --json tmp/sil.json
@@ -396,6 +397,104 @@ async function enemySubjects(): Promise<Subject[]> {
   return out;
 }
 
+/**
+ * The rock family, and the three levels it has to be measured at.
+ *
+ * The blind judge named this defect in two consecutive rounds — *"one instance,
+ * scattered by noise, never rotated… the same mushroom rock appears eight-plus
+ * times per frame at the same orientation"* — and the verdict is factually
+ * wrong about the rotation and right about the read. `Rocks.ts` yaws every
+ * instance uniformly over a full turn. **Yaw is the one rotation that cannot
+ * change the silhouette of a shape that is roughly radially symmetric about its
+ * own vertical axis**, and this bench is built to say exactly that: it
+ * minimises over every azimuth and the mirror, so a family that differs only by
+ * yaw scores its own floor, and it normalises every band by the mesh's own
+ * height, so a family that differs only by scale scores zero too.
+ *
+ *   `rock:base`    the eight base meshes of §3.7's variety ceiling.
+ *   `rock:tor`     whole tors, composed through the shipped `torPlan`.
+ *   `rock:stack`   corestone stacks, through the shipped `stackPlan`.
+ *
+ * The composed families are the ones that matter, because a tor is what a Leide
+ * frame actually puts on the horizon — a base mesh is never drawn alone at that
+ * size. Both are composed through the **shipped** functions and through
+ * `placedScale`, the one place the aspect and burial floors are stated, because
+ * the rocks lane shipped a stacking table measured by a bench carrying its own
+ * copy of the rule and the copy had gone stale with no symptom at all.
+ */
+async function rockSubjects(seeds: number): Promise<Subject[]> {
+  const R = await import('../world/props/Rocks.ts');
+  const { Rng } = await import('../util/Rng.ts');
+  type Kind = import('../world/props/ZoneDress.ts').StoneKind;
+  const geo = new Map<string, THREE.BufferGeometry>();
+  const ext = new Map<Kind, [number, number, number]>();
+  for (const k of R.KINDS) {
+    const g = R.rockGeometry(k.seed, k.opts);
+    geo.set(k.key, g);
+    ext.set(k.key, R.hullExtents(g));
+  }
+  const out: Subject[] = [];
+  for (const k of R.KINDS) {
+    out.push({ family: 'rock:base', name: `base:${k.key}`, tris: trisOfGeoms([geo.get(k.key)!]) });
+  }
+
+  /** One course, placed exactly as `Rocks.update`'s `emit` would place it. */
+  const place = (
+    kind: Kind, x: number, y: number, z: number,
+    s: number, sx: number, sy: number, sz: number,
+    yaw: number, pitch: number, roll: number, bury: number,
+  ) => {
+    const e = ext.get(kind)!;
+    const ps = R.placedScale(e, s, sx, sy, sz, bury);
+    const m = new THREE.Mesh(geo.get(kind)!, new THREE.MeshBasicMaterial());
+    // `emit` sinks along the terrain normal; on flat ground that is straight
+    // down, and a tor only stands on ground under 0.30 slope by construction.
+    m.position.set(x, y - ps.sink, z);
+    m.rotation.set(pitch, yaw, roll);
+    m.scale.set(s * ps.jx, s * ps.jy, s * ps.jz);
+    return m;
+  };
+
+  // **Tors are stratified by form, and that is the whole point of the row.**
+  //
+  // `torPlan` draws one of three archetypes and they differ by a factor of
+  // three in height, so a single `rock:tor` family's mean distance is dominated
+  // by fin-vs-boss pairs and reads as healthy however identical the pinnacles
+  // are. The judge's complaint — *"the same mushroom rock appears eight-plus
+  // times per frame"* — is a complaint about repetition **within** the form
+  // that breaks the horizon. So the seeds are drawn exactly as the game draws
+  // them and then sorted by the form that came out; nothing about the rule is
+  // changed, only which plans land in which row.
+  //
+  // `rockS` 1.05 is Longwythe's, the zone the judge photographed.
+  const want = new Map<string, number>([['pinnacle', seeds], ['fin', seeds], ['boss', seeds]]);
+  for (let v = 0; v < seeds * 40; v++) {
+    const rng = new Rng(9001 + v * 7919);
+    const plan = R.torPlan(rng, 1.05, ext);
+    const left = want.get(plan.form) ?? 0;
+    if (left <= 0) continue;
+    want.set(plan.form, left - 1);
+    const g = new THREE.Group();
+    for (const c of plan.courses) {
+      g.add(place(c.kind, c.dx, c.dy, c.dz, c.s, c.sx, c.sy, c.sz, c.yaw, c.pitch, c.roll, 0));
+    }
+    out.push({ family: `rock:tor:${plan.form}`, name: `tor#${v}:${plan.form}`, tris: trisOf(g) });
+    if ([...want.values()].every((n) => n <= 0)) break;
+  }
+
+  // A `granite` anchor at 4.4 m long axis is the median big block `_item` draws
+  // in Leide, and `_genCell` turns roughly half of them into a stack.
+  for (let v = 0; v < seeds; v++) {
+    const rng = new Rng(4201 + v * 7919);
+    const g = new THREE.Group();
+    for (const c of R.stackPlan('granite', 4.4, 1, rng, ext)) {
+      g.add(place(c.kind, c.dx, c.dy, c.dz, c.s, 1, c.sy, 1, c.yaw, 0, 0, c.bury ?? 0.26));
+    }
+    out.push({ family: 'rock:stack', name: `stack#${v}`, tris: trisOf(g) });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------ calibration */
 
 interface Calib { same: number; diff: number; threshold: number; ratio: number; }
@@ -504,7 +603,8 @@ const subjects: Subject[] = [];
 for (const s of opts.sets) {
   if (s === 'trees') subjects.push(...await treeSubjects(opts.seeds));
   else if (s === 'enemies') subjects.push(...await enemySubjects());
-  else throw new Error(`unknown --set ${s} (trees|enemies)`);
+  else if (s === 'rocks') subjects.push(...await rockSubjects(Math.max(opts.seeds, 10)));
+  else throw new Error(`unknown --set ${s} (trees|enemies|rocks)`);
 }
 
 const sils = new Map<string, Sil>();
