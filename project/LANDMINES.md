@@ -40,6 +40,16 @@ in this file.
   as an undisplaced flat plane. Bisect by editing `tf_shade`'s outputs instead.
 - **Bisect the post chain before the shader.** `?post=plain` takes thirty seconds
   and would have saved two agents a round each on the chevron hatch.
+- **A screen-space ray march needs a screen-space step budget.** `ContactShadowPass`
+  marched a *world* length (0.5 m over 12 steps) with a per-pixel start jitter
+  meant to dither within one step. At `hero_portrait` the subject is 0.6 m away
+  and one step is **69 px**, so neighbouring pixels started on completely
+  different geometry and the binary hit/no-hit landed as a one-pixel
+  checkerboard — the "burlap weave on all skin" that a blind judge read as
+  plastic skin, and that three lanes hunted in the *material*. Skin was never
+  special: it is the nearest large surface in a portrait, and the same march
+  over the terrain behind it steps a fraction of a pixel. `post.contact.stepPx`
+  caps it. **Any new post pass that walks the depth buffer needs the same cap.**
 
 ## Terrain
 
@@ -191,6 +201,19 @@ in this file.
 - **Boulders hung off cliff faces** — sunk along −Y instead of the surface normal.
 
 ## Harness and measurement
+
+- **Toggling one post pass and settling four frames is not an ablation.** Three
+  things move underneath it and none is the pass: the subject keeps *animating*
+  under `settle`, TAA keeps *converging* so a later stage is quieter for free,
+  and four frames after a toggle is a transient in which the neighbourhood clamp
+  is rejecting most of the history. Re-running the shipped configuration last
+  came back reading like a fix. Re-pose, apply the variable, `resetHistory()`,
+  run the same frame count, and repeat the null ablation as a floor —
+  `src/tools/probes/weavebisect.mts` is the shape.
+- **`applyShot` re-applies the quality tier, which sets `gtao.enabled`.** Ablate
+  a post pass *before* posing and you photograph a frame with the pass switched
+  back on. That reads as innocence. Print the flags that were in force at the
+  moment of capture, not the ones you set.
 
 - **The machine saturates.** Six or more concurrent headless Chromiums make every
   measurement worthless *and* stall agents outright — that is what killed three
@@ -522,6 +545,7 @@ trusting the document that recorded it**. Treat every handoff as a *lead*.
 | recorded as | actually |
 |---|---|
 | the chevron hatch = heightfield normals, "proven by forcing `cliffAmt = bedThrough = runnelAmt = 0`" | **GTAO** reconstructing normals from depth. The negative result was real; the inference from it was not. |
+| the crosshatch on all skin = a GTAO dither that TAA cannot resolve on **skinned** meshes, sharpened by CAS | **the contact-shadow march**, undersampled in screen space. GTAO off makes it *worse* (14.59 vs 10.93 rms); making TAA ignore the velocity buffer entirely reproduces the shipped frame to 0.001. Only the third link, CAS, was right, and it is the amplifier. The negative result — *not the material, it survives a flat white face* — was real and is still the best thing in that handoff. |
 | `combatloop` 21/30 = a game regression | **a stale test** — it still pressed `KeyH` after the keymap moved to G/J/K, which opened the controls card and `Menus._pointerLock` disabled input |
 | `Terrain.groundColorAt` disagrees with the shader | **it never existed.** `Ecology.groundColor` called two undefined functions, so every plant in the world tinted from a hard-coded brown ramp. It exists now and mirrors the shader's far-LOD path. |
 | dualhorn/bloodhorn "deep rebuild, **verified by eye**" | rendering **flat black** from the `Color.setHex` NaN above |

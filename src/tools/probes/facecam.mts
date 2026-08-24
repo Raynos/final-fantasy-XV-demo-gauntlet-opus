@@ -41,15 +41,20 @@ const NO_BLINK = true;
  */
 const PIN_HEAD = true;
 /**
- * Turn off the two post passes that put a hard crosshatch over all skin.
+ * Turn off the two post passes that used to put a hard crosshatch over all skin.
  *
- * Measured by `weavehunt.mts` and `weavehunt2.mts`: it is not the material -- it
- * survives a flat white face with every map, vertex colour, sheen, specular and
- * received shadow off -- it is a per-pixel dither out of GTAO that TAA fails to
- * resolve on skinned meshes, which CAS then sharpens into a weave. It is an
- * `src/engine/postfx/**` defect and it is requested, not fixed, in
- * `project/handoff/head.md`. Leave this **off** for any frame that is meant to
- * represent what ships; turn it on to judge the model underneath it.
+ * **The crosshatch is fixed and this toggle is now a historical control.** It
+ * was never the material -- it survived a flat white face with every map,
+ * vertex colour, sheen, specular and received shadow off (`weavehunt.mts`) --
+ * but it was not GTAO and not TAA either, which is what this comment used to
+ * say. It was `ContactShadowPass`: a ray march whose length is a *world* length,
+ * stepping ~69 px per step at 0.6 m, with a per-pixel start jitter meant to
+ * dither within one step. Bisected in `weavebisect.mts` and `weavecontact.mts`
+ * (GTAO off made it *worse*; contact off removed it), fixed by capping the step
+ * in screen space. `weaveproof.mts` is the before/after.
+ *
+ * Flipping this now only removes ambient occlusion and sharpening. Leave it
+ * **off** for any frame that is meant to represent what ships.
  */
 const NO_HATCH = false;
 
