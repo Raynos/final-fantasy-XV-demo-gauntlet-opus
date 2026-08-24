@@ -718,6 +718,54 @@ once per build. Currently 0.974/255 against a *measured* 1.493/255 boot-to-boot
 floor. Note the floor: two fresh boots of the same shot on a quiet machine are
 **not** byte-identical, so any check that demands zero will cry wolf forever.
 
+## A width guarantee stated on one axis is not a guarantee on a silhouette
+
+Every stacking rule in `Rocks.ts` was written as *"a course may not be more than
+1.15x wider than the one below it"* and every one of them was true — of the
+block's **local x half-extent**. The courses are then yawed over a full turn on a
+cross-section that is deliberately anisotropic (`thin` is 0.34 for a fin;
+`_item` draws `sx`/`sz` as independent gaussians at sd 0.30). Two courses ninety
+degrees apart present a cap far wider than the neck beneath it, from an azimuth
+nobody wrote a rule about.
+
+Measured over 16 viewing azimuths (`src/tools/probes/mushroom.mts`): the median
+tor stood **1.23-1.64x** wider than its own support somewhere, and a corestone
+stack reached **7.4x**. A blind judge called it *"the same mushroom rock"* for
+three consecutive rounds while every rule in the file passed.
+
+**And `silhouette.mts` cannot see it, by construction.** Every distance there is
+*between two subjects*, minimised over azimuth and mirror: a family in which
+every member is a wide cap on a narrow neck scores as varied so long as the caps
+differ. `rock:tor:fin` read 17.6/24 distinct with 80% of its members mushrooms.
+The general form — **a bench that grades subjects against each other is blind to
+whatever the whole family shares**, and that is exactly what a blind judge sees
+first.
+
+Fixing it also showed the other half: aligning the courses onto one fabric axis
+took `rock:tor:fin` to **11.4/24** and breached three floors. **Some of the
+variety a ratchet has recorded can be the defect paying for it.** Buy it back on
+parameters that cannot reproduce the defect, and say which those are.
+
+## A default of zero that means "skip the whole pass"
+
+`Cluster.maternScatter` has carried radius-aware separation since it was
+written, and `slack` defaults to **0**, which skips the pass entirely. Exactly
+one of its four callers ever passed a value. Every tree and every bush in the
+world was placed with **no minimum spacing at all** — 9-13% of trees and 9-30%
+of bushes within 1.5 m of a neighbour, trunks as close as 73 cm — for as long as
+the sampler has existed, while the feature was documented, exported, tested by
+the one caller that used it, and named in two handoffs.
+
+`orphans` calls it reachable and `reachcheck` says it ran, and both are right.
+Nothing anywhere reports "this option is defaulted off at three of four call
+sites". **When a capability is opt-in by a falsy default, count the call sites
+that opt in.**
+
+The same shape hid a second bug behind it: the rect filter lives *inside* the
+separation block, so `slack > 0 && out.length > 1` returned a halo point
+whenever a window produced exactly one, and two adjacent tiles both emitted it.
+Latent for as long as nothing sparse used a slack.
+
 ## Numbers that cannot be picked from throughput
 
 `BROWSER_BUDGET = 4` looks like it should come from a throughput curve. It
