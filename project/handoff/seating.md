@@ -303,6 +303,21 @@ Everything that could plausibly have been broken by this lane passed in both
 runs: `geocheck` (which checks seating), `driftcheck`, `floatcheck`,
 `roadcheck`, `silhouette`, `orphans`.
 
+### The distant read, checked rather than assumed
+
+The trade written into `BARE_SEAT_R` predicts a stele hanging over a sagging
+summit at range. **Photographed at 420 m** (`tmp/shots/seat-r9/poi_longwythe_peak.png`,
+`dresscam poi:longwythe_peak --dist 420 --eye 120`): the waymark reads as a dark
+tick standing on the apex with no sky under it. So the cost of choosing the near
+read is smaller in practice than the 17.5 m number suggests — at the distance a
+player actually sees that summit the ring under it is still fine enough. The
+terrain request in §7 stands anyway; it is about the summit's own silhouette,
+not about the stele.
+
+Close range: `tmp/shots/seat-r1/poi_keycatrich_ruins.png` at 34 m. Stele bedded
+into the earth, cairn on the ground, bench racked to the slope, boulders lying
+in the dirt. That is the frame the float was in.
+
 ## 6. What is left, in priority order
 
 1. **Fix `--hide` in `shoot.mts`.** §4 shows an ablation frame rendering with
