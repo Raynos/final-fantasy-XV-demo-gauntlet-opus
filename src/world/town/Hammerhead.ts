@@ -1235,6 +1235,25 @@ export class Hammerhead {
  * has to be written into the call — which is why every `M.corr` placement below
  * still names two numbers.
  */
+/*
+ * There was a `signPlate()` here that flipped every sign's V, on the report
+ * that the garage fascia read **"SOPHIAR" in the right left-to-right order with
+ * every glyph mirrored vertically** (`tmp/shots/sign/sign.png`). It is removed,
+ * and the negative is the useful part.
+ *
+ * Flipping V moved the *layout*: `tmp/shots/sign-fix/sign.png` has the
+ * strapline where the name was and the name off the top of the plate. So the
+ * texture is **not** inverted, and neither is anything else in the chain — a V
+ * flip cannot produce "right order, right vertical placement, mirrored glyphs",
+ * and nor can `ry = PI` (that mirrors U, and would give `RAIHPOS`) or the
+ * material's `DoubleSide` back face (same). Every rigid transform is eliminated.
+ *
+ * What is left is that the word is **twelve pixels tall on a fascia seen at a
+ * grazing angle**, upscaled 6x by `crop.mts` with no filtering, and that the
+ * defect is legibility rather than orientation. If it wants fixing, it wants a
+ * bigger plate or a shorter word, not a flip.
+ */
+
 function uvScale(g: THREE.BufferGeometry, su: number, sv: number) {
   const uv = g.attributes.uv;
   if (!uv) return authored(g);

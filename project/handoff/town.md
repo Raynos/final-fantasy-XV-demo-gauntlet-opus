@@ -214,28 +214,56 @@ in the town stands on a plinth.
 
 ---
 
-## Cost — and why I cannot give you the table the previous round gave
+## Cost — the nine-shot table, and a contradiction in it
 
-The previous round's bar is **+0.33% triangles and one extra draw across nine
-shots**. I cannot reproduce that measurement tonight and it is worth saying
-exactly why, because the answer is not "I did not try".
+Measured at HEAD `c0689df`, `--jpeg`, all nine in one run:
 
-`town_forecourt`'s draw count on `main`, all at HEAD, over roughly one hour:
+| shot | triangles | calls |
+|---|---:|---:|
+| `town_wide` | 8,156,144 | 644 |
+| `town_forecourt` | 10,956,808 | **991** |
+| `town_diner` | 10,985,483 | 893 |
+| `town_garage` | 11,868,267 | 974 |
+| `town_shops` | 10,839,679 | 969 |
+| `poi_reststop` | 11,152,020 | 988 |
+| `poi_haven` | 8,850,571 | 604 |
+| `poi_tomb` | 8,500,638 | 525 |
+| `landmark_insomnia` | 7,844,789 | 400 |
+
+**`town_forecourt` is 991 against a budget of 800 and that is still over.** The
+previous round's table had it at 917 and the coordinator measured 1037 mid-way
+through tonight.
+
+**I could not produce a clean before/after and the reason is worth recording,
+because it is a trap this harness can spring on anyone tonight.** Six lanes are
+committing to this trunk every few minutes, and the same shot at HEAD read:
 
 | sha | calls | triangles |
-|---|---|---|
-| `2af3dfc` (start of my session) | 1037 | 12.32 M |
+|---|---:|---:|
+| `2af3dfc` (session start) | 1037 | 12.32 M |
 | `592ebd0` | 1057 | 11.51 M |
-| `300eb82` (= my commit `9c083de`) | 1486 | 14.75 M |
-| a later HEAD | 1493 | 15.19 M |
+| `300eb82` | 1486 | 14.75 M |
+| `cd1d78e` | 1430 | 14.28 M |
+| `c0689df` | 991 | 10.96 M |
 
-Six lanes are committing to this trunk every few minutes, so **a before/after on
-HEAD attributes nothing**. My two `--hide poi_kits` ablations both landed on a
-*different* sha from their control (`8eef914` vs `592ebd0`; `d3b206a` vs the
-1493 run) and are therefore worthless — the harness README's own warning,
-arriving from the direction I did not expect.
+A ±450-call swing between neighbouring commits swamps anything one lane does, so
+**a before/after on HEAD attributes nothing.** My first two `--hide poi_kits`
+ablations each landed on a *different* sha from their control and were worthless
+— `shoot.mts` resolves `HEAD` per invocation. **Pass `--build <explicit sha>` to
+both halves of any A/B tonight.**
 
-What I *can* say, measured directly in the page at `town_forecourt`:
+### The pinned ablation, and why its answer cannot be right
+
+Both halves at `sha:cd1d78e6a3c8`, `--raw` on both:
+
+| | triangles | calls |
+|---|---:|---:|
+| `town_forecourt` | 14,279,562 | 1430 |
+| `town_forecourt --hide poi_kits` | 10,331,614 | 1081 |
+| **difference** | **3.95 M** | **349** |
+
+And an in-page count of the *same frame*, from `PoiKits.built` after
+`applyShot('town_forecourt')`:
 
 ```
 VISIBLE 7 POI groups, 46 meshes total, 0 shadow casters
@@ -244,117 +272,177 @@ longwythe_rest    reststop  529 m  12 meshes
 5 x landmark      943-1423 m  5 meshes each
 ```
 
-**46 draws is the whole of `poi_kits` in that frame.** It cannot be the source
-of a 400-draw swing. Per-POI, against the old kits' material sets:
+**349 draws against 46 meshes is a factor of 7.6, and 3.95 M triangles against
+seven small compounds is not plausible either.** One of those two numbers is not
+measuring what its name says. The most likely candidate is that `--hide
+poi_kits` matches more of the scene graph than `PoiKits.root` — that is a
+`src/tools/` question and I do not own that file. **Reconcile these before
+acting on either.** Until that is done, "the POI kits cost 349 draws" is not a
+finding, it is an unexplained disagreement.
+
+### What *is* established about this lane's cost
+
+Per-kit, counting materials in the source against meshes in the page:
 
 | kit | old materials | new meshes | delta |
-|---|---|---|---|
+|---|---:|---:|---:|
 | parking | 10 | 9 | **−1** |
 | reststop | 14 | 12 | **−2** |
-| landmark | 4 | 5 → **4** after `35f0bb8` | **0** |
+| landmark | 4 | 5 → **4** after `8a53995` | **0** |
 
-So this lane's POI work is **net draw-neutral to slightly cheaper** at
-Hammerhead, and the +429 between `592ebd0` and my commit is not explained by it.
-The honest next step for whoever picks this up is a **pinned** ablation: two
-captures at one `--build <sha>`, `--raw` on both, `--hide poi_kits` on one. The
-daemon would not hold a lease long enough for me to land it (see below).
+`Wear.ts` adds no material and no mesh anywhere: `gradePad`'s geometry replaces
+the drum one-for-one, and `applyWear` mutates the existing `M.asphalt` so
+Hammerhead's wear field costs **zero** draws. That is the entire reason the 124
+aprons carry their field in vertex colour instead.
 
-`Wear.ts` adds no material and no mesh: the pad geometry replaces the drum
-one-for-one and the wear rides in the vertex colours it already had.
-`applyWear` on Hammerhead's asphalt mutates the existing `M.asphalt`, so it adds
-**zero** draws — that is the reason it is only used there.
+### The class of bug, not the instance
 
----
+`8a53995` was one material for a decorative cap on a kit that exists **23
+times**. The general rule this lane now works to, and the one worth writing into
+`LANDMINES.md` if it is not there:
+
+> **A material is a draw call, and a kit's material count is multiplied by its
+> population.** A second colour on a one-off building is free; the same second
+> colour on a landmark, a parking bay or a haven is 23, 23 and 17 draws. Decide
+> a role's material by *how many of this kit exist*, not by how it looks in
+> isolation — and if two roles want the same material, map them to the same
+> material and `PartBuilder` merges them into one mesh for nothing.
+
+## The floating tombs — cause, fix, and where the gate stands
+
+The coordinator bisected 13 floating POI compounds to my `3d1e075` and sent a
+theory (an origin-convention mismatch between `BoxGeometry` and `BuildKit.box`).
+**That theory was wrong and the evidence says so:** `_block` and `_hut` were
+already seating correctly with the same primitives, and the kits that floated
+included `river_wennath`, which my commit did not touch. There were **four**
+causes, all in `_base` and `gradePad`, all about *which seat envelope at which
+range*:
+
+1. **`_base` used `coverY`**, the *upper* envelope, on the reasoning that "a pad
+   is the ground". True of the apron, false of the compound standing on it —
+   and `coverY`'s ring is chosen from the cull distance, 1300 m for a tomb, so
+   the deck came out metres above the surface a player walks on. Back to
+   `seatY`. **13 -> 12.**
+2. **`gradePad`'s batter could stop in mid-air.** Its reach is capped at
+   `1.15 r + 6` for composition, and on a steep site the 1:3 fill ran out of cap
+   before it ran out of hill. The outermost station now always reaches for the
+   ground. **-> 1 floating.**
+3. **…and reaching without a limit was the same mistake with the sign flipped.**
+   A pad clipping a cliff found ground fifty metres down and hung a fifty-metre
+   curtain off its edge, which `floatcheck` reads as a compound buried 56 m into
+   the hill (`disc_overlook`, `greyshire`, `crestholm`). Capped at
+   `max(6, r / 2)`. **poiBuried 23 -> 18.**
+4. **`_base` was being handed the *draw* distance.** `handoff/modeling.md` had
+   already written down that "a cull distance for `Seat` is the range at which
+   the object's BASE is read, not the range at which the object is visible" —
+   and then left `_make` passing `DRAW_BY_TYPE` straight into `_base`. A
+   landmark on a summit was seated on the lower envelope at **1500 m**, and a
+   coarse ring's chord cuts tens of metres under a sharp peak: `longwythe_peak`
+   was 38.82 m into the ground with a 4.6 m stele on it. `SEAT_BY_TYPE` is the
+   second table, 250–600 m against the 600–2400 m the same kinds are *drawn* at.
+   **poiBuried 18 -> 14.**
+
+**The gate is still red and I am not claiming otherwise:**
+
+```
+poiFloating   13 -> 1    baseline 0    gated
+poiBuried     23 -> 14   baseline 6    gated
+```
+
+Two honest caveats for whoever finishes it:
+
+- The one remaining float is `keycatrich_ruins`, a landmark, at 0.15 m. I bedded
+  the stele's base course 900 mm deeper and the reported figure went **up**, to
+  0.75 m. That means the number is not what I assumed it was — read
+  `floatcheck.mts`'s compound rule before trusting the sign of it.
+- The `poiBuried` baseline of 6 is itself unstable: the method lane measured 25
+  at `2437bc0` and 7 a few commits later, across a night in which the terrain
+  was reshaped twice. The remaining fourteen are dominated by **no-apron
+  landmarks on sharp relief**, where the drawn surface and the seat envelope
+  disagree by more than the object is tall. The cheap fix is a small `gradePad`
+  under the waymark, and I did not take it because it is +1 to +2 draws on 23
+  landmarks and this lane is already over the draw budget.
 
 ## Unverified, and why
 
-**The harness stopped serving.** From roughly the last hour of this session,
-`daemon.mts --health` reports `uptimeSec` under 15 on every poll — it is
-restarting continuously — and `shoot`, `probe` and `floatcheck` all fail with
-`ECONNRESET` or a 300 s `preparePage` timeout, on `--dirty` **and** on committed
-shas including `hero_full`. `cleanup.mts` reports clean. This is not one lane's
-build: `hero_full` at a committed sha does not boot either.
-
-So the following are **committed but not re-measured**:
-
-1. **The `floatcheck` fix.** The coordinator bisected 13 floating POI compounds
-   to my `3d1e075`, correctly. Two causes, both mine, both fixed in `d0b1f27`:
-   - `_base` used `coverY` (the *upper* envelope) on the reasoning that "a pad
-     is the ground". True of the apron, false of the compound standing on it —
-     and `coverY` is chosen from the kind's cull distance, 1300 m for a tomb, so
-     the deck came out metres above the surface a player walks on. Back to
-     `seatY`. The **grid** of 37 probes and the 88th percentile stay: those were
-     the fix for the hummock punching through the menace's court and they are
-     orthogonal to which envelope you sample.
-   - `gradePad`'s batter is capped at `1.15 r + 6` for composition, and on a
-     steep site the 1:3 fill ran out of cap before it ran out of hill, so the
-     earthwork's lowest point was still in the air. The outermost station now
-     **always** meets the ground whatever slope that takes.
-
-   **Run `node src/tools/floatcheck.mts` first thing.** If it is still red, the
-   remaining suspect is `_base`'s `+2.4 m` upward clamp against `h0`.
-
-2. **The five-round capture review the brief asks for.** I got four rounds on
-   the pads and kits (`tmp/shots/kits-r0b`, `r7`, `r9`, `r11/r12`) and read every
-   frame. I did **not** get a round on `town_*` after the Hammerhead pad change.
-
-3. **`pnpm run check`.** Not run. Blocked on the daemon.
-
----
+- **`pnpm run check`** — not run. The daemon spent much of the last two hours
+  crash-looping (`uptimeSec` under 15 on every poll; `shoot`, `probe` and
+  `floatcheck` all returning `ECONNRESET` or a 300 s `preparePage` timeout, on
+  committed shas as well as `--dirty`, including on `hero_full`).
+  `cleanup.mts` reported clean throughout. It recovered near the end, which is
+  how the nine-shot table and `floatcheck` got taken at all.
+- **The five-round capture review the brief asks for.** Four rounds on the pads
+  and kits (`tmp/shots/kits-r0b`, `r7`, `r9`, `r11`/`r12`), every frame read.
+  One round on `town_forecourt` after the Hammerhead pad change, read. The other
+  town shots (`town_night`, `town_approach`, `town_caravan`) were not re-read
+  after the pad work.
 
 ## Two visual defects the coordinator raised, and what I found
 
-### The garage sign
+### The garage sign — tested, and the report is not what it looks like
 
-`tmp/shots/sign/sign.png` shows **"SOPHIAR" in the correct left-to-right order
-with each glyph mirrored vertically**. I could not resolve it and I am recording
-the analysis rather than guessing, because a blind flip here is exactly
-"re-tinting before ablating":
+The fix was **tried and reverted**, and the negative is the deliverable.
 
-- `Hammerhead.ts:687` `put(M.signGA, plane(6.0, 1.7), [...], [0, Math.PI, 0])`.
-  A 180° yaw moves the plane; it does **not** mirror V. It mirrors U, which
-  would give `RAIHPOS`, and the crop does not show that.
-- `signMaterial` sets `side: DoubleSide`. Seeing the *back* face would also give
-  `RAIHPOS`. So we are seeing the front.
-- `garageSignTexture` draws SOPHIAR at `y = 0.44 s` and `EST. M.E. 736` at
-  `0.84 s`; the crop shows them in that same top-to-bottom order, so the texture
-  as a whole is **not** upside down.
+`tmp/shots/sign/sign.png` reads as "SOPHIAR" in the correct left-to-right order
+with every glyph mirrored vertically. Everything that could produce a mirror was
+eliminated by construction first:
 
-A rigid transform cannot produce "right order, right vertical placement, each
-glyph flipped". Either the crop is showing something other than the sign plane
-(the fascia board at `H + 0.74` is 20 mm away and the roof is tilted `-0.06`
-into it — z-fighting between the two would look like this), or `canvasTexture`'s
-mip chain through `bakedCanvasMips` is inverting a level. **The experiment:**
-`crop.mts` the same region with `--hide` on the fascia, and separately capture
-the texture on a flat quad in a blank page. `signCN` is placed identically and
-should be checked at the same time — if the cause is in the helper, every sign
-in the world has it and only this one is framed.
+- `ry = Math.PI` on the plate mirrors **U**, not V. It would give `RAIHPOS`.
+- `signMaterial` is `DoubleSide`; seeing the back face gives the same `RAIHPOS`.
+- `garageSignTexture` draws the name above the strapline, and the frame shows
+  them in that order — so the texture as a whole is not inverted.
 
-### The forecourt "bathroom tiles"
+So I flipped V on **every** sign plate in the town (deliberately all of them: if
+the cause were one call site the others would then be wrong, and one frame tells
+you which). Result in `tmp/shots/sign-fix/sign.png`: the *layout* moved — the
+strapline is now where the name was and the name is off the top of the plate.
+**That eliminates the last rigid transform.** No V flip, no U flip, no face
+choice can produce "right order, right vertical placement, mirrored glyphs".
 
-The hardstanding is `M.slab` at `TEXEL` 7.0 m/tile, laid as three boxes
-(`Hammerhead._ground`, `put(M.slab, box(20, 0.34, 15), ...)` and two more).
-`slabMaterial` is at `TownMaterials.ts:120`. Two candidate causes and they need
-separating before either is touched: (a) the tile itself contains a bay grid
-with too much value contrast, in which case it is a `slabMaterial` fix; (b) 7 m
-is too large a bay so the joints read as a checker rather than as scored lines,
-in which case it is a one-number `TEXEL` change. **Ablate: re-bake `town_slab`
-at 3.5 m and capture, before editing the texture.** Note that changing
-roughness or metalness invalidates the texbake key silently —
-`node src/tools/texbake.mts --force` after any material edit, and that rewrites
-the cache every tree shares.
+What is left is that the word is **about twelve pixels tall on a fascia seen at
+a grazing angle**, and `crop.mts` upscales 6× with no filtering. The defect is
+**legibility, not orientation**, and it wants a bigger plate or a shorter word.
+The elimination is written into the source at the call sites so the next person
+does not repeat it. `signCN`, `signMB`, `signHB`, `signRB` and `signCM` are
+placed identically and are the same story.
+
+### The forecourt "bathroom tiles" — not touched, and here is the read
+
+Untouched: I ran out of budget before I could ablate it, and this is exactly the
+class where re-tinting first is wrong. What I can say from
+`tmp/shots/town-cost2/town_forecourt.jpg`, read at the end of the session: the
+hardstanding under the canopy is a regular grid of large pale panels with thin
+dark joints and **no value alternation between panels**. That is closer to
+poured bays than the "checker" description suggests, so the remaining problem is
+probably bay *size* rather than the tile's contrast.
+
+The two candidates need separating before either is edited:
+
+1. `TEXEL`'s `[/^town_slab/, 7.0]` — 7 m bays. A fuel-station bay is 3–4 m, so
+   this is plausibly a one-number change.
+2. `slabMaterial` (`TownMaterials.ts:120`) — if the tile itself carries the grid
+   at too much contrast, no density change fixes it.
+
+**Re-bake at 3.5 m and capture before editing the texture.** And note the trap:
+a material's texbake key contains its roughness and metalness, so changing
+either invalidates the cache *silently* and boot falls back to runtime
+generation — `node src/tools/texbake.mts --force` after any material edit, and
+that rewrites the cache every materialised tree symlinks.
+
+**The asphalt half of this is fixed and is visible in the same frame.** The pad
+no longer reads as a flat black polygon: it is mottled, it carries the oil and
+tyre wear, and its edge dissolves into the dirt instead of stopping on a line.
 
 The corrugated-siding shimmer is `handoff/modeling.md`'s open item 6, now
-visible on the flat as well as the canopy roof. Untouched.
-
----
+visible on the flat as well as on the canopy roof. Untouched.
 
 ## What is left, in priority order
 
-1. **`floatcheck` green.** Committed fix, unverified. Nothing else matters until
-   this is confirmed.
-2. **The pinned draw-call ablation** described above, and then the nine-shot
-   cost table in the previous handoff's format.
+1. **`floatcheck` green.** `poiFloating 1` and `poiBuried 14` against a ratchet
+   of 0 and 6. See the section above for the two leads.
+2. **`town_forecourt` under 800.** It is 991. Reconcile the 349-draw ablation
+   against the 46-mesh page count first — one of them is wrong and acting on the
+   wrong one wastes a round.
 3. **§5.2 on Hammerhead**: plinths with buried footings on the diner, garage and
    shop; a coping and drip lip on each; the two window cills down to ~1.05 m.
    `BuildKit.plinth` and `BuildKit.parapet` already do all of it and the town has
@@ -362,7 +450,9 @@ visible on the flat as well as the canopy roof. Untouched.
 4. **Soft goods into the remaining callers**: `Outposts` (camo net over the
    containers, sandbags round the mast), Hammerhead's clutter (an awning over
    the shop front, a tarp over the pallet stack), the caravan.
-5. **The garage sign and the slab tiling** — the two experiments above.
+5. **The slab tiling** — re-bake `town_slab` at 3.5 m and capture before editing
+   `slabMaterial`. The sign is *closed*: every rigid transform is eliminated and
+   the residue is legibility, written up above.
 6. **Wear on Hammerhead's *concrete*, not just its asphalt.** `_wearPad` covers
    the tarmac; the hardstanding under the canopy is where the oil actually is.
 7. **The corrugation edge alias** (`handoff/modeling.md` item 6).
