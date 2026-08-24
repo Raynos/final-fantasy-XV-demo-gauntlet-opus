@@ -68,6 +68,17 @@ const GATES: Gate[] = [
   // meshes sharing one silhouette, not on the debt recorded in
   // `project/silhouette-baseline.json`.
   { name: 'silhouette', script: 'silhouette.mts', expect: 'no new collapsed silhouettes' },
+  // The same bench over the *generated* rock families, which need a different
+  // ratchet: a tor's name is its seed index, so any edit to `torPlan` renumbers
+  // every subject and a pair-named baseline cries wolf on the commits it exists
+  // to protect. This one is ratcheted on the family property instead, and the
+  // `--seeds`/`--reseeds` are load-bearing -- the floors were recorded at these
+  // and the tool VOIDs rather than grade at any others. ~18 s.
+  {
+    name: 'silrocks',
+    args: [path.join(HERE, 'silhouette.mts'), '--set', 'rocks', '--seeds', '24', '--reseeds', '5'],
+    expect: 'no rock family below its recorded distinct/variety floor',
+  },
   // Winding, orientation and attribute asserts over every generator bare Node
   // can build. Five controls with known answers run first and the tool exits
   // VOID rather than PASS if any comes back wrong.

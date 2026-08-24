@@ -1,6 +1,44 @@
 {
- "note": "Pairs already sharing one silhouette when the bench landed. The gate fails on a NEW collapse; these are debt, owned by the lane that built them. Re-run `node src/tools/silhouette.mts --set-baseline` only to LOWER this list.",
+ "note": "Two ratchets. `collapsed` is the pair ratchet, for families whose member names are stable facts (a tree species, a bestiary key): it lists the pairs already sharing one silhouette when the bench landed, and the gate fails on a NEW one. `families` is the floor ratchet, for GENERATED families whose member names are seed indices and therefore renumber on any edit to the generator. Its floors are set at (mean - 2 sd) over `reseeds` independent samples of the same generator, because a single sample of these two statistics moves by more than the regression they are meant to catch; the gate compares the MEAN over the same number of samples. Re-run `--set-baseline` only to LOWER `collapsed` or to RAISE a family floor -- both directions are the improving one.",
  "collapsed": [
   "irongiant ~ redgiant"
- ]
+ ],
+ "families": {
+  "rock:base": {
+   "n": 8,
+   "reseeds": 5,
+   "distinct": 8,
+   "variety": 1.3
+  },
+  "rock:stack": {
+   "n": 24,
+   "reseeds": 5,
+   "distinct": 23,
+   "variety": 0.8
+  },
+  "rock:tor:boss": {
+   "n": 24,
+   "reseeds": 5,
+   "distinct": 24,
+   "variety": 1
+  },
+  "rock:tor:fin": {
+   "n": 24,
+   "reseeds": 5,
+   "distinct": 13,
+   "variety": 1
+  },
+  "rock:tor:hoodoo": {
+   "n": 24,
+   "reseeds": 5,
+   "distinct": 19,
+   "variety": 1.4
+  },
+  "rock:tor:pinnacle": {
+   "n": 24,
+   "reseeds": 5,
+   "distinct": 14,
+   "variety": 0.9
+  }
+ }
 }
