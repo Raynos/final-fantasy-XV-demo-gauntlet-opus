@@ -684,11 +684,20 @@ export function applyBrushes(p: THREE.Vector3, nrm: THREE.Vector3, brushes: Scul
   const acc = _a.set(0, 0, 0);
   const px = p.x, py = p.y, pz = p.z;
   for (const br of brushes) {
+    // Reject on the bounding box, then on the squared radius, before the sqrt.
+    // The head grid went from 4,389 vertices to 17,545 and every one of them
+    // asks all 45 brushes; a brush covers a few percent of the head, so almost
+    // every one of those 790 k questions has the answer "no". Identical result:
+    // sqrt is monotone and sqrt(1) is exactly 1.
     const dx = (px - br.p[0]) / br.r[0];
+    if (dx <= -1 || dx >= 1) continue;
     const dy = (py - br.p[1]) / br.r[1];
+    if (dy <= -1 || dy >= 1) continue;
     const dz = (pz - br.p[2]) / br.r[2];
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist >= 1) continue;
+    if (dz <= -1 || dz >= 1) continue;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 >= 1) continue;
+    const dist = Math.sqrt(d2);
     let w = 0.5 * (1 + Math.cos(dist * Math.PI));
     if (br.pow) w = Math.pow(w, br.pow);
     if (br.dir === 'normal' || !br.dir) d.copy(nrm);

@@ -61,9 +61,9 @@ function gridPts(ev, su, sv) {
   const pts = new Float64Array((su + 1) * (sv + 1) * 3);
   let k = 0;
   for (let v = 0; v <= sv; v++) {
-    const phi = (v / sv) * Math.PI;
+    const phi = Face.phiWarp(v / sv) * Math.PI;
     for (let u = 0; u <= su; u++) {
-      const th = Math.PI + (u / su) * Math.PI * 2;
+      const th = Math.PI + Face.thetaWarp(u / su) * Math.PI * 2;
       const p = ev(th, phi);
       pts[k++] = p.x; pts[k++] = p.y; pts[k++] = p.z;
     }
@@ -80,7 +80,7 @@ function maxDisp(a, b) {
   return m;
 }
 
-const SU = 76, SV = 56, F = 6;
+const SU = Face.HEAD_SEG_U, SV = Face.HEAD_SEG_V, F = 3;
 
 for (const [key, m] of subjects) {
   const ch = m && m.character;
@@ -95,26 +95,44 @@ for (const [key, m] of subjects) {
 
   // ---- grid geometry, reported once ------------------------------------
   if (!out.grid.dyAtMouth) {
+    // Real spacing between the two adjacent *shipped* rows/columns nearest the
+    // given canonical height, so the warp is measured rather than assumed.
+    const phiOf = (y) => Math.acos(Math.max(-1, Math.min(1, y / Face.HEAD_R[1])));
+    const nearestRow = (y) => {
+      const want = phiOf(y) / Math.PI;
+      let best = 0, bd = 9;
+      for (let v = 1; v < SV; v++) {
+        const d = Math.abs(Face.phiWarp(v / SV) - want);
+        if (d < bd) { bd = d; best = v; }
+      }
+      return best;
+    };
     const probeY = (y) => {
-      // vertex row spacing in metres at canonical height y
-      const HRy = Face.HEAD_R[1];
-      const phi = Math.acos(Math.max(-1, Math.min(1, y / HRy)));
-      const e = 1e-3;
-      const a = evAll(0, phi - e), b = evAll(0, phi + e);
-      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) / (2 * e) * (Math.PI / SV);
+      const v = nearestRow(y);
+      const a = evAll(0, Face.phiWarp((v - 1) / SV) * Math.PI);
+      const b = evAll(0, Face.phiWarp((v + 1) / SV) * Math.PI);
+      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) / 2;
+    };
+    const probeDy = (y) => {
+      const v = nearestRow(y);
+      const a = evAll(0, Face.phiWarp((v - 1) / SV) * Math.PI);
+      const b = evAll(0, Face.phiWarp((v + 1) / SV) * Math.PI);
+      return Math.abs(a.y - b.y) / 2;
     };
     const probeX = (y) => {
-      const HRy = Face.HEAD_R[1];
-      const phi = Math.acos(Math.max(-1, Math.min(1, y / HRy)));
-      const e = 1e-3;
-      const a = evAll(-e, phi), b = evAll(e, phi);
-      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) / (2 * e) * (Math.PI * 2 / SU);
+      const phi = Face.phiWarp(nearestRow(y) / SV) * Math.PI;
+      // columns either side of the front midline (thetaWarp(0.5) === 0.5)
+      const uf = 0.5, du = 1 / SU;
+      const a = evAll(Math.PI + Face.thetaWarp(uf - du) * Math.PI * 2, phi);
+      const b = evAll(Math.PI + Face.thetaWarp(uf + du) * Math.PI * 2, phi);
+      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) / 2;
     };
     out.grid = {
       segU: SU, segV: SV, headVerts: (SU + 1) * (SV + 1),
       rowSpacing_mm: { brow: r(probeY(0.005) * 1000, 2), eye: r(probeY(-0.006) * 1000, 2),
         nose: r(probeY(-0.046) * 1000, 2), mouth: r(probeY(-0.079) * 1000, 2),
         chin: r(probeY(-0.104) * 1000, 2) },
+      rowDy_mm: { eye: r(probeDy(-0.006) * 1000, 2), mouth: r(probeDy(-0.079) * 1000, 2) },
       colSpacing_mm: { eye: r(probeX(-0.006) * 1000, 2), mouth: r(probeX(-0.079) * 1000, 2) },
       note: 'spacing at the front midline, in millimetres of surface',
     };
@@ -186,6 +204,7 @@ const L = [];
 L.push(`grid  segU=${out.grid.segU} segV=${out.grid.segV}  headVerts=${out.grid.headVerts}`);
 L.push(`      row spacing mm  brow ${out.grid.rowSpacing_mm.brow}  eye ${out.grid.rowSpacing_mm.eye}  nose ${out.grid.rowSpacing_mm.nose}  mouth ${out.grid.rowSpacing_mm.mouth}  chin ${out.grid.rowSpacing_mm.chin}`);
 L.push(`      col spacing mm  eye ${out.grid.colSpacing_mm.eye}  mouth ${out.grid.colSpacing_mm.mouth}`);
+L.push(`      row dy mm       eye ${out.grid.rowDy_mm.eye}  mouth ${out.grid.rowDy_mm.mouth}`);
 L.push(`controls  null=${out.controls.nullAblation_mm}mm  wide(r40mm) surv=${out.controls.wideBrush_r40mm.survival}  tiny(r1mm) surv=${out.controls.tinyBrush_r1mm.survival}`);
 for (const [k, c] of Object.entries(out.chars)) {
   L.push('');
