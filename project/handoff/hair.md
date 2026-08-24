@@ -203,11 +203,14 @@ top, which is why they stop short of a full relaxed curl.
 | + halo/wisps/strand map | `tmp/shots/hair-r2/` |
 | + brows, hands | `tmp/shots/hair-r3/`, `tmp/shots/hair-r3c/` |
 | **current, the honest picture** | **`tmp/shots/hair-r4/`**, `_n_hair.png` / `_p_hair.png` at 2× |
-| judged framings + budget | `tmp/shots/hair-r5/` |
+| **judged framings + budget, at HEAD** | **`tmp/shots/hair-final/`** |
 | the hand, 6× | `tmp/shots/hair-r4p/_handA.png` |
 | beard ablation pair | `tmp/shots/hair-abl/`, `tmp/shots/hair-abl2/` |
 
-`hair-r4/noctis_3q.png` is the one to look at first: layered black hair with a
+`tmp/shots/hair-final/hero_full.jpg` against
+`tmp/shots/head-r1p/hero_full.png` is the before/after for the whole cast at the
+range the shimmer lived at. `hair-r4/noctis_3q.png` is the one to look at
+next: layered black hair with a
 real fringe, visible strand structure and a visible ear, against `hair-r0`'s
 identical framing.
 
