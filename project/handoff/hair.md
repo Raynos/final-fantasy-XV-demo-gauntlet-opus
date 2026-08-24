@@ -6,7 +6,8 @@ and left the pixel arithmetic that decides the job. Plan §8.3, §8.5.
 
 Commits on `main`: `dfad601` (cards), `0629fe6` (halo, wisps, the strand map),
 `2d80a26` (brows), `519a1e4` (hands), `92e8373` (the cutout narrows and
-wanders), `d799537` (Gladiolus' beard + the ablation that justifies it).
+wanders), `d799537` (Gladiolus' beard + the ablation that justifies it),
+`21d8da8` (the two blond hair colours were, measured in hue, dry grass).
 
 **Gates: 16/16 on `pnpm run check`, run after the card work and again at the
 end.** `creaturecheck` 207 poses, `combatloop` 31/31, `silhouette` 42 meshes,
@@ -212,15 +213,18 @@ identical framing.
 
 ## 5. What is left, in the order I would take it
 
-1. **Pale hair still reads as straw at 0.55 m.** Prompto and Ignis
-   (`hair-r4/_p_hair.png`, `prompto_crown.png`). The cards are coherent and the
-   groom is right; the problem is *contrast* — a near-white filament against the
-   dark gap behind it, where dark hair hides the same gap. Two candidates, both
-   untested: more overlap (`cardDensity` past 0.30, which costs triangles the
-   budget has), or lifting the shell's value under pale styles so a gap is not a
-   hole. **Note the range**: this is 0.55 m, which is 2.9× closer than
-   `hero_portrait`, where the same heads read fine. Do not spend a round on it
-   before checking it is visible at a judged framing.
+1. **Pale hair still reads as a thatch at 0.55 m**, though no longer as *straw*
+   — half of that was the hue and it is fixed (`21d8da8`; Ignis was HSV hue 44.6
+   sat 27.5 and Prompto 45.3 / 31.7, and cut straw is hue 45–55 at sat 30–50:
+   they were not near that colour, they were it. Both are at hue 35–36 now).
+   What is left is *structure*: the locks are stiff and all radiate the same
+   way, and a near-white filament has contrast against the gap behind it where a
+   near-black one does not. Two candidates, both untested: more overlap
+   (`cardDensity` past 0.30, which costs triangles the budget has), or lifting
+   the shell's value under pale styles so a gap is not a hole. **Note the
+   range**: 0.55 m is 2.9× closer than `hero_portrait`, where the same heads
+   read fine. Do not spend a round on it before checking it is visible at a
+   judged framing.
 2. **Gladiolus' beard is still separated dashes**, not a field, at 0.55 m. The
    ablation in §3 says the answer is not deletion. The next thing to try is
    beard *cards* at a moustache scale (4–5 mm wide, 6–8 mm long) — the aspect is
