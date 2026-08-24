@@ -118,6 +118,15 @@ in this file.
 - **three.js has no per-instance normal matrix** — it divides the object normal
   by each instance-matrix column length, so non-uniform instance scale flattens
   normals. That was the "green cardboard" grass.
+  **Qualified 2026-08-24, because as written it deters a lever that is free.**
+  Read the chunk: `defaultnormal_vertex.glsl.js:32-34` is
+  `n /= vec3(dot(im0,im0), dot(im1,im1), dot(im2,im2)); n = im * n`, and for
+  `im = R·S` with `S` **diagonal** that evaluates to `R·S⁻¹·n`, which *is* the
+  exact inverse-transpose. So per-instance non-uniform scale on a rigid mesh is
+  correct, not an approximation — `Rocks._item` has relied on it for months at a
+  mean anisotropy of 1.7 and its normals are right. What the entry is really
+  about is **shear**, and about scale baked into a card's own geometry, which is
+  what the grass had. Say which of the three you mean before quoting it.
 - **Do not use a per-instance hash for per-clump wind.** An instance in the blade
   ring is *one blade*, not one plant; a positional hash gives blades inside a
   tuft different phases and shreds the tuft. Use smooth functions of world
