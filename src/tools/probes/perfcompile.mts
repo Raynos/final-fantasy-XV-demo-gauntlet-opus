@@ -14,7 +14,7 @@ const look = (x, y) => inp.look.set(x, y);
 const rig = g.get('CameraRig');
 g.applyShot('hud_field'); rig && rig.clearShot && rig.clearShot(); g.resetClock();
 
-const SEG = 'menu-open'; // SEGNAME
+const SEG = 'sprint+turn'; // SEGNAME
 const menus = g.get('Menus');
 const each = SEG === 'menu-open'
   ? (i) => { if (i === 5) menus.setScreen('main'); if (i === 30) menus.setScreen('ascension'); if (i === 55) menus.setScreen('inventory'); if (i === 80) menus.setScreen(null); }

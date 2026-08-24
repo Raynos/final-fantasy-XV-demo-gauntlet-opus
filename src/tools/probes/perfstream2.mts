@@ -83,7 +83,7 @@ const SEGMENTS = {
   },
 };
 
-const want = 'menu-open'; // SEGNAME
+const want = 'streaming-traverse'; // SEGNAME
 const seg = SEGMENTS[want];
 seg.setup();
 cur = null;
