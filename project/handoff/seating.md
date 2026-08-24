@@ -226,3 +226,66 @@ them on the finest ring costs nothing and fixes the burials as well.
 
 **The 7.6x ablation disagreement is NOT reconciled** and I did not get to it —
 see *What is left*.
+
+## 5. `pnpm run check`
+
+**15/16 in the run, and the sixteenth is the daemon landmine, not a
+regression.** `combatloop` came back `FAIL 69.95s page.evaluate: Target page,
+context or browser has been closed` — the exact signature `LANDMINES.md` records
+for a page lost under contention. Re-run on its own, on the same commit,
+unchanged: **31/31 mechanics verified**. `daemon --health` showed `uptimeSec`
+290 at the time, i.e. the daemon had restarted mid-suite.
+
+Everything else passed, including the ones that could plausibly have been broken
+by this lane: `geocheck` (which checks seating), `driftcheck`, `reachcheck`,
+`floatcheck`, `roadcheck`, `silhouette`, `orphans`.
+
+## 6. What is left, in priority order
+
+1. **The 7.6× ablation disagreement is still open and nobody should act on
+   either number.** `handoff/town.md` records `--hide poi_kits` costing 349
+   draws against an in-page count of 46 meshes with no shadow casters in the
+   same pinned frame. I did not get to it. What I *can* add is that `--hide` is
+   a **name-substring** match over the whole scene graph (`shoot.mts:76`), and
+   POI groups are named `poi_<type>_<id>` while `PoiKits.root` is not — so
+   `--hide poi_kits` may well be matching nothing at all and the 349 is two
+   different frames of a moving trunk. **`--hide poi_` is the string that
+   actually matches**, and I used it successfully for the ablations in §3. A
+   `--hide` that matches nothing must be an error; check whether it is.
+2. **The haven pad still reads as a large smooth cone.** The facets are gone but
+   there is no surface incident on 30 m of batter — no scree, no rills, no tonal
+   break between fill and undisturbed ground. That is `Wear`'s vertex-colour
+   story and a material question, not a seating one.
+3. **`the_weaverwilds`, `longwythe_peak` and `disc_cauthess` sit on knife
+   edges.** `seatPlane().residual` reports 1.53 m at `disc_cauthess` against a
+   9 m footprint. The waymarks are now *on* the ground there, but a bench and a
+   cairn on a ridge crest is a siting problem: it wants the POI moved a few
+   metres off the crest, which is `WorldMap.ts` and not this lane's file.
+4. **The waymark bench reads as a hollow frame at 30 m**
+   (`tmp/shots/seat-r1/poi_keycatrich_ruins.png`) — two legs and three thin
+   slats with daylight through them. Now that each leg finds its own ground it
+   racks correctly, but it wants a stretcher or a solid apron rail.
+5. **`_fishing` is the other `noApron` kit and was deliberately left alone.** Its
+   deck is set from the sea (`max(1.4, seaLevel + 1.5 - base)`) and its piles run
+   3.4 m below that, so it seats itself; if a jetty ever reads wrong, that is the
+   place to look and `seatsBare()` in `PoiKits.ts` is where to add it.
+
+## 7. Requests to other lanes
+
+- **terrain (coordinator).** `longwythe_peak` loses **21.2 m** between
+  `heightAt` (444.24) and what the clipmap's 6 m ring draws (423.02); the 1.5 m
+  ring draws 440.49. That is the region's signature summit changing height by
+  twenty metres as you back away from it, and **no prop seating can be right on
+  both sides of it** — this lane had to choose, and chose the near read, so a
+  4.6 m stele will hang over the sagged summit from ~400 m. It is a
+  terrain-LOD defect (a peak sharper than the lattice can carry), not a props
+  one. `disc_cauthess` loses 8.0 m and `rock_ravatogh` 10.9 m the same way.
+- **scatter / trees.** The town lane's three-line `poiClear` request in
+  `handoff/town.md` §"Grass grows through" is still unactioned as far as I can
+  see, and it is still the largest visual defect at every POI.
+- **coordinator.** `dresscam` came back twice with the **main menu open over the
+  frame** (`tmp/shots/seat-r2`, `seat-r3`) on a pooled page, after a clean run of
+  the same command minutes earlier. `reset()` is checked by `checkResetDrift`
+  against a `party_walk` pose; whatever leaves the menu up is not covered by it.
+  Not chased — flagging it because a frame with a menu over it is a wasted
+  capture and it is not obvious it is the harness rather than the shot.
