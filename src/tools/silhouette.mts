@@ -476,7 +476,7 @@ async function rockSubjects(seeds: number, reseed: number): Promise<Subject[]> {
       tris: trisOfGeoms([geo.get(k.key)!]),
     });
   }
-  // `--reseed` draws a different sample of the same generator. It exists so the
+  // `--reseeds` draws several samples of the same generator. It exists so the
   // family floors below can be set against the row's own resampling noise
   // rather than against one draw: `torPlan` consumes a different number of
   // random draws after any edit to it, so which seeds land in which archetype
@@ -810,7 +810,7 @@ interface Row {
  * Grade one built set: a row per family, plus the collapsed pairs.
  *
  * A function rather than straight-line code because the floor ratchet has to
- * run it several times over `--reseed`ed samples of the same generator, and a
+ * run it several times over `--reseeds` samples of the same generator, and a
  * second copy of the rule is how `handoff/rocks.md`'s stacking table went stale
  * with no symptom at all.
  */
