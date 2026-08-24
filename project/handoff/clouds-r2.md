@@ -183,13 +183,13 @@ over a sky of `#5ea0c9`.
 `imagestats` medians over the three daylight shots, delta from the 53-plate
 `FFXV` corpus:
 
-| | baseline | after `cf601ca` | shipped | FFXV |
-|---|---|---|---|---|
-| `R-B` | −7.6 | −11.4 | −7.2 | −10.0 |
-| `hi(R-B)` | −15.1 | −20.4 | **−5.7** | −19.8 |
-| `hi230%` | 4.50 | 0.73 | 2.76 | 2.92 |
-| `p99.9` | 251.0 | 226.6 | 247.9 | 252.5 |
-| `stops` | 9.52 | 9.07 | 9.47 | 10.08 |
+| | baseline | `cf601ca` | `+06eed03` | shipped | FFXV |
+|---|---|---|---|---|---|
+| `R-B` | −7.6 | −11.4 | −10.2 | −7.2 | −10.0 |
+| `hi(R-B)` | −15.1 | −20.4 | −17.0 | **−5.7** | −19.8 |
+| `hi230%` | 4.50 | 0.73 | 2.66 | 2.76 | 2.92 |
+| `p99.9` | 251.0 | 226.6 | 248.2 | 247.9 | 252.5 |
+| `stops` | 9.52 | 9.07 | 9.49 | 9.47 | 10.08 |
 
 **`hi(R-B)` is the one number that ends up worse, and it is one shot.**
 `zone_longwythe` and `zone_three_valleys` are unmoved (−0.3 and −22.3);
