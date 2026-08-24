@@ -44,7 +44,12 @@ Re-audited against the tree 2026-08-24:
 | **four more §7 rows were false** | **AUDITED** | The albedo pin **is** applied to trees (`VegTextures.ts:409`); crown volume normals are built **twice**; and §7.1's LOD-as-re-skin and §7.4's area-conserving crown LOD have **no consumer at all** — we have no geometry LOD1 to re-skin |
 | **the black bell at every trunk** | **FOUND** | `frame(+y)` makes a tube's angle parameter sweep the *opposite* rotational sense to a plain `(cos a, y, sin a)` ring. Probed: **640 tube triangles disagree with their own vertex normals, 40 flare triangles agree.** The old root skirt had the same bug and was small and dark enough to hide it — which is most of why trunks have always read as posts stuck in dirt |
 | **8.2 head tooling · the eye defect** | **DONE 2026-08-24, and it is the find of the night** | **Every eye in the game was covered by a lit skin-coloured lobe.** The full assembly — sclera, iris, pupil, limbal ring, catchlight, lash line, lid crease — was built by two earlier lanes and **had never once been visible in a shipped frame**. That is the "doll eyes / painted-on features / mannequin mask" a blind judge named in *every* round. Three causes: `buildLid` switched winding on `upper === (sg > 0)` where only `sg` may (48 of 48 covering triangles below the eye centre), the face material was `DoubleSide`, and `ribbon()` plus `buildHead`'s chin cap were backwards behind it. `headprofile.mts` separates a head from a smooth ovoid by **5x** |
-| **§8.2's head rebuild · §8.3's hair fix** | **BOTH PREMISES STALE** | `Face.ts` already has a nasion, mandible ramus and body, gonial angle and mental tubercles — **do not rebuild the head**, neither the SDF nor the Catmull-Clark route is justified. §8.3's grooming is likewise already built (guides, inverse-square blending, `a+b·cos` hairline, slotted roots, taper); what is wrong is parameters and the absence of *cards* — the locks are 1.5 mm opaque tubes, **0.7 px at 4 m** |
+| **§8.2 the head** | **REBUILT 2026-08-24 — and neither of the plan's two architectures was the answer** | The anatomy was **real and complete in `skullSampler`, the continuous function, and annihilated by a 76x56 UV sphere.** Measured one brush at a time by `probes/brushsurvive.mts` (controls first: null ablation 0.000 mm, a synthetic 40 mm brush survives 0.995, a synthetic 1 mm brush 0.000): the **entire face front was 611 vertices at 5.6-9.6 mm** against a brush table authored at **3-10 mm radii**. 17 of 45 brushes had fewer than four vertices of support; the **nostrils, both alar wings and the alar crease had zero**; the philtrum, mouth corners, nasion and cupid's bow had **one**; a 60 mm mouth line had **three**. The cranium had 272. So the defect was sampling density, not expressive power — and SDF and Catmull-Clark are both *uniform* refinement, paying for the whole head to fix a third of it. `warpAxis` reparameterises density instead: **face-front 611 -> 6,517 vertices**, mouth spacing 6.52/5.56 -> **2.03/1.39 mm**, starved brushes 17 -> 4, mouth-line/nostril verts 3/0 -> **15/8**. Draws **unchanged**, triangles +5.7% |
+| **`headprofile.mts` was blind to this, and now says so** | **§9.3 applied to an instrument that had just been believed** | 24 bands over a 238 mm head is **9.9 mm per band — coarser than the mesh it measures**; the statistic is a mid-sagittal *outline*, which a front-facing portrait never shows; and its own ablation control only removes the big brushes. All three blindnesses are in its header **and in its returned JSON as a `blindTo` field** |
+| **the burlap weave on every face** | **NOT OURS — measured** | The pore normal map really was aliasing **6.6x past Nyquist** and was fixed, and that moved `hero_portrait` by **0.385/255**, i.e. nothing. `probes/weavehunt.mts` renders **a flat white face with every map off and it still carries the identical crosshatch**. The chain is **GTAO dither -> TAA failing to resolve it on *skinned* meshes -> CAS sharpening it**. The background animal has it; the rocks and terrain do not. Routed to a postfx lane |
+| **the "fingerless paddle" hands** | **A WRONG DIAGNOSIS OF MINE, CORRECTED BY MEASUREMENT** | At `hero_full` a hand is **33 px** and a finger is **5 px wide by 20 px long, with real geometry already present**. The defect is the **rest pose** — fingers splayed straight like a rake. `Posture.ts`, not modelling |
+| **a `_face` framing was never a front view** | **TWO PREVIOUS ROUNDS GRADED A HEAD FROM A THREE-QUARTER** | The head-turn layer leaves the subject at 35-60°. `facecam.mts` now has `PIN_HEAD` |
+| **§8.3 hair** | IN FLIGHT | The grooming machinery is all built; **cards are missing**. Locks are 1.1-2.1 mm: **2-4 px at portrait** (separate sticks — the quill read) and **0.3-0.5 px at `hero_full`** (pure shimmer). §8.3's card scale is **12-18 mm** |
 | 8.1 skinning · 8.4-8.6 | NOT TAKEN | The lane spent its night on the eye defect and the measurement tooling, which is the right trade and the order §8 itself prescribes |
 | **§9.2 silhouette bench** | **DONE 2026-08-24 — a definition-of-done box** | `tools/silhouette.mts`: 8 azimuths x 24 height-normalised bands, RMS as % of height, minimised over azimuth and mirror so pure scale and pure yaw score **zero**. Thresholds are the geometric mean of two anchors **re-measured every run** — known-same 0.573, known-different 42.989, range 75x, threshold 4.96. Found **`irongiant` and `redgiant` are one silhouette** (1.84) |
 | **§13 `proudOf` + the floating gate** | **DONE 2026-08-24 — the other box** | `Seat.proudOf`/`supportPoints`/`seatPlane` push support points through the **final instance matrix** against the finest clipmap ring, plus the 6-probe least-squares seat plane. `tools/floatcheck.mts` builds all 123 POIs in one boot and is **calibrated against a known-bad confirmed by eye**. It immediately caught 13 POI compounds in the air and 379 floating rock instances |
@@ -569,18 +574,24 @@ Re-ticked 2026-08-24 after the seven-lane build. **4 of 6.** The plan stays
       height-normalised bands, thresholds the geometric mean of a known-same
       (0.573) and a known-different (42.989) re-measured every run. It found
       `irongiant` and `redgiant` are one silhouette.
-- [ ] **`seatHeightAt` + `proudOf` runs in a check — zero floating instances
-      across the POI corpus.** `proudOf` is built and `floatcheck` gates the
-      whole corpus in one boot, calibrated against a known-bad confirmed by eye.
-      But it is **red**: `poiFloating 1`, `poiBuried 15`. The gate exists; the
-      world does not yet pass it. `handoff/town.md` has four causes and the
-      caveat that stops anyone fixing it blind.
+- [x] **`seatHeightAt` + `proudOf` runs in a check — zero floating instances
+      across the POI corpus.** **CLOSED 2026-08-24.** `floatcheck` reports
+      **`poiFloating 0`, `poiBuried 0` across 120 POIs and 1405 placed
+      instances**, and the baseline was moved *down* to zero with a written
+      justification rather than ratcheted up. Getting there required decoding
+      what the gate's compound rule actually measures — the sign paradox that
+      stopped the previous lane (bedding a stele deeper made the reported float
+      go *up*) — and the answer was that it judged burial against the graded
+      pad rather than the deck.
 - [ ] **The head/hair rebuild is judged by the width-profile bench and a blind
-      A/B, not by eye alone.** It was *judged* — round 11, and the face is the
-      single reason the round scored 3/10 — but it was **not rebuilt**. The
-      characters lane concluded from `headprofile.mts` that `Face.ts` already
-      has the anatomy and the rebuild is not justified; the frame disagrees, and
-      `hero_portrait` has no mouth. **Re-open that verdict against the frame.**
+      A/B, not by eye alone.** The head is **rebuilt** and the bench-versus-frame
+      disagreement is **resolved with controls** — see the row above. What is
+      outstanding is the *judgement*: the lane that rebuilt it says a round now
+      would be wasted, because the frame is dominated by two things it does not
+      own — an engine-side crosshatch on all skin, and hair whose locks are
+      **0.3-0.5 px at `hero_full`**, i.e. pure shimmer, against §8.3's 12-18 mm
+      card scale. Both are in flight. **The round runs when they land**, and I
+      run it, not the lane that built the thing.
 - [x] **Measured negatives are recorded here or in handoffs.** Emphatically:
       sixteen of this plan's own rows were disproved and left in place rather
       than deleted; the 148 m talus fan is unbuildable and why; curvature cavity
