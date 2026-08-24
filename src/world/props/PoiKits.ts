@@ -40,6 +40,13 @@ import type { Game } from '../../game/Game.ts';
  */
 
 const BUILD_R = 1500;
+
+/**
+ * Kit types whose build does not fit inside one frame, so they are built at
+ * load instead. See {@link PoiKits.prebuildHeavy} for the per-type timings and
+ * for the shader-compile half of the reason.
+ */
+const PREBUILD_TYPES: ReadonlySet<string> = new Set(['town', 'imperial']);
 /**
  * How far each kit is worth drawing.
  *
@@ -365,6 +372,47 @@ export class PoiKits {
     }
     // nearest-to-spawn first so the opening view is already furnished
     this.sites.sort((a, b) => Math.hypot(a.poi.x, a.poi.z) - Math.hypot(b.poi.x, b.poi.z));
+  }
+
+  /**
+   * Build the kits that cannot fit in a frame, at load, before anyone is
+   * looking.
+   *
+   * {@link PoiKits.update} builds "at most one POI per frame, nearest first"
+   * with no time budget, and a budget cannot help here: one `_make` is an
+   * atomic unit of work and some of them are enormous. Every one of the 123
+   * sites, timed individually (`src/tools/probes/perfpoi.mts`):
+   *
+   *     type        n   median ms   max ms
+   *     town        2      168.4    168.4      <- lestallum, galdin_quay
+   *     imperial    6       32.4     36.7
+   *     outpost     8       10.8     17.3
+   *     everything else                  <= 15.2
+   *
+   * Median across all 123 is 6.7 ms; only these eight break
+   * `BRIEF.md` rule 3's 33 ms, and the two towns break it by five times. That
+   * is the 41-54 ms `Props.update` frame in `streaming-traverse`.
+   *
+   * Building them here has a second, larger payoff. `PostFX.precompile()` runs
+   * after every system has built its content, so a kit that exists by then has
+   * its programs linked on the loading screen instead of in the frame that
+   * first draws it. The 121-168 ms spike in `sprint+turn` (reproducible at the
+   * same frame index every run) was exactly that: `perfcompile.mts` catches
+   * `town_asphalt`, `town_chainlink`, `town_glass` and `sign_hh` linking, plus
+   * 44 geometries and 57 textures, as the player sprints into Hammerhead's
+   * range. Neither `renderer.compile(scene)` nor `Warmup` could ever have
+   * caught them, because the materials did not exist yet.
+   *
+   * The cost is about half a second of boot for eight kits that are then
+   * distance-culled by `update` like any other, and it buys back the two
+   * largest frame spikes in the game.
+   *
+   * @param game passed through to `_make`, which asks it for the exclusion set
+   */
+  prebuildHeavy(game: Game) {
+    for (const s of this.sites) {
+      if (!s.group && PREBUILD_TYPES.has(s.poi.type)) this._make(s, game);
+    }
   }
 
   // ------------------------------------------------------------- placement

@@ -91,6 +91,10 @@ export class Props {
       this.poiKits = new PoiKits(this.ecology, game.scene, { quality });
       this.poiKits.build();
     });
+    // The eight kits that cannot be built inside a frame — see
+    // `PoiKits.prebuildHeavy`. Its own boot phase, because half a second is
+    // worth seeing in `bootprof` rather than hiding inside `Props.poiKits`.
+    bootPhase('Props.poiPrebuild', () => this.poiKits.prebuildHeavy(game));
 
     bootPhase('Props.regalia', () => this._buildRegalia(game));
     this._camPos = new THREE.Vector3();
