@@ -1820,6 +1820,14 @@ export class Field {
       }
     }
 
+    // **Never bank scree over a place people go.** `floatcheck` found havens,
+    // parking, rest stops and two landmarks buried 4-19 m after this pass
+    // landed — `longwythe_peak` worst at 18.81 m into the ground — because a
+    // POI is very often sited at the foot of exactly the cliff that feeds a
+    // fan. The kits seat against the drawn surface, so the ground rising under
+    // them swallows them whole and nothing in the frame explains why.
+    const sites = this.map.pois.map((p) => ({ x: p.x, z: p.z, r: Math.max(70, p.r * 1.6) }));
+
     // Mottle the thickness and lay it in with a soft floor, so the apron's
     // outer edge is a fading skirt rather than a contour line on the ground.
     const n2 = this.n2;
@@ -1841,7 +1849,13 @@ export class Field {
         const want = Math.min(A[k], h[k] + 16);
         if (want <= h[k] + 0.02) continue;
         const x = -HALF + i * CELL;
-        const mottle = 0.68 + 0.32 * (0.5 + 0.5 * n2.fbm2(x * 0.0135 + 5.1, z * 0.0135 - 2.7, 3));
+        let keep = 1;
+        for (const st of sites) {
+          const d = Math.hypot(x - st.x, z - st.z);
+          if (d < st.r) keep *= smoothstep(st.r * 0.6, st.r, d);
+        }
+        if (keep < 0.02) continue;
+        const mottle = (0.68 + 0.32 * (0.5 + 0.5 * n2.fbm2(x * 0.0135 + 5.1, z * 0.0135 - 2.7, 3))) * keep;
         const target = h[k] + (want - h[k]) * mottle;
         const y = smax(h[k], target, 1.0);
         const t = y - h[k];
