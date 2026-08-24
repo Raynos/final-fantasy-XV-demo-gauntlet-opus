@@ -230,10 +230,28 @@ That is what "the cheek is a blank plane at every angle but profile"
 (`head-r2.md` §8.2) is, in numbers, and it is why a key from either side splits
 the face rather than drawing it.
 
-Landed: a **canine eminence** and a **malar plane** brush pair, mirrored, which
-take x = 30 at the upper-lip line from 24.6 to **14.1 mm** — a bit over half the
-gap. They cannot touch `muzzleMm`: at x = 0 they are 1.07 and 1.4 radii out and
-`applyBrushes` rejects on the bounding box before the sqrt.
+Landed: a **canine eminence** and a **malar plane** brush pair, mirrored.
+Measured on the mesh by the bench's own `transverse.dropMm`, at `262cb01`
+against `HEAD`:
+
+| row | x=15 | x=30 | x=45 | head |
+|---|---|---|---|---|
+| labrale superius, before | 11.1 | **42.3** | 58.1 | ~2 / 7 / 18 |
+| labrale superius, after | 1.6 | **17.5** | 40.6 | |
+| stomion, before | 4.5 | **23.9** | 42.1 | |
+| stomion, after | 3.3 | **19.0** | 42.3 | |
+
+**Read the stomion row, not the upper-lip one.** Before the muzzle came off, the
+labrale superius *was* the muzzle peak, so its 42.3 mm drop is mostly the
+midline lobe falling away and not the transverse section at all — the metric
+mixes the two at that height and the correction is not 42 → 17. The stomion row
+is clean and says 23.9 → 19.0 against a head's ~7: **a third of the way, no
+more.** My own offline model said 14.1; the mesh says 19.0, and the mesh wins.
+
+The brushes cannot touch `muzzleMm` or any other depth-axis number: at x = 0
+they are 1.07 and 1.4 radii out and `applyBrushes` rejects on the bounding box
+before the sqrt. Confirmed to the last decimal, along with euEu, zyZy, goGo and
+the whole width profile.
 
 **Not landed, and this is the honest limit of what a brush can do here:** the
 remaining 7 mm needs `shellPoint`'s section to stop being an ellipse — a
