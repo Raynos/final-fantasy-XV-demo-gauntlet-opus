@@ -254,6 +254,20 @@ function smax(a: number, b: number, k: number) {
   return (a > b ? a : b) + k * Math.log1p(Math.exp(-d / k));
 }
 
+/**
+ * Landforms that dig a hollow — lakes, sea shelves, gorges — as flat records,
+ * because `Landform` is a union and `CanyonLandform` carries no `x`/`z`/`r`.
+ * A fishing pin inside one of these already has its water and must not have a
+ * tarn shelf levelled over it: doing so put the Vesperpool's dock *above* the
+ * Vesperpool and cost two recipes their only source.
+ */
+const WET_LANDFORMS: { x: number, z: number, r: number }[] = worldMap.landforms.flatMap((L) => (
+  'h' in L && 'x' in L && 'z' in L && 'r' in L
+    && typeof L.h === 'number' && L.h < -5
+    && typeof L.x === 'number' && typeof L.z === 'number' && typeof L.r === 'number'
+    ? [{ x: L.x, z: L.z, r: L.r }] : []
+));
+
 /** cos/sin of the conjugate direction, 62 degrees off the regional strike. */
 const CONJ_C = Math.cos(1.0821), CONJ_S = Math.sin(1.0821);
 
@@ -1591,10 +1605,26 @@ export class Field {
     const h = this.h;
     let carved = 0, skipped = 0;
     for (const p of this.map.poisOfType('fishing')) {
-      // Sea-adjacent pins are shoreline, not tarns; `_findTarns` skips them on
-      // the same test and carving a bowl into a beach would be worse than
-      // leaving it.
-      if (this.rawHeightAt(p.x, p.z) < SEA + 8) continue;
+      // Three kinds of pin must be left alone, and getting the second one wrong
+      // cost the Vesperpool its fish.
+      //
+      // Shoreline: a bowl cut into a beach is worse than no bowl, and
+      // `_findTarns` skips these on the same test.
+      if (this.rawHeightAt(p.x, p.z) < SEA + 8) { skipped++; continue; }
+      // **Inside an authored lake.** `vesperpool_dock` and `alstor_dock` are
+      // docks ON the Vesperpool and Alstor Slough, not tarns of their own. The
+      // shelf here is averaged over a 118 m ring that straddles bank and lake
+      // bed, so it levelled the dock *above* its own lake: `integration` went
+      // from three fishable holes to two and `every recipe can be restocked`
+      // failed with "no source for vesper_gar, pink_jade_gar". The lake is the
+      // water body; this pass must not touch it.
+      // `h < -5` is the test rather than the kind name: a landform that digs
+      // below its surroundings is a water body or a gorge, and a fishing pin
+      // beside either already has its water. `CanyonLandform` carries no
+      // `x`/`z`/`r`, so the guard is structural rather than a cast.
+      if (WET_LANDFORMS.some((L) => Math.hypot(p.x - L.x, p.z - L.z) < L.r + 120)) {
+        skipped++; continue;
+      }
 
       // `flat` must exceed the radius `Water._findTarns` samples its rim at
       // (105 m), or the rim is still on the original slope and the basin spills
