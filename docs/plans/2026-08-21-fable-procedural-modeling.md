@@ -1,7 +1,10 @@
 # Procedural modeling port plan — how the siblings build shapes
 
-Status: IN-PROGRESS (2026-08-24, opus) — **an overnight seven-lane push is
-building the whole plan.** `project/handoff/2026-08-23-coordinator.md` has the
+Status: IN-PROGRESS (2026-08-24, opus) — **built end to end by seven parallel
+lanes overnight; 4 of 6 definition-of-done boxes, and the two open ones are open
+on their merits.** §2, §3, §4, §5, §6, §7 and §9 are done. §8 ported its tooling
+and found that every eye in the game was covered, but did not rebuild the head —
+and the blind round says it must. `floatcheck` is red. `project/handoff/2026-08-23-coordinator.md` has the
 lane map and the shared rules; each lane keeps its own
 `project/handoff/<lane>.md`. `project/handoff/modeling.md` remains the honest
 read on the round that landed §5.1 and the texel-density defect.
@@ -553,29 +556,35 @@ Each item should land with its check from §9 in the same commit.
 
 ## 13. Definition of done
 
-Ticked 2026-08-23 against the tree. **2 of 6.**
+Re-ticked 2026-08-24 after the seven-lane build. **4 of 6.** The plan stays
+`IN-PROGRESS` — the two open boxes are open on their merits, not on paperwork.
 
-- [ ] Each landed item cites its source file and ships with its §9 check.
-      **Half.** The items cite their sources; the §9 checks mostly did not
-      ship with them — `seatcheck` is the exception.
-- [x] Wave 1 verified by capture on the shots that showed the defect
-      (floating props, town close-ups, tree LOD swaps). *(Nine-shot
-      before/after pairs in `tmp/shots/COST-BASE` vs `COST-AFTER`, read.)*
-- [ ] A silhouette bench exists in `src/tools/` and gates at least trees
-      and the rebuilt enemy species. **Not built.** Do not mistake
-      `edgestat.mts` (alpha-edge hardness) or `lineup.mts` (crop strips)
-      for it — neither measures shape.
-- [ ] `seatHeightAt`+`proudOf` runs in `integration.mts` or a new check —
-      zero floating instances across the POI corpus. **Half:**
-      `seatHeightAt` exists and `seatcheck.mts` rasterises the clipmap to
-      test it, but `proudOf` was never written and no gate counts floating
-      instances across the POI corpus.
-- [ ] The head/hair rebuild (if taken) is judged by the width-profile
-      bench and a blind A/B, not by eye alone. **Not taken by this lane.**
-      Hair and eyes shipped from the `heroart` lane and are **unjudged** —
-      exactly the failure mode this line exists to prevent.
-- [x] Measured negatives are recorded here or in handoffs — the siblings'
-      rejected constructions were half the value of their logs.
-      *(`handoff/modeling.md` records the `driftcheck` −1.18 m claim as a
-      lead to re-measure rather than a regression to chase, and the dead
-      `RoadSample.y` write as suspected-dead-but-unverified.)*
+- [x] **Each landed item cites its source file and ships with its §9 check.**
+      The suite went 12 -> 16 gates: `silhouette`, `geocheck`, `hydrocheck` and
+      `floatcheck`, each with calibration anchors re-measured every run and each
+      printing what it is blind to.
+- [x] Wave 1 verified by capture on the shots that showed the defect.
+- [x] **A silhouette bench exists in `src/tools/` and gates trees and the
+      rebuilt enemy species.** `silhouette.mts`, 8 azimuths x 24
+      height-normalised bands, thresholds the geometric mean of a known-same
+      (0.573) and a known-different (42.989) re-measured every run. It found
+      `irongiant` and `redgiant` are one silhouette.
+- [ ] **`seatHeightAt` + `proudOf` runs in a check — zero floating instances
+      across the POI corpus.** `proudOf` is built and `floatcheck` gates the
+      whole corpus in one boot, calibrated against a known-bad confirmed by eye.
+      But it is **red**: `poiFloating 1`, `poiBuried 15`. The gate exists; the
+      world does not yet pass it. `handoff/town.md` has four causes and the
+      caveat that stops anyone fixing it blind.
+- [ ] **The head/hair rebuild is judged by the width-profile bench and a blind
+      A/B, not by eye alone.** It was *judged* — round 11, and the face is the
+      single reason the round scored 3/10 — but it was **not rebuilt**. The
+      characters lane concluded from `headprofile.mts` that `Face.ts` already
+      has the anatomy and the rebuild is not justified; the frame disagrees, and
+      `hero_portrait` has no mouth. **Re-open that verdict against the frame.**
+- [x] **Measured negatives are recorded here or in handoffs.** Emphatically:
+      sixteen of this plan's own rows were disproved and left in place rather
+      than deleted; the 148 m talus fan is unbuildable and why; curvature cavity
+      is identically zero on seven of eight rock kinds; plane-depth occlusion
+      was built, measured and removed rather than left unwired; `mixSeed`,
+      §12's blocker and both halves of §4.4 were already done; and two wrong
+      attributions were bisected rather than argued.
