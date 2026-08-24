@@ -294,8 +294,23 @@ crop 1000,590 400x200 at 3x) is round 13's ab-08 exactly: four pale bare
 two-forked stumps in a green wood, near-identical in silhouette, bark tone and
 height.
 
-Two things make it worse than the `dead` family's silhouette row suggests
-(`handoff/trees.md` reports `dead` at mean-d 34.40, the *best* row in the tree
+**And the bench does say so if you ask it at more seeds than the handoff quoted.**
+`silhouette --set trees --seeds 10`:
+
+    family            n  distinct   min-d  mean-d  ceiling  variety
+    tree:dead        10       9      4.21   31.37    21.05    1.49   <- collapsed
+    tree:conifer     10       8      4.95   14.09    13.89    1.01   <- collapsed
+    tree:broadleaf   10      10      8.13   28.15    23.97    1.17
+
+`dead`'s tightest pair is **4.21 against its own known-different ceiling of
+21.05** — a factor of five — while its *mean* distance is the best in the corpus
+at 31.37. (These are not a regression and are not the gate: the default
+`silhouette` run PASSES, and this configuration's pairs were never in
+`silhouette-baseline.json`, which is exactly the resampling trap `variety-r2`
+documented for the rock rows. Read them as a measurement, not a failure.)
+
+Two things make it worse than the family's *mean* suggests
+(`handoff/trees.md` reports `dead` at mean-d 34.40, the best row in the tree
 corpus):
 
 - The bench height-normalises, so four stumps that differ only in height score
@@ -376,7 +391,24 @@ floors held, three families above where they started.
 `scatterstat` — calibration anchors poisson **0.989** / lattice **1.258** /
 matérn **0.519**, dynamic range 2.42x, not void.
 
-`pnpm run check` — see the run recorded at the foot of this file.
+`pnpm run check` at `fdb5805` — **13/17 in the suite, 17/17 once each failure
+is re-run alone.** All four failures are the contention signature this repo
+already documents, and each was attributed by re-running it rather than by
+argument:
+
+| gate | in the suite | standalone |
+|---|---|---|
+| `anycheck` | FAIL, "5 more than the ceiling" | **`0 any across 0 files`** — a co-agent's in-flight edit, the same thing `handoff/scatter.md` recorded |
+| `reachcheck` | FAIL, uncaught `page.evaluate: Target page, context or browser has been closed` | **PASS**, and it is the confirmation this lane needed: `Ecology.groveScatter (818x)`, `scrubScatter (3572x)`, `rockScatter (2456x)` all executed |
+| `floatcheck` | FAIL, same closed-page error after 576 s | **PASS**, and *better than the baseline*: `instFloating` **355 vs 362**, `instBuried` **801 vs 861**, `poiFloating`/`poiBuried` 0/0. The bedding dip does not float or bury anything — it buries slightly less. |
+| `driftcheck` | FAIL, same closed-page error | **PASS**, surface drift `mean 0.000 / worst 0.000` |
+
+Everything else passed in the suite, including the two that grade this lane
+directly: **`silrocks` PASS** (all six floors) and **`roadcheck` 0 failures,
+0 warnings** — which is the gate that would have caught the tor-on-the-road
+exclusion going the wrong way. `geocheck`, `heightcheck`, `horizoncheck`,
+`hydrocheck`, `integration`, `uxcheck`, `combatloop`, `creaturecheck`,
+`orphans`, `silhouette` and `build` all PASS.
 
 Draw calls and triangles on the six judged frames, `tmp/shots/vr3-r0` (the
 session's starting HEAD, `262cb01`) against `tmp/shots/vr3-r4`. **That window
