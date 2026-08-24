@@ -194,7 +194,7 @@ export function brushes(look: Look): SculptBrush[] {
   // y radii with it, and the tip and subnasale amounts cut so the profile
   // projects like a nose instead of a beak.
   add({ p: [0, -0.0117, 0.089], r: [0.0175, 0.023, 0.030], amt: 0.0100 + 0.004 * nose, dir: [0, 0, 1] });
-  add({ p: [0, -0.0313, 0.095], r: [0.0165, 0.0140, 0.028], amt: 0.0135 + 0.004 * nose, dir: [0, 0.14, 1] });
+  add({ p: [0, -0.0313, 0.095], r: [0.0165, 0.0140, 0.028], amt: 0.0115 + 0.004 * nose, dir: [0, 0.14, 1] });
   add({ p: [0, -0.0362, 0.098], r: [0.0115, 0.0080, 0.020], amt: 0.0045, dir: [0, -0.2, 1] });
   // alar wings: a real ball of cartilage each side of the tip, and the crease
   // that curls around it. Without these the nose is a triangular smear. Their
@@ -230,18 +230,18 @@ export function brushes(look: Look): SculptBrush[] {
   // exactly the pair the round-11 judge described. A profile bench cannot see
   // this and neither can a landmark bench: it is off-midline mass, and it is
   // what makes a mouth read from an angle.
-  add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0055, dir: 'normal' });
-  add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0060, dir: [0, 0, 1] });    // philtrum groove
-  add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0042, dir: [0, 0, 1], mirror: true }); // philtrum columns
-  add({ p: [0, -0.0595, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0115, dir: [0, 0.18, 1] });   // upper vermilion
-  add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0038, dir: [0, 0, 1] });      // cupid's bow
+  add({ p: [0, -0.0600, 0.0790], r: [0.038, 0.028, 0.036], amt: 0.0012, dir: 'normal' });
+  add({ p: [0, -0.0500, 0.0875], r: [0.0075, 0.0105, 0.019], amt: -0.0038, dir: [0, 0, 1] });    // philtrum groove
+  add({ p: [0.0090, -0.0510, 0.0865], r: [0.0050, 0.0090, 0.017], amt: 0.0026, dir: [0, 0, 1], mirror: true }); // philtrum columns
+  add({ p: [0, -0.0595, 0.0855], r: [0.026, 0.0095, 0.026], amt: 0.0012, dir: [0, 0.18, 1] });   // upper vermilion
+  add({ p: [0, -0.0570, 0.0862], r: [0.010, 0.0055, 0.020], amt: 0.0010, dir: [0, 0, 1] });      // cupid's bow
   // The mouth line is 13 mm deep, not 9.2. It has to survive the *shipped*
   // key, not a studio one: in `hero_portrait` the mid-face is in shadow and a
   // 9.2 mm groove under a 5.5 mm barrel produced no shading contrast at all.
   // 3.6 mm of r_y is still four grid rows at the face's 1.9 mm row pitch.
-  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0130, dir: [0, 0, 1] });     // mouth line
-  add({ p: [0, -0.0715, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0105, dir: [0, -0.10, 1] });  // lower vermilion
-  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0100, dir: 'normal', mirror: true });
+  add({ p: [0, -0.0637, 0.0850], r: [0.030, 0.0036, 0.026], amt: -0.0068, dir: [0, 0, 1] });     // mouth line
+  add({ p: [0, -0.0715, 0.0845], r: [0.023, 0.0105, 0.027], amt: 0.0038, dir: [0, -0.10, 1] });  // lower vermilion
+  add({ p: [0.026, -0.0640, 0.076], r: [0.012, 0.012, 0.021], amt: -0.0055, dir: 'normal', mirror: true });
   // nasolabial: the fold runs from the alar crease down past the mouth corner,
   // and it is the strongest off-midline value on the lower face at any angle
   // other than dead-on. One brush at the top of it was not a fold.
@@ -257,7 +257,7 @@ export function brushes(look: Look): SculptBrush[] {
   // stands 4 mm further forward — the pogonion measured **1.0 mm** proud of the
   // sulcus against an adult 4-6, i.e. the chin was there as mass and absent as
   // a feature.
-  add({ p: [0, -0.0828, 0.0785], r: [0.022, 0.0085, 0.024], amt: -0.0072, dir: [0, 0, 1] });
+  add({ p: [0, -0.0820, 0.0790], r: [0.022, 0.0095, 0.024], amt: -0.0040, dir: [0, 0, 1] });
   // 0.0240 overshot: the chin came out 11.4 mm proud of its own mentolabial
   // sulcus against an adult 4-6, and in three-quarter it read as a muzzle.
   // Lower and shorter in y, not further forward. The midline outline showed the
@@ -266,10 +266,10 @@ export function brushes(look: Look): SculptBrush[] {
   // projection down to the pogonion and only then turns under. The prominence
   // was already right (7.9 mm out of its own sulcus against an adult 4-6); what
   // was missing was the wall under it.
-  add({ p: [0, -0.1045, 0.0735], r: [0.030, 0.0205, 0.040], amt: 0.0205 + 0.007 * jaw, dir: [0, 0.06, 1] });
+  add({ p: [0, -0.1010, 0.0700], r: [0.032, 0.0330, 0.045], amt: 0.0155 + 0.005 * jaw, dir: [0, 0.05, 1] });
   // mental tubercles — a chin is a shelf with two corners, not a cone. One
   // central bump is what made every chin in the cast come to a point.
-  add({ p: [0.0165, -0.1005, 0.0705], r: [0.0135, 0.0155, 0.026], amt: 0.0090 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
+  add({ p: [0.0165, -0.0975, 0.0690], r: [0.0135, 0.0180, 0.028], amt: 0.0080 + 0.004 * jaw, dir: [0, 0.05, 1], mirror: true });
   // mandible: a ramus block plus an undercut that carves the jawline edge
   // The `jaw` coefficients here are *lateral* — these brushes push along the
   // normal on the side of the head. At Gladiolus' 1.35 they were adding 35 mm
