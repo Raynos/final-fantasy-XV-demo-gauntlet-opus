@@ -22,7 +22,7 @@ import type { PostFX } from '../PostFX.ts';
  * resolution where it actually matters, and it costs one dependent texture
  * fetch per step with no extra scene pass.
  *
- *   post.contact.enabled / .intensity / .length / .thickness
+ *   post.contact.enabled / .intensity / .length / .thickness / .stepPx
  */
 export class ContactShadowPass extends FilterPass {
   _lightDir!: THREE.Vector3;
@@ -33,6 +33,8 @@ export class ContactShadowPass extends FilterPass {
   length!: number;
   override material!: THREE.ShaderMaterial;
   maxDistance!: number;
+  /** Screen-space budget for one march step, in pixels. See the shader. */
+  stepPx!: number;
   thickness!: number;
   tint!: THREE.Color;
   constructor(fx: PostFX) {
@@ -43,6 +45,7 @@ export class ContactShadowPass extends FilterPass {
     this.thickness = 0.45;      // assumed occluder depth (rejects far hits)
     this.bias = 0.030;          // metres, kills self-shadow acne
     this.maxDistance = 55;      // metres; contacts stop mattering past this
+    this.stepPx = 6.0;          // pixels per step, ceiling — the crosshatch fix
     this.tint = new THREE.Color(0x2b3a52);   // cool shadow, never neutral grey
     this._lightDir = new THREE.Vector3(0.4, 0.8, 0.3);
     this._lightTgt = new THREE.Vector3();
@@ -62,6 +65,7 @@ export class ContactShadowPass extends FilterPass {
         uIntensity: { value: 0.85 },
         uTint: { value: new THREE.Vector3(0.17, 0.23, 0.32) },
         uFrame: { value: 0 },
+        uStepPx: { value: 6.0 },
       },
       defines: { CS_STEPS: 12 },
       fragmentShader: /* glsl */`
@@ -70,7 +74,7 @@ export class ContactShadowPass extends FilterPass {
         uniform vec2 uTexel;
         uniform mat4 uInvViewProj, uViewProj;
         uniform vec3 uCamPos, uLightDir, uTint;
-        uniform float uNear, uFar, uIntensity, uFrame;
+        uniform float uNear, uFar, uIntensity, uFrame, uStepPx;
         uniform vec4 uParams;
         varying vec2 vUv;
         ${CHUNK_COLOR}
@@ -113,11 +117,53 @@ export class ContactShadowPass extends FilterPass {
           // Step length grows with distance so a far-away character still gets
           // a contact of the right *world* size rather than a sub-pixel one.
           float len = uParams.x * (1.0 + dist * 0.045);
+
+          // ...and is then capped so a step can never cross more of the screen
+          // than the depth buffer can resolve. **This is the crosshatch fix.**
+          //
+          // The world length above says nothing about how far a step travels in
+          // pixels, and at portrait range that is enormous: at 0.6 m the shipped
+          // 0.5 m / 12 steps is ~69 px per step. The per-pixel jitter below is
+          // meant to dither the start within one step; at 69 px per step it
+          // instead starts neighbouring pixels' marches on completely different
+          // geometry, so the binary hit/no-hit lands as a **one-pixel
+          // checkerboard** — which CAS then sharpens into the burlap weave that
+          // a blind judge read as "flat untextured plastic skin". Nothing about
+          // skin was involved: skin is just the nearest large surface in a
+          // portrait, and the same march over distant terrain steps a fraction
+          // of a pixel and is clean. See src/tools/probes/weavecontact.mts.
+          //
+          // Measured on hero_portrait, face residual, rms /255 and one-pixel
+          // alternation (each stage re-posed, history reset, 40 frames; the
+          // protocol's own null ablation repeats to 0.01):
+          //
+          //     shipped                       10.93   0.308
+          //     contact pass off               4.84  -0.023
+          //     CS_STEPS 12 -> 48              2.88  -0.028
+          //     length 0.50 -> 0.20          2.87  -0.027
+          //     jitter forced to 0.5          12.62  -0.570   (banding instead)
+          //     **this cap, 6 px**             2.97  -0.047
+          //
+          // Note which two rows are *not* on that list: GTAO off makes it worse
+          // (14.59 / 0.379), and forcing TAA to ignore the velocity buffer
+          // entirely reproduces the shipped frame to 0.001. The chain named in
+          // project/handoff/head.md §4 — GTAO dither, TAA failing on skinned
+          // meshes, CAS — was wrong in both of its first two links.
+          //
+          // 48 steps fixes it too and costs 4x the depth fetches. This costs one
+          // matrix multiply and no fetch: worldFromDepth is evaluated at the
+          // neighbouring uv with **this pixel's own depth**, so it is the
+          // projected world size of one texel and not a depth difference.
+          float pxWorld = length(worldFromDepth(vUv + vec2(uTexel.x, 0.0), d, uInvViewProj) - P);
+          len = min(len, pxWorld * uStepPx * float(CS_STEPS));
+
           float stepLen = len / float(CS_STEPS);
           float bias = uParams.z * (1.0 + dist * 0.10);
           // Rotating the dither every frame is what lets TAA average it away.
           // A screen-locked pattern is re-stamped at the same pixel each frame
-          // and survives the accumulation as visible cross-hatching.
+          // and survives the accumulation as visible cross-hatching. It is
+          // necessary and it is not sufficient: it was already here, correctly
+          // rotating over eight phases, while the weave above was shipping.
           float jitter = ign(gl_FragCoord.xy + mod(uFrame, 8.0) * 47.13);
 
           float occ = 0.0;
@@ -162,6 +208,7 @@ export class ContactShadowPass extends FilterPass {
     u.uNear.value = fx.rnd.camera.near;
     u.uFar.value = fx.rnd.camera.far;
     u.uParams.value.set(this.length, this.thickness, this.bias, this.maxDistance);
+    u.uStepPx.value = this.stepPx;
     u.uFrame.value = fx.frame;
     u.uIntensity.value = this.intensity;
     u.uTint.value.set(this.tint.r, this.tint.g, this.tint.b);
