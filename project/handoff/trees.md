@@ -215,6 +215,48 @@ lane's, and they wired it themselves in `654c4e7`.
   their `rng` draws, because `scrubScatter` rejects standing water outright.
   The two exclusions the old branch *order* expressed (`depth > 0.05`, and the
   reed band) are written out explicitly in the new loop.
+### The count check, which is the one the rocks lane's `69829e7` says to run
+
+Clustering must change **where** the matrices go, not how many there are, and
+nothing in the running game reports an instance that was never emitted. Counted
+in bare Node against the real bake over 81 tiles per zone (`tmp/treecount.mts`,
+`tmp/treecount2.mts` — they run the real samplers, and the "old" side is
+transcribed from `git show 10e5174^` and is a copy, good for this comparison
+and nothing else).
+
+**Trees, instances per 64 m tile:**
+
+| zone | old lattice | new + `_clumpBias` | new, no bias | ratio |
+|---|---|---|---|---|
+| fallgrove | 14.42 | 12.57 | 14.57 | 0.87 |
+| nebulawood | 14.91 | 13.07 | 15.25 | 0.88 |
+| malacchi | 19.37 | 18.20 | 20.67 | 0.94 |
+| longwythe | 0.32 | 0.41 | 0.46 | 1.28 |
+| three_valleys | 0.57 | 0.70 | 0.83 | 1.23 |
+| vesperpool | 40.93 | 40.70 | 43.74 | 0.99 |
+
+0.87–1.28×, inside the scatter lane's stated 0.92–1.35 parity band. The bias
+costs about 12%, which is the glade gate cutting glades — the thing it is for.
+
+**Woody scrub, per 32 m tile,** looked alarming at first and is the opposite:
+
+| zone | old | new + bias | ratio | **old, on ground `rootBlocked` allows** |
+|---|---|---|---|---|
+| fallgrove | 5.72 | 5.86 | 1.02 | 5.80 |
+| nebulawood | 5.56 | 4.47 | 0.80 | 5.60 |
+| malacchi | 8.32 | 6.33 | 0.76 | 7.60 |
+| **longwythe** | **10.88** | **4.65** | **0.43** | **5.12** |
+| three_valleys | 17.80 | 17.37 | 0.98 | 17.49 |
+| vesperpool | 10.05 | 9.69 | 0.96 | 10.80 |
+
+Longwythe appeared to lose 57% of its ground cover. It did not. **53.0% of the
+old lattice's bushes there were standing on ground `rootBlocked` refuses** —
+slope over 0.5, inside the 6 m road corridor, or on a cleared POI pad — because
+the old scrub lattice tested only `worldRadius` and water depth and nothing
+else. Longwythe is Hammerhead: the road and the pads are most of the frame.
+Against the legal count the sampler is **0.91×**, and 1.03× with the bias off.
+**Bushes have been growing in the road, and the swap is what stopped it.**
+
 - `farSeat` in both tile builders. The near ring is seated for the coarser of
   the two bands it serves; `seatHeightAt` takes the **minimum** over clip
   levels, so that sinks a near tree a few centimetres rather than lifting a far
