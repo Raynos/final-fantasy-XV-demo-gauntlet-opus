@@ -92,6 +92,12 @@ for (const [key, m] of subjects) {
   const evAll = makeEval(look, expanded);
   const meshAll = gridPts(evAll, SU, SV);
   const fineAll = gridPts(evAll, SU * F, SV * F);
+  // `applyBrushes` sums every brush against the vertex's **undisplaced** shell
+  // position, so that is where a brush's support has to be counted. Counting it
+  // on the finished mesh reported the nose tip -- a 20 mm push along +z through
+  // a 28 mm z-radius -- as having zero vertices, because its own displacement
+  // carries every one of them out of its own support.
+  const shellPts = gridPts(makeEval(look, []), SU, SV);
 
   // ---- grid geometry, reported once ------------------------------------
   if (!out.grid.dyAtMouth) {
@@ -169,10 +175,10 @@ for (const [key, m] of subjects) {
     const ff = maxDisp(gridPts(ev, SU * F, SV * F), fineAll);
     // how many shipped vertices sit inside the brush's support at weight > 0.5
     let inSupport = 0;
-    for (let k = 0; k < meshAll.length; k += 3) {
-      const dx = (meshAll[k] - br.p[0]) / br.r[0];
-      const dy = (meshAll[k + 1] - br.p[1]) / br.r[1];
-      const dz = (meshAll[k + 2] - br.p[2]) / br.r[2];
+    for (let k = 0; k < shellPts.length; k += 3) {
+      const dx = (shellPts[k] - br.p[0]) / br.r[0];
+      const dy = (shellPts[k + 1] - br.p[1]) / br.r[1];
+      const dz = (shellPts[k + 2] - br.p[2]) / br.r[2];
       const d = Math.hypot(dx, dy, dz);
       if (d < 1 && 0.5 * (1 + Math.cos(d * Math.PI)) > 0.5) inSupport++;
     }
