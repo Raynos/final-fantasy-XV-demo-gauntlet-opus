@@ -411,9 +411,18 @@ export class PoiKits {
    * range. Neither `renderer.compile(scene)` nor `Warmup` could ever have
    * caught them, because the materials did not exist yet.
    *
-   * The cost is about half a second of boot for eight kits that are then
-   * distance-culled by `update` like any other, and it buys back the two
-   * largest frame spikes in the game.
+   * **Cost, measured with `bootprof.mts`: `Props.poiPrebuild` is 1172 ms** of a
+   * 13.0 s cold boot. Most of that is not new work — it is the same `_make`
+   * calls the streamer would have run one per frame as the player moved,
+   * relocated to the loading screen. What is genuinely new is the sites a
+   * session would never have approached. A later lane that wants that second
+   * back should NOT narrow the type list — that was tried, and see
+   * {@link PREBUILD_TYPES} for why it failed. It should compile the MATERIAL
+   * rather than build the kit: a registry of the memoised `TownMaterials`,
+   * each drawn once into `Warmup`'s 64x64 target, would buy the shader-link
+   * half — the expensive half — for tens of milliseconds. That is the better
+   * fix, it is unmeasured, and that is exactly why it is written down here
+   * instead of shipped.
    *
    * @param game passed through to `_make`, which asks it for the exclusion set
    */
