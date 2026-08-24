@@ -68,6 +68,23 @@ wound backwards for months behind `DoubleSide`. The assert **catches and
 `console.error`s**: an assert inside `init()` hangs the boot rather than failing
 it.
 
+**And the instrument was made to report on cases whose answer was already
+known**, because seven instruments in this repo measured themselves before
+anyone checked. `tmp/hair/cardassert.mts` emits one card (101 verts, 190
+triangles) and runs the assert three times:
+
+```
+emitted verts 101 tris 190 | console.error calls: 0
+shipped uv    ok      (want ok)
+transposed uv threw   (want threw)
+mirrored uv   threw   (want threw)
+uv of the three verts: [0, -1] [0, -1.1111] [0.05, -1.1111]
+```
+
+A pass with a check that cannot fail is worth nothing; this one fails on both
+the transpose and the mirror, which is exactly the pair that is invisible to any
+area-based check.
+
 ### 2.2 One material, therefore no new draw call — `hairCutTexture`
 
 This is the part that took the design work. The scalp shell, the halo, the
