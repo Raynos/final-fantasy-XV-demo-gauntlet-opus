@@ -54,7 +54,7 @@ const BUILD_R = 1500;
  * `outpost`, wearing `TownMaterials`. Chasing that one type at a time is how a
  * fix like this ends up being wrong for a year, so: all of them.
  */
-const PREBUILD_TYPES: ReadonlySet<string> | null = null;
+const PREBUILD_TYPES: ReadonlySet<string> | null = new Set(['town', 'imperial']);
 /**
  * How far each kit is worth drawing.
  *

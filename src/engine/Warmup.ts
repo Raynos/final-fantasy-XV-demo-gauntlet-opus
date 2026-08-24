@@ -206,19 +206,42 @@ export class Warmup {
   /**
    * Draw every mesh in the scene once, visible, with the cascades forced to
    * refresh — that is the only way three builds the depth variants.
+   *
+   * **And compile while everything is visible, not just draw.** `_compileScene`
+   * runs `renderer.compile(scene, camera)` first, and three's `compile` walks
+   * the scene with `traverseVisible` — so every material on an object that
+   * boots hidden is skipped by it. Drawing them here was supposed to cover
+   * that, and it does not, because `render` frustum-culls and most of what
+   * boots hidden is a long way from the camera at load. Hammerhead's clutter
+   * is hidden until the camera is within 95 m of it; its `town_asphalt`,
+   * `town_chainlink`, `town_glass` and `sign_cn` programs were therefore
+   * linked in the first frame that drew them, which is a **211 ms and a 110 ms
+   * frame** at the same index of `gameplay.mts`'s `sprint+turn` every run
+   * (`src/tools/probes/perfsprint.mts` names the four programs on the exact
+   * frames). The whole point of this class is that this cannot happen.
+   *
+   * So: force everything visible, `compile` — which ignores the frustum —
+   * *and* render for the depth variants, then put the visibility back.
    */
   _warmShadows(rt: THREE.WebGLRenderTarget) {
     const hidden: THREE.Object3D[] = [];
+    const culled: THREE.Object3D[] = [];
     this.scene.traverse((o: THREE.Object3D) => {
       // Lights are deliberately left alone: their visibility is the light
       // budget's business, and showing them all would push the count past it.
       if (isLight(o)) return;
       if (o.visible === false) { hidden.push(o); o.visible = true; }
+      // AND make it reachable. `render` frustum-culls, and the whole point of
+      // this step is the content that is nowhere near the boot camera.
+      if (o.frustumCulled) { culled.push(o); o.frustumCulled = false; }
     });
     try {
+      this._patchAll();
+      this.renderer.compile(this.scene, this.camera);
       this._render(rt, { shadows: true });
     } finally {
       for (const o of hidden) o.visible = false;
+      for (const o of culled) o.frustumCulled = true;
     }
   }
 

@@ -52,6 +52,8 @@ await new Promise((r) => setTimeout(r, 400));
 
 const progs = () => g.renderer.info.programs.map((p) => p.name + '|' + (p.cacheKey || '').length);
 let prev = progs();
+let prevObjs = new Set();
+g.scene.traverse((o) => { if (o.isMesh || o.isInstancedMesh) prevObjs.add((o.name || o.type) + '#' + o.id); });
 const inf = () => ({ geo: g.renderer.info.memory.geometries, tex: g.renderer.info.memory.textures });
 let pm = inf();
 const rows = [];
@@ -65,12 +67,18 @@ for (let i = 0; i < 150; i++) {
   const ms = performance.now() - t0;
   const now = progs(), m = inf();
   const added = now.filter((p) => !prev.includes(p));
+  // What actually appeared in the scene this frame -- the program list says a
+  // material linked, not who built it.
+  const objs = new Set();
+  g.scene.traverse((o) => { if (o.isMesh || o.isInstancedMesh) objs.add((o.name || o.type) + '#' + o.id); });
+  const newObjs = [...objs].filter((k) => !prevObjs.has(k));
   if (ms > 20 || added.length || m.geo !== pm.geo || m.tex !== pm.tex) {
     rows.push({ i, ms: +ms.toFixed(1), dGeo: m.geo - pm.geo, dTex: m.tex - pm.tex,
       progTotal: now.length, newPrograms: added,
+      newObjects: newObjs.slice(0, 14), newObjectCount: newObjs.length,
       top: Object.entries(cur).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`) });
   }
-  prev = now; pm = m; cur = null;
+  prev = now; pm = m; cur = null; prevObjs = objs;
   await new Promise((r) => setTimeout(r, 0));
 }
 restore.forEach((f) => f());
