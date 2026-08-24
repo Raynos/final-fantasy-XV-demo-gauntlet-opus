@@ -145,3 +145,45 @@ not accumulated for 26 h.
 Conclusion for the plan: the top lever is **context discipline** (short
 sessions, capture-look loops in disposable subagents, crops instead of full
 frames, batch turns), ahead of any individual tool getting faster.
+
+---
+
+# Third pass: every tool benchmarked, one at a time, quiet-ish machine
+
+2026-08-24 evening, HEAD, warm daemon, serial runs. Raw:
+`project/audits/2026-08-24-tool-bench.csv`. Caveat: one co-agent was
+intermittently active; an external SIGTERM killed the first run mid-combatloop
+(resumed), and perf/gameplay queued behind a co-agent's gameplay run.
+
+## The >30 s offenders (everything else is already fast)
+
+| tool | standalone | inside `check` | verdict |
+|---|---|---|---|
+| perf.mts | 704 s (incl. queue; run VALID) | — | by design (full sweep); needs `--quick` + sha cache |
+| check.mts full | **535 s**, 17/17 PASS | — | serial sum of gates; parallelise + cache |
+| reachcheck | **263 s** | **76.6 s** | worst node-only tool; `farSeat` executed 5 516× — sampling budget |
+| uxcheck | **151 s**, rc=1 (page closed mid-run) | PASS | slow + fragile standalone; investigate |
+| floatcheck | **96 s**, rc=1 (throws) | **13.8 s** PASS | standalone path is broken/7× slower — env-dependent |
+| combatloop | 87 s | (in 17/17) | 31 scenarios serial on one page |
+| gameplay.mts | 76 s, VOID (noisy machine) | — | void logic worked as designed |
+| driftcheck | FAIL @ 10 s (`--only`) | PASS @ 54.7 s | standalone/in-check inversion — same class as the gate-run handoff |
+| integration | 40 s, rc=1 standalone | PASS | red standalone, green in suite |
+
+## Everything under 30 s already (no benchmaxx needed)
+
+vite build 2 s warm; typechecks 2–3 s cold; anycheck/orphans/geocheck ≤ 3 s;
+silhouette 11 s; hydrocheck 14 s; silrocks 22 s; roadcheck 16 s;
+creaturecheck (207 poses) **17 s**; heightcheck 12 s; horizoncheck < 1 s;
+imgdiff/imagestats ≤ 1 s; all CLIs ≤ 1 s.
+
+**Capture path is healthy on a quiet machine:** shoot 1-shot 19 s first,
+**1 s cache-hit**, **5-shot batch 21 s** (~4.2 s/shot), `--cold` 23 s. The
+48 h average of 38.9 s was contention + one-shot-per-call habits, not the tool.
+
+## Findings that are content, not harness
+
+- **perf: town_forecourt at 46 fps** vs the 60 fps target (valid run,
+  RULER_VALID true) — a real regression for whoever owns perf next.
+- floatcheck/integration/driftcheck disagree between standalone and in-suite
+  invocation. Until diagnosed, a red standalone gate is not evidence — run it
+  via `check.mts --only <gate>` before believing either colour.

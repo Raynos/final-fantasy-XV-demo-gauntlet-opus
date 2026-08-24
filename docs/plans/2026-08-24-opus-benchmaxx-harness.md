@@ -98,3 +98,30 @@ the top sinks.
 agent traffic. Done when: tool wall-clock ≤ 15 h/48 h with the same gate
 roster; no 600 s poll rows; cache-read tokens ≤ 1 B/48 h; no session over
 4 h span or 250 turns; median shoot call ≤ 8 s; same-sha `check` ≤ 5 s.
+
+## Per-tool budgets (third pass: every tool benchmarked, 2026-08-24)
+
+Measured serially on HEAD with a warm daemon (ledger + raw CSV in
+`project/audits/`). Rule: **any tool over 30 s gets a named fix and an owner;
+everything else is closed.** The capture path is already fast on a quiet
+machine (shoot 1-shot 19 s / cache 1 s / 5-batch 21 s), which re-ranks the
+work: contention and habits caused the 38.9 s average, not shoot itself.
+
+| tool | now | budget | the fix |
+|---|---|---|---|
+| check.mts full | 535 s | ≤ 60 s cold, ≤ 5 s cached | fixes 6+7 (sha cache, parallel browser gates); gates sum ~9 min serial while 4 slots idle |
+| perf.mts | 704 s w/ queue | ≤ 120 s quick, full on demand | fix 9: `--quick` + sha cache + default `--deadline` |
+| reachcheck | 263 s (76 s in-check) | ≤ 30 s | sampling budget: `farSeat` runs 5 516×; cap per-path executions, keep coverage assertion. Also explain the 3.4× standalone/in-check gap before trusting either number |
+| uxcheck | 151 s, fragile | ≤ 40 s | profile the 93 checks; batch page.evaluates; find the standalone page-close crash |
+| floatcheck | 96 s + throws standalone; 13.8 s in-check | ≤ 15 s everywhere | make standalone take the in-check path; the 7× gap is a bug, not a budget |
+| combatloop | 87 s | ≤ 40 s | 31 scenarios serial on one page → shard across pool or trim settle frames |
+| gameplay.mts | 76 s (VOID) | keep | void logic is correct; fix 9's deadline stops the queueing waste |
+| driftcheck | 55 s in-check; FAILS standalone | ≤ 55 s + consistent | fix the `--only` inversion (LANDMINES candidate) |
+| integration | 40 s; red standalone | ≤ 40 s + consistent | same standalone/in-suite diagnosis as floatcheck/driftcheck |
+
+Closed by measurement (no work): creaturecheck 17 s, roadcheck 16 s,
+silrocks 22 s, silhouette 11 s, hydrocheck 14 s, heightcheck 12 s, build 2 s,
+typechecks 3 s, all CLIs ≤ 1 s, imgdiff/imagestats ≤ 1 s, shoot (see above).
+
+New standalone finding for the perf owner: **town_forecourt 46 fps** on a
+valid run (RULER_VALID true) — below the 60 fps gate.
