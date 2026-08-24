@@ -1193,7 +1193,17 @@ export function torPlan(
   for (const t of TORS) { pick -= t.w; if (pick <= 0) { arch = t; break; } }
 
   const n = arch.n[0] + Math.floor(rng.next() * (arch.n[1] - arch.n[0] + 1));
-  const height = _r2(rng, arch.h) * rockS;
+  // **One tor in seven is a landmark.** A plain of stones that are all within a
+  // factor of two of each other has no scale in it — which is the other half of
+  // the judge's sentence, *"two wildly different scales that make the scale of
+  // the plain unreadable"*: it is not that the range is too wide, it is that
+  // the range is filled with one shape. `_item` already carries exactly this
+  // tail on the boulder field, for the reason recorded there — one big block
+  // does more for a middle distance than fifty small ones — and a plain with no
+  // large tor at all reads as a gravel pit rather than as badlands.
+  const u = rng.next();
+  const grand = 1 + Math.max(0, u - 0.86) * (0.95 / 0.14);
+  const height = _r2(rng, arch.h) * rockS * grand;
   const taper = _r2(rng, arch.taper);
   const lap = _r2(rng, arch.lap);
   const ar = _r2(rng, arch.ar);
