@@ -67,9 +67,8 @@ authoring, not rendering**:
    the ridge *belts*; `_cone`/`_volcano` are untouched and still radially
    symmetric.
 
-Defects it caught that no gate does: `poi_haven`'s camera is **inside a rock**,
-a slab floats in `zone_longwythe`, god rays cross branches unoccluded, and a
-haven canopy's shadow does not match its canopy.
+Defects it caught that no gate does: a slab floats in `zone_longwythe`, god rays
+cross branches unoccluded, and a haven canopy's shadow does not match it.
 
 ## Gates — 15/16 on a quiet tree, 2026-08-24
 
@@ -117,11 +116,13 @@ measuring it, to reconcile before acting on either.
 whose mean lumas span only 0.35-0.47. Nothing in our frame reaches white: eight
 of ten reference plates clip >=0.10%, four of our six clip at 0.00%. **A page
 costs 2.1 GB of RSS**, which is what makes the browser budget bite.
-`zone_nebulawood` — **one of the 30 judged shots** — is an unreadable wall of
-leaf cards, `landmark_meteor` has not framed the Meteor in a long time, and
-`poi_haven` puts the camera inside a rock. None was re-framed: changing what a
-blind judge sees, between rounds, to a frame an agent chose is a call for the
-human.
+**Three corpus shots were re-framed 2026-08-24** (`ac1a495`), on the human's
+call: `landmark_meteor` was aimed **3.8 km at the wrong zone**, `poi_haven` sat
+near the origin with the camera inside a rock, and `zone_nebulawood` descended
+into a canopy and was a wall of leaf cards. **`zone_nebulawood` is one of the 30
+judged shots, so round 12 is not comparable to rounds 1-11 on it.** All three now
+reveal defects the old framings hid — the Meteor's quilt, and haven pads that
+read as hard-edged cake stands.
 
 Genuinely strong: the field HUD, atmosphere and aerial perspective, terrain
 strata, the world map, the opening cutscene, warp-strike VFX, km-scale shadow —
