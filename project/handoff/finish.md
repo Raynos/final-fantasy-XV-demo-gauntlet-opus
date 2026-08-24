@@ -305,17 +305,51 @@ comment so nobody "tidies" them away.
 
 ## Gates
 
-`node src/tools/check.mts --only silhouette,silhouette-rocks` -> **2/2**, and the
-full sixteen-gate suite was launched at `d3a7041`. The roster is **17** with
-`silrocks` in it. **If the row below is still a placeholder, the run had not
-finished when this lane stopped — re-run `pnpm run check` before trusting it.**
+**17/17**, over two runs, and the second run is the interesting one.
 
-    RESULT: <full-suite run pending at handoff time>
+    node src/tools/check.mts                      12/17
+    node src/tools/check.mts --only integration,uxcheck,creaturecheck,combatloop,reachcheck
+                                                   5/5
 
-Two things worth knowing about running it right now: three `check.mts` processes
-and another lane's `gameplay.mts` were live on this machine at once, and
-`floatcheck` alone took several minutes under that load. A perf number taken in
-that window is not a perf number.
+    build PASS   anycheck PASS   orphans PASS   silhouette PASS 4.56s
+    silrocks PASS 11.74s   geocheck PASS   hydrocheck PASS
+    integration PASS 67.3s (27)      uxcheck PASS 110.1s (93/93)
+    creaturecheck PASS 14.2s (207)   combatloop PASS 88.3s (31/31)
+    roadcheck PASS (0 failures)      reachcheck PASS (every must-run path executed)
+    floatcheck PASS (nothing new floats)   horizoncheck PASS (worst MCC 0.766)
+    heightcheck PASS (0.000 m)       driftcheck PASS (mean 0.133 m)
+
+Perf gates not run: three other lanes were on the machine, and a perf number
+taken then is not a perf number.
+
+The first full run came back **12/17**, and the five failures were
+`integration`, `uxcheck`, `creaturecheck`, `combatloop` and `reachcheck` — all
+five with `page.evaluate: Target page, context or browser has been closed`,
+which is the signature `project/LANDMINES.md` records for a daemon problem and
+not for a code one. It is not this lane's change, and the reason is in the same
+table: `floatcheck`, `heightcheck`, `driftcheck`, `roadcheck` and both
+silhouette gates are browser gates too and all six passed, and nothing this lane
+touched is reachable from a page at all — one procedural texture function and
+one bare-Node bench.
+
+**What was actually happening: three `check.mts` runs from three lanes plus
+another lane's `gameplay.mts` were live at once, against a daemon pool of four.**
+`floatcheck` alone took 88 s and `integration` 139 s before dying. Re-run on a
+quieter tree with `--only integration,uxcheck,creaturecheck,combatloop,reachcheck`,
+**all five passed with no code change at all** — 27, 93/93, 207 poses, 31/31, and
+every must-run path executed — and `integration` took 67 s instead of the 139 s it
+had spent dying. That is the landmine's exact shape: five simultaneous red gates
+that look like one regression and are one shortage of browser pages.
+
+And a second thing worth writing down, because it is the landmine's other half:
+**`cleanup.mts` said `no capture daemon registered` and `clean — no orphaned
+servers or browsers` while `daemon.mts --health` reported a live daemon on port
+36646 with 12 138 s of uptime and four workers.** The registry and the daemon
+disagree. `cleanup` is the tool everyone reaches for when captures start failing
+and it is answering from a registry that does not know about the daemon that is
+actually serving. There were no orphaned vite servers (`ps -eo pid,ppid,command |
+grep '[v]ite/bin/vite.js' | awk '$2==1'` -> 0), so on this occasion the answer
+was right by accident.
 
 ---
 
