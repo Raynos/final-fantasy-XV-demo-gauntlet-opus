@@ -7,12 +7,16 @@
  *
  * `weavecontact.mts` established that the pass was marching a **world** length
  * with no screen-space budget, and capping the step at 6 px cleared the
- * one-pixel checkerboard. What it left is the opposite failure: at
- * `hero_portrait`'s 0.6 m the cap makes the *whole* march ~72 px long while the
- * world offsets around it — `bias`, `thickness` — stay in metres, so the
- * occlusion term goes hard 0 -> 1 across a jagged boundary instead of ramping.
- * `head-r2` measured it at 3.634/255 mean over the face rectangle with `--ablate
- * nocontact` as the control.
+ * one-pixel checkerboard. What it left is the opposite failure: the cap
+ * shortened the march tenfold at portrait range and left `thickness` — the
+ * acceptance window, authored at 0.9x the *world* march — sitting at ten times
+ * the capped one, so the test stopped rejecting anything and the occlusion term
+ * went hard 0 -> 1 across a jagged boundary. `head-r2` measured that blob at
+ * 3.634/255 over the face rectangle with `--ablate nocontact` as the control.
+ *
+ * The fix landed as `post.contact.thicknessTrack`, default 1. **`thicknessTrack
+ * = 0` is the pre-fix behaviour**, which is what lets every row below run on one
+ * boot and one build.
  *
  * Same protocol as `weavebisect.mts` and for the same reasons: every stage
  * re-poses the shot, applies its one variable **after** `applyShot` (a shot
@@ -47,7 +51,8 @@ const debugW = () => patch(
   'gl_FragColor = vec4(mix(src, shaded, clamp(w, 0.0, 1.0)), 1.0);',
   'gl_FragColor = vec4(vec3(clamp(w, 0.0, 1.0)), 1.0);',
 );
-/** The screen-space cap, restated as a total reach in pixels + a step count. */
+/** The screen-space cap, restated as a total reach in pixels + a step count,
+ *  so "more samples" can be tested without also meaning "a longer march". */
 const reach = (px, steps) => {
   patch(
     'len = min(len, pxWorld * uStepPx * float(CS_STEPS));',
@@ -59,6 +64,7 @@ const reach = (px, steps) => {
 const stage = async (name, apply) => {
   c.enabled = true;
   c.length = 0.50; c.bias = 0.030; c.intensity = 0.85; c.thickness = 0.45; c.stepPx = 6.0;
+  c.thicknessTrack = 1.0;
   if (c.material.fragmentShader !== baseFs) { c.material.fragmentShader = baseFs; c.material.needsUpdate = true; }
   if (c.material.defines.CS_STEPS !== baseSteps) { c.material.defines.CS_STEPS = baseSteps; c.material.needsUpdate = true; }
   g.applyShot('hero_portrait');
@@ -91,6 +97,7 @@ const stage = async (name, apply) => {
   for (const [o, was] of hidden) o.visible = was;
   out.stages.push({
     name, on: c.enabled, bias: c.bias, thickness: c.thickness, stepPx: c.stepPx,
+    track: c.thicknessTrack,
     steps: c.material.defines.CS_STEPS, patched: c.material.fragmentShader !== baseFs,
     hidden: hidden.length,
   });
@@ -101,44 +108,34 @@ await stage('b_null', () => {});
 await stage('c_off', () => { c.enabled = false; });
 await stage('c_off2', () => { c.enabled = false; });
 
-// --- the acceptance window, which is 0.45 m on a head 0.20 m deep ----------
-await stage('t_010', () => { c.thickness = 0.10; });
-await stage('t_006', () => { c.thickness = 0.06; });
-await stage('t_003', () => { c.thickness = 0.03; });
+// --- the defect: the acceptance window fixed in metres ---------------------
+await stage('p_track0', () => { c.thicknessTrack = 0; });
 
-// --- the candidate: scale the window by however much the cap shortened the
-// march. `thickness` 0.45 was authored against `length` 0.50, i.e. 0.9x the
-// march; the screen-space cap cut the march to 0.045 m at this range and left
-// the window at 0.45, i.e. 10x it. This restores the authored ratio and is
-// *exactly* a no-op wherever the cap does not bite. ------------------------
-// `len` is assigned from the world reach and then capped; name the uncapped one
-// so the ratio the cap applied is available.
-const scaleThick = () => {
-  patch('float len = uParams.x * (1.0 + dist * 0.045);',
-        'float lenW = uParams.x * (1.0 + dist * 0.045);\n          float len = lenW;');
-  patch('float stepLen = len / float(CS_STEPS);',
-        'float lenScale = len / lenW;\n          float stepLen = len / float(CS_STEPS);');
-  patch('if (diff > bias && diff < uParams.y) {',
-        'if (diff > bias && diff < uParams.y * lenScale) {');
-};
-await stage('j_thickscale', () => scaleThick());
-// --- ...and the bias scaled with it as well (it is 0.06x the authored march
-// and 0.71x the capped one, so it may be doing the same thing) -------------
-await stage('k_thickbias_scale', () => {
-  scaleThick();
-  patch('float bias = uParams.z * (1.0 + dist * 0.10);',
-        'float bias = uParams.z * (1.0 + dist * 0.10) * mix(1.0, lenScale, 0.75);');
-});
-// --- the scaled window with three times the samples, to separate "the window
-// was wrong" from "the march is still undersampled" ------------------------
-await stage('l_thickscale_s36', () => {
-  scaleThick();
-  c.material.defines.CS_STEPS = 36; c.material.needsUpdate = true;
-});
+// --- ...which is 0.45 m of window on a head 0.20 m deep, and 10x the 0.045 m
+// the cap left the march. Walk it down by hand, in the pre-fix regime. ------
+await stage('t_010', () => { c.thicknessTrack = 0; c.thickness = 0.10; });
+await stage('t_006', () => { c.thicknessTrack = 0; c.thickness = 0.06; });
+await stage('t_003', () => { c.thicknessTrack = 0; c.thickness = 0.03; });
 
-// --- and the term itself, for the two that matter --------------------------
+// --- does the bias want the same treatment? (no: it is what rejects the
+// ray's hit against the surface it started on) -----------------------------
+await stage('k_biastrack', () => patch(
+  'float bias = uParams.z * (1.0 + dist * 0.10);',
+  'float bias = uParams.z * (1.0 + dist * 0.10) * mix(1.0, lenScale, 0.75);',
+));
+
+// --- is it undersampling after all? Hold the reach at the shipped 72 px and
+// treble the samples. It is not: the blob is identical. --------------------
+await stage('m_r72_s12_t0', () => { c.thicknessTrack = 0; reach(72, 12); });
+await stage('n_r72_s36_t0', () => { c.thicknessTrack = 0; reach(72, 36); });
+// --- and the reach itself does matter: treble it with the window kept
+// proportional and the blob comes back, because 13 cm of march at 0.6 m
+// reaches the rest of the face. -------------------------------------------
+await stage('o_r216_s36', () => reach(216, 36));
+
+// --- the term itself, before and after ------------------------------------
+await stage('wv_track0', () => { c.thicknessTrack = 0; debugW(); });
 await stage('wv_base', () => debugW());
-await stage('wv_thickscale', () => { scaleThick(); debugW(); });
 
 await stage('z_restored', () => {});
 
