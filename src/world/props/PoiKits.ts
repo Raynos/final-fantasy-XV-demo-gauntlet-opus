@@ -42,11 +42,19 @@ import type { Game } from '../../game/Game.ts';
 const BUILD_R = 1500;
 
 /**
- * Kit types whose build does not fit inside one frame, so they are built at
- * load instead. See {@link PoiKits.prebuildHeavy} for the per-type timings and
- * for the shader-compile half of the reason.
+ * Kit types built at load rather than streamed in.
+ *
+ * `null` means all of them. It started as `['town', 'imperial']` — the only two
+ * whose `_make` breaks 33 ms on its own — and that was not enough, because the
+ * expensive half of a first POI is not its geometry, it is the SHADER LINK on
+ * the first frame that draws it, and the materials are shared across kit types.
+ * With the two heavy types prebuilt, `perfsprint.mts` still caught
+ * `town_chainlink`, `town_asphalt`, `town_glass` and `sign_cn` linking at
+ * frames 34-35 of `sprint+turn` for 144 and 96 ms: those are Coernix's, an
+ * `outpost`, wearing `TownMaterials`. Chasing that one type at a time is how a
+ * fix like this ends up being wrong for a year, so: all of them.
  */
-const PREBUILD_TYPES: ReadonlySet<string> = new Set(['town', 'imperial']);
+const PREBUILD_TYPES: ReadonlySet<string> | null = null;
 /**
  * How far each kit is worth drawing.
  *
@@ -411,7 +419,7 @@ export class PoiKits {
    */
   prebuildHeavy(game: Game) {
     for (const s of this.sites) {
-      if (!s.group && PREBUILD_TYPES.has(s.poi.type)) this._make(s, game);
+      if (!s.group && (!PREBUILD_TYPES || PREBUILD_TYPES.has(s.poi.type))) this._make(s, game);
     }
   }
 
