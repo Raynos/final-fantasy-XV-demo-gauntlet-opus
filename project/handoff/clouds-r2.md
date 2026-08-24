@@ -191,6 +191,18 @@ over a sky of `#5ea0c9`.
 | `p99.9` | 251.0 | 226.6 | 248.2 | 247.9 | 252.5 |
 | `stops` | 9.52 | 9.07 | 9.49 | 9.47 | 10.08 |
 
+Over all **twelve** review shots rather than the three daylight ones, the grade
+signature barely moves at all — which is the point: this is a change to cloud
+*form*, not to the grade.
+
+| median, n=12 | baseline | shipped | FFXV |
+|---|---|---|---|
+| `R-B` | −12.1 | −12.0 | −10.0 |
+| `hi(R-B)` | −6.1 | −5.1 | −19.8 |
+| `hi230%` | 11.32 | **8.53** | 2.92 |
+| `clip%` | 1.66 | 2.31 | 0.73 |
+| `stops` | 10.11 | 10.21 | 10.08 |
+
 **`hi(R-B)` is the one number that ends up worse, and it is one shot.**
 `zone_longwythe` and `zone_three_valleys` are unmoved (−0.3 and −22.3);
 `vista_noon` goes −17.0 → −5.7 because its bright quartile is now almost
