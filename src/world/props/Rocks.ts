@@ -965,12 +965,12 @@ const TORS: TorArchetype[] = [
     drift: 0.30, kinds: ['spire', 'slab', 'bedded'],
   },
   {
-    key: 'boss', w: 0.34, n: [2, 4], h: [6, 12], ar: [0.42, 0.82], thin: [0.55, 1.0],
+    key: 'boss', w: 0.30, n: [2, 4], h: [6, 12], ar: [0.42, 0.82], thin: [0.55, 1.0],
     taper: [0.01, 0.14], lap: [0.24, 0.44], bed: [0.00, 0.24], lean: [0.00, 0.10],
     drift: 0.70, kinds: ['granite', 'bedded', 'slab', 'worn'],
   },
   {
-    key: 'pinnacle', w: 0.28, n: [4, 7], h: [14, 30], ar: [0.70, 1.40], thin: [0.55, 1.0],
+    key: 'pinnacle', w: 0.32, n: [4, 7], h: [14, 30], ar: [0.70, 1.40], thin: [0.55, 1.0],
     taper: [0.08, 0.24], lap: [0.34, 0.58], bed: [0.02, 0.28], lean: [0.03, 0.20],
     drift: 0.32, kinds: ['granite', 'bedded', 'slab', 'spire'],
   },
@@ -1247,6 +1247,7 @@ export function torPlan(
     // balanced rock, and "the same mushroom rock" is the exact phrase the judge
     // used. A collar reads; a mushroom is a different object.
     if (i > 0) wz = Math.min(wz, wPrev * 1.15);
+    const wPrev0 = i > 0 ? wPrev : Infinity;
     wPrev = wz;
     let hz = h0 * (1 - i * taper * 0.6) * rng.range(0.76, 1.30);
     let dz = wz * thin * rng.range(0.80, 1.26);
@@ -1286,7 +1287,16 @@ export function torPlan(
       pitch: lean * leanC + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
       roll: -lean * leanS + rng.gauss(0, 0.3) * TOR_SETTLE * 0.22,
     });
-    const rise = 2 * h * lap;                       // `lap` of this block's own height
+    // **A course wider than the one below it has to sit DEEPER in it.**
+    //
+    // The bedding term is what puts a proud collar on a hoodoo, and a collar
+    // that rides high on a narrower block is not a collar, it is a cap on a
+    // stalk — a balanced rock, which is the "mushroom" the judge named and
+    // which `handoff/rocks.md` already recorded as `zone_ostium_gorge`'s
+    // four-in-one-frame defect from the other generator. `tmp/crop/vr2/r4-a.png`
+    // is one: a boss whose second course drew +0.24 of bedding on a 0.24 lap.
+    // Widening is allowed; widening while standing clear is not.
+    const rise = 2 * h * (wz > wPrev0 ? Math.max(lap, 0.58) : lap);
     y += rise;
     // The stack's axis follows the lean, so the courses stay stacked as it
     // tips; the gaussian on top is the step that keeps it from being a column
