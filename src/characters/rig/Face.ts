@@ -108,7 +108,12 @@ export const FACE = {
   noseTip: [0, -0.033, 0.104],
   mouth: [0, -0.064, 0.084],
   chin: [0, -0.108, 0.074],
-  ear: [0.0725, -0.026, -0.006],
+  // The ear measured 0.297 of head height long against an adult male's 0.269,
+  // with its centre 0.102 of head height below the eye where a tragion sits at
+  // 0.056 — 7 mm too long and 10 mm too low, which on a bare head reads as an
+  // elf. `headprop.mts` measures both off the ear geometry itself, not off this
+  // anchor. Raised 10 mm; every piece of the ear in `buildHead` is 0.906x in y.
+  ear: [0.0725, -0.0160, -0.006],
   yMin: -0.122,
   yMax: 0.116,
 };
@@ -265,6 +270,9 @@ export function brushes(look: Look): SculptBrush[] {
  * the chin, which leaves a head with no mandible — and lets the neck push out
  * through the face. Below the equator the profile is deliberately fuller so the
  * jaw keeps real mass all the way down to the chin line.
+ *
+ * This is the **sagittal** profile: it sets the front-to-back extent at every
+ * height, and it is right. The *lateral* extent is this times `jawTaper`.
  */
 function profileW(yn: number) {
   if (yn >= 0) return Math.sqrt(Math.max(0, 1 - yn * yn));
@@ -272,11 +280,47 @@ function profileW(yn: number) {
   return Math.pow(Math.max(0, 1 - Math.pow(a, 2.6)), 0.46);
 }
 
+/**
+ * How much narrower the skull is **across** than it is deep, as a function of
+ * height. 1 above the cheekbone, falling to 0.58 under the jaw.
+ *
+ * **Measured defect: the head was a barrel.** `headprop.mts` reports the
+ * half-width profile from vertex to menton, normalised by its own maximum. All
+ * four heads ran
+ *
+ *     0.44 0.69 0.80 0.89 0.95 0.99 1.00 0.98 0.99 0.93 0.91 0.44
+ *
+ * where an adult male runs roughly
+ *
+ *     0.40 0.64 0.80 0.91 0.98 1.00 0.98 0.92 0.82 0.70 0.53 0.32
+ *
+ * — i.e. the top half was right and the head then stayed at *full width all
+ * the way down to the mouth line*. Bigonial over head breadth measured 0.93 to
+ * 0.99 against an adult male's **0.63**, and bizygomatic over head breadth 0.89
+ * to 1.00 against 0.89. That is the single strongest cue for "infant": a baby's
+ * neurocranium is nearly adult-proportioned while its mandible is not, so its
+ * outline is a wide oval that stays wide low down. It is also invisible to
+ * `headprofile.mts`, whose statistic is the *mid-sagittal* outline — the one
+ * direction this defect does not touch.
+ *
+ * It has to be a separate function from `profileW` rather than a change to it,
+ * because the two directions want opposite things: front-to-back the head must
+ * stay deep at the jaw (there is a mandible ramus and a neck back there, and
+ * `profileW`'s fullness below the equator is what stops the neck pushing out
+ * through the face), while across it must close down to a chin 45 mm wide.
+ * One radius cannot do both, and trying to do it with `profileW` alone is what
+ * produced the barrel.
+ */
+function jawTaper(yn: number) {
+  const t = clamp01((-yn - 0.08) / 0.80);
+  return 1 - 0.42 * t * t * (3 - 2 * t);
+}
+
 /** Un-sculpted skull surface point for a spherical coordinate. */
 function shellPoint(theta: number, phi: number, rr: number[], out: THREE.Vector3) {
   const yn = Math.cos(phi);
   const w = profileW(yn);
-  return out.set(w * Math.sin(theta) * rr[0], yn * rr[1], w * Math.cos(theta) * rr[2]);
+  return out.set(w * jawTaper(yn) * Math.sin(theta) * rr[0], yn * rr[1], w * Math.cos(theta) * rr[2]);
 }
 
 const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3();
@@ -572,16 +616,16 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     B.color(0xcdb4a6);
     // the auricular plate — the sheet the ridges sit on
     blob(B, {
-      center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0305 * scale, 0.0192 * scale],
+      center: [c.x, c.y, c.z], scale: [0.0080 * scale, 0.0276 * scale, 0.0192 * scale],
       rot: [0.15, sg * 0.30, sg * 0.12], segU: 12, segV: 9, uv: eUV,
     });
     B.color(0xffffff);
     // concha: the bowl in front of the canal, in shadow at almost every angle
-    const c2 = put([ex * 1.02, e[1] - 0.004, e[2] + 0.003]);
+    const c2 = put([ex * 1.02, e[1] - 0.0036, e[2] + 0.003]);
     // the concha is a bowl and it is in shadow from every angle a head is seen at
     B.color(0x8e8078);
     blob(B, {
-      center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0170 * scale, 0.0098 * scale],
+      center: [c2.x, c2.y, c2.z], scale: [0.0046 * scale, 0.0154 * scale, 0.0098 * scale],
       rot: [0.15, sg * 0.35, sg * 0.12], segU: 10, segV: 7, uv: eUV,
     });
     B.color(0xffffff);
@@ -613,13 +657,13 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // it is supposed to roll over, so the ear rendered as a smooth almond with
     // no rim, no Y and no canal at any distance. Both ridges now clear the
     // plate.
-    ridge(1.02, -2.55, 0.0282, 0.0176, 0.0000, -0.0010, 0.150, 0.0023, 11);
+    ridge(1.02, -2.55, 0.0256, 0.0176, 0.0000, -0.0010, 0.150, 0.0023, 11);
     // antihelix — the inner Y, set back from the rim and shallower
-    ridge(0.72, -1.90, 0.0178, 0.0102, -0.0016, 0.0026, 0.118, 0.0018, 9);
+    ridge(0.72, -1.90, 0.0161, 0.0102, -0.0014, 0.0026, 0.118, 0.0018, 9);
     // tragus — the flap over the canal, pointing back into the concha
-    const tg = put([ex * 1.045, e[1] - 0.0055, e[2] + 0.0135]);
+    const tg = put([ex * 1.045, e[1] - 0.0050, e[2] + 0.0135]);
     blob(B, {
-      center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0062 * scale, 0.0032 * scale],
+      center: [tg.x, tg.y, tg.z], scale: [0.0042 * scale, 0.0056 * scale, 0.0032 * scale],
       rot: [0, sg * 0.5, 0], segU: 8, segV: 6, uv: eUV,
     });
     // lobe — a soft fleshy ball, no cartilage, so it is rounder than the rim.
@@ -627,9 +671,9 @@ export function buildHead(rig: Rig, look: Look, bakeKey: string | null = null): 
     // skull and stopped being hidden by it: an ellipsoid narrows fastest at its
     // poles, so a lobe placed level with the plate's bottom edge meets nothing
     // there. Raised into the plate's body and grown a little so the two merge.
-    const lb = put([ex * 1.030, e[1] - 0.0262, e[2] + 0.0026]);
+    const lb = put([ex * 1.030, e[1] - 0.0237, e[2] + 0.0026]);
     blob(B, {
-      center: [lb.x, lb.y, lb.z], scale: [0.0064 * scale, 0.0092 * scale, 0.0072 * scale],
+      center: [lb.x, lb.y, lb.z], scale: [0.0064 * scale, 0.0083 * scale, 0.0072 * scale],
       rot: [0, sg * 0.25, 0], segU: 8, segV: 6, uv: eUV,
     });
     B.mat(0.5, 0, 0);
