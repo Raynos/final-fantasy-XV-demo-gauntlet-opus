@@ -551,10 +551,16 @@ if (out.at) {
 if (opts.setBaseline) {
   const b: Baseline = {
     note: 'Measured inventory of floats and burials, not a target. The gate fails '
-      + 'when a count goes UP. It is not zero because this check cannot see intent: '
-      + 'a stacked rock course rests on rock, a POI apron is meant to be underground, '
-      + 'and a canopy roof is meant to be in the air. Re-run with --set-baseline only '
-      + 'to LOWER these.',
+      + 'when a count goes UP. The two POI counts ARE zero as of 2026-08-24 and the '
+      + 'intention is that they stay there: a compound entirely in the air, or a deck '
+      + 'under the ground it is cut into, is a defect with no legitimate reading. The '
+      + 'two instance counts are NOT zero and cannot be, because this check cannot see '
+      + 'intent -- a stacked rock course rests on rock, not on soil -- so they are '
+      + 'reported and never gated. NOTE the burial rule changed on 2026-08-24: it is '
+      + 'now the DECK against the drawn ground, not the tallest mesh against its own '
+      + 'height, which was reading the graded apron. A poiBuried from before that date '
+      + 'is not comparable; see project/handoff/seating.md. Re-run with --set-baseline '
+      + 'only to LOWER these.',
     ...now,
   };
   await writeFile(BASELINE, `${JSON.stringify(b, null, 1)}\n`);

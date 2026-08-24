@@ -1,7 +1,7 @@
 {
- "note": "poiFloating and poiBuried are GATED; the two instance counts are reported only. A POI compound where EVERY mesh is clear of the drawn ground has no benign reading, and those two counts are structural -- every site is force-built every run. poiFloating is pinned at 0 and is NOT a measured value: it was 0 when the gate landed and 13 after the 2026-08-24 terrain reshape, and baselining that would have hidden the regression the gate exists to find. The instance counts are dominated by stacked rock courses, which rest on rock rather than soil and are a float by arithmetic and not by defect; gating them needs one boolean per instance saying it is meant to be grounded, which lives in the placers, not here.",
+ "note": "Measured inventory of floats and burials, not a target. The gate fails when a count goes UP. The two POI counts ARE zero as of 2026-08-24 and the intention is that they stay there: a compound entirely in the air, or a deck under the ground it is cut into, is a defect with no legitimate reading. The two instance counts are NOT zero and cannot be, because this check cannot see intent -- a stacked rock course rests on rock, not on soil -- so they are reported and never gated. NOTE the burial rule changed on 2026-08-24: it is now the DECK against the drawn ground, not the tallest mesh against its own height, which was reading the graded apron. A poiBuried from before that date is not comparable; see project/handoff/seating.md. Re-run with --set-baseline only to LOWER these.",
  "poiFloating": 0,
- "poiBuried": 6,
- "instFloating": 320,
- "instBuried": 952
+ "poiBuried": 0,
+ "instFloating": 362,
+ "instBuried": 861
 }
