@@ -29,6 +29,8 @@ export class Vegetation {
   _actors!: VegActor[];
   _camPos!: THREE.Vector3;
   _gust!: number;
+  /** Whose turn it is in {@link Vegetation._stream}'s rotation. */
+  _phase!: number;
   /** Reused actor records; `_gatherActors` never allocates. */
   _pool!: VegActor[];
   actorRange!: number;
@@ -62,6 +64,7 @@ export class Vegetation {
 
     this._camPos = new THREE.Vector3();
     this._gust = 0;
+    this._phase = 0;
     this._actors = [];
     this._pool = [];
     this.actorRange = 45;        // metres from camera; past that no blade reads
@@ -75,6 +78,9 @@ export class Vegetation {
    */
   resetClock() {
     this._gust = 0;
+    // The rotation is state a capture must not depend on. `converge()` makes
+    // that true for posed shots anyway; zeroing it here makes it true twice.
+    this._phase = 0;
   }
 
   /**
@@ -166,8 +172,52 @@ export class Vegetation {
     // system list); the streaming radius has plenty of margin for that.
     this._camPos.setFromMatrixPosition(game.camera.matrixWorld);
     this._gatherActors(game, this._camPos);
-    this.grass.update(this._camPos);
-    this.bushes.update(this._camPos);
-    this.trees.update(this._camPos);
+    this._stream(this._camPos);
+  }
+
+  /**
+   * Stream grass, scrub and trees — **at most one of them per frame**.
+   *
+   * Each layer re-gathers and re-uploads its whole instance set when the
+   * camera has moved past its own threshold: grass at 5 m, bushes at 10 m,
+   * trees at 12 m. Sprinting covers 0.17 m in a frame, so under real motion
+   * they fire every 30, 60 and 72 frames and almost never coincide. A
+   * *teleport* makes all three fire on the same frame, and `gameplay.mts`'s
+   * `streaming-traverse` hops 660 m every twelfth frame, which is exactly the
+   * frame that costs 33-63 ms.
+   *
+   * So the layers take turns. A layer with no work still gets its call — its
+   * early-out is free, and `Bushes`/`Trees` advance their own tick counters
+   * inside `update`, so skipping them would stretch their cadence instead of
+   * preserving it. Only when more than one layer has heavy work does this
+   * hand the frame to one of them and make the others wait, at most two
+   * frames — 33 ms of extra latency on scenery that is streaming in anyway.
+   *
+   * Measured on the `streaming-traverse` script, interleaved base-rot-rot-base
+   * on one page (`src/tools/probes/perfveglayer.mts`):
+   *
+   *     arm     median   p95    max   >16ms   Vegetation.update
+   *     base     13.2   24.1   63.6     12%     4.21 ms/frame
+   *     rot       9.3   12.5   16.1      0%     1.46 ms/frame
+   *
+   * with 506-511 draws and 7.75-7.89 M triangles resident in **both** arms:
+   * the same world, delivered in smaller pieces. This is the same trade
+   * `TileStream.budgetMs` makes and it has the same guard — `converge()` runs
+   * all three unbounded before any posed capture, so no shot depends on it.
+   */
+  _stream(camPos: THREE.Vector3) {
+    const layers = [this.grass, this.bushes, this.trees];
+    let busy = 0;
+    for (const l of layers) if (l.wants(camPos)) busy++;
+    if (busy < 2) {
+      for (const l of layers) l.update(camPos);
+      return;
+    }
+    const pick = this._phase++ % busy;
+    let seen = 0;
+    for (const l of layers) {
+      if (!l.wants(camPos)) { l.update(camPos); continue; }
+      if (seen++ === pick) l.update(camPos);
+    }
   }
 }

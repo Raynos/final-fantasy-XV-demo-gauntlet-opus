@@ -26,6 +26,15 @@ const num = (n: string, d: number) => { const i = argv.indexOf(n); return i < 0 
 const FRAMES = num('--frames', 140);
 const DELAY = num('--delay', 0);
 const CLOSED = flag('--closed');
+/**
+ * `--sprint` replays `gameplay.mts`'s idle/walk/sprint segments first and then
+ * drives `sprint+turn`, which is where the one remaining >33 ms frame lives
+ * (frame 34-35, 84-116 ms, all of it inside `post.render`, with no new
+ * programs and no texture uploads). The question this tool answers about it is
+ * the same one it answered for the menu: is the thread WORKING or BLOCKED.
+ */
+const SPRINT = flag('--sprint');
+const RAF = flag('--raf');
 
 async function main() {
   const ha = harnessArgs(argv, { q: 'ultra' });
@@ -42,32 +51,43 @@ async function main() {
     return o;
   };
   try {
-    await page.evaluate(([open]) => {
+    await page.evaluate(([open, sprint]) => {
       const g = window.GAME as any;
       g.applyShot('hud_field');
       g.get('CameraRig')?.clearShot?.();
       g.resetClock();
       g.input.keys.clear();
       const dt = 1 / 60;
-      for (let i = 0; i < 30; i++) g.frame(dt);
-      if (open) { g.get('Menus').setScreen('main'); for (let i = 0; i < 40; i++) g.frame(dt); }
+      if (sprint) {
+        const hold = (...c: string[]) => { g.input.keys.clear(); for (const k of c) g.input.keys.add(k); };
+        const look = (x: number, y: number) => g.input.look.set(x, y);
+        hold(); for (let i = 0; i < 66; i++) g.frame(dt);
+        hold('KeyW'); for (let i = 0; i < 126; i++) g.frame(dt);
+        hold('KeyW', 'ShiftLeft'); for (let i = 0; i < 156; i++) g.frame(dt);
+        (window as any).__each = (i: number) => look(Math.sin(i * 0.06) * 22, Math.sin(i * 0.021) * 5);
+        for (let i = 0; i < 6; i++) { (window as any).__each(i); g.frame(dt); }
+      } else {
+        for (let i = 0; i < 30; i++) g.frame(dt);
+        if (open) { g.get('Menus').setScreen('main'); for (let i = 0; i < 40; i++) g.frame(dt); }
+      }
       g.renderer.getContext().finish();
-    }, [!CLOSED]);
+    }, [!CLOSED, SPRINT]);
     await new Promise((r) => setTimeout(r, 400));
 
     const rows: { i: number, ms: number, heap: number, d: number, m: Record<string, number> }[] = [];
     let prev = -1;
     let pm = await metrics();
     for (let i = 0; i < FRAMES; i++) {
-      const ms = await page.evaluate(() => {
+      const ms = await page.evaluate((i2) => {
         const g = window.GAME as any;
         const gl = g.renderer.getContext();
+        (window as any).__each?.(i2);
         gl.finish();
         const t0 = performance.now();
         g.frame(1 / 60);
         gl.finish();
         return performance.now() - t0;
-      });
+      }, i);
       const hu = await cdp.send('Runtime.getHeapUsage') as { usedSize: number, totalSize: number };
       const heap = hu.usedSize / 1048576;
       const nm = await metrics();
@@ -76,6 +96,7 @@ async function main() {
       pm = nm;
       rows.push({ i, ms: +ms.toFixed(1), heap: +heap.toFixed(2), d: prev < 0 ? 0 : +(heap - prev).toFixed(2), m: dm });
       prev = heap;
+      if (RAF) await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
       if (DELAY) await new Promise((r) => setTimeout(r, DELAY));
     }
 
@@ -88,7 +109,7 @@ async function main() {
     const gaps: number[] = [];
     for (let k = 1; k < spikes.length; k++) gaps.push(spikes[k].i - spikes[k - 1].i);
 
-    console.log(`\nmenu ${CLOSED ? 'CLOSED (control)' : 'OPEN'}   delay ${DELAY} ms   frames ${FRAMES}`);
+    console.log(`\n${SPRINT ? 'SPRINT+TURN' : 'menu ' + (CLOSED ? 'CLOSED (control)' : 'OPEN')}   delay ${DELAY} ms   raf ${RAF}   frames ${FRAMES}`);
     console.log(`median ${med.toFixed(2)} ms   spikes ${spikes.length}   over33 ${rows.filter((r) => r.ms > 33).length}`);
     console.log(`spike frames: ${spikes.map((r) => r.i).join(' ')}`);
     console.log(`gaps between spikes: ${gaps.join(' ')}`);

@@ -758,6 +758,18 @@ export class Bushes {
     return list;
   }
 
+  /**
+   * True when {@link Bushes.update} would take its heavy path this frame.
+   *
+   * Exactly that method's early-out read forwards, and deliberately WITHOUT
+   * the `_tick` increment — the increment is `update`'s, and this is asked
+   * immediately before it on the same frame. See `Vegetation.update`.
+   */
+  wants(camPos: THREE.Vector3): boolean {
+    if (this._last.distanceToSquared(camPos) >= 100) return true;
+    return this._pending && ((this._tick | 0) + 1) % 5 === 0;
+  }
+
   /** @param camPos — see {@link Trees#update} for the throttles */
   update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);

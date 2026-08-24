@@ -1001,6 +1001,17 @@ export class Trees {
    * the whole gather and upload sixty times a second, which is exactly how the
    * `menu-open` segment went CPU-bound.
    */
+  /**
+   * True when {@link Trees.update} would take its heavy path this frame.
+   *
+   * Exactly the early-out below read forwards, without the `_tick` increment,
+   * which belongs to `update`. See `Vegetation.update`.
+   */
+  wants(camPos: THREE.Vector3): boolean {
+    if (this._last.distanceToSquared(camPos) >= 144) return true;
+    return this._pending && ((this._tick | 0) + 1) % 6 === 0;
+  }
+
   update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 144) {

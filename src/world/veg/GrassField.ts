@@ -878,6 +878,17 @@ export class GrassField {
     };
   }
 
+  /**
+   * True when {@link GrassField.update} would take its heavy path this frame.
+   *
+   * Exactly the negation of that method's own early-out, with no side effect,
+   * so `Vegetation.update` can rotate the three layers instead of letting all
+   * three gather and upload on the same frame. See `Vegetation.update`.
+   */
+  wants(camPos: THREE.Vector3): boolean {
+    return this._last.distanceToSquared(camPos) >= 25 || this._pending;
+  }
+
   update(camPos: THREE.Vector3) {
     const moved = this._last.distanceToSquared(camPos);
     if (moved < 25 && !this._pending) return;

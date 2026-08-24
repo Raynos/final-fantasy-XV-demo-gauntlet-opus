@@ -79,7 +79,9 @@ for (let i = 0; i < 150; i++) {
       top: Object.entries(cur).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`) });
   }
   prev = now; pm = m; cur = null; prevObjs = objs;
-  await new Promise((r) => setTimeout(r, 0));
+  // perf-r3: rAF, not setTimeout(0) -- see the header of `ruler.mts`. Under a
+  // task-queue yield this loop's own tail was the compositor, not the game.
+  await new Promise((r) => requestAnimationFrame(r));
 }
 restore.forEach((f) => f());
 return { events: rows };

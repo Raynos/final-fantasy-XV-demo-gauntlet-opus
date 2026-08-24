@@ -9,6 +9,16 @@
 //
 // `dropped` is the honest headline: intervals over 33 ms, i.e. `BRIEF.md`'s
 // hard rule measured the way a player experiences it.
+//
+// DANGER, and it cost an hour: `Game.start()`'s loop calls
+// `requestAnimationFrame(loop)` WITHOUT checking `_running`, and `stop()` only
+// cancels the one callback in `_raf`. Any path that starts the loop twice
+// leaves an orphan chaining forever -- and the daemon POOLS the page, so the
+// next tool to be handed it inherits a browser burning 100% of a core and
+// every measurement after that is contaminated. Seen: one chromium at 105.8%
+// with nothing running, and gameplay medians 40% worse for three runs.
+// This probe therefore stops the loop in a `finally`, and anyone who runs it
+// should `node src/tools/daemon.mts --stop` afterwards.
 const g = window.GAME;
 const menus = g.get('Menus');
 const rig = g.get('CameraRig');
@@ -37,15 +47,21 @@ const sample = async (label, setup, n) => {
     };
     requestAnimationFrame(tick);
   });
-  g.stop();
+  g.stop(); g.stop();
   return { label, frames: n, ...q(iv), over16: iv.filter((x) => x > 16.9).length, dropped33: iv.filter((x) => x > 33).length, fps: +(1000 / q(iv).median).toFixed(1) };
 };
 
 const rows = [];
+try {
 for (const pass of [0, 1]) {
   rows.push(await sample(`closed #${pass}`, () => { menus.setScreen(null); g.input.keys.clear(); }, 240));
   rows.push(await sample(`menu   #${pass}`, () => { menus.setScreen('main'); }, 240));
   rows.push(await sample(`walk   #${pass}`, () => { menus.setScreen(null); g.input.keys.clear(); g.input.keys.add('KeyW'); }, 240));
 }
-menus.setScreen(null); g.input.keys.clear(); g.stop();
+} finally {
+  // Belt and braces: see the header. A page handed on with a live loop is a
+  // contaminated measurement for whoever gets it next.
+  menus.setScreen(null); g.input.keys.clear();
+  for (let i = 0; i < 4; i++) g.stop();
+}
 return rows;
