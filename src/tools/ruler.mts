@@ -66,6 +66,16 @@ export interface Contention {
   /** browser *trees*, counted as processes with no `--type=` argument */
   browsers: number;
   viteProcs: number;
+  /**
+   * `vite build` runs, which is a different animal from the daemon's dev
+   * servers: it is a one-shot that saturates several cores for tens of
+   * seconds and then vanishes. The pre-commit hook runs one on **every**
+   * commit by **every** lane, and `withExclusive` cannot queue it because it
+   * never asks the daemon for anything.
+   */
+  viteBuilds: number;
+  /** other agents' harness tools running right now, by tool name */
+  otherTools: string[];
   load1: number;
   cores: number;
   /** worktree directory names with a vite or capture process running */
@@ -96,22 +106,53 @@ export function contention(): Contention {
         .filter(Boolean) as string[],
     ),
   ].sort();
+  const viteBuilds = args.filter((a) => /vite(\.js)?\s+build\b/.test(a)).length;
+  /**
+   * Another lane's harness tool, running right now, in THIS checkout.
+   *
+   * `trees` only ever finds anything when lanes are in separate worktrees, and
+   * on this repository they are not — every agent works on one shared trunk.
+   * So the check that mattered found nothing, twice in a row: two consecutive
+   * perf lanes were briefed "the machine is yours and it is quiet", printed
+   * `VERDICT: quiet`, and measured through a `rocks` lane and a `head` lane
+   * committing (and therefore `vite build`ing) every few minutes. Whole-run
+   * before/after numbers taken across that are worthless; `idle` moved 6.4 ->
+   * 9.1 ms and `walk` 6.3 -> 11.8 ms with nothing touched that either could
+   * depend on.
+   */
+  const self = String(process.pid);
+  const otherTools = [
+    ...new Set(
+      args
+        .filter((a) => /node .*src\/tools\/[\w-]+\.mts/.test(a) && !a.includes(self))
+        .map((a) => (a.match(/src\/tools\/([\w-]+)\.mts/) || [])[1])
+        .filter((n): n is string => Boolean(n) && n !== 'daemon'),
+    ),
+  ].sort();
   const load1 = loadavg()[0];
   const cores = cpus().length;
-  // Two independent triggers. Browser count catches "five agents each holding a
-  // page open but idle" (low load, ruinous GPU queue); load average catches a
-  // build or a bake that owns the CPU with no browser at all.
-  const busy = browsers > 1 || load1 > cores * 0.7;
+  // Four independent triggers. Browser count catches "five agents each holding
+  // a page open but idle" (low load, ruinous GPU queue); load average catches a
+  // build or a bake that owns the CPU with no browser at all; a `vite build`
+  // and another lane's tool each catch the case those two miss entirely, which
+  // is a co-agent working in the same checkout.
+  const busy = browsers > 1 || load1 > cores * 0.7 || viteBuilds > 0 || otherTools.length > 0;
+  const why = browsers > 1 ? `${browsers} browsers`
+    : viteBuilds > 0 ? `${viteBuilds} vite build${viteBuilds === 1 ? '' : 's'} running`
+      : otherTools.length ? `another lane is running ${otherTools.join(', ')}`
+        : `load ${load1.toFixed(2)} over ${cores} cores`;
   return {
     headlessProcs: heads.length,
     browsers,
     viteProcs: vite,
+    viteBuilds,
+    otherTools,
     load1,
     cores,
     trees,
     busy,
     verdict: busy
-      ? 'CONTENDED — a frame time measured now is partly somebody else\'s load.'
+      ? `CONTENDED (${why}) — a frame time measured now is partly somebody else's load.`
       : 'quiet — safe to measure.',
   };
 }
@@ -119,7 +160,8 @@ export function contention(): Contention {
 /** Print the contention block. Call it *before* measuring, never after. */
 export function printContention(c: Contention = contention()): Contention {
   console.log(`headless chromium procs : ${c.headlessProcs} (~${c.browsers} browser${c.browsers === 1 ? '' : 's'})`);
-  console.log(`vite procs              : ${c.viteProcs}`);
+  console.log(`vite procs              : ${c.viteProcs}${c.viteBuilds ? ` (${c.viteBuilds} of them a BUILD)` : ''}`);
+  if (c.otherTools.length) console.log(`other lanes' tools      : ${c.otherTools.join(', ')}`);
   console.log(`load average (1m)       : ${c.load1.toFixed(2)} over ${c.cores} cores`);
   if (c.trees.length) console.log(`other worktrees running : ${c.trees.join(', ')}`);
   console.log(`VERDICT: ${c.verdict}`);
