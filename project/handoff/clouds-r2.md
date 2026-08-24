@@ -273,6 +273,50 @@ anchors), `tmp/cl2-maskstat.mts` (the same on a rendered frame),
 `tmp/cl2-cloudval.mts` (cloud value distribution by row band, sky-masked),
 `tmp/cl2-crop.mts`.
 
+## Gates
+
+**16/16**, re-run clean. `pnpm run check` first reported 15/16 with `uxcheck`
+failing on `page.evaluate: Target page, context or browser has been closed` —
+`cleanup.mts` then printed *"stale registry for a dead daemon (pid 7991);
+cleared"* and the standalone re-run is **93/93**. That is the landmine, exactly
+as written: a stale registry looks precisely like a code regression, and the
+daemon's uptime had dropped from 1850 s to 252 s mid-run. `floatcheck`, red at
+the start of this session, now passes — another lane's fix, not this one's.
+
+`horizoncheck` is the one gate that could plausibly have moved on a cloud
+change, since it classifies sky against terrain at the skyline. Run standalone:
+**PASS, worst MCC 0.766**, identical to the recorded baseline.
+
+## Perf — NOT certified, and the instrument says so itself
+
+`perf.mts` on the six sky-heavy shots came back **`RULER_VALID: false`, VOID
+RUN**, and refused to certify anything:
+
+> The noise floor is 1.75 ms against a 5.1 ms frame (34%), so nothing in this
+> frame is separable. The floor GREW during the run (0.65 → 1.75 ms) … wait
+> until the other worktrees are quiet and measure again.
+
+Three other lanes were live for the whole of this session — **99 vite processes**
+at the moment of the run — and a first `pnpm run check:perf` over the full
+corpus was abandoned after 33 minutes when the daemon restarted underneath it
+and dropped its exclusive lease. **So there is no perf number for this lane and
+the next agent has to take one.** Do not read the void run's two flagged rows
+(`zone_vannath` +1.80 ms, `vista_overcast` +2.30 ms) as a regression: the tool
+prints them and then says in the same breath that nothing in the run is
+separable.
+
+What *is* deterministic and can be quoted: **draw calls are unchanged**, because
+this whole change is fragment work inside a pass that already existed. Across
+the twelve review shots, 532–785 against a cap of 800 — the same range as the
+recorded 532–743, with `storm` at 785 the only shot near it and `storm` was
+already the outlier.
+
+**Where the honest risk is**, for whoever takes the ruler: the march slab is now
+wider by `uBaseSag * (uCloudTop - uCloudBottom)` at both ends, which is ±756 m
+on `clear` and ±1180 m on `storm`, so rays that used to miss the layer now enter
+it and take an empty-space-skip pass. And `covLo` 0.54 → 0.42 puts cloud in more
+columns. Both are real fill costs and neither has been measured.
+
 ## Files touched
 
 `src/world/sky/Clouds.ts`, `src/world/Sky.ts`. Nothing else.
