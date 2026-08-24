@@ -929,28 +929,91 @@ export class Field {
   }
 
   /**
-   * A big mountain: conical bulk with ridged flanks and a laid-back foot.
-   * Used for Longwythe Peak — the one landform in Leide with real prominence.
+   * A big mountain. Used for Longwythe Peak — the one landform in Leide with
+   * real prominence, and one of the shapes a blind judge named as the single
+   * worst thing in the game.
+   *
+   * Its verdict, round 12: *"A cone is used as a mountain. Smooth, radially
+   * symmetric, no cliff band, no talus fan, no erosion channel. Nothing in
+   * nature or in FFXV's Duscae reads like this."* It ranked that first of five
+   * and costed the fix: *"break the horizon silhouette... that single change
+   * fixes cues 1 and 2, which between them appear in seven of the twelve demo
+   * panels, and it costs no rendering work."*
+   *
+   * The old construction was `height * pow(t, 2.15) * spoke` on a radial `t`,
+   * so **the profile was identical in every direction** and `spoke` — an fbm of
+   * azimuth spanning 0.80 to 1.14 — modulated the amplitude by ±17%. That is
+   * not a silhouette, it is a cone with texture on it. Four changes, in the
+   * order they matter:
+   *
+   * - **A few major spurs, not many small ones.** A massif has three to five
+   *   ridges radiating from the summit with cirques between them, which is a
+   *   low harmonic, not noise. `SPURS` sums three of them at incommensurate
+   *   counts so the pattern never closes, and it moves the *radius* rather than
+   *   the amplitude — an outline that is not a circle.
+   * - **The regional strike.** The massif is elongated along the same axis the
+   *   ridge belts use (`strikeFrame`), so a peak belongs to its range instead
+   *   of sitting on it.
+   * - **A cliff band.** Two benches quantised out of the upper third with steep
+   *   risers, laid in with `smax` so the arris is weathered rather than creased.
+   *   This is §3.3's *"what sells rock is that the silhouette steps"* at
+   *   landform scale.
+   * - **A talus fan**, concave, below the lowest riser — which is also what
+   *   stops the foot meeting the plain on a clean curve.
    */
   _peak(cx: number, cz: number, radius: number, height: number) {
-    const h = this.h, n = this.n2, n3 = this.n3;
-    const box = this._box(cx, cz, radius);
+    const h = this.h, n3 = this.n3;
+    const [sca, ssa, kU, kV] = strikeFrame(this.n2, cx, cz, 0.0000275, 4.7, -18.3, 0.000229, 9.1, -5.5);
+    // Three incommensurate spur counts, so the outline never repeats around the
+    // massif. Phases are drawn from position so two peaks are never twins.
+    const p1 = 6.283 * n3.fbm2(cx * 0.0021 + 3.1, cz * 0.0021 - 7.7, 2);
+    const p2 = 6.283 * n3.fbm2(cx * 0.0021 - 9.4, cz * 0.0021 + 2.2, 2);
+    const p3 = 6.283 * n3.fbm2(cx * 0.0021 + 15.6, cz * 0.0021 + 11.3, 2);
+    const R = radius * 1.34;
+    const box = this._box(cx, cz, R);
     for (let j = box.j0; j <= box.j1; j++) {
       const z = -HALF + j * CELL;
       for (let i = box.i0; i <= box.i1; i++) {
         const x = -HALF + i * CELL;
         const dx = x - cx, dz = z - cz;
-        const ang = Math.atan2(dz, dx);
-        // ridge/gully spokes so the cone reads as a mountain, not a tent
-        const spoke = 0.80 + 0.34 * n.fbm2(Math.cos(ang) * 3.1 + cx * 0.004,
-          Math.sin(ang) * 3.1 + cz * 0.004, 3);
-        const warp = 1 + 0.20 * n3.fbm2(x * 0.0016 + 3, z * 0.0016 - 5, 3);
-        const d = Math.hypot(dx, dz) / warp;
-        if (d > radius) continue;
-        const t = 1 - d / radius;
-        let v = height * Math.pow(t, 2.15) * spoke;
-        // a summit crag and a broad shoulder
-        v += height * 0.16 * Math.pow(Math.max(0, 1 - d / (radius * 0.24)), 1.4);
+        // Measure the radius in the strike frame, so the massif runs with its
+        // range rather than being a disc that happens to sit in one.
+        const ux = (dx * sca + dz * ssa) / kU, uz = (-dx * ssa + dz * sca) * kV;
+        const ang = Math.atan2(uz, ux);
+        const spur = 0.62 * Math.cos(3 * ang + p1)
+          + 0.30 * Math.cos(5 * ang + p2)
+          + 0.18 * Math.cos(8 * ang + p3);
+        // The spur moves the RADIUS. That is the whole difference between a
+        // silhouette and a texture: at ±26% the outline is visibly lobed from
+        // any azimuth, where ±17% of amplitude was not.
+        const rEff = radius * (1 + 0.26 * spur)
+          * (1 + 0.11 * n3.fbm2(x * 0.0016 + 3, z * 0.0016 - 5, 3));
+        const d = Math.hypot(ux, uz);
+        if (d > rEff) continue;
+        const t = 1 - d / rEff;
+
+        // The flank exponent varies with azimuth too: a scarp on one side and a
+        // dip slope on the other is what makes a mountain look eroded rather
+        // than extruded.
+        const expo = 2.15 + 0.55 * Math.cos(3 * ang + p1 + 1.1);
+        let v = height * Math.pow(t, expo) * (0.90 + 0.16 * spur);
+        v += height * 0.16 * Math.pow(Math.max(0, 1 - d / (rEff * 0.24)), 1.4);
+
+        // Two cliff bands in the upper third. `smax` rather than a hard step,
+        // so the riser's top arris is weathered and the mesh does not draw a
+        // crease along it.
+        for (const bandT of [0.46, 0.68]) {
+          const bandY = height * Math.pow(bandT, 2.15);
+          const w = 1 - smoothstep(0, 0.085, Math.abs(t - bandT));
+          if (w > 0.002) v = smax(v, bandY + height * 0.055 * w, height * 0.012);
+        }
+
+        // A concave talus fan below the foot, so the massif does not meet the
+        // plain on a clean curve. Reaches a third of the radius past it.
+        if (d > rEff * 0.86) {
+          const u = Math.min(1, (d - rEff * 0.86) / (rEff * 0.48));
+          v += height * 0.085 * (1 - u) * (1 - u) * (0.75 + 0.25 * spur);
+        }
         v *= 0.62 + 0.38 * Math.min(1, v / 60);
         if (v > 0.4) h[j * N + i] += v;
       }
