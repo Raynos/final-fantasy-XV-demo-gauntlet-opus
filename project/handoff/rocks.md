@@ -295,6 +295,19 @@ closed cell. A single-scale Worley ridge reads as scales at every scale.
    (`tmp/shots/rocks-r5/zone_callaegh.jpg`, the near cluster). `uvScale` is per
    kind and is this lane's; `rockMaterial`'s tile is not.
 
+### THE CAPTURE DAEMON IS CRASH-LOOPING — every lane is affected
+
+`node src/tools/daemon.mts --health` reports **`uptimeSec` 9**, then 227, then 9
+again. It is restarting every few seconds, and every request through it —
+`shoot`, `probe`, `floatcheck`, at `--dirty` and at `--build HEAD` alike — comes
+back `Error: socket hang up  code: ECONNRESET`. `cleanup.mts` says
+`clean — no orphaned servers or browsers`, so it is not an orphan, and it
+started after `544dc94` / `db61f11` (harness lane, deadline and CDP-port work).
+**This is not a rocks-lane problem and I cannot fix it — I do not own
+`src/tools/`.** It is why the last stretch of this lane is measured in bare Node
+and not in frames. Whoever reads this: check `--health` before concluding that a
+capture failure is your own build.
+
 ### The scatter wiring is landed but UNPHOTOGRAPHED
 
 `654c4e7` replaces the entire boulder-field point process — `_genCell` no longer
@@ -307,15 +320,39 @@ it is not an orphan of mine. Whoever picks this up: capture `poi_haven`,
 `zone_callaegh`, `zone_three_valleys` and `hero_full` **first**, before anything
 else in this file. The specific risks, in order of how much they would cost:
 
-- **Density.** The sampler's parent intensity and `_density` as a `bias`
-  multiply, and I have not checked the resulting instance counts against the
-  near/far `CAP` table. Too many and the caps silently drop stones (`emit`
-  skips once `g.nw >= g.nearMax`); too few and Leide empties out.
+- **Density — FOUND AND FIXED IN BARE NODE, `69829e7`.** The first wiring
+  passed the whole of `_density` as `bias` and that stripped the boulder field
+  to **a tenth**. `rockSuit` already encodes where stone belongs from the
+  erosion pass, and `rockScatter`'s `reject` already carries road, water and
+  cleared-pad exclusions; multiplying a second suitability field over both
+  counts the same thing twice at the parent, where survival is most expensive.
+  `dress.rockD` — which is what `handoff/scatter.md` actually said — plus the
+  restored spall apron brings it back. Instances per 56 m cell over 169 cells:
+
+      zone            _density bias   rockD bias   the old process
+      longwythe            1.81          11.75          9.98
+      three_valleys        1.50           9.65         13.50
+      callaegh             0.48           3.64          3.91
+      fallgrove            0.73           6.19          7.07
+      ravatogh             0.59           4.53          5.38
+
+  **Nothing in the game would have said so.** `emit` drops an instance silently
+  once a group's cap is full and says nothing at all when a cap is nowhere near
+  full; there is no gate anywhere on "is the world as full as it was". It would
+  have read in a frame as *Leide looks a bit bare*, which is a sentence nobody
+  bisects. `tmp/rockcount.mts` is the bench; it runs the real `rockScatter`
+  against the real bake and carries a transcribed copy of the old `_genCell`,
+  labelled as a copy, for the one before/after.
 - **The `radius` estimate** (`0.7 + 4.2 u^1.65 × rockS`) approximates `_item`'s
   size draw rather than being it, so the claimed footprint and the placed one
-  can disagree. If boulders interpenetrate, that is the number.
+  can disagree. If boulders interpenetrate in a frame, that is the number.
 - **`fromParent` thresholds** (blocks < 1.0, chips > 1.2) are unmeasured guesses
   about the sampler's `spread` of 13 m.
+- **The per-child rejection is deliberately absent.** Thinning children by a
+  second suitability field re-imposes its near-uniform statistics on the cluster
+  and shreds it back to Poisson — §2.3's named mistake, which the first wiring
+  reintroduced. If someone "fixes" a density problem by adding a child-level
+  `if (d < x) continue`, they have undone the item.
 
 ## Shots
 
