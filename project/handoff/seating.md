@@ -224,34 +224,94 @@ withdrawn.** It costed +1 to +2 draws on 23 landmarks to fix a float that turned
 out to be a seating recipe applied to a kit it was never written for. Seating
 them on the finest ring costs nothing and fixes the burials as well.
 
-**The 7.6x ablation disagreement is NOT reconciled** and I did not get to it —
-see *What is left*.
+### The 7.6x ablation disagreement, reconciled — and the ablation is the liar
+
+`handoff/town.md` recorded `--hide poi_kits` costing **349 draws and 3.95 M
+triangles** at `town_forecourt`, against an in-page count of the same frame
+showing **46 meshes and 0 shadow casters**, and said plainly that one of the two
+was not measuring what its name said. It is the ablation.
+
+Everything below is at one pinned build, `sha:b3122ae5afa5`, `--raw` on every
+half, taken back to back:
+
+| frame | calls | triangles |
+|---|---:|---:|
+| control | 1434 / 1414 / 1414 | 16.32 / 16.30 / 16.30 M |
+| `--hide poi_kits` | 1085 / 1085 | 11.795 M |
+| `--hide poi_` | 1085 / 1085 | 11.795 M |
+| `--hide grass` | 971 | 11.540 M |
+| **`--hide poi_landmark_fossil_wood`** | **1113** | **11.802 M** |
+
+The last row is the control that settles it. `poi_landmark_fossil_wood` is **one
+waymark: 4 meshes, 1,334 triangles, no shadow casters** — counted in the page,
+after `applyShot('town_forecourt')`, in `tmp/probes/abl.mts`. Hiding it removes
+**301 draws and 4.50 M triangles**. That is arithmetically impossible as an
+effect of the object, and it is within 12 draws of what hiding the entire POI
+system removes.
+
+**So an `--hide` frame renders with materially less streamed content than its
+control — about 320 draws and 4.5 M triangles of it — and that offset is present
+whatever you hide.** Any `--hide` delta taken against a plain control in this
+repo has that offset in it and is not a cost.
+
+The in-page count is the one that was right. At this shot `poi_kits` holds 8
+built groups, **4 visible, 30 visible meshes, 0 shadow casters, 8,240
+triangles**. (46 was the town lane's count of 7 groups at a different moment.)
+
+**And the ablation is still usable if you difference it against another
+ablation rather than against the control**, because the offset cancels:
+
+```
+--hide poi_kits            1085 calls   11.7953 M
+--hide poi_landmark_...    1113 calls   11.8017 M
+                          ------------------------
+the other 26 POI meshes      28 calls        6.4 k triangles
+```
+
+28 draws and 6.4 k triangles for everything in `poi_kits` except one waymark —
+against an in-page truth of 30 meshes and 8.2 k triangles minus that waymark's 4
+and 1.3 k, which is **26 meshes and 6.9 k**. The two instruments agree to within
+two draws once the offset is cancelled.
+
+**The POI kits cost about thirty draws in this frame, not 349.** `town_forecourt`
+is 993–1434 for other reasons, and nothing in this lane's remit is where its
+budget is going.
+
+This is `src/tools/shoot.mts` / `harness.mts`, which this lane does not own —
+reported, not fixed. It is the eighth instrument here to be caught measuring
+something other than its name.
 
 ## 5. `pnpm run check`
 
-**15/16 in the run, and the sixteenth is the daemon landmine, not a
-regression.** `combatloop` came back `FAIL 69.95s page.evaluate: Target page,
-context or browser has been closed` — the exact signature `LANDMINES.md` records
-for a page lost under contention. Re-run on its own, on the same commit,
-unchanged: **31/31 mechanics verified**. `daemon --health` showed `uptimeSec`
-290 at the time, i.e. the daemon had restarted mid-suite.
+**Every one of the 16 passes, and no gate failed twice — but no single run of
+the suite was clean, and saying "16/16" without that sentence would be a lie.**
 
-Everything else passed, including the ones that could plausibly have been broken
-by this lane: `geocheck` (which checks seating), `driftcheck`, `reachcheck`,
-`floatcheck`, `roadcheck`, `silhouette`, `orphans`.
+| run | result | failed |
+|---|---|---|
+| first | 15/16 | `combatloop` — `Target page, context or browser has been closed` |
+| second | 14/16 | `reachcheck`, `heightcheck` — both `Node.js v24.18.1` crash tails |
+
+`combatloop` passed **31/31** in the second run and again on its own.
+`reachcheck` and `heightcheck` both pass on their own on the same commit
+(`reachcheck: every must-run path executed`; `heightcheck` `d 0.000` on every
+row). `daemon --health` showed `uptimeSec` 290 during the first run — the daemon
+had restarted mid-suite. This is the LANDMINES daemon signature, three times,
+under six lanes sharing one machine; it is not a regression and the union of the
+two runs plus the re-runs covers all sixteen.
+
+Everything that could plausibly have been broken by this lane passed in both
+runs: `geocheck` (which checks seating), `driftcheck`, `floatcheck`,
+`roadcheck`, `silhouette`, `orphans`.
 
 ## 6. What is left, in priority order
 
-1. **The 7.6× ablation disagreement is still open and nobody should act on
-   either number.** `handoff/town.md` records `--hide poi_kits` costing 349
-   draws against an in-page count of 46 meshes with no shadow casters in the
-   same pinned frame. I did not get to it. What I *can* add is that `--hide` is
-   a **name-substring** match over the whole scene graph (`shoot.mts:76`), and
-   POI groups are named `poi_<type>_<id>` while `PoiKits.root` is not — so
-   `--hide poi_kits` may well be matching nothing at all and the 349 is two
-   different frames of a moving trunk. **`--hide poi_` is the string that
-   actually matches**, and I used it successfully for the ablations in §3. A
-   `--hide` that matches nothing must be an error; check whether it is.
+1. **Fix `--hide` in `shoot.mts`.** §4 shows an ablation frame rendering with
+   ~320 draws and 4.5 M triangles less streamed content than its control,
+   whatever is hidden — measured by hiding one 4-mesh, 1,334-triangle waymark
+   and watching 301 draws leave the frame. Until it is fixed, **an `--hide`
+   delta against a plain control is not a cost**, and the workaround is to
+   difference two ablations against each other so the offset cancels. Not this
+   lane's file.
 2. **The haven pad still reads as a large smooth cone.** The facets are gone but
    there is no surface incident on 30 m of batter — no scree, no rills, no tonal
    break between fill and undisturbed ground. That is `Wear`'s vertex-colour
