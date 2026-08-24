@@ -500,9 +500,14 @@ const SHOT_TABLE = {
     pos: [-1640, 108.0, 690], target: [-2010, 28.0, 470], fov: 46,
   },
   zone_nebulawood: {
+    // Re-framed 2026-08-24. The old pose descended INTO a canopy that has since
+    // grown, and the frame was a wall of leaf cards — no trunks, no forest
+    // floor, no dreadnought, none of the foreground/midground/background
+    // separation `BRIEF.md` asks for. A blind judge and two lanes independently
+    // called it unreadable, and it is one of `compare.mts`'s 30 judged shots.
     doc: 'The Nebulawood: wet forest floor with the Niflheim dreadnought over it',
     time: 11.5, weather: 'overcast',
-    pos: [-1300, 88.8, -880], target: [-1600, 53.3, -1180], fov: 46,
+    pos: [-1420, 132, -980], target: [-1600, 50, -1200], fov: 48,
   },
   zone_mencemoor: {
     // Reframed after the meteor moved to its own zone centre (-1020, -2160).
@@ -570,9 +575,13 @@ const SHOT_TABLE = {
   // entries only — the three shots below say so in their doc rather than
   // pretending. The full type set is reviewable in `menu_map_wide`.
   poi_haven: {
+    // Re-framed 2026-08-24 onto `longwythe_haven` (962, -712). The old pose sat
+    // near the world origin, which is not any of the nineteen havens, and the
+    // camera ended up inside a rock — a blind judge called it out as "40% of
+    // frame is unlit interior surface, no subject, nothing composed".
     doc: 'A haven: the rune-marked camp rock and its fire on a raised flat',
     time: 18.4, weather: 'clear',
-    pos: [-60, 16.2, -30], target: [-99.6, 9.6, -59.7], fov: 40,
+    pos: [996, 40, -688], target: [962, 31, -712], fov: 48,
   },
   poi_parking: {
     doc: 'A parking spot: the gravel lay-by and its bus shelter off Route 1',
@@ -713,9 +722,14 @@ const SHOT_TABLE = {
     pos: [2900, 135.8, -1500], target: [2700, 77.7, -2300], fov: 36,
   },
   landmark_meteor: {
+    // Re-framed 2026-08-24. The old pose looked at z = +1620 while the Disc of
+    // Cauthess is at z = -2160 — **3.8 km in the wrong direction**, at the
+    // Fallgrove. The shot named for a 1.5 km hero landmark had not contained it
+    // for a long time, which is why the Meteor's own 5/10 grade was given from
+    // purpose-framed captures this shot could neither confirm nor refute.
     doc: 'The Meteor of the Disc backlit, its fissures still burning',
     time: 17.6, weather: 'clear',
-    pos: [-900, 55.7, 1400], target: [-1400, 104.4, 1620], fov: 42,
+    pos: [-1020, 150, -3560], target: [-1020, 340, -2160], fov: 50,
   },
   landmark_dreadnought: {
     doc: 'The Niflheim dreadnought hanging nose-down over the Nebulawood',
