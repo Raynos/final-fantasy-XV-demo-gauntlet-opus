@@ -276,10 +276,20 @@ export function makeRiverBankMaterial(noise: THREE.Texture | null): THREE.Shader
         wet = mix(wet, 1.0, smoothstep(0.02, -0.06, above));
         wet *= smoothstep(-1.20, -0.45, above) * 0.5 + 0.5;
 
-        // Spray, only where the reach is fast enough to make any.
+        // Spray, only where the reach is fast enough to make any AND only in
+        // the first quarter of the bank.
+        //
+        // Gated on elevation alone it covered the whole decal, because a bank
+        // that climbs 1.5 m over 13 m is inside the elevation window for almost
+        // all of its width -- and the decal is the wider of the two surfaces, so
+        // the river came back as a thirty-nine metre streak of white lace with a
+        // three-metre stream somewhere inside it. Spray needs BOTH: low enough
+        // above the water, and close enough to it.
         float fr = smoothstep(0.60, 1.15, froude);
         float lace = texture2D(uNoise, vec2(station * 0.09 - uTime * 0.22, above * 0.9)).y;
-        float spray = fr * smoothstep(0.52, 0.92, lace) * (1.0 - smoothstep(limit * 0.4, limit * 1.6, above));
+        float spray = fr * smoothstep(0.66, 0.95, lace)
+          * (1.0 - smoothstep(limit * 0.4, limit * 1.6, above))
+          * (1.0 - smoothstep(0.05, 0.34, vUv.x));
 
         vec3 lit = uSunColor * max(uSunDir.y, 0.0) * 0.55 + uAmbient * 1.6;
         vec3 V = normalize(uCameraPos - vWorld);
@@ -287,7 +297,7 @@ export function makeRiverBankMaterial(noise: THREE.Texture | null): THREE.Shader
         vec3 sheen = uAmbient * (graze * wet * 1.4 * near);
 
         float mul = mix(1.0, uWetDark, wet * near);
-        gl_FragColor = vec4(lit * spray * 0.8 * near + sheen, mul);
+        gl_FragColor = vec4(lit * spray * 0.30 * near + sheen, mul);
       }
     `,
   });
