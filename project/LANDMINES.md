@@ -386,6 +386,48 @@ of why trunks have always read as posts stuck in dirt.
 orientation-*relative*, and a flare is a disconnected shell. The check that
 catches it has to be orientation-absolute.
 
+## `cleanup.mts` reports "clean" while 96 orphaned vite servers hold 40 GB
+
+Measured 2026-08-24, at the end of a night in which the capture daemon restarted
+many times: **96 `vite` processes with PPID 1**, some ten hours old, holding
+**39.7 GB** of RSS between them. `cleanup.mts` printed `clean — no orphaned
+servers or browsers`.
+
+The reason is in its own first line: `no capture daemon registered`. With no
+daemon in the registry it has nothing to compare against, so it protects nothing
+**and detects nothing** — and the failure is silent and reads as reassurance.
+Each orphan is a server whose parent daemon died without reaping it.
+
+This is why **every `perf.mts` run that night voided.** One returned
+`RULER_VALID: false` with its noise floor *growing* 0.65 -> 1.75 ms during the
+run against a 5.1 ms frame; a full `check:perf` was abandoned after 33 minutes.
+A perf number is meaningless with a hundred servers on the machine, and nothing
+in the harness says so.
+
+Until `cleanup` learns to find them:
+
+```
+ps -eo pid,ppid,command | grep '[v]ite/bin/vite.js' | awk '$2==1{print $1}' | xargs -r kill
+```
+
+PPID 1 is the discriminator — a live daemon's servers are its children, so a
+parentless one is always an orphan and is always safe to kill.
+
+## `--hide` renders less than its control, whatever you hide
+
+Reconciling a **7.6x** disagreement between two instruments measuring the same
+frame: hiding **one waymark** — 4 meshes and 1,334 triangles, counted in-page —
+removed **301 draws and 4.50 M triangles**, within 12 draws of hiding the entire
+POI system.
+
+Every `--hide` frame renders about **320 draws and 4.5 M triangles less streamed
+content than its control, whatever you hide.** The ablation perturbs streaming,
+not just visibility. So a single `--hide` difference is not a cost, and **every
+cost ever attributed this way is inflated by that offset**.
+
+Differencing *two* ablations cancels it, and the two instruments then agree to
+within two draws: the POI kits cost **~30 draws** at `town_forecourt`, not 349.
+
 ## Names nothing ever verified
 
 A guess about a name compiles. `a.b || a.c || a.d` reads like defensive coding
