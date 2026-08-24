@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { MeshBuilder, ribbon, clamp01, smooth, lerp } from './Geo.ts';
 import { skullSampler, HEAD_R } from './Face.ts';
+import { CARD_VARIANTS } from './Materials.ts';
+import { assertCardOrientation } from '../../util/GeoAssert.ts';
 import { Rng } from '../../util/Rng.ts';
 import { Noise } from '../../util/Noise.ts';
 import type { Rig } from './Skeleton.ts';
@@ -65,6 +67,197 @@ const guideBlend = (
   );
   return out;
 };
+
+/**
+ * Points across each face of a card; the closed ring is twice this.
+ *
+ * Five puts a vertex every 3.0–3.6 mm across a 12–18 mm card, i.e. every 5.7–6.8
+ * px at `hero_portrait`. That is what makes the cross-section read as *round*
+ * rather than as a chamfered plate — see `CARD_ROUND`.
+ */
+const CARD_ACROSS = 5;
+
+/**
+ * Depth of a card's cross-section as a fraction of its half-width.
+ *
+ * §8.3: *"card cross-section slightly round, so the specular is a band, not a
+ * plate"*. A flat card has one normal over its whole width and therefore lights
+ * all at once — a mirror flash. At 0.28 the surface normal swings about ±20°
+ * across the card, so the base specular covers roughly a third of the width and
+ * travels across it as the light moves.
+ *
+ * In pixels: a 15 mm card is 4.2 mm deep, which is **8 px at `hero_portrait`**
+ * and 1.0 px at `hero_full` — so the band is a real feature at portrait range
+ * and correctly washes out to a single value at full-figure range, which is
+ * where a lock should read as one filament and not as a lit tube.
+ */
+const CARD_ROUND = 0.28;
+
+/** Scratch for the card frame — module-level, one card at a time. */
+const _cf = new THREE.Vector3(), _cr = new THREE.Vector3(), _cp = new THREE.Vector3();
+const _cu = new THREE.Vector3();
+
+/** Mean of `sin(pi*s)^0.55` over `s`, so the edge darkening can be mean-preserving. */
+const CREST_MEAN = (() => {
+  let a = 0;
+  const N = 512;
+  for (let i = 0; i < N; i++) a += Math.pow(Math.sin(Math.PI * (i + 0.5) / N), 0.55);
+  return a / N;
+})();
+
+/** Reported once per build: an orientation failure is a bug, not a per-card event. */
+let _cardAssertFailed = false;
+
+export interface CardOpts {
+  /** centreline control points, already in mesh space. */
+  points: THREE.Vector3[];
+  steps: number;
+  /** half of the card's width, in mesh units. Full width is twice this. */
+  halfWidth: number;
+  /** which of `hairCut`'s strand layouts this card takes. */
+  variant: number;
+  /** frame reference per point: the scalp normal the card should lie flat on. */
+  upAt: (p: THREE.Vector3, out: THREE.Vector3) => THREE.Vector3;
+  /** width multiplier along the card. */
+  taper: (t: number) => number;
+  color: THREE.Color;
+  tipColor: THREE.Color;
+  /** strength of the mean-preserving edge/root value spread. */
+  spread?: number;
+}
+
+/**
+ * One hair card — plan §8.3's unit, and the thing this file was missing.
+ *
+ * ## Why this is not `ribbon()`
+ *
+ * `ribbon` builds a rolled pipe whose `u` runs *around* the section, sampled at
+ * uniform **angle**. For a section 5× wider than it is deep that bunches the
+ * samples at the two edges and stretches `u` non-linearly across the face,
+ * which is exactly the coordinate a strand cutout has to be uniform in. A card
+ * is parameterised across its **width** instead, and its `v` is banded so the
+ * alpha map can find it (see `hairCutTexture` in `Materials.ts`).
+ *
+ * ## The arithmetic, before any of it was built (§8.5)
+ *
+ * | feature | mm | `hero_portrait` @1.9 px/mm | `hero_full` @0.24 px/mm |
+ * |---|---|---|---|
+ * | card width | 12–18 | 23–34 px | 2.9–4.3 px |
+ * | card depth | 3.4–5.0 | 6.5–9.6 px | 0.8–1.2 px |
+ * | filament in alpha | 1.3–2.5 | 2.5–4.7 px | 0.3–0.6 px (mipped) |
+ * | tip taper (last third of 85 mm) | 28 | 53 px | 6.8 px |
+ * | root value ramp (first 35%) | 30 | 57 px | 7.2 px |
+ * | *the old opaque lock* | *1.1–2.1* | *2–4 px* | ***0.3–0.5 px*** |
+ *
+ * The last row is the whole reason for this function: sub-pixel **geometry**
+ * can only shimmer, sub-pixel **texture** filters. Nothing here lands under
+ * ~2 px except the filaments, and those are in the alpha map on purpose.
+ *
+ * ## Winding
+ *
+ * `Geo.ts`'s `ribbon()` was wound backwards for months and `DoubleSide` hid it,
+ * and a card is precisely the primitive that bug lived in. Every card checks
+ * itself with the method lane's `assertCardOrientation`, which is *transpose-
+ * and mirror-sensitive* — UV area is invariant under both, which is how the
+ * sibling's version of this survived four rounds. The expected handedness is
+ * `+1`: `v` runs −1 → −2 from root to tip (negative because that is the band
+ * the alpha map reads), and with the ring running in +width the first
+ * triangle's uv cross product is positive.
+ */
+export function emitCard(B: MeshBuilder, o: CardOpts) {
+  const curve = new THREE.CatmullRomCurve3(o.points, false, 'centripetal', 0.5);
+  const N = CARD_ACROSS, RING = N * 2;
+  const uSpan = 1 / CARD_VARIANTS;
+  const u0 = (o.variant % CARD_VARIANTS) * uSpan;
+  const E = o.spread ?? 0.55;
+  const halfDepth = o.halfWidth * CARD_ROUND;
+  // Root darkening, mean-preserving in exactly the same way: `h` is 0 at the
+  // root and 1 by 35% of the length, so subtracting its own mean darkens the
+  // roots and lifts the body instead of dimming the whole card. §8.3's note is
+  // specific — their first build "lost the luminance variance", and variance is
+  // "the only thing separating hair from a hat at distance". Preserving the
+  // mean is what stops a value-spread pass from being a brightness pass.
+  const hMean = 1 - 0.35 / 2;
+  const rows: number[][] = [];
+  let a0 = 0, b0 = 0, b1 = 0;
+  const c = new THREE.Color();
+  for (let i = 0; i <= o.steps; i++) {
+    const t = i / o.steps;
+    const p = curve.getPoint(t);
+    const tan = curve.getTangent(t).normalize();
+    o.upAt(p, _cu);
+    _cf.copy(_cu).addScaledVector(tan, -_cu.dot(tan));
+    if (_cf.lengthSq() < 1e-6) _cf.set(0, 1, 0).addScaledVector(tan, -tan.y);
+    _cf.normalize();
+    _cr.crossVectors(_cf, tan).normalize();
+    const k = o.taper(t);
+    const w = o.halfWidth * k, h = halfDepth * k;
+    B.tang(tan.x, tan.y, tan.z);
+    // root at v = -1, tip at v = -2: `alphaMap.repeat.y = 0.5, offset.y = 1`
+    // maps that onto the cutout's own half of the texture, and leaves every
+    // other emitter in this file clamped to the solid row. Nothing else in the
+    // hair mesh had to change.
+    const vAlong = -1 - t;
+    const rootDark = 1 + 0.30 * (smooth(t / 0.35) - hMean);
+    const row: number[] = [];
+    for (let j = 0; j < RING; j++) {
+      const s = j <= N ? j / N : (RING - j) / N;
+      const sgn = j <= N ? 1 : -1;
+      // a rounded section: zero depth at the two silhouette edges, full depth
+      // over the middle, so the card has a crest rather than a fold
+      const dep = sgn * Math.pow(Math.sin(Math.PI * s), 0.62);
+      _cp.copy(p).addScaledVector(_cr, (s - 0.5) * 2 * w).addScaledVector(_cf, dep * h);
+      const crest = 1 + E * (Math.pow(Math.sin(Math.PI * s), 0.55) - CREST_MEAN);
+      c.copy(o.color).lerp(o.tipColor, t * t).multiplyScalar(Math.max(0.05, crest * rootDark));
+      B.color(c);
+      const idx = B.v(_cp.x, _cp.y, _cp.z, u0 + s * uSpan, vAlong);
+      row.push(idx);
+      if (i === 0 && j === 0) a0 = idx;
+      if (i === 1 && j === 0) b0 = idx;
+      if (i === 1 && j === 1) b1 = idx;
+    }
+    rows.push(row);
+  }
+  for (let i = 0; i < o.steps; i++) {
+    const a = rows[i], b = rows[i + 1];
+    for (let j = 0; j < RING; j++) {
+      const j2 = (j + 1) % RING;
+      B.quad(a[j], b[j], b[j2], a[j2]);
+    }
+  }
+  // close the tip; the alpha map has already faded to nothing there, so this
+  // is never seen — but an open pipe is a hole in the shadow map
+  const last = rows[o.steps];
+  const e = curve.getPoint(1);
+  B.tang(0, 1, 0);
+  const cap = B.v(e.x, e.y, e.z, u0 + 0.5 * uSpan, -2);
+  for (let j = 0; j < RING; j++) B.tri(last[j], last[(j + 1) % RING], cap);
+
+  // A build-time assert inside `init()` **hangs the boot** rather than failing
+  // it, so this reports and continues.
+  if (!_cardAssertFailed) {
+    try {
+      assertCardOrientation(cardStub(B, a0, b0, b1), 'hair card', 1);
+    } catch (err) {
+      _cardAssertFailed = true;
+      console.error(err);
+    }
+  }
+}
+
+/** The first triangle of a card, as much of a geometry as `GeoAssert` needs. */
+function cardStub(B: MeshBuilder, a: number, b: number, c: number) {
+  const P: number[] = [], U: number[] = [];
+  for (const i of [a, b, c]) {
+    P.push(B.pos[i * 3], B.pos[i * 3 + 1], B.pos[i * 3 + 2]);
+    U.push(B.uv[i * 2], B.uv[i * 2 + 1]);
+  }
+  return {
+    getAttribute: (n: string) => (n === 'position' ? { array: P, itemSize: 3, count: 3 }
+      : n === 'uv' ? { array: U, itemSize: 2, count: 3 } : undefined),
+    getIndex: () => null,
+  };
+}
 
 /**
  * Hair.
@@ -262,9 +455,59 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
   const guides = H.guides && H.guides.length >= 2 ? fitGuides(H.guides) : null;
   const _gs = new THREE.Vector3();
 
+  // ---- cards -------------------------------------------------------------
+  //
+  // §8.3's unit, and §8.5's arithmetic for why. A scalp lock is emitted as one
+  // alpha card of 12-18 mm carrying 5-7 filaments in the cutout, not as three
+  // opaque tubes of 1.1-2.1 mm. `emitCard` above carries the pixel table.
+  //
+  // The count follows from coverage, not from taste. A groom's scalp is roughly
+  // a 95 mm hemisphere, about 57 000 mm^2. A card 15 mm wide and 85 mm long is
+  // 1 275 mm^2, so ~150 cards is two full layers and ~220 is three — which is
+  // where the head lane's "150-250 cards" comes from, and it is why the density
+  // is a *fraction of the authored root count* rather than a new number per
+  // tuft: it keeps every style's relative distribution (fringe vs crown vs
+  // nape) exactly as `Cast.ts` authored it. At 0.25 Noctis' 872 roots become
+  // 218 cards, replacing 2 616 tubes.
+  const cardDensity = H.cardDensity ?? 0.25;
+  /**
+   * The card's frame reference: the scalp normal *at the point*, not at the
+   * root.
+   *
+   * A card is flat, so its roll decides whether you see its face or its edge,
+   * and a guided lock turns through most of a right angle between the crown and
+   * the nape. Keyed on the root normal alone the far end of a long lock ends up
+   * tilted by that whole angle and presents its edge — which is a quill, i.e.
+   * the exact failure this lane exists to remove. The ellipsoid normal is
+   * cheap, needs no inverse of `sample`, and is within a couple of degrees of
+   * the sculpted normal at hair scale; past 1.9 skull radii it stops meaning
+   * anything and the root normal takes over.
+   */
+  const cardUp = (pw: THREE.Vector3, rootN: THREE.Vector3, out: THREE.Vector3) => {
+    const x = (pw.x - origin.x) / scale, y = (pw.y - origin.y) / scale, z = (pw.z - origin.z) / scale;
+    const nx = x / (rrH[0] * rrH[0]), ny = y / (rrH[1] * rrH[1]), nz = z / (rrH[2] * rrH[2]);
+    const l = Math.hypot(nx, ny, nz);
+    if (l < 1e-9) return out.copy(rootN);
+    out.set(nx / l, ny / l, nz / l);
+    const rn = Math.hypot(x / rrH[0], y / rrH[1], z / rrH[2]);
+    const k = clamp01((1.9 - rn) / 0.5);
+    return out.lerp(rootN, 1 - k).normalize();
+  };
+  // Cards take `hairCut`'s four strand layouts in turn rather than at random:
+  // a random draw over ~200 cards leaves runs of the same layout side by side,
+  // which is visible as a repeated filament pattern in exactly the place a
+  // parting should be.
+  let cardVariant = 0;
+
   // ---- tufts -------------------------------------------------------------
   for (const tuft of H.tufts) {
-    const n = tuft.n || 8;
+    // A beard is 5-8 mm long: a 15 mm card there is wider than the hair is
+    // long, so `absPhi` tufts keep the tube path. Everything on the scalp is a
+    // card.
+    const asCards = !tuft.absPhi && tuft.cards !== false;
+    const n = asCards
+      ? Math.max(2, Math.round((tuft.n || 8) * cardDensity))
+      : (tuft.n || 8);
     // Guides describe the scalp, in the same `(u, v)` chart the roots are placed
     // in. A beard is not on the scalp, so `absPhi` opts out by construction.
     const guided = !!guides && !tuft.absPhi && tuft.guided !== false;
@@ -378,6 +621,37 @@ export function buildHair(rig: Rig, look: Look): THREE.BufferGeometry {
       // full turn around each strand and can only ever produce speckle. This is
       // the smooth field the anisotropic band is read against.
       B.groom(nrm.x, nrm.y, nrm.z);
+
+      // ---- one card per root ----------------------------------------------
+      if (asCards) {
+        // 12-18 mm, authored in skull-radius units (`put` scales by
+        // `headScale`, which *is* the skull scale) so a groom rescales per
+        // character exactly as §8.3 requires. `cardW` lets a style push a tuft
+        // thinner or wider without leaving the band.
+        const cw = 0.015 * (tuft.cardW ?? 1) * (0.82 + 0.36 * rng.next());
+        emitCard(B, {
+          points: pts.map((q) => put(q)),
+          // 9 steps chords an 85 mm lock turning through ~90 degrees to within
+          // 0.2 mm, i.e. 0.4 px at portrait range
+          steps: tuft.steps && tuft.steps > 9 ? tuft.steps : 9,
+          halfWidth: cw * 0.5 * scale,
+          variant: cardVariant++,
+          upAt: (pw, out) => cardUp(pw, nrm, out),
+          // §8.3: "tips taper over the last third — a lock ends in a point".
+          // Widest just below the root, held through the body, then down to
+          // 16% over the last third. The *ragged* end is in the cutout, where
+          // each filament stops at its own length; the geometry only has to
+          // stop the card being a rectangle.
+          taper: (t: number) => (t < 0.66
+            ? 0.72 + 0.28 * smooth(t / 0.22)
+            : 1 - 0.84 * Math.pow((t - 0.66) / 0.34, 0.85)),
+          // the same wide per-lock value spread the tubes carried: at card
+          // scale it is finally resolvable, which is the point
+          color: tRoot.clone().lerp(tTip, 0.10 + 0.32 * Math.pow(rng.next(), 1.3)),
+          tipColor: tTip.clone().multiplyScalar(0.66 + 0.30 * rng.next()),
+        });
+        continue;
+      }
 
       // ---- clumping -------------------------------------------------------
       // One ribbon per root is what read as straw. At any strand width fine

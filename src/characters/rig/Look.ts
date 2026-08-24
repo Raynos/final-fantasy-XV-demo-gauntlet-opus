@@ -108,6 +108,18 @@ export interface HairTuft {
   /** ribbons emitted per root — several locks sharing a root and splaying. */
   clump?: number;
   splay?: number;
+  /**
+   * Emit this tuft as opaque tubes rather than as alpha cards.
+   *
+   * The default is cards for anything on the scalp; `absPhi` tufts (beards,
+   * sideburns, stubble) opt out by construction because they are 5-8 mm long
+   * and a 15 mm card is wider than the hair it would carry. Set `false` only
+   * with a *pixel* reason — see `emitCard` in `Hair.ts`, whose whole premise is
+   * that a sub-pixel opaque tube can only shimmer.
+   */
+  cards?: boolean;
+  /** card width multiplier on the style's 12-18 mm band. */
+  cardW?: number;
   /** weight on the `tail` spring bone, so the tuft swings. */
   spring?: number;
   rough?: number;
@@ -151,6 +163,16 @@ export interface HairStyle {
   halo?: number;
   /** how far the halo floats off the shell, as a multiple of the shell standoff. */
   haloLift?: number;
+  /**
+   * Cards emitted per authored root, 0..1 (default 0.25).
+   *
+   * A card carries 5-7 filaments in its cutout, so it replaces a whole clump of
+   * tubes, and it is 6-8x their width. `Cast.ts`'s root counts are still what
+   * sets a style's *distribution*; this sets how many cards that distribution
+   * is resolved into. See the block comment at `cardDensity`'s use in
+   * `Hair.ts` for the coverage arithmetic.
+   */
+  cardDensity?: number;
   /** default `clump` for tufts that do not set their own. */
   clump?: number;
 }

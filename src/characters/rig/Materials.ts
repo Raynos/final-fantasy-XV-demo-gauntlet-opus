@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { makeTexture, normalFromHeight, srgb } from '../../util/TextureGen.ts';
 import { Noise } from '../../util/Noise.ts';
+import { Rng } from '../../util/Rng.ts';
+import { clamp01, smooth } from './Geo.ts';
 import { EYE } from './Face.ts';
+
+const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 
 /**
  * Character materials.
@@ -434,6 +438,145 @@ interface MaterialTextures {
   poreFine: THREE.Texture;
   weave: THREE.Texture;
   hairStripe: THREE.Texture;
+  hairCut: THREE.Texture;
+}
+
+/** How many distinct strand layouts `hairCut` carries across its `u` axis. */
+export const CARD_VARIANTS = 4;
+
+/**
+ * The hair-card cutout — plan §8.3's "cards, not quills", as an alpha map.
+ *
+ * ## Why a texture and not geometry, in pixels (§8.5's pre-check)
+ *
+ * A lock in the old groom was an **opaque tube 1.1–2.1 mm across**. At
+ * `hero_portrait` (1.9 px/mm, measured by the head lane) that is **2–4 px** —
+ * individually resolvable, which is exactly why a head of them read as a broom
+ * of separate sticks. At `hero_full` (0.24 px/mm) it is **0.3–0.5 px**:
+ * sub-pixel *opaque geometry*, which no filter can resolve and which can only
+ * shimmer, because MSAA and TAA both work on coverage, not on a strand that
+ * misses the sample point entirely.
+ *
+ * A **card at 12–18 mm** is 23–34 px at portrait and 2.9–4.3 px at `hero_full`
+ * — above the ~2 px floor at both ends. The 4–8 strands inside it are 1.3–2.5
+ * mm, i.e. 2.5–4.7 px at portrait and 0.3–0.6 px at `hero_full`. **That is the
+ * whole trick**: the sub-pixel detail is carried by a *mipmapped texture*,
+ * where 0.5 px of strand averages to a coverage value, instead of by geometry,
+ * where it aliases.
+ *
+ * ## How it coexists with the rest of the hair mesh on one material
+ *
+ * The scalp shell, the flyaway halo, the hairline wisps and the eyebrows share
+ * `hairMaterial()` with the cards, and a second material would cost a draw call
+ * per character plus three shadow cascades. So the cutout is separated **by uv
+ * band**, using three.js's per-map uv transform (`alphaMapTransform`, r152+):
+ * `alphaMap.repeat.y = 0.5`, `offset.y = 1.0`, `wrapT = ClampToEdge`, so the
+ * sampled row is `v * 0.5 + 1`.
+ *
+ * | emitter | `v` | sampled row | alpha |
+ * |---|---|---|---|
+ * | cards | `-2 … -1` (tip … root) | 0.0 … 0.5 | the cutout |
+ * | everything else | `0 … 3.2` | ≥ 1, clamped | 1 (solid) |
+ *
+ * `map` (`hairStripe`) keeps `repeat = (1, 1)` and `wrapT = Repeat`, so it is
+ * completely unaffected: the shell still samples exactly what it sampled
+ * before, and a card at `v = -2 … -1` wraps onto the same `0 … 1` the old locks
+ * used. Nothing outside this function had to move.
+ *
+ * ## Nyquist, one level down (the rule that produced the burlap face)
+ *
+ * 512 wide / `CARD_VARIANTS` = **128 texels per card**, carrying 5–7 strands,
+ * so a strand is ~21 texels and its soft edge ~4. Well clear of the 2.5
+ * texels-per-feature floor `maxFreq` states. 256 rows carry a card's length; at
+ * portrait a 85 mm lock is 162 px, i.e. 1.6 texels per pixel.
+ *
+ * ## Coverage, and why it is ~0.62 and not ~0.4
+ *
+ * Alpha-test plus mipmaps thins a card at distance: as the mip chain averages,
+ * the body's alpha falls toward its mean coverage, and anything under
+ * `alphaTest` disappears. With mean coverage **0.62** against `alphaTest`
+ * **0.35** the *body* of every card survives to the coarsest mip — a lock reads
+ * as one solid 3–4 px filament at `hero_full`, which is right — while the
+ * *tips*, where coverage ramps through 0.35, shorten and soften with distance,
+ * which is also right. The opaque band is half the texture, so even the 1×1 mip
+ * averages to ~0.8 and the shell can never punch a hole in itself.
+ */
+function hairCutTexture(size = 512): THREE.Texture {
+  const data = new Uint8Array(size * size * 4);
+  const half = size >> 1;
+  // one deterministic strand layout per variant
+  const rnd = new Rng(90210);
+  const V: { c: number, hw: number, drift: number, end: number }[][] = [];
+  for (let k = 0; k < CARD_VARIANTS; k++) {
+    const nStr = 5 + (k % 3);
+    const margin = 0.045;
+    const span = 1 - margin * 2;
+    const strands = [];
+    for (let j = 0; j < nStr; j++) {
+      strands.push({
+        // evenly slotted then jittered by well under half a slot — the same
+        // rule §8.3 states for roots ("an even fan is a comb, fully random
+        // leaves bald patches"), one scale down
+        c: margin + ((j + 0.5) / nStr + (rnd.next() - 0.5) * 0.34 / nStr) * span,
+        // HALF-width: 0.31 of the slot pitch puts the filament's full width at
+        // 62% of the pitch, which is the mean coverage the alpha-test/mip
+        // arithmetic in this docstring is built on. Writing the 0.62 here
+        // instead doubles it, the filaments merge, and the card goes back to
+        // being an opaque blade with a few scratches on it.
+        hw: (0.31 * span / nStr) * (0.72 + 0.56 * rnd.next()),
+        drift: rnd.gauss(0, 0.035),
+        // where this filament ends. Ragged ends over the last third are what
+        // makes the *lock* end in a point without the card's own silhouette
+        // being a clean triangle.
+        end: 0.60 + 0.40 * rnd.next(),
+      });
+    }
+    V.push(strands);
+  }
+  for (let y = 0; y < size; y++) {
+    const v = (y + 0.5) / size;
+    for (let x = 0; x < size; x++) {
+      let a = 1;
+      if (y < half) {
+        // 0 at the root (row `half`), 1 at the tip (row 0)
+        const t = 1 - v / 0.5;
+        const u = (x + 0.5) / size;
+        const k = Math.min(CARD_VARIANTS - 1, Math.floor(u * CARD_VARIANTS));
+        const s = u * CARD_VARIANTS - k;
+        a = 0;
+        for (const st of V[k]) {
+          if (t >= st.end) continue;
+          // the filament narrows to nothing at its own end: "a lock ends in a
+          // point", per filament, so the card's tip is ragged rather than cut
+          const w = st.hw * Math.pow(Math.min(1, (st.end - t) / 0.30), 0.55)
+            // and the roots merge into one solid base, or the card shows sky
+            // between its own filaments where it meets the scalp
+            * (1 + 2.2 * Math.exp(-t * 16));
+          if (w <= 0) continue;
+          const d = Math.abs(s - (st.c + st.drift * t));
+          if (d >= w) continue;
+          a = Math.max(a, smooth(clamp01((w - d) / (w * 0.45))));
+        }
+      }
+      const q = clamp255(a * 255);
+      const i = (y * size + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = data[i + 3] = q;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.colorSpace = THREE.NoColorSpace;
+  // `u` wraps because the scalp shell tiles it 34x; `v` clamps because that is
+  // what puts every non-card emitter on the solid top row.
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(1, 0.5);
+  tex.offset.set(0, 1.0);
+  tex.anisotropy = 16;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 /**
@@ -504,7 +647,7 @@ function cache(): MaterialTextures {
     c[0] = c[1] = c[2] = fil * along * edge;
   }, { colorSpace: THREE.SRGBColorSpace });
 
-  _cache = { pore, poreFine, weave, hairStripe };
+  _cache = { pore, poreFine, weave, hairStripe, hairCut: hairCutTexture() };
   return _cache;
 }
 
@@ -592,6 +735,16 @@ export function hairMaterial() {
     roughness: 0.46,
     metalness: 0.0,
     map: c.hairStripe,
+    // Plan 8.3's cards. `hairCut` is banded by `v` (see `hairCutTexture`) so it
+    // cuts the cards and leaves the shell, the halo, the wisps and the brows
+    // solid, on one material and therefore one draw call. `alphaTest` rather
+    // than `transparent`: alpha-blended hair would need per-lock sorting, and
+    // three copies `map`/`alphaMap`/`alphaTest` onto the shadow depth material
+    // (`WebGLShadowMap.getDepthMaterial`), so the cutout is in the shadow too —
+    // a solid card shadow on the forehead is the one thing worse than a solid
+    // card.
+    alphaMap: c.hairCut,
+    alphaTest: 0.35,
     specularIntensity: 0.22,
     sheen: 0.10,
     sheenColor: srgb(0x6b5c52),
