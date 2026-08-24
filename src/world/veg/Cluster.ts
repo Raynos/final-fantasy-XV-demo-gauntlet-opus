@@ -301,7 +301,16 @@ export function maternScatter(o: MaternOpts): ClusterPoint[] {
   }
 
   let kept = out;
-  if (slack > 0 && out.length > 1) {
+  // **`slack > 0` alone, not `&& out.length > 1`.** The rect filter lives
+  // inside this block, and the halo points are only excluded from `out` when
+  // `slack <= 0` — so a window that produced exactly ONE point returned it
+  // whether or not it was in the rect, and two adjacent tiles both emitted it.
+  // Latent while `rockScatter` was the only caller passing a slack (a 56 m rock
+  // cell is rarely that empty); it fires the moment a sparse zone's tree
+  // scatter does. Found as an exact 0.00 m same-asset nearest-neighbour pair in
+  // `three_valleys` by `src/tools/probes/copies.mts` — two identical trees in
+  // one hole, emitted by tiles 21,15 and 22,15.
+  if (slack > 0) {
     // Radius-aware separation, by priority rather than by a greedy sweep: a
     // point survives iff no HIGHER-priority point lies inside the sum of the
     // two radii. Local, order-free, and identical from either side of a tile

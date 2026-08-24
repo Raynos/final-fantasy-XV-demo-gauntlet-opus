@@ -68,6 +68,19 @@ export interface ScatterBias {
   maxCount?: number;
 }
 
+/**
+ * Radius-aware separation, as {@link Cluster.maternScatter} takes it.
+ *
+ * Every scatter here now passes a default pair; a caller overriding them is
+ * overriding a measured number, so re-run `src/tools/scatterstat.mts`.
+ */
+export interface ScatterSep {
+  /** Metres this instance claims. Two are separated at `(r1 + r2) * slack`. */
+  radius?: (x: number, z: number, u: number, k: string) => number;
+  /** Separation slack. **0 skips the pass entirely** — that is not a default. */
+  slack?: number;
+}
+
 export class Ecology {
   nPatch!: Noise;
   _clearings!: ClearingGrid;
@@ -839,13 +852,27 @@ export class Ecology {
    * carried by every child, which is the plan's 72% grove-coherence figure and
    * the reason a bank of thicket reads as a bank of thicket.
    */
-  groveScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias = {}) {
+  groveScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias & ScatterSep = {}) {
     return this._scatter(
       0x67a1, x0, z0, w, h, 26, 10, 30,
       (x, z) => this.groveSuit(x, z),
       (x, z) => this.rootBlocked(x, z),
       (x, z) => this.treeSpecies(x, z),
-      o);
+      // **Two stems may not stand in the same place**, which until now they
+      // could: `slack` defaults to 0 and `groveScatter` never passed one, so
+      // the separation pass `Cluster.ts` carries for the boulders has never run
+      // on a plant. Measured over four zones (`src/tools/probes/copies.mts`),
+      // **9.1-13.3% of trees and 9.2-30.0% of bushes had a neighbour inside
+      // 1.5 m** — two trunks in one hole. Round 13's ab-09 reads *"four copies
+      // of one tree ... two interpenetrating"*, and that is the second half of
+      // it, the half no amount of per-instance variation can touch.
+      //
+      // The radius is a *claim on ground*, not a measured crown: the tree's own
+      // size is drawn in `Trees.ts` from a hash this sampler cannot see, so all
+      // this can honestly key on is the biome's own scale band and the child's
+      // own draw. Stated rather than dressed up — a sampler that pretended to
+      // know the crown would be a third seating model.
+      { slack: 1.0, radius: (x, z, u) => vegAt(x, z).treeS[0] * (0.8 + 0.5 * u), ...o });
   }
 
   /**
@@ -859,7 +886,7 @@ export class Ecology {
    * budget is reeds, it emits 0.14x the lattice's count and that is correct
    * rather than a regression. Whoever wires this in keeps the water-line branch.
    */
-  scrubScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias = {}) {
+  scrubScatter(x0: number, z0: number, w: number, h: number, o: ScatterBias & ScatterSep = {}) {
     return this._scatter(
       0x5c3b, x0, z0, w, h, 12, 4, 24,
       (x, z) => this.scrubSuit(x, z),
@@ -871,7 +898,11 @@ export class Ecology {
       // the even salad the grove noise was added to kill, still running in the
       // undergrowth.
       (x, z, u) => pickFrom(vegAt(x, z).scrubTable, u) || 'shrub',
-      o);
+      // The same rule at the scale of a bush. A knot of scrub is meant to
+      // crowd, so the berth is small — but two shrubs at 30 cm are one shrub
+      // with a shading artefact, and in `three_valleys` 30.0% of the
+      // undergrowth was inside 1.5 m of its neighbour.
+      { slack: 1.0, radius: (x, z, u) => 0.40 + 0.50 * u, ...o });
   }
 
   /**
