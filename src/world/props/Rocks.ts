@@ -1649,7 +1649,14 @@ export class Rocks {
     return THREE.MathUtils.clamp(
       (0.5 + 0.5 * THREE.MathUtils.smoothstep(slope, 0.06, 0.45)) * rests
       * (0.32 + 0.68 * THREE.MathUtils.smoothstep(p, 0.26, 0.74))
-      * rd * d.rockD * (1 - eco.siteBlock(x, z) * 0.85), 0, 1);
+      // **`cleared`, not `siteBlock`.** `siteBlock` knows about the handful of
+      // authored landmarks near the origin; `poiClear` knows about the world
+      // map's 124 POIs, and this read neither of them until now. It is the same
+      // defect `39d4d16` found in the vegetation — grass growing through every
+      // town plaza in the world — one layer down: `rockScatter`'s own reject
+      // already takes `cleared`, so the boulder FIELD was excluded from a haven
+      // and the size draw that weights it was not.
+      * rd * d.rockD * (1 - eco.cleared(x, z) * 0.85), 0, 1);
   }
 
   // ------------------------------------------------------------ generation
@@ -1829,7 +1836,7 @@ export class Rocks {
       const dress = dressAt(ox, oz);
       const q = THREE.MathUtils.smoothstep(p, 0.42, 0.78)
         * THREE.MathUtils.smoothstep(eco.roadDist(ox, oz), 9, 26)
-        * (1 - eco.siteBlock(ox, oz)) * dress.rockD
+        * (1 - eco.cleared(ox, oz)) * dress.rockD
         * (1 - THREE.MathUtils.smoothstep(eco.slope01(ox, oz), 0.58, 0.8));
       // A tor is placed on its own test, not on the outcrop's.
       //
@@ -1878,6 +1885,21 @@ export class Rocks {
         continue;
       }
       if (rng.next() > q * 1.5) continue;
+      // **A knot is `spanX` across, so its site test has to be too.** `q`'s
+      // `cleared` term is a probability and a partially cleared site still
+      // passes it, and then the generator lays blocks up to `9 * grand` metres
+      // out along `axis` — which put 38 blocks over four metres on cleared
+      // ground across a 3 km radius, measured by `src/tools/probes/torsite.mts`
+      // after the tor branch above had been fixed. Same ring rule, same reason.
+      {
+        let blocked = false;
+        for (let i = 0; i < 4 && !blocked; i++) {
+          const a = (i / 4) * Math.PI * 2;
+          const sx = ox + Math.cos(a) * 15, sz = oz + Math.sin(a) * 15;
+          blocked = eco.cleared(sx, sz) > 0.06 || eco.roadDist(sx, sz) < 9;
+        }
+        if (blocked) continue;
+      }
       // A crag, not a pile of pebbles: the tor is two to three times the size
       // of a loose boulder, which is what makes it legible at half a kilometre
       // and stops the middle distance reading as an empty dust bowl.
@@ -2007,6 +2029,27 @@ export class Rocks {
     // Not on a slope: a twenty-metre stack on a twenty-degree hillside is a
     // pile that should have fallen over, and the seat error alone is metres.
     if (eco.slope01(ox, oz) > 0.30) return;
+    // **And not on a cleared pad or on the carriageway.** The tor branch in
+    // {@link Rocks._genOutcrop} `continue`s BEFORE that generator's `q` test,
+    // so it has never seen the road term, the site term or the POI term that
+    // every other stone in this file is filtered by — a thirty-metre landform
+    // was free to stand in a haven or across Route 1. Measured over an 3 km
+    // radius by `src/tools/probes/_torsite.mts`: **9 of 409 tors on a cleared
+    // pad and 2 on the road.** Stated here rather than in the caller so the
+    // guarantee travels with the landform: `_genTor` is the only thing that
+    // can promise it, and it is called from one place today and will not be.
+    //
+    // Sampled on a RING as well as at the centre, because a tor is a landform
+    // and not a point: its courses drift and its skirt reaches `foot * 3.6`, so
+    // a centre test alone leaves blocks on the pad belonging to a tor that
+    // stands just off it. Measured over a 3 km radius with the centre test
+    // alone, 38 blocks over 4 m still stood on cleared ground against 59 with
+    // no test at all; the ring takes it to the number in `probes/torsite.mts`.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 4) * Math.PI * 2, r = i === 4 ? 0 : 20;
+      const sx = ox + Math.cos(a) * r, sz = oz + Math.sin(a) * r;
+      if (eco.cleared(sx, sz) > 0.06 || eco.roadDist(sx, sz) < 12) return;
+    }
     // {@link torPlan} owns the shape; this owns the seat and the instance
     // record. The split is the same one {@link corestones} already has, and it
     // exists so `src/tools/silhouette.mts --set rocks` can measure the composed
