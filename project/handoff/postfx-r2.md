@@ -31,7 +31,9 @@ from that reading — decouple the step size from the reach, raise the step coun
 put a screen-space floor under the reach.
 
 **All three are measured negatives.** Hold the reach fixed at the shipped 72 px
-and treble the step count from 12 to 36 and **the blob is identical**. Raise the
+and treble the step count from 12 to 36 and **the blob is entirely still
+there** — 11.7 against 11.6 in one run, 11.5 against 13.1 in a repeat, on a
+shipped-configuration signal of 11.2-11.8 and a floor of 0.15. Raise the
 reach and it gets *worse*. The term was never a coarse ramp; the debug view of
 the pass's own weight (`tmp/shots/pfx2-r1/b-wv_base.png`) shows `w = 1.0`,
 saturated, across the entire mid-face, with a jagged boundary and nothing in
@@ -63,8 +65,9 @@ which is what lets every A/B below run on one boot.
 corrections in §5. `hero_portrait`, hair hidden, mid-face rectangle
 (700, 290, 160, 230), mean of the per-pixel max-channel delta **against the same
 stage with the pass disabled**. The pass-off side repeats to **0.15** and the
-shipped configuration repeats to **0.54** across three identical stages, and
-every row is reproducible to three decimals across separate runs.
+shipped configuration repeats to **0.54** across three identical stages. Two
+separate runs of the whole probe reproduced every row, and the pre-fix rows to
+three decimals.
 
 | stage | mean /255 |
 |---|---|
@@ -75,9 +78,14 @@ every row is reproducible to three decimals across separate runs.
 | `thickness` 0.45 -> 0.03 | 0.46 — nothing left at all |
 | **window tracks the cap** | **1.19** |
 | ...and the `bias` tracking too | 2.37 — *worse* |
-| 72 px reach, 12 steps | 11.7 |
-| **72 px reach, 36 steps** | **11.6 — identical: the step count is innocent** |
-| 216 px reach, 36 steps, window proportional | 11.61 — the reach itself matters |
+| 72 px reach, 12 steps | 11.7, and 11.5 on a repeat |
+| **72 px reach, 36 steps** | **11.6, and 13.1 on a repeat — the step count does not touch it** |
+| 216 px reach, 36 steps, window proportional | 11.6, 11.8 — the reach itself matters |
+
+A second run of the same probe **after** the fix landed, so the before and the
+after are stages of one boot: shipped now reads **1.52 / 0.99 / 1.64** on those
+three identical stages, `thicknessTrack = 0` reads **11.26**, and the pass-off
+floor is **0.148**. `tmp/shots/pfx2-r4/`.
 
 Two rows are worth keeping for their own sake. **`bias` is not the same defect
 even though it is the same *kind* of number** — it is also a world metre

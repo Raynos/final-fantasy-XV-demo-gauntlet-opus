@@ -201,9 +201,10 @@ export class ContactShadowPass extends FilterPass {
           //                                             — see the note below)
           //
           // Two measured negatives worth keeping. **The step count is innocent**:
-          // at a fixed 72 px reach, 12 steps and 36 steps produce the identical
-          // blob, so this was never the quantisation of \`occ\` into 13 levels that
-          // the shape of it suggests. And **the reach itself matters**: at three
+          // at a fixed 72 px reach, 12 steps and 36 steps leave the blob entirely
+          // in place (11.7 / 11.6, and 11.5 / 13.1 on a repeat), so this was never
+          // the quantisation of \`occ\` into 13 levels that the shape of it
+          // suggests. And **the reach itself matters**: at three
           // times the capped reach the blob comes back even with the window kept
           // proportional, because 13 cm of march at 0.6 m genuinely reaches the
           // rest of the face. See src/tools/probes/blobhunt.mts.
