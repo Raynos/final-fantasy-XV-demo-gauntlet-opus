@@ -411,9 +411,29 @@ export class PoiKits {
     // footprint must not lift the whole settlement onto a plinth, and the
     // batter carries whatever is left over.
     const hi = hs[Math.min(hs.length - 1, Math.floor((hs.length - 1) * 0.88))];
-    // Still bounded against the point the map actually names, in both
-    // directions -- a deck three metres over the named spot is a plateau.
-    return Math.max(Math.min(hi, h0 + 3.2), h0 - drop);
+    /*
+     * The floor, and it is a different surface from everything above.
+     *
+     * `h0` and `hs` are `seatY` — the LOWER envelope, the surface no ring will
+     * draw *below*. That is the right bound for "will this float". It is the
+     * wrong bound for "will the hill come up through the deck", because what
+     * the player sees punching through a tarmac bay is the surface actually
+     * RASTERISED at the ring they are standing on, and at a knoll that is
+     * metres above the lower envelope. `crestholm_inlet` had its deck 3.82 m
+     * under the drawn ground at the exact point the map names, with a 2.7 m
+     * compound on it; `balouve_head` 2.95 m under a 5.0 m one. Both are parking
+     * bays cut into a narrow rise, where the 88th percentile over a ten metre
+     * disc sits *below* the rise it is centred on.
+     *
+     * Bounded by the same `h0 + 3.2` as the percentile, so this can only ever
+     * remove that case and never lift a compound onto a new plateau: the deck
+     * is allowed up to the drawn ground under it, and no further than it was
+     * already allowed to go.
+     */
+    const t = this.eco.terrain;
+    const drawn = t && typeof t.drawnHeightAt === 'function'
+      ? t.drawnHeightAt(x, z, t.clipmap ? t.clipmap.cell0 : 1.5) : h0;
+    return Math.max(Math.min(hi, h0 + 3.2), h0 - drop, Math.min(drawn - 0.2, h0 + 3.2));
   }
 
   /**
