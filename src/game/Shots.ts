@@ -581,7 +581,11 @@ const SHOT_TABLE = {
     // frame is unlit interior surface, no subject, nothing composed".
     doc: 'A haven: the rune-marked camp rock and its fire on a raised flat',
     time: 18.4, weather: 'clear',
-    pos: [996, 40, -688], target: [962, 31, -712], fov: 48,
+    // Re-framed AGAIN 2026-08-24: `88efe38` gave every disc landform an
+    // anti-radial frame and the ground under this haven rose ~13 m, putting the
+    // camera at y=40 underneath a surface at 40.72. Coordinates go stale — the
+    // landmine says so, and this is the second time in one day.
+    pos: [1002, 56, -672], target: [962, 45, -712], fov: 48,
   },
   poi_parking: {
     doc: 'A parking spot: the gravel lay-by and its bus shelter off Route 1',
