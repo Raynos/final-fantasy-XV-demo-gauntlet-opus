@@ -88,3 +88,60 @@ and uncached, (c) agents not using the batch/background affordances that exist,
 (d) Opus latency itself.
 
 Plan that acts on this: `docs/plans/2026-08-24-opus-benchmaxx-harness.md`.
+
+---
+
+# Second pass: tokens, cache, and where the 61 h gap really goes
+
+Same 108 transcripts, same window. Script: session scratchpad `audit2.mjs`
+(dedupes usage by message id; gap anchored to the previous tool result).
+
+## Token totals (48 h, all sessions + subagents)
+
+| metric | value |
+|---|---|
+| assistant turns | 13 742 |
+| output tokens | 3.78 M |
+| — of which thinking | 523 k (**14 %**) |
+| cache **read** input tokens | **3.18 B** |
+| cache creation input tokens | 48.5 M |
+| screenshots returned into context | 1 359 (520 MB of transcript) |
+| tool-result bytes carried | 538 MB |
+
+**The weekly limit is being spent on context re-reads, not on output.** The
+top sessions ran 668–1 022 turns over 17–43 h while carrying ~300–530 k-token
+contexts — e.g. one main session: 668 turns × ~533 k avg context = 356 M
+cache-read tokens on its own. Output is a rounding error next to this.
+
+## Gap decomposition
+
+Per-turn generation speed has p90 ≈ 110 tok/s. Pricing every turn's output at
+that rate explains **~525 min** of the **~3 177 min** gap. The remaining
+**~44 h is per-turn overhead** — dominated by time-to-first-token on huge
+contexts, plus API queueing/retries — i.e. ~11.6 s of non-generation overhead
+per turn on average. So the "model is slow" problem and the "tokens are being
+wasted" problem are the same problem: **context size taxes every turn twice**
+(TTFT and cache-read spend), 13 742 times.
+
+Thinking is NOT where Opus rabbit-holes — 14 % of output. The rabbit-holing
+is in **turn count**, measured:
+
+## Rabbit-hole receipts
+
+| pattern | evidence |
+|---|---|
+| Same-shot polish loops | one agent captured `zone_longwythe` **48×**; others 47×, 25×, 21×; `hero_portrait` 27×; `vista_noon` 25× — dozens of look-tweak-look rounds per shot |
+| Gate babysitting | one subagent: **172 typechecks, 58 full `check` runs, 0 commits** in 40.8 h |
+| Scheduled napping | `for i in $(seq 1 9); do sleep 60; done; git log …` run **37×** by the coordinator ≈ 5.5 h of sleeping inside tool calls |
+| Session length | 8 sessions/lanes past 24 h of span; the 3 h / ~400-turn rule in CLAUDE.md was exceeded by every long lane |
+| Checks as a tic | per-session `check` counts of 63, 58, 55, 43 — mostly on trees whose inputs hadn't changed |
+
+Two per-session details worth keeping: `-Users-r/sub-985c9fe3` (the modeling
+coordinator): 76 commits, 55 checks, 71 typechecks, 17.8 h. `agent-ae`:
+174 screenshots into its own context (64 MB) while iterating on
+`rig/Materials.ts` — the capture-look loop belongs in short-lived context,
+not accumulated for 26 h.
+
+Conclusion for the plan: the top lever is **context discipline** (short
+sessions, capture-look loops in disposable subagents, crops instead of full
+frames, batch turns), ahead of any individual tool getting faster.
