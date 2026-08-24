@@ -27,6 +27,17 @@
 const HIDE_HAIR = true;
 /** The contact-shadow blob. Off, so the sculpt is visible; see the header. */
 const NO_CONTACT = true;
+/**
+ * Drop the painted face map (albedo) and the skin normal map.
+ *
+ * The open question these exist for: **a hard vertical line runs down the
+ * midline of every head, from the crown to the chin.** Two handoffs have
+ * reported it and neither ablated it. If it survives a flat face colour it is
+ * geometry or shading; if it goes with `NO_FACEMAP` it is `paintFace`'s "lit
+ * central T"; if it goes with `NO_NORMALMAP` it is the tangent frame at u=0.5.
+ */
+const NO_FACEMAP = false;
+const NO_NORMALMAP = false;
 /** 16.2 is the corpus hour: a low raking key from the subject's left. */
 const HOUR = 16.2;
 
@@ -64,7 +75,7 @@ wrap(player); wrap(party);
 const SPINE = ['hips', 'spine01', 'spine02', 'spine03', 'clavicleL', 'clavicleR', 'neck', 'head', 'jaw'];
 
 const who = { noctis: null, gladio: 'gladio', ignis: 'ignis', prompto: 'prompto' };
-const out = { ablation: { HIDE_HAIR, NO_CONTACT }, heads: {}, specs: [] };
+const out = { ablation: { HIDE_HAIR, NO_CONTACT, NO_FACEMAP, NO_NORMALMAP }, heads: {}, specs: [] };
 const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const r3 = (v) => v.map((x) => +x.toFixed(4));
 
@@ -75,6 +86,8 @@ for (const [key, id] of Object.entries(who)) {
   const byName = ch.rig.byName;
 
   if (HIDE_HAIR && ch.hair) ch.hair.visible = false;
+  if (NO_FACEMAP && ch.faceMat) { ch.faceMat.map = null; ch.faceMat.needsUpdate = true; }
+  if (NO_NORMALMAP && ch.faceMat) { ch.faceMat.normalMap = null; ch.faceMat.needsUpdate = true; }
   if (ch.anim && !ch.anim.__lookPinned) {
     const bind = new Map();
     for (const n of SPINE) if (byName[n]) bind.set(n, byName[n].rotation.clone());
