@@ -319,7 +319,7 @@ export const CAST = {
       lenses: true,
       gloves: { color: srgb(0x322e2e), rough: 0.40 },
       hair: {
-        color: 0x8e8467, tipColor: 0xdfcb9c, rough: 0.34, shell: 0.011, volume: 0.85,
+        color: 0x8f8371, tipColor: 0xdecbae, rough: 0.34, shell: 0.011, volume: 0.85,
         hairline: 0.004, peak: 0.25, wisps: 34, wispLen: 0.75, clump: 3,
         // A slicked quiff: up off the brow, over the crown and back, with the
         // sides tight against the skull. The contrast between the two is the
@@ -396,7 +396,7 @@ export const CAST = {
       freckles: true, freckleColor: 'rgba(158,96,58,0.6)',
       brows: { color: 0xa8823f, len: 0.013, width: 0.0058 },
       hair: {
-        color: 0xa79a72, tipColor: 0xf6e6ae, rough: 0.30, shell: 0.011, volume: 0.86,
+        color: 0xa8977e, tipColor: 0xf4e2bd, rough: 0.30, shell: 0.011, volume: 0.86,
         hairline: 0.006, peak: 0.2, wisps: 38, wispLen: 0.8, clump: 3,
         // `plates/character-prompto-daylight-01.jpg`: a swept quiff off a low
         // side parting, sides flat against the skull, and one long fringe
