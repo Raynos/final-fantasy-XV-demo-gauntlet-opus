@@ -317,6 +317,34 @@ on `clear` and ±1180 m on `storm`, so rays that used to miss the layer now ente
 it and take an empty-space-skip pass. And `covLo` 0.54 → 0.42 puts cloud in more
 columns. Both are real fill costs and neither has been measured.
 
+## Shots
+
+Five capture rounds, every frame read.
+
+- `tmp/shots/cl2-base/` — the twelve review shots as round 11's judge saw them.
+- `tmp/shots/cl2-r1/` — after the ambient burial alone.
+- `tmp/shots/cl2-r2/` — after the horizon haze and the altitude sag.
+- `tmp/shots/cl2-r3/` — after the radiance knee.
+- `tmp/shots/cl2-r4/` — **the shipped state**, all twelve.
+- `tmp/c-base-noon.png` / `tmp/c-C.png` / `tmp/c-final.png` — the same
+  `vista_noon` sky crop at 2x, before, after the burial, and shipped. The first
+  is the cotton ball.
+- `tmp/c-cl2-sunonly.png` / `tmp/c-cl2-ambonly.png` — the ablation that found
+  it. Look at these two side by side before touching this system.
+- `tmp/shots/cl2-H/` — the measured negative: fewer *thinner* clouds.
+
 ## Files touched
 
-`src/world/sky/Clouds.ts`, `src/world/Sky.ts`. Nothing else.
+`src/world/sky/Clouds.ts`, `src/world/Sky.ts`. Nothing else. Nothing in
+`src/world/terrain/`, `src/world/props/`, `src/world/town/` or
+`src/characters/`.
+
+## One thing I would change if I were carrying this further
+
+`uAmbBury` keys on the *normalised* fill `e`, so a preset with a different
+`uCloudDensity` buries the same amount of sky light at the same normalised
+depth, which is not right — a denser cloud should bury more. Keying on `d`
+directly with `k = uAmbBury / 0.021` reproduces `clear` exactly and makes the
+heavy presets scale correctly. It was not done because `overcast` and `storm`
+run `uAmbientBoost` at 0.30 and the term barely reaches them, so it would have
+been an unmeasurable change to a working system.
