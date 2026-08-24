@@ -85,6 +85,26 @@ export function isHarnessFlag(a: string): 'switch' | 'value' | null {
 }
 
 /**
+ * The flags {@link harnessArgs} consumes, and how many words each takes.
+ *
+ * A tool with its own strict `parseArgs` — `perf.mts` and `gameplay.mts` both
+ * have one, and throwing on an unknown flag is a feature worth keeping — has to
+ * be told which flags are not its business. Without this, `parseArgs` runs
+ * first and `perf.mts --build <sha>` dies on `unknown flag --build`, so the two
+ * headline perf gates could only ever measure `HEAD`: no A/B, no re-measuring a
+ * suspect regression against the baseline that certified it. That is not a
+ * theoretical limit — the postfx lane hit it and had to bound its cost another
+ * way, and this round needed `--dirty` to see its own edit in the gate.
+ *
+ * `--w`, `--h`, `--q` and `--nobake` are deliberately absent: the tools parse
+ * those themselves and pass them back in as defaults.
+ */
+export const HARNESS_FLAGS: ReadonlyMap<string, 0 | 1> = new Map<string, 0 | 1>([
+  ['--build', 1], ['--dirty', 0], ['--lane', 1], ['--agent', 1],
+  ['--deadline', 1], ['--cold', 0], ['--prod', 0], ['--ablate', 1], ['--post', 1],
+]);
+
+/**
  * Parse the flags every tool now has, leaving the rest to the tool.
  *
  * `--dirty` is the escape from the `HEAD` default and is what the tight edit

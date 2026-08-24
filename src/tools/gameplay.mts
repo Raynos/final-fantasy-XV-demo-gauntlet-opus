@@ -38,7 +38,7 @@ import { RULER_PAGE_SRC, printContention, validate, deltaVerdict, quantiles } fr
 import type { Floor } from './ruler.mts';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { harnessArgs, announceBuild, lease, pageOpts, withExclusive } from './harness.mts';
+import { harnessArgs, announceBuild, lease, pageOpts, withExclusive, HARNESS_FLAGS } from './harness.mts';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -60,6 +60,10 @@ function parseArgs(argv: string[]) {
     else if (a === '--out') o.out = argv[++i];
     else if (a === '--baseline') o.baseline = argv[++i];
     else if (a === '--pairs') o.pairs = Number(argv[++i]);
+    // `harnessArgs` owns these and parses the same argv separately; this
+    // clause is what lets the gate take `--build <sha>` and `--dirty` at all.
+    // An unknown flag still throws, which is the half of this worth keeping.
+    else if (HARNESS_FLAGS.has(a)) i += HARNESS_FLAGS.get(a)!;
     else throw new Error(`unknown flag ${a}`);
   }
   return o;
