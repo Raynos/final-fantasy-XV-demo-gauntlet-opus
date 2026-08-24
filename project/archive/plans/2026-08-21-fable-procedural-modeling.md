@@ -600,10 +600,21 @@ Re-ticked 2026-08-24 after fourteen lanes and three judged rounds. **6 of 6.**
       `muzzleMm` **22.44 → 6.46** against a norm of 3-6, `eLineLsMm` +11.23 →
       **−3.86** against −4, with two controls differing only in depth (27 mm
       apart) that move the height bench by 0.008 and `muzzleMm` by **4.9×**.
-      **Closed at a local maximum by the human's call**, and honestly: the
-      remaining mouth read is carried by `paintFace`, not geometry — the same
-      scanline across three builds reads 137 / 133 / 134, so more relief does
-      nothing. That is written down rather than papered over.
+      **Closed at a local maximum by the human's call** — and **round 14, taken
+      after this box was ticked, contradicts it.** It scored the demo **3.0,
+      down from 3.5**, and put the head first: *"the chin projects further
+      forward than the nose... no mouth geometry or mouth texture on the mouth's
+      location... the hair shell has come loose, sky is visible in the gap
+      between the hair volume and the temple."* Its verdict on this item was
+      **WORSE**.
+
+      So the depth fix **overshot**: `muzzleMm` 22.44 -> 6.46 is inside the
+      adult-male norm and the frame still reads as a beak, because pulling the
+      mid-face back moved the chin *ahead of* the nose. That is the third time
+      on this head that a bench has agreed and the frame has not, and it is the
+      reason the box is ticked **on the human's scope call, not on the
+      evidence**. Anyone reopening §8 starts here: nose projection must exceed
+      chin projection, and no existing bench asserts that.
 - [x] **Measured negatives are recorded here or in handoffs.** Emphatically:
       sixteen of this plan's own rows were disproved and left in place rather
       than deleted; the 148 m talus fan is unbuildable and why; curvature cavity
