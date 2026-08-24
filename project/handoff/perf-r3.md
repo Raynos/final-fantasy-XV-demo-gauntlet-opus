@@ -12,17 +12,70 @@ in `project/handoff/perf.md`, `perf-r2.md` and `LANDMINES.md`.
 ## 0. Where the gate stands
 
 `pnpm run check` is **17/17** (`anycheck` was 5 over its zero ceiling from my
-own probe; fixed in `4a4…`, verified `0 any across 0 files`).
+own probe; fixed, verified `0 any across 0 files`).
 
-`gameplay.mts` **still FAILs on `streaming-traverse`**, at 53.8-54.9 fps against
-60. Everything else in the session now passes, and the hitch list has gone from
-18 frames over 33 ms to 7-9, all of them in two segments.
+The best `gameplay.mts` run of the round, and the last one taken:
 
-**Every whole-run number below was taken on a CONTENDED machine and I could not
-fix that.** See §2: two other lanes were committing throughout, which means a
-`vite build` on this box every few minutes. Nothing here that makes a *claim*
-rests on a whole-run before/after; every claim is an interleaved A-B-B-A inside
-one page on one build, which is the only shape that survives a moving box.
+    segment              thru ms    fps   >16ms  hitches
+    idle                    6.2  161.3      0%        0
+    walk                    6.5  155.0      0%        0
+    sprint                  6.9  144.9      0%        0
+    sprint+turn             7.7  129.9      1%        1      <- 103.9 ms, frame 35
+    strafe+camera           9.3  107.5      0%        0
+    weapon-swap             7.5  134.2      4%        0
+    combat                 10.1   99.5      1%        0
+    warp-strike            11.9   84.0      3%        0
+    magic                   6.7  149.3      7%        0
+    streaming-traverse     14.8   67.3     39%        1
+    day-night-sweep        15.3   65.1     35%        2
+    weather-change          6.7  150.4      0%        0
+    menu-open               7.0  143.9      4%        0
+    worst segment: day-night-sweep at 65.1 fps   total hitches: 4
+
+**Every segment is over 60 fps** — `streaming-traverse` has gone 44-55 fps to
+67.3 and `menu-open`'s twelve hitches are zero — and the session's hitch count
+is 4, from 18-25. Against the two halves of the bar:
+
+- **≥60 fps per segment: met**, on this run.
+- **No frame over 33 ms: NOT met.** Four frames: `sprint+turn` 103.9 (§4B),
+  `day-night-sweep` 69.6 and 39.3 (§4C), `streaming-traverse` 35.2.
+
+**And the run is stamped `RULER_VALID: false`, so it certifies nothing.** It
+voided itself for the correct reason and named it: *"CONTENDED (another lane is
+running gameplay)"*. Another agent was running the same gate on the same machine
+at the same time. See §2 — this is the single largest obstacle left, and it is
+not a code problem.
+
+**A quiet-tree re-run is the first thing the next lane should do**, before
+changing anything. On the evidence above the fps half of the bar is met and only
+the 33 ms rule is outstanding.
+
+### `perf.mts`
+
+The corpus run prints **`FAIL: town_npcs at 51 fps`** (mean 170.4). Do not act
+on it; it is the artefact `perf-r2` documented, and the per-shot re-run minutes
+later on the same build says so plainly:
+
+    shot              corpus run          per-shot
+    town_npcs         19.65 ms  73% >16   7.20 ms  2% >16    (994 vs 979 draws)
+    town_forecourt    10.00 ms  21% >16   7.70 ms  2% >16
+    storm              6.85 ms   0% >16   6.80 ms  2% >16
+
+What has changed is that the *mechanism* is no longer a mystery for the ordinary
+shots — §1 removed their tail entirely (`storm` 34% → 0%, `zone_ravatogh` 25% →
+0%, `party_walk` 23% → 0%). The town shots keep theirs because theirs is real
+work, and a 140-shot corpus run on a four-lane machine pushes their median into
+it. **`perf.mts`'s corpus headline still needs one idle re-run before anyone
+records a baseline** — the same instruction `perf-r2` left, still unexecuted,
+because the machine has not been idle since.
+
+**A finding for whoever owns the draw budget, and it is not me.** `BRIEF.md`
+rule 3 sets the draw-call budget at **800** and records "measured range today is
+351-506". Ten town shots are over it: `town_forecourt` **1011**, `town_garage`
+995, `town_npcs` 994, `town_shops` 992, `town_regalia_bay` 988, `town_caravan`
+983, `town_diner` 932, `town_board` 924, and `cine_hammerhead` 981 at 11.8 M
+triangles. That is 25% over a documented budget on a quarter of the corpus, no
+gate checks it, and it is exactly why those shots are the slowest in the game.
 
 ---
 
